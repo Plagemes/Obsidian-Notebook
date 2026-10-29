@@ -19,7 +19,7 @@ import { App, notices, WorkspaceLeaf, type TFile } from "./obsidian-stub";
 import { NotebookView } from "../../src/view/notebook-view";
 import { DEFAULT_SETTINGS, type NotebookSettings } from "../../src/settings";
 import { createDocument } from "../../src/model/document";
-import { parse, serialize } from "../../src/model/serialize";
+import { parse, serialize, StagedParse } from "../../src/model/serialize";
 import { WetInk } from "../../src/ink/wet-ink";
 import { Renderer } from "../../src/ink/renderer";
 import { DocumentSession } from "../../src/storage/session";
@@ -309,6 +309,7 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 	await checkPageMode(add);
 	await checkToolbar(add);
 	await checkRestore(add);
+	await checkStagedLoad(add);
 
 	const unexpected = errors.filter((e) => !expectedError?.test(e));
 	if (fault) add("injected fault was reported", errors.some((e) => expectedError!.test(e)), errors[0]?.split("\n")[0] ?? "no error logged");
@@ -447,7 +448,7 @@ async function checkRestore(add: (name: string, ok: boolean, detail?: string) =>
 		leaf = new WorkspaceLeaf(app, root);
 		view = new NotebookView(leaf as any, { settings: settings() });
 		await view.onOpen();
-		await view.setState(s, {});
+		await view.setState(s, { history: false });
 		await (view as any).loadFile(file);
 		view.onResize();
 		await frames(4);
@@ -486,6 +487,74 @@ async function checkRestore(add: (name: string, ok: boolean, detail?: string) =>
 	root.style.height = h0;
 
 	// Leave a fresh view on page 1 for the screenshot.
+	await open();
+	await frames(3);
+}
+
+/**
+ * Progressive loading (#329): a large notebook (over the staged-load limit) opened on page 4 shows that page, read-only,
+ * before the rest is read; nothing can be edited or saved until every page is in; then it is complete, editable and
+ * saves a file with all its ink. A fresh view is opened at the end.
+ */
+async function checkStagedLoad(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
+	const label = `staged load ${window.innerWidth}px`;
+	const source = stressDocument(3300, 6);
+	const text = serialize(source);
+	const path = "Notebooks/Staged check.notebook";
+	if (!app.vault.getFileByPath(path)) await app.vault.create(path, text);
+	const file = app.vault.getFileByPath(path) as TFile;
+	const root = document.getElementById("harness-app")!;
+	await (view as any).onClose();
+	root.empty();
+	leaf = new WorkspaceLeaf(app, root);
+	view = new NotebookView(leaf as any, { settings: settings() });
+	await view.onOpen();
+	const v = view as any;
+	v.onResize();
+	const seen = { partial: false, editable: false, doc: false, painted: false, page: -1, pageStrokes: -1, otherStrokes: -1, status: "" };
+	const proto = NotebookView.prototype as any;
+	const orig = proto.showPartial as () => void;
+	proto.showPartial = function (this: any) {
+		orig.call(this);
+		seen.partial = true;
+		seen.editable = this.editable();
+		seen.doc = !!this.session.doc;
+		seen.page = this.currentPageIndex();
+		const pages = this.session.partialDoc.pages;
+		seen.pageStrokes = pages[3].strokes.length;
+		seen.otherStrokes = pages[0].strokes.length;
+		seen.status = document.querySelector(".notebook-status")?.textContent ?? "";
+	};
+	try {
+		v.renderer.onFrame = () => {
+			if (v.session?.mode === "loading" && v.renderer.stats.strokesDrawn > 0) seen.painted = true;
+		};
+		await v.setState({ file: path, page: 4 }, { history: false });
+		await v.loadFile(file);
+	} finally {
+		proto.showPartial = orig;
+	}
+	v.onResize();
+	await frames(3);
+	const total = v.session.doc.pages.reduce((n: number, p: { strokes: unknown[] }) => n + p.strokes.length, 0);
+	add(`${label}: the wanted page is shown before the rest is read`, seen.partial && seen.page === 3 && seen.pageStrokes > 0 && seen.otherStrokes === 0,
+		`partial ${seen.partial}, page ${seen.page + 1}, ink ${seen.pageStrokes} / ${seen.otherStrokes}`);
+	add(`${label}: it is painted while the notebook is still loading`, seen.painted, `painted ${seen.painted}`);
+	add(`${label}: nothing can be edited meanwhile`, !seen.editable && !seen.doc, `editable ${seen.editable}, session.doc ${seen.doc}`);
+	add(`${label}: then it is complete and editable`, v.session.mode === "ok" && v.editable() && !v.session.partialDoc && total === 3300 && v.currentPageIndex() === 3,
+		`mode ${v.session.mode}, ${total} strokes, page ${v.currentPageIndex() + 1}`);
+	add(`${label}: the status says saved, not loading`, !/loading/i.test(document.querySelector(".notebook-status")?.textContent ?? ""), document.querySelector(".notebook-status")?.textContent ?? "");
+
+	// Writing works on the loaded notebook and the saved file holds every stroke.
+	setTool("pen");
+	const before = strokeCount();
+	await penStroke([[0.3, 0.4], [0.7, 0.42]]);
+	await v.flushNow();
+	const saved = parse(await app.vault.read(file));
+	const savedStrokes = saved.ok ? saved.doc.pages.reduce((n, p) => n + p.strokes.length, 0) : -1;
+	add(`${label}: writing and saving work, and nothing is lost`, strokeCount() === before + 1 && savedStrokes === 3301, `strokes ${before} → ${strokeCount()}, saved ${savedStrokes}`);
+
+	// Back to a fresh view for the screenshot.
 	await open();
 	await frames(3);
 }
@@ -660,6 +729,12 @@ interface OpenSample {
 	targetPaintMs: number;
 	/** Page (1-based) in view at that moment. */
 	page: number;
+	/** Staged load: until the part-read document was shown (the page asked for is in), or -1 when the load is not staged. */
+	partialMs: number;
+	/** Staged load: the longest slice spent reading pages (the event loop is free in between). */
+	maxSliceMs: number;
+	/** Staged load: the longest stretch the event loop was blocked between the page being shown and the load ending. */
+	maxGapMs: number;
 }
 
 /**
@@ -672,9 +747,10 @@ interface OpenSample {
  * `snapshot` emulates the version-history snapshot that the plugin starts when a notebook opens
  * (integration/history-service.ts maybeSnapshot: read the file, parse it again): "eager" parses right away,
  * as before; "deferred" reads the file now and parses it once the page is on screen; "none" leaves it out.
+ * `staged` false loads the whole notebook before showing anything (how 0.5.0 did it).
  */
 async function measureOpen(
-	strokes = 10_000, pages = 10, reps = 5, goTo = 7, restore = true, snapshot: "none" | "eager" | "deferred" = "none",
+	strokes = 10_000, pages = 10, reps = 5, goTo = 7, restore = true, snapshot: "none" | "eager" | "deferred" = "none", staged = true,
 ): Promise<{ samples: OpenSample[]; bytes: number; strokes: number }> {
 	const text = serialize(stressDocument(strokes, pages));
 	const path = `Notebooks/Bench ${strokes}x${pages}.notebook`;
@@ -684,15 +760,39 @@ async function measureOpen(
 	const proto = NotebookView.prototype as any;
 	const origLoaded = proto.onDocumentLoaded as (...a: unknown[]) => void;
 	const origLoad = DocumentSession.prototype.load;
-	let sessionMs = 0, viewMs = 0;
+	const origShowPartial = proto.showPartial as (...a: unknown[]) => void;
+	const origStep = StagedParse.prototype.step;
+	let sessionMs = 0, viewMs = 0, partialMs = -1, maxSlice = 0, maxGap = 0, t0 = 0;
+	let gapTimer: number | null = null;
+	const stopGap = () => {
+		if (gapTimer !== null) window.clearInterval(gapTimer);
+		gapTimer = null;
+	};
+	proto.showPartial = function (this: unknown, ...a: unknown[]) {
+		partialMs = performance.now() - t0;
+		let last = performance.now();
+		stopGap();
+		gapTimer = window.setInterval(() => {
+			const n = performance.now();
+			maxGap = Math.max(maxGap, n - last);
+			last = n;
+		}, 1);
+		origShowPartial.apply(this, a);
+	};
+	StagedParse.prototype.step = function (this: StagedParse, ...a: Parameters<StagedParse["step"]>) {
+		const t = performance.now();
+		const r = origStep.apply(this, a);
+		maxSlice = Math.max(maxSlice, performance.now() - t);
+		return r;
+	};
 	proto.onDocumentLoaded = function (this: unknown, ...a: unknown[]) {
 		const t = performance.now();
 		origLoaded.apply(this, a);
 		viewMs = performance.now() - t;
 	};
-	DocumentSession.prototype.load = async function (this: DocumentSession) {
+	DocumentSession.prototype.load = async function (this: DocumentSession, opts?: Parameters<DocumentSession["load"]>[0]) {
 		const t = performance.now();
-		await origLoad.call(this);
+		await origLoad.call(this, staged ? opts : {});
 		sessionMs = performance.now() - t;
 	};
 	const samples: OpenSample[] = [];
@@ -707,7 +807,11 @@ async function measureOpen(
 			await view.onOpen();
 			const v = view as any;
 			let firstPaint = -1, targetPaint = -1;
-			const t0 = performance.now();
+			partialMs = -1;
+			maxSlice = 0;
+			maxGap = 0;
+			stopGap();
+			t0 = performance.now();
 			v.renderer.onFrame = () => {
 				const now = performance.now() - t0;
 				if (firstPaint < 0 && v.renderer.stats.strokesDrawn > 0) firstPaint = now;
@@ -725,6 +829,7 @@ async function measureOpen(
 			// The stub's FileView does not load the file from setState: do what Obsidian does after it.
 			await v.loadFile(file);
 			const loadMs = performance.now() - t0;
+			stopGap();
 			if (restore) v.applyPendingPage?.();
 			for (let i = 0; i < 60 && firstPaint < 0; i++) await frames(1);
 			if (!restore) {
@@ -735,10 +840,13 @@ async function measureOpen(
 				for (let i = 0; i < 60 && targetPaint < 0; i++) await frames(1);
 			}
 			if (rep === 0) continue; // warm-up: JIT, caches
-			samples.push({ loadMs, sessionMs, viewMs, firstPaintMs: firstPaint, targetPaintMs: targetPaint, page: v.currentPageIndex() + 1 });
+			samples.push({ loadMs, sessionMs, viewMs, firstPaintMs: firstPaint, targetPaintMs: targetPaint, page: v.currentPageIndex() + 1, partialMs, maxSliceMs: maxSlice, maxGapMs: maxGap });
 		}
 	} finally {
 		proto.onDocumentLoaded = origLoaded;
+		proto.showPartial = origShowPartial;
+		StagedParse.prototype.step = origStep;
+		stopGap();
 		DocumentSession.prototype.load = origLoad;
 	}
 	return { samples, bytes: text.length, strokes };

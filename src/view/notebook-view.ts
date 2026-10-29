@@ -51,6 +51,7 @@ import {
 } from "../model/types";
 import type { JournalStore } from "../storage/journal";
 import { DocumentSession, type SaveState, type SessionMode } from "../storage/session";
+import { nextTask } from "../storage/idle";
 import { isNotebookFile } from "../storage/format";
 import { VaultDocumentIO } from "../storage/vault-io";
 import { backupFolder, type NotebookSettings } from "../settings";
@@ -339,9 +340,9 @@ export class NotebookView extends FileView {
 		this.stage = this.body.createDiv({ cls: "notebook-stage" });
 		this.perfEl = this.stage.createDiv({ cls: "notebook-perf" });
 		this.pageNav = new PageNavigator(this.body, {
-			pages: () => this.session?.doc?.pages ?? [],
+			pages: () => this.shownDoc()?.pages ?? [],
 			current: () => this.currentPageIndex(),
-			bookmarks: () => new Set(this.session?.doc?.meta?.bookmarks ?? []),
+			bookmarks: () => new Set(this.shownDoc()?.meta?.bookmarks ?? []),
 			thumbnail: (page, width) => this.thumbnail(page, width),
 			goTo: (index) => this.goToPage(index),
 			move: (from, to) => this.movePage(from, to),
@@ -472,7 +473,7 @@ export class NotebookView extends FileView {
 	/** The page being read goes into the workspace layout, so reopening Obsidian shows the same page. */
 	getState(): Record<string, unknown> {
 		const state = super.getState();
-		const total = this.session?.doc?.pages.length ?? 0;
+		const total = this.shownDoc()?.pages.length ?? 0;
 		const page = this.pendingPage ?? (total > 0 ? this.currentPageIndex() + 1 : null);
 		// Where exactly (zoom and scroll) goes with the page; a page waiting to be shown keeps the position it came with.
 		const pos = this.pendingPage !== null ? this.pendingPos : this.currentPosition();
@@ -498,7 +499,7 @@ export class NotebookView extends FileView {
 	}
 
 	private applyPendingPage(): void {
-		const doc = this.session?.doc;
+		const doc = this.shownDoc();
 		const page = this.pendingPage;
 		if (page === null || !doc || !this.layout) return;
 		// A saved zoom needs the size of the view: wait for the first measurement.
@@ -544,6 +545,12 @@ export class NotebookView extends FileView {
 				onLoaded: (doc, mode, problem) => {
 					if (current()) this.onDocumentLoaded(doc, mode, problem);
 				},
+				onPartial: () => {
+					if (current()) this.showPartial();
+				},
+				onPartialProgress: (pages) => {
+					if (current()) this.onPagesRead(pages);
+				},
 				onSaveState: (state) => {
 					if (current()) this.showSaveState(state);
 				},
@@ -566,11 +573,14 @@ export class NotebookView extends FileView {
 				busy: () => this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null
 					|| this.textEditor?.isOpen === true,
 				journal: this.host.journal,
+				// The first slice waits for the frame that paints the page just shown.
+				yieldTask: (fn, first) => (first ? void window.requestAnimationFrame(() => nextTask(fn)) : nextTask(fn)),
 			},
 		);
 		this.session = session;
 		try {
-			await session.load();
+			// A large notebook is shown as soon as the page asked for is read; the rest follows (see StagedParse).
+			await session.load({ staged: true, page: this.pendingPage });
 		} catch (e) {
 			this.showError((e as Error).message);
 		}
@@ -714,7 +724,7 @@ export class NotebookView extends FileView {
 
 	/** Scrolls to the page delta pages away from the one in view. */
 	goToRelativePage(delta: number): void {
-		const n = this.session?.doc?.pages.length ?? 0;
+		const n = this.shownDoc()?.pages.length ?? 0;
 		if (n === 0) return;
 		this.scrollToPage(Math.min(n - 1, Math.max(0, this.currentPageIndex() + delta)), true);
 	}
@@ -1250,8 +1260,41 @@ export class NotebookView extends FileView {
 		return Math.max(0, nearestPage(this.layout, y));
 	}
 
+	/** The document to show: the complete one, or while a large notebook is still being read, the part-read one. */
+	private shownDoc(): NotebookDocument | null {
+		return this.session?.doc ?? this.session?.partialDoc ?? null;
+	}
+
+	/**
+	 * Staged load (#329): the page asked for is in, the others are stand-ins. Show it read-only: the toolbar stays off
+	 * and nothing can be edited or saved until `onDocumentLoaded` brings the complete document.
+	 */
+	private showPartial(): void {
+		if (!this.shownDoc()) return;
+		this.messageEl.hide();
+		this.body.show();
+		this.toolbar.setEditable(false);
+		this.toolbar.setStatus(t("status.loading"), "pending");
+		if (!this.media) {
+			this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged());
+			this.renderer?.setMedia(this.media);
+		}
+		this.refreshLayout();
+		this.refit(true);
+		this.pageNav?.invalidate();
+		this.applyPendingPage();
+	}
+
+	/** Staged load: these pages have their ink now; repaint if one of them is on screen. */
+	private onPagesRead(pages: number[]): void {
+		const layout = this.layout;
+		if (!layout) return;
+		const visible = visiblePages(layout, this.visibleRect());
+		if (visible.some((i) => pages.includes(i))) this.renderer?.invalidate();
+	}
+
 	private refreshLayout(): void {
-		const doc = this.session?.doc;
+		const doc = this.shownDoc();
 		this.layout = doc ? (this.pageMode?.enabled ? layoutPagesHorizontal(doc.pages) : layoutPages(doc.pages)) : null;
 		this.renderer?.setDocument(doc?.pages ?? null, this.layout);
 		this.pushRuler();
@@ -1283,7 +1326,7 @@ export class NotebookView extends FileView {
 			this.body.show();
 			this.toolbar.setEditable(true);
 			if (!this.media) {
-				this.media = new NotebookMedia(this.app, () => this.session?.doc ?? null, () => this.host.settings.folder, () => this.onMediaChanged());
+				this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged());
 				this.renderer?.setMedia(this.media);
 			}
 			this.refreshLayout();
@@ -1364,7 +1407,7 @@ export class NotebookView extends FileView {
 	}
 
 	private updatePageIndicator(): void {
-		const n = this.session?.doc?.pages.length ?? 0;
+		const n = this.shownDoc()?.pages.length ?? 0;
 		const current = n ? this.currentPageIndex() : -1;
 		this.toolbar.setPage(n ? current + 1 : 0, n);
 		if (current !== this.navCurrent) {
