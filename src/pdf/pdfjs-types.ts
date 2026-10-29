@@ -6,6 +6,13 @@
 export interface PdfViewport {
 	width: number;
 	height: number;
+	/** PDF user space → viewport (y down), `[a, b, c, d, e, f]`. Present in real pdf.js. */
+	transform?: number[];
+}
+
+/** What `getTextContent()` resolves to; items are read defensively (see pdf/text-items.ts). */
+export interface PdfTextContent {
+	items: unknown[];
 }
 
 export interface PdfRenderTask {
@@ -18,6 +25,8 @@ export interface PdfPage {
 	render(params: { canvasContext: unknown; viewport: PdfViewport }): PdfRenderTask;
 	/** Frees page-level resources (optional, present in real pdf.js). */
 	cleanup?(): unknown;
+	/** Text runs with their positions (optional, present in real pdf.js). */
+	getTextContent?(): Promise<PdfTextContent>;
 }
 
 export interface PdfDoc {
