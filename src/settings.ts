@@ -39,6 +39,8 @@ export interface NotebookSettings {
 	favouritePens: FavouritePen[];
 	/** Eraser radius, CSS px. */
 	eraserSize: number;
+	/** Vault path of the loose sheet (quick notes) notebook; empty = `<notebooks folder>/Quick notes.notebook`. */
+	looseSheetPath: string;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -60,6 +62,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	eraseAreaElements: false,
 	favouritePens: DEFAULT_FAVOURITES.map((f) => ({ ...f })),
 	eraserSize: DEFAULT_ERASER_SIZE,
+	looseSheetPath: "",
 };
 
 /** Merges saved data over the defaults, ignoring values of the wrong type. */
@@ -85,6 +88,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.eraseAreaElements === "boolean") s.eraseAreaElements = d.eraseAreaElements;
 	s.favouritePens = normaliseFavourites(d.favouritePens);
 	s.eraserSize = normaliseEraserSize(d.eraserSize);
+	if (typeof d.looseSheetPath === "string") s.looseSheetPath = d.looseSheetPath.trim();
 	return s;
 }
 

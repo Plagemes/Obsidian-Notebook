@@ -1210,3 +1210,33 @@
 	box-sizing: border-box;
 	pointer-events: none;
 }
+
+/* --- wave p1b: lecture --- */
+.notebook-move-pages {
+	max-height: 40vh;
+	overflow-y: auto;
+	margin-bottom: var(--size-4-3);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+
+.notebook-move-page {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2) var(--size-4-3);
+	min-height: 44px;
+	cursor: pointer;
+}
+
+.notebook-move-page + .notebook-move-page {
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.notebook-move-excerpt {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}

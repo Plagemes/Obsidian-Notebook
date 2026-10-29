@@ -20,6 +20,11 @@ Not yet verified on Android hardware (see `docs/testing.md`).
 - **Eraser size**: five presets in the toolbar for both eraser modes, remembered, and a circle that follows the pen (or mouse) while erasing.
 - **Pen only** toggle in the toolbar: fingers pan and zoom but do not draw. It is the inverse of the *Draw with finger* setting and stays in sync with it.
 - **Commands for hotkeys**: every tool and action as a command that only applies when a notebook is active (pen, highlighter, eraser and its mode and size, lasso, shapes, text, favourite pens 1-6, pen only, next/previous page, delete selection, pages panel, ruler). No default hotkeys.
+### Added
+- **Instant board shot** (toolbar camera button, command): one tap opens the in-app camera; after the shutter the photo is cropped automatically (the scanner's detection; the whole photo if no outline is found), gets the whiteboard filter and is placed as an image on the page in view, under the last ink, with a small "Board HH:MM" text label. On a page with no room it is scaled down, an infinite page grows, and as a last resort it is centred over the content with a notice. One undo step. Not verified on Android hardware.
+- **New lecture** (command, page menu): a small dialog asks for the course or title (default: the notebook name) and the date; a page like the last one is added at the end with the header as a text box, in one undo step. The format has no page titles, so the header is ordinary text.
+- **Loose sheet** (command, ribbon icon, library button): a quick-notes notebook opened from anywhere, created on first use in the notebooks folder or at the path set in the new setting *Loose sheet location*; an existing file is never replaced.
+- **Move to notebook…** (page menu, command): pick pages and a destination notebook. The destination is saved first (an open notebook: one undo step; a closed file: validated, a backup kept, read back), and only then do the pages leave the source (one undo step); pages edited meanwhile stay. Assets are shared by id, so only their records are copied.
 
 ## 0.4.1 — 2026-10-29
 

@@ -2,6 +2,7 @@ import { PluginSettingTab, Setting, type App, type Plugin, type SettingDefinitio
 import { t } from "../i18n";
 import { DEFAULT_SETTINGS, readSettings, type NotebookSettings } from "../settings";
 import { PAGE_SIZES, PAPER_KINDS } from "../model/types";
+import { defaultLooseSheetPath } from "../library/loose-sheet-logic";
 
 const paperOptions = () => Object.fromEntries(PAPER_KINDS.map((k) => [k, t(`paper.${k}`)]));
 const sizeOptions = () => Object.fromEntries((Object.keys(PAGE_SIZES) as Array<keyof typeof PAGE_SIZES>).map((k) => [k, t(`size.${k}`)]));
@@ -30,6 +31,11 @@ export class NotebookSettingTab extends PluginSettingTab {
 					defaultValue: DEFAULT_SETTINGS.folder,
 					placeholder: DEFAULT_SETTINGS.folder,
 				},
+			},
+			{
+				name: t("settings.looseSheet"),
+				desc: t("settings.looseSheet.desc"),
+				control: { type: "text", key: "looseSheetPath", defaultValue: DEFAULT_SETTINGS.looseSheetPath, placeholder: defaultLooseSheetPath(DEFAULT_SETTINGS.folder) },
 			},
 			{
 				name: t("settings.defaultPaper"),
@@ -142,6 +148,14 @@ export class NotebookSettingTab extends PluginSettingTab {
 				.setPlaceholder(DEFAULT_SETTINGS.folder)
 				.setValue(s.folder)
 				.onChange((v) => this.setControlValue("folder", v)));
+
+		new Setting(containerEl)
+			.setName(t("settings.looseSheet"))
+			.setDesc(t("settings.looseSheet.desc"))
+			.addText((text) => text
+				.setPlaceholder(defaultLooseSheetPath(DEFAULT_SETTINGS.folder))
+				.setValue(s.looseSheetPath)
+				.onChange((v) => this.setControlValue("looseSheetPath", v)));
 
 		new Setting(containerEl)
 			.setName(t("settings.defaultPaper"))

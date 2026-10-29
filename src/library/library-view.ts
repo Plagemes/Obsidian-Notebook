@@ -30,6 +30,8 @@ export interface LibraryHost {
 	importPdf(folder: string): void;
 	/** Scans pages with the camera into a new notebook in that folder. */
 	scanToNotebook?(folder: string): void;
+	/** Opens the loose sheet (quick notes), creating it the first time. */
+	openLooseSheet?(): void;
 	/** Writes metadata into the notebook (routed through an open view if there is one). */
 	updateMeta(file: TFile, patch: Partial<NotebookMeta>): Promise<void>;
 	/** Loads what a page shows under the ink (PDF page, image) so the cover can draw it. Null if there is none. */
@@ -250,6 +252,7 @@ export class LibraryView extends ItemView {
 		this.actionButton(actions, "folder-plus", t("library.action.newFolder"), () => this.askNewFolder(this.currentFolder()));
 		this.actionButton(actions, "file-up", t("library.action.importPdf"), () => this.host.importPdf(this.currentFolder()));
 		if (this.host.scanToNotebook) this.actionButton(actions, "scan", t("library.action.scanNotebook"), () => this.host.scanToNotebook?.(this.currentFolder()));
+		if (this.host.openLooseSheet) this.actionButton(actions, "sticky-note", t("library.action.looseSheet"), () => this.host.openLooseSheet?.());
 
 		this.scrollEl = main.createDiv({ cls: "notebook-lib-scroll" });
 		this.gridEl = this.scrollEl.createDiv({ cls: "notebook-lib-content" });

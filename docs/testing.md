@@ -105,6 +105,10 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Duplicate page ids rejected on read and on write; assets verified before use | ✅ | ✅ review-fixes tests | | | |
 | English UI + Italian translation | ✅ | ❌ | | | |
 | No Node/Electron imports in `main.js` | ✅ | ✅ `scripts/check-bundle.mjs` in `npm run build` | | | |
+| Instant board shot (toolbar camera button, command): in-app camera → automatic crop (whole photo if no outline) → whiteboard filter → image element under the last ink + time label, one undo step | ✅ | ✅ placement (below the ink, scaled down, infinite page grows, fallback over content), label, one undo step; ❌ camera, crop on real photos, view | | ✅ | quality of the automatic crop on real boards is unknown; HEIC from the camera app fallback shows the usual message |
+| New lecture (command, page menu): modal for course/title (default: notebook name) and date, new page at the end with the header as a text element, one undo step | ✅ | ✅ header text, date parsing, page copy of size/paper, undo; ❌ modal, view | | | the document format has no page titles, so the header is ordinary text (searchable in the library) |
+| Loose sheet (command, ribbon icon, library button): quick-notes notebook in a configurable location, created on first use, never replaced | ✅ | ✅ path resolution and sanitising, setting parsing; ❌ file creation and opening (Obsidian) | | | setting *Loose sheet location* |
+| Move to notebook… (page menu, command): choose pages and a notebook; target saved first (open view: one undo step; closed file: validated, backup kept, read back), then the pages leave the source (one undo step); assets shared by id | ✅ | ✅ planning, asset records, source-removal rules (edited pages stay), never-empty source, undo; ❌ dialog, vault writes, open-view path | | ✅ | not tried with Obsidian Sync or with the target open on another device |
 
 ## Automated checks
 
@@ -205,6 +209,10 @@ For each step note **pass / fail / notes** in the table at the end.
 39. **Selective eraser.** Write with pen in two colours, draw a few shapes and highlight over some text. With *Eraser*, choose *Highlighter only*: erase across text and highlights (whole stroke, then segment): only the highlighter goes. Then *Pen only*, then *One colour* (pick a swatch): only that ink goes. *All ink* brings back the old behaviour. Undo each gesture.
 40. **Erase area.** Eraser → *Area*. Draw a loop around some words and some highlighter, lift: everything inside is gone in one undo step; a stroke crossing the loop is cut at the line. Combine with *Pen only* or *One colour*. With a text box and an image inside the loop: they stay; turn on *Erase area also removes text and images* in the settings: they go with the ink, one undo brings everything back. Draw a very small loop: nothing happens.
 
+37. **Instant board shot.** In a notebook with some writing on the page in view, tap the camera button in the toolbar (also: command *Instant board shot*). Expected: the in-app camera opens (if the WebView refuses it, the camera app opens); after the shutter the photo appears with no further question, cropped to the board when an outline is found (otherwise whole, with a notice) and with the whiteboard filter, below your last line, with a small "Board HH:MM" label above it. One undo removes the photo and the label together. Repeat on an empty page, on a page written down to the bottom (the photo is scaled down; on an *infinite* page the page grows), and with the page zoomed in. Photograph a real whiteboard and a window or screen to see how the crop behaves. Note the time from the shutter to the photo on the page.
+38. **New lecture.** Command *New lecture* (or page menu → *New lecture…*). Expected: a small dialog with the notebook name as course/title and today's date; *Add page* adds a page at the end with "Title — YYYY-MM-DD" at the top, same size and paper as the last page, and scrolls to it; one undo removes it. Cancel adds nothing. An invalid date is refused. The header is found by the library search.
+39. **Loose sheet and Move to notebook.** Ribbon icon with the sticky note, command *Open loose sheet (quick notes)* and the library button: the first time a notebook *Quick notes* is created in the notebooks folder (or at the path set in *Loose sheet location*) and opened; afterwards the same one. Write on two pages. Page menu → *Move to notebook…*: tick pages, choose another notebook, *Move*. Expected: a notice; the pages are at the end of the other notebook (open it: all ink, text boxes, images and PDF/photo backgrounds are there); they are gone from the loose sheet (a blank page remains if all moved); undo in the target removes them there, undo in the source brings them back. Try with the target notebook open in another tab and closed; check that nothing is lost if you keep writing in the source while the dialog is open.
+
 | Step | Device / Obsidian version | Result | Notes |
 |---|---|---|---|
 | 1 Create and write | | | |
@@ -258,6 +266,9 @@ P1. **Favourite pens.** In a notebook, tap each of the six favourite buttons nex
 P2. **Eraser size.** Select the eraser: five size buttons appear. Pick the largest and drag the S Pen over strokes in *Whole strokes* and in *Parts of strokes* mode: a circle follows the pen (also while hovering) and what it touches is erased. Zoom in and out: the circle keeps its screen size and the erased area matches it. Pick the smallest. Close and reopen: the size is kept. Try the pen's eraser button/end.
 P3. **Pen only.** Tap *Pen only* in the toolbar (the pen icon): with *Draw with finger* previously on, a finger now pans and zooms instead of drawing; the setting in Obsidian's options shows the same state. Tap again to let the finger write.
 P4. **Commands and hotkeys.** In Settings > Hotkeys search "Notebook", assign keys to *Tool: pen*, *Favourite pen 2*, *Next page* and *Toggle pen only*, and use them with a keyboard in a notebook; with a Markdown note active they do nothing.
+| 37 Instant board shot | | | |
+| 38 New lecture | | | |
+| 39 Loose sheet and move pages | | | |
 
 Benchmark output (step 21): paste it here.
 
