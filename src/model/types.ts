@@ -1,7 +1,8 @@
 /** Notebook document format. Units: typographic points (pt), origin at the top-left of the page. */
 
 export const FORMAT_ID = "obsidian-notebook";
-export const CURRENT_VERSION = 2;
+/** v3: paper kinds beyond "grid" and page size presets (v2: highlighter tool). */
+export const CURRENT_VERSION = 3;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */

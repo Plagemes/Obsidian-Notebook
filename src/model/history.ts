@@ -1,5 +1,5 @@
 import { findPage } from "./document";
-import type { NotebookDocument, Page, Stroke } from "./types";
+import type { NotebookDocument, Page, Paper, Stroke } from "./types";
 
 /** A command knows how to apply and revert itself on a document: no snapshots. */
 export interface Command {
@@ -111,6 +111,7 @@ export class AddPage implements Command {
 	constructor(readonly page: Page, readonly index: number) {}
 
 	apply(doc: NotebookDocument): void {
+		if (doc.pages.includes(this.page)) return; // never insert a page twice
 		doc.pages.splice(Math.min(this.index, doc.pages.length), 0, this.page);
 	}
 
@@ -118,6 +119,98 @@ export class AddPage implements Command {
 		const i = doc.pages.indexOf(this.page);
 		// Never leave a document without pages.
 		if (i >= 0 && doc.pages.length > 1) doc.pages.splice(i, 1);
+	}
+}
+
+/**
+ * Deletes a page. The only page of a document is never deleted: apply() is then a no-op and so
+ * is revert(), which undoes only what apply() did. Undoing re-inserts the same page object.
+ */
+export class DeletePage implements Command {
+	readonly label = "Delete page";
+	private applied = false;
+	constructor(readonly page: Page, readonly index: number) {}
+
+	apply(doc: NotebookDocument): void {
+		const i = doc.pages.indexOf(this.page);
+		this.applied = i >= 0 && doc.pages.length > 1;
+		if (this.applied) doc.pages.splice(i, 1);
+	}
+
+	revert(doc: NotebookDocument): void {
+		if (!this.applied) return;
+		this.applied = false;
+		if (doc.pages.includes(this.page)) return;
+		doc.pages.splice(Math.max(0, Math.min(this.index, doc.pages.length)), 0, this.page);
+	}
+}
+
+/** Moves a page from index `from` to index `to` (indices of the page array before the move). */
+export class MovePage implements Command {
+	readonly label = "Move page";
+	/** Position the page actually had and reached; revert() puts it back exactly there. */
+	private applied: { from: number; to: number } | null = null;
+	constructor(readonly pageId: string, readonly from: number, readonly to: number) {}
+
+	apply(doc: NotebookDocument): void {
+		const i = doc.pages.findIndex((p) => p.id === this.pageId);
+		if (i < 0) {
+			this.applied = null;
+			return;
+		}
+		const to = Math.max(0, Math.min(this.to, doc.pages.length - 1));
+		this.applied = i === to ? null : { from: i, to };
+		if (!this.applied) return;
+		const [page] = doc.pages.splice(i, 1);
+		doc.pages.splice(to, 0, page!);
+	}
+
+	revert(doc: NotebookDocument): void {
+		if (!this.applied) return;
+		const { from, to } = this.applied;
+		this.applied = null;
+		if (doc.pages[to]?.id !== this.pageId) return;
+		const [page] = doc.pages.splice(to, 1);
+		doc.pages.splice(from, 0, page!);
+	}
+}
+
+/** Changes the paper (kind and spacing) of a page; strokes are untouched. */
+export class SetPaper implements Command {
+	readonly label = "Change paper";
+	constructor(readonly pageId: string, readonly before: Paper, readonly after: Paper) {}
+
+	apply(doc: NotebookDocument): void {
+		pageOf(doc, this.pageId).paper = { kind: this.after.kind, spacing: this.after.spacing };
+	}
+
+	revert(doc: NotebookDocument): void {
+		pageOf(doc, this.pageId).paper = { kind: this.before.kind, spacing: this.before.spacing };
+	}
+}
+
+/**
+ * Changes the size of a page. Strokes are NOT moved or scaled: they keep their page coordinates,
+ * so shrinking a page can leave strokes outside it (they are kept, never deleted).
+ */
+export class SetPageSize implements Command {
+	readonly label = "Change page size";
+	constructor(
+		readonly pageId: string,
+		readonly before: { width: number; height: number },
+		readonly after: { width: number; height: number },
+	) {}
+
+	apply(doc: NotebookDocument): void {
+		const page = pageOf(doc, this.pageId);
+		page.width = this.after.width;
+		page.height = this.after.height;
+	}
+
+	revert(doc: NotebookDocument): void {
+		const page = pageOf(doc, this.pageId);
+		page.width = this.before.width;
+		page.height = this.before.height;
 	}
 }
 

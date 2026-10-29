@@ -1,7 +1,7 @@
 import { detectVersion, migrate, MigrationError, type RawObject } from "./migrations";
 import {
-	CURRENT_VERSION, FORMAT_ID, TOOLS,
-	type NotebookDocument, type Page, type Point, type Stroke, type Tool,
+	CURRENT_VERSION, FORMAT_ID, PAPER_KINDS, TOOLS,
+	type NotebookDocument, type Page, type PaperKind, type Point, type Stroke, type Tool,
 } from "./types";
 
 export type ParseFailure =
@@ -103,7 +103,7 @@ function readPage(v: unknown, path: string, ids: Set<string>): Page {
 	const width = positive(v.width, `${path}.width`);
 	const height = positive(v.height, `${path}.height`);
 	const paper = v.paper;
-	if (!isObject(paper) || paper.kind !== "grid") fail(`${path}.paper`, "unknown paper");
+	if (!isObject(paper) || !PAPER_KINDS.includes(paper.kind as PaperKind)) fail(`${path}.paper`, "unknown paper");
 	const spacing = positive(paper.spacing, `${path}.paper.spacing`);
 	if (!Array.isArray(v.strokes)) fail(`${path}.strokes`, "expected an array");
 	const strokes = v.strokes.map((s, i) => {
@@ -114,7 +114,7 @@ function readPage(v: unknown, path: string, ids: Set<string>): Page {
 		validatedStrokes.add(stroke);
 		return stroke;
 	});
-	return { id, width, height, paper: { kind: "grid", spacing }, strokes };
+	return { id, width, height, paper: { kind: paper.kind as PaperKind, spacing }, strokes };
 }
 
 /** Committed strokes are immutable: edits create new strokes. This makes per-stroke caches safe. */
