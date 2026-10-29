@@ -61,6 +61,7 @@ Unknown fields are ignored on read. Every schema change increments `version` and
 src/
   main.ts                 plugin: view, extension, ribbon, commands, settings, flush on unload
   settings.ts             settings types and defaults
+  i18n.ts                 UI strings: English, Italian when Obsidian's language is Italian
   model/                  (does not import 'obsidian')
     types.ts              Document, Page, Stroke, A4 constants
     document.ts           document/page/stroke creation, ids, quantization
@@ -83,6 +84,8 @@ src/
     notebook-view.ts      FileView: mounts canvas and toolbar, wires session, history and input
     toolbar.ts            pen, eraser, colors, widths, undo/redo, fit to width
     modals.ts             "New notebook" (name) and "Open notebooks" (fuzzy search)
+    settings-tab.ts       settings UI
+scripts/check-bundle.mjs  fails the build if main.js requires anything but 'obsidian'
 tests/                    vitest on model/, ink/ and storage/session.ts
 ```
 
