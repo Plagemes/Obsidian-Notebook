@@ -4,6 +4,7 @@
  */
 import { createPage } from "../model/document";
 import { duplicatePage } from "../model/pages";
+import { parse } from "../model/serialize";
 import type { Asset, NotebookDocument, Page } from "../model/types";
 
 export type PageMoveFailure =
@@ -102,4 +103,15 @@ export function pageExcerpt(page: Page, max = 40): string {
 		if (text) return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 	}
 	return "";
+}
+
+/**
+ * Whether the document text read back from the destination's file holds every moved page. The source keeps its pages
+ * unless this is true: a destination that was deleted, turned read-only or reloaded during the move did not store them.
+ */
+export function holdsPages(text: string, pageIds: readonly string[]): boolean {
+	const back = parse(text);
+	if (!back.ok) return false;
+	const ids = new Set(back.doc.pages.map((p) => p.id));
+	return pageIds.length > 0 && pageIds.every((id) => ids.has(id));
 }

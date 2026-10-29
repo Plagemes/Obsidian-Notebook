@@ -12,7 +12,7 @@ import { isEditContextSource, type EditContext } from "../view/edit-context";
 import { resolveAssetFile, storeAsset } from "../view/media";
 import { looseSheetPath } from "./loose-sheet-logic";
 import { askMovePages } from "./move-pages-modal";
-import { pageExcerpt, planPageMove, planSourceRemoval, type PageMoveFailure, type PageMovePlan } from "./page-move";
+import { holdsPages, pageExcerpt, planPageMove, planSourceRemoval, type PageMoveFailure, type PageMovePlan } from "./page-move";
 
 const NOTEBOOK_VIEW_TYPE = "notebook-view";
 
@@ -77,8 +77,22 @@ async function appendToFile(
 		return writeNotebookText(file.extension, checked.text, current);
 	});
 	if (stale) throw new Error(t("host.changedElsewhere"));
-	const back = parse(await io.read());
-	if (!back.ok || !plan.pages.every((p) => back.doc.pages.some((q) => q.id === p.id))) throw new Error(t("move.verifyFailed"));
+	if (!holdsPages(await io.read(), plan.pages.map((p) => p.id))) throw new Error(t("move.verifyFailed"));
+}
+
+/**
+ * After the open destination saved: its file must still be there and hold the pages. `flush()` only says nothing is left
+ * unsaved; the view may have closed, the file may have been deleted or reloaded meanwhile.
+ */
+async function storedInFile(app: App, file: TFile, pageIds: readonly string[]): Promise<boolean> {
+	const current = app.vault.getFileByPath(file.path);
+	if (!current || current !== file) return false;
+	try {
+		return holdsPages(readNotebookText(file.extension, await app.vault.read(file)), pageIds);
+	} catch (e) {
+		console.error("[notebook] move pages: read back", e);
+		return false;
+	}
 }
 
 function failureText(f: PageMoveFailure): string {
@@ -124,6 +138,7 @@ export async function movePagesTo(src: EditContext, pageIds: readonly string[], 
 		commands.push(new InsertPages(plan.pages, targetCtx.doc.pages.length));
 		targetCtx.execute(new Batch("Move pages in", commands));
 		if (!(await targetCtx.flush())) throw new Error(t("move.targetNotSaved"));
+		if (!(await storedInFile(app, target, plan.pages.map((p) => p.id)))) throw new Error(t("move.targetNotStored"));
 	} else {
 		await appendToFile(app, target, targetDoc, before, ready, settings);
 	}

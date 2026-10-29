@@ -34,6 +34,15 @@ Not yet verified on Android hardware (see `docs/testing.md`).
 - **Paste from the system clipboard** (roadmap 114): a picture becomes an image element (same sizing and HEIF/HEIC message as Insert image), plain text becomes a text box (line breaks kept, at most 20,000 characters). Uses `navigator.clipboard` when the WebView allows it; where it does not (Android WebViews often refuse), Paste opens a small box in which you press and hold and choose the system Paste. Not verified on Android.
 - **White to transparent** (roadmap 172): the selection bar's *Make white transparent* stores a processed copy of each selected image (a PNG, at most 2048 px on the long side) as a new asset and points the element at it; undo points it back. No new fields in the file.
 
+### Fixed
+- **Move to notebook…**: when the destination is open, the pages leave the source only if the destination is still editable and saved after the flush and its file, read back, contains them; a destination deleted, turned read-only or closed during the move keeps the source pages, with a notice.
+- **Companion notes**: a change that arrived by sync (or from another app) waits 30 s even when the notebook is open here, and opening a notebook waits 30 s too; only this device's own saves use the 4 s delay, so two devices no longer write the same note and cause conflicted copies.
+- **Companion notes**: frontmatter and generated region are written in one `vault.process` instead of two writes (user properties and text untouched; broken YAML or markers still leave the note alone).
+- **Companion notes**: a file copy of a notebook (same document id) no longer takes over the original's note when that note's link does not resolve; it does so only if no other notebook has the id.
+- **Update PDF from a new version**: another PDF joins "that PDF" only with several unchanged pages (3) or more than half of its slides, so one shared "Thank you" slide no longer pulls in an unrelated lecture; the summary names the PDF of each updated slide and only the main PDF's slides start switched on.
+- **Update PDF from a new version**: switching an infinite page that grew beyond the slide keeps its height (the extra goes into the bottom margin when the page has margins), so ink below the slide is not cut off.
+- **Conflicted copies**: a copy identical to the notebook (e.g. a browser download named `Notes (1)`) is no longer announced; the merge dialog says that a `Notes (1)` copy may be intentional. Merging stays opt-in.
+
 ### Known limitations
 - White to transparent is a fixed threshold (near-white pixels, with a short ramp at the edges); it suits screenshots and drawings on white, not photos with grey paper. PDF and SVG exports draw images on white, so a transparent image shows a white box there over a coloured page or a PDF background.
 - A selection still belongs to one page; paste goes to the page in view.

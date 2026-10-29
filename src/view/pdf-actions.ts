@@ -258,11 +258,15 @@ function askRepublish(host: PdfActionHost, result: MatchResult, unreadable: numb
 			for (const m of updated) {
 				const src = m.source!;
 				const at = host.doc.pages.findIndex((p) => p.background?.kind === "pdf" && p.background.asset === src.asset && p.background.page === src.page);
-				switchPages.add(m.page);
+				// Only slides of the PDF the update is for start switched on; a look-alike slide of another PDF is opt-in.
+				const main = src.asset === result.main;
+				if (main) switchPages.add(m.page);
+				const similarity = t("pdf.update.similarity", { pct: String(Math.round(m.similarity * 100)) });
+				const from = t("pdf.update.from", { name: host.doc.assets?.[src.asset]?.name ?? src.asset, n: String(src.page) });
 				new Setting(el)
 					.setName(t("pdf.update.updatedItem", { page: String(at + 1), n: String(m.page) }))
-					.setDesc(t("pdf.update.similarity", { pct: String(Math.round(m.similarity * 100)) }))
-					.addToggle((tg) => tg.setTooltip(t("pdf.update.switch")).setValue(true).onChange((v) => {
+					.setDesc(main ? `${similarity} · ${from}` : `${similarity} · ${from} · ${t("pdf.update.otherPdf")}`)
+					.addToggle((tg) => tg.setTooltip(t("pdf.update.switch")).setValue(main).onChange((v) => {
 						if (v) switchPages.add(m.page);
 						else switchPages.delete(m.page);
 					}));

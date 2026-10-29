@@ -26,7 +26,11 @@ export interface EditContext {
 	visibleLocal(pageIndex: number): { minY: number; maxY: number } | null;
 	/** Runs a command as one undo step (ends text editing, clears the selection), optionally scrolling to a page. */
 	execute(cmd: Command, scrollToPage?: number): void;
-	/** Saves now. True only when nothing is left unsaved in memory. */
+	/**
+	 * Saves now. True only when the document is still editable here (not deleted, read-only or closed meanwhile) and
+	 * everything in it is written to disk. Stricter than the view's `flushNow()`, which is also true when there is
+	 * nothing it could write.
+	 */
 	flush(): Promise<boolean>;
 }
 

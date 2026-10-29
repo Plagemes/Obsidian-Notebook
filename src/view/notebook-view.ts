@@ -307,6 +307,11 @@ export class NotebookView extends FileView {
 		return this.session?.doc ?? null;
 	}
 
+	/** Whether `content` (document text now in the file) was written by this view's own save, not by sync or another app. */
+	isOwnWrite(content: string): boolean {
+		return this.session?.isOwnWrite(content) ?? false;
+	}
+
 	async onOpen(): Promise<void> {
 		this.contentEl.empty();
 		this.contentEl.addClass("notebook-view");
@@ -1121,7 +1126,7 @@ export class NotebookView extends FileView {
 				this.afterHistoryChange();
 				if (scrollTo !== undefined) this.scrollToPage(scrollTo);
 			},
-			flush: () => this.flushNow(),
+			flush: async () => (await this.flushNow()) && this.session === session && session.isSaved(),
 		};
 	}
 

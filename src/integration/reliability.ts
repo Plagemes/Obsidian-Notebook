@@ -22,7 +22,7 @@ import type { RepairSummary } from "../model/repair";
 import { parse, serializeChecked } from "../model/serialize";
 import type { NotebookDocument } from "../model/types";
 import { backupFolder, type NotebookSettings } from "../settings";
-import { conflictBaseOf, conflictCopiesOf } from "../storage/conflicts";
+import { conflictBaseOf, conflictCopiesOf, mayBeManualCopy, sameNotebookText } from "../storage/conflicts";
 import { isNotebookFile, readNotebookText } from "../storage/format";
 import { extractDocId, formatSnapshotDate, parseSnapshotName, snapshotFolder } from "../storage/history";
 import { journalKey, type JournalStore } from "../storage/journal";
@@ -215,6 +215,8 @@ class RepairModal extends Modal {
 interface ConflictCopy {
 	file: TFile;
 	doc: NotebookDocument | null;
+	/** Same content as the main file on disk: nothing to merge. */
+	identical: boolean;
 }
 
 /** Notebook files in the folder of `file` whose names look like conflicted copies of it. */
@@ -230,14 +232,23 @@ function copyFilesOf(app: App, file: TFile): TFile[] {
  */
 async function findConflictCopies(app: App, file: TFile, docId: string): Promise<ConflictCopy[]> {
 	const out: ConflictCopy[] = [];
-	for (const f of copyFilesOf(app, file)) {
+	const files = copyFilesOf(app, file);
+	if (files.length === 0) return out;
+	let main: string | null = null;
+	try {
+		main = readNotebookText(file.extension, await app.vault.read(file));
+	} catch (e) {
+		console.error("[notebook] could not read", file.path, e);
+	}
+	for (const f of files) {
 		try {
 			const text = readNotebookText(f.extension, await app.vault.read(f));
 			const r = parse(text);
+			const identical = main !== null && sameNotebookText(main, text);
 			if (r.ok) {
-				if (r.doc.id === docId) out.push({ file: f, doc: r.doc });
+				if (r.doc.id === docId) out.push({ file: f, doc: r.doc, identical });
 			} else if (extractDocId(text) === docId) {
-				out.push({ file: f, doc: null });
+				out.push({ file: f, doc: null, identical });
 			}
 		} catch (e) {
 			console.error("[notebook] could not read", f.path, e);
@@ -314,9 +325,12 @@ class MergeModal extends Modal {
 		this.setTitle(t("merge.title"));
 		contentEl.createEl("p", { text: t("merge.intro") });
 		const doc = this.view.editableDocument();
+		const base = this.view.file?.basename ?? "";
 		for (const copy of this.copies) {
 			const s = new Setting(contentEl).setName(copy.file.path);
 			s.descEl.empty();
+			if (copy.identical) s.descEl.createDiv({ text: t("merge.identical") });
+			else if (mayBeManualCopy(copy.file.basename, base)) s.descEl.createDiv({ text: t("merge.maybeIntentional") });
 			if (!copy.doc || !doc) {
 				s.descEl.createDiv({ text: t("merge.unreadable", { name: copy.file.name }) });
 				if (!copy.doc) s.addButton((b) => b.setButtonText(t("repair.title")).onClick(() => {
@@ -394,7 +408,8 @@ export async function checkConflicts(deps: ReliabilityDeps, view: ReliabilityVie
 	if (!file || !doc || (!force && notified.has(file.path))) return;
 	try {
 		if (copyFilesOf(deps.app, file).length === 0) return;
-		const copies = await findConflictCopies(deps.app, file, doc.id);
+		// A copy identical to this notebook holds nothing to merge (often a download or a file manager copy): no notice.
+		const copies = (await findConflictCopies(deps.app, file, doc.id)).filter((c) => !c.identical);
 		if (copies.length === 0 || view.file !== file) return;
 		notified.add(file.path);
 		const fragment = createFragment((f) => {
