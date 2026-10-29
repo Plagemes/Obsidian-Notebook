@@ -140,6 +140,9 @@ export class Toolbar {
 	readonly favouritesEl: HTMLElement;
 	readonly eraserSizeEl: HTMLElement;
 	readonly penOnlyEl: HTMLElement;
+	/** Slots filled by pdf-reading.ts: the PDF reading entries of the "more" menu, and the highlighter's snap-to-text option. */
+	readonly readingEl: HTMLElement;
+	readonly highlighterOptionsEl: HTMLElement;
 	onEditableChange: ((editable: boolean) => void) | null = null;
 
 	constructor(parent: HTMLElement, public state: ToolbarState, private readonly actions: ToolbarActions) {
@@ -197,6 +200,7 @@ export class Toolbar {
 		this.colorGroup = this.row(this.optionsEl);
 		this.widthGroup = this.row(this.optionsEl);
 		this.sizeGroup = this.row(this.optionsEl);
+		this.highlighterOptionsEl = this.row(this.optionsEl);
 
 		// The less used actions.
 		this.moreEl = this.el.createDiv({ cls: "notebook-popover notebook-more notebook-hidden", attr: { role: "menu", "aria-label": t("toolbar.more") } });
@@ -205,6 +209,7 @@ export class Toolbar {
 		this.moreItem("camera", "tool.boardShot", () => this.actions.boardShot());
 		this.rulerButton = this.moreItem("ruler", "tool.ruler", () => this.set({ ruler: !this.state.ruler }));
 		this.penOnlyEl = this.moreEl.createDiv({ cls: "notebook-more-slot" });
+		this.readingEl = this.moreEl.createDiv({ cls: "notebook-more-slot" });
 		this.moreItem("file-plus", "tool.addPage", () => this.actions.addPage());
 		const pageMenu = this.moreItem("more-vertical", "page.menu", () => undefined);
 		pageMenu.addEventListener("click", (e) => this.actions.pageMenu(e));
@@ -423,6 +428,7 @@ export class Toolbar {
 		this.colorGroup.toggleClass("notebook-hidden", !colouring);
 		this.widthGroup.toggleClass("notebook-hidden", !inking);
 		this.sizeGroup.toggleClass("notebook-hidden", s.tool !== "text");
+		this.highlighterOptionsEl.toggleClass("notebook-hidden", s.tool !== "highlighter");
 		this.colorGroup.empty();
 		this.widthGroup.empty();
 		this.sizeGroup.empty();

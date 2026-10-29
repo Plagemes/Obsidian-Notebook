@@ -69,6 +69,7 @@ import { SelectionActions } from "./selection-actions";
 import { TextEditor, type TextEditSession } from "./text-editor";
 import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites";
 import { PenControls, type PenStore } from "./pen-controls";
+import { PdfReading, type ReadingHost } from "./pdf-reading";
 import { DEFAULT_TOOLS, Toolbar, type ToolName, type ToolbarState } from "./toolbar";
 import {
 	centredPosition, imageElementSize, imagePageSize, mergeMeta, metaEquals, newTextBox, shapePoints, shouldGrabRuler, toggleBookmark,
@@ -235,6 +236,8 @@ export class NotebookView extends FileView {
 	private fitMode = true;
 	private tools: ToolbarState = { ...DEFAULT_TOOLS };
 	private pens: PenControls | null = null;
+	/** Wave 0.6: PDF search, snapping highlighter, hide annotations, dimmed backgrounds (pdf-reading.ts). */
+	private reading: PdfReading | null = null;
 
 	private active: ActiveStroke | null = null;
 	private erasing: ActiveErase | null = null;
@@ -375,6 +378,7 @@ export class NotebookView extends FileView {
 			canUndo: () => this.history.canUndo(),
 			undo: () => this.undo(),
 		});
+		this.reading = new PdfReading(this.readingHost());
 		this.applySettings(this.host.settings);
 
 		this.resizeObserver = new ResizeObserver(() => this.measure());
@@ -425,6 +429,8 @@ export class NotebookView extends FileView {
 		this.navTimer = this.thumbTimer = this.snapFlashTimer = null;
 		this.pens?.destroy();
 		this.pens = null;
+		this.reading?.destroy();
+		this.reading = null;
 		this.toolbar?.destroy();
 		this.controller?.destroy();
 		this.controller = null;
@@ -539,6 +545,7 @@ export class NotebookView extends FileView {
 		this.renderer?.setMedia(null);
 		this.media?.destroy();
 		this.media = null;
+		this.reading?.reset();
 		this.pageNav?.invalidate();
 		await super.onUnloadFile(file);
 	}
@@ -575,7 +582,7 @@ export class NotebookView extends FileView {
 	}
 
 	applySettings(settings: NotebookSettings): void {
-		this.policy.settings = policySettings(settings);
+		this.applyInput(settings);
 		this.pressure.mode = settings.pressureMode;
 		if (this.toolbar && this.tools.eraserSize !== settings.eraserSize) this.toolbar.update({ eraserSize: settings.eraserSize });
 		this.pens?.refresh();
@@ -587,6 +594,13 @@ export class NotebookView extends FileView {
 		if (this.renderer && !this.active) this.renderer.setLowLatency(settings.lowLatencyInk);
 		this.perfEl?.toggleClass("notebook-hidden", !settings.perfOverlay);
 		if (this.renderer) this.renderer.onFrame = settings.perfOverlay ? (t) => this.onFrame(t) : null;
+		this.reading?.settingsChanged();
+	}
+
+	/** Input policy from the settings; while annotations are hidden the view is read-only and a finger only pans and zooms. */
+	private applyInput(settings: NotebookSettings = this.host.settings): void {
+		const base = policySettings(settings);
+		this.policy.settings = this.reading ? this.reading.policy(base) : base;
 	}
 
 	/**
@@ -682,7 +696,7 @@ export class NotebookView extends FileView {
 			penOnly: () => !s().fingerDrawing,
 			setPenOnly: (on) => {
 				s().fingerDrawing = !on;
-				this.policy.settings = { ...this.policy.settings, fingerDrawing: !on };
+				this.applyInput();
 				save();
 			},
 			eraserSize: () => s().eraserSize,
@@ -964,6 +978,48 @@ export class NotebookView extends FileView {
 		return this.currentPageIndex();
 	}
 
+	/** What the PDF reading tools (search, snapping highlighter, hide annotations, dimming) need from this view. */
+	private readingHost(): ReadingHost {
+		const save = (): void => void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
+		return {
+			stage: this.stage,
+			body: this.body,
+			toolbar: this.toolbar,
+			settings: () => this.host.settings,
+			save,
+			doc: () => this.session?.doc ?? null,
+			pageText: (asset, page) => {
+				const media = this.media;
+				return media ? media.pdf.pageText(asset, page) : Promise.reject(new Error("no media"));
+			},
+			viewport: () => this.viewport,
+			viewSize: () => this.viewSize,
+			layout: () => this.layout,
+			visibleRect: () => this.visibleRect(),
+			currentPage: () => this.currentPageIndex(),
+			setViewport: (v) => this.setViewport(v),
+			renderer: () => this.renderer,
+			isNarrow: () => this.body.hasClass("is-narrow"),
+			beforeHide: () => {
+				this.controller?.finishActiveStroke();
+				this.commitText();
+				this.clearSelection();
+				this.radial?.close();
+			},
+			editingChanged: () => {
+				this.applyInput();
+				this.toolbar.setEditable(this.editable());
+				this.updateHistoryButtons();
+				this.selectionActions?.update();
+			},
+		};
+	}
+
+	/** The PDF reading tools (search, hide annotations, dimming) for the commands; null before the view is open. */
+	get readingTools(): PdfReading | null {
+		return this.reading;
+	}
+
 	/** Wave p1a: what the PDF actions (margins, re-published slides, annotation export) need; null without a document. */
 	pdfActionHost(): PdfActionHost | null {
 		const session = this.session;
@@ -1157,7 +1213,7 @@ export class NotebookView extends FileView {
 	}
 
 	private editable(): boolean {
-		return this.session?.mode === "ok" && !!this.session.doc;
+		return this.session?.mode === "ok" && !!this.session.doc && !this.reading?.annotationsHidden;
 	}
 
 	private pageAtIndex(i: number): Page | null {
@@ -1175,6 +1231,7 @@ export class NotebookView extends FileView {
 		this.layout = doc ? layoutPages(doc.pages) : null;
 		this.renderer?.setDocument(doc?.pages ?? null, this.layout);
 		this.pushRuler();
+		this.reading?.docChanged();
 	}
 
 	private onDocumentLoaded(doc: NotebookDocument | null, mode: SessionMode, problem: string | null): void {
@@ -1198,6 +1255,7 @@ export class NotebookView extends FileView {
 		this.renderer?.setSpacePreview(null);
 		this.radial?.close();
 		this.ruler = null;
+		this.reading?.reset();
 		if (doc && mode === "ok") {
 			this.messageEl.hide();
 			this.body.show();
@@ -1417,6 +1475,7 @@ export class NotebookView extends FileView {
 		const layout = this.layout;
 		this.viewport = layout ? clampToPage(v, this.viewSize, layout) : v;
 		this.renderer?.setViewport(this.viewport, interactive);
+		this.reading?.viewportChanged();
 		if (this.selection) this.pushSelection();
 		this.placeTextEditor();
 		this.updatePageIndicator();
@@ -1649,6 +1708,7 @@ export class NotebookView extends FileView {
 		this.pressure.begin(sample.pointerType, sample.pressure);
 		const p = this.pressure.sample(sample.pointerType, sample.pressure, sample.x, sample.y, sample.t);
 		const highlighter = tool === "highlighter";
+		if (highlighter && page) this.reading?.prefetch(page);
 		const inkTool = highlighter ? "highlighter" : "pen";
 		const color = highlighter ? this.tools.highlighterColor : this.tools.penColor;
 		const width = highlighter ? this.tools.highlighterWidth : this.tools.penWidth;
@@ -1895,6 +1955,14 @@ export class NotebookView extends FileView {
 			this.ink.add(active.rawX, active.rawY, active.rawP);
 			this.ink.finish();
 			const stroke = freezeStroke({ ...active.stroke, points: this.ink.toPoints() });
+			const snapped = this.reading?.snapStroke(page, stroke);
+			if (snapped) {
+				// Snap to text lines: straight highlights replace the hand-drawn stroke in the same undo step.
+				this.renderer?.cancelWet();
+				this.addStrokes(active.pageIndex, page, snapped);
+				if (active.liveFallback) this.renderer?.setLive(null);
+				return;
+			}
 			// The wet canvas shows exactly this geometry; the static layer takes it over without a change.
 			this.renderer?.endWet(stroke);
 			this.addStrokes(active.pageIndex, page, [stroke]);
@@ -1903,6 +1971,11 @@ export class NotebookView extends FileView {
 		}
 		this.renderer?.setLive(null);
 		const stroke = freezeStroke(active.stroke);
+		const snapped = this.reading?.snapStroke(page, stroke);
+		if (snapped) {
+			this.addStrokes(active.pageIndex, page, snapped);
+			return;
+		}
 		const extras = active.extra.map((points) => freezeStroke({ ...active.stroke, id: createId(), points }));
 		this.addStrokes(active.pageIndex, page, [stroke, ...extras]);
 	}

@@ -11,6 +11,7 @@ import { registerIntegration } from "./integration";
 import { registerReliability } from "./integration/reliability";
 import { LIBRARY_VIEW_TYPE, LibraryView } from "./library/library-view";
 import { registerToolCommands } from "./view/commands";
+import { registerReadingCommands } from "./view/reading-commands";
 import { OpenNotebookModal } from "./view/modals";
 import { openNotebookAtPage } from "./integration/open";
 import { exportPdfAnnotations, openMarginsModal, updatePdfFromNewVersion } from "./view/pdf-actions";
@@ -71,6 +72,7 @@ export default class NotebookPlugin extends Plugin {
 		registerLectureCommands(this, (file) => this.host.openNotebook(file));
 
 		registerToolCommands(this, (checking, run) => this.withView(checking, run));
+		registerReadingCommands(this, (checking, run) => this.withView(checking, run));
 
 		registerIntegration(this, {
 			background: (doc, page, width) => this.host.thumbnailBackground(doc, page, width),

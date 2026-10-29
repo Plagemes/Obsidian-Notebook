@@ -73,7 +73,7 @@ const slow = new Map<string, string>();
 function foldChar(ch: string): string {
 	let f = slow.get(ch);
 	if (f === undefined) {
-		f = ch.normalize("NFKD").toLowerCase().replace(/[\p{M}­​-‍⁠﻿]/gu, "");
+		f = ch.normalize("NFKD").toLowerCase().replace(/[\p{M}\u00ad\u200b-\u200d\u2060\ufeff]/gu, "");
 		if (slow.size < 4096) slow.set(ch, f);
 	}
 	return f;
