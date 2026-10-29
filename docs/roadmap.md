@@ -172,7 +172,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for all.
 
 ### Writing and tools
-61. **P1** Pen hover preview: with the S Pen near the screen, a circle shows the nib size and colour.
+61. ~~**P1** Pen hover preview: with the S Pen near the screen, a circle shows the nib size and colour.~~ — dropped: the S Pen and Android already show the hover pointer (user decision, 2026-10-29)
 62. **P1** Adjustable eraser size with a visible eraser circle.
 63. **P2** Rectangle selection in addition to the lasso.
 64. **P2** Select by colour or tool (e.g. all highlighter strokes on this page).
@@ -218,7 +218,7 @@ Goal: notebooks behave like first-class Obsidian content. Several items depend o
 - **O5 P2** Hover preview: hovering a notebook link shows the page thumbnail (page preview).
 - **O6 P1** Native embed syntax: `![[Physics.notebook#p3]]` renders the page in reading view and live preview.
 - **O7 P2** Linked mentions: inside the notebook, for each page, the notes that link to it.
-- **O8 P2** Wikilinks in text boxes: typing `[[` suggests notes; tapping the link opens the note.
+- **O8 P1** Links written with the pen: writing `[[` by hand (two bracket strokes) — or circling ink and choosing "Link" — opens the note suggester; the chosen note becomes a link attached to that ink, tapping it opens the note. The ink stays as written. The same works in text boxes with the keyboard.
 - **O9 P1** File explorer menu: "New notebook here" on folders, "Annotate in Notebook" on PDFs.
 - **O10 P2** From Obsidian's PDF viewer: an "Annotate in Notebook" action.
 - **O11 P3** Pages on Canvas: notebook pages as cards on an Obsidian Canvas.
@@ -227,10 +227,17 @@ Goal: notebooks behave like first-class Obsidian content. Several items depend o
 - **O14 P1** Commands and hotkeys for every tool (pen, eraser, lasso…), assignable in Hotkeys.
 - **O15 P2** Status bar: "p. 3/12" and save state; tap opens the navigator.
 - **O16 P1** Reopen where you left off: workspace/session restore brings back the same page and zoom.
-- **O17 P1** Theme integration: colours, accent and dark mode followed everywhere; documented CSS variables for snippets.
-- **O18 P1** Sync conflicts: when Obsidian Sync creates a conflicted copy, a dialog compares both versions and merges their strokes.
+- ~~**O17 P1** Theme integration: colours, accent and dark mode followed everywhere; documented CSS variables for snippets.~~ — dropped (user decision, 2026-10-29)
+- ~~**O18 P1** Sync conflicts: when Obsidian Sync creates a conflicted copy, a dialog compares both versions and merges their strokes.~~ — dropped: sync will go through Google Drive or OneDrive, not Obsidian Sync (user decision, 2026-10-29)
 - **O19 P2** Obsidian search: text boxes (and OCR later) appear in global search through the companion note.
 - **O20 P1** Page into a note: "Copy link to this page" and "Insert this page into the active note" (link or embed).
+
+### Sync with Google Drive or OneDrive (decision 2026-10-29)
+
+The vault will be synchronised through Google Drive or OneDrive (for example with a folder-sync app on Android or a sync plugin), not Obsidian Sync. Consequences for the design:
+- Notebooks and assets are plain files, so any folder-sync tool works; nothing depends on Obsidian Sync.
+- Conflicts are handled generically: when a notebook changes on disk while it is open, the other version is kept as a `conflict` backup before anything is overwritten (already implemented). Sync tools that create "conflicted copy" files leave them in the folder; the library should show them clearly (future item, to be planned with the companion-note work).
+- Large PDFs live in `_assets` once (content hash), which keeps uploads small.
 
 ## File format transition (applies to M4 and to every milestone before it)
 
