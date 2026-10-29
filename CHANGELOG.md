@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.1 — 2026-10-29
+
+Changes requested by the community directory review.
+
+### Changed
+- Settings use Obsidian's declarative settings API on Obsidian 1.13+, so they appear in the settings search. Older versions keep the previous settings tab.
+- **Open notebooks** lists only notebooks inside the notebooks folder (and its subfolders) instead of scanning the whole vault. Notebooks elsewhere can still be opened from the file explorer.
+- No `!important` in the stylesheet.
+
+### Added
+- Releases are built by GitHub Actions with artifact attestations for `main.js`, `manifest.json` and `styles.css`.
+
 ## 0.1.0 — 2026-10-29 (M1, MVP)
 
 First development version. Not yet verified on Android hardware (see `docs/testing.md`).

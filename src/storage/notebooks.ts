@@ -1,4 +1,4 @@
-import { normalizePath, type App, type TFile } from "obsidian";
+import { normalizePath, TFile, Vault, type App } from "obsidian";
 import { createDocument } from "../model/document";
 import { serialize } from "../model/serialize";
 import { FILE_EXTENSION } from "../model/types";
@@ -29,8 +29,13 @@ export async function createNotebook(app: App, folder: string, name: string): Pr
 	return app.vault.create(path, serialize(createDocument()));
 }
 
-export function listNotebooks(app: App): TFile[] {
-	return app.vault.getFiles()
-		.filter((f) => f.extension === FILE_EXTENSION)
-		.sort((a, b) => b.stat.mtime - a.stat.mtime);
+/** Notebooks inside the notebooks folder (recursively). The rest of the vault is not enumerated. */
+export function listNotebooks(app: App, folder: string): TFile[] {
+	const root = app.vault.getFolderByPath(normalizePath(folder || "/"));
+	if (!root) return [];
+	const found: TFile[] = [];
+	Vault.recurseChildren(root, (f) => {
+		if (f instanceof TFile && f.extension === FILE_EXTENSION) found.push(f);
+	});
+	return found.sort((a, b) => b.stat.mtime - a.stat.mtime);
 }
