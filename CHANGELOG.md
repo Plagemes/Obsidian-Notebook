@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.1 — 2026-10-30
+
+Hotfix for 0.5.0. Not verified on Android hardware (see `docs/testing.md`); how the S Pen button is reported is the open question.
+
+### Fixed
+- **S Pen side button did nothing** on a Galaxy tablet. Detection only looked at a pen `pointerdown` / `pointermove` with `button 2` / `buttons & 2`, and the page prevented `contextmenu` instead of using it. The radial menu now opens from every plausible signal, once per press: pen `pointerdown` with the button, `buttons & 2` turning on in `pointermove` / `pointerrawupdate` (hovering or touching), a `contextmenu` or `auxclick` (button 2) that comes from the pen (never a touch long-press, and never a bare pen long-press on the page), and a mouse right button right after pen activity. A press that lands just after the nib (a stroke younger than 350 ms that has not moved) discards that stroke, so no dot is left; a button brushed during real writing is ignored. The eraser (`buttons & 32`, `button 5`) is never taken for the side button. The stroke pipeline is unchanged.
+- On Samsung tablets the system **Air command** takes the button while the pen hovers; the setting text and the new test now say how to switch it off (the name and place may differ by One UI version).
+
+### Added
+- **Pen button test**: a button in the plugin settings and the command *Pen button test* open a test area that lists, live, the last 30 events on it (pointerdown / move / up / rawupdate / cancel, contextmenu, auxclick, keydown / keyup) with pointer type, `button`, `buttons`, pressure, primary flag and whether the plugin would treat the event as the side button. It draws nothing. *Copy log* copies the text (clipboard, with the text selected as a fallback). Use it to report what the S Pen sends.
+- Setting **Open the radial menu by holding the pen still** (off by default): a fallback that does not need the button. Holding the nib on the page for 0.6 s within 6 px opens the same menu and discards the stroke, so no dot remains; any movement cancels it.
+
 ## 0.5.0 — 2026-10-29
 
 Not yet verified on Android hardware (see `docs/testing.md`).

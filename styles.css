@@ -1654,3 +1654,42 @@
 	height: auto;
 	box-shadow: 0 0 0 1px var(--background-modifier-border);
 }
+
+/* 0.5.1: pen button test */
+.notebook-pentest-note {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.notebook-pentest-area {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 140px;
+	margin-bottom: 8px;
+	padding: 8px;
+	border: 2px dashed var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	color: var(--text-muted);
+	text-align: center;
+	touch-action: none;
+	user-select: none;
+}
+
+.notebook-pentest-summary {
+	margin-bottom: 4px;
+	font-weight: var(--font-semibold);
+}
+
+.notebook-pentest-log {
+	width: 100%;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	resize: vertical;
+}
+
+.notebook-pentest-buttons {
+	display: flex;
+	gap: 8px;
+	margin-top: 8px;
+}

@@ -42,7 +42,7 @@ The toolbar has these tools:
 - **Insert or remove space**: touch a line and drag; everything below moves, onto the next page (created when needed) if it no longer fits. Removing never takes away more than the empty gap.
 - **Favourite pens** (six slots), a **Pen only** toggle, and a command for every tool and action (no default hotkeys). The toolbar is two rows and the tool options are in a popover.
 - **Selection bar** (lasso): copy, cut, duplicate, paste, change colour and width, and make white transparent in an image. With the lasso, a double tap selects a word and a triple tap a line (found from the strokes, no OCR). Paste also takes a picture or text from the system clipboard; Android WebViews may refuse it, so a paste box is the fallback.
-- **Pen side button**: opens a radial menu at the pen tip (or erases while held, or does nothing). Which button number the S Pen reports is not verified.
+- **Pen side button**: opens a radial menu at the pen tip (or erases while held, or does nothing). Not verified on the S Pen: on Samsung tablets Air command may keep the button while the pen hovers (switch it off in the S Pen settings; the name may differ by One UI version). The setting and command *Pen button test* show what the pen sends, and *Open the radial menu by holding the pen still* is a fallback that does not need the button.
 - **Edge rejection zones** (off by default): touches near the chosen edges are ignored.
 
 Undo/redo: toolbar buttons, Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z (or Ctrl+Y) on desktop. Each transform, delete, insertion or eraser gesture is one step. The history lives in memory and is lost when the notebook is closed.
@@ -119,6 +119,8 @@ The PDF writer has no dependencies and does not compress, so a page with a lot o
 | Performance overlay | shows frame time, input-to-frame and input-to-paint times, whether raw input is in use, redraw time, and strokes and pages drawn |
 | Add a page when writing at the bottom | on by default; appends a page after the last page (not infinite or PDF/image pages) |
 | Pen side button | radial menu (default), erase while held, or nothing |
+| Open the radial menu by holding the pen still | off by default; a fallback when the side button does not reach the app |
+| Pen button test | opens a log of the events the pen sends, to see how its side button is reported |
 | Edge rejection zones | off by default; width 4-80 px and one switch per edge |
 | Erase area also removes text and images | off by default |
 | Loose sheet location | where the quick-notes notebook is created |
