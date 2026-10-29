@@ -117,9 +117,14 @@ export function embedPixelWidth(cssWidth: number, devicePixelRatio: number, maxP
 
 // ------------------------------------------------------------------- obsidian:// links
 
-/** `obsidian://notebook?vault=<name>&path=<vault path>&page=<n>` (page omitted when not a positive integer). */
+/**
+ * `obsidian://notebook?vault=<name>&path=<vault path>&page=<n>` (page omitted when not a positive integer).
+ * An empty `vaultName` leaves `vault` out: Obsidian then opens the link in the current vault. Generated
+ * notes use that form so their text does not depend on what the vault is called on each device.
+ */
 export function notebookUri(vaultName: string, path: string, page?: number): string {
-	let uri = `obsidian://notebook?vault=${encodeURIComponent(vaultName)}&path=${encodeURIComponent(path)}`;
+	const vault = vaultName ? `vault=${encodeURIComponent(vaultName)}&` : "";
+	let uri = `obsidian://notebook?${vault}path=${encodeURIComponent(path)}`;
 	if (page !== undefined && Number.isInteger(page) && page >= 1) uri += `&page=${page}`;
 	return uri;
 }
