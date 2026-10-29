@@ -48,7 +48,7 @@ function parsed(text: string) {
 
 describe("format v5: per-stroke render", () => {
 	it("is at version 5 and has a v4 step", () => {
-		expect(CURRENT_VERSION).toBe(5);
+		expect(CURRENT_VERSION).toBeGreaterThanOrEqual(5);
 		expect(MIGRATIONS[4]).toBeTypeOf("function");
 		expect(RENDER_FREEHAND).toBe(1);
 		expect(RENDER_INK).toBe(2);
@@ -58,7 +58,7 @@ describe("format v5: per-stroke render", () => {
 		const v4: Raw = { ...oldDoc(4), meta: { tags: ["t"], favorite: true, cover: "#ff0000", bookmarks: ["p2"] }, assets: {} };
 		const r = parsed(JSON.stringify(v4));
 		expect(r.migratedFrom).toBe(4);
-		expect(r.doc.version).toBe(5);
+		expect(r.doc.version).toBe(CURRENT_VERSION);
 		const strokes = r.doc.pages.flatMap((p) => p.strokes);
 		expect(strokes).toHaveLength(3);
 		for (const s of strokes) expect(s.render).toBe(1);
@@ -72,7 +72,7 @@ describe("format v5: per-stroke render", () => {
 			: oldDoc(from);
 		const r = parsed(JSON.stringify(raw));
 		expect(r.migratedFrom).toBe(from);
-		expect(r.doc.version).toBe(5);
+		expect(r.doc.version).toBe(CURRENT_VERSION);
 		const strokes = r.doc.pages.flatMap((p) => p.strokes);
 		expect(strokes.length).toBeGreaterThan(0);
 		for (const s of strokes) expect(s.render).toBe(1);

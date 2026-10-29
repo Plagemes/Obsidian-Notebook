@@ -1,6 +1,7 @@
 import { loadPdfJs, normalizePath, Notice, Platform, type App, type TFile, type WorkspaceLeaf } from "obsidian";
 import { t } from "../i18n";
 import { createDocument, createId } from "../model/document";
+import { backgroundRect } from "../model/margins";
 import { parse, serializeChecked } from "../model/serialize";
 import { PAGE_SIZES, PAPER_SPACING, type Asset, type NotebookDocument, type NotebookMeta, type Page } from "../model/types";
 import { assetExtension, assetPath, assetsFolder } from "../pdf/assets";
@@ -18,6 +19,7 @@ import { NotebookView, VIEW_TYPE } from "../view/notebook-view";
 import { pickFile } from "../view/pick";
 import { libraryIndexPath, parseStoredJson, patchNotebookId, patchNotebookMeta, type MetaPatchResult } from "./host-logic";
 import { importPdfAsNotebook } from "./import-pdf";
+import { openLooseSheet } from "./loose-sheet";
 import type { LibraryHost } from "./library-view";
 import type { ThumbnailOptions } from "./thumbnail";
 
@@ -138,9 +140,12 @@ export class NotebookLibraryHost implements LibraryHost {
 		}
 	}
 
-	importPdf(folder: string): void {
+	/** Imports a PDF as a new notebook in `folder`: the one chosen in a picker, or `source` when it is already in the vault. */
+	importPdf(folder: string, source?: TFile): void {
 		void importPdfAsNotebook<TFile>({
-			pick: () => pickFile(this.app, "pdf"),
+			pick: source
+				? async () => ({ name: source.name, bytes: await this.app.vault.readBinary(source) })
+				: () => pickFile(this.app, "pdf"),
 			store: async (bytes, name) => {
 				const asset = await storeAsset(this.app, this.root(), bytes, name, "pdf");
 				this.assets.set(asset.id, asset);
@@ -160,6 +165,10 @@ export class NotebookLibraryHost implements LibraryHost {
 				empty: () => t("import.empty"),
 			},
 		}, folder);
+	}
+
+	openLooseSheet(): void {
+		void openLooseSheet(this.plugin, (file) => this.openNotebook(file));
 	}
 
 	/** Camera scan into a new notebook "Scan <date>": one page per sheet, the JPEG as the page background. */
@@ -286,14 +295,18 @@ export class NotebookLibraryHost implements LibraryHost {
 		try {
 			if (bg.kind === "pdf") {
 				const canvas = await this.pdf.render(bg.asset, bg.page, width / page.width);
-				return (ctx, p) => ctx.drawImage(canvas, 0, 0, p.width, p.height);
+				return (ctx, p) => {
+					const r = backgroundRect(p);
+					ctx.drawImage(canvas, r.x, r.y, r.width, r.height);
+				};
 			}
 			const asset = doc.assets?.[bg.asset];
 			const file = asset && resolveAssetFile(this.app, asset, this.root());
 			if (!file) return null;
 			const bitmap = await createImageBitmap(new Blob([await this.app.vault.readBinary(file)]));
 			return (ctx, p) => {
-				ctx.drawImage(bitmap, 0, 0, p.width, p.height);
+				const r = backgroundRect(p);
+				ctx.drawImage(bitmap, r.x, r.y, r.width, r.height);
 				bitmap.close();
 			};
 		} catch (e) {

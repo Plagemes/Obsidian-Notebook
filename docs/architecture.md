@@ -15,12 +15,12 @@ Accepted and documented costs:
 - Native search, tags and backlinks do not see notebooks (until M4).
 - **Obsidian Sync** syncs unknown extensions only with the "Sync all other types" option enabled (stated in the README). Syncthing and USB copy have no limits.
 
-## 2. JSON schema v5
+## 2. JSON schema v6
 
 ```json
 {
   "format": "obsidian-notebook",
-  "version": 5,
+  "version": 6,
   "id": "6f1c…",
   "createdAt": "2026-10-29T14:30:00.000Z",
   "modifiedAt": "2026-10-29T14:42:10.000Z",
@@ -66,6 +66,12 @@ Added in v4 (all optional on disk, written only when present, except `meta` and 
 | page | `infinite` | the page grows downwards while writing near the bottom |
 | stroke | `tool: "shape"` | constant-width ink for lines, arrows, rectangles, ellipses and recognised shapes |
 
+Added in v6 (optional, written only when present):
+
+| Where | Field | Meaning |
+|---|---|---|
+| page | `margins` | `{ left, right, bottom }` in pt, each ≥ 0: blank space added around the background (#104). The background is drawn in the box `x = left, y = 0, width = width − left − right, height = height − bottom` (`backgroundRect` in `model/margins.ts`); without `margins` it fills the page as before. Validation: `left + right < width` and `bottom < height`, so the box keeps a positive size. Key order: after `background`, before `infinite` |
+
 Drawing order of a page: page colour, background (PDF page or image), paper pattern (none by default on PDF and scanned pages), images, text, ink.
 
 Unknown fields are ignored on read. Every schema change increments `version` and adds a tested migration (`src/model/migrations.ts`).
@@ -77,6 +83,7 @@ Unknown fields are ignored on read. Every schema change increments `version` and
 - **v2 → v3** (M3a): v3 adds the paper kinds `blank`, `ruled`, `dotted` and `millimetre` (the v2 reader accepted only `grid`); page sizes were already free numbers (`width`, `height`). The migration is the identity plus `version: 3`: every valid v2 document is a valid v3 document. A v2 file opened by 0.3 is migrated in memory and rewritten as v3 only on the first edit.
 - **v3 → v4** (M3): adds `meta` (`tags`, `favorite`, `cover`, `bookmarks`) and `assets` (keyed by lowercase-hex id) to the document; `background`, `elements` (text and image) and `infinite` to pages, written only when present; and the stroke tool `shape`. Migration: default meta (`DEFAULT_META`), empty assets; a pre-v4 file that already contains `shape` is rejected. Validation: asset references (page backgrounds, image elements) must resolve to an asset of the right kind; ids are unique across strokes and elements; `meta.tags` are de-duplicated and `meta.bookmarks` filtered to existing pages on read and on write. Order of keys: `meta`, `assets` before `pages`; per page `background`, `infinite`, `elements`, `strokes`. `serializeChecked` validates meta, assets, backgrounds and elements on every save, also on the incremental path.
 - **v4 → v5**: adds the required per-stroke `render` field (`1` = `RENDER_FREEHAND`, `2` = `RENDER_INK`). Migration: every stroke of every page gets `render: 1`, because every stroke written before v5 was drawn with perfect-freehand and must keep rendering exactly as before; v0→v1 still produces strokes without `render` and the v4→v5 step adds it. `readStroke` rejects a missing `render` or a value other than 1 or 2 (`pages[i].strokes[j].render`). `createStroke` defaults to `RENDER_FREEHAND`, so only a caller that asks for the new engine produces render 2. Key order: `id`, `tool`, `color`, `width`, `render`, `points`.
+- **v5 → v6** (PDF wave p1a): adds the optional page field `margins`. Migration: the identity plus `version: 6`; a `margins` key already present in a v5 file is dropped, because a v5 reader ignored it (it was never ours and never had an effect). No other field changes, so every valid v5 document is a valid v6 document without margins. A 0.4.x plugin opens a v6 file read-only (future version) with a backup and never rewrites it, so margins cannot be lost by an older version saving over them.
 - **Compatibility**: a plugin that supports an older version sees a newer `version` as a future version, so it opens the file read-only (and keeps a backup copy of it, as for any file it cannot edit) and never rewrites it. Once 0.2 has saved a file, 0.1.x cannot edit it; once 0.3 has saved a file, 0.2.x cannot edit it; once 0.4.0 has saved a file (v5), 0.3.x and earlier open it read-only.
 
 **Stroke rendering parameters** of `render: 1` (perfect-freehand) are code constants; the per-stroke `render` field selects the geometry, it does not carry parameters:
@@ -113,12 +120,19 @@ src/
   settings.ts             settings types and defaults (paper, size, input, stabilization, predicted ink, version history)
   i18n.ts                 UI strings: English, Italian when Obsidian's language is Italian
   model/                  (does not import 'obsidian')
-    types.ts              Document, Page, Stroke, elements, assets, meta, Tool, Paper, page size presets, CURRENT_VERSION (5)
+    types.ts              Document, Page, Stroke, elements, assets, meta, Tool, Paper, page margins, page size presets, CURRENT_VERSION (6)
     document.ts           document/page/stroke creation (size and paper as parameters), ids, quantization
     pages.ts              duplicatePage(): copy of a page with new page and stroke ids
+    page-content.ts       SetPageContent command and pageContentCommand(): replace the strokes/elements of several pages (and append pages) in one undo step
+    lenient-json.ts       tolerant JSON reader: keeps what was read in full up to the damage, reports cut-off containers (repair)
+    repair.ts             repair of an unreadable notebook text: line scan, tolerant migration, per-item validation, summary (#140)
+    merge.ts              merge of a conflicted copy as one Batch: union by id, conflicting items kept twice, no inferred deletions (#122)
+    page-restore.ts       restore one page of an older version: ReplacePage command, insert or replace plan (#180)
     serialize.ts          deterministic serialize(), parse() with validation and migrations, serializeChecked() (save check), freezeStroke()
-    migrations.ts         chain of vN → vN+1 migrations (v0→v1 … v4→v5)
+    migrations.ts         chain of vN → vN+1 migrations (v0→v1 … v5→v6)
+    margins.ts            page margins (v6): background box, size and resize rules, translating strokes and elements
     history.ts            command-stack undo/redo (strokes, pages, paper/size, elements, meta, assets, infinite, Batch)
+    companion-content.ts  companion note (O1): document → properties, tags and generated Markdown region; merge with the user's edits (pure)
     stress.ts             deterministic generated notebook (10,000 strokes / 10 pages by default) for benchmarks and the stress-test command
   ink/                    (does not import 'obsidian')
     viewport.ts           screen ↔ page transform, fit-width, zoom around a point (scale 0.25–8), pan
@@ -138,11 +152,20 @@ src/
     text-layout.ts        text wrapping and measurement shared by the renderer, the editor and the exports
     ruler.ts              ruler placed by two fingers, edge snapping
     infinite.ts           growth rule for infinite pages
+    auto-page.ts          when writing near the bottom of the last page appends a page (pure rule)
+    erase-filter.ts       selective eraser: which strokes the eraser may touch (all, highlighter, pen, one colour)
+    erase-area.ts         erase area: cut strokes at an outline, one undoable command (strokes, optionally elements)
+    space.ts              insert or remove space: plans the move of everything below a line, across pages (pure)
     writing-bench.ts      synthetic pen replay: old vs new writing pipeline (in-app benchmark and PC harness)
-    input-policy.ts       pen/touch/mouse routing, time-based palm rejection, contact-size palm filter (pure logic)
+    input-policy.ts       pen/touch/mouse routing, time-based palm rejection, contact-size palm filter, edge zones, pen side-button action (pure logic)
+    edge-zones.ts         edge rejection zones: which touch positions are ignored (pure)
+    radial.ts             radial menu geometry: sector hit test, centre clamping, sector paths, recent colours (pure)
     hit-test.ts           whole-stroke eraser (segment-segment distance + bounding box)
     segment-erase.ts      segment eraser: cuts a stroke into the runs that survive
     lasso.ts              point-in-polygon selection, selection bounds, stroke transform
+    restyle.ts            restyle selection: colour and width of selected strokes (and text colour) as one Batch; highlighters keep their palette
+    clipboard.ts          copy/cut/paste/duplicate of a selection: deep-copied clip, new ids, paste placement, one-step paste command
+    image-alpha.ts        white to transparent on RGBA pixels (alpha ramp, colours untouched)
     transform.ts          2D affine matrices (translate, scale and rotate about a point, invert)
     stroke-shape.ts       perfect-freehand → SVG path, pen/highlighter/shape parameters (render version 1); render-aware SVG path
     renderer.ts           static, live and wet canvases, visible pages only, backgrounds, elements, paper pattern, selection overlay, CSS-transform fast path, DPR, Path2D cache, rAF
@@ -152,8 +175,12 @@ src/
     session.ts            document lifecycle: load, dirty, debounce, flush, conflicts, journal hook; timed work waits for the pen (pure, testable)
     journal.ts            instant save journal: slots, entries (snapshot or line diff), fingerprints, replay (pure)
     history.ts            version history helpers: snapshot names, retention, timing, restore guards (pure)
+    conflicts.ts          names of conflicted copies made by sync clients (pure)
+    recovery.ts           repair sources: ranking, journal entries rebuilt as texts, backup names, combining two candidates (pure)
     vault-io.ts           Vault API adapter (read, process, backup) and the plugin-folder journal store
+    idle.ts               wait for a quiet moment (delay + idle callback) for work nobody is looking at (pure, injectable scheduler)
     notebooks.ts          notebook creation in the configured folder
+    companion-path.ts     companion note settings and location (next to the notebook / mirrored in a folder, name template) (pure)
   library/
     index.ts              library index: entries, queries (scope, search with snippets, sort), staleness (pure)
     scan.ts               entries from documents (metadata, text for search), cover colours, tag parsing (pure)
@@ -165,41 +192,70 @@ src/
     drag.ts               long-press drag and drop of cards onto folders
     thumbnail.ts          page → small PNG data URL (paper, background, elements, ink), render-aware
     import-pdf.ts         PDF → notebook document (pure part) and the import flow
+    loose-sheet.ts        opens (creating on first use, never replacing) the quick-notes notebook; loose-sheet-logic.ts: its path from the setting (pure)
+    page-move.ts          "Move to notebook…" planning: page copies, asset records, which source pages may leave (pure); move-pages.ts: the flow (target first, source after), move-pages-modal.ts: the dialog
   pdf/
     pdf-store.ts          pdf.js page store: open documents (LRU), rendered bitmaps (LRU by memory budget), page sizes, cancellable renders
     pdfjs-types.ts        the minimal slice of the pdf.js API in use
     assets.ts             asset kinds, content-addressed names and paths in `_assets` (pure)
     hash.ts               SHA-256 prefix used as asset id
     helvetica.ts          Helvetica metrics for text boxes in PDF export
+    text-items.ts         pdf.js text items → positioned boxes, mapped into a page's background box (pure)
+    republish.ts          re-published slides: fingerprints, content matching, the update plan as one Batch (pure)
+    annotations.ts        highlights and text boxes on PDF pages → Markdown note, PDF text under a highlight (pure)
   scan/
     detect.ts             page detection on a downscaled image
     geometry.ts           corner ordering, homography, output size, convex hull
     filters.ts            Original, Document and Whiteboard filters
     pages.ts              a scanned sheet → page with an image background
     scan-modal.ts         the scanner dialog: photo, corners with loupe, preview, several sheets
+    auto-sheet.ts         photo → detected crop (whole photo if none) → filter → JPEG without questions (board shot)
     types.ts              shared types
   integration/
     links.ts              parsing and building of embeds and `obsidian://notebook` links (pure)
     embed.ts              `notebook` code block processor: page preview, refresh, click to open
+    page-links.ts         link subpaths (`#p3`), ephemeral state, link/embed text, `[[Name#` trigger, page suggestions, explorer menu rules (pure)
+    native-embed.ts       `![[Notebook.notebook#p3]]`: Obsidian's embed registry (feature-detected), reading-view post-processor as fallback
+    page-link-suggest.ts  `EditorSuggest` for the pages of a notebook while typing `[[Name.notebook#`
+    page-share.ts         page menu: copy link, insert link or embed into the last Markdown note that had focus
+    file-menu.ts          file explorer menu: new notebook in a folder, annotate a PDF
     protocol.ts           `obsidian://notebook` handler
     open.ts               resolve a notebook by path or link name, open at a page, find open views
     picker.ts             notebook chooser for the embed command
     history-service.ts    automatic snapshots and the restore flow
-    index.ts              registers embeds, protocol and version history
+    companion.ts          companion notes: when to write (debounce, pen deferral), finding the note, rename/delete, commands
+    reliability.ts        repair, conflicted-copy merge and page-restore dialogs, their commands and the conflicted-copy notice
+    index.ts              registers embeds, protocol, version history, companion notes and the reliability features
   view/
     notebook-view.ts      FileView: mounts canvas and toolbar, wires session, history, input, tools, selection, navigator, media, performance overlay
-    toolbar.ts            tools, colours, widths, eraser mode, shape kind, text size, undo/redo, add page, page menu, pages panel, fit, page indicator
+    toolbar.ts            two-row bar (tools, undo/redo, current-pen indicator, favourites strip, save state, page) + options popover (colours, widths, eraser mode/filter/size, shape kind, text size) + "more" menu (image, board shot, ruler, pen only, add page, page menu, fit); a tap outside a popover is kept from the page
+    favourites.ts         pure: favourite pens (6 slots), eraser size presets and radius (no obsidian import, unit-tested)
+    pen-controls.ts       toolbar slots for favourite pens, eraser size and pen-only; eraser circle on the stage (passive listeners, outside the writing pipeline)
+    commands.ts           tool and action commands (checkCallback, no default hotkeys), registered from main.ts
     navigator.ts          the Pages panel: thumbnails, jump, drag to reorder, bookmarks
     media.ts              PDF pages, images and scans for the renderer and exports; asset storage
+    selection-actions.ts  floating bar over the lasso selection: restyle, copy, cut, duplicate, paste, white to transparent
+    clipboard.ts          plugin clipboard (module singleton, survives notebook switches) and the system clipboard wrappers
+    paste-logic.ts        pure paste decisions (plugin vs system clipboard), text normalisation, pasted image/text elements
+    paste-modal.ts        paste box for WebViews that cannot read the clipboard (press and hold, Paste)
     pick.ts               choose a PDF or image from the vault or the device
     pdf-range-modal.ts    page range for "Insert PDF"
+    pdf-actions.ts        page margins dialog, "Update PDF from a new version" flow and summary, annotation export (glue for the pure modules)
     text-editor.ts        in-place text box editor
     ruler-gesture.ts      two-finger ruler placement
+    radial-menu.ts        radial menu at the pen tip (DOM, window-level pointer capture) and the pen's quick-tools list
+    last-location.ts      debounced memory of the notebook and page being read (instant start)
+    input-settings.ts     plugin settings to input-policy settings
     export.ts             writes PDF/SVG files next to the notebook (Vault API), rasterises backgrounds and images, free file names
     benchmark.ts          in-app benchmark (off-screen render of a generated notebook, writing replay) and its modal
     modals.ts             "New notebook" (name, page size, orientation, paper) and "Open notebooks" (fuzzy search)
     view-helpers.ts       small pure helpers shared by the view
+    edit-context.ts       what flows outside the view may do to the open document (`NotebookView.editContext()`)
+    board-shot.ts         instant board shot flow; board-shot-logic.ts: placement under the ink and the label (pure)
+    lecture.ts            "New lecture" dialog and flow; lecture-logic.ts: header text and page (pure)
+    lecture-commands.ts   commands and ribbon icon for the three features above and the loose sheet
     settings-tab.ts       settings UI
+    companion-settings.ts companion note settings (declarative and classic settings UI)
 scripts/check-bundle.mjs          fails the build if main.js requires anything but 'obsidian'
 scripts/make-stress-notebook.mjs  writes a stress .notebook from the PC (alternative to the in-app command)
 tests/                    vitest on model/, ink/, storage/, library/, pdf/, scan/, integration/ ("unit" project, `npm test`); model.perf.ts is the `npm run bench` suite ("perf" project)
@@ -243,12 +299,22 @@ Known limit: if Android kills the process without notifying `visibilitychange`, 
 
 **Format layer** (`storage/format.ts`). The only module that knows what a notebook file is (`NOTEBOOK_EXTENSIONS`, `isNotebookFile`) and how the document text is taken from and put back into the raw file text (`readNotebookText`, `writeNotebookText`). The session, library, index, embeds, history, scanner and PDF import use these helpers instead of testing `.notebook` or reading raw text, so a later container change (M4: Markdown, §5) is confined here. The version snapshots and the journal store the document text as `readNotebookText` returns it.
 
-**Version history** (`storage/history.ts`, `integration/history-service.ts`). On `file-open` and `modify` of a notebook, a snapshot is written if the newest one is older than `snapshotIntervalHours` (default 24; 0 = off): `<notebooks folder>/_backup/history/<document id>/<YYYYMMDD-HHmm>.snapshot`, the document text byte for byte. Beyond `snapshotsToKeep` (default 10) the oldest go to the Obsidian trash. The command **Restore a previous version** lists the snapshots (date, page count, size), asks for confirmation, then: flushes the open notebook (restore stops if that save fails), checks that the snapshot's document id matches the file (a snapshot of another notebook is refused; if the file is unreadable it asks again), saves the current content as a `before-restore` backup, and writes the snapshot through the same checked path as a normal save. Open views reload the result.
+**Version history** (`storage/history.ts`, `integration/history-service.ts`). On `file-open` and `modify` of a notebook, a snapshot is written (the file is read at once, so the snapshot is the content as it was on open, but it is parsed and written only after `whenIdle`, so a second full parse does not compete with the first paint; see Instant start) if the newest one is older than `snapshotIntervalHours` (default 24; 0 = off): `<notebooks folder>/_backup/history/<document id>/<YYYYMMDD-HHmm>.snapshot`, the document text byte for byte. Beyond `snapshotsToKeep` (default 10) the oldest go to the Obsidian trash. The command **Restore a previous version** lists the snapshots (date, page count, size), asks for confirmation, then: flushes the open notebook (restore stops if that save fails), checks that the snapshot's document id matches the file (a snapshot of another notebook is refused; if the file is unreadable it asks again), saves the current content as a `before-restore` backup, and writes the snapshot through the same checked path as a normal save. Open views reload the result.
+
+**Instant start** (`view/last-location.ts`, `storage/idle.ts`, #271). The page being read goes into the workspace layout through `getState()` (`{ file, page }`, the same `page` that links use, applied by `setState`), saved by `requestSaveLayout` a second after it changes; the plugin also keeps the last notebook path and page in its settings for the command *Continue last notebook*. Neither is part of the notebook file. Work nobody is looking at is kept out of the first paint: the version-history snapshot parses after `whenIdle`, the stroke-line warm-up of the save check starts `WARM_UP_DELAY_MS` (400 ms) after the load, the page panel and thumbnails only work when open, PDF pages and images load on demand. Nothing in the load path was weakened: the document is still parsed, migrated and validated in full before it is shown, and a save before the warm-up has finished computes the lines it needs itself. Measure with `npm run bench:open` (headless Chrome, in-memory vault: CPU time only; not Android).
+
+**Input routing** (`ink/input-policy.ts`, `ink/edge-zones.ts`, `ink/radial.ts`, `view/radial-menu.ts`, #151, #152). Routing is policy around the pointer controller; the stroke pipeline (sampling, wet ink, geometry, stabilizer) is untouched. A touch that starts in an enabled edge zone (`edgeRejection`, `edgeRejectionPx`, one switch per edge) routes to `ignore`. The pen side button (`button 2` or `buttons & 2`) follows `penButtonAction`: `radial` routes the pen-down to `menu` (no stroke, and the pen is not marked down for palm rejection because no stroke will end it; a press while hovering is detected on `pointermove` once per press), `eraser` draws as the eraser while held, `off` keeps the previous behaviour (a contact with the button held draws, a bare button press is ignored). The eraser end and the eraser button (`button 5`, `buttons & 32`) always erase. While the radial menu is open it listens on `window` in the capture phase and stops the pointer events, so nothing reaches the page; the ring is placed by `clampCenter`, sectors are hit-tested by `sectorAt` (sector 0 at the top, clockwise), and a sector is chosen by lifting or tapping on it or by releasing the button over it.
+
+**Repair of a damaged notebook** (#140; `model/lenient-json.ts`, `model/repair.ts`, `storage/recovery.ts`, `integration/reliability.ts`). A `broken` view shows a **Repair…** button (also the command *Repair damaged notebook*). Nothing is written to the damaged file; it already has its `unreadable` backup. The repair reads the text in four steps: (1) `parseLenient` reads the JSON up to the first damage, closing the open objects and arrays there; a value read only in part (a cut number or string) is dropped, never guessed; (2) if the JSON was not complete, a line scan reads the layout `serialize()` writes (one stroke, element and asset per line, page fields on their own lines), so strokes after a damaged region in the middle are recovered too, matched by id (a stroke cut off in step 1 is replaced by its intact line); (3) the result goes through the regular migrations, and if the whole document does not migrate, pages and then single strokes are migrated one at a time; (4) every page, stroke, element, asset and the metadata are checked by the regular `validate()` on a one-item document, so the rules live in one place and a later format version is handled by its own migration and validator. Items that fail get conservative fixes (invalid points dropped, pressure clamped, unknown tool → pen, invalid colour → black, missing render → 1, duplicate id with different content → new id, exact duplicates kept once; page size and paper fall back to A4 grid, an unusable background is dropped and the page kept) and are kept only if they then validate; everything else is counted as lost. Unknown fields (e.g. from a newer version) cannot be carried over, because the model and the serializer only know the current fields: they are counted and stay in the original. Further sources: version-history snapshots, backup copies of the same file name whose document id matches, and journal entries of the file (full entries as they are; delta entries only on top of a text whose fingerprint is their base). Each source is repaired the same way and ranked by recovered items (strokes + elements + pages), then by date; the dialog shows every source with its summary, preselects the first and also offers *the damaged file and the best other source together* (merged with the rules below). The result is written with a **new document id** into a new notebook `<name> (repaired)` next to the original (so journal, version history and the library keep the two apart), read back and opened. A newer-version file is not repaired (it opens read-only).
+
+**Conflicted copies** (#122; `storage/conflicts.ts`, `model/merge.ts`, `integration/reliability.ts`). A file in the same folder is treated as a conflicted copy of `Name.notebook` only if its name matches a sync-client pattern (`Name (1)`, `[Conflict] Name`, `Name [Conflict]`, `Name-<DEVICE>[-n]` from OneDrive, `Name (… conflict …)`, `Name_conflict…`, `Name.sync-conflict-…`; sources in `docs/research.md`) **and** it holds the same document id (a copy made by sync keeps the id; an unrelated notebook does not). When a notebook loads, or such a file is created while it is open, a notice offers **Merge…** (also the command *Merge conflicted copies*). The dialog shows, per copy, what would be added (`planMerge` summary). Merge rules: union of pages, strokes, elements and assets by id; the same id with different content keeps the main version and adds the copy's as a copy with a new id, unless that page already holds identical content (which makes a second merge a no-op); nothing is ever removed (deletions are not inferred); page settings (margins included) and the cover of the main notebook are kept (differences are counted); when a common page has a different left margin in the copy, the copy's strokes and elements are first moved by the difference of the left margins into the main page's frame, so ink identical relative to the background is recognised as identical and new ink lands where it was drawn on the background (`mergeCovers` compares in the same frame); when new ink of the copy would then fall off the main page (left of it because the copy has the wider left margin, or beyond its right or bottom edge, also with equal margins; text boxes count with their wrapped height), the main page grows just enough in the same Batch, counted as `pagesEnlarged`: wider margins through `SetPageMargins` on a page with a background (its own ink moves with the background), more height through `SetPageSize` (margin rule `marginsAfterResize`) on an infinite page, a larger size on a plain page; tags and bookmarks are united, favourite is "either". Pages only in the copy are inserted after the page that precedes them in the copy. Properties covered by tests: nothing of either side is lost (`mergeCovers`), idempotent, commutative for the content of each page, and one undo step that restores the exact previous file. The copy stays where it is; optionally it is moved (never deleted) to `_backup/conflicts/`, only after `flushNow()` succeeded and the file read back from disk contains everything of the copy. A copy that cannot be read is offered for repair instead.
+
+**Restore one page** (#180; `model/page-restore.ts`, `integration/reliability.ts`). Page menu → *Restore page from a previous version…* (or the command): pick a version-history snapshot or a backup copy of this notebook (same document id), see its pages as thumbnails (the page with the same id, else the same position, is preselected), then *Replace current page* (`ReplacePage`: same page id, so bookmarks and links still work; content ids are kept unless another page uses them) or *Insert as new page* (`duplicatePage`, new ids). Assets the old page needs and the notebook no longer lists are added back (`AddAsset`). One `Batch`, one undo step; the rest of the notebook is untouched. The journal is not a source here: for a notebook that opens normally its entries are either already applied at open or belong to the live session.
 
 ## 5. Format evolution (toward M4)
 
 - The container is isolated in `storage/format.ts` (§4), so the options below change that module and the migration, not the library, journal, history or embeds.
-- **C (hybrid)**: a command will generate a companion `.md` (title, tags, links, OCR text) next to the `.notebook`; the JSON does not change.
+- **C (hybrid)**: implemented as O1 (companion notes, §12): a `.md` per notebook with properties and the text of its text boxes; the JSON does not change. Its content generator does not depend on the container, so it also serves B.
 - **B (`.md` with data block)**: if B is chosen, the migration will be a file → file conversion: the JSON becomes the content of a code block, with `format`/`version` unchanged. The parser stays the same.
 - Many strokes: v2 keeps a single JSON file (a generated 10,000-stroke notebook is about 6.8 MB on the PC). If that proves too slow on the device, a later version may split pages across files; `version` enables the migration. Decide with benchmark numbers from real hardware.
 
@@ -272,7 +338,7 @@ Known limit: if Android kills the process without notifying `visibilitychange`, 
 
 ### Page commands
 
-The toolbar has a page menu button next to Add page. It acts on the page at the centre of the view. Every item is a history command, so each is one undo step; the selection is cleared first, and nothing runs while a stroke is being drawn.
+The toolbar's "more" menu has *Add page* and *Page options* (the page menu). It acts on the page at the centre of the view. Every item is a history command, so each is one undo step; the selection is cleared first, and nothing runs while a stroke is being drawn.
 
 | Menu item | Command |
 |---|---|
@@ -283,6 +349,9 @@ The toolbar has a page menu button next to Add page. It acts on the page at the 
 | Size: A4 / A5 / Letter | `SetPageSize`; keeps the current orientation; strokes are not moved or scaled |
 | Portrait / Landscape | `SetPageSize` swapping width and height; shown only when the page has a preset size |
 | Export page as PDF / notebook as PDF / page as SVG | see §8 (not history commands) |
+| Page margins… (pages with a background) | `SetPageMargins`, or a `Batch` of them with *All pages of this PDF* (§10) |
+| Update PDF from a new version… (PDF pages) | one `Batch` from `planRepublish` (§10) |
+| Export PDF annotations to Markdown (PDF pages) | not a history command (§10) |
 
 After a command the view scrolls to the affected page. The commands tolerate repeated apply/revert: no page is inserted twice and a refused delete is not "undone".
 
@@ -315,13 +384,25 @@ The new pipeline:
 - **Segment eraser** (`eraseSegment`): same hit test, then the stroke is densified (no segment longer than half the radius, so a cut cannot slip between two distant points) and the points within `radius + width/2` of the eraser path are removed. Surviving runs of at least two points become new strokes with new ids and the original style; single-point crumbs are dropped. The original is replaced in place by a `ReplaceStroke`. The eraser acts on the page under the pointer, so one gesture can cross pages.
 - **Gesture undo**: everything erased in one gesture (either mode, any number of pages) is recorded as a single `Batch`, so one undo restores it.
 - **Lasso** (`lasso.ts`): the gesture polygon is tested with an even-odd rule; a stroke is selected when at least 50% of its points are inside. A selection belongs to one page. It shows a dashed frame, a **resize handle** at the bottom-right corner (uniform scale about the top-left corner of the frame, clamped to 0.05–20×) and a **rotate handle** above the top edge (rotation about the centre of the frame). Dragging inside the frame moves it.
+- **Selection actions** (`view/selection-actions.ts`, no format change): a bar outside the stage (so its taps never reach the pen input) over the selected items. *Restyle* builds one `Batch` of `ReplaceStroke`/`ReplaceElement` (`ink/restyle.ts`); a request names a group (ink or highlighter) and never touches the other. *Copy* deep-copies strokes and elements into a module-level clip (`view/clipboard.ts`, shared by every notebook view of the session) and reads the image bytes; it also writes a marker text (`[Notebook selection: …]`) to the system clipboard so a later paste can tell whether something newer was copied elsewhere (`decidePaste`). *Paste* stores the images again through `storeAsset` when the target document lacks them (content-addressed, so a shared `_assets/` stores nothing twice), instantiates the clip with new ids at the centre of the view and adds it as one `Batch` (`AddAsset`, `AddStroke`, `AddElement`); *Duplicate* does the same inside the notebook without touching the clipboard. Pasting a system-clipboard picture or text goes through `navigator.clipboard` or the paste event, with a paste box where the WebView cannot read the clipboard. *Make white transparent* decodes the image (at most 2048 px), clears near-white pixels (`ink/image-alpha.ts`), stores a PNG as a new asset and replaces the element (`AddAsset` + `ReplaceElement`); no field is added to the file.
 - **Transforms** are kept as an affine matrix (`transform.ts`) while the pointer is down: the selected strokes are hidden from the static layer and drawn on the live layer with the matrix, so a drag redraws only the selection. On release the matrix is baked into new strokes (`transformStroke`: points transformed and re-quantized, width scaled by the matrix's uniform factor, same id and style) and applied as a `Batch` of `ReplaceStroke` commands: one undo step. Delete (toolbar button, Delete or Backspace) is a `Batch` of `ReplaceStroke` with no replacement. Escape or changing tool clears the selection. Transformed strokes stay on their page and are clipped to it when drawn.
+
+### Words and lines (no OCR)
+- **Segmentation** (`ink/words.ts`, pure, no `obsidian`): `segmentText(strokes)` returns a `TextLayout`: `lines` (top to bottom) of `words` (left to right) of stroke ids, each with a point-box (`bounds`, no pen-width padding), plus per line a `baseline` (endpoints and slope) and the median `letterHeight`; `ignored` lists strokes that are not handwriting text. This is the foundation for reflow (#92), alignment (#93) and headings (#102): they read the layout and never re-derive it.
+- **Method.** Only `pen` strokes count (highlighter and shape strokes are ignored, as are strokes whose larger side exceeds 8× the page's median stroke size). Strokes sorted left to right join the open line whose recent strokes predict their vertical position (centres, not extents, so descenders and ascenders of neighbouring lines may overlap; a short robust slope estimate handles slanted writing; dots, commas and hyphens are matched by their centre with a wider tolerance) and that ends within 5 letter heights to their left, otherwise they start a line (so columns stay apart). Each line's baseline is fitted through the stroke bottoms with a RANSAC over pairs, so descenders do not tilt it. Along the baseline, a gap wider than 0.45× the line's median letter height starts a new word. Everything is relative to the handwriting size; nothing is in absolute pt. Tunable through `TextOptions`.
+- **Cost and caching.** Roughly linear in the number of strokes (open lines are kept sorted by y, so a stroke only looks at nearby lines); per-stroke boxes are cached in a `WeakMap`. `TextLayoutCache` keeps the layout of one page and returns it while the stroke objects are the same (O(n) pointer comparisons); the view creates one per `Page` lazily, only when a double tap happens, so writing never pays for it. `npm run bench` (`tests/words.perf.ts`) prints figures for 1,000 / 3,000 / 10,000 strokes.
+- **Gesture** (lasso tool only; `ink/multitap.ts`, `view/notebook-view.ts` `selectByTaps`). A lasso-tool contact that moves less than 8 CSS px is a tap; taps within 400 ms and 30 CSS px of the previous one count up (1, 2, 3). Tap 2 selects `wordAt` (the word with a stroke nearest the point, within 12 CSS px), tap 3 `lineAt` (the line of that word, or the nearest line box). It also works when the tap lands inside the previous selection (that would otherwise start a move); a single tap behaves as before (picks the element under it). The lasso tool was chosen over the pen because it never writes: with the pen, a double tap would leave dots and the first tap of the series would already be a stroke to undo. Pan, zoom, palm rejection and the text, shape and pen paths are untouched.
+- Known limits: handwriting with very wide letter spacing may split into several words and tightly spaced words may merge (the gap threshold is relative to the line, not learned from the page); text written over a drawing may be grouped with it; rotated pages of text are not detected (lines are near-horizontal, slopes up to about 35°).
 
 ### Objects, pages and the navigator
 - **Shape tool** (`shapes.ts`): drag out a line, arrow, rectangle or ellipse; points are generated every 3 pt along the outline and stored as a `shape` stroke (constant width, pressure 0.5). `constrain` offers 15° angle snapping for lines and arrows and equal sides for rectangles and ellipses (a modifier key). **Recognition** (`recognize.ts`): after the pen is still for 600 ms (radius 4 px, `isHold`), the stroke is fitted as a line, arrow, rectangle or ellipse and replaced by the clean shape if the fit is good enough; otherwise it stays as written.
 - **Text boxes** (`TextElement`) and **images** (`ImageElement`) are page elements, drawn above the background and below the ink. Layout and measurement are shared (`text-layout.ts`); the text box is edited in place (`view/text-editor.ts`). Inserting an image stores the file as an asset and adds the element in one `Batch` (`AddAsset` + `AddElement`) and selects it. The lasso selects strokes and elements together (`elementsInLasso`); a transform is baked into new elements with `ReplaceElement`, deletion is `RemoveElement`, both inside the same `Batch` as the stroke changes.
 - **Ruler** (`ruler.ts`, `view/ruler-gesture.ts`): placed by two fingers (centre and angle from the two touches, 20 cm long); pen points within a snap distance of the edge are projected onto it (`projectToRuler`), so a stroke started on the edge stays on the edge; the ruler draws mm/cm ticks.
 - **Infinite pages** (`infinite.ts`): when ink reaches the bottom fifth of an infinite page its height grows by half a page of its width, up to 20 times the width; the growth is part of the same undo step (`SetPageInfinite` for the flag, the growth as a `SetPageSize` inside the stroke's `Batch`).
+- **Selective eraser** (`erase-filter.ts`): the toolbar state `eraserFilter` (`all`, `highlighter`, `pen`, `color` + `eraserColor`) decides which strokes the eraser may hit; `pen` means every stroke that is not a highlighter (shapes included). Applied before the hit test, so it works with whole-stroke, segment and area erasing.
+- **Erase area** (`erase-area.ts`, eraser mode `area`): the outline is drawn like a lasso; on lift every stroke with a point inside is cut at the outline (the outside runs keep their style and get new ids; runs under 2 points are dropped) and text boxes and images whose centre is inside are removed when the setting is on and the filter is *All ink*. One `Batch`.
+- **Insert or remove space** (`space.ts`, `model/page-content.ts`, tool `space`): the pages are treated as stacked without gaps from the page touched. Items whose centre is below the line, and all items of the following pages, move by the dragged distance; each lands on the page that contains its new centre (pages are appended, like the last page, when it falls past the end). Removing is limited to the empty gap between what stays and what moves. Pages with a PDF or image background are barriers: the cascade runs only over plain pages, a background page never gets content from another page nor gives any up (overflow from it, or from the plain page before it, goes to a new blank page inserted right next to it, and removing never pulls content across it). An infinite page also ends the cascade and grows. `analyseSpace` decides the moves and is shared by the live preview (`Renderer.setSpacePreview`: the moving content is drawn shifted on the live layer and hidden from the static layer, like a floating selection, by the clamped amount; content that falls on a page that does not exist yet is only hidden) and by `planSpaceChange`. The result is a list of per-page content changes applied by `SetPageContent` (arrays changed in place, previous arrays kept for undo) plus `InsertPages`, in one `Batch`. Nothing in the document format changes.
+- **Automatic next page** (`auto-page.ts`): when a committed stroke reaches the bottom tenth of the last page (setting `autoNextPage`, default on; not for infinite pages or pages with a background) an `AddPage` joins the same `Batch` as the stroke.
 - **Page navigator** (`view/navigator.ts`): side panel of page thumbnails rendered with the thumbnail code; tap to jump, press and hold then drag to reorder (`MovePage`), star to bookmark (`SetMeta`, `meta.bookmarks`), filter to bookmarked pages. Thumbnails are not refreshed while the pen writes.
 - **Insertion**: `InsertPages` adds several pages in one step (PDF range, scanned sheets, blank pages, an image page).
 
@@ -343,7 +424,9 @@ Command stack, not snapshots. Each command knows how to apply and undo itself; a
 | `DeletePage { page, index }` | delete page; a no-op (and so is its undo) on the only page |
 | `MovePage { pageId, from, to }` | move up/down; undo puts the page back at the exact position it moved from |
 | `SetPaper { pageId, before, after }` | change paper kind and spacing; strokes untouched |
-| `SetPageSize { pageId, before, after }` | change page size / orientation; strokes untouched |
+| `SetPageSize { pageId, before, after }` | change page size / orientation; strokes untouched. v6: on a page with margins the background keeps its box and the right/bottom margins take the change (an infinite PDF page grows below the PDF); undo restores the previous margins |
+| `SetPageMargins { pageId, before, after }` | v6 page margins: the page grows or shrinks by the change, the background keeps its size; a change of the left margin moves every stroke and element of the page by the same amount (same ids, new frozen objects), so ink never moves relative to the PDF. Undo restores the same objects and the exact previous size |
+| `SetPageBackground { pageId, background, size }` | switches a page to another PDF page (a re-published slide) and size; ink, elements and margins stay; undo restores background and size |
 | `AddElement { pageId, element, index }` / `RemoveElement` / `ReplaceElement { pageId, before, after }` | text boxes and images: insert, delete, move/scale/rotate/edit |
 | `SetMeta { before, after }` | tags, favourite, cover, bookmarks (the library applies it to an open notebook through the view; a closed notebook is rewritten by patching its JSON) |
 | `AddAsset { asset }` | registers a PDF or image asset in the document |
@@ -391,7 +474,10 @@ Samsung-Notes-like screen (`library/library-view.ts`) opened from the ribbon or 
 - **Assets**: PDFs and images are copied into `<notebooks folder>/_assets/<id>.<ext>`, where `id` is the first 24 hex characters of the SHA-256 of the content (`pdf/hash.ts`). The same file imported twice is stored once. The notebook only holds `assets[id] = { id, kind, path, name, bytes }`. Saving a notebook with a long PDF writes only ink. `resolveAssetFile` finds the file by the stored path, then by the content-addressed name in the current `_assets` folder. Missing assets give a placeholder (file name) and the ink is kept; the document is not changed. The save check verifies that every page background and image element refers to an asset of the right kind, and the stored asset is checked when added.
 - **PDF engine** (`pdf/pdf-store.ts`, pure with injected `loadPdfJs`, `readAsset` and `createCanvas`): pdf.js comes from Obsidian's `loadPdfJs()`, no bundled copy. At most 3 documents stay open (LRU, destroyed on eviction, never while busy); rendered bitmaps live in an LRU bounded by a memory budget (160 MB by default; the most recent one is always kept); the scale is clamped so neither side exceeds 4096 px; renders are cancellable; while zooming, the previous bitmap is scaled until the sharp one arrives (`peek`).
 - **Import as notebook** (`library/import-pdf.ts`): reads the page sizes, builds one page per PDF page (page size = PDF page size, `background: { kind: "pdf", asset, page }`, no paper pattern), writes the notebook and opens it; a PDF of 1 MB or more shows a progress notice while its pages are measured (`LARGE_PDF_BYTES`). **Insert** (`InsertPages`) adds a range or the whole file after the current page; a blank page or an image page can be inserted anywhere.
-- **Export** is described in §8: backgrounds and images become JPEG (PDF pages at 200 dpi).
+- **Export** is described in §8: backgrounds and images become JPEG (PDF pages at 200 dpi). A page with margins is exported at its full size with the PDF in its box (`backgroundRect`), like the screen and the thumbnails.
+- **Margins (#104)**: page menu *Page margins…* (or the command) on a page with a background asks left, right and bottom in mm (a right margin of half the PDF width is suggested), optionally for every page of the same PDF, and applies `SetPageMargins` as one undo step. Format: §2 (v6).
+- **Re-published slides (#235)**: page menu *Update PDF from a new version…* (or the command). The chosen file is read in a temporary `PdfStore` (it is stored in `_assets` only when the update is applied). Each page of the new PDF and each distinct PDF page of the notebook gets a fingerprint (`pdf/republish.ts`): its pdf.js text, normalised; pages with fewer than 24 characters of text also get a 64-bit difference hash of a ~72 px rendering. Matching: (1) equal fingerprints are the same slide, *unchanged*, one to one, closest page number first, whatever the order; (2) "that PDF" is the asset of the page in view plus every asset with at least 3 unchanged pages or more than half of its slides unchanged (one shared "Thank you / Questions" slide does not pull in another lecture), and step 1 is repeated with those slides only; (3) remaining new pages are *updated* versions of remaining slides of that PDF when their words overlap enough (Dice ≥ 0.5 after removing words found on more than half of the pages, such as footers) or their image hashes differ by at most 10 bits; (4) the rest is *new*. A summary (new, updated, unchanged, not in the new version) lets the user switch each updated slide or keep the old one; each updated slide names the PDF it comes from, and only slides of the main asset (the one in view) start switched on. Applying is one `Batch`: `AddAsset`, `InsertPages` of the new pages after the last page of that PDF (and the blank note pages after it), with that page's margins, and `SetPageBackground` for every notebook page that shows an accepted updated slide (an infinite page never gets shorter: with margins the extra height goes into the bottom margin, `SetPageMargins`). Unchanged pages keep pointing at the old asset; old assets are never removed.
+- **Annotation export (#155)**: page menu or command *Export PDF annotations to Markdown*. For every PDF page: each highlighter stroke (with the PDF text under it: pdf.js text runs are split into equal-width character cells, and a cell whose middle lies within half the stroke width of the stroke's centre line is selected) and each non-empty text box, top to bottom. The note (`<notebook> annotations.md` next to the notebook, ` 2`, ` 3`… if taken: an existing note is never overwritten) has a wikilink to the notebook (`fileManager.generateMarkdownLink`), one section per notebook page and one callout per item with an `obsidian://notebook?…&page=n` link (`integration/links.ts`). PDF text is escaped; text boxes are copied as written. Pages without a text layer (scans) list their highlights without text.
 
 ## 11. Scanner
 
@@ -411,4 +497,48 @@ Samsung-Notes-like screen (`library/library-view.ts`) opened from the ribbon or 
 - **Protocol** (`protocol.ts`): `obsidian://notebook?path=<vault path>&page=<n>` (`vault=<name>` is handled by Obsidian). It opens the notebook, reusing the open tab, and scrolls to the page.
 - **Opening at a page** (`open.ts`): library search hits, embeds and links go through `openNotebookAtPage`, which opens the file and gives the view `{ page }` as state; a view that is already open is told to scroll.
 - **Version history** (§4): `history-service.ts` registers the snapshot hooks and the restore command.
-- Notebooks are still invisible to Obsidian's own search, tags, backlinks and graph (M4).
+- **Companion notes (O1)**: see below. Without them (the default) notebooks stay invisible to Obsidian's own search, tags, backlinks and graph.
+
+### Companion notes (O1)
+
+A Markdown note per notebook so that Obsidian's search, graph, tags, Dataview and Bases see notebooks. **Off by default** (setting *Companion notes*): turning it on creates files in the user's vault (one per notebook, synced to every device), which should never happen as a side effect of an update, and the notes only help people who use those Obsidian features. When on, a note is created the first time a notebook is opened or changed; *Update companion notes of all notebooks* (command, and a button in the settings) does the rest at once.
+
+**Three layers**, so M4 can reuse the content:
+- `model/companion-content.ts` (pure): `companionContent(doc, { notebookPath, pageUri })` → `{ properties, tags, text }`; `renderRegion()` wraps the text in markers; `mergeRegion()` and `mergeProperties()` apply it to a note that may have been edited. The output depends only on the document and the notebook path: no clock, time zone, UI language or vault name, so two synced devices produce byte-identical notes.
+- `storage/companion-path.ts` (pure): settings (`companionNotes`, `companionLocation` = `beside` | `folder`, `companionFolder`, `companionName` with `{name}`) and `companionPath()`. In folder mode the notebook's folder relative to the notebooks folder is mirrored, so equal names in different folders do not collide.
+- `integration/companion.ts`: when to write, which note is the companion, and the Vault calls.
+
+**Content.** Plugin-owned properties, in order: `notebook` (`[[<vault path>|<name>]]`, a real link: the graph and backlinks see it), `notebook-id` (the document id: how the plugin recognises its notes), `pages`, `created`, `modified` (UTC, minute precision, `2026-10-29T14:42:00Z`: identical on every device, and an ink-only save changes the note at most once a minute), then every field of `meta` with a string, number, boolean or list value under its own name (`favorite`, `cover`, and `course`, `teacher`… when the format adds them), with `bookmarks` as page numbers. `tags` holds the notebook's tags as Obsidian tags (no `#`, spaces → `-`, invalid characters dropped, numeric-only tags left out). The body has one generated region:
+
+```
+%% notebook-companion:start (generated by Notebook: edit outside this block) {"v":1,"keys":[…],"tags":[…]} %%
+### p. 1
+[↗ p. 1](obsidian://notebook?path=Notebooks%2FPhysics.notebook&page=1)
+
+<text boxes of page 1, top to bottom, then left to right>
+%% notebook-companion:end %%
+```
+
+Only pages with text get a section. The heading is language-neutral (`p. N`), so `[[Physics#p. 3]]` links to that section. The page link has no `vault=` (Obsidian uses the current vault), so it does not change with the vault's name. Text-box text is kept as written (links and inline `#tags` work) except what could break the note: `%%` is escaped, and lines that would open a fence, a math block or an HTML block, or become a heading, a heading underline or a rule, get a leading backslash.
+
+**Ownership** (the user may edit the note):
+- Everything outside the region, and every property that is not plugin-owned, belongs to the user and is never changed.
+- The region is replaced as a whole. With no region (new note, or the user deleted it) it is appended at the end. If the markers are missing one half, repeated or out of order, the note is not written at all and a notice says why.
+- Plugin-owned properties are overwritten from the notebook. Which keys the plugin owns, and which tags it added, is stored on the start marker (`keys`, `tags`), so a key the notebook no longer has (an emptied `course`, cleared bookmarks) is removed, and nothing else. Without a readable state nothing is removed.
+- `tags` is shared: notebook tags first, then the user's own; tags the plugin added before and the notebook no longer has are removed.
+- The whole note (frontmatter with the merged properties, and the region) is built as text by `updateCompanionText` (pure, `model/companion-content.ts`) and written once with `vault.process` (atomic), so a sync client never sees a half-updated note. The frontmatter block is re-serialized only when a plugin-owned property changed; otherwise it stays byte for byte. If the frontmatter is not valid YAML, or the markers are broken, the note is left alone.
+
+**Which note** (`companionClaim`). The note at the configured path (or `<name> (notebook).md` if a note of the user's already has that name: it is never taken over) when its `notebook` link points at this notebook, or its `notebook-id` is this notebook's and its link resolves to no notebook. Otherwise any note found through the metadata cache whose link points at this notebook, or that has this `notebook-id` and a link that resolves to nothing (the user moved it, the location setting changed, the notebook was renamed outside Obsidian: existing notes are not moved), but the latter only when no other notebook in the vault has the same id: a file copy of a notebook keeps the id, and must not take over the original's note (both would rewrite it back and forth). Otherwise a new note is created at the first free path.
+
+**When.**
+- Triggers are the notebook's own events: `modify` (4 s debounce only when the file holds what a view on this device just saved, `DocumentSession.isOwnWrite`; 30 s for every other change, i.e. sync, another app or library actions, also when the notebook is open here, so that the companion written by the other device usually arrives first and the identical content found here causes no write: two devices writing the same note make the sync client create conflicted copies), `file-open` (30 s as well; creates missing notes lazily and writes only if the note differs), `create` (5 s, registered after layout-ready), `rename`, `delete`.
+- Never while writing: capture-phase, passive `pointerdown`/`pointerup`/`pointercancel` listeners note activity inside `.notebook-view`; a due update waits until no pointer is down there and 1.5 s have passed (a pointer seen down for 15 s without an up is ignored). The notebook's own saves are already deferred while writing (§4), so the `modify` that starts an update arrives in a pause anyway.
+- **No write when nothing changed**: the new frontmatter and body are computed first and compared with the note (a timestamp read back as a Date compares equal); only the parts that differ are written.
+- **No loops**: the service never listens to `.md` files (its own writes and the user's edits start nothing) and never writes the notebook, so the notebook view's external-change check is never involved.
+- The document comes from the open view when there is one (no second parse), otherwise from the file; an unreadable notebook gets no update.
+
+**Rename and delete.** When a notebook is renamed or moved and its companion is at the configured place for the old path, the companion is renamed to the place for the new path with `fileManager.renameFile` (Obsidian updates links to it); a companion the user put elsewhere stays there. Renaming a folder in `beside` mode moves the companions with it. On **delete the companion is kept**: it may contain the user's own writing, and deleting a notebook from the library only moves it to the trash (restoring it reconnects the companion by id). A notice names the kept note (one notice for a folder of notebooks). Its `notebook` link becomes unresolved.
+
+**Library and index.** Companion notes are `.md`, which `isNotebookFile` rejects, so the library, the index, the picker and version history never treat them as notebooks. A companion folder placed inside the notebooks folder shows up in the library sidebar as a folder without notebooks.
+
+**M4.** If notebooks become `.md` (option B), the notebook file itself gets `companionContent()` as its frontmatter and generated body (the region markers and merge rules stay), the `notebook` property is dropped, and the migration can fold an existing companion into the notebook: its user text and properties are already separated from the generated parts. Links like `[[Physics]]` written against a companion at the default place (`Physics.md` next to `Physics.notebook`) then point at the migrated notebook.

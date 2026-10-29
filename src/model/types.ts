@@ -2,10 +2,10 @@
 
 export const FORMAT_ID = "obsidian-notebook";
 /**
- * v5: per-stroke render version (v4: library metadata, assets, backgrounds, elements, infinite pages,
- * "shape" tool; v3: paper kinds and page sizes).
+ * v6: optional page margins around a background (v5: per-stroke render version; v4: library metadata,
+ * assets, backgrounds, elements, infinite pages, "shape" tool; v3: paper kinds and page sizes).
  */
-export const CURRENT_VERSION = 5;
+export const CURRENT_VERSION = 6;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -121,6 +121,18 @@ export interface ImageElement {
 
 export type PageElement = TextElement | ImageElement;
 
+/**
+ * v6: blank space added around a page's background (a PDF page or a scan), in pt. The background is
+ * drawn in the box `x = left, y = 0, width = page.width - left - right, height = page.height - bottom`
+ * (backgroundRect in margins.ts); without margins it fills the page. Ink keeps page coordinates:
+ * widening to the left moves the background and the ink together (SetPageMargins).
+ */
+export interface PageMargins {
+	left: number;
+	right: number;
+	bottom: number;
+}
+
 export interface Page {
 	id: string;
 	width: number;
@@ -133,6 +145,8 @@ export interface Page {
 	elements?: PageElement[];
 	/** v4: the page grows downwards while writing near its bottom edge. */
 	infinite?: boolean;
+	/** v6: margins around the background; absent = the background fills the page. Written only when present. */
+	margins?: PageMargins;
 }
 
 /** v4 notebook metadata, shown and edited in the library. */

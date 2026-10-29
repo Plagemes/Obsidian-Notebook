@@ -97,6 +97,23 @@ function v4ToV5(raw: RawObject): RawObject {
 	return { ...raw, version: 5, pages };
 }
 
+/**
+ * v6 adds the optional page field `margins` (blank space around a PDF or scan background). Every valid
+ * v5 document is a valid v6 document without margins. A v5 reader ignored unknown fields, so a
+ * `margins` key in a v5 file was never ours and never had an effect: it is dropped, not interpreted.
+ */
+function v5ToV6(raw: RawObject): RawObject {
+	if (!Array.isArray(raw.pages)) return { ...raw, version: 6 };
+	const isObj = (v: unknown): v is RawObject => typeof v === "object" && v !== null && !Array.isArray(v);
+	const pages = (raw.pages as unknown[]).map((page) => {
+		if (!isObj(page) || !("margins" in page)) return page;
+		const copy = { ...page };
+		delete copy.margins;
+		return copy;
+	});
+	return { ...raw, version: 6, pages };
+}
+
 /** MIGRATIONS[n] takes a document from version n to n+1. */
 export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	0: v0ToV1,
@@ -104,6 +121,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	2: v2ToV3,
 	3: v3ToV4,
 	4: v4ToV5,
+	5: v5ToV6,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

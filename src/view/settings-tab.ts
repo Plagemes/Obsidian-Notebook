@@ -2,6 +2,9 @@ import { PluginSettingTab, Setting, type App, type Plugin, type SettingDefinitio
 import { t } from "../i18n";
 import { DEFAULT_SETTINGS, readSettings, type NotebookSettings } from "../settings";
 import { PAGE_SIZES, PAPER_KINDS } from "../model/types";
+import { defaultLooseSheetPath } from "../library/loose-sheet-logic";
+import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "../ink/edge-zones";
+import { companionSettingDefinitions, displayCompanionSettings, type CompanionSettingsHost } from "./companion-settings";
 
 const paperOptions = () => Object.fromEntries(PAPER_KINDS.map((k) => [k, t(`paper.${k}`)]));
 const sizeOptions = () => Object.fromEntries((Object.keys(PAGE_SIZES) as Array<keyof typeof PAGE_SIZES>).map((k) => [k, t(`size.${k}`)]));
@@ -12,6 +15,19 @@ export interface SettingsHost extends Plugin {
 }
 
 type Key = keyof NotebookSettings;
+
+const penButtonOptions = () => ({
+	radial: t("settings.penButton.radial"),
+	eraser: t("settings.penButton.eraser"),
+	off: t("settings.penButton.off"),
+});
+
+const EDGE_KEYS = [
+	["edgeLeft", "settings.edgeLeft"],
+	["edgeRight", "settings.edgeRight"],
+	["edgeTop", "settings.edgeTop"],
+	["edgeBottom", "settings.edgeBottom"],
+] as const;
 
 export class NotebookSettingTab extends PluginSettingTab {
 	constructor(app: App, private readonly host: SettingsHost) {
@@ -30,6 +46,11 @@ export class NotebookSettingTab extends PluginSettingTab {
 					defaultValue: DEFAULT_SETTINGS.folder,
 					placeholder: DEFAULT_SETTINGS.folder,
 				},
+			},
+			{
+				name: t("settings.looseSheet"),
+				desc: t("settings.looseSheet.desc"),
+				control: { type: "text", key: "looseSheetPath", defaultValue: DEFAULT_SETTINGS.looseSheetPath, placeholder: defaultLooseSheetPath(DEFAULT_SETTINGS.folder) },
 			},
 			{
 				name: t("settings.defaultPaper"),
@@ -106,7 +127,46 @@ export class NotebookSettingTab extends PluginSettingTab {
 				desc: t("settings.snapshotKeep.desc"),
 				control: { type: "slider", key: "snapshotsToKeep", defaultValue: DEFAULT_SETTINGS.snapshotsToKeep, min: 1, max: 50, step: 1 },
 			},
+			{
+				name: t("settings.autoNextPage"),
+				desc: t("settings.autoNextPage.desc"),
+				control: { type: "toggle", key: "autoNextPage", defaultValue: DEFAULT_SETTINGS.autoNextPage },
+			},
+			{
+				name: t("settings.eraseAreaElements"),
+				desc: t("settings.eraseAreaElements.desc"),
+				control: { type: "toggle", key: "eraseAreaElements", defaultValue: DEFAULT_SETTINGS.eraseAreaElements },
+			},
+			// wave p1a: input
+			{
+				name: t("settings.edge"),
+				desc: t("settings.edge.desc"),
+				control: { type: "toggle", key: "edgeRejection", defaultValue: DEFAULT_SETTINGS.edgeRejection },
+			},
+			{
+				name: t("settings.edgePx"),
+				desc: t("settings.edgePx.desc"),
+				control: {
+					type: "slider", key: "edgeRejectionPx", defaultValue: DEFAULT_SETTINGS.edgeRejectionPx,
+					min: EDGE_WIDTH_MIN, max: EDGE_WIDTH_MAX, step: 2, displayFormat: (v) => `${v} px`,
+				},
+			},
+			...EDGE_KEYS.map(([key, label]): SettingDefinitionItem<Key> => ({
+				name: t(label),
+				control: { type: "toggle", key, defaultValue: DEFAULT_SETTINGS[key] },
+			})),
+			{
+				name: t("settings.penButton"),
+				desc: t("settings.penButton.desc"),
+				control: { type: "dropdown", key: "penButtonAction", defaultValue: DEFAULT_SETTINGS.penButtonAction, options: penButtonOptions() },
+			},
+			// Companion notes (O1)
+			...companionSettingDefinitions(this.companionHost()),
 		];
+	}
+
+	private companionHost(): CompanionSettingsHost {
+		return { plugin: this.host, get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) };
 	}
 
 	getControlValue(key: string): unknown {
@@ -132,6 +192,14 @@ export class NotebookSettingTab extends PluginSettingTab {
 				.setPlaceholder(DEFAULT_SETTINGS.folder)
 				.setValue(s.folder)
 				.onChange((v) => this.setControlValue("folder", v)));
+
+		new Setting(containerEl)
+			.setName(t("settings.looseSheet"))
+			.setDesc(t("settings.looseSheet.desc"))
+			.addText((text) => text
+				.setPlaceholder(defaultLooseSheetPath(DEFAULT_SETTINGS.folder))
+				.setValue(s.looseSheetPath)
+				.onChange((v) => this.setControlValue("looseSheetPath", v)));
 
 		new Setting(containerEl)
 			.setName(t("settings.defaultPaper"))
@@ -202,5 +270,37 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setName(t("settings.snapshotKeep"))
 			.setDesc(t("settings.snapshotKeep.desc"))
 			.addSlider((slider) => slider.setLimits(1, 50, 1).setValue(s.snapshotsToKeep).onChange((v) => this.setControlValue("snapshotsToKeep", v)));
+
+		new Setting(containerEl)
+			.setName(t("settings.autoNextPage"))
+			.setDesc(t("settings.autoNextPage.desc"))
+			.addToggle((toggle) => toggle.setValue(s.autoNextPage).onChange((v) => this.setControlValue("autoNextPage", v)));
+
+		new Setting(containerEl)
+			.setName(t("settings.eraseAreaElements"))
+			.setDesc(t("settings.eraseAreaElements.desc"))
+			.addToggle((toggle) => toggle.setValue(s.eraseAreaElements).onChange((v) => this.setControlValue("eraseAreaElements", v)));
+		// wave p1a: input
+		new Setting(containerEl)
+			.setName(t("settings.edge"))
+			.setDesc(t("settings.edge.desc"))
+			.addToggle((toggle) => toggle.setValue(s.edgeRejection).onChange((v) => this.setControlValue("edgeRejection", v)));
+
+		new Setting(containerEl)
+			.setName(t("settings.edgePx"))
+			.setDesc(t("settings.edgePx.desc"))
+			.addSlider((slider) => slider.setLimits(EDGE_WIDTH_MIN, EDGE_WIDTH_MAX, 2).setValue(s.edgeRejectionPx).onChange((v) => this.setControlValue("edgeRejectionPx", v)));
+
+		for (const [key, label] of EDGE_KEYS) {
+			new Setting(containerEl)
+				.setName(t(label))
+				.addToggle((toggle) => toggle.setValue(s[key]).onChange((v) => this.setControlValue(key, v)));
+		}
+
+		new Setting(containerEl)
+			.setName(t("settings.penButton"))
+			.setDesc(t("settings.penButton.desc"))
+			.addDropdown((dd) => dd.addOptions(penButtonOptions()).setValue(s.penButtonAction).onChange((v) => this.setControlValue("penButtonAction", v)));
+		displayCompanionSettings(containerEl, this.companionHost());
 	}
 }

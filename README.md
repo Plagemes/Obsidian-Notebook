@@ -9,7 +9,7 @@ Handwritten notebooks inside your Obsidian vault, designed first for **Android t
 - Local-first: no account, no cloud, no telemetry.
 - UI in English, and in Italian when Obsidian is set to Italian.
 
-> **Status: v0.4.1 (milestones M3b and M3c, plus a hotfix), early development.** The automated tests pass, but the plugin has **not been verified on Android hardware yet**, and many features are experimental (including the writing engine, the scanner and export: the PDF and SVG were checked with other software on a PC, not opened on Android). See [docs/testing.md](docs/testing.md) for what is verified and how to test it.
+> **Status: v0.5.0, early development.** The automated tests pass, but the plugin has **not been verified on Android hardware yet**, and most features are new in 0.5.0 and many are experimental (including the writing engine, the scanner and export: the PDF and SVG were checked with other software on a PC, not opened on Android). See [docs/testing.md](docs/testing.md) for what is verified and how to test it.
 
 ## Usage
 
@@ -38,6 +38,12 @@ The toolbar has these tools:
 - **Text**: tap to place a text box and type; the text size is in the toolbar. Text in text boxes is searchable in the library.
 - **Image**: insert an image from the vault or the device as an element (select it with the lasso to move, scale or rotate it).
 - **Ruler**: place a straight edge with two fingers; the pen follows it, so a stroke started on its edge stays on the edge.
+- **Eraser filter and size**: the eraser can be limited to all ink, the highlighter only, the pen only or one colour; five sizes, with a circle that follows the pen. Mode **Area**: draw an outline and everything inside is erased in one undo step (text boxes and images only with the setting *Erase area also removes text and images*).
+- **Insert or remove space**: touch a line and drag; everything below moves, onto the next page (created when needed) if it no longer fits. Removing never takes away more than the empty gap.
+- **Favourite pens** (six slots), a **Pen only** toggle, and a command for every tool and action (no default hotkeys). The toolbar is two rows and the tool options are in a popover.
+- **Selection bar** (lasso): copy, cut, duplicate, paste, change colour and width, and make white transparent in an image. With the lasso, a double tap selects a word and a triple tap a line (found from the strokes, no OCR). Paste also takes a picture or text from the system clipboard; Android WebViews may refuse it, so a paste box is the fallback.
+- **Pen side button**: opens a radial menu at the pen tip (or erases while held, or does nothing). Which button number the S Pen reports is not verified.
+- **Edge rejection zones** (off by default): touches near the chosen edges are ignored.
 
 Undo/redo: toolbar buttons, Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z (or Ctrl+Y) on desktop. Each transform, delete, insertion or eraser gesture is one step. The history lives in memory and is lost when the notebook is closed.
 
@@ -49,6 +55,8 @@ Undo/redo: toolbar buttons, Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z (or Ctrl+Y) on deskt
 - **Infinite page** (page menu): when you write in the bottom fifth of the page it grows by half a page, up to 20 times its width. Undoing the stroke undoes the growth.
 - Ruled paper has its first line below a top margin and a red margin line about 25 mm from the left edge; dotted paper has a dot at every grid intersection; millimetre paper has a darker line every 10 mm. On screen the fine lines and dots fade out when zoomed far out.
 - With the default settings a finger scrolls (one finger) and zooms (two fingers); it does not draw. A quick one-finger flick keeps scrolling for a moment (fling). Turn on **Draw with finger** in the settings to draw with a finger.
+- **Automatic next page** (setting, on by default): writing in the bottom tenth of the last page appends a page. **New lecture** adds a dated page at the end; **Loose sheet** is a quick-notes notebook opened from the ribbon, a command or the library; **Move to notebook…** moves chosen pages to another notebook.
+- **Instant board shot**: a toolbar button takes a photo, crops it, applies the whiteboard filter and puts it under your last ink. **Instant start** reopens the notebook and page you were on (**Continue last notebook**).
 - **Fit to width** in the toolbar restores the default zoom.
 - Mouse: left button draws, wheel scrolls, Ctrl + wheel zooms, middle button pans.
 
@@ -58,6 +66,10 @@ Undo/redo: toolbar buttons, Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z (or Ctrl+Y) on deskt
 - **Insert PDF after this page** (page menu): the whole file or a page range. Blank pages can be inserted between PDF pages at any time. **Insert image as page** makes a page whose background is the image.
 - **Scanner**: **Scan into this notebook** (command or page menu), **New notebook from scan** (command or library), or **Insert scan as image** (page menu). Take a photo with the device camera (or choose one), drag the four corners to the edges of the sheet (a loupe shows the corner under your finger; the corners are detected automatically when possible), pick a filter (*Original*, *Document*, *Whiteboard*), rotate or retake, then go on with the next sheet or finish. The result is a page whose background is the corrected photo, like a PDF page.
 - PDFs and images are copied once into `<notebooks folder>/_assets/`, named by a hash of their content, so the same file used twice is stored once and saving a notebook with a long PDF writes only the ink. If an asset file is deleted, the page shows a placeholder with the file name and the ink is kept. Do not delete or rename files in `_assets`.
+
+- **Page margins…** (page menu): widen a PDF or scanned page to the left, right and bottom to write beside the slide, for one page or every page of the PDF.
+- **Update PDF from a new version…**: slides already in the notebook are recognised by their content, new ones are added after the last page of that PDF and your notes stay on their slides.
+- **Export PDF annotations to Markdown**: highlights (with the PDF text under them when the PDF has a text layer) and text boxes, each with a link to its page, in a new note.
 
 ### Export
 
@@ -79,11 +91,15 @@ The PDF writer has no dependencies and does not compress, so a page with a lot o
   The block also accepts `Notebooks/Physics.notebook#3` and the wikilink form `[[Physics#p3]]` (resolved by name). The page defaults to 1.
 - **Links**: `obsidian://notebook?path=<vault path>&page=<n>` opens the notebook at that page from other apps, bookmarks or a QR code (`vault=<name>` is optional).
 - Opening a notebook from a link, an embed or a search result scrolls to the requested page.
+- **Page links and embeds**: `[[Physics.notebook#p3]]` opens the notebook at page 3, with page suggestions while typing; `![[Physics.notebook#p3]]` shows the page preview. The page menu can copy a link or insert a link or preview into the active note, and the file explorer has *New notebook here* (folders) and *Annotate in Notebook* (PDFs). Not verified in Obsidian on Android; live preview needs a feature of Obsidian that is not in its public typings, so the `notebook` code block is the fallback.
+- **Companion notes** (setting, **off by default**): every notebook gets a Markdown note with properties and the text of its text boxes per page, so Obsidian search, graph, tags and Dataview see notebooks. Your own text and properties in the note are kept. Handwriting is not included (no OCR).
 
 ### Versions and recovery
 
 - **Instant save journal**: about 200 ms after a change (never during a gesture) the change is recorded in a small journal in the plugin folder. If the app was killed before the regular save, the next time the notebook opens the changes are restored and a notice says so. If the journal does not match the file (it was changed elsewhere), nothing is applied and a copy goes to `Notebooks/_backup/`.
 - **Version history**: when you open or change a notebook, a snapshot is saved if the last one is older than the interval (24 h by default); beyond the limit (10 by default) the oldest go to the trash. **Notebook: Restore a previous version** lists them; restoring first saves the current content as a backup, and a version of another notebook is refused. Snapshots are in `Notebooks/_backup/history/`.
+- **Repair a damaged notebook**: recovers what can be read from a damaged file, the journal, snapshots and backups into a new notebook; the damaged file is not changed.
+- **Merge conflicted copies** made by sync apps (only copies with the same notebook id), and **Restore a single page** from a previous version.
 
 ### Settings
 
@@ -101,6 +117,12 @@ The PDF writer has no dependencies and does not compress, so a page with a lot o
 | Stabilization | 0–10, default 2. Adaptive smoothing of hand tremor: strong when the pen is slow, almost none when it is fast; higher values trail further behind the pen. The filtered points are what is saved |
 | Ignore large touches | experimental, 0 = off. Touches with a contact larger than this many px are treated as a palm and ignored, scrolling included. Depends on what the device reports |
 | Performance overlay | shows frame time, input-to-frame and input-to-paint times, whether raw input is in use, redraw time, and strokes and pages drawn |
+| Add a page when writing at the bottom | on by default; appends a page after the last page (not infinite or PDF/image pages) |
+| Pen side button | radial menu (default), erase while held, or nothing |
+| Edge rejection zones | off by default; width 4-80 px and one switch per edge |
+| Erase area also removes text and images | off by default |
+| Loose sheet location | where the quick-notes notebook is created |
+| Companion notes | off by default; location, name template |
 | Version history interval | at most one snapshot per notebook per this many hours (default 24); 0 turns snapshots off |
 | Versions to keep | snapshots kept per notebook (default 10) |
 
@@ -174,11 +196,11 @@ Enable USB debugging on the device, connect it to a PC with Chrome and open `chr
 
 ## File format
 
-A `.notebook` file is JSON with `format: "obsidian-notebook"` and an integer `version` (currently 5). Version 2 added the highlighter, 3 the paper kinds, 4 the notebook metadata, assets, PDF/image page backgrounds, text and image elements, infinite pages and the shape tool, and 5 a per-stroke `render` field (1 = the previous pen look, kept for every existing stroke; 2 = the new ink engine). Older notebooks open normally and are rewritten as version 5 only when you edit them; after that, **older versions of the plugin open them read-only** (and keep a backup copy) instead of editing them. Coordinates are in typographic points (A4 = 595.28 × 841.89 pt). PDFs and images are not inside the file: they are in `<notebooks folder>/_assets/` and referenced by id. Details and the reasoning behind the format choice are in [docs/architecture.md](docs/architecture.md).
+A `.notebook` file is JSON with `format: "obsidian-notebook"` and an integer `version` (currently 6). Version 2 added the highlighter, 3 the paper kinds, 4 the notebook metadata, assets, PDF/image page backgrounds, text and image elements, infinite pages and the shape tool, and 5 a per-stroke `render` field (1 = the previous pen look, kept for every existing stroke; 2 = the new ink engine), and 6 optional page margins (files saved by 0.5.0 with margins open read-only in 0.4.x). Older notebooks open normally and are rewritten as version 5 only when you edit them; after that, **older versions of the plugin open them read-only** (and keep a backup copy) instead of editing them. Coordinates are in typographic points (A4 = 595.28 × 841.89 pt). PDFs and images are not inside the file: they are in `<notebooks folder>/_assets/` and referenced by id. Details and the reasoning behind the format choice are in [docs/architecture.md](docs/architecture.md).
 
 Backups of unreadable files, of versions changed elsewhere (conflicts), of changes that could not be saved and of journals that could not be applied are written to `Notebooks/_backup/` as `.bak` files; version snapshots go to `Notebooks/_backup/history/`. Obsidian does not show these folders in the file explorer; open them with a file manager. If you sync the vault, sync `_assets` and `_backup` too (with Obsidian Sync, turn on **Other types** so that `.notebook` files, PDFs and snapshots are synced). The journal and the library index live in the plugin folder and are not meant to be synced.
 
-Because the extension is custom, Obsidian's search, tags, backlinks and graph do not see notebooks yet (planned for M4, see [docs/roadmap.md](docs/roadmap.md)); the library has its own search, and notes can embed and link to notebook pages (see above).
+Because the extension is custom, Obsidian's search, tags, backlinks and graph do not see notebooks unless *Companion notes* is on (off by default; the rest is planned for M4, see [docs/roadmap.md](docs/roadmap.md)); the library has its own search, and notes can embed and link to notebook pages (see above).
 
 ## Development
 

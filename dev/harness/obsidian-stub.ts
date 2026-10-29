@@ -445,6 +445,11 @@ export class Workspace extends Events {
 	getActiveFile(): TFile | null {
 		return null;
 	}
+	/** Layout saves requested by views; counted so the harness can see that the page is saved with the layout. */
+	layoutSaves = 0;
+	requestSaveLayout(): void {
+		this.layoutSaves++;
+	}
 }
 
 export class Scope {
