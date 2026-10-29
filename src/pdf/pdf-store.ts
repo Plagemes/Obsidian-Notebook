@@ -138,7 +138,7 @@ export class PdfStore {
 			const vp = p.getViewport({ scale: 1 });
 			if (typeof p.getTextContent !== "function") return { width: vp.width, height: vp.height, items: [] };
 			const content = await p.getTextContent();
-			return { width: vp.width, height: vp.height, items: textBoxes(Array.isArray(content?.items) ? content.items : [], vp.transform) };
+			return { width: vp.width, height: vp.height, items: textBoxes(Array.isArray(content?.items) ? content.items : [], vp.transform, content?.styles) };
 		});
 	}
 

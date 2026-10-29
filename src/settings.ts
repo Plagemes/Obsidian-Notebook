@@ -7,9 +7,10 @@ import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./mo
 import { DEFAULT_COMPANION_SETTINGS, readCompanionSettings, type CompanionSettings } from "./storage/companion-path";
 import { DEFAULT_TRASH_SETTINGS, readTrashSettings, type TrashSettings } from "./storage/trash-settings";
 import { DEFAULT_ZETTEL_SETTINGS, readZettelSettings, type ZettelSettings } from "./zettel/settings";
+import { DEFAULT_READING_SETTINGS, readReadingSettings, type ReadingSettings } from "./view/reading-settings";
 
-/** Companion note settings (O1) are defined in storage/companion-path.ts, Zettelkasten settings (wave 0.6) in zettel/settings.ts. */
-export interface NotebookSettings extends CompanionSettings, GestureSettings, TrashSettings, ZettelSettings {
+/** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
+export interface NotebookSettings extends CompanionSettings, GestureSettings, TrashSettings, ZettelSettings, ReadingSettings {
 	folder: string;
 	fingerDrawing: boolean;
 	palmRejectionMs: number;
@@ -114,6 +115,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	...DEFAULT_TRASH_SETTINGS,
 	...DEFAULT_ZETTEL_SETTINGS,
 	zettelSlipBoxes: [],
+	...DEFAULT_READING_SETTINGS,
 };
 
 /** Merges saved data over the defaults, ignoring values of the wrong type. */
@@ -157,6 +159,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	Object.assign(s, readTrashSettings(d));
 	if (typeof d.inkFollowsObjects === "boolean") s.inkFollowsObjects = d.inkFollowsObjects;
 	Object.assign(s, readZettelSettings(d));
+	Object.assign(s, readReadingSettings(d));
 	return s;
 }
 

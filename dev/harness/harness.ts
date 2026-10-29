@@ -3,7 +3,7 @@
  * navigator) running in a plain web page on top of dev/harness/obsidian-stub.ts.
  *
  * URL parameters (all optional):
- *   doc=v3|new       notebook to open (v3: written by 0.3.0, grid paper and a few strokes; new: empty)
+ *   doc=v3|new|pdf   notebook to open (v3: written by 0.3.0, grid paper and a few strokes; new: empty; pdf: three pages of a fake PDF)
  *   theme=light|dark
  *   w=800&h=1280     size of the Obsidian leaf in CSS px (default: the window)
  *   lowLatency=1     turn on the low-latency ink setting
@@ -26,6 +26,8 @@ import { WetInk } from "../../src/ink/wet-ink";
 import { Renderer } from "../../src/ink/renderer";
 import { DocumentSession } from "../../src/storage/session";
 import { stressDocument } from "../../src/model/stress";
+import { FAKE_PATH, installFakePdf, slidesNotebook } from "./fake-pdf";
+import { checkReading } from "./reading-check";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -97,6 +99,11 @@ async function seed(): Promise<void> {
 	await app.vault.createFolder("Notebooks");
 	await app.vault.create("Notebooks/Old v3.notebook", v3Notebook());
 	await app.vault.create("Notebooks/New.notebook", serialize(createDocument()));
+	// doc=pdf: three pages that show the pages of a fake PDF (fake-pdf.ts).
+	installFakePdf();
+	await app.vault.createFolder("Notebooks/_assets");
+	await app.vault.createBinary(FAKE_PATH, new Uint8Array(8).buffer);
+	await app.vault.create("Notebooks/Slides.notebook", slidesNotebook());
 }
 
 function settings(): NotebookSettings {
@@ -112,7 +119,8 @@ async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	leaf = new WorkspaceLeaf(app, root);
 	view = new NotebookView(leaf as any, { settings: settings() });
 	await view.onOpen();
-	const file = app.vault.getFileByPath(doc === "new" ? "Notebooks/New.notebook" : "Notebooks/Old v3.notebook") as TFile;
+	const path = doc === "new" ? "Notebooks/New.notebook" : doc === "pdf" ? "Notebooks/Slides.notebook" : "Notebooks/Old v3.notebook";
+	const file = app.vault.getFileByPath(path) as TFile;
 	await (view as any).loadFile(file);
 	view.onResize();
 	await frames(3);
@@ -740,7 +748,7 @@ function applySize(): void {
 	if (h) root.style.height = `${Number(h)}px`;
 }
 
-(window as any).harness = { app, open, measureOpen, penStroke, setTool, openOptions, openMore, check, staticPixel, strokeCount, errors, notices, applyTheme, get view() {
+(window as any).harness = { app, open, measureOpen, penStroke, setTool, openOptions, openMore, check, checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
 	return view;
 } };
 
