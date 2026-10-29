@@ -54,6 +54,7 @@ export interface ToolbarActions {
 	undo(): void;
 	redo(): void;
 	addPage(): void;
+	exercisePage(): void;
 	pageMenu(evt: MouseEvent): void;
 	deleteSelection(): void;
 	fit(): void;
@@ -206,6 +207,7 @@ export class Toolbar {
 		this.rulerButton = this.moreItem("ruler", "tool.ruler", () => this.set({ ruler: !this.state.ruler }));
 		this.penOnlyEl = this.moreEl.createDiv({ cls: "notebook-more-slot" });
 		this.moreItem("file-plus", "tool.addPage", () => this.actions.addPage());
+		this.moreItem("pencil-ruler", "page.exercise", () => this.actions.exercisePage());
 		const pageMenu = this.moreItem("more-vertical", "page.menu", () => undefined);
 		pageMenu.addEventListener("click", (e) => this.actions.pageMenu(e));
 		this.moreItem("move-horizontal", "tool.fit", () => this.actions.fit());

@@ -10,6 +10,15 @@
   - Tagging pages with the course waits for page tags: the hook `applyCourseTag` in `src/timetable/page-tag.ts` is called but does nothing yet. No document format change.
   - Not yet verified on Android hardware.
 - **Synchronised PDF and notes view** (#106): command **Open PDF side by side** (also in the "…" page menu) shows a PDF beside the notes: a plain `.pdf` of the vault (read-only, rendered with pdf.js, not copied into the notebook) or another notebook whose pages have PDF backgrounds (its pages with your ink on them). The split is inside the notebook view, not a second Obsidian leaf, because Obsidian on phones and tablets has no split panes in the main area: side by side when the view is wide and landscape, stacked otherwise, with a draggable divider. Turning the PDF page shows the notes page linked to it; scrolling the notes shows the PDF page linked to the notes page in view (toggle **Follow**). A slide without a notes page shows **Add notes page for this slide**: it inserts a page in slide order as one undo step and links it. Also **Link** / **Unlink** for existing pages, commands *Close PDF side by side*, *Link this page to the slide in view*, *Add notes page for this slide*, and the menu entry *Show the slide of this page*. The links are stored in a small file in the plugin's folder (`pdf-links.json`, keyed by notebook id and page id, and by the PDF's content id and page number, so renaming the PDF does not break them), written only by these explicit actions and never while scrolling; the notebook format is unchanged. A links file that cannot be read is never overwritten. The pane shows one PDF page at a time and is not remembered across restarts. Not yet verified on Android hardware.
+Not yet verified on Android hardware (see `docs/testing.md`, steps K1-K7).
+
+### Added
+- **Lecture pack**
+  - **New lecture from slides…** (#191; command, library button and folder menu): choose the course slides PDF (vault or device), then the layout, a header (page, text or none), the course and the date. The lecture notebook is created in the folder and opened, with the slides as page backgrounds; the PDF is stored once like any import.
+  - **Slide + notes layout** (#192): one slide per page with a ruled (or other) notes area on the right or below the slide, made with page margins, so there is no format change. The slide is scaled to a fixed size so handwriting has the same scale in every course. Two or three slides per page are not possible yet: they need a format change (documented in `docs/architecture.md`).
+  - **Notes page after every slide** (#193): optional blank page of the same size and the paper of your choice after each slide.
+  - **Exercise page here** (page menu, toolbar … menu, command): one tap inserts a blank page with your exercise paper (grid by default, changeable with *Exercise page paper…*) right after the current page, the same size as that page; one undo step.
+  - The same layout options appear when you insert a PDF into an existing notebook (page menu → *Insert PDF*); the last choice is remembered on the device.
 
 ## 0.5.0 — 2026-10-29
 

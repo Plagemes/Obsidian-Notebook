@@ -28,6 +28,8 @@ export interface LibraryHost {
 	createNotebook(folder: string): void;
 	/** Opens the PDF import flow for that folder. */
 	importPdf(folder: string): void;
+	/** Opens "New lecture from slides…" (course PDF, layout, header) for that folder. */
+	lectureFromSlides?(folder: string): void;
 	/** Scans pages with the camera into a new notebook in that folder. */
 	scanToNotebook?(folder: string): void;
 	/** Opens the loose sheet (quick notes), creating it the first time. */
@@ -261,6 +263,7 @@ export class LibraryView extends ItemView {
 		this.actionButton(actions, "file-plus", t("library.action.newNotebook"), () => this.host.createNotebook(this.currentFolder()), true);
 		this.actionButton(actions, "folder-plus", t("library.action.newFolder"), () => this.askNewFolder(this.currentFolder()));
 		this.actionButton(actions, "file-up", t("library.action.importPdf"), () => this.host.importPdf(this.currentFolder()));
+		if (this.host.lectureFromSlides) this.actionButton(actions, "graduation-cap", t("library.action.lectureFromSlides"), () => this.host.lectureFromSlides?.(this.currentFolder()));
 		if (this.host.scanToNotebook) this.actionButton(actions, "scan", t("library.action.scanNotebook"), () => this.host.scanToNotebook?.(this.currentFolder()));
 		if (this.host.openLooseSheet) this.actionButton(actions, "sticky-note", t("library.action.looseSheet"), () => this.host.openLooseSheet?.());
 		if (this.host.nowClass && this.host.openNowClass) {
@@ -1000,6 +1003,7 @@ export class LibraryView extends ItemView {
 		menu.addItem((i) => i.setTitle(t("library.menu.newNotebookHere")).setIcon("file-plus").onClick(() => this.host.createNotebook(path)));
 		menu.addItem((i) => i.setTitle(t("library.menu.newFolderHere")).setIcon("folder-plus").onClick(() => this.askNewFolder(path)));
 		menu.addItem((i) => i.setTitle(t("library.menu.importPdfHere")).setIcon("file-up").onClick(() => this.host.importPdf(path)));
+		if (this.host.lectureFromSlides) menu.addItem((i) => i.setTitle(t("library.menu.lectureFromSlidesHere")).setIcon("graduation-cap").onClick(() => this.host.lectureFromSlides?.(path)));
 		if (this.host.scanToNotebook) menu.addItem((i) => i.setTitle(t("library.menu.scanHere")).setIcon("scan").onClick(() => this.host.scanToNotebook?.(path)));
 		if (!isRoot) {
 			menu.addSeparator();
