@@ -97,6 +97,7 @@ The PDF writer has no dependencies and does not compress, so a page with a lot o
 | Palm rejection time | touch is ignored for this long after the pen was seen (default 500 ms) |
 | Pressure | use the device pressure, or always simulate it from speed. Decided at the start of each stroke |
 | Predicted ink | draw the pen's predicted path ahead of the tip (never saved). Off by default: it can overshoot at turns and at the end of a stroke |
+| Low-latency ink (experimental) | show the ink being written on a low-latency layer and read pen samples as soon as they arrive. Off by default: on some devices it can turn the page black or hide the ink |
 | Stabilization | 0–10, default 2. Adaptive smoothing of hand tremor: strong when the pen is slow, almost none when it is fast; higher values trail further behind the pen. The filtered points are what is saved |
 | Ignore large touches | experimental, 0 = off. Touches with a contact larger than this many px are treated as a palm and ignored, scrolling included. Depends on what the device reports |
 | Performance overlay | shows frame time, input-to-frame and input-to-paint times, whether raw input is in use, redraw time, and strokes and pages drawn |

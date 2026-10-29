@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.1 — unreleased
+
+Hotfix for 0.4.0. Not yet verified on Android hardware.
+
+### Fixed
+- **Black page, nothing could be written** (reported on a Samsung tablet with S Pen, dark theme): the page area stayed empty — black in the dark theme — and no tool drew, while the toolbar and the page panel worked. Cause: two merges in the 0.4.0 cycle damaged `styles.css` (the "view wave 2" and "integration P1" sections lost their closing braces and many declarations). Browsers with CSS nesting read the rest of the file as nested rules that never match, so the page container was no longer a flex box: the drawing area had zero height, the canvases were never sized and no pointer event reached them. The two sections are restored from their original commits (embed previews and the page panel's hidden/narrow states were affected too).
+- One bad stroke, image, PDF background or text box can no longer stop the page from being drawn: every part of a frame is drawn in its own guard, a failure is skipped and logged once in the console (`[notebook] render …`). If painting wet ink fails, the stroke being written is shown on the regular live layer instead, so the pen always leaves ink. Pointer events are guarded the same way (`[notebook] input …`) and a stroke is always closed when the pen lifts.
+
+### Changed
+- New setting **Low-latency ink (experimental)**, **off by default**: the pen's wet-ink canvas asks for a low-latency (`desynchronized`) context and `pointerrawupdate` is listened to only when it is on. On some Android GPUs a low-latency canvas is composited as an opaque layer; off, ink is still painted as each pen event arrives, on a regular canvas, with `pointermove` and coalesced samples. If the low-latency context cannot be created, a regular one is used.
+
+### Development
+- Browser harness (`dev/harness/`, `npm run harness`, `npm run harness:check`): the real notebook view on a stand-in for the `obsidian` module, checked headlessly in Chrome on old (v3) and new notebooks, light and dark theme, tablet, phone and desktop viewports with their pixel ratios, synthetic pen input and injected faults, with screenshots and composited-pixel checks. See `docs/testing.md`.
+- Unit tests guard `styles.css` (balanced braces, no accidental nesting, the layout declarations) and the new guards and setting.
+
 ## 0.4.0 — 2026-10-29 (M3b and M3c)
 
 Not yet verified on Android hardware (see `docs/testing.md`). This release merges the planned 0.4.0 (objects) and 0.5.0 (library, PDF, canvas) of the M3 split.
