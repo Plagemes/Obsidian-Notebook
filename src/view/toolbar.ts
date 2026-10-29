@@ -1,9 +1,10 @@
 import { setIcon } from "obsidian";
 import { t, type MessageKey } from "../i18n";
+import { ERASE_FILTER_KINDS, type EraseFilterKind } from "../ink/erase-filter";
 import { SHAPE_KINDS, type ShapeKind } from "./view-helpers";
 
-export type ToolName = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text";
-export type EraserMode = "stroke" | "segment";
+export type ToolName = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "space";
+export type EraserMode = "stroke" | "segment" | "area";
 
 export const PEN_COLORS = ["#1e1e1e", "#6b7280", "#1d4ed8", "#0891b2", "#15803d", "#ca8a04", "#ea580c", "#dc2626", "#9333ea"] as const;
 export const HIGHLIGHTER_COLORS = ["#facc15", "#4ade80", "#f472b6", "#60a5fa", "#fb923c"] as const;
@@ -19,6 +20,10 @@ export interface ToolbarState {
 	highlighterColor: string;
 	highlighterWidth: number;
 	eraserMode: EraserMode;
+	/** Selective eraser: which ink the eraser may touch (all ink, only highlighter, only pen, one colour). */
+	eraserFilter: EraseFilterKind;
+	/** The colour the eraser is limited to when `eraserFilter` is "color". */
+	eraserColor: string;
 	shapeKind: ShapeKind;
 	/** Font size of new text boxes, pt. */
 	textSize: number;
@@ -33,6 +38,8 @@ export const DEFAULT_TOOLS: ToolbarState = {
 	highlighterColor: HIGHLIGHTER_COLORS[0],
 	highlighterWidth: HIGHLIGHTER_WIDTHS[1],
 	eraserMode: "stroke",
+	eraserFilter: "all",
+	eraserColor: PEN_COLORS[0],
 	shapeKind: "line",
 	textSize: TEXT_SIZES[1],
 	ruler: false,
@@ -57,7 +64,18 @@ const TOOL_DEFS: Array<[ToolName, string, MessageKey]> = [
 	["lasso", "lasso", "tool.lasso"],
 	["shape", "shapes", "tool.shape"],
 	["text", "type", "tool.text"],
+	["space", "move-vertical", "tool.space"],
 ];
+
+const FILTER_LABELS: Record<EraseFilterKind, MessageKey> = {
+	all: "tool.eraser.filter.all",
+	highlighter: "tool.eraser.filter.highlighter",
+	pen: "tool.eraser.filter.pen",
+	color: "tool.eraser.filter.color",
+};
+
+/** Swatches offered when the eraser is limited to one colour: every ink colour of the toolbar. */
+const ERASER_COLORS = [...PEN_COLORS, ...HIGHLIGHTER_COLORS] as const;
 
 const SHAPE_DEFS: Record<ShapeKind, [string, MessageKey]> = {
 	line: ["minus", "shape.line"],
@@ -73,6 +91,8 @@ export class Toolbar {
 	private readonly widthGroup: HTMLElement;
 	private readonly eraserGroup: HTMLElement;
 	private readonly eraserButtons = new Map<EraserMode, HTMLButtonElement>();
+	private readonly filterGroup: HTMLElement;
+	private readonly filterButtons = new Map<EraseFilterKind, HTMLButtonElement>();
 	private readonly shapeGroup: HTMLElement;
 	private readonly shapeButtons = new Map<ShapeKind, HTMLButtonElement>();
 	private readonly sizeGroup: HTMLElement;
@@ -101,6 +121,14 @@ export class Toolbar {
 		this.eraserGroup = this.group();
 		this.eraserButtons.set("stroke", this.textButton(this.eraserGroup, "tool.eraser.stroke", () => this.set({ eraserMode: "stroke" })));
 		this.eraserButtons.set("segment", this.textButton(this.eraserGroup, "tool.eraser.segment", () => this.set({ eraserMode: "segment" })));
+		this.eraserButtons.set("area", this.textButton(this.eraserGroup, "tool.eraser.area", () => this.set({ eraserMode: "area" })));
+
+		this.filterGroup = this.group();
+		for (const kind of ERASE_FILTER_KINDS) {
+			this.filterButtons.set(kind, this.textButton(this.filterGroup, FILTER_LABELS[kind], () =>
+				// "Colour" starts from the pen colour in use; the swatches then change it.
+				this.set(kind === "color" ? { eraserFilter: kind, eraserColor: this.state.penColor } : { eraserFilter: kind })));
+		}
 
 		this.shapeGroup = this.group();
 		for (const kind of SHAPE_KINDS) {
@@ -190,6 +218,8 @@ export class Toolbar {
 		this.rulerButton.setAttribute("aria-pressed", String(s.ruler));
 		this.eraserGroup.toggleClass("notebook-hidden", s.tool !== "eraser");
 		for (const [mode, b] of this.eraserButtons) b.toggleClass("is-active", mode === s.eraserMode);
+		this.filterGroup.toggleClass("notebook-hidden", s.tool !== "eraser");
+		for (const [kind, b] of this.filterButtons) b.toggleClass("is-active", kind === s.eraserFilter);
 		this.shapeGroup.toggleClass("notebook-hidden", s.tool !== "shape");
 		for (const [kind, b] of this.shapeButtons) {
 			b.toggleClass("is-active", kind === s.shapeKind);
@@ -197,7 +227,8 @@ export class Toolbar {
 		}
 
 		const inking = s.tool === "pen" || s.tool === "highlighter" || s.tool === "shape";
-		const colouring = inking || s.tool === "text";
+		const erasingColor = s.tool === "eraser" && s.eraserFilter === "color";
+		const colouring = inking || s.tool === "text" || erasingColor;
 		this.colorGroup.toggleClass("notebook-hidden", !colouring);
 		this.widthGroup.toggleClass("notebook-hidden", !inking);
 		this.sizeGroup.toggleClass("notebook-hidden", s.tool !== "text");
@@ -208,11 +239,11 @@ export class Toolbar {
 		// Shapes and text use the pen colour; only the highlighter has its own palette.
 		const highlighter = s.tool === "highlighter";
 		if (colouring) {
-			const colors = highlighter ? HIGHLIGHTER_COLORS : PEN_COLORS;
-			const current = highlighter ? s.highlighterColor : s.penColor;
+			const colors: readonly string[] = erasingColor ? ERASER_COLORS : highlighter ? HIGHLIGHTER_COLORS : PEN_COLORS;
+			const current = erasingColor ? s.eraserColor : highlighter ? s.highlighterColor : s.penColor;
 			for (const color of colors) {
 				const b = this.button(this.colorGroup, `${t("tool.color")} ${color}`, () =>
-					this.set(highlighter ? { highlighterColor: color } : { penColor: color }));
+					this.set(erasingColor ? { eraserColor: color } : highlighter ? { highlighterColor: color } : { penColor: color }));
 				b.addClass("notebook-swatch");
 				b.toggleClass("is-active", color === current);
 				b.disabled = !this.editable;

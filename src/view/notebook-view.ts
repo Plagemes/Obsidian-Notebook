@@ -6,7 +6,10 @@ import { PhotoDecodeError, photoSize } from "../scan/decode";
 import { isHeic } from "../scan/image-bytes";
 import { t } from "../i18n";
 import { renderThumbnail } from "../library/thumbnail";
+import { needsNextPage } from "../ink/auto-page";
 import { elementsInLasso, hitElement, transformElement } from "../ink/elements";
+import { eraseAreaCommand } from "../ink/erase-area";
+import { filterErasable } from "../ink/erase-filter";
 import { findHitStrokes, type BBox } from "../ink/hit-test";
 import { growForInfinite } from "../ink/infinite";
 import { InputPolicy } from "../ink/input-policy";
@@ -21,6 +24,7 @@ import { recognizeShape } from "../ink/recognize";
 import { drawElement, drawTextElement, measureText, Renderer, selectionHandles } from "../ink/renderer";
 import { projectToRuler, rulerFromTwoTouches, RULER_LENGTH, type Ruler } from "../ink/ruler";
 import { eraseSegment } from "../ink/segment-erase";
+import { planSpaceChange } from "../ink/space";
 import { apply, IDENTITY, invert, isIdentity, multiply, rotateAbout, scaleAbout, translate, type Matrix } from "../ink/transform";
 import { clampToPage, fitWidth, pan, PAGE_MARGIN, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
 import { cloneMeta, createId, createPage, createStroke } from "../model/document";
@@ -29,6 +33,7 @@ import {
 	AddAsset, AddElement, AddPage, AddStroke, Batch, DeletePage, History, InsertPages, MovePage, RemoveElement, ReplaceElement,
 	ReplaceStroke, SetMeta, SetPageInfinite, SetPageSize, SetPaper, type Command,
 } from "../model/history";
+import { pageContentCommand } from "../model/page-content";
 import { freezeStroke } from "../model/serialize";
 import {
 	DEFAULT_META, PAGE_SIZES, PAPER_KINDS, PAPER_SPACING,
@@ -117,6 +122,15 @@ interface ActiveErase {
 interface Lasso {
 	pageIndex: number;
 	points: Array<[number, number]>;
+	/** The eraser's Area mode: the outline erases what is inside instead of selecting it. */
+	erase?: boolean;
+}
+
+/** Insert/remove space: the line touched (page coordinates) and how far it was dragged (pt; down > 0). */
+interface SpaceDrag {
+	pageIndex: number;
+	y: number;
+	delta: number;
 }
 
 interface ShapeDrag {
@@ -183,6 +197,7 @@ export class NotebookView extends FileView {
 	private active: ActiveStroke | null = null;
 	private erasing: ActiveErase | null = null;
 	private lasso: Lasso | null = null;
+	private spaceDrag: SpaceDrag | null = null;
 	private selection: Selection | null = null;
 	private drag: SelectionDrag | null = null;
 	private shapeDrag: ShapeDrag | null = null;
@@ -1285,7 +1300,7 @@ export class NotebookView extends FileView {
 		if (!Number.isFinite(dx) || !Number.isFinite(dy)) return false;
 		const tool = eraserButton ? "eraser" : this.tools.tool;
 
-		if (tool === "eraser") {
+		if (tool === "eraser" && this.tools.eraserMode !== "area") {
 			// The selection may contain strokes about to be erased (e.g. erasing with the pen button).
 			this.clearSelection();
 			this.erasing = { commands: [], last: [dx, dy] };
@@ -1300,6 +1315,21 @@ export class NotebookView extends FileView {
 		}
 		const page = this.pageAtIndex(pageIndex);
 		const local = toPageLocal(layout.boxes[pageIndex]!, dx, dy);
+
+		if (tool === "eraser") {
+			// Area mode: the outline drawn like a lasso erases what is inside it when the pen lifts.
+			this.clearSelection();
+			this.lasso = { pageIndex, points: [local], erase: true };
+			this.renderer?.setLasso(this.lasso);
+			return true;
+		}
+
+		if (tool === "space") {
+			this.clearSelection();
+			this.spaceDrag = { pageIndex, y: local[1], delta: 0 };
+			this.previewSpace(this.spaceDrag);
+			return true;
+		}
 
 		if (tool === "lasso") {
 			const sel = this.selection;
@@ -1382,6 +1412,17 @@ export class NotebookView extends FileView {
 				if (p && Math.hypot(p[0] - last[0], p[1] - last[1]) >= minStep) lasso.points.push(p);
 			}
 			this.renderer?.setLasso(lasso);
+			return;
+		}
+
+		const space = this.spaceDrag;
+		if (space) {
+			const page = this.pageAtIndex(space.pageIndex);
+			const p = page && n > 0 ? this.toLocal(space.pageIndex, NotebookView.at(samples, n - 1)) : null;
+			if (page && p) {
+				space.delta = Math.max(-page.height, Math.min(page.height, p[1] - space.y));
+				this.previewSpace(space);
+			}
 			return;
 		}
 
@@ -1504,13 +1545,22 @@ export class NotebookView extends FileView {
 			return;
 		}
 
+		const space = this.spaceDrag;
+		if (space) {
+			this.spaceDrag = null;
+			this.renderer?.setLasso(null);
+			if (!cancelled) this.commitSpace(space);
+			return;
+		}
+
 		const lasso = this.lasso;
 		if (lasso) {
 			this.lasso = null;
 			this.renderer?.setLasso(null);
 			const page = this.pageAtIndex(lasso.pageIndex);
 			if (cancelled || !page) return;
-			this.selectFromLasso(lasso, page);
+			if (lasso.erase) this.eraseArea(lasso, page);
+			else this.selectFromLasso(lasso, page);
 			return;
 		}
 
@@ -1570,6 +1620,15 @@ export class NotebookView extends FileView {
 			const height = growForInfinite(page, { maxY });
 			if (height !== null) {
 				commands.push(new SetPageSize(page.id, { width: page.width, height: page.height }, { width: page.width, height }));
+				grew = true;
+			}
+		}
+		// Writing near the bottom of the last page appends a page in the same undo step.
+		const doc = this.session?.doc;
+		if (doc && this.renderer) {
+			const maxY = Math.max(...strokes.map((s) => this.renderer!.boundsOf(s).maxY));
+			if (needsNextPage(page, doc.pages[doc.pages.length - 1] === page, maxY, this.host.settings.autoNextPage)) {
+				commands.push(new AddPage(createPage({ width: page.width, height: page.height }, { ...page.paper }), doc.pages.length));
 				grew = true;
 			}
 		}
@@ -1675,7 +1734,7 @@ export class NotebookView extends FileView {
 		if (!page || !box) return;
 		const [ax, ay] = toPageLocal(box, px, py);
 		const [bx, by] = toPageLocal(box, x, y);
-		const hits = findHitStrokes(page.strokes, ax, ay, bx, by, radius, this.renderer.boundsOf);
+		const hits = findHitStrokes(filterErasable(page.strokes, this.eraseFilter()), ax, ay, bx, by, radius, this.renderer.boundsOf);
 		let changed = false;
 		for (const stroke of hits) {
 			const index = page.strokes.indexOf(stroke);
@@ -1692,6 +1751,54 @@ export class NotebookView extends FileView {
 			changed = true;
 		}
 		if (changed) this.renderer.invalidate();
+	}
+
+	/** Which ink the eraser may touch (selective eraser). */
+	private eraseFilter(): { kind: ToolbarState["eraserFilter"]; color: string } {
+		return { kind: this.tools.eraserFilter, color: this.tools.eraserColor };
+	}
+
+	/** Eraser Area mode: erases everything inside the outline (one undo step); text and images only if the setting is on. */
+	private eraseArea(lasso: Lasso, page: Page): void {
+		const cmd = eraseAreaCommand(page, lasso.points, {
+			filter: this.eraseFilter(),
+			includeElements: this.host.settings.eraseAreaElements,
+			measure: measureText,
+		});
+		if (!cmd) return;
+		this.history.execute(cmd);
+		this.renderer?.invalidate();
+		this.session?.markChanged();
+		this.updateHistoryButtons();
+		this.scheduleNavRefresh();
+	}
+
+	// --- insert or remove space ---
+
+	/** Shows the line touched and the band that will be added (or removed) as a dashed rectangle. */
+	private previewSpace(drag: SpaceDrag): void {
+		const page = this.pageAtIndex(drag.pageIndex);
+		if (!page) return;
+		const y1 = drag.y + drag.delta;
+		this.renderer?.setLasso({
+			pageIndex: drag.pageIndex,
+			points: [[0, drag.y], [page.width, drag.y], [page.width, y1], [0, y1], [0, drag.y]],
+		});
+	}
+
+	/** Moves everything below the line in one undo step (see planSpaceChange); overflow goes onto the next page, created if needed. */
+	private commitSpace(drag: SpaceDrag): void {
+		const doc = this.session?.doc;
+		if (!doc || !this.editable()) return;
+		const plan = planSpaceChange(doc.pages, drag.pageIndex, drag.y, drag.delta, measureText);
+		if (!plan) {
+			// A deliberate drag that moved nothing deserves an explanation; a tap does not.
+			if (Math.abs(drag.delta) * this.viewport.scale >= TAP_SLOP_PX) new Notice(t("space.nothing"));
+			return;
+		}
+		this.history.execute(pageContentCommand(doc, plan, plan.delta > 0 ? "Insert space" : "Remove space"));
+		this.renderer?.invalidate();
+		this.afterHistoryChange();
 	}
 
 	// --- selection ---

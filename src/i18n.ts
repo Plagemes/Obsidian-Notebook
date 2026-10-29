@@ -316,6 +316,18 @@ const en = {
 	"scan.capturedDone": "Done ({n})",
 	"scan.useFilePicker": "Use the camera app",
 	"scan.cameraFailed": "The in-app camera is not available here. Use the camera app instead.",
+	// wave p1a: ink tools
+	"tool.space": "Insert or remove space: touch a line and drag down to insert, up to remove",
+	"tool.eraser.area": "Area",
+	"tool.eraser.filter.all": "All ink",
+	"tool.eraser.filter.highlighter": "Highlighter only",
+	"tool.eraser.filter.pen": "Pen only",
+	"tool.eraser.filter.color": "One colour",
+	"space.nothing": "Nothing to move below that line, or no empty space to remove.",
+	"settings.autoNextPage": "Add a page when writing at the bottom",
+	"settings.autoNextPage.desc": "Writing near the bottom of the last page appends a new page with the same size and paper. Not used on infinite pages or on PDF and scanned pages.",
+	"settings.eraseAreaElements": "Erase area also removes text and images",
+	"settings.eraseAreaElements.desc": "With the eraser's Area mode, text boxes and images inside the outline are removed together with the ink. Off: only ink is erased. Not used when the eraser is limited to one kind of ink.",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -636,6 +648,18 @@ const it: Partial<Record<MessageKey, string>> = {
 	"scan.capturedDone": "Fine ({n})",
 	"scan.useFilePicker": "Usa l'app Fotocamera",
 	"scan.cameraFailed": "La fotocamera interna non è disponibile qui. Usa l'app Fotocamera.",
+	// wave p1a: ink tools
+	"tool.space": "Inserisci o togli spazio: tocca una riga e trascina verso il basso per inserire, verso l'alto per togliere",
+	"tool.eraser.area": "Area",
+	"tool.eraser.filter.all": "Tutto l'inchiostro",
+	"tool.eraser.filter.highlighter": "Solo evidenziatore",
+	"tool.eraser.filter.pen": "Solo penna",
+	"tool.eraser.filter.color": "Un colore",
+	"space.nothing": "Niente da spostare sotto quella riga, oppure non c'è spazio vuoto da togliere.",
+	"settings.autoNextPage": "Aggiungi una pagina scrivendo in fondo",
+	"settings.autoNextPage.desc": "Scrivendo vicino al fondo dell'ultima pagina viene aggiunta una nuova pagina con la stessa dimensione e carta. Non vale per le pagine infinite né per le pagine PDF e scansionate.",
+	"settings.eraseAreaElements": "L'area cancella anche testo e immagini",
+	"settings.eraseAreaElements.desc": "Con la modalità Area della gomma, le caselle di testo e le immagini dentro il contorno vengono rimosse insieme all'inchiostro. Disattivato: si cancella solo l'inchiostro. Non vale quando la gomma è limitata a un tipo di inchiostro.",
 };
 
 let table: Partial<Record<MessageKey, string>> | null = null;

@@ -106,6 +106,16 @@ export class NotebookSettingTab extends PluginSettingTab {
 				desc: t("settings.snapshotKeep.desc"),
 				control: { type: "slider", key: "snapshotsToKeep", defaultValue: DEFAULT_SETTINGS.snapshotsToKeep, min: 1, max: 50, step: 1 },
 			},
+			{
+				name: t("settings.autoNextPage"),
+				desc: t("settings.autoNextPage.desc"),
+				control: { type: "toggle", key: "autoNextPage", defaultValue: DEFAULT_SETTINGS.autoNextPage },
+			},
+			{
+				name: t("settings.eraseAreaElements"),
+				desc: t("settings.eraseAreaElements.desc"),
+				control: { type: "toggle", key: "eraseAreaElements", defaultValue: DEFAULT_SETTINGS.eraseAreaElements },
+			},
 		];
 	}
 
@@ -202,5 +212,15 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setName(t("settings.snapshotKeep"))
 			.setDesc(t("settings.snapshotKeep.desc"))
 			.addSlider((slider) => slider.setLimits(1, 50, 1).setValue(s.snapshotsToKeep).onChange((v) => this.setControlValue("snapshotsToKeep", v)));
+
+		new Setting(containerEl)
+			.setName(t("settings.autoNextPage"))
+			.setDesc(t("settings.autoNextPage.desc"))
+			.addToggle((toggle) => toggle.setValue(s.autoNextPage).onChange((v) => this.setControlValue("autoNextPage", v)));
+
+		new Setting(containerEl)
+			.setName(t("settings.eraseAreaElements"))
+			.setDesc(t("settings.eraseAreaElements.desc"))
+			.addToggle((toggle) => toggle.setValue(s.eraseAreaElements).onChange((v) => this.setControlValue("eraseAreaElements", v)));
 	}
 }
