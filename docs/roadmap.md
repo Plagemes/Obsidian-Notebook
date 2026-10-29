@@ -85,9 +85,9 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 
 ### Writing and tools
 1. **P1** 🧪 Favourite pens: 4–6 saved presets (tool + colour + width), one tap to switch.
-2. **P1** Configurable S Pen side button: hold for eraser, lasso or last tool.
-3. **P1** Multi-finger gestures: two-finger tap = undo, three-finger tap = redo (configurable).
-4. **P1** Scribble to erase: scratching over strokes deletes them.
+2. **P1** 🧪 Configurable S Pen side button: hold for eraser, lasso or last tool.
+3. **P1** 🧪 Multi-finger gestures: two-finger tap = undo, three-finger tap = redo (configurable).
+4. **P1** 🧪 Scribble to erase: scratching over strokes deletes them.
 5. **P1** 🧪 Restyle selection: change colour and width of lasso-selected strokes.
 6. **P1** 🧪 Copy, cut, paste and duplicate selections across pages and notebooks.
 7. **P2** Free colour picker with recent colours and an eyedropper.
@@ -135,7 +135,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 
 ### Advanced writing
 35. **P1** New pen types: fountain pen (angle-dependent width), brush, marker.
-36. **P1** Auto-scroll while writing near the bottom of the screen.
+36. **P1** 🧪 Auto-scroll while writing near the bottom of the screen.
 37. **P2** Filled shapes and dashed or dotted lines.
 38. **P2** Align and distribute the selection.
 39. **P2** Group elements and lock elements (for example a background image that must not move).

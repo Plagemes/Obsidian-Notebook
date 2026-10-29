@@ -19,6 +19,14 @@ Not yet verified on Android hardware (see `docs/testing.md`, steps K1-K7).
   - **Notes page after every slide** (#193): optional blank page of the same size and the paper of your choice after each slide.
   - **Exercise page here** (page menu, toolbar … menu, command): one tap inserts a blank page with your exercise paper (grid by default, changeable with *Exercise page paper…*) right after the current page, the same size as that page; one undo step.
   - The same layout options appear when you insert a PDF into an existing notebook (page menu → *Insert PDF*); the last choice is remembered on the device.
+Not yet verified on Android hardware (see `docs/testing.md`, steps G1-G6). No change to the document format or to the writing engine (sampling, wet ink, geometry, stabilizer).
+
+### Added
+- **Gestures (wave 0.6)**
+  - **Finger taps** (roadmap 3): a tap with two fingers undoes, with three fingers redoes (setting *Finger taps*: two undo / three redo, swapped, or off; on by default). A tap needs all fingers to land within 150 ms, move at most 12 px, lift within 150 ms and finish within 350 ms, so panning and pinching never trigger it; touches while the pen is near (palm rejection time), palm-sized or edge-zone contacts, and a pen touching in the middle spoil it. The few pixels the view may have moved are put back, and a tap leaves no ink. A finger that lands among fingers that are already panning or pinching no longer starts a stroke (also with *Draw with finger*).
+  - **Scribble to erase** (roadmap 4, setting, off by default): a fast back-and-forth scratch with the pen over existing ink deletes the strokes it crosses; the scribble is not kept and the whole thing is one undo step. Detector in `src/ink/scribble.ts`: at least four direction reversals between legs of 12 pt or more, roughly parallel, mostly piled up instead of travelling along a line (so "mmm" and sweeping zig-zag shading do not count), under 300 ms per leg on average; a stroke is deleted when at least two different legs cross it, and very large strokes (rulings, frames) are left alone. Off by default because a false positive deletes ink.
+  - **Auto-scroll while writing** (roadmap 36, setting, off by default): when a stroke ends in the bottom 18 % of the view, the page scrolls up smoothly (320 ms, ease-out) after a 700 ms pause so the tip sits at 40 % of the height. It never moves while a pen or finger is down; a touch cancels it; it stops at the end of the document.
+  - **Pen side button** (roadmap 2): the setting *Pen side button* gains *Lasso while held* and *Previous tool while held* (the tool used before the current one; the eraser if there is none). The tool is chosen when the pen touches down. The default stays *Radial menu*. A selection made with the lasso option stays after the button is released and is cleared when you write.
 
 ## 0.5.0 — 2026-10-29
 

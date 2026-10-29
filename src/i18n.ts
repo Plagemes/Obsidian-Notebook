@@ -723,6 +723,18 @@ const en = {
 	"command.exercisePaper": "Choose exercise page paper",
 	"exercise.paperTitle": "Exercise page paper",
 	"exercise.paper": "Paper",
+	// wave 0.6: gestures
+	"settings.penButton.lasso": "Lasso while held",
+	"settings.penButton.lastTool": "Previous tool while held",
+	"settings.tapGestures": "Finger taps",
+	"settings.tapGestures.desc": "Tap with two fingers to undo and with three fingers to redo. Fingers that move (pan, pinch) or touches while the pen is near are ignored, and a tap leaves no ink.",
+	"settings.tapGestures.undoRedo": "Two fingers undo, three redo",
+	"settings.tapGestures.redoUndo": "Two fingers redo, three undo",
+	"settings.tapGestures.off": "Off",
+	"settings.scribble": "Scribble to erase",
+	"settings.scribble.desc": "A fast back-and-forth scratch with the pen over existing ink deletes the strokes it crosses, as one undo step; the scribble itself is not kept. Off by default because handwriting that looks like a scribble would delete ink.",
+	"settings.autoScroll": "Scroll up when writing near the bottom",
+	"settings.autoScroll.desc": "When you lift the pen near the bottom of the view, the page scrolls up smoothly after a short pause so you can keep writing. It never moves while the pen is down.",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -1450,6 +1462,18 @@ const it: Partial<Record<MessageKey, string>> = {
 	"command.exercisePaper": "Scegli la carta della pagina esercizi",
 	"exercise.paperTitle": "Carta della pagina esercizi",
 	"exercise.paper": "Carta",
+	// wave 0.6: gestures
+	"settings.penButton.lasso": "Lazo finché è premuto",
+	"settings.penButton.lastTool": "Strumento precedente finché è premuto",
+	"settings.tapGestures": "Tocchi con le dita",
+	"settings.tapGestures.desc": "Tocca con due dita per annullare e con tre dita per ripetere. I tocchi in cui le dita si muovono (scorrimento, pinch) e quelli mentre la penna è vicina vengono ignorati, e un tocco non lascia inchiostro.",
+	"settings.tapGestures.undoRedo": "Due dita annulla, tre ripeti",
+	"settings.tapGestures.redoUndo": "Due dita ripeti, tre annulla",
+	"settings.tapGestures.off": "Disattivato",
+	"settings.scribble": "Scarabocchio per cancellare",
+	"settings.scribble.desc": "Uno scarabocchio veloce avanti e indietro con la penna sull'inchiostro esistente cancella i tratti che attraversa, in un solo passo di annullamento; lo scarabocchio stesso non viene salvato. Disattivato di default perché una scrittura simile a uno scarabocchio cancellerebbe inchiostro.",
+	"settings.autoScroll": "Scorri in su scrivendo vicino al fondo",
+	"settings.autoScroll.desc": "Quando alzi la penna vicino al fondo della vista, dopo una breve pausa la pagina scorre in su in modo fluido per continuare a scrivere. Non si muove mai mentre la penna è appoggiata.",
 };
 
 let table: Partial<Record<MessageKey, string>> | null = null;

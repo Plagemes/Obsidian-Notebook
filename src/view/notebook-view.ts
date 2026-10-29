@@ -15,11 +15,13 @@ import { eraseAreaCommand } from "../ink/erase-area";
 import { filterErasable } from "../ink/erase-filter";
 import { findHitStrokes, type BBox } from "../ink/hit-test";
 import { growForInfinite } from "../ink/infinite";
-import { InputPolicy } from "../ink/input-policy";
+import { InputPolicy, type HeldTool } from "../ink/input-policy";
 import { strokesInLasso, transformStroke } from "../ink/lasso";
 import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layout } from "../ink/layout";
 import { HoldTracker } from "../ink/hold";
+import { LastTool } from "../ink/last-tool";
 import { MultiTap } from "../ink/multitap";
+import { scribbleEraseCommand } from "../ink/scribble";
 import { lineAt, TextLayoutCache, wordAt } from "../ink/words";
 import { InkBuilder } from "../ink/ink-geometry";
 import { OneEuroFilter, stabilizationParams } from "../ink/one-euro";
@@ -57,6 +59,7 @@ import { policySettings } from "./input-settings";
 import { NotebookMedia, storeAsset } from "./media";
 import { PageNavigator } from "./navigator";
 import { LocationKeeper } from "./last-location";
+import { GestureInput } from "./gesture-input";
 import { PenRadial } from "./radial-menu";
 import { askPdfRange } from "./pdf-range-modal";
 import { runBoardShot } from "./board-shot";
@@ -223,6 +226,10 @@ export class NotebookView extends FileView {
 	private textEditor: TextEditor | null = null;
 	private rulerGesture: RulerGesture | null = null;
 	private radial: PenRadial | null = null;
+	/** Multi-finger taps and auto-scroll (wave 0.6: gestures), the previous tool, and when the stroke in progress began. */
+	private gestures: GestureInput | null = null;
+	private readonly lastTool = new LastTool<ToolName>();
+	private strokeStart = 0;
 	private readonly location = new LocationKeeper(
 		{ set: (fn, ms) => window.setTimeout(fn, ms), clear: (h) => window.clearTimeout(h) },
 		(path, page) => {
@@ -365,7 +372,7 @@ export class NotebookView extends FileView {
 			update: (a, b) => this.moveRuler(a, b),
 		});
 		this.controller = new PointerController(this.stage, this.policy, {
-			drawStart: (s, eraser) => this.drawStart(s, eraser),
+			drawStart: (s, eraser, held) => this.drawStart(s, eraser, held),
 			drawMove: (samples, predicted) => this.drawMove(samples, predicted),
 			drawEnd: (cancelled) => this.drawEnd(cancelled),
 			pan: (dx, dy) => this.setViewport(pan(this.viewport, dx, dy), true),
@@ -381,6 +388,26 @@ export class NotebookView extends FileView {
 			apply: (patch) => this.toolbar.apply(patch),
 			canUndo: () => this.history.canUndo(),
 			undo: () => this.undo(),
+		});
+		this.lastTool.note(this.tools.tool);
+		this.gestures = new GestureInput(this.stage, {
+			policy: this.policy,
+			tapMode: () => this.host.settings.tapGestures,
+			act: (action) => (action === "undo" ? this.undo() : this.redo()),
+			snapshotView: () => {
+				const { viewport, fitMode } = this;
+				return () => {
+					this.fitMode = fitMode;
+					this.setViewport(viewport, true);
+				};
+			},
+			drawing: () => !!this.controller?.drawing,
+			autoScroll: {
+				enabled: () => this.host.settings.autoScrollWriting && this.editable(),
+				viewHeight: () => this.viewSize.height,
+				offsetY: () => this.viewport.offsetY,
+				panBy: (dy) => this.setViewport(pan(this.viewport, 0, dy), true),
+			},
 		});
 		this.applySettings(this.host.settings);
 
@@ -437,6 +464,8 @@ export class NotebookView extends FileView {
 		this.controller = null;
 		this.radial?.destroy();
 		this.radial = null;
+		this.gestures?.destroy();
+		this.gestures = null;
 		this.rulerGesture?.destroy();
 		this.rulerGesture = null;
 		this.selectionActions?.destroy();
@@ -1331,6 +1360,7 @@ export class NotebookView extends FileView {
 		this.tools = state;
 		this.pens?.onToolsChanged(state);
 		this.radial?.noteTools(state);
+		this.lastTool.note(state.tool);
 		if (state.tool !== "lasso") this.clearSelection();
 		this.selectionActions?.update();
 		if (before.tool === "text" && state.tool !== "text") this.commitText();
@@ -1609,13 +1639,14 @@ export class NotebookView extends FileView {
 		return { x: b.x[i]!, y: b.y[i]! };
 	}
 
-	private drawStart(sample: InkSample, eraserButton: boolean): boolean {
+	private drawStart(sample: InkSample, eraserButton: boolean, held?: HeldTool): boolean {
 		const layout = this.layout;
 		if (!layout || !this.editable()) return false;
 		this.commitText();
 		const [dx, dy] = this.toDoc(sample);
 		if (!Number.isFinite(dx) || !Number.isFinite(dy)) return false;
-		const tool = eraserButton ? "eraser" : this.tools.tool;
+		// The pen's side button can select the eraser, the lasso or the previous tool for this contact only.
+		const tool = eraserButton ? "eraser" : held === "lasso" ? "lasso" : held === "last" ? (this.lastTool.previous() ?? "eraser") : this.tools.tool;
 
 		if (tool === "eraser" && this.tools.eraserMode !== "area") {
 			// The selection may contain strokes about to be erased (e.g. erasing with the pen button).
@@ -1674,6 +1705,9 @@ export class NotebookView extends FileView {
 			return true;
 		}
 
+		// A selection made with the side button's lasso is not carried into new ink.
+		this.clearSelection();
+		this.strokeStart = sample.t;
 		const snap = !!page && this.rulerLatches(page, local);
 		const start = snap && this.ruler ? (projectToRuler(this.ruler.ruler, local, Infinity) ?? local) : local;
 		this.filter.reset(sample.x, sample.y, sample.t);
@@ -1923,6 +1957,7 @@ export class NotebookView extends FileView {
 			return;
 		}
 		if (active.wet) {
+			if (this.eraseByScribble(active, page)) return;
 			// The line ends where the pen lifted (the filtered position may trail it slightly).
 			this.ink.add(active.rawX, active.rawY, active.rawP);
 			this.ink.finish();
@@ -1931,12 +1966,33 @@ export class NotebookView extends FileView {
 			this.renderer?.endWet(stroke);
 			this.addStrokes(active.pageIndex, page, [stroke]);
 			if (active.liveFallback) this.renderer?.setLive(null);
+			const box = this.layout?.boxes[active.pageIndex];
+			if (box) this.gestures?.strokeEnded((box.y + active.rawY) * this.viewport.scale + this.viewport.offsetY);
 			return;
 		}
 		this.renderer?.setLive(null);
 		const stroke = freezeStroke(active.stroke);
 		const extras = active.extra.map((points) => freezeStroke({ ...active.stroke, id: createId(), points }));
 		this.addStrokes(active.pageIndex, page, [stroke, ...extras]);
+	}
+
+	/**
+	 * Scribble to erase (setting): a fast back-and-forth scratch over existing ink deletes the strokes it
+	 * crosses, as one undo step, and the scribble itself is not kept. Returns true when it did.
+	 */
+	private eraseByScribble(active: ActiveStroke, page: Page): boolean {
+		if (!this.host.settings.scribbleErase || active.stroke.tool !== "pen" || active.snap || active.recognized || !this.renderer) return false;
+		const cmd = scribbleEraseCommand(page, this.ink.toPoints(), performance.now() - this.strokeStart, active.stroke.width, this.renderer.boundsOf);
+		if (!cmd) return false;
+		this.clearSelection();
+		this.renderer.cancelWet();
+		this.renderer.setLive(null);
+		this.history.execute(cmd);
+		this.renderer.invalidate();
+		this.session?.markChanged();
+		this.updateHistoryButtons();
+		this.scheduleNavRefresh();
+		return true;
 	}
 
 	/** Commits strokes drawn on a page as one undo step; an infinite page grows in the same step. */

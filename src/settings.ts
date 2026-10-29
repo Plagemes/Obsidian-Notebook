@@ -1,12 +1,13 @@
 import type { PressureMode } from "./ink/pressure";
 import { DEFAULT_ERASER_SIZE, DEFAULT_FAVOURITES, normaliseEraserSize, normaliseFavourites, type FavouritePen } from "./view/favourites";
 import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "./ink/edge-zones";
-import type { PenButtonAction } from "./ink/input-policy";
+import { DEFAULT_GESTURE_SETTINGS, readGestureSettings, type GestureSettings } from "./ink/gesture-settings";
+import { PEN_BUTTON_ACTIONS, type PenButtonAction } from "./ink/input-policy";
 import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./model/types";
 import { DEFAULT_COMPANION_SETTINGS, readCompanionSettings, type CompanionSettings } from "./storage/companion-path";
 
 /** Companion note settings (O1) are defined in storage/companion-path.ts. */
-export interface NotebookSettings extends CompanionSettings {
+export interface NotebookSettings extends CompanionSettings, GestureSettings {
 	folder: string;
 	fingerDrawing: boolean;
 	palmRejectionMs: number;
@@ -53,7 +54,7 @@ export interface NotebookSettings extends CompanionSettings {
 	edgeRight: boolean;
 	edgeTop: boolean;
 	edgeBottom: boolean;
-	/** What the pen's side button does: radial menu at the nib, erase while held, or nothing. */
+	/** What the pen's side button does: radial menu at the nib, erase / lasso / previous tool while held, or nothing. */
 	penButtonAction: PenButtonAction;
 	/** Instant start: the notebook and page (1-based) the reader was on last, for "Continue last notebook". Not shown in the settings tab. */
 	lastNotebookPath: string;
@@ -100,6 +101,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	timetableAutoOpen: false,
 	timetableLeadMinutes: 5,
 	...DEFAULT_COMPANION_SETTINGS,
+	...DEFAULT_GESTURE_SETTINGS,
 };
 
 /** Merges saved data over the defaults, ignoring values of the wrong type. */
@@ -132,13 +134,13 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.edgeRight === "boolean") s.edgeRight = d.edgeRight;
 	if (typeof d.edgeTop === "boolean") s.edgeTop = d.edgeTop;
 	if (typeof d.edgeBottom === "boolean") s.edgeBottom = d.edgeBottom;
-	if (d.penButtonAction === "radial" || d.penButtonAction === "eraser" || d.penButtonAction === "off") s.penButtonAction = d.penButtonAction;
+	if (PEN_BUTTON_ACTIONS.includes(d.penButtonAction as PenButtonAction)) s.penButtonAction = d.penButtonAction as PenButtonAction;
 	if (typeof d.lastNotebookPath === "string") s.lastNotebookPath = d.lastNotebookPath;
 	if (typeof d.lastNotebookPage === "number" && Number.isInteger(d.lastNotebookPage) && d.lastNotebookPage >= 1) s.lastNotebookPage = d.lastNotebookPage;
 	if (typeof d.timetableOffer === "boolean") s.timetableOffer = d.timetableOffer;
 	if (typeof d.timetableAutoOpen === "boolean") s.timetableAutoOpen = d.timetableAutoOpen;
 	if (typeof d.timetableLeadMinutes === "number" && Number.isInteger(d.timetableLeadMinutes) && d.timetableLeadMinutes >= 0 && d.timetableLeadMinutes <= 30) s.timetableLeadMinutes = d.timetableLeadMinutes;
-	Object.assign(s, readCompanionSettings(d));
+	Object.assign(s, readCompanionSettings(d), readGestureSettings(d));
 	return s;
 }
 

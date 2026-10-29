@@ -149,6 +149,11 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | New lecture from slides… (#191; command, library button, folder menu): PDF from the vault or the device, layout, header page / header text / none, course, date, notebook created in the folder and opened; PDF stored once | ✅ | ✅ flow with an injected host (cancel, empty PDF, failure, progress), header text and placement, notebook name, format round-trip; ❌ dialog, picker, vault writes | | | |
 | Insert PDF with the lecture pack layout (page menu): same layout questions after the page range, one undo step; last layout remembered on the device | ✅ | ✅ pages built by the same function, stored options parsing; ❌ dialog, view | | | |
 | Exercise page here (page menu, toolbar … menu, command): blank page with the exercise paper (default grid, remembered, changeable) right after the current page, full size of that page, scrolled to, one undo step | ✅ | ✅ page size/paper/no margins, infinite page, undo; ❌ menus, view | | | |
+| Finger taps (wave 0.6, setting *Finger taps*, **default two fingers undo / three redo**): all fingers land within 150 ms, move ≤ 12 px, lift within 150 ms, whole tap ≤ 350 ms; ignored with a pen near (palm rejection window), a palm / edge-zone contact or a pen contact in the series; the view is put back after the tap; swap and off | ✅ | ✅ detector (tap, pan, pinch, slow, late landing, late lift, cancel, pen, stale contact), mapping, stage glue with a fake element, no stroke ends from a finger tap; ❌ real touch hardware | | ✅ | thresholds are guesses until tried on the tablet |
+| A finger that lands among fingers already panning / pinching never starts a stroke (also with *Draw with finger*) | ✅ | ✅ controller routing | | | |
+| Scribble to erase (wave 0.6, setting, **default off**): fast back-and-forth over ink deletes the strokes crossed by ≥ 2 legs, scribble not kept, one undo step | ✅ | ✅ detector on synthetic paths (angles, jitter, leg counts; negatives "mmm", sharp-topped "mmm", sweeping zig-zag shading, separate hatching strokes, slow scratch, lines / circles / spirals), victims (graze, long ruling, empty paper), one undo step; ❌ real pen strokes, view glue | | ✅ | thresholds (leg ≥ 12 pt and a turn window of 8 pt, ≥ 4 reversals, ≤ 300 ms per leg, drift ≤ 0.8 of a leg) tuned on synthetic data only |
+| Auto-scroll after writing near the bottom (wave 0.6, setting, **default off**): stroke ends in the bottom 18 % → after 700 ms the view scrolls up 320 ms (ease-out) so the tip is at 40 %; never during a contact | ✅ | ✅ distance, easing, timing, cancel on contact, end of document; ❌ real view | | ✅ | the 700 ms pause and the 40 % target are guesses |
+| Pen side button: *Lasso while held* and *Previous tool while held* (extend *Pen side button*; default stays *Radial menu*); the tool is chosen when the pen touches down | ✅ | ✅ routing, held tool passed to the stroke start, setting parsing, previous-tool memory; ❌ the S Pen's real button reporting | | ✅ | pressing the button after the pen touched down does not switch (same as the eraser option) |
 
 ## Automated checks
 
@@ -283,6 +288,14 @@ S6. **Links survive restarts and renames.** Close the pane, restart Obsidian, op
 S7. **Notebook with PDF backgrounds as the PDF side.** Choose a notebook whose pages have PDF backgrounds (with your ink on them) instead of the PDF: pages show the slide with the ink, turning and adding notes pages work the same; a page without a PDF background shows a notice when you try to link it. Write in that notebook in another tab: the pane updates a moment after it is saved.
 S8. **Damaged links file.** Replace `pdf-links.json` with `{ not json`, reopen the pane: a notice says links are off, the file is unchanged and a `pdf-links.unreadable-…` copy exists; the PDF can still be read, *Link* is disabled. Restore the file and reopen the pane: links work again.
 
+**Gestures (wave 0.6).** Run these with the default settings unless a step says otherwise.
+
+- **G1. Two- and three-finger taps.** Write a few strokes. Lift the pen away and tap once with two fingers together: the last stroke disappears (undo); tap with three fingers: it comes back (redo). Expected: no ink, the page does not move or zoom. Then pan with two fingers and pinch to zoom, slowly and quickly: nothing is undone. Rest two fingers on the screen for about a second and lift: nothing. While the pen is near the screen (hover) or just after writing, tap with two fingers: nothing happens until the pen has been away for the palm-rejection time. Settings → *Finger taps*: try the swapped option and *Off*. Also try with *Draw with finger* on. Note any accidental undo from your palm while writing.
+- **G2. Scribble to erase (setting on).** Settings → *Scribble to erase* on. Write a few words, then scratch back and forth quickly over one word with the pen: the strokes you crossed vanish when the pen lifts, the scribble itself leaves nothing, and one undo brings the word back. Then try things that must stay ink: write "mmm" and "wwww" large and fast over existing ink, shade an area with zig-zags (a few cm wide), hatch with separate lines, scratch slowly, scribble on empty paper, scribble beside a word without touching it, scribble across a ruled line (the line must stay). Note every false positive and every scribble that was not recognised, with its size and speed.
+- **G3. Auto-scroll (setting on).** Settings → *Scroll up when writing near the bottom* on. Zoom so that a few lines fill the view, write along the bottom edge and lift the pen: after a short pause the page scrolls up smoothly so your last word sits about 40 % from the top. Touch the screen or put the pen down during the pause or the scroll: it stops. The page never moves while the pen is down. At the end of the last page it stops at the end (or the next page is appended first, with *Add a page when writing at the bottom*). Note whether the pause is too short (the page moves between words) or too long.
+- **G4. Side button: lasso.** Settings → *Pen side button* = *Lasso while held*. Hold the button and drag a loop around some words: they are selected and the tool in the toolbar does not change. Release the button and write: the selection goes away and ink is written. Hold the button and touch inside the selection: it can be moved.
+- **G5. Side button: previous tool.** Settings → *Pen side button* = *Previous tool while held*. Use the pen, then the highlighter (toolbar): holding the button, the pen strokes are pen strokes again; release and it highlights. Right after opening a notebook (no previous tool) holding the button erases. Note whether your S Pen reports the button at all (hold it during the stroke start, not after).
+- **G6. Defaults.** After updating, with a clean settings file: *Finger taps* is two fingers undo / three redo, *Scribble to erase* and *Scroll up when writing near the bottom* are off, and *Pen side button* is still *Radial menu*.
 
 | Step | Device / Obsidian version | Result | Notes |
 |---|---|---|---|
@@ -383,6 +396,12 @@ K7. **Large deck on the tablet.** Import a deck of 60+ slides with notes on the 
 | K6 Cancel | | | |
 | K7 Large deck | | | |
 | K8 Exercise page here | | | |
+| G1 Finger taps | | | |
+| G2 Scribble to erase | | | |
+| G3 Auto-scroll | | | |
+| G4 Side button: lasso | | | |
+| G5 Side button: previous tool | | | |
+| G6 Defaults | | | |
 
 Benchmark output (step 21): paste it here.
 

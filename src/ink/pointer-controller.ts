@@ -1,4 +1,4 @@
-import { InputPolicy } from "./input-policy";
+import { InputPolicy, type HeldTool } from "./input-policy";
 import { ErrorOnce } from "./errors";
 
 /** A pointer sample in CSS px relative to the element. */
@@ -70,8 +70,11 @@ export function isNewSample(lastT: number, lastX: number, lastY: number, t: numb
 }
 
 export interface PointerHandlers {
-	/** `eraser`: the pen has its eraser button pressed or is flipped. Return false to reject the stroke. */
-	drawStart(sample: InkSample, eraser: boolean): boolean;
+	/**
+	 * `eraser`: the pen has its eraser button pressed or is flipped. `held`: the side button is held and its
+	 * action is to select the lasso or the previous tool for this contact. Return false to reject the stroke.
+	 */
+	drawStart(sample: InkSample, eraser: boolean, held?: HeldTool): boolean;
 	/**
 	 * New samples of the drawing pointer (never repeated: each sample is delivered once, whether it
 	 * came from `pointerrawupdate` or `pointermove`) and the browser's predicted samples (may be empty).
@@ -217,6 +220,8 @@ export class PointerController {
 		if (route !== "ignore" && this.policy.edgeRejects(e.pointerType, e.clientX - this.rect.left, e.clientY - this.rect.top, this.rect.width, this.rect.height)) {
 			route = "ignore";
 		}
+		// A finger that lands among fingers that are already panning or pinching joins them: it never starts a stroke.
+		if (route === "draw" && e.pointerType === "touch" && this.nav.size > 0) route = "navigate";
 		// The menu route has no stroke whose end would clear this: the pen is not "down" for palm rejection.
 		if (e.pointerType === "pen") {
 			if (route === "menu") this.policy.notePen(e.timeStamp);
@@ -254,7 +259,8 @@ export class PointerController {
 			}
 			if (e.pointerType === "pen") this.nav.clear();
 			const eraser = e.pointerType === "pen" && this.policy.penErases(e.button, e.buttons);
-			if (!this.handlers.drawStart(this.sample(e), eraser)) return;
+			const held = e.pointerType === "pen" ? this.policy.penHeldTool(e.button, e.buttons) : null;
+			if (!this.handlers.drawStart(this.sample(e), eraser, held ?? undefined)) return;
 			this.drawId = e.pointerId;
 			this.drawType = e.pointerType;
 			this.rawSeen = false;
