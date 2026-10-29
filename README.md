@@ -19,11 +19,21 @@ Handwritten notebooks inside your Obsidian vault, designed first for **Android t
 - Mouse: left button draws, wheel scrolls, Ctrl + wheel zooms, middle button pans.
 - Undo/redo: toolbar buttons, Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z (or Ctrl+Y) on desktop.
 
-## Install (manual)
+## Install
 
-The plugin is not in the community plugin list yet. You need three files: `main.js`, `manifest.json` and `styles.css`.
+### From the community plugins directory
 
-### Build the files
+Submitted, waiting for review. Once it is approved: **Settings → Community plugins → Browse**, search for **Notebook**, then **Install** and **Enable**.
+
+### With BRAT (works now, updates automatically)
+
+1. **Settings → Community plugins → Browse**, search for **BRAT** (Obsidian42 - BRAT), install and enable it.
+2. Command palette → **BRAT: Add a beta plugin for testing** → enter `https://github.com/Plagemes/Obsidian-Notebook` → choose the latest version → **Add plugin**.
+3. Enable **Notebook** in **Settings → Community plugins**.
+
+### Manual install
+
+Download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/Plagemes/Obsidian-Notebook/releases/latest), or build them yourself:
 
 ```bash
 npm install
@@ -35,14 +45,16 @@ npm run build
 
 This produces `main.js` in the repo root; `manifest.json` and `styles.css` are already there.
 
-### Windows
+Requires Obsidian 1.8.7 or later.
+
+#### Windows
 
 1. Close Obsidian or keep it open, either works.
 2. Open your vault folder and create `<vault>\.obsidian\plugins\notebook\` (`.obsidian` is a hidden folder: in File Explorer turn on *View → Show → Hidden items*).
 3. Copy `main.js`, `manifest.json` and `styles.css` into it.
 4. In Obsidian: **Settings → Community plugins** → turn off *Restricted mode* if needed → click the reload icon next to *Installed plugins* → enable **Notebook**.
 
-### Android
+#### Android
 
 The plugin folder has to end up at `<vault>/.obsidian/plugins/notebook/` on the phone or tablet. Three ways to get it there:
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 — unreleased (M1, MVP)
+## 0.1.0 — 2026-10-29 (M1, MVP)
 
 First development version. Not yet verified on Android hardware (see `docs/testing.md`).
 
@@ -14,3 +14,4 @@ First development version. Not yet verified on Android hardware (see `docs/testi
 - Data safety: re-validation before every write, unreadable files never overwritten and backed up, newer format versions opened read-only, conflict backups taken before overwriting a file changed on disk, retries on close with an "unsaved" backup as last resort, deleted files never rewritten.
 - English UI with Italian translation.
 - Build check that `main.js` requires nothing but `obsidian`; stress-notebook generator script.
+- Requires Obsidian 1.8.7 or later. Follows the community plugin guidelines (checked with eslint-plugin-obsidianmd).

@@ -30,6 +30,12 @@ export interface SessionEvents {
 	onError?(message: string): void;
 }
 
+/** Timer functions, injected so the view can use its window's timers and tests can use Node's. */
+export interface Timers {
+	set(fn: () => void, ms: number): number;
+	clear(handle: number): void;
+}
+
 export interface SessionOptions {
 	debounceMs?: number;
 	maxWaitMs?: number;
@@ -62,8 +68,8 @@ export class DocumentSession {
 	private savedRevision = 0;
 	/** Last content read from or written to disk by this session. */
 	private diskContent: string | null = null;
-	private debounceTimer: ReturnType<typeof setTimeout> | null = null;
-	private maxWaitTimer: ReturnType<typeof setTimeout> | null = null;
+	private debounceTimer: number | null = null;
+	private maxWaitTimer: number | null = null;
 	private chain: Promise<unknown> = Promise.resolve();
 	private disposed = false;
 
@@ -73,7 +79,12 @@ export class DocumentSession {
 	private readonly now: () => Date;
 	private readonly busy: () => boolean;
 
-	constructor(private readonly io: DocumentIO, private readonly events: SessionEvents = {}, options: SessionOptions = {}) {
+	constructor(
+		private readonly io: DocumentIO,
+		private readonly timers: Timers,
+		private readonly events: SessionEvents = {},
+		options: SessionOptions = {},
+	) {
 		this.debounceMs = options.debounceMs ?? 1500;
 		this.maxWaitMs = options.maxWaitMs ?? 10000;
 		this.retryMs = options.retryMs ?? 5000;
@@ -97,9 +108,9 @@ export class DocumentSession {
 		if (this.mode !== "ok" || this.disposed) return;
 		this.revision++;
 		this.events.onSaveState?.("pending");
-		if (this.debounceTimer) clearTimeout(this.debounceTimer);
-		this.debounceTimer = setTimeout(() => void this.flush(), this.debounceMs);
-		if (!this.maxWaitTimer) this.maxWaitTimer = setTimeout(() => void this.flush(), this.maxWaitMs);
+		if (this.debounceTimer !== null) this.timers.clear(this.debounceTimer);
+		this.debounceTimer = this.timers.set(() => void this.flush(), this.debounceMs);
+		if (this.maxWaitTimer === null) this.maxWaitTimer = this.timers.set(() => void this.flush(), this.maxWaitMs);
 	}
 
 	/** Writes pending changes now. Resolves to false if they could not be written. */
@@ -227,12 +238,12 @@ export class DocumentSession {
 		} catch (e) {
 			this.events.onSaveState?.("error");
 			this.events.onError?.(`Save failed: ${(e as Error).message}. Retrying.`);
-			if (!this.disposed) this.debounceTimer = setTimeout(() => void this.flush(), this.retryMs);
+			if (!this.disposed) this.debounceTimer = this.timers.set(() => void this.flush(), this.retryMs);
 			return false;
 		}
 
 		if (this.dirty) {
-			if (!this.disposed) this.debounceTimer = setTimeout(() => void this.flush(), this.debounceMs);
+			if (!this.disposed) this.debounceTimer = this.timers.set(() => void this.flush(), this.debounceMs);
 			this.events.onSaveState?.("pending");
 		} else {
 			this.events.onSaveState?.("saved");
@@ -263,8 +274,8 @@ export class DocumentSession {
 	}
 
 	private clearTimers(): void {
-		if (this.debounceTimer) clearTimeout(this.debounceTimer);
-		if (this.maxWaitTimer) clearTimeout(this.maxWaitTimer);
+		if (this.debounceTimer !== null) this.timers.clear(this.debounceTimer);
+		if (this.maxWaitTimer !== null) this.timers.clear(this.maxWaitTimer);
 		this.debounceTimer = null;
 		this.maxWaitTimer = null;
 	}

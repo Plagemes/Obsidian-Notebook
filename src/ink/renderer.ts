@@ -40,11 +40,9 @@ export class Renderer {
 	private readonly bounds = new WeakMap<Stroke, BBox>();
 
 	constructor(container: HTMLElement) {
-		const doc = container.ownerDocument;
-		this.staticCanvas = container.appendChild(doc.createElement("canvas"));
-		this.staticCanvas.className = "notebook-canvas notebook-canvas-static";
-		this.liveCanvas = container.appendChild(doc.createElement("canvas"));
-		this.liveCanvas.className = "notebook-canvas notebook-canvas-live";
+		// CSS sizes the canvases to the container; only the backing store size is set here.
+		this.staticCanvas = container.createEl("canvas", { cls: "notebook-canvas notebook-canvas-static" });
+		this.liveCanvas = container.createEl("canvas", { cls: "notebook-canvas notebook-canvas-live" });
 		const s = this.staticCanvas.getContext("2d");
 		// `desynchronized` is a low-latency hint (Chromium); other engines ignore it.
 		const l = this.liveCanvas.getContext("2d", { desynchronized: true });
@@ -70,8 +68,6 @@ export class Renderer {
 		for (const c of [this.staticCanvas, this.liveCanvas]) {
 			c.width = Math.max(1, Math.round(width * dpr));
 			c.height = Math.max(1, Math.round(height * dpr));
-			c.style.width = `${width}px`;
-			c.style.height = `${height}px`;
 		}
 		this.staticDirty = true;
 		this.liveDirty = true;
@@ -114,13 +110,13 @@ export class Renderer {
 	}
 
 	destroy(): void {
-		if (this.frame !== null) cancelAnimationFrame(this.frame);
+		if (this.frame !== null) window.cancelAnimationFrame(this.frame);
 		this.frame = null;
 	}
 
 	private schedule(): void {
 		if (this.frame !== null) return;
-		this.frame = requestAnimationFrame(() => {
+		this.frame = window.requestAnimationFrame(() => {
 			this.frame = null;
 			if (this.staticDirty) this.drawStatic();
 			if (this.liveDirty) this.drawLive();

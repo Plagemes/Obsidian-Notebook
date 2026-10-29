@@ -42,7 +42,6 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.addSlider((slider) => slider
 				.setLimits(0, 2000, 50)
 				.setValue(s.palmRejectionMs)
-				.setDynamicTooltip()
 				.onChange(async (v) => {
 					s.palmRejectionMs = v;
 					await this.host.saveSettings();

@@ -18,8 +18,8 @@ export default class NotebookPlugin extends Plugin {
 
 		this.addRibbonIcon("book-open", t("ribbon.open"), () => this.openPicker());
 
-		this.addCommand({ id: "new-notebook", name: t("command.new"), callback: () => this.askNewNotebook() });
-		this.addCommand({ id: "open-notebooks", name: t("command.open"), callback: () => this.openPicker() });
+		this.addCommand({ id: "create", name: t("command.new"), callback: () => this.askNewNotebook() });
+		this.addCommand({ id: "open", name: t("command.open"), callback: () => this.openPicker() });
 		this.addCommand({ id: "undo", name: t("command.undo"), checkCallback: (checking) => this.withView(checking, (v) => v.undo()) });
 		this.addCommand({ id: "redo", name: t("command.redo"), checkCallback: (checking) => this.withView(checking, (v) => v.redo()) });
 		this.addCommand({ id: "fit-width", name: t("command.fit"), checkCallback: (checking) => this.withView(checking, (v) => v.fitToWidth()) });

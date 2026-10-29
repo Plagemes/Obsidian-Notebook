@@ -44,19 +44,17 @@ export class Toolbar {
 		for (const color of COLORS) {
 			const b = this.button(colors, `${t("tool.color")} ${color}`, () => this.set({ color, tool: "pen" }));
 			b.addClass("notebook-swatch");
-			b.createSpan({ cls: "notebook-swatch-dot" }).style.backgroundColor = color;
+			b.createSpan({ cls: "notebook-swatch-dot" }).setCssProps({ "--notebook-swatch-color": color });
 			this.colorButtons.set(color, b);
 		}
 
 		const widths = this.group();
-		for (const { width, label } of WIDTHS) {
+		WIDTHS.forEach(({ width, label }, i) => {
 			const b = this.button(widths, t(label), () => this.set({ width, tool: "pen" }));
 			b.addClass("notebook-width");
-			const dot = b.createSpan({ cls: "notebook-width-dot" });
-			const px = Math.round(3 + width * 2.5);
-			dot.style.width = dot.style.height = `${px}px`;
+			b.createSpan({ cls: `notebook-width-dot notebook-width-${i}` });
 			this.widthButtons.set(width, b);
-		}
+		});
 
 		const history = this.group();
 		this.undoButton = this.iconButton(history, "undo", "tool.undo", () => this.actions.undo());

@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parse, serialize } from "../src/model/serialize";
 import { CURRENT_VERSION } from "../src/model/types";
-import { DocumentSession, type BackupReason, type DocumentIO } from "../src/storage/session";
+import { DocumentSession, type BackupReason, type DocumentIO, type Timers } from "../src/storage/session";
 import { line, sampleDocument } from "./helpers";
+
+/** Node timers, resolved at call time so vitest's fake timers apply. */
+const timers: Timers = {
+	set: (fn, ms) => setTimeout(fn, ms) as unknown as number,
+	clear: (h) => clearTimeout(h),
+};
 
 /** In-memory file with the same contract as the Vault-backed IO. */
 class FakeIO implements DocumentIO {
@@ -63,7 +69,7 @@ describe("DocumentSession", () => {
 
 	it("loads, edits and saves a valid notebook that reopens identically", async () => {
 		const io = new FakeIO(serialize(sampleDocument(2)));
-		const s = new DocumentSession(io);
+		const s = new DocumentSession(io, timers);
 		await s.load();
 		expect(s.mode).toBe("ok");
 		s.doc!.pages[0]!.strokes.push(line(10, 10, 90, 90));
@@ -73,7 +79,7 @@ describe("DocumentSession", () => {
 		expect(s.dirty).toBe(false);
 		expect(io.writes).toHaveLength(1);
 
-		const reopened = new DocumentSession(new FakeIO(io.content));
+		const reopened = new DocumentSession(new FakeIO(io.content), timers);
 		await reopened.load();
 		expect(reopened.doc).toEqual(s.doc);
 		expect(serialize(reopened.doc!)).toBe(io.content);
@@ -81,7 +87,7 @@ describe("DocumentSession", () => {
 
 	it("does not write when nothing changed", async () => {
 		const io = new FakeIO(serialize(sampleDocument(1)));
-		const s = new DocumentSession(io);
+		const s = new DocumentSession(io, timers);
 		await s.load();
 		await s.flush();
 		expect(io.writes).toHaveLength(0);
@@ -89,7 +95,7 @@ describe("DocumentSession", () => {
 
 	it("debounces saves and caps the wait during continuous writing", async () => {
 		const io = new FakeIO(serialize(sampleDocument(0)));
-		const s = new DocumentSession(io, {}, { debounceMs: 1000, maxWaitMs: 5000 });
+		const s = new DocumentSession(io, timers, {}, { debounceMs: 1000, maxWaitMs: 5000 });
 		await s.load();
 		const page = s.doc!.pages[0]!;
 		// A stroke every 500 ms never lets the debounce expire...
@@ -107,7 +113,7 @@ describe("DocumentSession", () => {
 
 	it.each(corrupt)("never overwrites an unreadable file (%s) and backs it up", async (_, content) => {
 		const io = new FakeIO(content);
-		const s = new DocumentSession(io);
+		const s = new DocumentSession(io, timers);
 		await s.load();
 		expect(s.mode).toBe("broken");
 		expect(s.doc).toBeNull();
@@ -121,7 +127,7 @@ describe("DocumentSession", () => {
 
 	it("does not back up an empty file but still refuses to write it", async () => {
 		const io = new FakeIO("");
-		const s = new DocumentSession(io);
+		const s = new DocumentSession(io, timers);
 		await s.load();
 		expect(s.mode).toBe("broken");
 		await s.flush();
@@ -132,7 +138,7 @@ describe("DocumentSession", () => {
 	it("opens newer format versions read-only and never writes them", async () => {
 		const future = JSON.stringify({ ...JSON.parse(serialize(sampleDocument(1))), version: CURRENT_VERSION + 1 });
 		const io = new FakeIO(future);
-		const s = new DocumentSession(io);
+		const s = new DocumentSession(io, timers);
 		await s.load();
 		expect(s.mode).toBe("readonly");
 		s.markChanged();
@@ -143,7 +149,7 @@ describe("DocumentSession", () => {
 
 	it("backs up an external change before overwriting it with local edits", async () => {
 		const io = new FakeIO(serialize(sampleDocument(1)));
-		const s = new DocumentSession(io);
+		const s = new DocumentSession(io, timers);
 		await s.load();
 		const external = serialize(sampleDocument(4));
 		io.content = external; // e.g. Sync from another device
@@ -157,7 +163,7 @@ describe("DocumentSession", () => {
 
 	it("backs up a change that lands between the pre-read and the write", async () => {
 		const io = new FakeIO(serialize(sampleDocument(1)));
-		const s = new DocumentSession(io);
+		const s = new DocumentSession(io, timers);
 		await s.load();
 		const sneaky = serialize(sampleDocument(2));
 		io.beforeProcess = () => (io.content = sneaky);
@@ -170,7 +176,7 @@ describe("DocumentSession", () => {
 	it("reloads an external change when there are no local edits", async () => {
 		const io = new FakeIO(serialize(sampleDocument(1)));
 		const loaded = vi.fn();
-		const s = new DocumentSession(io, { onLoaded: loaded });
+		const s = new DocumentSession(io, timers, { onLoaded: loaded });
 		await s.load();
 		io.content = serialize(sampleDocument(3));
 		expect(await s.handleExternalChange()).toBe("reloaded");
@@ -180,7 +186,7 @@ describe("DocumentSession", () => {
 
 	it("ignores the echo of its own write", async () => {
 		const io = new FakeIO(serialize(sampleDocument(1)));
-		const s = new DocumentSession(io);
+		const s = new DocumentSession(io, timers);
 		await s.load();
 		s.doc!.pages[0]!.strokes.push(line(0, 0, 5, 5));
 		s.markChanged();
@@ -190,7 +196,7 @@ describe("DocumentSession", () => {
 
 	it("an external change that is unreadable puts the session in broken mode without writing", async () => {
 		const io = new FakeIO(serialize(sampleDocument(1)));
-		const s = new DocumentSession(io);
+		const s = new DocumentSession(io, timers);
 		await s.load();
 		io.content = "{ half a file";
 		await s.handleExternalChange();
@@ -204,7 +210,7 @@ describe("DocumentSession", () => {
 	it("keeps changes and retries after a failed write", async () => {
 		const io = new FakeIO(serialize(sampleDocument(0)));
 		const errors = vi.fn();
-		const s = new DocumentSession(io, { onError: errors }, { retryMs: 1000 });
+		const s = new DocumentSession(io, timers, { onError: errors }, { retryMs: 1000 });
 		await s.load();
 		s.doc!.pages[0]!.strokes.push(line(0, 0, 5, 5));
 		s.markChanged();
@@ -219,7 +225,7 @@ describe("DocumentSession", () => {
 
 	it("refuses to write a document that fails re-validation", async () => {
 		const io = new FakeIO(serialize(sampleDocument(1)));
-		const s = new DocumentSession(io);
+		const s = new DocumentSession(io, timers);
 		await s.load();
 		s.doc!.pages[0]!.strokes[0]!.points[0]![0] = Number.NaN; // would serialize as null
 		s.markChanged();
@@ -230,7 +236,7 @@ describe("DocumentSession", () => {
 
 	it("backs up a racing external version before overwriting it", async () => {
 		const io = new FakeIO(serialize(sampleDocument(1)));
-		const s = new DocumentSession(io);
+		const s = new DocumentSession(io, timers);
 		await s.load();
 		const sneaky = serialize(sampleDocument(2));
 		io.beforeProcess = () => (io.content = sneaky);
@@ -242,7 +248,7 @@ describe("DocumentSession", () => {
 
 	it("gives up without overwriting if the file keeps changing", async () => {
 		const io = new FakeIO(serialize(sampleDocument(1)));
-		const s = new DocumentSession(io, { onError: vi.fn() });
+		const s = new DocumentSession(io, timers, { onError: vi.fn() });
 		await s.load();
 		let n = 0;
 		io.keepBeforeProcess = true;
@@ -256,7 +262,7 @@ describe("DocumentSession", () => {
 
 	it("does not overwrite an external version it could not back up", async () => {
 		const io = new FakeIO(serialize(sampleDocument(1)));
-		const s = new DocumentSession(io, { onError: vi.fn() });
+		const s = new DocumentSession(io, timers, { onError: vi.fn() });
 		await s.load();
 		const external = serialize(sampleDocument(3));
 		io.content = external;
@@ -269,7 +275,7 @@ describe("DocumentSession", () => {
 
 	it("an external change seen during a flush is checked after it and is not reloaded over newer local data", async () => {
 		const io = new FakeIO(serialize(sampleDocument(1)));
-		const s = new DocumentSession(io);
+		const s = new DocumentSession(io, timers);
 		await s.load();
 		const external = serialize(sampleDocument(4));
 		// Sync writes between our pre-read and our write; its 'modify' event arrives meanwhile.
@@ -289,7 +295,7 @@ describe("DocumentSession", () => {
 
 	it("flushForClose retries transient failures", async () => {
 		const io = new FakeIO(serialize(sampleDocument(0)));
-		const s = new DocumentSession(io, { onError: vi.fn() });
+		const s = new DocumentSession(io, timers, { onError: vi.fn() });
 		await s.load();
 		s.doc!.pages[0]!.strokes.push(line(0, 0, 5, 5));
 		s.markChanged();
@@ -301,7 +307,7 @@ describe("DocumentSession", () => {
 
 	it("flushForClose keeps unsaved changes as a backup when writing keeps failing", async () => {
 		const io = new FakeIO(serialize(sampleDocument(0)));
-		const s = new DocumentSession(io, { onError: vi.fn() });
+		const s = new DocumentSession(io, timers, { onError: vi.fn() });
 		await s.load();
 		s.doc!.pages[0]!.strokes.push(line(0, 0, 5, 5));
 		s.markChanged();
@@ -315,7 +321,7 @@ describe("DocumentSession", () => {
 
 	it("a deleted file is never written again; unsaved changes go to a backup", async () => {
 		const io = new FakeIO(serialize(sampleDocument(1)));
-		const s = new DocumentSession(io);
+		const s = new DocumentSession(io, timers);
 		await s.load();
 		s.doc!.pages[0]!.strokes.push(line(0, 0, 5, 5));
 		s.markChanged();
@@ -332,7 +338,7 @@ describe("DocumentSession", () => {
 	it("does not reload an external change while a gesture is in progress", async () => {
 		const io = new FakeIO(serialize(sampleDocument(1)));
 		let busy = true;
-		const s = new DocumentSession(io, {}, { busy: () => busy });
+		const s = new DocumentSession(io, timers, {}, { busy: () => busy });
 		await s.load();
 		const external = serialize(sampleDocument(3));
 		io.content = external;
@@ -347,7 +353,7 @@ describe("DocumentSession", () => {
 
 	it("stops before writing if the file is deleted during a flush", async () => {
 		const io = new FakeIO(serialize(sampleDocument(1)));
-		const s = new DocumentSession(io);
+		const s = new DocumentSession(io, timers);
 		await s.load();
 		s.doc!.pages[0]!.strokes.push(line(0, 0, 5, 5));
 		s.markChanged();
@@ -360,7 +366,7 @@ describe("DocumentSession", () => {
 	it("a session disposed while loading does not report the load", async () => {
 		const io = new FakeIO(serialize(sampleDocument(1)));
 		const loaded = vi.fn();
-		const s = new DocumentSession(io, { onLoaded: loaded });
+		const s = new DocumentSession(io, timers, { onLoaded: loaded });
 		const p = s.load();
 		s.dispose();
 		await p;
@@ -369,7 +375,7 @@ describe("DocumentSession", () => {
 
 	it("does not reschedule after dispose", async () => {
 		const io = new FakeIO(serialize(sampleDocument(0)));
-		const s = new DocumentSession(io, {}, { debounceMs: 100 });
+		const s = new DocumentSession(io, timers, {}, { debounceMs: 100 });
 		await s.load();
 		s.doc!.pages[0]!.strokes.push(line(0, 0, 5, 5));
 		s.markChanged();

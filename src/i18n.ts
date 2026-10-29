@@ -1,4 +1,4 @@
-import * as obsidian from "obsidian";
+import { getLanguage } from "obsidian";
 
 const en = {
 	"plugin.name": "Notebook",
@@ -116,20 +116,10 @@ const it: Partial<Record<MessageKey, string>> = {
 	"settings.prediction.desc": "Disegna i punti predetti dal browser davanti alla penna per ridurre la latenza percepita. Non vengono mai salvati. Sperimentale.",
 };
 
-function language(): string {
-	const get = (obsidian as { getLanguage?: () => string }).getLanguage;
-	if (typeof get === "function") return get();
-	try {
-		return window.localStorage.getItem("language") ?? "en";
-	} catch {
-		return "en";
-	}
-}
-
 let table: Partial<Record<MessageKey, string>> | null = null;
 
 export function t(key: MessageKey, vars?: Record<string, string>): string {
-	table ??= language().startsWith("it") ? it : {};
+	table ??= getLanguage().startsWith("it") ? it : {};
 	let text = table[key] ?? en[key];
 	if (vars) for (const [k, v] of Object.entries(vars)) text = text.replace(`{${k}}`, v);
 	return text;
