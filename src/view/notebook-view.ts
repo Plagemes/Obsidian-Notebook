@@ -1,5 +1,7 @@
 import { FileView, Menu, Notice, Scope, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 import { pageFromState } from "../integration/links";
+import { pageFromEphemeralState } from "../integration/page-links";
+import { addPageShareItems } from "../integration/page-share";
 import { scanFromCamera } from "../scan/scan-modal";
 import { scannedPage } from "../scan/pages";
 import { PhotoDecodeError, photoSize } from "../scan/decode";
@@ -371,6 +373,15 @@ export class NotebookView extends FileView {
 		if (this.pendingPage !== null && this.layout) this.applyPendingPage();
 	}
 
+	/** Following `[[Notebook.notebook#p3]]` passes the subpath here (after `setState` when the file was not open yet). */
+	setEphemeralState(state: unknown): void {
+		super.setEphemeralState(state);
+		const page = pageFromEphemeralState(state);
+		if (page === null) return;
+		this.pendingPage = page;
+		if (this.layout) this.applyPendingPage();
+	}
+
 	private applyPendingPage(): void {
 		const doc = this.session?.doc;
 		const page = this.pendingPage;
@@ -602,6 +613,7 @@ export class NotebookView extends FileView {
 		menu.addSeparator();
 		const file = this.file;
 		if (file) {
+			addPageShareItems(menu, this.app, file, index + 1);
 			menu.addItem((i) => i.setTitle(t("export.pagePdf")).setIcon("file-output")
 				.onClick(() => void exportPdf(this.app, file, [page], ` p${index + 1}`, this.media)));
 			menu.addItem((i) => i.setTitle(t("export.notebookPdf")).setIcon("file-output").onClick(() => void this.exportNotebookPdf()));

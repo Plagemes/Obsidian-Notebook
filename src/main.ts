@@ -43,7 +43,11 @@ export default class NotebookPlugin extends Plugin {
 		this.addCommand({ id: "create-stress-test", name: t("command.stress"), callback: () => void this.createStressNotebook() });
 		this.addCommand({ id: "export-pdf", name: t("command.exportPdf"), checkCallback: (checking) => this.withView(checking, (v) => void v.exportNotebookPdf()) });
 
-		registerIntegration(this, { background: (doc, page, width) => this.host.thumbnailBackground(doc, page, width) });
+		registerIntegration(this, {
+			background: (doc, page, width) => this.host.thumbnailBackground(doc, page, width),
+			newNotebookIn: (folder) => this.host.createNotebook(folder),
+			annotatePdf: (pdf) => this.host.importPdf(this.settings.folder, pdf),
+		});
 
 		this.addSettingTab(new NotebookSettingTab(this.app, this));
 

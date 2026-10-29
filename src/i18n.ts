@@ -316,6 +316,20 @@ const en = {
 	"scan.capturedDone": "Done ({n})",
 	"scan.useFilePicker": "Use the camera app",
 	"scan.cameraFailed": "The in-app camera is not available here. Use the camera app instead.",
+	// wave p1b: obsidian
+	"menu.newNotebookHere": "New notebook here",
+	"menu.annotatePdf": "Annotate in Notebook",
+	"share.copyLink": "Copy link to this page",
+	"share.insertLink": "Insert link into the active note",
+	"share.insertEmbed": "Insert page preview into the active note",
+	"share.linkAlias": "{name}, p. {page}",
+	"share.copied": "Copied {link}",
+	"share.copyFailed": "Could not copy the link: {error}",
+	"share.noNote": "Open a note first: there is no note to insert into.",
+	"share.readingMode": "{name} is in reading view. Switch it to editing and try again.",
+	"share.inserted": "Inserted into {name}",
+	"suggest.handwriting": "Handwriting",
+	"suggest.emptyPage": "Empty page",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -636,6 +650,20 @@ const it: Partial<Record<MessageKey, string>> = {
 	"scan.capturedDone": "Fine ({n})",
 	"scan.useFilePicker": "Usa l'app Fotocamera",
 	"scan.cameraFailed": "La fotocamera interna non è disponibile qui. Usa l'app Fotocamera.",
+	// wave p1b: obsidian
+	"menu.newNotebookHere": "Nuovo quaderno qui",
+	"menu.annotatePdf": "Annota in Notebook",
+	"share.copyLink": "Copia il link a questa pagina",
+	"share.insertLink": "Inserisci il link nella nota attiva",
+	"share.insertEmbed": "Inserisci l'anteprima della pagina nella nota attiva",
+	"share.linkAlias": "{name}, pag. {page}",
+	"share.copied": "Copiato {link}",
+	"share.copyFailed": "Impossibile copiare il link: {error}",
+	"share.noNote": "Apri prima una nota: non c'è nessuna nota in cui inserire.",
+	"share.readingMode": "{name} è in modalità lettura. Passa alla modifica e riprova.",
+	"share.inserted": "Inserito in {name}",
+	"suggest.handwriting": "Scrittura a mano",
+	"suggest.emptyPage": "Pagina vuota",
 };
 
 let table: Partial<Record<MessageKey, string>> | null = null;
