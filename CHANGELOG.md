@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+Not yet verified on Android hardware (see `docs/testing.md`, steps R1-R5). No change to the file format.
+
+### Added
+- **PDF reading**
+  - **Search the PDF text** (#44): command *Search PDF text* and an entry in the toolbar's "…" menu open a search bar over the page. Matches ignore case, accents and ligatures ("caffe" finds "caffè"); at least 2 characters. Results are listed with their notebook page and the words around them, every match is marked on the page (yellow, the current one orange; a transient overlay that is never saved), and next/previous (also the commands *Next/Previous PDF search result*, Enter and Shift+Enter) scroll to it. The text of each PDF page is read once and cached; the search starts at the page in view, handles four pages at a time and gives the screen back every few milliseconds, so typing, scrolling and writing stay responsive on a big PDF, and a new query cancels the old one. At most 500 matches are listed. Marks inside a long line use the character widths of the PDF's font as the WebView measures them.
+  - **Highlighter that snaps to the text lines** (#43): the highlighter's options have *Snap to text lines* (off by default). When on, a highlighter stroke over PDF text is replaced at pen-up by straight highlighter strokes, one per line of text it crossed, covering the words it covers (a word counts when at least 40% of it is under the stroke) and as high as the line. They are ordinary highlighter strokes (vector, page coordinates) in the same undo step; a stroke that is not near any text, or made before the page's text was read, stays as drawn. Rotated text is not snapped.
+  - **Show or hide all annotations** (#188): command *Show or hide annotations on PDF pages* and a "…" menu entry hide the ink and text boxes on PDF pages (other pages keep theirs) to reread the clean PDF. View only: nothing is saved or changed, editing and the toolbar are off while hidden (a finger still scrolls and zooms), and a banner says so and has the button that shows everything again. Exports, thumbnails and embeds still contain the annotations.
+  - **Dim the background** (#199): command *Dim PDF and image backgrounds* and a "…" menu entry with a strength slider (10-80%) draw PDF and image backgrounds lighter so the ink stands out. Kept in the plugin settings (`dimBackground`, `dimStrength`), per device. Exports, thumbnails and embeds are not dimmed (they show the notebook, not one reader's screen); there is no export option for it yet.
+
 ## 0.5.0 — 2026-10-29
 
 Not yet verified on Android hardware (see `docs/testing.md`).
