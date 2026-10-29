@@ -9,6 +9,7 @@ import { rulerEdge, rulerTicks, type Ruler } from "./ruler";
 import { inkPath, type InkBuilder } from "./ink-geometry";
 import { HIGHLIGHTER_ALPHA, strokePath } from "./stroke-shape";
 import { WetInk, type PageTransform } from "./wet-ink";
+import { ErrorOnce } from "./errors";
 import type { Matrix } from "./transform";
 import type { Viewport } from "./viewport";
 
@@ -30,12 +31,15 @@ export interface MediaSource {
 /** Draws a text box in page coordinates; used by the renderer, thumbnails and the live layer. */
 export function drawTextElement(ctx: CanvasRenderingContext2D, el: TextElement): void {
 	ctx.save();
-	ctx.font = `${el.fontSize}px ${TEXT_FONT}`;
-	ctx.fillStyle = el.color;
-	ctx.textBaseline = "top";
-	const layout = layoutText(el.text, el.fontSize, el.width, (str) => ctx.measureText(str).width);
-	layout.lines.forEach((line, i) => ctx.fillText(line, el.x, el.y + i * layout.lineHeight + (layout.lineHeight - el.fontSize) / 2));
-	ctx.restore();
+	try {
+		ctx.font = `${el.fontSize}px ${TEXT_FONT}`;
+		ctx.fillStyle = el.color;
+		ctx.textBaseline = "top";
+		const layout = layoutText(el.text, el.fontSize, el.width, (str) => ctx.measureText(str).width);
+		layout.lines.forEach((line, i) => ctx.fillText(line, el.x, el.y + i * layout.lineHeight + (layout.lineHeight - el.fontSize) / 2));
+	} finally {
+		ctx.restore();
+	}
 }
 
 /** Font used for text boxes on screen. */
@@ -58,14 +62,17 @@ export function drawElement(ctx: CanvasRenderingContext2D, el: PageElement, img:
 		return;
 	}
 	ctx.save();
-	ctx.translate(el.x + el.width / 2, el.y + el.height / 2);
-	if (el.rotation) ctx.rotate(el.rotation);
-	if (img) ctx.drawImage(img, -el.width / 2, -el.height / 2, el.width, el.height);
-	else {
-		ctx.fillStyle = PLACEHOLDER;
-		ctx.fillRect(-el.width / 2, -el.height / 2, el.width, el.height);
+	try {
+		ctx.translate(el.x + el.width / 2, el.y + el.height / 2);
+		if (el.rotation) ctx.rotate(el.rotation);
+		if (img) ctx.drawImage(img, -el.width / 2, -el.height / 2, el.width, el.height);
+		else {
+			ctx.fillStyle = PLACEHOLDER;
+			ctx.fillRect(-el.width / 2, -el.height / 2, el.width, el.height);
+		}
+	} finally {
+		ctx.restore();
 	}
-	ctx.restore();
 }
 
 export interface LiveStroke {
@@ -101,6 +108,32 @@ export interface SelectionOverlay {
 	handle: number;
 }
 
+export interface RendererOptions {
+	/**
+	 * Ask for a low-latency (`desynchronized`) context for the pen's wet canvas. Off by default: on
+	 * some Android GPUs such a canvas is composited as an opaque overlay. When the browser does not
+	 * grant it, the wet canvas is a regular one.
+	 */
+	lowLatency?: boolean;
+}
+
+/**
+ * 2D context for a wet-ink canvas: `desynchronized` only when asked, and a regular context when the
+ * low-latency one cannot be created. `desynchronized` reports what the browser actually granted.
+ */
+export function createWetContext(canvas: HTMLCanvasElement, lowLatency: boolean): { ctx: CanvasRenderingContext2D | null; desynchronized: boolean } {
+	if (lowLatency) {
+		try {
+			const ctx = canvas.getContext("2d", { desynchronized: true });
+			if (ctx) return { ctx, desynchronized: ctx.getContextAttributes?.().desynchronized === true };
+		} catch {
+			// Fall through to a regular context (on a new canvas: a canvas keeps its first context).
+		}
+		return { ctx: null, desynchronized: false };
+	}
+	return { ctx: canvas.getContext("2d"), desynchronized: false };
+}
+
 export interface RenderStats {
 	/** Duration of the last full static redraw, ms. */
 	staticMs: number;
@@ -121,8 +154,10 @@ export interface RenderStats {
 export class Renderer {
 	readonly staticCanvas: HTMLCanvasElement;
 	readonly liveCanvas: HTMLCanvasElement;
-	/** Wet ink of the pen: a low-latency (desynchronized) canvas above the others. */
-	readonly wetCanvas: HTMLCanvasElement;
+	/** Wet ink of the pen, above the others (low-latency `desynchronized` only when enabled and granted). */
+	wetCanvas: HTMLCanvasElement;
+	/** The pen's wet canvas has a desynchronized context. */
+	desynchronized = false;
 	readonly stats: RenderStats = { staticMs: 0, strokesDrawn: 0, pagesDrawn: 0 };
 	/** Called after each animation frame that drew something (for the performance overlay). */
 	onFrame: ((frameStart: number) => void) | null = null;
@@ -153,7 +188,13 @@ export class Renderer {
 	private settleTimer: number | null = null;
 
 	private readonly container: HTMLElement;
-	private readonly wetPen: WetInk;
+	private wetPen: WetInk;
+	private lowLatency: boolean;
+	/** Painting wet ink failed: strokes in progress are shown on the live layer instead (see the view). */
+	private wetFailed = false;
+	private readonly errors = new ErrorOnce("render");
+	/** Contexts whose state (save stack, clip) may be off after an error: reset before their next full redraw. */
+	private readonly faulted = new Set<CanvasRenderingContext2D>();
 	/** Wet ink of the highlighter (created on first use): a regular canvas, see releaseWet(). */
 	private wetHl: WetInk | null = null;
 	/** The canvas showing the stroke in progress. */
@@ -167,21 +208,55 @@ export class Renderer {
 	private readonly paths = new WeakMap<Stroke, Path2D>();
 	private readonly bounds = new WeakMap<Stroke, BBox>();
 
-	constructor(container: HTMLElement) {
+	constructor(container: HTMLElement, options: RendererOptions = {}) {
 		// CSS sizes the canvases to the container; only the backing store size is set here.
 		this.staticCanvas = container.createEl("canvas", { cls: "notebook-canvas notebook-canvas-static" });
 		this.liveCanvas = container.createEl("canvas", { cls: "notebook-canvas notebook-canvas-live" });
-		this.wetCanvas = container.createEl("canvas", { cls: "notebook-canvas notebook-canvas-live notebook-canvas-wet" });
 		this.container = container;
 		const s = this.staticCanvas.getContext("2d");
 		const l = this.liveCanvas.getContext("2d");
-		// `desynchronized` is a low-latency hint (Chromium: the canvas may be shown without waiting for
-		// the compositor); other engines ignore it.
-		const w = this.wetCanvas.getContext("2d", { desynchronized: true });
-		if (!s || !l || !w) throw new Error("Canvas 2D is not available");
+		if (!s || !l) throw new Error("Canvas 2D is not available");
 		this.staticCtx = s;
 		this.liveCtx = l;
-		this.wetPen = new WetInk(this.wetCanvas, w);
+		this.lowLatency = options.lowLatency === true;
+		const wet = this.createPenWet(this.lowLatency);
+		this.wetCanvas = wet.canvas;
+		this.wetPen = wet;
+	}
+
+	/**
+	 * The pen's wet canvas. `desynchronized` is a low-latency hint (Chromium: the canvas may be shown
+	 * without waiting for the compositor); if the low-latency context cannot be created, a regular
+	 * canvas is used.
+	 */
+	private createPenWet(lowLatency: boolean): WetInk {
+		const make = () => this.container.createEl("canvas", { cls: "notebook-canvas notebook-canvas-live notebook-canvas-wet" });
+		let canvas = make();
+		let { ctx, desynchronized } = createWetContext(canvas, lowLatency);
+		if (!ctx) {
+			canvas.remove();
+			canvas = make();
+			({ ctx, desynchronized } = createWetContext(canvas, false));
+		}
+		if (!ctx) throw new Error("Canvas 2D is not available");
+		this.desynchronized = desynchronized;
+		return new WetInk(canvas, ctx);
+	}
+
+	/** Turns the low-latency wet canvas on or off (the canvas is replaced; a stroke in progress is dropped from it). */
+	setLowLatency(on: boolean): void {
+		if (on === this.lowLatency) return;
+		this.lowLatency = on;
+		if (this.wet === this.wetPen) this.cancelWet();
+		for (let i = this.wetRelease.length - 1; i >= 0; i--) if (this.wetRelease[i]!.wet === this.wetPen) this.wetRelease.splice(i, 1);
+		const old = this.wetCanvas;
+		const wet = this.createPenWet(on);
+		// Same place in the stack: right where the old one was (under the highlighter's wet canvas).
+		old.replaceWith(wet.canvas);
+		wet.canvas.width = old.width;
+		wet.canvas.height = old.height;
+		this.wetCanvas = wet.canvas;
+		this.wetPen = wet;
 	}
 
 	boundsOf = (stroke: Stroke): BBox => {
@@ -277,31 +352,49 @@ export class Renderer {
 		}
 		const ctx = this.staticCtx;
 		this.beginPage(ctx, box);
-		this.fillStroke(ctx, stroke);
-		ctx.restore();
-		if (wet && fromWet) this.releaseWet(wet, true);
+		let drawn = true;
+		try {
+			this.fillStroke(ctx, stroke);
+		} catch (e) {
+			this.fault(ctx, "stroke", e);
+			drawn = false;
+		} finally {
+			ctx.restore();
+		}
+		if (!drawn) this.invalidate();
+		if (wet && fromWet) this.releaseWet(wet, drawn);
 	}
 
 	// --- wet ink (the stroke being written) ---
 
 	/** Starts painting a stroke as it is written; `g` is filled by the caller and painted with paintWet(). */
+	/**
+	 * Returns false when the stroke cannot be shown as wet ink (no page, or wet ink failed earlier):
+	 * the caller then shows it on the live layer (setLive).
+	 */
 	beginWet(pageIndex: number, g: InkBuilder, tool: Tool, color: string): boolean {
+		if (this.wetFailed) return false;
 		const t = this.pageTransform(pageIndex);
 		if (!t) return false;
 		this.cancelWet();
-		const wet = tool === "highlighter" ? this.highlighterWet() : this.wetPen;
-		// A previous stroke still waiting to be cleared from this canvas: make sure the static layer
-		// shows it (a full redraw may still be pending) before it leaves the wet canvas.
-		for (let i = this.wetRelease.length - 1; i >= 0; i--) {
-			if (this.wetRelease[i]!.wet !== wet) continue;
-			if (this.staticDirty) this.drawStatic();
-			wet.clear();
-			this.wetRelease.splice(i, 1);
+		try {
+			const wet = tool === "highlighter" ? this.highlighterWet() : this.wetPen;
+			// A previous stroke still waiting to be cleared from this canvas: make sure the static layer
+			// shows it (a full redraw may still be pending) before it leaves the wet canvas.
+			for (let i = this.wetRelease.length - 1; i >= 0; i--) {
+				if (this.wetRelease[i]!.wet !== wet) continue;
+				if (this.staticDirty) this.drawStatic();
+				wet.clear();
+				this.wetRelease.splice(i, 1);
+			}
+			wet.begin(g, tool, color, t);
+			this.wet = wet;
+			this.wetPage = pageIndex;
+			return true;
+		} catch (e) {
+			this.failWet(e);
+			return false;
 		}
-		wet.begin(g, tool, color, t);
-		this.wet = wet;
-		this.wetPage = pageIndex;
-		return true;
 	}
 
 	/** The wet stroke in progress (to set its tip points), or null. */
@@ -309,9 +402,20 @@ export class Renderer {
 		return this.wet;
 	}
 
-	/** Paints the new part of the wet stroke now (call from the input handler). */
-	paintWet(): void {
-		this.wet?.paint();
+	/**
+	 * Paints the new part of the wet stroke now (call from the input handler). Returns false if
+	 * there is no wet stroke or painting it failed (wet ink is then off for this view).
+	 */
+	paintWet(): boolean {
+		const wet = this.wet;
+		if (!wet) return false;
+		try {
+			wet.paint();
+			return true;
+		} catch (e) {
+			this.failWet(e);
+			return false;
+		}
 	}
 
 	/**
@@ -319,11 +423,18 @@ export class Renderer {
 	 * committed with appendStroke(); null discards it.
 	 */
 	endWet(stroke: Stroke | null): void {
-		if (!this.wet) return;
+		const wet = this.wet;
+		if (!wet) return;
 		if (stroke) {
-			this.wet.clearExtra();
-			this.wet.paint();
-			this.wetDone = stroke;
+			try {
+				wet.clearExtra();
+				wet.paint();
+				this.wetDone = stroke;
+			} catch (e) {
+				// The static layer draws the stroke on the next frame.
+				this.failWet(e);
+				this.invalidate();
+			}
 		} else {
 			this.cancelWet();
 		}
@@ -331,9 +442,25 @@ export class Renderer {
 
 	/** Discards the wet stroke at once (cancelled, or replaced by a recognised shape). */
 	cancelWet(): void {
-		this.wet?.clear();
+		const wet = this.wet;
 		this.wet = null;
 		this.wetDone = null;
+		if (wet) this.errors.run("wet clear", () => wet.clear());
+	}
+
+	/** Wet ink threw: drop it, and show later strokes on the live layer (always works, one frame later). */
+	private failWet(e: unknown): void {
+		this.errors.report("wet ink", e);
+		this.wetFailed = true;
+		this.cancelWet();
+		this.wetRelease.length = 0;
+		for (const w of [this.wetPen, this.wetHl]) {
+			if (!w) continue;
+			this.errors.run("wet clear", () => {
+				w.ctx.setTransform(1, 0, 0, 1, 0, 0);
+				w.ctx.clearRect(0, 0, w.canvas.width, w.canvas.height);
+			});
+		}
 	}
 
 	/**
@@ -449,10 +576,11 @@ export class Renderer {
 		if (this.frame !== null) return;
 		this.frame = window.requestAnimationFrame((t) => {
 			this.frame = null;
-			if (this.staticDirty) this.drawStatic();
-			if (this.liveDirty) this.drawLive();
-			this.releaseWetFrames();
-			this.onFrame?.(t);
+			// Each step is guarded: an exception must never leave the page blank or stop later frames.
+			if (this.staticDirty) this.errors.run("static layer", () => this.drawStatic());
+			if (this.liveDirty) this.errors.run("live layer", () => this.drawLive());
+			this.errors.run("wet release", () => this.releaseWetFrames());
+			if (this.onFrame) this.errors.run("frame callback", () => this.onFrame?.(t));
 		});
 	}
 
@@ -507,6 +635,7 @@ export class Renderer {
 		this.drawnViewport = this.viewport;
 		this.staticCanvas.setCssStyles({ transform: "" });
 		const ctx = this.staticCtx;
+		this.resetIfFaulted(ctx);
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.clearRect(0, 0, this.staticCanvas.width, this.staticCanvas.height);
 		let strokesDrawn = 0;
@@ -518,32 +647,45 @@ export class Renderer {
 			const box = layout!.boxes[i]!;
 			if (!page) continue;
 			this.beginPage(ctx, box, false);
-			ctx.shadowColor = SHADOW;
-			ctx.shadowBlur = 8 * this.dpr;
-			ctx.shadowOffsetY = 2 * this.dpr;
-			ctx.fillStyle = PAPER;
-			ctx.fillRect(0, 0, page.width, page.height);
-			ctx.restore();
-
-			this.beginPage(ctx, box);
-			const visible: BBox = {
-				minX: visibleDoc.minX - box.x, minY: visibleDoc.minY - box.y,
-				maxX: visibleDoc.maxX - box.x, maxY: visibleDoc.maxY - box.y,
-			};
-			if (page.background) this.drawBackground(ctx, page);
-			this.drawPaper(ctx, page, visible);
-			if (page.elements?.length) this.drawElements(ctx, page);
-			for (const stroke of page.strokes) {
-				if (this.hidden?.has(stroke)) continue;
-				const b = this.boundsOf(stroke);
-				// Bounds are padded by half the width; pen ink reaches 0.8 × width at full pressure, and
-				// the wet-ink curve may pass slightly outside its points.
-				const m = stroke.width * 0.3 + 1;
-				if (b.maxX + m < visible.minX || b.minX - m > visible.maxX || b.maxY + m < visible.minY || b.minY - m > visible.maxY) continue;
-				this.fillStroke(ctx, stroke);
-				strokesDrawn++;
+			try {
+				ctx.shadowColor = SHADOW;
+				ctx.shadowBlur = 8 * this.dpr;
+				ctx.shadowOffsetY = 2 * this.dpr;
+				ctx.fillStyle = PAPER;
+				ctx.fillRect(0, 0, page.width, page.height);
+			} finally {
+				ctx.restore();
 			}
-			ctx.restore();
+
+			// Every part is guarded on its own: a bad background, element or stroke is skipped (and
+			// logged once), the rest of the page is still drawn.
+			this.beginPage(ctx, box);
+			try {
+				const visible: BBox = {
+					minX: visibleDoc.minX - box.x, minY: visibleDoc.minY - box.y,
+					maxX: visibleDoc.maxX - box.x, maxY: visibleDoc.maxY - box.y,
+				};
+				if (page.background) this.guarded(ctx, "background", () => this.drawBackground(ctx, page));
+				this.guarded(ctx, "paper", () => this.drawPaper(ctx, page, visible));
+				if (page.elements?.length) this.drawElements(ctx, page);
+				for (const stroke of page.strokes) {
+					if (this.hidden?.has(stroke)) continue;
+					try {
+						const b = this.boundsOf(stroke);
+						// Bounds are padded by half the width; pen ink reaches 0.8 × width at full pressure, and
+						// the wet-ink curve may pass slightly outside its points.
+						const m = stroke.width * 0.3 + 1;
+						if (b.maxX + m < visible.minX || b.minX - m > visible.maxX || b.maxY + m < visible.minY || b.minY - m > visible.maxY) continue;
+						this.fillStroke(ctx, stroke);
+						strokesDrawn++;
+					} catch (e) {
+						this.fault(ctx, "stroke", e);
+						this.setInk(ctx, "pen", PAPER);
+					}
+				}
+			} finally {
+				ctx.restore();
+			}
 		}
 		this.stats.staticMs = performance.now() - t0;
 		this.stats.strokesDrawn = strokesDrawn;
@@ -576,11 +718,40 @@ export class Renderer {
 		const skip = (el: PageElement) => !!(this.hiddenElements?.has(el) || this.selectedElements?.has(el));
 		for (const el of elements) {
 			if (el.type !== "image" || skip(el)) continue;
-			drawElement(ctx, el, this.media?.image(el.asset) ?? null);
+			this.guarded(ctx, "image element", () => drawElement(ctx, el, this.media?.image(el.asset) ?? null));
 		}
 		for (const el of elements) {
 			if (el.type !== "text" || skip(el)) continue;
-			drawTextElement(ctx, el);
+			this.guarded(ctx, "text element", () => drawTextElement(ctx, el));
+		}
+	}
+
+	/** Runs one drawing step with the context state saved around it; an exception is logged once and skipped. */
+	private guarded(ctx: CanvasRenderingContext2D, scope: string, fn: () => void): void {
+		ctx.save();
+		try {
+			fn();
+		} catch (e) {
+			this.fault(ctx, scope, e);
+		} finally {
+			ctx.restore();
+		}
+	}
+
+	private fault(ctx: CanvasRenderingContext2D, scope: string, e: unknown): void {
+		this.errors.report(scope, e);
+		this.faulted.add(ctx);
+	}
+
+	/** After an error the context's save stack may be unbalanced (a clip left behind): start from a clean state. */
+	private resetIfFaulted(ctx: CanvasRenderingContext2D): void {
+		if (!this.faulted.delete(ctx)) return;
+		const c = ctx as CanvasRenderingContext2D & { reset?: () => void };
+		if (typeof c.reset === "function") c.reset();
+		else {
+			// Setting the size (even to the same value) resets the context state.
+			const { width } = ctx.canvas;
+			ctx.canvas.width = width;
 		}
 	}
 
@@ -620,13 +791,15 @@ export class Renderer {
 	private drawLive(): void {
 		this.liveDirty = false;
 		const ctx = this.liveCtx;
+		this.resetIfFaulted(ctx);
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.clearRect(0, 0, this.liveCanvas.width, this.liveCanvas.height);
 		const boxes = this.layout?.boxes;
 		if (!boxes) return;
 
+		// Each overlay is guarded on its own (see drawStatic).
 		const sel = this.selection;
-		if (sel && boxes[sel.pageIndex]) {
+		if (sel && boxes[sel.pageIndex]) this.guarded(ctx, "selection", () => {
 			const box = boxes[sel.pageIndex]!;
 			if (sel.elements.length > 0) {
 				// Elements are drawn as they will be once committed (a text box cannot rotate), under the ink.
@@ -643,13 +816,13 @@ export class Renderer {
 			for (const stroke of sel.strokes) this.fillStroke(ctx, stroke);
 			ctx.restore();
 			this.drawSelectionFrame(ctx, box, sel);
-		}
+		});
 
 		const ruler = this.ruler;
-		if (ruler && boxes[ruler.pageIndex]) this.drawRuler(ctx, boxes[ruler.pageIndex]!, ruler.ruler);
+		if (ruler && boxes[ruler.pageIndex]) this.guarded(ctx, "ruler", () => this.drawRuler(ctx, boxes[ruler.pageIndex]!, ruler.ruler));
 
 		const lasso = this.lasso;
-		if (lasso && lasso.points.length > 1 && boxes[lasso.pageIndex]) {
+		if (lasso && lasso.points.length > 1 && boxes[lasso.pageIndex]) this.guarded(ctx, "lasso", () => {
 			this.beginPage(ctx, boxes[lasso.pageIndex]!, false);
 			ctx.beginPath();
 			lasso.points.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
@@ -658,16 +831,16 @@ export class Renderer {
 			ctx.setLineDash([6 / this.viewport.scale, 4 / this.viewport.scale]);
 			ctx.stroke();
 			ctx.restore();
-		}
+		});
 
 		const live = this.live;
-		if (live && live.points.length > 0 && boxes[live.pageIndex]) {
+		if (live && live.points.length > 0 && boxes[live.pageIndex]) this.guarded(ctx, "live stroke", () => {
 			this.beginPage(ctx, boxes[live.pageIndex]!);
 			const points = live.predicted.length ? [...live.points, ...live.predicted] : live.points;
 			this.setInk(ctx, live.tool, live.color);
 			ctx.fill(new Path2D(strokePath(points, live.width, false, live.tool)));
 			ctx.restore();
-		}
+		});
 	}
 
 	/** Translucent straight edge with millimetre ticks and centimetre numbers; the working edge is the top one (before rotation). */

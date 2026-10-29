@@ -880,78 +880,122 @@
 		min-height: 44px;
 	}
 }
+
 /* --- view wave 2 --- */
 
 .notebook-body {
+	position: relative;
+	display: flex;
+	flex: 1 1 auto;
+	min-height: 0;
 	min-width: 0;
+}
 
 .notebook-body > .notebook-stage {
+	flex: 1 1 0;
 	min-width: 0;
+}
 
 /* Page navigator: side panel, or a drawer over the page on narrow views. */
 .notebook-navigator {
+	display: flex;
 	flex: 0 0 150px;
+	flex-direction: column;
 	width: 150px;
+	min-height: 0;
 	border-right: 1px solid var(--background-modifier-border);
 	background: var(--background-primary);
 	user-select: none;
+}
 
 .notebook-navigator.notebook-hidden {
+	display: none;
+}
 
 .notebook-body.is-narrow > .notebook-navigator {
+	position: absolute;
 	top: 0;
 	bottom: 0;
 	left: 0;
 	z-index: 5;
 	width: min(200px, 70%);
 	box-shadow: var(--shadow-l);
+}
 
 .notebook-navigator-header {
+	display: flex;
+	align-items: center;
 	justify-content: space-between;
 	padding: 4px 8px;
 	border-bottom: 1px solid var(--background-modifier-border);
+}
 
 .notebook-navigator-title {
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+}
 
 .notebook-navigator-list {
+	flex: 1 1 auto;
+	min-height: 0;
 	padding: 8px;
 	overflow-y: auto;
 	overscroll-behavior: contain;
+}
 
 .notebook-navigator-item {
 	margin-bottom: 8px;
 	padding: 4px;
+	border-radius: var(--radius-m);
+	cursor: pointer;
 	touch-action: pan-y;
+}
 
 .notebook-navigator-item.is-current {
 	background: var(--background-modifier-active-hover);
+	outline: 2px solid var(--interactive-accent);
+}
 
 .notebook-navigator-item.is-drop-target {
 	outline: 2px dashed var(--interactive-accent);
+}
 
 .notebook-navigator-thumb {
 	display: block;
+	width: 100%;
 	aspect-ratio: 1 / var(--notebook-thumb-ratio, 1.414);
 	object-fit: contain;
 	border: 1px solid var(--background-modifier-border);
 	background: #fff;
 	-webkit-user-drag: none;
+}
 
 .notebook-navigator-footer {
+	display: flex;
+	align-items: center;
 	margin-top: 2px;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
 
 .notebook-navigator-number {
 	margin-right: auto;
+}
 
 .notebook-navigator-star {
 	min-width: 28px;
 	min-height: 28px;
+}
 
 .notebook-navigator-star.is-active {
 	color: var(--interactive-accent);
+}
 
 .notebook-navigator-empty {
 	padding: 12px 4px;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
 
 .notebook-navigator-ghost {
 	position: fixed;
@@ -963,10 +1007,12 @@
 	pointer-events: none;
 	transform: translate(-50%, -50%);
 	background: var(--background-primary);
+}
 
 /* Text boxes: the textarea sits over the canvas at the box's position and zoom. */
 .notebook-stage textarea.notebook-text-editor,
 .notebook-stage textarea.notebook-text-editor:focus {
+	position: absolute;
 	left: var(--notebook-text-x, 0);
 	top: var(--notebook-text-y, 0);
 	z-index: 4;
@@ -986,14 +1032,19 @@
 	font-family: sans-serif;
 	font-size: var(--notebook-text-fs, 14px);
 	line-height: var(--notebook-text-lh, 1.25);
+	overflow: hidden;
 	resize: none;
 	white-space: pre-wrap;
+	overflow-wrap: anywhere;
 	user-select: text;
 	-webkit-user-select: text;
 	touch-action: auto;
+}
 
 .notebook-text-size-glyph {
+	font-weight: var(--font-semibold);
 	line-height: 1;
+}
 
 .notebook-text-size-0 { font-size: 10px; }
 .notebook-text-size-1 { font-size: 13px; }
@@ -1003,48 +1054,74 @@
 /* Brief outline when a held stroke is turned into a shape. */
 .notebook-stage.is-snapped::after {
 	content: "";
+	position: absolute;
+	inset: 0;
 	z-index: 3;
 	pointer-events: none;
 	box-shadow: inset 0 0 0 3px var(--interactive-accent);
 	animation: notebook-snap 400ms ease-out forwards;
+}
 
 @keyframes notebook-snap {
 	from { opacity: 0.9; }
 	to { opacity: 0; }
+}
 
 .notebook-modal-error {
 	margin-bottom: 8px;
 	color: var(--text-error);
+	font-size: var(--font-ui-small);
+}
 
+@media (pointer: coarse) {
 	.notebook-navigator-star {
 		min-width: 36px;
 		min-height: 36px;
+	}
+}
 
 /* --- view wave 2 --- */
+
 /* --- integration P1 --- */
 .notebook-embed-host {
 	margin: 0.5em 0;
+}
 
 .notebook-embed {
+	display: block;
 	max-width: 100%;
+	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m);
 	background-color: var(--background-secondary);
+	overflow: hidden;
+	cursor: pointer;
+}
 
 .notebook-embed:hover,
 .notebook-embed:focus-visible {
 	border-color: var(--interactive-accent);
+}
 
 .notebook-embed-title {
 	padding: 4px 10px;
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	border-bottom: 1px solid var(--background-modifier-border);
+}
 
 .notebook-embed-image {
+	display: block;
 	width: 100%;
 	height: auto;
+}
 
 .notebook-embed-message {
 	padding: 8px 10px;
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
 	border: 1px dashed var(--background-modifier-border);
 	border-radius: var(--radius-m);
+}
 
 /* --- writing engine --- */
 /* Wet ink: the stroke being written, above every other layer. The highlighter's wet canvas holds

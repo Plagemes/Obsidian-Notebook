@@ -12,7 +12,9 @@
     "test": "vitest run --project unit",
     "test:watch": "vitest --project unit",
     "version": "node version-bump.mjs && git add manifest.json versions.json",
-    "bench": "vitest run --project perf --silent=false"
+    "bench": "vitest run --project perf --silent=false",
+    "harness": "node dev/harness/build.mjs --serve",
+    "harness:check": "node dev/harness/check.mjs"
   },
   "keywords": [
     "obsidian",
