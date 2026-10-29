@@ -1,5 +1,5 @@
 import { getStroke, type StrokeOptions } from "perfect-freehand";
-import type { Point } from "../model/types";
+import type { Point, Tool } from "../model/types";
 
 /** Pen v1 parameters (see docs/architecture.md §2). Changing them changes how existing files look. */
 export const PEN_V1: Readonly<StrokeOptions> = {
@@ -11,9 +11,22 @@ export const PEN_V1: Readonly<StrokeOptions> = {
 	end: { cap: true, taper: 0 },
 };
 
+/** Highlighter (format v2): constant width, flat ends. Drawn translucent by the renderer. */
+export const HIGHLIGHTER_V2: Readonly<StrokeOptions> = {
+	thinning: 0,
+	smoothing: 0.5,
+	streamline: 0.35,
+	simulatePressure: false,
+	start: { cap: false, taper: 0 },
+	end: { cap: false, taper: 0 },
+};
+
+export const HIGHLIGHTER_ALPHA = 0.35;
+
 /** Stroke outline (closed polygon) in page coordinates. */
-export function strokeOutline(points: readonly Point[], width: number, complete = true): number[][] {
-	return getStroke(points as Point[], { ...PEN_V1, size: width, last: complete });
+export function strokeOutline(points: readonly Point[], width: number, complete = true, tool: Tool = "pen"): number[][] {
+	const base = tool === "highlighter" ? HIGHLIGHTER_V2 : PEN_V1;
+	return getStroke(points as Point[], { ...base, size: width, last: complete });
 }
 
 /** Closed SVG path with quadratic curves through the outline midpoints. */
@@ -36,6 +49,6 @@ export function outlineToPath(outline: readonly number[][]): string {
 	return d + "Z";
 }
 
-export function strokePath(points: readonly Point[], width: number, complete = true): string {
-	return outlineToPath(strokeOutline(points, width, complete));
+export function strokePath(points: readonly Point[], width: number, complete = true, tool: Tool = "pen"): string {
+	return outlineToPath(strokeOutline(points, width, complete, tool));
 }

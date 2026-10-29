@@ -53,6 +53,24 @@ export class NotebookSettingTab extends PluginSettingTab {
 				desc: t("settings.prediction.desc"),
 				control: { type: "toggle", key: "prediction", defaultValue: DEFAULT_SETTINGS.prediction },
 			},
+			{
+				name: t("settings.stabilization"),
+				desc: t("settings.stabilization.desc"),
+				control: { type: "slider", key: "stabilization", defaultValue: DEFAULT_SETTINGS.stabilization, min: 0, max: 10, step: 1 },
+			},
+			{
+				name: t("settings.palmSize"),
+				desc: t("settings.palmSize.desc"),
+				control: {
+					type: "slider", key: "palmContactPx", defaultValue: DEFAULT_SETTINGS.palmContactPx,
+					min: 0, max: 120, step: 5, displayFormat: (v) => (v === 0 ? "off" : `${v} px`),
+				},
+			},
+			{
+				name: t("settings.perfOverlay"),
+				desc: t("settings.perfOverlay.desc"),
+				control: { type: "toggle", key: "perfOverlay", defaultValue: DEFAULT_SETTINGS.perfOverlay },
+			},
 		];
 	}
 
@@ -106,5 +124,20 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setName(t("settings.prediction"))
 			.setDesc(t("settings.prediction.desc"))
 			.addToggle((toggle) => toggle.setValue(s.prediction).onChange((v) => this.setControlValue("prediction", v)));
+
+		new Setting(containerEl)
+			.setName(t("settings.stabilization"))
+			.setDesc(t("settings.stabilization.desc"))
+			.addSlider((slider) => slider.setLimits(0, 10, 1).setValue(s.stabilization).onChange((v) => this.setControlValue("stabilization", v)));
+
+		new Setting(containerEl)
+			.setName(t("settings.palmSize"))
+			.setDesc(t("settings.palmSize.desc"))
+			.addSlider((slider) => slider.setLimits(0, 120, 5).setValue(s.palmContactPx).onChange((v) => this.setControlValue("palmContactPx", v)));
+
+		new Setting(containerEl)
+			.setName(t("settings.perfOverlay"))
+			.setDesc(t("settings.perfOverlay.desc"))
+			.addToggle((toggle) => toggle.setValue(s.perfOverlay).onChange((v) => this.setControlValue("perfOverlay", v)));
 	}
 }

@@ -2,6 +2,8 @@ export interface InputSettings {
 	/** Fingers draw (unless the pen was seen in the last `palmRejectionMs`). */
 	fingerDrawing: boolean;
 	palmRejectionMs: number;
+	/** Touch contacts larger than this (CSS px) are ignored as palms; 0 = off. */
+	palmContactPx?: number;
 }
 
 export type Route = "draw" | "navigate" | "ignore";
@@ -30,8 +32,8 @@ export class InputPolicy {
 		return this.penDown || t - this.lastPenTime < this.settings.palmRejectionMs;
 	}
 
-	/** What a new contact does. `button` is PointerEvent.button (0 = primary). */
-	route(pointerType: string, t: number, button = 0): Route {
+	/** What a new contact does. `button` is PointerEvent.button (0 = primary); `contact` the contact size in CSS px. */
+	route(pointerType: string, t: number, button = 0, contact = 0): Route {
 		switch (pointerType) {
 			case "pen":
 				this.notePen(t);
@@ -41,6 +43,7 @@ export class InputPolicy {
 				return button === 1 ? "navigate" : "ignore";
 			case "touch":
 				if (this.penDown) return "ignore";
+				if (this.settings.palmContactPx && contact > this.settings.palmContactPx) return "ignore";
 				if (this.settings.fingerDrawing && !this.penRecentlyActive(t)) return "draw";
 				return "navigate";
 			default:

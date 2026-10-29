@@ -1,5 +1,5 @@
 import { findPage } from "./document";
-import type { NotebookDocument, Stroke } from "./types";
+import type { NotebookDocument, Page, Stroke } from "./types";
 
 /** A command knows how to apply and revert itself on a document: no snapshots. */
 export interface Command {
@@ -55,6 +55,61 @@ export class EraseStrokes implements Command {
 			const item = this.items[k]!;
 			strokes.splice(Math.min(item.index, strokes.length), 0, item.stroke);
 		}
+	}
+}
+
+/**
+ * Replaces one stroke with zero or more strokes at the same position (segment eraser, transforms).
+ * Strokes are immutable, so an edited stroke is always a new object.
+ */
+export class ReplaceStroke implements Command {
+	readonly label = "Edit stroke";
+	constructor(readonly pageId: string, readonly before: Stroke, readonly after: readonly Stroke[], readonly index: number) {}
+
+	apply(doc: NotebookDocument): void {
+		const strokes = pageOf(doc, this.pageId).strokes;
+		const i = strokes.indexOf(this.before);
+		strokes.splice(i >= 0 ? i : Math.min(this.index, strokes.length), i >= 0 ? 1 : 0, ...this.after);
+	}
+
+	revert(doc: NotebookDocument): void {
+		const strokes = pageOf(doc, this.pageId).strokes;
+		let at = -1;
+		for (const s of this.after) {
+			const i = strokes.indexOf(s);
+			if (i < 0) continue;
+			if (at < 0) at = i;
+			strokes.splice(i, 1);
+		}
+		strokes.splice(at >= 0 ? at : Math.min(this.index, strokes.length), 0, this.before);
+	}
+}
+
+export class AddPage implements Command {
+	readonly label = "Add page";
+	constructor(readonly page: Page, readonly index: number) {}
+
+	apply(doc: NotebookDocument): void {
+		doc.pages.splice(Math.min(this.index, doc.pages.length), 0, this.page);
+	}
+
+	revert(doc: NotebookDocument): void {
+		const i = doc.pages.indexOf(this.page);
+		// Never leave a document without pages.
+		if (i >= 0 && doc.pages.length > 1) doc.pages.splice(i, 1);
+	}
+}
+
+/** Several commands undone and redone as one (e.g. one eraser gesture across pages). */
+export class Batch implements Command {
+	constructor(readonly label: string, readonly commands: readonly Command[]) {}
+
+	apply(doc: NotebookDocument): void {
+		for (const c of this.commands) c.apply(doc);
+	}
+
+	revert(doc: NotebookDocument): void {
+		for (let i = this.commands.length - 1; i >= 0; i--) this.commands[i]!.revert(doc);
 	}
 }
 

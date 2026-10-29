@@ -6,6 +6,11 @@ export interface NotebookSettings {
 	palmRejectionMs: number;
 	pressureMode: PressureMode;
 	prediction: boolean;
+	/** 0–10, see Stabilizer. */
+	stabilization: number;
+	/** Touch contacts larger than this (CSS px) are ignored as palms; 0 = off. */
+	palmContactPx: number;
+	perfOverlay: boolean;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -14,6 +19,9 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	palmRejectionMs: 500,
 	pressureMode: "auto",
 	prediction: true,
+	stabilization: 2,
+	palmContactPx: 0,
+	perfOverlay: false,
 };
 
 /** Merges saved data over the defaults, ignoring values of the wrong type. */
@@ -26,6 +34,9 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.palmRejectionMs === "number" && d.palmRejectionMs >= 0 && d.palmRejectionMs <= 5000) s.palmRejectionMs = d.palmRejectionMs;
 	if (d.pressureMode === "auto" || d.pressureMode === "simulated") s.pressureMode = d.pressureMode;
 	if (typeof d.prediction === "boolean") s.prediction = d.prediction;
+	if (typeof d.stabilization === "number" && d.stabilization >= 0 && d.stabilization <= 10) s.stabilization = d.stabilization;
+	if (typeof d.palmContactPx === "number" && d.palmContactPx >= 0 && d.palmContactPx <= 200) s.palmContactPx = d.palmContactPx;
+	if (typeof d.perfOverlay === "boolean") s.perfOverlay = d.perfOverlay;
 	return s;
 }
 

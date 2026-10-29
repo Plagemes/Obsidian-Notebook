@@ -40,6 +40,9 @@ export class PointerController {
 	private readonly nav = new Map<number, NavPointer>();
 	private rect: DOMRect;
 	private readonly disposers: Array<() => void> = [];
+	/** Recent one-finger pan movements, for the fling (inertial scroll) velocity. */
+	private panTrail: Array<{ t: number; dx: number; dy: number }> = [];
+	private inertiaFrame: number | null = null;
 
 	constructor(
 		private readonly el: HTMLElement,
@@ -74,6 +77,7 @@ export class PointerController {
 	}
 
 	destroy(): void {
+		this.stopInertia();
 		this.finishActiveStroke();
 		for (const d of this.disposers) d();
 		this.disposers.length = 0;
@@ -98,7 +102,8 @@ export class PointerController {
 
 	private onDown(e: PointerEvent): void {
 		this.rect = this.el.getBoundingClientRect();
-		const route = this.policy.route(e.pointerType, e.timeStamp, e.button);
+		this.stopInertia();
+		const route = this.policy.route(e.pointerType, e.timeStamp, e.button, Math.max(e.width || 0, e.height || 0));
 		if (e.pointerType === "pen") this.policy.setPenDown(true, e.timeStamp);
 
 		if (route === "draw") {
@@ -143,8 +148,13 @@ export class PointerController {
 		const p = this.nav.get(e.pointerId);
 		if (!p) return;
 		if (this.nav.size === 1) {
-			this.handlers.pan(e.clientX - p.x, e.clientY - p.y);
+			const dx = e.clientX - p.x;
+			const dy = e.clientY - p.y;
+			this.handlers.pan(dx, dy);
+			this.panTrail.push({ t: e.timeStamp, dx, dy });
+			while (this.panTrail.length && e.timeStamp - this.panTrail[0]!.t > 80) this.panTrail.shift();
 		} else if (this.nav.size === 2) {
+			this.panTrail = [];
 			const other = [...this.nav.entries()].find(([id]) => id !== e.pointerId)?.[1];
 			if (other) {
 				const before = Math.hypot(p.x - other.x, p.y - other.y);
@@ -169,11 +179,41 @@ export class PointerController {
 			this.handlers.drawEnd(false);
 			return;
 		}
+		const wasSingle = this.nav.size === 1 && this.nav.has(e.pointerId);
 		this.nav.delete(e.pointerId);
+		if (wasSingle && e.type === "pointerup") this.startInertia(e.timeStamp);
+		this.panTrail = [];
+	}
+
+	/** Continues a one-finger fling with exponentially decaying speed. */
+	private startInertia(t: number): void {
+		const trail = this.panTrail.filter((s) => t - s.t <= 80);
+		if (trail.length < 2) return;
+		const span = Math.max(16, t - trail[0]!.t);
+		let vx = trail.reduce((a, s) => a + s.dx, 0) / span;
+		let vy = trail.reduce((a, s) => a + s.dy, 0) / span;
+		if (Math.hypot(vx, vy) < 0.3) return;
+		let last = performance.now();
+		const step = (now: number) => {
+			const dt = Math.min(48, now - last);
+			last = now;
+			this.handlers.pan(vx * dt, vy * dt);
+			const decay = Math.exp(-dt / 325);
+			vx *= decay;
+			vy *= decay;
+			this.inertiaFrame = Math.hypot(vx, vy) > 0.02 ? window.requestAnimationFrame(step) : null;
+		};
+		this.inertiaFrame = window.requestAnimationFrame(step);
+	}
+
+	private stopInertia(): void {
+		if (this.inertiaFrame !== null) window.cancelAnimationFrame(this.inertiaFrame);
+		this.inertiaFrame = null;
 	}
 
 	private onWheel(e: WheelEvent): void {
 		e.preventDefault();
+		this.stopInertia();
 		this.rect = this.el.getBoundingClientRect();
 		const scale = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? this.rect.height : 1;
 		if (e.ctrlKey || e.metaKey) {

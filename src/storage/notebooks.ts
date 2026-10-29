@@ -1,7 +1,7 @@
 import { normalizePath, TFile, Vault, type App } from "obsidian";
 import { createDocument } from "../model/document";
 import { serialize } from "../model/serialize";
-import { FILE_EXTENSION } from "../model/types";
+import { FILE_EXTENSION, type NotebookDocument } from "../model/types";
 import { ensureFolder } from "./vault-io";
 
 /** Characters Obsidian does not allow in file names, plus those that break links. */
@@ -17,7 +17,7 @@ export function defaultNotebookName(now = new Date()): string {
 }
 
 /** Creates `<folder>/<name>.notebook` with one empty grid page, adding " 2", " 3"… if the name is taken. */
-export async function createNotebook(app: App, folder: string, name: string): Promise<TFile> {
+export async function createNotebook(app: App, folder: string, name: string, doc: NotebookDocument = createDocument()): Promise<TFile> {
 	const dir = normalizePath(folder || "/");
 	if (dir !== "/") await ensureFolder(app, dir);
 	const base = sanitizeName(name) || defaultNotebookName();
@@ -26,7 +26,7 @@ export async function createNotebook(app: App, folder: string, name: string): Pr
 	for (let i = 2; app.vault.getAbstractFileByPath(path); i++) {
 		path = normalizePath(`${prefix}${base} ${i}.${FILE_EXTENSION}`);
 	}
-	return app.vault.create(path, serialize(createDocument()));
+	return app.vault.create(path, serialize(doc));
 }
 
 /** Notebooks inside the notebooks folder (recursively). The rest of the vault is not enumerated. */
