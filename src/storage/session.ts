@@ -113,6 +113,9 @@ export class DocumentSession {
 	private savedRevision = 0;
 	/** Last content read from or written to disk by this session. */
 	private diskContent: string | null = null;
+	/** Last content this session itself wrote, and the one being written right now (see isOwnWrite). */
+	private lastWritten: string | null = null;
+	private writing: string | null = null;
 	private debounceTimer: number | null = null;
 	private maxWaitTimer: number | null = null;
 	private chain: Promise<unknown> = Promise.resolve();
@@ -224,6 +227,23 @@ export class DocumentSession {
 
 	get dirty(): boolean {
 		return this.revision !== this.savedRevision;
+	}
+
+	/**
+	 * True when the document is editable and everything in it is on disk. Unlike flush()'s result (also true when a
+	 * deleted, read-only or disposed session had nothing it could write), this says the file really holds the document.
+	 */
+	isSaved(): boolean {
+		return this.mode === "ok" && !this.disposed && !this.dirty;
+	}
+
+	/**
+	 * Whether `content` (document text found in the file) is what this session itself wrote: the echo of its own
+	 * save, as opposed to a change made by sync, another device or another app. Content only read from disk
+	 * (load, reload) is never "own".
+	 */
+	isOwnWrite(content: string): boolean {
+		return content === this.lastWritten || content === this.writing;
 	}
 
 	load(): Promise<void> {
@@ -423,15 +443,22 @@ export class DocumentSession {
 				// Deleted or disposed meanwhile: never touch the file again.
 				if (this.mode !== "ok" || this.disposed) return true;
 				let raced = false;
-				await this.io.process((latest) => {
-					if (latest !== current) {
-						// Changed again since our read: leave it as is, back it up on the next attempt.
-						raced = true;
-						return latest;
-					}
-					return next;
-				});
+				// Known before the write lands, so the `modify` event it fires is recognised as ours.
+				this.writing = next;
+				try {
+					await this.io.process((latest) => {
+						if (latest !== current) {
+							// Changed again since our read: leave it as is, back it up on the next attempt.
+							raced = true;
+							return latest;
+						}
+						return next;
+					});
+				} finally {
+					this.writing = null;
+				}
 				written = !raced;
+				if (written) this.lastWritten = next;
 			}
 			if (!written) throw new Error("the file keeps changing on disk");
 			this.diskContent = next;
