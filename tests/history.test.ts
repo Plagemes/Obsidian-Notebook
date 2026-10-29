@@ -77,3 +77,90 @@ describe("History", () => {
 		expect(ids()).toEqual(initial);
 	});
 });
+
+describe("M2 commands", () => {
+	it("ReplaceStroke splits a stroke in place and undo restores it", async () => {
+		const { ReplaceStroke } = await import("../src/model/history");
+		const { page, history, ids } = setup(3);
+		const before = ids();
+		const target = page.strokes[1]!;
+		const a = line(0, 0, 1, 1);
+		const b = line(2, 2, 3, 3);
+		history.execute(new ReplaceStroke(page.id, target, [a, b], 1));
+		expect(ids()).toEqual([before[0], a.id, b.id, before[2]]);
+		history.undo();
+		expect(ids()).toEqual(before);
+		history.redo();
+		expect(ids()).toEqual([before[0], a.id, b.id, before[2]]);
+	});
+
+	it("Batch undoes its commands in reverse order", async () => {
+		const { Batch, ReplaceStroke } = await import("../src/model/history");
+		const { doc, page, history, ids } = setup(3);
+		const before = ids();
+		const s0 = page.strokes[0]!;
+		const piece = line(9, 9, 10, 10);
+		// One eraser gesture: cut stroke 0 into a piece, then erase that piece too.
+		const first = new ReplaceStroke(page.id, s0, [piece], 0);
+		const second = new ReplaceStroke(page.id, piece, [], 0);
+		first.apply(doc);
+		second.apply(doc);
+		history.record(new Batch("Erase", [first, second]));
+		expect(ids()).toEqual(before.slice(1));
+		history.undo();
+		expect(ids()).toEqual(before);
+		history.redo();
+		expect(ids()).toEqual(before.slice(1));
+	});
+
+	it("AddPage adds and removes a page but never the last one", async () => {
+		const { AddPage } = await import("../src/model/history");
+		const { createPage } = await import("../src/model/document");
+		const { doc, history } = setup(0);
+		const extra = createPage();
+		history.execute(new AddPage(extra, 1));
+		expect(doc.pages).toHaveLength(2);
+		expect(doc.pages[1]).toBe(extra);
+		history.undo();
+		expect(doc.pages).toHaveLength(1);
+		const only = doc.pages[0]!;
+		new AddPage(only, 0).revert(doc);
+		expect(doc.pages).toEqual([only]);
+	});
+});
+
+describe("review regressions (M2)", () => {
+	it("ReplaceStroke never re-inserts a stroke that is already gone", async () => {
+		const { ReplaceStroke } = await import("../src/model/history");
+		const { doc, page, history, ids } = setup(4);
+		const [a, b, c, d] = page.strokes as [ReturnType<typeof line>, ReturnType<typeof line>, ReturnType<typeof line>, ReturnType<typeof line>];
+		page.strokes.splice(1, 1); // b erased elsewhere
+		const moved = line(50, 50, 60, 60);
+		history.execute(new ReplaceStroke(page.id, b, [moved], 1)); // stale selection tries to move b
+		expect(ids()).toEqual([a.id, c.id, d.id]);
+		history.undo();
+		expect(ids()).toEqual([a.id, c.id, d.id]);
+		expect(new Set(ids()).size).toBe(ids().length);
+		void doc;
+	});
+
+	it("removeStrokes undo restores the original order", async () => {
+		const { removeStrokes } = await import("../src/model/history");
+		const { page, history, ids } = setup(4);
+		const before = ids();
+		const [a, , c] = page.strokes;
+		const batch = removeStrokes(page.id, page.strokes, [a!, c!], "Delete selection")!;
+		history.execute(batch);
+		expect(ids()).toEqual([before[1], before[3]]);
+		history.undo();
+		expect(ids()).toEqual(before);
+		history.redo();
+		expect(ids()).toEqual([before[1], before[3]]);
+	});
+
+	it("removeStrokes skips strokes that are not on the page", async () => {
+		const { removeStrokes } = await import("../src/model/history");
+		const { page } = setup(2);
+		expect(removeStrokes(page.id, page.strokes, [line(0, 0, 1, 1)], "x")).toBeNull();
+	});
+});

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parse, serialize } from "../src/model/serialize";
+import { FULL_CHECK_LIMIT, freezeStroke, parse, serialize, serializeChecked } from "../src/model/serialize";
 import { CURRENT_VERSION, FORMAT_ID } from "../src/model/types";
-import { sampleDocument } from "./helpers";
+import { createStroke } from "../src/model/document";
+import { line, sampleDocument } from "./helpers";
 
 describe("serialize / parse", () => {
 	it("round-trips a document exactly", () => {
@@ -98,5 +99,89 @@ describe("parse rejects corrupt files", () => {
 		const d = valid();
 		mutate(d);
 		expect(reason(JSON.stringify(d))).not.toBe("ok");
+	});
+});
+
+describe("highlighter (v2)", () => {
+	it("round-trips highlighter strokes", () => {
+		const doc = sampleDocument(1);
+		doc.pages[0]!.strokes.push(createStroke("#facc15", 10, [[10, 10, 0.5], [50, 10, 0.5]], "highlighter"));
+		const r = parse(serialize(doc));
+		expect(r.ok && r.doc).toEqual(doc);
+	});
+});
+
+describe("serializeChecked", () => {
+	it("produces exactly serialize() output", () => {
+		const doc = sampleDocument(20);
+		const r = serializeChecked(doc);
+		expect(r.ok && r.text).toBe(serialize(doc));
+	});
+
+	it("parsed strokes are frozen", () => {
+		const r = parse(serialize(sampleDocument(1)));
+		if (!r.ok) throw new Error(r.message);
+		const s = r.doc.pages[0]!.strokes[0]!;
+		expect(Object.isFrozen(s)).toBe(true);
+		expect(() => { (s.points as unknown as number[][])[0]![0] = 5; }).toThrow();
+	});
+
+	it("rejects a document with duplicate stroke ids", () => {
+		const doc = sampleDocument(1);
+		const a = doc.pages[0]!.strokes[0]!;
+		doc.pages[0]!.strokes.push({ ...a, points: [[1, 1, 0.5]] });
+		expect(serializeChecked(doc).ok).toBe(false);
+	});
+
+	it("rejects invalid strokes and NaN", () => {
+		const doc = sampleDocument(1);
+		doc.pages[0]!.strokes.push({ ...line(0, 0, 1, 1), points: [[Number.NaN, 1, 0.5]] });
+		expect(serializeChecked(doc).ok).toBe(false);
+		const doc2 = sampleDocument(1);
+		doc2.pages[0]!.strokes.push({ ...line(0, 0, 1, 1), color: "red" });
+		expect(serializeChecked(doc2).ok).toBe(false);
+	});
+
+	it("incremental check on a large document matches the full parse", () => {
+		const doc = sampleDocument(0);
+		const page = doc.pages[0]!;
+		// Enough strokes to pass FULL_CHECK_LIMIT.
+		while (serialize(doc).length < FULL_CHECK_LIMIT * 1.2) {
+			for (let i = 0; i < 200; i++) page.strokes.push(freezeStroke(line(i % 500, (i * 7) % 800, (i % 500) + 30, ((i * 7) % 800) + 10, 30)));
+		}
+		const first = serializeChecked(doc);
+		const again = serializeChecked(doc); // second run uses the per-stroke cache
+		expect(first.ok && again.ok).toBe(true);
+		if (!first.ok || !again.ok) return;
+		expect(first.text.length).toBeGreaterThan(FULL_CHECK_LIMIT);
+		expect(again.text).toBe(first.text);
+		const full = parse(first.text);
+		expect(full.ok && serialize(full.doc)).toBe(first.text);
+		// A bad stroke added later is still caught by the incremental path.
+		page.strokes.push({ ...line(0, 0, 1, 1), width: -1 });
+		expect(serializeChecked(doc).ok).toBe(false);
+	});
+});
+
+describe("strokes loaded from a file", () => {
+	it("serializeChecked output equals serialize() with and without warm-up", async () => {
+		const { warmStrokeLines } = await import("../src/model/serialize");
+		const text = serialize(sampleDocument(30));
+		const a = parse(text);
+		const b = parse(text);
+		if (!a.ok || !b.ok) throw new Error("parse failed");
+		expect(warmStrokeLines(a.doc.pages[0]!.strokes)).toBe(30);
+		expect(warmStrokeLines(a.doc.pages[0]!.strokes)).toBe(0); // already cached
+		const warm = serializeChecked(a.doc);
+		const cold = serializeChecked(b.doc);
+		expect(warm.ok && warm.text).toBe(text);
+		expect(cold.ok && cold.text).toBe(text);
+	});
+
+	it("new strokes are not trusted just because they are frozen", () => {
+		const r = parse(serialize(sampleDocument(1)));
+		if (!r.ok) throw new Error("parse failed");
+		r.doc.pages[0]!.strokes.push(freezeStroke({ ...line(0, 0, 1, 1), color: "nope" }));
+		expect(serializeChecked(r.doc, false).ok).toBe(false);
 	});
 });

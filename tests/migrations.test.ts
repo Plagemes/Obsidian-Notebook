@@ -22,18 +22,41 @@ describe("migrations", () => {
 		expect(detectVersion({ version: "1" })).toBeNull();
 	});
 
-	it("migrates v0 to v1", () => {
+	it("migrates v0 to the current version", () => {
 		const r = parse(JSON.stringify(v0));
 		expect(r.ok).toBe(true);
 		if (!r.ok) return;
 		expect(r.migratedFrom).toBe(0);
 		expect(r.doc.format).toBe(FORMAT_ID);
-		expect(r.doc.version).toBe(1);
+		expect(r.doc.version).toBe(CURRENT_VERSION);
 		expect(r.doc.pages).toHaveLength(1);
 		const [a, b] = r.doc.pages[0]!.strokes;
 		expect(a).toMatchObject({ tool: "pen", color: "#ff0000", width: 3, points: [[10.12, 20.46, 0.25], [11, 21, 0.5]] });
 		expect(b).toMatchObject({ color: "#0000ff", width: 1.5, points: [[100, 100, 0.9]] });
 		expect(a!.id).not.toBe(b!.id);
+	});
+
+	it("migrates v1 to v2 without changing strokes", () => {
+		const v1 = {
+			format: FORMAT_ID, version: 1, id: "doc", createdAt: "2026-10-29T10:00:00.000Z", modifiedAt: "2026-10-29T10:00:00.000Z",
+			pages: [{ id: "p", width: 595.28, height: 841.89, paper: { kind: "grid", spacing: 14.17 },
+				strokes: [{ id: "s", tool: "pen", color: "#1e1e1e", width: 2, points: [[1, 2, 0.5]] }] }],
+		};
+		const r = parse(JSON.stringify(v1));
+		if (!r.ok) throw new Error(r.message);
+		expect(r.migratedFrom).toBe(1);
+		expect(r.doc.version).toBe(2);
+		expect(r.doc.pages[0]!.strokes[0]).toEqual(v1.pages[0]!.strokes[0]);
+	});
+
+	it("accepts a v1 file that already uses a v2 tool, after migration", () => {
+		const v1 = {
+			format: FORMAT_ID, version: 1, id: "doc", createdAt: "x", modifiedAt: "x",
+			pages: [{ id: "p", width: 1, height: 1, paper: { kind: "grid", spacing: 1 },
+				strokes: [{ id: "s", tool: "highlighter", color: "#ffff00", width: 8, points: [[1, 2, 0.5]] }] }],
+		};
+		// Widening the tool set is what v2 is for; a v1 file with a v2 tool is still accepted after migration.
+		expect(parse(JSON.stringify(v1)).ok).toBe(true);
 	});
 
 	it("migrated documents round-trip at the current version", () => {

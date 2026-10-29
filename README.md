@@ -3,21 +3,57 @@
 Handwritten notebooks inside your Obsidian vault, designed first for **Android tablets with a stylus (S Pen)** and also usable on Windows.
 
 - Pressure-sensitive vector ink (each point is `[x, y, pressure]` in page coordinates), drawn with [perfect-freehand](https://github.com/steveruizok/perfect-freehand).
-- A4 grid page, fitted to the screen width.
-- Pen (4 colours, 3 widths), whole-stroke eraser, undo/redo.
+- Multiple A4 grid pages stacked vertically; only the visible pages are drawn.
+- Pen (9 colours, 5 widths), translucent highlighter, whole-stroke and segment eraser, lasso selection (move, resize, rotate, delete), undo/redo.
+- Input stabilization, palm rejection, in-app performance tools.
 - Automatic saving into the vault as a `.notebook` file (versioned JSON). Unreadable files are never overwritten; a backup copy is kept.
 - Local-first: no account, no cloud, no telemetry.
 - UI in English, and in Italian when Obsidian is set to Italian.
 
-> **Status: v0.1 (milestone M1), early development.** The automated tests pass, but the plugin has **not been verified on Android hardware yet**. See [docs/testing.md](docs/testing.md) for what is verified and how to test it.
+> **Status: v0.2 (milestone M2), early development.** The automated tests pass, but the plugin has **not been verified on Android hardware yet**, and several M2 features are experimental. See [docs/testing.md](docs/testing.md) for what is verified and how to test it.
 
 ## Usage
 
 - Ribbon icon **Open notebooks** (book) or the command palette → **Notebook: New notebook** / **Notebook: Open notebooks**.
 - New notebooks go to the `Notebooks/` folder (configurable in the settings). **Open notebooks** lists the notebooks in that folder and its subfolders; notebooks stored elsewhere open from the file explorer.
-- Write with the pen. With the default settings a finger scrolls (one finger) and zooms (two fingers); it does not draw. Turn on **Draw with finger** in the settings to draw with a finger.
+
+### Tools
+
+The toolbar has four tools:
+
+- **Pen**: 9 colours, 5 widths, pressure-sensitive.
+- **Highlighter**: 5 colours, 3 widths, constant width, translucent. It darkens the ink and grid below it instead of covering them.
+- **Eraser**, with two modes: **Whole stroke** removes the strokes it touches; **Segment** cuts them and removes only the part under the eraser. It works across pages in one gesture, and one undo restores everything erased in that gesture.
+- **Lasso**: draw a loop around strokes (a stroke is selected when at least half of its points are inside). Drag inside the frame to move them, drag the handle at the bottom-right corner to resize (uniform), drag the handle above the top edge to rotate. The trash button, Delete or Backspace deletes the selection; Escape or changing tool clears it. A selection stays on one page.
+
+Undo/redo: toolbar buttons, Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z (or Ctrl+Y) on desktop. Each transform, delete or eraser gesture is one step.
+
+### Pages and navigation
+
+- A notebook can have several pages, stacked vertically. **Add page** (toolbar button or command) inserts a blank page after the page in view and can be undone. The toolbar shows the current page as `n / total`. Deleting and reordering pages is not available yet.
+- With the default settings a finger scrolls (one finger) and zooms (two fingers); it does not draw. A quick one-finger flick keeps scrolling for a moment (fling). Turn on **Draw with finger** in the settings to draw with a finger.
+- **Fit to width** in the toolbar restores the default zoom.
 - Mouse: left button draws, wheel scrolls, Ctrl + wheel zooms, middle button pans.
-- Undo/redo: toolbar buttons, Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z (or Ctrl+Y) on desktop.
+
+### Settings
+
+| Setting | What it does |
+|---|---|
+| Notebooks folder | where new notebooks are created (default `Notebooks`) |
+| Draw with finger | fingers draw instead of only scrolling |
+| Palm rejection time | touch is ignored for this long after the pen was seen (default 500 ms) |
+| Pressure | use the device pressure, or always simulate it from speed |
+| Predicted points | draw the pen's predicted path on the live layer to reduce perceived lag (never saved) |
+| Stabilization | 0–10, default 2. Smooths hand tremor; higher values trail further behind the pen. The smoothed points are what is saved |
+| Ignore large touches | experimental, 0 = off. Touches with a contact larger than this many px are treated as a palm and ignored, scrolling included. Depends on what the device reports |
+| Performance overlay | shows frame time, input-to-frame time, redraw time, and strokes and pages drawn |
+
+### Performance tools
+
+- **Notebook: Run performance benchmark** renders a generated 10,000-stroke, 10-page notebook off-screen at the size of the current view and reports first draw, redraw, scrolling (150 frames), 3x zoom, save check and open times, eraser timings and JS heap where available. Nothing is written to your vault. Results can be copied.
+- **Notebook: Create stress-test notebook** writes the same kind of notebook (10,000 strokes, 10 pages) to the notebooks folder, to try real writing, scrolling and zooming on a large document.
+- The **Performance overlay** setting shows live numbers while you use a notebook.
+- `npm run bench` runs benchmarks of the pure logic from the command line (see Development). Those are PC numbers; on a tablet use the in-app benchmark.
 
 ## Install
 
@@ -82,7 +118,7 @@ Enable USB debugging on the device, connect it to a PC with Chrome and open `chr
 
 ## File format
 
-A `.notebook` file is JSON with `format: "obsidian-notebook"` and an integer `version`. Coordinates are in typographic points (A4 = 595.28 × 841.89 pt). Details and the reasoning behind the format choice are in [docs/architecture.md](docs/architecture.md).
+A `.notebook` file is JSON with `format: "obsidian-notebook"` and an integer `version` (currently 2; version 2 adds the highlighter tool). Notebooks from 0.1 open normally and are rewritten as version 2 only when you edit them; after that, 0.1.x opens them read-only. Coordinates are in typographic points (A4 = 595.28 × 841.89 pt). Details and the reasoning behind the format choice are in [docs/architecture.md](docs/architecture.md).
 
 Backups of unreadable files, of versions changed elsewhere (conflicts) and of changes that could not be saved are written to `Notebooks/_backup/` as `.bak` files (Obsidian does not show them in the file explorer; open the folder with a file manager).
 
@@ -96,7 +132,16 @@ Because the extension is custom, Obsidian's search, tags, backlinks and graph do
 | `npm run build` | type-check, production build, check that `main.js` requires nothing but `obsidian` |
 | `npm test` | vitest |
 | `npm run lint` | eslint + `tsc --noEmit` |
+| `npm run bench` | benchmarks of the pure logic (serialize, open, save check, eraser, lasso) on a generated 10,000-stroke notebook; not part of `npm test` |
 | `node scripts/make-stress-notebook.mjs 5000` | writes `stress.notebook` with 5000 strokes for performance tests |
+
+### Releasing
+
+Releases are built by the **Release** workflow (`.github/workflows/release.yml`): when a version tag is pushed it builds the plugin and attests `main.js`, `manifest.json` and `styles.css`.
+
+Order matters: **publish the release (push the tag) before merging a manifest version bump into `main`.** The community plugin directory reads `manifest.json` at the head of `main` and complains if no release with that version exists yet.
+
+Beta versions: on the feature branch, push a tag made of the manifest version plus a suffix (for example `0.2.0-beta.1`). The workflow publishes it as a GitHub pre-release, which BRAT can install; directory users are not affected until the version bump is merged into `main` and the `0.2.0` tag is pushed.
 
 Rules for contributors are in [CLAUDE.md](CLAUDE.md) (no Node/Electron modules at runtime, vector strokes only, versioned format with tested migrations, zero data loss).
 

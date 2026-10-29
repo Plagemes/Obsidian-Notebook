@@ -47,9 +47,15 @@ function v0ToV1(raw: RawObject): RawObject {
 	};
 }
 
+/** v2 only widens the set of tools: every valid v1 document is a valid v2 document. */
+function v1ToV2(raw: RawObject): RawObject {
+	return { ...raw, version: 2 };
+}
+
 /** MIGRATIONS[n] takes a document from version n to n+1. */
 export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	0: v0ToV1,
+	1: v1ToV2,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

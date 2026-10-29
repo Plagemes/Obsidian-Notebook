@@ -2,7 +2,7 @@
 
 ## Feature status
 
-Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** column is filled in **only by the user** after running the protocol below; nothing in it was tested by the developer tooling (no Android hardware available).
+Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** column is filled in **only by the user** after running the protocol below; nothing in it was tested by the developer tooling (no Android hardware available). "Experimental" means the behaviour depends on the device or WebView and needs tuning from real measurements.
 
 | Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
 |---|---|---|---|---|---|
@@ -15,42 +15,57 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Real pen pressure, simulated fallback for constant pressure | ✅ | ✅ | | | |
 | Basic palm rejection (pen seen in the last N ms) | ✅ | ✅ | | | |
 | "Draw with finger" setting | ✅ | ✅ | | | |
-| Pen colours (4) and widths (3) | ✅ | ❌ | | | |
+| Palm rejection by contact size (setting, off by default) | ✅ | ✅ routing logic only | | ✅ | depends on what the device reports for touch size |
+| Pen: 9 colours, 5 widths | ✅ | ❌ | | | |
+| Highlighter: 5 colours, 3 widths, constant width | ✅ | ✅ format round-trip | | | |
+| Highlighter translucent with `multiply` blending | ✅ | ❌ (canvas) | | ✅ | live preview is not multiplied until the stroke is committed |
+| Stabilization (0–10, default 2) | ✅ | ✅ | | | tune levels on the device |
 | Whole-stroke eraser (toolbar) | ✅ | ✅ hit test | | | |
+| Segment eraser (cuts strokes; works across pages in one gesture) | ✅ | ✅ cutting logic; ❌ across pages (view) | | | |
 | Pen eraser button (`buttons & 32`) | ✅ | ❌ | | ✅ | S Pen button mapping unknown |
-| Undo/redo (command stack) | ✅ | ✅ | | | |
-| One-finger pan, two-finger pinch zoom, wheel/Ctrl+wheel | ✅ (basic) | ✅ zoom/pan maths | | ✅ | smooth zoom in M2 |
+| Lasso selection (≥ 50% of points inside) | ✅ | ✅ | | | |
+| Selection: move, resize (bottom-right handle), rotate (handle above), delete | ✅ (basic) | ✅ matrices, stroke transform; ❌ handles and gestures (view) | | | one page per selection; no copy/paste |
+| Undo/redo (command stack: add, erase, replace, add page, batch) | ✅ | ✅ | | | |
+| Multiple pages stacked vertically (24 pt gap), page indicator `n / total` | ✅ | ✅ layout; ❌ rendering | | | |
+| Add page (button and command), undoable, inserted after the page in view | ✅ | ✅ command; ❌ view | | | no delete/reorder (M3) |
+| Virtualization: only visible pages and strokes are drawn | ✅ | ✅ visible-page selection; ❌ rendering | | | |
+| One-finger pan, two-finger pinch zoom (0.25–8×), wheel/Ctrl+wheel | ✅ | ✅ zoom/pan maths | | | |
+| Fling inertia after one-finger pan | ✅ | ❌ | | ✅ | |
+| CSS-transform fast path while panning/zooming a slow page (redraw 120 ms after the gesture pauses) | ✅ | ❌ | | ✅ | |
+| Performance overlay (frame time, input→frame, redraw time, strokes and pages drawn) | ✅ | ❌ | | ✅ | software measure, not display latency |
+| In-app benchmark and stress-test notebook (10,000 strokes / 10 pages) | ✅ | ✅ generator is deterministic and valid; ❌ in-app run | | | |
+| `npm run bench` (pure logic) | ✅ | — | — | | |
 | Autosave (1.5 s debounce, 10 s max wait) | ✅ | ✅ | | | |
 | Flush on view close, file switch, plugin unload, `visibilitychange`, `pagehide` | ✅ | ✅ session logic; ❌ Obsidian events | | | |
 | `unsaved` backup if writing keeps failing on close; deleted files never rewritten | ✅ | ✅ | | | |
 | Stroke in progress kept when the app goes to background | ✅ | ❌ | | | |
-| Re-validation before every write | ✅ | ✅ | | | |
+| Re-validation before every write (full under 1 MB, incremental above) | ✅ | ✅ incremental result equals the full parse | | | |
 | Unreadable files never overwritten + backup copy | ✅ | ✅ | | | |
 | Newer format version opened read-only | ✅ | ✅ | | | |
 | External change (Sync): reload, or keep local + back up the other version | ✅ | ✅ | | | |
-| Format v1 + migration v0→v1 | ✅ | ✅ | | | |
+| Format v2 (adds `highlighter`) + migrations v0→v1, v1→v2 | ✅ | ✅ | | | |
 | Reopen shows identical strokes | ✅ | ✅ round-trip | | | |
 | English UI + Italian translation | ✅ | ❌ | | | |
 | No Node/Electron imports in `main.js` | ✅ | ✅ `scripts/check-bundle.mjs` in `npm run build` | | | |
-| Multiple pages, lasso, highlighter, segment eraser | ❌ | | | | M2 |
 
 ## Automated checks
 
-Run on 2026-10-29 (Windows, Node 24):
+The numbers below will be filled in after the final run of M2.
 
 | Command | Result |
 |---|---|
-| `npm test` | 8 files, 101 tests passed |
-| `npm run lint` | eslint + `tsc --noEmit`: no errors |
-| `npm run build` | ok; `main.js` ~48 KB; `check-bundle: ok (requires found: obsidian)` |
+| `npm test` (unit project only; benchmarks are separate) | 10 files, 142 tests passed |
+| `npm run lint` | eslint + `tsc --noEmit`: no errors; `eslint-plugin-obsidianmd` recommended rules: no errors or warnings |
+| `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
+| `npm run bench` | ok; numbers below (PC only) |
 
-Covered by tests: serialization round-trip and determinism, rejection of corrupt files (truncated, garbage, wrong format, bad points/colours/ids, future version), migration v0→v1, undo/redo of adds and multi-stroke erases, eraser hit test (including fast movements and dots), screen↔page transform at 7 zoom levels, fit-width, zoom around a point, pan clamping, palm-rejection routing, pressure detection, and the save session (debounce, max wait, no writes on broken/readonly files, conflict backups, echo detection, retry after a failed write, refusal to write a document that fails re-validation, backup-before-overwrite ordering when another writer races the save, no overwrite when the backup fails, external-change checks queued after flushes, close-time retries with an `unsaved` backup, deleted files never written, stale sessions silent).
+Covered by tests: serialization round-trip and determinism, rejection of corrupt files (truncated, garbage, wrong format, bad points/colours/ids, future version), migrations v0→v1 and v1→v2, highlighter round-trip, `serializeChecked` (same output as `serialize`, frozen strokes, duplicate ids, NaN, incremental check equal to the full parse on a large document), undo/redo of adds, erases, `ReplaceStroke`, `AddPage` (never removes the last page) and `Batch`, eraser hit test (including fast movements and dots), segment cutting (including cuts between distant points and no single-point crumbs), lasso selection and selection bounds, affine transforms and stroke transform with width scaling, stabilizer, page layout and visible-page selection, screen↔page transform at 7 zoom levels, fit-width, zoom around a point, pan clamping, palm-rejection routing (time-based and contact size), pressure detection, the deterministic stress document, and the save session (debounce, max wait, no writes on broken/readonly files, conflict backups, echo detection, retry after a failed write, refusal to write a document that fails re-validation, backup-before-overwrite ordering when another writer races the save, no overwrite when the backup fails, external-change checks queued after flushes, close-time retries with an `unsaved` backup, deleted files never written, stale sessions silent).
 
-Independent review: the data-safety code (session, Vault I/O, serializer, view lifecycle, undo) was reviewed by a separate agent that did not write it; its 7 findings (3 medium, 4 low, no corruption) were fixed and covered by the tests above.
+Independent review (M1): the data-safety code (session, Vault I/O, serializer, view lifecycle, undo) was reviewed by a separate agent that did not write it; its 7 findings (3 medium, 4 low, no corruption) were fixed and covered by the tests above.
 
-Measured on the PC (not on Android): a 10,000-stroke notebook (268k points) is 6.8 MB; parse 156 ms, serialize 98 ms. Each save serializes and re-validates the whole file, so on a slow tablet very large notebooks may freeze the UI briefly while saving (M2 benchmarks).
+Measured on the PC in M1 (not on Android): a 10,000-stroke notebook (268k points) is 6.8 MB; parse 156 ms, serialize 98 ms. In M2 the save check no longer re-parses documents over 1 MB each time. `npm run bench` on the dev PC (Windows, Node 24; 10,000 strokes, 10 pages, 6.69 MB): serialize 153 ms; open (parse + validate) 227 ms; open + first save with a cold cache 424 ms in total; next saves 16–19 ms; eraser hit test 0.04 ms per move (1,000 strokes, cached bounds); segment cut 0.005 ms; lasso over a quarter page 2.4 ms; stroke outline 0.04 ms. **These are PC numbers.** Android will be slower and must be measured with the in-app benchmark (step 21); record those numbers here once available.
 
-Not covered automatically: everything that needs Obsidian or a real browser (DOM, canvas, Pointer Events, Vault API, view lifecycle). That is what the manual protocol is for.
+Not covered automatically: everything that needs Obsidian or a real browser (DOM, canvas, Pointer Events, Vault API, view lifecycle, the toolbar, selection handles and gestures, the fast path and fling). That is what the manual protocol is for.
 
 ## Manual test protocol — Android + S Pen
 
@@ -63,13 +78,23 @@ For each step note **pass / fail / notes** in the table at the end.
 3. **Pressure.** Draw lines pressing lightly then hard. Expected: visibly thinner/thicker lines. If width does not change, set *Pressure* to *Always simulated* and confirm speed changes the width instead; report which one your device needs.
 4. **Hand resting on the screen.** Rest the palm on the screen *before* the pen touches, and while writing; also touch with the palm right after lifting the pen. Expected: no stray marks from the palm; the page may scroll slightly at most. Repeat with *Draw with finger* on: a palm touching before the pen may start a mark, which must disappear when the pen touches down.
 5. **Pinch/zoom and scroll.** One finger: scroll the page. Two fingers: zoom in and out, then write while zoomed. Expected: no ink from fingers, strokes land under the pen at every zoom level, the page never gets lost off screen. *Fit to width* restores the view.
-6. **Eraser and undo.** Erase a few strokes with the eraser tool, swiping fast across several. Undo: they come back in place. Redo: they disappear again. If the S Pen button does anything, note what.
+6. **Eraser and undo.** With *Eraser → Whole stroke*, erase a few strokes, swiping fast across several. Undo: they come back in place. Redo: they disappear again. If the S Pen button does anything, note what.
 7. **Force close while writing.** Write a stroke, and while the pen is still on the screen (or within 1 s of lifting it) open the recent apps and swipe Obsidian away. Reopen Obsidian and the notebook. Expected: everything written before closing is there, including the stroke that was in progress. Repeat by pressing Home while writing, then closing from recents.
 8. **Reopen.** Close the tab, reopen the notebook from *Open notebooks*. Restart Obsidian and reopen. Expected: exactly the same strokes, colours and widths.
 9. **Screen rotation.** Rotate to landscape and back while a notebook is open, also right after writing. Expected: the page refits to the new width, the same part of the page stays at the top, nothing is lost, and the status shows *Saved* after a moment.
-10. **Many strokes.** On the PC run `node scripts/make-stress-notebook.mjs 5000`, copy `stress.notebook` into the vault, open it on Android. Expected: opens in a few seconds at most; scrolling and zooming stay usable; writing on top of it still feels immediate; saving does not freeze the UI noticeably. Note how it feels at 2000 / 5000 / 10000 strokes.
+10. **Many strokes.** Run the command *Create stress-test notebook* (10,000 strokes on 10 pages, written to the notebooks folder) and let it open. Expected: it opens in a few seconds at most; scrolling and zooming stay usable; writing on top of it still feels immediate; saving does not freeze the UI noticeably. Note how it feels and how long opening takes. Alternative from the PC: `node scripts/make-stress-notebook.mjs 5000`, copy `stress.notebook` into the vault and open it (try 2000 / 5000 / 10000 strokes).
 11. **Corrupt file.** On the PC create `Notebooks/broken.notebook` containing `{ not json`. Open it on the device. Expected: an error message, no toolbar editing, the file stays unchanged, and a `.bak` copy appears in `Notebooks/_backup/`.
 12. **Sync (if used).** Edit the same notebook on two devices without letting them sync, then sync. Expected: one version is shown and the other one is in `Notebooks/_backup/` as a `conflict` backup; nothing is lost.
+13. **Multiple pages.** In a new notebook press *Add page* (toolbar) twice, and once from the command palette while the first page is in view. Expected: pages stack vertically with a visible gap, the new page appears after the page in view and the view scrolls to it, the indicator reads `n / total` and follows scrolling. Write on each page, including near the page edges. Undo the *Add page* steps (after undoing the strokes written on them): the pages disappear in reverse order and the last page cannot be removed. Close and reopen: same pages and strokes.
+14. **Highlighter.** Choose the highlighter, a colour and each width. Draw over pen text and over the grid. Expected: the text stays readable through the highlighter, the colour looks translucent and darkens the ink below it rather than covering it, the width does not change with pressure. Note whether the stroke looks different while drawing and after lifting the pen (the preview is not multiplied). Reopen the notebook: same look.
+15. **Segment eraser.** Choose *Eraser → Segment*. Cut across a long stroke, across several strokes, and in one gesture from the end of one page into the next page. Expected: only the part under the eraser disappears, no stray dots remain, one undo restores everything erased in that gesture. Try a fast swipe and small circles. Switch back to *Whole stroke* and check it still removes entire strokes.
+16. **Lasso.** Choose the lasso and draw a loop around some words, then: drag inside the frame to move them; drag the bottom-right handle to resize (uniform); drag the handle above the top edge to rotate; each time undo and redo. Then select again and delete with the toolbar button (on a keyboard also Delete/Backspace), undo. Escape or switching tool clears the selection. Expected: handles are easy to hit with the pen, the selection follows the pen without lag, a stroke is selected only when about half or more of it is inside the loop, and after reopening the transformed strokes are where you left them. Try a selection with 200+ strokes on the stress notebook and note how it feels.
+17. **Stabilization.** Write a slow wavy line and a signature at levels 0, 2 (default), 5 and 10. Expected: higher levels smooth tremor but trail behind the pen and round off corners; the line catches up when you lift. Report which level feels right.
+18. **Palm contact size.** Settings → *Ignore large touches*: leave at off, then try 30, 50 and 70 px. Rest a palm, a fist edge and a single finger on the screen. Expected: with a suitable value the palm is ignored completely (it does not scroll either) while a finger still scrolls. Report what range works on your device, or that the device reports a constant size (then the setting cannot help).
+19. **Fling scrolling.** With one finger, flick the page up and down at different speeds, then touch the screen during the glide. Expected: the page keeps moving after the finger lifts, slows down smoothly and stops at once when touched. Check that a slow drag followed by a pause does not fling.
+20. **Performance overlay.** Turn on *Performance overlay* and open the stress-test notebook. Note the readings (frame time, input→frame, redraw ms, strokes and pages drawn) in these situations: idle; writing; one-finger scrolling; pinch zooming in and out; at fit width and at high zoom. While scrolling or zooming the page may look blurred or blank at the edges for a moment and then sharpen (the fast path): note whether that is visible and bothersome.
+21. **In-app benchmark.** Command palette → *Run performance benchmark* with a notebook open (the benchmark uses the size of the view). Wait for it to finish and use *Copy results*, then paste the whole output into the notes table below. Run it twice, in portrait and landscape if you can, and once with other apps closed.
+22. **Notebook written by 0.1.** Open a notebook created with 0.1.x. Expected: identical strokes. Add a stroke and reopen: it works. Afterwards the file is format v2 and a 0.1.x plugin would open it read-only (this last point can be checked on the PC).
 
 | Step | Device / Obsidian version | Result | Notes |
 |---|---|---|---|
@@ -85,16 +110,39 @@ For each step note **pass / fail / notes** in the table at the end.
 | 10 Many strokes | | | |
 | 11 Corrupt file | | | |
 | 12 Sync | | | |
+| 13 Multiple pages | | | |
+| 14 Highlighter | | | |
+| 15 Segment eraser | | | |
+| 16 Lasso | | | |
+| 17 Stabilization | | | |
+| 18 Palm contact size | | | |
+| 19 Fling | | | |
+| 20 Performance overlay | | | |
+| 21 In-app benchmark | | | |
+| 22 Notebook from 0.1 | | | |
+
+Benchmark output (step 21): paste it here.
+
+```
+(paste results)
+```
 
 ## Quick check — Windows
 
-Mouse: draw, erase, undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scroll, Ctrl+wheel zoom, resize the window (the page refits), close and reopen the notebook. With a pen tablet or Surface pen: pressure and eraser end (`buttons & 32`).
+Mouse: draw, erase (both modes), undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scroll, Ctrl+wheel zoom, resize the window (the page refits), add a page, lasso select/move/resize/rotate/delete, close and reopen the notebook. With a pen tablet or Surface pen: pressure and eraser end (`buttons & 32`).
 
-## Known limitations (v0.1)
+## Known limitations (v0.2)
 
 - Nothing has been verified on Android hardware yet.
-- One page per notebook; zoom/pan are basic (smooth zoom, multiple pages and virtualization are M2).
-- Every save rewrites and re-validates the whole file: fine for normal notes, possibly a short freeze for very large notebooks on slow tablets.
+- Highlighter, palm contact size, fling, the CSS fast path, predicted points and the performance overlay are experimental. The highlighter preview while drawing is not multiplied with the page; the final look appears when the stroke is committed.
+- While the fast path moves the old bitmap during a pan or zoom, uncovered areas are blank and detail is not re-rendered until 120 ms after the gesture pauses.
+- Pages are all A4 with a grid; no page delete, reorder or duplicate (M3).
+- A lasso selection belongs to one page, strokes cannot be moved to another page, and there is no copy/paste. Resize is uniform only (one handle). Strokes moved partly outside their page are clipped when drawn.
+- Stabilization is applied while writing and the stabilized points are what is saved; it cannot be changed after the fact.
+- The segment eraser removes whole point runs: very short leftover pieces (a single point) are dropped.
+- Every save serializes the whole document. The re-validation is full under 1 MB and incremental above it, so very large notebooks save faster than in 0.1, but a short freeze is still possible on slow tablets (to be measured with the in-app benchmark).
+- The undo history is in memory only (500 commands) and is lost when the notebook is closed.
+- A notebook saved by 0.2 (format v2) opens read-only in 0.1.x.
 - If Android kills Obsidian without a `visibilitychange` event, the last ~1.5 s of changes (up to 10 s while writing continuously) can be lost.
 - When another writer changes the file in the instant between our read and our write, the attempt is aborted by writing back the same content; this may bump the file's modification time (no data change).
 - The S Pen side button is not mapped; only the standard `buttons & 32` eraser is handled.

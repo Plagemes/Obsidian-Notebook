@@ -1,4 +1,4 @@
-import { parse, serialize, type ParseFailure } from "../model/serialize";
+import { parse, serialize, serializeChecked, warmStrokeLines, type ParseFailure } from "../model/serialize";
 import type { NotebookDocument } from "../model/types";
 
 /** File access for one notebook. Implemented over the Vault API in vault-io.ts and by fakes in tests. */
@@ -72,6 +72,8 @@ export class DocumentSession {
 	private maxWaitTimer: number | null = null;
 	private chain: Promise<unknown> = Promise.resolve();
 	private disposed = false;
+	/** An external change arrived during a gesture and was not looked at yet. */
+	private deferredExternal = false;
 
 	private readonly debounceMs: number;
 	private readonly maxWaitMs: number;
@@ -138,10 +140,21 @@ export class DocumentSession {
 			const content = await this.io.read();
 			if (content === this.diskContent) return "echo" as const;
 			// Local changes win; the next flush backs up the external version before overwriting it.
-			if (this.mode === "ok" && (this.dirty || this.busy())) return "kept-local" as const;
+			if (this.mode === "ok" && this.busy()) {
+				this.deferredExternal = true;
+				return "kept-local" as const;
+			}
+			if (this.mode === "ok" && this.dirty) return "kept-local" as const;
 			await this.applyDiskContent(content);
 			return "reloaded" as const;
 		});
+	}
+
+	/** Call when a gesture ends: re-checks an external change that arrived while it was in progress. */
+	gestureEnded(): void {
+		if (!this.deferredExternal) return;
+		this.deferredExternal = false;
+		void this.handleExternalChange();
 	}
 
 	/** The file was deleted: never write it again, but keep unsaved changes as a backup. */
@@ -176,6 +189,7 @@ export class DocumentSession {
 			this.mode = "ok";
 			this.problem = null;
 			this.problemReason = null;
+			this.warmUp(result.doc);
 		} else {
 			this.doc = null;
 			this.mode = result.reason === "future-version" ? "readonly" : "broken";
@@ -204,14 +218,14 @@ export class DocumentSession {
 		const doc = this.doc;
 		const previousModifiedAt = doc.modifiedAt;
 		doc.modifiedAt = this.now().toISOString();
-		const next = serialize(doc);
-		const check = parse(next);
-		if (!check.ok || serialize(check.doc) !== next) {
+		const checked = serializeChecked(doc);
+		if (!checked.ok) {
 			doc.modifiedAt = previousModifiedAt;
 			this.events.onSaveState?.("error");
-			this.events.onError?.(`Save cancelled: the serialized document did not pass validation (${check.ok ? "round-trip mismatch" : check.message}). Changes are kept in memory.`);
+			this.events.onError?.(`Save cancelled: the serialized document did not pass validation (${checked.message}). Changes are kept in memory.`);
 			return false;
 		}
+		const next = checked.text;
 
 		try {
 			let written = false;
@@ -271,6 +285,19 @@ export class DocumentSession {
 			this.events.onError?.(`Unsaved changes could not be written or backed up: ${(e as Error).message}`);
 			return false;
 		}
+	}
+
+	/** Pre-computes stroke lines a page at a time in idle ticks, so the first save of a big notebook is quick. */
+	private warmUp(doc: NotebookDocument): void {
+		const pages = [...doc.pages];
+		const step = () => {
+			if (this.disposed || this.doc !== doc) return;
+			const page = pages.shift();
+			if (!page) return;
+			warmStrokeLines(page.strokes);
+			this.timers.set(step, 0);
+		};
+		this.timers.set(step, 0);
 	}
 
 	private clearTimers(): void {

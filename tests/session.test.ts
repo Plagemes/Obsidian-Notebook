@@ -227,7 +227,8 @@ describe("DocumentSession", () => {
 		const io = new FakeIO(serialize(sampleDocument(1)));
 		const s = new DocumentSession(io, timers);
 		await s.load();
-		s.doc!.pages[0]!.strokes[0]!.points[0]![0] = Number.NaN; // would serialize as null
+		// Committed strokes are frozen, so a corrupt stroke can only come from a bug that builds one.
+		s.doc!.pages[0]!.strokes.push({ ...line(0, 0, 1, 1), points: [[Number.NaN, 0, 0.5]] }); // NaN serializes as null
 		s.markChanged();
 		expect(await s.flush()).toBe(false);
 		expect(io.writes).toHaveLength(0);
@@ -349,6 +350,21 @@ describe("DocumentSession", () => {
 		await s.flush();
 		expect(io.backups.map((b) => b.content)).toEqual([external]);
 		expect(parse(io.content).ok).toBe(true);
+	});
+
+	it("re-checks an external change deferred during a gesture that changed nothing", async () => {
+		const io = new FakeIO(serialize(sampleDocument(1)));
+		let busy = true;
+		const s = new DocumentSession(io, timers, {}, { busy: () => busy });
+		await s.load();
+		const external = serialize(sampleDocument(3));
+		io.content = external;
+		expect(await s.handleExternalChange()).toBe("kept-local");
+		busy = false; // e.g. a palm stroke that was cancelled
+		s.gestureEnded();
+		await s.flush(); // waits for the queued check
+		expect(s.doc!.pages[0]!.strokes).toHaveLength(3);
+		expect(io.writes).toHaveLength(0);
 	});
 
 	it("stops before writing if the file is deleted during a flush", async () => {

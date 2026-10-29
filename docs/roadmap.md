@@ -18,9 +18,23 @@ Status: ✅ implemented (automated tests pass) · 🧪 implemented, waiting for 
 
 **Success criterion:** open Obsidian, create a notebook, write, close the app, reopen it and find exactly the same strokes. → To be confirmed with steps 1, 7 and 8 of the protocol in [testing.md](testing.md).
 
-## M2 — Complete writing engine — ⏳
+## M2 — Complete writing engine (v0.2) — 🧪 implemented, waiting for hardware verification
 
-Configurable smoothing and stabilisation; more pens and widths; transparent highlighter · segment eraser · lasso selection (move, resize, rotate) · smooth zoom and pan (M1 has a basic version) · configurable palm rejection (M1 has the time-based base) · multiple pages with virtualization · reproducible benchmarks (frame time, in-app input→pixel latency, memory, 10,000+ strokes).
+Every item below is implemented and its logic is covered by automated tests where it can be (see [testing.md](testing.md)); none has been verified on Android hardware. Rendering, gestures and performance only count once the protocol has been run on the device.
+
+| Item | Status | Notes |
+|---|---|---|
+| Configurable smoothing and stabilization | 🧪 | stabilization slider 0–10, default 2; the perfect-freehand smoothing parameters are fixed constants, not configurable |
+| Multiple pens and widths | 🧪 | pen: 9 colours, 5 widths |
+| Transparent highlighter | 🧪 experimental | 5 colours, 3 widths, constant width, translucent with multiply blending; format v2 |
+| Segment eraser (cuts strokes) | 🧪 | works across pages in one gesture, one undo step |
+| Lasso selection: move, resize, rotate | 🧪 basic | one page per selection; uniform resize with a single handle; delete; no copy/paste |
+| Smooth zoom and pan | 🧪 experimental | pinch and wheel zoom 0.25–8×; one-finger fling; CSS-transform fast path on heavy pages |
+| Configurable palm rejection | 🧪 experimental | time window and finger-drawing toggle (from M1) plus a contact-size filter, off by default |
+| Multiple pages with virtualization | 🧪 | stacked vertically, only visible pages and strokes are drawn; add page (undoable); no delete or reorder (M3) |
+| Reproducible benchmarks | 🧪 | `npm run bench` (pure logic), in-app benchmark, stress-test notebook (10,000 strokes / 10 pages), performance overlay; input→frame is a software measure, not display latency; PC numbers exist (see testing.md); numbers on the device are still to be collected |
+
+To be confirmed with steps 10 and 13–21 of the protocol in [testing.md](testing.md).
 
 ## M3 — Notebook system — ⏳
 

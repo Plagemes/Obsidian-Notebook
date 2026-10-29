@@ -2,7 +2,9 @@ import { Notice, Plugin, type TFile } from "obsidian";
 import { t } from "./i18n";
 import { FILE_EXTENSION } from "./model/types";
 import { readSettings, type NotebookSettings } from "./settings";
+import { stressDocument } from "./model/stress";
 import { createNotebook } from "./storage/notebooks";
+import { BenchmarkModal } from "./view/benchmark";
 import { NewNotebookModal, OpenNotebookModal } from "./view/modals";
 import { NotebookView, VIEW_TYPE } from "./view/notebook-view";
 import { NotebookSettingTab } from "./view/settings-tab";
@@ -23,6 +25,9 @@ export default class NotebookPlugin extends Plugin {
 		this.addCommand({ id: "undo", name: t("command.undo"), checkCallback: (checking) => this.withView(checking, (v) => v.undo()) });
 		this.addCommand({ id: "redo", name: t("command.redo"), checkCallback: (checking) => this.withView(checking, (v) => v.redo()) });
 		this.addCommand({ id: "fit-width", name: t("command.fit"), checkCallback: (checking) => this.withView(checking, (v) => v.fitToWidth()) });
+		this.addCommand({ id: "add-page", name: t("command.addPage"), checkCallback: (checking) => this.withView(checking, (v) => v.addPage()) });
+		this.addCommand({ id: "benchmark", name: t("command.benchmark"), callback: () => this.openBenchmark() });
+		this.addCommand({ id: "create-stress-test", name: t("command.stress"), callback: () => void this.createStressNotebook() });
 
 		this.addSettingTab(new NotebookSettingTab(this.app, this));
 
@@ -67,6 +72,22 @@ export default class NotebookPlugin extends Plugin {
 	private async createAndOpen(name: string): Promise<void> {
 		try {
 			const file = await createNotebook(this.app, this.settings.folder, name);
+			await this.openFile(file);
+		} catch (e) {
+			new Notice(t("notice.createFailed", { error: (e as Error).message }));
+		}
+	}
+
+	private openBenchmark(): void {
+		const view = this.app.workspace.getActiveViewOfType(NotebookView);
+		const size = view && view.stageSize.width > 0 ? view.stageSize : { width: window.innerWidth, height: window.innerHeight };
+		new BenchmarkModal(this.app, size).open();
+	}
+
+	/** 10,000 strokes on 10 pages, for manual performance tests on the device. */
+	private async createStressNotebook(): Promise<void> {
+		try {
+			const file = await createNotebook(this.app, this.settings.folder, "Stress test 10000", stressDocument(10_000, 10, Date.now() % 100000));
 			await this.openFile(file);
 		} catch (e) {
 			new Notice(t("notice.createFailed", { error: (e as Error).message }));
