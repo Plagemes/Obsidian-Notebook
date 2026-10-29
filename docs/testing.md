@@ -92,6 +92,10 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Duplicate page ids rejected on read and on write; assets verified before use | ✅ | ✅ review-fixes tests | | | |
 | English UI + Italian translation | ✅ | ❌ | | | |
 | No Node/Electron imports in `main.js` | ✅ | ✅ `scripts/check-bundle.mjs` in `npm run build` | | | |
+| Instant board shot (toolbar camera button, command): in-app camera → automatic crop (whole photo if no outline) → whiteboard filter → image element under the last ink + time label, one undo step | ✅ | ✅ placement (below the ink, scaled down, infinite page grows, fallback over content), label, one undo step; ❌ camera, crop on real photos, view | | ✅ | quality of the automatic crop on real boards is unknown; HEIC from the camera app fallback shows the usual message |
+| New lecture (command, page menu): modal for course/title (default: notebook name) and date, new page at the end with the header as a text element, one undo step | ✅ | ✅ header text, date parsing, page copy of size/paper, undo; ❌ modal, view | | | the document format has no page titles, so the header is ordinary text (searchable in the library) |
+| Loose sheet (command, ribbon icon, library button): quick-notes notebook in a configurable location, created on first use, never replaced | ✅ | ✅ path resolution and sanitising, setting parsing; ❌ file creation and opening (Obsidian) | | | setting *Loose sheet location* |
+| Move to notebook… (page menu, command): choose pages and a notebook; target saved first (open view: one undo step; closed file: validated, backup kept, read back), then the pages leave the source (one undo step); assets shared by id | ✅ | ✅ planning, asset records, source-removal rules (edited pages stay), never-empty source, undo; ❌ dialog, vault writes, open-view path | | ✅ | not tried with Obsidian Sync or with the target open on another device |
 
 ## Automated checks
 
@@ -186,6 +190,10 @@ For each step note **pass / fail / notes** in the table at the end.
 35. **Version history.** Open and edit a notebook, then check the folder `Notebooks/_backup/history/<document id>/` with a file manager: a `.snapshot` file exists (the default interval is 24 h, so a new snapshot per day; to get several quickly, set *Version history interval* to 1 and move the date of the existing snapshot file's name back on the PC). Add pages and ink, then run the command *Restore a previous version*: the list shows dates and page counts; choose an older one and confirm. Expected: the notebook goes back to that version, the notice names the backup of the previous content (a `.bak` in `_backup`), and the open view refreshes. Try it with unsaved changes in the open notebook (they are saved first), and with a snapshot file of another notebook copied into the folder (it is refused). Set *Versions to keep* to 1 and check that older snapshots go to the trash. Set the interval to 0: no new snapshots.
 36. **Embeds and links.** In a Markdown note run *Insert notebook embed* and choose a notebook: a `notebook` code block appears. Switch to reading view and live preview: the page preview is drawn (with PDF background and text boxes if the page has them), at the width of the note. Change `page:` to another page and to a page that does not exist (a clear message). Try `Notebooks/Name.notebook#3` and `[[Name#p3]]`. Write in the notebook and watch the embed refresh. Click the preview: the notebook opens at that page. Build a link `obsidian://notebook?path=Notebooks/Name.notebook&page=3` (add `vault=<name>` if you have several vaults), put it in a note or a QR code or an Android shortcut and open it from outside Obsidian: the notebook opens at page 3. Note which of these do not work on Android.
 
+37. **Instant board shot.** In a notebook with some writing on the page in view, tap the camera button in the toolbar (also: command *Instant board shot*). Expected: the in-app camera opens (if the WebView refuses it, the camera app opens); after the shutter the photo appears with no further question, cropped to the board when an outline is found (otherwise whole, with a notice) and with the whiteboard filter, below your last line, with a small "Board HH:MM" label above it. One undo removes the photo and the label together. Repeat on an empty page, on a page written down to the bottom (the photo is scaled down; on an *infinite* page the page grows), and with the page zoomed in. Photograph a real whiteboard and a window or screen to see how the crop behaves. Note the time from the shutter to the photo on the page.
+38. **New lecture.** Command *New lecture* (or page menu → *New lecture…*). Expected: a small dialog with the notebook name as course/title and today's date; *Add page* adds a page at the end with "Title — YYYY-MM-DD" at the top, same size and paper as the last page, and scrolls to it; one undo removes it. Cancel adds nothing. An invalid date is refused. The header is found by the library search.
+39. **Loose sheet and Move to notebook.** Ribbon icon with the sticky note, command *Open loose sheet (quick notes)* and the library button: the first time a notebook *Quick notes* is created in the notebooks folder (or at the path set in *Loose sheet location*) and opened; afterwards the same one. Write on two pages. Page menu → *Move to notebook…*: tick pages, choose another notebook, *Move*. Expected: a notice; the pages are at the end of the other notebook (open it: all ink, text boxes, images and PDF/photo backgrounds are there); they are gone from the loose sheet (a blank page remains if all moved); undo in the target removes them there, undo in the source brings them back. Try with the target notebook open in another tab and closed; check that nothing is lost if you keep writing in the source while the dialog is open.
+
 | Step | Device / Obsidian version | Result | Notes |
 |---|---|---|---|
 | 1 Create and write | | | |
@@ -224,6 +232,9 @@ For each step note **pass / fail / notes** in the table at the end.
 | 34 Journal recovery | | | |
 | 35 Version history | | | |
 | 36 Embeds and links | | | |
+| 37 Instant board shot | | | |
+| 38 New lecture | | | |
+| 39 Loose sheet and move pages | | | |
 
 Benchmark output (step 21): paste it here.
 

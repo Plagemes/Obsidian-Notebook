@@ -165,6 +165,8 @@ src/
     drag.ts               long-press drag and drop of cards onto folders
     thumbnail.ts          page → small PNG data URL (paper, background, elements, ink), render-aware
     import-pdf.ts         PDF → notebook document (pure part) and the import flow
+    loose-sheet.ts        opens (creating on first use, never replacing) the quick-notes notebook; loose-sheet-logic.ts: its path from the setting (pure)
+    page-move.ts          "Move to notebook…" planning: page copies, asset records, which source pages may leave (pure); move-pages.ts: the flow (target first, source after), move-pages-modal.ts: the dialog
   pdf/
     pdf-store.ts          pdf.js page store: open documents (LRU), rendered bitmaps (LRU by memory budget), page sizes, cancellable renders
     pdfjs-types.ts        the minimal slice of the pdf.js API in use
@@ -177,6 +179,7 @@ src/
     filters.ts            Original, Document and Whiteboard filters
     pages.ts              a scanned sheet → page with an image background
     scan-modal.ts         the scanner dialog: photo, corners with loupe, preview, several sheets
+    auto-sheet.ts         photo → detected crop (whole photo if none) → filter → JPEG without questions (board shot)
     types.ts              shared types
   integration/
     links.ts              parsing and building of embeds and `obsidian://notebook` links (pure)
@@ -199,6 +202,10 @@ src/
     benchmark.ts          in-app benchmark (off-screen render of a generated notebook, writing replay) and its modal
     modals.ts             "New notebook" (name, page size, orientation, paper) and "Open notebooks" (fuzzy search)
     view-helpers.ts       small pure helpers shared by the view
+    edit-context.ts       what flows outside the view may do to the open document (`NotebookView.editContext()`)
+    board-shot.ts         instant board shot flow; board-shot-logic.ts: placement under the ink and the label (pure)
+    lecture.ts            "New lecture" dialog and flow; lecture-logic.ts: header text and page (pure)
+    lecture-commands.ts   commands and ribbon icon for the three features above and the loose sheet
     settings-tab.ts       settings UI
 scripts/check-bundle.mjs          fails the build if main.js requires anything but 'obsidian'
 scripts/make-stress-notebook.mjs  writes a stress .notebook from the PC (alternative to the in-app command)
