@@ -31,7 +31,7 @@ const ids = (doc: NotebookDocument) => doc.pages.map((p) => p.id);
 
 describe("format v3 migration", () => {
 	it("is at version 3 and has a v2 step", () => {
-		expect(CURRENT_VERSION).toBe(3);
+		expect(CURRENT_VERSION).toBeGreaterThanOrEqual(3);
 		expect(MIGRATIONS[2]).toBeTypeOf("function");
 	});
 
@@ -40,7 +40,7 @@ describe("format v3 migration", () => {
 		const r = parse(JSON.stringify(v2));
 		if (!r.ok) throw new Error(r.message);
 		expect(r.migratedFrom).toBe(2);
-		expect(r.doc.version).toBe(3);
+		expect(r.doc.version).toBe(CURRENT_VERSION);
 		expect(r.doc.pages[0]!.paper).toEqual({ kind: "grid", spacing: 14.17 });
 		expect(r.doc.pages[0]!.strokes[0]).toEqual(v2.pages[0]!.strokes[0]);
 		expect(r.doc.pages[0]!.width).toBe(595.28);
@@ -48,9 +48,9 @@ describe("format v3 migration", () => {
 
 	it("v0 and v1 files still reach v3", () => {
 		const v0 = parse(JSON.stringify({ strokes: [{ color: "#000000", size: 2, points: [{ x: 1, y: 2 }] }] }));
-		expect(v0.ok && v0.doc.version).toBe(3);
+		expect(v0.ok && v0.doc.version).toBe(CURRENT_VERSION);
 		const v1 = parse(JSON.stringify({ ...v2Doc(), version: 1 }));
-		expect(v1.ok && v1.doc.version).toBe(3);
+		expect(v1.ok && v1.doc.version).toBe(CURRENT_VERSION);
 		expect(v1.ok && v1.migratedFrom).toBe(1);
 	});
 });

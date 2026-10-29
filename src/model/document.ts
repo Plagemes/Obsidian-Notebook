@@ -1,6 +1,6 @@
 import {
-	CURRENT_VERSION, FORMAT_ID, PAGE_SIZES, PAPER_SPACING,
-	type NotebookDocument, type Page, type Paper, type Point, type Stroke, type Tool,
+	CURRENT_VERSION, DEFAULT_META, FORMAT_ID, PAGE_SIZES, PAPER_SPACING,
+	type NotebookDocument, type NotebookMeta, type Page, type Paper, type Point, type Stroke, type Tool,
 } from "./types";
 
 export function createId(): string {
@@ -36,7 +36,24 @@ export function createDocument(
 		createdAt: iso,
 		modifiedAt: iso,
 		pages: [createPage(size, paper)],
+		meta: cloneMeta(DEFAULT_META),
+		assets: {},
 	};
+}
+
+/** Deep copy of the metadata (arrays are not shared). */
+export function cloneMeta(meta: NotebookMeta): NotebookMeta {
+	return { tags: [...meta.tags], favorite: meta.favorite, cover: meta.cover, bookmarks: [...meta.bookmarks] };
+}
+
+/** Ids of the assets used by a page background or an image element anywhere in the document. */
+export function referencedAssets(doc: NotebookDocument): Set<string> {
+	const used = new Set<string>();
+	for (const page of doc.pages) {
+		if (page.background) used.add(page.background.asset);
+		for (const el of page.elements ?? []) if (el.type === "image") used.add(el.asset);
+	}
+	return used;
 }
 
 /** Rounds like the file does: x/y to 0.01 pt, pressure to 0.001 within [0, 1]. */
