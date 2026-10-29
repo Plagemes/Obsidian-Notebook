@@ -119,6 +119,7 @@ src/
     serialize.ts          deterministic serialize(), parse() with validation and migrations, serializeChecked() (save check), freezeStroke()
     migrations.ts         chain of vN → vN+1 migrations (v0→v1 … v4→v5)
     history.ts            command-stack undo/redo (strokes, pages, paper/size, elements, meta, assets, infinite, Batch)
+    companion-content.ts  companion note (O1): document → properties, tags and generated Markdown region; merge with the user's edits (pure)
     stress.ts             deterministic generated notebook (10,000 strokes / 10 pages by default) for benchmarks and the stress-test command
   ink/                    (does not import 'obsidian')
     viewport.ts           screen ↔ page transform, fit-width, zoom around a point (scale 0.25–8), pan
@@ -154,6 +155,7 @@ src/
     history.ts            version history helpers: snapshot names, retention, timing, restore guards (pure)
     vault-io.ts           Vault API adapter (read, process, backup) and the plugin-folder journal store
     notebooks.ts          notebook creation in the configured folder
+    companion-path.ts     companion note settings and location (next to the notebook / mirrored in a folder, name template) (pure)
   library/
     index.ts              library index: entries, queries (scope, search with snippets, sort), staleness (pure)
     scan.ts               entries from documents (metadata, text for search), cover colours, tag parsing (pure)
@@ -185,7 +187,8 @@ src/
     open.ts               resolve a notebook by path or link name, open at a page, find open views
     picker.ts             notebook chooser for the embed command
     history-service.ts    automatic snapshots and the restore flow
-    index.ts              registers embeds, protocol and version history
+    companion.ts          companion notes: when to write (debounce, pen deferral), finding the note, rename/delete, commands
+    index.ts              registers embeds, protocol, version history and companion notes
   view/
     notebook-view.ts      FileView: mounts canvas and toolbar, wires session, history, input, tools, selection, navigator, media, performance overlay
     toolbar.ts            tools, colours, widths, eraser mode, shape kind, text size, undo/redo, add page, page menu, pages panel, fit, page indicator
@@ -200,6 +203,7 @@ src/
     modals.ts             "New notebook" (name, page size, orientation, paper) and "Open notebooks" (fuzzy search)
     view-helpers.ts       small pure helpers shared by the view
     settings-tab.ts       settings UI
+    companion-settings.ts companion note settings (declarative and classic settings UI)
 scripts/check-bundle.mjs          fails the build if main.js requires anything but 'obsidian'
 scripts/make-stress-notebook.mjs  writes a stress .notebook from the PC (alternative to the in-app command)
 tests/                    vitest on model/, ink/, storage/, library/, pdf/, scan/, integration/ ("unit" project, `npm test`); model.perf.ts is the `npm run bench` suite ("perf" project)
@@ -248,7 +252,7 @@ Known limit: if Android kills the process without notifying `visibilitychange`, 
 ## 5. Format evolution (toward M4)
 
 - The container is isolated in `storage/format.ts` (§4), so the options below change that module and the migration, not the library, journal, history or embeds.
-- **C (hybrid)**: a command will generate a companion `.md` (title, tags, links, OCR text) next to the `.notebook`; the JSON does not change.
+- **C (hybrid)**: implemented as O1 (companion notes, §12): a `.md` per notebook with properties and the text of its text boxes; the JSON does not change. Its content generator does not depend on the container, so it also serves B.
 - **B (`.md` with data block)**: if B is chosen, the migration will be a file → file conversion: the JSON becomes the content of a code block, with `format`/`version` unchanged. The parser stays the same.
 - Many strokes: v2 keeps a single JSON file (a generated 10,000-stroke notebook is about 6.8 MB on the PC). If that proves too slow on the device, a later version may split pages across files; `version` enables the migration. Decide with benchmark numbers from real hardware.
 
@@ -411,4 +415,48 @@ Samsung-Notes-like screen (`library/library-view.ts`) opened from the ribbon or 
 - **Protocol** (`protocol.ts`): `obsidian://notebook?path=<vault path>&page=<n>` (`vault=<name>` is handled by Obsidian). It opens the notebook, reusing the open tab, and scrolls to the page.
 - **Opening at a page** (`open.ts`): library search hits, embeds and links go through `openNotebookAtPage`, which opens the file and gives the view `{ page }` as state; a view that is already open is told to scroll.
 - **Version history** (§4): `history-service.ts` registers the snapshot hooks and the restore command.
-- Notebooks are still invisible to Obsidian's own search, tags, backlinks and graph (M4).
+- **Companion notes (O1)**: see below. Without them (the default) notebooks stay invisible to Obsidian's own search, tags, backlinks and graph.
+
+### Companion notes (O1)
+
+A Markdown note per notebook so that Obsidian's search, graph, tags, Dataview and Bases see notebooks. **Off by default** (setting *Companion notes*): turning it on creates files in the user's vault (one per notebook, synced to every device), which should never happen as a side effect of an update, and the notes only help people who use those Obsidian features. When on, a note is created the first time a notebook is opened or changed; *Update companion notes of all notebooks* (command, and a button in the settings) does the rest at once.
+
+**Three layers**, so M4 can reuse the content:
+- `model/companion-content.ts` (pure): `companionContent(doc, { notebookPath, pageUri })` → `{ properties, tags, text }`; `renderRegion()` wraps the text in markers; `mergeRegion()` and `mergeProperties()` apply it to a note that may have been edited. The output depends only on the document and the notebook path: no clock, time zone, UI language or vault name, so two synced devices produce byte-identical notes.
+- `storage/companion-path.ts` (pure): settings (`companionNotes`, `companionLocation` = `beside` | `folder`, `companionFolder`, `companionName` with `{name}`) and `companionPath()`. In folder mode the notebook's folder relative to the notebooks folder is mirrored, so equal names in different folders do not collide.
+- `integration/companion.ts`: when to write, which note is the companion, and the Vault calls.
+
+**Content.** Plugin-owned properties, in order: `notebook` (`[[<vault path>|<name>]]`, a real link: the graph and backlinks see it), `notebook-id` (the document id: how the plugin recognises its notes), `pages`, `created`, `modified` (UTC, minute precision, `2026-10-29T14:42:00Z`: identical on every device, and an ink-only save changes the note at most once a minute), then every field of `meta` with a string, number, boolean or list value under its own name (`favorite`, `cover`, and `course`, `teacher`… when the format adds them), with `bookmarks` as page numbers. `tags` holds the notebook's tags as Obsidian tags (no `#`, spaces → `-`, invalid characters dropped, numeric-only tags left out). The body has one generated region:
+
+```
+%% notebook-companion:start (generated by Notebook: edit outside this block) {"v":1,"keys":[…],"tags":[…]} %%
+### p. 1
+[↗ p. 1](obsidian://notebook?path=Notebooks%2FPhysics.notebook&page=1)
+
+<text boxes of page 1, top to bottom, then left to right>
+%% notebook-companion:end %%
+```
+
+Only pages with text get a section. The heading is language-neutral (`p. N`), so `[[Physics#p. 3]]` links to that section. The page link has no `vault=` (Obsidian uses the current vault), so it does not change with the vault's name. Text-box text is kept as written (links and inline `#tags` work) except what could break the note: `%%` is escaped, and lines that would open a fence, a math block or an HTML block, or become a heading, a heading underline or a rule, get a leading backslash.
+
+**Ownership** (the user may edit the note):
+- Everything outside the region, and every property that is not plugin-owned, belongs to the user and is never changed.
+- The region is replaced as a whole. With no region (new note, or the user deleted it) it is appended at the end. If the markers are missing one half, repeated or out of order, the note is not written at all and a notice says why.
+- Plugin-owned properties are overwritten from the notebook. Which keys the plugin owns, and which tags it added, is stored on the start marker (`keys`, `tags`), so a key the notebook no longer has (an emptied `course`, cleared bookmarks) is removed, and nothing else. Without a readable state nothing is removed.
+- `tags` is shared: notebook tags first, then the user's own; tags the plugin added before and the notebook no longer has are removed.
+- Properties are written with `fileManager.processFrontMatter`, the region with `vault.process` (atomic). If the frontmatter is not valid YAML the note is left alone.
+
+**Which note.** The note at the configured path (or `<name> (notebook).md` if a note of the user's already has that name: it is never taken over) when its `notebook-id` is this notebook's, or its `notebook` link points at this notebook. Otherwise any note with this `notebook-id` found through the metadata cache (the user moved it, or the location setting changed: existing notes are not moved), unless its link points at another existing notebook (a duplicated notebook carries the same id until the library gives it a new one). Otherwise a new note is created at the first free path.
+
+**When.**
+- Triggers are the notebook's own events: `modify` (4 s debounce when the notebook is open here; 30 s otherwise, i.e. sync or library actions, so that the companion written by the other device usually arrives first and the identical content found here causes no write), `file-open` (creates missing notes lazily), `create` (5 s, registered after layout-ready), `rename`, `delete`.
+- Never while writing: capture-phase, passive `pointerdown`/`pointerup`/`pointercancel` listeners note activity inside `.notebook-view`; a due update waits until no pointer is down there and 1.5 s have passed (a pointer seen down for 15 s without an up is ignored). The notebook's own saves are already deferred while writing (§4), so the `modify` that starts an update arrives in a pause anyway.
+- **No write when nothing changed**: the new frontmatter and body are computed first and compared with the note (a timestamp read back as a Date compares equal); only the parts that differ are written.
+- **No loops**: the service never listens to `.md` files (its own writes and the user's edits start nothing) and never writes the notebook, so the notebook view's external-change check is never involved.
+- The document comes from the open view when there is one (no second parse), otherwise from the file; an unreadable notebook gets no update.
+
+**Rename and delete.** When a notebook is renamed or moved and its companion is at the configured place for the old path, the companion is renamed to the place for the new path with `fileManager.renameFile` (Obsidian updates links to it); a companion the user put elsewhere stays there. Renaming a folder in `beside` mode moves the companions with it. On **delete the companion is kept**: it may contain the user's own writing, and deleting a notebook from the library only moves it to the trash (restoring it reconnects the companion by id). A notice names the kept note (one notice for a folder of notebooks). Its `notebook` link becomes unresolved.
+
+**Library and index.** Companion notes are `.md`, which `isNotebookFile` rejects, so the library, the index, the picker and version history never treat them as notebooks. A companion folder placed inside the notebooks folder shows up in the library sidebar as a folder without notebooks.
+
+**M4.** If notebooks become `.md` (option B), the notebook file itself gets `companionContent()` as its frontmatter and generated body (the region markers and merge rules stay), the `notebook` property is dropped, and the migration can fold an existing companion into the notebook: its user text and properties are already separated from the generated parts. Links like `[[Physics]]` written against a companion at the default place (`Physics.md` next to `Physics.notebook`) then point at the migrated notebook.
