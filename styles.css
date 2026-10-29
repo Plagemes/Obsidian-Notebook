@@ -1,0 +1,120 @@
+/* Notebook — handwritten notebooks */
+
+.notebook-view {
+	display: flex;
+	flex-direction: column;
+	padding: 0 !important;
+	overflow: hidden;
+}
+
+.notebook-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 12px;
+	padding: 4px 8px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+	flex: 0 0 auto;
+	user-select: none;
+}
+
+.notebook-toolbar-group {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.notebook-tool {
+	min-width: 36px;
+	min-height: 36px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.notebook-tool.is-active {
+	background: var(--background-modifier-active-hover);
+	color: var(--interactive-accent);
+}
+
+.notebook-tool:disabled {
+	opacity: 0.35;
+	pointer-events: none;
+}
+
+.notebook-swatch-dot {
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	border: 1px solid var(--background-modifier-border);
+}
+
+.notebook-swatch.is-active .notebook-swatch-dot {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+}
+
+.notebook-width-dot {
+	border-radius: 50%;
+	background: currentColor;
+}
+
+.notebook-status {
+	margin-left: auto;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.notebook-status[data-kind="pending"] {
+	color: var(--text-faint);
+}
+
+.notebook-status[data-kind="error"] {
+	color: var(--text-error);
+}
+
+.notebook-stage {
+	position: relative;
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: hidden;
+	background: var(--background-secondary);
+	touch-action: none;
+	user-select: none;
+	-webkit-user-select: none;
+	-webkit-touch-callout: none;
+	-webkit-tap-highlight-color: transparent;
+	overscroll-behavior: contain;
+}
+
+.notebook-canvas {
+	position: absolute;
+	inset: 0;
+	display: block;
+	touch-action: none;
+}
+
+.notebook-canvas-live {
+	pointer-events: none;
+}
+
+.notebook-message {
+	padding: 24px;
+	max-width: 640px;
+}
+
+.notebook-message pre {
+	white-space: pre-wrap;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.notebook-picker-path {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.notebook-picker-new {
+	color: var(--interactive-accent);
+}

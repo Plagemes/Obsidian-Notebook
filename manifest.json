@@ -1,0 +1,10 @@
+{
+	"id": "notebook",
+	"name": "Notebook",
+	"version": "0.1.0",
+	"minAppVersion": "1.5.7",
+	"description": "Handwritten notebooks with stylus pressure, saved as vector files in your vault.",
+	"author": "Plagemes",
+	"authorUrl": "https://github.com/Plagemes",
+	"isDesktopOnly": false
+}
