@@ -297,6 +297,9 @@ export class NotebookView extends FileView {
 	/** Per input event while writing: processing time and event timestamp → painted (ms). */
 	private readonly perfProcess: number[] = [];
 	private readonly perfPaint: number[] = [];
+	private resolveClosed: (() => void) | null = null;
+	/** Resolves once onClose has written (or backed up) everything; the library waits for it before moving the file. */
+	readonly closed = new Promise<void>((resolve) => (this.resolveClosed = resolve));
 
 	constructor(leaf: WorkspaceLeaf, private readonly host: NotebookHost) {
 		super(leaf);
@@ -470,7 +473,11 @@ export class NotebookView extends FileView {
 
 	async onClose(): Promise<void> {
 		this.location.flush();
-		await this.closeSession();
+		try {
+			await this.closeSession();
+		} finally {
+			this.resolveClosed?.();
+		}
 		this.stopHold();
 		for (const timer of [this.navTimer, this.thumbTimer, this.snapFlashTimer]) if (timer !== null) window.clearTimeout(timer);
 		this.navTimer = this.thumbTimer = this.snapFlashTimer = null;
