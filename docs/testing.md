@@ -140,6 +140,10 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | New lecture (command, page menu): modal for course/title (default: notebook name) and date, new page at the end with the header as a text element, one undo step | ✅ | ✅ header text, date parsing, page copy of size/paper, undo; ❌ modal, view | | | the document format has no page titles, so the header is ordinary text (searchable in the library) |
 | Loose sheet (command, ribbon icon, library button): quick-notes notebook in a configurable location, created on first use, never replaced | ✅ | ✅ path resolution and sanitising, setting parsing; ❌ file creation and opening (Obsidian) | | | setting *Loose sheet location* |
 | Move to notebook… (page menu, command): choose pages and a notebook; target saved first (open view: one undo step; closed file: validated, backup kept, read back), then the pages leave the source (one undo step); assets shared by id | ✅ | ✅ planning, asset records, source-removal rules (edited pages stay), never-empty source, undo; ❌ dialog, vault writes, open-view path | | ✅ | not tried with Obsidian Sync or with the target open on another device |
+| Synchronised PDF ↔ notes view (#106): command and "…" menu entry *Open PDF side by side*; the PDF (a plain vault `.pdf`, or another notebook's pages) in a pane inside the notebook view, side by side on a wide landscape view and stacked otherwise, draggable divider | ✅ | ✅ side-by-side / stacked rule, divider limits; ❌ pane, pdf.js rendering, divider drag, Obsidian | | ✅ | the split is internal because Obsidian on phones and tablets has no split panes in the main area; untried on Android; one reference page at a time (no continuous scroll in the pane) |
+| PDF ↔ notes links: sidecar `pdf-links.json` in the plugin folder (notebook id + page id ↔ PDF content id / path + page number), written only by *Link*, *Unlink* and *Add notes page for this slide*, never on scroll; no notebook format change | ✅ | ✅ parse/serialise round trip, unknown entries kept, set/remove, queries, read-modify-write before each update, no write when unchanged, unreadable or newer file never overwritten (one copy kept), concurrent updates; ❌ adapter on a real vault, sync between devices | | | not tried with Obsidian Sync or another sync tool |
+| Following: turning the PDF page shows the linked notes page (stays if already on one), scrolling the notes shows the linked PDF page, *Follow* toggle, no echo; strip *Show* when the notes are elsewhere | ✅ | ✅ decision rules (stay / go / none) and link states; ❌ view wiring, timing, the middle-of-screen page rule with short pages | | ✅ | |
+| *Add notes page for this slide*: new page (size and paper of the page in view) in slide order, one undo step, linked; works with PDF backgrounds beside a separate notes notebook | ✅ | ✅ insertion index rule; one-step undo of adding a page is covered by the history tests; ❌ the strip and the link write | | | undo removes the page but leaves its link in the file (ignored while the page is missing, back after redo) |
 
 ## Automated checks
 
@@ -263,6 +267,18 @@ For each step note **pass / fail / notes** in the table at the end.
 60. **Commands and hotkeys.** In Settings > Hotkeys search "Notebook", assign keys to *Tool: pen*, *Favourite pen 2*, *Next page* and *Toggle pen only*, and use them with a keyboard in a notebook; with a Markdown note active they do nothing.
 61. **Compact toolbar.** On the Samsung tablet and on a phone (also sideways): the toolbar is two rows (one line only on a wide leaf), nothing wraps further or scrolls the page sideways, and every button is easy to hit with a finger and with the S Pen. Select the pen and tap the pen button again (or the coloured dot): a popover opens under the bar with the colours and widths; choose a colour and a width, the dot follows. With the popover open, write on the page: the first touch only closes the popover and leaves no ink; the next stroke writes. Try the same with the eraser (modes *Whole stroke / Segment / Area*, the sizes, the filter and its colour swatches), the highlighter, shapes and text. Escape (keyboard) closes the popover. Tap the "…" button: *Insert image*, *Board shot*, *Ruler*, *Pen only*, *Add page*, *Page options*, *Fit to width* all work and the menu closes; the page number is its first line. Scroll the favourite pens strip with a finger and tap a pen: the strip does not start a stroke. Check the save-state dot (green saved, orange unsaved, red error). Note any control that is hard to reach and whether the popover ever covers what you need.
 
+**PDF beside the notes (wave 0.6, steps S1 to S8).** Needs a lecture PDF in the vault and a notes notebook (and, for S7, a notebook whose pages have PDF backgrounds).
+
+S1. **Open side by side (tablet sideways).** In a notes notebook run *Open PDF side by side* (command palette, or "…" menu → *Open PDF side by side*) and choose the lecture PDF. Expected: the PDF fills the left part, the notes the right part; the PDF page fits the width of its pane; the notes page refits to the narrower area. Drag the divider: both sides follow, limits about 20 % and 80 %. Write with the S Pen on the notes side: no change in feel; a finger on the PDF side scrolls it. Note how long the first page takes to appear.
+S2. **Phone and tablet upright.** Rotate the tablet to portrait and repeat on a phone: the panes stack (PDF on top). Rotate back while it is open: the layout switches without losing the page on either side.
+S3. **Add a notes page for a slide.** Turn the PDF to slide 1: the strip *No notes page for this slide* appears. Tap *Add notes page for this slide*: a page is inserted (same size and paper as the one you were on), the notes scroll to it and the strip disappears. Undo once: the page is gone; redo: it is back and the strip stays hidden on slide 1.
+S4. **Follow both ways.** Add notes pages for slides 2 and 3, then turn the PDF back and forth: the notes jump to the linked page each time. Scroll the notes by hand to another linked page: the PDF follows after a moment. Switch *Follow* off: neither side moves the other any more; the strip *Show* appears when the notes are elsewhere and works. Check with short pages (landscape slide pages in a tall view) that the PDF does not jump to the next slide by itself.
+S5. **Link and unlink.** On an existing notes page tap *Link* while the PDF shows slide 5: the notice names both pages and the button reads *Unlink*. Turn to another slide and back: the notes follow. *Unlink*: the notes stay where they are and the strip offers *Add notes page* for slide 5. "…" menu → *Show the slide of this page* moves the PDF to the linked slide.
+S6. **Links survive restarts and renames.** Close the pane, restart Obsidian, open the notebook and the same PDF side by side: it opens on the slide of the notes page in view and following works. Rename or move the PDF in the vault and open it again: the links still work. Check that scrolling and turning pages does not change the modified time of `pdf-links.json` in the plugin folder (only the three link actions do).
+S7. **Notebook with PDF backgrounds as the PDF side.** Choose a notebook whose pages have PDF backgrounds (with your ink on them) instead of the PDF: pages show the slide with the ink, turning and adding notes pages work the same; a page without a PDF background shows a notice when you try to link it. Write in that notebook in another tab: the pane updates a moment after it is saved.
+S8. **Damaged links file.** Replace `pdf-links.json` with `{ not json`, reopen the pane: a notice says links are off, the file is unchanged and a `pdf-links.unreadable-…` copy exists; the PDF can still be read, *Link* is disabled. Restore the file and reopen the pane: links work again.
+
+
 | Step | Device / Obsidian version | Result | Notes |
 |---|---|---|---|
 | 1 Create and write | | | |
@@ -332,6 +348,14 @@ For each step note **pass / fail / notes** in the table at the end.
 | T4 During a class, *New lecture* in a linked notebook has the course filled in; in an unrelated linked notebook it shows the notebook name | | | |
 | T5 Library shows *Now: <course>* during a class (also a few minutes before, per the lead setting) and nothing outside classes; tapping it opens the lecture page | | | |
 | T6 Edit `_timetable.json` by hand (also from another device through sync), including a deliberate mistake: a good edit is picked up; a bad file is reported in the editor and is not overwritten | | | |
+| S1 Open side by side (tablet sideways) | | | |
+| S2 Phone and tablet upright | | | |
+| S3 Add a notes page for a slide | | | |
+| S4 Follow both ways | | | |
+| S5 Link and unlink | | | |
+| S6 Links survive restarts and renames | | | |
+| S7 Notebook with PDF backgrounds as the PDF side | | | |
+| S8 Damaged links file | | | |
 
 Benchmark output (step 21): paste it here.
 

@@ -64,6 +64,7 @@ import { runNewLecture } from "./lecture";
 import { runMovePages } from "../library/move-pages";
 import { addPdfPageMenuItems, type PdfActionHost } from "./pdf-actions";
 import { pickFile } from "./pick";
+import { addPdfSyncMenuItems, type PageSyncHooks } from "./pdf-sync";
 import { RulerGesture } from "./ruler-gesture";
 import { SelectionActions } from "./selection-actions";
 import { TextEditor, type TextEditSession } from "./text-editor";
@@ -259,6 +260,9 @@ export class NotebookView extends FileView {
 	private readonly thumbPending = new Set<string>();
 	private readonly thumbRendering = new Set<string>();
 	private thumbTimer: number | null = null;
+
+	/** Wave 0.6 (#106): the synchronised PDF pane, when one is open (view/pdf-sync.ts). */
+	syncHooks: PageSyncHooks | null = null;
 
 	private lastBackupPath: string | null = null;
 	private lastErrorAt = 0;
@@ -789,6 +793,7 @@ export class NotebookView extends FileView {
 				.onClick(() => void exportSvg(this.app, file, page, ` p${index + 1}`, this.media)));
 		}
 		addPdfPageMenuItems(menu, this.pdfActionHost(), page);
+		addPdfSyncMenuItems(menu, this);
 		menu.showAtMouseEvent(evt);
 	}
 
@@ -1213,6 +1218,7 @@ export class NotebookView extends FileView {
 			this.applyPendingPage();
 			if (this.file) this.location.note(this.file.path, this.currentPageIndex() + 1);
 			void checkConflicts(this.reliabilityDeps(), this);
+			this.syncHooks?.loaded();
 		} else {
 			this.body.hide();
 			this.toolbar.setEditable(false);
@@ -1291,6 +1297,7 @@ export class NotebookView extends FileView {
 			this.navCurrent = current;
 			this.pageNav?.markCurrent(current);
 			if (n && this.file && this.pendingPage === null) this.location.note(this.file.path, current + 1);
+			this.syncHooks?.page(current);
 		}
 	}
 

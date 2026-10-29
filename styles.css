@@ -1727,3 +1727,126 @@
 .notebook-tt-card > button {
 	align-self: flex-start;
 }
+
+/* --- wave 0.6: pdf sync --- */
+
+/* The reference pane sits before the page navigator and the stage inside .notebook-body; the divider follows it. */
+.notebook-body.has-pdfside.is-pdfside-column {
+	flex-direction: column;
+}
+
+.notebook-pdfside {
+	display: flex;
+	flex: 0 0 var(--notebook-pdfside-size, 45%);
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	background: var(--background-secondary);
+}
+
+.notebook-pdfside-divider {
+	flex: 0 0 14px;
+	background: var(--background-modifier-border);
+	touch-action: none;
+}
+
+.notebook-body.is-pdfside-row > .notebook-pdfside-divider {
+	cursor: col-resize;
+}
+
+.notebook-body.is-pdfside-column > .notebook-pdfside-divider {
+	cursor: row-resize;
+}
+
+.notebook-pdfside-divider:hover,
+.notebook-pdfside-divider.is-dragging {
+	background: var(--interactive-accent);
+}
+
+.notebook-pdfside-header {
+	display: flex;
+	flex: 0 0 auto;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 4px 8px;
+	padding: 4px 8px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.notebook-pdfside-title {
+	flex: 1 1 100px;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: var(--font-semibold);
+}
+
+.notebook-pdfside-nav,
+.notebook-pdfside-tools {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.notebook-pdfside-btn,
+.notebook-pdfside-text-btn {
+	min-width: 44px;
+	min-height: 44px;
+}
+
+.notebook-pdfside-text-btn.is-active {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.notebook-pdfside-pagebox {
+	width: 4.5em;
+	min-height: 44px;
+	text-align: center;
+}
+
+.notebook-pdfside-total {
+	color: var(--text-muted);
+}
+
+.notebook-pdfside-page {
+	flex: 1 1 0;
+	min-height: 0;
+	overflow: auto;
+	touch-action: pan-x pan-y;
+}
+
+.notebook-pdfside-page.is-loading {
+	opacity: 0.7;
+}
+
+.notebook-pdfside-image {
+	display: block;
+	width: 100%;
+	height: auto;
+	background: #ffffff;
+}
+
+.notebook-pdfside-error {
+	padding: 16px;
+	color: var(--text-error);
+}
+
+.notebook-pdfside-banner {
+	display: flex;
+	flex: 0 0 auto;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 6px 8px;
+	border-top: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+}
+
+.notebook-pdfside-banner button {
+	min-height: 44px;
+}
