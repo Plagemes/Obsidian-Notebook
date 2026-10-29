@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+Not verified on Android hardware.
+
+### Added
+- **Expandable margins on PDF pages** (#104): page menu *Page margins…* (or the command) widens a PDF or scanned page to the left, right and bottom to write beside the slide without covering it; optionally for every page of the same PDF, one undo step. The PDF keeps its place and size and the ink moves with it; an infinite page with margins grows below the PDF instead of stretching it. Exports and thumbnails include the margins.
+- **Re-published slides** (#235): *Update PDF from a new version…* (page menu or command) recognises the slides already in the notebook by their content (pdf.js text; a small image hash for slides with little text), not by number. New pages are appended after the last pages of that PDF (with the same margins), notes stay on their slides even when the order changed, changed slides are listed as "updated" and can be switched to the new version keeping the notes or kept as they are. A summary (new, updated, unchanged, missing) is shown first; the whole update is one undo step; old PDFs stay in `_assets/`.
+- **Export PDF annotations to Markdown** (#155): highlights on PDF pages (with the PDF text under them when the PDF has a text layer) and text boxes, page by page, each with a link that opens the notebook at its page, in a new note next to the notebook (never overwrites an existing note).
+
+### Changed
+- **Format v6**: optional page field `margins`. v5 files are migrated in memory (nothing else changes); once saved by this version, 0.4.x opens them read-only with a backup.
+
 ## 0.4.1 — 2026-10-29
 
 Hotfix for 0.4.0. Not yet verified on Android hardware.
