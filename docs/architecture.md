@@ -139,7 +139,9 @@ src/
     ruler.ts              ruler placed by two fingers, edge snapping
     infinite.ts           growth rule for infinite pages
     writing-bench.ts      synthetic pen replay: old vs new writing pipeline (in-app benchmark and PC harness)
-    input-policy.ts       pen/touch/mouse routing, time-based palm rejection, contact-size palm filter (pure logic)
+    input-policy.ts       pen/touch/mouse routing, time-based palm rejection, contact-size palm filter, edge zones, pen side-button action (pure logic)
+    edge-zones.ts         edge rejection zones: which touch positions are ignored (pure)
+    radial.ts             radial menu geometry: sector hit test, centre clamping, sector paths, recent colours (pure)
     hit-test.ts           whole-stroke eraser (segment-segment distance + bounding box)
     segment-erase.ts      segment eraser: cuts a stroke into the runs that survive
     lasso.ts              point-in-polygon selection, selection bounds, stroke transform
@@ -153,6 +155,7 @@ src/
     journal.ts            instant save journal: slots, entries (snapshot or line diff), fingerprints, replay (pure)
     history.ts            version history helpers: snapshot names, retention, timing, restore guards (pure)
     vault-io.ts           Vault API adapter (read, process, backup) and the plugin-folder journal store
+    idle.ts               wait for a quiet moment (delay + idle callback) for work nobody is looking at (pure, injectable scheduler)
     notebooks.ts          notebook creation in the configured folder
   library/
     index.ts              library index: entries, queries (scope, search with snippets, sort), staleness (pure)
@@ -195,6 +198,9 @@ src/
     pdf-range-modal.ts    page range for "Insert PDF"
     text-editor.ts        in-place text box editor
     ruler-gesture.ts      two-finger ruler placement
+    radial-menu.ts        radial menu at the pen tip (DOM, window-level pointer capture) and the pen's quick-tools list
+    last-location.ts      debounced memory of the notebook and page being read (instant start)
+    input-settings.ts     plugin settings to input-policy settings
     export.ts             writes PDF/SVG files next to the notebook (Vault API), rasterises backgrounds and images, free file names
     benchmark.ts          in-app benchmark (off-screen render of a generated notebook, writing replay) and its modal
     modals.ts             "New notebook" (name, page size, orientation, paper) and "Open notebooks" (fuzzy search)
@@ -243,7 +249,11 @@ Known limit: if Android kills the process without notifying `visibilitychange`, 
 
 **Format layer** (`storage/format.ts`). The only module that knows what a notebook file is (`NOTEBOOK_EXTENSIONS`, `isNotebookFile`) and how the document text is taken from and put back into the raw file text (`readNotebookText`, `writeNotebookText`). The session, library, index, embeds, history, scanner and PDF import use these helpers instead of testing `.notebook` or reading raw text, so a later container change (M4: Markdown, §5) is confined here. The version snapshots and the journal store the document text as `readNotebookText` returns it.
 
-**Version history** (`storage/history.ts`, `integration/history-service.ts`). On `file-open` and `modify` of a notebook, a snapshot is written if the newest one is older than `snapshotIntervalHours` (default 24; 0 = off): `<notebooks folder>/_backup/history/<document id>/<YYYYMMDD-HHmm>.snapshot`, the document text byte for byte. Beyond `snapshotsToKeep` (default 10) the oldest go to the Obsidian trash. The command **Restore a previous version** lists the snapshots (date, page count, size), asks for confirmation, then: flushes the open notebook (restore stops if that save fails), checks that the snapshot's document id matches the file (a snapshot of another notebook is refused; if the file is unreadable it asks again), saves the current content as a `before-restore` backup, and writes the snapshot through the same checked path as a normal save. Open views reload the result.
+**Version history** (`storage/history.ts`, `integration/history-service.ts`). On `file-open` and `modify` of a notebook, a snapshot is written (the file is read at once, so the snapshot is the content as it was on open, but it is parsed and written only after `whenIdle`, so a second full parse does not compete with the first paint; see Instant start) if the newest one is older than `snapshotIntervalHours` (default 24; 0 = off): `<notebooks folder>/_backup/history/<document id>/<YYYYMMDD-HHmm>.snapshot`, the document text byte for byte. Beyond `snapshotsToKeep` (default 10) the oldest go to the Obsidian trash. The command **Restore a previous version** lists the snapshots (date, page count, size), asks for confirmation, then: flushes the open notebook (restore stops if that save fails), checks that the snapshot's document id matches the file (a snapshot of another notebook is refused; if the file is unreadable it asks again), saves the current content as a `before-restore` backup, and writes the snapshot through the same checked path as a normal save. Open views reload the result.
+
+**Instant start** (`view/last-location.ts`, `storage/idle.ts`, #271). The page being read goes into the workspace layout through `getState()` (`{ file, page }`, the same `page` that links use, applied by `setState`), saved by `requestSaveLayout` a second after it changes; the plugin also keeps the last notebook path and page in its settings for the command *Continue last notebook*. Neither is part of the notebook file. Work nobody is looking at is kept out of the first paint: the version-history snapshot parses after `whenIdle`, the stroke-line warm-up of the save check starts `WARM_UP_DELAY_MS` (400 ms) after the load, the page panel and thumbnails only work when open, PDF pages and images load on demand. Nothing in the load path was weakened: the document is still parsed, migrated and validated in full before it is shown, and a save before the warm-up has finished computes the lines it needs itself. Measure with `npm run bench:open` (headless Chrome, in-memory vault: CPU time only; not Android).
+
+**Input routing** (`ink/input-policy.ts`, `ink/edge-zones.ts`, `ink/radial.ts`, `view/radial-menu.ts`, #151, #152). Routing is policy around the pointer controller; the stroke pipeline (sampling, wet ink, geometry, stabilizer) is untouched. A touch that starts in an enabled edge zone (`edgeRejection`, `edgeRejectionPx`, one switch per edge) routes to `ignore`. The pen side button (`button 2` or `buttons & 2`) follows `penButtonAction`: `radial` routes the pen-down to `menu` (no stroke, and the pen is not marked down for palm rejection because no stroke will end it; a press while hovering is detected on `pointermove` once per press), `eraser` draws as the eraser while held, `off` keeps the previous behaviour (a contact with the button held draws, a bare button press is ignored). The eraser end and the eraser button (`button 5`, `buttons & 32`) always erase. While the radial menu is open it listens on `window` in the capture phase and stops the pointer events, so nothing reaches the page; the ring is placed by `clampCenter`, sectors are hit-tested by `sectorAt` (sector 0 at the top, clockwise), and a sector is chosen by lifting or tapping on it or by releasing the button over it.
 
 ## 5. Format evolution (toward M4)
 
