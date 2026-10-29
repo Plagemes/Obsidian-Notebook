@@ -14,8 +14,8 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | `pointerrawupdate` for the drawing pointer (fallback `pointermove`), each sample once | ✅ | ✅ dedup rule; harness (Chromium) | | ✅ | only with *Low-latency ink* (off by default); depends on the WebView exposing it (the overlay shows "raw") |
 | Low-latency (`desynchronized`) wet canvas, setting *Low-latency ink*, **default off** | ✅ | ✅ context fallback; harness (desktop Chromium only) | | ✅ | may be composited as an opaque layer on some Android GPUs |
 | Render and input guards: a failing stroke, element, background or wet-ink paint is skipped and logged once; the pen falls back to the live layer | ✅ | ✅ unit + harness fault injection | | | |
-| Wet ink: new ink painted per input event, dirty rectangles, no per-frame redraw | ✅ | ✅ geometry, dirty rects, constant work per sample (canvas stand-in) | | | |
-| No change at pen-up (same geometry while writing and after commit) | ✅ | ✅ causal geometry, committed path vs painted union | | | |
+| Wet ink: new ink painted per input event, dirty rectangles, no per-frame redraw | ✅ | ✅ geometry, dirty rects, constant work per sample (canvas stand-in) | ✅ user report, 2026-10-29: Samsung tablet, S Pen, 0.4.1, low-latency off | | |
+| No change at pen-up (same geometry while writing and after commit) | ✅ | ✅ causal geometry, committed path vs painted union | ✅ user report, 2026-10-29: Samsung tablet, S Pen, 0.4.1, low-latency off | | |
 | Predicted ink (tip only, never saved; **default off**) | ✅ | ❌ | | ✅ | |
 | Real pen pressure, decided at stroke start, simulated fallback for constant pressure | ✅ | ✅ | | | |
 | Basic palm rejection (pen seen in the last N ms) | ✅ | ✅ | | | |
@@ -214,7 +214,7 @@ For each step note **pass / fail / notes** in the table at the end.
 | 24 Page menu and undo | | | |
 | 25 Export PDF/SVG | | | |
 | 26 0.2 opens a 0.3 file | | | |
-| 27 Writing engine | | | |
+| 27 Writing engine | ✅ | user: "works very well" (Samsung tablet, 0.4.1, low-latency off) | benchmark numbers not reported yet |
 | 28 Library | | | |
 | 29 Library search | | | |
 | 30 PDF import and insertion | | | |
