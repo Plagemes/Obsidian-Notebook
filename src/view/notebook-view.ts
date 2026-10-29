@@ -2,6 +2,8 @@ import { FileView, Menu, Notice, Scope, type TFile, type ViewStateResult, type W
 import { pageFromState } from "../integration/links";
 import { scanFromCamera } from "../scan/scan-modal";
 import { scannedPage } from "../scan/pages";
+import { PhotoDecodeError, photoSize } from "../scan/decode";
+import { isHeic } from "../scan/image-bytes";
 import { t } from "../i18n";
 import { renderThumbnail } from "../library/thumbnail";
 import { elementsInLasso, hitElement, transformElement } from "../ink/elements";
@@ -88,6 +90,8 @@ interface ActiveStroke {
 	stroke: Stroke;
 	/** Written as wet ink: points and geometry live in the InkBuilder until the pen lifts. */
 	wet: boolean;
+	/** The wet-ink layer was not available: the stroke in progress is shown on the live layer. */
+	liveFallback: boolean;
 	/** Last raw (unfiltered) pen position on the page and its pressure: the tip of the line, and its last point. */
 	rawX: number;
 	rawY: number;
@@ -277,7 +281,7 @@ export class NotebookView extends FileView {
 		this.messageEl.hide();
 		this.toolbar.setEditable(false);
 
-		this.renderer = new Renderer(this.stage);
+		this.renderer = new Renderer(this.stage, { lowLatency: this.host.settings.lowLatencyInk });
 		// Registered before the pointer controller: the ruler gesture swallows the touches that move the ruler.
 		this.rulerGesture = new RulerGesture(this.stage, {
 			enabled: () => this.tools.ruler && !!this.ruler && this.editable(),
@@ -293,7 +297,7 @@ export class NotebookView extends FileView {
 				this.fitMode = false;
 				this.setViewport(zoomAt(this.viewport, factor, fx, fy), true);
 			},
-		});
+		}, { rawUpdates: this.host.settings.lowLatencyInk });
 		this.applySettings(this.host.settings);
 
 		this.resizeObserver = new ResizeObserver(() => this.measure());
@@ -475,7 +479,11 @@ export class NotebookView extends FileView {
 		};
 		this.pressure.mode = settings.pressureMode;
 		this.filter.params = stabilizationParams(settings.stabilization);
-		if (this.controller) this.controller.predictionEnabled = settings.inkPrediction;
+		if (this.controller) {
+			this.controller.predictionEnabled = settings.inkPrediction;
+			if (!this.controller.drawing) this.controller.setRawUpdates(settings.lowLatencyInk);
+		}
+		if (this.renderer && !this.active) this.renderer.setLowLatency(settings.lowLatencyInk);
 		this.perfEl?.toggleClass("notebook-hidden", !settings.perfOverlay);
 		if (this.renderer) this.renderer.onFrame = settings.perfOverlay ? (t) => this.onFrame(t) : null;
 	}
@@ -667,6 +675,8 @@ export class NotebookView extends FileView {
 	private async pickAndStore(kind: "pdf" | "image"): Promise<{ asset: Asset; bytes: ArrayBuffer } | null> {
 		const file = await pickFile(this.app, kind);
 		if (!file) return null;
+		// Refuse HEIF/HEIC before storing it: the WebView cannot show it on a page anyway.
+		if (kind === "image" && isHeic(file.bytes)) throw new PhotoDecodeError("heic");
 		const asset = await storeAsset(this.app, this.host.settings.folder, file.bytes, file.name, kind);
 		this.media?.addPending(asset);
 		return { asset, bytes: file.bytes };
@@ -726,7 +736,7 @@ export class NotebookView extends FileView {
 			const picked = await this.pickAndStore("image");
 			if (!picked) return;
 			asset = picked.asset;
-			const dims = await decodeSize(picked.bytes);
+			const dims = await photoSize(picked.bytes, "");
 			if (!this.stillHere(session)) return;
 			const doc = session.doc;
 			const at = doc ? doc.pages.indexOf(anchor) : -1;
@@ -740,7 +750,7 @@ export class NotebookView extends FileView {
 			this.scrollToPage(at + 1);
 		} catch (e) {
 			console.error("[notebook] insert image page", e);
-			new Notice(t("insert.failed", { error: (e as Error).message }), 8000);
+			new Notice(insertFailure(e), 8000);
 		} finally {
 			if (asset) media.removePending(asset.id);
 		}
@@ -827,7 +837,7 @@ export class NotebookView extends FileView {
 			const picked = await this.pickAndStore("image");
 			if (!picked) return;
 			asset = picked.asset;
-			const dims = await decodeSize(picked.bytes);
+			const dims = await photoSize(picked.bytes, "");
 			if (!this.stillHere(session) || !session.doc?.pages.includes(anchor)) return;
 			const box = this.layout?.boxes[session.doc.pages.indexOf(anchor)];
 			if (!box) return;
@@ -851,7 +861,7 @@ export class NotebookView extends FileView {
 			}
 		} catch (e) {
 			console.error("[notebook] insert image", e);
-			new Notice(t("insert.failed", { error: (e as Error).message }), 8000);
+			new Notice(insertFailure(e), 8000);
 		} finally {
 			if (asset) media.removePending(asset.id);
 		}
@@ -1332,6 +1342,7 @@ export class NotebookView extends FileView {
 			pageIndex,
 			stroke: createStroke(color, width, [], inkTool, RENDER_INK),
 			wet: true,
+			liveFallback: false,
 			rawX: start[0],
 			rawY: start[1],
 			rawP: p,
@@ -1345,7 +1356,8 @@ export class NotebookView extends FileView {
 		this.hold.push(sample.x, sample.y, performance.now());
 		this.startHold();
 		// The first point shows as a dot right away.
-		if (this.renderer?.beginWet(pageIndex, this.ink, inkTool, color)) this.renderer.paintWet();
+		const painted = !!this.renderer?.beginWet(pageIndex, this.ink, inkTool, color) && this.renderer.paintWet();
+		if (!painted) this.showLiveFallback(this.active);
 		return true;
 	}
 
@@ -1436,7 +1448,10 @@ export class NotebookView extends FileView {
 			if (active.tried && Math.hypot(rx - active.tried.x, ry - active.tried.y) > HOLD_RADIUS_PX) active.tried = null;
 		}
 		const wet = this.renderer?.wetInk;
-		if (!wet) return;
+		if (!wet) {
+			this.showLiveFallback(active);
+			return;
+		}
 		// Tip: up to the raw pen position, then the predicted samples (drawn, never stored).
 		wet.clearExtra();
 		wet.pushExtra(active.rawX, active.rawY, active.rawP);
@@ -1447,13 +1462,27 @@ export class NotebookView extends FileView {
 				if (Number.isFinite(px) && Number.isFinite(py)) wet.pushExtra(px, py, active.rawP);
 			}
 		}
-		this.renderer!.paintWet();
+		if (!this.renderer!.paintWet()) this.showLiveFallback(active);
 		if (this.host.settings.perfOverlay) {
 			const now = performance.now();
 			this.perfProcess.push(now - t0);
 			if (n > 0) this.perfPaint.push(Math.max(0, now - samples.t[n - 1]!));
 			this.renderer!.requestFrame();
 		}
+	}
+
+	/**
+	 * Safe path when wet ink is not available (it failed, or there is no page transform): the stroke
+	 * in progress is drawn on the live layer at the next animation frame, like before the writing
+	 * engine. Slower, but the pen always leaves ink.
+	 */
+	private showLiveFallback(active: ActiveStroke): void {
+		if (!this.renderer) return;
+		active.liveFallback = true;
+		const points = this.ink.toPoints();
+		points.push([active.rawX, active.rawY, active.rawP]);
+		const { tool, color, width } = active.stroke;
+		this.renderer.setLive({ pageIndex: active.pageIndex, tool, color, width, points, predicted: [] });
 	}
 
 	private drawEnd(cancelled: boolean): void {
@@ -1523,6 +1552,7 @@ export class NotebookView extends FileView {
 			// The wet canvas shows exactly this geometry; the static layer takes it over without a change.
 			this.renderer?.endWet(stroke);
 			this.addStrokes(active.pageIndex, page, [stroke]);
+			if (active.liveFallback) this.renderer?.setLive(null);
 			return;
 		}
 		this.renderer?.setLive(null);
@@ -1792,10 +1822,8 @@ export class NotebookView extends FileView {
 	}
 }
 
-/** Pixel size of an image file (any format the WebView can decode). */
-async function decodeSize(bytes: ArrayBuffer): Promise<{ width: number; height: number }> {
-	const bmp = await createImageBitmap(new Blob([bytes]));
-	const size = { width: bmp.width, height: bmp.height };
-	bmp.close();
-	return size;
+/** Notice text for a failed image insert: HEIF/HEIC gets its own, actionable message. */
+function insertFailure(e: unknown): string {
+	if (e instanceof PhotoDecodeError && e.reason === "heic") return t("scan.heic");
+	return t("insert.failed", { error: e instanceof Error ? e.message : String(e) });
 }

@@ -4,6 +4,8 @@ import { t } from "../i18n";
 export interface PickedFile {
 	name: string;
 	bytes: ArrayBuffer;
+	/** MIME type reported by the picker (may be empty on Android content URIs). */
+	type?: string;
 }
 
 const EXTENSIONS = {
@@ -42,12 +44,32 @@ class VaultFileModal extends FuzzySuggestModal<TFile> {
 	}
 }
 
-/** Opens the device file picker (camera when `capture` is set). Resolves null if nothing is chosen. */
+/** Reads a picked file; falls back to FileReader (Android content URIs). An unreadable file yields empty bytes, never a silent cancel. */
+async function readPicked(f: File): Promise<PickedFile> {
+	let bytes: ArrayBuffer;
+	try {
+		bytes = await f.arrayBuffer();
+	} catch {
+		bytes = await new Promise<ArrayBuffer>((resolve) => {
+			const reader = new FileReader();
+			reader.onload = () => resolve(reader.result instanceof ArrayBuffer ? reader.result : new ArrayBuffer(0));
+			reader.onerror = () => resolve(new ArrayBuffer(0));
+			reader.readAsArrayBuffer(f);
+		});
+	}
+	return { name: f.name, bytes, type: f.type };
+}
+
+/**
+ * Opens the device file picker (camera app when `capture` is set). Resolves with no files if nothing is chosen.
+ * With `capture` the camera app returns one photo, and `multiple` would make some Android WebViews open the gallery
+ * instead of the camera, so it is ignored there.
+ */
 export function pickFromDevice(kind: keyof typeof ACCEPT, capture = false, multiple = false): Promise<PickedFile[]> {
 	return new Promise((resolve) => {
 		const input = activeDocument.body.createEl("input", { type: "file", cls: "notebook-hidden", attr: { accept: ACCEPT[kind] } });
 		if (capture) input.setAttribute("capture", "environment");
-		input.multiple = multiple;
+		input.multiple = multiple && !capture;
 		let settled = false;
 		const finish = (files: PickedFile[]) => {
 			if (settled) return;
@@ -56,8 +78,9 @@ export function pickFromDevice(kind: keyof typeof ACCEPT, capture = false, multi
 			resolve(files);
 		};
 		input.addEventListener("change", () => {
+			// Read the list now: it belongs to the input, which is removed once we finish.
 			const list = Array.from(input.files ?? []);
-			void Promise.all(list.map(async (f) => ({ name: f.name, bytes: await f.arrayBuffer() }))).then(finish, () => finish([]));
+			void Promise.all(list.map(readPicked)).then(finish, () => finish([]));
 		});
 		// Some WebViews fire "cancel"; others never tell us. The input is removed on the next pick anyway.
 		input.addEventListener("cancel", () => finish([]));

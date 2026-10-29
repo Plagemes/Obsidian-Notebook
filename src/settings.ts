@@ -11,6 +11,12 @@ export interface NotebookSettings {
 	 * old `prediction` key (default on), so the new default (off) applies to everyone.
 	 */
 	inkPrediction: boolean;
+	/**
+	 * Experimental low-latency ink: the pen's wet canvas asks for a `desynchronized` context and
+	 * `pointerrawupdate` is listened to. Off by default: on some Android GPUs a desynchronized canvas
+	 * is composited as an opaque layer. Ink is painted in the input handler either way.
+	 */
+	lowLatencyInk: boolean;
 	/** 0–10: strength of the adaptive position filter (one-euro.ts); 0 turns it off. */
 	stabilization: number;
 	/** Touch contacts larger than this (CSS px) are ignored as palms; 0 = off. */
@@ -32,6 +38,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	palmRejectionMs: 500,
 	pressureMode: "auto",
 	inkPrediction: false,
+	lowLatencyInk: false,
 	stabilization: 2,
 	palmContactPx: 0,
 	perfOverlay: false,
@@ -52,6 +59,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.palmRejectionMs === "number" && d.palmRejectionMs >= 0 && d.palmRejectionMs <= 5000) s.palmRejectionMs = d.palmRejectionMs;
 	if (d.pressureMode === "auto" || d.pressureMode === "simulated") s.pressureMode = d.pressureMode;
 	if (typeof d.inkPrediction === "boolean") s.inkPrediction = d.inkPrediction;
+	if (typeof d.lowLatencyInk === "boolean") s.lowLatencyInk = d.lowLatencyInk;
 	if (typeof d.stabilization === "number" && d.stabilization >= 0 && d.stabilization <= 10) s.stabilization = d.stabilization;
 	if (typeof d.palmContactPx === "number" && d.palmContactPx >= 0 && d.palmContactPx <= 200) s.palmContactPx = d.palmContactPx;
 	if (typeof d.perfOverlay === "boolean") s.perfOverlay = d.perfOverlay;

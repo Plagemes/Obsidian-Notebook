@@ -1,6 +1,8 @@
 import { Modal, Notice, type App } from "obsidian";
 import { t } from "../i18n";
-import { pickFromDevice, type PickedFile } from "../view/pick";
+import type { PickedFile } from "../view/pick";
+import { takePhotos } from "./camera";
+import { decodePhoto, PhotoDecodeError } from "./decode";
 import { detectDocument } from "./detect";
 import { applyFilter, toGray } from "./filters";
 import { insetQuad, orderCorners, outputSize, rotatePoint90, warpPerspective } from "./geometry";
@@ -72,6 +74,7 @@ class ScanModal extends Modal {
 	private mode: Mode = "crop";
 	private busy = false;
 	private failed = false;
+	private failReason: "heic" | "unreadable" = "unreadable";
 	private loadToken = 0;
 	private activeCorner = -1;
 
@@ -174,7 +177,7 @@ class ScanModal extends Modal {
 		this.setTitle(t("scan.title", { n: String(this.index + 1), total: String(this.queue.length) }));
 		this.nextBtn.setText(last ? t("scan.done") : t("scan.next"));
 		this.toggleBtn.setText(this.mode === "crop" ? t("scan.preview") : t("scan.adjust"));
-		this.hintEl.setText(this.busy ? t("scan.processing") : this.failed ? t("scan.unreadable") : this.mode === "crop" ? t("scan.hint") : "");
+		this.hintEl.setText(this.busy ? t("scan.processing") : this.failed ? t(this.failReason === "heic" ? "scan.heic" : "scan.unreadable") : this.mode === "crop" ? t("scan.hint") : "");
 		const ready = !this.busy && !this.failed && this.work !== null;
 		this.nextBtn.disabled = !ready;
 		this.toggleBtn.disabled = !ready;
@@ -197,20 +200,14 @@ class ScanModal extends Modal {
 		this.draw();
 		if (!file) return;
 		try {
-			const bmp = await createImageBitmap(new Blob([file.bytes]));
+			const { canvas: work, ctx: wctx } = await decodePhoto(file.bytes, file.name, MAX_WORK_SIDE, file.type);
 			if (token !== this.loadToken) {
-				bmp.close();
+				work.width = 0;
+				work.height = 0;
 				return;
 			}
-			const k = Math.min(1, MAX_WORK_SIDE / Math.max(bmp.width, bmp.height));
-			const w = Math.max(1, Math.round(bmp.width * k));
-			const h = Math.max(1, Math.round(bmp.height * k));
-			const work = newCanvas(w, h);
-			const wctx = work.getContext("2d", { willReadFrequently: true });
-			if (!wctx) throw new Error("2D canvas is not available");
-			wctx.imageSmoothingQuality = "high";
-			wctx.drawImage(bmp, 0, 0, w, h);
-			bmp.close();
+			const w = work.width;
+			const h = work.height;
 			this.work = work;
 			this.srcData = wctx.getImageData(0, 0, w, h);
 			await nextFrame();
@@ -220,6 +217,8 @@ class ScanModal extends Modal {
 			if (token !== this.loadToken) return;
 			console.error("Notebook: could not decode the photo", err);
 			this.failed = true;
+			this.failReason = err instanceof PhotoDecodeError ? err.reason : "unreadable";
+			if (this.failReason === "heic") new Notice(t("scan.heic"), 15000);
 			this.work = null;
 			this.srcData = null;
 		}
@@ -245,7 +244,7 @@ class ScanModal extends Modal {
 
 	private async retake(): Promise<void> {
 		if (this.busy) return;
-		const files = await pickFromDevice("image", true, false);
+		const files = await takePhotos(this.app, false);
 		const file = files[0];
 		if (!file || this.closed) return;
 		this.queue[this.index] = file;
@@ -530,7 +529,7 @@ export function openScanner(app: App, sheets: PickedFile[]): Promise<ScannedShee
 
 /** Opens the camera (several shots allowed) and runs the scanner on the photos. */
 export async function scanFromCamera(app: App): Promise<ScannedSheet[]> {
-	const photos = await pickFromDevice("image", true, true);
+	const photos = await takePhotos(app, true);
 	if (photos.length === 0) return [];
 	return openScanner(app, photos);
 }

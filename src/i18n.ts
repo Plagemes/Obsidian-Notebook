@@ -305,7 +305,17 @@ const en = {
 	// --- writing engine ---
 	"settings.inkPrediction": "Predicted ink",
 	"settings.inkPrediction.desc": "Draws the browser's predicted pen positions ahead of the tip to reduce perceived latency. Never saved; they can overshoot at sharp turns and at the end of a stroke.",
+	"settings.lowLatencyInk": "Low-latency ink (experimental)",
+	"settings.lowLatencyInk.desc": "Shows the ink being written on a low-latency layer and reads pen samples as soon as they arrive. Faster on some devices; on others the page can turn black or the ink may not show. Turn it off if that happens.",
 	"settings.stabilization.filter.desc": "Smooths hand tremor when the pen moves slowly, without slowing the line down when it moves fast. Higher values smooth more. 0 turns it off.",
+	// --- scanner hotfix ---
+	"scan.heic": "This photo is HEIF/HEIC, which Obsidian on Android cannot read. In Samsung Camera → Settings, turn off \"High efficiency pictures\" (photos are then saved as JPEG), or use the in-app camera.",
+	"scan.cameraTitle": "Scan with the camera",
+	"scan.cameraHint": "Frame the page and tap the shutter.",
+	"scan.capture": "Take photo",
+	"scan.capturedDone": "Done ({n})",
+	"scan.useFilePicker": "Use the camera app",
+	"scan.cameraFailed": "The in-app camera is not available here. Use the camera app instead.",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -615,7 +625,17 @@ const it: Partial<Record<MessageKey, string>> = {
 	// --- writing engine ---
 	"settings.inkPrediction": "Inchiostro predetto",
 	"settings.inkPrediction.desc": "Disegna davanti alla punta le posizioni della penna previste dal browser, per ridurre la latenza percepita. Non vengono mai salvate; nelle curve strette e a fine tratto possono andare oltre.",
+	"settings.lowLatencyInk": "Inchiostro a bassa latenza (sperimentale)",
+	"settings.lowLatencyInk.desc": "Mostra l'inchiostro mentre scrivi su un livello a bassa latenza e legge i campioni della penna appena arrivano. Più veloce su alcuni dispositivi; su altri la pagina può diventare nera o l'inchiostro non comparire. In quel caso disattivalo.",
 	"settings.stabilization.filter.desc": "Attenua il tremolio della mano quando la penna si muove lentamente, senza rallentare la linea quando si muove veloce. Valori più alti stabilizzano di più. 0 la disattiva.",
+	// --- scanner hotfix ---
+	"scan.heic": "Questa foto è in formato HEIF/HEIC, che Obsidian su Android non riesce a leggere. In Fotocamera Samsung → Impostazioni, disattiva \"Foto ad alta efficienza\" (le foto verranno salvate in JPEG), oppure usa la fotocamera interna.",
+	"scan.cameraTitle": "Scansiona con la fotocamera",
+	"scan.cameraHint": "Inquadra la pagina e tocca lo scatto.",
+	"scan.capture": "Scatta",
+	"scan.capturedDone": "Fine ({n})",
+	"scan.useFilePicker": "Usa l'app Fotocamera",
+	"scan.cameraFailed": "La fotocamera interna non è disponibile qui. Usa l'app Fotocamera.",
 };
 
 let table: Partial<Record<MessageKey, string>> | null = null;

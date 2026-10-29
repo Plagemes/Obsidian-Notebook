@@ -9,7 +9,7 @@ const NODE_ONLY = [
 ].flatMap((name) => [name, `node:${name}`]);
 
 export default tseslint.config(
-	{ ignores: ["main.js", "node_modules/**", "coverage/**"] },
+	{ ignores: ["main.js", "node_modules/**", "coverage/**", "dev/harness/dist/**"] },
 	js.configs.recommended,
 	...tseslint.configs.recommended,
 	{
@@ -43,7 +43,12 @@ export default tseslint.config(
 		},
 	},
 	{
-		files: ["tests/**/*.ts", "*.mjs", "*.ts", "scripts/**/*.mjs"],
+		files: ["tests/**/*.ts", "*.mjs", "*.ts", "scripts/**/*.mjs", "dev/**/*.mjs"],
 		languageOptions: { globals: globals.node },
+	},
+	{
+		// Browser harness page (dev only, never bundled into main.js).
+		files: ["dev/**/*.ts"],
+		languageOptions: { globals: globals.browser },
 	},
 );

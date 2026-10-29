@@ -71,6 +71,11 @@ export class NotebookSettingTab extends PluginSettingTab {
 				control: { type: "toggle", key: "inkPrediction", defaultValue: DEFAULT_SETTINGS.inkPrediction },
 			},
 			{
+				name: t("settings.lowLatencyInk"),
+				desc: t("settings.lowLatencyInk.desc"),
+				control: { type: "toggle", key: "lowLatencyInk", defaultValue: DEFAULT_SETTINGS.lowLatencyInk },
+			},
+			{
 				name: t("settings.stabilization"),
 				desc: t("settings.stabilization.filter.desc"),
 				control: { type: "slider", key: "stabilization", defaultValue: DEFAULT_SETTINGS.stabilization, min: 0, max: 10, step: 1 },
@@ -167,6 +172,11 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setName(t("settings.inkPrediction"))
 			.setDesc(t("settings.inkPrediction.desc"))
 			.addToggle((toggle) => toggle.setValue(s.inkPrediction).onChange((v) => this.setControlValue("inkPrediction", v)));
+
+		new Setting(containerEl)
+			.setName(t("settings.lowLatencyInk"))
+			.setDesc(t("settings.lowLatencyInk.desc"))
+			.addToggle((toggle) => toggle.setValue(s.lowLatencyInk).onChange((v) => this.setControlValue("lowLatencyInk", v)));
 
 		new Setting(containerEl)
 			.setName(t("settings.stabilization"))

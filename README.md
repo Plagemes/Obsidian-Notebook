@@ -9,7 +9,7 @@ Handwritten notebooks inside your Obsidian vault, designed first for **Android t
 - Local-first: no account, no cloud, no telemetry.
 - UI in English, and in Italian when Obsidian is set to Italian.
 
-> **Status: v0.4.0 (milestones M3b and M3c), early development.** The automated tests pass, but the plugin has **not been verified on Android hardware yet**, and many features are experimental (including the writing engine, the scanner and export: the PDF and SVG were checked with other software on a PC, not opened on Android). See [docs/testing.md](docs/testing.md) for what is verified and how to test it.
+> **Status: v0.4.1 (milestones M3b and M3c, plus a hotfix), early development.** The automated tests pass, but the plugin has **not been verified on Android hardware yet**, and many features are experimental (including the writing engine, the scanner and export: the PDF and SVG were checked with other software on a PC, not opened on Android). See [docs/testing.md](docs/testing.md) for what is verified and how to test it.
 
 ## Usage
 
@@ -97,6 +97,7 @@ The PDF writer has no dependencies and does not compress, so a page with a lot o
 | Palm rejection time | touch is ignored for this long after the pen was seen (default 500 ms) |
 | Pressure | use the device pressure, or always simulate it from speed. Decided at the start of each stroke |
 | Predicted ink | draw the pen's predicted path ahead of the tip (never saved). Off by default: it can overshoot at turns and at the end of a stroke |
+| Low-latency ink (experimental) | show the ink being written on a low-latency layer and read pen samples as soon as they arrive. Off by default: on some devices it can turn the page black or hide the ink |
 | Stabilization | 0–10, default 2. Adaptive smoothing of hand tremor: strong when the pen is slow, almost none when it is fast; higher values trail further behind the pen. The filtered points are what is saved |
 | Ignore large touches | experimental, 0 = off. Touches with a contact larger than this many px are treated as a palm and ignored, scrolling included. Depends on what the device reports |
 | Performance overlay | shows frame time, input-to-frame and input-to-paint times, whether raw input is in use, redraw time, and strokes and pages drawn |
