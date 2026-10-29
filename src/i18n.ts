@@ -178,6 +178,21 @@ const en = {
 	"library.empty.folder": "This folder is empty.",
 	"library.empty.tag": "No notebooks have this tag.",
 	"library.empty.search": "No notebooks match “{query}”.",
+	// --- notebook view: navigator, media, pickers ---
+	"nav.title": "Pages",
+	"nav.onlyBookmarks": "Show bookmarked pages only",
+	"nav.page": "Page {n}",
+	"nav.bookmark": "Bookmark",
+	"nav.empty": "No pages to show",
+	"media.loading": "Loading…",
+	"media.missing": "Missing file: {name}",
+	"pick.search": "Search files…",
+	"pick.pdfTitle": "Choose a PDF",
+	"pick.imageTitle": "Choose an image",
+	"pick.fromVault": "From this vault",
+	"pick.fromDevice": "From this device",
+	"pick.browse": "Browse",
+	"pick.choose": "Choose file",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -360,6 +375,21 @@ const it: Partial<Record<MessageKey, string>> = {
 	"library.empty.folder": "Questa cartella è vuota.",
 	"library.empty.tag": "Nessun quaderno ha questo tag.",
 	"library.empty.search": "Nessun quaderno corrisponde a “{query}”.",
+	// --- notebook view: navigator, media, pickers ---
+	"nav.title": "Pagine",
+	"nav.onlyBookmarks": "Mostra solo le pagine con segnalibro",
+	"nav.page": "Pagina {n}",
+	"nav.bookmark": "Segnalibro",
+	"nav.empty": "Nessuna pagina da mostrare",
+	"media.loading": "Caricamento…",
+	"media.missing": "File mancante: {name}",
+	"pick.search": "Cerca file…",
+	"pick.pdfTitle": "Scegli un PDF",
+	"pick.imageTitle": "Scegli un'immagine",
+	"pick.fromVault": "Da questo vault",
+	"pick.fromDevice": "Da questo dispositivo",
+	"pick.browse": "Sfoglia",
+	"pick.choose": "Scegli file",
 };
 
 let table: Partial<Record<MessageKey, string>> | null = null;

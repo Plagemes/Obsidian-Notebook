@@ -3,7 +3,8 @@ import {
 	type TAbstractFile, type ViewStateResult, type WorkspaceLeaf,
 } from "obsidian";
 import { t, type MessageKey } from "../i18n";
-import { FILE_EXTENSION, type NotebookDocument, type NotebookMeta } from "../model/types";
+import type { NotebookDocument, NotebookMeta } from "../model/types";
+import { isNotebookFile } from "../storage/format";
 import { sanitizeName } from "../storage/notebooks";
 import { attachPress, DROP_ATTR } from "./drag";
 import { breadcrumb, buildFolderTree, flattenTree, isReservedPath, type FolderNode } from "./folders";
@@ -287,7 +288,7 @@ export class LibraryView extends ItemView {
 		if (!folder) return [];
 		const out: TFile[] = [];
 		Vault.recurseChildren(folder, (f) => {
-			if (f instanceof TFile && f.extension === FILE_EXTENSION && !isReservedPath(f.path, root)) out.push(f);
+			if (f instanceof TFile && isNotebookFile(f) && !isReservedPath(f.path, root)) out.push(f);
 		});
 		return out;
 	}
@@ -313,7 +314,7 @@ export class LibraryView extends ItemView {
 	}
 
 	private onVaultChange(f: TAbstractFile, delay = STRUCTURE_DELAY_MS): void {
-		if (f instanceof TFile && f.extension !== FILE_EXTENSION) return;
+		if (f instanceof TFile && !isNotebookFile(f)) return;
 		if (!this.inLibrary(f.path)) return;
 		this.scheduleReconcile(delay);
 		if (f instanceof TFolder) this.requestRender();
@@ -331,7 +332,7 @@ export class LibraryView extends ItemView {
 
 	private onVaultRename(f: TAbstractFile, oldPath: string): void {
 		if (f instanceof TFile) {
-			if (f.extension === FILE_EXTENSION) {
+			if (isNotebookFile(f)) {
 				if (this.inLibrary(f.path)) this.index.rename(oldPath, f.path);
 				else this.index.remove(oldPath);
 			}

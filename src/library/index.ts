@@ -5,7 +5,7 @@ export const INDEX_VERSION = 1;
 export const RECENT_LIMIT = 20;
 
 export interface LibraryEntry {
-	/** Vault path of the .notebook file. */
+	/** Vault path of the notebook file. */
 	path: string;
 	/** Parent folder path ("" for the vault root). */
 	folder: string;

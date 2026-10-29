@@ -1,5 +1,5 @@
 /** Pure helpers to decide what to read and to turn a document into index fields. No 'obsidian'. */
-import type { NotebookDocument } from "../model/types";
+import { DEFAULT_META, type NotebookDocument } from "../model/types";
 import { folderOf, nameOf, type LibraryEntry, type LibraryIndex } from "./index";
 
 export interface NotebookFileInfo {
@@ -10,10 +10,11 @@ export interface NotebookFileInfo {
 
 /** Cover colours offered in the library; the first is the default. */
 export const COVER_COLORS = [
-	"#5b7fd6", "#3fa7a0", "#5aa469", "#c9a227", "#e08a3c",
+	"#3b82f6", "#3fa7a0", "#5aa469", "#c9a227", "#e08a3c",
 	"#d9534f", "#c2569b", "#8a63d2", "#6b7280", "#2f3a4a",
 ] as const;
-export const DEFAULT_COVER: string = COVER_COLORS[0];
+/** Same default as new documents (DEFAULT_META), so library cards match the files. */
+export const DEFAULT_COVER: string = DEFAULT_META.cover;
 
 const HEX = /^#[0-9a-f]{6}$/i;
 export function isHexColor(v: unknown): v is string {
