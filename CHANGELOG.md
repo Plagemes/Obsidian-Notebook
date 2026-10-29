@@ -27,6 +27,15 @@ Not yet verified on Android hardware (see `docs/testing.md`).
 - **Move to notebook…** (page menu, command): pick pages and a destination notebook. The destination is saved first (an open notebook: one undo step; a closed file: validated, a backup kept, read back), and only then do the pages leave the source (one undo step); pages edited meanwhile stay. Assets are shared by id, so only their records are copied.
 
 ## 0.4.1 — 2026-10-29
+### Added
+- **Edge rejection zones** (#151): settings *Edge rejection zones* (off by default), *Edge zone width* (4-80 px) and one switch per edge (left, right, bottom on; top off). A touch that starts within that distance of an enabled edge of the page area is ignored: it neither draws nor scrolls, so a palm resting on the edge does nothing. The pen, the mouse and a touch that started inside the area are never affected; the zone never takes more than a third of the shorter side.
+- **Radial menu at the pen tip** (#152): pressing the pen's side button opens a ring around the nib with pen, highlighter, eraser, lasso, undo and the last three pen colours. Lift the pen (or tap) on a sector to choose it; releasing the button over a sector also chooses it; tapping elsewhere or Escape closes it. No stroke is drawn. New setting *Pen side button*: radial menu (default), erase while held, or nothing. The eraser end and the eraser button (`buttons & 32`, `button 5`) keep erasing as before.
+- **Instant start** (#271): the page being read is saved with the workspace layout, so reopening Obsidian (or going back/forward) shows the same page; new command **Continue last notebook** opens the notebook that was open last on the page that was in view (stored in the plugin settings, never in the notebook file).
+- `npm run bench:open`: open-time benchmark of the real view in headless Chrome (10,000 strokes / 10 pages by default), with the phases timed and an emulation of the work the plugin starts on open.
+
+### Changed
+- Opening a notebook no longer parses it a second time in the middle of the first paint: the version-history snapshot reads the file at once (so it keeps the content as it was on open) but parses and writes it once the page is on screen and the browser is idle. The stroke-line warm-up of the save check also starts 400 ms after the load. On the PC benchmark (10,000 strokes, 6.8 MB) the first painted frame went from 414 ms to 233 ms and the page the reader wants (page 7 of 10) from 519 ms to 233 ms; measured on desktop Chrome only, not on Android. No save or validation step was changed.
+ — 2026-10-29
 
 Hotfix for 0.4.0. Not yet verified on Android hardware.
 

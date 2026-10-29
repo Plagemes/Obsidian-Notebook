@@ -204,6 +204,11 @@ export class Toolbar {
 		if (this.state.tool !== tool) this.set({ tool });
 	}
 
+	/** Same as `update` (used by the radial menu). */
+	apply(patch: Partial<ToolbarState>): void {
+		this.update(patch);
+	}
+
 	/** Applies a state change from code (favourite pens, hotkeys) and notifies the view. */
 	update(patch: Partial<ToolbarState>): void {
 		this.set(patch);

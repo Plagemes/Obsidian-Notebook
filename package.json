@@ -14,7 +14,8 @@
     "version": "node version-bump.mjs && git add manifest.json versions.json",
     "bench": "vitest run --project perf --silent=false",
     "harness": "node dev/harness/build.mjs --serve",
-    "harness:check": "node dev/harness/check.mjs"
+    "harness:check": "node dev/harness/check.mjs",
+    "bench:open": "node dev/harness/open-bench.mjs"
   },
   "keywords": [
     "obsidian",

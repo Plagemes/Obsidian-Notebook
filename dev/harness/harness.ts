@@ -19,9 +19,11 @@ import { App, notices, WorkspaceLeaf, type TFile } from "./obsidian-stub";
 import { NotebookView } from "../../src/view/notebook-view";
 import { DEFAULT_SETTINGS, type NotebookSettings } from "../../src/settings";
 import { createDocument } from "../../src/model/document";
-import { serialize } from "../../src/model/serialize";
+import { parse, serialize } from "../../src/model/serialize";
 import { WetInk } from "../../src/ink/wet-ink";
 import { Renderer } from "../../src/ink/renderer";
+import { DocumentSession } from "../../src/storage/session";
+import { stressDocument } from "../../src/model/stress";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -273,6 +275,36 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 	if (!wasOpen) v.setNavigatorOpen(false);
 	await frames(4);
 
+	// Radial menu: the pen's side button opens it without drawing; lifting on a sector chooses it.
+	{
+		setTool("pen");
+		const rb = strokeCount();
+		const r3 = st.getBoundingClientRect();
+		const cx = r3.left + r3.width * 0.5, cy = r3.top + r3.height * 0.5;
+		const pen = (name: string, x: number, y: number, extra: PointerEventInit = {}) =>
+			new PointerEvent(name, {
+				bubbles: true, cancelable: true, composed: true, pointerId: 77, pointerType: "pen", isPrimary: true,
+				pressure: 0.5, width: 1, height: 1, button: 0, buttons: 1, clientX: x, clientY: y, ...extra,
+			});
+		st.dispatchEvent(pen("pointerdown", cx, cy, { button: 2, buttons: 3 }));
+		await frames(1);
+		const menu = st.querySelector(".notebook-radial");
+		add("radial menu opens on the pen side button", !!menu && menu.querySelectorAll(".notebook-radial-item").length === 8,
+			menu ? `${menu.querySelectorAll(".notebook-radial-item").length} items` : "no menu");
+		st.dispatchEvent(pen("pointerup", cx, cy, { button: 2, buttons: 0, pressure: 0 }));
+		await frames(1);
+		add("lifting in the middle keeps the menu open", !!st.querySelector(".notebook-radial"), "");
+		// Sector 2 (eraser) is to the right of the middle.
+		st.dispatchEvent(pen("pointerdown", cx + 72, cy));
+		st.dispatchEvent(pen("pointerup", cx + 72, cy, { buttons: 0, pressure: 0 }));
+		await frames(2);
+		add("tapping a sector chooses its tool and closes the menu", !st.querySelector(".notebook-radial") && (view as any).tools.tool === "eraser",
+			`tool ${(view as any).tools.tool}, menu ${st.querySelector(".notebook-radial") ? "open" : "closed"}`);
+		add("the radial menu draws nothing", strokeCount() === rb, `${rb} → ${strokeCount()}`);
+		setTool("pen");
+		await frames(2);
+	}
+
 	const unexpected = errors.filter((e) => !expectedError?.test(e));
 	if (fault) add("injected fault was reported", errors.some((e) => expectedError!.test(e)), errors[0]?.split("\n")[0] ?? "no error logged");
 	const ok = results.every((x) => x.ok) && unexpected.length === 0;
@@ -290,6 +322,103 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 	return { ok, results, errors: unexpected, notices: [...notices], env, points };
 }
 
+interface OpenSample {
+	/** Opening the file until its document is in the view (read, parse, journal check, layout). */
+	loadMs: number;
+	/** Of which: DocumentSession.load (read + parse + validation + journal check). */
+	sessionMs: number;
+	/** Of which: the view's onDocumentLoaded (layout, fit, first schedule). */
+	viewMs: number;
+	/** Opening the file until the first painted frame of the static layer. */
+	firstPaintMs: number;
+	/** Until the page asked for is painted: the same as firstPaintMs when it is restored directly. */
+	targetPaintMs: number;
+	/** Page (1-based) in view at that moment. */
+	page: number;
+}
+
+/**
+ * Open-time benchmark (npm run bench:open): a generated notebook is opened in a fresh view `reps` times
+ * and the phases are timed with performance.now(). `goTo` is the page (1-based) the user wants to see:
+ * with `restore` it is requested through the view state before the document loads (the saved position),
+ * without it the view opens on page 1 and the page is reached by scrolling, as before. Desktop Chrome with an
+ * in-memory vault: file I/O is instant, so this is CPU time only. NOT measured on Android.
+ *
+ * `snapshot` emulates the version-history snapshot that the plugin starts when a notebook opens
+ * (integration/history-service.ts maybeSnapshot: read the file, parse it again): "eager" parses right away,
+ * as before; "deferred" reads the file now and parses it once the page is on screen; "none" leaves it out.
+ */
+async function measureOpen(
+	strokes = 10_000, pages = 10, reps = 5, goTo = 7, restore = true, snapshot: "none" | "eager" | "deferred" = "none",
+): Promise<{ samples: OpenSample[]; bytes: number; strokes: number }> {
+	const text = serialize(stressDocument(strokes, pages));
+	const path = `Notebooks/Bench ${strokes}x${pages}.notebook`;
+	if (!app.vault.getFileByPath(path)) await app.vault.create(path, text);
+	const file = app.vault.getFileByPath(path) as TFile;
+
+	const proto = NotebookView.prototype as any;
+	const origLoaded = proto.onDocumentLoaded as (...a: unknown[]) => void;
+	const origLoad = DocumentSession.prototype.load;
+	let sessionMs = 0, viewMs = 0;
+	proto.onDocumentLoaded = function (this: unknown, ...a: unknown[]) {
+		const t = performance.now();
+		origLoaded.apply(this, a);
+		viewMs = performance.now() - t;
+	};
+	DocumentSession.prototype.load = async function (this: DocumentSession) {
+		const t = performance.now();
+		await origLoad.call(this);
+		sessionMs = performance.now() - t;
+	};
+	const samples: OpenSample[] = [];
+	try {
+		for (let rep = 0; rep < reps + 1; rep++) {
+			const root = document.getElementById("harness-app")!;
+			if (view) await (view as any).onClose();
+			root.empty();
+			await frames(2);
+			leaf = new WorkspaceLeaf(app, root);
+			view = new NotebookView(leaf as any, { settings: settings() });
+			await view.onOpen();
+			const v = view as any;
+			let firstPaint = -1, targetPaint = -1;
+			const t0 = performance.now();
+			v.renderer.onFrame = () => {
+				const now = performance.now() - t0;
+				if (firstPaint < 0 && v.renderer.stats.strokesDrawn > 0) firstPaint = now;
+				if (targetPaint < 0 && v.currentPageIndex() === goTo - 1 && v.renderer.stats.strokesDrawn > 0) targetPaint = now;
+			};
+			if (snapshot !== "none") {
+				const run = async () => {
+					const text = await app.vault.read(file);
+					if (snapshot === "deferred") await wait(1500);
+					parse(text);
+				};
+				void run();
+			}
+			if (restore) await v.setState({ file: path, page: goTo }, {});
+			// The stub's FileView does not load the file from setState: do what Obsidian does after it.
+			await v.loadFile(file);
+			const loadMs = performance.now() - t0;
+			if (restore) v.applyPendingPage?.();
+			for (let i = 0; i < 60 && firstPaint < 0; i++) await frames(1);
+			if (!restore) {
+				// Before: the view opened on page 1; the reader scrolls to the page.
+				v.scrollToPage(goTo - 1);
+				for (let i = 0; i < 60 && targetPaint < 0; i++) await frames(1);
+			} else {
+				for (let i = 0; i < 60 && targetPaint < 0; i++) await frames(1);
+			}
+			if (rep === 0) continue; // warm-up: JIT, caches
+			samples.push({ loadMs, sessionMs, viewMs, firstPaintMs: firstPaint, targetPaintMs: targetPaint, page: v.currentPageIndex() + 1 });
+		}
+	} finally {
+		proto.onDocumentLoaded = origLoaded;
+		DocumentSession.prototype.load = origLoad;
+	}
+	return { samples, bytes: text.length, strokes };
+}
+
 function applyTheme(theme = params.get("theme") ?? "light"): void {
 	document.body.classList.toggle("theme-dark", theme === "dark");
 	document.body.classList.toggle("theme-light", theme !== "dark");
@@ -302,7 +431,7 @@ function applySize(): void {
 	if (h) root.style.height = `${Number(h)}px`;
 }
 
-(window as any).harness = { app, open, penStroke, setTool, check, staticPixel, strokeCount, errors, notices, applyTheme, get view() {
+(window as any).harness = { app, open, measureOpen, penStroke, setTool, check, staticPixel, strokeCount, errors, notices, applyTheme, get view() {
 	return view;
 } };
 

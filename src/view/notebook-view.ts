@@ -48,8 +48,11 @@ import { isNotebookFile } from "../storage/format";
 import { VaultDocumentIO } from "../storage/vault-io";
 import { backupFolder, type NotebookSettings } from "../settings";
 import { exportPdf, exportSvg } from "./export";
+import { policySettings } from "./input-settings";
 import { NotebookMedia, storeAsset } from "./media";
 import { PageNavigator } from "./navigator";
+import { LocationKeeper } from "./last-location";
+import { PenRadial } from "./radial-menu";
 import { askPdfRange } from "./pdf-range-modal";
 import { runBoardShot } from "./board-shot";
 import type { EditContext } from "./edit-context";
@@ -91,6 +94,8 @@ const THUMB_CSS_WIDTH = 120;
 
 export interface NotebookHost {
 	settings: NotebookSettings;
+	/** Instant start: the reader is on this page (1-based) of this notebook. Called a moment after it changes. */
+	remember?(path: string, page: number): void;
 	/** Instant save journal shared by all views. */
 	journal?: JournalStore;
 	/** Persists the plugin settings (favourite pens, eraser size, pen-only). Optional: absent in tests. */
@@ -195,6 +200,14 @@ export class NotebookView extends FileView {
 	private pageNav: PageNavigator | null = null;
 	private textEditor: TextEditor | null = null;
 	private rulerGesture: RulerGesture | null = null;
+	private radial: PenRadial | null = null;
+	private readonly location = new LocationKeeper(
+		{ set: (fn, ms) => window.setTimeout(fn, ms), clear: (h) => window.clearTimeout(h) },
+		(path, page) => {
+			this.host.remember?.(path, page);
+			this.app.workspace.requestSaveLayout();
+		},
+	);
 
 	private viewport: Viewport = { scale: 1, offsetX: 0, offsetY: 0 };
 	private viewSize: Size = { width: 0, height: 0 };
@@ -239,7 +252,7 @@ export class NotebookView extends FileView {
 	constructor(leaf: WorkspaceLeaf, private readonly host: NotebookHost) {
 		super(leaf);
 		const s = host.settings;
-		this.policy = new InputPolicy({ fingerDrawing: s.fingerDrawing, palmRejectionMs: s.palmRejectionMs, palmContactPx: s.palmContactPx });
+		this.policy = new InputPolicy(policySettings(s));
 		this.tools = { ...this.tools, eraserSize: s.eraserSize };
 		this.pressure = new PressureModel(s.pressureMode);
 		this.filter.params = stabilizationParams(s.stabilization);
@@ -324,7 +337,15 @@ export class NotebookView extends FileView {
 				this.fitMode = false;
 				this.setViewport(zoomAt(this.viewport, factor, fx, fy), true);
 			},
+			penMenu: (x, y) => this.radial?.open(x, y),
 		}, { rawUpdates: this.host.settings.lowLatencyInk });
+		this.radial = new PenRadial(this.stage, {
+			editable: () => this.editable() && !this.controller?.drawing,
+			tools: () => this.tools,
+			apply: (patch) => this.toolbar.apply(patch),
+			canUndo: () => this.history.canUndo(),
+			undo: () => this.undo(),
+		});
 		this.applySettings(this.host.settings);
 
 		this.resizeObserver = new ResizeObserver(() => this.measure());
@@ -367,6 +388,7 @@ export class NotebookView extends FileView {
 	}
 
 	async onClose(): Promise<void> {
+		this.location.flush();
 		await this.closeSession();
 		this.stopHold();
 		for (const timer of [this.navTimer, this.thumbTimer, this.snapFlashTimer]) if (timer !== null) window.clearTimeout(timer);
@@ -375,6 +397,8 @@ export class NotebookView extends FileView {
 		this.pens = null;
 		this.controller?.destroy();
 		this.controller = null;
+		this.radial?.destroy();
+		this.radial = null;
 		this.rulerGesture?.destroy();
 		this.rulerGesture = null;
 		this.textEditor?.destroy();
@@ -392,6 +416,14 @@ export class NotebookView extends FileView {
 
 	/** Page (1-based) requested by the view state, applied once the document is loaded. */
 	private pendingPage: number | null = null;
+
+	/** The page being read goes into the workspace layout, so reopening Obsidian shows the same page. */
+	getState(): Record<string, unknown> {
+		const state = super.getState();
+		const total = this.session?.doc?.pages.length ?? 0;
+		const page = this.pendingPage ?? (total > 0 ? this.currentPageIndex() + 1 : null);
+		return page !== null ? { ...state, page } : state;
+	}
 
 	async setState(state: unknown, result: ViewStateResult): Promise<void> {
 		this.pendingPage = pageFromState(state);
@@ -510,11 +542,7 @@ export class NotebookView extends FileView {
 	}
 
 	applySettings(settings: NotebookSettings): void {
-		this.policy.settings = {
-			fingerDrawing: settings.fingerDrawing,
-			palmRejectionMs: settings.palmRejectionMs,
-			palmContactPx: settings.palmContactPx,
-		};
+		this.policy.settings = policySettings(settings);
 		this.pressure.mode = settings.pressureMode;
 		if (this.toolbar && this.tools.eraserSize !== settings.eraserSize) this.toolbar.update({ eraserSize: settings.eraserSize });
 		this.pens?.refresh();
@@ -1087,6 +1115,7 @@ export class NotebookView extends FileView {
 		this.renderer?.cancelWet();
 		this.renderer?.setLasso(null);
 		this.renderer?.setSpacePreview(null);
+		this.radial?.close();
 		this.ruler = null;
 		if (doc && mode === "ok") {
 			this.messageEl.hide();
@@ -1101,6 +1130,7 @@ export class NotebookView extends FileView {
 			this.pageNav?.invalidate();
 			if (this.tools.ruler) this.placeRuler();
 			this.applyPendingPage();
+			if (this.file) this.location.note(this.file.path, this.currentPageIndex() + 1);
 		} else {
 			this.body.hide();
 			this.toolbar.setEditable(false);
@@ -1171,6 +1201,7 @@ export class NotebookView extends FileView {
 		if (current !== this.navCurrent) {
 			this.navCurrent = current;
 			this.pageNav?.markCurrent(current);
+			if (n && this.file && this.pendingPage === null) this.location.note(this.file.path, current + 1);
 		}
 	}
 
@@ -1178,6 +1209,7 @@ export class NotebookView extends FileView {
 		const before = this.tools;
 		this.tools = state;
 		this.pens?.onToolsChanged(state);
+		this.radial?.noteTools(state);
 		if (state.tool !== "lasso") this.clearSelection();
 		if (before.tool === "text" && state.tool !== "text") this.commitText();
 		if (state.ruler !== before.ruler) {

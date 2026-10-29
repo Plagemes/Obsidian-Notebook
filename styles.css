@@ -1240,3 +1240,100 @@
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);
 }
+
+/* wave p1a: input — radial menu at the pen tip. */
+.notebook-radial {
+	position: absolute;
+	inset: 0;
+	z-index: 40;
+	touch-action: none;
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+.notebook-radial-ring {
+	position: absolute;
+	left: calc(var(--notebook-radial-x, 0px) - var(--notebook-radial-size, 216px) / 2);
+	top: calc(var(--notebook-radial-y, 0px) - var(--notebook-radial-size, 216px) / 2);
+	width: var(--notebook-radial-size, 216px);
+	height: var(--notebook-radial-size, 216px);
+	filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
+}
+
+.notebook-radial-svg {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+}
+
+.notebook-radial-sector {
+	fill: var(--background-primary);
+	stroke: var(--background-modifier-border);
+	stroke-width: 1px;
+}
+
+.notebook-radial-sector.is-active {
+	stroke: var(--interactive-accent);
+	stroke-width: 2px;
+}
+
+.notebook-radial-sector.is-hover {
+	fill: var(--interactive-accent);
+	stroke: var(--interactive-accent);
+	stroke-width: 2px;
+}
+
+.notebook-radial-sector.is-disabled {
+	fill: var(--background-secondary);
+}
+
+.notebook-radial-hub {
+	fill: var(--background-primary);
+	stroke: var(--background-modifier-border);
+	stroke-width: 1px;
+}
+
+.notebook-radial-item {
+	position: absolute;
+	left: var(--notebook-radial-item-x, 0);
+	top: var(--notebook-radial-item-y, 0);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	margin: -14px 0 0 -14px;
+	color: var(--text-normal);
+	pointer-events: none;
+}
+
+.notebook-radial-item.is-disabled {
+	opacity: 0.4;
+}
+
+.notebook-radial-item.is-hover {
+	color: var(--text-on-accent);
+}
+
+.notebook-radial-item .svg-icon {
+	width: 22px;
+	height: 22px;
+}
+
+.notebook-radial-label {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	max-width: 64px;
+	transform: translate(-50%, -50%);
+	overflow: hidden;
+	color: var(--text-normal);
+	font-size: 10px;
+	line-height: 1.2;
+	text-align: center;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	pointer-events: none;
+}
