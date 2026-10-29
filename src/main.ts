@@ -1,29 +1,34 @@
 import { Notice, Plugin, type TFile } from "obsidian";
 import { t } from "./i18n";
 import { readSettings, type NotebookSettings } from "./settings";
-import { createDocument } from "./model/document";
 import { stressDocument } from "./model/stress";
-import { PAGE_SIZES, PAPER_SPACING } from "./model/types";
 import { NOTEBOOK_EXTENSIONS } from "./storage/format";
 import { createNotebook } from "./storage/notebooks";
 import { BenchmarkModal } from "./view/benchmark";
-import { NewNotebookModal, OpenNotebookModal, type NewNotebookOptions } from "./view/modals";
+import { NotebookLibraryHost } from "./library/host";
+import { LIBRARY_VIEW_TYPE, LibraryView } from "./library/library-view";
+import { OpenNotebookModal } from "./view/modals";
 import { NotebookView, VIEW_TYPE } from "./view/notebook-view";
 import { NotebookSettingTab } from "./view/settings-tab";
 
 export default class NotebookPlugin extends Plugin {
 	settings!: NotebookSettings;
+	private host!: NotebookLibraryHost;
 
 	async onload(): Promise<void> {
 		this.settings = readSettings(await this.loadData());
 
 		this.registerView(VIEW_TYPE, (leaf) => new NotebookView(leaf, this));
 		this.registerExtensions([...NOTEBOOK_EXTENSIONS], VIEW_TYPE);
+		this.host = new NotebookLibraryHost(this);
+		this.registerView(LIBRARY_VIEW_TYPE, (leaf) => new LibraryView(leaf, this.host));
 
-		this.addRibbonIcon("book-open", t("ribbon.open"), () => this.openPicker());
+		this.addRibbonIcon("library", t("command.library"), () => void this.openLibrary());
 
 		this.addCommand({ id: "create", name: t("command.new"), callback: () => this.askNewNotebook() });
 		this.addCommand({ id: "open", name: t("command.open"), callback: () => this.openPicker() });
+		this.addCommand({ id: "open-library", name: t("command.library"), callback: () => void this.openLibrary() });
+		this.addCommand({ id: "import-pdf", name: t("command.importPdf"), callback: () => this.host.importPdf(this.settings.folder) });
 		this.addCommand({ id: "undo", name: t("command.undo"), checkCallback: (checking) => this.withView(checking, (v) => v.undo()) });
 		this.addCommand({ id: "redo", name: t("command.redo"), checkCallback: (checking) => this.withView(checking, (v) => v.redo()) });
 		this.addCommand({ id: "fit-width", name: t("command.fit"), checkCallback: (checking) => this.withView(checking, (v) => v.fitToWidth()) });
@@ -40,6 +45,7 @@ export default class NotebookPlugin extends Plugin {
 
 	onunload(): void {
 		void this.flushAll();
+		this.host.dispose();
 	}
 
 	async saveSettings(): Promise<void> {
@@ -69,26 +75,18 @@ export default class NotebookPlugin extends Plugin {
 	}
 
 	private askNewNotebook(): void {
-		const s = this.settings;
-		const defaults = { size: s.defaultPageSize, landscape: s.defaultLandscape, paper: s.defaultPaper };
-		new NewNotebookModal(this.app, defaults, (options) => void this.createAndOpen(options)).open();
+		this.host.createNotebook(this.settings.folder);
 	}
 
-	private async createAndOpen(o: NewNotebookOptions): Promise<void> {
-		try {
-			// Remember the choice for the next notebook.
-			if (o.size !== this.settings.defaultPageSize || o.landscape !== this.settings.defaultLandscape || o.paper !== this.settings.defaultPaper) {
-				this.settings = { ...this.settings, defaultPageSize: o.size, defaultLandscape: o.landscape, defaultPaper: o.paper };
-				await this.saveSettings();
-			}
-			const base = PAGE_SIZES[o.size];
-			const size = o.landscape ? { width: base.height, height: base.width } : { width: base.width, height: base.height };
-			const doc = createDocument(new Date(), size, { kind: o.paper, spacing: PAPER_SPACING[o.paper] });
-			const file = await createNotebook(this.app, this.settings.folder, o.name, doc);
-			await this.openFile(file);
-		} catch (e) {
-			new Notice(t("notice.createFailed", { error: (e as Error).message }));
+	/** Shows the library in its existing tab, or opens it in a new one. */
+	private async openLibrary(): Promise<void> {
+		const { workspace } = this.app;
+		let leaf = workspace.getLeavesOfType(LIBRARY_VIEW_TYPE)[0];
+		if (!leaf) {
+			leaf = workspace.getLeaf("tab");
+			await leaf.setViewState({ type: LIBRARY_VIEW_TYPE, active: true });
 		}
+		await workspace.revealLeaf(leaf);
 	}
 
 	private openBenchmark(): void {
