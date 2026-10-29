@@ -6,7 +6,8 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 
 | Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
 |---|---|---|---|---|---|
-| Class timetable (roadmap 115): pure scheduling (current/next class, odd/even weeks, term dates, local time, overlaps), file parse/serialize round trip, target notebook choice | ✅ | ✅ `tests/timetable.test.ts` | | | page tag (hook only until page tags exist) |
+| Class timetable (roadmap 115): pure scheduling (current/next class, odd/even weeks, term dates, local time, overlaps), file parse/serialize round trip, target notebook choice | ✅ | ✅ `tests/timetable.test.ts` | | | |
+| Course page tag: a lecture page made with a course from the timetable (New lecture prefill, *Open the current class*) gets the course as a v7 page tag, in the same undo step | ✅ | ✅ `applyCourseTag` (normalisation, no duplicate, undo with `AddPage`); ❌ the two flows in Obsidian | | | |
 | Class timetable editor (settings, command), `_timetable.json` read/write through the Vault API, unreadable file never overwritten | ✅ | ❌ (needs Obsidian) | | | |
 | Offer / auto-open the current class at a new lecture page; "New lecture" course prefill; library "Now: <course>" shortcut | ✅ | ❌ (needs Obsidian; the choices behind it are tested) | | | |
 | Ribbon icon + "New notebook" / "Open notebooks" commands | ✅ | ❌ (needs Obsidian) | | | |
@@ -427,7 +428,7 @@ Format v7 steps (numbered V1, V2… until the release renumbers them):
 | 60 Commands and hotkeys | | | |
 | 61 Compact toolbar | | | |
 | T1 Timetable editor: add two classes (one on odd weeks, one with a term and a room, one linked to a course folder), save, reopen: values are kept; `Notebooks/_timetable.json` exists and is readable | | | |
-| T2 Open Obsidian (or the library) during a class: notice with *Open lecture page*; tap it: the course's notebook opens with a new page headed "<course> — <date>"; do it again: the existing page is shown, no second page | | | |
+| T2 Open Obsidian (or the library) during a class: notice with *Open lecture page*; tap it: the course's notebook opens with a new page headed "<course> — <date>" and tagged with the course (Pages panel tag filter); undo removes the page and its tag together; do it again: the existing page is shown, no second page | | | |
 | T3 Turn on *Open it without asking*, restart during a class: the notebook opens on the new lecture page by itself; turn it off and the notice returns (once per class and day) | | | |
 | T4 During a class, *New lecture* in a linked notebook has the course filled in; in an unrelated linked notebook it shows the notebook name | | | |
 | T5 Library shows *Now: <course>* during a class (also a few minutes before, per the lead setting) and nothing outside classes; tapping it opens the lecture page | | | |
