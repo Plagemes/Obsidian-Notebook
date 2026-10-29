@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Words and lines without OCR (#255).** With the lasso tool, a **double tap** on handwriting selects the word under it and a **triple tap** the whole line; the result is the normal lasso selection (move, scale, rotate, delete). Words and lines are found geometrically from the strokes (`src/ink/words.ts`); highlighter and shape strokes and oversized strokes (frames, long underlines) are ignored. Taps do nothing to the document: no strokes or dots are created. Not yet verified on Android hardware.
+
 ## 0.4.1 — 2026-10-29
 
 Hotfix for 0.4.0. Not yet verified on Android hardware.
