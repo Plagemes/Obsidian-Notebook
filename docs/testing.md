@@ -84,6 +84,10 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Lasso also selects and transforms text boxes and images | ✅ | ✅ element hit test and transform; ❌ gesture | | | |
 | Ruler (two-finger placement, the pen follows the edge) | ✅ | ✅ geometry, snapping; ❌ gesture | | ✅ | |
 | Infinite page (grows by half a page near the bottom, up to 20 × the width) | ✅ | ✅ growth rule; ❌ view | | | |
+| Insert or remove space (drag a line; content below moves, overflows onto the next page, pages created; removal limited to the empty gap; one undo step) | ✅ | ✅ planning, page creation, undo/redo, infinite pages, elements; ❌ gesture and preview (view) | | ✅ | the band is previewed as a dashed rectangle; content is not moved live |
+| Automatic next page (setting, on by default; last page only) | ✅ | ✅ trigger rule, setting; ❌ view | | | bottom tenth of the page; not for infinite or PDF/image pages |
+| Selective eraser: all ink / highlighter only / pen only / one colour, for whole-stroke, segment and area erasing | ✅ | ✅ filter rules; ❌ toolbar and gestures (view) | | | |
+| Erase area: outline erases everything inside, strokes are cut at the outline, one undo step; optional text and images (setting) | ✅ | ✅ cutting, selective filter, elements, undo; ❌ gesture (view) | | | |
 | Instant save journal (≈200 ms), crash recovery on open, never applied if the file differs | ✅ | ✅ slots, torn writes, diff, per file and per session keys, recovery after broken→ok; ❌ Obsidian adapter | | | whether it saves the last stroke after a real kill is not known |
 | Version history: automatic snapshots, restore command, backup before restore | ✅ | ✅ naming, retention, restore guards (aborts if the save fails or the notebook differs); ❌ Obsidian commands | | | |
 | Embeds: `notebook` code block and wikilink form, refresh on change, click opens the page | ✅ | ✅ parsing and building; ❌ rendering in Obsidian | | | not tried in reading view and live preview on Android |
@@ -186,6 +190,11 @@ For each step note **pass / fail / notes** in the table at the end.
 35. **Version history.** Open and edit a notebook, then check the folder `Notebooks/_backup/history/<document id>/` with a file manager: a `.snapshot` file exists (the default interval is 24 h, so a new snapshot per day; to get several quickly, set *Version history interval* to 1 and move the date of the existing snapshot file's name back on the PC). Add pages and ink, then run the command *Restore a previous version*: the list shows dates and page counts; choose an older one and confirm. Expected: the notebook goes back to that version, the notice names the backup of the previous content (a `.bak` in `_backup`), and the open view refreshes. Try it with unsaved changes in the open notebook (they are saved first), and with a snapshot file of another notebook copied into the folder (it is refused). Set *Versions to keep* to 1 and check that older snapshots go to the trash. Set the interval to 0: no new snapshots.
 36. **Embeds and links.** In a Markdown note run *Insert notebook embed* and choose a notebook: a `notebook` code block appears. Switch to reading view and live preview: the page preview is drawn (with PDF background and text boxes if the page has them), at the width of the note. Change `page:` to another page and to a page that does not exist (a clear message). Try `Notebooks/Name.notebook#3` and `[[Name#p3]]`. Write in the notebook and watch the embed refresh. Click the preview: the notebook opens at that page. Build a link `obsidian://notebook?path=Notebooks/Name.notebook&page=3` (add `vault=<name>` if you have several vaults), put it in a note or a QR code or an Android shortcut and open it from outside Obsidian: the notebook opens at page 3. Note which of these do not work on Android.
 
+37. **Insert and remove space (wave p1a).** In a notebook with three or four pages of handwriting, choose the tool *Insert or remove space* (vertical arrows). (a) Touch between two lines of text in the middle of page 1 and drag down about 3 cm: a dashed band follows the pen; on lift, everything below the line moves down by that amount and the text above stays; the lines that no longer fit on page 1 appear at the top of page 2, whose own content moved down too. Undo: everything is back, in one step. (b) Do the same on the last page with ink near the bottom: a new page is created (same size and paper); undo removes it. (c) Touch in a gap and drag up: the content below moves up and stops when it reaches the ink above, however far you drag. (d) Touch below the last ink of the last page and drag: a notice says there is nothing to move, nothing changes. (e) Insert, then remove the same amount: positions return to what they were. (f) On an infinite page the page grows instead. Text boxes and images below the line move with the ink. Try with a finger (setting *Draw with finger*) and with the S Pen. Note any stroke that crosses the line (it moves with the part where its centre is).
+38. **Automatic next page.** In a new one-page notebook write along the bottom edge of the page (the last tenth). Expected: when the pen lifts, a new page of the same size and paper appears below; undo removes the stroke and the page together. Keep writing on the first page: no more pages are added (only the last page triggers it). Turn off *Add a page when writing at the bottom* in the settings: no page is added. On an infinite page and on an imported PDF page nothing is added.
+39. **Selective eraser.** Write with pen in two colours, draw a few shapes and highlight over some text. With *Eraser*, choose *Highlighter only*: erase across text and highlights (whole stroke, then segment): only the highlighter goes. Then *Pen only*, then *One colour* (pick a swatch): only that ink goes. *All ink* brings back the old behaviour. Undo each gesture.
+40. **Erase area.** Eraser → *Area*. Draw a loop around some words and some highlighter, lift: everything inside is gone in one undo step; a stroke crossing the loop is cut at the line. Combine with *Pen only* or *One colour*. With a text box and an image inside the loop: they stay; turn on *Erase area also removes text and images* in the settings: they go with the ink, one undo brings everything back. Draw a very small loop: nothing happens.
+
 | Step | Device / Obsidian version | Result | Notes |
 |---|---|---|---|
 | 1 Create and write | | | |
@@ -224,6 +233,10 @@ For each step note **pass / fail / notes** in the table at the end.
 | 34 Journal recovery | | | |
 | 35 Version history | | | |
 | 36 Embeds and links | | | |
+| 37 Insert and remove space | | | |
+| 38 Automatic next page | | | |
+| 39 Selective eraser | | | |
+| 40 Erase area | | | |
 
 Benchmark output (step 21): paste it here.
 

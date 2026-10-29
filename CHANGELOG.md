@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+Not yet verified on Android hardware (see `docs/testing.md`).
+
+### Added
+- **Insert or remove space** (tool *Insert or remove space*, wave p1a): touch a line and drag down to insert space or up to remove it. Everything below the line moves; what no longer fits on its page continues at the top of the next one, and pages are appended when needed (same size and paper as the last page); removing pulls the following content back up and never takes away more than the empty gap, so ink cannot overlap. An infinite page grows instead of overflowing. Text boxes and images move with the ink. One undo step.
+- **Automatic next page** (setting *Add a page when writing at the bottom*, on by default): ink that reaches the bottom tenth of the last page appends a page with the same size and paper, in the same undo step as the stroke. Not for infinite pages or for pages with a PDF or image background.
+- **Selective eraser**: the eraser can be limited to *All ink*, *Highlighter only*, *Pen only* (pen and shapes) or *One colour* (swatches). Works with *Whole stroke*, *Segment* and *Area*.
+- **Erase area** (eraser mode *Area*): draw an outline and everything inside disappears in one gesture and one undo step; strokes crossing the outline are cut at it. Setting *Erase area also removes text and images* (off by default).
+
 ## 0.4.1 — 2026-10-29
 
 Hotfix for 0.4.0. Not yet verified on Android hardware.

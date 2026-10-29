@@ -116,6 +116,7 @@ src/
     types.ts              Document, Page, Stroke, elements, assets, meta, Tool, Paper, page size presets, CURRENT_VERSION (5)
     document.ts           document/page/stroke creation (size and paper as parameters), ids, quantization
     pages.ts              duplicatePage(): copy of a page with new page and stroke ids
+    page-content.ts       SetPageContent command and pageContentCommand(): replace the strokes/elements of several pages (and append pages) in one undo step
     serialize.ts          deterministic serialize(), parse() with validation and migrations, serializeChecked() (save check), freezeStroke()
     migrations.ts         chain of vN → vN+1 migrations (v0→v1 … v4→v5)
     history.ts            command-stack undo/redo (strokes, pages, paper/size, elements, meta, assets, infinite, Batch)
@@ -138,6 +139,10 @@ src/
     text-layout.ts        text wrapping and measurement shared by the renderer, the editor and the exports
     ruler.ts              ruler placed by two fingers, edge snapping
     infinite.ts           growth rule for infinite pages
+    auto-page.ts          when writing near the bottom of the last page appends a page (pure rule)
+    erase-filter.ts       selective eraser: which strokes the eraser may touch (all, highlighter, pen, one colour)
+    erase-area.ts         erase area: cut strokes at an outline, one undoable command (strokes, optionally elements)
+    space.ts              insert or remove space: plans the move of everything below a line, across pages (pure)
     writing-bench.ts      synthetic pen replay: old vs new writing pipeline (in-app benchmark and PC harness)
     input-policy.ts       pen/touch/mouse routing, time-based palm rejection, contact-size palm filter (pure logic)
     hit-test.ts           whole-stroke eraser (segment-segment distance + bounding box)
@@ -322,6 +327,10 @@ The new pipeline:
 - **Text boxes** (`TextElement`) and **images** (`ImageElement`) are page elements, drawn above the background and below the ink. Layout and measurement are shared (`text-layout.ts`); the text box is edited in place (`view/text-editor.ts`). Inserting an image stores the file as an asset and adds the element in one `Batch` (`AddAsset` + `AddElement`) and selects it. The lasso selects strokes and elements together (`elementsInLasso`); a transform is baked into new elements with `ReplaceElement`, deletion is `RemoveElement`, both inside the same `Batch` as the stroke changes.
 - **Ruler** (`ruler.ts`, `view/ruler-gesture.ts`): placed by two fingers (centre and angle from the two touches, 20 cm long); pen points within a snap distance of the edge are projected onto it (`projectToRuler`), so a stroke started on the edge stays on the edge; the ruler draws mm/cm ticks.
 - **Infinite pages** (`infinite.ts`): when ink reaches the bottom fifth of an infinite page its height grows by half a page of its width, up to 20 times the width; the growth is part of the same undo step (`SetPageInfinite` for the flag, the growth as a `SetPageSize` inside the stroke's `Batch`).
+- **Selective eraser** (`erase-filter.ts`): the toolbar state `eraserFilter` (`all`, `highlighter`, `pen`, `color` + `eraserColor`) decides which strokes the eraser may hit; `pen` means every stroke that is not a highlighter (shapes included). Applied before the hit test, so it works with whole-stroke, segment and area erasing.
+- **Erase area** (`erase-area.ts`, eraser mode `area`): the outline is drawn like a lasso; on lift every stroke with a point inside is cut at the outline (the outside runs keep their style and get new ids; runs under 2 points are dropped) and text boxes and images whose centre is inside are removed when the setting is on and the filter is *All ink*. One `Batch`.
+- **Insert or remove space** (`space.ts`, `model/page-content.ts`, tool `space`): the pages are treated as stacked without gaps from the page touched. Items whose centre is below the line, and all items of the following pages, move by the dragged distance; each lands on the page that contains its new centre (pages are appended, like the last page, when it falls past the end). Removing is limited to the empty gap between what stays and what moves. An infinite page ends the cascade and grows. The result is a list of per-page content changes applied by `SetPageContent` (arrays changed in place, previous arrays kept for undo) plus `InsertPages`, in one `Batch`. Nothing in the document format changes. Pages with a PDF or image background are treated like any other: their ink moves, the background does not.
+- **Automatic next page** (`auto-page.ts`): when a committed stroke reaches the bottom tenth of the last page (setting `autoNextPage`, default on; not for infinite pages or pages with a background) an `AddPage` joins the same `Batch` as the stroke.
 - **Page navigator** (`view/navigator.ts`): side panel of page thumbnails rendered with the thumbnail code; tap to jump, press and hold then drag to reorder (`MovePage`), star to bookmark (`SetMeta`, `meta.bookmarks`), filter to bookmarked pages. Thumbnails are not refreshed while the pen writes.
 - **Insertion**: `InsertPages` adds several pages in one step (PDF range, scanned sheets, blank pages, an image page).
 
