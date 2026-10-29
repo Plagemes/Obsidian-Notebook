@@ -260,6 +260,7 @@ export function describeMerge(s: MergeSummary): string[] {
 	add(s.assetsAdded, "merge.summary.assets");
 	add(s.tagsAdded + s.bookmarksAdded, "merge.summary.meta");
 	add(s.pageSettingsDiffer, "merge.summary.settings");
+	add(s.marginsDiffer, "merge.summary.margins");
 	add(s.onlyInMain, "merge.summary.onlyMain");
 	return lines;
 }

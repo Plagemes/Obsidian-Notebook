@@ -7,8 +7,12 @@
  *   the other one is added as a copy with a new id (unless that page already has identical content,
  *   which makes the merge idempotent);
  * - deletions are not inferred: an item missing on one side is never removed from the other;
- * - page settings (size, paper, background, infinite) and the cover colour of the main notebook are
- *   kept; differences are counted in the summary. Tags and bookmarks are united, favourite is "either".
+ * - page settings (size, paper, background, infinite, margins) and the cover colour of the main notebook
+ *   are kept; differences are counted in the summary. Tags and bookmarks are united, favourite is "either";
+ * - v6 margins: a left margin shifts the whole page content by its width, so when a common page has a
+ *   different left margin in the copy, the copy's strokes and elements are first moved into the main
+ *   page's frame (by the difference of the left margins). Ink that is the same relative to the
+ *   background is then recognised as the same, and new ink lands where it was drawn on the background.
  *
  * Both documents must come from `parse()`, so whatever version the copy was written in, it has gone
  * through the regular migrations first. The result is one `Batch` (one undo step) for the main
@@ -16,6 +20,7 @@
  */
 import { cloneMeta, createId } from "./document";
 import { AddAsset, AddElement, AddPage, AddStroke, Batch, SetMeta, type Command } from "./history";
+import { marginsEqual, marginsOf, normalizeMargins, translateElement, translateStroke } from "./margins";
 import { freezeElement, freezeStroke } from "./serialize";
 import { DEFAULT_META, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type Stroke } from "./types";
 
@@ -35,6 +40,11 @@ export interface MergeSummary {
 	identical: number;
 	/** Common pages whose settings differ: the main notebook's settings are kept. */
 	pageSettingsDiffer: number;
+	/**
+	 * Common pages whose margins differ (also counted in `pageSettingsDiffer`): the main margins are
+	 * kept and the copy's content was moved into them before comparing and adding.
+	 */
+	marginsDiffer: number;
 	/** Items of the main notebook missing from the copy (kept: deletions are not inferred). */
 	onlyInMain: number;
 }
@@ -56,7 +66,22 @@ export function elementContentKey(e: PageElement): string {
 }
 
 function pageSettingsKey(p: Page): string {
-	return JSON.stringify([p.width, p.height, p.paper.kind, p.paper.spacing, p.background ?? null, p.infinite ?? false]);
+	return JSON.stringify([p.width, p.height, p.paper.kind, p.paper.spacing, p.background ?? null, p.infinite ?? false, normalizeMargins(p.margins) ?? null]);
+}
+
+/**
+ * Horizontal shift that brings content of `from` into the frame of `into` (the same page in another
+ * copy): adding a left margin moves the content right by its width, so the difference of the left margins.
+ */
+function frameShift(into: Page, from: Page): number {
+	return Math.round((marginsOf(into).left - marginsOf(from).left) * 100) / 100;
+}
+
+/** Strokes and elements of `page` moved by `dx` (the same objects when `dx` is 0). */
+function inFrame(page: Page, dx: number): { strokes: readonly Stroke[]; elements: readonly PageElement[] } {
+	const elements = page.elements ?? [];
+	if (dx === 0) return { strokes: page.strokes, elements };
+	return { strokes: page.strokes.map((s) => translateStroke(s, dx)), elements: elements.map((e) => translateElement(e, dx)) };
 }
 
 function copyStroke(s: Stroke, id: string): Stroke {
@@ -71,7 +96,7 @@ function copyElement(e: PageElement, id: string): PageElement {
 export function planMerge(main: NotebookDocument, other: NotebookDocument): MergePlan {
 	const summary: MergeSummary = {
 		pagesAdded: 0, strokesAdded: 0, strokesCopied: 0, elementsAdded: 0, elementsCopied: 0, assetsAdded: 0,
-		tagsAdded: 0, bookmarksAdded: 0, identical: 0, pageSettingsDiffer: 0, onlyInMain: 0,
+		tagsAdded: 0, bookmarksAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, onlyInMain: 0,
 	};
 	const commands: Command[] = [];
 
@@ -143,9 +168,11 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 		const target = mainPages.get(page.id);
 		if (target) {
 			if (pageSettingsKey(target) !== pageSettingsKey(page)) summary.pageSettingsDiffer++;
+			if (!marginsEqual(normalizeMargins(target.margins), normalizeMargins(page.margins))) summary.marginsDiffer++;
+			const content = inFrame(page, frameShift(target, page));
 			const keys = contentOn.get(page.id)!;
 			let strokeAt = target.strokes.length;
-			for (const s of page.strokes) {
+			for (const s of content.strokes) {
 				const key = `s${strokeContentKey(s)}`;
 				const d = decide(s.id, key, page.id, "stroke");
 				if (d.kind === "skip") continue;
@@ -154,7 +181,7 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 				keys.add(key);
 			}
 			let elAt = target.elements?.length ?? 0;
-			for (const e of page.elements ?? []) {
+			for (const e of content.elements) {
 				const key = `e${elementContentKey(e)}`;
 				const d = decide(e.id, key, page.id, "element");
 				if (d.kind === "skip") continue;
@@ -187,6 +214,7 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 		const added: Page = { id: page.id, width: page.width, height: page.height, paper: { ...page.paper }, strokes };
 		if (page.background) added.background = { ...page.background };
 		if (page.infinite !== undefined) added.infinite = page.infinite;
+		if (page.margins) added.margins = { ...page.margins };
 		if (elements.length > 0) added.elements = elements;
 		const at = anchor === null ? 0 : order.indexOf(anchor) + 1;
 		order.splice(at, 0, page.id);
@@ -230,8 +258,10 @@ export function mergeChangeCount(s: MergeSummary): number {
 
 /**
  * True when `result` contains everything of `other`: every stroke and element, by id with the same
- * content or as identical content on the same page, every asset, every tag. Used to check the saved
- * file before the conflicted copy is moved away.
+ * content or as identical content on the same page, every asset, every tag. Content is compared in the
+ * result page's margin frame (see `planMerge`), so a page whose margins were lost on the way (its ink
+ * would no longer line up with its background) is not covered. Used to check the saved file before
+ * the conflicted copy is moved away.
  */
 export function mergeCovers(result: NotebookDocument, other: NotebookDocument): boolean {
 	const byId = new Map<string, string>();
@@ -250,14 +280,17 @@ export function mergeCovers(result: NotebookDocument, other: NotebookDocument): 
 		}
 		onPage.set(p.id, keys);
 	}
+	const resultPages = new Map(result.pages.map((p) => [p.id, p]));
 	for (const p of other.pages) {
 		const keys = onPage.get(p.id);
-		if (!keys) return false;
-		for (const s of p.strokes) {
+		const into = resultPages.get(p.id);
+		if (!keys || !into) return false;
+		const content = inFrame(p, frameShift(into, p));
+		for (const s of content.strokes) {
 			const k = `s${strokeContentKey(s)}`;
 			if (byId.get(s.id) !== k && !keys.has(k)) return false;
 		}
-		for (const e of p.elements ?? []) {
+		for (const e of content.elements) {
 			const k = `e${elementContentKey(e)}`;
 			if (byId.get(e.id) !== k && !keys.has(k)) return false;
 		}
