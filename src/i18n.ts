@@ -290,6 +290,19 @@ const en = {
 	"settings.snapshotInterval.desc": "Save a snapshot of a notebook at most once in this many hours when it is opened or changed. 0 turns snapshots off.",
 	"settings.snapshotKeep": "Versions to keep",
 	"settings.snapshotKeep.desc": "How many snapshots to keep for each notebook. Older ones are moved to the trash.",
+	// --- glue ---
+	"notice.recovered": "Recovered unsaved changes from {time}",
+	"notice.journalBackup": "Unsaved changes could not be applied and were saved to {path}",
+	"page.scanAfter": "Scan pages after this page",
+	"page.scanInsert": "Insert scan as image",
+	"scan.pagesDone": "Added {n} scanned page(s)",
+	"scan.imageDone": "Scan inserted",
+	"scan.failed": "Could not add the scan: {error}",
+	"command.scanInto": "Scan into this notebook",
+	"command.scanNew": "New notebook from scan",
+	"library.action.scanNotebook": "New notebook from scan",
+	"library.menu.scanHere": "New notebook from scan here",
+	"scan.notebookName": "Scan {date}",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -584,6 +597,19 @@ const it: Partial<Record<MessageKey, string>> = {
 	"settings.snapshotInterval.desc": "Salva un'istantanea di un quaderno al massimo una volta ogni tot ore, quando viene aperto o modificato. 0 disattiva le istantanee.",
 	"settings.snapshotKeep": "Versioni da conservare",
 	"settings.snapshotKeep.desc": "Quante istantanee conservare per ogni quaderno. Le più vecchie vengono spostate nel cestino.",
+	// --- glue ---
+	"notice.recovered": "Modifiche non salvate recuperate del {time}",
+	"notice.journalBackup": "Non è stato possibile applicare le modifiche non salvate: sono state salvate in {path}",
+	"page.scanAfter": "Scansiona pagine dopo questa pagina",
+	"page.scanInsert": "Inserisci scansione come immagine",
+	"scan.pagesDone": "Aggiunte {n} pagine scansionate",
+	"scan.imageDone": "Scansione inserita",
+	"scan.failed": "Impossibile aggiungere la scansione: {error}",
+	"command.scanInto": "Scansiona in questo quaderno",
+	"command.scanNew": "Nuovo quaderno da scansione",
+	"library.action.scanNotebook": "Nuovo quaderno da scansione",
+	"library.menu.scanHere": "Nuovo quaderno da scansione qui",
+	"scan.notebookName": "Scansione {date}",
 };
 
 let table: Partial<Record<MessageKey, string>> | null = null;

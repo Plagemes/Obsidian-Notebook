@@ -7,13 +7,10 @@ import {
 	extractDocId, formatBytes, formatSnapshotDate, shouldSnapshot, snapshotFileName, snapshotFolder, snapshotPageCount,
 	snapshotsToPrune, sortSnapshots,
 } from "../storage/history";
-import type { BackupReason } from "../storage/session";
 import { ensureFolder, VaultDocumentIO } from "../storage/vault-io";
 import { viewsOf } from "./open";
 import { NotebookPickerModal } from "./picker";
 
-/** Reason in the name of the backup taken before a restore (BackupReason may not list it yet). */
-const BEFORE_RESTORE = "before-restore" as unknown as BackupReason;
 
 export interface HistoryHost {
 	app: App;
@@ -196,7 +193,7 @@ export class HistoryService {
 			const raw = await this.app.vault.read(file);
 			const current = readNotebookText(ext, raw);
 			let backup: string | null = null;
-			if (current.trim().length > 0) backup = await io.backup(current, BEFORE_RESTORE);
+			if (current.trim().length > 0) backup = await io.backup(current, "before-restore");
 			let stale = false;
 			await this.app.vault.process(file, (now) => {
 				if (now !== raw) {

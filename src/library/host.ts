@@ -4,6 +4,8 @@ import { createDocument, createId } from "../model/document";
 import { parse } from "../model/serialize";
 import { PAGE_SIZES, PAPER_SPACING, type Asset, type NotebookDocument, type NotebookMeta, type Page } from "../model/types";
 import { assetExtension, assetPath, assetsFolder } from "../pdf/assets";
+import { scanFromCamera } from "../scan/scan-modal";
+import { scannedPage } from "../scan/pages";
 import { PdfStore } from "../pdf/pdf-store";
 import type { PdfLib } from "../pdf/pdfjs-types";
 import { backupFolder, type NotebookSettings } from "../settings";
@@ -95,13 +97,19 @@ export class NotebookLibraryHost implements LibraryHost {
 	// ----------------------------------------------------------------- opening
 
 	/** Opens the notebook in a tab, focusing the tab that already shows it. */
-	async openNotebook(file: TFile): Promise<void> {
+	async openNotebook(file: TFile, pageIndex?: number): Promise<void> {
+		const page = pageIndex !== undefined && pageIndex >= 0 ? pageIndex + 1 : undefined;
 		const open = this.app.workspace.getLeavesOfType(VIEW_TYPE).find((leaf) => leafFile(leaf) === file.path);
 		if (open) {
+			if (page !== undefined) {
+				const current = open.getViewState();
+				await open.setViewState({ ...current, state: { ...current.state, file: file.path, page } });
+			}
 			await this.app.workspace.revealLeaf(open);
 			return;
 		}
-		await this.app.workspace.getLeaf("tab").openFile(file);
+		const leaf = this.app.workspace.getLeaf("tab");
+		await (page === undefined ? leaf.openFile(file) : leaf.openFile(file, { state: { page } }));
 	}
 
 	// ---------------------------------------------------------------- creating
@@ -152,6 +160,32 @@ export class NotebookLibraryHost implements LibraryHost {
 				empty: () => t("import.empty"),
 			},
 		}, folder);
+	}
+
+	/** Camera scan into a new notebook "Scan <date>": one page per sheet, the JPEG as the page background. */
+	scanToNotebook(folder: string): void {
+		void this.createFromScan(folder);
+	}
+
+	private async createFromScan(folder: string): Promise<void> {
+		try {
+			const sheets = await scanFromCamera(this.app);
+			if (sheets.length === 0) return;
+			const doc = createDocument(new Date(), PAGE_SIZES.a4, { kind: "blank", spacing: PAPER_SPACING.blank });
+			doc.pages = [];
+			doc.assets = {};
+			for (const sheet of sheets) {
+				const asset = await storeAsset(this.app, this.root(), sheet.jpeg, `${sheet.name}.jpg`, "image");
+				this.assets.set(asset.id, asset);
+				doc.assets[asset.id] = asset;
+				doc.pages.push(scannedPage(asset, sheet.width, sheet.height));
+			}
+			const name = t("scan.notebookName", { date: new Date().toISOString().slice(0, 10) });
+			const file = await createNotebook(this.app, folder, name, doc);
+			await this.openNotebook(file);
+		} catch (e) {
+			new Notice(t("scan.failed", { error: (e as Error).message }), 8000);
+		}
 	}
 
 	// ---------------------------------------------------------------- metadata
