@@ -306,6 +306,74 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
     - Ink interpreted as a gesture is never saved, but undo restores it as ink.
 140. **P1** Guided repair of damaged notebooks: recovers valid pages and strokes from an unreadable file into a new notebook, never touching the original.
 
+## M12 — More advanced features (backlog, planned 2026-10-29)
+
+Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for all.
+
+### A. Ink and geometry
+141. **P2** Touch-up brush: push or pull an existing stroke to fix its shape without rewriting it.
+142. **P1** Personal stamps: drawings, symbols and signatures you reuse, saved in a palette and dragged onto pages.
+143. **P2** Subject symbol kits with snapping: rings and bonds for chemistry, components for circuits, vectors for physics.
+144. **P2** Parametric 3D solids (cube, cylinder, cone, prism) with editable dimensions and perspective.
+145. **P2** Automatic geometric constraints while drawing shapes: snap to parallels, perpendiculars, tangents and midpoints of existing shapes.
+146. **P3** Symmetric drawing: mirror or radial axis.
+147. **P2** Computable table: typed cells with spreadsheet-like formulas (sums, averages, percentages).
+148. **P2** Timeline element: dated events with automatic spacing.
+149. **P1** Ink attached to objects: ink written over an image, table, graph or formula moves and scales with it.
+150. **P2** Free page rotation with two fingers, like turning real paper.
+151. **P1** Configurable edge rejection zones: a palm resting on the screen edge does nothing.
+152. **P1** Radial menu at the pen tip: pressing the S Pen button shows tools in a circle around the nib.
+
+### B. PDF
+153. **P2** Fill PDF forms (fields) by hand or keyboard; export them filled.
+154. **P2** Reusable signature and date stamp for documents.
+155. **P1** Export PDF annotations to a Markdown note: highlights, excerpts and comments, each with a page link.
+156. **P2** Import existing annotations from PDFs annotated in other apps, as editable items.
+157. **P3** Export ink as native PDF annotations, editable in other PDF readers.
+158. **P2** Zotero and literature-note link: from a PDF page to its citation.
+159. **P3** Split scanned two-page spreads into two pages.
+
+### C. Library
+160. **P1** Library trash with restore.
+161. **P2** Board view with statuses (in progress, done, to print).
+162. **P2** Calendar view: what you wrote on a given day.
+163. **P2** Per-notebook settings: stabilization, palm rejection, default paper, sync.
+
+### D. Sharing and open formats
+164. **P2** Interactive HTML export: zoomable vector pages that open anywhere, without Obsidian.
+165. **P3** Shared session on the local network: several people writing on the same notebook over Wi-Fi, no cloud.
+166. **P3** InkML export (open standard for digital ink).
+167. **P2** Documented format with a JSON Schema, so other tools can read notebooks.
+
+### E. Automation
+168. **P1** Public API for other plugins (Templater, QuickAdd, Dataview): create notebooks, add pages, insert images, export.
+169. **P2** If/then rules (e.g. "notebook in folder Physics → millimetre paper", "on close → update the PDF copy").
+170. **P2** Macros: a sequence of commands on one toolbar button.
+
+### F. Images and view
+171. **P2** Image editing: crop, rotate, brightness and contrast.
+172. **P1** White background made transparent: pasted images and screenshots blend with the paper.
+173. **P2** Minimap for infinite pages and high zoom.
+
+### G. More original ideas
+174. **P2** Draft and fair copy: write a draft, then the draft dims and you rewrite cleanly on top; the draft can be hidden.
+175. **P2** Magnifier lens following the pen, to read small PDF text while writing.
+176. **P1** Loose sheet: a quick-notes notebook opened from anywhere in Obsidian; move its content to the right notebook later.
+177. **P2** Inbox folder: files shared from other Android apps land there and the plugin offers to put them into a notebook.
+178. **P2** Split an infinite page into A4 pages for export and printing.
+179. **P2** Two-way page references: if page 3 refers to page 7, page 7 shows "referenced on page 3".
+180. **P1** Restore a single page from a previous version, leaving the rest untouched.
+181. **P3** Reference sheets per subject (periodic table, formula sheets, constants) kept at hand.
+182. **P2** Built-in scientific calculator with unit conversion; the result is inserted on the page.
+183. **P3** Gentle snapping of handwriting to the lines while writing on ruled paper.
+184. **P2** Paint bucket: fill closed areas with colour (diagrams, maps).
+185. **P1** Erase area: draw an outline and everything inside disappears, in one gesture.
+186. **P2** Copy a page into another notebook, with a link back to the source page.
+187. **P2** Back-of-book index: mark terms or regions and an index page with references is generated.
+188. **P1** Show/hide all annotations, to reread a clean PDF.
+189. **P2** Attachments on the page: Word files, zips and others as icons that open on tap.
+190. **P2** Page QR code: scan it with the phone and the page opens on the other device.
+
 ### Study and exam update (to be designed later)
 
 Exam and review features will ship as one coherent update, designed later together: #24 (flashcards from the lasso), #89 (scheduled review), #116 (exam review plan), #117 (review coverage map), #133 (course dashboard). Not planned for now.
