@@ -125,8 +125,8 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 
 ### Reliability and performance
 31. **P1** Instant save journal: each stroke is appended within milliseconds to a small journal next to the notebook and merged on the regular save, so even the last stroke survives Android killing the app.
-32. **P1** Diagnostic report: one command writes versions, device, settings and performance figures to a file for bug reports.
-33. **P2** Battery saver mode: fewer redraws, no predicted points, lighter thumbnails.
+32. ~~**P1** Diagnostic report: one command writes versions, device, settings and performance figures to a file for bug reports.~~ — dropped (user decision, 2026-10-29)
+33. ~~**P2** Battery saver mode: fewer redraws, no predicted points, lighter thumbnails.~~ — dropped (user decision, 2026-10-29)
 34. **P3** Optional compression of very large notebooks (compatible with the planned Markdown container).
 
 ### Advanced writing
@@ -147,7 +147,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 47. **P3** Export keeping the original vector PDF pages instead of images (needs an MIT library such as pdf-lib).
 
 ### Navigation and view
-48. **P1** Double tap to zoom: toggles fit-to-width and 100 %.
+48. ~~**P1** Double tap to zoom: toggles fit-to-width and 100 %.~~ — dropped (user decision, 2026-10-29)
 49. **P2** Two-page spread view (landscape tablets).
 50. **P2** Fast scrollbar with a page preview while dragging.
 51. **P2** Read-only mode to read without accidental marks.
@@ -165,7 +165,72 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 ### Integration and accessibility
 58. **P1** Direct `obsidian://` links to a page, to open it from other apps, bookmarks or a QR code.
 59. **P2** Lasso selection as an image inserted at the cursor of the active Markdown note.
-60. **P2** Left-handed mode: toolbar on the other side and palm rejection tuned for left-handed writing.
+60. ~~**P2** Left-handed mode: toolbar on the other side and palm rejection tuned for left-handed writing.~~ — dropped (user decision, 2026-10-29)
+
+## M9 — More features (backlog, planned 2026-10-29)
+
+Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for all.
+
+### Writing and tools
+61. **P1** Pen hover preview: with the S Pen near the screen, a circle shows the nib size and colour.
+62. **P1** Adjustable eraser size with a visible eraser circle.
+63. **P2** Rectangle selection in addition to the lasso.
+64. **P2** Select by colour or tool (e.g. all highlighter strokes on this page).
+65. **P2** Rotate by 90°, mirror and exact size for the selection.
+66. **P2** Smooth or straighten selected strokes.
+67. **P2** Textured pens: graphite pencil and gel.
+68. **P2** Style eyedropper: take colour, width and tool from an existing stroke.
+69. **P2** Smart connectors between shapes (diagrams).
+70. **P3** Mind maps: linked text nodes that move together.
+71. **P2** Magnetic snap to the grid and alignment guides.
+72. **P3** Measuring tool: real distances in cm on the page.
+
+### Pages and documents
+73. **P1** More papers: Cornell, music staff, isometric, hexagonal, calligraphy, planner.
+74. **P1** Save a page as a template, with a template gallery.
+75. **P2** Automatic header with date and page number.
+76. **P2** Rotate and crop imported PDF pages.
+77. **P2** Merge notebooks, split a notebook, extract pages into a new notebook.
+78. **P2** Move a selection to another page.
+79. **P2** Drag files (images, PDFs) straight onto a page.
+80. **P2** Bulk import in the library: drop many PDFs or images and they become notebooks.
+81. **P2** Export all pages as PNG images, and print.
+82. **P3** Portable package: a .zip with the notebook and its assets, to move it to another vault.
+83. **P3** Import from Xournal++ and from SVG.
+
+### Study
+84. **P2** Action history panel (jump back to a point) and undo that survives reopening.
+85. **P1** Coloured bookmarks with categories ("important", "to review").
+86. **P2** Margin comments attached to a region of the page.
+87. **P2** Presentation mode: full-screen pages, with the laser pointer (#12).
+88. **P3** Study timer (pomodoro) with a session log.
+89. **P2** Scheduled review: "review this page in 3 days", with a list of pages due.
+90. **P2** Highlights digest: every highlighted region collected in a summary page.
+
+## M10 — Native Obsidian integration (backlog, planned 2026-10-29)
+
+Goal: notebooks behave like first-class Obsidian content. Several items depend on the container decision ("File format transition" below): O1 is the companion-note option (C) and must be designed together with it.
+
+- **O1 P1** Automatic companion note: every notebook has a `.md` with properties (tags, course, pages, dates) and the text of its text boxes, so search, graph, Dataview and Bases see notebooks.
+- **O2 P1** Shared tags: notebook tags are real Obsidian tags, visible in the Tags pane.
+- **O3 P2** Native properties: course, teacher, exam date and similar edited from Obsidian's Properties panel.
+- **O4 P1** Page links: `[[Physics#p3]]` opens the notebook at that page, with link suggestions while typing.
+- **O5 P2** Hover preview: hovering a notebook link shows the page thumbnail (page preview).
+- **O6 P1** Native embed syntax: `![[Physics.notebook#p3]]` renders the page in reading view and live preview.
+- **O7 P2** Linked mentions: inside the notebook, for each page, the notes that link to it.
+- **O8 P2** Wikilinks in text boxes: typing `[[` suggests notes; tapping the link opens the note.
+- **O9 P1** File explorer menu: "New notebook here" on folders, "Annotate in Notebook" on PDFs.
+- **O10 P2** From Obsidian's PDF viewer: an "Annotate in Notebook" action.
+- **O11 P3** Pages on Canvas: notebook pages as cards on an Obsidian Canvas.
+- **O12 P2** Daily notebook: "Today's page" adds a dated page and links it from the daily note.
+- **O13 P2** Obsidian templates: template notebooks and embeds in Templates/Templater.
+- **O14 P1** Commands and hotkeys for every tool (pen, eraser, lasso…), assignable in Hotkeys.
+- **O15 P2** Status bar: "p. 3/12" and save state; tap opens the navigator.
+- **O16 P1** Reopen where you left off: workspace/session restore brings back the same page and zoom.
+- **O17 P1** Theme integration: colours, accent and dark mode followed everywhere; documented CSS variables for snippets.
+- **O18 P1** Sync conflicts: when Obsidian Sync creates a conflicted copy, a dialog compares both versions and merges their strokes.
+- **O19 P2** Obsidian search: text boxes (and OCR later) appear in global search through the companion note.
+- **O20 P1** Page into a note: "Copy link to this page" and "Insert this page into the active note" (link or embed).
 
 ## File format transition (applies to M4 and to every milestone before it)
 
