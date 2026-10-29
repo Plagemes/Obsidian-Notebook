@@ -13,6 +13,8 @@ export interface PdfViewport {
 /** What `getTextContent()` resolves to; items are read defensively (see pdf/text-items.ts). */
 export interface PdfTextContent {
 	items: unknown[];
+	/** Font name to style (`fontFamily`), used to measure the characters of a run. */
+	styles?: unknown;
 }
 
 export interface PdfRenderTask {

@@ -3,7 +3,7 @@ import { createPage } from "../src/model/document";
 import type { Page } from "../src/model/types";
 import { bandPoints, bandWidth, snapHighlight } from "../src/pdf/text-snap";
 import { PageTextCache, runSearch, type PdfTextSource, type SearchHit } from "../src/pdf/text-index";
-import type { PageTextContent, TextBox } from "../src/pdf/text-items";
+import { boxesOnPage, prefixShare, textBoxes, type PageTextContent, type TextBox } from "../src/pdf/text-items";
 import { assemblePageText, findInPage, hitBoxes, mergeLineBoxes, normalizeQuery, normalizeText, snippetOf } from "../src/pdf/text-search";
 import { backgroundAlpha, hasBackgrounds, hasPdfPages, insertHits, revealViewport, searchTargets, stepIndex } from "../src/view/reading-logic";
 import { DEFAULT_DIM, DIM_MAX, DIM_MIN, normaliseDim, readReadingSettings } from "../src/view/reading-settings";
@@ -98,6 +98,57 @@ describe("snippetOf", () => {
 	it("marks nothing as cut when the text is short", () => {
 		const s = snippetOf("hello world", { start: 0, end: 5 });
 		expect(s).toEqual({ before: "", match: "hello", after: " world", cutBefore: false, cutAfter: false });
+	});
+});
+
+/** Characters of different widths: "i" and "l" are narrow, "m" and "w" wide, the rest medium. */
+const proportional = (text: string): number => [...text].reduce((w, c) => w + ("il".includes(c) ? 1 : "mw".includes(c) ? 3 : 2), 0);
+
+describe("measured character widths", () => {
+	it("places a hit by the widths of the characters, not by their count", () => {
+		const str = "iiii mmmm";
+		const box: TextBox = { str, x: 0, y: 0, width: proportional(str), height: 10 };
+		const items = [box];
+		const page = assemblePageText(items);
+		const equal = hitBoxes(content(items), page, { start: 5, end: 9 })[0]!;
+		const measured = hitBoxes(content(items), page, { start: 5, end: 9 }, (text) => proportional(text))[0]!;
+		// The box is 18 units wide: "iiii " takes 6 and "mmmm" 12. Equal widths would put "mmmm" at 5/9 of the box.
+		expect(equal.x).toBeCloseTo(10, 5);
+		expect(measured.x).toBeCloseTo(6, 5);
+		expect(measured.width).toBeCloseTo(12, 5);
+	});
+
+	it("falls back to equal widths when the measure gives nothing", () => {
+		const box: TextBox = { str: "abcd", x: 10, y: 0, width: 40, height: 10 };
+		expect(prefixShare(box, 2)).toBe(0.5);
+		expect(prefixShare(box, 2, () => 0)).toBe(0.5);
+		expect(prefixShare(box, 2, () => NaN)).toBe(0.5);
+		expect(prefixShare(box, 0, () => 1)).toBe(0);
+		expect(prefixShare(box, 9, () => 1)).toBe(1);
+	});
+
+	it("snaps a stroke to the words as they are drawn in a proportional font", () => {
+		// "iii MMMM xx": with equal widths the second word would start at 4/11 of the box; measured it starts at 3 + 2 units.
+		const str = "iii mmmm xx";
+		const box: TextBox = { str, x: 0, y: 100, width: proportional(str) * 2, height: 10 };
+		const strokeOver = (x: number) => [[x, 105, 0.5], [x + 4, 105, 0.5]] as const;
+		// proportional(iii)=3, " "=2, mmmm=12 -> second word spans units 5..17 of 23, i.e. x 10..34.
+		const bands = snapHighlight(strokeOver(14), [box], (text) => proportional(text));
+		expect(bands).toHaveLength(1);
+		expect(bands[0]!.x0).toBeCloseTo(10, 5);
+		expect(bands[0]!.x1).toBeCloseTo(34, 5);
+	});
+});
+
+describe("text runs with fonts", () => {
+	it("carry the font family of their style, and keep it when moved onto the page", () => {
+		const items = [{ str: "Hello", transform: [10, 0, 0, 10, 5, 90], width: 25, fontName: "g_f1" }, { str: "World", transform: [10, 0, 0, 10, 40, 90], width: 25, fontName: "unknown" }];
+		const boxes = textBoxes(items, [1, 0, 0, -1, 0, 100], { g_f1: { fontFamily: "Times, serif" } });
+		expect(boxes[0]!.font).toBe("Times, serif");
+		expect("font" in boxes[1]!).toBe(false);
+		expect(textBoxes(items, [1, 0, 0, -1, 0, 100])[0]).not.toHaveProperty("font");
+		const placed = boxesOnPage({ width: 100, height: 100, items: boxes }, { x: 0, y: 0, width: 200, height: 200 });
+		expect(placed[0]!.font).toBe("Times, serif");
 	});
 });
 

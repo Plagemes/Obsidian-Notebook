@@ -87,9 +87,20 @@ export class SearchPanel {
 		return !this.el.hasClass("notebook-hidden");
 	}
 
-	/** Height of the panel in CSS px (what it covers at the top of the page area). */
+	/** How far down the panel reaches from the top of the page area, CSS px (what it covers). */
 	get height(): number {
-		return this.isOpen ? this.el.offsetHeight : 0;
+		return this.isOpen ? this.el.offsetTop + this.el.offsetHeight : 0;
+	}
+
+	/** The list of results is on screen. */
+	get listShown(): boolean {
+		return this.isOpen && !this.list.hasClass("notebook-hidden");
+	}
+
+	/** Hides the list of results (the bar stays), e.g. when it covers the result being shown. */
+	collapseList(): void {
+		this.listOpen = false;
+		this.syncList();
 	}
 
 	get query(): string {
@@ -97,6 +108,9 @@ export class SearchPanel {
 	}
 
 	open(): void {
+		// A narrow view has no room for the list next to the page: it opens from the list button.
+		this.listOpen = !this.narrow();
+		this.syncList();
 		this.el.removeClass("notebook-hidden");
 		this.input.focus();
 		this.input.select();

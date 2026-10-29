@@ -1783,7 +1783,7 @@
 /* Shown while the annotations of PDF pages are hidden: the view is read-only, and this is the way back. */
 .notebook-reading-banner {
 	position: absolute;
-	top: 8px;
+	bottom: 12px;
 	left: 50%;
 	transform: translateX(-50%);
 	z-index: 7;

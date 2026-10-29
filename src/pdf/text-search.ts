@@ -6,7 +6,7 @@
  * string can be turned back into boxes on the page. Matching ignores case, accents, ligatures and the amount of
  * white space.
  */
-import type { PageTextContent, TextBox } from "./text-items";
+import { prefixShare, type PageTextContent, type TextBox, type TextMeasure } from "./text-items";
 
 /** Where the text of run `item` sits in the assembled page text: `text.slice(start, end) === items[item].str`. */
 export interface TextSpan {
@@ -194,9 +194,10 @@ export function snippetOf(text: string, hit: TextHit, radius = 36): Snippet {
 
 /**
  * Boxes of a match on the PDF page (viewport coordinates at scale 1, like `PageTextContent`): the part of each run
- * the match covers, assuming equal character widths inside a run, and boxes of one line that are close merged into one.
+ * the match covers (character widths from `measure` when given, else equal), and boxes of one line that are close
+ * merged into one.
  */
-export function hitBoxes(content: PageTextContent, page: PageText, hit: TextHit): TextBox[] {
+export function hitBoxes(content: PageTextContent, page: PageText, hit: TextHit, measure?: TextMeasure): TextBox[] {
 	const parts: TextBox[] = [];
 	for (const span of page.spans) {
 		if (span.end <= hit.start) continue;
@@ -206,13 +207,9 @@ export function hitBoxes(content: PageTextContent, page: PageText, hit: TextHit)
 		if (!box || len <= 0) continue;
 		const a = Math.max(hit.start, span.start) - span.start;
 		const b = Math.min(hit.end, span.end) - span.start;
-		parts.push({
-			str: box.str.slice(a, b),
-			x: box.x + (box.width * a) / len,
-			y: box.y,
-			width: (box.width * (b - a)) / len,
-			height: box.height,
-		});
+		const from = prefixShare(box, a, measure);
+		const to = prefixShare(box, b, measure);
+		parts.push({ str: box.str.slice(a, b), x: box.x + box.width * from, y: box.y, width: box.width * (to - from), height: box.height });
 	}
 	return mergeLineBoxes(parts);
 }

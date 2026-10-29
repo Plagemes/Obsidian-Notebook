@@ -17,7 +17,7 @@ import { backgroundRect } from "../model/margins";
 import { freezeStroke } from "../model/serialize";
 import { RENDER_INK, type NotebookDocument, type Page, type Stroke } from "../model/types";
 import { PageTextCache, runSearch, type SearchHit } from "../pdf/text-index";
-import { boxesOnPage, type PageTextContent } from "../pdf/text-items";
+import { boxesOnPage, type PageTextContent, type TextMeasure } from "../pdf/text-items";
 import { hitBoxes, normalizeQuery } from "../pdf/text-search";
 import { bandPoints, bandWidth, snapHighlight } from "../pdf/text-snap";
 import { SearchPanel } from "./pdf-search-panel";
@@ -79,6 +79,8 @@ export class PdfReading {
 	private readonly dimRange: HTMLInputElement;
 	private readonly snapButton: HTMLButtonElement;
 	private readonly rects = new WeakMap<SearchHit, RectCache>();
+	private measureCtx: CanvasRenderingContext2D | null | undefined;
+	private measureFont = "";
 
 	private hidden = false;
 	private searchOpen = false;
@@ -354,6 +356,16 @@ export class PdfReading {
 			const y1 = Math.max(...rects.map((r) => r.y + r.height));
 			rect = { x: box.x + x0, y: box.y + y0, width: x1 - x0, height: y1 - y0 };
 		}
+		this.reveal(rect);
+		// At the top of the notebook the view cannot scroll further: if the list still covers the result, fold it away.
+		const covered = this.panel.height;
+		if (covered > 0 && rect.y * this.host.viewport().scale + this.host.viewport().offsetY < covered && this.panel.listShown) {
+			this.panel.collapseList();
+			this.reveal(rect);
+		}
+	}
+
+	private reveal(rect: Rect): void {
 		const next = revealViewport(this.host.viewport(), this.host.viewSize(), rect, this.panel.height);
 		if (next !== this.host.viewport()) this.host.setViewport(next);
 	}
@@ -372,7 +384,7 @@ export class PdfReading {
 		const key = `${r.x}|${r.y}|${r.width}|${r.height}`;
 		const have = this.rects.get(hit);
 		if (have && have.key === key) return have.rects;
-		const onPage = boxesOnPage({ ...cached.content, items: hitBoxes(cached.content, cached.text, hit) }, r);
+		const onPage = boxesOnPage({ ...cached.content, items: hitBoxes(cached.content, cached.text, hit, this.measure) }, r);
 		// A run's box is its font size high; the letters (with ascenders and descenders) sit lower in it.
 		const rects = onPage.map((b) => ({ x: b.x, y: b.y + b.height * 0.1, width: b.width, height: b.height * 1.15 }));
 		this.rects.set(hit, { key, rects });
@@ -396,6 +408,16 @@ export class PdfReading {
 	private draw(): void {
 		const ctx = this.ctx;
 		if (!ctx || this.destroyed) return;
+		const doc = this.host.doc();
+		const layout = this.host.layout();
+		if (!doc || !layout || !this.searchOpen || this.hits.length === 0) {
+			// Nothing to mark: give the bitmap back (a full-size canvas costs memory on a phone).
+			if (this.overlay.width !== 1 || this.overlay.height !== 1) {
+				this.overlay.width = 1;
+				this.overlay.height = 1;
+			}
+			return;
+		}
 		const size = this.host.viewSize();
 		const dpr = window.devicePixelRatio || 1;
 		const w = Math.max(1, Math.round(size.width * dpr));
@@ -406,9 +428,6 @@ export class PdfReading {
 		}
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.clearRect(0, 0, w, h);
-		const doc = this.host.doc();
-		const layout = this.host.layout();
-		if (!doc || !layout || !this.searchOpen || this.hits.length === 0) return;
 		const v = this.host.viewport();
 		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		for (const i of visiblePages(layout, this.host.visibleRect())) {
@@ -464,10 +483,23 @@ export class PdfReading {
 		const cached = this.cache.peek(bg.asset, bg.page);
 		if (!cached || cached.content.items.length === 0) return null;
 		const boxes = boxesOnPage(cached.content, backgroundRect(page)).filter((b) => b.str.length > 0);
-		const bands = snapHighlight(stroke.points, boxes);
+		const bands = snapHighlight(stroke.points, boxes, this.measure);
 		if (bands.length === 0) return null;
 		return bands.map((band) => freezeStroke(createStroke(stroke.color, bandWidth(band), bandPoints(band), "highlighter", RENDER_INK)));
 	}
+
+	/** Width of a text in a font, from a canvas: how wide the characters of a run are relative to each other. */
+	private readonly measure: TextMeasure = (text, font) => {
+		if (this.measureCtx === undefined) this.measureCtx = activeDocument.createEl("canvas").getContext("2d");
+		const ctx = this.measureCtx;
+		if (!ctx) return 0;
+		const css = `100px ${font ? `${font}, ` : ""}sans-serif`;
+		if (css !== this.measureFont) {
+			ctx.font = css;
+			this.measureFont = css;
+		}
+		return ctx.measureText(text).width;
+	};
 
 	// --- view plumbing ---
 

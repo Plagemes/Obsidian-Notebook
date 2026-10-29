@@ -7,10 +7,11 @@
  *
  * Text geometry comes from pdf.js runs: a run's box is `font size` high, from `size` above the baseline to the baseline.
  * Letters occupy roughly 0.25-1.2 of the box height (ascenders, then descenders below the baseline), which is the band
- * that is highlighted. Inside a run the characters are taken to have equal widths (the same approximation as the search
- * hits); snapping to whole words keeps the error of that approximation invisible.
+ * that is highlighted. Inside a run the characters have the widths `measure` gives (the view measures them in the run's font),
+ * or equal widths without one (the same approximation as the search hits); snapping to whole words keeps the remaining
+ * error invisible.
  */
-import type { TextBox } from "./text-items";
+import { prefixShare, type TextBox, type TextMeasure } from "./text-items";
 
 /** A straight highlight: the rectangle (page coordinates, pt) to cover. */
 export interface Band {
@@ -40,15 +41,15 @@ interface Word {
 	b: number;
 }
 
-/** Non-blank stretches of a run's text as x-ranges of its box (equal character widths). */
-function wordRanges(box: TextBox): Word[] {
+/** Non-blank stretches of a run's text as x-ranges of its box (character widths from `measure`, else equal). */
+function wordRanges(box: TextBox, measure?: TextMeasure): Word[] {
 	const len = box.str.length;
 	const out: Word[] = [];
 	if (len === 0) return out;
 	const re = /\S+/gu;
 	let m: RegExpExecArray | null;
 	while ((m = re.exec(box.str))) {
-		out.push({ a: box.x + (box.width * m.index) / len, b: box.x + (box.width * (m.index + m[0].length)) / len });
+		out.push({ a: box.x + box.width * prefixShare(box, m.index, measure), b: box.x + box.width * prefixShare(box, m.index + m[0].length, measure) });
 	}
 	return out;
 }
@@ -106,7 +107,7 @@ function usable(box: TextBox): boolean {
 }
 
 /** The pieces of runs the stroke crosses with `tolerance` (in run heights): whole words covered by at least 40%. */
-function crossedPieces(points: ReadonlyArray<readonly number[]>, boxes: readonly TextBox[], tolerance: number): Piece[] {
+function crossedPieces(points: ReadonlyArray<readonly number[]>, boxes: readonly TextBox[], tolerance: number, measure?: TextMeasure): Piece[] {
 	const pieces: Piece[] = [];
 	for (const box of boxes) {
 		const tol = box.height * tolerance;
@@ -116,7 +117,8 @@ function crossedPieces(points: ReadonlyArray<readonly number[]>, boxes: readonly
 		let best: Word | null = null;
 		let bestOverlap = 0;
 		const chosen: Word[] = [];
-		for (const w of wordRanges(box)) {
+		const words = wordRanges(box, measure);
+		for (const w of words) {
 			const overlap = Math.min(w.b, xb) - Math.max(w.a, xa);
 			if (overlap <= 0 && !(xa === xb && xa >= w.a && xa <= w.b)) continue;
 			if (overlap > bestOverlap) {
@@ -129,7 +131,7 @@ function crossedPieces(points: ReadonlyArray<readonly number[]>, boxes: readonly
 		if (chosen.length === 0 && best) chosen.push(best);
 		if (chosen.length === 0) {
 			// A point stroke (a tap) exactly on a word.
-			for (const w of wordRanges(box)) if (xa >= w.a && xa <= w.b) chosen.push(w);
+			for (const w of words) if (xa >= w.a && xa <= w.b) chosen.push(w);
 		}
 		if (chosen.length === 0) continue;
 		// Words of a run are contiguous: the highlight runs from the first to the last chosen word.
@@ -180,15 +182,16 @@ function bandsOf(pieces: readonly Piece[]): Band[] {
  *
  * @param points the stroke's centre line, `[x, y, pressure]` in page coordinates
  * @param boxes the text runs of the PDF page in page coordinates
+ * @param measure widths of characters in the run's font; without it every character of a run is as wide as the others
  */
-export function snapHighlight(points: ReadonlyArray<readonly number[]>, boxes: readonly TextBox[]): Band[] {
+export function snapHighlight(points: ReadonlyArray<readonly number[]>, boxes: readonly TextBox[], measure?: TextMeasure): Band[] {
 	if (points.length === 0) return [];
 	const candidates = boxes.filter(usable);
 	if (candidates.length === 0) return [];
-	let pieces = crossedPieces(points, candidates, STRICT_TOLERANCE);
+	let pieces = crossedPieces(points, candidates, STRICT_TOLERANCE, measure);
 	if (pieces.length === 0) {
 		// The stroke did not cross a run: take the line it is closest to, if it is near one at all.
-		const loose = crossedPieces(points, candidates, LOOSE_TOLERANCE);
+		const loose = crossedPieces(points, candidates, LOOSE_TOLERANCE, measure);
 		if (loose.length === 0) return [];
 		const cy = points.reduce((s, p) => s + p[1]!, 0) / points.length;
 		const distance = (p: Piece): number => Math.abs(p.top + p.height / 2 - cy);

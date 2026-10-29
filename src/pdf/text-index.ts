@@ -133,7 +133,7 @@ export interface SearchRunResult {
 
 export const DEFAULT_HIT_LIMIT = 500;
 
-const defaultYield = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+const defaultYield = (): Promise<void> => new Promise((resolve) => window.setTimeout(resolve, 0));
 
 /**
  * Searches `targets` in order. Resolves when everything was searched, the limit was reached or `signal.cancelled` turned
