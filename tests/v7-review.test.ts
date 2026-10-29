@@ -13,7 +13,7 @@ import { DEFAULT_META, type NotebookDocument } from "../src/model/types";
 
 function parsed(text: string) {
 	const r = parse(text);
-	if (!r.ok) throw new Error(r.error);
+	if (!r.ok) throw new Error(r.message);
 	return r;
 }
 
