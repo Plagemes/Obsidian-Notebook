@@ -10,6 +10,7 @@ import { displayGestureSettings, gestureSettingDefinitions, type GestureSettings
 import { displayTrashSettings, trashSettingDefinitions } from "./trash-settings";
 import { PenTestModal } from "./pen-test-modal";
 import { companionSettingDefinitions, displayCompanionSettings, type CompanionSettingsHost } from "./companion-settings";
+import { displayZettelSettings, zettelSettingDefinitions, type ZettelSettingsHost } from "../zettel/settings-ui";
 
 const paperOptions = () => Object.fromEntries(PAPER_KINDS.map((k) => [k, t(`paper.${k}`)]));
 const sizeOptions = () => Object.fromEntries((Object.keys(PAGE_SIZES) as Array<keyof typeof PAGE_SIZES>).map((k) => [k, t(`size.${k}`)]));
@@ -188,6 +189,8 @@ export class NotebookSettingTab extends PluginSettingTab {
 			...companionSettingDefinitions(this.companionHost()),
 			// wave 0.6: library trash, templates
 			...trashSettingDefinitions(),
+			// wave 0.6: zettelkasten
+			...zettelSettingDefinitions(this.zettelHost()),
 		];
 	}
 
@@ -196,6 +199,10 @@ export class NotebookSettingTab extends PluginSettingTab {
 	}
 
 	private companionHost(): CompanionSettingsHost {
+		return { plugin: this.host, get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) };
+	}
+
+	private zettelHost(): ZettelSettingsHost {
 		return { plugin: this.host, get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) };
 	}
 
@@ -348,5 +355,6 @@ export class NotebookSettingTab extends PluginSettingTab {
 		displayCompanionSettings(containerEl, this.companionHost());
 		displayTimetableSettings(containerEl, this.host);
 		displayTrashSettings(containerEl, { get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) });
+		displayZettelSettings(containerEl, this.zettelHost());
 	}
 }

@@ -19,7 +19,7 @@ import { findHitStrokes, type BBox } from "../ink/hit-test";
 import { growForInfinite } from "../ink/infinite";
 import { InputPolicy, type HeldTool } from "../ink/input-policy";
 import { strokesInLasso, transformStroke } from "../ink/lasso";
-import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layout } from "../ink/layout";
+import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layout, type PageBox } from "../ink/layout";
 import { HoldTracker } from "../ink/hold";
 import { LastTool } from "../ink/last-tool";
 import { MultiTap } from "../ink/multitap";
@@ -30,7 +30,7 @@ import { OneEuroFilter, stabilizationParams } from "../ink/one-euro";
 import { PointerController, type InkSample, type SampleBuffer } from "../ink/pointer-controller";
 import { PressureModel } from "../ink/pressure";
 import { recognizeShape } from "../ink/recognize";
-import { drawElement, drawTextElement, measureText, Renderer, selectionHandles } from "../ink/renderer";
+import { drawElement, drawTextElement, measureText, Renderer, selectionCorners, selectionHandles } from "../ink/renderer";
 import { projectToRuler, rulerFromTwoTouches, RULER_LENGTH, type Ruler } from "../ink/ruler";
 import { eraseSegment } from "../ink/segment-erase";
 import { analyseSpace, planSpaceChange, spacePreview } from "../ink/space";
@@ -1518,6 +1518,27 @@ export class NotebookView extends FileView {
 		if (this.selection) this.pushSelection();
 		this.placeTextEditor();
 		this.updatePageIndicator();
+		this.overlayChanged?.();
+	}
+
+	// wave 0.6: zettelkasten — hooks for DOM overlays (card regions, src/zettel/overlay.ts)
+
+	/** Called after every viewport or layout change, so overlays can follow the pages. */
+	overlayChanged: (() => void) | null = null;
+
+	/** Stage element, viewport and page boxes (document space) for DOM overlays; null without a document. */
+	overlayGeometry(): { stage: HTMLElement; viewport: Viewport; boxes: readonly PageBox[] } | null {
+		return this.layout && this.stage ? { stage: this.stage, viewport: this.viewport, boxes: this.layout.boxes } : null;
+	}
+
+	/** Page and bounds (page coordinates, any pending drag applied) of the lasso selection, or null. */
+	selectionRegion(): { pageIndex: number; bounds: BBox } | null {
+		const sel = this.selection;
+		if (!sel) return null;
+		const corners = selectionCorners(sel.bounds, sel.matrix);
+		const xs = corners.map((c) => c[0]);
+		const ys = corners.map((c) => c[1]);
+		return { pageIndex: sel.pageIndex, bounds: { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) } };
 	}
 
 	// --- text boxes ---

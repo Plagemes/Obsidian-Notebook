@@ -172,6 +172,14 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Shared tags: merge rule for the companion note's `tags` (notebook tags added; tags the person wrote never removed, also when the notebook had the same tag; only tags the plugin added are removed; deleted-by-hand notebook tags come back) | ✅ | ✅ rule and multi-update scenarios, region state | | | the state stored on the start marker now lists only the tags the plugin added; notes written by 0.5.0 count all their notebook tags as added |
 | Shared tags: library filter by tag includes nested tags (`physics` finds `physics/optics`) and counts parents; tag editor hint with *Turn on companion notes* when they are off | ✅ | ✅ filter and counts; ❌ hint and setting change (Obsidian) | | | tags are copied notebook → note only: a tag added only in the note is not added to the notebook |
 | Public API for other plugins (#168): `app.plugins.plugins["notebook"].api` with `version`, `createNotebook`, `addPages`, `insertImage`, `exportPdf`, `getNotebookInfo`, `openNotebook`, `listNotebooks`, typed `NotebookApiError`s, `docs/api.md` | ✅ | ✅ argument validation, generated documents, closed-notebook write plan (unreadable file never overwritten, validation, read-back check), per-notebook queue, doc covers every method and code; ❌ calls through the Vault and open views (Obsidian) | | ✅ | open notebooks are edited through their session (one undo step); closed ones by validated read-modify-write with a `before-api` backup; not yet run inside Obsidian |
+| Zettel cards (Z1): *Make card from selection* / *from this page*, note with id, title, aliases, type, source, date, tags, notebook link, notebook-id, page-id, region; live embed; Transcription section | ✅ | ✅ note text, properties, id generation (timestamp, Luhmann), file names; ❌ dialog, `vault.create`, menu | | | the notebook tab's ⋯ menu entries rely on Obsidian passing that menu to `file-menu` (not checked) |
+| Card subpath `#p3&id=<page id>&r=x,y,w,h` in links, native embeds and the `notebook` code block: page found by id, region cropped, deleted page reported | ✅ | ✅ parse/build, page lookup, clamping, region size; ❌ rendering in Obsidian | | | |
+| Slip-box (Z2): *New slip-box* (A6 pages), *Make this notebook a slip-box*, a card note for each new page after an own save | ✅ | ✅ settings parsing, A6 size; ❌ triggers, creation, sync behaviour | | ✅ | slip-box list is in the plugin settings (per device unless settings sync) |
+| Drawn links (Z3): shape-tool arrow from one card region to another → `links` in both notes; only arrows drawn since the notebook was opened; explicit command for older arrows | ✅ | ✅ arrow detection, card under a point, link merge; ❌ writing, graph display | | ✅ | hand-drawn (pen tool) arrows are not detected |
+| Card title (Z11): typed title in the dialog or *Set card title* (title + aliases, note renamed from `<id>` to `<id> <title>`) | ✅ | ✅ title/alias changes; ❌ rename, prompt | | | |
+| Card regions on the page (outline + id badge, `pointer-events: none`), setting and command to hide them | ✅ | ❌ (DOM over the canvas) | | | not checked that the overlay never disturbs S Pen input |
+| Cards never deleted; `orphaned` set/cleared with the page; *Show orphaned cards*; card notes edited only in the frontmatter, body kept byte for byte, no write when unchanged | ✅ | ✅ frontmatter edit, orphan rule; ❌ triggers and `vault.process` | | | |
+| Companion notes never claim a card note (same `notebook` link and `notebook-id`) | ✅ | ❌ (needs the Vault) | | | |
 
 ## Automated checks
 
@@ -322,6 +330,14 @@ A4. **API: create, pages, info.** In the developer console (or a Templater/Quick
 A5. **API: images and PDF.** `await api.insertImage(file, 1, "Attachments/photo.png", { width: 300 })` (a vault image) and with bytes (`new Uint8Array(await app.vault.adapter.readBinary(path))`): the image appears on page 1, centred; undo removes it when the notebook is open. A text file or an SVG throws `unsupported-image`; page 99 throws `invalid-argument`. `await api.exportPdf(file)` writes `Name.pdf` next to the notebook with every page (PDF/image backgrounds and images included); `{ strict: true }` throws `export-incomplete` when an asset was deleted.
 A6. **API: errors and safety.** Call `addPages(file, 0)`, `addPages(file, 1, 99)`, `addPages("Nope", 1)`, `createNotebook("../x", "y")` and `createNotebook("A", "B", { tag: [] })`: each throws a `NotebookApiError` with the documented code and nothing changes. Damage a closed notebook (cut its file in half) and call `addPages` on it: `unreadable`, the file is untouched. Call `openNotebook(file, 3)` on a closed and on an already open notebook: it opens at page 3.
 
+**Zettelkasten (wave 0.6).** Steps Z1, Z2, Z3, Z11 and Z12 below; note the results in the rows with the same labels.
+
+- **Z1 Cards.** In a notebook, write two short ideas apart from each other. Select the first with the lasso, open the ⋯ menu of the notebook tab (or the command *Make card from selection*): the *New card* dialog shows the ink; type a title, choose a type, a source and two tags, *Create card*. Expected: a note `Zettelkasten/<id> <title>.md` with those properties, `notebook-id`, `page-id`, `region` and the ink shown below the properties. Write more in that region of the page: once the notebook is saved, the card's preview follows. Move the page with the Pages panel: the card still shows the same ink. Repeat with *Make card from this page*. Switch *Card ids* to Luhmann numbering and make two cards, the second with *Branch of card* = the first id (expected ids `1` and `1a`).
+- **Z2 Slip-box.** Run *New slip-box*: an A6 notebook opens and its first page already has a card (id badge at the top right of the page). Add two pages: a few seconds after they are saved, two more cards exist (one per page), none created twice. Turn an existing notebook with several pages into a slip-box from the ⋯ menu: a confirmation gives the number of notes first. Delete a page: its card gets `orphaned: true` and is listed by *Show orphaned cards*; undo: the flag goes away. If you use sync, open the slip-box on a second device and check that no card appears twice.
+- **Z3 Drawn links.** On a page with two region cards, choose the shape tool's arrow and draw from the first region to the second. A few seconds later both card notes have the other in `links`, and the graph shows the link. Remove the link from one note by hand: it does not come back. Run *Link cards joined by arrows on this page*: it does come back (explicit request).
+- **Z11 Title and transcription.** In a slip-box page without a title, run *Set card title*: the note gets `title` and `aliases` and is renamed from `<id>.md` to `<id> <title>.md`; a link to it in another note follows the rename. Type text under *Transcription* in the note and then write on the page: the text stays untouched.
+- **Z12 Regions and container.** Toggle *Show or hide card regions*: outlines and badges disappear and come back; with them shown, write, erase and lasso across an outline with the S Pen and with a finger: input is exactly as without them. Rename the notebook in the file explorer: cards keep working (their `notebook` link is updated by Obsidian). Turn on *Companion notes* and open the notebook: the companion note is a separate note, never one of the cards.
+
 | Step | Device / Obsidian version | Result | Notes |
 |---|---|---|---|
 | 1 Create and write | | | |
@@ -467,6 +483,11 @@ L10. **Notebook from template.** *New notebook* dialog → *Template* → *Choos
 | A4 API: create, pages, info | | | |
 | A5 API: images and PDF | | | |
 | A6 API: errors and safety | | | |
+| Z1 Cards | | | |
+| Z2 Slip-box | | | |
+| Z3 Drawn links | | | |
+| Z11 Title and transcription | | | |
+| Z12 Regions and container | | | |
 
 Benchmark output (step 21): paste it here.
 

@@ -2,6 +2,7 @@
  * Pure parsing and building for embeds (`notebook` code blocks) and `obsidian://notebook` links.
  * No Obsidian imports: testable in Node.
  */
+import { parseSubpathParams, type Region } from "../zettel/subpath";
 
 export interface EmbedTarget {
 	/** `path`: a vault path (extension optional). `link`: a wikilink target, resolved by name. */
@@ -10,7 +11,12 @@ export interface EmbedTarget {
 }
 
 export type EmbedParse =
-	| { ok: true; target: EmbedTarget; page: number }
+	| {
+		ok: true; target: EmbedTarget; page: number;
+		/** Z1 card subpath (`#p3&id=<page id>&r=x,y,w,h`): present only when given. */
+		pageId?: string;
+		region?: Region;
+	}
 	| { ok: false; error: "empty" | "badPage"; detail: string };
 
 interface ParsedTarget {
@@ -18,6 +24,8 @@ interface ParsedTarget {
 	/** Page from a `#3`, `#p3` or `#page=3` suffix. */
 	page: number | null;
 	badFragment: string | null;
+	pageId: string | null;
+	region: Region | null;
 }
 
 function unquote(s: string): string {
@@ -45,15 +53,21 @@ function parseTarget(raw: string): ParsedTarget | null {
 	const hash = s.indexOf("#");
 	let page: number | null = null;
 	let badFragment: string | null = null;
+	let pageId: string | null = null;
+	let region: Region | null = null;
 	if (hash >= 0) {
 		const fragment = s.slice(hash + 1);
 		s = s.slice(0, hash);
-		page = parsePageFragment(fragment);
-		if (page === null) badFragment = fragment;
+		// `p3&id=…&r=…` (Z1 cards): the page part, then the card parameters.
+		const params = parseSubpathParams(fragment);
+		page = parsePageFragment(params.head);
+		pageId = params.pageId;
+		region = params.region;
+		if (params.bad !== null || (page === null && !(params.head === "" && pageId !== null))) badFragment = fragment;
 	}
 	s = s.trim();
 	if (!s) return null;
-	return { target: { kind, value: s }, page, badFragment };
+	return { target: { kind, value: s }, page, badFragment, pageId, region };
 }
 
 /**
@@ -85,7 +99,8 @@ export function parseEmbedSource(source: string): EmbedParse {
 	} else if (parsed.badFragment !== null) {
 		return { ok: false, error: "badPage", detail: parsed.badFragment };
 	}
-	return { ok: true, target: parsed.target, page: page ?? 1 };
+	const card = { ...(parsed.pageId !== null ? { pageId: parsed.pageId } : {}), ...(parsed.region !== null ? { region: parsed.region } : {}) };
+	return { ok: true, target: parsed.target, page: page ?? 1, ...card };
 }
 
 /** Text of a `notebook` code block for the given notebook and page. */

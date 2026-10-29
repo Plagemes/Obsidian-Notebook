@@ -4,6 +4,7 @@ import { renderThumbnail, type ThumbnailOptions } from "../library/thumbnail";
 import { parse } from "../model/serialize";
 import type { NotebookDocument, Page } from "../model/types";
 import { readNotebookText } from "../storage/format";
+import { clampRegion, lookupPage } from "../zettel/subpath";
 import { embedPixelWidth, parseEmbedSource } from "./links";
 import { resolveNotebookFile } from "./open";
 
@@ -98,17 +99,23 @@ export class NotebookEmbed extends MarkdownRenderChild {
 				return;
 			}
 			const doc = result.doc;
-			const page = doc.pages[parsed.page - 1];
-			if (!page) {
-				this.message(t("embed.pageMissing", { name: file.basename, count: String(doc.pages.length), page: String(parsed.page) }));
+			// Z1 cards name their page by id (it may have moved) and may show only a region of it.
+			const found = lookupPage(doc.pages, parsed.page, parsed.pageId ?? null);
+			const page = "index" in found ? doc.pages[found.index] : undefined;
+			if (!page || !("index" in found)) {
+				this.message("missing" in found && found.missing === "deleted"
+					? t("zettel.embedPageDeleted", { name: file.basename })
+					: t("embed.pageMissing", { name: file.basename, count: String(doc.pages.length), page: String(parsed.page) }));
 				return;
 			}
+			const region = parsed.region ? clampRegion(parsed.region, page) : null;
 			const px = embedPixelWidth(this.containerEl.clientWidth, window.devicePixelRatio);
-			const background = await this.deps.background(doc, page, px).catch(() => null);
+			const bgPx = region ? Math.min(4096, Math.round((px * page.width) / region.width)) : px;
+			const background = await this.deps.background(doc, page, bgPx).catch(() => null);
 			if (stale()) return;
-			const url = renderThumbnail(page, px, background ? { drawBackground: background } : {});
+			const url = renderThumbnail(page, px, { ...(background ? { drawBackground: background } : {}), ...(region ? { region } : {}) });
 			if (!url) throw new Error("Canvas 2D is not available");
-			this.show(file, parsed.page, url);
+			this.show(file, found.index + 1, url);
 		} catch (e) {
 			if (!stale()) this.message(t("embed.failed", { error: (e as Error).message }));
 		}

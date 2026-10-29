@@ -57,6 +57,17 @@ Hotfix for 0.5.0. Not verified on Android hardware (see `docs/testing.md`); how 
 ### Added
 - **Pen button test**: a button in the plugin settings and the command *Pen button test* open a test area that lists, live, the last 30 events on it (pointerdown / move / up / rawupdate / cancel, contextmenu, auxclick, keydown / keyup) with pointer type, `button`, `buttons`, pressure, primary flag and whether the plugin would treat the event as the side button. It draws nothing. *Copy log* copies the text (clipboard, with the text selected as a fallback). Use it to report what the S Pen sends.
 - Setting **Open the radial menu by holding the pen still** (off by default): a fallback that does not need the button. Holding the nib on the page for 0.6 s within 6 px opens the same menu and discards the stroke, so no dot remains; any movement cancels it.
+Not yet verified on Android hardware (see `docs/testing.md`).
+
+### Added
+- **Zettelkasten core (M15 Z1, Z2, Z3, Z11, Z12)**. No change to the document format: card data lives only in the card notes.
+  - **Cards** (Z1): *Make card from selection* (lasso) and *Make card from this page* (commands and the notebook tab's ⋯ menu) create a Markdown note in the card folder (setting, default `Zettelkasten/`) with `zettel-id` (timestamp `202610291442` or Luhmann numbering `1`, `1a`, `1a1`, setting *Card ids*), `title`, `aliases`, `type`, `source`, `date`, `tags`, `notebook`, `notebook-id`, `page-id` and `region`, and the ink embedded live (editing the notebook updates the card).
+  - **Card subpath** for links and embeds: `#p3&id=<page id>&r=x,y,w,h` (page units). `id` finds the page after it was moved and never shows another page if it was deleted; `r` crops the preview to the region. Plain `#p3` links are unchanged.
+  - **Slip-box** (Z2): *New slip-box* (A6 card pages) and *Make this notebook a slip-box*: every page is a card, and a page added on this device gets its note automatically a few seconds after it is saved.
+  - **Drawn links** (Z3): an arrow drawn with the shape tool from one card region to another adds a link to each card's `links` property (two-way, shown in the graph); *Link cards joined by arrows on this page* does it for arrows drawn earlier.
+  - **Title and transcription** (Z11): typed title in the *New card* dialog or later with *Set card title* (title, alias, and the note renamed from `<id>` to `<id> <title>`); every card note has a *Transcription* section.
+  - **Card regions** on the page: dashed outline and id badge, never taking pointer events; setting *Show card regions* and command *Show or hide card regions*.
+  - **Orphans**: cards are never deleted; when their page is deleted they get `orphaned: true` (removed again if the page comes back) and are listed by *Show orphaned cards* and *Show cards of this notebook*.
 
 ## 0.5.0 — 2026-10-29
 

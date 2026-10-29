@@ -540,7 +540,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 
 ## M15 — Zettelkasten with handwriting (planned 2026-10-29)
 
-A complete Zettelkasten workflow where handwriting is first-class. Everything goes through the companion note (O1) and the format layer, so it stays valid if notebooks move to a Markdown container. Status: ⏳ for all.
+A complete Zettelkasten workflow where handwriting is first-class. Everything goes through the companion note (O1) and the format layer, so it stays valid if notebooks move to a Markdown container. Status: Z1, Z2, Z3, Z11 and Z12 🧪 implemented in wave 0.6 (not verified on hardware; design in `docs/architecture.md` §12 "Zettelkasten"); the rest ⏳.
 
 - **Z1 P1** Real cards: a region of a page, or an A6 "card" page, becomes a Zettel — a Markdown note with a unique id (timestamp or Luhmann numbering, configurable), properties (type, source, tags, date) and the ink embedded live (no copy: editing the ink in the notebook updates the card).
 - **Z2 P1** Slip-box notebook type: every page is a Zettel; a new page creates its note automatically.

@@ -21,6 +21,7 @@ import { NotebookSettingTab } from "./view/settings-tab";
 import { registerLectureCommands } from "./view/lecture-commands";
 import { TimetableService } from "./timetable/service";
 import { registerPdfSyncCommands } from "./view/pdf-sync";
+import { registerZettel } from "./zettel";
 
 export default class NotebookPlugin extends Plugin {
 	settings!: NotebookSettings;
@@ -94,6 +95,8 @@ export default class NotebookPlugin extends Plugin {
 			newNotebookIn: (folder) => this.host.createNotebook(folder),
 			annotatePdf: (pdf) => this.host.importPdf(this.settings.folder, pdf),
 		});
+		// wave 0.6: zettelkasten (M15 Z1–Z3, Z11, Z12)
+		registerZettel(this);
 
 		// wave 0.6: timetable (src/timetable/): current class offer, library shortcut, editor.
 		this.timetable = new TimetableService(this, (file) => this.host.openNotebook(file));

@@ -3,14 +3,15 @@
  * page suggestions and the file explorer menu. No Obsidian imports: testable in Node.
  */
 import type { Page } from "../model/types";
+import { parseSubpathParams } from "../zettel/subpath";
 import { pageFromState, parsePageFragment } from "./links";
 
 // ------------------------------------------------------------------------- subpaths
 
-/** Page (1-based) from a link subpath: `#p3`, `#3`, `#page=3`. Headings and block ids give null. */
+/** Page (1-based) from a link subpath: `#p3`, `#3`, `#page=3` (Z1 card parameters after `&` ignored). Headings and block ids give null. */
 export function pageFromSubpath(subpath: string): number | null {
 	const s = subpath.trim();
-	return parsePageFragment(s.startsWith("#") ? s.slice(1) : s);
+	return parsePageFragment(parseSubpathParams(s.startsWith("#") ? s.slice(1) : s).head);
 }
 
 /** Link subpath that points at a page, as Obsidian writes it after the file name. */

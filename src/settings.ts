@@ -6,9 +6,10 @@ import { PEN_BUTTON_ACTIONS, type PenButtonAction } from "./ink/input-policy";
 import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./model/types";
 import { DEFAULT_COMPANION_SETTINGS, readCompanionSettings, type CompanionSettings } from "./storage/companion-path";
 import { DEFAULT_TRASH_SETTINGS, readTrashSettings, type TrashSettings } from "./storage/trash-settings";
+import { DEFAULT_ZETTEL_SETTINGS, readZettelSettings, type ZettelSettings } from "./zettel/settings";
 
-/** Companion note settings (O1) are defined in storage/companion-path.ts. */
-export interface NotebookSettings extends CompanionSettings, GestureSettings, TrashSettings {
+/** Companion note settings (O1) are defined in storage/companion-path.ts, Zettelkasten settings (wave 0.6) in zettel/settings.ts. */
+export interface NotebookSettings extends CompanionSettings, GestureSettings, TrashSettings, ZettelSettings {
 	folder: string;
 	fingerDrawing: boolean;
 	palmRejectionMs: number;
@@ -111,6 +112,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	...DEFAULT_COMPANION_SETTINGS,
 	...DEFAULT_GESTURE_SETTINGS,
 	...DEFAULT_TRASH_SETTINGS,
+	...DEFAULT_ZETTEL_SETTINGS,
+	zettelSlipBoxes: [],
 };
 
 /** Merges saved data over the defaults, ignoring values of the wrong type. */
@@ -153,6 +156,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	Object.assign(s, readCompanionSettings(d), readGestureSettings(d));
 	Object.assign(s, readTrashSettings(d));
 	if (typeof d.inkFollowsObjects === "boolean") s.inkFollowsObjects = d.inkFollowsObjects;
+	Object.assign(s, readZettelSettings(d));
 	return s;
 }
 
