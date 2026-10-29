@@ -239,3 +239,34 @@ describe("page tools: delete and restore", () => {
 		expect((await store.read(doc.id)).entries).toHaveLength(1);
 	});
 });
+
+describe("library trash: folders with the user's other files", () => {
+	const meta = (id: string, name: string, kind: "folder" | "notebook") =>
+		JSON.stringify({ v: 1, id, kind, name, originalPath: `${ROOT}/${name}`, deletedAt: 0 });
+
+	it("splits a folder into notebooks and other files, at every level", async () => {
+		const { folderContents } = await import("../src/storage/trash");
+		const v = new FakeVault({ [`${ROOT}/Course/a.notebook`]: "", [`${ROOT}/Course/sub/b.notebook`]: "", [`${ROOT}/Course/sub/notes.md`]: "", [`${ROOT}/Course/slides.pdf`]: "" });
+		const { notebooks, others } = folderContents(v.vault.getFolderByPath(`${ROOT}/Course`) as never);
+		expect(notebooks.map((f) => f.path).sort()).toEqual([`${ROOT}/Course/a.notebook`, `${ROOT}/Course/sub/b.notebook`]);
+		expect(others.map((f) => f.path).sort()).toEqual([`${ROOT}/Course/slides.pdf`, `${ROOT}/Course/sub/notes.md`]);
+	});
+
+	it("auto-empty never removes a trashed folder that holds files other than notebooks", async () => {
+		const { LibraryTrash } = await import("../src/storage/trash");
+		const items = `${ROOT}/_trash/items`;
+		const v = new FakeVault({
+			[`${items}/aaa-11111/meta.json`]: meta("aaa-11111", "Mixed", "folder"),
+			[`${items}/aaa-11111/Mixed/a.notebook`]: "",
+			[`${items}/aaa-11111/Mixed/notes.md`]: "my notes",
+			[`${items}/bbb-22222/meta.json`]: meta("bbb-22222", "Only", "folder"),
+			[`${items}/bbb-22222/Only/b.notebook`]: "",
+		});
+		const trash = new LibraryTrash({ app: v.app, root: () => ROOT, retentionDays: () => 30 });
+		const listed = await trash.list();
+		expect(listed.map((i) => [i.id, trash.otherFiles(i).length])).toEqual(expect.arrayContaining([["aaa-11111", 1], ["bbb-22222", 0]]));
+		expect(await trash.purgeExpired(365 * DAY)).toBe(1);
+		expect(v.files.get(`${items}/aaa-11111/Mixed/notes.md`)).toBe("my notes");
+		expect(v.files.has(`${items}/bbb-22222/Only/b.notebook`)).toBe(false);
+	});
+});
