@@ -21,11 +21,21 @@ export const HIGHLIGHTER_V2: Readonly<StrokeOptions> = {
 	end: { cap: false, taper: 0 },
 };
 
+/** Shape tool (format v4): constant width, no smoothing or streamlining (corners stay sharp), round caps. */
+export const SHAPE_V4: Readonly<StrokeOptions> = {
+	thinning: 0,
+	smoothing: 0,
+	streamline: 0,
+	simulatePressure: false,
+	start: { cap: true, taper: 0 },
+	end: { cap: true, taper: 0 },
+};
+
 export const HIGHLIGHTER_ALPHA = 0.35;
 
 /** Stroke outline (closed polygon) in page coordinates. */
 export function strokeOutline(points: readonly Point[], width: number, complete = true, tool: Tool = "pen"): number[][] {
-	const base = tool === "highlighter" ? HIGHLIGHTER_V2 : PEN_V1;
+	const base = tool === "highlighter" ? HIGHLIGHTER_V2 : tool === "shape" ? SHAPE_V4 : PEN_V1;
 	return getStroke(points as Point[], { ...base, size: width, last: complete });
 }
 
