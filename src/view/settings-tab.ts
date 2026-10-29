@@ -8,6 +8,7 @@ import { displayTimetableSettings } from "../timetable/settings-ui";
 import type { TimetableService } from "../timetable/service";
 import { displayGestureSettings, gestureSettingDefinitions, type GestureSettingsHost } from "./gesture-settings";
 import { displayTrashSettings, trashSettingDefinitions } from "./trash-settings";
+import { PenTestModal } from "./pen-test-modal";
 import { companionSettingDefinitions, displayCompanionSettings, type CompanionSettingsHost } from "./companion-settings";
 
 const paperOptions = () => Object.fromEntries(PAPER_KINDS.map((k) => [k, t(`paper.${k}`)]));
@@ -173,6 +174,16 @@ export class NotebookSettingTab extends PluginSettingTab {
 				control: { type: "dropdown", key: "penButtonAction", defaultValue: DEFAULT_SETTINGS.penButtonAction, options: penButtonOptions() },
 			},
 			...gestureSettingDefinitions(this.gestureHost()),
+			{
+				name: t("settings.penLongPress"),
+				desc: t("settings.penLongPress.desc"),
+				control: { type: "toggle", key: "penLongPress", defaultValue: DEFAULT_SETTINGS.penLongPress },
+			},
+			{
+				name: t("settings.penTest"),
+				desc: t("settings.penTest.desc"),
+				action: () => new PenTestModal(this.app).open(),
+			},
 			// Companion notes (O1)
 			...companionSettingDefinitions(this.companionHost()),
 			// wave 0.6: library trash, templates
@@ -325,6 +336,15 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setDesc(t("settings.penButton.desc"))
 			.addDropdown((dd) => dd.addOptions(penButtonOptions()).setValue(s.penButtonAction).onChange((v) => this.setControlValue("penButtonAction", v)));
 		displayGestureSettings(containerEl, this.gestureHost());
+		new Setting(containerEl)
+			.setName(t("settings.penLongPress"))
+			.setDesc(t("settings.penLongPress.desc"))
+			.addToggle((toggle) => toggle.setValue(s.penLongPress).onChange((v) => this.setControlValue("penLongPress", v)));
+
+		new Setting(containerEl)
+			.setName(t("settings.penTest"))
+			.setDesc(t("settings.penTest.desc"))
+			.addButton((b) => b.setButtonText(t("settings.penTest")).onClick(() => new PenTestModal(this.app).open()));
 		displayCompanionSettings(containerEl, this.companionHost());
 		displayTimetableSettings(containerEl, this.host);
 		displayTrashSettings(containerEl, { get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) });

@@ -6,6 +6,7 @@ import { NOTEBOOK_EXTENSIONS } from "./storage/format";
 import { AdapterJournalStore, journalFolder } from "./storage/vault-io";
 import { createNotebook } from "./storage/notebooks";
 import { BenchmarkModal } from "./view/benchmark";
+import { PenTestModal } from "./view/pen-test-modal";
 import { NotebookLibraryHost } from "./library/host";
 import { registerIntegration } from "./integration";
 import type { NotebookApi } from "./integration/api";
@@ -57,6 +58,7 @@ export default class NotebookPlugin extends Plugin {
 		this.addCommand({ id: "add-page", name: t("command.addPage"), checkCallback: (checking) => this.withView(checking, (v) => v.addPage()) });
 		this.addCommand({ id: "scan-into", name: t("command.scanInto"), checkCallback: (checking) => this.withView(checking, (v) => void v.scanPagesAfter(v.currentPage())) });
 		this.addCommand({ id: "scan-new", name: t("command.scanNew"), callback: () => this.host.scanToNotebook(this.settings.folder) });
+		this.addCommand({ id: "pen-button-test", name: t("command.penTest"), callback: () => new PenTestModal(this.app).open() });
 		this.addCommand({ id: "benchmark", name: t("command.benchmark"), callback: () => this.openBenchmark() });
 		this.addCommand({ id: "create-stress-test", name: t("command.stress"), callback: () => void this.createStressNotebook() });
 		this.addCommand({ id: "export-pdf", name: t("command.exportPdf"), checkCallback: (checking) => this.withView(checking, (v) => void v.exportNotebookPdf()) });

@@ -57,6 +57,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Tr
 	edgeBottom: boolean;
 	/** What the pen's side button does: radial menu at the nib, erase / lasso / previous tool while held, or nothing. */
 	penButtonAction: PenButtonAction;
+	/** Fallback for pens whose button never reaches the app: holding the nib still opens the radial menu. */
+	penLongPress: boolean;
 	/** Instant start: the notebook and page (1-based) the reader was on last, for "Continue last notebook". Not shown in the settings tab. */
 	lastNotebookPath: string;
 	lastNotebookPage: number;
@@ -99,6 +101,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	edgeTop: false,
 	edgeBottom: true,
 	penButtonAction: "radial",
+	penLongPress: false,
 	lastNotebookPath: "",
 	lastNotebookPage: 1,
 	timetableOffer: true,
@@ -141,6 +144,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.edgeTop === "boolean") s.edgeTop = d.edgeTop;
 	if (typeof d.edgeBottom === "boolean") s.edgeBottom = d.edgeBottom;
 	if (PEN_BUTTON_ACTIONS.includes(d.penButtonAction as PenButtonAction)) s.penButtonAction = d.penButtonAction as PenButtonAction;
+	if (typeof d.penLongPress === "boolean") s.penLongPress = d.penLongPress;
 	if (typeof d.lastNotebookPath === "string") s.lastNotebookPath = d.lastNotebookPath;
 	if (typeof d.lastNotebookPage === "number" && Number.isInteger(d.lastNotebookPage) && d.lastNotebookPage >= 1) s.lastNotebookPage = d.lastNotebookPage;
 	if (typeof d.timetableOffer === "boolean") s.timetableOffer = d.timetableOffer;

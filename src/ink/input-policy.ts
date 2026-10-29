@@ -1,4 +1,5 @@
 import { inEdgeZone, type EdgeZones } from "./edge-zones";
+import { isBarrelSignal } from "./pen-button";
 
 /**
  * What pressing the pen's side button does: open the radial menu, erase while it is held, use the
@@ -20,13 +21,12 @@ export interface InputSettings {
 	edge?: EdgeZones;
 	/** Side (barrel) button of the pen; `button === 2` / `buttons & 2`. Default "off". */
 	penButton?: PenButtonAction;
+	/** Fallback for pens whose button never reaches the page: holding the nib still opens the radial menu. Default off. */
+	penLongPress?: boolean;
 }
 
 /** `menu`: the pen's side button was pressed and the radial menu should open (nothing is drawn). */
 export type Route = "draw" | "navigate" | "ignore" | "menu";
-
-/** PointerEvent.buttons bit of the pen's side (barrel) button. */
-export const BARREL_BUTTONS = 2;
 
 /**
  * Basic palm rejection: while the pen is down, or was seen (hover included) in the last
@@ -57,9 +57,9 @@ export class InputPolicy {
 		return pointerType === "touch" && inEdgeZone(this.settings.edge, x, y, width, height);
 	}
 
-	/** The pen's side button is part of this event (`button` 2, or bit 2 of `buttons`). */
+	/** The pen's side button is part of this event (`button` 2, or bit 2 of `buttons`); the eraser (bit 32, `button` 5) is not. */
 	static barrel(button: number, buttons: number): boolean {
-		return button === 2 || (buttons & BARREL_BUTTONS) !== 0;
+		return isBarrelSignal(button, buttons);
 	}
 
 	/** Does a pen contact erase? The eraser button / flipped pen always do; the side button when its action is "eraser". */
