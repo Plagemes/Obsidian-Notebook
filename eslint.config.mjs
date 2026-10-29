@@ -35,7 +35,7 @@ export default tseslint.config(
 		files: [
 			"src/ink/**/*.ts", "src/model/**/*.ts", "src/storage/session.ts",
 			// wave 0.6: zettelkasten pure logic
-			"src/zettel/subpath.ts", "src/zettel/ids.ts", "src/zettel/card-content.ts", "src/zettel/arrows.ts", "src/zettel/settings.ts",
+			"src/zettel/subpath.ts", "src/zettel/ids.ts", "src/zettel/card-content.ts", "src/zettel/arrows.ts", "src/zettel/settings.ts", "src/zettel/local-pages.ts",
 		],
 		rules: {
 			"no-restricted-imports": ["error", {

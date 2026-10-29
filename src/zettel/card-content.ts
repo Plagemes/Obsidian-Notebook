@@ -3,8 +3,13 @@
  * its frontmatter, and the frontmatter-only edits the plugin makes later (orphaned flag, drawn links).
  * Pure: no 'obsidian' (YAML goes through the injected deps, as for companion notes).
  *
- * Card identity and data live only in the note: `notebook-id` + `page-id` (never the page index, so a
+ * Card identity and data live only in the note: `zettel-notebook-id` + `page-id` (never the page index, so a
  * card survives page moves) and `region`. The notebook file is never written for a card.
+ *
+ * Cards have their own keys for the notebook (`zettel-notebook`, `zettel-notebook-id`), not the companion note's
+ * `notebook` / `notebook-id`: a device on an older version (0.5.1) with companion notes on would otherwise take a
+ * synced card for a companion note and write its generated region into it. Cards made before the rename (only by
+ * unreleased builds) still have the companion keys; those are read only from notes that also have `zettel-id`.
  *
  * Ownership: the body is written once, when the card is created, and never touched again; afterwards
  * the plugin only sets or removes `orphaned` and appends to `links`. Every other property is the user's.
@@ -19,8 +24,11 @@ export const CARD_TYPE_KEY = "type";
 export const CARD_SOURCE_KEY = "source";
 export const CARD_DATE_KEY = "date";
 export const CARD_TAGS_KEY = "tags";
-export const CARD_NOTEBOOK_KEY = COMPANION_LINK_KEY;
-export const CARD_NOTEBOOK_ID_KEY = COMPANION_ID_KEY;
+export const CARD_NOTEBOOK_KEY = "zettel-notebook";
+export const CARD_NOTEBOOK_ID_KEY = "zettel-notebook-id";
+/** Keys of cards made by unreleased builds (the companion note's): read as a fallback, never written. */
+export const LEGACY_CARD_NOTEBOOK_KEY = COMPANION_LINK_KEY;
+export const LEGACY_CARD_NOTEBOOK_ID_KEY = COMPANION_ID_KEY;
 export const CARD_PAGE_ID_KEY = "page-id";
 export const CARD_REGION_KEY = "region";
 /** Drawn links (Z3): wikilinks to other cards, a list. */
@@ -58,7 +66,7 @@ export interface CardRecord {
 	id: string;
 	title: string;
 	notebookId: string;
-	/** Raw `notebook` property (a wikilink). */
+	/** Raw `zettel-notebook` property (a wikilink). */
 	notebookLink: string;
 	pageId: string;
 	region: Region | null;
@@ -127,20 +135,26 @@ export function readLinks(value: unknown): string[] {
 	return raw.filter((v): v is string => typeof v === "string" && v.trim().length > 0).map((v) => v.trim());
 }
 
-/** A card from a note's frontmatter; null when the note is not a card (no `zettel-id`, `notebook-id` and `page-id`). */
+/**
+ * A card from a note's frontmatter; null when the note is not a card (no `zettel-id`, `zettel-notebook-id` and
+ * `page-id`). The companion keys `notebook-id` / `notebook` are a fallback, and only because `zettel-id` is required.
+ */
 export function readCard(path: string, fm: Readonly<Record<string, unknown>> | null | undefined): CardRecord | null {
 	if (!fm) return null;
 	const id = str(fm[CARD_ID_KEY]);
-	const notebookId = str(fm[CARD_NOTEBOOK_ID_KEY]);
+	if (!id) return null;
+	const own = str(fm[CARD_NOTEBOOK_ID_KEY]);
+	const notebookId = own ?? str(fm[LEGACY_CARD_NOTEBOOK_ID_KEY]);
 	const pageId = str(fm[CARD_PAGE_ID_KEY]);
-	if (!id || !notebookId || !pageId) return null;
+	if (!notebookId || !pageId) return null;
+	const linkValue = own ? fm[CARD_NOTEBOOK_KEY] : fm[CARD_NOTEBOOK_KEY] ?? fm[LEGACY_CARD_NOTEBOOK_KEY];
 	const regionText = str(fm[CARD_REGION_KEY]);
 	return {
 		path,
 		id,
 		title: str(fm[CARD_TITLE_KEY]) ?? "",
 		notebookId,
-		notebookLink: typeof fm[CARD_NOTEBOOK_KEY] === "string" ? String(fm[CARD_NOTEBOOK_KEY]) : "",
+		notebookLink: typeof linkValue === "string" ? linkValue : "",
 		pageId,
 		region: regionText ? parseRegion(regionText) : null,
 		orphaned: fm[CARD_ORPHANED_KEY] === true,
@@ -180,9 +194,50 @@ export type FrontmatterEdit =
 	/** The frontmatter is not valid YAML: the note is left alone. */
 	| { kind: "yaml" };
 
+/** Top-level key of a YAML line (`key:`, `"key":`, `'key':`), or null for anything else (items, comments, continuations). */
+function yamlKey(line: string): string | null {
+	const m = /^(?:"([^"\\]*)"|'([^']*)'|([A-Za-z0-9_][^:#]*?))\s*:(?:\s|$)/.exec(line);
+	if (!m) return null;
+	return (m[1] ?? m[2] ?? m[3] ?? "").trim();
+}
+
+/** Whether a line continues the value of the key above it (indented, or a `- item` of a block list). */
+function continues(line: string): boolean {
+	return /^[ \t]+\S/.test(line) || /^-(?:\s|$)/.test(line);
+}
+
 /**
- * The note with some properties set (`undefined` removes one). Only the frontmatter block is rewritten, and
- * only when a value really changes; the body is kept byte for byte. Key order is kept, new keys go last.
+ * The frontmatter block with only the changed keys rewritten: each changed key's lines (the key and its indented or
+ * `- item` continuation lines) are replaced by `stringify({ key: value })`, removed for `undefined`, or appended at the
+ * end for a new key. Every other line (other properties as written, comments, quoting, blank lines) stays byte for byte.
+ * The result ends with a line break unless it is empty.
+ */
+function editYamlLines(block: string, changes: Readonly<Record<string, unknown>>, eol: string, stringify: CompanionTextDeps["stringify"]): string {
+	const body = block.replace(/\r?\n$/, "");
+	const lines = body === "" ? [] : body.split(/\r?\n/);
+	for (const [key, value] of Object.entries(changes)) {
+		const start = lines.findIndex((l) => yamlKey(l) === key);
+		let end = start + 1;
+		if (start >= 0) {
+			// Blank lines inside the value belong to it only when the value goes on after them.
+			for (let i = end; i < lines.length; i++) {
+				if (continues(lines[i]!)) end = i + 1;
+				else if (lines[i]!.trim() !== "") break;
+			}
+		}
+		const replacement = value === undefined ? [] : stringify({ [key]: value }).replace(/(\r?\n)+$/, "").split(/\r?\n/);
+		if (start >= 0) lines.splice(start, end - start, ...replacement);
+		else lines.push(...replacement);
+	}
+	return lines.length > 0 ? `${lines.join(eol)}${eol}` : "";
+}
+
+/**
+ * The note with some properties set (`undefined` removes one), only when a value really changes; the body is kept byte
+ * for byte. Only the lines of the changed keys are rewritten, so the rest of the frontmatter (the user's properties,
+ * comments, quoting) stays as written; new keys go last. If the edited block would not read back as exactly the wanted
+ * properties (unusual YAML: anchors, flow mappings over several keys…), the block is re-serialized as a whole instead,
+ * as `processFrontMatter` does.
  */
 export function editProperties(text: string, changes: Readonly<Record<string, unknown>>, deps: CompanionTextDeps): FrontmatterEdit {
 	const info = deps.frontmatterInfo(text);
@@ -195,12 +250,21 @@ export function editProperties(text: string, changes: Readonly<Record<string, un
 	}
 	if (sameProperties(current, next)) return { kind: "unchanged" };
 	const eol = text.includes("\r\n") ? "\r\n" : "\n";
-	const yaml = deps.stringify(next).replace(/\r?\n/g, eol).replace(/(\r?\n)+$/, "");
-	if (info.exists) {
-		const tail = text.slice(info.to);
-		return { kind: "changed", text: `${text.slice(0, info.from)}${yaml}${/^\r?\n/.test(tail) ? "" : eol}${tail}` };
+	if (!info.exists) {
+		const yaml = deps.stringify(next).replace(/\r?\n/g, eol).replace(/(\r?\n)+$/, "");
+		return { kind: "changed", text: `---${eol}${yaml}${eol}---${eol}${text}` };
 	}
-	return { kind: "changed", text: `---${eol}${yaml}${eol}---${eol}${text}` };
+	const head = text.slice(0, info.from);
+	const tail = text.slice(info.to);
+	// The block may end before or after the line break that precedes the closing `---`.
+	const breakInTail = /^\r?\n/.test(tail);
+	const edited = editYamlLines(text.slice(info.from, info.to), changes, eol, (data) => deps.stringify(data).replace(/\r?\n/g, eol));
+	const reread = deps.parseFrontmatter(edited);
+	if (reread !== null && sameProperties(reread, next)) {
+		return { kind: "changed", text: `${head}${breakInTail ? edited.replace(/\r?\n$/, "") : edited}${tail}` };
+	}
+	const yaml = deps.stringify(next).replace(/\r?\n/g, eol).replace(/(\r?\n)+$/, "");
+	return { kind: "changed", text: `${head}${yaml}${breakInTail ? "" : eol}${tail}` };
 }
 
 /** Z11: a new typed title, also added to `aliases` (earlier titles stay there, so old links keep working). */
