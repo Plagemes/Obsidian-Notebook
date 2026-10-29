@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Class timetable** (roadmap 115). Define your weekly classes (course, weekday, start and end time, room, a linked notebook or course folder, alternating odd/even weeks, term start and end dates) from *Settings, Class timetable, Edit timetable* or the command **Edit class timetable**. Stored in the plain JSON file `<notebooks folder>/_timetable.json` (human-editable, syncs like any file; an unreadable file is never overwritten, a copy goes to `_backup/` before it is replaced). Times are local; overlapping classes are flagged in the editor.
+  - Opening Obsidian or the library during a class (or up to a few minutes before, setting *Count a class as started this many minutes early*) shows a notice with **Open lecture page**; setting *Open it without asking* does it by itself. The class's notebook opens with a new lecture page (header: course and date, as in New lecture); if that page already exists it is shown instead. With no linked notebook, the one named like the course is used, else a new one is created. Command **Open the current class** does the same on demand.
+  - **New lecture** prefills the course from the class in progress (the one linked to the open notebook, else one linked to nothing).
+  - The library shows a **Now: <course>** shortcut while a class is in progress.
+  - Tagging pages with the course waits for page tags: the hook `applyCourseTag` in `src/timetable/page-tag.ts` is called but does nothing yet. No document format change.
+  - Not yet verified on Android hardware.
+
 ## 0.5.0 — 2026-10-29
 
 Not yet verified on Android hardware (see `docs/testing.md`).

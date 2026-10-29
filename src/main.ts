@@ -17,11 +17,14 @@ import { exportPdfAnnotations, openMarginsModal, updatePdfFromNewVersion } from 
 import { NotebookView, VIEW_TYPE } from "./view/notebook-view";
 import { NotebookSettingTab } from "./view/settings-tab";
 import { registerLectureCommands } from "./view/lecture-commands";
+import { TimetableService } from "./timetable/service";
 
 export default class NotebookPlugin extends Plugin {
 	settings!: NotebookSettings;
 	private host!: NotebookLibraryHost;
 	journal!: AdapterJournalStore;
+	/** Class timetable (wave 0.6). */
+	timetable!: TimetableService;
 
 	async onload(): Promise<void> {
 		this.settings = readSettings(await this.loadData());
@@ -78,6 +81,12 @@ export default class NotebookPlugin extends Plugin {
 			annotatePdf: (pdf) => this.host.importPdf(this.settings.folder, pdf),
 		});
 
+		// wave 0.6: timetable (src/timetable/): current class offer, library shortcut, editor.
+		this.timetable = new TimetableService(this, (file) => this.host.openNotebook(file));
+		this.timetable.start();
+		this.addCommand({ id: "timetable", name: t("command.timetable"), callback: () => void this.timetable.edit() });
+		this.addCommand({ id: "open-class", name: t("command.openClass"), callback: () => this.timetable.openNow() });
+
 		this.addSettingTab(new NotebookSettingTab(this.app, this));
 
 		// Best effort only (not guaranteed, unreliable on mobile): views also flush on visibilitychange/pagehide.
@@ -86,6 +95,7 @@ export default class NotebookPlugin extends Plugin {
 
 	onunload(): void {
 		void this.flushAll();
+		this.timetable.stop();
 		this.host.dispose();
 	}
 

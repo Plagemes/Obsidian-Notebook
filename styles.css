@@ -1654,3 +1654,76 @@
 	height: auto;
 	box-shadow: 0 0 0 1px var(--background-modifier-border);
 }
+
+/* wave 0.6: timetable */
+.notebook-lib-btn.notebook-lib-now.is-hidden {
+	display: none;
+}
+
+.notebook-tt-modal {
+	max-width: 640px;
+}
+
+.notebook-tt-list {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	max-height: 50vh;
+	overflow-y: auto;
+	margin: 12px 0;
+}
+
+.notebook-tt-card {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 10px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+
+.notebook-tt-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.notebook-tt-row .notebook-tt-field {
+	flex: 1 1 120px;
+}
+
+.notebook-tt-field {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.notebook-tt-field label {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.notebook-tt-field input,
+.notebook-tt-field select {
+	width: 100%;
+}
+
+.notebook-tt-warning {
+	color: var(--text-warning);
+	font-size: var(--font-ui-smaller);
+}
+
+.notebook-tt-warning:empty {
+	display: none;
+}
+
+.notebook-tt-actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 8px;
+}
+
+.notebook-tt-card > button {
+	align-self: flex-start;
+}

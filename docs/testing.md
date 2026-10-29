@@ -6,6 +6,9 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 
 | Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
 |---|---|---|---|---|---|
+| Class timetable (roadmap 115): pure scheduling (current/next class, odd/even weeks, term dates, local time, overlaps), file parse/serialize round trip, target notebook choice | ✅ | ✅ `tests/timetable.test.ts` | | | page tag (hook only until page tags exist) |
+| Class timetable editor (settings, command), `_timetable.json` read/write through the Vault API, unreadable file never overwritten | ✅ | ❌ (needs Obsidian) | | | |
+| Offer / auto-open the current class at a new lecture page; "New lecture" course prefill; library "Now: <course>" shortcut | ✅ | ❌ (needs Obsidian; the choices behind it are tested) | | | |
 | Ribbon icon + "New notebook" / "Open notebooks" commands | ✅ | ❌ (needs Obsidian) | | | |
 | Notebook file created in the configured folder (default `Notebooks/`) | ✅ | ❌ (needs Obsidian) | | | |
 | A4 grid page, fitted to width, refit on resize/rotation | ✅ | ✅ fit-width, transforms | | | |
@@ -323,6 +326,12 @@ For each step note **pass / fail / notes** in the table at the end.
 | 59 Pen only | | | |
 | 60 Commands and hotkeys | | | |
 | 61 Compact toolbar | | | |
+| T1 Timetable editor: add two classes (one on odd weeks, one with a term and a room, one linked to a course folder), save, reopen: values are kept; `Notebooks/_timetable.json` exists and is readable | | | |
+| T2 Open Obsidian (or the library) during a class: notice with *Open lecture page*; tap it: the course's notebook opens with a new page headed "<course> — <date>"; do it again: the existing page is shown, no second page | | | |
+| T3 Turn on *Open it without asking*, restart during a class: the notebook opens on the new lecture page by itself; turn it off and the notice returns (once per class and day) | | | |
+| T4 During a class, *New lecture* in a linked notebook has the course filled in; in an unrelated linked notebook it shows the notebook name | | | |
+| T5 Library shows *Now: <course>* during a class (also a few minutes before, per the lead setting) and nothing outside classes; tapping it opens the lecture page | | | |
+| T6 Edit `_timetable.json` by hand (also from another device through sync), including a deliberate mistake: a good edit is picked up; a bad file is reported in the editor and is not overwritten | | | |
 
 Benchmark output (step 21): paste it here.
 

@@ -29,6 +29,8 @@ export interface HostPlugin {
 	manifest: { id: string };
 	settings: NotebookSettings;
 	saveSettings(): Promise<void>;
+	/** Class timetable service (optional: wave 0.6). */
+	timetable?: { nowClass(): { course: string; room?: string } | null; openNow(): void; offer(): Promise<void> };
 }
 
 /** The part of NotebookView the host calls (checked at runtime so the host compiles without it). */
@@ -165,6 +167,19 @@ export class NotebookLibraryHost implements LibraryHost {
 				empty: () => t("import.empty"),
 			},
 		}, folder);
+	}
+
+	nowClass(): { course: string; room?: string } | null {
+		return this.plugin.timetable?.nowClass() ?? null;
+	}
+
+	openNowClass(): void {
+		this.plugin.timetable?.openNow();
+	}
+
+	/** The library was opened: offer the class in progress. */
+	libraryOpened(): void {
+		void this.plugin.timetable?.offer();
 	}
 
 	openLooseSheet(): void {

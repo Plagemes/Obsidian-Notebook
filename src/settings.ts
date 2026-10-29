@@ -58,6 +58,13 @@ export interface NotebookSettings extends CompanionSettings {
 	/** Instant start: the notebook and page (1-based) the reader was on last, for "Continue last notebook". Not shown in the settings tab. */
 	lastNotebookPath: string;
 	lastNotebookPage: number;
+	// wave 0.6: timetable
+	/** Offer to open the current class's notebook at a new lecture page when the app or the library is opened during a class. */
+	timetableOffer: boolean;
+	/** Open it without asking (only when `timetableOffer` is on). */
+	timetableAutoOpen: boolean;
+	/** A class counts as in progress this many minutes before it starts. */
+	timetableLeadMinutes: number;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -89,6 +96,9 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	penButtonAction: "radial",
 	lastNotebookPath: "",
 	lastNotebookPage: 1,
+	timetableOffer: true,
+	timetableAutoOpen: false,
+	timetableLeadMinutes: 5,
 	...DEFAULT_COMPANION_SETTINGS,
 };
 
@@ -125,6 +135,9 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (d.penButtonAction === "radial" || d.penButtonAction === "eraser" || d.penButtonAction === "off") s.penButtonAction = d.penButtonAction;
 	if (typeof d.lastNotebookPath === "string") s.lastNotebookPath = d.lastNotebookPath;
 	if (typeof d.lastNotebookPage === "number" && Number.isInteger(d.lastNotebookPage) && d.lastNotebookPage >= 1) s.lastNotebookPage = d.lastNotebookPage;
+	if (typeof d.timetableOffer === "boolean") s.timetableOffer = d.timetableOffer;
+	if (typeof d.timetableAutoOpen === "boolean") s.timetableAutoOpen = d.timetableAutoOpen;
+	if (typeof d.timetableLeadMinutes === "number" && Number.isInteger(d.timetableLeadMinutes) && d.timetableLeadMinutes >= 0 && d.timetableLeadMinutes <= 30) s.timetableLeadMinutes = d.timetableLeadMinutes;
 	Object.assign(s, readCompanionSettings(d));
 	return s;
 }

@@ -32,6 +32,11 @@ export interface LibraryHost {
 	scanToNotebook?(folder: string): void;
 	/** Opens the loose sheet (quick notes), creating it the first time. */
 	openLooseSheet?(): void;
+	/** Class in progress according to the timetable (wave 0.6), for the "Now: <course>" shortcut. */
+	nowClass?(): { course: string; room?: string } | null;
+	openNowClass?(): void;
+	/** Called when the library opens (offers the class in progress). */
+	libraryOpened?(): void;
 	/** Writes metadata into the notebook (routed through an open view if there is one). */
 	updateMeta(file: TFile, patch: Partial<NotebookMeta>): Promise<void>;
 	/** Loads what a page shows under the ink (PDF page, image) so the cover can draw it. Null if there is none. */
@@ -97,6 +102,8 @@ export class LibraryView extends ItemView {
 	private readonly cards = new Map<string, HTMLElement>();
 
 	private renderQueued = false;
+	/** "Now: <course>" shortcut (timetable); hidden when no class is in progress. */
+	private nowBtn: HTMLButtonElement | null = null;
 	private saveTimer = 0;
 	private reconcileTimer = 0;
 	private reconcileAt = 0;
@@ -154,6 +161,9 @@ export class LibraryView extends ItemView {
 		this.built = true;
 		this.expanded.add(this.root());
 		this.render();
+		this.refreshNow();
+		this.registerInterval(window.setInterval(() => this.refreshNow(), 30_000));
+		this.host.libraryOpened?.();
 
 		const vault = this.app.vault;
 		this.registerEvent(vault.on("create", (f) => this.onVaultChange(f)));
@@ -253,6 +263,11 @@ export class LibraryView extends ItemView {
 		this.actionButton(actions, "file-up", t("library.action.importPdf"), () => this.host.importPdf(this.currentFolder()));
 		if (this.host.scanToNotebook) this.actionButton(actions, "scan", t("library.action.scanNotebook"), () => this.host.scanToNotebook?.(this.currentFolder()));
 		if (this.host.openLooseSheet) this.actionButton(actions, "sticky-note", t("library.action.looseSheet"), () => this.host.openLooseSheet?.());
+		if (this.host.nowClass && this.host.openNowClass) {
+			this.nowBtn = this.actionButton(actions, "graduation-cap", "", () => this.host.openNowClass?.());
+			this.nowBtn.addClass("notebook-lib-now");
+			this.nowBtn.title = t("library.now.tip");
+		}
 
 		this.scrollEl = main.createDiv({ cls: "notebook-lib-scroll" });
 		this.gridEl = this.scrollEl.createDiv({ cls: "notebook-lib-content" });
@@ -546,6 +561,7 @@ export class LibraryView extends ItemView {
 	}
 
 	private render(): void {
+		this.refreshNow();
 		this.fixScope();
 		const focus = this.contentEl.ownerDocument.activeElement instanceof HTMLElement && this.contentEl.contains(this.contentEl.ownerDocument.activeElement)
 			? this.contentEl.ownerDocument.activeElement.dataset.key
@@ -562,6 +578,18 @@ export class LibraryView extends ItemView {
 				}
 			}
 		}
+	}
+
+	/** Shows or hides the "Now: <course>" shortcut for the class in progress. */
+	private refreshNow(): void {
+		const btn = this.nowBtn;
+		if (!btn) return;
+		const now = this.host.nowClass?.() ?? null;
+		btn.toggleClass("is-hidden", !now);
+		if (!now) return;
+		const label = t("library.now", { course: now.course });
+		btn.setAttribute("aria-label", label);
+		btn.querySelector(".notebook-lib-btn-label")?.setText(label);
 	}
 
 	private currentFolder(): string {

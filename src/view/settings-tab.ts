@@ -4,6 +4,8 @@ import { DEFAULT_SETTINGS, readSettings, type NotebookSettings } from "../settin
 import { PAGE_SIZES, PAPER_KINDS } from "../model/types";
 import { defaultLooseSheetPath } from "../library/loose-sheet-logic";
 import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "../ink/edge-zones";
+import { displayTimetableSettings } from "../timetable/settings-ui";
+import type { TimetableService } from "../timetable/service";
 import { companionSettingDefinitions, displayCompanionSettings, type CompanionSettingsHost } from "./companion-settings";
 
 const paperOptions = () => Object.fromEntries(PAPER_KINDS.map((k) => [k, t(`paper.${k}`)]));
@@ -12,6 +14,7 @@ const sizeOptions = () => Object.fromEntries((Object.keys(PAGE_SIZES) as Array<k
 export interface SettingsHost extends Plugin {
 	settings: NotebookSettings;
 	saveSettings(): Promise<void>;
+	timetable?: TimetableService;
 }
 
 type Key = keyof NotebookSettings;
@@ -302,5 +305,6 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setDesc(t("settings.penButton.desc"))
 			.addDropdown((dd) => dd.addOptions(penButtonOptions()).setValue(s.penButtonAction).onChange((v) => this.setControlValue("penButtonAction", v)));
 		displayCompanionSettings(containerEl, this.companionHost());
+		displayTimetableSettings(containerEl, this.host);
 	}
 }
