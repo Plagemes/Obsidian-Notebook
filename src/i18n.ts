@@ -178,6 +178,13 @@ const en = {
 	"library.empty.folder": "This folder is empty.",
 	"library.empty.tag": "No notebooks have this tag.",
 	"library.empty.search": "No notebooks match “{query}”.",
+	// --- library search ---
+	"library.search.scope": "Search scope",
+	"library.search.everywhere": "Everywhere",
+	"library.search.thisFolder": "This folder",
+	"library.search.thisView": "This view",
+	"library.search.page": "Page {page}",
+	"library.search.openPage": "Open at page {page}",
 	// --- main wave 2 ---
 	"command.library": "Open library",
 	"command.importPdf": "Import PDF as notebook",
@@ -400,6 +407,13 @@ const it: Partial<Record<MessageKey, string>> = {
 	"library.empty.folder": "Questa cartella è vuota.",
 	"library.empty.tag": "Nessun quaderno ha questo tag.",
 	"library.empty.search": "Nessun quaderno corrisponde a “{query}”.",
+	// --- library search ---
+	"library.search.scope": "Ambito della ricerca",
+	"library.search.everywhere": "Ovunque",
+	"library.search.thisFolder": "Questa cartella",
+	"library.search.thisView": "Questa vista",
+	"library.search.page": "Pagina {page}",
+	"library.search.openPage": "Apri a pagina {page}",
 	// --- main wave 2 ---
 	"command.library": "Apri la libreria",
 	"command.importPdf": "Importa PDF come quaderno",

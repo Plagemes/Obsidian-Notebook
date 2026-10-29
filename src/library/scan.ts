@@ -26,7 +26,30 @@ export function filesToRead(files: readonly NotebookFileInfo[], index: LibraryIn
 	return files.filter((f) => index.isStale(f.path, f.mtime, f.size));
 }
 
-export type DocumentFields = Pick<LibraryEntry, "pages" | "tags" | "favorite" | "cover" | "created" | "modified">;
+/** Most text indexed per notebook (characters). */
+export const TEXT_CAP = 20_000;
+
+/** Text of the text boxes of all pages, whitespace collapsed, capped; with the offset where each page's text begins. */
+export function extractText(doc: NotebookDocument, cap = TEXT_CAP): { text: string; textPages: number[] } {
+	let text = "";
+	const textPages: number[] = [];
+	const pages = Array.isArray(doc.pages) ? doc.pages : [];
+	for (let p = 0; p < pages.length && text.length < cap; p++) {
+		const parts: string[] = [];
+		for (const el of pages[p]?.elements ?? []) {
+			if (el.type !== "text" || typeof el.text !== "string") continue;
+			const t = el.text.replace(/\s+/g, " ").trim();
+			if (t) parts.push(t);
+		}
+		if (parts.length === 0) continue;
+		const sep = text.length > 0 ? "\n" : "";
+		textPages.push(p, text.length + sep.length);
+		text = (text + sep + parts.join(" ")).slice(0, cap);
+	}
+	return { text, textPages };
+}
+
+export type DocumentFields = Pick<LibraryEntry, "pages" | "tags" | "favorite" | "cover" | "created" | "modified" | "text" | "textPages">;
 
 function time(v: unknown, fallback: number): number {
 	const ms = typeof v === "string" ? Date.parse(v) : NaN;
@@ -47,7 +70,9 @@ export function metaFromDocument(doc: NotebookDocument, fallbackTime = 0): Docum
 		}
 	}
 	const created = time(doc.createdAt, fallbackTime);
+	const { text, textPages } = extractText(doc);
 	return {
+		...(text ? { text, textPages } : {}),
 		pages: Array.isArray(doc.pages) ? doc.pages.length : 0,
 		tags,
 		favorite: meta.favorite === true,

@@ -1,6 +1,6 @@
 /** Library index: a disposable cache of notebook metadata and thumbnails. Pure, no 'obsidian'. */
 
-export const INDEX_VERSION = 1;
+export const INDEX_VERSION = 2;
 /** "Recent" shows this many notebooks. */
 export const RECENT_LIMIT = 20;
 
@@ -18,6 +18,10 @@ export interface LibraryEntry {
 	created: number;
 	modified: number;
 	pages: number;
+	/** Text of the text boxes of all pages (whitespace collapsed, capped), for search. Absent when there is none. */
+	text?: string;
+	/** Flat pairs `[pageIndex, start, ...]`: the offset in `text` where each page with text begins (0-based pages). */
+	textPages?: number[];
 	tags: string[];
 	favorite: boolean;
 	/** Cover colour #rrggbb. */
@@ -42,6 +46,88 @@ export const SORTS: readonly LibrarySort[] = ["modified", "name", "created"];
 /** Lower-case, accent-free form used for searching and comparing. */
 export function normalizeText(text: string): string {
 	return text.normalize("NFD").replace(/\p{M}+/gu, "").toLowerCase();
+}
+
+/**
+ * Like `normalizeText`, but every code point maps to one of the same length, so offsets in the result
+ * are valid offsets in the original string (used to find and highlight matches).
+ */
+export function foldText(text: string): string {
+	let out = "";
+	for (const ch of text) {
+		const f = ch.normalize("NFD").replace(/\p{M}+/gu, "").toLowerCase();
+		if (f.length === ch.length) out += f;
+		else {
+			const l = ch.toLowerCase();
+			out += l.length === ch.length ? l : ch;
+		}
+	}
+	return out;
+}
+
+export type SearchField = "title" | "tag" | "text";
+
+/** A string with the `[start, end)` ranges to highlight (sorted, non-overlapping). */
+export interface Highlight {
+	text: string;
+	ranges: Array<[number, number]>;
+}
+
+export interface SearchHit {
+	entry: LibraryEntry;
+	/** Fields that matched, best first: title, tag, text. */
+	fields: SearchField[];
+	title?: Highlight;
+	tag?: Highlight;
+	/** `page` is the 0-based page of the first match. */
+	text?: { snippet: Highlight; page: number };
+}
+
+export interface SearchQuery {
+	search: string;
+	/** Where to look; default: every notebook. */
+	scope?: LibraryScope;
+	sort: LibrarySort;
+}
+
+/** Characters of context kept on each side of a text match. */
+export const SNIPPET_RADIUS = 40;
+
+function mergeRanges(ranges: Array<[number, number]>): Array<[number, number]> {
+	const sorted = ranges.filter((r) => r[1] > r[0]).sort((a, b) => a[0] - b[0]);
+	const out: Array<[number, number]> = [];
+	for (const r of sorted) {
+		const last = out[out.length - 1];
+		if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1]);
+		else out.push([r[0], r[1]]);
+	}
+	return out;
+}
+
+function rangesOf(folded: string, terms: readonly string[], from = 0, to = folded.length): Array<[number, number]> {
+	const out: Array<[number, number]> = [];
+	for (const term of terms) {
+		let i = folded.indexOf(term, from);
+		while (i >= 0 && i + term.length <= to) {
+			out.push([i, i + term.length]);
+			i = folded.indexOf(term, i + term.length);
+		}
+	}
+	return mergeRanges(out);
+}
+
+/** A window of `text` around `[start, end)` (at most 2 * SNIPPET_RADIUS plus the match, plus ellipses), with highlights. */
+function snippetAround(text: string, folded: string, terms: readonly string[], start: number, end: number): Highlight {
+	let from = Math.max(0, start - SNIPPET_RADIUS);
+	let to = Math.min(text.length, Math.max(end, start) + SNIPPET_RADIUS);
+	const isLow = (i: number) => { const c = text.charCodeAt(i); return c >= 0xdc00 && c <= 0xdfff; };
+	if (from > 0 && isLow(from)) from++;
+	if (to < text.length && isLow(to)) to--;
+	const prefix = from > 0 ? "…" : "";
+	const suffix = to < text.length ? "…" : "";
+	const shift = prefix.length - from;
+	const ranges = rangesOf(folded, terms, from, to).map((r): [number, number] => [r[0] + shift, r[1] + shift]);
+	return { text: prefix + text.slice(from, to) + suffix, ranges };
 }
 
 export function folderOf(path: string): string {
@@ -83,6 +169,8 @@ function isEntry(v: unknown): v is LibraryEntry {
 		Number.isFinite(e.mtime) && Number.isFinite(e.size) && Number.isFinite(e.created) && Number.isFinite(e.modified) &&
 		Number.isFinite(e.pages) && Array.isArray(e.tags) && e.tags.every((x) => typeof x === "string") &&
 		typeof e.favorite === "boolean" && typeof e.cover === "string" &&
+		(e.text === undefined || typeof e.text === "string") &&
+		(e.textPages === undefined || (Array.isArray(e.textPages) && e.textPages.length % 2 === 0 && e.textPages.every((n) => Number.isFinite(n)))) &&
 		(e.thumb === undefined || typeof e.thumb === "string") &&
 		(e.thumbMtime === undefined || Number.isFinite(e.thumbMtime))
 	);
@@ -168,8 +256,7 @@ export class LibraryIndex {
 		return removed;
 	}
 
-	query(q: LibraryQuery): LibraryEntry[] {
-		const { scope } = q;
+	private inScope(scope: LibraryScope): LibraryEntry[] {
 		let list = this.all();
 		if (scope === "favorites") {
 			list = list.filter((e) => e.favorite);
@@ -182,6 +269,11 @@ export class LibraryIndex {
 			const tag = normalizeText(scope.tag);
 			list = list.filter((e) => e.tags.some((x) => normalizeText(x) === tag));
 		}
+		return list;
+	}
+
+	query(q: LibraryQuery): LibraryEntry[] {
+		let list = this.inScope(q.scope);
 		const terms = normalizeText(q.search ?? "").split(/\s+/).filter(Boolean);
 		if (terms.length > 0) {
 			list = list.filter((e) => {
@@ -191,6 +283,71 @@ export class LibraryIndex {
 			});
 		}
 		return list.sort(compare(q.sort));
+	}
+
+	private readonly foldCache = new Map<string, { text: string; folded: string }>();
+
+	private foldedText(e: LibraryEntry): string {
+		if (!e.text) return "";
+		const c = this.foldCache.get(e.path);
+		if (c && c.text === e.text) return c.folded;
+		const folded = foldText(e.text);
+		this.foldCache.set(e.path, { text: e.text, folded });
+		return folded;
+	}
+
+	/**
+	 * Global search over title, tags and text boxes, on the in-memory index only. Accent and case
+	 * insensitive; several words must all match (each in any field). Title hits come first, then tag
+	 * hits, then text hits; ties follow `sort`.
+	 */
+	search(q: SearchQuery): SearchHit[] {
+		const terms = [...new Set(normalizeText(q.search).split(/\s+/).filter(Boolean))];
+		if (terms.length === 0) return [];
+		const ranked: Array<{ hit: SearchHit; rank: number }> = [];
+		for (const e of this.inScope(q.scope ?? "all")) {
+			const name = normalizeText(e.name);
+			const tags = e.tags.map(normalizeText);
+			const folded = this.foldedText(e);
+			const inTitle = terms.filter((t) => name.includes(t));
+			const inTags = terms.filter((t) => tags.some((tag) => tag.includes(t)));
+			const textPos = terms.map((t) => folded.indexOf(t));
+			if (!terms.every((t, i) => name.includes(t) || tags.some((tag) => tag.includes(t)) || textPos[i]! >= 0)) continue;
+
+			const fields: SearchField[] = [];
+			const hit: SearchHit = { entry: e, fields };
+			if (inTitle.length > 0) {
+				fields.push("title");
+				hit.title = { text: e.name, ranges: rangesOf(foldText(e.name), terms) };
+			}
+			if (inTags.length > 0) {
+				fields.push("tag");
+				const i = tags.findIndex((tag) => inTags.some((t) => tag.includes(t)));
+				const tagText = e.tags[i]!;
+				hit.tag = { text: tagText, ranges: rangesOf(foldText(tagText), terms) };
+			}
+			let first = -1;
+			let firstTerm = "";
+			textPos.forEach((pos, i) => {
+				if (pos >= 0 && (first < 0 || pos < first)) {
+					first = pos;
+					firstTerm = terms[i]!;
+				}
+			});
+			if (first >= 0 && e.text) {
+				fields.push("text");
+				let page = 0;
+				const tp = e.textPages ?? [];
+				for (let k = 0; k + 1 < tp.length; k += 2) {
+					if (tp[k + 1]! <= first) page = tp[k]!;
+					else break;
+				}
+				hit.text = { snippet: snippetAround(e.text, folded, terms, first, first + firstTerm.length), page };
+			}
+			ranked.push({ hit, rank: fields[0] === "title" ? 0 : fields[0] === "tag" ? 1 : 2 });
+		}
+		const cmp = compare(q.sort);
+		return ranked.sort((a, b) => a.rank - b.rank || cmp(a.hit.entry, b.hit.entry)).map((r) => r.hit);
 	}
 
 	/** Tags with the number of notebooks using them, most used first (ties alphabetically). Case-insensitive. */
