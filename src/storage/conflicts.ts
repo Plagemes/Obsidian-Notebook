@@ -18,7 +18,12 @@
  * when (checked by the caller) `Notes.notebook` exists in the same folder, both files parse, and both
  * hold the same document id (a sync conflict copies the file, so the id is the same; an unrelated
  * notebook that happens to be called "Notes (1)" has its own id).
+ *
+ * `Notes (1)` is also what a browser download or a file manager copy is called, and such a copy keeps the id
+ * too: it may be intentional (`mayBeManualCopy`). A copy identical to the main file (`sameNotebookText`)
+ * holds nothing to merge and is not announced. Merging is always the user's choice.
  */
+import { parse, serialize } from "../model/serialize";
 
 /** OneDrive device name: up to 15 letters, digits and hyphens, with at least one letter, optionally "-<n>". */
 const DEVICE_SUFFIX = /^(?=[A-Za-z0-9-]*[A-Za-z])[A-Za-z0-9][A-Za-z0-9-]{0,14}(?:-\d{1,3})?$/;
@@ -54,6 +59,23 @@ export function conflictBaseCandidates(stem: string): string[] {
 export function conflictBaseOf(stem: string, existing: ReadonlySet<string>): string | null {
 	for (const base of conflictBaseCandidates(stem)) if (existing.has(base)) return base;
 	return null;
+}
+
+/**
+ * Whether `stem` is named like a copy the user may have made on purpose (`Notes (1)`: browser downloads, file
+ * managers, Google Drive's "keep both") rather than only by a sync conflict.
+ */
+export function mayBeManualCopy(stem: string, base: string): boolean {
+	const m = PATTERNS[0]!.exec(stem);
+	return m?.[1]?.trim() === base;
+}
+
+/** Whether two notebook files hold the same notebook content: the same text, or the same document once parsed. */
+export function sameNotebookText(a: string, b: string): boolean {
+	if (a === b) return true;
+	const x = parse(a);
+	const y = parse(b);
+	return x.ok && y.ok && serialize(x.doc) === serialize(y.doc);
 }
 
 /** Stems in `siblings` that may be conflicted copies of `base`. */
