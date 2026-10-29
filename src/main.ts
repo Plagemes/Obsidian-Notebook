@@ -39,6 +39,7 @@ export default class NotebookPlugin extends Plugin {
 		this.addCommand({ id: "continue-last", name: t("command.continue"), callback: () => void this.continueLast() });
 		this.addCommand({ id: "open-library", name: t("command.library"), callback: () => void this.openLibrary() });
 		this.addCommand({ id: "import-pdf", name: t("command.importPdf"), callback: () => this.host.importPdf(this.settings.folder) });
+		this.addCommand({ id: "lecture-from-slides", name: t("command.lectureFromSlides"), callback: () => this.host.lectureFromSlides() });
 		this.addCommand({ id: "undo", name: t("command.undo"), checkCallback: (checking) => this.withView(checking, (v) => v.undo()) });
 		this.addCommand({ id: "redo", name: t("command.redo"), checkCallback: (checking) => this.withView(checking, (v) => v.redo()) });
 		this.addCommand({ id: "fit-width", name: t("command.fit"), checkCallback: (checking) => this.withView(checking, (v) => v.fitToWidth()) });

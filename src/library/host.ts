@@ -16,9 +16,11 @@ import { VaultDocumentIO } from "../storage/vault-io";
 import { resolveAssetFile, storeAsset } from "../view/media";
 import { NewNotebookModal, type NewNotebookOptions } from "../view/modals";
 import { NotebookView, VIEW_TYPE } from "../view/notebook-view";
+import { askLectureSetup } from "../view/lecture-pack-modal";
 import { pickFile } from "../view/pick";
 import { libraryIndexPath, parseStoredJson, patchNotebookId, patchNotebookMeta, type MetaPatchResult } from "./host-logic";
 import { importPdfAsNotebook } from "./import-pdf";
+import { createLectureFromSlides } from "./lecture-pack";
 import { openLooseSheet } from "./loose-sheet";
 import type { LibraryHost } from "./library-view";
 import type { ThumbnailOptions } from "./thumbnail";
@@ -165,6 +167,37 @@ export class NotebookLibraryHost implements LibraryHost {
 				empty: () => t("import.empty"),
 			},
 		}, folder);
+	}
+
+	/**
+	 * "New lecture from slides…": picks the course slides (vault or device), asks for layout and header and creates the
+	 * lecture notebook. Without `folder` it goes next to the notebook in view, or in the notebooks folder.
+	 */
+	lectureFromSlides(folder?: string): void {
+		const active = this.app.workspace.getActiveViewOfType(NotebookView)?.file?.parent?.path;
+		const target = folder ?? (active && active !== "/" ? active : this.plugin.settings.folder);
+		void createLectureFromSlides<TFile>({
+			pick: () => pickFile(this.app, "pdf"),
+			ask: (defaultTitle) => askLectureSetup(this.app, defaultTitle),
+			store: async (bytes, name) => {
+				const asset = await storeAsset(this.app, this.root(), bytes, name, "pdf");
+				this.assets.set(asset.id, asset);
+				return asset;
+			},
+			pageSizes: (id) => this.pdf.pageSizes(id),
+			create: (dir, name, doc) => createNotebook(this.app, dir, name, doc),
+			open: (file) => this.openNotebook(file),
+			progress: (text) => {
+				const notice = new Notice(text, 0);
+				return () => notice.hide();
+			},
+			notify: (text) => void new Notice(text),
+			messages: {
+				working: (name) => t("import.working", { name }),
+				failed: (error) => t("import.failed", { error }),
+				empty: () => t("import.empty"),
+			},
+		}, target);
 	}
 
 	openLooseSheet(): void {

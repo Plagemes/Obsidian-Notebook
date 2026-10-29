@@ -603,6 +603,28 @@ const en = {
 	"pageRestore.unreadable": "This version cannot be read.",
 	"pageRestore.otherNotebook": "This version belongs to a different notebook.",
 	"pageRestore.done": "Page restored",
+
+	// wave 0.6: lecture pack
+	"command.lectureFromSlides": "New lecture from slides…",
+	"library.action.lectureFromSlides": "New lecture from slides",
+	"library.menu.lectureFromSlidesHere": "New lecture from slides here",
+	"lecturePack.title": "New lecture from slides",
+	"lecturePack.insertTitle": "Insert PDF: page layout",
+	"lecturePack.header": "Header",
+	"lecturePack.header.page": "Header page before the slides",
+	"lecturePack.header.text": "Header text on the first page",
+	"lecturePack.header.none": "No header",
+	"lecturePack.layout": "Layout",
+	"lecturePack.layout.desc": "Two or three slides on one page are not possible yet: a page shows one slide.",
+	"lecturePack.layout.slide": "On the slide (write directly on it)",
+	"lecturePack.layout.notes-right": "Slide with notes on the right",
+	"lecturePack.layout.notes-bottom": "Slide with notes below",
+	"lecturePack.notesPaper": "Paper of the notes area",
+	"lecturePack.notesPageAfter": "Notes page after every slide",
+	"lecturePack.notesPageAfter.desc": "A blank page of the same size after each slide, for exercises and longer notes.",
+	"lecturePack.afterPaper": "Paper of the notes pages",
+	"lecturePack.create": "Create lecture",
+	"lecturePack.apply": "Insert",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -1210,6 +1232,28 @@ const it: Partial<Record<MessageKey, string>> = {
 	"pageRestore.unreadable": "Questa versione non è leggibile.",
 	"pageRestore.otherNotebook": "Questa versione appartiene a un altro quaderno.",
 	"pageRestore.done": "Pagina ripristinata",
+
+	// wave 0.6: lecture pack
+	"command.lectureFromSlides": "Nuova lezione dalle slide…",
+	"library.action.lectureFromSlides": "Nuova lezione dalle slide",
+	"library.menu.lectureFromSlidesHere": "Nuova lezione dalle slide qui",
+	"lecturePack.title": "Nuova lezione dalle slide",
+	"lecturePack.insertTitle": "Inserisci PDF: impaginazione",
+	"lecturePack.header": "Intestazione",
+	"lecturePack.header.page": "Pagina di intestazione prima delle slide",
+	"lecturePack.header.text": "Testo di intestazione sulla prima pagina",
+	"lecturePack.header.none": "Nessuna intestazione",
+	"lecturePack.layout": "Impaginazione",
+	"lecturePack.layout.desc": "Due o tre slide su una pagina non sono ancora possibili: una pagina mostra una sola slide.",
+	"lecturePack.layout.slide": "Sulla slide (scrivi direttamente sopra)",
+	"lecturePack.layout.notes-right": "Slide con appunti a destra",
+	"lecturePack.layout.notes-bottom": "Slide con appunti sotto",
+	"lecturePack.notesPaper": "Carta dell’area appunti",
+	"lecturePack.notesPageAfter": "Pagina di appunti dopo ogni slide",
+	"lecturePack.notesPageAfter.desc": "Una pagina vuota della stessa dimensione dopo ogni slide, per esercizi e appunti più lunghi.",
+	"lecturePack.afterPaper": "Carta delle pagine di appunti",
+	"lecturePack.create": "Crea lezione",
+	"lecturePack.apply": "Inserisci",
 };
 
 let table: Partial<Record<MessageKey, string>> | null = null;

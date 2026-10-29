@@ -33,7 +33,8 @@ import { analyseSpace, planSpaceChange, spacePreview } from "../ink/space";
 import { apply, IDENTITY, invert, isIdentity, multiply, rotateAbout, scaleAbout, translate, type Matrix } from "../ink/transform";
 import { clampToPage, fitWidth, pan, PAGE_MARGIN, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
 import { cloneMeta, createId, createPage, createStroke } from "../model/document";
-import { createPdfPages, duplicatePage } from "../model/pages";
+import { buildLecturePackPages } from "../model/lecture-pack";
+import { duplicatePage } from "../model/pages";
 import { backgroundRect } from "../model/margins";
 import {
 	AddAsset, AddElement, AddPage, AddStroke, Batch, DeletePage, History, InsertPages, MovePage, RemoveElement, ReplaceElement,
@@ -61,6 +62,7 @@ import { askPdfRange } from "./pdf-range-modal";
 import { runBoardShot } from "./board-shot";
 import type { EditContext } from "./edit-context";
 import { runNewLecture } from "./lecture";
+import { askLayoutOptions } from "./lecture-pack-modal";
 import { runMovePages } from "../library/move-pages";
 import { addPdfPageMenuItems, type PdfActionHost } from "./pdf-actions";
 import { pickFile } from "./pick";
@@ -887,16 +889,19 @@ export class NotebookView extends FileView {
 			if (sizes.length === 0) throw new Error("the PDF has no pages");
 			const range = sizes.length === 1 ? { from: 1, to: 1 } : await askPdfRange(this.app, sizes.length);
 			if (!range || !this.stillHere(session)) return;
+			// Lecture pack layout (#192, #193): on the slide, slide + notes area, notes page after every slide.
+			const layout = await askLayoutOptions(this.app);
+			if (!layout || !this.stillHere(session)) return;
 			const doc = session.doc;
 			const at = doc ? doc.pages.indexOf(anchor) : -1;
 			if (!doc || at < 0) return;
-			const pages = createPdfPages(asset, sizes.slice(range.from - 1, range.to), range.from);
+			const pages = buildLecturePackPages(asset, sizes.slice(range.from - 1, range.to), range.from, layout);
 			this.commitText();
 			this.clearSelection();
 			this.history.execute(new Batch("Insert PDF", [new AddAsset(asset), new InsertPages(pages, at + 1)]));
 			this.afterHistoryChange();
 			this.scrollToPage(at + 1);
-			new Notice(t("insert.pdfDone", { n: String(pages.length) }));
+			new Notice(t("insert.pdfDone", { n: String(range.to - range.from + 1) }));
 		} catch (e) {
 			console.error("[notebook] insert PDF", e);
 			new Notice(t("insert.failed", { error: (e as Error).message }), 8000);
