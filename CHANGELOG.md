@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+Not yet verified on Android hardware.
+
+### Added
+- **Repair a damaged notebook** (button in the "cannot be opened" view, command *Repair damaged notebook*): recovers every valid page, stroke, text box, image and file reference from a cut-off or damaged file, also after a damaged region in the middle, and from the journal, version-history snapshots and backup copies; shows what each source recovers and loses and writes the chosen result into a new notebook `<name> (repaired)`. The damaged file is never changed.
+- **Merge conflicted copies** made by Google Drive, OneDrive, Dropbox, Syncthing and Android sync apps (notice when a notebook has one, command *Merge conflicted copies*): only files with a conflict-like name **and** the same notebook id are offered; a summary shows what will be added; everything is added and nothing removed (an item changed on both sides is kept twice); one undo step. The copy is kept, or moved to `_backup/conflicts/` only after the merged notebook was saved and checked.
+- **Restore a single page** from a previous version (page menu, command *Restore this page from a previous version*): pick a snapshot or backup, see its pages, insert the old page as a new page or replace the current one; one undo step, the rest of the notebook untouched.
+
 ## 0.4.1 — 2026-10-29
 
 Hotfix for 0.4.0. Not yet verified on Android hardware.
