@@ -1,7 +1,7 @@
 import { loadPdfJs, normalizePath, Notice, Platform, type App, type TFile, type WorkspaceLeaf } from "obsidian";
 import { t } from "../i18n";
 import { createDocument, createId } from "../model/document";
-import { parse } from "../model/serialize";
+import { parse, serializeChecked } from "../model/serialize";
 import { PAGE_SIZES, PAPER_SPACING, type Asset, type NotebookDocument, type NotebookMeta, type Page } from "../model/types";
 import { assetExtension, assetPath, assetsFolder } from "../pdf/assets";
 import { scanFromCamera } from "../scan/scan-modal";
@@ -181,6 +181,9 @@ export class NotebookLibraryHost implements LibraryHost {
 				doc.pages.push(scannedPage(asset, sheet.width, sheet.height));
 			}
 			const name = t("scan.notebookName", { date: new Date().toISOString().slice(0, 10) });
+			// Validate before creating the file, like the PDF import: an invalid document never reaches the vault.
+			const checked = serializeChecked(doc);
+			if (!checked.ok) throw new Error(checked.message);
 			const file = await createNotebook(this.app, folder, name, doc);
 			await this.openNotebook(file);
 		} catch (e) {

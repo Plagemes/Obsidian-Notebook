@@ -1,6 +1,6 @@
 import { parse, serialize, serializeChecked, warmStrokeLines, type ParseFailure } from "../model/serialize";
 import type { NotebookDocument } from "../model/types";
-import { buildEntry, fullWriteGapMs, inspectJournal, splitLines, type JournalStore } from "./journal";
+import { buildEntry, fullWriteGapMs, inspectJournal, journalKey, splitLines, type JournalStore } from "./journal";
 
 /** File access for one notebook. Implemented over the Vault API in vault-io.ts and by fakes in tests. */
 export interface DocumentIO {
@@ -9,6 +9,8 @@ export interface DocumentIO {
 	process(fn: (current: string) => string): Promise<void>;
 	/** Keeps a copy of `content`. Returns the backup path, or null if an identical backup already exists. */
 	backup(content: string, reason: BackupReason): Promise<string | null>;
+	/** Current vault path of the file (follows renames). Part of the journal's file identity. */
+	path?(): string;
 }
 
 export type BackupReason = "unreadable" | "future-version" | "conflict" | "unsaved" | "journal" | "before-restore";
@@ -50,6 +52,15 @@ export interface SessionOptions {
 	journal?: JournalStore;
 	/** Delay between a change and its journal entry. */
 	journalDelayMs?: number;
+	/** Name of this session's journal files; unique among the sessions open at the same time. */
+	journalOwner?: string;
+}
+
+let ownerCounter = 0;
+/** A short unique id for a session's journal files (letters and digits only). */
+function newOwnerId(): string {
+	ownerCounter++;
+	return `${Date.now().toString(36)}${ownerCounter.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
 /** Attempts per flush when another writer keeps changing the file between our read and our write. */
@@ -89,8 +100,14 @@ export class DocumentSession {
 	private jchain: Promise<unknown> = Promise.resolve();
 	private journalSeq = 0;
 	private journalSlot: 0 | 1 = 0;
-	/** A journal file may exist for this notebook. */
-	private journalOnDisk = false;
+	/** Name of this session's journal files. */
+	private readonly journalOwner: string;
+	/** Journal keys (file identity at the time) under which this session has written files. */
+	private readonly ownedKeys = new Set<string>();
+	/** Files of earlier sessions whose content was recovered here: deleted once a save covers it. */
+	private inherited: Array<{ key: string; owner: string }> = [];
+	/** Revision whose text was last serialized for the journal (its modifiedAt is reused by the save). */
+	private journaledRevision = -1;
 	private journalNextAt = 0;
 	private journalErrorShown = false;
 	/** A journal that could not be backed up is left untouched for the next open: no writes, no deletion. */
@@ -117,6 +134,7 @@ export class DocumentSession {
 		this.busy = options.busy ?? (() => false);
 		this.journal = options.journal ?? null;
 		this.journalDelayMs = options.journalDelayMs ?? 200;
+		this.journalOwner = options.journalOwner ?? newOwnerId();
 	}
 
 	get dirty(): boolean {
@@ -191,10 +209,10 @@ export class DocumentSession {
 		this.clearTimers();
 		const hadUnsaved = this.mode === "ok" && this.dirty;
 		this.mode = "deleted";
-		if (hadUnsaved) await this.backupUnsaved();
+		const backedUp = hadUnsaved ? await this.backupUnsaved() : true;
 		this.dispose();
-		const docId = this.doc?.id;
-		if (docId) this.enqueueJournal(() => this.removeJournal(docId));
+		// The journal may hold the only copy of unsaved edits: delete it only when they are safe elsewhere.
+		if (backedUp) this.enqueueJournal(() => this.removeJournal());
 		await this.jchain;
 	}
 
@@ -203,6 +221,9 @@ export class DocumentSession {
 		this.disposed = true;
 		this.clearTimers();
 		this.clearJournalTimer();
+		// Files left behind (unsaved edits) become recoverable by the next session once queued I/O is done.
+		const journal = this.journal;
+		if (journal) void this.jchain.then(() => journal.release(this.journalOwner));
 	}
 
 	/** Resolves when the journal operations queued so far are done. For tests and orderly shutdown. */
@@ -218,15 +239,19 @@ export class DocumentSession {
 
 	private async applyDiskContent(content: string, initialLoad = false): Promise<void> {
 		if (this.disposed) return;
+		// A file that could not be used until now (broken or read-only) is recovered like a first load: its
+		// journal may hold edits made before the file was damaged or overwritten.
+		const recover = initialLoad || this.mode !== "ok";
 		this.diskContent = content;
 		this.revision = 0;
 		this.savedRevision = 0;
+		this.journaledRevision = -1;
 		let recoveredAt: string | null = null;
 		const result = parse(content);
 		if (result.ok) {
 			let doc = result.doc;
 			if (this.journal) {
-				if (initialLoad) {
+				if (recover) {
 					const recovered = await this.recoverFromJournal(content, doc);
 					if (this.disposed) return;
 					if (recovered) {
@@ -234,9 +259,8 @@ export class DocumentSession {
 						recoveredAt = recovered.savedAt;
 					}
 				} else {
-					// The file was reloaded with no local changes: whatever the journal holds is obsolete.
-					const docId = doc.id;
-					this.enqueueJournal(() => this.removeJournal(docId));
+					// The file was reloaded with no local changes: whatever this session journaled is obsolete.
+					this.enqueueJournal(() => this.removeJournal());
 				}
 			}
 			this.doc = doc;
@@ -282,7 +306,9 @@ export class DocumentSession {
 
 		const doc = this.doc;
 		const previousModifiedAt = doc.modifiedAt;
-		doc.modifiedAt = this.now().toISOString();
+		// If the journal already serialized this revision, keep its modifiedAt: the saved text is then identical
+		// to the journal entry's result, so a crash between the save and the cleanup is recognised as "merged".
+		if (this.journaledRevision !== revision) doc.modifiedAt = this.now().toISOString();
 		const checked = serializeChecked(doc);
 		if (!checked.ok) {
 			doc.modifiedAt = previousModifiedAt;
@@ -334,10 +360,13 @@ export class DocumentSession {
 	/** The file now holds our changes: the journal is obsolete, or must be rebased if newer changes exist. */
 	private afterSave(): void {
 		if (!this.journal) return;
-		const docId = this.doc?.id;
-		if (!docId) return;
 		this.baseLinesFor = null;
-		this.enqueueJournal(() => (this.dirty ? this.writeJournal() : this.removeJournal(docId)));
+		this.enqueueJournal(async () => {
+			// Whatever an earlier session left and this session recovered is in the file now.
+			await this.removeInherited();
+			if (this.dirty) await this.writeJournal();
+			else await this.removeJournal();
+		});
 	}
 
 	private scheduleJournal(delayMs: number): void {
@@ -378,28 +407,58 @@ export class DocumentSession {
 			this.scheduleJournal(wait);
 			return;
 		}
+		// The entry carries the modifiedAt the next save will reuse (see doFlush), so that a crash between the
+		// save and the cleanup leaves an entry whose result equals the file.
+		const revision = this.revision;
+		const previousModifiedAt = doc.modifiedAt;
+		doc.modifiedAt = this.now().toISOString();
 		const checked = serializeChecked(doc);
-		if (!checked.ok) return; // the regular save reports it
+		if (!checked.ok) {
+			doc.modifiedAt = previousModifiedAt;
+			return; // the regular save reports it
+		}
+		this.journaledRevision = revision;
 		if (this.baseLinesFor !== base) {
 			this.baseLines = splitLines(base);
 			this.baseLinesFor = base;
 		}
 		const seq = Math.max(this.journalSeq + 1, nowMs);
-		const built = buildEntry(doc.id, seq, this.now().toISOString(), base, this.baseLines, checked.text);
+		const path = this.io.path?.() ?? "";
+		const key = journalKey(doc.id, path);
+		const built = buildEntry(doc.id, seq, this.now().toISOString(), base, this.baseLines, checked.text, path);
 		if (!built) return; // too big to journal: only the regular save protects it
 		const slot: 0 | 1 = this.journalSlot === 0 ? 1 : 0;
-		this.journalOnDisk = true;
-		await journal.write(doc.id, slot, built.text);
+		this.ownedKeys.add(key);
+		await journal.write(key, this.journalOwner, slot, built.text);
 		this.journalSeq = seq;
 		this.journalSlot = slot;
 		this.journalErrorShown = false;
+		// Renamed since the last entry: the new key now holds a complete entry, so the old files can go.
+		for (const old of [...this.ownedKeys]) {
+			if (old === key) continue;
+			await journal.remove(old, this.journalOwner);
+			this.ownedKeys.delete(old);
+		}
 		if (built.full) this.journalNextAt = nowMs + fullWriteGapMs(checked.text.length);
 	}
 
-	private async removeJournal(docId: string): Promise<void> {
-		if (!this.journal || this.journalSuspended || !this.journalOnDisk) return;
-		await this.journal.remove(docId);
-		this.journalOnDisk = false;
+	/** Deletes the files this session wrote (under any key it has used). Never touches another session's files. */
+	private async removeJournal(): Promise<void> {
+		if (!this.journal || this.journalSuspended) return;
+		for (const key of [...this.ownedKeys]) {
+			await this.journal.remove(key, this.journalOwner);
+			this.ownedKeys.delete(key);
+		}
+	}
+
+	/** Deletes the files of earlier sessions that this session recovered and has now saved. */
+	private async removeInherited(): Promise<void> {
+		if (!this.journal || this.journalSuspended) return;
+		while (this.inherited.length > 0) {
+			const { key, owner } = this.inherited[0]!;
+			await this.journal.remove(key, owner);
+			this.inherited.shift();
+		}
 	}
 
 	/**
@@ -410,33 +469,59 @@ export class DocumentSession {
 		const journal = this.journal;
 		if (!journal) return null;
 		try {
-			const files = await journal.read(diskDoc.id);
+			const path = this.io.path?.() ?? "";
+			const key = journalKey(diskDoc.id, path);
+			const files = await journal.read(key);
 			if (files.length === 0) return null;
-			this.journalOnDisk = true;
-			const found = inspectJournal(files, diskDoc.id, diskText);
-			this.journalSeq = found.maxSeq;
-			if (found.newestSlot !== null) this.journalSlot = found.newestSlot;
+			const found = inspectJournal(files, diskDoc.id, diskText, path);
+			this.journalSeq = Math.max(this.journalSeq, found.maxSeq);
+			const owners = [...new Set(files.map((f) => f.owner))];
+			const removeAll = async () => {
+				for (const owner of owners) await journal.remove(key, owner);
+			};
 			const r = found.recovery;
 			if (r.kind === "none") return null;
 			if (r.kind === "merged") {
-				await this.removeJournal(diskDoc.id);
+				if (r.backupText !== undefined) {
+					// A newer entry that did not fit: keep a copy first; if that fails the journal stays untouched.
+					this.journalSuspended = true;
+					await this.backupJournalCopy(r.backupText);
+					this.journalSuspended = false;
+				}
+				await removeAll();
 				return null;
 			}
 			if (r.kind === "apply") {
 				const check = parse(r.text);
-				return check.ok ? { doc: check.doc, savedAt: r.savedAt } : null;
+				if (!check.ok) return null;
+				this.inherited = owners.map((owner) => ({ key, owner }));
+				if (r.backupText !== undefined) {
+					// A newer entry that did not fit: keep a copy. If that fails the files are never deleted (not inherited).
+					try {
+						await this.backupJournalCopy(r.backupText);
+					} catch (e) {
+						this.inherited = [];
+						this.events.onError?.(`The instant save journal could not be backed up: ${(e as Error).message}`);
+					}
+				}
+				return { doc: check.doc, savedAt: r.savedAt };
 			}
 			// Stale: keep a copy first, and delete the journal only if that worked.
 			this.journalSuspended = true;
-			const path = await this.io.backup(r.backupText, "journal");
+			await this.backupJournalCopy(r.backupText);
 			this.journalSuspended = false;
-			if (path && !this.disposed) this.events.onBackup?.(path, "journal");
-			await this.removeJournal(diskDoc.id);
+			await removeAll();
 			return null;
 		} catch (e) {
 			this.events.onError?.(`The instant save journal could not be read: ${(e as Error).message}`);
 			return null;
 		}
+	}
+
+	/** Copies journal text to the backup folder (throws if that fails). */
+	private async backupJournalCopy(text: string): Promise<void> {
+		const path = await this.io.backup(text, "journal");
+		if (path && !this.disposed) this.events.onBackup?.(path, "journal");
 	}
 
 	private async backupConflict(content: string): Promise<void> {

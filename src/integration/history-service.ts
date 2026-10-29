@@ -4,7 +4,7 @@ import { parse } from "../model/serialize";
 import { backupFolder, type NotebookSettings } from "../settings";
 import { isNotebookFile, readNotebookText, writeNotebookText } from "../storage/format";
 import {
-	extractDocId, formatBytes, formatSnapshotDate, shouldSnapshot, snapshotFileName, snapshotFolder, snapshotPageCount,
+	checkRestoreTarget, extractDocId, formatBytes, formatSnapshotDate, shouldSnapshot, snapshotFileName, snapshotFolder, snapshotPageCount,
 	snapshotsToPrune, sortSnapshots,
 } from "../storage/history";
 import { ensureFolder, VaultDocumentIO } from "../storage/vault-io";
@@ -156,14 +156,26 @@ export class HistoryService {
 			if (!parse(snapshot).ok) throw new Error(t("history.unreadable"));
 
 			for (const { view } of open) {
+				let saved = false;
 				try {
-					await view.flushNow();
+					saved = await view.flushNow();
 				} catch (e) {
 					console.error("[notebook] flush before restore failed", e);
+				}
+				// Anything left only in memory would be lost when the tab is emptied: do not restore.
+				if (!saved) {
 					new Notice(t("history.flushFailed"));
 					return;
 				}
 			}
+
+			// The file may have changed since the version was chosen (Sync, another leaf): it must still be this notebook.
+			const check = checkRestoreTarget(readNotebookText(file.extension, await this.app.vault.read(file)), snapshot);
+			if (check === "other-notebook") {
+				new Notice(t("history.otherNotebook"));
+				return;
+			}
+			if (check === "unreadable" && !(await confirmOverUnreadable(this.app, item.date))) return;
 			for (const { leaf } of open) {
 				states.push({ leaf, state: leaf.getViewState() });
 				await leaf.setViewState({ type: "empty" });
@@ -238,16 +250,25 @@ class SnapshotModal extends FuzzySuggestModal<SnapshotItem> {
 }
 
 class ConfirmRestoreModal extends Modal {
-	constructor(app: App, private readonly date: Date, private readonly onConfirm: () => void) {
+	private confirmed = false;
+
+	constructor(
+		app: App,
+		private readonly date: Date,
+		private readonly onConfirm: () => void,
+		private readonly bodyKey: "history.confirm.body" | "history.confirm.unreadableBody" = "history.confirm.body",
+		private readonly onCancel: () => void = () => undefined,
+	) {
 		super(app);
 	}
 
 	onOpen(): void {
 		this.setTitle(t("history.confirm.title"));
-		this.contentEl.createEl("p", { text: t("history.confirm.body", { date: formatSnapshotDate(this.date) }) });
+		this.contentEl.createEl("p", { text: t(this.bodyKey, { date: formatSnapshotDate(this.date) }) });
 		new Setting(this.contentEl)
 			.addButton((b) => b.setButtonText(t("history.confirm.cancel")).onClick(() => this.close()))
 			.addButton((b) => b.setButtonText(t("history.confirm.restore")).setCta().onClick(() => {
+				this.confirmed = true;
 				this.close();
 				this.onConfirm();
 			}));
@@ -255,5 +276,13 @@ class ConfirmRestoreModal extends Modal {
 
 	onClose(): void {
 		this.contentEl.empty();
+		if (!this.confirmed) this.onCancel();
 	}
+}
+
+/** Asks for explicit confirmation to restore over a file that cannot be read. */
+function confirmOverUnreadable(app: App, date: Date): Promise<boolean> {
+	return new Promise((resolve) => {
+		new ConfirmRestoreModal(app, date, () => resolve(true), "history.confirm.unreadableBody", () => resolve(false)).open();
+	});
 }

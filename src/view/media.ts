@@ -21,6 +21,17 @@ export function resolveAssetFile(app: App, asset: Asset, notebooksFolder: string
 	return fallback;
 }
 
+/** True if `file` holds exactly `bytes` (size first, then a hash of the content). */
+async function sameBytes(app: App, file: TFile, bytes: ArrayBuffer): Promise<boolean> {
+	try {
+		const current = await app.vault.readBinary(file);
+		if (current.byteLength !== bytes.byteLength) return false;
+		return (await sha256Hex(current)) === (await sha256Hex(bytes));
+	} catch {
+		return false;
+	}
+}
+
 /**
  * Stores bytes as a content-addressed asset (`_assets/<hash>.<ext>`); the same file imported twice is
  * stored once. Returns the asset record to put in the document.
@@ -31,9 +42,14 @@ export async function storeAsset(app: App, notebooksFolder: string, bytes: Array
 	const id = assetIdFromHash(await sha256Hex(bytes));
 	const folder = assetsFolder(notebooksFolder);
 	const path = normalizePath(assetPath(folder, id, assetExtension(k, name)));
-	if (!app.vault.getFileByPath(path)) {
+	const existing = app.vault.getFileByPath(path);
+	if (!existing) {
 		await ensureFolder(app, folder);
 		await app.vault.createBinary(path, bytes);
+	} else if (!(await sameBytes(app, existing, bytes))) {
+		// The file is named by the hash of the bytes but holds something else (truncated by a failed sync, or
+		// edited): reusing it would make every notebook that references it show a broken asset. Rewrite it.
+		await app.vault.modifyBinary(existing, bytes);
 	}
 	return { id, kind: k, path, name, bytes: bytes.byteLength };
 }

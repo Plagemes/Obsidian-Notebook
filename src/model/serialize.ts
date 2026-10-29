@@ -312,7 +312,14 @@ export function validate(raw: unknown): NotebookDocument {
 	if (!Array.isArray(raw.pages) || raw.pages.length === 0) fail("pages", "expected at least one page");
 	const assets = readAssets(raw.assets);
 	const ids = new Set<string>();
-	const pages = raw.pages.map((p, i) => readPage(p, `pages[${i}]`, ids, assets));
+	const pageIds = new Set<string>();
+	const pages = raw.pages.map((p, i) => {
+		const page = readPage(p, `pages[${i}]`, ids, assets);
+		// Page ids key bookmarks, jumps and caches: two pages with one id would be confused with each other.
+		if (pageIds.has(page.id)) fail(`pages[${i}].id`, "duplicate id");
+		pageIds.add(page.id);
+		return page;
+	});
 	const meta = readMeta(raw.meta, new Set(pages.map((p) => p.id)));
 	return { format: FORMAT_ID, version: CURRENT_VERSION, id, createdAt, modifiedAt, pages, meta, assets };
 }
