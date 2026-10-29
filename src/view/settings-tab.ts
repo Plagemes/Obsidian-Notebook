@@ -4,6 +4,7 @@ import { DEFAULT_SETTINGS, readSettings, type NotebookSettings } from "../settin
 import { PAGE_SIZES, PAPER_KINDS } from "../model/types";
 import { defaultLooseSheetPath } from "../library/loose-sheet-logic";
 import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "../ink/edge-zones";
+import { displayTrashSettings, trashSettingDefinitions } from "./trash-settings";
 import { companionSettingDefinitions, displayCompanionSettings, type CompanionSettingsHost } from "./companion-settings";
 
 const paperOptions = () => Object.fromEntries(PAPER_KINDS.map((k) => [k, t(`paper.${k}`)]));
@@ -162,6 +163,8 @@ export class NotebookSettingTab extends PluginSettingTab {
 			},
 			// Companion notes (O1)
 			...companionSettingDefinitions(this.companionHost()),
+			// wave 0.6: library trash, templates
+			...trashSettingDefinitions(),
 		];
 	}
 
@@ -302,5 +305,6 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setDesc(t("settings.penButton.desc"))
 			.addDropdown((dd) => dd.addOptions(penButtonOptions()).setValue(s.penButtonAction).onChange((v) => this.setControlValue("penButtonAction", v)));
 		displayCompanionSettings(containerEl, this.companionHost());
+		displayTrashSettings(containerEl, { get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) });
 	}
 }

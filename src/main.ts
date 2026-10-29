@@ -31,6 +31,8 @@ export default class NotebookPlugin extends Plugin {
 		this.registerExtensions([...NOTEBOOK_EXTENSIONS], VIEW_TYPE);
 		this.host = new NotebookLibraryHost(this);
 		this.registerView(LIBRARY_VIEW_TYPE, (leaf) => new LibraryView(leaf, this.host));
+		// wave 0.6: library trash auto-empty (setting, off by default)
+		this.app.workspace.onLayoutReady(() => void this.host.trash.purgeExpired().catch((e) => console.error("[notebook] trash auto-empty failed", e)));
 
 		this.addRibbonIcon("library", t("command.library"), () => void this.openLibrary());
 
