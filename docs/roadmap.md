@@ -258,7 +258,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 ### B. PDF and study material
 104. **P1** 🧪 Expandable margins on PDFs: widen a PDF page sideways to annotate without covering the text.
 105. **P1** Anchored excerpts: cut a region of a PDF, drop it on another page as an excerpt; tapping the excerpt jumps back to the exact source location.
-106. **P1** Synchronised PDF ↔ notes view: the PDF on one side and the linked note pages on the other; turning a PDF page follows on the notes side.
+106. **P1** 🧪 Synchronised PDF ↔ notes view: the PDF on one side and the linked note pages on the other; turning a PDF page follows on the notes side.
 107. **P2** Floating reference window: another page or notebook stays visible while you write.
 108. ~~**P3** Read the PDF text aloud with the system's speech synthesis, offline.~~ — dropped (user decision, 2026-10-29)
 109. ~~**P3** Reading ruler on PDFs: highlights the line being read (accessibility, dyslexia).~~ — dropped (user decision, 2026-10-29)
