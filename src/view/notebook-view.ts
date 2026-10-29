@@ -13,6 +13,8 @@ import { InputPolicy } from "../ink/input-policy";
 import { strokesInLasso, transformStroke } from "../ink/lasso";
 import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layout } from "../ink/layout";
 import { HoldTracker } from "../ink/hold";
+import { MultiTap } from "../ink/multitap";
+import { lineAt, TextLayoutCache, wordAt } from "../ink/words";
 import { InkBuilder } from "../ink/ink-geometry";
 import { OneEuroFilter, stabilizationParams } from "../ink/one-euro";
 import { PointerController, type InkSample, type SampleBuffer } from "../ink/pointer-controller";
@@ -71,6 +73,8 @@ const RULER_SNAP_PX = 14;
 const MIN_STEP_PX = 0.5;
 /** A touch that moves less than this (CSS px) is a tap. */
 const TAP_SLOP_PX = 8;
+/** Double/triple tap with the lasso: how far from the ink (CSS px) a tap still picks a word or line. */
+const WORD_TAP_PX = 12;
 /** Below this width (CSS px) the page panel is a drawer over the page instead of a side panel. */
 const NARROW_PX = 720;
 /** PDF pages are rendered at this scale (device px per pt) for thumbnails of pages not in view. */
@@ -117,6 +121,17 @@ interface ActiveErase {
 interface Lasso {
 	pageIndex: number;
 	points: Array<[number, number]>;
+}
+
+/** A lasso-tool contact that may turn out to be a tap of a double/triple tap. */
+interface LassoTap {
+	pageIndex: number;
+	local: [number, number];
+	/** Stage px and time where it started. */
+	x: number;
+	y: number;
+	t: number;
+	moved: boolean;
 }
 
 interface ShapeDrag {
@@ -187,6 +202,9 @@ export class NotebookView extends FileView {
 	private drag: SelectionDrag | null = null;
 	private shapeDrag: ShapeDrag | null = null;
 	private textTap: TextTap | null = null;
+	private lassoTap: LassoTap | null = null;
+	private readonly multiTap = new MultiTap();
+	private readonly textLayouts = new WeakMap<Page, TextLayoutCache>();
 	private ruler: { pageId: string; ruler: Ruler } | null = null;
 	private shiftDown = false;
 	private readonly hold = new HoldTracker();
@@ -903,6 +921,8 @@ export class NotebookView extends FileView {
 		this.drag = null;
 		this.shapeDrag = null;
 		this.textTap = null;
+		this.lassoTap = null;
+		this.multiTap.reset();
 		this.stopHold();
 		this.textEditor?.close();
 		this.renderer?.setHiddenElements(null);
@@ -1302,6 +1322,7 @@ export class NotebookView extends FileView {
 		const local = toPageLocal(layout.boxes[pageIndex]!, dx, dy);
 
 		if (tool === "lasso") {
+			this.lassoTap = { pageIndex, local, x: sample.x, y: sample.y, t: sample.t, moved: false };
 			const sel = this.selection;
 			const hit = sel && sel.pageIndex === pageIndex ? this.selectionHit(local) : null;
 			if (sel && hit) {
@@ -1371,6 +1392,11 @@ export class NotebookView extends FileView {
 				if (Number.isFinite(x) && Number.isFinite(y)) this.eraseTo(x, y);
 			}
 			return;
+		}
+
+		const lt = this.lassoTap;
+		if (lt && !lt.moved) {
+			for (let i = 0; i < n; i++) if (Math.hypot(samples.x[i]! - lt.x, samples.y[i]! - lt.y) > TAP_SLOP_PX) lt.moved = true;
 		}
 
 		const lasso = this.lasso;
@@ -1509,13 +1535,17 @@ export class NotebookView extends FileView {
 			this.lasso = null;
 			this.renderer?.setLasso(null);
 			const page = this.pageAtIndex(lasso.pageIndex);
-			if (cancelled || !page) return;
+			if (cancelled || !page || this.selectByTaps(cancelled)) {
+				this.lassoTap = null;
+				return;
+			}
 			this.selectFromLasso(lasso, page);
 			return;
 		}
 
 		if (this.drag) {
 			this.drag = null;
+			if (this.selectByTaps(cancelled)) return;
 			this.commitSelectionTransform();
 			return;
 		}
@@ -1708,6 +1738,39 @@ export class NotebookView extends FileView {
 		const sel = this.selection;
 		this.toolbar.setSelection(!!sel);
 		this.renderer?.setSelection(sel ? { ...sel, handle: HANDLE_PX } : null);
+	}
+
+	/**
+	 * Lasso tool: a double tap selects the word under the finger or pen, a triple tap its line (found
+	 * geometrically, see ink/words.ts). The result is an ordinary selection. Returns true when it
+	 * made one; a single tap, a moved contact or a tap away from any ink falls through to the normal
+	 * lasso/drag handling.
+	 */
+	private selectByTaps(cancelled: boolean): boolean {
+		const tap = this.lassoTap;
+		this.lassoTap = null;
+		if (!tap || cancelled || tap.moved) {
+			this.multiTap.reset();
+			return false;
+		}
+		const count = this.multiTap.tap(tap.t, tap.x, tap.y);
+		const page = this.pageAtIndex(tap.pageIndex);
+		if (count < 2 || !page) return false;
+		let cache = this.textLayouts.get(page);
+		if (!cache) this.textLayouts.set(page, (cache = new TextLayoutCache()));
+		const layout = cache.get(page.strokes);
+		const tol = WORD_TAP_PX / this.viewport.scale;
+		const [x, y] = tap.local;
+		const ids = count === 2 ? wordAt(layout, x, y, tol)?.word.strokeIds : lineAt(layout, x, y, tol)?.strokeIds;
+		if (!ids) return false;
+		const wanted = new Set(ids);
+		const strokes = page.strokes.filter((s) => wanted.has(s.id));
+		const bounds = unionBounds(strokes, [], measureText);
+		if (!bounds) return false;
+		this.drag = null;
+		this.selection = { pageIndex: tap.pageIndex, strokes, elements: [], bounds, matrix: IDENTITY };
+		this.pushSelection();
+		return true;
 	}
 
 	/** Selects the strokes and elements inside the lasso; a tap (a lasso too small to enclose anything) picks the element under it. */
