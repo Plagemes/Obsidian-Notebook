@@ -67,8 +67,9 @@ interface RectCache {
 }
 
 export class PdfReading {
-	private readonly overlay: HTMLCanvasElement;
-	private readonly ctx: CanvasRenderingContext2D | null;
+	/** The canvas that marks the hits: in the page area only while there is something to mark (a full-size canvas costs memory on a phone). */
+	private overlay: HTMLCanvasElement | null = null;
+	private ctx: CanvasRenderingContext2D | null = null;
 	private readonly panel: SearchPanel;
 	private readonly banner: HTMLElement;
 	private readonly cache: PageTextCache;
@@ -102,9 +103,6 @@ export class PdfReading {
 
 	constructor(private readonly host: ReadingHost) {
 		this.cache = new PageTextCache({ pageText: (asset, page) => host.pageText(asset, page) });
-
-		this.overlay = host.stage.createEl("canvas", { cls: "notebook-reading-overlay", attr: { "aria-hidden": "true" } });
-		this.ctx = this.overlay.getContext("2d");
 
 		this.panel = new SearchPanel(host.body, {
 			query: (text) => this.startSearch(text),
@@ -397,6 +395,12 @@ export class PdfReading {
 		this.prefetchVisible();
 	}
 
+	private dropOverlay(): void {
+		this.overlay?.remove();
+		this.overlay = null;
+		this.ctx = null;
+	}
+
 	private requestDraw(): void {
 		if (this.drawFrame || this.destroyed) return;
 		this.drawFrame = window.requestAnimationFrame(() => {
@@ -406,25 +410,23 @@ export class PdfReading {
 	}
 
 	private draw(): void {
-		const ctx = this.ctx;
-		if (!ctx || this.destroyed) return;
+		if (this.destroyed) return;
 		const doc = this.host.doc();
 		const layout = this.host.layout();
 		if (!doc || !layout || !this.searchOpen || this.hits.length === 0) {
-			// Nothing to mark: give the bitmap back (a full-size canvas costs memory on a phone).
-			if (this.overlay.width !== 1 || this.overlay.height !== 1) {
-				this.overlay.width = 1;
-				this.overlay.height = 1;
-			}
+			this.dropOverlay();
 			return;
 		}
+		const overlay = this.overlay ?? (this.overlay = this.host.stage.createEl("canvas", { cls: "notebook-reading-overlay", attr: { "aria-hidden": "true" } }));
+		const ctx = this.ctx ?? (this.ctx = overlay.getContext("2d"));
+		if (!ctx) return;
 		const size = this.host.viewSize();
 		const dpr = window.devicePixelRatio || 1;
 		const w = Math.max(1, Math.round(size.width * dpr));
 		const h = Math.max(1, Math.round(size.height * dpr));
-		if (this.overlay.width !== w || this.overlay.height !== h) {
-			this.overlay.width = w;
-			this.overlay.height = h;
+		if (overlay.width !== w || overlay.height !== h) {
+			overlay.width = w;
+			overlay.height = h;
 		}
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.clearRect(0, 0, w, h);
@@ -535,7 +537,7 @@ export class PdfReading {
 		if (this.drawFrame) window.cancelAnimationFrame(this.drawFrame);
 		this.panel.destroy();
 		this.banner.remove();
-		this.overlay.remove();
+		this.dropOverlay();
 		this.host.toolbar.readingEl.empty();
 		this.host.toolbar.highlighterOptionsEl.empty();
 		this.cache.clear();

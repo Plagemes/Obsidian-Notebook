@@ -47,7 +47,8 @@ export async function checkReading(api: ReadingCheckApi): Promise<{ ok: boolean;
 		return [(vp.offsetX + x * vp.scale) / r.width, (vp.offsetY + y * vp.scale) / r.height];
 	};
 	const overlayPixels = (): number => {
-		const c = document.querySelector(".notebook-reading-overlay") as HTMLCanvasElement;
+		const c = document.querySelector(".notebook-reading-overlay") as HTMLCanvasElement | null;
+		if (!c) return 0;
 		const d = c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data;
 		let n = 0;
 		for (let i = 3; i < d.length; i += 4) if (d[i]! > 0) n++;
@@ -58,7 +59,7 @@ export async function checkReading(api: ReadingCheckApi): Promise<{ ok: boolean;
 		return strokes[strokes.length - 1];
 	};
 
-	add("the reading tools are in the view", !!reading && !!document.querySelector(".notebook-reading-overlay") && !!document.querySelector(".notebook-search"));
+	add("the reading tools are in the view", !!reading && !!document.querySelector(".notebook-search") && !!document.querySelector(".notebook-reading-banner"));
 	const entries = [...document.querySelectorAll(".notebook-more .notebook-menu-item")].filter((b) => getComputedStyle(b).display !== "none").map((b) => b.textContent ?? "");
 	add("the more menu offers search, hide annotations and dim", ["Search PDF text", "Hide annotations", "Dim backgrounds"].every((l) => entries.some((e) => e.includes(l))), entries.join(" | "));
 	/** The content of the notebook (the modification time moves with every save and is not compared). */
