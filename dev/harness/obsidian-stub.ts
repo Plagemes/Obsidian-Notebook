@@ -824,6 +824,9 @@ export const Platform = {
 };
 
 export async function loadPdfJs(): Promise<never> {
+	// `doc=pdf` installs a fake library (fake-pdf.ts); otherwise there is no pdf.js in the harness.
+	const fake = (globalThis as { __harnessPdfJs?: unknown }).__harnessPdfJs;
+	if (fake) return fake as never;
 	throw new Error("pdf.js is not available in the harness");
 }
 
