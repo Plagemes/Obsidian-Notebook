@@ -15,12 +15,12 @@ Accepted and documented costs:
 - Native search, tags and backlinks do not see notebooks (until M4).
 - **Obsidian Sync** syncs unknown extensions only with the "Sync all other types" option enabled (stated in the README). Syncthing and USB copy have no limits.
 
-## 2. JSON schema v6
+## 2. JSON schema v7
 
 ```json
 {
   "format": "obsidian-notebook",
-  "version": 6,
+  "version": 7,
   "id": "6f1c…",
   "createdAt": "2026-10-29T14:30:00.000Z",
   "modifiedAt": "2026-10-29T14:42:10.000Z",
@@ -72,6 +72,17 @@ Added in v6 (optional, written only when present):
 |---|---|---|
 | page | `margins` | `{ left, right, bottom }` in pt, each ≥ 0: blank space added around the background (#104). The background is drawn in the box `x = left, y = 0, width = width − left − right, height = height − bottom` (`backgroundRect` in `model/margins.ts`); without `margins` it fills the page as before. Validation: `left + right < width` and `bottom < height`, so the box keeps a positive size. Key order: after `background`, before `infinite` |
 
+Added in v7 (optional, written only when present):
+
+| Where | Field | Meaning |
+|---|---|---|
+| `meta` | `bookmarkInfo` | `{ [pageId]: { title?, color?, category? } }`: details of bookmarks (#15, #85). Which pages are bookmarked stays in `meta.bookmarks`; details exist only for ids in it (others are dropped on read and write) and an entry with no field is dropped. `title` and `category` are strings (whitespace collapsed, trimmed, at most 200 / 60 characters, empty = absent); `color` is `#rrggbb`. Built-in categories are `"important"` and `"review"` (shown translated), any other string is a custom category. Written at the end of the meta line, entries in bookmark order, fields in the order title, color, category. A key `__proto__` is never stored. Helpers in `model/bookmarks.ts` |
+| page | `tags` | array of strings (#119): leading `#` removed, whitespace collapsed, trimmed, at most 64 characters, case-insensitive duplicates removed (first spelling kept), at most 50; an empty list is absent. Key order: right after `paper`. Helpers and the `SetPageTags` command in `model/page-tags.ts` |
+| document | `position` | `{ page, y?, at }` (#125): where the notebook was last read — page id, page y (pt, rounded to 0.01, only when > 0) at the top of the view, ISO time. Dropped (not rejected) when its page is not in the document. Key order: after `meta`, before `assets`. Not part of the undo history. Written only together with a content save: `DocumentSession` calls the `beforeSerialize` hook just before the first serialization of a changed revision (by the journal or by the save), never for a flush without changes, so reading or scrolling alone never writes the file and two devices that only read never fight; when both edit, the last writer wins. `model/position.ts`, `view/position-sync.ts` |
+| page | `paper.kind` | new kinds `cornell`, `music`, `isometric`, `hexagonal`, `calligraphy`, `planner-day`, `planner-week` (#73), see "Paper and page sizes" |
+
+**Where a notebook starts (v7).** A page asked for explicitly (a `#p3` link, a library search hit, *Continue last notebook*) always wins. The workspace layout stores the page in view with `pageAt`, the time it was in view; on a layout restore the stored `position` wins only when its `at` is later (another device read and saved the notebook afterwards). Opening without a page starts at the stored position. Only the first load of a file applies this; a reload after a sync change keeps the view where it is.
+
 Drawing order of a page: page colour, background (PDF page or image), paper pattern (none by default on PDF and scanned pages), images, text, ink.
 
 Unknown fields are ignored on read. Every schema change increments `version` and adds a tested migration (`src/model/migrations.ts`).
@@ -84,7 +95,8 @@ Unknown fields are ignored on read. Every schema change increments `version` and
 - **v3 → v4** (M3): adds `meta` (`tags`, `favorite`, `cover`, `bookmarks`) and `assets` (keyed by lowercase-hex id) to the document; `background`, `elements` (text and image) and `infinite` to pages, written only when present; and the stroke tool `shape`. Migration: default meta (`DEFAULT_META`), empty assets; a pre-v4 file that already contains `shape` is rejected. Validation: asset references (page backgrounds, image elements) must resolve to an asset of the right kind; ids are unique across strokes and elements; `meta.tags` are de-duplicated and `meta.bookmarks` filtered to existing pages on read and on write. Order of keys: `meta`, `assets` before `pages`; per page `background`, `infinite`, `elements`, `strokes`. `serializeChecked` validates meta, assets, backgrounds and elements on every save, also on the incremental path.
 - **v4 → v5**: adds the required per-stroke `render` field (`1` = `RENDER_FREEHAND`, `2` = `RENDER_INK`). Migration: every stroke of every page gets `render: 1`, because every stroke written before v5 was drawn with perfect-freehand and must keep rendering exactly as before; v0→v1 still produces strokes without `render` and the v4→v5 step adds it. `readStroke` rejects a missing `render` or a value other than 1 or 2 (`pages[i].strokes[j].render`). `createStroke` defaults to `RENDER_FREEHAND`, so only a caller that asks for the new engine produces render 2. Key order: `id`, `tool`, `color`, `width`, `render`, `points`.
 - **v5 → v6** (PDF wave p1a): adds the optional page field `margins`. Migration: the identity plus `version: 6`; a `margins` key already present in a v5 file is dropped, because a v5 reader ignored it (it was never ours and never had an effect). No other field changes, so every valid v5 document is a valid v6 document without margins. A 0.4.x plugin opens a v6 file read-only (future version) with a backup and never rewrites it, so margins cannot be lost by an older version saving over them.
-- **Compatibility**: a plugin that supports an older version sees a newer `version` as a future version, so it opens the file read-only (and keeps a backup copy of it, as for any file it cannot edit) and never rewrites it. Once 0.2 has saved a file, 0.1.x cannot edit it; once 0.3 has saved a file, 0.2.x cannot edit it; once 0.4.0 has saved a file (v5), 0.3.x and earlier open it read-only.
+- **v6 → v7** (wave 0.6): adds the optional `meta.bookmarkInfo`, page `tags`, document `position` and seven paper kinds. Migration: the identity plus `version: 7`, except that `meta.bookmarkInfo`, `position` and page `tags` keys already present in a v6 file are dropped (a v6 reader ignored them: they were never ours), and a pre-v7 file whose page uses one of the new paper kinds is rejected (a v6 reader rejected it, so no version of this plugin wrote it; like `shape` before v4). Every valid v6 document is a valid v7 document without the new fields. Paths that copy pages or metadata keep the new fields: `cloneMeta` (so `SetMeta` and library patches), `duplicatePage` (tags; the bookmark stays with the original page id), page restore (*replace* unites the tags of the current page and of the version, *insert* copies the version's), conflicted-copy merge (page tags of common pages united; bookmark details of the main notebook win, the copy's are taken where the main has none; the main position is kept; `mergeCovers` also checks page tags, bookmarks and their details), repair (line scan reads the `tags` and `position` lines; tags keep their string entries, bookmark details keep their valid fields per entry, a position whose page was not recovered is dropped) and the companion note (details are not properties). A 0.5.x plugin opens a v7 file read-only with a backup.
+- **Compatibility**: a plugin that supports an older version sees a newer `version` as a future version, so it opens the file read-only (and keeps a backup copy of it, as for any file it cannot edit) and never rewrites it. Once 0.2 has saved a file, 0.1.x cannot edit it; once 0.3 has saved a file, 0.2.x cannot edit it; once 0.4.0 has saved a file (v5), 0.3.x and earlier open it read-only; once a v7 version has saved a file, 0.5.x opens it read-only.
 
 **Stroke rendering parameters** of `render: 1` (perfect-freehand) are code constants; the per-stroke `render` field selects the geometry, it does not carry parameters:
 - pen (`PEN_V1`): `size = width`, `thinning 0.6`, `smoothing 0.5`, `streamline 0.35`, `simulatePressure false`, round caps. Unchanged since v1;
@@ -103,8 +115,15 @@ Both are per page, so one notebook can mix them. Constants are in `model/types.t
 | `grid` | 5 mm (14.17 pt) | vertical and horizontal lines every `spacing` |
 | `dotted` | 5 mm | a dot at every grid intersection |
 | `millimetre` | 1 mm | lines every `spacing`; every 10th (10 mm) is a major line, drawn darker |
+| `cornell` (v7) | 8 mm | ruled lines every `spacing` from 3 × `spacing`; a major title line at 2 × `spacing`, a major summary line at 80 % of the height and a margin-coloured cue-column line at 30 % of the width between them |
+| `music` (v7) | 2 mm (gap between staff lines) | staves of five lines (outer two major, inner three minor) from 15 mm, one every 10 × `spacing`, 12 mm from the sides, 10 mm free at the bottom |
+| `isometric` (v7) | 5 mm (triangle side) | vertical lines every `spacing` × √3/2 and lines at ±30° through the same lattice (all minor) |
+| `hexagonal` (v7) | 4 mm (hexagon side) | flat-top honeycomb; every edge drawn once (each hexagon draws three edges); minor; at most 200,000 hexagons walked |
+| `calligraphy` (v7) | 6 mm (x-height) | groups of ascender (0.8), waist, baseline (major) and descender (0.8) lines, 0.6 x-height apart; slant guides at 55° every 2 x-heights inside each group (minor) |
+| `planner-day` (v7) | 8 mm (row) | major title line at 3 rows; rows to the bottom, every second (hour) major across the schedule (62 % of the width) and minor in the notes column; a margin-coloured time column at 20 mm and a major line between schedule and notes |
+| `planner-week` (v7) | 6 mm (ruling) | major title line at 3 rows and a bottom line; eight boxes (seven days and notes), 2 × 4 on a portrait page and 4 × 2 on a landscape one, with major borders and minor ruling inside |
 
-Lines and dots are never drawn on the page edge. `paperPattern(page, visible, { includeMinor })` is pure (no canvas): it returns lines (`minor` / `major` / `margin`) and dots in page coordinates, limited to the visible rectangle. The canvas renderer (`drawPaper`) and both exporters use it, with shared colours (`PAPER_COLORS`), so screen and export show the same pattern. On screen, minor lines and dots are left out when they would be closer than about 3 CSS px (`minorVisible`), which keeps millimetre paper cheap and readable when zoomed out; major and margin lines stay. Exports always draw the full pattern.
+The v7 kinds are built in `ink/paper-kinds.ts` (segments clipped to the page, only those crossing the visible rectangle, none on the page edge) and returned by the same `paperPattern`, so the canvas, thumbnails, PDF and SVG exports, the new-notebook dialog, the default-paper setting and the page menu offer them without further code. Lines and dots are never drawn on the page edge. `paperPattern(page, visible, { includeMinor })` is pure (no canvas): it returns lines (`minor` / `major` / `margin`) and dots in page coordinates, limited to the visible rectangle. The canvas renderer (`drawPaper`) and both exporters use it, with shared colours (`PAPER_COLORS`), so screen and export show the same pattern. On screen, minor lines and dots are left out when they would be closer than about 3 CSS px (`minorVisible`), which keeps millimetre paper cheap and readable when zoomed out; major and margin lines stay. Exports always draw the full pattern.
 
 Page size presets (portrait, pt): A4 595.28 × 841.89, A5 419.53 × 595.28, Letter 612 × 792. Landscape swaps width and height; there is no stored orientation field, it follows from `width > height`. The format accepts any positive `width` and `height`; the UI offers only the presets, plus the size of imported PDF pages and of scanned or image pages (custom sizes are not implemented).
 
@@ -120,7 +139,7 @@ src/
   settings.ts             settings types and defaults (paper, size, input, stabilization, predicted ink, version history)
   i18n.ts                 UI strings: English, Italian when Obsidian's language is Italian
   model/                  (does not import 'obsidian')
-    types.ts              Document, Page, Stroke, elements, assets, meta, Tool, Paper, page margins, page size presets, CURRENT_VERSION (6)
+    types.ts              Document, Page, Stroke, elements, assets, meta, Tool, Paper, page margins, page tags, bookmark details, reading position, page size presets, CURRENT_VERSION (7)
     document.ts           document/page/stroke creation (size and paper as parameters), ids, quantization
     pages.ts              duplicatePage(): copy of a page with new page and stroke ids
     page-content.ts       SetPageContent command and pageContentCommand(): replace the strokes/elements of several pages (and append pages) in one undo step
@@ -131,7 +150,11 @@ src/
     serialize.ts          deterministic serialize(), parse() with validation and migrations, serializeChecked() (save check), freezeStroke()
     migrations.ts         chain of vN → vN+1 migrations (v0→v1 … v5→v6)
     lecture-pack.ts       lecture pack page plans: slide geometry, notes layouts, notes page after every slide, stored options (pure)
+    migrations.ts         chain of vN → vN+1 migrations (v0→v1 … v6→v7)
     margins.ts            page margins (v6): background box, size and resize rules, translating strokes and elements
+    page-tags.ts          page tags (v7): normalisation, input parsing, counts, union, SetPageTags command
+    position.ts           reading position (v7): normalisation, position of the view, start-page choice
+    bookmarks.ts          bookmark details (v7): set / patch / remove, outline entries, categories and colours
     history.ts            command-stack undo/redo (strokes, pages, paper/size, elements, meta, assets, infinite, Batch)
     companion-content.ts  companion note (O1): document → properties, tags and generated Markdown region; merge with the user's edits (pure)
     tags.ts               shared tags (O2): Obsidian-style normalisation, suggestions, the merge rule for the companion note's `tags` (pure)
@@ -139,6 +162,7 @@ src/
   ink/                    (does not import 'obsidian')
     viewport.ts           screen ↔ page transform, fit-width, zoom around a point (scale 0.25–8), pan
     paper.ts              paper pattern geometry (lines and dots in page coordinates) and paper colours (pure)
+    paper-kinds.ts        geometry of the v7 papers (Cornell, music, isometric, hexagonal, calligraphy, planners), pure
     export-svg.ts         page → standalone SVG string, images as data URLs (pure)
     export-pdf.ts         pages → PDF bytes, dependency-free writer, JPEG images (pure)
     layout.ts             pages stacked vertically: boxes, page at a point, nearest and visible pages
@@ -176,7 +200,7 @@ src/
     pointer-controller.ts Pointer Events: pointerrawupdate/coalesced/predicted into typed-array buffers, capture, pan, pinch, fling inertia
   storage/
     format.ts             the notebook container: which files are notebooks and how their text is read and written (only place that knows `.notebook`)
-    session.ts            document lifecycle: load, dirty, debounce, flush, conflicts, journal hook; timed work waits for the pen (pure, testable)
+    session.ts            document lifecycle: load, dirty, debounce, flush, conflicts, journal hook, beforeSerialize hook (v7 position); timed work waits for the pen (pure, testable)
     journal.ts            instant save journal: slots, entries (snapshot or line diff), fingerprints, replay (pure)
     history.ts            version history helpers: snapshot names, retention, timing, restore guards (pure)
     conflicts.ts          names of conflicted copies made by sync clients (pure)
@@ -187,7 +211,7 @@ src/
     notebooks.ts          notebook creation in the configured folder
     companion-path.ts     companion note settings and location (next to the notebook / mirrored in a folder, name template) (pure)
   library/
-    index.ts              library index: entries, queries (scope, search with snippets, sort), staleness (pure)
+    index.ts              library index (v3): entries with page tags, queries (scope, search over titles, tags, page tags and text with snippets, sort), staleness (pure)
     scan.ts               entries from documents (metadata, text for search), cover colours, tag parsing (pure)
     folders.ts            folder tree, reserved folders `_assets`, `_backup`, `_trash`, `_templates` (pure)
     host-logic.ts         index file path, notebook metadata patches, document id patch (pure)
@@ -247,7 +271,9 @@ src/
     favourites.ts         pure: favourite pens (6 slots), eraser size presets and radius (no obsidian import, unit-tested)
     pen-controls.ts       toolbar slots for favourite pens, eraser size and pen-only; eraser circle on the stage (passive listeners, outside the writing pipeline)
     commands.ts           tool and action commands (checkCallback, no default hotkeys), registered from main.ts
-    navigator.ts          the Pages panel: thumbnails, jump, drag to reorder, bookmarks
+    navigator.ts          the Pages panel: thumbnails, jump, drag to reorder, bookmarks, page-tag filter, outline mode
+    outline.ts            outline list, bookmark editor (title, colour, category), page tags editor, page-menu items (v7)
+    position-sync.ts      reading position glue: `pageAt` in the view state, start position of a fresh load (pure)
     media.ts              PDF pages, images and scans for the renderer and exports; asset storage
     selection-actions.ts  floating bar over the lasso selection: restyle, copy, cut, duplicate, paste, white to transparent
     stamp-palette.ts      stamp palette over the page area: built-in and personal stamps, tap or drag to place, save / rename / delete (#142)

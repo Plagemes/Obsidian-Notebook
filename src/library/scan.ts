@@ -1,4 +1,5 @@
 /** Pure helpers to decide what to read and to turn a document into index fields. No 'obsidian'. */
+import { normalizePageTags } from "../model/page-tags";
 import { DEFAULT_META, type NotebookDocument } from "../model/types";
 import { folderOf, nameOf, type LibraryEntry, type LibraryIndex } from "./index";
 
@@ -49,7 +50,18 @@ export function extractText(doc: NotebookDocument, cap = TEXT_CAP): { text: stri
 	return { text, textPages };
 }
 
-export type DocumentFields = Pick<LibraryEntry, "pages" | "tags" | "favorite" | "cover" | "created" | "modified" | "text" | "textPages">;
+export type DocumentFields = Pick<LibraryEntry, "pages" | "tags" | "favorite" | "cover" | "created" | "modified" | "text" | "textPages" | "pageTags">;
+
+/** v7 page tags for the index: the pages that have tags (0-based), with their tags. */
+export function extractPageTags(doc: NotebookDocument): Array<{ page: number; tags: string[] }> {
+	const out: Array<{ page: number; tags: string[] }> = [];
+	const pages = Array.isArray(doc.pages) ? doc.pages : [];
+	pages.forEach((p, page) => {
+		const tags = normalizePageTags(Array.isArray(p?.tags) ? p.tags : undefined);
+		if (tags) out.push({ page, tags });
+	});
+	return out;
+}
 
 function time(v: unknown, fallback: number): number {
 	const ms = typeof v === "string" ? Date.parse(v) : NaN;
@@ -71,8 +83,10 @@ export function metaFromDocument(doc: NotebookDocument, fallbackTime = 0): Docum
 	}
 	const created = time(doc.createdAt, fallbackTime);
 	const { text, textPages } = extractText(doc);
+	const pageTags = extractPageTags(doc);
 	return {
 		...(text ? { text, textPages } : {}),
+		...(pageTags.length > 0 ? { pageTags } : {}),
 		pages: Array.isArray(doc.pages) ? doc.pages.length : 0,
 		tags,
 		favorite: meta.favorite === true,

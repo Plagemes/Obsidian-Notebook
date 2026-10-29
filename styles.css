@@ -2415,3 +2415,184 @@
 	flex: 1 1 auto;
 	min-width: 0;
 }
+
+
+/* wave 0.6: v7 format — outline (bookmarks with titles, colours, categories) and page tags in the page panel, bookmark editor. */
+.notebook-navigator-header {
+	gap: 2px;
+}
+
+.notebook-navigator-header .notebook-navigator-title {
+	margin-right: auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.notebook-navigator-header .notebook-tool.notebook-hidden {
+	display: none;
+}
+
+.notebook-navigator-header .notebook-tool.is-active {
+	color: var(--interactive-accent);
+}
+
+.notebook-navigator-tagbar {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 8px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.notebook-navigator-tagbar.notebook-hidden {
+	display: none;
+}
+
+.notebook-navigator-tagbar-text {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.notebook-navigator-caption {
+	margin-top: 2px;
+	font-size: var(--font-ui-smaller);
+	line-height: 1.3;
+}
+
+.notebook-navigator-caption-title {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: var(--font-semibold);
+}
+
+.notebook-navigator-caption-tags {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-accent);
+}
+
+.notebook-navigator-star.is-active {
+	color: var(--notebook-bookmark-color, var(--interactive-accent));
+}
+
+.notebook-outline-bar {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-bottom: 6px;
+}
+
+.notebook-outline-bar .notebook-outline-category {
+	flex: 1 1 auto;
+	min-width: 0;
+	max-width: 100%;
+	font-size: var(--font-ui-smaller);
+}
+
+.notebook-outline-bar .notebook-tool {
+	margin-left: auto;
+	min-width: 32px;
+	min-height: 32px;
+}
+
+.notebook-outline-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 40px;
+	margin-bottom: 4px;
+	padding: 4px 2px 4px 6px;
+	border-radius: var(--radius-m);
+	cursor: pointer;
+	touch-action: pan-y;
+}
+
+.notebook-outline-row:hover {
+	background: var(--background-modifier-hover);
+}
+
+.notebook-outline-row.is-current {
+	background: var(--background-modifier-active-hover);
+}
+
+.notebook-outline-dot {
+	flex: 0 0 auto;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: var(--notebook-bookmark-color, var(--interactive-accent));
+}
+
+.notebook-outline-text {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.notebook-outline-title {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--font-ui-small);
+}
+
+.notebook-outline-category-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.notebook-outline-page {
+	flex: 0 0 auto;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.notebook-outline-more {
+	flex: 0 0 auto;
+	min-width: 28px;
+	min-height: 28px;
+}
+
+.notebook-bookmark-swatches {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 6px;
+}
+
+.notebook-bookmark-swatch {
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: 2px solid var(--background-modifier-border);
+	border-radius: 50%;
+	background: var(--notebook-bookmark-color, var(--interactive-accent));
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.notebook-bookmark-swatch.is-default {
+	background:
+		linear-gradient(135deg, transparent 45%, var(--background-primary) 45%, var(--background-primary) 55%, transparent 55%),
+		var(--notebook-bookmark-color, var(--interactive-accent));
+}
+
+.notebook-bookmark-swatch.is-active {
+	border-color: var(--text-normal);
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 1px;
+}
+
+.setting-item.notebook-hidden {
+	display: none;
+}

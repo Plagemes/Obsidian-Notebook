@@ -60,6 +60,9 @@ import { exportPdf, exportSvg } from "./export";
 import { policySettings } from "./input-settings";
 import { NotebookMedia, storeAsset } from "./media";
 import { PageNavigator } from "./navigator";
+import { addOutlinePageMenuItems, type OutlineHost } from "./outline";
+import { PAGE_AT_KEY, pageAtFromState, pageState, startPosition } from "./position-sync";
+import { positionAt, updatePosition } from "../model/position";
 import { LocationKeeper } from "./last-location";
 import { GestureInput } from "./gesture-input";
 import { PenRadial } from "./radial-menu";
@@ -365,6 +368,7 @@ export class NotebookView extends FileView {
 			move: (from, to) => this.movePage(from, to),
 			toggleBookmark: (pageId) => this.toggleBookmarkOf(pageId),
 			pageMenu: (index, evt) => this.openPageMenu(evt, index),
+			outline: this.outlineHost(),
 		});
 		// The panel sits to the left of the page (a drawer over it on narrow views).
 		this.body.insertBefore(this.pageNav.el, this.stage);
@@ -503,17 +507,22 @@ export class NotebookView extends FileView {
 
 	/** Page (1-based) requested by the view state, applied once the document is loaded. */
 	private pendingPage: number | null = null;
+	/** wave 0.6 (v7): when the reader was on `pendingPage` (workspace layout), null for an explicit request. */
+	private pendingAt: string | null = null;
+	/** wave 0.6 (v7): the next load is the first one of this file, so it may start at the stored reading position. */
+	private startPending = false;
 
-	/** The page being read goes into the workspace layout, so reopening Obsidian shows the same page. */
+	/** The page being read (and, v7, when) goes into the workspace layout, so reopening Obsidian shows the same page. */
 	getState(): Record<string, unknown> {
 		const state = super.getState();
+		if (this.pendingPage !== null) return { ...state, page: this.pendingPage, ...(this.pendingAt ? { [PAGE_AT_KEY]: this.pendingAt } : {}) };
 		const total = this.session?.doc?.pages.length ?? 0;
-		const page = this.pendingPage ?? (total > 0 ? this.currentPageIndex() + 1 : null);
-		return page !== null ? { ...state, page } : state;
+		return total > 0 ? { ...state, ...pageState(this.currentPageIndex() + 1, new Date()) } : state;
 	}
 
 	async setState(state: unknown, result: ViewStateResult): Promise<void> {
 		this.pendingPage = pageFromState(state);
+		this.pendingAt = this.pendingPage !== null ? pageAtFromState(state) : null;
 		await super.setState(state, result);
 		// Already loaded (the same file was shown): jump now; otherwise onDocumentLoaded applies it.
 		if (this.pendingPage !== null && this.layout) this.applyPendingPage();
@@ -525,6 +534,7 @@ export class NotebookView extends FileView {
 		const page = pageFromEphemeralState(state);
 		if (page === null) return;
 		this.pendingPage = page;
+		this.pendingAt = null;
 		if (this.layout) this.applyPendingPage();
 	}
 
@@ -533,11 +543,34 @@ export class NotebookView extends FileView {
 		const page = this.pendingPage;
 		if (page === null || !doc || !this.layout) return;
 		this.pendingPage = null;
+		this.pendingAt = null;
 		this.scrollToPage(Math.min(doc.pages.length, Math.max(1, page)) - 1);
+	}
+
+	/** wave 0.6 (v7): the first load of a file starts at the requested page or at the stored reading position. */
+	private applyStartPosition(): void {
+		const doc = this.session?.doc;
+		if (!this.startPending || !doc || !this.layout) return this.applyPendingPage();
+		this.startPending = false;
+		const start = startPosition(doc, this.pendingPage, this.pendingAt);
+		this.pendingPage = null;
+		this.pendingAt = null;
+		if (start) this.scrollToPage(start.index, start.y);
+	}
+
+	/** wave 0.6 (v7): stores where the reader is, just before a content save serializes (DocumentSession.beforeSerialize). */
+	private storePosition(doc: NotebookDocument): void {
+		if (!this.layout || doc !== this.session?.doc || this.pendingPage !== null) return;
+		const index = this.currentPageIndex();
+		const box = this.layout.boxes[index];
+		if (!box) return;
+		const top = screenToPage(this.viewport, 0, 0)[1];
+		updatePosition(doc, positionAt(doc, index, top - box.y, new Date()));
 	}
 
 	async onLoadFile(file: TFile): Promise<void> {
 		await super.onLoadFile(file);
+		this.startPending = true;
 		this.lastBackupPath = null;
 		this.fitMode = true;
 		this.viewport = { scale: 1, offsetX: 0, offsetY: 0 };
@@ -572,6 +605,7 @@ export class NotebookView extends FileView {
 				busy: () => this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null
 					|| this.textEditor?.isOpen === true,
 				journal: this.host.journal,
+				beforeSerialize: (doc) => this.storePosition(doc),
 			},
 		);
 		this.session = session;
@@ -796,9 +830,12 @@ export class NotebookView extends FileView {
 		void askExercisePaper(this.app);
 	}
 
-	private scrollToPage(index: number): void {
+	/** Shows page `index` from its top, or (v7 reading position) with page y `y` at the top of the view. */
+	private scrollToPage(index: number, y = 0): void {
 		const box = this.layout?.boxes[index];
-		if (box) this.setViewport({ ...this.viewport, offsetY: PAGE_MARGIN - box.y * this.viewport.scale });
+		if (!box) return;
+		const offsetY = y > 0 ? -(box.y + y) * this.viewport.scale : PAGE_MARGIN - box.y * this.viewport.scale;
+		this.setViewport({ ...this.viewport, offsetY });
 	}
 
 	private goToPage(index: number): void {
@@ -834,6 +871,7 @@ export class NotebookView extends FileView {
 			.onClick(() => this.pageCommand(new MovePage(page.id, index, index + 1), index + 1, page)));
 		const marked = doc.meta?.bookmarks.includes(page.id) ?? false;
 		menu.addItem((i) => i.setTitle(t(marked ? "page.unbookmark" : "page.bookmark")).setIcon("bookmark").onClick(() => this.toggleBookmarkOf(page.id)));
+		addOutlinePageMenuItems(menu, this.outlineHost(), page);
 		menu.addItem((i) => i.setTitle(t("page.moveToNotebook")).setIcon("folder-input").onClick(() => void this.movePagesToNotebook(index)));
 		menu.addItem((i) => i.setTitle(t("page.delete")).setIcon("trash-2").setSection("danger").setDisabled(doc.pages.length <= 1)
 			.onClick(() => {
@@ -907,6 +945,18 @@ export class NotebookView extends FileView {
 		const before = doc.meta ?? cloneMeta(DEFAULT_META);
 		this.history.execute(new SetMeta(before, toggleBookmark(before, pageId)));
 		this.afterHistoryChange();
+	}
+
+	/** wave 0.6 (v7): what the outline, the bookmark editor and the page tags editor need (outline.ts). */
+	private outlineHost(): OutlineHost {
+		return {
+			app: this.app,
+			pages: () => this.session?.doc?.pages ?? [],
+			meta: () => this.session?.doc?.meta,
+			canEdit: () => this.editableDocument() !== null,
+			execute: (cmd) => void this.applyCommand(cmd),
+			goTo: (index) => this.goToPage(index),
+		};
 	}
 
 	private setPaper(page: Page, kind: PaperKind, index: number): void {
@@ -1363,7 +1413,7 @@ export class NotebookView extends FileView {
 			this.refit(true);
 			this.pageNav?.invalidate();
 			if (this.tools.ruler) this.placeRuler();
-			this.applyPendingPage();
+			this.applyStartPosition();
 			if (this.file) this.location.note(this.file.path, this.currentPageIndex() + 1);
 			void checkConflicts(this.reliabilityDeps(), this);
 			this.syncHooks?.loaded();

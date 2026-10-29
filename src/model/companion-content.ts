@@ -155,6 +155,8 @@ export function companionContent(doc: NotebookDocument, ctx: CompanionContext): 
 			if (numbers.length > 0) properties[key] = numbers;
 			continue;
 		}
+		// v7 bookmark details (titles, colours, categories) belong to the outline, not to the note's properties.
+		if (key === "bookmarkInfo") continue;
 		const value = propertyValue(raw);
 		if (value !== null) properties[key] = value;
 	}

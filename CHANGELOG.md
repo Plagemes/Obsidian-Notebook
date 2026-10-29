@@ -76,6 +76,17 @@ Not yet verified on Android hardware (see `docs/testing.md`, steps R1-R5). No ch
   - **Highlighter that snaps to the text lines** (#43): the highlighter's options have *Snap to text lines* (off by default). When on, a highlighter stroke over PDF text is replaced at pen-up by straight highlighter strokes, one per line of text it crossed, covering the words it covers (a word counts when at least 40% of it is under the stroke) and as high as the line. They are ordinary highlighter strokes (vector, page coordinates) in the same undo step; a stroke that is not near any text, or made before the page's text was read, stays as drawn. Rotated text is not snapped.
   - **Show or hide all annotations** (#188): command *Show or hide annotations on PDF pages* and a "…" menu entry hide the ink and text boxes on PDF pages (other pages keep theirs) to reread the clean PDF. View only: nothing is saved or changed, editing and the toolbar are off while hidden (a finger still scrolls and zooms), and a banner says so and has the button that shows everything again. Exports, thumbnails and embeds still contain the annotations.
   - **Dim the background** (#199): command *Dim PDF and image backgrounds* and a "…" menu entry with a strength slider (10-80%) draw PDF and image backgrounds lighter so the ink stands out. Kept in the plugin settings (`dimBackground`, `dimStrength`), per device. Exports, thumbnails and embeds are not dimmed (they show the notebook, not one reader's screen); there is no export option for it yet.
+Not yet verified on Android hardware (see `docs/testing.md`, steps V1–V4).
+
+### Added
+- **Outline with coloured bookmarks** (#15, #85): the Pages panel has an outline mode listing the bookmarked pages in page order with a title, a colour and a category (*Important*, *To review* or a custom one), a category filter and a button to bookmark the page in view; tap a row to jump, its menu edits (rename, recolour, category) or deletes the bookmark. The page menu has *Edit bookmark…*. Thumbnails show the bookmark title and a star in its colour. Every change is one undo step.
+- **Page tags** (#119): page menu *Page tags…* (with the tags already used in the notebook as chips); the Pages panel filters by tag; the library search finds page tags and opens the notebook at the tagged page.
+- **Last position shared across devices** (#125): the notebook stores the page and height where it was last read, so another device opens it there. It is written only together with a content save (never on its own, so reading or scrolling does not touch the file and two devices that only read never fight). A link or search hit still opens its page; a restored workspace keeps this device's page unless another device was in the notebook later; *Continue last notebook* keeps this device's page.
+- **More papers** (#73): Cornell, music staff, isometric, hexagonal, calligraphy (slanted guides), daily planner and weekly planner (2 × 4 boxes, 4 × 2 in landscape), in the new-notebook dialog, the default-paper setting, the page menu, thumbnails and PDF/SVG export. Fine lines fade out when zoomed out as on the other papers.
+
+### Changed
+- **Format v7**: optional `meta.bookmarkInfo`, page `tags`, document `position` and the new paper kinds, with a v6 → v7 migration. Files saved with it open read-only (with a backup) in 0.5.x. Duplicate page, page restore, conflicted-copy merge, repair and library edits keep the new fields.
+- The library index is rebuilt once (index version 3) to pick up page tags.
 
 ## 0.5.0 — 2026-10-29
 
