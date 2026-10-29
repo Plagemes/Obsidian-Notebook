@@ -1,31 +1,55 @@
-import { FileView, Menu, Notice, Scope, type TFile, type WorkspaceLeaf } from "obsidian";
+import { FileView, Menu, Notice, Scope, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
+import { pageFromState } from "../integration/links";
+import { scanFromCamera } from "../scan/scan-modal";
+import { scannedPage } from "../scan/pages";
 import { t } from "../i18n";
+import { renderThumbnail } from "../library/thumbnail";
+import { elementsInLasso, hitElement, transformElement } from "../ink/elements";
 import { findHitStrokes, type BBox } from "../ink/hit-test";
+import { growForInfinite } from "../ink/infinite";
 import { InputPolicy } from "../ink/input-policy";
-import { selectionBounds, strokesInLasso, transformStroke } from "../ink/lasso";
-import { layoutPages, nearestPage, pageAt, toPageLocal, type Layout } from "../ink/layout";
-import { PointerController, type InkSample } from "../ink/pointer-controller";
+import { strokesInLasso, transformStroke } from "../ink/lasso";
+import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layout } from "../ink/layout";
+import { HoldTracker } from "../ink/hold";
+import { InkBuilder } from "../ink/ink-geometry";
+import { OneEuroFilter, stabilizationParams } from "../ink/one-euro";
+import { PointerController, type InkSample, type SampleBuffer } from "../ink/pointer-controller";
 import { PressureModel } from "../ink/pressure";
-import { Renderer, selectionHandles } from "../ink/renderer";
+import { recognizeShape } from "../ink/recognize";
+import { drawElement, drawTextElement, measureText, Renderer, selectionHandles } from "../ink/renderer";
+import { projectToRuler, rulerFromTwoTouches, RULER_LENGTH, type Ruler } from "../ink/ruler";
 import { eraseSegment } from "../ink/segment-erase";
-import { Stabilizer } from "../ink/stabilizer";
 import { apply, IDENTITY, invert, isIdentity, multiply, rotateAbout, scaleAbout, translate, type Matrix } from "../ink/transform";
 import { clampToPage, fitWidth, pan, PAGE_MARGIN, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
-import { createId, createPage, createStroke, quantizePoint } from "../model/document";
-import { duplicatePage } from "../model/pages";
+import { cloneMeta, createId, createPage, createStroke } from "../model/document";
+import { createPdfPages, duplicatePage } from "../model/pages";
 import {
-	AddPage, AddStroke, Batch, DeletePage, History, MovePage, removeStrokes, ReplaceStroke, SetPageSize, SetPaper, type Command,
+	AddAsset, AddElement, AddPage, AddStroke, Batch, DeletePage, History, InsertPages, MovePage, RemoveElement, ReplaceElement,
+	ReplaceStroke, SetMeta, SetPageInfinite, SetPageSize, SetPaper, type Command,
 } from "../model/history";
 import { freezeStroke } from "../model/serialize";
 import {
-	FILE_EXTENSION, PAGE_SIZES, PAPER_KINDS, PAPER_SPACING,
-	type NotebookDocument, type Page, type PageSizeName, type PaperKind, type Point, type Stroke,
+	DEFAULT_META, PAGE_SIZES, PAPER_KINDS, PAPER_SPACING,
+	type Asset, type ImageElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type PageSizeName,
+	type PaperKind, type Point, type Stroke, type TextElement, RENDER_FREEHAND, RENDER_INK,
 } from "../model/types";
+import type { JournalStore } from "../storage/journal";
 import { DocumentSession, type SaveState, type SessionMode } from "../storage/session";
+import { isNotebookFile } from "../storage/format";
 import { VaultDocumentIO } from "../storage/vault-io";
 import { backupFolder, type NotebookSettings } from "../settings";
 import { exportPdf, exportSvg } from "./export";
+import { NotebookMedia, storeAsset } from "./media";
+import { PageNavigator } from "./navigator";
+import { askPdfRange } from "./pdf-range-modal";
+import { pickFile } from "./pick";
+import { RulerGesture } from "./ruler-gesture";
+import { TextEditor, type TextEditSession } from "./text-editor";
 import { DEFAULT_TOOLS, Toolbar, type ToolbarState } from "./toolbar";
+import {
+	centredPosition, imageElementSize, imagePageSize, mergeMeta, metaEquals, newTextBox, shapePoints, shouldGrabRuler, toggleBookmark,
+	unionBounds,
+} from "./view-helpers";
 
 export const VIEW_TYPE = "notebook-view";
 
@@ -35,15 +59,49 @@ const ERASER_RADIUS_PX = 10;
 const HANDLE_PX = 22;
 /** A stroke may start this far outside the page (pt). */
 const PAGE_TOLERANCE = 8;
+/** Keeping the pen still this long (ms) at the end of a stroke turns it into a clean shape. */
+const HOLD_MS = 600;
+/** ...within this radius (CSS px). */
+const HOLD_RADIUS_PX = 4;
+/** A pen stroke that starts this close to the ruler edge (CSS px) is projected onto it. */
+const RULER_SNAP_PX = 14;
+/** Pen samples closer than this (CSS px) to the last stored point are not stored. */
+const MIN_STEP_PX = 0.5;
+/** A touch that moves less than this (CSS px) is a tap. */
+const TAP_SLOP_PX = 8;
+/** Below this width (CSS px) the page panel is a drawer over the page instead of a side panel. */
+const NARROW_PX = 720;
+/** PDF pages are rendered at this scale (device px per pt) for thumbnails of pages not in view. */
+const THUMB_PDF_SCALE = 0.75;
+/** Page thumbnails are this many CSS px wide. */
+const THUMB_CSS_WIDTH = 120;
 
 export interface NotebookHost {
 	settings: NotebookSettings;
+	/** Instant save journal shared by all views. */
+	journal?: JournalStore;
 }
 
 interface ActiveStroke {
 	pageIndex: number;
+	/** Style (and, once recognised as a shape, the points); while `wet`, the points are in the view's InkBuilder. */
 	stroke: Stroke;
-	predicted: Point[];
+	/** Written as wet ink: points and geometry live in the InkBuilder until the pen lifts. */
+	wet: boolean;
+	/** Last raw (unfiltered) pen position on the page and its pressure: the tip of the line, and its last point. */
+	rawX: number;
+	rawY: number;
+	rawP: number;
+	/** Samples closer than this (pt) to the last stored point are not stored (the tip still follows the pen). */
+	minStep: number;
+	/** Points are projected onto the ruler edge. */
+	snap: boolean;
+	/** The pen was held still and the stroke was replaced with a clean shape: further movement is ignored. */
+	recognized: boolean;
+	/** Further strokes of a recognised shape (none for the shapes that exist today). */
+	extra: Point[][];
+	/** Where the pen was when recognition last failed (do not retry until it moves). */
+	tried: { x: number; y: number } | null;
 }
 
 interface ActiveErase {
@@ -57,10 +115,26 @@ interface Lasso {
 	points: Array<[number, number]>;
 }
 
+interface ShapeDrag {
+	pageIndex: number;
+	a: [number, number];
+	b: [number, number];
+}
+
+interface TextTap {
+	pageIndex: number;
+	local: [number, number];
+	/** Stage px where the tap started. */
+	x: number;
+	y: number;
+	moved: boolean;
+}
+
 interface Selection {
 	pageIndex: number;
 	strokes: Stroke[];
-	/** Bounds of `strokes` before `matrix`, page coordinates. */
+	elements: PageElement[];
+	/** Bounds of `strokes` and `elements` before `matrix`, page coordinates. */
 	bounds: BBox;
 	/** Transform being dragged, not applied to the document yet. */
 	matrix: Matrix;
@@ -79,15 +153,22 @@ export class NotebookView extends FileView {
 	private readonly history = new History(() => this.requireDoc());
 	private readonly policy: InputPolicy;
 	private readonly pressure: PressureModel;
-	private readonly stabilizer: Stabilizer;
+	/** Position filter (stabilization setting) and the geometry of the stroke being written. */
+	private readonly filter = new OneEuroFilter();
+	private readonly ink = new InkBuilder();
 
 	private toolbar!: Toolbar;
+	private body!: HTMLElement;
 	private stage!: HTMLElement;
 	private messageEl!: HTMLElement;
 	private perfEl!: HTMLElement;
 	private renderer: Renderer | null = null;
 	private controller: PointerController | null = null;
 	private resizeObserver: ResizeObserver | null = null;
+	private media: NotebookMedia | null = null;
+	private pageNav: PageNavigator | null = null;
+	private textEditor: TextEditor | null = null;
+	private rulerGesture: RulerGesture | null = null;
 
 	private viewport: Viewport = { scale: 1, offsetX: 0, offsetY: 0 };
 	private viewSize: Size = { width: 0, height: 0 };
@@ -100,6 +181,20 @@ export class NotebookView extends FileView {
 	private lasso: Lasso | null = null;
 	private selection: Selection | null = null;
 	private drag: SelectionDrag | null = null;
+	private shapeDrag: ShapeDrag | null = null;
+	private textTap: TextTap | null = null;
+	private ruler: { pageId: string; ruler: Ruler } | null = null;
+	private shiftDown = false;
+	private readonly hold = new HoldTracker();
+	private holdTimer: number | null = null;
+	private snapFlashTimer: number | null = null;
+
+	private navTimer: number | null = null;
+	private navCurrent = -1;
+	/** Pages whose thumbnail was drawn without all its media; redrawn when media arrives. */
+	private readonly thumbPending = new Set<string>();
+	private readonly thumbRendering = new Set<string>();
+	private thumbTimer: number | null = null;
 
 	private lastBackupPath: string | null = null;
 	private lastErrorAt = 0;
@@ -109,13 +204,16 @@ export class NotebookView extends FileView {
 	private readonly perfFrames: number[] = [];
 	private readonly perfLatency: number[] = [];
 	private perfShownAt = 0;
+	/** Per input event while writing: processing time and event timestamp → painted (ms). */
+	private readonly perfProcess: number[] = [];
+	private readonly perfPaint: number[] = [];
 
 	constructor(leaf: WorkspaceLeaf, private readonly host: NotebookHost) {
 		super(leaf);
 		const s = host.settings;
 		this.policy = new InputPolicy({ fingerDrawing: s.fingerDrawing, palmRejectionMs: s.palmRejectionMs, palmContactPx: s.palmContactPx });
 		this.pressure = new PressureModel(s.pressureMode);
-		this.stabilizer = new Stabilizer(s.stabilization);
+		this.filter.params = stabilizationParams(s.stabilization);
 	}
 
 	getViewType(): string {
@@ -131,12 +229,17 @@ export class NotebookView extends FileView {
 	}
 
 	canAcceptExtension(extension: string): boolean {
-		return extension === FILE_EXTENSION;
+		return isNotebookFile({ extension });
 	}
 
 	/** Size of the drawing area, for the benchmark. */
 	get stageSize(): Size {
 		return this.viewSize;
+	}
+
+	/** The open document (null while loading or when the file could not be read). Do not mutate it: use commands. */
+	get document(): NotebookDocument | null {
+		return this.session?.doc ?? null;
 	}
 
 	async onOpen(): Promise<void> {
@@ -146,19 +249,41 @@ export class NotebookView extends FileView {
 			change: (state) => this.onToolsChanged(state),
 			undo: () => this.undo(),
 			redo: () => this.redo(),
-			addPage: () => this.addPage(),
-			pageMenu: (evt) => this.openPageMenu(evt),
+			addPage: () => this.addPageAfter(this.currentPageIndex()),
+			pageMenu: (evt) => this.openPageMenu(evt, this.currentPageIndex()),
 			deleteSelection: () => this.deleteSelection(),
 			fit: () => this.fitToWidth(),
+			toggleNavigator: () => this.setNavigatorOpen(!this.pageNav?.open),
+			insertImage: () => void this.insertImageElement(),
 		});
 		this.toolbar.setSelection(false);
-		this.stage = this.contentEl.createDiv({ cls: "notebook-stage" });
+		this.body = this.contentEl.createDiv({ cls: "notebook-body" });
+		this.stage = this.body.createDiv({ cls: "notebook-stage" });
 		this.perfEl = this.stage.createDiv({ cls: "notebook-perf" });
+		this.pageNav = new PageNavigator(this.body, {
+			pages: () => this.session?.doc?.pages ?? [],
+			current: () => this.currentPageIndex(),
+			bookmarks: () => new Set(this.session?.doc?.meta?.bookmarks ?? []),
+			thumbnail: (page, width) => this.thumbnail(page, width),
+			goTo: (index) => this.goToPage(index),
+			move: (from, to) => this.movePage(from, to),
+			toggleBookmark: (pageId) => this.toggleBookmarkOf(pageId),
+			pageMenu: (index, evt) => this.openPageMenu(evt, index),
+		});
+		// The panel sits to the left of the page (a drawer over it on narrow views).
+		this.body.insertBefore(this.pageNav.el, this.stage);
+		this.textEditor = new TextEditor(this.stage);
 		this.messageEl = this.contentEl.createDiv({ cls: "notebook-message" });
 		this.messageEl.hide();
 		this.toolbar.setEditable(false);
 
 		this.renderer = new Renderer(this.stage);
+		// Registered before the pointer controller: the ruler gesture swallows the touches that move the ruler.
+		this.rulerGesture = new RulerGesture(this.stage, {
+			enabled: () => this.tools.ruler && !!this.ruler && this.editable(),
+			grabs: (mid) => this.rulerGrabs(mid),
+			update: (a, b) => this.moveRuler(a, b),
+		});
 		this.controller = new PointerController(this.stage, this.policy, {
 			drawStart: (s, eraser) => this.drawStart(s, eraser),
 			drawMove: (samples, predicted) => this.drawMove(samples, predicted),
@@ -175,11 +300,23 @@ export class NotebookView extends FileView {
 		this.resizeObserver.observe(this.stage);
 		this.registerDomEvent(window, "resize", () => this.measure());
 
+		// Tapping anywhere else ends text editing. Pointer events on the canvas are cancelled, so the textarea would not blur.
+		this.registerDomEvent(this.stage, "pointerdown", (e) => {
+			if (!(e.target as HTMLElement | null)?.closest?.(".notebook-text-editor")) this.commitText();
+		}, true);
+
 		// Android may kill a backgrounded app without notice: save as soon as we are hidden.
 		this.registerDomEvent(document, "visibilitychange", () => {
 			if (document.visibilityState === "hidden") void this.flushNow();
 		});
 		this.registerDomEvent(window, "pagehide", () => void this.flushNow());
+		this.registerDomEvent(document, "keydown", (e) => {
+			if (e.key === "Shift") this.shiftDown = true;
+		});
+		this.registerDomEvent(document, "keyup", (e) => {
+			if (e.key === "Shift") this.shiftDown = false;
+		});
+		this.registerDomEvent(window, "blur", () => (this.shiftDown = false));
 
 		this.registerEvent(this.app.vault.on("modify", (f) => {
 			if (f === this.file && this.session) void this.session.handleExternalChange();
@@ -200,12 +337,42 @@ export class NotebookView extends FileView {
 
 	async onClose(): Promise<void> {
 		await this.closeSession();
+		this.stopHold();
+		for (const timer of [this.navTimer, this.thumbTimer, this.snapFlashTimer]) if (timer !== null) window.clearTimeout(timer);
+		this.navTimer = this.thumbTimer = this.snapFlashTimer = null;
 		this.controller?.destroy();
 		this.controller = null;
+		this.rulerGesture?.destroy();
+		this.rulerGesture = null;
+		this.textEditor?.destroy();
+		this.textEditor = null;
+		this.pageNav?.destroy();
+		this.pageNav = null;
+		this.renderer?.setMedia(null);
+		this.media?.destroy();
+		this.media = null;
 		this.renderer?.destroy();
 		this.renderer = null;
 		this.resizeObserver?.disconnect();
 		this.resizeObserver = null;
+	}
+
+	/** Page (1-based) requested by the view state, applied once the document is loaded. */
+	private pendingPage: number | null = null;
+
+	async setState(state: unknown, result: ViewStateResult): Promise<void> {
+		this.pendingPage = pageFromState(state);
+		await super.setState(state, result);
+		// Already loaded (the same file was shown): jump now; otherwise onDocumentLoaded applies it.
+		if (this.pendingPage !== null && this.layout) this.applyPendingPage();
+	}
+
+	private applyPendingPage(): void {
+		const doc = this.session?.doc;
+		const page = this.pendingPage;
+		if (page === null || !doc || !this.layout) return;
+		this.pendingPage = null;
+		this.scrollToPage(Math.min(doc.pages.length, Math.max(1, page)) - 1);
 	}
 
 	async onLoadFile(file: TFile): Promise<void> {
@@ -225,8 +392,13 @@ export class NotebookView extends FileView {
 				onSaveState: (state) => {
 					if (current()) this.showSaveState(state);
 				},
+				onRecovered: ({ savedAt }) => {
+					const when = new Date(savedAt);
+					new Notice(t("notice.recovered", { time: Number.isNaN(when.getTime()) ? savedAt : when.toLocaleString() }), 8000);
+				},
 				onBackup: (path, reason) => {
-					new Notice(t(reason === "conflict" ? "notice.conflict" : "notice.backup", { path }), 8000);
+					const key = reason === "conflict" ? "notice.conflict" : reason === "journal" ? "notice.journalBackup" : "notice.backup";
+					new Notice(t(key, { path }), 8000);
 					if (!current()) return;
 					this.lastBackupPath = path;
 					if (session.mode === "broken" || session.mode === "readonly") this.showProblem();
@@ -235,7 +407,11 @@ export class NotebookView extends FileView {
 					if (current()) this.showError(message);
 				},
 			},
-			{ busy: () => this.active !== null || this.erasing !== null || this.drag !== null },
+			{
+				busy: () => this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null
+					|| this.textEditor?.isOpen === true,
+				journal: this.host.journal,
+			},
 		);
 		this.session = session;
 		try {
@@ -250,19 +426,34 @@ export class NotebookView extends FileView {
 		this.history.clear();
 		this.clearSelection();
 		this.layout = null;
+		this.ruler = null;
+		this.renderer?.setRuler(null);
 		this.renderer?.setDocument(null, null);
+		this.renderer?.setMedia(null);
+		this.media?.destroy();
+		this.media = null;
+		this.pageNav?.invalidate();
 		await super.onUnloadFile(file);
 	}
 
-	/** Closes the stroke in progress and writes everything to disk. */
-	async flushNow(): Promise<void> {
+	/**
+	 * Closes the stroke in progress and the text box being edited, and writes everything to disk.
+	 * Resolves to true only if nothing is left unsaved in memory (callers such as the history restore
+	 * must not go on when it is false).
+	 */
+	async flushNow(): Promise<boolean> {
 		this.controller?.finishActiveStroke();
-		await this.session?.flush();
+		this.commitText();
+		const session = this.session;
+		if (!session) return true;
+		const written = await session.flush();
+		return written && (session.mode !== "ok" || !session.dirty);
 	}
 
 	/** Final flush (with retries and an "unsaved" backup as last resort), then detaches the session. */
 	private async closeSession(): Promise<void> {
 		this.controller?.finishActiveStroke();
+		this.commitText();
 		const session = this.session;
 		if (!session) return;
 		try {
@@ -283,20 +474,37 @@ export class NotebookView extends FileView {
 			palmContactPx: settings.palmContactPx,
 		};
 		this.pressure.mode = settings.pressureMode;
-		this.stabilizer.level = settings.stabilization;
-		if (this.controller) this.controller.predictionEnabled = settings.prediction;
+		this.filter.params = stabilizationParams(settings.stabilization);
+		if (this.controller) this.controller.predictionEnabled = settings.inkPrediction;
 		this.perfEl?.toggleClass("notebook-hidden", !settings.perfOverlay);
 		if (this.renderer) this.renderer.onFrame = settings.perfOverlay ? (t) => this.onFrame(t) : null;
 	}
 
+	/**
+	 * Changes the notebook metadata (tags, favourite, cover, bookmarks) through the undo history, for the library when
+	 * the notebook is open. Returns false when the document cannot be edited (not loaded, read-only, being drawn on).
+	 */
+	applyMetaPatch(patch: Partial<NotebookMeta>): boolean {
+		const doc = this.session?.doc;
+		if (!doc || !this.editable() || this.controller?.drawing) return false;
+		const before = doc.meta ?? cloneMeta(DEFAULT_META);
+		const after = mergeMeta(before, patch);
+		if (metaEquals(before, after)) return true;
+		this.history.execute(new SetMeta(before, after));
+		this.afterHistoryChange();
+		return true;
+	}
+
 	undo(): void {
 		if (!this.editable() || this.controller?.drawing) return;
+		this.commitText();
 		this.clearSelection();
 		if (this.history.undo()) this.afterHistoryChange();
 	}
 
 	redo(): void {
 		if (!this.editable() || this.controller?.drawing) return;
+		this.commitText();
 		this.clearSelection();
 		if (this.history.redo()) this.afterHistoryChange();
 	}
@@ -308,16 +516,21 @@ export class NotebookView extends FileView {
 
 	/** Inserts a blank page after the one in view and scrolls to it. */
 	addPage(): void {
+		this.addPageAfter(this.currentPageIndex());
+	}
+
+	/** Inserts a blank page (size and paper of the page at `index`) after it. */
+	private addPageAfter(index: number): void {
 		const doc = this.session?.doc;
 		if (!doc || !this.editable() || this.controller?.drawing) return;
+		this.commitText();
 		this.clearSelection();
-		const index = this.currentPageIndex() + 1;
-		// A new page takes the size and paper of the page in view.
-		const like = doc.pages[index - 1];
+		const at = index + 1;
+		const like = doc.pages[index];
 		const page = like ? createPage({ width: like.width, height: like.height }, { ...like.paper }) : createPage();
-		this.history.execute(new AddPage(page, index));
+		this.history.execute(new AddPage(page, at));
 		this.afterHistoryChange();
-		this.scrollToPage(index);
+		this.scrollToPage(at);
 	}
 
 	private scrollToPage(index: number): void {
@@ -325,19 +538,36 @@ export class NotebookView extends FileView {
 		if (box) this.setViewport({ ...this.viewport, offsetY: PAGE_MARGIN - box.y * this.viewport.scale });
 	}
 
-	/** Page menu: reorder, duplicate, delete, paper, size, export. Every change is undoable. */
-	private openPageMenu(evt: MouseEvent): void {
+	private goToPage(index: number): void {
+		this.scrollToPage(index);
+		if (this.body.hasClass("is-narrow")) this.setNavigatorOpen(false);
+	}
+
+	private setNavigatorOpen(open: boolean): void {
+		this.pageNav?.setOpen(open);
+		this.toolbar.setNavigatorOpen(open);
+	}
+
+	/** Page menu: insert, reorder, duplicate, delete, bookmark, paper, size, infinite, export. Every change is undoable. */
+	private openPageMenu(evt: MouseEvent, index: number): void {
 		const doc = this.session?.doc;
 		if (!doc || !this.editable()) return;
-		const index = this.currentPageIndex();
 		const page = doc.pages[index];
 		if (!page) return;
 		const menu = new Menu();
+		menu.addItem((i) => i.setTitle(t("page.insertPdf")).setIcon("file-input").onClick(() => void this.insertPdfAfter(index)));
+		menu.addItem((i) => i.setTitle(t("page.insertBlank")).setIcon("file-plus").onClick(() => this.addPageAfter(index)));
+		menu.addItem((i) => i.setTitle(t("page.insertImage")).setIcon("image-plus").onClick(() => void this.insertImagePageAfter(index)));
+		menu.addItem((i) => i.setTitle(t("page.scanAfter")).setIcon("scan").onClick(() => void this.scanPagesAfter(index)));
+		menu.addItem((i) => i.setTitle(t("page.scanInsert")).setIcon("scan-line").onClick(() => void this.insertScanElement(index)));
+		menu.addSeparator();
 		menu.addItem((i) => i.setTitle(t("page.duplicate")).setIcon("copy").onClick(() => this.pageCommand(new AddPage(duplicatePage(page), index + 1), index + 1, page)));
 		menu.addItem((i) => i.setTitle(t("page.moveUp")).setIcon("arrow-up").setDisabled(index === 0)
 			.onClick(() => this.pageCommand(new MovePage(page.id, index, index - 1), index - 1, page)));
 		menu.addItem((i) => i.setTitle(t("page.moveDown")).setIcon("arrow-down").setDisabled(index >= doc.pages.length - 1)
 			.onClick(() => this.pageCommand(new MovePage(page.id, index, index + 1), index + 1, page)));
+		const marked = doc.meta?.bookmarks.includes(page.id) ?? false;
+		menu.addItem((i) => i.setTitle(t(marked ? "page.unbookmark" : "page.bookmark")).setIcon("bookmark").onClick(() => this.toggleBookmarkOf(page.id)));
 		menu.addItem((i) => i.setTitle(t("page.delete")).setIcon("trash-2").setSection("danger").setDisabled(doc.pages.length <= 1)
 			.onClick(() => this.pageCommand(new DeletePage(page, index), Math.max(0, index - 1), page)));
 		menu.addSeparator();
@@ -359,30 +589,46 @@ export class NotebookView extends FileView {
 			menu.addItem((i) => i.setTitle(t(landscape ? "page.portrait" : "page.landscape")).setIcon("rotate-cw")
 				.onClick(() => this.setSize(page, sizeName, !landscape, index)));
 		}
+		menu.addItem((i) => i.setTitle(t("page.infinite")).setIcon("infinity").setChecked(!!page.infinite)
+			.onClick(() => this.pageCommand(new SetPageInfinite(page.id, !page.infinite), index, page)));
 		menu.addSeparator();
 		const file = this.file;
 		if (file) {
 			menu.addItem((i) => i.setTitle(t("export.pagePdf")).setIcon("file-output")
-				.onClick(() => void exportPdf(this.app, file, [page], ` p${index + 1}`)));
+				.onClick(() => void exportPdf(this.app, file, [page], ` p${index + 1}`, this.media)));
 			menu.addItem((i) => i.setTitle(t("export.notebookPdf")).setIcon("file-output").onClick(() => void this.exportNotebookPdf()));
 			menu.addItem((i) => i.setTitle(t("export.pageSvg")).setIcon("image")
-				.onClick(() => void exportSvg(this.app, file, page, ` p${index + 1}`)));
+				.onClick(() => void exportSvg(this.app, file, page, ` p${index + 1}`, this.media)));
 		}
 		menu.showAtMouseEvent(evt);
 	}
 
 	async exportNotebookPdf(): Promise<void> {
 		const doc = this.session?.doc;
-		if (doc && this.file) await exportPdf(this.app, this.file, doc.pages);
+		if (doc && this.file) await exportPdf(this.app, this.file, doc.pages, "", this.media);
 	}
 
 	private pageCommand(cmd: Command, scrollTo: number, page: Page): void {
 		// The menu may have stayed open while the file was reloaded (read-only, broken, or another document).
 		if (this.controller?.drawing || !this.editable() || !this.session?.doc?.pages.includes(page)) return;
+		this.commitText();
 		this.clearSelection();
 		this.history.execute(cmd);
 		this.afterHistoryChange();
 		this.scrollToPage(scrollTo);
+	}
+
+	private movePage(from: number, to: number): void {
+		const page = this.session?.doc?.pages[from];
+		if (page && to >= 0 && to < (this.session?.doc?.pages.length ?? 0)) this.pageCommand(new MovePage(page.id, from, to), to, page);
+	}
+
+	private toggleBookmarkOf(pageId: string): void {
+		const doc = this.session?.doc;
+		if (!doc || !this.editable() || this.controller?.drawing || !doc.pages.some((p) => p.id === pageId)) return;
+		const before = doc.meta ?? cloneMeta(DEFAULT_META);
+		this.history.execute(new SetMeta(before, toggleBookmark(before, pageId)));
+		this.afterHistoryChange();
 	}
 
 	private setPaper(page: Page, kind: PaperKind, index: number): void {
@@ -402,11 +648,213 @@ export class NotebookView extends FileView {
 		const sel = this.selection;
 		const page = sel && this.session?.doc?.pages[sel.pageIndex];
 		if (!sel || !page || !this.editable()) return;
-		const batch = removeStrokes(page.id, page.strokes, sel.strokes, "Delete selection");
+		const commands: Command[] = [];
+		const strokes = [...sel.strokes]
+			.map((stroke) => ({ stroke, index: page.strokes.indexOf(stroke) }))
+			.filter((it) => it.index >= 0)
+			.sort((a, b) => b.index - a.index);
+		for (const it of strokes) commands.push(new ReplaceStroke(page.id, it.stroke, [], it.index));
+		for (const el of sel.elements) if (page.elements?.includes(el)) commands.push(new RemoveElement(page.id, el));
 		this.clearSelection();
-		if (!batch) return;
-		this.history.execute(batch);
+		if (commands.length === 0) return;
+		this.history.execute(new Batch("Delete selection", commands));
 		this.afterHistoryChange();
+	}
+
+	// --- insert: PDF, image page, image element ---
+
+	/** Stores a file chosen by the user as an asset (the same file twice is stored once) and makes it readable. */
+	private async pickAndStore(kind: "pdf" | "image"): Promise<{ asset: Asset; bytes: ArrayBuffer } | null> {
+		const file = await pickFile(this.app, kind);
+		if (!file) return null;
+		const asset = await storeAsset(this.app, this.host.settings.folder, file.bytes, file.name, kind);
+		this.media?.addPending(asset);
+		return { asset, bytes: file.bytes };
+	}
+
+	/** True when the view still shows the same editable document (the picker and the import are asynchronous). */
+	private stillHere(session: DocumentSession | null): boolean {
+		return !!session && this.session === session && this.editable() && !this.controller?.drawing;
+	}
+
+	/** Page menu: inserts a whole PDF or a page range after the page at `index` (one undo step). */
+	async insertPdfAfter(index: number): Promise<void> {
+		const session = this.session;
+		const media = this.media;
+		const anchor = session?.doc?.pages[index];
+		if (!session || !media || !anchor || !this.stillHere(session)) return;
+		let asset: Asset | null = null;
+		let working: Notice | null = null;
+		try {
+			const picked = await this.pickAndStore("pdf");
+			if (!picked) return;
+			asset = picked.asset;
+			working = new Notice(t("insert.working"), 0);
+			const sizes = await media.pdf.pageSizes(asset.id);
+			working.hide();
+			working = null;
+			if (sizes.length === 0) throw new Error("the PDF has no pages");
+			const range = sizes.length === 1 ? { from: 1, to: 1 } : await askPdfRange(this.app, sizes.length);
+			if (!range || !this.stillHere(session)) return;
+			const doc = session.doc;
+			const at = doc ? doc.pages.indexOf(anchor) : -1;
+			if (!doc || at < 0) return;
+			const pages = createPdfPages(asset, sizes.slice(range.from - 1, range.to), range.from);
+			this.commitText();
+			this.clearSelection();
+			this.history.execute(new Batch("Insert PDF", [new AddAsset(asset), new InsertPages(pages, at + 1)]));
+			this.afterHistoryChange();
+			this.scrollToPage(at + 1);
+			new Notice(t("insert.pdfDone", { n: String(pages.length) }));
+		} catch (e) {
+			console.error("[notebook] insert PDF", e);
+			new Notice(t("insert.failed", { error: (e as Error).message }), 8000);
+		} finally {
+			working?.hide();
+			if (asset) media.removePending(asset.id);
+		}
+	}
+
+	/** Page menu: a new page after `index` whose background is an image (A4 portrait or landscape by the image's aspect). */
+	async insertImagePageAfter(index: number): Promise<void> {
+		const session = this.session;
+		const media = this.media;
+		const anchor = session?.doc?.pages[index];
+		if (!session || !media || !anchor || !this.stillHere(session)) return;
+		let asset: Asset | null = null;
+		try {
+			const picked = await this.pickAndStore("image");
+			if (!picked) return;
+			asset = picked.asset;
+			const dims = await decodeSize(picked.bytes);
+			if (!this.stillHere(session)) return;
+			const doc = session.doc;
+			const at = doc ? doc.pages.indexOf(anchor) : -1;
+			if (!doc || at < 0) return;
+			const page = createPage(imagePageSize(dims.width, dims.height), { kind: "blank", spacing: PAPER_SPACING.blank });
+			page.background = { kind: "image", asset: asset.id };
+			this.commitText();
+			this.clearSelection();
+			this.history.execute(new Batch("Insert image page", [new AddAsset(asset), new InsertPages([page], at + 1)]));
+			this.afterHistoryChange();
+			this.scrollToPage(at + 1);
+		} catch (e) {
+			console.error("[notebook] insert image page", e);
+			new Notice(t("insert.failed", { error: (e as Error).message }), 8000);
+		} finally {
+			if (asset) media.removePending(asset.id);
+		}
+	}
+
+	/** Index of the page in view (for commands). */
+	currentPage(): number {
+		return this.currentPageIndex();
+	}
+
+	/** Scans sheets with the camera and inserts them as consecutive pages after `index` (one undo step). */
+	async scanPagesAfter(index: number): Promise<void> {
+		const session = this.session;
+		const media = this.media;
+		const anchor = session?.doc?.pages[index];
+		if (!session || !media || !anchor || !this.stillHere(session)) return;
+		const assets: Asset[] = [];
+		try {
+			const sheets = await scanFromCamera(this.app);
+			if (sheets.length === 0 || !this.stillHere(session)) return;
+			const pages: Page[] = [];
+			for (const sheet of sheets) {
+				const asset = await storeAsset(this.app, this.host.settings.folder, sheet.jpeg, `${sheet.name}.jpg`, "image");
+				media.addPending(asset);
+				assets.push(asset);
+				pages.push(scannedPage(asset, sheet.width, sheet.height));
+			}
+			const doc = session.doc;
+			const at = doc ? doc.pages.indexOf(anchor) : -1;
+			if (!doc || at < 0 || !this.stillHere(session)) return;
+			this.commitText();
+			this.clearSelection();
+			this.history.execute(new Batch("Insert scan", [...assets.map((a) => new AddAsset(a)), new InsertPages(pages, at + 1)]));
+			this.afterHistoryChange();
+			this.scrollToPage(at + 1);
+			new Notice(t("scan.pagesDone", { n: String(pages.length) }));
+		} catch (e) {
+			console.error("[notebook] scan pages", e);
+			new Notice(t("scan.failed", { error: (e as Error).message }), 8000);
+		} finally {
+			for (const a of assets) media.removePending(a.id);
+		}
+	}
+
+	/** Scans one sheet and places it as an image element on the page at `index`. */
+	async insertScanElement(index: number): Promise<void> {
+		const session = this.session;
+		const media = this.media;
+		const anchor = session?.doc?.pages[index];
+		if (!session || !media || !anchor || !this.stillHere(session)) return;
+		let asset: Asset | null = null;
+		try {
+			const sheets = await scanFromCamera(this.app);
+			const sheet = sheets[0];
+			if (!sheet || !this.stillHere(session) || !session.doc?.pages.includes(anchor)) return;
+			asset = await storeAsset(this.app, this.host.settings.folder, sheet.jpeg, `${sheet.name}.jpg`, "image");
+			media.addPending(asset);
+			const size = imageElementSize(sheet.width, sheet.height, anchor.width, anchor.height);
+			const [x, y] = centredPosition(anchor.width / 2, anchor.height / 2, size, anchor);
+			const element: ImageElement = { id: createId(), type: "image", asset: asset.id, x, y, width: size.width, height: size.height, rotation: 0 };
+			this.commitText();
+			this.clearSelection();
+			this.history.execute(new Batch("Insert scan", [new AddAsset(asset), new AddElement(anchor.id, element, anchor.elements?.length ?? 0)]));
+			this.afterHistoryChange();
+			new Notice(t("scan.imageDone"));
+		} catch (e) {
+			console.error("[notebook] insert scan", e);
+			new Notice(t("scan.failed", { error: (e as Error).message }), 8000);
+		} finally {
+			if (asset) media.removePending(asset.id);
+		}
+	}
+
+	/** Toolbar: places a picked image in the middle of the view, sized to fit, and selects it so it can be moved. */
+	async insertImageElement(): Promise<void> {
+		const session = this.session;
+		const media = this.media;
+		const layout = this.layout;
+		const anchorIndex = this.currentPageIndex();
+		const anchor = session?.doc?.pages[anchorIndex];
+		if (!session || !media || !layout || !anchor || !this.stillHere(session)) return;
+		let asset: Asset | null = null;
+		try {
+			const picked = await this.pickAndStore("image");
+			if (!picked) return;
+			asset = picked.asset;
+			const dims = await decodeSize(picked.bytes);
+			if (!this.stillHere(session) || !session.doc?.pages.includes(anchor)) return;
+			const box = this.layout?.boxes[session.doc.pages.indexOf(anchor)];
+			if (!box) return;
+			const [dx, dy] = screenToPage(this.viewport, this.viewSize.width / 2, this.viewSize.height / 2);
+			const [lx, ly] = toPageLocal(box, dx, dy);
+			const size = imageElementSize(dims.width, dims.height, anchor.width, anchor.height);
+			const [x, y] = centredPosition(lx, ly, size, anchor);
+			const element: ImageElement = { id: createId(), type: "image", asset: asset.id, x, y, width: size.width, height: size.height, rotation: 0 };
+			this.commitText();
+			this.clearSelection();
+			this.history.execute(new Batch("Insert image", [new AddAsset(asset), new AddElement(anchor.id, element, anchor.elements?.length ?? 0)]));
+			this.afterHistoryChange();
+			// Select it: the lasso then moves, scales and rotates it.
+			this.toolbar.setTool("lasso");
+			const placed = anchor.elements?.find((e) => e.id === element.id);
+			const pageIndex = session.doc.pages.indexOf(anchor);
+			if (placed && pageIndex >= 0) {
+				const bounds = unionBounds([], [placed], measureText);
+				if (bounds) this.selection = { pageIndex, strokes: [], elements: [placed], bounds, matrix: IDENTITY };
+				this.pushSelection();
+			}
+		} catch (e) {
+			console.error("[notebook] insert image", e);
+			new Notice(t("insert.failed", { error: (e as Error).message }), 8000);
+		} finally {
+			if (asset) media.removePending(asset.id);
+		}
 	}
 
 	// --- document ---
@@ -435,6 +883,7 @@ export class NotebookView extends FileView {
 		const doc = this.session?.doc;
 		this.layout = doc ? layoutPages(doc.pages) : null;
 		this.renderer?.setDocument(doc?.pages ?? null, this.layout);
+		this.pushRuler();
 	}
 
 	private onDocumentLoaded(doc: NotebookDocument | null, mode: SessionMode, problem: string | null): void {
@@ -442,18 +891,32 @@ export class NotebookView extends FileView {
 		this.erasing = null;
 		this.lasso = null;
 		this.drag = null;
+		this.shapeDrag = null;
+		this.textTap = null;
+		this.stopHold();
+		this.textEditor?.close();
+		this.renderer?.setHiddenElements(null);
 		this.clearSelection();
 		this.history.clear();
 		this.renderer?.setLive(null);
+		this.renderer?.cancelWet();
 		this.renderer?.setLasso(null);
+		this.ruler = null;
 		if (doc && mode === "ok") {
 			this.messageEl.hide();
-			this.stage.show();
+			this.body.show();
 			this.toolbar.setEditable(true);
+			if (!this.media) {
+				this.media = new NotebookMedia(this.app, () => this.session?.doc ?? null, () => this.host.settings.folder, () => this.onMediaChanged());
+				this.renderer?.setMedia(this.media);
+			}
 			this.refreshLayout();
 			this.refit(true);
+			this.pageNav?.invalidate();
+			if (this.tools.ruler) this.placeRuler();
+			this.applyPendingPage();
 		} else {
-			this.stage.hide();
+			this.body.hide();
 			this.toolbar.setEditable(false);
 			this.layout = null;
 			this.renderer?.setDocument(null, null);
@@ -497,6 +960,18 @@ export class NotebookView extends FileView {
 		this.session?.markChanged();
 		this.updateHistoryButtons();
 		this.updatePageIndicator();
+		this.pageNav?.refresh();
+	}
+
+	/** The page panel shows thumbnails of what was just drawn, a moment after the pen lifts. */
+	private scheduleNavRefresh(): void {
+		if (!this.pageNav?.open || this.navTimer !== null) return;
+		this.navTimer = window.setTimeout(() => {
+			this.navTimer = null;
+			// Thumbnails are rendered on the main thread: never while the pen is writing.
+			if (this.active || this.erasing) this.scheduleNavRefresh();
+			else this.pageNav?.refresh();
+		}, 500);
 	}
 
 	private updateHistoryButtons(): void {
@@ -505,12 +980,98 @@ export class NotebookView extends FileView {
 
 	private updatePageIndicator(): void {
 		const n = this.session?.doc?.pages.length ?? 0;
-		this.toolbar.setPage(n ? this.currentPageIndex() + 1 : 0, n);
+		const current = n ? this.currentPageIndex() : -1;
+		this.toolbar.setPage(n ? current + 1 : 0, n);
+		if (current !== this.navCurrent) {
+			this.navCurrent = current;
+			this.pageNav?.markCurrent(current);
+		}
 	}
 
 	private onToolsChanged(state: ToolbarState): void {
-		if (state.tool !== "lasso") this.clearSelection();
+		const before = this.tools;
 		this.tools = state;
+		if (state.tool !== "lasso") this.clearSelection();
+		if (before.tool === "text" && state.tool !== "text") this.commitText();
+		if (state.ruler !== before.ruler) {
+			if (state.ruler && !this.ruler) this.placeRuler();
+			this.pushRuler();
+		}
+	}
+
+	// --- media, thumbnails ---
+
+	private onMediaChanged(): void {
+		this.renderer?.invalidate();
+		if (this.thumbPending.size === 0 || !this.pageNav?.open || this.thumbTimer !== null) return;
+		this.thumbTimer = window.setTimeout(() => {
+			this.thumbTimer = null;
+			const ids = [...this.thumbPending];
+			this.thumbPending.clear();
+			this.pageNav?.invalidate(ids);
+		}, 150);
+	}
+
+	private thumbnail(page: Page, width: number): string {
+		const dpr = Math.min(2, window.devicePixelRatio || 1);
+		return renderThumbnail(page, Math.round(Math.min(width, THUMB_CSS_WIDTH) * dpr), {
+			mime: "image/jpeg",
+			quality: 0.8,
+			drawBackground: (ctx, p) => this.drawThumbMedia(ctx, p),
+		});
+	}
+
+	/** Background and elements of a thumbnail; whatever is not loaded yet is drawn as a placeholder and retried later. */
+	private drawThumbMedia(ctx: CanvasRenderingContext2D, page: Page): void {
+		const media = this.media;
+		if (!media) return;
+		let incomplete = false;
+		const bg = page.background;
+		if (bg) {
+			let img: CanvasImageSource | null;
+			if (bg.kind === "image") img = media.image(bg.asset);
+			else {
+				// Never ask for another scale of a page the main view is drawing: a render in flight would be cancelled.
+				img = (media.pdf.peek(bg.asset, bg.page)?.canvas as CanvasImageSource | undefined) ?? null;
+				if (!img && !this.isPageVisible(page)) this.renderThumbPdf(bg.asset, bg.page);
+			}
+			if (img) ctx.drawImage(img, 0, 0, page.width, page.height);
+			else {
+				ctx.fillStyle = "#f1f5f9";
+				ctx.fillRect(0, 0, page.width, page.height);
+				incomplete = true;
+			}
+		}
+		const elements = page.elements ?? [];
+		for (const el of elements) {
+			if (el.type !== "image") continue;
+			const img = media.image(el.asset);
+			if (!img) incomplete = true;
+			drawElement(ctx, el, img);
+		}
+		for (const el of elements) if (el.type === "text") drawTextElement(ctx, el);
+		if (incomplete) this.thumbPending.add(page.id);
+	}
+
+	private renderThumbPdf(asset: string, pageNumber: number): void {
+		const media = this.media;
+		const key = `${asset}|${pageNumber}`;
+		if (!media || this.thumbRendering.has(key)) return;
+		this.thumbRendering.add(key);
+		media.pdf.render(asset, pageNumber, THUMB_PDF_SCALE).then(() => this.onMediaChanged(), () => undefined)
+			.finally(() => this.thumbRendering.delete(key));
+	}
+
+	private isPageVisible(page: Page): boolean {
+		const layout = this.layout;
+		const index = this.session?.doc?.pages.indexOf(page) ?? -1;
+		if (!layout || index < 0) return false;
+		return visiblePages(layout, this.visibleRect()).includes(index);
+	}
+
+	private visibleRect(): BBox {
+		const { scale, offsetX, offsetY } = this.viewport;
+		return { minX: -offsetX / scale, minY: -offsetY / scale, maxX: (this.viewSize.width - offsetX) / scale, maxY: (this.viewSize.height - offsetY) / scale };
 	}
 
 	// --- view geometry ---
@@ -523,6 +1084,7 @@ export class NotebookView extends FileView {
 		const rect = this.stage.getBoundingClientRect();
 		if (rect.width === 0 || rect.height === 0) return;
 		this.viewSize = { width: rect.width, height: rect.height };
+		this.body.toggleClass("is-narrow", this.contentEl.clientWidth < NARROW_PX);
 		this.renderer?.resize(rect.width, rect.height, window.devicePixelRatio || 1);
 		this.refit(true);
 	}
@@ -546,16 +1108,153 @@ export class NotebookView extends FileView {
 		this.viewport = layout ? clampToPage(v, this.viewSize, layout) : v;
 		this.renderer?.setViewport(this.viewport, interactive);
 		if (this.selection) this.pushSelection();
+		this.placeTextEditor();
 		this.updatePageIndicator();
+	}
+
+	// --- text boxes ---
+
+	/** Positions the textarea over the box being edited at the current zoom. */
+	private placeTextEditor(): void {
+		const session = this.textEditor?.session;
+		if (!session || !this.layout) return;
+		const index = this.session?.doc?.pages.findIndex((p) => p.id === session.pageId) ?? -1;
+		const box = this.layout.boxes[index];
+		if (!box) return;
+		const { scale, offsetX, offsetY } = this.viewport;
+		this.textEditor?.place(offsetX + (box.x + session.x) * scale, offsetY + (box.y + session.y) * scale, scale);
+	}
+
+	/** Text tool tap: edits the text box under the pen, or starts a new one at that point. */
+	private beginText(pageIndex: number, local: [number, number]): void {
+		const page = this.pageAtIndex(pageIndex);
+		const editor = this.textEditor;
+		if (!page || !editor) return;
+		this.clearSelection();
+		const texts = (page.elements ?? []).filter((e): e is TextElement => e.type === "text");
+		const hit = hitElement(texts, local[0], local[1], 4 / this.viewport.scale, measureText) as TextElement | null;
+		let session: TextEditSession;
+		if (hit) {
+			session = { pageId: page.id, element: hit, x: hit.x, y: hit.y, width: hit.width, fontSize: hit.fontSize, color: hit.color };
+			this.renderer?.setHiddenElements(new Set<PageElement>([hit]));
+		} else {
+			const box = newTextBox(page.width, local[0], local[1]);
+			session = { pageId: page.id, element: null, ...box, fontSize: this.tools.textSize, color: this.tools.penColor };
+		}
+		editor.open(session, hit?.text ?? "", () => this.commitText());
+		this.placeTextEditor();
+		editor.focus();
+	}
+
+	/** Ends text editing: adds, changes or (when emptied) removes the text box, as one undo step. */
+	private commitText(): void {
+		const result = this.textEditor?.close();
+		if (!result) return;
+		this.renderer?.setHiddenElements(null);
+		const doc = this.session?.doc;
+		const page = doc?.pages.find((p) => p.id === result.pageId);
+		if (!doc || !page || !this.editable()) return;
+		const text = result.text.replace(/\s+$/, "");
+		let cmd: Command | null = null;
+		if (result.element) {
+			// The box may have been deleted or changed by undo while it was open.
+			if (!page.elements?.includes(result.element)) return;
+			if (text === "") cmd = new RemoveElement(page.id, result.element);
+			else if (text !== result.element.text) cmd = new ReplaceElement(page.id, result.element, { ...result.element, text });
+		} else if (text !== "") {
+			const el: TextElement = {
+				id: createId(), type: "text", x: result.x, y: result.y, width: result.width, text, fontSize: result.fontSize, color: result.color,
+			};
+			cmd = new AddElement(page.id, el, page.elements?.length ?? 0);
+		}
+		if (cmd) {
+			this.history.execute(cmd);
+			this.afterHistoryChange();
+		} else {
+			this.renderer?.invalidate();
+		}
+		// An external change seen while the box was open was postponed.
+		this.session?.gestureEnded();
+	}
+
+	// --- ruler ---
+
+	/** Puts the ruler in the middle of the view, on the page in view. */
+	private placeRuler(): void {
+		const doc = this.session?.doc;
+		const layout = this.layout;
+		if (!doc || !layout) return;
+		const index = this.currentPageIndex();
+		const page = doc.pages[index];
+		const box = layout.boxes[index];
+		if (!page || !box) return;
+		const [dx, dy] = screenToPage(this.viewport, this.viewSize.width / 2, this.viewSize.height / 2);
+		const [lx, ly] = toPageLocal(box, dx, dy);
+		const length = Math.min(RULER_LENGTH, page.width * 0.9);
+		const half = length / 2;
+		const x = Math.min(Math.max(lx, half), Math.max(half, page.width - half));
+		const y = Math.min(Math.max(ly, 0), page.height);
+		this.ruler = { pageId: page.id, ruler: { x, y, angle: 0, length } };
+	}
+
+	private pushRuler(): void {
+		const r = this.ruler;
+		const index = r ? (this.session?.doc?.pages.findIndex((p) => p.id === r.pageId) ?? -1) : -1;
+		this.renderer?.setRuler(this.tools.ruler && r && index >= 0 ? { pageIndex: index, ruler: r.ruler } : null);
+	}
+
+	/** Stage px to the ruler's page, in page coordinates. */
+	private toRulerLocal(p: [number, number]): [number, number] | null {
+		const r = this.ruler;
+		const index = r ? (this.session?.doc?.pages.findIndex((pg) => pg.id === r.pageId) ?? -1) : -1;
+		const box = this.layout?.boxes[index];
+		if (!box) return null;
+		const [dx, dy] = screenToPage(this.viewport, p[0], p[1]);
+		return toPageLocal(box, dx, dy);
+	}
+
+	private rulerGrabs(mid: [number, number]): boolean {
+		const r = this.ruler;
+		const local = this.toRulerLocal(mid);
+		if (!r || !local) return false;
+		const index = this.session?.doc?.pages.findIndex((pg) => pg.id === r.pageId) ?? -1;
+		const box = this.layout?.boxes[index];
+		if (!box) return false;
+		const { scale, offsetX, offsetY } = this.viewport;
+		const sx = offsetX + (box.x + r.ruler.x) * scale;
+		const sy = offsetY + (box.y + r.ruler.y) * scale;
+		const visible = sx >= 0 && sx <= this.viewSize.width && sy >= 0 && sy <= this.viewSize.height;
+		return shouldGrabRuler(r.ruler, local, scale, visible);
+	}
+
+	/** Two fingers hold the ruler: it sits between them, along the line through them. */
+	private moveRuler(a: [number, number], b: [number, number]): void {
+		const r = this.ruler;
+		const la = this.toRulerLocal(a);
+		const lb = this.toRulerLocal(b);
+		if (!r || !la || !lb || Math.hypot(la[0] - lb[0], la[1] - lb[1]) < 1e-6) return;
+		this.ruler = { pageId: r.pageId, ruler: rulerFromTwoTouches(la, lb, r.ruler.length) };
+		this.pushRuler();
+	}
+
+	/** Does a pen stroke starting at `local` on this page latch onto the ruler edge? */
+	private rulerLatches(page: Page, local: [number, number]): boolean {
+		const r = this.ruler;
+		return this.tools.ruler && !!r && r.pageId === page.id && projectToRuler(r.ruler, local, RULER_SNAP_PX / this.viewport.scale) !== null;
+	}
+
+	private snapToRuler(active: ActiveStroke, x: number, y: number): [number, number] {
+		if (!active.snap || !this.ruler) return [x, y];
+		return projectToRuler(this.ruler.ruler, [x, y], Infinity) ?? [x, y];
 	}
 
 	// --- input ---
 
-	private toDoc(s: InkSample): [number, number] {
+	private toDoc(s: { x: number; y: number }): [number, number] {
 		return screenToPage(this.viewport, s.x, s.y);
 	}
 
-	private toLocal(pageIndex: number, s: InkSample): [number, number] | null {
+	private toLocal(pageIndex: number, s: { x: number; y: number }): [number, number] | null {
 		const box = this.layout?.boxes[pageIndex];
 		if (!box) return null;
 		const [x, y] = this.toDoc(s);
@@ -563,9 +1262,15 @@ export class NotebookView extends FileView {
 		return toPageLocal(box, x, y);
 	}
 
+	/** Sample `i` of a buffer as a point object (for the tools that are not on the writing hot path). */
+	private static at(b: SampleBuffer, i: number): { x: number; y: number } {
+		return { x: b.x[i]!, y: b.y[i]! };
+	}
+
 	private drawStart(sample: InkSample, eraserButton: boolean): boolean {
 		const layout = this.layout;
 		if (!layout || !this.editable()) return false;
+		this.commitText();
 		const [dx, dy] = this.toDoc(sample);
 		if (!Number.isFinite(dx) || !Number.isFinite(dy)) return false;
 		const tool = eraserButton ? "eraser" : this.tools.tool;
@@ -583,6 +1288,7 @@ export class NotebookView extends FileView {
 			this.clearSelection();
 			return false;
 		}
+		const page = this.pageAtIndex(pageIndex);
 		const local = toPageLocal(layout.boxes[pageIndex]!, dx, dy);
 
 		if (tool === "lasso") {
@@ -598,31 +1304,58 @@ export class NotebookView extends FileView {
 			return true;
 		}
 
-		this.stabilizer.reset(local[0], local[1]);
-		this.pressure.begin();
+		if (tool === "text") {
+			this.clearSelection();
+			this.textTap = { pageIndex, local, x: sample.x, y: sample.y, moved: false };
+			return true;
+		}
+
+		if (tool === "shape") {
+			this.clearSelection();
+			this.shapeDrag = { pageIndex, a: local, b: local };
+			return true;
+		}
+
+		const snap = !!page && this.rulerLatches(page, local);
+		const start = snap && this.ruler ? (projectToRuler(this.ruler.ruler, local, Infinity) ?? local) : local;
+		this.filter.reset(sample.x, sample.y, sample.t);
+		// Real or simulated pressure is decided here, for the whole stroke.
+		this.pressure.begin(sample.pointerType, sample.pressure);
 		const p = this.pressure.sample(sample.pointerType, sample.pressure, sample.x, sample.y, sample.t);
 		const highlighter = tool === "highlighter";
+		const inkTool = highlighter ? "highlighter" : "pen";
+		const color = highlighter ? this.tools.highlighterColor : this.tools.penColor;
+		const width = highlighter ? this.tools.highlighterWidth : this.tools.penWidth;
+		this.ink.reset(inkTool, width);
+		this.ink.add(start[0], start[1], p);
 		this.active = {
 			pageIndex,
-			stroke: createStroke(
-				highlighter ? this.tools.highlighterColor : this.tools.penColor,
-				highlighter ? this.tools.highlighterWidth : this.tools.penWidth,
-				[quantizePoint(local[0], local[1], p)],
-				highlighter ? "highlighter" : "pen",
-			),
-			predicted: [],
+			stroke: createStroke(color, width, [], inkTool, RENDER_INK),
+			wet: true,
+			rawX: start[0],
+			rawY: start[1],
+			rawP: p,
+			minStep: MIN_STEP_PX / this.viewport.scale,
+			snap,
+			recognized: false,
+			extra: [],
+			tried: null,
 		};
-		this.pushLive();
+		this.hold.clear();
+		this.hold.push(sample.x, sample.y, performance.now());
+		this.startHold();
+		// The first point shows as a dot right away.
+		if (this.renderer?.beginWet(pageIndex, this.ink, inkTool, color)) this.renderer.paintWet();
 		return true;
 	}
 
-	private drawMove(samples: InkSample[], predicted: InkSample[]): void {
-		const lastSample = samples[samples.length - 1];
-		if (lastSample) this.perfInput = lastSample.t;
+	private drawMove(samples: SampleBuffer, predicted: SampleBuffer): void {
+		const n = samples.count;
+		if (n > 0) this.perfInput = samples.t[n - 1]!;
 
 		if (this.erasing) {
-			for (const s of samples) {
-				const [x, y] = this.toDoc(s);
+			for (let i = 0; i < n; i++) {
+				const [x, y] = this.toDoc(NotebookView.at(samples, i));
 				if (Number.isFinite(x) && Number.isFinite(y)) this.eraseTo(x, y);
 			}
 			return;
@@ -631,8 +1364,8 @@ export class NotebookView extends FileView {
 		const lasso = this.lasso;
 		if (lasso) {
 			const minStep = 2 / this.viewport.scale;
-			for (const s of samples) {
-				const p = this.toLocal(lasso.pageIndex, s);
+			for (let i = 0; i < n; i++) {
+				const p = this.toLocal(lasso.pageIndex, NotebookView.at(samples, i));
 				const last = lasso.points[lasso.points.length - 1]!;
 				if (p && Math.hypot(p[0] - last[0], p[1] - last[1]) >= minStep) lasso.points.push(p);
 			}
@@ -640,38 +1373,87 @@ export class NotebookView extends FileView {
 			return;
 		}
 
+		const lastSample = n > 0 ? NotebookView.at(samples, n - 1) : null;
 		if (this.drag && this.selection && lastSample) {
 			const p = this.toLocal(this.selection.pageIndex, lastSample);
 			if (p) this.updateDrag(p);
 			return;
 		}
 
-		const active = this.active;
-		if (!active) return;
-		const points = active.stroke.points;
-		for (const s of samples) {
-			const local = this.toLocal(active.pageIndex, s);
-			// A single non-finite point would make every later save fail validation.
-			if (!local) continue;
-			const [x, y] = this.stabilizer.push(local[0], local[1]);
-			const p = this.pressure.sample(s.pointerType, s.pressure, s.x, s.y, s.t);
-			this.pushPoint(points, quantizePoint(x, y, p));
-		}
-		const lastP = points[points.length - 1]?.[2] ?? 0.5;
-		active.predicted = predicted
-			.map((s) => this.toLocal(active.pageIndex, s))
-			.filter((p): p is [number, number] => p !== null)
-			.map(([x, y]): Point => [x, y, lastP]);
-		this.pushLive();
-	}
-
-	private pushPoint(points: Point[], q: Point): void {
-		const last = points[points.length - 1];
-		if (last && last[0] === q[0] && last[1] === q[1]) {
-			last[2] = Math.max(last[2], q[2]);
+		const tap = this.textTap;
+		if (tap) {
+			for (let i = 0; i < n; i++) if (Math.hypot(samples.x[i]! - tap.x, samples.y[i]! - tap.y) > TAP_SLOP_PX) tap.moved = true;
 			return;
 		}
-		points.push(q);
+
+		const shape = this.shapeDrag;
+		if (shape) {
+			const p = lastSample ? this.toLocal(shape.pageIndex, lastSample) : null;
+			if (p) {
+				shape.b = p;
+				this.pushShapeLive();
+			}
+			return;
+		}
+
+		const active = this.active;
+		// After a shape was recognised the pen only has to be lifted.
+		if (!active || active.recognized || !active.wet) return;
+		this.writeSamples(active, samples, predicted);
+	}
+
+	/**
+	 * The writing hot path: filter, convert to page coordinates, store, and paint the new ink right
+	 * away (no animation frame). No object is created per sample (except with the ruler).
+	 */
+	private writeSamples(active: ActiveStroke, samples: SampleBuffer, predicted: SampleBuffer): void {
+		const t0 = performance.now();
+		const box = this.layout?.boxes[active.pageIndex];
+		if (!box) return;
+		const { scale, offsetX, offsetY } = this.viewport;
+		const ink = this.ink;
+		const type = samples.pointerType;
+		const n = samples.count;
+		for (let i = 0; i < n; i++) {
+			const rx = samples.x[i]!, ry = samples.y[i]!, t = samples.t[i]!;
+			let ax = (rx - offsetX) / scale - box.x;
+			let ay = (ry - offsetY) / scale - box.y;
+			// A single non-finite point would make every later save fail validation.
+			if (!Number.isFinite(ax) || !Number.isFinite(ay)) continue;
+			this.filter.filter(rx, ry, t);
+			let fx = (this.filter.x - offsetX) / scale - box.x;
+			let fy = (this.filter.y - offsetY) / scale - box.y;
+			if (active.snap) {
+				[ax, ay] = this.snapToRuler(active, ax, ay);
+				[fx, fy] = this.snapToRuler(active, fx, fy);
+			}
+			const p = this.pressure.sample(type, samples.p[i]!, rx, ry, t);
+			active.rawX = ax;
+			active.rawY = ay;
+			active.rawP = p;
+			if (ink.distanceToLast(fx, fy) >= active.minStep) ink.add(fx, fy, p);
+			this.hold.push(rx, ry, t0);
+			if (active.tried && Math.hypot(rx - active.tried.x, ry - active.tried.y) > HOLD_RADIUS_PX) active.tried = null;
+		}
+		const wet = this.renderer?.wetInk;
+		if (!wet) return;
+		// Tip: up to the raw pen position, then the predicted samples (drawn, never stored).
+		wet.clearExtra();
+		wet.pushExtra(active.rawX, active.rawY, active.rawP);
+		if (!active.snap) {
+			for (let i = 0; i < predicted.count; i++) {
+				const px = (predicted.x[i]! - offsetX) / scale - box.x;
+				const py = (predicted.y[i]! - offsetY) / scale - box.y;
+				if (Number.isFinite(px) && Number.isFinite(py)) wet.pushExtra(px, py, active.rawP);
+			}
+		}
+		this.renderer!.paintWet();
+		if (this.host.settings.perfOverlay) {
+			const now = performance.now();
+			this.perfProcess.push(now - t0);
+			if (n > 0) this.perfPaint.push(Math.max(0, now - samples.t[n - 1]!));
+			this.renderer!.requestFrame();
+		}
 	}
 
 	private drawEnd(cancelled: boolean): void {
@@ -688,6 +1470,7 @@ export class NotebookView extends FileView {
 				this.history.record(new Batch("Erase", erasing.commands));
 				this.session?.markChanged();
 				this.updateHistoryButtons();
+				this.scheduleNavRefresh();
 			}
 			return;
 		}
@@ -698,12 +1481,7 @@ export class NotebookView extends FileView {
 			this.renderer?.setLasso(null);
 			const page = this.pageAtIndex(lasso.pageIndex);
 			if (cancelled || !page) return;
-			const strokes = strokesInLasso(page.strokes, lasso.points);
-			const bounds = selectionBounds(strokes);
-			if (bounds) {
-				this.selection = { pageIndex: lasso.pageIndex, strokes, bounds, matrix: IDENTITY };
-				this.pushSelection();
-			}
+			this.selectFromLasso(lasso, page);
 			return;
 		}
 
@@ -713,21 +1491,76 @@ export class NotebookView extends FileView {
 			return;
 		}
 
+		const tap = this.textTap;
+		if (tap) {
+			this.textTap = null;
+			if (!cancelled && !tap.moved) this.beginText(tap.pageIndex, tap.local);
+			return;
+		}
+
+		const shape = this.shapeDrag;
+		if (shape) {
+			this.shapeDrag = null;
+			this.renderer?.setLive(null);
+			if (!cancelled) this.commitShape(shape);
+			return;
+		}
+
 		const active = this.active;
 		this.active = null;
-		this.renderer?.setLive(null);
-		const tail = this.stabilizer.finish();
+		this.stopHold();
 		const page = active && this.pageAtIndex(active.pageIndex);
-		if (!active || cancelled || !page) return;
-		for (const [x, y] of tail) {
-			const last = active.stroke.points[active.stroke.points.length - 1]!;
-			this.pushPoint(active.stroke.points, quantizePoint(x, y, last[2]));
+		if (!active || cancelled || !page) {
+			this.renderer?.cancelWet();
+			this.renderer?.setLive(null);
+			return;
 		}
+		if (active.wet) {
+			// The line ends where the pen lifted (the filtered position may trail it slightly).
+			this.ink.add(active.rawX, active.rawY, active.rawP);
+			this.ink.finish();
+			const stroke = freezeStroke({ ...active.stroke, points: this.ink.toPoints() });
+			// The wet canvas shows exactly this geometry; the static layer takes it over without a change.
+			this.renderer?.endWet(stroke);
+			this.addStrokes(active.pageIndex, page, [stroke]);
+			return;
+		}
+		this.renderer?.setLive(null);
 		const stroke = freezeStroke(active.stroke);
-		this.history.execute(new AddStroke(page.id, stroke, page.strokes.length));
-		this.renderer?.appendStroke(active.pageIndex, stroke);
+		const extras = active.extra.map((points) => freezeStroke({ ...active.stroke, id: createId(), points }));
+		this.addStrokes(active.pageIndex, page, [stroke, ...extras]);
+	}
+
+	/** Commits strokes drawn on a page as one undo step; an infinite page grows in the same step. */
+	private addStrokes(pageIndex: number, page: Page, strokes: Stroke[]): void {
+		const commands: Command[] = strokes.map((s, i) => new AddStroke(page.id, s, page.strokes.length + i));
+		let grew = false;
+		if (page.infinite && this.renderer) {
+			const maxY = Math.max(...strokes.map((s) => this.renderer!.boundsOf(s).maxY));
+			const height = growForInfinite(page, { maxY });
+			if (height !== null) {
+				commands.push(new SetPageSize(page.id, { width: page.width, height: page.height }, { width: page.width, height }));
+				grew = true;
+			}
+		}
+		this.history.execute(commands.length === 1 ? commands[0]! : new Batch("Draw", commands));
+		if (grew) {
+			this.afterHistoryChange();
+			return;
+		}
+		for (const s of strokes) this.renderer?.appendStroke(pageIndex, s);
 		this.session?.markChanged();
 		this.updateHistoryButtons();
+		this.scheduleNavRefresh();
+	}
+
+	private commitShape(shape: ShapeDrag): void {
+		const page = this.pageAtIndex(shape.pageIndex);
+		if (!page) return;
+		const points = shapePoints(this.tools.shapeKind, shape.a, shape.b, this.tools.penWidth, this.shiftDown);
+		if (points.length < 2) return;
+		const stroke = freezeStroke(createStroke(this.tools.penColor, this.tools.penWidth, points, "shape"));
+		this.addStrokes(shape.pageIndex, page, [stroke]);
 	}
 
 	private pushLive(): void {
@@ -735,8 +1568,66 @@ export class NotebookView extends FileView {
 		if (!a) return;
 		this.renderer?.setLive({
 			pageIndex: a.pageIndex, tool: a.stroke.tool, color: a.stroke.color, width: a.stroke.width,
-			points: a.stroke.points, predicted: a.predicted,
+			points: a.stroke.points, predicted: [],
 		});
+	}
+
+	private pushShapeLive(): void {
+		const s = this.shapeDrag;
+		if (!s) return;
+		this.renderer?.setLive({
+			pageIndex: s.pageIndex, tool: "shape", color: this.tools.penColor, width: this.tools.penWidth,
+			points: shapePoints(this.tools.shapeKind, s.a, s.b, this.tools.penWidth, this.shiftDown), predicted: [],
+		});
+	}
+
+	// --- shape recognition ---
+
+	private startHold(): void {
+		if (this.holdTimer === null) this.holdTimer = window.setInterval(() => this.checkHold(), 100);
+	}
+
+	private stopHold(): void {
+		if (this.holdTimer !== null) window.clearInterval(this.holdTimer);
+		this.holdTimer = null;
+		this.hold.clear();
+	}
+
+	/** The pen has been still for 0.6 s: if the stroke so far is clearly a shape, it becomes a clean one. */
+	private checkHold(): void {
+		const a = this.active;
+		if (!a || a.recognized || a.tried || !a.wet) return;
+		if (!this.hold.isHold(performance.now(), HOLD_MS, HOLD_RADIUS_PX)) return;
+		a.tried = { x: this.hold.lastX(), y: this.hold.lastY() };
+		const shape = recognizeShape(this.ink.toPoints());
+		const first = shape?.points[0];
+		if (!shape || !first || first.length < 2) return;
+		// Highlighter shapes stay highlighter strokes (translucent); pen shapes become constant-width "shape" ink.
+		// Shapes keep the perfect-freehand geometry (render 1), drawn whole on the live layer.
+		a.stroke = { ...a.stroke, tool: a.stroke.tool === "highlighter" ? "highlighter" : "shape", points: first, render: RENDER_FREEHAND };
+		a.extra = shape.points.slice(1);
+		a.wet = false;
+		a.recognized = true;
+		this.renderer?.cancelWet();
+		this.pushLive();
+		this.flashSnap();
+	}
+
+	/** Brief outline around the page and a short vibration: the stroke was turned into a shape. */
+	private flashSnap(): void {
+		this.stage.removeClass("is-snapped");
+		void this.stage.offsetWidth; // restart the CSS animation
+		this.stage.addClass("is-snapped");
+		if (this.snapFlashTimer !== null) window.clearTimeout(this.snapFlashTimer);
+		this.snapFlashTimer = window.setTimeout(() => {
+			this.snapFlashTimer = null;
+			this.stage.removeClass("is-snapped");
+		}, 400);
+		try {
+			window.navigator.vibrate?.(12);
+		} catch {
+			// Vibration is optional.
+		}
 	}
 
 	/** Erases along the eraser's movement to the document point (x, y), on the page under it. */
@@ -789,6 +1680,27 @@ export class NotebookView extends FileView {
 		this.renderer?.setSelection(sel ? { ...sel, handle: HANDLE_PX } : null);
 	}
 
+	/** Selects the strokes and elements inside the lasso; a tap (a lasso too small to enclose anything) picks the element under it. */
+	private selectFromLasso(lasso: Lasso, page: Page): void {
+		const xs = lasso.points.map((p) => p[0]);
+		const ys = lasso.points.map((p) => p[1]);
+		const extent = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+		let strokes: Stroke[] = [];
+		let elements: PageElement[] = [];
+		if (extent * this.viewport.scale < TAP_SLOP_PX) {
+			const p = lasso.points[0]!;
+			const el = hitElement(page.elements ?? [], p[0], p[1], 6 / this.viewport.scale, measureText);
+			if (el) elements = [el];
+		} else {
+			strokes = strokesInLasso(page.strokes, lasso.points);
+			elements = elementsInLasso(page.elements ?? [], lasso.points, measureText);
+		}
+		const bounds = unionBounds(strokes, elements, measureText);
+		if (!bounds) return;
+		this.selection = { pageIndex: lasso.pageIndex, strokes, elements, bounds, matrix: IDENTITY };
+		this.pushSelection();
+	}
+
 	private selectionHit(p: [number, number]): SelectionDrag["kind"] | null {
 		const sel = this.selection;
 		if (!sel) return null;
@@ -825,26 +1737,33 @@ export class NotebookView extends FileView {
 		this.pushSelection();
 	}
 
-	/** Applies the dragged transform to the document as one undoable step; the selection stays on the new strokes. */
+	/** Applies the dragged transform to the document as one undoable step; the selection stays on the new strokes and elements. */
 	private commitSelectionTransform(): void {
 		const sel = this.selection;
 		const page = sel && this.pageAtIndex(sel.pageIndex);
 		if (!sel || !page || isIdentity(sel.matrix)) return;
 		const present = sel.strokes.filter((s) => page.strokes.includes(s));
-		if (present.length === 0) {
+		const presentEls = sel.elements.filter((e) => page.elements?.includes(e));
+		if (present.length === 0 && presentEls.length === 0) {
 			this.clearSelection();
 			return;
 		}
 		const moved = present.map((s) => freezeStroke(transformStroke(s, sel.matrix)));
-		const commands = present.map((s, i) => new ReplaceStroke(page.id, s, [moved[i]!], page.strokes.indexOf(s)));
+		const movedEls = presentEls.map((e) => transformElement(e, sel.matrix, measureText));
+		const commands: Command[] = [
+			...present.map((s, i) => new ReplaceStroke(page.id, s, [moved[i]!], page.strokes.indexOf(s))),
+			...presentEls.map((e, i) => new ReplaceElement(page.id, e, movedEls[i]!)),
+		];
 		this.history.execute(new Batch("Transform selection", commands));
 		sel.strokes = moved;
+		sel.elements = movedEls;
 		sel.matrix = IDENTITY;
-		sel.bounds = selectionBounds(moved) ?? sel.bounds;
+		sel.bounds = unionBounds(moved, movedEls, measureText) ?? sel.bounds;
 		this.pushSelection();
 		this.renderer?.invalidate();
 		this.session?.markChanged();
 		this.updateHistoryButtons();
+		this.scheduleNavRefresh();
 	}
 
 	// --- performance overlay ---
@@ -861,10 +1780,22 @@ export class NotebookView extends FileView {
 		const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 		const frames = this.perfFrames.splice(0).filter((f) => f < 250);
 		const latency = this.perfLatency.splice(0);
+		const proc = this.perfProcess.splice(0);
+		const paint = this.perfPaint.splice(0);
 		const st = this.renderer.stats;
+		const ms = (a: number[]) => (a.length ? `${avg(a).toFixed(1)} ms` : "–");
 		this.perfEl.setText(
-			`frame ${avg(frames).toFixed(1)} ms · input→frame ${latency.length ? avg(latency).toFixed(1) + " ms" : "–"}\n`
+			`frame ${avg(frames).toFixed(1)} ms · input→frame ${ms(latency)}\n`
+			+ `ink: input→paint ${ms(paint)} · per event ${proc.length ? avg(proc).toFixed(2) + " ms" : "–"}${this.controller?.rawUpdates ? " · raw" : ""}\n`
 			+ `redraw ${st.staticMs.toFixed(1)} ms · ${st.strokesDrawn} strokes · ${st.pagesDrawn} pages`,
 		);
 	}
+}
+
+/** Pixel size of an image file (any format the WebView can decode). */
+async function decodeSize(bytes: ArrayBuffer): Promise<{ width: number; height: number }> {
+	const bmp = await createImageBitmap(new Blob([bytes]));
+	const size = { width: bmp.width, height: bmp.height };
+	bmp.close();
+	return size;
 }

@@ -66,13 +66,13 @@ export class NotebookSettingTab extends PluginSettingTab {
 				},
 			},
 			{
-				name: t("settings.prediction"),
-				desc: t("settings.prediction.desc"),
-				control: { type: "toggle", key: "prediction", defaultValue: DEFAULT_SETTINGS.prediction },
+				name: t("settings.inkPrediction"),
+				desc: t("settings.inkPrediction.desc"),
+				control: { type: "toggle", key: "inkPrediction", defaultValue: DEFAULT_SETTINGS.inkPrediction },
 			},
 			{
 				name: t("settings.stabilization"),
-				desc: t("settings.stabilization.desc"),
+				desc: t("settings.stabilization.filter.desc"),
 				control: { type: "slider", key: "stabilization", defaultValue: DEFAULT_SETTINGS.stabilization, min: 0, max: 10, step: 1 },
 			},
 			{
@@ -87,6 +87,19 @@ export class NotebookSettingTab extends PluginSettingTab {
 				name: t("settings.perfOverlay"),
 				desc: t("settings.perfOverlay.desc"),
 				control: { type: "toggle", key: "perfOverlay", defaultValue: DEFAULT_SETTINGS.perfOverlay },
+			},
+			{
+				name: t("settings.snapshotInterval"),
+				desc: t("settings.snapshotInterval.desc"),
+				control: {
+					type: "slider", key: "snapshotIntervalHours", defaultValue: DEFAULT_SETTINGS.snapshotIntervalHours,
+					min: 0, max: 168, step: 1, displayFormat: (v) => (v === 0 ? "off" : `${v} h`),
+				},
+			},
+			{
+				name: t("settings.snapshotKeep"),
+				desc: t("settings.snapshotKeep.desc"),
+				control: { type: "slider", key: "snapshotsToKeep", defaultValue: DEFAULT_SETTINGS.snapshotsToKeep, min: 1, max: 50, step: 1 },
 			},
 		];
 	}
@@ -151,13 +164,13 @@ export class NotebookSettingTab extends PluginSettingTab {
 				.onChange((v) => this.setControlValue("pressureMode", v)));
 
 		new Setting(containerEl)
-			.setName(t("settings.prediction"))
-			.setDesc(t("settings.prediction.desc"))
-			.addToggle((toggle) => toggle.setValue(s.prediction).onChange((v) => this.setControlValue("prediction", v)));
+			.setName(t("settings.inkPrediction"))
+			.setDesc(t("settings.inkPrediction.desc"))
+			.addToggle((toggle) => toggle.setValue(s.inkPrediction).onChange((v) => this.setControlValue("inkPrediction", v)));
 
 		new Setting(containerEl)
 			.setName(t("settings.stabilization"))
-			.setDesc(t("settings.stabilization.desc"))
+			.setDesc(t("settings.stabilization.filter.desc"))
 			.addSlider((slider) => slider.setLimits(0, 10, 1).setValue(s.stabilization).onChange((v) => this.setControlValue("stabilization", v)));
 
 		new Setting(containerEl)
@@ -169,5 +182,15 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setName(t("settings.perfOverlay"))
 			.setDesc(t("settings.perfOverlay.desc"))
 			.addToggle((toggle) => toggle.setValue(s.perfOverlay).onChange((v) => this.setControlValue("perfOverlay", v)));
+
+		new Setting(containerEl)
+			.setName(t("settings.snapshotInterval"))
+			.setDesc(t("settings.snapshotInterval.desc"))
+			.addSlider((slider) => slider.setLimits(0, 168, 1).setValue(s.snapshotIntervalHours).onChange((v) => this.setControlValue("snapshotIntervalHours", v)));
+
+		new Setting(containerEl)
+			.setName(t("settings.snapshotKeep"))
+			.setDesc(t("settings.snapshotKeep.desc"))
+			.addSlider((slider) => slider.setLimits(1, 50, 1).setValue(s.snapshotsToKeep).onChange((v) => this.setControlValue("snapshotsToKeep", v)));
 	}
 }

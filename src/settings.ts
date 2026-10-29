@@ -6,8 +6,12 @@ export interface NotebookSettings {
 	fingerDrawing: boolean;
 	palmRejectionMs: number;
 	pressureMode: PressureMode;
-	prediction: boolean;
-	/** 0–10, see Stabilizer. */
+	/**
+	 * Draw the browser's predicted pen samples at the tip of the wet ink (never stored). Replaces the
+	 * old `prediction` key (default on), so the new default (off) applies to everyone.
+	 */
+	inkPrediction: boolean;
+	/** 0–10: strength of the adaptive position filter (one-euro.ts); 0 turns it off. */
 	stabilization: number;
 	/** Touch contacts larger than this (CSS px) are ignored as palms; 0 = off. */
 	palmContactPx: number;
@@ -16,6 +20,10 @@ export interface NotebookSettings {
 	defaultPaper: PaperKind;
 	defaultPageSize: PageSizeName;
 	defaultLandscape: boolean;
+	/** Version history: at most one snapshot per notebook per this many hours; 0 turns snapshots off. */
+	snapshotIntervalHours: number;
+	/** Version history: how many snapshots to keep per notebook. */
+	snapshotsToKeep: number;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -23,13 +31,15 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	fingerDrawing: false,
 	palmRejectionMs: 500,
 	pressureMode: "auto",
-	prediction: true,
+	inkPrediction: false,
 	stabilization: 2,
 	palmContactPx: 0,
 	perfOverlay: false,
 	defaultPaper: "grid",
 	defaultPageSize: "a4",
 	defaultLandscape: false,
+	snapshotIntervalHours: 24,
+	snapshotsToKeep: 10,
 };
 
 /** Merges saved data over the defaults, ignoring values of the wrong type. */
@@ -41,13 +51,15 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.fingerDrawing === "boolean") s.fingerDrawing = d.fingerDrawing;
 	if (typeof d.palmRejectionMs === "number" && d.palmRejectionMs >= 0 && d.palmRejectionMs <= 5000) s.palmRejectionMs = d.palmRejectionMs;
 	if (d.pressureMode === "auto" || d.pressureMode === "simulated") s.pressureMode = d.pressureMode;
-	if (typeof d.prediction === "boolean") s.prediction = d.prediction;
+	if (typeof d.inkPrediction === "boolean") s.inkPrediction = d.inkPrediction;
 	if (typeof d.stabilization === "number" && d.stabilization >= 0 && d.stabilization <= 10) s.stabilization = d.stabilization;
 	if (typeof d.palmContactPx === "number" && d.palmContactPx >= 0 && d.palmContactPx <= 200) s.palmContactPx = d.palmContactPx;
 	if (typeof d.perfOverlay === "boolean") s.perfOverlay = d.perfOverlay;
 	if (PAPER_KINDS.includes(d.defaultPaper as PaperKind)) s.defaultPaper = d.defaultPaper as PaperKind;
 	if (typeof d.defaultPageSize === "string" && Object.prototype.hasOwnProperty.call(PAGE_SIZES, d.defaultPageSize)) s.defaultPageSize = d.defaultPageSize as PageSizeName;
 	if (typeof d.defaultLandscape === "boolean") s.defaultLandscape = d.defaultLandscape;
+	if (typeof d.snapshotIntervalHours === "number" && d.snapshotIntervalHours >= 0 && d.snapshotIntervalHours <= 720) s.snapshotIntervalHours = d.snapshotIntervalHours;
+	if (typeof d.snapshotsToKeep === "number" && Number.isInteger(d.snapshotsToKeep) && d.snapshotsToKeep >= 1 && d.snapshotsToKeep <= 100) s.snapshotsToKeep = d.snapshotsToKeep;
 	return s;
 }
 

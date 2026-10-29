@@ -5,6 +5,7 @@ import { layoutPages } from "../ink/layout";
 import { Renderer } from "../ink/renderer";
 import { eraseSegment } from "../ink/segment-erase";
 import { fitWidth, pan, zoomAt } from "../ink/viewport";
+import { runWritingBench } from "../ink/writing-bench";
 import { parse, serialize, serializeChecked } from "../model/serialize";
 import { stressDocument } from "../model/stress";
 
@@ -34,7 +35,8 @@ function heapMb(): number | null {
 
 /**
  * Reproducible benchmark on a generated 10,000-stroke notebook (10 pages), rendered off-screen
- * at the size of the current view. Nothing is written to the vault.
+ * at the size of the current view, then a replay of synthetic pen input through the old and the
+ * new writing pipeline. Nothing is written to the vault.
  */
 export async function runBenchmark(width: number, height: number, dpr: number, log: (line: string) => void): Promise<void> {
 	log(`Device: ${Platform.isAndroidApp ? "Android" : Platform.isIosApp ? "iOS" : Platform.isMobile ? "mobile" : "desktop"}, view ${Math.round(width)}×${Math.round(height)} @${dpr}x`);
@@ -105,6 +107,16 @@ export async function runBenchmark(width: number, height: number, dpr: number, l
 	const heap1 = heapMb();
 	if (heap0 !== null && heap1 !== null) log(`JS heap: ${heap0.toFixed(0)} → ${heap1.toFixed(0)} MB`);
 	else log("JS heap: not reported by this browser");
+	await pause();
+
+	// Writing engine: old vs new pipeline on a synthetic pen replay (see ink/writing-bench.ts).
+	log("— Writing engine —");
+	const writeStage = activeDocument.body.createDiv({ cls: "notebook-bench-stage" });
+	try {
+		await runWritingBench({ width, height, dpr, log, pause, stage: writeStage });
+	} finally {
+		writeStage.remove();
+	}
 }
 
 export class BenchmarkModal extends Modal {

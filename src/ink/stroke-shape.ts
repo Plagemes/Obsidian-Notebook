@@ -1,5 +1,6 @@
 import { getStroke, type StrokeOptions } from "perfect-freehand";
-import type { Point, Tool } from "../model/types";
+import { RENDER_INK, type Point, type Stroke, type Tool } from "../model/types";
+import { inkPath, SvgPathSink } from "./ink-geometry";
 
 /** Pen v1 parameters (see docs/architecture.md §2). Changing them changes how existing files look. */
 export const PEN_V1: Readonly<StrokeOptions> = {
@@ -21,11 +22,21 @@ export const HIGHLIGHTER_V2: Readonly<StrokeOptions> = {
 	end: { cap: false, taper: 0 },
 };
 
+/** Shape tool (format v4): constant width, no smoothing or streamlining (corners stay sharp), round caps. */
+export const SHAPE_V4: Readonly<StrokeOptions> = {
+	thinning: 0,
+	smoothing: 0,
+	streamline: 0,
+	simulatePressure: false,
+	start: { cap: true, taper: 0 },
+	end: { cap: true, taper: 0 },
+};
+
 export const HIGHLIGHTER_ALPHA = 0.35;
 
 /** Stroke outline (closed polygon) in page coordinates. */
 export function strokeOutline(points: readonly Point[], width: number, complete = true, tool: Tool = "pen"): number[][] {
-	const base = tool === "highlighter" ? HIGHLIGHTER_V2 : PEN_V1;
+	const base = tool === "highlighter" ? HIGHLIGHTER_V2 : tool === "shape" ? SHAPE_V4 : PEN_V1;
 	return getStroke(points as Point[], { ...base, size: width, last: complete });
 }
 
@@ -51,4 +62,12 @@ export function outlineToPath(outline: readonly number[][]): string {
 
 export function strokePath(points: readonly Point[], width: number, complete = true, tool: Tool = "pen"): string {
 	return outlineToPath(strokeOutline(points, width, complete, tool));
+}
+
+/** SVG path of a committed stroke with the geometry its render version names (nonzero fill). */
+export function strokeSvgPath(stroke: Pick<Stroke, "points" | "width" | "tool" | "render">): string {
+	if (stroke.render !== RENDER_INK) return strokePath(stroke.points, stroke.width, true, stroke.tool);
+	const sink = new SvgPathSink();
+	inkPath(sink, stroke.points, stroke.width, stroke.tool);
+	return sink.d;
 }

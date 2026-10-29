@@ -46,7 +46,7 @@ describe("migrations", () => {
 		if (!r.ok) throw new Error(r.message);
 		expect(r.migratedFrom).toBe(1);
 		expect(r.doc.version).toBe(CURRENT_VERSION);
-		expect(r.doc.pages[0]!.strokes[0]).toEqual(v1.pages[0]!.strokes[0]);
+		expect(r.doc.pages[0]!.strokes[0]).toEqual({ ...v1.pages[0]!.strokes[0], render: 1 });
 	});
 
 	it("accepts a v1 file that already uses a v2 tool, after migration", () => {

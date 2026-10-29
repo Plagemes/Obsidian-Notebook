@@ -31,15 +31,32 @@ describe("InputPolicy (palm rejection)", () => {
 
 describe("PressureModel", () => {
 	const run = (m: PressureModel, type: string, values: number[]) => {
-		m.begin();
+		m.begin(type, values[0]);
 		return values.map((v, i) => m.sample(type, v, i * 2, 0, i * 8));
 	};
 
-	it("uses real pen pressure once it varies", () => {
+	it("uses real pen pressure from the first sample when it is plausible", () => {
 		const m = new PressureModel("auto");
 		const out = run(m, "pen", [0.2, 0.35, 0.6, 0.8, 0.7]);
+		expect(m.usingReal).toBe(true);
 		expect(m.penPressureTrusted).toBe(true);
-		expect(out.slice(2)).toEqual([0.6, 0.8, 0.7]);
+		// Lightly smoothed, but it follows the pen.
+		expect(out[3]!).toBeGreaterThan(out[1]!);
+		expect(Math.abs(out[4]! - 0.7)).toBeLessThan(0.1);
+	});
+
+	it("never switches from simulated to real in the middle of a stroke", () => {
+		const m = new PressureModel("auto");
+		const sim = new PressureModel("auto");
+		const values = [0.5, 0.2, 0.35, 0.6, 0.8, 0.7, 0.3, 0.9];
+		const out = run(m, "pen", values);
+		// Same as a mouse moving the same way: the first sample (0.5) did not prove real pressure.
+		expect(out).toEqual(run(sim, "mouse", values));
+		expect(m.usingReal).toBe(false);
+		// The device proved real pressure during the stroke: the next stroke uses it from its start.
+		expect(m.penPressureTrusted).toBe(true);
+		run(m, "pen", [0.5, 0.5, 0.6]);
+		expect(m.usingReal).toBe(true);
 	});
 
 	it.each([0, 0.5, 1])("simulates pressure when the pen always reports %f", (c) => {

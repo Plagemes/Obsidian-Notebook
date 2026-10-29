@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.4.0 — 2026-10-29 (M3b and M3c)
+
+Not yet verified on Android hardware (see `docs/testing.md`). This release merges the planned 0.4.0 (objects) and 0.5.0 (library, PDF, canvas) of the M3 split.
+
+### Added
+- **Library view** (ribbon icon, command **Open library**): folders, favourites, recent, tags, cover colours, thumbnails (also of PDF and image pages), sort by modified, name or created, rename, move (menu or drag and drop), duplicate, delete (to the trash). Search over titles, tags and the text of text boxes, with a snippet and a jump to the page. Notebook metadata and thumbnails are cached in a disposable `library-index.json` in the plugin folder; the notebooks stay the only source of truth.
+- **PDFs**: **Import PDF as notebook** (one page per PDF page, page size from the PDF), **Insert PDF after this page** (whole file or a page range), blank pages between PDF pages. Rendered with Obsidian's pdf.js into a bounded bitmap cache; ink stays vector on top. A missing file shows a placeholder and keeps the ink.
+- **Scanner**: photo from the device camera or a file, four-corner crop with a loupe and automatic page detection, perspective correction, filters *Original*, *Document* and *Whiteboard*, rotate, retake, several sheets in a row. Into the notebook as pages (**Scan into this notebook**, page menu), as an image (**Insert scan as image**), or as a new notebook (**New notebook from scan**).
+- **Assets**: PDFs and images are stored once in `<notebooks folder>/_assets/`, named by the hash of their content, and referenced from the notebook.
+- **Page navigator** (Pages panel): thumbnails, tap to jump, drag to reorder, bookmarks and a bookmarks-only filter.
+- **Tools**: shapes (line, arrow, rectangle, ellipse) with hold-still recognition of rough lines, rectangles, ellipses and arrows; text boxes; images; ruler placed with two fingers (the pen follows its edge); lasso now selects text boxes and images too; **infinite page** (grows downwards when you write near the bottom).
+- **Instant save journal**: changes are recorded within about 200 ms in a plugin-owned journal and replayed when the notebook is opened after a crash or a forced close.
+- **Version history**: automatic snapshots (at most one per notebook per 24 h by default, last 10 kept), command **Restore a previous version**; the current content is backed up before a restore.
+- **Embeds and links**: a `notebook` code block (or a wikilink form such as `[[Physics#p3]]`) shows a page preview that opens the notebook at that page; command **Insert notebook embed**; `obsidian://notebook?path=…&page=…` links.
+- **Writing engine** (wet ink): the stroke being written is painted as each pen sample arrives (`pointerrawupdate` where available, `pointermove` otherwise), only the new part, on its own low-latency canvas. New strokes use a geometry (disc chain on a smooth curve) that is identical while writing and after the pen lifts, so the line no longer jumps at pen-up. The highlighter looks the same while writing and after.
+- Export: PDF backgrounds and images are rasterised as JPEG (PDF pages at 200 dpi) and embedded in PDF and SVG exports.
+- Settings: *Version history interval*, *Versions to keep*, *Predicted ink*. Commands: **Open library**, **Import PDF as notebook**, **Scan into this notebook**, **New notebook from scan**, **Insert notebook embed**, **Restore a previous version**.
+- Italian translation of the new UI.
+
+### Changed
+- **File format v4 and v5.** v4 adds notebook `meta`, `assets`, page backgrounds (PDF page or image), text and image elements, infinite pages and the `shape` tool. v5 adds the per-stroke `render` field (1 = the old perfect-freehand look, kept for every existing stroke; 2 = the new ink engine). v3 and v4 files migrate in memory and are rewritten as v5 on the first edit. **Files written by 0.4.0 open read-only in older versions** (with a backup copy).
+- Stabilization is an adaptive filter (1€ filter): less jitter at rest and much less lag while writing at the same level (default 2).
+- Pressure, real or simulated, is decided at the start of each stroke and never switches in the middle of it.
+- *Predicted points* is replaced by *Predicted ink*, **off by default** (predicted samples overshoot at turns and at the end of a stroke).
+- Saves, journal entries and thumbnail refreshes wait while the pen writes (and 350 ms after), never longer than a few seconds.
+- The notebook container is isolated in one module (`src/storage/format.ts`), so a later move to Markdown (M4) is a contained change.
+- Duplicating a notebook gives it a new document id.
+
+### Fixed
+- Safety: during continuous writing the journal entry now lands in the first short pen-up gap (120 ms) or after at most 1 s / 1.5 s, instead of up to 4 s / 8 s later; the journal no longer writes while a save of the same revision is in flight (a crash could otherwise turn a "merged" entry into a stale one); a partial erase of a fast curved stroke keeps the curve (inserted points follow the ink geometry, not the chord).
+Found by independent reviews of the new data-safety code:
+- The journal is keyed per file identity and per session, so two notebooks or two sessions cannot replay each other's entries; an entry that does not match the file on disk is never applied, a copy goes to the backup folder first.
+- Recovery works again after a notebook was unreadable and then became readable.
+- Assets are verified before a page refers to them.
+- Duplicate page ids are rejected on read and on write.
+- Restoring a version aborts if the save of the open notebook fails, or if the version belongs to a different notebook.
+
 ## 0.3.0 — 2026-10-29 (M3a)
 
 Not yet verified on Android hardware (see `docs/testing.md`). M3 has been split: this release covers pages, paper and export; shapes, text boxes, images and the ruler are planned for 0.4.0 (M3b), the library, PDF import and infinite canvas for 0.5.0 (M3c).
