@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Document format v4 (model side): notebook `meta`, `assets`, page backgrounds, text and image elements, infinite pages, `shape` tool; v3 files migrate in memory. New undoable commands: `AddElement`, `RemoveElement`, `ReplaceElement`, `SetMeta`, `AddAsset`, `InsertPages`, `SetPageInfinite`.
+
 ## 0.3.0 — 2026-10-29 (M3a)
 
 Not yet verified on Android hardware (see `docs/testing.md`). M3 has been split: this release covers pages, paper and export; shapes, text boxes, images and the ruler are planned for 0.4.0 (M3b), the library, PDF import and infinite canvas for 0.5.0 (M3c).

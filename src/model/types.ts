@@ -1,8 +1,8 @@
 /** Notebook document format. Units: typographic points (pt), origin at the top-left of the page. */
 
 export const FORMAT_ID = "obsidian-notebook";
-/** v3: paper kinds beyond "grid" and page size presets (v2: highlighter tool). */
-export const CURRENT_VERSION = 3;
+/** v4: library metadata, assets, backgrounds, elements, infinite pages, "shape" tool (v3: paper kinds and page sizes). */
+export const CURRENT_VERSION = 4;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -128,6 +128,14 @@ export interface NotebookMeta {
 	/** Bookmarked page ids. */
 	bookmarks: string[];
 }
+
+/** Metadata of a new notebook and of every migrated v3 file. Never mutate it: copy it (cloneMeta in document.ts). */
+export const DEFAULT_META: Readonly<NotebookMeta> = {
+	tags: [],
+	favorite: false,
+	cover: "#3b82f6",
+	bookmarks: [],
+};
 
 export interface NotebookDocument {
 	format: typeof FORMAT_ID;

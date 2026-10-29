@@ -1,14 +1,19 @@
-import { createId } from "./document";
-import { freezeStroke } from "./serialize";
-import type { Page } from "./types";
+import { createId, createPage } from "./document";
+import { freezeElement, freezeStroke } from "./serialize";
+import { PAPER_SPACING, type Asset, type Page, type PageElement } from "./types";
+
+function copyElement(el: PageElement): PageElement {
+	return freezeElement({ ...el, id: createId() });
+}
 
 /**
- * Copy of a page for "duplicate page": new page id and new stroke ids, same size, paper and
- * stroke content. Points are copied (not shared) and strokes are frozen like committed ones.
- * Lives apart from document.ts because serialize.ts -> migrations.ts -> document.ts would cycle.
+ * Copy of a page for "duplicate page": new page id and new stroke/element ids, same size, paper,
+ * background, infinite flag and content. Points are copied (not shared) and strokes and elements are
+ * frozen like committed ones. Lives apart from document.ts because
+ * serialize.ts -> migrations.ts -> document.ts would cycle.
  */
 export function duplicatePage(page: Page): Page {
-	return {
+	const copy: Page = {
 		id: createId(),
 		width: page.width,
 		height: page.height,
@@ -21,4 +26,29 @@ export function duplicatePage(page: Page): Page {
 			points: s.points.map((p) => [p[0], p[1], p[2]] as [number, number, number]),
 		})),
 	};
+	if (page.background) copy.background = { ...page.background };
+	if (page.infinite !== undefined) copy.infinite = page.infinite;
+	if (page.elements && page.elements.length > 0) copy.elements = page.elements.map(copyElement);
+	return copy;
+}
+
+/**
+ * One blank page per PDF page, in order: page `i` has the size `sizes[i]` (pt) and shows PDF page
+ * `firstPage + i` of `asset`. The caller adds the asset (AddAsset) and the pages (InsertPages) in one Batch.
+ */
+export function createPdfPages(
+	asset: Asset,
+	sizes: ReadonlyArray<{ width: number; height: number }>,
+	firstPage = 1,
+): Page[] {
+	if (asset.kind !== "pdf") throw new Error("createPdfPages: the asset is not a PDF");
+	if (!Number.isInteger(firstPage) || firstPage < 1) throw new Error("createPdfPages: firstPage must be an integer >= 1");
+	return sizes.map((size, i) => {
+		if (!(Number.isFinite(size.width) && size.width > 0 && Number.isFinite(size.height) && size.height > 0)) {
+			throw new Error(`createPdfPages: invalid size for page ${i}`);
+		}
+		const page = createPage({ width: size.width, height: size.height }, { kind: "blank", spacing: PAPER_SPACING.blank });
+		page.background = { kind: "pdf", asset: asset.id, page: firstPage + i };
+		return page;
+	});
 }

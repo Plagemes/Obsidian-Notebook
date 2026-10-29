@@ -1,7 +1,8 @@
 import { detectVersion, migrate, MigrationError, type RawObject } from "./migrations";
 import {
-	CURRENT_VERSION, FORMAT_ID, PAPER_KINDS, TOOLS,
-	type NotebookDocument, type Page, type PaperKind, type Point, type Stroke, type Tool,
+	CURRENT_VERSION, DEFAULT_META, FORMAT_ID, PAPER_KINDS, TOOLS,
+	type Asset, type AssetKind, type ImageElement, type NotebookDocument, type NotebookMeta, type Page,
+	type PageBackground, type PageElement, type PaperKind, type Point, type Stroke, type TextElement, type Tool,
 } from "./types";
 
 export type ParseFailure =
@@ -17,23 +18,74 @@ export type ParseResult =
 
 const j = JSON.stringify;
 
+class ValidationError extends Error {}
+
+function fail(path: string, what: string): never {
+	throw new ValidationError(`${path}: ${what}`);
+}
+
 function strokeLine(s: Stroke): string {
 	return `\t\t\t\t{"id":${j(s.id)},"tool":${j(s.tool)},"color":${j(s.color)},"width":${j(s.width)},"points":${j(s.points)}}`;
 }
 
-function assemble(doc: NotebookDocument, lineOf: (s: Stroke) => string): string {
+function elementLine(e: PageElement): string {
+	if (e.type === "text") {
+		return `\t\t\t\t{"id":${j(e.id)},"type":"text","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"text":${j(e.text)},"fontSize":${j(e.fontSize)},"color":${j(e.color)}}`;
+	}
+	if (e.type === "image") {
+		return `\t\t\t\t{"id":${j(e.id)},"type":"image","asset":${j(e.asset)},"x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"rotation":${j(e.rotation)}}`;
+	}
+	return fail("element", "unknown element type");
+}
+
+function assetLine(a: Asset): string {
+	return `\t\t${j(a.id)}: {"id":${j(a.id)},"kind":${j(a.kind)},"path":${j(a.path)},"name":${j(a.name)},"bytes":${j(a.bytes)}}`;
+}
+
+/** Tags without duplicates; bookmarks without duplicates and without ids of pages that no longer exist. */
+function normalizeMeta(meta: NotebookMeta, pageIds: ReadonlySet<string>): NotebookMeta {
+	return {
+		tags: [...new Set(meta.tags)],
+		favorite: meta.favorite,
+		cover: meta.cover,
+		bookmarks: [...new Set(meta.bookmarks)].filter((id) => pageIds.has(id)),
+	};
+}
+
+function metaLine(meta: NotebookMeta): string {
+	return `{"tags":${j(meta.tags)},"favorite":${j(meta.favorite)},"cover":${j(meta.cover)},"bookmarks":${j(meta.bookmarks)}}`;
+}
+
+function assemble(
+	doc: NotebookDocument,
+	lineOf: (s: Stroke) => string,
+	elementLineOf: (e: PageElement) => string = elementLine,
+): string {
 	const pages = doc.pages.map((page) => {
 		const strokes = page.strokes.map(lineOf);
-		return [
+		const elements = (page.elements ?? []).map(elementLineOf);
+		const out = [
 			"\t\t{",
 			`\t\t\t"id": ${j(page.id)},`,
 			`\t\t\t"width": ${j(page.width)},`,
 			`\t\t\t"height": ${j(page.height)},`,
 			`\t\t\t"paper": {"kind":${j(page.paper.kind)},"spacing":${j(page.paper.spacing)}},`,
-			strokes.length ? `\t\t\t"strokes": [\n${strokes.join(",\n")}\n\t\t\t]` : `\t\t\t"strokes": []`,
-			"\t\t}",
-		].join("\n");
+		];
+		const b = page.background;
+		if (b) {
+			out.push(b.kind === "pdf"
+				? `\t\t\t"background": {"kind":"pdf","asset":${j(b.asset)},"page":${j(b.page)}},`
+				: `\t\t\t"background": {"kind":${j(b.kind)},"asset":${j(b.asset)}},`);
+		}
+		if (page.infinite !== undefined) out.push(`\t\t\t"infinite": ${j(page.infinite)},`);
+		if (elements.length) out.push(`\t\t\t"elements": [\n${elements.join(",\n")}\n\t\t\t],`);
+		out.push(strokes.length ? `\t\t\t"strokes": [\n${strokes.join(",\n")}\n\t\t\t]` : `\t\t\t"strokes": []`);
+		out.push("\t\t}");
+		return out.join("\n");
 	});
+	const pageIds = new Set(doc.pages.map((p) => p.id));
+	const meta = normalizeMeta(doc.meta ?? DEFAULT_META, pageIds);
+	const assets = Object.values(doc.assets ?? {}).sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
 	return [
 		"{",
 		`\t"format": ${j(doc.format)},`,
@@ -41,6 +93,8 @@ function assemble(doc: NotebookDocument, lineOf: (s: Stroke) => string): string 
 		`\t"id": ${j(doc.id)},`,
 		`\t"createdAt": ${j(doc.createdAt)},`,
 		`\t"modifiedAt": ${j(doc.modifiedAt)},`,
+		`\t"meta": ${metaLine(meta)},`,
+		assets.length ? `\t"assets": {\n${assets.map(assetLine).join(",\n")}\n\t},` : `\t"assets": {},`,
 		`\t"pages": [\n${pages.join(",\n")}\n\t]`,
 		"}",
 		"",
@@ -48,17 +102,13 @@ function assemble(doc: NotebookDocument, lineOf: (s: Stroke) => string): string 
 }
 
 /**
- * Deterministic serialization: fixed key order, one stroke per line.
+ * Deterministic serialization: fixed key order, one stroke, element and asset per line.
  * `serialize(parse(s).doc) === s` for every `s` produced by this function.
+ * Metadata is written normalised: tags without duplicates, bookmarks without duplicates and
+ * without ids of pages that are not in the document (a deleted page may still be bookmarked in memory).
  */
 export function serialize(doc: NotebookDocument): string {
 	return assemble(doc, strokeLine);
-}
-
-class ValidationError extends Error {}
-
-function fail(path: string, what: string): never {
-	throw new ValidationError(`${path}: ${what}`);
 }
 
 function isObject(v: unknown): v is RawObject {
@@ -75,10 +125,23 @@ function positive(v: unknown, path: string): number {
 	return v;
 }
 
+function finite(v: unknown, path: string): number {
+	if (typeof v !== "number" || !Number.isFinite(v)) fail(path, "expected a finite number");
+	return v;
+}
+
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+const HEX_RE = /^[0-9a-f]+$/;
+
+function colour(v: unknown, path: string): string {
+	if (typeof v !== "string" || !COLOR_RE.test(v)) fail(path, "expected a #rrggbb colour");
+	return v;
+}
 
 /** Smallest accepted paper spacing, pt (0.5 pt ≈ 0.18 mm; the finest preset is 1 mm). */
 export const MIN_PAPER_SPACING = 0.5;
+/** Largest accepted text size, pt. */
+export const MAX_FONT_SIZE = 400;
 
 function readPoint(v: unknown, path: string): Point {
 	if (!Array.isArray(v) || v.length !== 3) fail(path, "expected a [x, y, pressure] point");
@@ -100,7 +163,95 @@ function readStroke(v: unknown, path: string): Stroke {
 	return { id, tool: v.tool as Tool, color: v.color, width, points };
 }
 
-function readPage(v: unknown, path: string, ids: Set<string>): Page {
+type Assets = Readonly<Record<string, Asset>>;
+
+function readAsset(v: unknown, key: string, path: string): Asset {
+	if (!isObject(v)) fail(path, "expected an object");
+	const id = str(v.id, `${path}.id`);
+	if (!HEX_RE.test(id)) fail(`${path}.id`, "expected lowercase hexadecimal");
+	if (id !== key) fail(path, "key does not match the asset id");
+	if (v.kind !== "pdf" && v.kind !== "image") fail(`${path}.kind`, "unknown asset kind");
+	const assetPath = str(v.path, `${path}.path`);
+	if (typeof v.name !== "string") fail(`${path}.name`, "expected a string");
+	if (typeof v.bytes !== "number" || !Number.isSafeInteger(v.bytes) || v.bytes < 0) {
+		fail(`${path}.bytes`, "expected a non-negative integer");
+	}
+	return { id, kind: v.kind, path: assetPath, name: v.name, bytes: v.bytes };
+}
+
+function requireAsset(assets: Assets, id: string, kind: AssetKind, path: string): void {
+	const a = Object.prototype.hasOwnProperty.call(assets, id) ? assets[id] : undefined;
+	if (!a) fail(path, "refers to an asset that does not exist");
+	if (a.kind !== kind) fail(path, `expected a ${kind} asset, found ${a.kind}`);
+}
+
+function readBackground(v: unknown, path: string, assets: Assets): PageBackground {
+	if (!isObject(v)) fail(path, "expected an object");
+	const asset = str(v.asset, `${path}.asset`);
+	if (v.kind === "pdf") {
+		if (typeof v.page !== "number" || !Number.isSafeInteger(v.page) || v.page < 1) {
+			fail(`${path}.page`, "expected an integer >= 1");
+		}
+		requireAsset(assets, asset, "pdf", `${path}.asset`);
+		return { kind: "pdf", asset, page: v.page };
+	}
+	if (v.kind === "image") {
+		requireAsset(assets, asset, "image", `${path}.asset`);
+		return { kind: "image", asset };
+	}
+	return fail(`${path}.kind`, "unknown background kind");
+}
+
+function readElement(v: unknown, path: string, assets: Assets): PageElement {
+	if (!isObject(v)) fail(path, "expected an object");
+	const id = str(v.id, `${path}.id`);
+	if (v.type === "text") {
+		if (typeof v.text !== "string") fail(`${path}.text`, "expected a string");
+		const fontSize = positive(v.fontSize, `${path}.fontSize`);
+		if (fontSize > MAX_FONT_SIZE) fail(`${path}.fontSize`, `must be at most ${MAX_FONT_SIZE} pt`);
+		const el: TextElement = {
+			id, type: "text",
+			x: finite(v.x, `${path}.x`), y: finite(v.y, `${path}.y`),
+			width: positive(v.width, `${path}.width`),
+			text: v.text, fontSize, color: colour(v.color, `${path}.color`),
+		};
+		return el;
+	}
+	if (v.type === "image") {
+		const asset = str(v.asset, `${path}.asset`);
+		requireAsset(assets, asset, "image", `${path}.asset`);
+		const el: ImageElement = {
+			id, type: "image", asset,
+			x: finite(v.x, `${path}.x`), y: finite(v.y, `${path}.y`),
+			width: positive(v.width, `${path}.width`), height: positive(v.height, `${path}.height`),
+			rotation: finite(v.rotation, `${path}.rotation`),
+		};
+		return el;
+	}
+	return fail(`${path}.type`, "unknown element type");
+}
+
+function readMeta(v: unknown, pageIds: ReadonlySet<string>): NotebookMeta {
+	if (v === undefined) return normalizeMeta(DEFAULT_META, pageIds);
+	if (!isObject(v)) fail("meta", "expected an object");
+	if (!Array.isArray(v.tags)) fail("meta.tags", "expected an array");
+	const tags = v.tags.map((t, i) => str(t, `meta.tags[${i}]`));
+	if (typeof v.favorite !== "boolean") fail("meta.favorite", "expected a boolean");
+	const cover = colour(v.cover, "meta.cover");
+	if (!Array.isArray(v.bookmarks)) fail("meta.bookmarks", "expected an array");
+	const bookmarks = v.bookmarks.map((b, i) => str(b, `meta.bookmarks[${i}]`));
+	return normalizeMeta({ tags, favorite: v.favorite, cover, bookmarks }, pageIds);
+}
+
+function readAssets(v: unknown): Record<string, Asset> {
+	if (v === undefined) return {};
+	if (!isObject(v)) fail("assets", "expected an object");
+	const assets: Record<string, Asset> = {};
+	for (const [key, a] of Object.entries(v)) assets[key] = readAsset(a, key, `assets.${key}`);
+	return assets;
+}
+
+function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets): Page {
 	if (!isObject(v)) fail(path, "expected an object");
 	const id = str(v.id, `${path}.id`);
 	const width = positive(v.width, `${path}.width`);
@@ -119,7 +270,23 @@ function readPage(v: unknown, path: string, ids: Set<string>): Page {
 		validatedStrokes.add(stroke);
 		return stroke;
 	});
-	return { id, width, height, paper: { kind: paper.kind as PaperKind, spacing }, strokes };
+	const page: Page = { id, width, height, paper: { kind: paper.kind as PaperKind, spacing }, strokes };
+	if (v.background !== undefined) page.background = readBackground(v.background, `${path}.background`, assets);
+	if (v.infinite !== undefined) {
+		if (typeof v.infinite !== "boolean") fail(`${path}.infinite`, "expected a boolean");
+		page.infinite = v.infinite;
+	}
+	if (v.elements !== undefined) {
+		if (!Array.isArray(v.elements)) fail(`${path}.elements`, "expected an array");
+		const elements = v.elements.map((e, i) => {
+			const el = readElement(e, `${path}.elements[${i}]`, assets);
+			if (ids.has(el.id)) fail(`${path}.elements[${i}].id`, "duplicate id");
+			ids.add(el.id);
+			return freezeElement(el);
+		});
+		if (elements.length > 0) page.elements = elements;
+	}
+	return page;
 }
 
 /** Committed strokes are immutable: edits create new strokes. This makes per-stroke caches safe. */
@@ -127,6 +294,11 @@ export function freezeStroke(stroke: Stroke): Stroke {
 	for (const p of stroke.points) Object.freeze(p);
 	Object.freeze(stroke.points);
 	return Object.freeze(stroke);
+}
+
+/** Elements are immutable like strokes: an edit replaces the object (ReplaceElement). */
+export function freezeElement<T extends PageElement>(element: T): T {
+	return Object.freeze(element);
 }
 
 /** Validates an object already at the current version and returns a copy with known fields only. */
@@ -138,9 +310,11 @@ export function validate(raw: unknown): NotebookDocument {
 	const createdAt = str(raw.createdAt, "createdAt");
 	const modifiedAt = str(raw.modifiedAt, "modifiedAt");
 	if (!Array.isArray(raw.pages) || raw.pages.length === 0) fail("pages", "expected at least one page");
+	const assets = readAssets(raw.assets);
 	const ids = new Set<string>();
-	const pages = raw.pages.map((p, i) => readPage(p, `pages[${i}]`, ids));
-	return { format: FORMAT_ID, version: CURRENT_VERSION, id, createdAt, modifiedAt, pages };
+	const pages = raw.pages.map((p, i) => readPage(p, `pages[${i}]`, ids, assets));
+	const meta = readMeta(raw.meta, new Set(pages.map((p) => p.id)));
+	return { format: FORMAT_ID, version: CURRENT_VERSION, id, createdAt, modifiedAt, pages, meta, assets };
 }
 
 export function parse(text: string): ParseResult {
@@ -203,10 +377,14 @@ export const FULL_CHECK_LIMIT = 1_000_000;
  * Small documents are fully re-parsed. For large ones the check is incremental, so saving
  * a 10,000-stroke notebook does not re-parse megabytes each time: every stroke line is
  * parsed, validated and re-serialized once (strokes are frozen, so it cannot change later),
- * and the document skeleton (header, pages, ids) is validated on every save.
+ * and the document skeleton (header, meta, assets, pages, backgrounds, elements) is validated
+ * and round-trip checked on every save, which also catches dangling asset references.
  */
 export function serializeChecked(doc: NotebookDocument, forceFull = false): CheckedSerialization {
 	try {
+		for (const [key, asset] of Object.entries(doc.assets ?? {})) {
+			if (key !== asset.id) fail(`assets.${key}`, "key does not match the asset id");
+		}
 		const ids = new Set<string>();
 		const text = assemble(doc, (s) => {
 			if (ids.has(s.id)) fail(`stroke ${s.id}`, "duplicate id");
@@ -224,6 +402,11 @@ export function serializeChecked(doc: NotebookDocument, forceFull = false): Chec
 			if (strokeLine(back) !== line) fail(`stroke ${s.id}`, "round-trip mismatch");
 			if (Object.isFrozen(s) && Object.isFrozen(s.points)) verifiedLines.set(s, line);
 			return line;
+		}, (e) => {
+			// Ids are unique across strokes and elements; the content is validated by the parse below.
+			if (ids.has(e.id)) fail(`element ${e.id}`, "duplicate id");
+			ids.add(e.id);
+			return elementLine(e);
 		});
 		if (forceFull || text.length < FULL_CHECK_LIMIT) {
 			const check = parse(text);
@@ -231,8 +414,10 @@ export function serializeChecked(doc: NotebookDocument, forceFull = false): Chec
 			if (serialize(check.doc) !== text) return { ok: false, message: "round-trip mismatch" };
 		} else {
 			const skeleton = { ...doc, pages: doc.pages.map((p) => ({ ...p, strokes: [] })) };
-			const check = parse(assemble(skeleton, strokeLine));
+			const skeletonText = assemble(skeleton, strokeLine);
+			const check = parse(skeletonText);
 			if (!check.ok) return { ok: false, message: check.message };
+			if (assemble(check.doc, strokeLine) !== skeletonText) return { ok: false, message: "round-trip mismatch" };
 		}
 		return { ok: true, text };
 	} catch (e) {

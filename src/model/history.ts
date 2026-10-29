@@ -1,5 +1,6 @@
-import { findPage } from "./document";
-import type { NotebookDocument, Page, Paper, Stroke } from "./types";
+import { cloneMeta, findPage } from "./document";
+import { freezeElement } from "./serialize";
+import type { Asset, NotebookDocument, NotebookMeta, Page, PageElement, Paper, Stroke } from "./types";
 
 /** A command knows how to apply and revert itself on a document: no snapshots. */
 export interface Command {
@@ -211,6 +212,180 @@ export class SetPageSize implements Command {
 		const page = pageOf(doc, this.pageId);
 		page.width = this.before.width;
 		page.height = this.before.height;
+	}
+}
+
+/** The element array of a page, created on first use (pages without elements have none). */
+function elementsOf(doc: NotebookDocument, pageId: string): PageElement[] {
+	const page = pageOf(doc, pageId);
+	return (page.elements ??= []);
+}
+
+/**
+ * Adds an element (a text box or an image). Elements are immutable like strokes, so the command
+ * freezes it. Applying twice never duplicates; undoing removes it wherever it is.
+ */
+export class AddElement implements Command {
+	readonly label = "Add element";
+	constructor(readonly pageId: string, readonly element: PageElement, readonly index: number) {
+		freezeElement(element);
+	}
+
+	apply(doc: NotebookDocument): void {
+		const els = elementsOf(doc, this.pageId);
+		if (els.includes(this.element)) return;
+		els.splice(Math.max(0, Math.min(this.index, els.length)), 0, this.element);
+	}
+
+	revert(doc: NotebookDocument): void {
+		const els = elementsOf(doc, this.pageId);
+		const i = els.indexOf(this.element);
+		if (i >= 0) els.splice(i, 1);
+	}
+}
+
+/** Removes an element; undo puts the same object back where it was. A missing element is a no-op both ways. */
+export class RemoveElement implements Command {
+	readonly label = "Remove element";
+	private applied = false;
+	private at = 0;
+	constructor(readonly pageId: string, readonly element: PageElement) {}
+
+	apply(doc: NotebookDocument): void {
+		const els = elementsOf(doc, this.pageId);
+		const i = els.indexOf(this.element);
+		this.applied = i >= 0;
+		if (i < 0) return;
+		this.at = i;
+		els.splice(i, 1);
+	}
+
+	revert(doc: NotebookDocument): void {
+		if (!this.applied) return;
+		this.applied = false;
+		const els = elementsOf(doc, this.pageId);
+		if (els.includes(this.element)) return;
+		els.splice(Math.max(0, Math.min(this.at, els.length)), 0, this.element);
+	}
+}
+
+/** Replaces an element with an edited copy at the same position (elements are immutable). */
+export class ReplaceElement implements Command {
+	readonly label = "Edit element";
+	private applied = false;
+	private at = 0;
+	constructor(readonly pageId: string, readonly before: PageElement, readonly after: PageElement) {
+		freezeElement(after);
+	}
+
+	apply(doc: NotebookDocument): void {
+		const els = elementsOf(doc, this.pageId);
+		const i = els.indexOf(this.before);
+		this.applied = i >= 0 && !els.includes(this.after);
+		if (!this.applied) return;
+		this.at = i;
+		els.splice(i, 1, this.after);
+	}
+
+	revert(doc: NotebookDocument): void {
+		if (!this.applied) return;
+		this.applied = false;
+		const els = elementsOf(doc, this.pageId);
+		if (els.includes(this.before)) return;
+		const i = els.indexOf(this.after);
+		if (i >= 0) els.splice(i, 1, this.before);
+		else els.splice(Math.max(0, Math.min(this.at, els.length)), 0, this.before);
+	}
+}
+
+/** Changes the notebook metadata (tags, favourite, cover, bookmarks). Both sides are copied. */
+export class SetMeta implements Command {
+	readonly label = "Change notebook properties";
+	private readonly before: NotebookMeta;
+	private readonly after: NotebookMeta;
+	constructor(before: NotebookMeta, after: NotebookMeta) {
+		this.before = cloneMeta(before);
+		this.after = cloneMeta(after);
+	}
+
+	apply(doc: NotebookDocument): void {
+		doc.meta = cloneMeta(this.after);
+	}
+
+	revert(doc: NotebookDocument): void {
+		doc.meta = cloneMeta(this.before);
+	}
+}
+
+/**
+ * Registers an asset. An asset that already exists (same content id) is left alone, and then
+ * undoing does not remove it: revert() removes only what this command added.
+ */
+export class AddAsset implements Command {
+	readonly label = "Add file";
+	private added = false;
+	constructor(readonly asset: Asset) {}
+
+	apply(doc: NotebookDocument): void {
+		const assets = (doc.assets ??= {});
+		this.added = !Object.prototype.hasOwnProperty.call(assets, this.asset.id);
+		if (this.added) assets[this.asset.id] = this.asset;
+	}
+
+	revert(doc: NotebookDocument): void {
+		if (!this.added) return;
+		this.added = false;
+		if (doc.assets) delete doc.assets[this.asset.id];
+	}
+}
+
+/**
+ * Inserts many pages at once (a PDF import) as one undo step. Pages already in the document are
+ * skipped; undo removes exactly the pages this command inserted, and never the last remaining page.
+ */
+export class InsertPages implements Command {
+	readonly label = "Insert pages";
+	private inserted: Page[] = [];
+	constructor(readonly pages: readonly Page[], readonly index: number) {}
+
+	apply(doc: NotebookDocument): void {
+		const fresh = this.pages.filter((p, i) => !doc.pages.includes(p) && this.pages.indexOf(p) === i);
+		if (fresh.length === 0) return; // already applied (or nothing to add): keep what revert() must remove
+		this.inserted = fresh;
+		doc.pages.splice(Math.max(0, Math.min(this.index, doc.pages.length)), 0, ...this.inserted);
+	}
+
+	revert(doc: NotebookDocument): void {
+		const mine = new Set(this.inserted);
+		this.inserted = [];
+		if (mine.size === 0) return;
+		const keep = doc.pages.filter((p) => !mine.has(p));
+		if (keep.length === 0) return; // never leave a document without pages
+		doc.pages.splice(0, doc.pages.length, ...keep);
+	}
+}
+
+/** Turns the infinite-page option on or off. Off is stored as the absence of the flag. */
+export class SetPageInfinite implements Command {
+	readonly label = "Change infinite page";
+	private previous: boolean | undefined;
+	private applied = false;
+	constructor(readonly pageId: string, readonly value: boolean) {}
+
+	apply(doc: NotebookDocument): void {
+		const page = pageOf(doc, this.pageId);
+		this.previous = page.infinite;
+		this.applied = true;
+		if (this.value) page.infinite = true;
+		else delete page.infinite;
+	}
+
+	revert(doc: NotebookDocument): void {
+		if (!this.applied) return;
+		this.applied = false;
+		const page = pageOf(doc, this.pageId);
+		if (this.previous === undefined) delete page.infinite;
+		else page.infinite = this.previous;
 	}
 }
 
