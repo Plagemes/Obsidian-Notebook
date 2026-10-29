@@ -270,3 +270,71 @@ describe("library trash: folders with the user's other files", () => {
 		expect(v.files.has(`${items}/bbb-22222/Only/b.notebook`)).toBe(false);
 	});
 });
+
+describe("timetable store: never overwrites a file that changed since it was loaded", () => {
+	const course = (name: string) => ({ version: 1 as const, entries: [{ id: `id-${name}`, course: name, day: 1, start: "09:00", end: "10:00", weeks: "all" as const }] });
+
+	async function setup(initial?: string) {
+		const { TimetableStore, timetablePath } = await import("../src/timetable/store");
+		const v = new FakeVault(initial === undefined ? {} : { [timetablePath(ROOT)]: initial });
+		return { v, store: new TimetableStore(v.app, () => ROOT), path: timetablePath(ROOT) };
+	}
+
+	it("saves over the loaded text, and skips a write that changes nothing", async () => {
+		const { serializeChecked } = await import("../src/timetable/schedule");
+		const { v, store, path } = await setup(serializeChecked(course("Physics")));
+		const loaded = await store.load();
+		await store.save(course("Maths"), { base: loaded.text });
+		expect(v.files.get(path)).toBe(serializeChecked(course("Maths")));
+		const n = v.log.length;
+		await store.save(course("Maths"), { base: serializeChecked(course("Maths")) });
+		expect(v.log.length).toBe(n);
+	});
+
+	it("refuses when sync changed the file meanwhile, keeps the synced file and backs up the draft", async () => {
+		const { serializeChecked } = await import("../src/timetable/schedule");
+		const { TimetableChangedError } = await import("../src/timetable/store");
+		const { v, store, path } = await setup(serializeChecked(course("Physics")));
+		const loaded = await store.load();
+		v.files.set(path, serializeChecked(course("Synced from phone")));
+		await expect(store.save(course("Maths"), { base: loaded.text })).rejects.toBeInstanceOf(TimetableChangedError);
+		expect(v.files.get(path)).toBe(serializeChecked(course("Synced from phone")));
+		const drafts = [...v.files.keys()].filter((p) => p.includes("/_backup/") && p.includes("unsaved"));
+		expect(drafts).toHaveLength(1);
+		expect(v.files.get(drafts[0]!)).toBe(serializeChecked(course("Maths")));
+	});
+
+	it("with 'start new' chosen on an unreadable file, never replaces a file that became valid through sync", async () => {
+		const { serializeChecked } = await import("../src/timetable/schedule");
+		const { v, store, path } = await setup("{ damaged");
+		const loaded = await store.load();
+		expect(loaded.ok).toBe(false);
+		v.files.set(path, serializeChecked(course("Synced")));
+		await expect(store.save({ version: 1, entries: [] }, { base: loaded.text, replaceUnreadable: true })).rejects.toThrow(/changed/);
+		expect(v.files.get(path)).toBe(serializeChecked(course("Synced")));
+	});
+
+	it("replaces a still-unreadable file only when asked, after a backup of it", async () => {
+		const { serializeChecked } = await import("../src/timetable/schedule");
+		const { v, store, path } = await setup("{ damaged");
+		const loaded = await store.load();
+		await expect(store.save(course("A"), { base: loaded.text })).rejects.toThrow(/cannot be read/);
+		expect(v.files.get(path)).toBe("{ damaged");
+		const r = await store.save(course("A"), { base: loaded.text, replaceUnreadable: true });
+		expect(r.backup && v.files.get(r.backup)).toBe("{ damaged");
+		expect(v.files.get(path)).toBe(serializeChecked(course("A")));
+	});
+
+	it("re-checks inside process: a change landing during the save is kept", async () => {
+		const { serializeChecked } = await import("../src/timetable/schedule");
+		const { v, store, path } = await setup(serializeChecked(course("Physics")));
+		const loaded = await store.load();
+		const process = v.vault.process;
+		v.vault.process = async (f, fn) => {
+			v.files.set(path, serializeChecked(course("Late sync")));
+			return process(f, fn);
+		};
+		await expect(store.save(course("Maths"), { base: loaded.text })).rejects.toThrow(/changed/);
+		expect(v.files.get(path)).toBe(serializeChecked(course("Late sync")));
+	});
+});

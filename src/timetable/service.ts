@@ -34,6 +34,8 @@ const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(re
 export class TimetableService {
 	private timetable: Timetable = emptyTimetable();
 	private loadError: string | null = null;
+	/** The file's text as last read (null: no file), the base of the next edit. */
+	private loadedText: string | null = null;
 	private readonly store: TimetableStore;
 	/** Occurrences already offered in this session, so closing the notice does not bring it back. */
 	private readonly offered = new Set<string>();
@@ -77,6 +79,7 @@ export class TimetableService {
 
 	async reload(): Promise<void> {
 		const r = await this.store.load();
+		this.loadedText = r.text;
 		if (r.ok) {
 			this.timetable = r.timetable;
 			this.loadError = null;
@@ -209,6 +212,7 @@ export class TimetableService {
 			store: this.store,
 			timetable: this.timetable,
 			loadError: this.loadError,
+			base: this.loadedText,
 			choices: this.linkChoices(),
 			saved: (tt) => {
 				this.timetable = tt;
