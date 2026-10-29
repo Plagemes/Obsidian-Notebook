@@ -162,3 +162,26 @@ describe("serializeChecked", () => {
 		expect(serializeChecked(doc).ok).toBe(false);
 	});
 });
+
+describe("strokes loaded from a file", () => {
+	it("serializeChecked output equals serialize() with and without warm-up", async () => {
+		const { warmStrokeLines } = await import("../src/model/serialize");
+		const text = serialize(sampleDocument(30));
+		const a = parse(text);
+		const b = parse(text);
+		if (!a.ok || !b.ok) throw new Error("parse failed");
+		expect(warmStrokeLines(a.doc.pages[0]!.strokes)).toBe(30);
+		expect(warmStrokeLines(a.doc.pages[0]!.strokes)).toBe(0); // already cached
+		const warm = serializeChecked(a.doc);
+		const cold = serializeChecked(b.doc);
+		expect(warm.ok && warm.text).toBe(text);
+		expect(cold.ok && cold.text).toBe(text);
+	});
+
+	it("new strokes are not trusted just because they are frozen", () => {
+		const r = parse(serialize(sampleDocument(1)));
+		if (!r.ok) throw new Error("parse failed");
+		r.doc.pages[0]!.strokes.push(freezeStroke({ ...line(0, 0, 1, 1), color: "nope" }));
+		expect(serializeChecked(r.doc, false).ok).toBe(false);
+	});
+});

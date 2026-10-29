@@ -9,9 +9,10 @@
     "dev": "node esbuild.config.mjs",
     "build": "tsc --noEmit && node esbuild.config.mjs production && node scripts/check-bundle.mjs",
     "lint": "eslint . && tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "version": "node version-bump.mjs && git add manifest.json versions.json"
+    "test": "vitest run --project unit",
+    "test:watch": "vitest --project unit",
+    "version": "node version-bump.mjs && git add manifest.json versions.json",
+    "bench": "vitest run --project perf --silent=false"
   },
   "keywords": [
     "obsidian",

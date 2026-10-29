@@ -110,7 +110,9 @@ function readPage(v: unknown, path: string, ids: Set<string>): Page {
 		const stroke = readStroke(s, `${path}.strokes[${i}]`);
 		if (ids.has(stroke.id)) fail(`${path}.strokes[${i}].id`, "duplicate id");
 		ids.add(stroke.id);
-		return freezeStroke(stroke);
+		freezeStroke(stroke);
+		validatedStrokes.add(stroke);
+		return stroke;
 	});
 	return { id, width, height, paper: { kind: "grid", spacing }, strokes };
 }
@@ -170,6 +172,22 @@ export type CheckedSerialization = { ok: true; text: string } | { ok: false; mes
 
 /** Serialized line of each committed (frozen) stroke that already passed the round-trip check. */
 const verifiedLines = new WeakMap<Stroke, string>();
+/** Frozen strokes produced by readStroke() while parsing a file: already validated field by field. */
+const validatedStrokes = new WeakSet<Stroke>();
+
+/**
+ * Caches the serialized line of already-validated strokes ahead of the first save, so that save
+ * does not pay for the whole document at once. Returns how many strokes were processed.
+ */
+export function warmStrokeLines(strokes: readonly Stroke[]): number {
+	let n = 0;
+	for (const s of strokes) {
+		if (verifiedLines.has(s) || !validatedStrokes.has(s)) continue;
+		verifiedLines.set(s, strokeLine(s));
+		n++;
+	}
+	return n;
+}
 
 /** Below this size the whole file is re-parsed on every save; above it, only new strokes are. */
 export const FULL_CHECK_LIMIT = 1_000_000;
@@ -190,6 +208,12 @@ export function serializeChecked(doc: NotebookDocument, forceFull = false): Chec
 			ids.add(s.id);
 			const cached = verifiedLines.get(s);
 			if (cached !== undefined) return cached;
+			if (validatedStrokes.has(s)) {
+				// Read from a file and validated by readStroke(); frozen since, so it cannot have changed.
+				const line = strokeLine(s);
+				verifiedLines.set(s, line);
+				return line;
+			}
 			const line = strokeLine(s);
 			const back = readStroke(JSON.parse(line), `stroke ${s.id}`);
 			if (strokeLine(back) !== line) fail(`stroke ${s.id}`, "round-trip mismatch");

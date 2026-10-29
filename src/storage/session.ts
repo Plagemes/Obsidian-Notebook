@@ -1,4 +1,4 @@
-import { parse, serialize, serializeChecked, type ParseFailure } from "../model/serialize";
+import { parse, serialize, serializeChecked, warmStrokeLines, type ParseFailure } from "../model/serialize";
 import type { NotebookDocument } from "../model/types";
 
 /** File access for one notebook. Implemented over the Vault API in vault-io.ts and by fakes in tests. */
@@ -176,6 +176,7 @@ export class DocumentSession {
 			this.mode = "ok";
 			this.problem = null;
 			this.problemReason = null;
+			this.warmUp(result.doc);
 		} else {
 			this.doc = null;
 			this.mode = result.reason === "future-version" ? "readonly" : "broken";
@@ -271,6 +272,19 @@ export class DocumentSession {
 			this.events.onError?.(`Unsaved changes could not be written or backed up: ${(e as Error).message}`);
 			return false;
 		}
+	}
+
+	/** Pre-computes stroke lines a page at a time in idle ticks, so the first save of a big notebook is quick. */
+	private warmUp(doc: NotebookDocument): void {
+		const pages = [...doc.pages];
+		const step = () => {
+			if (this.disposed || this.doc !== doc) return;
+			const page = pages.shift();
+			if (!page) return;
+			warmStrokeLines(page.strokes);
+			this.timers.set(step, 0);
+		};
+		this.timers.set(step, 0);
 	}
 
 	private clearTimers(): void {
