@@ -1,5 +1,7 @@
 /** Library index: a disposable cache of notebook metadata and thumbnails. Pure, no 'obsidian'. */
 
+import { tagAncestors, tagIsWithin } from "../model/tags";
+
 export const INDEX_VERSION = 2;
 /** "Recent" shows this many notebooks. */
 export const RECENT_LIMIT = 20;
@@ -267,7 +269,8 @@ export class LibraryIndex {
 			list = list.filter((e) => (recursive ? isInside(e.path, folder) && e.path !== folder : e.folder === folder));
 		} else if (typeof scope === "object" && "tag" in scope) {
 			const tag = normalizeText(scope.tag);
-			list = list.filter((e) => e.tags.some((x) => normalizeText(x) === tag));
+			// Like Obsidian's tag search: `a` also finds the notebooks tagged `a/b`.
+			list = list.filter((e) => e.tags.some((x) => tagIsWithin(normalizeText(x), tag)));
 		}
 		return list;
 	}
@@ -350,18 +353,23 @@ export class LibraryIndex {
 		return ranked.sort((a, b) => a.rank - b.rank || cmp(a.hit.entry, b.hit.entry)).map((r) => r.hit);
 	}
 
-	/** Tags with the number of notebooks using them, most used first (ties alphabetically). Case-insensitive. */
+	/**
+	 * Tags with the number of notebooks using them, most used first (ties alphabetically). Case-insensitive. A nested tag
+	 * `a/b` also counts for its parent `a` (as in Obsidian's Tags pane), so the parent can be chosen as a filter.
+	 */
 	tags(): Array<{ tag: string; count: number }> {
 		const counts = new Map<string, { tag: string; count: number }>();
 		for (const e of this.map.values()) {
 			const seen = new Set<string>();
-			for (const tag of e.tags) {
-				const key = normalizeText(tag);
-				if (!key || seen.has(key)) continue;
-				seen.add(key);
-				const c = counts.get(key);
-				if (c) c.count++;
-				else counts.set(key, { tag, count: 1 });
+			for (const full of e.tags) {
+				for (const tag of [...tagAncestors(full), full]) {
+					const key = normalizeText(tag);
+					if (!key || seen.has(key)) continue;
+					seen.add(key);
+					const c = counts.get(key);
+					if (c) c.count++;
+					else counts.set(key, { tag, count: 1 });
+				}
 			}
 		}
 		return [...counts.values()].sort((a, b) => b.count - a.count || collator.compare(a.tag, b.tag));
@@ -383,3 +391,4 @@ export class LibraryIndex {
 		return index;
 	}
 }
+

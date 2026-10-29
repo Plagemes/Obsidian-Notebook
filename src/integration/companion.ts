@@ -286,7 +286,8 @@ export class CompanionService {
 		const doc = await this.readDocument(file);
 		if (!doc) return "skipped";
 		const content = this.content(file, doc);
-		const region = renderRegion(content);
+		// A new note owns every tag it gets; an existing one records which tags the plugin added (model/tags.ts).
+		const region = (owned: readonly string[]) => renderRegion(content, owned);
 		const target = await this.locate(file, doc.id);
 		if (!target) {
 			const path = companionPath(file.path, this.plugin.settings, this.plugin.settings.folder);
@@ -299,7 +300,7 @@ export class CompanionService {
 			if (dir) await ensureFolder(this.app, dir);
 			const yaml = stringifyYaml(mergeProperties({}, content, null));
 			try {
-				await this.app.vault.create(target.create, newCompanionText(yaml, region));
+				await this.app.vault.create(target.create, newCompanionText(yaml, region(content.tags)));
 			} catch (e) {
 				// Created in the meantime (sync, another trigger): the next change updates it.
 				if (this.app.vault.getAbstractFileByPath(target.create)) return "skipped";
@@ -438,6 +439,10 @@ export function registerCompanion(plugin: CompanionHost): CompanionService {
 	const service = new CompanionService(plugin);
 	service.register();
 	services.set(plugin, service);
+	current = service;
+	plugin.register(() => {
+		if (current === service) current = undefined;
+	});
 	plugin.addCommand({ id: "companion-update-all", name: t("command.companionUpdateAll"), callback: () => void service.updateAll() });
 	plugin.addCommand({
 		id: "companion-open",
@@ -453,6 +458,12 @@ export function registerCompanion(plugin: CompanionHost): CompanionService {
 }
 
 const services = new WeakMap<Plugin, CompanionService>();
+let current: CompanionService | undefined;
+
+/** The running companion service (there is one plugin instance), for the tag editor; undefined before onload or after unload. */
+export function activeCompanion(): CompanionService | undefined {
+	return current;
+}
 
 /** The service of a plugin, for the settings tab. */
 export function companionService(plugin: Plugin): CompanionService | undefined {
