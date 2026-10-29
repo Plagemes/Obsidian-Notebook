@@ -829,7 +829,26 @@ export class LibraryView extends ItemView {
 		more.addEventListener("click", (e) => this.notebookMenu(entry.path, e.clientX, e.clientY, more));
 
 		const textHit = hit?.text;
-		const open = () => this.openEntry(entry.path, hit?.fields[0] === "text" ? textHit?.page : undefined);
+		const tagHit = hit?.pageTag;
+		const first = hit?.fields[0];
+		const open = () => this.openEntry(entry.path, first === "text" ? textHit?.page : first === "pageTag" ? tagHit?.page : undefined);
+		if (tagHit) {
+			// v7: a page tag matched: the row opens that page.
+			const row = card.createDiv({
+				cls: "notebook-lib-hit",
+				attr: { role: "button", tabindex: "0", "data-key": `taghit:${entry.path}`, "aria-label": t("library.search.openPage", { page: String(tagHit.page + 1) }) },
+			});
+			row.createSpan({ cls: "notebook-lib-hit-page", text: t("library.search.page", { page: String(tagHit.page + 1) }) });
+			this.appendHighlight(row.createSpan({ cls: "notebook-lib-hit-snippet" }), { text: `#${tagHit.tag.text}`, ranges: tagHit.tag.ranges.map(([a, b]): [number, number] => [a + 1, b + 1]) });
+			const openPage = () => this.openEntry(entry.path, tagHit.page);
+			row.addEventListener("click", openPage);
+			row.addEventListener("keydown", (e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					openPage();
+				}
+			});
+		}
 		if (textHit) {
 			const row = card.createDiv({
 				cls: "notebook-lib-hit",

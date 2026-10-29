@@ -646,7 +646,6 @@ const en = {
 	"pageTags.modal.placeholder": "exam, chapter 2",
 	"pageTags.modal.suggestions": "Tags used in this notebook",
 	"pageTags.modal.save": "Save",
-	"library.search.pageTag": "Page {page}",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -1297,7 +1296,6 @@ const it: Partial<Record<MessageKey, string>> = {
 	"pageTags.modal.placeholder": "esame, capitolo 2",
 	"pageTags.modal.suggestions": "Tag usati in questo quaderno",
 	"pageTags.modal.save": "Salva",
-	"library.search.pageTag": "Pagina {page}",
 };
 
 let table: Partial<Record<MessageKey, string>> | null = null;
