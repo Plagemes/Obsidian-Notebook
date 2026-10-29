@@ -138,9 +138,12 @@ export class NotebookLibraryHost implements LibraryHost {
 		}
 	}
 
-	importPdf(folder: string): void {
+	/** Imports a PDF as a new notebook in `folder`: the one chosen in a picker, or `source` when it is already in the vault. */
+	importPdf(folder: string, source?: TFile): void {
 		void importPdfAsNotebook<TFile>({
-			pick: () => pickFile(this.app, "pdf"),
+			pick: source
+				? async () => ({ name: source.name, bytes: await this.app.vault.readBinary(source) })
+				: () => pickFile(this.app, "pdf"),
 			store: async (bytes, name) => {
 				const asset = await storeAsset(this.app, this.root(), bytes, name, "pdf");
 				this.assets.set(asset.id, asset);

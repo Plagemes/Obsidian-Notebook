@@ -25,7 +25,7 @@ export function registerEmbed(plugin: Plugin, deps: EmbedDeps): void {
 }
 
 /** One rendered embed. Redraws when its notebook changes; everything is released on unload. */
-class NotebookEmbed extends MarkdownRenderChild {
+export class NotebookEmbed extends MarkdownRenderChild {
 	private run = 0;
 	private timer: number | null = null;
 	/** Path of the notebook shown now, to react to its changes. */

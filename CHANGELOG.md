@@ -9,6 +9,12 @@ Not yet verified on Android hardware (see `docs/testing.md`).
 - **Automatic next page** (setting *Add a page when writing at the bottom*, on by default): ink that reaches the bottom tenth of the last page appends a page with the same size and paper, in the same undo step as the stroke. Not for infinite pages or for pages with a PDF or image background.
 - **Selective eraser**: the eraser can be limited to *All ink*, *Highlighter only*, *Pen only* (pen and shapes) or *One colour* (swatches). Works with *Whole stroke*, *Segment* and *Area*.
 - **Erase area** (eraser mode *Area*): draw an outline and everything inside disappears in one gesture and one undo step; strokes crossing the outline are cut at it. Setting *Erase area also removes text and images* (off by default).
+### Added (Obsidian integration, wave p1b)
+- **Page links (O4)**: `[[Physics.notebook#p3]]` opens the notebook at page 3 (the view reads the link subpath through `setEphemeralState`), also when the notebook is already open. Typing `[[Physics.notebook#` lists the pages with their number and first text box (`EditorSuggest`).
+- **Native embed (O6)**: `![[Physics.notebook#p3]]` renders the same page preview as the `notebook` code block, in reading view and live preview, and tapping it opens the page. It uses Obsidian's embed registry (not part of the public typings, so feature-detected); if it is missing, a reading-view post-processor is used and live preview keeps the plain embed (use the code block there).
+- **File explorer menu (O9)**: *New notebook here* on folders and *Annotate in Notebook* on PDFs (a new notebook in the notebooks folder with the PDF as page backgrounds, reusing the PDF import).
+- **Page into a note (O20)**: the page menu has *Copy link to this page*, *Insert link into the active note* and *Insert page preview into the active note* (links follow Obsidian's link-format setting).
+- Not verified in Obsidian or on Android hardware (see `docs/testing.md`, step 37).
 
 ## 0.4.1 — 2026-10-29
 

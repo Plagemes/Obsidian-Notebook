@@ -328,6 +328,20 @@ const en = {
 	"settings.autoNextPage.desc": "Writing near the bottom of the last page appends a new page with the same size and paper. Not used on infinite pages or on PDF and scanned pages.",
 	"settings.eraseAreaElements": "Erase area also removes text and images",
 	"settings.eraseAreaElements.desc": "With the eraser's Area mode, text boxes and images inside the outline are removed together with the ink. Off: only ink is erased. Not used when the eraser is limited to one kind of ink.",
+	// wave p1b: obsidian
+	"menu.newNotebookHere": "New notebook here",
+	"menu.annotatePdf": "Annotate in Notebook",
+	"share.copyLink": "Copy link to this page",
+	"share.insertLink": "Insert link into the active note",
+	"share.insertEmbed": "Insert page preview into the active note",
+	"share.linkAlias": "{name}, p. {page}",
+	"share.copied": "Copied {link}",
+	"share.copyFailed": "Could not copy the link: {error}",
+	"share.noNote": "Open a note first: there is no note to insert into.",
+	"share.readingMode": "{name} is in reading view. Switch it to editing and try again.",
+	"share.inserted": "Inserted into {name}",
+	"suggest.handwriting": "Handwriting",
+	"suggest.emptyPage": "Empty page",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -660,6 +674,20 @@ const it: Partial<Record<MessageKey, string>> = {
 	"settings.autoNextPage.desc": "Scrivendo vicino al fondo dell'ultima pagina viene aggiunta una nuova pagina con la stessa dimensione e carta. Non vale per le pagine infinite né per le pagine PDF e scansionate.",
 	"settings.eraseAreaElements": "L'area cancella anche testo e immagini",
 	"settings.eraseAreaElements.desc": "Con la modalità Area della gomma, le caselle di testo e le immagini dentro il contorno vengono rimosse insieme all'inchiostro. Disattivato: si cancella solo l'inchiostro. Non vale quando la gomma è limitata a un tipo di inchiostro.",
+	// wave p1b: obsidian
+	"menu.newNotebookHere": "Nuovo quaderno qui",
+	"menu.annotatePdf": "Annota in Notebook",
+	"share.copyLink": "Copia il link a questa pagina",
+	"share.insertLink": "Inserisci il link nella nota attiva",
+	"share.insertEmbed": "Inserisci l'anteprima della pagina nella nota attiva",
+	"share.linkAlias": "{name}, pag. {page}",
+	"share.copied": "Copiato {link}",
+	"share.copyFailed": "Impossibile copiare il link: {error}",
+	"share.noNote": "Apri prima una nota: non c'è nessuna nota in cui inserire.",
+	"share.readingMode": "{name} è in modalità lettura. Passa alla modifica e riprova.",
+	"share.inserted": "Inserito in {name}",
+	"suggest.handwriting": "Scrittura a mano",
+	"suggest.emptyPage": "Pagina vuota",
 };
 
 let table: Partial<Record<MessageKey, string>> | null = null;

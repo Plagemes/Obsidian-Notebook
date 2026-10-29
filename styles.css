@@ -1135,3 +1135,32 @@
 	opacity: 0.35;
 	mix-blend-mode: multiply;
 }
+
+/* --- wave p1b: obsidian --- */
+.internal-embed.notebook-embed-host {
+	display: block;
+}
+
+.notebook-page-suggestion {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+}
+
+.notebook-page-suggestion-number {
+	flex: 0 0 auto;
+	font-variant-numeric: tabular-nums;
+	font-weight: var(--font-semibold);
+	color: var(--text-accent);
+}
+
+.notebook-page-suggestion-title {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.notebook-page-suggestion-title.is-muted {
+	color: var(--text-muted);
+}
