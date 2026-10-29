@@ -22,6 +22,11 @@ const penButtonOptions = () => ({
 	off: t("settings.penButton.off"),
 });
 
+const scrollModeOptions = () => ({
+	continuous: t("settings.scrollMode.continuous"),
+	pages: t("settings.scrollMode.pages"),
+});
+
 const EDGE_KEYS = [
 	["edgeLeft", "settings.edgeLeft"],
 	["edgeRight", "settings.edgeRight"],
@@ -159,6 +164,12 @@ export class NotebookSettingTab extends PluginSettingTab {
 				name: t("settings.penButton"),
 				desc: t("settings.penButton.desc"),
 				control: { type: "dropdown", key: "penButtonAction", defaultValue: DEFAULT_SETTINGS.penButtonAction, options: penButtonOptions() },
+			},
+			// wave 0.6: navigation
+			{
+				name: t("settings.scrollMode"),
+				desc: t("settings.scrollMode.desc"),
+				control: { type: "dropdown", key: "scrollMode", defaultValue: DEFAULT_SETTINGS.scrollMode, options: scrollModeOptions() },
 			},
 			// Companion notes (O1)
 			...companionSettingDefinitions(this.companionHost()),
@@ -301,6 +312,10 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setName(t("settings.penButton"))
 			.setDesc(t("settings.penButton.desc"))
 			.addDropdown((dd) => dd.addOptions(penButtonOptions()).setValue(s.penButtonAction).onChange((v) => this.setControlValue("penButtonAction", v)));
+		new Setting(containerEl)
+			.setName(t("settings.scrollMode"))
+			.setDesc(t("settings.scrollMode.desc"))
+			.addDropdown((dd) => dd.addOptions(scrollModeOptions()).setValue(s.scrollMode).onChange((v) => this.setControlValue("scrollMode", v)));
 		displayCompanionSettings(containerEl, this.companionHost());
 	}
 }

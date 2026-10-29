@@ -32,6 +32,8 @@ import { eraseSegment } from "../ink/segment-erase";
 import { analyseSpace, planSpaceChange, spacePreview } from "../ink/space";
 import { apply, IDENTITY, invert, isIdentity, multiply, rotateAbout, scaleAbout, translate, type Matrix } from "../ink/transform";
 import { clampToPage, fitWidth, pan, PAGE_MARGIN, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
+import { layoutPagesHorizontal, type ScrollMode } from "../ink/page-mode";
+import { PageMode } from "./page-mode";
 import { cloneMeta, createId, createPage, createStroke } from "../model/document";
 import { createPdfPages, duplicatePage } from "../model/pages";
 import { backgroundRect } from "../model/margins";
@@ -228,6 +230,9 @@ export class NotebookView extends FileView {
 		},
 	);
 	private selectionActions: SelectionActions | null = null;
+	/** One page at a time (#14); its gestures and animation live in page-mode.ts. */
+	private pageMode: PageMode | null = null;
+	private showPageMode: (on: boolean) => void = () => undefined;
 
 	private viewport: Viewport = { scale: 1, offsetX: 0, offsetY: 0 };
 	private viewSize: Size = { width: 0, height: 0 };
@@ -328,6 +333,7 @@ export class NotebookView extends FileView {
 			boardShot: () => void this.boardShot(),
 		});
 		this.toolbar.setSelection(false);
+		this.showPageMode = this.toolbar.addMoreToggle("book-open", "toolbar.pageMode", () => this.togglePageMode());
 		this.body = this.contentEl.createDiv({ cls: "notebook-body" });
 		this.stage = this.body.createDiv({ cls: "notebook-stage" });
 		this.perfEl = this.stage.createDiv({ cls: "notebook-perf" });
@@ -361,13 +367,21 @@ export class NotebookView extends FileView {
 			drawStart: (s, eraser) => this.drawStart(s, eraser),
 			drawMove: (samples, predicted) => this.drawMove(samples, predicted),
 			drawEnd: (cancelled) => this.drawEnd(cancelled),
-			pan: (dx, dy) => this.setViewport(pan(this.viewport, dx, dy), true),
+			pan: (dx, dy) => (this.pageMode?.enabled ? this.pageMode.pan(dx, dy) : this.setViewport(pan(this.viewport, dx, dy), true)),
 			zoom: (factor, fx, fy) => {
 				this.fitMode = false;
+				this.pageMode?.zoomed(factor);
 				this.setViewport(zoomAt(this.viewport, factor, fx, fy), true);
 			},
 			penMenu: (x, y) => this.radial?.open(x, y),
 		}, { rawUpdates: this.host.settings.lowLatencyInk });
+		this.pageMode = new PageMode(this.stage, {
+			viewport: () => this.viewport,
+			viewSize: () => this.viewSize,
+			layout: () => this.layout,
+			setViewport: (v, interactive) => this.setViewport(v, interactive),
+			fitMode: () => this.fitMode,
+		});
 		this.radial = new PenRadial(this.stage, {
 			editable: () => this.editable() && !this.controller?.drawing,
 			tools: () => this.tools,
@@ -432,6 +446,8 @@ export class NotebookView extends FileView {
 		this.radial = null;
 		this.rulerGesture?.destroy();
 		this.rulerGesture = null;
+		this.pageMode?.destroy();
+		this.pageMode = null;
 		this.selectionActions?.destroy();
 		this.selectionActions = null;
 		this.textEditor?.destroy();
@@ -487,6 +503,7 @@ export class NotebookView extends FileView {
 		this.lastBackupPath = null;
 		this.fitMode = true;
 		this.viewport = { scale: 1, offsetX: 0, offsetY: 0 };
+		this.pageMode?.reset();
 		// Callbacks of a session that is no longer the current one (file switched while loading) are ignored.
 		const current = () => this.session === session;
 		const session: DocumentSession = new DocumentSession(
@@ -585,6 +602,7 @@ export class NotebookView extends FileView {
 			if (!this.controller.drawing) this.controller.setRawUpdates(settings.lowLatencyInk);
 		}
 		if (this.renderer && !this.active) this.renderer.setLowLatency(settings.lowLatencyInk);
+		this.setScrollMode(settings.scrollMode);
 		this.perfEl?.toggleClass("notebook-hidden", !settings.perfOverlay);
 		if (this.renderer) this.renderer.onFrame = settings.perfOverlay ? (t) => this.onFrame(t) : null;
 	}
@@ -667,7 +685,7 @@ export class NotebookView extends FileView {
 	goToRelativePage(delta: number): void {
 		const n = this.session?.doc?.pages.length ?? 0;
 		if (n === 0) return;
-		this.scrollToPage(Math.min(n - 1, Math.max(0, this.currentPageIndex() + delta)));
+		this.scrollToPage(Math.min(n - 1, Math.max(0, this.currentPageIndex() + delta)), true);
 	}
 
 	private penStore(): PenStore {
@@ -691,6 +709,32 @@ export class NotebookView extends FileView {
 				save();
 			},
 		};
+	}
+
+	/** Switches between continuous scrolling and one page at a time, staying on the page in view. */
+	setScrollMode(mode: ScrollMode): void {
+		const pm = this.pageMode;
+		const on = mode === "pages";
+		this.showPageMode(on);
+		if (!pm || pm.enabled === on) return;
+		const index = this.currentPageIndex();
+		pm.setEnabled(on);
+		this.fitMode = true;
+		this.refreshLayout();
+		if (!this.layout) return;
+		if (on) pm.goTo(index);
+		else {
+			this.refit(false);
+			this.scrollToPage(index);
+		}
+	}
+
+	/** Toolbar and command: flips the setting (saved with the plugin settings, applied to every open notebook). */
+	togglePageMode(): void {
+		const s = this.host.settings;
+		s.scrollMode = s.scrollMode === "pages" ? "continuous" : "pages";
+		this.setScrollMode(s.scrollMode);
+		void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
 	}
 
 	fitToWidth(): void {
@@ -717,7 +761,11 @@ export class NotebookView extends FileView {
 		this.scrollToPage(at);
 	}
 
-	private scrollToPage(index: number): void {
+	private scrollToPage(index: number, animate = false): void {
+		if (this.pageMode?.enabled) {
+			this.pageMode.goTo(index, animate);
+			return;
+		}
 		const box = this.layout?.boxes[index];
 		if (box) this.setViewport({ ...this.viewport, offsetY: PAGE_MARGIN - box.y * this.viewport.scale });
 	}
@@ -1166,13 +1214,14 @@ export class NotebookView extends FileView {
 
 	private currentPageIndex(): number {
 		if (!this.layout) return 0;
+		if (this.pageMode?.enabled) return this.pageMode.current();
 		const [, y] = screenToPage(this.viewport, this.viewSize.width / 2, this.viewSize.height / 2);
 		return Math.max(0, nearestPage(this.layout, y));
 	}
 
 	private refreshLayout(): void {
 		const doc = this.session?.doc;
-		this.layout = doc ? layoutPages(doc.pages) : null;
+		this.layout = doc ? (this.pageMode?.enabled ? layoutPagesHorizontal(doc.pages) : layoutPages(doc.pages)) : null;
 		this.renderer?.setDocument(doc?.pages ?? null, this.layout);
 		this.pushRuler();
 	}
@@ -1407,6 +1456,10 @@ export class NotebookView extends FileView {
 			this.setViewport(this.viewport);
 			return;
 		}
+		if (this.pageMode?.enabled) {
+			this.pageMode.refit(keepTop);
+			return;
+		}
 		const topY = screenToPage(this.viewport, 0, 0)[1];
 		const fitted = fitWidth(this.viewSize, layout);
 		if (keepTop && topY > 0) fitted.offsetY = -topY * fitted.scale;
@@ -1415,7 +1468,7 @@ export class NotebookView extends FileView {
 
 	private setViewport(v: Viewport, interactive = false): void {
 		const layout = this.layout;
-		this.viewport = layout ? clampToPage(v, this.viewSize, layout) : v;
+		this.viewport = layout ? (this.pageMode?.enabled ? this.pageMode.clamp(v) : clampToPage(v, this.viewSize, layout)) : v;
 		this.renderer?.setViewport(this.viewport, interactive);
 		if (this.selection) this.pushSelection();
 		this.placeTextEditor();
