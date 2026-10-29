@@ -61,8 +61,9 @@ function rgb(color: string): string {
 	let h = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color)?.[1];
 	if (!h) return "0 0 0";
 	if (h.length === 3) h = h.replace(/./g, (c) => c + c);
+	const hex = h;
 	const c = (k: number) => {
-		const v = Math.round((parseInt(h!.slice(k, k + 2), 16) / 255) * 1000) / 1000;
+		const v = Math.round((parseInt(hex.slice(k, k + 2), 16) / 255) * 1000) / 1000;
 		return v.toString();
 	};
 	return `${c(0)} ${c(2)} ${c(4)}`;

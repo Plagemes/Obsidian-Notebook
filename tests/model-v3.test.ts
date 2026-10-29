@@ -355,3 +355,29 @@ describe("SetPaper and SetPageSize", () => {
 		expect(() => new SetPageSize("nope", { width: 1, height: 1 }, { width: 2, height: 2 }).apply(doc)).toThrow();
 	});
 });
+
+describe("review fixes (M3a)", () => {
+	it("rejects paper spacing below the minimum", async () => {
+		const { parse, serialize, MIN_PAPER_SPACING } = await import("../src/model/serialize");
+		const { createDocument } = await import("../src/model/document");
+		const doc = createDocument(new Date("2026-01-01T00:00:00Z"));
+		doc.pages[0]!.paper = { kind: "millimetre", spacing: 0.0001 };
+		expect(parse(serialize(doc)).ok).toBe(false);
+		doc.pages[0]!.paper = { kind: "millimetre", spacing: MIN_PAPER_SPACING };
+		expect(parse(serialize(doc)).ok).toBe(true);
+	});
+
+	it("paperPattern refuses absurd densities instead of looping for ever", async () => {
+		const { paperPattern } = await import("../src/ink/paper");
+		const { createPage } = await import("../src/model/document");
+		const page = createPage(undefined, { kind: "dotted", spacing: 0.0001 });
+		const r = paperPattern(page, { minX: 0, minY: 0, maxX: page.width, maxY: page.height });
+		expect(r.lines.length + r.dots.length).toBe(0);
+	});
+
+	it("settings ignore inherited keys for the page size", async () => {
+		const { readSettings, DEFAULT_SETTINGS } = await import("../src/settings");
+		expect(readSettings({ defaultPageSize: "toString" }).defaultPageSize).toBe(DEFAULT_SETTINGS.defaultPageSize);
+		expect(readSettings({ defaultPageSize: "a5" }).defaultPageSize).toBe("a5");
+	});
+});

@@ -333,13 +333,13 @@ export class NotebookView extends FileView {
 		const page = doc.pages[index];
 		if (!page) return;
 		const menu = new Menu();
-		menu.addItem((i) => i.setTitle(t("page.duplicate")).setIcon("copy").onClick(() => this.pageCommand(new AddPage(duplicatePage(page), index + 1), index + 1)));
+		menu.addItem((i) => i.setTitle(t("page.duplicate")).setIcon("copy").onClick(() => this.pageCommand(new AddPage(duplicatePage(page), index + 1), index + 1, page)));
 		menu.addItem((i) => i.setTitle(t("page.moveUp")).setIcon("arrow-up").setDisabled(index === 0)
-			.onClick(() => this.pageCommand(new MovePage(page.id, index, index - 1), index - 1)));
+			.onClick(() => this.pageCommand(new MovePage(page.id, index, index - 1), index - 1, page)));
 		menu.addItem((i) => i.setTitle(t("page.moveDown")).setIcon("arrow-down").setDisabled(index >= doc.pages.length - 1)
-			.onClick(() => this.pageCommand(new MovePage(page.id, index, index + 1), index + 1)));
+			.onClick(() => this.pageCommand(new MovePage(page.id, index, index + 1), index + 1, page)));
 		menu.addItem((i) => i.setTitle(t("page.delete")).setIcon("trash-2").setSection("danger").setDisabled(doc.pages.length <= 1)
-			.onClick(() => this.pageCommand(new DeletePage(page, index), Math.max(0, index - 1))));
+			.onClick(() => this.pageCommand(new DeletePage(page, index), Math.max(0, index - 1), page)));
 		menu.addSeparator();
 		for (const kind of PAPER_KINDS) {
 			menu.addItem((i) => i.setTitle(t("page.paper", { kind: t(`paper.${kind}`) })).setChecked(page.paper.kind === kind)
@@ -376,8 +376,9 @@ export class NotebookView extends FileView {
 		if (doc && this.file) await exportPdf(this.app, this.file, doc.pages);
 	}
 
-	private pageCommand(cmd: Command, scrollTo: number): void {
-		if (this.controller?.drawing) return;
+	private pageCommand(cmd: Command, scrollTo: number, page: Page): void {
+		// The menu may have stayed open while the file was reloaded (read-only, broken, or another document).
+		if (this.controller?.drawing || !this.editable() || !this.session?.doc?.pages.includes(page)) return;
 		this.clearSelection();
 		this.history.execute(cmd);
 		this.afterHistoryChange();
@@ -387,14 +388,14 @@ export class NotebookView extends FileView {
 	private setPaper(page: Page, kind: PaperKind, index: number): void {
 		if (page.paper.kind === kind) return;
 		const after = { kind, spacing: PAPER_SPACING[kind] };
-		this.pageCommand(new SetPaper(page.id, { ...page.paper }, after), index);
+		this.pageCommand(new SetPaper(page.id, { ...page.paper }, after), index, page);
 	}
 
 	private setSize(page: Page, name: PageSizeName, landscape: boolean, index: number): void {
 		const base = PAGE_SIZES[name];
 		const after = landscape ? { width: base.height, height: base.width } : { width: base.width, height: base.height };
 		if (after.width === page.width && after.height === page.height) return;
-		this.pageCommand(new SetPageSize(page.id, { width: page.width, height: page.height }, after), index);
+		this.pageCommand(new SetPageSize(page.id, { width: page.width, height: page.height }, after), index, page);
 	}
 
 	deleteSelection(): void {
@@ -491,6 +492,8 @@ export class NotebookView extends FileView {
 
 	private afterHistoryChange(): void {
 		this.refreshLayout();
+		// The document may be shorter now (page deleted or made smaller): keep the view inside it.
+		this.setViewport(this.viewport);
 		this.session?.markChanged();
 		this.updateHistoryButtons();
 		this.updatePageIndicator();

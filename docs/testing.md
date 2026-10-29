@@ -27,7 +27,7 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Selection: move, resize (bottom-right handle), rotate (handle above), delete | ✅ (basic) | ✅ matrices, stroke transform; ❌ handles and gestures (view) | | | one page per selection; no copy/paste |
 | Undo/redo (command stack: add, erase, replace, add page, batch) | ✅ | ✅ | | | |
 | Multiple pages stacked vertically (24 pt gap), page indicator `n / total` | ✅ | ✅ layout; ❌ rendering | | | |
-| Add page (button and command), undoable, inserted after the page in view | ✅ | ✅ command; ❌ view | | | no delete/reorder (M3) |
+| Add page (button and command), undoable, inserted after the page in view | ✅ | ✅ command; ❌ view | | | |
 | Virtualization: only visible pages and strokes are drawn | ✅ | ✅ visible-page selection; ❌ rendering | | | |
 | One-finger pan, two-finger pinch zoom (0.25–8×), wheel/Ctrl+wheel | ✅ | ✅ zoom/pan maths | | | |
 | Fling inertia after one-finger pan | ✅ | ❌ | | ✅ | |
@@ -44,28 +44,42 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Newer format version opened read-only | ✅ | ✅ | | | |
 | External change (Sync): reload, or keep local + back up the other version | ✅ | ✅ | | | |
 | Format v2 (adds `highlighter`) + migrations v0→v1, v1→v2 | ✅ | ✅ | | | |
+| Paper kinds: blank, ruled, grid, dotted, millimetre (per page) | ✅ | ✅ pattern geometry (`paperPattern`); ❌ canvas drawing | | | minor lines/dots hidden on screen below ~3 CSS px spacing |
+| Page sizes A4, A5, Letter + landscape (per page) | ✅ | ✅ command logic; ❌ view | | | no custom sizes (M3c) |
+| Changing page size keeps strokes where they are (outside ones clipped, kept in the file) | ✅ | ✅ strokes untouched by `SetPageSize`; ❌ clipping on screen | | | |
+| Page menu: duplicate, move up/down, delete, paper, size, orientation (all undoable) | ✅ | ✅ commands and undo/redo; ❌ menu (view) | | | |
+| Add page copies size and paper of the page in view | ✅ | ❌ (view) | | | |
+| New-notebook dialog with size, orientation and paper; last choice remembered | ✅ | ✅ settings parsing; ❌ dialog | | | |
+| Default paper / size / orientation settings | ✅ | ✅ settings parsing; ❌ settings tab | | | |
+| Export page / notebook as PDF, page as SVG (written next to the notebook) | ✅ | ✅ generators (structure, offsets, y-flip, highlighter, determinism); ❌ file writing (Obsidian) | | ✅ | PDF and SVG checked with pdf.js and resvg on the PC only; not opened on Android; PDF is uncompressed (large with a lot of ink) |
+| Format v3 (paper kinds) + migration v2→v3 (identity) | ✅ | ✅ | | | |
+| 0.2.x opens a 0.3 file read-only and keeps a backup | ✅ | ✅ future-version handling (same code path as v2 in 0.1); ❌ with a real 0.2 install | | | |
 | Reopen shows identical strokes | ✅ | ✅ round-trip | | | |
 | English UI + Italian translation | ✅ | ❌ | | | |
 | No Node/Electron imports in `main.js` | ✅ | ✅ `scripts/check-bundle.mjs` in `npm run build` | | | |
 
 ## Automated checks
 
-The numbers below will be filled in after the final run of M2.
+Numbers from the final run of M3a (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 10 files, 142 tests passed |
+| `npm test` (unit project only; benchmarks are separate) | 12 files, 199 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: no errors; `eslint-plugin-obsidianmd` recommended rules: no errors or warnings |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
 
+Added in M3a: migration v2→v3 (identity plus version, v0 and v1 files still reach v3), all five paper kinds in the round-trip, rejection of unknown kinds and bad spacing, `duplicatePage` (new ids, same content, unique ids in the document), `DeletePage` (order, undo/redo with the same page object, the last page is never deleted), `MovePage` (both directions, edges, clamping, exact undo), `SetPaper` and `SetPageSize` (exact undo, strokes untouched), paper pattern geometry for each kind (ruled first line and 25 mm margin, dots at intersections, millimetre major lines, culling, `includeMinor`), SVG output (size in mm with a pt viewBox, paper on/off, highlighter, escaping, determinism) and PDF output (header and trailer, one page object per page, `xref` offsets, `/Length`, MediaBox, y-flip, colours, ExtGState only with a highlighter, title escaping, two decimals).
+
 Covered by tests: serialization round-trip and determinism, rejection of corrupt files (truncated, garbage, wrong format, bad points/colours/ids, future version), migrations v0→v1 and v1→v2, highlighter round-trip, `serializeChecked` (same output as `serialize`, frozen strokes, duplicate ids, NaN, incremental check equal to the full parse on a large document), undo/redo of adds, erases, `ReplaceStroke`, `AddPage` (never removes the last page) and `Batch`, eraser hit test (including fast movements and dots), segment cutting (including cuts between distant points and no single-point crumbs), lasso selection and selection bounds, affine transforms and stroke transform with width scaling, stabilizer, page layout and visible-page selection, screen↔page transform at 7 zoom levels, fit-width, zoom around a point, pan clamping, palm-rejection routing (time-based and contact size), pressure detection, the deterministic stress document, and the save session (debounce, max wait, no writes on broken/readonly files, conflict backups, echo detection, retry after a failed write, refusal to write a document that fails re-validation, backup-before-overwrite ordering when another writer races the save, no overwrite when the backup fails, external-change checks queued after flushes, close-time retries with an `unsaved` backup, deleted files never written, stale sessions silent).
+
+Export checks outside the unit tests (development PC, not Android): a PDF generated by `pagesToPdf` was parsed with pdf.js (3 pages, Unicode title, fills, stroked paper lines, highlighter ExtGState) and an SVG from `pageToSvg` was rendered with resvg. Neither file was opened on an Android device or in Obsidian.
 
 Independent review (M1): the data-safety code (session, Vault I/O, serializer, view lifecycle, undo) was reviewed by a separate agent that did not write it; its 7 findings (3 medium, 4 low, no corruption) were fixed and covered by the tests above.
 
 Measured on the PC in M1 (not on Android): a 10,000-stroke notebook (268k points) is 6.8 MB; parse 156 ms, serialize 98 ms. In M2 the save check no longer re-parses documents over 1 MB each time. `npm run bench` on the dev PC (Windows, Node 24; 10,000 strokes, 10 pages, 6.69 MB): serialize 153 ms; open (parse + validate) 227 ms; open + first save with a cold cache 424 ms in total; next saves 16–19 ms; eraser hit test 0.04 ms per move (1,000 strokes, cached bounds); segment cut 0.005 ms; lasso over a quarter page 2.4 ms; stroke outline 0.04 ms. **These are PC numbers.** Android will be slower and must be measured with the in-app benchmark (step 21); record those numbers here once available.
 
-Not covered automatically: everything that needs Obsidian or a real browser (DOM, canvas, Pointer Events, Vault API, view lifecycle, the toolbar, selection handles and gestures, the fast path and fling). That is what the manual protocol is for.
+Not covered automatically: everything that needs Obsidian or a real browser (DOM, canvas, Pointer Events, Vault API, view lifecycle, the toolbar, the page menu and dialogs, writing the export files, selection handles and gestures, the fast path and fling). That is what the manual protocol is for.
 
 ## Manual test protocol — Android + S Pen
 
@@ -94,7 +108,12 @@ For each step note **pass / fail / notes** in the table at the end.
 19. **Fling scrolling.** With one finger, flick the page up and down at different speeds, then touch the screen during the glide. Expected: the page keeps moving after the finger lifts, slows down smoothly and stops at once when touched. Check that a slow drag followed by a pause does not fling.
 20. **Performance overlay.** Turn on *Performance overlay* and open the stress-test notebook. Note the readings (frame time, input→frame, redraw ms, strokes and pages drawn) in these situations: idle; writing; one-finger scrolling; pinch zooming in and out; at fit width and at high zoom. While scrolling or zooming the page may look blurred or blank at the edges for a moment and then sharpen (the fast path): note whether that is visible and bothersome.
 21. **In-app benchmark.** Command palette → *Run performance benchmark* with a notebook open (the benchmark uses the size of the view). Wait for it to finish and use *Copy results*, then paste the whole output into the notes table below. Run it twice, in portrait and landscape if you can, and once with other apps closed.
-22. **Notebook written by 0.1.** Open a notebook created with 0.1.x. Expected: identical strokes. Add a stroke and reopen: it works. Afterwards the file is format v2 and a 0.1.x plugin would open it read-only (this last point can be checked on the PC).
+22. **Notebook written by 0.1.** Open a notebook created with 0.1.x. Expected: identical strokes. Add a stroke and reopen: it works. Afterwards the file is format v3 and a 0.1.x or 0.2.x plugin would open it read-only (this last point can be checked on the PC).
+
+23. **Paper and page size at creation.** Create a notebook for each paper (*Blank*, *Ruled*, *Grid*, *Dotted*, *Millimetre*) and each size (*A4*, *A5*, *Letter*), with and without *Landscape* (a few combinations are enough: at least one of each paper, one of each size, one landscape). Expected: the page has the right proportions and fits the view width; ruled paper has a first line below a top margin and a red margin line on the left; dotted paper has a dot at each grid intersection; millimetre paper has a darker line every 10 mm and the fine lines fade out when zoomed out and come back when zoomed in; the dialog opens with your last choice, and the same defaults appear in *Settings → Default paper / page size / Landscape by default*. Write on each, including near the edges.
+24. **Page menu and undo.** In a notebook with three pages and some ink on each, open the page menu (three-dot button next to *Add page*) and use, one by one: *Duplicate page*; *Move page up* and *down* (disabled at the ends); *Delete page* (disabled with a single page); a different *Paper*; a different *Size*; *Landscape* / *Portrait*. After each, undo and redo. Expected: every action takes effect on the page in view, is a single undo step, and undo restores the exact previous state (order, paper, size, strokes). The duplicate has the same ink and can be edited independently. After shrinking a page (for example A4 to A5) with ink near the bottom: the ink outside is not shown; undo, or enlarging again, brings it back. *Add page* gives a page with the size and paper of the page in view. Close and reopen: same pages, order, papers and sizes.
+25. **Export.** From the page menu run *Export page as PDF*, *Export notebook as PDF* and *Export page as SVG* on a notebook with several pages, mixed papers and sizes, a highlighter stroke and some Unicode in the notebook name (for example an accent). Expected: a notice with the path; the files appear next to the notebook (`<name>.pdf`, `<name> p2.pdf`, `<name> p2.svg`); running the same export again creates `… 2` files instead of overwriting. Open the PDF on the device (from the file explorer, or share it to a PDF viewer or another app) and check: page count, page sizes and orientation, paper pattern, ink in the right place and colours, highlighter translucent over the ink, no missing strokes. Note the file size of a page with a lot of ink (the PDF is not compressed) and how long the export takes. Open the SVG in a browser or an image viewer.
+26. **0.2 opens a 0.3 file.** Take a notebook saved by 0.3 (for example one with a ruled or dotted page) to a device or vault that still has Notebook 0.2.x, and open it. Expected: it opens read-only with a warning, nothing can be edited, the file is unchanged, and a `.bak` copy appears in `Notebooks/_backup/`. Then open it again with 0.3: normal editing.
 
 | Step | Device / Obsidian version | Result | Notes |
 |---|---|---|---|
@@ -120,6 +139,10 @@ For each step note **pass / fail / notes** in the table at the end.
 | 20 Performance overlay | | | |
 | 21 In-app benchmark | | | |
 | 22 Notebook from 0.1 | | | |
+| 23 Paper and size at creation | | | |
+| 24 Page menu and undo | | | |
+| 25 Export PDF/SVG | | | |
+| 26 0.2 opens a 0.3 file | | | |
 
 Benchmark output (step 21): paste it here.
 
@@ -129,20 +152,22 @@ Benchmark output (step 21): paste it here.
 
 ## Quick check — Windows
 
-Mouse: draw, erase (both modes), undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scroll, Ctrl+wheel zoom, resize the window (the page refits), add a page, lasso select/move/resize/rotate/delete, close and reopen the notebook. With a pen tablet or Surface pen: pressure and eraser end (`buttons & 32`).
+Mouse: draw, erase (both modes), undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scroll, Ctrl+wheel zoom, resize the window (the page refits), add a page, use every page menu action with undo, create notebooks with each paper and size, export PDF and SVG and open them, lasso select/move/resize/rotate/delete, close and reopen the notebook. With a pen tablet or Surface pen: pressure and eraser end (`buttons & 32`).
 
-## Known limitations (v0.2)
+## Known limitations (v0.3)
 
 - Nothing has been verified on Android hardware yet.
 - Highlighter, palm contact size, fling, the CSS fast path, predicted points and the performance overlay are experimental. The highlighter preview while drawing is not multiplied with the page; the final look appears when the stroke is committed.
 - While the fast path moves the old bitmap during a pan or zoom, uncovered areas are blank and detail is not re-rendered until 120 ms after the gesture pauses.
-- Pages are all A4 with a grid; no page delete, reorder or duplicate (M3).
+- Page sizes are limited to A4, A5 and Letter (portrait or landscape); no custom sizes. Changing a page size does not move or scale its strokes: strokes outside a smaller page are kept in the file but clipped on screen and in exports.
+- Exports: PDF and SVG always include the paper pattern, there is no option to leave it out. The PDF is not compressed, so a page with a lot of ink gives a large file (roughly 100-200 bytes per stroke point). Dots of dotted paper are tiny squares in the PDF and circles in the SVG. There is no export of a page range or a selection; page SVG and PDF are exported from the page menu, the whole notebook also from the command palette.
+- The PDF and SVG were checked with pdf.js and resvg on the PC, not on Android.
 - A lasso selection belongs to one page, strokes cannot be moved to another page, and there is no copy/paste. Resize is uniform only (one handle). Strokes moved partly outside their page are clipped when drawn.
 - Stabilization is applied while writing and the stabilized points are what is saved; it cannot be changed after the fact.
 - The segment eraser removes whole point runs: very short leftover pieces (a single point) are dropped.
 - Every save serializes the whole document. The re-validation is full under 1 MB and incremental above it, so very large notebooks save faster than in 0.1, but a short freeze is still possible on slow tablets (to be measured with the in-app benchmark).
 - The undo history is in memory only (500 commands) and is lost when the notebook is closed.
-- A notebook saved by 0.2 (format v2) opens read-only in 0.1.x.
+- A notebook saved by 0.2 (format v2) opens read-only in 0.1.x, and one saved by 0.3 (format v3) opens read-only in 0.2.x.
 - If Android kills Obsidian without a `visibilitychange` event, the last ~1.5 s of changes (up to 10 s while writing continuously) can be lost.
 - When another writer changes the file in the instant between our read and our write, the attempt is aborted by writing back the same content; this may bump the file's modification time (no data change).
 - The S Pen side button is not mapped; only the standard `buttons & 32` eraser is handled.

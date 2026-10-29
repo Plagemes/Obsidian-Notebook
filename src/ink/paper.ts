@@ -35,6 +35,9 @@ export function minorVisible(spacing: number, scale: number): boolean {
  * Lines span the whole page; nothing is drawn on the page edge. With `includeMinor: false` the
  * minor lines and the dots are left out (major and margin lines remain).
  */
+/** Upper bound on pattern lines per axis (an A4 page at 1 mm has about 300). */
+export const MAX_PATTERN_STEPS = 5000;
+
 export function paperPattern(page: Page, visible: BBox, options: { includeMinor?: boolean } = {}): PaperPattern {
 	const includeMinor = options.includeMinor ?? true;
 	const lines: PaperLine[] = [];
@@ -42,6 +45,8 @@ export function paperPattern(page: Page, visible: BBox, options: { includeMinor?
 	const { kind, spacing } = page.paper;
 	const { width, height } = page;
 	if (kind === "blank" || !(spacing > 0)) return { lines, dots };
+	// Safety cap for documents that bypassed validation: never walk more than MAX_PATTERN_STEPS per axis.
+	if (Math.max(width, height) / spacing > MAX_PATTERN_STEPS) return { lines, dots };
 
 	const vx = (x: number) => x >= visible.minX && x <= visible.maxX;
 	const vy = (y: number) => y >= visible.minY && y <= visible.maxY;

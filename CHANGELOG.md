@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.3.0 — 2026-10-29 (M3a)
+
+Not yet verified on Android hardware (see `docs/testing.md`). M3 has been split: this release covers pages, paper and export; shapes, text boxes, images and the ruler are planned for 0.4.0 (M3b), the library, PDF import and infinite canvas for 0.5.0 (M3c).
+
+### Safety
+- Paper spacing below 0.5 pt is rejected as invalid, and paper patterns are capped, so a hand-edited file cannot freeze the app.
+- The page menu re-checks that the notebook is still editable before changing it.
+
+### Added
+- Paper kinds per page: blank, ruled (first line below a top margin, red margin line at 25 mm), grid, dotted (a dot at each grid intersection) and millimetre (a major line every 10 mm).
+- Page sizes A4, A5 and Letter, portrait or landscape, per page.
+- Page menu (three-dot button next to Add page): duplicate, move up, move down, delete, change paper, change size, switch orientation. Every action is one undo step. The only page of a notebook cannot be deleted.
+- New-notebook dialog with page size, orientation and paper. The last choice is remembered as the default; the defaults are also in the settings (default paper, default page size, landscape by default).
+- Export a page or the whole notebook as PDF, and a page as SVG, from the page menu; **Export notebook as PDF** is also a command. Files are written next to the notebook. The PDF writer has no dependencies and is not compressed. A generated PDF was parsed with pdf.js and a generated SVG rendered with resvg; neither was opened on Android.
+- Italian translation of the new UI.
+
+### Changed
+- **File format v3**: adds the paper kinds. The v2 to v3 migration only changes the version number. A 0.2 notebook is rewritten as v3 on its first edit. Files written by 0.3 cannot be edited by 0.2.x, which opens them read-only (and keeps a backup copy).
+- **Add page** now creates a page with the same size and paper as the page in view (before, always an A4 grid page).
+- New notebooks are created with the chosen size, orientation and paper (default: A4 portrait, grid).
+- Changing a page size does not move or scale strokes. Strokes outside a smaller page are kept in the file and clipped when drawn and exported.
+- On screen, the fine lines and dots of the paper are not drawn when they would be closer than about 3 px.
+
 ## 0.2.0 — 2026-10-29 (M2)
 
 Not yet verified on Android hardware (see `docs/testing.md`).
