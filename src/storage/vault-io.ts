@@ -1,5 +1,6 @@
-import { normalizePath, TFile, type App } from "obsidian";
+import { normalizePath, TFile, type App, type DataAdapter } from "obsidian";
 import { readNotebookText, writeNotebookText } from "./format";
+import type { JournalSlotFile, JournalStore } from "./journal";
 import type { BackupReason, DocumentIO } from "./session";
 
 /** Creates every missing folder along `path`. */
@@ -69,5 +70,60 @@ export class VaultDocumentIO implements DocumentIO {
 		for (let i = 2; this.app.vault.getAbstractFileByPath(path); i++) path = normalizePath(`${stem} ${i} ${hash}.bak`);
 		await this.app.vault.create(path, content);
 		return path;
+	}
+}
+
+/** Folder of the instant save journal: `<config dir>/plugins/<plugin id>/journal`. */
+export function journalFolder(app: App, pluginId: string): string {
+	return normalizePath(`${app.vault.configDir}/plugins/${pluginId}/journal`);
+}
+
+/**
+ * JournalStore over the vault adapter. The journal is a plugin-owned technical file, so it lives in
+ * the plugin's config folder (no vault events, no sync, no indexing); this is the one place the
+ * adapter is used. Reads skip slots that cannot be read; the session decides what to do with them.
+ */
+export class AdapterJournalStore implements JournalStore {
+	private folderReady = false;
+
+	constructor(
+		private readonly adapter: DataAdapter,
+		private readonly folder: string,
+	) {}
+
+	private path(docId: string, slot: 0 | 1): string {
+		return normalizePath(`${this.folder}/${docId.replace(/[^A-Za-z0-9_-]/g, "_")}.${slot}.journal`);
+	}
+
+	async read(docId: string): Promise<JournalSlotFile[]> {
+		const files: JournalSlotFile[] = [];
+		for (const slot of [0, 1] as const) {
+			try {
+				const path = this.path(docId, slot);
+				if (await this.adapter.exists(path)) files.push({ slot, text: await this.adapter.read(path) });
+			} catch {
+				// Unreadable slot: ignored, the other one may still be good.
+			}
+		}
+		return files;
+	}
+
+	async write(docId: string, slot: 0 | 1, text: string): Promise<void> {
+		if (!this.folderReady) {
+			let current = "";
+			for (const part of this.folder.split("/").filter(Boolean)) {
+				current = current ? `${current}/${part}` : part;
+				if (!(await this.adapter.exists(current))) await this.adapter.mkdir(current);
+			}
+			this.folderReady = true;
+		}
+		await this.adapter.write(this.path(docId, slot), text);
+	}
+
+	async remove(docId: string): Promise<void> {
+		for (const slot of [0, 1] as const) {
+			const path = this.path(docId, slot);
+			if (await this.adapter.exists(path)) await this.adapter.remove(path);
+		}
 	}
 }

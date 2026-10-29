@@ -1,5 +1,6 @@
 import { parse, serialize, serializeChecked, warmStrokeLines, type ParseFailure } from "../model/serialize";
 import type { NotebookDocument } from "../model/types";
+import { buildEntry, fullWriteGapMs, inspectJournal, splitLines, type JournalStore } from "./journal";
 
 /** File access for one notebook. Implemented over the Vault API in vault-io.ts and by fakes in tests. */
 export interface DocumentIO {
@@ -10,7 +11,7 @@ export interface DocumentIO {
 	backup(content: string, reason: BackupReason): Promise<string | null>;
 }
 
-export type BackupReason = "unreadable" | "future-version" | "conflict" | "unsaved";
+export type BackupReason = "unreadable" | "future-version" | "conflict" | "unsaved" | "journal";
 
 /**
  * - `ok`: the document is editable and saved automatically.
@@ -27,6 +28,8 @@ export interface SessionEvents {
 	onLoaded?(doc: NotebookDocument | null, mode: SessionMode, problem: string | null): void;
 	onSaveState?(state: SaveState): void;
 	onBackup?(path: string, reason: BackupReason): void;
+	/** The app died before the last save: edits found in the journal were restored and are being saved. */
+	onRecovered?(info: { savedAt: string }): void;
 	onError?(message: string): void;
 }
 
@@ -43,6 +46,10 @@ export interface SessionOptions {
 	now?: () => Date;
 	/** True while the user is in the middle of a stroke or erase gesture that is not in `doc` yet. */
 	busy?: () => boolean;
+	/** Instant save journal (see journal.ts). Without it only the debounced save protects the edits. */
+	journal?: JournalStore;
+	/** Delay between a change and its journal entry. */
+	journalDelayMs?: number;
 }
 
 /** Attempts per flush when another writer keeps changing the file between our read and our write. */
@@ -75,6 +82,22 @@ export class DocumentSession {
 	/** An external change arrived during a gesture and was not looked at yet. */
 	private deferredExternal = false;
 
+	// Instant save journal. Its I/O runs on its own queue and can never fail a save.
+	private readonly journal: JournalStore | null;
+	private readonly journalDelayMs: number;
+	private journalTimer: number | null = null;
+	private jchain: Promise<unknown> = Promise.resolve();
+	private journalSeq = 0;
+	private journalSlot: 0 | 1 = 0;
+	/** A journal file may exist for this notebook. */
+	private journalOnDisk = false;
+	private journalNextAt = 0;
+	private journalErrorShown = false;
+	/** A journal that could not be backed up is left untouched for the next open: no writes, no deletion. */
+	private journalSuspended = false;
+	private baseLinesFor: string | null = null;
+	private baseLines: string[] = [];
+
 	private readonly debounceMs: number;
 	private readonly maxWaitMs: number;
 	private readonly retryMs: number;
@@ -92,6 +115,8 @@ export class DocumentSession {
 		this.retryMs = options.retryMs ?? 5000;
 		this.now = options.now ?? (() => new Date());
 		this.busy = options.busy ?? (() => false);
+		this.journal = options.journal ?? null;
+		this.journalDelayMs = options.journalDelayMs ?? 200;
 	}
 
 	get dirty(): boolean {
@@ -101,7 +126,7 @@ export class DocumentSession {
 	load(): Promise<void> {
 		return this.enqueue(async () => {
 			const content = await this.io.read();
-			await this.applyDiskContent(content);
+			await this.applyDiskContent(content, true);
 		});
 	}
 
@@ -113,6 +138,7 @@ export class DocumentSession {
 		if (this.debounceTimer !== null) this.timers.clear(this.debounceTimer);
 		this.debounceTimer = this.timers.set(() => void this.flush(), this.debounceMs);
 		if (this.maxWaitTimer === null) this.maxWaitTimer = this.timers.set(() => void this.flush(), this.maxWaitMs);
+		this.scheduleJournal(this.journalDelayMs);
 	}
 
 	/** Writes pending changes now. Resolves to false if they could not be written. */
@@ -128,7 +154,10 @@ export class DocumentSession {
 	async flushForClose(): Promise<boolean> {
 		for (let i = 0; i < CLOSE_ATTEMPTS; i++) {
 			await this.flush();
-			if (this.mode !== "ok" || !this.dirty) return true;
+			if (this.mode !== "ok" || !this.dirty) {
+				await this.jchain;
+				return true;
+			}
 		}
 		return this.backupUnsaved();
 	}
@@ -164,12 +193,21 @@ export class DocumentSession {
 		this.mode = "deleted";
 		if (hadUnsaved) await this.backupUnsaved();
 		this.dispose();
+		const docId = this.doc?.id;
+		if (docId) this.enqueueJournal(() => this.removeJournal(docId));
+		await this.jchain;
 	}
 
 	/** Stops timers and callbacks. Call flushForClose() first if pending changes must be written. */
 	dispose(): void {
 		this.disposed = true;
 		this.clearTimers();
+		this.clearJournalTimer();
+	}
+
+	/** Resolves when the journal operations queued so far are done. For tests and orderly shutdown. */
+	journalIdle(): Promise<void> {
+		return this.jchain.then(() => undefined);
 	}
 
 	private enqueue<T>(task: () => Promise<T>): Promise<T> {
@@ -178,18 +216,40 @@ export class DocumentSession {
 		return run;
 	}
 
-	private async applyDiskContent(content: string): Promise<void> {
+	private async applyDiskContent(content: string, initialLoad = false): Promise<void> {
 		if (this.disposed) return;
 		this.diskContent = content;
 		this.revision = 0;
 		this.savedRevision = 0;
+		let recoveredAt: string | null = null;
 		const result = parse(content);
 		if (result.ok) {
-			this.doc = result.doc;
+			let doc = result.doc;
+			if (this.journal) {
+				if (initialLoad) {
+					const recovered = await this.recoverFromJournal(content, doc);
+					if (this.disposed) return;
+					if (recovered) {
+						doc = recovered.doc;
+						recoveredAt = recovered.savedAt;
+					}
+				} else {
+					// The file was reloaded with no local changes: whatever the journal holds is obsolete.
+					const docId = doc.id;
+					this.enqueueJournal(() => this.removeJournal(docId));
+				}
+			}
+			this.doc = doc;
 			this.mode = "ok";
 			this.problem = null;
 			this.problemReason = null;
-			this.warmUp(result.doc);
+			this.warmUp(doc);
+			if (recoveredAt !== null) {
+				// The restored edits are not in the file yet: the regular save writes them.
+				this.revision = 1;
+				this.debounceTimer = this.timers.set(() => void this.flush(), this.debounceMs);
+				this.maxWaitTimer = this.timers.set(() => void this.flush(), this.maxWaitMs);
+			}
 		} else {
 			this.doc = null;
 			this.mode = result.reason === "future-version" ? "readonly" : "broken";
@@ -207,7 +267,12 @@ export class DocumentSession {
 		}
 		if (this.disposed) return;
 		this.events.onLoaded?.(this.doc, this.mode, this.problem);
-		this.events.onSaveState?.("saved");
+		if (recoveredAt !== null) {
+			this.events.onSaveState?.("pending");
+			this.events.onRecovered?.({ savedAt: recoveredAt });
+		} else {
+			this.events.onSaveState?.("saved");
+		}
 	}
 
 	private async doFlush(): Promise<boolean> {
@@ -249,6 +314,7 @@ export class DocumentSession {
 			if (!written) throw new Error("the file keeps changing on disk");
 			this.diskContent = next;
 			this.savedRevision = Math.max(this.savedRevision, revision);
+			this.afterSave();
 		} catch (e) {
 			this.events.onSaveState?.("error");
 			this.events.onError?.(`Save failed: ${(e as Error).message}. Retrying.`);
@@ -263,6 +329,114 @@ export class DocumentSession {
 			this.events.onSaveState?.("saved");
 		}
 		return true;
+	}
+
+	/** The file now holds our changes: the journal is obsolete, or must be rebased if newer changes exist. */
+	private afterSave(): void {
+		if (!this.journal) return;
+		const docId = this.doc?.id;
+		if (!docId) return;
+		this.baseLinesFor = null;
+		this.enqueueJournal(() => (this.dirty ? this.writeJournal() : this.removeJournal(docId)));
+	}
+
+	private scheduleJournal(delayMs: number): void {
+		if (!this.journal || this.journalSuspended || this.disposed || this.mode !== "ok" || this.journalTimer !== null) return;
+		this.journalTimer = this.timers.set(() => {
+			this.journalTimer = null;
+			// Never serialize in the middle of a gesture: the pen-up commit schedules the entry anyway.
+			if (this.busy()) return this.scheduleJournal(100);
+			this.enqueueJournal(() => this.writeJournal());
+		}, delayMs);
+	}
+
+	private clearJournalTimer(): void {
+		if (this.journalTimer !== null) this.timers.clear(this.journalTimer);
+		this.journalTimer = null;
+	}
+
+	private enqueueJournal(task: () => Promise<void>): void {
+		this.jchain = this.jchain.then(task).catch((e: unknown) => {
+			if (!this.journalErrorShown && !this.disposed) {
+				this.journalErrorShown = true;
+				this.events.onError?.(`The instant save journal failed: ${(e as Error).message}. Regular saving continues.`);
+			}
+			// Try again later while there are still unsaved changes.
+			if (this.dirty) this.scheduleJournal(this.retryMs);
+		});
+	}
+
+	/** Records the current document in the journal. Runs on the journal queue. */
+	private async writeJournal(): Promise<void> {
+		const journal = this.journal;
+		const doc = this.doc;
+		const base = this.diskContent;
+		if (!journal || this.journalSuspended || !doc || base === null || this.disposed || this.mode !== "ok" || !this.dirty) return;
+		const nowMs = this.now().getTime();
+		const wait = this.journalNextAt - nowMs;
+		if (wait > 0) {
+			this.scheduleJournal(wait);
+			return;
+		}
+		const checked = serializeChecked(doc);
+		if (!checked.ok) return; // the regular save reports it
+		if (this.baseLinesFor !== base) {
+			this.baseLines = splitLines(base);
+			this.baseLinesFor = base;
+		}
+		const seq = Math.max(this.journalSeq + 1, nowMs);
+		const built = buildEntry(doc.id, seq, this.now().toISOString(), base, this.baseLines, checked.text);
+		if (!built) return; // too big to journal: only the regular save protects it
+		const slot: 0 | 1 = this.journalSlot === 0 ? 1 : 0;
+		this.journalOnDisk = true;
+		await journal.write(doc.id, slot, built.text);
+		this.journalSeq = seq;
+		this.journalSlot = slot;
+		this.journalErrorShown = false;
+		if (built.full) this.journalNextAt = nowMs + fullWriteGapMs(checked.text.length);
+	}
+
+	private async removeJournal(docId: string): Promise<void> {
+		if (!this.journal || this.journalSuspended || !this.journalOnDisk) return;
+		await this.journal.remove(docId);
+		this.journalOnDisk = false;
+	}
+
+	/**
+	 * Looks for edits that were journaled but never saved. Returns the restored document, or null.
+	 * A journal that cannot be applied is copied to the backup folder before it is deleted. Never throws.
+	 */
+	private async recoverFromJournal(diskText: string, diskDoc: NotebookDocument): Promise<{ doc: NotebookDocument; savedAt: string } | null> {
+		const journal = this.journal;
+		if (!journal) return null;
+		try {
+			const files = await journal.read(diskDoc.id);
+			if (files.length === 0) return null;
+			this.journalOnDisk = true;
+			const found = inspectJournal(files, diskDoc.id, diskText);
+			this.journalSeq = found.maxSeq;
+			if (found.newestSlot !== null) this.journalSlot = found.newestSlot;
+			const r = found.recovery;
+			if (r.kind === "none") return null;
+			if (r.kind === "merged") {
+				await this.removeJournal(diskDoc.id);
+				return null;
+			}
+			if (r.kind === "apply") {
+				const check = parse(r.text);
+				return check.ok ? { doc: check.doc, savedAt: r.savedAt } : null;
+			}
+			// Stale: keep a copy first, and delete the journal only if that worked.
+			this.journalSuspended = true;
+			const path = await this.io.backup(r.backupText, "journal");
+			this.journalSuspended = false;
+			if (path && !this.disposed) this.events.onBackup?.(path, "journal");
+			await this.removeJournal(diskDoc.id);
+			return null;
+		} catch (e) {
+			this.events.onError?.(`The instant save journal could not be read: ${(e as Error).message}`);
+			return null;
+		}
 	}
 
 	private async backupConflict(content: string): Promise<void> {

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Instant save journal (storage side, M8 #31): every change is recorded within ~200 ms in a small plugin-owned journal (full snapshot for small notebooks, line diff for large ones, two alternating slot files) and replayed on open if the app died before the regular save. Not wired into the view yet.
 - Document format v4 (model side): notebook `meta`, `assets`, page backgrounds, text and image elements, infinite pages, `shape` tool; v3 files migrate in memory. New undoable commands: `AddElement`, `RemoveElement`, `ReplaceElement`, `SetMeta`, `AddAsset`, `InsertPages`, `SetPageInfinite`.
 
 ## 0.3.0 — 2026-10-29 (M3a)
