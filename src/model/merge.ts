@@ -13,16 +13,19 @@
  *   different left margin in the copy, the copy's strokes and elements are first moved into the main
  *   page's frame (by the difference of the left margins). Ink that is the same relative to the
  *   background is then recognised as the same, and new ink lands where it was drawn on the background.
+ *   When new ink of the copy would then fall off the main page (left of it because the copy has a
+ *   wider left margin, or beyond its right or bottom edge), the main page's margins are widened just
+ *   enough in the same step (`SetPageMargins`: its own ink moves with the background), so it stays visible.
  *
  * Both documents must come from `parse()`, so whatever version the copy was written in, it has gone
  * through the regular migrations first. The result is one `Batch` (one undo step) for the main
  * notebook's history; it is planned against the current state of `main` and must be applied to it.
  */
 import { cloneMeta, createId } from "./document";
-import { AddAsset, AddElement, AddPage, AddStroke, Batch, SetMeta, type Command } from "./history";
+import { AddAsset, AddElement, AddPage, AddStroke, Batch, SetMeta, SetPageMargins, type Command } from "./history";
 import { marginsEqual, marginsOf, normalizeMargins, translateElement, translateStroke } from "./margins";
 import { freezeElement, freezeStroke } from "./serialize";
-import { DEFAULT_META, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type Stroke } from "./types";
+import { DEFAULT_META, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type PageMargins, type Stroke } from "./types";
 
 export interface MergeSummary {
 	/** Pages only in the copy, added. */
@@ -45,6 +48,8 @@ export interface MergeSummary {
 	 * kept and the copy's content was moved into them before comparing and adding.
 	 */
 	marginsDiffer: number;
+	/** Common pages whose margins were widened so that ink of the copy stays on the page. */
+	marginsWidened: number;
 	/** Items of the main notebook missing from the copy (kept: deletions are not inferred). */
 	onlyInMain: number;
 }
@@ -77,6 +82,42 @@ function frameShift(into: Page, from: Page): number {
 	return Math.round((marginsOf(into).left - marginsOf(from).left) * 100) / 100;
 }
 
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+const ceil2 = (n: number): number => Math.ceil(Math.round(n * 1e6) / 1e4) / 100;
+
+/**
+ * Margins of `target` widened so that every new item of the copy (`fresh`, already in `target`'s frame)
+ * lies on the page: the left margin grows to the copy's when an item lies left of the page (the copy
+ * has the wider left margin), the right and bottom ones by what lies beyond the page. Null when nothing
+ * falls off the page.
+ */
+function widenedMargins(target: Page, copy: Page, fresh: { strokes: readonly Stroke[]; elements: readonly PageElement[] }): PageMargins | null {
+	let minX = Infinity;
+	let maxX = -Infinity;
+	let maxY = -Infinity;
+	for (const s of fresh.strokes) {
+		for (const [x, y] of s.points) {
+			if (x < minX) minX = x;
+			if (x > maxX) maxX = x;
+			if (y > maxY) maxY = y;
+		}
+	}
+	for (const e of fresh.elements) {
+		minX = Math.min(minX, e.x);
+		maxX = Math.max(maxX, e.x + e.width);
+		maxY = Math.max(maxY, e.y + (e.type === "image" ? e.height : 0));
+	}
+	if (minX === Infinity) return null;
+	const m = marginsOf(target);
+	const copyLeft = marginsOf(copy).left;
+	const left = minX < 0 && copyLeft > m.left ? copyLeft : m.left;
+	// Moving the left edge moves the items and the right edge alike: only what lies beyond the page counts.
+	const right = round2(m.right + Math.max(0, ceil2(maxX - target.width)));
+	const bottom = round2(m.bottom + Math.max(0, ceil2(maxY - target.height)));
+	if (left === m.left && right === m.right && bottom === m.bottom) return null;
+	return { left, right, bottom };
+}
+
 /** Strokes and elements of `page` moved by `dx` (the same objects when `dx` is 0). */
 function inFrame(page: Page, dx: number): { strokes: readonly Stroke[]; elements: readonly PageElement[] } {
 	const elements = page.elements ?? [];
@@ -96,7 +137,7 @@ function copyElement(e: PageElement, id: string): PageElement {
 export function planMerge(main: NotebookDocument, other: NotebookDocument): MergePlan {
 	const summary: MergeSummary = {
 		pagesAdded: 0, strokesAdded: 0, strokesCopied: 0, elementsAdded: 0, elementsCopied: 0, assetsAdded: 0,
-		tagsAdded: 0, bookmarksAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, onlyInMain: 0,
+		tagsAdded: 0, bookmarksAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, marginsWidened: 0, onlyInMain: 0,
 	};
 	const commands: Command[] = [];
 
@@ -168,9 +209,41 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 		const target = mainPages.get(page.id);
 		if (target) {
 			if (pageSettingsKey(target) !== pageSettingsKey(page)) summary.pageSettingsDiffer++;
-			if (!marginsEqual(normalizeMargins(target.margins), normalizeMargins(page.margins))) summary.marginsDiffer++;
-			const content = inFrame(page, frameShift(target, page));
 			const keys = contentOn.get(page.id)!;
+			let shift = frameShift(target, page);
+			if (!marginsEqual(normalizeMargins(target.margins), normalizeMargins(page.margins))) {
+				summary.marginsDiffer++;
+				// New ink of the copy that would fall off the main page: widen the main margins first.
+				const inMain = inFrame(page, shift);
+				const isNew = (id: string, key: string) => used.get(id) !== key && !keys.has(key);
+				const fresh = {
+					strokes: inMain.strokes.filter((s) => isNew(s.id, `s${strokeContentKey(s)}`)),
+					elements: inMain.elements.filter((e) => isNew(e.id, `e${elementContentKey(e)}`)),
+				};
+				const widened = widenedMargins(target, page, fresh);
+				if (widened) {
+					const before = normalizeMargins(target.margins);
+					commands.push(new SetPageMargins(target.id, before, widened));
+					summary.marginsWidened++;
+					const w = round2(marginsOf({ margins: normalizeMargins(widened) }).left - marginsOf({ margins: before }).left);
+					if (w !== 0) {
+						// The main page's own ink moves with its background: its content keys move too.
+						keys.clear();
+						for (const s of target.strokes) {
+							const k = `s${strokeContentKey(translateStroke(s, w))}`;
+							used.set(s.id, k);
+							keys.add(k);
+						}
+						for (const e of target.elements ?? []) {
+							const k = `e${elementContentKey(translateElement(e, w))}`;
+							used.set(e.id, k);
+							keys.add(k);
+						}
+						shift = round2(shift + w);
+					}
+				}
+			}
+			const content = inFrame(page, shift);
 			let strokeAt = target.strokes.length;
 			for (const s of content.strokes) {
 				const key = `s${strokeContentKey(s)}`;
@@ -253,7 +326,7 @@ export function mergeMeta(main: NotebookMeta, other: NotebookMeta, pageIds: Read
 
 /** Number of changes a summary describes (0: the copy holds nothing new). */
 export function mergeChangeCount(s: MergeSummary): number {
-	return s.pagesAdded + s.strokesAdded + s.strokesCopied + s.elementsAdded + s.elementsCopied + s.assetsAdded + s.tagsAdded + s.bookmarksAdded;
+	return s.marginsWidened + s.pagesAdded + s.strokesAdded + s.strokesCopied + s.elementsAdded + s.elementsCopied + s.assetsAdded + s.tagsAdded + s.bookmarksAdded;
 }
 
 /**

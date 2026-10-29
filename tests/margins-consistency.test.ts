@@ -132,6 +132,61 @@ describe("merge of a conflicted copy with v6 margins", () => {
 		expect(serialize(merged(m, other))).toBe(serialize(m));
 	});
 
+	it("ink drawn in the copy's wider left margin: main's left margin is widened in the same step, so it stays visible", () => {
+		const origin = pdfDoc();
+		const main = clone(origin);
+		const other = withMargins(origin);
+		// Drawn in the copy's left margin: at x = 20 - 80 = -60 in main's frame, off the page.
+		const inMargin = line(20, 100, 60, 120);
+		other.pages[1]!.strokes.push(inMargin);
+		const doc = clone(main);
+		const before = serialize(doc);
+		const history = new History(() => doc);
+		const plan = planMerge(doc, other);
+		expect(plan.summary.marginsWidened).toBe(1);
+		expect(plan.summary.strokesAdded).toBe(1);
+		expect(plan.summary.identical).toBe(3);
+		history.execute(plan.command!);
+		const page = doc.pages[1]!;
+		expect(page.margins).toEqual({ left: MARGINS.left, right: 0, bottom: 0 });
+		// The PDF keeps its size and moves with main's own ink; the new stroke is where it was drawn.
+		expect(backgroundRect(page)).toEqual({ x: MARGINS.left, y: 0, width: 600, height: 400 });
+		expect(keys(page)).toEqual(keys(other.pages[1]!));
+		expect(page.strokes.every((s) => s.points.every(([x]) => x >= 0 && x <= page.width))).toBe(true);
+		expect(serializeChecked(doc, true).ok).toBe(true);
+		expect(mergeCovers(doc, other)).toBe(true);
+		expect(mergeCovers(doc, main)).toBe(true);
+		const m = clone(doc);
+		expect(planMerge(clone(m), other).command).toBeNull();
+		history.undo();
+		expect(serialize(doc)).toBe(before);
+	});
+
+	it("ink of the copy beyond main's right or bottom edge widens those margins", () => {
+		const origin = pdfDoc();
+		const main = clone(origin);
+		const other = withMargins(origin, { left: 0, right: 200, bottom: 100 });
+		const far = line(650, 420, 700, 450);
+		other.pages[1]!.strokes.push(far);
+		const plan = planMerge(clone(main), other);
+		expect(plan.summary.marginsWidened).toBe(1);
+		const m = merged(main, other);
+		const page = m.pages[1]!;
+		expect(page.margins).toEqual({ left: 0, right: 100, bottom: 50 });
+		expect(page.width).toBe(700);
+		expect(page.height).toBe(450);
+		expect(backgroundRect(page)).toEqual({ x: 0, y: 0, width: 600, height: 400 });
+		expect(mergeCovers(m, other)).toBe(true);
+		expect(planMerge(clone(m), other).command).toBeNull();
+	});
+
+	it("no widening when the copy's new ink fits on main's page", () => {
+		const origin = pdfDoc();
+		const other = withMargins(origin);
+		other.pages[1]!.strokes.push(line(200, 100, 300, 120));
+		expect(planMerge(clone(origin), other).summary.marginsWidened).toBe(0);
+	});
+
 	it("the other way round: main has the margins, the copy has none", () => {
 		const origin = pdfDoc();
 		const main = withMargins(origin);
