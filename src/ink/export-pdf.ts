@@ -1,8 +1,45 @@
-import type { Page, Stroke } from "../model/types";
+import type { Page, Stroke, TextElement } from "../model/types";
 import type { BBox } from "./hit-test";
 import { PAPER_DOT_RADIUS, PAPER_LINE_WIDTH } from "./export-svg";
 import { PAPER_COLORS, paperPattern, type PaperLineKind } from "./paper";
 import { HIGHLIGHTER_ALPHA, strokeOutline } from "./stroke-shape";
+import { wrapHelvetica } from "../pdf/helvetica";
+
+/**
+ * An image placed on a page, in page coordinates (pt, origin top-left, y down). `jpeg` is a
+ * complete baseline/progressive JPEG file; `pixelWidth`/`pixelHeight` are its pixel size.
+ * `rotation` is in radians, clockwise on screen, around the centre of the box.
+ * The same `Uint8Array` instance used on several pages/places is embedded once.
+ */
+export interface PdfPlacedImage {
+	jpeg: Uint8Array;
+	pixelWidth: number;
+	pixelHeight: number;
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+	rotation?: number;
+	/**
+	 * "background" draws under the paper pattern (a rasterised PDF page); "element" (default) draws
+	 * above it, in the order returned.
+	 */
+	layer?: "background" | "element";
+}
+
+export interface PdfOptions {
+	paper?: boolean;
+	title?: string;
+	/** Images of a page (PDF background and image elements). */
+	images?: (page: Page) => PdfPlacedImage[];
+}
+
+/** Line height of text elements, as a multiple of the font size. */
+export const TEXT_LINE_HEIGHT = 1.25;
+/** Baseline of the first text line below the top of the box, as a multiple of the font size. */
+const TEXT_BASELINE = 0.88;
+
+const enc = new TextEncoder();
 
 /**
  * Minimal PDF 1.4 writer (no dependencies, browser-safe).
@@ -11,42 +48,143 @@ import { HIGHLIGHTER_ALPHA, strokeOutline } from "./stroke-shape";
  * page size as is. Content streams are written uncompressed (no Flate: no dependency, trivially
  * verifiable) and strokes are cubic Bézier outlines, so a page with a lot of ink is several times
  * larger than the same page compressed by a regular PDF producer (roughly 100-200 bytes per
- * stroke point). Everything is ASCII, so string length equals byte length and xref offsets are exact.
+ * stroke point). The file is assembled from byte chunks (JPEG data is binary); content streams and
+ * dictionaries are ASCII, so xref offsets are exact byte offsets.
+ *
+ * Draw order: white page, background images, paper, image elements, text elements, ink. Text uses the
+ * standard Helvetica font (not embedded), WinAnsi-encoded; characters outside WinAnsi become "?".
  */
-export function pagesToPdf(pages: readonly Page[], options: { paper?: boolean; title?: string } = {}): Uint8Array {
+export function pagesToPdf(pages: readonly Page[], options: PdfOptions = {}): Uint8Array {
 	const withPaper = options.paper ?? true;
-	// Object numbers: 1 catalog, 2 page tree, 3 info, then (page, content) pairs.
-	const objects: string[] = [];
-	const pageObj = (i: number) => 4 + 2 * i;
+	// Objects are numbered in allocation order; 1 catalog, 2 page tree, 3 info.
+	const objects: Uint8Array[][] = [];
+	const alloc = (): number => {
+		objects.push([]);
+		return objects.length;
+	};
+	const setObject = (n: number, ...chunks: Array<string | Uint8Array>): void => {
+		objects[n - 1] = chunks.map((c) => (typeof c === "string" ? enc.encode(c) : c));
+	};
 
-	objects.push("<< /Type /Catalog /Pages 2 0 R >>");
-	objects.push(`<< /Type /Pages /Kids [${pages.map((_, i) => `${pageObj(i)} 0 R`).join(" ")}] /Count ${pages.length} >>`);
+	const catalog = alloc();
+	const tree = alloc();
+	const info = alloc();
 	const title = options.title !== undefined ? `/Title ${pdfString(options.title)} ` : "";
-	objects.push(`<< ${title}/Producer (Notebook) >>`);
+	setObject(info, `<< ${title}/Producer (Notebook) >>`);
 
-	pages.forEach((page, i) => {
-		const content = pageContent(page, withPaper);
-		const highlighter = page.strokes.some((s) => s.tool === "highlighter");
-		const resources = highlighter
-			? `<< /ExtGState << /GS1 << /Type /ExtGState /ca ${HIGHLIGHTER_ALPHA} /BM /Multiply >> >> >>`
-			: "<< >>";
-		objects.push(
-			`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${num(page.width)} ${num(page.height)}] /Contents ${pageObj(i) + 1} 0 R /Resources ${resources} >>`,
+	let fontObj = 0;
+	const getFont = (): number => {
+		if (!fontObj) {
+			fontObj = alloc();
+			setObject(fontObj, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
+		}
+		return fontObj;
+	};
+	const imageObjs = new Map<Uint8Array, number>();
+	const getImage = (img: PdfPlacedImage): number => {
+		let n = imageObjs.get(img.jpeg);
+		if (n === undefined) {
+			n = alloc();
+			imageObjs.set(img.jpeg, n);
+			const comps = jpegComponents(img.jpeg);
+			// Adobe CMYK JPEGs store inverted values, hence /Decode.
+			const csEntry =
+				comps === 1 ? "/ColorSpace /DeviceGray" : comps === 4 ? "/ColorSpace /DeviceCMYK /Decode [1 0 1 0 1 0 1 0]" : "/ColorSpace /DeviceRGB";
+			setObject(
+				n,
+				`<< /Type /XObject /Subtype /Image /Width ${Math.max(1, Math.round(img.pixelWidth))} /Height ${Math.max(1, Math.round(img.pixelHeight))} ${csEntry} /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.jpeg.length} >>\nstream\n`,
+				img.jpeg,
+				"\nendstream",
+			);
+		}
+		return n;
+	};
+
+	const pageObjs: number[] = [];
+	for (const page of pages) {
+		const pageObj = alloc();
+		const contentObj = alloc();
+		pageObjs.push(pageObj);
+		const res = { xobjects: new Map<string, number>(), font: false, highlighter: false };
+		const content = pageContent(page, withPaper, options.images?.(page) ?? [], getImage, res);
+		const parts: string[] = [];
+		if (res.highlighter) parts.push(`/ExtGState << /GS1 << /Type /ExtGState /ca ${HIGHLIGHTER_ALPHA} /BM /Multiply >> >>`);
+		if (res.xobjects.size > 0) {
+			parts.push(`/XObject << ${[...res.xobjects].map(([name, n]) => `/${name} ${n} 0 R`).join(" ")} >>`);
+		}
+		if (res.font) parts.push(`/Font << /F1 ${getFont()} 0 R >>`);
+		const resources = `<< ${parts.join(" ")}${parts.length ? " " : ""}>>`;
+		setObject(
+			pageObj,
+			`<< /Type /Page /Parent ${tree} 0 R /MediaBox [0 0 ${num(page.width)} ${num(page.height)}] /Contents ${contentObj} 0 R /Resources ${resources} >>`,
 		);
-		objects.push(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
-	});
+		const body = enc.encode(content);
+		setObject(contentObj, `<< /Length ${body.length} >>\nstream\n`, body, "\nendstream");
+	}
+	setObject(catalog, `<< /Type /Catalog /Pages ${tree} 0 R >>`);
+	setObject(tree, `<< /Type /Pages /Kids [${pageObjs.map((n) => `${n} 0 R`).join(" ")}] /Count ${pages.length} >>`);
 
-	let out = "%PDF-1.4\n";
+	const chunks: Uint8Array[] = [];
+	let length = 0;
+	const push = (c: Uint8Array | string) => {
+		const b = typeof c === "string" ? enc.encode(c) : c;
+		chunks.push(b);
+		length += b.length;
+	};
+	push("%PDF-1.4\n");
+	// Binary marker comment: tells transfer tools the file has bytes above 127.
+	push(new Uint8Array([0x25, 0xe2, 0xe3, 0xcf, 0xd3, 0x0a]));
 	const offsets: number[] = [];
 	objects.forEach((body, i) => {
-		offsets.push(out.length);
-		out += `${i + 1} 0 obj\n${body}\nendobj\n`;
+		offsets.push(length);
+		push(`${i + 1} 0 obj\n`);
+		for (const c of body) push(c);
+		push("\nendobj\n");
 	});
-	const xrefAt = out.length;
-	out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-	for (const off of offsets) out += `${String(off).padStart(10, "0")} 00000 n \n`;
-	out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R /Info 3 0 R >>\nstartxref\n${xrefAt}\n%%EOF\n`;
-	return new TextEncoder().encode(out);
+	const xrefAt = length;
+	let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+	for (const off of offsets) xref += `${String(off).padStart(10, "0")} 00000 n \n`;
+	xref += `trailer\n<< /Size ${objects.length + 1} /Root ${catalog} 0 R /Info ${info} 0 R >>\nstartxref\n${xrefAt}\n%%EOF\n`;
+	push(xref);
+
+	const out = new Uint8Array(length);
+	let at = 0;
+	for (const c of chunks) {
+		out.set(c, at);
+		at += c.length;
+	}
+	return out;
+}
+
+/** Number of colour components declared by the first SOF marker of a JPEG (3 if it cannot be found). */
+function jpegComponents(jpeg: Uint8Array): number {
+	let i = 2;
+	while (i + 9 < jpeg.length) {
+		if (jpeg[i] !== 0xff) {
+			i++;
+			continue;
+		}
+		const m = jpeg[i + 1]!;
+		if (m === 0xff) {
+			i++;
+			continue;
+		}
+		if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return jpeg[i + 9] ?? 3;
+		if (m === 0xd8 || (m >= 0xd0 && m <= 0xd7) || m === 0x01 || m === 0x00) {
+			i += 2;
+			continue;
+		}
+		i += 2 + (((jpeg[i + 2] ?? 0) << 8) | (jpeg[i + 3] ?? 0));
+	}
+	return 3;
+}
+
+/** Fixed-point number with `digits` decimals, no exponent (for matrix entries). */
+function fix(v: number, digits: number): string {
+	if (!Number.isFinite(v)) return "0";
+	const f = 10 ** digits;
+	const r = Math.round(v * f) / f;
+	return Object.is(r, -0) ? "0" : r.toString();
 }
 
 /** Number with at most 2 decimals and never in exponent notation. */
@@ -77,16 +215,95 @@ function pdfString(s: string): string {
 	return `<${hex}>`;
 }
 
-function pageContent(page: Page, withPaper: boolean): string {
+interface PageResources {
+	xobjects: Map<string, number>;
+	font: boolean;
+	highlighter: boolean;
+}
+
+function pageContent(
+	page: Page,
+	withPaper: boolean,
+	images: readonly PdfPlacedImage[],
+	imageObj: (img: PdfPlacedImage) => number,
+	res: PageResources,
+): string {
 	const ops: string[] = [];
 	ops.push(`1 0 0 -1 0 ${num(page.height)} cm`);
 	ops.push(`1 1 1 rg 0 0 ${num(page.width)} ${num(page.height)} re f`);
+	const draw = (img: PdfPlacedImage) => {
+		const n = imageObj(img);
+		const name = `Im${n}`;
+		res.xobjects.set(name, n);
+		ops.push(imageOps(img, name));
+	};
+	for (const img of images) if (img.layer === "background") draw(img);
 	if (withPaper) ops.push(...paperOps(page));
+	for (const img of images) if (img.layer !== "background") draw(img);
+	for (const el of page.elements ?? []) {
+		if (el.type !== "text") continue;
+		const op = textOps(el);
+		if (op) {
+			res.font = true;
+			ops.push(op);
+		}
+	}
 	for (const stroke of page.strokes) {
 		const op = strokeOps(stroke);
-		if (op) ops.push(op);
+		if (op) {
+			if (stroke.tool === "highlighter") res.highlighter = true;
+			ops.push(op);
+		}
 	}
 	return ops.join("\n");
+}
+
+/**
+ * Draws image XObject `name` into the box (x, y, width, height), optionally rotated. The content
+ * stream is in y-down page coordinates, where a PDF image (unit square, y up) would come out
+ * upside down, so the matrix flips it with a negative height.
+ */
+function imageOps(img: PdfPlacedImage, name: string): string {
+	const { x, y, width: w, height: h } = img;
+	const rot = img.rotation ?? 0;
+	if (!rot) return `q ${num(w)} 0 0 ${num(-h)} ${num(x)} ${num(y + h)} cm /${name} Do Q`;
+	const cos = Math.cos(rot), sin = Math.sin(rot);
+	const cx = x + w / 2, cy = y + h / 2;
+	return [
+		"q",
+		`1 0 0 1 ${num(cx)} ${num(cy)} cm`,
+		`${fix(cos, 6)} ${fix(sin, 6)} ${fix(-sin, 6)} ${fix(cos, 6)} 0 0 cm`,
+		`${num(w)} 0 0 ${num(-h)} ${num(-w / 2)} ${num(h / 2)} cm`,
+		`/${name} Do`,
+		"Q",
+	].join("\n");
+}
+
+/** PDF literal string of WinAnsi codes: printable ASCII as is, everything else as octal escapes. */
+function winAnsiLiteral(codes: readonly number[]): string {
+	let s = "(";
+	for (const c of codes) {
+		if (c === 0x28 || c === 0x29 || c === 0x5c) s += "\\" + String.fromCharCode(c);
+		else if (c >= 32 && c <= 126) s += String.fromCharCode(c);
+		else s += "\\" + c.toString(8).padStart(3, "0");
+	}
+	return s + ")";
+}
+
+/** A text element: wrapped to its width with Helvetica metrics, one `Tm`/`Tj` per line. */
+function textOps(el: TextElement): string {
+	const size = el.fontSize;
+	if (!(size > 0) || el.text === "") return "";
+	const lines = wrapHelvetica(el.text, size, Math.max(el.width, 1));
+	const out = ["BT", `/F1 ${num(size)} Tf`, `${rgb(el.color)} rg`];
+	lines.forEach((codes, i) => {
+		if (codes.length === 0) return;
+		const baseline = el.y + size * (TEXT_BASELINE + i * TEXT_LINE_HEIGHT);
+		// The page is y-down: a negative d flips the glyphs upright again.
+		out.push(`1 0 0 -1 ${num(el.x)} ${num(baseline)} Tm ${winAnsiLiteral(codes)} Tj`);
+	});
+	out.push("ET");
+	return out.join("\n");
 }
 
 function paperOps(page: Page): string[] {
