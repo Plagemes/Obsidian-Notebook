@@ -25,6 +25,7 @@ import { apply, IDENTITY, invert, isIdentity, multiply, rotateAbout, scaleAbout,
 import { clampToPage, fitWidth, pan, PAGE_MARGIN, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
 import { cloneMeta, createId, createPage, createStroke } from "../model/document";
 import { createPdfPages, duplicatePage } from "../model/pages";
+import { backgroundRect } from "../model/margins";
 import {
 	AddAsset, AddElement, AddPage, AddStroke, Batch, DeletePage, History, InsertPages, MovePage, RemoveElement, ReplaceElement,
 	ReplaceStroke, SetMeta, SetPageInfinite, SetPageSize, SetPaper, type Command,
@@ -44,6 +45,7 @@ import { exportPdf, exportSvg } from "./export";
 import { NotebookMedia, storeAsset } from "./media";
 import { PageNavigator } from "./navigator";
 import { askPdfRange } from "./pdf-range-modal";
+import { addPdfPageMenuItems, type PdfActionHost } from "./pdf-actions";
 import { pickFile } from "./pick";
 import { RulerGesture } from "./ruler-gesture";
 import { TextEditor, type TextEditSession } from "./text-editor";
@@ -608,6 +610,7 @@ export class NotebookView extends FileView {
 			menu.addItem((i) => i.setTitle(t("export.pageSvg")).setIcon("image")
 				.onClick(() => void exportSvg(this.app, file, page, ` p${index + 1}`, this.media)));
 		}
+		addPdfPageMenuItems(menu, this.pdfActionHost(), page);
 		menu.showAtMouseEvent(evt);
 	}
 
@@ -759,6 +762,28 @@ export class NotebookView extends FileView {
 	/** Index of the page in view (for commands). */
 	currentPage(): number {
 		return this.currentPageIndex();
+	}
+
+	/** Wave p1a: what the PDF actions (margins, re-published slides, annotation export) need; null without a document. */
+	pdfActionHost(): PdfActionHost | null {
+		const session = this.session;
+		const doc = session?.doc;
+		const media = this.media;
+		const file = this.file;
+		if (!session || !doc || !media || !file) return null;
+		return {
+			app: this.app, file, doc, media, folder: this.host.settings.folder,
+			editable: () => this.stillHere(session) && session.doc === doc,
+			run: (cmd, scrollTo) => {
+				if (!this.stillHere(session) || session.doc !== doc) return false;
+				this.commitText();
+				this.clearSelection();
+				this.history.execute(cmd);
+				this.afterHistoryChange();
+				if (scrollTo !== undefined) this.scrollToPage(scrollTo);
+				return true;
+			},
+		};
 	}
 
 	/** Scans sheets with the camera and inserts them as consecutive pages after `index` (one undo step). */
@@ -1045,10 +1070,11 @@ export class NotebookView extends FileView {
 				img = (media.pdf.peek(bg.asset, bg.page)?.canvas as CanvasImageSource | undefined) ?? null;
 				if (!img && !this.isPageVisible(page)) this.renderThumbPdf(bg.asset, bg.page);
 			}
-			if (img) ctx.drawImage(img, 0, 0, page.width, page.height);
+			const r = backgroundRect(page);
+			if (img) ctx.drawImage(img, r.x, r.y, r.width, r.height);
 			else {
 				ctx.fillStyle = "#f1f5f9";
-				ctx.fillRect(0, 0, page.width, page.height);
+				ctx.fillRect(r.x, r.y, r.width, r.height);
 				incomplete = true;
 			}
 		}
