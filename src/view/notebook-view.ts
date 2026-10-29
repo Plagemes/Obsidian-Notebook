@@ -24,7 +24,7 @@ import { recognizeShape } from "../ink/recognize";
 import { drawElement, drawTextElement, measureText, Renderer, selectionHandles } from "../ink/renderer";
 import { projectToRuler, rulerFromTwoTouches, RULER_LENGTH, type Ruler } from "../ink/ruler";
 import { eraseSegment } from "../ink/segment-erase";
-import { planSpaceChange } from "../ink/space";
+import { analyseSpace, planSpaceChange, spacePreview } from "../ink/space";
 import { apply, IDENTITY, invert, isIdentity, multiply, rotateAbout, scaleAbout, translate, type Matrix } from "../ink/transform";
 import { clampToPage, fitWidth, pan, PAGE_MARGIN, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
 import { cloneMeta, createId, createPage, createStroke } from "../model/document";
@@ -915,6 +915,7 @@ export class NotebookView extends FileView {
 		this.active = null;
 		this.erasing = null;
 		this.lasso = null;
+		this.spaceDrag = null;
 		this.drag = null;
 		this.shapeDrag = null;
 		this.textTap = null;
@@ -926,6 +927,7 @@ export class NotebookView extends FileView {
 		this.renderer?.setLive(null);
 		this.renderer?.cancelWet();
 		this.renderer?.setLasso(null);
+		this.renderer?.setSpacePreview(null);
 		this.ruler = null;
 		if (doc && mode === "ok") {
 			this.messageEl.hide();
@@ -1549,6 +1551,7 @@ export class NotebookView extends FileView {
 		if (space) {
 			this.spaceDrag = null;
 			this.renderer?.setLasso(null);
+			this.renderer?.setSpacePreview(null);
 			if (!cancelled) this.commitSpace(space);
 			return;
 		}
@@ -1775,11 +1778,17 @@ export class NotebookView extends FileView {
 
 	// --- insert or remove space ---
 
-	/** Shows the line touched and the band that will be added (or removed) as a dashed rectangle. */
+	/**
+	 * Live preview: the content below the line is drawn shifted by the amount that will really be applied
+	 * (limited when removing), with the band that is added or removed as a dashed rectangle.
+	 */
 	private previewSpace(drag: SpaceDrag): void {
+		const doc = this.session?.doc;
 		const page = this.pageAtIndex(drag.pageIndex);
-		if (!page) return;
-		const y1 = drag.y + drag.delta;
+		if (!doc || !page) return;
+		const a = analyseSpace(doc.pages, drag.pageIndex, drag.y, drag.delta, measureText, this.renderer?.boundsOf);
+		this.renderer?.setSpacePreview(a ? spacePreview(a) : null);
+		const y1 = drag.y + (a ? a.delta : 0);
 		this.renderer?.setLasso({
 			pageIndex: drag.pageIndex,
 			points: [[0, drag.y], [page.width, drag.y], [page.width, y1], [0, y1], [0, drag.y]],
@@ -1790,7 +1799,7 @@ export class NotebookView extends FileView {
 	private commitSpace(drag: SpaceDrag): void {
 		const doc = this.session?.doc;
 		if (!doc || !this.editable()) return;
-		const plan = planSpaceChange(doc.pages, drag.pageIndex, drag.y, drag.delta, measureText);
+		const plan = planSpaceChange(doc.pages, drag.pageIndex, drag.y, drag.delta, measureText, this.renderer?.boundsOf);
 		if (!plan) {
 			// A deliberate drag that moved nothing deserves an explanation; a tap does not.
 			if (Math.abs(drag.delta) * this.viewport.scale >= TAP_SLOP_PX) new Notice(t("space.nothing"));

@@ -10,7 +10,8 @@ import { inkPath, type InkBuilder } from "./ink-geometry";
 import { HIGHLIGHTER_ALPHA, strokePath } from "./stroke-shape";
 import { WetInk, type PageTransform } from "./wet-ink";
 import { ErrorOnce } from "./errors";
-import type { Matrix } from "./transform";
+import type { SpacePreviewEntry } from "./space";
+import { translate, type Matrix } from "./transform";
 import type { Viewport } from "./viewport";
 
 const PAPER = "#ffffff";
@@ -176,6 +177,8 @@ export class Renderer {
 	private live: LiveStroke | null = null;
 	private lasso: LassoOverlay | null = null;
 	private selection: SelectionOverlay | null = null;
+	/** Content shown shifted while the insert/remove-space tool is dragged (hidden from the static layer meanwhile). */
+	private spacePreview: readonly SpacePreviewEntry[] | null = null;
 	private hidden: ReadonlySet<Stroke> | null = null;
 	private hiddenElements: ReadonlySet<PageElement> | null = null;
 	private selectedElements: ReadonlySet<PageElement> | null = null;
@@ -528,13 +531,38 @@ export class Renderer {
 
 	/** Shows a selection; its strokes are hidden from the static layer while it floats. */
 	setSelection(selection: SelectionOverlay | null): void {
-		const hidden = selection ? new Set(selection.strokes) : null;
-		const hiddenEls = selection && selection.elements.length > 0 ? new Set(selection.elements) : null;
+		this.selection = selection;
+		this.applyHidden(
+			selection ? new Set(selection.strokes) : null,
+			selection && selection.elements.length > 0 ? new Set(selection.elements) : null,
+		);
+	}
+
+	/**
+	 * Shows the content below the line of the insert/remove-space tool shifted, on the live layer, and hides it
+	 * from the static layer (the same mechanism as a floating selection; the two never exist together).
+	 * Entries for a page that does not exist yet (`pageIndex` -1) are only hidden.
+	 */
+	setSpacePreview(entries: readonly SpacePreviewEntry[] | null): void {
+		this.spacePreview = entries;
+		if (!entries) {
+			this.applyHidden(null, null);
+			return;
+		}
+		const hidden = new Set<Stroke>();
+		const hiddenEls = new Set<PageElement>();
+		for (const e of entries) {
+			for (const s of e.strokes) hidden.add(s);
+			for (const el of e.elements) hiddenEls.add(el);
+		}
+		this.applyHidden(hidden, hiddenEls.size > 0 ? hiddenEls : null);
+	}
+
+	private applyHidden(hidden: ReadonlySet<Stroke> | null, hiddenEls: ReadonlySet<PageElement> | null): void {
 		const changedHidden = (hidden?.size ?? 0) !== (this.hidden?.size ?? 0)
 			|| (hidden !== null && [...hidden].some((s) => !this.hidden?.has(s)))
 			|| (hiddenEls?.size ?? 0) !== (this.selectedElements?.size ?? 0)
 			|| (hiddenEls !== null && [...hiddenEls].some((e) => !this.selectedElements?.has(e)));
-		this.selection = selection;
 		this.hidden = hidden;
 		this.selectedElements = hiddenEls;
 		if (changedHidden) this.staticDirty = true;
@@ -816,6 +844,35 @@ export class Renderer {
 			for (const stroke of sel.strokes) this.fillStroke(ctx, stroke);
 			ctx.restore();
 			this.drawSelectionFrame(ctx, box, sel);
+		});
+
+		const preview = this.spacePreview;
+		if (preview) this.guarded(ctx, "space preview", () => {
+			const visibleDoc = this.visibleRect();
+			for (const e of preview) {
+				const box = boxes[e.pageIndex];
+				if (!box) continue;
+				if (e.elements.length > 0) {
+					this.beginPage(ctx, box);
+					const m = translate(0, e.dy);
+					for (const el of e.elements) {
+						const moved = transformElement(el, m, measureText);
+						drawElement(ctx, moved, moved.type === "image" ? this.media?.image(moved.asset) ?? null : null);
+					}
+					ctx.restore();
+				}
+				// Only the ink that can be seen once shifted.
+				const minY = visibleDoc.minY - box.y - e.dy;
+				const maxY = visibleDoc.maxY - box.y - e.dy;
+				this.beginPage(ctx, box);
+				ctx.translate(0, e.dy);
+				for (const stroke of e.strokes) {
+					const b = this.boundsOf(stroke);
+					if (b.maxY + stroke.width < minY || b.minY - stroke.width > maxY) continue;
+					this.fillStroke(ctx, stroke);
+				}
+				ctx.restore();
+			}
 		});
 
 		const ruler = this.ruler;

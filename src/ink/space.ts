@@ -2,7 +2,7 @@ import type { NewPageContent, PageContentChange, PageContentPlan } from "../mode
 import { freezeStroke } from "../model/serialize";
 import type { PageElement, Stroke } from "../model/types";
 import { elementBounds, transformElement, type MeasureText } from "./elements";
-import { strokeBounds } from "./hit-test";
+import { strokeBounds, type BBox } from "./hit-test";
 import { growForInfinite } from "./infinite";
 import { transformStroke } from "./lasso";
 import { estimateMeasure } from "./text-layout";
@@ -19,6 +19,8 @@ export interface SpacePage {
 	width: number;
 	height: number;
 	infinite?: boolean;
+	/** A PDF or image page: ink annotates that page, so it never moves onto or off another page. */
+	background?: unknown;
 	strokes: readonly Stroke[];
 	elements?: readonly PageElement[];
 }
@@ -38,31 +40,71 @@ interface Item {
 	maxY: number;
 }
 
+export interface SpaceMove {
+	item: Item;
+	/** Page index it lands on; an index above `endIdx` is a page that does not exist yet. */
+	target: number;
+	/** Vertical translation in page coordinates (differs from `delta` when it changes page). */
+	dy: number;
+}
+
+/** Which items move where for a given drag; shared by the live preview and the final plan. */
+export interface SpaceAnalysis {
+	/** The distance actually applied (limited when removing). */
+	delta: number;
+	/** Last existing page of the cascade; new pages are inserted right after it. */
+	endIdx: number;
+	/** The last page of the cascade is infinite: it grows instead of overflowing. */
+	grows: boolean;
+	staying: Item[];
+	moves: SpaceMove[];
+	offset: ReadonlyMap<number, number>;
+}
+
+/** Items to draw shifted while dragging. `pageIndex` -1: the page does not exist yet (the items are only hidden). */
+export interface SpacePreviewEntry {
+	pageIndex: number;
+	strokes: Stroke[];
+	elements: PageElement[];
+	dy: number;
+}
+
 /**
- * Insert or remove vertical space at height `y` of page `pageIndex`.
+ * Decides what an insert or remove of `delta` pt at height `y` of page `pageIndex` moves, and where.
  *
  * The notebook is treated as pages stacked without gaps, starting at the top of `pageIndex`. Everything
- * whose centre is below the line (on that page) and every item of the following pages moves by `delta`:
- * down when inserting (what no longer fits on its page continues at the top of the next one, and
- * pages are appended when needed), up when removing. Items keep their x, ids and order; an item
- * that crosses the line stays with the part above if its centre is above it.
+ * whose centre is below the line (on that page) and every item of the following pages of the cascade
+ * moves by `delta`: down when inserting (what no longer fits on its page continues at the top of the
+ * next one; new pages are inserted right after the last page of the cascade when needed, same size and
+ * paper, no background), up when removing. Items keep their x, ids and order.
  *
- * Removing only takes away empty space: `delta` is limited to the gap between the content that stays
- * and the content that moves, so ink never overlaps. An infinite page ends the cascade: it grows instead
- * of pushing content onto a next page (and the pages after it are not touched).
+ * The cascade only runs over pages without a PDF or image background, because ink there annotates one
+ * specific page: a background page never receives content from another page and never gives any up
+ * (overflow from it, or from the plain page before it, goes to a new blank page inserted next to it, and
+ * removing never pulls content across it). An infinite page also ends the cascade: it grows instead.
+ *
+ * Removing only takes away empty space: `delta` is limited to the gap between the content that stays and
+ * the content that moves, so ink never overlaps.
  *
  * Returns null when nothing would move (nothing below the line, no room to remove, a change under 0.5 pt).
- * Pure: the result is applied with `pageContentCommand`.
  */
-export function planSpaceChange(
-	pages: readonly SpacePage[], pageIndex: number, y: number, delta: number, measure: MeasureText = estimateMeasure,
-): SpacePlan | null {
+export function analyseSpace(
+	pages: readonly SpacePage[], pageIndex: number, y: number, delta: number,
+	measure: MeasureText = estimateMeasure, boundsOf: (s: Stroke) => BBox = strokeBounds,
+): SpaceAnalysis | null {
 	const first = pages[pageIndex];
 	if (!first || !Number.isFinite(y) || !Number.isFinite(delta) || Math.abs(delta) < MIN_SPACE_PT) return null;
-	const stopAt = pages.findIndex((p, i) => i >= pageIndex && !!p.infinite);
-	const endIdx = stopAt >= 0 ? stopAt : pages.length - 1;
-	const lastPage = pages[pages.length - 1]!;
-	const heightOf = (i: number) => (i < pages.length ? pages[i]!.height : lastPage.height);
+
+	let endIdx = pageIndex;
+	if (!first.background && !first.infinite) {
+		while (endIdx + 1 < pages.length && !pages[endIdx + 1]!.background) {
+			endIdx++;
+			if (pages[endIdx]!.infinite) break;
+		}
+	}
+	const grows = !!pages[endIdx]!.infinite;
+	const lastHeight = pages[endIdx]!.height;
+	const heightOf = (i: number) => (i <= endIdx ? pages[i]!.height : lastHeight);
 
 	// Offsets of the pages from the top of `pageIndex`.
 	const offset = new Map<number, number>();
@@ -89,7 +131,7 @@ export function planSpaceChange(
 	for (let i = pageIndex; i <= endIdx; i++) {
 		const base = offset.get(i)!;
 		pages[i]!.strokes.forEach((stroke, index) => {
-			const b = strokeBounds(stroke);
+			const b = boundsOf(stroke);
 			take({ stroke, page: i, index, minY: base + b.minY, maxY: base + b.maxY });
 		});
 		pages[i]!.elements?.forEach((element, index) => {
@@ -104,17 +146,49 @@ export function planSpaceChange(
 	d = Math.round(d * 100) / 100;
 	if (Math.abs(d) < MIN_SPACE_PT) return null;
 
-	// Where does a moved item land? Page index (maybe a page that does not exist yet) and that page's offset.
+	// Where does a moved item land? Page index (above endIdx: a new page) and that page's offset.
 	const locate = (abs: number): { page: number; offset: number } | null => {
 		let j = pageIndex;
 		let o = 0;
 		for (;;) {
-			if (abs < o + heightOf(j) || (stopAt >= 0 && j >= endIdx)) return { page: j, offset: o };
-			if (j >= pages.length - 1 + MAX_SPACE_PAGES) return null;
+			if (abs < o + heightOf(j) || (grows && j >= endIdx)) return { page: j, offset: o };
+			if (j >= endIdx + MAX_SPACE_PAGES) return null;
 			o += heightOf(j);
 			j++;
 		}
 	};
+
+	const moves: SpaceMove[] = [];
+	for (const item of moving) {
+		const land = locate((item.minY + item.maxY) / 2 + d);
+		if (!land) return null;
+		moves.push({ item, target: land.page, dy: d - (land.offset - offset.get(item.page)!) });
+	}
+	return { delta: d, endIdx, grows, staying, moves, offset };
+}
+
+/** The moving items grouped by the page they land on and by how far they move: what the renderer draws while dragging. */
+export function spacePreview(a: SpaceAnalysis): SpacePreviewEntry[] {
+	const groups = new Map<string, SpacePreviewEntry>();
+	for (const m of a.moves) {
+		const pageIndex = m.target > a.endIdx ? -1 : m.target;
+		const key = `${pageIndex}:${m.dy}`;
+		let g = groups.get(key);
+		if (!g) groups.set(key, (g = { pageIndex, strokes: [], elements: [], dy: m.dy }));
+		if (m.item.stroke) g.strokes.push(m.item.stroke);
+		else g.elements.push(m.item.element!);
+	}
+	return [...groups.values()];
+}
+
+/** Builds the content changes for an analysis. Pure: apply the result with `pageContentCommand`. */
+export function planSpaceChange(
+	pages: readonly SpacePage[], pageIndex: number, y: number, delta: number,
+	measure: MeasureText = estimateMeasure, boundsOf: (s: Stroke) => BBox = strokeBounds,
+): SpacePlan | null {
+	const a = analyseSpace(pages, pageIndex, y, delta, measure, boundsOf);
+	if (!a) return null;
+	const { endIdx, grows, offset } = a;
 
 	type Entry<T> = { source: number; index: number; item: T };
 	const targets = new Map<number, { strokes: Array<Entry<Stroke>>; elements: Array<Entry<PageElement>> }>();
@@ -124,36 +198,29 @@ export function planSpaceChange(
 		return b;
 	};
 	const touched = new Set<number>();
-	for (const it of staying) {
+	for (const it of a.staying) {
 		const b = bucket(it.page);
 		if (it.stroke) b.strokes.push({ source: it.page, index: it.index, item: it.stroke });
 		else b.elements.push({ source: it.page, index: it.index, item: it.element! });
 	}
-	const grownMaxY = { value: -Infinity };
-	for (const it of moving) {
-		const centre = (it.minY + it.maxY) / 2;
-		const land = locate(centre + d);
-		if (!land) return null;
-		const dy = d - (land.offset - offset.get(it.page)!);
-		const b = bucket(land.page);
+	let grownMaxY = -Infinity;
+	for (const { item: it, target, dy } of a.moves) {
+		const b = bucket(target);
 		touched.add(it.page);
-		touched.add(land.page);
-		let maxLocal: number;
+		touched.add(target);
 		if (it.stroke) {
 			const moved = dy === 0 ? it.stroke : freezeStroke(transformStroke(it.stroke, translate(0, dy)));
 			b.strokes.push({ source: it.page, index: it.index, item: moved });
-			maxLocal = it.maxY - offset.get(it.page)! + dy;
 		} else {
 			const moved = dy === 0 ? it.element! : transformElement(it.element!, translate(0, dy), measure);
 			b.elements.push({ source: it.page, index: it.index, item: moved });
-			maxLocal = it.maxY - offset.get(it.page)! + dy;
 		}
-		if (land.page === endIdx && stopAt >= 0) grownMaxY.value = Math.max(grownMaxY.value, maxLocal);
+		if (grows && target === endIdx) grownMaxY = Math.max(grownMaxY, it.maxY - offset.get(it.page)! + dy);
 	}
 
 	const order = <T>(j: number, entries: Array<Entry<T>>): T[] =>
 		entries
-			.sort((a, b) => (a.source === j ? 0 : 1) - (b.source === j ? 0 : 1) || a.source - b.source || a.index - b.index)
+			.sort((x, z) => (x.source === j ? 0 : 1) - (z.source === j ? 0 : 1) || x.source - z.source || x.index - z.index)
 			.map((e) => e.item);
 
 	const changes: PageContentChange[] = [];
@@ -165,19 +232,19 @@ export function planSpaceChange(
 			strokes: order(j, b.strokes),
 			elements: b.elements.length > 0 ? order(j, b.elements) : undefined,
 		};
-		if (stopAt >= 0 && j === endIdx && grownMaxY.value > -Infinity) {
+		if (grows && j === endIdx && grownMaxY > -Infinity) {
 			const page = pages[j]!;
-			const height = growForInfinite({ width: page.width, height: page.height, infinite: true }, { maxY: grownMaxY.value });
+			const height = growForInfinite({ width: page.width, height: page.height, infinite: true }, { maxY: grownMaxY });
 			if (height !== null) change.height = height;
 		}
 		changes.push(change);
 	}
 
 	const appended: NewPageContent[] = [];
-	const lastTarget = Math.max(...targets.keys());
-	for (let j = pages.length; j <= lastTarget; j++) {
+	const lastTarget = Math.max(endIdx, ...targets.keys());
+	for (let j = endIdx + 1; j <= lastTarget; j++) {
 		const b = bucket(j);
 		appended.push({ strokes: order(j, b.strokes), elements: order(j, b.elements) });
 	}
-	return { delta: d, changes, appended };
+	return { delta: a.delta, changes, appended, insertAt: endIdx + 1 };
 }

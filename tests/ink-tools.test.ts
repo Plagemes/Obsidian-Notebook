@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { needsNextPage } from "../src/ink/auto-page";
 import { cutOutsidePolygon, eraseAreaCommand } from "../src/ink/erase-area";
 import { filterErasable, isEraseFilterKind, strokeMatchesFilter, type EraseFilter } from "../src/ink/erase-filter";
-import { planSpaceChange } from "../src/ink/space";
+import { analyseSpace, planSpaceChange, spacePreview } from "../src/ink/space";
 import { createDocument, createPage, createStroke, quantizePoint } from "../src/model/document";
 import { History } from "../src/model/history";
 import { pageContentCommand } from "../src/model/page-content";
@@ -376,6 +376,148 @@ describe("insert or remove space", () => {
 		const moved = doc.pages[0]!.strokes[0]!;
 		expect(moved.points.map((p) => p[0])).toEqual([10.5, 90.25]);
 		expect(moved.points.map((p) => p[1])).toEqual([340, 350.5]);
+	});
+});
+
+describe("insert or remove space with PDF or image pages", () => {
+	const bg = { kind: "pdf", asset: "ab", page: 1 } as const;
+	function docWith(...backgrounds: boolean[]): NotebookDocument {
+		const doc = createDocument(new Date("2026-10-29T10:00:00.000Z"), { width: 400, height: 600 });
+		doc.pages = backgrounds.map((b) => {
+			const p = createPage({ width: 400, height: 600 });
+			if (b) p.background = bg;
+			return p;
+		});
+		return doc;
+	}
+	const ys = (strokes: readonly Stroke[]) => strokes.map((s) => Math.round(s.points[0]![1]));
+	function apply(doc: NotebookDocument, pageIndex: number, y: number, delta: number) {
+		const plan = planSpaceChange(doc.pages, pageIndex, y, delta);
+		if (!plan) return null;
+		const history = new History(() => doc);
+		history.execute(pageContentCommand(doc, plan, "space"));
+		return { plan, history };
+	}
+
+	it("removing never pulls content onto an earlier page when the later page has a background", () => {
+		const doc = docWith(false, true);
+		const c = hline(40);
+		doc.pages[0]!.strokes.push(hline(100));
+		doc.pages[1]!.strokes.push(c);
+		expect(planSpaceChange(doc.pages, 0, 200, -300)).toBeNull();
+		expect(doc.pages[1]!.strokes[0]).toBe(c);
+	});
+
+	it("removing never pulls content onto an earlier page when the earlier page has a background", () => {
+		const doc = docWith(true, false);
+		const c = hline(40);
+		doc.pages[0]!.strokes.push(hline(100));
+		doc.pages[1]!.strokes.push(c);
+		expect(planSpaceChange(doc.pages, 0, 200, -300)).toBeNull();
+		expect(doc.pages[1]!.strokes[0]).toBe(c);
+	});
+
+	it("removing on a plain page leaves the background page after it alone, but still works within the page", () => {
+		const doc = docWith(false, true);
+		const b = hline(300);
+		const slide = hline(30);
+		doc.pages[0]!.strokes.push(hline(100), b);
+		doc.pages[1]!.strokes.push(slide);
+		const r = apply(doc, 0, 150, -500)!;
+		expect(r.plan.delta).toBeCloseTo(-198, 1);
+		expect(doc.pages[1]!.strokes[0]).toBe(slide);
+		expect(doc.pages).toHaveLength(2);
+	});
+
+	it("removing on a background page moves only that page's own ink", () => {
+		const doc = docWith(true, false);
+		const slide = hline(30);
+		doc.pages[0]!.strokes.push(hline(100), hline(300));
+		doc.pages[1]!.strokes.push(slide);
+		apply(doc, 0, 150, -500);
+		expect(doc.pages[1]!.strokes[0]).toBe(slide);
+	});
+
+	it("insert: overflow from a plain page does not land on the next background page; a blank page is inserted before it", () => {
+		const doc = docWith(false, true);
+		const slide = hline(50);
+		doc.pages[0]!.strokes.push(hline(100), hline(500));
+		doc.pages[1]!.strokes.push(slide);
+		const r = apply(doc, 0, 150, 200)!;
+		expect(doc.pages).toHaveLength(3);
+		expect(doc.pages[2]!.background).toBeDefined();
+		expect(doc.pages[2]!.strokes[0]).toBe(slide);
+		const added = doc.pages[1]!;
+		expect(added.background).toBeUndefined();
+		expect(ys(added.strokes)).toEqual([100]);
+		expect(serializeChecked(doc)).toBeTruthy();
+		r.history.undo();
+		expect(doc.pages).toHaveLength(2);
+		expect(doc.pages[1]!.strokes[0]).toBe(slide);
+		expect(ys(doc.pages[0]!.strokes)).toEqual([100, 500]);
+	});
+
+	it("insert: overflow from a background page goes to a new blank page right after it, not onto the next slide", () => {
+		const doc = docWith(true, true);
+		doc.pages[0]!.paper = { kind: "ruled", spacing: 22.67 };
+		const next = hline(20);
+		doc.pages[0]!.strokes.push(hline(100), hline(550));
+		doc.pages[1]!.strokes.push(next);
+		apply(doc, 0, 300, 100);
+		expect(doc.pages).toHaveLength(3);
+		expect(doc.pages[0]!.background).toBeDefined();
+		expect(doc.pages[1]!.background).toBeUndefined();
+		expect(doc.pages[1]!.paper.kind).toBe("ruled");
+		expect(ys(doc.pages[1]!.strokes)).toEqual([50]);
+		expect(doc.pages[2]!.strokes[0]).toBe(next);
+		expect(ys(doc.pages[0]!.strokes)).toEqual([100]);
+	});
+
+	it("a plain cascade still runs through plain pages and stops before a background page", () => {
+		const doc = docWith(false, false, true);
+		const slide = hline(20);
+		doc.pages[0]!.strokes.push(hline(550));
+		doc.pages[1]!.strokes.push(hline(100), hline(570));
+		doc.pages[2]!.strokes.push(slide);
+		apply(doc, 0, 100, 100);
+		expect(doc.pages).toHaveLength(4);
+		expect(doc.pages[3]!.strokes[0]).toBe(slide);
+		expect(doc.pages[3]!.background).toBeDefined();
+		expect(doc.pages[2]!.background).toBeUndefined();
+		expect(ys(doc.pages[2]!.strokes)).toEqual([70]);
+	});
+});
+
+describe("space preview", () => {
+	it("describes the same moves as the plan, with the clamped amount, grouped by page", () => {
+		const doc = createDocument(new Date("2026-10-29T10:00:00.000Z"), { width: 400, height: 600 });
+		doc.pages.push(createPage({ width: 400, height: 600 }));
+		const a = hline(100), b = hline(300), low = hline(550), n = hline(40);
+		doc.pages[0]!.strokes.push(a, b, low);
+		doc.pages[1]!.strokes.push(n);
+		const ins = analyseSpace(doc.pages, 0, 200, 100)!;
+		const entries = spacePreview(ins);
+		const flat = (pi: number) => entries.filter((e) => e.pageIndex === pi).flatMap((e) => e.strokes);
+		expect(flat(0)).toEqual([b]);
+		expect(flat(1)).toEqual([low, n]);
+		expect(entries.find((e) => e.strokes.includes(b))!.dy).toBe(100);
+		expect(entries.find((e) => e.strokes.includes(low))!.dy).toBe(100 - 600);
+		const rem = analyseSpace(doc.pages, 0, 200, -900)!;
+		expect(rem.delta).toBeGreaterThan(-300);
+		expect(rem.delta).toBeLessThan(-190);
+	});
+
+	it("marks content that falls on a page that does not exist yet", () => {
+		const doc = createDocument(new Date("2026-10-29T10:00:00.000Z"), { width: 400, height: 600 });
+		doc.pages[0]!.strokes.push(hline(100), hline(550));
+		const entries = spacePreview(analyseSpace(doc.pages, 0, 300, 100)!);
+		expect(entries.some((e) => e.pageIndex === -1 && e.strokes.length === 1)).toBe(true);
+	});
+
+	it("is null when nothing would move", () => {
+		const doc = createDocument(new Date("2026-10-29T10:00:00.000Z"), { width: 400, height: 600 });
+		doc.pages[0]!.strokes.push(hline(100));
+		expect(analyseSpace(doc.pages, 0, 300, 50)).toBeNull();
 	});
 });
 

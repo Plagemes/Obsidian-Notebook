@@ -22,6 +22,8 @@ export interface NewPageContent {
 export interface PageContentPlan {
 	changes: readonly PageContentChange[];
 	appended: readonly NewPageContent[];
+	/** Where the appended pages go (index in the document); the end of the document when absent. */
+	insertAt?: number;
 }
 
 /**
@@ -70,11 +72,13 @@ export class SetPageContent implements Command {
 
 /**
  * One undoable step for a content plan: the changed pages, plus the pages that have to be appended
- * (same size and paper as the last page of the document, no background). Undo removes the pages it added.
+ * (same size and paper as the page before them, no background; at `plan.insertAt`, by default the end). Undo removes the pages it added.
  */
 export function pageContentCommand(doc: NotebookDocument, plan: PageContentPlan, label: string): Command {
 	const commands: Command[] = plan.changes.map((c) => new SetPageContent(c));
-	const like = doc.pages[doc.pages.length - 1];
+	const at = Math.max(0, Math.min(plan.insertAt ?? doc.pages.length, doc.pages.length));
+	// New pages look like the page they continue.
+	const like = doc.pages[at - 1] ?? doc.pages[doc.pages.length - 1];
 	if (plan.appended.length > 0 && like) {
 		const pages = plan.appended.map((content) => {
 			const page = createPage({ width: like.width, height: like.height }, { ...like.paper });
@@ -82,7 +86,7 @@ export function pageContentCommand(doc: NotebookDocument, plan: PageContentPlan,
 			if (content.elements.length > 0) page.elements = content.elements.map((el) => freezeElement(el));
 			return page;
 		});
-		commands.push(new InsertPages(pages, doc.pages.length));
+		commands.push(new InsertPages(pages, at));
 	}
 	return new Batch(label, commands);
 }
