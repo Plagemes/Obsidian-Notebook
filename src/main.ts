@@ -12,6 +12,7 @@ import { LIBRARY_VIEW_TYPE, LibraryView } from "./library/library-view";
 import { registerToolCommands } from "./view/commands";
 import { OpenNotebookModal } from "./view/modals";
 import { openNotebookAtPage } from "./integration/open";
+import { exportPdfAnnotations, openMarginsModal, updatePdfFromNewVersion } from "./view/pdf-actions";
 import { NotebookView, VIEW_TYPE } from "./view/notebook-view";
 import { NotebookSettingTab } from "./view/settings-tab";
 import { registerLectureCommands } from "./view/lecture-commands";
@@ -46,6 +47,22 @@ export default class NotebookPlugin extends Plugin {
 		this.addCommand({ id: "benchmark", name: t("command.benchmark"), callback: () => this.openBenchmark() });
 		this.addCommand({ id: "create-stress-test", name: t("command.stress"), callback: () => void this.createStressNotebook() });
 		this.addCommand({ id: "export-pdf", name: t("command.exportPdf"), checkCallback: (checking) => this.withView(checking, (v) => void v.exportNotebookPdf()) });
+
+		// Wave p1a: PDF margins, re-published slides, annotation export (view/pdf-actions.ts).
+		this.addCommand({ id: "pdf-margins", name: t("command.pdfMargins"), checkCallback: (checking) => this.withView(checking, (v) => {
+			const host = v.pdfActionHost();
+			const page = host?.doc.pages[v.currentPage()];
+			if (!host || !page?.background || !host.editable()) new Notice(t("pdf.noPdfPage"));
+			else openMarginsModal(host, page);
+		}) });
+		this.addCommand({ id: "pdf-update", name: t("command.pdfUpdate"), checkCallback: (checking) => this.withView(checking, (v) => {
+			const host = v.pdfActionHost();
+			if (host) void updatePdfFromNewVersion(host, v.currentPage());
+		}) });
+		this.addCommand({ id: "pdf-annotations", name: t("command.pdfAnnotations"), checkCallback: (checking) => this.withView(checking, (v) => {
+			const host = v.pdfActionHost();
+			if (host) void exportPdfAnnotations(host);
+		}) });
 
 		registerLectureCommands(this, (file) => this.host.openNotebook(file));
 

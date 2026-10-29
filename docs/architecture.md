@@ -15,12 +15,12 @@ Accepted and documented costs:
 - Native search, tags and backlinks do not see notebooks (until M4).
 - **Obsidian Sync** syncs unknown extensions only with the "Sync all other types" option enabled (stated in the README). Syncthing and USB copy have no limits.
 
-## 2. JSON schema v5
+## 2. JSON schema v6
 
 ```json
 {
   "format": "obsidian-notebook",
-  "version": 5,
+  "version": 6,
   "id": "6f1c…",
   "createdAt": "2026-10-29T14:30:00.000Z",
   "modifiedAt": "2026-10-29T14:42:10.000Z",
@@ -66,6 +66,12 @@ Added in v4 (all optional on disk, written only when present, except `meta` and 
 | page | `infinite` | the page grows downwards while writing near the bottom |
 | stroke | `tool: "shape"` | constant-width ink for lines, arrows, rectangles, ellipses and recognised shapes |
 
+Added in v6 (optional, written only when present):
+
+| Where | Field | Meaning |
+|---|---|---|
+| page | `margins` | `{ left, right, bottom }` in pt, each ≥ 0: blank space added around the background (#104). The background is drawn in the box `x = left, y = 0, width = width − left − right, height = height − bottom` (`backgroundRect` in `model/margins.ts`); without `margins` it fills the page as before. Validation: `left + right < width` and `bottom < height`, so the box keeps a positive size. Key order: after `background`, before `infinite` |
+
 Drawing order of a page: page colour, background (PDF page or image), paper pattern (none by default on PDF and scanned pages), images, text, ink.
 
 Unknown fields are ignored on read. Every schema change increments `version` and adds a tested migration (`src/model/migrations.ts`).
@@ -77,6 +83,7 @@ Unknown fields are ignored on read. Every schema change increments `version` and
 - **v2 → v3** (M3a): v3 adds the paper kinds `blank`, `ruled`, `dotted` and `millimetre` (the v2 reader accepted only `grid`); page sizes were already free numbers (`width`, `height`). The migration is the identity plus `version: 3`: every valid v2 document is a valid v3 document. A v2 file opened by 0.3 is migrated in memory and rewritten as v3 only on the first edit.
 - **v3 → v4** (M3): adds `meta` (`tags`, `favorite`, `cover`, `bookmarks`) and `assets` (keyed by lowercase-hex id) to the document; `background`, `elements` (text and image) and `infinite` to pages, written only when present; and the stroke tool `shape`. Migration: default meta (`DEFAULT_META`), empty assets; a pre-v4 file that already contains `shape` is rejected. Validation: asset references (page backgrounds, image elements) must resolve to an asset of the right kind; ids are unique across strokes and elements; `meta.tags` are de-duplicated and `meta.bookmarks` filtered to existing pages on read and on write. Order of keys: `meta`, `assets` before `pages`; per page `background`, `infinite`, `elements`, `strokes`. `serializeChecked` validates meta, assets, backgrounds and elements on every save, also on the incremental path.
 - **v4 → v5**: adds the required per-stroke `render` field (`1` = `RENDER_FREEHAND`, `2` = `RENDER_INK`). Migration: every stroke of every page gets `render: 1`, because every stroke written before v5 was drawn with perfect-freehand and must keep rendering exactly as before; v0→v1 still produces strokes without `render` and the v4→v5 step adds it. `readStroke` rejects a missing `render` or a value other than 1 or 2 (`pages[i].strokes[j].render`). `createStroke` defaults to `RENDER_FREEHAND`, so only a caller that asks for the new engine produces render 2. Key order: `id`, `tool`, `color`, `width`, `render`, `points`.
+- **v5 → v6** (PDF wave p1a): adds the optional page field `margins`. Migration: the identity plus `version: 6`; a `margins` key already present in a v5 file is dropped, because a v5 reader ignored it (it was never ours and never had an effect). No other field changes, so every valid v5 document is a valid v6 document without margins. A 0.4.x plugin opens a v6 file read-only (future version) with a backup and never rewrites it, so margins cannot be lost by an older version saving over them.
 - **Compatibility**: a plugin that supports an older version sees a newer `version` as a future version, so it opens the file read-only (and keeps a backup copy of it, as for any file it cannot edit) and never rewrites it. Once 0.2 has saved a file, 0.1.x cannot edit it; once 0.3 has saved a file, 0.2.x cannot edit it; once 0.4.0 has saved a file (v5), 0.3.x and earlier open it read-only.
 
 **Stroke rendering parameters** of `render: 1` (perfect-freehand) are code constants; the per-stroke `render` field selects the geometry, it does not carry parameters:
@@ -113,12 +120,13 @@ src/
   settings.ts             settings types and defaults (paper, size, input, stabilization, predicted ink, version history)
   i18n.ts                 UI strings: English, Italian when Obsidian's language is Italian
   model/                  (does not import 'obsidian')
-    types.ts              Document, Page, Stroke, elements, assets, meta, Tool, Paper, page size presets, CURRENT_VERSION (5)
+    types.ts              Document, Page, Stroke, elements, assets, meta, Tool, Paper, page margins, page size presets, CURRENT_VERSION (6)
     document.ts           document/page/stroke creation (size and paper as parameters), ids, quantization
     pages.ts              duplicatePage(): copy of a page with new page and stroke ids
     page-content.ts       SetPageContent command and pageContentCommand(): replace the strokes/elements of several pages (and append pages) in one undo step
     serialize.ts          deterministic serialize(), parse() with validation and migrations, serializeChecked() (save check), freezeStroke()
-    migrations.ts         chain of vN → vN+1 migrations (v0→v1 … v4→v5)
+    migrations.ts         chain of vN → vN+1 migrations (v0→v1 … v5→v6)
+    margins.ts            page margins (v6): background box, size and resize rules, translating strokes and elements
     history.ts            command-stack undo/redo (strokes, pages, paper/size, elements, meta, assets, infinite, Batch)
     companion-content.ts  companion note (O1): document → properties, tags and generated Markdown region; merge with the user's edits (pure)
     stress.ts             deterministic generated notebook (10,000 strokes / 10 pages by default) for benchmarks and the stress-test command
@@ -186,6 +194,9 @@ src/
     assets.ts             asset kinds, content-addressed names and paths in `_assets` (pure)
     hash.ts               SHA-256 prefix used as asset id
     helvetica.ts          Helvetica metrics for text boxes in PDF export
+    text-items.ts         pdf.js text items → positioned boxes, mapped into a page's background box (pure)
+    republish.ts          re-published slides: fingerprints, content matching, the update plan as one Batch (pure)
+    annotations.ts        highlights and text boxes on PDF pages → Markdown note, PDF text under a highlight (pure)
   scan/
     detect.ts             page detection on a downscaled image
     geometry.ts           corner ordering, homography, output size, convex hull
@@ -222,6 +233,7 @@ src/
     paste-modal.ts        paste box for WebViews that cannot read the clipboard (press and hold, Paste)
     pick.ts               choose a PDF or image from the vault or the device
     pdf-range-modal.ts    page range for "Insert PDF"
+    pdf-actions.ts        page margins dialog, "Update PDF from a new version" flow and summary, annotation export (glue for the pure modules)
     text-editor.ts        in-place text box editor
     ruler-gesture.ts      two-finger ruler placement
     radial-menu.ts        radial menu at the pen tip (DOM, window-level pointer capture) and the pen's quick-tools list
@@ -324,6 +336,9 @@ The toolbar has a page menu button next to Add page. It acts on the page at the 
 | Size: A4 / A5 / Letter | `SetPageSize`; keeps the current orientation; strokes are not moved or scaled |
 | Portrait / Landscape | `SetPageSize` swapping width and height; shown only when the page has a preset size |
 | Export page as PDF / notebook as PDF / page as SVG | see §8 (not history commands) |
+| Page margins… (pages with a background) | `SetPageMargins`, or a `Batch` of them with *All pages of this PDF* (§10) |
+| Update PDF from a new version… (PDF pages) | one `Batch` from `planRepublish` (§10) |
+| Export PDF annotations to Markdown (PDF pages) | not a history command (§10) |
 
 After a command the view scrolls to the affected page. The commands tolerate repeated apply/revert: no page is inserted twice and a refused delete is not "undone".
 
@@ -396,7 +411,9 @@ Command stack, not snapshots. Each command knows how to apply and undo itself; a
 | `DeletePage { page, index }` | delete page; a no-op (and so is its undo) on the only page |
 | `MovePage { pageId, from, to }` | move up/down; undo puts the page back at the exact position it moved from |
 | `SetPaper { pageId, before, after }` | change paper kind and spacing; strokes untouched |
-| `SetPageSize { pageId, before, after }` | change page size / orientation; strokes untouched |
+| `SetPageSize { pageId, before, after }` | change page size / orientation; strokes untouched. v6: on a page with margins the background keeps its box and the right/bottom margins take the change (an infinite PDF page grows below the PDF); undo restores the previous margins |
+| `SetPageMargins { pageId, before, after }` | v6 page margins: the page grows or shrinks by the change, the background keeps its size; a change of the left margin moves every stroke and element of the page by the same amount (same ids, new frozen objects), so ink never moves relative to the PDF. Undo restores the same objects and the exact previous size |
+| `SetPageBackground { pageId, background, size }` | switches a page to another PDF page (a re-published slide) and size; ink, elements and margins stay; undo restores background and size |
 | `AddElement { pageId, element, index }` / `RemoveElement` / `ReplaceElement { pageId, before, after }` | text boxes and images: insert, delete, move/scale/rotate/edit |
 | `SetMeta { before, after }` | tags, favourite, cover, bookmarks (the library applies it to an open notebook through the view; a closed notebook is rewritten by patching its JSON) |
 | `AddAsset { asset }` | registers a PDF or image asset in the document |
@@ -444,7 +461,10 @@ Samsung-Notes-like screen (`library/library-view.ts`) opened from the ribbon or 
 - **Assets**: PDFs and images are copied into `<notebooks folder>/_assets/<id>.<ext>`, where `id` is the first 24 hex characters of the SHA-256 of the content (`pdf/hash.ts`). The same file imported twice is stored once. The notebook only holds `assets[id] = { id, kind, path, name, bytes }`. Saving a notebook with a long PDF writes only ink. `resolveAssetFile` finds the file by the stored path, then by the content-addressed name in the current `_assets` folder. Missing assets give a placeholder (file name) and the ink is kept; the document is not changed. The save check verifies that every page background and image element refers to an asset of the right kind, and the stored asset is checked when added.
 - **PDF engine** (`pdf/pdf-store.ts`, pure with injected `loadPdfJs`, `readAsset` and `createCanvas`): pdf.js comes from Obsidian's `loadPdfJs()`, no bundled copy. At most 3 documents stay open (LRU, destroyed on eviction, never while busy); rendered bitmaps live in an LRU bounded by a memory budget (160 MB by default; the most recent one is always kept); the scale is clamped so neither side exceeds 4096 px; renders are cancellable; while zooming, the previous bitmap is scaled until the sharp one arrives (`peek`).
 - **Import as notebook** (`library/import-pdf.ts`): reads the page sizes, builds one page per PDF page (page size = PDF page size, `background: { kind: "pdf", asset, page }`, no paper pattern), writes the notebook and opens it; a PDF of 1 MB or more shows a progress notice while its pages are measured (`LARGE_PDF_BYTES`). **Insert** (`InsertPages`) adds a range or the whole file after the current page; a blank page or an image page can be inserted anywhere.
-- **Export** is described in §8: backgrounds and images become JPEG (PDF pages at 200 dpi).
+- **Export** is described in §8: backgrounds and images become JPEG (PDF pages at 200 dpi). A page with margins is exported at its full size with the PDF in its box (`backgroundRect`), like the screen and the thumbnails.
+- **Margins (#104)**: page menu *Page margins…* (or the command) on a page with a background asks left, right and bottom in mm (a right margin of half the PDF width is suggested), optionally for every page of the same PDF, and applies `SetPageMargins` as one undo step. Format: §2 (v6).
+- **Re-published slides (#235)**: page menu *Update PDF from a new version…* (or the command). The chosen file is read in a temporary `PdfStore` (it is stored in `_assets` only when the update is applied). Each page of the new PDF and each distinct PDF page of the notebook gets a fingerprint (`pdf/republish.ts`): its pdf.js text, normalised; pages with fewer than 24 characters of text also get a 64-bit difference hash of a ~72 px rendering. Matching: (1) equal fingerprints are the same slide, *unchanged*, one to one, closest page number first, whatever the order; (2) "that PDF" is the asset of the page in view plus every asset with an unchanged page; (3) remaining new pages are *updated* versions of remaining slides of that PDF when their words overlap enough (Dice ≥ 0.5 after removing words found on more than half of the pages, such as footers) or their image hashes differ by at most 10 bits; (4) the rest is *new*. A summary (new, updated, unchanged, not in the new version) lets the user switch each updated slide or keep the old one. Applying is one `Batch`: `AddAsset`, `InsertPages` of the new pages after the last page of that PDF (and the blank note pages after it), with that page's margins, and `SetPageBackground` for every notebook page that shows an accepted updated slide. Unchanged pages keep pointing at the old asset; old assets are never removed.
+- **Annotation export (#155)**: page menu or command *Export PDF annotations to Markdown*. For every PDF page: each highlighter stroke (with the PDF text under it: pdf.js text runs are split into equal-width character cells, and a cell whose middle lies within half the stroke width of the stroke's centre line is selected) and each non-empty text box, top to bottom. The note (`<notebook> annotations.md` next to the notebook, ` 2`, ` 3`… if taken: an existing note is never overwritten) has a wikilink to the notebook (`fileManager.generateMarkdownLink`), one section per notebook page and one callout per item with an `obsidian://notebook?…&page=n` link (`integration/links.ts`). PDF text is escaped; text boxes are copied as written. Pages without a text layer (scans) list their highlights without text.
 
 ## 11. Scanner
 

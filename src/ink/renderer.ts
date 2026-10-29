@@ -1,5 +1,6 @@
 import type { Page, PageElement, Point, Stroke, TextElement, Tool } from "../model/types";
 import { MM, RENDER_INK } from "../model/types";
+import { backgroundRect } from "../model/margins";
 import { transformElement } from "./elements";
 import { layoutText, type MeasureText } from "./text-layout";
 import { strokeBounds, type BBox } from "./hit-test";
@@ -726,17 +727,19 @@ export class Renderer {
 	 */
 	private drawBackground(ctx: CanvasRenderingContext2D, page: Page): void {
 		const img = this.media?.background(page, this.viewport.scale * this.dpr) ?? null;
+		// v6: the background keeps its box when the page has margins.
+		const r = backgroundRect(page);
 		if (img) {
-			ctx.drawImage(img, 0, 0, page.width, page.height);
+			ctx.drawImage(img, r.x, r.y, r.width, r.height);
 			return;
 		}
 		ctx.fillStyle = PLACEHOLDER;
-		ctx.fillRect(0, 0, page.width, page.height);
+		ctx.fillRect(r.x, r.y, r.width, r.height);
 		const label = this.media?.backgroundLabel(page);
 		if (label) {
 			ctx.fillStyle = PLACEHOLDER_TEXT;
-			ctx.font = `${Math.max(8, page.width / 40)}px sans-serif`;
-			ctx.fillText(label, page.width * 0.08, page.height * 0.1, page.width * 0.84);
+			ctx.font = `${Math.max(8, r.width / 40)}px sans-serif`;
+			ctx.fillText(label, r.x + r.width * 0.08, r.y + r.height * 0.1, r.width * 0.84);
 		}
 	}
 

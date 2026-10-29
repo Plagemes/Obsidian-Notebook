@@ -1,4 +1,5 @@
 import type { PdfDoc, PdfLib, PdfPage, PdfRenderTask } from "./pdfjs-types";
+import { textBoxes, type PageTextContent } from "./text-items";
 
 export type CanvasLike = HTMLCanvasElement | OffscreenCanvas;
 
@@ -122,6 +123,23 @@ export class PdfStore {
 			p.catch(() => this.sizes.delete(assetId));
 		}
 		return p;
+	}
+
+	/**
+	 * Text runs of `page` (1-based) with their boxes at scale 1, for re-published slide fingerprints and the
+	 * annotation export. Not cached (callers read each page once). A pdf.js without text support, or a page
+	 * whose text cannot be read, gives no items.
+	 */
+	pageText(assetId: string, page: number): Promise<PageTextContent> {
+		return this.withBusy(assetId, async () => {
+			const doc = await this.openDoc(assetId);
+			if (!Number.isInteger(page) || page < 1 || page > doc.numPages) throw new RangeError(`page ${page} out of range (1..${doc.numPages})`);
+			const p = await doc.getPage(page);
+			const vp = p.getViewport({ scale: 1 });
+			if (typeof p.getTextContent !== "function") return { width: vp.width, height: vp.height, items: [] };
+			const content = await p.getTextContent();
+			return { width: vp.width, height: vp.height, items: textBoxes(Array.isArray(content?.items) ? content.items : [], vp.transform) };
+		});
 	}
 
 	/** Renders `page` (1-based) at `scale` device px per pt. */
