@@ -147,3 +147,26 @@ describe("stabilizer", () => {
 		expect(tail[tail.length - 1]).toEqual([40, -2]);
 	});
 });
+
+describe("selection geometry", () => {
+	it("corners and handles follow the transform", async () => {
+		const { selectionCorners, selectionHandles } = await import("../src/ink/renderer");
+		const b = { minX: 0, minY: 0, maxX: 10, maxY: 20 };
+		expect(selectionCorners(b, IDENTITY)).toEqual([[0, 0], [10, 0], [10, 20], [0, 20]]);
+		const h = selectionHandles(b, IDENTITY, 2);
+		expect(h.scale).toEqual([10, 20]);
+		expect(h.rotate[0]).toBeCloseTo(5);
+		expect(h.rotate[1]).toBeLessThan(0); // above the top edge
+		const moved = selectionHandles(b, translate(100, 50), 2);
+		expect(moved.scale).toEqual([110, 70]);
+	});
+
+	it("invert undoes a transform", async () => {
+		const { invert } = await import("../src/ink/transform");
+		const m = multiply(rotateAbout(0.7, 3, 4), scaleAbout(2.5, 2.5, 1, 1));
+		const [x, y] = apply(m, 12, -7);
+		const [bx, by] = apply(invert(m), x, y);
+		expect(bx).toBeCloseTo(12);
+		expect(by).toBeCloseTo(-7);
+	});
+});
