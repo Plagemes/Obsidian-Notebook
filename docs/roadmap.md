@@ -55,17 +55,21 @@ Every item is implemented and its logic is covered by automated tests where it c
 
 To be confirmed with steps 23–26 of the protocol in [testing.md](testing.md).
 
-### M3b — Objects (v0.4.0) — ⏳
+### M3b — Objects (v0.4.0) — 🧪 implemented, waiting for hardware verification
 
 Shapes (lines, arrows, circles, rectangles) · text boxes · images · ruler.
 
-### M3c — Library, PDF and canvas (v0.5.0) — ⏳
+Status: 🧪 shapes (line, arrow, rectangle, ellipse, with hold-to-recognise), 🧪 text boxes, 🧪 images, 🧪 ruler; the lasso also selects text boxes and images. Logic covered by automated tests; none verified on Android hardware (steps 28–36 of the protocol in [testing.md](testing.md)).
+
+### M3c — Library, PDF and canvas (shipped in v0.4.0) — 🧪 partly implemented, waiting for hardware verification
 
 Library with folders, covers, tags, metadata, favourites and bookmarks · PDF import with annotation (Obsidian's `loadPdfJs()` first) · infinite canvas and custom page sizes · custom templates.
 
+Status: 🧪 library (folders, covers and thumbnails, tags, favourites, recent, search, move/duplicate/delete, drag and drop), 🧪 page bookmarks and navigator, 🧪 PDF import and annotation (import as notebook, insert a page range), 🧪 infinite canvas as an infinite page (grows downwards), 🧪 scan into the notebook. ⏳ custom page sizes, ⏳ custom templates. Not verified on Android hardware.
+
 ## M4 — Obsidian integration — ⏳
 
-Links to notebooks and to a specific page · backlinks, search and graph (need a Markdown representation: see the format notes in [architecture.md](architecture.md) §5) · Markdown representation of the notebook (title, tags, links, OCR text).
+Links to notebooks and to a specific page (🧪 `obsidian://notebook` links and page embeds shipped in 0.4.0; the rest ⏳) · backlinks, search and graph (need a Markdown representation: see the format notes in [architecture.md](architecture.md) §5) · Markdown representation of the notebook (title, tags, links, OCR text).
 
 ## M5 — AI and academic features — ⏳ (only after M1–M3 are stable)
 
@@ -77,7 +81,7 @@ Floating customizable toolbar, fullscreen, UI that hides while writing, quick co
 
 ## M7 — Additional features (backlog, planned 2026-10-29)
 
-Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for all.
+Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for all, except items marked 🧪 (implemented in 0.4.0, waiting for hardware verification).
 
 ### Writing and tools
 1. **P1** Favourite pens: 4–6 saved presets (tool + colour + width), one tap to switch.
@@ -97,7 +101,7 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 ### Organisation and navigation
 14. **P1** Two scroll modes: continuous vertical (current) or one page at a time with horizontal swipe.
 15. **P1** Notebook outline: titled bookmarks shown as a table of contents.
-16. **P1** Global search in the library: titles, tags, text boxes (OCR later).
+16. 🧪 **P1** Global search in the library: titles, tags, text boxes (OCR later).
 17. **P2** Links on the page: a region or element opens another page, notebook, Obsidian note or URL.
 18. **P2** Back/forward history of visited pages.
 19. **P2** Notebook templates: create a notebook from a saved notebook (planner, lab book).
@@ -105,26 +109,26 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 21. **P3** Paper colours (cream, dark, chalkboard) with ink adapted for contrast.
 
 ### Obsidian integration
-22. **P1** Embed a page in a Markdown note: a `notebook` code block renders a page preview.
+22. 🧪 **P1** Embed a page in a Markdown note: a `notebook` code block renders a page preview.
 23. **P2** Optional always-updated PDF copy next to each notebook (sharing, NotebookLM).
 24. ~~**P2** Flashcards from the lasso: question and answer regions become a Markdown flashcard compatible with spaced-repetition plugins.~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
 
 ### Data and reliability
-25. **P1** Version history: automatic snapshots (e.g. daily per notebook) with restore.
+25. 🧪 **P1** Version history: automatic snapshots (e.g. daily per notebook) with restore.
 26. **P1** Page trash: deleted pages stay recoverable after the session ends.
 27. **P2** Library check: find unreadable notebooks and orphaned assets, free space.
 28. **P3** Password-protected notebooks: local encryption with Web Crypto, no cloud.
 
 ### Capture and sharing
-29. **P1** Scan into the notebook: the camera scan goes straight into the notebook as a page whose background is the cropped, perspective-corrected and enhanced photo (like a PDF page), so you write on it, reorder it in the navigator and export it like any other page. A multi-sheet session adds consecutive pages after the current one; alternatively a scan can be placed as an image on the current page. Enhancement filters: original, document (high-contrast black and white), whiteboard.
+29. 🧪 **P1** Scan into the notebook: the camera scan goes straight into the notebook as a page whose background is the cropped, perspective-corrected and enhanced photo (like a PDF page), so you write on it, reorder it in the navigator and export it like any other page. A multi-sheet session adds consecutive pages after the current one; alternatively a scan can be placed as an image on the current page. Enhancement filters: original, document (high-contrast black and white), whiteboard.
 30. **P2** Quick share of a page as PNG or PDF through the Android share sheet.
 
 ## M8 — More features (backlog, planned 2026-10-29)
 
-Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for all.
+Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for all, except items marked 🧪 (implemented in 0.4.0, waiting for hardware verification).
 
 ### Reliability and performance
-31. **P1** Instant save journal: each stroke is appended within milliseconds to a small journal next to the notebook and merged on the regular save, so even the last stroke survives Android killing the app.
+31. 🧪 **P1** Instant save journal: each stroke is appended within milliseconds to a small journal next to the notebook and merged on the regular save, so even the last stroke survives Android killing the app.
 32. ~~**P1** Diagnostic report: one command writes versions, device, settings and performance figures to a file for bug reports.~~ — dropped (user decision, 2026-10-29)
 33. ~~**P2** Battery saver mode: fewer redraws, no predicted points, lighter thumbnails.~~ — dropped (user decision, 2026-10-29)
 34. **P3** Optional compression of very large notebooks (compatible with the planned Markdown container).
@@ -163,7 +167,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 57. **P2** Task from a selection: a region of the page becomes a task in the daily note, linked back to the page.
 
 ### Integration and accessibility
-58. **P1** Direct `obsidian://` links to a page, to open it from other apps, bookmarks or a QR code.
+58. 🧪 **P1** Direct `obsidian://` links to a page, to open it from other apps, bookmarks or a QR code.
 59. **P2** Lasso selection as an image inserted at the cursor of the active Markdown note.
 60. ~~**P2** Left-handed mode: toolbar on the other side and palm rejection tuned for left-handed writing.~~ — dropped (user decision, 2026-10-29)
 
@@ -556,14 +560,20 @@ A complete Zettelkasten workflow where handwriting is first-class. Everything go
 Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for all.
 
 ### STEM tools (no AI)
-292. **P2** Step checker: type the steps of a calculation one per line; each line is checked numerically for equivalence with the previous one.
+292. ~~**P2** Step checker: type the steps of a calculation one per line; each line is checked numerically for equivalence with the previous one.~~ — dropped (user decision, 2026-10-29)
 293. **P2** Dimensional analysis of formulas: flags inconsistent units.
 294. **P2** Balancing of typed chemical reactions.
 295. **P2** Statistics from table data: mean, deviation, regression, with the line drawn on the chart.
 296. **P3** Step-by-step linear systems and matrices shown on the page.
-297. **P3** Basic vector maps as backgrounds for geography and history (public-domain data).
-298. **P3** Truth tables and simulated logic circuits.
-299. **P3** Simple physics simulations on drawings with states (projectile, spring, inclined plane).
+297. ~~**P3** Basic vector maps as backgrounds for geography and history (public-domain data).~~ — dropped (user decision, 2026-10-29)
+298. ~~**P3** Truth tables and simulated logic circuits.~~ — dropped (user decision, 2026-10-29)
+299. **P2** Physics simulations on drawings with states (advanced):
+    - Declare bodies and quantities on the parts of a drawing with states (#241): mass, initial velocity, forces, friction, springs, constraints (inclined plane, rope, pivot).
+    - A numerical engine (own RK4 integrator) computes the motion: projectiles, inclined planes with friction, springs, pendulums, 1D/2D collisions, multi-body systems.
+    - Time slider; velocity, acceleration and force vectors drawn automatically to scale; trajectory left as a trace.
+    - Linked graphs x(t), v(t), a(t) and energies, built on function graphs (#113); parameters with sliders shared with the calculator (#182); units always consistent.
+    - Presets for common exercise types; chosen instants become instances of the drawing on the page (#241).
+    - "Check my result": compares the values you computed by hand with the simulation's.
 
 ### Annotating vault files without converting them
 300. **P2** Annotate vault images: the ink lives in a side file, the image stays untouched.
@@ -571,9 +581,14 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 302. **P3** Clean web page to annotate (to be researched).
 
 ### Practice and exercises (not exams)
-303. **P2** Redo the exercise: a copy of the page without your ink.
-304. **P2** Overlay two pages: your working and the solution, one over the other with transparency.
-305. **P3** Correction layer for tutors or classmates, with accept and reject.
+303. **P1** Redo the exercise (advanced):
+    - Choose what to hide: all your ink, only some colours or layers (e.g. the working but not the notes on the statement), or only a selected region; works on PDF exercise sheets (the PDF stays, only your solution disappears).
+    - The practice copy goes right after the original or into an "exercises" notebook, always linked to the original.
+    - "Peek at the solution": hold a button to see the original working until you let go.
+    - Attempts are kept, numbered and dated, to see progress; optional timer per attempt.
+    - Variants with different numbers: when the exercise uses variables or drawings with states (#182, #241), a variant is generated for more practice.
+304. ~~**P2** Overlay two pages: your working and the solution, one over the other with transparency.~~ — dropped (user decision, 2026-10-29)
+305. **P3** Correction layer for tutors or classmates, with accept and reject. Works like "track changes" for ink: a tutor, the lecturer or a classmate writes corrections on a separate layer (through a shared Drive folder or a collaboration session); you go through them and accept (merged into your notes) or reject (removed). (Confirmed by the user, 2026-10-29.)
 
 ### Page structure
 306. **P2** Nested detail pages: a mark opens a dedicated sub-page, like a full-page footnote.
@@ -591,11 +606,11 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 316. **P2** Editable Bézier curves with handles, for precise drawings.
 317. **P3** Freehand arrows: any drawn curve can get an arrowhead.
 318. **P3** Snap to the endpoints of existing ink.
-319. **P3** Eraser that grows with pressure.
-320. **P3** Column alignment of handwritten numbers.
+319. ~~**P3** Eraser that grows with pressure.~~ — dropped (user decision, 2026-10-29)
+320. ~~**P3** Column alignment of handwritten numbers.~~ — dropped (user decision, 2026-10-29)
 321. **P3** Local grid: lines or squares only in one region of the page.
-322. **P3** Colour by session: ink coloured by when it was written.
-323. **P3** Haptic confirmation for gestures and saves, where the device supports it.
+322. ~~**P3** Colour by session: ink coloured by when it was written.~~ — dropped (user decision, 2026-10-29)
+323. **P3** Configurable haptic confirmation: vibration enabled per event type (gestures, saves, shape recognition), where the device supports it.
 324. **P3** Precision cursor for finger writing.
 
 ### Obsidian integration
@@ -619,7 +634,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 338. **P3** Private presenter notes on a second screen.
 339. **P3** Step-by-step procedures with the time recorded at each tick, for labs.
 340. **P3** Book from ISBN: scan the barcode and create the book note for the bibliography.
-341. **P2** Night mode for PDFs: inverted pages with ink always readable.
+341. ~~**P2** Night mode for PDFs: inverted pages with ink always readable.~~ — dropped (user decision, 2026-10-29)
 
 ### Study and exam update (to be designed later)
 

@@ -50,7 +50,7 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | External change (Sync): reload, or keep local + back up the other version | ✅ | ✅ | | | |
 | Format v2 (adds `highlighter`) + migrations v0→v1, v1→v2 | ✅ | ✅ | | | |
 | Paper kinds: blank, ruled, grid, dotted, millimetre (per page) | ✅ | ✅ pattern geometry (`paperPattern`); ❌ canvas drawing | | | minor lines/dots hidden on screen below ~3 CSS px spacing |
-| Page sizes A4, A5, Letter + landscape (per page) | ✅ | ✅ command logic; ❌ view | | | no custom sizes (M3c) |
+| Page sizes A4, A5, Letter + landscape (per page) | ✅ | ✅ command logic; ❌ view | | | no custom sizes yet |
 | Changing page size keeps strokes where they are (outside ones clipped, kept in the file) | ✅ | ✅ strokes untouched by `SetPageSize`; ❌ clipping on screen | | | |
 | Page menu: duplicate, move up/down, delete, paper, size, orientation (all undoable) | ✅ | ✅ commands and undo/redo; ❌ menu (view) | | | |
 | Add page copies size and paper of the page in view | ✅ | ❌ (view) | | | |
@@ -60,19 +60,49 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Format v3 (paper kinds) + migration v2→v3 (identity) | ✅ | ✅ | | | |
 | 0.2.x opens a 0.3 file read-only and keeps a backup | ✅ | ✅ future-version handling (same code path as v2 in 0.1); ❌ with a real 0.2 install | | | |
 | Reopen shows identical strokes | ✅ | ✅ round-trip | | | |
+| Format v4: notebook `meta`, `assets`, page backgrounds, text and image elements, infinite pages, `shape` tool; migration v3→v4 | ✅ | ✅ round-trip, validation, migration, asset references | | | |
+| Files written by 0.4.0 open read-only in 0.3.x and older, with a backup | ✅ | ✅ future-version handling; ❌ with a real 0.3 install | | | |
+| Format layer: container independent of the `.notebook` extension (`storage/format.ts`) | ✅ | ✅ | | | prepares the M4 move to Markdown |
+| Library view: sidebar (all, favourites, recent, folders, tags), cards, sort, empty states | ✅ | ✅ index, queries, folders, drag target logic; ❌ view | | | |
+| Library actions: new notebook / folder, rename, move (menu and drag and drop), duplicate (new document id), delete to trash, favourite, tags, cover colour | ✅ | ✅ host logic and library tests; ❌ Obsidian file operations and drag with touch | | ✅ | drag and drop on Android is untested |
+| Covers and thumbnails (also of PDF and image pages), disposable `library-index.json` rebuilt lazily | ✅ | ✅ index staleness, rebuild; ❌ canvas thumbnails | | ✅ | |
+| Library search over titles, tags and text-box text, with snippet and page jump | ✅ | ✅ matching, snippets, page numbers; ❌ view | | | no handwriting search (OCR is M5) |
+| PDF engine: pdf.js page store, bounded bitmap cache, placeholder for a missing asset | ✅ | ✅ cache, scaling, limits (pdf.js stand-in); ❌ real pdf.js and rendering | | ✅ | speed on large PDFs unknown; depends on Obsidian's `loadPdfJs()` |
+| Import a PDF as a new notebook; insert a PDF (whole or page range), a blank page or an image as a page | ✅ | ✅ page creation, range, asset helpers; ❌ file picking and the UI | | ✅ | |
+| Content-addressed assets in `<notebooks folder>/_assets/` (same file stored once) | ✅ | ✅ hashing, names, paths; ❌ vault writes | | | |
+| Scanner: camera or photo file, 4-corner crop with loupe, automatic page detection | ✅ | ✅ detection, geometry; ❌ camera, touch handling, loupe | | ✅ | |
+| Scanner: perspective correction, filters Original / Document / Whiteboard, rotate, retake, several sheets | ✅ | ✅ warp and filters on synthetic images; ❌ real photos | | ✅ | quality on real photos is unknown |
+| Scan into the notebook as pages, as an image, or as a new notebook | ✅ | ✅ page building; ❌ view and library commands | | | |
+| Export: PDF backgrounds (200 dpi) and images embedded as JPEG in PDF and SVG | ✅ | ✅ writers with images; ❌ rasterising (canvas) | | ✅ | not opened on Android; large files |
+| Page navigator: thumbnails, tap to jump, drag to reorder, bookmarks and filter | ✅ | ✅ reorder and bookmark logic; ❌ panel and touch drag | | ✅ | |
+| Shape tool: line, arrow, rectangle, ellipse (`shape` strokes) | ✅ | ✅ geometry, constraints | | | |
+| Shape recognition: hold the pen still 0.6 s to get a clean line, rectangle, ellipse or arrow | ✅ | ✅ recognition, hold check; ❌ in the view | | ✅ | thresholds need tuning on the device |
+| Text boxes (place, edit, move, resize, rotate) | ✅ | ✅ layout, bounds, commands; ❌ editor | | ✅ | soft keyboard behaviour on Android unknown |
+| Images as elements (insert from vault or device, move, scale, rotate) | ✅ | ✅ element commands; ❌ picker, drawing | | | |
+| Lasso also selects and transforms text boxes and images | ✅ | ✅ element hit test and transform; ❌ gesture | | | |
+| Ruler (two-finger placement, the pen follows the edge) | ✅ | ✅ geometry, snapping; ❌ gesture | | ✅ | |
+| Infinite page (grows by half a page near the bottom, up to 20 × the width) | ✅ | ✅ growth rule; ❌ view | | | |
+| Instant save journal (≈200 ms), crash recovery on open, never applied if the file differs | ✅ | ✅ slots, torn writes, diff, per file and per session keys, recovery after broken→ok; ❌ Obsidian adapter | | | whether it saves the last stroke after a real kill is not known |
+| Version history: automatic snapshots, restore command, backup before restore | ✅ | ✅ naming, retention, restore guards (aborts if the save fails or the notebook differs); ❌ Obsidian commands | | | |
+| Embeds: `notebook` code block and wikilink form, refresh on change, click opens the page | ✅ | ✅ parsing and building; ❌ rendering in Obsidian | | | not tried in reading view and live preview on Android |
+| `obsidian://notebook?path=…&page=…` links; command to insert an embed | ✅ | ✅ parsing; ❌ protocol handler | | ✅ | whether Android hands the link to Obsidian is untested |
+| Page jump when opening from search, links and embeds | ✅ | ✅ page parsing; ❌ view | | | |
+| Duplicate page ids rejected on read and on write; assets verified before use | ✅ | ✅ review-fixes tests | | | |
 | English UI + Italian translation | ✅ | ❌ | | | |
 | No Node/Electron imports in `main.js` | ✅ | ✅ `scripts/check-bundle.mjs` in `npm run build` | | | |
 
 ## Automated checks
 
-Numbers from the final run of M3a (development PC).
+Numbers from the final run of 0.4.0 (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 12 files, 199 tests passed |
-| `npm run lint` | eslint + `tsc --noEmit`: no errors; `eslint-plugin-obsidianmd` recommended rules: no errors or warnings |
+| `npm test` (unit project only; benchmarks are separate) | 599 tests passed |
+| `npm run lint` | eslint + `tsc --noEmit`: 0 errors; `eslint-plugin-obsidianmd` recommended rules: 0 errors |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
+
+Added in 0.4.0: format v4 and v5 (round-trip, validation, migrations v3→v4→v5, asset references, duplicate ids), the writing engine (causal geometry equal while writing and after commit, constant work per sample, dirty rectangles, sample de-duplication, 1€ filter, pressure decided at stroke start, saves deferred while writing), shapes, recognition, text layout, elements, ruler and infinite-page geometry, the library (index, queries, folders, search with snippets, host logic, drag), the PDF store and assets (cache, limits, hashing, names), the scanner (detection, perspective, filters), the save journal (slots, torn writes, diffs, per-file and per-session keys, recovery), version history (naming, retention, restore guards), embeds and links (parsing, building, protocol parameters), export with images, and the fixes from the independent reviews (`review-fixes.test.ts`).
 
 Added in M3a: migration v2→v3 (identity plus version, v0 and v1 files still reach v3), all five paper kinds in the round-trip, rejection of unknown kinds and bad spacing, `duplicatePage` (new ids, same content, unique ids in the document), `DeletePage` (order, undo/redo with the same page object, the last page is never deleted), `MovePage` (both directions, edges, clamping, exact undo), `SetPaper` and `SetPageSize` (exact undo, strokes untouched), paper pattern geometry for each kind (ruled first line and 25 mm margin, dots at intersections, millimetre major lines, culling, `includeMinor`), SVG output (size in mm with a pt viewBox, paper on/off, highlighter, escaping, determinism) and PDF output (header and trailer, one page object per page, `xref` offsets, `/Length`, MediaBox, y-flip, colours, ExtGState only with a highlighter, title escaping, two decimals).
 
@@ -84,7 +114,7 @@ Independent review (M1): the data-safety code (session, Vault I/O, serializer, v
 
 Measured on the PC in M1 (not on Android): a 10,000-stroke notebook (268k points) is 6.8 MB; parse 156 ms, serialize 98 ms. In M2 the save check no longer re-parses documents over 1 MB each time. `npm run bench` on the dev PC (Windows, Node 24; 10,000 strokes, 10 pages, 6.69 MB): serialize 153 ms; open (parse + validate) 227 ms; open + first save with a cold cache 424 ms in total; next saves 16–19 ms; eraser hit test 0.04 ms per move (1,000 strokes, cached bounds); segment cut 0.005 ms; lasso over a quarter page 2.4 ms; stroke outline 0.04 ms. **These are PC numbers.** Android will be slower and must be measured with the in-app benchmark (step 21); record those numbers here once available.
 
-Not covered automatically: everything that needs Obsidian or a real browser (DOM, canvas, Pointer Events, Vault API, view lifecycle, the toolbar, the page menu and dialogs, writing the export files, selection handles and gestures, the fast path and fling). That is what the manual protocol is for.
+Not covered automatically: everything that needs Obsidian or a real browser (DOM, canvas, Pointer Events, Vault API, view lifecycle, the toolbar, the page menu and dialogs, the library view, the navigator panel, the scanner camera and crop UI, rendering PDFs with pdf.js, the text editor, writing the export files, selection handles and gestures, the fast path and fling, protocol and Markdown embeds). That is what the manual protocol is for.
 
 ## Manual test protocol — Android + S Pen
 
@@ -113,7 +143,7 @@ For each step note **pass / fail / notes** in the table at the end.
 19. **Fling scrolling.** With one finger, flick the page up and down at different speeds, then touch the screen during the glide. Expected: the page keeps moving after the finger lifts, slows down smoothly and stops at once when touched. Check that a slow drag followed by a pause does not fling.
 20. **Performance overlay.** Turn on *Performance overlay* and open the stress-test notebook. Note the readings (frame time, input→frame, redraw ms, strokes and pages drawn) in these situations: idle; writing; one-finger scrolling; pinch zooming in and out; at fit width and at high zoom. While scrolling or zooming the page may look blurred or blank at the edges for a moment and then sharpen (the fast path): note whether that is visible and bothersome.
 21. **In-app benchmark.** Command palette → *Run performance benchmark* with a notebook open (the benchmark uses the size of the view). Wait for it to finish and use *Copy results*, then paste the whole output into the notes table below. Run it twice, in portrait and landscape if you can, and once with other apps closed.
-22. **Notebook written by 0.1.** Open a notebook created with 0.1.x. Expected: identical strokes. Add a stroke and reopen: it works. Afterwards the file is format v3 and a 0.1.x or 0.2.x plugin would open it read-only (this last point can be checked on the PC).
+22. **Notebook written by 0.1.** Open a notebook created with 0.1.x. Expected: identical strokes. Add a stroke and reopen: it works. Afterwards the file is format v5 and a 0.1.x to 0.3.x plugin would open it read-only (this last point can be checked on the PC).
 
 23. **Paper and page size at creation.** Create a notebook for each paper (*Blank*, *Ruled*, *Grid*, *Dotted*, *Millimetre*) and each size (*A4*, *A5*, *Letter*), with and without *Landscape* (a few combinations are enough: at least one of each paper, one of each size, one landscape). Expected: the page has the right proportions and fits the view width; ruled paper has a first line below a top margin and a red margin line on the left; dotted paper has a dot at each grid intersection; millimetre paper has a darker line every 10 mm and the fine lines fade out when zoomed out and come back when zoomed in; the dialog opens with your last choice, and the same defaults appear in *Settings → Default paper / page size / Landscape by default*. Write on each, including near the edges.
 24. **Page menu and undo.** In a notebook with three pages and some ink on each, open the page menu (three-dot button next to *Add page*) and use, one by one: *Duplicate page*; *Move page up* and *down* (disabled at the ends); *Delete page* (disabled with a single page); a different *Paper*; a different *Size*; *Landscape* / *Portrait*. After each, undo and redo. Expected: every action takes effect on the page in view, is a single undo step, and undo restores the exact previous state (order, paper, size, strokes). The duplicate has the same ink and can be edited independently. After shrinking a page (for example A4 to A5) with ink near the bottom: the ink outside is not shown; undo, or enlarging again, brings it back. *Add page* gives a page with the size and paper of the page in view. Close and reopen: same pages, order, papers and sizes.
@@ -130,6 +160,16 @@ For each step note **pass / fail / notes** in the table at the end.
     - Hold still 0.6 s at the end of a rough circle/rectangle/line: it still becomes a clean shape. With the ruler: a stroke started on its edge stays on the edge.
     - Old notebooks (written before this version): strokes look exactly as before; new strokes look like the pen (same weight), and both export to PDF/SVG.
     - Run *Run performance benchmark* and copy the *Writing engine* section into the notes.
+
+28. **Library.** Open the library from the ribbon. Create two folders and three notebooks, one in a folder. Check: sidebar entries (*All notebooks*, *Favourites*, *Recent*, folders, tags), cards with cover, name, page count and date; sort by *Last modified*, *Name* and *Date created*; favourite star; *Edit tags…* (the tag appears in the sidebar and filters); *Cover colour…*; *Rename…*; *Duplicate* (the copy is independent: ink drawn in one does not appear in the other); *Move to folder…* and drag a card onto a folder (with a finger and with the pen); *Delete* (goes to the Obsidian trash); delete an empty folder and try one that is not empty. Write something in a notebook and go back: its cover thumbnail updates. Delete `library-index.json` in the plugin folder, reopen the library: it shows *Indexing…* and rebuilds with the same content. Note how long the first indexing takes with 30+ notebooks.
+29. **Library search.** Put text boxes with distinct words in a few pages of different notebooks (step 31). Search for a word in a title, a tag and a text box, with the scope *Everywhere*, *This folder* and *This view*. Expected: matches in all three places, a snippet for text hits, and a text hit opens the notebook at that page.
+30. **PDF import and insertion.** *Import PDF as notebook* (library button and command) with a PDF of 10+ pages with text and images, and with one of 100+ pages. Expected: one page per PDF page with the right size and proportions, pages sharp at fit width and after zooming (a blurry image may show for a moment), scrolling stays usable, the cover shows the first page. Write on several PDF pages, close, reopen: ink in place. In a notebook use *Insert PDF after this page* (all, then a range such as 2–3) and *Insert blank page after*. Insert an image with *Insert image as page*. Import the same PDF twice: only one file appears in `Notebooks/_assets/`. Rename or move the PDF notebook: it still works. Delete the asset file from `_assets` (on a copy): the page shows a placeholder with the file name and the ink is kept. Export the notebook as PDF: PDF pages appear as backgrounds under the ink; note file size and time.
+31. **Tools: shapes, text, images, ruler, infinite page.** (a) *Shape*: draw a line, an arrow, a rectangle and an ellipse; undo each. (b) With the pen, draw a rough rectangle, circle, line and arrow and hold still 0.6 s: each becomes a clean shape; a handwritten letter held still at the end should stay as written (note false positives and misses). (c) *Text*: place a text box, type with the soft keyboard (including accents), change the size, move it, rotate it with the lasso, undo; reopen: same text. (d) *Image*: insert from the vault and from the device; move, scale, rotate; undo. (e) Lasso a region with ink, a text box and an image together: all move. (f) *Ruler*: place it with two fingers, draw along its edge with the pen, start a stroke on the edge, rotate it; the stroke stays straight. (g) *Infinite page*: turn it on from the page menu, write down to the bottom: the page grows by half a page and writing continues; undo. Export the notebook as PDF and SVG: shapes, text and images are there.
+32. **Page navigator.** Open the *Pages panel* in a notebook with 10+ pages (a PDF notebook is good). Expected: thumbnails (with PDF/image backgrounds and ink), tap jumps to the page, drag a thumbnail to reorder (a quick swipe scrolls the list instead), star a page, show only bookmarked pages, undo a reorder. Thumbnails do not refresh while you write. Close and reopen: bookmarks and order are kept.
+33. **Scanner.** On the device: *Scan into this notebook* (command and page menu) with a sheet of paper on a table, then a whiteboard or a book page. Expected: the camera or photo picker opens, the corners are placed near the edges of the sheet (or can be dragged to them; the loupe shows the corner), *Original*, *Document* and *Whiteboard* previews differ and look sensible (readable text, no black blobs), *Rotate* and *Retake* work, a second sheet continues the session, *Done* adds the pages after the current one. Then *Insert scan as image* and *New notebook from scan* (command and library). Write on a scanned page, reorder it in the navigator, export the notebook as PDF. Note: quality of detection, time to process a 12 MP photo, any crash or out-of-memory with several sheets.
+34. **Journal recovery (force close).** Open a notebook, write 5–10 strokes and, within one second after the last one, swipe Obsidian away from the recent apps (or force stop it in the system settings). Reopen Obsidian and the notebook. Expected: all strokes are there and a notice *Recovered unsaved changes from …* may appear. Repeat while the pen is still down on a stroke and right after *Add page*, a shape and a text box. Variants: do it in a large notebook (the stress test), and with two notebooks open. Then, on a copy, damage the situation: write, force close, edit the notebook file on the PC so it differs from the saved one, reopen: nothing from the journal is applied, a copy appears in `Notebooks/_backup/` and a notice names it. Note which cases lost data, if any.
+35. **Version history.** Open and edit a notebook, then check the folder `Notebooks/_backup/history/<document id>/` with a file manager: a `.snapshot` file exists (the default interval is 24 h, so a new snapshot per day; to get several quickly, set *Version history interval* to 1 and move the date of the existing snapshot file's name back on the PC). Add pages and ink, then run the command *Restore a previous version*: the list shows dates and page counts; choose an older one and confirm. Expected: the notebook goes back to that version, the notice names the backup of the previous content (a `.bak` in `_backup`), and the open view refreshes. Try it with unsaved changes in the open notebook (they are saved first), and with a snapshot file of another notebook copied into the folder (it is refused). Set *Versions to keep* to 1 and check that older snapshots go to the trash. Set the interval to 0: no new snapshots.
+36. **Embeds and links.** In a Markdown note run *Insert notebook embed* and choose a notebook: a `notebook` code block appears. Switch to reading view and live preview: the page preview is drawn (with PDF background and text boxes if the page has them), at the width of the note. Change `page:` to another page and to a page that does not exist (a clear message). Try `Notebooks/Name.notebook#3` and `[[Name#p3]]`. Write in the notebook and watch the embed refresh. Click the preview: the notebook opens at that page. Build a link `obsidian://notebook?path=Notebooks/Name.notebook&page=3` (add `vault=<name>` if you have several vaults), put it in a note or a QR code or an Android shortcut and open it from outside Obsidian: the notebook opens at page 3. Note which of these do not work on Android.
 
 | Step | Device / Obsidian version | Result | Notes |
 |---|---|---|---|
@@ -154,12 +194,21 @@ For each step note **pass / fail / notes** in the table at the end.
 | 19 Fling | | | |
 | 20 Performance overlay | | | |
 | 21 In-app benchmark | | | |
-| 27 Writing engine | | | |
 | 22 Notebook from 0.1 | | | |
 | 23 Paper and size at creation | | | |
 | 24 Page menu and undo | | | |
 | 25 Export PDF/SVG | | | |
 | 26 0.2 opens a 0.3 file | | | |
+| 27 Writing engine | | | |
+| 28 Library | | | |
+| 29 Library search | | | |
+| 30 PDF import and insertion | | | |
+| 31 Shapes, text, images, ruler, infinite page | | | |
+| 32 Page navigator | | | |
+| 33 Scanner | | | |
+| 34 Journal recovery | | | |
+| 35 Version history | | | |
+| 36 Embeds and links | | | |
 
 Benchmark output (step 21): paste it here.
 
@@ -169,23 +218,26 @@ Benchmark output (step 21): paste it here.
 
 ## Quick check — Windows
 
-Mouse: draw, erase (both modes), undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scroll, Ctrl+wheel zoom, resize the window (the page refits), add a page, use every page menu action with undo, create notebooks with each paper and size, export PDF and SVG and open them, lasso select/move/resize/rotate/delete, close and reopen the notebook. With a pen tablet or Surface pen: pressure and eraser end (`buttons & 32`).
+Mouse: draw, erase (both modes), undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scroll, Ctrl+wheel zoom, resize the window (the page refits), add a page, use every page menu action with undo, create notebooks with each paper and size, export PDF and SVG and open them, lasso select/move/resize/rotate/delete, close and reopen the notebook. Also: open the library and use every action, import a PDF and write on it, insert a PDF range and an image page, use the shape, text, image and ruler tools, scan from a photo file, use the Pages panel, run *Restore a previous version*, insert an embed in a note and open an `obsidian://notebook` link. With a pen tablet or Surface pen: pressure and eraser end (`buttons & 32`).
 
-## Known limitations (v0.3)
+## Known limitations (v0.4)
 
 - Nothing has been verified on Android hardware yet.
-- Highlighter, palm contact size, fling, the CSS fast path, predicted points and the performance overlay are experimental. The highlighter preview while drawing is not multiplied with the page; the final look appears when the stroke is committed.
+- Experimental, depending on the device or WebView: the writing engine (raw input, wet ink), predicted ink, the highlighter preview, palm contact size, fling, the CSS fast path, the performance overlay, shape recognition thresholds, the ruler gesture, the text editor with the soft keyboard, the scanner (camera, detection, filters), PDF rendering speed on large files, drag and drop in the library and the navigator, `obsidian://` links from other apps.
 - While the fast path moves the old bitmap during a pan or zoom, uncovered areas are blank and detail is not re-rendered until 120 ms after the gesture pauses.
-- Page sizes are limited to A4, A5 and Letter (portrait or landscape); no custom sizes. Changing a page size does not move or scale its strokes: strokes outside a smaller page are kept in the file but clipped on screen and in exports.
-- Exports: PDF and SVG always include the paper pattern, there is no option to leave it out. The PDF is not compressed, so a page with a lot of ink gives a large file (roughly 100-200 bytes per stroke point). Dots of dotted paper are tiny squares in the PDF and circles in the SVG. There is no export of a page range or a selection; page SVG and PDF are exported from the page menu, the whole notebook also from the command palette.
-- The PDF and SVG were checked with pdf.js and resvg on the PC, not on Android.
-- A lasso selection belongs to one page, strokes cannot be moved to another page, and there is no copy/paste. Resize is uniform only (one handle). Strokes moved partly outside their page are clipped when drawn.
-- Stabilization is applied while writing and the stabilized points are what is saved; it cannot be changed after the fact.
+- Page sizes are limited to A4, A5 and Letter (portrait or landscape) and the size of imported PDFs and images; no custom sizes. Changing a page size does not move or scale its strokes: strokes outside a smaller page are kept in the file but clipped on screen and in exports. An infinite page grows only downwards and up to 20 times its width.
+- Exports: PDF and SVG always include the paper pattern, there is no option to leave it out. The PDF is not compressed, so a page with a lot of ink gives a large file (roughly 100-200 bytes per stroke point) and PDF page backgrounds and images are embedded as JPEG (PDF pages at 200 dpi). There is no export of a page range or a selection. The PDF and SVG were checked with pdf.js and resvg on the PC, not on Android.
+- Library: search covers titles, tags and text-box text only (no handwriting recognition). Only empty folders can be deleted. The library index is a cache and is rebuilt after it is deleted or when it is out of date. Duplicating a notebook that uses a PDF shares the same asset file.
+- PDFs and images live in `_assets/` and are referenced by content hash; deleting or renaming those files breaks the pages that use them (a placeholder is shown and the ink is kept). There is no library check or clean-up of unused assets yet. A notebook moved to another vault needs its `_assets` files too.
+- Scans: the corners are detected on a downscaled image and may need correcting by hand; the photo comes from the system camera or a file picker, there is no live camera view inside the plugin.
+- A lasso selection belongs to one page, elements and strokes cannot be moved to another page, and there is no copy/paste. Resize is uniform only (one handle). Strokes moved partly outside their page are clipped when drawn.
+- Stabilization is applied while writing and the filtered points are what is saved; it cannot be changed after the fact. New strokes use the new ink geometry (render 2); old strokes keep their look (render 1).
 - The segment eraser removes whole point runs: very short leftover pieces (a single point) are dropped.
-- Every save serializes the whole document. The re-validation is full under 1 MB and incremental above it, so very large notebooks save faster than in 0.1, but a short freeze is still possible on slow tablets (to be measured with the in-app benchmark).
+- Every save serializes the whole document. The re-validation is full under 1 MB and incremental above it, so very large notebooks save faster than in 0.1, but a short freeze is still possible on slow tablets (to be measured with the in-app benchmark). Saves, journal entries and thumbnails wait while the pen writes.
 - The undo history is in memory only (500 commands) and is lost when the notebook is closed.
-- A notebook saved by 0.2 (format v2) opens read-only in 0.1.x, and one saved by 0.3 (format v3) opens read-only in 0.2.x.
-- If Android kills Obsidian without a `visibilitychange` event, the last ~1.5 s of changes (up to 10 s while writing continuously) can be lost.
+- Files written by 0.4.0 (format v5) open read-only in older versions of the plugin (0.3.x and earlier).
+- If Android kills Obsidian, at most the changes of the last ~200 ms plus those never journaled are lost: the journal covers notebooks up to 8 MB (above that only the regular save, ~1.5 s, up to 10 s while writing continuously, protects the changes). The journal is plugin-private and does not travel with sync.
+- Version history keeps one snapshot per interval (24 h by default), so very recent work is protected by the journal and the regular save, not by the history.
 - When another writer changes the file in the instant between our read and our write, the attempt is aborted by writing back the same content; this may bump the file's modification time (no data change).
 - The S Pen side button is not mapped; only the standard `buttons & 32` eraser is handled.
-- Notebooks are invisible to Obsidian search, tags, backlinks and graph (M4).
+- Notebooks are invisible to Obsidian search, tags, backlinks and graph (M4); use the library search, embeds and `obsidian://` links meanwhile.
