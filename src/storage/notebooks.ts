@@ -1,7 +1,8 @@
 import { normalizePath, TFile, Vault, type App } from "obsidian";
 import { createDocument } from "../model/document";
 import { serialize } from "../model/serialize";
-import { FILE_EXTENSION, type NotebookDocument } from "../model/types";
+import type { NotebookDocument } from "../model/types";
+import { isNotebookFile, NEW_NOTEBOOK_EXTENSION, writeNotebookText } from "./format";
 import { ensureFolder } from "./vault-io";
 
 /** Characters Obsidian does not allow in file names, plus those that break links. */
@@ -22,11 +23,11 @@ export async function createNotebook(app: App, folder: string, name: string, doc
 	if (dir !== "/") await ensureFolder(app, dir);
 	const base = sanitizeName(name) || defaultNotebookName();
 	const prefix = dir === "/" ? "" : `${dir}/`;
-	let path = normalizePath(`${prefix}${base}.${FILE_EXTENSION}`);
+	let path = normalizePath(`${prefix}${base}.${NEW_NOTEBOOK_EXTENSION}`);
 	for (let i = 2; app.vault.getAbstractFileByPath(path); i++) {
-		path = normalizePath(`${prefix}${base} ${i}.${FILE_EXTENSION}`);
+		path = normalizePath(`${prefix}${base} ${i}.${NEW_NOTEBOOK_EXTENSION}`);
 	}
-	return app.vault.create(path, serialize(doc));
+	return app.vault.create(path, writeNotebookText(NEW_NOTEBOOK_EXTENSION, serialize(doc), ""));
 }
 
 /** Notebooks inside the notebooks folder (recursively). The rest of the vault is not enumerated. */
@@ -35,7 +36,7 @@ export function listNotebooks(app: App, folder: string): TFile[] {
 	if (!root) return [];
 	const found: TFile[] = [];
 	Vault.recurseChildren(root, (f) => {
-		if (f instanceof TFile && f.extension === FILE_EXTENSION) found.push(f);
+		if (f instanceof TFile && isNotebookFile(f)) found.push(f);
 	});
 	return found.sort((a, b) => b.stat.mtime - a.stat.mtime);
 }

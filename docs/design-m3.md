@@ -7,7 +7,8 @@ Goal: a notebook system in the spirit of Samsung Notes and Notewise (folders →
 1. **The vault is the database.** Library folders are real folders under the notebooks folder; a notebook is one `.notebook` file. Moving, renaming and syncing work with any tool. No hidden database that can go out of sync.
 2. **Heavy data is referenced, not embedded.** PDFs and images live in `<notebooks folder>/_assets/<sha256-prefix>.<ext>` and are referenced by id from the notebook. Saving a notebook with a 300-page PDF writes only the ink. The same file imported twice is stored once.
 3. **Everything stays vector and versioned.** Ink, shapes and text are data in the notebook (format v4); PDF pages are a background that is rendered on demand. Every change is a command (undo/redo).
-4. **Fast library through a disposable index.** Covers and metadata are cached in `index.json` in the plugin folder, keyed by path + mtime + size. The index can be deleted at any time and is rebuilt lazily; the notebooks remain the only source of truth.
+4. **Container-independent.** Code never tests the `.notebook` extension directly: one format layer (`src/storage/format.ts`) says what a notebook file is and how its text is read and written, so the planned M4 move to Markdown (`.md` with a data block, or a companion `.md`) is a contained change.
+5. **Fast library through a disposable index.** Covers and metadata are cached in `index.json` in the plugin folder, keyed by path + mtime + size. The index can be deleted at any time and is rebuilt lazily; the notebooks remain the only source of truth.
 
 ## Format v4 (additions)
 
@@ -29,6 +30,7 @@ Drawing order: page colour → background (PDF page or image) → paper pattern 
 - Rendering: pdf.js from Obsidian (`loadPdfJs()`); visible pages are rasterised at the current zoom into an LRU bitmap cache with a memory budget; while zooming, the previous bitmap is scaled until the sharp one is ready.
 - Missing asset (file deleted): the page shows a placeholder with the file name; the ink is kept.
 - Export: ink stays vector; the PDF page is embedded as a JPEG image at 200 dpi.
+- Scans (roadmap M7 #29) reuse the same mechanism: a scanned sheet is an image asset used as a page background (`{ kind: "image" }`), so it behaves exactly like a PDF page.
 
 ## Library view
 

@@ -18,10 +18,11 @@ import {
 } from "../model/history";
 import { freezeStroke } from "../model/serialize";
 import {
-	FILE_EXTENSION, PAGE_SIZES, PAPER_KINDS, PAPER_SPACING,
+	PAGE_SIZES, PAPER_KINDS, PAPER_SPACING,
 	type NotebookDocument, type Page, type PageSizeName, type PaperKind, type Point, type Stroke,
 } from "../model/types";
 import { DocumentSession, type SaveState, type SessionMode } from "../storage/session";
+import { isNotebookFile } from "../storage/format";
 import { VaultDocumentIO } from "../storage/vault-io";
 import { backupFolder, type NotebookSettings } from "../settings";
 import { exportPdf, exportSvg } from "./export";
@@ -131,7 +132,7 @@ export class NotebookView extends FileView {
 	}
 
 	canAcceptExtension(extension: string): boolean {
-		return extension === FILE_EXTENSION;
+		return isNotebookFile({ extension });
 	}
 
 	/** Size of the drawing area, for the benchmark. */

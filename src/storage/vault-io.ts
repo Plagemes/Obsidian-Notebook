@@ -1,4 +1,5 @@
 import { normalizePath, TFile, type App } from "obsidian";
+import { readNotebookText, writeNotebookText } from "./format";
 import type { BackupReason, DocumentIO } from "./session";
 
 /** Creates every missing folder along `path`. */
@@ -42,12 +43,14 @@ export class VaultDocumentIO implements DocumentIO {
 		private readonly backupFolder: () => string,
 	) {}
 
-	read(): Promise<string> {
-		return this.app.vault.read(this.file);
+	/** The document text inside the file (the container format lives in format.ts). */
+	async read(): Promise<string> {
+		return readNotebookText(this.file.extension, await this.app.vault.read(this.file));
 	}
 
 	async process(fn: (current: string) => string): Promise<void> {
-		await this.app.vault.process(this.file, fn);
+		const ext = this.file.extension;
+		await this.app.vault.process(this.file, (raw) => writeNotebookText(ext, fn(readNotebookText(ext, raw)), raw));
 	}
 
 	async backup(content: string, reason: BackupReason): Promise<string | null> {

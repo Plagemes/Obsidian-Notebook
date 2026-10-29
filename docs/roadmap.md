@@ -74,3 +74,56 @@ Swappable providers, local first, cloud only as explicit opt-in · handwriting O
 ## M6 — Premium UX (cross-cutting) — ⏳
 
 Floating customizable toolbar, fullscreen, UI that hides while writing, quick colour/width picker, portrait/landscape, dark mode, accessibility, light animations that do not affect latency.
+
+## M7 — Additional features (backlog, planned 2026-10-29)
+
+Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for all.
+
+### Writing and tools
+1. **P1** Favourite pens: 4–6 saved presets (tool + colour + width), one tap to switch.
+2. **P1** Configurable S Pen side button: hold for eraser, lasso or last tool.
+3. **P1** Multi-finger gestures: two-finger tap = undo, three-finger tap = redo (configurable).
+4. **P1** Scribble to erase: scratching over strokes deletes them.
+5. **P1** Restyle selection: change colour and width of lasso-selected strokes.
+6. **P1** Copy, paste and duplicate selections across pages and notebooks.
+7. **P2** Free colour picker with recent colours and an eyedropper.
+8. **P2** Pressure curve calibration per device, with a test area.
+9. **P2** Tilt-aware pencil (tiltX/tiltY widen and lighten the stroke).
+10. **P2** Study tape: opaque strips that hide parts of a page and reveal on tap.
+11. **P2** Zoom window for writing small on a large page.
+12. **P3** Laser pointer (fading temporary ink) for presentations.
+13. **P3** Protractor and compass alongside the ruler.
+
+### Organisation and navigation
+14. **P1** Two scroll modes: continuous vertical (current) or one page at a time with horizontal swipe.
+15. **P1** Notebook outline: titled bookmarks shown as a table of contents.
+16. **P1** Global search in the library: titles, tags, text boxes (OCR later).
+17. **P2** Links on the page: a region or element opens another page, notebook, Obsidian note or URL.
+18. **P2** Back/forward history of visited pages.
+19. **P2** Notebook templates: create a notebook from a saved notebook (planner, lab book).
+20. **P2** Sticky notes: movable coloured notes on the page.
+21. **P3** Paper colours (cream, dark, chalkboard) with ink adapted for contrast.
+
+### Obsidian integration
+22. **P1** Embed a page in a Markdown note: a `notebook` code block renders a page preview.
+23. **P2** Optional always-updated PDF copy next to each notebook (sharing, NotebookLM).
+24. **P2** Flashcards from the lasso: question and answer regions become a Markdown flashcard compatible with spaced-repetition plugins.
+
+### Data and reliability
+25. **P1** Version history: automatic snapshots (e.g. daily per notebook) with restore.
+26. **P1** Page trash: deleted pages stay recoverable after the session ends.
+27. **P2** Library check: find unreadable notebooks and orphaned assets, free space.
+28. **P3** Password-protected notebooks: local encryption with Web Crypto, no cloud.
+
+### Capture and sharing
+29. **P1** Scan into the notebook: the camera scan goes straight into the notebook as a page whose background is the cropped, perspective-corrected and enhanced photo (like a PDF page), so you write on it, reorder it in the navigator and export it like any other page. A multi-sheet session adds consecutive pages after the current one; alternatively a scan can be placed as an image on the current page. Enhancement filters: original, document (high-contrast black and white), whiteboard.
+30. **P2** Quick share of a page as PNG or PDF through the Android share sheet.
+
+## File format transition (applies to M4 and to every milestone before it)
+
+M4 may move notebooks from `.notebook` to Markdown (option B, `.md` with the data in a block) or add a companion `.md` (option C), so that links, backlinks, search and the graph work natively (see architecture.md §1 and §5). Until that decision is taken, all code must keep the move cheap:
+
+- One format layer decides what a notebook file is and how it is read and written (`isNotebookFile`, `readNotebookText`, `writeNotebookText` in `src/storage/format.ts`). Library, index, links, embeds, version history, scanner and import never test the extension themselves.
+- Assets, links, bookmarks and the library index reference notebooks by vault path and document id, never by extension-dependent names; a rename keeps working.
+- The document JSON (format version, migrations) is independent of the container, so the same data can live in a `.notebook` file or inside a Markdown block.
+- When the switch happens it ships as a format container change with a one-click migration command, a backup of every converted file, and support for reading both containers for at least one release.

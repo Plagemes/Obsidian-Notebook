@@ -1,10 +1,10 @@
 import { Notice, Plugin, type TFile } from "obsidian";
 import { t } from "./i18n";
-import { FILE_EXTENSION } from "./model/types";
 import { readSettings, type NotebookSettings } from "./settings";
 import { createDocument } from "./model/document";
 import { stressDocument } from "./model/stress";
 import { PAGE_SIZES, PAPER_SPACING } from "./model/types";
+import { NOTEBOOK_EXTENSIONS } from "./storage/format";
 import { createNotebook } from "./storage/notebooks";
 import { BenchmarkModal } from "./view/benchmark";
 import { NewNotebookModal, OpenNotebookModal, type NewNotebookOptions } from "./view/modals";
@@ -18,7 +18,7 @@ export default class NotebookPlugin extends Plugin {
 		this.settings = readSettings(await this.loadData());
 
 		this.registerView(VIEW_TYPE, (leaf) => new NotebookView(leaf, this));
-		this.registerExtensions([FILE_EXTENSION], VIEW_TYPE);
+		this.registerExtensions([...NOTEBOOK_EXTENSIONS], VIEW_TYPE);
 
 		this.addRibbonIcon("book-open", t("ribbon.open"), () => this.openPicker());
 
