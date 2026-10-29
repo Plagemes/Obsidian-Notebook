@@ -1,7 +1,14 @@
 import { inEdgeZone, type EdgeZones } from "./edge-zones";
 
-/** What pressing the pen's side button does: open the radial menu, erase while it is held, or nothing. */
-export type PenButtonAction = "radial" | "eraser" | "off";
+/**
+ * What pressing the pen's side button does: open the radial menu, erase while it is held, use the
+ * lasso while it is held, use the previously used tool while it is held, or nothing.
+ */
+export const PEN_BUTTON_ACTIONS = ["radial", "eraser", "lasso", "lastTool", "off"] as const;
+export type PenButtonAction = (typeof PEN_BUTTON_ACTIONS)[number];
+
+/** A tool the side button selects for the contact it is held on (the eraser has its own flag). */
+export type HeldTool = "lasso" | "last";
 
 export interface InputSettings {
 	/** Fingers draw (unless the pen was seen in the last `palmRejectionMs`). */
@@ -61,6 +68,13 @@ export class InputPolicy {
 		return this.settings.penButton === "eraser" && InputPolicy.barrel(button, buttons);
 	}
 
+	/** The tool the side button selects for a pen contact (setting "lasso" or "lastTool"), or null. Decided when the pen touches down. */
+	penHeldTool(button: number, buttons: number): HeldTool | null {
+		if (!InputPolicy.barrel(button, buttons)) return null;
+		if (this.settings.penButton === "lasso") return "lasso";
+		return this.settings.penButton === "lastTool" ? "last" : null;
+	}
+
 	/**
 	 * What a new contact does. `button` is PointerEvent.button (0 = primary), `buttons` PointerEvent.buttons,
 	 * `contact` the contact size in CSS px.
@@ -71,7 +85,7 @@ export class InputPolicy {
 				this.notePen(t);
 				if (InputPolicy.barrel(button, buttons)) {
 					if (this.settings.penButton === "radial") return "menu";
-					if (this.settings.penButton === "eraser") return "draw";
+					if (this.settings.penButton !== undefined && this.settings.penButton !== "off") return "draw";
 				}
 				return button === 0 || button === 5 ? "draw" : "ignore";
 			case "mouse":
