@@ -3,8 +3,10 @@ import { DEFAULT_ERASER_SIZE, DEFAULT_FAVOURITES, normaliseEraserSize, normalise
 import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "./ink/edge-zones";
 import type { PenButtonAction } from "./ink/input-policy";
 import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./model/types";
+import { DEFAULT_COMPANION_SETTINGS, readCompanionSettings, type CompanionSettings } from "./storage/companion-path";
 
-export interface NotebookSettings {
+/** Companion note settings (O1) are defined in storage/companion-path.ts. */
+export interface NotebookSettings extends CompanionSettings {
 	folder: string;
 	fingerDrawing: boolean;
 	palmRejectionMs: number;
@@ -87,6 +89,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	penButtonAction: "radial",
 	lastNotebookPath: "",
 	lastNotebookPage: 1,
+	...DEFAULT_COMPANION_SETTINGS,
 };
 
 /** Merges saved data over the defaults, ignoring values of the wrong type. */
@@ -122,6 +125,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (d.penButtonAction === "radial" || d.penButtonAction === "eraser" || d.penButtonAction === "off") s.penButtonAction = d.penButtonAction;
 	if (typeof d.lastNotebookPath === "string") s.lastNotebookPath = d.lastNotebookPath;
 	if (typeof d.lastNotebookPage === "number" && Number.isInteger(d.lastNotebookPage) && d.lastNotebookPage >= 1) s.lastNotebookPage = d.lastNotebookPage;
+	Object.assign(s, readCompanionSettings(d));
 	return s;
 }
 

@@ -4,6 +4,7 @@ import { DEFAULT_SETTINGS, readSettings, type NotebookSettings } from "../settin
 import { PAGE_SIZES, PAPER_KINDS } from "../model/types";
 import { defaultLooseSheetPath } from "../library/loose-sheet-logic";
 import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "../ink/edge-zones";
+import { companionSettingDefinitions, displayCompanionSettings, type CompanionSettingsHost } from "./companion-settings";
 
 const paperOptions = () => Object.fromEntries(PAPER_KINDS.map((k) => [k, t(`paper.${k}`)]));
 const sizeOptions = () => Object.fromEntries((Object.keys(PAGE_SIZES) as Array<keyof typeof PAGE_SIZES>).map((k) => [k, t(`size.${k}`)]));
@@ -159,7 +160,13 @@ export class NotebookSettingTab extends PluginSettingTab {
 				desc: t("settings.penButton.desc"),
 				control: { type: "dropdown", key: "penButtonAction", defaultValue: DEFAULT_SETTINGS.penButtonAction, options: penButtonOptions() },
 			},
+			// Companion notes (O1)
+			...companionSettingDefinitions(this.companionHost()),
 		];
+	}
+
+	private companionHost(): CompanionSettingsHost {
+		return { plugin: this.host, get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) };
 	}
 
 	getControlValue(key: string): unknown {
@@ -294,5 +301,6 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setName(t("settings.penButton"))
 			.setDesc(t("settings.penButton.desc"))
 			.addDropdown((dd) => dd.addOptions(penButtonOptions()).setValue(s.penButtonAction).onChange((v) => this.setControlValue("penButtonAction", v)));
+		displayCompanionSettings(containerEl, this.companionHost());
 	}
 }

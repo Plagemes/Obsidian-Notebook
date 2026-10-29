@@ -5,6 +5,7 @@ import type { NotebookDocument, Page } from "../model/types";
 import type { NotebookSettings } from "../settings";
 import { isNotebookFile } from "../storage/format";
 import { whenIdle } from "../storage/idle";
+import { registerCompanion } from "./companion";
 import { registerEmbed } from "./embed";
 import { registerFileMenu } from "./file-menu";
 import { HistoryService } from "./history-service";
@@ -31,7 +32,7 @@ export interface IntegrationDeps {
 	annotatePdf: (pdf: TFile) => void;
 }
 
-/** Registers embeds, the `obsidian://notebook` link and version history. Called once from onload. */
+/** Registers embeds, the `obsidian://notebook` link, version history and companion notes. Called once from onload. */
 export function registerIntegration(plugin: IntegrationPlugin, deps: IntegrationDeps): void {
 	const { app } = plugin;
 	const folder = () => plugin.settings.folder;
@@ -67,4 +68,7 @@ export function registerIntegration(plugin: IntegrationPlugin, deps: Integration
 	plugin.registerEvent(app.workspace.on("file-open", (f) => {
 		if (f && isNotebookFile(f)) void history.maybeSnapshot(f, new Date(), whenIdle);
 	}));
+
+	// O1 Companion notes.
+	registerCompanion(plugin);
 }

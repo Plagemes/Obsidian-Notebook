@@ -37,6 +37,11 @@ Not yet verified on Android hardware (see `docs/testing.md`).
 ### Known limitations
 - White to transparent is a fixed threshold (near-white pixels, with a short ramp at the edges); it suits screenshots and drawings on white, not photos with grey paper. PDF and SVG exports draw images on white, so a transparent image shows a white box there over a coloured page or a PDF background.
 - A selection still belongs to one page; paste goes to the page in view.
+### Added
+- **Companion notes** (O1, setting *Companion notes*, **off by default**): every notebook gets a Markdown note (next to it, or in a folder that mirrors the notebooks' subfolders; name template with `{name}`) with properties — a link to the notebook, its id, page count, created and modified dates, its tags as Obsidian tags and every field of its metadata — and the text of its text boxes per page with a link that opens each page, so Obsidian search, graph, tags, Dataview and Bases see notebooks. The note may be edited: only the marked generated block and the plugin's own properties are rewritten; your text, properties and tags are kept. Written with a debounce, never while the pen is on the screen, and only when something changed; renamed and moved with the notebook, kept when the notebook is deleted. Commands **Update companion notes of all notebooks** and **Open companion note**. Not yet verified on Android hardware.
+
+### Changed
+- `obsidian://notebook` links can leave out `vault=` (the current vault is used); companion notes use that form.
 
 ## 0.4.1 — 2026-10-29
 ### Added
