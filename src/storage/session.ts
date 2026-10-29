@@ -11,7 +11,7 @@ export interface DocumentIO {
 	backup(content: string, reason: BackupReason): Promise<string | null>;
 }
 
-export type BackupReason = "unreadable" | "future-version" | "conflict" | "unsaved" | "journal";
+export type BackupReason = "unreadable" | "future-version" | "conflict" | "unsaved" | "journal" | "before-restore";
 
 /**
  * - `ok`: the document is editable and saved automatically.

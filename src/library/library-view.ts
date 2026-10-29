@@ -28,6 +28,8 @@ export interface LibraryHost {
 	createNotebook(folder: string): void;
 	/** Opens the PDF import flow for that folder. */
 	importPdf(folder: string): void;
+	/** Scans pages with the camera into a new notebook in that folder. */
+	scanToNotebook?(folder: string): void;
 	/** Writes metadata into the notebook (routed through an open view if there is one). */
 	updateMeta(file: TFile, patch: Partial<NotebookMeta>): Promise<void>;
 	/** Loads what a page shows under the ink (PDF page, image) so the cover can draw it. Null if there is none. */
@@ -247,6 +249,7 @@ export class LibraryView extends ItemView {
 		this.actionButton(actions, "file-plus", t("library.action.newNotebook"), () => this.host.createNotebook(this.currentFolder()), true);
 		this.actionButton(actions, "folder-plus", t("library.action.newFolder"), () => this.askNewFolder(this.currentFolder()));
 		this.actionButton(actions, "file-up", t("library.action.importPdf"), () => this.host.importPdf(this.currentFolder()));
+		if (this.host.scanToNotebook) this.actionButton(actions, "scan", t("library.action.scanNotebook"), () => this.host.scanToNotebook?.(this.currentFolder()));
 
 		this.scrollEl = main.createDiv({ cls: "notebook-lib-scroll" });
 		this.gridEl = this.scrollEl.createDiv({ cls: "notebook-lib-content" });
@@ -966,6 +969,7 @@ export class LibraryView extends ItemView {
 		menu.addItem((i) => i.setTitle(t("library.menu.newNotebookHere")).setIcon("file-plus").onClick(() => this.host.createNotebook(path)));
 		menu.addItem((i) => i.setTitle(t("library.menu.newFolderHere")).setIcon("folder-plus").onClick(() => this.askNewFolder(path)));
 		menu.addItem((i) => i.setTitle(t("library.menu.importPdfHere")).setIcon("file-up").onClick(() => this.host.importPdf(path)));
+		if (this.host.scanToNotebook) menu.addItem((i) => i.setTitle(t("library.menu.scanHere")).setIcon("scan").onClick(() => this.host.scanToNotebook?.(path)));
 		if (!isRoot) {
 			menu.addSeparator();
 			menu.addItem((i) => i.setTitle(t("library.menu.renameFolder")).setIcon("pencil").onClick(() => this.askRenameFolder(path)));

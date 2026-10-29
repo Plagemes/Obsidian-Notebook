@@ -1,4 +1,7 @@
-import { FileView, Menu, Notice, Scope, type TFile, type WorkspaceLeaf } from "obsidian";
+import { FileView, Menu, Notice, Scope, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
+import { pageFromState } from "../integration/links";
+import { scanFromCamera } from "../scan/scan-modal";
+import { scannedPage } from "../scan/pages";
 import { t } from "../i18n";
 import { renderThumbnail } from "../library/thumbnail";
 import { elementsInLasso, hitElement, transformElement } from "../ink/elements";
@@ -28,6 +31,7 @@ import {
 	type Asset, type ImageElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type PageSizeName,
 	type PaperKind, type Point, type Stroke, type TextElement,
 } from "../model/types";
+import type { JournalStore } from "../storage/journal";
 import { DocumentSession, type SaveState, type SessionMode } from "../storage/session";
 import { isNotebookFile } from "../storage/format";
 import { VaultDocumentIO } from "../storage/vault-io";
@@ -70,6 +74,8 @@ const THUMB_CSS_WIDTH = 120;
 
 export interface NotebookHost {
 	settings: NotebookSettings;
+	/** Instant save journal shared by all views. */
+	journal?: JournalStore;
 }
 
 interface ActiveStroke {
@@ -334,6 +340,24 @@ export class NotebookView extends FileView {
 		this.resizeObserver = null;
 	}
 
+	/** Page (1-based) requested by the view state, applied once the document is loaded. */
+	private pendingPage: number | null = null;
+
+	async setState(state: unknown, result: ViewStateResult): Promise<void> {
+		this.pendingPage = pageFromState(state);
+		await super.setState(state, result);
+		// Already loaded (the same file was shown): jump now; otherwise onDocumentLoaded applies it.
+		if (this.pendingPage !== null && this.layout) this.applyPendingPage();
+	}
+
+	private applyPendingPage(): void {
+		const doc = this.session?.doc;
+		const page = this.pendingPage;
+		if (page === null || !doc || !this.layout) return;
+		this.pendingPage = null;
+		this.scrollToPage(Math.min(doc.pages.length, Math.max(1, page)) - 1);
+	}
+
 	async onLoadFile(file: TFile): Promise<void> {
 		await super.onLoadFile(file);
 		this.lastBackupPath = null;
@@ -351,8 +375,13 @@ export class NotebookView extends FileView {
 				onSaveState: (state) => {
 					if (current()) this.showSaveState(state);
 				},
+				onRecovered: ({ savedAt }) => {
+					const when = new Date(savedAt);
+					new Notice(t("notice.recovered", { time: Number.isNaN(when.getTime()) ? savedAt : when.toLocaleString() }), 8000);
+				},
 				onBackup: (path, reason) => {
-					new Notice(t(reason === "conflict" ? "notice.conflict" : "notice.backup", { path }), 8000);
+					const key = reason === "conflict" ? "notice.conflict" : reason === "journal" ? "notice.journalBackup" : "notice.backup";
+					new Notice(t(key, { path }), 8000);
 					if (!current()) return;
 					this.lastBackupPath = path;
 					if (session.mode === "broken" || session.mode === "readonly") this.showProblem();
@@ -364,6 +393,7 @@ export class NotebookView extends FileView {
 			{
 				busy: () => this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null
 					|| this.textEditor?.isOpen === true,
+				journal: this.host.journal,
 			},
 		);
 		this.session = session;
@@ -504,6 +534,8 @@ export class NotebookView extends FileView {
 		menu.addItem((i) => i.setTitle(t("page.insertPdf")).setIcon("file-input").onClick(() => void this.insertPdfAfter(index)));
 		menu.addItem((i) => i.setTitle(t("page.insertBlank")).setIcon("file-plus").onClick(() => this.addPageAfter(index)));
 		menu.addItem((i) => i.setTitle(t("page.insertImage")).setIcon("image-plus").onClick(() => void this.insertImagePageAfter(index)));
+		menu.addItem((i) => i.setTitle(t("page.scanAfter")).setIcon("scan").onClick(() => void this.scanPagesAfter(index)));
+		menu.addItem((i) => i.setTitle(t("page.scanInsert")).setIcon("scan-line").onClick(() => void this.insertScanElement(index)));
 		menu.addSeparator();
 		menu.addItem((i) => i.setTitle(t("page.duplicate")).setIcon("copy").onClick(() => this.pageCommand(new AddPage(duplicatePage(page), index + 1), index + 1, page)));
 		menu.addItem((i) => i.setTitle(t("page.moveUp")).setIcon("arrow-up").setDisabled(index === 0)
@@ -690,6 +722,74 @@ export class NotebookView extends FileView {
 		}
 	}
 
+	/** Index of the page in view (for commands). */
+	currentPage(): number {
+		return this.currentPageIndex();
+	}
+
+	/** Scans sheets with the camera and inserts them as consecutive pages after `index` (one undo step). */
+	async scanPagesAfter(index: number): Promise<void> {
+		const session = this.session;
+		const media = this.media;
+		const anchor = session?.doc?.pages[index];
+		if (!session || !media || !anchor || !this.stillHere(session)) return;
+		const assets: Asset[] = [];
+		try {
+			const sheets = await scanFromCamera(this.app);
+			if (sheets.length === 0 || !this.stillHere(session)) return;
+			const pages: Page[] = [];
+			for (const sheet of sheets) {
+				const asset = await storeAsset(this.app, this.host.settings.folder, sheet.jpeg, `${sheet.name}.jpg`, "image");
+				media.addPending(asset);
+				assets.push(asset);
+				pages.push(scannedPage(asset, sheet.width, sheet.height));
+			}
+			const doc = session.doc;
+			const at = doc ? doc.pages.indexOf(anchor) : -1;
+			if (!doc || at < 0 || !this.stillHere(session)) return;
+			this.commitText();
+			this.clearSelection();
+			this.history.execute(new Batch("Insert scan", [...assets.map((a) => new AddAsset(a)), new InsertPages(pages, at + 1)]));
+			this.afterHistoryChange();
+			this.scrollToPage(at + 1);
+			new Notice(t("scan.pagesDone", { n: String(pages.length) }));
+		} catch (e) {
+			console.error("[notebook] scan pages", e);
+			new Notice(t("scan.failed", { error: (e as Error).message }), 8000);
+		} finally {
+			for (const a of assets) media.removePending(a.id);
+		}
+	}
+
+	/** Scans one sheet and places it as an image element on the page at `index`. */
+	async insertScanElement(index: number): Promise<void> {
+		const session = this.session;
+		const media = this.media;
+		const anchor = session?.doc?.pages[index];
+		if (!session || !media || !anchor || !this.stillHere(session)) return;
+		let asset: Asset | null = null;
+		try {
+			const sheets = await scanFromCamera(this.app);
+			const sheet = sheets[0];
+			if (!sheet || !this.stillHere(session) || !session.doc?.pages.includes(anchor)) return;
+			asset = await storeAsset(this.app, this.host.settings.folder, sheet.jpeg, `${sheet.name}.jpg`, "image");
+			media.addPending(asset);
+			const size = imageElementSize(sheet.width, sheet.height, anchor.width, anchor.height);
+			const [x, y] = centredPosition(anchor.width / 2, anchor.height / 2, size, anchor);
+			const element: ImageElement = { id: createId(), type: "image", asset: asset.id, x, y, width: size.width, height: size.height, rotation: 0 };
+			this.commitText();
+			this.clearSelection();
+			this.history.execute(new Batch("Insert scan", [new AddAsset(asset), new AddElement(anchor.id, element, anchor.elements?.length ?? 0)]));
+			this.afterHistoryChange();
+			new Notice(t("scan.imageDone"));
+		} catch (e) {
+			console.error("[notebook] insert scan", e);
+			new Notice(t("scan.failed", { error: (e as Error).message }), 8000);
+		} finally {
+			if (asset) media.removePending(asset.id);
+		}
+	}
+
 	/** Toolbar: places a picked image in the middle of the view, sized to fit, and selects it so it can be moved. */
 	async insertImageElement(): Promise<void> {
 		const session = this.session;
@@ -789,6 +889,7 @@ export class NotebookView extends FileView {
 			this.refit(true);
 			this.pageNav?.invalidate();
 			if (this.tools.ruler) this.placeRuler();
+			this.applyPendingPage();
 		} else {
 			this.body.hide();
 			this.toolbar.setEditable(false);
