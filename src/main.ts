@@ -8,6 +8,7 @@ import { createNotebook } from "./storage/notebooks";
 import { BenchmarkModal } from "./view/benchmark";
 import { NotebookLibraryHost } from "./library/host";
 import { registerIntegration } from "./integration";
+import { registerReliability } from "./integration/reliability";
 import { LIBRARY_VIEW_TYPE, LibraryView } from "./library/library-view";
 import { OpenNotebookModal } from "./view/modals";
 import { NotebookView, VIEW_TYPE } from "./view/notebook-view";
@@ -44,6 +45,8 @@ export default class NotebookPlugin extends Plugin {
 		this.addCommand({ id: "export-pdf", name: t("command.exportPdf"), checkCallback: (checking) => this.withView(checking, (v) => void v.exportNotebookPdf()) });
 
 		registerIntegration(this, { background: (doc, page, width) => this.host.thumbnailBackground(doc, page, width) });
+		// wave p1b: repair (#140), conflicted copies (#122), page restore (#180).
+		registerReliability(this, this, () => this.views(), () => this.app.workspace.getActiveViewOfType(NotebookView));
 
 		this.addSettingTab(new NotebookSettingTab(this.app, this));
 
