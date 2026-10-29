@@ -1,12 +1,13 @@
 # Changelog
 
-## 0.4.1 — unreleased
+## 0.4.1 — 2026-10-29
 
 Hotfix for 0.4.0. Not yet verified on Android hardware.
 
 ### Fixed
 - **Black page, nothing could be written** (reported on a Samsung tablet with S Pen, dark theme): the page area stayed empty — black in the dark theme — and no tool drew, while the toolbar and the page panel worked. Cause: two merges in the 0.4.0 cycle damaged `styles.css` (the "view wave 2" and "integration P1" sections lost their closing braces and many declarations). Browsers with CSS nesting read the rest of the file as nested rules that never match, so the page container was no longer a flex box: the drawing area had zero height, the canvases were never sized and no pointer event reached them. The two sections are restored from their original commits (embed previews and the page panel's hidden/narrow states were affected too).
 - One bad stroke, image, PDF background or text box can no longer stop the page from being drawn: every part of a frame is drawn in its own guard, a failure is skipped and logged once in the console (`[notebook] render …`). If painting wet ink fails, the stroke being written is shown on the regular live layer instead, so the pen always leaves ink. Pointer events are guarded the same way (`[notebook] input …`) and a stroke is always closed when the pen lifts.
+- Insert image and Insert image page: HEIF/HEIC photos get the same clear message instead of a generic failure (and are not copied into the vault); sizes are read through the scanner's decoder with its fallbacks.
 - Scanner: photos in HEIF/HEIC (Samsung "High efficiency pictures") get a clear message instead of "Could not read this photo"; robust decoding (fallbacks, safe canvas sizes for 12-50 MP photos); in-app camera that always yields JPEG.
 
 ### Changed

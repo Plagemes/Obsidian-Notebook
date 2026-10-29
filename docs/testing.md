@@ -95,15 +95,15 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 
 ## Automated checks
 
-Numbers from the final run of 0.4.0 (development PC).
+Numbers from the final run of 0.4.1 (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 606 tests passed |
+| `npm test` (unit project only; benchmarks are separate) | 635 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: 0 errors; `eslint-plugin-obsidianmd` recommended rules: 0 errors |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
-| `npm run harness:check` (0.4.1) | 17 scenarios ok (headless Chrome 152 on Windows; see "Browser harness") |
+| `npm run harness:check` | 17 scenarios ok (headless Chrome 152 on Windows; see "Browser harness") |
 
 Added in 0.4.0: format v4 and v5 (round-trip, validation, migrations v3→v4→v5, asset references, duplicate ids), the writing engine (causal geometry equal while writing and after commit, constant work per sample, dirty rectangles, sample de-duplication, 1€ filter, pressure decided at stroke start, saves deferred while writing), shapes, recognition, text layout, elements, ruler and infinite-page geometry, the library (index, queries, folders, search with snippets, host logic, drag), the PDF store and assets (cache, limits, hashing, names), the scanner (detection, perspective, filters), the save journal (slots, torn writes, diffs, per-file and per-session keys, recovery), version history (naming, retention, restore guards), embeds and links (parsing, building, protocol parameters), export with images, and the fixes from the independent reviews (`review-fixes.test.ts`).
 

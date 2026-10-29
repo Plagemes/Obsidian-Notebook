@@ -108,6 +108,20 @@ async function openSource(blob: Blob, bytes: ArrayBuffer, maxSide: number): Prom
 	throw new PhotoDecodeError("unreadable", errors.map((e) => (e instanceof Error ? e.message : String(e))).join(" | "));
 }
 
+/** Pixel size of an image file, through the same checks and decoder fallbacks as `decodePhoto` (aspect ratio is exact). */
+export async function photoSize(bytes: ArrayBuffer, name: string, declaredType = ""): Promise<{ width: number; height: number }> {
+	if (bytes.byteLength === 0) throw new PhotoDecodeError("unreadable", "empty file");
+	if (sniffImage(bytes) === "heic") throw new PhotoDecodeError("heic");
+	const blob = new Blob([bytes], { type: photoMime(bytes, name, declaredType) });
+	const source = await openSource(blob, bytes, SAFE_CANVAS_SIDE);
+	try {
+		if (source.width <= 0 || source.height <= 0) throw new PhotoDecodeError("unreadable", "decoded image has no size");
+		return { width: source.width, height: source.height };
+	} finally {
+		source.release();
+	}
+}
+
 /**
  * Decodes a photo and returns it on a canvas whose longest side is at most `maxSide` (and never above the safe canvas
  * limits). The full-resolution photo is never drawn on a canvas: it is shrunk in steps that stay within the safe size.

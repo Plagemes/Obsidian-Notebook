@@ -92,3 +92,18 @@ describe("downscaleSteps", () => {
 		expect(downscaleSteps({ width: 800, height: 600 }, { width: 800, height: 600 })).toEqual([{ width: 800, height: 600 }]);
 	});
 });
+
+describe("photoSize", () => {
+	it("rejects HEIF/HEIC with the actionable reason before decoding", async () => {
+		const { photoSize, PhotoDecodeError } = await import("../src/scan/decode");
+		const err = await photoSize(ftyp("heic").buffer as ArrayBuffer, "IMG_0001.heic").catch((e: unknown) => e);
+		expect(err).toBeInstanceOf(PhotoDecodeError);
+		expect((err as InstanceType<typeof PhotoDecodeError>).reason).toBe("heic");
+	});
+	it("rejects an empty file as unreadable", async () => {
+		const { photoSize, PhotoDecodeError } = await import("../src/scan/decode");
+		const err = await photoSize(new ArrayBuffer(0), "x.jpg").catch((e: unknown) => e);
+		expect(err).toBeInstanceOf(PhotoDecodeError);
+		expect((err as InstanceType<typeof PhotoDecodeError>).reason).toBe("unreadable");
+	});
+});

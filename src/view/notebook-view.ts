@@ -2,6 +2,8 @@ import { FileView, Menu, Notice, Scope, type TFile, type ViewStateResult, type W
 import { pageFromState } from "../integration/links";
 import { scanFromCamera } from "../scan/scan-modal";
 import { scannedPage } from "../scan/pages";
+import { PhotoDecodeError, photoSize } from "../scan/decode";
+import { isHeic } from "../scan/image-bytes";
 import { t } from "../i18n";
 import { renderThumbnail } from "../library/thumbnail";
 import { elementsInLasso, hitElement, transformElement } from "../ink/elements";
@@ -673,6 +675,8 @@ export class NotebookView extends FileView {
 	private async pickAndStore(kind: "pdf" | "image"): Promise<{ asset: Asset; bytes: ArrayBuffer } | null> {
 		const file = await pickFile(this.app, kind);
 		if (!file) return null;
+		// Refuse HEIF/HEIC before storing it: the WebView cannot show it on a page anyway.
+		if (kind === "image" && isHeic(file.bytes)) throw new PhotoDecodeError("heic");
 		const asset = await storeAsset(this.app, this.host.settings.folder, file.bytes, file.name, kind);
 		this.media?.addPending(asset);
 		return { asset, bytes: file.bytes };
@@ -732,7 +736,7 @@ export class NotebookView extends FileView {
 			const picked = await this.pickAndStore("image");
 			if (!picked) return;
 			asset = picked.asset;
-			const dims = await decodeSize(picked.bytes);
+			const dims = await photoSize(picked.bytes, "");
 			if (!this.stillHere(session)) return;
 			const doc = session.doc;
 			const at = doc ? doc.pages.indexOf(anchor) : -1;
@@ -746,7 +750,7 @@ export class NotebookView extends FileView {
 			this.scrollToPage(at + 1);
 		} catch (e) {
 			console.error("[notebook] insert image page", e);
-			new Notice(t("insert.failed", { error: (e as Error).message }), 8000);
+			new Notice(insertFailure(e), 8000);
 		} finally {
 			if (asset) media.removePending(asset.id);
 		}
@@ -833,7 +837,7 @@ export class NotebookView extends FileView {
 			const picked = await this.pickAndStore("image");
 			if (!picked) return;
 			asset = picked.asset;
-			const dims = await decodeSize(picked.bytes);
+			const dims = await photoSize(picked.bytes, "");
 			if (!this.stillHere(session) || !session.doc?.pages.includes(anchor)) return;
 			const box = this.layout?.boxes[session.doc.pages.indexOf(anchor)];
 			if (!box) return;
@@ -857,7 +861,7 @@ export class NotebookView extends FileView {
 			}
 		} catch (e) {
 			console.error("[notebook] insert image", e);
-			new Notice(t("insert.failed", { error: (e as Error).message }), 8000);
+			new Notice(insertFailure(e), 8000);
 		} finally {
 			if (asset) media.removePending(asset.id);
 		}
@@ -1818,10 +1822,8 @@ export class NotebookView extends FileView {
 	}
 }
 
-/** Pixel size of an image file (any format the WebView can decode). */
-async function decodeSize(bytes: ArrayBuffer): Promise<{ width: number; height: number }> {
-	const bmp = await createImageBitmap(new Blob([bytes]));
-	const size = { width: bmp.width, height: bmp.height };
-	bmp.close();
-	return size;
+/** Notice text for a failed image insert: HEIF/HEIC gets its own, actionable message. */
+function insertFailure(e: unknown): string {
+	if (e instanceof PhotoDecodeError && e.reason === "heic") return t("scan.heic");
+	return t("insert.failed", { error: e instanceof Error ? e.message : String(e) });
 }
