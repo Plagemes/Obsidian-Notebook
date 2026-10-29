@@ -780,6 +780,14 @@
 	touch-action: none;
 }
 
+.notebook-scan-video {
+	object-fit: contain;
+}
+
+.notebook-scan-overlay {
+	pointer-events: none;
+}
+
 .notebook-scan-bar {
 	display: flex;
 	flex-wrap: wrap;

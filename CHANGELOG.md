@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1 — unreleased
+
+### Fixed
+- Scanner: photos in HEIF/HEIC (Samsung "High efficiency pictures") get a clear message instead of "Could not read this photo"; robust decoding (fallbacks, safe canvas sizes for 12-50 MP photos); in-app camera that always yields JPEG.
+
 ## 0.4.0 — 2026-10-29 (M3b and M3c)
 
 Not yet verified on Android hardware (see `docs/testing.md`). This release merges the planned 0.4.0 (objects) and 0.5.0 (library, PDF, canvas) of the M3 split.
