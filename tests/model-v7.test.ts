@@ -371,10 +371,14 @@ describe("merge of a conflicted copy with v7 fields", () => {
 		other.meta = setBookmark(other.meta, "p2", { title: "From copy", category: "review" });
 		const plan = planMerge(main, other);
 		expect(plan.summary.bookmarksAdded).toBe(1);
-		expect(plan.summary.bookmarkInfoAdded).toBe(1);
+		expect(plan.summary.bookmarkInfoAdded).toBe(2);
+		expect(plan.summary.bookmarkInfoDiffer).toBe(1);
 		new History(() => main).execute(plan.command!);
 		expect(main.meta?.bookmarkInfo?.p1?.title).toBe("Intro");
 		expect(main.meta?.bookmarkInfo?.p2).toEqual({ title: "From copy", category: "review" });
+		// The copy's other title for p1 is not in the result: the copy is not covered (it stays).
+		expect(mergeCovers(parsed(serialize(main)).doc, other)).toBe(false);
+		other.meta = setBookmark(other.meta, "p1", { title: "Intro" });
 		expect(mergeCovers(parsed(serialize(main)).doc, other)).toBe(true);
 	});
 
