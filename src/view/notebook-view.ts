@@ -10,6 +10,8 @@ import { isHeic } from "../scan/image-bytes";
 import { t } from "../i18n";
 import { renderThumbnail } from "../library/thumbnail";
 import { needsNextPage } from "../ink/auto-page";
+import { deleteInkCommand, inkOnRemoved } from "../ink/attach";
+import { captureClip, type ClipContent } from "../ink/clipboard";
 import { elementsInLasso, hitElement, transformElement } from "../ink/elements";
 import { eraseAreaCommand } from "../ink/erase-area";
 import { filterErasable } from "../ink/erase-filter";
@@ -65,7 +67,9 @@ import { runMovePages } from "../library/move-pages";
 import { addPdfPageMenuItems, type PdfActionHost } from "./pdf-actions";
 import { pickFile } from "./pick";
 import { RulerGesture } from "./ruler-gesture";
+import { ObjectInk } from "./object-ink";
 import { SelectionActions } from "./selection-actions";
+import { StampPalette, type StampTarget } from "./stamp-palette";
 import { TextEditor, type TextEditSession } from "./text-editor";
 import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites";
 import { PenControls, type PenStore } from "./pen-controls";
@@ -228,6 +232,8 @@ export class NotebookView extends FileView {
 		},
 	);
 	private selectionActions: SelectionActions | null = null;
+	private stamps: StampPalette | null = null;
+	private readonly objectInk = new ObjectInk();
 
 	private viewport: Viewport = { scale: 1, offsetX: 0, offsetY: 0 };
 	private viewSize: Size = { width: 0, height: 0 };
@@ -326,6 +332,7 @@ export class NotebookView extends FileView {
 			toggleNavigator: () => this.setNavigatorOpen(!this.pageNav?.open),
 			insertImage: () => void this.insertImageElement(),
 			boardShot: () => void this.boardShot(),
+			stamps: () => this.stamps?.toggle(),
 		});
 		this.toolbar.setSelection(false);
 		this.body = this.contentEl.createDiv({ cls: "notebook-body" });
@@ -346,6 +353,7 @@ export class NotebookView extends FileView {
 		this.textEditor = new TextEditor(this.stage);
 		this.pens = new PenControls(this.toolbar, this.stage, this.penStore());
 		this.mountSelectionActions();
+		this.mountStamps();
 		this.messageEl = this.contentEl.createDiv({ cls: "notebook-message" });
 		this.messageEl.hide();
 		this.toolbar.setEditable(false);
@@ -434,6 +442,9 @@ export class NotebookView extends FileView {
 		this.rulerGesture = null;
 		this.selectionActions?.destroy();
 		this.selectionActions = null;
+		this.stamps?.destroy();
+		this.stamps = null;
+		this.objectInk.destroy();
 		this.textEditor?.destroy();
 		this.textEditor = null;
 		this.pageNav?.destroy();
@@ -843,11 +854,17 @@ export class NotebookView extends FileView {
 			.filter((it) => it.index >= 0)
 			.sort((a, b) => b.index - a.index);
 		for (const it of strokes) commands.push(new ReplaceStroke(page.id, it.stroke, [], it.index));
-		for (const el of sel.elements) if (page.elements?.includes(el)) commands.push(new RemoveElement(page.id, el));
+		const removedEls = sel.elements.filter((el) => page.elements?.includes(el));
+		for (const el of removedEls) commands.push(new RemoveElement(page.id, el));
+		// Ink written on a deleted object stays unless the user takes the offer shown afterwards (setting "Ink follows objects").
+		const owned = this.host.settings.inkFollowsObjects && removedEls.length > 0
+			? inkOnRemoved(page.strokes, page.elements ?? [], removedEls, new Set(sel.strokes), measureText)
+			: [];
 		this.clearSelection();
 		if (commands.length === 0) return;
 		this.history.execute(new Batch("Delete selection", commands));
 		this.afterHistoryChange();
+		if (owned.length > 0) this.offerDeleteInk(page, removedEls, owned);
 	}
 
 	// --- insert: PDF, image page, image element ---
@@ -2117,7 +2134,9 @@ export class NotebookView extends FileView {
 	private pushSelection(): void {
 		const sel = this.selection;
 		this.toolbar.setSelection(!!sel);
-		this.renderer?.setSelection(sel ? { ...sel, handle: HANDLE_PX } : null);
+		// Ink written on the selected objects floats with them (setting "Ink follows objects").
+		const attached = sel ? this.attachedInk(sel) : [];
+		this.renderer?.setSelection(sel ? { ...sel, strokes: attached.length > 0 ? [...sel.strokes, ...attached] : sel.strokes, handle: HANDLE_PX } : null);
 		this.selectionActions?.update();
 	}
 
@@ -2224,8 +2243,12 @@ export class NotebookView extends FileView {
 		}
 		const moved = present.map((s) => freezeStroke(transformStroke(s, sel.matrix)));
 		const movedEls = presentEls.map((e) => transformElement(e, sel.matrix, measureText));
+		const onPage = new Set(page.strokes);
+		const attached = this.attachedInk(sel).filter((s) => onPage.has(s));
+		const movedAttached = attached.map((s) => freezeStroke(transformStroke(s, sel.matrix)));
 		const commands: Command[] = [
 			...present.map((s, i) => new ReplaceStroke(page.id, s, [moved[i]!], page.strokes.indexOf(s))),
+			...attached.map((s, i) => new ReplaceStroke(page.id, s, [movedAttached[i]!], page.strokes.indexOf(s))),
 			...presentEls.map((e, i) => new ReplaceElement(page.id, e, movedEls[i]!)),
 		];
 		this.history.execute(new Batch("Transform selection", commands));
@@ -2238,6 +2261,82 @@ export class NotebookView extends FileView {
 		this.session?.markChanged();
 		this.updateHistoryButtons();
 		this.scheduleNavRefresh();
+	}
+
+	// --- ink attached to objects (roadmap 149) ---
+
+	/** Strokes that float with the selection without being selected: the ink written on the selected objects (none when the setting is off). */
+	private attachedInk(sel: Selection): Stroke[] {
+		if (!this.host.settings.inkFollowsObjects) return [];
+		const page = this.pageAtIndex(sel.pageIndex);
+		return page ? this.objectInk.attachedTo(page, sel) : [];
+	}
+
+	/** After deleting objects that had ink on them: offers to delete that ink too (undone separately; ignored = the ink stays). */
+	private offerDeleteInk(page: Page, removed: readonly PageElement[], owned: Stroke[]): void {
+		this.objectInk.offerDelete(owned.length, () => {
+			const doc = this.session?.doc;
+			// Only while the objects are still deleted: an undo in between brings them back, and their ink stays where it is.
+			if (!doc || !this.editable() || !doc.pages.includes(page) || removed.some((e) => page.elements?.includes(e))) return;
+			const cmd = deleteInkCommand(page.id, page.strokes, owned);
+			if (!cmd) return;
+			this.clearSelection();
+			this.history.execute(cmd);
+			this.afterHistoryChange();
+			this.renderer?.invalidate();
+			new Notice(t("object.inkDeleted"));
+		});
+	}
+
+	// --- stamps (roadmap 142) ---
+
+	private mountStamps(): void {
+		this.stamps = new StampPalette(this.body, {
+			app: this.app,
+			folder: () => this.host.settings.folder,
+			editable: () => this.editable(),
+			doc: () => this.session?.doc ?? null,
+			captureSelection: () => this.captureSelectionClip(),
+			penStyle: () => ({ color: this.tools.penColor, width: this.tools.penWidth }),
+			viewTarget: () => this.pasteTarget(),
+			pageAtClient: (x, y) => this.pageAtClient(x, y),
+			execute: (cmd) => {
+				this.history.execute(cmd);
+				this.afterHistoryChange();
+				this.renderer?.invalidate();
+			},
+			select: (pageIndex, strokes, elements) => this.selectItems(pageIndex, strokes, elements),
+		});
+	}
+
+	private captureSelectionClip(): ClipContent | null {
+		const sel = this.selection;
+		const doc = this.session?.doc;
+		const page = sel && doc?.pages[sel.pageIndex];
+		if (!sel || !doc || !page) return null;
+		return captureClip(
+			sel.strokes.filter((s) => page.strokes.includes(s)),
+			sel.elements.filter((e) => page.elements?.includes(e)),
+			doc.assets, measureText,
+		);
+	}
+
+	/** The page under a screen point (CSS px of the window) and the point on it; null outside the page area. */
+	private pageAtClient(clientX: number, clientY: number): StampTarget | null {
+		const doc = this.session?.doc;
+		const layout = this.layout;
+		if (!doc || !layout) return null;
+		const rect = this.stage.getBoundingClientRect();
+		if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return null;
+		const [dx, dy] = screenToPage(this.viewport, clientX - rect.left, clientY - rect.top);
+		if (!Number.isFinite(dx) || !Number.isFinite(dy)) return null;
+		let index = pageAt(layout, dx, dy);
+		if (index < 0) index = nearestPage(layout, dy);
+		const page = doc.pages[index];
+		const box = layout.boxes[index];
+		if (!page || !box) return null;
+		const [x, y] = toPageLocal(box, dx, dy);
+		return { pageIndex: index, page, x, y };
 	}
 
 	// --- selection actions: restyle, copy, cut, paste, duplicate, white to transparent ---

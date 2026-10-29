@@ -60,6 +60,7 @@ export interface ToolbarActions {
 	toggleNavigator(): void;
 	insertImage(): void;
 	boardShot(): void;
+	stamps(): void;
 }
 
 const TOOL_DEFS: Array<[ToolName, string, MessageKey]> = [
@@ -202,6 +203,7 @@ export class Toolbar {
 		this.moreEl = this.el.createDiv({ cls: "notebook-popover notebook-more notebook-hidden", attr: { role: "menu", "aria-label": t("toolbar.more") } });
 		this.pageLabelEl = this.moreEl.createDiv({ cls: "notebook-more-title notebook-hidden" });
 		this.moreItem("image-plus", "tool.image", () => this.actions.insertImage());
+		this.moreItem("stamp", "stamps.menu", () => this.actions.stamps());
 		this.moreItem("camera", "tool.boardShot", () => this.actions.boardShot());
 		this.rulerButton = this.moreItem("ruler", "tool.ruler", () => this.set({ ruler: !this.state.ruler }));
 		this.penOnlyEl = this.moreEl.createDiv({ cls: "notebook-more-slot" });
