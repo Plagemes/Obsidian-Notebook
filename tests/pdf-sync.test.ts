@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-	applyLinkOp, decideFromNotes, decideFromPdf, emptyLinks, insertionIndex, linkOf, linkState, notesPagesFor, parseLinks, sameSource,
+	applyLinkOp, decideFromPdf, emptyLinks, insertionIndex, linkOf, linkState, notesPagesFor, parseLinks, sameSource,
 	serializeLinks, LINKS_FORMAT, type LinksData, type PdfLink,
 } from "../src/pdf/sync-links";
 import { clampRatio, DEFAULT_RATIO, MAX_RATIO, MIN_RATIO, ratioFromPointer, splitOrientation } from "../src/pdf/sync-layout";
@@ -92,14 +92,6 @@ describe("operations and queries", () => {
 		expect(decideFromPdf(d, "nb1", ref, ids, 2)).toEqual({ kind: "stay" });
 		expect(decideFromPdf(d, "nb1", ref, ids, 0)).toEqual({ kind: "go", index: 1 });
 		expect(decideFromPdf(d, "nb1", { source: A, page: 5 }, ids, 0)).toEqual({ kind: "none" });
-	});
-
-	it("follows the notes only when the link points into the PDF on the other side", () => {
-		const d = withLinks(link("n1", 7, A, "nb1", "L.pdf"));
-		expect(decideFromNotes(d, "nb1", "n1", { source: A })?.page).toBe(7);
-		expect(decideFromNotes(d, "nb1", "n1", { source: B })).toBeNull();
-		expect(decideFromNotes(d, "nb1", "n1", { source: B, path: "L.pdf" })?.page).toBe(7);
-		expect(decideFromNotes(d, "nb1", "n2", { source: A })).toBeNull();
 	});
 
 	it("link state for the link / unlink button", () => {

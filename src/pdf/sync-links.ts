@@ -153,12 +153,6 @@ export function decideFromPdf(data: LinksData, notebook: string, ref: PdfRef, pa
 	return { kind: "go", index: linked[0]! };
 }
 
-/** The PDF page a notes page is linked to, only if that PDF is the one on the other side. */
-export function decideFromNotes(data: LinksData, notebook: string, notesPage: string, reference: { source: string; path?: string }): PdfLink | null {
-	const l = linkOf(data, notebook, notesPage);
-	return l && sameSource(l, reference) ? l : null;
-}
-
 export type LinkState = "here" | "elsewhere" | "none";
 
 /** `here`: linked to `ref`; `elsewhere`: linked to another PDF page; `none`: no link. Drives the link / unlink button. */
