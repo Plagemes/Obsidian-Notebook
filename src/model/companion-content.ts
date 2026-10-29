@@ -257,6 +257,79 @@ export function newCompanionText(yaml: string, region: string): string {
 	return `---\n${fm}---\n${region}\n\n`;
 }
 
+// ------------------------------------------------------------------- ownership
+
+/**
+ * Whether an existing note that carries a `notebook-id` may be used as the companion of a notebook.
+ * - `link`: where the note's `notebook` link resolves: to this notebook, to another notebook, or to none.
+ * - `sameId`: the note's id is this notebook's document id.
+ * - `atOwnPath`: the note sits at one of this notebook's own companion paths (derived from its file path).
+ *
+ * `"if-unique"`: only when no other notebook in the vault has the same id. A file copy of a notebook keeps the
+ * id, so a note found elsewhere by its id alone could be the original's: the copy must not take it over.
+ */
+export function companionClaim(link: "this" | "other" | "none", sameId: boolean, atOwnPath: boolean): "yes" | "no" | "if-unique" {
+	if (link === "this") return "yes";
+	if (link === "other" || !sameId) return "no";
+	return atOwnPath ? "yes" : "if-unique";
+}
+
+// ------------------------------------------------------------------- whole note
+
+/** Where a note's frontmatter is: offsets of its contents, without the `---` lines (Obsidian's FrontMatterInfo). */
+export interface FrontmatterBlock {
+	exists: boolean;
+	from: number;
+	to: number;
+}
+
+/** The YAML side of an update, injected so this module stays free of 'obsidian'. */
+export interface CompanionTextDeps {
+	frontmatterInfo(text: string): FrontmatterBlock;
+	/** The frontmatter as an object ({} when empty); null when it is not valid YAML or not a mapping. */
+	parseFrontmatter(yaml: string): Record<string, unknown> | null;
+	stringify(data: Record<string, unknown>): string;
+}
+
+export type CompanionTextUpdate =
+	| { kind: "unchanged" }
+	| { kind: "changed"; text: string }
+	/** The frontmatter is not valid YAML: the note is left alone. */
+	| { kind: "yaml" }
+	/** The region markers are missing, repeated or out of order: the note is left alone. */
+	| { kind: "markers" };
+
+/**
+ * The whole companion note after an update, so it can be written once (one `vault.process`): the plugin-owned
+ * properties merged into the frontmatter (mergeProperties) and the generated region replaced (mergeRegion).
+ * User properties, user text and the frontmatter as written are kept byte for byte when no plugin-owned
+ * property changed; otherwise only the frontmatter block is re-serialized, as `processFrontMatter` would.
+ */
+export function updateCompanionText(text: string, content: CompanionContent, region: string, deps: CompanionTextDeps): CompanionTextUpdate {
+	const info = deps.frontmatterInfo(text);
+	const current = info.exists ? deps.parseFrontmatter(text.slice(info.from, info.to)) : {};
+	if (current === null) return { kind: "yaml" };
+	if (regionStatus(text) === "broken") return { kind: "markers" };
+	// What the last update owned: read before the region (which stores it) is replaced.
+	const previous = readRegionState(text);
+	const nextProps = mergeProperties(current, content, previous);
+	const merged = mergeRegion(text, region);
+	if (merged === null) return { kind: "markers" };
+	let out = merged;
+	if (!sameProperties(current, nextProps)) {
+		const eol = text.includes("\r\n") ? "\r\n" : "\n";
+		const yaml = deps.stringify(nextProps).replace(/\r?\n/g, eol).replace(/(\r?\n)+$/, "");
+		const at = deps.frontmatterInfo(merged);
+		if (at.exists) {
+			const tail = merged.slice(at.to);
+			out = `${merged.slice(0, at.from)}${yaml}${/^\r?\n/.test(tail) ? "" : eol}${tail}`;
+		} else {
+			out = `---${eol}${yaml}${eol}---${eol}${merged}`;
+		}
+	}
+	return out === text ? { kind: "unchanged" } : { kind: "changed", text: out };
+}
+
 // ------------------------------------------------------------------- properties
 
 /** Tags as found in frontmatter: a list, or one string with commas or spaces; without `#`. */

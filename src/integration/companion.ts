@@ -1,8 +1,8 @@
 import { getFrontMatterInfo, normalizePath, Notice, parseYaml, stringifyYaml, TFile, type App, type Plugin, type TAbstractFile } from "obsidian";
 import { t } from "../i18n";
 import {
-	COMPANION_ID_KEY, COMPANION_LINK_KEY, companionContent, mergeProperties, mergeRegion, newCompanionText, readRegionState, regionStatus,
-	renderRegion, sameProperties, type CompanionContent,
+	COMPANION_ID_KEY, COMPANION_LINK_KEY, companionClaim, companionContent, mergeProperties, newCompanionText, renderRegion, updateCompanionText,
+	type CompanionContent, type CompanionTextDeps,
 } from "../model/companion-content";
 import { parse } from "../model/serialize";
 import type { NotebookDocument } from "../model/types";
@@ -31,11 +31,12 @@ export interface CompanionHost extends Plugin {
 	settings: NotebookSettings;
 }
 
-/** After a save of an open notebook. */
+/** After this device's own save of an open notebook. */
 const LOCAL_DELAY_MS = 4_000;
 /**
- * After a change to a notebook that is not open here (sync, library actions): long enough for the companion
- * written by the other device to arrive first, so the identical content found here causes no second write.
+ * After any other change (sync, another app, library actions) and after opening a notebook: long enough for the
+ * companion written by the other device to arrive first, so the identical content found here causes no second write
+ * (two devices writing the same note make the sync client create conflicted copies).
  */
 const REMOTE_DELAY_MS = 30_000;
 /** New notebook: lets "Duplicate" give the copy its own document id before the companion is made. */
@@ -99,10 +100,12 @@ export class CompanionService {
 		this.input.attach(plugin, document);
 		plugin.registerEvent(app.workspace.on("window-open", (win) => this.input.attach(plugin, win.doc)));
 		plugin.registerEvent(app.vault.on("modify", (f) => {
-			if (f instanceof TFile && isNotebookFile(f)) this.schedule(f, viewsOf(app, f).length > 0 ? LOCAL_DELAY_MS : REMOTE_DELAY_MS);
+			if (f instanceof TFile && isNotebookFile(f)) void this.afterModify(f);
 		}));
 		plugin.registerEvent(app.workspace.on("file-open", (f) => {
-			if (f && isNotebookFile(f)) this.schedule(f, LOCAL_DELAY_MS);
+			// Opening is no change: wait as for a remote one (a synced version may be arriving with its companion);
+			// update() then writes only if the note really differs.
+			if (f && isNotebookFile(f)) this.schedule(f, REMOTE_DELAY_MS);
 		}));
 		plugin.registerEvent(app.vault.on("rename", (f, oldPath) => {
 			if (f instanceof TFile && isNotebookFile(f)) void this.enqueue(() => this.followRename(f, oldPath));
@@ -131,6 +134,24 @@ export class CompanionService {
 		const old = this.timers.get(path);
 		if (old !== undefined) window.clearTimeout(old);
 		this.timers.set(path, window.setTimeout(() => this.fire(path), delayMs));
+	}
+
+	/** A notebook file changed: the short delay only for the echo of this device's own save. */
+	private async afterModify(file: TFile): Promise<void> {
+		if (!this.enabled) return;
+		this.schedule(file, (await this.isOwnSave(file)) ? LOCAL_DELAY_MS : REMOTE_DELAY_MS);
+	}
+
+	/** Whether the file now holds what a view of it on this device wrote (not a change from sync or another app). */
+	private async isOwnSave(file: TFile): Promise<boolean> {
+		const views = viewsOf(this.app, file);
+		if (views.length === 0) return false;
+		try {
+			const text = readNotebookText(file.extension, await this.app.vault.cachedRead(file));
+			return views.some(({ view }) => view.isOwnWrite(text));
+		} catch {
+			return false;
+		}
 	}
 
 	private fire(path: string): void {
@@ -179,20 +200,19 @@ export class CompanionService {
 	/** Frontmatter of a note's text; null when it is not valid YAML. */
 	private frontmatter(text: string): Record<string, unknown> | null {
 		const info = getFrontMatterInfo(text);
-		if (!info.exists) return {};
-		try {
-			const data: unknown = parseYaml(info.frontmatter);
-			if (data === null || data === undefined) return {};
-			return typeof data === "object" && !Array.isArray(data) ? (data as Record<string, unknown>) : null;
-		} catch {
-			return null;
-		}
+		return info.exists ? parseFrontmatterYaml(info.frontmatter) : {};
 	}
 
 	/** Frontmatter from the metadata cache (may lag behind the file by a moment). */
 	private cachedFrontmatter(file: TFile | null): Record<string, unknown> | undefined {
 		const fm: unknown = file ? this.app.metadataCache.getFileCache(file)?.frontmatter : undefined;
 		return typeof fm === "object" && fm !== null ? (fm as Record<string, unknown>) : undefined;
+	}
+
+	/** Where a note's `notebook` link points, seen from `file`. */
+	private linkState(fm: Record<string, unknown> | undefined, from: string, file: TFile): "this" | "other" | "none" {
+		const linked = this.linkedNotebook(fm, from);
+		return linked === null ? "none" : linked === file ? "this" : "other";
 	}
 
 	/** Target of the companion's `notebook` link, when it resolves to a notebook file. */
@@ -205,10 +225,28 @@ export class CompanionService {
 	}
 
 	/**
-	 * The companion of `file`: the note at the configured path (or the fallback name) when it carries this
-	 * notebook's id, or links to this notebook; else any note with this id (the user may have moved it, or the
-	 * location setting changed) unless it belongs to another existing notebook (a copy with the same id).
-	 * Otherwise the first free path to create it at, or null when both names are taken by the user's notes.
+	 * Whether a notebook other than `file` holds the document id `docId` (a file copy keeps the id). Reads only the
+	 * start of each file, where the serializer puts the id.
+	 */
+	private async otherNotebookHasId(file: TFile, docId: string): Promise<boolean> {
+		for (const f of this.app.vault.getFiles()) {
+			if (f === file || !isNotebookFile(f)) continue;
+			try {
+				if (peekDocumentId(readNotebookText(f.extension, await this.app.vault.cachedRead(f))) === docId) return true;
+			} catch {
+				// Unreadable here: it cannot claim the note either.
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * The companion of `file`: the note at the configured path (or the fallback name) when it links to this notebook,
+	 * or carries this notebook's id and its link resolves to no notebook (the configured path is derived from this
+	 * notebook's own path); else any note whose link resolves to this notebook, or (only when no other notebook in
+	 * the vault has the same id) a note with this id whose link resolves to nothing: the user moved the note, or the
+	 * notebook was renamed outside Obsidian. A file copy of a notebook (same id) therefore never takes over the
+	 * original's note. Otherwise the first free path to create it at, or null when both names are taken by the user's notes.
 	 */
 	private async locate(file: TFile, docId: string): Promise<{ file: TFile } | { create: string } | null> {
 		const s = this.plugin.settings;
@@ -223,13 +261,19 @@ export class CompanionService {
 			if (!(existing instanceof TFile)) continue;
 			const fm = this.frontmatter(await this.app.vault.cachedRead(existing));
 			const id = fm?.[COMPANION_ID_KEY];
-			if (typeof id === "string" && (id === docId || this.linkedNotebook(fm ?? undefined, existing.path) === file)) return { file: existing };
+			if (typeof id !== "string") continue;
+			// At this notebook's own path: "if-unique" cannot come back.
+			if (companionClaim(this.linkState(fm ?? undefined, existing.path, file), id === docId, true) === "yes") return { file: existing };
 		}
+		let others: boolean | null = null;
 		for (const md of this.app.vault.getMarkdownFiles()) {
 			const fm = this.cachedFrontmatter(md);
 			if (fm?.[COMPANION_ID_KEY] !== docId) continue;
-			const linked = this.linkedNotebook(fm, md.path);
-			if (linked === null || linked === file) return { file: md };
+			const claim = companionClaim(this.linkState(fm, md.path, file), true, false);
+			if (claim === "yes") return { file: md };
+			if (claim === "no") continue;
+			others ??= await this.otherNotebookHasId(file, docId);
+			if (!others) return { file: md };
 		}
 		return free === null ? null : { create: free };
 	}
@@ -265,35 +309,26 @@ export class CompanionService {
 
 		const note = target.file;
 		const text = await this.app.vault.read(note);
-		const current = this.frontmatter(text);
-		if (current === null) {
+		const planned = updateCompanionText(text, content, region, TEXT_DEPS);
+		if (planned.kind === "yaml") {
 			this.report(`yaml:${note.path}`, t("notice.companionYaml", { path: note.path }));
 			return "skipped";
 		}
-		if (regionStatus(text) === "broken") {
+		if (planned.kind === "markers") {
 			this.report(`markers:${note.path}`, t("notice.companionBroken", { path: note.path }));
 			return "skipped";
 		}
-		// What the last update owned: read before the region (which stores it) is rewritten.
-		const previous = readRegionState(text);
-		const nextProps = mergeProperties(current, content, previous);
-		const propsChanged = !sameProperties(current, nextProps);
-		const nextText = mergeRegion(text, region);
-		const bodyChanged = nextText !== null && nextText !== text;
-		if (!propsChanged && !bodyChanged) return "unchanged";
+		if (planned.kind === "unchanged") return "unchanged";
 
-		if (bodyChanged) {
-			await this.app.vault.process(note, (latest) => mergeRegion(latest, region) ?? latest);
-		}
-		if (propsChanged) {
-			await this.app.fileManager.processFrontMatter(note, (fm: Record<string, unknown>) => {
-				const next = mergeProperties(fm, content, previous);
-				if (sameProperties(fm, next)) return;
-				for (const key of Object.keys(fm)) delete fm[key];
-				Object.assign(fm, next);
-			});
-		}
-		return "updated";
+		// One write for frontmatter and region, on the note as it is at that moment (the user may have just typed in it).
+		let written = false;
+		await this.app.vault.process(note, (latest) => {
+			const next = latest === text ? planned : updateCompanionText(latest, content, region, TEXT_DEPS);
+			if (next.kind !== "changed") return latest;
+			written = true;
+			return next.text;
+		});
+		return written ? "updated" : "unchanged";
 	}
 
 	/** Renames the companion with its notebook when it sits at the configured place for the old path. */
@@ -374,6 +409,29 @@ export class CompanionService {
 		const found = await this.locate(file, doc.id);
 		if (found && "file" in found) await this.app.workspace.getLeaf("tab").openFile(found.file);
 	}
+}
+
+/** A frontmatter block as an object; null when it is not valid YAML or not a mapping. */
+function parseFrontmatterYaml(yaml: string): Record<string, unknown> | null {
+	try {
+		const data: unknown = parseYaml(yaml);
+		if (data === null || data === undefined) return {};
+		return typeof data === "object" && !Array.isArray(data) ? (data as Record<string, unknown>) : null;
+	} catch {
+		return null;
+	}
+}
+
+const TEXT_DEPS: CompanionTextDeps = {
+	frontmatterInfo: (text) => getFrontMatterInfo(text),
+	parseFrontmatter: parseFrontmatterYaml,
+	stringify: (data) => stringifyYaml(data),
+};
+
+/** Document id from the start of a notebook's JSON (the serializer writes it third), without parsing the whole file. */
+function peekDocumentId(json: string): string | null {
+	const m = /"id"\s*:\s*"([^"\\]{1,200})"/.exec(json.slice(0, 600));
+	return m?.[1] ?? null;
 }
 
 function sleep(ms: number): Promise<void> {
