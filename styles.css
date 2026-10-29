@@ -801,3 +801,74 @@
 		min-height: 44px;
 	}
 }
+
+/* --- library search --- */
+.notebook-lib-search-scope {
+	flex: none;
+	height: var(--input-height, 30px);
+	padding: 0 10px;
+	font-size: var(--font-ui-small);
+}
+
+.notebook-lib-search-scope.is-hidden {
+	display: none;
+}
+
+.notebook-lib-search-scope[aria-pressed="true"] {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.notebook-lib-grid.is-search {
+	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.notebook-lib-card mark {
+	padding: 0 1px;
+	border-radius: 2px;
+	background: var(--text-highlight-bg);
+	color: inherit;
+}
+
+.notebook-lib-hit-tag {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.notebook-lib-hit {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin: 2px 4px 0;
+	padding: 6px 8px;
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	line-height: 1.35;
+	cursor: pointer;
+	overflow-wrap: anywhere;
+}
+
+.notebook-lib-hit:hover {
+	background: var(--background-modifier-hover);
+}
+
+.notebook-lib-hit:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 1px;
+}
+
+.notebook-lib-hit-page {
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+}
+
+@media (pointer: coarse) {
+	.notebook-lib-hit {
+		min-height: 44px;
+	}
+}

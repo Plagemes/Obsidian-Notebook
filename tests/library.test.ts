@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { breadcrumb, buildFolderTree, flattenTree, isReservedPath } from "../src/library/folders";
 import { relativeTime, uniquePath } from "../src/library/format";
 import {
-	folderOf, INDEX_VERSION, isInside, LibraryIndex, nameOf, normalizeText, RECENT_LIMIT, type LibraryEntry,
+	folderOf, INDEX_VERSION, isInside, LibraryIndex, nameOf, normalizeText, RECENT_LIMIT, SNIPPET_RADIUS, type LibraryEntry,
 } from "../src/library/index";
-import { COVER_COLORS, DEFAULT_COVER, entryFromFile, filesToRead, metaFromDocument, parseTags } from "../src/library/scan";
+import { COVER_COLORS, DEFAULT_COVER, entryFromFile, filesToRead, metaFromDocument, parseTags, TEXT_CAP } from "../src/library/scan";
 import { thumbnailSize } from "../src/library/thumbnail";
 import { createDocument } from "../src/model/document";
 import type { NotebookDocument } from "../src/model/types";
@@ -396,5 +396,112 @@ describe("thumbnail size", () => {
 		const s = thumbnailSize(page(0, 0), 0);
 		expect(s.width).toBeGreaterThan(0);
 		expect(s.height).toBeGreaterThan(0);
+	});
+});
+
+describe("library search", () => {
+	function docWithText(pagesText: string[][]): NotebookDocument {
+		const doc = createDocument(new Date("2026-10-29T10:00:00.000Z"));
+		doc.pages = pagesText.map((texts, i) => ({
+			...doc.pages[0]!,
+			id: `p${i}`,
+			elements: texts.map((text, j) => ({ id: `t${i}-${j}`, type: "text" as const, x: 0, y: 0, width: 100, text, fontSize: 16, color: "#000000" })),
+		}));
+		return doc;
+	}
+	const info = { path: "N/Notes.notebook", mtime: 5, size: 9 };
+
+	it("indexes the text of all pages with the page of each start", () => {
+		const e = entryFromFile(info, docWithText([["Hello  world", ""], [], ["Second\n page"]]));
+		expect(e.text).toBe("Hello world\nSecond page");
+		expect(e.textPages).toEqual([0, 0, 2, 12]);
+		expect(e.pages).toBe(3);
+	});
+
+	it("caps the indexed text", () => {
+		const e = entryFromFile(info, docWithText([["x".repeat(30_000)]]));
+		expect(e.text!.length).toBe(TEXT_CAP);
+	});
+
+	it("omits text fields when there is no text", () => {
+		const e = entryFromFile(info, docWithText([[]]));
+		expect(e.text).toBeUndefined();
+		expect(e.textPages).toBeUndefined();
+	});
+
+	it("round-trips text through JSON and discards an old index version", () => {
+		const idx = new LibraryIndex();
+		idx.upsert(entryFromFile(info, docWithText([["alpha"]])));
+		const copy = LibraryIndex.fromJSON(JSON.parse(JSON.stringify(idx.toJSON())));
+		expect(copy.get(info.path)?.text).toBe("alpha");
+		const old = { ...idx.toJSON(), version: INDEX_VERSION - 1 };
+		expect(LibraryIndex.fromJSON(old).size).toBe(0);
+		expect(INDEX_VERSION).toBeGreaterThanOrEqual(2);
+	});
+
+	it("rejects a malformed textPages", () => {
+		const j = JSON.parse(JSON.stringify({ version: INDEX_VERSION, entries: [{ ...entry("a.notebook"), text: "x", textPages: [0] }] }));
+		expect(LibraryIndex.fromJSON(j).size).toBe(0);
+	});
+
+	function searchable(): LibraryIndex {
+		const idx = new LibraryIndex();
+		idx.upsert(entryFromFile({ path: "N/Chimica.notebook", mtime: 1, size: 1 }, docWithText([["intro"], ["La reazione è esotermica"]])));
+		idx.upsert(entryFromFile({ path: "N/Fisica/Termo.notebook", mtime: 1, size: 1 }, docWithText([["Entropia e calore"], ["x"], ["Reazione inversa"]])));
+		idx.patch("N/Fisica/Termo.notebook", { tags: ["Calore"] });
+		return idx;
+	}
+
+	it("matches case- and accent-insensitively and finds the first page", () => {
+		const hits = searchable().search({ search: "ESOTERMICA", sort: "name" });
+		expect(hits).toHaveLength(1);
+		expect(hits[0]!.fields).toEqual(["text"]);
+		expect(hits[0]!.text!.page).toBe(1);
+		const h = hits[0]!.text!.snippet;
+		expect(h.text.slice(h.ranges[0]![0], h.ranges[0]![1])).toBe("esotermica");
+		expect(searchable().search({ search: "è", sort: "name" })).toHaveLength(2);
+	});
+
+	it("requires every word, each in any field", () => {
+		const idx = searchable();
+		expect(idx.search({ search: "reazione termo", sort: "name" }).map((h) => h.entry.name)).toEqual(["Termo"]);
+		expect(idx.search({ search: "reazione chimica", sort: "name" }).map((h) => h.entry.name)).toEqual(["Chimica"]);
+		expect(idx.search({ search: "reazione zzz", sort: "name" })).toEqual([]);
+		expect(idx.search({ search: "   ", sort: "name" })).toEqual([]);
+	});
+
+	it("reports title and tag matches with highlights and ranks title first", () => {
+		const idx = searchable();
+		const hits = idx.search({ search: "calore", sort: "name" });
+		expect(hits).toHaveLength(1);
+		expect(hits[0]!.fields).toEqual(["tag", "text"]);
+		expect(hits[0]!.tag).toEqual({ text: "Calore", ranges: [[0, 6]] });
+		expect(hits[0]!.text!.page).toBe(0);
+		const title = idx.search({ search: "chim", sort: "name" })[0]!;
+		expect(title.fields[0]).toBe("title");
+		expect(title.title).toEqual({ text: "Chimica", ranges: [[0, 4]] });
+	});
+
+	it("page of first match follows the earliest occurrence", () => {
+		const hit = searchable().search({ search: "reazione", scope: { folder: "N/Fisica", recursive: true }, sort: "name" })[0]!;
+		expect(hit.text!.page).toBe(2);
+	});
+
+	it("keeps snippets short and ellipsised", () => {
+		const long = `${"a ".repeat(200)}needle${" b".repeat(200)}`;
+		const idx = new LibraryIndex();
+		idx.upsert(entryFromFile(info, docWithText([[long]])));
+		const s = idx.search({ search: "needle", sort: "name" })[0]!.text!.snippet;
+		expect(s.text.length).toBeLessThanOrEqual(2 * SNIPPET_RADIUS + "needle".length + 2);
+		expect(s.text.startsWith("…")).toBe(true);
+		expect(s.text.endsWith("…")).toBe(true);
+		const [a, b] = s.ranges[0]!;
+		expect(s.text.slice(a, b)).toBe("needle");
+	});
+
+	it("limits the search to a scope", () => {
+		const idx = searchable();
+		expect(idx.search({ search: "reazione", scope: { folder: "N/Fisica", recursive: true }, sort: "name" })).toHaveLength(1);
+		expect(idx.search({ search: "reazione", scope: "favorites", sort: "name" })).toHaveLength(0);
 	});
 });

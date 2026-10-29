@@ -9,7 +9,7 @@ import { sanitizeName } from "../storage/notebooks";
 import { attachPress, DROP_ATTR } from "./drag";
 import { breadcrumb, buildFolderTree, flattenTree, isReservedPath, type FolderNode } from "./folders";
 import { relativeTime, uniquePath } from "./format";
-import { folderOf, isInside, LibraryIndex, SORTS, type LibraryEntry, type LibraryScope, type LibrarySort } from "./index";
+import { folderOf, isInside, LibraryIndex, SORTS, type Highlight, type LibraryEntry, type LibraryScope, type LibrarySort, type SearchHit } from "./index";
 import { ConfirmModal, CoverModal, FolderSuggestModal, PromptModal, TagsModal } from "./library-modals";
 import { entryFromFile, filesToRead, type NotebookFileInfo } from "./scan";
 import { renderThumbnail, type ThumbnailOptions } from "./thumbnail";
@@ -22,7 +22,8 @@ export interface LibraryHost {
 	root(): string;
 	/** Parsed document, or null if the file cannot be read. */
 	readNotebook(file: TFile): Promise<NotebookDocument | null>;
-	openNotebook(file: TFile): Promise<void>;
+	/** Opens the notebook; `pageIndex` (0-based) is the page to show, e.g. for a search hit. */
+	openNotebook(file: TFile, pageIndex?: number): Promise<void>;
 	/** Opens the "New notebook" dialog for that folder. */
 	createNotebook(folder: string): void;
 	/** Opens the PDF import flow for that folder. */
@@ -69,6 +70,8 @@ export class LibraryView extends ItemView {
 	private place: LibraryScope = "all";
 	private sort: LibrarySort = "modified";
 	private search = "";
+	/** Search the whole library (true) or only the current view (false); null = automatic (everywhere in "All notebooks"). */
+	private searchWide: boolean | null = null;
 	private sidebarCollapsed = false;
 	private narrow = false;
 	private drawerOpen = false;
@@ -83,6 +86,7 @@ export class LibraryView extends ItemView {
 	private scrollEl!: HTMLElement;
 	private gridEl!: HTMLElement;
 	private searchEl!: HTMLInputElement;
+	private scopeEl!: HTMLButtonElement;
 	private sortEl!: HTMLSelectElement;
 	private observer: IntersectionObserver | null = null;
 	private resizeObserver: ResizeObserver | null = null;
@@ -215,7 +219,7 @@ export class LibraryView extends ItemView {
 			this.searchTimer = window.setTimeout(() => {
 				this.search = this.searchEl.value;
 				this.requestRender();
-			}, 120);
+			}, 150);
 		});
 		this.searchEl.addEventListener("keydown", (e) => {
 			if (e.key === "Escape" && this.searchEl.value) {
@@ -225,6 +229,11 @@ export class LibraryView extends ItemView {
 				this.search = "";
 				this.requestRender();
 			}
+		});
+		this.scopeEl = tools.createEl("button", { cls: "notebook-lib-search-scope", attr: { type: "button", "aria-label": t("library.search.scope") } });
+		this.scopeEl.addEventListener("click", () => {
+			this.searchWide = !this.searchesWide();
+			this.requestRender();
 		});
 		this.sortEl = tools.createEl("select", { cls: "dropdown notebook-lib-sort", attr: { "aria-label": t("library.sort.label"), title: t("library.sort.label") } });
 		for (const s of SORTS) this.sortEl.createEl("option", { value: s, text: t(`library.sort.${s}` as MessageKey) });
@@ -555,6 +564,7 @@ export class LibraryView extends ItemView {
 
 	private navigate(scope: LibraryScope): void {
 		this.place = scope;
+		this.searchWide = null;
 		if (typeof scope === "object" && "folder" in scope) {
 			// Make the folder visible in the tree.
 			let p = scope.folder;
@@ -675,16 +685,43 @@ export class LibraryView extends ItemView {
 		el.createSpan({ cls: "notebook-lib-crumb is-current", text: title, attr: { "aria-current": "page" } });
 	}
 
+	private searchesWide(): boolean {
+		return this.searchWide ?? this.place === "all";
+	}
+
+	private updateScopeButton(searching: boolean): void {
+		const show = searching && this.place !== "all";
+		this.scopeEl.toggleClass("is-hidden", !show);
+		if (!show) return;
+		const wide = this.searchesWide();
+		this.scopeEl.setText(wide ? t("library.search.everywhere") : typeof this.place === "object" && "folder" in this.place ? t("library.search.thisFolder") : t("library.search.thisView"));
+		this.scopeEl.setAttribute("aria-pressed", String(wide));
+		this.scopeEl.setAttribute("title", t("library.search.scope"));
+	}
+
 	private renderGrid(tree: FolderNode): void {
 		const el = this.gridEl;
 		el.empty();
 		this.observer?.disconnect();
 		this.cards.clear();
 		const searching = this.search.trim().length > 0;
-		const scope: LibraryScope = typeof this.place === "object" && "folder" in this.place ? { folder: this.place.folder, recursive: searching } : this.place;
-		const entries = this.index.query({ scope, search: this.search, sort: this.sort });
+		this.updateScopeButton(searching);
+		if (searching) {
+			const place: LibraryScope = typeof this.place === "object" && "folder" in this.place ? { folder: this.place.folder, recursive: true } : this.place;
+			const hits = this.index.search({ search: this.search, scope: this.searchesWide() ? "all" : place, sort: this.sort });
+			if (hits.length === 0) {
+				this.renderEmpty(el, true);
+				return;
+			}
+			const grid = el.createDiv({ cls: "notebook-lib-grid is-search", attr: { role: "list" } });
+			const now = Date.now();
+			for (const hit of hits) this.notebookCard(grid, hit.entry, now, hit);
+			return;
+		}
+		const scope: LibraryScope = typeof this.place === "object" && "folder" in this.place ? { folder: this.place.folder, recursive: false } : this.place;
+		const entries = this.index.query({ scope, sort: this.sort });
 		const folder = typeof this.place === "object" && "folder" in this.place ? this.place.folder : null;
-		const subfolders = folder !== null && !searching ? (flattenTree(tree).find((n) => n.path === folder)?.children ?? []) : [];
+		const subfolders = folder !== null ? (flattenTree(tree).find((n) => n.path === folder)?.children ?? []) : [];
 
 		if (entries.length === 0 && subfolders.length === 0) {
 			this.renderEmpty(el, searching);
@@ -745,7 +782,18 @@ export class LibraryView extends ItemView {
 		attachPress({ el: main, onMenu: (x, y) => this.folderMenu(node.path, x, y) });
 	}
 
-	private notebookCard(grid: HTMLElement, entry: LibraryEntry, now: number): void {
+	/** Appends `h.text` with the highlighted ranges as <mark> nodes (no HTML parsing). */
+	private appendHighlight(parent: HTMLElement, h: Highlight): void {
+		let pos = 0;
+		for (const [a, b] of h.ranges) {
+			if (a > pos) parent.appendText(h.text.slice(pos, a));
+			parent.createEl("mark", { text: h.text.slice(a, b) });
+			pos = b;
+		}
+		if (pos < h.text.length) parent.appendText(h.text.slice(pos));
+	}
+
+	private notebookCard(grid: HTMLElement, entry: LibraryEntry, now: number, hit?: SearchHit): void {
 		const card = grid.createDiv({ cls: "notebook-lib-card", attr: { role: "listitem" } });
 		card.dataset.path = entry.path;
 		const placeholder = entry.mtime < 0;
@@ -755,9 +803,13 @@ export class LibraryView extends ItemView {
 		cover.setCssProps({ "--notebook-cover": entry.cover });
 		cover.createDiv({ cls: "notebook-lib-spine" });
 		cover.createDiv({ cls: "notebook-lib-page" });
-		main.createDiv({ cls: "notebook-lib-title", text: entry.name, attr: { title: entry.name } });
+		const titleEl = main.createDiv({ cls: "notebook-lib-title", attr: { title: entry.name } });
+		if (hit?.title) this.appendHighlight(titleEl, hit.title);
+		else titleEl.setText(entry.name);
 		main.createDiv({ cls: "notebook-lib-meta", text: meta });
-		if (entry.tags.length > 0) main.createDiv({ cls: "notebook-lib-card-tags", text: entry.tags.map((x) => `#${x}`).join(" ") });
+		if (hit) {
+			if (hit.tag) this.appendHighlight(main.createDiv({ cls: "notebook-lib-hit-tag" }), { text: `#${hit.tag.text}`, ranges: hit.tag.ranges.map(([a, b]): [number, number] => [a + 1, b + 1]) });
+		} else if (entry.tags.length > 0) main.createDiv({ cls: "notebook-lib-card-tags", text: entry.tags.map((x) => `#${x}`).join(" ") });
 
 		const star = card.createEl("button", {
 			cls: "notebook-lib-star clickable-icon",
@@ -770,7 +822,24 @@ export class LibraryView extends ItemView {
 		setIcon(more, "more-vertical");
 		more.addEventListener("click", (e) => this.notebookMenu(entry.path, e.clientX, e.clientY, more));
 
-		const open = () => this.openEntry(entry.path);
+		const textHit = hit?.text;
+		const open = () => this.openEntry(entry.path, hit?.fields[0] === "text" ? textHit?.page : undefined);
+		if (textHit) {
+			const row = card.createDiv({
+				cls: "notebook-lib-hit",
+				attr: { role: "button", tabindex: "0", "data-key": `hit:${entry.path}`, "aria-label": t("library.search.openPage", { page: String(textHit.page + 1) }) },
+			});
+			row.createSpan({ cls: "notebook-lib-hit-page", text: t("library.search.page", { page: String(textHit.page + 1) }) });
+			this.appendHighlight(row.createSpan({ cls: "notebook-lib-hit-snippet" }), textHit.snippet);
+			const openPage = () => this.openEntry(entry.path, textHit.page);
+			row.addEventListener("click", openPage);
+			row.addEventListener("keydown", (e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					openPage();
+				}
+			});
+		}
 		main.addEventListener("click", open);
 		this.cardKeys(main, open);
 		attachPress({
@@ -833,9 +902,9 @@ export class LibraryView extends ItemView {
 
 	// --------------------------------------------------------------- actions
 
-	private openEntry(path: string): void {
+	private openEntry(path: string, pageIndex?: number): void {
 		const file = this.app.vault.getFileByPath(path);
-		if (file) void this.host.openNotebook(file);
+		if (file) void this.host.openNotebook(file, pageIndex);
 	}
 
 	private fail(e: unknown): void {
