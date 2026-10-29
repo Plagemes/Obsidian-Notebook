@@ -30,6 +30,8 @@ export interface NotebookSettings {
 	snapshotIntervalHours: number;
 	/** Version history: how many snapshots to keep per notebook. */
 	snapshotsToKeep: number;
+	/** Vault path of the loose sheet (quick notes) notebook; empty = `<notebooks folder>/Quick notes.notebook`. */
+	looseSheetPath: string;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -47,6 +49,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	defaultLandscape: false,
 	snapshotIntervalHours: 24,
 	snapshotsToKeep: 10,
+	looseSheetPath: "",
 };
 
 /** Merges saved data over the defaults, ignoring values of the wrong type. */
@@ -68,6 +71,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.defaultLandscape === "boolean") s.defaultLandscape = d.defaultLandscape;
 	if (typeof d.snapshotIntervalHours === "number" && d.snapshotIntervalHours >= 0 && d.snapshotIntervalHours <= 720) s.snapshotIntervalHours = d.snapshotIntervalHours;
 	if (typeof d.snapshotsToKeep === "number" && Number.isInteger(d.snapshotsToKeep) && d.snapshotsToKeep >= 1 && d.snapshotsToKeep <= 100) s.snapshotsToKeep = d.snapshotsToKeep;
+	if (typeof d.looseSheetPath === "string") s.looseSheetPath = d.looseSheetPath.trim();
 	return s;
 }
 
