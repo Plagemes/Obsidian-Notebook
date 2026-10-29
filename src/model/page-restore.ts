@@ -111,6 +111,7 @@ export function planPageRestore(
 	};
 	if (source.background) page.background = { ...source.background };
 	if (source.infinite !== undefined) page.infinite = source.infinite;
+	if (source.margins) page.margins = { ...source.margins };
 	if (source.elements && source.elements.length > 0) page.elements = source.elements.map((e) => freezeElement({ ...e, id: idFor(e.id) }));
 	commands.push(new ReplacePage(target, page));
 	return { command: new Batch("Restore page", commands), pageIndex: targetIndex, assetsAdded };
