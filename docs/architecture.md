@@ -1,25 +1,25 @@
-# Architettura — Quaderni v0.1 (M1)
+# Architecture — Notebook v0.1 (M1)
 
-## 1. Decisione: formato file
+## 1. Decision: file format
 
-**Scelta: opzione A — estensione custom `.quaderno` con contenuto JSON versionato**, aperta da una `FileView` registrata con `registerExtensions(['quaderno'])`.
+**Choice: option A — custom `.notebook` extension with versioned JSON content**, opened by a `FileView` registered with `registerExtensions(['notebook'])`.
 
-Motivi, in ordine di peso per M1 (affidabilità dei dati prima di tutto):
+Reasons, in order of weight for M1 (data reliability first):
 
-1. **Nessun altro scrive nel file.** Un `.md` (opzioni B e C) viene toccato da Obsidian e da altri plugin: Linter, Templater, aggiornamento automatico dei link alla rinomina, modifiche al frontmatter, editor Markdown aperto per sbaglio. Ognuno di questi può corrompere un blocco dati di grandi dimensioni. Con un'estensione propria il file è scritto solo da Quaderni.
-2. **Nessuna patch del workspace.** Per B serve intercettare `WorkspaceLeaf.setViewState` (come fa Excalidraw con monkey-around): codice fragile tra versioni di Obsidian e con le tab "deferred" della 1.7.2+. `registerExtensions` è un'API pubblica.
-3. **Nessun costo di indicizzazione.** Un `.md` con migliaia di punti viene indicizzato da ricerca e metadata cache a ogni salvataggio; su Android è un costo reale.
-4. **I vantaggi di B/C (link, tag, backlink, Graph) sono M4.** Il formato è progettato per arrivarci senza riscrivere i dati (vedi §5).
+1. **No one else writes to the file.** A `.md` (options B and C) is touched by Obsidian and by other plugins: Linter, Templater, automatic link updates on rename, frontmatter changes, a Markdown editor opened by mistake. Any of these can corrupt a large data block. With our own extension the file is written only by Notebook.
+2. **No workspace patching.** B requires intercepting `WorkspaceLeaf.setViewState` (as Excalidraw does with monkey-around): fragile code across Obsidian versions and with the "deferred" tabs of 1.7.2+. `registerExtensions` is a public API.
+3. **No indexing cost.** A `.md` with thousands of points is indexed by search and the metadata cache on every save; on Android that is a real cost.
+4. **The advantages of B/C (links, tags, backlinks, Graph) belong to M4.** The format is designed to get there without rewriting the data (see §5).
 
-Costi accettati e documentati:
-- Ricerca, tag e backlink nativi non vedono i quaderni (fino a M4).
-- **Obsidian Sync** sincronizza le estensioni sconosciute solo con l'opzione "Sincronizza tutti gli altri tipi di file" attiva (indicato nel README). Syncthing e la copia via USB non hanno limiti.
+Accepted and documented costs:
+- Native search, tags and backlinks do not see notebooks (until M4).
+- **Obsidian Sync** syncs unknown extensions only with the "Sync all other types" option enabled (stated in the README). Syncthing and USB copy have no limits.
 
-## 2. Schema JSON v1
+## 2. JSON schema v1
 
 ```json
 {
-  "format": "quaderni",
+  "format": "obsidian-notebook",
   "version": 1,
   "id": "6f1c…",
   "createdAt": "2026-10-29T14:30:00.000Z",
@@ -39,92 +39,92 @@ Costi accettati e documentati:
 }
 ```
 
-| Campo | Regola |
+| Field | Rule |
 |---|---|
-| `format` | sempre `"quaderni"`: distingue il file da un JSON qualsiasi |
-| `version` | intero. Versione più alta di quella supportata → il file si apre **in sola lettura** con avviso e non viene mai riscritto |
-| unità | **punti tipografici (pt, 1/72 di pollice)**, origine in alto a sinistra della pagina. A4 = 595.28 × 841.89 pt. Scelti perché sono l'unità nativa del PDF (export M3) e indipendenti dallo schermo |
-| `paper` | M1: solo `grid` con `spacing` in pt (5 mm = 14.17 pt). M3 aggiunge altri `kind` |
-| `points` | `[x, y, pressione]`, x/y arrotondati a 0.01 pt, pressione in [0, 1] arrotondata a 0.001. **La pressione salvata è quella effettivamente usata**: se il dispositivo non la fornisce, viene scritta quella simulata dalla velocità. Il rendering è quindi deterministico |
-| `tool` | M1: solo `"pen"`. La gomma non produce tratti |
+| `format` | always `"obsidian-notebook"`: distinguishes the file from any random JSON |
+| `version` | integer. A version higher than the supported one → the file opens **read-only** with a warning and is never rewritten |
+| units | **typographic points (pt, 1/72 inch)**, origin at the top left of the page. A4 = 595.28 × 841.89 pt. Chosen because it is PDF's native unit (M3 export) and independent of the screen |
+| `paper` | M1: only `grid` with `spacing` in pt (5 mm = 14.17 pt). M3 adds other `kind`s |
+| `points` | `[x, y, pressure]`, x/y rounded to 0.01 pt, pressure in [0, 1] rounded to 0.001. **The saved pressure is the one actually used**: if the device does not provide it, the pressure simulated from velocity is written. Rendering is therefore deterministic |
+| `tool` | M1: only `"pen"`. The eraser produces no strokes |
 | `color` | `#rrggbb` |
-| `width` | diametro nominale in pt, > 0 |
-| `id` | stringhe uniche (UUID quando disponibile) |
+| `width` | nominal diameter in pt, > 0 |
+| `id` | unique strings (UUID when available) |
 
-Campi sconosciuti vengono ignorati in lettura. Ogni cambio di schema incrementa `version` e aggiunge una migrazione testata (`src/model/migrations.ts`). Esiste una migrazione v0 → v1 da un formato di prova senza versione (`{ strokes: [{ points: [{x, y, p}], color, size }] }`), che serve a fissare il meccanismo.
+Unknown fields are ignored on read. Every schema change increments `version` and adds a tested migration (`src/model/migrations.ts`). There is a v0 → v1 migration from an unversioned test format (`{ strokes: [{ points: [{x, y, p}], color, size }] }`), which serves to establish the mechanism.
 
-**Parametri di rendering della penna v1** (perfect-freehand): `size = width`, `thinning 0.6`, `smoothing 0.5`, `streamline 0.35`, `simulatePressure false`, cap arrotondati. Sono costanti di codice: se M2 li rende configurabili per tratto, servirà la v2 dello schema con migrazione che assegna i valori v1 ai tratti esistenti.
+**v1 pen rendering parameters** (perfect-freehand): `size = width`, `thinning 0.6`, `smoothing 0.5`, `streamline 0.35`, `simulatePressure false`, round caps. They are code constants: if M2 makes them configurable per stroke, schema v2 will be needed, with a migration that assigns the v1 values to existing strokes.
 
-## 3. Moduli
+## 3. Modules
 
 ```
 src/
-  main.ts                 plugin: vista, estensione, ribbon, comandi, impostazioni, flush su unload
-  settings.ts             tipi e default delle impostazioni
-  model/                  (non importa 'obsidian')
-    types.ts              Document, Page, Stroke, costanti A4
-    document.ts           creazione documento/pagina/tratto, id, quantizzazione
-    serialize.ts          serialize() deterministico + parse() con validazione e migrazioni
-    migrations.ts         catena di migrazioni vN → vN+1
-    history.ts            undo/redo a stack di comandi (AddStroke, EraseStrokes)
-  ink/                    (non importa 'obsidian')
-    viewport.ts           trasformazione schermo ↔ pagina, fit-width, zoom attorno a un punto, pan
-    pressure.ts           rilevamento pressione reale vs costante, pressione simulata dalla velocità
-    input-policy.ts       instradamento pen/touch/mouse e palm rejection (logica pura)
-    hit-test.ts           gomma a tratto intero (distanza segmento-segmento + bounding box)
-    stroke-shape.ts       perfect-freehand → path SVG (puro, testabile)
-    renderer.ts           due canvas (statico + live), DPR, cache Path2D, rAF
-    pointer-controller.ts Pointer Events: coalesced/predicted, capture, pan e pinch
+  main.ts                 plugin: view, extension, ribbon, commands, settings, flush on unload
+  settings.ts             settings types and defaults
+  model/                  (does not import 'obsidian')
+    types.ts              Document, Page, Stroke, A4 constants
+    document.ts           document/page/stroke creation, ids, quantization
+    serialize.ts          deterministic serialize() + parse() with validation and migrations
+    migrations.ts         chain of vN → vN+1 migrations
+    history.ts            command-stack undo/redo (AddStroke, EraseStrokes)
+  ink/                    (does not import 'obsidian')
+    viewport.ts           screen ↔ page transform, fit-width, zoom around a point, pan
+    pressure.ts           real vs constant pressure detection, pressure simulated from velocity
+    input-policy.ts       pen/touch/mouse routing and palm rejection (pure logic)
+    hit-test.ts           whole-stroke eraser (segment-segment distance + bounding box)
+    stroke-shape.ts       perfect-freehand → SVG path (pure, testable)
+    renderer.ts           two canvases (static + live), DPR, Path2D cache, rAF
+    pointer-controller.ts Pointer Events: coalesced/predicted, capture, pan and pinch
   storage/
-    session.ts            ciclo di vita del documento: load, dirty, debounce, flush, conflitti (puro, testabile)
-    vault-io.ts           adattatore Vault API (read, process, backup)
-    notebooks.ts          creazione di un quaderno nella cartella configurata
+    session.ts            document lifecycle: load, dirty, debounce, flush, conflicts (pure, testable)
+    vault-io.ts           Vault API adapter (read, process, backup)
+    notebooks.ts          notebook creation in the configured folder
   view/
-    notebook-view.ts      FileView: monta canvas e toolbar, collega sessione, history e input
-    toolbar.ts            penna, gomma, colori, spessori, undo/redo, adatta alla larghezza
-    modals.ts             "Nuovo quaderno" (nome) e "Apri quaderni" (ricerca fuzzy)
-tests/                    vitest su model/, ink/ e storage/session.ts
+    notebook-view.ts      FileView: mounts canvas and toolbar, wires session, history and input
+    toolbar.ts            pen, eraser, colors, widths, undo/redo, fit to width
+    modals.ts             "New notebook" (name) and "Open notebooks" (fuzzy search)
+tests/                    vitest on model/, ink/ and storage/session.ts
 ```
 
-## 4. Flusso di salvataggio (regola 4: zero perdita dati)
+## 4. Save flow (rule 4: zero data loss)
 
-Stato della sessione: `doc`, `revision` (incrementata a ogni modifica), `savedRevision`, `diskContent` (ultimo contenuto letto o scritto da noi), `mode` = `ok` | `readonly` (versione futura) | `broken` (illeggibile).
+Session state: `doc`, `revision` (incremented on every change), `savedRevision`, `diskContent` (last content read or written by us), `mode` = `ok` | `readonly` (future version) | `broken` (unreadable).
 
-**Apertura**
+**Open**
 1. `vault.read(file)` → `parse()`.
-2. Successo → `mode = ok`, eventuale migrazione in memoria (il file migrato si riscrive solo alla prima modifica).
-3. Fallimento (JSON non valido, schema non valido, file vuoto) → `mode = broken`; versione futura → `mode = readonly`. In entrambi i casi: **si crea un backup** del contenuto grezzo in `<cartella quaderni>/_backup/<nome> <data-ora> <motivo> <hash>.bak` (niente duplicati: l'hash del contenuto è nel nome), la vista mostra un messaggio e **nessun percorso di scrittura è attivo**.
+2. Success → `mode = ok`, any migration happens in memory (the migrated file is rewritten only on the first change).
+3. Failure (invalid JSON, invalid schema, empty file) → `mode = broken`; future version → `mode = readonly`. In both cases: **a backup of the raw content is created** in `<notebooks folder>/_backup/<name> <date-time> <reason> <hash>.bak` (no duplicates: the content hash is in the name), the view shows a message and **no write path is active**.
 
-**Modifica** → `revision++` → salvataggio programmato: debounce 1,5 s dall'ultima modifica, al massimo 10 s di attesa durante la scrittura continua.
+**Change** → `revision++` → scheduled save: 1.5 s debounce from the last change, at most 10 s of waiting during continuous writing.
 
-**Flush** (debounce, chiusura vista `onUnloadFile`/`onClose`, `onunload` del plugin, `visibilitychange` → hidden, `pagehide`, `workspace 'quit'` best effort):
-1. Se `mode ≠ ok` o non ci sono modifiche → niente.
-2. `next = serialize(doc)`; **ri-validazione**: `parse(next)` deve riuscire e `serialize(parse(next)) === next`. Se fallisce: niente scrittura, avviso, modifiche tenute in memoria.
-3. `vault.process(file, current => …)` (atomico): se `current ≠ diskContent` il file è cambiato fuori da noi (Sync, altro dispositivo) → il contenuto `current` viene conservato e salvato come backup `conflitto` subito dopo la scrittura, e l'utente viene avvisato.
-4. `diskContent = next`, `savedRevision = revision` catturata al punto 2. I flush sono serializzati (mai due scritture in parallelo); modifiche arrivate durante un flush ne programmano un altro.
+**Flush** (debounce, view close `onUnloadFile`/`onClose`, plugin `onunload`, `visibilitychange` → hidden, `pagehide`, `workspace 'quit'` best effort):
+1. If `mode ≠ ok` or there are no changes → nothing.
+2. `next = serialize(doc)`; **re-validation**: `parse(next)` must succeed and `serialize(parse(next)) === next`. If it fails: no write, warning, changes kept in memory.
+3. `vault.process(file, current => …)` (atomic): if `current ≠ diskContent` the file changed outside of us (Sync, another device) → the `current` content is kept and saved as a `conflict` backup right after the write, and the user is notified.
+4. `diskContent = next`, `savedRevision = revision` captured at step 2. Flushes are serialized (never two parallel writes); changes arriving during a flush schedule another one.
 
-**Modifica esterna** (`vault.on('modify')` sul file aperto): se il contenuto coincide con `diskContent` è l'eco della nostra scrittura → ignorato. Altrimenti, senza modifiche locali pendenti → ricarica il documento (se illeggibile → `broken` + backup, senza sovrascrivere); con modifiche pendenti → si tengono le nostre e al flush il contenuto esterno finisce nel backup `conflitto`.
+**External modification** (`vault.on('modify')` on the open file): if the content matches `diskContent` it is the echo of our own write → ignored. Otherwise, with no pending local changes → reload the document (if unreadable → `broken` + backup, without overwriting); with pending changes → ours are kept and on flush the external content ends up in the `conflict` backup.
 
-**Tratto in corso**: su `visibilitychange`/`pagehide`/`pointercancel` il tratto in corso viene chiuso e salvato come tratto normale prima del flush, così l'uscita dall'app durante la scrittura non lo perde.
+**Stroke in progress**: on `visibilitychange`/`pagehide`/`pointercancel` the stroke in progress is closed and saved as a normal stroke before the flush, so leaving the app mid-writing does not lose it.
 
-Limite noto: se Android uccide il processo senza notificare `visibilitychange`, si perdono al massimo le modifiche degli ultimi ~1,5 s (o 10 s durante una scrittura continua). La chiusura dalle app recenti passa prima dallo stato "in background", quindi il flush avviene; va verificato su hardware.
+Known limit: if Android kills the process without notifying `visibilitychange`, at most the last ~1.5 s of changes are lost (or 10 s during continuous writing). Closing from recent apps first goes through the "background" state, so the flush happens; this needs to be verified on hardware.
 
-## 5. Evoluzione del formato (verso M4)
+## 5. Format evolution (toward M4)
 
-- **C (ibrido)**: un comando genererà un `.md` companion (titolo, tag, link, testo OCR) accanto al `.quaderno`; il JSON non cambia.
-- **B (`.md` con blocco dati)**: se si sceglierà B, la migrazione sarà una conversione file → file: il JSON v1 diventa il contenuto di un blocco di codice, con `format`/`version` invariati. Il parser resta lo stesso.
-- Molte pagine: se un unico JSON diventa troppo grande (M2, 10.000+ tratti), la v2 potrà dividere le pagine; `version` permette la migrazione.
+- **C (hybrid)**: a command will generate a companion `.md` (title, tags, links, OCR text) next to the `.notebook`; the JSON does not change.
+- **B (`.md` with data block)**: if B is chosen, the migration will be a file → file conversion: the v1 JSON becomes the content of a code block, with `format`/`version` unchanged. The parser stays the same.
+- Many pages: if a single JSON becomes too large (M2, 10,000+ strokes), v2 may split the pages; `version` enables the migration.
 
-## 6. Input e rendering
+## 6. Input and rendering
 
-- `touch-action: none` sul contenitore; `pointerType` distingue `pen`/`touch`/`mouse`.
-- **Palm rejection base**: se la penna è attiva o è stata vista (anche in hover) negli ultimi N ms (default 500, configurabile), il tocco non disegna e fa solo pan (un dito) o zoom (due dita). La modalità "scrivi con il dito" è un'impostazione (default off). Se la penna tocca mentre un dito sta disegnando, il tratto del dito viene scartato.
-- `getCoalescedEvents()` per ogni `pointermove`; `getPredictedEvents()` opzionale (impostazione) e disegnato **solo** sul layer live, mai salvato.
-- Pressione: per la penna si usa quella reale solo dopo aver visto almeno 3 valori distinti in (0, 1) diversi da 0,5; altrimenti, e sempre per mouse e dito, si usa la pressione simulata dalla velocità (media esponenziale). Impostazione "pressione sempre simulata".
-- Due canvas sovrapposti, dimensionati sulla vista × `devicePixelRatio`: **statico** (carta, quadretti, tratti salvati, ridisegnato solo quando cambia il documento o la vista; un nuovo tratto viene aggiunto senza ridisegnare tutto) e **live** (tratto in corso + predizione, ridisegnato con `requestAnimationFrame`). I `Path2D` dei tratti sono in coordinate pagina e messi in cache per id.
-- Zoom iniziale: adattato alla larghezza della vista; ricalcolato su resize/rotazione finché l'utente non zooma. Pinch, rotella e Ctrl+rotella sono una versione base (lo zoom fluido è M2).
-- Gomma a tratto intero: raggio 10 px schermo convertiti in pt; si testa il segmento percorso dalla gomma tra due eventi contro i segmenti del tratto (con mezza larghezza del tratto), con prefiltro per bounding box. Tutti i tratti cancellati in un gesto formano un solo comando di undo.
+- `touch-action: none` on the container; `pointerType` distinguishes `pen`/`touch`/`mouse`.
+- **Basic palm rejection**: if the pen is active or was seen (even hovering) in the last N ms (default 500, configurable), touch does not draw and only pans (one finger) or zooms (two fingers). "Write with finger" mode is a setting (default off). If the pen touches down while a finger is drawing, the finger stroke is discarded.
+- `getCoalescedEvents()` for every `pointermove`; `getPredictedEvents()` optional (setting) and drawn **only** on the live layer, never saved.
+- Pressure: for the pen, real pressure is used only after seeing at least 3 distinct values in (0, 1) different from 0.5; otherwise, and always for mouse and finger, pressure simulated from velocity (exponential average) is used. "Always simulate pressure" setting.
+- Two stacked canvases, sized to the view × `devicePixelRatio`: **static** (paper, grid, saved strokes, redrawn only when the document or the view changes; a new stroke is added without redrawing everything) and **live** (stroke in progress + prediction, redrawn with `requestAnimationFrame`). Stroke `Path2D`s are in page coordinates and cached by id.
+- Initial zoom: fit to the view width; recomputed on resize/rotation until the user zooms. Pinch, wheel and Ctrl+wheel are a basic version (smooth zoom is M2).
+- Whole-stroke eraser: 10 screen px radius converted to pt; the segment traveled by the eraser between two events is tested against the stroke's segments (with half the stroke width), with a bounding-box prefilter. All strokes erased in one gesture form a single undo command.
 
 ## 7. Undo/redo
 
-Stack di comandi, non snapshot: `AddStroke { pageId, stroke, index }` e `EraseStrokes { pageId, items: [{ stroke, index }] }`. Ogni comando sa applicarsi e annullarsi; un nuovo comando svuota il redo; massimo 500 comandi. La cronologia vive in memoria (non è salvata nel file) e si azzera alla riapertura o al ricaricamento da modifica esterna.
+Command stack, not snapshots: `AddStroke { pageId, stroke, index }` and `EraseStrokes { pageId, items: [{ stroke, index }] }`. Each command knows how to apply and undo itself; a new command clears the redo stack; maximum 500 commands. The history lives in memory (it is not saved in the file) and is reset on reopening or on reload after an external modification.
