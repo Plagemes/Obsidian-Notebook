@@ -24,8 +24,8 @@ export type PageSizeName = keyof typeof PAGE_SIZES;
 /** [x, y, pressure] in page coordinates; pressure in [0, 1]. */
 export type Point = [number, number, number];
 
-/** v2 adds "highlighter" (translucent, constant width). */
-export const TOOLS = ["pen", "highlighter"] as const;
+/** v2 adds "highlighter" (translucent, constant width); v4 adds "shape" (constant width, for geometric shapes). */
+export const TOOLS = ["pen", "highlighter", "shape"] as const;
 export type Tool = (typeof TOOLS)[number];
 
 export interface Stroke {
@@ -60,12 +60,73 @@ export const PAPER_SPACING: Readonly<Record<PaperKind, number>> = {
 	millimetre: MM,
 };
 
+/** v4: content-addressed file in the assets folder (`<notebooks folder>/_assets/<id>.<ext>`). */
+export type AssetKind = "pdf" | "image";
+
+export interface Asset {
+	/** Content hash (hex), also the file name without extension. */
+	id: string;
+	kind: AssetKind;
+	/** Vault path when the asset was stored; resolved again by id if the file moved. */
+	path: string;
+	/** Original file name, for display. */
+	name: string;
+	bytes: number;
+}
+
+/** v4: what is drawn under the paper pattern and the ink. */
+export type PageBackground =
+	| { kind: "pdf"; asset: string; /** 1-based page number in the PDF */ page: number }
+	| { kind: "image"; asset: string };
+
+/** v4 text box: `x`, `y` top-left, `width` wraps the text; height follows the content. */
+export interface TextElement {
+	id: string;
+	type: "text";
+	x: number;
+	y: number;
+	width: number;
+	text: string;
+	fontSize: number;
+	color: string;
+}
+
+/** v4 image placed on the page, rotation in radians around its centre. */
+export interface ImageElement {
+	id: string;
+	type: "image";
+	asset: string;
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+	rotation: number;
+}
+
+export type PageElement = TextElement | ImageElement;
+
 export interface Page {
 	id: string;
 	width: number;
 	height: number;
 	paper: Paper;
 	strokes: Stroke[];
+	/** v4 */
+	background?: PageBackground;
+	/** v4: drawn above the background and below the ink. */
+	elements?: PageElement[];
+	/** v4: the page grows downwards while writing near its bottom edge. */
+	infinite?: boolean;
+}
+
+/** v4 notebook metadata, shown and edited in the library. */
+export interface NotebookMeta {
+	tags: string[];
+	favorite: boolean;
+	/** Cover colour #rrggbb. */
+	cover: string;
+	/** Bookmarked page ids. */
+	bookmarks: string[];
 }
 
 export interface NotebookDocument {
@@ -75,4 +136,8 @@ export interface NotebookDocument {
 	createdAt: string;
 	modifiedAt: string;
 	pages: Page[];
+	/** v4 */
+	meta?: NotebookMeta;
+	/** v4: assets referenced by pages, keyed by Asset.id. */
+	assets?: Record<string, Asset>;
 }
