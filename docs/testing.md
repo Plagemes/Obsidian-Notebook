@@ -11,15 +11,20 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | A4 grid page, fitted to width, refit on resize/rotation | ✅ | ✅ fit-width, transforms | | | |
 | Pen input via Pointer Events (pen/touch/mouse) | ✅ | ✅ routing logic only | | | |
 | Coalesced events | ✅ | ❌ (browser API) | | | |
-| Predicted points (live layer only, never saved) | ✅ | ❌ | | ✅ | |
-| Real pen pressure, simulated fallback for constant pressure | ✅ | ✅ | | | |
+| `pointerrawupdate` for the drawing pointer (fallback `pointermove`), each sample once | ✅ | ✅ dedup rule; ❌ browser API | | ✅ | depends on the WebView exposing it (the overlay shows "raw") |
+| Wet ink: new ink painted per input event, dirty rectangles, no per-frame redraw | ✅ | ✅ geometry, dirty rects, constant work per sample (canvas stand-in) | | | |
+| No change at pen-up (same geometry while writing and after commit) | ✅ | ✅ causal geometry, committed path vs painted union | | | |
+| Predicted ink (tip only, never saved; **default off**) | ✅ | ❌ | | ✅ | |
+| Real pen pressure, decided at stroke start, simulated fallback for constant pressure | ✅ | ✅ | | | |
 | Basic palm rejection (pen seen in the last N ms) | ✅ | ✅ | | | |
 | "Draw with finger" setting | ✅ | ✅ | | | |
 | Palm rejection by contact size (setting, off by default) | ✅ | ✅ routing logic only | | ✅ | depends on what the device reports for touch size |
 | Pen: 9 colours, 5 widths | ✅ | ❌ | | | |
 | Highlighter: 5 colours, 3 widths, constant width | ✅ | ✅ format round-trip | | | |
-| Highlighter translucent with `multiply` blending | ✅ | ❌ (canvas) | | ✅ | live preview is not multiplied until the stroke is committed |
-| Stabilization (0–10, default 2) | ✅ | ✅ | | | tune levels on the device |
+| Highlighter translucent with `multiply` blending, also while writing (CSS on the wet canvas) | ✅ | ❌ (canvas) | | ✅ | |
+| Stabilization (0–10, default 2): adaptive 1€ filter | ✅ | ✅ jitter and lag vs the old stabilizer | | | tune levels on the device |
+| Saves, journal and thumbnails wait while writing (and 350 ms after) | ✅ | ✅ session | | | |
+| Format v5: per-stroke render version; old strokes unchanged | ✅ | ✅ migration, round-trip | | | |
 | Whole-stroke eraser (toolbar) | ✅ | ✅ hit test | | | |
 | Segment eraser (cuts strokes; works across pages in one gesture) | ✅ | ✅ cutting logic; ❌ across pages (view) | | | |
 | Pen eraser button (`buttons & 32`) | ✅ | ❌ | | ✅ | S Pen button mapping unknown |
@@ -88,7 +93,7 @@ Setup: install as in the README, enable the plugin, keep the default settings. O
 For each step note **pass / fail / notes** in the table at the end.
 
 1. **Create and write.** Ribbon → *Open notebooks* → *+ New notebook* → *Create*. Expected: a grid A4 page as wide as the screen, file in `Notebooks/`. Write a few lines of text.
-2. **Perceived latency.** Write quickly and slowly, small handwriting and large loops. Expected: ink follows the pen tip without visible lag or gaps; no jagged segments on fast curves. Repeat with *Predicted points* off (settings) and compare.
+2. **Perceived latency.** Write quickly and slowly, small handwriting and large loops. Expected: ink follows the pen tip without visible lag or gaps; no jagged segments on fast curves. Repeat with *Predicted ink* on (settings; default off) and compare: note whether the tip feels closer to the pen or overshoots at turns and at the end of a stroke.
 3. **Pressure.** Draw lines pressing lightly then hard. Expected: visibly thinner/thicker lines. If width does not change, set *Pressure* to *Always simulated* and confirm speed changes the width instead; report which one your device needs.
 4. **Hand resting on the screen.** Rest the palm on the screen *before* the pen touches, and while writing; also touch with the palm right after lifting the pen. Expected: no stray marks from the palm; the page may scroll slightly at most. Repeat with *Draw with finger* on: a palm touching before the pen may start a mark, which must disappear when the pen touches down.
 5. **Pinch/zoom and scroll.** One finger: scroll the page. Two fingers: zoom in and out, then write while zoomed. Expected: no ink from fingers, strokes land under the pen at every zoom level, the page never gets lost off screen. *Fit to width* restores the view.
@@ -100,10 +105,10 @@ For each step note **pass / fail / notes** in the table at the end.
 11. **Corrupt file.** On the PC create `Notebooks/broken.notebook` containing `{ not json`. Open it on the device. Expected: an error message, no toolbar editing, the file stays unchanged, and a `.bak` copy appears in `Notebooks/_backup/`.
 12. **Sync (if used).** Edit the same notebook on two devices without letting them sync, then sync. Expected: one version is shown and the other one is in `Notebooks/_backup/` as a `conflict` backup; nothing is lost.
 13. **Multiple pages.** In a new notebook press *Add page* (toolbar) twice, and once from the command palette while the first page is in view. Expected: pages stack vertically with a visible gap, the new page appears after the page in view and the view scrolls to it, the indicator reads `n / total` and follows scrolling. Write on each page, including near the page edges. Undo the *Add page* steps (after undoing the strokes written on them): the pages disappear in reverse order and the last page cannot be removed. Close and reopen: same pages and strokes.
-14. **Highlighter.** Choose the highlighter, a colour and each width. Draw over pen text and over the grid. Expected: the text stays readable through the highlighter, the colour looks translucent and darkens the ink below it rather than covering it, the width does not change with pressure. Note whether the stroke looks different while drawing and after lifting the pen (the preview is not multiplied). Reopen the notebook: same look.
+14. **Highlighter.** Choose the highlighter, a colour and each width. Draw over pen text and over the grid. Expected: the text stays readable through the highlighter, the colour looks translucent and darkens the ink below it rather than covering it, the width does not change with pressure. Expected: the stroke looks the same while drawing and after lifting the pen (also where it crosses itself). Reopen the notebook: same look.
 15. **Segment eraser.** Choose *Eraser → Segment*. Cut across a long stroke, across several strokes, and in one gesture from the end of one page into the next page. Expected: only the part under the eraser disappears, no stray dots remain, one undo restores everything erased in that gesture. Try a fast swipe and small circles. Switch back to *Whole stroke* and check it still removes entire strokes.
 16. **Lasso.** Choose the lasso and draw a loop around some words, then: drag inside the frame to move them; drag the bottom-right handle to resize (uniform); drag the handle above the top edge to rotate; each time undo and redo. Then select again and delete with the toolbar button (on a keyboard also Delete/Backspace), undo. Escape or switching tool clears the selection. Expected: handles are easy to hit with the pen, the selection follows the pen without lag, a stroke is selected only when about half or more of it is inside the loop, and after reopening the transformed strokes are where you left them. Try a selection with 200+ strokes on the stress notebook and note how it feels.
-17. **Stabilization.** Write a slow wavy line and a signature at levels 0, 2 (default), 5 and 10. Expected: higher levels smooth tremor but trail behind the pen and round off corners; the line catches up when you lift. Report which level feels right.
+17. **Stabilization.** Write a slow wavy line and a signature at levels 0, 2 (default), 5 and 10. Expected: higher levels smooth tremor when moving slowly; at writing speed the line stays close to the pen (at 10 it trails a little and rounds corners); the line always ends where the pen lifted. Report which level feels right.
 18. **Palm contact size.** Settings → *Ignore large touches*: leave at off, then try 30, 50 and 70 px. Rest a palm, a fist edge and a single finger on the screen. Expected: with a suitable value the palm is ignored completely (it does not scroll either) while a finger still scrolls. Report what range works on your device, or that the device reports a constant size (then the setting cannot help).
 19. **Fling scrolling.** With one finger, flick the page up and down at different speeds, then touch the screen during the glide. Expected: the page keeps moving after the finger lifts, slows down smoothly and stops at once when touched. Check that a slow drag followed by a pause does not fling.
 20. **Performance overlay.** Turn on *Performance overlay* and open the stress-test notebook. Note the readings (frame time, input→frame, redraw ms, strokes and pages drawn) in these situations: idle; writing; one-finger scrolling; pinch zooming in and out; at fit width and at high zoom. While scrolling or zooming the page may look blurred or blank at the edges for a moment and then sharpen (the fast path): note whether that is visible and bothersome.
@@ -114,6 +119,17 @@ For each step note **pass / fail / notes** in the table at the end.
 24. **Page menu and undo.** In a notebook with three pages and some ink on each, open the page menu (three-dot button next to *Add page*) and use, one by one: *Duplicate page*; *Move page up* and *down* (disabled at the ends); *Delete page* (disabled with a single page); a different *Paper*; a different *Size*; *Landscape* / *Portrait*. After each, undo and redo. Expected: every action takes effect on the page in view, is a single undo step, and undo restores the exact previous state (order, paper, size, strokes). The duplicate has the same ink and can be edited independently. After shrinking a page (for example A4 to A5) with ink near the bottom: the ink outside is not shown; undo, or enlarging again, brings it back. *Add page* gives a page with the size and paper of the page in view. Close and reopen: same pages, order, papers and sizes.
 25. **Export.** From the page menu run *Export page as PDF*, *Export notebook as PDF* and *Export page as SVG* on a notebook with several pages, mixed papers and sizes, a highlighter stroke and some Unicode in the notebook name (for example an accent). Expected: a notice with the path; the files appear next to the notebook (`<name>.pdf`, `<name> p2.pdf`, `<name> p2.svg`); running the same export again creates `… 2` files instead of overwriting. Open the PDF on the device (from the file explorer, or share it to a PDF viewer or another app) and check: page count, page sizes and orientation, paper pattern, ink in the right place and colours, highlighter translucent over the ink, no missing strokes. Note the file size of a page with a lot of ink (the PDF is not compressed) and how long the export takes. Open the SVG in a browser or an image viewer.
 26. **0.2 opens a 0.3 file.** Take a notebook saved by 0.3 (for example one with a ruled or dotted page) to a device or vault that still has Notebook 0.2.x, and open it. Expected: it opens read-only with a warning, nothing can be edited, the file is unchanged, and a `.bak` copy appears in `Notebooks/_backup/`. Then open it again with 0.3: normal editing.
+
+27. **Writing engine (S Pen).** With the *Performance overlay* on, in a notebook with a few pages of ink and in the stress-test notebook:
+    - Write normal handwriting for a minute, fast and slow. Expected: no lag of the line behind the tip, no "jumps" (the line never snaps to a new shape, at the start, in the middle or when the pen lifts), no hitch at the start of a stroke written right after another (saving waits until the pen rests). The overlay's second line should show "raw" (pointerrawupdate in use) and an input→paint of a few ms; note the values.
+    - Lift the pen in the middle of a fast curve and look closely at the end: it must not change shape or move when the pen lifts.
+    - Write a tiny dot (tap) and very short strokes: the dot appears at once.
+    - First stroke after opening Obsidian, pressing lightly then hard: the width changes with pressure along the line, without a sudden change in the middle.
+    - Highlighter over text, crossing itself: same look while writing and after lifting; no darker spots where it overlaps itself.
+    - Pen and highlighter at high zoom and at fit width; pan with a finger while the pen is down if your hand allows it: the ink stays under the pen.
+    - Hold still 0.6 s at the end of a rough circle/rectangle/line: it still becomes a clean shape. With the ruler: a stroke started on its edge stays on the edge.
+    - Old notebooks (written before this version): strokes look exactly as before; new strokes look like the pen (same weight), and both export to PDF/SVG.
+    - Run *Run performance benchmark* and copy the *Writing engine* section into the notes.
 
 | Step | Device / Obsidian version | Result | Notes |
 |---|---|---|---|
@@ -138,6 +154,7 @@ For each step note **pass / fail / notes** in the table at the end.
 | 19 Fling | | | |
 | 20 Performance overlay | | | |
 | 21 In-app benchmark | | | |
+| 27 Writing engine | | | |
 | 22 Notebook from 0.1 | | | |
 | 23 Paper and size at creation | | | |
 | 24 Page menu and undo | | | |

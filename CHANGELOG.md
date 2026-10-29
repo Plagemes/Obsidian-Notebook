@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Writing engine** (wet ink): the stroke being written is painted as each pen sample arrives (`pointerrawupdate` where available), only the new part, on its own low-latency canvas; nothing is rebuilt per frame. New strokes use a new geometry (disc chain on a smooth curve) that is identical while writing and after the pen lifts, so the line no longer changes shape at pen-up or appears late at the start. Highlighter looks the same while writing and after. Saves, journal entries and thumbnails wait while the pen writes. Not verified on Android hardware.
+- **File format v5**: every stroke records its render version (`render`: 1 = perfect-freehand as before, 2 = the new geometry). v4 files migrate in memory with every stroke marked 1, so existing notebooks look exactly as before. Files written by this version open read-only in older versions.
+- Stabilization is now an adaptive filter (1€ filter): less jitter at rest and much less lag while writing at the same level (default 2).
+- Pressure: real or simulated is decided at the start of each stroke and never switches in the middle of it.
+- Settings: *Predicted points* is replaced by *Predicted ink*, **off by default** (predicted samples overshoot at turns and at the end of a stroke).
+
 - Instant save journal (storage side, M8 #31): every change is recorded within ~200 ms in a small plugin-owned journal (full snapshot for small notebooks, line diff for large ones, two alternating slot files) and replayed on open if the app died before the regular save. Not wired into the view yet.
 - Document format v4 (model side): notebook `meta`, `assets`, page backgrounds, text and image elements, infinite pages, `shape` tool; v3 files migrate in memory. New undoable commands: `AddElement`, `RemoveElement`, `ReplaceElement`, `SetMeta`, `AddAsset`, `InsertPages`, `SetPageInfinite`.
 
