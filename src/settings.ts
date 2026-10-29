@@ -58,6 +58,9 @@ export interface NotebookSettings extends CompanionSettings {
 	/** Instant start: the notebook and page (1-based) the reader was on last, for "Continue last notebook". Not shown in the settings tab. */
 	lastNotebookPath: string;
 	lastNotebookPage: number;
+	// wave 0.6: objects
+	/** Ink written over an image or a text box moves, scales and rotates with it (geometric attachment, nothing stored). */
+	inkFollowsObjects: boolean;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -89,6 +92,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	penButtonAction: "radial",
 	lastNotebookPath: "",
 	lastNotebookPage: 1,
+	inkFollowsObjects: true,
 	...DEFAULT_COMPANION_SETTINGS,
 };
 
@@ -125,6 +129,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (d.penButtonAction === "radial" || d.penButtonAction === "eraser" || d.penButtonAction === "off") s.penButtonAction = d.penButtonAction;
 	if (typeof d.lastNotebookPath === "string") s.lastNotebookPath = d.lastNotebookPath;
 	if (typeof d.lastNotebookPage === "number" && Number.isInteger(d.lastNotebookPage) && d.lastNotebookPage >= 1) s.lastNotebookPage = d.lastNotebookPage;
+	if (typeof d.inkFollowsObjects === "boolean") s.inkFollowsObjects = d.inkFollowsObjects;
 	Object.assign(s, readCompanionSettings(d));
 	return s;
 }
