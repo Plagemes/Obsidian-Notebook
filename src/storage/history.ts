@@ -95,6 +95,22 @@ export function extractDocId(json: string): string | null {
 	return m?.[1] ?? null;
 }
 
+export type RestoreCheck =
+	/** The file holds the same notebook (same document id): safe to restore over it. */
+	| "ok"
+	/** The file holds a different notebook: restoring would destroy it. */
+	| "other-notebook"
+	/** The file's id cannot be read (corrupt or empty): only restore after an explicit confirmation. */
+	| "unreadable";
+
+/** Whether `snapshotJson` (a parseable snapshot) may be restored over the file that currently holds `currentJson`. */
+export function checkRestoreTarget(currentJson: string, snapshotJson: string): RestoreCheck {
+	const snapshotId = extractDocId(snapshotJson);
+	const currentId = extractDocId(currentJson);
+	if (currentId === null) return "unreadable";
+	return snapshotId !== null && snapshotId === currentId ? "ok" : "other-notebook";
+}
+
 /** Page count of a snapshot's text; null when it does not parse. */
 export function snapshotPageCount(json: string): number | null {
 	const parsed = parse(json);

@@ -419,11 +419,18 @@ export class NotebookView extends FileView {
 		await super.onUnloadFile(file);
 	}
 
-	/** Closes the stroke in progress and the text box being edited, and writes everything to disk. */
-	async flushNow(): Promise<void> {
+	/**
+	 * Closes the stroke in progress and the text box being edited, and writes everything to disk.
+	 * Resolves to true only if nothing is left unsaved in memory (callers such as the history restore
+	 * must not go on when it is false).
+	 */
+	async flushNow(): Promise<boolean> {
 		this.controller?.finishActiveStroke();
 		this.commitText();
-		await this.session?.flush();
+		const session = this.session;
+		if (!session) return true;
+		const written = await session.flush();
+		return written && (session.mode !== "ok" || !session.dirty);
 	}
 
 	/** Final flush (with retries and an "unsaved" backup as last resort), then detaches the session. */

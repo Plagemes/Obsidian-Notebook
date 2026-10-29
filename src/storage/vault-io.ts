@@ -54,6 +54,11 @@ export class VaultDocumentIO implements DocumentIO {
 		await this.app.vault.process(this.file, (raw) => writeNotebookText(ext, fn(readNotebookText(ext, raw)), raw));
 	}
 
+	/** Current vault path of the file (follows renames): part of the journal's file identity. */
+	path(): string {
+		return this.file.path;
+	}
+
 	async backup(content: string, reason: BackupReason): Promise<string | null> {
 		const folder = normalizePath(this.backupFolder());
 		await ensureFolder(this.app, folder);
@@ -82,25 +87,42 @@ export function journalFolder(app: App, pluginId: string): string {
  * JournalStore over the vault adapter. The journal is a plugin-owned technical file, so it lives in
  * the plugin's config folder (no vault events, no sync, no indexing); this is the one place the
  * adapter is used. Reads skip slots that cannot be read; the session decides what to do with them.
+ *
+ * Files are named `<key>.<owner>.<slot>.journal` (see `journalKey`). `live` holds the owners that
+ * have written and are not released yet: their files belong to a running session, so `read` hides them.
  */
 export class AdapterJournalStore implements JournalStore {
 	private folderReady = false;
+	private readonly live = new Set<string>();
 
 	constructor(
 		private readonly adapter: DataAdapter,
 		private readonly folder: string,
 	) {}
 
-	private path(docId: string, slot: 0 | 1): string {
-		return normalizePath(`${this.folder}/${docId.replace(/[^A-Za-z0-9_-]/g, "_")}.${slot}.journal`);
+	private path(key: string, owner: string, slot: 0 | 1): string {
+		return normalizePath(`${this.folder}/${key}.${owner.replace(/[^A-Za-z0-9_-]/g, "_")}.${slot}.journal`);
 	}
 
-	async read(docId: string): Promise<JournalSlotFile[]> {
+	async read(key: string): Promise<JournalSlotFile[]> {
 		const files: JournalSlotFile[] = [];
-		for (const slot of [0, 1] as const) {
+		let listed: string[];
+		try {
+			if (!(await this.adapter.exists(this.folder))) return files;
+			listed = (await this.adapter.list(this.folder)).files;
+		} catch {
+			return files;
+		}
+		for (const full of listed) {
+			// <doc>.<path hash>.<owner>.<slot>.journal
+			const name = full.slice(full.lastIndexOf("/") + 1);
+			const parts = name.split(".");
+			if (parts.length !== 5 || parts[4] !== "journal" || `${parts[0]}.${parts[1]}` !== key) continue;
+			const owner = parts[2]!;
+			const slot = parts[3] === "0" ? 0 : parts[3] === "1" ? 1 : null;
+			if (slot === null || this.live.has(owner)) continue;
 			try {
-				const path = this.path(docId, slot);
-				if (await this.adapter.exists(path)) files.push({ slot, text: await this.adapter.read(path) });
+				files.push({ owner, slot, text: await this.adapter.read(full) });
 			} catch {
 				// Unreadable slot: ignored, the other one may still be good.
 			}
@@ -108,7 +130,7 @@ export class AdapterJournalStore implements JournalStore {
 		return files;
 	}
 
-	async write(docId: string, slot: 0 | 1, text: string): Promise<void> {
+	async write(key: string, owner: string, slot: 0 | 1, text: string): Promise<void> {
 		if (!this.folderReady) {
 			let current = "";
 			for (const part of this.folder.split("/").filter(Boolean)) {
@@ -117,13 +139,18 @@ export class AdapterJournalStore implements JournalStore {
 			}
 			this.folderReady = true;
 		}
-		await this.adapter.write(this.path(docId, slot), text);
+		this.live.add(owner.replace(/[^A-Za-z0-9_-]/g, "_"));
+		await this.adapter.write(this.path(key, owner, slot), text);
 	}
 
-	async remove(docId: string): Promise<void> {
+	async remove(key: string, owner: string): Promise<void> {
 		for (const slot of [0, 1] as const) {
-			const path = this.path(docId, slot);
+			const path = this.path(key, owner, slot);
 			if (await this.adapter.exists(path)) await this.adapter.remove(path);
 		}
+	}
+
+	release(owner: string): void {
+		this.live.delete(owner.replace(/[^A-Za-z0-9_-]/g, "_"));
 	}
 }

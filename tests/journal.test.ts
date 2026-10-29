@@ -11,6 +11,7 @@ import {
 	fingerprint,
 	fullWriteGapMs,
 	inspectJournal,
+	journalKey,
 	splitLines,
 	type JournalSlotFile,
 	type JournalStore,
@@ -28,7 +29,12 @@ class FakeIO implements DocumentIO {
 	backups: Array<{ content: string; reason: BackupReason }> = [];
 	failBackups = false;
 	duringProcess: (() => void) | null = null;
+	/** Vault path of the file; change it to simulate a rename. */
+	filePath = "Notebooks/a.notebook";
 	constructor(public content: string) {}
+	path(): string {
+		return this.filePath;
+	}
 	async read(): Promise<string> {
 		return this.content;
 	}
@@ -49,30 +55,45 @@ class FakeIO implements DocumentIO {
 
 /** In-memory journal files that survive across sessions, like the plugin folder does. */
 class FakeJournal implements JournalStore {
+	/** `<key>|<owner>|<slot>` -> text */
 	files = new Map<string, string>();
-	writeLog: Array<{ slot: 0 | 1; size: number }> = [];
+	writeLog: Array<{ key: string; owner: string; slot: 0 | 1; size: number }> = [];
 	failWrites = false;
 	failReads = false;
-	private key(docId: string, slot: number) {
-		return `${docId}.${slot}`;
+	private readonly live = new Set<string>();
+	private fileKey(key: string, owner: string, slot: number) {
+		return `${key}|${owner}|${slot}`;
 	}
-	async read(docId: string): Promise<JournalSlotFile[]> {
+	async read(key: string): Promise<JournalSlotFile[]> {
 		if (this.failReads) throw new Error("plugin folder unreadable");
 		const out: JournalSlotFile[] = [];
-		for (const slot of [0, 1] as const) {
-			const text = this.files.get(this.key(docId, slot));
-			if (text !== undefined) out.push({ slot, text });
+		for (const [k, text] of this.files) {
+			const [fileKey, owner, slot] = k.split("|") as [string, string, string];
+			if (fileKey === key && !this.live.has(owner)) out.push({ owner, slot: slot === "0" ? 0 : 1, text });
 		}
 		return out;
 	}
-	async write(docId: string, slot: 0 | 1, text: string): Promise<void> {
+	async write(key: string, owner: string, slot: 0 | 1, text: string): Promise<void> {
 		if (this.failWrites) throw new Error("disk full");
-		this.files.set(this.key(docId, slot), text);
-		this.writeLog.push({ slot, size: text.length });
+		this.live.add(owner);
+		this.files.set(this.fileKey(key, owner, slot), text);
+		this.writeLog.push({ key, owner, slot, size: text.length });
 	}
-	async remove(docId: string): Promise<void> {
-		this.files.delete(this.key(docId, 0));
-		this.files.delete(this.key(docId, 1));
+	async remove(key: string, owner: string): Promise<void> {
+		this.files.delete(this.fileKey(key, owner, 0));
+		this.files.delete(this.fileKey(key, owner, 1));
+	}
+	release(owner: string): void {
+		this.live.delete(owner);
+	}
+	/** Plants a file as left by a session that died (not live). */
+	put(docId: string, slot: 0 | 1, text: string, path = "", owner = "dead"): void {
+		this.files.set(this.fileKey(journalKey(docId, path), owner, slot), text);
+	}
+	/** Files under one key. */
+	under(docId: string, path = ""): string[] {
+		const prefix = `${journalKey(docId, path)}|`;
+		return [...this.files.keys()].filter((k) => k.startsWith(prefix));
 	}
 }
 
@@ -177,7 +198,7 @@ describe("journal entries", () => {
 		const doc = sampleDocument(1);
 		const text = serialize(doc);
 		const entry = buildEntry("other", 1, "t", text, splitLines(text), text + " ")!;
-		const r = inspectJournal([{ slot: 0, text: entry.text }], doc.id, text);
+		const r = inspectJournal([{ owner: "o", slot: 0, text: entry.text }], doc.id, text);
 		expect(r.recovery.kind).toBe("none");
 	});
 });
@@ -316,7 +337,8 @@ describe("DocumentSession journal", () => {
 		first.dispose();
 		// The second write was cut short by the kill.
 		const newest = journal.writeLog[journal.writeLog.length - 1]!.slot;
-		journal.files.set(`${first.doc!.id}.${newest}`, journal.files.get(`${first.doc!.id}.${newest}`)!.slice(0, 40));
+		const newestKey = [...journal.files.keys()].find((k) => k.endsWith(`|${newest}`))!;
+		journal.files.set(newestKey, journal.files.get(newestKey)!.slice(0, 40));
 
 		const second = open(io, journal);
 		await second.load();
@@ -429,9 +451,8 @@ describe("DocumentSession journal", () => {
 		first.dispose();
 		// The kill happened between the file write and the cleanup: the entry is still there.
 		for (const [k, v] of saved) journal.files.set(k, v);
-		const entry = decodeEntry([...saved.values()][0]!)!;
-		// Make the file equal to what the journal produces (as if the save had landed).
-		io.content = entry.full!;
+		// The file now holds what the save wrote: byte for byte what the journal entry produces.
+		expect(fingerprint(io.content)).toBe(decodeEntry([...saved.values()][0]!)!.result);
 
 		const events = { onRecovered: vi.fn() };
 		const second = open(io, journal, events);
@@ -535,7 +556,7 @@ describe("DocumentSession journal", () => {
 		const doc = parse(original);
 		if (!doc.ok) throw new Error("unreachable");
 		const journal = new FakeJournal();
-		journal.files.set(`${doc.doc.id}.0`, "\u0000garbage{{{");
+		journal.put(doc.doc.id, 0, "\u0000garbage{{{", io.filePath);
 		const s = open(io, journal);
 		await s.load();
 		expect(s.mode).toBe("ok");
@@ -554,7 +575,7 @@ describe("DocumentSession journal", () => {
 		const forged = buildEntry(doc.doc.id, 5, "t", original, splitLines(original), original.replace('"pen"', '"highlighter"'))!;
 		const tampered = { ...forged.entry, full: original.replace('"pen"', '"highlighter"').slice(0, -5) };
 		const journal = new FakeJournal();
-		journal.files.set(`${doc.doc.id}.0`, JSON.stringify(tampered));
+		journal.put(doc.doc.id, 0, JSON.stringify(tampered), io.filePath);
 		const s = open(io, journal);
 		await s.load();
 		expect(s.dirty).toBe(false);
@@ -642,6 +663,301 @@ describe("DocumentSession journal", () => {
 		await vi.advanceTimersByTimeAsync(2000);
 		expect(strokeCount(io.content)).toBe(2);
 		await s.journalIdle();
+	});
+});
+
+describe("journal review fixes", () => {
+	beforeEach(() => vi.useFakeTimers());
+	afterEach(() => vi.useRealTimers());
+
+	const open = (io: FakeIO, journal: FakeJournal, events: SessionEvents = {}) => new DocumentSession(io, timers, events, { journal });
+	const settle = async (...sessions: DocumentSession[]) => {
+		await vi.advanceTimersByTimeAsync(300);
+		for (const s of sessions) await s.journalIdle();
+	};
+
+	it("the same notebook open in two leaves: neither session deletes or overwrites the other's entries", async () => {
+		const original = serialize(sampleDocument(1));
+		const ioA = new FakeIO(original);
+		const ioB = new FakeIO(original);
+		const journal = new FakeJournal();
+		const a = open(ioA, journal);
+		const b = open(ioB, journal);
+		await a.load();
+		await b.load();
+		a.doc!.pages[0]!.strokes.push(line(1, 1, 10, 10));
+		a.markChanged();
+		await settle(a);
+		const aFiles = journal.under(a.doc!.id, ioA.filePath);
+		expect(aFiles).toHaveLength(1);
+
+		// B edits and saves; its cleanup must leave A's pending entry alone.
+		b.doc!.pages[0]!.strokes.push(line(2, 2, 20, 20));
+		b.markChanged();
+		await b.flush();
+		await b.journalIdle();
+		expect(journal.under(a.doc!.id, ioA.filePath)).toEqual(aFiles);
+
+		// A crashes (never flushes). The file was changed by B, so A's entry no longer fits: it is kept as a
+		// backup copy, not applied to the wrong content.
+		a.dispose();
+		const c = open(ioB, journal);
+		await c.load();
+		expect(c.doc!.pages[0]!.strokes).toHaveLength(2);
+		expect(ioB.backups.map((x) => x.reason)).toEqual(["journal"]);
+	});
+
+	it("a live session's entries are not offered to a session that opens the same file", async () => {
+		const original = serialize(sampleDocument(1));
+		const io = new FakeIO(original);
+		const journal = new FakeJournal();
+		const a = open(io, journal);
+		await a.load();
+		a.doc!.pages[0]!.strokes.push(line(1, 1, 10, 10));
+		a.markChanged();
+		await settle(a);
+		const b = open(new FakeIO(original), journal);
+		await b.load();
+		expect(b.dirty).toBe(false);
+		expect(journal.under(a.doc!.id, io.filePath)).toHaveLength(1);
+	});
+
+	it("two files with the same document id (a copy) have separate journals", async () => {
+		const original = serialize(sampleDocument(1));
+		const orig = new FakeIO(original);
+		const copy = new FakeIO(original);
+		copy.filePath = "Notebooks/a (copy).notebook";
+		const journal = new FakeJournal();
+		const a = open(orig, journal);
+		const b = open(copy, journal);
+		await a.load();
+		await b.load();
+		a.doc!.pages[0]!.strokes.push(line(1, 1, 10, 10));
+		a.markChanged();
+		b.doc!.pages[0]!.strokes.push(line(9, 9, 90, 90));
+		b.markChanged();
+		await settle(a, b);
+		const id = a.doc!.id;
+		expect(journal.under(id, orig.filePath)).toHaveLength(1);
+		expect(journal.under(id, copy.filePath)).toHaveLength(1);
+		const lostB = b.doc!.pages[0]!.strokes[1]!.id;
+		a.dispose();
+		b.dispose();
+
+		// Crash: each file recovers its own edits.
+		const a2 = open(orig, journal);
+		const b2 = open(copy, journal);
+		await a2.load();
+		await b2.load();
+		expect(a2.doc!.pages[0]!.strokes.some((s) => s.id === lostB)).toBe(false);
+		expect(b2.doc!.pages[0]!.strokes.some((s) => s.id === lostB)).toBe(true);
+	});
+
+	it("inspect ignores an entry recorded for another path", () => {
+		const doc = sampleDocument(1);
+		const text = serialize(doc);
+		const next = text + " ";
+		const foreign = buildEntry(doc.id, 1, "t", text, splitLines(text), next, "Notebooks/other.notebook")!;
+		expect(inspectJournal([{ owner: "o", slot: 0, text: foreign.text }], doc.id, text, "Notebooks/a.notebook").recovery.kind).toBe("none");
+		const mine = buildEntry(doc.id, 1, "t", text, splitLines(text), next, "Notebooks/a.notebook")!;
+		expect(inspectJournal([{ owner: "o", slot: 0, text: mine.text }], doc.id, text, "Notebooks/a.notebook").recovery.kind).not.toBe("none");
+		expect(journalKey(doc.id, "a")).not.toBe(journalKey(doc.id, "b"));
+	});
+
+	it("a rename moves the journal to the new key at the next entry, and recovery finds it there", async () => {
+		const original = serialize(sampleDocument(1));
+		const io = new FakeIO(original);
+		const journal = new FakeJournal();
+		const s = open(io, journal);
+		await s.load();
+		const id = s.doc!.id;
+		const oldPath = io.filePath;
+		s.doc!.pages[0]!.strokes.push(line(1, 1, 10, 10));
+		s.markChanged();
+		await settle(s);
+		expect(journal.under(id, oldPath)).toHaveLength(1);
+
+		io.filePath = "Notebooks/renamed.notebook";
+		const lost = line(5, 5, 50, 50);
+		s.doc!.pages[0]!.strokes.push(lost);
+		s.markChanged();
+		await settle(s);
+		expect(journal.under(id, oldPath)).toHaveLength(0);
+		expect(journal.under(id, io.filePath)).toHaveLength(1);
+		s.dispose();
+
+		const second = open(io, journal);
+		await second.load();
+		expect(second.dirty).toBe(true);
+		expect(second.doc!.pages[0]!.strokes.some((x) => x.id === lost.id)).toBe(true);
+	});
+
+	it("a rename followed by a save leaves no journal behind", async () => {
+		const io = new FakeIO(serialize(sampleDocument(1)));
+		const journal = new FakeJournal();
+		const s = open(io, journal);
+		await s.load();
+		s.doc!.pages[0]!.strokes.push(line(1, 1, 10, 10));
+		s.markChanged();
+		await settle(s);
+		io.filePath = "Notebooks/renamed.notebook";
+		await s.flush();
+		await s.journalIdle();
+		expect(journal.files.size).toBe(0);
+	});
+
+	it("a file that goes from broken to readable is recovered from the journal", async () => {
+		const original = serialize(sampleDocument(2));
+		const io = new FakeIO(original);
+		const journal = new FakeJournal();
+		const first = open(io, journal);
+		await first.load();
+		const lost = line(5, 5, 60, 60);
+		first.doc!.pages[0]!.strokes.push(lost);
+		first.markChanged();
+		await settle(first);
+		first.dispose();
+
+		// Sync truncated the file; the notebook opens as broken.
+		io.content = original.slice(0, 120);
+		const events = { onRecovered: vi.fn() };
+		const second = open(io, journal, events);
+		await second.load();
+		expect(second.mode).toBe("broken");
+		expect(journal.under(first.doc!.id, io.filePath)).toHaveLength(1);
+
+		// Sync brings back the complete file.
+		io.content = original;
+		expect(await second.handleExternalChange()).toBe("reloaded");
+		expect(second.mode).toBe("ok");
+		expect(second.dirty).toBe(true);
+		expect(second.doc!.pages[0]!.strokes.some((x) => x.id === lost.id)).toBe(true);
+		expect(events.onRecovered).toHaveBeenCalledTimes(1);
+		await vi.advanceTimersByTimeAsync(2000);
+		await second.journalIdle();
+		expect(strokeCount(io.content)).toBe(3);
+		expect(journal.files.size).toBe(0);
+	});
+
+	it("a deleted notebook whose unsaved changes could not be backed up keeps its journal", async () => {
+		const io = new FakeIO(serialize(sampleDocument(1)));
+		const journal = new FakeJournal();
+		const s = open(io, journal);
+		await s.load();
+		s.doc!.pages[0]!.strokes.push(line(1, 1, 5, 5));
+		s.markChanged();
+		await settle(s);
+		expect(journal.files.size).toBe(1);
+		io.failBackups = true;
+		await s.markDeleted();
+		expect(io.backups).toHaveLength(0);
+		expect(journal.files.size).toBe(1);
+	});
+
+	describe("inspect with several entries", () => {
+		function setup() {
+			const base = serialize(sampleDocument(2));
+			const parsed = parse(base);
+			if (!parsed.ok) throw new Error("unreachable");
+			const doc = parsed.doc;
+			const lines = splitLines(base);
+			const memo = new Map<number, string>();
+			const withStroke = (n: number) => {
+				if (!memo.has(n)) {
+					const d = structuredClone(doc);
+					d.pages[0]!.strokes.push(line(n, n, n + 40, n + 40));
+					memo.set(n, serialize(d));
+				}
+				return memo.get(n)!;
+			};
+			return { base, doc, lines, withStroke };
+		}
+
+		it("applies the newest entry even when an older one equals the file", () => {
+			const { doc, withStroke } = setup();
+			const saved = withStroke(1);
+			const older = buildEntry(doc.id, 1, "t", withStroke(0), splitLines(withStroke(0)), saved)!; // result == the file
+			const newest = buildEntry(doc.id, 2, "t", saved, splitLines(saved), withStroke(2))!; // written after the save
+			const r = inspectJournal(
+				[{ owner: "o", slot: 0, text: older.text }, { owner: "o", slot: 1, text: newest.text }],
+				doc.id, saved,
+			).recovery;
+			expect(r.kind).toBe("apply");
+			if (r.kind === "apply") expect(r.text).toBe(withStroke(2));
+		});
+
+		it("backs up the newest entry when an older one is applied", () => {
+			const { base, doc, lines, withStroke } = setup();
+			const older = buildEntry(doc.id, 1, "t", base, lines, withStroke(1))!;
+			// The newest entry was written against some other file content.
+			const other = withStroke(7);
+			const newest = buildEntry(doc.id, 2, "t", other, splitLines(other), withStroke(8))!;
+			const r = inspectJournal(
+				[{ owner: "o", slot: 0, text: older.text }, { owner: "o", slot: 1, text: newest.text }],
+				doc.id, base,
+			).recovery;
+			expect(r.kind).toBe("apply");
+			if (r.kind !== "apply") return;
+			expect(r.backupText).toBe(withStroke(8));
+		});
+
+		it("backs up the newest entry when an older one is already merged", () => {
+			const { base, doc, lines, withStroke } = setup();
+			const saved = withStroke(1);
+			const older = buildEntry(doc.id, 1, "t", base, lines, saved)!;
+			const other = withStroke(7);
+			const newest = buildEntry(doc.id, 2, "t", other, splitLines(other), withStroke(8))!;
+			const r = inspectJournal(
+				[{ owner: "o", slot: 0, text: older.text }, { owner: "o", slot: 1, text: newest.text }],
+				doc.id, saved,
+			).recovery;
+			expect(r.kind).toBe("merged");
+			if (r.kind !== "merged") return;
+			expect(r.backupText).toBe(withStroke(8));
+		});
+
+		it("the session keeps that copy in the backup folder before deleting the journal", async () => {
+			const { base, doc, lines, withStroke } = setup();
+			const older = buildEntry(doc.id, 1, "t", base, lines, withStroke(1))!;
+			const other = withStroke(7);
+			const newest = buildEntry(doc.id, 2, "t", other, splitLines(other), withStroke(8))!;
+			const io = new FakeIO(base);
+			const journal = new FakeJournal();
+			journal.put(doc.id, 0, older.text, io.filePath);
+			journal.put(doc.id, 1, newest.text, io.filePath);
+			const s = open(io, journal);
+			await s.load();
+			expect(s.dirty).toBe(true); // the older entry was applied
+			expect(io.backups).toEqual([{ content: withStroke(8), reason: "journal" }]);
+			await vi.advanceTimersByTimeAsync(2000);
+			await s.journalIdle();
+			expect(journal.files.size).toBe(0);
+		});
+	});
+
+	it("a crash between the save and the journal cleanup is recognised as merged (no spurious backup)", async () => {
+		// modifiedAt is set by the save: the journal entry must carry the same value as the saved file.
+		let t = Date.parse("2026-10-29T12:00:00.000Z");
+		const now = () => new Date((t += 50));
+		const io = new FakeIO(serialize(sampleDocument(1)));
+		const journal = new FakeJournal();
+		const s = new DocumentSession(io, timers, {}, { journal, now });
+		await s.load();
+		s.doc!.pages[0]!.strokes.push(line(1, 1, 10, 10));
+		s.markChanged();
+		await settle(s);
+		const entryText = [...journal.files.values()][0]!;
+		await s.flush();
+		await s.journalIdle();
+		expect(fingerprint(io.content)).toBe(decodeEntry(entryText)!.result);
+		s.dispose();
+		journal.put(s.doc!.id, 0, entryText, io.filePath);
+
+		const second = open(io, journal);
+		await second.load();
+		expect(io.backups).toHaveLength(0);
+		expect(second.dirty).toBe(false);
+		expect(journal.files.size).toBe(0);
 	});
 });
 

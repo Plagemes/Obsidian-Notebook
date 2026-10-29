@@ -12,9 +12,19 @@
  *   as last read or written by the session ("delta", for large ones). A delta holds only the
  *   changed lines: appending a stroke to a 6 MB notebook journals a few hundred bytes.
  *   The view does not have to describe its edits: `DocumentSession.markChanged()` is the only hook.
- * - Each write replaces a whole journal entry. Two slot files (`<doc id>.0.journal`,
- *   `<doc id>.1.journal`) are written alternately, so a torn write of one slot always leaves the
- *   previous complete entry in the other. Entries carry a fingerprint (length + two 32 bit hashes)
+ * - Each write replaces a whole journal entry. Two slot files per writer are written alternately, so
+ *   a torn write of one slot always leaves the previous complete entry in the other.
+ * - The journal is keyed by file identity, not by document id alone: `journalKey(docId, vault path)`.
+ *   Copies of a notebook (explorer copy, sync conflict copy) share a document id but not a path, so
+ *   they cannot read or delete each other's entries; every entry also records its path and
+ *   `inspectJournal` ignores entries of another path. Each open session writes under its own owner
+ *   id (file `<key>.<owner>.<slot>.journal`), so the same notebook open in two leaves never overwrites
+ *   or deletes the other's pending entries; a session only deletes what it wrote itself (or what it
+ *   recovered and has since saved). Entries of owners that are still live in this app are not
+ *   offered to a session that opens the same file (`JournalStore.read`).
+ * - Rename: the key contains the path, so after a rename the session writes its next entry under the
+ *   new key and then deletes its files under the old one (DocumentSession.writeJournal). Until that
+ *   next write (at most one journal delay after the next change) the entries sit under the old key. Entries carry a fingerprint (length + two 32 bit hashes)
  *   of the disk content they apply to (`base`) and of the text they produce (`result`); an entry
  *   whose reconstructed text does not match `result`, or does not parse as a notebook, is ignored.
  * - The files live in the plugin's config folder, written through `app.vault.adapter` (see
@@ -27,28 +37,42 @@
  *   the full text is written instead, throttled in proportion to its size (see `fullWriteGapMs`);
  *   above FULL_MAX_CHARS nothing is journaled and the regular save is the only protection.
  *
- * Recovery (`inspectJournal`, used by DocumentSession.load): the newest entry whose `base` equals
- * the fingerprint of the file just read is applied in memory and the session marks itself dirty,
- * so the normal save writes it; the journal stays until that save succeeds. An entry whose
- * `result` equals the file is already merged (crash between save and cleanup) and is deleted.
- * Any other entry (the file changed elsewhere, or the entry cannot be rebuilt) is never applied:
- * a copy goes to the backup folder first, and only then is the journal deleted.
+ * Recovery (`inspectJournal`, used by DocumentSession whenever a file becomes readable: the first
+ * load and a later reload of a file that was broken or read-only): entries are examined newest first.
+ * The first whose `result` equals the file is already merged (crash between save and cleanup); the
+ * first whose `base` equals the fingerprint of the file just read is applied in memory and the
+ * session marks itself dirty, so the normal save writes it. The journal stays until that save
+ * succeeds. Whenever the newest entry is not the one chosen, a copy of it goes to the backup folder
+ * first. If no entry fits (the file changed elsewhere, or the entry cannot be rebuilt) nothing is
+ * applied: a copy goes to the backup folder first, and only then is the journal deleted.
  */
 import { parse } from "../model/serialize";
 
 /** Raw text of one journal slot file. */
 export interface JournalSlotFile {
+	/** The session that wrote it. */
+	owner: string;
 	slot: 0 | 1;
 	text: string;
 }
 
+/** Key of the journal of one notebook file: its document id plus a hash of its vault path. File-name safe. */
+export function journalKey(docId: string, path: string): string {
+	return `${docId.replace(/[^A-Za-z0-9_-]/g, "_")}.${fingerprint(path)}`;
+}
+
 /** Storage of the journal files of all notebooks, injected so tests can use a fake. */
 export interface JournalStore {
-	/** The slot files that exist for `docId` (unreadable ones are left out). */
-	read(docId: string): Promise<JournalSlotFile[]>;
-	write(docId: string, slot: 0 | 1, text: string): Promise<void>;
-	/** Deletes both slots. */
-	remove(docId: string): Promise<void>;
+	/**
+	 * The slot files under `key` that may be recovered: those of owners that are no longer live
+	 * (a session that wrote and was not `release`d is still using its files). Unreadable ones are left out.
+	 */
+	read(key: string): Promise<JournalSlotFile[]>;
+	write(key: string, owner: string, slot: 0 | 1, text: string): Promise<void>;
+	/** Deletes both slots of `owner` under `key`. */
+	remove(key: string, owner: string): Promise<void>;
+	/** The session `owner` is closed: its remaining files (if any) become recoverable by the next session. */
+	release(owner: string): void;
 }
 
 /** Documents up to this size are journaled as a full snapshot (robust: no dependency on the base). */
@@ -82,6 +106,8 @@ export interface JournalEntry {
 	format: "notebook-journal";
 	v: 1;
 	doc: string;
+	/** Vault path of the notebook file when the entry was written (absent in entries of older builds). */
+	path?: string;
 	seq: number;
 	savedAt: string;
 	/** Fingerprint of the disk content this entry applies to. */
@@ -225,8 +251,12 @@ export function buildEntry(
 	base: string,
 	baseLines: readonly string[],
 	next: string,
+	path?: string,
 ): { entry: JournalEntry; text: string; full: boolean } | null {
-	const head = { format: "notebook-journal" as const, v: 1 as const, doc: docId, seq, savedAt, base: fingerprint(base), result: fingerprint(next) };
+	const head = {
+		format: "notebook-journal" as const, v: 1 as const, doc: docId, ...(path !== undefined ? { path } : {}),
+		seq, savedAt, base: fingerprint(base), result: fingerprint(next),
+	};
 	const full = (): { entry: JournalEntry; text: string; full: true } | null => {
 		if (next.length > FULL_MAX_CHARS) return null;
 		const entry: JournalEntry = { ...head, full: next };
@@ -264,6 +294,7 @@ export function decodeEntry(text: string): JournalEntry | null {
 	if (e.format !== "notebook-journal" || e.v !== 1) return null;
 	if (typeof e.doc !== "string" || typeof e.seq !== "number" || typeof e.savedAt !== "string") return null;
 	if (typeof e.base !== "string" || typeof e.result !== "string") return null;
+	if (e.path !== undefined && typeof e.path !== "string") return null;
 	const hasFull = typeof e.full === "string";
 	const hasHunks = Array.isArray(e.hunks) && e.hunks.every(isHunk);
 	if (hasFull === hasHunks) return null;
@@ -273,10 +304,10 @@ export function decodeEntry(text: string): JournalEntry | null {
 export type JournalRecovery =
 	/** No journal for this notebook. */
 	| { kind: "none" }
-	/** Everything in the journal is already in the file: delete it. */
-	| { kind: "merged" }
-	/** Apply `text` (a complete notebook text) in memory and save it. */
-	| { kind: "apply"; text: string; savedAt: string }
+	/** The file already holds the chosen entry: delete the journal (after backing up `backupText`, a newer entry that did not fit). */
+	| { kind: "merged"; backupText?: string }
+	/** Apply `text` (a complete notebook text) in memory and save it; `backupText` is a newer entry that did not fit. */
+	| { kind: "apply"; text: string; savedAt: string; backupText?: string }
 	/** Not applicable (file changed elsewhere, or unreadable): back up `backupText`, then delete. */
 	| { kind: "stale"; backupText: string };
 
@@ -284,18 +315,26 @@ export interface JournalInspection {
 	recovery: JournalRecovery;
 	/** Highest sequence number found; the next write must be higher. */
 	maxSeq: number;
-	/** Slot holding the newest valid entry, if any (the next write goes to the other one). */
+	/** Slot holding the newest valid entry, if any. */
 	newestSlot: 0 | 1 | null;
 }
 
-/** Decides what to do with the journal of a notebook whose file content is `diskText`. Never throws. */
-export function inspectJournal(files: readonly JournalSlotFile[], docId: string, diskText: string): JournalInspection {
+/** Text to keep for an entry: a full entry is a complete notebook; a delta is only meaningful with its base, so keep it raw. */
+function backupOf(entry: JournalEntry, file: JournalSlotFile): string {
+	return entry.full !== undefined && parse(entry.full).ok ? entry.full : file.text;
+}
+
+/**
+ * Decides what to do with the journal of a notebook whose file content is `diskText` (at vault path
+ * `path`, when known). Never throws.
+ */
+export function inspectJournal(files: readonly JournalSlotFile[], docId: string, diskText: string, path?: string): JournalInspection {
 	const entries: Array<{ entry: JournalEntry; file: JournalSlotFile }> = [];
 	let undecodable: JournalSlotFile | null = null;
 	for (const file of files) {
 		const entry = decodeEntry(file.text);
 		if (!entry) undecodable ??= file;
-		else if (entry.doc === docId) entries.push({ entry, file });
+		else if (entry.doc === docId && (path === undefined || entry.path === undefined || entry.path === path)) entries.push({ entry, file });
 	}
 	entries.sort((x, y) => y.entry.seq - x.entry.seq);
 	if (entries.length === 0) {
@@ -303,13 +342,18 @@ export function inspectJournal(files: readonly JournalSlotFile[], docId: string,
 		const raw = undecodable && undecodable.text.trim().length > 0 ? undecodable : null;
 		return { recovery: raw ? { kind: "stale", backupText: raw.text } : { kind: "none" }, maxSeq: 0, newestSlot: null };
 	}
-	const maxSeq = entries[0]!.entry.seq;
-	const newestSlot = entries[0]!.file.slot;
+	const newest = entries[0]!;
+	const maxSeq = newest.entry.seq;
+	const newestSlot = newest.file.slot;
 	const diskFp = fingerprint(diskText);
-	if (entries.some(({ entry }) => entry.result === diskFp)) return { recovery: { kind: "merged" }, maxSeq, newestSlot };
 
+	// Newest first: an entry newer than the saved state must be applied, not skipped because an older one is merged.
 	let baseLines: string[] | null = null;
-	for (const { entry } of entries) {
+	for (const candidate of entries) {
+		const { entry } = candidate;
+		// A newer entry that is not the chosen one is kept as a backup before the journal is deleted.
+		const extra = candidate === newest ? {} : { backupText: backupOf(newest.entry, newest.file) };
+		if (entry.result === diskFp) return { recovery: { kind: "merged", ...extra }, maxSeq, newestSlot };
 		if (entry.base !== diskFp) continue;
 		let text: string | null = null;
 		if (entry.full !== undefined) {
@@ -321,10 +365,7 @@ export function inspectJournal(files: readonly JournalSlotFile[], docId: string,
 		if (text === null || fingerprint(text) !== entry.result) continue;
 		const check = parse(text);
 		if (!check.ok || check.doc.id !== docId) continue;
-		return { recovery: { kind: "apply", text, savedAt: entry.savedAt }, maxSeq, newestSlot };
+		return { recovery: { kind: "apply", text, savedAt: entry.savedAt, ...extra }, maxSeq, newestSlot };
 	}
-	const newest = entries[0]!;
-	// A full entry is a complete notebook text; a delta is only meaningful with its base, so keep the raw entry.
-	const backupText = newest.entry.full !== undefined && parse(newest.entry.full).ok ? newest.entry.full : newest.file.text;
-	return { recovery: { kind: "stale", backupText }, maxSeq, newestSlot };
+	return { recovery: { kind: "stale", backupText: backupOf(newest.entry, newest.file) }, maxSeq, newestSlot };
 }
