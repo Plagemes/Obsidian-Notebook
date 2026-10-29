@@ -93,10 +93,7 @@ const en = {
 	"settings.pressure.desc": "Auto uses the stylus pressure when the device reports it, and simulates it from speed otherwise.",
 	"settings.pressure.auto": "Auto",
 	"settings.pressure.simulated": "Always simulated",
-	"settings.prediction": "Predicted points",
-	"settings.prediction.desc": "Draws the browser's predicted points ahead of the pen to reduce perceived latency. They are never saved. Experimental.",
 	"settings.stabilization": "Stabilization",
-	"settings.stabilization.desc": "Smooths hand tremor. Higher values smooth more but make the line trail behind the pen. 0 turns it off.",
 	"settings.palmSize": "Ignore large touches (px)",
 	"settings.palmSize.desc": "Touches with a contact larger than this are treated as a palm and ignored completely, also for scrolling. 0 turns it off. Experimental: depends on what the device reports.",
 	"settings.perfOverlay": "Performance overlay",
@@ -290,6 +287,10 @@ const en = {
 	"settings.snapshotInterval.desc": "Save a snapshot of a notebook at most once in this many hours when it is opened or changed. 0 turns snapshots off.",
 	"settings.snapshotKeep": "Versions to keep",
 	"settings.snapshotKeep.desc": "How many snapshots to keep for each notebook. Older ones are moved to the trash.",
+	// --- writing engine ---
+	"settings.inkPrediction": "Predicted ink",
+	"settings.inkPrediction.desc": "Draws the browser's predicted pen positions ahead of the tip to reduce perceived latency. Never saved; they can overshoot at sharp turns and at the end of a stroke.",
+	"settings.stabilization.filter.desc": "Smooths hand tremor when the pen moves slowly, without slowing the line down when it moves fast. Higher values smooth more. 0 turns it off.",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -387,10 +388,7 @@ const it: Partial<Record<MessageKey, string>> = {
 	"settings.pressure.desc": "Automatica usa la pressione del pennino se il dispositivo la fornisce, altrimenti la simula dalla velocità.",
 	"settings.pressure.auto": "Automatica",
 	"settings.pressure.simulated": "Sempre simulata",
-	"settings.prediction": "Punti predetti",
-	"settings.prediction.desc": "Disegna i punti predetti dal browser davanti alla penna per ridurre la latenza percepita. Non vengono mai salvati. Sperimentale.",
 	"settings.stabilization": "Stabilizzazione",
-	"settings.stabilization.desc": "Attenua il tremolio della mano. Valori più alti stabilizzano di più ma la linea segue la penna con un po' di ritardo. 0 la disattiva.",
 	"settings.palmSize": "Ignora i contatti grandi (px)",
 	"settings.palmSize.desc": "I tocchi con un'area di contatto più grande di questo valore sono considerati palmo e ignorati del tutto, anche per scorrere. 0 la disattiva. Sperimentale: dipende da cosa riporta il dispositivo.",
 	"settings.perfOverlay": "Indicatore delle prestazioni",
@@ -584,6 +582,10 @@ const it: Partial<Record<MessageKey, string>> = {
 	"settings.snapshotInterval.desc": "Salva un'istantanea di un quaderno al massimo una volta ogni tot ore, quando viene aperto o modificato. 0 disattiva le istantanee.",
 	"settings.snapshotKeep": "Versioni da conservare",
 	"settings.snapshotKeep.desc": "Quante istantanee conservare per ogni quaderno. Le più vecchie vengono spostate nel cestino.",
+	// --- writing engine ---
+	"settings.inkPrediction": "Inchiostro predetto",
+	"settings.inkPrediction.desc": "Disegna davanti alla punta le posizioni della penna previste dal browser, per ridurre la latenza percepita. Non vengono mai salvate; nelle curve strette e a fine tratto possono andare oltre.",
+	"settings.stabilization.filter.desc": "Attenua il tremolio della mano quando la penna si muove lentamente, senza rallentare la linea quando si muove veloce. Valori più alti stabilizzano di più. 0 la disattiva.",
 };
 
 let table: Partial<Record<MessageKey, string>> | null = null;

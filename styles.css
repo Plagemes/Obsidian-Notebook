@@ -1037,3 +1037,16 @@
 	padding: 8px 10px;
 	border: 1px dashed var(--background-modifier-border);
 	border-radius: var(--radius-m);
+
+/* --- writing engine --- */
+/* Wet ink: the stroke being written, above every other layer. The highlighter's wet canvas holds
+   opaque ink and gets its translucency here, like a committed highlighter stroke (alpha 0.35 =
+   HIGHLIGHTER_ALPHA in src/ink/stroke-shape.ts, multiply blending), so overlaps never darken twice. */
+.notebook-canvas-wet {
+	pointer-events: none;
+}
+
+.notebook-canvas-wet.is-highlighter {
+	opacity: 0.35;
+	mix-blend-mode: multiply;
+}

@@ -6,8 +6,12 @@ export interface NotebookSettings {
 	fingerDrawing: boolean;
 	palmRejectionMs: number;
 	pressureMode: PressureMode;
-	prediction: boolean;
-	/** 0–10, see Stabilizer. */
+	/**
+	 * Draw the browser's predicted pen samples at the tip of the wet ink (never stored). Replaces the
+	 * old `prediction` key (default on), so the new default (off) applies to everyone.
+	 */
+	inkPrediction: boolean;
+	/** 0–10: strength of the adaptive position filter (one-euro.ts); 0 turns it off. */
 	stabilization: number;
 	/** Touch contacts larger than this (CSS px) are ignored as palms; 0 = off. */
 	palmContactPx: number;
@@ -27,7 +31,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	fingerDrawing: false,
 	palmRejectionMs: 500,
 	pressureMode: "auto",
-	prediction: true,
+	inkPrediction: false,
 	stabilization: 2,
 	palmContactPx: 0,
 	perfOverlay: false,
@@ -47,7 +51,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.fingerDrawing === "boolean") s.fingerDrawing = d.fingerDrawing;
 	if (typeof d.palmRejectionMs === "number" && d.palmRejectionMs >= 0 && d.palmRejectionMs <= 5000) s.palmRejectionMs = d.palmRejectionMs;
 	if (d.pressureMode === "auto" || d.pressureMode === "simulated") s.pressureMode = d.pressureMode;
-	if (typeof d.prediction === "boolean") s.prediction = d.prediction;
+	if (typeof d.inkPrediction === "boolean") s.inkPrediction = d.inkPrediction;
 	if (typeof d.stabilization === "number" && d.stabilization >= 0 && d.stabilization <= 10) s.stabilization = d.stabilization;
 	if (typeof d.palmContactPx === "number" && d.palmContactPx >= 0 && d.palmContactPx <= 200) s.palmContactPx = d.palmContactPx;
 	if (typeof d.perfOverlay === "boolean") s.perfOverlay = d.perfOverlay;

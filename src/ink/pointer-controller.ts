@@ -9,10 +9,71 @@ export interface InkSample {
 	pointerType: string;
 }
 
+/**
+ * Pointer samples of one event in preallocated typed arrays (CSS px relative to the element,
+ * pressure, timestamp in ms): the drawing hot path creates no object per sample. The buffer is
+ * reused for the next event, so handlers must copy what they keep.
+ */
+export class SampleBuffer {
+	count = 0;
+	pointerType = "";
+	x: Float64Array;
+	y: Float64Array;
+	p: Float64Array;
+	t: Float64Array;
+
+	constructor(capacity = 64) {
+		this.x = new Float64Array(capacity);
+		this.y = new Float64Array(capacity);
+		this.p = new Float64Array(capacity);
+		this.t = new Float64Array(capacity);
+	}
+
+	clear(pointerType = this.pointerType): void {
+		this.count = 0;
+		this.pointerType = pointerType;
+	}
+
+	push(x: number, y: number, p: number, t: number): void {
+		const i = this.count;
+		if (i >= this.x.length) this.grow();
+		this.x[i] = x;
+		this.y[i] = y;
+		this.p[i] = p;
+		this.t[i] = t;
+		this.count = i + 1;
+	}
+
+	private grow(): void {
+		const n = this.x.length * 2;
+		const g = (a: Float64Array) => {
+			const b = new Float64Array(n);
+			b.set(a);
+			return b;
+		};
+		this.x = g(this.x);
+		this.y = g(this.y);
+		this.p = g(this.p);
+		this.t = g(this.t);
+	}
+}
+
+/**
+ * Is a sample at (t, x, y) new after the last delivered one? `pointerrawupdate` and the coalesced
+ * list of the next `pointermove` report the same samples: timestamps only move forward.
+ */
+export function isNewSample(lastT: number, lastX: number, lastY: number, t: number, x: number, y: number): boolean {
+	return t > lastT || (t === lastT && (x !== lastX || y !== lastY));
+}
+
 export interface PointerHandlers {
 	/** `eraser`: the pen has its eraser button pressed or is flipped. Return false to reject the stroke. */
 	drawStart(sample: InkSample, eraser: boolean): boolean;
-	drawMove(samples: InkSample[], predicted: InkSample[]): void;
+	/**
+	 * New samples of the drawing pointer (never repeated: each sample is delivered once, whether it
+	 * came from `pointerrawupdate` or `pointermove`) and the browser's predicted samples (may be empty).
+	 */
+	drawMove(samples: SampleBuffer, predicted: SampleBuffer): void;
 	/** `cancelled`: discard the stroke (e.g. palm, finger turned into a pinch). */
 	drawEnd(cancelled: boolean): void;
 	pan(dx: number, dy: number): void;
@@ -32,7 +93,9 @@ interface NavPointer {
  * Only one pointer draws at a time; the pen takes precedence over everything.
  */
 export class PointerController {
-	predictionEnabled = true;
+	predictionEnabled = false;
+	/** `pointerrawupdate` is listened to (Chromium, secure contexts): samples arrive as soon as the OS delivers them, not once per frame. */
+	readonly rawUpdates: boolean;
 
 	private drawId: number | null = null;
 	private drawType = "";
@@ -43,6 +106,12 @@ export class PointerController {
 	/** Recent one-finger pan movements, for the fling (inertial scroll) velocity. */
 	private panTrail: Array<{ t: number; dx: number; dy: number }> = [];
 	private inertiaFrame: number | null = null;
+	private readonly samples = new SampleBuffer();
+	private readonly predicted = new SampleBuffer(16);
+	/** Last delivered sample of the drawing pointer (deduplicates rawupdate/move and coalesced lists). */
+	private lastT = -Infinity;
+	private lastX = NaN;
+	private lastY = NaN;
 
 	constructor(
 		private readonly el: HTMLElement,
@@ -52,6 +121,12 @@ export class PointerController {
 		this.rect = el.getBoundingClientRect();
 		this.listen("pointerdown", (e) => this.onDown(e));
 		this.listen("pointermove", (e) => this.onMove(e));
+		this.rawUpdates = typeof window !== "undefined" && "onpointerrawupdate" in window;
+		if (this.rawUpdates) {
+			const raw = (e: Event) => this.onRawUpdate(e as PointerEvent);
+			el.addEventListener("pointerrawupdate", raw);
+			this.disposers.push(() => el.removeEventListener("pointerrawupdate", raw));
+		}
 		this.listen("pointerup", (e) => this.onUp(e));
 		this.listen("pointercancel", (e) => this.onUp(e));
 		this.listen("lostpointercapture", (e) => this.onUp(e));
@@ -124,6 +199,9 @@ export class PointerController {
 			if (!this.handlers.drawStart(this.sample(e), eraser)) return;
 			this.drawId = e.pointerId;
 			this.drawType = e.pointerType;
+			this.lastT = e.timeStamp;
+			this.lastX = e.clientX;
+			this.lastY = e.clientY;
 			this.drawLast = { x: e.clientX, y: e.clientY };
 			this.capture(e.pointerId);
 			e.preventDefault();
@@ -133,15 +211,21 @@ export class PointerController {
 		}
 	}
 
+	private onRawUpdate(e: PointerEvent): void {
+		if (e.pointerId === this.drawId) this.deliver(e);
+	}
+
 	private onMove(e: PointerEvent): void {
 		if (e.pointerType === "pen") this.policy.notePen(e.timeStamp);
 
 		if (e.pointerId === this.drawId) {
-			const events = e.getCoalescedEvents?.() ?? [];
-			const samples = (events.length ? events : [e]).map((ce) => this.sample(ce));
-			const predicted = this.predictionEnabled ? (e.getPredictedEvents?.() ?? []).map((pe) => this.sample(pe)) : [];
-			this.drawLast = { x: e.clientX, y: e.clientY };
-			this.handlers.drawMove(samples, predicted);
+			// With pointerrawupdate these samples were already delivered and are skipped by timestamp.
+			this.deliver(e);
+			const last = this.drawLast;
+			if (last) {
+				last.x = e.clientX;
+				last.y = e.clientY;
+			}
 			return;
 		}
 
@@ -170,6 +254,36 @@ export class PointerController {
 		}
 		p.x = e.clientX;
 		p.y = e.clientY;
+	}
+
+	/** Passes the samples of `e` not delivered yet (and its predicted ones) to the handler. */
+	private deliver(e: PointerEvent): void {
+		const buf = this.samples;
+		buf.clear(e.pointerType);
+		const left = this.rect.left, top = this.rect.top;
+		const events = e.getCoalescedEvents?.();
+		if (events && events.length > 0) {
+			for (const ce of events) this.addSample(buf, ce, left, top);
+		} else {
+			this.addSample(buf, e, left, top);
+		}
+		const pred = this.predicted;
+		pred.clear(e.pointerType);
+		if (this.predictionEnabled) {
+			const list = e.getPredictedEvents?.();
+			if (list) for (const pe of list) pred.push(pe.clientX - left, pe.clientY - top, pe.pressure, pe.timeStamp);
+		}
+		if (buf.count === 0 && pred.count === 0) return;
+		this.handlers.drawMove(buf, pred);
+	}
+
+	private addSample(buf: SampleBuffer, ce: PointerEvent, left: number, top: number): void {
+		const t = ce.timeStamp, x = ce.clientX, y = ce.clientY;
+		if (!isNewSample(this.lastT, this.lastX, this.lastY, t, x, y)) return;
+		this.lastT = t;
+		this.lastX = x;
+		this.lastY = y;
+		buf.push(x - left, y - top, ce.pressure, t);
 	}
 
 	private onUp(e: PointerEvent): void {
