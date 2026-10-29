@@ -75,7 +75,7 @@ import { runMovePages } from "../library/move-pages";
 import { addPdfPageMenuItems, type PdfActionHost } from "./pdf-actions";
 import { pickFile } from "./pick";
 import { addPdfSyncMenuItems, type PageSyncHooks } from "./pdf-sync";
-import { newPageFromTemplate, openDeletedPages, savePageAsTemplate, stashDeletedPage, type PageToolsHost } from "./page-tools";
+import { deletePageKeepingCopy, newPageFromTemplate, openDeletedPages, savePageAsTemplate, type PageToolsHost } from "./page-tools";
 import { RulerGesture } from "./ruler-gesture";
 import { ObjectInk } from "./object-ink";
 import { SelectionActions } from "./selection-actions";
@@ -874,10 +874,8 @@ export class NotebookView extends FileView {
 		addOutlinePageMenuItems(menu, this.outlineHost(), page);
 		menu.addItem((i) => i.setTitle(t("page.moveToNotebook")).setIcon("folder-input").onClick(() => void this.movePagesToNotebook(index)));
 		menu.addItem((i) => i.setTitle(t("page.delete")).setIcon("trash-2").setSection("danger").setDisabled(doc.pages.length <= 1)
-			.onClick(() => {
-				stashDeletedPage(this.pageToolsHost(), doc, page, index); // wave 0.6: kept in the page trash
-				this.pageCommand(new DeletePage(page, index), Math.max(0, index - 1), page);
-			}));
+			// Wave 0.6: a copy goes to the page trash first; the page is deleted only once that copy is on disk.
+			.onClick(() => void deletePageKeepingCopy(this.pageToolsHost(), doc, page, index, (at) => this.pageCommand(new DeletePage(page, at), Math.max(0, at - 1), page))));
 		menu.addItem((i) => i.setTitle(t("page.deletedPages")).setIcon("archive-restore").onClick(() => void openDeletedPages(this.pageToolsHost())));
 		menu.addItem((i) => i.setTitle(t("page.saveTemplate")).setIcon("layout-template")
 			.onClick(() => savePageAsTemplate(this.pageToolsHost(), doc, page, this.file?.basename ?? "")));
@@ -1095,6 +1093,7 @@ export class NotebookView extends FileView {
 			get settings() { return host.settings; },
 			editableDocument: () => this.editableDocument(),
 			applyCommand: (cmd, scrollTo) => this.applyCommand(cmd, scrollTo),
+			flush: async () => (await this.flushNow()) && (this.session?.isSaved() ?? false),
 		};
 	}
 
@@ -1812,7 +1811,7 @@ export class NotebookView extends FileView {
 		const [dx, dy] = this.toDoc(sample);
 		if (!Number.isFinite(dx) || !Number.isFinite(dy)) return false;
 		// The pen's side button can select the eraser, the lasso or the previous tool for this contact only.
-		const tool = eraserButton ? "eraser" : held === "lasso" ? "lasso" : held === "last" ? (this.lastTool.previous() ?? "eraser") : this.tools.tool;
+		const tool = eraserButton ? "eraser" : held === "lasso" ? "lasso" : held === "last" ? (this.lastTool.previous() ?? this.tools.tool) : this.tools.tool;
 
 		if (tool === "eraser" && this.tools.eraserMode !== "area") {
 			// The selection may contain strokes about to be erased (e.g. erasing with the pen button).

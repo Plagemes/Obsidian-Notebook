@@ -5,7 +5,8 @@
  *
  *   _trash/items/<id>/meta.json          where the item came from, and when it was deleted
  *   _trash/items/<id>/<original name>    the notebook file, or the folder with everything in it
- *   _trash/pages/<notebook id>.json      deleted pages of one notebook (see model/page-trash.ts)
+ *   _trash/pages/<notebook id>/<entry id>.json   one deleted page of a notebook, written once (see model/page-trash.ts)
+ *   _trash/pages/<notebook id>.json      first layout: every deleted page of a notebook in one file (read, then moved over)
  *
  * Every trashed item gets a folder of its own, so two items with the same name never meet, a trashed
  * notebook is never a sibling of another notebook (conflicted-copy detection finds nothing to compare)
@@ -44,8 +45,24 @@ export function trashMetaPath(root: string, id: string): string {
 export function pageTrashFolder(root: string): string {
 	return join(trashFolder(root), PAGES);
 }
+/** First layout (0.6 previews): one file with every entry of a notebook. Only read now, then moved over. */
 export function pageTrashPath(root: string, notebookId: string): string {
 	return join(pageTrashFolder(root), `${notebookId}.json`);
+}
+/** An id as a file name: as it is when it is a plain one (generated ids are), else encoded (only hand-edited files). */
+function idFileName(id: string): string {
+	if (/^[A-Za-z0-9_-]{1,80}$/.test(id)) return id;
+	let h = 0x811c9dc5;
+	for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 0x01000193);
+	return `x-${id.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40)}-${(h >>> 0).toString(16)}`;
+}
+/** Folder of a notebook's page trash entries (current layout). */
+export function pageTrashEntriesFolder(root: string, notebookId: string): string {
+	return join(pageTrashFolder(root), idFileName(notebookId));
+}
+/** File of one entry. */
+export function pageTrashEntryPath(root: string, notebookId: string, entryId: string): string {
+	return join(pageTrashEntriesFolder(root, notebookId), `${idFileName(entryId)}.json`);
 }
 
 /** Where templates are stored: the setting, or `<notebooks folder>/_templates`. */

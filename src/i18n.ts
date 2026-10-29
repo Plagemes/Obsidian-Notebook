@@ -773,9 +773,10 @@ const en = {
 	"pageTrash.thumb": "Deleted page",
 	"pageTrash.unreadable": "This page cannot be read.",
 	"pageTrash.done": "Page restored",
+	"pageTrash.doneUnsaved": "Page restored, but the notebook could not be saved yet, so its copy stays in Deleted pages.",
 	"pageTrash.cannotRestore": "This page cannot be restored right now.",
 	"pageTrash.readFailed": "Could not read the deleted pages: {error}",
-	"pageTrash.keepFailed": "Could not keep a copy of the deleted page: {error}",
+	"pageTrash.keepFailed": "The page was not deleted: a copy of it could not be kept in Deleted pages ({error}).",
 	// wave 0.6: templates
 	"page.saveTemplate": "Save page as template…",
 	"page.newFromTemplate": "New page from template…",
@@ -1784,9 +1785,10 @@ const it: Partial<Record<MessageKey, string>> = {
 	"pageTrash.thumb": "Pagina eliminata",
 	"pageTrash.unreadable": "Questa pagina non è leggibile.",
 	"pageTrash.done": "Pagina ripristinata",
+	"pageTrash.doneUnsaved": "Pagina ripristinata, ma il quaderno non è ancora stato salvato: la copia resta in Pagine eliminate.",
 	"pageTrash.cannotRestore": "Questa pagina non può essere ripristinata ora.",
 	"pageTrash.readFailed": "Impossibile leggere le pagine eliminate: {error}",
-	"pageTrash.keepFailed": "Impossibile conservare una copia della pagina eliminata: {error}",
+	"pageTrash.keepFailed": "La pagina non è stata eliminata: non è stato possibile conservarne una copia in Pagine eliminate ({error}).",
 	// wave 0.6: templates
 	"page.saveTemplate": "Salva la pagina come modello…",
 	"page.newFromTemplate": "Nuova pagina da modello…",
