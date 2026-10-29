@@ -17,6 +17,7 @@ import { exportPdfAnnotations, openMarginsModal, updatePdfFromNewVersion } from 
 import { NotebookView, VIEW_TYPE } from "./view/notebook-view";
 import { NotebookSettingTab } from "./view/settings-tab";
 import { registerLectureCommands } from "./view/lecture-commands";
+import { registerZettel } from "./zettel";
 
 export default class NotebookPlugin extends Plugin {
 	settings!: NotebookSettings;
@@ -77,6 +78,8 @@ export default class NotebookPlugin extends Plugin {
 			newNotebookIn: (folder) => this.host.createNotebook(folder),
 			annotatePdf: (pdf) => this.host.importPdf(this.settings.folder, pdf),
 		});
+		// wave 0.6: zettelkasten (M15 Z1–Z3, Z11, Z12)
+		registerZettel(this);
 
 		this.addSettingTab(new NotebookSettingTab(this.app, this));
 

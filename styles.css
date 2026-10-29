@@ -1654,3 +1654,56 @@
 	height: auto;
 	box-shadow: 0 0 0 1px var(--background-modifier-border);
 }
+
+/* wave 0.6: zettelkasten (card regions over the page; never takes pointer events) */
+.notebook-zettel-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 2;
+	overflow: hidden;
+	pointer-events: none;
+}
+
+.notebook-zettel-region {
+	position: absolute;
+	left: var(--notebook-zettel-x, 0);
+	top: var(--notebook-zettel-y, 0);
+	width: var(--notebook-zettel-w, 0);
+	height: var(--notebook-zettel-h, 0);
+	box-sizing: border-box;
+	border: 1px dashed var(--color-accent);
+	border-radius: 4px;
+	opacity: 0.55;
+	pointer-events: none;
+}
+
+.notebook-zettel-region.is-page {
+	border-color: transparent;
+}
+
+.notebook-zettel-badge {
+	position: absolute;
+	top: 2px;
+	right: 2px;
+	padding: 0 4px;
+	border-radius: 3px;
+	background: var(--color-accent);
+	color: var(--text-on-accent);
+	font-size: 10px;
+	line-height: 14px;
+	white-space: nowrap;
+	pointer-events: none;
+}
+
+.notebook-zettel-preview {
+	display: block;
+	max-width: 100%;
+	max-height: 30vh;
+	margin: 0 auto 12px;
+	box-shadow: 0 0 0 1px var(--background-modifier-border);
+}
+
+.notebook-zettel-list-orphan {
+	color: var(--text-warning);
+	font-size: var(--font-ui-smaller);
+}

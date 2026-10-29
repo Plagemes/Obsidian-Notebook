@@ -11,6 +11,7 @@ import { companionCandidates, companionPath } from "../storage/companion-path";
 import { isNotebookFile, readNotebookText } from "../storage/format";
 import { quickDocId } from "../storage/history";
 import { ensureFolder } from "../storage/vault-io";
+import { isCardFrontmatter } from "../zettel/card-content";
 import { notebookUri } from "./links";
 import { viewsOf } from "./open";
 
@@ -51,7 +52,7 @@ const STUCK_POINTER_MS = 15_000;
 type UpdateResult = "created" | "updated" | "unchanged" | "skipped";
 
 /** Pointer activity inside notebook views, from capture-phase listeners (passive: no effect on input). */
-class InputWatch {
+export class InputWatch {
 	private readonly down = new Map<number, number>();
 	private last = 0;
 
@@ -262,14 +263,14 @@ export class CompanionService {
 			if (!(existing instanceof TFile)) continue;
 			const fm = this.frontmatter(await this.app.vault.cachedRead(existing));
 			const id = fm?.[COMPANION_ID_KEY];
-			if (typeof id !== "string") continue;
+			if (typeof id !== "string" || isCardFrontmatter(fm)) continue;
 			// At this notebook's own path: "if-unique" cannot come back.
 			if (companionClaim(this.linkState(fm ?? undefined, existing.path, file), id === docId, true) === "yes") return { file: existing };
 		}
 		let others: boolean | null = null;
 		for (const md of this.app.vault.getMarkdownFiles()) {
 			const fm = this.cachedFrontmatter(md);
-			if (fm?.[COMPANION_ID_KEY] !== docId) continue;
+			if (fm?.[COMPANION_ID_KEY] !== docId || isCardFrontmatter(fm)) continue;
 			const claim = companionClaim(this.linkState(fm, md.path, file), true, false);
 			if (claim === "yes") return { file: md };
 			if (claim === "no") continue;

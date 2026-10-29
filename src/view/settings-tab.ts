@@ -5,6 +5,7 @@ import { PAGE_SIZES, PAPER_KINDS } from "../model/types";
 import { defaultLooseSheetPath } from "../library/loose-sheet-logic";
 import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "../ink/edge-zones";
 import { companionSettingDefinitions, displayCompanionSettings, type CompanionSettingsHost } from "./companion-settings";
+import { displayZettelSettings, zettelSettingDefinitions, type ZettelSettingsHost } from "../zettel/settings-ui";
 
 const paperOptions = () => Object.fromEntries(PAPER_KINDS.map((k) => [k, t(`paper.${k}`)]));
 const sizeOptions = () => Object.fromEntries((Object.keys(PAGE_SIZES) as Array<keyof typeof PAGE_SIZES>).map((k) => [k, t(`size.${k}`)]));
@@ -162,10 +163,16 @@ export class NotebookSettingTab extends PluginSettingTab {
 			},
 			// Companion notes (O1)
 			...companionSettingDefinitions(this.companionHost()),
+			// wave 0.6: zettelkasten
+			...zettelSettingDefinitions(this.zettelHost()),
 		];
 	}
 
 	private companionHost(): CompanionSettingsHost {
+		return { plugin: this.host, get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) };
+	}
+
+	private zettelHost(): ZettelSettingsHost {
 		return { plugin: this.host, get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) };
 	}
 
@@ -302,5 +309,6 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setDesc(t("settings.penButton.desc"))
 			.addDropdown((dd) => dd.addOptions(penButtonOptions()).setValue(s.penButtonAction).onChange((v) => this.setControlValue("penButtonAction", v)));
 		displayCompanionSettings(containerEl, this.companionHost());
+		displayZettelSettings(containerEl, this.zettelHost());
 	}
 }
