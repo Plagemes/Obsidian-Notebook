@@ -7,7 +7,7 @@ import { isNewSample, SampleBuffer } from "../src/ink/pointer-controller";
 import { PressureModel } from "../src/ink/pressure";
 import { Stabilizer } from "../src/ink/stabilizer";
 import { strokePath, strokeSvgPath } from "../src/ink/stroke-shape";
-import { capsulesIn, emptyRect, isEmpty, pageBoxToDevice, unionInto, WetInk, type PageTransform } from "../src/ink/wet-ink";
+import { CapsuleIndex, capsulesIn, emptyRect, isEmpty, pageBoxToDevice, unionInto, WetInk, type PageTransform } from "../src/ink/wet-ink";
 import { pageToSvg } from "../src/ink/export-svg";
 import { pagesToPdf } from "../src/ink/export-pdf";
 import { createPage, createStroke } from "../src/model/document";
@@ -238,6 +238,10 @@ describe("dirty rectangles", () => {
 		const rect = pageBoxToDevice(t, 140, 190, 150, 205, 4000, 4000, emptyRect());
 		const found: number[] = [];
 		capsulesIn(g, t, rect, (i) => found.push(i));
+		// The chunk index finds exactly the same capsules.
+		const indexed: number[] = [];
+		capsulesIn(g, t, rect, (i) => indexed.push(i), new CapsuleIndex());
+		expect(indexed).toEqual(found);
 		expect(found.length).toBeGreaterThan(0);
 		expect(found.length).toBeLessThan(g.nodeCount / 2);
 		// Brute force: every capsule with a sample point inside the rectangle is found.
@@ -282,6 +286,8 @@ describe("wet ink painter", () => {
 		expect(late).toBeLessThan(60);
 		expect(late).toBeLessThanOrEqual(early * 2 + 10);
 		expect(ctx.fullClears).toBe(0);
+		// Bounding-box checks per paint stay small too (chunks of 64 capsules are skipped whole).
+		expect(wet.lastScanned).toBeLessThan(400);
 	});
 
 	it("at pen-up the tip is erased and the final segment painted; nothing remains provisional", () => {
@@ -404,6 +410,9 @@ describe("input samples", () => {
 		expect(isNewSample(10, 1, 1, 10, 1, 1)).toBe(false);
 		expect(isNewSample(10, 1, 1, 10, 2, 1)).toBe(true);
 		expect(isNewSample(10, 1, 1, 11, 1, 1)).toBe(true);
+		// After pointerrawupdate, a pointermove re-reporting a batch that shares one timestamp adds nothing.
+		expect(isNewSample(10, 3, 3, 10, 1, 1, true)).toBe(false);
+		expect(isNewSample(10, 3, 3, 11, 1, 1, true)).toBe(true);
 	});
 
 	it("the hold tracker agrees with isHold", () => {
@@ -496,6 +505,28 @@ describe("saving waits for the pen", () => {
 		expect(io.writes).toBe(0);
 		await vi.advanceTimersByTimeAsync(1000);
 		expect(io.writes).toBe(1);
+	});
+
+	it("continuous writing cannot push the save back: it lands within max-wait plus the cap", async () => {
+		const io = new IO();
+		let busy = false;
+		const s = new DocumentSession(io, timers, {}, { busy: () => busy, debounceMs: 1500, maxWaitMs: 10_000 });
+		await s.load();
+		// Strokes of 400 ms with 200 ms gaps for 30 s: never a 350 ms pause.
+		let firstWriteAt = -1;
+		for (let t = 0; t < 30_000; t += 600) {
+			busy = true;
+			await vi.advanceTimersByTimeAsync(400);
+			busy = false;
+			s.markChanged();
+			s.gestureEnded();
+			await vi.advanceTimersByTimeAsync(200);
+			if (firstWriteAt < 0 && io.writes > 0) firstWriteAt = t + 600;
+		}
+		expect(firstWriteAt).toBeGreaterThan(0);
+		// Max-wait 10 s, then at most 8 s waiting for the pen (busy cap).
+		expect(firstWriteAt).toBeLessThanOrEqual(10_000 + 8000 + 1200);
+		expect(io.writes).toBeGreaterThanOrEqual(2);
 	});
 
 	it("an explicit flush never waits", async () => {

@@ -290,9 +290,11 @@ export class Renderer {
 		if (!t) return false;
 		this.cancelWet();
 		const wet = tool === "highlighter" ? this.highlighterWet() : this.wetPen;
-		// A previous stroke still waiting to be cleared from this canvas is in the static layer by now.
+		// A previous stroke still waiting to be cleared from this canvas: make sure the static layer
+		// shows it (a full redraw may still be pending) before it leaves the wet canvas.
 		for (let i = this.wetRelease.length - 1; i >= 0; i--) {
 			if (this.wetRelease[i]!.wet !== wet) continue;
+			if (this.staticDirty) this.drawStatic();
 			wet.clear();
 			this.wetRelease.splice(i, 1);
 		}
@@ -534,7 +536,10 @@ export class Renderer {
 			for (const stroke of page.strokes) {
 				if (this.hidden?.has(stroke)) continue;
 				const b = this.boundsOf(stroke);
-				if (b.maxX < visible.minX || b.minX > visible.maxX || b.maxY < visible.minY || b.minY > visible.maxY) continue;
+				// Bounds are padded by half the width; pen ink reaches 0.8 × width at full pressure, and
+				// the wet-ink curve may pass slightly outside its points.
+				const m = stroke.width * 0.3 + 1;
+				if (b.maxX + m < visible.minX || b.minX - m > visible.maxX || b.maxY + m < visible.minY || b.minY - m > visible.maxY) continue;
 				this.fillStroke(ctx, stroke);
 				strokesDrawn++;
 			}

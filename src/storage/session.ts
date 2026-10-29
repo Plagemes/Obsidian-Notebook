@@ -121,8 +121,11 @@ export class DocumentSession {
 	private readonly maxBusyDeferMs: number;
 	/** When the last gesture ended (ms since epoch), or -Infinity. */
 	private lastGestureEnd = -Infinity;
-	/** When the timed work being deferred first became due, or null. */
-	private deferredSince: number | null = null;
+	/** When the deferred save / journal entry first became due, or null (separate clocks). */
+	private flushDeferredSince: number | null = null;
+	private journalDeferredSince: number | null = null;
+	/** Poll of a timed save that is waiting for the pen; the due time is kept while it runs. */
+	private deferTimer: number | null = null;
 
 	constructor(
 		private readonly io: DocumentIO,
@@ -146,29 +149,30 @@ export class DocumentSession {
 	 * Should timed work wait for the input to settle? True while a gesture is in progress or within
 	 * `quietMs` after one, up to the caps; explicit flushes (flush(), flushForClose()) never wait.
 	 */
-	private deferForInput(): boolean {
+	private deferForInput(kind: "flush" | "journal"): boolean {
 		const now = this.now().getTime();
 		const busy = this.busy();
 		const quiet = now - this.lastGestureEnd < this.quietMs;
-		if (!busy && !quiet) {
-			this.deferredSince = null;
-			return false;
-		}
-		this.deferredSince ??= now;
-		const waited = now - this.deferredSince;
-		if (waited >= (busy ? this.maxBusyDeferMs : this.maxQuietDeferMs)) {
-			this.deferredSince = null;
-			return false;
-		}
-		return true;
+		const since = kind === "flush" ? this.flushDeferredSince : this.journalDeferredSince;
+		let defer = busy || quiet;
+		if (defer && since !== null && now - since >= (busy ? this.maxBusyDeferMs : this.maxQuietDeferMs)) defer = false;
+		const next = defer ? (since ?? now) : null;
+		if (kind === "flush") this.flushDeferredSince = next;
+		else this.journalDeferredSince = next;
+		return defer;
 	}
 
-	/** Debounced and max-wait saves: deferred while the pen is writing. */
+	/**
+	 * Debounced and max-wait saves: deferred while the pen is writing. The wait has its own poll
+	 * timer and keeps its due time, so new strokes (markChanged) cannot push the save further back.
+	 */
 	private timedFlush(): void {
 		if (this.disposed) return;
-		if (this.deferForInput()) {
-			this.clearTimers();
-			this.debounceTimer = this.timers.set(() => this.timedFlush(), DEFER_POLL_MS);
+		if (this.deferForInput("flush")) {
+			this.deferTimer ??= this.timers.set(() => {
+				this.deferTimer = null;
+				this.timedFlush();
+			}, DEFER_POLL_MS);
 			return;
 		}
 		void this.flush();
@@ -401,7 +405,7 @@ export class DocumentSession {
 		this.journalTimer = this.timers.set(() => {
 			this.journalTimer = null;
 			// Never serialize in the middle of a gesture or right after it (the next stroke may be starting).
-			if (this.deferForInput()) return this.scheduleJournal(DEFER_POLL_MS);
+			if (this.deferForInput("journal")) return this.scheduleJournal(DEFER_POLL_MS);
 			this.enqueueJournal(() => this.writeJournal());
 		}, delayMs);
 	}
@@ -533,7 +537,10 @@ export class DocumentSession {
 	private clearTimers(): void {
 		if (this.debounceTimer !== null) this.timers.clear(this.debounceTimer);
 		if (this.maxWaitTimer !== null) this.timers.clear(this.maxWaitTimer);
+		if (this.deferTimer !== null) this.timers.clear(this.deferTimer);
 		this.debounceTimer = null;
 		this.maxWaitTimer = null;
+		this.deferTimer = null;
+		this.flushDeferredSince = null;
 	}
 }

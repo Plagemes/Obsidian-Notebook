@@ -59,27 +59,90 @@ export function unionInto(a: DeviceRect, b: DeviceRect): void {
 	a.y1 = Math.max(a.y1, b.y1);
 }
 
+/** Capsules per chunk of the spatial index. */
+const CHUNK = 64;
+
 /**
- * Index range of the capsules (node i with the trapezoid from node i-1) whose box meets the device
- * rectangle: the ones to repaint after the rectangle is cleared. `cb` is called for each.
+ * Bounding boxes (page coordinates) of consecutive chunks of 64 capsules, grown as nodes are
+ * added, so finding the capsules under a small rectangle skips whole chunks: the work per input
+ * event does not grow with the length of the stroke.
  */
-export function capsulesIn(g: InkBuilder, t: PageTransform, r: DeviceRect, cb: (i: number) => void): void {
-	if (isEmpty(r)) return;
+export class CapsuleIndex {
+	private boxes = new Float64Array(4 * 16);
+	private indexed = 0;
+
+	reset(): void {
+		this.indexed = 0;
+	}
+
+	/** Chunk count after indexing every node of `g`. */
+	update(g: InkBuilder): number {
+		const { nx, ny, nr, nodeCount } = g;
+		const chunks = Math.ceil(nodeCount / CHUNK);
+		if (4 * chunks > this.boxes.length) {
+			const b = new Float64Array(Math.max(4 * chunks, this.boxes.length * 2));
+			b.set(this.boxes);
+			this.boxes = b;
+		}
+		const bx = this.boxes;
+		for (let i = this.indexed; i < nodeCount; i++) {
+			const c = 4 * Math.floor(i / CHUNK);
+			if (i % CHUNK === 0) {
+				bx[c] = Infinity;
+				bx[c + 1] = Infinity;
+				bx[c + 2] = -Infinity;
+				bx[c + 3] = -Infinity;
+			}
+			for (let j = i > 0 ? i - 1 : i; j <= i; j++) {
+				const x = nx[j]!, y = ny[j]!, r = nr[j]!;
+				if (x - r < bx[c]!) bx[c] = x - r;
+				if (y - r < bx[c + 1]!) bx[c + 1] = y - r;
+				if (x + r > bx[c + 2]!) bx[c + 2] = x + r;
+				if (y + r > bx[c + 3]!) bx[c + 3] = y + r;
+			}
+		}
+		this.indexed = nodeCount;
+		return chunks;
+	}
+
+	/** Does chunk `c` meet the page-space box? */
+	meets(c: number, minX: number, minY: number, maxX: number, maxY: number): boolean {
+		const bx = this.boxes, k = 4 * c;
+		return bx[k + 2]! >= minX && bx[k]! <= maxX && bx[k + 3]! >= minY && bx[k + 1]! <= maxY;
+	}
+}
+
+/**
+ * The capsules (node i with the trapezoid from node i-1) whose box meets the device rectangle:
+ * the ones to repaint after the rectangle is cleared. `cb` is called for each, in order. With an
+ * index, chunks of capsules far from the rectangle are skipped as a whole. Returns how many
+ * capsules were looked at.
+ */
+export function capsulesIn(g: InkBuilder, t: PageTransform, r: DeviceRect, cb: (i: number) => void, index?: CapsuleIndex): number {
+	if (isEmpty(r)) return 0;
 	// The rectangle in page coordinates, widened by the antialiasing margin.
 	const m = AA_MARGIN / t.k;
 	const minX = (r.x0 - t.tx) / t.k - m, maxX = (r.x1 - t.tx) / t.k + m;
 	const minY = (r.y0 - t.ty) / t.k - m, maxY = (r.y1 - t.ty) / t.k + m;
 	const { nx, ny, nr, nodeCount } = g;
-	for (let i = 0; i < nodeCount; i++) {
-		let x0 = nx[i]! - nr[i]!, x1 = nx[i]! + nr[i]!, y0 = ny[i]! - nr[i]!, y1 = ny[i]! + nr[i]!;
-		if (i > 0) {
-			x0 = Math.min(x0, nx[i - 1]! - nr[i - 1]!);
-			x1 = Math.max(x1, nx[i - 1]! + nr[i - 1]!);
-			y0 = Math.min(y0, ny[i - 1]! - nr[i - 1]!);
-			y1 = Math.max(y1, ny[i - 1]! + nr[i - 1]!);
+	const chunks = index ? index.update(g) : 1;
+	let scanned = 0;
+	for (let c = 0; c < chunks; c++) {
+		if (index && !index.meets(c, minX, minY, maxX, maxY)) continue;
+		const end = index ? Math.min(nodeCount, (c + 1) * CHUNK) : nodeCount;
+		for (let i = index ? c * CHUNK : 0; i < end; i++) {
+			let x0 = nx[i]! - nr[i]!, x1 = nx[i]! + nr[i]!, y0 = ny[i]! - nr[i]!, y1 = ny[i]! + nr[i]!;
+			if (i > 0) {
+				x0 = Math.min(x0, nx[i - 1]! - nr[i - 1]!);
+				x1 = Math.max(x1, nx[i - 1]! + nr[i - 1]!);
+				y0 = Math.min(y0, ny[i - 1]! - nr[i - 1]!);
+				y1 = Math.max(y1, ny[i - 1]! + nr[i - 1]!);
+			}
+			if (x1 >= minX && x0 <= maxX && y1 >= minY && y0 <= maxY) cb(i);
+			scanned++;
 		}
-		if (x1 >= minX && x0 <= maxX && y1 >= minY && y0 <= maxY) cb(i);
 	}
+	return scanned;
 }
 
 /**
@@ -115,6 +178,9 @@ export class WetInk {
 	private ty = 0;
 	private tr = 0;
 	private tipAny = false;
+	private readonly index = new CapsuleIndex();
+	/** Capsules looked at by the last tip erase (benchmarks and tests). */
+	lastScanned = 0;
 	private readonly repaintOne = (i: number) => addCapsule(this.ctx, this.g!.nx, this.g!.ny, this.g!.nr, i, true);
 
 	constructor(readonly canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) {
@@ -136,6 +202,7 @@ export class WetInk {
 		this.color = color;
 		this.t = { ...t };
 		this.painted = 0;
+		this.index.reset();
 		this.extraCount = 0;
 	}
 
@@ -145,6 +212,7 @@ export class WetInk {
 		if (!this.g) return;
 		this.wipe();
 		this.painted = 0;
+		this.index.reset();
 		this.paint();
 	}
 
@@ -203,7 +271,7 @@ export class WetInk {
 			ctx.clearRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
 			ctx.setTransform(t.k, 0, 0, t.k, t.tx, t.ty);
 			ctx.beginPath();
-			capsulesIn(g, t, r, this.repaintOne);
+			this.lastScanned = capsulesIn(g, t, r, this.repaintOne, this.index);
 			ctx.fill();
 			ctx.restore();
 			r.x0 = r.y0 = r.x1 = r.y1 = 0;
@@ -230,6 +298,7 @@ export class WetInk {
 		this.wipe();
 		this.g = null;
 		this.painted = 0;
+		this.index.reset();
 		this.extraCount = 0;
 	}
 

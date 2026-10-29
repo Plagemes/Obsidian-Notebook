@@ -60,10 +60,12 @@ export class SampleBuffer {
 
 /**
  * Is a sample at (t, x, y) new after the last delivered one? `pointerrawupdate` and the coalesced
- * list of the next `pointermove` report the same samples: timestamps only move forward.
+ * list of the next `pointermove` report the same samples: timestamps only move forward. `strict`
+ * (a `pointermove` after `pointerrawupdate` delivered samples): only later timestamps are new, so a
+ * batch of samples sharing one timestamp is not delivered twice.
  */
-export function isNewSample(lastT: number, lastX: number, lastY: number, t: number, x: number, y: number): boolean {
-	return t > lastT || (t === lastT && (x !== lastX || y !== lastY));
+export function isNewSample(lastT: number, lastX: number, lastY: number, t: number, x: number, y: number, strict = false): boolean {
+	return t > lastT || (!strict && t === lastT && (x !== lastX || y !== lastY));
 }
 
 export interface PointerHandlers {
@@ -112,6 +114,8 @@ export class PointerController {
 	private lastT = -Infinity;
 	private lastX = NaN;
 	private lastY = NaN;
+	/** pointerrawupdate delivered samples during this stroke: pointermove only adds later ones. */
+	private rawSeen = false;
 
 	constructor(
 		private readonly el: HTMLElement,
@@ -199,6 +203,7 @@ export class PointerController {
 			if (!this.handlers.drawStart(this.sample(e), eraser)) return;
 			this.drawId = e.pointerId;
 			this.drawType = e.pointerType;
+			this.rawSeen = false;
 			this.lastT = e.timeStamp;
 			this.lastX = e.clientX;
 			this.lastY = e.clientY;
@@ -212,7 +217,9 @@ export class PointerController {
 	}
 
 	private onRawUpdate(e: PointerEvent): void {
-		if (e.pointerId === this.drawId) this.deliver(e);
+		if (e.pointerId !== this.drawId) return;
+		this.rawSeen = true;
+		this.deliver(e, false);
 	}
 
 	private onMove(e: PointerEvent): void {
@@ -220,7 +227,7 @@ export class PointerController {
 
 		if (e.pointerId === this.drawId) {
 			// With pointerrawupdate these samples were already delivered and are skipped by timestamp.
-			this.deliver(e);
+			this.deliver(e, this.rawSeen);
 			const last = this.drawLast;
 			if (last) {
 				last.x = e.clientX;
@@ -257,15 +264,15 @@ export class PointerController {
 	}
 
 	/** Passes the samples of `e` not delivered yet (and its predicted ones) to the handler. */
-	private deliver(e: PointerEvent): void {
+	private deliver(e: PointerEvent, strict: boolean): void {
 		const buf = this.samples;
 		buf.clear(e.pointerType);
 		const left = this.rect.left, top = this.rect.top;
 		const events = e.getCoalescedEvents?.();
 		if (events && events.length > 0) {
-			for (const ce of events) this.addSample(buf, ce, left, top);
+			for (const ce of events) this.addSample(buf, ce, left, top, strict);
 		} else {
-			this.addSample(buf, e, left, top);
+			this.addSample(buf, e, left, top, strict);
 		}
 		const pred = this.predicted;
 		pred.clear(e.pointerType);
@@ -277,9 +284,9 @@ export class PointerController {
 		this.handlers.drawMove(buf, pred);
 	}
 
-	private addSample(buf: SampleBuffer, ce: PointerEvent, left: number, top: number): void {
+	private addSample(buf: SampleBuffer, ce: PointerEvent, left: number, top: number, strict: boolean): void {
 		const t = ce.timeStamp, x = ce.clientX, y = ce.clientY;
-		if (!isNewSample(this.lastT, this.lastX, this.lastY, t, x, y)) return;
+		if (!isNewSample(this.lastT, this.lastX, this.lastY, t, x, y, strict)) return;
 		this.lastT = t;
 		this.lastX = x;
 		this.lastY = y;
