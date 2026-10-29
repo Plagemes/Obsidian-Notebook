@@ -70,6 +70,18 @@ describe("styles.css", () => {
 		expectDecl(".notebook-body.is-narrow > .notebook-navigator", "position", "absolute");
 	});
 
+	it("keeps the toolbar compact: touch targets of 40 px, popovers under the bar, a scrolling favourites strip", () => {
+		const expectDecl = (selector: string, prop: string, value: string) => {
+			expect(rules.get(selector)?.get(prop), `${selector} { ${prop}: ${value} }`).toBe(value);
+		};
+		expectDecl(".notebook-tool", "min-width", "40px");
+		expectDecl(".notebook-tool", "min-height", "40px");
+		expectDecl(".notebook-toolbar", "flex-wrap", "wrap");
+		expectDecl(".notebook-popover", "position", "absolute");
+		expectDecl(".notebook-popover.notebook-hidden", "display", "none");
+		expectDecl(".notebook-favs", "overflow-x", "auto");
+	});
+
 	it("never makes the pen's wet canvas translucent or blended", () => {
 		const wet = rules.get(".notebook-canvas-wet");
 		expect(wet?.get("opacity")).toBeUndefined();

@@ -89,9 +89,27 @@ const SHAPE_DEFS: Record<ShapeKind, [string, MessageKey]> = {
 	ellipse: ["circle", "shape.ellipse"],
 };
 
+
+/** Tools that have options (colour, width, eraser mode, …): tapping the active tool again opens them. */
+const TOOLS_WITH_OPTIONS: ReadonlySet<ToolName> = new Set<ToolName>(["pen", "highlighter", "eraser", "shape", "text"]);
+
+type PopoverKind = "options" | "more";
+
+/** Diameter of the pen dot in the current-pen indicator, CSS px (same scale as the favourite pens). */
+function chipDiameter(width: number): number {
+	return Math.round(Math.min(18, 6 + Math.sqrt(width) * 3));
+}
+
+/**
+ * The toolbar: two rows (tools; history, current pen, favourite pens, page, status, more) that share one line on a wide
+ * view and stack on a phone. Tool options (colours, widths, eraser mode, filter, size) live in a popover that opens
+ * when the active tool is tapped again (or from the current-pen indicator); the less used actions are in a "more" menu.
+ */
 export class Toolbar {
 	readonly el: HTMLElement;
 	private readonly toolButtons = new Map<ToolName, HTMLButtonElement>();
+	private readonly optionsEl: HTMLElement;
+	private readonly moreEl: HTMLElement;
 	private readonly colorGroup: HTMLElement;
 	private readonly widthGroup: HTMLElement;
 	private readonly eraserGroup: HTMLElement;
@@ -101,18 +119,23 @@ export class Toolbar {
 	private readonly shapeGroup: HTMLElement;
 	private readonly shapeButtons = new Map<ShapeKind, HTMLButtonElement>();
 	private readonly sizeGroup: HTMLElement;
+	private readonly chipButton: HTMLButtonElement;
+	private readonly chipDot: HTMLElement;
+	private readonly moreButton: HTMLButtonElement;
 	private readonly rulerButton: HTMLButtonElement;
-	private readonly imageButton: HTMLButtonElement;
-	private readonly boardShotButton: HTMLButtonElement;
+	private readonly moreItems: HTMLButtonElement[] = [];
 	private readonly navigatorButton: HTMLButtonElement;
 	private readonly undoButton: HTMLButtonElement;
 	private readonly redoButton: HTMLButtonElement;
-	private readonly addPageButton: HTMLButtonElement;
-	private readonly pageMenuButton: HTMLButtonElement;
 	private readonly deleteButton: HTMLButtonElement;
 	private readonly pageEl: HTMLElement;
+	private readonly pageLabelEl: HTMLElement;
 	private readonly statusEl: HTMLElement;
+	private readonly statusTextEl: HTMLElement;
 	private editable = false;
+	private popover: PopoverKind | null = null;
+	private popoverOff: Array<() => void> = [];
+	private readonly swallowOff = new Map<number, () => void>();
 	/** Slots filled by pen-controls.ts: favourite pens, eraser size, pen-only toggle. */
 	readonly favouritesEl: HTMLElement;
 	readonly eraserSizeEl: HTMLElement;
@@ -120,61 +143,84 @@ export class Toolbar {
 	onEditableChange: ((editable: boolean) => void) | null = null;
 
 	constructor(parent: HTMLElement, public state: ToolbarState, private readonly actions: ToolbarActions) {
-		this.el = parent.createDiv({ cls: "notebook-toolbar" });
+		this.el = parent.createDiv({ cls: "notebook-toolbar", attr: { role: "toolbar" } });
 
-		this.navigatorButton = this.iconButton(this.group(), "panel-left", "tool.pages", () => this.actions.toggleNavigator());
-
-		const tools = this.group();
+		const toolsRow = this.el.createDiv({ cls: "notebook-toolbar-row notebook-toolbar-tools" });
+		this.navigatorButton = this.iconButton(toolsRow, "panel-left", "tool.pages", () => this.actions.toggleNavigator());
 		for (const [tool, icon, label] of TOOL_DEFS) {
-			this.toolButtons.set(tool, this.iconButton(tools, icon, label, () => this.set({ tool })));
+			const b = this.iconButton(toolsRow, icon, label, () => this.onToolTap(tool));
+			if (TOOLS_WITH_OPTIONS.has(tool)) {
+				b.addClass("has-options");
+				b.setAttribute("aria-haspopup", "true");
+			}
+			this.toolButtons.set(tool, b);
 		}
 
-		this.eraserGroup = this.group();
+		const actionsRow = this.el.createDiv({ cls: "notebook-toolbar-row notebook-toolbar-actions" });
+		this.undoButton = this.iconButton(actionsRow, "undo", "tool.undo", () => this.actions.undo());
+		this.redoButton = this.iconButton(actionsRow, "redo", "tool.redo", () => this.actions.redo());
+		this.deleteButton = this.iconButton(actionsRow, "trash-2", "tool.deleteSelection", () => this.actions.deleteSelection());
+
+		this.chipButton = this.button(actionsRow, t("toolbar.options"), () => this.togglePopover("options"));
+		this.chipButton.addClass("notebook-chip");
+		this.chipButton.setAttribute("aria-haspopup", "true");
+		this.chipDot = this.chipButton.createSpan({ cls: "notebook-chip-dot" });
+
+		this.favouritesEl = actionsRow.createDiv({ cls: "notebook-favs", attr: { role: "group", "aria-label": t("toolbar.favourites") } });
+
+		const end = actionsRow.createDiv({ cls: "notebook-toolbar-end" });
+		this.pageEl = end.createSpan({ cls: "notebook-page-indicator" });
+		this.statusEl = end.createSpan({ cls: "notebook-status", attr: { role: "status" } });
+		this.statusEl.createSpan({ cls: "notebook-status-dot" });
+		this.statusTextEl = this.statusEl.createSpan({ cls: "notebook-status-text" });
+		this.moreButton = this.iconButton(end, "more-horizontal", "toolbar.more", () => this.togglePopover("more"));
+		this.moreButton.setAttribute("aria-haspopup", "true");
+
+		// Tool options: persistent sections, each shown for the tools that use it.
+		this.optionsEl = this.el.createDiv({ cls: "notebook-popover notebook-options notebook-hidden", attr: { role: "group", "aria-label": t("toolbar.options") } });
+		this.shapeGroup = this.row(this.optionsEl);
+		for (const kind of SHAPE_KINDS) {
+			const [icon, label] = SHAPE_DEFS[kind];
+			this.shapeButtons.set(kind, this.iconButton(this.shapeGroup, icon, label, () => this.set({ shapeKind: kind })));
+		}
+		this.eraserGroup = this.row(this.optionsEl);
 		this.eraserButtons.set("stroke", this.textButton(this.eraserGroup, "tool.eraser.stroke", () => this.set({ eraserMode: "stroke" })));
 		this.eraserButtons.set("segment", this.textButton(this.eraserGroup, "tool.eraser.segment", () => this.set({ eraserMode: "segment" })));
 		this.eraserButtons.set("area", this.textButton(this.eraserGroup, "tool.eraser.area", () => this.set({ eraserMode: "area" })));
-
-		this.filterGroup = this.group();
+		this.eraserSizeEl = this.row(this.optionsEl);
+		this.filterGroup = this.row(this.optionsEl);
 		for (const kind of ERASE_FILTER_KINDS) {
 			this.filterButtons.set(kind, this.textButton(this.filterGroup, FILTER_LABELS[kind], () =>
 				// "Colour" starts from the pen colour in use; the swatches then change it.
 				this.set(kind === "color" ? { eraserFilter: kind, eraserColor: this.state.penColor } : { eraserFilter: kind })));
 		}
+		this.colorGroup = this.row(this.optionsEl);
+		this.widthGroup = this.row(this.optionsEl);
+		this.sizeGroup = this.row(this.optionsEl);
 
-		this.eraserSizeEl = this.group();
-		this.penOnlyEl = this.group();
-		this.favouritesEl = this.group();
+		// The less used actions.
+		this.moreEl = this.el.createDiv({ cls: "notebook-popover notebook-more notebook-hidden", attr: { role: "menu", "aria-label": t("toolbar.more") } });
+		this.pageLabelEl = this.moreEl.createDiv({ cls: "notebook-more-title notebook-hidden" });
+		this.moreItem("image-plus", "tool.image", () => this.actions.insertImage());
+		this.moreItem("camera", "tool.boardShot", () => this.actions.boardShot());
+		this.rulerButton = this.moreItem("ruler", "tool.ruler", () => this.set({ ruler: !this.state.ruler }));
+		this.penOnlyEl = this.moreEl.createDiv({ cls: "notebook-more-slot" });
+		this.moreItem("file-plus", "tool.addPage", () => this.actions.addPage());
+		const pageMenu = this.moreItem("more-vertical", "page.menu", () => undefined);
+		pageMenu.addEventListener("click", (e) => this.actions.pageMenu(e));
+		this.moreItem("move-horizontal", "tool.fit", () => this.actions.fit());
+		// Any choice in the menu closes it (the click bubbles up here after the item has acted).
+		this.moreEl.addEventListener("click", (e) => {
+			if ((e.target as HTMLElement).closest("button")) this.closePopover();
+		});
 
-		this.shapeGroup = this.group();
-		for (const kind of SHAPE_KINDS) {
-			const [icon, label] = SHAPE_DEFS[kind];
-			this.shapeButtons.set(kind, this.iconButton(this.shapeGroup, icon, label, () => this.set({ shapeKind: kind })));
-		}
-
-		this.colorGroup = this.group();
-		this.widthGroup = this.group();
-		this.sizeGroup = this.group();
-
-		const insert = this.group();
-		this.imageButton = this.iconButton(insert, "image-plus", "tool.image", () => this.actions.insertImage());
-		this.boardShotButton = this.iconButton(insert, "camera", "tool.boardShot", () => this.actions.boardShot());
-		this.rulerButton = this.iconButton(insert, "ruler", "tool.ruler", () => this.set({ ruler: !this.state.ruler }));
-
-		this.deleteButton = this.iconButton(this.group(), "trash-2", "tool.deleteSelection", () => this.actions.deleteSelection());
-
-		const history = this.group();
-		this.undoButton = this.iconButton(history, "undo", "tool.undo", () => this.actions.undo());
-		this.redoButton = this.iconButton(history, "redo", "tool.redo", () => this.actions.redo());
-
-		const pages = this.group();
-		this.addPageButton = this.iconButton(pages, "file-plus", "tool.addPage", () => this.actions.addPage());
-		this.pageMenuButton = this.iconButton(pages, "more-vertical", "page.menu", () => undefined);
-		this.pageMenuButton.addEventListener("click", (e) => this.actions.pageMenu(e));
-		this.iconButton(pages, "move-horizontal", "tool.fit", () => this.actions.fit());
-		this.pageEl = pages.createSpan({ cls: "notebook-page-indicator" });
-
-		this.statusEl = this.el.createSpan({ cls: "notebook-status" });
 		this.render();
+	}
+
+	/** Removes the listeners of an open popover. Call when the view closes. */
+	destroy(): void {
+		this.closePopover();
+		for (const off of [...this.swallowOff.values()]) off();
 	}
 
 	setHistory(canUndo: boolean, canRedo: boolean): void {
@@ -184,6 +230,7 @@ export class Toolbar {
 
 	setEditable(editable: boolean): void {
 		this.editable = editable;
+		if (!editable) this.closePopover();
 		this.render();
 		this.onEditableChange?.(editable);
 		if (!editable) this.setHistory(false, false);
@@ -215,12 +262,121 @@ export class Toolbar {
 	}
 
 	setPage(current: number, total: number): void {
-		this.pageEl.setText(total > 0 ? `${current} / ${total}` : "");
+		const text = total > 0 ? `${current} / ${total}` : "";
+		this.pageEl.setText(text);
+		// On a narrow view the indicator is hidden in the bar; the overflow menu shows it.
+		this.pageLabelEl.setText(total > 0 ? t("toolbar.page", { n: text }) : "");
+		this.pageLabelEl.toggleClass("notebook-hidden", total <= 0);
 	}
 
 	setStatus(text: string, kind: "ok" | "pending" | "error"): void {
-		this.statusEl.setText(text);
+		this.statusTextEl.setText(text);
+		this.statusEl.setAttribute("title", text);
 		this.statusEl.dataset.kind = kind;
+	}
+
+	/** Which popover is open (null: none). */
+	get openPopover(): PopoverKind | null {
+		return this.popover;
+	}
+
+	closePopover(): void {
+		for (const off of this.popoverOff) off();
+		this.popoverOff = [];
+		if (this.popover === null) return;
+		this.popover = null;
+		this.syncPopover();
+	}
+
+	private onToolTap(tool: ToolName): void {
+		if (this.state.tool === tool) {
+			// The active tool again: its options.
+			if (TOOLS_WITH_OPTIONS.has(tool)) this.togglePopover("options");
+			return;
+		}
+		this.closePopover();
+		this.set({ tool });
+	}
+
+	private togglePopover(kind: PopoverKind): void {
+		if (this.popover === kind) {
+			this.closePopover();
+			return;
+		}
+		if (!this.editable || (kind === "options" && !TOOLS_WITH_OPTIONS.has(this.state.tool))) return;
+		this.closePopover();
+		this.popover = kind;
+		this.syncPopover();
+		this.listenOutside();
+	}
+
+	private syncPopover(): void {
+		const kind = this.popover;
+		this.optionsEl.toggleClass("notebook-hidden", kind !== "options");
+		this.moreEl.toggleClass("notebook-hidden", kind !== "more");
+		this.moreButton.toggleClass("is-active", kind === "more");
+		this.moreButton.setAttribute("aria-expanded", String(kind === "more"));
+		// A popover never grows past the bottom of the view (a phone held sideways has little room): it scrolls instead.
+		const shown = kind === "options" ? this.optionsEl : kind === "more" ? this.moreEl : null;
+		const host = this.el.parentElement;
+		if (shown && host) {
+			const room = host.getBoundingClientRect().bottom - shown.getBoundingClientRect().top - 8;
+			shown.setCssProps({ "--notebook-popover-max": `${Math.max(120, Math.floor(room))}px` });
+		}
+		const open = kind === "options";
+		this.chipButton.toggleClass("is-active", open);
+		this.chipButton.setAttribute("aria-expanded", String(open));
+		for (const [tool, b] of this.toolButtons) {
+			if (TOOLS_WITH_OPTIONS.has(tool)) b.setAttribute("aria-expanded", String(open && tool === this.state.tool));
+		}
+	}
+
+	/**
+	 * While a popover is open, Escape closes it and so does a tap outside it. A tap on the page only closes the popover
+	 * (as in Samsung Notes and Goodnotes): the rest of that pointer's sequence is kept from the page, so it leaves no ink.
+	 */
+	private listenOutside(): void {
+		const on = <K extends keyof WindowEventMap>(type: K, fn: (e: WindowEventMap[K]) => void): void => {
+			window.addEventListener(type, fn, true);
+			this.popoverOff.push(() => window.removeEventListener(type, fn, true));
+		};
+		on("pointerdown", (e) => {
+			const target = e.target as Element | null;
+			if (!target || typeof target.closest !== "function") return;
+			if (this.optionsEl.contains(target) || this.moreEl.contains(target)) return;
+			// The bar's own buttons act as usual (and may switch to the other popover).
+			if (this.el.contains(target) && target.closest(".notebook-toolbar-row")) return;
+			const onPage = !!target.closest(".notebook-stage");
+			this.closePopover();
+			if (onPage) this.swallow(e);
+		});
+		on("keydown", (e) => {
+			if (e.key !== "Escape") return;
+			e.preventDefault();
+			e.stopPropagation();
+			this.closePopover();
+		});
+	}
+
+	/** Keeps a pointer sequence (down … up) from reaching the page. */
+	private swallow(down: PointerEvent): void {
+		const id = down.pointerId;
+		const types = ["pointerdown", "pointermove", "pointerrawupdate", "pointerup", "pointercancel"] as const;
+		const stop = (e: Event): void => {
+			const pe = e as PointerEvent;
+			if (pe.pointerId !== id) return;
+			e.stopPropagation();
+			e.preventDefault();
+			if (e.type === "pointerup" || e.type === "pointercancel") off();
+		};
+		const off = (): void => {
+			for (const type of types) window.removeEventListener(type, stop, true);
+			this.swallowOff.delete(id);
+		};
+		this.swallowOff.get(id)?.();
+		for (const type of types) window.addEventListener(type, stop, true);
+		this.swallowOff.set(id, off);
+		stop(down);
 	}
 
 	private set(patch: Partial<ToolbarState>): void {
@@ -229,26 +385,32 @@ export class Toolbar {
 		this.actions.change(this.state);
 	}
 
-	/** Rebuilds the colour and width rows for the current tool. */
+	/** Refreshes the bar and rebuilds the colour and width rows of the options for the current tool. */
 	private render(): void {
 		const s = this.state;
 		for (const [tool, b] of this.toolButtons) {
 			b.toggleClass("is-active", tool === s.tool);
 			b.disabled = !this.editable;
 		}
-		this.addPageButton.disabled = !this.editable;
-		this.pageMenuButton.disabled = !this.editable;
-		this.imageButton.disabled = !this.editable;
-		this.boardShotButton.disabled = !this.editable;
+		this.moreButton.disabled = !this.editable;
+		for (const b of this.moreItems) b.disabled = !this.editable;
 		this.navigatorButton.disabled = !this.editable;
-		this.rulerButton.disabled = !this.editable;
 		this.rulerButton.toggleClass("is-active", s.ruler);
 		this.rulerButton.setAttribute("aria-pressed", String(s.ruler));
+		if (this.popover === "options" && !TOOLS_WITH_OPTIONS.has(s.tool)) this.closePopover();
+		else this.syncPopover();
+		this.renderChip();
 		this.eraserGroup.toggleClass("notebook-hidden", s.tool !== "eraser");
 		this.eraserSizeEl.toggleClass("notebook-hidden", s.tool !== "eraser");
-		for (const [mode, b] of this.eraserButtons) b.toggleClass("is-active", mode === s.eraserMode);
+		for (const [mode, b] of this.eraserButtons) {
+			b.toggleClass("is-active", mode === s.eraserMode);
+			b.disabled = !this.editable;
+		}
 		this.filterGroup.toggleClass("notebook-hidden", s.tool !== "eraser");
-		for (const [kind, b] of this.filterButtons) b.toggleClass("is-active", kind === s.eraserFilter);
+		for (const [kind, b] of this.filterButtons) {
+			b.toggleClass("is-active", kind === s.eraserFilter);
+			b.disabled = !this.editable;
+		}
 		this.shapeGroup.toggleClass("notebook-hidden", s.tool !== "shape");
 		for (const [kind, b] of this.shapeButtons) {
 			b.toggleClass("is-active", kind === s.shapeKind);
@@ -304,8 +466,31 @@ export class Toolbar {
 		}
 	}
 
-	private group(): HTMLElement {
-		return this.el.createDiv({ cls: "notebook-toolbar-group" });
+	/** The current-pen indicator: colour and thickness of the tool in use; a ring the size of the eraser for the eraser. */
+	private renderChip(): void {
+		const s = this.state;
+		const has = TOOLS_WITH_OPTIONS.has(s.tool);
+		this.chipButton.toggleClass("notebook-hidden", !has);
+		this.chipButton.disabled = !this.editable;
+		const dot = this.chipDot;
+		dot.toggleClass("is-eraser", s.tool === "eraser");
+		dot.toggleClass("is-highlighter", s.tool === "highlighter");
+		if (!has) return;
+		const toolLabel = t(TOOL_DEFS.find((d) => d[0] === s.tool)![2]);
+		this.chipButton.setAttribute("aria-label", `${t("toolbar.options")}: ${toolLabel}`);
+		if (s.tool === "eraser") {
+			const d = Math.max(8, Math.min(24, Math.round(s.eraserSize * 0.6)));
+			dot.setCssProps({ "--notebook-chip-w": `${d}px`, "--notebook-chip-h": `${d}px`, "--notebook-chip-color": "transparent" });
+		} else if (s.tool === "highlighter") {
+			dot.setCssProps({ "--notebook-chip-w": "20px", "--notebook-chip-h": `${Math.round(6 + s.highlighterWidth * 0.4)}px`, "--notebook-chip-color": s.highlighterColor });
+		} else {
+			const d = chipDiameter(s.penWidth);
+			dot.setCssProps({ "--notebook-chip-w": `${d}px`, "--notebook-chip-h": `${d}px`, "--notebook-chip-color": s.penColor });
+		}
+	}
+
+	private row(parent: HTMLElement): HTMLElement {
+		return parent.createDiv({ cls: "notebook-popover-row" });
 	}
 
 	private button(parent: HTMLElement, label: string, onClick: () => void): HTMLButtonElement {
@@ -327,6 +512,19 @@ export class Toolbar {
 		const b = this.button(parent, t(label), onClick);
 		b.addClass("notebook-text-tool");
 		b.setText(t(label));
+		return b;
+	}
+
+	/** A row of the "more" menu: icon and label. */
+	private moreItem(icon: string, label: MessageKey, onClick: () => void): HTMLButtonElement {
+		const b = this.moreEl.createEl("button", { cls: "notebook-menu-item", attr: { type: "button", role: "menuitem" } });
+		setIcon(b.createSpan({ cls: "notebook-menu-icon" }), icon);
+		b.createSpan({ cls: "notebook-menu-label", text: t(label) });
+		b.addEventListener("click", (e) => {
+			e.preventDefault();
+			onClick();
+		});
+		this.moreItems.push(b);
 		return b;
 	}
 }

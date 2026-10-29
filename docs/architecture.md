@@ -228,7 +228,7 @@ src/
     index.ts              registers embeds, protocol, version history, companion notes and the reliability features
   view/
     notebook-view.ts      FileView: mounts canvas and toolbar, wires session, history, input, tools, selection, navigator, media, performance overlay
-    toolbar.ts            tools, colours, widths, eraser mode, shape kind, text size, undo/redo, add page, page menu, pages panel, fit, page indicator
+    toolbar.ts            two-row bar (tools, undo/redo, current-pen indicator, favourites strip, save state, page) + options popover (colours, widths, eraser mode/filter/size, shape kind, text size) + "more" menu (image, board shot, ruler, pen only, add page, page menu, fit); a tap outside a popover is kept from the page
     favourites.ts         pure: favourite pens (6 slots), eraser size presets and radius (no obsidian import, unit-tested)
     pen-controls.ts       toolbar slots for favourite pens, eraser size and pen-only; eraser circle on the stage (passive listeners, outside the writing pipeline)
     commands.ts           tool and action commands (checkCallback, no default hotkeys), registered from main.ts
@@ -338,7 +338,7 @@ Known limit: if Android kills the process without notifying `visibilitychange`, 
 
 ### Page commands
 
-The toolbar has a page menu button next to Add page. It acts on the page at the centre of the view. Every item is a history command, so each is one undo step; the selection is cleared first, and nothing runs while a stroke is being drawn.
+The toolbar's "more" menu has *Add page* and *Page options* (the page menu). It acts on the page at the centre of the view. Every item is a history command, so each is one undo step; the selection is cleared first, and nothing runs while a stroke is being drawn.
 
 | Menu item | Command |
 |---|---|

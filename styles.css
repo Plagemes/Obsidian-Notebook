@@ -7,16 +7,67 @@
 	overflow: hidden;
 }
 
+/* Two rows (tools; history, current pen, favourites, page, status, more): one line when the view is wide, stacked on a phone. Tool options and the less used actions open in popovers under the bar. */
 .notebook-toolbar {
+	position: relative;
+	z-index: 10;
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: 4px 12px;
-	padding: 4px 8px;
+	gap: 0 8px;
+	padding: 2px 6px;
 	border-bottom: 1px solid var(--background-modifier-border);
 	background: var(--background-primary);
 	flex: 0 0 auto;
+	min-width: 0;
+	container: notebook-toolbar / inline-size;
 	user-select: none;
+}
+
+.notebook-toolbar-row {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	min-width: 0;
+}
+
+.notebook-toolbar-tools {
+	flex: 0 0 auto;
+}
+
+.notebook-toolbar-actions {
+	flex: 1 1 540px;
+}
+
+.notebook-toolbar-end {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	gap: 2px;
+	margin-left: auto;
+}
+
+/* Favourite pens: a strip that scrolls sideways when the bar is narrow. */
+.notebook-favs {
+	position: relative;
+	display: flex;
+	flex: 0 1 auto;
+	align-items: center;
+	gap: 2px;
+	min-width: 0;
+	margin-left: 4px;
+	overflow-x: auto;
+	overflow-y: hidden;
+	scrollbar-width: none;
+	-webkit-overflow-scrolling: touch;
+}
+
+.notebook-favs::-webkit-scrollbar {
+	display: none;
+}
+
+.notebook-favs > .notebook-tool {
+	flex: 0 0 auto;
 }
 
 .notebook-toolbar-group {
@@ -26,11 +77,29 @@
 }
 
 .notebook-tool {
-	min-width: 36px;
-	min-height: 36px;
+	position: relative;
+	flex: 0 0 auto;
+	min-width: 40px;
+	min-height: 40px;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
+}
+
+/* A tool with options shows a small corner mark once it is the active one: tap it again for the options. */
+.notebook-tool.has-options.is-active::after {
+	content: "";
+	position: absolute;
+	right: 4px;
+	bottom: 4px;
+	border: 3px solid transparent;
+	border-right-color: currentColor;
+	border-bottom-color: currentColor;
+	opacity: 0.7;
+}
+
+.notebook-tool[aria-expanded="true"].has-options::after {
+	opacity: 1;
 }
 
 .notebook-tool.is-active {
@@ -44,8 +113,8 @@
 }
 
 .notebook-swatch-dot {
-	width: 18px;
-	height: 18px;
+	width: 20px;
+	height: 20px;
 	border-radius: 50%;
 	background-color: var(--notebook-swatch-color, var(--text-normal));
 	border: 1px solid var(--background-modifier-border);
@@ -71,8 +140,8 @@
 .notebook-width-h2 { width: 18px; height: 12px; border-radius: 2px; }
 
 .notebook-text-tool {
-	font-size: var(--font-ui-smaller);
-	padding: 0 8px;
+	font-size: var(--font-ui-small);
+	padding: 0 10px;
 }
 
 .notebook-hidden {
@@ -85,6 +154,129 @@
 	font-size: var(--font-ui-smaller);
 	color: var(--text-muted);
 	font-variant-numeric: tabular-nums;
+}
+
+/* Current-pen indicator: the colour and thickness of the tool in use (a ring for the eraser). */
+.notebook-chip.notebook-hidden {
+	display: none;
+}
+
+.notebook-chip-dot {
+	display: block;
+	width: var(--notebook-chip-w, 10px);
+	height: var(--notebook-chip-h, 10px);
+	border-radius: 50%;
+	background-color: var(--notebook-chip-color, var(--text-normal));
+	border: 1px solid var(--background-modifier-border-hover);
+	box-sizing: border-box;
+}
+
+.notebook-chip-dot.is-highlighter {
+	border-radius: 3px;
+}
+
+.notebook-chip-dot.is-eraser {
+	border: 2px solid var(--text-muted);
+}
+
+/* Popovers under the bar: tool options, and the "more" menu. They are outside the page, so a tap on them never reaches the pen input. */
+.notebook-popover {
+	position: absolute;
+	top: 100%;
+	z-index: 2;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	box-sizing: border-box;
+	width: min(352px, calc(100% - 12px));
+	max-height: min(var(--notebook-popover-max, 70vh), 480px);
+	overflow-y: auto;
+	padding: 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-l);
+	background: var(--background-primary);
+	box-shadow: var(--shadow-l);
+}
+
+.notebook-popover.notebook-hidden {
+	display: none;
+}
+
+.notebook-options {
+	left: 6px;
+}
+
+.notebook-more {
+	right: 6px;
+	width: min(280px, calc(100% - 12px));
+}
+
+.notebook-popover-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 2px;
+}
+
+.notebook-popover-row.notebook-hidden {
+	display: none;
+}
+
+.notebook-popover-row:empty {
+	display: none;
+}
+
+.notebook-more-slot {
+	display: contents;
+}
+
+.notebook-more-title {
+	padding: 4px 10px;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.notebook-more-title.notebook-hidden {
+	display: none;
+}
+
+.notebook-menu-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	min-height: 44px;
+	padding: 0 10px;
+	border: 0;
+	box-shadow: none;
+	background: transparent;
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	text-align: left;
+}
+
+.notebook-menu-item:hover {
+	background: var(--background-modifier-hover);
+}
+
+.notebook-menu-item.is-active {
+	background: var(--background-modifier-active-hover);
+	color: var(--interactive-accent);
+}
+
+.notebook-menu-item:disabled {
+	opacity: 0.35;
+	pointer-events: none;
+}
+
+.notebook-menu-icon {
+	display: inline-flex;
+	flex: 0 0 auto;
+}
+
+.notebook-menu-label {
+	flex: 1 1 auto;
 }
 
 .notebook-perf {
@@ -117,18 +309,62 @@
 	min-height: 8em;
 }
 
+/* Save state: a dot (its text is the tooltip) on a narrow bar, dot and text on a wide one. */
 .notebook-status {
-	margin-left: auto;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 0 6px;
 	font-size: var(--font-ui-smaller);
 	color: var(--text-muted);
 }
 
-.notebook-status[data-kind="pending"] {
-	color: var(--text-faint);
+.notebook-status-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--text-faint);
+}
+
+.notebook-status[data-kind="ok"] .notebook-status-dot {
+	background: var(--color-green);
+}
+
+.notebook-status[data-kind="pending"] .notebook-status-dot {
+	background: var(--color-orange);
 }
 
 .notebook-status[data-kind="error"] {
 	color: var(--text-error);
+}
+
+.notebook-status[data-kind="error"] .notebook-status-dot {
+	background: var(--text-error);
+}
+
+.notebook-status-text {
+	display: none;
+}
+
+.notebook-status[data-kind="error"] .notebook-status-text {
+	display: inline;
+	max-width: 7em;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+@container notebook-toolbar (min-width: 900px) {
+	.notebook-status-text {
+		display: inline;
+	}
+}
+
+/* Narrow bar: the page number moves into the "more" menu. */
+@container notebook-toolbar (max-width: 520px) {
+	.notebook-page-indicator {
+		display: none;
+	}
 }
 
 .notebook-stage {
@@ -1167,7 +1403,7 @@
 
 /* wave p1b: pens — favourite pens, eraser size, pen-only switch, eraser circle */
 .notebook-fav {
-	min-width: 32px;
+	min-width: 40px;
 }
 
 .notebook-fav-dot {

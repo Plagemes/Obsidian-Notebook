@@ -19,6 +19,8 @@ const DEVICES = {
 	// Samsung Galaxy Tab S-class tablet in portrait, Android WebView.
 	tablet: { width: 800, height: 1280, deviceScaleFactor: 2, mobile: true, touch: true },
 	phone: { width: 412, height: 915, deviceScaleFactor: 2.625, mobile: true, touch: true },
+	// Small phone (360 CSS px is the common narrow Android width): the toolbar must still fit.
+	narrow: { width: 360, height: 740, deviceScaleFactor: 3, mobile: true, touch: true },
 	desktop: { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false, touch: false },
 };
 
@@ -28,6 +30,9 @@ for (const doc of ["v3", "new"]) {
 		for (const device of Object.keys(DEVICES)) SCENARIOS.push({ doc, theme, device, lowLatency: false });
 	}
 }
+// Phone held sideways: little height for the toolbar popovers.
+DEVICES.landscape = { width: 740, height: 360, deviceScaleFactor: 3, mobile: true, touch: true };
+SCENARIOS.push({ doc: "new", theme: "light", device: "landscape", lowLatency: false });
 SCENARIOS.push({ doc: "v3", theme: "dark", device: "tablet", lowLatency: true });
 SCENARIOS.push({ doc: "new", theme: "light", device: "phone", lowLatency: true });
 // Injected faults: wet ink failing on every paint, and one stored stroke that cannot be drawn.
@@ -211,6 +216,17 @@ async function main() {
 					if (c[0] < 100 && c[1] < 100 && c[2] < 100) dark = true;
 				}
 				if (!dark) problems.push(`composited ink missing at (${Math.round(ix)}, ${Math.round(iy)})`);
+			}
+			// The toolbar with the eraser options and the "more" menu open (narrow phone and tablet, light theme).
+			if (!s.fault && s.doc === "new" && s.theme === "light" && (s.device === "narrow" || s.device === "tablet")) {
+				try {
+					await cdp.evaluate("window.harness.openOptions('eraser').then(() => true)");
+					writeFileSync(join(shots, `${name}-eraser-options.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					await cdp.evaluate("window.harness.openMore().then(() => true)");
+					writeFileSync(join(shots, `${name}-more.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+				} catch (e) {
+					problems.push(`popover screenshots: ${e.message}`);
+				}
 			}
 			if (problems.length) {
 				failures++;

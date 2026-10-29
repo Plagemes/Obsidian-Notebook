@@ -420,6 +420,7 @@ export class NotebookView extends FileView {
 		this.navTimer = this.thumbTimer = this.snapFlashTimer = null;
 		this.pens?.destroy();
 		this.pens = null;
+		this.toolbar?.destroy();
 		this.controller?.destroy();
 		this.controller = null;
 		this.radial?.destroy();
