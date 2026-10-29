@@ -137,6 +137,12 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | New lecture (command, page menu): modal for course/title (default: notebook name) and date, new page at the end with the header as a text element, one undo step | ✅ | ✅ header text, date parsing, page copy of size/paper, undo; ❌ modal, view | | | the document format has no page titles, so the header is ordinary text (searchable in the library) |
 | Loose sheet (command, ribbon icon, library button): quick-notes notebook in a configurable location, created on first use, never replaced | ✅ | ✅ path resolution and sanitising, setting parsing; ❌ file creation and opening (Obsidian) | | | setting *Loose sheet location* |
 | Move to notebook… (page menu, command): choose pages and a notebook; target saved first (open view: one undo step; closed file: validated, backup kept, read back), then the pages leave the source (one undo step); assets shared by id | ✅ | ✅ planning, asset records, source-removal rules (edited pages stay), never-empty source, undo; ❌ dialog, vault writes, open-view path | | ✅ | not tried with Obsidian Sync or with the target open on another device |
+| Ink attached to objects (#149), geometric, no format change: strokes with at least 60% of their points inside an image or text box move, scale and rotate with it through the lasso handles, in the same undo step; setting *Ink follows objects* (default on) | ✅ | ✅ ownership (image, rotated image, text, overlapping elements, topmost wins), exclusion of selected strokes, move / scale / rotate keep the ink on the object, one undo step, serialization; ❌ drag preview and handles (view) | | | the 60% threshold is a guess; a stroke written half on and half off an object stays behind |
+| Deleting an object that has ink on it offers (notice with a button, 10 s) to delete that ink too, as its own undo step; ignoring the notice keeps the ink; the button does nothing if the object was restored by undo meanwhile | ✅ | ✅ ink found for the removed elements, delete command and undo; ❌ notice and button (view) | | | |
+| Personal stamps (#142): *Stamps* in the "more" menu opens a palette; *Save selection as stamp* stores the lasso selection (strokes, text, images with their asset records) as `<notebooks>/_stamps/<name>.stamp`; tap places it in the middle of the page in view, drag places it where it is dropped; placed stamps get fresh ids and are selected; one undo step | ✅ | ✅ file round trip and validation (damaged, newer, empty, too large), unique names, placement (fresh ids, centre, inside the page, assets registered once, missing images skipped, undo), previews; ❌ palette, drag and drop, vault files (Obsidian) | | ✅ | drag from the palette with a finger relies on `touch-action: pan-y`, untested on a WebView |
+| Stamps: rename, delete (to the trash, after a confirmation); a stamp file that cannot be read is shown as unreadable and never rewritten | ✅ | ✅ name cleaning; ❌ file operations and UI (Obsidian) | | | |
+| Built-in stamps (checkmark, star, arrow) generated in code with the current pen colour and width | ✅ | ✅ geometry, colour, width, valid file | | | |
+| Stamp files use the notebook document format (one page), so they follow the format's migrations and no format change was made | ✅ | ✅ valid document, parsed back with `parse` | | | Obsidian Sync syncs `.stamp` files only with *Sync all other types* on, like `.notebook` |
 
 ## Automated checks
 
@@ -323,12 +329,37 @@ For each step note **pass / fail / notes** in the table at the end.
 | 59 Pen only | | | |
 | 60 Commands and hotkeys | | | |
 | 61 Compact toolbar | | | |
+| O1 Ink follows an image | | | |
+| O2 Ink follows a text box | | | |
+| O3 Setting off | | | |
+| O4 Delete an object with ink | | | |
+| O5 Undo before taking the offer | | | |
+| O6 Built-in stamps | | | |
+| O7 Save a stamp | | | |
+| O8 Stamp with image and text | | | |
+| O9 Rename and delete a stamp | | | |
+| O10 Palette on a phone and with a finger | | | |
 
 Benchmark output (step 21): paste it here.
 
 ```
 (paste results)
 ```
+
+### Objects wave 0.6 (ink on objects, stamps)
+
+Not verified on a device. Fill in the result table at the end of this file.
+
+- **O1. Ink follows an image.** Insert an image, write a few words over it with the pen, switch to the lasso and tap the image (or lasso it). Drag it, then scale it with the bottom-right handle and rotate it with the top handle. Expected: the words move, scale and rotate with the picture and stay on it; one undo step puts everything back. Words written next to the image stay where they were.
+- **O2. Ink follows a text box.** Same with a text box (text boxes move and scale but do not rotate). Expected: ink written over the text moves with it.
+- **O3. Setting off.** Turn off *Ink follows objects* in the settings and move the image again. Expected: only the image moves; the ink stays.
+- **O4. Delete an object with ink.** Select an image that has ink on it and delete it. Expected: a notice says how many strokes were written on it, with *Delete the ink too*. Ignore it: the ink stays. Repeat and tap the button: the ink goes, and one undo brings it back; a second undo brings the image back.
+- **O5. Undo before taking the offer.** Delete an image with ink, press undo, then tap *Delete the ink too* in the notice. Expected: nothing happens (the image is back).
+- **O6. Built-in stamps.** More menu → *Stamps*. Tap *Checkmark*: a checkmark appears in the middle of the page in the current pen colour and width and is selected; move it. Drag *Star* onto another place. Expected: it lands where the finger or pen was lifted. Undo removes it.
+- **O7. Save a stamp.** Write a small signature, select it with the lasso, open *Stamps* and tap the save button, name it. Expected: it appears under *My stamps*; the file `Notebooks/_stamps/<name>.stamp` exists. Tap it on another page and in another notebook.
+- **O8. Stamp with an image and text.** Select an image and a text box together, save as a stamp, delete the originals, place the stamp. Expected: both come back; the image uses the same file in `_assets/` (no copy).
+- **O9. Rename and delete a stamp.** Use the pencil and trash buttons on a stamp. Expected: the name changes in the palette and the file; delete asks first and moves the file to the trash; notebooks that used the stamp are unchanged.
+- **O10. Palette on a phone and with a finger.** Open the palette on a narrow screen. Expected: it fits, the list scrolls vertically, a sideways drag from a tile onto the page places the stamp. Report whether a vertical or diagonal drag scrolls the list instead of dragging.
 
 ## Quick check — Windows
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Objects (wave 0.6)** (not verified on Android hardware; no change to the notebook format)
+  - **Ink attached to objects** (#149): ink written over an image or a text box moves, scales and rotates with it. When the object is moved, scaled or rotated with the lasso (or its handles), the strokes with at least 60% of their points inside the object's box go with it, in the same undo step, and are shown moving during the drag. The link is geometric (nothing is stored in the file); where objects overlap, ink belongs to the topmost one. New setting *Ink follows objects* (on by default). Deleting an object that has ink on it shows a notice with *Delete the ink too* (its own undo step); ignoring it keeps the ink. Logic in `src/ink/attach.ts`.
+  - **Personal stamps** (#142): *Stamps* in the toolbar's more menu opens a palette with three built-in stamps (checkmark, star, arrow, drawn with the current pen colour and width) and your own. *Save selection as stamp* stores the lasso selection (strokes, text boxes and images) as `<notebooks folder>/_stamps/<name>.stamp`, a vault file in the notebook document format (one page), so stamps sync with the vault and not with the plugin settings; images are referenced by their content-addressed asset, as in a notebook. Tap a stamp to put it in the middle of the page in view, or drag it onto the page; placed stamps get new ids, are selected so they can be moved at once, and are one undo step. Stamps can be renamed and deleted (to the trash, after a confirmation); a stamp file that cannot be read is listed as unreadable and never rewritten. Logic in `src/ink/stamps.ts`, vault access in `src/storage/stamps.ts`.
+
 ## 0.5.0 — 2026-10-29
 
 Not yet verified on Android hardware (see `docs/testing.md`).
