@@ -437,6 +437,26 @@ const en = {
 	"command.continue": "Continue last notebook",
 	"notice.noLastNotebook": "No notebook has been opened yet.",
 	"notice.lastNotebookGone": "The last notebook was not found: {path}",
+	// wave p1b: selection
+	"selection.bar": "Selection actions",
+	"selection.copy": "Copy",
+	"selection.cut": "Cut",
+	"selection.duplicate": "Duplicate",
+	"selection.paste": "Paste",
+	"selection.whiteTransparent": "Make white transparent",
+	"selection.color": "Selection colour",
+	"selection.width": "Selection width",
+	"selection.copied": "Copied.",
+	"selection.cutDone": "Cut.",
+	"selection.nothingToPaste": "Nothing to paste. Copy a selection, an image or some text first.",
+	"selection.pasteTitle": "Paste",
+	"selection.pasteHint": "This device does not let the app read the clipboard. Press and hold in the box below, then choose Paste.",
+	"selection.pasteBox": "Press and hold here, then Paste",
+	"selection.pasteFailed": "Could not paste: {error}",
+	"selection.textTruncated": "The pasted text was longer than {n} characters and was cut.",
+	"selection.assetMissing": "Some images could not be pasted because their file is missing.",
+	"selection.transparentNone": "No white found in this image.",
+	"selection.transparentFailed": "Could not make the white transparent: {error}",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -878,6 +898,26 @@ const it: Partial<Record<MessageKey, string>> = {
 	"command.continue": "Continua l'ultimo quaderno",
 	"notice.noLastNotebook": "Non è ancora stato aperto nessun quaderno.",
 	"notice.lastNotebookGone": "L'ultimo quaderno non è stato trovato: {path}",
+	// wave p1b: selection
+	"selection.bar": "Azioni sulla selezione",
+	"selection.copy": "Copia",
+	"selection.cut": "Taglia",
+	"selection.duplicate": "Duplica",
+	"selection.paste": "Incolla",
+	"selection.whiteTransparent": "Rendi trasparente il bianco",
+	"selection.color": "Colore della selezione",
+	"selection.width": "Spessore della selezione",
+	"selection.copied": "Copiato.",
+	"selection.cutDone": "Tagliato.",
+	"selection.nothingToPaste": "Niente da incollare. Copia prima una selezione, un'immagine o del testo.",
+	"selection.pasteTitle": "Incolla",
+	"selection.pasteHint": "Questo dispositivo non permette all'app di leggere gli appunti. Tieni premuto nel riquadro qui sotto e scegli Incolla.",
+	"selection.pasteBox": "Tieni premuto qui, poi Incolla",
+	"selection.pasteFailed": "Impossibile incollare: {error}",
+	"selection.textTruncated": "Il testo incollato superava {n} caratteri ed è stato tagliato.",
+	"selection.assetMissing": "Alcune immagini non sono state incollate perché il loro file manca.",
+	"selection.transparentNone": "Nessun bianco trovato in questa immagine.",
+	"selection.transparentFailed": "Impossibile rendere trasparente il bianco: {error}",
 };
 
 let table: Partial<Record<MessageKey, string>> | null = null;

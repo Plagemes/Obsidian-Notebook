@@ -1337,3 +1337,54 @@
 	white-space: nowrap;
 	pointer-events: none;
 }
+
+/* --- wave p1b: selection --- */
+/* Actions on the lasso selection (copy, cut, duplicate, paste, restyle): a floating bar over the bottom of the page area, outside the stage so its taps never reach the pen input. */
+.notebook-selection-bar {
+	position: absolute;
+	left: 50%;
+	bottom: 12px;
+	transform: translateX(-50%);
+	z-index: 6;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	width: max-content;
+	max-width: calc(100% - 16px);
+	padding: 4px 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-l);
+	background: var(--background-primary);
+	box-shadow: var(--shadow-s);
+}
+
+.notebook-selection-bar .notebook-toolbar-group,
+.notebook-selection-styles {
+	flex-wrap: wrap;
+	justify-content: center;
+}
+
+.notebook-selection-styles {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+
+.notebook-paste-hint {
+	color: var(--text-muted);
+}
+
+.notebook-paste-box {
+	min-height: 96px;
+	padding: 12px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	color: var(--text-muted);
+	border: 2px dashed var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	user-select: text;
+	-webkit-user-select: text;
+}

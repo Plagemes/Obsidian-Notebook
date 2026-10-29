@@ -28,7 +28,7 @@ Every item below is implemented and its logic is covered by automated tests wher
 | Multiple pens and widths | 🧪 | pen: 9 colours, 5 widths |
 | Transparent highlighter | 🧪 experimental | 5 colours, 3 widths, constant width, translucent with multiply blending; format v2 |
 | Segment eraser (cuts strokes) | 🧪 | works across pages in one gesture, one undo step |
-| Lasso selection: move, resize, rotate | 🧪 basic | one page per selection; uniform resize with a single handle; delete; no copy/paste |
+| Lasso selection: move, resize, rotate | 🧪 basic | one page per selection; uniform resize with a single handle; delete; copy, cut, paste and duplicate arrived later (M7 5, 6) |
 | Smooth zoom and pan | 🧪 experimental | pinch and wheel zoom 0.25–8×; one-finger fling; CSS-transform fast path on heavy pages |
 | Configurable palm rejection | 🧪 experimental | time window and finger-drawing toggle (from M1) plus a contact-size filter, off by default |
 | Multiple pages with virtualization | 🧪 | stacked vertically, only visible pages and strokes are drawn; add page (undoable); delete, duplicate and reorder arrived in M3a |
@@ -88,8 +88,8 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 2. **P1** Configurable S Pen side button: hold for eraser, lasso or last tool.
 3. **P1** Multi-finger gestures: two-finger tap = undo, three-finger tap = redo (configurable).
 4. **P1** Scribble to erase: scratching over strokes deletes them.
-5. **P1** Restyle selection: change colour and width of lasso-selected strokes.
-6. **P1** Copy, paste and duplicate selections across pages and notebooks.
+5. **P1** 🧪 Restyle selection: change colour and width of lasso-selected strokes.
+6. **P1** 🧪 Copy, cut, paste and duplicate selections across pages and notebooks.
 7. **P2** Free colour picker with recent colours and an eyedropper.
 8. **P2** Pressure curve calibration per device, with a test area.
 9. **P2** Tilt-aware pencil (tiltX/tiltY widen and lighten the stroke).
@@ -268,7 +268,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 111. **P2** Markdown boxes on the page: real Markdown (lists, callouts, links) rendered by Obsidian.
 112. **P2** Back of the page: each page can have a Markdown note as its back side; flip the page to type.
 113. **P1** Function graphs (advanced), designed as a full element: several functions per graph (cartesian, parametric, polar, implicit, piecewise); parameters with sliders (a, b…) updating curves live; pan and zoom inside the graph; roots, intersections, maxima and minima found numerically and marked; tangents and shaded areas under curves; table of values; configurable axes, grid, labels and units (degrees/radians); ink written on the graph stays attached to the graph's coordinates when the graph is moved or zoomed; expressions parsed by a safe math parser (never eval); exported as vectors.
-114. **P1** Paste from the system clipboard: images and text become page elements.
+114. **P1** 🧪 Paste from the system clipboard: images and text become page elements.
 
 ### D. Study and planning
 115. **P1** Class timetable: define the weekly timetable; new pages are tagged with the course in progress, and opening the app during a class opens that course's notebook on a new page.
@@ -361,7 +361,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 
 ### F. Images and view
 171. **P2** Image editing: crop, rotate, brightness and contrast.
-172. **P1** White background made transparent: pasted images and screenshots blend with the paper.
+172. **P1** 🧪 White background made transparent: pasted images and screenshots blend with the paper.
 173. **P2** Minimap for infinite pages and high zoom.
 
 ### G. More original ideas

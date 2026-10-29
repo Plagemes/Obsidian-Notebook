@@ -62,6 +62,7 @@ import { runNewLecture } from "./lecture";
 import { runMovePages } from "../library/move-pages";
 import { pickFile } from "./pick";
 import { RulerGesture } from "./ruler-gesture";
+import { SelectionActions } from "./selection-actions";
 import { TextEditor, type TextEditSession } from "./text-editor";
 import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites";
 import { PenControls, type PenStore } from "./pen-controls";
@@ -223,6 +224,7 @@ export class NotebookView extends FileView {
 			this.app.workspace.requestSaveLayout();
 		},
 	);
+	private selectionActions: SelectionActions | null = null;
 
 	private viewport: Viewport = { scale: 1, offsetX: 0, offsetY: 0 };
 	private viewSize: Size = { width: 0, height: 0 };
@@ -335,6 +337,7 @@ export class NotebookView extends FileView {
 		this.body.insertBefore(this.pageNav.el, this.stage);
 		this.textEditor = new TextEditor(this.stage);
 		this.pens = new PenControls(this.toolbar, this.stage, this.penStore());
+		this.mountSelectionActions();
 		this.messageEl = this.contentEl.createDiv({ cls: "notebook-message" });
 		this.messageEl.hide();
 		this.toolbar.setEditable(false);
@@ -387,6 +390,7 @@ export class NotebookView extends FileView {
 			if (e.key === "Shift") this.shiftDown = false;
 		});
 		this.registerDomEvent(window, "blur", () => (this.shiftDown = false));
+		this.registerClipboardEvents();
 
 		this.registerEvent(this.app.vault.on("modify", (f) => {
 			if (f === this.file && this.session) void this.session.handleExternalChange();
@@ -419,6 +423,8 @@ export class NotebookView extends FileView {
 		this.radial = null;
 		this.rulerGesture?.destroy();
 		this.rulerGesture = null;
+		this.selectionActions?.destroy();
+		this.selectionActions = null;
 		this.textEditor?.destroy();
 		this.textEditor = null;
 		this.pageNav?.destroy();
@@ -1159,6 +1165,7 @@ export class NotebookView extends FileView {
 			this.showProblem(problem);
 		}
 		this.updateHistoryButtons();
+		this.selectionActions?.update();
 	}
 
 	private showProblem(problem = this.session?.problem ?? null): void {
@@ -1231,6 +1238,7 @@ export class NotebookView extends FileView {
 		this.pens?.onToolsChanged(state);
 		this.radial?.noteTools(state);
 		if (state.tool !== "lasso") this.clearSelection();
+		this.selectionActions?.update();
 		if (before.tool === "text" && state.tool !== "text") this.commitText();
 		if (state.ruler !== before.ruler) {
 			if (state.ruler && !this.ruler) this.placeRuler();
@@ -2040,12 +2048,14 @@ export class NotebookView extends FileView {
 		this.drag = null;
 		this.renderer?.setSelection(null);
 		this.toolbar?.setSelection(false);
+		this.selectionActions?.update();
 	}
 
 	private pushSelection(): void {
 		const sel = this.selection;
 		this.toolbar.setSelection(!!sel);
 		this.renderer?.setSelection(sel ? { ...sel, handle: HANDLE_PX } : null);
+		this.selectionActions?.update();
 	}
 
 	/**
@@ -2165,6 +2175,85 @@ export class NotebookView extends FileView {
 		this.session?.markChanged();
 		this.updateHistoryButtons();
 		this.scheduleNavRefresh();
+	}
+
+	// --- selection actions: restyle, copy, cut, paste, duplicate, white to transparent ---
+
+	private mountSelectionActions(): void {
+		this.selectionActions = new SelectionActions(this.body, {
+			app: this.app,
+			folder: () => this.host.settings.folder,
+			media: () => this.media,
+			doc: () => this.session?.doc ?? null,
+			editable: () => this.editable(),
+			lassoActive: () => this.tools.tool === "lasso",
+			selection: () => this.selection,
+			select: (pageIndex, strokes, elements) => this.selectItems(pageIndex, strokes, elements),
+			execute: (cmd) => {
+				this.history.execute(cmd);
+				this.afterHistoryChange();
+				this.renderer?.invalidate();
+			},
+			deleteSelection: () => this.deleteSelection(),
+			pasteTarget: () => this.pasteTarget(),
+			textStyle: () => ({ fontSize: this.tools.textSize, color: this.tools.penColor }),
+			stillHere: (doc) => this.session?.doc === doc && this.editable() && !this.controller?.drawing,
+		});
+	}
+
+	/** Selects exactly these items (the lasso tool is switched on, so they can be moved at once). */
+	private selectItems(pageIndex: number, strokes: Stroke[], elements: PageElement[]): void {
+		this.commitText();
+		this.toolbar.setTool("lasso");
+		const bounds = unionBounds(strokes, elements, measureText);
+		if (!bounds) {
+			this.clearSelection();
+			return;
+		}
+		this.drag = null;
+		this.selection = { pageIndex, strokes, elements, bounds, matrix: IDENTITY };
+		this.pushSelection();
+	}
+
+	/** The page in view and the centre of the view in its coordinates: where pasted things go. */
+	private pasteTarget(): { pageIndex: number; page: Page; x: number; y: number } | null {
+		const doc = this.session?.doc;
+		const pageIndex = this.currentPageIndex();
+		const page = doc?.pages[pageIndex];
+		const box = this.layout?.boxes[pageIndex];
+		if (!page || !box) return null;
+		const [dx, dy] = screenToPage(this.viewport, this.viewSize.width / 2, this.viewSize.height / 2);
+		const [x, y] = toPageLocal(box, dx, dy);
+		return { pageIndex, page, x, y };
+	}
+
+	/** Copy, cut and paste with the keyboard (and the system's own menu): only while this notebook is the active view and no text field has the focus. */
+	private registerClipboardEvents(): void {
+		const mine = (e: Event): boolean => {
+			if (!this.selectionActions || !this.editable() || this.app.workspace.getActiveViewOfType(NotebookView) !== this) return false;
+			const target = e.target instanceof HTMLElement ? e.target : null;
+			return !target?.closest("input, textarea, [contenteditable='true'], .modal");
+		};
+		this.registerDomEvent(document, "copy", (e) => {
+			if (!mine(e) || !this.selection) return;
+			const marker = this.selectionActions?.copySync();
+			if (marker == null) return;
+			e.clipboardData?.setData("text/plain", marker);
+			e.preventDefault();
+		});
+		this.registerDomEvent(document, "cut", (e) => {
+			if (!mine(e) || !this.selection) return;
+			const marker = this.selectionActions?.copySync();
+			if (marker == null) return;
+			e.clipboardData?.setData("text/plain", marker);
+			e.preventDefault();
+			this.deleteSelection();
+		});
+		this.registerDomEvent(document, "paste", (e) => {
+			if (!mine(e)) return;
+			e.preventDefault();
+			void this.selectionActions?.pasteFromEvent(e);
+		});
 	}
 
 	// --- performance overlay ---
