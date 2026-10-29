@@ -4,8 +4,7 @@ import {
 } from "./types";
 
 export function createId(): string {
-	const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
-	if (c?.randomUUID) return c.randomUUID();
+	if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
 	let id = "";
 	for (let i = 0; i < 4; i++) id += Math.floor(Math.random() * 0x100000000).toString(16).padStart(8, "0");
 	return id;

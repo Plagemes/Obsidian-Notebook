@@ -157,6 +157,7 @@ export class NotebookView extends FileView {
 		const current = () => this.session === session;
 		const session: DocumentSession = new DocumentSession(
 			new VaultDocumentIO(this.app, file, () => backupFolder(this.host.settings)),
+			{ set: (fn, ms) => window.setTimeout(fn, ms), clear: (h) => window.clearTimeout(h) },
 			{
 				onLoaded: (doc, mode, problem) => {
 					if (current()) this.onDocumentLoaded(doc, mode, problem);
