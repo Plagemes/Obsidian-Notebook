@@ -32,7 +32,11 @@ export default tseslint.config(
 	},
 	{
 		// ink/ and model/ must stay testable in Node without Obsidian.
-		files: ["src/ink/**/*.ts", "src/model/**/*.ts", "src/storage/session.ts"],
+		files: [
+			"src/ink/**/*.ts", "src/model/**/*.ts", "src/storage/session.ts",
+			// wave 0.6: zettelkasten pure logic
+			"src/zettel/subpath.ts", "src/zettel/ids.ts", "src/zettel/card-content.ts", "src/zettel/arrows.ts", "src/zettel/settings.ts",
+		],
 		rules: {
 			"no-restricted-imports": ["error", {
 				paths: [

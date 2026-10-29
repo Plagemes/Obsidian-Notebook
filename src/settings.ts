@@ -4,9 +4,10 @@ import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "./ink/edge-zones";
 import type { PenButtonAction } from "./ink/input-policy";
 import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./model/types";
 import { DEFAULT_COMPANION_SETTINGS, readCompanionSettings, type CompanionSettings } from "./storage/companion-path";
+import { DEFAULT_ZETTEL_SETTINGS, readZettelSettings, type ZettelSettings } from "./zettel/settings";
 
-/** Companion note settings (O1) are defined in storage/companion-path.ts. */
-export interface NotebookSettings extends CompanionSettings {
+/** Companion note settings (O1) are defined in storage/companion-path.ts, Zettelkasten settings (wave 0.6) in zettel/settings.ts. */
+export interface NotebookSettings extends CompanionSettings, ZettelSettings {
 	folder: string;
 	fingerDrawing: boolean;
 	palmRejectionMs: number;
@@ -90,6 +91,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	lastNotebookPath: "",
 	lastNotebookPage: 1,
 	...DEFAULT_COMPANION_SETTINGS,
+	...DEFAULT_ZETTEL_SETTINGS,
+	zettelSlipBoxes: [],
 };
 
 /** Merges saved data over the defaults, ignoring values of the wrong type. */
@@ -126,6 +129,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.lastNotebookPath === "string") s.lastNotebookPath = d.lastNotebookPath;
 	if (typeof d.lastNotebookPage === "number" && Number.isInteger(d.lastNotebookPage) && d.lastNotebookPage >= 1) s.lastNotebookPage = d.lastNotebookPage;
 	Object.assign(s, readCompanionSettings(d));
+	Object.assign(s, readZettelSettings(d));
 	return s;
 }
 
