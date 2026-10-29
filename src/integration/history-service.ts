@@ -57,15 +57,21 @@ export class HistoryService {
 	 * Takes a snapshot of `file` if one is due: at most one per notebook per interval, only for
 	 * content that parses, and not when it is identical to the latest snapshot. Never throws.
 	 * Returns the snapshot path, or null when nothing was written.
+	 *
+	 * `settle` (instant start): the file is read at once, so the snapshot holds the content as it was when this
+	 * was called, but parsing it (the expensive part, a second full parse of the notebook) waits until `settle`
+	 * resolves, so it does not compete with the first paint of the notebook that was just opened.
 	 */
-	async maybeSnapshot(file: TFile, now = new Date()): Promise<string | null> {
+	async maybeSnapshot(file: TFile, now = new Date(), settle?: () => Promise<void>): Promise<string | null> {
 		const hours = this.host.settings.snapshotIntervalHours;
 		if (!(hours > 0) || !isNotebookFile(file) || this.busy.has(file.path)) return null;
 		const known = this.checked.get(file.path);
 		if (known !== undefined && !shouldSnapshot(new Date(known), now, hours)) return null;
 		this.busy.add(file.path);
 		try {
-			const json = readNotebookText(file.extension, await this.app.vault.read(file));
+			const text = await this.app.vault.read(file);
+			if (settle) await settle();
+			const json = readNotebookText(file.extension, text);
 			const parsed = parse(json);
 			if (!parsed.ok) {
 				// Only parseable content is worth keeping; look again after the interval.

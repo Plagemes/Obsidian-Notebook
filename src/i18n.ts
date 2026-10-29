@@ -316,6 +316,24 @@ const en = {
 	"scan.capturedDone": "Done ({n})",
 	"scan.useFilePicker": "Use the camera app",
 	"scan.cameraFailed": "The in-app camera is not available here. Use the camera app instead.",
+	// wave p1a: input
+	"settings.edge": "Edge rejection zones",
+	"settings.edge.desc": "Touches that start within the chosen width of an edge of the page area are ignored: they neither draw nor scroll, so a palm resting on the edge does nothing. The pen is never affected.",
+	"settings.edgePx": "Edge zone width (px)",
+	"settings.edgePx.desc": "How far from the edge a touch is still ignored. Never more than a third of the shorter side.",
+	"settings.edgeLeft": "Reject the left edge",
+	"settings.edgeRight": "Reject the right edge",
+	"settings.edgeTop": "Reject the top edge",
+	"settings.edgeBottom": "Reject the bottom edge",
+	"settings.penButton": "Pen side button",
+	"settings.penButton.desc": "What pressing the button on the side of the pen does. Whether your pen reports this button depends on the device.",
+	"settings.penButton.radial": "Radial menu at the pen tip",
+	"settings.penButton.eraser": "Erase while held",
+	"settings.penButton.off": "Nothing",
+	"radial.label": "Quick tools",
+	"command.continue": "Continue last notebook",
+	"notice.noLastNotebook": "No notebook has been opened yet.",
+	"notice.lastNotebookGone": "The last notebook was not found: {path}",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -636,6 +654,24 @@ const it: Partial<Record<MessageKey, string>> = {
 	"scan.capturedDone": "Fine ({n})",
 	"scan.useFilePicker": "Usa l'app Fotocamera",
 	"scan.cameraFailed": "La fotocamera interna non è disponibile qui. Usa l'app Fotocamera.",
+	// wave p1a: input
+	"settings.edge": "Zone di rifiuto ai bordi",
+	"settings.edge.desc": "I tocchi che iniziano entro la larghezza scelta da un bordo dell'area della pagina vengono ignorati: non disegnano né scorrono, così un palmo appoggiato al bordo non fa nulla. La penna non è mai coinvolta.",
+	"settings.edgePx": "Larghezza della zona ai bordi (px)",
+	"settings.edgePx.desc": "A che distanza dal bordo un tocco viene ancora ignorato. Mai più di un terzo del lato più corto.",
+	"settings.edgeLeft": "Rifiuta il bordo sinistro",
+	"settings.edgeRight": "Rifiuta il bordo destro",
+	"settings.edgeTop": "Rifiuta il bordo superiore",
+	"settings.edgeBottom": "Rifiuta il bordo inferiore",
+	"settings.penButton": "Pulsante laterale della penna",
+	"settings.penButton.desc": "Cosa fa premere il pulsante sul lato della penna. Se la tua penna lo segnala dipende dal dispositivo.",
+	"settings.penButton.radial": "Menu radiale sulla punta",
+	"settings.penButton.eraser": "Cancella finché è premuto",
+	"settings.penButton.off": "Niente",
+	"radial.label": "Strumenti rapidi",
+	"command.continue": "Continua l'ultimo quaderno",
+	"notice.noLastNotebook": "Non è ancora stato aperto nessun quaderno.",
+	"notice.lastNotebookGone": "L'ultimo quaderno non è stato trovato: {path}",
 };
 
 let table: Partial<Record<MessageKey, string>> | null = null;

@@ -4,6 +4,7 @@ import type { ThumbnailOptions } from "../library/thumbnail";
 import type { NotebookDocument, Page } from "../model/types";
 import type { NotebookSettings } from "../settings";
 import { isNotebookFile } from "../storage/format";
+import { whenIdle } from "../storage/idle";
 import { registerEmbed } from "./embed";
 import { HistoryService } from "./history-service";
 import { embedInsertText } from "./links";
@@ -47,9 +48,9 @@ export function registerIntegration(plugin: IntegrationPlugin, deps: Integration
 	const history = new HistoryService(plugin);
 	plugin.addCommand({ id: "restore-version", name: t("command.restore"), callback: () => history.start() });
 	plugin.registerEvent(app.vault.on("modify", (f) => {
-		if (f instanceof TFile && isNotebookFile(f)) void history.maybeSnapshot(f);
+		if (f instanceof TFile && isNotebookFile(f)) void history.maybeSnapshot(f, new Date(), whenIdle);
 	}));
 	plugin.registerEvent(app.workspace.on("file-open", (f) => {
-		if (f && isNotebookFile(f)) void history.maybeSnapshot(f);
+		if (f && isNotebookFile(f)) void history.maybeSnapshot(f, new Date(), whenIdle);
 	}));
 }

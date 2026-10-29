@@ -81,10 +81,12 @@ export interface PointerHandlers {
 	drawEnd(cancelled: boolean): void;
 	pan(dx: number, dy: number): void;
 	zoom(factor: number, fx: number, fy: number): void;
+	/**
+	 * The pen's side button was pressed (and its action is the radial menu): open the menu at the pen tip
+	 * (CSS px relative to the element). No stroke is started.
+	 */
+	penMenu?(x: number, y: number): void;
 }
-
-/** `PointerEvent.buttons` bit for the pen eraser (Pointer Events "eraser button"). */
-const ERASER_BUTTONS = 32;
 
 interface NavPointer {
 	x: number;
@@ -125,6 +127,8 @@ export class PointerController {
 	private lastY = NaN;
 	/** pointerrawupdate delivered samples during this stroke: pointermove only adds later ones. */
 	private rawSeen = false;
+	/** The pen's side button is held (hover or contact), so a hovering press opens the menu only once. */
+	private barrelHeld = false;
 
 	constructor(
 		private readonly el: HTMLElement,
@@ -208,8 +212,32 @@ export class PointerController {
 	private onDown(e: PointerEvent): void {
 		this.rect = this.el.getBoundingClientRect();
 		this.stopInertia();
-		const route = this.policy.route(e.pointerType, e.timeStamp, e.button, Math.max(e.width || 0, e.height || 0));
-		if (e.pointerType === "pen") this.policy.setPenDown(true, e.timeStamp);
+		let route = this.policy.route(e.pointerType, e.timeStamp, e.button, Math.max(e.width || 0, e.height || 0), e.buttons);
+		// A palm resting on an edge does nothing: no drawing, no panning.
+		if (route !== "ignore" && this.policy.edgeRejects(e.pointerType, e.clientX - this.rect.left, e.clientY - this.rect.top, this.rect.width, this.rect.height)) {
+			route = "ignore";
+		}
+		// The menu route has no stroke whose end would clear this: the pen is not "down" for palm rejection.
+		if (e.pointerType === "pen") {
+			if (route === "menu") this.policy.notePen(e.timeStamp);
+			else this.policy.setPenDown(true, e.timeStamp);
+		}
+
+		if (route === "menu") {
+			this.barrelHeld = true;
+			if (this.drawId !== null && this.drawType !== "pen") this.cancelDraw();
+			// The pen is captured by the stage on contact; release it so the menu receives the movement and the lift.
+			if (this.el.hasPointerCapture?.(e.pointerId)) {
+				try {
+					this.el.releasePointerCapture(e.pointerId);
+				} catch {
+					// The pointer is gone: nothing to release.
+				}
+			}
+			e.preventDefault();
+			this.handlers.penMenu?.(e.clientX - this.rect.left, e.clientY - this.rect.top);
+			return;
+		}
 
 		if (route === "draw") {
 			if (this.drawId !== null) {
@@ -225,7 +253,7 @@ export class PointerController {
 				}
 			}
 			if (e.pointerType === "pen") this.nav.clear();
-			const eraser = e.pointerType === "pen" && ((e.buttons & ERASER_BUTTONS) !== 0 || e.button === 5);
+			const eraser = e.pointerType === "pen" && this.policy.penErases(e.button, e.buttons);
 			if (!this.handlers.drawStart(this.sample(e), eraser)) return;
 			this.drawId = e.pointerId;
 			this.drawType = e.pointerType;
@@ -242,6 +270,20 @@ export class PointerController {
 		}
 	}
 
+	/** A press of the pen's side button while the pen hovers opens the radial menu (once per press). */
+	private trackBarrel(e: PointerEvent): void {
+		const pressed = (e.buttons & 2) !== 0;
+		if (!pressed) {
+			this.barrelHeld = false;
+			return;
+		}
+		if (this.barrelHeld || this.drawId !== null || (e.buttons & 1) !== 0) return;
+		if (this.policy.settings.penButton !== "radial") return;
+		this.barrelHeld = true;
+		this.rect = this.el.getBoundingClientRect();
+		this.handlers.penMenu?.(e.clientX - this.rect.left, e.clientY - this.rect.top);
+	}
+
 	private onRawUpdate(e: PointerEvent): void {
 		if (e.pointerId !== this.drawId) return;
 		this.rawSeen = true;
@@ -249,7 +291,10 @@ export class PointerController {
 	}
 
 	private onMove(e: PointerEvent): void {
-		if (e.pointerType === "pen") this.policy.notePen(e.timeStamp);
+		if (e.pointerType === "pen") {
+			this.policy.notePen(e.timeStamp);
+			this.trackBarrel(e);
+		}
 
 		if (e.pointerId === this.drawId) {
 			// With pointerrawupdate these samples were already delivered and are skipped by timestamp.

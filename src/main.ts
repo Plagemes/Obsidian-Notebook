@@ -10,6 +10,7 @@ import { NotebookLibraryHost } from "./library/host";
 import { registerIntegration } from "./integration";
 import { LIBRARY_VIEW_TYPE, LibraryView } from "./library/library-view";
 import { OpenNotebookModal } from "./view/modals";
+import { openNotebookAtPage } from "./integration/open";
 import { NotebookView, VIEW_TYPE } from "./view/notebook-view";
 import { NotebookSettingTab } from "./view/settings-tab";
 
@@ -31,6 +32,7 @@ export default class NotebookPlugin extends Plugin {
 
 		this.addCommand({ id: "create", name: t("command.new"), callback: () => this.askNewNotebook() });
 		this.addCommand({ id: "open", name: t("command.open"), callback: () => this.openPicker() });
+		this.addCommand({ id: "continue-last", name: t("command.continue"), callback: () => void this.continueLast() });
 		this.addCommand({ id: "open-library", name: t("command.library"), callback: () => void this.openLibrary() });
 		this.addCommand({ id: "import-pdf", name: t("command.importPdf"), callback: () => this.host.importPdf(this.settings.folder) });
 		this.addCommand({ id: "undo", name: t("command.undo"), checkCallback: (checking) => this.withView(checking, (v) => v.undo()) });
@@ -76,6 +78,29 @@ export default class NotebookPlugin extends Plugin {
 		if (!view) return false;
 		if (!checking) run(view);
 		return true;
+	}
+
+	/** Instant start: remembers the page being read (called a moment after it changes). Only the plugin settings are written. */
+	remember(path: string, page: number): void {
+		if (this.settings.lastNotebookPath === path && this.settings.lastNotebookPage === page) return;
+		this.settings.lastNotebookPath = path;
+		this.settings.lastNotebookPage = page;
+		void this.saveData(this.settings).catch((e) => console.error("[notebook] could not save the last location", e));
+	}
+
+	/** Opens the notebook that was open last, on the page that was in view. */
+	private async continueLast(): Promise<void> {
+		const { lastNotebookPath: path, lastNotebookPage: page } = this.settings;
+		if (!path) {
+			new Notice(t("notice.noLastNotebook"));
+			return;
+		}
+		const file = this.app.vault.getFileByPath(path);
+		if (!file) {
+			new Notice(t("notice.lastNotebookGone", { path }));
+			return;
+		}
+		await openNotebookAtPage(this.app, file, page);
 	}
 
 	private openPicker(): void {

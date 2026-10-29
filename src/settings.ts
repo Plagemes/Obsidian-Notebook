@@ -1,4 +1,6 @@
 import type { PressureMode } from "./ink/pressure";
+import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "./ink/edge-zones";
+import type { PenButtonAction } from "./ink/input-policy";
 import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./model/types";
 
 export interface NotebookSettings {
@@ -30,6 +32,19 @@ export interface NotebookSettings {
 	snapshotIntervalHours: number;
 	/** Version history: how many snapshots to keep per notebook. */
 	snapshotsToKeep: number;
+	// wave p1a: input
+	/** Edge rejection: touches that start within `edgeRejectionPx` of a selected edge of the page area are ignored. */
+	edgeRejection: boolean;
+	edgeRejectionPx: number;
+	edgeLeft: boolean;
+	edgeRight: boolean;
+	edgeTop: boolean;
+	edgeBottom: boolean;
+	/** What the pen's side button does: radial menu at the nib, erase while held, or nothing. */
+	penButtonAction: PenButtonAction;
+	/** Instant start: the notebook and page (1-based) the reader was on last, for "Continue last notebook". Not shown in the settings tab. */
+	lastNotebookPath: string;
+	lastNotebookPage: number;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -47,6 +62,15 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	defaultLandscape: false,
 	snapshotIntervalHours: 24,
 	snapshotsToKeep: 10,
+	edgeRejection: false,
+	edgeRejectionPx: 24,
+	edgeLeft: true,
+	edgeRight: true,
+	edgeTop: false,
+	edgeBottom: true,
+	penButtonAction: "radial",
+	lastNotebookPath: "",
+	lastNotebookPage: 1,
 };
 
 /** Merges saved data over the defaults, ignoring values of the wrong type. */
@@ -68,6 +92,15 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.defaultLandscape === "boolean") s.defaultLandscape = d.defaultLandscape;
 	if (typeof d.snapshotIntervalHours === "number" && d.snapshotIntervalHours >= 0 && d.snapshotIntervalHours <= 720) s.snapshotIntervalHours = d.snapshotIntervalHours;
 	if (typeof d.snapshotsToKeep === "number" && Number.isInteger(d.snapshotsToKeep) && d.snapshotsToKeep >= 1 && d.snapshotsToKeep <= 100) s.snapshotsToKeep = d.snapshotsToKeep;
+	if (typeof d.edgeRejection === "boolean") s.edgeRejection = d.edgeRejection;
+	if (typeof d.edgeRejectionPx === "number" && d.edgeRejectionPx >= EDGE_WIDTH_MIN && d.edgeRejectionPx <= EDGE_WIDTH_MAX) s.edgeRejectionPx = d.edgeRejectionPx;
+	if (typeof d.edgeLeft === "boolean") s.edgeLeft = d.edgeLeft;
+	if (typeof d.edgeRight === "boolean") s.edgeRight = d.edgeRight;
+	if (typeof d.edgeTop === "boolean") s.edgeTop = d.edgeTop;
+	if (typeof d.edgeBottom === "boolean") s.edgeBottom = d.edgeBottom;
+	if (d.penButtonAction === "radial" || d.penButtonAction === "eraser" || d.penButtonAction === "off") s.penButtonAction = d.penButtonAction;
+	if (typeof d.lastNotebookPath === "string") s.lastNotebookPath = d.lastNotebookPath;
+	if (typeof d.lastNotebookPage === "number" && Number.isInteger(d.lastNotebookPage) && d.lastNotebookPage >= 1) s.lastNotebookPage = d.lastNotebookPage;
 	return s;
 }
 

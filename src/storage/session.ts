@@ -75,6 +75,9 @@ export interface SessionOptions {
 	journalMaxBusyDeferMs?: number;
 }
 
+/** The stroke-line warm-up waits this long after a load, so the page is painted first. */
+export const WARM_UP_DELAY_MS = 400;
+
 let ownerCounter = 0;
 /** A short unique id for a session's journal files (letters and digits only). */
 function newOwnerId(): string {
@@ -644,7 +647,11 @@ export class DocumentSession {
 		}
 	}
 
-	/** Pre-computes stroke lines a page at a time in idle ticks, so the first save of a big notebook is quick. */
+	/**
+	 * Pre-computes stroke lines a page at a time in idle ticks, so the first save of a big notebook is quick.
+	 * It starts a moment after the load (WARM_UP_DELAY_MS) so the first paint of the page comes first; a save
+	 * that happens before it is done computes the lines it needs itself.
+	 */
 	private warmUp(doc: NotebookDocument): void {
 		const pages = [...doc.pages];
 		const step = () => {
@@ -654,7 +661,7 @@ export class DocumentSession {
 			warmStrokeLines(page.strokes);
 			this.timers.set(step, 0);
 		};
-		this.timers.set(step, 0);
+		this.timers.set(step, WARM_UP_DELAY_MS);
 	}
 
 	private clearTimers(): void {

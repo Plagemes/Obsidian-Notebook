@@ -1,12 +1,25 @@
+import { inEdgeZone, type EdgeZones } from "./edge-zones";
+
+/** What pressing the pen's side button does: open the radial menu, erase while it is held, or nothing. */
+export type PenButtonAction = "radial" | "eraser" | "off";
+
 export interface InputSettings {
 	/** Fingers draw (unless the pen was seen in the last `palmRejectionMs`). */
 	fingerDrawing: boolean;
 	palmRejectionMs: number;
 	/** Touch contacts larger than this (CSS px) are ignored as palms; 0 = off. */
 	palmContactPx?: number;
+	/** Touches that start in these edge zones are ignored. */
+	edge?: EdgeZones;
+	/** Side (barrel) button of the pen; `button === 2` / `buttons & 2`. Default "off". */
+	penButton?: PenButtonAction;
 }
 
-export type Route = "draw" | "navigate" | "ignore";
+/** `menu`: the pen's side button was pressed and the radial menu should open (nothing is drawn). */
+export type Route = "draw" | "navigate" | "ignore" | "menu";
+
+/** PointerEvent.buttons bit of the pen's side (barrel) button. */
+export const BARREL_BUTTONS = 2;
 
 /**
  * Basic palm rejection: while the pen is down, or was seen (hover included) in the last
@@ -32,11 +45,34 @@ export class InputPolicy {
 		return this.penDown || t - this.lastPenTime < this.settings.palmRejectionMs;
 	}
 
-	/** What a new contact does. `button` is PointerEvent.button (0 = primary); `contact` the contact size in CSS px. */
-	route(pointerType: string, t: number, button = 0, contact = 0): Route {
+	/** Is a contact at (x, y) (CSS px in a `width` × `height` area) of this type rejected by the edge zones? Only touch is. */
+	edgeRejects(pointerType: string, x: number, y: number, width: number, height: number): boolean {
+		return pointerType === "touch" && inEdgeZone(this.settings.edge, x, y, width, height);
+	}
+
+	/** The pen's side button is part of this event (`button` 2, or bit 2 of `buttons`). */
+	static barrel(button: number, buttons: number): boolean {
+		return button === 2 || (buttons & BARREL_BUTTONS) !== 0;
+	}
+
+	/** Does a pen contact erase? The eraser button / flipped pen always do; the side button when its action is "eraser". */
+	penErases(button: number, buttons: number): boolean {
+		if (button === 5 || (buttons & 32) !== 0) return true;
+		return this.settings.penButton === "eraser" && InputPolicy.barrel(button, buttons);
+	}
+
+	/**
+	 * What a new contact does. `button` is PointerEvent.button (0 = primary), `buttons` PointerEvent.buttons,
+	 * `contact` the contact size in CSS px.
+	 */
+	route(pointerType: string, t: number, button = 0, contact = 0, buttons = 0): Route {
 		switch (pointerType) {
 			case "pen":
 				this.notePen(t);
+				if (InputPolicy.barrel(button, buttons)) {
+					if (this.settings.penButton === "radial") return "menu";
+					if (this.settings.penButton === "eraser") return "draw";
+				}
 				return button === 0 || button === 5 ? "draw" : "ignore";
 			case "mouse":
 				if (button === 0) return "draw";

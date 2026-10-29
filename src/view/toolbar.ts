@@ -159,6 +159,11 @@ export class Toolbar {
 		if (this.state.tool !== tool) this.set({ tool });
 	}
 
+	/** Applies a state change from code (the radial menu) as if the toolbar buttons were pressed. */
+	apply(patch: Partial<ToolbarState>): void {
+		this.set(patch);
+	}
+
 	setPage(current: number, total: number): void {
 		this.pageEl.setText(total > 0 ? `${current} / ${total}` : "");
 	}
