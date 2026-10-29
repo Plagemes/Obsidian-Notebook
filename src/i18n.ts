@@ -193,6 +193,23 @@ const en = {
 	"pick.fromDevice": "From this device",
 	"pick.browse": "Browse",
 	"pick.choose": "Choose file",
+	// --- scanner ---
+	"scan.title": "Scan, sheet {n} of {total}",
+	"scan.hint": "Drag the corners to the edges of the page",
+	"scan.adjust": "Adjust corners",
+	"scan.preview": "Preview",
+	"scan.original": "Original",
+	"scan.document": "Document",
+	"scan.whiteboard": "Whiteboard",
+	"scan.rotate": "Rotate",
+	"scan.retake": "Retake",
+	"scan.skip": "Skip",
+	"scan.next": "Next",
+	"scan.done": "Done",
+	"scan.cancel": "Cancel",
+	"scan.processing": "Processing…",
+	"scan.unreadable": "Could not read this photo",
+	"scan.stage": "Scan preview",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -390,6 +407,23 @@ const it: Partial<Record<MessageKey, string>> = {
 	"pick.fromDevice": "Da questo dispositivo",
 	"pick.browse": "Sfoglia",
 	"pick.choose": "Scegli file",
+	// --- scanner ---
+	"scan.title": "Scansione, foglio {n} di {total}",
+	"scan.hint": "Trascina gli angoli sui bordi della pagina",
+	"scan.adjust": "Regola gli angoli",
+	"scan.preview": "Anteprima",
+	"scan.original": "Originale",
+	"scan.document": "Documento",
+	"scan.whiteboard": "Lavagna",
+	"scan.rotate": "Ruota",
+	"scan.retake": "Rifai",
+	"scan.skip": "Salta",
+	"scan.next": "Avanti",
+	"scan.done": "Fine",
+	"scan.cancel": "Annulla",
+	"scan.processing": "Elaborazione…",
+	"scan.unreadable": "Impossibile leggere questa foto",
+	"scan.stage": "Anteprima della scansione",
 };
 
 let table: Partial<Record<MessageKey, string>> | null = null;

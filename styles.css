@@ -744,3 +744,60 @@
 }
 
 /* --- library --- */
+
+/* --- scanner --- */
+.modal.notebook-scan-modal {
+	width: min(920px, 96vw);
+}
+
+.notebook-scan-body {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	height: min(78vh, 760px);
+}
+
+.notebook-scan-hint {
+	min-height: 1.4em;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.notebook-scan-stage {
+	position: relative;
+	flex: 1 1 0;
+	min-height: 0;
+	border-radius: var(--radius-m);
+	background-color: var(--background-secondary);
+	overflow: hidden;
+}
+
+.notebook-scan-canvas {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	touch-action: none;
+}
+
+.notebook-scan-bar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.notebook-scan-spacer {
+	flex: 1 1 auto;
+}
+
+.notebook-scan-filters button.is-active {
+	background-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+@media (pointer: coarse) {
+	.notebook-scan-bar button {
+		min-height: 44px;
+	}
+}
