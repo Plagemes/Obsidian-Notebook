@@ -1,6 +1,8 @@
 import { setIcon } from "obsidian";
 import { t } from "../i18n";
+import { MAX_ASPECT } from "../library/thumbnail";
 import type { Page } from "../model/types";
+import { pageSignature } from "./view-helpers";
 
 export interface NavigatorHost {
 	pages(): readonly Page[];
@@ -56,13 +58,24 @@ export class PageNavigator {
 
 	setOpen(open: boolean): void {
 		this.el.toggleClass("notebook-hidden", !open);
-		if (open) this.refresh();
+		if (open) {
+			this.refresh();
+			this.scrollToCurrent();
+		}
+	}
+
+	/** Forgets cached thumbnails (all, or those of `pageIds`) and redraws the list. */
+	invalidate(pageIds?: Iterable<string>): void {
+		if (pageIds) for (const id of pageIds) this.thumbs.delete(id);
+		else this.thumbs.clear();
+		this.refresh();
 	}
 
 	/** Rebuilds the list (cheap: thumbnails are cached and loaded lazily). */
 	refresh(): void {
 		if (!this.open) return;
 		this.observer.disconnect();
+		const scrollTop = this.listEl.scrollTop;
 		this.listEl.empty();
 		const pages = this.host.pages();
 		const marks = this.host.bookmarks();
@@ -74,16 +87,25 @@ export class PageNavigator {
 			const item = this.listEl.createDiv({ cls: "notebook-navigator-item", attr: { tabindex: "0", "data-index": String(index) } });
 			item.toggleClass("is-current", index === current);
 			const img = item.createEl("img", { cls: "notebook-navigator-thumb", attr: { alt: t("nav.page", { n: String(index + 1) }), draggable: "false" } });
-			img.setCssProps({ "--notebook-thumb-ratio": String(page.height / page.width) });
+			img.setCssProps({ "--notebook-thumb-ratio": String(Math.min(page.height / page.width, MAX_ASPECT)) });
 			const cached = this.thumbs.get(page.id);
 			if (cached && cached.key === this.thumbKey(page)) img.src = cached.url;
 			const footer = item.createDiv({ cls: "notebook-navigator-footer" });
-			footer.createSpan({ text: String(index + 1) });
+			footer.createSpan({ text: String(index + 1), cls: "notebook-navigator-number" });
+			const menu = footer.createEl("button", {
+				cls: "notebook-tool clickable-icon notebook-navigator-star", attr: { "aria-label": t("page.menu"), type: "button" },
+			});
+			setIcon(menu, "more-vertical");
+			menu.addEventListener("click", (e) => {
+				e.stopPropagation();
+				this.host.pageMenu(index, e);
+			});
 			const star = footer.createEl("button", {
 				cls: "notebook-tool clickable-icon notebook-navigator-star", attr: { "aria-label": t("nav.bookmark"), type: "button" },
 			});
 			setIcon(star, "bookmark");
 			star.toggleClass("is-active", marks.has(page.id));
+			star.setAttribute("aria-pressed", String(marks.has(page.id)));
 			star.addEventListener("click", (e) => {
 				e.stopPropagation();
 				this.host.toggleBookmark(page.id);
@@ -100,13 +122,24 @@ export class PageNavigator {
 			this.observer.observe(item);
 		});
 		if (shown === 0) this.listEl.createDiv({ cls: "notebook-navigator-empty", text: t("nav.empty") });
+		this.listEl.scrollTop = scrollTop;
 	}
 
-	/** Highlights the current page without rebuilding the list. */
+	/** Highlights the current page without rebuilding the list, and brings it into view. */
 	markCurrent(index: number): void {
+		if (!this.open) return;
 		this.listEl.querySelectorAll(".notebook-navigator-item").forEach((el) => {
-			(el as HTMLElement).toggleClass("is-current", Number((el as HTMLElement).dataset.index) === index);
+			const item = el as HTMLElement;
+			const current = Number(item.dataset.index) === index;
+			if (current !== item.hasClass("is-current")) {
+				item.toggleClass("is-current", current);
+				if (current && !this.drag) item.scrollIntoView({ block: "nearest" });
+			}
 		});
+	}
+
+	private scrollToCurrent(): void {
+		this.listEl.querySelector(".is-current")?.scrollIntoView({ block: "center" });
 	}
 
 	destroy(): void {
@@ -118,10 +151,7 @@ export class PageNavigator {
 
 	/** Changes whenever what the thumbnail shows changes. */
 	private thumbKey(page: Page): string {
-		const last = page.strokes[page.strokes.length - 1];
-		const bg = page.background ? `${page.background.kind}:${page.background.asset}:${"page" in page.background ? page.background.page : ""}` : "";
-		return [page.width, page.height, page.paper.kind, page.paper.spacing, page.strokes.length, last?.id ?? "",
-			page.elements?.length ?? 0, page.elements?.[page.elements.length - 1]?.id ?? "", bg].join("|");
+		return pageSignature(page);
 	}
 
 	private loadThumb(item: HTMLElement): void {
