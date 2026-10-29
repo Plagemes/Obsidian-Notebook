@@ -4,6 +4,7 @@ import { DEFAULT_SETTINGS, readSettings, type NotebookSettings } from "../settin
 import { PAGE_SIZES, PAPER_KINDS } from "../model/types";
 import { defaultLooseSheetPath } from "../library/loose-sheet-logic";
 import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "../ink/edge-zones";
+import { displayGestureSettings, gestureSettingDefinitions, type GestureSettingsHost } from "./gesture-settings";
 import { companionSettingDefinitions, displayCompanionSettings, type CompanionSettingsHost } from "./companion-settings";
 
 const paperOptions = () => Object.fromEntries(PAPER_KINDS.map((k) => [k, t(`paper.${k}`)]));
@@ -19,6 +20,8 @@ type Key = keyof NotebookSettings;
 const penButtonOptions = () => ({
 	radial: t("settings.penButton.radial"),
 	eraser: t("settings.penButton.eraser"),
+	lasso: t("settings.penButton.lasso"),
+	lastTool: t("settings.penButton.lastTool"),
 	off: t("settings.penButton.off"),
 });
 
@@ -160,9 +163,14 @@ export class NotebookSettingTab extends PluginSettingTab {
 				desc: t("settings.penButton.desc"),
 				control: { type: "dropdown", key: "penButtonAction", defaultValue: DEFAULT_SETTINGS.penButtonAction, options: penButtonOptions() },
 			},
+			...gestureSettingDefinitions(this.gestureHost()),
 			// Companion notes (O1)
 			...companionSettingDefinitions(this.companionHost()),
 		];
+	}
+
+	private gestureHost(): GestureSettingsHost {
+		return { get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) };
 	}
 
 	private companionHost(): CompanionSettingsHost {
@@ -301,6 +309,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setName(t("settings.penButton"))
 			.setDesc(t("settings.penButton.desc"))
 			.addDropdown((dd) => dd.addOptions(penButtonOptions()).setValue(s.penButtonAction).onChange((v) => this.setControlValue("penButtonAction", v)));
+		displayGestureSettings(containerEl, this.gestureHost());
 		displayCompanionSettings(containerEl, this.companionHost());
 	}
 }
