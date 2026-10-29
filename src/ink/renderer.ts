@@ -1,4 +1,5 @@
-import type { Page, Point, Stroke, Tool } from "../model/types";
+import type { Page, PageElement, Point, Stroke, TextElement, Tool } from "../model/types";
+import { layoutText } from "./text-layout";
 import { strokeBounds, type BBox } from "./hit-test";
 import { minorVisible, paperPattern, PAPER_COLORS } from "./paper";
 import { visiblePages, type Layout, type PageBox } from "./layout";
@@ -9,6 +10,31 @@ import type { Viewport } from "./viewport";
 const PAPER = "#ffffff";
 const SHADOW = "rgba(0, 0, 0, 0.18)";
 const SELECTION = "#2563eb";
+const PLACEHOLDER = "#f1f5f9";
+const PLACEHOLDER_TEXT = "#64748b";
+
+/** Bitmaps the renderer cannot produce itself: PDF pages, scans, images. */
+export interface MediaSource {
+	/** Best available bitmap for the page background at `deviceScale` (device px per pt), or null while loading. */
+	background(page: Page, deviceScale: number): CanvasImageSource | null;
+	/** Text shown on the placeholder (e.g. "Loading…" or a missing file name). */
+	backgroundLabel(page: Page): string | null;
+	image(assetId: string): CanvasImageSource | null;
+}
+
+/** Draws a text box in page coordinates; used by the renderer, thumbnails and the live layer. */
+export function drawTextElement(ctx: CanvasRenderingContext2D, el: TextElement): void {
+	ctx.save();
+	ctx.font = `${el.fontSize}px ${TEXT_FONT}`;
+	ctx.fillStyle = el.color;
+	ctx.textBaseline = "top";
+	const layout = layoutText(el.text, el.fontSize, el.width, (str) => ctx.measureText(str).width);
+	layout.lines.forEach((line, i) => ctx.fillText(line, el.x, el.y + i * layout.lineHeight + (layout.lineHeight - el.fontSize) / 2));
+	ctx.restore();
+}
+
+/** Font used for text boxes on screen. */
+export const TEXT_FONT = "sans-serif";
 
 export interface LiveStroke {
 	pageIndex: number;
@@ -75,6 +101,8 @@ export class Renderer {
 	private lasso: LassoOverlay | null = null;
 	private selection: SelectionOverlay | null = null;
 	private hidden: ReadonlySet<Stroke> | null = null;
+	private hiddenElements: ReadonlySet<PageElement> | null = null;
+	private media: MediaSource | null = null;
 
 	private staticDirty = true;
 	private liveDirty = false;
@@ -134,6 +162,18 @@ export class Renderer {
 			this.schedule();
 			return;
 		}
+		this.invalidate();
+	}
+
+	/** Bitmaps for PDF/scan backgrounds and image elements. */
+	setMedia(media: MediaSource | null): void {
+		this.media = media;
+		this.invalidate();
+	}
+
+	/** Elements being edited or transformed are drawn elsewhere (live layer or DOM editor). */
+	setHiddenElements(elements: ReadonlySet<PageElement> | null): void {
+		this.hiddenElements = elements;
 		this.invalidate();
 	}
 
@@ -262,7 +302,9 @@ export class Renderer {
 				minX: visibleDoc.minX - box.x, minY: visibleDoc.minY - box.y,
 				maxX: visibleDoc.maxX - box.x, maxY: visibleDoc.maxY - box.y,
 			};
+			if (page.background) this.drawBackground(ctx, page);
 			this.drawPaper(ctx, page, visible);
+			if (page.elements?.length) this.drawElements(ctx, page);
 			for (const stroke of page.strokes) {
 				if (this.hidden?.has(stroke)) continue;
 				const b = this.boundsOf(stroke);
@@ -275,6 +317,48 @@ export class Renderer {
 		this.stats.staticMs = performance.now() - t0;
 		this.stats.strokesDrawn = strokesDrawn;
 		this.stats.pagesDrawn = indices.length;
+	}
+
+	/**
+	 * PDF page or scan under the paper pattern. The source returns the best bitmap it has right away
+	 * (possibly blurry) and calls `invalidate` again when a sharper one is ready.
+	 */
+	private drawBackground(ctx: CanvasRenderingContext2D, page: Page): void {
+		const img = this.media?.background(page, this.viewport.scale * this.dpr) ?? null;
+		if (img) {
+			ctx.drawImage(img, 0, 0, page.width, page.height);
+			return;
+		}
+		ctx.fillStyle = PLACEHOLDER;
+		ctx.fillRect(0, 0, page.width, page.height);
+		const label = this.media?.backgroundLabel(page);
+		if (label) {
+			ctx.fillStyle = PLACEHOLDER_TEXT;
+			ctx.font = `${Math.max(8, page.width / 40)}px sans-serif`;
+			ctx.fillText(label, page.width * 0.08, page.height * 0.1, page.width * 0.84);
+		}
+	}
+
+	/** Images, then text boxes; both under the ink. */
+	private drawElements(ctx: CanvasRenderingContext2D, page: Page): void {
+		const elements = page.elements ?? [];
+		for (const el of elements) {
+			if (el.type !== "image" || this.hiddenElements?.has(el)) continue;
+			const img = this.media?.image(el.asset) ?? null;
+			ctx.save();
+			ctx.translate(el.x + el.width / 2, el.y + el.height / 2);
+			if (el.rotation) ctx.rotate(el.rotation);
+			if (img) ctx.drawImage(img, -el.width / 2, -el.height / 2, el.width, el.height);
+			else {
+				ctx.fillStyle = PLACEHOLDER;
+				ctx.fillRect(-el.width / 2, -el.height / 2, el.width, el.height);
+			}
+			ctx.restore();
+		}
+		for (const el of elements) {
+			if (el.type !== "text" || this.hiddenElements?.has(el)) continue;
+			drawTextElement(ctx, el);
+		}
 	}
 
 	/** Paper pattern (grid, ruled, dots, millimetre), drawn with hairlines about one device pixel wide at any zoom. */
