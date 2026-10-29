@@ -1,5 +1,6 @@
 import { setIcon } from "obsidian";
 import { t, type MessageKey } from "../i18n";
+import { DEFAULT_ERASER_SIZE } from "./favourites";
 import { SHAPE_KINDS, type ShapeKind } from "./view-helpers";
 
 export type ToolName = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text";
@@ -19,6 +20,8 @@ export interface ToolbarState {
 	highlighterColor: string;
 	highlighterWidth: number;
 	eraserMode: EraserMode;
+	/** Eraser radius, CSS px (segment and whole-stroke eraser). */
+	eraserSize: number;
 	shapeKind: ShapeKind;
 	/** Font size of new text boxes, pt. */
 	textSize: number;
@@ -33,6 +36,7 @@ export const DEFAULT_TOOLS: ToolbarState = {
 	highlighterColor: HIGHLIGHTER_COLORS[0],
 	highlighterWidth: HIGHLIGHTER_WIDTHS[1],
 	eraserMode: "stroke",
+	eraserSize: DEFAULT_ERASER_SIZE,
 	shapeKind: "line",
 	textSize: TEXT_SIZES[1],
 	ruler: false,
@@ -87,6 +91,11 @@ export class Toolbar {
 	private readonly pageEl: HTMLElement;
 	private readonly statusEl: HTMLElement;
 	private editable = false;
+	/** Slots filled by pen-controls.ts: favourite pens, eraser size, pen-only toggle. */
+	readonly favouritesEl: HTMLElement;
+	readonly eraserSizeEl: HTMLElement;
+	readonly penOnlyEl: HTMLElement;
+	onEditableChange: ((editable: boolean) => void) | null = null;
 
 	constructor(parent: HTMLElement, public state: ToolbarState, private readonly actions: ToolbarActions) {
 		this.el = parent.createDiv({ cls: "notebook-toolbar" });
@@ -101,6 +110,10 @@ export class Toolbar {
 		this.eraserGroup = this.group();
 		this.eraserButtons.set("stroke", this.textButton(this.eraserGroup, "tool.eraser.stroke", () => this.set({ eraserMode: "stroke" })));
 		this.eraserButtons.set("segment", this.textButton(this.eraserGroup, "tool.eraser.segment", () => this.set({ eraserMode: "segment" })));
+
+		this.eraserSizeEl = this.group();
+		this.penOnlyEl = this.group();
+		this.favouritesEl = this.group();
 
 		this.shapeGroup = this.group();
 		for (const kind of SHAPE_KINDS) {
@@ -141,6 +154,7 @@ export class Toolbar {
 	setEditable(editable: boolean): void {
 		this.editable = editable;
 		this.render();
+		this.onEditableChange?.(editable);
 		if (!editable) this.setHistory(false, false);
 	}
 
@@ -157,6 +171,11 @@ export class Toolbar {
 	/** Selects a tool from code (e.g. the lasso after inserting an image) and notifies the view. */
 	setTool(tool: ToolName): void {
 		if (this.state.tool !== tool) this.set({ tool });
+	}
+
+	/** Applies a state change from code (favourite pens, hotkeys) and notifies the view. */
+	update(patch: Partial<ToolbarState>): void {
+		this.set(patch);
 	}
 
 	setPage(current: number, total: number): void {
@@ -189,6 +208,7 @@ export class Toolbar {
 		this.rulerButton.toggleClass("is-active", s.ruler);
 		this.rulerButton.setAttribute("aria-pressed", String(s.ruler));
 		this.eraserGroup.toggleClass("notebook-hidden", s.tool !== "eraser");
+		this.eraserSizeEl.toggleClass("notebook-hidden", s.tool !== "eraser");
 		for (const [mode, b] of this.eraserButtons) b.toggleClass("is-active", mode === s.eraserMode);
 		this.shapeGroup.toggleClass("notebook-hidden", s.tool !== "shape");
 		for (const [kind, b] of this.shapeButtons) {

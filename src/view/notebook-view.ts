@@ -47,7 +47,9 @@ import { askPdfRange } from "./pdf-range-modal";
 import { pickFile } from "./pick";
 import { RulerGesture } from "./ruler-gesture";
 import { TextEditor, type TextEditSession } from "./text-editor";
-import { DEFAULT_TOOLS, Toolbar, type ToolbarState } from "./toolbar";
+import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites";
+import { PenControls, type PenStore } from "./pen-controls";
+import { DEFAULT_TOOLS, Toolbar, type ToolName, type ToolbarState } from "./toolbar";
 import {
 	centredPosition, imageElementSize, imagePageSize, mergeMeta, metaEquals, newTextBox, shapePoints, shouldGrabRuler, toggleBookmark,
 	unionBounds,
@@ -55,8 +57,6 @@ import {
 
 export const VIEW_TYPE = "notebook-view";
 
-/** Eraser radius in CSS px, converted to pt at the current zoom. */
-const ERASER_RADIUS_PX = 10;
 /** Selection handle diameter in CSS px. */
 const HANDLE_PX = 22;
 /** A stroke may start this far outside the page (pt). */
@@ -82,6 +82,8 @@ export interface NotebookHost {
 	settings: NotebookSettings;
 	/** Instant save journal shared by all views. */
 	journal?: JournalStore;
+	/** Persists the plugin settings (favourite pens, eraser size, pen-only). Optional: absent in tests. */
+	saveSettings?(): Promise<void>;
 }
 
 interface ActiveStroke {
@@ -179,6 +181,7 @@ export class NotebookView extends FileView {
 	private layout: Layout | null = null;
 	private fitMode = true;
 	private tools: ToolbarState = { ...DEFAULT_TOOLS };
+	private pens: PenControls | null = null;
 
 	private active: ActiveStroke | null = null;
 	private erasing: ActiveErase | null = null;
@@ -216,6 +219,7 @@ export class NotebookView extends FileView {
 		super(leaf);
 		const s = host.settings;
 		this.policy = new InputPolicy({ fingerDrawing: s.fingerDrawing, palmRejectionMs: s.palmRejectionMs, palmContactPx: s.palmContactPx });
+		this.tools = { ...this.tools, eraserSize: s.eraserSize };
 		this.pressure = new PressureModel(s.pressureMode);
 		this.filter.params = stabilizationParams(s.stabilization);
 	}
@@ -277,6 +281,7 @@ export class NotebookView extends FileView {
 		// The panel sits to the left of the page (a drawer over it on narrow views).
 		this.body.insertBefore(this.pageNav.el, this.stage);
 		this.textEditor = new TextEditor(this.stage);
+		this.pens = new PenControls(this.toolbar, this.stage, this.penStore());
 		this.messageEl = this.contentEl.createDiv({ cls: "notebook-message" });
 		this.messageEl.hide();
 		this.toolbar.setEditable(false);
@@ -344,6 +349,8 @@ export class NotebookView extends FileView {
 		this.stopHold();
 		for (const timer of [this.navTimer, this.thumbTimer, this.snapFlashTimer]) if (timer !== null) window.clearTimeout(timer);
 		this.navTimer = this.thumbTimer = this.snapFlashTimer = null;
+		this.pens?.destroy();
+		this.pens = null;
 		this.controller?.destroy();
 		this.controller = null;
 		this.rulerGesture?.destroy();
@@ -478,6 +485,8 @@ export class NotebookView extends FileView {
 			palmContactPx: settings.palmContactPx,
 		};
 		this.pressure.mode = settings.pressureMode;
+		if (this.toolbar && this.tools.eraserSize !== settings.eraserSize) this.toolbar.update({ eraserSize: settings.eraserSize });
+		this.pens?.refresh();
 		this.filter.params = stabilizationParams(settings.stabilization);
 		if (this.controller) {
 			this.controller.predictionEnabled = settings.inkPrediction;
@@ -515,6 +524,81 @@ export class NotebookView extends FileView {
 		this.commitText();
 		this.clearSelection();
 		if (this.history.redo()) this.afterHistoryChange();
+	}
+
+	// --- pens: favourites, tools, pen-only (hotkey commands) ---
+
+	/** Selects a tool, as the toolbar does. */
+	selectTool(tool: ToolName): void {
+		if (this.editable()) this.toolbar.setTool(tool);
+	}
+
+	/** Selects the shape tool with the given kind. */
+	selectShape(shapeKind: ToolbarState["shapeKind"]): void {
+		if (this.editable()) this.toolbar.update({ tool: "shape", shapeKind });
+	}
+
+	/** Selects favourite pen index (0-based). */
+	selectFavourite(index: number): void {
+		this.pens?.applyFavourite(index);
+	}
+
+	/** Eraser: whole strokes or parts of strokes. */
+	selectEraserMode(eraserMode: ToolbarState["eraserMode"]): void {
+		if (this.editable()) this.toolbar.update({ tool: "eraser", eraserMode });
+	}
+
+	/** Steps the eraser size to the next larger (1) or smaller (-1) preset. */
+	stepEraserSize(direction: 1 | -1): void {
+		if (this.editable()) this.toolbar.update({ eraserSize: stepEraserSize(this.tools.eraserSize, direction) });
+	}
+
+	toggleNavigator(): void {
+		this.setNavigatorOpen(!this.pageNav?.open);
+	}
+
+	toggleRuler(): void {
+		if (this.editable()) this.toolbar.update({ ruler: !this.tools.ruler });
+	}
+
+	/** Deletes the selection (lasso), if any. */
+	removeSelection(): void {
+		if (this.editable()) this.deleteSelection();
+	}
+
+	/** Pen only: fingers pan and zoom but do not draw. */
+	togglePenOnly(): void {
+		this.pens?.togglePenOnly();
+	}
+
+	/** Scrolls to the page delta pages away from the one in view. */
+	goToRelativePage(delta: number): void {
+		const n = this.session?.doc?.pages.length ?? 0;
+		if (n === 0) return;
+		this.scrollToPage(Math.min(n - 1, Math.max(0, this.currentPageIndex() + delta)));
+	}
+
+	private penStore(): PenStore {
+		const s = (): NotebookSettings => this.host.settings;
+		const save = (): void => void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
+		return {
+			favourites: () => s().favouritePens,
+			saveFavourites: (favs: FavouritePen[]) => {
+				s().favouritePens = favs;
+				save();
+			},
+			penOnly: () => !s().fingerDrawing,
+			setPenOnly: (on) => {
+				s().fingerDrawing = !on;
+				this.policy.settings = { ...this.policy.settings, fingerDrawing: !on };
+				save();
+			},
+			eraserSize: () => s().eraserSize,
+			saveEraserSize: (size) => {
+				s().eraserSize = size;
+				save();
+			},
+		};
 	}
 
 	fitToWidth(): void {
@@ -1001,6 +1085,7 @@ export class NotebookView extends FileView {
 	private onToolsChanged(state: ToolbarState): void {
 		const before = this.tools;
 		this.tools = state;
+		this.pens?.onToolsChanged(state);
 		if (state.tool !== "lasso") this.clearSelection();
 		if (before.tool === "text" && state.tool !== "text") this.commitText();
 		if (state.ruler !== before.ruler) {
@@ -1668,7 +1753,7 @@ export class NotebookView extends FileView {
 		if (!erasing || !doc || !layout || !this.renderer) return;
 		const [px, py] = erasing.last;
 		erasing.last = [x, y];
-		const radius = ERASER_RADIUS_PX / this.viewport.scale;
+		const radius = eraserRadiusPt(this.tools.eraserSize, this.viewport.scale);
 		const pageIndex = pageAt(layout, x, y, radius);
 		const page = doc.pages[pageIndex];
 		const box = layout.boxes[pageIndex];

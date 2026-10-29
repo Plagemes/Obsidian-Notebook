@@ -1135,3 +1135,49 @@
 	opacity: 0.35;
 	mix-blend-mode: multiply;
 }
+
+/* wave p1b: pens — favourite pens, eraser size, pen-only switch, eraser circle */
+.notebook-fav {
+	min-width: 32px;
+}
+
+.notebook-fav-dot {
+	width: var(--notebook-fav-w, 14px);
+	height: 14px;
+	border-radius: 50%;
+	background-color: var(--notebook-swatch-color, var(--text-normal));
+	border: 1px solid var(--background-modifier-border);
+}
+
+.notebook-fav-dot.is-highlighter {
+	border-radius: 3px;
+}
+
+.notebook-fav.is-active .notebook-fav-dot {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+}
+
+.notebook-eraser-dot {
+	width: var(--notebook-eraser-dot, 8px);
+	height: var(--notebook-eraser-dot, 8px);
+	border-radius: 50%;
+	border: 2px solid currentColor;
+	box-sizing: border-box;
+}
+
+.notebook-eraser-cursor {
+	position: absolute;
+	left: 0;
+	top: 0;
+	z-index: 3;
+	width: var(--notebook-eraser-d, 20px);
+	height: var(--notebook-eraser-d, 20px);
+	margin: calc(var(--notebook-eraser-d, 20px) / -2) 0 0 calc(var(--notebook-eraser-d, 20px) / -2);
+	transform: translate(var(--notebook-eraser-x, 0), var(--notebook-eraser-y, 0));
+	border-radius: 50%;
+	border: 1.5px solid var(--text-muted);
+	background: color-mix(in srgb, var(--background-primary) 35%, transparent);
+	box-sizing: border-box;
+	pointer-events: none;
+}

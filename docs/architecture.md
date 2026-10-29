@@ -189,6 +189,9 @@ src/
   view/
     notebook-view.ts      FileView: mounts canvas and toolbar, wires session, history, input, tools, selection, navigator, media, performance overlay
     toolbar.ts            tools, colours, widths, eraser mode, shape kind, text size, undo/redo, add page, page menu, pages panel, fit, page indicator
+    favourites.ts         pure: favourite pens (6 slots), eraser size presets and radius (no obsidian import, unit-tested)
+    pen-controls.ts       toolbar slots for favourite pens, eraser size and pen-only; eraser circle on the stage (passive listeners, outside the writing pipeline)
+    commands.ts           tool and action commands (checkCallback, no default hotkeys), registered from main.ts
     navigator.ts          the Pages panel: thumbnails, jump, drag to reorder, bookmarks
     media.ts              PDF pages, images and scans for the renderer and exports; asset storage
     pick.ts               choose a PDF or image from the vault or the device
