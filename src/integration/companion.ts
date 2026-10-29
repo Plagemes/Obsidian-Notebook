@@ -9,6 +9,7 @@ import type { NotebookDocument } from "../model/types";
 import type { NotebookSettings } from "../settings";
 import { companionCandidates, companionPath } from "../storage/companion-path";
 import { isNotebookFile, readNotebookText } from "../storage/format";
+import { quickDocId } from "../storage/history";
 import { ensureFolder } from "../storage/vault-io";
 import { notebookUri } from "./links";
 import { viewsOf } from "./open";
@@ -225,14 +226,14 @@ export class CompanionService {
 	}
 
 	/**
-	 * Whether a notebook other than `file` holds the document id `docId` (a file copy keeps the id). Reads only the
-	 * start of each file, where the serializer puts the id.
+	 * Whether a notebook other than `file` holds the document id `docId` (a file copy keeps the id). Looks at the
+	 * start of each file, where the serializer puts the id, and parses the whole file only when it is not there.
 	 */
 	private async otherNotebookHasId(file: TFile, docId: string): Promise<boolean> {
 		for (const f of this.app.vault.getFiles()) {
 			if (f === file || !isNotebookFile(f)) continue;
 			try {
-				if (peekDocumentId(readNotebookText(f.extension, await this.app.vault.cachedRead(f))) === docId) return true;
+				if (quickDocId(readNotebookText(f.extension, await this.app.vault.cachedRead(f))) === docId) return true;
 			} catch {
 				// Unreadable here: it cannot claim the note either.
 			}
@@ -427,12 +428,6 @@ const TEXT_DEPS: CompanionTextDeps = {
 	parseFrontmatter: parseFrontmatterYaml,
 	stringify: (data) => stringifyYaml(data),
 };
-
-/** Document id from the start of a notebook's JSON (the serializer writes it third), without parsing the whole file. */
-function peekDocumentId(json: string): string | null {
-	const m = /"id"\s*:\s*"([^"\\]{1,200})"/.exec(json.slice(0, 600));
-	return m?.[1] ?? null;
-}
 
 function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => window.setTimeout(resolve, ms));

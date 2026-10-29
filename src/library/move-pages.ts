@@ -12,7 +12,7 @@ import { isEditContextSource, type EditContext } from "../view/edit-context";
 import { resolveAssetFile, storeAsset } from "../view/media";
 import { looseSheetPath } from "./loose-sheet-logic";
 import { askMovePages } from "./move-pages-modal";
-import { holdsPages, pageExcerpt, planPageMove, planSourceRemoval, type PageMoveFailure, type PageMovePlan } from "./page-move";
+import { destinationVerdict, holdsPages, pageExcerpt, planPageMove, planSourceRemoval, type PageMoveFailure, type PageMovePlan } from "./page-move";
 
 const NOTEBOOK_VIEW_TYPE = "notebook-view";
 
@@ -81,8 +81,8 @@ async function appendToFile(
 }
 
 /**
- * After the open destination saved: its file must still be there and hold the pages. `flush()` only says nothing is left
- * unsaved; the view may have closed, the file may have been deleted or reloaded meanwhile.
+ * After the open destination's flush: its file must still be there and hold the pages. The view may have closed, the
+ * file may have been deleted or reloaded meanwhile (see destinationVerdict).
  */
 async function storedInFile(app: App, file: TFile, pageIds: readonly string[]): Promise<boolean> {
 	const current = app.vault.getFileByPath(file.path);
@@ -137,8 +137,10 @@ export async function movePagesTo(src: EditContext, pageIds: readonly string[], 
 		const commands: Command[] = assets.map((a) => new AddAsset(a));
 		commands.push(new InsertPages(plan.pages, targetCtx.doc.pages.length));
 		targetCtx.execute(new Batch("Move pages in", commands));
-		if (!(await targetCtx.flush())) throw new Error(t("move.targetNotSaved"));
-		if (!(await storedInFile(app, target, plan.pages.map((p) => p.id)))) throw new Error(t("move.targetNotStored"));
+		// flush() is also false when the user kept writing in the destination after the pages were saved: the file decides.
+		const flushed = await targetCtx.flush();
+		const verdict = destinationVerdict(flushed, await storedInFile(app, target, plan.pages.map((p) => p.id)));
+		if (verdict !== "ok") throw new Error(t(verdict === "not-saved" ? "move.targetNotSaved" : "move.targetNotStored"));
 	} else {
 		await appendToFile(app, target, targetDoc, before, ready, settings);
 	}
