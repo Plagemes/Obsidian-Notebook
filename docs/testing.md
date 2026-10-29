@@ -137,6 +137,10 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | New lecture (command, page menu): modal for course/title (default: notebook name) and date, new page at the end with the header as a text element, one undo step | ✅ | ✅ header text, date parsing, page copy of size/paper, undo; ❌ modal, view | | | the document format has no page titles, so the header is ordinary text (searchable in the library) |
 | Loose sheet (command, ribbon icon, library button): quick-notes notebook in a configurable location, created on first use, never replaced | ✅ | ✅ path resolution and sanitising, setting parsing; ❌ file creation and opening (Obsidian) | | | setting *Loose sheet location* |
 | Move to notebook… (page menu, command): choose pages and a notebook; target saved first (open view: one undo step; closed file: validated, backup kept, read back), then the pages leave the source (one undo step); assets shared by id | ✅ | ✅ planning, asset records, source-removal rules (edited pages stay), never-empty source, undo; ❌ dialog, vault writes, open-view path | | ✅ | not tried with Obsidian Sync or with the target open on another device |
+| Lecture pack layout (#192): slide + notes area on the right or below, one slide per page scaled to a fixed size, chosen paper in the notes area, via v6 margins | ✅ | ✅ geometry, aspect ratio, page plan, format round-trip; ❌ rendering of the notes area | | | 2 or 3 slides per page are not implemented: they need a format change (several backgrounds per page) |
+| Notes page after every slide (#193): blank page, same size, paper of choice | ✅ | ✅ plan order, size, paper; ❌ view | | | |
+| New lecture from slides… (#191; command, library button, folder menu): PDF from the vault or the device, layout, header page / header text / none, course, date, notebook created in the folder and opened; PDF stored once | ✅ | ✅ flow with an injected host (cancel, empty PDF, failure, progress), header text and placement, notebook name, format round-trip; ❌ dialog, picker, vault writes | | | |
+| Insert PDF with the lecture pack layout (page menu): same layout questions after the page range, one undo step; last layout remembered on the device | ✅ | ✅ pages built by the same function, stored options parsing; ❌ dialog, view | | | |
 
 ## Automated checks
 
@@ -323,6 +327,26 @@ For each step note **pass / fail / notes** in the table at the end.
 | 59 Pen only | | | |
 | 60 Commands and hotkeys | | | |
 | 61 Compact toolbar | | | |
+
+### Lecture pack (wave 0.6)
+
+K1. **Lecture from slides, slide + notes right.** Library → *New lecture from slides* (or the command). Choose a slides PDF from the vault, then from the device. In the dialog leave the course as proposed, set today, header *Header page before the slides*, layout *Slide with notes on the right*, notes paper *Ruled*. Expected: the notebook "<course> <date>" appears in the folder and opens; page 1 is the header page ("Course — date"); the next pages show one slide each in the left part with ruled lines to its right; the slide is not stretched; writing in the notes area and on the slide works and stays where it was written after reopening.
+K2. **Notes below.** Same with *Slide with notes below* and header *Header text on the first page*: the text sits below the first slide; no header page. Rotate the tablet: pages refit.
+K3. **On the slide.** Layout *On the slide*, header *No header*: the pages are the slides at their own size, as with *Import PDF*.
+K4. **Notes page after every slide.** Turn on *Notes page after every slide* with paper *Millimetre* (also combined with a notes layout): after each slide page there is a blank millimetre page of the same size. Count the pages: twice the slides (plus the header page).
+K5. **Insert PDF with layout.** In an existing notebook, page menu → *Insert PDF*, choose a PDF and a range: a layout dialog follows (the last choice is proposed; Enter confirms). Pick a layout with notes and notes pages: the pages are inserted after the current page; one undo removes all of them; the PDF is not copied again if it was already imported (check the assets folder).
+K6. **Cancel.** Cancel at each dialog (file choice, setup, range, layout): nothing is created or inserted, and cancelling the setup dialog of a new lecture leaves no PDF in the assets folder.
+K7. **Large deck on the tablet.** Import a deck of 60+ slides with notes on the right: the progress message appears and the notebook opens; scrolling and zoom stay smooth.
+
+| Step | Device / Obsidian version | Result | Notes |
+|---|---|---|---|
+| K1 Slide + notes right | | | |
+| K2 Notes below, header text | | | |
+| K3 On the slide | | | |
+| K4 Notes page after every slide | | | |
+| K5 Insert PDF with layout | | | |
+| K6 Cancel | | | |
+| K7 Large deck | | | |
 
 Benchmark output (step 21): paste it here.
 

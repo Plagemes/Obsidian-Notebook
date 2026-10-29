@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+Not yet verified on Android hardware (see `docs/testing.md`, steps K1-K7).
+
+### Added
+- **Lecture pack**
+  - **New lecture from slides…** (#191; command, library button and folder menu): choose the course slides PDF (vault or device), then the layout, a header (page, text or none), the course and the date. The lecture notebook is created in the folder and opened, with the slides as page backgrounds; the PDF is stored once like any import.
+  - **Slide + notes layout** (#192): one slide per page with a ruled (or other) notes area on the right or below the slide, made with page margins, so there is no format change. The slide is scaled to a fixed size so handwriting has the same scale in every course. Two or three slides per page are not possible yet: they need a format change (documented in `docs/architecture.md`).
+  - **Notes page after every slide** (#193): optional blank page of the same size and the paper of your choice after each slide.
+  - The same layout options appear when you insert a PDF into an existing notebook (page menu → *Insert PDF*); the last choice is remembered on the device.
+
 ## 0.5.0 — 2026-10-29
 
 Not yet verified on Android hardware (see `docs/testing.md`).
