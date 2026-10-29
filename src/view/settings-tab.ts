@@ -2,6 +2,7 @@ import { PluginSettingTab, Setting, type App, type Plugin, type SettingDefinitio
 import { t } from "../i18n";
 import { DEFAULT_SETTINGS, readSettings, type NotebookSettings } from "../settings";
 import { PAGE_SIZES, PAPER_KINDS } from "../model/types";
+import { companionSettingDefinitions, displayCompanionSettings, type CompanionSettingsHost } from "./companion-settings";
 
 const paperOptions = () => Object.fromEntries(PAPER_KINDS.map((k) => [k, t(`paper.${k}`)]));
 const sizeOptions = () => Object.fromEntries((Object.keys(PAGE_SIZES) as Array<keyof typeof PAGE_SIZES>).map((k) => [k, t(`size.${k}`)]));
@@ -106,7 +107,13 @@ export class NotebookSettingTab extends PluginSettingTab {
 				desc: t("settings.snapshotKeep.desc"),
 				control: { type: "slider", key: "snapshotsToKeep", defaultValue: DEFAULT_SETTINGS.snapshotsToKeep, min: 1, max: 50, step: 1 },
 			},
+			// Companion notes (O1)
+			...companionSettingDefinitions(this.companionHost()),
 		];
+	}
+
+	private companionHost(): CompanionSettingsHost {
+		return { plugin: this.host, get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) };
 	}
 
 	getControlValue(key: string): unknown {
@@ -202,5 +209,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setName(t("settings.snapshotKeep"))
 			.setDesc(t("settings.snapshotKeep.desc"))
 			.addSlider((slider) => slider.setLimits(1, 50, 1).setValue(s.snapshotsToKeep).onChange((v) => this.setControlValue("snapshotsToKeep", v)));
+
+		displayCompanionSettings(containerEl, this.companionHost());
 	}
 }

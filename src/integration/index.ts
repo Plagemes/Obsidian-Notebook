@@ -4,6 +4,7 @@ import type { ThumbnailOptions } from "../library/thumbnail";
 import type { NotebookDocument, Page } from "../model/types";
 import type { NotebookSettings } from "../settings";
 import { isNotebookFile } from "../storage/format";
+import { registerCompanion } from "./companion";
 import { registerEmbed } from "./embed";
 import { HistoryService } from "./history-service";
 import { embedInsertText } from "./links";
@@ -22,7 +23,7 @@ export interface IntegrationDeps {
 	background: (doc: NotebookDocument, page: Page, width: number) => Promise<ThumbnailOptions["drawBackground"] | null>;
 }
 
-/** Registers embeds, the `obsidian://notebook` link and version history. Called once from onload. */
+/** Registers embeds, the `obsidian://notebook` link, version history and companion notes. Called once from onload. */
 export function registerIntegration(plugin: IntegrationPlugin, deps: IntegrationDeps): void {
 	const { app } = plugin;
 	const folder = () => plugin.settings.folder;
@@ -52,4 +53,7 @@ export function registerIntegration(plugin: IntegrationPlugin, deps: Integration
 	plugin.registerEvent(app.workspace.on("file-open", (f) => {
 		if (f && isNotebookFile(f)) void history.maybeSnapshot(f);
 	}));
+
+	// O1 Companion notes.
+	registerCompanion(plugin);
 }

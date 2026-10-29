@@ -1,7 +1,9 @@
 import type { PressureMode } from "./ink/pressure";
 import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./model/types";
+import { DEFAULT_COMPANION_SETTINGS, readCompanionSettings, type CompanionSettings } from "./storage/companion-path";
 
-export interface NotebookSettings {
+/** Companion note settings (O1) are defined in storage/companion-path.ts. */
+export interface NotebookSettings extends CompanionSettings {
 	folder: string;
 	fingerDrawing: boolean;
 	palmRejectionMs: number;
@@ -47,6 +49,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	defaultLandscape: false,
 	snapshotIntervalHours: 24,
 	snapshotsToKeep: 10,
+	...DEFAULT_COMPANION_SETTINGS,
 };
 
 /** Merges saved data over the defaults, ignoring values of the wrong type. */
@@ -68,6 +71,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.defaultLandscape === "boolean") s.defaultLandscape = d.defaultLandscape;
 	if (typeof d.snapshotIntervalHours === "number" && d.snapshotIntervalHours >= 0 && d.snapshotIntervalHours <= 720) s.snapshotIntervalHours = d.snapshotIntervalHours;
 	if (typeof d.snapshotsToKeep === "number" && Number.isInteger(d.snapshotsToKeep) && d.snapshotsToKeep >= 1 && d.snapshotsToKeep <= 100) s.snapshotsToKeep = d.snapshotsToKeep;
+	Object.assign(s, readCompanionSettings(d));
 	return s;
 }
 
