@@ -137,6 +137,14 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | New lecture (command, page menu): modal for course/title (default: notebook name) and date, new page at the end with the header as a text element, one undo step | ✅ | ✅ header text, date parsing, page copy of size/paper, undo; ❌ modal, view | | | the document format has no page titles, so the header is ordinary text (searchable in the library) |
 | Loose sheet (command, ribbon icon, library button): quick-notes notebook in a configurable location, created on first use, never replaced | ✅ | ✅ path resolution and sanitising, setting parsing; ❌ file creation and opening (Obsidian) | | | setting *Loose sheet location* |
 | Move to notebook… (page menu, command): choose pages and a notebook; target saved first (open view: one undo step; closed file: validated, backup kept, read back), then the pages leave the source (one undo step); assets shared by id | ✅ | ✅ planning, asset records, source-removal rules (edited pages stay), never-empty source, undo; ❌ dialog, vault writes, open-view path | | ✅ | not tried with Obsidian Sync or with the target open on another device |
+| Zettel cards (Z1): *Make card from selection* / *from this page*, note with id, title, aliases, type, source, date, tags, notebook link, notebook-id, page-id, region; live embed; Transcription section | ✅ | ✅ note text, properties, id generation (timestamp, Luhmann), file names; ❌ dialog, `vault.create`, menu | | | the notebook tab's ⋯ menu entries rely on Obsidian passing that menu to `file-menu` (not checked) |
+| Card subpath `#p3&id=<page id>&r=x,y,w,h` in links, native embeds and the `notebook` code block: page found by id, region cropped, deleted page reported | ✅ | ✅ parse/build, page lookup, clamping, region size; ❌ rendering in Obsidian | | | |
+| Slip-box (Z2): *New slip-box* (A6 pages), *Make this notebook a slip-box*, a card note for each new page after an own save | ✅ | ✅ settings parsing, A6 size; ❌ triggers, creation, sync behaviour | | ✅ | slip-box list is in the plugin settings (per device unless settings sync) |
+| Drawn links (Z3): shape-tool arrow from one card region to another → `links` in both notes; only arrows drawn since the notebook was opened; explicit command for older arrows | ✅ | ✅ arrow detection, card under a point, link merge; ❌ writing, graph display | | ✅ | hand-drawn (pen tool) arrows are not detected |
+| Card title (Z11): typed title in the dialog or *Set card title* (title + aliases, note renamed from `<id>` to `<id> <title>`) | ✅ | ✅ title/alias changes; ❌ rename, prompt | | | |
+| Card regions on the page (outline + id badge, `pointer-events: none`), setting and command to hide them | ✅ | ❌ (DOM over the canvas) | | | not checked that the overlay never disturbs S Pen input |
+| Cards never deleted; `orphaned` set/cleared with the page; *Show orphaned cards*; card notes edited only in the frontmatter, body kept byte for byte, no write when unchanged | ✅ | ✅ frontmatter edit, orphan rule; ❌ triggers and `vault.process` | | | |
+| Companion notes never claim a card note (same `notebook` link and `notebook-id`) | ✅ | ❌ (needs the Vault) | | | |
 
 ## Automated checks
 
@@ -260,6 +268,14 @@ For each step note **pass / fail / notes** in the table at the end.
 60. **Commands and hotkeys.** In Settings > Hotkeys search "Notebook", assign keys to *Tool: pen*, *Favourite pen 2*, *Next page* and *Toggle pen only*, and use them with a keyboard in a notebook; with a Markdown note active they do nothing.
 61. **Compact toolbar.** On the Samsung tablet and on a phone (also sideways): the toolbar is two rows (one line only on a wide leaf), nothing wraps further or scrolls the page sideways, and every button is easy to hit with a finger and with the S Pen. Select the pen and tap the pen button again (or the coloured dot): a popover opens under the bar with the colours and widths; choose a colour and a width, the dot follows. With the popover open, write on the page: the first touch only closes the popover and leaves no ink; the next stroke writes. Try the same with the eraser (modes *Whole stroke / Segment / Area*, the sizes, the filter and its colour swatches), the highlighter, shapes and text. Escape (keyboard) closes the popover. Tap the "…" button: *Insert image*, *Board shot*, *Ruler*, *Pen only*, *Add page*, *Page options*, *Fit to width* all work and the menu closes; the page number is its first line. Scroll the favourite pens strip with a finger and tap a pen: the strip does not start a stroke. Check the save-state dot (green saved, orange unsaved, red error). Note any control that is hard to reach and whether the popover ever covers what you need.
 
+**Zettelkasten (wave 0.6).** Steps Z1, Z2, Z3, Z11 and Z12 below; note the results in the rows with the same labels.
+
+- **Z1 Cards.** In a notebook, write two short ideas apart from each other. Select the first with the lasso, open the ⋯ menu of the notebook tab (or the command *Make card from selection*): the *New card* dialog shows the ink; type a title, choose a type, a source and two tags, *Create card*. Expected: a note `Zettelkasten/<id> <title>.md` with those properties, `notebook-id`, `page-id`, `region` and the ink shown below the properties. Write more in that region of the page: once the notebook is saved, the card's preview follows. Move the page with the Pages panel: the card still shows the same ink. Repeat with *Make card from this page*. Switch *Card ids* to Luhmann numbering and make two cards, the second with *Branch of card* = the first id (expected ids `1` and `1a`).
+- **Z2 Slip-box.** Run *New slip-box*: an A6 notebook opens and its first page already has a card (id badge at the top right of the page). Add two pages: a few seconds after they are saved, two more cards exist (one per page), none created twice. Turn an existing notebook with several pages into a slip-box from the ⋯ menu: a confirmation gives the number of notes first. Delete a page: its card gets `orphaned: true` and is listed by *Show orphaned cards*; undo: the flag goes away. If you use sync, open the slip-box on a second device and check that no card appears twice.
+- **Z3 Drawn links.** On a page with two region cards, choose the shape tool's arrow and draw from the first region to the second. A few seconds later both card notes have the other in `links`, and the graph shows the link. Remove the link from one note by hand: it does not come back. Run *Link cards joined by arrows on this page*: it does come back (explicit request).
+- **Z11 Title and transcription.** In a slip-box page without a title, run *Set card title*: the note gets `title` and `aliases` and is renamed from `<id>.md` to `<id> <title>.md`; a link to it in another note follows the rename. Type text under *Transcription* in the note and then write on the page: the text stays untouched.
+- **Z12 Regions and container.** Toggle *Show or hide card regions*: outlines and badges disappear and come back; with them shown, write, erase and lasso across an outline with the S Pen and with a finger: input is exactly as without them. Rename the notebook in the file explorer: cards keep working (their `notebook` link is updated by Obsidian). Turn on *Companion notes* and open the notebook: the companion note is a separate note, never one of the cards.
+
 | Step | Device / Obsidian version | Result | Notes |
 |---|---|---|---|
 | 1 Create and write | | | |
@@ -323,6 +339,11 @@ For each step note **pass / fail / notes** in the table at the end.
 | 59 Pen only | | | |
 | 60 Commands and hotkeys | | | |
 | 61 Compact toolbar | | | |
+| Z1 Cards | | | |
+| Z2 Slip-box | | | |
+| Z3 Drawn links | | | |
+| Z11 Title and transcription | | | |
+| Z12 Regions and container | | | |
 
 Benchmark output (step 21): paste it here.
 

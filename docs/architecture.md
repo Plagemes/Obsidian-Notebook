@@ -256,6 +256,17 @@ src/
     lecture-commands.ts   commands and ribbon icon for the three features above and the loose sheet
     settings-tab.ts       settings UI
     companion-settings.ts companion note settings (declarative and classic settings UI)
+  zettel/                 Zettelkasten core (M15, §12 "Zettelkasten"); the first five files are pure (no 'obsidian', lint-enforced)
+    subpath.ts            card subpaths `#p3&id=<page id>&r=x,y,w,h`: parse/build, page lookup by id, region clamping
+    ids.ts                card ids: timestamp, Luhmann (top level and branches), file names
+    card-content.ts       card note text, reading a card from frontmatter, frontmatter-only edits (orphaned, links, title)
+    arrows.ts             arrow strokes → tail/tip → the two cards they join (drawn links)
+    settings.ts           card folder, id scheme, region display, slip-box notebook ids; A6 page size
+    service.ts            card index from the metadata cache, triggers (own save / remote change, pen deferral), writes, actions
+    overlay.ts            card outlines and id badges over the pages (DOM, `pointer-events: none`)
+    modals.ts             "New card" dialog, card list, slip-box confirmation
+    settings-ui.ts        Zettelkasten settings (declarative and classic)
+    index.ts              registers the service, commands and the notebook tab menu entries
 scripts/check-bundle.mjs          fails the build if main.js requires anything but 'obsidian'
 scripts/make-stress-notebook.mjs  writes a stress .notebook from the PC (alternative to the in-app command)
 tests/                    vitest on model/, ink/, storage/, library/, pdf/, scan/, integration/ ("unit" project, `npm test`); model.perf.ts is the `npm run bench` suite ("perf" project)
@@ -542,3 +553,33 @@ Only pages with text get a section. The heading is language-neutral (`p. N`), so
 **Library and index.** Companion notes are `.md`, which `isNotebookFile` rejects, so the library, the index, the picker and version history never treat them as notebooks. A companion folder placed inside the notebooks folder shows up in the library sidebar as a folder without notebooks.
 
 **M4.** If notebooks become `.md` (option B), the notebook file itself gets `companionContent()` as its frontmatter and generated body (the region markers and merge rules stay), the `notebook` property is dropped, and the migration can fold an existing companion into the notebook: its user text and properties are already separated from the generated parts. Links like `[[Physics]]` written against a companion at the default place (`Physics.md` next to `Physics.notebook`) then point at the migrated notebook.
+
+### Zettelkasten (M15 Z1, Z2, Z3, Z11, Z12; wave 0.6)
+
+Cards (Zettel) are ordinary Markdown notes that show a page, or a region of a page, **live**: the note embeds the ink, nothing is copied, so writing in the notebook updates every card. The document format is unchanged: **nothing about cards is stored in the notebook file**.
+
+**Card note.** Created with `vault.create` in the card folder (setting, default `Zettelkasten/`), named `<id> <title>.md` (just `<id>.md` without a title; ` 2`, ` 3`… if taken). Properties, in order: `zettel-id`, `title`, `aliases` (the title), `type` (`permanent` | `literature` | `fleeting`), `source`, `date` (local `YYYY-MM-DD`), `tags`, `notebook` (`[[<vault path>|<name>]]`: the graph shows card → notebook), `notebook-id` (document id), `page-id` (the page's id, never its index), `region` (`x,y,w,h` in page units, absent for a whole-page card). Body: the live embed, then an empty `## Transcription` section (Z11; language-neutral so handwriting recognition can fill it later, M5):
+
+```
+![[Notebooks/Box.notebook#p3&id=<page id>&r=40,60,200,120]]
+
+## Transcription
+```
+
+**Card subpath** (`zettel/subpath.ts`, used by `links.ts`, `page-links.ts` and `embed.ts`). After `#`: the page part as before (`p3`), then `&`-separated parameters in any order: `id=<page id>` and `r=x,y,w,h` (one decimal). Unknown parameters are ignored, a malformed `id` or `r` is an error shown in the embed. With `id`, the embed shows that page wherever it is now (the `p3` is only a fallback for readers that do not know `id`); if no page has that id the embed says the card's page was deleted and never shows another page. With `r`, the page preview renderer (`library/thumbnail.ts`, option `region`) draws only that part, at the region's own aspect ratio, with the PDF or image background rendered at the matching resolution. Plain `#p3` links behave as before; following a card link opens the notebook at the `p3` page.
+
+**Index.** `ZettelService` keeps an in-memory map of cards built from the metadata cache (`zettel-id` + `notebook-id` + `page-id`), updated on `metadataCache` `changed` and vault `delete`/`rename` of `.md` files. Those events only update the index and redraw overlays; they never write. A note counts as a card of a notebook file when its `notebook-id` is that document's id and its `notebook` link resolves to that file (or to no notebook: moved outside Obsidian), so a file copy of a notebook (same id) does not take over the original's cards. Companion notes skip any note with a `zettel-id` (`companionClaim` would otherwise accept a card, whose `notebook` link and `notebook-id` match).
+
+**Writes** (zero data loss, no sync churn).
+- A card is created only on an explicit action (*Make card from selection*, *Make card from this page*, the slip-box commands) or, in a slip-box, after this device's own save added a page.
+- After creation the plugin only ever changes three things, each with one `vault.process` that re-serializes the frontmatter block only when a value really changes (`editProperties`; the body is kept byte for byte, invalid YAML leaves the note alone with a notice): `orphaned` (set when the card's page is no longer in its notebook, removed when it is back, e.g. after undo), `links` (drawn links, appended, never removed) and `title`/`aliases` (*Set card title*, explicit). Earlier titles stay in `aliases`. A note still named after its id alone is renamed to `<id> <title>` through `fileManager.renameFile`, so links follow.
+- **A card is never deleted** by the plugin. Orphaned cards (page deleted, or notebook not found) are listed by *Show orphaned cards*; *Show cards of this notebook* marks them too.
+- Triggers are notebook `modify` events only: 4 s after this device's own save (`DocumentSession.isOwnWrite`), 30 s after any other change (sync, another app: the other device's card writes usually arrive first, and identical values cause no write). Due work waits until no pointer is down in a notebook view and 1.5 s have passed (`InputWatch`, shared with companion notes). Slip-box creation and arrow links run only after own saves, so two devices do not both create the same card.
+
+**Slip-box (Z2).** A notebook is a slip-box when its document id is in the setting `zettelSlipBoxes` (plugin settings, not the notebook file: no format change). *New slip-box* creates a notebook with A6 pages (105 × 148 mm, default paper) and a card for its first page; new pages use the size of the page they follow, so they are A6 too. *Make this notebook a slip-box* creates a card for every page without a whole-page card (asking first when there is more than one). After an own save of a slip-box, every page without a card gets one (at most 20 at a time; a `<doc id>/<page id>` set prevents duplicates while the metadata cache catches up). Limitation: the setting is per device unless the plugin settings are synced; a device that does not know the notebook is a slip-box just does not create cards (the cards created elsewhere arrive by sync).
+
+**Drawn links (Z3).** An arrow drawn with the shape tool (or recognised from a held stroke) is one polyline tail → tip → wing → tip → wing (`ink/shapes.ts`). `arrowEnds` takes the point farthest from the tail as the tip and checks the straight shaft and the out-back-out head; `cardAt` maps each end to the smallest region card containing it (6 pt tolerance), else to the page's whole-page card. Tail and tip on two different cards add a wikilink to the other card to each note's `links` list (`addLinks`, de-duplicated by target), which Obsidian shows in the graph and backlinks. Automatically, only arrows drawn after the notebook was opened in this session are linked (the shape strokes present when the view first had the document are remembered), so a link the user removed from a note is not put back; *Link cards joined by arrows on this page* does every arrow on the page on request. Deleting an arrow does not remove the link.
+
+**Region overlay.** `NotebookView` exposes two small hooks for DOM overlays (`overlayChanged`, called at the end of every `setViewport`, and `overlayGeometry()` with the stage, viewport and page boxes) and `selectionRegion()` (lasso bounds). `zettel/overlay.ts` places one absolutely positioned element per visible card on the stage (`pointer-events: none`, so it never affects input): a dashed outline for region cards and a small id badge (top right; whole-page cards only get the badge). Setting *Show card regions* (on by default) and the command *Show or hide card regions*.
+
+**Z12, the M4 container move.** Everything goes through `storage/format.ts` (`isNotebookFile`, `readNotebookText`) and the document id; cards refer to pages by id, so a migration that keeps document and page ids keeps every card. If notebooks become `.md`, the notebook's own frontmatter will hold `notebook-id` (companion content), but never `zettel-id`, so it is not taken for a card. Obsidian renders `![[X.md#…]]` itself, so the migration rewrites the embed line of card notes (`zettel-id` in frontmatter, line = `cardEmbed()`) to the `notebook` code block form with the same subpath (`path: X.md#p3&id=…&r=…`), which `parseEmbedSource` already reads; the card's properties need no change.
