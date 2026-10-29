@@ -341,7 +341,12 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 
 ### D. Sharing and open formats
 164. **P2** Interactive HTML export: zoomable vector pages that open anywhere, without Obsidian.
-165. **P3** Shared session on the local network: several people writing on the same notebook over Wi-Fi, no cloud.
+165. **P2** Collaboration, also with people who do not use Obsidian:
+    - Guests join from any browser through a lightweight web viewer/editor; nothing to install.
+    - Direct peer-to-peer connection (WebRTC) set up by scanning a QR code; works on the same network even without internet; no mandatory cloud.
+    - Live: everyone's pen and cursor visible, a colour per participant (#123), permissions (view only, write on own layer, write anywhere), "follow the presenter", laser pointer, shared PDF pages, optional audio.
+    - Conflict-free by design: every stroke has a unique id, so concurrent edits never clash; at the end everything lands in the host's notebook with the author of each stroke.
+    - Asynchronous too: people without Obsidian annotate in the web viewer (#164) and send back an annotation package that is imported with one tap; or the notebook is shared on Drive with conflict merging (#122).
 166. **P3** InkML export (open standard for digital ink).
 167. **P2** Documented format with a JSON Schema, so other tools can read notebooks.
 
@@ -356,15 +361,25 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 173. **P2** Minimap for infinite pages and high zoom.
 
 ### G. More original ideas
-174. **P2** Draft and fair copy: write a draft, then the draft dims and you rewrite cleanly on top; the draft can be hidden.
-175. **P2** Magnifier lens following the pen, to read small PDF text while writing.
+174. ~~**P2** Draft and fair copy: write a draft, then the draft dims and you rewrite cleanly on top; the draft can be hidden.~~ — dropped (user decision, 2026-10-29)
+175. ~~**P2** Magnifier lens following the pen, to read small PDF text while writing.~~ — dropped (user decision, 2026-10-29)
 176. **P1** Loose sheet: a quick-notes notebook opened from anywhere in Obsidian; move its content to the right notebook later.
 177. **P2** Inbox folder: files shared from other Android apps land there and the plugin offers to put them into a notebook.
 178. **P2** Split an infinite page into A4 pages for export and printing.
 179. **P2** Two-way page references: if page 3 refers to page 7, page 7 shows "referenced on page 3".
 180. **P1** Restore a single page from a previous version, leaving the rest untouched.
-181. **P3** Reference sheets per subject (periodic table, formula sheets, constants) kept at hand.
-182. **P2** Built-in scientific calculator with unit conversion; the result is inserted on the page.
+181. **P2** Reference sheets, dynamic and integrated:
+    - Sources: built-in sheets (interactive periodic table with element data, physical constants, formula sheets, unit tables, Greek alphabet), your own notebook pages or Obsidian notes marked as "reference", and sheets you add.
+    - Search, subject filters, and suggestions based on the course of the open notebook.
+    - Docked side panel or floating window.
+    - Drag a formula or an element card onto the page and it becomes a real element (formula #110 or stamp #142); values are available by name in the calculator (#182).
+    - Visual style consistent with the rest of the plugin and with Obsidian.
+182. **P2** Advanced calculator:
+    - Unit-aware expressions ("3 km/h to m/s") and constants by name from the reference sheets (g, c, h…).
+    - Variables that persist on the page (a = 3.2, then a·2); exact fractions, complex numbers, matrices and vectors, statistics on lists, numeric equation solver.
+    - Degrees/radians, scientific notation and significant figures configurable; calculation history tape; large pen-friendly keys; link to function graphs (#113).
+    - The result is inserted as text or as a formula element together with its expression.
+    - Same safe math parser as the graphs (no code execution). Later (M5): handwritten calculations.
 183. **P3** Gentle snapping of handwriting to the lines while writing on ruled paper.
 184. **P2** Paint bucket: fill closed areas with colour (diagrams, maps).
 185. **P1** Erase area: draw an outline and everything inside disappears, in one gesture.
