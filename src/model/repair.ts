@@ -74,7 +74,7 @@ export type RepairResult =
 
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 /** Page fields of the current format (a field dropped by the repair is not "unknown"). */
-const PAGE_FIELDS = { id: 1, width: 1, height: 1, paper: 1, strokes: 1, elements: 1, background: 1, infinite: 1 };
+const PAGE_FIELDS = { id: 1, width: 1, height: 1, paper: 1, strokes: 1, elements: 1, background: 1, infinite: 1, margins: 1 };
 const HEX_RE = /^[0-9a-f]+$/;
 
 function isObj(v: unknown): v is RawObject {
@@ -126,7 +126,7 @@ function jsonOrUndefined(text: string): unknown {
 
 const HEADER_LINE = /^\t"(format|version|id|createdAt|modifiedAt|meta)": (.*)$/;
 const ASSET_LINE = /^\t\t("[0-9a-f]+"): (\{.*\}),?$/;
-const PAGE_FIELD_LINE = /^\t\t\t"(id|width|height|paper|background|infinite)": (.*)$/;
+const PAGE_FIELD_LINE = /^\t\t\t"(id|width|height|paper|background|infinite|margins)": (.*)$/;
 const ITEM_LINE = /^\t\t\t\t(\{.*\}),?$/;
 
 /** Reads the line layout of `serialize()`; lines that are damaged are skipped. */
@@ -446,6 +446,12 @@ function salvageSkeleton(p: RawObject, ctx: SalvageContext): { page: RawObject; 
 		if (tryDoc([withBg], ctx.assets)) page.background = p.background;
 		else ctx.summary.backgroundsLost++;
 	}
+	if (p.margins !== undefined) {
+		// v6 margins position the background and the ink against each other: kept when they validate on this page, else reset to none.
+		const withMargins = { ...page, margins: p.margins };
+		if (tryDoc([withMargins], ctx.assets)) page.margins = p.margins;
+		else ctx.summary.fieldsReset++;
+	}
 	if (!tryDoc([page], ctx.assets)) {
 		// A rule this code does not know about: fall back to a plain page with the same id.
 		for (const k of Object.keys(page)) if (!["id", "width", "height", "paper", "strokes"].includes(k)) delete page[k];
@@ -479,7 +485,7 @@ function salvageStrokes(raw: unknown, skeleton: RawObject, ctx: SalvageContext):
 			return;
 		}
 		if (r === "taken") {
-			const copy = tryDoc([{ ...skeleton, strokes: [{ ...stroke, id: createId() }] }]);
+			const copy = tryDoc([{ ...skeleton, strokes: [{ ...stroke, id: createId() }] }], ctx.assets);
 			const fresh = copy?.pages[0]?.strokes[0];
 			if (!fresh) {
 				s.strokes.lost++;
@@ -495,7 +501,7 @@ function salvageStrokes(raw: unknown, skeleton: RawObject, ctx: SalvageContext):
 		else s.strokes.recovered++;
 	};
 	for (const item of list) {
-		const asIs = tryDoc([{ ...skeleton, strokes: [item] }])?.pages[0]?.strokes[0];
+		const asIs = tryDoc([{ ...skeleton, strokes: [item] }], ctx.assets)?.pages[0]?.strokes[0];
 		if (asIs) {
 			s.unknownFields += unknownKeys(item, asIs);
 			// A stroke cut off by the damage keeps the points before it: kept, but not "as it was".
@@ -504,7 +510,7 @@ function salvageStrokes(raw: unknown, skeleton: RawObject, ctx: SalvageContext):
 			continue;
 		}
 		const fixed = fixStroke(item);
-		const repaired = fixed ? tryDoc([{ ...skeleton, strokes: [fixed] }])?.pages[0]?.strokes[0] : undefined;
+		const repaired = fixed ? tryDoc([{ ...skeleton, strokes: [fixed] }], ctx.assets)?.pages[0]?.strokes[0] : undefined;
 		if (repaired) accept(repaired, true);
 		else s.strokes.lost++;
 	}

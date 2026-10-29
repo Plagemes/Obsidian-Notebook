@@ -59,6 +59,12 @@ Not yet verified on Android hardware.
 - **Merge conflicted copies** made by Google Drive, OneDrive, Dropbox, Syncthing and Android sync apps (notice when a notebook has one, command *Merge conflicted copies*): only files with a conflict-like name **and** the same notebook id are offered; a summary shows what will be added; everything is added and nothing removed (an item changed on both sides is kept twice); one undo step. The copy is kept, or moved to `_backup/conflicts/` only after the merged notebook was saved and checked.
 - **Restore a single page** from a previous version (page menu, command *Restore this page from a previous version*): pick a snapshot or backup, see its pages, insert the old page as a new page or replace the current one; one undo step, the rest of the notebook untouched.
 
+### Fixed
+- **Restore a single page** (*Replace current page*) keeps the v6 margins of the restored page, so its PDF is no longer stretched and its ink stays aligned.
+- **Merge conflicted copies** keeps the margins of pages that exist only in the copy; when the other device changed a page's left margin, the copy's ink is aligned to this notebook's margins before comparing, so the same ink is no longer added again as shifted duplicates, and when ink of the copy would fall off this notebook's page (left, right or bottom) that page's margins are widened in the same undo step so it stays visible; the summary reports pages with different margins, and the coverage check before moving the copy away compares content in the page's margin frame.
+- **Repair a damaged notebook** keeps page margins (validated like the other page fields, reset when invalid) instead of dropping them as unknown, and no longer loses the strokes of pages with a PDF or image background.
+- **Insert or remove space** on an infinite page with margins grows the bottom margin instead of stretching the PDF; undo restores the margins exactly.
+
 ## 0.4.1 — 2026-10-29
 ### Added
 - **Edge rejection zones** (#151): settings *Edge rejection zones* (off by default), *Edge zone width* (4-80 px) and one switch per edge (left, right, bottom on; top off). A touch that starts within that distance of an enabled edge of the page area is ignored: it neither draws nor scrolls, so a palm resting on the edge does nothing. The pen, the mouse and a touch that started inside the area are never affected; the zone never takes more than a third of the shorter side.

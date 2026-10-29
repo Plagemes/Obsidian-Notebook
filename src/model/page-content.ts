@@ -1,7 +1,8 @@
 import { createPage, findPage } from "./document";
 import { Batch, InsertPages, type Command } from "./history";
+import { marginsAfterResize } from "./margins";
 import { freezeElement } from "./serialize";
-import type { NotebookDocument, PageElement, Stroke } from "./types";
+import type { NotebookDocument, PageElement, PageMargins, Stroke } from "./types";
 
 /** The new content (and, for a page that grows, height) of one existing page. Strokes and elements are the objects to keep, in drawing order. */
 export interface PageContentChange {
@@ -30,10 +31,13 @@ export interface PageContentPlan {
  * Replaces the strokes and elements of a page (and optionally its height) in one step. Strokes and elements
  * are immutable objects, so the command keeps the arrays of what was there and puts them back on undo.
  * The page's arrays are changed in place, so anything holding them keeps seeing the page.
+ * A new height follows the same margin rule as `SetPageSize` (v6): on a page with margins the change
+ * goes to the bottom margin, so the background keeps its box instead of stretching; undo restores the
+ * previous margins exactly.
  */
 export class SetPageContent implements Command {
 	readonly label = "Move content";
-	private before: { strokes: Stroke[]; elements: PageElement[] | undefined; height: number } | null = null;
+	private before: { strokes: Stroke[]; elements: PageElement[] | undefined; height: number; margins: PageMargins | undefined } | null = null;
 
 	constructor(readonly change: PageContentChange) {
 		for (const el of change.elements ?? []) freezeElement(el);
@@ -42,7 +46,7 @@ export class SetPageContent implements Command {
 	apply(doc: NotebookDocument): void {
 		const page = findPage(doc, this.change.pageId);
 		if (!page) throw new Error(`page ${this.change.pageId} not found`);
-		this.before ??= { strokes: [...page.strokes], elements: page.elements ? [...page.elements] : undefined, height: page.height };
+		this.before ??= { strokes: [...page.strokes], elements: page.elements ? [...page.elements] : undefined, height: page.height, margins: page.margins };
 		page.strokes.splice(0, page.strokes.length, ...this.change.strokes);
 		const els = this.change.elements;
 		if (els && els.length > 0) {
@@ -51,7 +55,13 @@ export class SetPageContent implements Command {
 		} else if (page.elements) {
 			delete page.elements;
 		}
-		if (this.change.height !== undefined) page.height = this.change.height;
+		const height = this.change.height;
+		if (height !== undefined) {
+			const margins = marginsAfterResize(page, { width: page.width, height });
+			page.height = height;
+			if (margins) page.margins = margins;
+			else delete page.margins;
+		}
 	}
 
 	revert(doc: NotebookDocument): void {
@@ -67,6 +77,9 @@ export class SetPageContent implements Command {
 			delete page.elements;
 		}
 		page.height = before.height;
+		if (this.change.height === undefined) return;
+		if (before.margins) page.margins = before.margins;
+		else delete page.margins;
 	}
 }
 
