@@ -389,6 +389,72 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 189. **P2** Attachments on the page: Word files, zips and others as icons that open on tap.
 190. **P2** Page QR code: scan it with the phone and the page opens on the other device.
 
+## M13 — During the lecture (backlog, planned 2026-10-29)
+
+Features for following a lecture live. Exam and review features stay in the separate "Study and exam update". Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for all.
+
+### Before the lecture
+191. **P1** Lecture pack: import the course slides and the lecture notebook is ready (slides, room for notes, header, dated section).
+192. **P1** Slide + notes layout: each slide scaled down on a page with lines beside or below it (1, 2 or 3 slides per page).
+193. **P1** A notes page after every slide (import option).
+194. **P2** Timetable imported from the university calendar (.ics).
+195. **P2** Course syllabus page: topics get ticked as lectures cover them, with links to the pages.
+
+### During the lecture: fast capture
+196. **P1** Instant board shot: one tap, automatic crop and whiteboard filter, the photo lands where you are writing, with the time.
+197. **P2** Burst of projected slides: perspective corrected, two shots of the same slide merged.
+198. **P2** Phone as the tablet's camera: shoot with the phone and the photo appears in the notebook open on the tablet (paired with a QR code).
+199. **P1** Dim the background: slides or PDFs become lighter so the ink stands out.
+200. **P2** Zoomed detail: crop a region of a slide and place it enlarged beside it, linked to the original.
+201. **P1** "To complete" placeholder: when you fall behind, leave a marked gap with time and slide; later you get the list of gaps.
+202. **P1** Questions for the lecturer: mark a question on the page; it goes to a list for the end of class or office hours, with a resolved state.
+203. **P1** Importance markers (!, !!, ★) on the page, collected per lecture.
+204. **P1** Structured boxes: Definition, Theorem, Example, Proof, Remark — frames drawn on the fly that become callouts in the companion note.
+205. **P2** Automatic numbering of boxes (Def. 3.2) and an index of the course's definitions and theorems.
+206. **P2** Instant axes: one gesture drops Cartesian axes with ticks for quick hand-drawn graphs.
+207. **P2** Personal shorthand: your abbreviation symbols with an automatically generated legend.
+208. **P1** Quick textbook reference: "p. 134" becomes a link to the textbook PDF at that page.
+209. **P1** Assigned homework: a "homework" stamp with a due date that becomes an Obsidian task.
+210. **P2** Automatic lecture header: course, lecturer, room, date and time from the timetable.
+211. **P1** "Pen only" toggle at hand: instantly ignores fingers when you rest your hand.
+212. **P2** Recent symbols: the symbols you draw most often (∀, ∫, →) become buttons to insert them quickly.
+213. **P2** "Look up later" list: circle a word and it goes to a list, with its image.
+214. **P2** Compact lecture toolbar: only 4–5 large tools.
+215. **P2** Tracing mode: the board photo stays semi-transparent underneath, you trace it by hand, then remove it.
+
+### Structure and time
+216. **P1** "New lecture" command: creates a section with date and title in the course notebook.
+217. **P2** Start and end time on every page (also the basis for audio in M5).
+218. **P2** Automatic new-lecture suggestion after a long pause since the last writing.
+219. **P2** "Lecture" and "study" profiles: one tap switches pens, paper and stabilization for fast or careful writing.
+220. **P2** End-of-lecture summary: three guided lines (Cornell style), also saved in the companion note.
+221. **P2** Lecture log in the daily note.
+222. **P2** Automatic snapshot at the end of the lecture (version history).
+223. **P1** "End of lecture" panel: open questions, gaps, homework and markers at a glance.
+
+### Slides and board
+224. **P2** "Slide explained" ticks: see how far the lecturer has got.
+225. **P2** "Back to the current slide" after looking elsewhere.
+226. **P1** Automatic notes ↔ slide link: ink remembers which slide was visible in the side-by-side view while you wrote it; tapping it shows that slide again.
+227. **P2** Quick tabs: pages pinned during the lecture (e.g. the formula sheet), one tap away.
+228. **P2** Lecture figure gallery: all photos and crops of the section in one place.
+229. **P3** Peek at the next slide while writing.
+230. **P3** Continuous board: a horizontally scrolling page for long blackboards.
+
+### Online or recorded lectures
+231. **P2** Lecture video side by side: floating video window; each note remembers the minute and tapping it resumes the video there.
+232. **P2** Video frame into the notebook.
+233. **P2** External audio recording aligned to the notes by clock time (recorded with another app).
+234. **P3** Imported subtitles/transcript (.srt, .vtt) aligned in time and shown next to the pages.
+
+### After the lecture: completing
+235. **P1** Slides published later: when the lecturer publishes the slides, they are aligned to the notes (by number or time) and replace the placeholders.
+236. **P2** Completion walkthrough: a guided tour of the gaps and open questions.
+237. **P2** A classmate's notes side by side with yours for the same lecture (PDF or photos).
+238. **P2** One-step page tidy-up: align, straighten and compact spacing.
+239. **P2** Clean notes export: the lecture as a PDF without placeholders or markers, ready to share.
+240. **P2** Lecture shared with the study group: at the end, a rule exports the clean notes to a shared (Drive) folder.
+
 ### Study and exam update (to be designed later)
 
 Exam and review features will ship as one coherent update, designed later together: #24 (flashcards from the lasso), #89 (scheduled review), #116 (exam review plan), #117 (review coverage map), #133 (course dashboard). Not planned for now.
