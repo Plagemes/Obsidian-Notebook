@@ -318,7 +318,7 @@ export class PageMode {
 		}
 		const size = this.host.viewSize();
 		const n = layout.boxes.length;
-		const velocity = recentVelocity(this.samples);
+		const velocity = recentVelocity(this.samples, performance.now());
 		const dir = decideTurn(this.shownDrag(), velocity, size.width, this.anchor > 0, this.anchor < n - 1);
 		const target = this.anchor + dir;
 		const from = this.host.viewport();

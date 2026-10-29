@@ -306,6 +306,7 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 		await frames(2);
 	}
 
+	await checkPageMode(add);
 	await checkToolbar(add);
 
 	const unexpected = errors.filter((e) => !expectedError?.test(e));
@@ -323,6 +324,91 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 		wetDesynchronized: (wet?.getContext("2d") as any)?.getContextAttributes?.()?.desynchronized ?? null,
 	};
 	return { ok, results, errors: unexpected, notices: [...notices], env, points };
+}
+
+/**
+ * One page at a time (#14): the toolbar item turns it on, pages sit side by side, a finger swipe turns the page and it
+ * snaps, a vertical finger drag does not, a pen drag across the page draws and does not, and the mode switches back.
+ */
+async function checkPageMode(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
+	const v = view as any;
+	const st = stage();
+	if (v.session.doc.pages.length < 2) v.addPage();
+	v.scrollToPage(0);
+	await frames(3);
+	const pages = v.session.doc.pages.length;
+	const label = `page mode ${window.innerWidth}px`;
+	const swipe = async (from: [number, number], to: [number, number], opts: { type?: string; steps?: number; stepMs?: number; rest?: number } = {}) => {
+		const r = st.getBoundingClientRect();
+		const id = pointerId++;
+		const type = opts.type ?? "touch";
+		const steps = opts.steps ?? 10;
+		const ev = (name: string, fx: number, fy: number, extra: PointerEventInit = {}) =>
+			new PointerEvent(name, {
+				bubbles: true, cancelable: true, composed: true, pointerId: id, pointerType: type, isPrimary: true,
+				pressure: 0.5, width: 1, height: 1, button: 0, buttons: 1, clientX: r.left + fx * r.width, clientY: r.top + fy * r.height, ...extra,
+			});
+		st.dispatchEvent(ev("pointerdown", from[0], from[1]));
+		for (let i = 1; i <= steps; i++) {
+			st.dispatchEvent(ev("pointermove", from[0] + ((to[0] - from[0]) * i) / steps, from[1] + ((to[1] - from[1]) * i) / steps));
+			await wait(opts.stepMs ?? 8);
+		}
+		if (opts.rest) await wait(opts.rest);
+		st.dispatchEvent(ev("pointerup", to[0], to[1], { buttons: 0, pressure: 0 }));
+		for (let i = 0; i < 60 && v.pageMode?.busy; i++) await frames(1);
+		await frames(3);
+	};
+
+	// The toolbar item switches the mode on.
+	(v.toolbar as any).closePopover();
+	click(byLabel(document, "More actions"), "more button");
+	await frames(2);
+	click(byText(document.querySelector(".notebook-more")!, "One page at a time"), "One page at a time");
+	await frames(3);
+	add(`${label}: the toolbar item turns on one page at a time`, v.pageMode.enabled === true && v.host.settings.scrollMode === "pages", `enabled ${v.pageMode.enabled}, setting ${v.host.settings.scrollMode}`);
+	const boxes = v.layout.boxes as Array<{ x: number; y: number; width: number }>;
+	add(`${label}: pages sit side by side`, boxes.length === pages && boxes.every((b, i) => b.y === 0 && (i === 0 || b.x > boxes[i - 1]!.x)), `${boxes.length} boxes`);
+	add(`${label}: starts on the first page`, v.currentPageIndex() === 0, `page ${v.currentPageIndex() + 1}`);
+	const paper = staticPixel(0.5, 0.3);
+	add(`${label}: the page is painted`, paper[3]! > 250 && paper[0]! > 200, `rgba(${paper.join(",")})`);
+	const x0 = v.viewport.offsetX;
+
+	// A mostly vertical finger drag scrolls (or does nothing) but never turns the page.
+	await swipe([0.5, 0.7], [0.45, 0.3]);
+	add(`${label}: a vertical drag does not turn the page`, v.currentPageIndex() === 0 && Math.abs(v.viewport.offsetX - x0) < 1, `page ${v.currentPageIndex() + 1}, offsetX ${v.viewport.offsetX.toFixed(1)} vs ${x0.toFixed(1)}`);
+	await swipe([0.45, 0.3], [0.5, 0.7]);
+
+	// A pen drag across the page draws, it does not turn the page.
+	setTool("pen");
+	const before = strokeCount();
+	await penStroke([[0.85, 0.45], [0.15, 0.45]]);
+	add(`${label}: a pen drag draws and does not turn the page`, v.currentPageIndex() === 0 && strokeCount() === before + 1, `page ${v.currentPageIndex() + 1}, strokes ${before} → ${strokeCount()}`);
+
+	// A short slow drag springs back; a long swipe turns and snaps.
+	await swipe([0.5, 0.5], [0.4, 0.5], { stepMs: 30, rest: 150 });
+	add(`${label}: a short drag springs back`, v.currentPageIndex() === 0 && Math.abs(v.viewport.offsetX - x0) < 1, `page ${v.currentPageIndex() + 1}, offsetX ${v.viewport.offsetX.toFixed(1)}`);
+	await swipe([0.85, 0.5], [0.15, 0.5]);
+	const snapped = v.currentPageIndex() === 1;
+	const box1 = v.layout.boxes[1];
+	const left = box1.x * v.viewport.scale + v.viewport.offsetX;
+	add(`${label}: a finger swipe turns to the next page and it snaps`, snapped && left >= 0 && left < st.getBoundingClientRect().width * 0.5 && !v.pageMode.busy,
+		`page ${v.currentPageIndex() + 1}, left edge ${left.toFixed(1)} px`);
+	const toolbarPage = document.querySelector(".notebook-page-indicator")?.textContent ?? "";
+	add(`${label}: the page indicator follows`, toolbarPage.includes(`2 / ${pages}`) || toolbarPage === "", `"${toolbarPage}"`);
+	const second = staticPixel(0.5, 0.3);
+	add(`${label}: the next page is painted`, second[3]! > 250 && second[0]! > 200, `rgba(${second.join(",")})`);
+	await swipe([0.15, 0.5], [0.85, 0.5]);
+	add(`${label}: and back to the first`, v.currentPageIndex() === 0 && Math.abs(v.viewport.offsetX - x0) < 1, `page ${v.currentPageIndex() + 1}`);
+
+	// Back to continuous scrolling.
+	click(byLabel(document, "More actions"), "more button");
+	await frames(2);
+	click(byText(document.querySelector(".notebook-more")!, "One page at a time"), "One page at a time");
+	await frames(3);
+	const ys = (v.layout.boxes as Array<{ y: number }>).map((b) => b.y);
+	add(`${label}: the toolbar item switches back to continuous`, v.pageMode.enabled === false && ys[1]! > ys[0]! && v.currentPageIndex() === 0 && v.host.settings.scrollMode === "continuous",
+		`enabled ${v.pageMode.enabled}, page ${v.currentPageIndex() + 1}`);
+	await frames(2);
 }
 
 /** Fraction of the stage height that is still on the first page, a little above its bottom edge (at most 0.75). */
@@ -469,7 +555,7 @@ async function checkToolbar(add: (name: string, ok: boolean, detail?: string) =>
 	const menu = bar.querySelector(".notebook-more") as HTMLElement;
 	r = menu.getBoundingClientRect();
 	const items = Array.from(menu.querySelectorAll("button")).filter((b) => b.offsetParent !== null);
-	add(`${label}: the more menu opens inside the view with its 7 actions`, tb.openPopover === "more" && inView(r) && r.bottom <= window.innerHeight && items.length === 7,
+	add(`${label}: the more menu opens inside the view with its 8 actions`, tb.openPopover === "more" && inView(r) && r.bottom <= window.innerHeight && items.length === 8,
 		`menu ${Math.round(r.left)}–${Math.round(r.right)}, bottom ${Math.round(r.bottom)} of ${window.innerHeight}, ${items.length} items, ${tb.openPopover}`);
 	add(`${label}: more menu rows are at least 40 px`, items.every((b) => b.offsetHeight >= 40), items.map((b) => b.offsetHeight).join(","));
 	click(byText(menu, "Ruler"), "Ruler");

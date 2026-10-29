@@ -127,6 +127,9 @@ describe("turning", () => {
 		const slowThenFast = [{ t: 0, dx: 5 }, { t: 400, dx: 5 }, { t: 410, dx: -20 }, { t: 420, dx: -20 }];
 		expect(recentVelocity(slowThenFast)).toBeLessThan(-1);
 		expect(recentVelocity([{ t: 100, dx: 30 }])).toBeCloseTo(30 / 16);
+		// A finger that rested before lifting is not flicking.
+		expect(recentVelocity(slowThenFast, 420 + 50)).toBeLessThan(-1);
+		expect(recentVelocity(slowThenFast, 420 + 300)).toBe(0);
 	});
 
 	it("resists dragging past the first and last page", () => {

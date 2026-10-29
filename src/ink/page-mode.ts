@@ -126,14 +126,20 @@ export function decideTurn(drag: number, velocity: number, viewWidth: number, ha
 	return 0;
 }
 
-/** Sideways velocity (CSS px/ms) from recent moves, ignoring samples older than `windowMs` before the last. */
-export function recentVelocity(samples: ReadonlyArray<{ t: number; dx: number }>, windowMs = 90): number {
+/**
+ * Sideways velocity (CSS px/ms) from the moves in the last `windowMs` before `now` (the lift). A finger that
+ * rested before lifting has no velocity.
+ */
+export function recentVelocity(samples: ReadonlyArray<{ t: number; dx: number }>, now?: number, windowMs = 90): number {
 	if (samples.length === 0) return 0;
 	const end = samples[samples.length - 1]!.t;
+	if (now !== undefined && now - end > windowMs) return 0;
 	const recent = samples.filter((s) => end - s.t <= windowMs);
 	const first = recent[0]!.t;
+	if (recent.length === 1) return recent[0]!.dx / 16;
+	// The first sample only marks where the window starts: its own travel happened before it.
 	const span = Math.max(16, end - first);
-	return recent.reduce((a, s) => a + s.dx, 0) / span;
+	return recent.slice(1).reduce((a, s) => a + s.dx, 0) / span;
 }
 
 export type SwipeAxis = "none" | "x" | "y" | "free";
