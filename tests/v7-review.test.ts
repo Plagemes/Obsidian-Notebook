@@ -4,7 +4,7 @@
  * pages, the library index version.
  */
 import { describe, expect, it } from "vitest";
-import { setBookmark } from "../src/model/bookmarks";
+import { categoriesInUse, setBookmark } from "../src/model/bookmarks";
 import { cloneMeta, createDocument, createPage } from "../src/model/document";
 import { History } from "../src/model/history";
 import { mergeChangeCount, mergeCovers, planMerge } from "../src/model/merge";
@@ -58,5 +58,15 @@ describe("merge of bookmark details, field by field", () => {
 		new History(() => main).execute(plan.command!);
 		expect(main.meta?.bookmarkInfo?.p1).toEqual({ title: "Main", color: "#3b82f6", category: "review" });
 		expect(mergeCovers(parsed(serialize(main)).doc, other)).toBe(false);
+	});
+});
+
+describe("categories in use", () => {
+	it("ignores bookmarks left on pages that no longer exist", () => {
+		const doc = twoPages();
+		let meta = setBookmark(doc.meta!, "p1", { category: "review" });
+		meta = setBookmark(meta, "gone", { category: "old course" });
+		expect(categoriesInUse(meta)).toEqual(["review", "old course"]);
+		expect(categoriesInUse(meta, doc.pages)).toEqual(["review"]);
 	});
 });
