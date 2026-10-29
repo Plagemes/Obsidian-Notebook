@@ -1,4 +1,5 @@
 import { InputPolicy } from "./input-policy";
+import { ErrorOnce } from "./errors";
 
 /** A pointer sample in CSS px relative to the element. */
 export interface InkSample {
@@ -94,10 +95,18 @@ interface NavPointer {
  * Turns Pointer Events into strokes and navigation gestures.
  * Only one pointer draws at a time; the pen takes precedence over everything.
  */
+export interface PointerControllerOptions {
+	/**
+	 * Also listen to `pointerrawupdate` (Chromium, secure contexts): samples arrive as soon as the OS
+	 * delivers them, not once per frame. Part of the experimental low-latency ink; off by default.
+	 */
+	rawUpdates?: boolean;
+}
+
 export class PointerController {
 	predictionEnabled = false;
-	/** `pointerrawupdate` is listened to (Chromium, secure contexts): samples arrive as soon as the OS delivers them, not once per frame. */
-	readonly rawUpdates: boolean;
+	private rawListener: ((e: Event) => void) | null = null;
+	private readonly errors = new ErrorOnce("input");
 
 	private drawId: number | null = null;
 	private drawType = "";
@@ -121,19 +130,17 @@ export class PointerController {
 		private readonly el: HTMLElement,
 		private readonly policy: InputPolicy,
 		private readonly handlers: PointerHandlers,
+		options: PointerControllerOptions = {},
 	) {
 		this.rect = el.getBoundingClientRect();
-		this.listen("pointerdown", (e) => this.onDown(e));
-		this.listen("pointermove", (e) => this.onMove(e));
-		this.rawUpdates = typeof window !== "undefined" && "onpointerrawupdate" in window;
-		if (this.rawUpdates) {
-			const raw = (e: Event) => this.onRawUpdate(e as PointerEvent);
-			el.addEventListener("pointerrawupdate", raw);
-			this.disposers.push(() => el.removeEventListener("pointerrawupdate", raw));
-		}
-		this.listen("pointerup", (e) => this.onUp(e));
-		this.listen("pointercancel", (e) => this.onUp(e));
-		this.listen("lostpointercapture", (e) => this.onUp(e));
+		// Handlers are guarded: an exception in one event must not leave a stroke half-open or stop the next ones.
+		this.listen("pointerdown", (e) => this.errors.run("pointerdown", () => this.onDown(e)));
+		this.listen("pointermove", (e) => this.errors.run("pointermove", () => this.onMove(e)));
+		this.setRawUpdates(options.rawUpdates === true);
+		this.disposers.push(() => this.setRawUpdates(false));
+		this.listen("pointerup", (e) => this.guardedUp(e));
+		this.listen("pointercancel", (e) => this.guardedUp(e));
+		this.listen("lostpointercapture", (e) => this.guardedUp(e));
 		this.listen("wheel", (e) => this.onWheel(e), { passive: false });
 		this.listen("contextmenu", (e) => e.preventDefault());
 		// Keep Obsidian mobile (side drawers) and the WebView from interpreting gestures on the page.
@@ -142,6 +149,25 @@ export class PointerController {
 			e.stopPropagation();
 			if (e.cancelable) e.preventDefault();
 		}, { passive: false });
+	}
+
+	/** `pointerrawupdate` is listened to. */
+	get rawUpdates(): boolean {
+		return this.rawListener !== null;
+	}
+
+	/** Listens to `pointerrawupdate` when `on` and the browser has it; pointermove alone otherwise. */
+	setRawUpdates(on: boolean): void {
+		const supported = typeof window !== "undefined" && "onpointerrawupdate" in window;
+		const want = on && supported;
+		if (want === this.rawUpdates) return;
+		if (this.rawListener) {
+			this.el.removeEventListener("pointerrawupdate", this.rawListener);
+			this.rawListener = null;
+		} else {
+			this.rawListener = (e: Event) => this.errors.run("pointerrawupdate", () => this.onRawUpdate(e as PointerEvent));
+			this.el.addEventListener("pointerrawupdate", this.rawListener);
+		}
 	}
 
 	get drawing(): boolean {
@@ -291,6 +317,12 @@ export class PointerController {
 		this.lastX = x;
 		this.lastY = y;
 		buf.push(x - left, y - top, ce.pressure, t);
+	}
+
+	/** Pointer up/cancel; if the handler throws, the stroke is still closed so the next one can start. */
+	private guardedUp(e: PointerEvent): void {
+		const ok = this.errors.run(e.type, () => this.onUp(e));
+		if (!ok && e.pointerId === this.drawId) this.releaseDraw(e.pointerId);
 	}
 
 	private onUp(e: PointerEvent): void {
