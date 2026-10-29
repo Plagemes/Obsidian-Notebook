@@ -10,7 +10,7 @@ import type { NotebookMedia } from "./media";
 const PDF_DPI = 200;
 
 /** Path next to the notebook, adding " 2", " 3"… if taken. */
-function freePath(app: App, notebook: TFile, suffix: string, ext: string): string {
+export function freePath(app: App, notebook: TFile, suffix: string, ext: string): string {
 	const dir = notebook.parent && notebook.parent.path !== "/" ? `${notebook.parent.path}/` : "";
 	let path = normalizePath(`${dir}${notebook.basename}${suffix}.${ext}`);
 	for (let i = 2; app.vault.getAbstractFileByPath(path); i++) path = normalizePath(`${dir}${notebook.basename}${suffix} ${i}.${ext}`);
