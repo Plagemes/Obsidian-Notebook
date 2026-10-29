@@ -1,8 +1,12 @@
+import { normalizeBookmarkInfoMap } from "./bookmarks";
 import { detectVersion, migrate, MigrationError, type RawObject } from "./migrations";
+import { normalizePageTags } from "./page-tags";
+import { normalizePosition } from "./position";
 import {
 	CURRENT_VERSION, DEFAULT_META, FORMAT_ID, PAPER_KINDS, RENDER_VERSIONS, TOOLS,
-	type Asset, type AssetKind, type ImageElement, type NotebookDocument, type NotebookMeta, type Page,
-	type PageBackground, type PageElement, type PageMargins, type PaperKind, type Point, type RenderVersion, type Stroke, type TextElement, type Tool,
+	type Asset, type AssetKind, type BookmarkInfo, type ImageElement, type NotebookDocument, type NotebookMeta, type Page,
+	type PageBackground, type PageElement, type PageMargins, type PaperKind, type Point, type ReadingPosition, type RenderVersion, type Stroke,
+	type TextElement, type Tool,
 } from "./types";
 
 export type ParseFailure =
@@ -42,18 +46,39 @@ function assetLine(a: Asset): string {
 	return `\t\t${j(a.id)}: {"id":${j(a.id)},"kind":${j(a.kind)},"path":${j(a.path)},"name":${j(a.name)},"bytes":${j(a.bytes)}}`;
 }
 
-/** Tags without duplicates; bookmarks without duplicates and without ids of pages that no longer exist. */
+/**
+ * Tags without duplicates; bookmarks without duplicates and without ids of pages that no longer exist;
+ * v7 bookmark details only for bookmarked pages, normalised, in bookmark order (absent when there are none).
+ */
 function normalizeMeta(meta: NotebookMeta, pageIds: ReadonlySet<string>): NotebookMeta {
-	return {
-		tags: [...new Set(meta.tags)],
-		favorite: meta.favorite,
-		cover: meta.cover,
-		bookmarks: [...new Set(meta.bookmarks)].filter((id) => pageIds.has(id)),
-	};
+	const bookmarks = [...new Set(meta.bookmarks)].filter((id) => pageIds.has(id));
+	const out: NotebookMeta = { tags: [...new Set(meta.tags)], favorite: meta.favorite, cover: meta.cover, bookmarks };
+	const info = normalizeBookmarkInfoMap(meta.bookmarkInfo, bookmarks);
+	if (info) out.bookmarkInfo = info;
+	return out;
+}
+
+function bookmarkInfoLine(info: BookmarkInfo): string {
+	const parts: string[] = [];
+	if (info.title !== undefined) parts.push(`"title":${j(info.title)}`);
+	if (info.color !== undefined) parts.push(`"color":${j(info.color)}`);
+	if (info.category !== undefined) parts.push(`"category":${j(info.category)}`);
+	return `{${parts.join(",")}}`;
 }
 
 function metaLine(meta: NotebookMeta): string {
-	return `{"tags":${j(meta.tags)},"favorite":${j(meta.favorite)},"cover":${j(meta.cover)},"bookmarks":${j(meta.bookmarks)}}`;
+	const base = `"tags":${j(meta.tags)},"favorite":${j(meta.favorite)},"cover":${j(meta.cover)},"bookmarks":${j(meta.bookmarks)}`;
+	const info = meta.bookmarkInfo;
+	if (!info) return `{${base}}`;
+	// In bookmark order (normalizeMeta), so the line does not depend on the order keys were added in memory.
+	const entries = meta.bookmarks.filter((id) => Object.prototype.hasOwnProperty.call(info, id)).map((id) => `${j(id)}:${bookmarkInfoLine(info[id]!)}`);
+	return `{${base},"bookmarkInfo":{${entries.join(",")}}}`;
+}
+
+function positionLine(p: ReadingPosition): string {
+	return p.y !== undefined
+		? `{"page":${j(p.page)},"y":${j(p.y)},"at":${j(p.at)}}`
+		: `{"page":${j(p.page)},"at":${j(p.at)}}`;
 }
 
 function assemble(
@@ -71,6 +96,8 @@ function assemble(
 			`\t\t\t"height": ${j(page.height)},`,
 			`\t\t\t"paper": {"kind":${j(page.paper.kind)},"spacing":${j(page.paper.spacing)}},`,
 		];
+		const tags = normalizePageTags(page.tags);
+		if (tags) out.push(`\t\t\t"tags": ${j(tags)},`);
 		const b = page.background;
 		if (b) {
 			out.push(b.kind === "pdf"
@@ -87,6 +114,7 @@ function assemble(
 	});
 	const pageIds = new Set(doc.pages.map((p) => p.id));
 	const meta = normalizeMeta(doc.meta ?? DEFAULT_META, pageIds);
+	const position = normalizePosition(doc.position, pageIds);
 	const assets = Object.values(doc.assets ?? {}).sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
 	return [
 		"{",
@@ -96,6 +124,7 @@ function assemble(
 		`\t"createdAt": ${j(doc.createdAt)},`,
 		`\t"modifiedAt": ${j(doc.modifiedAt)},`,
 		`\t"meta": ${metaLine(meta)},`,
+		...(position ? [`\t"position": ${positionLine(position)},`] : []),
 		assets.length ? `\t"assets": {\n${assets.map(assetLine).join(",\n")}\n\t},` : `\t"assets": {},`,
 		`\t"pages": [\n${pages.join(",\n")}\n\t]`,
 		"}",
@@ -259,7 +288,52 @@ function readMeta(v: unknown, pageIds: ReadonlySet<string>): NotebookMeta {
 	const cover = colour(v.cover, "meta.cover");
 	if (!Array.isArray(v.bookmarks)) fail("meta.bookmarks", "expected an array");
 	const bookmarks = v.bookmarks.map((b, i) => str(b, `meta.bookmarks[${i}]`));
-	return normalizeMeta({ tags, favorite: v.favorite, cover, bookmarks }, pageIds);
+	const meta: NotebookMeta = { tags, favorite: v.favorite, cover, bookmarks };
+	if (v.bookmarkInfo !== undefined) meta.bookmarkInfo = readBookmarkInfo(v.bookmarkInfo);
+	return normalizeMeta(meta, pageIds);
+}
+
+/** v7 bookmark details: an object of objects; text fields are strings, the colour #rrggbb. */
+function readBookmarkInfo(v: unknown): Record<string, BookmarkInfo> {
+	if (!isObject(v)) fail("meta.bookmarkInfo", "expected an object");
+	const out: Record<string, BookmarkInfo> = {};
+	for (const [id, raw] of Object.entries(v)) {
+		const path = `meta.bookmarkInfo.${id}`;
+		if (!isObject(raw)) fail(path, "expected an object");
+		const info: BookmarkInfo = {};
+		if (raw.title !== undefined) {
+			if (typeof raw.title !== "string") fail(`${path}.title`, "expected a string");
+			info.title = raw.title;
+		}
+		if (raw.color !== undefined) info.color = colour(raw.color, `${path}.color`);
+		if (raw.category !== undefined) {
+			if (typeof raw.category !== "string") fail(`${path}.category`, "expected a string");
+			info.category = raw.category;
+		}
+		// A key that would change the object's prototype instead of adding an entry is not kept.
+		if (id !== "__proto__") out[id] = info;
+	}
+	return out;
+}
+
+/** v7 reading position; dropped (not rejected) when its page is not in the document. */
+function readPosition(v: unknown, pageIds: ReadonlySet<string>): ReadingPosition | undefined {
+	if (v === undefined) return undefined;
+	if (!isObject(v)) fail("position", "expected an object");
+	const page = str(v.page, "position.page");
+	const at = str(v.at, "position.at");
+	const p: ReadingPosition = { page, at };
+	if (v.y !== undefined) p.y = finite(v.y, "position.y");
+	return normalizePosition(p, pageIds);
+}
+
+/** v7 page tags: an array of strings, normalised (no "#", no duplicates); absent when empty. */
+function readPageTags(v: unknown, path: string): string[] | undefined {
+	if (!Array.isArray(v)) fail(path, "expected an array");
+	v.forEach((t, i) => {
+		if (typeof t !== "string") fail(`${path}[${i}]`, "expected a string");
+	});
+	return normalizePageTags(v);
 }
 
 function readAssets(v: unknown): Record<string, Asset> {
@@ -290,6 +364,10 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets): P
 		return stroke;
 	});
 	const page: Page = { id, width, height, paper: { kind: paper.kind as PaperKind, spacing }, strokes };
+	if (v.tags !== undefined) {
+		const tags = readPageTags(v.tags, `${path}.tags`);
+		if (tags) page.tags = tags;
+	}
 	if (v.background !== undefined) page.background = readBackground(v.background, `${path}.background`, assets);
 	if (v.margins !== undefined) page.margins = readMargins(v.margins, `${path}.margins`, width, height);
 	if (v.infinite !== undefined) {
@@ -340,8 +418,11 @@ export function validate(raw: unknown): NotebookDocument {
 		pageIds.add(page.id);
 		return page;
 	});
-	const meta = readMeta(raw.meta, new Set(pages.map((p) => p.id)));
-	return { format: FORMAT_ID, version: CURRENT_VERSION, id, createdAt, modifiedAt, pages, meta, assets };
+	const meta = readMeta(raw.meta, pageIds);
+	const doc: NotebookDocument = { format: FORMAT_ID, version: CURRENT_VERSION, id, createdAt, modifiedAt, pages, meta, assets };
+	const position = readPosition(raw.position, pageIds);
+	if (position) doc.position = position;
+	return doc;
 }
 
 export function parse(text: string): ParseResult {

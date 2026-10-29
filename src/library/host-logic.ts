@@ -1,3 +1,4 @@
+import { copyBookmarkInfoMap } from "../model/bookmarks";
 import { cloneMeta } from "../model/document";
 import { parse, serializeChecked } from "../model/serialize";
 import { DEFAULT_META, type NotebookMeta } from "../model/types";
@@ -28,6 +29,11 @@ export function mergeMeta(base: NotebookMeta | undefined, patch: Partial<Noteboo
 	if (patch.favorite !== undefined) next.favorite = patch.favorite;
 	if (patch.cover !== undefined) next.cover = patch.cover;
 	if (patch.bookmarks !== undefined) next.bookmarks = [...patch.bookmarks];
+	if ("bookmarkInfo" in patch) {
+		const info = copyBookmarkInfoMap(patch.bookmarkInfo);
+		if (info) next.bookmarkInfo = info;
+		else delete next.bookmarkInfo;
+	}
 	return next;
 }
 

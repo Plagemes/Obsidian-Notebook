@@ -3,6 +3,7 @@ import { elementBounds, type MeasureText } from "../ink/elements";
 import { strokeBounds, type BBox } from "../ink/hit-test";
 import { projectToRuler, type Ruler } from "../ink/ruler";
 import { arrowPoints, constrain, ellipsePoints, linePoints, rectPoints, type Vec } from "../ink/shapes";
+import { bookmarkInfoMapEquals, copyBookmarkInfoMap, removeBookmark } from "../model/bookmarks";
 import { cloneMeta } from "../model/document";
 import { A4_HEIGHT, A4_WIDTH, type NotebookMeta, type Page, type PageElement, type Point, type Stroke } from "../model/types";
 
@@ -77,8 +78,10 @@ export function pageSignature(page: Page): string {
 
 /** Metadata with `bookmarks` toggled for a page. */
 export function toggleBookmark(meta: NotebookMeta, pageId: string): NotebookMeta {
+	// Removing a bookmark also drops its v7 details (title, colour, category); undo brings both back.
+	if (meta.bookmarks.includes(pageId)) return removeBookmark(meta, pageId);
 	const next = cloneMeta(meta);
-	next.bookmarks = meta.bookmarks.includes(pageId) ? meta.bookmarks.filter((id) => id !== pageId) : [...meta.bookmarks, pageId];
+	next.bookmarks = [...meta.bookmarks, pageId];
 	return next;
 }
 
@@ -89,12 +92,18 @@ export function mergeMeta(meta: NotebookMeta, patch: Partial<NotebookMeta>): Not
 	if (patch.favorite !== undefined) next.favorite = patch.favorite;
 	if (patch.cover !== undefined) next.cover = patch.cover;
 	if (patch.bookmarks !== undefined) next.bookmarks = [...patch.bookmarks];
+	if ("bookmarkInfo" in patch) {
+		const info = copyBookmarkInfoMap(patch.bookmarkInfo);
+		if (info) next.bookmarkInfo = info;
+		else delete next.bookmarkInfo;
+	}
 	return next;
 }
 
 export function metaEquals(a: NotebookMeta, b: NotebookMeta): boolean {
 	const same = (x: readonly string[], y: readonly string[]) => x.length === y.length && x.every((v, i) => v === y[i]);
-	return a.favorite === b.favorite && a.cover === b.cover && same(a.tags, b.tags) && same(a.bookmarks, b.bookmarks);
+	return a.favorite === b.favorite && a.cover === b.cover && same(a.tags, b.tags) && same(a.bookmarks, b.bookmarks)
+		&& bookmarkInfoMapEquals(a.bookmarkInfo, b.bookmarkInfo);
 }
 
 /** Polyline of the shape dragged from `a` to `b` (page coordinates); empty when the drag is too short to mean anything. */

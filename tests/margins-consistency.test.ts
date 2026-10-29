@@ -13,7 +13,7 @@ import { pageContentCommand } from "../src/model/page-content";
 import { planPageRestore } from "../src/model/page-restore";
 import { repairNotebookText } from "../src/model/repair";
 import { freezeStroke, parse, serialize, serializeChecked } from "../src/model/serialize";
-import type { NotebookDocument, Page, TextElement } from "../src/model/types";
+import { CURRENT_VERSION, type NotebookDocument, type Page, type TextElement } from "../src/model/types";
 import { combineCandidates } from "../src/storage/recovery";
 import { line } from "./helpers";
 
@@ -355,7 +355,7 @@ describe("repair of a damaged v6 notebook keeps the margins", () => {
 describe("repair keeps the ink of PDF pages", () => {
 	it("strokes of a page with a background are validated against the notebook's assets, not lost", () => {
 		const doc = pdfDoc();
-		const text = serialize(doc).replace('"version": 6', '"version": "x"');
+		const text = serialize(doc).replace(`"version": ${CURRENT_VERSION}`, '"version": "x"');
 		const r = repairNotebookText(text);
 		expect(r.ok).toBe(true);
 		if (!r.ok) return;
