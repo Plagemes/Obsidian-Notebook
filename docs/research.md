@@ -31,3 +31,21 @@ Date: 2026-10-29. Sources: README, LICENSE and key files of the repositories; `o
 2. **Stroke shape**: perfect-freehand as the only runtime dependency (MIT).
 3. **Format**: versioned JSON with a custom extension (see `docs/architecture.md`).
 4. **Licenses**: no GPL/AGPL/CC-NC code copied. The ideas taken from Excalidraw, Handwriting, Saber and Butterfly were reimplemented from scratch.
+
+## Conflicted copies made by sync clients (#122)
+
+Date: 2026-10-29. Web search of vendor pages, university IT pages and forum reports; no code copied. Vendors document the behaviour (both versions are kept, one gets another name in the same folder) more clearly than the exact name, which varies by client, version and OS. Patterns recognised by `src/storage/conflicts.ts`:
+
+| Client | Name of the conflicted copy | Confidence |
+|---|---|---|
+| OneDrive (Windows) | `Name-<COMPUTERNAME>.ext`, also with a counter (`-1`); computer names are NetBIOS-like (≤ 15 letters, digits, hyphens, not all digits) | reported consistently (e.g. University of Windsor IT, "OneDrive duplicate files"; sharepointmaven.com); not in Microsoft documentation found |
+| OneDrive (macOS), Dropbox | `Name (conflicted copy).ext`, `Name (<user>'s conflicted copy <date>).ext` | Dropbox help; reports for OneDrive on macOS |
+| Google Drive for desktop | `[Conflict] Name.ext` (also reported as a `[Conflict]` suffix) | third-party guides (filerev.com, addictivetips.com); not in Google documentation found |
+| Google Drive (web, Android) and file managers ("keep both") | `Name (1).ext`, `Name (2).ext` | widespread; the cause may also be a plain copy |
+| Autosync for Google Drive / OneDrive (MetaCtrl, Android) | a "conflict" suffix with a timestamp (MetaCtrl blog, 2015); exact format not documented | low: matched by the generic `Name (… conflict …)` / `Name_conflict…` patterns |
+| FolderSync (Android) | not documented (foldersync.io "Sync issues" describes when, not how) | unknown: covered only if the name contains "conflict" or "(n)" |
+| Syncthing | `Name.sync-conflict-YYYYMMDD-HHMMSS-<DEVICE>.ext` | Syncthing documentation |
+
+Because names are only a hint (and `Name (1)` is also what a plain copy gets), a file is offered for merging only when the base file `Name.notebook` exists in the same folder and both hold the **same document id**. An unrelated notebook with a similar name has its own id and is never offered. The user's sync app (Google Drive / OneDrive on Android) should be checked on the device and the table updated (testing protocol R2).
+
+Sources: [University of Windsor IT, "Known Issue: OneDrive duplicate files"](https://uwindsor.teamdynamix.com/TDClient/1975/Portal/KB/Article/29832/Known-Issue-OneDrive-duplicate-files), [SharePoint Maven, "How OneDrive sync resolves sync conflicts"](https://sharepointmaven.com/how-onedrive-sync-resolves-sync-conflicts/), [Digital Citizen, "Cloud sync conflicts explained"](https://www.digitalcitizen.life/cloud-sync-conflicts-explained-why-files-duplicate-or-overwrite-themselves/), [FileRev, "How to find and resolve conflicted files in Google Drive"](https://filerev.com/blog/find-resolve-conflicted-google/), [MetaCtrl, "MD5 checksum in Autosync for Google Drive"](https://metactrl.com/blog/2015/07/22/drivesync-and-md5-checksum/), [FolderSync, "Sync issues"](https://foldersync.io/docs/help/syncissues), [Obsidian forum, "FolderSync conflicts on Android (through Google Drive)"](https://forum.obsidian.md/t/foldersync-conflicts-on-android-through-google-drive/37189).

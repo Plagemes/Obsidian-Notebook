@@ -2,6 +2,7 @@ import { FileView, Menu, Notice, Scope, type TFile, type ViewStateResult, type W
 import { pageFromState } from "../integration/links";
 import { pageFromEphemeralState } from "../integration/page-links";
 import { addPageShareItems } from "../integration/page-share";
+import { checkConflicts, openPageRestore, openRepair, type ReliabilityDeps } from "../integration/reliability";
 import { scanFromCamera } from "../scan/scan-modal";
 import { scannedPage } from "../scan/pages";
 import { PhotoDecodeError, photoSize } from "../scan/decode";
@@ -770,6 +771,7 @@ export class NotebookView extends FileView {
 		}
 		menu.addItem((i) => i.setTitle(t("page.infinite")).setIcon("infinity").setChecked(!!page.infinite)
 			.onClick(() => this.pageCommand(new SetPageInfinite(page.id, !page.infinite), index, page)));
+		menu.addItem((i) => i.setTitle(t("page.restoreVersion")).setIcon("history").onClick(() => openPageRestore(this.reliabilityDeps(), this, index)));
 		menu.addSeparator();
 		const file = this.file;
 		if (file) {
@@ -927,6 +929,28 @@ export class NotebookView extends FileView {
 		} finally {
 			if (asset) media.removePending(asset.id);
 		}
+	}
+
+	// --- wave p1b: reliability (repair, conflicted copies, page restore; see integration/reliability.ts) ---
+
+	private reliabilityDeps(): ReliabilityDeps {
+		return { app: this.app, settings: this.host.settings, journal: this.host.journal };
+	}
+
+	/** The loaded document when it can be edited (not read-only, broken or being drawn on), else null. */
+	editableDocument(): NotebookDocument | null {
+		return this.editable() && !this.controller?.drawing ? (this.session?.doc ?? null) : null;
+	}
+
+	/** Runs a command built outside the view (merge, page restore) as one undo step. */
+	applyCommand(cmd: Command, scrollTo?: number): boolean {
+		if (!this.editableDocument()) return false;
+		this.commitText();
+		this.clearSelection();
+		this.history.execute(cmd);
+		this.afterHistoryChange();
+		if (scrollTo !== undefined) this.scrollToPage(scrollTo);
+		return true;
 	}
 
 	/** Index of the page in view (for commands). */
@@ -1182,6 +1206,7 @@ export class NotebookView extends FileView {
 			if (this.tools.ruler) this.placeRuler();
 			this.applyPendingPage();
 			if (this.file) this.location.note(this.file.path, this.currentPageIndex() + 1);
+			void checkConflicts(this.reliabilityDeps(), this);
 		} else {
 			this.body.hide();
 			this.toolbar.setEditable(false);
@@ -1200,6 +1225,12 @@ export class NotebookView extends FileView {
 		this.messageEl.createEl("p", { text: t(readonly ? "view.readonly.body" : "view.broken.body") });
 		if (problem) this.messageEl.createEl("pre", { text: problem });
 		if (this.lastBackupPath) this.messageEl.createEl("p", { text: `${t("view.backup")}: ${this.lastBackupPath}` });
+		const file = this.file;
+		if (!readonly && file) {
+			// #140: recover what can be read into a new notebook; this file is never written.
+			this.messageEl.createEl("button", { text: t("view.broken.repair"), cls: "mod-cta" })
+				.addEventListener("click", () => void openRepair(this.reliabilityDeps(), file));
+		}
 		this.messageEl.show();
 		this.toolbar.setStatus(t("status.readonly"), "error");
 	}

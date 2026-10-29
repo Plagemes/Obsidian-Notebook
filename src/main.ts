@@ -8,6 +8,7 @@ import { createNotebook } from "./storage/notebooks";
 import { BenchmarkModal } from "./view/benchmark";
 import { NotebookLibraryHost } from "./library/host";
 import { registerIntegration } from "./integration";
+import { registerReliability } from "./integration/reliability";
 import { LIBRARY_VIEW_TYPE, LibraryView } from "./library/library-view";
 import { registerToolCommands } from "./view/commands";
 import { OpenNotebookModal } from "./view/modals";
@@ -47,6 +48,9 @@ export default class NotebookPlugin extends Plugin {
 		this.addCommand({ id: "benchmark", name: t("command.benchmark"), callback: () => this.openBenchmark() });
 		this.addCommand({ id: "create-stress-test", name: t("command.stress"), callback: () => void this.createStressNotebook() });
 		this.addCommand({ id: "export-pdf", name: t("command.exportPdf"), checkCallback: (checking) => this.withView(checking, (v) => void v.exportNotebookPdf()) });
+
+		// wave p1b: repair (#140), conflicted copies (#122), page restore (#180).
+		registerReliability(this, this, () => this.views(), () => this.app.workspace.getActiveViewOfType(NotebookView));
 
 		// Wave p1a: PDF margins, re-published slides, annotation export (view/pdf-actions.ts).
 		this.addCommand({ id: "pdf-margins", name: t("command.pdfMargins"), checkCallback: (checking) => this.withView(checking, (v) => {

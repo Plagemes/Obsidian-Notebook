@@ -1388,3 +1388,33 @@
 	user-select: text;
 	-webkit-user-select: text;
 }
+
+/* wave p1b: reliability (restore a page from a previous version) */
+.notebook-restore-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+	gap: 8px;
+	max-height: 50vh;
+	overflow-y: auto;
+	margin-bottom: 12px;
+}
+
+.notebook-restore-page {
+	cursor: pointer;
+	padding: 4px;
+	border: 2px solid transparent;
+	border-radius: var(--radius-s);
+	text-align: center;
+	font-size: var(--font-ui-smaller);
+}
+
+.notebook-restore-page.is-selected {
+	border-color: var(--interactive-accent);
+}
+
+.notebook-restore-page img {
+	display: block;
+	width: 100%;
+	height: auto;
+	box-shadow: 0 0 0 1px var(--background-modifier-border);
+}
