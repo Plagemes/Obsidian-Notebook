@@ -2,10 +2,12 @@ import { Notice, Plugin, type TFile } from "obsidian";
 import { t } from "./i18n";
 import { FILE_EXTENSION } from "./model/types";
 import { readSettings, type NotebookSettings } from "./settings";
+import { createDocument } from "./model/document";
 import { stressDocument } from "./model/stress";
+import { PAGE_SIZES, PAPER_SPACING } from "./model/types";
 import { createNotebook } from "./storage/notebooks";
 import { BenchmarkModal } from "./view/benchmark";
-import { NewNotebookModal, OpenNotebookModal } from "./view/modals";
+import { NewNotebookModal, OpenNotebookModal, type NewNotebookOptions } from "./view/modals";
 import { NotebookView, VIEW_TYPE } from "./view/notebook-view";
 import { NotebookSettingTab } from "./view/settings-tab";
 
@@ -28,6 +30,7 @@ export default class NotebookPlugin extends Plugin {
 		this.addCommand({ id: "add-page", name: t("command.addPage"), checkCallback: (checking) => this.withView(checking, (v) => v.addPage()) });
 		this.addCommand({ id: "benchmark", name: t("command.benchmark"), callback: () => this.openBenchmark() });
 		this.addCommand({ id: "create-stress-test", name: t("command.stress"), callback: () => void this.createStressNotebook() });
+		this.addCommand({ id: "export-pdf", name: t("command.exportPdf"), checkCallback: (checking) => this.withView(checking, (v) => void v.exportNotebookPdf()) });
 
 		this.addSettingTab(new NotebookSettingTab(this.app, this));
 
@@ -66,12 +69,22 @@ export default class NotebookPlugin extends Plugin {
 	}
 
 	private askNewNotebook(): void {
-		new NewNotebookModal(this.app, (name) => void this.createAndOpen(name)).open();
+		const s = this.settings;
+		const defaults = { size: s.defaultPageSize, landscape: s.defaultLandscape, paper: s.defaultPaper };
+		new NewNotebookModal(this.app, defaults, (options) => void this.createAndOpen(options)).open();
 	}
 
-	private async createAndOpen(name: string): Promise<void> {
+	private async createAndOpen(o: NewNotebookOptions): Promise<void> {
 		try {
-			const file = await createNotebook(this.app, this.settings.folder, name);
+			// Remember the choice for the next notebook.
+			if (o.size !== this.settings.defaultPageSize || o.landscape !== this.settings.defaultLandscape || o.paper !== this.settings.defaultPaper) {
+				this.settings = { ...this.settings, defaultPageSize: o.size, defaultLandscape: o.landscape, defaultPaper: o.paper };
+				await this.saveSettings();
+			}
+			const base = PAGE_SIZES[o.size];
+			const size = o.landscape ? { width: base.height, height: base.width } : { width: base.width, height: base.height };
+			const doc = createDocument(new Date(), size, { kind: o.paper, spacing: PAPER_SPACING[o.paper] });
+			const file = await createNotebook(this.app, this.settings.folder, o.name, doc);
 			await this.openFile(file);
 		} catch (e) {
 			new Notice(t("notice.createFailed", { error: (e as Error).message }));

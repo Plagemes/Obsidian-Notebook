@@ -1,4 +1,5 @@
 import type { PressureMode } from "./ink/pressure";
+import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./model/types";
 
 export interface NotebookSettings {
 	folder: string;
@@ -11,6 +12,10 @@ export interface NotebookSettings {
 	/** Touch contacts larger than this (CSS px) are ignored as palms; 0 = off. */
 	palmContactPx: number;
 	perfOverlay: boolean;
+	/** Defaults for new notebooks; the "New notebook" dialog remembers the last choice. */
+	defaultPaper: PaperKind;
+	defaultPageSize: PageSizeName;
+	defaultLandscape: boolean;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -22,6 +27,9 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	stabilization: 2,
 	palmContactPx: 0,
 	perfOverlay: false,
+	defaultPaper: "grid",
+	defaultPageSize: "a4",
+	defaultLandscape: false,
 };
 
 /** Merges saved data over the defaults, ignoring values of the wrong type. */
@@ -37,6 +45,9 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.stabilization === "number" && d.stabilization >= 0 && d.stabilization <= 10) s.stabilization = d.stabilization;
 	if (typeof d.palmContactPx === "number" && d.palmContactPx >= 0 && d.palmContactPx <= 200) s.palmContactPx = d.palmContactPx;
 	if (typeof d.perfOverlay === "boolean") s.perfOverlay = d.perfOverlay;
+	if (PAPER_KINDS.includes(d.defaultPaper as PaperKind)) s.defaultPaper = d.defaultPaper as PaperKind;
+	if (typeof d.defaultPageSize === "string" && d.defaultPageSize in PAGE_SIZES) s.defaultPageSize = d.defaultPageSize as PageSizeName;
+	if (typeof d.defaultLandscape === "boolean") s.defaultLandscape = d.defaultLandscape;
 	return s;
 }
 

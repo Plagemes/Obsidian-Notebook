@@ -32,6 +32,7 @@ export interface ToolbarActions {
 	undo(): void;
 	redo(): void;
 	addPage(): void;
+	pageMenu(evt: MouseEvent): void;
 	deleteSelection(): void;
 	fit(): void;
 }
@@ -46,6 +47,7 @@ export class Toolbar {
 	private readonly undoButton: HTMLButtonElement;
 	private readonly redoButton: HTMLButtonElement;
 	private readonly addPageButton: HTMLButtonElement;
+	private readonly pageMenuButton: HTMLButtonElement;
 	private readonly deleteButton: HTMLButtonElement;
 	private readonly pageEl: HTMLElement;
 	private readonly statusEl: HTMLElement;
@@ -80,6 +82,8 @@ export class Toolbar {
 
 		const pages = this.group();
 		this.addPageButton = this.iconButton(pages, "file-plus", "tool.addPage", () => this.actions.addPage());
+		this.pageMenuButton = this.iconButton(pages, "more-vertical", "page.menu", () => undefined);
+		this.pageMenuButton.addEventListener("click", (e) => this.actions.pageMenu(e));
 		this.iconButton(pages, "move-horizontal", "tool.fit", () => this.actions.fit());
 		this.pageEl = pages.createSpan({ cls: "notebook-page-indicator" });
 
@@ -125,6 +129,7 @@ export class Toolbar {
 			b.disabled = !this.editable;
 		}
 		this.addPageButton.disabled = !this.editable;
+		this.pageMenuButton.disabled = !this.editable;
 		this.eraserGroup.toggleClass("notebook-hidden", s.tool !== "eraser");
 		for (const [mode, b] of this.eraserButtons) b.toggleClass("is-active", mode === s.eraserMode);
 
