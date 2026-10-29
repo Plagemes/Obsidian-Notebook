@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.5.1 — unreleased
+## 0.5.1 — 2026-10-30
 
 Hotfix for 0.5.0. Not verified on Android hardware (see `docs/testing.md`); how the S Pen button is reported is the open question.
 
