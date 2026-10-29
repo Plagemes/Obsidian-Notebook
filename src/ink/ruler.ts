@@ -82,8 +82,8 @@ export function rulerTicks(r: Ruler, mm = 1): RulerTick[] {
 		const isHalf = !isCm && Math.abs(units % 5) < 1e-6;
 		out.push({
 			along,
-			x: start[0]! + along * ux,
-			y: start[1]! + along * uy,
+			x: start[0] + along * ux,
+			y: start[1] + along * uy,
 			kind: isCm ? "cm" : isHalf ? "half" : "mm",
 			size: isCm ? 9 : isHalf ? 6 : 4,
 			...(isCm ? { label: Math.round(units / 10) } : {}),

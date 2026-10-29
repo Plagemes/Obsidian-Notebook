@@ -43,6 +43,8 @@ export class NotebookMedia implements MediaSource {
 	readonly pdf: PdfStore;
 	private readonly images = new Map<string, ImageBitmap | "loading" | "missing">();
 	private readonly missing = new Set<string>();
+	/** Assets stored but not yet in the document (an import in progress), readable by id. */
+	private readonly pending = new Map<string, Asset>();
 
 	constructor(
 		private readonly app: App,
@@ -54,7 +56,7 @@ export class NotebookMedia implements MediaSource {
 			loadPdfJs: () => loadPdfJs() as Promise<PdfLib>,
 			readAsset: (id) => this.readAsset(id),
 			createCanvas: (w, h) => {
-				const c = activeDocument.createElement("canvas");
+				const c = activeDocument.createEl("canvas");
 				c.width = w;
 				c.height = h;
 				return c;
@@ -65,7 +67,17 @@ export class NotebookMedia implements MediaSource {
 	}
 
 	asset(id: string): Asset | null {
-		return this.doc()?.assets?.[id] ?? null;
+		return this.doc()?.assets?.[id] ?? this.pending.get(id) ?? null;
+	}
+
+	/** Makes an asset readable before the command that adds it to the document runs (to read a PDF's page sizes). */
+	addPending(asset: Asset): void {
+		this.pending.set(asset.id, asset);
+		this.missing.delete(asset.id);
+	}
+
+	removePending(id: string): void {
+		this.pending.delete(id);
 	}
 
 	async readAsset(id: string): Promise<ArrayBuffer> {
@@ -132,7 +144,7 @@ export class NotebookMedia implements MediaSource {
 	/** JPEG of an image asset (any browser-decodable format), for exports. */
 	async imageJpeg(asset: string): Promise<{ jpeg: Uint8Array; pixelWidth: number; pixelHeight: number }> {
 		const bmp = await createImageBitmap(new Blob([await this.readAsset(asset)]));
-		const c = activeDocument.createElement("canvas");
+		const c = activeDocument.createEl("canvas");
 		c.width = bmp.width;
 		c.height = bmp.height;
 		const ctx = c.getContext("2d");
@@ -145,6 +157,7 @@ export class NotebookMedia implements MediaSource {
 
 	destroy(): void {
 		this.pdf.clear();
+		this.pending.clear();
 		for (const v of this.images.values()) if (typeof v === "object") v.close();
 		this.images.clear();
 	}

@@ -1,13 +1,16 @@
 import { setIcon } from "obsidian";
 import { t, type MessageKey } from "../i18n";
+import { SHAPE_KINDS, type ShapeKind } from "./view-helpers";
 
-export type ToolName = "pen" | "highlighter" | "eraser" | "lasso";
+export type ToolName = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text";
 export type EraserMode = "stroke" | "segment";
 
 export const PEN_COLORS = ["#1e1e1e", "#6b7280", "#1d4ed8", "#0891b2", "#15803d", "#ca8a04", "#ea580c", "#dc2626", "#9333ea"] as const;
 export const HIGHLIGHTER_COLORS = ["#facc15", "#4ade80", "#f472b6", "#60a5fa", "#fb923c"] as const;
 export const PEN_WIDTHS = [0.8, 1.2, 2, 3.2, 5] as const;
 export const HIGHLIGHTER_WIDTHS = [8, 14, 20] as const;
+/** Font sizes of new text boxes, pt. */
+export const TEXT_SIZES = [10, 14, 20, 28] as const;
 
 export interface ToolbarState {
 	tool: ToolName;
@@ -16,6 +19,11 @@ export interface ToolbarState {
 	highlighterColor: string;
 	highlighterWidth: number;
 	eraserMode: EraserMode;
+	shapeKind: ShapeKind;
+	/** Font size of new text boxes, pt. */
+	textSize: number;
+	/** The ruler is shown and pen strokes near its edge snap to it. */
+	ruler: boolean;
 }
 
 export const DEFAULT_TOOLS: ToolbarState = {
@@ -25,6 +33,9 @@ export const DEFAULT_TOOLS: ToolbarState = {
 	highlighterColor: HIGHLIGHTER_COLORS[0],
 	highlighterWidth: HIGHLIGHTER_WIDTHS[1],
 	eraserMode: "stroke",
+	shapeKind: "line",
+	textSize: TEXT_SIZES[1],
+	ruler: false,
 };
 
 export interface ToolbarActions {
@@ -35,7 +46,25 @@ export interface ToolbarActions {
 	pageMenu(evt: MouseEvent): void;
 	deleteSelection(): void;
 	fit(): void;
+	toggleNavigator(): void;
+	insertImage(): void;
 }
+
+const TOOL_DEFS: Array<[ToolName, string, MessageKey]> = [
+	["pen", "pencil", "tool.pen"],
+	["highlighter", "highlighter", "tool.highlighter"],
+	["eraser", "eraser", "tool.eraser"],
+	["lasso", "lasso", "tool.lasso"],
+	["shape", "shapes", "tool.shape"],
+	["text", "type", "tool.text"],
+];
+
+const SHAPE_DEFS: Record<ShapeKind, [string, MessageKey]> = {
+	line: ["minus", "shape.line"],
+	arrow: ["arrow-up-right", "shape.arrow"],
+	rectangle: ["square", "shape.rectangle"],
+	ellipse: ["circle", "shape.ellipse"],
+};
 
 export class Toolbar {
 	readonly el: HTMLElement;
@@ -44,6 +73,12 @@ export class Toolbar {
 	private readonly widthGroup: HTMLElement;
 	private readonly eraserGroup: HTMLElement;
 	private readonly eraserButtons = new Map<EraserMode, HTMLButtonElement>();
+	private readonly shapeGroup: HTMLElement;
+	private readonly shapeButtons = new Map<ShapeKind, HTMLButtonElement>();
+	private readonly sizeGroup: HTMLElement;
+	private readonly rulerButton: HTMLButtonElement;
+	private readonly imageButton: HTMLButtonElement;
+	private readonly navigatorButton: HTMLButtonElement;
 	private readonly undoButton: HTMLButtonElement;
 	private readonly redoButton: HTMLButtonElement;
 	private readonly addPageButton: HTMLButtonElement;
@@ -56,14 +91,10 @@ export class Toolbar {
 	constructor(parent: HTMLElement, public state: ToolbarState, private readonly actions: ToolbarActions) {
 		this.el = parent.createDiv({ cls: "notebook-toolbar" });
 
+		this.navigatorButton = this.iconButton(this.group(), "panel-left", "tool.pages", () => this.actions.toggleNavigator());
+
 		const tools = this.group();
-		const toolDefs: Array<[ToolName, string, MessageKey]> = [
-			["pen", "pencil", "tool.pen"],
-			["highlighter", "highlighter", "tool.highlighter"],
-			["eraser", "eraser", "tool.eraser"],
-			["lasso", "lasso", "tool.lasso"],
-		];
-		for (const [tool, icon, label] of toolDefs) {
+		for (const [tool, icon, label] of TOOL_DEFS) {
 			this.toolButtons.set(tool, this.iconButton(tools, icon, label, () => this.set({ tool })));
 		}
 
@@ -71,8 +102,19 @@ export class Toolbar {
 		this.eraserButtons.set("stroke", this.textButton(this.eraserGroup, "tool.eraser.stroke", () => this.set({ eraserMode: "stroke" })));
 		this.eraserButtons.set("segment", this.textButton(this.eraserGroup, "tool.eraser.segment", () => this.set({ eraserMode: "segment" })));
 
+		this.shapeGroup = this.group();
+		for (const kind of SHAPE_KINDS) {
+			const [icon, label] = SHAPE_DEFS[kind];
+			this.shapeButtons.set(kind, this.iconButton(this.shapeGroup, icon, label, () => this.set({ shapeKind: kind })));
+		}
+
 		this.colorGroup = this.group();
 		this.widthGroup = this.group();
+		this.sizeGroup = this.group();
+
+		const insert = this.group();
+		this.imageButton = this.iconButton(insert, "image-plus", "tool.image", () => this.actions.insertImage());
+		this.rulerButton = this.iconButton(insert, "ruler", "tool.ruler", () => this.set({ ruler: !this.state.ruler }));
 
 		this.deleteButton = this.iconButton(this.group(), "trash-2", "tool.deleteSelection", () => this.actions.deleteSelection());
 
@@ -106,6 +148,17 @@ export class Toolbar {
 		this.deleteButton.toggleClass("notebook-hidden", !active);
 	}
 
+	/** Reflects the state of the page panel on its button. */
+	setNavigatorOpen(open: boolean): void {
+		this.navigatorButton.toggleClass("is-active", open);
+		this.navigatorButton.setAttribute("aria-pressed", String(open));
+	}
+
+	/** Selects a tool from code (e.g. the lasso after inserting an image) and notifies the view. */
+	setTool(tool: ToolName): void {
+		if (this.state.tool !== tool) this.set({ tool });
+	}
+
 	setPage(current: number, total: number): void {
 		this.pageEl.setText(total > 0 ? `${current} / ${total}` : "");
 	}
@@ -130,38 +183,65 @@ export class Toolbar {
 		}
 		this.addPageButton.disabled = !this.editable;
 		this.pageMenuButton.disabled = !this.editable;
+		this.imageButton.disabled = !this.editable;
+		this.navigatorButton.disabled = !this.editable;
+		this.rulerButton.disabled = !this.editable;
+		this.rulerButton.toggleClass("is-active", s.ruler);
+		this.rulerButton.setAttribute("aria-pressed", String(s.ruler));
 		this.eraserGroup.toggleClass("notebook-hidden", s.tool !== "eraser");
 		for (const [mode, b] of this.eraserButtons) b.toggleClass("is-active", mode === s.eraserMode);
-
-		const inking = s.tool === "pen" || s.tool === "highlighter";
-		this.colorGroup.toggleClass("notebook-hidden", !inking);
-		this.widthGroup.toggleClass("notebook-hidden", !inking);
-		this.colorGroup.empty();
-		this.widthGroup.empty();
-		if (!inking) return;
-
-		const highlighter = s.tool === "highlighter";
-		const colors = highlighter ? HIGHLIGHTER_COLORS : PEN_COLORS;
-		const current = highlighter ? s.highlighterColor : s.penColor;
-		for (const color of colors) {
-			const b = this.button(this.colorGroup, `${t("tool.color")} ${color}`, () =>
-				this.set(highlighter ? { highlighterColor: color } : { penColor: color }));
-			b.addClass("notebook-swatch");
-			b.toggleClass("is-active", color === current);
+		this.shapeGroup.toggleClass("notebook-hidden", s.tool !== "shape");
+		for (const [kind, b] of this.shapeButtons) {
+			b.toggleClass("is-active", kind === s.shapeKind);
 			b.disabled = !this.editable;
-			b.createSpan({ cls: "notebook-swatch-dot" }).setCssProps({ "--notebook-swatch-color": color });
 		}
 
-		const widths = highlighter ? HIGHLIGHTER_WIDTHS : PEN_WIDTHS;
-		const currentWidth = highlighter ? s.highlighterWidth : s.penWidth;
-		widths.forEach((width, i) => {
-			const b = this.button(this.widthGroup, `${t("tool.width")} ${i + 1}`, () =>
-				this.set(highlighter ? { highlighterWidth: width } : { penWidth: width }));
-			b.addClass("notebook-width");
-			b.toggleClass("is-active", width === currentWidth);
-			b.disabled = !this.editable;
-			b.createSpan({ cls: `notebook-width-dot notebook-width-${highlighter ? "h" : "p"}${i}` });
-		});
+		const inking = s.tool === "pen" || s.tool === "highlighter" || s.tool === "shape";
+		const colouring = inking || s.tool === "text";
+		this.colorGroup.toggleClass("notebook-hidden", !colouring);
+		this.widthGroup.toggleClass("notebook-hidden", !inking);
+		this.sizeGroup.toggleClass("notebook-hidden", s.tool !== "text");
+		this.colorGroup.empty();
+		this.widthGroup.empty();
+		this.sizeGroup.empty();
+
+		// Shapes and text use the pen colour; only the highlighter has its own palette.
+		const highlighter = s.tool === "highlighter";
+		if (colouring) {
+			const colors = highlighter ? HIGHLIGHTER_COLORS : PEN_COLORS;
+			const current = highlighter ? s.highlighterColor : s.penColor;
+			for (const color of colors) {
+				const b = this.button(this.colorGroup, `${t("tool.color")} ${color}`, () =>
+					this.set(highlighter ? { highlighterColor: color } : { penColor: color }));
+				b.addClass("notebook-swatch");
+				b.toggleClass("is-active", color === current);
+				b.disabled = !this.editable;
+				b.createSpan({ cls: "notebook-swatch-dot" }).setCssProps({ "--notebook-swatch-color": color });
+			}
+		}
+
+		if (inking) {
+			const widths = highlighter ? HIGHLIGHTER_WIDTHS : PEN_WIDTHS;
+			const currentWidth = highlighter ? s.highlighterWidth : s.penWidth;
+			widths.forEach((width, i) => {
+				const b = this.button(this.widthGroup, `${t("tool.width")} ${i + 1}`, () =>
+					this.set(highlighter ? { highlighterWidth: width } : { penWidth: width }));
+				b.addClass("notebook-width");
+				b.toggleClass("is-active", width === currentWidth);
+				b.disabled = !this.editable;
+				b.createSpan({ cls: `notebook-width-dot notebook-width-${highlighter ? "h" : "p"}${i}` });
+			});
+		}
+
+		if (s.tool === "text") {
+			TEXT_SIZES.forEach((size, i) => {
+				const b = this.button(this.sizeGroup, `${t("tool.textSize")} ${size}`, () => this.set({ textSize: size }));
+				b.addClass("notebook-text-size");
+				b.toggleClass("is-active", size === s.textSize);
+				b.disabled = !this.editable;
+				b.createSpan({ cls: `notebook-text-size-glyph notebook-text-size-${i}`, text: "A" });
+			});
+		}
 	}
 
 	private group(): HTMLElement {

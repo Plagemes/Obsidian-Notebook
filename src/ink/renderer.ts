@@ -1,8 +1,11 @@
 import type { Page, PageElement, Point, Stroke, TextElement, Tool } from "../model/types";
-import { layoutText } from "./text-layout";
+import { MM } from "../model/types";
+import { transformElement } from "./elements";
+import { layoutText, type MeasureText } from "./text-layout";
 import { strokeBounds, type BBox } from "./hit-test";
 import { minorVisible, paperPattern, PAPER_COLORS } from "./paper";
 import { visiblePages, type Layout, type PageBox } from "./layout";
+import { rulerEdge, rulerTicks, type Ruler } from "./ruler";
 import { HIGHLIGHTER_ALPHA, strokePath } from "./stroke-shape";
 import type { Matrix } from "./transform";
 import type { Viewport } from "./viewport";
@@ -36,6 +39,33 @@ export function drawTextElement(ctx: CanvasRenderingContext2D, el: TextElement):
 /** Font used for text boxes on screen. */
 export const TEXT_FONT = "sans-serif";
 
+let measureCtx: CanvasRenderingContext2D | null = null;
+
+/** Text width in pt with the on-screen font (a canvas context shared by everything that lays text out). */
+export const measureText: MeasureText = (s, fontSize) => {
+	measureCtx ??= activeDocument.createEl("canvas").getContext("2d");
+	if (!measureCtx) return Array.from(s).length * fontSize * 0.55;
+	measureCtx.font = `${fontSize}px ${TEXT_FONT}`;
+	return measureCtx.measureText(s).width;
+};
+
+/** Draws one image or text element in page coordinates (images may be rotated; `img` null draws a placeholder). */
+export function drawElement(ctx: CanvasRenderingContext2D, el: PageElement, img: CanvasImageSource | null): void {
+	if (el.type === "text") {
+		drawTextElement(ctx, el);
+		return;
+	}
+	ctx.save();
+	ctx.translate(el.x + el.width / 2, el.y + el.height / 2);
+	if (el.rotation) ctx.rotate(el.rotation);
+	if (img) ctx.drawImage(img, -el.width / 2, -el.height / 2, el.width, el.height);
+	else {
+		ctx.fillStyle = PLACEHOLDER;
+		ctx.fillRect(-el.width / 2, -el.height / 2, el.width, el.height);
+	}
+	ctx.restore();
+}
+
 export interface LiveStroke {
 	pageIndex: number;
 	tool: Tool;
@@ -51,10 +81,17 @@ export interface LassoOverlay {
 	points: ReadonlyArray<readonly [number, number]>;
 }
 
-/** Selected strokes, drawn on the live layer with a transform while they are moved, scaled or rotated. */
+/** Ruler placed on a page, drawn on the live layer (page coordinates). */
+export interface RulerOverlay {
+	pageIndex: number;
+	ruler: Ruler;
+}
+
+/** Selected strokes and elements, drawn on the live layer with a transform while they are moved, scaled or rotated. */
 export interface SelectionOverlay {
 	pageIndex: number;
 	strokes: readonly Stroke[];
+	elements: readonly PageElement[];
 	matrix: Matrix;
 	/** Selection bounds in page coordinates, before `matrix`. */
 	bounds: BBox;
@@ -102,6 +139,8 @@ export class Renderer {
 	private selection: SelectionOverlay | null = null;
 	private hidden: ReadonlySet<Stroke> | null = null;
 	private hiddenElements: ReadonlySet<PageElement> | null = null;
+	private selectedElements: ReadonlySet<PageElement> | null = null;
+	private ruler: RulerOverlay | null = null;
 	private media: MediaSource | null = null;
 
 	private staticDirty = true;
@@ -218,11 +257,22 @@ export class Renderer {
 	/** Shows a selection; its strokes are hidden from the static layer while it floats. */
 	setSelection(selection: SelectionOverlay | null): void {
 		const hidden = selection ? new Set(selection.strokes) : null;
+		const hiddenEls = selection && selection.elements.length > 0 ? new Set(selection.elements) : null;
 		const changedHidden = (hidden?.size ?? 0) !== (this.hidden?.size ?? 0)
-			|| (hidden !== null && [...hidden].some((s) => !this.hidden?.has(s)));
+			|| (hidden !== null && [...hidden].some((s) => !this.hidden?.has(s)))
+			|| (hiddenEls?.size ?? 0) !== (this.selectedElements?.size ?? 0)
+			|| (hiddenEls !== null && [...hiddenEls].some((e) => !this.selectedElements?.has(e)));
 		this.selection = selection;
 		this.hidden = hidden;
+		this.selectedElements = hiddenEls;
 		if (changedHidden) this.staticDirty = true;
+		this.liveDirty = true;
+		this.schedule();
+	}
+
+	/** Straight edge drawn over the page (null hides it). */
+	setRuler(ruler: RulerOverlay | null): void {
+		this.ruler = ruler;
 		this.liveDirty = true;
 		this.schedule();
 	}
@@ -342,21 +392,13 @@ export class Renderer {
 	/** Images, then text boxes; both under the ink. */
 	private drawElements(ctx: CanvasRenderingContext2D, page: Page): void {
 		const elements = page.elements ?? [];
+		const skip = (el: PageElement) => !!(this.hiddenElements?.has(el) || this.selectedElements?.has(el));
 		for (const el of elements) {
-			if (el.type !== "image" || this.hiddenElements?.has(el)) continue;
-			const img = this.media?.image(el.asset) ?? null;
-			ctx.save();
-			ctx.translate(el.x + el.width / 2, el.y + el.height / 2);
-			if (el.rotation) ctx.rotate(el.rotation);
-			if (img) ctx.drawImage(img, -el.width / 2, -el.height / 2, el.width, el.height);
-			else {
-				ctx.fillStyle = PLACEHOLDER;
-				ctx.fillRect(-el.width / 2, -el.height / 2, el.width, el.height);
-			}
-			ctx.restore();
+			if (el.type !== "image" || skip(el)) continue;
+			drawElement(ctx, el, this.media?.image(el.asset) ?? null);
 		}
 		for (const el of elements) {
-			if (el.type !== "text" || this.hiddenElements?.has(el)) continue;
+			if (el.type !== "text" || skip(el)) continue;
 			drawTextElement(ctx, el);
 		}
 	}
@@ -405,6 +447,15 @@ export class Renderer {
 		const sel = this.selection;
 		if (sel && boxes[sel.pageIndex]) {
 			const box = boxes[sel.pageIndex]!;
+			if (sel.elements.length > 0) {
+				// Elements are drawn as they will be once committed (a text box cannot rotate), under the ink.
+				this.beginPage(ctx, box);
+				for (const el of sel.elements) {
+					const moved = transformElement(el, sel.matrix, measureText);
+					drawElement(ctx, moved, moved.type === "image" ? this.media?.image(moved.asset) ?? null : null);
+				}
+				ctx.restore();
+			}
 			this.beginPage(ctx, box);
 			const [a, b, c, d, e, f] = sel.matrix;
 			ctx.transform(a, b, c, d, e, f);
@@ -412,6 +463,9 @@ export class Renderer {
 			ctx.restore();
 			this.drawSelectionFrame(ctx, box, sel);
 		}
+
+		const ruler = this.ruler;
+		if (ruler && boxes[ruler.pageIndex]) this.drawRuler(ctx, boxes[ruler.pageIndex]!, ruler.ruler);
 
 		const lasso = this.lasso;
 		if (lasso && lasso.points.length > 1 && boxes[lasso.pageIndex]) {
@@ -433,6 +487,51 @@ export class Renderer {
 			ctx.fill(new Path2D(strokePath(points, live.width, false, live.tool)));
 			ctx.restore();
 		}
+	}
+
+	/** Translucent straight edge with millimetre ticks and centimetre numbers; the working edge is the top one (before rotation). */
+	private drawRuler(ctx: CanvasRenderingContext2D, box: PageBox, r: Ruler): void {
+		const { scale } = this.viewport;
+		const depth = 38;
+		const [s, e] = rulerEdge(r);
+		const nx = -Math.sin(r.angle);
+		const ny = Math.cos(r.angle);
+		this.beginPage(ctx, box, false);
+		ctx.beginPath();
+		ctx.moveTo(s[0], s[1]);
+		ctx.lineTo(e[0], e[1]);
+		ctx.lineTo(e[0] + nx * depth, e[1] + ny * depth);
+		ctx.lineTo(s[0] + nx * depth, s[1] + ny * depth);
+		ctx.closePath();
+		ctx.fillStyle = "rgba(37, 99, 235, 0.14)";
+		ctx.fill();
+		ctx.strokeStyle = SELECTION;
+		ctx.lineWidth = 1 / scale;
+		ctx.stroke();
+		// Ticks no closer than ~2 px on screen.
+		const pxPerMm = scale * MM;
+		const step = pxPerMm >= 2.2 ? 1 : pxPerMm * 5 >= 2.2 ? 5 : 10;
+		ctx.lineWidth = 0.7 / scale;
+		ctx.beginPath();
+		const labels: Array<{ x: number; y: number; n: number }> = [];
+		for (const tick of rulerTicks(r, step)) {
+			ctx.moveTo(tick.x, tick.y);
+			ctx.lineTo(tick.x + nx * tick.size, tick.y + ny * tick.size);
+			if (tick.label !== undefined && tick.label > 0) labels.push({ x: tick.x + nx * (tick.size + 1), y: tick.y + ny * (tick.size + 1), n: tick.label });
+		}
+		ctx.stroke();
+		ctx.fillStyle = SELECTION;
+		ctx.font = "8px sans-serif";
+		ctx.textAlign = "center";
+		ctx.textBaseline = "top";
+		for (const l of labels) {
+			ctx.save();
+			ctx.translate(l.x, l.y);
+			ctx.rotate(r.angle);
+			ctx.fillText(String(l.n), 0, 0);
+			ctx.restore();
+		}
+		ctx.restore();
 	}
 
 	/** Dashed box with a scale handle (bottom-right) and a rotate handle (above the top edge), in screen space. */
