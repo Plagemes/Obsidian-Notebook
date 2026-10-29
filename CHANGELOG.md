@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added (Obsidian integration, wave p1b)
+- **Page links (O4)**: `[[Physics.notebook#p3]]` opens the notebook at page 3 (the view reads the link subpath through `setEphemeralState`), also when the notebook is already open. Typing `[[Physics.notebook#` lists the pages with their number and first text box (`EditorSuggest`).
+- **Native embed (O6)**: `![[Physics.notebook#p3]]` renders the same page preview as the `notebook` code block, in reading view and live preview, and tapping it opens the page. It uses Obsidian's embed registry (not part of the public typings, so feature-detected); if it is missing, a reading-view post-processor is used and live preview keeps the plain embed (use the code block there).
+- **File explorer menu (O9)**: *New notebook here* on folders and *Annotate in Notebook* on PDFs (a new notebook in the notebooks folder with the PDF as page backgrounds, reusing the PDF import).
+- **Page into a note (O20)**: the page menu has *Copy link to this page*, *Insert link into the active note* and *Insert page preview into the active note* (links follow Obsidian's link-format setting).
+- Not verified in Obsidian or on Android hardware (see `docs/testing.md`, step 37).
+
 ## 0.4.1 — 2026-10-29
 
 Hotfix for 0.4.0. Not yet verified on Android hardware.

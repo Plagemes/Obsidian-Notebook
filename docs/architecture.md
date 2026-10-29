@@ -181,6 +181,11 @@ src/
   integration/
     links.ts              parsing and building of embeds and `obsidian://notebook` links (pure)
     embed.ts              `notebook` code block processor: page preview, refresh, click to open
+    page-links.ts         link subpaths (`#p3`), ephemeral state, link/embed text, `[[Name#` trigger, page suggestions, explorer menu rules (pure)
+    native-embed.ts       `![[Notebook.notebook#p3]]`: Obsidian's embed registry (feature-detected), reading-view post-processor as fallback
+    page-link-suggest.ts  `EditorSuggest` for the pages of a notebook while typing `[[Name.notebook#`
+    page-share.ts         page menu: copy link, insert link or embed into the last Markdown note that had focus
+    file-menu.ts          file explorer menu: new notebook in a folder, annotate a PDF
     protocol.ts           `obsidian://notebook` handler
     open.ts               resolve a notebook by path or link name, open at a page, find open views
     picker.ts             notebook chooser for the embed command
