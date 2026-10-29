@@ -469,7 +469,7 @@ async function checkToolbar(add: (name: string, ok: boolean, detail?: string) =>
 	const menu = bar.querySelector(".notebook-more") as HTMLElement;
 	r = menu.getBoundingClientRect();
 	const items = Array.from(menu.querySelectorAll("button")).filter((b) => b.offsetParent !== null);
-	add(`${label}: the more menu opens inside the view with its 7 actions`, tb.openPopover === "more" && inView(r) && r.bottom <= window.innerHeight && items.length === 7,
+	add(`${label}: the more menu opens inside the view with its 8 actions`, tb.openPopover === "more" && inView(r) && r.bottom <= window.innerHeight && items.length === 8,
 		`menu ${Math.round(r.left)}–${Math.round(r.right)}, bottom ${Math.round(r.bottom)} of ${window.innerHeight}, ${items.length} items, ${tb.openPopover}`);
 	add(`${label}: more menu rows are at least 40 px`, items.every((b) => b.offsetHeight >= 40), items.map((b) => b.offsetHeight).join(","));
 	click(byText(menu, "Ruler"), "Ruler");

@@ -17,7 +17,7 @@
 import { createPdfPages } from "./pages";
 import { createPage } from "./document";
 import { normalizeMargins } from "./margins";
-import { PAPER_KINDS, PAPER_SPACING, type Asset, type Page, type PageMargins, type PaperKind } from "./types";
+import { A4_HEIGHT, A4_WIDTH, PAPER_KINDS, PAPER_SPACING, type Asset, type Page, type PageMargins, type PaperKind } from "./types";
 
 export const SLIDE_LAYOUTS = ["slide", "notes-right", "notes-bottom"] as const;
 export type SlideLayout = (typeof SLIDE_LAYOUTS)[number];
@@ -128,4 +128,14 @@ export function buildLecturePackPages(
 		if (item.margins) page.margins = { ...item.margins };
 		return page;
 	});
+}
+
+/**
+ * "Exercise page here": a blank page with the exercise paper, the size of the page it follows (the full page,
+ * margins included, so after a slide with a notes area the exercise page is as wide as that page). A grown
+ * infinite page gives an A4-proportioned page of the same width. No background, margins or content.
+ */
+export function exercisePage(like: { width: number; height: number; infinite?: boolean }, paper: PaperKind): Page {
+	const height = like.infinite ? round2(like.width * (A4_HEIGHT / A4_WIDTH)) : like.height;
+	return createPage({ width: like.width, height }, { kind: paper, spacing: PAPER_SPACING[paper] });
 }

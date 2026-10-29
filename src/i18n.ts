@@ -625,6 +625,12 @@ const en = {
 	"lecturePack.afterPaper": "Paper of the notes pages",
 	"lecturePack.create": "Create lecture",
 	"lecturePack.apply": "Insert",
+	"page.exercise": "Exercise page here",
+	"page.exercisePaper": "Exercise page paper…",
+	"command.exercisePage": "Exercise page here",
+	"command.exercisePaper": "Choose exercise page paper",
+	"exercise.paperTitle": "Exercise page paper",
+	"exercise.paper": "Paper",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -1254,6 +1260,12 @@ const it: Partial<Record<MessageKey, string>> = {
 	"lecturePack.afterPaper": "Carta delle pagine di appunti",
 	"lecturePack.create": "Crea lezione",
 	"lecturePack.apply": "Inserisci",
+	"page.exercise": "Pagina esercizi qui",
+	"page.exercisePaper": "Carta della pagina esercizi…",
+	"command.exercisePage": "Pagina esercizi qui",
+	"command.exercisePaper": "Scegli la carta della pagina esercizi",
+	"exercise.paperTitle": "Carta della pagina esercizi",
+	"exercise.paper": "Carta",
 };
 
 let table: Partial<Record<MessageKey, string>> | null = null;

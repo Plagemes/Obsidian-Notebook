@@ -141,6 +141,7 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Notes page after every slide (#193): blank page, same size, paper of choice | ✅ | ✅ plan order, size, paper; ❌ view | | | |
 | New lecture from slides… (#191; command, library button, folder menu): PDF from the vault or the device, layout, header page / header text / none, course, date, notebook created in the folder and opened; PDF stored once | ✅ | ✅ flow with an injected host (cancel, empty PDF, failure, progress), header text and placement, notebook name, format round-trip; ❌ dialog, picker, vault writes | | | |
 | Insert PDF with the lecture pack layout (page menu): same layout questions after the page range, one undo step; last layout remembered on the device | ✅ | ✅ pages built by the same function, stored options parsing; ❌ dialog, view | | | |
+| Exercise page here (page menu, toolbar … menu, command): blank page with the exercise paper (default grid, remembered, changeable) right after the current page, full size of that page, scrolled to, one undo step | ✅ | ✅ page size/paper/no margins, infinite page, undo; ❌ menus, view | | | |
 
 ## Automated checks
 
@@ -336,6 +337,7 @@ K3. **On the slide.** Layout *On the slide*, header *No header*: the pages are t
 K4. **Notes page after every slide.** Turn on *Notes page after every slide* with paper *Millimetre* (also combined with a notes layout): after each slide page there is a blank millimetre page of the same size. Count the pages: twice the slides (plus the header page).
 K5. **Insert PDF with layout.** In an existing notebook, page menu → *Insert PDF*, choose a PDF and a range: a layout dialog follows (the last choice is proposed; Enter confirms). Pick a layout with notes and notes pages: the pages are inserted after the current page; one undo removes all of them; the PDF is not copied again if it was already imported (check the assets folder).
 K6. **Cancel.** Cancel at each dialog (file choice, setup, range, layout): nothing is created or inserted, and cancelling the setup dialog of a new lecture leaves no PDF in the assets folder.
+K8. **Exercise page here.** On a slide page with a notes area, tap … in the toolbar → *Exercise page here* (also page menu and the command): a blank grid page as large as the whole slide page appears right after it and is shown; one undo removes it. *Exercise page paper…* (page menu) changes the paper to millimetre: the next exercise page uses it, also after restarting Obsidian.
 K7. **Large deck on the tablet.** Import a deck of 60+ slides with notes on the right: the progress message appears and the notebook opens; scrolling and zoom stay smooth.
 
 | Step | Device / Obsidian version | Result | Notes |
@@ -347,6 +349,7 @@ K7. **Large deck on the tablet.** Import a deck of 60+ slides with notes on the 
 | K5 Insert PDF with layout | | | |
 | K6 Cancel | | | |
 | K7 Large deck | | | |
+| K8 Exercise page here | | | |
 
 Benchmark output (step 21): paste it here.
 

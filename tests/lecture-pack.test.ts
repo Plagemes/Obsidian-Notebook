@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { createLectureFromSlides, buildLectureDocument, headerTextElement, lectureNotebookName, type LectureDeps, type LectureSetup } from "../src/library/lecture-pack";
 import {
-	DEFAULT_LAYOUT_OPTIONS, NOTES_BOTTOM_RATIO, NOTES_RIGHT_RATIO, REFERENCE_SLIDE_SIDE, buildLecturePackPages, parseLayoutOptions,
+	DEFAULT_LAYOUT_OPTIONS, NOTES_BOTTOM_RATIO, NOTES_RIGHT_RATIO, REFERENCE_SLIDE_SIDE, buildLecturePackPages, exercisePage, parseLayoutOptions,
 	planLecturePages, slideGeometry, type LayoutOptions,
 } from "../src/model/lecture-pack";
+import { AddPage, History } from "../src/model/history";
 import { backgroundRect } from "../src/model/margins";
 import { parse, serializeChecked } from "../src/model/serialize";
 import { PAPER_SPACING, type Asset, type NotebookDocument } from "../src/model/types";
@@ -242,5 +243,36 @@ describe("lecture from slides flow", () => {
 		await createLectureFromSlides(deps({ progress, pick: async () => ({ name: "big.pdf", bytes: new ArrayBuffer(2 * 1024 * 1024) }) }).d, "x");
 		expect(progress).toHaveBeenCalledTimes(1);
 		expect(hide).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("exercise page", () => {
+	it("is blank, with the chosen paper and the full size of the page it follows", () => {
+		const [slide] = buildLecturePackPages(pdf, [slide169], 1, opts({ layout: "notes-right" }));
+		const p = exercisePage(slide!, "grid");
+		expect({ w: p.width, h: p.height, paper: p.paper }).toEqual({ w: slide!.width, h: slide!.height, paper: { kind: "grid", spacing: PAPER_SPACING.grid } });
+		expect(p.background).toBeUndefined();
+		expect(p.margins).toBeUndefined();
+		expect(p.strokes).toEqual([]);
+		expect(p.id).not.toBe(slide!.id);
+	});
+
+	it("gives a grown infinite page the A4 proportions of its width", () => {
+		const p = exercisePage({ width: 600, height: 5000, infinite: true }, "millimetre");
+		expect(p.width).toBe(600);
+		expect(p.height).toBeCloseTo(600 * (841.89 / 595.28), 1);
+		expect(p.infinite).toBeUndefined();
+	});
+
+	it("is one undo step that inserts right after the page and removes it again", () => {
+		const doc = buildLectureDocument(pdf, [slide169, slide169], { title: "", date: new Date(2026, 9, 29, 12), header: "none", layout: opts({}) });
+		const h = new History(() => doc);
+		h.execute(new AddPage(exercisePage(doc.pages[0]!, "grid"), 1));
+		expect(doc.pages).toHaveLength(3);
+		expect(doc.pages[1]!.background).toBeUndefined();
+		expect(doc.pages[2]!.background).toBeDefined();
+		h.undo();
+		expect(doc.pages).toHaveLength(2);
+		expect(serializeChecked(doc).ok).toBe(true);
 	});
 });

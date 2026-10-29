@@ -1,7 +1,7 @@
 import { Modal, Notice, Setting, type App } from "obsidian";
 import { t } from "../i18n";
 import { HEADER_MODES, type HeaderMode, type LectureSetup } from "../library/lecture-pack";
-import { PAPER_KINDS } from "../model/types";
+import { PAPER_KINDS, type PaperKind } from "../model/types";
 import { parseLayoutOptions, SLIDE_LAYOUTS, type LayoutOptions, type SlideLayout } from "../model/lecture-pack";
 import { cleanTitle, isoDate, parseIsoDate } from "./lecture-logic";
 
@@ -148,6 +148,47 @@ export function askLectureSetup(app: App, defaultTitle: string): Promise<Lecture
 		new Setting(modal.contentEl)
 			.addButton((b) => b.setButtonText(t("lecture.cancel")).onClick(() => modal.close()))
 			.addButton((b) => b.setButtonText(t("lecturePack.create")).setCta().onClick(submit));
+		modal.onClose = () => {
+			finish(null);
+			modal.contentEl.empty();
+		};
+		modal.open();
+	});
+}
+
+/** Paper of the "Exercise page here" action: the paper chosen for notes pages, remembered like the layout. */
+export function loadExercisePaper(app: App): PaperKind {
+	return loadLayoutOptions(app).afterPaper;
+}
+
+/** Asks for the paper of exercise pages (and of notes pages after each slide, which share the choice). */
+export function askExercisePaper(app: App): Promise<PaperKind | null> {
+	return new Promise((resolve) => {
+		const modal = new Modal(app);
+		const options = loadLayoutOptions(app);
+		let settled = false;
+		const finish = (value: PaperKind | null) => {
+			if (settled) return;
+			settled = true;
+			resolve(value);
+		};
+		modal.setTitle(t("exercise.paperTitle"));
+		new Setting(modal.contentEl).setName(t("exercise.paper")).addDropdown((dd) => {
+			for (const kind of PAPER_KINDS) dd.addOption(kind, t(`paper.${kind}`));
+			dd.setValue(options.afterPaper).onChange((v) => (options.afterPaper = v as PaperKind));
+		});
+		const submit = () => {
+			saveLayoutOptions(app, options);
+			finish(options.afterPaper);
+			modal.close();
+		};
+		new Setting(modal.contentEl)
+			.addButton((b) => b.setButtonText(t("lecture.cancel")).onClick(() => modal.close()))
+			.addButton((b) => b.setButtonText(t("lecturePack.apply")).setCta().onClick(submit));
+		modal.scope.register([], "Enter", () => {
+			submit();
+			return false;
+		});
 		modal.onClose = () => {
 			finish(null);
 			modal.contentEl.empty();
