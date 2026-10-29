@@ -1,5 +1,5 @@
 /** Page thumbnails for the library cards. Runs in the browser (canvas). */
-import { HIGHLIGHTER_ALPHA, strokePath } from "../ink/stroke-shape";
+import { HIGHLIGHTER_ALPHA, strokeSvgPath } from "../ink/stroke-shape";
 import { minorVisible, PAPER_COLORS, paperPattern } from "../ink/paper";
 import type { Page } from "../model/types";
 
@@ -78,7 +78,8 @@ export function renderThumbnail(page: Page, width: number, options: ThumbnailOpt
 		ctx.globalAlpha = highlighter ? HIGHLIGHTER_ALPHA : 1;
 		ctx.globalCompositeOperation = highlighter ? "multiply" : "source-over";
 		const w = highlighter ? stroke.width : Math.max(stroke.width, MIN_STROKE_PX / scale);
-		ctx.fill(new Path2D(strokePath(stroke.points, w, true, stroke.tool)));
+		// Same geometry as the notebook (old strokes: perfect-freehand, new ones: the ink engine).
+		ctx.fill(new Path2D(strokeSvgPath({ ...stroke, width: w })));
 	}
 	ctx.restore();
 

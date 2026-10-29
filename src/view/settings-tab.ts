@@ -66,13 +66,13 @@ export class NotebookSettingTab extends PluginSettingTab {
 				},
 			},
 			{
-				name: t("settings.prediction"),
-				desc: t("settings.prediction.desc"),
-				control: { type: "toggle", key: "prediction", defaultValue: DEFAULT_SETTINGS.prediction },
+				name: t("settings.inkPrediction"),
+				desc: t("settings.inkPrediction.desc"),
+				control: { type: "toggle", key: "inkPrediction", defaultValue: DEFAULT_SETTINGS.inkPrediction },
 			},
 			{
 				name: t("settings.stabilization"),
-				desc: t("settings.stabilization.desc"),
+				desc: t("settings.stabilization.filter.desc"),
 				control: { type: "slider", key: "stabilization", defaultValue: DEFAULT_SETTINGS.stabilization, min: 0, max: 10, step: 1 },
 			},
 			{
@@ -164,13 +164,13 @@ export class NotebookSettingTab extends PluginSettingTab {
 				.onChange((v) => this.setControlValue("pressureMode", v)));
 
 		new Setting(containerEl)
-			.setName(t("settings.prediction"))
-			.setDesc(t("settings.prediction.desc"))
-			.addToggle((toggle) => toggle.setValue(s.prediction).onChange((v) => this.setControlValue("prediction", v)));
+			.setName(t("settings.inkPrediction"))
+			.setDesc(t("settings.inkPrediction.desc"))
+			.addToggle((toggle) => toggle.setValue(s.inkPrediction).onChange((v) => this.setControlValue("inkPrediction", v)));
 
 		new Setting(containerEl)
 			.setName(t("settings.stabilization"))
-			.setDesc(t("settings.stabilization.desc"))
+			.setDesc(t("settings.stabilization.filter.desc"))
 			.addSlider((slider) => slider.setLimits(0, 10, 1).setValue(s.stabilization).onChange((v) => this.setControlValue("stabilization", v)));
 
 		new Setting(containerEl)

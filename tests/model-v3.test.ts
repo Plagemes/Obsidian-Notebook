@@ -42,7 +42,7 @@ describe("format v3 migration", () => {
 		expect(r.migratedFrom).toBe(2);
 		expect(r.doc.version).toBe(CURRENT_VERSION);
 		expect(r.doc.pages[0]!.paper).toEqual({ kind: "grid", spacing: 14.17 });
-		expect(r.doc.pages[0]!.strokes[0]).toEqual(v2.pages[0]!.strokes[0]);
+		expect(r.doc.pages[0]!.strokes[0]).toEqual({ ...v2.pages[0]!.strokes[0], render: 1 });
 		expect(r.doc.pages[0]!.width).toBe(595.28);
 	});
 

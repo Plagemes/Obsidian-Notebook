@@ -10,16 +10,18 @@ import { growForInfinite } from "../ink/infinite";
 import { InputPolicy } from "../ink/input-policy";
 import { strokesInLasso, transformStroke } from "../ink/lasso";
 import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layout } from "../ink/layout";
-import { PointerController, type InkSample } from "../ink/pointer-controller";
+import { HoldTracker } from "../ink/hold";
+import { InkBuilder } from "../ink/ink-geometry";
+import { OneEuroFilter, stabilizationParams } from "../ink/one-euro";
+import { PointerController, type InkSample, type SampleBuffer } from "../ink/pointer-controller";
 import { PressureModel } from "../ink/pressure";
-import { isHold, recognizeShape, type TimedSample } from "../ink/recognize";
+import { recognizeShape } from "../ink/recognize";
 import { drawElement, drawTextElement, measureText, Renderer, selectionHandles } from "../ink/renderer";
 import { projectToRuler, rulerFromTwoTouches, RULER_LENGTH, type Ruler } from "../ink/ruler";
 import { eraseSegment } from "../ink/segment-erase";
-import { Stabilizer } from "../ink/stabilizer";
 import { apply, IDENTITY, invert, isIdentity, multiply, rotateAbout, scaleAbout, translate, type Matrix } from "../ink/transform";
 import { clampToPage, fitWidth, pan, PAGE_MARGIN, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
-import { cloneMeta, createId, createPage, createStroke, quantizePoint } from "../model/document";
+import { cloneMeta, createId, createPage, createStroke } from "../model/document";
 import { createPdfPages, duplicatePage } from "../model/pages";
 import {
 	AddAsset, AddElement, AddPage, AddStroke, Batch, DeletePage, History, InsertPages, MovePage, RemoveElement, ReplaceElement,
@@ -29,7 +31,7 @@ import { freezeStroke } from "../model/serialize";
 import {
 	DEFAULT_META, PAGE_SIZES, PAPER_KINDS, PAPER_SPACING,
 	type Asset, type ImageElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type PageSizeName,
-	type PaperKind, type Point, type Stroke, type TextElement,
+	type PaperKind, type Point, type Stroke, type TextElement, RENDER_FREEHAND, RENDER_INK,
 } from "../model/types";
 import type { JournalStore } from "../storage/journal";
 import { DocumentSession, type SaveState, type SessionMode } from "../storage/session";
@@ -63,6 +65,8 @@ const HOLD_MS = 600;
 const HOLD_RADIUS_PX = 4;
 /** A pen stroke that starts this close to the ruler edge (CSS px) is projected onto it. */
 const RULER_SNAP_PX = 14;
+/** Pen samples closer than this (CSS px) to the last stored point are not stored. */
+const MIN_STEP_PX = 0.5;
 /** A touch that moves less than this (CSS px) is a tap. */
 const TAP_SLOP_PX = 8;
 /** Below this width (CSS px) the page panel is a drawer over the page instead of a side panel. */
@@ -80,8 +84,16 @@ export interface NotebookHost {
 
 interface ActiveStroke {
 	pageIndex: number;
+	/** Style (and, once recognised as a shape, the points); while `wet`, the points are in the view's InkBuilder. */
 	stroke: Stroke;
-	predicted: Point[];
+	/** Written as wet ink: points and geometry live in the InkBuilder until the pen lifts. */
+	wet: boolean;
+	/** Last raw (unfiltered) pen position on the page and its pressure: the tip of the line, and its last point. */
+	rawX: number;
+	rawY: number;
+	rawP: number;
+	/** Samples closer than this (pt) to the last stored point are not stored (the tip still follows the pen). */
+	minStep: number;
 	/** Points are projected onto the ruler edge. */
 	snap: boolean;
 	/** The pen was held still and the stroke was replaced with a clean shape: further movement is ignored. */
@@ -141,7 +153,9 @@ export class NotebookView extends FileView {
 	private readonly history = new History(() => this.requireDoc());
 	private readonly policy: InputPolicy;
 	private readonly pressure: PressureModel;
-	private readonly stabilizer: Stabilizer;
+	/** Position filter (stabilization setting) and the geometry of the stroke being written. */
+	private readonly filter = new OneEuroFilter();
+	private readonly ink = new InkBuilder();
 
 	private toolbar!: Toolbar;
 	private body!: HTMLElement;
@@ -171,7 +185,7 @@ export class NotebookView extends FileView {
 	private textTap: TextTap | null = null;
 	private ruler: { pageId: string; ruler: Ruler } | null = null;
 	private shiftDown = false;
-	private holdSamples: TimedSample[] = [];
+	private readonly hold = new HoldTracker();
 	private holdTimer: number | null = null;
 	private snapFlashTimer: number | null = null;
 
@@ -190,13 +204,16 @@ export class NotebookView extends FileView {
 	private readonly perfFrames: number[] = [];
 	private readonly perfLatency: number[] = [];
 	private perfShownAt = 0;
+	/** Per input event while writing: processing time and event timestamp → painted (ms). */
+	private readonly perfProcess: number[] = [];
+	private readonly perfPaint: number[] = [];
 
 	constructor(leaf: WorkspaceLeaf, private readonly host: NotebookHost) {
 		super(leaf);
 		const s = host.settings;
 		this.policy = new InputPolicy({ fingerDrawing: s.fingerDrawing, palmRejectionMs: s.palmRejectionMs, palmContactPx: s.palmContactPx });
 		this.pressure = new PressureModel(s.pressureMode);
-		this.stabilizer = new Stabilizer(s.stabilization);
+		this.filter.params = stabilizationParams(s.stabilization);
 	}
 
 	getViewType(): string {
@@ -457,8 +474,8 @@ export class NotebookView extends FileView {
 			palmContactPx: settings.palmContactPx,
 		};
 		this.pressure.mode = settings.pressureMode;
-		this.stabilizer.level = settings.stabilization;
-		if (this.controller) this.controller.predictionEnabled = settings.prediction;
+		this.filter.params = stabilizationParams(settings.stabilization);
+		if (this.controller) this.controller.predictionEnabled = settings.inkPrediction;
 		this.perfEl?.toggleClass("notebook-hidden", !settings.perfOverlay);
 		if (this.renderer) this.renderer.onFrame = settings.perfOverlay ? (t) => this.onFrame(t) : null;
 	}
@@ -882,6 +899,7 @@ export class NotebookView extends FileView {
 		this.clearSelection();
 		this.history.clear();
 		this.renderer?.setLive(null);
+		this.renderer?.cancelWet();
 		this.renderer?.setLasso(null);
 		this.ruler = null;
 		if (doc && mode === "ok") {
@@ -950,7 +968,9 @@ export class NotebookView extends FileView {
 		if (!this.pageNav?.open || this.navTimer !== null) return;
 		this.navTimer = window.setTimeout(() => {
 			this.navTimer = null;
-			this.pageNav?.refresh();
+			// Thumbnails are rendered on the main thread: never while the pen is writing.
+			if (this.active || this.erasing) this.scheduleNavRefresh();
+			else this.pageNav?.refresh();
 		}, 500);
 	}
 
@@ -1230,16 +1250,21 @@ export class NotebookView extends FileView {
 
 	// --- input ---
 
-	private toDoc(s: InkSample): [number, number] {
+	private toDoc(s: { x: number; y: number }): [number, number] {
 		return screenToPage(this.viewport, s.x, s.y);
 	}
 
-	private toLocal(pageIndex: number, s: InkSample): [number, number] | null {
+	private toLocal(pageIndex: number, s: { x: number; y: number }): [number, number] | null {
 		const box = this.layout?.boxes[pageIndex];
 		if (!box) return null;
 		const [x, y] = this.toDoc(s);
 		if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
 		return toPageLocal(box, x, y);
+	}
+
+	/** Sample `i` of a buffer as a point object (for the tools that are not on the writing hot path). */
+	private static at(b: SampleBuffer, i: number): { x: number; y: number } {
+		return { x: b.x[i]!, y: b.y[i]! };
 	}
 
 	private drawStart(sample: InkSample, eraserButton: boolean): boolean {
@@ -1293,37 +1318,44 @@ export class NotebookView extends FileView {
 
 		const snap = !!page && this.rulerLatches(page, local);
 		const start = snap && this.ruler ? (projectToRuler(this.ruler.ruler, local, Infinity) ?? local) : local;
-		this.stabilizer.reset(start[0], start[1]);
-		this.pressure.begin();
+		this.filter.reset(sample.x, sample.y, sample.t);
+		// Real or simulated pressure is decided here, for the whole stroke.
+		this.pressure.begin(sample.pointerType, sample.pressure);
 		const p = this.pressure.sample(sample.pointerType, sample.pressure, sample.x, sample.y, sample.t);
 		const highlighter = tool === "highlighter";
+		const inkTool = highlighter ? "highlighter" : "pen";
+		const color = highlighter ? this.tools.highlighterColor : this.tools.penColor;
+		const width = highlighter ? this.tools.highlighterWidth : this.tools.penWidth;
+		this.ink.reset(inkTool, width);
+		this.ink.add(start[0], start[1], p);
 		this.active = {
 			pageIndex,
-			stroke: createStroke(
-				highlighter ? this.tools.highlighterColor : this.tools.penColor,
-				highlighter ? this.tools.highlighterWidth : this.tools.penWidth,
-				[quantizePoint(start[0], start[1], p)],
-				highlighter ? "highlighter" : "pen",
-			),
-			predicted: [],
+			stroke: createStroke(color, width, [], inkTool, RENDER_INK),
+			wet: true,
+			rawX: start[0],
+			rawY: start[1],
+			rawP: p,
+			minStep: MIN_STEP_PX / this.viewport.scale,
 			snap,
 			recognized: false,
 			extra: [],
 			tried: null,
 		};
-		this.holdSamples = [{ x: sample.x, y: sample.y, t: performance.now() }];
+		this.hold.clear();
+		this.hold.push(sample.x, sample.y, performance.now());
 		this.startHold();
-		this.pushLive();
+		// The first point shows as a dot right away.
+		if (this.renderer?.beginWet(pageIndex, this.ink, inkTool, color)) this.renderer.paintWet();
 		return true;
 	}
 
-	private drawMove(samples: InkSample[], predicted: InkSample[]): void {
-		const lastSample = samples[samples.length - 1];
-		if (lastSample) this.perfInput = lastSample.t;
+	private drawMove(samples: SampleBuffer, predicted: SampleBuffer): void {
+		const n = samples.count;
+		if (n > 0) this.perfInput = samples.t[n - 1]!;
 
 		if (this.erasing) {
-			for (const s of samples) {
-				const [x, y] = this.toDoc(s);
+			for (let i = 0; i < n; i++) {
+				const [x, y] = this.toDoc(NotebookView.at(samples, i));
 				if (Number.isFinite(x) && Number.isFinite(y)) this.eraseTo(x, y);
 			}
 			return;
@@ -1332,8 +1364,8 @@ export class NotebookView extends FileView {
 		const lasso = this.lasso;
 		if (lasso) {
 			const minStep = 2 / this.viewport.scale;
-			for (const s of samples) {
-				const p = this.toLocal(lasso.pageIndex, s);
+			for (let i = 0; i < n; i++) {
+				const p = this.toLocal(lasso.pageIndex, NotebookView.at(samples, i));
 				const last = lasso.points[lasso.points.length - 1]!;
 				if (p && Math.hypot(p[0] - last[0], p[1] - last[1]) >= minStep) lasso.points.push(p);
 			}
@@ -1341,6 +1373,7 @@ export class NotebookView extends FileView {
 			return;
 		}
 
+		const lastSample = n > 0 ? NotebookView.at(samples, n - 1) : null;
 		if (this.drag && this.selection && lastSample) {
 			const p = this.toLocal(this.selection.pageIndex, lastSample);
 			if (p) this.updateDrag(p);
@@ -1349,7 +1382,7 @@ export class NotebookView extends FileView {
 
 		const tap = this.textTap;
 		if (tap) {
-			for (const s of samples) if (Math.hypot(s.x - tap.x, s.y - tap.y) > TAP_SLOP_PX) tap.moved = true;
+			for (let i = 0; i < n; i++) if (Math.hypot(samples.x[i]! - tap.x, samples.y[i]! - tap.y) > TAP_SLOP_PX) tap.moved = true;
 			return;
 		}
 
@@ -1365,36 +1398,62 @@ export class NotebookView extends FileView {
 
 		const active = this.active;
 		// After a shape was recognised the pen only has to be lifted.
-		if (!active || active.recognized) return;
-		const points = active.stroke.points;
-		const now = performance.now();
-		for (const s of samples) {
-			const local = this.toLocal(active.pageIndex, s);
-			// A single non-finite point would make every later save fail validation.
-			if (!local) continue;
-			const [sx, sy] = this.stabilizer.push(local[0], local[1]);
-			const [x, y] = this.snapToRuler(active, sx, sy);
-			const p = this.pressure.sample(s.pointerType, s.pressure, s.x, s.y, s.t);
-			this.pushPoint(points, quantizePoint(x, y, p));
-			this.holdSamples.push({ x: s.x, y: s.y, t: now });
-			if (active.tried && Math.hypot(s.x - active.tried.x, s.y - active.tried.y) > HOLD_RADIUS_PX) active.tried = null;
-		}
-		if (this.holdSamples.length > 48) this.holdSamples.splice(0, this.holdSamples.length - 48);
-		const lastP = points[points.length - 1]?.[2] ?? 0.5;
-		active.predicted = active.snap ? [] : predicted
-			.map((s) => this.toLocal(active.pageIndex, s))
-			.filter((p): p is [number, number] => p !== null)
-			.map(([x, y]): Point => [x, y, lastP]);
-		this.pushLive();
+		if (!active || active.recognized || !active.wet) return;
+		this.writeSamples(active, samples, predicted);
 	}
 
-	private pushPoint(points: Point[], q: Point): void {
-		const last = points[points.length - 1];
-		if (last && last[0] === q[0] && last[1] === q[1]) {
-			last[2] = Math.max(last[2], q[2]);
-			return;
+	/**
+	 * The writing hot path: filter, convert to page coordinates, store, and paint the new ink right
+	 * away (no animation frame). No object is created per sample (except with the ruler).
+	 */
+	private writeSamples(active: ActiveStroke, samples: SampleBuffer, predicted: SampleBuffer): void {
+		const t0 = performance.now();
+		const box = this.layout?.boxes[active.pageIndex];
+		if (!box) return;
+		const { scale, offsetX, offsetY } = this.viewport;
+		const ink = this.ink;
+		const type = samples.pointerType;
+		const n = samples.count;
+		for (let i = 0; i < n; i++) {
+			const rx = samples.x[i]!, ry = samples.y[i]!, t = samples.t[i]!;
+			let ax = (rx - offsetX) / scale - box.x;
+			let ay = (ry - offsetY) / scale - box.y;
+			// A single non-finite point would make every later save fail validation.
+			if (!Number.isFinite(ax) || !Number.isFinite(ay)) continue;
+			this.filter.filter(rx, ry, t);
+			let fx = (this.filter.x - offsetX) / scale - box.x;
+			let fy = (this.filter.y - offsetY) / scale - box.y;
+			if (active.snap) {
+				[ax, ay] = this.snapToRuler(active, ax, ay);
+				[fx, fy] = this.snapToRuler(active, fx, fy);
+			}
+			const p = this.pressure.sample(type, samples.p[i]!, rx, ry, t);
+			active.rawX = ax;
+			active.rawY = ay;
+			active.rawP = p;
+			if (ink.distanceToLast(fx, fy) >= active.minStep) ink.add(fx, fy, p);
+			this.hold.push(rx, ry, t0);
+			if (active.tried && Math.hypot(rx - active.tried.x, ry - active.tried.y) > HOLD_RADIUS_PX) active.tried = null;
 		}
-		points.push(q);
+		const wet = this.renderer?.wetInk;
+		if (!wet) return;
+		// Tip: up to the raw pen position, then the predicted samples (drawn, never stored).
+		wet.clearExtra();
+		wet.pushExtra(active.rawX, active.rawY, active.rawP);
+		if (!active.snap) {
+			for (let i = 0; i < predicted.count; i++) {
+				const px = (predicted.x[i]! - offsetX) / scale - box.x;
+				const py = (predicted.y[i]! - offsetY) / scale - box.y;
+				if (Number.isFinite(px) && Number.isFinite(py)) wet.pushExtra(px, py, active.rawP);
+			}
+		}
+		this.renderer!.paintWet();
+		if (this.host.settings.perfOverlay) {
+			const now = performance.now();
+			this.perfProcess.push(now - t0);
+			if (n > 0) this.perfPaint.push(Math.max(0, now - samples.t[n - 1]!));
+			this.renderer!.requestFrame();
+		}
 	}
 
 	private drawEnd(cancelled: boolean): void {
@@ -1450,15 +1509,23 @@ export class NotebookView extends FileView {
 		const active = this.active;
 		this.active = null;
 		this.stopHold();
-		this.renderer?.setLive(null);
-		const tail = active?.recognized ? [] : this.stabilizer.finish();
 		const page = active && this.pageAtIndex(active.pageIndex);
-		if (!active || cancelled || !page) return;
-		for (const [x, y] of tail) {
-			const last = active.stroke.points[active.stroke.points.length - 1]!;
-			const [sx, sy] = this.snapToRuler(active, x, y);
-			this.pushPoint(active.stroke.points, quantizePoint(sx, sy, last[2]));
+		if (!active || cancelled || !page) {
+			this.renderer?.cancelWet();
+			this.renderer?.setLive(null);
+			return;
 		}
+		if (active.wet) {
+			// The line ends where the pen lifted (the filtered position may trail it slightly).
+			this.ink.add(active.rawX, active.rawY, active.rawP);
+			this.ink.finish();
+			const stroke = freezeStroke({ ...active.stroke, points: this.ink.toPoints() });
+			// The wet canvas shows exactly this geometry; the static layer takes it over without a change.
+			this.renderer?.endWet(stroke);
+			this.addStrokes(active.pageIndex, page, [stroke]);
+			return;
+		}
+		this.renderer?.setLive(null);
 		const stroke = freezeStroke(active.stroke);
 		const extras = active.extra.map((points) => freezeStroke({ ...active.stroke, id: createId(), points }));
 		this.addStrokes(active.pageIndex, page, [stroke, ...extras]);
@@ -1501,7 +1568,7 @@ export class NotebookView extends FileView {
 		if (!a) return;
 		this.renderer?.setLive({
 			pageIndex: a.pageIndex, tool: a.stroke.tool, color: a.stroke.color, width: a.stroke.width,
-			points: a.stroke.points, predicted: a.predicted,
+			points: a.stroke.points, predicted: [],
 		});
 	}
 
@@ -1523,24 +1590,25 @@ export class NotebookView extends FileView {
 	private stopHold(): void {
 		if (this.holdTimer !== null) window.clearInterval(this.holdTimer);
 		this.holdTimer = null;
-		this.holdSamples = [];
+		this.hold.clear();
 	}
 
 	/** The pen has been still for 0.6 s: if the stroke so far is clearly a shape, it becomes a clean one. */
 	private checkHold(): void {
 		const a = this.active;
-		if (!a || a.recognized || a.tried) return;
-		if (!isHold(this.holdSamples, performance.now(), HOLD_MS, HOLD_RADIUS_PX)) return;
-		const last = this.holdSamples[this.holdSamples.length - 1]!;
-		a.tried = { x: last.x, y: last.y };
-		const shape = recognizeShape(a.stroke.points);
+		if (!a || a.recognized || a.tried || !a.wet) return;
+		if (!this.hold.isHold(performance.now(), HOLD_MS, HOLD_RADIUS_PX)) return;
+		a.tried = { x: this.hold.lastX(), y: this.hold.lastY() };
+		const shape = recognizeShape(this.ink.toPoints());
 		const first = shape?.points[0];
 		if (!shape || !first || first.length < 2) return;
 		// Highlighter shapes stay highlighter strokes (translucent); pen shapes become constant-width "shape" ink.
-		a.stroke = { ...a.stroke, tool: a.stroke.tool === "highlighter" ? "highlighter" : "shape", points: first };
+		// Shapes keep the perfect-freehand geometry (render 1), drawn whole on the live layer.
+		a.stroke = { ...a.stroke, tool: a.stroke.tool === "highlighter" ? "highlighter" : "shape", points: first, render: RENDER_FREEHAND };
 		a.extra = shape.points.slice(1);
-		a.predicted = [];
+		a.wet = false;
 		a.recognized = true;
+		this.renderer?.cancelWet();
 		this.pushLive();
 		this.flashSnap();
 	}
@@ -1712,9 +1780,13 @@ export class NotebookView extends FileView {
 		const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 		const frames = this.perfFrames.splice(0).filter((f) => f < 250);
 		const latency = this.perfLatency.splice(0);
+		const proc = this.perfProcess.splice(0);
+		const paint = this.perfPaint.splice(0);
 		const st = this.renderer.stats;
+		const ms = (a: number[]) => (a.length ? `${avg(a).toFixed(1)} ms` : "–");
 		this.perfEl.setText(
-			`frame ${avg(frames).toFixed(1)} ms · input→frame ${latency.length ? avg(latency).toFixed(1) + " ms" : "–"}\n`
+			`frame ${avg(frames).toFixed(1)} ms · input→frame ${ms(latency)}\n`
+			+ `ink: input→paint ${ms(paint)} · per event ${proc.length ? avg(proc).toFixed(2) + " ms" : "–"}${this.controller?.rawUpdates ? " · raw" : ""}\n`
 			+ `redraw ${st.staticMs.toFixed(1)} ms · ${st.strokesDrawn} strokes · ${st.pagesDrawn} pages`,
 		);
 	}

@@ -54,6 +54,16 @@ export interface SessionOptions {
 	journalDelayMs?: number;
 	/** Name of this session's journal files; unique among the sessions open at the same time. */
 	journalOwner?: string;
+	/**
+	 * Timed work (debounced and max-wait saves, journal entries) waits until the pen has been up
+	 * this long after a gesture (gestureEnded()), so serializing never delays the next stroke's
+	 * first samples. Default 350 ms.
+	 */
+	quietMs?: number;
+	/** ...but never longer than this after it was first due (default 4 s)... */
+	maxQuietDeferMs?: number;
+	/** ...and while busy() (pen down) at most this long (default 8 s): a very long gesture cannot hold back saving forever. */
+	maxBusyDeferMs?: number;
 }
 
 let ownerCounter = 0;
@@ -62,6 +72,9 @@ function newOwnerId(): string {
 	ownerCounter++;
 	return `${Date.now().toString(36)}${ownerCounter.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
+
+/** How often deferred timed work checks again, ms. */
+const DEFER_POLL_MS = 100;
 
 /** Attempts per flush when another writer keeps changing the file between our read and our write. */
 const RACE_ATTEMPTS = 3;
@@ -120,6 +133,16 @@ export class DocumentSession {
 	private readonly retryMs: number;
 	private readonly now: () => Date;
 	private readonly busy: () => boolean;
+	private readonly quietMs: number;
+	private readonly maxQuietDeferMs: number;
+	private readonly maxBusyDeferMs: number;
+	/** When the last gesture ended (ms since epoch), or -Infinity. */
+	private lastGestureEnd = -Infinity;
+	/** When the deferred save / journal entry first became due, or null (separate clocks). */
+	private flushDeferredSince: number | null = null;
+	private journalDeferredSince: number | null = null;
+	/** Poll of a timed save that is waiting for the pen; the due time is kept while it runs. */
+	private deferTimer: number | null = null;
 
 	constructor(
 		private readonly io: DocumentIO,
@@ -135,6 +158,42 @@ export class DocumentSession {
 		this.journal = options.journal ?? null;
 		this.journalDelayMs = options.journalDelayMs ?? 200;
 		this.journalOwner = options.journalOwner ?? newOwnerId();
+		this.quietMs = options.quietMs ?? 350;
+		this.maxQuietDeferMs = options.maxQuietDeferMs ?? 4000;
+		this.maxBusyDeferMs = options.maxBusyDeferMs ?? 8000;
+	}
+
+	/**
+	 * Should timed work wait for the input to settle? True while a gesture is in progress or within
+	 * `quietMs` after one, up to the caps; explicit flushes (flush(), flushForClose()) never wait.
+	 */
+	private deferForInput(kind: "flush" | "journal"): boolean {
+		const now = this.now().getTime();
+		const busy = this.busy();
+		const quiet = now - this.lastGestureEnd < this.quietMs;
+		const since = kind === "flush" ? this.flushDeferredSince : this.journalDeferredSince;
+		let defer = busy || quiet;
+		if (defer && since !== null && now - since >= (busy ? this.maxBusyDeferMs : this.maxQuietDeferMs)) defer = false;
+		const next = defer ? (since ?? now) : null;
+		if (kind === "flush") this.flushDeferredSince = next;
+		else this.journalDeferredSince = next;
+		return defer;
+	}
+
+	/**
+	 * Debounced and max-wait saves: deferred while the pen is writing. The wait has its own poll
+	 * timer and keeps its due time, so new strokes (markChanged) cannot push the save further back.
+	 */
+	private timedFlush(): void {
+		if (this.disposed) return;
+		if (this.deferForInput("flush")) {
+			this.deferTimer ??= this.timers.set(() => {
+				this.deferTimer = null;
+				this.timedFlush();
+			}, DEFER_POLL_MS);
+			return;
+		}
+		void this.flush();
 	}
 
 	get dirty(): boolean {
@@ -154,8 +213,8 @@ export class DocumentSession {
 		this.revision++;
 		this.events.onSaveState?.("pending");
 		if (this.debounceTimer !== null) this.timers.clear(this.debounceTimer);
-		this.debounceTimer = this.timers.set(() => void this.flush(), this.debounceMs);
-		if (this.maxWaitTimer === null) this.maxWaitTimer = this.timers.set(() => void this.flush(), this.maxWaitMs);
+		this.debounceTimer = this.timers.set(() => this.timedFlush(), this.debounceMs);
+		if (this.maxWaitTimer === null) this.maxWaitTimer = this.timers.set(() => this.timedFlush(), this.maxWaitMs);
 		this.scheduleJournal(this.journalDelayMs);
 	}
 
@@ -199,6 +258,7 @@ export class DocumentSession {
 
 	/** Call when a gesture ends: re-checks an external change that arrived while it was in progress. */
 	gestureEnded(): void {
+		this.lastGestureEnd = this.now().getTime();
 		if (!this.deferredExternal) return;
 		this.deferredExternal = false;
 		void this.handleExternalChange();
@@ -271,8 +331,8 @@ export class DocumentSession {
 			if (recoveredAt !== null) {
 				// The restored edits are not in the file yet: the regular save writes them.
 				this.revision = 1;
-				this.debounceTimer = this.timers.set(() => void this.flush(), this.debounceMs);
-				this.maxWaitTimer = this.timers.set(() => void this.flush(), this.maxWaitMs);
+				this.debounceTimer = this.timers.set(() => this.timedFlush(), this.debounceMs);
+				this.maxWaitTimer = this.timers.set(() => this.timedFlush(), this.maxWaitMs);
 			}
 		} else {
 			this.doc = null;
@@ -349,7 +409,7 @@ export class DocumentSession {
 		}
 
 		if (this.dirty) {
-			if (!this.disposed) this.debounceTimer = this.timers.set(() => void this.flush(), this.debounceMs);
+			if (!this.disposed) this.debounceTimer = this.timers.set(() => this.timedFlush(), this.debounceMs);
 			this.events.onSaveState?.("pending");
 		} else {
 			this.events.onSaveState?.("saved");
@@ -373,8 +433,8 @@ export class DocumentSession {
 		if (!this.journal || this.journalSuspended || this.disposed || this.mode !== "ok" || this.journalTimer !== null) return;
 		this.journalTimer = this.timers.set(() => {
 			this.journalTimer = null;
-			// Never serialize in the middle of a gesture: the pen-up commit schedules the entry anyway.
-			if (this.busy()) return this.scheduleJournal(100);
+			// Never serialize in the middle of a gesture or right after it (the next stroke may be starting).
+			if (this.deferForInput("journal")) return this.scheduleJournal(DEFER_POLL_MS);
 			this.enqueueJournal(() => this.writeJournal());
 		}, delayMs);
 	}
@@ -562,7 +622,10 @@ export class DocumentSession {
 	private clearTimers(): void {
 		if (this.debounceTimer !== null) this.timers.clear(this.debounceTimer);
 		if (this.maxWaitTimer !== null) this.timers.clear(this.maxWaitTimer);
+		if (this.deferTimer !== null) this.timers.clear(this.deferTimer);
 		this.debounceTimer = null;
 		this.maxWaitTimer = null;
+		this.deferTimer = null;
+		this.flushDeferredSince = null;
 	}
 }

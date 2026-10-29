@@ -1,5 +1,6 @@
 import { getStroke, type StrokeOptions } from "perfect-freehand";
-import type { Point, Tool } from "../model/types";
+import { RENDER_INK, type Point, type Stroke, type Tool } from "../model/types";
+import { inkPath, SvgPathSink } from "./ink-geometry";
 
 /** Pen v1 parameters (see docs/architecture.md §2). Changing them changes how existing files look. */
 export const PEN_V1: Readonly<StrokeOptions> = {
@@ -61,4 +62,12 @@ export function outlineToPath(outline: readonly number[][]): string {
 
 export function strokePath(points: readonly Point[], width: number, complete = true, tool: Tool = "pen"): string {
 	return outlineToPath(strokeOutline(points, width, complete, tool));
+}
+
+/** SVG path of a committed stroke with the geometry its render version names (nonzero fill). */
+export function strokeSvgPath(stroke: Pick<Stroke, "points" | "width" | "tool" | "render">): string {
+	if (stroke.render !== RENDER_INK) return strokePath(stroke.points, stroke.width, true, stroke.tool);
+	const sink = new SvgPathSink();
+	inkPath(sink, stroke.points, stroke.width, stroke.tool);
+	return sink.d;
 }

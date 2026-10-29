@@ -1,7 +1,7 @@
 import type { Page, TextElement } from "../model/types";
 import type { BBox } from "./hit-test";
 import { PAPER_COLORS, paperPattern, type PaperLineKind } from "./paper";
-import { HIGHLIGHTER_ALPHA, strokePath } from "./stroke-shape";
+import { HIGHLIGHTER_ALPHA, strokeSvgPath } from "./stroke-shape";
 
 /** Line widths of the paper pattern, pt. Shared with the PDF exporter. */
 export const PAPER_LINE_WIDTH: Readonly<Record<PaperLineKind, number>> = { minor: 0.3, major: 0.5, margin: 0.5 };
@@ -98,7 +98,7 @@ export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 	}
 
 	for (const stroke of page.strokes) {
-		const d = strokePath(stroke.points, stroke.width, true, stroke.tool);
+		const d = strokeSvgPath(stroke);
 		if (!d) continue;
 		const fill = escapeAttr(stroke.color);
 		out.push(

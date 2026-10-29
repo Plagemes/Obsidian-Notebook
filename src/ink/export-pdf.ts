@@ -1,7 +1,8 @@
-import type { Page, Stroke, TextElement } from "../model/types";
+import { RENDER_INK, type Page, type Stroke, type TextElement } from "../model/types";
 import type { BBox } from "./hit-test";
 import { PAPER_DOT_RADIUS, PAPER_LINE_WIDTH } from "./export-svg";
 import { PAPER_COLORS, paperPattern, type PaperLineKind } from "./paper";
+import { inkPath, type PathSink } from "./ink-geometry";
 import { HIGHLIGHTER_ALPHA, strokeOutline } from "./stroke-shape";
 import { wrapHelvetica } from "../pdf/helvetica";
 
@@ -325,7 +326,41 @@ function paperOps(page: Page): string[] {
 	return ops;
 }
 
+/** PDF path operators; full circles as four cubic Béziers in the positive-angle direction (like canvas arc). */
+class PdfPathSink implements PathSink {
+	readonly parts: string[] = [];
+	moveTo(x: number, y: number): void {
+		this.parts.push(`${num(x)} ${num(y)} m`);
+	}
+	lineTo(x: number, y: number): void {
+		this.parts.push(`${num(x)} ${num(y)} l`);
+	}
+	arc(x: number, y: number, r: number): void {
+		const c = r * 0.5522847498;
+		this.parts.push(
+			`${num(x + r)} ${num(y + c)} ${num(x + c)} ${num(y + r)} ${num(x)} ${num(y + r)} c`,
+			`${num(x - c)} ${num(y + r)} ${num(x - r)} ${num(y + c)} ${num(x - r)} ${num(y)} c`,
+			`${num(x - r)} ${num(y - c)} ${num(x - c)} ${num(y - r)} ${num(x)} ${num(y - r)} c`,
+			`${num(x + c)} ${num(y - r)} ${num(x + r)} ${num(y - c)} ${num(x + r)} ${num(y)} c`,
+		);
+	}
+	closePath(): void {
+		this.parts.push("h");
+	}
+}
+
 function strokeOps(stroke: Stroke): string {
+	if (stroke.render === RENDER_INK) {
+		const sink = new PdfPathSink();
+		inkPath(sink, stroke.points, stroke.width, stroke.tool);
+		if (sink.parts.length === 0) return "";
+		const body = `${rgb(stroke.color)} rg
+${sink.parts.join(" ")} f`;
+		return stroke.tool === "highlighter" ? `q
+/GS1 gs
+${body}
+Q` : body;
+	}
 	const outline = strokeOutline(stroke.points, stroke.width, true, stroke.tool);
 	const n = outline.length;
 	if (n < 3) return "";

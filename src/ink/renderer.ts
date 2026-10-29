@@ -1,12 +1,14 @@
 import type { Page, PageElement, Point, Stroke, TextElement, Tool } from "../model/types";
-import { MM } from "../model/types";
+import { MM, RENDER_INK } from "../model/types";
 import { transformElement } from "./elements";
 import { layoutText, type MeasureText } from "./text-layout";
 import { strokeBounds, type BBox } from "./hit-test";
 import { minorVisible, paperPattern, PAPER_COLORS } from "./paper";
 import { visiblePages, type Layout, type PageBox } from "./layout";
 import { rulerEdge, rulerTicks, type Ruler } from "./ruler";
+import { inkPath, type InkBuilder } from "./ink-geometry";
 import { HIGHLIGHTER_ALPHA, strokePath } from "./stroke-shape";
+import { WetInk, type PageTransform } from "./wet-ink";
 import type { Matrix } from "./transform";
 import type { Viewport } from "./viewport";
 
@@ -119,6 +121,8 @@ export interface RenderStats {
 export class Renderer {
 	readonly staticCanvas: HTMLCanvasElement;
 	readonly liveCanvas: HTMLCanvasElement;
+	/** Wet ink of the pen: a low-latency (desynchronized) canvas above the others. */
+	readonly wetCanvas: HTMLCanvasElement;
 	readonly stats: RenderStats = { staticMs: 0, strokesDrawn: 0, pagesDrawn: 0 };
 	/** Called after each animation frame that drew something (for the performance overlay). */
 	onFrame: ((frameStart: number) => void) | null = null;
@@ -148,6 +152,18 @@ export class Renderer {
 	private frame: number | null = null;
 	private settleTimer: number | null = null;
 
+	private readonly container: HTMLElement;
+	private readonly wetPen: WetInk;
+	/** Wet ink of the highlighter (created on first use): a regular canvas, see releaseWet(). */
+	private wetHl: WetInk | null = null;
+	/** The canvas showing the stroke in progress. */
+	private wet: WetInk | null = null;
+	private wetPage = -1;
+	/** The finished wet stroke, about to be added to the static layer. */
+	private wetDone: Stroke | null = null;
+	/** Wet canvases to clear once the static layer shows their stroke, with the frames to wait. */
+	private readonly wetRelease: Array<{ wet: WetInk; frames: number }> = [];
+
 	private readonly paths = new WeakMap<Stroke, Path2D>();
 	private readonly bounds = new WeakMap<Stroke, BBox>();
 
@@ -155,12 +171,17 @@ export class Renderer {
 		// CSS sizes the canvases to the container; only the backing store size is set here.
 		this.staticCanvas = container.createEl("canvas", { cls: "notebook-canvas notebook-canvas-static" });
 		this.liveCanvas = container.createEl("canvas", { cls: "notebook-canvas notebook-canvas-live" });
+		this.wetCanvas = container.createEl("canvas", { cls: "notebook-canvas notebook-canvas-live notebook-canvas-wet" });
+		this.container = container;
 		const s = this.staticCanvas.getContext("2d");
-		// `desynchronized` is a low-latency hint (Chromium); other engines ignore it.
-		const l = this.liveCanvas.getContext("2d", { desynchronized: true });
-		if (!s || !l) throw new Error("Canvas 2D is not available");
+		const l = this.liveCanvas.getContext("2d");
+		// `desynchronized` is a low-latency hint (Chromium: the canvas may be shown without waiting for
+		// the compositor); other engines ignore it.
+		const w = this.wetCanvas.getContext("2d", { desynchronized: true });
+		if (!s || !l || !w) throw new Error("Canvas 2D is not available");
 		this.staticCtx = s;
 		this.liveCtx = l;
+		this.wetPen = new WetInk(this.wetCanvas, w);
 	}
 
 	boundsOf = (stroke: Stroke): BBox => {
@@ -177,10 +198,14 @@ export class Renderer {
 		this.width = width;
 		this.height = height;
 		this.dpr = dpr;
-		for (const c of [this.staticCanvas, this.liveCanvas]) {
+		for (const c of [this.staticCanvas, this.liveCanvas, this.wetCanvas, this.wetHl?.canvas]) {
+			if (!c) continue;
 			c.width = Math.max(1, Math.round(width * dpr));
 			c.height = Math.max(1, Math.round(height * dpr));
 		}
+		// Resizing cleared the wet canvases: a stroke in progress is painted again.
+		this.wetRelease.length = 0;
+		this.retransformWet(true);
 		this.invalidate();
 	}
 
@@ -191,6 +216,7 @@ export class Renderer {
 	setViewport(v: Viewport, interactive = false): void {
 		this.viewport = v;
 		this.liveDirty = true;
+		this.retransformWet();
 		if (interactive && this.stats.staticMs > 12 && !this.staticDirty) {
 			this.applyCssTransform();
 			if (this.settleTimer !== null) window.clearTimeout(this.settleTimer);
@@ -219,6 +245,7 @@ export class Renderer {
 	setDocument(pages: readonly Page[] | null, layout: Layout | null): void {
 		this.pages = pages ?? [];
 		this.layout = layout;
+		this.retransformWet();
 		this.invalidate();
 	}
 
@@ -229,17 +256,135 @@ export class Renderer {
 		this.schedule();
 	}
 
-	/** Adds a just-committed stroke to the static layer without redrawing everything. */
+	/**
+	 * Adds a just-committed stroke to the static layer without redrawing everything. For the stroke
+	 * just written as wet ink this draws the same geometry the wet canvas shows (the committed
+	 * path of the same nodes), then the wet canvas is cleared: nothing visibly changes. (Copying the
+	 * wet pixels instead was measured slower: reading a low-latency canvas back costs milliseconds.)
+	 */
 	appendStroke(pageIndex: number, stroke: Stroke): void {
 		const box = this.layout?.boxes[pageIndex];
+		const wet = this.wet;
+		const fromWet = wet !== null && stroke === this.wetDone;
+		if (fromWet) {
+			this.wet = null;
+			this.wetDone = null;
+		}
 		if (this.staticDirty || !box || this.staticCanvas.style.transform) {
 			this.invalidate();
+			if (wet && fromWet) this.releaseWet(wet, false);
 			return;
 		}
 		const ctx = this.staticCtx;
 		this.beginPage(ctx, box);
 		this.fillStroke(ctx, stroke);
 		ctx.restore();
+		if (wet && fromWet) this.releaseWet(wet, true);
+	}
+
+	// --- wet ink (the stroke being written) ---
+
+	/** Starts painting a stroke as it is written; `g` is filled by the caller and painted with paintWet(). */
+	beginWet(pageIndex: number, g: InkBuilder, tool: Tool, color: string): boolean {
+		const t = this.pageTransform(pageIndex);
+		if (!t) return false;
+		this.cancelWet();
+		const wet = tool === "highlighter" ? this.highlighterWet() : this.wetPen;
+		// A previous stroke still waiting to be cleared from this canvas: make sure the static layer
+		// shows it (a full redraw may still be pending) before it leaves the wet canvas.
+		for (let i = this.wetRelease.length - 1; i >= 0; i--) {
+			if (this.wetRelease[i]!.wet !== wet) continue;
+			if (this.staticDirty) this.drawStatic();
+			wet.clear();
+			this.wetRelease.splice(i, 1);
+		}
+		wet.begin(g, tool, color, t);
+		this.wet = wet;
+		this.wetPage = pageIndex;
+		return true;
+	}
+
+	/** The wet stroke in progress (to set its tip points), or null. */
+	get wetInk(): WetInk | null {
+		return this.wet;
+	}
+
+	/** Paints the new part of the wet stroke now (call from the input handler). */
+	paintWet(): void {
+		this.wet?.paint();
+	}
+
+	/**
+	 * The wet stroke is finished (its geometry too) and `stroke`, its frozen copy, is about to be
+	 * committed with appendStroke(); null discards it.
+	 */
+	endWet(stroke: Stroke | null): void {
+		if (!this.wet) return;
+		if (stroke) {
+			this.wet.clearExtra();
+			this.wet.paint();
+			this.wetDone = stroke;
+		} else {
+			this.cancelWet();
+		}
+	}
+
+	/** Discards the wet stroke at once (cancelled, or replaced by a recognised shape). */
+	cancelWet(): void {
+		this.wet?.clear();
+		this.wet = null;
+		this.wetDone = null;
+	}
+
+	/**
+	 * Clears a finished wet canvas once the static layer shows its stroke. The highlighter canvas is
+	 * a regular canvas, updated in the same frame as the static one: cleared at once when the stroke
+	 * was drawn on the static layer, else right after the next static redraw. The pen canvas may be presented ahead
+	 * of the compositor, so it is cleared two frames later; meanwhile the same opaque ink is shown
+	 * twice at the same place.
+	 */
+	private releaseWet(wet: WetInk, staticHasIt: boolean): void {
+		const sync = wet !== this.wetPen;
+		if (sync && staticHasIt) {
+			wet.clear();
+			return;
+		}
+		this.wetRelease.push({ wet, frames: sync ? 0 : 1 });
+		this.schedule();
+	}
+
+	private highlighterWet(): WetInk {
+		if (this.wetHl) return this.wetHl;
+		const canvas = this.container.createEl("canvas", { cls: "notebook-canvas notebook-canvas-live notebook-canvas-wet is-highlighter" });
+		// Right above the pen's wet canvas, under anything the view adds later.
+		this.wetCanvas.after(canvas);
+		canvas.width = this.wetCanvas.width;
+		canvas.height = this.wetCanvas.height;
+		const ctx = canvas.getContext("2d");
+		if (!ctx) throw new Error("Canvas 2D is not available");
+		this.wetHl = new WetInk(canvas, ctx);
+		return this.wetHl;
+	}
+
+	/** Page to device pixel transform of a page in the current view. */
+	private pageTransform(pageIndex: number): PageTransform | null {
+		const box = this.layout?.boxes[pageIndex];
+		if (!box) return null;
+		const { scale, offsetX, offsetY } = this.viewport;
+		const d = this.dpr;
+		return { k: d * scale, tx: d * (offsetX + box.x * scale), ty: d * (offsetY + box.y * scale), pageW: box.width, pageH: box.height };
+	}
+
+	private sameTransform(a: Readonly<PageTransform>, b: PageTransform | null): boolean {
+		return !!b && a.k === b.k && a.tx === b.tx && a.ty === b.ty && a.pageW === b.pageW && a.pageH === b.pageH;
+	}
+
+	/** The view changed while a stroke is being written: repaint it for the new view. */
+	private retransformWet(force = false): void {
+		const wet = this.wet;
+		if (!wet) return;
+		const t = this.pageTransform(this.wetPage);
+		if (t && (force || !this.sameTransform(wet.transform, t))) wet.setTransform(t);
 	}
 
 	setLive(live: LiveStroke | null): void {
@@ -284,9 +429,18 @@ export class Renderer {
 		return this.stats.staticMs;
 	}
 
+	/** Synchronous redraw of the live layer only, for benchmarks. Returns its draw time in ms. */
+	renderLiveNow(): number {
+		const t0 = performance.now();
+		this.drawLive();
+		return performance.now() - t0;
+	}
+
 	destroy(): void {
 		if (this.frame !== null) window.cancelAnimationFrame(this.frame);
 		if (this.settleTimer !== null) window.clearTimeout(this.settleTimer);
+		this.cancelWet();
+		this.wetRelease.length = 0;
 		this.frame = null;
 		this.settleTimer = null;
 	}
@@ -297,8 +451,25 @@ export class Renderer {
 			this.frame = null;
 			if (this.staticDirty) this.drawStatic();
 			if (this.liveDirty) this.drawLive();
+			this.releaseWetFrames();
 			this.onFrame?.(t);
 		});
+	}
+
+	/** Asks for an animation frame even when nothing changed (performance overlay while writing). */
+	requestFrame(): void {
+		this.schedule();
+	}
+
+	private releaseWetFrames(): void {
+		if (this.wetRelease.length === 0) return;
+		for (let i = this.wetRelease.length - 1; i >= 0; i--) {
+			const r = this.wetRelease[i]!;
+			if (r.frames-- > 0) continue;
+			if (r.wet !== this.wet) r.wet.clear();
+			this.wetRelease.splice(i, 1);
+		}
+		if (this.wetRelease.length > 0) this.schedule();
 	}
 
 	private applyCssTransform(): void {
@@ -325,6 +496,13 @@ export class Renderer {
 
 	private drawStatic(): void {
 		const t0 = performance.now();
+		// A finished wet stroke committed without appendStroke() (e.g. the page grew): this redraw shows it.
+		const done = this.wetDone ? this.wet : null;
+		if (done) {
+			this.wet = null;
+			this.wetDone = null;
+			this.releaseWet(done, true);
+		}
 		this.staticDirty = false;
 		this.drawnViewport = this.viewport;
 		this.staticCanvas.setCssStyles({ transform: "" });
@@ -358,7 +536,10 @@ export class Renderer {
 			for (const stroke of page.strokes) {
 				if (this.hidden?.has(stroke)) continue;
 				const b = this.boundsOf(stroke);
-				if (b.maxX < visible.minX || b.minX > visible.maxX || b.maxY < visible.minY || b.minY > visible.maxY) continue;
+				// Bounds are padded by half the width; pen ink reaches 0.8 × width at full pressure, and
+				// the wet-ink curve may pass slightly outside its points.
+				const m = stroke.width * 0.3 + 1;
+				if (b.maxX + m < visible.minX || b.minX - m > visible.maxX || b.maxY + m < visible.minY || b.minY - m > visible.maxY) continue;
 				this.fillStroke(ctx, stroke);
 				strokesDrawn++;
 			}
@@ -580,7 +761,12 @@ export class Renderer {
 	private fillStroke(ctx: CanvasRenderingContext2D, stroke: Stroke): void {
 		let path = this.paths.get(stroke);
 		if (!path) {
-			path = new Path2D(strokePath(stroke.points, stroke.width, true, stroke.tool));
+			if (stroke.render === RENDER_INK) {
+				path = new Path2D();
+				inkPath(path, stroke.points, stroke.width, stroke.tool);
+			} else {
+				path = new Path2D(strokePath(stroke.points, stroke.width, true, stroke.tool));
+			}
 			this.paths.set(stroke, path);
 		}
 		this.setInk(ctx, stroke.tool, stroke.color);

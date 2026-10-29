@@ -15,12 +15,12 @@ Accepted and documented costs:
 - Native search, tags and backlinks do not see notebooks (until M4).
 - **Obsidian Sync** syncs unknown extensions only with the "Sync all other types" option enabled (stated in the README). Syncthing and USB copy have no limits.
 
-## 2. JSON schema v3
+## 2. JSON schema v5
 
 ```json
 {
   "format": "obsidian-notebook",
-  "version": 3,
+  "version": 5,
   "id": "6f1c…",
   "createdAt": "2026-10-29T14:30:00.000Z",
   "modifiedAt": "2026-10-29T14:42:10.000Z",
@@ -31,9 +31,9 @@ Accepted and documented costs:
       "height": 841.89,
       "paper": { "kind": "grid", "spacing": 14.17 },
       "strokes": [
-        { "id": "c03d…", "tool": "pen", "color": "#1e293b", "width": 2,
+        { "id": "c03d…", "tool": "pen", "color": "#1e293b", "width": 2, "render": 1,
           "points": [[72.5, 90.12, 0.512], [73.1, 90.4, 0.534]] },
-        { "id": "d71a…", "tool": "highlighter", "color": "#facc15", "width": 14,
+        { "id": "d71a…", "tool": "highlighter", "color": "#facc15", "width": 14, "render": 2,
           "points": [[72.5, 120.0, 0.5], [180.2, 120.3, 0.5]] }
       ]
     }
@@ -52,6 +52,7 @@ Accepted and documented costs:
 | `tool` | `"pen"` or `"highlighter"` (new in v2). The eraser produces no strokes |
 | `color` | `#rrggbb` |
 | `width` | nominal diameter in pt, > 0 |
+| `render` | required (v5): the geometry that draws the stroke. `1` = perfect-freehand outline with the per-tool parameters below (frozen; every stroke written before v5 is 1); `2` = incremental wet-ink geometry (§6). Any other value is rejected. Written right after `width`, before `points` |
 | `id` | unique strings (UUID when available) |
 
 Unknown fields are ignored on read. Every schema change increments `version` and adds a tested migration (`src/model/migrations.ts`).
@@ -62,13 +63,14 @@ Unknown fields are ignored on read. Every schema change increments `version` and
 - **v1 → v2** (M2): the only change is the new `highlighter` tool. The migration is the identity plus `version: 2`: every valid v1 document is a valid v2 document. A v1 file opened by 0.2 is migrated in memory and rewritten as v2 only on the first edit.
 - **v2 → v3** (M3a): v3 adds the paper kinds `blank`, `ruled`, `dotted` and `millimetre` (the v2 reader accepted only `grid`); page sizes were already free numbers (`width`, `height`). The migration is the identity plus `version: 3`: every valid v2 document is a valid v3 document. A v2 file opened by 0.3 is migrated in memory and rewritten as v3 only on the first edit.
 - **v3 → v4** (M3): adds `meta` (`tags`, `favorite`, `cover`, `bookmarks`) and `assets` (keyed by lowercase-hex id) to the document; `background`, `elements` (text and image) and `infinite` to pages, written only when present; and the stroke tool `shape`. Migration: default meta (`DEFAULT_META`), empty assets; a pre-v4 file that already contains `shape` is rejected. Validation: asset references (page backgrounds, image elements) must resolve to an asset of the right kind; ids are unique across strokes and elements; `meta.tags` are de-duplicated and `meta.bookmarks` filtered to existing pages on read and on write. Order of keys: `meta`, `assets` before `pages`; per page `background`, `infinite`, `elements`, `strokes`. `serializeChecked` validates meta, assets, backgrounds and elements on every save, also on the incremental path.
+- **v4 → v5**: adds the required per-stroke `render` field (`1` = `RENDER_FREEHAND`, `2` = `RENDER_INK`). Migration: every stroke of every page gets `render: 1`, because every stroke written before v5 was drawn with perfect-freehand and must keep rendering exactly as before; v0→v1 still produces strokes without `render` and the v4→v5 step adds it. `readStroke` rejects a missing `render` or a value other than 1 or 2 (`pages[i].strokes[j].render`). `createStroke` defaults to `RENDER_FREEHAND`, so only a caller that asks for the new engine produces render 2. Key order: `id`, `tool`, `color`, `width`, `render`, `points`.
 - **Compatibility**: a plugin that supports an older version sees a newer `version` as a future version, so it opens the file read-only (and keeps a backup copy of it, as for any file it cannot edit) and never rewrites it. Once 0.2 has saved a file, 0.1.x cannot edit it; once 0.3 has saved a file, 0.2.x cannot edit it.
 
-**Stroke rendering parameters** (perfect-freehand) are code constants, not per-stroke fields:
+**Stroke rendering parameters** of `render: 1` (perfect-freehand) are code constants; the per-stroke `render` field selects the geometry, it does not carry parameters:
 - pen (`PEN_V1`): `size = width`, `thinning 0.6`, `smoothing 0.5`, `streamline 0.35`, `simulatePressure false`, round caps. Unchanged since v1;
 - highlighter (`HIGHLIGHTER_V2`): `thinning 0` (constant width, pressure ignored), `smoothing 0.5`, `streamline 0.35`, flat ends. Painted with alpha 0.35 and `multiply` compositing.
 
-Changing these constants changes how existing files look; making them per-stroke would need another schema version with a migration.
+Changing these constants changes how existing files look: the `render: 1` parameters are frozen. A different look is a new `render` value (2 = wet ink, §6), never an edit of these constants.
 
 ### Paper and page sizes
 
@@ -102,7 +104,7 @@ src/
     document.ts           document/page/stroke creation (size and paper as parameters), ids, quantization
     pages.ts              duplicatePage(): copy of a page with new page and stroke ids
     serialize.ts          deterministic serialize(), parse() with validation and migrations, serializeChecked() (save check), freezeStroke()
-    migrations.ts         chain of vN → vN+1 migrations (v0→v1, v1→v2, v2→v3)
+    migrations.ts         chain of vN → vN+1 migrations (v0→v1, v1→v2, v2→v3, v3→v4, v4→v5)
     history.ts            command-stack undo/redo (AddStroke, EraseStrokes, ReplaceStroke, AddPage, DeletePage, MovePage, SetPaper, SetPageSize, Batch)
     stress.ts             deterministic generated notebook (10,000 strokes / 10 pages by default) for benchmarks and the stress-test command
   ink/                    (does not import 'obsidian')
@@ -111,25 +113,30 @@ src/
     export-svg.ts         page → standalone SVG string (pure)
     export-pdf.ts         pages → PDF bytes, dependency-free writer (pure)
     layout.ts             pages stacked vertically: boxes, page at a point, nearest and visible pages
-    pressure.ts           real vs constant pressure detection, pressure simulated from velocity
-    stabilizer.ts         exponential-lag input stabilization
+    pressure.ts           real vs constant pressure, decided once per stroke; pressure simulated from velocity
+    one-euro.ts           adaptive position filter (1€ filter) behind the "Stabilization" setting
+    stabilizer.ts         the previous exponential-lag stabilizer (kept for the old-vs-new benchmark only)
+    ink-geometry.ts       wet-ink geometry (render version 2): incremental disc chain on a centripetal Catmull–Rom curve, committed path, SVG path writer
+    wet-ink.ts            paints the stroke being written as it arrives (dirty rectangles, provisional tip)
+    hold.ts               ring buffer for the "hold still to make a shape" check
+    writing-bench.ts      synthetic pen replay: old vs new writing pipeline (in-app benchmark and PC harness)
     input-policy.ts       pen/touch/mouse routing, time-based palm rejection, contact-size palm filter (pure logic)
     hit-test.ts           whole-stroke eraser (segment-segment distance + bounding box)
     segment-erase.ts      segment eraser: cuts a stroke into the runs that survive
     lasso.ts              point-in-polygon selection, selection bounds, stroke transform
     transform.ts          2D affine matrices (translate, scale and rotate about a point, invert)
-    stroke-shape.ts       perfect-freehand → SVG path, pen and highlighter parameters (pure, testable)
-    renderer.ts           two canvases (static + live), visible pages only, paper pattern, selection overlay, CSS-transform fast path, DPR, Path2D cache, rAF
-    pointer-controller.ts Pointer Events: coalesced/predicted, capture, pan, pinch, fling inertia
+    stroke-shape.ts       perfect-freehand → SVG path, pen and highlighter parameters (render version 1); render-aware SVG path
+    renderer.ts           static, live and wet canvases, visible pages only, paper pattern, selection overlay, CSS-transform fast path, DPR, Path2D cache, rAF
+    pointer-controller.ts Pointer Events: pointerrawupdate/coalesced/predicted into typed-array buffers, capture, pan, pinch, fling inertia
   storage/
-    session.ts            document lifecycle: load, dirty, debounce, flush, conflicts (pure, testable)
+    session.ts            document lifecycle: load, dirty, debounce, flush, conflicts; timed work waits for the pen (pure, testable)
     vault-io.ts           Vault API adapter (read, process, backup)
     notebooks.ts          notebook creation in the configured folder
   view/
     notebook-view.ts      FileView: mounts canvas and toolbar, wires session, history, input, tools, selection, performance overlay
     toolbar.ts            tools, colours, widths, eraser mode, undo/redo, add page, page menu button, delete selection, fit, page indicator
     export.ts             writes PDF/SVG files next to the notebook (Vault API), free file names
-    benchmark.ts          in-app benchmark (off-screen render of a generated notebook) and its modal
+    benchmark.ts          in-app benchmark (off-screen render of a generated notebook, writing replay) and its modal
     modals.ts             "New notebook" (name, page size, orientation, paper) and "Open notebooks" (fuzzy search)
     settings-tab.ts       settings UI
 scripts/check-bundle.mjs          fails the build if main.js requires anything but 'obsidian'
@@ -184,9 +191,11 @@ Known limit: if Android kills the process without notifying `visibilitychange`, 
 ### Input
 - `touch-action: none` on the container; `pointerType` distinguishes `pen`/`touch`/`mouse`.
 - **Palm rejection.** Time-based: if the pen is active or was seen (even hovering) in the last N ms (default 500, configurable), touch does not draw and only pans (one finger) or zooms (two fingers). "Write with finger" mode is a setting (default off). If the pen touches down while a finger is drawing, the finger stroke is discarded. Contact size (experimental, default off): a touch whose `max(width, height)` exceeds the setting (CSS px) is ignored completely, scrolling included; it depends on what the device reports.
-- `getCoalescedEvents()` for every `pointermove`; `getPredictedEvents()` optional (setting) and drawn **only** on the live layer, never saved.
-- Pressure: for the pen, real pressure is used only after seeing at least 3 distinct values in (0, 1) different from 0.5; otherwise, and always for mouse and finger, pressure simulated from velocity (exponential average) is used. "Always simulate pressure" setting.
-- **Stabilization** (`Stabilizer`, setting 0–10, default 2): the stored point follows the raw pointer with an exponential lag, `alpha = 1 / (1 + 0.6 × level)`; level 0 passes points through. It is applied before the point is quantized and stored, so a saved stroke contains the stabilized path (changing the setting later does not alter existing strokes). When the pen lifts, up to 6 interpolated points close the gap between the lagging point and the last raw position. Higher levels trail further behind the pen.
+- **Samples.** The drawing pointer is read from `pointerrawupdate` where the WebView has it (Chromium in a secure context: samples are dispatched as the OS delivers them, not once per frame) and from `pointermove` otherwise, always with `getCoalescedEvents()`. Both events report the same samples, so each sample is delivered once: a sample is new only if its timestamp is later than the last delivered one (or equal with a different position; once `pointerrawupdate` has delivered samples in a stroke, `pointermove` only adds strictly later ones, so a batch sharing one timestamp is not repeated). Samples go into preallocated typed arrays (`SampleBuffer`: x, y, pressure, time), converted to page coordinates inline: no object per sample on the writing path. Navigation (pan, pinch) stays on `pointermove`.
+- **Prediction** (`getPredictedEvents()`): setting *Predicted ink*, **default off**. Predicted samples are only drawn at the tip of the wet ink and erased at the next sample; they are never stored. Off by default because they overshoot at sharp turns and at the end of a stroke (the tip "jumps" ahead and back), which is one of the reported problems; the gain cannot be measured without the device. The setting key changed (`prediction` → `inkPrediction`), so the new default applies to everyone.
+- **Pressure** is decided **once, when the stroke starts**, and never switches in the middle of it (the previous model trusted real pressure after three distinct values, which changed the width inside the first stroke). Real pressure is used if the device already proved it (≥ 3 distinct values in (0, 1), 0.5 excluded, in earlier strokes) or if the stroke's first sample is already in (0, 1) and not 0.5; otherwise the stroke uses pressure simulated from speed, and a device that proves real pressure meanwhile uses it from the next stroke. A trusted pen that then reports one value for 200 samples in a row loses the trust for later strokes. Real pressure gets a light causal smoothing (factor 0.6 per sample). "Always simulate pressure" setting.
+- **Stabilization** (setting 0–10, default 2): an adaptive low-pass, the 1€ filter (`one-euro.ts`, after Casiez, Roussel and Vogel, CHI 2012; own implementation), on screen coordinates before conversion. Its cutoff rises with speed: when the pen is nearly still it removes tremor and digitizer jitter, when it moves the lag drops towards zero. Level L maps to `minCutoff = 20/L Hz`, `beta = 0.2/L Hz per px/s`, `dCutoff = 4 Hz`; 0 turns it off. On synthetic 240 Hz input, level 2 leaves 35% of the jitter at rest (the old exponential stabilizer at level 2: 53%) and lags 1.2–1.5 px at 300–1000 px/s (old: 1.5–5 px); level 10 leaves 15% (old: 27%) and lags 6–7 px (old: 7.5–25 px). The filtered point is what gets stored; the drawn tip follows the raw pen position, and when the pen lifts the raw position is added as the last point, so the line always ends where the pen did.
+- Samples closer than 0.5 CSS px to the last stored point are not stored (the tip still follows the pen).
 - **Fling**: when a one-finger pan ends with `pointerup`, the speed over the last 80 ms continues as an inertial scroll with exponential decay (time constant 325 ms); a new touch or wheel event stops it. Two-finger pan/zoom has no inertia.
 
 ### Pages: layout and virtualization
@@ -212,11 +221,27 @@ The toolbar has a page menu button next to Add page. It acts on the page at the 
 After a command the view scrolls to the affected page. The commands tolerate repeated apply/revert: no page is inserted twice and a refused delete is not "undone".
 
 ### Rendering
-- Two stacked canvases, sized to the view × `devicePixelRatio`: **static** (paper pattern, saved strokes of the visible pages; a new stroke is appended without redrawing everything) and **live** (stroke in progress + prediction, lasso, floating selection; redrawn with `requestAnimationFrame`).
-- **Highlighter** strokes are filled with alpha 0.35 and `globalCompositeOperation = "multiply"` in stroke order, so they darken what is under them (paper, grid, earlier ink) instead of covering it. The live preview is on the separate live canvas: translucent, but not multiplied with the page until the stroke is committed.
+- Canvases stacked in the view, sized to it × `devicePixelRatio`: **static** (paper pattern, saved strokes of the visible pages; a new stroke is appended without redrawing everything), **live** (lasso, floating selection, ruler, shape-tool preview and recognised shapes; redrawn with `requestAnimationFrame`) and **wet** (the pen or highlighter stroke being written, see "Writing engine"). Only the pen's wet canvas asks for `desynchronized: true` (low latency: Chromium may present it without waiting for the compositor); a second, regular wet canvas is created on first use for the highlighter.
+- **Highlighter** strokes are filled with alpha 0.35 and `globalCompositeOperation = "multiply"` in stroke order, so they darken what is under them (paper, grid, earlier ink) instead of covering it. While writing, the highlighter's wet canvas holds the stroke opaque and CSS gives the canvas `opacity: 0.35; mix-blend-mode: multiply`: the same result over the page as the committed stroke, and overlapping parts of the stroke never darken twice.
 - **CSS-transform fast path**: pan and zoom gestures call `setViewport(v, interactive = true)`. If the last full static redraw took more than 12 ms, the existing bitmap is moved and scaled with a CSS `matrix(...)` transform instead of being redrawn, and a full redraw runs 120 ms after the last gesture update. Any non-interactive change redraws immediately. While only the transform is applied, areas the old bitmap did not cover are blank and detail is not re-rendered for the new zoom. Pages that redraw in 12 ms or less never use it.
 - Initial zoom: fit to the view width; recomputed on resize/rotation until the user zooms. Pinch, wheel and Ctrl+wheel zoom around the focal point.
-- **Performance overlay** (setting): per frame it records the frame interval and the time from the last input sample to the next drawn frame (a software measure of input→frame, not display latency), and shows them with the last static redraw time and the strokes and pages drawn, refreshed twice a second.
+- **Performance overlay** (setting): frame interval and input→frame (time from the last input sample to the next drawn frame), and for the wet ink input→paint (event timestamp to the end of the handler that painted it) and the processing time per input event, whether `pointerrawupdate` is in use ("raw"), the last static redraw time and the strokes and pages drawn; refreshed twice a second. These are software measures, not display latency.
+
+### Writing engine
+
+What was wrong (measured or confirmed in the code, PC numbers; see "Benchmarks"):
+1. The live stroke was rebuilt **whole** every frame: perfect-freehand outline of all points (`last: false`), SVG string, `new Path2D(string)`, full-canvas clear and fill. On the PC a 1.5 s stroke at 240 Hz cost 11.4 ms of outline building in total (90 rebuilds, growing with the stroke) against 0.03 ms for the new geometry, and a lot of garbage per frame (a 7,200-sample replay in Node: 56 minor collections, the new path 1).
+2. Visible **jumps**: perfect-freehand does not draw the start of a stroke until the pen has moved one stroke width, rounds the end differently with `last: false` than with `last: true`, and the predicted points (on by default) were part of the same outline, so the tip overshot and pulled back; at pen-up the committed outline (`last: true`, stabilizer catch-up points) replaced the live one; in the first stroke of a session the pressure switched from simulated to real in the middle of the line.
+3. **Main-thread work during writing**: the debounced save (1.5 s after a stroke) and the 10 s max-wait save did not check for a gesture in progress, so a full `serializeChecked` (30 ms on the PC for 10,000 strokes) could run in the middle of the next stroke; the journal (200 ms after a stroke) waited only while the pen was down, so it typically serialized in the short gap between two strokes and delayed the first samples of the next one.
+4. Frame-aligned input: `pointermove` is dispatched once per frame, so a sample waited on average half a frame before anything was drawn.
+
+The new pipeline:
+- **Geometry** (`ink-geometry.ts`, render version 2): the stored points are joined by a centripetal Catmull–Rom curve (no cusps or loops between uneven samples), subdivided into pieces of at most 1.5 pt (≤ 16 per segment). Along it sit *nodes*: discs whose radius follows the pressure with PEN_V1's response (`width × (0.2 + 0.6 p)`; highlighter: constant `width / 2`). The stroke is the union of the discs and the tangent trapezoids between consecutive discs. The curve between points k and k+1 depends only on points k−1…k+2, so its nodes are **final** as soon as point k+2 exists (or the pen lifts): the geometry is causal and incremental, and the nodes built while writing are exactly the nodes built later from the saved points (a test checks equality at every step).
+- **Wet ink** (`wet-ink.ts`): each input event filters and stores its samples, then paints at once, in the handler (no animation frame): (1) the capsules (disc + trapezoid) that just became final, once; (2) the previous provisional tip is erased by clearing its dirty rectangle and repainting, clipped to it, only the final capsules whose boxes meet it (found through the bounding boxes of chunks of 64 capsules, so long strokes do not slow it down); (3) the new tip: straight capsules from the last final node through the stored points not final yet, the raw pen position and, if enabled, the predicted samples. Nothing is redrawn whole: the work per event stays constant as the stroke grows (a test counts the canvas calls and the capsules looked at over 2,000 samples). Each event fills its own capsules, so where two events' capsules meet, antialiased edge pixels are composited twice: a sub-pixel difference from the single fill of the committed path. The first point shows as a dot immediately.
+- **Commit** at pen-up: the raw end point is added, the last segment becomes final and is painted, and the frozen stroke (render 2) is drawn on the static layer with the committed path of the same nodes; then the wet canvas is cleared. The committed path is the same area with far fewer edges: the node chain is cut into runs where it bends gently (< 25° between consecutive trapezoids, no side stepping backwards), each run is one polygon through the tangent points, and a disc is kept at each end of a run; inside a run it differs from the union of capsules by at most 2.4% of the radius on the outer side of bends (a test fills both on a fine grid: under 0.4% of the area differs). The pen's wet canvas is cleared one frame after the static layer shows the stroke, because a desynchronized canvas may be presented before the compositor frame (meanwhile the same opaque ink is simply shown twice); the highlighter's regular canvas is cleared at once. Copying the wet pixels to the static layer was tried and dropped: reading back a desynchronized canvas cost 2–4 ms on the PC. The static layer is never redrawn whole for a single stroke (except when an infinite page grows, as before).
+- **Recognised shapes** (hold still 0.6 s) leave the wet layer: the shape is drawn on the live layer with perfect-freehand like before and committed as render 1; the shape tool is unchanged.
+- **Main thread while writing**: the session's timed work (debounced save, max-wait save, journal entry) waits while a gesture is in progress and for 350 ms after it ends (`quietMs`), but never more than 4 s after it was due (8 s while the pen stays down or a text box is open); a deferred save keeps its due time (new strokes do not push it back), and the save and the journal have separate clocks, so continuous writing cannot hold saving back; explicit flushes (closing, `flushNow`) never wait. Page-panel thumbnails are not refreshed while writing.
+- **Render versions**: every stroke records its geometry (`render`, format v5). Strokes written before v5 are render 1 and keep perfect-freehand with the frozen PEN_V1/HIGHLIGHTER_V2/SHAPE_V4 parameters, so existing notebooks look exactly as before; the renderer, SVG and PDF export pick the geometry per stroke (PDF writes discs as four cubic Béziers, SVG as two arcs, both nonzero fills). Library thumbnails (`library/thumbnail.ts`) still draw every stroke with perfect-freehand: at thumbnail size the difference is not visible, but it should switch to the render-aware path.
 
 ### Tools
 - **Whole-stroke eraser**: 10 screen px radius converted to pt; the segment travelled by the eraser between two events is tested against the stroke's segments (with half the stroke width), with a bounding-box prefilter.
@@ -227,7 +252,8 @@ After a command the view scrolls to the affected page. The commands tolerate rep
 
 ### Benchmarks
 - `npm run bench` (`vitest run --project perf --silent=false`): `tests/model.perf.ts`, a custom timing loop (not vitest's bench API) over `stressDocument(10_000, 10)`: serialize, open (parse + validate), open plus first save with a cold cache, next saves, eraser hit test, segment cut, lasso, stroke outline. It is excluded from `npm test`. Dev-PC reference (Windows, Node 24; 10,000 strokes, 10 pages, 6.69 MB): serialize 153 ms; open 227 ms; open + first save, cold cache, 424 ms in total; next saves 16–19 ms; eraser hit test 0.04 ms per move (1,000 strokes, cached bounds); segment cut 0.005 ms; lasso over a quarter page 2.4 ms; stroke outline 0.04 ms. **These are PC numbers**: Android will be slower and must be measured with the in-app benchmark.
-- In-app command **Run performance benchmark** (`view/benchmark.ts`): generates the same notebook, then times serialization, the first and later save checks and parse, and renders it with an **off-screen** `Renderer` at the current view size: first draw (builds paths), 30 redraws at fit width, 150 scroll frames, 30 redraws at 3× zoom. It also times the eraser hit test and segment cuts and reports the JS heap where the WebView exposes it. Nothing is written to the vault; the results can be copied.
+- In-app command **Run performance benchmark** (`view/benchmark.ts`): generates the same notebook, then times serialization, the first and later save checks and parse, and renders it with an **off-screen** `Renderer` at the current view size: first draw (builds paths), 30 redraws at fit width, 150 scroll frames, 30 redraws at 3× zoom. It also times the eraser hit test and segment cuts and reports the JS heap where the WebView exposes it. Then the **writing replay** (`ink/writing-bench.ts`): static redraw of a page with 2,000 strokes in render 1 and render 2 (JavaScript time, and with rasterization forced by reading one pixel back), then 10 synthetic strokes of 1.5 s at 120 and 240 Hz written on that page through the old pipeline (frame-aligned events, EMA stabilizer, whole outline rebuilt each frame on the live canvas) and the new one (one event per sample, wet ink painted in the handler): work per sample, per-frame cost, an input→paint estimate (old: half-frame alignment wait + frame work; new: handler work) and the pen-up commit. Nothing is written to the vault; the results can be copied.
+- Writing replay on the dev PC (Chromium 152 in the desktop app's browser pane, 1280×800 @2x, off-screen): static redraw of 2,000 strokes with rasterization ≈ 60 ms for both render 1 and render 2 (JavaScript ≈ 1 ms); old pipeline 0.2 ms per frame and an input→paint estimate of 8.5 ms on average (p95 13–15 ms), almost all of it the wait for the frame-aligned event; new pipeline 0.03 ms per sample (p95 0.1 ms), nothing per frame; pen-up commit 0.3–0.6 ms (old 0.4–0.5 ms). `npm run bench` adds: perfect-freehand outline of a stored stroke 0.044 ms vs 0.006 ms for the wet-ink path of the same points; 360 samples through the 1€ filter 0.008 ms (old EMA 0.002 ms); wet-ink geometry for 360 samples 0.03 ms vs 11.4 ms for the old per-frame outlines. **None of this is display latency**, and the PC is much faster than a tablet: Android must be measured with the in-app benchmark and the overlay.
 - Command **Create stress-test notebook**: writes the generated notebook (10,000 strokes, 10 pages) to the notebooks folder and opens it, to test real interaction on the device. The in-app benchmark does not measure real input latency; the performance overlay does, in the software sense above.
 
 ## 7. Undo/redo

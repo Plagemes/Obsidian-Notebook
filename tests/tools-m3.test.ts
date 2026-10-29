@@ -64,7 +64,7 @@ const rotateV = (p: V, a: number, c: V): V => [
 ];
 
 function stroke(points: Point[], width = 2): Stroke {
-	return { id: "s", tool: "shape", color: "#000000", width, points };
+	return { id: "s", tool: "shape", color: "#000000", width, render: 1, points };
 }
 
 describe("shape generators", () => {
