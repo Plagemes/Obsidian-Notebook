@@ -28,6 +28,33 @@ export function inkRadius(tool: Tool, width: number, pressure: number): number {
 	return Math.max(0.01, width / 2);
 }
 
+/**
+ * Position at `t` (0..1) on the curve the ink geometry draws between stored points `b` and `b + 1` (`b + 1 < points.length`):
+ * the same centripetal Catmull–Rom segment InkBuilder.emit builds its nodes from (a test keeps the two in step).
+ * Not for the hot path: it allocates. Used where a stroke is cut and the pieces must keep their shape.
+ */
+export function inkCurveAt(points: readonly Point[], b: number, t: number): [number, number] {
+	const n = points.length;
+	const c = b + 1;
+	const A = points[b > 0 ? b - 1 : b]!, B = points[b]!, C = points[c]!, D = points[c + 1 < n ? c + 1 : c]!;
+	const ax = A[0], ay = A[1], bx = B[0], by = B[1], cx = C[0], cy = C[1], dx = D[0], dy = D[1];
+	const t01 = Math.sqrt(Math.hypot(bx - ax, by - ay));
+	const t12 = Math.sqrt(Math.hypot(cx - bx, cy - by));
+	const t23 = Math.sqrt(Math.hypot(dx - cx, dy - cy));
+	let m1x = cx - bx, m1y = cy - by, m2x = cx - bx, m2y = cy - by;
+	if (t01 > 1e-9) {
+		m1x += t12 * ((bx - ax) / t01 - (cx - ax) / (t01 + t12));
+		m1y += t12 * ((by - ay) / t01 - (cy - ay) / (t01 + t12));
+	}
+	if (t23 > 1e-9) {
+		m2x += t12 * ((dx - cx) / t23 - (dx - bx) / (t12 + t23));
+		m2y += t12 * ((dy - cy) / t23 - (dy - by) / (t12 + t23));
+	}
+	const qax = 2 * bx - 2 * cx + m1x + m2x, qay = 2 * by - 2 * cy + m1y + m2y;
+	const qbx = -3 * bx + 3 * cx - 2 * m1x - m2x, qby = -3 * by + 3 * cy - 2 * m1y - m2y;
+	return [((qax * t + qbx) * t + m1x) * t + bx, ((qay * t + qby) * t + m1y) * t + by];
+}
+
 /** What paths are drawn into: Path2D and CanvasRenderingContext2D both qualify. */
 export interface PathSink {
 	moveTo(x: number, y: number): void;

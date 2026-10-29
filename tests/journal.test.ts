@@ -29,6 +29,8 @@ class FakeIO implements DocumentIO {
 	backups: Array<{ content: string; reason: BackupReason }> = [];
 	failBackups = false;
 	duringProcess: (() => void) | null = null;
+	/** When set, read() waits for it (a save that is slow to start). */
+	gate: Promise<void> | null = null;
 	/** Vault path of the file; change it to simulate a rename. */
 	filePath = "Notebooks/a.notebook";
 	constructor(public content: string) {}
@@ -36,6 +38,7 @@ class FakeIO implements DocumentIO {
 		return this.filePath;
 	}
 	async read(): Promise<string> {
+		if (this.gate) await this.gate;
 		return this.content;
 	}
 	async process(fn: (current: string) => string): Promise<void> {
@@ -624,6 +627,124 @@ describe("DocumentSession journal", () => {
 		await vi.advanceTimersByTimeAsync(150);
 		await s.journalIdle();
 		expect(journal.files.size).toBe(1);
+	});
+
+	describe("crash window during continuous writing", () => {
+		/** Strokes of `penMs` with `gapMs` between them; returns when the journal grew and whether the pen was down then. */
+		async function simulate(gapMs: number, totalMs: number) {
+			const io = new FakeIO(serialize(sampleDocument(0)));
+			const journal = new FakeJournal();
+			let busy = false;
+			const s = open(io, journal, {}, { busy: () => busy });
+			await s.load();
+			const penMs = 400, period = penMs + gapMs;
+			const growth: Array<{ t: number; busy: boolean }> = [];
+			let seen = 0;
+			for (let t = 0; t < totalMs; t += 10) {
+				const phase = t % period;
+				const nowBusy = phase < penMs;
+				if (busy && !nowBusy) {
+					busy = false;
+					s.doc!.pages[0]!.strokes.push(line(t % 97, 0, t % 97, 20));
+					s.markChanged();
+					s.gestureEnded();
+				}
+				busy = nowBusy;
+				await vi.advanceTimersByTimeAsync(10);
+				if (journal.writeLog.length > seen) {
+					seen = journal.writeLog.length;
+					growth.push({ t, busy });
+				}
+			}
+			s.dispose();
+			return { growth, io };
+		}
+
+		it("a pen-up gap longer than the journal quiet time gets the entry right away", async () => {
+			const { growth, io } = await simulate(300, 3000);
+			// First stroke ends at 400 ms; the entry lands in that gap, long before the 350 ms / 4 s of the save.
+			expect(growth.length).toBeGreaterThan(0);
+			expect(growth[0]!.t).toBeLessThanOrEqual(700);
+			expect(growth.every((g) => !g.busy)).toBe(true);
+			expect(io.writes).toHaveLength(0);
+		});
+
+		it("without a usable gap the entry waits for the pen, but only up to the journal cap", async () => {
+			const { growth } = await simulate(80, 4000);
+			expect(growth.length).toBeGreaterThan(0);
+			// Not while the pen was down before the cap (the cap counts from the first deferral at ~600 ms)...
+			for (const g of growth) if (g.busy) expect(g.t).toBeGreaterThanOrEqual(600 + 1500);
+			expect(growth[0]!.t).toBeGreaterThanOrEqual(1000);
+			// ...and at the latest about a second and a half after that (the old limits were 4 s and 8 s).
+			expect(growth[0]!.t).toBeLessThanOrEqual(600 + 1500 + 200);
+		});
+
+		it("the caps are configurable", async () => {
+			const io = new FakeIO(serialize(sampleDocument(1)));
+			const journal = new FakeJournal();
+			const s = new DocumentSession(io, timers, {}, { journal, busy: () => true, journalMaxBusyDeferMs: 300 });
+			await s.load();
+			s.doc!.pages[0]!.strokes.push(line(1, 1, 5, 5));
+			s.markChanged();
+			await vi.advanceTimersByTimeAsync(400);
+			expect(journal.files.size).toBe(0);
+			await vi.advanceTimersByTimeAsync(300);
+			await s.journalIdle();
+			expect(journal.files.size).toBe(1);
+		});
+	});
+
+	describe("journal and a save of the same revision", () => {
+		function setup() {
+			const io = new FakeIO(serialize(sampleDocument(1)));
+			const journal = new FakeJournal();
+			const s = new DocumentSession(io, timers, {}, { journal, debounceMs: 100, journalDelayMs: 150, retryMs: 5000 });
+			return { io, journal, s };
+		}
+
+		it("does not write an entry (and so does not touch modifiedAt) while that save is in flight", async () => {
+			const { io, journal, s } = setup();
+			await s.load();
+			s.doc!.pages[0]!.strokes.push(line(1, 1, 5, 5));
+			let release!: () => void;
+			io.gate = new Promise<void>((r) => (release = r));
+			s.markChanged();
+			await vi.advanceTimersByTimeAsync(120); // the save starts and waits in read()
+			const modifiedAt = s.doc!.modifiedAt;
+			await vi.advanceTimersByTimeAsync(100); // the journal timer fires meanwhile
+			await s.journalIdle();
+			expect(journal.writeLog).toHaveLength(0);
+			expect(s.doc!.modifiedAt).toBe(modifiedAt);
+			release();
+			io.gate = null;
+			await vi.advanceTimersByTimeAsync(50);
+			await s.journalIdle();
+			expect(io.writes).toHaveLength(1);
+			expect(parse(io.content).ok && (parse(io.content) as { doc: NotebookDocument }).doc.modifiedAt).toBe(modifiedAt);
+			expect(s.dirty).toBe(false);
+			expect(journal.files.size).toBe(0);
+		});
+
+		it("journals the revision after all when that save fails", async () => {
+			const { io, journal, s } = setup();
+			await s.load();
+			s.doc!.pages[0]!.strokes.push(line(1, 1, 5, 5));
+			let release!: () => void;
+			io.gate = new Promise<void>((r) => (release = r));
+			io.duringProcess = () => {
+				io.duringProcess = null;
+				throw new Error("disk full");
+			};
+			s.markChanged();
+			await vi.advanceTimersByTimeAsync(250);
+			expect(journal.writeLog).toHaveLength(0);
+			release();
+			io.gate = null;
+			await vi.advanceTimersByTimeAsync(400);
+			await s.journalIdle();
+			expect(s.dirty).toBe(true);
+			expect(journal.files.size).toBe(1);
+		});
 	});
 
 	it("a deleted notebook loses its journal; unsaved changes go to the backup", async () => {
