@@ -50,3 +50,13 @@ export function patchNotebookMeta(json: string, patch: Partial<NotebookMeta>): M
 	const migrated = parsed.migratedFrom !== null;
 	return { ok: true, text: out.text, changed: migrated || out.text !== json, migrated };
 }
+
+/** Same as `patchNotebookMeta`, but gives the notebook the document id `id` (for a duplicated file). */
+export function patchNotebookId(json: string, id: string): MetaPatchResult {
+	const parsed = parse(json);
+	if (!parsed.ok) return { ok: false, message: parsed.message };
+	if (id.length === 0) return { ok: false, message: "empty id" };
+	const out = serializeChecked({ ...parsed.doc, id });
+	if (!out.ok) return { ok: false, message: out.message };
+	return { ok: true, text: out.text, changed: parsed.doc.id !== id, migrated: parsed.migratedFrom !== null };
+}

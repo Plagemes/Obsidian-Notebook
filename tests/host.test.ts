@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { libraryIndexPath, mergeMeta, parseStoredJson, patchNotebookMeta } from "../src/library/host-logic";
+import { libraryIndexPath, mergeMeta, parseStoredJson, patchNotebookId, patchNotebookMeta } from "../src/library/host-logic";
 import { buildPdfDocument, importPdfAsNotebook, LARGE_PDF_BYTES, pdfNotebookName, type ImportDeps } from "../src/library/import-pdf";
 import { createDocument } from "../src/model/document";
 import { parse, serialize, serializeChecked } from "../src/model/serialize";
@@ -126,5 +126,22 @@ describe("PDF import", () => {
 		const d = deps({ pageSizes: async () => [] });
 		expect(await importPdfAsNotebook(d, "N")).toBe(false);
 		expect(d.notes).toEqual(["empty"]);
+	});
+});
+
+describe("patchNotebookId", () => {
+	it("changes only the document id", () => {
+		const doc = createDocument(new Date("2026-01-01T00:00:00Z"));
+		const r = patchNotebookId(serialize(doc), "new-id");
+		expect(r.ok && r.changed).toBe(true);
+		if (!r.ok) return;
+		const back = parse(r.text);
+		expect(back.ok && back.doc.id).toBe("new-id");
+		expect(back.ok && back.doc.pages).toEqual(doc.pages);
+	});
+
+	it("refuses unreadable files and empty ids", () => {
+		expect(patchNotebookId("{ nope", "x").ok).toBe(false);
+		expect(patchNotebookId(serialize(createDocument()), "").ok).toBe(false);
 	});
 });

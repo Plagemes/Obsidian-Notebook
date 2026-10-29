@@ -1,6 +1,6 @@
 import { loadPdfJs, normalizePath, Notice, Platform, type App, type TFile, type WorkspaceLeaf } from "obsidian";
 import { t } from "../i18n";
-import { createDocument } from "../model/document";
+import { createDocument, createId } from "../model/document";
 import { parse } from "../model/serialize";
 import { PAGE_SIZES, PAPER_SPACING, type Asset, type NotebookDocument, type NotebookMeta, type Page } from "../model/types";
 import { assetExtension, assetPath, assetsFolder } from "../pdf/assets";
@@ -14,7 +14,7 @@ import { resolveAssetFile, storeAsset } from "../view/media";
 import { NewNotebookModal, type NewNotebookOptions } from "../view/modals";
 import { NotebookView, VIEW_TYPE } from "../view/notebook-view";
 import { pickFile } from "../view/pick";
-import { libraryIndexPath, parseStoredJson, patchNotebookMeta } from "./host-logic";
+import { libraryIndexPath, parseStoredJson, patchNotebookId, patchNotebookMeta, type MetaPatchResult } from "./host-logic";
 import { importPdfAsNotebook } from "./import-pdf";
 import type { LibraryHost } from "./library-view";
 import type { ThumbnailOptions } from "./thumbnail";
@@ -163,12 +163,24 @@ export class NotebookLibraryHost implements LibraryHost {
 			if (typeof target.applyMetaPatch !== "function" || !target.applyMetaPatch(patch)) throw new Error(t("host.metaRejected"));
 			return;
 		}
+		await this.rewrite(file, (json) => patchNotebookMeta(json, patch));
+	}
+
+	/** A duplicated notebook is a byte copy: give it its own document id. */
+	async afterDuplicate(file: TFile): Promise<void> {
+		await this.rewrite(file, (json) => patchNotebookId(json, createId()));
+	}
+
+	/**
+	 * Safe read-patch-write: nothing is written if the file fails to parse or the result fails the
+	 * round-trip check, and only if the file still holds what was read (one retry, then an error).
+	 */
+	private async rewrite(file: TFile, patch: (json: string) => MetaPatchResult): Promise<void> {
 		const ext = file.extension;
 		for (let attempt = 0; attempt < 2; attempt++) {
 			const raw = await this.app.vault.read(file);
 			const json = readNotebookText(ext, raw);
-			const result = patchNotebookMeta(json, patch);
-			// Never write a notebook that failed to parse (or whose result fails the round-trip check).
+			const result = patch(json);
 			if (!result.ok) throw new Error(result.message);
 			if (!result.changed) return;
 			if (result.migrated) {
@@ -226,19 +238,29 @@ export class NotebookLibraryHost implements LibraryHost {
 	// -------------------------------------------------------------- thumbnails
 
 	/**
-	 * Draws the PDF page behind a thumbnail: renders it first (async), then returns the synchronous
+	 * Draws the PDF page or image behind a thumbnail: loads it first (async), then returns the synchronous
 	 * `drawBackground` that renderThumbnail expects. Null for pages without a PDF background or when
 	 * the PDF cannot be rendered (the thumbnail then shows the ink on paper).
 	 */
 	async thumbnailBackground(doc: NotebookDocument, page: Page, width: number): Promise<ThumbnailOptions["drawBackground"] | null> {
 		const bg = page.background;
-		if (!bg || bg.kind !== "pdf" || page.width <= 0) return null;
+		if (!bg || page.width <= 0) return null;
 		this.remember(doc);
 		try {
-			const canvas = await this.pdf.render(bg.asset, bg.page, width / page.width);
-			return (ctx, p) => ctx.drawImage(canvas, 0, 0, p.width, p.height);
+			if (bg.kind === "pdf") {
+				const canvas = await this.pdf.render(bg.asset, bg.page, width / page.width);
+				return (ctx, p) => ctx.drawImage(canvas, 0, 0, p.width, p.height);
+			}
+			const asset = doc.assets?.[bg.asset];
+			const file = asset && resolveAssetFile(this.app, asset, this.root());
+			if (!file) return null;
+			const bitmap = await createImageBitmap(new Blob([await this.app.vault.readBinary(file)]));
+			return (ctx, p) => {
+				ctx.drawImage(bitmap, 0, 0, p.width, p.height);
+				bitmap.close();
+			};
 		} catch (e) {
-			console.error("[notebook] PDF thumbnail", e);
+			console.error("[notebook] thumbnail background", e);
 			return null;
 		}
 	}
