@@ -119,6 +119,54 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 29. **P1** Scan into the notebook: the camera scan goes straight into the notebook as a page whose background is the cropped, perspective-corrected and enhanced photo (like a PDF page), so you write on it, reorder it in the navigator and export it like any other page. A multi-sheet session adds consecutive pages after the current one; alternatively a scan can be placed as an image on the current page. Enhancement filters: original, document (high-contrast black and white), whiteboard.
 30. **P2** Quick share of a page as PNG or PDF through the Android share sheet.
 
+## M8 — More features (backlog, planned 2026-10-29)
+
+Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for all.
+
+### Reliability and performance
+31. **P1** Instant save journal: each stroke is appended within milliseconds to a small journal next to the notebook and merged on the regular save, so even the last stroke survives Android killing the app.
+32. **P1** Diagnostic report: one command writes versions, device, settings and performance figures to a file for bug reports.
+33. **P2** Battery saver mode: fewer redraws, no predicted points, lighter thumbnails.
+34. **P3** Optional compression of very large notebooks (compatible with the planned Markdown container).
+
+### Advanced writing
+35. **P1** New pen types: fountain pen (angle-dependent width), brush, marker.
+36. **P1** Auto-scroll while writing near the bottom of the screen.
+37. **P2** Filled shapes and dashed or dotted lines.
+38. **P2** Align and distribute the selection.
+39. **P2** Group elements and lock elements (for example a background image that must not move).
+40. **P2** Layers: annotations on a layer separate from the PDF, which can be hidden or locked.
+41. **P2** Hand-drawn tables: insert a grid of cells and write inside it.
+42. **P3** Symbol keyboard (Greek, maths) for text boxes.
+
+### PDF
+43. **P1** Highlighter that snaps to the PDF's text lines (pdf.js text content).
+44. **P1** Search the PDF text, with hits highlighted on the pages.
+45. **P2** Copy text from the PDF.
+46. **P2** PDF outline and internal links: the PDF outline becomes the notebook outline, internal links work.
+47. **P3** Export keeping the original vector PDF pages instead of images (needs an MIT library such as pdf-lib).
+
+### Navigation and view
+48. **P1** Double tap to zoom: toggles fit-to-width and 100 %.
+49. **P2** Two-page spread view (landscape tablets).
+50. **P2** Fast scrollbar with a page preview while dragging.
+51. **P2** Read-only mode to read without accidental marks.
+52. **P2** Coloured sections inside a notebook (tab dividers, as in OneNote).
+
+### Library
+53. **P2** Custom covers (image or template).
+54. **P2** Pinned notebooks, manual order and an archive that hides notebooks without deleting them.
+55. **P3** Study statistics: writing time per notebook and per day, kept on the device.
+
+### Study
+56. **P2** Replay handwriting like a video (strokes redrawn in writing order); needs a timestamp per stroke, which also prepares audio sync (M5).
+57. **P2** Task from a selection: a region of the page becomes a task in the daily note, linked back to the page.
+
+### Integration and accessibility
+58. **P1** Direct `obsidian://` links to a page, to open it from other apps, bookmarks or a QR code.
+59. **P2** Lasso selection as an image inserted at the cursor of the active Markdown note.
+60. **P2** Left-handed mode: toolbar on the other side and palm rejection tuned for left-handed writing.
+
 ## File format transition (applies to M4 and to every milestone before it)
 
 M4 may move notebooks from `.notebook` to Markdown (option B, `.md` with the data in a block) or add a companion `.md` (option C), so that links, backlinks, search and the graph work natively (see architecture.md §1 and §5). Until that decision is taken, all code must keep the move cheap:
