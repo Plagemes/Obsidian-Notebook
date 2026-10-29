@@ -35,6 +35,7 @@ export class PenControls {
 	private raf = 0;
 	private cursorShown = false;
 	private lastLongPress = -Infinity;
+	private lastActive = -1;
 
 	constructor(private readonly toolbar: Toolbar, stage: HTMLElement, private readonly store: PenStore) {
 		for (let i = 0; i < FAVOURITE_SLOTS; i++) this.slotButtons.push(this.buildSlot(i));
@@ -52,8 +53,10 @@ export class PenControls {
 			this.sizeButtons.set(size, b);
 		}
 
-		this.penOnlyButton = toolbar.penOnlyEl.createEl("button", { cls: "notebook-tool clickable-icon", attr: { type: "button" } });
-		setIcon(this.penOnlyButton, "pen-tool");
+		// A row of the toolbar's "more" menu: icon and label, pressed while on.
+		this.penOnlyButton = toolbar.penOnlyEl.createEl("button", { cls: "notebook-menu-item", attr: { type: "button", role: "menuitem" } });
+		setIcon(this.penOnlyButton.createSpan({ cls: "notebook-menu-icon" }), "pen-tool");
+		this.penOnlyButton.createSpan({ cls: "notebook-menu-label", text: t("pens.penOnly") });
 		this.penOnlyButton.addEventListener("click", (e) => {
 			e.preventDefault();
 			this.togglePenOnly();
@@ -92,6 +95,7 @@ export class PenControls {
 		this.slotButtons.forEach((b, i) => {
 			const fav = favourites[i];
 			if (!fav) return;
+			if (i === active && i !== this.lastActive) this.scrollIntoStrip(b);
 			b.disabled = !this.editable;
 			b.toggleClass("is-active", i === active);
 			b.setAttribute("aria-pressed", String(i === active));
@@ -100,6 +104,8 @@ export class PenControls {
 			dot?.setCssProps({ "--notebook-swatch-color": fav.color, "--notebook-fav-w": `${Math.round(Math.min(18, 6 + Math.sqrt(fav.width) * 3))}px` });
 			dot?.toggleClass("is-highlighter", fav.tool === "highlighter");
 		});
+
+		this.lastActive = active;
 
 		for (const [size, b] of this.sizeButtons) {
 			b.toggleClass("is-active", size === s.eraserSize);
@@ -154,6 +160,15 @@ export class PenControls {
 		this.store.setPenOnly(next);
 		this.refresh();
 		new Notice(t(next ? "pens.penOnly.on" : "pens.penOnly.off"));
+	}
+
+	/** Scrolls the favourites strip (it scrolls sideways on a narrow view) so that the pen just chosen is in sight. */
+	private scrollIntoStrip(b: HTMLElement): void {
+		const strip = this.toolbar.favouritesEl;
+		if (strip.clientWidth === 0) return;
+		const left = b.offsetLeft - strip.offsetLeft, right = left + b.offsetWidth;
+		if (left < strip.scrollLeft) strip.scrollLeft = left;
+		else if (right > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = right - strip.clientWidth;
 	}
 
 	// --- favourite slot buttons ---
