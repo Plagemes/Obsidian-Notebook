@@ -144,6 +144,11 @@ export class NotebookSettingTab extends PluginSettingTab {
 				desc: t("settings.eraseAreaElements.desc"),
 				control: { type: "toggle", key: "eraseAreaElements", defaultValue: DEFAULT_SETTINGS.eraseAreaElements },
 			},
+			{
+				name: t("settings.inkFollows"),
+				desc: t("settings.inkFollows.desc"),
+				control: { type: "toggle", key: "inkFollowsObjects", defaultValue: DEFAULT_SETTINGS.inkFollowsObjects },
+			},
 			// wave p1a: input
 			{
 				name: t("settings.edge"),
@@ -294,6 +299,10 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setName(t("settings.eraseAreaElements"))
 			.setDesc(t("settings.eraseAreaElements.desc"))
 			.addToggle((toggle) => toggle.setValue(s.eraseAreaElements).onChange((v) => this.setControlValue("eraseAreaElements", v)));
+		new Setting(containerEl)
+			.setName(t("settings.inkFollows"))
+			.setDesc(t("settings.inkFollows.desc"))
+			.addToggle((toggle) => toggle.setValue(s.inkFollowsObjects).onChange((v) => this.setControlValue("inkFollowsObjects", v)));
 		// wave p1a: input
 		new Setting(containerEl)
 			.setName(t("settings.edge"))

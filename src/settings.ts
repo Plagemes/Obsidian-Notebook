@@ -67,6 +67,9 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Tr
 	timetableAutoOpen: boolean;
 	/** A class counts as in progress this many minutes before it starts. */
 	timetableLeadMinutes: number;
+	// wave 0.6: objects
+	/** Ink written over an image or a text box moves, scales and rotates with it (geometric attachment, nothing stored). */
+	inkFollowsObjects: boolean;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -101,6 +104,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	timetableOffer: true,
 	timetableAutoOpen: false,
 	timetableLeadMinutes: 5,
+	inkFollowsObjects: true,
 	...DEFAULT_COMPANION_SETTINGS,
 	...DEFAULT_GESTURE_SETTINGS,
 	...DEFAULT_TRASH_SETTINGS,
@@ -144,6 +148,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.timetableLeadMinutes === "number" && Number.isInteger(d.timetableLeadMinutes) && d.timetableLeadMinutes >= 0 && d.timetableLeadMinutes <= 30) s.timetableLeadMinutes = d.timetableLeadMinutes;
 	Object.assign(s, readCompanionSettings(d), readGestureSettings(d));
 	Object.assign(s, readTrashSettings(d));
+	if (typeof d.inkFollowsObjects === "boolean") s.inkFollowsObjects = d.inkFollowsObjects;
 	return s;
 }
 

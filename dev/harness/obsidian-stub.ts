@@ -72,6 +72,13 @@ export function installDomHelpers(): void {
 	D.createEl = function (tag: string, o?: DomInfo | string, cb?: (el: HTMLElement) => void) {
 		return createElIn(null, tag, o, cb);
 	};
+	N.createSvg = function (this: Node, tag: string, o?: DomInfo | string, cb?: (el: SVGElement) => void) {
+		const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+		applyInfo(el as unknown as HTMLElement, o);
+		this.appendChild(el);
+		cb?.(el as SVGElement);
+		return el;
+	};
 	N.empty = function (this: Node) {
 		while (this.firstChild) this.removeChild(this.firstChild);
 	};
@@ -652,6 +659,8 @@ export class Plugin extends Component {
 // --- UI ---
 
 export const notices: string[] = [];
+/** The DOM of notices created with a fragment (buttons inside a notice), newest last. */
+export const noticeEls: HTMLElement[] = [];
 
 export class Notice {
 	readonly noticeEl: HTMLElement;
@@ -661,6 +670,10 @@ export class Notice {
 		notices.push(text);
 		console.warn("[harness] Notice:", text);
 		this.noticeEl = document.createElement("div");
+		if (typeof message !== "string") {
+			this.noticeEl.appendChild(message);
+			noticeEls.push(this.noticeEl);
+		}
 	}
 	setMessage(message: string): this {
 		notices.push(message);
