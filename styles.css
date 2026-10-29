@@ -1654,3 +1654,67 @@
 	height: auto;
 	box-shadow: 0 0 0 1px var(--background-modifier-border);
 }
+
+/* wave 0.6: obsidian api — tag editor (shared tags, O2) */
+.notebook-tags-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	min-height: 32px;
+	margin-bottom: 10px;
+	align-items: center;
+}
+
+.notebook-tags-none {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.notebook-tags-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: auto;
+	min-height: 32px;
+	padding: 2px 10px;
+	border-radius: 999px;
+	font-size: var(--font-ui-small);
+	background: var(--background-modifier-hover);
+}
+
+.notebook-tags-x {
+	color: var(--text-muted);
+	font-size: var(--font-ui-medium);
+	line-height: 1;
+}
+
+.notebook-tags-row {
+	display: flex;
+	gap: 8px;
+}
+
+.notebook-tags-input {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.notebook-tags-error {
+	margin-top: 6px;
+	color: var(--text-error);
+	font-size: var(--font-ui-small);
+}
+
+.notebook-tags-error:empty {
+	display: none;
+}
+
+.notebook-tags-desc,
+.notebook-tags-hint {
+	margin-top: 10px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.notebook-tags-hint button {
+	margin-top: 6px;
+}

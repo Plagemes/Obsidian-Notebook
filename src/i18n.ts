@@ -603,6 +603,19 @@ const en = {
 	"pageRestore.unreadable": "This version cannot be read.",
 	"pageRestore.otherNotebook": "This version belongs to a different notebook.",
 	"pageRestore.done": "Page restored",
+	// wave 0.6: obsidian api
+	"command.editTags": "Edit tags of this notebook…",
+	"tags.editor.title": "Tags",
+	"tags.editor.placeholder": "Add a tag…",
+	"tags.editor.add": "Add",
+	"tags.editor.none": "No tags yet",
+	"tags.editor.remove": "Remove tag {tag}",
+	"tags.editor.desc": "Tags are written like Obsidian tags: without #, spaces become -, and a/b makes a nested tag. Suggestions come from the tags already in your vault.",
+	"tags.editor.invalid": "Not a valid tag (a tag cannot be only digits or only symbols): {tags}",
+	"tags.editor.companionOff": "Obsidian's Tags pane and tag search only see these tags when companion notes are on: the tags are written to the notebook's companion note.",
+	"tags.editor.enableCompanion": "Turn on companion notes",
+	"tags.editor.companionOn": "These tags are also written to the notebook's companion note, so they appear in Obsidian's Tags pane. Tags you add to that note yourself are never removed.",
+	"tags.editor.enableFailed": "Could not turn on companion notes: {error}",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -1210,6 +1223,19 @@ const it: Partial<Record<MessageKey, string>> = {
 	"pageRestore.unreadable": "Questa versione non è leggibile.",
 	"pageRestore.otherNotebook": "Questa versione appartiene a un altro quaderno.",
 	"pageRestore.done": "Pagina ripristinata",
+	// wave 0.6: obsidian api
+	"command.editTags": "Modifica i tag di questo quaderno…",
+	"tags.editor.title": "Tag",
+	"tags.editor.placeholder": "Aggiungi un tag…",
+	"tags.editor.add": "Aggiungi",
+	"tags.editor.none": "Ancora nessun tag",
+	"tags.editor.remove": "Rimuovi il tag {tag}",
+	"tags.editor.desc": "I tag si scrivono come in Obsidian: senza #, gli spazi diventano -, e a/b crea un tag annidato. I suggerimenti vengono dai tag già presenti nel vault.",
+	"tags.editor.invalid": "Non è un tag valido (un tag non può essere fatto solo di cifre o solo di simboli): {tags}",
+	"tags.editor.companionOff": "Il pannello Tag e la ricerca per tag di Obsidian vedono questi tag solo se le note di accompagnamento sono attive: i tag vengono scritti nella nota di accompagnamento del quaderno.",
+	"tags.editor.enableCompanion": "Attiva le note di accompagnamento",
+	"tags.editor.companionOn": "Questi tag sono scritti anche nella nota di accompagnamento del quaderno, quindi compaiono nel pannello Tag di Obsidian. I tag che aggiungi tu a quella nota non vengono mai rimossi.",
+	"tags.editor.enableFailed": "Impossibile attivare le note di accompagnamento: {error}",
 };
 
 let table: Partial<Record<MessageKey, string>> | null = null;
