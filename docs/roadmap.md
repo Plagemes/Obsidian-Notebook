@@ -107,7 +107,7 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 ### Obsidian integration
 22. **P1** Embed a page in a Markdown note: a `notebook` code block renders a page preview.
 23. **P2** Optional always-updated PDF copy next to each notebook (sharing, NotebookLM).
-24. **P2** Flashcards from the lasso: question and answer regions become a Markdown flashcard compatible with spaced-repetition plugins.
+24. ~~**P2** Flashcards from the lasso: question and answer regions become a Markdown flashcard compatible with spaced-repetition plugins.~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
 
 ### Data and reliability
 25. **P1** Version history: automatic snapshots (e.g. daily per notebook) with restore.
@@ -204,7 +204,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 86. **P2** Margin comments attached to a region of the page.
 87. **P2** Presentation mode: full-screen pages, with the laser pointer (#12).
 88. **P3** Study timer (pomodoro) with a session log.
-89. **P2** Scheduled review: "review this page in 3 days", with a list of pages due.
+89. ~~**P2** Scheduled review: "review this page in 3 days", with a list of pages due.~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
 90. **P2** Highlights digest: every highlighted region collected in a summary page.
 
 ## M10 — Native Obsidian integration (backlog, planned 2026-10-29)
@@ -256,20 +256,20 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 105. **P1** Anchored excerpts: cut a region of a PDF, drop it on another page as an excerpt; tapping the excerpt jumps back to the exact source location.
 106. **P1** Synchronised PDF ↔ notes view: the PDF on one side and the linked note pages on the other; turning a PDF page follows on the notes side.
 107. **P2** Floating reference window: another page or notebook stays visible while you write.
-108. **P3** Read the PDF text aloud with the system's speech synthesis, offline.
-109. **P3** Reading ruler on PDFs: highlights the line being read (accessibility, dyslexia).
+108. ~~**P3** Read the PDF text aloud with the system's speech synthesis, offline.~~ — dropped (user decision, 2026-10-29)
+109. ~~**P3** Reading ruler on PDFs: highlights the line being read (accessibility, dyslexia).~~ — dropped (user decision, 2026-10-29)
 
 ### C. Rich native Obsidian elements
-110. **P1** Typed LaTeX formulas rendered with Obsidian's maths engine, placed on the page.
+110. **P1** Formulas and equations (advanced): an equation element with a live-preview editor and a palette of structures (fractions, matrices, integrals, systems); multi-line equations aligned on "=", optional automatic numbering; size adapts to the handwriting around it so formulas sit naturally next to the notes; configurable style (size, colour, numbering, inline or display); edited in place on the page; can be converted to vector ink to annotate or tweak by hand. Rendered with Obsidian's maths engine. Later, handwriting recognition (M5) fills the same element: write the formula by hand and it is typeset.
 111. **P2** Markdown boxes on the page: real Markdown (lists, callouts, links) rendered by Obsidian.
 112. **P2** Back of the page: each page can have a Markdown note as its back side; flip the page to type.
-113. **P2** Function plots: type f(x) and get axes and curve as editable vector shapes.
+113. **P1** Function graphs (advanced), designed as a full element: several functions per graph (cartesian, parametric, polar, implicit, piecewise); parameters with sliders (a, b…) updating curves live; pan and zoom inside the graph; roots, intersections, maxima and minima found numerically and marked; tangents and shaded areas under curves; table of values; configurable axes, grid, labels and units (degrees/radians); ink written on the graph stays attached to the graph's coordinates when the graph is moved or zoomed; expressions parsed by a safe math parser (never eval); exported as vectors.
 114. **P1** Paste from the system clipboard: images and text become page elements.
 
 ### D. Study and planning
 115. **P1** Class timetable: define the weekly timetable; new pages are tagged with the course in progress, and opening the app during a class opens that course's notebook on a new page.
-116. **P1** Exam review plan: set an exam date per notebook and its pages are spread over the remaining days for review.
-117. **P2** Review coverage map: thumbnails coloured from "never reviewed" to "reviewed often".
+116. ~~**P1** Exam review plan: set an exam date per notebook and its pages are spread over the remaining days for review.~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
+117. ~~**P2** Review coverage map: thumbnails coloured from "never reviewed" to "reviewed often".~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
 118. **P2** Planner generator: a planner notebook with dated month, week and day pages linked to each other.
 119. **P1** Page tags: tags on single pages, filterable in the navigator and in search.
 120. **P2** Smart collections in the library: saved rules (tag + folder + period + favourite).
@@ -282,7 +282,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 125. **P1** Last position shared across devices: reopen on the phone at the page you were on with the tablet (stored in the notebook, so it travels with the sync).
 
 ### F. Sync and storage
-126. **P1** Optional Google Drive / OneDrive connector inside the plugin (opt-in only): syncs the notebooks folder without external apps.
+126. **P1** Optional Google Drive / OneDrive connector inside the plugin (opt-in only), configurable scope: the whole vault, only selected folders, or include/exclude rules (patterns, file types, size limits). When to sync: on open, on close, on an interval or manually; "Wi-Fi only" option; rules for large files. Conflicts merged with #122; never a mandatory cloud.
 127. **P2** Scheduled backups to an external folder or to Drive (e.g. a weekly zip).
 128. **P2** Storage manager: size of each notebook, duplicate or unused assets, downscaling of heavy images.
 
@@ -291,14 +291,24 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 130. **P2** Semantic zoom: when zoomed out, headings and excerpts are shown large for orientation.
 131. **P3** Arrows linking regions of different pages, visible in the side-by-side view.
 132. **P2** Live lecture mode: a timer and quick buttons ("new page", "important moment"); each mark becomes a timestamped bookmark.
-133. **P2** Course dashboard page that updates itself: next exam, pages due for review, recent notebooks.
+133. ~~**P2** Course dashboard page that updates itself: next exam, pages due for review, recent notebooks.~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
 134. **P2** Pen sets per subject, loaded automatically with the notebook (e.g. maths or languages).
 135. **P2** Mirror page: a page that always shows the current content of a page in another notebook (transclusion).
 136. **P3** Handout printing: several pages per sheet with space for notes.
 137. **P2** Templates with fields: title, date and topic filled by hand or keyboard become properties of the companion note.
 138. **P3** Progressive reveal in presentation mode: a page is shown piece by piece.
-139. **P2** Drawn command gestures: e.g. "?" opens search, a down arrow adds a page; configurable.
+139. **P1** Pen gestures, designed to be genuinely useful:
+    - No false positives: gestures start only while the S Pen button is held (or after a long press), never during normal writing.
+    - Preview before committing: the recognised command is shown before the pen lifts; moving back along the stroke cancels it.
+    - Context-aware: a circle around ink selects it; a scribble deletes (#4); "^" inserts space (#91); "#" tags the page (#119); a star bookmarks; "?" opens search; an arrow from a selection to a navigator thumbnail moves it to that page.
+    - Custom gestures: record your own (three samples each) and bind them to any Obsidian command.
+    - Cheat sheet overlay listing the available gestures; per-gesture enable/disable.
+    - Ink interpreted as a gesture is never saved, but undo restores it as ink.
 140. **P1** Guided repair of damaged notebooks: recovers valid pages and strokes from an unreadable file into a new notebook, never touching the original.
+
+### Study and exam update (to be designed later)
+
+Exam and review features will ship as one coherent update, designed later together: #24 (flashcards from the lasso), #89 (scheduled review), #116 (exam review plan), #117 (review coverage map), #133 (course dashboard). Not planned for now.
 
 ### Sync with Google Drive or OneDrive (decision 2026-10-29)
 
