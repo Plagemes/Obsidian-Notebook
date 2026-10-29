@@ -9,7 +9,7 @@ export interface FolderNode {
 }
 
 /** Subfolders of the notebooks folder that are not part of the library. */
-export const RESERVED_FOLDERS: readonly string[] = ["_assets", "_backup"];
+export const RESERVED_FOLDERS: readonly string[] = ["_assets", "_backup", "_trash", "_templates"];
 
 /** True if `path` lies in a reserved subtree directly under `root`. */
 export function isReservedPath(path: string, root: string): boolean {

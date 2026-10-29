@@ -1850,3 +1850,91 @@
 .notebook-pdfside-banner button {
 	min-height: 44px;
 }
+
+
+/* wave 0.6: library trash, page trash, templates */
+.notebook-trash-hint,
+.notebook-trash-empty {
+	color: var(--text-muted);
+}
+
+.notebook-trash-bar {
+	display: flex;
+	justify-content: flex-end;
+	margin-bottom: 8px;
+}
+
+.notebook-trash-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	max-height: 55vh;
+	overflow-y: auto;
+}
+
+.notebook-trash-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+
+.notebook-trash-icon {
+	flex: none;
+	color: var(--text-muted);
+}
+
+.notebook-trash-text {
+	flex: 1;
+	min-width: 0;
+}
+
+.notebook-trash-name {
+	font-weight: var(--font-semibold);
+	overflow-wrap: anywhere;
+}
+
+.notebook-trash-path,
+.notebook-trash-meta {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	overflow-wrap: anywhere;
+}
+
+.notebook-trash-actions {
+	display: flex;
+	flex: none;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 6px;
+}
+
+@media (max-width: 480px) {
+	.notebook-trash-row {
+		flex-wrap: wrap;
+	}
+
+	.notebook-trash-actions {
+		width: 100%;
+		justify-content: flex-start;
+	}
+}
+
+.notebook-page-trash-grid .notebook-restore-page,
+.notebook-template-grid .notebook-restore-page {
+	cursor: default;
+}
+
+.notebook-page-trash-grid button,
+.notebook-template-actions button {
+	margin-top: 4px;
+}
+
+.notebook-template-actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 4px;
+}

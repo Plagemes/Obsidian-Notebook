@@ -70,6 +70,7 @@ import { runMovePages } from "../library/move-pages";
 import { addPdfPageMenuItems, type PdfActionHost } from "./pdf-actions";
 import { pickFile } from "./pick";
 import { addPdfSyncMenuItems, type PageSyncHooks } from "./pdf-sync";
+import { newPageFromTemplate, openDeletedPages, savePageAsTemplate, stashDeletedPage, type PageToolsHost } from "./page-tools";
 import { RulerGesture } from "./ruler-gesture";
 import { SelectionActions } from "./selection-actions";
 import { TextEditor, type TextEditSession } from "./text-editor";
@@ -810,7 +811,14 @@ export class NotebookView extends FileView {
 		menu.addItem((i) => i.setTitle(t(marked ? "page.unbookmark" : "page.bookmark")).setIcon("bookmark").onClick(() => this.toggleBookmarkOf(page.id)));
 		menu.addItem((i) => i.setTitle(t("page.moveToNotebook")).setIcon("folder-input").onClick(() => void this.movePagesToNotebook(index)));
 		menu.addItem((i) => i.setTitle(t("page.delete")).setIcon("trash-2").setSection("danger").setDisabled(doc.pages.length <= 1)
-			.onClick(() => this.pageCommand(new DeletePage(page, index), Math.max(0, index - 1), page)));
+			.onClick(() => {
+				stashDeletedPage(this.pageToolsHost(), doc, page, index); // wave 0.6: kept in the page trash
+				this.pageCommand(new DeletePage(page, index), Math.max(0, index - 1), page);
+			}));
+		menu.addItem((i) => i.setTitle(t("page.deletedPages")).setIcon("archive-restore").onClick(() => void openDeletedPages(this.pageToolsHost())));
+		menu.addItem((i) => i.setTitle(t("page.saveTemplate")).setIcon("layout-template")
+			.onClick(() => savePageAsTemplate(this.pageToolsHost(), doc, page, this.file?.basename ?? "")));
+		menu.addItem((i) => i.setTitle(t("page.newFromTemplate")).setIcon("file-plus-2").onClick(() => newPageFromTemplate(this.pageToolsHost(), index)));
 		menu.addSeparator();
 		for (const kind of PAPER_KINDS) {
 			menu.addItem((i) => i.setTitle(t("page.paper", { kind: t(`paper.${kind}`) })).setChecked(page.paper.kind === kind)
@@ -997,6 +1005,17 @@ export class NotebookView extends FileView {
 	}
 
 	// --- wave p1b: reliability (repair, conflicted copies, page restore; see integration/reliability.ts) ---
+
+	/** Page trash and templates (wave 0.6, see page-tools.ts). */
+	private pageToolsHost(): PageToolsHost {
+		const host = this.host;
+		return {
+			app: this.app,
+			get settings() { return host.settings; },
+			editableDocument: () => this.editableDocument(),
+			applyCommand: (cmd, scrollTo) => this.applyCommand(cmd, scrollTo),
+		};
+	}
 
 	private reliabilityDeps(): ReliabilityDeps {
 		return { app: this.app, settings: this.host.settings, journal: this.host.journal };

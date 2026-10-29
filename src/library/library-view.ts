@@ -12,6 +12,8 @@ import { relativeTime, uniquePath } from "./format";
 import { folderOf, isInside, LibraryIndex, SORTS, type Highlight, type LibraryEntry, type LibraryScope, type LibrarySort, type SearchHit } from "./index";
 import { ConfirmModal, CoverModal, FolderSuggestModal, PromptModal, TagsModal } from "./library-modals";
 import { entryFromFile, filesToRead, type NotebookFileInfo } from "./scan";
+import type { LibraryTrash } from "../storage/trash";
+import { addTrashNavItem, confirmMoveToTrash, TrashModal } from "./trash-modal";
 import { renderThumbnail, type ThumbnailOptions } from "./thumbnail";
 
 export const LIBRARY_VIEW_TYPE = "notebook-library";
@@ -45,6 +47,8 @@ export interface LibraryHost {
 	thumbnailBackground?(doc: NotebookDocument, page: Page, width: number): Promise<ThumbnailOptions["drawBackground"] | null>;
 	/** Called after the library copied a notebook, so the copy can get its own identity. */
 	afterDuplicate?(file: TFile): Promise<void>;
+	/** Library trash (#160): deleting moves to the plugin trash instead of deleting. */
+	trash?: LibraryTrash;
 	loadIndex(): Promise<unknown>;
 	saveIndex(data: unknown): Promise<void>;
 }
@@ -655,6 +659,13 @@ export class LibraryView extends ItemView {
 		this.navItem(nav, { icon: "library", label: t("library.nav.all"), count: this.index.size, scope: "all", key: "nav:all" });
 		this.navItem(nav, { icon: "star", label: t("library.nav.favorites"), count: favorites, scope: "favorites", key: "nav:favorites" });
 		this.navItem(nav, { icon: "clock", label: t("library.nav.recent"), scope: "recent", key: "nav:recent" });
+		const trash = this.host.trash;
+		if (trash) {
+			addTrashNavItem(nav, () => {
+				this.setDrawer(false);
+				new TrashModal(this.app, trash).open();
+			});
+		}
 
 		el.createDiv({ cls: "notebook-lib-section", text: t("library.nav.folders") });
 		const counts = this.folderCounts();
@@ -1061,6 +1072,8 @@ export class LibraryView extends ItemView {
 	}
 
 	private askDelete(file: TFile): void {
+		const trash = this.host.trash;
+		if (trash) return confirmMoveToTrash(this.app, { name: file.basename, isFolder: false }, () => trash.trash(file), (e) => this.fail(e));
 		new ConfirmModal(
 			this.app,
 			{ title: t("library.modal.deleteTitle"), body: t("library.modal.deleteBody", { name: file.basename }), cta: t("library.modal.deleteConfirm") },
@@ -1109,6 +1122,8 @@ export class LibraryView extends ItemView {
 	private askDeleteFolder(path: string): void {
 		const folder = this.app.vault.getFolderByPath(path);
 		if (!folder) return;
+		const trash = this.host.trash;
+		if (trash) return confirmMoveToTrash(this.app, { name: folder.name, isFolder: true }, () => trash.trash(folder), (e) => this.fail(e));
 		if (folder.children.length > 0) {
 			new Notice(t("library.notice.folderNotEmpty", { name: folder.name }));
 			return;

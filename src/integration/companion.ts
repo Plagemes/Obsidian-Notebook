@@ -10,6 +10,7 @@ import type { NotebookSettings } from "../settings";
 import { companionCandidates, companionPath } from "../storage/companion-path";
 import { isNotebookFile, readNotebookText } from "../storage/format";
 import { quickDocId } from "../storage/history";
+import { isInTrash, isWithin, templatesFolderPath } from "../storage/trash-paths";
 import { ensureFolder } from "../storage/vault-io";
 import { notebookUri } from "./links";
 import { viewsOf } from "./open";
@@ -231,7 +232,7 @@ export class CompanionService {
 	 */
 	private async otherNotebookHasId(file: TFile, docId: string): Promise<boolean> {
 		for (const f of this.app.vault.getFiles()) {
-			if (f === file || !isNotebookFile(f)) continue;
+			if (f === file || !isNotebookFile(f) || this.isInternal(f.path)) continue;
 			try {
 				if (quickDocId(readNotebookText(f.extension, await this.app.vault.cachedRead(f))) === docId) return true;
 			} catch {
@@ -279,10 +280,15 @@ export class CompanionService {
 		return free === null ? null : { create: free };
 	}
 
-	// ------------------------------------------------------------------- writing
+	/** Trashed notebooks and templates (roadmap #160, #74) get no companion note, and never claim one. */
+	private isInternal(path: string): boolean {
+		const s = this.plugin.settings;
+		return isInTrash(path) || isWithin(path, templatesFolderPath(s.templatesFolder, s.folder));
+	}
 
 	/** Brings the companion of `file` up to date. Writes nothing when the note already matches. */
 	async update(file: TFile): Promise<UpdateResult> {
+		if (this.isInternal(file.path)) return "skipped";
 		const doc = await this.readDocument(file);
 		if (!doc) return "skipped";
 		const content = this.content(file, doc);
@@ -334,6 +340,7 @@ export class CompanionService {
 
 	/** Renames the companion with its notebook when it sits at the configured place for the old path. */
 	private async followRename(file: TFile, oldPath: string): Promise<void> {
+		if (this.isInternal(file.path)) return;
 		if (!this.enabled) return;
 		const s = this.plugin.settings;
 		const from = normalizePath(companionPath(oldPath, s, s.folder));
@@ -385,7 +392,7 @@ export class CompanionService {
 			new Notice(t("notice.companionOff"));
 			return;
 		}
-		const files = this.app.vault.getFiles().filter((f) => isNotebookFile(f));
+		const files = this.app.vault.getFiles().filter((f) => isNotebookFile(f) && !this.isInternal(f.path));
 		const counts: Record<UpdateResult, number> = { created: 0, updated: 0, unchanged: 0, skipped: 0 };
 		for (const file of files) {
 			while (this.input.active() && !this.disposed) await sleep(INPUT_POLL_MS);

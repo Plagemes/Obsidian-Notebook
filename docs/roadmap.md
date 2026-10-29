@@ -115,7 +115,7 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 
 ### Data and reliability
 25. 🧪 **P1** Version history: automatic snapshots (e.g. daily per notebook) with restore.
-26. **P1** Page trash: deleted pages stay recoverable after the session ends.
+26. 🧪 **P1** Page trash: deleted pages stay recoverable after the session ends.
 27. **P2** Library check: find unreadable notebooks and orphaned assets, free space.
 28. **P3** Password-protected notebooks: local encryption with Web Crypto, no cloud.
 
@@ -191,7 +191,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 
 ### Pages and documents
 73. **P1** More papers: Cornell, music staff, isometric, hexagonal, calligraphy, planner.
-74. **P1** Save a page as a template, with a template gallery.
+74. 🧪 **P1** Save a page as a template, with a template gallery.
 75. **P2** Automatic header with date and page number.
 76. **P2** Rotate and crop imported PDF pages.
 77. **P2** Merge notebooks, split a notebook, extract pages into a new notebook.
@@ -338,7 +338,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 159. **P3** Split scanned two-page spreads into two pages.
 
 ### C. Library
-160. **P1** Library trash with restore.
+160. 🧪 **P1** Library trash with restore.
 161. **P2** Board view with statuses (in progress, done, to print).
 162. **P2** Calendar view: what you wrote on a given day.
 163. **P2** Per-notebook settings: stabilization, palm rejection, default paper, sync.

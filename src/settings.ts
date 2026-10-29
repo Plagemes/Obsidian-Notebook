@@ -5,9 +5,10 @@ import { DEFAULT_GESTURE_SETTINGS, readGestureSettings, type GestureSettings } f
 import { PEN_BUTTON_ACTIONS, type PenButtonAction } from "./ink/input-policy";
 import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./model/types";
 import { DEFAULT_COMPANION_SETTINGS, readCompanionSettings, type CompanionSettings } from "./storage/companion-path";
+import { DEFAULT_TRASH_SETTINGS, readTrashSettings, type TrashSettings } from "./storage/trash-settings";
 
 /** Companion note settings (O1) are defined in storage/companion-path.ts. */
-export interface NotebookSettings extends CompanionSettings, GestureSettings {
+export interface NotebookSettings extends CompanionSettings, GestureSettings, TrashSettings {
 	folder: string;
 	fingerDrawing: boolean;
 	palmRejectionMs: number;
@@ -102,6 +103,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	timetableLeadMinutes: 5,
 	...DEFAULT_COMPANION_SETTINGS,
 	...DEFAULT_GESTURE_SETTINGS,
+	...DEFAULT_TRASH_SETTINGS,
 };
 
 /** Merges saved data over the defaults, ignoring values of the wrong type. */
@@ -141,6 +143,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.timetableAutoOpen === "boolean") s.timetableAutoOpen = d.timetableAutoOpen;
 	if (typeof d.timetableLeadMinutes === "number" && Number.isInteger(d.timetableLeadMinutes) && d.timetableLeadMinutes >= 0 && d.timetableLeadMinutes <= 30) s.timetableLeadMinutes = d.timetableLeadMinutes;
 	Object.assign(s, readCompanionSettings(d), readGestureSettings(d));
+	Object.assign(s, readTrashSettings(d));
 	return s;
 }
 

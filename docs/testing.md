@@ -154,6 +154,11 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Scribble to erase (wave 0.6, setting, **default off**): fast back-and-forth over ink deletes the strokes crossed by ≥ 2 legs, scribble not kept, one undo step | ✅ | ✅ detector on synthetic paths (angles, jitter, leg counts; negatives "mmm", sharp-topped "mmm", sweeping zig-zag shading, separate hatching strokes, slow scratch, lines / circles / spirals), victims (graze, long ruling, empty paper), one undo step; ❌ real pen strokes, view glue | | ✅ | thresholds (leg ≥ 12 pt and a turn window of 8 pt, ≥ 4 reversals, ≤ 300 ms per leg, drift ≤ 0.8 of a leg) tuned on synthetic data only |
 | Auto-scroll after writing near the bottom (wave 0.6, setting, **default off**): stroke ends in the bottom 18 % → after 700 ms the view scrolls up 320 ms (ease-out) so the tip is at 40 %; never during a contact | ✅ | ✅ distance, easing, timing, cancel on contact, end of document; ❌ real view | | ✅ | the 700 ms pause and the 40 % target are guesses |
 | Pen side button: *Lasso while held* and *Previous tool while held* (extend *Pen side button*; default stays *Radial menu*); the tool is chosen when the pen touches down | ✅ | ✅ routing, held tool passed to the stroke start, setting parsing, previous-tool memory; ❌ the S Pen's real button reporting | | ✅ | pressing the button after the pen touched down does not switch (same as the eraser option) |
+| Library trash (#160): deleting a notebook or folder moves it to `_trash/` with its original path; restore to the original place or a free name; delete permanently and empty trash ask first; trash excluded from library, index, search, companion notes and conflicted-copy detection | ✅ | ✅ `tests/library-trash.test.ts`: layout, meta parsing, `isInTrash`, reserved folders, restore naming; ❌ vault moves, dialogs (need Obsidian) | | | permanent deletion follows Obsidian's *Deleted files* setting |
+| Library trash auto-empty (setting *Empty the trash automatically*, **default off**) | ✅ | ✅ expiry rule, boundary, setting parsing; ❌ run at start-up | | | |
+| Assets used only by trashed notebooks or deleted pages stay in `_assets/` | ✅ | ✅ `trashedAssetIds`; nothing deletes assets yet (#27) | | | a future clean-up must treat `_trash/` as references |
+| Page trash (#26): *Delete page* keeps the page in `_trash/pages/<notebook id>.json` (assets by id); *Deleted pages...* lists them with thumbnails; restore after the page that preceded it, one undo step; 50 pages / 30 days per notebook | ✅ | ✅ entry round trip through the file, caps and retention, position rules, ids, assets, undo; ❌ dialog, vault writes | | | not part of the notebook format |
+| Page templates (#74): *Save page as template...* (content, paper, size, background), *New page from template...*, template row in the *New notebook* dialog, gallery with thumbnails, built-in Cornell / meeting / to-do templates | ✅ | ✅ saved page, fresh ids on every use, built-ins valid and round-trip, new notebook from a template; ❌ gallery, dialogs | | | stored in the templates folder (setting), as ordinary notebook files |
 
 ## Automated checks
 
@@ -402,6 +407,30 @@ K7. **Large deck on the tablet.** Import a deck of 60+ slides with notes on the 
 | G4 Side button: lasso | | | |
 | G5 Side button: previous tool | | | |
 | G6 Defaults | | | |
+| L1 Library trash: move to trash | | | |
+| L2 Library trash: restore (original place, free name) | | | |
+| L3 Delete permanently and empty trash | | | |
+| L4 Trash auto-empty | | | |
+| L5 Trash is invisible to library, search, companion notes, conflicts | | | |
+| L6 Trash through sync | | | |
+| L7 Deleted pages: list and restore | | | |
+| L8 Save page as template | | | |
+| L9 New page from template | | | |
+| L10 New notebook from template | | | |
+
+### Library trash, page trash and templates (wave 0.6)
+
+L1. **Move to trash.** In the library, delete a notebook (card menu) and a non-empty folder. Expected: a confirmation that says it can be restored; both disappear from the library and from search; the notebook tab, if open, closes; in the file explorer they are under `Notebooks/_trash/items/<id>/` with a `meta.json`.
+L2. **Restore.** Library sidebar → *Trash*. Restore the notebook: it returns to its folder and opens with all pages and ink. Create a new notebook with the same name, trash the first one again and restore it: expected the name `<name> 2`. Restore the folder: its notebooks are back inside it.
+L3. **Delete permanently and empty.** In *Trash*, *Delete permanently* on one item: a confirmation first, then it is gone (or in the system trash, per Obsidian's *Deleted files* setting). *Empty trash*: confirmation, then everything goes. Cancel both once and check nothing was deleted.
+L4. **Auto-empty.** Setting *Empty the trash automatically* = 1 day, trash a notebook, set the device clock two days ahead (or change `deletedAt` in `meta.json` to an old time), restart Obsidian. Expected: the item is removed; with the setting at 0 nothing is ever removed.
+L5. **Trash is invisible.** With companion notes on, trash a notebook: no companion note is created inside `_trash`; the existing note stays. Trashed notebooks do not appear in *Open notebooks*, search, or *Move to notebook*. A copy named `Name (1)` made by Google Drive inside `_trash` produces no merge notice.
+L6. **Sync.** Trash a notebook on one device, let Google Drive / OneDrive sync, open the library on the other device. Expected: the notebook is gone from the library there and listed in *Trash*; restore on that device works.
+L7. **Deleted pages.** Delete a page from the page menu, fully close Obsidian and reopen the notebook. Page menu → *Deleted pages...*: the page is listed with a thumbnail. *Restore*: it comes back after the page that preceded it; *Undo* removes it again and it is listed again. Delete a page that has a PDF background or an image and restore it: the background shows.
+L8. **Save as template.** On a page with ink, text and a ruled A5 paper choose *Save page as template...*, name it. Expected: a notice, and a `.notebook` file in the templates folder (default `Notebooks/_templates/`).
+L9. **Page from template.** Page menu → *New page from template...*: the gallery shows the built-in templates and yours with thumbnails; *Use* adds a page after the current one with the same content, paper and size; one *Undo* removes it. Do it twice: both pages are independent.
+L10. **Notebook from template.** *New notebook* dialog → *Template* → *Choose...* → pick one → *Create*. Expected: the notebook opens with the template's pages. *Clear* goes back to the paper and size choices. Delete one of your templates from the gallery: it disappears and the file goes to the Obsidian trash.
+
 
 Benchmark output (step 21): paste it here.
 
@@ -437,3 +466,4 @@ Mouse: draw, erase (both modes), undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scr
 - The S Pen side button is mapped to the radial menu (setting *Pen side button*), but whether the pen reports it as `button 2` / `buttons & 2` has not been checked on a device; the standard `buttons & 32` eraser keeps working as before.
 - Notebooks are invisible to Obsidian search, tags, backlinks and graph unless *Companion notes* is on (off by default); the companion note carries the text boxes, not the handwriting (no OCR yet).
 - Companion notes: a note the user moved is found by its `notebook-id`, but deleting that property makes the plugin create a new note; changing the location or name setting does not move existing notes; a companion folder inside the notebooks folder shows in the library sidebar.
+- Library trash, page trash and templates (wave 0.6) are not verified in Obsidian or on Android (steps L1-L10). Trashed items move with `vault.rename`, so notes that linked to a trashed notebook show a broken link until it is restored. Permanent deletion follows Obsidian's *Deleted files* setting. The page trash keeps the 50 most recent pages per notebook for 30 days (fixed limits); it is not synced into the notebook, only through the vault file `_trash/pages/<notebook id>.json`, and two devices deleting pages at the same time can overwrite each other's entries. Page trash and template thumbnails do not draw PDF or image backgrounds. A folder named `_trash` or `_templates` directly under the notebooks folder is hidden from the library.

@@ -7,6 +7,7 @@ import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "../ink/edge-zones";
 import { displayTimetableSettings } from "../timetable/settings-ui";
 import type { TimetableService } from "../timetable/service";
 import { displayGestureSettings, gestureSettingDefinitions, type GestureSettingsHost } from "./gesture-settings";
+import { displayTrashSettings, trashSettingDefinitions } from "./trash-settings";
 import { companionSettingDefinitions, displayCompanionSettings, type CompanionSettingsHost } from "./companion-settings";
 
 const paperOptions = () => Object.fromEntries(PAPER_KINDS.map((k) => [k, t(`paper.${k}`)]));
@@ -169,6 +170,8 @@ export class NotebookSettingTab extends PluginSettingTab {
 			...gestureSettingDefinitions(this.gestureHost()),
 			// Companion notes (O1)
 			...companionSettingDefinitions(this.companionHost()),
+			// wave 0.6: library trash, templates
+			...trashSettingDefinitions(),
 		];
 	}
 
@@ -315,5 +318,6 @@ export class NotebookSettingTab extends PluginSettingTab {
 		displayGestureSettings(containerEl, this.gestureHost());
 		displayCompanionSettings(containerEl, this.companionHost());
 		displayTimetableSettings(containerEl, this.host);
+		displayTrashSettings(containerEl, { get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) });
 	}
 }
