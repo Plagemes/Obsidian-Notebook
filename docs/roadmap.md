@@ -495,7 +495,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 ### Even closer Obsidian integration
 260. **P2** Ink on top of Markdown notes: write by hand directly on a regular note (feasibility study first).
 261. **P2** Sketch inside a Markdown note: a small handwriting block inside the note.
-262. **P2** Turn a region into an atomic note (Zettelkasten style), with the ink image and a link back.
+262. **P2** Turn a region into an atomic note (Zettelkasten style), with the ink image and a link back. — superseded by the Zettelkasten system (Z1–Z12) below.
 263. **P2** Links to a precise region of a page, not only to the page.
 264. **P2** Saved views: a named region + zoom, recalled instantly.
 265. **P2** Global bookmarks: pages from different notebooks in one list.
@@ -530,9 +530,96 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 288. **P3** Duplicate or similar pages: find slides imported twice and duplicated pages.
 
 ### Accessibility and learning
-289. **P3** Colour-blind-safe palettes, with simulation.
-290. **P3** Alternative descriptions of figures and images for screen readers.
-291. **P3** Handwriting practice with a model and comparison, for languages with other scripts.
+289. ~~**P3** Colour-blind-safe palettes, with simulation.~~ — dropped (user decision, 2026-10-29)
+290. ~~**P3** Alternative descriptions of figures and images for screen readers.~~ — dropped (user decision, 2026-10-29)
+291. ~~**P3** Handwriting practice with a model and comparison, for languages with other scripts.~~ — dropped (user decision, 2026-10-29)
+
+## M15 — Zettelkasten with handwriting (planned 2026-10-29)
+
+A complete Zettelkasten workflow where handwriting is first-class. Everything goes through the companion note (O1) and the format layer, so it stays valid if notebooks move to a Markdown container. Status: ⏳ for all.
+
+- **Z1 P1** Real cards: a region of a page, or an A6 "card" page, becomes a Zettel — a Markdown note with a unique id (timestamp or Luhmann numbering, configurable), properties (type, source, tags, date) and the ink embedded live (no copy: editing the ink in the notebook updates the card).
+- **Z2 P1** Slip-box notebook type: every page is a Zettel; a new page creates its note automatically.
+- **Z3 P1** Drawn links: draw an arrow between two cards (or regions) and a two-way link is created between their notes; visible in Obsidian's graph.
+- **Z4 P1** Processing flow: fleeting notes (loose sheet #176, markers, questions) go to an "to process" inbox; PDF excerpts (#105, #155) become literature notes with their source; a guided view lets you discard each one, turn it into a permanent card, or link it to an existing one.
+- **Z5 P2** Link suggestions while creating a card: related cards by tags, title and text-box text (MiniSearch), so no card stays isolated.
+- **Z6 P2** Drawn maps of content: a page where cards are placed as live transclusions and relations are drawn; it also generates a Markdown MOC.
+- **Z7 P2** Sequences and branches (Luhmann style 1, 1a, 1a1), optional, with previous/next/children navigation.
+- **Z8 P2** Slip-box view in the library: browse cards like index cards, filter by tag, "draw a random card" to rediscover ideas.
+- **Z9 P2** Card templates: concept, question, quote, definition.
+- **Z10 P2** System hygiene: orphan cards (no links), duplicates, cards without a typed title.
+- **Z11 P1** Title and transcription: each card has a typed title (search and graph) and a transcription field, filled by hand or later by handwriting recognition (M5).
+- **Z12 P1** Container-proof: built on the companion note (O1) and the format layer.
+
+## M16 — More features (backlog, planned 2026-10-29)
+
+Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for all.
+
+### STEM tools (no AI)
+292. **P2** Step checker: type the steps of a calculation one per line; each line is checked numerically for equivalence with the previous one.
+293. **P2** Dimensional analysis of formulas: flags inconsistent units.
+294. **P2** Balancing of typed chemical reactions.
+295. **P2** Statistics from table data: mean, deviation, regression, with the line drawn on the chart.
+296. **P3** Step-by-step linear systems and matrices shown on the page.
+297. **P3** Basic vector maps as backgrounds for geography and history (public-domain data).
+298. **P3** Truth tables and simulated logic circuits.
+299. **P3** Simple physics simulations on drawings with states (projectile, spring, inclined plane).
+
+### Annotating vault files without converting them
+300. **P2** Annotate vault images: the ink lives in a side file, the image stays untouched.
+301. **P2** Annotate vault PDFs in place: the PDF is not modified; the ink lives in a side file.
+302. **P3** Clean web page to annotate (to be researched).
+
+### Practice and exercises (not exams)
+303. **P2** Redo the exercise: a copy of the page without your ink.
+304. **P2** Overlay two pages: your working and the solution, one over the other with transparency.
+305. **P3** Correction layer for tutors or classmates, with accept and reject.
+
+### Page structure
+306. **P2** Nested detail pages: a mark opens a dedicated sub-page, like a full-page footnote.
+307. **P3** Nested zoom: a region of a page contains another page in miniature.
+308. **P2** Drawn containers: circle a group of ideas and it becomes a container that moves them together.
+309. **P3** Handwritten kanban on the page.
+310. **P3** Handwritten Gantt chart.
+311. **P3** Meeting minutes: attendees, decisions, actions that become tasks.
+312. **P2** Virtual notebook: gathers pages from several notebooks by tag or rule without copying them; browse and export it like a real notebook.
+
+### Writing and pen
+313. **P2** Automatic joining of broken strokes caused by tiny pen dropouts.
+314. **P2** Cleanup of hooks and stray dots at the start and end of strokes.
+315. **P2** Thumb bar: a finger of the free hand switches tools while the pen keeps writing.
+316. **P2** Editable Bézier curves with handles, for precise drawings.
+317. **P3** Freehand arrows: any drawn curve can get an arrowhead.
+318. **P3** Snap to the endpoints of existing ink.
+319. **P3** Eraser that grows with pressure.
+320. **P3** Column alignment of handwritten numbers.
+321. **P3** Local grid: lines or squares only in one region of the page.
+322. **P3** Colour by session: ink coloured by when it was written.
+323. **P3** Haptic confirmation for gestures and saves, where the device supports it.
+324. **P3** Precision cursor for finger writing.
+
+### Obsidian integration
+325. **P2** Box with a block of a note, transcluded live with `^block`.
+326. **P3** Dynamic list on the page, Dataview style: notes and notebooks filtered, always up to date.
+327. **P3** Page properties beyond tags.
+328. **P3** Variables shared across the whole notebook for the calculator and graphs.
+
+### Reliability and performance
+329. **P1** Progressive loading of huge notebooks, page by page.
+330. **P3** Tamper-evident lab notebook: dated entries, signatures, hash chain.
+331. **P3** HEIC/HEIF photo support.
+
+### Thesis, assignments, sharing
+332. **P3** Thesis mode: chapters, numbered figures, bibliography, single export.
+333. **P3** Export numbered figures as separate high-resolution files.
+334. **P2** Assignment hand-in: export chosen pages as a PDF with a cover (name, course, date) after checking blank pages and open placeholders.
+335. **P3** "For correction" export: wide margins and line numbers for the teacher.
+336. **P3** Export pages as 16:9 slides.
+337. **P3** Timelapse video or GIF of the writing, from the replay feature.
+338. **P3** Private presenter notes on a second screen.
+339. **P3** Step-by-step procedures with the time recorded at each tick, for labs.
+340. **P3** Book from ISBN: scan the barcode and create the book note for the bibliography.
+341. **P2** Night mode for PDFs: inverted pages with ink always readable.
 
 ### Study and exam update (to be designed later)
 
