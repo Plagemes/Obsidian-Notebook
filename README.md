@@ -14,7 +14,7 @@ Handwritten notebooks inside your Obsidian vault, designed first for **Android t
 ## Usage
 
 - Ribbon icon **Open notebooks** (book) or the command palette → **Notebook: New notebook** / **Notebook: Open notebooks**.
-- New notebooks go to the `Notebooks/` folder (configurable in the settings).
+- New notebooks go to the `Notebooks/` folder (configurable in the settings). **Open notebooks** lists the notebooks in that folder and its subfolders; notebooks stored elsewhere open from the file explorer.
 - Write with the pen. With the default settings a finger scrolls (one finger) and zooms (two fingers); it does not draw. Turn on **Draw with finger** in the settings to draw with a finger.
 - Mouse: left button draws, wheel scrolls, Ctrl + wheel zooms, middle button pans.
 - Undo/redo: toolbar buttons, Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z (or Ctrl+Y) on desktop.
