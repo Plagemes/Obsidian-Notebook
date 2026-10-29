@@ -232,6 +232,74 @@ Goal: notebooks behave like first-class Obsidian content. Several items depend o
 - **O19 P2** Obsidian search: text boxes (and OCR later) appear in global search through the companion note.
 - **O20 P1** Page into a note: "Copy link to this page" and "Insert this page into the active note" (link or embed).
 
+## M11 — Original and advanced features (backlog, planned 2026-10-29)
+
+Non-trivial features, many of them original to this project. Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for all.
+
+### A. Smart writing (geometry, no AI)
+91. **P1** Insert or remove space: drag a line and everything below moves down (onto the next page if needed) or back up.
+92. **P2** Handwriting reflow: handwritten lines re-wrap to a different width like text, words found from the gaps between strokes.
+93. **P2** Align to baseline: crooked handwritten words are moved onto a common baseline.
+94. **P2** Ghost guide lines on blank paper: they appear while writing and fade when you stop.
+95. **P1** Automatic next page: writing at the bottom of the last page appends a new page (different from infinite pages).
+96. **P2** Strike-through as logical deletion: a line over a word marks it as deleted; it stays readable struck through and can be hidden.
+97. **P1** Selective eraser: erase only one kind of ink (only highlighter, only one colour) and leave the rest.
+98. **P2** Per-page undo: each page has its own history; undo on one page never touches another.
+99. **P2** Area highlighter: translucent rectangles, ideal on scanned PDFs.
+100. **P1** Invisible ink for self-testing: write answers with a hidden pen and reveal them with "show solutions".
+101. **P2** Colours with meaning: define what each colour means (red = definition, blue = example), filter the view by it and generate a digest per colour.
+102. **P2** Headings from handwriting size (no OCR): lines written large become outline entries, shown as images of the ink.
+103. **P2** Handwritten checklists: a drawn square becomes a tappable checkbox, linked to Obsidian tasks.
+
+### B. PDF and study material
+104. **P1** Expandable margins on PDFs: widen a PDF page sideways to annotate without covering the text.
+105. **P1** Anchored excerpts: cut a region of a PDF, drop it on another page as an excerpt; tapping the excerpt jumps back to the exact source location.
+106. **P1** Synchronised PDF ↔ notes view: the PDF on one side and the linked note pages on the other; turning a PDF page follows on the notes side.
+107. **P2** Floating reference window: another page or notebook stays visible while you write.
+108. **P3** Read the PDF text aloud with the system's speech synthesis, offline.
+109. **P3** Reading ruler on PDFs: highlights the line being read (accessibility, dyslexia).
+
+### C. Rich native Obsidian elements
+110. **P1** Typed LaTeX formulas rendered with Obsidian's maths engine, placed on the page.
+111. **P2** Markdown boxes on the page: real Markdown (lists, callouts, links) rendered by Obsidian.
+112. **P2** Back of the page: each page can have a Markdown note as its back side; flip the page to type.
+113. **P2** Function plots: type f(x) and get axes and curve as editable vector shapes.
+114. **P1** Paste from the system clipboard: images and text become page elements.
+
+### D. Study and planning
+115. **P1** Class timetable: define the weekly timetable; new pages are tagged with the course in progress, and opening the app during a class opens that course's notebook on a new page.
+116. **P1** Exam review plan: set an exam date per notebook and its pages are spread over the remaining days for review.
+117. **P2** Review coverage map: thumbnails coloured from "never reviewed" to "reviewed often".
+118. **P2** Planner generator: a planner notebook with dated month, week and day pages linked to each other.
+119. **P1** Page tags: tags on single pages, filterable in the navigator and in search.
+120. **P2** Smart collections in the library: saved rules (tag + folder + period + favourite).
+
+### E. Versions, review, collaboration
+121. **P2** Visual version diff: additions in green, removals in red, between the current version and a snapshot.
+122. **P1** Merge conflicted copies created by Google Drive or OneDrive: compare both copies and merge the strokes (by id) without losing anything.
+123. **P3** Stroke authors in notebooks shared through a common folder: filter and colour by person or device.
+124. **P2** Lock a finished page.
+125. **P1** Last position shared across devices: reopen on the phone at the page you were on with the tablet (stored in the notebook, so it travels with the sync).
+
+### F. Sync and storage
+126. **P1** Optional Google Drive / OneDrive connector inside the plugin (opt-in only): syncs the notebooks folder without external apps.
+127. **P2** Scheduled backups to an external folder or to Drive (e.g. a weekly zip).
+128. **P2** Storage manager: size of each notebook, duplicate or unused assets, downscaling of heavy images.
+
+### G. Navigation and workflow
+129. **P3** Search by drawing: sketch a shape and find pages with similar drawings (geometric descriptors, no AI).
+130. **P2** Semantic zoom: when zoomed out, headings and excerpts are shown large for orientation.
+131. **P3** Arrows linking regions of different pages, visible in the side-by-side view.
+132. **P2** Live lecture mode: a timer and quick buttons ("new page", "important moment"); each mark becomes a timestamped bookmark.
+133. **P2** Course dashboard page that updates itself: next exam, pages due for review, recent notebooks.
+134. **P2** Pen sets per subject, loaded automatically with the notebook (e.g. maths or languages).
+135. **P2** Mirror page: a page that always shows the current content of a page in another notebook (transclusion).
+136. **P3** Handout printing: several pages per sheet with space for notes.
+137. **P2** Templates with fields: title, date and topic filled by hand or keyboard become properties of the companion note.
+138. **P3** Progressive reveal in presentation mode: a page is shown piece by piece.
+139. **P2** Drawn command gestures: e.g. "?" opens search, a down arrow adds a page; configurable.
+140. **P1** Guided repair of damaged notebooks: recovers valid pages and strokes from an unreadable file into a new notebook, never touching the original.
+
 ### Sync with Google Drive or OneDrive (decision 2026-10-29)
 
 The vault will be synchronised through Google Drive or OneDrive (for example with a folder-sync app on Android or a sync plugin), not Obsidian Sync. Consequences for the design:
