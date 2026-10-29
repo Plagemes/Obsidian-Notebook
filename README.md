@@ -72,7 +72,7 @@ Enable USB debugging on the device, connect it to a PC with Chrome and open `chr
 
 A `.notebook` file is JSON with `format: "obsidian-notebook"` and an integer `version`. Coordinates are in typographic points (A4 = 595.28 × 841.89 pt). Details and the reasoning behind the format choice are in [docs/architecture.md](docs/architecture.md).
 
-Backups of unreadable or conflicting files are written to `Notebooks/_backup/` as `.bak` files (Obsidian does not show them in the file explorer; open the folder with a file manager).
+Backups of unreadable files, of versions changed elsewhere (conflicts) and of changes that could not be saved are written to `Notebooks/_backup/` as `.bak` files (Obsidian does not show them in the file explorer; open the folder with a file manager).
 
 Because the extension is custom, Obsidian's search, tags, backlinks and graph do not see notebooks yet (planned for M4, see [docs/roadmap.md](docs/roadmap.md)).
 

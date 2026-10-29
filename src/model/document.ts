@@ -35,7 +35,7 @@ export function createDocument(now: Date = new Date()): NotebookDocument {
 
 /** Rounds like the file does: x/y to 0.01 pt, pressure to 0.001 within [0, 1]. */
 export function quantizePoint(x: number, y: number, pressure: number): Point {
-	const p = Math.min(1, Math.max(0, pressure));
+	const p = Number.isFinite(pressure) ? Math.min(1, Math.max(0, pressure)) : 0.5;
 	return [Math.round(x * 100) / 100, Math.round(y * 100) / 100, Math.round(p * 1000) / 1000];
 }
 

@@ -128,8 +128,8 @@ export class NotebookView extends FileView {
 			if (f === this.file && this.session) void this.session.handleExternalChange();
 		}));
 		this.registerEvent(this.app.vault.on("delete", (f) => {
-			// The user deleted the notebook: do not try to write it back.
-			if (f === this.file) this.session?.dispose();
+			// Never write a deleted notebook back; unsaved changes go to a backup.
+			if (f === this.file) void this.session?.markDeleted();
 		}));
 
 		this.scope = new Scope(this.app.scope);
@@ -139,7 +139,7 @@ export class NotebookView extends FileView {
 	}
 
 	async onClose(): Promise<void> {
-		await this.flushNow();
+		await this.closeSession();
 		this.controller?.destroy();
 		this.controller = null;
 		this.renderer?.destroy();
@@ -153,18 +153,28 @@ export class NotebookView extends FileView {
 		this.lastBackupPath = null;
 		this.fitMode = true;
 		this.viewport = { scale: 1, offsetX: 0, offsetY: 0 };
-		const session = new DocumentSession(
+		// Callbacks of a session that is no longer the current one (file switched while loading) are ignored.
+		const current = () => this.session === session;
+		const session: DocumentSession = new DocumentSession(
 			new VaultDocumentIO(this.app, file, () => backupFolder(this.host.settings)),
 			{
-				onLoaded: (doc, mode, problem) => this.onDocumentLoaded(doc, mode, problem),
-				onSaveState: (state) => this.showSaveState(state),
-				onBackup: (path, reason) => {
-					this.lastBackupPath = path;
-					new Notice(t(reason === "conflict" ? "notice.conflict" : "notice.backup", { path }), 8000);
-					if (this.session?.mode !== "ok") this.showProblem();
+				onLoaded: (doc, mode, problem) => {
+					if (current()) this.onDocumentLoaded(doc, mode, problem);
 				},
-				onError: (message) => this.showError(message),
+				onSaveState: (state) => {
+					if (current()) this.showSaveState(state);
+				},
+				onBackup: (path, reason) => {
+					new Notice(t(reason === "conflict" ? "notice.conflict" : "notice.backup", { path }), 8000);
+					if (!current()) return;
+					this.lastBackupPath = path;
+					if (session.mode === "broken" || session.mode === "readonly") this.showProblem();
+				},
+				onError: (message) => {
+					if (current()) this.showError(message);
+				},
 			},
+			{ busy: () => this.active !== null || this.erasing !== null },
 		);
 		this.session = session;
 		try {
@@ -175,9 +185,7 @@ export class NotebookView extends FileView {
 	}
 
 	async onUnloadFile(file: TFile): Promise<void> {
-		await this.flushNow();
-		this.session?.dispose();
-		this.session = null;
+		await this.closeSession();
 		this.history.clear();
 		this.renderer?.setPage(null);
 		await super.onUnloadFile(file);
@@ -187,6 +195,22 @@ export class NotebookView extends FileView {
 	async flushNow(): Promise<void> {
 		this.controller?.finishActiveStroke();
 		await this.session?.flush();
+	}
+
+	/** Final flush (with retries and an "unsaved" backup as last resort), then detaches the session. */
+	private async closeSession(): Promise<void> {
+		this.controller?.finishActiveStroke();
+		const session = this.session;
+		if (!session) return;
+		try {
+			// Obsidian may close the view for a deleted file before our 'delete' handler runs.
+			const file = this.file;
+			if (file && !this.app.vault.getAbstractFileByPath(file.path)) await session.markDeleted();
+			else await session.flushForClose();
+		} finally {
+			session.dispose();
+			if (this.session === session) this.session = null;
+		}
 	}
 
 	applySettings(settings: NotebookSettings): void {
@@ -328,6 +352,7 @@ export class NotebookView extends FileView {
 		const page = this.currentPage();
 		if (!page || !this.editable()) return false;
 		const [x, y] = this.toPage(sample);
+		if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
 		if (x < -PAGE_TOLERANCE || y < -PAGE_TOLERANCE || x > page.width + PAGE_TOLERANCE || y > page.height + PAGE_TOLERANCE) {
 			return false;
 		}
@@ -351,7 +376,7 @@ export class NotebookView extends FileView {
 		if (this.erasing) {
 			for (const s of samples) {
 				const [x, y] = this.toPage(s);
-				this.eraseAlong(x, y);
+				if (Number.isFinite(x) && Number.isFinite(y)) this.eraseAlong(x, y);
 			}
 			return;
 		}
@@ -360,6 +385,8 @@ export class NotebookView extends FileView {
 		const points = active.stroke.points;
 		for (const s of samples) {
 			const [x, y] = this.toPage(s);
+			// A single non-finite point would make every later save fail validation.
+			if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
 			const p = this.pressure.sample(s.pointerType, s.pressure, s.x, s.y, s.t);
 			const q = quantizePoint(x, y, p);
 			const last = points[points.length - 1];
@@ -370,10 +397,9 @@ export class NotebookView extends FileView {
 			points.push(q);
 		}
 		const lastP = points[points.length - 1]?.[2] ?? 0.5;
-		active.predicted = predicted.map((s) => {
-			const [x, y] = this.toPage(s);
-			return [x, y, lastP];
-		});
+		active.predicted = predicted
+			.map((s): Point => [...this.toPage(s), lastP])
+			.filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
 		this.pushLive();
 	}
 

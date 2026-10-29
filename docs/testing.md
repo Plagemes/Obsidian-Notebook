@@ -21,7 +21,8 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Undo/redo (command stack) | ✅ | ✅ | | | |
 | One-finger pan, two-finger pinch zoom, wheel/Ctrl+wheel | ✅ (basic) | ✅ zoom/pan maths | | ✅ | smooth zoom in M2 |
 | Autosave (1.5 s debounce, 10 s max wait) | ✅ | ✅ | | | |
-| Flush on view close, file switch, plugin unload, `visibilitychange`, `pagehide` | ✅ | ❌ (needs Obsidian) | | | |
+| Flush on view close, file switch, plugin unload, `visibilitychange`, `pagehide` | ✅ | ✅ session logic; ❌ Obsidian events | | | |
+| `unsaved` backup if writing keeps failing on close; deleted files never rewritten | ✅ | ✅ | | | |
 | Stroke in progress kept when the app goes to background | ✅ | ❌ | | | |
 | Re-validation before every write | ✅ | ✅ | | | |
 | Unreadable files never overwritten + backup copy | ✅ | ✅ | | | |
@@ -39,11 +40,15 @@ Run on 2026-10-29 (Windows, Node 24):
 
 | Command | Result |
 |---|---|
-| `npm test` | 8 files, 91 tests passed |
+| `npm test` | 8 files, 101 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: no errors |
 | `npm run build` | ok; `main.js` ~48 KB; `check-bundle: ok (requires found: obsidian)` |
 
-Covered by tests: serialization round-trip and determinism, rejection of corrupt files (truncated, garbage, wrong format, bad points/colours/ids, future version), migration v0→v1, undo/redo of adds and multi-stroke erases, eraser hit test (including fast movements and dots), screen↔page transform at 7 zoom levels, fit-width, zoom around a point, pan clamping, palm-rejection routing, pressure detection, and the save session (debounce, max wait, no writes on broken/readonly files, conflict backups, echo detection, retry after a failed write, refusal to write a document that fails re-validation).
+Covered by tests: serialization round-trip and determinism, rejection of corrupt files (truncated, garbage, wrong format, bad points/colours/ids, future version), migration v0→v1, undo/redo of adds and multi-stroke erases, eraser hit test (including fast movements and dots), screen↔page transform at 7 zoom levels, fit-width, zoom around a point, pan clamping, palm-rejection routing, pressure detection, and the save session (debounce, max wait, no writes on broken/readonly files, conflict backups, echo detection, retry after a failed write, refusal to write a document that fails re-validation, backup-before-overwrite ordering when another writer races the save, no overwrite when the backup fails, external-change checks queued after flushes, close-time retries with an `unsaved` backup, deleted files never written, stale sessions silent).
+
+Independent review: the data-safety code (session, Vault I/O, serializer, view lifecycle, undo) was reviewed by a separate agent that did not write it; its 7 findings (3 medium, 4 low, no corruption) were fixed and covered by the tests above.
+
+Measured on the PC (not on Android): a 10,000-stroke notebook (268k points) is 6.8 MB; parse 156 ms, serialize 98 ms. Each save serializes and re-validates the whole file, so on a slow tablet very large notebooks may freeze the UI briefly while saving (M2 benchmarks).
 
 Not covered automatically: everything that needs Obsidian or a real browser (DOM, canvas, Pointer Events, Vault API, view lifecycle). That is what the manual protocol is for.
 
@@ -84,3 +89,13 @@ For each step note **pass / fail / notes** in the table at the end.
 ## Quick check — Windows
 
 Mouse: draw, erase, undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scroll, Ctrl+wheel zoom, resize the window (the page refits), close and reopen the notebook. With a pen tablet or Surface pen: pressure and eraser end (`buttons & 32`).
+
+## Known limitations (v0.1)
+
+- Nothing has been verified on Android hardware yet.
+- One page per notebook; zoom/pan are basic (smooth zoom, multiple pages and virtualization are M2).
+- Every save rewrites and re-validates the whole file: fine for normal notes, possibly a short freeze for very large notebooks on slow tablets.
+- If Android kills Obsidian without a `visibilitychange` event, the last ~1.5 s of changes (up to 10 s while writing continuously) can be lost.
+- When another writer changes the file in the instant between our read and our write, the attempt is aborted by writing back the same content; this may bump the file's modification time (no data change).
+- The S Pen side button is not mapped; only the standard `buttons & 32` eraser is handled.
+- Notebooks are invisible to Obsidian search, tags, backlinks and graph (M4).

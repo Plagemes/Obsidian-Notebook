@@ -55,10 +55,15 @@ export class VaultDocumentIO implements DocumentIO {
 		await ensureFolder(this.app, folder);
 		const hash = contentHash(content);
 		const base = this.file.basename;
-		const existing = this.app.vault.getFolderByPath(folder)?.children
-			.find((f) => f instanceof TFile && f.name.startsWith(`${base} `) && f.name.endsWith(` ${hash}.bak`));
-		if (existing) return null;
-		const path = normalizePath(`${folder}/${base} ${timestamp(new Date())} ${reason} ${hash}.bak`);
+		const sameHash = (this.app.vault.getFolderByPath(folder)?.children ?? [])
+			.filter((f): f is TFile => f instanceof TFile && f.name.startsWith(`${base} `) && f.name.endsWith(` ${hash}.bak`));
+		// The hash only narrows the search: skip the backup only if the content really is identical.
+		for (const f of sameHash) {
+			if ((await this.app.vault.read(f)) === content) return null;
+		}
+		const stem = `${folder}/${base} ${timestamp(new Date())} ${reason}`;
+		let path = normalizePath(`${stem} ${hash}.bak`);
+		for (let i = 2; this.app.vault.getAbstractFileByPath(path); i++) path = normalizePath(`${stem} ${i} ${hash}.bak`);
 		await this.app.vault.create(path, content);
 		return path;
 	}

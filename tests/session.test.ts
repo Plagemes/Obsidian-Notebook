@@ -6,13 +6,21 @@ import { line, sampleDocument } from "./helpers";
 
 /** In-memory file with the same contract as the Vault-backed IO. */
 class FakeIO implements DocumentIO {
+	/** Contents actually changed by process(). */
 	writes: string[] = [];
 	backups: Array<{ content: string; reason: BackupReason }> = [];
-	failNextWrite = false;
+	log: string[] = [];
+	failWrites = 0;
+	failBackups = false;
 	/** Simulates another writer (Sync) changing the file between read and process. */
 	beforeProcess: (() => void) | null = null;
+	keepBeforeProcess = false;
 
 	constructor(public content: string) {}
+
+	set failNextWrite(v: boolean) {
+		this.failWrites = v ? 1 : 0;
+	}
 
 	async read(): Promise<string> {
 		return this.content;
@@ -20,18 +28,24 @@ class FakeIO implements DocumentIO {
 
 	async process(fn: (current: string) => string): Promise<void> {
 		this.beforeProcess?.();
-		this.beforeProcess = null;
-		if (this.failNextWrite) {
-			this.failNextWrite = false;
+		if (!this.keepBeforeProcess) this.beforeProcess = null;
+		if (this.failWrites > 0) {
+			this.failWrites--;
 			throw new Error("disk full");
 		}
-		this.content = fn(this.content);
-		this.writes.push(this.content);
+		const next = fn(this.content);
+		if (next !== this.content) {
+			this.content = next;
+			this.writes.push(next);
+			this.log.push("write");
+		}
 	}
 
 	async backup(content: string, reason: BackupReason): Promise<string | null> {
+		if (this.failBackups) throw new Error("backup folder not writable");
 		if (this.backups.some((b) => b.content === content)) return null;
 		this.backups.push({ content, reason });
+		this.log.push(`backup:${reason}`);
 		return `backup-${this.backups.length}.bak`;
 	}
 }
@@ -212,6 +226,145 @@ describe("DocumentSession", () => {
 		expect(await s.flush()).toBe(false);
 		expect(io.writes).toHaveLength(0);
 		expect(s.dirty).toBe(true);
+	});
+
+	it("backs up a racing external version before overwriting it", async () => {
+		const io = new FakeIO(serialize(sampleDocument(1)));
+		const s = new DocumentSession(io);
+		await s.load();
+		const sneaky = serialize(sampleDocument(2));
+		io.beforeProcess = () => (io.content = sneaky);
+		s.doc!.pages[0]!.strokes.push(line(0, 0, 5, 5));
+		s.markChanged();
+		expect(await s.flush()).toBe(true);
+		expect(io.log).toEqual(["backup:conflict", "write"]);
+	});
+
+	it("gives up without overwriting if the file keeps changing", async () => {
+		const io = new FakeIO(serialize(sampleDocument(1)));
+		const s = new DocumentSession(io, { onError: vi.fn() });
+		await s.load();
+		let n = 0;
+		io.keepBeforeProcess = true;
+		io.beforeProcess = () => (io.content = serialize(sampleDocument(2 + (n++ % 5))));
+		s.doc!.pages[0]!.strokes.push(line(0, 0, 5, 5));
+		s.markChanged();
+		expect(await s.flush()).toBe(false);
+		expect(io.writes).toHaveLength(0);
+		expect(s.dirty).toBe(true);
+	});
+
+	it("does not overwrite an external version it could not back up", async () => {
+		const io = new FakeIO(serialize(sampleDocument(1)));
+		const s = new DocumentSession(io, { onError: vi.fn() });
+		await s.load();
+		const external = serialize(sampleDocument(3));
+		io.content = external;
+		io.failBackups = true;
+		s.doc!.pages[0]!.strokes.push(line(0, 0, 5, 5));
+		s.markChanged();
+		expect(await s.flush()).toBe(false);
+		expect(io.content).toBe(external);
+	});
+
+	it("an external change seen during a flush is checked after it and is not reloaded over newer local data", async () => {
+		const io = new FakeIO(serialize(sampleDocument(1)));
+		const s = new DocumentSession(io);
+		await s.load();
+		const external = serialize(sampleDocument(4));
+		// Sync writes between our pre-read and our write; its 'modify' event arrives meanwhile.
+		io.beforeProcess = () => {
+			io.content = external;
+			void s.handleExternalChange();
+		};
+		s.doc!.pages[0]!.strokes.push(line(0, 0, 5, 5));
+		s.markChanged();
+		await s.flush();
+		const verdict = await s.handleExternalChange();
+		expect(verdict).toBe("echo");
+		expect(s.doc!.pages[0]!.strokes).toHaveLength(2);
+		expect(io.content).toBe(serialize(s.doc!));
+		expect(io.backups.map((b) => b.content)).toContain(external);
+	});
+
+	it("flushForClose retries transient failures", async () => {
+		const io = new FakeIO(serialize(sampleDocument(0)));
+		const s = new DocumentSession(io, { onError: vi.fn() });
+		await s.load();
+		s.doc!.pages[0]!.strokes.push(line(0, 0, 5, 5));
+		s.markChanged();
+		io.failWrites = 2;
+		expect(await s.flushForClose()).toBe(true);
+		expect(s.dirty).toBe(false);
+		expect(io.backups).toHaveLength(0);
+	});
+
+	it("flushForClose keeps unsaved changes as a backup when writing keeps failing", async () => {
+		const io = new FakeIO(serialize(sampleDocument(0)));
+		const s = new DocumentSession(io, { onError: vi.fn() });
+		await s.load();
+		s.doc!.pages[0]!.strokes.push(line(0, 0, 5, 5));
+		s.markChanged();
+		io.failWrites = 99;
+		expect(await s.flushForClose()).toBe(true);
+		expect(io.backups).toHaveLength(1);
+		expect(io.backups[0]!.reason).toBe("unsaved");
+		const kept = parse(io.backups[0]!.content);
+		expect(kept.ok && kept.doc.pages[0]!.strokes).toHaveLength(1);
+	});
+
+	it("a deleted file is never written again; unsaved changes go to a backup", async () => {
+		const io = new FakeIO(serialize(sampleDocument(1)));
+		const s = new DocumentSession(io);
+		await s.load();
+		s.doc!.pages[0]!.strokes.push(line(0, 0, 5, 5));
+		s.markChanged();
+		await s.markDeleted();
+		expect(s.mode).toBe("deleted");
+		await s.flush();
+		await s.flushForClose();
+		await vi.advanceTimersByTimeAsync(60_000);
+		expect(io.writes).toHaveLength(0);
+		expect(io.backups.map((b) => b.reason)).toEqual(["unsaved"]);
+		expect(await s.handleExternalChange()).toBe("ignored");
+	});
+
+	it("does not reload an external change while a gesture is in progress", async () => {
+		const io = new FakeIO(serialize(sampleDocument(1)));
+		let busy = true;
+		const s = new DocumentSession(io, {}, { busy: () => busy });
+		await s.load();
+		const external = serialize(sampleDocument(3));
+		io.content = external;
+		expect(await s.handleExternalChange()).toBe("kept-local");
+		busy = false;
+		s.doc!.pages[0]!.strokes.push(line(0, 0, 5, 5)); // the gesture is committed
+		s.markChanged();
+		await s.flush();
+		expect(io.backups.map((b) => b.content)).toEqual([external]);
+		expect(parse(io.content).ok).toBe(true);
+	});
+
+	it("stops before writing if the file is deleted during a flush", async () => {
+		const io = new FakeIO(serialize(sampleDocument(1)));
+		const s = new DocumentSession(io);
+		await s.load();
+		s.doc!.pages[0]!.strokes.push(line(0, 0, 5, 5));
+		s.markChanged();
+		const flushing = s.flush();
+		void s.markDeleted();
+		await flushing;
+		expect(io.writes).toHaveLength(0);
+	});
+
+	it("a session disposed while loading does not report the load", async () => {
+		const io = new FakeIO(serialize(sampleDocument(1)));
+		const loaded = vi.fn();
+		const s = new DocumentSession(io, { onLoaded: loaded });
+		const p = s.load();
+		s.dispose();
+		await p;
+		expect(loaded).not.toHaveBeenCalled();
 	});
 
 	it("does not reschedule after dispose", async () => {

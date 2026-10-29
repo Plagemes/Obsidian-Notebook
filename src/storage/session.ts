@@ -10,14 +10,15 @@ export interface DocumentIO {
 	backup(content: string, reason: BackupReason): Promise<string | null>;
 }
 
-export type BackupReason = "unreadable" | "future-version" | "conflict";
+export type BackupReason = "unreadable" | "future-version" | "conflict" | "unsaved";
 
 /**
  * - `ok`: the document is editable and saved automatically.
  * - `readonly`: written by a newer format version; never written.
  * - `broken`: unreadable (invalid JSON or schema, empty); never written.
+ * - `deleted`: the file was deleted; never written.
  */
-export type SessionMode = "loading" | "ok" | "readonly" | "broken";
+export type SessionMode = "loading" | "ok" | "readonly" | "broken" | "deleted";
 
 export type SaveState = "saved" | "pending" | "saving" | "error";
 
@@ -34,11 +35,22 @@ export interface SessionOptions {
 	maxWaitMs?: number;
 	retryMs?: number;
 	now?: () => Date;
+	/** True while the user is in the middle of a stroke or erase gesture that is not in `doc` yet. */
+	busy?: () => boolean;
 }
+
+/** Attempts per flush when another writer keeps changing the file between our read and our write. */
+const RACE_ATTEMPTS = 3;
+/** Flush attempts when the view closes, before falling back to an "unsaved" backup. */
+const CLOSE_ATTEMPTS = 3;
 
 /**
  * Lifecycle of an open notebook: load, change tracking, debounced save, flush and conflicts.
- * Invariant: an unreadable file is never overwritten.
+ *
+ * Invariants:
+ * - an unreadable (or newer-version, or deleted) file is never written;
+ * - content found on disk that we did not write is backed up *before* it is overwritten;
+ * - disk operations (flushes and external-change checks) run one at a time, in order.
  */
 export class DocumentSession {
 	mode: SessionMode = "loading";
@@ -50,32 +62,34 @@ export class DocumentSession {
 	private savedRevision = 0;
 	/** Last content read from or written to disk by this session. */
 	private diskContent: string | null = null;
-	/** Content of a write in progress, to recognise its echo. */
-	private writing: string | null = null;
 	private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 	private maxWaitTimer: ReturnType<typeof setTimeout> | null = null;
-	private chain: Promise<boolean> = Promise.resolve(true);
+	private chain: Promise<unknown> = Promise.resolve();
 	private disposed = false;
 
 	private readonly debounceMs: number;
 	private readonly maxWaitMs: number;
 	private readonly retryMs: number;
 	private readonly now: () => Date;
+	private readonly busy: () => boolean;
 
 	constructor(private readonly io: DocumentIO, private readonly events: SessionEvents = {}, options: SessionOptions = {}) {
 		this.debounceMs = options.debounceMs ?? 1500;
 		this.maxWaitMs = options.maxWaitMs ?? 10000;
 		this.retryMs = options.retryMs ?? 5000;
 		this.now = options.now ?? (() => new Date());
+		this.busy = options.busy ?? (() => false);
 	}
 
 	get dirty(): boolean {
 		return this.revision !== this.savedRevision;
 	}
 
-	async load(): Promise<void> {
-		const content = await this.io.read();
-		await this.applyDiskContent(content);
+	load(): Promise<void> {
+		return this.enqueue(async () => {
+			const content = await this.io.read();
+			await this.applyDiskContent(content);
+		});
 	}
 
 	/** Call after every change to `doc`. */
@@ -88,31 +102,60 @@ export class DocumentSession {
 		if (!this.maxWaitTimer) this.maxWaitTimer = setTimeout(() => void this.flush(), this.maxWaitMs);
 	}
 
-	/** Writes pending changes now. Flushes are serialised; resolves to false if the write did not happen. */
+	/** Writes pending changes now. Resolves to false if they could not be written. */
 	flush(): Promise<boolean> {
 		this.clearTimers();
-		this.chain = this.chain.then(() => this.doFlush(), () => this.doFlush());
-		return this.chain;
+		return this.enqueue(() => this.doFlush());
 	}
 
-	/** The file changed on disk (Sync, another device, another app). */
-	async handleExternalChange(): Promise<"echo" | "reloaded" | "kept-local"> {
-		if (this.mode === "loading" || this.disposed) return "echo";
-		const content = await this.io.read();
-		if (content === this.diskContent || content === this.writing) return "echo";
-		// Local changes win; the external version is backed up by the next flush.
-		if (this.mode === "ok" && this.dirty) return "kept-local";
-		await this.applyDiskContent(content);
-		return "reloaded";
+	/**
+	 * Flush for a closing view: retries a few times and, if the changes still cannot be written,
+	 * keeps them as an "unsaved" backup. Resolves to true if nothing was left only in memory.
+	 */
+	async flushForClose(): Promise<boolean> {
+		for (let i = 0; i < CLOSE_ATTEMPTS; i++) {
+			await this.flush();
+			if (this.mode !== "ok" || !this.dirty) return true;
+		}
+		return this.backupUnsaved();
 	}
 
-	/** Stops timers. Call flush() first if pending changes must be written. */
+	/** The file changed on disk (Sync, another device, another app). Runs after any flush in progress. */
+	handleExternalChange(): Promise<"echo" | "reloaded" | "kept-local" | "ignored"> {
+		return this.enqueue(async () => {
+			if (this.disposed || this.mode === "loading" || this.mode === "deleted") return "ignored" as const;
+			const content = await this.io.read();
+			if (content === this.diskContent) return "echo" as const;
+			// Local changes win; the next flush backs up the external version before overwriting it.
+			if (this.mode === "ok" && (this.dirty || this.busy())) return "kept-local" as const;
+			await this.applyDiskContent(content);
+			return "reloaded" as const;
+		});
+	}
+
+	/** The file was deleted: never write it again, but keep unsaved changes as a backup. */
+	async markDeleted(): Promise<void> {
+		this.clearTimers();
+		const hadUnsaved = this.mode === "ok" && this.dirty;
+		this.mode = "deleted";
+		if (hadUnsaved) await this.backupUnsaved();
+		this.dispose();
+	}
+
+	/** Stops timers and callbacks. Call flushForClose() first if pending changes must be written. */
 	dispose(): void {
 		this.disposed = true;
 		this.clearTimers();
 	}
 
+	private enqueue<T>(task: () => Promise<T>): Promise<T> {
+		const run = this.chain.then(task, task);
+		this.chain = run.catch(() => undefined);
+		return run;
+	}
+
 	private async applyDiskContent(content: string): Promise<void> {
+		if (this.disposed) return;
 		this.diskContent = content;
 		this.revision = 0;
 		this.savedRevision = 0;
@@ -131,12 +174,13 @@ export class DocumentSession {
 				const reason: BackupReason = this.mode === "readonly" ? "future-version" : "unreadable";
 				try {
 					const path = await this.io.backup(content, reason);
-					if (path) this.events.onBackup?.(path, reason);
+					if (path && !this.disposed) this.events.onBackup?.(path, reason);
 				} catch (e) {
 					this.events.onError?.(`Could not create a backup: ${(e as Error).message}`);
 				}
 			}
 		}
+		if (this.disposed) return;
 		this.events.onLoaded?.(this.doc, this.mode, this.problem);
 		this.events.onSaveState?.("saved");
 	}
@@ -159,26 +203,32 @@ export class DocumentSession {
 		}
 
 		try {
-			// Back up an externally modified file *before* overwriting it.
-			const current = await this.io.read();
-			if (current !== this.diskContent && current.trim().length > 0) await this.backupConflict(current);
-
-			let changedMeanwhile: string | null = null;
-			this.writing = next;
-			await this.io.process((latest) => {
-				if (latest !== current && latest !== this.diskContent && latest.trim().length > 0) changedMeanwhile = latest;
-				return next;
-			});
+			let written = false;
+			for (let attempt = 0; attempt < RACE_ATTEMPTS && !written; attempt++) {
+				const current = await this.io.read();
+				// Someone else wrote the file: keep their version before replacing it.
+				if (current !== this.diskContent && current.trim().length > 0) await this.backupConflict(current);
+				// Deleted or disposed meanwhile: never touch the file again.
+				if (this.mode !== "ok" || this.disposed) return true;
+				let raced = false;
+				await this.io.process((latest) => {
+					if (latest !== current) {
+						// Changed again since our read: leave it as is, back it up on the next attempt.
+						raced = true;
+						return latest;
+					}
+					return next;
+				});
+				written = !raced;
+			}
+			if (!written) throw new Error("the file keeps changing on disk");
 			this.diskContent = next;
 			this.savedRevision = Math.max(this.savedRevision, revision);
-			if (changedMeanwhile !== null) await this.backupConflict(changedMeanwhile);
 		} catch (e) {
 			this.events.onSaveState?.("error");
 			this.events.onError?.(`Save failed: ${(e as Error).message}. Retrying.`);
 			if (!this.disposed) this.debounceTimer = setTimeout(() => void this.flush(), this.retryMs);
 			return false;
-		} finally {
-			this.writing = null;
 		}
 
 		if (this.dirty) {
@@ -197,6 +247,18 @@ export class DocumentSession {
 		} catch (e) {
 			this.events.onError?.(`Could not back up the external version: ${(e as Error).message}`);
 			throw e;
+		}
+	}
+
+	private async backupUnsaved(): Promise<boolean> {
+		if (!this.doc) return false;
+		try {
+			const path = await this.io.backup(serialize(this.doc), "unsaved");
+			if (path) this.events.onBackup?.(path, "unsaved");
+			return true;
+		} catch (e) {
+			this.events.onError?.(`Unsaved changes could not be written or backed up: ${(e as Error).message}`);
+			return false;
 		}
 	}
 

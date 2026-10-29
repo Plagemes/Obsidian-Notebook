@@ -11,6 +11,6 @@ First development version. Not yet verified on Android hardware (see `docs/testi
 - Pen input with Pointer Events: coalesced events, optional predicted points, pressure with simulated fallback, basic palm rejection, optional finger drawing.
 - Pen with 4 colours and 3 widths, whole-stroke eraser, command-based undo/redo.
 - Autosave with debounce and max wait; flush on view close, file switch, plugin unload, `visibilitychange` and `pagehide`.
-- Data safety: re-validation before every write, unreadable files never overwritten and backed up, newer format versions opened read-only, conflict backups when the file changes on disk.
+- Data safety: re-validation before every write, unreadable files never overwritten and backed up, newer format versions opened read-only, conflict backups taken before overwriting a file changed on disk, retries on close with an "unsaved" backup as last resort, deleted files never rewritten.
 - English UI with Italian translation.
 - Build check that `main.js` requires nothing but `obsidian`; stress-notebook generator script.

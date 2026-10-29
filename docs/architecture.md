@@ -91,22 +91,27 @@ tests/                    vitest on model/, ink/ and storage/session.ts
 
 ## 4. Save flow (rule 4: zero data loss)
 
-Session state: `doc`, `revision` (incremented on every change), `savedRevision`, `diskContent` (last content read or written by us), `mode` = `ok` | `readonly` (future version) | `broken` (unreadable).
+Session state: `doc`, `revision` (incremented on every change), `savedRevision`, `diskContent` (last content read or written by us), `mode` = `ok` | `readonly` (future version) | `broken` (unreadable) | `deleted`. **All disk operations of a session (load, flush, external-change check) run one at a time through a single queue**, so a check never interleaves with a write.
 
 **Open**
 1. `vault.read(file)` → `parse()`.
 2. Success → `mode = ok`, any migration happens in memory (the migrated file is rewritten only on the first change).
-3. Failure (invalid JSON, invalid schema, empty file) → `mode = broken`; future version → `mode = readonly`. In both cases: **a backup of the raw content is created** in `<notebooks folder>/_backup/<name> <date-time> <reason> <hash>.bak` (no duplicates: the content hash is in the name), the view shows a message and **no write path is active**.
+3. Failure (invalid JSON, invalid schema, empty file) → `mode = broken`; future version → `mode = readonly`. In both cases: **a backup of the raw content is created** in `<notebooks folder>/_backup/<name> <date-time> <reason> <hash>.bak` (no duplicates: a backup is skipped only if a file with the same hash in its name has exactly the same content), the view shows a message and **no write path is active**.
 
 **Change** → `revision++` → scheduled save: 1.5 s debounce from the last change, at most 10 s of waiting during continuous writing.
 
 **Flush** (debounce, view close `onUnloadFile`/`onClose`, plugin `onunload`, `visibilitychange` → hidden, `pagehide`, `workspace 'quit'` best effort):
 1. If `mode ≠ ok` or there are no changes → nothing.
 2. `next = serialize(doc)`; **re-validation**: `parse(next)` must succeed and `serialize(parse(next)) === next`. If it fails: no write, warning, changes kept in memory.
-3. `vault.process(file, current => …)` (atomic): if `current ≠ diskContent` the file changed outside of us (Sync, another device) → the `current` content is kept and saved as a `conflict` backup right after the write, and the user is notified.
-4. `diskContent = next`, `savedRevision = revision` captured at step 2. Flushes are serialized (never two parallel writes); changes arriving during a flush schedule another one.
+3. `current = vault.read(file)`; if `current ≠ diskContent` the file changed outside of us (Sync, another device) → `current` is saved as a `conflict` backup **before** anything is overwritten, and the user is notified. If the backup fails, the write does not happen.
+4. `vault.process(file, latest => …)` (atomic): if `latest ≠ current` the file changed again since step 3 → it is returned unchanged (nothing overwritten) and steps 3–4 are repeated, at most 3 times; then the save fails and is retried later.
+5. `diskContent = next`, `savedRevision = revision` captured at step 2. Changes arriving during a flush schedule another one. A failed write keeps the changes in memory and retries after 5 s.
 
-**External modification** (`vault.on('modify')` on the open file): if the content matches `diskContent` it is the echo of our own write → ignored. Otherwise, with no pending local changes → reload the document (if unreadable → `broken` + backup, without overwriting); with pending changes → ours are kept and on flush the external content ends up in the `conflict` backup.
+**Closing a view or switching file** (`onClose`/`onUnloadFile`): the stroke in progress is committed, then the flush is attempted up to 3 times; if the changes still cannot be written they are saved as an `unsaved` backup before the session is released.
+
+**Deleted file**: the session stops writing (`mode = deleted`); unsaved changes, if any, go to an `unsaved` backup.
+
+**External modification** (`vault.on('modify')` on the open file): the check is queued after any flush in progress and re-reads the file; if the content matches `diskContent` it is the echo of our own write → ignored. Otherwise, with no pending local changes → reload the document (if unreadable → `broken` + backup, without overwriting); with pending changes → ours are kept and on flush the external content ends up in the `conflict` backup.
 
 **Stroke in progress**: on `visibilitychange`/`pagehide`/`pointercancel` the stroke in progress is closed and saved as a normal stroke before the flush, so leaving the app mid-writing does not lose it.
 
