@@ -143,6 +143,9 @@ src/
     hit-test.ts           whole-stroke eraser (segment-segment distance + bounding box)
     segment-erase.ts      segment eraser: cuts a stroke into the runs that survive
     lasso.ts              point-in-polygon selection, selection bounds, stroke transform
+    restyle.ts            restyle selection: colour and width of selected strokes (and text colour) as one Batch; highlighters keep their palette
+    clipboard.ts          copy/cut/paste/duplicate of a selection: deep-copied clip, new ids, paste placement, one-step paste command
+    image-alpha.ts        white to transparent on RGBA pixels (alpha ramp, colours untouched)
     transform.ts          2D affine matrices (translate, scale and rotate about a point, invert)
     stroke-shape.ts       perfect-freehand → SVG path, pen/highlighter/shape parameters (render version 1); render-aware SVG path
     renderer.ts           static, live and wet canvases, visible pages only, backgrounds, elements, paper pattern, selection overlay, CSS-transform fast path, DPR, Path2D cache, rAF
@@ -191,6 +194,10 @@ src/
     toolbar.ts            tools, colours, widths, eraser mode, shape kind, text size, undo/redo, add page, page menu, pages panel, fit, page indicator
     navigator.ts          the Pages panel: thumbnails, jump, drag to reorder, bookmarks
     media.ts              PDF pages, images and scans for the renderer and exports; asset storage
+    selection-actions.ts  floating bar over the lasso selection: restyle, copy, cut, duplicate, paste, white to transparent
+    clipboard.ts          plugin clipboard (module singleton, survives notebook switches) and the system clipboard wrappers
+    paste-logic.ts        pure paste decisions (plugin vs system clipboard), text normalisation, pasted image/text elements
+    paste-modal.ts        paste box for WebViews that cannot read the clipboard (press and hold, Paste)
     pick.ts               choose a PDF or image from the vault or the device
     pdf-range-modal.ts    page range for "Insert PDF"
     text-editor.ts        in-place text box editor
@@ -315,6 +322,7 @@ The new pipeline:
 - **Segment eraser** (`eraseSegment`): same hit test, then the stroke is densified (no segment longer than half the radius, so a cut cannot slip between two distant points) and the points within `radius + width/2` of the eraser path are removed. Surviving runs of at least two points become new strokes with new ids and the original style; single-point crumbs are dropped. The original is replaced in place by a `ReplaceStroke`. The eraser acts on the page under the pointer, so one gesture can cross pages.
 - **Gesture undo**: everything erased in one gesture (either mode, any number of pages) is recorded as a single `Batch`, so one undo restores it.
 - **Lasso** (`lasso.ts`): the gesture polygon is tested with an even-odd rule; a stroke is selected when at least 50% of its points are inside. A selection belongs to one page. It shows a dashed frame, a **resize handle** at the bottom-right corner (uniform scale about the top-left corner of the frame, clamped to 0.05–20×) and a **rotate handle** above the top edge (rotation about the centre of the frame). Dragging inside the frame moves it.
+- **Selection actions** (`view/selection-actions.ts`, no format change): a bar outside the stage (so its taps never reach the pen input) over the selected items. *Restyle* builds one `Batch` of `ReplaceStroke`/`ReplaceElement` (`ink/restyle.ts`); a request names a group (ink or highlighter) and never touches the other. *Copy* deep-copies strokes and elements into a module-level clip (`view/clipboard.ts`, shared by every notebook view of the session) and reads the image bytes; it also writes a marker text (`[Notebook selection: …]`) to the system clipboard so a later paste can tell whether something newer was copied elsewhere (`decidePaste`). *Paste* stores the images again through `storeAsset` when the target document lacks them (content-addressed, so a shared `_assets/` stores nothing twice), instantiates the clip with new ids at the centre of the view and adds it as one `Batch` (`AddAsset`, `AddStroke`, `AddElement`); *Duplicate* does the same inside the notebook without touching the clipboard. Pasting a system-clipboard picture or text goes through `navigator.clipboard` or the paste event, with a paste box where the WebView cannot read the clipboard. *Make white transparent* decodes the image (at most 2048 px), clears near-white pixels (`ink/image-alpha.ts`), stores a PNG as a new asset and replaces the element (`AddAsset` + `ReplaceElement`); no field is added to the file.
 - **Transforms** are kept as an affine matrix (`transform.ts`) while the pointer is down: the selected strokes are hidden from the static layer and drawn on the live layer with the matrix, so a drag redraws only the selection. On release the matrix is baked into new strokes (`transformStroke`: points transformed and re-quantized, width scaled by the matrix's uniform factor, same id and style) and applied as a `Batch` of `ReplaceStroke` commands: one undo step. Delete (toolbar button, Delete or Backspace) is a `Batch` of `ReplaceStroke` with no replacement. Escape or changing tool clears the selection. Transformed strokes stay on their page and are clipped to it when drawn.
 
 ### Objects, pages and the navigator

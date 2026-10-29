@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Selection actions bar** (lasso tool): when something is selected, a bar over the bottom of the page offers Copy, Cut, Duplicate and Paste, the colour and width rows, and (for images) Make white transparent; with the lasso active and nothing selected it offers Paste. Every button works; none of this changes the file format.
+- **Restyle selection** (roadmap 5): change the colour and width of the lasso-selected strokes, and the colour of selected text boxes, as one undo step. Pens and shapes use the pen palettes; a highlighter keeps the highlighter palette and widths (in a mixed selection each group has its own row and the other group is left alone).
+- **Copy, cut, paste and duplicate** (roadmap 6): strokes and elements with their images, across pages and across notebooks. The plugin clipboard lives for the whole session, so it survives switching notebooks; pasting into another notebook stores the needed images again in its `_assets/` folder (content-addressed, so nothing is duplicated). Each paste gets new ids, lands in the middle of the view (a little further each time) and is selected so it can be moved at once. Ctrl/Cmd+C, X and V work too. Copying also writes a short marker text such as `[Notebook selection: 3 strokes]` to the system clipboard, which is how a later paste knows whether something newer was copied elsewhere.
+- **Paste from the system clipboard** (roadmap 114): a picture becomes an image element (same sizing and HEIF/HEIC message as Insert image), plain text becomes a text box (line breaks kept, at most 20,000 characters). Uses `navigator.clipboard` when the WebView allows it; where it does not (Android WebViews often refuse), Paste opens a small box in which you press and hold and choose the system Paste. Not verified on Android.
+- **White to transparent** (roadmap 172): the selection bar's *Make white transparent* stores a processed copy of each selected image (a PNG, at most 2048 px on the long side) as a new asset and points the element at it; undo points it back. No new fields in the file.
+
+### Known limitations
+- White to transparent is a fixed threshold (near-white pixels, with a short ramp at the edges); it suits screenshots and drawings on white, not photos with grey paper. PDF and SVG exports draw images on white, so a transparent image shows a white box there over a coloured page or a PDF background.
+- A selection still belongs to one page; paste goes to the page in view.
+
 ## 0.4.1 — 2026-10-29
 
 Hotfix for 0.4.0. Not yet verified on Android hardware.
