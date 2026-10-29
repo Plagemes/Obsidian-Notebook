@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+Not yet verified on Android hardware (see `docs/testing.md`, steps L1-L10).
+
+### Added
+- **Library trash** (#160): deleting a notebook or a folder (now also a non-empty one) from the library moves it to `<notebooks folder>/_trash/` and remembers its original path. *Trash* in the library sidebar lists the items; *Restore* puts an item back where it was, or under `Name 2` if the name is taken; *Delete permanently* and *Empty trash* ask first (permanent deletion follows Obsidian's *Deleted files* setting). New setting *Empty the trash automatically* (days, default off). The trash is invisible to the library, search, companion notes and conflicted-copy detection; assets are never deleted, so those used only by trashed notebooks stay.
+- **Page trash** (#26): *Delete page* keeps the page in `_trash/pages/<notebook id>.json` (not in the notebook format; assets by id). Page menu *Deleted pages...* lists them with thumbnails and restores one after the page that preceded it as one undo step. At most 50 pages per notebook, 30 days.
+- **Page templates** (#74): page menu *Save page as template...* (content, paper, size, background) stores a small notebook file in the templates folder (setting *Templates folder*, default `_templates` in the notebooks folder); *New page from template...* and a *Template* row in the *New notebook* dialog open a gallery with thumbnails, including built-in Cornell, meeting notes and to-do templates.
+
 ## 0.5.0 — 2026-10-29
 
 Not yet verified on Android hardware (see `docs/testing.md`).
