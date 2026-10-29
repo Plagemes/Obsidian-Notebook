@@ -115,3 +115,13 @@ export function holdsPages(text: string, pageIds: readonly string[]): boolean {
 	const ids = new Set(back.doc.pages.map((p) => p.id));
 	return pageIds.length > 0 && pageIds.every((id) => ids.has(id));
 }
+
+/**
+ * Whether a move into an open destination may remove the pages from the source. The file read back decides
+ * (`stored`): a flush that failed only because the user kept writing in the destination after the pages were saved
+ * must not leave the same pages in both notebooks. `flushed` only picks the message when they are not in the file.
+ */
+export function destinationVerdict(flushed: boolean, stored: boolean): "ok" | "not-saved" | "not-stored" {
+	if (stored) return "ok";
+	return flushed ? "not-stored" : "not-saved";
+}

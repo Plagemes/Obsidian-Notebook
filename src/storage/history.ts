@@ -95,6 +95,17 @@ export function extractDocId(json: string): string | null {
 	return m?.[1] ?? null;
 }
 
+/**
+ * Document id of a notebook text, cheaply: the first `"id"` near the top (where the serializer writes it); only when
+ * none is there (a file written by another tool, keys in another order) from a full parse. Null when there is none.
+ */
+export function quickDocId(json: string): string | null {
+	const m = /"id"\s*:\s*"([^"\\]{1,200})"/.exec(json.slice(0, 600));
+	if (m) return m[1]!;
+	const parsed = parse(json);
+	return parsed.ok ? parsed.doc.id : null;
+}
+
 export type RestoreCheck =
 	/** The file holds the same notebook (same document id): safe to restore over it. */
 	| "ok"

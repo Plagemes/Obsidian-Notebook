@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { holdsPages } from "../src/library/page-move";
+import { destinationVerdict, holdsPages } from "../src/library/page-move";
 import { notebookUri } from "../src/integration/links";
 import {
 	companionClaim, companionContent, readRegionState, renderRegion, REGION_START, updateCompanionText, type CompanionTextDeps,
@@ -12,6 +12,7 @@ import { serialize } from "../src/model/serialize";
 import type { Asset, NotebookDocument, TextElement } from "../src/model/types";
 import { makeFingerprint, matchRepublished, planRepublish, type NewSource, type OldSource } from "../src/pdf/republish";
 import { conflictBaseOf, mayBeManualCopy, sameNotebookText } from "../src/storage/conflicts";
+import { quickDocId } from "../src/storage/history";
 import { DocumentSession, type DocumentIO, type Timers } from "../src/storage/session";
 import { line, sampleDocument } from "./helpers";
 
@@ -29,6 +30,28 @@ describe("holdsPages (move to an open notebook)", () => {
 		expect(holdsPages(text.slice(0, 50), ids)).toBe(false);
 		expect(holdsPages("", ids)).toBe(false);
 		expect(holdsPages(text, [])).toBe(false);
+	});
+
+	it("the file decides: pages on disk are moved even if the flush failed because the user kept writing", () => {
+		expect(destinationVerdict(true, true)).toBe("ok");
+		expect(destinationVerdict(false, true)).toBe("ok");
+		expect(destinationVerdict(true, false)).toBe("not-stored");
+		expect(destinationVerdict(false, false)).toBe("not-saved");
+	});
+});
+
+describe("quickDocId (is a notebook id unique in the vault)", () => {
+	it("reads the id near the top, else falls back to a full parse", () => {
+		const doc = sampleDocument(1);
+		doc.id = "doc-xyz";
+		expect(quickDocId(serialize(doc))).toBe("doc-xyz");
+		// Another tool wrote the keys in another order, the id far from the top.
+		const raw = JSON.parse(serialize(doc)) as Record<string, unknown>;
+		const { format, version, id, ...rest } = raw;
+		const late = JSON.stringify({ format, version, note: "x".repeat(700), id, ...rest });
+		expect(late.indexOf('"id"')).toBeGreaterThan(600);
+		expect(quickDocId(late)).toBe("doc-xyz");
+		expect(quickDocId(`{"format":"obsidian-notebook","note":"${"x".repeat(700)}"}`)).toBeNull();
 	});
 });
 
