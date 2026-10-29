@@ -216,7 +216,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 Goal: notebooks behave like first-class Obsidian content. Several items depend on the container decision ("File format transition" below): O1 is the companion-note option (C) and must be designed together with it.
 
 - **O1 P1** 🧪 Automatic companion note: every notebook has a `.md` with properties (tags, course, pages, dates) and the text of its text boxes, so search, graph, Dataview and Bases see notebooks.
-- **O2 P1** Shared tags: notebook tags are real Obsidian tags, visible in the Tags pane.
+- **O2 P1** 🧪 Shared tags: notebook tags are real Obsidian tags, visible in the Tags pane (through the companion note's `tags`; tag editor with the vault's tag suggestions, Obsidian-style normalisation, library filter by tag including nested tags; a tag the person added to the note by hand is never removed).
 - **O3 P2** Native properties: course, teacher, exam date and similar edited from Obsidian's Properties panel.
 - **O4 P1** 🧪 Page links: `[[Physics#p3]]` opens the notebook at that page, with link suggestions while typing.
 - **O5 P2** Hover preview: hovering a notebook link shows the page thumbnail (page preview).
@@ -355,7 +355,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 167. **P2** Documented format with a JSON Schema, so other tools can read notebooks.
 
 ### E. Automation
-168. **P1** Public API for other plugins (Templater, QuickAdd, Dataview): create notebooks, add pages, insert images, export.
+168. **P1** 🧪 Public API for other plugins (Templater, QuickAdd, Dataview): create notebooks, add pages, insert images, export. See `docs/api.md`.
 169. **P2** If/then rules (e.g. "notebook in folder Physics → millimetre paper", "on close → update the PDF copy").
 170. **P2** Macros: a sequence of commands on one toolbar button.
 

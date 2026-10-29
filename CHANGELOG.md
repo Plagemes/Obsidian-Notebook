@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+Not yet verified in Obsidian or on Android hardware (see `docs/testing.md`, steps A1 to A6).
+
+### Added
+- **Shared tags (O2)**: the tag editor of the library (*Edit tags…*) and the new command *Edit tags of this notebook…* suggest the tags that already exist in your vault (the Tags pane), write tags the way Obsidian does (no `#`, spaces become `-`, `a/b` is a nested tag; a tag of only digits is refused with a message) and show the chosen tags as chips. With companion notes off the dialog says that Obsidian's Tags pane and tag search need them and offers *Turn on companion notes*. The companion note is refreshed 2 s after saving tags.
+- **Library filter by tag follows nesting**: choosing `physics` also lists notebooks tagged `physics/optics`, and a nested tag counts for its parents in the sidebar, as in Obsidian's Tags pane.
+- **Public API for other plugins (#168)**: `app.plugins.plugins["notebook"].api` with `version`, `createNotebook`, `addPages`, `insertImage`, `exportPdf`, `getNotebookInfo`, `openNotebook` and `listNotebooks`, typed `NotebookApiError`s and checked arguments. Open notebooks are changed through their own session (one undo step, normal save); closed ones are rewritten only after validation, with a `before-api` backup and a read-back check. Documented, with TypeScript typings and Templater, QuickAdd and Dataview examples, in `docs/api.md`. No change to the document format.
+
+### Changed
+- **Companion notes: which tags the plugin may remove.** The tags of the notebook that the note already had (written by you) are no longer treated as the plugin's: removing such a tag from the notebook leaves it in the note. Only tags the plugin added itself are removed when the notebook drops them. Notes written by 0.5.0 keep their old behaviour until their next update.
+- Tags typed in the editor are stored normalised (`linear algebra` becomes `linear-algebra`); tags already stored are not rewritten until you edit them.
+
 ## 0.5.0 — 2026-10-29
 
 Not yet verified on Android hardware (see `docs/testing.md`).
