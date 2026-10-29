@@ -2127,6 +2127,16 @@
 	background: var(--background-modifier-hover);
 }
 
+/* A tag the notebook already has that Obsidian would not accept (kept as written). */
+.notebook-tags-chip-invalid {
+	border: 1px dashed var(--text-warning);
+}
+
+.notebook-tags-flag {
+	color: var(--text-warning);
+	font-weight: var(--font-bold);
+}
+
 .notebook-tags-x {
 	color: var(--text-muted);
 	font-size: var(--font-ui-medium);

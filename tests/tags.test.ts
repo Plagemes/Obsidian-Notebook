@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { notebookUri } from "../src/integration/links";
 import {
-	companionContent, mergeCompanion, readRegionState, renderRegion, updateCompanionText, type CompanionTextDeps,
+	companionContent, mergeCompanion, readRegionState, readTags, renderRegion, unreadTags, updateCompanionText, type CompanionTextDeps,
 } from "../src/model/companion-content";
 import { createDocument } from "../src/model/document";
 import {
-	computeSharedTags, normalizeTag, normalizeTagList, parseTagInput, suggestTags, tagAncestors, tagIsWithin, tagsFromVault,
+	addTypedTags, computeSharedTags, isObsidianTag, normalizeTag, normalizeTagList, parseTagInput, suggestTags, tagAncestors, tagIsWithin, tagsFromVault,
 } from "../src/model/tags";
 import { LibraryIndex, type LibraryEntry } from "../src/library/index";
 
@@ -56,6 +56,26 @@ describe("normalizeTagList / parseTagInput", () => {
 		expect(parseTagInput("#a #b")).toEqual(["#a", "#b"]);
 		expect(parseTagInput("two words, x")).toEqual(["two words", "x"]);
 		expect(parseTagInput("  ,, ")).toEqual([]);
+	});
+});
+
+describe("tag editor: existing tags stay as they are", () => {
+	it("flags tags Obsidian would not take, without changing them", () => {
+		expect(isObsidianTag("physics/optics")).toBe(true);
+		expect(isObsidianTag("2026")).toBe(false);
+		expect(isObsidianTag("C++")).toBe(false);
+		expect(isObsidianTag("big idea")).toBe(false);
+	});
+
+	it("adds only new typed tags; existing ones keep spelling, order and validity", () => {
+		const current = ["2026", "C++", "Physics", "big idea"];
+		expect(addTypedTags(current, [])).toEqual(current);
+		expect(addTypedTags(current, ["exam"])).toEqual([...current, "exam"]);
+		// Already there, ignoring case, or as the normalised form of an existing tag: not added twice.
+		expect(addTypedTags(current, ["physics", "C", "big-idea"])).toEqual(current);
+		expect(addTypedTags([], ["a", "A", "b"])).toEqual(["a", "b"]);
+		// The typed text is normalised before it gets here (normalizeTagList), never the existing tags.
+		expect(addTypedTags(current, normalizeTagList(["#Exam prep", "1999"]).tags)).toEqual([...current, "Exam-prep"]);
 	});
 });
 
@@ -226,6 +246,24 @@ describe("companion note: tags across updates", () => {
 	it("an update with nothing new does not rewrite the note", () => {
 		const note = update(null, ["a"]);
 		expect(updateCompanionText(note, contentWith(["a"]), (owned) => renderRegion(contentWith(["a"]), owned), DEPS)).toEqual({ kind: "unchanged" });
+	});
+
+	it("keeps tag entries it does not read (numbers, empty items) as they are", () => {
+		expect(readTags([2026, "physics"])).toEqual(["physics"]);
+		expect(unreadTags([2026, "physics", null, " "])).toEqual([2026, null, " "]);
+		expect(unreadTags(2026)).toEqual([2026]);
+		expect(unreadTags("2026, physics")).toEqual([]);
+		// `tags: [2026, physics]` in the note, the notebook gets `exam`: 2026 is not lost.
+		const r = mergeCompanion({ tags: [2026, "physics"] }, contentWith(["exam"]), null);
+		expect(r.properties.tags).toEqual(["exam", "physics", 2026]);
+		// Nothing else changes: the note's own order stays and nothing is rewritten.
+		const same = mergeCompanion({ tags: [2026, "exam"] }, contentWith(["exam"]), { keys: [], tags: ["exam"] });
+		expect(same.properties.tags).toEqual([2026, "exam"]);
+		// Every plugin tag gone: the entries it does not read stay, the property is not dropped.
+		const gone = mergeCompanion({ tags: ["exam", 2026] }, contentWith([]), { keys: [], tags: ["exam"] });
+		expect(gone.properties.tags).toEqual([2026]);
+		expect(mergeCompanion({ tags: 2026 }, contentWith([]), null).properties.tags).toBe(2026);
+		expect(mergeCompanion({ tags: 2026 }, contentWith(["exam"]), null).properties.tags).toEqual(["exam", 2026]);
 	});
 
 	it("mergeCompanion reports the owned tags", () => {
