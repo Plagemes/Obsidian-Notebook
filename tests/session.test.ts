@@ -227,7 +227,8 @@ describe("DocumentSession", () => {
 		const io = new FakeIO(serialize(sampleDocument(1)));
 		const s = new DocumentSession(io, timers);
 		await s.load();
-		s.doc!.pages[0]!.strokes[0]!.points[0]![0] = Number.NaN; // would serialize as null
+		// Committed strokes are frozen, so a corrupt stroke can only come from a bug that builds one.
+		s.doc!.pages[0]!.strokes.push({ ...line(0, 0, 1, 1), points: [[Number.NaN, 0, 0.5]] }); // NaN serializes as null
 		s.markChanged();
 		expect(await s.flush()).toBe(false);
 		expect(io.writes).toHaveLength(0);

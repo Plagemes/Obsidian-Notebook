@@ -8,6 +8,7 @@ import { Renderer } from "../ink/renderer";
 import { clampToPage, fitWidth, pan, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
 import { createStroke, findPage, quantizePoint } from "../model/document";
 import { AddStroke, EraseStrokes, History, type ErasedItem } from "../model/history";
+import { freezeStroke } from "../model/serialize";
 import { FILE_EXTENSION, type NotebookDocument, type Page, type Point, type Stroke } from "../model/types";
 import { DocumentSession, type SaveState, type SessionMode } from "../storage/session";
 import { VaultDocumentIO } from "../storage/vault-io";
@@ -421,7 +422,7 @@ export class NotebookView extends FileView {
 		if (!active || cancelled || !this.session?.doc) return;
 		const page = findPage(this.session.doc, active.pageId);
 		if (!page) return;
-		this.history.execute(new AddStroke(page.id, active.stroke, page.strokes.length));
+		this.history.execute(new AddStroke(page.id, freezeStroke(active.stroke), page.strokes.length));
 		this.renderer?.appendStroke(active.stroke);
 		this.session.markChanged();
 		this.updateHistoryButtons();

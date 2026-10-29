@@ -1,4 +1,4 @@
-import { parse, serialize, type ParseFailure } from "../model/serialize";
+import { parse, serialize, serializeChecked, type ParseFailure } from "../model/serialize";
 import type { NotebookDocument } from "../model/types";
 
 /** File access for one notebook. Implemented over the Vault API in vault-io.ts and by fakes in tests. */
@@ -204,14 +204,14 @@ export class DocumentSession {
 		const doc = this.doc;
 		const previousModifiedAt = doc.modifiedAt;
 		doc.modifiedAt = this.now().toISOString();
-		const next = serialize(doc);
-		const check = parse(next);
-		if (!check.ok || serialize(check.doc) !== next) {
+		const checked = serializeChecked(doc);
+		if (!checked.ok) {
 			doc.modifiedAt = previousModifiedAt;
 			this.events.onSaveState?.("error");
-			this.events.onError?.(`Save cancelled: the serialized document did not pass validation (${check.ok ? "round-trip mismatch" : check.message}). Changes are kept in memory.`);
+			this.events.onError?.(`Save cancelled: the serialized document did not pass validation (${checked.message}). Changes are kept in memory.`);
 			return false;
 		}
+		const next = checked.text;
 
 		try {
 			let written = false;

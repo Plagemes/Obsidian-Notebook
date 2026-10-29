@@ -1,7 +1,7 @@
 /** Notebook document format. Units: typographic points (pt), origin at the top-left of the page. */
 
 export const FORMAT_ID = "obsidian-notebook";
-export const CURRENT_VERSION = 1;
+export const CURRENT_VERSION = 2;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -13,7 +13,9 @@ export const GRID_5MM = 14.17;
 /** [x, y, pressure] in page coordinates; pressure in [0, 1]. */
 export type Point = [number, number, number];
 
-export type Tool = "pen";
+/** v2 adds "highlighter" (translucent, constant width). */
+export const TOOLS = ["pen", "highlighter"] as const;
+export type Tool = (typeof TOOLS)[number];
 
 export interface Stroke {
 	id: string;

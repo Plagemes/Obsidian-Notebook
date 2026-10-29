@@ -1,6 +1,6 @@
 import {
 	A4_HEIGHT, A4_WIDTH, CURRENT_VERSION, FORMAT_ID, GRID_5MM,
-	type NotebookDocument, type Page, type Point, type Stroke,
+	type NotebookDocument, type Page, type Point, type Stroke, type Tool,
 } from "./types";
 
 export function createId(): string {
@@ -38,8 +38,8 @@ export function quantizePoint(x: number, y: number, pressure: number): Point {
 	return [Math.round(x * 100) / 100, Math.round(y * 100) / 100, Math.round(p * 1000) / 1000];
 }
 
-export function createStroke(color: string, width: number, points: Point[] = []): Stroke {
-	return { id: createId(), tool: "pen", color, width, points };
+export function createStroke(color: string, width: number, points: Point[] = [], tool: Tool = "pen"): Stroke {
+	return { id: createId(), tool, color, width, points };
 }
 
 export function findPage(doc: NotebookDocument, pageId: string): Page | undefined {
