@@ -44,6 +44,10 @@ import { exportPdf, exportSvg } from "./export";
 import { NotebookMedia, storeAsset } from "./media";
 import { PageNavigator } from "./navigator";
 import { askPdfRange } from "./pdf-range-modal";
+import { runBoardShot } from "./board-shot";
+import type { EditContext } from "./edit-context";
+import { runNewLecture } from "./lecture";
+import { runMovePages } from "../library/move-pages";
 import { pickFile } from "./pick";
 import { RulerGesture } from "./ruler-gesture";
 import { TextEditor, type TextEditSession } from "./text-editor";
@@ -259,6 +263,7 @@ export class NotebookView extends FileView {
 			fit: () => this.fitToWidth(),
 			toggleNavigator: () => this.setNavigatorOpen(!this.pageNav?.open),
 			insertImage: () => void this.insertImageElement(),
+			boardShot: () => void this.boardShot(),
 		});
 		this.toolbar.setSelection(false);
 		this.body = this.contentEl.createDiv({ cls: "notebook-body" });
@@ -568,6 +573,7 @@ export class NotebookView extends FileView {
 		menu.addItem((i) => i.setTitle(t("page.insertImage")).setIcon("image-plus").onClick(() => void this.insertImagePageAfter(index)));
 		menu.addItem((i) => i.setTitle(t("page.scanAfter")).setIcon("scan").onClick(() => void this.scanPagesAfter(index)));
 		menu.addItem((i) => i.setTitle(t("page.scanInsert")).setIcon("scan-line").onClick(() => void this.insertScanElement(index)));
+		menu.addItem((i) => i.setTitle(t("page.newLecture")).setIcon("graduation-cap").onClick(() => void this.newLecture()));
 		menu.addSeparator();
 		menu.addItem((i) => i.setTitle(t("page.duplicate")).setIcon("copy").onClick(() => this.pageCommand(new AddPage(duplicatePage(page), index + 1), index + 1, page)));
 		menu.addItem((i) => i.setTitle(t("page.moveUp")).setIcon("arrow-up").setDisabled(index === 0)
@@ -576,6 +582,7 @@ export class NotebookView extends FileView {
 			.onClick(() => this.pageCommand(new MovePage(page.id, index, index + 1), index + 1, page)));
 		const marked = doc.meta?.bookmarks.includes(page.id) ?? false;
 		menu.addItem((i) => i.setTitle(t(marked ? "page.unbookmark" : "page.bookmark")).setIcon("bookmark").onClick(() => this.toggleBookmarkOf(page.id)));
+		menu.addItem((i) => i.setTitle(t("page.moveToNotebook")).setIcon("folder-input").onClick(() => void this.movePagesToNotebook(index)));
 		menu.addItem((i) => i.setTitle(t("page.delete")).setIcon("trash-2").setSection("danger").setDisabled(doc.pages.length <= 1)
 			.onClick(() => this.pageCommand(new DeletePage(page, index), Math.max(0, index - 1), page)));
 		menu.addSeparator();
@@ -865,6 +872,62 @@ export class NotebookView extends FileView {
 		} finally {
 			if (asset) media.removePending(asset.id);
 		}
+	}
+
+	// --- during the lecture: board shot, new lecture, move pages (logic in board-shot.ts, lecture.ts, library/move-pages.ts) ---
+
+	/** What the flows of those modules may do to this document; null unless it is open, editable and not being written on. */
+	editContext(): EditContext | null {
+		const session = this.session;
+		const media = this.media;
+		const doc = session?.doc;
+		if (!session || !media || !doc || !this.stillHere(session)) return null;
+		return {
+			app: this.app,
+			folder: this.host.settings.folder,
+			file: this.file,
+			doc,
+			measure: measureText,
+			alive: () => this.stillHere(session) && session.doc === doc,
+			addPending: (asset) => media.addPending(asset),
+			removePending: (id) => media.removePending(id),
+			currentPage: () => this.currentPageIndex(),
+			visibleLocal: (i) => {
+				const box = this.layout?.boxes[i];
+				const page = doc.pages[i];
+				if (!box || !page) return null;
+				const v = this.visibleRect();
+				const minY = Math.max(0, v.minY - box.y);
+				const maxY = Math.min(page.height, v.maxY - box.y);
+				return maxY > minY ? { minY, maxY } : null;
+			},
+			execute: (cmd, scrollTo) => {
+				this.commitText();
+				this.clearSelection();
+				this.history.execute(cmd);
+				this.afterHistoryChange();
+				if (scrollTo !== undefined) this.scrollToPage(scrollTo);
+			},
+			flush: () => this.flushNow(),
+		};
+	}
+
+	/** Toolbar and command: photo of the board, cropped and filtered, placed under the writing with the time. */
+	async boardShot(): Promise<void> {
+		const ctx = this.editContext();
+		if (ctx) await runBoardShot(ctx);
+	}
+
+	/** Command and page menu: a new page at the end with the course/title and the date as a header. */
+	async newLecture(): Promise<void> {
+		const ctx = this.editContext();
+		if (ctx) await runNewLecture(ctx);
+	}
+
+	/** Command and page menu: moves pages to another notebook. `index` is the page ticked at first (the one in view by default). */
+	async movePagesToNotebook(index = this.currentPageIndex()): Promise<void> {
+		const ctx = this.editContext();
+		if (ctx) await runMovePages(ctx, this.host.settings, [index]);
 	}
 
 	// --- document ---

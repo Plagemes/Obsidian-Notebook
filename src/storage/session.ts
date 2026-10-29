@@ -13,7 +13,7 @@ export interface DocumentIO {
 	path?(): string;
 }
 
-export type BackupReason = "unreadable" | "future-version" | "conflict" | "unsaved" | "journal" | "before-restore";
+export type BackupReason = "unreadable" | "future-version" | "conflict" | "unsaved" | "journal" | "before-restore" | "before-move";
 
 /**
  * - `ok`: the document is editable and saved automatically.

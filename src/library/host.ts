@@ -18,6 +18,7 @@ import { NotebookView, VIEW_TYPE } from "../view/notebook-view";
 import { pickFile } from "../view/pick";
 import { libraryIndexPath, parseStoredJson, patchNotebookId, patchNotebookMeta, type MetaPatchResult } from "./host-logic";
 import { importPdfAsNotebook } from "./import-pdf";
+import { openLooseSheet } from "./loose-sheet";
 import type { LibraryHost } from "./library-view";
 import type { ThumbnailOptions } from "./thumbnail";
 
@@ -160,6 +161,10 @@ export class NotebookLibraryHost implements LibraryHost {
 				empty: () => t("import.empty"),
 			},
 		}, folder);
+	}
+
+	openLooseSheet(): void {
+		void openLooseSheet(this.plugin, (file) => this.openNotebook(file));
 	}
 
 	/** Camera scan into a new notebook "Scan <date>": one page per sheet, the JPEG as the page background. */

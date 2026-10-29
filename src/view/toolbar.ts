@@ -48,6 +48,7 @@ export interface ToolbarActions {
 	fit(): void;
 	toggleNavigator(): void;
 	insertImage(): void;
+	boardShot(): void;
 }
 
 const TOOL_DEFS: Array<[ToolName, string, MessageKey]> = [
@@ -78,6 +79,7 @@ export class Toolbar {
 	private readonly sizeGroup: HTMLElement;
 	private readonly rulerButton: HTMLButtonElement;
 	private readonly imageButton: HTMLButtonElement;
+	private readonly boardShotButton: HTMLButtonElement;
 	private readonly navigatorButton: HTMLButtonElement;
 	private readonly undoButton: HTMLButtonElement;
 	private readonly redoButton: HTMLButtonElement;
@@ -114,6 +116,7 @@ export class Toolbar {
 
 		const insert = this.group();
 		this.imageButton = this.iconButton(insert, "image-plus", "tool.image", () => this.actions.insertImage());
+		this.boardShotButton = this.iconButton(insert, "camera", "tool.boardShot", () => this.actions.boardShot());
 		this.rulerButton = this.iconButton(insert, "ruler", "tool.ruler", () => this.set({ ruler: !this.state.ruler }));
 
 		this.deleteButton = this.iconButton(this.group(), "trash-2", "tool.deleteSelection", () => this.actions.deleteSelection());
@@ -184,6 +187,7 @@ export class Toolbar {
 		this.addPageButton.disabled = !this.editable;
 		this.pageMenuButton.disabled = !this.editable;
 		this.imageButton.disabled = !this.editable;
+		this.boardShotButton.disabled = !this.editable;
 		this.navigatorButton.disabled = !this.editable;
 		this.rulerButton.disabled = !this.editable;
 		this.rulerButton.toggleClass("is-active", s.ruler);

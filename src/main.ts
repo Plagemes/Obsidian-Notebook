@@ -12,6 +12,7 @@ import { LIBRARY_VIEW_TYPE, LibraryView } from "./library/library-view";
 import { OpenNotebookModal } from "./view/modals";
 import { NotebookView, VIEW_TYPE } from "./view/notebook-view";
 import { NotebookSettingTab } from "./view/settings-tab";
+import { registerLectureCommands } from "./view/lecture-commands";
 
 export default class NotebookPlugin extends Plugin {
 	settings!: NotebookSettings;
@@ -42,6 +43,8 @@ export default class NotebookPlugin extends Plugin {
 		this.addCommand({ id: "benchmark", name: t("command.benchmark"), callback: () => this.openBenchmark() });
 		this.addCommand({ id: "create-stress-test", name: t("command.stress"), callback: () => void this.createStressNotebook() });
 		this.addCommand({ id: "export-pdf", name: t("command.exportPdf"), checkCallback: (checking) => this.withView(checking, (v) => void v.exportNotebookPdf()) });
+
+		registerLectureCommands(this, (file) => this.host.openNotebook(file));
 
 		registerIntegration(this, { background: (doc, page, width) => this.host.thumbnailBackground(doc, page, width) });
 
