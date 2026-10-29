@@ -1,12 +1,12 @@
 import type { Page, Point, Stroke, Tool } from "../model/types";
 import { strokeBounds, type BBox } from "./hit-test";
+import { minorVisible, paperPattern, PAPER_COLORS } from "./paper";
 import { visiblePages, type Layout, type PageBox } from "./layout";
 import { HIGHLIGHTER_ALPHA, strokePath } from "./stroke-shape";
 import type { Matrix } from "./transform";
 import type { Viewport } from "./viewport";
 
 const PAPER = "#ffffff";
-const GRID = "#cfdcea";
 const SHADOW = "rgba(0, 0, 0, 0.18)";
 const SELECTION = "#2563eb";
 
@@ -262,7 +262,7 @@ export class Renderer {
 				minX: visibleDoc.minX - box.x, minY: visibleDoc.minY - box.y,
 				maxX: visibleDoc.maxX - box.x, maxY: visibleDoc.maxY - box.y,
 			};
-			this.drawGrid(ctx, page, visible);
+			this.drawPaper(ctx, page, visible);
 			for (const stroke of page.strokes) {
 				if (this.hidden?.has(stroke)) continue;
 				const b = this.boundsOf(stroke);
@@ -277,24 +277,37 @@ export class Renderer {
 		this.stats.pagesDrawn = indices.length;
 	}
 
-	private drawGrid(ctx: CanvasRenderingContext2D, page: Page, visible: BBox): void {
-		const step = page.paper.spacing;
+	/** Paper pattern (grid, ruled, dots, millimetre), drawn with hairlines about one device pixel wide at any zoom. */
+	private drawPaper(ctx: CanvasRenderingContext2D, page: Page, visible: BBox): void {
 		const { scale } = this.viewport;
-		ctx.strokeStyle = GRID;
-		// About one device pixel wide at any zoom.
-		ctx.lineWidth = Math.max(0.6, this.dpr) / (scale * this.dpr);
-		ctx.beginPath();
-		const x0 = Math.max(step, Math.ceil(visible.minX / step) * step);
-		for (let x = x0; x < Math.min(page.width, visible.maxX); x += step) {
-			ctx.moveTo(x, 0);
-			ctx.lineTo(x, page.height);
+		const { lines, dots } = paperPattern(page, visible, {
+			includeMinor: minorVisible(page.paper.spacing, scale),
+		});
+		const hairline = Math.max(0.6, this.dpr) / (scale * this.dpr);
+		ctx.lineWidth = hairline;
+		for (const kind of ["minor", "major", "margin"] as const) {
+			ctx.strokeStyle = PAPER_COLORS[kind];
+			ctx.beginPath();
+			let any = false;
+			for (const l of lines) {
+				if (l.kind !== kind) continue;
+				ctx.moveTo(l.x1, l.y1);
+				ctx.lineTo(l.x2, l.y2);
+				any = true;
+			}
+			if (any) ctx.stroke();
 		}
-		const y0 = Math.max(step, Math.ceil(visible.minY / step) * step);
-		for (let y = y0; y < Math.min(page.height, visible.maxY); y += step) {
-			ctx.moveTo(0, y);
-			ctx.lineTo(page.width, y);
+		if (dots.length > 0) {
+			// About one device pixel in radius at any zoom.
+			const r = Math.max(1, this.dpr * 0.6) / (scale * this.dpr);
+			ctx.fillStyle = PAPER_COLORS.dot;
+			ctx.beginPath();
+			for (const [x, y] of dots) {
+				ctx.moveTo(x + r, y);
+				ctx.arc(x, y, r, 0, Math.PI * 2);
+			}
+			ctx.fill();
 		}
-		ctx.stroke();
 	}
 
 	private drawLive(): void {

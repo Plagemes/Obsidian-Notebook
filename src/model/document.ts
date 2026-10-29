@@ -1,6 +1,6 @@
 import {
-	A4_HEIGHT, A4_WIDTH, CURRENT_VERSION, FORMAT_ID, GRID_5MM,
-	type NotebookDocument, type Page, type Point, type Stroke, type Tool,
+	CURRENT_VERSION, FORMAT_ID, PAGE_SIZES, PAPER_SPACING,
+	type NotebookDocument, type Page, type Paper, type Point, type Stroke, type Tool,
 } from "./types";
 
 export function createId(): string {
@@ -10,17 +10,24 @@ export function createId(): string {
 	return id;
 }
 
-export function createPage(): Page {
+export function createPage(
+	size: { width: number; height: number } = PAGE_SIZES.a4,
+	paper: Paper = { kind: "grid", spacing: PAPER_SPACING.grid },
+): Page {
 	return {
 		id: createId(),
-		width: A4_WIDTH,
-		height: A4_HEIGHT,
-		paper: { kind: "grid", spacing: GRID_5MM },
+		width: size.width,
+		height: size.height,
+		paper: { kind: paper.kind, spacing: paper.spacing },
 		strokes: [],
 	};
 }
 
-export function createDocument(now: Date = new Date()): NotebookDocument {
+export function createDocument(
+	now: Date = new Date(),
+	size: { width: number; height: number } = PAGE_SIZES.a4,
+	paper: Paper = { kind: "grid", spacing: PAPER_SPACING.grid },
+): NotebookDocument {
 	const iso = now.toISOString();
 	return {
 		format: FORMAT_ID,
@@ -28,7 +35,7 @@ export function createDocument(now: Date = new Date()): NotebookDocument {
 		id: createId(),
 		createdAt: iso,
 		modifiedAt: iso,
-		pages: [createPage()],
+		pages: [createPage(size, paper)],
 	};
 }
 

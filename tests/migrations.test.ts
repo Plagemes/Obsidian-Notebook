@@ -45,7 +45,7 @@ describe("migrations", () => {
 		const r = parse(JSON.stringify(v1));
 		if (!r.ok) throw new Error(r.message);
 		expect(r.migratedFrom).toBe(1);
-		expect(r.doc.version).toBe(2);
+		expect(r.doc.version).toBe(CURRENT_VERSION);
 		expect(r.doc.pages[0]!.strokes[0]).toEqual(v1.pages[0]!.strokes[0]);
 	});
 

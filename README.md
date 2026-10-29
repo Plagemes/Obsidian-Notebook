@@ -3,18 +3,20 @@
 Handwritten notebooks inside your Obsidian vault, designed first for **Android tablets with a stylus (S Pen)** and also usable on Windows.
 
 - Pressure-sensitive vector ink (each point is `[x, y, pressure]` in page coordinates), drawn with [perfect-freehand](https://github.com/steveruizok/perfect-freehand).
-- Multiple A4 grid pages stacked vertically; only the visible pages are drawn.
+- Multiple pages stacked vertically; only the visible pages are drawn. Paper per page: blank, ruled, grid, dotted or millimetre; sizes A4, A5 and Letter, portrait or landscape.
+- Page menu (duplicate, reorder, delete, change paper or size), all undoable. Export a page or a notebook as PDF, or a page as SVG.
 - Pen (9 colours, 5 widths), translucent highlighter, whole-stroke and segment eraser, lasso selection (move, resize, rotate, delete), undo/redo.
 - Input stabilization, palm rejection, in-app performance tools.
 - Automatic saving into the vault as a `.notebook` file (versioned JSON). Unreadable files are never overwritten; a backup copy is kept.
 - Local-first: no account, no cloud, no telemetry.
 - UI in English, and in Italian when Obsidian is set to Italian.
 
-> **Status: v0.2 (milestone M2), early development.** The automated tests pass, but the plugin has **not been verified on Android hardware yet**, and several M2 features are experimental. See [docs/testing.md](docs/testing.md) for what is verified and how to test it.
+> **Status: v0.3 (milestone M3a), early development.** The automated tests pass, but the plugin has **not been verified on Android hardware yet**, and several M2 and M3a features are experimental (including export: the PDF and SVG were checked with other software on a PC, not opened on Android). See [docs/testing.md](docs/testing.md) for what is verified and how to test it.
 
 ## Usage
 
 - Ribbon icon **Open notebooks** (book) or the command palette → **Notebook: New notebook** / **Notebook: Open notebooks**.
+- **New notebook** asks for a name, a page size (A4, A5, Letter), landscape or portrait, and a paper (blank, ruled, grid, dotted, millimetre). The last choice is remembered and used as the default next time; the defaults can also be changed in the settings.
 - New notebooks go to the `Notebooks/` folder (configurable in the settings). **Open notebooks** lists the notebooks in that folder and its subfolders; notebooks stored elsewhere open from the file explorer.
 
 ### Tools
@@ -30,16 +32,27 @@ Undo/redo: toolbar buttons, Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z (or Ctrl+Y) on deskt
 
 ### Pages and navigation
 
-- A notebook can have several pages, stacked vertically. **Add page** (toolbar button or command) inserts a blank page after the page in view and can be undone. The toolbar shows the current page as `n / total`. Deleting and reordering pages is not available yet.
+- A notebook can have several pages, stacked vertically. **Add page** (toolbar button or command) inserts a blank page after the page in view, with the same size and paper as that page, and can be undone. The toolbar shows the current page as `n / total`.
+- The **page menu** (three-dot button next to Add page) acts on the page in view: duplicate, move up or down, delete (not the only page), change the paper (blank, ruled, grid, dotted, millimetre), change the size (A4, A5, Letter), switch between portrait and landscape, and export. Each change is one undo step. Changing the size does not move or scale the ink: ink that falls outside a smaller page is kept in the file but not shown or exported, and comes back if you enlarge the page again.
+- Ruled paper has its first line below a top margin and a red margin line about 25 mm from the left edge; dotted paper has a dot at every grid intersection; millimetre paper has a darker line every 10 mm. On screen the fine lines and dots fade out when zoomed far out.
 - With the default settings a finger scrolls (one finger) and zooms (two fingers); it does not draw. A quick one-finger flick keeps scrolling for a moment (fling). Turn on **Draw with finger** in the settings to draw with a finger.
 - **Fit to width** in the toolbar restores the default zoom.
 - Mouse: left button draws, wheel scrolls, Ctrl + wheel zooms, middle button pans.
+
+### Export
+
+From the page menu: **Export page as PDF**, **Export notebook as PDF** and **Export page as SVG**; the command palette also has **Notebook: Export notebook as PDF**. The file is written next to the notebook (`My notebook.pdf`; single pages as `My notebook p3.pdf` or `My notebook p3.svg`), with ` 2`, ` 3`… added if the name is taken, and a notice shows the path. The export includes the paper pattern and keeps the ink as vector shapes; the highlighter stays translucent. Page sizes are the real sizes (A4 prints as A4).
+
+The PDF writer has no dependencies and does not compress, so a page with a lot of ink can give a large file. The exported PDF was parsed with pdf.js and the SVG rendered with resvg on a PC; they have not been opened on Android yet.
 
 ### Settings
 
 | Setting | What it does |
 |---|---|
 | Notebooks folder | where new notebooks are created (default `Notebooks`) |
+| Default paper | paper for new notebooks (blank, ruled, grid, dotted, millimetre) |
+| Default page size | A4, A5 or Letter for new notebooks |
+| Landscape by default | new notebooks are landscape |
 | Draw with finger | fingers draw instead of only scrolling |
 | Palm rejection time | touch is ignored for this long after the pen was seen (default 500 ms) |
 | Pressure | use the device pressure, or always simulate it from speed |
@@ -118,7 +131,7 @@ Enable USB debugging on the device, connect it to a PC with Chrome and open `chr
 
 ## File format
 
-A `.notebook` file is JSON with `format: "obsidian-notebook"` and an integer `version` (currently 2; version 2 adds the highlighter tool). Notebooks from 0.1 open normally and are rewritten as version 2 only when you edit them; after that, 0.1.x opens them read-only. Coordinates are in typographic points (A4 = 595.28 × 841.89 pt). Details and the reasoning behind the format choice are in [docs/architecture.md](docs/architecture.md).
+A `.notebook` file is JSON with `format: "obsidian-notebook"` and an integer `version` (currently 3; version 2 added the highlighter tool, version 3 adds the paper kinds). Notebooks from 0.1 and 0.2 open normally and are rewritten as version 3 only when you edit them; after that, older versions open them read-only (and keep a backup copy) instead of editing them. Coordinates are in typographic points (A4 = 595.28 × 841.89 pt). Details and the reasoning behind the format choice are in [docs/architecture.md](docs/architecture.md).
 
 Backups of unreadable files, of versions changed elsewhere (conflicts) and of changes that could not be saved are written to `Notebooks/_backup/` as `.bak` files (Obsidian does not show them in the file explorer; open the folder with a file manager).
 
@@ -141,7 +154,7 @@ Releases are built by the **Release** workflow (`.github/workflows/release.yml`)
 
 Order matters: **publish the release (push the tag) before merging a manifest version bump into `main`.** The community plugin directory reads `manifest.json` at the head of `main` and complains if no release with that version exists yet.
 
-Beta versions: on the feature branch, push a tag made of the manifest version plus a suffix (for example `0.2.0-beta.1`). The workflow publishes it as a GitHub pre-release, which BRAT can install; directory users are not affected until the version bump is merged into `main` and the `0.2.0` tag is pushed.
+Beta versions: on the feature branch, push a tag made of the manifest version plus a suffix (for example `0.3.0-beta.1`). The workflow publishes it as a GitHub pre-release, which BRAT can install; directory users are not affected until the version bump is merged into `main` and the `0.3.0` tag is pushed.
 
 Rules for contributors are in [CLAUDE.md](CLAUDE.md) (no Node/Electron modules at runtime, vector strokes only, versioned format with tested migrations, zero data loss).
 

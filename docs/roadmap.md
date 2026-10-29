@@ -31,14 +31,37 @@ Every item below is implemented and its logic is covered by automated tests wher
 | Lasso selection: move, resize, rotate | 🧪 basic | one page per selection; uniform resize with a single handle; delete; no copy/paste |
 | Smooth zoom and pan | 🧪 experimental | pinch and wheel zoom 0.25–8×; one-finger fling; CSS-transform fast path on heavy pages |
 | Configurable palm rejection | 🧪 experimental | time window and finger-drawing toggle (from M1) plus a contact-size filter, off by default |
-| Multiple pages with virtualization | 🧪 | stacked vertically, only visible pages and strokes are drawn; add page (undoable); no delete or reorder (M3) |
+| Multiple pages with virtualization | 🧪 | stacked vertically, only visible pages and strokes are drawn; add page (undoable); delete, duplicate and reorder arrived in M3a |
 | Reproducible benchmarks | 🧪 | `npm run bench` (pure logic), in-app benchmark, stress-test notebook (10,000 strokes / 10 pages), performance overlay; input→frame is a software measure, not display latency; PC numbers exist (see testing.md); numbers on the device are still to be collected |
 
 To be confirmed with steps 10 and 13–21 of the protocol in [testing.md](testing.md).
 
-## M3 — Notebook system — ⏳
+## M3 — Notebook system — split into M3a, M3b and M3c
 
-Library with folders, covers, tags, metadata, favourites, bookmarks · A4, A5, custom, infinite canvas · white, ruled, grid, dotted, millimetre paper and custom templates · duplicate, reorder, delete pages · images, text boxes, shapes, ruler · PDF/SVG export; PDF import with annotation (Obsidian's `loadPdfJs()` first).
+M3 was too large for one stable release, so it is split. Each part ships as its own version and starts from a stable one.
+
+### M3a — Pages, paper and export (v0.3.0) — 🧪 implemented, waiting for hardware verification
+
+Every item is implemented and its logic is covered by automated tests where it can be (196 unit tests); none has been verified on Android hardware. The PDF was parsed with pdf.js and the SVG rendered with resvg on the PC; neither was opened on a device.
+
+| Item | Status | Notes |
+|---|---|---|
+| Paper kinds: blank, ruled, grid, dotted, millimetre | 🧪 | per page; format v3 (migration v2 to v3 is the identity; 0.2.x opens v3 files read-only and keeps a backup) |
+| Page sizes A4, A5, Letter and orientation | 🧪 | per page; changing the size does not move or scale strokes (strokes outside a smaller page are kept but clipped); no custom sizes yet |
+| Page menu: duplicate, move up/down, delete, paper, size, orientation | 🧪 | every action is one undo step; the last page cannot be deleted |
+| New-notebook dialog with size, orientation and paper | 🧪 | the last choice is remembered as the default |
+| Default paper and page size settings | 🧪 | also set by the dialog |
+| Export page or notebook as PDF, page as SVG | 🧪 experimental | files are written next to the notebook; dependency-free PDF writer, uncompressed (large files for a lot of ink) |
+
+To be confirmed with steps 23–26 of the protocol in [testing.md](testing.md).
+
+### M3b — Objects (v0.4.0) — ⏳
+
+Shapes (lines, arrows, circles, rectangles) · text boxes · images · ruler.
+
+### M3c — Library, PDF and canvas (v0.5.0) — ⏳
+
+Library with folders, covers, tags, metadata, favourites and bookmarks · PDF import with annotation (Obsidian's `loadPdfJs()` first) · infinite canvas and custom page sizes · custom templates.
 
 ## M4 — Obsidian integration — ⏳
 

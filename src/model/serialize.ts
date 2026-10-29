@@ -1,7 +1,7 @@
 import { detectVersion, migrate, MigrationError, type RawObject } from "./migrations";
 import {
-	CURRENT_VERSION, FORMAT_ID, TOOLS,
-	type NotebookDocument, type Page, type Point, type Stroke, type Tool,
+	CURRENT_VERSION, FORMAT_ID, PAPER_KINDS, TOOLS,
+	type NotebookDocument, type Page, type PaperKind, type Point, type Stroke, type Tool,
 } from "./types";
 
 export type ParseFailure =
@@ -77,6 +77,9 @@ function positive(v: unknown, path: string): number {
 
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
+/** Smallest accepted paper spacing, pt (0.5 pt ≈ 0.18 mm; the finest preset is 1 mm). */
+export const MIN_PAPER_SPACING = 0.5;
+
 function readPoint(v: unknown, path: string): Point {
 	if (!Array.isArray(v) || v.length !== 3) fail(path, "expected a [x, y, pressure] point");
 	const [x, y, p] = v as unknown[];
@@ -103,8 +106,10 @@ function readPage(v: unknown, path: string, ids: Set<string>): Page {
 	const width = positive(v.width, `${path}.width`);
 	const height = positive(v.height, `${path}.height`);
 	const paper = v.paper;
-	if (!isObject(paper) || paper.kind !== "grid") fail(`${path}.paper`, "unknown paper");
+	if (!isObject(paper) || !PAPER_KINDS.includes(paper.kind as PaperKind)) fail(`${path}.paper`, "unknown paper");
 	const spacing = positive(paper.spacing, `${path}.paper.spacing`);
+	// Below this the pattern would have millions of lines (a hand-edited file could freeze the app).
+	if (spacing < MIN_PAPER_SPACING) fail(`${path}.paper.spacing`, `must be at least ${MIN_PAPER_SPACING} pt`);
 	if (!Array.isArray(v.strokes)) fail(`${path}.strokes`, "expected an array");
 	const strokes = v.strokes.map((s, i) => {
 		const stroke = readStroke(s, `${path}.strokes[${i}]`);
@@ -114,7 +119,7 @@ function readPage(v: unknown, path: string, ids: Set<string>): Page {
 		validatedStrokes.add(stroke);
 		return stroke;
 	});
-	return { id, width, height, paper: { kind: "grid", spacing }, strokes };
+	return { id, width, height, paper: { kind: paper.kind as PaperKind, spacing }, strokes };
 }
 
 /** Committed strokes are immutable: edits create new strokes. This makes per-stroke caches safe. */

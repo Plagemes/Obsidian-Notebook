@@ -1,4 +1,4 @@
-# Architecture — Notebook v0.2 (M2)
+# Architecture — Notebook v0.3 (M3a)
 
 ## 1. Decision: file format
 
@@ -15,12 +15,12 @@ Accepted and documented costs:
 - Native search, tags and backlinks do not see notebooks (until M4).
 - **Obsidian Sync** syncs unknown extensions only with the "Sync all other types" option enabled (stated in the README). Syncthing and USB copy have no limits.
 
-## 2. JSON schema v2
+## 2. JSON schema v3
 
 ```json
 {
   "format": "obsidian-notebook",
-  "version": 2,
+  "version": 3,
   "id": "6f1c…",
   "createdAt": "2026-10-29T14:30:00.000Z",
   "modifiedAt": "2026-10-29T14:42:10.000Z",
@@ -45,9 +45,9 @@ Accepted and documented costs:
 |---|---|
 | `format` | always `"obsidian-notebook"`: distinguishes the file from any random JSON |
 | `version` | integer. A version higher than the supported one → the file opens **read-only** with a warning and is never rewritten |
-| units | **typographic points (pt, 1/72 inch)**, origin at the top left of the page. A4 = 595.28 × 841.89 pt. Chosen because it is PDF's native unit (M3 export) and independent of the screen |
+| units | **typographic points (pt, 1/72 inch)**, origin at the top left of the page. A4 = 595.28 × 841.89 pt. Chosen because it is PDF's native unit (used as is by the M3a export) and independent of the screen |
 | `pages` | at least one. They are stacked vertically by the layout (§6), not by coordinates. Stroke ids are unique across the whole document |
-| `paper` | only `grid` with `spacing` in pt (5 mm = 14.17 pt). M3 adds other `kind`s |
+| `paper` | `kind` is one of `blank`, `ruled`, `grid`, `dotted`, `millimetre` (all but `grid` are new in v3); `spacing` in pt. See "Paper and page sizes" below |
 | `points` | `[x, y, pressure]` in the page's own coordinates, x/y rounded to 0.01 pt, pressure in [0, 1] rounded to 0.001. **The saved pressure is the one actually used**: if the device does not provide it, the pressure simulated from velocity is written. Rendering is therefore deterministic. With stabilization on, the stored points are the stabilized ones (§6) |
 | `tool` | `"pen"` or `"highlighter"` (new in v2). The eraser produces no strokes |
 | `color` | `#rrggbb` |
@@ -60,7 +60,8 @@ Unknown fields are ignored on read. Every schema change increments `version` and
 
 - **v0 → v1**: v0 is an unversioned test format (`{ strokes: [{ points: [{x, y, p}], color, size }] }`) that served to establish the mechanism.
 - **v1 → v2** (M2): the only change is the new `highlighter` tool. The migration is the identity plus `version: 2`: every valid v1 document is a valid v2 document. A v1 file opened by 0.2 is migrated in memory and rewritten as v2 only on the first edit.
-- **Compatibility**: a 0.1.x plugin sees `version: 2` as a future version, so it opens the file read-only (and keeps a backup copy of it, as for any file it cannot edit) and never rewrites it. Once 0.2 has saved a file, 0.1.x cannot edit it.
+- **v2 → v3** (M3a): v3 adds the paper kinds `blank`, `ruled`, `dotted` and `millimetre` (the v2 reader accepted only `grid`); page sizes were already free numbers (`width`, `height`). The migration is the identity plus `version: 3`: every valid v2 document is a valid v3 document. A v2 file opened by 0.3 is migrated in memory and rewritten as v3 only on the first edit.
+- **Compatibility**: a plugin that supports an older version sees a newer `version` as a future version, so it opens the file read-only (and keeps a backup copy of it, as for any file it cannot edit) and never rewrites it. Once 0.2 has saved a file, 0.1.x cannot edit it; once 0.3 has saved a file, 0.2.x cannot edit it.
 
 **Stroke rendering parameters** (perfect-freehand) are code constants, not per-stroke fields:
 - pen (`PEN_V1`): `size = width`, `thinning 0.6`, `smoothing 0.5`, `streamline 0.35`, `simulatePressure false`, round caps. Unchanged since v1;
@@ -68,22 +69,46 @@ Unknown fields are ignored on read. Every schema change increments `version` and
 
 Changing these constants changes how existing files look; making them per-stroke would need another schema version with a migration.
 
+### Paper and page sizes
+
+Both are per page, so one notebook can mix them. Constants are in `model/types.ts` (sizes, default spacing) and `ink/paper.ts` (pattern geometry).
+
+| Paper `kind` | Default `spacing` | Pattern |
+|---|---|---|
+| `blank` | unused | nothing drawn |
+| `ruled` | 8 mm | horizontal lines every `spacing`, the first at 3 × `spacing` from the top (`RULED_TOP_LINES`); a red vertical margin line at 25 mm from the left edge |
+| `grid` | 5 mm (14.17 pt) | vertical and horizontal lines every `spacing` |
+| `dotted` | 5 mm | a dot at every grid intersection |
+| `millimetre` | 1 mm | lines every `spacing`; every 10th (10 mm) is a major line, drawn darker |
+
+Lines and dots are never drawn on the page edge. `paperPattern(page, visible, { includeMinor })` is pure (no canvas): it returns lines (`minor` / `major` / `margin`) and dots in page coordinates, limited to the visible rectangle. The canvas renderer (`drawPaper`) and both exporters use it, with shared colours (`PAPER_COLORS`), so screen and export show the same pattern. On screen, minor lines and dots are left out when they would be closer than about 3 CSS px (`minorVisible`), which keeps millimetre paper cheap and readable when zoomed out; major and margin lines stay. Exports always draw the full pattern.
+
+Page size presets (portrait, pt): A4 595.28 × 841.89, A5 419.53 × 595.28, Letter 612 × 792. Landscape swaps width and height; there is no stored orientation field, it follows from `width > height`. The format accepts any positive `width` and `height`, but 0.3 offers only the presets (custom sizes are M3c).
+
+**Changing the size of a page does not move or scale its strokes.** They keep their page coordinates; strokes that end up outside a smaller page stay in the file (nothing is deleted) and are clipped when drawn and exported. Making the page large again shows them again.
+
+A page added with **Add page** copies the size and paper of the page in view (0.2 always added an A4 grid page); `createPage()` without arguments still gives A4 grid.
+
 ## 3. Modules
 
 ```
 src/
-  main.ts                 plugin: view, extension, ribbon, commands (incl. add page, benchmark, stress test), settings, flush on unload
-  settings.ts             settings types and defaults
+  main.ts                 plugin: view, extension, ribbon, commands (incl. add page, export PDF, benchmark, stress test), settings, flush on unload
+  settings.ts             settings types and defaults (incl. default paper, page size, orientation)
   i18n.ts                 UI strings: English, Italian when Obsidian's language is Italian
   model/                  (does not import 'obsidian')
-    types.ts              Document, Page, Stroke, Tool, A4 constants, CURRENT_VERSION
-    document.ts           document/page/stroke creation, ids, quantization
+    types.ts              Document, Page, Stroke, Tool, Paper and paper kinds, page size presets, A4 constants, CURRENT_VERSION
+    document.ts           document/page/stroke creation (size and paper as parameters), ids, quantization
+    pages.ts              duplicatePage(): copy of a page with new page and stroke ids
     serialize.ts          deterministic serialize(), parse() with validation and migrations, serializeChecked() (save check), freezeStroke()
-    migrations.ts         chain of vN → vN+1 migrations (v0→v1, v1→v2)
-    history.ts            command-stack undo/redo (AddStroke, EraseStrokes, ReplaceStroke, AddPage, Batch)
+    migrations.ts         chain of vN → vN+1 migrations (v0→v1, v1→v2, v2→v3)
+    history.ts            command-stack undo/redo (AddStroke, EraseStrokes, ReplaceStroke, AddPage, DeletePage, MovePage, SetPaper, SetPageSize, Batch)
     stress.ts             deterministic generated notebook (10,000 strokes / 10 pages by default) for benchmarks and the stress-test command
   ink/                    (does not import 'obsidian')
     viewport.ts           screen ↔ page transform, fit-width, zoom around a point (scale 0.25–8), pan
+    paper.ts              paper pattern geometry (lines and dots in page coordinates) and paper colours (pure)
+    export-svg.ts         page → standalone SVG string (pure)
+    export-pdf.ts         pages → PDF bytes, dependency-free writer (pure)
     layout.ts             pages stacked vertically: boxes, page at a point, nearest and visible pages
     pressure.ts           real vs constant pressure detection, pressure simulated from velocity
     stabilizer.ts         exponential-lag input stabilization
@@ -93,7 +118,7 @@ src/
     lasso.ts              point-in-polygon selection, selection bounds, stroke transform
     transform.ts          2D affine matrices (translate, scale and rotate about a point, invert)
     stroke-shape.ts       perfect-freehand → SVG path, pen and highlighter parameters (pure, testable)
-    renderer.ts           two canvases (static + live), visible pages only, selection overlay, CSS-transform fast path, DPR, Path2D cache, rAF
+    renderer.ts           two canvases (static + live), visible pages only, paper pattern, selection overlay, CSS-transform fast path, DPR, Path2D cache, rAF
     pointer-controller.ts Pointer Events: coalesced/predicted, capture, pan, pinch, fling inertia
   storage/
     session.ts            document lifecycle: load, dirty, debounce, flush, conflicts (pure, testable)
@@ -101,9 +126,10 @@ src/
     notebooks.ts          notebook creation in the configured folder
   view/
     notebook-view.ts      FileView: mounts canvas and toolbar, wires session, history, input, tools, selection, performance overlay
-    toolbar.ts            tools, colours, widths, eraser mode, undo/redo, add page, delete selection, fit, page indicator
+    toolbar.ts            tools, colours, widths, eraser mode, undo/redo, add page, page menu button, delete selection, fit, page indicator
+    export.ts             writes PDF/SVG files next to the notebook (Vault API), free file names
     benchmark.ts          in-app benchmark (off-screen render of a generated notebook) and its modal
-    modals.ts             "New notebook" (name) and "Open notebooks" (fuzzy search)
+    modals.ts             "New notebook" (name, page size, orientation, paper) and "Open notebooks" (fuzzy search)
     settings-tab.ts       settings UI
 scripts/check-bundle.mjs          fails the build if main.js requires anything but 'obsidian'
 scripts/make-stress-notebook.mjs  writes a stress .notebook from the PC (alternative to the in-app command)
@@ -164,10 +190,26 @@ Known limit: if Android kills the process without notifying `visibilitychange`, 
 - `layoutPages` stacks the pages vertically in "document space" (pt) with a 24 pt gap, each page centred horizontally on the widest one. Strokes stay in page coordinates; a page box is only an offset, so layout changes never touch stroke data.
 - The viewport maps document space to the screen. Fit-to-width uses the layout width; zoom is clamped to 0.25–8.
 - **Virtualization**: the static redraw asks `visiblePages` for the pages intersecting the screen and draws only those; within a page it skips strokes whose cached bounding box is outside the visible area. Stroke `Path2D`s and bounds are cached per (frozen) stroke object and built the first time a stroke is drawn.
-- **Add page** (toolbar button and command) inserts a blank A4 grid page **after the page at the centre of the view** as an undoable `AddPage`, then scrolls to it. The toolbar shows `n / total` for the page at the centre of the view. There is no page delete yet (M3).
+- **Add page** (toolbar button and command) inserts a blank page with the size and paper of the page in view **after the page at the centre of the view** as an undoable `AddPage`, then scrolls to it. The toolbar shows `n / total` for the page at the centre of the view. Further page commands are in "Page commands" below.
+
+### Page commands
+
+The toolbar has a page menu button next to Add page. It acts on the page at the centre of the view. Every item is a history command, so each is one undo step; the selection is cleared first, and nothing runs while a stroke is being drawn.
+
+| Menu item | Command |
+|---|---|
+| Duplicate page | `AddPage` with `duplicatePage(page)` after the current page: new page id, new stroke ids, copied points, same size and paper |
+| Move page up / down | `MovePage`; disabled at the first / last page |
+| Delete page | `DeletePage`; disabled when the notebook has one page (a document always keeps at least one). Undo re-inserts the same page object |
+| Paper: blank / ruled / grid / dotted / millimetre | `SetPaper`; the spacing becomes the default of the new kind |
+| Size: A4 / A5 / Letter | `SetPageSize`; keeps the current orientation; strokes are not moved or scaled |
+| Portrait / Landscape | `SetPageSize` swapping width and height; shown only when the page has a preset size |
+| Export page as PDF / notebook as PDF / page as SVG | see §8 (not history commands) |
+
+After a command the view scrolls to the affected page. The commands tolerate repeated apply/revert: no page is inserted twice and a refused delete is not "undone".
 
 ### Rendering
-- Two stacked canvases, sized to the view × `devicePixelRatio`: **static** (paper, grid, saved strokes of the visible pages; a new stroke is appended without redrawing everything) and **live** (stroke in progress + prediction, lasso, floating selection; redrawn with `requestAnimationFrame`).
+- Two stacked canvases, sized to the view × `devicePixelRatio`: **static** (paper pattern, saved strokes of the visible pages; a new stroke is appended without redrawing everything) and **live** (stroke in progress + prediction, lasso, floating selection; redrawn with `requestAnimationFrame`).
 - **Highlighter** strokes are filled with alpha 0.35 and `globalCompositeOperation = "multiply"` in stroke order, so they darken what is under them (paper, grid, earlier ink) instead of covering it. The live preview is on the separate live canvas: translucent, but not multiplied with the page until the stroke is committed.
 - **CSS-transform fast path**: pan and zoom gestures call `setViewport(v, interactive = true)`. If the last full static redraw took more than 12 ms, the existing bitmap is moved and scaled with a CSS `matrix(...)` transform instead of being redrawn, and a full redraw runs 120 ms after the last gesture update. Any non-interactive change redraws immediately. While only the transform is applied, areas the old bitmap did not cover are blank and detail is not re-rendered for the new zoom. Pages that redraw in 12 ms or less never use it.
 - Initial zoom: fit to the view width; recomputed on resize/rotation until the user zooms. Pinch, wheel and Ctrl+wheel zoom around the focal point.
@@ -193,8 +235,32 @@ Command stack, not snapshots. Each command knows how to apply and undo itself; a
 |---|---|
 | `AddStroke { pageId, stroke, index }` | pen and highlighter strokes |
 | `ReplaceStroke { pageId, before, after[], index }` | segment erase (cut), whole-stroke erase (`after` empty), transforms, delete selection |
-| `AddPage { page, index }` | add page; undoing never removes the last page |
+| `AddPage { page, index }` | add or duplicate a page; undoing never removes the last page; applying it twice never inserts the page twice |
+| `DeletePage { page, index }` | delete page; a no-op (and so is its undo) on the only page |
+| `MovePage { pageId, from, to }` | move up/down; undo puts the page back at the exact position it moved from |
+| `SetPaper { pageId, before, after }` | change paper kind and spacing; strokes untouched |
+| `SetPageSize { pageId, before, after }` | change page size / orientation; strokes untouched |
 | `Batch { label, commands }` | one gesture or action made of several commands (eraser gesture, transform, delete); undone in reverse order |
 | `EraseStrokes { pageId, items }` | multi-stroke whole erase from M1; kept and tested, no longer used by the view |
 
 Committed strokes are immutable, so commands refer to stroke objects and indices, never to data that can change underneath them.
+
+## 8. Export (PDF and SVG)
+
+Export reads the document and does not go through the history. Files are written with the Vault API next to the notebook (`<name>.pdf`; single pages `<name> p3.pdf` and `<name> p3.svg`), adding ` 2`, ` 3`… if the name is taken; a notice shows the path or the error. The generators are pure functions in `ink/` (no `obsidian`, no DOM), so they run in tests. Entry points: the page menu (page as PDF, notebook as PDF, page as SVG) and the command **Export notebook as PDF**. Both formats always include the paper pattern.
+
+Both exporters reuse `paperPattern` and the stroke outline of the renderer (perfect-freehand, same parameters) and the same colours, so ink has the same geometry as on screen. Strokes stay vector.
+
+**PDF** (`pagesToPdf`, PDF 1.4, written by hand, no library):
+- One PDF page per notebook page. **Units: the PDF user unit is 1/72 inch = 1 pt = our document unit**, so `MediaBox` is `[0 0 width height]` with no scaling.
+- Objects: 1 catalog, 2 page tree, 3 info (`Producer`, and `Title` = notebook name), then a page object and a content stream per page. The classic `xref` table is built from real byte offsets. Everything is ASCII (the title is a literal string when it is printable ASCII, otherwise UTF-16BE hex with a BOM), so string length equals byte length and the offsets are exact.
+- **y-flip.** PDF has its origin at the bottom left, the document at the top left. Each content stream starts with `1 0 0 -1 0 H cm`, so coordinates are written as they are in the document.
+- Content: white page rectangle, paper (lines per kind with width and colour via `w` and `RG`; dots as tiny filled squares, to avoid four Béziers per dot), then the strokes in order.
+- **Strokes as cubics.** `strokeOutline` returns a polygon; the screen draws it as a chain of quadratic curves (control point = vertex, end point = midpoint to the next vertex). PDF paths have only cubics, so each quadratic is raised exactly: `c1 = p0 + 2/3 (q − p0)`, `c2 = p + 2/3 (q − p)`. The shape is the same as on screen. Each stroke is one closed filled path.
+- **Highlighter.** Pages that contain a highlighter stroke declare `/GS1 << /ca 0.35 /BM /Multiply >>` in their resources, and highlighter strokes are wrapped in `q /GS1 gs … Q`: same alpha and multiply blending as the canvas.
+- Numbers have at most 2 decimals and never use exponent notation.
+- **No compression.** Content streams are not Flate-compressed: no dependency, and the file can be read and checked by eye. The price is size, roughly 100–200 bytes per stroke point, so a page with a lot of ink is several times larger than the same page from a compressing PDF producer. Compression can be added later without changing the structure.
+
+**SVG** (`pageToSvg`): one standalone file per page. `width` and `height` are in mm (it prints at real size), the `viewBox` is in pt. White background rectangle, one path per paper line kind, one path for all dots (circles), one path per stroke; the highlighter has `fill-opacity` 0.35 and `mix-blend-mode: multiply`. The output is deterministic (no ids, dates or random values) and attribute values are escaped.
+
+**What was and was not checked.** Unit tests cover the PDF structure (header and trailer, one page object per page, `xref` offsets and `startxref`, `/Length`, MediaBox, y-flip, colours, ExtGState only with a highlighter, paper on/off, title escaping, two decimals) and the SVG (size, paper, highlighter, escaping, determinism). Beyond the unit tests, an exported PDF was parsed with pdf.js (3 pages, Unicode title, fills, stroked paper lines, highlighter ExtGState) and an exported SVG was rendered with resvg. **Neither was opened on Android**, and how the device displays or shares the files is untested.

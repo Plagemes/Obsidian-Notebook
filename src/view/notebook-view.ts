@@ -1,4 +1,4 @@
-import { FileView, Notice, Scope, type TFile, type WorkspaceLeaf } from "obsidian";
+import { FileView, Menu, Notice, Scope, type TFile, type WorkspaceLeaf } from "obsidian";
 import { t } from "../i18n";
 import { findHitStrokes, type BBox } from "../ink/hit-test";
 import { InputPolicy } from "../ink/input-policy";
@@ -12,12 +12,19 @@ import { Stabilizer } from "../ink/stabilizer";
 import { apply, IDENTITY, invert, isIdentity, multiply, rotateAbout, scaleAbout, translate, type Matrix } from "../ink/transform";
 import { clampToPage, fitWidth, pan, PAGE_MARGIN, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
 import { createId, createPage, createStroke, quantizePoint } from "../model/document";
-import { AddPage, AddStroke, Batch, History, removeStrokes, ReplaceStroke, type Command } from "../model/history";
+import { duplicatePage } from "../model/pages";
+import {
+	AddPage, AddStroke, Batch, DeletePage, History, MovePage, removeStrokes, ReplaceStroke, SetPageSize, SetPaper, type Command,
+} from "../model/history";
 import { freezeStroke } from "../model/serialize";
-import { FILE_EXTENSION, type NotebookDocument, type Page, type Point, type Stroke } from "../model/types";
+import {
+	FILE_EXTENSION, PAGE_SIZES, PAPER_KINDS, PAPER_SPACING,
+	type NotebookDocument, type Page, type PageSizeName, type PaperKind, type Point, type Stroke,
+} from "../model/types";
 import { DocumentSession, type SaveState, type SessionMode } from "../storage/session";
 import { VaultDocumentIO } from "../storage/vault-io";
 import { backupFolder, type NotebookSettings } from "../settings";
+import { exportPdf, exportSvg } from "./export";
 import { DEFAULT_TOOLS, Toolbar, type ToolbarState } from "./toolbar";
 
 export const VIEW_TYPE = "notebook-view";
@@ -140,6 +147,7 @@ export class NotebookView extends FileView {
 			undo: () => this.undo(),
 			redo: () => this.redo(),
 			addPage: () => this.addPage(),
+			pageMenu: (evt) => this.openPageMenu(evt),
 			deleteSelection: () => this.deleteSelection(),
 			fit: () => this.fitToWidth(),
 		});
@@ -304,10 +312,90 @@ export class NotebookView extends FileView {
 		if (!doc || !this.editable() || this.controller?.drawing) return;
 		this.clearSelection();
 		const index = this.currentPageIndex() + 1;
-		this.history.execute(new AddPage(createPage(), index));
+		// A new page takes the size and paper of the page in view.
+		const like = doc.pages[index - 1];
+		const page = like ? createPage({ width: like.width, height: like.height }, { ...like.paper }) : createPage();
+		this.history.execute(new AddPage(page, index));
 		this.afterHistoryChange();
+		this.scrollToPage(index);
+	}
+
+	private scrollToPage(index: number): void {
 		const box = this.layout?.boxes[index];
 		if (box) this.setViewport({ ...this.viewport, offsetY: PAGE_MARGIN - box.y * this.viewport.scale });
+	}
+
+	/** Page menu: reorder, duplicate, delete, paper, size, export. Every change is undoable. */
+	private openPageMenu(evt: MouseEvent): void {
+		const doc = this.session?.doc;
+		if (!doc || !this.editable()) return;
+		const index = this.currentPageIndex();
+		const page = doc.pages[index];
+		if (!page) return;
+		const menu = new Menu();
+		menu.addItem((i) => i.setTitle(t("page.duplicate")).setIcon("copy").onClick(() => this.pageCommand(new AddPage(duplicatePage(page), index + 1), index + 1, page)));
+		menu.addItem((i) => i.setTitle(t("page.moveUp")).setIcon("arrow-up").setDisabled(index === 0)
+			.onClick(() => this.pageCommand(new MovePage(page.id, index, index - 1), index - 1, page)));
+		menu.addItem((i) => i.setTitle(t("page.moveDown")).setIcon("arrow-down").setDisabled(index >= doc.pages.length - 1)
+			.onClick(() => this.pageCommand(new MovePage(page.id, index, index + 1), index + 1, page)));
+		menu.addItem((i) => i.setTitle(t("page.delete")).setIcon("trash-2").setSection("danger").setDisabled(doc.pages.length <= 1)
+			.onClick(() => this.pageCommand(new DeletePage(page, index), Math.max(0, index - 1), page)));
+		menu.addSeparator();
+		for (const kind of PAPER_KINDS) {
+			menu.addItem((i) => i.setTitle(t("page.paper", { kind: t(`paper.${kind}`) })).setChecked(page.paper.kind === kind)
+				.onClick(() => this.setPaper(page, kind, index)));
+		}
+		menu.addSeparator();
+		const landscape = page.width > page.height;
+		for (const name of Object.keys(PAGE_SIZES) as PageSizeName[]) {
+			const base = PAGE_SIZES[name];
+			const current = Math.min(page.width, page.height) === base.width && Math.max(page.width, page.height) === base.height;
+			menu.addItem((i) => i.setTitle(t("page.size", { size: t(`size.${name}`) })).setChecked(current)
+				.onClick(() => this.setSize(page, name, landscape, index)));
+		}
+		const sizeName = (Object.keys(PAGE_SIZES) as PageSizeName[]).find((n) =>
+			Math.min(page.width, page.height) === PAGE_SIZES[n].width && Math.max(page.width, page.height) === PAGE_SIZES[n].height);
+		if (sizeName) {
+			menu.addItem((i) => i.setTitle(t(landscape ? "page.portrait" : "page.landscape")).setIcon("rotate-cw")
+				.onClick(() => this.setSize(page, sizeName, !landscape, index)));
+		}
+		menu.addSeparator();
+		const file = this.file;
+		if (file) {
+			menu.addItem((i) => i.setTitle(t("export.pagePdf")).setIcon("file-output")
+				.onClick(() => void exportPdf(this.app, file, [page], ` p${index + 1}`)));
+			menu.addItem((i) => i.setTitle(t("export.notebookPdf")).setIcon("file-output").onClick(() => void this.exportNotebookPdf()));
+			menu.addItem((i) => i.setTitle(t("export.pageSvg")).setIcon("image")
+				.onClick(() => void exportSvg(this.app, file, page, ` p${index + 1}`)));
+		}
+		menu.showAtMouseEvent(evt);
+	}
+
+	async exportNotebookPdf(): Promise<void> {
+		const doc = this.session?.doc;
+		if (doc && this.file) await exportPdf(this.app, this.file, doc.pages);
+	}
+
+	private pageCommand(cmd: Command, scrollTo: number, page: Page): void {
+		// The menu may have stayed open while the file was reloaded (read-only, broken, or another document).
+		if (this.controller?.drawing || !this.editable() || !this.session?.doc?.pages.includes(page)) return;
+		this.clearSelection();
+		this.history.execute(cmd);
+		this.afterHistoryChange();
+		this.scrollToPage(scrollTo);
+	}
+
+	private setPaper(page: Page, kind: PaperKind, index: number): void {
+		if (page.paper.kind === kind) return;
+		const after = { kind, spacing: PAPER_SPACING[kind] };
+		this.pageCommand(new SetPaper(page.id, { ...page.paper }, after), index, page);
+	}
+
+	private setSize(page: Page, name: PageSizeName, landscape: boolean, index: number): void {
+		const base = PAGE_SIZES[name];
+		const after = landscape ? { width: base.height, height: base.width } : { width: base.width, height: base.height };
+		if (after.width === page.width && after.height === page.height) return;
+		this.pageCommand(new SetPageSize(page.id, { width: page.width, height: page.height }, after), index, page);
 	}
 
 	deleteSelection(): void {
@@ -404,6 +492,8 @@ export class NotebookView extends FileView {
 
 	private afterHistoryChange(): void {
 		this.refreshLayout();
+		// The document may be shorter now (page deleted or made smaller): keep the view inside it.
+		this.setViewport(this.viewport);
 		this.session?.markChanged();
 		this.updateHistoryButtons();
 		this.updatePageIndicator();

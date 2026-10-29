@@ -1,6 +1,10 @@
 import { PluginSettingTab, Setting, type App, type Plugin, type SettingDefinitionItem } from "obsidian";
 import { t } from "../i18n";
 import { DEFAULT_SETTINGS, readSettings, type NotebookSettings } from "../settings";
+import { PAGE_SIZES, PAPER_KINDS } from "../model/types";
+
+const paperOptions = () => Object.fromEntries(PAPER_KINDS.map((k) => [k, t(`paper.${k}`)]));
+const sizeOptions = () => Object.fromEntries((Object.keys(PAGE_SIZES) as Array<keyof typeof PAGE_SIZES>).map((k) => [k, t(`size.${k}`)]));
 
 export interface SettingsHost extends Plugin {
 	settings: NotebookSettings;
@@ -26,6 +30,19 @@ export class NotebookSettingTab extends PluginSettingTab {
 					defaultValue: DEFAULT_SETTINGS.folder,
 					placeholder: DEFAULT_SETTINGS.folder,
 				},
+			},
+			{
+				name: t("settings.defaultPaper"),
+				desc: t("settings.defaultPaper.desc"),
+				control: { type: "dropdown", key: "defaultPaper", defaultValue: DEFAULT_SETTINGS.defaultPaper, options: paperOptions() },
+			},
+			{
+				name: t("settings.defaultSize"),
+				control: { type: "dropdown", key: "defaultPageSize", defaultValue: DEFAULT_SETTINGS.defaultPageSize, options: sizeOptions() },
+			},
+			{
+				name: t("settings.defaultLandscape"),
+				control: { type: "toggle", key: "defaultLandscape", defaultValue: DEFAULT_SETTINGS.defaultLandscape },
 			},
 			{
 				name: t("settings.finger"),
@@ -97,6 +114,19 @@ export class NotebookSettingTab extends PluginSettingTab {
 				.setPlaceholder(DEFAULT_SETTINGS.folder)
 				.setValue(s.folder)
 				.onChange((v) => this.setControlValue("folder", v)));
+
+		new Setting(containerEl)
+			.setName(t("settings.defaultPaper"))
+			.setDesc(t("settings.defaultPaper.desc"))
+			.addDropdown((dd) => dd.addOptions(paperOptions()).setValue(s.defaultPaper).onChange((v) => this.setControlValue("defaultPaper", v)));
+
+		new Setting(containerEl)
+			.setName(t("settings.defaultSize"))
+			.addDropdown((dd) => dd.addOptions(sizeOptions()).setValue(s.defaultPageSize).onChange((v) => this.setControlValue("defaultPageSize", v)));
+
+		new Setting(containerEl)
+			.setName(t("settings.defaultLandscape"))
+			.addToggle((tg) => tg.setValue(s.defaultLandscape).onChange((v) => this.setControlValue("defaultLandscape", v)));
 
 		new Setting(containerEl)
 			.setName(t("settings.finger"))

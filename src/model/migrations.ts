@@ -52,10 +52,16 @@ function v1ToV2(raw: RawObject): RawObject {
 	return { ...raw, version: 2 };
 }
 
+/** v3 only widens the set of paper kinds (and page sizes): every valid v2 document is a valid v3 document. */
+function v2ToV3(raw: RawObject): RawObject {
+	return { ...raw, version: 3 };
+}
+
 /** MIGRATIONS[n] takes a document from version n to n+1. */
 export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	0: v0ToV1,
 	1: v1ToV2,
+	2: v2ToV3,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */
