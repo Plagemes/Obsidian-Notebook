@@ -1,8 +1,11 @@
 /** Notebook document format. Units: typographic points (pt), origin at the top-left of the page. */
 
 export const FORMAT_ID = "obsidian-notebook";
-/** v4: library metadata, assets, backgrounds, elements, infinite pages, "shape" tool (v3: paper kinds and page sizes). */
-export const CURRENT_VERSION = 4;
+/**
+ * v5: per-stroke render version (v4: library metadata, assets, backgrounds, elements, infinite pages,
+ * "shape" tool; v3: paper kinds and page sizes).
+ */
+export const CURRENT_VERSION = 5;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -28,6 +31,13 @@ export type Point = [number, number, number];
 export const TOOLS = ["pen", "highlighter", "shape"] as const;
 export type Tool = (typeof TOOLS)[number];
 
+/** Geometry that draws a stroke: perfect-freehand outline with the frozen per-tool parameters (every stroke written before v5). */
+export const RENDER_FREEHAND = 1;
+/** Incremental "wet ink" geometry. */
+export const RENDER_INK = 2;
+export const RENDER_VERSIONS = [RENDER_FREEHAND, RENDER_INK] as const;
+export type RenderVersion = (typeof RENDER_VERSIONS)[number];
+
 export interface Stroke {
 	id: string;
 	tool: Tool;
@@ -35,6 +45,12 @@ export interface Stroke {
 	color: string;
 	/** Nominal diameter in pt. */
 	width: number;
+	/**
+	 * v5: which geometry draws the stroke. 1 = perfect-freehand outline with the per-tool parameters
+	 * (frozen: every stroke written before v5 is 1 and must keep rendering exactly as before);
+	 * 2 = incremental wet-ink geometry.
+	 */
+	render: RenderVersion;
 	points: Point[];
 }
 

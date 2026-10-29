@@ -15,12 +15,12 @@ Accepted and documented costs:
 - Native search, tags and backlinks do not see notebooks (until M4).
 - **Obsidian Sync** syncs unknown extensions only with the "Sync all other types" option enabled (stated in the README). Syncthing and USB copy have no limits.
 
-## 2. JSON schema v3
+## 2. JSON schema v5
 
 ```json
 {
   "format": "obsidian-notebook",
-  "version": 3,
+  "version": 5,
   "id": "6f1c…",
   "createdAt": "2026-10-29T14:30:00.000Z",
   "modifiedAt": "2026-10-29T14:42:10.000Z",
@@ -31,9 +31,9 @@ Accepted and documented costs:
       "height": 841.89,
       "paper": { "kind": "grid", "spacing": 14.17 },
       "strokes": [
-        { "id": "c03d…", "tool": "pen", "color": "#1e293b", "width": 2,
+        { "id": "c03d…", "tool": "pen", "color": "#1e293b", "width": 2, "render": 1,
           "points": [[72.5, 90.12, 0.512], [73.1, 90.4, 0.534]] },
-        { "id": "d71a…", "tool": "highlighter", "color": "#facc15", "width": 14,
+        { "id": "d71a…", "tool": "highlighter", "color": "#facc15", "width": 14, "render": 2,
           "points": [[72.5, 120.0, 0.5], [180.2, 120.3, 0.5]] }
       ]
     }
@@ -52,6 +52,7 @@ Accepted and documented costs:
 | `tool` | `"pen"` or `"highlighter"` (new in v2). The eraser produces no strokes |
 | `color` | `#rrggbb` |
 | `width` | nominal diameter in pt, > 0 |
+| `render` | required (v5): the geometry that draws the stroke. `1` = perfect-freehand outline with the per-tool parameters below (frozen; every stroke written before v5 is 1); `2` = incremental wet-ink geometry (§6). Any other value is rejected. Written right after `width`, before `points` |
 | `id` | unique strings (UUID when available) |
 
 Unknown fields are ignored on read. Every schema change increments `version` and adds a tested migration (`src/model/migrations.ts`).
@@ -62,13 +63,14 @@ Unknown fields are ignored on read. Every schema change increments `version` and
 - **v1 → v2** (M2): the only change is the new `highlighter` tool. The migration is the identity plus `version: 2`: every valid v1 document is a valid v2 document. A v1 file opened by 0.2 is migrated in memory and rewritten as v2 only on the first edit.
 - **v2 → v3** (M3a): v3 adds the paper kinds `blank`, `ruled`, `dotted` and `millimetre` (the v2 reader accepted only `grid`); page sizes were already free numbers (`width`, `height`). The migration is the identity plus `version: 3`: every valid v2 document is a valid v3 document. A v2 file opened by 0.3 is migrated in memory and rewritten as v3 only on the first edit.
 - **v3 → v4** (M3): adds `meta` (`tags`, `favorite`, `cover`, `bookmarks`) and `assets` (keyed by lowercase-hex id) to the document; `background`, `elements` (text and image) and `infinite` to pages, written only when present; and the stroke tool `shape`. Migration: default meta (`DEFAULT_META`), empty assets; a pre-v4 file that already contains `shape` is rejected. Validation: asset references (page backgrounds, image elements) must resolve to an asset of the right kind; ids are unique across strokes and elements; `meta.tags` are de-duplicated and `meta.bookmarks` filtered to existing pages on read and on write. Order of keys: `meta`, `assets` before `pages`; per page `background`, `infinite`, `elements`, `strokes`. `serializeChecked` validates meta, assets, backgrounds and elements on every save, also on the incremental path.
+- **v4 → v5**: adds the required per-stroke `render` field (`1` = `RENDER_FREEHAND`, `2` = `RENDER_INK`). Migration: every stroke of every page gets `render: 1`, because every stroke written before v5 was drawn with perfect-freehand and must keep rendering exactly as before; v0→v1 still produces strokes without `render` and the v4→v5 step adds it. `readStroke` rejects a missing `render` or a value other than 1 or 2 (`pages[i].strokes[j].render`). `createStroke` defaults to `RENDER_FREEHAND`, so only a caller that asks for the new engine produces render 2. Key order: `id`, `tool`, `color`, `width`, `render`, `points`.
 - **Compatibility**: a plugin that supports an older version sees a newer `version` as a future version, so it opens the file read-only (and keeps a backup copy of it, as for any file it cannot edit) and never rewrites it. Once 0.2 has saved a file, 0.1.x cannot edit it; once 0.3 has saved a file, 0.2.x cannot edit it.
 
-**Stroke rendering parameters** (perfect-freehand) are code constants, not per-stroke fields:
+**Stroke rendering parameters** of `render: 1` (perfect-freehand) are code constants; the per-stroke `render` field selects the geometry, it does not carry parameters:
 - pen (`PEN_V1`): `size = width`, `thinning 0.6`, `smoothing 0.5`, `streamline 0.35`, `simulatePressure false`, round caps. Unchanged since v1;
 - highlighter (`HIGHLIGHTER_V2`): `thinning 0` (constant width, pressure ignored), `smoothing 0.5`, `streamline 0.35`, flat ends. Painted with alpha 0.35 and `multiply` compositing.
 
-Changing these constants changes how existing files look; making them per-stroke would need another schema version with a migration.
+Changing these constants changes how existing files look: the `render: 1` parameters are frozen. A different look is a new `render` value (2 = wet ink, §6), never an edit of these constants.
 
 ### Paper and page sizes
 
@@ -102,7 +104,7 @@ src/
     document.ts           document/page/stroke creation (size and paper as parameters), ids, quantization
     pages.ts              duplicatePage(): copy of a page with new page and stroke ids
     serialize.ts          deterministic serialize(), parse() with validation and migrations, serializeChecked() (save check), freezeStroke()
-    migrations.ts         chain of vN → vN+1 migrations (v0→v1, v1→v2, v2→v3)
+    migrations.ts         chain of vN → vN+1 migrations (v0→v1, v1→v2, v2→v3, v3→v4, v4→v5)
     history.ts            command-stack undo/redo (AddStroke, EraseStrokes, ReplaceStroke, AddPage, DeletePage, MovePage, SetPaper, SetPageSize, Batch)
     stress.ts             deterministic generated notebook (10,000 strokes / 10 pages by default) for benchmarks and the stress-test command
   ink/                    (does not import 'obsidian')

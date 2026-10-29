@@ -23,6 +23,7 @@ export function duplicatePage(page: Page): Page {
 			tool: s.tool,
 			color: s.color,
 			width: s.width,
+			render: s.render,
 			points: s.points.map((p) => [p[0], p[1], p[2]] as [number, number, number]),
 		})),
 	};

@@ -1,8 +1,8 @@
 import { detectVersion, migrate, MigrationError, type RawObject } from "./migrations";
 import {
-	CURRENT_VERSION, DEFAULT_META, FORMAT_ID, PAPER_KINDS, TOOLS,
+	CURRENT_VERSION, DEFAULT_META, FORMAT_ID, PAPER_KINDS, RENDER_VERSIONS, TOOLS,
 	type Asset, type AssetKind, type ImageElement, type NotebookDocument, type NotebookMeta, type Page,
-	type PageBackground, type PageElement, type PaperKind, type Point, type Stroke, type TextElement, type Tool,
+	type PageBackground, type PageElement, type PaperKind, type Point, type RenderVersion, type Stroke, type TextElement, type Tool,
 } from "./types";
 
 export type ParseFailure =
@@ -25,7 +25,7 @@ function fail(path: string, what: string): never {
 }
 
 function strokeLine(s: Stroke): string {
-	return `\t\t\t\t{"id":${j(s.id)},"tool":${j(s.tool)},"color":${j(s.color)},"width":${j(s.width)},"points":${j(s.points)}}`;
+	return `\t\t\t\t{"id":${j(s.id)},"tool":${j(s.tool)},"color":${j(s.color)},"width":${j(s.width)},"render":${j(s.render)},"points":${j(s.points)}}`;
 }
 
 function elementLine(e: PageElement): string {
@@ -158,9 +158,10 @@ function readStroke(v: unknown, path: string): Stroke {
 	if (!TOOLS.includes(v.tool as Tool)) fail(`${path}.tool`, "unknown tool");
 	if (typeof v.color !== "string" || !COLOR_RE.test(v.color)) fail(`${path}.color`, "expected a #rrggbb colour");
 	const width = positive(v.width, `${path}.width`);
+	if (!RENDER_VERSIONS.includes(v.render as RenderVersion)) fail(`${path}.render`, "expected render version 1 or 2");
 	if (!Array.isArray(v.points) || v.points.length === 0) fail(`${path}.points`, "expected at least one point");
 	const points = v.points.map((pt, i) => readPoint(pt, `${path}.points[${i}]`));
-	return { id, tool: v.tool as Tool, color: v.color, width, points };
+	return { id, tool: v.tool as Tool, color: v.color, width, render: v.render as RenderVersion, points };
 }
 
 type Assets = Readonly<Record<string, Asset>>;

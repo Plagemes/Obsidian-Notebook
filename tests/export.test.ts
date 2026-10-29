@@ -10,7 +10,7 @@ import { A4_HEIGHT, A4_WIDTH, MM, PAPER_SPACING, type ImageElement, type Page, t
 function makeStroke(tool: Tool = "pen", color = "#1e1e1e", id = "s1"): Stroke {
 	const points: Point[] = [];
 	for (let i = 0; i <= 12; i++) points.push([50 + i * 10, 60 + Math.sin(i / 2) * 8, 0.5]);
-	return { id, tool, color, width: tool === "highlighter" ? 12 : 2, points };
+	return { id, tool, color, width: tool === "highlighter" ? 12 : 2, render: 1, points };
 }
 
 function makePage(kind: PaperKind, strokes: Stroke[] = [], width = A4_WIDTH, height = A4_HEIGHT): Page {

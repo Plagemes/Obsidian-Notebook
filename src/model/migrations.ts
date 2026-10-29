@@ -1,5 +1,5 @@
 import { createId, quantizePoint } from "./document";
-import { A4_HEIGHT, A4_WIDTH, DEFAULT_META, FORMAT_ID, GRID_5MM } from "./types";
+import { A4_HEIGHT, A4_WIDTH, DEFAULT_META, FORMAT_ID, GRID_5MM, RENDER_FREEHAND } from "./types";
 
 export type RawObject = Record<string, unknown>;
 
@@ -82,12 +82,28 @@ function v3ToV4(raw: RawObject): RawObject {
 	};
 }
 
+/**
+ * v5 adds the required per-stroke `render` field. Every stroke written before v5 was drawn with
+ * perfect-freehand, so it becomes render 1 (RENDER_FREEHAND) and keeps rendering exactly as before.
+ * Pages and strokes that are not objects are left alone: validation rejects them afterwards.
+ */
+function v4ToV5(raw: RawObject): RawObject {
+	if (!Array.isArray(raw.pages)) return { ...raw, version: 5 };
+	const isObj = (v: unknown): v is RawObject => typeof v === "object" && v !== null && !Array.isArray(v);
+	const pages = (raw.pages as unknown[]).map((page) => {
+		if (!isObj(page) || !Array.isArray(page.strokes)) return page;
+		return { ...page, strokes: (page.strokes as unknown[]).map((s) => (isObj(s) ? { ...s, render: RENDER_FREEHAND } : s)) };
+	});
+	return { ...raw, version: 5, pages };
+}
+
 /** MIGRATIONS[n] takes a document from version n to n+1. */
 export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	0: v0ToV1,
 	1: v1ToV2,
 	2: v2ToV3,
 	3: v3ToV4,
+	4: v4ToV5,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

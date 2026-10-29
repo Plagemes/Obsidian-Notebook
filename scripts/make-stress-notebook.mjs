@@ -26,7 +26,7 @@ for (let i = 0; i < count; i++) {
 			Math.round((0.35 + 0.4 * Math.sin(t * Math.PI)) * 1000) / 1000,
 		]);
 	}
-	strokes.push({ id: randomUUID(), tool: "pen", color: "#1e1e1e", width: 1.6, points });
+	strokes.push({ id: randomUUID(), tool: "pen", color: "#1e1e1e", width: 1.6, render: 1, points });
 	x += w + 2 + (rand() < 0.2 ? 6 : 0);
 	if (x > W - MARGIN) {
 		x = MARGIN;
@@ -38,7 +38,7 @@ for (let i = 0; i < count; i++) {
 const now = new Date().toISOString();
 const doc = {
 	format: "obsidian-notebook",
-	version: 1,
+	version: 5,
 	id: randomUUID(),
 	createdAt: now,
 	modifiedAt: now,

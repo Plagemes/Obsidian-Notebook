@@ -63,8 +63,7 @@ function rawFull(): Raw {
 }
 
 describe("format v4 migrations", () => {
-	it("is at version 4 and has a v3 step", () => {
-		expect(CURRENT_VERSION).toBe(4);
+	it("has a v3 step", () => {
 		expect(MIGRATIONS[3]).toBeTypeOf("function");
 	});
 
@@ -73,24 +72,24 @@ describe("format v4 migrations", () => {
 		const r = parse(JSON.stringify(v3));
 		if (!r.ok) throw new Error(r.message);
 		expect(r.migratedFrom).toBe(3);
-		expect(r.doc.version).toBe(4);
+		expect(r.doc.version).toBe(CURRENT_VERSION);
 		expect(r.doc.meta).toEqual(DEFAULT_META);
 		expect(r.doc.meta).not.toBe(DEFAULT_META);
 		expect(r.doc.assets).toEqual({});
 		expect(r.doc.pages[0]!.paper).toEqual({ kind: "ruled", spacing: 22.68 });
-		expect(r.doc.pages[0]!.strokes[0]).toEqual(v3.pages[0]!.strokes[0]);
+		expect(r.doc.pages[0]!.strokes[0]).toEqual({ ...v3.pages[0]!.strokes[0], render: 1 });
 		expect(r.doc.pages[0]!.background).toBeUndefined();
 		expect(r.doc.pages[0]!.elements).toBeUndefined();
 		expect(r.doc.pages[0]!.infinite).toBeUndefined();
 	});
 
-	it.each([0, 1, 2])("a v%i file reaches v4", (from) => {
+	it.each([0, 1, 2])("a v%i file reaches the current version", (from) => {
 		const raw = from === 0
 			? { strokes: [{ color: "#000000", size: 2, points: [{ x: 1, y: 2 }] }] }
 			: { ...v3Doc(), version: from, pages: [{ ...v3Doc().pages[0]!, paper: { kind: "grid", spacing: 14.17 } }] };
 		const r = parse(JSON.stringify(raw));
 		if (!r.ok) throw new Error(r.message);
-		expect(r.doc.version).toBe(4);
+		expect(r.doc.version).toBe(CURRENT_VERSION);
 		expect(r.migratedFrom).toBe(from);
 		expect(r.doc.meta).toEqual(DEFAULT_META);
 		expect(r.doc.assets).toEqual({});
