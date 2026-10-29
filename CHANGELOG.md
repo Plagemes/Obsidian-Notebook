@@ -25,6 +25,8 @@ Not yet verified on Android hardware (see `docs/testing.md`).
 - **New lecture** (command, page menu): a small dialog asks for the course or title (default: the notebook name) and the date; a page like the last one is added at the end with the header as a text box, in one undo step. The format has no page titles, so the header is ordinary text.
 - **Loose sheet** (command, ribbon icon, library button): a quick-notes notebook opened from anywhere, created on first use in the notebooks folder or at the path set in the new setting *Loose sheet location*; an existing file is never replaced.
 - **Move to notebook…** (page menu, command): pick pages and a destination notebook. The destination is saved first (an open notebook: one undo step; a closed file: validated, a backup kept, read back), and only then do the pages leave the source (one undo step); pages edited meanwhile stay. Assets are shared by id, so only their records are copied.
+### Added
+- **Words and lines without OCR (#255).** With the lasso tool, a **double tap** on handwriting selects the word under it and a **triple tap** the whole line; the result is the normal lasso selection (move, scale, rotate, delete). Words and lines are found geometrically from the strokes (`src/ink/words.ts`); highlighter and shape strokes and oversized strokes (frames, long underlines) are ignored. Taps do nothing to the document: no strokes or dots are created. Not yet verified on Android hardware.
 
 ## 0.4.1 — 2026-10-29
 ### Added
