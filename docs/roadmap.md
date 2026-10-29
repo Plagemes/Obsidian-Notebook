@@ -466,6 +466,74 @@ Features for following a lecture live. Exam and review features stay in the sepa
     - Switch states with tabs or a slider on the figure; optional animation to watch the evolution over time.
     - Export renders each instance at the state it shows.
 
+## M14 — More features (backlog, planned 2026-10-29)
+
+Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for all.
+
+### Technical and scientific drawing
+242. **P2** Dynamic geometry: points and figures linked by constraints that update when you drag one (a lightweight GeoGebra inside the page).
+243. **P2** Scale drawing with dimensions: set the scale (1 cm = 1 m) and measurements and dimension lines show real sizes.
+244. **P2** Charts from table data (bar, line, pie), updated when the numbers change.
+245. **P2** Hand-drawn flowcharts that tidy themselves: boxes and arrows recognised, aligned and connected.
+246. **P2** Leader-line labels, auto-aligned, for annotated figures (anatomy, diagrams).
+247. **P2** Numbered markers on a figure (1, 2, 3) with an automatically generated legend.
+248. **P2** Figure captions and numbering ("Fig. 3") with references that update themselves.
+249. **P2** Automatic course formula sheet: collects every formula element (#110) into one page.
+250. **P3** Pattern fills (hatching, dots).
+251. **P3** Duplicate in series: copies on a grid or along a path.
+252. **P3** Tree diagrams (probability, decisions) with automatic layout.
+253. **P3** Even out handwriting: make size and slant of selected words consistent.
+254. **P3** Automatic indentation of handwritten lists.
+
+### Ink structure (foundation for many features)
+255. **P1** Words and lines detected without OCR: double tap selects a word, triple tap a line. Basis for reflow (#92), alignment (#93) and headings (#102).
+256. **P2** Line handle: drag whole lines to reorder them.
+257. **P2** Overwrite: write over a word and the new one replaces the old.
+258. **P3** Smart underline: a line under a word is straightened and fitted to that word.
+259. **P3** Self-adjusting boxes: a frame around handwriting grows when lines are added.
+
+### Even closer Obsidian integration
+260. **P2** Ink on top of Markdown notes: write by hand directly on a regular note (feasibility study first).
+261. **P2** Sketch inside a Markdown note: a small handwriting block inside the note.
+262. **P2** Turn a region into an atomic note (Zettelkasten style), with the ink image and a link back.
+263. **P2** Links to a precise region of a page, not only to the page.
+264. **P2** Saved views: a named region + zoom, recalled instantly.
+265. **P2** Global bookmarks: pages from different notebooks in one list.
+266. **P2** Planner pages showing Obsidian tasks and due dates on top.
+267. **P2** Linked images: if the file in the vault changes (e.g. a plot exported from Python), the image on the page updates.
+268. **P3** Table linked to a CSV in the vault, updating itself.
+269. **P3** Export to Excalidraw.
+270. **P3** Ink inside Obsidian Canvas.
+
+### Devices and Android
+271. **P1** Instant start: reopens the last page in under a second.
+272. **P2** E-ink mode for Android e-ink tablets (e.g. Boox): high contrast, no animations, refresh-friendly drawing.
+273. **P2** Same notebook in two side-by-side views: two different pages, shared edits.
+274. **P3** Android home-screen shortcut to the last notebook or page.
+275. **P3** S Pen buttons and Air actions to turn pages in presentation mode (to verify whether the WebView receives them).
+276. **P3** Graphics tablets on Windows: buttons, pressure, tilt.
+277. **P2** Copy to the system clipboard as an image, to paste into messaging, mail and other apps.
+
+### Paper ↔ digital and exports
+278. **P2** Paper round trip: print pages with a code, write on paper, scan it and it returns to the right page of the notebook.
+279. **P2** Custom paper editor: spacing, colours, margins, header area, combinations.
+280. **P2** Export only the written area, or the selection, as transparent PNG or SVG.
+281. **P3** Poster printing over several sheets.
+282. **P3** Export optimised for e-ink readers.
+283. **P3** Export to LaTeX/Overleaf for theses and reports.
+284. **P3** Import from other apps (Samsung Notes, Goodnotes, OneNote) where the format allows it (to be researched).
+
+### Privacy and sharing
+285. **P2** Redaction before export: cover personal data or parts not to share.
+286. **P3** Safe presentation: show only chosen pages; the rest of the notebook stays hidden.
+287. **P2** "What changed": opening a notebook edited on another device shows the differences.
+288. **P3** Duplicate or similar pages: find slides imported twice and duplicated pages.
+
+### Accessibility and learning
+289. **P3** Colour-blind-safe palettes, with simulation.
+290. **P3** Alternative descriptions of figures and images for screen readers.
+291. **P3** Handwriting practice with a model and comparison, for languages with other scripts.
+
 ### Study and exam update (to be designed later)
 
 Exam and review features will ship as one coherent update, designed later together: #24 (flashcards from the lasso), #89 (scheduled review), #116 (exam review plan), #117 (review coverage map), #133 (course dashboard). Not planned for now.
