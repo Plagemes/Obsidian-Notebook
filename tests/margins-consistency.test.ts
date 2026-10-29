@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { planSpaceChange } from "../src/ink/space";
+import { textElementBounds } from "../src/ink/text-layout";
 import { createDocument, createPage, createStroke } from "../src/model/document";
 import { History, SetPageMargins } from "../src/model/history";
 import { backgroundRect, translateStroke } from "../src/model/margins";
@@ -143,7 +144,7 @@ describe("merge of a conflicted copy with v6 margins", () => {
 		const before = serialize(doc);
 		const history = new History(() => doc);
 		const plan = planMerge(doc, other);
-		expect(plan.summary.marginsWidened).toBe(1);
+		expect(plan.summary.pagesEnlarged).toBe(1);
 		expect(plan.summary.strokesAdded).toBe(1);
 		expect(plan.summary.identical).toBe(3);
 		history.execute(plan.command!);
@@ -169,7 +170,7 @@ describe("merge of a conflicted copy with v6 margins", () => {
 		const far = line(650, 420, 700, 450);
 		other.pages[1]!.strokes.push(far);
 		const plan = planMerge(clone(main), other);
-		expect(plan.summary.marginsWidened).toBe(1);
+		expect(plan.summary.pagesEnlarged).toBe(1);
 		const m = merged(main, other);
 		const page = m.pages[1]!;
 		expect(page.margins).toEqual({ left: 0, right: 100, bottom: 50 });
@@ -184,7 +185,79 @@ describe("merge of a conflicted copy with v6 margins", () => {
 		const origin = pdfDoc();
 		const other = withMargins(origin);
 		other.pages[1]!.strokes.push(line(200, 100, 300, 120));
-		expect(planMerge(clone(origin), other).summary.marginsWidened).toBe(0);
+		expect(planMerge(clone(origin), other).summary.pagesEnlarged).toBe(0);
+	});
+
+	it("a text box of the copy below main's bottom counts with the height of its text", () => {
+		const origin = pdfDoc();
+		const other = clone(origin);
+		const box: TextElement = { id: "t2", type: "text", x: 50, y: 390, width: 100, text: "one\ntwo\nthree", fontSize: 12, color: "#000000" };
+		other.pages[1]!.elements!.push(box);
+		const m = merged(origin, other);
+		const page = m.pages[1]!;
+		expect(page.height).toBeGreaterThanOrEqual(textElementBounds(box).maxY);
+		expect(textElementBounds(box).maxY).toBeGreaterThan(400 + 12);
+		expect(page.margins).toEqual({ left: 0, right: 0, bottom: page.height - 400 });
+		expect(backgroundRect(page)).toEqual({ x: 0, y: 0, width: 600, height: 400 });
+		expect(planMerge(clone(m), other).command).toBeNull();
+	});
+
+	it("equal margins, fixed PDF page: ink of the copy below the page extends the bottom margin", () => {
+		const origin = withMargins(pdfDoc());
+		const other = clone(origin);
+		other.pages[1]!.strokes.push(line(100, 450, 200, 500));
+		const plan = planMerge(clone(origin), other);
+		expect(plan.summary.marginsDiffer).toBe(0);
+		expect(plan.summary.pagesEnlarged).toBe(1);
+		const m = merged(origin, other);
+		const page = m.pages[1]!;
+		expect(page.height).toBe(500);
+		expect(page.margins).toEqual({ ...MARGINS, bottom: 100 });
+		expect(backgroundRect(page)).toEqual(backgroundRect(origin.pages[1]!));
+		expect(mergeCovers(m, other)).toBe(true);
+	});
+
+	it("equal margins, infinite page taller in the copy: main grows its height through the margin rule, one undo step", () => {
+		const origin = withMargins(pdfDoc(), { left: 0, right: 0, bottom: 100 });
+		origin.pages[1]!.infinite = true;
+		const main = clone(origin);
+		const other = clone(origin);
+		// The copy grew (as infinite pages do) and has ink far below main's height.
+		other.pages[1]!.height = 1200;
+		other.pages[1]!.margins = { left: 0, right: 0, bottom: 800 };
+		other.pages[1]!.strokes.push(line(100, 1000, 200, 1050));
+		const doc = clone(main);
+		const before = serialize(doc);
+		const history = new History(() => doc);
+		const plan = planMerge(doc, other);
+		expect(plan.summary.pagesEnlarged).toBe(1);
+		history.execute(plan.command!);
+		const page = doc.pages[1]!;
+		expect(page.height).toBeGreaterThanOrEqual(1050);
+		const box = backgroundRect(page);
+		expect([box.x, box.y, box.width]).toEqual([0, 0, 600]);
+		expect(box.height).toBeCloseTo(400, 6);
+		expect(page.margins!.bottom).toBeCloseTo(page.height - 400, 6);
+		expect(serializeChecked(doc, true).ok).toBe(true);
+		expect(planMerge(clone(doc), other).command).toBeNull();
+		history.undo();
+		expect(serialize(doc)).toBe(before);
+	});
+
+	it("plain pages grow instead of getting margins: fixed and infinite", () => {
+		for (const infinite of [false, true]) {
+			const origin = pdfDoc();
+			const p = origin.pages[0]!;
+			if (infinite) p.infinite = true;
+			const other = clone(origin);
+			other.pages[0]!.strokes.push(line(100, p.height + 50, p.width + 30, p.height + 60));
+			const m = merged(origin, other);
+			const page = m.pages[0]!;
+			expect(page.margins).toBeUndefined();
+			expect(page.height).toBeGreaterThanOrEqual(p.height + 60);
+			expect(page.width).toBe(p.width + 30);
+			expect(planMerge(clone(m), other).command).toBeNull();
+		}
 	});
 
 	it("the other way round: main has the margins, the copy has none", () => {

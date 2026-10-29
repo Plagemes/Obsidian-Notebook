@@ -14,15 +14,19 @@
  *   page's frame (by the difference of the left margins). Ink that is the same relative to the
  *   background is then recognised as the same, and new ink lands where it was drawn on the background.
  *   When new ink of the copy would then fall off the main page (left of it because the copy has a
- *   wider left margin, or beyond its right or bottom edge), the main page's margins are widened just
- *   enough in the same step (`SetPageMargins`: its own ink moves with the background), so it stays visible.
+ *   wider left margin, or beyond its right or bottom edge, also with equal margins), the main page grows
+ *   just enough in the same step so it stays visible: wider margins on a page with a background
+ *   (`SetPageMargins`: its own ink moves with the background), a larger plain page, or more height on an
+ *   infinite page (`SetPageSize`, which follows the margin rule).
  *
  * Both documents must come from `parse()`, so whatever version the copy was written in, it has gone
  * through the regular migrations first. The result is one `Batch` (one undo step) for the main
  * notebook's history; it is planned against the current state of `main` and must be applied to it.
  */
 import { cloneMeta, createId } from "./document";
-import { AddAsset, AddElement, AddPage, AddStroke, Batch, SetMeta, SetPageMargins, type Command } from "./history";
+import { growForInfinite } from "../ink/infinite";
+import { textElementBounds } from "../ink/text-layout";
+import { AddAsset, AddElement, AddPage, AddStroke, Batch, SetMeta, SetPageMargins, SetPageSize, type Command } from "./history";
 import { marginsEqual, marginsOf, normalizeMargins, translateElement, translateStroke } from "./margins";
 import { freezeElement, freezeStroke } from "./serialize";
 import { DEFAULT_META, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type PageMargins, type Stroke } from "./types";
@@ -48,8 +52,8 @@ export interface MergeSummary {
 	 * kept and the copy's content was moved into them before comparing and adding.
 	 */
 	marginsDiffer: number;
-	/** Common pages whose margins were widened so that ink of the copy stays on the page. */
-	marginsWidened: number;
+	/** Common pages enlarged (wider margins, or a larger or taller page) so that ink of the copy stays on the page. */
+	pagesEnlarged: number;
 	/** Items of the main notebook missing from the copy (kept: deletions are not inferred). */
 	onlyInMain: number;
 }
@@ -85,13 +89,22 @@ function frameShift(into: Page, from: Page): number {
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 const ceil2 = (n: number): number => Math.ceil(Math.round(n * 1e6) / 1e4) / 100;
 
+interface Fit {
+	/** New margins of the main page (a page with a background or margins), or null to keep them. */
+	margins: PageMargins | null;
+	/** Size of the main page after the new margins, and the size it must grow to, or null to keep it. */
+	size: { before: { width: number; height: number }; after: { width: number; height: number } } | null;
+}
+
 /**
- * Margins of `target` widened so that every new item of the copy (`fresh`, already in `target`'s frame)
- * lies on the page: the left margin grows to the copy's when an item lies left of the page (the copy
- * has the wider left margin), the right and bottom ones by what lies beyond the page. Null when nothing
- * falls off the page.
+ * How the main page `target` has to grow so that every new item of the copy (`fresh`, already in
+ * `target`'s frame) lies on it. A page with a background (or margins) widens its margins, the background
+ * keeping its box: the left one to the copy's when an item lies left of the page (the copy has the wider
+ * left margin), the right and bottom ones by what lies beyond the page. A plain page grows instead. An
+ * infinite page grows its height in its usual steps (`SetPageSize`, which follows the margin rule).
+ * Text boxes count with the height of their wrapped text (estimated measure). Null when everything fits.
  */
-function widenedMargins(target: Page, copy: Page, fresh: { strokes: readonly Stroke[]; elements: readonly PageElement[] }): PageMargins | null {
+function fitOnPage(target: Page, copy: Page, fresh: { strokes: readonly Stroke[]; elements: readonly PageElement[] }): Fit | null {
 	let minX = Infinity;
 	let maxX = -Infinity;
 	let maxY = -Infinity;
@@ -103,19 +116,36 @@ function widenedMargins(target: Page, copy: Page, fresh: { strokes: readonly Str
 		}
 	}
 	for (const e of fresh.elements) {
+		const bottom = e.type === "image" ? e.y + e.height : textElementBounds(e).maxY;
 		minX = Math.min(minX, e.x);
 		maxX = Math.max(maxX, e.x + e.width);
-		maxY = Math.max(maxY, e.y + (e.type === "image" ? e.height : 0));
+		maxY = Math.max(maxY, bottom);
 	}
 	if (minX === Infinity) return null;
 	const m = marginsOf(target);
 	const copyLeft = marginsOf(copy).left;
 	const left = minX < 0 && copyLeft > m.left ? copyLeft : m.left;
 	// Moving the left edge moves the items and the right edge alike: only what lies beyond the page counts.
-	const right = round2(m.right + Math.max(0, ceil2(maxX - target.width)));
-	const bottom = round2(m.bottom + Math.max(0, ceil2(maxY - target.height)));
-	if (left === m.left && right === m.right && bottom === m.bottom) return null;
-	return { left, right, bottom };
+	const overRight = Math.max(0, ceil2(maxX - target.width));
+	const overBottom = Math.max(0, ceil2(maxY - target.height));
+	const withMargins = target.background !== undefined || target.margins !== undefined || left !== m.left;
+	let margins: PageMargins | null = null;
+	let width = target.width;
+	if (withMargins) {
+		const next = { left, right: round2(m.right + overRight), bottom: target.infinite ? m.bottom : round2(m.bottom + overBottom) };
+		if (next.left !== m.left || next.right !== m.right || next.bottom !== m.bottom) {
+			margins = next;
+			width = round2(target.width + (next.left - m.left) + (next.right - m.right));
+		}
+	}
+	const before = { width, height: target.height };
+	let after = { width: withMargins ? width : round2(width + overRight), height: target.height };
+	if (overBottom > 0 && (target.infinite || !withMargins)) {
+		const grown = target.infinite ? growForInfinite({ width: after.width, height: target.height, infinite: true }, { maxY }) : null;
+		after = { width: after.width, height: grown !== null && grown >= maxY ? grown : round2(target.height + overBottom) };
+	}
+	const size = after.width !== before.width || after.height !== before.height ? { before, after } : null;
+	return margins || size ? { margins, size } : null;
 }
 
 /** Strokes and elements of `page` moved by `dx` (the same objects when `dx` is 0). */
@@ -137,7 +167,7 @@ function copyElement(e: PageElement, id: string): PageElement {
 export function planMerge(main: NotebookDocument, other: NotebookDocument): MergePlan {
 	const summary: MergeSummary = {
 		pagesAdded: 0, strokesAdded: 0, strokesCopied: 0, elementsAdded: 0, elementsCopied: 0, assetsAdded: 0,
-		tagsAdded: 0, bookmarksAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, marginsWidened: 0, onlyInMain: 0,
+		tagsAdded: 0, bookmarksAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0,
 	};
 	const commands: Command[] = [];
 
@@ -211,21 +241,20 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 			if (pageSettingsKey(target) !== pageSettingsKey(page)) summary.pageSettingsDiffer++;
 			const keys = contentOn.get(page.id)!;
 			let shift = frameShift(target, page);
-			if (!marginsEqual(normalizeMargins(target.margins), normalizeMargins(page.margins))) {
-				summary.marginsDiffer++;
-				// New ink of the copy that would fall off the main page: widen the main margins first.
-				const inMain = inFrame(page, shift);
-				const isNew = (id: string, key: string) => used.get(id) !== key && !keys.has(key);
-				const fresh = {
-					strokes: inMain.strokes.filter((s) => isNew(s.id, `s${strokeContentKey(s)}`)),
-					elements: inMain.elements.filter((e) => isNew(e.id, `e${elementContentKey(e)}`)),
-				};
-				const widened = widenedMargins(target, page, fresh);
-				if (widened) {
+			if (!marginsEqual(normalizeMargins(target.margins), normalizeMargins(page.margins))) summary.marginsDiffer++;
+			// New ink of the copy that would fall off the main page: the page grows first, in the same step.
+			const inMain = inFrame(page, shift);
+			const isNew = (id: string, key: string) => used.get(id) !== key && !keys.has(key);
+			const fit = fitOnPage(target, page, {
+				strokes: inMain.strokes.filter((s) => isNew(s.id, `s${strokeContentKey(s)}`)),
+				elements: inMain.elements.filter((e) => isNew(e.id, `e${elementContentKey(e)}`)),
+			});
+			if (fit) {
+				summary.pagesEnlarged++;
+				if (fit.margins) {
 					const before = normalizeMargins(target.margins);
-					commands.push(new SetPageMargins(target.id, before, widened));
-					summary.marginsWidened++;
-					const w = round2(marginsOf({ margins: normalizeMargins(widened) }).left - marginsOf({ margins: before }).left);
+					commands.push(new SetPageMargins(target.id, before, fit.margins));
+					const w = round2(marginsOf({ margins: normalizeMargins(fit.margins) }).left - marginsOf({ margins: before }).left);
 					if (w !== 0) {
 						// The main page's own ink moves with its background: its content keys move too.
 						keys.clear();
@@ -242,6 +271,7 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 						shift = round2(shift + w);
 					}
 				}
+				if (fit.size) commands.push(new SetPageSize(target.id, fit.size.before, fit.size.after));
 			}
 			const content = inFrame(page, shift);
 			let strokeAt = target.strokes.length;
@@ -326,7 +356,7 @@ export function mergeMeta(main: NotebookMeta, other: NotebookMeta, pageIds: Read
 
 /** Number of changes a summary describes (0: the copy holds nothing new). */
 export function mergeChangeCount(s: MergeSummary): number {
-	return s.marginsWidened + s.pagesAdded + s.strokesAdded + s.strokesCopied + s.elementsAdded + s.elementsCopied + s.assetsAdded + s.tagsAdded + s.bookmarksAdded;
+	return s.pagesEnlarged + s.pagesAdded + s.strokesAdded + s.strokesCopied + s.elementsAdded + s.elementsCopied + s.assetsAdded + s.tagsAdded + s.bookmarksAdded;
 }
 
 /**
