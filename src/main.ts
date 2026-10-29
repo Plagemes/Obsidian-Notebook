@@ -17,6 +17,7 @@ import { exportPdfAnnotations, openMarginsModal, updatePdfFromNewVersion } from 
 import { NotebookView, VIEW_TYPE } from "./view/notebook-view";
 import { NotebookSettingTab } from "./view/settings-tab";
 import { registerLectureCommands } from "./view/lecture-commands";
+import { registerPdfSyncCommands } from "./view/pdf-sync";
 
 export default class NotebookPlugin extends Plugin {
 	settings!: NotebookSettings;
@@ -69,6 +70,9 @@ export default class NotebookPlugin extends Plugin {
 		}) });
 
 		registerLectureCommands(this, (file) => this.host.openNotebook(file));
+
+		// Wave 0.6: synchronised PDF <-> notes view (view/pdf-sync.ts).
+		registerPdfSyncCommands(this, () => this.app.workspace.getActiveViewOfType(NotebookView), () => this.settings.folder);
 
 		registerToolCommands(this, (checking, run) => this.withView(checking, run));
 
