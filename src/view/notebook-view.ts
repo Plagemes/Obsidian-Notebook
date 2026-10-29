@@ -12,7 +12,7 @@ import { Stabilizer } from "../ink/stabilizer";
 import { apply, IDENTITY, invert, isIdentity, multiply, rotateAbout, scaleAbout, translate, type Matrix } from "../ink/transform";
 import { clampToPage, fitWidth, pan, PAGE_MARGIN, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
 import { createId, createPage, createStroke, quantizePoint } from "../model/document";
-import { AddPage, AddStroke, Batch, History, ReplaceStroke, type Command } from "../model/history";
+import { AddPage, AddStroke, Batch, History, removeStrokes, ReplaceStroke, type Command } from "../model/history";
 import { freezeStroke } from "../model/serialize";
 import { FILE_EXTENSION, type NotebookDocument, type Page, type Point, type Stroke } from "../model/types";
 import { DocumentSession, type SaveState, type SessionMode } from "../storage/session";
@@ -314,9 +314,10 @@ export class NotebookView extends FileView {
 		const sel = this.selection;
 		const page = sel && this.session?.doc?.pages[sel.pageIndex];
 		if (!sel || !page || !this.editable()) return;
-		const commands = sel.strokes.map((s) => new ReplaceStroke(page.id, s, [], page.strokes.indexOf(s)));
+		const batch = removeStrokes(page.id, page.strokes, sel.strokes, "Delete selection");
 		this.clearSelection();
-		this.history.execute(new Batch("Delete selection", commands));
+		if (!batch) return;
+		this.history.execute(batch);
 		this.afterHistoryChange();
 	}
 
@@ -480,6 +481,8 @@ export class NotebookView extends FileView {
 		const tool = eraserButton ? "eraser" : this.tools.tool;
 
 		if (tool === "eraser") {
+			// The selection may contain strokes about to be erased (e.g. erasing with the pen button).
+			this.clearSelection();
 			this.erasing = { commands: [], last: [dx, dy] };
 			this.eraseTo(dx, dy);
 			return true;
@@ -582,6 +585,12 @@ export class NotebookView extends FileView {
 	}
 
 	private drawEnd(cancelled: boolean): void {
+		this.endGesture(cancelled);
+		// An external change seen during the gesture was postponed; check it now.
+		this.session?.gestureEnded();
+	}
+
+	private endGesture(cancelled: boolean): void {
 		const erasing = this.erasing;
 		if (erasing) {
 			this.erasing = null;
@@ -731,8 +740,13 @@ export class NotebookView extends FileView {
 		const sel = this.selection;
 		const page = sel && this.pageAtIndex(sel.pageIndex);
 		if (!sel || !page || isIdentity(sel.matrix)) return;
-		const moved = sel.strokes.map((s) => freezeStroke(transformStroke(s, sel.matrix)));
-		const commands = sel.strokes.map((s, i) => new ReplaceStroke(page.id, s, [moved[i]!], page.strokes.indexOf(s)));
+		const present = sel.strokes.filter((s) => page.strokes.includes(s));
+		if (present.length === 0) {
+			this.clearSelection();
+			return;
+		}
+		const moved = present.map((s) => freezeStroke(transformStroke(s, sel.matrix)));
+		const commands = present.map((s, i) => new ReplaceStroke(page.id, s, [moved[i]!], page.strokes.indexOf(s)));
 		this.history.execute(new Batch("Transform selection", commands));
 		sel.strokes = moved;
 		sel.matrix = IDENTITY;

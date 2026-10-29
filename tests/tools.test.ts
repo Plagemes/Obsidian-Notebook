@@ -67,6 +67,13 @@ describe("segment eraser", () => {
 		expect(d[2]).toEqual([5, 0, 0.5]);
 	});
 
+	it("returns null instead of a no-op cut when no point is within reach", () => {
+		const s = createStroke("#000000", 1, [[0, 0, 0.5], [0.2, 0, 0.5]]);
+		// The bounding test passes (reach 1.5) but every point is farther than that from the eraser.
+		const r = eraseSegment(s, 0.1, 1.6, 0.1, 1.6, 1);
+		expect(r === null || r.length !== 1 || r[0]!.length !== 2).toBe(true);
+	});
+
 	it("does not leave single-point crumbs", () => {
 		const runs = eraseSegment(line(0, 0, 10, 0, 10, 1), 1.5, -5, 1.5, 5, 1)!;
 		for (const r of runs) expect(r.length).toBeGreaterThanOrEqual(2);

@@ -64,16 +64,24 @@ export class EraseStrokes implements Command {
  */
 export class ReplaceStroke implements Command {
 	readonly label = "Edit stroke";
+	/** Whether the last apply() changed the page; revert() undoes only what apply() did. */
+	private applied = false;
 	constructor(readonly pageId: string, readonly before: Stroke, readonly after: readonly Stroke[], readonly index: number) {}
 
+	/** A replacement only happens where `before` is: nothing is ever inserted twice. */
 	apply(doc: NotebookDocument): void {
 		const strokes = pageOf(doc, this.pageId).strokes;
 		const i = strokes.indexOf(this.before);
-		strokes.splice(i >= 0 ? i : Math.min(this.index, strokes.length), i >= 0 ? 1 : 0, ...this.after);
+		this.applied = i >= 0;
+		if (i < 0) return;
+		strokes.splice(i, 1, ...this.after.filter((s) => !strokes.includes(s)));
 	}
 
 	revert(doc: NotebookDocument): void {
 		const strokes = pageOf(doc, this.pageId).strokes;
+		if (!this.applied) return;
+		this.applied = false;
+		if (strokes.includes(this.before)) return;
 		let at = -1;
 		for (const s of this.after) {
 			const i = strokes.indexOf(s);
@@ -81,8 +89,21 @@ export class ReplaceStroke implements Command {
 			if (at < 0) at = i;
 			strokes.splice(i, 1);
 		}
-		strokes.splice(at >= 0 ? at : Math.min(this.index, strokes.length), 0, this.before);
+		strokes.splice(at >= 0 ? at : Math.max(0, Math.min(this.index, strokes.length)), 0, this.before);
 	}
+}
+
+/**
+ * Removes strokes in one undoable step. Strokes no longer on the page are skipped; commands are
+ * ordered by descending index so that undo puts every stroke back at its original position.
+ */
+export function removeStrokes(pageId: string, pageStrokes: readonly Stroke[], strokes: readonly Stroke[], label: string): Batch | null {
+	const items = strokes
+		.map((stroke) => ({ stroke, index: pageStrokes.indexOf(stroke) }))
+		.filter((it) => it.index >= 0)
+		.sort((a, b) => b.index - a.index);
+	if (items.length === 0) return null;
+	return new Batch(label, items.map((it) => new ReplaceStroke(pageId, it.stroke, [], it.index)));
 }
 
 export class AddPage implements Command {

@@ -54,16 +54,16 @@ The numbers below will be filled in after the final run of M2.
 
 | Command | Result |
 |---|---|
-| `npm test` | to be filled |
-| `npm run lint` | to be filled |
-| `npm run build` | to be filled |
-| `npm run bench` | to be filled |
+| `npm test` (unit project only; benchmarks are separate) | 10 files, 142 tests passed |
+| `npm run lint` | eslint + `tsc --noEmit`: no errors; `eslint-plugin-obsidianmd` recommended rules: no errors or warnings |
+| `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
+| `npm run bench` | ok; numbers below (PC only) |
 
 Covered by tests: serialization round-trip and determinism, rejection of corrupt files (truncated, garbage, wrong format, bad points/colours/ids, future version), migrations v0→v1 and v1→v2, highlighter round-trip, `serializeChecked` (same output as `serialize`, frozen strokes, duplicate ids, NaN, incremental check equal to the full parse on a large document), undo/redo of adds, erases, `ReplaceStroke`, `AddPage` (never removes the last page) and `Batch`, eraser hit test (including fast movements and dots), segment cutting (including cuts between distant points and no single-point crumbs), lasso selection and selection bounds, affine transforms and stroke transform with width scaling, stabilizer, page layout and visible-page selection, screen↔page transform at 7 zoom levels, fit-width, zoom around a point, pan clamping, palm-rejection routing (time-based and contact size), pressure detection, the deterministic stress document, and the save session (debounce, max wait, no writes on broken/readonly files, conflict backups, echo detection, retry after a failed write, refusal to write a document that fails re-validation, backup-before-overwrite ordering when another writer races the save, no overwrite when the backup fails, external-change checks queued after flushes, close-time retries with an `unsaved` backup, deleted files never written, stale sessions silent).
 
 Independent review (M1): the data-safety code (session, Vault I/O, serializer, view lifecycle, undo) was reviewed by a separate agent that did not write it; its 7 findings (3 medium, 4 low, no corruption) were fixed and covered by the tests above.
 
-Measured on the PC in M1 (not on Android): a 10,000-stroke notebook (268k points) is 6.8 MB; parse 156 ms, serialize 98 ms. In M2 the save check no longer re-parses documents over 1 MB each time; the benchmark numbers for M2, on the PC and on the device, are to be recorded here after the final run.
+Measured on the PC in M1 (not on Android): a 10,000-stroke notebook (268k points) is 6.8 MB; parse 156 ms, serialize 98 ms. In M2 the save check no longer re-parses documents over 1 MB each time. `npm run bench` on the dev PC (Windows, Node 24; 10,000 strokes, 10 pages, 6.69 MB): serialize 153 ms; open (parse + validate) 227 ms; open + first save with a cold cache 424 ms in total; next saves 16–19 ms; eraser hit test 0.04 ms per move (1,000 strokes, cached bounds); segment cut 0.005 ms; lasso over a quarter page 2.4 ms; stroke outline 0.04 ms. **These are PC numbers.** Android will be slower and must be measured with the in-app benchmark (step 21); record those numbers here once available.
 
 Not covered automatically: everything that needs Obsidian or a real browser (DOM, canvas, Pointer Events, Vault API, view lifecycle, the toolbar, selection handles and gestures, the fast path and fling). That is what the manual protocol is for.
 

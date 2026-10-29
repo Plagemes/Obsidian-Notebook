@@ -107,7 +107,7 @@ src/
     settings-tab.ts       settings UI
 scripts/check-bundle.mjs          fails the build if main.js requires anything but 'obsidian'
 scripts/make-stress-notebook.mjs  writes a stress .notebook from the PC (alternative to the in-app command)
-tests/                    vitest on model/, ink/ and storage/session.ts; model.bench.ts is the `npm run bench` suite
+tests/                    vitest on model/, ink/ and storage/session.ts ("unit" project, `npm test`); model.perf.ts is the `npm run bench` suite ("perf" project)
 ```
 
 ## 4. Save flow (rule 4: zero data loss)
@@ -128,7 +128,7 @@ Session state: `doc`, `revision` (incremented on every change), `savedRevision`,
 4. `vault.process(file, latest => …)` (atomic): if `latest ≠ current` the file changed again since step 3 → it is returned unchanged (nothing overwritten) and steps 3–4 are repeated, at most 3 times; then the save fails and is retried later.
 5. `diskContent = next`, `savedRevision = revision` captured at step 2. Changes arriving during a flush schedule another one. A failed write keeps the changes in memory and retries after 5 s.
 
-**Save check** (`serializeChecked`). Committed strokes are frozen (`freezeStroke`: immutable; an edit creates a new stroke), so their serialized line can be cached safely. For every stroke the check serializes its line, parses and validates it, re-serializes it and requires identical text; the verified line is cached per stroke object, so each stroke goes through this once. Duplicate stroke ids are rejected. Then:
+**Save check** (`serializeChecked`). Committed strokes are frozen (`freezeStroke`: immutable; an edit creates a new stroke), so their serialized line can be cached safely. A **new** stroke (drawn in this session) is serialized, parsed and validated, re-serialized, and the text must be identical; the verified line is cached per stroke object, so each stroke goes through this once. A stroke **read from a file** was already validated field by field by `parse()` and is marked as such (a `WeakSet`), so on the first save it is only serialized, without a second parse. After a successful load the session warms the line cache one page per timer tick (`DocumentSession.warmUp` → `warmStrokeLines`), so that first save is cheap. Duplicate stroke ids are rejected. Then:
 - documents whose text is under `FULL_CHECK_LIMIT` (1 MB) are **fully re-parsed** on every save and must satisfy `serialize(parse(next)) === next`, as in 0.1;
 - larger documents get the **incremental check**: the skeleton (header, pages, paper, page ids) is parsed and validated on every save, plus the strokes not seen before, plus the duplicate-id check. The full re-parse is skipped, so saving a notebook of several MB no longer re-parses all of it each time.
 
@@ -181,7 +181,7 @@ Known limit: if Android kills the process without notifying `visibilitychange`, 
 - **Transforms** are kept as an affine matrix (`transform.ts`) while the pointer is down: the selected strokes are hidden from the static layer and drawn on the live layer with the matrix, so a drag redraws only the selection. On release the matrix is baked into new strokes (`transformStroke`: points transformed and re-quantized, width scaled by the matrix's uniform factor, same id and style) and applied as a `Batch` of `ReplaceStroke` commands: one undo step. Delete (toolbar button, Delete or Backspace) is a `Batch` of `ReplaceStroke` with no replacement. Escape or changing tool clears the selection. Transformed strokes stay on their page and are clipped to it when drawn.
 
 ### Benchmarks
-- `npm run bench`: vitest bench on the pure logic (`tests/model.bench.ts`) over `stressDocument(10_000, 10)`: serialize, save check with cached strokes, parse, eraser hit test, segment cut, lasso, stroke outline.
+- `npm run bench` (`vitest run --project perf --silent=false`): `tests/model.perf.ts`, a custom timing loop (not vitest's bench API) over `stressDocument(10_000, 10)`: serialize, open (parse + validate), open plus first save with a cold cache, next saves, eraser hit test, segment cut, lasso, stroke outline. It is excluded from `npm test`. Dev-PC reference (Windows, Node 24; 10,000 strokes, 10 pages, 6.69 MB): serialize 153 ms; open 227 ms; open + first save, cold cache, 424 ms in total; next saves 16–19 ms; eraser hit test 0.04 ms per move (1,000 strokes, cached bounds); segment cut 0.005 ms; lasso over a quarter page 2.4 ms; stroke outline 0.04 ms. **These are PC numbers**: Android will be slower and must be measured with the in-app benchmark.
 - In-app command **Run performance benchmark** (`view/benchmark.ts`): generates the same notebook, then times serialization, the first and later save checks and parse, and renders it with an **off-screen** `Renderer` at the current view size: first draw (builds paths), 30 redraws at fit width, 150 scroll frames, 30 redraws at 3× zoom. It also times the eraser hit test and segment cuts and reports the JS heap where the WebView exposes it. Nothing is written to the vault; the results can be copied.
 - Command **Create stress-test notebook**: writes the generated notebook (10,000 strokes, 10 pages) to the notebooks folder and opens it, to test real interaction on the device. The in-app benchmark does not measure real input latency; the performance overlay does, in the software sense above.
 

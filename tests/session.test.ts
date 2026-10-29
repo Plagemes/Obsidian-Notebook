@@ -352,6 +352,21 @@ describe("DocumentSession", () => {
 		expect(parse(io.content).ok).toBe(true);
 	});
 
+	it("re-checks an external change deferred during a gesture that changed nothing", async () => {
+		const io = new FakeIO(serialize(sampleDocument(1)));
+		let busy = true;
+		const s = new DocumentSession(io, timers, {}, { busy: () => busy });
+		await s.load();
+		const external = serialize(sampleDocument(3));
+		io.content = external;
+		expect(await s.handleExternalChange()).toBe("kept-local");
+		busy = false; // e.g. a palm stroke that was cancelled
+		s.gestureEnded();
+		await s.flush(); // waits for the queued check
+		expect(s.doc!.pages[0]!.strokes).toHaveLength(3);
+		expect(io.writes).toHaveLength(0);
+	});
+
 	it("stops before writing if the file is deleted during a flush", async () => {
 		const io = new FakeIO(serialize(sampleDocument(1)));
 		const s = new DocumentSession(io, timers);

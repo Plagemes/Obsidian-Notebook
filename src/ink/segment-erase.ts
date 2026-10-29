@@ -26,6 +26,8 @@ export function eraseSegment(
 		}
 	}
 	if (run.length) runs.push(run);
+	// Within reach of the bounding test but no point actually touched: nothing to cut.
+	if (runs.length === 1 && runs[0]!.length === dense.length) return null;
 	const minLength = stroke.points.length === 1 ? 1 : 2;
 	return runs.filter((r) => r.length >= minLength);
 }

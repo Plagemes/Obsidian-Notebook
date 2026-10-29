@@ -128,3 +128,39 @@ describe("M2 commands", () => {
 		expect(doc.pages).toEqual([only]);
 	});
 });
+
+describe("review regressions (M2)", () => {
+	it("ReplaceStroke never re-inserts a stroke that is already gone", async () => {
+		const { ReplaceStroke } = await import("../src/model/history");
+		const { doc, page, history, ids } = setup(4);
+		const [a, b, c, d] = page.strokes as [ReturnType<typeof line>, ReturnType<typeof line>, ReturnType<typeof line>, ReturnType<typeof line>];
+		page.strokes.splice(1, 1); // b erased elsewhere
+		const moved = line(50, 50, 60, 60);
+		history.execute(new ReplaceStroke(page.id, b, [moved], 1)); // stale selection tries to move b
+		expect(ids()).toEqual([a.id, c.id, d.id]);
+		history.undo();
+		expect(ids()).toEqual([a.id, c.id, d.id]);
+		expect(new Set(ids()).size).toBe(ids().length);
+		void doc;
+	});
+
+	it("removeStrokes undo restores the original order", async () => {
+		const { removeStrokes } = await import("../src/model/history");
+		const { page, history, ids } = setup(4);
+		const before = ids();
+		const [a, , c] = page.strokes;
+		const batch = removeStrokes(page.id, page.strokes, [a!, c!], "Delete selection")!;
+		history.execute(batch);
+		expect(ids()).toEqual([before[1], before[3]]);
+		history.undo();
+		expect(ids()).toEqual(before);
+		history.redo();
+		expect(ids()).toEqual([before[1], before[3]]);
+	});
+
+	it("removeStrokes skips strokes that are not on the page", async () => {
+		const { removeStrokes } = await import("../src/model/history");
+		const { page } = setup(2);
+		expect(removeStrokes(page.id, page.strokes, [line(0, 0, 1, 1)], "x")).toBeNull();
+	});
+});

@@ -72,6 +72,8 @@ export class DocumentSession {
 	private maxWaitTimer: number | null = null;
 	private chain: Promise<unknown> = Promise.resolve();
 	private disposed = false;
+	/** An external change arrived during a gesture and was not looked at yet. */
+	private deferredExternal = false;
 
 	private readonly debounceMs: number;
 	private readonly maxWaitMs: number;
@@ -138,10 +140,21 @@ export class DocumentSession {
 			const content = await this.io.read();
 			if (content === this.diskContent) return "echo" as const;
 			// Local changes win; the next flush backs up the external version before overwriting it.
-			if (this.mode === "ok" && (this.dirty || this.busy())) return "kept-local" as const;
+			if (this.mode === "ok" && this.busy()) {
+				this.deferredExternal = true;
+				return "kept-local" as const;
+			}
+			if (this.mode === "ok" && this.dirty) return "kept-local" as const;
 			await this.applyDiskContent(content);
 			return "reloaded" as const;
 		});
+	}
+
+	/** Call when a gesture ends: re-checks an external change that arrived while it was in progress. */
+	gestureEnded(): void {
+		if (!this.deferredExternal) return;
+		this.deferredExternal = false;
+		void this.handleExternalChange();
 	}
 
 	/** The file was deleted: never write it again, but keep unsaved changes as a backup. */

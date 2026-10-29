@@ -1,7 +1,7 @@
 /**
  * Input stabilization: the drawn point follows the pen with an exponential lag that smooths
- * hand tremor. Level 0 is off; higher levels smooth more and lag more. Applied before points
- * are stored, so saved strokes do not depend on the setting.
+ * hand tremor. Level 0 is off; higher levels smooth more and lag more. The stabilized points are
+ * what gets stored, so a saved stroke keeps its shape if the setting changes later.
  */
 export class Stabilizer {
 	private x = 0;
