@@ -1013,3 +1013,27 @@
 		min-height: 36px;
 
 /* --- view wave 2 --- */
+/* --- integration P1 --- */
+.notebook-embed-host {
+	margin: 0.5em 0;
+
+.notebook-embed {
+	max-width: 100%;
+	border-radius: var(--radius-m);
+	background-color: var(--background-secondary);
+
+.notebook-embed:hover,
+.notebook-embed:focus-visible {
+	border-color: var(--interactive-accent);
+
+.notebook-embed-title {
+	padding: 4px 10px;
+
+.notebook-embed-image {
+	width: 100%;
+	height: auto;
+
+.notebook-embed-message {
+	padding: 8px 10px;
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: var(--radius-m);
