@@ -178,6 +178,14 @@ const en = {
 	"library.empty.folder": "This folder is empty.",
 	"library.empty.tag": "No notebooks have this tag.",
 	"library.empty.search": "No notebooks match “{query}”.",
+	// --- main wave 2 ---
+	"command.library": "Open library",
+	"command.importPdf": "Import PDF as notebook",
+	"import.working": "Importing “{name}”…",
+	"import.failed": "Could not import the PDF: {error}",
+	"import.empty": "The PDF has no pages.",
+	"host.metaRejected": "The notebook is open and cannot be changed right now.",
+	"host.changedElsewhere": "The notebook was changed while saving. Try again.",
 	// --- notebook view: navigator, media, pickers ---
 	"nav.title": "Pages",
 	"nav.onlyBookmarks": "Show bookmarked pages only",
@@ -392,6 +400,14 @@ const it: Partial<Record<MessageKey, string>> = {
 	"library.empty.folder": "Questa cartella è vuota.",
 	"library.empty.tag": "Nessun quaderno ha questo tag.",
 	"library.empty.search": "Nessun quaderno corrisponde a “{query}”.",
+	// --- main wave 2 ---
+	"command.library": "Apri la libreria",
+	"command.importPdf": "Importa PDF come quaderno",
+	"import.working": "Importazione di “{name}”…",
+	"import.failed": "Impossibile importare il PDF: {error}",
+	"import.empty": "Il PDF non ha pagine.",
+	"host.metaRejected": "Il quaderno è aperto e al momento non può essere modificato.",
+	"host.changedElsewhere": "Il quaderno è cambiato durante il salvataggio. Riprova.",
 	// --- notebook view: navigator, media, pickers ---
 	"nav.title": "Pagine",
 	"nav.onlyBookmarks": "Mostra solo le pagine con segnalibro",

@@ -3,7 +3,7 @@ import {
 	type TAbstractFile, type ViewStateResult, type WorkspaceLeaf,
 } from "obsidian";
 import { t, type MessageKey } from "../i18n";
-import type { NotebookDocument, NotebookMeta } from "../model/types";
+import type { NotebookDocument, NotebookMeta, Page } from "../model/types";
 import { isNotebookFile } from "../storage/format";
 import { sanitizeName } from "../storage/notebooks";
 import { attachPress, DROP_ATTR } from "./drag";
@@ -12,7 +12,7 @@ import { relativeTime, uniquePath } from "./format";
 import { folderOf, isInside, LibraryIndex, SORTS, type LibraryEntry, type LibraryScope, type LibrarySort } from "./index";
 import { ConfirmModal, CoverModal, FolderSuggestModal, PromptModal, TagsModal } from "./library-modals";
 import { entryFromFile, filesToRead, type NotebookFileInfo } from "./scan";
-import { renderThumbnail } from "./thumbnail";
+import { renderThumbnail, type ThumbnailOptions } from "./thumbnail";
 
 export const LIBRARY_VIEW_TYPE = "notebook-library";
 
@@ -29,6 +29,10 @@ export interface LibraryHost {
 	importPdf(folder: string): void;
 	/** Writes metadata into the notebook (routed through an open view if there is one). */
 	updateMeta(file: TFile, patch: Partial<NotebookMeta>): Promise<void>;
+	/** Loads what a page shows under the ink (PDF page, image) so the cover can draw it. Null if there is none. */
+	thumbnailBackground?(doc: NotebookDocument, page: Page, width: number): Promise<ThumbnailOptions["drawBackground"] | null>;
+	/** Called after the library copied a notebook, so the copy can get its own identity. */
+	afterDuplicate?(file: TFile): Promise<void>;
 	loadIndex(): Promise<unknown>;
 	saveIndex(data: unknown): Promise<void>;
 }
@@ -466,8 +470,10 @@ export class LibraryView extends ItemView {
 				const file = this.app.vault.getFileByPath(path);
 				if (entry && file && entry.mtime >= 0 && this.index.needsThumb(path)) {
 					try {
-						const page = (await this.host.readNotebook(file))?.pages[0];
-						const thumb = page ? renderThumbnail(page, THUMB_WIDTH, { mime: "image/jpeg", quality: 0.82 }) : "";
+						const doc = await this.host.readNotebook(file);
+						const page = doc?.pages[0];
+						const drawBackground = doc && page ? await this.host.thumbnailBackground?.(doc, page, THUMB_WIDTH) : null;
+						const thumb = page ? renderThumbnail(page, THUMB_WIDTH, { drawBackground: drawBackground ?? undefined, mime: "image/jpeg", quality: 0.82 }) : "";
 						if (thumb) {
 							this.index.patch(path, { thumb, thumbMtime: entry.mtime });
 							const next = this.index.get(path);
@@ -939,7 +945,8 @@ export class LibraryView extends ItemView {
 	private async duplicate(file: TFile): Promise<void> {
 		try {
 			const target = uniquePath(folderOf(file.path), `${file.basename} copy`, file.extension, (p) => this.exists(normalizePath(p)));
-			await this.app.vault.copy(file, normalizePath(target));
+			const copy = await this.app.vault.copy(file, normalizePath(target));
+			await this.host.afterDuplicate?.(copy);
 		} catch (e) {
 			this.fail(e);
 		}
