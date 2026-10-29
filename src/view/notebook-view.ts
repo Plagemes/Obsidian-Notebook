@@ -33,6 +33,7 @@ import { analyseSpace, planSpaceChange, spacePreview } from "../ink/space";
 import { apply, IDENTITY, invert, isIdentity, multiply, rotateAbout, scaleAbout, translate, type Matrix } from "../ink/transform";
 import { clampToPage, fitWidth, pan, PAGE_MARGIN, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
 import { layoutPagesHorizontal, type ScrollMode } from "../ink/page-mode";
+import { capturePosition, positionFromState, restoreViewport, type SavedPosition } from "../ink/view-position";
 import { PageMode } from "./page-mode";
 import { cloneMeta, createId, createPage, createStroke } from "../model/document";
 import { createPdfPages, duplicatePage } from "../model/pages";
@@ -105,7 +106,7 @@ const THUMB_CSS_WIDTH = 120;
 export interface NotebookHost {
 	settings: NotebookSettings;
 	/** Instant start: the reader is on this page (1-based) of this notebook. Called a moment after it changes. */
-	remember?(path: string, page: number): void;
+	remember?(path: string, page: number, pos?: SavedPosition | null): void;
 	/** Instant save journal shared by all views. */
 	journal?: JournalStore;
 	/** Persists the plugin settings (favourite pens, eraser size, pen-only). Optional: absent in tests. */
@@ -224,8 +225,8 @@ export class NotebookView extends FileView {
 	private radial: PenRadial | null = null;
 	private readonly location = new LocationKeeper(
 		{ set: (fn, ms) => window.setTimeout(fn, ms), clear: (h) => window.clearTimeout(h) },
-		(path, page) => {
-			this.host.remember?.(path, page);
+		(path, page, pos) => {
+			this.host.remember?.(path, page, pos);
 			this.app.workspace.requestSaveLayout();
 		},
 	);
@@ -465,17 +466,22 @@ export class NotebookView extends FileView {
 
 	/** Page (1-based) requested by the view state, applied once the document is loaded. */
 	private pendingPage: number | null = null;
+	/** Zoom and scroll position to restore on `pendingPage` (O16). */
+	private pendingPos: SavedPosition | null = null;
 
 	/** The page being read goes into the workspace layout, so reopening Obsidian shows the same page. */
 	getState(): Record<string, unknown> {
 		const state = super.getState();
 		const total = this.session?.doc?.pages.length ?? 0;
 		const page = this.pendingPage ?? (total > 0 ? this.currentPageIndex() + 1 : null);
-		return page !== null ? { ...state, page } : state;
+		// Where exactly (zoom and scroll) goes with the page; a page waiting to be shown keeps the position it came with.
+		const pos = this.pendingPage !== null ? this.pendingPos : this.currentPosition();
+		return page !== null ? { ...state, page, ...(pos ? { view: pos } : {}) } : state;
 	}
 
 	async setState(state: unknown, result: ViewStateResult): Promise<void> {
 		this.pendingPage = pageFromState(state);
+		this.pendingPos = positionFromState(state);
 		await super.setState(state, result);
 		// Already loaded (the same file was shown): jump now; otherwise onDocumentLoaded applies it.
 		if (this.pendingPage !== null && this.layout) this.applyPendingPage();
@@ -487,6 +493,7 @@ export class NotebookView extends FileView {
 		const page = pageFromEphemeralState(state);
 		if (page === null) return;
 		this.pendingPage = page;
+		this.pendingPos = null;
 		if (this.layout) this.applyPendingPage();
 	}
 
@@ -494,8 +501,32 @@ export class NotebookView extends FileView {
 		const doc = this.session?.doc;
 		const page = this.pendingPage;
 		if (page === null || !doc || !this.layout) return;
+		// A saved zoom needs the size of the view: wait for the first measurement.
+		if (this.pendingPos && this.viewSize.width === 0) return;
 		this.pendingPage = null;
-		this.scrollToPage(Math.min(doc.pages.length, Math.max(1, page)) - 1);
+		const pos = this.pendingPos;
+		this.pendingPos = null;
+		const index = Math.min(doc.pages.length, Math.max(1, page)) - 1;
+		if (pos && pos.page === index + 1 && this.restorePosition(pos)) return;
+		this.scrollToPage(index);
+	}
+
+	/** Shows the page, zoom and scroll position of a saved place (O16). False if the view cannot show it yet. */
+	private restorePosition(pos: SavedPosition): boolean {
+		const layout = this.layout;
+		const restored = layout ? restoreViewport(pos, this.pageMode?.enabled ? "pages" : "continuous", this.viewSize, layout) : null;
+		if (!restored) return false;
+		this.pageMode?.goTo(restored.pageIndex);
+		this.fitMode = restored.fit;
+		this.setViewport(restored.viewport);
+		return true;
+	}
+
+	/** Page, zoom and scroll position in view now, or null while the view has no size or no document. */
+	private currentPosition(): SavedPosition | null {
+		const layout = this.layout;
+		if (!layout) return null;
+		return capturePosition(this.pageMode?.enabled ? "pages" : "continuous", this.viewport, this.viewSize, layout, this.currentPageIndex());
 	}
 
 	async onLoadFile(file: TFile): Promise<void> {
@@ -1339,7 +1370,10 @@ export class NotebookView extends FileView {
 		if (current !== this.navCurrent) {
 			this.navCurrent = current;
 			this.pageNav?.markCurrent(current);
-			if (n && this.file && this.pendingPage === null) this.location.note(this.file.path, current + 1);
+			if (n && this.file && this.pendingPage === null) this.location.note(this.file.path, current + 1, this.currentPosition());
+		} else if (n && this.file && this.pendingPage === null) {
+			// Same page, but the zoom or the scroll position may have changed.
+			this.location.note(this.file.path, current + 1, this.currentPosition());
 		}
 	}
 
@@ -1446,6 +1480,7 @@ export class NotebookView extends FileView {
 		this.body.toggleClass("is-narrow", this.contentEl.clientWidth < NARROW_PX);
 		this.renderer?.resize(rect.width, rect.height, window.devicePixelRatio || 1);
 		this.refit(true);
+		if (this.pendingPage !== null) this.applyPendingPage();
 	}
 
 	/** In fit mode, rescales to the view width; `keepTop` keeps the same document line at the top (rotation). */

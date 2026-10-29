@@ -308,12 +308,13 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 
 	await checkPageMode(add);
 	await checkToolbar(add);
+	await checkRestore(add);
 
 	const unexpected = errors.filter((e) => !expectedError?.test(e));
 	if (fault) add("injected fault was reported", errors.some((e) => expectedError!.test(e)), errors[0]?.split("\n")[0] ?? "no error logged");
 	const ok = results.every((x) => x.ok) && unexpected.length === 0;
 	/** Viewport CSS px where the composited page must show paper and ink (checked on a screenshot by check.mjs). */
-	const r2 = st.getBoundingClientRect();
+	const r2 = stage().getBoundingClientRect();
 	const points = {
 		paper: [r2.left + r2.width * 0.5, r2.top + r2.height * 0.3],
 		ink: [r2.left + r2.width * 0.5, r2.top + r2.height * 0.52],
@@ -409,6 +410,84 @@ async function checkPageMode(add: (name: string, ok: boolean, detail?: string) =
 	add(`${label}: the toolbar item switches back to continuous`, v.pageMode.enabled === false && ys[1]! > ys[0]! && v.currentPageIndex() === 0 && v.host.settings.scrollMode === "continuous",
 		`enabled ${v.pageMode.enabled}, page ${v.currentPageIndex() + 1}`);
 	await frames(2);
+}
+
+/**
+ * Reopen where you left off (O16): zoom in and scroll, take the view state the workspace would store, close the view,
+ * open a new one with that state and check page, zoom and scroll position come back (also in a view of another
+ * size). A state with only a page (a link) lands on the page at fit. The view is reopened fresh at the end.
+ */
+async function checkRestore(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
+	const v0 = view as any;
+	const label = `restore ${window.innerWidth}px`;
+	await v0.flushNow();
+	const file = v0.file as TFile;
+	if (v0.session.doc.pages.length < 2) v0.addPage();
+	v0.scrollToPage(1);
+	await frames(2);
+	v0.fitMode = false;
+	const box1 = v0.layout.boxes[1];
+	const zoomed = v0.viewport.scale * 2.2;
+	v0.setViewport({ scale: zoomed, offsetX: -(box1.x + 40) * zoomed, offsetY: -(box1.y + 300) * zoomed });
+	await frames(3);
+	const before = v0.currentPosition();
+	const state = JSON.parse(JSON.stringify(v0.getState()));
+	add(`${label}: the view state carries page, zoom and position`, !!before && state.page === 2 && state.view?.page === 2 && Math.abs(state.view.zoom - 2.2) < 0.2,
+		JSON.stringify(state.view ?? null));
+	await v0.flushNow();
+
+	const reopen = async (s: unknown, size?: { w: number; h: number }) => {
+		const root = document.getElementById("harness-app")!;
+		await (view as any).onClose();
+		root.empty();
+		if (size) {
+			root.style.width = `${size.w}px`;
+			root.style.height = `${size.h}px`;
+		}
+		leaf = new WorkspaceLeaf(app, root);
+		view = new NotebookView(leaf as any, { settings: settings() });
+		await view.onOpen();
+		await view.setState(s, {});
+		await (view as any).loadFile(file);
+		view.onResize();
+		await frames(4);
+		return view as any;
+	};
+
+	let v = await reopen(state);
+	let after = v.currentPosition();
+	add(`${label}: reopening brings back the same page, zoom and position`,
+		!!after && after.page === before.page && Math.abs(after.zoom - before.zoom) < 0.02 && Math.abs(after.x - before.x) < 3 && Math.abs(after.y - before.y) < 3 && v.fitMode === false,
+		`${JSON.stringify(before)} → ${JSON.stringify(after)}`);
+
+	// A fitted page comes back fitted (and keeps fitting when the view changes size).
+	v.fitToWidth();
+	await frames(2);
+	const fitted = v.currentPosition();
+	v = await reopen(JSON.parse(JSON.stringify(v.getState())));
+	after = v.currentPosition();
+	add(`${label}: a fitted page comes back fitted`, !!fitted && !!after && v.fitMode === true && Math.abs(after.zoom - 1) < 0.02 && after.page === fitted.page,
+		`${JSON.stringify(fitted)} → ${JSON.stringify(after)}`);
+
+	// A link only names the page: no stale zoom.
+	v = await reopen({ file: file.path, page: 1 });
+	after = v.currentPosition();
+	add(`${label}: a state with only a page opens that page at fit`, !!after && after.page === 1 && v.fitMode === true && Math.abs(after.zoom - 1) < 0.02, JSON.stringify(after));
+
+	// Another view size: the same page point at the corner, the zoom relative to the fit.
+	const root = document.getElementById("harness-app")!;
+	const w0 = root.style.width, h0 = root.style.height;
+	v = await reopen(state, { w: Math.max(360, Math.round(window.innerWidth * 0.7)), h: Math.max(400, Math.round(window.innerHeight * 0.8)) });
+	after = v.currentPosition();
+	add(`${label}: in a view of another size the page point and the relative zoom hold`,
+		!!after && after.page === before.page && Math.abs(after.zoom - before.zoom) < 0.05 && Math.abs(after.x - before.x) < 6 && Math.abs(after.y - before.y) < 6,
+		`${JSON.stringify(before)} → ${JSON.stringify(after)}`);
+	root.style.width = w0;
+	root.style.height = h0;
+
+	// Leave a fresh view on page 1 for the screenshot.
+	await open();
+	await frames(3);
 }
 
 /** Fraction of the stage height that is still on the first page, a little above its bottom edge (at most 0.75). */

@@ -3,6 +3,7 @@ import { DEFAULT_ERASER_SIZE, DEFAULT_FAVOURITES, normaliseEraserSize, normalise
 import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "./ink/edge-zones";
 import type { PenButtonAction } from "./ink/input-policy";
 import { isScrollMode, type ScrollMode } from "./ink/page-mode";
+import { parsePosition, type SavedPosition } from "./ink/view-position";
 import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./model/types";
 import { DEFAULT_COMPANION_SETTINGS, readCompanionSettings, type CompanionSettings } from "./storage/companion-path";
 
@@ -62,6 +63,8 @@ export interface NotebookSettings extends CompanionSettings {
 	// wave 0.6: navigation
 	/** Continuous vertical scrolling, or one page at a time with a sideways swipe (#14). */
 	scrollMode: ScrollMode;
+	/** Zoom and scroll position on `lastNotebookPage` (O16), for "Continue last notebook". Not shown in the settings tab. */
+	lastNotebookPos: SavedPosition | null;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -94,6 +97,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	lastNotebookPath: "",
 	lastNotebookPage: 1,
 	scrollMode: "continuous",
+	lastNotebookPos: null,
 	...DEFAULT_COMPANION_SETTINGS,
 };
 
@@ -131,6 +135,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.lastNotebookPath === "string") s.lastNotebookPath = d.lastNotebookPath;
 	if (typeof d.lastNotebookPage === "number" && Number.isInteger(d.lastNotebookPage) && d.lastNotebookPage >= 1) s.lastNotebookPage = d.lastNotebookPage;
 	if (isScrollMode(d.scrollMode)) s.scrollMode = d.scrollMode;
+	s.lastNotebookPos = parsePosition(d.lastNotebookPos);
 	Object.assign(s, readCompanionSettings(d));
 	return s;
 }
