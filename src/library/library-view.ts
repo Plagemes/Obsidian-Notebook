@@ -10,7 +10,8 @@ import { attachPress, DROP_ATTR } from "./drag";
 import { breadcrumb, buildFolderTree, flattenTree, isReservedPath, type FolderNode } from "./folders";
 import { relativeTime, uniquePath } from "./format";
 import { folderOf, isInside, LibraryIndex, SORTS, type Highlight, type LibraryEntry, type LibraryScope, type LibrarySort, type SearchHit } from "./index";
-import { ConfirmModal, CoverModal, FolderSuggestModal, PromptModal, TagsModal } from "./library-modals";
+import { openTagEditor } from "../integration/tags";
+import { ConfirmModal, CoverModal, FolderSuggestModal, PromptModal } from "./library-modals";
 import { entryFromFile, filesToRead, type NotebookFileInfo } from "./scan";
 import type { LibraryTrash } from "../storage/trash";
 import { addTrashNavItem, confirmMoveToTrash, TrashModal } from "./trash-modal";
@@ -1084,7 +1085,8 @@ export class LibraryView extends ItemView {
 	private askTags(path: string): void {
 		const entry = this.index.get(path);
 		if (!entry) return;
-		new TagsModal(this.app, entry.tags, this.index.tags().map((x) => x.tag), (tags) => void this.setMeta(path, { tags })).open();
+		// O2: suggestions from Obsidian's tags, Obsidian-style normalisation, hint about companion notes (integration/tags.ts).
+		openTagEditor(this.app, { file: this.app.vault.getFileByPath(path), current: entry.tags, libraryTags: this.index.tags().map((x) => x.tag), onSave: (tags) => this.setMeta(path, { tags }) });
 	}
 
 	private askCover(path: string): void {

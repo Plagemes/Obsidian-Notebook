@@ -1,7 +1,6 @@
 import { FuzzySuggestModal, Modal, Setting, type App, type FuzzyMatch } from "obsidian";
 import { t } from "../i18n";
-import { normalizeText } from "./index";
-import { COVER_COLORS, parseTags } from "./scan";
+import { COVER_COLORS } from "./scan";
 
 /** Modal with one text field. Enter submits; the callback runs once, after the modal closed. */
 export class PromptModal extends Modal {
@@ -67,74 +66,6 @@ export class ConfirmModal extends Modal {
 					this.onConfirm();
 				}),
 			);
-	}
-
-	onClose(): void {
-		this.contentEl.empty();
-	}
-}
-
-/** Edit the tags of a notebook: a comma-separated field plus the tags already used elsewhere as toggle chips. */
-export class TagsModal extends Modal {
-	private input: HTMLInputElement | null = null;
-
-	constructor(
-		app: App,
-		private readonly current: string[],
-		private readonly existing: string[],
-		private readonly onSave: (tags: string[]) => void,
-	) {
-		super(app);
-	}
-
-	onOpen(): void {
-		this.setTitle(t("library.modal.tagsTitle"));
-		const save = () => {
-			this.close();
-			this.onSave(parseTags(this.input?.value ?? ""));
-		};
-		let chips: HTMLElement | null = null;
-		const syncChips = () => {
-			const active = new Set(parseTags(this.input?.value ?? "").map(normalizeText));
-			chips?.querySelectorAll<HTMLElement>(".notebook-lib-chip").forEach((el) => {
-				const on = active.has(normalizeText(el.dataset.tag ?? ""));
-				el.toggleClass("is-active", on);
-				el.setAttribute("aria-pressed", String(on));
-			});
-		};
-		new Setting(this.contentEl)
-			.setName(t("library.modal.tagsLabel"))
-			.setDesc(t("library.modal.tagsDesc"))
-			.addText((text) => {
-				this.input = text.inputEl;
-				text.setValue(this.current.join(", ")).onChange(syncChips);
-				text.inputEl.addEventListener("keydown", (e) => {
-					if (e.key === "Enter" && !e.isComposing) {
-						e.preventDefault();
-						save();
-					}
-				});
-				window.setTimeout(() => text.inputEl.focus(), 0);
-			});
-		if (this.existing.length > 0) {
-			this.contentEl.createDiv({ text: t("library.modal.tagsExisting"), cls: "notebook-lib-modal-label" });
-			chips = this.contentEl.createDiv({ cls: "notebook-lib-chips" });
-			for (const tag of this.existing) {
-				const chip = chips.createEl("button", { text: tag, cls: "notebook-lib-chip" });
-				chip.dataset.tag = tag;
-				chip.addEventListener("click", () => {
-					const tags = parseTags(this.input?.value ?? "");
-					const key = normalizeText(tag);
-					const next = tags.some((x) => normalizeText(x) === key) ? tags.filter((x) => normalizeText(x) !== key) : [...tags, tag];
-					if (this.input) this.input.value = next.join(", ");
-					syncChips();
-				});
-			}
-			syncChips();
-		}
-		new Setting(this.contentEl)
-			.addButton((b) => b.setButtonText(t("library.modal.cancel")).onClick(() => this.close()))
-			.addButton((b) => b.setButtonText(t("library.modal.save")).setCta().onClick(save));
 	}
 
 	onClose(): void {

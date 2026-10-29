@@ -5,6 +5,7 @@ import type { NotebookDocument, Page } from "../model/types";
 import type { NotebookSettings } from "../settings";
 import { isNotebookFile } from "../storage/format";
 import { whenIdle } from "../storage/idle";
+import { createNotebookApi, type NotebookApi } from "./api";
 import { registerCompanion } from "./companion";
 import { registerEmbed } from "./embed";
 import { registerFileMenu } from "./file-menu";
@@ -16,11 +17,15 @@ import { PageLinkSuggest } from "./page-link-suggest";
 import { trackActiveNote } from "./page-share";
 import { NotebookPickerModal } from "./picker";
 import { registerProtocol } from "./protocol";
+import { registerTags } from "./tags";
 
 export { notebookUri } from "./links";
 
 export interface IntegrationPlugin extends Plugin {
 	settings: NotebookSettings;
+	saveSettings(): Promise<void>;
+	/** Public API for other plugins (docs/api.md): `app.plugins.plugins["notebook"].api`. Set by registerIntegration. */
+	api?: NotebookApi;
 }
 
 export interface IntegrationDeps {
@@ -71,4 +76,10 @@ export function registerIntegration(plugin: IntegrationPlugin, deps: Integration
 
 	// O1 Companion notes.
 	registerCompanion(plugin);
+
+	// O2 Shared tags: the tag editor command (the library uses the same editor).
+	registerTags(plugin);
+
+	// #168 Public API for other plugins.
+	plugin.api = createNotebookApi(plugin);
 }

@@ -8,6 +8,7 @@ import { createNotebook } from "./storage/notebooks";
 import { BenchmarkModal } from "./view/benchmark";
 import { NotebookLibraryHost } from "./library/host";
 import { registerIntegration } from "./integration";
+import type { NotebookApi } from "./integration/api";
 import { registerReliability } from "./integration/reliability";
 import { LIBRARY_VIEW_TYPE, LibraryView } from "./library/library-view";
 import { registerToolCommands } from "./view/commands";
@@ -26,6 +27,8 @@ export default class NotebookPlugin extends Plugin {
 	journal!: AdapterJournalStore;
 	/** Class timetable (wave 0.6). */
 	timetable!: TimetableService;
+	/** Public API for other plugins and scripts (docs/api.md). */
+	api?: NotebookApi;
 
 	async onload(): Promise<void> {
 		this.settings = readSettings(await this.loadData());
