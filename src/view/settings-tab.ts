@@ -88,6 +88,19 @@ export class NotebookSettingTab extends PluginSettingTab {
 				desc: t("settings.perfOverlay.desc"),
 				control: { type: "toggle", key: "perfOverlay", defaultValue: DEFAULT_SETTINGS.perfOverlay },
 			},
+			{
+				name: t("settings.snapshotInterval"),
+				desc: t("settings.snapshotInterval.desc"),
+				control: {
+					type: "slider", key: "snapshotIntervalHours", defaultValue: DEFAULT_SETTINGS.snapshotIntervalHours,
+					min: 0, max: 168, step: 1, displayFormat: (v) => (v === 0 ? "off" : `${v} h`),
+				},
+			},
+			{
+				name: t("settings.snapshotKeep"),
+				desc: t("settings.snapshotKeep.desc"),
+				control: { type: "slider", key: "snapshotsToKeep", defaultValue: DEFAULT_SETTINGS.snapshotsToKeep, min: 1, max: 50, step: 1 },
+			},
 		];
 	}
 
@@ -169,5 +182,15 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setName(t("settings.perfOverlay"))
 			.setDesc(t("settings.perfOverlay.desc"))
 			.addToggle((toggle) => toggle.setValue(s.perfOverlay).onChange((v) => this.setControlValue("perfOverlay", v)));
+
+		new Setting(containerEl)
+			.setName(t("settings.snapshotInterval"))
+			.setDesc(t("settings.snapshotInterval.desc"))
+			.addSlider((slider) => slider.setLimits(0, 168, 1).setValue(s.snapshotIntervalHours).onChange((v) => this.setControlValue("snapshotIntervalHours", v)));
+
+		new Setting(containerEl)
+			.setName(t("settings.snapshotKeep"))
+			.setDesc(t("settings.snapshotKeep.desc"))
+			.addSlider((slider) => slider.setLimits(1, 50, 1).setValue(s.snapshotsToKeep).onChange((v) => this.setControlValue("snapshotsToKeep", v)));
 	}
 }

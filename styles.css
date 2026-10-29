@@ -801,3 +801,44 @@
 		min-height: 44px;
 	}
 }
+
+/* --- integration P1 --- */
+.notebook-embed-host {
+	margin: 0.5em 0;
+}
+
+.notebook-embed {
+	display: block;
+	max-width: 100%;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background-color: var(--background-secondary);
+	overflow: hidden;
+	cursor: pointer;
+}
+
+.notebook-embed:hover,
+.notebook-embed:focus-visible {
+	border-color: var(--interactive-accent);
+}
+
+.notebook-embed-title {
+	padding: 4px 10px;
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.notebook-embed-image {
+	display: block;
+	width: 100%;
+	height: auto;
+}
+
+.notebook-embed-message {
+	padding: 8px 10px;
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}

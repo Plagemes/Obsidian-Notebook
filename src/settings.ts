@@ -16,6 +16,10 @@ export interface NotebookSettings {
 	defaultPaper: PaperKind;
 	defaultPageSize: PageSizeName;
 	defaultLandscape: boolean;
+	/** Version history: at most one snapshot per notebook per this many hours; 0 turns snapshots off. */
+	snapshotIntervalHours: number;
+	/** Version history: how many snapshots to keep per notebook. */
+	snapshotsToKeep: number;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -30,6 +34,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	defaultPaper: "grid",
 	defaultPageSize: "a4",
 	defaultLandscape: false,
+	snapshotIntervalHours: 24,
+	snapshotsToKeep: 10,
 };
 
 /** Merges saved data over the defaults, ignoring values of the wrong type. */
@@ -48,6 +54,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (PAPER_KINDS.includes(d.defaultPaper as PaperKind)) s.defaultPaper = d.defaultPaper as PaperKind;
 	if (typeof d.defaultPageSize === "string" && Object.prototype.hasOwnProperty.call(PAGE_SIZES, d.defaultPageSize)) s.defaultPageSize = d.defaultPageSize as PageSizeName;
 	if (typeof d.defaultLandscape === "boolean") s.defaultLandscape = d.defaultLandscape;
+	if (typeof d.snapshotIntervalHours === "number" && d.snapshotIntervalHours >= 0 && d.snapshotIntervalHours <= 720) s.snapshotIntervalHours = d.snapshotIntervalHours;
+	if (typeof d.snapshotsToKeep === "number" && Number.isInteger(d.snapshotsToKeep) && d.snapshotsToKeep >= 1 && d.snapshotsToKeep <= 100) s.snapshotsToKeep = d.snapshotsToKeep;
 	return s;
 }
 
