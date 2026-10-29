@@ -5,3 +5,4 @@ data.json
 .DS_Store
 coverage/
 stress.notebook
+dev/harness/dist/

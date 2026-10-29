@@ -1,0 +1,112 @@
+/* The slice of Obsidian's app.css the plugin's styles rely on: theme variables and the leaf layout. */
+
+body {
+	margin: 0;
+	font-family: system-ui, sans-serif;
+	font-size: 14px;
+	--font-ui-smaller: 11px;
+	--font-ui-small: 13px;
+	--font-semibold: 600;
+	--radius-s: 4px;
+	--radius-m: 8px;
+	--input-height: 30px;
+	--layer-popover: 30;
+	--shadow-l: 0 4px 16px rgba(0, 0, 0, 0.3);
+	--interactive-accent: #7c3aed;
+	--text-on-accent: #ffffff;
+	--text-error: #e93147;
+	--text-highlight-bg: rgba(255, 208, 0, 0.4);
+	background: var(--background-primary);
+	color: var(--text-normal);
+}
+
+body.theme-light {
+	--background-primary: #ffffff;
+	--background-secondary: #f6f6f6;
+	--background-modifier-border: #e0e0e0;
+	--background-modifier-hover: rgba(0, 0, 0, 0.075);
+	--background-modifier-active-hover: rgba(124, 58, 237, 0.15);
+	--text-normal: #222222;
+	--text-muted: #5c5c5c;
+	--text-faint: #ababab;
+}
+
+/* Obsidian's dark theme: the stage background (--background-secondary) is nearly black. */
+body.theme-dark {
+	--background-primary: #1e1e1e;
+	--background-secondary: #161616;
+	--background-modifier-border: #363636;
+	--background-modifier-hover: rgba(255, 255, 255, 0.075);
+	--background-modifier-active-hover: rgba(124, 58, 237, 0.25);
+	--text-normal: #dadada;
+	--text-muted: #b3b3b3;
+	--text-faint: #666666;
+	color-scheme: dark;
+}
+
+.harness-app {
+	width: 100vw;
+	height: 100vh;
+	display: flex;
+	overflow: hidden;
+}
+
+.workspace-leaf {
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.workspace-leaf-content {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.view-header {
+	flex: 0 0 40px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.view-content {
+	flex: 1 1 auto;
+	min-height: 0;
+	width: 100%;
+	height: 100%;
+	position: relative;
+	overflow: auto;
+	padding: 12px;
+	box-sizing: border-box;
+}
+
+button {
+	font: inherit;
+	color: inherit;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+}
+
+.harness-icon {
+	font-size: 11px;
+}
+
+#harness-report {
+	position: fixed;
+	right: 0;
+	bottom: 0;
+	max-width: 40vw;
+	max-height: 30vh;
+	overflow: auto;
+	margin: 0;
+	font-size: 10px;
+	background: rgba(0, 0, 0, 0.6);
+	color: #fff;
+	pointer-events: none;
+}
+
+#harness-report:empty {
+	display: none;
+}
