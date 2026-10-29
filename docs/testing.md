@@ -28,6 +28,10 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Saves, journal and thumbnails wait while writing (and 350 ms after) | ✅ | ✅ session | | | |
 | Format v5: per-stroke render version; old strokes unchanged | ✅ | ✅ migration, round-trip | | | |
 | Whole-stroke eraser (toolbar) | ✅ | ✅ hit test | | | |
+| Favourite pens: 6 slots (tool, colour, width) in the plugin settings, one tap to select, long press or menu to save the current pen | ✅ | ✅ slot logic, settings read; ❌ UI | | | |
+| Eraser size (5 presets in the toolbar, persisted) for both eraser modes, and an eraser circle that follows the pen/mouse | ✅ | ✅ radius and presets; ❌ circle (harness only) | | ✅ | circle position under a real S Pen hover untested |
+| "Pen only" toggle in the toolbar (the inverse of *Draw with finger*; fingers still pan and zoom) | ✅ | ✅ routing (existing); ❌ toggle | | | |
+| Commands for every tool and action (pen, highlighter, eraser, lasso, shapes, text, favourites 1–6, pen only, next/previous page, eraser size…), `checkCallback`, no default hotkeys | ✅ | ✅ ids and checkCallback | | | |
 | Segment eraser (cuts strokes; works across pages in one gesture) | ✅ | ✅ cutting logic; ❌ across pages (view) | | | |
 | Pen eraser button (`buttons & 32`) | ✅ | ❌ | | ✅ | S Pen button mapping unknown |
 | Lasso selection (≥ 50% of points inside) | ✅ | ✅ | | | |
@@ -244,6 +248,16 @@ For each step note **pass / fail / notes** in the table at the end.
 | 39 Selective eraser | | | |
 | 40 Erase area | | | |
 | 37 Page links, native embeds, explorer menu | | | |
+| P1 Favourite pens | | | |
+| P2 Eraser size and circle | | | |
+| P3 Pen only | | | |
+| P4 Commands and hotkeys | | | |
+
+**Pens (wave p1b) — steps P1–P4.**
+P1. **Favourite pens.** In a notebook, tap each of the six favourite buttons next to the tools: the tool, colour and width change and the button is outlined. Select the pen with a new colour and width, long-press a favourite for about half a second: a notice says it was saved and the button changes. Right-click (or the context menu) a favourite: *Save the current pen here* and *Reset this favourite*. Close and reopen Obsidian: the favourites are kept. Check the toolbar on the phone width.
+P2. **Eraser size.** Select the eraser: five size buttons appear. Pick the largest and drag the S Pen over strokes in *Whole strokes* and in *Parts of strokes* mode: a circle follows the pen (also while hovering) and what it touches is erased. Zoom in and out: the circle keeps its screen size and the erased area matches it. Pick the smallest. Close and reopen: the size is kept. Try the pen's eraser button/end.
+P3. **Pen only.** Tap *Pen only* in the toolbar (the pen icon): with *Draw with finger* previously on, a finger now pans and zooms instead of drawing; the setting in Obsidian's options shows the same state. Tap again to let the finger write.
+P4. **Commands and hotkeys.** In Settings > Hotkeys search "Notebook", assign keys to *Tool: pen*, *Favourite pen 2*, *Next page* and *Toggle pen only*, and use them with a keyboard in a notebook; with a Markdown note active they do nothing.
 
 Benchmark output (step 21): paste it here.
 

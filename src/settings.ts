@@ -1,4 +1,5 @@
 import type { PressureMode } from "./ink/pressure";
+import { DEFAULT_ERASER_SIZE, DEFAULT_FAVOURITES, normaliseEraserSize, normaliseFavourites, type FavouritePen } from "./view/favourites";
 import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./model/types";
 
 export interface NotebookSettings {
@@ -34,6 +35,10 @@ export interface NotebookSettings {
 	autoNextPage: boolean;
 	/** The eraser's Area mode also removes the text boxes and images inside the outline. */
 	eraseAreaElements: boolean;
+	/** Favourite pens (six slots: tool, colour, width). */
+	favouritePens: FavouritePen[];
+	/** Eraser radius, CSS px. */
+	eraserSize: number;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -53,6 +58,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	snapshotsToKeep: 10,
 	autoNextPage: true,
 	eraseAreaElements: false,
+	favouritePens: DEFAULT_FAVOURITES.map((f) => ({ ...f })),
+	eraserSize: DEFAULT_ERASER_SIZE,
 };
 
 /** Merges saved data over the defaults, ignoring values of the wrong type. */
@@ -76,6 +83,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.snapshotsToKeep === "number" && Number.isInteger(d.snapshotsToKeep) && d.snapshotsToKeep >= 1 && d.snapshotsToKeep <= 100) s.snapshotsToKeep = d.snapshotsToKeep;
 	if (typeof d.autoNextPage === "boolean") s.autoNextPage = d.autoNextPage;
 	if (typeof d.eraseAreaElements === "boolean") s.eraseAreaElements = d.eraseAreaElements;
+	s.favouritePens = normaliseFavourites(d.favouritePens);
+	s.eraserSize = normaliseEraserSize(d.eraserSize);
 	return s;
 }
 

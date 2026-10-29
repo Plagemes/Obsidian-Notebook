@@ -15,6 +15,11 @@ Not yet verified on Android hardware (see `docs/testing.md`).
 - **File explorer menu (O9)**: *New notebook here* on folders and *Annotate in Notebook* on PDFs (a new notebook in the notebooks folder with the PDF as page backgrounds, reusing the PDF import).
 - **Page into a note (O20)**: the page menu has *Copy link to this page*, *Insert link into the active note* and *Insert page preview into the active note* (links follow Obsidian's link-format setting).
 - Not verified in Obsidian or on Android hardware (see `docs/testing.md`, step 37).
+### Added
+- **Favourite pens**: six slots (tool, colour, width) next to the tools, one tap to select, long press or context menu to save the current pen into a slot (or reset it). Stored in the plugin settings.
+- **Eraser size**: five presets in the toolbar for both eraser modes, remembered, and a circle that follows the pen (or mouse) while erasing.
+- **Pen only** toggle in the toolbar: fingers pan and zoom but do not draw. It is the inverse of the *Draw with finger* setting and stays in sync with it.
+- **Commands for hotkeys**: every tool and action as a command that only applies when a notebook is active (pen, highlighter, eraser and its mode and size, lasso, shapes, text, favourite pens 1-6, pen only, next/previous page, delete selection, pages panel, ruler). No default hotkeys.
 
 ## 0.4.1 — 2026-10-29
 

@@ -9,6 +9,7 @@ import { BenchmarkModal } from "./view/benchmark";
 import { NotebookLibraryHost } from "./library/host";
 import { registerIntegration } from "./integration";
 import { LIBRARY_VIEW_TYPE, LibraryView } from "./library/library-view";
+import { registerToolCommands } from "./view/commands";
 import { OpenNotebookModal } from "./view/modals";
 import { NotebookView, VIEW_TYPE } from "./view/notebook-view";
 import { NotebookSettingTab } from "./view/settings-tab";
@@ -42,6 +43,8 @@ export default class NotebookPlugin extends Plugin {
 		this.addCommand({ id: "benchmark", name: t("command.benchmark"), callback: () => this.openBenchmark() });
 		this.addCommand({ id: "create-stress-test", name: t("command.stress"), callback: () => void this.createStressNotebook() });
 		this.addCommand({ id: "export-pdf", name: t("command.exportPdf"), checkCallback: (checking) => this.withView(checking, (v) => void v.exportNotebookPdf()) });
+
+		registerToolCommands(this, (checking, run) => this.withView(checking, run));
 
 		registerIntegration(this, {
 			background: (doc, page, width) => this.host.thumbnailBackground(doc, page, width),
