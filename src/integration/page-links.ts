@@ -33,6 +33,48 @@ export function pageFromEphemeralState(state: unknown): number | null {
 	return pageFromState(state);
 }
 
+/** Where a link points: a 1-based page number and/or a page id (`#p3&id=<page id>`, Z1 card links). */
+export interface PageTarget {
+	page: number | null;
+	pageId: string | null;
+}
+
+/** Target of a link subpath; null when it names no page (headings, block ids). A malformed `id` is ignored (the number decides). */
+export function pageTargetFromSubpath(subpath: string): PageTarget | null {
+	const s = subpath.trim();
+	const params = parseSubpathParams(s.startsWith("#") ? s.slice(1) : s);
+	const page = parsePageFragment(params.head);
+	if (page === null && !(params.head === "" && params.pageId !== null)) return null;
+	return { page, pageId: params.pageId };
+}
+
+/** Target requested by Obsidian's ephemeral state (`{ subpath }` when following a link, `{ page }` from the plugin's own callers). */
+export function pageTargetFromEphemeralState(state: unknown): PageTarget | null {
+	if (typeof state !== "object" || state === null) return null;
+	const subpath = (state as { subpath?: unknown }).subpath;
+	if (typeof subpath === "string") {
+		const target = pageTargetFromSubpath(subpath);
+		if (target) return target;
+	}
+	const page = pageFromState(state);
+	return page === null ? null : { page, pageId: null };
+}
+
+export type PageTargetResult = { index: number } | { missing: "deleted" };
+
+/**
+ * The 0-based page a link opens. By id first: the page may have moved, and when no page has that id any more the
+ * link's page was deleted (`missing`: say so, never open whatever page now has that number). Without an id, the
+ * number, kept inside the notebook (as page links always were).
+ */
+export function resolvePageTarget(pages: ReadonlyArray<{ id: string }>, target: PageTarget): PageTargetResult {
+	if (target.pageId !== null) {
+		const index = pages.findIndex((p) => p.id === target.pageId);
+		return index >= 0 ? { index } : { missing: "deleted" };
+	}
+	return { index: Math.min(pages.length, Math.max(1, target.page ?? 1)) - 1 };
+}
+
 /** `generateMarkdownLink` may or may not add the `!` of an embed; this makes it match `embed`. */
 export function withEmbedMarker(link: string, embed: boolean): string {
 	const bare = link.startsWith("!") ? link.slice(1) : link;
