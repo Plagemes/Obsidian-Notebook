@@ -1,6 +1,7 @@
 import { loadPdfJs, normalizePath, Notice, Platform, type App, type TFile, type WorkspaceLeaf } from "obsidian";
 import { t } from "../i18n";
 import { createDocument, createId } from "../model/document";
+import { backgroundRect } from "../model/margins";
 import { parse, serializeChecked } from "../model/serialize";
 import { PAGE_SIZES, PAPER_SPACING, type Asset, type NotebookDocument, type NotebookMeta, type Page } from "../model/types";
 import { assetExtension, assetPath, assetsFolder } from "../pdf/assets";
@@ -286,14 +287,18 @@ export class NotebookLibraryHost implements LibraryHost {
 		try {
 			if (bg.kind === "pdf") {
 				const canvas = await this.pdf.render(bg.asset, bg.page, width / page.width);
-				return (ctx, p) => ctx.drawImage(canvas, 0, 0, p.width, p.height);
+				return (ctx, p) => {
+					const r = backgroundRect(p);
+					ctx.drawImage(canvas, r.x, r.y, r.width, r.height);
+				};
 			}
 			const asset = doc.assets?.[bg.asset];
 			const file = asset && resolveAssetFile(this.app, asset, this.root());
 			if (!file) return null;
 			const bitmap = await createImageBitmap(new Blob([await this.app.vault.readBinary(file)]));
 			return (ctx, p) => {
-				ctx.drawImage(bitmap, 0, 0, p.width, p.height);
+				const r = backgroundRect(p);
+				ctx.drawImage(bitmap, r.x, r.y, r.width, r.height);
 				bitmap.close();
 			};
 		} catch (e) {

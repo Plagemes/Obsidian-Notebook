@@ -29,6 +29,7 @@ export function duplicatePage(page: Page): Page {
 	};
 	if (page.background) copy.background = { ...page.background };
 	if (page.infinite !== undefined) copy.infinite = page.infinite;
+	if (page.margins) copy.margins = { ...page.margins };
 	if (page.elements && page.elements.length > 0) copy.elements = page.elements.map(copyElement);
 	return copy;
 }

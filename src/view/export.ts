@@ -2,6 +2,7 @@ import { Notice, normalizePath, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { pagesToPdf, type PdfPlacedImage } from "../ink/export-pdf";
 import { pageToSvg, type SvgPlacedImage } from "../ink/export-svg";
+import { backgroundRect } from "../model/margins";
 import type { Page } from "../model/types";
 import type { NotebookMedia } from "./media";
 
@@ -52,7 +53,7 @@ export async function collectPageImages(media: NotebookMedia | null, pages: read
 			const jpeg = bg.kind === "pdf"
 				? await load(`pdf:${bg.asset}:${bg.page}`, () => media.pdfPageJpeg(bg.asset, bg.page, PDF_DPI))
 				: await load(`img:${bg.asset}`, () => media.imageJpeg(bg.asset));
-			if (jpeg) list.push({ ...jpeg, x: 0, y: 0, width: page.width, height: page.height, layer: "background" });
+			if (jpeg) list.push({ ...jpeg, ...backgroundRect(page), layer: "background" });
 			else out.skipped++;
 		}
 		for (const el of page.elements ?? []) {

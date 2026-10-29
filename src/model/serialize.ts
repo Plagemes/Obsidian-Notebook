@@ -2,7 +2,7 @@ import { detectVersion, migrate, MigrationError, type RawObject } from "./migrat
 import {
 	CURRENT_VERSION, DEFAULT_META, FORMAT_ID, PAPER_KINDS, RENDER_VERSIONS, TOOLS,
 	type Asset, type AssetKind, type ImageElement, type NotebookDocument, type NotebookMeta, type Page,
-	type PageBackground, type PageElement, type PaperKind, type Point, type RenderVersion, type Stroke, type TextElement, type Tool,
+	type PageBackground, type PageElement, type PageMargins, type PaperKind, type Point, type RenderVersion, type Stroke, type TextElement, type Tool,
 } from "./types";
 
 export type ParseFailure =
@@ -77,6 +77,8 @@ function assemble(
 				? `\t\t\t"background": {"kind":"pdf","asset":${j(b.asset)},"page":${j(b.page)}},`
 				: `\t\t\t"background": {"kind":${j(b.kind)},"asset":${j(b.asset)}},`);
 		}
+		const m = page.margins;
+		if (m) out.push(`\t\t\t"margins": {"left":${j(m.left)},"right":${j(m.right)},"bottom":${j(m.bottom)}},`);
 		if (page.infinite !== undefined) out.push(`\t\t\t"infinite": ${j(page.infinite)},`);
 		if (elements.length) out.push(`\t\t\t"elements": [\n${elements.join(",\n")}\n\t\t\t],`);
 		out.push(strokes.length ? `\t\t\t"strokes": [\n${strokes.join(",\n")}\n\t\t\t]` : `\t\t\t"strokes": []`);
@@ -203,6 +205,22 @@ function readBackground(v: unknown, path: string, assets: Assets): PageBackgroun
 	return fail(`${path}.kind`, "unknown background kind");
 }
 
+/** v6 margins: non-negative, and the background box they leave keeps a positive size. */
+function readMargins(v: unknown, path: string, width: number, height: number): PageMargins {
+	if (!isObject(v)) fail(path, "expected an object");
+	const side = (x: unknown, name: string): number => {
+		const n = finite(x, `${path}.${name}`);
+		if (n < 0) fail(`${path}.${name}`, "must not be negative");
+		return n;
+	};
+	const left = side(v.left, "left");
+	const right = side(v.right, "right");
+	const bottom = side(v.bottom, "bottom");
+	if (left + right >= width) fail(path, "left + right must be smaller than the page width");
+	if (bottom >= height) fail(`${path}.bottom`, "must be smaller than the page height");
+	return { left, right, bottom };
+}
+
 function readElement(v: unknown, path: string, assets: Assets): PageElement {
 	if (!isObject(v)) fail(path, "expected an object");
 	const id = str(v.id, `${path}.id`);
@@ -273,6 +291,7 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets): P
 	});
 	const page: Page = { id, width, height, paper: { kind: paper.kind as PaperKind, spacing }, strokes };
 	if (v.background !== undefined) page.background = readBackground(v.background, `${path}.background`, assets);
+	if (v.margins !== undefined) page.margins = readMargins(v.margins, `${path}.margins`, width, height);
 	if (v.infinite !== undefined) {
 		if (typeof v.infinite !== "boolean") fail(`${path}.infinite`, "expected a boolean");
 		page.infinite = v.infinite;

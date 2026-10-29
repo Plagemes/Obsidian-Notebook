@@ -1,6 +1,7 @@
 import { cloneMeta, findPage } from "./document";
 import { freezeElement } from "./serialize";
-import type { Asset, NotebookDocument, NotebookMeta, Page, PageElement, Paper, Stroke } from "./types";
+import { marginsAfterResize, marginsOf, normalizeMargins, translateElement, translateStroke } from "./margins";
+import type { Asset, NotebookDocument, NotebookMeta, Page, PageBackground, PageElement, PageMargins, Paper, Stroke } from "./types";
 
 /** A command knows how to apply and revert itself on a document: no snapshots. */
 export interface Command {
@@ -193,9 +194,14 @@ export class SetPaper implements Command {
 /**
  * Changes the size of a page. Strokes are NOT moved or scaled: they keep their page coordinates,
  * so shrinking a page can leave strokes outside it (they are kept, never deleted).
+ * v6: on a page with margins the background keeps its box; the right and bottom margins take the
+ * change (marginsAfterResize), so an infinite PDF page grows below the PDF instead of stretching it.
  */
 export class SetPageSize implements Command {
 	readonly label = "Change page size";
+	/** Margins the page had before apply(), restored by revert(). */
+	private previousMargins: PageMargins | undefined;
+	private applied = false;
 	constructor(
 		readonly pageId: string,
 		readonly before: { width: number; height: number },
@@ -204,14 +210,126 @@ export class SetPageSize implements Command {
 
 	apply(doc: NotebookDocument): void {
 		const page = pageOf(doc, this.pageId);
+		this.previousMargins = page.margins;
+		this.applied = true;
+		const margins = marginsAfterResize(page, this.after);
 		page.width = this.after.width;
 		page.height = this.after.height;
+		if (margins) page.margins = margins;
+		else delete page.margins;
 	}
 
 	revert(doc: NotebookDocument): void {
 		const page = pageOf(doc, this.pageId);
 		page.width = this.before.width;
 		page.height = this.before.height;
+		if (!this.applied) return;
+		this.applied = false;
+		if (this.previousMargins) page.margins = this.previousMargins;
+		else delete page.margins;
+	}
+}
+
+/**
+ * v6: changes the margins around a page's background. The background box keeps its size, so the page
+ * grows or shrinks by the change; when the left margin changes, the background moves right or left and
+ * every stroke and element of the page moves with it (same ids, new frozen objects), so the ink stays
+ * exactly where it was relative to the PDF. Undo puts back the very same stroke and element objects
+ * and the exact previous page size.
+ */
+export class SetPageMargins implements Command {
+	readonly label = "Change page margins";
+	private readonly moved = new Map<Stroke | PageElement, Stroke | PageElement>();
+	private readonly original = new Map<Stroke | PageElement, Stroke | PageElement>();
+	private previous: { width: number; height: number; margins: PageMargins | undefined } | null = null;
+	readonly before: PageMargins | undefined;
+	readonly after: PageMargins | undefined;
+
+	constructor(readonly pageId: string, before: PageMargins | undefined, after: PageMargins | undefined) {
+		this.before = normalizeMargins(before);
+		this.after = normalizeMargins(after);
+	}
+
+	apply(doc: NotebookDocument): void {
+		const page = pageOf(doc, this.pageId);
+		const b = marginsOf({ margins: this.before });
+		const a = marginsOf({ margins: this.after });
+		this.previous = { width: page.width, height: page.height, margins: page.margins };
+		const dx = Math.round((a.left - b.left) * 100) / 100;
+		page.width = Math.round((page.width + a.left + a.right - b.left - b.right) * 100) / 100;
+		page.height = Math.round((page.height + a.bottom - b.bottom) * 100) / 100;
+		if (this.after) page.margins = { ...this.after };
+		else delete page.margins;
+		if (dx === 0) return;
+		const move = <T extends Stroke | PageElement>(item: T, make: (x: T) => T): T => {
+			let m = this.moved.get(item) as T | undefined;
+			if (!m) {
+				m = make(item);
+				this.moved.set(item, m);
+				this.original.set(m, item);
+			}
+			return m;
+		};
+		const strokes = page.strokes;
+		for (let i = 0; i < strokes.length; i++) strokes[i] = move(strokes[i]!, (s) => translateStroke(s, dx));
+		const els = page.elements;
+		if (els) for (let i = 0; i < els.length; i++) els[i] = move(els[i]!, (e) => translateElement(e, dx));
+	}
+
+	revert(doc: NotebookDocument): void {
+		const prev = this.previous;
+		if (!prev) return;
+		this.previous = null;
+		const page = pageOf(doc, this.pageId);
+		page.width = prev.width;
+		page.height = prev.height;
+		if (prev.margins) page.margins = prev.margins;
+		else delete page.margins;
+		const strokes = page.strokes;
+		for (let i = 0; i < strokes.length; i++) {
+			const o = this.original.get(strokes[i]!);
+			if (o) strokes[i] = o as Stroke;
+		}
+		const els = page.elements;
+		if (els) {
+			for (let i = 0; i < els.length; i++) {
+				const o = this.original.get(els[i]!);
+				if (o) els[i] = o as PageElement;
+			}
+		}
+	}
+}
+
+/**
+ * Replaces a page's background and size in one step (a re-published slide switched to its new version).
+ * Strokes and elements keep their page coordinates; margins are kept. Undo restores both exactly.
+ */
+export class SetPageBackground implements Command {
+	readonly label = "Change page background";
+	private previous: { background: PageBackground | undefined; width: number; height: number } | null = null;
+	constructor(
+		readonly pageId: string,
+		readonly background: PageBackground,
+		readonly size: { width: number; height: number },
+	) {}
+
+	apply(doc: NotebookDocument): void {
+		const page = pageOf(doc, this.pageId);
+		this.previous = { background: page.background, width: page.width, height: page.height };
+		page.background = { ...this.background };
+		page.width = this.size.width;
+		page.height = this.size.height;
+	}
+
+	revert(doc: NotebookDocument): void {
+		const prev = this.previous;
+		if (!prev) return;
+		this.previous = null;
+		const page = pageOf(doc, this.pageId);
+		if (prev.background) page.background = prev.background;
+		else delete page.background;
+		page.width = prev.width;
+		page.height = prev.height;
 	}
 }
 
