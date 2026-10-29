@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { layoutPages, nearestPage, PAGE_GAP, pageAt, visiblePages } from "../src/ink/layout";
 import { pointInPolygon, selectionBounds, strokesInLasso, transformStroke } from "../src/ink/lasso";
+import { pointSegmentDistance } from "../src/ink/hit-test";
+import { INK_MAX_STEPS, INK_STEP_PT, InkBuilder, inkCurveAt } from "../src/ink/ink-geometry";
 import { densify, eraseSegment } from "../src/ink/segment-erase";
 import { Stabilizer } from "../src/ink/stabilizer";
 import { apply, IDENTITY, isIdentity, multiply, rotateAbout, scaleAbout, scaleFactor, translate } from "../src/ink/transform";
 import { createStroke } from "../src/model/document";
-import { A4_HEIGHT, A4_WIDTH } from "../src/model/types";
+import { A4_HEIGHT, A4_WIDTH, RENDER_FREEHAND, RENDER_INK, type Point } from "../src/model/types";
 import { line } from "./helpers";
 
 describe("page layout", () => {
@@ -74,11 +76,62 @@ describe("segment eraser", () => {
 		expect(r === null || r.length !== 1 || r[0]!.length !== 2).toBe(true);
 	});
 
+	it("render 2: the pieces of a fast curved stroke stay on the drawn curve", () => {
+		// A quarter-ish circle of radius 100 sampled every 0.3 rad (30 pt chords): a fast stroke.
+		const R = 100;
+		const pts: Point[] = [];
+		for (let i = 0; i <= 8; i++) pts.push([Math.round(R * Math.cos(i * 0.3) * 100) / 100, Math.round(R * Math.sin(i * 0.3) * 100) / 100, 0.5]);
+		const ink = createStroke("#000000", 2, pts, "pen", RENDER_INK);
+		const old = createStroke("#000000", 2, pts, "pen", RENDER_FREEHAND);
+		const b = InkBuilder.fromPoints(pts, 2, "pen");
+		const nodes: Array<[number, number]> = [];
+		for (let i = 0; i < b.nodeCount; i++) nodes.push([b.nx[i]!, b.ny[i]!]);
+		const away = (runs: Point[][]) => {
+			let worst = 0;
+			for (const r of runs) for (const p of r) worst = Math.max(worst, distanceToPolyline(p[0], p[1], nodes));
+			return worst;
+		};
+		// Cut across the middle of the curve (between two stored points).
+		const a = 1.05;
+		const cut = (stroke: typeof ink) => eraseSegment(stroke, (R - 8) * Math.cos(a), (R - 8) * Math.sin(a), (R + 8) * Math.cos(a), (R + 8) * Math.sin(a), 3)!;
+		const runsInk = cut(ink);
+		expect(runsInk).toHaveLength(2);
+		expect(away(runsInk)).toBeLessThan(0.05);
+		// Render 1 keeps its behaviour: the inserted points lie on the chords, off the curve.
+		expect(away(cut(old))).toBeGreaterThan(0.3);
+	});
+
+	it("inkCurveAt follows exactly the nodes InkBuilder builds", () => {
+		const pts: Point[] = [[0, 0, 0.5], [30, 12, 0.5], [41, 50, 0.5], [90, 61.5, 0.5], [95, 20, 0.5]];
+		const b = InkBuilder.fromPoints(pts, 2, "pen");
+		let node = 1;
+		for (let k = 0; k + 1 < pts.length; k++) {
+			const len = Math.hypot(pts[k + 1]![0] - pts[k]![0], pts[k + 1]![1] - pts[k]![1]);
+			const steps = Math.min(INK_MAX_STEPS, Math.max(1, Math.ceil(len / INK_STEP_PT)));
+			for (let j = 1; j < steps; j++, node++) {
+				const [x, y] = inkCurveAt(pts, k, j / steps);
+				expect(x).toBeCloseTo(b.nx[node]!, 9);
+				expect(y).toBeCloseTo(b.ny[node]!, 9);
+			}
+			node++; // the node on point k + 1
+		}
+		expect(node).toBe(b.nodeCount);
+	});
+
 	it("does not leave single-point crumbs", () => {
 		const runs = eraseSegment(line(0, 0, 10, 0, 10, 1), 1.5, -5, 1.5, 5, 1)!;
 		for (const r of runs) expect(r.length).toBeGreaterThanOrEqual(2);
 	});
 });
+
+/** Distance from (x, y) to the polyline through `poly`. */
+function distanceToPolyline(x: number, y: number, poly: ReadonlyArray<readonly [number, number]>): number {
+	let best = Infinity;
+	for (let i = 1; i < poly.length; i++) {
+		best = Math.min(best, pointSegmentDistance(x, y, poly[i - 1]![0], poly[i - 1]![1], poly[i]![0], poly[i]![1]));
+	}
+	return best;
+}
 
 describe("lasso", () => {
 	const square = [[0, 0], [100, 0], [100, 100], [0, 100]] as const;

@@ -64,6 +64,15 @@ export interface SessionOptions {
 	maxQuietDeferMs?: number;
 	/** ...and while busy() (pen down) at most this long (default 8 s): a very long gesture cannot hold back saving forever. */
 	maxBusyDeferMs?: number;
+	/**
+	 * The journal entry is small and cheap, the save is not, so it waits much less (default 120 ms of pen-up gap):
+	 * during continuous writing it lands in the first short gap instead of seconds later.
+	 */
+	journalQuietMs?: number;
+	/** Journal: longest wait after a gesture (default 1 s)... */
+	journalMaxQuietDeferMs?: number;
+	/** ...and while the pen is down (default 1.5 s): bounds how much ink a kill without a visibility change can lose. */
+	journalMaxBusyDeferMs?: number;
 }
 
 let ownerCounter = 0;
@@ -75,6 +84,8 @@ function newOwnerId(): string {
 
 /** How often deferred timed work checks again, ms. */
 const DEFER_POLL_MS = 100;
+/** The journal looks for a pen-up gap more often, so a short gap between strokes is not missed. */
+const JOURNAL_POLL_MS = 40;
 
 /** Attempts per flush when another writer keeps changing the file between our read and our write. */
 const RACE_ATTEMPTS = 3;
@@ -136,6 +147,11 @@ export class DocumentSession {
 	private readonly quietMs: number;
 	private readonly maxQuietDeferMs: number;
 	private readonly maxBusyDeferMs: number;
+	private readonly journalQuietMs: number;
+	private readonly journalMaxQuietDeferMs: number;
+	private readonly journalMaxBusyDeferMs: number;
+	/** Revision a flush is currently serializing and writing, or null: the journal must not touch that document meanwhile. */
+	private flushingRevision: number | null = null;
 	/** When the last gesture ended (ms since epoch), or -Infinity. */
 	private lastGestureEnd = -Infinity;
 	/** When the deferred save / journal entry first became due, or null (separate clocks). */
@@ -161,6 +177,9 @@ export class DocumentSession {
 		this.quietMs = options.quietMs ?? 350;
 		this.maxQuietDeferMs = options.maxQuietDeferMs ?? 4000;
 		this.maxBusyDeferMs = options.maxBusyDeferMs ?? 8000;
+		this.journalQuietMs = options.journalQuietMs ?? 120;
+		this.journalMaxQuietDeferMs = options.journalMaxQuietDeferMs ?? 1000;
+		this.journalMaxBusyDeferMs = options.journalMaxBusyDeferMs ?? 1500;
 	}
 
 	/**
@@ -170,10 +189,14 @@ export class DocumentSession {
 	private deferForInput(kind: "flush" | "journal"): boolean {
 		const now = this.now().getTime();
 		const busy = this.busy();
-		const quiet = now - this.lastGestureEnd < this.quietMs;
-		const since = kind === "flush" ? this.flushDeferredSince : this.journalDeferredSince;
+		const isFlush = kind === "flush";
+		const quiet = now - this.lastGestureEnd < (isFlush ? this.quietMs : this.journalQuietMs);
+		const since = isFlush ? this.flushDeferredSince : this.journalDeferredSince;
+		const cap = isFlush
+			? (busy ? this.maxBusyDeferMs : this.maxQuietDeferMs)
+			: (busy ? this.journalMaxBusyDeferMs : this.journalMaxQuietDeferMs);
 		let defer = busy || quiet;
-		if (defer && since !== null && now - since >= (busy ? this.maxBusyDeferMs : this.maxQuietDeferMs)) defer = false;
+		if (defer && since !== null && now - since >= cap) defer = false;
 		const next = defer ? (since ?? now) : null;
 		if (kind === "flush") this.flushDeferredSince = next;
 		else this.journalDeferredSince = next;
@@ -362,9 +385,19 @@ export class DocumentSession {
 	private async doFlush(): Promise<boolean> {
 		if (this.mode !== "ok" || !this.doc || !this.dirty) return true;
 		const revision = this.revision;
+		// The journal stays out of this revision until the save is done: writing it would change doc.modifiedAt
+		// after the save serialized, and a crash before the cleanup would turn a "merged" entry into a stale one.
+		this.flushingRevision = revision;
+		try {
+			return await this.flushRevision(this.doc, revision);
+		} finally {
+			this.flushingRevision = null;
+		}
+	}
+
+	private async flushRevision(doc: NotebookDocument, revision: number): Promise<boolean> {
 		this.events.onSaveState?.("saving");
 
-		const doc = this.doc;
 		const previousModifiedAt = doc.modifiedAt;
 		// If the journal already serialized this revision, keep its modifiedAt: the saved text is then identical
 		// to the journal entry's result, so a crash between the save and the cleanup is recognised as "merged".
@@ -404,6 +437,8 @@ export class DocumentSession {
 		} catch (e) {
 			this.events.onSaveState?.("error");
 			this.events.onError?.(`Save failed: ${(e as Error).message}. Retrying.`);
+			// A journal entry skipped during this attempt is still needed while the save keeps failing.
+			if (this.dirty && this.journaledRevision !== this.revision) this.scheduleJournal(this.journalDelayMs);
 			if (!this.disposed) this.debounceTimer = this.timers.set(() => void this.flush(), this.retryMs);
 			return false;
 		}
@@ -434,7 +469,7 @@ export class DocumentSession {
 		this.journalTimer = this.timers.set(() => {
 			this.journalTimer = null;
 			// Never serialize in the middle of a gesture or right after it (the next stroke may be starting).
-			if (this.deferForInput("journal")) return this.scheduleJournal(DEFER_POLL_MS);
+			if (this.deferForInput("journal")) return this.scheduleJournal(JOURNAL_POLL_MS);
 			this.enqueueJournal(() => this.writeJournal());
 		}, delayMs);
 	}
@@ -461,6 +496,9 @@ export class DocumentSession {
 		const doc = this.doc;
 		const base = this.diskContent;
 		if (!journal || this.journalSuspended || !doc || base === null || this.disposed || this.mode !== "ok" || !this.dirty) return;
+		// A save of this very revision is in flight: it covers these edits, and its success (or its failure
+		// handler) decides what the journal does next.
+		if (this.flushingRevision === this.revision) return;
 		const nowMs = this.now().getTime();
 		const wait = this.journalNextAt - nowMs;
 		if (wait > 0) {

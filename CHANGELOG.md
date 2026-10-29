@@ -29,6 +29,7 @@ Not yet verified on Android hardware (see `docs/testing.md`). This release merge
 - Duplicating a notebook gives it a new document id.
 
 ### Fixed
+- Safety: during continuous writing the journal entry now lands in the first short pen-up gap (120 ms) or after at most 1 s / 1.5 s, instead of up to 4 s / 8 s later; the journal no longer writes while a save of the same revision is in flight (a crash could otherwise turn a "merged" entry into a stale one); a partial erase of a fast curved stroke keeps the curve (inserted points follow the ink geometry, not the chord).
 Found by independent reviews of the new data-safety code:
 - The journal is keyed per file identity and per session, so two notebooks or two sessions cannot replay each other's entries; an entry that does not match the file on disk is never applied, a copy goes to the backup folder first.
 - Recovery works again after a notebook was unreadable and then became readable.
