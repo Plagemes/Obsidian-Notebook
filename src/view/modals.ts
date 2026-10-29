@@ -39,14 +39,19 @@ export class NewNotebookModal extends Modal {
 type PickerItem = TFile | "new";
 
 export class OpenNotebookModal extends FuzzySuggestModal<PickerItem> {
-	constructor(app: App, private readonly onOpenFile: (file: TFile) => void, private readonly onNew: () => void) {
+	constructor(
+		app: App,
+		private readonly folder: string,
+		private readonly onOpenFile: (file: TFile) => void,
+		private readonly onNew: () => void,
+	) {
 		super(app);
 		this.setPlaceholder(t("modal.open.placeholder"));
 		this.emptyStateText = t("modal.open.empty");
 	}
 
 	getItems(): PickerItem[] {
-		return ["new", ...listNotebooks(this.app)];
+		return ["new", ...listNotebooks(this.app, this.folder)];
 	}
 
 	getItemText(item: PickerItem): string {

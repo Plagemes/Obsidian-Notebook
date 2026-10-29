@@ -57,7 +57,7 @@ export default class NotebookPlugin extends Plugin {
 	}
 
 	private openPicker(): void {
-		new OpenNotebookModal(this.app, (file) => void this.openFile(file), () => this.askNewNotebook()).open();
+		new OpenNotebookModal(this.app, this.settings.folder, (file) => void this.openFile(file), () => this.askNewNotebook()).open();
 	}
 
 	private askNewNotebook(): void {
