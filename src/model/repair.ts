@@ -409,7 +409,26 @@ function fixElement(v: unknown, assets: Record<string, Asset>): RawObject | null
 		return { id: v.id, type: "image", asset: v.asset, x: v.x, y: v.y, width: v.width, height: v.height, rotation: finite(v.rotation) ? v.rotation : 0 };
 	}
 	if (v.type === "marker" || v.type === "box") return fixMarkerOrBox(v, v.id);
+	if (v.type === "equation" || v.type === "graph") return fixMathElement(v, assets);
 	return null;
+}
+
+/**
+ * v9 equation or graph with its valid parts: read by the lenient reader of the format on a one-element page, so an
+ * invalid detail (an outline, a function, a parameter, a setting) is left out and the rest is kept; null when what
+ * the element needs (frame, source, viewport) is invalid.
+ */
+function fixMathElement(v: RawObject, assets: Record<string, Asset>): RawObject | null {
+	try {
+		const doc = validate({
+			format: FORMAT_ID, version: CURRENT_VERSION, id: "repair", createdAt: "x", modifiedAt: "x", assets,
+			pages: [{ id: "p", width: 1, height: 1, paper: { kind: "blank", spacing: PAPER_SPACING.blank }, strokes: [], elements: [v] }],
+		}, { count: 0 });
+		const el = doc.pages[0]?.elements?.[0];
+		return el ? { ...el } : null;
+	} catch {
+		return null;
+	}
 }
 
 function strokeKey(s: Stroke): string {

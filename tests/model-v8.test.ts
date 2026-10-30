@@ -106,7 +106,7 @@ function v8Content(page: Page): unknown {
 
 describe("format v8", () => {
 	it("is at version 8 with a v7 step", () => {
-		expect(CURRENT_VERSION).toBe(8);
+		expect(CURRENT_VERSION).toBeGreaterThanOrEqual(8);
 		expect(MIGRATIONS[7]).toBeTypeOf("function");
 	});
 
@@ -115,7 +115,7 @@ describe("format v8", () => {
 		raw.pages[0].strokes[0].hidden = true;
 		const r = parsed(JSON.stringify(raw));
 		expect(r.migratedFrom).toBe(7);
-		expect(r.doc.version).toBe(8);
+		expect(r.doc.version).toBe(CURRENT_VERSION);
 		expect(r.doc.pages[0]!.strokes[0]!.hidden).toBeUndefined();
 		expect(r.doc.pages[0]!.elements).toHaveLength(1);
 		expect(r.dropped).toBeUndefined();

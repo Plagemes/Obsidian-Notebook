@@ -1,11 +1,17 @@
 import { normalizeBookmarkInfoMap } from "./bookmarks";
 import { cleanMarkerText, isBoxKind, isIsoDate, isMarkerKind } from "./markers";
+import {
+	cleanGraphLabel, deepFreezeGraph, EQUATION_LATEX_MAX, EQUATION_OUTLINE_MAX, GRAPH_EXPR_MAX, GRAPH_ID_MAX, GRAPH_MAX_FUNCTIONS,
+	GRAPH_MAX_LINE_WIDTH, GRAPH_MAX_PARAMS, GRAPH_MAX_PIECES, GRAPH_TABLE_MAX_ROWS, isGraphFunctionKind, isParamName, isViewport,
+} from "./math-elements";
+import { parseOutline } from "../math/outline";
 import { detectVersion, migrate, MigrationError, type RawObject } from "./migrations";
 import { normalizePageTags } from "./page-tags";
 import { normalizePosition } from "./position";
 import {
-	CURRENT_VERSION, DEFAULT_META, ELEMENT_TYPES_V8, FORMAT_ID, PAPER_KINDS, RENDER_VERSIONS, TOOLS,
-	type Asset, type AssetKind, type BookmarkInfo, type BoxElement, type ImageElement, type MarkerElement, type NotebookDocument, type NotebookMeta, type Page,
+	CURRENT_VERSION, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, FORMAT_ID, PAPER_KINDS, RENDER_VERSIONS, TOOLS,
+	type Asset, type AssetKind, type BookmarkInfo, type BoxElement, type EquationElement, type GraphElement, type GraphFunction, type GraphParam,
+	type GraphPiece, type GraphTable, type GraphViewport, type ImageElement, type MarkerElement, type NotebookDocument, type NotebookMeta, type Page,
 	type PageBackground, type PageElement, type PageMargins, type PaperKind, type Point, type ReadingPosition, type RenderVersion, type Stroke,
 	type TextElement, type Tool,
 } from "./types";
@@ -70,6 +76,64 @@ function boxLine(e: BoxElement): string {
 	return `\t\t\t\t{"id":${j(e.id)},"type":"box","kind":${j(e.kind)},"x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)}${t}}`;
 }
 
+/** v9 equation: frame, source, size and colour, then the optional style flags and the cached outline. */
+function equationLine(e: EquationElement): string {
+	let out = `{"id":${j(e.id)},"type":"equation","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"latex":${j(e.latex)},"fontSize":${j(e.fontSize)},"color":${j(e.color)}`;
+	if (e.inline !== undefined) out += `,"inline":${j(e.inline)}`;
+	if (e.numbered !== undefined) out += `,"numbered":${j(e.numbered)}`;
+	if (e.outline !== undefined) out += `,"outline":${j(e.outline)}`;
+	return `\t\t\t\t${out}}`;
+}
+
+/** A graphed function with its fields in a fixed order, the ones of its kind only, labels normalised. */
+function canonicalFunction(f: GraphFunction): Record<string, unknown> {
+	const o: Record<string, unknown> = { id: f.id, kind: f.kind, color: f.color };
+	if (f.kind === "parametric") {
+		o.x = f.x;
+		o.y = f.y;
+	} else if (f.kind === "piecewise") {
+		o.pieces = (f.pieces ?? []).map((p) => (p.when !== undefined ? { expr: p.expr, when: p.when } : { expr: p.expr }));
+	} else o.expr = f.expr;
+	if (f.min !== undefined) o.min = f.min;
+	if (f.max !== undefined) o.max = f.max;
+	if (f.width !== undefined) o.width = f.width;
+	if (f.hidden !== undefined) o.hidden = f.hidden;
+	if (f.roots !== undefined) o.roots = f.roots;
+	if (f.extrema !== undefined) o.extrema = f.extrema;
+	if (f.intersections !== undefined) o.intersections = f.intersections;
+	if (f.tangent !== undefined) o.tangent = f.tangent;
+	if (f.area !== undefined) o.area = { from: f.area.from, to: f.area.to };
+	const label = cleanGraphLabel(f.label);
+	if (label !== undefined) o.label = label;
+	return o;
+}
+
+/** v9 graph: frame, viewport and functions, then the optional settings in a fixed order (one line). */
+function graphLine(e: GraphElement): string {
+	const o: Record<string, unknown> = {
+		id: e.id, type: "graph", x: e.x, y: e.y, width: e.width, height: e.height,
+		view: { xMin: e.view.xMin, xMax: e.view.xMax, yMin: e.view.yMin, yMax: e.view.yMax },
+		functions: e.functions.map(canonicalFunction),
+	};
+	if (e.params !== undefined) {
+		o.params = e.params.map((p) => (p.step !== undefined
+			? { name: p.name, value: p.value, min: p.min, max: p.max, step: p.step }
+			: { name: p.name, value: p.value, min: p.min, max: p.max }));
+	}
+	if (e.axes !== undefined) o.axes = e.axes;
+	if (e.grid !== undefined) o.grid = e.grid;
+	if (e.xStep !== undefined) o.xStep = e.xStep;
+	if (e.yStep !== undefined) o.yStep = e.yStep;
+	const xLabel = cleanGraphLabel(e.xLabel);
+	if (xLabel !== undefined) o.xLabel = xLabel;
+	const yLabel = cleanGraphLabel(e.yLabel);
+	if (yLabel !== undefined) o.yLabel = yLabel;
+	if (e.degrees !== undefined) o.degrees = e.degrees;
+	// A table whose function was removed is left out (it could not be shown).
+	if (e.table !== undefined && e.functions.some((f) => f.id === e.table!.fn)) o.table = { fn: e.table.fn, from: e.table.from, step: e.table.step, rows: e.table.rows };
+	return `\t\t\t\t${j(o)}`;
+}
+
 function elementLine(e: PageElement): string {
 	if (e.type === "text") {
 		return `\t\t\t\t{"id":${j(e.id)},"type":"text","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"text":${j(e.text)},"fontSize":${j(e.fontSize)},"color":${j(e.color)}}`;
@@ -79,6 +143,8 @@ function elementLine(e: PageElement): string {
 	}
 	if (e.type === "marker") return markerLine(e);
 	if (e.type === "box") return boxLine(e);
+	if (e.type === "equation") return equationLine(e);
+	if (e.type === "graph") return graphLine(e);
 	return fail("element", "unknown element type");
 }
 
@@ -325,6 +391,8 @@ function readElement(v: unknown, path: string, assets: Assets, drop: Dropped | n
 	}
 	if (v.type === "marker") return readMarker(v, id, path, drop);
 	if (v.type === "box") return readBox(v, id, path, drop);
+	if (v.type === "equation") return readEquation(v, id, path, drop);
+	if (v.type === "graph") return readGraph(v, id, path, drop);
 	return fail(`${path}.type`, "unknown element type");
 }
 
@@ -383,6 +451,219 @@ function readBox(v: RawObject, id: string, path: string, drop: Dropped | null): 
 	const title = readLabel(v.title, `${path}.title`, drop);
 	if (title !== undefined) el.title = title;
 	return el;
+}
+
+/** `true` or absent; anything else is invalid (dropped and counted when lenient). */
+function readTrue(v: unknown, path: string, drop: Dropped | null): true | undefined {
+	return orDrop(drop, () => (v === undefined ? undefined : v === true ? true : fail(path, "expected true")));
+}
+
+/** A string of at most `max` characters (an expression may be empty while it is being written). */
+function boundedString(v: unknown, path: string, max: number): string {
+	if (typeof v !== "string") fail(path, "expected a string");
+	if (v.length > max) fail(path, `longer than ${max} characters`);
+	return v;
+}
+
+/**
+ * v9 equation. Frame, source, size and colour are required (an invalid one fails the equation); the style flags and
+ * the cached outline are optional details, each dropped and counted on its own when invalid and reading leniently.
+ */
+function readEquation(v: RawObject, id: string, path: string, drop: Dropped | null): EquationElement {
+	const latex = boundedString(v.latex, `${path}.latex`, EQUATION_LATEX_MAX);
+	if (latex.trim().length === 0) fail(`${path}.latex`, "expected some LaTeX");
+	const fontSize = positive(v.fontSize, `${path}.fontSize`);
+	if (fontSize > MAX_FONT_SIZE) fail(`${path}.fontSize`, `must be at most ${MAX_FONT_SIZE} pt`);
+	const el: EquationElement = {
+		id, type: "equation",
+		x: finite(v.x, `${path}.x`), y: finite(v.y, `${path}.y`),
+		width: positive(v.width, `${path}.width`), height: positive(v.height, `${path}.height`),
+		latex, fontSize, color: colour(v.color, `${path}.color`),
+	};
+	const inline = readTrue(v.inline, `${path}.inline`, drop);
+	if (inline) el.inline = inline;
+	const numbered = readTrue(v.numbered, `${path}.numbered`, drop);
+	if (numbered) el.numbered = numbered;
+	const outline = orDrop(drop, () => {
+		if (v.outline === undefined) return undefined;
+		const d = boundedString(v.outline, `${path}.outline`, EQUATION_OUTLINE_MAX);
+		if (parseOutline(d) === null) fail(`${path}.outline`, "expected an outline path (M, L, Z)");
+		return d;
+	});
+	if (outline !== undefined) el.outline = outline;
+	return el;
+}
+
+function readViewport(v: unknown, path: string): GraphViewport {
+	if (!isObject(v)) fail(path, "expected an object");
+	const view: GraphViewport = {
+		xMin: finite(v.xMin, `${path}.xMin`), xMax: finite(v.xMax, `${path}.xMax`),
+		yMin: finite(v.yMin, `${path}.yMin`), yMax: finite(v.yMax, `${path}.yMax`),
+	};
+	if (!isViewport(view)) fail(path, "expected xMin < xMax and yMin < yMax within the supported range");
+	return view;
+}
+
+/** One graphed function: kind, colour and the expressions of its kind are required; options are details. */
+function readGraphFunction(v: unknown, path: string, drop: Dropped | null): GraphFunction {
+	if (!isObject(v)) fail(path, "expected an object");
+	const id = str(v.id, `${path}.id`);
+	if (id.length > GRAPH_ID_MAX) fail(`${path}.id`, `longer than ${GRAPH_ID_MAX} characters`);
+	if (!isGraphFunctionKind(v.kind)) fail(`${path}.kind`, "unknown function kind");
+	const f: GraphFunction = { id, kind: v.kind, color: colour(v.color, `${path}.color`) };
+	if (v.kind === "parametric") {
+		f.x = boundedString(v.x, `${path}.x`, GRAPH_EXPR_MAX);
+		f.y = boundedString(v.y, `${path}.y`, GRAPH_EXPR_MAX);
+	} else if (v.kind === "piecewise") {
+		if (!Array.isArray(v.pieces) || v.pieces.length === 0 || v.pieces.length > GRAPH_MAX_PIECES) {
+			fail(`${path}.pieces`, `expected 1 to ${GRAPH_MAX_PIECES} pieces`);
+		}
+		f.pieces = v.pieces.map((p, i): GraphPiece => {
+			const at = `${path}.pieces[${i}]`;
+			if (!isObject(p)) fail(at, "expected an object");
+			const piece: GraphPiece = { expr: boundedString(p.expr, `${at}.expr`, GRAPH_EXPR_MAX) };
+			if (p.when !== undefined) piece.when = boundedString(p.when, `${at}.when`, GRAPH_EXPR_MAX);
+			return piece;
+		});
+	} else f.expr = boundedString(v.expr, `${path}.expr`, GRAPH_EXPR_MAX);
+	if (v.min !== undefined || v.max !== undefined) {
+		const r = orDrop(drop, () => {
+			const min = finite(v.min, `${path}.min`);
+			const max = finite(v.max, `${path}.max`);
+			if (!(min < max)) fail(`${path}.max`, "must be greater than min");
+			return { min, max };
+		});
+		if (r) {
+			f.min = r.min;
+			f.max = r.max;
+		}
+	}
+	const width = orDrop(drop, () => {
+		if (v.width === undefined) return undefined;
+		const w = positive(v.width, `${path}.width`);
+		if (w > GRAPH_MAX_LINE_WIDTH) fail(`${path}.width`, `must be at most ${GRAPH_MAX_LINE_WIDTH} pt`);
+		return w;
+	});
+	if (width !== undefined) f.width = width;
+	for (const key of ["hidden", "roots", "extrema", "intersections"] as const) {
+		const flag = readTrue(v[key], `${path}.${key}`, drop);
+		if (flag) f[key] = flag;
+	}
+	const tangent = orDrop(drop, () => (v.tangent === undefined ? undefined : finite(v.tangent, `${path}.tangent`)));
+	if (tangent !== undefined) f.tangent = tangent;
+	const area = orDrop(drop, () => {
+		if (v.area === undefined) return undefined;
+		const a = v.area;
+		if (!isObject(a)) fail(`${path}.area`, "expected an object");
+		const from = finite(a.from, `${path}.area.from`);
+		const to = finite(a.to, `${path}.area.to`);
+		if (from === to) fail(`${path}.area`, "expected two different ends");
+		return { from, to };
+	});
+	if (area !== undefined) f.area = area;
+	const label = orDrop(drop, () => {
+		if (v.label === undefined) return undefined;
+		if (typeof v.label !== "string") fail(`${path}.label`, "expected a string");
+		return cleanGraphLabel(v.label);
+	});
+	if (label !== undefined) f.label = label;
+	return f;
+}
+
+function readGraphParam(v: unknown, path: string, drop: Dropped | null): GraphParam {
+	if (!isObject(v)) fail(path, "expected an object");
+	if (!isParamName(v.name)) fail(`${path}.name`, "expected a parameter name that is not a function or a variable");
+	const p: GraphParam = { name: v.name, value: finite(v.value, `${path}.value`), min: finite(v.min, `${path}.min`), max: finite(v.max, `${path}.max`) };
+	if (!(p.min < p.max)) fail(`${path}.max`, "must be greater than min");
+	const step = orDrop(drop, () => (v.step === undefined ? undefined : positive(v.step, `${path}.step`)));
+	if (step !== undefined) p.step = step;
+	return p;
+}
+
+/**
+ * v9 graph. Frame, viewport and the function list are required (an invalid one fails the graph); each function,
+ * parameter and setting is a detail, dropped and counted on its own when invalid and reading leniently. An expression
+ * that does not parse is not a format error (the graph shows the message).
+ */
+function readGraph(v: RawObject, id: string, path: string, drop: Dropped | null): GraphElement {
+	const g: GraphElement = {
+		id, type: "graph",
+		x: finite(v.x, `${path}.x`), y: finite(v.y, `${path}.y`),
+		width: positive(v.width, `${path}.width`), height: positive(v.height, `${path}.height`),
+		view: readViewport(v.view, `${path}.view`),
+		functions: [],
+	};
+	if (!Array.isArray(v.functions)) fail(`${path}.functions`, "expected an array");
+	const fnIds = new Set<string>();
+	v.functions.forEach((raw, i) => {
+		const at = `${path}.functions[${i}]`;
+		const f = orDrop(drop, () => {
+			if (i >= GRAPH_MAX_FUNCTIONS) fail(at, `at most ${GRAPH_MAX_FUNCTIONS} functions`);
+			const fn = readGraphFunction(raw, at, drop);
+			if (fnIds.has(fn.id)) fail(`${at}.id`, "duplicate function id");
+			return fn;
+		});
+		if (!f) return;
+		fnIds.add(f.id);
+		g.functions.push(f);
+	});
+	if (v.params !== undefined) {
+		const list = v.params;
+		const params = orDrop(drop, () => {
+			if (!Array.isArray(list)) fail(`${path}.params`, "expected an array");
+			const out: GraphParam[] = [];
+			const names = new Set<string>();
+			list.forEach((raw, i) => {
+				const at = `${path}.params[${i}]`;
+				const p = orDrop(drop, () => {
+					if (i >= GRAPH_MAX_PARAMS) fail(at, `at most ${GRAPH_MAX_PARAMS} parameters`);
+					const param = readGraphParam(raw, at, drop);
+					if (names.has(param.name)) fail(`${at}.name`, "duplicate parameter");
+					return param;
+				});
+				if (!p) return;
+				names.add(p.name);
+				out.push(p);
+			});
+			return out;
+		});
+		if (params) g.params = params;
+	}
+	for (const key of ["axes", "grid"] as const) {
+		const off = orDrop(drop, () => (v[key] === undefined ? undefined : v[key] === false ? false as const : fail(`${path}.${key}`, "expected false")));
+		if (off === false) g[key] = false;
+	}
+	for (const key of ["xStep", "yStep"] as const) {
+		const step = orDrop(drop, () => (v[key] === undefined ? undefined : positive(v[key], `${path}.${key}`)));
+		if (step !== undefined) g[key] = step;
+	}
+	for (const key of ["xLabel", "yLabel"] as const) {
+		const label = orDrop(drop, () => {
+			const raw = v[key];
+			if (raw === undefined) return undefined;
+			if (typeof raw !== "string") fail(`${path}.${key}`, "expected a string");
+			return cleanGraphLabel(raw);
+		});
+		if (label !== undefined) g[key] = label;
+	}
+	const degrees = readTrue(v.degrees, `${path}.degrees`, drop);
+	if (degrees) g.degrees = degrees;
+	const table = orDrop(drop, (): GraphTable | undefined => {
+		const t = v.table;
+		if (t === undefined) return undefined;
+		if (!isObject(t)) fail(`${path}.table`, "expected an object");
+		const fn = str(t.fn, `${path}.table.fn`);
+		if (!fnIds.has(fn)) fail(`${path}.table.fn`, "refers to a function that does not exist");
+		const step = finite(t.step, `${path}.table.step`);
+		if (step === 0) fail(`${path}.table.step`, "must not be 0");
+		const rows = t.rows;
+		if (typeof rows !== "number" || !Number.isSafeInteger(rows) || rows < 1 || rows > GRAPH_TABLE_MAX_ROWS) {
+			fail(`${path}.table.rows`, `expected an integer from 1 to ${GRAPH_TABLE_MAX_ROWS}`);
+		}
+		return { fn, from: finite(t.from, `${path}.table.from`), step, rows };
+	});
+	if (table) g.table = table;
+	return g;
 }
 
 function readMeta(v: unknown, pageIds: ReadonlySet<string>, drop: Dropped | null): NotebookMeta {
@@ -521,8 +802,8 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, dr
 		const elements: PageElement[] = [];
 		v.elements.forEach((e, i) => {
 			const at = `${path}.elements[${i}]`;
-			// v8 markers and boxes are details: an invalid one is dropped and counted when reading leniently.
-			const v8 = isObject(e) && typeof e.type === "string" && ELEMENT_TYPES_V8.includes(e.type);
+			// v8 markers and boxes, v9 equations and graphs are details: an invalid one is dropped and counted when reading leniently.
+			const v8 = isObject(e) && typeof e.type === "string" && (ELEMENT_TYPES_V8.includes(e.type) || ELEMENT_TYPES_V9.includes(e.type));
 			const el = v8 ? orDrop(drop, () => readElement(e, at, assets, drop)) : readElement(e, at, assets, drop);
 			if (!el) return;
 			if (ids.has(el.id)) fail(`${at}.id`, "duplicate id");
@@ -541,8 +822,9 @@ export function freezeStroke(stroke: Stroke): Stroke {
 	return Object.freeze(stroke);
 }
 
-/** Elements are immutable like strokes: an edit replaces the object (ReplaceElement). */
+/** Elements are immutable like strokes: an edit replaces the object (ReplaceElement). v9 graphs freeze their nested data too. */
 export function freezeElement<T extends PageElement>(element: T): T {
+	if (element.type === "graph" && !Object.isFrozen(element)) deepFreezeGraph(element);
 	return Object.freeze(element);
 }
 
