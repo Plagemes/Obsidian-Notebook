@@ -23,6 +23,7 @@ import { registerLectureCommands } from "./view/lecture-commands";
 import { TimetableService } from "./timetable/service";
 import { registerPdfSyncCommands } from "./view/pdf-sync";
 import { registerZettel } from "./zettel";
+import { SyncSafetyService } from "./view/sync-safety";
 
 export default class NotebookPlugin extends Plugin {
 	settings!: NotebookSettings;
@@ -32,11 +33,15 @@ export default class NotebookPlugin extends Plugin {
 	timetable!: TimetableService;
 	/** Public API for other plugins and scripts (docs/api.md). */
 	api?: NotebookApi;
+	/** wave 0.7: sync safety (presence files, sync check). */
+	syncSafety!: SyncSafetyService;
 
 	async onload(): Promise<void> {
 		this.settings = readSettings(await this.loadData());
 
 		this.journal = new AdapterJournalStore(this.app.vault.adapter, journalFolder(this.app, this.manifest.id));
+		this.syncSafety = new SyncSafetyService(this);
+		this.syncSafety.register();
 		this.registerView(VIEW_TYPE, (leaf) => new NotebookView(leaf, this));
 		this.registerExtensions([...NOTEBOOK_EXTENSIONS], VIEW_TYPE);
 		this.host = new NotebookLibraryHost(this);
@@ -114,6 +119,7 @@ export default class NotebookPlugin extends Plugin {
 
 	onunload(): void {
 		void this.flushAll();
+		this.syncSafety.dispose();
 		this.timetable.stop();
 		this.host.dispose();
 	}
