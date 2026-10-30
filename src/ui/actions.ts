@@ -363,6 +363,8 @@ export const ACTIONS: readonly ActionDef[] = [
 
 	// --- notebooks: the library, the ribbon and the palette.
 	global("open-library", "command.library", "library", "app", ["notebook", "palette"], 30),
+	// 0.12: the Notebook home (Home surface of the library view); the ribbon opens it.
+	global("open-home", "home.command", "home", "app", ["notebook", "palette"], 30),
 	global("create", "command.new", "file-plus-2", "app", ["library", "palette"]),
 	// wave 0.12: the creation dialog on its Notebook or Folder tab (view/create-dialog.ts). "create" stays the command (hotkeys);
 	// `new-notebook` is the same dialog for the library and home surfaces, `new-folder` is also a command.

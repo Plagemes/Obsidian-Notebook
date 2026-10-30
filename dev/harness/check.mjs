@@ -35,6 +35,14 @@ for (const doc of ["v3", "new"]) {
 		for (const device of Object.keys(DEVICES)) SCENARIOS.push({ doc, theme, device, lowLatency: false });
 	}
 }
+// 0.12 design system: Home and the library on a seeded demo vault, at the size of the reference images (1448 × 1086),
+// tablet portrait and phone, dark and light. Screenshots also go to dev/harness/dist/shots/design/ for review.
+DEVICES.reference = { width: 1448, height: 1086, deviceScaleFactor: 1, mobile: true, touch: true };
+for (const surface of ["home", "library"]) {
+	for (const theme of ["dark", "light"]) {
+		for (const device of ["reference", "tablet", "phone"]) SCENARIOS.push({ doc: "library", surface, theme, device, lowLatency: false });
+	}
+}
 // Phone held sideways: little height for the toolbar popovers.
 DEVICES.landscape = { width: 740, height: 360, deviceScaleFactor: 3, mobile: true, touch: true };
 SCENARIOS.push({ doc: "new", theme: "light", device: "landscape", lowLatency: false });
@@ -208,10 +216,10 @@ async function main() {
 
 		for (const s of SCENARIOS.filter((x) => !process.env.HARNESS_DOC || x.doc === process.env.HARNESS_DOC)) {
 			const d = DEVICES[s.device];
-			const name = `${s.doc}-${s.theme}-${s.device}${s.lowLatency ? "-lowlatency" : ""}${s.fault ? `-fault-${s.fault}` : ""}`;
+			const name = `${s.doc}${s.surface ? `-${s.surface}` : ""}-${s.theme}-${s.device}${s.lowLatency ? "-lowlatency" : ""}${s.fault ? `-fault-${s.fault}` : ""}`;
 			await cdp.send("Emulation.setDeviceMetricsOverride", { width: d.width, height: d.height, deviceScaleFactor: d.deviceScaleFactor, mobile: d.mobile });
 			await cdp.send("Emulation.setTouchEmulationEnabled", d.touch ? { enabled: true, maxTouchPoints: 5 } : { enabled: false });
-			const url = `http://127.0.0.1:${port}/index.html?doc=${s.doc}&theme=${s.theme}${s.lowLatency ? "&lowLatency=1" : ""}${s.fault ? `&fault=${s.fault}` : ""}`;
+			const url = `http://127.0.0.1:${port}/index.html?doc=${s.doc}&theme=${s.theme}${s.lowLatency ? "&lowLatency=1" : ""}${s.fault ? `&fault=${s.fault}` : ""}${s.surface ? `&surface=${s.surface}` : ""}`;
 			await cdp.send("Page.navigate", { url });
 			let report;
 			try {
@@ -220,7 +228,7 @@ async function main() {
 					await sleep(100);
 				}
 				await cdp.evaluate("window.harness.ready.then(() => true)");
-				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "library" ? "window.harness.checkLibrary()" : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}
@@ -250,6 +258,26 @@ async function main() {
 					writeFileSync(join(shots, `${name}-folder.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 				} catch (e) {
 					problems.push(`folder tab screenshot: ${e.message}`);
+				}
+			}
+			// 0.12: review screenshots of Home and the library, then their controls (bell, rail, quick actions, search, star, list).
+			if (s.doc === "library") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				writeFileSync(join(designDir, `${s.surface}-${s.theme}-${s.device}.png`), png);
+				const shotAs = async (file) => writeFileSync(join(designDir, `${s.surface}-${s.theme}-${s.device}-${file}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+				try {
+					if (s.theme === "dark") {
+						for (const state of ["bell", "search", "list"]) {
+							await cdp.evaluate(`window.harness.libraryState('${state}')`);
+							await shotAs(state);
+							await cdp.evaluate("window.harness.libraryState('reset')");
+						}
+					}
+					const r = await cdp.evaluate("window.harness.interactLibrary()", 60000);
+					problems.push(...r.results.filter((x) => !x.ok).map((x) => `${x.name}: ${x.detail}`));
+				} catch (e) {
+					problems.push(`library interactions: ${e.message}`);
 				}
 			}
 			// The toolbar with the eraser options and the "more" menu open (narrow phone and tablet, light theme).

@@ -1,7 +1,7 @@
 /** Pure helpers to decide what to read and to turn a document into index fields. No 'obsidian'. */
 import { normalizePageTags } from "../model/page-tags";
-import { DEFAULT_META, type NotebookDocument } from "../model/types";
-import { folderOf, nameOf, type LibraryEntry, type LibraryIndex } from "./index";
+import { COVER_ART_STYLES, DEFAULT_META, type NotebookDocument } from "../model/types";
+import { folderOf, nameOf, type IndexCoverArt, type LibraryEntry, type LibraryIndex } from "./index";
 
 export interface NotebookFileInfo {
 	path: string;
@@ -50,7 +50,23 @@ export function extractText(doc: NotebookDocument, cap = TEXT_CAP): { text: stri
 	return { text, textPages };
 }
 
-export type DocumentFields = Pick<LibraryEntry, "id" | "pages" | "tags" | "favorite" | "cover" | "created" | "modified" | "text" | "textPages" | "pageTags" | "bookmarks">;
+export type DocumentFields = Pick<LibraryEntry, "id" | "pages" | "tags" | "favorite" | "cover" | "created" | "modified" | "text" | "textPages" | "pageTags" | "bookmarks" | "pdfPages" | "openMarkers" | "coverArt">;
+
+/** Markers that still ask for something: a gap to fill, a question for the lecturer, homework (not marked done). */
+const OPEN_MARKERS: ReadonlySet<string> = new Set(["gap", "question", "homework"]);
+
+/** v5 index fields: pages with a PDF background and markers still open (for Home and the smart collections). */
+export function extractStudyCounts(doc: NotebookDocument): { pdfPages: number; openMarkers: number } {
+	let pdfPages = 0;
+	let openMarkers = 0;
+	for (const p of Array.isArray(doc.pages) ? doc.pages : []) {
+		if (p?.background?.kind === "pdf") pdfPages++;
+		for (const el of Array.isArray(p?.elements) ? p.elements : []) {
+			if (el.type === "marker" && OPEN_MARKERS.has(el.kind) && el.done !== true) openMarkers++;
+		}
+	}
+	return { pdfPages, openMarkers };
+}
 
 /** Titled bookmarks for the index (0-based pages, in page order). */
 export function extractBookmarks(doc: NotebookDocument): Array<{ page: number; title: string }> {
@@ -82,6 +98,20 @@ function time(v: unknown, fallback: number): number {
 	return Number.isFinite(ms) ? ms : fallback;
 }
 
+/** v11 cover of the index: the generated art as stored, an image cover as the vault path of its asset; null for none or odd data. */
+export function extractCoverArt(doc: NotebookDocument): IndexCoverArt | null {
+	const c: unknown = doc.meta?.coverArt;
+	if (typeof c !== "object" || c === null) return null;
+	const art = c as { kind?: unknown; style?: unknown; seed?: unknown; asset?: unknown };
+	if (art.kind === "art") {
+		const style = COVER_ART_STYLES.find((s) => s === art.style);
+		return style && typeof art.seed === "string" && art.seed !== "" ? { kind: "art", style, seed: art.seed } : null;
+	}
+	if (art.kind !== "image" || typeof art.asset !== "string") return null;
+	const path = doc.assets?.[art.asset]?.path;
+	return typeof path === "string" && path !== "" ? { kind: "image", path } : null;
+}
+
 /** Index fields from a parsed document. Tolerates documents without v4 `meta` and partial or odd meta. */
 export function metaFromDocument(doc: NotebookDocument, fallbackTime = 0): DocumentFields {
 	const meta: Partial<NonNullable<NotebookDocument["meta"]>> = doc.meta ?? {};
@@ -99,7 +129,12 @@ export function metaFromDocument(doc: NotebookDocument, fallbackTime = 0): Docum
 	const { text, textPages } = extractText(doc);
 	const pageTags = extractPageTags(doc);
 	const bookmarks = extractBookmarks(doc);
+	const { pdfPages, openMarkers } = extractStudyCounts(doc);
+	const coverArt = extractCoverArt(doc);
 	return {
+		...(pdfPages > 0 ? { pdfPages } : {}),
+		...(coverArt ? { coverArt } : {}),
+		...(openMarkers > 0 ? { openMarkers } : {}),
 		...(typeof doc.id === "string" && doc.id !== "" ? { id: doc.id } : {}),
 		...(bookmarks.length > 0 ? { bookmarks } : {}),
 		...(text ? { text, textPages } : {}),

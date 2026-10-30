@@ -1131,3 +1131,19 @@ export function stringifyYaml(value: unknown): string {
 	if (typeof value !== "object" || value === null) return `${JSON.stringify(value)}\n`;
 	return Object.entries(value).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join("\n") + "\n";
 }
+
+// 0.12: the library view (doc=library) imports the tag editor and companion notes; the harness never opens them.
+export class AbstractInputSuggest<T> {
+	constructor(readonly app: App, readonly inputEl: HTMLInputElement) {}
+	getSuggestions(query: string): T[] | Promise<T[]> {
+		void query;
+		return [];
+	}
+	close(): void {
+		/* nothing */
+	}
+}
+
+export function getAllTags(): string[] | null {
+	return null;
+}

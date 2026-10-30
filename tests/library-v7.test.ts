@@ -48,6 +48,6 @@ describe("library index: page tags", () => {
 		const bad = { version: INDEX_VERSION, entries: [entry("N/b.notebook", { pageTags: [{ page: "1", tags: ["x"] }] as never })] };
 		expect(LibraryIndex.fromJSON(bad).size).toBe(0);
 		expect(LibraryIndex.fromJSON({ version: 2, entries: [entry("N/c.notebook")] }).size).toBe(0);
-		expect(INDEX_VERSION).toBe(4);
+		expect(INDEX_VERSION).toBeGreaterThanOrEqual(4);
 	});
 });

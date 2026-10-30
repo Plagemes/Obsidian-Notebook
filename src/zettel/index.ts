@@ -3,11 +3,18 @@ import { t, type MessageKey } from "../i18n";
 import { isNotebookFile } from "../storage/format";
 import { NotebookView } from "../view/notebook-view";
 import { registerInbox } from "./inbox";
+import type { InboxService } from "./inbox-service";
 import { ZettelService, type ZettelHost } from "./service";
 
 export type { ZettelHost } from "./service";
 
 const services = new WeakMap<Plugin, ZettelService>();
+const inboxes = new WeakMap<Plugin, InboxService>();
+
+/** 0.12: the Inbox service of a plugin (the inbox bell of Home and the library). */
+export function inboxService(plugin: Plugin): InboxService | undefined {
+	return inboxes.get(plugin);
+}
 
 /** The service of a plugin, for the settings tab. */
 export function zettelService(plugin: Plugin): ZettelService | undefined {
@@ -56,6 +63,6 @@ export function registerZettel(plugin: ZettelHost): ZettelService {
 			.onClick(() => service.toggleSlipBox(view)));
 	}));
 	// wave 0.8: processing flow (Z4): the Inbox view and its commands
-	registerInbox(plugin, service);
+	inboxes.set(plugin, registerInbox(plugin, service));
 	return service;
 }
