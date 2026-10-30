@@ -92,6 +92,8 @@ export interface EraseAreaOptions {
 	measure?: MeasureText;
 	/** Called for every new piece of a cut stroke; defaults to a fresh id. */
 	newId?: () => string;
+	/** v8: strokes the eraser must leave alone (hidden ink while the solutions are not shown). */
+	skip?: (stroke: Stroke) => boolean;
 }
 
 /**
@@ -105,7 +107,7 @@ export function eraseAreaCommand(page: Pick<Page, "id" | "strokes" | "elements">
 	const erasable = new Set(filterErasable(page.strokes, options.filter));
 	const edits: Array<{ stroke: Stroke; index: number; after: Stroke[] }> = [];
 	page.strokes.forEach((stroke, index) => {
-		if (!erasable.has(stroke)) return;
+		if (!erasable.has(stroke) || options.skip?.(stroke)) return;
 		const runs = cutOutsidePolygon(stroke, poly);
 		if (runs === null) return;
 		edits.push({ stroke, index, after: runs.map((points) => freezeStroke({ ...stroke, id: newId(), points })) });

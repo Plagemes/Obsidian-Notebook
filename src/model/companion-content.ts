@@ -16,8 +16,10 @@
  * The output depends only on the document and the notebook path (no clock, time zone, language or vault
  * name), so two synced devices generate byte-identical notes and never rewrite each other's copy.
  */
+import { cardSubpath, clampRegion, validPageId } from "../zettel/subpath";
+import { cleanMarkerText, isBoxKind, isIsoDate } from "./markers";
 import { computeSharedTags, normalizeTag, uniqueTags } from "./tags";
-import type { NotebookDocument, TextElement } from "./types";
+import type { BoxElement, MarkerElement, NotebookDocument, Page, TextElement } from "./types";
 
 export const COMPANION_LINK_KEY = "notebook";
 export const COMPANION_ID_KEY = "notebook-id";
@@ -118,6 +120,46 @@ function textBlocks(elements: readonly unknown[] | undefined): string[] {
 	return out;
 }
 
+/** Elements of one v8 type in reading order (top to bottom, then left to right; stable). */
+function inReadingOrder<T extends BoxElement | MarkerElement>(elements: readonly unknown[] | undefined, type: T["type"]): T[] {
+	const items = (elements ?? []).filter((e): e is T => typeof e === "object" && e !== null && (e as T).type === type);
+	return items.map((e, i) => ({ e, i })).sort((a, b) =>
+		(Number(a.e.y) || 0) - (Number(b.e.y) || 0) || (Number(a.e.x) || 0) - (Number(b.e.x) || 0) || a.i - b.i).map(({ e }) => e);
+}
+
+/**
+ * v8 structured boxes as callouts (`> [!theorem] Title`) holding a live embed of the boxed region, through the card
+ * subpath of Z1 (`#p3&id=<page id>&r=x,y,w,h`). The callout type is the English kind (Obsidian shows it as the
+ * callout's name when there is no title), so the note does not depend on the language.
+ */
+function boxCallouts(page: Page | undefined, number: number, notebookPath: string): string[] {
+	if (!page) return [];
+	const out: string[] = [];
+	for (const box of inReadingOrder<BoxElement>(page.elements, "box")) {
+		if (!isBoxKind(box.kind)) continue;
+		const title = cleanMarkerText(box.title);
+		const region = clampRegion({ x: box.x, y: box.y, width: box.width, height: box.height }, page);
+		const subpath = typeof page.id === "string" && validPageId(page.id) ? cardSubpath(number, page.id, region) : `#p${number}`;
+		out.push([`> [!${box.kind}]${title ? ` ${escapeLine(title)}` : ""}`, `> ![[${notebookPath}${subpath}]]`].join("\n"));
+	}
+	return out;
+}
+
+/**
+ * v8 homework markers as Obsidian tasks, one line each: `- [ ] what 📅 YYYY-MM-DD` (the Tasks plugin's due date),
+ * `- [x]` once done in the notebook. The notebook is the source: the region is regenerated, so a box ticked in the
+ * note is not read back (tick it in the notebook or in the end-of-lecture panel).
+ */
+function homeworkTasks(elements: readonly unknown[] | undefined): string[] {
+	const lines: string[] = [];
+	for (const m of inReadingOrder<MarkerElement>(elements, "marker")) {
+		if (m.kind !== "homework") continue;
+		const what = escapeLine(cleanMarkerText(m.text) ?? "Homework");
+		lines.push(`- [${m.done ? "x" : " "}] ${what}${isIsoDate(m.due) ? ` 📅 ${m.due}` : ""}`);
+	}
+	return lines.length > 0 ? [lines.join("\n")] : [];
+}
+
 /** Page heading in the region; language-neutral so two devices in different languages write the same note. */
 export function pageHeading(page: number): string {
 	return `p. ${page}`;
@@ -163,7 +205,8 @@ export function companionContent(doc: NotebookDocument, ctx: CompanionContext): 
 
 	const sections: string[] = [];
 	pages.forEach((page, i) => {
-		const blocks = textBlocks(page?.elements);
+		// v8: structured boxes become callouts with a live embed of their region, homework becomes Obsidian tasks.
+		const blocks = [...textBlocks(page?.elements), ...boxCallouts(page, i + 1, ctx.notebookPath), ...homeworkTasks(page?.elements)];
 		if (blocks.length === 0) return;
 		// Parentheses would end the Markdown link early.
 		const uri = ctx.pageUri(i + 1).replace(/\(/g, "%28").replace(/\)/g, "%29");

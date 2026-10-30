@@ -2606,3 +2606,89 @@
 .setting-item.notebook-hidden {
 	display: none;
 }
+
+/* wave 0.8: markers — end-of-lecture panel, marker badges and box swatches in lists (the badges on the page are drawn on the canvas). */
+.notebook-lecture-panel .notebook-marker-summary {
+	color: var(--text-muted);
+	margin-bottom: var(--size-4-2);
+}
+
+.notebook-lecture-panel .notebook-marker-section {
+	margin: var(--size-4-3) 0 var(--size-4-1);
+}
+
+.notebook-marker-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-2-2);
+}
+
+.notebook-marker-row {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	min-height: 40px;
+}
+
+.notebook-marker-check {
+	width: 20px;
+	height: 20px;
+	flex: none;
+}
+
+.notebook-marker-badge,
+.notebook-marker-swatch {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	color: #ffffff;
+	font-weight: 700;
+	font-size: var(--font-ui-smaller);
+	margin-right: var(--size-2-2);
+}
+
+.notebook-marker-swatch {
+	width: 14px;
+	height: 14px;
+	border-radius: 3px;
+}
+
+.notebook-marker-gap { background-color: #d97706; }
+.notebook-marker-question { background-color: #2563eb; }
+.notebook-marker-important { background-color: #dc2626; }
+.notebook-marker-critical { background-color: #991b1b; }
+.notebook-marker-star { background-color: #ca8a04; }
+.notebook-marker-homework { background-color: #7c3aed; border-radius: 4px; }
+.notebook-box-definition { background-color: #2563eb; }
+.notebook-box-theorem { background-color: #7c3aed; }
+.notebook-box-example { background-color: #16a34a; }
+.notebook-box-proof { background-color: #475569; }
+.notebook-box-remark { background-color: #d97706; }
+
+.notebook-marker-main {
+	flex: 1;
+	min-width: 0;
+	cursor: pointer;
+}
+
+.notebook-marker-label {
+	overflow-wrap: anywhere;
+}
+
+.notebook-marker-label.is-done {
+	text-decoration: line-through;
+	color: var(--text-muted);
+}
+
+.notebook-marker-meta {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.notebook-marker-edit {
+	flex: none;
+}

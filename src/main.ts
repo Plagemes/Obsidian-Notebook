@@ -14,6 +14,7 @@ import type { NotebookApi } from "./integration/api";
 import { registerReliability } from "./integration/reliability";
 import { LIBRARY_VIEW_TYPE, LibraryView } from "./library/library-view";
 import { registerToolCommands } from "./view/commands";
+import { registerMarkerCommands } from "./view/markers";
 import { registerReadingCommands } from "./view/reading-commands";
 import { OpenNotebookModal } from "./view/modals";
 import { openNotebookAtPage } from "./integration/open";
@@ -91,6 +92,7 @@ export default class NotebookPlugin extends Plugin {
 		registerPdfSyncCommands(this, () => this.app.workspace.getActiveViewOfType(NotebookView), () => this.settings.folder);
 
 		registerToolCommands(this, (checking, run) => this.withView(checking, run));
+		registerMarkerCommands(this, (checking, run) => this.withView(checking, run));
 		registerReadingCommands(this, (checking, run) => this.withView(checking, run));
 
 		registerIntegration(this, {
