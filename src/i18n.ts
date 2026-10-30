@@ -1037,6 +1037,15 @@ const en = {
 	"pageTags.modal.placeholder": "exam, chapter 2",
 	"pageTags.modal.suggestions": "Tags used in this notebook",
 	"pageTags.modal.save": "Save",
+	// wave 0.7: lod
+	"heavy.message": "Page {n} is very large ({why}). Drawing and saving may get slow.",
+	"heavy.reason.strokes": "{count} strokes",
+	"heavy.reason.points": "{count} points",
+	"heavy.reason.assets": "{size} of images",
+	"heavy.split": "Split page",
+	"heavy.dismiss": "Dismiss",
+	"heavy.split.done": "Page split: the lower part is now page {n}. Undo puts it back.",
+	"heavy.split.none": "This page cannot be split.",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -2078,6 +2087,15 @@ const it: Partial<Record<MessageKey, string>> = {
 	"pageTags.modal.placeholder": "esame, capitolo 2",
 	"pageTags.modal.suggestions": "Tag usati in questo quaderno",
 	"pageTags.modal.save": "Salva",
+	// wave 0.7: lod
+	"heavy.message": "La pagina {n} è molto pesante ({why}). Disegno e salvataggio potrebbero rallentare.",
+	"heavy.reason.strokes": "{count} tratti",
+	"heavy.reason.points": "{count} punti",
+	"heavy.reason.assets": "{size} di immagini",
+	"heavy.split": "Dividi pagina",
+	"heavy.dismiss": "Ignora",
+	"heavy.split.done": "Pagina divisa: la parte inferiore è ora la pagina {n}. Annulla la rimette a posto.",
+	"heavy.split.none": "Questa pagina non si può dividere.",
 };
 
 let table: Partial<Record<MessageKey, string>> | null = null;

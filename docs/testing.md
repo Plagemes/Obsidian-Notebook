@@ -8,6 +8,9 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 |---|---|---|---|---|---|
 | Class timetable (roadmap 115): pure scheduling (current/next class, odd/even weeks, term dates, local time, overlaps), file parse/serialize round trip, target notebook choice | ✅ | ✅ `tests/timetable.test.ts` | | | |
 | Course page tag: a lecture page made with a course from the timetable (New lecture prefill, *Open the current class*) gets the course as a v7 page tag, in the same undo step | ✅ | ✅ `applyCourseTag` (normalisation, no duplicate, undo with `AddPage`); ❌ the two flows in Obsidian | | | |
+| Level of detail (roadmap 387): zoom → level (`lodLevel`, tolerance within 0.5 device px at any scale and pixel ratio), Douglas–Peucker on outlines (render 1) and on ink nodes with their radius (render 2), simplified paths kept per stroke and level, thumbnails | ✅ | ✅ `tests/lod.test.ts` (worst outline difference 0.44 device px over handwriting, stress strokes, pen/highlighter/shape); ✅ `npm run bench:lod` (PC pixel comparison and frame times) | | | not measured on Android |
+| Heavy page warning (roadmap 380): thresholds (strokes, points, image bytes), split plan (cut at the widest gap near half the load, text boxes and images, one undo step, nothing lost or duplicated), banner with Split page / Dismiss | ✅ | ✅ `tests/heavy-page.test.ts`; ✅ harness check (`npm run bench:lod -- --check-heavy`: banner, split, undo, dismiss) | | | the banner's look on a phone |
+| Class timetable (roadmap 115): pure scheduling (current/next class, odd/even weeks, term dates, local time, overlaps), file parse/serialize round trip, target notebook choice | ✅ | ✅ `tests/timetable.test.ts` | | | page tag (hook only until page tags exist) |
 | Class timetable editor (settings, command), `_timetable.json` read/write through the Vault API, unreadable file never overwritten | ✅ | ❌ (needs Obsidian) | | | |
 | Offer / auto-open the current class at a new lecture page; "New lecture" course prefill; library "Now: <course>" shortcut | ✅ | ❌ (needs Obsidian; the choices behind it are tested) | | | |
 | Ribbon icon + "New notebook" / "Open notebooks" commands | ✅ | ❌ (needs Obsidian) | | | |
@@ -229,6 +232,8 @@ Added in 0.4.1: `styles.test.ts` (styles.css has balanced braces, no accidentall
 Added in 0.5.0 (companion notes): `companion.test.ts` — the companion note generator (properties, meta pass-through, Obsidian tags, text in reading order, page links, determinism), escaping of text-box text, the generated region (append, replace, Windows line endings, broken markers, stored state), the property merge (owned vs user keys, shared tags, removal only of what the plugin owned, idempotence, timestamps read back as dates), locations and settings.
 
 Not covered automatically: everything that needs Obsidian or a real browser (DOM, canvas, Pointer Events, Vault API, view lifecycle, the toolbar, the page menu and dialogs, the library view, the navigator panel, the scanner camera and crop UI, rendering PDFs with pdf.js, the text editor, writing the export files, selection handles and gestures, the fast path and fling, protocol and Markdown embeds). That is what the manual protocol is for.
+
+Added in wave 0.7 (level of detail and heavy pages): `tests/lod.test.ts` (zoom → level for every pixel ratio from 1 to 3, the simplified shape stays within 0.5 device px of the exact one for perfect-freehand outlines and wet-ink nodes, ring simplification keeps corners, nothing simplified at normal zoom or for short strokes, saved points untouched, SVG paths for thumbnails) and `tests/heavy-page.test.ts` (thresholds are strict, asset bytes counted once per file, PDF background not counted, split plan: cut in the gap near the middle, load-balanced, text boxes and images, strokes crossing the cut, deterministic, no split for backgrounds or a single item, one undo step restores the serialized document exactly). `npm run bench:lod` (PC): frame time scrolling through the 10,000-stroke notebook at 49, 35 and 25 % with the level of detail off and on, and the pixel difference between the two on a page of 1,000 strokes; `-- --check-heavy` runs the banner check in the harness. Measured on the dev PC (desktop Chrome, 1280×800, canvas read back after each frame so rasterization counts; not Android): redraw with strokes cached, off → on, 1x screen: render 1 `52 → 23`, `64 → 27`, `81 → 29` ms at 49, 35, 25 %; render 2 `61 → 37`, `72 → 45`, `91 → 52` ms; 2x screen: render 1 `88 → 51`, `100 → 53`, `114 → 58` ms, render 2 `90 → 72`, `109 → 79`, `130 → 85` ms.
 
 ## Browser harness
 
@@ -571,6 +576,41 @@ Benchmark output (step 21): paste it here.
 (paste results)
 ```
 
+### Objects wave 0.6 (ink on objects, stamps)
+
+Not verified on a device. Fill in the result table at the end of this file.
+
+- **O1. Ink follows an image.** Insert an image, write a few words over it with the pen, switch to the lasso and tap the image (or lasso it). Drag it, then scale it with the bottom-right handle and rotate it with the top handle. Expected: the words move, scale and rotate with the picture and stay on it; one undo step puts everything back. Words written next to the image stay where they were.
+- **O2. Ink follows a text box.** Same with a text box (text boxes move and scale but do not rotate). Expected: ink written over the text moves with it.
+- **O3. Setting off.** Turn off *Ink follows objects* in the settings and move the image again. Expected: only the image moves; the ink stays.
+- **O4. Delete an object with ink.** Select an image that has ink on it and delete it. Expected: a notice says how many strokes were written on it, with *Delete the ink too*. Ignore it: the ink stays. Repeat and tap the button: the ink goes, and one undo brings it back; a second undo brings the image back.
+- **O5. Undo before taking the offer.** Delete an image with ink, press undo, then tap *Delete the ink too* in the notice. Expected: nothing happens (the image is back).
+- **O6. Built-in stamps.** More menu → *Stamps*. Tap *Checkmark*: a checkmark appears in the middle of the page in the current pen colour and width and is selected; move it. Drag *Star* onto another place. Expected: it lands where the finger or pen was lifted. Undo removes it.
+- **O7. Save a stamp.** Write a small signature, select it with the lasso, open *Stamps* and tap the save button, name it. Expected: it appears under *My stamps*; the file `Notebooks/_stamps/<name>.stamp` exists. Tap it on another page and in another notebook.
+- **O8. Stamp with an image and text.** Select an image and a text box together, save as a stamp, delete the originals, place the stamp. Expected: both come back; the image uses the same file in `_assets/` (no copy).
+- **O9. Rename and delete a stamp.** Use the pencil and trash buttons on a stamp. Expected: the name changes in the palette and the file; delete asks first and moves the file to the trash; notebooks that used the stamp are unchanged.
+- **O10. Palette on a phone and with a finger.** Open the palette on a narrow screen. Expected: it fits, the list scrolls vertically, a sideways drag from a tile onto the page places the stamp. Report whether a vertical or diagonal drag scrolls the list instead of dragging.
+
+### Level of detail and heavy pages (wave 0.7)
+
+Not verified on a device. Use **Create stress-test notebook** (10,000 strokes, 10 pages) for D1-D3.
+
+- **D1. Zoomed out looks the same.** Open the stress notebook, fit the width, then pinch out until the page is below half of its width on screen. Expected: the handwriting looks the same as before (no jagged or thinner strokes, no strokes missing); pinch back in: the strokes are as smooth as at the start.
+- **D2. Scrolling and zooming out is smooth.** In the same notebook scroll quickly through all pages at about 30 % zoom, and pinch in and out. Expected: no stutter that was not there before; note it as faster, same or slower than 0.5.x if you remember.
+- **D3. Thumbnails.** Open the page panel and the library. Expected: thumbnails of dense pages look right and appear at least as quickly as before.
+- **D4. Warning appears.** Open the stress notebook and make a page heavy (the stress notebook has about 1,000 strokes per page: duplicate a page 3 times and paste its content into one page, or open a notebook with more than 3,000 strokes on one page). Expected: after a moment a bar at the bottom says the page is very large, with *Split page* and *Dismiss*; it does not appear while the pen is writing and does not cover the toolbar.
+- **D5. Split page.** Press *Split page*. Expected: a notice, a new page right after this one with the lower half of the writing (same x positions, starting near the top of the page), the upper half still on this page; undo once puts everything back on one page.
+- **D6. Dismiss.** Press *Dismiss*. Expected: the bar goes away and does not come back for that page until you close the notebook tab; other heavy pages still warn. On a page that shows a PDF the bar has only *Dismiss*.
+
+| Step | Device / Obsidian version | Result | Notes |
+|---|---|---|---|
+| D1 Zoomed out looks the same | | | |
+| D2 Scrolling and zooming out | | | |
+| D3 Thumbnails | | | |
+| D4 Warning appears | | | |
+| D5 Split page | | | |
+| D6 Dismiss | | | |
+
 ## Quick check — Windows
 
 Mouse: draw, erase (both modes), undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scroll, Ctrl+wheel zoom, resize the window (the page refits), add a page, use every page menu action with undo, create notebooks with each paper and size, export PDF and SVG and open them, lasso select/move/resize/rotate/delete, close and reopen the notebook. Also: open the library and use every action, import a PDF and write on it, insert a PDF range and an image page, use the shape, text, image and ruler tools, scan from a photo file, use the Pages panel, run *Restore a previous version*, insert an embed in a note and open an `obsidian://notebook` link. With a pen tablet or Surface pen: pressure and eraser end (`buttons & 32`).
@@ -600,4 +640,6 @@ Mouse: draw, erase (both modes), undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scr
 - Notebooks are invisible to Obsidian search, tags, backlinks and graph unless *Companion notes* is on (off by default); the companion note carries the text boxes, not the handwriting (no OCR yet).
 - Companion notes: a note the user moved is found by its `notebook-id`, but deleting that property makes the plugin create a new note; changing the location or name setting does not move existing notes; a companion folder inside the notebooks folder shows in the library sidebar.
 - Library trash, page trash and templates are not verified in Obsidian or on Android (steps 82-91). Trashed items move with `vault.rename`, so notes that linked to a trashed notebook show a broken link until it is restored. Permanent deletion follows Obsidian's *Deleted files* setting. The page trash keeps the 50 most recent pages per notebook for 30 days (fixed limits); it is not synced into the notebook, only through one vault file per deleted page under `_trash/pages/<notebook id>/`, so two devices deleting pages at the same time keep both. Page trash and template thumbnails do not draw PDF or image backgrounds. A folder named `_trash`, `_templates` or `_meta` directly under the notebooks folder is hidden from the library. A trashed folder that holds files other than notebooks is never emptied automatically.
+- Library trash, page trash and templates (wave 0.6) are not verified in Obsidian or on Android (steps L1-L10). Trashed items move with `vault.rename`, so notes that linked to a trashed notebook show a broken link until it is restored. Permanent deletion follows Obsidian's *Deleted files* setting. The page trash keeps the 50 most recent pages per notebook for 30 days (fixed limits); it is not synced into the notebook, only through the vault file `_trash/pages/<notebook id>.json`, and two devices deleting pages at the same time can overwrite each other's entries. Page trash and template thumbnails do not draw PDF or image backgrounds. A folder named `_trash` or `_templates` directly under the notebooks folder is hidden from the library.
+- Level of detail and heavy pages (wave 0.7) are not verified in Obsidian or on Android (steps D1-D6). The level of detail applies to committed strokes only (not to the stroke being written or to a floating selection) and switches when a redraw runs after the zoom settles, so a pinch shows the old bitmap scaled until then, as before. The heavy page limits (3,000 strokes, 120,000 points, 20 MB of images) are fixed; the split moves whole strokes, so a stroke that crosses the cut goes to the side of its middle.
 - PDF reading tools: the search and the snapping highlighter need the PDF's text layer (scanned PDFs have none), positions inside a long line of text are estimated from the font's character widths and can be a few points off, rotated and vertical text is not snapped, and the search lists at most 500 matches. Dimming and hiding annotations are view settings: exports, thumbnails and embeds are not affected.
