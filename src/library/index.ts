@@ -2,8 +2,8 @@
 
 import { tagAncestors, tagIsWithin } from "../model/tags";
 
-/** v3: entries carry the page tags (format v7), so older indexes are rebuilt. */
-export const INDEX_VERSION = 3;
+/** v4: entries also carry the titled bookmarks (quick switcher); v3 added the page tags. Older indexes are rebuilt. */
+export const INDEX_VERSION = 4;
 /** "Recent" shows this many notebooks. */
 export const RECENT_LIMIT = 20;
 
@@ -27,6 +27,8 @@ export interface LibraryEntry {
 	textPages?: number[];
 	/** v7 page tags: the 0-based pages that have tags, with their tags. Absent when no page has any. */
 	pageTags?: Array<{ page: number; tags: string[] }>;
+	/** Titled bookmarks: 0-based page and title. Absent when there is none. */
+	bookmarks?: Array<{ page: number; title: string }>;
 	tags: string[];
 	favorite: boolean;
 	/** Cover colour #rrggbb. */
@@ -182,6 +184,10 @@ function isEntry(v: unknown): v is LibraryEntry {
 			const o = p as { page?: unknown; tags?: unknown } | null;
 			return typeof o === "object" && o !== null && Number.isInteger(o.page) && Array.isArray(o.tags) && o.tags.every((x) => typeof x === "string");
 		}))) &&
+		(e.bookmarks === undefined || (Array.isArray(e.bookmarks) && e.bookmarks.every((b: unknown) => {
+			const o = b as { page?: unknown; title?: unknown } | null;
+			return typeof o === "object" && o !== null && Number.isInteger(o.page) && typeof o.title === "string";
+		}))) &&
 		(e.thumb === undefined || typeof e.thumb === "string") &&
 		(e.thumbMtime === undefined || Number.isFinite(e.thumbMtime))
 	);
@@ -189,6 +195,17 @@ function isEntry(v: unknown): v is LibraryEntry {
 
 export class LibraryIndex {
 	private readonly map = new Map<string, LibraryEntry>();
+	/**
+	 * Saved data of a newer index version (a newer plugin version on another device syncs the same plugin
+	 * folder). Kept as read and returned by `toJSON`, so saving does not overwrite that device's index; this
+	 * device works from an index rebuilt in memory.
+	 */
+	private newer: { version: number; entries: LibraryEntry[] } | null = null;
+
+	/** True when the saved data was a newer index version, which `toJSON` hands back unchanged. */
+	get keepsNewerVersion(): boolean {
+		return this.newer !== null;
+	}
 
 	get size(): number {
 		return this.map.size;
@@ -209,6 +226,7 @@ export class LibraryIndex {
 	/** Inserts or replaces the entry stored under `entry.path`. */
 	upsert(entry: LibraryEntry): void {
 		const copy: LibraryEntry = { ...entry, tags: [...entry.tags] };
+		if (entry.bookmarks) copy.bookmarks = entry.bookmarks.map((b) => ({ ...b }));
 		if (entry.pageTags) copy.pageTags = entry.pageTags.map((p) => ({ page: p.page, tags: [...p.tags] }));
 		this.map.set(entry.path, copy);
 	}
@@ -394,14 +412,23 @@ export class LibraryIndex {
 	}
 
 	toJSON(): { version: number; entries: LibraryEntry[] } {
+		if (this.newer) return this.newer;
 		return { version: INDEX_VERSION, entries: this.all() };
 	}
 
-	/** Reads saved data. Anything unknown, old or malformed gives an empty index (it is rebuilt lazily). */
+	/**
+	 * Reads saved data. Anything unknown, old or malformed gives an empty index (it is rebuilt lazily). A newer
+	 * index version also gives an empty index, but is not overwritten: `toJSON` returns it as it was read.
+	 */
 	static fromJSON(data: unknown): LibraryIndex {
 		const index = new LibraryIndex();
 		if (typeof data !== "object" || data === null) return index;
 		const d = data as { version?: unknown; entries?: unknown };
+		if (typeof d.version === "number" && Number.isInteger(d.version) && d.version > INDEX_VERSION) {
+			// Only handed back to be saved again: never read by this version.
+			index.newer = data as { version: number; entries: LibraryEntry[] };
+			return index;
+		}
 		if (d.version !== INDEX_VERSION || !Array.isArray(d.entries)) return index;
 		for (const e of d.entries) {
 			if (isEntry(e)) index.upsert(e);

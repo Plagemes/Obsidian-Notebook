@@ -60,6 +60,35 @@ export function normalizeTagList(raw: readonly string[]): NormalizedTags {
 	return { tags: uniqueTags(tags), rejected };
 }
 
+/**
+ * Whether a tag already on a notebook is one Obsidian takes as it is (`normalizeTag` would not change it). The tag
+ * editor shows the others as written, flagged, and never renames or drops them by itself (`2026`, `C++`).
+ */
+export function isObsidianTag(tag: string): boolean {
+	return normalizeTag(tag) === tag;
+}
+
+/**
+ * The tag list after the person adds `typed` (already normalised) to `current`, which stays exactly as it is (same
+ * spellings, same order, also tags Obsidian would not accept). A typed tag that is already there (ignoring case, also
+ * as the normalised form of an existing tag) is not added again.
+ */
+export function addTypedTags(current: readonly string[], typed: readonly string[]): string[] {
+	const keys = new Set<string>();
+	for (const tag of current) {
+		keys.add(tagKey(tag));
+		const normal = normalizeTag(tag);
+		if (normal !== null) keys.add(tagKey(normal));
+	}
+	const out = [...current];
+	for (const tag of typed) {
+		if (keys.has(tagKey(tag))) continue;
+		keys.add(tagKey(tag));
+		out.push(tag);
+	}
+	return out;
+}
+
 /** Splits text typed in the tag field: commas, semicolons, new lines, and spaces before a `#` separate tags. */
 export function parseTagInput(text: string): string[] {
 	return text.split(/[,;\n]|\s+(?=#)/).map((s) => s.trim()).filter((s) => s.length > 0);

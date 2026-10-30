@@ -2,7 +2,7 @@
  * Synchronised PDF <-> notes view (#106): the link between a notes page and a PDF page.
  *
  * The notebook format has no field for it (no format change in this wave), so the mapping lives in a
- * sidecar JSON file in the plugin's folder (storage/pdf-links-store.ts) and is written only by explicit
+ * sidecar JSON file in `<notebooks folder>/_meta/` (storage/pdf-links-store.ts) and is written only by explicit
  * link actions, never while scrolling. This module is pure: parsing, serialising, queries and the
  * follow decisions, testable in Node without Obsidian.
  *

@@ -361,3 +361,44 @@ describe("integrity verdicts and other serializers", () => {
 		expect(assessDisk(ledger.records(P), disk(reformatted)).kind).toBe("intact");
 	});
 });
+
+describe("resilience and files not downloaded yet (sync safety)", () => {
+	const timers: Timers = { set: (fn, ms) => setTimeout(fn, ms) as unknown as number, clear: (h) => clearTimeout(h) };
+
+	class IO implements DocumentIO {
+		backups: BackupReason[] = [];
+		constructor(public content: string) {}
+		async read(): Promise<string> {
+			return this.content;
+		}
+		async process(fn: (c: string) => string): Promise<void> {
+			this.content = fn(this.content);
+		}
+		async backup(content: string, reason: BackupReason): Promise<string | null> {
+			void content;
+			this.backups.push(reason);
+			return "b.bak";
+		}
+	}
+
+	it("a 0-byte or NUL placeholder is never reported to the integrity check, backed up or counted as a write failure", async () => {
+		for (const placeholder of ["", "\0\0\0\0"]) {
+			const io = new IO(placeholder);
+			const seen: DiskContentInfo[] = [];
+			const health: unknown[] = [];
+			const s = new DocumentSession(io, timers, { onDiskContent: (i) => seen.push(i), onWriteHealth: (h) => health.push(h) });
+			await s.load();
+			expect(s.mode).toBe("not-downloaded");
+			expect(seen).toHaveLength(0);
+			expect(io.backups).toHaveLength(0);
+			expect(await s.flush()).toBe(true);
+			expect(health).toHaveLength(0);
+			// The content arrives: now it is assessed, as a reload of the placeholder.
+			io.content = serialize(sampleDocument(1));
+			await s.handleExternalChange();
+			expect(s.mode).toBe("ok");
+			expect(seen).toHaveLength(1);
+			expect(seen[0]!.doc).not.toBeNull();
+		}
+	});
+});

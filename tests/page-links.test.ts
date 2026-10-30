@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { parseEmbedSource } from "../src/integration/links";
 import {
 	embedSourceFromFile, embedSourceFromSrc, fileMenuKind, insertionText, isNotebookEmbedSrc, MAX_PAGE_SUGGESTIONS,
-	pageFromEphemeralState, pageFromSubpath, pageSubpath, pageSuggestions, pageTitle, parsePageLinkTrigger, withEmbedMarker,
+	pageFromEphemeralState, pageFromSubpath, pageSubpath, pageSuggestions, pageTargetFromEphemeralState, pageTargetFromSubpath, pageTitle,
+	parsePageLinkTrigger, resolvePageTarget, withEmbedMarker,
 } from "../src/integration/page-links";
 import { createPage } from "../src/model/document";
 import type { Page, TextElement } from "../src/model/types";
@@ -47,6 +48,32 @@ describe("page link subpaths", () => {
 		expect(pageFromEphemeralState({ subpath: "" })).toBeNull();
 		expect(pageFromEphemeralState(null)).toBeNull();
 		expect(pageFromEphemeralState("#p3")).toBeNull();
+	});
+});
+
+describe("page link targets: by id first", () => {
+	const pages = [{ id: "a" }, { id: "b" }, { id: "c" }];
+
+	it("reads the page number and the page id of a link", () => {
+		expect(pageTargetFromSubpath("#p3&id=c")).toEqual({ page: 3, pageId: "c" });
+		expect(pageTargetFromSubpath("#p3")).toEqual({ page: 3, pageId: null });
+		expect(pageTargetFromSubpath("#&id=c")).toEqual({ page: null, pageId: "c" });
+		expect(pageTargetFromSubpath("#p3&id=bad id")).toEqual({ page: 3, pageId: null });
+		expect(pageTargetFromSubpath("#Heading")).toBeNull();
+		expect(pageTargetFromEphemeralState({ subpath: "#p1&id=c&r=1,2,3,4" })).toEqual({ page: 1, pageId: "c" });
+		expect(pageTargetFromEphemeralState({ subpath: "#Heading", page: 2 })).toEqual({ page: 2, pageId: null });
+		expect(pageTargetFromEphemeralState({ scroll: 1 })).toBeNull();
+		expect(pageTargetFromEphemeralState(null)).toBeNull();
+	});
+
+	it("opens the page with that id wherever it is now, and never another page when it was deleted", () => {
+		// The page moved: `p1` is stale, the id decides.
+		expect(resolvePageTarget(pages, { page: 1, pageId: "c" })).toEqual({ index: 2 });
+		// Deleted: page 3 exists, but it is not the linked page.
+		expect(resolvePageTarget(pages, { page: 3, pageId: "gone" })).toEqual({ missing: "deleted" });
+		// No id: the number, kept inside the notebook.
+		expect(resolvePageTarget(pages, { page: 2, pageId: null })).toEqual({ index: 1 });
+		expect(resolvePageTarget(pages, { page: 9, pageId: null })).toEqual({ index: 2 });
 	});
 });
 

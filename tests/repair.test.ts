@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { createDocument, createPage, createStroke, quantizePoint } from "../src/model/document";
 import { parseLenient } from "../src/model/lenient-json";
 import { recoveredItems, repairNotebookText } from "../src/model/repair";
@@ -18,6 +18,13 @@ function rng(seed: number): () => number {
 		t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
 		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 	};
+}
+
+/** Deterministic UUID-shaped ids (what crypto.randomUUID returns), for a reproducible createId(). */
+function seededIds(seed: number): () => `${string}-${string}-${string}-${string}-${string}` {
+	const rand = rng(seed);
+	const hex = (n: number) => Array.from({ length: n }, () => Math.floor(rand() * 16).toString(16)).join("");
+	return () => `${hex(8)}-${hex(4)}-4${hex(3)}-a${hex(3)}-${hex(12)}`;
 }
 
 function bigDocument(pages = 3, strokesPerPage = 20): NotebookDocument {
@@ -259,7 +266,11 @@ describe("repairNotebookText", () => {
 		expect(repairNotebookText('{"format":"obsidian-notebook","version":5,"id":"x","pa')).toMatchObject({ ok: false, reason: "nothing" });
 	});
 
-	it("fuzz: any truncation or corruption gives a valid notebook (or a clean refusal) and never invents strokes", () => {
+	it("fuzz: any truncation or corruption gives a valid notebook (or a clean refusal) and never invents strokes", { timeout: 30_000 }, () => {
+		// createId() is seeded too, so a failing run can be reproduced exactly.
+		const ids = seededIds(99);
+		const spy = vi.spyOn(globalThis.crypto, "randomUUID").mockImplementation(ids);
+		onTestFinished(() => spy.mockRestore());
 		const doc = bigDocument(2, 8);
 		const text = serialize(doc);
 		const originals = new Map(doc.pages.flatMap((p) => p.strokes).map((s) => [s.id, s]));

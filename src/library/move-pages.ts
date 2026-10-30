@@ -1,8 +1,9 @@
 import { normalizePath, Notice, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
-import { AddAsset, AddPage, Batch, DeletePage, InsertPages, type Command } from "../model/history";
+import { cloneMeta } from "../model/document";
+import { AddAsset, AddPage, Batch, DeletePage, InsertPages, SetMeta, type Command } from "../model/history";
 import { parse, serializeChecked } from "../model/serialize";
-import type { Asset, NotebookDocument } from "../model/types";
+import { DEFAULT_META, type Asset, type NotebookDocument } from "../model/types";
 import { assetExtension, assetPath, assetsFolder } from "../pdf/assets";
 import { backupFolder, type NotebookSettings } from "../settings";
 import { readNotebookText, writeNotebookText } from "../storage/format";
@@ -12,7 +13,9 @@ import { isEditContextSource, type EditContext } from "../view/edit-context";
 import { resolveAssetFile, storeAsset } from "../view/media";
 import { looseSheetPath } from "./loose-sheet-logic";
 import { askMovePages } from "./move-pages-modal";
-import { destinationVerdict, holdsPages, pageExcerpt, planPageMove, planSourceRemoval, type PageMoveFailure, type PageMovePlan } from "./page-move";
+import {
+	destinationVerdict, holdsPages, pageExcerpt, planPageMove, planSourceRemoval, withMovedBookmarks, type PageMoveFailure, type PageMovePlan,
+} from "./page-move";
 
 const NOTEBOOK_VIEW_TYPE = "notebook-view";
 
@@ -63,6 +66,7 @@ async function appendToFile(
 ): Promise<void> {
 	for (const asset of plan.assets) (doc.assets ??= {})[asset.id] = asset;
 	doc.pages.push(...plan.pages);
+	if (plan.bookmarks.length > 0) doc.meta = withMovedBookmarks(doc.meta, plan.bookmarks);
 	doc.modifiedAt = new Date().toISOString();
 	const checked = serializeChecked(doc, true);
 	if (!checked.ok) throw new Error(checked.message);
@@ -136,6 +140,11 @@ export async function movePagesTo(src: EditContext, pageIds: readonly string[], 
 	if (targetCtx) {
 		const commands: Command[] = assets.map((a) => new AddAsset(a));
 		commands.push(new InsertPages(plan.pages, targetCtx.doc.pages.length));
+		// v7: the moved pages' bookmarks (new page ids) in the same undo step and the same save.
+		if (plan.bookmarks.length > 0) {
+			const before = targetCtx.doc.meta ?? cloneMeta(DEFAULT_META);
+			commands.push(new SetMeta(before, withMovedBookmarks(before, plan.bookmarks)));
+		}
 		targetCtx.execute(new Batch("Move pages in", commands));
 		// flush() is also false when the user kept writing in the destination after the pages were saved: the file decides.
 		const flushed = await targetCtx.flush();

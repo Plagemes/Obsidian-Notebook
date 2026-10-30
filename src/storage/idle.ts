@@ -34,3 +34,21 @@ export function whenIdle(delayMs = 1500, timeoutMs = 10_000, scheduler: IdleSche
 		}, delayMs);
 	});
 }
+
+/**
+ * Runs `fn` in a new task, after what is already queued (input, painting) has had its turn. Unlike
+ * `setTimeout(fn, 0)` it is not held back to 4 ms once calls are nested, which matters for work done in many short
+ * slices (the staged load of a large notebook). Falls back to the timer where there is no MessageChannel.
+ */
+export function nextTask(fn: () => void): void {
+	if (typeof MessageChannel === "undefined") {
+		window.setTimeout(fn, 0);
+		return;
+	}
+	const channel = new MessageChannel();
+	channel.port1.onmessage = () => {
+		channel.port1.close();
+		fn();
+	};
+	channel.port2.postMessage(null);
+}

@@ -1,8 +1,27 @@
 import { normalizePath, TFile, type App, type DataAdapter } from "obsidian";
 import { readNotebookText, writeNotebookText } from "./format";
 import type { JournalSlotFile, JournalStore } from "./journal";
+import type { LinkFileAdapter } from "./pdf-links-store";
 import type { BackupReason, DocumentIO } from "./session";
 import type { SpaceProbe } from "./write-guard";
+
+/** Vault-backed file operations for small plugin sidecar files that live in the vault (e.g. the PDF links file). */
+export function vaultLinkFileAdapter(app: App): LinkFileAdapter {
+	return {
+		exists: async (p) => app.vault.getAbstractFileByPath(normalizePath(p)) !== null,
+		read: async (p) => {
+			const file = app.vault.getFileByPath(normalizePath(p));
+			if (!file) throw new Error(`"${p}" does not exist`);
+			return app.vault.read(file);
+		},
+		write: async (p, d) => {
+			const file = app.vault.getFileByPath(normalizePath(p));
+			if (file) await app.vault.modify(file, d);
+			else await app.vault.create(normalizePath(p), d);
+		},
+		mkdir: (p) => ensureFolder(app, p),
+	};
+}
 
 /** Creates every missing folder along `path`. */
 export async function ensureFolder(app: App, path: string): Promise<void> {

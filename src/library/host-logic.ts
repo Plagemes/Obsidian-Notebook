@@ -44,8 +44,9 @@ export type MetaPatchResult =
 /**
  * New document text with `patch` merged into the metadata of the notebook stored in `json`.
  * Never produces text for a file that fails to parse or whose result fails the round-trip check,
- * so the caller can refuse to write. `migrated` is true when the file is from an older format
- * (writing it upgrades it, so the caller should keep a backup).
+ * so the caller can refuse to write. `migrated` is true when the file is from an older format, or when
+ * invalid v7 details were dropped on read (writing changes it beyond the patch, so the caller should keep
+ * a backup).
  */
 export function patchNotebookMeta(json: string, patch: Partial<NotebookMeta>): MetaPatchResult {
 	const parsed = parse(json);
@@ -53,7 +54,7 @@ export function patchNotebookMeta(json: string, patch: Partial<NotebookMeta>): M
 	const doc = { ...parsed.doc, meta: mergeMeta(parsed.doc.meta, patch) };
 	const out = serializeChecked(doc);
 	if (!out.ok) return { ok: false, message: out.message };
-	const migrated = parsed.migratedFrom !== null;
+	const migrated = parsed.migratedFrom !== null || (parsed.dropped ?? 0) > 0;
 	return { ok: true, text: out.text, changed: migrated || out.text !== json, migrated };
 }
 
@@ -64,5 +65,5 @@ export function patchNotebookId(json: string, id: string): MetaPatchResult {
 	if (id.length === 0) return { ok: false, message: "empty id" };
 	const out = serializeChecked({ ...parsed.doc, id });
 	if (!out.ok) return { ok: false, message: out.message };
-	return { ok: true, text: out.text, changed: parsed.doc.id !== id, migrated: parsed.migratedFrom !== null };
+	return { ok: true, text: out.text, changed: parsed.doc.id !== id, migrated: parsed.migratedFrom !== null || (parsed.dropped ?? 0) > 0 };
 }

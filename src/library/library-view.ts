@@ -13,8 +13,8 @@ import { folderOf, isInside, LibraryIndex, SORTS, type Highlight, type LibraryEn
 import { openTagEditor } from "../integration/tags";
 import { ConfirmModal, CoverModal, FolderSuggestModal, PromptModal } from "./library-modals";
 import { entryFromFile, filesToRead, type NotebookFileInfo } from "./scan";
-import type { LibraryTrash } from "../storage/trash";
-import { addTrashNavItem, confirmMoveToTrash, TrashModal } from "./trash-modal";
+import { folderContents, type LibraryTrash } from "../storage/trash";
+import { addTrashNavItem, confirmMoveToTrash, FolderToTrashModal, TrashModal } from "./trash-modal";
 import { renderThumbnail, type ThumbnailOptions } from "./thumbnail";
 
 export const LIBRARY_VIEW_TYPE = "notebook-library";
@@ -50,6 +50,8 @@ export interface LibraryHost {
 	afterDuplicate?(file: TFile): Promise<void>;
 	/** Library trash (#160): deleting moves to the plugin trash instead of deleting. */
 	trash?: LibraryTrash;
+	/** wave 0.7: opens the list of recently edited pages (roadmap 365). */
+	openRecentPages?(): void;
 	loadIndex(): Promise<unknown>;
 	saveIndex(data: unknown): Promise<void>;
 }
@@ -660,6 +662,16 @@ export class LibraryView extends ItemView {
 		this.navItem(nav, { icon: "library", label: t("library.nav.all"), count: this.index.size, scope: "all", key: "nav:all" });
 		this.navItem(nav, { icon: "star", label: t("library.nav.favorites"), count: favorites, scope: "favorites", key: "nav:favorites" });
 		this.navItem(nav, { icon: "clock", label: t("library.nav.recent"), scope: "recent", key: "nav:recent" });
+		const recentPages = this.host.openRecentPages?.bind(this.host); // wave 0.7: quick nav
+		if (recentPages) {
+			const b = nav.createEl("button", { cls: "notebook-lib-nav-item", attr: { "data-key": "nav:recent-pages" } });
+			setIcon(b.createSpan({ cls: "notebook-lib-nav-icon" }), "history");
+			b.createSpan({ cls: "notebook-lib-nav-label", text: t("library.nav.recentPages") });
+			b.addEventListener("click", () => {
+				this.setDrawer(false);
+				recentPages();
+			});
+		}
 		const trash = this.host.trash;
 		if (trash) {
 			addTrashNavItem(nav, () => {
@@ -846,7 +858,8 @@ export class LibraryView extends ItemView {
 		const card = grid.createDiv({ cls: "notebook-lib-card", attr: { role: "listitem" } });
 		card.dataset.path = entry.path;
 		const placeholder = entry.mtime < 0;
-		const meta = placeholder ? "" : entry.pages === 0 ? t("library.unreadable") : `${this.plural(entry.pages, "library.pages.one", "library.pages.many")} · ${relativeTime(entry.modified, now, getLanguage())}`;
+		// wave 0.7: a 0-byte file is a notebook the sync client has not downloaded yet, not a damaged one (#344).
+		const meta = placeholder ? "" : entry.pages === 0 ? t(entry.size === 0 ? "sync.library.notDownloaded" : "library.unreadable") : `${this.plural(entry.pages, "library.pages.one", "library.pages.many")} · ${relativeTime(entry.modified, now, getLanguage())}`;
 		const main = card.createDiv({ cls: "notebook-lib-card-main", attr: { role: "button", tabindex: "0", "data-key": `card:${entry.path}`, "aria-label": [entry.name, meta].filter(Boolean).join(", ") } });
 		const cover = main.createDiv({ cls: "notebook-lib-cover" });
 		cover.setCssProps({ "--notebook-cover": entry.cover });
@@ -1144,7 +1157,24 @@ export class LibraryView extends ItemView {
 		const folder = this.app.vault.getFolderByPath(path);
 		if (!folder) return;
 		const trash = this.host.trash;
-		if (trash) return confirmMoveToTrash(this.app, { name: folder.name, isFolder: true }, () => trash.trash(folder), (e) => this.fail(e));
+		if (trash) {
+			const { notebooks, others } = folderContents(folder);
+			if (others.length === 0) return confirmMoveToTrash(this.app, { name: folder.name, isFolder: true }, () => trash.trash(folder), (e) => this.fail(e));
+			// The folder holds the user's own files too: list them and let the user choose (never moved silently).
+			const opts = { name: folder.name, path: folder.path, notebooks: notebooks.length, others: others.map((f) => f.path) };
+			new FolderToTrashModal(this.app, opts, (choice) => {
+				void (async () => {
+					if (choice === "everything") {
+						await trash.trash(folder);
+						new Notice(t("trash.notice.moved", { name: folder.name }));
+						return;
+					}
+					for (const nb of notebooks) await trash.trash(nb);
+					new Notice(t("trash.notice.movedNotebooks", { n: String(notebooks.length), name: folder.name }));
+				})().catch((e) => this.fail(e));
+			}).open();
+			return;
+		}
 		if (folder.children.length > 0) {
 			new Notice(t("library.notice.folderNotEmpty", { name: folder.name }));
 			return;

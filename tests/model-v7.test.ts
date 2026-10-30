@@ -159,7 +159,7 @@ describe("format v7", () => {
 		expect(out.meta?.bookmarkInfo).toBeUndefined();
 	});
 
-	it("rejects malformed v7 fields", () => {
+	it("rejects malformed v7 page fields and drops malformed bookmark details and positions", () => {
 		const base = JSON.parse(serialize(richDoc())) as Raw;
 		const bad = (fn: (r: Raw) => void, path: string) => {
 			const raw = structuredClone(base);
@@ -168,14 +168,21 @@ describe("format v7", () => {
 			expect(r.ok).toBe(false);
 			if (!r.ok) expect(r.message).toContain(path);
 		};
-		bad((r) => (r.meta.bookmarkInfo.p1.color = "red"), "meta.bookmarkInfo.p1.color");
-		bad((r) => (r.meta.bookmarkInfo.p1.title = 3), "meta.bookmarkInfo.p1.title");
-		bad((r) => (r.meta.bookmarkInfo = []), "meta.bookmarkInfo");
+		const dropped = (fn: (r: Raw) => void) => {
+			const raw = structuredClone(base);
+			fn(raw);
+			const r = parse(JSON.stringify(raw));
+			expect(r.ok).toBe(true);
+			if (r.ok) expect(r.dropped).toBe(1);
+		};
+		dropped((r) => (r.meta.bookmarkInfo.p1.color = "red"));
+		dropped((r) => (r.meta.bookmarkInfo.p1.title = 3));
+		dropped((r) => (r.meta.bookmarkInfo = []));
 		bad((r) => (r.pages[0].tags = "exam"), "pages[0].tags");
 		bad((r) => (r.pages[0].tags = ["ok", 1]), "pages[0].tags[1]");
-		bad((r) => (r.position = { page: "p1" }), "position.at");
-		bad((r) => (r.position = { at: stamp }), "position.page");
-		bad((r) => (r.position.y = "top"), "position.y");
+		dropped((r) => (r.position = { page: "p1" }));
+		dropped((r) => (r.position = { at: stamp }));
+		dropped((r) => (r.position.y = "top"));
 		bad((r) => (r.pages[1].paper.kind = "staff"), "pages[1].paper");
 	});
 
@@ -371,10 +378,14 @@ describe("merge of a conflicted copy with v7 fields", () => {
 		other.meta = setBookmark(other.meta, "p2", { title: "From copy", category: "review" });
 		const plan = planMerge(main, other);
 		expect(plan.summary.bookmarksAdded).toBe(1);
-		expect(plan.summary.bookmarkInfoAdded).toBe(1);
+		expect(plan.summary.bookmarkInfoAdded).toBe(2);
+		expect(plan.summary.bookmarkInfoDiffer).toBe(1);
 		new History(() => main).execute(plan.command!);
 		expect(main.meta?.bookmarkInfo?.p1?.title).toBe("Intro");
 		expect(main.meta?.bookmarkInfo?.p2).toEqual({ title: "From copy", category: "review" });
+		// The copy's other title for p1 is not in the result: the copy is not covered (it stays).
+		expect(mergeCovers(parsed(serialize(main)).doc, other)).toBe(false);
+		other.meta = setBookmark(other.meta, "p1", { title: "Intro" });
 		expect(mergeCovers(parsed(serialize(main)).doc, other)).toBe(true);
 	});
 

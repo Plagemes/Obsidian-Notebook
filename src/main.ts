@@ -1,12 +1,13 @@
 import { Notice, Plugin, type TFile } from "obsidian";
 import { t } from "./i18n";
 import { readSettings, type NotebookSettings } from "./settings";
+import { positionEquals, type SavedPosition } from "./ink/view-position";
 import { stressDocument } from "./model/stress";
 import { NOTEBOOK_EXTENSIONS } from "./storage/format";
 import { AdapterJournalStore, journalFolder } from "./storage/vault-io";
 import { createNotebook } from "./storage/notebooks";
 import { BenchmarkModal } from "./view/benchmark";
-import { PenTestModal } from "./view/pen-test-modal";
+import { PenTestModal, penSignalInfo } from "./view/pen-test-modal";
 import { NotebookLibraryHost } from "./library/host";
 import { registerIntegration } from "./integration";
 import type { HistoryService } from "./integration/history-service";
@@ -24,6 +25,10 @@ import { registerLectureCommands } from "./view/lecture-commands";
 import { TimetableService } from "./timetable/service";
 import { registerPdfSyncCommands } from "./view/pdf-sync";
 import { registerZettel } from "./zettel";
+import { registerGotoPage } from "./view/goto-page";
+import { QuickNavService, registerQuickSwitcher } from "./view/quick-switcher";
+import { openRecentPages, RecentPagesService, registerRecentPages } from "./view/recent-pages";
+import { SyncSafetyService } from "./view/sync-safety";
 import { registerResilience, type ResilienceServices } from "./view/resilience";
 
 export default class NotebookPlugin extends Plugin {
@@ -32,8 +37,12 @@ export default class NotebookPlugin extends Plugin {
 	journal!: AdapterJournalStore;
 	/** Class timetable (wave 0.6). */
 	timetable!: TimetableService;
+	/** wave 0.7: quick navigation (364-366). */
+	recentPages!: RecentPagesService;
 	/** Public API for other plugins and scripts (docs/api.md). */
 	api?: NotebookApi;
+	/** wave 0.7: sync safety (presence files, sync check). */
+	syncSafety!: SyncSafetyService;
 	/** wave 0.7: resilience: safe mode, storage-full warning, integrity check (view/resilience.ts). */
 	resilience?: ResilienceServices;
 	/** Version history (set by registerIntegration), for the integrity check. */
@@ -43,6 +52,8 @@ export default class NotebookPlugin extends Plugin {
 		this.settings = readSettings(await this.loadData());
 
 		this.journal = new AdapterJournalStore(this.app.vault.adapter, journalFolder(this.app, this.manifest.id));
+		this.syncSafety = new SyncSafetyService(this);
+		this.syncSafety.register();
 		// wave 0.7: resilience (#346 safe mode, #347 storage full, #390 integrity check); before the views exist.
 		this.resilience = registerResilience(this, () => this.history);
 		this.registerView(VIEW_TYPE, (leaf) => new NotebookView(leaf, this));
@@ -68,7 +79,7 @@ export default class NotebookPlugin extends Plugin {
 		this.addCommand({ id: "add-page", name: t("command.addPage"), checkCallback: (checking) => this.withView(checking, (v) => v.addPage()) });
 		this.addCommand({ id: "scan-into", name: t("command.scanInto"), checkCallback: (checking) => this.withView(checking, (v) => void v.scanPagesAfter(v.currentPage())) });
 		this.addCommand({ id: "scan-new", name: t("command.scanNew"), callback: () => this.host.scanToNotebook(this.settings.folder) });
-		this.addCommand({ id: "pen-button-test", name: t("command.penTest"), callback: () => new PenTestModal(this.app).open() });
+		this.addCommand({ id: "pen-button-test", name: t("command.penTest"), callback: () => new PenTestModal(this.app, penSignalInfo(this)).open() });
 		this.addCommand({ id: "benchmark", name: t("command.benchmark"), callback: () => this.openBenchmark() });
 		this.addCommand({ id: "create-stress-test", name: t("command.stress"), callback: () => void this.createStressNotebook() });
 		this.addCommand({ id: "export-pdf", name: t("command.exportPdf"), checkCallback: (checking) => this.withView(checking, (v) => void v.exportNotebookPdf()) });
@@ -114,6 +125,18 @@ export default class NotebookPlugin extends Plugin {
 		this.addCommand({ id: "timetable", name: t("command.timetable"), callback: () => void this.timetable.edit() });
 		this.addCommand({ id: "open-class", name: t("command.openClass"), callback: () => this.timetable.openNow() });
 
+		// wave 0.7: quick nav (page switcher, recently edited pages, go to page number)
+		this.recentPages = new RecentPagesService(this.app, (file) => this.host.readNotebook(file));
+		registerRecentPages(this, this.recentPages);
+		Object.assign(this.host, { openRecentPages: () => openRecentPages(this.app, this.recentPages) });
+		registerQuickSwitcher(this, new QuickNavService(this.app, {
+			root: () => this.settings.folder,
+			loadIndex: () => this.host.loadIndex(),
+			readNotebook: (file) => this.host.readNotebook(file),
+			thumbnailBackground: (doc, page, width) => this.host.thumbnailBackground(doc, page, width),
+		}, this.recentPages));
+		registerGotoPage(this, () => this.app.workspace.getActiveViewOfType(NotebookView));
+
 		this.addSettingTab(new NotebookSettingTab(this.app, this));
 
 		// Best effort only (not guaranteed, unreliable on mobile): views also flush on visibilitychange/pagehide.
@@ -121,7 +144,10 @@ export default class NotebookPlugin extends Plugin {
 	}
 
 	onunload(): void {
+		if (this.rememberTimer !== null) this.writeLocation();
+		this.recentPages.flush();
 		void this.flushAll();
+		this.syncSafety.dispose();
 		this.timetable.stop();
 		this.host.dispose();
 	}
@@ -148,17 +174,37 @@ export default class NotebookPlugin extends Plugin {
 		return true;
 	}
 
+	/** wave 0.7: a real edit; the recent pages log collapses and stores it (device-local). */
+	edited(nb: string, path: string, pageId: string, num: number): void {
+		this.recentPages?.note(nb, path, pageId, num);
+	}
+
 	/** Instant start: remembers the page being read (called a moment after it changes). Only the plugin settings are written. */
-	remember(path: string, page: number): void {
-		if (this.settings.lastNotebookPath === path && this.settings.lastNotebookPage === page) return;
-		this.settings.lastNotebookPath = path;
-		this.settings.lastNotebookPage = page;
+	remember(path: string, page: number, pos: SavedPosition | null = null): void {
+		const s = this.settings;
+		const samePlace = s.lastNotebookPath === path && s.lastNotebookPage === page;
+		if (samePlace && positionEquals(s.lastNotebookPos, pos)) return;
+		s.lastNotebookPath = path;
+		s.lastNotebookPage = page;
+		s.lastNotebookPos = pos;
+		// A new page is written at once; zoom and scroll alone only every few seconds, so a long read does not make Sync busy.
+		if (this.rememberTimer !== null) window.clearTimeout(this.rememberTimer);
+		this.rememberTimer = null;
+		if (!samePlace) this.writeLocation();
+		else this.rememberTimer = window.setTimeout(() => this.writeLocation(), 5000);
+	}
+
+	private rememberTimer: number | null = null;
+
+	private writeLocation(): void {
+		if (this.rememberTimer !== null) window.clearTimeout(this.rememberTimer);
+		this.rememberTimer = null;
 		void this.saveData(this.settings).catch((e) => console.error("[notebook] could not save the last location", e));
 	}
 
 	/** Opens the notebook that was open last, on the page that was in view. */
 	private async continueLast(): Promise<void> {
-		const { lastNotebookPath: path, lastNotebookPage: page } = this.settings;
+		const { lastNotebookPath: path, lastNotebookPage: page, lastNotebookPos: pos } = this.settings;
 		if (!path) {
 			new Notice(t("notice.noLastNotebook"));
 			return;
@@ -168,7 +214,7 @@ export default class NotebookPlugin extends Plugin {
 			new Notice(t("notice.lastNotebookGone", { path }));
 			return;
 		}
-		await openNotebookAtPage(this.app, file, page);
+		await openNotebookAtPage(this.app, file, page, pos?.page === page ? pos : null);
 	}
 
 	private openPicker(): void {

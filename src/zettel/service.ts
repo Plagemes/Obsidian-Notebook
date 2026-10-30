@@ -18,8 +18,9 @@ import {
 	type CardRecord, type NewCard,
 } from "./card-content";
 import { PromptModal } from "../library/library-modals";
-import { cardFileName, idSet, localDate, nextCardId } from "./ids";
+import { cardFileName, idSet, isUntitledCardName, localDate, nameSuffixFor, nextCardId } from "./ids";
 import { CardListModal, CardModal, ConfirmCardsModal, type CardAnswer, type CardListItem } from "./modals";
+import { LocalPages } from "./local-pages";
 import { CardOverlay, type OverlaySource } from "./overlay";
 import { A6_PAGE } from "./settings";
 import { regionFromBounds, type Region } from "./subpath";
@@ -56,11 +57,13 @@ const TEXT_DEPS: CompanionTextDeps = {
  * Zettelkasten core (M15: Z1, Z2, Z3, Z11, Z12).
  *
  * - Cards are Markdown notes; the plugin finds them through the metadata cache (frontmatter `zettel-id`,
- *   `notebook-id`, `page-id`, `region`) and keeps an in-memory index. Nothing about cards is stored in the
+ *   `zettel-notebook-id`, `page-id`, `region`) and keeps an in-memory index. Nothing about cards is stored in the
  *   notebook file, so the document format does not change and cards follow their page when it moves.
  * - Writes: a card is created only on an explicit action, or (slip-box) after this device's own save that
- *   added a page; afterwards only the `orphaned` flag and the drawn `links` are ever written, with one
- *   `vault.process` and only when the value really changes. The body is never touched after creation and
+ *   added a page on this device in this session; afterwards only the `orphaned` flag and the drawn `links` are
+ *   ever written (and the title, on request), with one `vault.process`, only when the value really changes and
+ *   only after this device's own save: changes that arrive through sync are shown, never written back (two
+ *   devices writing the same note make conflicted copies). Only the lines of the changed keys are rewritten. The body is never touched after creation and
  *   a card is never deleted.
  * - Automatic work waits until no pointer has been down in a notebook view for a moment (as companion notes)
  *   and listens only to notebook files; changes of `.md` files only update the index (no loops).
@@ -77,6 +80,8 @@ export class ZettelService implements OverlaySource {
 	private readonly seenShapes = new Map<string, Set<string>>();
 	/** `<doc id>/<page id>` of slip-box cards being created (the metadata cache lags behind `vault.create`). */
 	private readonly creating = new Set<string>();
+	/** Pages not made on this device in this session: slip-boxes never fill them by themselves. */
+	private readonly localPages = new LocalPages();
 	private readonly reported = new Set<string>();
 	private disposed = false;
 
@@ -142,7 +147,7 @@ export class ZettelService implements OverlaySource {
 		return [...this.cards.values()].filter((c) => c.notebookId === docId).sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
 	}
 
-	/** The notebook a card's `notebook` link resolves to (null when it resolves to none). */
+	/** The notebook a card's `zettel-notebook` link resolves to (null when it resolves to none). */
 	private linkedNotebook(card: CardRecord): TFile | null {
 		const m = /^\[\[([^\]|#]+)/.exec(card.notebookLink);
 		if (!m) return null;
@@ -174,6 +179,7 @@ export class ZettelService implements OverlaySource {
 	seen(view: NotebookView): void {
 		const doc = view.document;
 		if (doc && !this.seenShapes.has(doc.id)) this.seenShapes.set(doc.id, shapeIds(doc));
+		if (doc && !this.localPages.seen(doc.id)) this.localPages.know(doc.id, doc.pages.map((p) => p.id));
 	}
 
 	private attachOverlays(): void {
@@ -200,6 +206,8 @@ export class ZettelService implements OverlaySource {
 	private async afterModify(file: TFile): Promise<void> {
 		if (this.disposed) return;
 		const own = await this.isOwnSave(file);
+		if (!own) await this.notePages(file);
+		if (this.disposed) return;
 		const path = file.path;
 		const old = this.timers.get(path);
 		if (old !== undefined) window.clearTimeout(old);
@@ -257,15 +265,16 @@ export class ZettelService implements OverlaySource {
 	}
 
 	/**
-	 * After a notebook changed: marks cards whose page is gone as orphaned (and clears the flag when the page is
-	 * back, e.g. after undo). After this device's own save also: slip-box pages without a card get one (Z2), and
-	 * arrows drawn since the notebook was opened link their two cards (Z3).
+	 * After this device's own save of a notebook: marks cards whose page is gone as orphaned (and clears the flag when
+	 * the page is back, e.g. after undo), gives slip-box pages made here a card (Z2), and links the two cards of
+	 * arrows drawn since the notebook was opened (Z3). Any other change only redraws the overlays.
 	 */
 	private async check(file: TFile, own: boolean): Promise<void> {
-		if (viewsOf(this.app, file).length === 0) {
-			// Not open here (sync, another app): parse the file only if some card or the slip-box list knows its id.
-			const id = quickDocId(readNotebookText(file.extension, await this.app.vault.cachedRead(file)));
-			if (id && !this.settings.zettelSlipBoxes.includes(id) && this.cardsOf(id).length === 0) return;
+		// A change made elsewhere (sync, another app) is only shown: the device that made it writes the card notes,
+		// and if every device wrote the same flag the sync service would make conflicted copies of the note.
+		if (!own) {
+			this.refreshOverlays();
+			return;
 		}
 		const doc = await this.readDocument(file);
 		if (!doc) return;
@@ -275,9 +284,29 @@ export class ZettelService implements OverlaySource {
 			const changes = orphanChanges(card, pageIds);
 			if (changes) await this.editCard(card, () => changes);
 		}
-		if (!own) return;
-		if (this.settings.zettelSlipBoxes.includes(doc.id)) await this.fillSlipBox(file, doc, MAX_AUTO_CARDS);
+		if (this.settings.zettelSlipBoxes.includes(doc.id)) {
+			const fresh = this.localPages.fresh(doc.id, doc.pages.map((p) => p.id));
+			if (fresh.size > 0) await this.fillSlipBox(file, doc, MAX_AUTO_CARDS, fresh);
+			// A page that still has no card (limit reached, write failed) is tried again at the next save.
+			const carded = new Set(this.cardsOfFile(file, doc.id).map((c) => c.pageId));
+			this.localPages.know(doc.id, [...fresh].filter((id) => carded.has(id)));
+		}
 		await this.linkNewArrows(file, doc);
+	}
+
+	// ------------------------------------------------------------------- pages made on this device
+
+	/** After a change this device did not make: its pages count as known (they were not made here). */
+	private async notePages(file: TFile): Promise<void> {
+		try {
+			const text = readNotebookText(file.extension, await this.app.vault.cachedRead(file));
+			const id = quickDocId(text);
+			if (!id || !this.settings.zettelSlipBoxes.includes(id)) return;
+			const result = parse(text);
+			if (result.ok) this.localPages.know(result.doc.id, result.doc.pages.map((p) => p.id));
+		} catch (e) {
+			console.error("[notebook] zettel: could not read", file.path, e);
+		}
 	}
 
 	// ------------------------------------------------------------------- writing
@@ -316,7 +345,8 @@ export class ZettelService implements OverlaySource {
 		const page = doc.pages[pageIndex];
 		if (!page) throw new Error(`page ${pageIndex + 1} not found`);
 		const now = new Date();
-		const id = nextCardId(this.settings.zettelIdScheme, now, idSet([...this.cards.values()].map((c) => c.id)), answer.parent || null);
+		const scheme = this.settings.zettelIdScheme;
+		const id = nextCardId(scheme, now, idSet([...this.cards.values()].map((c) => c.id)), answer.parent || null);
 		const card: NewCard = {
 			id, title: answer.title, type: answer.type, source: answer.source, tags: answer.tags, date: localDate(now),
 			notebookPath: file.path, notebookId: doc.id, pageId: page.id, page: pageIndex + 1, region,
@@ -324,7 +354,7 @@ export class ZettelService implements OverlaySource {
 		const folder = normalizePath(this.settings.zettelFolder || "/");
 		if (folder !== "/") await ensureFolder(this.app, folder);
 		const prefix = folder === "/" ? "" : `${folder}/`;
-		const base = cardFileName(id, answer.title);
+		const base = cardFileName(id, answer.title, nameSuffixFor(scheme, answer.title));
 		let path = normalizePath(`${prefix}${base}.md`);
 		for (let i = 2; this.app.vault.getAbstractFileByPath(path); i++) path = normalizePath(`${prefix}${base} ${i}.md`);
 		const note = await this.app.vault.create(path, newCardText(card, (data) => stringifyYaml(data)));
@@ -335,14 +365,17 @@ export class ZettelService implements OverlaySource {
 		return note;
 	}
 
-	/** Slip-box (Z2): a card for every page that has none yet, at most `limit`. Returns how many were created. */
-	private async fillSlipBox(file: TFile, doc: NotebookDocument, limit: number): Promise<number> {
+	/**
+	 * Slip-box (Z2): a card for every page that has none yet (only the pages in `only`, when given), at most `limit`.
+	 * Returns how many were created.
+	 */
+	private async fillSlipBox(file: TFile, doc: NotebookDocument, limit: number, only: ReadonlySet<string> | null = null): Promise<number> {
 		const have = new Set(this.cardsOfFile(file, doc.id).filter((c) => !c.region).map((c) => c.pageId));
 		let made = 0;
 		for (let i = 0; i < doc.pages.length && made < limit; i++) {
 			const page = doc.pages[i]!;
 			const key = `${doc.id}/${page.id}`;
-			if (have.has(page.id) || this.creating.has(key)) continue;
+			if ((only && !only.has(page.id)) || have.has(page.id) || this.creating.has(key)) continue;
 			this.creating.add(key);
 			try {
 				await this.writeCard(file, doc, i, null, { title: "", type: "permanent", source: "", tags: [], parent: "" });
@@ -494,7 +527,9 @@ export class ZettelService implements OverlaySource {
 	private async writeTitle(card: CardRecord, title: string): Promise<void> {
 		await this.editCard(card, (current) => titleChanges(current, title));
 		const note = this.app.vault.getFileByPath(card.path);
-		if (!note || note.basename !== cardFileName(card.id, card.title)) return;
+		// Renamed only while it still has the name the plugin gave it (the user's own name is kept).
+		const named = card.title ? note?.basename === cardFileName(card.id, card.title) : !!note && isUntitledCardName(note.basename, card.id);
+		if (!note || !named) return;
 		const base = cardFileName(card.id, title);
 		const dir = note.parent && note.parent.path !== "/" ? `${note.parent.path}/` : "";
 		const target = normalizePath(`${dir}${base}.md`);

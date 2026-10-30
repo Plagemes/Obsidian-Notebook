@@ -46,6 +46,31 @@ export function clampCenter(x: number, y: number, width: number, height: number,
 	return [clamp(x, width), clamp(y, height)];
 }
 
+/** Gap (CSS px) between the ring's outer edge and the fingertip that opened the menu. */
+export const FINGER_GAP = 32;
+
+/**
+ * Centre for a menu opened by a finger held at (x, y): the ring sits beside the finger, not under it, so the
+ * fingertip does not cover the sectors. Preferred above the finger, then below, then to the right, then to the
+ * left; if none fits whole in the area the nearest clamped position is used.
+ */
+export function fingerMenuCenter(
+	x: number, y: number, width: number, height: number, outer: number, gap = FINGER_GAP, margin = 8,
+): [number, number] {
+	const r = outer + margin;
+	const d = outer + gap;
+	const okX = (v: number) => v >= r && v <= width - r;
+	const okY = (v: number) => v >= r && v <= height - r;
+	const cx = width < 2 * r ? width / 2 : Math.min(Math.max(x, r), width - r);
+	const cy = height < 2 * r ? height / 2 : Math.min(Math.max(y, r), height - r);
+	if (okY(y - d)) return [cx, y - d];
+	if (okY(y + d)) return [cx, y + d];
+	if (okX(x + d)) return [x + d, cy];
+	if (okX(x - d)) return [x - d, cy];
+	// Too small for any side: keep the ring whole, on the side with the most room.
+	return clampCenter(x, y < height / 2 ? y + d : y - d, width, height, outer, margin);
+}
+
 /** SVG path of the annular sector `i` (a slice of the ring between `inner` and `outer`, with a small gap between slices). */
 export function sectorPath(shape: RadialShape, cx: number, cy: number, i: number, gapPx = 2): string {
 	const { inner, outer, count } = shape;

@@ -25,7 +25,7 @@ import {
 import type { JournalStore } from "../storage/journal";
 import { listNotebooks } from "../storage/notebooks";
 import { markSafeOpen, SafeModeTracker, SETTLE_MS, unmarkSafeOpen, type LocalSlot, type OpenDecision } from "../storage/safe-mode";
-import type { DiskContentInfo } from "../storage/session";
+import type { DiskContentInfo, SessionMode } from "../storage/session";
 import { AdapterSpaceProbe, pluginFolder, VaultDocumentIO } from "../storage/vault-io";
 import type { SpaceProbe, WriteHealthState } from "../storage/write-guard";
 import { resolveAssetFile } from "./media";
@@ -186,7 +186,9 @@ export class ViewResilience {
 	}
 
 	/** The session applied the file. Waits for the first frame, then (after SETTLE_MS) records the open as successful. */
-	loaded(): void {
+	loaded(mode?: SessionMode): void {
+		// A file the sync client has not downloaded yet (sync safety) is not an open: no crash marker for it.
+		if (mode === "not-downloaded") return this.hidden();
 		if (this.settled || this.paintFrame !== null || this.settleTimer !== null) return;
 		this.paintFrame = window.requestAnimationFrame(() => {
 			this.paintFrame = window.requestAnimationFrame(() => {

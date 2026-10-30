@@ -32,6 +32,7 @@ import {
 	backupDate, combineCandidates, isBackupOf, journalTexts, rankSources, type RecoveryCandidate, type RecoverySource, type SourceKind,
 } from "../storage/recovery";
 import { ensureFolder } from "../storage/vault-io";
+import { isAwaitingDownload } from "../storage/sync-state";
 
 export interface ReliabilityDeps {
 	app: App;
@@ -94,6 +95,11 @@ export async function openRepair(deps: ReliabilityDeps, file: TFile): Promise<vo
 		const raw = readNotebookText(file.extension, await app.vault.read(file));
 		if (parse(raw).ok) {
 			new Notice(t("repair.notBroken"));
+			return;
+		}
+		// wave 0.7: sync safety (#344): a file still in the cloud is not damaged; never "repaired".
+		if (isAwaitingDownload(raw)) {
+			new Notice(t("sync.repair.notDownloaded"));
 			return;
 		}
 		const docId = extractDocId(raw);
@@ -275,6 +281,7 @@ export function describeMerge(s: MergeSummary): string[] {
 	add(s.tagsAdded + s.bookmarksAdded + s.bookmarkInfoAdded + s.pageTagsAdded, "merge.summary.meta");
 	add(s.pageSettingsDiffer, "merge.summary.settings");
 	add(s.marginsDiffer, "merge.summary.margins");
+	add(s.bookmarkInfoDiffer, "merge.summary.bookmarkInfo");
 	add(s.pagesEnlarged, "merge.summary.enlarged");
 	add(s.onlyInMain, "merge.summary.onlyMain");
 	return lines;

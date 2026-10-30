@@ -1,6 +1,27 @@
 import { Modal, Notice, type App } from "obsidian";
 import { t } from "../i18n";
-import { EventLog, type LoggedEvent } from "../ink/pen-button";
+import { EventLog, noSignalYet, type LoggedEvent } from "../ink/pen-button";
+import type { NotebookSettings } from "../settings";
+
+/** What the test knows about this device's side button across sessions (a flag saved in the plugin settings). */
+export interface PenSignalInfo {
+	/** A side-button signal has been received on this device (here or while writing). */
+	seen(): boolean;
+	/** Remember that one has. */
+	markSeen(): void;
+}
+
+/** The plugin settings as the "side button seen" flag. */
+export function penSignalInfo(host: { settings: NotebookSettings; saveSettings(): Promise<void> }): PenSignalInfo {
+	return {
+		seen: () => host.settings.penButtonSeen,
+		markSeen: () => {
+			if (host.settings.penButtonSeen) return;
+			host.settings.penButtonSeen = true;
+			void host.saveSettings().catch((e) => console.error("[notebook] saving settings failed", e));
+		},
+	};
+}
 
 /**
  * "Pen button test": a test area that lists, in plain text, the last events the pen sends to it (pointer
@@ -13,9 +34,10 @@ export class PenTestModal extends Modal {
 	private area!: HTMLElement;
 	private output!: HTMLTextAreaElement;
 	private summary!: HTMLElement;
+	private signal!: HTMLElement;
 	private stopKeys: () => void = () => {};
 
-	constructor(app: App) {
+	constructor(app: App, private readonly info: PenSignalInfo) {
 		super(app);
 	}
 
@@ -43,6 +65,7 @@ export class PenTestModal extends Modal {
 			activeDocument.removeEventListener("keyup", rec, true);
 		};
 
+		this.signal = contentEl.createDiv({ cls: "notebook-pentest-note" });
 		this.summary = contentEl.createDiv({ cls: "notebook-pentest-summary" });
 		this.output = contentEl.createEl("textarea", { cls: "notebook-pentest-log", attr: { readonly: "true", rows: "14", "aria-label": t("penTest.logLabel") } });
 		const buttons = contentEl.createDiv({ cls: "notebook-pentest-buttons" });
@@ -72,6 +95,7 @@ export class PenTestModal extends Modal {
 			ev.buttons = pe.buttons;
 			ev.pressure = pe.pressure;
 			ev.isPrimary = pe.isPrimary;
+			ev.pointerId = pe.pointerId;
 		}
 		this.log.add(ev);
 		this.refresh();
@@ -81,6 +105,8 @@ export class PenTestModal extends Modal {
 		this.output.value = this.log.length > 0 ? this.log.text() : t("penTest.empty");
 		this.output.scrollTop = this.output.scrollHeight;
 		this.summary.setText(t("penTest.summary", { n: String(this.log.sideButtonCount) }));
+		if (this.log.sideButtonCount > 0) this.info.markSeen();
+		this.signal.setText(noSignalYet(this.info.seen(), this.log.sideButtonCount) ? t("penTest.noSignal") : t("penTest.signalSeen"));
 	}
 
 	private async copy(): Promise<void> {

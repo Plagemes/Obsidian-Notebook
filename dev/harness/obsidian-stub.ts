@@ -358,6 +358,7 @@ export class Vault extends Events {
 	async createBinary(p: string, data: ArrayBuffer): Promise<TFile> {
 		const f = this.addFile(p);
 		this.binary.set(f.path, data);
+		f.stat.size = data.byteLength;
 		this.trigger("create", f);
 		return f;
 	}
@@ -390,6 +391,7 @@ export class Vault extends Events {
 
 	async modifyBinary(f: TFile, data: ArrayBuffer): Promise<void> {
 		this.binary.set(f.path, data);
+		f.stat.size = data.byteLength;
 		this.trigger("modify", f);
 	}
 
@@ -581,6 +583,9 @@ export class View extends Component {
 	onResize(): void {
 		/* override */
 	}
+	setEphemeralState(state: unknown): void {
+		void state;
+	}
 	getState(): Record<string, unknown> {
 		return {};
 	}
@@ -764,6 +769,29 @@ export class FuzzySuggestModal<T> extends Modal {
 	}
 	onChooseItem(item: T): void {
 		void item;
+	}
+}
+
+/** wave 0.7: quick nav. */
+export class SuggestModal<T> extends Modal {
+	inputEl = document.createElement("input");
+	emptyStateText = "";
+	setPlaceholder(): void {
+		/* nothing */
+	}
+	setInstructions(): void {
+		/* nothing */
+	}
+	getSuggestions(query: string): T[] {
+		void query;
+		return [];
+	}
+	renderSuggestion(value: T, el: HTMLElement): void {
+		void value;
+		void el;
+	}
+	onChooseSuggestion(value: T): void {
+		void value;
 	}
 }
 

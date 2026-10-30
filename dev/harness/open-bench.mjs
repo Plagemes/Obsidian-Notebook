@@ -8,6 +8,7 @@
 // This is CPU time on a PC with an in-memory vault. It is NOT a measurement on Android.
 // Usage: node dev/harness/open-bench.mjs [--strokes=10000] [--pages=10] [--reps=7] [--page=7] [--no-restore]
 //                                        [--snapshot=none|eager|deferred]  (emulates the snapshot started on open)
+//                                        [--no-staged]  (loads the whole notebook before showing anything, as 0.5.0 did)
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -25,6 +26,7 @@ const reps = arg("reps", 7);
 const page = arg("page", 7);
 const restore = !process.argv.includes("--no-restore");
 const snapshot = process.argv.find((x) => x.startsWith("--snapshot="))?.slice(11) ?? "none";
+const staged = !process.argv.includes("--no-staged");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function findChrome() {
@@ -111,13 +113,17 @@ try {
 		await sleep(100);
 	}
 	await cdp.evaluate("window.harness.ready.then(() => true)");
-	const out = await cdp.evaluate(`window.harness.measureOpen(${strokes}, ${pages}, ${reps}, ${page}, ${restore}, "${snapshot}")`);
+	const out = await cdp.evaluate(`window.harness.measureOpen(${strokes}, ${pages}, ${reps}, ${page}, ${restore}, "${snapshot}", ${staged})`);
 	const col = (k) => median(out.samples.map((s) => s[k]));
 	const f = (n) => `${n.toFixed(0)} ms`;
-	console.log(`open benchmark: ${out.strokes} strokes on ${pages} pages, file ${(out.bytes / 1e6).toFixed(2)} MB, ${out.samples.length} runs (median), wanted page ${page}, ${restore ? "position restored" : "opens on page 1, then scrolls"}, version-history snapshot: ${snapshot}`);
+	console.log(`open benchmark: ${out.strokes} strokes on ${pages} pages, file ${(out.bytes / 1e6).toFixed(2)} MB, ${out.samples.length} runs (median), wanted page ${page}, ${restore ? "position restored" : "opens on page 1, then scrolls"}, version-history snapshot: ${snapshot}, ${staged ? "staged load" : "whole notebook first"}`);
 	console.log(`  read + parse + validate (DocumentSession.load): ${f(col("sessionMs"))}`);
 	console.log(`  view setup after load (layout, fit, schedule):   ${f(col("viewMs"))}`);
-	console.log(`  file opened (document in the view):              ${f(col("loadMs"))}`);
+	console.log(`  file opened (document complete and editable):    ${f(col("loadMs"))}`);
+	if (staged) {
+		console.log(`  page shown (part-read document, read-only):      ${f(col("partialMs"))}`);
+		console.log(`  longest slice reading pages / longest stall:     ${f(col("maxSliceMs"))} / ${f(col("maxGapMs"))}`);
+	}
 	console.log(`  first painted frame:                             ${f(col("firstPaintMs"))}`);
 	console.log(`  wanted page painted:                             ${f(col("targetPaintMs"))}`);
 	console.log("  (desktop headless Chrome, in-memory vault: CPU time only, not measured on Android)");

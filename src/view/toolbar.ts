@@ -525,6 +525,15 @@ export class Toolbar {
 		return b;
 	}
 
+	/** Adds a toggle row to the "more" menu (one page at a time). Returns the setter of its pressed state. */
+	addMoreToggle(icon: string, label: MessageKey, onClick: () => void): (on: boolean) => void {
+		const b = this.moreItem(icon, label, onClick);
+		return (on) => {
+			b.toggleClass("is-active", on);
+			b.setAttribute("aria-pressed", String(on));
+		};
+	}
+
 	/** A row of the "more" menu: icon and label. */
 	private moreItem(icon: string, label: MessageKey, onClick: () => void): HTMLButtonElement {
 		const b = this.moreEl.createEl("button", { cls: "notebook-menu-item", attr: { type: "button", role: "menuitem" } });
