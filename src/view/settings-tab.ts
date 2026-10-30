@@ -1,5 +1,5 @@
 import { PluginSettingTab, Setting, type App, type Plugin, type SettingDefinitionItem } from "obsidian";
-import { t } from "../i18n";
+import { LANGUAGES, LANGUAGE_CODES, setUiLanguage, t } from "../i18n";
 import { DEFAULT_SETTINGS, readSettings, type NotebookSettings } from "../settings";
 import { PAGE_SIZES, PAPER_KINDS } from "../model/types";
 import { defaultLooseSheetPath } from "../library/loose-sheet-logic";
@@ -19,6 +19,11 @@ import { displaySyncSettings, syncSettingDefinitions, type SyncSafetyService } f
 
 const paperOptions = () => Object.fromEntries(PAPER_KINDS.map((k) => [k, t(`paper.${k}`)]));
 const sizeOptions = () => Object.fromEntries((Object.keys(PAGE_SIZES) as Array<keyof typeof PAGE_SIZES>).map((k) => [k, t(`size.${k}`)]));
+
+const languageOptions = (): Record<string, string> => ({
+	auto: t("settings.uiLanguage.auto"),
+	...Object.fromEntries(LANGUAGE_CODES.map((c) => [c, LANGUAGES[c].label])),
+});
 
 export interface SettingsHost extends Plugin {
 	settings: NotebookSettings;
@@ -65,6 +70,11 @@ export class NotebookSettingTab extends PluginSettingTab {
 	/** Obsidian 1.13+: declarative settings, also indexed by the settings search. */
 	getSettingDefinitions(): SettingDefinitionItem<Key>[] {
 		return [
+			{
+				name: t("settings.uiLanguage"),
+				desc: t("settings.uiLanguage.desc"),
+				control: { type: "dropdown", key: "uiLanguage", defaultValue: DEFAULT_SETTINGS.uiLanguage, options: languageOptions() },
+			},
 			{
 				name: t("settings.folder"),
 				desc: t("settings.folder.desc"),
@@ -305,6 +315,16 @@ export class NotebookSettingTab extends PluginSettingTab {
 		// readSettings drops values of the wrong type and keeps the defaults.
 		this.host.settings = readSettings({ ...this.host.settings, [key]: value });
 		await this.host.saveSettings();
+		if (key === "uiLanguage") this.languageChanged();
+	}
+
+	/** Applies the new language and redraws this tab; open notebooks pick it up when reopened (see `onLanguageChanged`). */
+	private languageChanged(): void {
+		setUiLanguage(this.host.settings.uiLanguage);
+		// Obsidian 1.13+ re-reads getSettingDefinitions() in update(); older versions only have display().
+		const update = (this as { update?: () => void }).update;
+		if (typeof update === "function") update.call(this);
+		else this.display();
 	}
 
 	/** Fallback for Obsidian older than 1.13, which does not read getSettingDefinitions(). */
@@ -312,6 +332,11 @@ export class NotebookSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		const s = this.host.settings;
 		containerEl.empty();
+
+		new Setting(containerEl)
+			.setName(t("settings.uiLanguage"))
+			.setDesc(t("settings.uiLanguage.desc"))
+			.addDropdown((dd) => dd.addOptions(languageOptions()).setValue(s.uiLanguage).onChange((v) => this.setControlValue("uiLanguage", v)));
 
 		new Setting(containerEl)
 			.setName(t("settings.folder"))

@@ -300,7 +300,7 @@ Numbers from the final run of 0.9.0 (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 2568 tests passed |
+| `npm test` (unit project only; benchmarks are separate) | 2581 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: 0 errors; `eslint-plugin-obsidianmd` recommended rules: 0 errors |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
@@ -895,7 +895,14 @@ Free colour picker with recent colours and an eyedropper (roadmap 7), style eyed
 378. **Phone.** On a phone in portrait the picker fits the width, the square and hue bar are easy to drag with a thumb, the buttons are at least 40 px, and the panel does not cover the toolbar. In large toolbar size and in the dark theme the panel and the loupe stay readable.
 379. **Nothing else changes.** Write with the pen before and after using the picker and the eyedroppers: latency, smoothing and the look of the ink are the same. The notebook file is not changed by picking colours (no save is triggered by the picker or the eyedroppers alone), and a notebook written after using them opens in the previous version.
 
-Results table for steps 1 to 379. Fill it in as you go.
+### UI language (steps 380-383)
+
+380. **Language setting.** Settings, Notebook, *Language*: the choices are Automatic (follow Obsidian), English and Italiano. Pick Italiano: the settings tab is redrawn in Italian at once and a notice says that open notebooks update when reopened and command names after a restart. Pick English: back to English.
+381. **Auto follows Obsidian.** With *Automatic*, set Obsidian to Italian (Settings, General, Language) and restart: the plugin is in Italian; with Obsidian in English, in English; with another Obsidian language, in English.
+382. **Apply and reopen.** Choose a language different from Obsidian's, close and reopen a notebook and the library: toolbar, menus and notices use the chosen language. The choice survives a restart.
+383. **Commands after restart.** After changing the language the command palette still shows the old names until Obsidian is restarted; after the restart they follow the new language.
+
+Results table for steps 1 to 383. Fill it in as you go.
 
 | Step | Device / Obsidian version | Result | Notes |
 |---|---|---|---|
@@ -1278,6 +1285,10 @@ Results table for steps 1 to 379. Fill it in as you go.
 | 377 Commands and hotkeys | | | |
 | 378 Phone | | | |
 | 379 Nothing else changes | | | |
+| 380 Language setting | | | |
+| 381 Auto follows Obsidian | | | |
+| 382 Apply and reopen | | | |
+| 383 Commands after restart | | | |
 
 Benchmark output (step 21): paste it here.
 

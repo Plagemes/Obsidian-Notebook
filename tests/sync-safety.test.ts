@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import i18nSource from "../src/i18n.ts?raw";
+import enSource from "../src/i18n/en.ts?raw";
+import itSource from "../src/i18n/it.ts?raw";
 import { serialize } from "../src/model/serialize";
 import { DocumentSession, type BackupReason, type DocumentIO, type Timers } from "../src/storage/session";
 import {
@@ -197,7 +198,7 @@ describe("#345 sync check", () => {
 			"long-path", "long-name", "case-clash", "large-file", "very-large-file"];
 		for (const k of kinds) {
 			// once in the English table, once in the Italian one
-			expect(i18nSource.split(`"sync.issue.${k}":`).length - 1, k).toBe(2);
+			expect(enSource.split(`"sync.issue.${k}":`).length - 1 + itSource.split(`"sync.issue.${k}":`).length - 1, k).toBe(2);
 		}
 	});
 });
