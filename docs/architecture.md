@@ -388,8 +388,8 @@ src/
     practice-types.ts     what the view hands out (`PracticeViewHost`) and takes (`PracticeHooks`, `PracticeProvider`); types only
     pdf-side-pane.ts      the PDF pane inside the notebook body: header, page, strip "Add notes page for this slide", divider
     pdf-reference.ts      what the pane shows: a plain vault PDF (own `PdfStore`) or another notebook's pages (own `NotebookMedia`)
-    settings-tab.ts       settings UI
-    companion-settings.ts companion note settings (declarative and classic settings UI)
+    settings-schema.ts    the settings tab described once: sections, groups, rows, visibility, search (pure; docs/design-ui.md §10)
+    settings-tab.ts       draws the settings tab from the schema (Obsidian 1.13+ definitions and the older hand-drawn tab)
   zettel/                 Zettelkasten core (M15, §12 "Zettelkasten"); the first five files and local-pages.ts are pure (no 'obsidian', lint-enforced)
     subpath.ts            card subpaths `#p3&id=<page id>&r=x,y,w,h`: parse/build, page lookup by id, region clamping
     ids.ts                card ids: timestamp, Luhmann (top level and branches), file names, random suffixes
@@ -400,7 +400,6 @@ src/
     service.ts            card index from the metadata cache, triggers (own save / remote change, pen deferral), writes, actions
     overlay.ts            card outlines and id badges over the pages (DOM, `pointer-events: none`)
     modals.ts             "New card" dialog, card list, slip-box confirmation
-    settings-ui.ts        Zettelkasten settings (declarative and classic)
     index.ts              registers the service, commands and the notebook tab menu entries
 scripts/check-bundle.mjs          fails the build if main.js requires anything but 'obsidian'
 scripts/make-stress-notebook.mjs  writes a stress .notebook from the PC (alternative to the in-app command)
@@ -575,7 +574,7 @@ The new pipeline:
 - **Gesture ink and undo.** The drawn line is never added to the document by the gesture itself. For the effects that go through the history (delete, space, bookmark, move) the view records `AddStroke(line)` and then the effect as two steps (the same shape as scribble erase), so a single Undo restores the page and leaves the line as ordinary ink, and a second Undo removes it; the SetPageContent of the effect is planned on the page without the line and its `before` snapshot includes it. Effects that only open UI or select (select, tags, search, custom commands) record nothing and the line is dropped. The choice is deliberate: a false positive costs one Undo and the user's writing is not lost; the line is saved only if the user stops at that Undo.
 - **Hidden strokes (format v8).** Gestures act only on what the user can see. When strokes can be flagged `hidden: true`, every gesture query and effect skips them: the circle's `enclosedInk` and the selection it makes, the scribble victims (`scribbleVictims` input), the "^" and move plans (hidden strokes stay where they are and are neither moved to another page nor counted as content below the line), and `movePlan`. The single place to apply it is the set of strokes handed to `gestureWorld` and to the plans (`page.strokes` filtered by visibility), so the pure recognisers need no change.
 - **Registry.** The three actions (`pen-gesture-mode`, `pen-gesture-sheet`, `pen-gesture-custom`) are entries of `ui/actions.ts` (command ids unchanged; handlers in `view/view-actions.ts`); the mode toggle is a quick slot and in the All actions sheet, the other two are in the All actions sheet. `view/pen-gestures.ts` calls `refreshUi()` when the mode changes so the toggle shows its state.
-- **Settings** (flat keys, no migration): `penGesturesOff` (built-in ids), `penGestureLongPress`, `penGestureSpacePt`, `penGesturesCustom` (templates are 48 normalised points per sample). The cheat sheet, the custom gesture list and the recorder are Obsidian modals (`view/pen-gesture-ui.ts`); the settings group is `view/pen-gesture-settings.ts`. The only toolbar entry is the *Gesture mode* toggle in the "…" menu; the commands are `pen-gesture-mode`, `pen-gesture-sheet`, `pen-gesture-custom`.
+- **Settings** (flat keys, no migration): `penGesturesOff` (built-in ids), `penGestureLongPress`, `penGestureSpacePt`, `penGesturesCustom` (templates are 48 normalised points per sample). The cheat sheet, the custom gesture list and the recorder are Obsidian modals (`view/pen-gesture-ui.ts`); the settings rows are in `view/settings-schema.ts` (*Pen & input* → *Pen gestures*), and `view/pen-gesture-settings.ts` maps the per-gesture switch keys. The only toolbar entry is the *Gesture mode* toggle in the "…" menu; the commands are `pen-gesture-mode`, `pen-gesture-sheet`, `pen-gesture-custom`.
 
 ### Words and lines (no OCR)
 - **Segmentation** (`ink/words.ts`, pure, no `obsidian`): `segmentText(strokes)` returns a `TextLayout`: `lines` (top to bottom) of `words` (left to right) of stroke ids, each with a point-box (`bounds`, no pen-width padding), plus per line a `baseline` (endpoints and slope) and the median `letterHeight`; `ignored` lists strokes that are not handwriting text. This is the foundation for reflow (#92), alignment (#93) and headings (#102): they read the layout and never re-derive it.

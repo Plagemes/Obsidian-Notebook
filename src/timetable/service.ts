@@ -206,6 +206,11 @@ export class TimetableService {
 		return out.sort((a, b) => a.localeCompare(b));
 	}
 
+	/** The timetable has at least one class (the settings tab opens its group then). */
+	hasClasses(): boolean {
+		return this.timetable.entries.length > 0;
+	}
+
 	path(): string {
 		return this.store.path();
 	}

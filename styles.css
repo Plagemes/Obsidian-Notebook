@@ -5630,3 +5630,314 @@ body {
 	outline: 2px solid var(--interactive-accent);
 	outline-offset: -2px;
 }
+
+/* --- Settings tab (DESIGN.md §2 and §6, docs/design-ui.md "Settings"). The tokens of the design system are declared
+   on the settings root only for now, with the names and values of DESIGN.md §2.1–2.2, so other surfaces can reuse them.
+   The "Style" setting (appearanceStyle) maps them onto Obsidian's variables (nb-style-obsidian). --- */
+.notebook-settings {
+	--nb-bg: #0a0e17;
+	--nb-bg-elevated: #0f1420;
+	--nb-panel: #121826;
+	--nb-tile: #161d2d;
+	--nb-border: rgba(255, 255, 255, 0.07);
+	--nb-border-strong: rgba(255, 255, 255, 0.12);
+	--nb-text: #f4f6fb;
+	--nb-text-muted: #9aa3b5;
+	--nb-text-faint: #6b7487;
+	--nb-accent: #6d8bff;
+	--nb-accent-bg: rgba(109, 139, 255, 0.16);
+	--nb-radius-panel: 16px;
+	--nb-radius-tile: 14px;
+	--nb-radius-icon: 12px;
+	--nb-radius-pill: 999px;
+	--nb-target: 40px;
+	background-color: var(--nb-bg);
+	color: var(--nb-text);
+	font-family: var(--font-interface);
+}
+
+.theme-light .notebook-settings {
+	--nb-bg: #f6f7fb;
+	--nb-bg-elevated: #f6f7fb;
+	--nb-panel: #ffffff;
+	--nb-tile: #f1f3f9;
+	--nb-border: rgba(15, 23, 42, 0.08);
+	--nb-border-strong: rgba(15, 23, 42, 0.14);
+	--nb-text: #0e1424;
+	--nb-text-muted: #5b6478;
+	--nb-text-faint: #7b8496;
+	--nb-accent: #4f6bf0;
+	--nb-accent-bg: rgba(79, 107, 240, 0.12);
+}
+
+.notebook-settings.nb-style-obsidian {
+	--nb-bg: var(--background-primary);
+	--nb-bg-elevated: var(--background-secondary);
+	--nb-panel: var(--background-secondary);
+	--nb-tile: var(--background-modifier-hover);
+	--nb-border: var(--background-modifier-border);
+	--nb-border-strong: var(--background-modifier-border-hover);
+	--nb-text: var(--text-normal);
+	--nb-text-muted: var(--text-muted);
+	--nb-text-faint: var(--text-faint);
+	--nb-accent: var(--interactive-accent);
+	--nb-accent-bg: hsla(var(--interactive-accent-hsl, 258, 88%, 66%), 0.16);
+}
+
+.notebook-settings .notebook-hidden,
+.notebook-settings .setting-item.notebook-hidden,
+.notebook-settings-section.notebook-hidden {
+	display: none;
+}
+
+/* Search pill, kept in reach while the list scrolls. */
+.notebook-settings-top {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	padding: 4px 0 8px;
+	background-color: var(--nb-bg);
+}
+
+.notebook-settings-top .setting-item {
+	border: none;
+	padding: 0;
+}
+
+.notebook-settings-search .setting-item-control {
+	flex: 1 1 auto;
+	justify-content: stretch;
+}
+
+.notebook-settings-search-pill {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	min-height: 44px;
+	padding: 0 16px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background-color: var(--nb-panel);
+	color: var(--nb-text-muted);
+}
+
+.notebook-settings-search-pill:focus-within {
+	border-color: var(--nb-accent);
+	box-shadow: 0 0 0 2px var(--nb-accent-bg);
+}
+
+.notebook-settings-search-icon {
+	display: flex;
+}
+
+.notebook-settings-search-icon svg {
+	width: 20px;
+	height: 20px;
+}
+
+.notebook-settings .notebook-settings-search-pill input {
+	flex: 1 1 auto;
+	min-width: 0;
+	height: 42px;
+	padding: 0;
+	border: none;
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text);
+	font-size: 15px;
+}
+
+.notebook-settings .notebook-settings-search-pill input:focus,
+.notebook-settings .notebook-settings-search-pill input:focus-visible {
+	outline: none;
+	box-shadow: none;
+}
+
+.notebook-settings-empty {
+	justify-content: center;
+}
+
+.notebook-settings-empty .setting-item-name {
+	color: var(--nb-text-muted);
+	font-size: 15px;
+}
+
+/* One panel per section. */
+.notebook-settings-section {
+	margin: 0 0 24px;
+	padding: 4px 20px 8px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-panel);
+	background-color: var(--nb-panel);
+}
+
+.notebook-settings-section .setting-item {
+	align-items: center;
+	gap: 16px;
+	min-height: 56px;
+	padding: 12px 0;
+	border-top: 1px solid var(--nb-border);
+}
+
+.notebook-settings-section .setting-item-name {
+	color: var(--nb-text);
+	font-size: 15px;
+	font-weight: 500;
+	line-height: 1.35;
+}
+
+.notebook-settings-section .setting-item-description {
+	padding-top: 2px;
+	color: var(--nb-text-muted);
+	font-size: 13px;
+	line-height: 1.4;
+}
+
+/* Section header: icon square and a 20 px / 600 title. */
+.notebook-settings-section .notebook-settings-header {
+	min-height: 64px;
+	padding: 16px 0 12px;
+	border: none;
+}
+
+.notebook-settings-header + .setting-item {
+	border-top: none;
+}
+
+.notebook-settings-section .notebook-settings-header .setting-item-name {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	font-size: 20px;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+}
+
+.notebook-settings-header-icon {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	border-radius: var(--nb-radius-icon);
+	background-color: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.notebook-settings-header-icon svg {
+	width: 20px;
+	height: 20px;
+}
+
+/* Disclosure rows: Advanced, and the options of features not in use. The whole row is the target. */
+.notebook-settings-section .notebook-settings-disclosure {
+	cursor: pointer;
+	min-height: 52px;
+	user-select: none;
+}
+
+.notebook-settings-section .notebook-settings-disclosure .setting-item-name {
+	color: var(--nb-text-muted);
+}
+
+.notebook-settings-section .notebook-settings-disclosure:hover .setting-item-name,
+.notebook-settings-section .notebook-settings-disclosure.is-open .setting-item-name {
+	color: var(--nb-text);
+}
+
+.notebook-settings-chevron {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	color: var(--nb-text-muted);
+	transition: transform 150ms ease-out;
+}
+
+.notebook-settings-chevron svg {
+	width: 20px;
+	height: 20px;
+}
+
+.notebook-settings-disclosure.is-open .notebook-settings-chevron {
+	transform: rotate(90deg);
+}
+
+/* Controls: pill dropdowns and buttons, 14 px inputs, at least 40 px tall. */
+.notebook-settings-section .setting-item-control select,
+.notebook-settings-section .setting-item-control button {
+	min-height: var(--nb-target);
+	padding: 0 16px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background-color: var(--nb-tile);
+	box-shadow: none;
+	color: var(--nb-text);
+	font-size: 13px;
+	font-weight: 500;
+}
+
+.notebook-settings-section .setting-item-control select {
+	padding-right: 32px;
+}
+
+.notebook-settings-section .setting-item-control input[type="text"],
+.notebook-settings-section .setting-item-control input[type="search"] {
+	min-height: var(--nb-target);
+	padding: 0 12px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background-color: var(--nb-tile);
+	color: var(--nb-text);
+}
+
+.notebook-settings-section .setting-item-control input[type="range"] {
+	accent-color: var(--nb-accent);
+}
+
+.notebook-settings-section .checkbox-container.is-enabled {
+	background-color: var(--nb-accent);
+}
+
+.notebook-settings :focus-visible,
+.notebook-settings-section .notebook-settings-disclosure:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+/* Phone: the control goes under its name when they do not fit side by side. */
+@media (max-width: 600px) {
+	.notebook-settings-section {
+		margin-bottom: 16px;
+		padding: 4px 16px 8px;
+	}
+
+	.notebook-settings-section .setting-item {
+		flex-wrap: wrap;
+		gap: 8px 16px;
+	}
+
+	.notebook-settings-section .setting-item-info {
+		flex: 1 1 200px;
+	}
+
+	.notebook-settings-section .setting-item-control {
+		flex: 0 1 auto;
+		margin-left: auto;
+		max-width: 100%;
+	}
+
+	.notebook-settings-section .notebook-settings-header .setting-item-info,
+	.notebook-settings-section .notebook-settings-disclosure .setting-item-info {
+		flex: 1 1 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.notebook-settings-chevron {
+		transition: none;
+	}
+}

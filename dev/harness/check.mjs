@@ -55,6 +55,10 @@ SCENARIOS.push({ doc: "excerpt", theme: "dark", device: "tablet", lowLatency: fa
 SCENARIOS.push({ doc: "readonly", theme: "light", device: "desktop", lowLatency: false });
 SCENARIOS.push({ doc: "readonly", theme: "dark", device: "narrow", lowLatency: false });
 SCENARIOS.push({ doc: "readonly", theme: "light", device: "tablet", lowLatency: false });
+// The settings tab (sections, a dependent option, Advanced, search in both languages, Style, 40 px targets) on a phone, a tablet and a desktop.
+SCENARIOS.push({ doc: "settings", theme: "light", device: "narrow", lowLatency: false });
+SCENARIOS.push({ doc: "settings", theme: "dark", device: "tablet", lowLatency: false });
+SCENARIOS.push({ doc: "settings", theme: "dark", device: "desktop", lowLatency: false });
 
 function findChrome() {
 	const candidates = [
@@ -210,7 +214,7 @@ async function main() {
 					await sleep(100);
 				}
 				await cdp.evaluate("window.harness.ready.then(() => true)");
-				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}
