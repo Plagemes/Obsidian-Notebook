@@ -440,6 +440,10 @@ export class NotebookView extends FileView {
 				this.updateHistoryButtons();
 				this.refreshUi();
 			},
+			repair: () => {
+				const file = this.file;
+				if (file) void openRepair(this.reliabilityDeps(), file, { docId: this.session?.doc?.id ?? this.host.resilience?.ledger.records(file.path)[0]?.id ?? null });
+			},
 		});
 		this.messageEl.hide();
 		this.toolbar.setEditable(false);
@@ -787,6 +791,13 @@ export class NotebookView extends FileView {
 				onDiskContent: (info) => {
 					if (current()) this.resilience?.diskContent(info);
 				},
+				// wave 0.7: sync safety (review)
+				onAwaiting: (state) => {
+					if (current()) this.syncSafety?.awaitingChanged(state);
+				},
+				onExternalNewer: (info) => {
+					if (current()) this.resilience?.externalNewer(info);
+				},
 			},
 			{
 				busy: () => this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null
@@ -806,6 +817,7 @@ export class NotebookView extends FileView {
 				},
 				beforeSerialize: (doc) => this.storePosition(doc),
 				spaceProbe: this.host.resilience?.spaceProbe,
+				ownWrite: () => this.host.resilience?.ledger.records(file.path)[0] ?? null,
 			},
 		);
 		this.session = session;

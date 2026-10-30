@@ -4,7 +4,7 @@ import { t, type MessageKey } from "../i18n";
 import type { NotebookDocument } from "../model/types";
 import { PresenceService } from "../storage/presence";
 import { minutesSince, type DeviceRecord, type PresenceRecord } from "../storage/presence-logic";
-import type { DocumentSession, SessionMode } from "../storage/session";
+import type { AwaitingState, DocumentSession, SessionMode } from "../storage/session";
 import {
 	formatBytes, issueSignature, LONG_PATH_CHARS, scanForSyncIssues, segmentIssue, sizeIssue, type SyncIssue,
 } from "../storage/sync-state";
@@ -154,6 +154,36 @@ export class SyncSafetyService {
 	}
 }
 
+/** A yes/no question; resolves to true only when the confirm button was pressed. */
+export function confirmAction(app: App, title: string, body: string, button: string): Promise<boolean> {
+	return new Promise((resolve) => new ConfirmModal(app, title, body, button, resolve).open());
+}
+
+class ConfirmModal extends Modal {
+	private answered = false;
+
+	constructor(app: App, private readonly title: string, private readonly body: string, private readonly button: string, private readonly done: (ok: boolean) => void) {
+		super(app);
+	}
+
+	onOpen(): void {
+		this.setTitle(this.title);
+		this.contentEl.createEl("p", { text: this.body });
+		new Setting(this.contentEl)
+			.addButton((b) => b.setButtonText(t("sync.confirm.cancel")).onClick(() => this.close()))
+			.addButton((b) => b.setButtonText(this.button).setCta().onClick(() => {
+				this.answered = true;
+				this.close();
+				this.done(true);
+			}));
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
+		if (!this.answered) this.done(false);
+	}
+}
+
 /** #345: the result of the check, with what cannot be detected from inside the vault. */
 export class SyncCheckModal extends Modal {
 	constructor(app: App, private readonly report: SyncCheckReport) {
@@ -227,6 +257,8 @@ export interface ViewSyncDeps {
 	assetFileChanged(file: TFile): void;
 	/** Read-only was switched on or off: the view refreshes its tools. */
 	editingChanged(): void;
+	/** Opens the repair dialog for the file (it asks first when the file may still be arriving). */
+	repair?(): void;
 }
 
 /**
@@ -242,6 +274,8 @@ export class ViewSyncSafety {
 	private dismissed = new Set<string>();
 	private poll: number | null = null;
 	private checking = 0;
+	/** Banner of an open notebook whose file became empty or is arriving (the document is kept in memory). */
+	private awaitingBanner: HTMLElement | null = null;
 
 	constructor(private readonly deps: ViewSyncDeps) {
 		const { app, component } = deps;
@@ -266,6 +300,7 @@ export class ViewSyncSafety {
 
 	/** Called by the view after every (re)load of the session. */
 	loaded(doc: NotebookDocument | null, mode: SessionMode): void {
+		this.renderAwaiting(null);
 		if (mode === "not-downloaded") this.startPoll();
 		else this.stopPoll();
 		const file = this.deps.file();
@@ -285,6 +320,7 @@ export class ViewSyncSafety {
 	/** The file is being closed or replaced: presence removed, banner and read-only reset. */
 	closed(): void {
 		this.stopPoll();
+		this.renderAwaiting(null);
 		this.releasePresence();
 		this.dismissed.clear();
 		this.others = [];
@@ -294,17 +330,56 @@ export class ViewSyncSafety {
 		if (wasReadOnly) this.deps.editingChanged();
 	}
 
-	/** #344: fills the view's message area for a notebook that is not downloaded yet. */
+	/** #344: fills the view's message area for a notebook that is not downloaded yet (or still arriving, or maybe damaged). */
 	renderNotDownloaded(el: HTMLElement): void {
+		const awaiting = this.deps.session()?.awaiting ?? null;
 		el.empty();
-		el.createEl("h3", { text: t("sync.notDownloaded.title") });
-		el.createEl("p", { text: t("sync.notDownloaded.body") });
+		const partial = awaiting?.kind === "partial";
+		el.createEl("h3", { text: t(partial ? "sync.arriving.title" : "sync.notDownloaded.title") });
+		el.createEl("p", { text: t(partial ? "sync.arriving.body" : "sync.notDownloaded.body") });
+		if (awaiting?.damaged) el.createEl("p", { text: t("sync.notDownloaded.damaged") });
 		el.createEl("p", { cls: "notebook-sync-muted", text: t("sync.notDownloaded.hint") });
+		if (this.deps.repair) {
+			// Review: recovery is offered (after a confirmation), the more prominently the more likely it is damage.
+			el.createEl("button", { text: t("sync.notDownloaded.recover"), cls: awaiting?.damaged ? "mod-cta" : "" })
+				.addEventListener("click", () => this.deps.repair?.());
+		}
 		el.show();
+	}
+
+	/**
+	 * Sync safety (review): the file of the open notebook became empty or is arriving. When the document is kept in
+	 * memory, a banner says so and offers to write it back (after a confirmation) or to recover; polling looks for the
+	 * content. Null removes the banner.
+	 */
+	awaitingChanged(state: AwaitingState | null): void {
+		this.renderAwaiting(state?.kept ? state : null);
+		if (state?.kept) this.startPoll();
+		else if (state === null && this.deps.session()?.mode === "ok") this.stopPoll();
+	}
+
+	private renderAwaiting(state: AwaitingState | null): void {
+		this.awaitingBanner?.remove();
+		this.awaitingBanner = null;
+		if (!state) return;
+		const el = createDiv({ cls: "notebook-sync-banner", attr: { role: "alert" } });
+		this.deps.container.insertBefore(el, this.deps.before);
+		this.awaitingBanner = el;
+		const text = el.createDiv({ cls: "notebook-sync-banner-text" });
+		text.createDiv({ text: t(state.kind === "empty" ? "sync.kept.empty" : "sync.kept.partial") });
+		text.createDiv({ cls: "notebook-sync-muted", text: t("sync.kept.hint") });
+		const actions = el.createDiv({ cls: "notebook-sync-banner-actions" });
+		actions.createEl("button", { text: t("sync.kept.writeBack"), cls: state.damaged ? "mod-cta" : "" }).addEventListener("click", () => {
+			void confirmAction(this.deps.app, t("sync.kept.confirmTitle"), t("sync.kept.confirmBody"), t("sync.kept.writeBack")).then((ok) => {
+				if (ok) void this.deps.session()?.writeBack();
+			});
+		});
+		if (this.deps.repair) actions.createEl("button", { text: t("sync.notDownloaded.recover") }).addEventListener("click", () => this.deps.repair?.());
 	}
 
 	destroy(): void {
 		this.stopPoll();
+		this.renderAwaiting(null);
 		this.releasePresence();
 		this.banner?.remove();
 		this.banner = null;
@@ -385,6 +460,6 @@ export class ViewSyncSafety {
 	private pollOnce(): void {
 		if (this.poll === null || document.visibilityState === "hidden") return;
 		const session = this.deps.session();
-		if (session?.mode === "not-downloaded") void session.handleExternalChange();
+		if (session?.mode === "not-downloaded" || session?.awaiting?.kept) void session.handleExternalChange();
 	}
 }

@@ -2,8 +2,9 @@
  * "Open on another device" (roadmap #342): pure logic of the presence files. No Obsidian imports.
  *
  * While a notebook is open, each device keeps one small file in the notebooks folder:
- * `_meta/presence/<notebook id>.<device id>.json`, refreshed every HEARTBEAT_MS while the app is in the
- * foreground and removed when the notebook is closed. A file is only ever written (and removed) by the
+ * `_meta/presence/<notebook id>.<device id>.json`, written when the notebook opens, refreshed every HEARTBEAT_MS while
+ * the app is in the foreground (and on resume when the last refresh is that old) and removed when the notebook is closed.
+ * Every write is an upload for the sync client, so the refresh is rare: STALE_AFTER_MS is three heartbeats. A file is only ever written (and removed) by the
  * device whose id is in its name, so two devices never write the same file and the sync client never
  * has a reason to create a conflicted copy of it.
  *
@@ -14,8 +15,8 @@
 
 export const META_DIRNAME = "_meta";
 export const PRESENCE_VERSION = 1;
-/** A device refreshes its presence files this often while the app is visible. */
-export const HEARTBEAT_MS = 60_000;
+/** A device refreshes its presence files this often while the app is visible (each refresh is one upload per notebook). */
+export const HEARTBEAT_MS = 5 * 60_000;
 /**
  * A presence file is "fresh" (the notebook is probably still open there) for this long after its heartbeat.
  * Much longer than the heartbeat because folder-sync apps upload and download on their own schedule

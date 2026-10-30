@@ -15,6 +15,161 @@ export function isAwaitingDownload(text: string): boolean {
 	return /^[\s\0]*$/.test(text);
 }
 
+/** Text that does not parse and changed less than this long ago is taken as still being written (by the sync client). */
+export const RECENT_WRITE_MS = 30_000;
+/** Repair asks for a confirmation when the file changed less than this long ago: it may still be arriving. */
+export const RECENT_CHANGE_MS = 3 * 60_000;
+
+/**
+ * Whether `text` is valid JSON up to its end but cut off before the end of the value (a download or a write that stopped
+ * part-way): every token read is well formed and the text ends inside a value. Trailing whitespace is ignored. A complete
+ * value, an empty text or a syntax error before the end give false.
+ */
+export function isTruncatedJson(text: string): boolean {
+	const n = text.length;
+	const stack: number[] = [];
+	const OBJ = 1;
+	const ARR = 2;
+	type State = "value" | "valueOrEnd" | "key" | "keyOrEnd" | "colon" | "after";
+	let state: State = "value";
+	let i = 0;
+	let seen = false;
+	const ws = (c: number) => c === 0x20 || c === 0x0a || c === 0x0d || c === 0x09;
+	/** Reads a string from the quote at `i`: the index after it, -1 when the text ends inside it, -2 on a bad string. */
+	const str = (): number => {
+		let j = i + 1;
+		while (j < n) {
+			const c = text.charCodeAt(j);
+			if (c === 0x22) return j + 1;
+			if (c < 0x20) return -2;
+			if (c === 0x5c) {
+				if (j + 1 >= n) return -1;
+				const e = text[j + 1]!;
+				if (e === "u") {
+					const hex = text.slice(j + 2, j + 6);
+					if (!/^[0-9a-fA-F]*$/.test(hex)) return -2;
+					if (hex.length < 4) return -1;
+					j += 6;
+					continue;
+				}
+				if (!'"\\/bfnrt'.includes(e)) return -2;
+				j += 2;
+				continue;
+			}
+			j++;
+		}
+		return -1;
+	};
+	const NUMBER = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
+	const NUMBER_START = /-?\d*\.?\d*(?:[eE][+-]?\d*)?/y;
+	for (;;) {
+		while (i < n && ws(text.charCodeAt(i))) i++;
+		if (i >= n) return seen && !(state === "after" && stack.length === 0);
+		seen = true;
+		const c = text[i]!;
+		if (state === "after") {
+			if (stack.length === 0) return false; // garbage after a complete value
+			const top = stack[stack.length - 1];
+			if (c === ",") {
+				state = top === OBJ ? "key" : "value";
+				i++;
+			} else if ((c === "}" && top === OBJ) || (c === "]" && top === ARR)) {
+				stack.pop();
+				i++;
+			} else return false;
+			continue;
+		}
+		if (state === "colon") {
+			if (c !== ":") return false;
+			state = "value";
+			i++;
+			continue;
+		}
+		if (state === "key" || state === "keyOrEnd") {
+			if (state === "keyOrEnd" && c === "}") {
+				stack.pop();
+				state = "after";
+				i++;
+				continue;
+			}
+			if (c !== '"') return false;
+			const end = str();
+			if (end === -1) return true;
+			if (end < 0) return false;
+			i = end;
+			state = "colon";
+			continue;
+		}
+		// state "value" or "valueOrEnd"
+		if (state === "valueOrEnd" && c === "]") {
+			stack.pop();
+			state = "after";
+			i++;
+			continue;
+		}
+		if (c === "{" || c === "[") {
+			stack.push(c === "{" ? OBJ : ARR);
+			state = c === "{" ? "keyOrEnd" : "valueOrEnd";
+			i++;
+			continue;
+		}
+		if (c === '"') {
+			const end = str();
+			if (end === -1) return true;
+			if (end < 0) return false;
+			i = end;
+			state = "after";
+			continue;
+		}
+		if (c === "-" || (c >= "0" && c <= "9")) {
+			NUMBER_START.lastIndex = i;
+			const partial = NUMBER_START.exec(text);
+			const partialEnd = i + (partial?.[0].length ?? 0);
+			NUMBER.lastIndex = i;
+			const full = NUMBER.exec(text);
+			const fullEnd = full ? i + full[0].length : -1;
+			// Cut inside a number ("72.", "1e", "-"): valid so far, the text ends there.
+			if (partialEnd >= n && fullEnd < n) return true;
+			if (fullEnd < 0) return false;
+			i = fullEnd;
+			state = "after";
+			continue;
+		}
+		let matched = false;
+		for (const word of ["true", "false", "null"]) {
+			const rest = text.slice(i, i + word.length);
+			if (rest === word) {
+				i += word.length;
+				state = "after";
+				matched = true;
+				break;
+			}
+			if (i + rest.length >= n && word.startsWith(rest)) return true;
+		}
+		if (!matched) return false;
+	}
+}
+
+/** See `downloadState`. */
+export type DownloadState = "empty" | "partial";
+
+/**
+ * #344: for document text that does not parse, whether it is still arriving from the sync client rather than damaged:
+ * - `empty`: nothing yet (see `isAwaitingDownload`);
+ * - `partial`: a NUL tail (space reserved by a download that has not got there yet), JSON cut off at the end, or, for a
+ *   JSON syntax error only (`jsonError`), a file changed less than RECENT_WRITE_MS ago (`changedAgoMs`);
+ * - null: damage (the caller treats it as an unreadable file).
+ */
+export function downloadState(text: string, options: { jsonError?: boolean; changedAgoMs?: number | null } = {}): DownloadState | null {
+	if (isAwaitingDownload(text)) return "empty";
+	if (text.endsWith("\0")) return "partial";
+	if (options.jsonError === false) return null;
+	if (isTruncatedJson(text)) return "partial";
+	const ago = options.changedAgoMs;
+	if (options.jsonError === true && ago !== null && ago !== undefined && ago >= 0 && ago < RECENT_WRITE_MS) return "partial";
+	return null;
+}
+
 /** #343: the state of an asset file. `waiting`: not in the vault yet, or smaller than the asset (still arriving). */
 export type AssetAvailability = "present" | "waiting";
 

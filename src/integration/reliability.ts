@@ -32,7 +32,8 @@ import {
 	backupDate, combineCandidates, isBackupOf, journalTexts, rankSources, type RecoveryCandidate, type RecoverySource, type SourceKind,
 } from "../storage/recovery";
 import { ensureFolder } from "../storage/vault-io";
-import { isAwaitingDownload } from "../storage/sync-state";
+import { downloadState, isAwaitingDownload, RECENT_CHANGE_MS } from "../storage/sync-state";
+import { confirmAction } from "../view/sync-safety";
 
 export interface ReliabilityDeps {
 	app: App;
@@ -88,21 +89,33 @@ function versionLabel(v: { kind: SourceKind; date: Date | null }): string {
 
 // ------------------------------------------------------------------ #140 repair
 
-/** Opens the repair dialog for a notebook that cannot be read. Never writes to `file`. */
-export async function openRepair(deps: ReliabilityDeps, file: TFile): Promise<void> {
+/**
+ * Opens the repair dialog for a notebook that cannot be read. Never writes to `file` (the repair goes into a new notebook).
+ * `docId`: the notebook's id when the file does not say it (an empty file: from the open document or the integrity ledger),
+ * so version-history snapshots and the journal are found.
+ */
+export async function openRepair(deps: ReliabilityDeps, file: TFile, options: { docId?: string | null } = {}): Promise<void> {
 	const { app } = deps;
 	try {
-		const raw = readNotebookText(file.extension, await app.vault.read(file));
+		const first = readNotebookText(file.extension, await app.vault.read(file));
+		const parsed = parse(first);
+		if (parsed.ok) {
+			new Notice(t("repair.notBroken"));
+			return;
+		}
+		// wave 0.7: sync safety (#344, review): an empty file, or one still being written, may still be arriving from the
+		// cloud. Repair is allowed after a confirmation (it only creates a new notebook; the file stays as it is).
+		const empty = isAwaitingDownload(first);
+		const recent = Date.now() - file.stat.mtime < RECENT_CHANGE_MS;
+		const arriving = empty || recent || downloadState(first, { jsonError: parsed.reason === "json" }) !== null;
+		if (arriving && !(await confirmAction(app, t("sync.repair.confirmTitle"), t(empty ? "sync.repair.confirmEmpty" : "sync.repair.confirmArriving"), t("sync.repair.confirmButton")))) return;
+		// Read again: the content may have arrived during the question.
+		const raw = arriving ? readNotebookText(file.extension, await app.vault.read(file)) : first;
 		if (parse(raw).ok) {
 			new Notice(t("repair.notBroken"));
 			return;
 		}
-		// wave 0.7: sync safety (#344): a file still in the cloud is not damaged; never "repaired".
-		if (isAwaitingDownload(raw)) {
-			new Notice(t("sync.repair.notDownloaded"));
-			return;
-		}
-		const docId = extractDocId(raw);
+		const docId = extractDocId(raw) ?? options.docId ?? null;
 		const sources: RecoverySource[] = [{ kind: "file", label: file.path, date: new Date(file.stat.mtime), text: raw }];
 		const others: RecoverySource[] = [];
 		for (const v of versionFiles(deps, file, docId)) {

@@ -31,6 +31,7 @@ import type { Asset, NotebookDocument } from "../model/types";
 import { fingerprint } from "./journal";
 import { backupDate, isBackupOf } from "./recovery";
 import type { LocalSlot } from "./safe-mode";
+import { assetAvailability, isAwaitingDownload } from "./sync-state";
 
 /** Versions kept per notebook. */
 export const RING_SIZE = 5;
@@ -246,6 +247,8 @@ export function restoredSince(backupNames: readonly string[], basename: string, 
 export type IssueKind =
 	/** The file does not parse. */
 	| "unreadable"
+	/** The file is empty (or only NUL bytes): not downloaded by the sync client yet, or emptied. Not damage by itself. */
+	| "not-downloaded"
 	/** Written by a newer version: cannot be checked here. */
 	| "future-version"
 	/** It parses but does not pass the save check (validation and round trip). */
@@ -255,7 +258,9 @@ export type IssueKind =
 	/** An asset listed by the notebook has no file in the vault. */
 	| "missing-asset"
 	/** An asset file has another size than the notebook recorded (often a truncated sync). */
-	| "damaged-asset";
+	| "damaged-asset"
+	/** An asset file is empty or smaller than recorded: the sync client may still be downloading it. */
+	| "waiting-asset";
 
 export interface IntegrityIssue {
 	kind: IssueKind;
@@ -280,6 +285,7 @@ export interface CheckOptions {
 export function checkNotebookText(text: string, options: CheckOptions): NotebookCheck {
 	const parsed = parse(text);
 	if (!parsed.ok) {
+		if (isAwaitingDownload(text)) return { docId: null, pages: 0, issues: [{ kind: "not-downloaded" }] };
 		const issues: IntegrityIssue[] = [{ kind: parsed.reason === "future-version" ? "future-version" : "unreadable", detail: parsed.message }];
 		return { docId: headerField(text, "id"), pages: 0, issues };
 	}
@@ -293,6 +299,7 @@ export function checkNotebookText(text: string, options: CheckOptions): Notebook
 	for (const asset of Object.values(doc.assets ?? {})) {
 		const file = options.assetFile(asset);
 		if (!file) issues.push({ kind: "missing-asset", detail: asset.name || asset.id });
+		else if (assetAvailability(file.size, asset.bytes) === "waiting") issues.push({ kind: "waiting-asset", detail: asset.name || asset.id });
 		else if (asset.bytes > 0 && file.size !== asset.bytes) issues.push({ kind: "damaged-asset", detail: asset.name || asset.id });
 	}
 	return { docId: doc.id, pages: doc.pages.length, issues };

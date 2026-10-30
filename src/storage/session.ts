@@ -1,8 +1,12 @@
 import { parse, parseStaged, serialize, serializeChecked, StagedParse, warmStrokeLines, type ParseFailure, type ParseResult } from "../model/serialize";
 import type { NotebookDocument } from "../model/types";
-import { buildEntry, fullWriteGapMs, inspectJournal, journalKey, splitLines, type JournalStore } from "./journal";
-import { isAwaitingDownload } from "./sync-state";
-import { assessAfterFailure, probeSize, TornWriteError, WriteHealth, type SpaceProbe, type WriteFailureKind, type WriteHealthState } from "./write-guard";
+import { extractDocId } from "./history";
+import { buildEntry, fingerprint, fullWriteGapMs, inspectJournal, journalKey, splitLines, type JournalStore } from "./journal";
+import { downloadState, isAwaitingDownload, RECENT_WRITE_MS, type DownloadState } from "./sync-state";
+import {
+	assessAfterFailure, ForeignWriteError, isPartialOf, probeSize, TornWriteError, WriteHealth, type SpaceProbe, type WriteFailureKind,
+	type WriteHealthState,
+} from "./write-guard";
 
 /** File access for one notebook. Implemented over the Vault API in vault-io.ts and by fakes in tests. */
 export interface DocumentIO {
@@ -13,6 +17,8 @@ export interface DocumentIO {
 	backup(content: string, reason: BackupReason): Promise<string | null>;
 	/** Current vault path of the file (follows renames). Part of the journal's file identity. */
 	path?(): string;
+	/** Last modification time of the file (ms since epoch), when known (sync safety: a file still being written). */
+	mtime?(): number | null;
 }
 
 export type BackupReason =
@@ -27,12 +33,39 @@ export type BackupReason =
  * - `readonly`: written by a newer format version; never written.
  * - `broken`: unreadable (invalid JSON or schema, empty); never written.
  * - `deleted`: the file was deleted; never written.
- * - `not-downloaded` (wave 0.7: sync safety): the sync client has not downloaded the content yet (0 bytes); never
- *   written, backed up or repaired; the next external change with content loads it like a first load.
+ * - `not-downloaded` (wave 0.7: sync safety): the sync client has not downloaded the content yet (0 bytes, NUL bytes,
+ *   JSON cut off at the end, or a file that does not parse and is still being written); never written; the next
+ *   external change with content loads it like a first load. `DocumentSession.awaiting` says which, and whether there
+ *   is evidence of damage (then the view offers recovery).
  */
 export type SessionMode = "loading" | "ok" | "readonly" | "broken" | "deleted" | "not-downloaded";
 
 export type SaveState = "saved" | "pending" | "saving" | "error";
+
+/** Sync safety: the file is empty or still arriving (see `DocumentSession.awaiting`). */
+export interface AwaitingState {
+	kind: DownloadState;
+	/**
+	 * There is evidence that this is damage rather than a download: our own write was cut off, the journal holds entries
+	 * for the notebook, or this device has written content to the file before (integrity ledger). The view offers recovery.
+	 */
+	damaged: boolean;
+	/**
+	 * The notebook was open when the file emptied or got cut off: its document stays in memory and editable (a backup of
+	 * the previous version was made) and nothing is written until the content arrives or the user chooses `writeBack()`.
+	 */
+	kept: boolean;
+}
+
+/** #347 (review): a version newer than our last save was found on disk while saving was failing. */
+export interface ExternalNewerInfo {
+	text: string;
+	doc: NotebookDocument;
+	/** Backup path of that version (reason "conflict"), or null when an identical backup existed. */
+	backup: string | null;
+	/** Once the user merged it (or chose to keep this version): saving goes on and writes over it. */
+	accept(): void;
+}
 
 export interface SessionEvents {
 	/** The document was (re)loaded: drop undo history and caches. */
@@ -57,6 +90,13 @@ export interface SessionEvents {
 	onWritten?(text: string): void;
 	/** #390: document text was read from the file and is being applied (first load or reload of an external change). */
 	onDiskContent?(info: DiskContentInfo): void;
+	/** Sync safety: `awaiting` changed (the file became empty or is arriving, or that is over). */
+	onAwaiting?(state: AwaitingState | null): void;
+	/**
+	 * After a failing streak the file holds a version saved elsewhere that is newer than our last save: it was backed up
+	 * and nothing is written until the user merges it or keeps this version (`info.accept()`).
+	 */
+	onExternalNewer?(info: ExternalNewerInfo): void;
 }
 
 /** wave 0.7: resilience (#390). What `onDiskContent` reports. */
@@ -124,9 +164,22 @@ export interface SessionOptions {
 	retryMaxMs?: number;
 	/** Checks for free space before a write is retried after a full disk or a partial write. */
 	spaceProbe?: SpaceProbe;
-	/** Every write up to this size is read back and compared (always while saving is failing). Default 2,000,000 chars. */
+	/**
+	 * Every write up to this size is read back and compared in full (always while saving is failing); a larger one is read
+	 * back and compared by length, start and end. Default 2,000,000 chars.
+	 */
 	verifyLimitChars?: number;
+	/**
+	 * Sync safety: this device's newest record of a write of content to this file (integrity ledger), or null. Evidence
+	 * that an empty or cut-off file is damage rather than a file still to be downloaded.
+	 */
+	ownWrite?: () => { id: string } | null;
 }
+
+/** Large writes are verified by their length and this many characters at the start and at the end. */
+const VERIFY_EDGE_CHARS = 64 * 1024;
+/** A cut-off file found on load is backed up only up to this size (usually it is an incomplete download). */
+export const PARTIAL_BACKUP_MAX_CHARS = 1_000_000;
 
 /** The stroke-line warm-up waits this long after a load, so the page is painted first. */
 export const WARM_UP_DELAY_MS = 400;
@@ -244,6 +297,26 @@ export class DocumentSession {
 	/** A partial file left by one of our failed writes that could not be undone: not someone else's version. */
 	private tornContent: string | null = null;
 
+	// wave 0.7: sync safety (review fixes)
+	/** The file is empty or still arriving; see AwaitingState. Null otherwise. */
+	awaiting: AwaitingState | null = null;
+	/**
+	 * Writes wait: `awaiting` (the file is empty or arriving while a document is kept in memory) or `external` (a newer
+	 * version found after a failing streak, see onExternalNewer). Only `writeBack()` / `accept()` lift it early.
+	 */
+	private hold: "awaiting" | "external" | null = null;
+	/** The external version an `external` hold waits on. */
+	private holdText: string | null = null;
+	/** The flush running now may write over an empty or arriving file (the user chose "Write it back"). */
+	private forceWrite = false;
+	/** A "partial" verdict that rests only on the file's recent change time is looked at again from this time on. */
+	private recheckAt: number | null = null;
+	/** Fingerprints of cut-off files already backed up by this session. */
+	private readonly partialBackups = new Set<string>();
+	/** modifiedAt of the version last loaded or saved by this session. */
+	private baseModifiedAt: string | null = null;
+	private readonly ownWrite: (() => { id: string } | null) | null;
+
 	constructor(
 		private readonly io: DocumentIO,
 		private readonly timers: Timers,
@@ -269,6 +342,7 @@ export class DocumentSession {
 		this.health = new WriteHealth(this.retryMs, options.retryMaxMs ?? 60_000);
 		this.spaceProbe = options.spaceProbe ?? null;
 		this.verifyLimitChars = options.verifyLimitChars ?? 2_000_000;
+		this.ownWrite = options.ownWrite ?? null;
 	}
 
 	/** #347: whether saving is failing, why, and when it is retried. */
@@ -387,9 +461,27 @@ export class DocumentSession {
 		return this.enqueue(async () => {
 			if (this.disposed || this.mode === "loading" || this.mode === "deleted") return "ignored" as const;
 			const content = await this.io.read();
-			if (content === this.diskContent) return "echo" as const;
+			// Sync safety: a "still being written" verdict that rests on the change time is reviewed once that time is over.
+			const recheck = this.mode === "not-downloaded" && this.recheckAt !== null && this.now().getTime() >= this.recheckAt;
+			if (content === this.diskContent && !recheck) return "echo" as const;
 			// #347: the partial file of our own failed write is not an external version.
 			if (content === this.tornContent) return "echo" as const;
+			// Sync safety: the open document is kept while the file is empty or arriving.
+			if (this.hold === "awaiting" && this.mode === "ok") {
+				const kind = this.arrivingKind(content);
+				if (kind !== null) {
+					this.diskContent = content;
+					this.setAwaiting({ ...(this.awaiting ?? { damaged: false, kept: true }), kind });
+					return "kept-local" as const;
+				}
+				// The content is there: back to normal. Local edits win (the next save backs that version up first).
+				this.hold = null;
+				this.setAwaiting(null);
+				if (this.dirty) {
+					this.scheduleFlushSoon();
+					return "kept-local" as const;
+				}
+			}
 			// Local changes win; the next flush backs up the external version before overwriting it.
 			if (this.mode === "ok" && this.busy()) {
 				this.deferredExternal = true;
@@ -397,8 +489,112 @@ export class DocumentSession {
 			}
 			if (this.mode === "ok" && this.dirty) return "kept-local" as const;
 			await this.applyDiskContent(content);
-			return "reloaded" as const;
+			// An open document kept in memory while its file is empty or arriving was not replaced.
+			return this.awaiting?.kept ? ("kept-local" as const) : ("reloaded" as const);
 		});
+	}
+
+	/**
+	 * Sync safety: the user confirmed writing the open document over a file that is empty or still arriving (it was kept
+	 * in memory, `awaiting.kept`). A cut-off file is backed up first. Resolves to true when the file now holds the document.
+	 */
+	writeBack(): Promise<boolean> {
+		this.clearTimers();
+		return this.enqueue(async () => {
+			if (this.mode !== "ok" || !this.doc || this.disposed || this.hold !== "awaiting") return false;
+			// The file does not hold the document: there is something to write even without new edits.
+			if (!this.dirty) this.revision++;
+			this.forceWrite = true;
+			try {
+				return await this.doFlush();
+			} finally {
+				this.forceWrite = false;
+			}
+		});
+	}
+
+	/** Null when `content` parses (or is damage); otherwise whether it is empty or still arriving. */
+	private arrivingKind(content: string): DownloadState | null {
+		if (isAwaitingDownload(content)) return "empty";
+		const r = parse(content);
+		if (r.ok) return null;
+		return downloadState(content, { jsonError: r.reason === "json", changedAgoMs: this.changedAgoMs() });
+	}
+
+	/** How long ago the file changed (ms), when the I/O knows. */
+	private changedAgoMs(): number | null {
+		try {
+			const m = this.io.mtime?.() ?? null;
+			return m === null || !Number.isFinite(m) || m <= 0 ? null : this.now().getTime() - m;
+		} catch {
+			return null;
+		}
+	}
+
+	private setAwaiting(state: AwaitingState | null): void {
+		const before = this.awaiting;
+		this.awaiting = state;
+		if (before === state || (before && state && before.kind === state.kind && before.damaged === state.damaged && before.kept === state.kept)) return;
+		if (this.disposed) return;
+		try {
+			this.events.onAwaiting?.(state);
+		} catch (e) {
+			console.error("[notebook] onAwaiting failed", e);
+		}
+	}
+
+	/** A save soon (after the debounce), e.g. once a hold is lifted with edits waiting. */
+	private scheduleFlushSoon(): void {
+		if (this.disposed) return;
+		if (this.debounceTimer !== null) this.timers.clear(this.debounceTimer);
+		this.debounceTimer = this.timers.set(() => this.timedFlush(), this.debounceMs);
+	}
+
+	/**
+	 * Evidence that an empty or cut-off file is damage rather than a download (sync safety, review): our own write left
+	 * it, the journal holds entries for the notebook, or this device wrote content to the file before.
+	 */
+	private async damageEvidence(content: string, previous: string | null, tornBefore: string | null): Promise<boolean> {
+		if (tornBefore !== null && (tornBefore === content || isAwaitingDownload(tornBefore))) return true;
+		let own: { id: string } | null = null;
+		try {
+			own = this.ownWrite?.() ?? null;
+		} catch (e) {
+			console.error("[notebook] ownWrite failed", e);
+		}
+		if (own) return true;
+		const docId = this.doc?.id ?? (previous ? extractDocId(previous) : null) ?? (isAwaitingDownload(content) ? null : extractDocId(content));
+		return docId !== null && (await this.hasJournalFor(docId));
+	}
+
+	/** Keeps the version that was open (parseable text only) before the file it came from is replaced in memory. */
+	private async backupReplaced(previous: string | null): Promise<void> {
+		if (previous === null || previous.trim().length === 0 || !parse(previous).ok) return;
+		try {
+			const path = await this.io.backup(previous, "integrity");
+			if (path && !this.disposed) this.events.onBackup?.(path, "integrity");
+		} catch (e) {
+			this.events.onError?.(`Could not back up the open version: ${(e as Error).message}`);
+		}
+	}
+
+	/**
+	 * A cut-off file: backed up at most once per content. Found on load (probably a download) only up to
+	 * PARTIAL_BACKUP_MAX_CHARS; before it is written over, always (throws if that fails).
+	 */
+	private async backupPartial(content: string, beforeOverwrite: boolean): Promise<void> {
+		if (isAwaitingDownload(content)) return;
+		const fp = fingerprint(content);
+		if (this.partialBackups.has(fp)) return;
+		if (!beforeOverwrite && content.length > PARTIAL_BACKUP_MAX_CHARS) return;
+		try {
+			const path = await this.io.backup(content, "unreadable");
+			this.partialBackups.add(fp);
+			if (path && !this.disposed) this.events.onBackup?.(path, "unreadable");
+		} catch (e) {
+			this.events.onError?.(`Could not create a backup: ${(e as Error).message}`);
+			if (beforeOverwrite) throw e;
+		}
 	}
 
 	/** Call when a gesture ends: re-checks an external change that arrived while it was in progress. */
@@ -503,6 +699,9 @@ export class DocumentSession {
 		// journal may hold edits made before the file was damaged or overwritten.
 		const recover = initialLoad || this.mode !== "ok";
 		const previous = this.diskContent;
+		const tornBefore = this.tornContent;
+		// An open, editable document is replaced by this content (the session is clean: see handleExternalChange).
+		const wasOpen = !initialLoad && this.mode === "ok" && this.doc !== null;
 		this.diskContent = content;
 		this.tornContent = null;
 		this.revision = 0;
@@ -521,8 +720,21 @@ export class DocumentSession {
 		} else {
 			result = parsed;
 		}
+		// wave 0.7: sync safety. Empty or still arriving (not damage) when it does not parse?
+		let arriving: DownloadState | null = null;
+		this.recheckAt = null;
+		if (!result.ok) {
+			const jsonError = result.reason === "json" || result.reason === "empty";
+			arriving = downloadState(content, { jsonError });
+			if (arriving === null && jsonError) {
+				const ago = this.changedAgoMs();
+				arriving = downloadState(content, { jsonError, changedAgoMs: ago });
+				// Only the change time says so: look again once it is no longer recent.
+				if (arriving !== null && ago !== null) this.recheckAt = this.now().getTime() + Math.max(0, RECENT_WRITE_MS - ago);
+			}
+		}
 		// wave 0.7: resilience (#390). Not for a file the sync client has not downloaded yet: that is not content.
-		if (!isAwaitingDownload(content)) {
+		if (arriving === null) {
 			try {
 				this.events.onDiskContent?.({
 					content, previous, initial: initialLoad, doc: result.ok ? result.doc : null, failure: result.ok ? null : result.reason,
@@ -552,6 +764,11 @@ export class DocumentSession {
 			this.mode = "ok";
 			this.problem = null;
 			this.problemReason = null;
+			this.hold = null;
+			this.holdText = null;
+			this.partialBackups.clear();
+			this.baseModifiedAt = result.doc.modifiedAt;
+			this.setAwaiting(null);
 			this.warmUp(doc);
 			if (recoveredAt !== null) {
 				// The restored edits are not in the file yet: the regular save writes them.
@@ -559,13 +776,36 @@ export class DocumentSession {
 				this.debounceTimer = this.timers.set(() => this.timedFlush(), this.debounceMs);
 				this.maxWaitTimer = this.timers.set(() => this.timedFlush(), this.maxWaitMs);
 			}
-		} else if (isAwaitingDownload(content)) {
-			// wave 0.7: sync safety (#344): a placeholder of a file still in the cloud is not damaged.
+		} else if (arriving !== null) {
+			// wave 0.7: sync safety (#344): a placeholder of a file still in the cloud, or a download in progress, is not
+			// damaged (review): unless something says it is, then the view offers recovery.
+			const damaged = await this.damageEvidence(content, previous, tornBefore);
+			if (this.disposed) return;
+			if (wasOpen) {
+				// The version that was open is about to leave memory (or the file no longer holds it): keep it first.
+				await this.backupReplaced(previous);
+				if (this.disposed) return;
+				if (damaged) {
+					// Keep the document: editable, journaled, but written only once the file has arrived or on writeBack().
+					this.hold = "awaiting";
+					this.setAwaiting({ kind: arriving, damaged, kept: true });
+					this.events.onSaveState?.("pending"); // the file does not hold the document
+					return;
+				}
+			}
+			if (arriving === "partial") await this.backupPartial(content, false);
+			if (this.disposed) return;
 			this.doc = null;
 			this.mode = "not-downloaded";
 			this.problem = null;
 			this.problemReason = null;
+			this.hold = null;
+			this.holdText = null;
+			this.setAwaiting({ kind: arriving, damaged, kept: false });
 		} else {
+			this.hold = null;
+			this.holdText = null;
+			this.setAwaiting(null);
 			this.doc = null;
 			this.mode = result.reason === "future-version" ? "readonly" : "broken";
 			this.problem = result.message;
@@ -602,6 +842,11 @@ export class DocumentSession {
 
 	private async doFlush(): Promise<boolean> {
 		if (this.mode !== "ok" || !this.doc || !this.dirty) return true;
+		// Sync safety: writes wait for the file to arrive, or for the user's choice about a newer version (review).
+		if (this.hold !== null && !(this.hold === "awaiting" && this.forceWrite)) {
+			this.events.onSaveState?.("pending");
+			return false;
+		}
 		const revision = this.revision;
 		// The journal stays out of this revision until the save is done: writing it would change doc.modifiedAt
 		// after the save serialized, and a crash before the cleanup would turn a "merged" entry into a stale one.
@@ -631,14 +876,53 @@ export class DocumentSession {
 			return false;
 		}
 		const next = checked.text;
+		const writtenModifiedAt = doc.modifiedAt;
+
+		/** Nothing is written now (a hold started): the edits stay in memory and in the journal. */
+		const held = (): false => {
+			this.events.onSaveState?.("pending");
+			if (this.dirty && this.journaledRevision !== this.revision) this.scheduleJournal(this.journalDelayMs);
+			return false;
+		};
 
 		try {
 			let written = false;
+			let replaced = false;
 			for (let attempt = 0; attempt < RACE_ATTEMPTS && !written; attempt++) {
 				const current = await this.io.read();
 				// Someone else wrote the file: keep their version before replacing it (not a file still to be downloaded, not
 				// the partial file of our own failed write).
-				if (current !== this.diskContent && current !== this.tornContent && !isAwaitingDownload(current)) await this.backupConflict(current);
+				const foreign = current !== this.diskContent && current !== this.tornContent;
+				if ((foreign || this.forceWrite) && current !== this.tornContent && !isAwaitingDownload(current)) {
+					const theirs = parse(current);
+					if (theirs.ok) {
+						if (foreign) {
+							// Review #6: after a failing streak, a newer version saved elsewhere is not silently written over.
+							if (this.health.failing && theirs.doc.id === doc.id && isNewerStamp(theirs.doc.modifiedAt, this.baseModifiedAt)) {
+								const backup = await this.backupConflict(current);
+								if (this.mode !== "ok" || this.disposed) return true;
+								this.hold = "external";
+								this.holdText = current;
+								this.events.onExternalNewer?.({ text: current, doc: theirs.doc, backup, accept: () => void this.acceptExternal(current) });
+								return held();
+							}
+							await this.backupConflict(current);
+						}
+					} else {
+						const kind = downloadState(current, { jsonError: theirs.reason === "json", changedAgoMs: this.changedAgoMs() });
+						if (kind === "partial" && !this.forceWrite) {
+							// A download (or another app's write) in progress: wait for it instead of writing over it. The view offers
+							// "Write it back"; when the content is complete, it is backed up as a conflict before our write.
+							this.hold = "awaiting";
+							this.diskContent = current;
+							this.setAwaiting({ kind, damaged: false, kept: true });
+							return held();
+						}
+						// Unreadable content is never written over without a copy of it.
+						if (kind === "partial" || !foreign) await this.backupPartial(current, true);
+						else await this.backupConflict(current);
+					}
+				}
 				// Deleted or disposed meanwhile: never touch the file again.
 				if (this.mode !== "ok" || this.disposed) return true;
 				// #347: after a full disk or a partial write, the file is touched only once there is room for the new text.
@@ -661,7 +945,7 @@ export class DocumentSession {
 						if ((await this.inspectFailedWrite(current, next)) !== "written") throw e;
 						raced = false;
 					}
-					if (!raced) await this.verifyWrite(current, next);
+					if (!raced) replaced = (await this.verifyWrite(current, next)) === "replaced";
 				} finally {
 					this.writing = null;
 				}
@@ -672,8 +956,16 @@ export class DocumentSession {
 			this.diskContent = next;
 			this.tornContent = null;
 			this.savedRevision = Math.max(this.savedRevision, revision);
+			this.baseModifiedAt = writtenModifiedAt;
+			if (this.hold === "awaiting") {
+				this.hold = null;
+				this.setAwaiting(null);
+			}
 			if (this.health.recordSuccess()) this.events.onWriteHealth?.(this.health.state());
-			this.events.onWritten?.(next);
+			// Review #3: replaced by another version right away (backed up above): the file does not hold our text. That
+			// version is loaded by the external-change check, queued now in case its vault event never comes.
+			if (replaced) void this.handleExternalChange();
+			else this.events.onWritten?.(next);
 			this.afterSave();
 		} catch (e) {
 			const { changed } = this.health.recordFailure(e, this.now().getTime());
@@ -721,22 +1013,45 @@ export class DocumentSession {
 		const outcome = assessAfterFailure(before, attempted, after);
 		if (outcome !== "torn") return outcome;
 		if (after.trim().length > 0 && parse(after).ok) return "unchanged"; // another writer's version: backed up next time
+		// Review #3: only what can be left of OUR write is repaired; another app writing the file in place is left alone.
+		if (!isPartialOf(attempted, after)) return "unchanged";
 		await this.repairTorn(before, after);
 		return "torn";
 	}
 
 	/**
-	 * #347: a write that returned normally is read back (every write up to `verifyLimitChars`, all of them while saving
-	 * is failing). A file that does not hold what was written is a partial write: repaired and reported as a failure.
+	 * #347: a write that returned normally is read back (in full up to `verifyLimitChars`, and always while saving is
+	 * failing; a larger one by length, start and end). Only what can be left of our own write (empty, NUL bytes, a strict
+	 * prefix) is a partial write: repaired and reported as a failure. A different valid notebook means another writer
+	 * replaced ours right away: our text is kept as a "conflict" backup and that version is loaded ("replaced"). Anything
+	 * else is another app writing the file in place: never repaired over, the save fails and is retried.
 	 */
-	private async verifyWrite(before: string, attempted: string): Promise<void> {
-		if (!this.health.failing && attempted.length > this.verifyLimitChars) return;
+	private async verifyWrite(before: string, attempted: string): Promise<"ok" | "replaced"> {
 		const back = await this.io.read();
-		if (back === attempted) return;
-		// A valid notebook written right after ours (Sync): our write landed; the 'modify' check handles theirs.
-		if (back.trim().length > 0 && parse(back).ok) return;
-		await this.repairTorn(before, back);
-		throw new TornWriteError();
+		const big = !this.health.failing && attempted.length > this.verifyLimitChars;
+		if (big ? sameEdges(back, attempted) : back === attempted) return "ok";
+		if (back.trim().length > 0 && parse(back).ok) {
+			await this.backupConflict(attempted);
+			return "replaced";
+		}
+		if (isPartialOf(attempted, back)) {
+			await this.repairTorn(before, back);
+			throw new TornWriteError();
+		}
+		throw new ForeignWriteError();
+	}
+
+	/** Review #6: the user merged the newer version found on disk (or keeps this one): saving goes on over `text`. */
+	private acceptExternal(text: string): Promise<boolean> {
+		return this.enqueue(async () => {
+			if (this.disposed || this.hold !== "external" || this.holdText !== text) return;
+			this.hold = null;
+			this.holdText = null;
+			// That version was backed up when it was found: it is now the base the next save writes over.
+			this.diskContent = text;
+			const r = parse(text);
+			if (r.ok) this.baseModifiedAt = r.doc.modifiedAt;
+		}).then(() => this.flush());
 	}
 
 	/** Puts `good` (the file before our write) back over the partial `torn`; if that fails too, remembers `torn` as ours. */
@@ -940,10 +1255,11 @@ export class DocumentSession {
 		}
 	}
 
-	private async backupConflict(content: string): Promise<void> {
+	private async backupConflict(content: string): Promise<string | null> {
 		try {
 			const path = await this.io.backup(content, "conflict");
 			if (path) this.events.onBackup?.(path, "conflict");
+			return path;
 		} catch (e) {
 			this.events.onError?.(`Could not back up the external version: ${(e as Error).message}`);
 			throw e;
@@ -990,6 +1306,21 @@ export class DocumentSession {
 		this.deferTimer = null;
 		this.flushDeferredSince = null;
 	}
+}
+
+/** Same length and the same first and last VERIFY_EDGE_CHARS characters (read-back of a large write). */
+function sameEdges(a: string, b: string): boolean {
+	if (a.length !== b.length) return false;
+	if (a.length <= 2 * VERIFY_EDGE_CHARS) return a === b;
+	return a.slice(0, VERIFY_EDGE_CHARS) === b.slice(0, VERIFY_EDGE_CHARS) && a.slice(-VERIFY_EDGE_CHARS) === b.slice(-VERIFY_EDGE_CHARS);
+}
+
+/** `stamp` is a later edit time than `base` (both ISO times; false when either is missing or not a time). */
+function isNewerStamp(stamp: string, base: string | null): boolean {
+	if (base === null) return false;
+	const a = Date.parse(stamp);
+	const b = Date.parse(base);
+	return Number.isFinite(a) && Number.isFinite(b) && a > b;
 }
 
 /** wave 0.7: resilience (#347). The message of a failing save, by cause (the view shows a translated warning too). */

@@ -193,7 +193,8 @@ export class LibraryView extends ItemView {
 		this.resizeObserver?.disconnect();
 		this.thumbQueue.length = 0;
 		try {
-			await this.host.saveIndex(this.index.toJSON());
+			// An index written by a newer plugin version on another device is never saved over (review).
+			if (!this.index.keepsNewerVersion) await this.host.saveIndex(this.index.toJSON());
 		} catch (e) {
 			console.error("[notebook] saving the library index failed", e);
 		}
@@ -473,6 +474,7 @@ export class LibraryView extends ItemView {
 		if (this.closed) return;
 		window.clearTimeout(this.saveTimer);
 		this.saveTimer = window.setTimeout(() => {
+			if (this.index.keepsNewerVersion) return;
 			this.host.saveIndex(this.index.toJSON()).catch((e) => console.error("[notebook] saving the library index failed", e));
 		}, SAVE_DELAY_MS);
 	}

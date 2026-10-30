@@ -79,6 +79,12 @@ export class VaultDocumentIO implements DocumentIO {
 		return this.file.path;
 	}
 
+	/** Last modification time known to the vault (sync safety: a file still being written). */
+	mtime(): number | null {
+		const m = this.file.stat?.mtime;
+		return typeof m === "number" && m > 0 ? m : null;
+	}
+
 	async backup(content: string, reason: BackupReason): Promise<string | null> {
 		const folder = normalizePath(this.backupFolder());
 		await ensureFolder(this.app, folder);

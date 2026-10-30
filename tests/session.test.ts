@@ -57,7 +57,8 @@ class FakeIO implements DocumentIO {
 }
 
 const corrupt: Array<[string, string]> = [
-	["truncated JSON", serialize(sampleDocument(3)).slice(0, 200)],
+	// A cut-off file is "still arriving" (sync safety): tests/sync-review.test.ts.
+	["broken JSON", `${serialize(sampleDocument(3)).slice(0, 200)}]}`],
 	["invalid schema", JSON.stringify({ format: "obsidian-notebook", version: 1, id: "x", pages: "nope" })],
 	["not a notebook", JSON.stringify({ hello: "world" })],
 	["garbage", "\u0000\u0001\u0002"],

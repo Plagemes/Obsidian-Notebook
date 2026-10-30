@@ -1,7 +1,7 @@
 import { Notice, SuggestModal, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { openNotebookAtPage } from "../integration/open";
-import { LibraryIndex } from "../library/index";
+import { LibraryIndex, type LibraryEntry } from "../library/index";
 import { renderThumbnail, type ThumbnailOptions } from "../library/thumbnail";
 import { entryFromFile, filesToRead } from "../library/scan";
 import { searchPages, type PageHit } from "../library/page-search";
@@ -14,6 +14,8 @@ import type { RecentItem } from "../library/recent-log";
 export interface QuickNavHost {
 	root(): string;
 	loadIndex(): Promise<unknown>;
+	/** Saves the library index (the library's own file): entries read here are not read again next session. */
+	saveIndex?(data: unknown): Promise<void>;
 	readNotebook(file: TFile): Promise<NotebookDocument | null>;
 	thumbnailBackground(doc: NotebookDocument, page: Page, width: number): Promise<ThumbnailOptions["drawBackground"] | null>;
 }
@@ -47,12 +49,39 @@ class PageDirectory {
 		this.index.prune(files.map((f) => f.path));
 		const todo = filesToRead(files.map((f) => ({ path: f.path, mtime: f.stat.mtime, size: f.stat.size })), this.index);
 		let done = 0;
+		const updated: LibraryEntry[] = [];
 		for (const info of todo) {
 			const file = this.app.vault.getFileByPath(info.path);
 			const doc = file ? await this.host.readNotebook(file) : null;
-			this.index.upsert(entryFromFile(info, doc, this.index.get(info.path)));
+			const entry = entryFromFile(info, doc, this.index.get(info.path));
+			this.index.upsert(entry);
+			updated.push(entry);
 			progress(++done, todo.length);
 			await new Promise<void>((r) => window.setTimeout(r, 0));
+		}
+		if (updated.length > 0) await this.save(updated);
+	}
+
+	/**
+	 * Review: what was read goes into the library index file, so the next session does not read every notebook again.
+	 * Merged into the file as it is now (the library view may have saved meanwhile); an index of a newer plugin version
+	 * is never saved over.
+	 */
+	private async save(updated: LibraryEntry[]): Promise<void> {
+		const saveIndex = this.host.saveIndex?.bind(this.host);
+		if (!saveIndex || this.index.keepsNewerVersion) return;
+		try {
+			const onDisk = LibraryIndex.fromJSON(await this.host.loadIndex());
+			if (onDisk.keepsNewerVersion) return;
+			for (const entry of updated) {
+				const have = onDisk.get(entry.path);
+				// The library view may have a newer thumbnail of the same version of the file: keep it.
+				const thumb = have && have.mtime === entry.mtime && have.thumb !== undefined ? { thumb: have.thumb, thumbMtime: have.thumbMtime } : {};
+				onDisk.upsert({ ...entry, ...thumb });
+			}
+			await saveIndex(onDisk.toJSON());
+		} catch (e) {
+			console.error("[notebook] saving the library index failed", e);
 		}
 	}
 }

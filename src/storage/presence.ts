@@ -14,6 +14,8 @@ interface OpenEntry {
 	file: string;
 	/** Views of this notebook open on this device. */
 	count: number;
+	/** When its presence file was last written (ms since epoch), 0 before the first write. */
+	beatAt: number;
 }
 
 /** Where the service keeps its per-device identity: Obsidian's App.loadLocalStorage / saveLocalStorage. */
@@ -39,7 +41,8 @@ function randomByte(): number {
  * "Open on another device" (roadmap #342), the vault side: this device's identity and presence files.
  *
  * - One file per (notebook, device), written and removed only by that device: no sync conflicts.
- * - Heartbeats run only while the app is visible (`setVisible`): a phone in the background writes nothing.
+ * - Heartbeats run only while the app is visible (`setVisible`): a phone in the background writes nothing. A file is
+ *   written on open, every HEARTBEAT_MS, and on resume only when its last write is that old (each write is an upload).
  * - Failures are logged and never reach the notebook: presence is a hint, not part of the data.
  */
 export class PresenceService {
@@ -89,7 +92,7 @@ export class PresenceService {
 			return;
 		}
 		const file = normalizePath(`${presenceFolder(this.root())}/${presenceFileName(notebookId, this.device().id)}`);
-		const entry: OpenEntry = { notebookId, notebookPath, openedAt: this.now().toISOString(), file, count: 1 };
+		const entry: OpenEntry = { notebookId, notebookPath, openedAt: this.now().toISOString(), file, count: 1, beatAt: 0 };
 		this.open.set(notebookId, entry);
 		if (this.visible) void this.enqueue(() => this.write(entry));
 		this.schedule();
@@ -104,11 +107,14 @@ export class PresenceService {
 		this.schedule();
 	}
 
-	/** The app went to the background (false) or came back (true). In the background no heartbeat is written. */
+	/**
+	 * The app went to the background (false) or came back (true). In the background no heartbeat is written; on resume
+	 * only the files whose last heartbeat is HEARTBEAT_MS old (Android switches apps often: each write is an upload).
+	 */
 	setVisible(visible: boolean): void {
 		if (this.visible === visible) return;
 		this.visible = visible;
-		if (visible) this.heartbeatAll();
+		if (visible) this.heartbeatAll(true);
 		this.schedule();
 	}
 
@@ -220,15 +226,21 @@ export class PresenceService {
 		}
 	}
 
-	private heartbeatAll(): void {
+	/** `onlyDue`: only the files whose last heartbeat is at least HEARTBEAT_MS old. */
+	private heartbeatAll(onlyDue = false): void {
 		if (!this.visible || this.disposed) return;
-		for (const entry of this.open.values()) void this.enqueue(() => this.write(entry));
+		const now = this.now().getTime();
+		for (const entry of this.open.values()) {
+			if (onlyDue && now - entry.beatAt < HEARTBEAT_MS) continue;
+			void this.enqueue(() => this.write(entry));
+		}
 	}
 
 	private async write(entry: OpenEntry): Promise<void> {
 		// Released (or the plugin unloaded) while this write was queued: the file must stay removed.
 		if (this.open.get(entry.notebookId) !== entry) return;
 		const me = this.device();
+		entry.beatAt = this.now().getTime();
 		await this.writeText(entry.file, serializePresence({
 			notebookId: entry.notebookId,
 			deviceId: me.id,
