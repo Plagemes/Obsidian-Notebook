@@ -2377,7 +2377,9 @@ body {
 	width: 1px;
 	height: 1px;
 	overflow: hidden;
-	clip-path: inset(50%);
+	white-space: nowrap;
+	/* Invisible but still read by screen readers (opacity keeps it in the accessibility tree). */
+	opacity: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -4492,7 +4494,8 @@ body {
 	pointer-events: none;
 }
 
-.notebook-math-measure mjx-container[display="true"] {
+/* MathJax's output root (`mjx-container`), matched by its `jax` attribute rather than by its custom element name. */
+.notebook-math-measure [jax][display="true"] {
 	margin: 0;
 }
 
@@ -5268,28 +5271,28 @@ body {
 }
 
 @media print {
-	body.notebook-printing > *:not(.notebook-print-root) {
-		display: none !important;
+	/* `html body.…` outranks the app's own body and top-level rules without !important. */
+	html body.notebook-printing > *:not(.notebook-print-root) {
+		display: none;
 	}
 
-	body.notebook-printing {
-		overflow: visible !important;
-		height: auto !important;
-		background: #fff !important;
+	html body.notebook-printing {
+		overflow: visible;
+		height: auto;
+		background: #fff;
 	}
 
-	body.notebook-printing .notebook-print-root {
+	html body.notebook-printing .notebook-print-root {
 		display: block;
 	}
 
+	/* The page-break-* names: every engine maps them to the break-* properties. */
 	.notebook-print-root .notebook-print-page {
-		break-after: page;
 		page-break-after: always;
-		break-inside: avoid;
+		page-break-inside: avoid;
 	}
 
 	.notebook-print-root .notebook-print-page:last-child {
-		break-after: auto;
 		page-break-after: auto;
 	}
 
@@ -5303,7 +5306,7 @@ body {
 	}
 
 	.notebook-print-root .notebook-print-page.is-long {
-		break-inside: auto;
+		page-break-inside: auto;
 	}
 
 	.notebook-print-root .notebook-print-page.is-long > img {

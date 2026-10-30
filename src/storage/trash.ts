@@ -6,6 +6,7 @@ import {
 } from "./trash-paths";
 import { isNotebookFile } from "./format";
 import { ensureFolder } from "./vault-io";
+import { deletePluginFile } from "./plugin-files";
 
 /** Every file inside `folder` (all levels), split into notebooks and the user's other files (.md, .pdf, images…). */
 export function folderContents(folder: TFolder): { notebooks: TFile[]; others: TFile[] } {
@@ -74,9 +75,9 @@ export class LibraryTrash {
 			await this.app.vault.rename(target, dest);
 		} catch (e) {
 			// Nothing moved: remove only the meta file written a moment ago and its empty folder.
-			await this.app.vault.delete(metaFile).catch(() => undefined);
+			await deletePluginFile(this.app.vault, metaFile).catch(() => undefined);
 			const folder = this.app.vault.getFolderByPath(trashItemFolder(this.root, id));
-			if (folder && folder.children.length === 0) await this.app.vault.delete(folder).catch(() => undefined);
+			if (folder && folder.children.length === 0) await deletePluginFile(this.app.vault, folder).catch(() => undefined);
 			throw e;
 		}
 		return { ...meta, trashPath: dest };
@@ -137,7 +138,7 @@ export class LibraryTrash {
 		// Only our own meta file is left in the item folder: it is plugin bookkeeping, not user data, so it is removed outright
 		// (trashFile would fill the user trash with one folder per restore).
 		const folder = this.app.vault.getFolderByPath(trashItemFolder(this.root, id));
-		if (folder && folder.children.every((c) => c.name === "meta.json")) await this.app.vault.delete(folder, true).catch(() => undefined);
+		if (folder && folder.children.every((c) => c.name === "meta.json")) await deletePluginFile(this.app.vault, folder, true).catch(() => undefined);
 		return target;
 	}
 

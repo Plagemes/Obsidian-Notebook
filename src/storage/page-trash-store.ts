@@ -6,6 +6,7 @@ import {
 import type { NotebookDocument, Page } from "../model/types";
 import { pageTrashEntriesFolder, pageTrashEntryPath, pageTrashFolder } from "./trash-paths";
 import { ensureFolder } from "./vault-io";
+import { deletePluginFile } from "./plugin-files";
 
 interface ReadEntry {
 	file: TFile;
@@ -108,7 +109,7 @@ export class PageTrashStore {
 			if (!complete) continue;
 			const written = new Set((await this.entryFiles(notebookId)).map((r) => r.entry.id));
 			if (data.entries.every((e) => written.has(e.id))) {
-				await this.app.vault.delete(file).catch((e) => console.warn("[notebook] old page trash file kept", file.path, e));
+				await deletePluginFile(this.app.vault, file).catch((e) => console.warn("[notebook] old page trash file kept", file.path, e));
 			}
 		}
 		return this.entryFiles(notebookId);
@@ -123,7 +124,8 @@ export class PageTrashStore {
 
 	/** Deletes the entry files (conflicted copies included) of the given entry ids. */
 	private async deleteEntries(files: readonly ReadEntry[], ids: ReadonlySet<string>): Promise<void> {
-		for (const r of files) if (ids.has(r.entry.id)) await this.app.vault.delete(r.file);
+		// Plugin-internal records (after a restore was saved, or by the retention limits): not moved to the user's trash.
+		for (const r of files) if (ids.has(r.entry.id)) await deletePluginFile(this.app.vault, r.file);
 	}
 
 	/** Remembers a page that is about to be deleted. `page` must still be at `index` in `doc`. Resolves once the copy is on disk. */

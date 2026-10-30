@@ -1,6 +1,7 @@
 import { FuzzySuggestModal, Modal, Setting, type App, type FuzzyMatch } from "obsidian";
 import { t } from "../i18n";
 import { COVER_COLORS } from "./scan";
+import { setDestructive } from "../ui/destructive";
 
 /** Modal with one text field. Enter submits; the callback runs once, after the modal closed. */
 export class PromptModal extends Modal {
@@ -61,7 +62,7 @@ export class ConfirmModal extends Modal {
 		new Setting(this.contentEl)
 			.addButton((b) => b.setButtonText(t("library.modal.cancel")).onClick(() => this.close()))
 			.addButton((b) =>
-				b.setButtonText(this.opts.cta).setWarning().onClick(() => {
+				setDestructive(b.setButtonText(this.opts.cta)).onClick(() => {
 					this.close();
 					this.onConfirm();
 				}),

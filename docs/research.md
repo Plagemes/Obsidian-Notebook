@@ -32,6 +32,12 @@ Date: 2026-10-29. Sources: README, LICENSE and key files of the repositories; `o
 3. **Format**: versioned JSON with a custom extension (see `docs/architecture.md`).
 4. **Licenses**: no GPL/AGPL/CC-NC code copied. The ideas taken from Excalidraw, Handwriting, Saber and Butterfly were reimplemented from scratch.
 
+## Lint: eslint-plugin-obsidianmd (Scorecard)
+
+Obsidian's community Scorecard lints plugin repositories with [eslint-plugin-obsidianmd](https://github.com/obsidianmd/eslint-plugin) (`recommended` config). **License: MIT** ("Copyright (c) 2025 Dynalist Inc.", `LICENSE` of the npm package 0.4.2), compatible with this project. It is a **devDependency only**, pinned at 0.4.2, used by `npm run lint`; nothing of it is copied or bundled into `main.js`. `npm audit` reports a moderate advisory for the `moment` that its own nested `obsidian@1.12.3` type package depends on: development tooling only, never shipped.
+
+Obsidian APIs it steers to, checked in `obsidian.d.ts` 1.14.4 against `minAppVersion` 1.8.7: `ButtonComponent.setDestructive()` and `PluginSettingTab.getSettingDefinitions()` exist only since 1.13.0, so both keep a feature-checked fallback (`ui/destructive.ts` adds the `mod-warning` class, the one `setWarning()` sets; the settings tab keeps `display()` for older versions and calls its own drawing method instead of the deprecated `display()`).
+
 ## Conflicted copies made by sync clients (#122)
 
 Date: 2026-10-29. Web search of vendor pages, university IT pages and forum reports; no code copied. Vendors document the behaviour (both versions are kept, one gets another name in the same folder) more clearly than the exact name, which varies by client, version and OS. Patterns recognised by `src/storage/conflicts.ts`:

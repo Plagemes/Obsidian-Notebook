@@ -37,8 +37,7 @@ export function randomSuffix(random: () => number = defaultRandom): string {
 }
 
 function defaultRandom(): number {
-	const c = (globalThis as { crypto?: { getRandomValues?: (a: Uint32Array) => Uint32Array } }).crypto;
-	if (c?.getRandomValues) return c.getRandomValues(new Uint32Array(1))[0]! / 2 ** 32;
+	if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") return crypto.getRandomValues(new Uint32Array(1))[0]! / 2 ** 32;
 	return Math.random();
 }
 

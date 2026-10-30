@@ -768,6 +768,21 @@ No change to the document format. All three live in plugin-owned folders under t
 - **Templates** (`model/templates.ts` pure, `storage/templates-store.ts`, `view/page-tools.ts`). A template is a normal one-page notebook file in the templates folder (setting `templatesFolder`, default `<notebooks folder>/_templates`): content, paper, size and background of the saved page, with new ids. *Save page as template...* writes it (validated); *New page from template...* (page menu) and the template row of the *New notebook* dialog open a gallery with thumbnails of the built-in templates (Cornell, meeting notes, to-do list; generated in code, translated labels passed in) and of the stored ones (which can be deleted from the gallery, through Obsidian's trash). Using a template always copies the page with fresh ids; a new page is one undo step.
 
 
+### Deleting files (Scorecard lint)
+
+Rule: whatever is the user's (a notebook, a folder, a note, an attachment, a template, a stamp, a version-history snapshot, an item of the library trash) is removed only through `app.fileManager.trashFile`, so Obsidian's *Deleted files* setting decides what happens to it; moves into the plugin trash use `vault.rename`. Only the plugin's own bookkeeping files are deleted straight away, through `deletePluginFile` (`storage/plugin-files.ts`), which does exactly what `Vault.delete` did before; moving them to the user's trash would fill it with one file per opened notebook or restored page. No call was made more permanent than before. Every call site (`eslint-plugin-obsidianmd` reports `Vault.delete` / `Vault.trash` as `prefer-file-manager-trash-file`, and its config forbids disabling that rule):
+
+| Call site | Target | Decision |
+|---|---|---|
+| `storage/presence.ts` `startup()` | this device's stale presence files in `_meta` (the app was killed while a notebook was open); other devices' files are never touched | plugin-internal: `deletePluginFile` |
+| `storage/presence.ts` `remove()` | this device's presence file when the notebook closes | plugin-internal: `deletePluginFile` |
+| `storage/page-trash-store.ts` `migrate()` | first-layout page-trash file, only once every entry in it reads back from its own entry file | plugin-internal (its content is kept in the entry files): `deletePluginFile` |
+| `storage/page-trash-store.ts` `deleteEntries()` | page-trash entry files: after the restored page was saved in the notebook, and by the retention limits (50 pages, 30 days) | plugin-internal records of the plugin's own trash, as before: `deletePluginFile` |
+| `storage/trash.ts` `trash()`, failed move (×2) | the meta file written a moment before and its item folder, only when empty; the user's item never moved | plugin-internal: `deletePluginFile` |
+| `storage/trash.ts` `restore()` | the item folder once it holds only `meta.json` (the item was moved back) | plugin-internal: `deletePluginFile` |
+| `storage/trash.ts` `deletePermanently()` / `empty()`, `integration/history-service.ts`, `library/library-view.ts`, `storage/stamps.ts`, `view/page-tools.ts` | user content | already `fileManager.trashFile`, unchanged |
+| `storage/vault-io.ts` (journal slots, space probe) | files in the plugin's config folder, through the adapter | unchanged (not `Vault.delete`) |
+
 ## 10. PDFs, images and assets
 
 - **Assets**: PDFs and images are copied into `<notebooks folder>/_assets/<id>.<ext>`, where `id` is the first 24 hex characters of the SHA-256 of the content (`pdf/hash.ts`). The same file imported twice is stored once. The notebook only holds `assets[id] = { id, kind, path, name, bytes }`. Saving a notebook with a long PDF writes only ink. `resolveAssetFile` finds the file by the stored path, then by the content-addressed name in the current `_assets` folder. Missing assets give a placeholder (file name) and the ink is kept; the document is not changed. The save check verifies that every page background and image element refers to an asset of the right kind, and the stored asset is checked when added.
