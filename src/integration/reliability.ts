@@ -32,7 +32,7 @@ import {
 	backupDate, combineCandidates, isBackupOf, journalTexts, rankSources, type RecoveryCandidate, type RecoverySource, type SourceKind,
 } from "../storage/recovery";
 import { ensureFolder } from "../storage/vault-io";
-import { downloadState, isAwaitingDownload, RECENT_CHANGE_MS } from "../storage/sync-state";
+import { downloadState, isAwaitingDownload, RECENT_CHANGE_MS, withoutNulTail } from "../storage/sync-state";
 import { confirmAction } from "../view/sync-safety";
 
 export interface ReliabilityDeps {
@@ -98,7 +98,7 @@ export async function openRepair(deps: ReliabilityDeps, file: TFile, options: { 
 	const { app } = deps;
 	try {
 		const first = readNotebookText(file.extension, await app.vault.read(file));
-		const parsed = parse(first);
+		const parsed = parse(withoutNulTail(first));
 		if (parsed.ok) {
 			new Notice(t("repair.notBroken"));
 			return;
@@ -111,7 +111,7 @@ export async function openRepair(deps: ReliabilityDeps, file: TFile, options: { 
 		if (arriving && !(await confirmAction(app, t("sync.repair.confirmTitle"), t(empty ? "sync.repair.confirmEmpty" : "sync.repair.confirmArriving"), t("sync.repair.confirmButton")))) return;
 		// Read again: the content may have arrived during the question.
 		const raw = arriving ? readNotebookText(file.extension, await app.vault.read(file)) : first;
-		if (parse(raw).ok) {
+		if (parse(withoutNulTail(raw)).ok) {
 			new Notice(t("repair.notBroken"));
 			return;
 		}

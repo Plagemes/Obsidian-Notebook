@@ -7,9 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parse, serialize } from "../src/model/serialize";
 import type { NotebookDocument } from "../src/model/types";
 import type { JournalSlotFile, JournalStore } from "../src/storage/journal";
-import { journalKey } from "../src/storage/journal";
+import { fingerprint, journalKey } from "../src/storage/journal";
 import type { AwaitingState, ExternalNewerInfo, SessionEvents, SessionOptions, Timers } from "../src/storage/session";
-import { downloadState, isTruncatedJson, RECENT_WRITE_MS } from "../src/storage/sync-state";
+import { downloadState, isTruncatedJson, RECENT_WRITE_MS, withoutNulTail } from "../src/storage/sync-state";
 import { isPartialOf } from "../src/storage/write-guard";
 import { assessDisk, IntegrityLedger } from "../src/storage/integrity";
 import { restoredText } from "../src/storage/history";
@@ -28,7 +28,7 @@ vi.mock("obsidian", async () => {
 });
 
 const { VaultDocumentIO } = await import("../src/storage/vault-io");
-const { DocumentSession, PARTIAL_BACKUP_MAX_CHARS } = await import("../src/storage/session");
+const { DocumentSession, PARTIAL_BACKUP_MAX_CHARS, PARTIAL_STABLE_MS } = await import("../src/storage/session");
 const { PresenceService } = await import("../src/storage/presence");
 const { NotebookMedia } = await import("../src/view/media");
 const { QuickNavService } = await import("../src/view/quick-switcher");
@@ -80,6 +80,11 @@ function setup(text: string, options: SessionOptions = {}, events: SessionEvents
 		.filter(([p]) => p.startsWith(`${BACKUPS}/`))
 		.map(([p, content]) => ({ reason: / ([a-z-]+) (?:\d+ )?[0-9a-f]{8}\.bak$/.exec(p)?.[1] ?? "?", content }));
 	return { vault, file: file as unknown as FakeTFile, io, s, backups, disk: () => vault.files.get(P)! };
+}
+
+/** The ledger's record of a write of `text` by this device a few seconds ago (strong evidence, review N3). */
+function recentWrite(text: string, agoMs = 10_000) {
+	return () => ({ id: "x", fp: fingerprint(text), at: Date.now() - agoMs });
 }
 
 function strokes(text: string): number {
@@ -139,6 +144,13 @@ describe("sync-state helpers (review)", () => {
 		expect(isPartialOf(ours, ours)).toBe(false);
 		expect(isPartialOf(ours, `${ours.slice(0, 100)}garbage`)).toBe(false);
 		expect(isPartialOf(ours, "{ someone else's text")).toBe(false);
+		// Review N1: cut inside a multi-byte character (decoded as U+FFFD), optionally NUL-padded.
+		const accented = serialize({ ...sampleDocument(1), id: "caf\u00e9-\u{1F58A}-note" });
+		const cut = accented.indexOf("\u{1F58A}");
+		expect(isPartialOf(accented, `${accented.slice(0, cut)}\uFFFD`)).toBe(true);
+		expect(isPartialOf(accented, `${accented.slice(0, cut)}\uFFFD\uFFFD\0\0`)).toBe(true);
+		expect(isPartialOf(accented, `${accented.slice(0, cut)}\uFFFDx`)).toBe(false);
+		expect(withoutNulTail(`ab\0\0`)).toBe("ab");
 	});
 });
 
@@ -146,7 +158,7 @@ describe("#1 a 0-byte file that may be our damage (review)", () => {
 	it("an open notebook keeps its document when this device wrote the file, backs it up, writes only after Write it back", async () => {
 		const good = serialize(sampleDocument(2));
 		const seen: Array<AwaitingState | null> = [];
-		const { s, backups, disk, vault } = setup(good, { ownWrite: () => ({ id: "x" }) }, { onAwaiting: (a) => seen.push(a) });
+		const { s, backups, disk, vault } = setup(good, { ownWrite: recentWrite(good) }, { onAwaiting: (a) => seen.push(a) });
 		await s.load();
 		vault.files.set(P, "");
 		expect(await s.handleExternalChange()).toBe("kept-local");
@@ -173,6 +185,49 @@ describe("#1 a 0-byte file that may be our damage (review)", () => {
 		expect(s.dirty).toBe(false);
 	});
 
+	it("review N3: a ledger record alone (old write, or not the text that was replaced) is no evidence", async () => {
+		const good = serialize(sampleDocument(2));
+		for (const ownWrite of [recentWrite(good, 5 * 60_000), recentWrite("other text"), () => ({ id: "x" })]) {
+			const { s, vault } = setup(good, { ownWrite });
+			await s.load();
+			vault.files.set(P, "");
+			expect(await s.handleExternalChange()).toBe("reloaded");
+			expect(s.mode).toBe("not-downloaded");
+			expect(s.awaiting).toEqual({ kind: "empty", damaged: false, kept: false });
+		}
+	});
+
+	it("review N6: when the open version cannot be backed up, the document stays in memory", async () => {
+		const good = serialize(sampleDocument(2));
+		const { s, vault } = setup(good);
+		await s.load();
+		const real = vault.vault.create;
+		vault.vault.create = async () => {
+			throw new Error("disk full");
+		};
+		vault.files.set(P, "");
+		expect(await s.handleExternalChange()).toBe("kept-local");
+		vault.vault.create = real;
+		expect(s.mode).toBe("ok");
+		expect(s.doc!.pages[0]!.strokes).toHaveLength(2);
+		expect(s.awaiting).toEqual({ kind: "empty", damaged: false, kept: true });
+	});
+
+	it("review N3: Write it back does not write over a complete version that arrived meanwhile", async () => {
+		const good = serialize(sampleDocument(2));
+		const { s, vault, disk } = setup(good, { ownWrite: recentWrite(good) });
+		await s.load();
+		vault.files.set(P, "");
+		await s.handleExternalChange();
+		const newer = sampleDocument(5);
+		const theirs = serialize(newer);
+		vault.files.set(P, theirs);
+		expect(await s.writeBack()).toBe(false);
+		expect(disk()).toBe(theirs);
+		expect(s.awaiting).toBeNull();
+		expect(s.doc!.pages[0]!.strokes).toHaveLength(5);
+	});
+
 	it("without evidence an open notebook waits for the download, after backing up the version that was open", async () => {
 		for (const placeholder of ["", "\0".repeat(64)]) {
 			const good = serialize(sampleDocument(1));
@@ -196,7 +251,7 @@ describe("#1 a 0-byte file that may be our damage (review)", () => {
 		theirsDoc.doc.modifiedAt = "2026-10-30T11:00:00.000Z";
 		const theirs = serialize(theirsDoc.doc);
 
-		const clean = setup(good, { ownWrite: () => ({ id: "x" }) });
+		const clean = setup(good, { ownWrite: recentWrite(good) });
 		await clean.s.load();
 		clean.vault.files.set(P, "");
 		await clean.s.handleExternalChange();
@@ -205,7 +260,7 @@ describe("#1 a 0-byte file that may be our damage (review)", () => {
 		expect(clean.s.doc!.pages[0]!.strokes).toHaveLength(3);
 		expect(clean.s.awaiting).toBeNull();
 
-		const dirty = setup(good, { ownWrite: () => ({ id: "x" }) });
+		const dirty = setup(good, { ownWrite: recentWrite(good) });
 		await dirty.s.load();
 		dirty.vault.files.set(P, "");
 		await dirty.s.handleExternalChange();
@@ -257,31 +312,55 @@ describe("#1 a 0-byte file that may be our damage (review)", () => {
 });
 
 describe("#2 a file that is still arriving (review)", () => {
-	it("a cut-off file is not broken: no backup churn, polling goes on, and it opens when complete", async () => {
+	it("a cut-off file is not broken: one backup once it stops changing (review N4), polling goes on, it opens when complete", async () => {
 		const good = serialize(sampleDocument(3));
 		const loaded: string[] = [];
 		const { s, backups, vault } = setup(good.slice(0, 150), {}, { onLoaded: (_d, mode) => loaded.push(mode) });
 		await s.load();
 		expect(s.mode).toBe("not-downloaded");
 		expect(s.awaiting).toEqual({ kind: "partial", damaged: false, kept: false });
-		expect(backups().map((b) => b.reason)).toEqual(["unreadable"]);
-		// The same partial content again: nothing new.
+		expect(backups()).toHaveLength(0);
+		// It keeps growing (NUL-padded): no backup per state.
+		for (const n of [300, 400, 500]) {
+			vault.files.set(P, `${good.slice(0, n)}${"\0".repeat(200)}`);
+			await vi.advanceTimersByTimeAsync(4000);
+			await s.handleExternalChange();
+			expect(s.mode).toBe("not-downloaded");
+		}
+		expect(backups()).toHaveLength(0);
+		// It stops changing: one backup, and never another one in this session.
+		await vi.advanceTimersByTimeAsync(PARTIAL_STABLE_MS);
 		expect(await s.handleExternalChange()).toBe("echo");
-		// More of it, padded with NUL bytes: still arriving, one backup per distinct small content.
-		vault.files.set(P, `${good.slice(0, 400)}${"\0".repeat(200)}`);
+		expect(backups().map((b) => b.reason)).toEqual(["unreadable"]);
+		vault.files.set(P, good.slice(0, 700));
 		await s.handleExternalChange();
-		expect(s.mode).toBe("not-downloaded");
-		expect(backups()).toHaveLength(2);
-		// A large cut-off file is not copied into the synced backup folder.
-		vault.files.set(P, `{"format": "obsidian-notebook", "id": "${"x".repeat(PARTIAL_BACKUP_MAX_CHARS + 10)}`);
+		await vi.advanceTimersByTimeAsync(PARTIAL_STABLE_MS * 2);
 		await s.handleExternalChange();
-		expect(s.mode).toBe("not-downloaded");
-		expect(backups()).toHaveLength(2);
+		expect(backups()).toHaveLength(1);
 		vault.files.set(P, good);
 		expect(await s.handleExternalChange()).toBe("reloaded");
 		expect(s.mode).toBe("ok");
 		expect(s.awaiting).toBeNull();
-		expect(loaded).toEqual(["not-downloaded", "not-downloaded", "not-downloaded", "ok"]);
+		expect(loaded[loaded.length - 1]).toBe("ok");
+	});
+
+	it("a large cut-off file that stops changing is not copied into the synced backup folder", async () => {
+		const big = `{"format": "obsidian-notebook", "id": "${"x".repeat(PARTIAL_BACKUP_MAX_CHARS + 10)}`;
+		const { s, backups } = setup(big);
+		await s.load();
+		await vi.advanceTimersByTimeAsync(PARTIAL_STABLE_MS);
+		await s.handleExternalChange();
+		expect(s.mode).toBe("not-downloaded");
+		expect(backups()).toHaveLength(0);
+	});
+
+	it("review N6: a complete notebook followed by NUL bytes opens normally", async () => {
+		const good = serialize(sampleDocument(2));
+		const { s, backups } = setup(`${good}${"\0".repeat(500)}`);
+		await s.load();
+		expect(s.mode).toBe("ok");
+		expect(s.doc!.pages[0]!.strokes).toHaveLength(2);
+		expect(backups()).toHaveLength(0);
 	});
 
 	it("a file that does not parse and changed seconds ago waits; after RECENT_WRITE_MS the same content counts as damage", async () => {
@@ -291,12 +370,54 @@ describe("#2 a file that is still arriving (review)", () => {
 		await s.load();
 		expect(s.mode).toBe("not-downloaded");
 		expect(s.awaiting).toMatchObject({ kind: "partial" });
-		expect(backups().map((b) => b.reason)).toEqual(["unreadable"]); // small: one copy of this content
+		expect(backups()).toHaveLength(0);
 		expect(await s.handleExternalChange()).toBe("echo");
 		await vi.advanceTimersByTimeAsync(RECENT_WRITE_MS);
 		expect(await s.handleExternalChange()).toBe("reloaded");
 		expect(s.mode).toBe("broken");
-		expect(backups().map((b) => b.reason)).toEqual(["unreadable"]); // the same content is not copied twice
+		expect(backups().map((b) => b.reason)).toEqual(["unreadable"]);
+	});
+
+	it("review N5: a kept document whose file only looked arriving (recent change) is reviewed, then saved over it with a backup", async () => {
+		const good = serialize(sampleDocument(2));
+		const { s, backups, file, vault, disk } = setup(good, { ownWrite: recentWrite(good) });
+		await s.load();
+		const garbage = '{"format": "obsidian-notebook", ]';
+		vault.files.set(P, garbage);
+		file.stat.mtime = Date.now() - 1000;
+		expect(await s.handleExternalChange()).toBe("kept-local");
+		expect(s.awaiting).toMatchObject({ kept: true, kind: "partial" });
+		addStroke(s.doc);
+		s.markChanged();
+		await vi.advanceTimersByTimeAsync(RECENT_WRITE_MS);
+		expect(await s.handleExternalChange()).toBe("kept-local");
+		expect(s.awaiting).toBeNull();
+		await vi.advanceTimersByTimeAsync(2000);
+		expect(strokes(disk())).toBe(3);
+		expect(backups().map((b) => b.reason).sort()).toEqual(["conflict", "integrity"]);
+		expect(backups().find((b) => b.reason === "conflict")!.content).toBe(garbage);
+	});
+
+	it("review N5: while a document is kept, the journal base stays the last readable text", async () => {
+		const good = serialize(sampleDocument(2));
+		const journal = new MemJournal();
+		const { s, vault } = setup(good, { journal, ownWrite: recentWrite(good) });
+		await s.load();
+		vault.files.set(P, "");
+		await s.handleExternalChange();
+		addStroke(s.doc);
+		s.markChanged();
+		await vi.advanceTimersByTimeAsync(400);
+		await s.journalIdle();
+		s.dispose(); // the app dies while the file is still empty
+		await s.journalIdle();
+		// The sync client puts the previous version back: the journal applies to it.
+		vault.files.set(P, good);
+		const recovered = vi.fn();
+		const next = setup(good, { journal }, { onRecovered: recovered }, vault).s;
+		await next.load();
+		expect(recovered).toHaveBeenCalledTimes(1);
+		expect(next.doc!.pages[0]!.strokes).toHaveLength(3);
 	});
 
 	it("an open notebook whose file is cut off keeps the previous version as a backup before it waits", async () => {
@@ -306,8 +427,21 @@ describe("#2 a file that is still arriving (review)", () => {
 		vault.files.set(P, good.slice(0, 90));
 		await s.handleExternalChange();
 		expect(s.mode).toBe("not-downloaded");
-		expect(backups().map((b) => b.reason).sort()).toEqual(["integrity", "unreadable"]);
-		expect(backups().find((b) => b.reason === "integrity")!.content).toBe(good);
+		expect(backups()).toEqual([{ reason: "integrity", content: good }]);
+	});
+
+	it("review N7: a dirty save does not write over an empty file at once: it waits like for a cut-off one", async () => {
+		const good = serialize(sampleDocument(1));
+		const { s, vault, disk } = setup(good);
+		await s.load();
+		addStroke(s.doc);
+		s.markChanged();
+		vault.files.set(P, "");
+		expect(await s.flush()).toBe(false);
+		expect(disk()).toBe("");
+		expect(s.awaiting).toEqual({ kind: "empty", damaged: false, kept: true });
+		expect(await s.writeBack()).toBe(true);
+		expect(strokes(disk())).toBe(2);
 	});
 
 	it("a dirty notebook never writes over a file being downloaded: it waits, then backs the complete version up and saves", async () => {
@@ -335,29 +469,70 @@ describe("#2 a file that is still arriving (review)", () => {
 });
 
 describe("#3 read-back after a save (review)", () => {
-	it("a different valid notebook right after our write: ours is backed up as a conflict, theirs is loaded", async () => {
+	it("review N2: another version of the notebook right after our write: ours stays in memory and in the journal, a merge is offered", async () => {
 		const good = serialize(sampleDocument(1));
 		const written = vi.fn();
-		const { s, backups, vault } = setup(good, {}, { onWritten: written });
+		const asked: ExternalNewerInfo[] = [];
+		const journal = new MemJournal();
+		const { s, backups, vault, disk } = setup(good, { journal }, { onWritten: written, onExternalNewer: (i) => asked.push(i) });
 		await s.load();
 		addStroke(s.doc);
 		s.markChanged();
-		const external = serialize(sampleDocument(4));
+		await vi.advanceTimersByTimeAsync(400);
+		await s.journalIdle();
+		const id = s.doc!.id;
+		const other = parse(good);
+		if (!other.ok) throw new Error("bad fixture");
+		addStroke(other.doc, 200);
+		addStroke(other.doc, 300);
+		other.doc.modifiedAt = "2026-10-30T11:59:00.000Z";
+		const external = serialize(other.doc);
 		const real = vault.vault.process;
 		vault.vault.process = async (f, fn) => {
 			const out = await real(f, fn);
 			vault.files.set(P, external);
 			return out;
 		};
-		expect(await s.flush()).toBe(true);
+		expect(await s.flush()).toBe(false);
 		vault.vault.process = real;
-		const conflict = backups().filter((b) => b.reason === "conflict");
-		expect(conflict).toHaveLength(1);
-		expect(strokes(conflict[0]!.content)).toBe(2);
+		expect(backups()).toEqual([{ reason: "conflict", content: external }]);
 		expect(written).not.toHaveBeenCalled();
-		await s.flush(); // runs after the queued external-change check
-		expect(s.doc!.pages[0]!.strokes).toHaveLength(4);
+		expect(asked).toHaveLength(1);
+		expect(s.doc!.pages[0]!.strokes).toHaveLength(2);
+		expect(s.dirty).toBe(true);
+		await s.journalIdle();
+		expect(journal.count(id, P)).toBeGreaterThan(0);
+		asked[0]!.accept();
+		await vi.advanceTimersByTimeAsync(0);
+		await s.flush();
+		expect(strokes(disk())).toBe(2);
+		expect(s.dirty).toBe(false);
 	});
+
+	it("review N2: a read-back equal to the text before the write is a failed write, retried; nothing is backed up or reloaded", async () => {
+		const good = serialize(sampleDocument(1));
+		const { s, backups, vault, disk } = setup(good);
+		await s.load();
+		addStroke(s.doc);
+		s.markChanged();
+		const real = vault.vault.process;
+		let first = true;
+		vault.vault.process = async (f, fn) => {
+			if (!first) return real(f, fn);
+			first = false;
+			fn(good); // the write "returns" but never lands
+			return good;
+		};
+		expect(await s.flush()).toBe(false);
+		expect(disk()).toBe(good);
+		expect(backups()).toHaveLength(0);
+		expect(s.doc!.pages[0]!.strokes).toHaveLength(2);
+		expect(s.dirty).toBe(true);
+		await vi.advanceTimersByTimeAsync(1500);
+		expect(strokes(disk())).toBe(2);
+		vault.vault.process = real;
+	});
+
 
 	it("another app writing the file in place is never 'repaired' over: the save fails and is retried", async () => {
 		const good = serialize(sampleDocument(1));

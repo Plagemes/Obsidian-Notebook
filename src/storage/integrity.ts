@@ -31,7 +31,7 @@ import type { Asset, NotebookDocument } from "../model/types";
 import { fingerprint } from "./journal";
 import { backupDate, isBackupOf } from "./recovery";
 import type { LocalSlot } from "./safe-mode";
-import { assetAvailability, isAwaitingDownload } from "./sync-state";
+import { assetAvailability, isAwaitingDownload, withoutNulTail } from "./sync-state";
 
 /** Versions kept per notebook. */
 export const RING_SIZE = 5;
@@ -283,7 +283,7 @@ export interface CheckOptions {
 
 /** Full check of one notebook's document text: parse, validation, ledger verdict, asset files. */
 export function checkNotebookText(text: string, options: CheckOptions): NotebookCheck {
-	const parsed = parse(text);
+	const parsed = parse(withoutNulTail(text));
 	if (!parsed.ok) {
 		if (isAwaitingDownload(text)) return { docId: null, pages: 0, issues: [{ kind: "not-downloaded" }] };
 		const issues: IntegrityIssue[] = [{ kind: parsed.reason === "future-version" ? "future-version" : "unreadable", detail: parsed.message }];

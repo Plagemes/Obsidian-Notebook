@@ -55,6 +55,13 @@ Not yet verified on Android hardware. The manual steps added in this version are
 - *Check notebooks integrity* reports an empty notebook as not downloaded (Repair asks first) and an empty or smaller asset file as still arriving, not as damage.
 - An image that fails to decode (usually still being written by the sync app) is loaded again when its file changes.
 - The quick switcher saves the notebooks it read into the library index (no re-reading every session), and neither it nor the library saves over an index written by a newer plugin version.
+- Save read-back: a write cut inside a multi-byte character (read back ending in U+FFFD) is recognised as our own partial write and repaired.
+- Save read-back: a read-back equal to the previous text is a failed write (retried, journal and document kept) instead of "another writer"; another version of the notebook is backed up and offered for merge while the local document stays in memory, and the journal is deleted only once our content is on disk.
+- Sync safety: "may be damaged" now needs strong evidence (the replaced text is this device's write of the last 2 minutes, journal entries or our own torn write); *Write it back* is the primary action only then, its confirmation warns that a newer version may be downloading, the current file content is backed up first and a version that arrived meanwhile is not written over.
+- Sync safety: a cut-off file is backed up once per session, after it stops changing, instead of once per partial state during a slow download.
+- Sync safety: while an open notebook waits for its file, the last readable text stays the journal base (edits survive a crash) and a "recently changed" verdict is reviewed as well.
+- Sync safety: a complete notebook followed by NUL bytes opens normally, and an open document stays in memory when its backup fails.
+- Sync safety: a save with pending edits no longer writes over an empty file at once; it waits as for a cut-off file (*Write it back* is offered).
 
 ### Development
 - The browser harness has checks and screenshots for the redesigned interface; `npm run harness:check` runs 29 scenarios.

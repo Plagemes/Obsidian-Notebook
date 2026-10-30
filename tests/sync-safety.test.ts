@@ -93,14 +93,17 @@ describe("#344 not downloaded yet", () => {
 		expect(io.backups).toEqual([{ content: before, reason: "integrity" }]);
 	});
 
-	it("a save over a NUL placeholder does not back the placeholder up as a conflict", async () => {
+	it("a save over a NUL placeholder waits (review N7) and never backs the placeholder up as a conflict", async () => {
 		const io = new FakeIO(serialize(sampleDocument(1)));
 		const s = new DocumentSession(io, timers);
 		await s.load();
 		s.doc!.pages[0]!.strokes.push(line(1, 1, 50, 50));
 		s.markChanged();
 		io.content = "\0".repeat(100);
-		expect(await s.flush()).toBe(true);
+		expect(await s.flush()).toBe(false);
+		expect(io.writes).toHaveLength(0);
+		expect(s.awaiting).toEqual({ kind: "empty", damaged: false, kept: true });
+		expect(await s.writeBack()).toBe(true);
 		expect(io.backups).toHaveLength(0);
 		expect(io.writes).toHaveLength(1);
 	});

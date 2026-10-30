@@ -98,7 +98,9 @@ export function assessAfterFailure(before: string, attempted: string, after: str
 export function isPartialOf(attempted: string, after: string): boolean {
 	if (after === attempted) return false;
 	if (/^[\s\0]*$/.test(after)) return true;
-	const core = after.replace(/\0+$/, "");
+	// Review N1: a write cut inside a multi-byte UTF-8 character reads back ending in U+FFFD (replacement characters),
+	// possibly followed by NUL bytes: what comes before them is still our prefix.
+	const core = after.replace(/[\0�]+$/, "");
 	return core.length <= attempted.length && attempted.startsWith(core);
 }
 
