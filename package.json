@@ -1,6 +1,6 @@
 {
   "name": "obsidian-notebook",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Handwritten notes with a stylus inside Obsidian (Android + S Pen first).",
   "main": "main.js",
   "type": "module",
