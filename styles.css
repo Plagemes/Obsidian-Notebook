@@ -6284,39 +6284,71 @@ body.notebook-style-obsidian {
 	transform: scale(0.99);
 }
 
+/* The art is laid out beside the text, never under it: in a row it takes the space the text leaves (from the end of the
+   text to the card's right edge, under the chevron), in a tile the column right of the icon and text. A long name shrinks
+   the art, down to nothing, before it ellipsises. The padding is in variables so the art can reach the card's edges. */
 .nb-subject-card.is-row {
+	--nb-card-pad-y: 0px;
+	--nb-card-pad-r: 56px;
 	min-height: 126px;
+	padding: 0 var(--nb-card-pad-r) 0 26px;
 }
 
 .nb-subject-card.is-tile {
-	flex-direction: column;
-	align-items: flex-start;
-	justify-content: flex-end;
-	gap: 10px;
+	--nb-card-pad-y: 16px;
+	--nb-card-pad-r: 44px;
+	display: grid;
+	grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+	grid-template-rows: minmax(0, 1fr) auto;
+	align-items: end;
+	gap: 10px 20px;
 	min-height: 168px;
-	padding: 16px 44px 16px 22px;
+	padding: var(--nb-card-pad-y) var(--nb-card-pad-r) var(--nb-card-pad-y) 22px;
+}
+
+.nb-subject-card.is-tile > .nb-folder-icon,
+.nb-subject-card.is-tile > .nb-folder-badge {
+	grid-column: 1;
+	grid-row: 1;
+	align-self: start;
+}
+
+.nb-subject-card.is-tile > .nb-subject-text {
+	grid-column: 1;
+	grid-row: 2;
 }
 
 .nb-subject-art {
-	position: absolute;
+	position: relative;
 	z-index: -1;
-	top: 0;
-	right: 0;
-	bottom: 0;
-	width: 62%;
+	order: 1;
+	flex: 1 1 0;
+	align-self: stretch;
+	min-width: 0;
+	margin: calc(0px - var(--nb-card-pad-y, 0px)) calc(0px - var(--nb-card-pad-r, 0px)) calc(0px - var(--nb-card-pad-y, 0px)) 0;
 	background-image: var(--nb-art);
 	background-size: cover;
 	background-position: center right;
 	opacity: 0.9;
-	-webkit-mask-image: linear-gradient(to right, transparent 0%, #000 45%);
-	mask-image: linear-gradient(to right, transparent 0%, #000 45%);
+	-webkit-mask-image: linear-gradient(to right, transparent 0%, #000 40%);
+	mask-image: linear-gradient(to right, transparent 0%, #000 40%);
 	pointer-events: none;
 }
 
-.nb-subject-card.is-tile .nb-subject-art {
-	width: 100%;
-	-webkit-mask-image: linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.55) 35%, #000 70%);
-	mask-image: linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.55) 35%, #000 70%);
+.nb-subject-card.is-tile > .nb-subject-art {
+	grid-column: 2;
+	grid-row: 1 / -1;
+}
+
+.nb-subject-card.is-row .nb-subject-text {
+	flex: 0 1 auto;
+}
+
+.nb-subject-card.is-row .nb-chevron {
+	position: absolute;
+	right: 22px;
+	top: 50%;
+	margin-top: -11px;
 }
 
 .nb-folder-icon {
@@ -7138,7 +7170,9 @@ body.notebook-style-obsidian {
 
 .nb-app.is-phone .nb-subject-card.is-tile {
 	min-height: 146px;
-	padding: 14px 30px 14px 16px;
+	--nb-card-pad-y: 14px;
+	--nb-card-pad-r: 30px;
+	padding: var(--nb-card-pad-y) var(--nb-card-pad-r) var(--nb-card-pad-y) 16px;
 }
 
 .nb-app.is-phone .nb-subject-card.is-tile .nb-folder-icon {

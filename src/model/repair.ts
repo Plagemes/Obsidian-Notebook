@@ -624,10 +624,14 @@ function salvageMeta(raw: unknown, pageIds: Set<string>, summary: RepairSummary,
 	const blank = [{ id: "p", width: 1, height: 1, paper: { kind: "blank", spacing: PAPER_SPACING.blank }, strokes: [] }];
 	if (raw === undefined) return { ...DEFAULT_META, tags: [], bookmarks: [] };
 	// Bookmark details are checked on their own below (against the real pages), so a damaged entry costs only itself.
+	// v11: so are the description and the cover, so a cover whose image asset was lost costs only the cover.
 	const withoutInfo: RawObject | null = isObj(raw) ? { ...raw, bookmarks: [] } : null;
-	if (withoutInfo) delete withoutInfo.bookmarkInfo;
-	// v11: the assets are passed so an image cover whose asset survived is kept.
-	const asIs = withoutInfo ? tryDoc(blank, assets, withoutInfo) : null;
+	if (withoutInfo) {
+		delete withoutInfo.bookmarkInfo;
+		delete withoutInfo.description;
+		delete withoutInfo.coverArt;
+	}
+	const asIs = withoutInfo ? tryDoc(blank, {}, withoutInfo) : null;
 	let meta: NotebookMeta;
 	if (asIs && isObj(raw)) {
 		const bookmarks = Array.isArray(raw.bookmarks) ? (raw.bookmarks as unknown[]).filter((b): b is string => typeof b === "string" && pageIds.has(b)) : [];
@@ -645,7 +649,26 @@ function salvageMeta(raw: unknown, pageIds: Set<string>, summary: RepairSummary,
 	}
 	const info = isObj(raw) ? salvageBookmarkInfo(raw.bookmarkInfo, meta.bookmarks, summary) : undefined;
 	if (info) meta.bookmarkInfo = info;
+	if (isObj(raw)) salvageV11Meta(raw, meta, blank, summary, assets);
 	return meta;
+}
+
+/**
+ * v11 description and cover, each validated on its own (with the recovered assets, so an image cover whose asset
+ * survived is kept): a valid one is kept, an invalid one (an image cover whose asset was lost) is dropped and counted.
+ */
+function salvageV11Meta(raw: RawObject, meta: NotebookMeta, blank: unknown[], summary: RepairSummary, assets: Record<string, Asset>): void {
+	const base = { tags: [], favorite: false, cover: DEFAULT_META.cover, bookmarks: [] };
+	if (raw.description !== undefined) {
+		const d = tryDoc(blank, {}, { ...base, description: raw.description })?.meta?.description;
+		if (d !== undefined) meta.description = d;
+		else summary.fieldsReset++;
+	}
+	if (raw.coverArt !== undefined) {
+		const c = tryDoc(blank, assets, { ...base, coverArt: raw.coverArt })?.meta?.coverArt;
+		if (c) meta.coverArt = c;
+		else summary.fieldsReset++;
+	}
 }
 
 /**

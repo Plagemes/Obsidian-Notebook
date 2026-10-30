@@ -27,7 +27,10 @@ export interface SubjectCardOptions {
 /** Art bitmaps are cached by size, so every card asks for the same few sizes. */
 const ART_SIZE = { row: [320, 128], tile: [280, 176] } as const;
 
-/** Subject card (DESIGN.md §3): gradient in the subject colour, glossy folder icon, title, meta, artwork, chevron. */
+/**
+ * Subject card (DESIGN.md §3): gradient in the subject colour, glossy folder icon, title, meta, artwork, chevron. The
+ * artwork is laid out beside the icon and text (styles.css, "subject cards"), never under them, at every width.
+ */
 export function subjectCard(parent: HTMLElement, o: SubjectCardOptions): HTMLElement {
 	const card = parent.createDiv({ cls: `nb-subject-card is-${o.shape}` });
 	subjectVars(card, o.color);

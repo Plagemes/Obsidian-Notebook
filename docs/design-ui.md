@@ -217,7 +217,7 @@ the accent soft fill and an accent underline dot; groups are separated by 1 px d
 | `src/view/settings-schema.ts` | The settings tab described once: sections, groups, rows, visibility and search (pure) |
 | `src/view/settings-tab.ts` | Draws the settings tab from the schema (Obsidian 1.13+ definitions and the older hand-drawn tab) |
 | `src/view/create-dialog.ts`, `src/view/create-logic.ts` | Creation dialog (wave 0.12) and its pure rules (names, sizes, folder list, the new document) |
-| `src/ui/components/subject-card.ts` | The subject card (DESIGN.md §3) shared by the library, Home and the creation dialog's folder preview: `subjectCard(parent, { name, color, seed, artStyle?, icon?, lines, shape, art, onOpen? })` |
+| `src/ui/components/subject-card.ts` | The subject card (DESIGN.md §3) shared by the library, Home and the creation dialog's folder preview: `subjectCard(parent, { name, color, seed, artStyle?, icon?, lines, shape, art, onOpen? })`. The art is laid out beside the icon and text, never under them: in a row from the end of the text to the right edge, in a tile the column right of them (a long name narrows it) |
 | `src/library/folder-meta.ts`, `folder-meta-store.ts`, `folder-meta-events.ts` | Folder colour, icon, description and art style (per-device sidecar in `_meta`), the read API `getFolderMeta` / `onFolderMetaChange`, renames |
 
 ## 10. Settings

@@ -16,6 +16,7 @@ import type { PdfLib } from "../pdf/pdfjs-types";
 import { backupFolder, type NotebookSettings } from "../settings";
 import { readNotebookText, writeNotebookText } from "../storage/format";
 import { createNotebook } from "../storage/notebooks";
+import { existsInsensitive } from "../storage/names";
 import { LibraryTrash } from "../storage/trash";
 import { documentFromTemplate } from "../model/templates";
 import { openTemplateGallery } from "../view/page-tools";
@@ -190,7 +191,8 @@ export class NotebookLibraryHost implements LibraryHost {
 		new CreateDialog(app, {
 			root: () => this.root(),
 			allFolders: () => app.vault.getAllLoadedFiles().filter((f): f is TFolder => f instanceof TFolder).map((f) => f.path),
-			exists: (path) => app.vault.getAbstractFileByPath(normalizePath(path)) !== null,
+			// Case is ignored, as on the disks of Windows, macOS and Android: `anatomy` takes `Anatomy`.
+			exists: (path) => existsInsensitive(app.vault, normalizePath(path)),
 			folderMeta: (path) => this.folderMeta.getFolderMeta(path),
 			defaults: () => {
 				const s = this.plugin.settings;
@@ -264,7 +266,7 @@ export class NotebookLibraryHost implements LibraryHost {
 	private async createFolderFromDialog(spec: FolderSpec): Promise<boolean> {
 		const path = normalizePath(joinPath(spec.parent, spec.name));
 		try {
-			if (this.app.vault.getAbstractFileByPath(path)) throw new Error(t("create.error.folderExists", { name: spec.name }));
+			if (existsInsensitive(this.app.vault, path)) throw new Error(t("create.error.folderExists", { name: spec.name }));
 			await this.app.vault.createFolder(path);
 			this.app.saveLocalStorage(LAST_FOLDER_KEY, spec.parent);
 		} catch (e) {

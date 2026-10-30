@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-	assetsDir, assetTrashDir, assetTrashPath, ASSET_GRACE_MS, hexTokens, isAssetFilePath, keptFolders, moveOrphans, runLibraryCheck,
+	assetsDir, assetTrashDir, assetTrashPath, ASSET_GRACE_MS, hexTokens, isAssetFilePath, isNonHolderSidecar, keptFolders, moveOrphans, runLibraryCheck,
 	scanNotebookText, type AssetFile, type CheckConfig, type CheckSource, type LiveReferences, type Mover, type RunOptions,
 	type ScanCache, type SeenStore, type VaultFileInfo,
 } from "../src/library/library-check";
@@ -350,6 +350,42 @@ describe("the library check", () => {
 		const r = await runLibraryCheck(src, config, opts(agedSeen(1)));
 		expect(r.kept.count).toBe(0);
 		expect(r.orphans.map((o) => o.id)).toEqual([id(1)]);
+	});
+
+	it("device sidecars that cannot name assets, unsynced, empty or unreadable, do not make the answer incomplete", async () => {
+		const sidecars = [
+			"Notebooks/_meta/folders-0a1b2c3d.json", "Notebooks/_meta/library-0a1b2c3d.json", "Notebooks/_meta/library-check-0a1b2c3d.json",
+			"Notebooks/_meta/folders.unreadable-deadbeef.json", "Notebooks/_meta/library.unreadable-deadbeef.json",
+			"Notebooks/_meta/library-check.unreadable-deadbeef.json",
+		];
+		for (const state of [{ text: "", size: 0 }, { text: "{\"cut", size: 5 }, { unreadable: true, size: 50 }] as FakeFile[]) {
+			const src = vault().put("Notebooks/Good.notebook", { text: notebookText() }).put(...assetFile(1));
+			for (const p of sidecars) src.put(p, state);
+			const r = await runLibraryCheck(src, config, opts(agedSeen(1)));
+			expect(r.complete).toBe(true);
+			expect(r.unavailable).toBe(0);
+			expect(r.orphans.map((o) => o.id)).toEqual([id(1)]);
+			expect(src.reads.filter((p) => p.includes("/_meta/"))).toEqual([]);
+		}
+	});
+
+	it("every other file that can name an asset stays a holder, in _meta too", async () => {
+		expect(isNonHolderSidecar("Notebooks/_meta/folders-0a1b2c3d.json", "Notebooks")).toBe(true);
+		expect(isNonHolderSidecar("_meta/library-0a1b2c3d.json", "")).toBe(true);
+		for (const p of [
+			"Notebooks/_meta/pdf-links-0a1b2c3d.json", "Notebooks/_meta/practice-0a1b2c3d.json", "Notebooks/_meta/page-moves-0a1b2c3d.json",
+			"Notebooks/_meta/sub/folders-0a1b2c3d.json", "Notebooks/_trash/folders-0a1b2c3d.json", "Notebooks/_meta/folders-xyz.json",
+			"Notebooks/_meta/practice.unreadable-deadbeef.json",
+		]) expect(isNonHolderSidecar(p, "Notebooks"), p).toBe(false);
+		// An unsynced holder (a page move record) still makes the answer unsure, and a complete one still protects.
+		const unsure = vault().put("Notebooks/Good.notebook", { text: notebookText() }).put(...assetFile(1))
+			.put("Notebooks/_meta/page-moves-0a1b2c3d.json", { text: "", size: 0 });
+		expect((await runLibraryCheck(unsure, config, opts(agedSeen(1)))).complete).toBe(false);
+		const holds = vault().put("Notebooks/Good.notebook", { text: notebookText() }).put(...assetFile(1))
+			.put("Notebooks/_meta/practice-0a1b2c3d.json", { text: `{"a":"${id(1)}"}` });
+		const r = await runLibraryCheck(holds, config, opts(agedSeen(1)));
+		expect(r.kept.count).toBe(1);
+		expect(r.orphans).toEqual([]);
 	});
 });
 

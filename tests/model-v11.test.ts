@@ -179,6 +179,55 @@ describe("format v11", () => {
 		}
 	});
 
+	it("repair keeps the description when the image cover's asset was lost, and drops only that cover (counted)", () => {
+		const doc = v11Doc();
+		doc.meta!.coverArt = { kind: "image", asset: img.id };
+		doc.assets = { [img.id]: img };
+		const raw = JSON.parse(serialize(doc)) as Raw;
+		setAt(raw, ["assets"], {});
+		setAt(raw, ["pages", 0, "strokes"], [{ id: "bad" }]);
+		const r = repairNotebookText(JSON.stringify(raw));
+		expect(r.ok).toBe(true);
+		if (r.ok) {
+			expect(r.summary.fieldsReset).toBe(1);
+			const back = parsed(r.text).doc;
+			expect(back.meta?.description).toBe(doc.meta!.description);
+			expect(back.meta?.cover).toBe("#16c2a3");
+			expect(back.meta?.coverArt).toBeUndefined();
+		}
+	});
+
+	it("repair keeps a valid art cover and drops only an invalid description", () => {
+		const raw = JSON.parse(serialize(v11Doc())) as Raw;
+		setAt(raw, ["meta", "description"], 42);
+		setAt(raw, ["pages", 0, "strokes"], [{ id: "bad" }]);
+		const r = repairNotebookText(JSON.stringify(raw));
+		expect(r.ok).toBe(true);
+		if (r.ok) {
+			expect(r.summary.fieldsReset).toBe(1);
+			const back = parsed(r.text).doc;
+			expect(back.meta?.description).toBeUndefined();
+			expect(back.meta?.coverArt).toEqual({ kind: "art", style: "waves", seed: "abc" });
+		}
+	});
+
+	it("repair keeps an image cover whose asset survived, and the v11 fields when another meta field is damaged", () => {
+		const doc = v11Doc();
+		doc.meta!.coverArt = { kind: "image", asset: img.id };
+		doc.assets = { [img.id]: img };
+		const raw = JSON.parse(serialize(doc)) as Raw;
+		setAt(raw, ["meta", "favorite"], "yes");
+		setAt(raw, ["pages", 0, "strokes"], [{ id: "bad" }]);
+		const r = repairNotebookText(JSON.stringify(raw));
+		expect(r.ok).toBe(true);
+		if (r.ok) {
+			const back = parsed(r.text).doc;
+			expect(back.meta?.description).toBe(doc.meta!.description);
+			expect(back.meta?.coverArt).toEqual({ kind: "image", asset: img.id });
+			expect(back.assets?.[img.id]).toBeDefined();
+		}
+	});
+
 	it("has the B5 page size preset (176 × 250 mm)", () => {
 		expect(PAGE_SIZES.b5.width / 2.8346).toBeCloseTo(176, 0);
 		expect(PAGE_SIZES.b5.height / 2.8346).toBeCloseTo(250, 0);

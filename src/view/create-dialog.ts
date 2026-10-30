@@ -24,9 +24,10 @@ import { subjectCard } from "../ui/components/subject-card";
 import { colorFor, SUBJECT_COLORS } from "../ui/palette";
 import { ColourPicker } from "./colour-picker";
 import {
-	CUSTOM_MAX_MM, CUSTOM_MIN_MM, customSide, depthBelow, folderChoices, joinPath, MAX_NAME, nameProblem, nextArtStyle, pageSize,
-	SIZE_CHOICES, startFolder, type NameProblem, type NotebookSpec, type SizeChoice,
+	CUSTOM_MAX_MM, CUSTOM_MIN_MM, customOrientation, customSide, depthBelow, folderChoices, isRootFolder, joinPath, MAX_NAME, nameProblem,
+	nextArtStyle, orientCustom, pageSize, SIZE_CHOICES, startFolder, type NameProblem, type NotebookSpec, type SizeChoice,
 } from "./create-logic";
+import { sanitizeName } from "../storage/names";
 import type { PickedFile } from "./pick";
 
 export type CreateTab = "notebook" | "folder";
@@ -275,18 +276,22 @@ export class CreateDialog extends Modal {
 	}
 
 	private nameProblem(): NameProblem | null {
+		// `clean` is the name as it will be created, so the check asks about the path that will be written.
 		if (this.tab === "notebook") {
-			return nameProblem(this.nb.name, (clean) => this.host.exists(joinPath(this.nb.folder, `${clean}.notebook`)));
+			return nameProblem(this.nb.name, (clean) => this.host.exists(joinPath(this.nb.folder, `${clean}.notebook`)), isRootFolder(this.nb.folder, this.host.root()));
 		}
-		return nameProblem(this.fd.name, (clean) => this.host.exists(joinPath(this.fd.parent, clean)));
+		return nameProblem(this.fd.name, (clean) => this.host.exists(joinPath(this.fd.parent, clean)), isRootFolder(this.fd.parent, this.host.root()));
 	}
 
 	private problemText(p: NameProblem): string {
-		const name = (this.tab === "notebook" ? this.nb.name : this.fd.name).trim();
+		const name = sanitizeName(this.tab === "notebook" ? this.nb.name : this.fd.name);
 		switch (p) {
 			case "empty": return t("create.error.empty");
 			case "chars": return t("create.error.chars");
 			case "dot": return t("create.error.dot");
+			case "trailing": return t("create.error.trailing");
+			case "device": return t("create.error.device", { name });
+			case "reserved": return t("create.error.reserved", { name });
 			case "long": return t("create.error.long", { max: String(MAX_NAME) });
 			case "exists": return t(this.tab === "notebook" ? "create.error.notebookExists" : "create.error.folderExists", { name });
 		}
@@ -524,6 +529,8 @@ export class CreateDialog extends Modal {
 			{ id: "custom", label: t("create.size.custom"), cls: "nb-create-chip" },
 		];
 		this.radioTiles(sizes, sizeItems.map((it) => ({ ...it, build: (tile: HTMLElement) => void tile.setText(it.label) })), this.nb.size, (s) => {
+			// Entering a custom size: the fields follow the selected orientation (swapped only if they show the other one).
+			if (s === "custom" && this.nb.size !== "custom") this.setCustomFields(orientCustom({ width: this.customWidth, height: this.customHeight }, this.nb.landscape, false));
 			this.nb.size = s;
 			this.render(false);
 		});
@@ -538,8 +545,32 @@ export class CreateDialog extends Modal {
 			setIcon(tile.createSpan({ cls: "nb-create-tile-icon" }), o.icon);
 			tile.createSpan({ cls: "nb-create-tile-label", text: o.label });
 		} })), this.nb.landscape ? "landscape" : "portrait", (o) => {
-			this.nb.landscape = o === "landscape";
+			const landscape = o === "landscape";
+			if (landscape === this.nb.landscape) return;
+			// A custom size keeps its two numbers: the other orientation swaps them.
+			if (this.nb.size === "custom" && !this.template) this.setCustomFields(orientCustom({ width: this.customWidth, height: this.customHeight }, landscape, true));
+			this.nb.landscape = landscape;
 			this.render(false);
+		});
+	}
+
+	/** Sets the custom side fields (as typed) and, when both are valid, the custom size. */
+	private setCustomFields(fields: { width: string; height: string }): void {
+		this.customWidth = fields.width;
+		this.customHeight = fields.height;
+		const cw = customSide(fields.width);
+		const ch = customSide(fields.height);
+		if (cw !== null && ch !== null) this.nb.customMm = { width: cw, height: ch };
+	}
+
+	/** Marks the orientation tile of `this.nb.landscape` as selected, without rebuilding the form (typing goes on). */
+	private syncOrientationTiles(): void {
+		const want = this.nb.landscape ? "landscape" : "portrait";
+		this.contentEl.querySelectorAll<HTMLElement>(".nb-create-orient-tile").forEach((tile) => {
+			const on = tile.dataset.id === want;
+			tile.toggleClass("is-active", on);
+			tile.setAttribute("aria-checked", String(on));
+			tile.tabIndex = on ? 0 : -1;
 		});
 	}
 
@@ -566,7 +597,15 @@ export class CreateDialog extends Modal {
 			w.toggleClass("is-invalid", cw === null);
 			h.toggleClass("is-invalid", ch === null);
 			error.setText(cw === null || ch === null ? t("create.custom.invalid", { min: String(CUSTOM_MIN_MM), max: String(CUSTOM_MAX_MM) }) : "");
-			if (cw !== null && ch !== null) this.nb.customMm = { width: cw, height: ch };
+			if (cw !== null && ch !== null) {
+				this.nb.customMm = { width: cw, height: ch };
+				// The numbers are applied as typed; the selected orientation follows them.
+				const landscape = customOrientation(cw, ch, this.nb.landscape);
+				if (landscape !== this.nb.landscape) {
+					this.nb.landscape = landscape;
+					this.syncOrientationTiles();
+				}
+			}
 		};
 		check();
 	}
@@ -731,7 +770,7 @@ export class CreateDialog extends Modal {
 				const spec: NotebookSpec = { ...this.nb, name: this.nb.name.trim(), description: this.nb.description.trim() };
 				ok = await this.host.createNotebook(spec, { ...(this.image ? { image: this.image.file } : {}), ...(this.template ? { template: this.template } : {}) });
 			} else {
-				ok = await this.host.createFolder({ ...this.fd, name: this.fd.name.trim(), description: this.fd.description.trim() });
+				ok = await this.host.createFolder({ ...this.fd, name: sanitizeName(this.fd.name), description: this.fd.description.trim() });
 			}
 		} finally {
 			this.busy = false;
