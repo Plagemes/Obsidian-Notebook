@@ -21,6 +21,7 @@ import { deletePageKeepingCopy, newPageFromTemplate, openDeletedPages, savePageA
 import { insertReference, openPage, removeTextbook, setTextbook } from "./textbook-ref-ui";
 import { toggleBookmark } from "./view-helpers";
 import { showNotice } from "./notice";
+import { canPrint } from "./print";
 
 export interface ActionArg {
 	page?: number;
@@ -43,6 +44,8 @@ export function commandApplies(view: NotebookView, id: string): boolean {
 	if (id.startsWith("layer-")) return !!view.uiContext().selection;
 	// wave 0.10 (362): copying to the other devices needs a selection (pasting does not).
 	if (id === "selection-copy-devices") return !!view.uiContext().selection;
+	// wave 0.10 (81): there is no print dialog on a phone or tablet.
+	if (id === "print") return canPrint();
 	return true;
 }
 
@@ -272,6 +275,13 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	// wave 0.9: export dialog (381, from a page's sheet it starts on that page), Markdown export (382), night mode (367), cropped margins (376)
 	"export-dialog": (v, arg) => v.openExportDialog(arg.page),
 	"export-markdown": (v) => v.openMarkdownExport(),
+	// wave 0.10: PNG images (81) and Print (81) are choices of the same dialog; read-only mode (51)
+	"export-png": (v) => v.openExportDialog(undefined, "png"),
+	"print": (v) => {
+		if (canPrint()) v.openExportDialog(undefined, "print");
+		else showNotice(t("export.print.unavailable"), 8000);
+	},
+	"toggle-read-only": (v) => v.toggleReadOnlyMode(),
 	"night-mode": (v) => v.displayTools?.toggleNight(),
 	"crop-margins": (v) => v.displayTools?.toggleCrop(),
 	// wave 0.10 (363): next / previous open notebook

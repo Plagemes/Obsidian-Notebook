@@ -5103,3 +5103,94 @@ body {
 	font-size: var(--font-ui-small);
 	word-break: break-all;
 }
+
+
+/* wave 0.10 (51): read-only mode. The indicator replaces the pen indicator and the favourite pens, which cannot be used. */
+.notebook-readonly-chip {
+	flex: 0 1 auto;
+	gap: 6px;
+	padding: 0 10px;
+	max-width: 160px;
+	border-radius: var(--nb-radius-pill);
+	font-size: var(--nb-text-s);
+	font-weight: var(--font-medium, 500);
+	white-space: nowrap;
+}
+
+.notebook-readonly-chip .notebook-readonly-icon {
+	display: inline-flex;
+	align-items: center;
+}
+
+.notebook-toolbar.is-read-only .notebook-chip,
+.notebook-toolbar.is-read-only .notebook-favs {
+	display: none;
+}
+
+/* The save state says nothing while nothing can change; an error still shows. */
+.notebook-toolbar.is-read-only .notebook-status:not([data-kind="error"]) {
+	display: none;
+}
+
+/* A phone: only the lock, the label is its name for screen readers. */
+.notebook-toolbar:not(.is-single-row) .notebook-readonly-chip .notebook-readonly-label {
+	display: none;
+}
+
+.notebook-toolbar:not(.is-single-row) .notebook-readonly-chip {
+	padding: 0;
+	min-width: 40px;
+}
+
+.notebook-body.is-read-only .notebook-stage {
+	cursor: grab;
+}
+
+/* wave 0.10 (81): Print. The container exists only while the system print dialog is open; it is never visible on screen. */
+.notebook-print-root {
+	display: none;
+}
+
+@media print {
+	body.notebook-printing > *:not(.notebook-print-root) {
+		display: none !important;
+	}
+
+	body.notebook-printing {
+		overflow: visible !important;
+		height: auto !important;
+		background: #fff !important;
+	}
+
+	body.notebook-printing .notebook-print-root {
+		display: block;
+	}
+
+	.notebook-print-root .notebook-print-page {
+		break-after: page;
+		page-break-after: always;
+		break-inside: avoid;
+	}
+
+	.notebook-print-root .notebook-print-page:last-child {
+		break-after: auto;
+		page-break-after: auto;
+	}
+
+	/* A page is scaled down to fit one sheet, whatever the paper; a very long page (an infinite one) keeps its size and flows over several sheets. */
+	.notebook-print-root .notebook-print-page > img {
+		display: block;
+		width: 100%;
+		height: auto;
+		max-height: 100vh;
+		object-fit: contain;
+	}
+
+	.notebook-print-root .notebook-print-page.is-long {
+		break-inside: auto;
+	}
+
+	.notebook-print-root .notebook-print-page.is-long > img {
+		max-height: none;
+	}
+}

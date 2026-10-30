@@ -48,6 +48,10 @@ SCENARIOS.push({ doc: "pdf", theme: "dark", device: "narrow", lowLatency: false 
 // The practice strip, the peek and the timer on a notebook with a practice copy (wave 0.9).
 SCENARIOS.push({ doc: "practice", theme: "light", device: "desktop", lowLatency: false });
 SCENARIOS.push({ doc: "practice", theme: "dark", device: "narrow", lowLatency: false });
+// Read-only mode, PNG export with ranges and Print (wave 0.10): desktop can print, a phone and a tablet cannot.
+SCENARIOS.push({ doc: "readonly", theme: "light", device: "desktop", lowLatency: false });
+SCENARIOS.push({ doc: "readonly", theme: "dark", device: "narrow", lowLatency: false });
+SCENARIOS.push({ doc: "readonly", theme: "light", device: "tablet", lowLatency: false });
 
 function findChrome() {
 	const candidates = [
@@ -203,7 +207,7 @@ async function main() {
 					await sleep(100);
 				}
 				await cdp.evaluate("window.harness.ready.then(() => true)");
-				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}

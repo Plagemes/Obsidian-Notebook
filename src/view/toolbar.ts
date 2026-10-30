@@ -132,6 +132,7 @@ export class Toolbar {
 	private readonly shapeButtons = new Map<ShapeKind, HTMLButtonElement>();
 	private readonly sizeGroup: HTMLElement;
 	private readonly chipButton: HTMLButtonElement;
+	private readonly readOnlyButton: HTMLButtonElement;
 	private readonly chipDot: HTMLElement;
 	private readonly moreButton: HTMLButtonElement;
 	private readonly navigatorButton: HTMLButtonElement;
@@ -175,6 +176,14 @@ export class Toolbar {
 		this.undoButton = this.iconButton(history, "undo", "tool.undo", () => this.actions.undo());
 		this.redoButton = this.iconButton(history, "redo", "tool.redo", () => this.actions.redo());
 		actionsRow.createDiv({ cls: "notebook-toolbar-divider", attr: { "aria-hidden": "true" } });
+
+		// wave 0.10 (51): while read-only mode is on this button takes the place of the pen indicator and the favourite pens;
+		// tapping it switches the mode off.
+		this.readOnlyButton = this.button(actionsRow, t("readonly.chip.hint"), () => this.actions.runAction("toggle-read-only"));
+		this.readOnlyButton.addClasses(["notebook-readonly-chip", "notebook-hidden", "is-active"]);
+		this.readOnlyButton.setAttribute("aria-pressed", "true");
+		setIcon(this.readOnlyButton.createSpan({ cls: "notebook-readonly-icon" }), "lock");
+		this.readOnlyButton.createSpan({ cls: "notebook-readonly-label", text: t("readonly.chip") });
 
 		this.chipButton = this.button(actionsRow, t("toolbar.options"), () => this.togglePopover("options"));
 		this.chipButton.addClass("notebook-chip");
@@ -247,6 +256,13 @@ export class Toolbar {
 		this.render();
 		this.onEditableChange?.(editable);
 		if (!editable) this.setHistory(false, false);
+	}
+
+	/** wave 0.10 (51): shows or hides the read-only indicator (it is also the button that switches the mode off). */
+	setReadOnly(on: boolean): void {
+		this.el.toggleClass("is-read-only", on);
+		this.readOnlyButton.toggleClass("notebook-hidden", !on);
+		if (on) this.closePopover();
 	}
 
 	/** Reflects the state of the page panel on its button. */
