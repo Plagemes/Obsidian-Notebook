@@ -11,13 +11,14 @@ import { renderThumbnail } from "../library/thumbnail";
 import { needsNextPage, needsPageOffer } from "../ink/auto-page";
 import { deleteInkCommand, inkOnRemoved } from "../ink/attach";
 import { captureClip, type ClipContent } from "../ink/clipboard";
-import { elementsInLasso, hitElement, transformElement } from "../ink/elements";
+import { elementsInLasso, hitElement } from "../ink/elements";
 import { eraseAreaCommand } from "../ink/erase-area";
 import { filterErasable } from "../ink/erase-filter";
 import { findHitStrokes, type BBox } from "../ink/hit-test";
 import { growForInfinite } from "../ink/infinite";
 import { InputPolicy } from "../ink/input-policy";
-import { strokesInLasso, transformStroke } from "../ink/lasso";
+import { rectanglePolygon, strokesInLasso } from "../ink/lasso";
+import { applyPlacement, uniformPlacement } from "../ink/selection-transform";
 import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layout, type PageBox } from "../ink/layout";
 import { HoldTracker } from "../ink/hold";
 import { LastTool } from "../ink/last-tool";
@@ -103,6 +104,7 @@ import { BLANK_THUMBNAIL, ViewResilience, type ResilienceServices, type Resilien
 import { ObjectInk } from "./object-ink";
 import { PenLinks } from "./pen-links";
 import { SelectionActions } from "./selection-actions";
+import { SelectionArrange } from "./selection-arrange";
 import { StampPalette, type StampTarget } from "./stamp-palette";
 import { TextEditor, type TextEditSession } from "./text-editor";
 import { MathTools, type MathHost } from "./math-tools";
@@ -208,6 +210,8 @@ interface Lasso {
 	points: Array<[number, number]>;
 	/** The eraser's Area mode: the outline erases what is inside instead of selecting it. */
 	erase?: boolean;
+	/** wave 0.10 (63): rectangle selection: the outline is the box from `anchor` to the pen, not a freehand path. */
+	anchor?: [number, number];
 }
 
 /** Insert/remove space: the line touched (page coordinates) and how far it was dragged (pt; down > 0). */
@@ -313,6 +317,7 @@ export class NotebookView extends FileView {
 		},
 	);
 	private selectionActions: SelectionActions | null = null;
+	private arrange: SelectionArrange | null = null;
 	/** Links written with the pen (O8): note links in text boxes, on ink, and the `[[` suggester. */
 	private penLinks: PenLinks | null = null;
 	/** One page at a time (#14); its gestures and animation live in page-mode.ts. */
@@ -671,6 +676,7 @@ export class NotebookView extends FileView {
 		this.pageMode = null;
 		this.selectionActions?.destroy();
 		this.selectionActions = null;
+		this.arrange = null;
 		this.penLinks?.destroy();
 		this.penLinks = null;
 		this.pageOffer?.destroy();
@@ -1765,13 +1771,23 @@ export class NotebookView extends FileView {
 			sidePane: pdfSideState(this),
 			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false },
 			display: { night: this.display?.night ?? false, crop: this.display?.crop ?? false },
-			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true },
+			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle" },
 			markers: {
 				invisibleInk: !!this.markers?.invisibleInk, solutions: !!this.markers?.solutionsShown,
 				pageSolutions: !!page && (this.markers?.pageSolutionsShown(page) ?? false),
 			},
 			narrow: this.body?.hasClass("is-narrow") ?? false,
 		};
+	}
+
+	/** wave 0.10: align, distribute, rotate, mirror, exact size and select similar / by colour or tool (contextual bar, sheet, commands). */
+	get arrangeTools(): SelectionArrange | null {
+		return this.arrange;
+	}
+
+	/** wave 0.10 (63): switches the lasso tool between the freehand outline and the rectangle (turning the lasso on). */
+	toggleSelectRectangle(): void {
+		if (this.editable()) this.toolbar.update({ tool: "lasso", selectMode: this.tools.selectMode === "rectangle" ? "lasso" : "rectangle" });
 	}
 
 	/** The selection's copy, cut, paste, duplicate and white-to-transparent (contextual bar). */
@@ -2639,7 +2655,7 @@ export class NotebookView extends FileView {
 				return true;
 			}
 			this.clearSelection();
-			this.lasso = { pageIndex, points: [local] };
+			this.lasso = this.tools.selectMode === "rectangle" ? { pageIndex, points: [local], anchor: local } : { pageIndex, points: [local] };
 			this.renderer?.setLasso(this.lasso);
 			return true;
 		}
@@ -2731,6 +2747,13 @@ export class NotebookView extends FileView {
 		}
 
 		const lasso = this.lasso;
+		if (lasso?.anchor) {
+			// Rectangle selection: the box from where the pen went down to where it is now.
+			const p = n > 0 ? this.toLocal(lasso.pageIndex, NotebookView.at(samples, n - 1)) : null;
+			if (p) lasso.points = rectanglePolygon(lasso.anchor, p);
+			this.renderer?.setLasso(lasso);
+			return;
+		}
 		if (lasso) {
 			const minStep = 2 / this.viewport.scale;
 			for (let i = 0; i < n; i++) {
@@ -3482,17 +3505,13 @@ export class NotebookView extends FileView {
 			this.clearSelection();
 			return;
 		}
-		const moved = present.map((s) => freezeStroke(transformStroke(s, sel.matrix)));
-		const movedEls = presentEls.map((e) => transformElement(e, sel.matrix, measureText));
 		const onPage = new Set(page.strokes);
 		const attached = this.attachedInk(sel).filter((s) => onPage.has(s));
-		const movedAttached = attached.map((s) => freezeStroke(transformStroke(s, sel.matrix)));
-		const commands: Command[] = [
-			...present.map((s, i) => new ReplaceStroke(page.id, s, [moved[i]!], page.strokes.indexOf(s))),
-			...attached.map((s, i) => new ReplaceStroke(page.id, s, [movedAttached[i]!], page.strokes.indexOf(s))),
-			...presentEls.map((e, i) => new ReplaceElement(page.id, e, movedEls[i]!)),
-		];
-		this.history.execute(new Batch("Transform selection", commands));
+		const plan = applyPlacement(page, present, presentEls, uniformPlacement(present, presentEls, attached, sel.matrix), measureText, "Transform selection");
+		if (!plan) return;
+		this.history.execute(plan.command);
+		const moved = plan.strokes;
+		const movedEls = plan.elements;
 		sel.strokes = moved;
 		sel.elements = movedEls;
 		sel.matrix = IDENTITY;
@@ -3600,6 +3619,28 @@ export class NotebookView extends FileView {
 			pasteTarget: () => this.pasteTarget(),
 			textStyle: () => ({ fontSize: this.tools.textSize, color: this.tools.penColor }),
 			stillHere: (doc) => this.session?.doc === doc && this.editable() && !this.controller?.drawing,
+		});
+		this.arrange = new SelectionArrange({
+			app: this.app,
+			doc: () => this.session?.doc ?? null,
+			editable: () => this.editable() && !this.controller?.drawing,
+			selection: () => this.selection,
+			select: (pageIndex, strokes, elements) => this.selectItems(pageIndex, strokes, elements),
+			execute: (cmd) => {
+				this.history.execute(cmd);
+				this.afterHistoryChange();
+				this.renderer?.invalidate();
+			},
+			ink: (page) => this.inkInView(page),
+			inkFollowsObjects: () => this.host.settings.inkFollowsObjects,
+			currentPage: () => this.currentPageIndex(),
+			anchor: (id) => {
+				const el = this.ui?.contextBar.el.querySelector<HTMLElement>(`[data-action="${id}"]`);
+				const r = el?.getBoundingClientRect();
+				return r ? { x: r.left, y: r.top } : null;
+			},
+			run: (id) => this.runAction(id),
+			commitText: () => this.commitText(),
 		});
 	}
 

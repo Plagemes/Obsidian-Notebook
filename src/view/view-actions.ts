@@ -33,12 +33,15 @@ export function sizeName(page: Page): PageSizeName | null {
 	return (Object.keys(PAGE_SIZES) as PageSizeName[]).find((n) => PAGE_SIZES[n].width === short && PAGE_SIZES[n].height === long) ?? null;
 }
 
+/** The commands that work on a selection (layer order; wave 0.10: align, distribute, rotate, mirror, size, select similar). */
+const SELECTION_ONLY = /^(layer-|selection-(align|distribute|rotate|mirror|resize|transform|similar)|select-same-)/;
+
 /** Whether a command of the registry applies to this view now (the palette hides it otherwise). */
 export function commandApplies(view: NotebookView, id: string): boolean {
 	if (id === "pdf-side-open") return pdfSideState(view).available;
 	if (id.startsWith("pdf-side-")) return pdfSideState(view).open;
-	// wave 0.9 (357): the layer order needs something selected.
-	if (id.startsWith("layer-")) return !!view.uiContext().selection;
+	// wave 0.9 (357): the layer order needs something selected. Wave 0.10: so do arranging it and selecting similar ink.
+	if (SELECTION_ONLY.test(id)) return !!view.uiContext().selection;
 	return true;
 }
 
@@ -112,6 +115,27 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"layer-backward": (v) => v.moveSelectionLayer("backward"),
 	"layer-back": (v) => v.moveSelectionLayer("back"),
 	"delete-selection": (v) => v.removeSelection(),
+	// wave 0.10: rectangle selection (63), select by colour or tool (64), align and distribute (38), rotate, mirror, size (65)
+	"select-rectangle": (v) => v.toggleSelectRectangle(),
+	"select-by-style": (v) => v.arrangeTools?.pickStyle(),
+	"selection-similar": (v) => v.arrangeTools?.menu("similar"),
+	"select-same-colour": (v) => v.arrangeTools?.similar("colour"),
+	"select-same-tool": (v) => v.arrangeTools?.similar("tool"),
+	"selection-align-menu": (v) => v.arrangeTools?.menu("align"),
+	"selection-align-left": (v) => v.arrangeTools?.align("left"),
+	"selection-align-centre": (v) => v.arrangeTools?.align("centre"),
+	"selection-align-right": (v) => v.arrangeTools?.align("right"),
+	"selection-align-top": (v) => v.arrangeTools?.align("top"),
+	"selection-align-middle": (v) => v.arrangeTools?.align("middle"),
+	"selection-align-bottom": (v) => v.arrangeTools?.align("bottom"),
+	"selection-distribute-h": (v) => v.arrangeTools?.distribute("horizontal"),
+	"selection-distribute-v": (v) => v.arrangeTools?.distribute("vertical"),
+	"selection-transform-menu": (v) => v.arrangeTools?.menu("transform"),
+	"selection-rotate-cw": (v) => v.arrangeTools?.rotate(true),
+	"selection-rotate-ccw": (v) => v.arrangeTools?.rotate(false),
+	"selection-mirror-h": (v) => v.arrangeTools?.mirror("horizontal"),
+	"selection-mirror-v": (v) => v.arrangeTools?.mirror("vertical"),
+	"selection-resize": (v) => v.arrangeTools?.resize(),
 
 	// navigation (wave 0.7)
 	"goto-page-number": (v) => new GotoPageModal(v.app, v).open(),

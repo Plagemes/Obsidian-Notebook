@@ -57,7 +57,10 @@ export interface UiContext {
 	lecture: boolean;
 	sidePane: { available: boolean; open: boolean };
 	reading: { annotationsHidden: boolean; dim: boolean };
-	toggles: { ruler: boolean; penOnly: boolean; navigator: boolean; /** One page at a time (wave 0.7). */ pageMode?: boolean; /** Pen gesture mode (wave 0.8). */ penGestures?: boolean };
+	toggles: {
+		ruler: boolean; penOnly: boolean; navigator: boolean; /** One page at a time (wave 0.7). */ pageMode?: boolean; /** Pen gesture mode (wave 0.8). */ penGestures?: boolean;
+		/** wave 0.10 (63): the lasso tool selects with a rectangle instead of a freehand outline. */ selectRectangle?: boolean;
+	};
 	/** wave 0.8: invisible-ink pen mode and the view-only "Show solutions" toggles (notebook, page in view). Optional. */
 	markers?: { invisibleInk: boolean; solutions: boolean; pageSolutions: boolean };
 	/** wave 0.9: view-only night mode (367) and cropped PDF margins (376). Optional (both off when absent). */
@@ -92,6 +95,8 @@ export interface ActionDef {
 	/** Toggle state shown on the control. */
 	readonly checked?: (c: UiContext) => boolean;
 	readonly danger?: boolean;
+	/** wave 0.10: on the second row of the contextual bar (under the main row), for contexts that have one (the selection). */
+	readonly second?: true;
 	/** An inline row of choices in the sheets instead of a single row. */
 	readonly choices?: "paper" | "size";
 	/** Extra search words (any language). */
@@ -101,6 +106,10 @@ export interface ActionDef {
 const pdfPage = (c: UiContext) => c.page?.background === "pdf";
 const backgroundPage = (c: UiContext) => !!c.page && c.page.background !== "none";
 const hasSelection = (c: UiContext) => !!c.selection && c.selection.strokes + c.selection.elements > 0;
+/** wave 0.10: how many things are selected (strokes and elements), and whether the selection holds ink. */
+const itemCount = (c: UiContext) => (c.selection?.strokes ?? 0) + (c.selection?.elements ?? 0);
+const lassoOrSelection = (c: UiContext) => c.tool === "lasso" || itemCount(c) > 0;
+const hasInk = (c: UiContext) => (c.selection?.strokes ?? 0) > 0;
 const sideOpen = (c: UiContext) => c.sidePane.available && c.sidePane.open;
 /** v9: exactly one equation or graph is selected (its editor or panel can open). */
 const oneMath = (c: UiContext) => (c.selection?.equations ?? 0) + (c.selection?.graphs ?? 0) === 1;
@@ -171,6 +180,31 @@ export const ACTIONS: readonly ActionDef[] = [
 		id: `layer-${move}`, label: `layer.${move}`, icon, group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"],
 		priority, scope: "view", command, when: hasSelection, keywords: "layer order z arrange stack front back behind above below",
 	})),
+	// wave 0.10: rectangle selection mode (63) and select by colour or tool (64) belong to the lasso; the rest of the arranging
+	// (38, 65) and "Select similar" (64) are menus on the second row of the selection bar, each entry also in the sheet and a command.
+	{ id: "select-rectangle", label: "select.rectangle", icon: "box-select", group: "selection", surfaces: ["context", "sheet"], contexts: ["lasso"], priority: 66, scope: "view", command: "command.selectRectangle", when: lassoOrSelection, checked: (c) => !!c.toggles.selectRectangle, keywords: "lasso freehand box marquee mode" },
+	{ id: "select-by-style", label: "select.byStyle", icon: "palette", group: "selection", surfaces: ["context", "sheet"], contexts: ["lasso"], priority: 64, scope: "view", command: "command.selectByStyle", when: lassoOrSelection, keywords: "colour color tool pen highlighter same similar all page" },
+	{ id: "selection-similar", label: "select.similar", icon: "check-check", group: "selection", surfaces: ["context"], contexts: ["selection"], second: true, priority: 62, scope: "view", when: hasInk },
+	{ id: "select-same-colour", label: "select.sameColour", icon: "palette", group: "selection", surfaces: ["sheet"], priority: 48, scope: "view", command: "command.selectSameColour", when: hasInk, keywords: "similar color all" },
+	{ id: "select-same-tool", label: "select.sameTool", icon: "highlighter", group: "selection", surfaces: ["sheet"], priority: 47, scope: "view", command: "command.selectSameTool", when: hasInk, keywords: "similar pen highlighter all" },
+	{ id: "selection-align-menu", label: "arrange.align", icon: "align-horizontal-distribute-center", group: "selection", surfaces: ["context"], contexts: ["selection"], second: true, priority: 60, scope: "view", when: (c) => itemCount(c) >= 2 },
+	...([
+		["left", "align-start-vertical"], ["centre", "align-center-vertical"], ["right", "align-end-vertical"],
+		["top", "align-start-horizontal"], ["middle", "align-center-horizontal"], ["bottom", "align-end-horizontal"],
+	] as const).map(([mode, icon]): ActionDef => ({
+		id: `selection-align-${mode}`, label: `arrange.align.${mode}`, icon, group: "selection", surfaces: ["sheet"], priority: 40, scope: "view",
+		command: `command.align.${mode}`, when: (c) => itemCount(c) >= 2, keywords: "align arrange edge centre center middle",
+	})),
+	...([["horizontal", "align-horizontal-distribute-center"], ["vertical", "align-vertical-distribute-center"]] as const).map(([axis, icon]): ActionDef => ({
+		id: `selection-distribute-${axis === "horizontal" ? "h" : "v"}`, label: `arrange.distribute.${axis}`, icon, group: "selection", surfaces: ["sheet"], priority: 39, scope: "view",
+		command: `command.distribute.${axis}`, when: (c) => itemCount(c) >= 3, keywords: "distribute spread space evenly arrange",
+	})),
+	{ id: "selection-transform-menu", label: "transform.menu", icon: "rotate-3d", group: "selection", surfaces: ["context"], contexts: ["selection"], second: true, priority: 58, scope: "view", when: hasSelection },
+	{ id: "selection-rotate-cw", label: "transform.rotateCw", icon: "rotate-cw", group: "selection", surfaces: ["sheet"], priority: 38, scope: "view", command: "command.rotateCw", when: hasSelection, keywords: "turn quarter 90 clockwise" },
+	{ id: "selection-rotate-ccw", label: "transform.rotateCcw", icon: "rotate-ccw", group: "selection", surfaces: ["sheet"], priority: 37, scope: "view", command: "command.rotateCcw", when: hasSelection, keywords: "turn quarter 90 anticlockwise counterclockwise" },
+	{ id: "selection-mirror-h", label: "transform.mirrorH", icon: "flip-horizontal", group: "selection", surfaces: ["sheet"], priority: 36, scope: "view", command: "command.mirrorH", when: hasSelection, keywords: "flip reflect left right" },
+	{ id: "selection-mirror-v", label: "transform.mirrorV", icon: "flip-vertical", group: "selection", surfaces: ["sheet"], priority: 35, scope: "view", command: "command.mirrorV", when: hasSelection, keywords: "flip reflect up down top bottom" },
+	{ id: "selection-resize", label: "transform.resize", icon: "maximize-2", group: "selection", surfaces: ["sheet"], priority: 34, scope: "view", command: "command.resizeSelection", when: hasSelection, keywords: "size width height scale exact dimensions proportions" },
 	{ id: "delete-selection", label: "tool.deleteSelection", icon: "trash-2", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 70, scope: "view", command: "command.deleteSelection", when: hasSelection, danger: true },
 
 	// --- navigation (wave 0.7): the first section of the page sheet (the page indicator opens it) and of the sheet.
