@@ -522,6 +522,12 @@ L10. **Notebook from template.** *New notebook* dialog → *Template* → *Choos
 | V2 Page tags | | | |
 | V3 Last position across devices | | | |
 | V4 New papers | | | |
+| Q1 Page switcher: search | | | |
+| Q2 Page switcher: thumbnails | | | |
+| Q3 Recent pages: log | | | |
+| Q4 Recent pages: library | | | |
+| Q5 Go to page number | | | |
+| Q6 Page indicator tap | | | |
 
 Benchmark output (step 21): paste it here.
 
@@ -543,6 +549,19 @@ Not verified on a device. Fill in the result table at the end of this file.
 - **O8. Stamp with an image and text.** Select an image and a text box together, save as a stamp, delete the originals, place the stamp. Expected: both come back; the image uses the same file in `_assets/` (no copy).
 - **O9. Rename and delete a stamp.** Use the pencil and trash buttons on a stamp. Expected: the name changes in the palette and the file; delete asks first and moves the file to the trash; notebooks that used the stamp are unchanged.
 - **O10. Palette on a phone and with a finger.** Open the palette on a narrow screen. Expected: it fits, the list scrolls vertically, a sideways drag from a tile onto the page places the stamp. Report whether a vertical or diagonal drag scrolls the list instead of dragging.
+
+### Quick navigation (wave 0.7)
+
+Not verified on a device. Commands: *Go to page…*, *Recently edited pages*, *Go to page number…*.
+
+- **Q1. Page switcher: search.** Have two notebooks, one with a titled bookmark, one with a page tag and a text box. Run *Go to page…* and type: part of a notebook name; `name 3`; `p3`; the bookmark title; the tag; a word from the text box. Expected: each result opens the right notebook at the right page; a page number beyond the notebook is not offered.
+- **Q2. Page switcher: thumbnails.** With many notebooks (including a PDF one) type a common letter. Expected: the list appears at once, thumbnails fill in one after another without freezing typing; closing the dialog stops them.
+- **Q3. Recent pages: log.** Write on page 4 of a notebook, wait 5 seconds, then run *Recently edited pages*. Expected: that page is first, "Edited just now". Only scroll/open another notebook: nothing new is logged.
+- **Q4. Recent pages: library.** Open the library, tap *Recent pages* in the sidebar. Expected: the same list. Rename the notebook, reopen the list: the entry follows the new name; delete it: the entry disappears.
+- **Q5. Go to page number.** In an open notebook run *Go to page number…*, type `7`, then `p7`, then the start of a bookmark title. Expected: each scrolls to the page; `999` offers nothing.
+- **Q6. Page indicator tap.** Tap the "3 / 12" indicator in the toolbar. Expected: the same dialog opens.
+- **Q7. Recent pages after reordering.** Edit page 5, move it to position 2, open it from the list. Expected: the page that was edited opens (found by id).
+- **Q8. Not synced.** Check that no new file appeared in the vault or the plugin folder because of the recent pages (the log is in device-local storage only).
 
 ## Quick check — Windows
 

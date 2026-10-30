@@ -23,6 +23,9 @@ import { registerLectureCommands } from "./view/lecture-commands";
 import { TimetableService } from "./timetable/service";
 import { registerPdfSyncCommands } from "./view/pdf-sync";
 import { registerZettel } from "./zettel";
+import { registerGotoPage } from "./view/goto-page";
+import { QuickNavService, registerQuickSwitcher } from "./view/quick-switcher";
+import { openRecentPages, RecentPagesService, registerRecentPages } from "./view/recent-pages";
 
 export default class NotebookPlugin extends Plugin {
 	settings!: NotebookSettings;
@@ -30,6 +33,8 @@ export default class NotebookPlugin extends Plugin {
 	journal!: AdapterJournalStore;
 	/** Class timetable (wave 0.6). */
 	timetable!: TimetableService;
+	/** wave 0.7: quick navigation (364-366). */
+	recentPages!: RecentPagesService;
 	/** Public API for other plugins and scripts (docs/api.md). */
 	api?: NotebookApi;
 
@@ -106,6 +111,18 @@ export default class NotebookPlugin extends Plugin {
 		this.addCommand({ id: "timetable", name: t("command.timetable"), callback: () => void this.timetable.edit() });
 		this.addCommand({ id: "open-class", name: t("command.openClass"), callback: () => this.timetable.openNow() });
 
+		// wave 0.7: quick nav (page switcher, recently edited pages, go to page number)
+		this.recentPages = new RecentPagesService(this.app, (file) => this.host.readNotebook(file));
+		registerRecentPages(this, this.recentPages);
+		Object.assign(this.host, { openRecentPages: () => openRecentPages(this.app, this.recentPages) });
+		registerQuickSwitcher(this, new QuickNavService(this.app, {
+			root: () => this.settings.folder,
+			loadIndex: () => this.host.loadIndex(),
+			readNotebook: (file) => this.host.readNotebook(file),
+			thumbnailBackground: (doc, page, width) => this.host.thumbnailBackground(doc, page, width),
+		}, this.recentPages));
+		registerGotoPage(this, () => this.app.workspace.getActiveViewOfType(NotebookView));
+
 		this.addSettingTab(new NotebookSettingTab(this.app, this));
 
 		// Best effort only (not guaranteed, unreliable on mobile): views also flush on visibilitychange/pagehide.
@@ -113,6 +130,7 @@ export default class NotebookPlugin extends Plugin {
 	}
 
 	onunload(): void {
+		this.recentPages.flush();
 		void this.flushAll();
 		this.timetable.stop();
 		this.host.dispose();
@@ -138,6 +156,11 @@ export default class NotebookPlugin extends Plugin {
 		if (!view) return false;
 		if (!checking) run(view);
 		return true;
+	}
+
+	/** wave 0.7: a real edit; the recent pages log collapses and stores it (device-local). */
+	edited(nb: string, path: string, pageId: string, num: number): void {
+		this.recentPages?.note(nb, path, pageId, num);
 	}
 
 	/** Instant start: remembers the page being read (called a moment after it changes). Only the plugin settings are written. */

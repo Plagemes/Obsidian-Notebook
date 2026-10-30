@@ -2596,3 +2596,15 @@
 .setting-item.notebook-hidden {
 	display: none;
 }
+
+/* wave 0.7: quick nav */
+.notebook-quicknav-row { display: flex; align-items: center; gap: 10px; }
+.notebook-quicknav-thumb { width: 36px; min-height: 48px; max-height: 54px; object-fit: cover; border: 1px solid var(--background-modifier-border); border-radius: 3px; background: var(--background-secondary); flex: none; }
+.notebook-quicknav-body { min-width: 0; flex: 1; }
+.notebook-quicknav-top { display: flex; justify-content: space-between; gap: 8px; }
+.notebook-quicknav-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notebook-quicknav-page, .notebook-recent-page, .notebook-goto-num { color: var(--text-muted); font-variant-numeric: tabular-nums; flex: none; }
+.notebook-quicknav-detail, .notebook-recent-when { color: var(--text-muted); font-size: var(--font-ui-smaller); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notebook-quicknav-status:not(:empty) { padding: 4px 12px; color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.notebook-recent-main, .notebook-goto-row { display: flex; justify-content: space-between; gap: 8px; }
+.notebook-page-indicator { cursor: pointer; }
