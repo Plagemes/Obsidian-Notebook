@@ -780,6 +780,80 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 390. **P1** 🧪 Integrity check with checksums (extends #27): finds silent corruption caused by sync and offers to restore an earlier version.
 391. **P2** Stroke timestamps linked to the lecture video (extends #231): tapping ink jumps the video to the minute it was written.
 
+## M18 — Generative interface (planned 2026-10-30)
+
+A deterministic, rule-based interface that adapts to context, content, habits and device (no AI: see CLAUDE.md rule 7). Built on the action registry (`src/ui/actions.ts`, `docs/design-ui.md`). Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for all.
+
+### Toolbar and tools
+392. **P1** Toolbar by page type: PDF slide → snapping highlighter, PDF search, margins; ruled page → pen and text; grid → ruler and shapes (extends the PDF and image-page contextual bars).
+393. **P1** Toolbar that learns per notebook or course: quick slots and favourites ranked by what is used in that notebook (today use counts are per device).
+394. **P2** Context palette: the slide's colours plus the colours already used on the page.
+395. **P3** Suggested pen width from the paper spacing and the zoom level.
+396. **P3** Likely next tool one tap away, from the sequence of tools you usually use.
+397. **P3** Adaptive radial menu: sectors ordered by frequency of use, plus a wedge of recent actions.
+398. **P3** Toolbar placed away from the writing hand (learned handedness and palm position).
+399. **P2** Toolbar fades while writing and returns on the first touch.
+400. **P3** The 4–5 most likely commands appear near the nib when the pen lifts.
+401. **P1** Automatic lecture mode from the timetable (#115), with the compact lecture toolbar (#214) shown when a class starts.
+
+### Selection
+402. **P1** Selection bar by content type: ink, image, text or mixed selection each show their own actions (extends the selection contextual bar).
+403. **P2** Actions suggested by the selection's geometry: a row of words → card, highlight; two regions joined by an arrow → link.
+404. **P3** Preview before applying: press and hold an action to see its result.
+405. **P3** Radial menu for the selection.
+406. **P2** Resize and rotate handles shown only when they are meaningful.
+
+### Pages and notebook
+407. **P1** Generated outline: bookmarks, large handwriting as headings and slide changes in one outline (combines #15, #102 and #46).
+408. **P1** Notebook map with states: open questions, gaps and homework per page (extends #223 from one lecture to the whole notebook).
+409. **P2** Suggested paper for a new page, from the previous pages and the course.
+410. **P1** Smart "+": the 2–3 most likely new pages (same paper, exercise page, slide page) in one tap.
+411. **P2** Tags suggested from context (course, content, markers).
+412. **P3** Page panel that shows only what that page has (hides empty sections and actions that do not apply).
+413. **P3** Generated cover for a notebook (title, course, colour, first page).
+414. **P2** Adaptive navigator: large thumbnails for PDFs, a compact list for text pages.
+
+### Library
+415. **P1** Dynamic sections: Now, To complete, Changed on another device, Recent.
+416. **P2** Notebooks ordered by the active term.
+
+### PDF and lecture
+417. **P1** Slide strip: for each slide, the exercise page after it, the margin note and the question on this slide.
+418. **P2** PDF search with suggested terms (from the outline, headings and your own text).
+419. **P2** Filtered view of marked pages only (bookmarks, markers, questions).
+420. **P2** Welcome-back banner when reopening: last slide, open questions and gaps.
+
+### Obsidian
+421. **P2** Dynamic gallery block in notes: pages selected by tag, bookmark or course.
+422. **P2** Related handwritten pages panel for the open Markdown note.
+423. ~~**P2** Rich hover preview of page links with actions.~~ — already covered by O5
+424. **P2** Command palette ordered by context (commands relevant to the open view first).
+
+### Help and habits
+425. **P1** Just-in-time hints: a short tip the first time a situation occurs, shown once.
+426. **P3** Shortcuts proposed from habits (a gesture or quick slot for what you repeat).
+427. **P3** Friction detection proposing a setting change (for example repeated accidental touches → palm rejection).
+428. **P3** Favourites suggested from the pen, colour and width combinations you really use.
+429. **P2** Explanation on long-press of an icon.
+
+### Layout and devices
+430. **P1** Layout by orientation and size (the layout engine today reacts to width only).
+431. **P2** Layout by input device: pen, finger or mouse and keyboard.
+432. **P3** Larger targets when you often miss.
+433. **P3** Contrast-adaptive toolbar over slides.
+434. ~~**P2** Panels that arrange themselves by available space.~~ — already covered by the UI redesign (layout engine, `docs/design-ui.md` §4)
+
+### Sync and state
+435. **P2** Badge on pages changed on another device (extends #287 and #342).
+436. **P3** Ink that arrived through sync briefly highlighted.
+437. ~~**P1** Status shown only when relevant (saving, sync, read-only).~~ — already covered by the UI redesign (status banners, `docs/design-ui.md` §2)
+
+### Structured content
+438. **P1** Lecture page prefilled from context (course, date, slide, header from #210).
+439. **P2** Contextual insert: equation, graph or table suggested by the paper and the content.
+440. **P2** Composed exercise page: the statement cropped from the slide on top, space to solve below.
+441. **P3** Export settings proposed from the content (ink only, with PDF, margins).
+
 ### Study and exam update (to be designed later)
 
 Exam and review features will ship as one coherent update, designed later together: #24 (flashcards from the lasso), #89 (scheduled review), #116 (exam review plan), #117 (review coverage map), #133 (course dashboard). Not planned for now.
