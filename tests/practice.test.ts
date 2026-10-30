@@ -9,7 +9,7 @@ import {
 } from "../src/model/practice";
 import { parse, serialize } from "../src/model/serialize";
 import { PracticeBlockedError, PRACTICE_FILE, PracticeStore } from "../src/storage/practice-store";
-import type { LinkFileAdapter } from "../src/storage/pdf-links-store";
+import type { DeviceFileAdapter } from "../src/storage/device-files";
 import type { Page, Point, Tool } from "../src/model/types";
 
 const pts: Point[] = [[10, 10, 0.5], [20, 20, 0.5]];
@@ -161,8 +161,9 @@ describe("practice file", () => {
 		expect(text.split("\n").filter((l) => l.startsWith("{\"practice\"")).length).toBe(3);
 	});
 
-	it("empty text is an empty set; foreign JSON, broken JSON and newer versions are reported", () => {
-		expect(parsePractice("")).toEqual({ ok: true, data: emptyPractice() });
+	it("an existing empty file, foreign JSON, broken JSON and newer versions are reported", () => {
+		// Empty: it may not be downloaded yet (a missing file is the empty set; the store never parses one).
+		expect(parsePractice("")).toMatchObject({ ok: false, reason: "empty" });
 		expect(parsePractice("{ nope")).toMatchObject({ ok: false, reason: "json" });
 		expect(parsePractice("{\"a\":1}")).toMatchObject({ ok: false, reason: "format" });
 		expect(parsePractice(`{"format":"${PRACTICE_FORMAT}","version":2,"attempts":[]}`)).toMatchObject({ ok: false, reason: "future" });
@@ -250,7 +251,7 @@ describe("text and small rules", () => {
 	});
 });
 
-class MemoryAdapter implements LinkFileAdapter {
+class MemoryAdapter implements DeviceFileAdapter {
 	files = new Map<string, string>();
 	folders = new Set<string>();
 	writes: string[] = [];
@@ -262,67 +263,114 @@ class MemoryAdapter implements LinkFileAdapter {
 	}
 	async write(p: string, d: string) { this.files.set(p, d); this.writes.push(p); }
 	async mkdir(p: string) { this.folders.add(p); }
+	async list(folder: string) { return [...this.files.keys()].filter((k) => k.startsWith(`${folder}/`) && !k.slice(folder.length + 1).includes("/")); }
 }
 
-describe("practice store", () => {
-	const PATH = `Notebooks/_meta/${PRACTICE_FILE}`;
+describe("practice store (one file per device)", () => {
+	const LEGACY = `Notebooks/_meta/${PRACTICE_FILE}`;
+	const OWN = "Notebooks/_meta/practice-aaaaaaaa.json";
+	const OTHER = "Notebooks/_meta/practice-bbbbbbbb.json";
 
-	it("a missing file is empty and loading writes nothing", async () => {
+	it("missing files are empty and loading writes nothing", async () => {
 		const ad = new MemoryAdapter();
-		const store = new PracticeStore(ad, "Notebooks");
+		const store = new PracticeStore(ad, "Notebooks", "aaaaaaaa");
 		expect((await store.load()).attempts).toEqual([]);
 		expect(ad.writes).toEqual([]);
-		expect(store.path).toBe(PATH);
+		expect(store.ownPath).toBe(OWN);
+		expect(store.legacyPath).toBe(LEGACY);
+		expect(store.watches(OTHER) && store.watches(LEGACY) && !store.watches("Notebooks/_meta/pdf-links.json")).toBe(true);
 	});
 
-	it("an update creates the folder and the file, and reads the file again first (another device's entry is kept)", async () => {
+	it("an update writes only this device's file and merges what other devices wrote", async () => {
 		const ad = new MemoryAdapter();
-		const store = new PracticeStore(ad, () => "Notebooks");
-		await store.update({ type: "add", record: rec("p1", "o1", 1, "2026-10-30T08:00:00.000Z") });
+		const mine = new PracticeStore(ad, () => "Notebooks", "aaaaaaaa");
+		const theirs = new PracticeStore(ad, () => "Notebooks", "bbbbbbbb");
+		await mine.update({ type: "add", record: rec("p1", "o1", 1, "2026-10-30T08:00:00.000Z") });
 		expect(ad.folders.has("Notebooks/_meta")).toBe(true);
-		// A sync brings an entry this store has not seen.
-		const synced = parsePractice(ad.files.get(PATH)!);
-		if (!synced.ok) throw new Error("bad");
-		ad.files.set(PATH, serializePractice({ ...synced.data, attempts: [...synced.data.attempts, rec("p2", "o1", 2, "2026-10-31T08:00:00.000Z")] }));
-		const after = await store.update({ type: "addSeconds", practicePage: "p1", seconds: 12 });
+		await theirs.update({ type: "add", record: rec("p2", "o1", 2, "2026-10-31T08:00:00.000Z") });
+		expect(ad.writes).toEqual([OWN, OTHER]);
+		const after = await mine.update({ type: "addSeconds", practicePage: "p1", seconds: 12 });
 		expect(after.attempts.map((a) => a.practice.page).sort()).toEqual(["p1", "p2"]);
 		expect(recordOf(after, "p1")?.seconds).toBe(12);
+		expect(ad.writes.filter((p) => p === OTHER)).toHaveLength(1);
+	});
+
+	it("two devices timing the same attempt add up, each in its own file", async () => {
+		const ad = new MemoryAdapter();
+		const mine = new PracticeStore(ad, "Notebooks", "aaaaaaaa");
+		const theirs = new PracticeStore(ad, "Notebooks", "bbbbbbbb");
+		await mine.update({ type: "add", record: rec("p1", "o1", 1, "2026-10-30T08:00:00.000Z") });
+		await mine.update({ type: "addSeconds", practicePage: "p1", seconds: 60 });
+		await theirs.update({ type: "addSeconds", practicePage: "p1", seconds: 30 });
+		expect(recordOf(await mine.load(), "p1")?.seconds).toBe(90);
+		// The other device's file holds only its own 30 seconds.
+		const other = parsePractice(ad.files.get(OTHER)!);
+		expect(other.ok && other.data.attempts[0]?.seconds).toBe(30);
+	});
+
+	it("reads the old shared practice.json lazily, never writes it, and a removal hides its record", async () => {
+		const ad = new MemoryAdapter();
+		const legacy = serializePractice(withAttempts(rec("p1", "o1", 1, "2026-10-30T08:00:00.000Z", { seconds: 100 }), rec("p2", "o1", 2, "2026-10-31T08:00:00.000Z")));
+		ad.files.set(LEGACY, legacy);
+		const store = new PracticeStore(ad, "Notebooks", "aaaaaaaa");
+		expect((await store.load()).attempts).toHaveLength(2);
+		await store.update({ type: "addSeconds", practicePage: "p1", seconds: 20 });
+		expect(recordOf(store.snapshot(), "p1")?.seconds).toBe(120);
+		await store.update({ type: "remove", practicePage: "p2" });
+		expect(store.snapshot().attempts.map((a) => a.practice.page)).toEqual(["p1"]);
+		expect(ad.files.get(LEGACY)).toBe(legacy);
+		expect(ad.writes.every((p) => p === OWN)).toBe(true);
+		expect(nextAttemptNumber(store.snapshot(), { doc: "docO", page: "o1" })).toBe(2);
 	});
 
 	it("does not write when nothing changes", async () => {
 		const ad = new MemoryAdapter();
-		const store = new PracticeStore(ad, "Notebooks");
+		const store = new PracticeStore(ad, "Notebooks", "aaaaaaaa");
 		await store.update({ type: "add", record: rec("p1", "o1", 1, "2026-10-30T08:00:00.000Z") });
 		const n = ad.writes.length;
 		await store.update({ type: "addSeconds", practicePage: "unknown", seconds: 3 });
 		expect(ad.writes.length).toBe(n);
 	});
 
-	it("an unreadable file is never overwritten; one copy is kept", async () => {
+	it("its own unreadable or empty file is never overwritten; one copy is kept", async () => {
+		for (const bad of ["{ broken", "", "  \n"]) {
+			const ad = new MemoryAdapter();
+			ad.files.set(OWN, bad);
+			const store = new PracticeStore(ad, "Notebooks", "aaaaaaaa");
+			await store.load();
+			expect(store.unreadable).toHaveLength(1);
+			await expect(store.update({ type: "add", record: rec("p1", "o1", 1, "2026-10-30T08:00:00.000Z") })).rejects.toBeInstanceOf(PracticeBlockedError);
+			expect(ad.files.get(OWN)).toBe(bad);
+			expect([...ad.files.keys()].filter((k) => k.includes("practice.unreadable-")).length).toBe(1);
+		}
+	});
+
+	it("another device's unreadable file, or an unreadable old file, is skipped and reported; never written", async () => {
 		const ad = new MemoryAdapter();
-		ad.files.set(PATH, "{ broken");
-		const store = new PracticeStore(ad, "Notebooks");
-		await expect(store.load()).rejects.toBeInstanceOf(PracticeBlockedError);
-		await expect(store.update({ type: "add", record: rec("p1", "o1", 1, "2026-10-30T08:00:00.000Z") })).rejects.toBeInstanceOf(PracticeBlockedError);
-		expect(ad.files.get(PATH)).toBe("{ broken");
-		expect([...ad.files.keys()].filter((k) => k.includes("practice.unreadable-")).length).toBe(1);
+		ad.files.set(OTHER, "");
+		ad.files.set(LEGACY, "{ cut in half");
+		const store = new PracticeStore(ad, "Notebooks", "aaaaaaaa");
+		await store.update({ type: "add", record: rec("p1", "o1", 1, "2026-10-30T08:00:00.000Z") });
+		expect(store.unreadable.map((u) => u.split(":")[0])).toEqual([OTHER, LEGACY]);
+		expect(ad.files.get(OTHER)).toBe("");
+		expect(ad.files.get(LEGACY)).toBe("{ cut in half");
 	});
 
 	it("a file from a newer version is left alone", async () => {
 		const ad = new MemoryAdapter();
 		const text = `{"format":"${PRACTICE_FORMAT}","version":9,"attempts":[]}`;
-		ad.files.set(PATH, text);
-		const store = new PracticeStore(ad, "Notebooks");
+		ad.files.set(OWN, text);
+		const store = new PracticeStore(ad, "Notebooks", "aaaaaaaa");
 		await expect(store.update({ type: "remove", practicePage: "x" })).rejects.toMatchObject({ reason: "future" });
-		expect(ad.files.get(PATH)).toBe(text);
+		expect(ad.files.get(OWN)).toBe(text);
 	});
 
 	it("concurrent updates all land", async () => {
 		const ad = new MemoryAdapter();
-		const store = new PracticeStore(ad, "");
+		const store = new PracticeStore(ad, "", "aaaaaaaa");
 		await Promise.all([1, 2, 3, 4].map((i) => store.update({ type: "add", record: rec(`p${i}`, "o1", i, `2026-10-0${i}T08:00:00.000Z`) })));
 		expect(store.snapshot().attempts.length).toBe(4);
-		expect(store.path).toBe("_meta/practice.json");
+		expect(store.ownPath).toBe("_meta/practice-aaaaaaaa.json");
 	});
 });
 

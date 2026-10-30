@@ -13,7 +13,8 @@ export interface NoticeHandle {
  * shown once, and closing a queued notice cancels it. The returned handle works either way.
  *
  * Limits, on purpose: Obsidian's own notices (sync, other plugins, "file saved") are shown by Obsidian and cannot be held
- * back from here. A notice that has to be seen at once is not exempt; the delay is at most the time the pen stays down.
+ * back from here. Errors that put data at risk (a failed save, a full disk, an integrity problem) are shown at once with
+ * `showErrorNotice` instead: they must never wait behind the pen.
  */
 export function showNotice(message: string | DocumentFragment, duration?: number): NoticeHandle {
 	if (!writing.writing() && writing.waiting === 0) return new Notice(message, duration);
@@ -33,4 +34,12 @@ export function showNotice(message: string | DocumentFragment, duration?: number
 			shown?.hide();
 		},
 	};
+}
+
+/**
+ * An error notice that skips the writing-quiet queue (save failures, storage full, integrity problems, unreadable files
+ * kept as a backup): shown at once, even while the pen is on the screen.
+ */
+export function showErrorNotice(message: string | DocumentFragment, duration?: number): NoticeHandle {
+	return new Notice(message, duration);
 }

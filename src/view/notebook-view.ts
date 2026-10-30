@@ -8,7 +8,7 @@ import { PhotoDecodeError, photoSize } from "../scan/decode";
 import { isHeic } from "../scan/image-bytes";
 import { t } from "../i18n";
 import { renderThumbnail } from "../library/thumbnail";
-import { needsNextPage } from "../ink/auto-page";
+import { needsNextPage, needsPageOffer } from "../ink/auto-page";
 import { deleteInkCommand, inkOnRemoved } from "../ink/attach";
 import { captureClip, type ClipContent } from "../ink/clipboard";
 import { elementsInLasso, hitElement, transformElement } from "../ink/elements";
@@ -59,7 +59,10 @@ import { nextTask } from "../storage/idle";
 import { isNotebookFile } from "../storage/format";
 import { VaultDocumentIO } from "../storage/vault-io";
 import { backupFolder, readSettings, type NotebookSettings } from "../settings";
-import { exportPdf, type ExportOptions } from "./export";
+import { defaultMarkdownFolder, exportMarkdown } from "./export-markdown";
+import { ExportModal, MarkdownExportModal } from "./export-dialog";
+import { exportPdf, runExport, type ExportOptions } from "./export";
+import { ViewDisplay, type DisplayHost } from "./display";
 import { policySettings } from "./input-settings";
 import { NotebookMedia, storeAsset } from "./media";
 import { HeavyPageBanner } from "./heavy-page-banner";
@@ -89,6 +92,10 @@ import type { PdfActionHost } from "./pdf-actions";
 import { pickFile } from "./pick";
 import { pdfSideState, referenceSlideOf, type PageSyncHooks } from "./pdf-sync";
 import { MarkerTools, translatedBoxLabel } from "./markers";
+import { layerCommand, type LayerMove } from "../model/layers";
+import { FindReplaceModal } from "./find-replace";
+import { PageInfoModal } from "./page-info";
+import { PageOffer } from "./page-offer";
 import { visibleStrokes } from "../model/markers";
 import type { PageToolsHost } from "./page-tools";
 import { RulerGesture } from "./ruler-gesture";
@@ -108,13 +115,14 @@ import { DEFAULT_TOOLS, Toolbar, type ToolName, type ToolbarState } from "./tool
 import { hasBackgrounds, hasPdfPages } from "./reading-logic";
 import { commandApplies, runViewAction, sizeName, type ActionArg } from "./view-actions";
 import { ViewUi } from "./view-ui";
+import { pageKeyAction, shouldTurnPage, takesKey, type KeyScene } from "./page-keys";
 import { actionById, isEnabled, type UiContext } from "../ui/actions";
 import { actionLabel } from "../ui/action-sheet";
 import {
 	centredPosition, imageElementSize, imagePageSize, mergeMeta, metaEquals, newTextBox, shapePoints, shouldGrabRuler, toggleBookmark,
 	unionBounds,
 } from "./view-helpers";
-import { showNotice, type NoticeHandle } from "./notice";
+import { showErrorNotice, showNotice, type NoticeHandle } from "./notice";
 
 export const VIEW_TYPE = "notebook-view";
 
@@ -147,6 +155,8 @@ export interface NotebookHost {
 	remember?(path: string, page: number, pos?: SavedPosition | null): void;
 	/** wave 0.7: a real edit on page `pageId` (`num`, 1-based) of notebook `nb`; feeds the per-device recent pages log. */
 	edited?(nb: string, path: string, pageId: string, num: number): void;
+	/** wave 0.9 (379): when this device last edited the page (ms since epoch), if it has a record. */
+	pageEditedAt?(nb: string, pageId: string): number | null;
 	/** Instant save journal shared by all views. */
 	journal?: JournalStore;
 	/** Persists the plugin settings (favourite pens, eraser size, pen-only). Optional: absent in tests. */
@@ -306,6 +316,8 @@ export class NotebookView extends FileView {
 	private readonly objectInk = new ObjectInk();
 	/** v8 markers, boxes, invisible ink and the end-of-lecture panel (view/markers.ts). */
 	private markers: MarkerTools | null = null;
+	/** wave 0.9 (389): the chip that offers a page after a page in the middle of the notebook (view/page-offer.ts). */
+	private pageOffer: PageOffer | null = null;
 
 	private viewport: Viewport = { scale: 1, offsetX: 0, offsetY: 0 };
 	private viewSize: Size = { width: 0, height: 0 };
@@ -315,6 +327,8 @@ export class NotebookView extends FileView {
 	private pens: PenControls | null = null;
 	/** Wave 0.6: PDF search, snapping highlighter, hide annotations, dimmed backgrounds (pdf-reading.ts). */
 	private reading: PdfReading | null = null;
+	/** wave 0.9: night mode (367) and the cropped view of PDF pages (376). */
+	private display: ViewDisplay | null = null;
 
 	private active: ActiveStroke | null = null;
 	private erasing: ActiveErase | null = null;
@@ -467,6 +481,7 @@ export class NotebookView extends FileView {
 				return page ? { paper: page.paper.kind, size: sizeName(page) } : null;
 			},
 			dimControl: () => (this.reading?.dimmed ? this.reading.dimControl : null),
+			toolbarSize: () => this.host.settings.toolbarSize,
 		});
 		this.mountSelectionActions();
 		this.mountStamps();
@@ -490,6 +505,10 @@ export class NotebookView extends FileView {
 
 		this.renderer = new Renderer(this.stage, { lowLatency: this.host.settings.lowLatencyInk });
 		this.mountMarkers();
+		this.pageOffer = new PageOffer({
+			parent: () => this.body,
+			insertAfter: (pageId) => this.insertPageAfterId(pageId),
+		});
 		// Registered before the pointer controller: the ruler gesture swallows the touches that move the ruler.
 		this.rulerGesture = new RulerGesture(this.stage, {
 			enabled: () => this.tools.ruler && !!this.ruler && this.editable(),
@@ -521,6 +540,7 @@ export class NotebookView extends FileView {
 			fitMode: () => this.fitMode,
 		});
 		this.radial = new PenRadial(this.stage, {
+			toolbarSize: () => this.host.settings.toolbarSize,
 			editable: () => this.editable() && !this.controller?.drawing,
 			tools: () => this.tools,
 			apply: (patch) => this.toolbar.apply(patch),
@@ -558,6 +578,8 @@ export class NotebookView extends FileView {
 			},
 		});
 		this.reading = new PdfReading(this.readingHost());
+		this.display = new ViewDisplay(this.displayHost());
+		this.display.applyNight();
 		this.practiceHooks = this.host.practice?.attach(this.practiceHost()) ?? null;
 		this.applySettings(this.host.settings);
 
@@ -586,6 +608,8 @@ export class NotebookView extends FileView {
 			if (e.key === "Shift") this.shiftDown = false;
 		});
 		this.registerDomEvent(window, "blur", () => (this.shiftDown = false));
+		// wave 0.9 (372): the page turner (arrows, PageUp / PageDown, space, Bluetooth clickers).
+		this.registerDomEvent(document, "keydown", (e) => this.onPageTurnKey(e));
 		this.registerClipboardEvents();
 
 		this.registerEvent(this.app.vault.on("modify", (f) => {
@@ -623,6 +647,8 @@ export class NotebookView extends FileView {
 		this.pens = null;
 		this.reading?.destroy();
 		this.reading = null;
+		this.display?.destroy();
+		this.display = null;
 		this.practiceHooks?.destroy();
 		this.practiceHooks = null;
 		this.toolbar?.destroy();
@@ -640,6 +666,8 @@ export class NotebookView extends FileView {
 		this.selectionActions = null;
 		this.penLinks?.destroy();
 		this.penLinks = null;
+		this.pageOffer?.destroy();
+		this.pageOffer = null;
 		this.ui?.destroy();
 		this.ui = null;
 		this.stamps?.destroy();
@@ -715,6 +743,23 @@ export class NotebookView extends FileView {
 		this.pendingPos = null;
 		this.pendingAt = null;
 		if (this.layout) this.applyPendingPage();
+	}
+
+	/** wave 0.9 (372): keys that turn pages, only while this view is the active one and nothing else wants the key. */
+	private onPageTurnKey(e: KeyboardEvent): void {
+		const action = pageKeyAction(e);
+		if (action === null) return;
+		const scene: KeyScene = {
+			enabled: this.host.settings.pageTurnerKeys,
+			viewActive: this.app.workspace.getActiveViewOfType(NotebookView) === this,
+			targetEditable: takesKey(e.target as HTMLElement | null, e.key),
+			busy: this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null
+				|| this.textEditor?.isOpen === true || this.radial?.isOpen === true,
+			overlayOpen: !!activeDocument.querySelector(".modal-container, .menu, .suggestion-container"),
+		};
+		if (!shouldTurnPage(scene)) return;
+		e.preventDefault();
+		this.goToRelativePage(action === "next" ? 1 : -1);
 	}
 
 	private applyPendingPage(): void {
@@ -830,7 +875,7 @@ export class NotebookView extends FileView {
 				},
 				onBackup: (path, reason) => {
 					const key = reason === "conflict" ? "notice.conflict" : reason === "journal" ? "notice.journalBackup" : "notice.backup";
-					showNotice(t(key, { path }), 8000);
+					showErrorNotice(t(key, { path }), 8000);
 					if (!current()) return;
 					this.lastBackupPath = path;
 					if (session.mode === "broken" || session.mode === "readonly") this.showProblem();
@@ -961,6 +1006,9 @@ export class NotebookView extends FileView {
 		this.perfEl?.toggleClass("notebook-hidden", !settings.perfOverlay);
 		if (this.renderer) this.renderer.onFrame = settings.perfOverlay ? (t) => this.onFrame(t) : null;
 		this.reading?.settingsChanged();
+		// wave 0.9 (370): a new toolbar size changes the bar, the contextual bar and the number of quick slots.
+		this.ui?.refresh();
+		this.display?.settingsChanged();
 	}
 
 	/** Input policy from the settings; while annotations are hidden the view is read-only and a finger only pans and zooms. */
@@ -989,6 +1037,7 @@ export class NotebookView extends FileView {
 		this.commitText();
 		this.clearSelection();
 		this.penLinks?.hideChip();
+		this.pageOffer?.cancel();
 		if (this.history.undo()) this.afterHistoryChange();
 	}
 
@@ -997,6 +1046,7 @@ export class NotebookView extends FileView {
 		this.commitText();
 		this.clearSelection();
 		this.penLinks?.hideChip();
+		this.pageOffer?.cancel();
 		if (this.history.redo()) this.afterHistoryChange();
 	}
 
@@ -1044,6 +1094,62 @@ export class NotebookView extends FileView {
 	/** Deletes the selection (lasso), if any. */
 	removeSelection(): void {
 		if (this.editable()) this.deleteSelection();
+	}
+
+	/**
+	 * wave 0.9 (357): moves the selected strokes and elements in the layer order of their page (model/layers.ts), one undo
+	 * step. The selection is released afterwards: a selection floats on its own layer, so the new order is only visible once
+	 * it is dropped back on the page.
+	 */
+	moveSelectionLayer(move: LayerMove): void {
+		const sel = this.selection;
+		const page = sel && this.session?.doc?.pages[sel.pageIndex];
+		if (!sel || !page || !this.editableDocument()) return;
+		this.commitText();
+		const cmd = layerCommand(page, sel, move, { stroke: this.renderer?.boundsOf, measure: measureText });
+		if (!cmd) {
+			showNotice(t("layer.nothing"));
+			return;
+		}
+		this.clearSelection();
+		this.history.execute(cmd);
+		this.afterHistoryChange();
+		this.renderer?.invalidate();
+	}
+
+	/** wave 0.9 (361): the find and replace panel for the text boxes of this notebook. */
+	openFindReplace(): void {
+		if (!this.session?.doc) return;
+		this.commitText();
+		new FindReplaceModal({
+			app: this.app,
+			doc: () => this.session?.doc ?? null,
+			canEdit: () => this.editableDocument() !== null,
+			run: (cmd) => this.applyCommand(cmd),
+			goTo: (index) => this.goToPage(index),
+		}).open();
+	}
+
+	/** wave 0.9 (379): the information panel of page `index`. */
+	openPageInfo(index: number): void {
+		if (!this.session?.doc?.pages[index]) return;
+		new PageInfoModal({
+			app: this.app,
+			doc: () => this.session?.doc ?? null,
+			editedAt: (pageId) => {
+				const id = this.session?.doc?.id;
+				return id ? (this.host.pageEditedAt?.(id, pageId) ?? null) : null;
+			},
+		}, index).open();
+	}
+
+	/** wave 0.9 (389): inserts a page (same size and paper) right after the page with this id; false when it is gone or the document cannot be edited. */
+	private insertPageAfterId(pageId: string): boolean {
+		const doc = this.session?.doc;
+		const index = doc ? doc.pages.findIndex((p) => p.id === pageId) : -1;
+		if (index < 0 || !this.editableDocument()) return false;
+		this.addPageAfter(index);
+		return true;
 	}
 
 	/** Pen only: fingers pan and zoom but do not draw. */
@@ -1186,6 +1292,38 @@ export class NotebookView extends FileView {
 		if (doc && this.file) await exportPdf(this.app, this.file, doc.pages, "", this.media, this.exportOptions());
 	}
 
+	/** wave 0.9 (381): the export dialog (format, page or notebook, ink and/or background). `pageIndex`: opened from that page's sheet. */
+	openExportDialog(pageIndex?: number): void {
+		const doc = this.session?.doc;
+		const file = this.file;
+		if (!doc || !file || doc.pages.length === 0) return;
+		new ExportModal({
+			app: this.app,
+			pageCount: doc.pages.length,
+			pageIndex: Math.min(doc.pages.length - 1, Math.max(0, pageIndex ?? this.currentPageIndex())),
+			pageFirst: pageIndex !== undefined,
+			run: (request) => void runExport(this.app, file, doc.pages, request, this.media, this.exportOptions()),
+		}).open();
+	}
+
+	/** wave 0.9 (382): the dialog of the Markdown export (folder, resolution). */
+	openMarkdownExport(): void {
+		const doc = this.session?.doc;
+		const file = this.file;
+		if (!doc || !file || doc.pages.length === 0) return;
+		new MarkdownExportModal({
+			app: this.app,
+			pageCount: doc.pages.length,
+			defaultFolder: defaultMarkdownFolder(file),
+			run: (folder, dpi) => void exportMarkdown(this.app, file, doc, this.media, { folder, dpi, ...this.exportOptions() }),
+		}).open();
+	}
+
+	/** wave 0.9: view-only night mode and cropped margins (null before the view is open). */
+	get displayTools(): ViewDisplay | null {
+		return this.display;
+	}
+
 	/** v8: exports draw hidden ink only where the solutions are shown, and label boxes in the reader's language. */
 	exportOptions(): ExportOptions {
 		const doc = this.session?.doc;
@@ -1324,8 +1462,9 @@ export class NotebookView extends FileView {
 		const removedEls = sel.elements.filter((el) => page.elements?.includes(el));
 		for (const el of removedEls) commands.push(new RemoveElement(page.id, el));
 		// Ink written on a deleted object stays unless the user takes the offer shown afterwards (setting "Ink follows objects").
+		// v8: hidden ink is never offered (nor counted) while the solutions of the page are not shown.
 		const owned = this.host.settings.inkFollowsObjects && removedEls.length > 0
-			? inkOnRemoved(page.strokes, page.elements ?? [], removedEls, new Set(sel.strokes), measureText)
+			? inkOnRemoved(this.inkInView(page), page.elements ?? [], removedEls, new Set(sel.strokes), measureText)
 			: [];
 		this.clearSelection();
 		if (commands.length === 0) return;
@@ -1618,6 +1757,7 @@ export class NotebookView extends FileView {
 			lecture: !!this.host.classNow?.(),
 			sidePane: pdfSideState(this),
 			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false },
+			display: { night: this.display?.night ?? false, crop: this.display?.crop ?? false },
 			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true },
 			markers: {
 				invisibleInk: !!this.markers?.invisibleInk, solutions: !!this.markers?.solutionsShown,
@@ -1916,10 +2056,34 @@ export class NotebookView extends FileView {
 
 	private refreshLayout(): void {
 		const doc = this.shownDoc();
-		this.layout = doc ? (this.pageMode?.enabled ? layoutPagesHorizontal(doc.pages) : layoutPages(doc.pages)) : null;
+		const plain = doc ? (this.pageMode?.enabled ? layoutPagesHorizontal(doc.pages) : layoutPages(doc.pages)) : null;
+		// wave 0.9 (376): with the margins cropped, the PDF pages carry the window the view fits (nothing else changes).
+		this.layout = plain && doc && this.display ? this.display.shape(plain, doc.pages) : plain;
 		this.renderer?.setDocument(doc?.pages ?? null, this.layout);
 		this.pushRuler();
 		this.reading?.docChanged();
+		this.display?.docChanged();
+	}
+
+	/** wave 0.9 (376): the windows of the cropped view changed (or the toggle did): lay the pages out again and fit. */
+	private reflow(): void {
+		if (!this.shownDoc()) return;
+		this.refreshLayout();
+		this.refit(true);
+		this.pageNav?.invalidate();
+	}
+
+	private displayHost(): DisplayHost {
+		return {
+			settings: () => this.host.settings,
+			save: () => void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e)),
+			renderer: () => this.renderer,
+			doc: () => this.shownDoc(),
+			media: () => this.media,
+			currentPage: () => this.currentPageIndex(),
+			reflow: () => this.reflow(),
+			refreshUi: () => this.refreshUi(),
+		};
 	}
 
 	private onDocumentLoaded(doc: NotebookDocument | null, mode: SessionMode, problem: string | null): void {
@@ -1932,6 +2096,7 @@ export class NotebookView extends FileView {
 		this.textTap = null;
 		this.lassoTap = null;
 		this.penLinks?.reset();
+		this.pageOffer?.reset();
 		this.multiTap.reset();
 		this.stopHold();
 		this.textEditor?.close();
@@ -2012,7 +2177,8 @@ export class NotebookView extends FileView {
 		const now = Date.now();
 		if (now - this.lastErrorAt < 10000) return;
 		this.lastErrorAt = now;
-		showNotice(`Notebook: ${message}`, 8000);
+		// An error (a failed save) is shown at once, not after the pen is lifted.
+		showErrorNotice(`Notebook: ${message}`, 8000);
 	}
 
 	/** Every real change of the document: schedules the save and logs the page as recently edited (365). */
@@ -2061,6 +2227,7 @@ export class NotebookView extends FileView {
 		if (current !== this.navCurrent) {
 			this.navCurrent = current;
 			this.pageNav?.markCurrent(current);
+			this.pageOffer?.cancel(); // an offer made for the page that was in view
 			this.refreshUi(); // the contextual bar follows the kind of page in view
 			if (n && this.file && this.pendingPage === null) this.location.note(this.file.path, current + 1, this.currentPosition());
 			this.syncHooks?.page(current);
@@ -2173,6 +2340,7 @@ export class NotebookView extends FileView {
 		if (rect.width === 0 || rect.height === 0) return;
 		this.viewSize = { width: rect.width, height: rect.height };
 		this.body.toggleClass("is-narrow", this.contentEl.clientWidth < NARROW_PX);
+		this.ui?.refresh();
 		this.renderer?.resize(rect.width, rect.height, window.devicePixelRatio || 1);
 		this.refit(true);
 		if (this.pendingPage !== null) this.applyStartPosition();
@@ -2484,6 +2652,7 @@ export class NotebookView extends FileView {
 		// A selection made with the side button's lasso is not carried into new ink.
 		this.clearSelection();
 		this.penLinks?.strokeStarted();
+		this.pageOffer?.penDown();
 		this.strokeStart = sample.t;
 		const snap = !!page && this.rulerLatches(page, local);
 		const start = snap && this.ruler ? (projectToRuler(this.ruler.ruler, local, Infinity) ?? local) : local;
@@ -2796,7 +2965,8 @@ export class NotebookView extends FileView {
 	private eraseByScribble(active: ActiveStroke, page: Page): boolean {
 		if (!this.host.settings.scribbleErase || active.stroke.tool !== "pen" || active.snap || active.recognized || !this.renderer) return false;
 		const stroke = freezeStroke({ ...active.stroke, points: this.ink.toPoints() });
-		const steps = scribbleEraseSteps(page, stroke, performance.now() - this.strokeStart, this.renderer.boundsOf);
+		// v8: hidden ink (the solutions) is never scratched out while it is not shown.
+		const steps = scribbleEraseSteps(page, stroke, performance.now() - this.strokeStart, this.renderer.boundsOf, {}, this.markers?.isRevealed(page) ?? false);
 		if (!steps) return false;
 		this.clearSelection();
 		this.renderer.cancelWet();
@@ -2834,6 +3004,11 @@ export class NotebookView extends FileView {
 		}
 		this.history.execute(commands.length === 1 ? commands[0]! : new Batch("Draw", commands));
 		this.penLinks?.strokesAdded(pageIndex);
+		// Reaching the bottom of a page in the middle: offer (never add) a page right after it.
+		if (doc && this.renderer && !grew) {
+			const maxY = Math.max(...strokes.map((s) => this.renderer!.boundsOf(s).maxY));
+			if (needsPageOffer(page, doc.pages[doc.pages.length - 1] === page, maxY, this.host.settings.autoNextPage)) this.pageOffer?.offer(page.id);
+		}
 		if (grew) {
 			this.afterHistoryChange();
 			return;
@@ -3023,6 +3198,7 @@ export class NotebookView extends FileView {
 			toLocal: (pageIndex, p) => this.toLocal(pageIndex, p),
 			stageRect: () => this.stage.getBoundingClientRect(),
 			boundsOf: () => this.renderer?.boundsOf,
+			revealed: (page) => this.markers?.isRevealed(page) ?? false,
 			selection: () => this.selection,
 			selectionHit: (pageIndex, local) => this.selection?.pageIndex === pageIndex && this.selectionHit(local) !== null,
 			selectPolygon: (pageIndex, polygon) => {

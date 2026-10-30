@@ -97,13 +97,26 @@ export function drawEquation(ctx: CanvasRenderingContext2D, el: EquationElement,
 	}
 }
 
+/**
+ * Colours of a graph drawn in another palette (night mode, view only): `paper` replaces the white background and the
+ * panels, `ink` maps the colours of curves, points and labels, `line` the grid, axes and borders.
+ */
+export interface GraphPalette {
+	paper: string;
+	ink: (color: string) => string;
+	line: (color: string) => string;
+}
+
+const SAME: GraphPalette = { paper: GRAPH_STYLE.background, ink: (c) => c, line: (c) => c };
+
 /** Draws a graph scene (frame, grid, axes, areas, curves, points, panels, texts), clipped to the frame. */
-export function drawGraphScene(ctx: CanvasRenderingContext2D, s: GraphScene): void {
+export function drawGraphScene(ctx: CanvasRenderingContext2D, s: GraphScene, palette: GraphPalette = SAME): void {
 	const S = GRAPH_STYLE;
+	const P = palette;
 	const f = s.frame;
 	ctx.save();
 	try {
-		ctx.fillStyle = S.background;
+		ctx.fillStyle = P.paper;
 		ctx.fillRect(f.x, f.y, f.width, f.height);
 		ctx.beginPath();
 		ctx.rect(f.x, f.y, f.width, f.height);
@@ -112,7 +125,7 @@ export function drawGraphScene(ctx: CanvasRenderingContext2D, s: GraphScene): vo
 		ctx.lineJoin = "round";
 		const lines = (list: GraphScene["grid"], color: string, width: number) => {
 			if (list.length === 0) return;
-			ctx.strokeStyle = color;
+			ctx.strokeStyle = P.line(color);
 			ctx.lineWidth = width;
 			ctx.beginPath();
 			for (const l of list) {
@@ -125,7 +138,7 @@ export function drawGraphScene(ctx: CanvasRenderingContext2D, s: GraphScene): vo
 		lines(s.axes, S.axis, S.axisWidth);
 		for (const a of s.areas) {
 			ctx.globalAlpha = S.areaAlpha;
-			ctx.fillStyle = a.color;
+			ctx.fillStyle = P.ink(a.color);
 			ctx.beginPath();
 			for (const p of a.polygons) {
 				ctx.moveTo(p[0]![0], p[0]![1]);
@@ -136,7 +149,7 @@ export function drawGraphScene(ctx: CanvasRenderingContext2D, s: GraphScene): vo
 			ctx.globalAlpha = 1;
 		}
 		for (const c of s.curves) {
-			ctx.strokeStyle = c.color;
+			ctx.strokeStyle = P.ink(c.color);
 			ctx.lineWidth = c.width;
 			ctx.setLineDash(c.dash ? [...c.dash] : []);
 			ctx.beginPath();
@@ -150,23 +163,23 @@ export function drawGraphScene(ctx: CanvasRenderingContext2D, s: GraphScene): vo
 		}
 		ctx.setLineDash([]);
 		for (const p of s.points) {
-			ctx.fillStyle = p.color;
+			ctx.fillStyle = P.ink(p.color);
 			ctx.beginPath();
 			ctx.arc(p.x, p.y, S.pointRadius, 0, Math.PI * 2);
 			ctx.fill();
 		}
 		for (const p of s.panels) {
-			ctx.fillStyle = S.panel;
+			ctx.fillStyle = P === SAME ? S.panel : P.paper;
 			ctx.globalAlpha = 0.92;
 			ctx.fillRect(p.x, p.y, p.width, p.height);
 			ctx.globalAlpha = 1;
-			ctx.strokeStyle = S.panelBorder;
+			ctx.strokeStyle = P.line(S.panelBorder);
 			ctx.lineWidth = 0.5;
 			ctx.strokeRect(p.x, p.y, p.width, p.height);
 		}
 		// Legend colour samples, above the panels.
 		for (const c of s.overlay) {
-			ctx.strokeStyle = c.color;
+			ctx.strokeStyle = P.ink(c.color);
 			ctx.lineWidth = c.width;
 			ctx.beginPath();
 			for (const l of c.lines) {
@@ -177,7 +190,7 @@ export function drawGraphScene(ctx: CanvasRenderingContext2D, s: GraphScene): vo
 			ctx.stroke();
 		}
 		for (const t of s.texts) {
-			ctx.fillStyle = t.color;
+			ctx.fillStyle = P.ink(t.color);
 			ctx.font = `${t.size}px sans-serif`;
 			ctx.textAlign = t.align;
 			ctx.textBaseline = t.baseline === "top" ? "top" : t.baseline === "bottom" ? "bottom" : "middle";
@@ -187,13 +200,13 @@ export function drawGraphScene(ctx: CanvasRenderingContext2D, s: GraphScene): vo
 		ctx.restore();
 	}
 	ctx.save();
-	ctx.strokeStyle = S.border;
+	ctx.strokeStyle = P.line(S.border);
 	ctx.lineWidth = S.borderWidth;
 	ctx.strokeRect(f.x, f.y, f.width, f.height);
 	ctx.restore();
 }
 
-/** Draws a graph element. */
-export function drawGraph(ctx: CanvasRenderingContext2D, el: GraphElement): void {
-	drawGraphScene(ctx, graphScene(el));
+/** Draws a graph element (in `palette`, e.g. night mode; default its own colours). */
+export function drawGraph(ctx: CanvasRenderingContext2D, el: GraphElement, palette?: GraphPalette): void {
+	drawGraphScene(ctx, graphScene(el), palette);
 }

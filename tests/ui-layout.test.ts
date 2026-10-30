@@ -66,7 +66,7 @@ describe("layout engine", () => {
 
 	it("changes the contextual bar with the page and the situation", () => {
 		const pdf = baseContext({ page: { index: 0, count: 2, background: "pdf", infinite: false, bookmarked: false }, notebook: { pdfPages: true, backgrounds: true } });
-		expect(contextBar(pdf, 800, {}, NOW)).toEqual({ kind: "pdf", actions: ["pdf-search", "toggle-annotations", "toggle-dim-background", "pdf-side-open", "pdf-margins"] });
+		expect(contextBar(pdf, 800, {}, NOW)).toEqual({ kind: "pdf", actions: ["pdf-search", "toggle-annotations", "toggle-dim-background", "pdf-side-open", "crop-margins", "pdf-margins"] });
 		const side = contextBar({ ...pdf, sidePane: { available: true, open: true } }, 800, {}, NOW)!;
 		expect(side.kind).toBe("side-pane");
 		expect(side.actions).toEqual(["pdf-side-link", "pdf-side-add-page", "pdf-side-show-slide", "pdf-side-close"]);

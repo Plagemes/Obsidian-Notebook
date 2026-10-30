@@ -21,7 +21,7 @@ import { PromptModal } from "../library/library-modals";
 import { createId } from "../model/document";
 import { AddElement } from "../model/history";
 import type { TextElement } from "../model/types";
-import { vaultLinkFileAdapter } from "../storage/vault-io";
+import { sidecarDeviceId, vaultDeviceFileAdapter } from "../storage/vault-io";
 import { NotebookView, VIEW_TYPE } from "./notebook-view";
 import { referencePane } from "./pdf-sync";
 import {
@@ -502,7 +502,7 @@ function refreshAll(): void {
  */
 export function registerTextbookRefs(plugin: Plugin, folder: () => string): void {
 	const { app } = plugin;
-	const store = new TextbookStore(vaultLinkFileAdapter(app), folder);
+	const store = new TextbookStore(vaultDeviceFileAdapter(app), folder, sidecarDeviceId(app));
 	services = { app, store, folder };
 	plugin.register(() => {
 		for (const view of views(app)) overlays.get(view)?.detach();
@@ -530,7 +530,7 @@ export function registerTextbookRefs(plugin: Plugin, folder: () => string): void
 		attach();
 		// The file is read again when it changes (another device, or an explicit action here); looking never writes.
 		const changed = (f: { path: string }) => {
-			if (f.path === store.path) reload();
+			if (store.watches(f.path)) reload();
 		};
 		plugin.registerEvent(app.vault.on("modify", changed));
 		plugin.registerEvent(app.vault.on("create", changed));

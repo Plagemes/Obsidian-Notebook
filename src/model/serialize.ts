@@ -396,12 +396,22 @@ function readElement(v: unknown, path: string, assets: Assets, drop: Dropped | n
 	return fail(`${path}.type`, "unknown element type");
 }
 
-/** One line of text (a marker label, a box title): any string, normalised; an invalid one is dropped and counted when lenient. */
+/**
+ * One line of text (a marker label, a box title): any string, normalised; an invalid one is dropped and counted when
+ * lenient. A label that normalising changes (extra spaces, line breaks, longer than the limit, blank) is not what this
+ * plugin writes: read leniently it is kept normalised and counted as dropped (so the repair notice tells the user that
+ * something changed); read strictly it fails.
+ */
 function readLabel(v: unknown, path: string, drop: Dropped | null): string | undefined {
 	return orDrop(drop, () => {
 		if (v === undefined) return undefined;
 		if (typeof v !== "string") fail(path, "expected a string");
-		return cleanMarkerText(v);
+		const clean = cleanMarkerText(v);
+		if (clean !== v) {
+			if (!drop) fail(path, "not a normalised label");
+			drop.count++;
+		}
+		return clean;
 	});
 }
 

@@ -436,8 +436,8 @@ describe("companion note", () => {
 			"> [!theorem] Pythagoras",
 			"> ![[Courses/Analysis.notebook#p1&id=p1&r=30,120,400,150]]",
 			"",
-			"- [x] Exercises 3.1-3.4 📅 2026-11-05",
-			"- [ ] Homework",
+			"- [x] Exercises 3.1-3.4 📅 2026-11-05 ^nb-m-hw",
+			"- [ ] Homework ^nb-m-hw2",
 		].join("\n"));
 		const plain = createDocument(new Date(stamp));
 		expect(companionContent(plain, { notebookPath: "a.notebook", pageUri: () => "u" }).text).toBe("");

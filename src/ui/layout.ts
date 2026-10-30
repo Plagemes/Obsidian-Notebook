@@ -4,7 +4,7 @@
 import { ACTIONS, activeContexts, GROUP_ORDER, isRelevant, type ActionDef, type ActionGroup, type ContextKind, type Surface, type UiContext } from "./actions";
 import { usageBoost, type UsageMap } from "./usage";
 
-/** Sizes (CSS px) the toolbar is laid out with. They match styles.css (40 px buttons, 4 px gaps). */
+/** Sizes (CSS px) the toolbar is laid out with. They match styles.css (40 px buttons, 4 px gaps) at the normal toolbar size. */
 export const TOOLBAR_METRICS = {
 	/** One icon button and its gap. */
 	slot: 44,
@@ -37,9 +37,19 @@ export interface ToolbarPlan {
 	quickSlots: number;
 }
 
-/** How the toolbar uses a view `width` CSS px wide. */
-export function toolbarPlan(width: number): ToolbarPlan {
-	const m = TOOLBAR_METRICS;
+/** The metrics for a toolbar whose button slot is `slot` px (wave 0.9, 370; 44 = normal): everything made of buttons scales. */
+export function metricsFor(slot: number): { -readonly [K in keyof typeof TOOLBAR_METRICS]: number } {
+	const k = slot / TOOLBAR_METRICS.slot;
+	return {
+		slot, padding: TOOLBAR_METRICS.padding, gap: TOOLBAR_METRICS.gap,
+		tools: Math.round(8 * slot + 12), history: 2 * slot, chip: slot, favourites: Math.round(TOOLBAR_METRICS.favourites * k),
+		endNarrow: Math.round(64 + 20 + slot), endWide: Math.round(64 + 96 + slot),
+	};
+}
+
+/** How the toolbar uses a view `width` CSS px wide; `slot`: button slot of the toolbar size (default: normal). */
+export function toolbarPlan(width: number, slot: number = TOOLBAR_METRICS.slot): ToolbarPlan {
+	const m = metricsFor(slot);
 	const inner = Math.max(0, width - m.padding);
 	const actions = (end: number) => m.history + m.chip + m.favourites + end + 3 * m.gap;
 	const singleRoom = inner - m.tools - m.gap - actions(m.endWide) - m.gap;
@@ -71,17 +81,17 @@ export interface ContextBarPlan {
 }
 
 /** Number of action buttons the contextual bar can show in a view `width` CSS px wide (beside its label and collapse button). */
-export function contextCapacity(width: number): number {
-	const m = TOOLBAR_METRICS;
+export function contextCapacity(width: number, slot: number = TOOLBAR_METRICS.slot): number {
+	const m = metricsFor(slot);
 	return Math.max(3, Math.min(8, Math.floor((width - 32 - 2 * m.slot) / m.slot)));
 }
 
 /** The contextual bar: the most specific context that has something to offer, with its best actions. */
-export function contextBar(c: UiContext, width: number, usage: UsageMap, now: number, actions: readonly ActionDef[] = ACTIONS): ContextBarPlan | null {
+export function contextBar(c: UiContext, width: number, usage: UsageMap, now: number, actions: readonly ActionDef[] = ACTIONS, slot: number = TOOLBAR_METRICS.slot): ContextBarPlan | null {
 	if (!c.open) return null;
 	const all = ranked("context", c, usage, now, actions);
 	for (const kind of activeContexts(c)) {
-		const fit = all.filter((a) => a.contexts?.includes(kind)).slice(0, contextCapacity(width));
+		const fit = all.filter((a) => a.contexts?.includes(kind)).slice(0, contextCapacity(width, slot));
 		if (fit.length > 0) return { kind, actions: fit.map((a) => a.id) };
 	}
 	return null;
@@ -93,9 +103,9 @@ export interface ToolbarLayout extends ToolbarPlan {
 }
 
 /** Everything the primary toolbar and the contextual bar show right now. */
-export function buildLayout(c: UiContext, width: number, usage: UsageMap, now: number, actions: readonly ActionDef[] = ACTIONS): ToolbarLayout {
-	const plan = toolbarPlan(width);
-	const context = contextBar(c, width, usage, now, actions);
+export function buildLayout(c: UiContext, width: number, usage: UsageMap, now: number, actions: readonly ActionDef[] = ACTIONS, slot: number = TOOLBAR_METRICS.slot): ToolbarLayout {
+	const plan = toolbarPlan(width, slot);
+	const context = contextBar(c, width, usage, now, actions, slot);
 	const inContext = new Set(context?.actions ?? []);
 	// A read-only view offers no quick insert actions: they would all be disabled.
 	const quick = ranked("quick", c, usage, now, actions)

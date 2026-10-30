@@ -9,7 +9,7 @@ Handwritten notebooks inside your Obsidian vault, designed first for **Android t
 - Local-first: no account, no cloud, no telemetry.
 - UI in English, and in Italian when Obsidian is set to Italian.
 
-> **Status: v0.7.0, early development.** The automated tests pass, but the plugin has **not been verified on Android hardware yet**, and most features are new in 0.5.x, 0.6.0 and 0.7.0 (the interface was redesigned in 0.7.0) and many are experimental (including the writing engine, the scanner and export: the PDF and SVG were checked with other software on a PC, not opened on Android). See [docs/testing.md](docs/testing.md) for what is verified and how to test it.
+> **Status: v0.8.0, early development.** The automated tests pass, but the plugin has **not been verified on Android hardware yet**, and most features are new in 0.5.x, 0.6.0, 0.7.0 and 0.8.0 (the interface was redesigned in 0.7.0; markers, pen gestures and page operations came in 0.8.0) and many are experimental (including the writing engine, the scanner and export: the PDF and SVG were checked with other software on a PC, not opened on Android). See [docs/testing.md](docs/testing.md) for what is verified and how to test it.
 
 ## Usage
 
@@ -36,6 +36,15 @@ Every action is described once in an action registry and the interface is built 
 - **Page sheet**: the actions of one page, with paper and size as chips (see *Pages and navigation*).
 - **Radial dial** at the pen tip (S Pen side button, or a long press): undo/redo, a width bubble, a colour bubble (12 colours, a custom colour and an eyedropper), the active tool, and favourites · pen case · shapes.
 - Built on Obsidian's CSS variables, so light, dark and community themes apply; *reduced motion* is respected. Not verified on Android hardware.
+- **Toolbar size** (setting): compact, normal or large buttons and icons for the toolbar, the contextual bar, the option popovers and the radial dial. In large the row of tools wraps onto a second line on a narrow phone.
+
+#### Obsidian mobile toolbar
+
+Obsidian's mobile toolbar is set up by you (*Settings > Mobile*): a plugin cannot add buttons to it, so the plugin only makes its commands good candidates, each with a clear name and the icon of its action. Worth adding (they act on the notebook in view and are inactive elsewhere): *Notebook: Next page*, *Previous page*, *Undo (notebook)*, *Redo (notebook)*, *Add page*, *Toggle the pages panel*, *Go to page number…*, *Tool: pen*, *Tool: eraser*, *Tool: lasso selection*, *Toggle pen only*, *Fit page to width*, *Add page to Obsidian bookmarks*. *Continue last notebook* and *Open library* also work from a note.
+
+#### Page turner and Bluetooth clickers
+
+While a notebook is the active view, **PageDown, ArrowRight, ArrowDown and space** go to the next page and **PageUp, ArrowLeft, ArrowUp and Shift+space** to the previous one, unless a text field or text box is being edited, a stroke is being drawn, or a dialog or menu is open. Bluetooth presentation clickers send PageUp/PageDown or the arrow keys, so they work; turn it off with *Turn pages with the keyboard*. The Android **volume keys cannot be used**: the system handles them and web content (so Obsidian plugins) never receives them. Undo and redo keep their keys (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl+Y).
 
 ### Tools
 
@@ -77,7 +86,22 @@ Undo/redo: toolbar buttons, Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z (or Ctrl+Y) on deskt
 - More papers: Cornell, music staff, isometric, hexagonal, calligraphy, daily and weekly planner.
 - **Delete page** keeps the page in the page trash (**Deleted pages…**, at most 50 pages per notebook for 30 days). **Page templates**: *Save page as template…* and *New page from template…*, with built-in Cornell, meeting notes and to-do templates. **Exercise page here** inserts a blank page with your exercise paper after the current one.
 - **Fit to width** in the toolbar restores the default zoom.
+- **Bookmarks pane**: *Add page to Obsidian bookmarks* (page sheet, All actions, command palette) adds the page in view to Obsidian's core Bookmarks pane as `Notebook.notebook#pN&id=...`; opening the bookmark goes to that page even if pages moved. It needs the core *Bookmarks* plugin turned on and uses an internal Obsidian API, so it says so in a notice when it is not available.
 - Mouse: left button draws, wheel scrolls, Ctrl + wheel zooms, middle button pans.
+
+### Study tools (0.8.0)
+
+All of this is new in 0.8.0 and **not verified on Android hardware**; the manual steps are in [docs/testing.md](docs/testing.md) (steps 178-232).
+
+- **Markers**: *To complete* (a gap, with the time and the slide in view), *Question*, importance (!, !!, ★) and *Homework* with a due date. Tap to place, drag to mark a region; tap a badge to resolve or cycle it. The **End of lecture** panel lists them for a lecture or the whole notebook. Homework becomes Obsidian tasks in the companion note (ticking one there is read back into the notebook) and **structured boxes** (Definition, Theorem, Example, Proof, Remark) become callouts.
+- **Invisible ink** (*Toggle invisible ink*): write answers that are saved hidden; *Show solutions* reveals them (view only). Hidden ink is not erased, selected or exported while hidden.
+- **Pen gestures** (gesture mode, the S Pen side button held, or an optional long press): circle to select, scribble to delete, "^" to insert space, "#" for page tags, a star to bookmark, "?" to search, a line from a selection to a thumbnail to move it, plus your own gestures bound to any command. The command is previewed before you lift the pen and moving back cancels it. Gestures never start while you just write.
+- **Several pages at once** in the Pages panel (move, duplicate, bookmark, tags, paper, size, export, delete), **stable page links** (`#p3&id=…` keep working after pages are reordered; *Update links to notebook pages…* fixes old links) and **quiet while writing** (the plugin's own notices and background work wait while the pen is on the screen).
+- **Zettelkasten inbox** (*Open the inbox*): the loose jots on the quick-notes sheet and the PDF highlights waiting to be made into permanent or literature cards, linked to an existing card, or discarded (nothing is deleted).
+- **Textbook references**: "p. 134" typed in a text box opens the textbook PDF you chose (*Set textbook for this notebook…*) at that page.
+- **Redo the exercise**: a practice copy of a page with your ink hidden (all, some colours or tools, or the selection), linked to the original, with attempts, a peek at the solution and an optional timer.
+- **Links written with the pen**: `[[Note]]` in a text box is a link, circled ink can be linked to a note, and two handwritten brackets offer the note chooser.
+- Per-device files in `<notebooks folder>/_meta/` (inbox, practice, textbooks, moved pages) are merged when read, so synced devices never write the same file.
 
 ### PDFs and scans
 
@@ -150,6 +174,8 @@ The PDF writer has no dependencies and does not compress, so a page with a lot o
 | Performance overlay | shows frame time, input-to-frame and input-to-paint times, whether raw input is in use, redraw time, and strokes and pages drawn |
 | Add a page when writing at the bottom | on by default; appends a page after the last page (not infinite or PDF/image pages) |
 | Scrolling | continuous (vertical) or one page at a time |
+| Toolbar size | compact, normal or large buttons and icons for the toolbar, the contextual bar and the radial menu (large is easier with a finger; on a narrow phone the tools wrap onto a second line) |
+| Turn pages with the keyboard | on by default; arrow keys, PageUp / PageDown and space (Shift+space back), also from a Bluetooth presentation clicker |
 | Finger taps | two fingers undo / three redo (default), swapped, or off |
 | Scribble to erase | off by default |
 | Scroll up when writing near the bottom | off by default |
@@ -239,7 +265,7 @@ Enable USB debugging on the device, connect it to a PC with Chrome and open `chr
 
 ## File format
 
-A `.notebook` file is JSON with `format: "obsidian-notebook"` and an integer `version` (currently 7). Version 2 added the highlighter, 3 the paper kinds, 4 the notebook metadata, assets, PDF/image page backgrounds, text and image elements, infinite pages and the shape tool, and 5 a per-stroke `render` field (1 = the previous pen look, kept for every existing stroke; 2 = the new ink engine), 6 optional page margins (files saved by 0.5.0 with margins open read-only in 0.4.x), and 7 bookmark details, page tags, the last reading position and the new paper kinds (files saved by 0.6.0 open read-only in 0.5.x, with a backup). Older notebooks open normally and are rewritten in the current version only when you edit them; after that, **older versions of the plugin open them read-only** (and keep a backup copy) instead of editing them. Coordinates are in typographic points (A4 = 595.28 × 841.89 pt). PDFs and images are not inside the file: they are in `<notebooks folder>/_assets/` and referenced by id. Details and the reasoning behind the format choice are in [docs/architecture.md](docs/architecture.md).
+A `.notebook` file is JSON with `format: "obsidian-notebook"` and an integer `version` (currently 8). Version 2 added the highlighter, 3 the paper kinds, 4 the notebook metadata, assets, PDF/image page backgrounds, text and image elements, infinite pages and the shape tool, and 5 a per-stroke `render` field (1 = the previous pen look, kept for every existing stroke; 2 = the new ink engine), 6 optional page margins (files saved by 0.5.0 with margins open read-only in 0.4.x), and 7 bookmark details, page tags, the last reading position and the new paper kinds (files saved by 0.6.0 open read-only in 0.5.x, with a backup), and 8 markers, structured boxes and hidden (invisible) ink (files saved by 0.8.0 open read-only in 0.7.x, with a backup). Older notebooks open normally and are rewritten in the current version only when you edit them; after that, **older versions of the plugin open them read-only** (and keep a backup copy) instead of editing them. Coordinates are in typographic points (A4 = 595.28 × 841.89 pt). PDFs and images are not inside the file: they are in `<notebooks folder>/_assets/` and referenced by id. Details and the reasoning behind the format choice are in [docs/architecture.md](docs/architecture.md).
 
 Backups of unreadable files, of versions changed elsewhere (conflicts), of changes that could not be saved and of journals that could not be applied are written to `Notebooks/_backup/` as `.bak` files; version snapshots go to `Notebooks/_backup/history/`. Obsidian does not show these folders in the file explorer; open them with a file manager. If you sync the vault, sync `_assets` and `_backup` too (with Obsidian Sync, turn on **Other types** so that `.notebook` files, PDFs and snapshots are synced). The journal and the library index live in the plugin folder and are not meant to be synced.
 

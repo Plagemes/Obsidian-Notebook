@@ -72,8 +72,10 @@ export function fitPageViewport(view: Size, layout: Layout, index: number, margi
 	const box = layout.boxes[index];
 	if (!box || box.width <= 0) return { scale: 1, offsetX: 0, offsetY: margin };
 	const usable = Math.max(1, view.width - 2 * margin);
-	const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, usable / box.width));
-	return { scale, offsetX: (view.width - box.width * scale) / 2 - box.x * scale, offsetY: margin - box.y * scale };
+	// wave 0.9 (376): with the margins cropped, the content box is what fills the width.
+	const width = box.window?.width ?? box.width;
+	const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, usable / width));
+	return { scale, offsetX: (view.width - width * scale) / 2 - (box.x + (box.window?.x ?? 0)) * scale, offsetY: margin - box.y * scale };
 }
 
 /**
@@ -92,7 +94,7 @@ export function panRoom(v: Viewport, view: Size, layout: Layout, anchor: number,
 	const box = layout.boxes[anchor];
 	if (!box) return { x: false, y: false };
 	return {
-		x: box.width * v.scale + 2 * margin > view.width + 0.5,
+		x: (box.window?.width ?? box.width) * v.scale + 2 * margin > view.width + 0.5,
 		y: box.height * v.scale + 2 * margin > view.height + 0.5,
 	};
 }
@@ -109,10 +111,12 @@ export function turnViewport(v: Viewport, view: Size, layout: Layout, from: numb
 	if (!box) return v;
 	// Same position relative to the page top as before (screen px), clamped to the new page.
 	const relY = v.offsetY + (src?.y ?? 0) * v.scale;
-	const wide = box.width * v.scale + 2 * margin > view.width;
+	const w = (box.window?.width ?? box.width) * v.scale;
+	const left = (box.x + (box.window?.x ?? 0)) * v.scale;
+	const wide = w + 2 * margin > view.width;
 	const offsetX = to > from
-		? (wide ? margin : (view.width - box.width * v.scale) / 2) - box.x * v.scale
-		: (wide ? view.width - box.width * v.scale - margin : (view.width - box.width * v.scale) / 2) - box.x * v.scale;
+		? (wide ? margin : (view.width - w) / 2) - left
+		: (wide ? view.width - w - margin : (view.width - w) / 2) - left;
 	return clampToAnchor({ scale: v.scale, offsetX, offsetY: relY - box.y * v.scale }, view, layout, to, margin);
 }
 

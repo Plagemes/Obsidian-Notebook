@@ -11,7 +11,7 @@ import { ensureFolder, VaultDocumentIO } from "../storage/vault-io";
 import { viewsOf } from "./open";
 import { NotebookPickerModal } from "./picker";
 
-import { showNotice } from "../view/notice";
+import { showErrorNotice, showNotice } from "../view/notice";
 
 export interface HistoryHost {
 	app: App;
@@ -172,7 +172,7 @@ export class HistoryService {
 				}
 				// Anything left only in memory would be lost when the tab is emptied: do not restore.
 				if (!saved) {
-					showNotice(t("history.flushFailed"));
+					showErrorNotice(t("history.flushFailed"));
 					return;
 				}
 			}

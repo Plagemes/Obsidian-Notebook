@@ -10,6 +10,7 @@ import { PAPER_COLORS, paperPattern, type PaperLineKind } from "./paper";
 import { inkPath, type PathSink } from "./ink-geometry";
 import { BOX_COLORS, badgeColor, badgeFace, badgeIsSquare, boxLabelWidth, checkPoints, defaultBoxLabel, glyphSize, starPoints, type BoxLabel } from "./marker-render";
 import { HIGHLIGHTER_ALPHA, strokeOutline } from "./stroke-shape";
+import { layerFlags, type ExportLayers, type LayerFlags } from "./export-layers";
 import { helveticaCodeWidth, toWinAnsi, wrapHelvetica } from "../pdf/helvetica";
 
 /**
@@ -47,6 +48,8 @@ export interface PdfOptions {
 	equationNumbers?: ReadonlyMap<string, number>;
 	/** v9: outline of an equation without a cached one (default: one typeset this session, else its source as text). */
 	equationOutline?: (el: EquationElement) => { polys: Polygon[]; sx: number; sy: number } | null;
+	/** wave 0.9 (381): "ink" leaves out the sheet, the PDF/picture background and the paper; "background" leaves out the ink. Default "both". */
+	layers?: ExportLayers;
 }
 
 /** Line height of text elements, as a multiple of the font size. */
@@ -124,7 +127,7 @@ export function pagesToPdf(pages: readonly Page[], options: PdfOptions = {}): Ui
 		const res: PageResources = { xobjects: new Map<string, number>(), font: false, highlighter: false, area: false };
 		const hidden = typeof options.hiddenInk === "function" ? options.hiddenInk(page) : !!options.hiddenInk;
 		const content = pageContent(page, withPaper, options.images?.(page) ?? [], getImage, res, {
-			hidden, boxLabel: options.boxLabel ?? ((b) => defaultBoxLabel(b)),
+			hidden, boxLabel: options.boxLabel ?? ((b) => defaultBoxLabel(b)), layers: layerFlags(options.layers),
 			numbers, outline: options.equationOutline ?? equationOutline,
 		});
 		const parts: string[] = [];
@@ -250,6 +253,8 @@ interface PageResources {
 interface ElementOptions {
 	hidden: boolean;
 	boxLabel: BoxLabel;
+	/** wave 0.9 (381): which layers are drawn. Equations and graphs are content (drawn with the ink, never with the background). */
+	layers?: LayerFlags;
 	numbers?: ReadonlyMap<string, number>;
 	outline?: (el: EquationElement) => { polys: Polygon[]; sx: number; sy: number } | null;
 }
@@ -262,17 +267,19 @@ function pageContent(
 	res: PageResources,
 	v8: ElementOptions = { hidden: false, boxLabel: (b) => defaultBoxLabel(b) },
 ): string {
+	const layers = v8.layers ?? { background: true, content: true };
 	const ops: string[] = [];
 	ops.push(`1 0 0 -1 0 ${num(page.height)} cm`);
-	ops.push(`1 1 1 rg 0 0 ${num(page.width)} ${num(page.height)} re f`);
+	if (layers.background) ops.push(`1 1 1 rg 0 0 ${num(page.width)} ${num(page.height)} re f`);
 	const draw = (img: PdfPlacedImage) => {
 		const n = imageObj(img);
 		const name = `Im${n}`;
 		res.xobjects.set(name, n);
 		ops.push(imageOps(img, name));
 	};
-	for (const img of images) if (img.layer === "background") draw(img);
-	if (withPaper) ops.push(...paperOps(page));
+	if (layers.background) for (const img of images) if (img.layer === "background") draw(img);
+	if (layers.background && withPaper) ops.push(...paperOps(page));
+	if (!layers.content) return ops.join("\n");
 	for (const img of images) if (img.layer !== "background") draw(img);
 	for (const el of page.elements ?? []) {
 		if (el.type !== "graph") continue;

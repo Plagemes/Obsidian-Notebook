@@ -3482,6 +3482,15 @@ body {
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
 }
+
+/* The line of the note that holds the link, so the user can tell links apart before updating. */
+.notebook-update-links-line {
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
 /* wave 0.7: resilience — safe mode, "not saved" and integrity banners (view/resilience.ts), integrity report */
 .notebook-resilience:empty {
 	display: none;
@@ -4699,4 +4708,231 @@ body {
 	width: 36px;
 	height: 36px;
 	padding: 2px;
+}
+
+/* wave 0.9: obsidian and input (toolbar size: view-ui.ts sets --nb-target and --nb-icon on the view; large lets the tools wrap on a narrow phone) */
+.notebook-view .notebook-tool {
+	min-width: var(--nb-target, 40px);
+	min-height: var(--nb-target, 40px);
+}
+
+.notebook-view .notebook-tool .svg-icon {
+	width: var(--nb-icon, 18px);
+	height: var(--nb-icon, 18px);
+}
+
+.notebook-view .notebook-context-label,
+.notebook-view .notebook-page-indicator {
+	min-height: var(--nb-target, 40px);
+}
+
+.notebook-view.is-tools-wrapped .notebook-toolbar-tools {
+	flex-wrap: wrap;
+	max-width: 100%;
+}
+
+.notebook-view.is-tools-wrapped .notebook-toolbar-tools > .notebook-toolbar-divider {
+	display: none;
+}
+
+.notebook-view.is-tools-wrapped .notebook-toolbar-tools .notebook-toolbar-group {
+	flex-wrap: wrap;
+}
+
+
+/* wave 0.9: text and objects (find and replace panel, page information, the chip that offers a page in the middle of a notebook) */
+.notebook-find-panel {
+	width: min(560px, 96vw);
+}
+
+.notebook-find-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+
+.notebook-find-row > label {
+	flex: 0 0 7.5em;
+	color: var(--text-muted);
+}
+
+.notebook-find-row > input {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 40px;
+}
+
+.notebook-find-options,
+.notebook-find-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 16px;
+	margin-bottom: 8px;
+}
+
+.notebook-find-check {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 40px;
+}
+
+.notebook-find-actions button {
+	min-height: 40px;
+}
+
+.notebook-find-status {
+	margin: 4px 0 8px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.notebook-find-results {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	max-height: 40vh;
+	overflow-y: auto;
+}
+
+.notebook-find-row-result {
+	display: flex;
+	align-items: stretch;
+	border-radius: var(--radius-s);
+}
+
+.notebook-find-row-result.is-active {
+	background: var(--background-modifier-hover);
+	box-shadow: inset 3px 0 0 var(--interactive-accent);
+}
+
+.notebook-find-hit {
+	display: flex;
+	flex: 1 1 auto;
+	align-items: baseline;
+	gap: 10px;
+	min-width: 0;
+	min-height: 40px;
+	padding: 6px 10px;
+	background: transparent;
+	box-shadow: none;
+	text-align: left;
+}
+
+.notebook-find-page {
+	flex: 0 0 auto;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.notebook-find-snippet {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.notebook-find-snippet mark {
+	padding: 0 1px;
+	background: var(--text-highlight-bg);
+	color: inherit;
+}
+
+.notebook-find-go {
+	flex: 0 0 auto;
+	width: 40px;
+	min-height: 40px;
+}
+
+.notebook-info-list {
+	display: grid;
+	grid-template-columns: minmax(7em, max-content) 1fr;
+	gap: 6px 14px;
+	margin: 0 0 12px;
+}
+
+.notebook-info-list dt {
+	color: var(--text-muted);
+}
+
+.notebook-info-list dd {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.notebook-info-note {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.notebook-page-offer {
+	position: absolute;
+	left: 50%;
+	bottom: 72px;
+	transform: translateX(-50%);
+	z-index: 7;
+	display: flex;
+	align-items: center;
+	max-width: calc(100% - 16px);
+	border-radius: 22px;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	box-shadow: var(--shadow-s);
+}
+
+.notebook-page-offer-add {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 44px;
+	padding: 0 8px 0 16px;
+	background: transparent;
+	box-shadow: none;
+	color: inherit;
+	cursor: pointer;
+}
+
+.notebook-page-offer-icon {
+	display: inline-flex;
+}
+
+.notebook-page-offer-close {
+	width: 40px;
+	min-height: 44px;
+	color: inherit;
+}
+
+@media (max-width: 480px) {
+	.notebook-find-row {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 2px;
+	}
+
+	.notebook-find-row > label {
+		flex: none;
+	}
+}
+
+
+/* wave 0.9: export and view (export dialogs, night mode) */
+.notebook-export-note {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	margin: 6px 0;
+}
+
+.notebook-export-problem {
+	color: var(--text-error);
+	font-size: var(--font-ui-small);
+	min-height: 1.2em;
+	margin: 4px 0;
+}
+
+/* Night mode: the wet highlighter canvas lights the page ("screen") instead of darkening it ("multiply"); opacity = NIGHT_HIGHLIGHTER_ALPHA in src/ink/night.ts. */
+.notebook-night .notebook-canvas-wet.is-highlighter {
+	opacity: 0.45;
+	mix-blend-mode: screen;
 }

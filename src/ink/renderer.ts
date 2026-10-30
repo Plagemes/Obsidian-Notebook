@@ -3,11 +3,12 @@ import { MM, RENDER_INK } from "../model/types";
 import { backgroundRect } from "../model/margins";
 import { transformElement } from "./elements";
 import { drawBox, drawMarker, type BoxLabel } from "./marker-render";
-import { drawEquation, drawGraph } from "./math-render";
+import { drawEquation, drawGraph, type GraphPalette } from "./math-render";
 import { equationNumbers } from "../model/math-elements";
 import { drawLinkedLines, parseLinks } from "./link-text";
 import { layoutText, type MeasureText } from "./text-layout";
 import { strokeBounds, type BBox } from "./hit-test";
+import { memoColors, nightHighlighter, nightInk, nightLine, NIGHT_BACKGROUND_VEIL, NIGHT_HIGHLIGHTER_ALPHA, NIGHT_PAPER } from "./night";
 import { minorVisible, paperPattern, PAPER_COLORS } from "./paper";
 import { visiblePages, type Layout, type PageBox } from "./layout";
 import { rulerEdge, rulerTicks, type Ruler } from "./ruler";
@@ -243,6 +244,11 @@ export class Renderer {
 	/** Reading options of the view (never saved): ink and elements of PDF pages are not drawn; backgrounds are drawn with this opacity. */
 	private hideAnnotations = false;
 	private backgroundAlpha = 1;
+	/** wave 0.9 (367): night mode, view-only. Colours are mapped when they are drawn; the document is never touched. */
+	private night = false;
+	private readonly nightInkColor = memoColors(nightInk);
+	private readonly nightHighlighterColor = memoColors(nightHighlighter);
+	private readonly nightLineColor = memoColors(nightLine);
 	private selectedElements: ReadonlySet<PageElement> | null = null;
 	private ruler: RulerOverlay | null = null;
 	private media: MediaSource | null = null;
@@ -379,6 +385,27 @@ export class Renderer {
 		this.invalidate();
 	}
 
+	/**
+	 * wave 0.9 (367): dark paper, light ink, lively highlighter (ink/night.ts). View-only: stored colours, exports and
+	 * thumbnails are not affected. The container gets the class `notebook-night` (the wet highlighter canvas blends with CSS).
+	 */
+	setNight(on: boolean): void {
+		if (on === this.night) return;
+		this.night = on;
+		this.container.toggleClass("notebook-night", on);
+		this.invalidate();
+	}
+
+	get nightMode(): boolean {
+		return this.night;
+	}
+
+	/** The colour `color` is drawn with: itself, or its night-mode counterpart. */
+	private inkColor(tool: Tool, color: string): string {
+		if (!this.night) return color;
+		return tool === "highlighter" ? this.nightHighlighterColor(color) : this.nightInkColor(color);
+	}
+
 	/** Bitmaps for PDF/scan backgrounds and image elements. */
 	setMedia(media: MediaSource | null): void {
 		this.media = media;
@@ -489,7 +516,7 @@ export class Renderer {
 				wet.clear();
 				this.wetRelease.splice(i, 1);
 			}
-			wet.begin(g, tool, color, t);
+			wet.begin(g, tool, this.inkColor(tool, color), t);
 			this.wet = wet;
 			this.wetPage = pageIndex;
 			return true;
@@ -792,7 +819,7 @@ export class Renderer {
 				ctx.shadowColor = SHADOW;
 				ctx.shadowBlur = 8 * this.dpr;
 				ctx.shadowOffsetY = 2 * this.dpr;
-				ctx.fillStyle = PAPER;
+				ctx.fillStyle = this.night ? NIGHT_PAPER : PAPER;
 				ctx.fillRect(0, 0, page.width, page.height);
 			} finally {
 				ctx.restore();
@@ -849,6 +876,12 @@ export class Renderer {
 		if (img) {
 			ctx.globalAlpha = this.backgroundAlpha;
 			ctx.drawImage(img, r.x, r.y, r.width, r.height);
+			if (this.night) {
+				// Night mode dims a PDF or picture instead of inverting it (inverted pages change what a figure means).
+				ctx.globalAlpha = NIGHT_BACKGROUND_VEIL;
+				ctx.fillStyle = NIGHT_PAPER;
+				ctx.fillRect(r.x, r.y, r.width, r.height);
+			}
 			return;
 		}
 		ctx.fillStyle = PLACEHOLDER;
@@ -859,6 +892,11 @@ export class Renderer {
 			ctx.font = `${Math.max(8, r.width / 40)}px sans-serif`;
 			ctx.fillText(label, r.x + r.width * 0.08, r.y + r.height * 0.1, r.width * 0.84);
 		}
+	}
+
+	/** v9 + wave 0.9 night mode: how a graph's colours are drawn at night (ink colours for curves, line colours for the grid). */
+	private nightPalette(): GraphPalette {
+		return { paper: NIGHT_PAPER, ink: this.nightInkColor, line: this.nightLineColor };
 	}
 
 	/** v9: the automatic equation numbers of the document (cheap when nothing numbered changed). */
@@ -882,7 +920,8 @@ export class Renderer {
 		}
 		for (const el of elements) {
 			if (el.type !== "graph" || skip(el)) continue;
-			this.guarded(ctx, "graph element", () => drawGraph(ctx, el));
+			// wave 0.9 night mode: the graph's paper, lines, curves and labels are mapped like the page's.
+			this.guarded(ctx, "graph element", () => drawGraph(ctx, el, this.night ? this.nightPalette() : undefined));
 		}
 		for (const el of elements) {
 			if (el.type !== "box" || skip(el)) continue;
@@ -891,11 +930,11 @@ export class Renderer {
 		const numbers = this.equationNumbers();
 		for (const el of elements) {
 			if (el.type !== "equation" || skip(el)) continue;
-			this.guarded(ctx, "equation element", () => drawEquation(ctx, el, numbers.get(el.id)));
+			this.guarded(ctx, "equation element", () => drawEquation(ctx, this.night ? { ...el, color: this.nightInkColor(el.color) } : el, numbers.get(el.id)));
 		}
 		for (const el of elements) {
 			if (el.type !== "text" || skip(el)) continue;
-			this.guarded(ctx, "text element", () => drawTextElement(ctx, el));
+			this.guarded(ctx, "text element", () => drawTextElement(ctx, this.night ? { ...el, color: this.nightInkColor(el.color) } : el));
 		}
 	}
 
@@ -945,7 +984,7 @@ export class Renderer {
 		const hairline = Math.max(0.6, this.dpr) / (scale * this.dpr);
 		ctx.lineWidth = hairline;
 		for (const kind of ["minor", "major", "margin"] as const) {
-			ctx.strokeStyle = PAPER_COLORS[kind];
+			ctx.strokeStyle = this.night ? this.nightLineColor(PAPER_COLORS[kind]) : PAPER_COLORS[kind];
 			ctx.beginPath();
 			let any = false;
 			for (const l of lines) {
@@ -959,7 +998,7 @@ export class Renderer {
 		if (dots.length > 0) {
 			// About one device pixel in radius at any zoom.
 			const r = Math.max(1, this.dpr * 0.6) / (scale * this.dpr);
-			ctx.fillStyle = PAPER_COLORS.dot;
+			ctx.fillStyle = this.night ? this.nightLineColor(PAPER_COLORS.dot) : PAPER_COLORS.dot;
 			ctx.beginPath();
 			for (const [x, y] of dots) {
 				ctx.moveTo(x + r, y);
@@ -1158,10 +1197,11 @@ export class Renderer {
 	}
 
 	private setInk(ctx: CanvasRenderingContext2D, tool: Tool, color: string): void {
-		ctx.fillStyle = color;
+		ctx.fillStyle = this.inkColor(tool, color);
 		if (tool === "highlighter") {
-			ctx.globalAlpha = HIGHLIGHTER_ALPHA;
-			ctx.globalCompositeOperation = "multiply";
+			// Night mode: "multiply" would vanish on the dark paper, "screen" lights it.
+			ctx.globalAlpha = this.night ? NIGHT_HIGHLIGHTER_ALPHA : HIGHLIGHTER_ALPHA;
+			ctx.globalCompositeOperation = this.night ? "screen" : "multiply";
 		} else {
 			ctx.globalAlpha = 1;
 			ctx.globalCompositeOperation = "source-over";

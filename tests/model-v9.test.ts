@@ -34,6 +34,9 @@ import {
 	type EquationElement, type GraphElement, type NotebookDocument, type Page, type PageElement,
 } from "../src/model/types";
 import { line } from "./helpers";
+import { buildNotebookMarkdown, equationMarkdown, pageTexts } from "../src/model/export-markdown";
+import { elementBand } from "../src/model/layers";
+import { pageInfo } from "../src/model/page-info";
 
 const stamp = "2026-10-30T10:00:00.000Z";
 type Raw = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -555,5 +558,41 @@ describe("helpers", () => {
 			doc.pages[1]!.elements = [{ ...g, functions: [...g.functions, f] }];
 			expect(serializeChecked(doc).ok, kind).toBe(true);
 		}
+	});
+});
+
+describe("wave 0.9 features with equations and graphs", () => {
+	it("exports: equations and graphs are content, drawn with the ink layer and never with the background", () => {
+		const page = v9Doc().pages[0]!;
+		const dec = new TextDecoder();
+		const bg = dec.decode(pagesToPdf([page], { layers: "background" }));
+		expect(bg).not.toContain(" f*");
+		expect(bg).not.toContain("re W n");
+		const ink = dec.decode(pagesToPdf([page], { layers: "ink" }));
+		expect(ink).toContain(" f*");
+		expect(ink).toContain("re W n");
+		expect(pageToSvg(page, { layers: "background" })).not.toContain("nb-graph-1");
+		expect(pageToSvg(page, { layers: "ink" })).toContain("nb-graph-1");
+	});
+
+	it("Markdown export: equations as $$…$$ (numbered with \\tag, inline with $…$) in reading order with the text boxes", () => {
+		expect(equationMarkdown(euler, 1)).toBe("$$\ne^{i\\pi} + 1 = 0 \\tag{1}\n$$");
+		expect(equationMarkdown(inlineEq)).toBe("$\\frac{a}{b}$");
+		expect(equationMarkdown({ ...inlineEq, latex: "a$b \\$c" })).toBe("$a\\$b \\$c$");
+		const page = v9Doc().pages[0]!;
+		page.elements = [...page.elements!, { id: "t1", type: "text", x: 10, y: 10, width: 100, text: "Euler", fontSize: 12, color: "#000000" }];
+		expect(pageTexts(page)).toEqual(["Euler", "$$\ne^{i\\pi} + 1 = 0\n$$", "$\\frac{a}{b}$"]);
+		const md = buildNotebookMarkdown({ title: "Maths", pages: v9Doc().pages, meta: undefined, images: ["p1.png", "p2.png"], pageLabel: (n) => `Page ${n}` });
+		expect(md).toContain("![](p1.png)\n\n$$\ne^{i\\pi} + 1 = 0 \\tag{1}\n$$");
+	});
+
+	it("layer order keeps graphs and equations in their own bands, as the renderer stacks them", () => {
+		const bands = [{ type: "image" }, plot, { type: "box" }, euler, { type: "text" }, { type: "marker" }].map((e) => elementBand(e as PageElement));
+		expect(bands).toEqual([0, 1, 2, 3, 4, 5]);
+	});
+
+	it("page information counts equations and graphs", () => {
+		const info = pageInfo(v9Doc(), 0)!;
+		expect(info.elements).toMatchObject({ total: 3, equation: 2, graph: 1 });
 	});
 });

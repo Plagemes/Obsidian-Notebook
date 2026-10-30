@@ -37,12 +37,14 @@ export function registerActionCommands(plugin: Plugin, deps: CommandDeps): strin
 				missing.push(a.id);
 				continue;
 			}
-			plugin.addCommand({ id: a.id, name: commandName(a), callback: run });
+			plugin.addCommand({ id: a.id, name: commandName(a), icon: a.icon, callback: run });
 			continue;
 		}
 		plugin.addCommand({
 			id: a.id,
 			name: commandName(a),
+			// wave 0.9 (384): the icon is what the Obsidian mobile toolbar (Settings > Mobile) shows for the command.
+			icon: a.icon,
 			checkCallback: (checking) => {
 				const view = deps.activeView();
 				if (!view || !view.commandApplies(a.id)) return false;

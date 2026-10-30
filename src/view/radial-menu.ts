@@ -1,3 +1,4 @@
+import { dialScale, type ToolbarSize } from "../ui/toolbar-size";
 import { setIcon } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import { clampCenter, fingerMenuCenter, pushRecentColor } from "../ink/radial";
@@ -16,6 +17,8 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 /** What the view lets the radial menu do. The members after `undo` are optional (the dial hides what is missing). */
 export interface RadialContext {
 	editable(): boolean;
+	/** wave 0.9 (370): the toolbar size setting scales the dial. */
+	toolbarSize?(): ToolbarSize;
 	tools(): ToolbarState;
 	/** Changes the toolbar state (tool, colour, width) as if its buttons were pressed. */
 	apply(patch: Partial<ToolbarState>): void;
@@ -148,7 +151,7 @@ export class PenRadial {
 		this.cancelEyedropper();
 		const buttonHeld = source === "button";
 		const rect = this.host.getBoundingClientRect();
-		this.scale = Math.max(0.6, Math.min(1, (Math.min(rect.width, rect.height) - 16) / DIAL_SIZE));
+		this.scale = dialScale((Math.min(rect.width, rect.height) - 16) / DIAL_SIZE, this.ctx.toolbarSize?.() ?? "normal");
 		const outer = DIAL_RADIUS * this.scale;
 		[this.cx, this.cy] = source === "finger"
 			? fingerMenuCenter(x, y, rect.width, rect.height, outer)

@@ -9,6 +9,9 @@ import { estimateMeasure, textElementBounds, type MeasureText } from "./text-lay
  * topmost element under which at least `ATTACH_SHARE` of its points lie. Moving, scaling or rotating that
  * element transforms those strokes with it; deleting the element offers to delete them too. Pure: the view
  * decides when to ask and which setting applies.
+ *
+ * v8 markers and structured boxes never own ink: they annotate a region of the page, they are not a surface the ink
+ * is written on, so moving or deleting one leaves the ink it frames where it is (see `ownsInk`).
  */
 
 /** Share of a stroke's points that must lie inside an element for the stroke to belong to it. */
@@ -26,6 +29,14 @@ function inImage(el: ImageElement, x: number, y: number): boolean {
 
 function overlap(a: BBox, b: BBox): boolean {
 	return a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY;
+}
+
+/**
+ * Whether ink can belong to the element: texts and images, and v9 equations and graphs (ink written on a graph keeps
+ * its graph coordinates, ink/graph-ink.ts); v8 markers and boxes only frame the page.
+ */
+export function ownsInk(el: PageElement): boolean {
+	return el.type === "text" || el.type === "image" || el.type === "equation" || el.type === "graph";
 }
 
 /** Whether (x, y) is on the element: the rotated rectangle of an image, the laid-out box of a text. */
@@ -51,6 +62,7 @@ export function inkOwner(
 	const sb = strokeBounds(stroke);
 	for (let i = elements.length - 1; i >= 0; i--) {
 		const el = elements[i]!;
+		if (!ownsInk(el)) continue;
 		const eb = boxes?.get(el) ?? elementBounds(el, measure);
 		if (!overlap(sb, eb)) continue;
 		if (shareOnElement(stroke, el, measure) >= share) return el;
@@ -71,11 +83,12 @@ export function attachedInk(
 	strokes: readonly Stroke[], elements: readonly PageElement[], moving: readonly PageElement[],
 	exclude: ReadonlySet<Stroke> = new Set(), measure: MeasureText = estimateMeasure, share = ATTACH_SHARE,
 ): Stroke[] {
-	if (moving.length === 0 || elements.length === 0) return [];
-	const movingSet = new Set(moving);
+	const owners = moving.filter(ownsInk);
+	if (owners.length === 0 || elements.length === 0) return [];
+	const movingSet = new Set(owners);
 	const boxes = boxesOf(elements, measure);
 	// Only strokes that touch a moving element can belong to it.
-	const movingBoxes = moving.map((e) => boxes.get(e) ?? elementBounds(e, measure));
+	const movingBoxes = owners.map((e) => boxes.get(e) ?? elementBounds(e, measure));
 	const out: Stroke[] = [];
 	for (const stroke of strokes) {
 		if (exclude.has(stroke)) continue;

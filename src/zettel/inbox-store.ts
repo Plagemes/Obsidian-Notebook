@@ -24,7 +24,7 @@ export interface InboxFileAdapter {
 }
 
 export class InboxBlockedError extends Error {
-	constructor(message: string, readonly reason: "json" | "format" | "future") {
+	constructor(message: string, readonly reason: "json" | "format" | "future" | "empty") {
 		super(message);
 		this.name = "InboxBlockedError";
 	}

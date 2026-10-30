@@ -8,7 +8,8 @@ import { assetExtension, assetPath, assetsFolder } from "../pdf/assets";
 import { backupFolder, type NotebookSettings } from "../settings";
 import { readNotebookText, writeNotebookText } from "../storage/format";
 import { listNotebooks } from "../storage/notebooks";
-import { VaultDocumentIO } from "../storage/vault-io";
+import { PageMoveStore } from "../storage/page-moves";
+import { sidecarDeviceId, VaultDocumentIO, vaultDeviceFileAdapter } from "../storage/vault-io";
 import { isEditContextSource, type EditContext } from "../view/edit-context";
 import { resolveAssetFile, storeAsset } from "../view/media";
 import { looseSheetPath } from "./loose-sheet-logic";
@@ -100,6 +101,17 @@ async function storedInFile(app: App, file: TFile, pageIds: readonly string[]): 
 	}
 }
 
+/** Records the pages that got a new id in the target. A failure is reported and does not undo the move. */
+async function recordRenamed(app: App, settings: NotebookSettings, renamed: PageMovePlan["renamed"], doc: string): Promise<void> {
+	const at = new Date().toISOString();
+	try {
+		await new PageMoveStore(vaultDeviceFileAdapter(app), () => settings.folder, sidecarDeviceId(app)).record(renamed.map((r) => ({ ...r, doc, at })));
+	} catch (e) {
+		console.error("[notebook] move pages: could not record the new page ids", e);
+		showNotice(t("move.renamedNotRecorded", { error: e instanceof Error ? e.message : String(e) }), 10000);
+	}
+}
+
 function failureText(f: PageMoveFailure): string {
 	return t(f.reason === "missing-asset" ? "move.missingAsset" : "move.noPages");
 }
@@ -154,6 +166,9 @@ export async function movePagesTo(src: EditContext, pageIds: readonly string[], 
 	} else {
 		await appendToFile(app, target, targetDoc, before, ready, settings);
 	}
+
+	// Pages the target already had an id of got a new one: "Update links" finds them through this record.
+	if (plan.renamed.length > 0) await recordRenamed(app, settings, plan.renamed, targetDoc.id);
 
 	// The target has them on disk. Only now may they leave the source, and only those still as they were copied.
 	let removed = 0;
