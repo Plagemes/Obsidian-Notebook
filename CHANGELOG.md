@@ -1,8 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.11.2 — 2026-10-30
 
 No change to the notebook format (still v10). Clean-up for Obsidian's community Scorecard (runtime code and styles); not verified in Obsidian or on a device.
+
+- `tests/` and `dev/` are now lint-clean under the same rules (about 1,800 problems fixed, no rules disabled), and `npm run lint` checks all three folders.
+- New `DESIGN.md`: the visual system (tokens, subject palette, type scale, components, surfaces) taken from the reference designs in `docs/design/reference/`, and the rule that every feature adds its settings organically.
 
 ### Changed
 - `npm run lint` now also runs `eslint-plugin-obsidianmd` 0.4.2 (`recommended`, type-checked; MIT, devDependency only) on `src/**` and `package.json`; a commented block in `eslint.config.mjs` extends it to `tests/**` and `dev/**`.
