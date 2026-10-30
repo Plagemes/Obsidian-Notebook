@@ -45,6 +45,8 @@ export function commandApplies(view: NotebookView, id: string): boolean {
 	if (id.startsWith("pdf-side-")) return pdfSideState(view).open;
 	// wave 0.9 (357): the layer order needs something selected. Wave 0.10: so do arranging it and selecting similar ink.
 	if (SELECTION_ONLY.test(id)) return !!view.uiContext().selection;
+	// v10: "Go to source" needs a selected excerpt.
+	if (id === "excerpt-open-source") return (view.uiContext().selection?.excerpts ?? 0) > 0;
 	// wave 0.10 (362): copying to the other devices needs a selection (pasting does not).
 	if (id === "selection-copy-devices") return !!view.uiContext().selection;
 	// wave 0.10 (81): there is no print dialog on a phone or tablet.
@@ -126,6 +128,10 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"link-selection": (v) => v.linkSelection(),
 	"selection-open-link": (v) => v.openSelectionLink(),
 	"stamps-save-selection": (v) => v.stampPalette?.saveSelection(),
+	// v10: anchored excerpts
+	"excerpt-to-page": (v) => v.excerptTools?.excerptToPage(),
+	"excerpt-copy": (v) => v.excerptTools?.copyAsExcerpt(),
+	"excerpt-open-source": (v) => v.excerptTools?.openSelectedSource(),
 	"layer-front": (v) => v.moveSelectionLayer("front"),
 	"layer-forward": (v) => v.moveSelectionLayer("forward"),
 	"layer-backward": (v) => v.moveSelectionLayer("backward"),

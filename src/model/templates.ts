@@ -6,6 +6,7 @@
  * Nothing is added to the document format. A template never shares ids with the pages made from it:
  * every use copies the page with fresh ids.
  */
+import { elementAssetId } from "./excerpts";
 import { cloneMeta, createDocument, createId, createPage, createStroke, quantizePoint } from "./document";
 import { duplicatePage } from "./pages";
 import { freezeElement, freezeStroke } from "./serialize";
@@ -25,7 +26,10 @@ export function templateFileName(name: string): string {
 export function assetsOfPage(page: Page, doc: NotebookDocument): Asset[] {
 	const ids = new Set<string>();
 	if (page.background) ids.add(page.background.asset);
-	for (const el of page.elements ?? []) if (el.type === "image") ids.add(el.asset);
+	for (const el of page.elements ?? []) {
+		const id = elementAssetId(el);
+		if (id !== null) ids.add(id);
+	}
 	const out: Asset[] = [];
 	for (const id of ids) {
 		const a = doc.assets?.[id];

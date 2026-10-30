@@ -65,6 +65,15 @@ export async function collectPageImages(media: NotebookMedia | null, pages: read
 			else out.skipped++;
 		}
 		for (const el of flags.content ? page.elements ?? [] : []) {
+			// v10: an excerpt is exported as its snapshot (exports are deterministic and never read another notebook).
+			if (el.type === "excerpt") {
+				const asset = el.asset;
+				if (asset === undefined) continue;
+				const jpeg = await load(`img:${asset}`, () => media.imageJpeg(asset));
+				if (jpeg) list.push({ ...jpeg, x: el.x, y: el.y, width: el.width, height: el.height, rotation: 0, layer: "element" });
+				else out.skipped++;
+				continue;
+			}
 			if (el.type !== "image") continue;
 			const jpeg = await load(`img:${el.asset}`, () => media.imageJpeg(el.asset));
 			if (jpeg) list.push({ ...jpeg, x: el.x, y: el.y, width: el.width, height: el.height, rotation: el.rotation, layer: "element" });

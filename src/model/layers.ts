@@ -23,7 +23,8 @@ export const LAYER_MOVES: readonly LayerMove[] = ["front", "forward", "backward"
 /** Stacking band of an element, as the renderer draws them (ink/renderer.ts drawElements / drawMarkers). Higher is on top. */
 export function elementBand(el: PageElement): number {
 	switch (el.type) {
-		case "image": return 0;
+		// v10 excerpts are pictures too: they stack with the images.
+		case "image": case "excerpt": return 0;
 		case "graph": return 1;
 		case "box": return 2;
 		case "equation": return 3;

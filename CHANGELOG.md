@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.11.1 — 2026-10-30
 
-Not verified on Android hardware or in Obsidian. No change to the notebook format (still v9). Manual steps 404-406 in `docs/testing.md`.
+No change to the notebook format (still v10). S Pen side-button detection and a much more complete Pen button test log; not verified on the device. Manual steps 404-406 in `docs/testing.md`.
 
 ### Fixed
 - **S Pen side button: the Pen button test showed nothing while the button was pressed** (user report, Samsung tablet, 0.10.1), while Chrome's pen-tracker page on the same tablet shows the press (`pointerdown`, `button 0`, `buttons 1`, `pressure 0` with the pen hovering). The root cause could not be proven without the device. What the code did differently from pen-tracker: the test listened to seven event types (`pointerdown` / `move` / `up` / `cancel` / `rawupdate`, `contextmenu`, `auxclick`) in the bubble phase on a 140 px area only, so an event that targeted another element, that a handler above the area stopped, or that arrived as another type (mouse compatibility events only, `pointerover` / `enter`, capture changes, touch, selection) was never shown; the notebook only listened on the page element. Now:
@@ -10,6 +10,24 @@ Not verified on Android hardware or in Obsidian. No change to the notebook forma
   - While a notebook is open, the side-button detector also listens **at window level (capture phase) over the whole notebook view**: a press over the toolbar or another bar lying on the page, or one stopped before it reached the page, still opens the radial menu (only when the pen is over the page, never a stroke). Events that reach the page are handled once, by the page's own listeners as before. Events outside the view (modals, other views, Obsidian's own UI) are ignored.
   - A `mousedown` that no pointer event announced (no `pointerdown` within 500 ms, no finger within 1 s, not derived from touch), with `button` 0 or 2 while the pen hovers, now counts as the side button too, in case the WebView sends the button only as a mouse event.
   - Unchanged: a click while hovering opens the radial menu on release; holding the button and touching erases; a pressure-0 pen `pointerdown` after hovering is the button, never a stroke start (a real contact has pressure above 0); the press during writing stays experimental. The stroke pipeline (smoothing, shape, rendering) is untouched.
+## 0.11.0 — 2026-10-30
+
+Not yet verified on Android hardware or in Obsidian. Document format v10: notebooks saved by 0.11.0 open read-only (with a backup) in 0.10.x and older. Manual steps 384–403 in `docs/testing.md`.
+
+### Upgrade notes
+- **Document format v10** (0.10 wrote v9). Notebooks saved by 0.11.0 open **read-only** (with a backup) in 0.10.x, 0.9.x and older builds, which read up to v9. v9 files are read unchanged and rewritten as v10 only on the first edit. The only change is the new `excerpt` element; nothing else changes in how notebooks are saved.
+
+### Added
+- **Anchored excerpts** (roadmap 105, format v10; manual steps 384-403). Cut a region of a page (a PDF page or any other page) and drop it on another page; the excerpt remembers exactly where it came from.
+  - *Excerpt to page…* on the contextual bar of a lasso selection, on the lasso bar with nothing selected, in the *All actions* sheet (Insert) and as a command. With a selection the region is the selection's box (plus 4 pt); with nothing selected the next drag on a page outlines the region. The go-to-page picker then asks where it goes: this page, the next page, a new page after this one, or any page by number or bookmark. The excerpt is placed at the region's size (scaled down to fit the page), selected, and added in one undo step.
+  - *Copy as excerpt* (same places) puts the excerpt on the plugin clipboard: paste it (lasso → *Paste*) on any page of **any notebook**.
+  - The excerpt is an element like a picture: it can be selected, moved and resized with the lasso (uniformly: it never rotates or stretches), copied, duplicated, deleted, reordered among pictures, and ink written on it moves with it.
+  - **Jump back**: a pen, finger or mouse tap on the badge in its top-right corner (also in read-only mode) (a stroke that starts on the badge and moves stays ink) (or *Go to source* on the contextual bar of a selected excerpt) goes to the source: the same notebook scrolls to the page and outlines the region for a moment; another notebook is opened at the source page (found by its stable id, so it still works after pages were reordered) with the region outlined.
+  - **What is drawn**: an excerpt of a page of the same notebook is drawn **live** from its source (writing on the source shows in the excerpt a moment later); otherwise, and in exports, thumbnails and the Markdown page images, it shows the **snapshot** taken when it was made (a PNG image asset in `_assets`). See docs/architecture.md (v10).
+  - **A source that is gone** never breaks anything: a deleted source page turns the badge grey and a tap says "Source not found"; a source notebook that was moved or renamed is found by its document id (its path, then its name, then the whole vault), never another notebook with the same name, and the stored path is updated; when it is not found a tap says so. The excerpt keeps showing its snapshot (or a placeholder card when it has none) and nothing is changed or lost.
+
+### Changed
+- *Page information* counts excerpts; the files of a page include excerpt snapshots; the library check never reports a snapshot as unused; the PNG export and printing draw the snapshot; the clipboard between devices and the lasso across pages carry excerpts. Every path that copies pages or elements (duplicate, page restore, page trash, *Move to notebook…*, templates, stamps, clipboard, conflicted-copy merge, repair) keeps excerpts and brings their snapshot asset along.
 
 ## 0.10.1 — 2026-10-30
 

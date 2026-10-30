@@ -1,5 +1,5 @@
 import { createId, quantizePoint } from "./document";
-import { A4_HEIGHT, A4_WIDTH, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, FORMAT_ID, GRID_5MM, PAPER_KINDS_V7, RENDER_FREEHAND } from "./types";
+import { A4_HEIGHT, A4_WIDTH, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, FORMAT_ID, GRID_5MM, PAPER_KINDS_V7, RENDER_FREEHAND } from "./types";
 
 export type RawObject = Record<string, unknown>;
 
@@ -200,6 +200,36 @@ function v8ToV9(raw: RawObject): RawObject {
 	return { ...raw, version: 9 };
 }
 
+/**
+ * v10 adds the element type "excerpt" (anchored excerpts, #105). Every valid v9 document is a valid v10 document. A v9
+ * reader rejected unknown element types, so a pre-v10 file with an excerpt was not written by any version of this
+ * plugin: it is rejected rather than guessed at (like equations before v9). Nothing else changes.
+ */
+function v9ToV10(raw: RawObject): RawObject {
+	if (Array.isArray(raw.pages)) {
+		(raw.pages as unknown[]).forEach((page, i) => {
+			const problem = v10OnlyElement(page, i);
+			if (problem) throw new MigrationError(problem);
+		});
+	}
+	return { ...raw, version: 10 };
+}
+
+/**
+ * Why page `index` (0-based) of a v9 file cannot be read as v10 (it holds an element type that exists only from v10),
+ * or null. Everything else of a v9 page is a valid v10 page, so staged loading reads large v9 files page by page with
+ * this check instead of migrating them in one go.
+ */
+export function v10OnlyElement(page: unknown, index: number): string | null {
+	const isObj = (v: unknown): v is RawObject => typeof v === "object" && v !== null && !Array.isArray(v);
+	if (!isObj(page) || !Array.isArray(page.elements)) return null;
+	for (const el of page.elements as unknown[]) {
+		const type = isObj(el) ? el.type : undefined;
+		if (typeof type === "string" && ELEMENT_TYPES_V10.includes(type)) return `v9: element type '${type}' (page ${index + 1}) exists only from v10`;
+	}
+	return null;
+}
+
 /** MIGRATIONS[n] takes a document from version n to n+1. */
 export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	0: v0ToV1,
@@ -211,6 +241,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	6: v6ToV7,
 	7: v7ToV8,
 	8: v8ToV9,
+	9: v9ToV10,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

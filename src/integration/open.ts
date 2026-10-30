@@ -13,10 +13,12 @@ function leafFile(leaf: WorkspaceLeaf): string | undefined {
 /**
  * Opens a notebook, focusing the tab that already shows it, and asks the view to go to `page`
  * (1-based) through the view state `{ page }`: `NotebookView.setState` reads it. `view` (zoom and scroll position on
- * that page) is passed along when known.
+ * that page) is passed along when known. v10: `region` (page coordinates of the page `pageId`) is outlined once the page
+ * is shown (the jump back from an anchored excerpt).
  */
 export async function openNotebookAtPage(
 	app: App, file: TFile, page: number | null, view: SavedPosition | null = null, pageId: string | null = null,
+	region: { x: number; y: number; width: number; height: number } | null = null,
 ): Promise<void> {
 	const { workspace } = app;
 	const open = workspace.getLeavesOfType(VIEW_TYPE).find((leaf) => leafFile(leaf) === file.path);
@@ -25,13 +27,16 @@ export async function openNotebookAtPage(
 	if (open) {
 		if (wanted) {
 			const state = open.getViewState().state ?? {};
-			await open.setViewState({ type: VIEW_TYPE, state: { ...state, file: file.path, page: page ?? undefined, pageId: pageId ?? undefined, view: view ?? undefined }, active: true });
+			await open.setViewState({
+				type: VIEW_TYPE, active: true,
+				state: { ...state, file: file.path, page: page ?? undefined, pageId: pageId ?? undefined, view: view ?? undefined, region: region ?? undefined },
+			});
 		}
 		await workspace.revealLeaf(open);
 		return;
 	}
 	await workspace.getLeaf("tab").openFile(file, {
-		active: true, state: wanted ? { page: page ?? undefined, pageId: pageId ?? undefined, view: view ?? undefined } : undefined,
+		active: true, state: wanted ? { page: page ?? undefined, pageId: pageId ?? undefined, view: view ?? undefined, region: region ?? undefined } : undefined,
 	});
 }
 

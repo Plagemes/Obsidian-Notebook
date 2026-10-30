@@ -5,12 +5,13 @@ import {
 	GRAPH_MAX_LINE_WIDTH, GRAPH_MAX_PARAMS, GRAPH_MAX_PIECES, GRAPH_TABLE_MAX_ROWS, isGraphFunctionKind, isParamName, isViewport,
 } from "./math-elements";
 import { parseOutline } from "../math/outline";
-import { detectVersion, migrate, MigrationError, type RawObject } from "./migrations";
+import { EXCERPT_ID_MAX, EXCERPT_PATH_MAX } from "./excerpts";
+import { detectVersion, migrate, MigrationError, v10OnlyElement, type RawObject } from "./migrations";
 import { normalizePageTags } from "./page-tags";
 import { normalizePosition } from "./position";
 import {
-	CURRENT_VERSION, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, FORMAT_ID, PAPER_KINDS, RENDER_VERSIONS, TOOLS,
-	type Asset, type AssetKind, type BookmarkInfo, type BoxElement, type EquationElement, type GraphElement, type GraphFunction, type GraphParam,
+	CURRENT_VERSION, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, FORMAT_ID, PAPER_KINDS, RENDER_VERSIONS, TOOLS,
+	type Asset, type AssetKind, type BookmarkInfo, type BoxElement, type EquationElement, type ExcerptElement, type ExcerptSource, type GraphElement, type GraphFunction, type GraphParam,
 	type GraphPiece, type GraphTable, type GraphViewport, type ImageElement, type MarkerElement, type NotebookDocument, type NotebookMeta, type Page,
 	type PageBackground, type PageElement, type PageMargins, type PaperKind, type Point, type ReadingPosition, type RenderVersion, type Stroke,
 	type TextElement, type Tool,
@@ -27,7 +28,7 @@ export type ParseResult =
 	/**
 	 * `dropped` (v7, only when > 0): optional details that were invalid and left out on read (a bookmark detail
 	 * field such as a bad colour, the reading position or its y; v8: a marker or box, one of their optional fields,
-	 * or a stroke's `hidden` flag) instead of making the whole notebook unreadable.
+	 * or a stroke's `hidden` flag; v9: an equation or graph or one of their parts; v10: an excerpt or its snapshot asset) instead of making the whole notebook unreadable.
 	 * Saving writes the document without them, so callers keep a backup of the original text first.
 	 */
 	| { ok: true; doc: NotebookDocument; migratedFrom: number | null; dropped?: number }
@@ -134,6 +135,14 @@ function graphLine(e: GraphElement): string {
 	return `\t\t\t\t${j(o)}`;
 }
 
+/** v10 excerpt: target frame, then the source (notebook path, document id, page id, region), then the snapshot asset when present. */
+function excerptLine(e: ExcerptElement): string {
+	const s = e.source;
+	const source = `{"notebook":${j(s.notebook)},"doc":${j(s.doc)},"page":${j(s.page)},"x":${j(s.x)},"y":${j(s.y)},"width":${j(s.width)},"height":${j(s.height)}}`;
+	const asset = e.asset !== undefined ? `,"asset":${j(e.asset)}` : "";
+	return `				{"id":${j(e.id)},"type":"excerpt","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"source":${source}${asset}}`;
+}
+
 function elementLine(e: PageElement): string {
 	if (e.type === "text") {
 		return `\t\t\t\t{"id":${j(e.id)},"type":"text","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"text":${j(e.text)},"fontSize":${j(e.fontSize)},"color":${j(e.color)}}`;
@@ -145,6 +154,7 @@ function elementLine(e: PageElement): string {
 	if (e.type === "box") return boxLine(e);
 	if (e.type === "equation") return equationLine(e);
 	if (e.type === "graph") return graphLine(e);
+	if (e.type === "excerpt") return excerptLine(e);
 	return fail("element", "unknown element type");
 }
 
@@ -393,6 +403,7 @@ function readElement(v: unknown, path: string, assets: Assets, drop: Dropped | n
 	if (v.type === "box") return readBox(v, id, path, drop);
 	if (v.type === "equation") return readEquation(v, id, path, drop);
 	if (v.type === "graph") return readGraph(v, id, path, drop);
+	if (v.type === "excerpt") return readExcerpt(v, id, path, assets, drop);
 	return fail(`${path}.type`, "unknown element type");
 }
 
@@ -501,6 +512,46 @@ function readEquation(v: RawObject, id: string, path: string, drop: Dropped | nu
 		return d;
 	});
 	if (outline !== undefined) el.outline = outline;
+	return el;
+}
+
+/** A non-empty string of at most `max` characters. */
+function boundedId(v: unknown, path: string, max: number): string {
+	const s = str(v, path);
+	if (s.length > max) fail(path, `longer than ${max} characters`);
+	return s;
+}
+
+/**
+ * v10 excerpt. The target frame and the source (notebook path, document id, page id, region) are required (an invalid
+ * one fails the excerpt); the snapshot asset is optional, dropped and counted on its own when invalid and reading
+ * leniently (the excerpt then draws live or as a placeholder). The source region is not checked against any page: its
+ * page may be in another notebook, or have been resized since.
+ */
+function readExcerpt(v: RawObject, id: string, path: string, assets: Assets, drop: Dropped | null): ExcerptElement {
+	const raw = v.source;
+	if (!isObject(raw)) fail(`${path}.source`, "expected an object");
+	const at = `${path}.source`;
+	const source: ExcerptSource = {
+		notebook: boundedId(raw.notebook, `${at}.notebook`, EXCERPT_PATH_MAX),
+		doc: boundedId(raw.doc, `${at}.doc`, EXCERPT_ID_MAX),
+		page: boundedId(raw.page, `${at}.page`, EXCERPT_ID_MAX),
+		x: finite(raw.x, `${at}.x`), y: finite(raw.y, `${at}.y`),
+		width: positive(raw.width, `${at}.width`), height: positive(raw.height, `${at}.height`),
+	};
+	const el: ExcerptElement = {
+		id, type: "excerpt",
+		x: finite(v.x, `${path}.x`), y: finite(v.y, `${path}.y`),
+		width: positive(v.width, `${path}.width`), height: positive(v.height, `${path}.height`),
+		source,
+	};
+	const asset = orDrop(drop, () => {
+		if (v.asset === undefined) return undefined;
+		const a = str(v.asset, `${path}.asset`);
+		requireAsset(assets, a, "image", `${path}.asset`);
+		return a;
+	});
+	if (asset !== undefined) el.asset = asset;
 	return el;
 }
 
@@ -824,8 +875,10 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, dr
 		const elements: PageElement[] = [];
 		v.elements.forEach((e, i) => {
 			const at = `${path}.elements[${i}]`;
-			// v8 markers and boxes, v9 equations and graphs are details: an invalid one is dropped and counted when reading leniently.
-			const v8 = isObject(e) && typeof e.type === "string" && (ELEMENT_TYPES_V8.includes(e.type) || ELEMENT_TYPES_V9.includes(e.type));
+			// v8 markers and boxes, v9 equations and graphs, v10 excerpts are details: an invalid one is dropped and counted when
+			// reading leniently.
+			const v8 = isObject(e) && typeof e.type === "string"
+				&& (ELEMENT_TYPES_V8.includes(e.type) || ELEMENT_TYPES_V9.includes(e.type) || ELEMENT_TYPES_V10.includes(e.type));
 			const el = v8 ? orDrop(drop, () => readElement(e, at, assets, drop)) : readElement(e, at, assets, drop);
 			if (!el) return;
 			if (ids.has(el.id)) fail(`${at}.id`, "duplicate id");
@@ -844,9 +897,10 @@ export function freezeStroke(stroke: Stroke): Stroke {
 	return Object.freeze(stroke);
 }
 
-/** Elements are immutable like strokes: an edit replaces the object (ReplaceElement). v9 graphs freeze their nested data too. */
+/** Elements are immutable like strokes: an edit replaces the object (ReplaceElement). v9 graphs and v10 excerpts freeze their nested data too. */
 export function freezeElement<T extends PageElement>(element: T): T {
 	if (element.type === "graph" && !Object.isFrozen(element)) deepFreezeGraph(element);
+	if (element.type === "excerpt") Object.freeze(element.source);
 	return Object.freeze(element);
 }
 
@@ -986,6 +1040,8 @@ export class StagedParse {
 		first: number,
 		/** Invalid optional details dropped so far: the document-level ones up front, page details as the pages are read. */
 		private readonly drop: Dropped,
+		/** v10: the version of the file (9: each page is checked for v10-only elements as it is read). */
+		private readonly from: number = CURRENT_VERSION,
 	) {
 		// Nearest to the wanted page first: forward, then back (the next page is the likelier swipe).
 		const order: number[] = [];
@@ -996,25 +1052,33 @@ export class StagedParse {
 		this.queue = order;
 	}
 
-	/** Prepares a staged parse of a file already at the current version, with page `first` (0-based) read in full. */
-	static create(raw: RawObject, first: number): StagedParse | ParseFailureResult {
+	/**
+	 * Prepares a staged parse of a file at the current version, or (v10) at version 9, whose migration only refuses
+	 * excerpts (checked page by page as they are read), with page `first` (0-based) read in full.
+	 */
+	static create(raw: RawObject, first: number, from: number = CURRENT_VERSION): StagedParse | ParseFailureResult {
 		try {
 			const ids = new Set<string>();
 			// Lenient like `parse`: invalid optional v7 details are dropped and counted; everything else still fails.
 			const drop: Dropped = { count: 0 };
-			const doc = validateWith(raw, readPageShell, ids, drop);
+			const current = from === CURRENT_VERSION ? raw : { ...raw, version: CURRENT_VERSION };
+			const doc = validateWith(current, readPageShell, ids, drop);
 			const rawPages = raw.pages as unknown[];
 			const at = Math.min(rawPages.length - 1, Math.max(0, first));
-			const staged = new StagedParse(doc, rawPages, ids, at, drop);
+			const staged = new StagedParse(doc, rawPages, ids, at, drop, from);
 			staged.read(at);
 			return staged;
 		} catch (e) {
-			if (e instanceof ValidationError) return { ok: false, reason: "invalid", message: e.message, version: CURRENT_VERSION };
+			if (e instanceof ValidationError) return { ok: false, reason: "invalid", message: e.message, version: from };
 			throw e;
 		}
 	}
 
 	private read(i: number): void {
+		if (this.from < CURRENT_VERSION) {
+			const problem = v10OnlyElement(this.rawPages[i], i);
+			if (problem) fail(`pages[${i}]`, problem);
+		}
 		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop);
 	}
 
@@ -1040,7 +1104,7 @@ export class StagedParse {
 			}
 		} catch (e) {
 			if (!(e instanceof ValidationError)) throw e;
-			this.failure = { ok: false, reason: "invalid", message: e.message, version: CURRENT_VERSION };
+			this.failure = { ok: false, reason: "invalid", message: e.message, version: this.from };
 			return { ok: false, failure: this.failure };
 		}
 		return { ok: true, changed, done: this.queue.length === 0 };
@@ -1055,7 +1119,8 @@ export class StagedParse {
 	/** The result once every page has been read (same shape as `parse`: `dropped` only when > 0). */
 	result(): ParseResult {
 		const dropped = this.drop.count;
-		return dropped > 0 ? { ok: true, doc: this.doc, migratedFrom: null, dropped } : { ok: true, doc: this.doc, migratedFrom: null };
+		const migratedFrom = this.from === CURRENT_VERSION ? null : this.from;
+		return dropped > 0 ? { ok: true, doc: this.doc, migratedFrom, dropped } : { ok: true, doc: this.doc, migratedFrom };
 	}
 }
 
@@ -1068,8 +1133,11 @@ export function parseStaged(text: string, firstPage: number | null): StagedParse
 	if (text.length < STAGED_MIN_CHARS) return parse(text);
 	const pre = preflight(text);
 	if (!pre.ok) return pre.failure;
+	const first = firstPage === null ? 0 : firstPage - 1;
+	// v10: the v9 → v10 migration changes nothing but the version and refuses excerpts, so a large v9 file is staged too.
+	if (pre.version === 9 && CURRENT_VERSION === 10) return StagedParse.create(pre.raw, first, 9);
 	if (pre.version !== CURRENT_VERSION) return parseRaw(pre.raw, pre.version, true);
-	return StagedParse.create(pre.raw, firstPage === null ? 0 : firstPage - 1);
+	return StagedParse.create(pre.raw, first);
 }
 
 export type CheckedSerialization = { ok: true; text: string } | { ok: false; message: string };

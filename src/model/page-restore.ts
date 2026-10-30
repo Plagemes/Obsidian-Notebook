@@ -7,6 +7,7 @@
  * bookmarks and links to it stay valid. The rest of the notebook is untouched, and the change is one
  * undo step. Assets the restored page needs and the notebook no longer lists are added back.
  */
+import { elementAssetId } from "./excerpts";
 import { createId } from "./document";
 import { AddAsset, AddPage, Batch, type Command } from "./history";
 import { unionPageTags } from "./page-tags";
@@ -48,7 +49,10 @@ export interface PageRestorePlan {
 function assetsOf(page: Page, from: NotebookDocument): Asset[] {
 	const ids = new Set<string>();
 	if (page.background) ids.add(page.background.asset);
-	for (const el of page.elements ?? []) if (el.type === "image") ids.add(el.asset);
+	for (const el of page.elements ?? []) {
+		const id = elementAssetId(el);
+		if (id !== null) ids.add(id);
+	}
 	const out: Asset[] = [];
 	for (const id of ids) {
 		const a = from.assets?.[id];

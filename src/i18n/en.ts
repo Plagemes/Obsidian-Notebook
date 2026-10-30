@@ -1998,6 +1998,26 @@ export const en = {
 	"library.notice.archived": "Archived {name}. It is under Archived.",
 	"library.notice.unarchived": "Restored {name} from the archive.",
 	"library.notice.stateBlocked": "The pinned, archived and order settings of this device could not be saved: {error}. Nothing was changed.",
+	// v10: anchored excerpts (#105)
+	"info.objects.excerpts": "{n} excerpts",
+	"excerpt.toPage": "Excerpt to page…",
+	"excerpt.command.toPage": "Excerpt the selection (or a region) to a page…",
+	"excerpt.copy": "Copy as excerpt",
+	"excerpt.command.copy": "Copy the selection (or a region) as an excerpt, to paste in any notebook",
+	"excerpt.openSource": "Go to source",
+	"excerpt.command.openSource": "Go to the source of the selected excerpt",
+	"excerpt.hint.region": "Drag over the part of the page to excerpt.",
+	"excerpt.tooSmall": "That region is too small to excerpt. Drag over a larger part of the page.",
+	"excerpt.pick.placeholder": "Excerpt to page… type a number (1–{total}) or a bookmark",
+	"excerpt.pick.here": "This page ({n})",
+	"excerpt.pick.next": "Next page ({n})",
+	"excerpt.pick.newPage": "A new page after page {n}",
+	"excerpt.done": "Excerpt placed on page {n}. Tap its corner badge to go back to the source.",
+	"excerpt.copied": "Excerpt copied. Paste it on a page of any notebook (lasso → Paste).",
+	"excerpt.failed": "The excerpt could not be made: {error}",
+	"excerpt.pageMissing": "Source not found: the page of this excerpt is no longer in “{name}” (deleted or moved to another notebook).",
+	"excerpt.notebookMissing": "Source not found: the notebook “{name}” is not in this vault any more (moved, renamed or deleted).",
+	"excerpt.noneSelected": "Select an excerpt first (lasso).",
 } as const;
 
 export type MessageKey = keyof typeof en;

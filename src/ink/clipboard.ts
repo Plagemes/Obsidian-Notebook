@@ -1,5 +1,6 @@
 import { createId } from "../model/document";
 import { AddAsset, AddElement, AddStroke, Batch, type Command } from "../model/history";
+import { elementAssetId, withElementAsset } from "../model/excerpts";
 import { copyStroke as copyStrokeWithId } from "../model/pages";
 import { freezeElement, freezeStroke } from "../model/serialize";
 import type { Asset, Page, PageElement, Stroke } from "../model/types";
@@ -39,8 +40,9 @@ export function captureClip(
 	if (strokes.length === 0 && elements.length === 0) return null;
 	const used = new Map<string, Asset>();
 	for (const el of elements) {
-		if (el.type !== "image") continue;
-		const a = assets?.[el.asset];
+		// Images and (v10) excerpt snapshots bring their asset records.
+		const id = elementAssetId(el);
+		const a = id !== null ? assets?.[id] : undefined;
 		if (a) used.set(a.id, { ...a });
 	}
 	const boxes: BBox[] = [
@@ -61,7 +63,10 @@ export function captureClip(
 /** Ids of the assets a clip still has to bring to a document: all of its images' assets (the caller checks the file). */
 export function clipAssetIds(clip: ClipContent): string[] {
 	const ids = new Set<string>();
-	for (const e of clip.elements) if (e.type === "image") ids.add(e.asset);
+	for (const e of clip.elements) {
+		const id = elementAssetId(e);
+		if (id !== null) ids.add(id);
+	}
 	return [...ids];
 }
 
@@ -79,8 +84,9 @@ export function instantiateClip(
 	const newIds = new Map<string, string>();
 	const elements = clip.elements.map((e) => {
 		const moved = transformElement(e, m, measure);
-		const asset = moved.type === "image" ? (assetMap?.get(moved.asset) ?? moved.asset) : undefined;
-		const base = moved.type === "image" && asset !== undefined ? { ...moved, asset } : moved;
+		// Images and (v10) excerpt snapshots stored again under another id are renamed.
+		const old = elementAssetId(moved);
+		const base = old !== null ? withElementAsset(moved, assetMap?.get(old) ?? old) : moved;
 		const id = createId();
 		if (e.type === "graph") newIds.set(e.id, id);
 		return freezeElement({ ...base, id });

@@ -1,4 +1,5 @@
 import { createId } from "../model/document";
+import { elementAssetId } from "../model/excerpts";
 import type { Asset } from "../model/types";
 import { ASSETS_DIRNAME, assetPath, assetsFolder } from "../pdf/assets";
 import { ASSET_ID_LENGTH, assetIdFromHash, sha256Hex } from "../pdf/hash";
@@ -111,7 +112,8 @@ export type MakeEntry = { ok: true; entry: SharedClipEntry } | { ok: false; reas
 export function makeSharedEntry(clip: ClipContent, at: number): MakeEntry {
 	const saved = serializeStamp(clip, new Date(at), MAX_SHARED_SIDE);
 	if (!saved.ok) return { ok: false, reason: saved.message.includes("too large") ? "too-large" : "invalid", message: saved.message };
-	const images = clip.elements.filter((e) => e.type === "image").length;
+	// Pictures, and (v10) excerpts, which are shown as their snapshot picture.
+	const images = clip.elements.filter((e) => elementAssetId(e) !== null || e.type === "excerpt").length;
 	const entry: SharedClipEntry = {
 		id: createId(), at, strokes: clip.strokes.length, images, texts: clip.elements.length - images, text: saved.text,
 	};

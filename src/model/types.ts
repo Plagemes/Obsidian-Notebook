@@ -2,13 +2,13 @@
 
 export const FORMAT_ID = "obsidian-notebook";
 /**
- * v9: equations (LaTeX, typeset with Obsidian's MathJax) and function graphs (page elements). v8: markers and
- * structured boxes (page elements), hidden ("invisible ink") strokes. v7: bookmark details
+ * v10: anchored excerpts (page elements that show a region of a page and jump back to it). v9: equations (LaTeX,
+ * typeset with Obsidian's MathJax) and function graphs (page elements). v8: markers and structured boxes (page elements), hidden ("invisible ink") strokes. v7: bookmark details
  * (title, colour, category), page tags, the shared reading position and more paper kinds (v6: page margins
  * around a background; v5: per-stroke render version; v4: library metadata, assets, backgrounds, elements,
  * infinite pages, "shape" tool; v3: paper kinds and page sizes).
  */
-export const CURRENT_VERSION = 9;
+export const CURRENT_VERSION = 10;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -319,11 +319,45 @@ export interface GraphElement {
 	table?: GraphTable;
 }
 
-export type PageElement = TextElement | ImageElement | MarkerElement | BoxElement | EquationElement | GraphElement;
+/**
+ * v10 source of an anchored excerpt (#105): the region (`x`, `y`, `width`, `height`, page coordinates, pt) of the page
+ * `page` (stable page id) of the notebook `doc` (NotebookDocument.id), which was at the vault path `notebook` when the
+ * excerpt was made. The path finds the file; the document id recognises it after a rename and tells an excerpt of the
+ * same notebook apart (drawn live from the open document).
+ */
+export interface ExcerptSource {
+	notebook: string;
+	doc: string;
+	page: string;
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
+/**
+ * v10 anchored excerpt (#105): a region of a page shown in the box `width` × `height` whose top-left corner is
+ * (`x`, `y`); tapping its badge jumps back to the source. `asset`: the image asset holding a snapshot of the region
+ * taken when it was made (drawn when the source cannot be drawn live, and in exports). Written only when present.
+ */
+export interface ExcerptElement {
+	id: string;
+	type: "excerpt";
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+	source: ExcerptSource;
+	asset?: string;
+}
+
+export type PageElement = TextElement | ImageElement | MarkerElement | BoxElement | EquationElement | GraphElement | ExcerptElement;
 /** Element types that exist only from format v8: an older file that uses one was not written by this plugin. */
 export const ELEMENT_TYPES_V8: readonly string[] = ["marker", "box"];
 /** Element types that exist only from format v9. */
 export const ELEMENT_TYPES_V9: readonly string[] = ["equation", "graph"];
+/** Element types that exist only from format v10. */
+export const ELEMENT_TYPES_V10: readonly string[] = ["excerpt"];
 
 /**
  * v6: blank space added around a page's background (a PDF page or a scan), in pt. The background is

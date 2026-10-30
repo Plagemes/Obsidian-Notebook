@@ -29,6 +29,7 @@ import { stressDocument } from "../../src/model/stress";
 import { FAKE_PATH, installFakePdf, slidesNotebook } from "./fake-pdf";
 import { checkReading } from "./reading-check";
 import { checkPractice } from "./practice-check";
+import { checkExcerpt } from "./excerpt-check";
 import { checkReadOnly } from "./readonly-check";
 import { PracticeService } from "../../src/view/practice";
 import { NavController } from "../../src/view/nav-controller";
@@ -147,7 +148,7 @@ async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	leaf = new WorkspaceLeaf(app, root);
 	view = new NotebookView(leaf as any, { settings: settings(), practice: doc === "practice" ? practiceService : undefined, nav: harnessNav, statusChanged: (v) => harnessStatusBar.update(v.statusSnapshot()) });
 	await view.onOpen();
-	const path = doc === "new" || doc === "practice" || doc === "readonly" ? "Notebooks/New.notebook" : doc === "pdf" ? "Notebooks/Slides.notebook" : "Notebooks/Old v3.notebook";
+	const path = doc === "new" || doc === "practice" || doc === "readonly" ? "Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" ? "Notebooks/Slides.notebook" : "Notebooks/Old v3.notebook";
 	const file = app.vault.getFileByPath(path) as TFile;
 	await (view as any).loadFile(file);
 	view.onResize();
@@ -1325,7 +1326,7 @@ async function checkToolbar(add: (name: string, ok: boolean, detail?: string) =>
 	add(`${label}: quick slots follow the width`, quick.length === plan && (width < 480 ? plan === 0 : width >= 760 ? plan >= 4 : true) && quick.every((b) => inView(b.getBoundingClientRect())),
 		`${quick.length} quick (${v.toolbar.quickIds.join(", ")}) at ${width}px`);
 
-	// 6. The contextual bar follows the context: none with the pen, paste for the lasso, the selection actions for a selection.
+	// 6. The contextual bar follows the context: none with the pen, paste and the excerpt actions (v10) for the lasso, the selection actions for a selection.
 	const ctx = () => (document.querySelector(".notebook-context-bar") as HTMLElement);
 	const ctxKind = () => (ctx().classList.contains("notebook-hidden") ? "none" : ctx().dataset.context ?? "?");
 	ui.refreshNow();
@@ -1340,7 +1341,7 @@ async function checkToolbar(add: (name: string, ok: boolean, detail?: string) =>
 	const k2 = ctxKind();
 	const selActions = Array.from(ctx().querySelectorAll("[data-action]")).map((b) => (b as HTMLElement).dataset.action);
 	const cr = ctx().getBoundingClientRect();
-	add(`${label}: the contextual bar changes with the context`, k0 === "none" && k1 === "lasso" && lassoActions.join() === "selection-paste,select-rectangle,select-by-style,selection-paste-device" && k2 === "selection" && selActions.includes("selection-copy") && selActions.includes("delete-selection"),
+	add(`${label}: the contextual bar changes with the context`, k0 === "none" && k1 === "lasso" && /^selection-paste,select-rectangle,select-by-style,selection-paste-device(,excerpt-to-page(,excerpt-copy)?)?$/.test(lassoActions.join()) && k2 === "selection" && selActions.includes("selection-copy") && selActions.includes("delete-selection"),
 		`${k0} → ${k1} (${lassoActions.join()}) → ${k2} (${selActions.join()})`);
 	add(`${label}: the contextual bar is inside the view with 40 px targets`, inView(cr) && cr.bottom <= window.innerHeight + 0.5 && Array.from(ctx().querySelectorAll("button")).every((b) => (b as HTMLElement).offsetHeight >= 40 && (b as HTMLElement).offsetWidth >= 40),
 		`bar ${Math.round(cr.left)}–${Math.round(cr.right)}, bottom ${Math.round(cr.bottom)}`);
@@ -1854,7 +1855,7 @@ function applySize(): void {
 	if (h) root.style.height = `${Number(h)}px`;
 }
 
-(window as any).harness = { app, open, measureOpen, penStroke, setTool, openOptions, openMore, measureLod, compareLod, checkHeavy, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkReadOnly: async () => { try { return JSON.parse(JSON.stringify(await checkReadOnly({ view, app, stage, penStroke, setTool, strokeCount, frames, openMore, errors, notices }))); } catch (e) { return { ok: false, results: [], errors: [`readonly check: ${(e as Error).stack ?? e}`], notices: [], env: {} }; } }, checkPractice: () => checkPractice({ view, app, service: practiceService, frames, errors, notices }), checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
+(window as any).harness = { app, open, measureOpen, penStroke, setTool, openOptions, openMore, measureLod, compareLod, checkHeavy, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkReadOnly: async () => { try { return JSON.parse(JSON.stringify(await checkReadOnly({ view, app, stage, penStroke, setTool, strokeCount, frames, openMore, errors, notices }))); } catch (e) { return { ok: false, results: [], errors: [`readonly check: ${(e as Error).stack ?? e}`], notices: [], env: {} }; } }, checkPractice: () => checkPractice({ view, app, service: practiceService, frames, errors, notices }), checkExcerpt: () => checkExcerpt({ view, stage, penStroke, setTool, strokeCount, staticPixel, frames, errors, notices }), checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
 	return view;
 } };
 

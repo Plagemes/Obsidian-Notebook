@@ -46,6 +46,8 @@ export function pageFromEphemeralState(state: unknown): number | null {
 export interface PageTarget {
 	page: number | null;
 	pageId: string | null;
+	/** v10: a region of that page to outline once it is shown (the jump back from an anchored excerpt). */
+	region?: { x: number; y: number; width: number; height: number } | null;
 }
 
 /** Target of a link subpath; null when it names no page (headings, block ids). A malformed `id` is ignored (the number decides). */

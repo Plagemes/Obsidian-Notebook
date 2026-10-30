@@ -410,7 +410,16 @@ export class SelectionActions {
 			if (!this.host.stillHere(doc) || !doc.pages.includes(target.page)) return;
 			const content: ClipContent = missing.size === 0
 				? clip.content
-				: { ...clip.content, elements: clip.content.elements.filter((e) => e.type !== "image" || !missing.has(e.asset)) };
+				: { ...clip.content, elements: clip.content.elements.flatMap((e): PageElement[] => {
+					if (e.type === "image") return missing.has(e.asset) ? [] : [e];
+					// v10: an excerpt whose snapshot is gone keeps its anchor (it draws live or as a placeholder).
+					if (e.type === "excerpt" && e.asset !== undefined && missing.has(e.asset)) {
+						const { asset: _a, ...rest } = e;
+						void _a;
+						return [rest];
+					}
+					return [e];
+				}) };
 			const gone = (): string => (unsynced.size > 0 ? t("clipshare.notSynced") : t("selection.assetMissing"));
 			if (content.strokes.length === 0 && content.elements.length === 0) {
 				new Notice(gone(), 8000);
