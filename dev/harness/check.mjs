@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { inflateSync } from "node:zlib";
 import { buildHarness } from "./build.mjs";
+import { Cdp, findChrome, sleep } from "./chrome.mjs";
 import { serve } from "./serve.mjs";
 
 const DEVICES = {
@@ -82,72 +83,14 @@ SCENARIOS.push({ doc: "readonly", theme: "light", device: "tablet", lowLatency: 
 SCENARIOS.push({ doc: "settings", theme: "light", device: "narrow", lowLatency: false });
 SCENARIOS.push({ doc: "settings", theme: "dark", device: "tablet", lowLatency: false });
 SCENARIOS.push({ doc: "settings", theme: "dark", device: "desktop", lowLatency: false });
+// The light desktop settings too: with the dark one, the pair shown in the README (docs/media/).
+SCENARIOS.push({ doc: "settings", theme: "light", device: "desktop", lowLatency: false });
 // wave 0.12: the creation dialog (both tabs) at tablet and phone widths, light and dark.
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "create", theme, device, lowLatency: false });
 // 0.12.1: the whole plugin's onload against the stub: what it registers, the settings tab through both of Obsidian's paths,
 // and injected failures (a failing step, failing settings definitions, an unreadable data.json).
 SCENARIOS.push({ doc: "plugin", theme: "dark", device: "tablet", lowLatency: false });
 SCENARIOS.push({ doc: "plugin", theme: "light", device: "desktop", lowLatency: false });
-
-function findChrome() {
-	const candidates = [
-		process.env.CHROME_PATH,
-		"C:/Program Files/Google/Chrome/Application/chrome.exe",
-		"C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
-		"C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
-		"C:/Program Files/Microsoft/Edge/Application/msedge.exe",
-		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-		"/Applications/Chromium.app/Contents/MacOS/Chromium",
-		"/usr/bin/google-chrome",
-		"/usr/bin/google-chrome-stable",
-		"/usr/bin/chromium",
-		"/usr/bin/chromium-browser",
-	].filter(Boolean);
-	return candidates.find((p) => existsSync(p)) ?? null;
-}
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-/** Minimal DevTools protocol client over the built-in WebSocket. */
-class Cdp {
-	constructor(url) {
-		this.ws = new WebSocket(url);
-		this.id = 0;
-		this.pending = new Map();
-		this.ws.addEventListener("message", (e) => {
-			const msg = JSON.parse(String(e.data));
-			const p = msg.id !== undefined ? this.pending.get(msg.id) : null;
-			if (!p) return;
-			this.pending.delete(msg.id);
-			if (msg.error) p.reject(new Error(`${p.method}: ${msg.error.message}`));
-			else p.resolve(msg.result);
-		});
-	}
-	open() {
-		return new Promise((resolve, reject) => {
-			this.ws.addEventListener("open", resolve, { once: true });
-			this.ws.addEventListener("error", reject, { once: true });
-		});
-	}
-	send(method, params = {}) {
-		const id = ++this.id;
-		this.ws.send(JSON.stringify({ id, method, params }));
-		return new Promise((resolve, reject) => this.pending.set(id, { resolve, reject, method }));
-	}
-	async evaluate(expression, timeoutMs = 30000) {
-		const r = await Promise.race([
-			this.send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true }),
-			sleep(timeoutMs).then(() => {
-				throw new Error(`timed out: ${expression}`);
-			}),
-		]);
-		if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text);
-		return r.result.value;
-	}
-	close() {
-		this.ws.close();
-	}
-}
 
 /** RGBA pixel reader for the 8-bit, non-interlaced PNGs Chrome produces. */
 function decodePng(buf) {
@@ -422,6 +365,44 @@ async function main() {
 					const v = await cdp.evaluate(`JSON.stringify(Object.fromEntries(${JSON.stringify(ART_STYLES)}.map((s) => [s, ["card", "noglow", "flat"].map((k) => window.artGallery.bench(s, 9, k)).join(" / ")])))`, 120000);
 					console.log(`     bench card / noglow / flat: ${v}`);
 				}
+			}
+		}
+		// The repository banner (1280 × 400), the social preview (1280 × 640) and the roadmap page's art band (1600 × 240), dark
+		// and light: exact-size screenshots in dist/shots/banner/, copied into docs/media/ when the art changes.
+		// HARNESS_DOC=banner runs only these.
+		if (!process.env.HARNESS_DOC || process.env.HARNESS_DOC === "banner") {
+			const bannerDir = join(shots, "banner");
+			mkdirSync(bannerDir, { recursive: true });
+			for (const b of [{ kind: "banner", theme: "dark", height: 400 }, { kind: "banner", theme: "light", height: 400 }, { kind: "social", theme: "dark", height: 640 }, { kind: "social", theme: "light", height: 640 }, { kind: "band", theme: "dark", width: 1600, height: 240 }, { kind: "band", theme: "light", width: 1600, height: 240 }]) {
+				const name = `${b.kind}-${b.theme}`;
+				const width = b.width ?? 1280;
+				await cdp.send("Emulation.setDeviceMetricsOverride", { width, height: b.height, deviceScaleFactor: 1, mobile: false });
+				await cdp.send("Emulation.setTouchEmulationEnabled", { enabled: false });
+				await cdp.send("Page.navigate", { url: `http://127.0.0.1:${port}/banner.html?theme=${b.theme}&kind=${b.kind}` });
+				let report;
+				try {
+					for (let i = 0; i < 100; i++) {
+						if (await cdp.evaluate("typeof window.banner === 'object'")) break;
+						await sleep(100);
+					}
+					await cdp.evaluate("window.banner.ready.then(() => true)");
+					report = await cdp.evaluate("window.banner.check()", 60000);
+					await sleep(150);
+				} catch (e) {
+					report = { ok: false, results: [], errors: [String(e.message ?? e)] };
+				}
+				const png = Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png", clip: { x: 0, y: 0, width, height: b.height, scale: 1 } })).data, "base64");
+				writeFileSync(join(bannerDir, `${name}.png`), png);
+				const problems = report.results.filter((r) => !r.ok).map((r) => `${r.name}: ${r.detail}`);
+				problems.push(...report.errors.map((e) => `console error: ${e.split("\n")[0]}`));
+				const img = decodePng(png);
+				if (img.width !== width || img.height !== b.height) problems.push(`screenshot is ${img.width} × ${img.height}, expected ${width} × ${b.height}`);
+				total++;
+				if (problems.length) {
+					failures++;
+					console.log(`FAIL ${name}`);
+					for (const p of problems) console.log(`     ${p}`);
+				} else console.log(`ok   ${name}`);
 			}
 		}
 		cdp.close();
