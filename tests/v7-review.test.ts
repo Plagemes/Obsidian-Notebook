@@ -8,15 +8,19 @@ import { patchNotebookMeta } from "../src/library/host-logic";
 import { INDEX_VERSION, LibraryIndex } from "../src/library/index";
 import { planPageMove, withMovedBookmarks } from "../src/library/page-move";
 import { entryFromFile } from "../src/library/scan";
+import { pagesToPdf } from "../src/ink/export-pdf";
+import { pageToSvg } from "../src/ink/export-svg";
+import { paperPattern } from "../src/ink/paper";
+import { MAX_PAPER_SEGMENTS } from "../src/ink/paper-kinds";
 import { categoriesInUse, setBookmark } from "../src/model/bookmarks";
 import { cloneMeta, createDocument, createPage } from "../src/model/document";
 import { Batch, History, InsertPages, SetMeta } from "../src/model/history";
 import { mergeChangeCount, mergeCovers, planMerge } from "../src/model/merge";
 import { repairNotebookText } from "../src/model/repair";
-import { parse, serialize, serializeChecked } from "../src/model/serialize";
+import { MIN_PAPER_SPACING, parse, serialize, serializeChecked } from "../src/model/serialize";
 import { DocumentSession, type BackupReason, type DocumentIO, type Timers } from "../src/storage/session";
 import { PAGE_AT_KEY, PageClock, pageState, startPosition } from "../src/view/position-sync";
-import { DEFAULT_META, type NotebookDocument } from "../src/model/types";
+import { A4_HEIGHT, A4_WIDTH, DEFAULT_META, PAPER_KINDS_V7, PAPER_SPACING, type NotebookDocument, type Page, type PaperKind } from "../src/model/types";
 
 function parsed(text: string) {
 	const r = parse(text);
@@ -249,5 +253,64 @@ describe("library index of another plugin version", () => {
 		const old = LibraryIndex.fromJSON({ version: INDEX_VERSION - 1, entries: [] });
 		expect(old.keepsNewerVersion).toBe(false);
 		expect(old.toJSON()).toEqual({ version: INDEX_VERSION, entries: [] });
+	});
+});
+
+describe("v7 paper patterns stay bounded", () => {
+	const sizes: Array<[string, number, number]> = [
+		["A4", A4_WIDTH, A4_HEIGHT],
+		["A0", 2384, 3370],
+		["infinite A4", A4_WIDTH, A4_WIDTH * 20],
+		["absurd", 595, 100_000],
+	];
+	const spacings = [MIN_PAPER_SPACING, 1, 500];
+	const whole = (p: Page) => ({ minX: 0, minY: 0, maxX: p.width, maxY: p.height });
+	const paperPage = (kind: PaperKind, width: number, height: number, spacing: number): Page => ({ id: "p", width, height, paper: { kind, spacing }, strokes: [] });
+
+	it.each(PAPER_KINDS_V7)("%s: at most MAX_PAPER_SEGMENTS lines, never blank, quickly", (kind) => {
+		for (const [, w, h] of sizes) {
+			for (const sp of spacings) {
+				const p = paperPage(kind, w, h, sp);
+				const started = performance.now();
+				const { lines } = paperPattern(p, whole(p));
+				const ms = performance.now() - started;
+				expect(lines.length).toBeLessThanOrEqual(MAX_PAPER_SEGMENTS);
+				expect(ms).toBeLessThan(1000);
+				// Something is drawn whenever the full-size page has lines at this spacing (500 pt may leave none).
+				if (sp <= 1) expect(lines.length).toBeGreaterThan(0);
+			}
+		}
+	});
+
+	it("calligraphy at 1 pt on A4 falls back to its major lines; hexagons at 1 pt on A0 to a coarser lattice", () => {
+		const cal = paperPage("calligraphy", A4_WIDTH, A4_HEIGHT, 1);
+		const lines = paperPattern(cal, whole(cal)).lines;
+		expect(lines.length).toBeGreaterThan(0);
+		expect(lines.every((l) => l.kind !== "minor")).toBe(true);
+		const hex = paperPage("hexagonal", 2384, 3370, 1);
+		const edges = paperPattern(hex, whole(hex)).lines;
+		expect(edges.length).toBeGreaterThan(1000);
+		expect(edges.every((l) => l.kind === "minor")).toBe(true);
+		// Edges of a coarser hexagon (side a power-of-two multiple of 1 pt).
+		const longest = (ls: typeof edges) => Math.max(...ls.map((l) => Math.hypot(l.x2 - l.x1, l.y2 - l.y1)));
+		expect(longest(edges)).toBeGreaterThan(1.5);
+		// The usual densities are untouched.
+		const normal = paperPage("hexagonal", A4_WIDTH, A4_HEIGHT, PAPER_SPACING.hexagonal);
+		const normalEdges = paperPattern(normal, whole(normal)).lines;
+		expect(normalEdges.length).toBeLessThan(MAX_PAPER_SEGMENTS);
+		expect(longest(normalEdges)).toBeCloseTo(PAPER_SPACING.hexagonal, 3);
+	});
+
+	it.each(PAPER_KINDS_V7)("%s: the exporters draw a dense page, within the bound and in time", (kind) => {
+		const p = paperPage(kind, 2384, 3370, 1);
+		const started = performance.now();
+		const svg = pageToSvg(p);
+		const pdf = new TextDecoder("latin1").decode(pagesToPdf([p]));
+		expect(performance.now() - started).toBeLessThan(3000);
+		expect((svg.match(/<path d="M/g) ?? []).length).toBeGreaterThan(0);
+		expect(pdf).toContain(" l");
+		const segments = (pdf.match(/ m -?[\d.]+ -?[\d.]+ l/g) ?? []).length;
+		expect(segments).toBeGreaterThan(0);
+		expect(segments).toBeLessThanOrEqual(MAX_PAPER_SEGMENTS);
 	});
 });
