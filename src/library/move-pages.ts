@@ -1,4 +1,4 @@
-import { normalizePath, Notice, type App, type TFile } from "obsidian";
+import { normalizePath, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { cloneMeta } from "../model/document";
 import { AddAsset, AddPage, Batch, DeletePage, InsertPages, SetMeta, type Command } from "../model/history";
@@ -16,6 +16,7 @@ import { askMovePages } from "./move-pages-modal";
 import {
 	destinationVerdict, holdsPages, pageExcerpt, planPageMove, planSourceRemoval, withMovedBookmarks, type PageMoveFailure, type PageMovePlan,
 } from "./page-move";
+import { showNotice } from "../view/notice";
 
 const NOTEBOOK_VIEW_TYPE = "notebook-view";
 
@@ -183,9 +184,9 @@ export async function runMovePages(src: EditContext, settings: NotebookSettings,
 	try {
 		const out = await movePagesTo(src, answer.pageIds, answer.target, settings);
 		const vars = { n: String(out.moved), name: out.targetName, kept: String(out.stayed) };
-		new Notice(t(out.stayed > 0 ? "move.doneKept" : "move.done", vars), 8000);
+		showNotice(t(out.stayed > 0 ? "move.doneKept" : "move.done", vars), 8000);
 	} catch (e) {
 		console.error("[notebook] move pages", e);
-		new Notice(t("move.failed", { error: e instanceof Error ? e.message : String(e) }), 10000);
+		showNotice(t("move.failed", { error: e instanceof Error ? e.message : String(e) }), 10000);
 	}
 }

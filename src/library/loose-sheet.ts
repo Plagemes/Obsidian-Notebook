@@ -1,4 +1,4 @@
-import { normalizePath, Notice, type App, type TFile } from "obsidian";
+import { normalizePath, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { createDocument } from "../model/document";
 import { PAGE_SIZES, PAPER_SPACING } from "../model/types";
@@ -6,6 +6,7 @@ import type { NotebookSettings } from "../settings";
 import { createNotebook } from "../storage/notebooks";
 import { ensureFolder } from "../storage/vault-io";
 import { looseSheetPath, notebookBaseName, parentFolder } from "./loose-sheet-logic";
+import { showNotice } from "../view/notice";
 
 /** Cover colour of the loose sheet in the library (amber, one of the cover colours). */
 const LOOSE_SHEET_COVER = "#c9a227";
@@ -47,7 +48,7 @@ export function openLooseSheet(plugin: LooseSheetPlugin, open: (file: TFile) => 
 			await open(await ensureLooseSheet(plugin));
 		} catch (e) {
 			console.error("[notebook] loose sheet", e);
-			new Notice(t("loose.failed", { error: e instanceof Error ? e.message : String(e) }), 8000);
+			showNotice(t("loose.failed", { error: e instanceof Error ? e.message : String(e) }), 8000);
 		} finally {
 			opening = null;
 		}

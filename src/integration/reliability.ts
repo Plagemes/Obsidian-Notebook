@@ -11,7 +11,7 @@
  * notebook, and a conflicted copy is only moved (to the backup folder) after the merged notebook was
  * saved and read back containing everything of the copy.
  */
-import { FuzzySuggestModal, Modal, normalizePath, Notice, Setting, TFile, type App, type FuzzyMatch, type Plugin } from "obsidian";
+import { FuzzySuggestModal, Modal, normalizePath, Setting, TFile, type App, type FuzzyMatch, type Plugin } from "obsidian";
 import { t } from "../i18n";
 import { renderThumbnail } from "../library/thumbnail";
 import { createId } from "../model/document";
@@ -32,6 +32,7 @@ import {
 	backupDate, combineCandidates, isBackupOf, journalTexts, rankSources, type RecoveryCandidate, type RecoverySource, type SourceKind,
 } from "../storage/recovery";
 import { ensureFolder } from "../storage/vault-io";
+import { showNotice } from "../view/notice";
 
 export interface ReliabilityDeps {
 	app: App;
@@ -93,7 +94,7 @@ export async function openRepair(deps: ReliabilityDeps, file: TFile): Promise<vo
 	try {
 		const raw = readNotebookText(file.extension, await app.vault.read(file));
 		if (parse(raw).ok) {
-			new Notice(t("repair.notBroken"));
+			showNotice(t("repair.notBroken"));
 			return;
 		}
 		const docId = extractDocId(raw);
@@ -122,12 +123,12 @@ export async function openRepair(deps: ReliabilityDeps, file: TFile): Promise<vo
 		}
 		const ranked = rankSources([...sources, ...others]);
 		if (ranked.length === 0) {
-			new Notice(t("repair.none"));
+			showNotice(t("repair.none"));
 			return;
 		}
 		new RepairModal(deps, file, ranked).open();
 	} catch (e) {
-		new Notice(t("repair.failed", { error: (e as Error).message }));
+		showNotice(t("repair.failed", { error: (e as Error).message }));
 	}
 }
 
@@ -196,11 +197,11 @@ class RepairModal extends Modal {
 			const created = await createNotebook(this.app, folder, t("repair.newName", { name: this.file.basename }), copy);
 			const back = parse(readNotebookText(created.extension, await this.app.vault.read(created)));
 			if (!back.ok) throw new Error(back.message);
-			new Notice(t("repair.done", { path: created.path }), 8000);
+			showNotice(t("repair.done", { path: created.path }), 8000);
 			this.close();
 			await this.app.workspace.getLeaf("tab").openFile(created);
 		} catch (e) {
-			new Notice(t("repair.failed", { error: (e as Error).message }));
+			showNotice(t("repair.failed", { error: (e as Error).message }));
 		} finally {
 			this.busy = false;
 		}
@@ -286,18 +287,18 @@ export async function openMerge(deps: ReliabilityDeps, view: ReliabilityView): P
 	const file = view.file;
 	const doc = view.editableDocument();
 	if (!file || !doc) {
-		new Notice(t("merge.notEditable"));
+		showNotice(t("merge.notEditable"));
 		return;
 	}
 	try {
 		const copies = await findConflictCopies(deps.app, file, doc.id);
 		if (copies.length === 0) {
-			new Notice(t("merge.none"));
+			showNotice(t("merge.none"));
 			return;
 		}
 		new MergeModal(deps, view, copies).open();
 	} catch (e) {
-		new Notice(t("merge.failed", { error: (e as Error).message }));
+		showNotice(t("merge.failed", { error: (e as Error).message }));
 	}
 }
 
@@ -369,12 +370,12 @@ class MergeModal extends Modal {
 			if (!fresh.ok || !doc || fresh.doc.id !== doc.id) throw new Error(t("merge.unreadable", { name: copy.file.name }));
 			const plan = planMerge(doc, fresh.doc);
 			if (plan.command && !this.view.applyCommand(plan.command)) throw new Error(t("merge.notEditable"));
-			new Notice(t("merge.done", { name: copy.file.name }));
+			showNotice(t("merge.done", { name: copy.file.name }));
 			if (this.moveCopy) await this.afterMerge(copy, fresh.doc, true);
 			copy.doc = fresh.doc;
 			this.render();
 		} catch (e) {
-			new Notice(t("merge.failed", { error: (e as Error).message }));
+			showNotice(t("merge.failed", { error: (e as Error).message }));
 		} finally {
 			this.busy = false;
 		}
@@ -386,11 +387,11 @@ class MergeModal extends Modal {
 		const saved = await this.view.flushNow();
 		const back = saved && file ? parse(readNotebookText(file.extension, await this.app.vault.read(file))) : null;
 		if (!back?.ok || !mergeCovers(back.doc, copyDoc)) {
-			new Notice(t("merge.notMoved"), 8000);
+			showNotice(t("merge.notMoved"), 8000);
 			return;
 		}
 		const path = await moveToBackup(this.deps, copy.file);
-		new Notice(t("merge.moved", { path }), 8000);
+		showNotice(t("merge.moved", { path }), 8000);
 		const i = this.copies.indexOf(copy);
 		if (i >= 0) this.copies.splice(i, 1);
 		if (!fromMerge) this.render();
@@ -421,7 +422,7 @@ export async function checkConflicts(deps: ReliabilityDeps, view: ReliabilityVie
 			const button = f.createEl("button", { text: t("merge.foundAction") });
 			button.addEventListener("click", () => void openMerge(deps, view));
 		});
-		new Notice(fragment, 15000);
+		showNotice(fragment, 15000);
 	} catch (e) {
 		console.error("[notebook] conflict check failed", e);
 	}
@@ -462,12 +463,12 @@ export function openPageRestore(deps: ReliabilityDeps, view: ReliabilityView, pa
 	const file = view.file;
 	const doc = view.editableDocument();
 	if (!file || !doc) {
-		new Notice(t("merge.notEditable"));
+		showNotice(t("merge.notEditable"));
 		return;
 	}
 	const items = versionFiles(deps, file, doc.id).map((v) => ({ ...v, label: versionLabel(v) }));
 	if (items.length === 0) {
-		new Notice(t("pageRestore.none"));
+		showNotice(t("pageRestore.none"));
 		return;
 	}
 	const targetId = doc.pages[pageIndex]?.id ?? null;
@@ -475,16 +476,16 @@ export function openPageRestore(deps: ReliabilityDeps, view: ReliabilityView, pa
 		try {
 			const r = parse(await deps.app.vault.read(item.file));
 			if (!r.ok) {
-				new Notice(t("pageRestore.unreadable"));
+				showNotice(t("pageRestore.unreadable"));
 				return;
 			}
 			if (r.doc.id !== doc.id) {
-				new Notice(t("pageRestore.otherNotebook"));
+				showNotice(t("pageRestore.otherNotebook"));
 				return;
 			}
 			new PageRestoreModal(deps.app, view, r.doc, item, targetId, pageIndex).open();
 		} catch (e) {
-			new Notice(t("merge.failed", { error: (e as Error).message }));
+			showNotice(t("merge.failed", { error: (e as Error).message }));
 		}
 	})()).open();
 }
@@ -537,10 +538,10 @@ class PageRestoreModal extends Modal {
 		const target = doc ? doc.pages.findIndex((p) => p.id === this.targetId) : -1;
 		const plan = doc && target >= 0 ? planPageRestore(doc, this.version, this.selected, target, mode) : null;
 		if (!plan || !this.view.applyCommand(plan.command, plan.pageIndex)) {
-			new Notice(t("merge.notEditable"));
+			showNotice(t("merge.notEditable"));
 			return;
 		}
-		new Notice(t("pageRestore.done"));
+		showNotice(t("pageRestore.done"));
 		this.close();
 	}
 

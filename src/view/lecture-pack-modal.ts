@@ -1,9 +1,10 @@
-import { Modal, Notice, Setting, type App } from "obsidian";
+import { Modal, Setting, type App } from "obsidian";
 import { t } from "../i18n";
 import { HEADER_MODES, type HeaderMode, type LectureSetup } from "../library/lecture-pack";
 import { PAPER_KINDS, type PaperKind } from "../model/types";
 import { parseLayoutOptions, SLIDE_LAYOUTS, type LayoutOptions, type SlideLayout } from "../model/lecture-pack";
 import { cleanTitle, isoDate, parseIsoDate } from "./lecture-logic";
+import { showNotice } from "./notice";
 
 /** Device-local storage key (Obsidian's per-vault local storage) for the last layout chosen. */
 const STORAGE_KEY = "notebook-lecture-layout";
@@ -137,7 +138,7 @@ export function askLectureSetup(app: App, defaultTitle: string): Promise<Lecture
 		const submit = () => {
 			const date = parseIsoDate(dateText);
 			if (!date) {
-				new Notice(t("lecture.badDate"));
+				showNotice(t("lecture.badDate"));
 				dateEl?.focus();
 				return;
 			}

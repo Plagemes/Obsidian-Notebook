@@ -2,7 +2,7 @@
  * Pure parsing and building for embeds (`notebook` code blocks) and `obsidian://notebook` links.
  * No Obsidian imports: testable in Node.
  */
-import { parseSubpathParams, type Region } from "../zettel/subpath";
+import { parseSubpathParams, validPageId, type Region } from "../zettel/subpath";
 
 export interface EmbedTarget {
 	/** `path`: a vault path (extension optional). `link`: a wikilink target, resolved by name. */
@@ -137,15 +137,17 @@ export function embedPixelWidth(cssWidth: number, devicePixelRatio: number, maxP
  * An empty `vaultName` leaves `vault` out: Obsidian then opens the link in the current vault. Generated
  * notes use that form so their text does not depend on what the vault is called on each device.
  */
-export function notebookUri(vaultName: string, path: string, page?: number): string {
+export function notebookUri(vaultName: string, path: string, page?: number, pageId?: string): string {
 	const vault = vaultName ? `vault=${encodeURIComponent(vaultName)}&` : "";
 	let uri = `obsidian://notebook?${vault}path=${encodeURIComponent(path)}`;
 	if (page !== undefined && Number.isInteger(page) && page >= 1) uri += `&page=${page}`;
+	// wave 0.8 (388): the page id keeps the link on its page when pages are reordered; `page` stays for older readers.
+	if (pageId !== undefined && validPageId(pageId)) uri += `&id=${pageId}`;
 	return uri;
 }
 
 export type ProtocolTarget =
-	| { ok: true; path: string; page: number | null }
+	| { ok: true; path: string; page: number | null; pageId: string | null }
 	| { ok: false };
 
 /** Reads the parameters Obsidian passes to the `notebook` protocol handler. */
@@ -154,7 +156,15 @@ export function parseProtocolParams(params: Record<string, string | undefined>):
 	if (!path) return { ok: false };
 	const raw = (params.page ?? "").trim();
 	const page = /^\d{1,6}$/.test(raw) && Number(raw) >= 1 ? Number(raw) : null;
-	return { ok: true, path, page };
+	const id = (params.id ?? "").trim();
+	return { ok: true, path, page, pageId: validPageId(id) ? id : null };
+}
+
+/** Page id from a view state (`{ pageId }`), when it is a well-formed id. */
+export function pageIdFromState(state: unknown): string | null {
+	if (typeof state !== "object" || state === null) return null;
+	const id = (state as { pageId?: unknown }).pageId;
+	return typeof id === "string" && validPageId(id) ? id : null;
 }
 
 /** Page number from a view state (`{ page }`), as a 1-based integer or null. */

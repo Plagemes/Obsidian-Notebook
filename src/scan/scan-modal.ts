@@ -1,4 +1,4 @@
-import { Modal, Notice, type App } from "obsidian";
+import { Modal, type App } from "obsidian";
 import { t } from "../i18n";
 import type { PickedFile } from "../view/pick";
 import { takePhotos } from "./camera";
@@ -7,6 +7,7 @@ import { detectDocument } from "./detect";
 import { applyFilter, toGray } from "./filters";
 import { insetQuad, orderCorners, outputSize, rotatePoint90, warpPerspective } from "./geometry";
 import type { ImageDataLike, Pt, Quad, ScanFilter } from "./types";
+import { showNotice } from "../view/notice";
 
 export interface ScannedSheet {
 	jpeg: ArrayBuffer;
@@ -218,7 +219,7 @@ class ScanModal extends Modal {
 			console.error("Notebook: could not decode the photo", err);
 			this.failed = true;
 			this.failReason = err instanceof PhotoDecodeError ? err.reason : "unreadable";
-			if (this.failReason === "heic") new Notice(t("scan.heic"), 15000);
+			if (this.failReason === "heic") showNotice(t("scan.heic"), 15000);
 			this.work = null;
 			this.srcData = null;
 		}
@@ -315,7 +316,7 @@ class ScanModal extends Modal {
 			this.previewValid = true;
 		} catch (err) {
 			console.error("Notebook: could not process the photo", err);
-			new Notice(t("scan.unreadable"));
+			showNotice(t("scan.unreadable"));
 			this.mode = "crop";
 		} finally {
 			this.busy = false;
@@ -345,7 +346,7 @@ class ScanModal extends Modal {
 			this.results.push({ jpeg, width, height, name: `${baseName(file?.name ?? "scan")}-scan.jpg` });
 		} catch (err) {
 			console.error("Notebook: could not save the scan", err);
-			new Notice(t("scan.unreadable"));
+			showNotice(t("scan.unreadable"));
 			this.busy = false;
 			this.refreshUi();
 			return;

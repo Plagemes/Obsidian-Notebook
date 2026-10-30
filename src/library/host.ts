@@ -1,4 +1,4 @@
-import { loadPdfJs, normalizePath, Notice, Platform, type App, type TFile, type WorkspaceLeaf } from "obsidian";
+import { loadPdfJs, normalizePath, Platform, type App, type TFile, type WorkspaceLeaf } from "obsidian";
 import { t } from "../i18n";
 import { createDocument, createId } from "../model/document";
 import { backgroundRect } from "../model/margins";
@@ -27,6 +27,7 @@ import { createLectureFromSlides } from "./lecture-pack";
 import { openLooseSheet } from "./loose-sheet";
 import type { LibraryHost } from "./library-view";
 import type { ThumbnailOptions } from "./thumbnail";
+import { showNotice } from "../view/notice";
 
 /** Longest wait for a closing notebook view's final save before a library move goes on. */
 const CLOSE_WAIT_MS = 10_000;
@@ -179,7 +180,7 @@ export class NotebookLibraryHost implements LibraryHost {
 			const file = await createNotebook(this.app, folder, o.name, doc);
 			await this.openNotebook(file);
 		} catch (e) {
-			new Notice(t("notice.createFailed", { error: (e as Error).message }));
+			showNotice(t("notice.createFailed", { error: (e as Error).message }));
 		}
 	}
 
@@ -198,10 +199,10 @@ export class NotebookLibraryHost implements LibraryHost {
 			create: (dir, name, doc) => createNotebook(this.app, dir, name, doc),
 			open: (file) => this.openNotebook(file),
 			progress: (text) => {
-				const notice = new Notice(text, 0);
+				const notice = showNotice(text, 0);
 				return () => notice.hide();
 			},
-			notify: (text) => void new Notice(text),
+			notify: (text) => void showNotice(text),
 			messages: {
 				working: (name) => t("import.working", { name }),
 				failed: (error) => t("import.failed", { error }),
@@ -242,10 +243,10 @@ export class NotebookLibraryHost implements LibraryHost {
 			create: (dir, name, doc) => createNotebook(this.app, dir, name, doc),
 			open: (file) => this.openNotebook(file),
 			progress: (text) => {
-				const notice = new Notice(text, 0);
+				const notice = showNotice(text, 0);
 				return () => notice.hide();
 			},
-			notify: (text) => void new Notice(text),
+			notify: (text) => void showNotice(text),
 			messages: {
 				working: (name) => t("import.working", { name }),
 				failed: (error) => t("import.failed", { error }),
@@ -283,7 +284,7 @@ export class NotebookLibraryHost implements LibraryHost {
 			const file = await createNotebook(this.app, folder, name, doc);
 			await this.openNotebook(file);
 		} catch (e) {
-			new Notice(t("scan.failed", { error: (e as Error).message }), 8000);
+			showNotice(t("scan.failed", { error: (e as Error).message }), 8000);
 		}
 	}
 

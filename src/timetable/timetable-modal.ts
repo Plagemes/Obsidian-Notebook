@@ -1,9 +1,10 @@
-import { getLanguage, Modal, Notice, type App } from "obsidian";
+import { getLanguage, Modal, type App } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import {
 	entryProblem, findOverlaps, isValidDay, newEntry, WEEK_PATTERNS, type ClassEntry, type Timetable, type WeekPattern,
 } from "./schedule";
 import type { TimetableStore } from "./store";
+import { showNotice } from "../view/notice";
 
 export interface TimetableModalOptions {
 	store: TimetableStore;
@@ -178,25 +179,25 @@ export class TimetableModal extends Modal {
 	private async save(): Promise<void> {
 		const tt = this.draft;
 		if (tt.weekOne && !isValidDay(tt.weekOne)) {
-			new Notice(t("timetable.problem.weekOne"));
+			showNotice(t("timetable.problem.weekOne"));
 			return;
 		}
 		for (const e of tt.entries) {
 			const p = entryProblem(e);
 			if (p) {
-				new Notice(t("timetable.problem.entry", { course: e.course.trim() || t("timetable.course"), problem: t(`timetable.problem.${p}` as MessageKey) }), 6000);
+				showNotice(t("timetable.problem.entry", { course: e.course.trim() || t("timetable.course"), problem: t(`timetable.problem.${p}` as MessageKey) }), 6000);
 				return;
 			}
 		}
 		try {
 			const { backup } = await this.opts.store.save(tt, { base: this.opts.base, replaceUnreadable: this.replaceUnreadable });
 			this.opts.saved(clone(tt));
-			if (backup) new Notice(t("timetable.backedUp", { path: backup }), 8000);
-			new Notice(t("timetable.saved"));
+			if (backup) showNotice(t("timetable.backedUp", { path: backup }), 8000);
+			showNotice(t("timetable.saved"));
 			this.close();
 		} catch (e) {
 			console.error("[notebook] timetable save", e);
-			new Notice(t("timetable.saveFailed", { error: e instanceof Error ? e.message : String(e) }), 8000);
+			showNotice(t("timetable.saveFailed", { error: e instanceof Error ? e.message : String(e) }), 8000);
 		}
 	}
 }

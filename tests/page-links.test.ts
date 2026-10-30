@@ -155,7 +155,7 @@ describe("page titles and suggestions", () => {
 	it("lists every page for an empty query", () => {
 		const all = pageSuggestions(pages, "");
 		expect(all.map((s) => s.page)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-		expect(all[0]).toEqual({ page: 1, title: "Kinematics", hasInk: false });
+		expect(all[0]).toEqual({ page: 1, pageId: pages[0]!.id, title: "Kinematics", hasInk: false });
 	});
 
 	it("matches digits, with or without p, against the start of the page number", () => {

@@ -2,7 +2,7 @@
  * Page trash (#26) and page templates (#74): what the page menu and the new-notebook dialog call.
  * Kept out of notebook-view.ts on purpose; the view only passes itself as a `PageToolsHost`.
  */
-import { getLanguage, Modal, Notice, type App } from "obsidian";
+import { getLanguage, Modal, type App } from "obsidian";
 import { t } from "../i18n";
 import { ConfirmModal, PromptModal } from "../library/library-modals";
 import { relativeTime } from "../library/format";
@@ -20,6 +20,7 @@ import type { NotebookSettings } from "../settings";
 import { PageTrashStore } from "../storage/page-trash-store";
 import { listStoredTemplates, saveStoredTemplate } from "../storage/templates-store";
 import { templatesFolderPath } from "../storage/trash-paths";
+import { showNotice } from "./notice";
 
 /** What the page tools need from the notebook view. */
 export interface PageToolsHost {
@@ -58,7 +59,7 @@ export async function stashDeletedPage(host: PageToolsHost, doc: NotebookDocumen
 		return true;
 	} catch (e) {
 		console.error("[notebook] could not keep the deleted page", e);
-		new Notice(t("pageTrash.keepFailed", { error: (e as Error).message }), 8000);
+		showNotice(t("pageTrash.keepFailed", { error: (e as Error).message }), 8000);
 		return false;
 	}
 }
@@ -112,14 +113,14 @@ export async function restoreDeletedPage(host: PageToolsHost, notebookId: string
 export async function openDeletedPages(host: PageToolsHost): Promise<void> {
 	const doc = host.editableDocument();
 	if (!doc) {
-		new Notice(t("merge.notEditable"));
+		showNotice(t("merge.notEditable"));
 		return;
 	}
 	try {
 		const file = await storeFor(host).read(doc.id);
 		new DeletedPagesModal(host, doc.id, file.entries.length).open();
 	} catch (e) {
-		new Notice(t("pageTrash.readFailed", { error: (e as Error).message }));
+		showNotice(t("pageTrash.readFailed", { error: (e as Error).message }));
 	}
 }
 
@@ -181,10 +182,10 @@ class DeletedPagesModal extends Modal {
 				console.error("[notebook] restoring a deleted page failed", e);
 			}
 			if (outcome === "failed") {
-				new Notice(t("pageTrash.cannotRestore"));
+				showNotice(t("pageTrash.cannotRestore"));
 				return;
 			}
-			new Notice(t(outcome === "restored" ? "pageTrash.done" : "pageTrash.doneUnsaved"));
+			showNotice(t(outcome === "restored" ? "pageTrash.done" : "pageTrash.doneUnsaved"));
 			this.close();
 		})();
 	}
@@ -226,7 +227,7 @@ export async function openTemplateGallery(app: App, settings: NotebookSettings, 
 		const choices = await loadTemplateChoices(app, settings);
 		new TemplateGalleryModal(app, settings, choices, onChoose).open();
 	} catch (e) {
-		new Notice(t("template.loadFailed", { error: (e as Error).message }));
+		showNotice(t("template.loadFailed", { error: (e as Error).message }));
 	}
 }
 
@@ -294,7 +295,7 @@ class TemplateGalleryModal extends Modal {
 				void this.app.fileManager.trashFile(file).then(() => {
 					this.choices = { ...this.choices, mine: this.choices.mine.filter((c) => c !== choice) };
 					this.render();
-				}).catch((e: Error) => new Notice(t("template.loadFailed", { error: e.message })));
+				}).catch((e: Error) => showNotice(t("template.loadFailed", { error: e.message })));
 			},
 		).open();
 	}
@@ -304,31 +305,31 @@ class TemplateGalleryModal extends Modal {
 export function savePageAsTemplate(host: PageToolsHost, doc: NotebookDocument, page: Page, suggestedName: string): void {
 	new PromptModal(host.app, { title: t("template.save.title"), label: t("template.save.name"), value: suggestedName, cta: t("template.save.cta") }, (value) => {
 		const name = value.trim();
-		if (!name) return void new Notice(t("library.notice.invalidName"));
+		if (!name) return void showNotice(t("library.notice.invalidName"));
 		const s = host.settings;
 		void saveStoredTemplate(host.app, templatesFolderPath(s.templatesFolder, s.folder), name, templateDocument(doc, page))
-			.then((file) => new Notice(t("template.saved", { name: file.basename })))
-			.catch((e: Error) => new Notice(t("template.saveFailed", { error: e.message })));
+			.then((file) => showNotice(t("template.saved", { name: file.basename })))
+			.catch((e: Error) => showNotice(t("template.saveFailed", { error: e.message })));
 	}).open();
 }
 
 /** "New page from template…": the gallery, then the template's page is inserted after page `index` as one undo step. */
 export function newPageFromTemplate(host: PageToolsHost, index: number): void {
 	if (!host.editableDocument()) {
-		new Notice(t("merge.notEditable"));
+		showNotice(t("merge.notEditable"));
 		return;
 	}
 	void openTemplateGallery(host.app, host.settings, (choice) => {
 		const doc = host.editableDocument();
 		const made = pageFromTemplate(choice.doc);
-		if (!doc || !made) return void new Notice(t("merge.notEditable"));
+		if (!doc || !made) return void showNotice(t("merge.notEditable"));
 		const commands: Command[] = [];
 		for (const a of made.assets) {
 			if (!doc.assets || !Object.prototype.hasOwnProperty.call(doc.assets, a.id)) commands.push(new AddAsset(a));
 		}
 		const at = Math.min(index + 1, doc.pages.length);
 		commands.push(new AddPage(made.page, at));
-		if (host.applyCommand(new Batch("New page from template", commands), at)) new Notice(t("template.pageAdded", { name: choice.name }));
-		else new Notice(t("merge.notEditable"));
+		if (host.applyCommand(new Batch("New page from template", commands), at)) showNotice(t("template.pageAdded", { name: choice.name }));
+		else showNotice(t("merge.notEditable"));
 	});
 }

@@ -1,5 +1,6 @@
-import { FuzzySuggestModal, Modal, Notice, Setting, type App, type TFile } from "obsidian";
+import { FuzzySuggestModal, Modal, Setting, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
+import { showNotice } from "../view/notice";
 
 export interface MovePageItem {
 	id: string;
@@ -118,7 +119,7 @@ class MovePagesModal extends Modal {
 
 	private pickTarget(): void {
 		if (this.candidates.length === 0) {
-			new Notice(t("move.noNotebooks"));
+			showNotice(t("move.noNotebooks"));
 			return;
 		}
 		new TargetPicker(this.app, this.candidates, (file) => {

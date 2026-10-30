@@ -1,7 +1,4 @@
-import {
-	getLanguage, ItemView, Menu, normalizePath, Notice, setIcon, TFile, TFolder, Vault,
-	type TAbstractFile, type ViewStateResult, type WorkspaceLeaf,
-} from "obsidian";
+import { getLanguage, ItemView, Menu, normalizePath, setIcon, TFile, TFolder, Vault, type TAbstractFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import type { NotebookDocument, NotebookMeta, Page } from "../model/types";
 import { isNotebookFile } from "../storage/format";
@@ -15,7 +12,9 @@ import { ConfirmModal, CoverModal, FolderSuggestModal, PromptModal } from "./lib
 import { entryFromFile, filesToRead, type NotebookFileInfo } from "./scan";
 import { folderContents, type LibraryTrash } from "../storage/trash";
 import { addTrashNavItem, confirmMoveToTrash, FolderToTrashModal, TrashModal } from "./trash-modal";
+import { writing } from "../ink/writing-guard";
 import { renderThumbnail, type ThumbnailOptions } from "./thumbnail";
+import { showNotice } from "../view/notice";
 
 export const LIBRARY_VIEW_TYPE = "notebook-library";
 
@@ -60,6 +59,8 @@ const THUMB_WIDTH = 320;
 const SAVE_DELAY_MS = 2000;
 /** Saves of an open notebook come often: wait for it to settle before reading it again. */
 const MODIFY_DELAY_MS = 3000;
+/** Looking again this soon after finding the pen on the screen. */
+const QUIET_RETRY_MS = 1500;
 const STRUCTURE_DELAY_MS = 300;
 
 const tick = (ms = 0) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
@@ -401,6 +402,11 @@ export class LibraryView extends ItemView {
 		this.reconcileAt = at;
 		this.reconcileTimer = window.setTimeout(() => {
 			this.reconcileTimer = 0;
+			// Wave 0.8 (374): reading and indexing notebooks waits while the pen is on the screen (the save that caused it can wait).
+			if (writing.writing()) {
+				this.scheduleReconcile(QUIET_RETRY_MS);
+				return;
+			}
 			void this.reconcile();
 		}, delay);
 	}
@@ -503,6 +509,9 @@ export class LibraryView extends ItemView {
 		this.thumbRunning = true;
 		try {
 			while (this.thumbQueue.length > 0 && !this.closed) {
+				// Wave 0.8 (374): drawing cover thumbnails waits for a pause in writing.
+				await writing.idle();
+				if (this.closed) break;
 				const path = this.thumbQueue.shift()!;
 				const entry = this.index.get(path);
 				const file = this.app.vault.getFileByPath(path);
@@ -977,7 +986,7 @@ export class LibraryView extends ItemView {
 
 	private fail(e: unknown): void {
 		console.error("[notebook] library", e);
-		new Notice(t("library.notice.failed", { error: (e as Error).message ?? String(e) }));
+		showNotice(t("library.notice.failed", { error: (e as Error).message ?? String(e) }));
 	}
 
 	private async setMeta(path: string, patch: Partial<NotebookMeta>): Promise<void> {
@@ -1055,10 +1064,10 @@ export class LibraryView extends ItemView {
 	private askRename(file: TFile): void {
 		new PromptModal(this.app, { title: t("library.modal.renameNotebook"), label: t("library.modal.name"), value: file.basename, cta: t("library.modal.save") }, (value) => {
 			const name = sanitizeName(value);
-			if (!name) return void new Notice(t("library.notice.invalidName"));
+			if (!name) return void showNotice(t("library.notice.invalidName"));
 			if (name === file.basename) return;
 			const target = this.joinPath(folderOf(file.path), `${name}.${file.extension}`);
-			if (this.exists(target)) return void new Notice(t("library.notice.exists", { name }));
+			if (this.exists(target)) return void showNotice(t("library.notice.exists", { name }));
 			this.app.fileManager.renameFile(file, target).catch((e) => this.fail(e));
 		}).open();
 	}
@@ -1117,9 +1126,9 @@ export class LibraryView extends ItemView {
 	private askNewFolder(parent: string): void {
 		new PromptModal(this.app, { title: t("library.modal.newFolder"), label: t("library.modal.name"), cta: t("library.modal.create") }, (value) => {
 			const name = sanitizeName(value);
-			if (!name) return void new Notice(t("library.notice.invalidName"));
+			if (!name) return void showNotice(t("library.notice.invalidName"));
 			const path = this.joinPath(parent, name);
-			if (this.exists(path)) return void new Notice(t("library.notice.exists", { name }));
+			if (this.exists(path)) return void showNotice(t("library.notice.exists", { name }));
 			this.app.vault.createFolder(path).then(() => {
 				this.expanded.add(parent);
 				this.navigate({ folder: path });
@@ -1132,10 +1141,10 @@ export class LibraryView extends ItemView {
 		if (!folder) return;
 		new PromptModal(this.app, { title: t("library.modal.renameFolder"), label: t("library.modal.name"), value: folder.name, cta: t("library.modal.save") }, (value) => {
 			const name = sanitizeName(value);
-			if (!name) return void new Notice(t("library.notice.invalidName"));
+			if (!name) return void showNotice(t("library.notice.invalidName"));
 			if (name === folder.name) return;
 			const target = this.joinPath(folderOf(path), name);
-			if (this.exists(target)) return void new Notice(t("library.notice.exists", { name }));
+			if (this.exists(target)) return void showNotice(t("library.notice.exists", { name }));
 			this.app.fileManager.renameFile(folder, target).catch((e) => this.fail(e));
 		}).open();
 	}
@@ -1153,17 +1162,17 @@ export class LibraryView extends ItemView {
 				void (async () => {
 					if (choice === "everything") {
 						await trash.trash(folder);
-						new Notice(t("trash.notice.moved", { name: folder.name }));
+						showNotice(t("trash.notice.moved", { name: folder.name }));
 						return;
 					}
 					for (const nb of notebooks) await trash.trash(nb);
-					new Notice(t("trash.notice.movedNotebooks", { n: String(notebooks.length), name: folder.name }));
+					showNotice(t("trash.notice.movedNotebooks", { n: String(notebooks.length), name: folder.name }));
 				})().catch((e) => this.fail(e));
 			}).open();
 			return;
 		}
 		if (folder.children.length > 0) {
-			new Notice(t("library.notice.folderNotEmpty", { name: folder.name }));
+			showNotice(t("library.notice.folderNotEmpty", { name: folder.name }));
 			return;
 		}
 		new ConfirmModal(

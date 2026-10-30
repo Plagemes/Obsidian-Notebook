@@ -1,4 +1,4 @@
-import { Notice, Plugin, type TFile } from "obsidian";
+import { Plugin, type TFile } from "obsidian";
 import { t } from "./i18n";
 import { readSettings, type NotebookSettings } from "./settings";
 import { positionEquals, type SavedPosition } from "./ink/view-position";
@@ -24,6 +24,8 @@ import { registerLectureCommands } from "./view/lecture-commands";
 import { TimetableService } from "./timetable/service";
 import { registerPdfSyncCommands } from "./view/pdf-sync";
 import { registerZettel } from "./zettel";
+import { trackWriting } from "./view/writing-quiet";
+import { showNotice } from "./view/notice";
 
 export default class NotebookPlugin extends Plugin {
 	settings!: NotebookSettings;
@@ -36,6 +38,8 @@ export default class NotebookPlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		this.settings = readSettings(await this.loadData());
+		// wave 0.8 (374): notices and non-urgent background work wait while the pen is on the screen.
+		trackWriting(this);
 
 		this.journal = new AdapterJournalStore(this.app.vault.adapter, journalFolder(this.app, this.manifest.id));
 		this.registerView(VIEW_TYPE, (leaf) => new NotebookView(leaf, this));
@@ -73,7 +77,7 @@ export default class NotebookPlugin extends Plugin {
 		this.addCommand({ id: "pdf-margins", name: t("command.pdfMargins"), checkCallback: (checking) => this.withView(checking, (v) => {
 			const host = v.pdfActionHost();
 			const page = host?.doc.pages[v.currentPage()];
-			if (!host || !page?.background || !host.editable()) new Notice(t("pdf.noPdfPage"));
+			if (!host || !page?.background || !host.editable()) showNotice(t("pdf.noPdfPage"));
 			else openMarginsModal(host, page);
 		}) });
 		this.addCommand({ id: "pdf-update", name: t("command.pdfUpdate"), checkCallback: (checking) => this.withView(checking, (v) => {
@@ -169,12 +173,12 @@ export default class NotebookPlugin extends Plugin {
 	private async continueLast(): Promise<void> {
 		const { lastNotebookPath: path, lastNotebookPage: page, lastNotebookPos: pos } = this.settings;
 		if (!path) {
-			new Notice(t("notice.noLastNotebook"));
+			showNotice(t("notice.noLastNotebook"));
 			return;
 		}
 		const file = this.app.vault.getFileByPath(path);
 		if (!file) {
-			new Notice(t("notice.lastNotebookGone", { path }));
+			showNotice(t("notice.lastNotebookGone", { path }));
 			return;
 		}
 		await openNotebookAtPage(this.app, file, page, pos?.page === page ? pos : null);
@@ -211,7 +215,7 @@ export default class NotebookPlugin extends Plugin {
 			const file = await createNotebook(this.app, this.settings.folder, "Stress test 10000", stressDocument(10_000, 10, Date.now() % 100000));
 			await this.openFile(file);
 		} catch (e) {
-			new Notice(t("notice.createFailed", { error: (e as Error).message }));
+			showNotice(t("notice.createFailed", { error: (e as Error).message }));
 		}
 	}
 
