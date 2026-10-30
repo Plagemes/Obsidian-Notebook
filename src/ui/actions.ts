@@ -55,6 +55,8 @@ export interface UiContext {
 	sidePane: { available: boolean; open: boolean };
 	reading: { annotationsHidden: boolean; dim: boolean };
 	toggles: { ruler: boolean; penOnly: boolean; navigator: boolean; /** One page at a time (wave 0.7). */ pageMode?: boolean };
+	/** wave 0.8: invisible-ink pen mode and the view-only "Show solutions" toggles (notebook, page in view). Optional. */
+	markers?: { invisibleInk: boolean; solutions: boolean; pageSolutions: boolean };
 	/** Phone-sized view (the page panel is a drawer, the toolbar has two rows). */
 	narrow: boolean;
 }
@@ -208,6 +210,19 @@ export const ACTIONS: readonly ActionDef[] = [
 	// --- lecture: the contextual bar while a class of the timetable is on.
 	{ id: "new-lecture", label: "page.newLecture", icon: "graduation-cap", group: "lecture", surfaces: ["context", "sheet"], contexts: ["lecture"], priority: 70, scope: "view", command: "command.newLecture" },
 	{ id: "exercise-paper", label: "page.exercisePaper", icon: "palette", group: "lecture", surfaces: ["sheet"], priority: 20, scope: "view", command: "command.exercisePaper", readOnly: true },
+	// wave 0.8: markers (#201-#203, #209) and structured boxes (#204): the next tap or drag on a page places one. Also on the radial dial (shapes ring → Markers).
+	...([
+		["gap", "ellipsis", 44], ["question", "help-circle", 43], ["homework", "calendar-check", 41], ["important", "alert-circle", 40], ["critical", "alert-triangle", 25], ["star", "star", 25],
+	] as const).map(([kind, icon, priority]): ActionDef => ({
+		id: `marker-${kind}`, label: `markers.place.${kind}`, icon, group: "lecture", surfaces: ["context", "radial", "sheet"], contexts: ["lecture"],
+		priority, scope: "view", command: true, keywords: "marker badge",
+	})),
+	{ id: "marker-box", label: "markers.menu.box", icon: "square-dashed", group: "lecture", surfaces: ["context", "radial", "sheet"], contexts: ["lecture"], priority: 38, scope: "view", command: true, keywords: "definition theorem example proof remark callout" },
+	{ id: "end-of-lecture", label: "markers.menu.panel", icon: "list-checks", group: "lecture", surfaces: ["context", "sheet", "page"], contexts: ["lecture"], priority: 42, scope: "view", command: true, readOnly: true, keywords: "questions gaps homework markers" },
+	// wave 0.8: invisible ink (#100): a pen mode, and the view-only "Show solutions".
+	{ id: "invisible-ink", label: "markers.command.invisible", icon: "eye-off", group: "view", surfaces: ["sheet"], priority: 35, scope: "view", command: true, checked: (c) => !!c.markers?.invisibleInk, keywords: "hidden solutions self-test" },
+	{ id: "show-solutions", label: "markers.command.solutions", icon: "eye", group: "view", surfaces: ["sheet"], priority: 30, scope: "view", command: true, readOnly: true, checked: (c) => !!c.markers?.solutions, keywords: "invisible ink hidden" },
+	{ id: "show-page-solutions", label: "markers.menu.pageSolutions", icon: "eye", group: "page", surfaces: ["page"], priority: 30, scope: "view", command: true, readOnly: true, checked: (c) => !!c.markers?.pageSolutions, keywords: "invisible ink hidden" },
 
 	// --- view and input.
 	{ id: "toggle-pages-panel", label: "tool.pages", icon: "panel-left", group: "view", surfaces: ["toolbar"], priority: 100, scope: "view", command: "command.toggleNavigator", readOnly: true, checked: (c) => c.toggles.navigator },

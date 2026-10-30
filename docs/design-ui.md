@@ -67,6 +67,8 @@ anywhere in `src/` is in the registry and that every action is placed somewhere.
 | PDF margins, update PDF, export annotations | PDF bar (margins), page sheet, PDF & reading section | Page-level PDF work |
 | PDF side by side: open, link, show slide, add notes page, close | PDF bar (open), side-pane bar (the rest), Side by side section | Appear only when they apply |
 | New lecture, exercise paper | Lecture bar during a class, Lecture section | Class-time tools |
+| Markers (`marker-gap`, `marker-question`, `marker-important`, `marker-critical`, `marker-star`, `marker-homework`), structured box (`marker-box`), End of lecture panel (`end-of-lecture`) | Lecture bar during a class, Lecture section, radial shapes ring → Markers ring (markers and box), page sheet (panel), commands | Captured while the lecture runs; the next tap or drag places one |
+| Invisible ink (`invisible-ink`), show solutions (`show-solutions`, page: `show-page-solutions`) | View section of the sheet (ink and solutions), page sheet (page solutions), commands | A pen mode and view-only toggles |
 | Ruler, pen only, fit to width | Quick slots + View & input section | Toggles used in bursts |
 | Next/previous page | Commands (hotkeys), pages panel, scrolling | Keyboard only |
 | Copy link, insert link/embed, export page PDF/SVG | Page sheet (Export & share) | Act on one page |

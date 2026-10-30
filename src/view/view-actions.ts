@@ -59,8 +59,9 @@ function setSize(view: NotebookView, page: Page, index: number, name: PageSizeNa
 function exportPage(view: NotebookView, page: Page, index: number, kind: "pdf" | "svg"): void {
 	const file = view.file;
 	if (!file) return;
-	if (kind === "pdf") void exportPdf(view.app, file, [page], ` p${index + 1}`, view.mediaCache);
-	else void exportSvg(view.app, file, page, ` p${index + 1}`, view.mediaCache);
+	// v8: hidden ink only where the solutions are shown; boxes labelled in the reader's language.
+	if (kind === "pdf") void exportPdf(view.app, file, [page], ` p${index + 1}`, view.mediaCache, view.exportOptions());
+	else void exportSvg(view.app, file, page, ` p${index + 1}`, view.mediaCache, view.exportOptions());
 }
 
 const side = (id: PdfSideAction): Runner => (view) => void runPdfSideAction(view, id);
@@ -195,6 +196,19 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	// lecture
 	"new-lecture": (v) => void v.newLecture(),
 	"exercise-paper": (v) => v.chooseExercisePaper(),
+
+	// markers, boxes, invisible ink (wave 0.8)
+	"marker-gap": (v) => v.markerTools?.arm("gap"),
+	"marker-question": (v) => v.markerTools?.arm("question"),
+	"marker-important": (v) => v.markerTools?.arm("important"),
+	"marker-critical": (v) => v.markerTools?.arm("critical"),
+	"marker-star": (v) => v.markerTools?.arm("star"),
+	"marker-homework": (v) => v.markerTools?.arm("homework"),
+	"marker-box": (v) => v.markerTools?.arm("box"),
+	"end-of-lecture": (v) => v.markerTools?.openPanel(),
+	"invisible-ink": (v) => v.markerTools?.toggleInvisibleInk(),
+	"show-solutions": (v) => v.markerTools?.toggleSolutions(),
+	"show-page-solutions": (v, arg) => v.markerTools?.togglePageSolutions(arg.page),
 
 	// view and input
 	"toggle-pages-panel": (v) => v.toggleNavigator(),

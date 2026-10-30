@@ -15,12 +15,12 @@ Accepted and documented costs:
 - Native search, tags and backlinks do not see notebooks (until M4).
 - **Obsidian Sync** syncs unknown extensions only with the "Sync all other types" option enabled (stated in the README). Syncthing and USB copy have no limits.
 
-## 2. JSON schema v7
+## 2. JSON schema v8
 
 ```json
 {
   "format": "obsidian-notebook",
-  "version": 7,
+  "version": 8,
   "id": "6f1c…",
   "createdAt": "2026-10-29T14:30:00.000Z",
   "modifiedAt": "2026-10-29T14:42:10.000Z",
@@ -81,9 +81,19 @@ Added in v7 (optional, written only when present):
 | document | `position` | `{ page, y?, at }` (#125): where the notebook was last read — page id, page y (pt, rounded to 0.01, only when > 0) at the top of the view, ISO time. Dropped (not rejected) when its page is not in the document. Key order: after `meta`, before `assets`. Not part of the undo history. Written only together with a content save: `DocumentSession` calls the `beforeSerialize` hook just before the first serialization of a changed revision (by the journal or by the save), never for a flush without changes, so reading or scrolling alone never writes the file and two devices that only read never fight; when both edit, the last writer wins. `model/position.ts`, `view/position-sync.ts` |
 | page | `paper.kind` | new kinds `cornell`, `music`, `isometric`, `hexagonal`, `calligraphy`, `planner-day`, `planner-week` (#73), see "Paper and page sizes" |
 
+Added in v8 (optional, written only when present):
+
+| Where | Field | Meaning |
+|---|---|---|
+| stroke | `hidden` | `true` (#100 invisible ink): the stroke is not drawn, erased, lassoed or exported unless the reader shows the solutions (view-only toggles per notebook or page, never saved; the invisible-ink pen mode shows them to the writer). Never in thumbnails and embeds. Any other value is invalid. Key order: after `render`, before `points` |
+| page `elements` | `type: "marker"` | `{ id, type, kind, x, y, width?, height?, at?, done?, slide?, due?, text? }`: a badge (14 pt, `MARKER_BADGE`) whose top-left corner is (`x`, `y`), optionally about the region `width` × `height` from that corner (both or neither, each > 0). `kind`: `gap` (to complete, #201), `question` (#202), `important` (!), `critical` (!!), `star` (★) (#203), `homework` (#209). `at`: ISO time it was placed; `done`: only `true` (resolved question, filled gap, homework done); `slide`: integer ≥ 1, the reference PDF page in view (or the page's own PDF page) when a gap was placed; `due`: a real calendar date `YYYY-MM-DD`; `text`: one line (whitespace collapsed, trimmed, at most 300 characters, empty = absent). Line: required fields, then the optional ones in the order above |
+| page `elements` | `type: "box"` | `{ id, type, kind, x, y, width, height, title? }` (#204): a labelled frame, `kind` one of `definition`, `theorem`, `example`, `proof`, `remark`; `title` follows the marker `text` rule. Drawn under the ink with a label tab above its top-left corner (12 pt) |
+
+Markers and boxes share the id space of strokes and elements. Drawing order: boxes after images and before text boxes (under the ink); marker badges after the ink, so they stay visible and tappable. **Reading is lenient for the v8 details** (like the v7 ones): a marker or box whose kind, position or frame is invalid, or an invalid optional field of one (region, time, state, slide, due date, label, title), or a `hidden` value other than `true`, is left out and counted in `ParseResult.dropped` (also in staged loading, for the pages read later) instead of rejecting the notebook; the session keeps the `dropped-details` backup before the next save. A duplicate id still makes the file invalid. **Writing is strict**: `serializeChecked` re-parses without dropping (also the skeleton of the incremental path), so an invalid marker, box or flag is never written. Helpers in `model/markers.ts`; looks in `ink/marker-render.ts` (canvas, SVG and PDF share the badge geometry and colours).
+
 **Where a notebook starts (v7).** A page asked for explicitly (a `#p3` link, a library search hit, *Continue last notebook*) always wins. The workspace layout stores the page in view with `pageAt`, the time it was in view; on a layout restore the stored `position` wins only when its `at` is later (another device read and saved the notebook afterwards). Opening without a page starts at the stored position. Only the first load of a file applies this; a reload after a sync change keeps the view where it is.
 
-Drawing order of a page: page colour, background (PDF page or image), paper pattern (none by default on PDF and scanned pages), images, text, ink.
+Drawing order of a page: page colour, background (PDF page or image), paper pattern (none by default on PDF and scanned pages), images, structured boxes (v8), text, ink (hidden ink only while the solutions are shown), marker badges (v8).
 
 Unknown fields are ignored on read. Every schema change increments `version` and adds a tested migration (`src/model/migrations.ts`).
 
@@ -96,7 +106,8 @@ Unknown fields are ignored on read. Every schema change increments `version` and
 - **v4 → v5**: adds the required per-stroke `render` field (`1` = `RENDER_FREEHAND`, `2` = `RENDER_INK`). Migration: every stroke of every page gets `render: 1`, because every stroke written before v5 was drawn with perfect-freehand and must keep rendering exactly as before; v0→v1 still produces strokes without `render` and the v4→v5 step adds it. `readStroke` rejects a missing `render` or a value other than 1 or 2 (`pages[i].strokes[j].render`). `createStroke` defaults to `RENDER_FREEHAND`, so only a caller that asks for the new engine produces render 2. Key order: `id`, `tool`, `color`, `width`, `render`, `points`.
 - **v5 → v6** (PDF wave p1a): adds the optional page field `margins`. Migration: the identity plus `version: 6`; a `margins` key already present in a v5 file is dropped, because a v5 reader ignored it (it was never ours and never had an effect). No other field changes, so every valid v5 document is a valid v6 document without margins. A 0.4.x plugin opens a v6 file read-only (future version) with a backup and never rewrites it, so margins cannot be lost by an older version saving over them.
 - **v6 → v7** (wave 0.6): adds the optional `meta.bookmarkInfo`, page `tags`, document `position` and seven paper kinds. Migration: the identity plus `version: 7`, except that `meta.bookmarkInfo`, `position` and page `tags` keys already present in a v6 file are dropped (a v6 reader ignored them: they were never ours), and a pre-v7 file whose page uses one of the new paper kinds is rejected (a v6 reader rejected it, so no version of this plugin wrote it; like `shape` before v4). Every valid v6 document is a valid v7 document without the new fields. Paths that copy pages or metadata keep the new fields: `cloneMeta` (so `SetMeta` and library patches), `duplicatePage` (tags; the bookmark stays with the original page id), page restore (*replace* unites the tags of the current page and of the version, *insert* copies the version's), conflicted-copy merge (page tags of common pages united; bookmark details merged field by field: the main notebook's value of each field wins, missing fields come from the copy, differing fields are counted in `bookmarkInfoDiffer`; the main position is kept; `mergeCovers` also checks page tags, bookmarks and that every detail field of the copy is in the result with the same value), *Move to notebook…* (the moved pages' bookmarks and details go to the target under the new page ids, in the same write), repair (line scan reads the `tags` and `position` lines; tags keep their string entries, bookmark details keep their valid fields per entry, a position whose page was not recovered is dropped) and the companion note (details are not properties). A 0.5.x plugin opens a v7 file read-only with a backup.
-- **Compatibility**: a plugin that supports an older version sees a newer `version` as a future version, so it opens the file read-only (and keeps a backup copy of it, as for any file it cannot edit) and never rewrites it. Once 0.2 has saved a file, 0.1.x cannot edit it; once 0.3 has saved a file, 0.2.x cannot edit it; once 0.4.0 has saved a file (v5), 0.3.x and earlier open it read-only; once a v7 version has saved a file, 0.5.x opens it read-only.
+- **v7 → v8** (wave 0.8): adds the element types `marker` and `box` and the optional stroke field `hidden`. Migration: the identity plus `version: 8`, except that a `hidden` key already present on a stroke of a v7 file is dropped (a v7 reader ignored unknown stroke fields, so it never hid anything), and a pre-v8 file with a marker or box element is rejected (a v7 reader rejected unknown element types, so no version of this plugin wrote it). Every valid v7 document is a valid v8 document. Paths that copy ink and elements keep the new data: `copyStroke` (`model/pages.ts`, used by `duplicatePage`, page restore, merge and the clipboard) keeps `hidden`; elements are copied whole. So duplicate page, page restore (*replace* and *insert*), the page trash (entries are one-page documents; a restore with an id clash goes through `duplicatePage`), *Move to notebook…*, templates, stamps and paste keep markers, boxes and hidden ink. Conflicted-copy merge: hidden ink is part of a stroke's content (the same ink shown on one side and hidden on the other is kept twice, nothing is revealed); a marker's resolved state is not content — the same marker resolved only in the copy is resolved in the result (`SetMarkerDone`, by id, `markersResolved` in the summary), never added twice; an edited label is content (both kept); `mergeCovers` also checks that every resolved marker of the copy is resolved in the result. Repair: `fixStroke` keeps `hidden: true`, `fixElement` keeps a marker or box with a valid kind and position and its valid optional fields. Companion note: boxes become callouts `> [!<kind>] <title>` holding `![[<notebook>#p<n>&id=<page id>&r=x,y,w,h]]` (the Z1 region embed), homework markers become tasks `- [ ] <text or "Homework"> 📅 <due>` (`- [x]` when done), in the generated region only, in reading order after the text boxes of the page; English callout types and fallback text keep the note language-neutral. One way: a task ticked in the note is not read back. Exports draw boxes and markers; hidden ink only for the pages whose solutions are shown in the view (`PdfOptions.hiddenInk`, `SvgOptions.hiddenInk`). A plugin that reads up to v7 opens a v8 file read-only with a backup.
+- **Compatibility**: a plugin that supports an older version sees a newer `version` as a future version, so it opens the file read-only (and keeps a backup copy of it, as for any file it cannot edit) and never rewrites it. Once 0.2 has saved a file, 0.1.x cannot edit it; once 0.3 has saved a file, 0.2.x cannot edit it; once 0.4.0 has saved a file (v5), 0.3.x and earlier open it read-only; once a v7 version has saved a file, 0.5.x opens it read-only; once a v8 version has saved a file, versions that read up to v7 open it read-only.
 
 **Stroke rendering parameters** of `render: 1` (perfect-freehand) are code constants; the per-stroke `render` field selects the geometry, it does not carry parameters:
 - pen (`PEN_V1`): `size = width`, `thinning 0.6`, `smoothing 0.5`, `streamline 0.35`, `simulatePressure false`, round caps. Unchanged since v1;
@@ -150,7 +161,9 @@ src/
     serialize.ts          deterministic serialize(), parse() with validation and migrations, serializeChecked() (save check), freezeStroke()
     migrations.ts         chain of vN → vN+1 migrations (v0→v1 … v5→v6)
     lecture-pack.ts       lecture pack page plans: slide geometry, notes layouts, notes page after every slide, stored options (pure)
-    migrations.ts         chain of vN → vN+1 migrations (v0→v1 … v6→v7)
+    migrations.ts         chain of vN → vN+1 migrations (v0→v1 … v7→v8)
+    markers.ts            markers, structured boxes and invisible ink (v8): creation, edits, tap rules, bounds, lecture range, panel lists (pure)
+    marker-commands.ts    SetMarkerDone: resolve a marker found by id (merge, panel)
     margins.ts            page margins (v6): background box, size and resize rules, translating strokes and elements
     page-tags.ts          page tags (v7): normalisation, input parsing, counts, union, SetPageTags command
     position.ts           reading position (v7): normalisation, position of the view, start-page choice
@@ -178,7 +191,8 @@ src/
     shapes.ts             shape tool geometry: points for lines, arrows, rectangles, ellipses, angle constraints
     attach.ts             ink attached to objects (#149): which strokes belong to an image or text box (>= 60% of their points inside, topmost wins), ink to offer deleting with a removed object (pure)
     stamps.ts             personal stamps (#142): stamp file text (notebook document, one page) and its validation, built-in stamps, placement as one undo step, palette previews (pure)
-    elements.ts           text and image elements: bounds, hit test, lasso selection, transform
+    elements.ts           text, image, marker and box elements: bounds, hit test, lasso selection, transform
+    marker-render.ts      look of markers and boxes (v8): badge faces, colours, star and check geometry, canvas drawing; shared with the SVG and PDF export
     text-layout.ts        text wrapping and measurement shared by the renderer, the editor and the exports
     ruler.ts              ruler placed by two fingers, edge snapping
     infinite.ts           growth rule for infinite pages
@@ -310,6 +324,7 @@ src/
     lecture.ts            "New lecture" dialog and flow; lecture-logic.ts: header text and page (pure)
     lecture-pack-modal.ts layout / header dialogs of the lecture pack (also used by Insert PDF)
     lecture-commands.ts   commands and ribbon icon for the three features above and the loose sheet
+    markers.ts            v8 markers, boxes, invisible ink, End of lecture panel (#201-#204, #209, #223, #100): MarkerTools (placement, badge taps, view-only solutions), dialogs; its actions are registry entries (ui/actions.ts) run by view/view-actions.ts
     pdf-sync.ts           synchronised PDF view (#106): command, "…" menu entries, reference picker, the controller that keeps the two sides together
     pdf-side-pane.ts      the PDF pane inside the notebook body: header, page, strip "Add notes page for this slide", divider
     pdf-reference.ts      what the pane shows: a plain vault PDF (own `PdfStore`) or another notebook's pages (own `NotebookMedia`)

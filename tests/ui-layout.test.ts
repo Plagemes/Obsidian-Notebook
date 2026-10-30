@@ -72,7 +72,8 @@ describe("layout engine", () => {
 		expect(side.actions).toEqual(["pdf-side-link", "pdf-side-add-page", "pdf-side-show-slide", "pdf-side-close"]);
 		const lecture = contextBar(baseContext({ lecture: true }), 800, {}, NOW)!;
 		expect(lecture.kind).toBe("lecture");
-		expect(lecture.actions).toEqual(["new-lecture", "board-shot", "exercise-page"]);
+		// wave 0.8: the markers and the End of lecture panel follow the class-time tools, as far as the width allows.
+		expect(lecture.actions).toEqual(["new-lecture", "board-shot", "exercise-page", "marker-gap", "marker-question", "end-of-lecture", "marker-homework", "marker-important"]);
 		expect(contextBar(baseContext(), 800, {}, NOW)).toBeNull();
 		expect(contextBar(baseContext({ open: false, lecture: true }), 800, {}, NOW)).toBeNull();
 	});

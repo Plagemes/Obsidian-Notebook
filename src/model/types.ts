@@ -2,11 +2,12 @@
 
 export const FORMAT_ID = "obsidian-notebook";
 /**
- * v7: bookmark details (title, colour, category), page tags, the shared reading position and more paper
- * kinds (v6: page margins around a background; v5: per-stroke render version; v4: library metadata,
- * assets, backgrounds, elements, infinite pages, "shape" tool; v3: paper kinds and page sizes).
+ * v8: markers and structured boxes (page elements), hidden ("invisible ink") strokes. v7: bookmark details
+ * (title, colour, category), page tags, the shared reading position and more paper kinds (v6: page margins
+ * around a background; v5: per-stroke render version; v4: library metadata, assets, backgrounds, elements,
+ * infinite pages, "shape" tool; v3: paper kinds and page sizes).
  */
-export const CURRENT_VERSION = 7;
+export const CURRENT_VERSION = 8;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -52,6 +53,11 @@ export interface Stroke {
 	 * 2 = incremental wet-ink geometry.
 	 */
 	render: RenderVersion;
+	/**
+	 * v8 invisible ink (#100): the stroke is not drawn, exported or erasable until the reader shows the solutions
+	 * (a view-only toggle). Written only when true.
+	 */
+	hidden?: true;
 	points: Point[];
 }
 
@@ -134,7 +140,60 @@ export interface ImageElement {
 	rotation: number;
 }
 
-export type PageElement = TextElement | ImageElement;
+/**
+ * v8 marker kinds: "gap" a to-complete placeholder (#201), "question" for the lecturer (#202), importance
+ * "important" (!), "critical" (!!) and "star" (★) (#203), "homework" with a due date (#209).
+ */
+export const MARKER_KINDS = ["gap", "question", "important", "critical", "star", "homework"] as const;
+export type MarkerKind = (typeof MARKER_KINDS)[number];
+
+/**
+ * v8 marker: a small badge whose top-left corner is (`x`, `y`), optionally about a region of the page
+ * (`width` × `height` from the same corner; both or neither). Optional fields are written only when present.
+ */
+export interface MarkerElement {
+	id: string;
+	type: "marker";
+	kind: MarkerKind;
+	x: number;
+	y: number;
+	width?: number;
+	height?: number;
+	/** When it was placed (ISO time). */
+	at?: string;
+	/** Resolved question, filled gap, homework done. Only `true` is stored. */
+	done?: true;
+	/** Gap: 1-based page of the reference PDF (or of the page's own PDF background) in view when it was placed. */
+	slide?: number;
+	/** Homework: due date `YYYY-MM-DD`. */
+	due?: string;
+	/** A short label: the question, what the homework is. One line, at most MARKER_TEXT_MAX characters. */
+	text?: string;
+}
+
+/** v8 structured box kinds (#204). */
+export const BOX_KINDS = ["definition", "theorem", "example", "proof", "remark"] as const;
+export type BoxKind = (typeof BOX_KINDS)[number];
+
+/** v8 structured box: a labelled frame around a region of the page (drawn under the ink). */
+export interface BoxElement {
+	id: string;
+	type: "box";
+	kind: BoxKind;
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+	/** Optional title shown on the label (and as the callout title in the companion note). Same rules as a marker label. */
+	title?: string;
+}
+
+/** Longest marker label or box title, characters. */
+export const MARKER_TEXT_MAX = 300;
+
+export type PageElement = TextElement | ImageElement | MarkerElement | BoxElement;
+/** Element types that exist only from format v8: an older file that uses one was not written by this plugin. */
+export const ELEMENT_TYPES_V8: readonly string[] = ["marker", "box"];
 
 /**
  * v6: blank space added around a page's background (a PDF page or a scan), in pt. The background is

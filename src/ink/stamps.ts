@@ -200,7 +200,7 @@ export function stampPreview(clip: ClipContent, measure: MeasureText = estimateM
 		return {
 			x: eb.minX, y: eb.minY, w: eb.maxX - eb.minX, h: eb.maxY - eb.minY,
 			rotation: e.type === "image" ? (e.rotation * 180) / Math.PI : 0,
-			kind: e.type,
+			kind: e.type === "image" ? "image" as const : "text" as const,
 		};
 	});
 	return { box: { x: b.minX - pad, y: b.minY - pad, w: w + pad * 2, h: h + pad * 2 }, strokes, boxes };

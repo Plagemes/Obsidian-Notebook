@@ -119,6 +119,11 @@ class PdfSyncController implements PageSyncHooks {
 		return this.pane !== null;
 	}
 
+	/** 1-based reference page in view, or null when the pane is closed. */
+	get slideInView(): number | null {
+		return this.pane ? this.index + 1 : null;
+	}
+
 	// --- opening and closing ---
 
 	pick(): void {
@@ -432,6 +437,11 @@ export function initPdfSync(plugin: Plugin, folder: () => string): void {
 	plugin.register(() => {
 		services = null;
 	});
+}
+
+/** v8 gap markers: the 1-based page of the reference beside the notes, or null when none is open. */
+export function referenceSlideOf(view: NotebookView): number | null {
+	return controllerOf(view)?.slideInView ?? null;
 }
 
 /** ui redesign: whether side by side is available for this view and whether its pane is open (creates nothing). */

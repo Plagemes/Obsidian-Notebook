@@ -1,10 +1,12 @@
-import { RENDER_INK, type Page, type Stroke, type TextElement } from "../model/types";
+import { BOX_LABEL_HEIGHT, MARKER_BADGE, markerRegion } from "../model/markers";
+import { RENDER_INK, type BoxElement, type MarkerElement, type Page, type Stroke, type TextElement } from "../model/types";
 import type { BBox } from "./hit-test";
 import { PAPER_DOT_RADIUS, PAPER_LINE_WIDTH } from "./export-svg";
 import { PAPER_COLORS, paperPattern, type PaperLineKind } from "./paper";
 import { inkPath, type PathSink } from "./ink-geometry";
+import { BOX_COLORS, badgeColor, badgeFace, badgeIsSquare, boxLabelWidth, checkPoints, defaultBoxLabel, glyphSize, starPoints, type BoxLabel } from "./marker-render";
 import { HIGHLIGHTER_ALPHA, strokeOutline } from "./stroke-shape";
-import { wrapHelvetica } from "../pdf/helvetica";
+import { helveticaCodeWidth, toWinAnsi, wrapHelvetica } from "../pdf/helvetica";
 
 /**
  * An image placed on a page, in page coordinates (pt, origin top-left, y down). `jpeg` is a
@@ -33,6 +35,10 @@ export interface PdfOptions {
 	title?: string;
 	/** Images of a page (PDF background and image elements). */
 	images?: (page: Page) => PdfPlacedImage[];
+	/** v8 invisible ink: draw the hidden strokes of a page (default: never; they are the solutions). */
+	hiddenInk?: boolean | ((page: Page) => boolean);
+	/** v8: label of a structured box (default: the English kind name and the title). */
+	boxLabel?: BoxLabel;
 }
 
 /** Line height of text elements, as a multiple of the font size. */
@@ -107,7 +113,8 @@ export function pagesToPdf(pages: readonly Page[], options: PdfOptions = {}): Ui
 		const contentObj = alloc();
 		pageObjs.push(pageObj);
 		const res = { xobjects: new Map<string, number>(), font: false, highlighter: false };
-		const content = pageContent(page, withPaper, options.images?.(page) ?? [], getImage, res);
+		const hidden = typeof options.hiddenInk === "function" ? options.hiddenInk(page) : !!options.hiddenInk;
+		const content = pageContent(page, withPaper, options.images?.(page) ?? [], getImage, res, { hidden, boxLabel: options.boxLabel ?? ((b) => defaultBoxLabel(b)) });
 		const parts: string[] = [];
 		if (res.highlighter) parts.push(`/ExtGState << /GS1 << /Type /ExtGState /ca ${HIGHLIGHTER_ALPHA} /BM /Multiply >> >>`);
 		if (res.xobjects.size > 0) {
@@ -228,6 +235,7 @@ function pageContent(
 	images: readonly PdfPlacedImage[],
 	imageObj: (img: PdfPlacedImage) => number,
 	res: PageResources,
+	v8: { hidden: boolean; boxLabel: BoxLabel } = { hidden: false, boxLabel: (b) => defaultBoxLabel(b) },
 ): string {
 	const ops: string[] = [];
 	ops.push(`1 0 0 -1 0 ${num(page.height)} cm`);
@@ -242,6 +250,11 @@ function pageContent(
 	if (withPaper) ops.push(...paperOps(page));
 	for (const img of images) if (img.layer !== "background") draw(img);
 	for (const el of page.elements ?? []) {
+		if (el.type !== "box") continue;
+		res.font = true;
+		ops.push(boxOps(el, v8.boxLabel(el)));
+	}
+	for (const el of page.elements ?? []) {
 		if (el.type !== "text") continue;
 		const op = textOps(el);
 		if (op) {
@@ -250,13 +263,91 @@ function pageContent(
 		}
 	}
 	for (const stroke of page.strokes) {
+		if (stroke.hidden && !v8.hidden) continue;
 		const op = strokeOps(stroke);
 		if (op) {
 			if (stroke.tool === "highlighter") res.highlighter = true;
 			ops.push(op);
 		}
 	}
+	for (const el of page.elements ?? []) {
+		if (el.type !== "marker") continue;
+		const op = markerOps(el);
+		if (op.font) res.font = true;
+		ops.push(op.ops);
+	}
 	return ops.join("\n");
+}
+
+/** Polygon (or open polyline) path. */
+function polyOps(points: ReadonlyArray<readonly [number, number]>, close = true): string {
+	return points.map(([x, y], i) => `${num(x)} ${num(y)} ${i === 0 ? "m" : "l"}`).join(" ") + (close ? " h" : "");
+}
+
+/** Circle as four cubic Béziers. */
+function circleOps(cx: number, cy: number, r: number): string {
+	const k = 0.5523 * r;
+	return [
+		`${num(cx + r)} ${num(cy)} m`,
+		`${num(cx + r)} ${num(cy + k)} ${num(cx + k)} ${num(cy + r)} ${num(cx)} ${num(cy + r)} c`,
+		`${num(cx - k)} ${num(cy + r)} ${num(cx - r)} ${num(cy + k)} ${num(cx - r)} ${num(cy)} c`,
+		`${num(cx - r)} ${num(cy - k)} ${num(cx - k)} ${num(cy - r)} ${num(cx)} ${num(cy - r)} c`,
+		`${num(cx + k)} ${num(cy - r)} ${num(cx + r)} ${num(cy - k)} ${num(cx + r)} ${num(cy)} c h`,
+	].join(" ");
+}
+
+/** One line of Helvetica text with its left end at (x, baseline), cut to `maxWidth`. */
+function labelOps(text: string, x: number, baseline: number, size: number, maxWidth: number, color: string): string {
+	const codes: number[] = [];
+	let w = 0;
+	for (const c of toWinAnsi(text)) {
+		const cw = helveticaCodeWidth(c, size);
+		if (w + cw > maxWidth) break;
+		codes.push(c);
+		w += cw;
+	}
+	if (codes.length === 0) return "";
+	return `BT /F1 ${num(size)} Tf ${rgb(color)} rg 1 0 0 -1 ${num(x)} ${num(baseline)} Tm ${winAnsiLiteral(codes)} Tj ET`;
+}
+
+/** v8 marker: dashed region, badge and glyph, as on the canvas (marker-render.ts). Above the ink. */
+function markerOps(m: MarkerElement): { ops: string; font: boolean } {
+	const out: string[] = ["q"];
+	const color = badgeColor(m);
+	const region = markerRegion(m);
+	if (region) out.push(`${rgb(color)} RG 1 w [3 2] 0 d ${num(region.x)} ${num(region.y)} ${num(region.width)} ${num(region.height)} re S [] 0 d`);
+	const s = MARKER_BADGE;
+	out.push(`${rgb(color)} rg 1 1 1 RG 0.8 w`);
+	out.push(badgeIsSquare(m) ? `${num(m.x)} ${num(m.y)} ${num(s)} ${num(s)} re B` : `${circleOps(m.x + s / 2, m.y + s / 2, s / 2)} B`);
+	const face = badgeFace(m);
+	let font = false;
+	if (face.kind === "star") out.push(`1 1 1 rg ${polyOps(starPoints(m.x + s / 2, m.y + s / 2 + 0.3, s * 0.36))} f`);
+	else if (face.kind === "check") out.push(`1 1 1 RG ${num(s * 0.13)} w 1 J 1 j ${polyOps(checkPoints(m.x, m.y, s), false)} S`);
+	else {
+		const size = glyphSize(face.text);
+		const width = toWinAnsi(face.text).reduce((a, c) => a + helveticaCodeWidth(c, size), 0);
+		const op = labelOps(face.text, m.x + (s - width) / 2, m.y + s / 2 + size * 0.36, size, s, "#ffffff");
+		if (op) {
+			out.push(op);
+			font = true;
+		}
+	}
+	out.push("Q");
+	return { ops: out.join("\n"), font };
+}
+
+/** v8 structured box: frame and label tab (under the ink). */
+function boxOps(b: BoxElement, label: string): string {
+	const color = BOX_COLORS[b.kind];
+	const w = boxLabelWidth(b, label);
+	const size = BOX_LABEL_HEIGHT * 0.62;
+	return [
+		"q",
+		`${rgb(color)} RG 1.2 w ${num(b.x)} ${num(b.y)} ${num(b.width)} ${num(b.height)} re S`,
+		`${rgb(color)} rg ${num(b.x)} ${num(b.y - BOX_LABEL_HEIGHT)} ${num(w)} ${num(BOX_LABEL_HEIGHT)} re f`,
+		labelOps(label, b.x + 4, b.y - BOX_LABEL_HEIGHT / 2 + size * 0.36, size, w - 8, "#ffffff"),
+		"Q",
+	].filter(Boolean).join("\n");
 }
 
 /**

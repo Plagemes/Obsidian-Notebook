@@ -4,7 +4,7 @@ import { clampCenter, fingerMenuCenter, pushRecentColor } from "../ink/radial";
 import type { MenuSource } from "../ink/pointer-controller";
 import type { ToolId } from "../ui/actions";
 import {
-	angleOf, arcAngles, bubbleDot, colourSlot, DIAL_RADIUS, DIAL_SIZE, formatWidth, nearestStep, paletteFor, PEN_CASE, polar, RING_RADIUS,
+	angleOf, arcAngles, bubbleDot, colourSlot, DIAL_RADIUS, DIAL_SIZE, formatWidth, MARKER_RING, nearestStep, paletteFor, PEN_CASE, polar, RING_RADIUS, ringAngles,
 	SLIDER_END, SLIDER_START, stepAtAngle, stepDotRadius, widthScale, type DialState,
 } from "../ui/radial-model";
 import type { FavouritePen } from "./favourites";
@@ -27,6 +27,8 @@ export interface RadialContext {
 	applyFavourite?(index: number): void;
 	saveFavourite?(index: number): void;
 	toggleRuler?(): void;
+	/** wave 0.8: arms a marker or a structured box (view/markers.ts); the next contact on a page places it. */
+	placeMarker?(kind: (typeof MARKER_RING)[number][0]): void;
 	/** Shows a short message (eyedropper hint). */
 	notify?(text: string): void;
 }
@@ -221,6 +223,7 @@ export class PenRadial {
 			case "tools": this.renderTools(layer, s, tool); break;
 			case "favourites": this.renderFavourites(layer); break;
 			case "shapes": this.renderShapes(layer, s); break;
+			case "markers": this.renderMarkers(layer); break;
 		}
 		if (animate) window.requestAnimationFrame(() => window.requestAnimationFrame(() => layer.removeClass("is-entering")));
 	}
@@ -395,7 +398,7 @@ export class PenRadial {
 	}
 
 	private renderShapes(layer: HTMLElement, s: ToolbarState): void {
-		const angles = arcAngles(SHAPES.length + (this.ctx.toggleRuler ? 1 : 0), -100, 100);
+		const angles = arcAngles(SHAPES.length + (this.ctx.toggleRuler ? 1 : 0) + (this.ctx.placeMarker ? 1 : 0), -100, 100);
 		SHAPES.forEach(([kind, icon, label], i) => {
 			const b = this.item(layer, `shape:${kind}`, t(label), ...this.at(angles[i]!, 96), 46, "is-round");
 			b.toggleClass("is-active", s.tool === "shape" && s.shapeKind === kind);
@@ -407,8 +410,23 @@ export class PenRadial {
 			r.setAttribute("aria-pressed", String(s.ruler));
 			setIcon(r, "ruler");
 		}
+		if (this.ctx.placeMarker) {
+			const m = this.item(layer, "markers", t("markers.radial"), ...this.at(angles[angles.length - 1]!, 96), 46, "is-round");
+			setIcon(m, "flag");
+		}
 		this.back(layer);
 		this.say(t("radial.shapes"));
+	}
+
+	/** wave 0.8: the marker kinds and the structured box, as their badges; a tap arms one and closes the dial. */
+	private renderMarkers(layer: HTMLElement): void {
+		const angles = ringAngles(MARKER_RING.length);
+		MARKER_RING.forEach(([kind, glyph], i) => {
+			const label = kind === "box" ? t("markers.menu.box") : t(`markers.place.${kind}`);
+			this.item(layer, `marker:${kind}`, label, ...this.at(angles[i]!, 96), 44, `is-round notebook-dial-marker is-${kind}`).setText(glyph);
+		});
+		this.back(layer);
+		this.say(t("markers.radial"));
 	}
 
 	private say(text: string): void {
@@ -553,7 +571,12 @@ export class PenRadial {
 			case "color":
 			case "tools":
 			case "shapes":
+			case "markers":
 				this.go(kind);
+				return;
+			case "marker":
+				this.ctx.placeMarker?.(arg as (typeof MARKER_RING)[number][0]);
+				this.close();
 				return;
 			case "favourites":
 				this.saveMode = false;

@@ -1,5 +1,7 @@
-import type { Page, TextElement } from "../model/types";
+import { BOX_LABEL_HEIGHT, MARKER_BADGE, markerRegion } from "../model/markers";
+import type { BoxElement, MarkerElement, Page, TextElement } from "../model/types";
 import type { BBox } from "./hit-test";
+import { BOX_COLORS, badgeColor, badgeFace, badgeIsSquare, boxLabelWidth, checkPoints, defaultBoxLabel, glyphSize, starPoints, type BoxLabel } from "./marker-render";
 import { PAPER_COLORS, paperPattern, type PaperLineKind } from "./paper";
 import { HIGHLIGHTER_ALPHA, strokeSvgPath } from "./stroke-shape";
 
@@ -40,6 +42,10 @@ export interface SvgPlacedImage {
 export interface SvgOptions {
 	paper?: boolean;
 	images?: (page: Page) => SvgPlacedImage[];
+	/** v8 invisible ink: draw the page's hidden strokes (default false: they are the solutions). */
+	hiddenInk?: boolean;
+	/** v8: label of a structured box (default: the English kind name and the title). */
+	boxLabel?: BoxLabel;
 }
 
 /** Line height of text elements as a multiple of the font size (same as the PDF export). */
@@ -90,6 +96,8 @@ export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 	}
 
 	for (const img of images) if (img.layer !== "background") out.push(imageTag(img));
+	const boxLabel = options.boxLabel ?? ((b: BoxElement) => defaultBoxLabel(b));
+	for (const el of page.elements ?? []) if (el.type === "box") out.push(boxTag(el, boxLabel(el)));
 	for (const el of page.elements ?? []) {
 		if (el.type === "text") {
 			const t = textTag(el);
@@ -98,6 +106,7 @@ export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 	}
 
 	for (const stroke of page.strokes) {
+		if (stroke.hidden && !options.hiddenInk) continue;
 		const d = strokeSvgPath(stroke);
 		if (!d) continue;
 		const fill = escapeAttr(stroke.color);
@@ -107,8 +116,44 @@ export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 				: `<path d="${d}" fill="${fill}"/>`,
 		);
 	}
+	for (const el of page.elements ?? []) if (el.type === "marker") out.push(markerTag(el));
 	out.push("</svg>");
 	return out.join("\n") + "\n";
+}
+
+const pointsAttr = (pts: ReadonlyArray<readonly [number, number]>): string => pts.map(([x, y]) => `${num(x)},${num(y)}`).join(" ");
+
+/** v8 marker: dashed region, badge and glyph, as on the canvas (marker-render.ts). Above the ink. */
+function markerTag(m: MarkerElement): string {
+	const color = escapeAttr(badgeColor(m));
+	const s = MARKER_BADGE;
+	const parts: string[] = [];
+	const region = markerRegion(m);
+	if (region) {
+		parts.push(`<rect x="${num(region.x)}" y="${num(region.y)}" width="${num(region.width)}" height="${num(region.height)}" fill="none" stroke="${color}" stroke-width="1" stroke-dasharray="3 2" stroke-opacity="0.75"/>`);
+	}
+	parts.push(badgeIsSquare(m)
+		? `<rect x="${num(m.x)}" y="${num(m.y)}" width="${num(s)}" height="${num(s)}" rx="${num(s * 0.22)}" fill="${color}" stroke="#ffffff" stroke-width="0.8"/>`
+		: `<circle cx="${num(m.x + s / 2)}" cy="${num(m.y + s / 2)}" r="${num(s / 2)}" fill="${color}" stroke="#ffffff" stroke-width="0.8"/>`);
+	const face = badgeFace(m);
+	if (face.kind === "star") parts.push(`<polygon points="${pointsAttr(starPoints(m.x + s / 2, m.y + s / 2 + 0.3, s * 0.36))}" fill="#ffffff"/>`);
+	else if (face.kind === "check") {
+		parts.push(`<polyline points="${pointsAttr(checkPoints(m.x, m.y, s))}" fill="none" stroke="#ffffff" stroke-width="${num(s * 0.13)}" stroke-linecap="round" stroke-linejoin="round"/>`);
+	} else {
+		const size = glyphSize(face.text);
+		parts.push(`<text x="${num(m.x + s / 2)}" y="${num(m.y + s / 2 + size * 0.36)}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="${num(size)}" fill="#ffffff">${escapeAttr(face.text)}</text>`);
+	}
+	return `<g>${parts.join("")}</g>`;
+}
+
+/** v8 structured box: frame and label tab (under the ink). */
+function boxTag(b: BoxElement, label: string): string {
+	const color = escapeAttr(BOX_COLORS[b.kind]);
+	const w = boxLabelWidth(b, label);
+	const size = BOX_LABEL_HEIGHT * 0.62;
+	return `<g><rect x="${num(b.x)}" y="${num(b.y)}" width="${num(b.width)}" height="${num(b.height)}" fill="none" stroke="${color}" stroke-width="1.2"/>`
+		+ `<rect x="${num(b.x)}" y="${num(b.y - BOX_LABEL_HEIGHT)}" width="${num(w)}" height="${num(BOX_LABEL_HEIGHT)}" fill="${color}"/>`
+		+ `<text x="${num(b.x + 4)}" y="${num(b.y - BOX_LABEL_HEIGHT / 2 + size * 0.36)}" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="${num(size)}" fill="#ffffff" textLength="${num(Math.max(1, w - 8))}" lengthAdjust="spacingAndGlyphs">${escapeAttr(stripInvalidXml(label))}</text></g>`;
 }
 
 function imageTag(img: SvgPlacedImage): string {
