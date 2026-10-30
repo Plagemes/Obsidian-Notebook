@@ -6,9 +6,9 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 
 | Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
 |---|---|---|---|---|---|
-| Operations on several selected pages (roadmap 378, wave 0.8): multi-select in the page navigator (select button, long press on touch, Ctrl/Shift+click, range, select all) and move (start, end, position, another notebook), duplicate, bookmark, tag, paper, size, PDF export, delete through the page trash; one undo step each | ✅ | ✅ `tests/page-ops.test.ts` (order planning, ranges, every command as one step with exact undo, never deleting every page); ❌ the panel, the menus, touch long press, the dialogs | | ✅ | long press on touch both starts a selection and arms the old drag-to-reorder: to be checked on the tablet (steps PO1-PO3) |
-| Do not disturb while writing (roadmap 374, wave 0.8): the plugin's own notices and non-urgent background work (thumbnails in the page panel and the library, library re-index, version-history snapshots, the timetable offer) wait while a pen is on the screen and for 1.5 s after | ✅ | ✅ `tests/writing-guard.test.ts` (timing, queue order, same-key replacement, lost pen, reset); ❌ real pen events, the notice wrapper in Obsidian | | ✅ | Obsidian's own notices (and other plugins') cannot be held back; `pointerType` `pen` only (a finger or mouse does not count); notices from the toolbar, stamps, selection actions and Zettelkasten are not routed yet (steps PO6-PO7) |
-| Stable page links (roadmap 388, wave 0.8): copy/insert link and embed, page suggestions, `obsidian://` links, companion note links, PDF annotation note links and the API write `#p3&id=<page id>`; opening and embeds resolve by id first; API `getPageLink`, `openNotebook(file, pageId)` | ✅ | ✅ `tests/stable-links.test.ts` (subpaths, protocol, ephemeral state, resolve, API page refs), `tests/page-links.test.ts`; ❌ following a link in Obsidian | | | recent pages and the quick switcher (roadmap 364, 365) are not in this branch: they must use `stablePageSubpath` (steps PO4-PO5) |
+| Operations on several selected pages (roadmap 378, wave 0.8): multi-select in the page navigator (select button, long press on touch, Ctrl/Shift+click, range, select all) and move (start, end, position, another notebook), duplicate, bookmark, tag, paper, size, PDF export, delete through the page trash; one undo step each | ✅ | ✅ `tests/page-ops.test.ts` (order planning, ranges, every command as one step with exact undo, never deleting every page); ❌ the panel, the menus, touch long press, the dialogs | | ✅ | long press on touch both starts a selection and arms the old drag-to-reorder: to be checked on the tablet (steps 200-202) |
+| Do not disturb while writing (roadmap 374, wave 0.8): the plugin's own notices and non-urgent background work (thumbnails in the page panel and the library, library re-index, version-history snapshots, the timetable offer) wait while a pen is on the screen and for 1.5 s after | ✅ | ✅ `tests/writing-guard.test.ts` (timing, queue order, same-key replacement, lost pen, reset); ❌ real pen events, the notice wrapper in Obsidian | | ✅ | Obsidian's own notices (and other plugins') cannot be held back; `pointerType` `pen` only (a finger or mouse does not count); notices from the toolbar, stamps, selection actions and Zettelkasten are not routed yet (steps 205-206) |
+| Stable page links (roadmap 388, wave 0.8): copy/insert link and embed, page suggestions, `obsidian://` links, companion note links, PDF annotation note links and the API write `#p3&id=<page id>`; opening and embeds resolve by id first; API `getPageLink`, `openNotebook(file, pageId)` | ✅ | ✅ `tests/stable-links.test.ts` (subpaths, protocol, ephemeral state, resolve, API page refs), `tests/page-links.test.ts`; ❌ following a link in Obsidian | | | recent pages and the quick switcher (roadmap 364, 365) are not in this branch: they must use `stablePageSubpath` (steps 203-204) |
 | Update links to notebook pages (wave 0.8): finds `#pN` links and id links in the notes, shows every change in a list first (nothing is written), pins old links to the page id, renumbers links whose page moved, follows an id to the one other notebook that has it, and lists what it leaves alone with the reason | ✅ | ✅ `tests/stable-links.test.ts` (scanning with offsets, code skipped, every plan case, applying from the end, stale text left alone); ❌ the command, the list and the writes in Obsidian | | ✅ | an old `#pN` link cannot be known to have been correct: it is tied to the page that has that number now, and the list says so |
 | Class timetable (roadmap 115): pure scheduling (current/next class, odd/even weeks, term dates, local time, overlaps), file parse/serialize round trip, target notebook choice | ✅ | ✅ `tests/timetable.test.ts` | | | |
 | Course page tag: a lecture page made with a course from the timetable (New lecture prefill, *Open the current class*) gets the course as a v7 page tag, in the same undo step | ✅ | ✅ `applyCourseTag` (normalisation, no duplicate, undo with `AddPage`); ❌ the two flows in Obsidian | | | |
@@ -240,23 +240,23 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Homework → Obsidian task in the companion note's generated region: `- [ ] what 📅 YYYY-MM-DD`, `- [x]` when done | ✅ | ✅ companion text | | | one way: a task ticked in the note is not read back into the notebook |
 | End of lecture panel (#223): questions, gaps, homework, importance markers and boxes of this lecture (pages from the last lecture header) or of the whole notebook; tap to jump, checkbox to resolve, *Edit* | ✅ | ✅ `collectMarkers`, `groupMarkers`, `lectureRange`, `SetMarkerDone`; ❌ the modal | | | |
 | Invisible ink (#100): pen mode whose strokes are stored with `hidden: true`; shown only while the mode is on or *Show solutions* (notebook or page, view-only, never saved); hidden ink is not erased, lassoed or exported (PDF, SVG) unless shown, and never in thumbnails or embeds | ✅ | ✅ visible strokes, area eraser skip, SVG/PDF with and without, thumbnails skip; ❌ toggles in the view | | | *Scribble to erase* can still remove hidden strokes it crosses (undo brings them back) |
-| Redo this exercise… (#303; page sheet, command): choose what to hide (all ink, some colours or tools, the lasso selection) in a practice copy that keeps the PDF/image background, margins, text boxes and pictures; right after the page or in an *Exercises* notebook (created when missing, name and choice remembered on the device); one undo step in the notebook it goes to | ✅ | ✅ `tests/practice.test.ts`: hide rules (colour, tool, ids, combined, normalisation), the copy (new ids, background and margins kept, tags, original untouched, format round trip, one-step undo with `AddPage`); ❌ dialog, menu, writing into an open / closed / new Exercises notebook (the writing follows *Move to notebook…*) | | | steps EX1-EX3, EX7; variants with different numbers (#182, #241) not built |
-| Practice link: page tags `practice` and `attempt/<n>` + sidecar `_meta/practice-<device>.json`, one per device, merged on read with the other devices' files and the old shared `_meta/practice.json` (practice page id ↔ original page id, notebook ids with a path hint, attempt number, date, what was hidden, seconds), written only by *Redo this exercise* and the timer's *Stop*; no notebook format change | ✅ | ✅ parse/serialise round trip and fixed line order, unknown entries kept, duplicate line, newer or foreign file refused, empty file refused, add / seconds / remove, queries and numbering, only this device's file written, other devices' files and the old shared file merged (seconds add up, removals stay removed, old file never written), no write when unchanged, unreadable or empty own file never overwritten (one copy kept), concurrent updates; ❌ adapter on a real vault, sync between devices | | | steps EX4, EX9, EX10; not tried with Obsidian Sync or another sync tool |
-| Practice strip over a practice page: attempt number, *Peek*, *Original*, *Attempts*, timer; commands *Go to the original exercise*, *Attempts of this exercise* (numbered, dated, with time), *Peek at the solution* (on / off), *Start or stop the practice timer* | ✅ | ✅ numbering, attempt list order, totals, durations and dates; ✅ harness scenario `practice`: strip shown on a copy only, peek draws the hidden ink and removes it on release; ❌ navigation across notebooks, timer, touch and pen | | ✅ | the hold uses pointer capture, which a WebView may not grant to every pointer; steps EX4-EX8 |
-| Peek at the solution: the original's hidden ink drawn over the practice page while *Peek* is held (live layer, view only), never saved or exported | ✅ | ✅ which strokes are shown; ✅ harness (see above) | | ✅ | step EX5 |
-| Timer per attempt: *Start* / *Stop* in the strip, time added to the attempt's record on *Stop* and when the view closes; runs while you look at other pages | ✅ | ✅ elapsed time, duration text, accumulation of seconds in the file; ❌ the strip | | | not saved if the plugin is unloaded while it runs; step EX8 |
+| Redo this exercise… (#303; page sheet, command): choose what to hide (all ink, some colours or tools, the lasso selection) in a practice copy that keeps the PDF/image background, margins, text boxes and pictures; right after the page or in an *Exercises* notebook (created when missing, name and choice remembered on the device); one undo step in the notebook it goes to | ✅ | ✅ `tests/practice.test.ts`: hide rules (colour, tool, ids, combined, normalisation), the copy (new ids, background and margins kept, tags, original untouched, format round trip, one-step undo with `AddPage`); ❌ dialog, menu, writing into an open / closed / new Exercises notebook (the writing follows *Move to notebook…*) | | | steps 215-217, 221; variants with different numbers (#182, #241) not built |
+| Practice link: page tags `practice` and `attempt/<n>` + sidecar `_meta/practice-<device>.json`, one per device, merged on read with the other devices' files and the old shared `_meta/practice.json` (practice page id ↔ original page id, notebook ids with a path hint, attempt number, date, what was hidden, seconds), written only by *Redo this exercise* and the timer's *Stop*; no notebook format change | ✅ | ✅ parse/serialise round trip and fixed line order, unknown entries kept, duplicate line, newer or foreign file refused, empty file refused, add / seconds / remove, queries and numbering, only this device's file written, other devices' files and the old shared file merged (seconds add up, removals stay removed, old file never written), no write when unchanged, unreadable or empty own file never overwritten (one copy kept), concurrent updates; ❌ adapter on a real vault, sync between devices | | | steps 218, 223, 224; not tried with Obsidian Sync or another sync tool |
+| Practice strip over a practice page: attempt number, *Peek*, *Original*, *Attempts*, timer; commands *Go to the original exercise*, *Attempts of this exercise* (numbered, dated, with time), *Peek at the solution* (on / off), *Start or stop the practice timer* | ✅ | ✅ numbering, attempt list order, totals, durations and dates; ✅ harness scenario `practice`: strip shown on a copy only, peek draws the hidden ink and removes it on release; ❌ navigation across notebooks, timer, touch and pen | | ✅ | the hold uses pointer capture, which a WebView may not grant to every pointer; steps 218-222 |
+| Peek at the solution: the original's hidden ink drawn over the practice page while *Peek* is held (live layer, view only), never saved or exported | ✅ | ✅ which strokes are shown; ✅ harness (see above) | | ✅ | step 219 |
+| Timer per attempt: *Start* / *Stop* in the strip, time added to the attempt's record on *Stop* and when the view closes; runs while you look at other pages | ✅ | ✅ elapsed time, duration text, accumulation of seconds in the file; ❌ the strip | | | not saved if the plugin is unloaded while it runs; step 222 |
 
 ## Automated checks
 
-Numbers from the final run of 0.7.0 (development PC).
+Numbers from the final run of 0.8.0 (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 1828 tests passed |
+| `npm test` (unit project only; benchmarks are separate) | 2110 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: 0 errors; `eslint-plugin-obsidianmd` recommended rules: 0 errors |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
-| `npm run harness:check` | 29 scenarios ok (headless Chrome on Windows; see "Browser harness") |
+| `npm run harness:check` | 31 scenarios ok (headless Chrome on Windows; see "Browser harness") |
 
 Added in 0.5.0 (PDF): format v6 (`tests/model-v6.test.ts`: v5→v6 migration, `margins` validation and round trip, future version, `SetPageMargins` / `SetPageSize` with margins / `SetPageBackground` with exact undo, ink kept relative to the PDF), re-published slide matching and the update plan (`tests/republish.test.ts`), pdf.js text boxes, text under a highlight and the annotation note (`tests/annotations.test.ts`).
 
@@ -544,33 +544,97 @@ Not verified in Obsidian or on a device. Needs two devices syncing the same vaul
 176. **Sync check.** Command *Check sync safety* (also in the settings). Create `Notebooks/What?.notebook` (on Windows, or with a file manager that allows it), a 15 MB PDF in a notebook, and two notebooks named `Notes` and `notes` (on a case-sensitive device). Expected: each is listed with a clear explanation; the dialog says whether other devices were seen in this folder and what cannot be checked. Restart Obsidian: a notice appears once; restart again with nothing changed: no notice.
 177. **Folder excluded.** Set the notebooks folder to `.obsidian/Notebooks` (or a hidden folder) in the settings and run the check. Expected: the first line explains that this folder is often not synced. Set it back.
 
-Results table for steps 1 to 177. Fill it in as you go.
-**Links written with the pen (O8).**
+### Markers, boxes and invisible ink (wave 0.8, steps 178-187)
 
-PL1. **Link in a text box.** With the text tool write `See [[` : a list of your notes opens under the box. Type a few letters: the list narrows (closest names first). Choose one with the arrow keys and Enter, then with a finger tap on another try. Expected: the text becomes `See [[Note]]`, the box keeps the focus, nothing was drawn on the page below. Finish typing and leave the box: `[[Note]]` is drawn in blue, underlined. Try `[[Note|label]]` and `[[Note#` (the headings of that note are listed). Escape closes the list without leaving the box.
-PL2. **Open a link.** Switch to the pen and tap the link with a finger. Expected: the note opens in a new tab (the notebook stays open). With a mouse, Ctrl/Cmd+click does the same and leaves no dot. With the text tool a tap edits the box instead. A tap next to the link does nothing.
-PL3. **Unresolved link.** Type `[[A note that does not exist]]`: it is drawn dimmed with a dashed underline. Tap it: a dialog offers *Create note*. Create it: the note is created where Obsidian puts new notes, opens, and after a moment the link in the notebook is drawn normally. Try a name with a folder (`[[Projects/New]]`) and a name with a colon (a notice says it cannot be used).
-PL4. **Ink link from the lasso.** Write a word. With the lasso circle it: the selection bar has *Link to a note…*. Tap it, search a note, choose it. Expected: a small label `[[Note]]` with a round badge appears just above the word, faintly tinted over the word; the word is unchanged. Tap the label and then the word itself with a finger: the note opens each time. Undo: the label disappears. Run the command *Link selection to a note…* with nothing selected: a notice says to circle ink first.
-PL5. **Ink link moves with its ink.** Lasso-select the label (or select ink and label together) and drag: the ink under the label moves with it when *Ink follows objects* is on. Delete the label: you are asked about the ink as for any object.
-PL6. **Handwritten brackets.** Write `[[` as two brackets with the S Pen. Expected: a *Link to a note…* chip appears under the brackets. Write a note name next to them: the chip stays (and moves under the whole line). Tap it, choose a note: the label is attached to the brackets and the name. Now write `l1`, `||`, `(( ))`, `[ ]`, `a[i]` and a few lines of ordinary text: no chip may appear. Write `[[` and ignore the chip: it disappears after about 10 seconds, when you write on the next line, when you scroll or undo. Note anything that was missed or wrongly offered, with your handwriting style (size, speed).
-PL7. **Companion note.** With *Companion notes* on, wait a few seconds after steps PL1-PL4: the companion note shows `[[Note]]` under the page heading (once for an ink link, without a column of empty lines), and the linked note shows the companion note in Backlinks and the graph. Rename the linked note: check what happens to the link in the notebook (it is not updated; the link becomes dimmed).
-PL8. **No interference.** With *Draw with finger* off, pan and pinch over a link: the tap opens only when the finger barely moves and lifts quickly. With *Draw with finger* on, tapping a link draws a dot and does not open it. While writing with the S Pen near a link nothing opens. Check that writing latency feels the same on a page full of links.
+Not verified on a device. Fill in the result table at the end of this file.
 
-Results table for steps 1 to 134 (PL1 to PL8 have their own rows after the last one). Fill it in as you go.
+178. **Place markers.** ⊞ *All actions* → Lecture → *Place marker: Question* (also on the lecture bar during a class, and on the radial dial: shapes ring → *Markers*), then tap on the page: a blue "?" badge appears, centred where you tapped. Do the same for *Important*, *Very important*, *Key point* and *To complete*, once with a tap and once dragging around some handwriting (a dashed frame shows the region). Use the commands from the command palette too. Undo removes each one, redo puts it back. Close and reopen: everything is there.
+179. **Tap a badge.** With the pen: tap the "?" badge: it turns green with a check (resolved); tap again: back to "?". Tap "!": it becomes "!!", then "★", then "!". Tap next to a badge: ink is written as usual. With the lasso: tap a badge to select it, move it, delete it; undo.
+180. **Gap with the slide.** Open a PDF side by side (*Open PDF side by side*), turn to slide 5, place *To complete*. *End of lecture* lists it with the time and "slide 5". On a page with a PDF background (no side pane) the slide is that page's PDF page.
+181. **Homework.** Place *Homework*: a dialog asks what to do and the due date (date picker). Save: a purple square badge shows the day of the month. Tap it: the dialog opens again; mark it done and save. With companion notes on, open the companion note: the generated region has `- [x] <what> 📅 <date>`; text you wrote outside the region is unchanged.
+182. **Structured boxes.** *Draw a structured box*, drag a frame around a formula, choose *Theorem*: a purple frame with a "Theorem" tab. Tap the tab: change the kind to *Definition* and add a title; save. The companion note gets `> [!definition] <title>` with a live embed of exactly that region (check it renders). A tap without dragging asks to drag.
+183. **End of lecture panel.** In a notebook with two *New lecture* pages and markers on both, open *End of lecture panel* on the second lecture: only its markers are listed; the *Whole notebook* toggle shows all. Tap a row: the panel closes and the page scrolls there. Tick a question: it is resolved on the page (and in the undo history). *Edit* changes the label.
+184. **Invisible ink.** *Toggle invisible ink*, write an answer: it shows while the mode is on. Turn the mode off: the answer disappears; the eraser and the lasso do not touch it. *Show solutions (notebook)*: it is back; *Show or hide the solutions of this page* works per page. Export the page as PDF and SVG with the solutions hidden (no answer) and shown (answer present). Library thumbnails and embeds never show it.
+185. **Sync and conflicts.** On two devices synced through Google Drive or OneDrive: resolve a question on device A and add a marker on device B before syncing; merge the conflicted copy: the question is resolved once (no duplicate badge) and the new marker is there.
+186. **Older plugin.** Open a notebook saved by this version with an older one (0.5.x / wave 0.6 build): it opens read-only (format v8) with a backup; nothing is rewritten.
+187. **Phone.** On a phone: the dialogs, the panel rows (checkbox, label, *Edit*) and the date picker are usable with a finger; badges can be tapped at 100 % zoom.
+
+### Pen gestures (wave 0.8, steps 188-199)
+
+Not verified on a device. Fill in the result table at the end of this file.
+
+188. **Nothing starts by itself.** With a clean settings file, write words, numbers, circles, arrows, a "#", a star and a "?" with the pen as normal ink. Expected: all of it stays ink; no label appears and nothing is selected, deleted or opened.
+189. **Gesture mode.** *Gesture mode* toggle (All actions sheet, or the command). Expected: a *Gesture mode* badge at the top. Draw a circle around some words: while you draw, a label *Select* appears beside the pen once the loop closes; lift: the words are selected and no line is left. A finger still pans and zooms. Leave the mode with the badge's cross or the menu.
+190. **Preview and cancel.** In the mode, draw a straight line outward and come back along it to the start, then lift. Expected: the label reads *Cancelled* and nothing changes. Draw a scribble over a word: the label says *Delete* before you lift; lift: the word is gone.
+191. **Delete and undo.** Scribble over a word, lift, press Undo once. Expected: the word is back and the scribble you drew is on the page as ink; Undo again removes the scribble ink.
+192. **Insert space.** Draw a "^" between two lines of writing. Expected: the lines below move down by the amount in the settings (default 48 pt); Undo restores them (and leaves the "^" as ink; Undo again removes it). On an empty part of the page: a notice says there is nothing to move.
+193. **Tags, bookmark, search.** Draw a "#" in one stroke: the page tags editor opens. Draw a five-pointed star in one stroke: the page is bookmarked (a notice); again: the bookmark is removed. Draw a "?": the search bar opens.
+194. **Move a selection.** Open the page panel, select some ink with the lasso (or the circle gesture), enter gesture mode and draw a line from the selection onto another page's thumbnail. Expected: the label says *Move to page N* before you lift; lifting moves the ink in place; Undo brings it back.
+195. **Side button.** Settings → *Pen side button* → *Pen gestures while held*. Hold the button and draw a circle around ink, then a scribble. Expected: gestures work only while the button is held; without it the pen writes. Report what the Pen button test shows for your pen.
+196. **Long press.** Settings → *Long press starts a gesture* on. Rest the pen on the page for about a second, then draw a circle. Expected: a short vibration, the dot disappears and the circle is a gesture. Write normally with pauses in the middle of words: nothing may turn into a gesture. Report false positives.
+197. **Custom gesture.** Settings → *Custom gestures* → *New custom gesture*: name it, choose a command (for example *Open daily note* or *Toggle pen gesture mode*), draw a "Z" three times on the pad. Then in gesture mode draw the "Z" on the page. Expected: its name appears beside the pen and lifting runs the command. Try recording a circle (refused: looks like a built-in gesture) and three different shapes (refused: too different).
+198. **Cheat sheet and switches.** Open the cheat sheet from the badge's question mark. Turn off *Insert space* and draw a "^": nothing happens, the label does not appear.
+199. **Defaults and writing.** After updating, *Pen side button* is still *Radial menu on click, erase while held*, *Long press starts a gesture* is off, and writing, shapes by holding still, scribble erase and the radial menu behave exactly as before.
+
+### Page operations, stable links, quiet while writing (wave 0.8, steps 200-206)
+
+Not verified on a device. Fill in the result table at the end of this file.
+
+200. **Select pages.** Open the page panel in a notebook with 10+ pages. Tap the select button (check-square). Tap three pages, then use *Select a range* and tap the last page of a run. Expected: ticks on the thumbnails, the count in the bar, *Select all pages shown* ticks the pages the filters show. On a touch screen: press and hold a thumbnail. Expected: it is selected and picked up like before; letting go without moving only selects it; with a selection active, press and hold another thumbnail adds the range. A quick swipe still scrolls the list. Escape or the X ends the selection.
+201. **Move and duplicate.** Select 3 non-adjacent pages, *Actions*, *Move to the start*, then undo (one step brings every page back). *Move to position…* with 5, *Move to the end*, *Duplicate* (copies appear after the last selected page), *Move to notebook…* (the usual dialog opens with these pages ticked; each notebook gets one undo step).
+202. **Paper, size, tags, bookmarks, export, delete.** On a selection: *Change paper…*, *Change size…* (each page keeps its orientation), *Add tags…*, *Remove tag #x*, *Bookmark* (and again to remove), *Export as PDF* (file name with `p3-5` or `selection`), *Delete…* (asks first; *Deleted pages…* shows the copies; undo restores the pages in place). Expected: one undo step each; selecting every page disables *Delete…*.
+203. **Copy link, insert link, embed.** Page menu → *Copy link to this page*, paste into a note: the link ends in `#p3&id=…`. Reorder the pages in the notebook and follow the link from the note. Expected: it opens the same page, not page 3. Insert an embed and check the same.
+204. **Other generated links.** Turn on companion notes: the *↗ Page* links of a companion note carry `&id=…` (the note is rewritten once). Export PDF annotations: the *Open page* links too. Type `[[Notebook.notebook#` in a note and pick a page: `p3&id=…` is written. Via the API: `await api.getPageLink("Notebooks/Physics", 3)`.
+205. **Update links.** In a note write `[[Physics.notebook#p3]]` (old style), reorder the notebook, run *Update links to notebook pages…*. Expected: a list (nothing changed yet) with the link and *tied to the page that has this number now*; untick it and apply: the note is unchanged; run again and apply: the link gets `&id=…`. A link whose page moved gets its number fixed; a link to a deleted page is listed under *Left as they are*.
+206. **Do not disturb.** Write with the pen continuously (the S Pen) and, meanwhile, trigger something that shows a notice (for example a PDF export from the page menu started just before, or *Copy link*). Expected: the notice does not appear while the pen is on the screen; it appears about 1.5 s after the last stroke. Page-panel thumbnails and the library cover thumbnails draw after you stop. Note anything that still interrupts (Obsidian's own notices cannot be held back).
+
+### Zettelkasten inbox (wave 0.8, steps 207-211)
+
+Not verified on a device. Fill in the result table at the end of this file.
+
+207. **Inbox of loose notes.** On the quick-notes sheet write three separate jots a few centimetres apart, and type one line in a text box. Run *Open the inbox*. Expected: every separate jot (and the typed line) is its own item showing its ink or text; writing that is close together is one item, not split. The list is empty when nothing is left to process.
+208. **Process.** Select an item and make a *permanent card*: the card dialog starts with a title taken from the text, the type and the typed text as the first content of the *Transcription* section. Create it: the item leaves the list and the next open item is selected. Repeat with *Link to a card* (search and pick one), *Discard* and *Skip*. Expected: nothing is deleted from the notebook; *Show processed* lists the processed items and one can be reopened. The command *Process the next inbox item* selects the first open item.
+209. **New writing.** Process a jot, then write more in the same block on the quick-notes sheet. Expected: it comes back among the open items.
+210. **PDF highlights.** In a notebook with PDF pages add a highlight and a comment on a page, then open the inbox. Expected: they are listed with the PDF and page as their source; making a *literature card* starts with the PDF source and the highlighted words as the first content of *Transcription*. A highlight on a PDF without a text layer has no text for the card.
+211. **Two devices.** Process an item on device A, wait for the sync, open the inbox on B: the item is processed there too; process another one on B. Expected: `Notebooks/_meta/inbox-<device>.json` exists once per device and no conflicted copies appear. Cut one of the files in a text editor and process an item on that device: a notice says the file cannot be read, a copy is kept and the file is not overwritten.
+
+### Textbook references (wave 0.8, steps 212-214)
+
+Not verified on a device. Fill in the result table at the end of this file.
+
+212. **Set up.** Command *Set textbook for this notebook…*: choose a PDF of the vault, the scope (this notebook, its folder, all notebooks), a page offset (for example 10) and a name. Expected: `Notebooks/_meta/textbooks-<device>.json` appears; *Remove a textbook…* takes it away again.
+213. **Slides open.** In a text box type "p. 134", "pag. 134", "p134", "pp. 134-136" and "page 7". Expected: each is underlined; the text is unchanged. Tap one with a PDF pane open beside the notes: the textbook opens at that page (printed page plus the offset) in the pane. With the pane showing other slides, a tap opens Obsidian's PDF viewer instead; a long press or right click offers both and the other textbooks. While the text tool is active the underline is hidden.
+214. **Insert and writing.** Run *Insert textbook reference* after writing with the pen: "p. N" is typed at the last pen position as one undo step. Run *Open textbook at a page…* and type a page. Write next to and over a reference with the S Pen: ink is written as usual (a stroke cannot start exactly on the reference), with no extra latency.
+
+### Redo the exercise (practice copies, #303; wave 0.8, steps 215-224)
+
 Redo the exercise (practice copies, roadmap #303; wave 0.9). Setup: a notebook with a PDF page (any exercise sheet) and a plain page, each with a few strokes in black pen, red pen and the highlighter, plus one text box.
 
-EX1. **Redo, hide everything.** On the PDF page open the page sheet (tap the page indicator) > *Redo this exercise…* (or the command *Redo this exercise*). The dialog says "attempt 1" and, with *All my ink*, how many strokes will be hidden (all of them). *Right after this page* > *Create practice page*: a new page appears right after the original, scrolled to, with the same PDF background, margins and text box and none of the strokes; a notice says attempt 1. The original is untouched. *Undo* removes the new page in one step; *Redo* brings it back.
-EX2. **Hide by colour and by tool.** Redo the same page again, choose *Only some colours or tools*, tick red: the summary counts only the red strokes; confirm. The copy keeps the black ink and the highlighter and loses the red. Another time tick *Highlighter* only, then red and *Pen* together (a stroke must match both). With nothing ticked the button is disabled.
-EX3. **Hide the selection.** With the lasso select a few strokes (e.g. the working but not the statement notes), open *Redo this exercise…*: the choice *Only the selection (n strokes)* is there; confirm. Only those strokes are missing in the copy. Without a selection that choice is not offered.
-EX4. **The strip and the tags.** On a copy a strip shows "Practice, attempt n" with *Peek*, *Original*, *Attempts* and *Start*. *Page tags…* of the copy lists `practice` and `attempt/n` next to the tags of the original; the Pages panel filter by tag `practice` shows the copies. The strip is not shown on the original or on other pages and is not part of exports.
-EX5. **Peek at the solution.** Press and hold *Peek* with a finger and with the pen: the original's hidden ink appears over the practice page (also the highlighter); let go (also by sliding off the button) and it is gone at once. Close and reopen the notebook: nothing of the peek is saved; export the page to PDF: the hidden ink is not in it. The command *Peek at the solution* switches the overlay on and off.
-EX6. **Original and attempts.** *Original* scrolls to the original page. Redo again from the copy: the new copy is attempt 2 and starts from the original sheet (not from your first attempt's ink). *Attempts* (also on the original and as the command) lists the original and the attempts, each numbered and dated; tapping one goes to it. A copy deleted meanwhile says the page cannot be found.
-EX7. **Exercises notebook.** In the dialog choose *In the exercises notebook* and confirm: a notebook called *Exercises* is created in the notebooks folder with the copy as its only page, and it opens on it. Redo another page the same way with *Exercises* closed, then open: the page was added at the end (a `before-move` copy is in `_backup`). With *Exercises* open in another tab the page appears there as one undo step and the file is saved. Change the name in the dialog to use another notebook. *Original* from there opens the source notebook at the page.
-EX8. **Timer.** On a copy tap *Start*: the button counts up in seconds. Switch to the original and back: it kept running. Tap *Stop*: a notice shows the time and the button shows the total; the *Attempts* list shows it next to the attempt. Start again and close the notebook tab: reopen, the time was added. Check that this device's `_meta/practice-<device>.json` changes only on redo and on stop (an old `_meta/practice.json` is never changed).
-EX9. **Links survive renames, moves and sync.** Rename the notebook and move it to another folder inside the notebooks folder: *Original* and *Attempts* still work. With a synced vault, make an attempt on two devices before they sync: after syncing both attempts are in the list (the numbers may repeat). Move the copy to another notebook (*Move to notebook…*): it keeps its tags but loses the link (strip says "Not linked to an original").
-EX10. **Damaged links file and read-only.** Cut this device's `_meta/practice-<device>.json` in half (or empty it): *Redo this exercise…* says the file cannot be read, makes no copy and does not touch the file (a `practice.unreadable-…` copy appears next to it). With a notebook that is read-only (a file from a newer version) the page sheet shows the entry disabled and the command says the notebook cannot be edited: no copy is made.
+215. **Redo, hide everything.** On the PDF page open the page sheet (tap the page indicator) > *Redo this exercise…* (or the command *Redo this exercise*). The dialog says "attempt 1" and, with *All my ink*, how many strokes will be hidden (all of them). *Right after this page* > *Create practice page*: a new page appears right after the original, scrolled to, with the same PDF background, margins and text box and none of the strokes; a notice says attempt 1. The original is untouched. *Undo* removes the new page in one step; *Redo* brings it back.
+216. **Hide by colour and by tool.** Redo the same page again, choose *Only some colours or tools*, tick red: the summary counts only the red strokes; confirm. The copy keeps the black ink and the highlighter and loses the red. Another time tick *Highlighter* only, then red and *Pen* together (a stroke must match both). With nothing ticked the button is disabled.
+217. **Hide the selection.** With the lasso select a few strokes (e.g. the working but not the statement notes), open *Redo this exercise…*: the choice *Only the selection (n strokes)* is there; confirm. Only those strokes are missing in the copy. Without a selection that choice is not offered.
+218. **The strip and the tags.** On a copy a strip shows "Practice, attempt n" with *Peek*, *Original*, *Attempts* and *Start*. *Page tags…* of the copy lists `practice` and `attempt/n` next to the tags of the original; the Pages panel filter by tag `practice` shows the copies. The strip is not shown on the original or on other pages and is not part of exports.
+219. **Peek at the solution.** Press and hold *Peek* with a finger and with the pen: the original's hidden ink appears over the practice page (also the highlighter); let go (also by sliding off the button) and it is gone at once. Close and reopen the notebook: nothing of the peek is saved; export the page to PDF: the hidden ink is not in it. The command *Peek at the solution* switches the overlay on and off.
+220. **Original and attempts.** *Original* scrolls to the original page. Redo again from the copy: the new copy is attempt 2 and starts from the original sheet (not from your first attempt's ink). *Attempts* (also on the original and as the command) lists the original and the attempts, each numbered and dated; tapping one goes to it. A copy deleted meanwhile says the page cannot be found.
+221. **Exercises notebook.** In the dialog choose *In the exercises notebook* and confirm: a notebook called *Exercises* is created in the notebooks folder with the copy as its only page, and it opens on it. Redo another page the same way with *Exercises* closed, then open: the page was added at the end (a `before-move` copy is in `_backup`). With *Exercises* open in another tab the page appears there as one undo step and the file is saved. Change the name in the dialog to use another notebook. *Original* from there opens the source notebook at the page.
+222. **Timer.** On a copy tap *Start*: the button counts up in seconds. Switch to the original and back: it kept running. Tap *Stop*: a notice shows the time and the button shows the total; the *Attempts* list shows it next to the attempt. Start again and close the notebook tab: reopen, the time was added. Check that this device's `_meta/practice-<device>.json` changes only on redo and on stop (an old `_meta/practice.json` is never changed).
+223. **Links survive renames, moves and sync.** Rename the notebook and move it to another folder inside the notebooks folder: *Original* and *Attempts* still work. With a synced vault, make an attempt on two devices before they sync: after syncing both attempts are in the list (the numbers may repeat). Move the copy to another notebook (*Move to notebook…*): it keeps its tags but loses the link (strip says "Not linked to an original").
+224. **Damaged links file and read-only.** Cut this device's `_meta/practice-<device>.json` in half (or empty it): *Redo this exercise…* says the file cannot be read, makes no copy and does not touch the file (a `practice.unreadable-…` copy appears next to it). With a notebook that is read-only (a file from a newer version) the page sheet shows the entry disabled and the command says the notebook cannot be edited: no copy is made.
 
-Results table for steps 1 to 134. Fill it in as you go.
+### Links written with the pen (O8; wave 0.8, steps 225-232)
+
+Not verified on a device. Fill in the result table at the end of this file.
+
+225. **Link in a text box.** With the text tool write `See [[` : a list of your notes opens under the box. Type a few letters: the list narrows (closest names first). Choose one with the arrow keys and Enter, then with a finger tap on another try. Expected: the text becomes `See [[Note]]`, the box keeps the focus, nothing was drawn on the page below. Finish typing and leave the box: `[[Note]]` is drawn in blue, underlined. Try `[[Note|label]]` and `[[Note#` (the headings of that note are listed). Escape closes the list without leaving the box.
+226. **Open a link.** Switch to the pen and tap the link with a finger. Expected: the note opens in a new tab (the notebook stays open). With a mouse, Ctrl/Cmd+click does the same and leaves no dot. With the text tool a tap edits the box instead. A tap next to the link does nothing.
+227. **Unresolved link.** Type `[[A note that does not exist]]`: it is drawn dimmed with a dashed underline. Tap it: a dialog offers *Create note*. Create it: the note is created where Obsidian puts new notes, opens, and after a moment the link in the notebook is drawn normally. Try a name with a folder (`[[Projects/New]]`) and a name with a colon (a notice says it cannot be used).
+228. **Ink link from the lasso.** Write a word. With the lasso circle it: the selection bar has *Link to a note…*. Tap it, search a note, choose it. Expected: a small label `[[Note]]` with a round badge appears just above the word, faintly tinted over the word; the word is unchanged. Tap the label and then the word itself with a finger: the note opens each time. Undo: the label disappears. Run the command *Link selection to a note…* with nothing selected: a notice says to circle ink first.
+229. **Ink link moves with its ink.** Lasso-select the label (or select ink and label together) and drag: the ink under the label moves with it when *Ink follows objects* is on. Delete the label: you are asked about the ink as for any object.
+230. **Handwritten brackets.** Write `[[` as two brackets with the S Pen. Expected: a *Link to a note…* chip appears under the brackets. Write a note name next to them: the chip stays (and moves under the whole line). Tap it, choose a note: the label is attached to the brackets and the name. Now write `l1`, `||`, `(( ))`, `[ ]`, `a[i]` and a few lines of ordinary text: no chip may appear. Write `[[` and ignore the chip: it disappears after about 10 seconds, when you write on the next line, when you scroll or undo. Note anything that was missed or wrongly offered, with your handwriting style (size, speed).
+231. **Companion note.** With *Companion notes* on, wait a few seconds after steps 225-228: the companion note shows `[[Note]]` under the page heading (once for an ink link, without a column of empty lines), and the linked note shows the companion note in Backlinks and the graph. Rename the linked note: check what happens to the link in the notebook (it is not updated; the link becomes dimmed).
+232. **No interference.** With *Draw with finger* off, pan and pinch over a link: the tap opens only when the finger barely moves and lifts quickly. With *Draw with finger* on, tapping a link draws a dot and does not open it. While writing with the S Pen near a link nothing opens. Check that writing latency feels the same on a page full of links.
+
+Results table for steps 1 to 232. Fill it in as you go.
 
 | Step | Device / Obsidian version | Result | Notes |
 |---|---|---|---|
@@ -751,336 +815,67 @@ Results table for steps 1 to 134. Fill it in as you go.
 | 175 Not downloaded yet | | | |
 | 176 Sync check | | | |
 | 177 Folder excluded | | | |
-| PL1 Link in a text box | | | |
-| PL2 Open a link | | | |
-| PL3 Unresolved link | | | |
-| PL4 Ink link from the lasso | | | |
-| PL5 Ink link moves with its ink | | | |
-| PL6 Handwritten brackets | | | |
-| PL7 Companion note | | | |
-| PL8 No interference | | | |
-| EX1 Redo, hide everything | | | |
-| EX2 Hide by colour and by tool | | | |
-| EX3 Hide the selection | | | |
-| EX4 The strip and the tags | | | |
-| EX5 Peek at the solution | | | |
-| EX6 Original and attempts | | | |
-| EX7 Exercises notebook | | | |
-| EX8 Timer | | | |
-| EX9 Links survive renames, moves and sync | | | |
-| EX10 Damaged links file and read-only | | | |
-| T1 Timetable editor: add two classes (one on odd weeks, one with a term and a room, one linked to a course folder), save, reopen: values are kept; `Notebooks/_timetable.json` exists and is readable | | | |
-| T2 Open Obsidian (or the library) during a class: notice with *Open lecture page*; tap it: the course's notebook opens with a new page headed "<course> — <date>"; do it again: the existing page is shown, no second page | | | |
-| T3 Turn on *Open it without asking*, restart during a class: the notebook opens on the new lecture page by itself; turn it off and the notice returns (once per class and day) | | | |
-| T4 During a class, *New lecture* in a linked notebook has the course filled in; in an unrelated linked notebook it shows the notebook name | | | |
-| T5 Library shows *Now: <course>* during a class (also a few minutes before, per the lead setting) and nothing outside classes; tapping it opens the lecture page | | | |
-| T6 Edit `_timetable.json` by hand (also from another device through sync), including a deliberate mistake: a good edit is picked up; a bad file is reported in the editor and is not overwritten | | | |
-| S1 Open side by side (tablet sideways) | | | |
-| S2 Phone and tablet upright | | | |
-| S3 Add a notes page for a slide | | | |
-| S4 Follow both ways | | | |
-| S5 Link and unlink | | | |
-| S6 Links survive restarts and renames | | | |
-| S7 Notebook with PDF backgrounds as the PDF side | | | |
-| S8 Damaged links file | | | |
-
-### Lecture pack (wave 0.6)
-
-K1. **Lecture from slides, slide + notes right.** Library → *New lecture from slides* (or the command). Choose a slides PDF from the vault, then from the device. In the dialog leave the course as proposed, set today, header *Header page before the slides*, layout *Slide with notes on the right*, notes paper *Ruled*. Expected: the notebook "<course> <date>" appears in the folder and opens; page 1 is the header page ("Course — date"); the next pages show one slide each in the left part with ruled lines to its right; the slide is not stretched; writing in the notes area and on the slide works and stays where it was written after reopening.
-K2. **Notes below.** Same with *Slide with notes below* and header *Header text on the first page*: the text sits below the first slide; no header page. Rotate the tablet: pages refit.
-K3. **On the slide.** Layout *On the slide*, header *No header*: the pages are the slides at their own size, as with *Import PDF*.
-K4. **Notes page after every slide.** Turn on *Notes page after every slide* with paper *Millimetre* (also combined with a notes layout): after each slide page there is a blank millimetre page of the same size. Count the pages: twice the slides (plus the header page).
-K5. **Insert PDF with layout.** In an existing notebook, page menu → *Insert PDF*, choose a PDF and a range: a layout dialog follows (the last choice is proposed; Enter confirms). Pick a layout with notes and notes pages: the pages are inserted after the current page; one undo removes all of them; the PDF is not copied again if it was already imported (check the assets folder).
-K6. **Cancel.** Cancel at each dialog (file choice, setup, range, layout): nothing is created or inserted, and cancelling the setup dialog of a new lecture leaves no PDF in the assets folder.
-K8. **Exercise page here.** On a slide page with a notes area, tap … in the toolbar → *Exercise page here* (also page menu and the command): a blank grid page as large as the whole slide page appears right after it and is shown; one undo removes it. *Exercise page paper…* (page menu) changes the paper to millimetre: the next exercise page uses it, also after restarting Obsidian.
-K7. **Large deck on the tablet.** Import a deck of 60+ slides with notes on the right: the progress message appears and the notebook opens; scrolling and zoom stay smooth.
-
-| Step | Device / Obsidian version | Result | Notes |
-|---|---|---|---|
-| K1 Slide + notes right | | | |
-| K2 Notes below, header text | | | |
-| K3 On the slide | | | |
-| K4 Notes page after every slide | | | |
-| K5 Insert PDF with layout | | | |
-| K6 Cancel | | | |
-| K7 Large deck | | | |
-| K8 Exercise page here | | | |
-| G1 Finger taps | | | |
-| G2 Scribble to erase | | | |
-| G3 Auto-scroll | | | |
-| G4 Side button: lasso | | | |
-| G5 Side button: previous tool | | | |
-| G6 Defaults | | | |
-| L1 Library trash: move to trash | | | |
-| L2 Library trash: restore (original place, free name) | | | |
-| L3 Delete permanently and empty trash | | | |
-| L4 Trash auto-empty | | | |
-| L5 Trash is invisible to library, search, companion notes, conflicts | | | |
-| L6 Trash through sync | | | |
-| L7 Deleted pages: list and restore | | | |
-| L8 Save page as template | | | |
-| L9 New page from template | | | |
-| L10 New notebook from template | | | |
-
-### Library trash, page trash and templates (wave 0.6)
-
-L1. **Move to trash.** In the library, delete a notebook (card menu) and a non-empty folder. Expected: a confirmation that says it can be restored; both disappear from the library and from search; the notebook tab, if open, closes; in the file explorer they are under `Notebooks/_trash/items/<id>/` with a `meta.json`.
-L2. **Restore.** Library sidebar → *Trash*. Restore the notebook: it returns to its folder and opens with all pages and ink. Create a new notebook with the same name, trash the first one again and restore it: expected the name `<name> 2`. Restore the folder: its notebooks are back inside it.
-L3. **Delete permanently and empty.** In *Trash*, *Delete permanently* on one item: a confirmation first, then it is gone (or in the system trash, per Obsidian's *Deleted files* setting). *Empty trash*: confirmation, then everything goes. Cancel both once and check nothing was deleted.
-L4. **Auto-empty.** Setting *Empty the trash automatically* = 1 day, trash a notebook, set the device clock two days ahead (or change `deletedAt` in `meta.json` to an old time), restart Obsidian. Expected: the item is removed; with the setting at 0 nothing is ever removed.
-L5. **Trash is invisible.** With companion notes on, trash a notebook: no companion note is created inside `_trash`; the existing note stays. Trashed notebooks do not appear in *Open notebooks*, search, or *Move to notebook*. A copy named `Name (1)` made by Google Drive inside `_trash` produces no merge notice.
-L6. **Sync.** Trash a notebook on one device, let Google Drive / OneDrive sync, open the library on the other device. Expected: the notebook is gone from the library there and listed in *Trash*; restore on that device works.
-L7. **Deleted pages.** Delete a page from the page menu, fully close Obsidian and reopen the notebook. Page menu → *Deleted pages...*: the page is listed with a thumbnail. *Restore*: it comes back after the page that preceded it; *Undo* removes it again and it is listed again. Delete a page that has a PDF background or an image and restore it: the background shows.
-L8. **Save as template.** On a page with ink, text and a ruled A5 paper choose *Save page as template...*, name it. Expected: a notice, and a `.notebook` file in the templates folder (default `Notebooks/_templates/`).
-L9. **Page from template.** Page menu → *New page from template...*: the gallery shows the built-in templates and yours with thumbnails; *Use* adds a page after the current one with the same content, paper and size; one *Undo* removes it. Do it twice: both pages are independent.
-L10. **Notebook from template.** *New notebook* dialog → *Template* → *Choose...* → pick one → *Create*. Expected: the notebook opens with the template's pages. *Clear* goes back to the paper and size choices. Delete one of your templates from the gallery: it disappears and the file goes to the Obsidian trash.
-
-| O1 Ink follows an image | | | |
-| O2 Ink follows a text box | | | |
-| O3 Setting off | | | |
-| O4 Delete an object with ink | | | |
-| O5 Undo before taking the offer | | | |
-| O6 Built-in stamps | | | |
-| O7 Save a stamp | | | |
-| O8 Stamp with image and text | | | |
-| O9 Rename and delete a stamp | | | |
-| O10 Palette on a phone and with a finger | | | |
-| A1 Shared tags | | | |
-| A2 Tags and the companion note you edit | | | |
-| A3 Tag editor hint | | | |
-| A4 API: create, pages, info | | | |
-| A5 API: images and PDF | | | |
-| A6 API: errors and safety | | | |
-| Z1 Cards | | | |
-| Z2 Slip-box | | | |
-| Z3 Drawn links | | | |
-| Z11 Title and transcription | | | |
-| Z12 Regions and container | | | |
-| ZP1 Inbox of loose notes | | | |
-| ZP2 Process | | | |
-| ZP3 New writing | | | |
-| ZP4 PDF highlights | | | |
-| ZP5 Two devices | | | |
-| TB1 Set up | | | |
-| TB2 Slides open | | | |
-| TB3 Insert and writing | | | |
-| R1 Search the PDF text | | | |
-| R2 Search on a big PDF | | | |
-| R3 Snapping highlighter | | | |
-| R4 Hide annotations | | | |
-| R5 Dim background | | | |
-| V1 Outline and coloured bookmarks | | | |
-| V2 Page tags | | | |
-| V3 Last position across devices | | | |
-| V4 New papers | | | |
-| M1 Place markers | | | |
-| M2 Tap a badge | | | |
-| M3 Gap with the slide | | | |
-| M4 Homework | | | |
-| M5 Structured boxes | | | |
-| M6 End of lecture panel | | | |
-| M7 Invisible ink | | | |
-| M8 Sync and conflicts | | | |
-| M9 Older plugin | | | |
-| M10 Phone | | | |
-| PO1 Select pages | | | |
-| PO2 Move and duplicate | | | |
-| PO3 Paper, size, tags, bookmarks, export, delete | | | |
-| PO4 Copy link, insert link, embed | | | |
-| PO5 Other generated links | | | |
-| PO6 Update links | | | |
-| PO7 Do not disturb | | | |
-| X1 Safe mode after a crash | | | |
-| X2 Open normally | | | |
-| X3 Two failures | | | |
-| X4 Not a failure | | | |
-| X5 Storage full | | | |
-| X6 Storage full while closing | | | |
-| X7 Rolled back by sync | | | |
-| X8 No false alarm | | | |
-| X9 Check notebooks integrity | | | |
-| Q1 Page switcher: search | | | |
-| Q2 Page switcher: thumbnails | | | |
-| Q3 Recent pages: log | | | |
-| Q4 Recent pages: library | | | |
-| Q5 Go to page number | | | |
-| Q6 Page indicator tap | | | |
-
-### Resilience (wave 0.7: safe mode, storage full, integrity)
-
-Not verified on a device. Fill in the result table at the end of this file.
-
-X1. **Safe mode after a crash.** Open a big notebook and, while it is still opening (before the page shows), kill Obsidian from the recent apps (or force-stop it in the Android settings). Open the same notebook again. Expected: the *Safe mode* banner; the page panel has no thumbnails; writing works (without low-latency ink); PDF or image backgrounds appear a moment after the ink. No companion note is written while it is open.
-X2. **Open normally.** In the safe-mode banner tap *Open normally*. Expected: the notebook reopens without the banner, with thumbnails; close and reopen it: still normal.
-X3. **Two failures.** Repeat X1 twice in a row (kill during the normal open, then kill during the safe open). Expected: the banner says it failed twice and *Repair…* is highlighted; *Repair…* opens the integrity report of this notebook with *Open* and *Restore a version…*.
-X4. **Not a failure.** Open a notebook and switch to another app at once, or close the tab right away; reopen it. Expected: no safe mode.
-X5. **Storage full.** Fill the device storage (large video or a big file copied until the system says the storage is full), then write a few strokes. Expected: within a few seconds the red *Not saved* banner says the storage is full; the strokes stay on the page; the next attempt time moves further out (5 s, 10 s, 20 s… up to a minute). Free some space and tap *Retry now* (or wait). Expected: the banner goes, a notice says saving works again; close and reopen: all strokes are there and the file opens normally (not damaged).
-X6. **Storage full while closing.** As X5 but close the notebook tab while the banner is shown, free space, reopen. Report what was kept (the strokes may be in the journal or an `unsaved` backup) and whether any file in `Notebooks/` became unreadable.
-X7. **Rolled back by sync.** On device A write in a notebook, wait for the sync, close it. Write more on A, sync. With the sync app's version history (Google Drive / OneDrive web *Manage versions*), put the older version back; let it reach A and open the notebook there. Expected: the *Unexpected change on disk* banner with the two dates, *Restore a version…* and *Keep this version*. Repeat with the notebook open on A (not editing): the banner also offers *Restore the newer version*, which brings the newer strokes back as one undo step; a backup `… integrity ….bak` exists in `Notebooks/_backup/`.
-X8. **No false alarm.** Edit the notebook on device B (also with B's clock a few minutes behind), and change tags or the favourite from the library on B with the notebook closed. Open it on A. Expected: no banner, in every case. Restore a snapshot with *Restore a previous version* on A: no banner.
-X9. **Check notebooks integrity.** Run the command. Expected: a progress line, then a summary; a notebook made unreadable on purpose (truncate a copy of a `.notebook` file in a text editor) is listed with *Repair…*; deleting a PDF from `Notebooks/_assets/` lists *The file of … is missing* for the notebooks using it.
+| 178 Place markers | | | |
+| 179 Tap a badge | | | |
+| 180 Gap with the slide | | | |
+| 181 Homework | | | |
+| 182 Structured boxes | | | |
+| 183 End of lecture panel | | | |
+| 184 Invisible ink | | | |
+| 185 Sync and conflicts | | | |
+| 186 Older plugin | | | |
+| 187 Phone | | | |
+| 188 Nothing starts by itself | | | |
+| 189 Gesture mode | | | |
+| 190 Preview and cancel | | | |
+| 191 Delete and undo | | | |
+| 192 Insert space | | | |
+| 193 Tags, bookmark, search | | | |
+| 194 Move a selection | | | |
+| 195 Side button | | | |
+| 196 Long press | | | |
+| 197 Custom gesture | | | |
+| 198 Cheat sheet and switches | | | |
+| 199 Defaults and writing | | | |
+| 200 Select pages | | | |
+| 201 Move and duplicate | | | |
+| 202 Paper, size, tags, bookmarks, export, delete | | | |
+| 203 Copy link, insert link, embed | | | |
+| 204 Other generated links | | | |
+| 205 Update links | | | |
+| 206 Do not disturb | | | |
+| 207 Inbox of loose notes | | | |
+| 208 Process | | | |
+| 209 New writing | | | |
+| 210 PDF highlights | | | |
+| 211 Two devices | | | |
+| 212 Set up | | | |
+| 213 Slides open | | | |
+| 214 Insert and writing | | | |
+| 215 Redo, hide everything | | | |
+| 216 Hide by colour and by tool | | | |
+| 217 Hide the selection | | | |
+| 218 The strip and the tags | | | |
+| 219 Peek at the solution | | | |
+| 220 Original and attempts | | | |
+| 221 Exercises notebook | | | |
+| 222 Timer | | | |
+| 223 Links survive renames, moves and sync | | | |
+| 224 Damaged links file and read-only | | | |
+| 225 Link in a text box | | | |
+| 226 Open a link | | | |
+| 227 Unresolved link | | | |
+| 228 Ink link from the lasso | | | |
+| 229 Ink link moves with its ink | | | |
+| 230 Handwritten brackets | | | |
+| 231 Companion note | | | |
+| 232 No interference | | | |
 
 Benchmark output (step 21): paste it here.
 
 ```
 (paste results)
 ```
-
-### Objects wave 0.6 (ink on objects, stamps)
-
-Not verified on a device. Fill in the result table at the end of this file.
-
-- **O1. Ink follows an image.** Insert an image, write a few words over it with the pen, switch to the lasso and tap the image (or lasso it). Drag it, then scale it with the bottom-right handle and rotate it with the top handle. Expected: the words move, scale and rotate with the picture and stay on it; one undo step puts everything back. Words written next to the image stay where they were.
-- **O2. Ink follows a text box.** Same with a text box (text boxes move and scale but do not rotate). Expected: ink written over the text moves with it.
-- **O3. Setting off.** Turn off *Ink follows objects* in the settings and move the image again. Expected: only the image moves; the ink stays.
-- **O4. Delete an object with ink.** Select an image that has ink on it and delete it. Expected: a notice says how many strokes were written on it, with *Delete the ink too*. Ignore it: the ink stays. Repeat and tap the button: the ink goes, and one undo brings it back; a second undo brings the image back.
-- **O5. Undo before taking the offer.** Delete an image with ink, press undo, then tap *Delete the ink too* in the notice. Expected: nothing happens (the image is back).
-- **O6. Built-in stamps.** More menu → *Stamps*. Tap *Checkmark*: a checkmark appears in the middle of the page in the current pen colour and width and is selected; move it. Drag *Star* onto another place. Expected: it lands where the finger or pen was lifted. Undo removes it.
-- **O7. Save a stamp.** Write a small signature, select it with the lasso, open *Stamps* and tap the save button, name it. Expected: it appears under *My stamps*; the file `Notebooks/_stamps/<name>.stamp` exists. Tap it on another page and in another notebook.
-- **O8. Stamp with an image and text.** Select an image and a text box together, save as a stamp, delete the originals, place the stamp. Expected: both come back; the image uses the same file in `_assets/` (no copy).
-- **O9. Rename and delete a stamp.** Use the pencil and trash buttons on a stamp. Expected: the name changes in the palette and the file; delete asks first and moves the file to the trash; notebooks that used the stamp are unchanged.
-- **O10. Palette on a phone and with a finger.** Open the palette on a narrow screen. Expected: it fits, the list scrolls vertically, a sideways drag from a tile onto the page places the stamp. Report whether a vertical or diagonal drag scrolls the list instead of dragging.
-
-### Page operations, stable links, do not disturb (wave 0.8)
-
-Not verified on a device. Fill in the result table at the end of this file.
-
-- **PO1. Select pages.** Open the page panel in a notebook with 10+ pages. Tap the select button (check-square). Tap three pages, then use *Select a range* and tap the last page of a run. Expected: ticks on the thumbnails, the count in the bar, *Select all pages shown* ticks the pages the filters show. On a touch screen: press and hold a thumbnail. Expected: it is selected and picked up like before; letting go without moving only selects it; with a selection active, press and hold another thumbnail adds the range. A quick swipe still scrolls the list. Escape or the X ends the selection.
-- **PO2. Move and duplicate.** Select 3 non-adjacent pages, *Actions*, *Move to the start*, then undo (one step brings every page back). *Move to position…* with 5, *Move to the end*, *Duplicate* (copies appear after the last selected page), *Move to notebook…* (the usual dialog opens with these pages ticked; each notebook gets one undo step).
-- **PO3. Paper, size, tags, bookmarks, export, delete.** On a selection: *Change paper…*, *Change size…* (each page keeps its orientation), *Add tags…*, *Remove tag #x*, *Bookmark* (and again to remove), *Export as PDF* (file name with `p3-5` or `selection`), *Delete…* (asks first; *Deleted pages…* shows the copies; undo restores the pages in place). Expected: one undo step each; selecting every page disables *Delete…*.
-- **PO4. Copy link, insert link, embed.** Page menu → *Copy link to this page*, paste into a note: the link ends in `#p3&id=…`. Reorder the pages in the notebook and follow the link from the note. Expected: it opens the same page, not page 3. Insert an embed and check the same.
-- **PO5. Other generated links.** Turn on companion notes: the *↗ Page* links of a companion note carry `&id=…` (the note is rewritten once). Export PDF annotations: the *Open page* links too. Type `[[Notebook.notebook#` in a note and pick a page: `p3&id=…` is written. Via the API: `await api.getPageLink("Notebooks/Physics", 3)`.
-- **PO6. Update links.** In a note write `[[Physics.notebook#p3]]` (old style), reorder the notebook, run *Update links to notebook pages…*. Expected: a list (nothing changed yet) with the link and *tied to the page that has this number now*; untick it and apply: the note is unchanged; run again and apply: the link gets `&id=…`. A link whose page moved gets its number fixed; a link to a deleted page is listed under *Left as they are*.
-- **PO7. Do not disturb.** Write with the pen continuously (the S Pen) and, meanwhile, trigger something that shows a notice (for example a PDF export from the page menu started just before, or *Copy link*). Expected: the notice does not appear while the pen is on the screen; it appears about 1.5 s after the last stroke. Page-panel thumbnails and the library cover thumbnails draw after you stop. Note anything that still interrupts (Obsidian's own notices cannot be held back).
-### Pen gestures (wave 0.8)
-
-Not verified on a device. Fill in the result table below.
-
-- **PG1. Nothing starts by itself.** With a clean settings file, write words, numbers, circles, arrows, a "#", a star and a "?" with the pen as normal ink. Expected: all of it stays ink; no label appears and nothing is selected, deleted or opened.
-- **PG2. Gesture mode.** *Gesture mode* toggle (All actions sheet, or the command). Expected: a *Gesture mode* badge at the top. Draw a circle around some words: while you draw, a label *Select* appears beside the pen once the loop closes; lift: the words are selected and no line is left. A finger still pans and zooms. Leave the mode with the badge's cross or the menu.
-- **PG3. Preview and cancel.** In the mode, draw a straight line outward and come back along it to the start, then lift. Expected: the label reads *Cancelled* and nothing changes. Draw a scribble over a word: the label says *Delete* before you lift; lift: the word is gone.
-- **PG4. Delete and undo.** Scribble over a word, lift, press Undo once. Expected: the word is back and the scribble you drew is on the page as ink; Undo again removes the scribble ink.
-- **PG5. Insert space.** Draw a "^" between two lines of writing. Expected: the lines below move down by the amount in the settings (default 48 pt); Undo restores them (and leaves the "^" as ink; Undo again removes it). On an empty part of the page: a notice says there is nothing to move.
-- **PG6. Tags, bookmark, search.** Draw a "#" in one stroke: the page tags editor opens. Draw a five-pointed star in one stroke: the page is bookmarked (a notice); again: the bookmark is removed. Draw a "?": the search bar opens.
-- **PG7. Move a selection.** Open the page panel, select some ink with the lasso (or the circle gesture), enter gesture mode and draw a line from the selection onto another page's thumbnail. Expected: the label says *Move to page N* before you lift; lifting moves the ink in place; Undo brings it back.
-- **PG8. Side button.** Settings → *Pen side button* → *Pen gestures while held*. Hold the button and draw a circle around ink, then a scribble. Expected: gestures work only while the button is held; without it the pen writes. Report what the Pen button test shows for your pen.
-- **PG9. Long press.** Settings → *Long press starts a gesture* on. Rest the pen on the page for about a second, then draw a circle. Expected: a short vibration, the dot disappears and the circle is a gesture. Write normally with pauses in the middle of words: nothing may turn into a gesture. Report false positives.
-- **PG10. Custom gesture.** Settings → *Custom gestures* → *New custom gesture*: name it, choose a command (for example *Open daily note* or *Toggle pen gesture mode*), draw a "Z" three times on the pad. Then in gesture mode draw the "Z" on the page. Expected: its name appears beside the pen and lifting runs the command. Try recording a circle (refused: looks like a built-in gesture) and three different shapes (refused: too different).
-- **PG11. Cheat sheet and switches.** Open the cheat sheet from the badge's question mark. Turn off *Insert space* and draw a "^": nothing happens, the label does not appear.
-- **PG12. Defaults and writing.** After updating, *Pen side button* is still *Radial menu on click, erase while held*, *Long press starts a gesture* is off, and writing, shapes by holding still, scribble erase and the radial menu behave exactly as before.
-
-| Step | Works (yes/no) | Device / pen | Notes |
-|---|---|---|---|
-| PG1 | | | |
-| PG2 | | | |
-| PG3 | | | |
-| PG4 | | | |
-| PG5 | | | |
-| PG6 | | | |
-| PG7 | | | |
-| PG8 | | | |
-| PG9 | | | |
-| PG10 | | | |
-| PG11 | | | |
-| PG12 | | | |
-### Interface redesign (ui redesign)
-
-Not verified on a device. Fill in the table after the steps.
-
-- **U1. Toolbar on the tablet.** Open a notebook on the tablet in portrait, then landscape. Expected: portrait has two rows (tools; undo/redo, current pen, favourites, 4-5 quick actions, page "1 / n", save dot, ⊞); landscape has one row with up to six quick actions. Nothing is cut off; every button reacts to the S Pen and to a finger.
-- **U2. Quick actions learn.** Use *Fit to width* from the ⊞ sheet five times. Expected: after a while it appears among the quick actions; *Recent* in the sheet lists the actions you use. Close and reopen Obsidian: the order is kept (local to the device).
-- **U3. All actions sheet.** Tap ⊞. Expected: a sheet grouped in sections (Insert, Page, …) with a search field; typing "stamp" or "timbro" (Italian UI) finds *Stamps*; the keyboard does not pop up by itself. *Ruler* toggles with a switch and the sheet stays open; *Insert image* closes it. A tap on the page closes the sheet and draws nothing. On a phone it is a bottom sheet within thumb reach.
-- **U4. Page sheet.** Tap the page indicator "2 / 5". Expected: the first section *Go to* (*Go to page number…*, *Recently edited pages*, *One page at a time*), then *Page 2* actions (duplicate, move, bookmark, tags, paper and size chips, turn, infinite, …, delete). Tap *Dotted*: the page changes at once and one undo restores it. Open the pages panel and use a thumbnail's menu: the same sheet opens for that page.
-- **U5. Selection bar.** Select ink with the lasso. Expected: a pill at the bottom with *Selection*, copy, cut, duplicate, paste, save as stamp, delete, and the colour/width rows above it; with an image selected also *Make white transparent*. The chevron collapses it to one round button, which opens it again. With the lasso and nothing selected only *Paste* is offered.
-- **U6. PDF page and side by side.** Scroll to a PDF page. Expected: the bar shows *PDF page* with search, hide annotations, dim, margins and *Open PDF side by side*; on a plain page it disappears. Open a PDF side by side: the bar shows link, add notes page, show slide and close.
-- **U7. Class now.** With a class of the timetable on now, open a notebook. Expected: the bar shows *Class now* with new lecture, board shot and exercise page.
-- **U8. Radial dial.** Press the S Pen button over the page. Expected: a dark dial at the nib with the pen drawn in the middle, undo/redo at the top, the width dot on the left and the colour on the right, and favourites · tool · shapes at the bottom. Releasing the button over undo undoes (flick); nothing is drawn while it is open; Escape or a tap outside closes it.
-- **U9. Dial colours and width.** Tap the colour bubble: 12 colours around the ring; pick one (the dial goes back, the pen uses it). Tap the rainbow button: the system colour picker opens. Tap the pipette and then a coloured stroke on the page: the pen takes that colour and nothing is drawn. Tap the width bubble and drag along the arc: the number and the dots follow; the pen writes with the new width.
-- **U10. Pen case and favourites.** Tap the pen in the middle: the tools drawn as pens with a stroke preview; tap the highlighter (the dial closes, the highlighter is active). Open it again, tap "+": the six favourites pulse; tap one to save the current pen there; the toolbar strip shows it.
-- **U12. Go to and banners.** Tap the page indicator, then *Go to page number…*, type `p3`: page 3 opens. Toggle *One page at a time* from the same sheet: pages turn with a swipe and the toggle shows a switch. Open a very large page: the heavy-page banner offers *Split page*; dismiss it and the page sheet still offers *Split page*. *Check sync safety* and *Check notebooks integrity* are in the ⊞ sheet under *Notebooks*.
-- **U11. Themes and accessibility.** Switch Obsidian to the dark theme and to a community theme. Expected: bars, sheets and panels follow the theme colours; the dial stays dark and readable; a black pen dot stays visible on a dark bar. With *Reduce motion* on in Android, nothing animates.
-
-| Step | Device / Obsidian version | Result | Notes |
-|---|---|---|---|
-| U1 Toolbar on the tablet | | | |
-| U2 Quick actions learn | | | |
-| U3 All actions sheet | | | |
-| U4 Page sheet | | | |
-| U5 Selection bar | | | |
-| U6 PDF page and side by side | | | |
-| U7 Class now | | | |
-| U8 Radial dial | | | |
-| U9 Dial colours and width | | | |
-| U10 Pen case and favourites | | | |
-| U11 Themes and accessibility | | | |
-| U12 Go to and banners | | | |
-
-### Level of detail and heavy pages (wave 0.7)
-
-Not verified on a device. Use **Create stress-test notebook** (10,000 strokes, 10 pages) for D1-D3.
-
-- **D1. Zoomed out looks the same.** Open the stress notebook, fit the width, then pinch out until the page is below half of its width on screen. Expected: the handwriting looks the same as before (no jagged or thinner strokes, no strokes missing); pinch back in: the strokes are as smooth as at the start.
-- **D2. Scrolling and zooming out is smooth.** In the same notebook scroll quickly through all pages at about 30 % zoom, and pinch in and out. Expected: no stutter that was not there before; note it as faster, same or slower than 0.5.x if you remember.
-- **D3. Thumbnails.** Open the page panel and the library. Expected: thumbnails of dense pages look right and appear at least as quickly as before.
-- **D4. Warning appears.** Open the stress notebook and make a page heavy (the stress notebook has about 1,000 strokes per page: duplicate a page 3 times and paste its content into one page, or open a notebook with more than 3,000 strokes on one page). Expected: after a moment a bar at the bottom says the page is very large, with *Split page* and *Dismiss*; it does not appear while the pen is writing and does not cover the toolbar.
-- **D5. Split page.** Press *Split page*. Expected: a notice, a new page right after this one with the lower half of the writing (same x positions, starting near the top of the page), the upper half still on this page; undo once puts everything back on one page.
-- **D6. Dismiss.** Press *Dismiss*. Expected: the bar goes away and does not come back for that page until you close the notebook tab; other heavy pages still warn. On a page that shows a PDF the bar has only *Dismiss*.
-
-| Step | Device / Obsidian version | Result | Notes |
-|---|---|---|---|
-| D1 Zoomed out looks the same | | | |
-| D2 Scrolling and zooming out | | | |
-| D3 Thumbnails | | | |
-| D4 Warning appears | | | |
-| D5 Split page | | | |
-| D6 Dismiss | | | |
-### Quick navigation (wave 0.7)
-
-Not verified on a device. Commands: *Go to page…*, *Recently edited pages*, *Go to page number…*.
-
-- **Q1. Page switcher: search.** Have two notebooks, one with a titled bookmark, one with a page tag and a text box. Run *Go to page…* and type: part of a notebook name; `name 3`; `p3`; the bookmark title; the tag; a word from the text box. Expected: each result opens the right notebook at the right page; a page number beyond the notebook is not offered.
-- **Q2. Page switcher: thumbnails.** With many notebooks (including a PDF one) type a common letter. Expected: the list appears at once, thumbnails fill in one after another without freezing typing; closing the dialog stops them.
-- **Q3. Recent pages: log.** Write on page 4 of a notebook, wait 5 seconds, then run *Recently edited pages*. Expected: that page is first, "Edited just now". Only scroll/open another notebook: nothing new is logged.
-- **Q4. Recent pages: library.** Open the library, tap *Recent pages* in the sidebar. Expected: the same list. Rename the notebook, reopen the list: the entry follows the new name; delete it: the entry disappears.
-- **Q5. Go to page number.** In an open notebook run *Go to page number…*, type `7`, then `p7`, then the start of a bookmark title. Expected: each scrolls to the page; `999` offers nothing.
-- **Q6. Page indicator tap.** Tap the "3 / 12" indicator in the toolbar. Expected: the same dialog opens.
-- **Q7. Recent pages after reordering.** Edit page 5, move it to position 2, open it from the list. Expected: the page that was edited opens (found by id).
-- **Q8. Not synced.** Check that no new file appeared in the vault or the plugin folder because of the recent pages (the log is in device-local storage only).
-### Sync safety (wave 0.7)
-
-Not verified in Obsidian or on a device. Needs two devices syncing the same vault through Google Drive or OneDrive (for example Autosync or FolderSync on Android) unless said otherwise.
-
-- **Y1. Open on another device.** Open a notebook on device A, wait for the sync app to upload `Notebooks/_meta/presence/`, sync device B and open the same notebook there. Expected: a banner above the page on B names device A and how long ago it was active, with *Open read-only* and *Open anyway*; the page can be used meanwhile. On A, nothing changes (or, if B's file arrives while A is open, the banner appears on A too).
-- **Y2. Read-only.** On B tap *Open read-only*. Expected: the toolbar is disabled, the pen does not write, nothing is saved (the file's modification time does not change); *Edit anyway* enables editing again. *Open anyway* instead only hides the banner.
-- **Y3. Heartbeat stops in the background and the file goes on close.** On A, put Obsidian in the background for 5 minutes, then check (file manager or the other device) that the presence file's time did not change; bring it back: it is refreshed at once. Close the notebook on A: the file disappears (and, after syncing, from B). Kill Obsidian on A with a notebook open, restart it: its own leftover file is removed at startup. No `(1)` or conflict copy of any file in `_meta` appears on either device.
-- **Y4. Device name.** *Settings, Device name*: change it on A, reopen the notebook on A. Expected on B (after syncing): the banner shows the new name. The name is not in the plugin's `data.json`.
-- **Y5. Asset waiting for sync.** On A, insert an image and import a PDF into a notebook; on B, let the sync app download the notebook but not `_assets` (pause it, or delete the asset file on B only). Open the notebook on B. Expected: a dashed "Waiting for sync…" card where the image is, "Waiting for sync: <name>" on the PDF page, no error notice, and the page can still be written on. Resume syncing: the image and PDF appear by themselves without reopening.
-- **Y6. Not downloaded yet.** Make a notebook file 0 bytes on B (an online-only file of the sync app, or create an empty `Test.notebook` with a file manager). Expected: the library card says *Not downloaded yet*; opening it shows *Not downloaded yet* (no *Repair…* button), the status says *Not downloaded*; the command *Repair damaged notebook* says it is not damaged; no `.bak` is created in `_backup`. Then put the real content in the file (let the sync app download it, or copy a notebook over it): it opens by itself within a few seconds, in the library too.
-- **Y7. Sync check.** Command *Check sync safety* (also in the settings). Create `Notebooks/What?.notebook` (on Windows, or with a file manager that allows it), a 15 MB PDF in a notebook, and two notebooks named `Notes` and `notes` (on a case-sensitive device). Expected: each is listed with a clear explanation; the dialog says whether other devices were seen in this folder and what cannot be checked. Restart Obsidian: a notice appears once; restart again with nothing changed: no notice.
-- **Y8. Folder excluded.** Set the notebooks folder to `.obsidian/Notebooks` (or a hidden folder) in the settings and run the check. Expected: the first line explains that this folder is often not synced. Set it back.
-
-| Step | Device | Result | Notes |
-|---|---|---|---|
-| Y1 Open on another device | | | |
-| Y2 Read-only | | | |
-| Y3 Heartbeat, close, leftovers | | | |
-| Y4 Device name | | | |
-| Y5 Asset waiting for sync | | | |
-| Y6 Not downloaded yet | | | |
-| Y7 Sync check | | | |
-| Y8 Folder excluded | | | |
-### Markers, boxes and invisible ink (wave 0.8)
-
-M1. **Place markers.** ⊞ *All actions* → Lecture → *Place marker: Question* (also on the lecture bar during a class, and on the radial dial: shapes ring → *Markers*), then tap on the page: a blue "?" badge appears, centred where you tapped. Do the same for *Important*, *Very important*, *Key point* and *To complete*, once with a tap and once dragging around some handwriting (a dashed frame shows the region). Use the commands from the command palette too. Undo removes each one, redo puts it back. Close and reopen: everything is there.
-M2. **Tap a badge.** With the pen: tap the "?" badge: it turns green with a check (resolved); tap again: back to "?". Tap "!": it becomes "!!", then "★", then "!". Tap next to a badge: ink is written as usual. With the lasso: tap a badge to select it, move it, delete it; undo.
-M3. **Gap with the slide.** Open a PDF side by side (*Open PDF side by side*), turn to slide 5, place *To complete*. *End of lecture* lists it with the time and "slide 5". On a page with a PDF background (no side pane) the slide is that page's PDF page.
-M4. **Homework.** Place *Homework*: a dialog asks what to do and the due date (date picker). Save: a purple square badge shows the day of the month. Tap it: the dialog opens again; mark it done and save. With companion notes on, open the companion note: the generated region has `- [x] <what> 📅 <date>`; text you wrote outside the region is unchanged.
-M5. **Structured boxes.** *Draw a structured box*, drag a frame around a formula, choose *Theorem*: a purple frame with a "Theorem" tab. Tap the tab: change the kind to *Definition* and add a title; save. The companion note gets `> [!definition] <title>` with a live embed of exactly that region (check it renders). A tap without dragging asks to drag.
-M6. **End of lecture panel.** In a notebook with two *New lecture* pages and markers on both, open *End of lecture panel* on the second lecture: only its markers are listed; the *Whole notebook* toggle shows all. Tap a row: the panel closes and the page scrolls there. Tick a question: it is resolved on the page (and in the undo history). *Edit* changes the label.
-M7. **Invisible ink.** *Toggle invisible ink*, write an answer: it shows while the mode is on. Turn the mode off: the answer disappears; the eraser and the lasso do not touch it. *Show solutions (notebook)*: it is back; *Show or hide the solutions of this page* works per page. Export the page as PDF and SVG with the solutions hidden (no answer) and shown (answer present). Library thumbnails and embeds never show it.
-M8. **Sync and conflicts.** On two devices synced through Google Drive or OneDrive: resolve a question on device A and add a marker on device B before syncing; merge the conflicted copy: the question is resolved once (no duplicate badge) and the new marker is there.
-M9. **Older plugin.** Open a notebook saved by this version with an older one (0.5.x / wave 0.6 build): it opens read-only (format v8) with a backup; nothing is rewritten.
-M10. **Phone.** On a phone: the dialogs, the panel rows (checkbox, label, *Edit*) and the date picker are usable with a finger; badges can be tapped at 100 % zoom.
 
 ## Quick check — Windows
 
