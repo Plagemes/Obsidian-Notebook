@@ -35,6 +35,9 @@ Not yet verified on Android hardware or in Obsidian. The manual steps for these 
 - The radial dial's custom colour button opens the new picker instead of the system colour dialog, and its eyedropper uses the new page eyedropper (which now also ends on Escape or a tap on the toolbar instead of swallowing it).
 - Dragging, scaling or rotating a selection with the handles now goes through the same pure routine as the new operations (`applyPlacement`); the result and the undo step are the same.
 
+### Fixed
+- **Selection tools** (review fixes). A rotated picture resized to a non-uniform size no longer comes out hugely distorted (its own axes are stretched, not the page's). *Rotate 90°* no longer turns a graph's frame under its plot or turns ink written on text boxes, equations and graphs: those move their centre and keep their orientation, and their ink moves with them. Ink bound to a graph (`<graph id>~…`) now stays with its graph in align, distribute, mirror and rotate even with *Ink follows objects* off. A change the document refuses (read-only lock, size guard) no longer leaves a selection on copies that are not in the notebook. *Select same colour* works from a selection of text boxes alone, and says so when nothing matches. *Exact size* tells you when the size was limited or text boxes kept their proportions.
+
 ## 0.9.0 — 2026-10-30
 
 Not yet verified on Android hardware, or in Obsidian with its maths engine (the browser harness uses a stand-in for MathJax). The manual steps added in this version are numbered 233 to 274 in `docs/testing.md`; the ones that belong to each area are named below.

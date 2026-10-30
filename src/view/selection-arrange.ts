@@ -3,7 +3,7 @@ import { t } from "../i18n";
 import { alignItems, alignPlacement, distributePlacement, type AlignMode, type DistributeAxis } from "../ink/align";
 import { measureText } from "../ink/renderer";
 import {
-	applyPlacement, inkOwnership, itemsBounds, mirrorKeepsOrientation, mirrorPlacement, NO_OWNERSHIP, rotate90Matrix, sizeMatrix, uniformPlacement,
+	applyPlacement, inkOwnership, itemsBounds, mirrorKeepsOrientation, mirrorPlacement, rotatePlacement, sizeMatrix, uniformPlacement,
 	type InkOwnership, type MirrorAxis, type Placement,
 } from "../ink/selection-transform";
 import { selectByStyle, selectSimilar, styleCatalog, type StyleChoice } from "../ink/select-similar";
@@ -24,7 +24,7 @@ export interface ArrangeHost {
 	/** Selects exactly these items of the page (switching to the lasso). */
 	select(pageIndex: number, strokes: Stroke[], elements: PageElement[]): void;
 	/** Runs the command as one undo step and refreshes everything that depends on the document. */
-	execute(cmd: Command): void;
+	execute(cmd: Command): boolean;
 	/** The ink of the page the reader can see (hidden ink only while the solutions are shown): the same set the lasso picks from. */
 	ink(page: Page): readonly Stroke[];
 	/** Setting "Ink follows objects": ink written on a picture or a text box is arranged with it. */
@@ -75,18 +75,22 @@ export class SelectionArrange {
 	}
 
 	private ownership(page: Page, strokes: readonly Stroke[], elements: readonly PageElement[]): InkOwnership {
-		return this.host.inkFollowsObjects() ? inkOwnership(page, strokes, elements, measureText) : NO_OWNERSHIP;
+		// Ink bound to a selected graph stays with it whatever the setting says (inkOwnership).
+		return inkOwnership(page, strokes, elements, measureText, this.host.inkFollowsObjects());
 	}
 
-	/** Runs a placement as one undo step and keeps the selection on the moved objects. Returns false when nothing changed. */
-	private run(cur: Current, placement: Placement | null, label: string): boolean {
-		if (!placement) return false;
+	/**
+	 * Runs a placement as one undo step and keeps the selection on the moved objects. "none": nothing would change; "refused":
+	 * the document did not accept the command (read-only lock, size guard), so nothing changed and nothing is selected.
+	 */
+	private run(cur: Current, placement: Placement | null, label: string): "done" | "none" | "refused" {
+		if (!placement) return "none";
 		const plan = applyPlacement(cur.page, cur.strokes, cur.elements, placement, measureText, label);
-		if (!plan) return false;
+		if (!plan) return "none";
 		this.host.commitText();
-		this.host.execute(plan.command);
+		if (!this.host.execute(plan.command)) return "refused";
 		this.host.select(cur.sel.pageIndex, plan.strokes, plan.elements);
-		return true;
+		return "done";
 	}
 
 	// --- align and distribute (38) ---
@@ -99,7 +103,7 @@ export class SelectionArrange {
 			showNotice(t("arrange.needTwo"));
 			return;
 		}
-		if (!this.run(cur, alignPlacement(items, mode), "Align selection")) showNotice(t("arrange.nothing"));
+		if (this.run(cur, alignPlacement(items, mode), "Align selection") === "none") showNotice(t("arrange.nothing"));
 	}
 
 	distribute(axis: DistributeAxis): void {
@@ -110,7 +114,7 @@ export class SelectionArrange {
 			showNotice(t("arrange.needThree"));
 			return;
 		}
-		if (!this.run(cur, distributePlacement(items, axis), "Distribute selection")) showNotice(t("arrange.nothing"));
+		if (this.run(cur, distributePlacement(items, axis), "Distribute selection") === "none") showNotice(t("arrange.nothing"));
 	}
 
 	// --- rotate, mirror, size (65) ---
@@ -119,8 +123,8 @@ export class SelectionArrange {
 		const cur = this.current();
 		const bounds = cur && itemsBounds(cur.strokes, cur.elements, measureText);
 		if (!cur || !bounds) return;
-		const followers = this.ownership(cur.page, cur.strokes, cur.elements).followers;
-		this.run(cur, uniformPlacement(cur.strokes, cur.elements, followers, rotate90Matrix(bounds, clockwise)), "Rotate selection");
+		const own = this.ownership(cur.page, cur.strokes, cur.elements);
+		this.run(cur, rotatePlacement(cur.strokes, cur.elements, bounds, clockwise, own, measureText), "Rotate selection");
 	}
 
 	mirror(axis: MirrorAxis): void {
@@ -128,10 +132,9 @@ export class SelectionArrange {
 		const bounds = cur && itemsBounds(cur.strokes, cur.elements, measureText);
 		if (!cur || !bounds) return;
 		const own = this.ownership(cur.page, cur.strokes, cur.elements);
-		if (!this.run(cur, mirrorPlacement(cur.strokes, cur.elements, bounds, axis, own, measureText), "Mirror selection")) {
-			showNotice(t("transform.nothing"));
-			return;
-		}
+		const done = this.run(cur, mirrorPlacement(cur.strokes, cur.elements, bounds, axis, own, measureText), "Mirror selection");
+		if (done === "none") showNotice(t("transform.nothing"));
+		if (done !== "done") return;
 		if (cur.elements.some(mirrorKeepsOrientation)) showNotice(t("transform.mirrorNote"));
 	}
 
@@ -154,7 +157,19 @@ export class SelectionArrange {
 			return;
 		}
 		const followers = this.ownership(cur.page, cur.strokes, cur.elements).followers;
-		if (!this.run(cur, uniformPlacement(cur.strokes, cur.elements, followers, m), "Resize selection")) showNotice(t("transform.nothing"));
+		const done = this.run(cur, uniformPlacement(cur.strokes, cur.elements, followers, m), "Resize selection");
+		if (done === "none") showNotice(t("transform.nothing"));
+		if (done !== "done") return;
+		// The size is limited (smallest and largest factor, 20 000 pt) and text boxes and equations keep their proportions:
+		// say so when what the selection has now is not what was typed.
+		const now = this.host.selection();
+		const after = now && itemsBounds(now.strokes, now.elements, measureText);
+		if (after) {
+			const w = after.maxX - after.minX, h = after.maxY - after.minY;
+			if (Math.abs(w - size.width) > 0.5 || Math.abs(h - size.height) > 0.5) {
+				showNotice(t("resize.limited", { w: String(Math.round(w * 100) / 100), h: String(Math.round(h * 100) / 100) }));
+			}
+		}
 	}
 
 	// --- select similar and select by colour or tool (64) ---
@@ -188,7 +203,11 @@ export class SelectionArrange {
 		}
 		const onPage = new Set(at.page.strokes);
 		const seed = { strokes: sel.strokes.filter((s) => onPage.has(s)), elements: sel.elements };
-		if (seed.strokes.length === 0) return;
+		// A colour also works from a selection of text boxes alone; a tool needs ink.
+		if (seed.strokes.length === 0 && (by === "tool" || seed.elements.length === 0)) {
+			showNotice(t("select.nothingSimilar"));
+			return;
+		}
 		this.show(at.pageIndex, selectSimilar(this.host.ink(at.page), at.page.elements ?? [], seed, by));
 	}
 

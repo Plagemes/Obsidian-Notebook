@@ -1,12 +1,12 @@
 import { Batch, ReplaceElement, ReplaceStroke, type Command } from "../model/history";
 import { freezeStroke } from "../model/serialize";
 import type { Page, PageElement, Stroke } from "../model/types";
-import { attachedInk, inkOwner } from "./attach";
+import { attachedInk, boundGraphId, inkOwner } from "./attach";
 import { elementBounds, transformElement, type MeasureText } from "./elements";
 import { strokeBounds, type BBox } from "./hit-test";
 import { transformStroke } from "./lasso";
 import { estimateMeasure } from "./text-layout";
-import { IDENTITY, isIdentity, multiply, scaleAbout, translate, type Matrix } from "./transform";
+import { apply, IDENTITY, isIdentity, multiply, scaleAbout, translate, type Matrix } from "./transform";
 
 /**
  * Exact transformations of a selection (roadmap 38, 65): align and distribute, rotate by 90 degrees, mirror, exact size.
@@ -98,10 +98,15 @@ export const NO_OWNERSHIP: InkOwnership = { owner: new Map(), followers: [] };
 
 export function inkOwnership(
 	page: Page, selStrokes: readonly Stroke[], selElements: readonly PageElement[], measure: MeasureText = estimateMeasure,
+	/** Setting "Ink follows objects". Off: only ink bound to a selected graph (`<graph id>~…`) still belongs to it, as its id says. */
+	follow = true,
 ): InkOwnership {
 	const elements = page.elements ?? [];
 	if (selElements.length === 0 || elements.length === 0) return NO_OWNERSHIP;
-	const owned = attachedInk(page.strokes, elements, selElements, new Set(), measure);
+	const graphs = selElements.filter((e) => e.type === "graph");
+	const owned = follow
+		? attachedInk(page.strokes, elements, selElements, new Set(), measure)
+		: graphs.length > 0 ? attachedInk(page.strokes, elements, graphs, new Set(), measure).filter((s) => boundGraphId(s) !== null) : [];
 	const selected = new Set(selStrokes);
 	const owner = new Map<Stroke, PageElement>();
 	const followers: Stroke[] = [];
@@ -120,6 +125,41 @@ export function inkOwnership(
 export function rotate90Matrix(b: BBox, clockwise: boolean): Matrix {
 	const cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2;
 	return clockwise ? [0, 1, -1, 0, cx + cy, cy - cx] : [0, -1, 1, 0, cx - cy, cx + cy];
+}
+
+/** Elements that have no rotated form in the format (no rotation field): a rotation moves their centre and keeps their orientation. */
+export function rotationKeepsOrientation(el: PageElement): boolean {
+	return el.type === "text" || el.type === "equation" || el.type === "graph";
+}
+
+/**
+ * Turns the selection a quarter turn about the centre of `bounds`. Pictures, boxes and markers turn with it; text boxes,
+ * equations and graphs only move their centre to where it would go (they keep their size and orientation, so a graph's
+ * viewport still fits its frame), and ink written on them moves with them by the same translation instead of turning.
+ */
+export function rotatePlacement(
+	strokes: readonly Stroke[], elements: readonly PageElement[], bounds: BBox, clockwise: boolean, ownership: InkOwnership = NO_OWNERSHIP,
+	measure: MeasureText = estimateMeasure,
+): Placement {
+	const m = rotate90Matrix(bounds, clockwise);
+	const p = emptyPlacement();
+	const moves = new Map<PageElement, Matrix>();
+	for (const e of elements) {
+		if (!rotationKeepsOrientation(e)) {
+			p.elements.set(e, m);
+			continue;
+		}
+		const b = elementBounds(e, measure);
+		const [cx, cy] = apply(m, (b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2);
+		const t = translate(cx - (b.minX + b.maxX) / 2, cy - (b.minY + b.maxY) / 2);
+		moves.set(e, t);
+		p.elements.set(e, t);
+	}
+	for (const s of [...strokes, ...ownership.followers]) {
+		const owner = ownership.owner.get(s);
+		p.strokes.set(s, (owner && moves.get(owner)) ?? m);
+	}
+	return p;
 }
 
 // --- mirror ---
