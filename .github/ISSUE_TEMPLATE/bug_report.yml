@@ -1,0 +1,76 @@
+name: Bug report
+description: Something does not work as it should.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Notebook never overwrites a file it cannot read and keeps backups: if a notebook looks damaged, don't delete anything, and try **Notebook: Repair damaged notebook** first.
+
+        **Never attach private notes.** Screenshots, logs and files in a public issue are visible to everyone. Crop or blur anything personal, or reproduce the problem in a fresh test notebook.
+  - type: input
+    id: version
+    attributes:
+      label: Plugin version
+      description: Settings → Community plugins → Notebook.
+      placeholder: "0.12.1"
+    validations:
+      required: true
+  - type: input
+    id: obsidian
+    attributes:
+      label: Obsidian version
+      description: Settings → About.
+      placeholder: "1.9.10"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and OS
+      placeholder: "Samsung Galaxy Tab S9, Android 14"
+    validations:
+      required: true
+  - type: input
+    id: stylus
+    attributes:
+      label: Stylus model
+      description: Leave empty if you use a finger or a mouse.
+      placeholder: "S Pen (Tab S9)"
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a notebook with a PDF page
+        2. Select the highlighter
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead?
+      description: Screenshots or a short screen recording help a lot (no private notes, please).
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Pen button test log or console errors
+      description: |
+        For pen or side-button problems, paste the output of the **Pen button test** (command palette → *Notebook: Pen button test*, press the button a few times, then **Copy log**).
+        For other errors: on Android, connect to a PC and open `chrome://inspect`; on desktop, open the developer console (Ctrl+Shift+I). Lines from this plugin start with `[notebook]`.
+      render: text
+  - type: input
+    id: format
+    attributes:
+      label: Notebook format and size
+      description: Only if relevant, for example "PDF notebook, 120 pages, 45 MB" or "blank notebook, about 2000 strokes".

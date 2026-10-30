@@ -1,0 +1,64 @@
+name: Feature request
+description: Suggest something Notebook should do. Requests are listed on the public roadmap, sorted by 👍.
+title: "[Feature] "
+labels: ["feature-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time! A few things that help a lot:
+
+        - **Be specific.** Say what you would see or do, not just a topic.
+        - **One feature per request.** Several ideas are easier to plan as several issues.
+        - **Vote instead of "+1".** If your idea already exists, add a 👍 reaction to it. Requests are ranked by 👍.
+  - type: checkboxes
+    id: searched
+    attributes:
+      label: Existing requests
+      description: |
+        Look at the [feature requests](https://github.com/Plagemes/Obsidian-Notebook/issues?q=is%3Aissue+label%3Afeature-request) (open and closed) and the [public roadmap](https://plagemes.github.io/Obsidian-Notebook/).
+      options:
+        - label: I searched existing requests and the roadmap
+          required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What would you like?
+      description: Describe the feature in a few sentences.
+      placeholder: "For example: a lasso option that selects only the highlighter strokes."
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: The problem or use case
+      description: What are you trying to do, and what gets in the way today? A concrete example helps most.
+    validations:
+      required: true
+  - type: dropdown
+    id: device
+    attributes:
+      label: Device(s)
+      description: Where would you use it? Pick every one that applies.
+      multiple: true
+      options:
+        - Android tablet
+        - Android phone
+        - iPad
+        - iPhone
+        - Windows
+        - macOS
+        - Linux
+  - type: dropdown
+    id: importance
+    attributes:
+      label: How important is it to you?
+      options:
+        - Nice to have
+        - Important
+        - Essential for me
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Sketches, screenshots, links to apps that do it well.

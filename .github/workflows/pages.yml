@@ -1,0 +1,60 @@
+name: Pages
+
+# Publishes the public roadmap (site/) to GitHub Pages: site/roadmap.json is built from docs/roadmap.md and CHANGELOG.md
+# by scripts/roadmap-data.mjs (Node built-ins only, so there is no npm install). The art band of the page header comes
+# from docs/media/art-band-*.png when they exist; otherwise the page shows its CSS gradient.
+# Repository settings > Pages > Source must be "GitHub Actions".
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/roadmap.md
+      - docs/roadmap-in-progress.txt
+      - CHANGELOG.md
+      - site/**
+      - scripts/roadmap-data.mjs
+      - docs/media/**
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read # actions/checkout
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Build the roadmap data
+        run: node scripts/roadmap-data.mjs
+
+      - name: Copy the art bands
+        run: |
+          mkdir -p site/assets
+          for f in docs/media/art-band-*.png; do
+            if [ -f "$f" ]; then cp "$f" site/assets/; fi
+          done
+          ls site site/assets
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -13,7 +13,7 @@ Reasons, in order of weight for M1 (data reliability first):
 
 Accepted and documented costs:
 - Native search, tags and backlinks do not see notebooks (until M4).
-- **Obsidian Sync** syncs unknown extensions only with the "Sync all other types" option enabled (stated in the README). Syncthing and USB copy have no limits.
+- **Obsidian Sync** syncs unknown extensions only with the "Sync all other types" option enabled (stated in [install.md](install.md)). Syncthing and USB copy have no limits.
 
 ## 2. JSON schema v11
 
