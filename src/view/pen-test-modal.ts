@@ -1,6 +1,6 @@
 import { Modal, type App } from "obsidian";
 import { t } from "../i18n";
-import { EventLog, noSignalYet, type LoggedEvent } from "../ink/pen-button";
+import { EventLog, PEN_TEST_EVENT_TYPES, describeTarget, noSignalYet, type LoggedEvent } from "../ink/pen-button";
 import type { NotebookSettings } from "../settings";
 import { showNotice } from "./notice";
 
@@ -25,9 +25,11 @@ export function penSignalInfo(host: { settings: NotebookSettings; saveSettings()
 }
 
 /**
- * "Pen button test": a test area that lists, in plain text, the last events the pen sends to it (pointer
- * events, contextmenu, auxclick, keys) and whether the plugin would treat each as the side button. It draws
- * nothing and changes nothing; its only purpose is to find out how a device reports the pen's button.
+ * "Pen button test": lists, in plain text, the last events the pen (or anything else) sends anywhere in the
+ * window, and whether the plugin would treat each as the side button. Like the pen-tracker page it shows the
+ * values of the last event too. After 0.10.1: every pointer, mouse, touch, contextmenu, auxclick, selection and key
+ * event is recorded at window level in the capture phase, so an event that targets another element than the
+ * test area, or that a handler would stop on its way, still shows. It draws nothing and changes nothing.
  */
 export class PenTestModal extends Modal {
 	private readonly log = new EventLog();
@@ -35,8 +37,12 @@ export class PenTestModal extends Modal {
 	private area!: HTMLElement;
 	private output!: HTMLTextAreaElement;
 	private summary!: HTMLElement;
+	private counts!: HTMLElement;
+	private last!: HTMLElement;
+	private lastText = "";
 	private signal!: HTMLElement;
-	private stopKeys: () => void = () => {};
+	private stop: () => void = () => {};
+	private frame = 0;
 
 	constructor(app: App, private readonly info: PenSignalInfo) {
 		super(app);
@@ -48,70 +54,99 @@ export class PenTestModal extends Modal {
 		const { contentEl } = this;
 		contentEl.addClass("notebook-pentest");
 		contentEl.createEl("p", { text: t("penTest.intro") });
+		contentEl.createEl("p", { text: t("penTest.window"), cls: "notebook-pentest-note" });
 		contentEl.createEl("p", { text: t("penTest.air"), cls: "notebook-pentest-note" });
 
 		this.area = contentEl.createDiv({ cls: "notebook-pentest-area", text: t("penTest.area") });
-		const rec = (ev: Event) => this.record(ev);
-		// pointerrawupdate does not exist everywhere: an event type that is never fired is harmless.
-		for (const type of ["pointerdown", "pointermove", "pointerup", "pointercancel", "pointerrawupdate", "contextmenu", "auxclick"]) {
-			this.area.addEventListener(type, rec);
-		}
-		this.area.addEventListener("contextmenu", (e) => e.preventDefault());
-		this.area.addEventListener("auxclick", (e) => e.preventDefault());
-		// Keys go to the document while the modal is open (a pen button may be mapped to a key by the system).
-		activeDocument.addEventListener("keydown", rec, true);
-		activeDocument.addEventListener("keyup", rec, true);
-		this.stopKeys = () => {
-			activeDocument.removeEventListener("keydown", rec, true);
-			activeDocument.removeEventListener("keyup", rec, true);
+		this.last = contentEl.createDiv({ cls: "notebook-pentest-last" });
+		const win = activeWindow;
+		const doc = activeDocument;
+		const rec = (ev: Event) => this.record(ev, win, doc);
+		// Window, capture phase: first to see every event, whatever element it targets. Passive: the test never
+		// changes what an event does, except that the native menu does not open over the test area.
+		const opts = { capture: true, passive: true } as const;
+		for (const type of PEN_TEST_EVENT_TYPES) win.addEventListener(type, rec, opts);
+		doc.addEventListener("selectionchange", rec, opts);
+		const noMenu = (e: Event) => {
+			if (this.area.contains(e.target as Node)) e.preventDefault();
+		};
+		win.addEventListener("contextmenu", noMenu, true);
+		win.addEventListener("auxclick", noMenu, true);
+		this.stop = () => {
+			for (const type of PEN_TEST_EVENT_TYPES) win.removeEventListener(type, rec, opts);
+			doc.removeEventListener("selectionchange", rec, opts);
+			win.removeEventListener("contextmenu", noMenu, true);
+			win.removeEventListener("auxclick", noMenu, true);
+			if (this.frame) win.cancelAnimationFrame(this.frame);
+			this.frame = 0;
 		};
 
 		this.signal = contentEl.createDiv({ cls: "notebook-pentest-note" });
 		this.summary = contentEl.createDiv({ cls: "notebook-pentest-summary" });
+		this.counts = contentEl.createDiv({ cls: "notebook-pentest-note" });
 		this.output = contentEl.createEl("textarea", { cls: "notebook-pentest-log", attr: { readonly: "true", rows: "14", "aria-label": t("penTest.logLabel") } });
 		const buttons = contentEl.createDiv({ cls: "notebook-pentest-buttons" });
 		buttons.createEl("button", { text: t("penTest.copy"), cls: "mod-cta" }).addEventListener("click", () => void this.copy());
 		buttons.createEl("button", { text: t("penTest.clear") }).addEventListener("click", () => {
 			this.log.clear();
+			this.lastText = "";
 			this.refresh();
 		});
 		this.refresh();
 	}
 
 	onClose(): void {
-		this.stopKeys();
-		this.stopKeys = () => {};
+		this.stop();
+		this.stop = () => {};
 		this.contentEl.empty();
 	}
 
-	private record(e: Event): void {
+	private record(e: Event, win: Window, doc: Document): void {
 		const pe = e as Partial<PointerEvent> & Partial<KeyboardEvent>;
-		const ev: LoggedEvent = { kind: e.type, t: performance.now() - this.t0 };
+		const ev: LoggedEvent = { kind: e.type, t: performance.now() - this.t0, timeStamp: e.timeStamp, target: describeTarget(e.target, this.area, win, doc) };
 		if (e.type === "keydown" || e.type === "keyup") {
 			ev.key = pe.key;
 			ev.code = pe.code;
-		} else {
+		} else if (typeof pe.button === "number" || typeof pe.pointerType === "string") {
 			ev.pointerType = typeof pe.pointerType === "string" ? pe.pointerType : "";
 			ev.button = pe.button;
 			ev.buttons = pe.buttons;
 			ev.pressure = pe.pressure;
 			ev.isPrimary = pe.isPrimary;
 			ev.pointerId = pe.pointerId;
+			const caps = (e as MouseEvent & { sourceCapabilities?: { firesTouchEvents?: boolean } | null }).sourceCapabilities;
+			if (caps?.firesTouchEvents === true) ev.fromTouch = true;
+		} else if (e.type.startsWith("touch")) {
+			const touches = (e as TouchEvent).changedTouches;
+			const touch: (Touch & { touchType?: string }) | undefined = touches?.[0];
+			ev.pointerType = touch?.touchType ? `touch:${touch.touchType}` : "touch";
+			ev.pressure = touch?.force;
 		}
 		this.log.add(ev);
-		this.refresh();
+		// The values of the last event, as the pen-tracker page shows them.
+		if (ev.kind !== "selectionchange") {
+			const fields = [`${ev.kind}`, `pointerType=${ev.pointerType ?? "-"}`, `button=${pe.button ?? "-"}`, `buttons=${pe.buttons ?? "-"}`,
+				`pressure=${pe.pressure ?? "-"}`, `tiltX=${pe.tiltX ?? "-"}`, `tiltY=${pe.tiltY ?? "-"}`, `isPrimary=${pe.isPrimary ?? "-"}`, `target=${ev.target ?? "-"}`];
+			this.lastText = fields.join("  ");
+		}
+		if (!this.frame) this.frame = win.requestAnimationFrame(() => {
+			this.frame = 0;
+			this.refresh();
+		});
 	}
 
 	private refresh(): void {
 		this.output.value = this.log.length > 0 ? this.log.text() : t("penTest.empty");
 		this.output.scrollTop = this.output.scrollHeight;
+		this.last.setText(t("penTest.last", { text: this.lastText || "-" }));
 		this.summary.setText(t("penTest.summary", { n: String(this.log.sideButtonCount) }));
+		this.counts.setText(this.log.total > 0 ? t("penTest.counts", { list: this.log.countsText() }) : t("penTest.countsNone"));
 		if (this.log.sideButtonCount > 0) this.info.markSeen();
 		this.signal.setText(noSignalYet(this.info.seen(), this.log.sideButtonCount) ? t("penTest.noSignal") : t("penTest.signalSeen"));
 	}
 
 	private async copy(): Promise<void> {
-		const text = this.log.text();
+		const text = [this.counts.getText(), this.last.getText(), this.log.text()].join("\n");
 		try {
 			await navigator.clipboard.writeText(text);
 			showNotice(t("penTest.copied"));

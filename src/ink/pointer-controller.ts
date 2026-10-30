@@ -116,7 +116,21 @@ export interface PointerControllerOptions {
 	 * delivers them, not once per frame. Part of the experimental low-latency ink; off by default.
 	 */
 	rawUpdates?: boolean;
+	/**
+	 * The view's root element (after 0.10.1). With it, the side-button detector also listens at window level in the
+	 * capture phase: pen events over the view that never reach the element (they target the toolbar or another
+	 * part of the view, or a handler above the element stopped them) and mouse-only presses still count. Events
+	 * outside the scope (other views, modals, Obsidian's own UI) are ignored. Only the side button is detected
+	 * there: strokes, panning and zooming come from the element's own listeners, as before.
+	 */
+	scope?: { contains(node: Node | null): boolean };
+	/** Where the window-level listeners go (default: the element's window). For tests. */
+	windowTarget?: EventTarget;
 }
+
+/** Event types the window-level side-button watch listens to (capture phase). */
+const WINDOW_TYPES = ["pointerdown", "pointermove", "pointerup", "pointercancel", "contextmenu", "auxclick", "mousedown"] as const;
+const WINDOW_KIND: Record<string, PointerKind | undefined> = { pointerdown: "down", pointermove: "move", pointerup: "up", pointercancel: "cancel" };
 
 export class PointerController {
 	predictionEnabled = false;
@@ -153,6 +167,11 @@ export class PointerController {
 	/** Side button pressed during contact (chord event): the stroke was finished and the contact now acts as the button's tool. */
 	private readonly chord = new ChordDetector();
 	private chordHeld = false;
+	/** Events that reached the element (its capture phase): the window-level watch leaves them to the element's listeners. */
+	private readonly reached = new WeakSet<Event>();
+	/** Events over the element seen at window level, checked once their dispatch is over (did they reach the element?). */
+	private pending: Event[] = [];
+	private pendingTimer: number | null = null;
 
 	constructor(
 		private readonly el: HTMLElement,
@@ -179,6 +198,117 @@ export class PointerController {
 			e.stopPropagation();
 			if (e.cancelable) e.preventDefault();
 		}, { passive: false });
+		const win = options.windowTarget ?? el.ownerDocument?.defaultView ?? null;
+		if (win && options.scope) this.watchWindow(win, options.scope);
+	}
+
+	/**
+	 * Side-button signals at window level, capture phase (pen-tracker style: whatever element the pen is over).
+	 * An event over the element is left to the element's listeners when it reaches them (the normal case); one
+	 * that was stopped before it got there, or that targets another part of the view, is fed to the detector here.
+	 */
+	private watchWindow(win: EventTarget, scope: { contains(node: Node | null): boolean }): void {
+		for (const type of WINDOW_TYPES) {
+			this.listen(type, (e: Event) => this.reached.add(e), { capture: true, passive: true });
+		}
+		const fn = (e: Event): void => {
+			this.errors.run("window", () => this.onWindowEvent(e, scope));
+		};
+		for (const type of WINDOW_TYPES) {
+			// contextmenu / auxclick of the pen button are prevented (no native menu over the view).
+			const opts: AddEventListenerOptions = { capture: true, passive: type !== "contextmenu" && type !== "auxclick" };
+			win.addEventListener(type, fn, opts);
+			this.disposers.push(() => win.removeEventListener(type, fn, opts));
+		}
+		this.disposers.push(() => {
+			if (this.pendingTimer !== null) window.clearTimeout(this.pendingTimer);
+			this.pendingTimer = null;
+			this.pending = [];
+		});
+	}
+
+	private onWindowEvent(e: Event, scope: { contains(node: Node | null): boolean }): void {
+		const target = e.target as Node | null;
+		if (!target || !scope.contains(target)) return;
+		const pe = e as Partial<PointerEvent>;
+		const kind = WINDOW_KIND[e.type];
+		if (kind) this.barrel.noteAny(kind, pe.pointerType ?? "", e.timeStamp);
+		if (e.type === "mousedown") {
+			this.onWindowMouseDown(e as MouseEvent);
+			return;
+		}
+		// Fingers: the element's own listeners count them; a finger elsewhere only blocks mouse-only presses (noteAny).
+		if (kind && pe.pointerType === "touch") return;
+		if (target === (this.el as unknown as Node) || this.el.contains(target)) {
+			// The stroke in progress is captured by the element: its events always reach it.
+			if (kind && this.drawId !== null && pe.pointerId === this.drawId) return;
+			this.pending.push(e);
+			if (this.pendingTimer === null) this.pendingTimer = window.setTimeout(() => this.flushPending(), 0);
+			return;
+		}
+		this.sideButtonElsewhere(e);
+	}
+
+	private flushPending(): void {
+		this.pendingTimer = null;
+		const list = this.pending;
+		this.pending = [];
+		for (const e of list) {
+			if (this.reached.has(e)) continue;
+			this.errors.run("window", () => this.sideButtonElsewhere(e));
+		}
+	}
+
+	/**
+	 * A side-button signal that did not reach the element: detector only. A press (or a click of the Samsung
+	 * pressure-0 button) opens the menu when the pen is over the element; it never starts a stroke.
+	 */
+	private sideButtonElsewhere(e: Event): void {
+		if (e.type === "contextmenu" || e.type === "auxclick") {
+			const me = e as MouseEvent;
+			const pointerType = (e as Partial<PointerEvent>).pointerType;
+			const press = e.type === "contextmenu" ? this.barrel.contextMenu(pointerType, e.timeStamp) : this.barrel.auxClick(pointerType, me.button, e.timeStamp);
+			if (!press) return;
+			if (e.cancelable) e.preventDefault();
+			this.handlers.sideButtonSeen?.();
+			this.menuIfOver(me.clientX, me.clientY, e.timeStamp, "button");
+			return;
+		}
+		const kind = WINDOW_KIND[e.type];
+		if (!kind) return;
+		const pe = e as PointerEvent;
+		if (this.barrelPointer(kind, pe)) {
+			this.handlers.sideButtonSeen?.();
+			if (!this.barrel.zeroPressureHeld) this.menuIfOver(pe.clientX, pe.clientY, pe.timeStamp, "button");
+		}
+		if (pe.pointerType !== "pen") return;
+		const tr = this.barrel.transition;
+		if (tr === "release-click") {
+			if (opensRadial(this.policy.settings.penButton)) this.menuIfOver(pe.clientX, pe.clientY, pe.timeStamp, "click");
+		} else if (tr === "contact-end" || tr === "release") {
+			this.finishPenStroke(pe.timeStamp);
+		}
+	}
+
+	/** A `mousedown` that no pointer event announced, while the pen hovers: the side button reported only as a mouse event. */
+	private onWindowMouseDown(e: MouseEvent): void {
+		const caps = (e as MouseEvent & { sourceCapabilities?: { firesTouchEvents?: boolean } | null }).sourceCapabilities;
+		if (!this.barrel.mouseDown(e.button, e.buttons, e.timeStamp, caps?.firesTouchEvents === true)) return;
+		this.handlers.sideButtonSeen?.();
+		this.menuIfOver(e.clientX, e.clientY, e.timeStamp, "button");
+	}
+
+	/** Opens the menu for a window-level signal, only when the pen is over the element (client coordinates). */
+	private menuIfOver(clientX: number, clientY: number, t: number, source: "button" | "click"): void {
+		this.rect = this.el.getBoundingClientRect();
+		const r = this.rect;
+		if (clientX < r.left || clientX > r.left + r.width || clientY < r.top || clientY > r.top + r.height) return;
+		if (source === "button") {
+			this.requestMenu(clientX, clientY, t);
+			return;
+		}
+		if (this.drawId !== null) return;
+		this.handlers.penMenu?.(clientX - r.left, clientY - r.top, "click");
 	}
 
 	/** `pointerrawupdate` is listened to. */

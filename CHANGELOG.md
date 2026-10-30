@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+Not verified on Android hardware or in Obsidian. No change to the notebook format (still v9). Manual steps 404-406 in `docs/testing.md`.
+
+### Fixed
+- **S Pen side button: the Pen button test showed nothing while the button was pressed** (user report, Samsung tablet, 0.10.1), while Chrome's pen-tracker page on the same tablet shows the press (`pointerdown`, `button 0`, `buttons 1`, `pressure 0` with the pen hovering). The root cause could not be proven without the device. What the code did differently from pen-tracker: the test listened to seven event types (`pointerdown` / `move` / `up` / `cancel` / `rawupdate`, `contextmenu`, `auxclick`) in the bubble phase on a 140 px area only, so an event that targeted another element, that a handler above the area stopped, or that arrived as another type (mouse compatibility events only, `pointerover` / `enter`, capture changes, touch, selection) was never shown; the notebook only listened on the page element. Now:
+  - The **Pen button test** records every pointer, mouse, touch, `contextmenu`, `auxclick`, `click`, capture, selection and key event **at window level in the capture phase**, wherever it is dispatched, with type, `pointerType`, pointer id, `button`, `buttons`, pressure, primary flag, target element and both timestamps. Like pen-tracker it also shows the values of the last event (including tilt), and a count per event type. Hover moves of pointer, mouse and `pointerrawupdate` fold into one line each; the log keeps 80 lines. If the count does not change while the button is pressed, the button does not reach Obsidian at all.
+  - While a notebook is open, the side-button detector also listens **at window level (capture phase) over the whole notebook view**: a press over the toolbar or another bar lying on the page, or one stopped before it reached the page, still opens the radial menu (only when the pen is over the page, never a stroke). Events that reach the page are handled once, by the page's own listeners as before. Events outside the view (modals, other views, Obsidian's own UI) are ignored.
+  - A `mousedown` that no pointer event announced (no `pointerdown` within 500 ms, no finger within 1 s, not derived from touch), with `button` 0 or 2 while the pen hovers, now counts as the side button too, in case the WebView sends the button only as a mouse event.
+  - Unchanged: a click while hovering opens the radial menu on release; holding the button and touching erases; a pressure-0 pen `pointerdown` after hovering is the button, never a stroke start (a real contact has pressure above 0); the press during writing stays experimental. The stroke pipeline (smoothing, shape, rendering) is untouched.
+
 ## 0.10.1 — 2026-10-30
 
 Not yet verified on Android hardware or in Obsidian. No change to the notebook format (still v9). Manual steps 380-383 in `docs/testing.md`.
