@@ -45,7 +45,16 @@ Not yet verified in Obsidian or on Android hardware (see `docs/testing.md`, step
 
 ### Changed
 - **Companion notes: which tags the plugin may remove.** The tags of the notebook that the note already had (written by you) are no longer treated as the plugin's: removing such a tag from the notebook leaves it in the note. Only tags the plugin added itself are removed when the notebook drops them. Notes written by 0.5.0 keep their old behaviour until their next update.
-- Tags typed in the editor are stored normalised (`linear algebra` becomes `linear-algebra`); tags already stored are not rewritten until you edit them.
+- Tags typed in the editor are stored normalised (`linear algebra` becomes `linear-algebra`); tags already stored are kept as written, also when you edit the tags.
+
+### Fixed
+- Zettel cards use their own `zettel-notebook` / `zettel-notebook-id` properties instead of the companion note's `notebook` / `notebook-id`, so a device still on 0.5.1 with companion notes on no longer takes a synced card for a companion note and writes into it (cards with the old keys are still read).
+- The tag editor no longer drops or renames tags the notebook already has (`2026` removed, `C++` turned into `C`): they are shown as written, flagged when Obsidian would not accept them, and only the tags you remove go; only newly typed tags are normalised.
+- Card notes are written only after this device's own saves: a page deleted on another device no longer makes every device write `orphaned` to the same card (conflicted copies with Google Drive or OneDrive). Card frontmatter edits now rewrite only the changed keys' lines, so YAML comments, quoting and your own properties stay as written.
+- Slip-boxes create cards only for pages made on this device in this session, so a page that arrives by sync before its card no longer gets a second one; timestamp card ids now carry seconds and a short random suffix, and untitled Luhmann cards a suffix in their file name, so two devices never create the same card file.
+- Following a page link with a page id (`#p3&id=…`) can now be resolved by id first (`resolvePageTarget`), reporting a deleted page instead of opening page 3; the notebook view does not use it yet.
+- Companion note updates keep `tags` entries they do not read, such as an unquoted `2026` (`tags: [2026, physics]` no longer loses 2026).
+
 ## 0.5.1 — 2026-10-30
 
 Hotfix for 0.5.0. Not verified on Android hardware (see `docs/testing.md`); how the S Pen button is reported is the open question.
