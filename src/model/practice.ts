@@ -3,9 +3,10 @@
  * the attempts of an exercise and the timer. Pure: no 'obsidian', no DOM.
  *
  * No format change. A practice copy is an ordinary page: its tags `practice` and `attempt/<n>` mark it (and survive
- * moving it to another notebook); the link to the original lives in a sidecar file, `<notebooks folder>/_meta/practice.json`
- * (storage/practice-store.ts), keyed by the practice page's id, so two devices that each add an attempt never write the
- * same entry and every write is a read-modify-write of the entries it touches. The file is written only by explicit
+ * moving it to another notebook); the link to the original lives in sidecar files, one per device,
+ * `<notebooks folder>/_meta/practice-<device>.json` (storage/practice-store.ts), keyed by the practice page's id: a device
+ * only writes its own file, so two devices never write the same file, and reading merges every file (plus the old shared
+ * `practice.json` of earlier versions, which is still read and never written again). The files are written only by explicit
  * actions (*Redo this exercise*, the timer's *Stop*).
  *
  * What is hidden is described by a `HideSpec`: no criterion = all the ink; otherwise a stroke is hidden when it matches
@@ -180,11 +181,16 @@ export interface PracticeData {
 	attempts: AttemptRecord[];
 	/** Entries this version does not understand: kept and written back as they were. */
 	unknown: unknown[];
+	/**
+	 * Per-device files: practice pages this device removed, so that a record still held by another device's file or by the
+	 * old shared file stays removed. Written only when not empty.
+	 */
+	removed?: Array<{ page: string; at: string }>;
 }
 
 export type PracticeParse =
 	| { ok: true; data: PracticeData }
-	| { ok: false; reason: "json" | "format" | "future"; message: string };
+	| { ok: false; reason: "json" | "format" | "future" | "empty"; message: string };
 
 export type PracticeOp =
 	| { type: "add"; record: AttemptRecord }
@@ -221,9 +227,16 @@ function readRecord(v: unknown): AttemptRecord | null {
 	return rec;
 }
 
-/** Reads the sidecar text. A file that is not ours or comes from a newer version is reported, never "fixed". */
+/** Why an existing empty file is not read as "no practice copies": it may not have finished syncing (same text as device-files.ts). */
+export const EMPTY_PRACTICE_MESSAGE = "the file is empty: it may not have finished syncing yet. Nothing was changed; try again once it has synced";
+
+/**
+ * Reads the sidecar text. A file that is not ours or comes from a newer version is reported, never "fixed". So is an
+ * existing empty one (a missing file is the empty set; the store never asks this for one): a sync app that has not
+ * finished downloading it leaves exactly that, and reading it as "nothing" would let the next write drop what it held.
+ */
 export function parsePractice(text: string): PracticeParse {
-	if (text.trim() === "") return { ok: true, data: emptyPractice() };
+	if (text.trim() === "") return { ok: false, reason: "empty", message: EMPTY_PRACTICE_MESSAGE };
 	let raw: unknown;
 	try {
 		raw = JSON.parse(text);
@@ -251,6 +264,14 @@ export function parsePractice(text: string): PracticeParse {
 			seen.set(rec.practice.page, data.attempts.length);
 			data.attempts.push(rec);
 		}
+	}
+	if (Array.isArray(raw.removed)) {
+		const removed = new Map<string, string>();
+		for (const r of raw.removed) {
+			if (isObject(r) && typeof r.page === "string" && r.page !== "" && typeof r.at === "string") removed.set(r.page, r.at);
+			else data.unknown.push(r);
+		}
+		if (removed.size > 0) data.removed = [...removed].map(([page, at]) => ({ page, at }));
 	}
 	return { ok: true, data };
 }
@@ -283,7 +304,62 @@ function byOriginal(a: AttemptRecord, b: AttemptRecord): number {
 export function serializePractice(data: PracticeData): string {
 	const lines = [...[...data.attempts].sort(byOriginal).map(recordJson), ...data.unknown.map((u) => JSON.stringify(u))];
 	const body = lines.length ? `\n${lines.join(",\n")}\n` : "";
-	return `{"format":"${PRACTICE_FORMAT}","version":${PRACTICE_VERSION},"attempts":[${body}]}\n`;
+	const removed = [...(data.removed ?? [])].sort((a, b) => a.page.localeCompare(b.page)).map((r) => JSON.stringify({ page: r.page, at: r.at }));
+	const tail = removed.length ? `,"removed":[\n${removed.join(",\n")}\n]` : "";
+	return `{"format":"${PRACTICE_FORMAT}","version":${PRACTICE_VERSION},"attempts":[${body}]${tail}}\n`;
+}
+
+// --- one file per device ---
+
+/**
+ * Per-device files (`practice-<device>.json`, storage/practice-store.ts): this device's change applied to its own file.
+ * `merged` is what every file says together (mergePractice). Timing an attempt this device's file does not hold yet adds a
+ * copy of the record with only the seconds timed here, so that the times of all devices add up; removing one leaves a
+ * mark (`removed`) so that the copies other files hold stay removed.
+ */
+export function applyDeviceOp(own: PracticeData, merged: PracticeData, op: PracticeOp, now: Date = new Date()): PracticeData {
+	if (op.type === "add") {
+		const next: PracticeData = { ...applyPracticeOp(own, op) };
+		const removed = (own.removed ?? []).filter((r) => r.page !== op.record.practice.page);
+		delete next.removed;
+		if (removed.length > 0) next.removed = removed;
+		return next;
+	}
+	if (op.type === "remove") {
+		const next = applyPracticeOp(own, op);
+		if (!merged.attempts.some((a) => a.practice.page === op.practicePage) && !own.attempts.some((a) => a.practice.page === op.practicePage)) return next;
+		const removed = [...(own.removed ?? []).filter((r) => r.page !== op.practicePage), { page: op.practicePage, at: now.toISOString() }];
+		return { ...next, removed };
+	}
+	if (own.attempts.some((a) => a.practice.page === op.practicePage)) return applyPracticeOp(own, op);
+	const seconds = Math.round(op.seconds);
+	const record = merged.attempts.find((a) => a.practice.page === op.practicePage);
+	if (!(seconds > 0) || !record) return own;
+	return { ...own, attempts: [...own.attempts, { ...record, seconds }] };
+}
+
+/**
+ * Every file together: `files` with this device's first (its record wins when two files describe the same practice page
+ * differently) and the old shared `practice.json` last. A page any file marks removed is left out; the seconds of the
+ * same attempt in several files add up (each file holds only the time timed on its device).
+ */
+export function mergePractice(files: readonly PracticeData[]): PracticeData {
+	const removed = new Set(files.flatMap((f) => f.removed ?? []).map((r) => r.page));
+	const by = new Map<string, AttemptRecord>();
+	for (const f of files) {
+		for (const a of f.attempts) {
+			if (removed.has(a.practice.page)) continue;
+			const key = `${a.practice.doc}\u0000${a.practice.page}`;
+			const old = by.get(key);
+			if (!old) {
+				by.set(key, { ...a });
+				continue;
+			}
+			const seconds = (old.seconds ?? 0) + (a.seconds ?? 0);
+			if (seconds > 0) old.seconds = seconds;
+		}
+	}
+	return { ...emptyPractice(), attempts: [...by.values()] };
 }
 
 export function applyPracticeOp(data: PracticeData, op: PracticeOp): PracticeData {
