@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+Not yet verified on Android hardware. The manual steps are OI1 to OI8 in `docs/testing.md`. No change to the document format or to saving.
+
+### Added
+- **Notebook commands in the Obsidian mobile toolbar** (roadmap 384). Every command now carries the icon of its action, so it shows with that icon in *Settings > Mobile > toolbar*. Obsidian offers no API for a plugin to suggest toolbar items (the toolbar is configured by the user), so nothing is added automatically; the README lists the commands worth adding.
+- **Bookmark a page in Obsidian's Bookmarks pane** (385). New action and command *Add page to Obsidian bookmarks* (page sheet, All actions, command palette). It uses the core Bookmarks plugin's instance (`app.internalPlugins`, not a published API), detected at run time: if the plugin is off or has another shape you get a notice and nothing happens. The bookmark is a file bookmark with the stable page subpath `#pN&id=...`, so opening it lands on the page even after pages moved; a page already bookmarked is not added twice.
+- **Page turner** (372). Arrow keys, PageUp, PageDown and space (Shift+space goes back) turn pages while a notebook is the active view; Bluetooth presentation clickers send these keys. Nothing happens while a text field or text box is being edited, while a stroke or a drag is in progress, with a dialog or menu open, or with Ctrl/Alt/Meta held. Setting *Turn pages with the keyboard* (on by default). Android's volume keys are handled by the system and never reach web content, so they cannot be used.
+- **Toolbar size** (370). Setting *Toolbar size*: compact (36 px buttons), normal (40 px, unchanged) or large (48 px buttons, 24 px icons). It scales the toolbar, the contextual bar, the option popovers and the radial dial, and the layout engine counts fewer quick slots when buttons are bigger. On a narrow phone the row of tools wraps onto a second line in large. The browser harness checks that nothing overflows at phone width in large and compact.
+
 ## 0.7.0 — 2026-10-30
 
 Not yet verified on Android hardware. The manual steps added in this version are numbered 135 to 177 in `docs/testing.md`; the ones that belong to each area are named below.
