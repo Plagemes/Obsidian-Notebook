@@ -24,6 +24,7 @@ import { registerLectureCommands } from "./view/lecture-commands";
 import { TimetableService } from "./timetable/service";
 import { registerPdfSyncCommands } from "./view/pdf-sync";
 import { registerZettel } from "./zettel";
+import { registerTextbookRefs } from "./view/textbook-ref-ui";
 
 export default class NotebookPlugin extends Plugin {
 	settings!: NotebookSettings;
@@ -100,6 +101,8 @@ export default class NotebookPlugin extends Plugin {
 		});
 		// wave 0.6: zettelkasten (M15 Z1–Z3, Z11, Z12)
 		registerZettel(this);
+		// wave 0.8: quick textbook reference (roadmap 208): "p. 134" in a text box opens the textbook at that page
+		registerTextbookRefs(this, () => this.settings.folder);
 
 		// wave 0.6: timetable (src/timetable/): current class offer, library shortcut, editor.
 		this.timetable = new TimetableService(this, (file) => this.host.openNotebook(file));
