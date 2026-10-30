@@ -7,10 +7,13 @@ import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./mo
 import { DEFAULT_COMPANION_SETTINGS, readCompanionSettings, type CompanionSettings } from "./storage/companion-path";
 import { DEFAULT_TRASH_SETTINGS, readTrashSettings, type TrashSettings } from "./storage/trash-settings";
 import { DEFAULT_ZETTEL_SETTINGS, readZettelSettings, type ZettelSettings } from "./zettel/settings";
+import { isUiLanguage, type UiLanguage } from "./i18n/languages";
 import { DEFAULT_READING_SETTINGS, readReadingSettings, type ReadingSettings } from "./view/reading-settings";
 
 /** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
 export interface NotebookSettings extends CompanionSettings, GestureSettings, TrashSettings, ZettelSettings, ReadingSettings {
+	/** UI language: "auto" follows Obsidian. */
+	uiLanguage: UiLanguage;
 	folder: string;
 	fingerDrawing: boolean;
 	palmRejectionMs: number;
@@ -97,6 +100,7 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Tr
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
+	uiLanguage: "auto",
 	folder: "Notebooks",
 	fingerDrawing: false,
 	palmRejectionMs: 500,
@@ -147,6 +151,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	const s = { ...DEFAULT_SETTINGS };
 	if (typeof data !== "object" || data === null) return s;
 	const d = data as Record<string, unknown>;
+	if (isUiLanguage(d.uiLanguage)) s.uiLanguage = d.uiLanguage;
 	if (typeof d.folder === "string" && d.folder.trim()) s.folder = d.folder.trim();
 	if (typeof d.fingerDrawing === "boolean") s.fingerDrawing = d.fingerDrawing;
 	if (typeof d.palmRejectionMs === "number" && d.palmRejectionMs >= 0 && d.palmRejectionMs <= 5000) s.palmRejectionMs = d.palmRejectionMs;

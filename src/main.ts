@@ -1,5 +1,5 @@
 import { Notice, Plugin, type TFile } from "obsidian";
-import { t } from "./i18n";
+import { onLanguageChanged, setUiLanguage, t } from "./i18n";
 import { readSettings, type NotebookSettings } from "./settings";
 import { stressDocument } from "./model/stress";
 import { NOTEBOOK_EXTENSIONS } from "./storage/format";
@@ -35,6 +35,9 @@ export default class NotebookPlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		this.settings = readSettings(await this.loadData());
+		// Command names (below) are registered once, so they follow the language at startup.
+		setUiLanguage(this.settings.uiLanguage);
+		this.register(onLanguageChanged(() => new Notice(t("settings.uiLanguage.changed"))));
 
 		this.journal = new AdapterJournalStore(this.app.vault.adapter, journalFolder(this.app, this.manifest.id));
 		this.registerView(VIEW_TYPE, (leaf) => new NotebookView(leaf, this));
