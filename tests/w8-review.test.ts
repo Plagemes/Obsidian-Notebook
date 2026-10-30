@@ -397,3 +397,80 @@ describe("practice copies and markers", () => {
 		expect(buildPracticePage(bare, {}, 2).page.elements).toBeUndefined();
 	});
 });
+
+// --- 2. homework ticked in the companion note is read back, never undone ---
+
+const cc = await import("../src/model/companion-content");
+const { SetMarkerDone } = await import("../src/model/marker-commands");
+
+describe("companion note: homework ticks made in the note", () => {
+	const ctx = { notebookPath: "Analysis.notebook", pageUri: (n: number) => `obsidian://x?page=${n}` };
+	// A tiny frontmatter of `key: <JSON>` lines, enough for these tests.
+	const deps = {
+		frontmatterInfo: (text: string) => {
+			const end = text.startsWith("---\n") ? text.indexOf("\n---", 3) : -1;
+			return end < 0 ? { exists: false, from: 0, to: 0 } : { exists: true, from: 4, to: end + 1 };
+		},
+		parseFrontmatter: (yaml: string) =>
+			Object.fromEntries(yaml.split("\n").filter(Boolean).map((l) => [l.slice(0, l.indexOf(":")), JSON.parse(l.slice(l.indexOf(":") + 1)) as unknown])),
+		stringify: (d: Record<string, unknown>) => Object.entries(d).map(([k, v]) => `${k}: ${JSON.stringify(v)}\n`).join(""),
+	};
+	function hwDoc() {
+		const { doc, page } = docWith([]);
+		page.id = "p1";
+		page.elements = [
+			{ ...createMarker("homework", 10, 10, { text: "Exercises 3.1" }), id: "hw1", due: "2026-11-05" },
+			{ ...createMarker("homework", 10, 50, { text: "Read chapter 4" }), id: "hw2" },
+		];
+		return doc;
+	}
+	/** One companion update, as the service does it: ticks read from the note, the region regenerated. */
+	function regenerate(doc: NotebookDocument, note: string): string {
+		const content = cc.companionContent(doc, ctx, cc.homeworkFromNote(doc, note));
+		const r = cc.updateCompanionText(note, content, (owned) => cc.renderRegion(content, owned), deps);
+		return r.kind === "changed" ? r.text : note;
+	}
+
+	it("ties each task line to its marker with a block id", () => {
+		const doc = hwDoc();
+		const note = regenerate(doc, "My notes\n");
+		expect(note).toContain("- [ ] Exercises 3.1 📅 2026-11-05 ^nb-hw1");
+		expect(note).toContain("- [ ] Read chapter 4 ^nb-hw2");
+		expect(note).toContain("My notes\n");
+		expect(regenerate(doc, note)).toBe(note);
+	});
+
+	it("a tick made in the note (with the Tasks plugin's done date) is kept and reported for the notebook", () => {
+		const doc = hwDoc();
+		const ticked = regenerate(doc, "").replace("- [ ] Exercises 3.1 📅 2026-11-05 ^nb-hw1", "- [x] Exercises 3.1 📅 2026-11-05 ✅ 2026-10-31 ^nb-hw1");
+		expect(cc.userTicks(doc, cc.readHomeworkTasks(ticked), cc.readRegionState(ticked))).toEqual([{ pageId: "p1", markerId: "hw1", anchor: "nb-hw1" }]);
+		// The notebook is not open here: the tick and its done date stay, again and again.
+		const kept = regenerate(doc, ticked);
+		expect(kept).toBe(ticked);
+		// Once the notebook has it done (one undo step), the line stays as it is and the plugin now owns the tick.
+		const history = new History(() => doc);
+		history.execute(new SetMarkerDone("p1", "hw1", true));
+		const after = regenerate(doc, kept);
+		expect(after).toContain("- [x] Exercises 3.1 📅 2026-11-05 ✅ 2026-10-31 ^nb-hw1");
+		expect(cc.readRegionState(after)?.done).toEqual(["nb-hw1"]);
+		expect(cc.userTicks(doc, cc.readHomeworkTasks(after), cc.readRegionState(after))).toEqual([]);
+		// Reopened in the notebook: a tick the plugin wrote follows the notebook.
+		history.undo();
+		expect(regenerate(doc, after)).toContain("- [ ] Exercises 3.1 📅 2026-11-05 ^nb-hw1");
+	});
+
+	it("unticking one's own tick in the note before the notebook saw it is respected", () => {
+		const doc = hwDoc();
+		const base = regenerate(doc, "");
+		const ticked = base.replace("- [ ] Read chapter 4 ^nb-hw2", "- [x] Read chapter 4 ^nb-hw2");
+		expect(regenerate(doc, ticked)).toBe(ticked);
+		expect(regenerate(doc, ticked.replace("- [x] Read chapter 4", "- [ ] Read chapter 4"))).toBe(base);
+	});
+
+	it("only lines of the generated region count", () => {
+		const doc = hwDoc();
+		const note = `- [x] my own task ^nb-hw2\n\n${regenerate(doc, "")}`;
+		expect(cc.userTicks(doc, cc.readHomeworkTasks(note), cc.readRegionState(note))).toEqual([]);
+		expect(cc.homeworkAnchor("not an id!")).toBeNull();
+	});
+});
