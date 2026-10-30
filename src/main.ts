@@ -69,73 +69,99 @@ export default class NotebookPlugin extends Plugin {
 	/** wave 0.10 (362): the clipboard shared between devices; one store (one write queue) for every view. */
 	private sharedClipStore: SharedClipStore | null = null;
 
+	/**
+	 * 0.12.1: the start-up steps that failed (logged to the console, reported once in a notice). A step that throws no
+	 * longer aborts `onload`: before, one failure stopped the rest of the start-up, the settings tab among them.
+	 */
+	readonly startupFailures: string[] = [];
+
 	async onload(): Promise<void> {
-		this.settings = readSettings(await this.loadData());
+		this.settings = await this.readStoredSettings();
 		// Command names (below) are registered once, so they follow the language at startup.
-		setUiLanguage(this.settings.uiLanguage);
-		this.applyAppearanceStyle();
-		this.register(onLanguageChanged(() => showNotice(t("settings.uiLanguage.changed"))));
+		this.step("language", () => setUiLanguage(this.settings.uiLanguage));
+		this.step("appearance", () => this.applyAppearanceStyle());
+		// 0.12.1: the settings tab first, so that no later step can take it away. It reads the services below lazily.
+		this.step("settings tab", () => this.addSettingTab(new NotebookSettingTab(this.app, this)));
+		this.step("language notice", () => this.register(onLanguageChanged(() => showNotice(t("settings.uiLanguage.changed")))));
 		// wave 0.8 (374): notices and non-urgent background work wait while the pen is on the screen.
-		trackWriting(this);
+		this.step("writing tracker", () => trackWriting(this));
 
-		this.practice = new PracticeService(this);
-		this.journal = new AdapterJournalStore(this.app.vault.adapter, journalFolder(this.app, this.manifest.id));
-		this.syncSafety = new SyncSafetyService(this);
-		this.syncSafety.register();
-		// wave 0.7: resilience (#346 safe mode, #347 storage full, #390 integrity check); before the views exist.
-		this.resilience = registerResilience(this, () => this.history);
-		this.registerView(VIEW_TYPE, (leaf) => new NotebookView(leaf, this));
-		this.registerExtensions([...NOTEBOOK_EXTENSIONS], VIEW_TYPE);
-		this.host = new NotebookLibraryHost(this);
-		// wave 0.12: folder colours and icons follow renames and other devices' changes (library/folder-meta-events.ts).
-		registerFolderMeta(this, this.host.folderMeta);
-		this.registerView(LIBRARY_VIEW_TYPE, (leaf) => new LibraryView(leaf, this.host));
-		// 0.12: Home (the library view on its Home surface); the rail, the quick actions and the bell reach the plugin through the host.
-		this.registerView(HOME_VIEW_TYPE, (leaf) => new HomeView(leaf, this.host));
-		Object.assign(this.host, {
-			runAction: (id: string): boolean => {
-				const run = this.globalActions[id];
-				if (!run) return false;
-				run();
-				return true;
-			},
-			openSettings: () => {
-				const setting = (this.app as unknown as { setting?: { open(): void; openTabById(id: string): void } }).setting;
-				setting?.open();
-				setting?.openTabById(this.manifest.id);
-			},
-			recentEdits: () => this.recentPages?.items() ?? [],
-			inbox: () => {
-				const service = inboxService(this);
-				return service ? this.inboxPort(service) : null;
-			},
+		this.step("practice", () => {
+			this.practice = new PracticeService(this);
 		});
-		// wave 0.6: library trash auto-empty (setting, off by default)
-		this.app.workspace.onLayoutReady(() => void this.host.trash.purgeExpired().catch((e) => console.error("[notebook] trash auto-empty failed", e)));
-
-		this.addRibbonIcon("home", t("home.command"), () => void this.openLibrary("home"));
+		this.step("journal", () => {
+			this.journal = new AdapterJournalStore(this.app.vault.adapter, journalFolder(this.app, this.manifest.id));
+		});
+		this.step("sync safety", () => {
+			this.syncSafety = new SyncSafetyService(this);
+			this.syncSafety.register();
+		});
+		// wave 0.7: resilience (#346 safe mode, #347 storage full, #390 integrity check); before the views exist.
+		this.step("resilience", () => {
+			this.resilience = registerResilience(this, () => this.history);
+		});
+		this.step("notebook view", () => {
+			this.registerView(VIEW_TYPE, (leaf) => new NotebookView(leaf, this));
+			this.registerExtensions([...NOTEBOOK_EXTENSIONS], VIEW_TYPE);
+		});
+		this.step("library", () => {
+			this.host = new NotebookLibraryHost(this);
+			this.registerView(LIBRARY_VIEW_TYPE, (leaf) => new LibraryView(leaf, this.host));
+			// 0.12: Home (the library view on its Home surface); the rail, the quick actions and the bell reach the plugin through the host.
+			this.registerView(HOME_VIEW_TYPE, (leaf) => new HomeView(leaf, this.host));
+			Object.assign(this.host, {
+				runAction: (id: string): boolean => {
+					const run = this.globalActions[id];
+					if (!run) return false;
+					run();
+					return true;
+				},
+				openSettings: () => {
+					const setting = (this.app as unknown as { setting?: { open(): void; openTabById(id: string): void } }).setting;
+					setting?.open();
+					setting?.openTabById(this.manifest.id);
+				},
+				recentEdits: () => this.recentPages?.items() ?? [],
+				inbox: () => {
+					const service = inboxService(this);
+					return service ? this.inboxPort(service) : null;
+				},
+			});
+			// wave 0.6: library trash auto-empty (setting, off by default)
+			this.app.workspace.onLayoutReady(() => void this.host.trash.purgeExpired().catch((e) => console.error("[notebook] trash auto-empty failed", e)));
+		});
+		// wave 0.12: folder colours and icons follow renames and other devices' changes (library/folder-meta-events.ts).
+		this.step("folder metadata", () => registerFolderMeta(this, this.host.folderMeta));
+		this.step("ribbon", () => this.addRibbonIcon("home", t("home.command"), () => void this.openLibrary("home")));
 
 		// wave p1b: repair (#140), conflicted copies (#122), page restore (#180).
-		registerReliability(this, this, () => this.views(), () => this.app.workspace.getActiveViewOfType(NotebookView));
+		this.step("reliability", () => registerReliability(this, this, () => this.views(), () => this.app.workspace.getActiveViewOfType(NotebookView)));
 
-		registerLectureRibbon(this, (file) => this.host.openNotebook(file));
+		this.step("lecture ribbon", () => registerLectureRibbon(this, (file) => this.host.openNotebook(file)));
 		// Wave 0.6: synchronised PDF <-> notes view (view/pdf-sync.ts).
-		initPdfSync(this, () => this.settings.folder);
+		this.step("pdf sync", () => initPdfSync(this, () => this.settings.folder));
 
 		// wave 0.7: quick nav (page switcher, recently edited pages; "Go to page number" is a view action of the registry)
-		this.recentPages = new RecentPagesService(this.app, (file) => this.host.readNotebook(file));
-		this.recentPages.register(this);
+		this.step("recent pages", () => {
+			this.recentPages = new RecentPagesService(this.app, (file) => this.host.readNotebook(file));
+			this.recentPages.register(this);
+			Object.assign(this.host, { openRecentPages: () => openRecentPages(this.app, this.recentPages) });
+		});
 		// wave 0.10: back/forward history of visited pages (18) and the status bar item (O15); views reach both through the host.
-		this.nav = registerNavigation(this, (file) => this.host.readNotebook(file));
-		this.registerStatusBar();
-		Object.assign(this.host, { openRecentPages: () => openRecentPages(this.app, this.recentPages) });
-		const quickNav = new QuickNavService(this.app, {
-			root: () => this.settings.folder,
-			loadIndex: () => this.host.loadIndex(),
-			saveIndex: (data) => this.host.saveIndex(data),
-			readNotebook: (file) => this.host.readNotebook(file),
-			thumbnailBackground: (doc, page, width) => this.host.thumbnailBackground(doc, page, width),
-		}, this.recentPages);
+		this.step("navigation", () => {
+			this.nav = registerNavigation(this, (file) => this.host.readNotebook(file));
+		});
+		this.step("status bar", () => this.registerStatusBar());
+		let quickNav: QuickNavService | null = null;
+		this.step("quick navigation", () => {
+			quickNav = new QuickNavService(this.app, {
+				root: () => this.settings.folder,
+				loadIndex: () => this.host.loadIndex(),
+				saveIndex: (data) => this.host.saveIndex(data),
+				readNotebook: (file) => this.host.readNotebook(file),
+				thumbnailBackground: (doc, page, width) => this.host.thumbnailBackground(doc, page, width),
+			}, this.recentPages);
+		});
 
 		// ui redesign: every command of the plugin comes from the action registry (ui/actions.ts); ids are unchanged.
 		this.globalActions = {
@@ -154,7 +180,9 @@ export default class NotebookPlugin extends Plugin {
 			"timetable": () => void this.timetable.edit(),
 			"open-class": () => this.timetable.openNow(),
 			"pen-button-test": () => new PenTestModal(this.app, penSignalInfo(this)).open(),
-			"go-to-page": () => openPageSwitcher(quickNav),
+			"go-to-page": () => {
+				if (quickNav) openPageSwitcher(quickNav);
+			},
 			"recent-pages": () => openRecentPages(this.app, this.recentPages),
 			"sync-check": () => void this.syncSafety.openCheck(),
 			"check-integrity": () => void this.resilience?.check(),
@@ -164,47 +192,98 @@ export default class NotebookPlugin extends Plugin {
 			"benchmark": () => this.openBenchmark(),
 			"create-stress-test": () => void this.createStressNotebook(),
 		};
-		const missing = registerActionCommands(this, {
-			activeView: () => this.app.workspace.getActiveViewOfType(NotebookView),
-			globals: this.globalActions,
+		this.step("commands", () => {
+			const missing = registerActionCommands(this, {
+				activeView: () => this.app.workspace.getActiveViewOfType(NotebookView),
+				globals: this.globalActions,
+			});
+			if (missing.length) console.error("[notebook] actions without a handler:", missing.join(", "));
 		});
-		if (missing.length) console.error("[notebook] actions without a handler:", missing.join(", "));
 
-		this.history = registerIntegration(this, {
-			background: (doc, page, width) => this.host.thumbnailBackground(doc, page, width),
-			newNotebookIn: (folder) => this.host.createNotebook(folder),
-			annotatePdf: (pdf) => this.host.importPdf(this.settings.folder, pdf),
+		this.step("integration", () => {
+			this.history = registerIntegration(this, {
+				background: (doc, page, width) => this.host.thumbnailBackground(doc, page, width),
+				newNotebookIn: (folder) => this.host.createNotebook(folder),
+				annotatePdf: (pdf) => this.host.importPdf(this.settings.folder, pdf),
+			});
 		});
 		// wave 0.6: zettelkasten (M15 Z1–Z3, Z11, Z12)
-		registerZettel(this);
+		this.step("zettelkasten", () => registerZettel(this));
 		// wave 0.8: quick textbook reference (roadmap 208): "p. 134" in a text box opens the textbook at that page
-		registerTextbookRefs(this, () => this.settings.folder);
+		this.step("textbook references", () => registerTextbookRefs(this, () => this.settings.folder));
 
 		// wave 0.9: redo the exercise (#303): practice copies, attempts, peek, timer (view/practice.ts)
-		this.practice.start();
+		this.step("practice start", () => this.practice.start());
 
 		// wave 0.6: timetable (src/timetable/): current class offer, library shortcut, editor.
-		this.timetable = new TimetableService(this, (file) => this.host.openNotebook(file));
-		this.timetable.start();
-
-		this.addSettingTab(new NotebookSettingTab(this.app, this));
+		this.step("timetable", () => {
+			this.timetable = new TimetableService(this, (file) => this.host.openNotebook(file));
+			this.timetable.start();
+		});
 
 		// Best effort only (not guaranteed, unreliable on mobile): views also flush on visibilitychange/pagehide.
-		this.registerEvent(this.app.workspace.on("quit", () => void this.flushAll()));
+		this.step("quit flush", () => this.registerEvent(this.app.workspace.on("quit", () => void this.flushAll())));
+
+		if (this.startupFailures.length > 0) {
+			const steps = this.startupFailures.join(", ");
+			this.app.workspace.onLayoutReady(() => showNotice(t("notice.startupFailed", { steps }), 15000));
+		}
 	}
 
+	/**
+	 * 0.12.1: runs one start-up step. A step that throws is logged and recorded in `startupFailures`, and the start-up
+	 * goes on: one failing feature never takes the settings tab, the views or the commands down with it.
+	 */
+	private step(name: string, run: () => void): void {
+		try {
+			run();
+		} catch (e) {
+			this.startupFailures.push(name);
+			console.error(`[notebook] start-up step "${name}" failed; the other features still start`, e);
+		}
+	}
+
+	/**
+	 * The stored settings. 0.12.1: an unreadable data.json no longer aborts the start-up: the plugin starts on the
+	 * defaults and never writes them over the stored file in this session (zero data loss), so it can be repaired.
+	 */
+	private async readStoredSettings(): Promise<NotebookSettings> {
+		try {
+			return readSettings(await this.loadData());
+		} catch (e) {
+			this.settingsUnreadable = true;
+			this.startupFailures.push("settings file");
+			console.error("[notebook] the plugin settings (data.json) could not be read; using the defaults without saving them", e);
+			return readSettings(null);
+		}
+	}
+
+	/** Set when data.json could not be read: the settings are never saved over it (see `readStoredSettings`). */
+	private settingsUnreadable = false;
+
 	onunload(): void {
-		if (this.rememberTimer !== null) this.writeLocation();
-		this.recentPages.flush();
-		void this.flushAll();
-		this.syncSafety.dispose();
-		this.timetable.stop();
-		this.host.dispose();
-		activeDocument.body.removeClass("notebook-style-obsidian");
+		// 0.12.1: each step is independent, and a service whose start-up step failed may not exist.
+		const stop = (name: string, run: () => void): void => {
+			try {
+				run();
+			} catch (e) {
+				console.error(`[notebook] stopping "${name}" failed`, e);
+			}
+		};
+		stop("last location", () => {
+			if (this.rememberTimer !== null) this.writeLocation();
+		});
+		stop("recent pages", () => this.recentPages?.flush());
+		stop("views", () => void this.flushAll());
+		stop("sync safety", () => this.syncSafety?.dispose());
+		stop("timetable", () => this.timetable?.stop());
+		stop("library", () => this.host?.dispose());
+		stop("appearance", () => activeDocument.body.removeClass("notebook-style-obsidian"));
 	}
 
 	async saveSettings(): Promise<void> {
-		await this.saveData(this.settings);
+		if (this.settingsUnreadable) showNotice(t("notice.settingsNotSaved"));
+		else await this.saveData(this.settings);
 		this.applyAppearanceStyle();
 		for (const view of this.views()) view.applySettings(this.settings);
 	}
@@ -284,6 +363,7 @@ export default class NotebookPlugin extends Plugin {
 	private writeLocation(): void {
 		if (this.rememberTimer !== null) window.clearTimeout(this.rememberTimer);
 		this.rememberTimer = null;
+		if (this.settingsUnreadable) return;
 		void this.saveData(this.settings).catch((e) => console.error("[notebook] could not save the last location", e));
 	}
 

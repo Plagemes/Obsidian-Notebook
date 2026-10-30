@@ -325,6 +325,10 @@ export class Vault extends Events {
 		return [...this.entries.values()];
 	}
 
+	getMarkdownFiles(): TFile[] {
+		return this.getFiles().filter((f) => f.extension === "md");
+	}
+
 	private parentOf(p: string): TFolder {
 		const i = p.lastIndexOf("/");
 		const dir = i < 0 ? "" : p.slice(0, i);
@@ -480,6 +484,9 @@ export class Workspace extends Events {
 	}
 	getActiveFile(): TFile | null {
 		return null;
+	}
+	getMostRecentLeaf(): WorkspaceLeaf | null {
+		return this.leaves[0] ?? null;
 	}
 	/** Layout saves requested by views; counted so the harness can see that the page is saved with the layout. */
 	layoutSaves = 0;
@@ -683,7 +690,9 @@ export class MarkdownRenderChild extends Component {
 }
 
 export class Plugin extends Component {
-	constructor(readonly app: App, readonly manifest: { id: string; dir?: string; version: string }) {
+	/** 0.12.1: what the plugin registered, so the harness can check its `onload` (plugin-check.ts). */
+	readonly registered = { views: [] as string[], settingTabs: [] as PluginSettingTab[], ribbonIcons: 0, commands: 0 };
+	constructor(readonly app: App, readonly manifest: { id: string; dir?: string; version: string; name?: string }) {
 		super();
 	}
 	async loadData(): Promise<unknown> {
@@ -692,19 +701,41 @@ export class Plugin extends Component {
 	async saveData(): Promise<void> {
 		/* in memory */
 	}
-	registerView(): void {
-		/* harness creates the view itself */
+	registerView(type: string): void {
+		// The harness creates the views itself; the type is recorded.
+		this.registered.views.push(type);
 	}
 	registerExtensions(): void {
 		/* nothing */
 	}
 	addRibbonIcon(): HTMLElement {
+		this.registered.ribbonIcons++;
 		return createDiv();
 	}
 	addCommand(): void {
+		this.registered.commands++;
+	}
+	removeCommand(): void {
 		/* nothing */
 	}
-	addSettingTab(): void {
+	/** As Obsidian 1.13+: the tab is listed and its definitions are read at once for the settings search (`update()`). */
+	addSettingTab(tab: PluginSettingTab): void {
+		tab.update();
+		this.registered.settingTabs.push(tab);
+	}
+	addStatusBarItem(): HTMLElement {
+		return createDiv();
+	}
+	registerMarkdownPostProcessor(): void {
+		/* nothing */
+	}
+	registerEditorSuggest(): void {
+		/* nothing */
+	}
+	registerEditorExtension(): void {
+		/* nothing */
+	}
+	registerHoverLinkSource(): void {
 		/* nothing */
 	}
 	registerMarkdownCodeBlockProcessor(): void {
@@ -860,9 +891,100 @@ export class SuggestModal<T> extends Modal {
 	}
 }
 
+/** A row or group of a declarative settings tab (Obsidian 1.13+), as much of it as the stub reads. */
+interface DefinitionStub {
+	type?: string;
+	name?: string;
+	desc?: string | DocumentFragment;
+	cls?: string;
+	items?: DefinitionStub[];
+	visible?: boolean | (() => boolean);
+	control?: { type: string; key: string; defaultValue?: unknown; options?: Record<string, string>; min?: number; max?: number; step?: number; placeholder?: string };
+	action?: (el: HTMLElement, index: number) => void;
+	render?: (setting: Setting, group: unknown) => unknown;
+}
+
+/**
+ * The settings tab with both of Obsidian's ways to draw it: `display()` (before 1.13) and the declarative definitions of
+ * 1.13+ (`getSettingDefinitions()`, read by `update()` when the tab is added and drawn by `showDeclarative()`).
+ */
 export class PluginSettingTab {
-	readonly containerEl = createDiv();
+	readonly containerEl = createDiv({ cls: "vertical-tab-content" });
+	settingItems: unknown[] = [];
+	/** The drawn declarative rows and their `visible`, for `refreshDomState()`. */
+	private shown: Array<{ el: HTMLElement; visible: DefinitionStub["visible"] }> = [];
 	constructor(readonly app: App, readonly plugin: unknown) {}
+	getSettingDefinitions(): unknown[] {
+		return [];
+	}
+	update(): void {
+		this.settingItems = this.getSettingDefinitions();
+	}
+	display(): void {
+		/* override */
+	}
+	hide(): void {
+		this.containerEl.empty();
+	}
+	getControlValue(key: string): unknown {
+		return (this.plugin as { settings: Record<string, unknown> }).settings[key];
+	}
+	setControlValue(key: string, value: unknown): void | Promise<void> {
+		(this.plugin as { settings: Record<string, unknown> }).settings[key] = value;
+	}
+	refreshDomState(): void {
+		for (const row of this.shown) row.el.toggleClass("notebook-hidden", !isVisible(row.visible));
+	}
+	/**
+	 * What Obsidian 1.13+ does when the tab opens: the definitions, drawn declaratively; `display()` only when there are
+	 * none. Returns which path drew the tab.
+	 */
+	showDeclarative(): "declarative" | "display" {
+		this.containerEl.empty();
+		this.shown = [];
+		this.update();
+		const items = this.settingItems as DefinitionStub[];
+		if (items.length === 0) {
+			this.display();
+			return "display";
+		}
+		for (const item of items) this.drawItem(this.containerEl, item);
+		this.refreshDomState();
+		return "declarative";
+	}
+	private drawItem(parent: HTMLElement, item: DefinitionStub): void {
+		if (item.type === "group" || item.type === "list") {
+			const group = parent.createDiv({ cls: `setting-group${item.cls ? ` ${item.cls}` : ""}` });
+			this.shown.push({ el: group, visible: item.visible });
+			for (const child of item.items ?? []) this.drawItem(group, child);
+			return;
+		}
+		const setting = new Setting(parent);
+		this.shown.push({ el: setting.settingEl, visible: item.visible });
+		setting.setName(item.name ?? "");
+		if (typeof item.desc === "string") setting.setDesc(item.desc);
+		const c = item.control;
+		if (item.render) {
+			item.render(setting, parent);
+		} else if (item.action) {
+			const action = item.action;
+			setting.settingEl.addEventListener("click", () => action(setting.settingEl, 0));
+		} else if (c) {
+			const value = this.getControlValue(c.key) ?? c.defaultValue;
+			const save = (v: unknown) => void this.setControlValue(c.key, v);
+			const text = typeof value === "string" || typeof value === "number" ? String(value) : "";
+			// The inert toggle and slider builders, with the three methods used here.
+			type Chain = { setLimits(min?: number, max?: number, step?: number): Chain; setValue(v: unknown): Chain; onChange(f: (v: unknown) => void): Chain };
+			if (c.type === "toggle") setting.addToggle((tg) => (tg as unknown as Chain).setValue(value === true).onChange(save));
+			else if (c.type === "dropdown") setting.addDropdown((dd) => dd.addOptions(c.options ?? {}).setValue(text).onChange(save));
+			else if (c.type === "slider") setting.addSlider((sl) => (sl as unknown as Chain).setLimits(c.min, c.max, c.step).setValue(value).onChange(save));
+			else setting.addText((tx) => tx.setPlaceholder(c.placeholder ?? "").setValue(text).onChange(save));
+		}
+	}
+}
+
+function isVisible(v: DefinitionStub["visible"]): boolean {
+	return typeof v === "function" ? v() : v !== false;
 }
 
 /**
@@ -1146,4 +1268,23 @@ export class AbstractInputSuggest<T> {
 
 export function getAllTags(): string[] | null {
 	return null;
+}
+
+export function parseLinktext(linktext: string): { path: string; subpath: string } {
+	const i = linktext.indexOf("#");
+	return i < 0 ? { path: linktext, subpath: "" } : { path: linktext.slice(0, i), subpath: linktext.slice(i) };
+}
+
+/** The editor suggestions of the integration (page links); never shown in the harness, which has no Markdown editor. */
+export class EditorSuggest<T> {
+	context: unknown = null;
+	limit = 100;
+	constructor(readonly app: App) {}
+	getSuggestions(context: unknown): T[] | Promise<T[]> {
+		void context;
+		return [];
+	}
+	close(): void {
+		/* nothing */
+	}
 }

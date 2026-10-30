@@ -109,6 +109,8 @@ Obsidian's interface font (`--font-interface`). Numbers use `font-variant-numeri
 
 Each component lives in the plugin as one reusable builder, for example `ui/components/subject-card.ts`, with the same tokens on every surface.
 
+**CSS scope.** Every surface built on these components carries the class `nb-ui` on its root (the Home/library root, the creation dialog), and every component rule in `styles.css` starts with that scope (`.nb-ui .nb-chip`, `.nb-app.nb-ui …`). Obsidian styles every button and text input with selectors of specificity 0,1,1 (`button:not(.clickable-icon)`, `button:hover`, `input[type=search]`), which beat a single-class rule: unscoped, a component shows Obsidian's grey button. A reset at the top of the section neutralises those defaults inside `.nb-ui`; `tests/styles.test.ts` fails on an unscoped rule, and the browser harness loads the same Obsidian rules.
+
 | Component | Anatomy (from the reference) | Behaviour |
 |---|---|---|
 | **Page header** | Large title + muted subtitle on the left. On the right: search pill, circular icon buttons (filter, sort, view toggle; the active one gets an accent fill) | The search pill searches the current surface. The `⌘K` / `Ctrl K` hint is shown only on desktop |
@@ -210,3 +212,4 @@ They use the same palette and art engine (§2.3, §2.6).
 5. Strings in English and Italian.
 6. Works with pen, finger and mouse, on phone, tablet and desktop widths, in dark and light.
 7. `docs/design-ui.md` is updated if a surface or the settings structure changed.
+8. New component rules are scoped under `.nb-ui` (§3), and the surface is checked in the browser harness, which loads Obsidian's own button and input rules.

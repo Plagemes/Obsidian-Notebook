@@ -1,4 +1,6 @@
-/* The slice of Obsidian's app.css the plugin's styles rely on: theme variables and the leaf layout. */
+/* The slice of Obsidian's app.css the plugin's styles rely on, or compete with: theme variables, the leaf layout and
+   Obsidian's own button and text-input rules (copied from app.css, 0.12.1: before, a softer stand-in hid that these beat
+   the plugin's single-class component rules, and Home rendered as Obsidian's grey pills on the device). */
 
 body {
 	margin: 0;
@@ -10,6 +12,14 @@ body {
 	--radius-s: 4px;
 	--radius-m: 8px;
 	--input-height: 30px;
+	--input-radius: 5px;
+	--button-radius: var(--input-radius);
+	--input-padding: 4px 8px;
+	--input-border-width: 1px;
+	--input-font-weight: normal;
+	--size-4-1: 4px;
+	--size-4-3: 12px;
+	--cursor: default;
 	--layer-popover: 30;
 	--shadow-l: 0 4px 16px rgba(0, 0, 0, 0.3);
 	--interactive-accent: #7c3aed;
@@ -29,6 +39,13 @@ body.theme-light {
 	--text-normal: #222222;
 	--text-muted: #5c5c5c;
 	--text-faint: #ababab;
+	--interactive-normal: #ffffff;
+	--interactive-hover: #fafafa;
+	--background-modifier-form-field: #ffffff;
+	--background-modifier-border-hover: #d4d4d4;
+	--background-modifier-border-focus: #bdbdbd;
+	--input-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12), 0 1px 2px 0 rgba(0, 0, 0, 0.065), 0 0 0 0 transparent;
+	--input-shadow-hover: inset 0 0 0 1px rgba(0, 0, 0, 0.17), 0 1px 2px 0 rgba(0, 0, 0, 0.1), 0 0 0 0 transparent;
 }
 
 /* Obsidian's dark theme: the stage background (--background-secondary) is nearly black. */
@@ -41,7 +58,19 @@ body.theme-dark {
 	--text-normal: #dadada;
 	--text-muted: #b3b3b3;
 	--text-faint: #666666;
+	--interactive-normal: #363636;
+	--interactive-hover: #3f3f3f;
+	--background-modifier-form-field: #262626;
+	--background-modifier-border-hover: #3f3f3f;
+	--background-modifier-border-focus: #555555;
+	--input-shadow: inset 0 0.5px 0.5px 0.5px rgba(255, 255, 255, 0.09), 0 2px 4px 0 rgba(0, 0, 0, 0.15), 0 1px 1.5px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.2), 0 0 0 0 transparent;
+	--input-shadow-hover: inset 0 0.5px 1px 0.5px rgba(255, 255, 255, 0.16), 0 2px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 1.5px 0 rgba(0, 0, 0, 0.2), 0 1px 2px 0 rgba(0, 0, 0, 0.4), 0 0 0 0 transparent;
 	color-scheme: dark;
+}
+
+/* Obsidian on a phone or tablet (body.is-mobile): taller inputs and buttons. */
+body.is-mobile {
+	--input-height: 36px;
 }
 
 .harness-app {
@@ -81,12 +110,78 @@ body.theme-dark {
 	box-sizing: border-box;
 }
 
+/* Obsidian's buttons and text inputs, as in app.css (same selectors, so the same specificity). */
 button {
-	font: inherit;
-	color: inherit;
-	background: var(--background-primary);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-s);
+	--text-color: var(--text-normal);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--text-color);
+	font-size: var(--font-ui-small);
+	border-radius: var(--button-radius);
+	border: 0;
+	padding: var(--size-4-1) var(--size-4-3);
+	height: var(--input-height);
+	font-weight: var(--input-font-weight);
+	cursor: var(--cursor);
+	font-family: inherit;
+	outline: none;
+	user-select: none;
+	white-space: nowrap;
+}
+
+button:not(.clickable-icon) {
+	color: var(--text-color);
+	background-color: var(--interactive-normal);
+	box-shadow: var(--input-shadow);
+}
+
+button:not(.clickable-icon).mobile-tap {
+	background-color: var(--interactive-hover);
+	box-shadow: var(--input-shadow-hover);
+}
+
+button:hover {
+	background-color: var(--interactive-hover);
+	box-shadow: var(--input-shadow-hover);
+}
+
+button:focus-visible {
+	box-shadow: 0 0 0 3px var(--background-modifier-border-focus);
+}
+
+textarea,
+input[type=date],
+input[type=datetime-local],
+input[type=text],
+input[type=search],
+input[type=email],
+input[type=password],
+input[type=number] {
+	background: var(--background-modifier-form-field);
+	border: var(--input-border-width) solid var(--background-modifier-border);
+	color: var(--text-normal);
+	font-family: inherit;
+	padding: var(--input-padding);
+	font-size: var(--font-ui-small);
+	border-radius: var(--input-radius);
+	outline: none;
+}
+
+input[type=text],
+input[type=search],
+input[type=email],
+input[type=password],
+input[type=number] {
+	height: var(--input-height);
+}
+
+textarea:where(:not(:disabled)):hover,
+input[type=text]:where(:not(:disabled)):hover,
+input[type=search]:where(:not(:disabled)):hover,
+input[type=number]:where(:not(:disabled)):hover {
+	background-color: var(--background-modifier-form-field-hover, var(--background-modifier-form-field));
+	border-color: var(--background-modifier-border-hover);
 }
 
 .harness-icon {

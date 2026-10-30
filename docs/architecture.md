@@ -178,7 +178,7 @@ A page added with **Add page** copies the size and paper of the page in view (0.
 
 ```
 src/
-  main.ts                 plugin: views (notebook, library), extension, ribbon, commands, settings, integration, flush on unload
+  main.ts                 plugin: views (notebook, library), extension, ribbon, commands, settings, integration, flush on unload. Since 0.12.1 every start-up step runs through `step()`: a step that throws is logged, listed in `startupFailures` and reported once in a notice, and the others still start; the settings tab is registered first. An unreadable data.json starts the plugin on the defaults and is never written over in that session
   settings.ts             settings types and defaults (paper, size, input, stabilization, predicted ink, version history)
   i18n.ts                 UI strings: English, Italian when Obsidian's language is Italian
   model/                  (does not import 'obsidian')
@@ -391,7 +391,7 @@ src/
     pdf-side-pane.ts      the PDF pane inside the notebook body: header, page, strip "Add notes page for this slide", divider
     pdf-reference.ts      what the pane shows: a plain vault PDF (own `PdfStore`) or another notebook's pages (own `NotebookMedia`)
     settings-schema.ts    the settings tab described once: sections, groups, rows, visibility, search (pure; docs/design-ui.md §10)
-    settings-tab.ts       draws the settings tab from the schema (Obsidian 1.13+ definitions and the older hand-drawn tab)
+    settings-tab.ts       draws the settings tab from the schema (Obsidian 1.13+ definitions and the older hand-drawn tab); 0.12.1: the definitions never throw (an empty list makes Obsidian fall back to `display()`), each row callback is guarded, and a tab that cannot be drawn shows the error
   zettel/                 Zettelkasten core (M15, §12 "Zettelkasten"); the first five files and local-pages.ts are pure (no 'obsidian', lint-enforced)
     subpath.ts            card subpaths `#p3&id=<page id>&r=x,y,w,h`: parse/build, page lookup by id, region clamping
     ids.ts                card ids: timestamp, Luhmann (top level and branches), file names, random suffixes
