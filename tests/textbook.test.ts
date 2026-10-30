@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	applyTextbookOp, emptyTextbooks, findPageRefs, parseTextbooks, pdfLinkText, pdfPageFor, placeRefs, referenceText, serializeTextbooks,
 	textbookName, textbooksFor, TEXTBOOKS_FORMAT, type Textbook, type TextbookData,
@@ -172,6 +172,7 @@ const plain = (d: TextbookData) => d.books.map((b) => {
 
 describe("textbook store (one file per device)", () => {
 	const LEGACY = "Notebooks/_meta/textbooks.json";
+	afterEach(() => vi.useRealTimers());
 	const make = (device = "aaaaaaaa", adapter = new MemoryAdapter()) => ({ adapter, store: new TextbookStore(adapter, () => "Notebooks", device) });
 
 	it("lives in _meta of the notebooks folder and reading never writes", async () => {
@@ -192,19 +193,24 @@ describe("textbook store (one file per device)", () => {
 	});
 
 	it("merges the other devices' files and the old shared file, which is never written", async () => {
+		// Fake clock: the time stamps decide who wins, so they must not depend on the speed of the machine.
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-10-01T10:00:00.000Z"));
 		const adapter = new MemoryAdapter();
 		const legacy = serializeTextbooks(data(nb("n1", "old.pdf"), nb("n2", "gone.pdf")));
 		adapter.files.set(LEGACY, legacy);
 		const mine = make("aaaaaaaa", adapter).store;
 		const theirs = make("bbbbbbbb", adapter).store;
 		await theirs.update({ type: "set", book: nb("n3", "theirs.pdf") });
+		vi.advanceTimersByTime(1000);
 		await mine.update({ type: "set", book: nb("n4", "mine.pdf") });
+		vi.advanceTimersByTime(1000);
 		await mine.update({ type: "remove", book: nb("n2", "gone.pdf") });
 		expect(plain(await mine.load()).map((b) => b.pdf)).toEqual(["old.pdf", "theirs.pdf", "mine.pdf"]);
 		expect(plain(await theirs.load()).map((b) => b.pdf)).toEqual(["old.pdf", "theirs.pdf", "mine.pdf"]);
 		expect(adapter.files.get(LEGACY)).toBe(legacy);
 		// Set again later on the other device: the newer setting wins over the removal.
-		await new Promise((r) => setTimeout(r, 5));
+		vi.advanceTimersByTime(5000);
 		await theirs.update({ type: "set", book: nb("n2", "gone.pdf", 4) });
 		expect(plain(await mine.load()).find((b) => b.pdf === "gone.pdf")?.offset).toBe(4);
 	});
