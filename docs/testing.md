@@ -169,6 +169,12 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Finger taps (wave 0.6, setting *Finger taps*, **default two fingers undo / three redo**): all fingers land within 150 ms, move ≤ 12 px, lift within 150 ms, whole tap ≤ 350 ms; ignored with a pen near (palm rejection window), a palm / edge-zone contact or a pen contact in the series; the view is put back after the tap; swap and off | ✅ | ✅ detector (tap, pan, pinch, slow, late landing, late lift, cancel, pen, stale contact), mapping, stage glue with a fake element, no stroke ends from a finger tap; ❌ real touch hardware | | ✅ | thresholds are guesses until tried on the tablet |
 | A finger that lands among fingers already panning / pinching never starts a stroke (also with *Draw with finger*) | ✅ | ✅ controller routing | | | |
 | Scribble to erase (wave 0.6, setting, **default off**): fast back-and-forth over ink deletes the strokes crossed by ≥ 2 legs, scribble not kept, one undo step | ✅ | ✅ detector on synthetic paths (angles, jitter, leg counts; negatives "mmm", sharp-topped "mmm", sweeping zig-zag shading, separate hatching strokes, slow scratch, lines / circles / spirals), victims (graze, long ruling, empty paper), one undo step; ❌ real pen strokes, view glue | | ✅ | thresholds (leg ≥ 12 pt and a turn window of 8 pt, ≥ 4 reversals, ≤ 300 ms per leg, drift ≤ 0.8 of a leg) tuned on synthetic data only |
+| Pen gestures (roadmap 139): recognisers for circle (select), "^" (space), one-stroke "#" (tags), one-stroke star (bookmark), "?" (search), line / arrow to a thumbnail (move selection), scribble (delete, existing detector); retrace-to-cancel; context rules (ink inside, ink under, page, selection + thumbnail) | ✅ | ✅ `tests/pen-gestures.test.ts` (positives at several sizes, tilt and tremor; negatives: letters, digits, H/N/+/E, zig-zag, wave, arch, V, n, A, 7, figure eight, spiral, half circle, lines and arrows without a selection, disabled gestures); ❌ real pen strokes | | ✅ | shapes and thresholds tuned on synthetic data only; "#", star and "?" must be drawn in one stroke |
+| Gesture triggers: gesture mode, side button "Pen gestures while held", opt-in long press (rest 0.65 s within 5 px of the first contact); never during normal writing, never for a finger or the eraser | ✅ | ✅ pure policy (`gestureStarts`, `dwellMayStart`, `DwellTracker`), settings and routing in `tests/pen-gestures*.test.ts`; ❌ the view glue and the real side button | | ✅ | how the button reaches the page is unverified (see the pen button notes) |
+| Preview label beside the nib, vibration on change, cancel by going back along the stroke, "Not recognised" | ✅ | ✅ recogniser, retrace and preview clock; ❌ the overlay | | | |
+| Custom gestures: three samples, consistency and built-in checks, template matching (`ink/gestures/dollar.ts`), bind to an Obsidian command, settings storage and parsing | ✅ | ✅ `tests/pen-gestures-custom.test.ts`; ❌ the pad and the command picker in Obsidian | | ✅ | |
+| Gesture effects in the undo history (delete, space, bookmark, move): ink first, effect after; move to another page plan | ✅ | ✅ move plan and undo (`tests/pen-gestures-view.test.ts`); ❌ the other effects in Obsidian | | | |
+| Cheat sheet, per-gesture switches, settings section, commands | ✅ | ❌ (needs Obsidian) | | | |
 | Auto-scroll after writing near the bottom (wave 0.6, setting, **default off**): stroke ends in the bottom 18 % → after 700 ms the view scrolls up 320 ms (ease-out) so the tip is at 40 %; never during a contact | ✅ | ✅ distance, easing, timing, cancel on contact, end of document; ❌ real view | | ✅ | the 700 ms pause and the 40 % target are guesses |
 | Pen side button: *Lasso while held* and *Previous tool while held* (extend *Pen side button*; default stays *Radial menu*); the tool is chosen when the pen touches down | ✅ | ✅ routing, held tool passed to the stroke start, setting parsing, previous-tool memory; ❌ the S Pen's real button reporting | | ✅ | pressing the button after the pen touched down does not switch (same as the eraser option) |
 | Library trash (#160): deleting a notebook or folder moves it to `_trash/` with its original path; restore to the original place or a free name; delete permanently and empty trash ask first; trash excluded from library, index, search, companion notes and conflicted-copy detection | ✅ | ✅ `tests/library-trash.test.ts`: layout, meta parsing, `isInTrash`, reserved folders, restore naming; ❌ vault moves, dialogs (need Obsidian) | | | permanent deletion follows Obsidian's *Deleted files* setting |
@@ -556,6 +562,38 @@ Not verified on a device. Fill in the result table at the end of this file.
 - **O8. Stamp with an image and text.** Select an image and a text box together, save as a stamp, delete the originals, place the stamp. Expected: both come back; the image uses the same file in `_assets/` (no copy).
 - **O9. Rename and delete a stamp.** Use the pencil and trash buttons on a stamp. Expected: the name changes in the palette and the file; delete asks first and moves the file to the trash; notebooks that used the stamp are unchanged.
 - **O10. Palette on a phone and with a finger.** Open the palette on a narrow screen. Expected: it fits, the list scrolls vertically, a sideways drag from a tile onto the page places the stamp. Report whether a vertical or diagonal drag scrolls the list instead of dragging.
+
+### Pen gestures (wave 0.8)
+
+Not verified on a device. Fill in the result table below.
+
+- **PG1. Nothing starts by itself.** With a clean settings file, write words, numbers, circles, arrows, a "#", a star and a "?" with the pen as normal ink. Expected: all of it stays ink; no label appears and nothing is selected, deleted or opened.
+- **PG2. Gesture mode.** "…" menu → *Gesture mode* (or the command). Expected: a *Gesture mode* badge at the top. Draw a circle around some words: while you draw, a label *Select* appears beside the pen once the loop closes; lift: the words are selected and no line is left. A finger still pans and zooms. Leave the mode with the badge's cross or the menu.
+- **PG3. Preview and cancel.** In the mode, draw a straight line outward and come back along it to the start, then lift. Expected: the label reads *Cancelled* and nothing changes. Draw a scribble over a word: the label says *Delete* before you lift; lift: the word is gone.
+- **PG4. Delete and undo.** Scribble over a word, lift, press Undo once. Expected: the word is back and the scribble you drew is on the page as ink; Undo again removes the scribble ink.
+- **PG5. Insert space.** Draw a "^" between two lines of writing. Expected: the lines below move down by the amount in the settings (default 48 pt); Undo restores them (and leaves the "^" as ink; Undo again removes it). On an empty part of the page: a notice says there is nothing to move.
+- **PG6. Tags, bookmark, search.** Draw a "#" in one stroke: the page tags editor opens. Draw a five-pointed star in one stroke: the page is bookmarked (a notice); again: the bookmark is removed. Draw a "?": the search bar opens.
+- **PG7. Move a selection.** Open the page panel, select some ink with the lasso (or the circle gesture), enter gesture mode and draw a line from the selection onto another page's thumbnail. Expected: the label says *Move to page N* before you lift; lifting moves the ink in place; Undo brings it back.
+- **PG8. Side button.** Settings → *Pen side button* → *Pen gestures while held*. Hold the button and draw a circle around ink, then a scribble. Expected: gestures work only while the button is held; without it the pen writes. Report what the Pen button test shows for your pen.
+- **PG9. Long press.** Settings → *Long press starts a gesture* on. Rest the pen on the page for about a second, then draw a circle. Expected: a short vibration, the dot disappears and the circle is a gesture. Write normally with pauses in the middle of words: nothing may turn into a gesture. Report false positives.
+- **PG10. Custom gesture.** Settings → *Custom gestures* → *New custom gesture*: name it, choose a command (for example *Open daily note* or *Toggle pen gesture mode*), draw a "Z" three times on the pad. Then in gesture mode draw the "Z" on the page. Expected: its name appears beside the pen and lifting runs the command. Try recording a circle (refused: looks like a built-in gesture) and three different shapes (refused: too different).
+- **PG11. Cheat sheet and switches.** Open the cheat sheet from the badge's question mark. Turn off *Insert space* and draw a "^": nothing happens, the label does not appear.
+- **PG12. Defaults and writing.** After updating, *Pen side button* is still *Radial menu on click, erase while held*, *Long press starts a gesture* is off, and writing, shapes by holding still, scribble erase and the radial menu behave exactly as before.
+
+| Step | Works (yes/no) | Device / pen | Notes |
+|---|---|---|---|
+| PG1 | | | |
+| PG2 | | | |
+| PG3 | | | |
+| PG4 | | | |
+| PG5 | | | |
+| PG6 | | | |
+| PG7 | | | |
+| PG8 | | | |
+| PG9 | | | |
+| PG10 | | | |
+| PG11 | | | |
+| PG12 | | | |
 
 ## Quick check — Windows
 
