@@ -338,3 +338,44 @@ describe("timetable store: never overwrites a file that changed since it was loa
 		expect(v.files.get(path)).toBe(serializeChecked(course("Late sync")));
 	});
 });
+
+describe("PDF links file: a vault file in _meta, moved over from the config folder", () => {
+	const doc = { notebook: "nb1", notesPage: "p1", source: "a".repeat(24), page: 3 };
+
+	it("lives in the notebooks folder's reserved _meta folder", async () => {
+		const { linksFolder } = await import("../src/storage/pdf-links-store");
+		const { isReservedPath } = await import("../src/library/folders");
+		expect(linksFolder("Notebooks")).toBe("Notebooks/_meta");
+		expect(linksFolder("")).toBe("_meta");
+		expect(isReservedPath("Notebooks/_meta/pdf-links.json", "Notebooks")).toBe(true);
+	});
+
+	it("copies a readable old file once, leaves it untouched, and then uses the vault file", async () => {
+		const { PdfLinkStore, linksFolder } = await import("../src/storage/pdf-links-store");
+		const { vaultLinkFileAdapter } = await import("../src/storage/vault-io");
+		const { emptyLinks, serializeLinks } = await import("../src/pdf/sync-links");
+		const oldText = serializeLinks({ ...emptyLinks(), links: [doc] });
+		const config = new Map([[".obsidian/plugins/notebook/pdf-links.json", oldText]]);
+		const legacy = { adapter: { exists: async (p: string) => config.has(p), read: async (p: string) => config.get(p)! }, path: ".obsidian/plugins/notebook/pdf-links.json" };
+		const v = new FakeVault();
+		const store = new PdfLinkStore(vaultLinkFileAdapter(v.app as never), () => linksFolder(ROOT), legacy);
+		expect((await store.load()).links).toEqual([doc]);
+		expect(v.files.get(`${ROOT}/_meta/pdf-links.json`)).toBe(oldText);
+		expect(config.get(legacy.path)).toBe(oldText);
+		// The old file is not read again once the vault file exists (another device's newer vault file wins).
+		config.set(legacy.path, serializeLinks(emptyLinks()));
+		expect((await store.load()).links).toEqual([doc]);
+	});
+
+	it("does not use an unreadable old file, keeps a copy of it, and never touches it", async () => {
+		const { PdfLinkStore, linksFolder } = await import("../src/storage/pdf-links-store");
+		const { vaultLinkFileAdapter } = await import("../src/storage/vault-io");
+		const config = new Map([["old.json", "{ broken"]]);
+		const legacy = { adapter: { exists: async (p: string) => config.has(p), read: async (p: string) => config.get(p)! }, path: "old.json" };
+		const v = new FakeVault();
+		const store = new PdfLinkStore(vaultLinkFileAdapter(v.app as never), () => linksFolder(ROOT), legacy);
+		expect((await store.load()).links).toEqual([]);
+		expect([...v.files.entries()].filter(([p]) => p.includes("unreadable")).map(([, t]) => t)).toEqual(["{ broken"]);
+		expect(config.get("old.json")).toBe("{ broken");
+	});
+});
