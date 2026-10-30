@@ -204,6 +204,11 @@ export class PointerController {
 		return this.drawId !== null;
 	}
 
+	/** True while a finger or mouse pans or zooms. */
+	get navigating(): boolean {
+		return this.nav.size > 0;
+	}
+
 	/** Ends the stroke in progress and keeps it (app going to background, view closing). */
 	finishActiveStroke(): void {
 		if (this.drawId === null) return;
@@ -261,6 +266,8 @@ export class PointerController {
 		if (route !== "ignore" && this.policy.edgeRejects(e.pointerType, e.clientX - this.rect.left, e.clientY - this.rect.top, this.rect.width, this.rect.height)) {
 			route = "ignore";
 		}
+		// A finger that lands among fingers that are already panning or pinching joins them: it never starts a stroke.
+		if (route === "draw" && e.pointerType === "touch" && this.nav.size > 0) route = "navigate";
 		// The menu route has no stroke whose end would clear this: the pen is not "down" for palm rejection.
 		if (e.pointerType === "pen") {
 			if (route === "menu") this.policy.notePen(e.timeStamp);

@@ -50,7 +50,7 @@ function pdfDoc(): { doc: NotebookDocument; page: Page } {
 
 describe("format v6: page margins", () => {
 	it("is at version 6 with a v5 step", () => {
-		expect(CURRENT_VERSION).toBe(6);
+		expect(CURRENT_VERSION).toBeGreaterThanOrEqual(6);
 		expect(MIGRATIONS[5]).toBeTypeOf("function");
 	});
 
@@ -58,7 +58,7 @@ describe("format v6: page margins", () => {
 		const raw = v5Doc();
 		const r = parsed(JSON.stringify(raw));
 		expect(r.migratedFrom).toBe(5);
-		expect(r.doc.version).toBe(6);
+		expect(r.doc.version).toBe(CURRENT_VERSION);
 		expect(r.doc.pages[0]!.margins).toBeUndefined();
 		expect(r.doc.pages[0]!.strokes[0]!.points).toEqual(raw.pages[0].strokes[0].points);
 		expect(r.doc.pages[0]!.background).toEqual(raw.pages[0].background);
@@ -107,8 +107,8 @@ describe("format v6: page margins", () => {
 		}
 	});
 
-	it("a v7 file is a future version (opens read-only, never rewritten)", () => {
-		const r = parse(JSON.stringify({ ...v5Doc(), version: 7 }));
+	it("a file of a version after the current one is a future version (opens read-only, never rewritten)", () => {
+		const r = parse(JSON.stringify({ ...v5Doc(), version: CURRENT_VERSION + 1 }));
 		expect(r.ok).toBe(false);
 		if (!r.ok) expect(r.reason).toBe("future-version");
 	});

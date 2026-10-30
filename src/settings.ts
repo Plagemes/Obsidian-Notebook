@@ -1,12 +1,18 @@
 import type { PressureMode } from "./ink/pressure";
 import { DEFAULT_ERASER_SIZE, DEFAULT_FAVOURITES, normaliseEraserSize, normaliseFavourites, type FavouritePen } from "./view/favourites";
 import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "./ink/edge-zones";
-import type { PenButtonAction } from "./ink/input-policy";
+import { DEFAULT_GESTURE_SETTINGS, readGestureSettings, type GestureSettings } from "./ink/gesture-settings";
+import { PEN_BUTTON_ACTIONS, type PenButtonAction } from "./ink/input-policy";
+import { isScrollMode, type ScrollMode } from "./ink/page-mode";
+import { parsePosition, type SavedPosition } from "./ink/view-position";
 import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./model/types";
 import { DEFAULT_COMPANION_SETTINGS, readCompanionSettings, type CompanionSettings } from "./storage/companion-path";
+import { DEFAULT_TRASH_SETTINGS, readTrashSettings, type TrashSettings } from "./storage/trash-settings";
+import { DEFAULT_ZETTEL_SETTINGS, readZettelSettings, type ZettelSettings } from "./zettel/settings";
+import { DEFAULT_READING_SETTINGS, readReadingSettings, type ReadingSettings } from "./view/reading-settings";
 
-/** Companion note settings (O1) are defined in storage/companion-path.ts. */
-export interface NotebookSettings extends CompanionSettings {
+/** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
+export interface NotebookSettings extends CompanionSettings, GestureSettings, TrashSettings, ZettelSettings, ReadingSettings {
 	folder: string;
 	fingerDrawing: boolean;
 	palmRejectionMs: number;
@@ -80,6 +86,21 @@ export interface NotebookSettings extends CompanionSettings {
 	/** Instant start: the notebook and page (1-based) the reader was on last, for "Continue last notebook". Not shown in the settings tab. */
 	lastNotebookPath: string;
 	lastNotebookPage: number;
+	// wave 0.6: navigation
+	/** Continuous vertical scrolling, or one page at a time with a sideways swipe (#14). */
+	scrollMode: ScrollMode;
+	/** Zoom and scroll position on `lastNotebookPage` (O16), for "Continue last notebook". Not shown in the settings tab. */
+	lastNotebookPos: SavedPosition | null;
+	// wave 0.6: timetable
+	/** Offer to open the current class's notebook at a new lecture page when the app or the library is opened during a class. */
+	timetableOffer: boolean;
+	/** Open it without asking (only when `timetableOffer` is on). */
+	timetableAutoOpen: boolean;
+	/** A class counts as in progress this many minutes before it starts. */
+	timetableLeadMinutes: number;
+	// wave 0.6: objects
+	/** Ink written over an image or a text box moves, scales and rotates with it (geometric attachment, nothing stored). */
+	inkFollowsObjects: boolean;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -116,10 +137,19 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	penChordButton: true,
 	lastNotebookPath: "",
 	lastNotebookPage: 1,
+	scrollMode: "continuous",
+	lastNotebookPos: null,
+	timetableOffer: true,
+	timetableAutoOpen: false,
+	timetableLeadMinutes: 5,
+	inkFollowsObjects: true,
 	...DEFAULT_COMPANION_SETTINGS,
+	...DEFAULT_GESTURE_SETTINGS,
+	...DEFAULT_TRASH_SETTINGS,
+	...DEFAULT_ZETTEL_SETTINGS,
+	zettelSlipBoxes: [],
+	...DEFAULT_READING_SETTINGS,
 };
-
-const PEN_BUTTON_ACTIONS: readonly PenButtonAction[] = ["radial-eraser", "radial", "eraser", "lasso", "previous", "off"];
 
 /** Merges saved data over the defaults, ignoring values of the wrong type. */
 export function readSettings(data: unknown): NotebookSettings {
@@ -152,8 +182,10 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.edgeTop === "boolean") s.edgeTop = d.edgeTop;
 	if (typeof d.edgeBottom === "boolean") s.edgeBottom = d.edgeBottom;
 	if (PEN_BUTTON_ACTIONS.includes(d.penSideButton as PenButtonAction)) s.penSideButton = d.penSideButton as PenButtonAction;
-	// 0.5.x saved every setting, so its "radial" is only the old default; an explicit "eraser" / "off" is kept.
-	else if (d.penButtonAction === "eraser" || d.penButtonAction === "off") s.penSideButton = d.penButtonAction;
+	// The old key: 0.5.x saved every setting, so its "radial" is only the old default and is not carried over; an
+	// explicit "eraser", "lasso", "off" (and wave 0.6's "lastTool", now "previous") is kept.
+	else if (d.penButtonAction === "eraser" || d.penButtonAction === "lasso" || d.penButtonAction === "off") s.penSideButton = d.penButtonAction;
+	else if (d.penButtonAction === "lastTool") s.penSideButton = "previous";
 	// 0.5.1 saved `penLongPress: false` for everyone (its default), so only an explicit true is carried over.
 	if (typeof d.penHoldStill === "boolean") s.penHoldStill = d.penHoldStill;
 	else if (d.penLongPress === true) s.penHoldStill = true;
@@ -163,7 +195,17 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.penChordButton === "boolean") s.penChordButton = d.penChordButton;
 	if (typeof d.lastNotebookPath === "string") s.lastNotebookPath = d.lastNotebookPath;
 	if (typeof d.lastNotebookPage === "number" && Number.isInteger(d.lastNotebookPage) && d.lastNotebookPage >= 1) s.lastNotebookPage = d.lastNotebookPage;
-	Object.assign(s, readCompanionSettings(d));
+	if (isScrollMode(d.scrollMode)) s.scrollMode = d.scrollMode;
+	s.lastNotebookPos = parsePosition(d.lastNotebookPos);
+
+	if (typeof d.timetableOffer === "boolean") s.timetableOffer = d.timetableOffer;
+	if (typeof d.timetableAutoOpen === "boolean") s.timetableAutoOpen = d.timetableAutoOpen;
+	if (typeof d.timetableLeadMinutes === "number" && Number.isInteger(d.timetableLeadMinutes) && d.timetableLeadMinutes >= 0 && d.timetableLeadMinutes <= 30) s.timetableLeadMinutes = d.timetableLeadMinutes;
+	Object.assign(s, readCompanionSettings(d), readGestureSettings(d));
+	Object.assign(s, readTrashSettings(d));
+	if (typeof d.inkFollowsObjects === "boolean") s.inkFollowsObjects = d.inkFollowsObjects;
+	Object.assign(s, readZettelSettings(d));
+	Object.assign(s, readReadingSettings(d));
 	return s;
 }
 

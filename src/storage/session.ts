@@ -1,4 +1,4 @@
-import { parse, serialize, serializeChecked, warmStrokeLines, type ParseFailure } from "../model/serialize";
+import { parse, parseStaged, serialize, serializeChecked, StagedParse, warmStrokeLines, type ParseFailure, type ParseResult } from "../model/serialize";
 import type { NotebookDocument } from "../model/types";
 import { buildEntry, fullWriteGapMs, inspectJournal, journalKey, splitLines, type JournalStore } from "./journal";
 
@@ -13,7 +13,10 @@ export interface DocumentIO {
 	path?(): string;
 }
 
-export type BackupReason = "unreadable" | "future-version" | "conflict" | "unsaved" | "journal" | "before-restore" | "before-move";
+export type BackupReason =
+	| "unreadable" | "future-version" | "conflict" | "unsaved" | "journal" | "before-restore" | "before-move" | "before-api"
+	/** v7: the file opened, but invalid details were dropped on read; the next save writes it without them. */
+	| "dropped-details";
 
 /**
  * - `ok`: the document is editable and saved automatically.
@@ -28,6 +31,14 @@ export type SaveState = "saved" | "pending" | "saving" | "error";
 export interface SessionEvents {
 	/** The document was (re)loaded: drop undo history and caches. */
 	onLoaded?(doc: NotebookDocument | null, mode: SessionMode, problem: string | null): void;
+	/**
+	 * Staged load (#329): a large notebook can be shown before it is fully read. `doc` has the page asked for in full and
+	 * stand-ins (right size, no ink) for the others. It is for DISPLAY ONLY: it is not `session.doc`, nothing can be
+	 * edited or saved, and `onLoaded` follows when every page has been read and validated (or reports the failure).
+	 */
+	onPartial?(doc: NotebookDocument): void;
+	/** Staged load: these pages (0-based) were read in full just now. */
+	onPartialProgress?(pages: number[]): void;
 	onSaveState?(state: SaveState): void;
 	onBackup?(path: string, reason: BackupReason): void;
 	/** The app died before the last save: edits found in the journal were restored and are being saved. */
@@ -73,10 +84,31 @@ export interface SessionOptions {
 	journalMaxQuietDeferMs?: number;
 	/** ...and while the pen is down (default 1.5 s): bounds how much ink a kill without a visibility change can lose. */
 	journalMaxBusyDeferMs?: number;
+	/**
+	 * Runs a function in a new task, after queued input and painting (staged load slices). `first` is the first slice,
+	 * which should wait until the page just announced has been painted. Default: a 0 ms timer.
+	 */
+	yieldTask?: (fn: () => void, first: boolean) => void;
+	/**
+	 * v7: called just before a changed revision is serialized for the first time (by the journal or by the save),
+	 * never for a revision that is not being written anyway. The view stores the reading position here, so it
+	 * travels with content saves only and never causes a write of its own. Errors are ignored.
+	 */
+	beforeSerialize?: (doc: NotebookDocument) => void;
 }
 
 /** The stroke-line warm-up waits this long after a load, so the page is painted first. */
 export const WARM_UP_DELAY_MS = 400;
+
+/** Staged load: pages are read in slices of about this many ms, with the event loop free in between (input, painting). */
+export const STAGED_SLICE_MS = 10;
+
+/** `load` options. */
+export interface LoadOptions {
+	/** Read a large notebook in stages (see `SessionEvents.onPartial`); `page` (1-based) is read first. */
+	staged?: boolean;
+	page?: number | null;
+}
 
 let ownerCounter = 0;
 /** A short unique id for a session's journal files (letters and digits only). */
@@ -106,6 +138,10 @@ const CLOSE_ATTEMPTS = 3;
 export class DocumentSession {
 	mode: SessionMode = "loading";
 	doc: NotebookDocument | null = null;
+	/** Staged load in progress: the document being read, for display only. Never saved. Null otherwise. */
+	partialDoc: NotebookDocument | null = null;
+	/** The staged load must stop at its next slice (the session is closing). */
+	private stagedAborted = false;
 	problem: string | null = null;
 	problemReason: ParseFailure | null = null;
 
@@ -150,12 +186,14 @@ export class DocumentSession {
 	private readonly retryMs: number;
 	private readonly now: () => Date;
 	private readonly busy: () => boolean;
+	private readonly beforeSerialize: ((doc: NotebookDocument) => void) | null;
 	private readonly quietMs: number;
 	private readonly maxQuietDeferMs: number;
 	private readonly maxBusyDeferMs: number;
 	private readonly journalQuietMs: number;
 	private readonly journalMaxQuietDeferMs: number;
 	private readonly journalMaxBusyDeferMs: number;
+	private readonly yieldTask: (fn: () => void, first: boolean) => void;
 	/** Revision a flush is currently serializing and writing, or null: the journal must not touch that document meanwhile. */
 	private flushingRevision: number | null = null;
 	/** When the last gesture ended (ms since epoch), or -Infinity. */
@@ -177,6 +215,7 @@ export class DocumentSession {
 		this.retryMs = options.retryMs ?? 5000;
 		this.now = options.now ?? (() => new Date());
 		this.busy = options.busy ?? (() => false);
+		this.beforeSerialize = options.beforeSerialize ?? null;
 		this.journal = options.journal ?? null;
 		this.journalDelayMs = options.journalDelayMs ?? 200;
 		this.journalOwner = options.journalOwner ?? newOwnerId();
@@ -186,6 +225,7 @@ export class DocumentSession {
 		this.journalQuietMs = options.journalQuietMs ?? 120;
 		this.journalMaxQuietDeferMs = options.journalMaxQuietDeferMs ?? 1000;
 		this.journalMaxBusyDeferMs = options.journalMaxBusyDeferMs ?? 1500;
+		this.yieldTask = options.yieldTask ?? ((fn) => void this.timers.set(fn, 0));
 	}
 
 	/**
@@ -246,10 +286,12 @@ export class DocumentSession {
 		return content === this.lastWritten || content === this.writing;
 	}
 
-	load(): Promise<void> {
+	load(options: LoadOptions = {}): Promise<void> {
+		// Set here, not when the slices start: a close that comes while the file is still being read must not be forgotten.
+		this.stagedAborted = false;
 		return this.enqueue(async () => {
 			const content = await this.io.read();
-			await this.applyDiskContent(content, true);
+			await this.applyDiskContent(content, true, options);
 		});
 	}
 
@@ -275,6 +317,8 @@ export class DocumentSession {
 	 * keeps them as an "unsaved" backup. Resolves to true if nothing was left only in memory.
 	 */
 	async flushForClose(): Promise<boolean> {
+		// A staged load still reading pages has nothing to save: let it stop instead of waiting for it.
+		this.stagedAborted = true;
 		for (let i = 0; i < CLOSE_ATTEMPTS; i++) {
 			await this.flush();
 			if (this.mode !== "ok" || !this.dirty) {
@@ -332,6 +376,61 @@ export class DocumentSession {
 		if (journal) void this.jchain.then(() => journal.release(this.journalOwner));
 	}
 
+	/** Is there a journal entry for this notebook (by document id and current path)? An unreadable journal counts as yes. */
+	private async hasJournalFor(docId: string): Promise<boolean> {
+		const journal = this.journal;
+		if (!journal) return false;
+		try {
+			const files = await journal.read(journalKey(docId, this.io.path?.() ?? ""));
+			return files.length > 0;
+		} catch {
+			return true;
+		}
+	}
+
+	/**
+	 * Reads the pages left in `staged` in time slices, announcing the partial document first and the pages as they
+	 * are read. Resolves with the complete result, or null if the session was closed. `mode` stays "loading" and
+	 * `doc` stays null throughout: nothing can be edited or saved from the partial document.
+	 */
+	private runStaged(staged: StagedParse): Promise<ParseResult | null> {
+		this.partialDoc = staged.doc;
+		return new Promise((resolve) => {
+			const done = (r: ParseResult | null): void => {
+				this.partialDoc = null;
+				resolve(r);
+			};
+			// A view callback that throws must not leave the load hanging (the whole session queue waits behind it).
+			const notify = (fn: () => void): void => {
+				try {
+					fn();
+				} catch (e) {
+					this.events.onError?.(`Showing the notebook while it loads failed: ${(e as Error).message}`);
+				}
+			};
+			const tick = (): void => {
+				if (this.disposed || this.stagedAborted) {
+					done(null);
+					return;
+				}
+				try {
+					const r = staged.step(STAGED_SLICE_MS);
+					if (!r.ok) {
+						done(r.failure);
+						return;
+					}
+					if (r.changed.length > 0) notify(() => this.events.onPartialProgress?.(r.changed));
+					if (r.done) done(staged.result());
+					else this.yieldTask(tick, false);
+				} catch (e) {
+					done({ ok: false, reason: "invalid", message: `unexpected error while reading the notebook: ${(e as Error).message}` });
+				}
+			};
+			notify(() => this.events.onPartial?.(staged.doc));
+			this.yieldTask(tick, true);
+		});
+	}
+
 	/** Resolves when the journal operations queued so far are done. For tests and orderly shutdown. */
 	journalIdle(): Promise<void> {
 		return this.jchain.then(() => undefined);
@@ -343,7 +442,7 @@ export class DocumentSession {
 		return run;
 	}
 
-	private async applyDiskContent(content: string, initialLoad = false): Promise<void> {
+	private async applyDiskContent(content: string, initialLoad = false, options: LoadOptions = {}): Promise<void> {
 		if (this.disposed) return;
 		// A file that could not be used until now (broken or read-only) is recovered like a first load: its
 		// journal may hold edits made before the file was damaged or overwritten.
@@ -353,9 +452,22 @@ export class DocumentSession {
 		this.savedRevision = 0;
 		this.journaledRevision = -1;
 		let recoveredAt: string | null = null;
-		const result = parse(content);
+		let result: ParseResult;
+		const parsed = initialLoad && options.staged && this.mode === "loading" ? parseStaged(content, options.page ?? null) : parse(content);
+		if (parsed instanceof StagedParse) {
+			// Edits left in the journal are merged into the complete document, so those loads are not staged.
+			const staged = (await this.hasJournalFor(parsed.doc.id)) ? null : parsed;
+			if (this.disposed || this.stagedAborted) return;
+			const finished = staged ? await this.runStaged(staged) : parsed.finish();
+			if (finished === null) return; // the session was closed meanwhile
+			result = finished;
+		} else {
+			result = parsed;
+		}
 		if (result.ok) {
 			let doc = result.doc;
+			if (result.dropped) await this.backupDropped(content);
+			if (this.disposed) return;
 			if (this.journal) {
 				if (recover) {
 					const recovered = await this.recoverFromJournal(content, doc);
@@ -405,6 +517,16 @@ export class DocumentSession {
 		}
 	}
 
+	/** The `beforeSerialize` hook; a failing hook never stops a save. */
+	private runBeforeSerialize(doc: NotebookDocument): void {
+		if (!this.beforeSerialize) return;
+		try {
+			this.beforeSerialize(doc);
+		} catch (e) {
+			console.error("[notebook] beforeSerialize failed", e);
+		}
+	}
+
 	private async doFlush(): Promise<boolean> {
 		if (this.mode !== "ok" || !this.doc || !this.dirty) return true;
 		const revision = this.revision;
@@ -424,7 +546,10 @@ export class DocumentSession {
 		const previousModifiedAt = doc.modifiedAt;
 		// If the journal already serialized this revision, keep its modifiedAt: the saved text is then identical
 		// to the journal entry's result, so a crash between the save and the cleanup is recognised as "merged".
-		if (this.journaledRevision !== revision) doc.modifiedAt = this.now().toISOString();
+		if (this.journaledRevision !== revision) {
+			this.runBeforeSerialize(doc);
+			doc.modifiedAt = this.now().toISOString();
+		}
 		const checked = serializeChecked(doc);
 		if (!checked.ok) {
 			doc.modifiedAt = previousModifiedAt;
@@ -539,6 +664,7 @@ export class DocumentSession {
 		// save and the cleanup leaves an entry whose result equals the file.
 		const revision = this.revision;
 		const previousModifiedAt = doc.modifiedAt;
+		this.runBeforeSerialize(doc);
 		doc.modifiedAt = this.now().toISOString();
 		const checked = serializeChecked(doc);
 		if (!checked.ok) {
@@ -650,6 +776,20 @@ export class DocumentSession {
 	private async backupJournalCopy(text: string): Promise<void> {
 		const path = await this.io.backup(text, "journal");
 		if (path && !this.disposed) this.events.onBackup?.(path, "journal");
+	}
+
+	/**
+	 * v7: the file was read with invalid details left out (`ParseResult.dropped`): keep its text before a save
+	 * rewrites it without them. Only invalid optional details are at stake, so a failed backup is reported
+	 * and the notebook still opens.
+	 */
+	private async backupDropped(content: string): Promise<void> {
+		try {
+			const path = await this.io.backup(content, "dropped-details");
+			if (path && !this.disposed) this.events.onBackup?.(path, "dropped-details");
+		} catch (e) {
+			this.events.onError?.(`Could not create a backup: ${(e as Error).message}`);
+		}
 	}
 
 	private async backupConflict(content: string): Promise<void> {

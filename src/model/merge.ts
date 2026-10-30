@@ -9,6 +9,10 @@
  * - deletions are not inferred: an item missing on one side is never removed from the other;
  * - page settings (size, paper, background, infinite, margins) and the cover colour of the main notebook
  *   are kept; differences are counted in the summary. Tags and bookmarks are united, favourite is "either";
+ * - v7: page tags of a common page are united (main first); bookmark details (title, colour, category) are
+ *   merged field by field: the main notebook's value of each field wins, fields it lacks are filled in from
+ *   the copy, and fields set to a different value on the two sides are counted in the summary; the reading
+ *   position of the main notebook is kept (it is not content, and the next save writes the current one);
  * - v6 margins: a left margin shifts the whole page content by its width, so when a common page has a
  *   different left margin in the copy, the copy's strokes and elements are first moved into the main
  *   page's frame (by the difference of the left margins). Ink that is the same relative to the
@@ -28,8 +32,10 @@ import { growForInfinite } from "../ink/infinite";
 import { textElementBounds } from "../ink/text-layout";
 import { AddAsset, AddElement, AddPage, AddStroke, Batch, SetMeta, SetPageMargins, SetPageSize, type Command } from "./history";
 import { marginsEqual, marginsOf, normalizeMargins, translateElement, translateStroke } from "./margins";
+import { normalizeBookmarkInfo } from "./bookmarks";
+import { SetPageTags, unionPageTags } from "./page-tags";
 import { freezeElement, freezeStroke } from "./serialize";
-import { DEFAULT_META, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type PageMargins, type Stroke } from "./types";
+import { DEFAULT_META, type BookmarkInfo, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type PageMargins, type Stroke } from "./types";
 
 export interface MergeSummary {
 	/** Pages only in the copy, added. */
@@ -43,6 +49,12 @@ export interface MergeSummary {
 	assetsAdded: number;
 	tagsAdded: number;
 	bookmarksAdded: number;
+	/** v7: bookmark detail fields (title, colour, category) taken from the copy because the main notebook had none set. */
+	bookmarkInfoAdded: number;
+	/** v7: bookmark detail fields set to a different value in the copy: the main notebook's value is kept. */
+	bookmarkInfoDiffer: number;
+	/** v7: page tags of the copy added to common pages (tags of pages only in the copy come with the page). */
+	pageTagsAdded: number;
 	/** Strokes and elements present on both sides with identical content (nothing to do). */
 	identical: number;
 	/** Common pages whose settings differ: the main notebook's settings are kept. */
@@ -167,7 +179,7 @@ function copyElement(e: PageElement, id: string): PageElement {
 export function planMerge(main: NotebookDocument, other: NotebookDocument): MergePlan {
 	const summary: MergeSummary = {
 		pagesAdded: 0, strokesAdded: 0, strokesCopied: 0, elementsAdded: 0, elementsCopied: 0, assetsAdded: 0,
-		tagsAdded: 0, bookmarksAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0,
+		tagsAdded: 0, bookmarksAdded: 0, bookmarkInfoAdded: 0, bookmarkInfoDiffer: 0, pageTagsAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0,
 	};
 	const commands: Command[] = [];
 
@@ -239,6 +251,12 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 		const target = mainPages.get(page.id);
 		if (target) {
 			if (pageSettingsKey(target) !== pageSettingsKey(page)) summary.pageSettingsDiffer++;
+			const tags = unionPageTags(target.tags, page.tags);
+			const tagsAdded = (tags?.length ?? 0) - (unionPageTags(target.tags, undefined)?.length ?? 0);
+			if (tagsAdded > 0) {
+				commands.push(new SetPageTags(target.id, target.tags, tags));
+				summary.pageTagsAdded += tagsAdded;
+			}
 			const keys = contentOn.get(page.id)!;
 			let shift = frameShift(target, page);
 			if (!marginsEqual(normalizeMargins(target.margins), normalizeMargins(page.margins))) summary.marginsDiffer++;
@@ -318,6 +336,7 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 		if (page.background) added.background = { ...page.background };
 		if (page.infinite !== undefined) added.infinite = page.infinite;
 		if (page.margins) added.margins = { ...page.margins };
+		if (page.tags && page.tags.length > 0) added.tags = [...page.tags];
 		if (elements.length > 0) added.elements = elements;
 		const at = anchor === null ? 0 : order.indexOf(anchor) + 1;
 		order.splice(at, 0, page.id);
@@ -342,26 +361,78 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 	const before = main.meta ?? cloneMeta(DEFAULT_META);
 	summary.tagsAdded = meta.tags.length - new Set(before.tags).size;
 	summary.bookmarksAdded = meta.bookmarks.length - new Set(before.bookmarks.filter((b) => order.includes(b))).size;
-	if (summary.tagsAdded > 0 || summary.bookmarksAdded > 0 || meta.favorite !== before.favorite) commands.push(new SetMeta(before, meta));
+	const fields = bookmarkFieldChanges(before, other.meta ?? DEFAULT_META, meta.bookmarks);
+	summary.bookmarkInfoAdded = fields.added;
+	summary.bookmarkInfoDiffer = fields.differ;
+	if (summary.tagsAdded > 0 || summary.bookmarksAdded > 0 || summary.bookmarkInfoAdded > 0 || meta.favorite !== before.favorite) {
+		commands.push(new SetMeta(before, meta));
+	}
 
 	return { summary, command: commands.length > 0 ? new Batch("Merge conflicted copy", commands) : null };
 }
 
-/** Tags and bookmarks of both (main first), favourite if either, the main cover. */
+const BOOKMARK_FIELDS = ["title", "color", "category"] as const;
+
+/** Per bookmark of `bookmarks`: detail fields the copy fills in (`added`) and fields both set differently (`differ`). */
+function bookmarkFieldChanges(main: NotebookMeta, other: NotebookMeta, bookmarks: readonly string[]): { added: number; differ: number } {
+	let added = 0;
+	let differ = 0;
+	for (const id of bookmarks) {
+		if (id === "__proto__") continue;
+		const a = normalizeBookmarkInfo(main.bookmarkInfo?.[id]);
+		const b = normalizeBookmarkInfo(other.bookmarkInfo?.[id]);
+		if (!b) continue;
+		for (const key of BOOKMARK_FIELDS) {
+			if (b[key] === undefined) continue;
+			if (a?.[key] === undefined) added++;
+			else if (a[key] !== b[key]) differ++;
+		}
+	}
+	return { added, differ };
+}
+
+/** Bookmark details merged field by field: each field of `main` wins, missing ones come from `other`. */
+function mergeBookmarkInfo(main: BookmarkInfo | undefined, other: BookmarkInfo | undefined): BookmarkInfo | undefined {
+	const a = normalizeBookmarkInfo(main);
+	const b = normalizeBookmarkInfo(other);
+	if (!a || !b) return a ?? b;
+	const out: BookmarkInfo = { ...a };
+	for (const key of BOOKMARK_FIELDS) if (out[key] === undefined && b[key] !== undefined) out[key] = b[key];
+	return out;
+}
+
+/**
+ * Tags and bookmarks of both (main first), favourite if either, the main cover. v7 bookmark details are
+ * merged field by field: the main notebook's value of each field, else the copy's.
+ */
 export function mergeMeta(main: NotebookMeta, other: NotebookMeta, pageIds: ReadonlySet<string>): NotebookMeta {
 	const tags = [...new Set([...main.tags, ...other.tags])];
 	const bookmarks = [...new Set([...main.bookmarks, ...other.bookmarks])].filter((b) => pageIds.has(b));
-	return { tags, favorite: main.favorite || other.favorite, cover: main.cover, bookmarks };
+	const out: NotebookMeta = { tags, favorite: main.favorite || other.favorite, cover: main.cover, bookmarks };
+	const info: Record<string, BookmarkInfo> = {};
+	let n = 0;
+	for (const id of bookmarks) {
+		if (id === "__proto__") continue;
+		const chosen = mergeBookmarkInfo(main.bookmarkInfo?.[id], other.bookmarkInfo?.[id]);
+		if (chosen) {
+			info[id] = chosen;
+			n++;
+		}
+	}
+	if (n > 0) out.bookmarkInfo = info;
+	return out;
 }
 
 /** Number of changes a summary describes (0: the copy holds nothing new). */
 export function mergeChangeCount(s: MergeSummary): number {
-	return s.pagesEnlarged + s.pagesAdded + s.strokesAdded + s.strokesCopied + s.elementsAdded + s.elementsCopied + s.assetsAdded + s.tagsAdded + s.bookmarksAdded;
+	return s.pagesEnlarged + s.pagesAdded + s.strokesAdded + s.strokesCopied + s.elementsAdded + s.elementsCopied + s.assetsAdded + s.tagsAdded
+		+ s.bookmarksAdded + s.bookmarkInfoAdded + s.pageTagsAdded;
 }
 
 /**
  * True when `result` contains everything of `other`: every stroke and element, by id with the same
- * content or as identical content on the same page, every asset, every tag. Content is compared in the
+ * content or as identical content on the same page, every asset, every tag, every v7 bookmark detail field
+ * with the same value (a field the main notebook set differently is not covered: the copy stays). Content is compared in the
  * result page's margin frame (see `planMerge`), so a page whose margins were lost on the way (its ink
  * would no longer line up with its background) is not covered. Used to check the saved file before
  * the conflicted copy is moved away.
@@ -400,5 +471,21 @@ export function mergeCovers(result: NotebookDocument, other: NotebookDocument): 
 	}
 	for (const id of Object.keys(other.assets ?? {})) if (!result.assets?.[id]) return false;
 	const tags = new Set(result.meta?.tags ?? []);
-	return (other.meta?.tags ?? []).every((t) => tags.has(t));
+	if (!(other.meta?.tags ?? []).every((t) => tags.has(t))) return false;
+	// v7: every page tag, every bookmark and every bookmark detail field of the copy is in the result, with the same value.
+	for (const p of other.pages) {
+		const into = resultPages.get(p.id)!;
+		const have = new Set((into.tags ?? []).map((t) => t.toLowerCase()));
+		if (!(p.tags ?? []).every((t) => have.has(t.toLowerCase()))) return false;
+	}
+	const marks = new Set(result.meta?.bookmarks ?? []);
+	for (const id of other.meta?.bookmarks ?? []) {
+		if (!resultPages.has(id)) continue;
+		if (!marks.has(id)) return false;
+		const want = normalizeBookmarkInfo(other.meta?.bookmarkInfo?.[id]);
+		if (!want) continue;
+		const have = normalizeBookmarkInfo(result.meta?.bookmarkInfo?.[id]);
+		if (BOOKMARK_FIELDS.some((key) => want[key] !== undefined && have?.[key] !== want[key])) return false;
+	}
+	return true;
 }

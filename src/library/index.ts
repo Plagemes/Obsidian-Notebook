@@ -1,6 +1,9 @@
 /** Library index: a disposable cache of notebook metadata and thumbnails. Pure, no 'obsidian'. */
 
-export const INDEX_VERSION = 2;
+import { tagAncestors, tagIsWithin } from "../model/tags";
+
+/** v3: entries carry the page tags (format v7), so older indexes are rebuilt. */
+export const INDEX_VERSION = 3;
 /** "Recent" shows this many notebooks. */
 export const RECENT_LIMIT = 20;
 
@@ -22,6 +25,8 @@ export interface LibraryEntry {
 	text?: string;
 	/** Flat pairs `[pageIndex, start, ...]`: the offset in `text` where each page with text begins (0-based pages). */
 	textPages?: number[];
+	/** v7 page tags: the 0-based pages that have tags, with their tags. Absent when no page has any. */
+	pageTags?: Array<{ page: number; tags: string[] }>;
 	tags: string[];
 	favorite: boolean;
 	/** Cover colour #rrggbb. */
@@ -65,7 +70,7 @@ export function foldText(text: string): string {
 	return out;
 }
 
-export type SearchField = "title" | "tag" | "text";
+export type SearchField = "title" | "tag" | "pageTag" | "text";
 
 /** A string with the `[start, end)` ranges to highlight (sorted, non-overlapping). */
 export interface Highlight {
@@ -79,6 +84,8 @@ export interface SearchHit {
 	fields: SearchField[];
 	title?: Highlight;
 	tag?: Highlight;
+	/** v7: a page tag that matched, on the 0-based page `page` (the first page with a matching tag). */
+	pageTag?: { tag: Highlight; page: number };
 	/** `page` is the 0-based page of the first match. */
 	text?: { snippet: Highlight; page: number };
 }
@@ -171,6 +178,10 @@ function isEntry(v: unknown): v is LibraryEntry {
 		typeof e.favorite === "boolean" && typeof e.cover === "string" &&
 		(e.text === undefined || typeof e.text === "string") &&
 		(e.textPages === undefined || (Array.isArray(e.textPages) && e.textPages.length % 2 === 0 && e.textPages.every((n) => Number.isFinite(n)))) &&
+		(e.pageTags === undefined || (Array.isArray(e.pageTags) && e.pageTags.every((p: unknown) => {
+			const o = p as { page?: unknown; tags?: unknown } | null;
+			return typeof o === "object" && o !== null && Number.isInteger(o.page) && Array.isArray(o.tags) && o.tags.every((x) => typeof x === "string");
+		}))) &&
 		(e.thumb === undefined || typeof e.thumb === "string") &&
 		(e.thumbMtime === undefined || Number.isFinite(e.thumbMtime))
 	);
@@ -178,6 +189,17 @@ function isEntry(v: unknown): v is LibraryEntry {
 
 export class LibraryIndex {
 	private readonly map = new Map<string, LibraryEntry>();
+	/**
+	 * Saved data of a newer index version (a newer plugin version on another device syncs the same plugin
+	 * folder). Kept as read and returned by `toJSON`, so saving does not overwrite that device's index; this
+	 * device works from an index rebuilt in memory.
+	 */
+	private newer: { version: number; entries: LibraryEntry[] } | null = null;
+
+	/** True when the saved data was a newer index version, which `toJSON` hands back unchanged. */
+	get keepsNewerVersion(): boolean {
+		return this.newer !== null;
+	}
 
 	get size(): number {
 		return this.map.size;
@@ -197,7 +219,9 @@ export class LibraryIndex {
 
 	/** Inserts or replaces the entry stored under `entry.path`. */
 	upsert(entry: LibraryEntry): void {
-		this.map.set(entry.path, { ...entry, tags: [...entry.tags] });
+		const copy: LibraryEntry = { ...entry, tags: [...entry.tags] };
+		if (entry.pageTags) copy.pageTags = entry.pageTags.map((p) => ({ page: p.page, tags: [...p.tags] }));
+		this.map.set(entry.path, copy);
 	}
 
 	/** Merges fields into an existing entry; returns false if the path is unknown. */
@@ -267,7 +291,8 @@ export class LibraryIndex {
 			list = list.filter((e) => (recursive ? isInside(e.path, folder) && e.path !== folder : e.folder === folder));
 		} else if (typeof scope === "object" && "tag" in scope) {
 			const tag = normalizeText(scope.tag);
-			list = list.filter((e) => e.tags.some((x) => normalizeText(x) === tag));
+			// Like Obsidian's tag search: `a` also finds the notebooks tagged `a/b`.
+			list = list.filter((e) => e.tags.some((x) => tagIsWithin(normalizeText(x), tag)));
 		}
 		return list;
 	}
@@ -297,9 +322,9 @@ export class LibraryIndex {
 	}
 
 	/**
-	 * Global search over title, tags and text boxes, on the in-memory index only. Accent and case
+	 * Global search over title, tags, page tags (v7) and text boxes, on the in-memory index only. Accent and case
 	 * insensitive; several words must all match (each in any field). Title hits come first, then tag
-	 * hits, then text hits; ties follow `sort`.
+	 * hits, then page-tag hits, then text hits; ties follow `sort`.
 	 */
 	search(q: SearchQuery): SearchHit[] {
 		const terms = [...new Set(normalizeText(q.search).split(/\s+/).filter(Boolean))];
@@ -311,8 +336,10 @@ export class LibraryIndex {
 			const folded = this.foldedText(e);
 			const inTitle = terms.filter((t) => name.includes(t));
 			const inTags = terms.filter((t) => tags.some((tag) => tag.includes(t)));
+			const pageTags = (e.pageTags ?? []).flatMap((p) => p.tags.map((tag) => ({ page: p.page, tag, norm: normalizeText(tag) })));
+			const inPageTags = terms.filter((t) => pageTags.some((p) => p.norm.includes(t)));
 			const textPos = terms.map((t) => folded.indexOf(t));
-			if (!terms.every((t, i) => name.includes(t) || tags.some((tag) => tag.includes(t)) || textPos[i]! >= 0)) continue;
+			if (!terms.every((t, i) => name.includes(t) || tags.some((tag) => tag.includes(t)) || inPageTags.includes(t) || textPos[i]! >= 0)) continue;
 
 			const fields: SearchField[] = [];
 			const hit: SearchHit = { entry: e, fields };
@@ -325,6 +352,11 @@ export class LibraryIndex {
 				const i = tags.findIndex((tag) => inTags.some((t) => tag.includes(t)));
 				const tagText = e.tags[i]!;
 				hit.tag = { text: tagText, ranges: rangesOf(foldText(tagText), terms) };
+			}
+			if (inPageTags.length > 0) {
+				fields.push("pageTag");
+				const first = pageTags.find((p) => inPageTags.some((t) => p.norm.includes(t)))!;
+				hit.pageTag = { tag: { text: first.tag, ranges: rangesOf(foldText(first.tag), terms) }, page: first.page };
 			}
 			let first = -1;
 			let firstTerm = "";
@@ -344,38 +376,52 @@ export class LibraryIndex {
 				}
 				hit.text = { snippet: snippetAround(e.text, folded, terms, first, first + firstTerm.length), page };
 			}
-			ranked.push({ hit, rank: fields[0] === "title" ? 0 : fields[0] === "tag" ? 1 : 2 });
+			ranked.push({ hit, rank: fields[0] === "title" ? 0 : fields[0] === "tag" ? 1 : fields[0] === "pageTag" ? 2 : 3 });
 		}
 		const cmp = compare(q.sort);
 		return ranked.sort((a, b) => a.rank - b.rank || cmp(a.hit.entry, b.hit.entry)).map((r) => r.hit);
 	}
 
-	/** Tags with the number of notebooks using them, most used first (ties alphabetically). Case-insensitive. */
+	/**
+	 * Tags with the number of notebooks using them, most used first (ties alphabetically). Case-insensitive. A nested tag
+	 * `a/b` also counts for its parent `a` (as in Obsidian's Tags pane), so the parent can be chosen as a filter.
+	 */
 	tags(): Array<{ tag: string; count: number }> {
 		const counts = new Map<string, { tag: string; count: number }>();
 		for (const e of this.map.values()) {
 			const seen = new Set<string>();
-			for (const tag of e.tags) {
-				const key = normalizeText(tag);
-				if (!key || seen.has(key)) continue;
-				seen.add(key);
-				const c = counts.get(key);
-				if (c) c.count++;
-				else counts.set(key, { tag, count: 1 });
+			for (const full of e.tags) {
+				for (const tag of [...tagAncestors(full), full]) {
+					const key = normalizeText(tag);
+					if (!key || seen.has(key)) continue;
+					seen.add(key);
+					const c = counts.get(key);
+					if (c) c.count++;
+					else counts.set(key, { tag, count: 1 });
+				}
 			}
 		}
 		return [...counts.values()].sort((a, b) => b.count - a.count || collator.compare(a.tag, b.tag));
 	}
 
 	toJSON(): { version: number; entries: LibraryEntry[] } {
+		if (this.newer) return this.newer;
 		return { version: INDEX_VERSION, entries: this.all() };
 	}
 
-	/** Reads saved data. Anything unknown, old or malformed gives an empty index (it is rebuilt lazily). */
+	/**
+	 * Reads saved data. Anything unknown, old or malformed gives an empty index (it is rebuilt lazily). A newer
+	 * index version also gives an empty index, but is not overwritten: `toJSON` returns it as it was read.
+	 */
 	static fromJSON(data: unknown): LibraryIndex {
 		const index = new LibraryIndex();
 		if (typeof data !== "object" || data === null) return index;
 		const d = data as { version?: unknown; entries?: unknown };
+		if (typeof d.version === "number" && Number.isInteger(d.version) && d.version > INDEX_VERSION) {
+			// Only handed back to be saved again: never read by this version.
+			index.newer = data as { version: number; entries: LibraryEntry[] };
+			return index;
+		}
 		if (d.version !== INDEX_VERSION || !Array.isArray(d.entries)) return index;
 		for (const e of d.entries) {
 			if (isEntry(e)) index.upsert(e);
@@ -383,3 +429,4 @@ export class LibraryIndex {
 		return index;
 	}
 }
+

@@ -39,6 +39,9 @@ SCENARIOS.push({ doc: "new", theme: "light", device: "phone", lowLatency: true }
 SCENARIOS.push({ doc: "v3", theme: "dark", device: "tablet", lowLatency: false, fault: "wet" });
 SCENARIOS.push({ doc: "v3", theme: "dark", device: "tablet", lowLatency: true, fault: "wet" });
 SCENARIOS.push({ doc: "v3", theme: "light", device: "tablet", lowLatency: false, fault: "stroke" });
+// The PDF reading tools (search, snapping highlighter, hidden annotations, dimming) on a notebook of three fake PDF pages.
+SCENARIOS.push({ doc: "pdf", theme: "light", device: "desktop", lowLatency: false });
+SCENARIOS.push({ doc: "pdf", theme: "dark", device: "narrow", lowLatency: false });
 
 function findChrome() {
 	const candidates = [
@@ -194,7 +197,7 @@ async function main() {
 					await sleep(100);
 				}
 				await cdp.evaluate("window.harness.ready.then(() => true)");
-				report = await cdp.evaluate("window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}

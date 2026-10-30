@@ -10,7 +10,9 @@ import type { NotebookSettings } from "../settings";
 import { companionCandidates, companionPath } from "../storage/companion-path";
 import { isNotebookFile, readNotebookText } from "../storage/format";
 import { quickDocId } from "../storage/history";
+import { isInTrash, isWithin, templatesFolderPath } from "../storage/trash-paths";
 import { ensureFolder } from "../storage/vault-io";
+import { isCardFrontmatter } from "../zettel/card-content";
 import { notebookUri } from "./links";
 import { viewsOf } from "./open";
 
@@ -51,7 +53,7 @@ const STUCK_POINTER_MS = 15_000;
 type UpdateResult = "created" | "updated" | "unchanged" | "skipped";
 
 /** Pointer activity inside notebook views, from capture-phase listeners (passive: no effect on input). */
-class InputWatch {
+export class InputWatch {
 	private readonly down = new Map<number, number>();
 	private last = 0;
 
@@ -231,7 +233,7 @@ export class CompanionService {
 	 */
 	private async otherNotebookHasId(file: TFile, docId: string): Promise<boolean> {
 		for (const f of this.app.vault.getFiles()) {
-			if (f === file || !isNotebookFile(f)) continue;
+			if (f === file || !isNotebookFile(f) || this.isInternal(f.path)) continue;
 			try {
 				if (quickDocId(readNotebookText(f.extension, await this.app.vault.cachedRead(f))) === docId) return true;
 			} catch {
@@ -262,14 +264,14 @@ export class CompanionService {
 			if (!(existing instanceof TFile)) continue;
 			const fm = this.frontmatter(await this.app.vault.cachedRead(existing));
 			const id = fm?.[COMPANION_ID_KEY];
-			if (typeof id !== "string") continue;
+			if (typeof id !== "string" || isCardFrontmatter(fm)) continue;
 			// At this notebook's own path: "if-unique" cannot come back.
 			if (companionClaim(this.linkState(fm ?? undefined, existing.path, file), id === docId, true) === "yes") return { file: existing };
 		}
 		let others: boolean | null = null;
 		for (const md of this.app.vault.getMarkdownFiles()) {
 			const fm = this.cachedFrontmatter(md);
-			if (fm?.[COMPANION_ID_KEY] !== docId) continue;
+			if (fm?.[COMPANION_ID_KEY] !== docId || isCardFrontmatter(fm)) continue;
 			const claim = companionClaim(this.linkState(fm, md.path, file), true, false);
 			if (claim === "yes") return { file: md };
 			if (claim === "no") continue;
@@ -279,14 +281,20 @@ export class CompanionService {
 		return free === null ? null : { create: free };
 	}
 
-	// ------------------------------------------------------------------- writing
+	/** Trashed notebooks and templates (roadmap #160, #74) get no companion note, and never claim one. */
+	private isInternal(path: string): boolean {
+		const s = this.plugin.settings;
+		return isInTrash(path) || isWithin(path, templatesFolderPath(s.templatesFolder, s.folder));
+	}
 
 	/** Brings the companion of `file` up to date. Writes nothing when the note already matches. */
 	async update(file: TFile): Promise<UpdateResult> {
+		if (this.isInternal(file.path)) return "skipped";
 		const doc = await this.readDocument(file);
 		if (!doc) return "skipped";
 		const content = this.content(file, doc);
-		const region = renderRegion(content);
+		// A new note owns every tag it gets; an existing one records which tags the plugin added (model/tags.ts).
+		const region = (owned: readonly string[]) => renderRegion(content, owned);
 		const target = await this.locate(file, doc.id);
 		if (!target) {
 			const path = companionPath(file.path, this.plugin.settings, this.plugin.settings.folder);
@@ -299,7 +307,7 @@ export class CompanionService {
 			if (dir) await ensureFolder(this.app, dir);
 			const yaml = stringifyYaml(mergeProperties({}, content, null));
 			try {
-				await this.app.vault.create(target.create, newCompanionText(yaml, region));
+				await this.app.vault.create(target.create, newCompanionText(yaml, region(content.tags)));
 			} catch (e) {
 				// Created in the meantime (sync, another trigger): the next change updates it.
 				if (this.app.vault.getAbstractFileByPath(target.create)) return "skipped";
@@ -334,6 +342,7 @@ export class CompanionService {
 
 	/** Renames the companion with its notebook when it sits at the configured place for the old path. */
 	private async followRename(file: TFile, oldPath: string): Promise<void> {
+		if (this.isInternal(file.path)) return;
 		if (!this.enabled) return;
 		const s = this.plugin.settings;
 		const from = normalizePath(companionPath(oldPath, s, s.folder));
@@ -385,7 +394,7 @@ export class CompanionService {
 			new Notice(t("notice.companionOff"));
 			return;
 		}
-		const files = this.app.vault.getFiles().filter((f) => isNotebookFile(f));
+		const files = this.app.vault.getFiles().filter((f) => isNotebookFile(f) && !this.isInternal(f.path));
 		const counts: Record<UpdateResult, number> = { created: 0, updated: 0, unchanged: 0, skipped: 0 };
 		for (const file of files) {
 			while (this.input.active() && !this.disposed) await sleep(INPUT_POLL_MS);
@@ -438,6 +447,10 @@ export function registerCompanion(plugin: CompanionHost): CompanionService {
 	const service = new CompanionService(plugin);
 	service.register();
 	services.set(plugin, service);
+	current = service;
+	plugin.register(() => {
+		if (current === service) current = undefined;
+	});
 	plugin.addCommand({ id: "companion-update-all", name: t("command.companionUpdateAll"), callback: () => void service.updateAll() });
 	plugin.addCommand({
 		id: "companion-open",
@@ -453,6 +466,12 @@ export function registerCompanion(plugin: CompanionHost): CompanionService {
 }
 
 const services = new WeakMap<Plugin, CompanionService>();
+let current: CompanionService | undefined;
+
+/** The running companion service (there is one plugin instance), for the tag editor; undefined before onload or after unload. */
+export function activeCompanion(): CompanionService | undefined {
+	return current;
+}
 
 /** The service of a plugin, for the settings tab. */
 export function companionService(plugin: Plugin): CompanionService | undefined {

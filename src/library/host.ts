@@ -12,16 +12,24 @@ import type { PdfLib } from "../pdf/pdfjs-types";
 import { backupFolder, type NotebookSettings } from "../settings";
 import { readNotebookText, writeNotebookText } from "../storage/format";
 import { createNotebook } from "../storage/notebooks";
+import { LibraryTrash } from "../storage/trash";
+import { documentFromTemplate } from "../model/templates";
+import { openTemplateGallery } from "../view/page-tools";
 import { VaultDocumentIO } from "../storage/vault-io";
 import { resolveAssetFile, storeAsset } from "../view/media";
 import { NewNotebookModal, type NewNotebookOptions } from "../view/modals";
 import { NotebookView, VIEW_TYPE } from "../view/notebook-view";
+import { askLectureSetup } from "../view/lecture-pack-modal";
 import { pickFile } from "../view/pick";
 import { libraryIndexPath, parseStoredJson, patchNotebookId, patchNotebookMeta, type MetaPatchResult } from "./host-logic";
 import { importPdfAsNotebook } from "./import-pdf";
+import { createLectureFromSlides } from "./lecture-pack";
 import { openLooseSheet } from "./loose-sheet";
 import type { LibraryHost } from "./library-view";
 import type { ThumbnailOptions } from "./thumbnail";
+
+/** Longest wait for a closing notebook view's final save before a library move goes on. */
+const CLOSE_WAIT_MS = 10_000;
 
 /** What the host needs from the plugin. */
 export interface HostPlugin {
@@ -29,6 +37,8 @@ export interface HostPlugin {
 	manifest: { id: string };
 	settings: NotebookSettings;
 	saveSettings(): Promise<void>;
+	/** Class timetable service (optional: wave 0.6). */
+	timetable?: { nowClass(): { course: string; room?: string } | null; openNow(): void; offer(): Promise<void> };
 }
 
 /** The part of NotebookView the host calls (checked at runtime so the host compiles without it). */
@@ -41,8 +51,16 @@ export class NotebookLibraryHost implements LibraryHost {
 	readonly pdf: PdfStore;
 	/** Assets seen in notebooks the library read, so a PDF is found even if its file was moved. */
 	private readonly assets = new Map<string, Asset>();
+	/** Library trash (#160): deleting from the library moves to `_trash/`. */
+	readonly trash: LibraryTrash;
 
 	constructor(private readonly plugin: HostPlugin) {
+		this.trash = new LibraryTrash({
+			app: plugin.app,
+			root: () => plugin.settings.folder,
+			retentionDays: () => plugin.settings.trashRetentionDays,
+			beforeMove: (path) => this.closeViewsOf(path),
+		});
 		this.pdf = new PdfStore({
 			loadPdfJs: () => loadPdfJs() as Promise<PdfLib>,
 			readAsset: (id) => this.readAsset(id),
@@ -119,20 +137,45 @@ export class NotebookLibraryHost implements LibraryHost {
 	createNotebook(folder: string): void {
 		const s = this.plugin.settings;
 		const defaults = { size: s.defaultPageSize, landscape: s.defaultLandscape, paper: s.defaultPaper };
-		new NewNotebookModal(this.app, defaults, (options) => void this.createAndOpen(options, folder)).open();
+		const pickTemplate = (done: (template: { name: string; doc: NotebookDocument }) => void) =>
+			void openTemplateGallery(this.app, this.plugin.settings, (c) => done({ name: c.name, doc: c.doc }));
+		new NewNotebookModal(this.app, defaults, (options) => void this.createAndOpen(options, folder), pickTemplate).open();
+	}
+
+	/**
+	 * Closes the notebook tabs that show `path` or something inside it before the file moves. Each view is flushed
+	 * first (the move is refused if its changes cannot be written), then detached, and the move waits for the view's
+	 * own close (its final flush) to finish, so no save of the old path runs while `vault.rename` does.
+	 */
+	private async closeViewsOf(path: string): Promise<void> {
+		const closing: Promise<void>[] = [];
+		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+			const file = leafFile(leaf);
+			if (file === undefined || (file !== path && !file.startsWith(`${path}/`))) continue;
+			const view = leaf.view;
+			if (view instanceof NotebookView) {
+				if (!(await view.flushNow())) throw new Error(t("library.notice.unsavedBeforeMove", { name: file }));
+				closing.push(view.closed);
+			}
+			leaf.detach();
+		}
+		// A view that never gets its onClose (should not happen) must not block the move forever.
+		await Promise.race([Promise.all(closing), new Promise<void>((resolve) => window.setTimeout(resolve, CLOSE_WAIT_MS))]);
 	}
 
 	private async createAndOpen(o: NewNotebookOptions, folder: string): Promise<void> {
 		try {
 			const s = this.plugin.settings;
 			// Remember the choice for the next notebook.
-			if (o.size !== s.defaultPageSize || o.landscape !== s.defaultLandscape || o.paper !== s.defaultPaper) {
+			if (!o.template && (o.size !== s.defaultPageSize || o.landscape !== s.defaultLandscape || o.paper !== s.defaultPaper)) {
 				this.plugin.settings = { ...s, defaultPageSize: o.size, defaultLandscape: o.landscape, defaultPaper: o.paper };
 				await this.plugin.saveSettings();
 			}
 			const base = PAGE_SIZES[o.size];
 			const size = o.landscape ? { width: base.height, height: base.width } : { width: base.width, height: base.height };
-			const doc = createDocument(new Date(), size, { kind: o.paper, spacing: PAPER_SPACING[o.paper] });
+			const doc = o.template
+				? documentFromTemplate(o.template.doc)
+				: createDocument(new Date(), size, { kind: o.paper, spacing: PAPER_SPACING[o.paper] });
 			const file = await createNotebook(this.app, folder, o.name, doc);
 			await this.openNotebook(file);
 		} catch (e) {
@@ -165,6 +208,50 @@ export class NotebookLibraryHost implements LibraryHost {
 				empty: () => t("import.empty"),
 			},
 		}, folder);
+	}
+
+	nowClass(): { course: string; room?: string } | null {
+		return this.plugin.timetable?.nowClass() ?? null;
+	}
+
+	openNowClass(): void {
+		this.plugin.timetable?.openNow();
+	}
+
+	/** The library was opened: offer the class in progress. */
+	libraryOpened(): void {
+		void this.plugin.timetable?.offer();
+	}
+
+	/**
+	 * "New lecture from slides…": picks the course slides (vault or device), asks for layout and header and creates the
+	 * lecture notebook. Without `folder` it goes next to the notebook in view, or in the notebooks folder.
+	 */
+	lectureFromSlides(folder?: string): void {
+		const active = this.app.workspace.getActiveViewOfType(NotebookView)?.file?.parent?.path;
+		const target = folder ?? (active && active !== "/" ? active : this.plugin.settings.folder);
+		void createLectureFromSlides<TFile>({
+			pick: () => pickFile(this.app, "pdf"),
+			ask: (defaultTitle) => askLectureSetup(this.app, defaultTitle),
+			store: async (bytes, name) => {
+				const asset = await storeAsset(this.app, this.root(), bytes, name, "pdf");
+				this.assets.set(asset.id, asset);
+				return asset;
+			},
+			pageSizes: (id) => this.pdf.pageSizes(id),
+			create: (dir, name, doc) => createNotebook(this.app, dir, name, doc),
+			open: (file) => this.openNotebook(file),
+			progress: (text) => {
+				const notice = new Notice(text, 0);
+				return () => notice.hide();
+			},
+			notify: (text) => void new Notice(text),
+			messages: {
+				working: (name) => t("import.working", { name }),
+				failed: (error) => t("import.failed", { error }),
+				empty: () => t("import.empty"),
+			},
+		}, target);
 	}
 
 	openLooseSheet(): void {

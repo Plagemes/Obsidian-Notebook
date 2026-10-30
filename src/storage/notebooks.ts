@@ -3,6 +3,7 @@ import { createDocument } from "../model/document";
 import { serialize } from "../model/serialize";
 import type { NotebookDocument } from "../model/types";
 import { isNotebookFile, NEW_NOTEBOOK_EXTENSION, writeNotebookText } from "./format";
+import { isReservedPath } from "../library/folders";
 import { ensureFolder } from "./vault-io";
 
 /** Characters Obsidian does not allow in file names, plus those that break links. */
@@ -36,7 +37,7 @@ export function listNotebooks(app: App, folder: string): TFile[] {
 	if (!root) return [];
 	const found: TFile[] = [];
 	Vault.recurseChildren(root, (f) => {
-		if (f instanceof TFile && isNotebookFile(f)) found.push(f);
+		if (f instanceof TFile && isNotebookFile(f) && !isReservedPath(f.path, root.path === "/" ? "" : root.path)) found.push(f);
 	});
 	return found.sort((a, b) => b.stat.mtime - a.stat.mtime);
 }

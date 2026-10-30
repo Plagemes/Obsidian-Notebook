@@ -1,8 +1,12 @@
+import { normalizeBookmarkInfoMap } from "./bookmarks";
 import { detectVersion, migrate, MigrationError, type RawObject } from "./migrations";
+import { normalizePageTags } from "./page-tags";
+import { normalizePosition } from "./position";
 import {
 	CURRENT_VERSION, DEFAULT_META, FORMAT_ID, PAPER_KINDS, RENDER_VERSIONS, TOOLS,
-	type Asset, type AssetKind, type ImageElement, type NotebookDocument, type NotebookMeta, type Page,
-	type PageBackground, type PageElement, type PageMargins, type PaperKind, type Point, type RenderVersion, type Stroke, type TextElement, type Tool,
+	type Asset, type AssetKind, type BookmarkInfo, type ImageElement, type NotebookDocument, type NotebookMeta, type Page,
+	type PageBackground, type PageElement, type PageMargins, type PaperKind, type Point, type ReadingPosition, type RenderVersion, type Stroke,
+	type TextElement, type Tool,
 } from "./types";
 
 export type ParseFailure =
@@ -13,12 +17,25 @@ export type ParseFailure =
 	| "invalid";
 
 export type ParseResult =
-	| { ok: true; doc: NotebookDocument; migratedFrom: number | null }
+	/**
+	 * `dropped` (v7, only when > 0): optional details that were invalid and left out on read (a bookmark detail
+	 * field such as a bad colour, the reading position or its y) instead of making the whole notebook unreadable.
+	 * Saving writes the document without them, so callers keep a backup of the original text first.
+	 */
+	| { ok: true; doc: NotebookDocument; migratedFrom: number | null; dropped?: number }
 	| { ok: false; reason: ParseFailure; message: string; version?: number };
 
 const j = JSON.stringify;
 
 class ValidationError extends Error {}
+
+/**
+ * Lenient read of optional v7 details: invalid ones are counted here and left out instead of failing the
+ * document. Null: strict (every invalid value fails), used to check what is about to be written.
+ */
+export interface Dropped {
+	count: number;
+}
 
 function fail(path: string, what: string): never {
 	throw new ValidationError(`${path}: ${what}`);
@@ -42,18 +59,39 @@ function assetLine(a: Asset): string {
 	return `\t\t${j(a.id)}: {"id":${j(a.id)},"kind":${j(a.kind)},"path":${j(a.path)},"name":${j(a.name)},"bytes":${j(a.bytes)}}`;
 }
 
-/** Tags without duplicates; bookmarks without duplicates and without ids of pages that no longer exist. */
+/**
+ * Tags without duplicates; bookmarks without duplicates and without ids of pages that no longer exist;
+ * v7 bookmark details only for bookmarked pages, normalised, in bookmark order (absent when there are none).
+ */
 function normalizeMeta(meta: NotebookMeta, pageIds: ReadonlySet<string>): NotebookMeta {
-	return {
-		tags: [...new Set(meta.tags)],
-		favorite: meta.favorite,
-		cover: meta.cover,
-		bookmarks: [...new Set(meta.bookmarks)].filter((id) => pageIds.has(id)),
-	};
+	const bookmarks = [...new Set(meta.bookmarks)].filter((id) => pageIds.has(id));
+	const out: NotebookMeta = { tags: [...new Set(meta.tags)], favorite: meta.favorite, cover: meta.cover, bookmarks };
+	const info = normalizeBookmarkInfoMap(meta.bookmarkInfo, bookmarks);
+	if (info) out.bookmarkInfo = info;
+	return out;
+}
+
+function bookmarkInfoLine(info: BookmarkInfo): string {
+	const parts: string[] = [];
+	if (info.title !== undefined) parts.push(`"title":${j(info.title)}`);
+	if (info.color !== undefined) parts.push(`"color":${j(info.color)}`);
+	if (info.category !== undefined) parts.push(`"category":${j(info.category)}`);
+	return `{${parts.join(",")}}`;
 }
 
 function metaLine(meta: NotebookMeta): string {
-	return `{"tags":${j(meta.tags)},"favorite":${j(meta.favorite)},"cover":${j(meta.cover)},"bookmarks":${j(meta.bookmarks)}}`;
+	const base = `"tags":${j(meta.tags)},"favorite":${j(meta.favorite)},"cover":${j(meta.cover)},"bookmarks":${j(meta.bookmarks)}`;
+	const info = meta.bookmarkInfo;
+	if (!info) return `{${base}}`;
+	// In bookmark order (normalizeMeta), so the line does not depend on the order keys were added in memory.
+	const entries = meta.bookmarks.filter((id) => Object.prototype.hasOwnProperty.call(info, id)).map((id) => `${j(id)}:${bookmarkInfoLine(info[id]!)}`);
+	return `{${base},"bookmarkInfo":{${entries.join(",")}}}`;
+}
+
+function positionLine(p: ReadingPosition): string {
+	return p.y !== undefined
+		? `{"page":${j(p.page)},"y":${j(p.y)},"at":${j(p.at)}}`
+		: `{"page":${j(p.page)},"at":${j(p.at)}}`;
 }
 
 function assemble(
@@ -71,6 +109,8 @@ function assemble(
 			`\t\t\t"height": ${j(page.height)},`,
 			`\t\t\t"paper": {"kind":${j(page.paper.kind)},"spacing":${j(page.paper.spacing)}},`,
 		];
+		const tags = normalizePageTags(page.tags);
+		if (tags) out.push(`\t\t\t"tags": ${j(tags)},`);
 		const b = page.background;
 		if (b) {
 			out.push(b.kind === "pdf"
@@ -87,6 +127,7 @@ function assemble(
 	});
 	const pageIds = new Set(doc.pages.map((p) => p.id));
 	const meta = normalizeMeta(doc.meta ?? DEFAULT_META, pageIds);
+	const position = normalizePosition(doc.position, pageIds);
 	const assets = Object.values(doc.assets ?? {}).sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
 	return [
 		"{",
@@ -96,6 +137,7 @@ function assemble(
 		`\t"createdAt": ${j(doc.createdAt)},`,
 		`\t"modifiedAt": ${j(doc.modifiedAt)},`,
 		`\t"meta": ${metaLine(meta)},`,
+		...(position ? [`\t"position": ${positionLine(position)},`] : []),
 		assets.length ? `\t"assets": {\n${assets.map(assetLine).join(",\n")}\n\t},` : `\t"assets": {},`,
 		`\t"pages": [\n${pages.join(",\n")}\n\t]`,
 		"}",
@@ -250,7 +292,7 @@ function readElement(v: unknown, path: string, assets: Assets): PageElement {
 	return fail(`${path}.type`, "unknown element type");
 }
 
-function readMeta(v: unknown, pageIds: ReadonlySet<string>): NotebookMeta {
+function readMeta(v: unknown, pageIds: ReadonlySet<string>, drop: Dropped | null): NotebookMeta {
 	if (v === undefined) return normalizeMeta(DEFAULT_META, pageIds);
 	if (!isObject(v)) fail("meta", "expected an object");
 	if (!Array.isArray(v.tags)) fail("meta.tags", "expected an array");
@@ -259,7 +301,88 @@ function readMeta(v: unknown, pageIds: ReadonlySet<string>): NotebookMeta {
 	const cover = colour(v.cover, "meta.cover");
 	if (!Array.isArray(v.bookmarks)) fail("meta.bookmarks", "expected an array");
 	const bookmarks = v.bookmarks.map((b, i) => str(b, `meta.bookmarks[${i}]`));
-	return normalizeMeta({ tags, favorite: v.favorite, cover, bookmarks }, pageIds);
+	const meta: NotebookMeta = { tags, favorite: v.favorite, cover, bookmarks };
+	if (v.bookmarkInfo !== undefined) {
+		const info = readBookmarkInfo(v.bookmarkInfo, drop);
+		if (info) meta.bookmarkInfo = info;
+	}
+	return normalizeMeta(meta, pageIds);
+}
+
+/**
+ * Runs `read`; on a validation error, strict mode (`drop` null) fails, lenient mode counts the value as
+ * dropped and returns undefined.
+ */
+function orDrop<T>(drop: Dropped | null, read: () => T): T | undefined {
+	if (!drop) return read();
+	try {
+		return read();
+	} catch (e) {
+		if (!(e instanceof ValidationError)) throw e;
+		drop.count++;
+		return undefined;
+	}
+}
+
+/**
+ * v7 bookmark details: an object of objects; text fields are strings, the colour #rrggbb. Read leniently,
+ * an invalid field (or entry, or the whole map) is dropped and counted; the other details stay.
+ */
+function readBookmarkInfo(v: unknown, drop: Dropped | null): Record<string, BookmarkInfo> | undefined {
+	return orDrop(drop, () => {
+		if (!isObject(v)) fail("meta.bookmarkInfo", "expected an object");
+		const out: Record<string, BookmarkInfo> = {};
+		for (const [id, raw] of Object.entries(v)) {
+			const path = `meta.bookmarkInfo.${id}`;
+			const info = orDrop(drop, () => {
+				if (!isObject(raw)) fail(path, "expected an object");
+				const info: BookmarkInfo = {};
+				const title = orDrop(drop, () => {
+					if (raw.title !== undefined && typeof raw.title !== "string") fail(`${path}.title`, "expected a string");
+					return raw.title;
+				});
+				if (title !== undefined) info.title = title;
+				const color = orDrop(drop, () => (raw.color === undefined ? undefined : colour(raw.color, `${path}.color`)));
+				if (color !== undefined) info.color = color;
+				const category = orDrop(drop, () => {
+					if (raw.category !== undefined && typeof raw.category !== "string") fail(`${path}.category`, "expected a string");
+					return raw.category;
+				});
+				if (category !== undefined) info.category = category;
+				return info;
+			});
+			// A key that would change the object's prototype instead of adding an entry is not kept.
+			if (info && id !== "__proto__") out[id] = info;
+		}
+		return out;
+	});
+}
+
+/**
+ * v7 reading position; dropped (not rejected) when its page is not in the document. Read leniently, an
+ * invalid position (or only its invalid y) is dropped and counted.
+ */
+function readPosition(v: unknown, pageIds: ReadonlySet<string>, drop: Dropped | null): ReadingPosition | undefined {
+	if (v === undefined) return undefined;
+	const p = orDrop(drop, () => {
+		if (!isObject(v)) fail("position", "expected an object");
+		const page = str(v.page, "position.page");
+		const at = str(v.at, "position.at");
+		const p: ReadingPosition = { page, at };
+		const y = orDrop(drop, () => (v.y === undefined ? undefined : finite(v.y, "position.y")));
+		if (y !== undefined) p.y = y;
+		return p;
+	});
+	return p ? normalizePosition(p, pageIds) : undefined;
+}
+
+/** v7 page tags: an array of strings, normalised (no "#", no duplicates); absent when empty. */
+function readPageTags(v: unknown, path: string): string[] | undefined {
+	if (!Array.isArray(v)) fail(path, "expected an array");
+	v.forEach((t, i) => {
+		if (typeof t !== "string") fail(`${path}[${i}]`, "expected a string");
+	});
+	return normalizePageTags(v);
 }
 
 function readAssets(v: unknown): Record<string, Asset> {
@@ -290,6 +413,10 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets): P
 		return stroke;
 	});
 	const page: Page = { id, width, height, paper: { kind: paper.kind as PaperKind, spacing }, strokes };
+	if (v.tags !== undefined) {
+		const tags = readPageTags(v.tags, `${path}.tags`);
+		if (tags) page.tags = tags;
+	}
 	if (v.background !== undefined) page.background = readBackground(v.background, `${path}.background`, assets);
 	if (v.margins !== undefined) page.margins = readMargins(v.margins, `${path}.margins`, width, height);
 	if (v.infinite !== undefined) {
@@ -321,8 +448,18 @@ export function freezeElement<T extends PageElement>(element: T): T {
 	return Object.freeze(element);
 }
 
-/** Validates an object already at the current version and returns a copy with known fields only. */
-export function validate(raw: unknown): NotebookDocument {
+/**
+ * Validates an object already at the current version and returns a copy with known fields only. With
+ * `drop`, invalid optional v7 details are left out and counted there instead of failing (see `Dropped`).
+ */
+export function validate(raw: unknown, drop: Dropped | null = null): NotebookDocument {
+	return validateWith(raw, readPage, new Set<string>(), drop);
+}
+
+type PageReader = (v: unknown, path: string, ids: Set<string>, assets: Assets) => Page;
+
+/** `validate` with the page reader and the set of ids injected: staged loading reads page shells first (see StagedParse). */
+function validateWith(raw: unknown, readPageAt: PageReader, ids: Set<string>, drop: Dropped | null): NotebookDocument {
 	if (!isObject(raw)) fail("document", "expected an object");
 	if (raw.format !== FORMAT_ID) fail("format", `expected "${FORMAT_ID}"`);
 	if (raw.version !== CURRENT_VERSION) fail("version", `expected ${CURRENT_VERSION}`);
@@ -331,47 +468,205 @@ export function validate(raw: unknown): NotebookDocument {
 	const modifiedAt = str(raw.modifiedAt, "modifiedAt");
 	if (!Array.isArray(raw.pages) || raw.pages.length === 0) fail("pages", "expected at least one page");
 	const assets = readAssets(raw.assets);
-	const ids = new Set<string>();
 	const pageIds = new Set<string>();
 	const pages = raw.pages.map((p, i) => {
-		const page = readPage(p, `pages[${i}]`, ids, assets);
+		const page = readPageAt(p, `pages[${i}]`, ids, assets);
 		// Page ids key bookmarks, jumps and caches: two pages with one id would be confused with each other.
 		if (pageIds.has(page.id)) fail(`pages[${i}].id`, "duplicate id");
 		pageIds.add(page.id);
 		return page;
 	});
-	const meta = readMeta(raw.meta, new Set(pages.map((p) => p.id)));
-	return { format: FORMAT_ID, version: CURRENT_VERSION, id, createdAt, modifiedAt, pages, meta, assets };
+	const meta = readMeta(raw.meta, pageIds, drop);
+	const doc: NotebookDocument = { format: FORMAT_ID, version: CURRENT_VERSION, id, createdAt, modifiedAt, pages, meta, assets };
+	const position = readPosition(raw.position, pageIds, drop);
+	if (position) doc.position = position;
+	return doc;
 }
 
-export function parse(text: string): ParseResult {
-	if (text.trim().length === 0) return { ok: false, reason: "empty", message: "the file is empty" };
+type ParseFailureResult = ParseResult & { ok: false };
+
+type Preflight = { ok: true; raw: RawObject; version: number } | { ok: false; failure: ParseFailureResult };
+
+/** JSON syntax, "is it a notebook" and the version check: everything before the content is looked at. */
+function preflight(text: string): Preflight {
+	if (text.trim().length === 0) return { ok: false, failure: { ok: false, reason: "empty", message: "the file is empty" } };
 	let raw: unknown;
 	try {
 		raw = JSON.parse(text);
 	} catch (e) {
-		return { ok: false, reason: "json", message: `invalid JSON: ${(e as Error).message}` };
+		return { ok: false, failure: { ok: false, reason: "json", message: `invalid JSON: ${(e as Error).message}` } };
 	}
-	if (!isObject(raw)) return { ok: false, reason: "not-notebook", message: "not a Notebook document" };
+	const notNotebook: Preflight = { ok: false, failure: { ok: false, reason: "not-notebook", message: "not a Notebook document" } };
+	if (!isObject(raw)) return notNotebook;
 	const version = detectVersion(raw);
-	if (version === null || (version >= 1 && raw.format !== FORMAT_ID)) {
-		return { ok: false, reason: "not-notebook", message: "not a Notebook document" };
-	}
+	if (version === null || (version >= 1 && raw.format !== FORMAT_ID)) return notNotebook;
 	if (version > CURRENT_VERSION) {
 		return {
-			ok: false, reason: "future-version", version,
-			message: `created by a newer version of Notebook (format v${version}, this version reads up to v${CURRENT_VERSION})`,
+			ok: false,
+			failure: {
+				ok: false, reason: "future-version", version,
+				message: `created by a newer version of Notebook (format v${version}, this version reads up to v${CURRENT_VERSION})`,
+			},
 		};
 	}
+	return { ok: true, raw, version };
+}
+
+/** Migrates and validates a parsed file. `lenient`: invalid optional v7 details are dropped and counted. */
+function parseRaw(raw: RawObject, version: number, lenient: boolean): ParseResult {
 	try {
 		const migrated = version < CURRENT_VERSION ? migrate(raw, version, CURRENT_VERSION) : raw;
-		return { ok: true, doc: validate(migrated), migratedFrom: version < CURRENT_VERSION ? version : null };
+		const drop: Dropped | null = lenient ? { count: 0 } : null;
+		const doc = validate(migrated, drop);
+		const migratedFrom = version < CURRENT_VERSION ? version : null;
+		return drop && drop.count > 0 ? { ok: true, doc, migratedFrom, dropped: drop.count } : { ok: true, doc, migratedFrom };
 	} catch (e) {
 		if (e instanceof ValidationError || e instanceof MigrationError) {
 			return { ok: false, reason: "invalid", message: e.message, version };
 		}
 		throw e;
 	}
+}
+
+/** Parses a notebook file (any supported version). Invalid optional v7 details are dropped, see `ParseResult`. */
+export function parse(text: string): ParseResult {
+	return parseText(text, true);
+}
+
+function parseText(text: string, lenient: boolean): ParseResult {
+	const pre = preflight(text);
+	return pre.ok ? parseRaw(pre.raw, pre.version, lenient) : pre.failure;
+}
+
+/**
+ * Texts shorter than this (characters, about 3,000 strokes) are always parsed in one go: that is tens of milliseconds
+ * on a PC, and staging has a fixed cost of its own (slices, an extra paint before the end).
+ */
+export const STAGED_MIN_CHARS = 2_000_000;
+
+/** A page that has not been read yet: right id, size and paper, no ink, nothing else. */
+function readPageShell(v: unknown, path: string): Page {
+	if (!isObject(v)) fail(path, "expected an object");
+	const id = str(v.id, `${path}.id`);
+	const width = positive(v.width, `${path}.width`);
+	const height = positive(v.height, `${path}.height`);
+	const paper = v.paper;
+	if (!isObject(paper) || !PAPER_KINDS.includes(paper.kind as PaperKind)) fail(`${path}.paper`, "unknown paper");
+	const spacing = positive(paper.spacing, `${path}.paper.spacing`);
+	if (spacing < MIN_PAPER_SPACING) fail(`${path}.paper.spacing`, `must be at least ${MIN_PAPER_SPACING} pt`);
+	return { id, width, height, paper: { kind: paper.kind as PaperKind, spacing }, strokes: [] };
+}
+
+export type StagedStep =
+	| { ok: true; /** Indices of the pages read by this step. */ changed: number[]; done: boolean }
+	| { ok: false; failure: ParseFailureResult };
+
+/**
+ * A file parsed in stages (#329). `parseStaged` runs the JSON parse and validates the header, the assets, the
+ * metadata and the pages one level deep (every page's id, size and paper), and reads one page completely: the
+ * one the reader wants. `doc` then has real content on that page and stand-ins (right size, no ink) elsewhere,
+ * so the page can be painted at once. `step` reads the other pages, nearest first, in slices of time that leave
+ * the input alone; `finish` reads whatever is left.
+ *
+ * `doc` is for DISPLAY ONLY until `done`: it is missing the ink of the unread pages, so saving it would erase
+ * them. `DocumentSession` therefore keeps it out of `session.doc` and `mode` stays "loading" until the last page is
+ * read and every page has passed exactly the validation `validate` applies (same readers, one shared set of
+ * ids, so duplicate ids across pages are still found). A page that fails ends the load like a damaged file.
+ */
+export class StagedParse {
+	private readonly queue: number[];
+	private failure: ParseFailureResult | null = null;
+
+	private constructor(
+		readonly doc: NotebookDocument,
+		private readonly rawPages: readonly unknown[],
+		private readonly ids: Set<string>,
+		first: number,
+		/** Invalid optional v7 details dropped while reading the document-level fields (they are all read up front). */
+		private readonly dropped: number,
+	) {
+		// Nearest to the wanted page first: forward, then back (the next page is the likelier swipe).
+		const order: number[] = [];
+		for (let d = 1; d < rawPages.length; d++) {
+			if (first + d < rawPages.length) order.push(first + d);
+			if (first - d >= 0) order.push(first - d);
+		}
+		this.queue = order;
+	}
+
+	/** Prepares a staged parse of a file already at the current version, with page `first` (0-based) read in full. */
+	static create(raw: RawObject, first: number): StagedParse | ParseFailureResult {
+		try {
+			const ids = new Set<string>();
+			// Lenient like `parse`: invalid optional v7 details are dropped and counted; everything else still fails.
+			const drop: Dropped = { count: 0 };
+			const doc = validateWith(raw, readPageShell, ids, drop);
+			const rawPages = raw.pages as unknown[];
+			const at = Math.min(rawPages.length - 1, Math.max(0, first));
+			const staged = new StagedParse(doc, rawPages, ids, at, drop.count);
+			staged.read(at);
+			return staged;
+		} catch (e) {
+			if (e instanceof ValidationError) return { ok: false, reason: "invalid", message: e.message, version: CURRENT_VERSION };
+			throw e;
+		}
+	}
+
+	private read(i: number): void {
+		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {});
+	}
+
+	get pending(): number {
+		return this.queue.length;
+	}
+
+	get done(): boolean {
+		return this.queue.length === 0 && this.failure === null;
+	}
+
+	/** Reads pages for about `budgetMs` (at least one page, if any is left). */
+	step(budgetMs: number, now: () => number = () => performance.now()): StagedStep {
+		if (this.failure) return { ok: false, failure: this.failure };
+		const changed: number[] = [];
+		const end = now() + budgetMs;
+		try {
+			while (this.queue.length > 0) {
+				const i = this.queue.shift()!;
+				this.read(i);
+				changed.push(i);
+				if (now() >= end) break;
+			}
+		} catch (e) {
+			if (!(e instanceof ValidationError)) throw e;
+			this.failure = { ok: false, reason: "invalid", message: e.message, version: CURRENT_VERSION };
+			return { ok: false, failure: this.failure };
+		}
+		return { ok: true, changed, done: this.queue.length === 0 };
+	}
+
+	/** Reads every page that is left, at once. */
+	finish(): ParseResult {
+		const r = this.step(Infinity);
+		return r.ok ? this.result() : r.failure;
+	}
+
+	/** The result once every page has been read (same shape as `parse`: `dropped` only when > 0). */
+	result(): ParseResult {
+		return this.dropped > 0 ? { ok: true, doc: this.doc, migratedFrom: null, dropped: this.dropped } : { ok: true, doc: this.doc, migratedFrom: null };
+	}
+}
+
+/**
+ * Like `parse`, but a large file at the current version comes back as a StagedParse. Everything else (small
+ * files, older versions that need migrating, damaged files) is parsed completely and returned as a ParseResult.
+ * `firstPage` is 1-based (the page the reader wants), or null.
+ */
+export function parseStaged(text: string, firstPage: number | null): StagedParse | ParseResult {
+	if (text.length < STAGED_MIN_CHARS) return parse(text);
+	const pre = preflight(text);
+	if (!pre.ok) return pre.failure;
+	if (pre.version !== CURRENT_VERSION) return parseRaw(pre.raw, pre.version, true);
+	return StagedParse.create(pre.raw, firstPage === null ? 0 : firstPage - 1);
 }
 
 export type CheckedSerialization = { ok: true; text: string } | { ok: false; message: string };
@@ -436,13 +731,14 @@ export function serializeChecked(doc: NotebookDocument, forceFull = false): Chec
 			return elementLine(e);
 		});
 		if (forceFull || text.length < FULL_CHECK_LIMIT) {
-			const check = parse(text);
+			// Strict: what is written must be valid as a whole, nothing may be dropped on the next read.
+			const check = parseText(text, false);
 			if (!check.ok) return { ok: false, message: check.message };
 			if (serialize(check.doc) !== text) return { ok: false, message: "round-trip mismatch" };
 		} else {
 			const skeleton = { ...doc, pages: doc.pages.map((p) => ({ ...p, strokes: [] })) };
 			const skeletonText = assemble(skeleton, strokeLine);
-			const check = parse(skeletonText);
+			const check = parseText(skeletonText, false);
 			if (!check.ok) return { ok: false, message: check.message };
 			if (assemble(check.doc, strokeLine) !== skeletonText) return { ok: false, message: "round-trip mismatch" };
 		}

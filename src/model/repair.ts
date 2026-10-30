@@ -25,13 +25,16 @@
  * document model and the serializer only know the current fields. They are counted, and they remain
  * in the original file, which is never modified.
  */
+import { normalizeBookmarkInfo, normalizeBookmarkInfoMap } from "./bookmarks";
 import { createId } from "./document";
 import { parseLenient } from "./lenient-json";
 import { detectVersion, migrate, type RawObject } from "./migrations";
+import { normalizePageTags } from "./page-tags";
+import { normalizePosition } from "./position";
 import { parse, serializeChecked, validate, MAX_FONT_SIZE } from "./serialize";
 import {
 	A4_HEIGHT, A4_WIDTH, CURRENT_VERSION, DEFAULT_META, FORMAT_ID, PAPER_SPACING, RENDER_FREEHAND, RENDER_VERSIONS, TOOLS,
-	type Asset, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type Stroke,
+	type Asset, type BookmarkInfo, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type ReadingPosition, type Stroke,
 } from "./types";
 
 export interface Counts {
@@ -74,7 +77,7 @@ export type RepairResult =
 
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 /** Page fields of the current format (a field dropped by the repair is not "unknown"). */
-const PAGE_FIELDS = { id: 1, width: 1, height: 1, paper: 1, strokes: 1, elements: 1, background: 1, infinite: 1, margins: 1 };
+const PAGE_FIELDS = { id: 1, width: 1, height: 1, paper: 1, strokes: 1, elements: 1, background: 1, infinite: 1, margins: 1, tags: 1 };
 const HEX_RE = /^[0-9a-f]+$/;
 
 function isObj(v: unknown): v is RawObject {
@@ -124,9 +127,9 @@ function jsonOrUndefined(text: string): unknown {
 	}
 }
 
-const HEADER_LINE = /^\t"(format|version|id|createdAt|modifiedAt|meta)": (.*)$/;
+const HEADER_LINE = /^\t"(format|version|id|createdAt|modifiedAt|meta|position)": (.*)$/;
 const ASSET_LINE = /^\t\t("[0-9a-f]+"): (\{.*\}),?$/;
-const PAGE_FIELD_LINE = /^\t\t\t"(id|width|height|paper|background|infinite|margins)": (.*)$/;
+const PAGE_FIELD_LINE = /^\t\t\t"(id|width|height|paper|tags|background|infinite|margins)": (.*)$/;
 const ITEM_LINE = /^\t\t\t\t(\{.*\}),?$/;
 
 /** Reads the line layout of `serialize()`; lines that are damaged are skipped. */
@@ -441,6 +444,14 @@ function salvageSkeleton(p: RawObject, ctx: SalvageContext): { page: RawObject; 
 		if (typeof p.infinite === "boolean") page.infinite = p.infinite;
 		else ctx.summary.fieldsReset++;
 	}
+	if (p.tags !== undefined) {
+		// v7 page tags: the strings are kept (normalised); anything else in the list is dropped.
+		const list = Array.isArray(p.tags) ? (p.tags as unknown[]) : [];
+		const strings = list.filter((t): t is string => typeof t === "string");
+		const tags = normalizePageTags(strings);
+		if (tags) page.tags = tags;
+		if (!Array.isArray(p.tags) || strings.length !== list.length) ctx.summary.fieldsReset++;
+	}
 	if (p.background !== undefined) {
 		const withBg = { ...page, background: p.background };
 		if (tryDoc([withBg], ctx.assets)) page.background = p.background;
@@ -561,20 +572,71 @@ function salvageElements(raw: unknown, skeleton: RawObject, ctx: SalvageContext)
 function salvageMeta(raw: unknown, pageIds: Set<string>, summary: RepairSummary): NotebookMeta {
 	const blank = [{ id: "p", width: 1, height: 1, paper: { kind: "blank", spacing: PAPER_SPACING.blank }, strokes: [] }];
 	if (raw === undefined) return { ...DEFAULT_META, tags: [], bookmarks: [] };
-	const asIs = isObj(raw) ? tryDoc(blank, {}, { ...raw, bookmarks: [] }) : null;
+	// Bookmark details are checked on their own below (against the real pages), so a damaged entry costs only itself.
+	const withoutInfo: RawObject | null = isObj(raw) ? { ...raw, bookmarks: [] } : null;
+	if (withoutInfo) delete withoutInfo.bookmarkInfo;
+	const asIs = withoutInfo ? tryDoc(blank, {}, withoutInfo) : null;
+	let meta: NotebookMeta;
 	if (asIs && isObj(raw)) {
 		const bookmarks = Array.isArray(raw.bookmarks) ? (raw.bookmarks as unknown[]).filter((b): b is string => typeof b === "string" && pageIds.has(b)) : [];
-		return { ...asIs.meta!, bookmarks: [...new Set(bookmarks)] };
+		meta = { ...asIs.meta!, bookmarks: [...new Set(bookmarks)] };
+	} else {
+		summary.fieldsReset++;
+		const m = isObj(raw) ? raw : {};
+		const strings = (v: unknown) => (Array.isArray(v) ? (v as unknown[]).filter((x): x is string => typeof x === "string" && x.length > 0) : []);
+		meta = {
+			tags: [...new Set(strings(m.tags))],
+			favorite: typeof m.favorite === "boolean" ? m.favorite : DEFAULT_META.favorite,
+			cover: typeof m.cover === "string" && COLOR_RE.test(m.cover) ? m.cover : DEFAULT_META.cover,
+			bookmarks: [...new Set(strings(m.bookmarks).filter((b) => pageIds.has(b)))],
+		};
 	}
-	summary.fieldsReset++;
-	const m = isObj(raw) ? raw : {};
-	const strings = (v: unknown) => (Array.isArray(v) ? (v as unknown[]).filter((x): x is string => typeof x === "string" && x.length > 0) : []);
-	return {
-		tags: [...new Set(strings(m.tags))],
-		favorite: typeof m.favorite === "boolean" ? m.favorite : DEFAULT_META.favorite,
-		cover: typeof m.cover === "string" && COLOR_RE.test(m.cover) ? m.cover : DEFAULT_META.cover,
-		bookmarks: [...new Set(strings(m.bookmarks).filter((b) => pageIds.has(b)))],
-	};
+	const info = isObj(raw) ? salvageBookmarkInfo(raw.bookmarkInfo, meta.bookmarks, summary) : undefined;
+	if (info) meta.bookmarkInfo = info;
+	return meta;
+}
+
+/**
+ * v7 bookmark details of the kept bookmarks: each entry is validated on its own; within a damaged entry the
+ * fields that are still valid are kept (a bad colour is dropped, the title stays).
+ */
+function salvageBookmarkInfo(raw: unknown, bookmarks: readonly string[], summary: RepairSummary): Record<string, BookmarkInfo> | undefined {
+	if (raw === undefined) return undefined;
+	if (!isObj(raw)) {
+		summary.fieldsReset++;
+		return undefined;
+	}
+	const out: Record<string, BookmarkInfo> = {};
+	for (const id of bookmarks) {
+		if (id === "__proto__" || !Object.prototype.hasOwnProperty.call(raw, id)) continue;
+		const v = raw[id];
+		if (!isObj(v)) {
+			summary.fieldsReset++;
+			continue;
+		}
+		const info: BookmarkInfo = {};
+		let bad = false;
+		if (typeof v.title === "string") info.title = v.title;
+		else if (v.title !== undefined) bad = true;
+		if (typeof v.color === "string" && COLOR_RE.test(v.color)) info.color = v.color;
+		else if (v.color !== undefined) bad = true;
+		if (typeof v.category === "string") info.category = v.category;
+		else if (v.category !== undefined) bad = true;
+		if (bad) summary.fieldsReset++;
+		const clean = normalizeBookmarkInfo(info);
+		if (clean) out[id] = clean;
+	}
+	return normalizeBookmarkInfoMap(out, bookmarks);
+}
+
+/** v7 reading position, kept when its page was recovered; otherwise dropped (it only says where to start reading). */
+function salvagePosition(raw: unknown, pageIds: ReadonlySet<string>, summary: RepairSummary): ReadingPosition | undefined {
+	if (raw === undefined) return undefined;
+	const p = isObj(raw) && typeof raw.page === "string" && typeof raw.at === "string"
+		? normalizePosition({ page: raw.page, at: raw.at, ...(typeof raw.y === "number" ? { y: raw.y } : {}) }, pageIds)
+		: undefined;
+	if (!p) summary.fieldsReset++;
+	return p;
 }
 
 function salvage(raw: RawObject, summary: RepairSummary, now: Date, cut: WeakSet<object>): NotebookDocument {
@@ -607,12 +669,15 @@ function salvage(raw: RawObject, summary: RepairSummary, now: Date, cut: WeakSet
 	const id = str(raw.id, createId);
 	const createdAt = str(raw.createdAt, () => iso);
 	const meta = salvageMeta(raw.meta, ctx.pageIds, summary);
-	summary.unknownFields += unknownKeys(raw, { format: 1, version: 1, id: 1, createdAt: 1, modifiedAt: 1, pages: 1, meta: 1, assets: 1 });
+	const position = salvagePosition(raw.position, ctx.pageIds, summary);
+	summary.unknownFields += unknownKeys(raw, { format: 1, version: 1, id: 1, createdAt: 1, modifiedAt: 1, pages: 1, meta: 1, assets: 1, position: 1 });
 	if (pages.length === 0) {
 		// A notebook has at least one page.
 		pages.push({ id: createId(), width: A4_WIDTH, height: A4_HEIGHT, paper: { kind: "grid", spacing: PAPER_SPACING.grid }, strokes: [] });
 	}
-	return { format: FORMAT_ID, version: CURRENT_VERSION, id, createdAt, modifiedAt: iso, pages, meta, assets };
+	const doc: NotebookDocument = { format: FORMAT_ID, version: CURRENT_VERSION, id, createdAt, modifiedAt: iso, pages, meta, assets };
+	if (position) doc.position = position;
+	return doc;
 }
 
 /**
@@ -626,6 +691,8 @@ export function repairNotebookText(text: string, now: Date = new Date()): Repair
 	if (parsed.ok) {
 		summary.alreadyReadable = true;
 		summary.sourceVersion = parsed.migratedFrom ?? CURRENT_VERSION;
+		// v7 details that were invalid and left out on read (a bad bookmark colour, the reading position).
+		summary.fieldsReset += parsed.dropped ?? 0;
 		for (const p of parsed.doc.pages) {
 			summary.pages.recovered++;
 			summary.strokes.recovered += p.strokes.length;

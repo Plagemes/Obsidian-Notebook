@@ -23,6 +23,7 @@ import { parse, serializeChecked } from "../model/serialize";
 import type { NotebookDocument } from "../model/types";
 import { backupFolder, type NotebookSettings } from "../settings";
 import { conflictBaseOf, conflictCopiesOf, mayBeManualCopy, sameNotebookText } from "../storage/conflicts";
+import { isInTrash } from "../storage/trash-paths";
 import { isNotebookFile, readNotebookText } from "../storage/format";
 import { extractDocId, formatSnapshotDate, parseSnapshotName, snapshotFolder } from "../storage/history";
 import { journalKey, type JournalStore } from "../storage/journal";
@@ -221,6 +222,8 @@ interface ConflictCopy {
 
 /** Notebook files in the folder of `file` whose names look like conflicted copies of it. */
 function copyFilesOf(app: App, file: TFile): TFile[] {
+	// Never inside the plugin trash (#160): a trashed notebook is not a copy of anything.
+	if (isInTrash(file.path)) return [];
 	const siblings = (file.parent?.children ?? []).filter((f): f is TFile => f instanceof TFile && isNotebookFile(f) && f !== file);
 	const stems = conflictCopiesOf(file.basename, siblings.map((f) => f.basename));
 	return siblings.filter((f) => stems.includes(f.basename));
@@ -269,9 +272,10 @@ export function describeMerge(s: MergeSummary): string[] {
 	add(s.elementsAdded, "merge.summary.elements");
 	add(s.elementsCopied, "merge.summary.elementsCopied");
 	add(s.assetsAdded, "merge.summary.assets");
-	add(s.tagsAdded + s.bookmarksAdded, "merge.summary.meta");
+	add(s.tagsAdded + s.bookmarksAdded + s.bookmarkInfoAdded + s.pageTagsAdded, "merge.summary.meta");
 	add(s.pageSettingsDiffer, "merge.summary.settings");
 	add(s.marginsDiffer, "merge.summary.margins");
+	add(s.bookmarkInfoDiffer, "merge.summary.bookmarkInfo");
 	add(s.pagesEnlarged, "merge.summary.enlarged");
 	add(s.onlyInMain, "merge.summary.onlyMain");
 	return lines;
@@ -584,7 +588,7 @@ export function registerReliability(plugin: Plugin, deps: ReliabilityDeps, views
 	// Registered after the layout is ready: Obsidian reports every existing file as "created" while loading.
 	app.workspace.onLayoutReady(() => {
 		plugin.registerEvent(app.vault.on("create", (f) => {
-			if (!(f instanceof TFile) || !isNotebookFile(f) || !f.parent) return;
+			if (!(f instanceof TFile) || !isNotebookFile(f) || !f.parent || isInTrash(f.path)) return;
 			const stems = new Set(f.parent.children.filter((c): c is TFile => c instanceof TFile && isNotebookFile(c)).map((c) => c.basename));
 			const base = conflictBaseOf(f.basename, stems);
 			if (base === null) return;

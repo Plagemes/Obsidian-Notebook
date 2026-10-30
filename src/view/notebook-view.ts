@@ -1,6 +1,6 @@
 import { FileView, Menu, Notice, Scope, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 import { pageFromState } from "../integration/links";
-import { pageFromEphemeralState } from "../integration/page-links";
+import { pageTargetFromEphemeralState, resolvePageTarget, type PageTarget } from "../integration/page-links";
 import { addPageShareItems } from "../integration/page-share";
 import { checkConflicts, openPageRestore, openRepair, type ReliabilityDeps } from "../integration/reliability";
 import { scanFromCamera } from "../scan/scan-modal";
@@ -10,6 +10,8 @@ import { isHeic } from "../scan/image-bytes";
 import { t } from "../i18n";
 import { renderThumbnail } from "../library/thumbnail";
 import { needsNextPage } from "../ink/auto-page";
+import { deleteInkCommand, inkOnRemoved } from "../ink/attach";
+import { captureClip, type ClipContent } from "../ink/clipboard";
 import { elementsInLasso, hitElement, transformElement } from "../ink/elements";
 import { eraseAreaCommand } from "../ink/erase-area";
 import { filterErasable } from "../ink/erase-filter";
@@ -17,23 +19,29 @@ import { findHitStrokes, type BBox } from "../ink/hit-test";
 import { growForInfinite } from "../ink/infinite";
 import { InputPolicy } from "../ink/input-policy";
 import { strokesInLasso, transformStroke } from "../ink/lasso";
-import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layout } from "../ink/layout";
+import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layout, type PageBox } from "../ink/layout";
 import { HoldTracker } from "../ink/hold";
+import { LastTool } from "../ink/last-tool";
 import { MultiTap } from "../ink/multitap";
+import { scribbleEraseSteps } from "../ink/scribble";
 import { lineAt, TextLayoutCache, wordAt } from "../ink/words";
 import { InkBuilder } from "../ink/ink-geometry";
 import { OneEuroFilter, stabilizationParams } from "../ink/one-euro";
 import { PointerController, type InkSample, type SampleBuffer } from "../ink/pointer-controller";
 import { PressureModel } from "../ink/pressure";
 import { recognizeShape } from "../ink/recognize";
-import { drawElement, drawTextElement, measureText, Renderer, selectionHandles } from "../ink/renderer";
+import { drawElement, drawTextElement, measureText, Renderer, selectionCorners, selectionHandles } from "../ink/renderer";
 import { projectToRuler, rulerFromTwoTouches, RULER_LENGTH, type Ruler } from "../ink/ruler";
 import { eraseSegment } from "../ink/segment-erase";
 import { analyseSpace, planSpaceChange, spacePreview } from "../ink/space";
 import { apply, IDENTITY, invert, isIdentity, multiply, rotateAbout, scaleAbout, translate, type Matrix } from "../ink/transform";
 import { clampToPage, fitWidth, pan, PAGE_MARGIN, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
+import { layoutPagesHorizontal, type ScrollMode } from "../ink/page-mode";
+import { capturePosition, positionFromState, restoreViewport, type SavedPosition } from "../ink/view-position";
+import { PageMode } from "./page-mode";
 import { cloneMeta, createId, createPage, createStroke } from "../model/document";
-import { createPdfPages, duplicatePage } from "../model/pages";
+import { buildLecturePackPages, exercisePage } from "../model/lecture-pack";
+import { duplicatePage } from "../model/pages";
 import { backgroundRect } from "../model/margins";
 import {
 	AddAsset, AddElement, AddPage, AddStroke, Batch, DeletePage, History, InsertPages, MovePage, RemoveElement, ReplaceElement,
@@ -48,6 +56,7 @@ import {
 } from "../model/types";
 import type { JournalStore } from "../storage/journal";
 import { DocumentSession, type SaveState, type SessionMode } from "../storage/session";
+import { nextTask } from "../storage/idle";
 import { isNotebookFile } from "../storage/format";
 import { VaultDocumentIO } from "../storage/vault-io";
 import { backupFolder, type NotebookSettings } from "../settings";
@@ -55,20 +64,30 @@ import { exportPdf, exportSvg } from "./export";
 import { policySettings } from "./input-settings";
 import { NotebookMedia, storeAsset } from "./media";
 import { PageNavigator } from "./navigator";
+import { addOutlinePageMenuItems, type OutlineHost } from "./outline";
+import { PAGE_AT_KEY, PageClock, pageAtFromState, pageState, startPosition } from "./position-sync";
+import { positionAt, updatePosition } from "../model/position";
 import { LocationKeeper } from "./last-location";
+import { GestureInput } from "./gesture-input";
 import { PenRadial } from "./radial-menu";
 import { askPdfRange } from "./pdf-range-modal";
 import { runBoardShot } from "./board-shot";
 import type { EditContext } from "./edit-context";
 import { runNewLecture } from "./lecture";
+import { askExercisePaper, askLayoutOptions, loadExercisePaper } from "./lecture-pack-modal";
 import { runMovePages } from "../library/move-pages";
 import { addPdfPageMenuItems, type PdfActionHost } from "./pdf-actions";
 import { pickFile } from "./pick";
+import { addPdfSyncMenuItems, type PageSyncHooks } from "./pdf-sync";
+import { deletePageKeepingCopy, newPageFromTemplate, openDeletedPages, savePageAsTemplate, type PageToolsHost } from "./page-tools";
 import { RulerGesture } from "./ruler-gesture";
+import { ObjectInk } from "./object-ink";
 import { SelectionActions } from "./selection-actions";
+import { StampPalette, type StampTarget } from "./stamp-palette";
 import { TextEditor, type TextEditSession } from "./text-editor";
 import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites";
 import { PenControls, type PenStore } from "./pen-controls";
+import { PdfReading, type ReadingHost } from "./pdf-reading";
 import { DEFAULT_TOOLS, Toolbar, type ToolName, type ToolbarState } from "./toolbar";
 import {
 	centredPosition, imageElementSize, imagePageSize, mergeMeta, metaEquals, newTextBox, shapePoints, shouldGrabRuler, toggleBookmark,
@@ -103,7 +122,7 @@ const THUMB_CSS_WIDTH = 120;
 export interface NotebookHost {
 	settings: NotebookSettings;
 	/** Instant start: the reader is on this page (1-based) of this notebook. Called a moment after it changes. */
-	remember?(path: string, page: number): void;
+	remember?(path: string, page: number, pos?: SavedPosition | null): void;
 	/** Instant save journal shared by all views. */
 	journal?: JournalStore;
 	/** Persists the plugin settings (favourite pens, eraser size, pen-only). Optional: absent in tests. */
@@ -220,15 +239,23 @@ export class NotebookView extends FileView {
 	private textEditor: TextEditor | null = null;
 	private rulerGesture: RulerGesture | null = null;
 	private radial: PenRadial | null = null;
-	private prevTool: ToolName = "pen";
+	/** Multi-finger taps and auto-scroll (wave 0.6: gestures), the previous tool, and when the stroke in progress began. */
+	private gestures: GestureInput | null = null;
+	private readonly lastTool = new LastTool<ToolName>();
+	private strokeStart = 0;
 	private readonly location = new LocationKeeper(
 		{ set: (fn, ms) => window.setTimeout(fn, ms), clear: (h) => window.clearTimeout(h) },
-		(path, page) => {
-			this.host.remember?.(path, page);
+		(path, page, pos) => {
+			this.host.remember?.(path, page, pos);
 			this.app.workspace.requestSaveLayout();
 		},
 	);
 	private selectionActions: SelectionActions | null = null;
+	/** One page at a time (#14); its gestures and animation live in page-mode.ts. */
+	private pageMode: PageMode | null = null;
+	private showPageMode: (on: boolean) => void = () => undefined;
+	private stamps: StampPalette | null = null;
+	private readonly objectInk = new ObjectInk();
 
 	private viewport: Viewport = { scale: 1, offsetX: 0, offsetY: 0 };
 	private viewSize: Size = { width: 0, height: 0 };
@@ -236,6 +263,8 @@ export class NotebookView extends FileView {
 	private fitMode = true;
 	private tools: ToolbarState = { ...DEFAULT_TOOLS };
 	private pens: PenControls | null = null;
+	/** Wave 0.6: PDF search, snapping highlighter, hide annotations, dimmed backgrounds (pdf-reading.ts). */
+	private reading: PdfReading | null = null;
 
 	private active: ActiveStroke | null = null;
 	private erasing: ActiveErase | null = null;
@@ -261,6 +290,9 @@ export class NotebookView extends FileView {
 	private readonly thumbRendering = new Set<string>();
 	private thumbTimer: number | null = null;
 
+	/** Wave 0.6 (#106): the synchronised PDF pane, when one is open (view/pdf-sync.ts). */
+	syncHooks: PageSyncHooks | null = null;
+
 	private lastBackupPath: string | null = null;
 	private lastErrorAt = 0;
 
@@ -272,6 +304,9 @@ export class NotebookView extends FileView {
 	/** Per input event while writing: processing time and event timestamp → painted (ms). */
 	private readonly perfProcess: number[] = [];
 	private readonly perfPaint: number[] = [];
+	private resolveClosed: (() => void) | null = null;
+	/** Resolves once onClose has written (or backed up) everything; the library waits for it before moving the file. */
+	readonly closed = new Promise<void>((resolve) => (this.resolveClosed = resolve));
 
 	constructor(leaf: WorkspaceLeaf, private readonly host: NotebookHost) {
 		super(leaf);
@@ -321,32 +356,37 @@ export class NotebookView extends FileView {
 			undo: () => this.undo(),
 			redo: () => this.redo(),
 			addPage: () => this.addPageAfter(this.currentPageIndex()),
+			exercisePage: () => this.exercisePageAfter(),
 			pageMenu: (evt) => this.openPageMenu(evt, this.currentPageIndex()),
 			deleteSelection: () => this.deleteSelection(),
 			fit: () => this.fitToWidth(),
 			toggleNavigator: () => this.setNavigatorOpen(!this.pageNav?.open),
 			insertImage: () => void this.insertImageElement(),
 			boardShot: () => void this.boardShot(),
+			stamps: () => this.stamps?.toggle(),
 		});
 		this.toolbar.setSelection(false);
+		this.showPageMode = this.toolbar.addMoreToggle("book-open", "toolbar.pageMode", () => this.togglePageMode());
 		this.body = this.contentEl.createDiv({ cls: "notebook-body" });
 		this.stage = this.body.createDiv({ cls: "notebook-stage" });
 		this.perfEl = this.stage.createDiv({ cls: "notebook-perf" });
 		this.pageNav = new PageNavigator(this.body, {
-			pages: () => this.session?.doc?.pages ?? [],
+			pages: () => this.shownDoc()?.pages ?? [],
 			current: () => this.currentPageIndex(),
-			bookmarks: () => new Set(this.session?.doc?.meta?.bookmarks ?? []),
+			bookmarks: () => new Set(this.shownDoc()?.meta?.bookmarks ?? []),
 			thumbnail: (page, width) => this.thumbnail(page, width),
 			goTo: (index) => this.goToPage(index),
 			move: (from, to) => this.movePage(from, to),
 			toggleBookmark: (pageId) => this.toggleBookmarkOf(pageId),
 			pageMenu: (index, evt) => this.openPageMenu(evt, index),
+			outline: this.outlineHost(),
 		});
 		// The panel sits to the left of the page (a drawer over it on narrow views).
 		this.body.insertBefore(this.pageNav.el, this.stage);
 		this.textEditor = new TextEditor(this.stage);
 		this.pens = new PenControls(this.toolbar, this.stage, this.penStore());
 		this.mountSelectionActions();
+		this.mountStamps();
 		this.messageEl = this.contentEl.createDiv({ cls: "notebook-message" });
 		this.messageEl.hide();
 		this.toolbar.setEditable(false);
@@ -362,14 +402,26 @@ export class NotebookView extends FileView {
 			drawStart: (s, eraser, held) => this.drawStart(s, eraser, held),
 			drawMove: (samples, predicted) => this.drawMove(samples, predicted),
 			drawEnd: (cancelled) => this.drawEnd(cancelled),
-			pan: (dx, dy) => this.setViewport(pan(this.viewport, dx, dy), true),
+			pan: (dx, dy) => (this.pageMode?.enabled ? this.pageMode.pan(dx, dy) : this.setViewport(pan(this.viewport, dx, dy), true)),
 			zoom: (factor, fx, fy) => {
 				this.fitMode = false;
+				this.pageMode?.zoomed(factor);
 				this.setViewport(zoomAt(this.viewport, factor, fx, fy), true);
 			},
-			penMenu: (x, y, source) => this.radial?.open(x, y, source),
+			penMenu: (x, y, source) => {
+				this.radial?.open(x, y, source);
+				// The menu swallows the lift of the contact that opened it: the gesture layer must not wait for it.
+				window.setTimeout(() => this.gestures?.releaseContacts(), 0);
+			},
 			sideButtonSeen: () => this.noteSideButtonSeen(),
 		}, { rawUpdates: this.host.settings.lowLatencyInk });
+		this.pageMode = new PageMode(this.stage, {
+			viewport: () => this.viewport,
+			viewSize: () => this.viewSize,
+			layout: () => this.layout,
+			setViewport: (v, interactive) => this.setViewport(v, interactive),
+			fitMode: () => this.fitMode,
+		});
 		this.radial = new PenRadial(this.stage, {
 			editable: () => this.editable() && !this.controller?.drawing,
 			tools: () => this.tools,
@@ -377,6 +429,27 @@ export class NotebookView extends FileView {
 			canUndo: () => this.history.canUndo(),
 			undo: () => this.undo(),
 		});
+		this.lastTool.note(this.tools.tool);
+		this.gestures = new GestureInput(this.stage, {
+			policy: this.policy,
+			tapMode: () => this.host.settings.tapGestures,
+			act: (action) => (action === "undo" ? this.undo() : this.redo()),
+			snapshotView: () => {
+				const { viewport, fitMode } = this;
+				return () => {
+					this.fitMode = fitMode;
+					this.setViewport(viewport, true);
+				};
+			},
+			drawing: () => !!this.controller?.drawing,
+			autoScroll: {
+				enabled: () => this.host.settings.autoScrollWriting && this.editable(),
+				viewHeight: () => this.viewSize.height,
+				offsetY: () => this.viewport.offsetY,
+				panBy: (dy) => this.setViewport(pan(this.viewport, 0, dy), true),
+			},
+		});
+		this.reading = new PdfReading(this.readingHost());
 		this.applySettings(this.host.settings);
 
 		this.resizeObserver = new ResizeObserver(() => this.measure());
@@ -421,21 +494,34 @@ export class NotebookView extends FileView {
 
 	async onClose(): Promise<void> {
 		this.location.flush();
-		await this.closeSession();
+		try {
+			await this.closeSession();
+		} finally {
+			this.resolveClosed?.();
+		}
 		this.stopHold();
 		for (const timer of [this.navTimer, this.thumbTimer, this.snapFlashTimer]) if (timer !== null) window.clearTimeout(timer);
 		this.navTimer = this.thumbTimer = this.snapFlashTimer = null;
 		this.pens?.destroy();
 		this.pens = null;
+		this.reading?.destroy();
+		this.reading = null;
 		this.toolbar?.destroy();
 		this.controller?.destroy();
 		this.controller = null;
 		this.radial?.destroy();
 		this.radial = null;
+		this.gestures?.destroy();
+		this.gestures = null;
 		this.rulerGesture?.destroy();
 		this.rulerGesture = null;
+		this.pageMode?.destroy();
+		this.pageMode = null;
 		this.selectionActions?.destroy();
 		this.selectionActions = null;
+		this.stamps?.destroy();
+		this.stamps = null;
+		this.objectInk.destroy();
 		this.textEditor?.destroy();
 		this.textEditor = null;
 		this.pageNav?.destroy();
@@ -451,17 +537,41 @@ export class NotebookView extends FileView {
 
 	/** Page (1-based) requested by the view state, applied once the document is loaded. */
 	private pendingPage: number | null = null;
+	/** Zoom and scroll position to restore on `pendingPage` (O16). */
+	private pendingPos: SavedPosition | null = null;
+	/** Link target (`#p3`, `#p3&id=...`) requested through the ephemeral state: always wins over any restored position. */
+	private pendingTarget: PageTarget | null = null;
+	/** wave 0.6 (v7): when the reader was on `pendingPage` (workspace layout), null for an explicit request. */
+	private pendingAt: string | null = null;
+	/** wave 0.6 (v7): the next load is the first one of this file, so it may start at the stored reading position. */
+	private startPending = false;
+	/** wave 0.6 (v7): when the page in view last changed, for the `pageAt` of the layout. */
+	private readonly pageClock = new PageClock();
 
-	/** The page being read goes into the workspace layout, so reopening Obsidian shows the same page. */
+	/** The page being read (and, v7, when) goes into the workspace layout, so reopening Obsidian shows the same page. */
 	getState(): Record<string, unknown> {
 		const state = super.getState();
-		const total = this.session?.doc?.pages.length ?? 0;
-		const page = this.pendingPage ?? (total > 0 ? this.currentPageIndex() + 1 : null);
-		return page !== null ? { ...state, page } : state;
+		if (this.pendingPage !== null) {
+			return {
+				...state, page: this.pendingPage,
+				...(this.pendingAt ? { [PAGE_AT_KEY]: this.pendingAt } : {}),
+				...(this.pendingPos ? { view: this.pendingPos } : {}),
+			};
+		}
+		const total = this.shownDoc()?.pages.length ?? 0;
+		const index = this.currentPageIndex();
+		// Where exactly (zoom and scroll) goes with the page; `pageAt` is when the reader arrived on it.
+		const pos = this.currentPosition();
+		return total > 0
+			? { ...state, ...pageState(index + 1, this.pageClock.since(this.file?.path, index, new Date())), ...(pos ? { view: pos } : {}) }
+			: state;
 	}
 
 	async setState(state: unknown, result: ViewStateResult): Promise<void> {
 		this.pendingPage = pageFromState(state);
+		this.pendingPos = positionFromState(state);
+		this.pendingAt = this.pendingPage !== null ? pageAtFromState(state) : null;
+		this.pendingTarget = null;
 		await super.setState(state, result);
 		// Already loaded (the same file was shown): jump now; otherwise onDocumentLoaded applies it.
 		if (this.pendingPage !== null && this.layout) this.applyPendingPage();
@@ -470,25 +580,103 @@ export class NotebookView extends FileView {
 	/** Following `[[Notebook.notebook#p3]]` passes the subpath here (after `setState` when the file was not open yet). */
 	setEphemeralState(state: unknown): void {
 		super.setEphemeralState(state);
-		const page = pageFromEphemeralState(state);
-		if (page === null) return;
-		this.pendingPage = page;
+		const target = pageTargetFromEphemeralState(state);
+		if (target === null) return;
+		// A link to a page by id only has no number: any page keeps the request pending until it is resolved.
+		this.pendingPage = target.page ?? 1;
+		this.pendingTarget = target;
+		this.pendingPos = null;
+		this.pendingAt = null;
 		if (this.layout) this.applyPendingPage();
 	}
 
 	private applyPendingPage(): void {
-		const doc = this.session?.doc;
+		const doc = this.shownDoc();
 		const page = this.pendingPage;
 		if (page === null || !doc || !this.layout) return;
+		// A saved zoom needs the size of the view: wait for the first measurement.
+		if (this.pendingPos && this.viewSize.width === 0) return;
 		this.pendingPage = null;
-		this.scrollToPage(Math.min(doc.pages.length, Math.max(1, page)) - 1);
+		const pos = this.pendingPos;
+		const target = this.pendingTarget;
+		this.pendingPos = null;
+		this.pendingTarget = null;
+		this.pendingAt = null;
+		if (target) {
+			// A link to a page that was deleted says so and stays where it is.
+			const found = resolvePageTarget(doc.pages, target);
+			if ("missing" in found) {
+				new Notice(t("links.pageDeleted", { name: this.file?.basename ?? "" }));
+				return;
+			}
+			this.scrollToPage(found.index);
+			return;
+		}
+		const index = Math.min(doc.pages.length, Math.max(1, page)) - 1;
+		if (pos && pos.page === index + 1 && this.restorePosition(pos)) return;
+		this.scrollToPage(index);
+	}
+
+	/** Shows the page, zoom and scroll position of a saved place (O16). False if the view cannot show it yet. */
+	private restorePosition(pos: SavedPosition): boolean {
+		const layout = this.layout;
+		const restored = layout ? restoreViewport(pos, this.pageMode?.enabled ? "pages" : "continuous", this.viewSize, layout) : null;
+		if (!restored) return false;
+		this.pageMode?.goTo(restored.pageIndex);
+		this.fitMode = restored.fit;
+		this.setViewport(restored.viewport);
+		return true;
+	}
+
+	/** Page, zoom and scroll position in view now, or null while the view has no size or no document. */
+	private currentPosition(): SavedPosition | null {
+		const layout = this.layout;
+		if (!layout) return null;
+		return capturePosition(this.pageMode?.enabled ? "pages" : "continuous", this.viewport, this.viewSize, layout, this.currentPageIndex());
+	}
+
+	/** wave 0.6 (v7): the first load of a file starts at the requested page or at the stored reading position. */
+	private applyStartPosition(): void {
+		const doc = this.shownDoc();
+		if (!doc || !this.layout) return;
+		if (!this.startPending) return this.applyPendingPage();
+		// A link (or search hit) always wins; it also needs no stored position.
+		if (this.pendingTarget) {
+			this.startPending = false;
+			return this.applyPendingPage();
+		}
+		// A saved zoom needs the size of the view: wait for the first measurement.
+		if (this.pendingPos && this.viewSize.width === 0) return;
+		this.startPending = false;
+		// An explicit page (Continue last notebook, search) wins; a restored layout page yields to a newer stored position.
+		const start = startPosition(doc, this.pendingPage, this.pendingAt);
+		const pos = this.pendingPos;
+		this.pendingPage = null;
+		this.pendingAt = null;
+		this.pendingPos = null;
+		if (!start) return;
+		// The workspace position (zoom and scroll) applies when its page is the one chosen, at the page top.
+		if (pos && pos.page === start.index + 1 && start.y === 0 && this.restorePosition(pos)) return;
+		this.scrollToPage(start.index, start.y);
+	}
+
+	/** wave 0.6 (v7): stores where the reader is, just before a content save serializes (DocumentSession.beforeSerialize). */
+	private storePosition(doc: NotebookDocument): void {
+		if (!this.layout || doc !== this.session?.doc || this.pendingPage !== null) return;
+		const index = this.currentPageIndex();
+		const box = this.layout.boxes[index];
+		if (!box) return;
+		const top = screenToPage(this.viewport, 0, 0)[1];
+		updatePosition(doc, positionAt(doc, index, top - box.y, new Date()));
 	}
 
 	async onLoadFile(file: TFile): Promise<void> {
 		await super.onLoadFile(file);
+		this.startPending = true;
 		this.lastBackupPath = null;
 		this.fitMode = true;
 		this.viewport = { scale: 1, offsetX: 0, offsetY: 0 };
+		this.pageMode?.reset();
 		// Callbacks of a session that is no longer the current one (file switched while loading) are ignored.
 		const current = () => this.session === session;
 		const session: DocumentSession = new DocumentSession(
@@ -497,6 +685,12 @@ export class NotebookView extends FileView {
 			{
 				onLoaded: (doc, mode, problem) => {
 					if (current()) this.onDocumentLoaded(doc, mode, problem);
+				},
+				onPartial: () => {
+					if (current()) this.showPartial();
+				},
+				onPartialProgress: (pages) => {
+					if (current()) this.onPagesRead(pages);
 				},
 				onSaveState: (state) => {
 					if (current()) this.showSaveState(state);
@@ -520,11 +714,25 @@ export class NotebookView extends FileView {
 				busy: () => this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null
 					|| this.textEditor?.isOpen === true,
 				journal: this.host.journal,
+				// The first slice waits for the frame that paints the page just shown (but not for long: no frames come while hidden).
+				yieldTask: (fn, first) => {
+					if (!first) return nextTask(fn);
+					let ran = false;
+					const go = (): void => {
+						if (ran) return;
+						ran = true;
+						nextTask(fn);
+					};
+					window.requestAnimationFrame(go);
+					window.setTimeout(go, 100);
+				},
+				beforeSerialize: (doc) => this.storePosition(doc),
 			},
 		);
 		this.session = session;
 		try {
-			await session.load();
+			// A large notebook is shown as soon as the page asked for is read; the rest follows (see StagedParse).
+			await session.load({ staged: true, page: this.pendingPage });
 		} catch (e) {
 			this.showError((e as Error).message);
 		}
@@ -541,6 +749,7 @@ export class NotebookView extends FileView {
 		this.renderer?.setMedia(null);
 		this.media?.destroy();
 		this.media = null;
+		this.reading?.reset();
 		this.pageNav?.invalidate();
 		await super.onUnloadFile(file);
 	}
@@ -586,7 +795,7 @@ export class NotebookView extends FileView {
 	}
 
 	applySettings(settings: NotebookSettings): void {
-		this.policy.settings = policySettings(settings);
+		this.applyInput(settings);
 		this.pressure.mode = settings.pressureMode;
 		if (this.toolbar && this.tools.eraserSize !== settings.eraserSize) this.toolbar.update({ eraserSize: settings.eraserSize });
 		this.pens?.refresh();
@@ -596,8 +805,16 @@ export class NotebookView extends FileView {
 			if (!this.controller.drawing) this.controller.setRawUpdates(settings.lowLatencyInk);
 		}
 		if (this.renderer && !this.active) this.renderer.setLowLatency(settings.lowLatencyInk);
+		this.setScrollMode(settings.scrollMode);
 		this.perfEl?.toggleClass("notebook-hidden", !settings.perfOverlay);
 		if (this.renderer) this.renderer.onFrame = settings.perfOverlay ? (t) => this.onFrame(t) : null;
+		this.reading?.settingsChanged();
+	}
+
+	/** Input policy from the settings; while annotations are hidden the view is read-only and a finger only pans and zooms. */
+	private applyInput(settings: NotebookSettings = this.host.settings): void {
+		const base = policySettings(settings);
+		this.policy.settings = this.reading ? this.reading.policy(base) : base;
 	}
 
 	/**
@@ -676,9 +893,9 @@ export class NotebookView extends FileView {
 
 	/** Scrolls to the page delta pages away from the one in view. */
 	goToRelativePage(delta: number): void {
-		const n = this.session?.doc?.pages.length ?? 0;
+		const n = this.shownDoc()?.pages.length ?? 0;
 		if (n === 0) return;
-		this.scrollToPage(Math.min(n - 1, Math.max(0, this.currentPageIndex() + delta)));
+		this.scrollToPage(Math.min(n - 1, Math.max(0, this.currentPageIndex() + delta)), 0, true);
 	}
 
 	private penStore(): PenStore {
@@ -693,7 +910,7 @@ export class NotebookView extends FileView {
 			penOnly: () => !s().fingerDrawing,
 			setPenOnly: (on) => {
 				s().fingerDrawing = !on;
-				this.policy.settings = { ...this.policy.settings, fingerDrawing: !on };
+				this.applyInput();
 				save();
 			},
 			eraserSize: () => s().eraserSize,
@@ -702,6 +919,32 @@ export class NotebookView extends FileView {
 				save();
 			},
 		};
+	}
+
+	/** Switches between continuous scrolling and one page at a time, staying on the page in view. */
+	setScrollMode(mode: ScrollMode): void {
+		const pm = this.pageMode;
+		const on = mode === "pages";
+		this.showPageMode(on);
+		if (!pm || pm.enabled === on) return;
+		const index = this.currentPageIndex();
+		pm.setEnabled(on);
+		this.fitMode = true;
+		this.refreshLayout();
+		if (!this.layout) return;
+		if (on) pm.goTo(index);
+		else {
+			this.refit(false);
+			this.scrollToPage(index);
+		}
+	}
+
+	/** Toolbar and command: flips the setting (saved with the plugin settings, applied to every open notebook). */
+	togglePageMode(): void {
+		const s = this.host.settings;
+		s.scrollMode = s.scrollMode === "pages" ? "continuous" : "pages";
+		this.setScrollMode(s.scrollMode);
+		void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
 	}
 
 	fitToWidth(): void {
@@ -728,9 +971,38 @@ export class NotebookView extends FileView {
 		this.scrollToPage(at);
 	}
 
-	private scrollToPage(index: number): void {
+	/** "Exercise page here": a blank page with the exercise paper right after the page at `index` (default: the one in view), one undo step. */
+	exercisePageAfter(index: number = this.currentPageIndex()): void {
+		const doc = this.session?.doc;
+		const like = doc?.pages[index];
+		if (!doc || !like || !this.editable() || this.controller?.drawing) return;
+		this.commitText();
+		this.clearSelection();
+		this.history.execute(new AddPage(exercisePage(like, loadExercisePaper(this.app)), index + 1));
+		this.afterHistoryChange();
+		this.scrollToPage(index + 1);
+	}
+
+	/** Asks for the paper of exercise pages. */
+	chooseExercisePaper(): void {
+		void askExercisePaper(this.app);
+	}
+
+
+	/** Shows page `index` from its top, or (v7 reading position) with page y `y` at the top of the view. `animate`: page-by-page turn. */
+	private scrollToPage(index: number, y = 0, animate = false): void {
+		if (this.pageMode?.enabled) {
+			this.pageMode.goTo(index, animate);
+			if (y > 0) {
+				const box = this.layout?.boxes[index];
+				if (box) this.setViewport({ ...this.viewport, offsetY: -(box.y + y) * this.viewport.scale });
+			}
+			return;
+		}
 		const box = this.layout?.boxes[index];
-		if (box) this.setViewport({ ...this.viewport, offsetY: PAGE_MARGIN - box.y * this.viewport.scale });
+		if (!box) return;
+		const offsetY = y > 0 ? -(box.y + y) * this.viewport.scale : PAGE_MARGIN - box.y * this.viewport.scale;
+		this.setViewport({ ...this.viewport, offsetY });
 	}
 
 	private goToPage(index: number): void {
@@ -752,6 +1024,8 @@ export class NotebookView extends FileView {
 		const menu = new Menu();
 		menu.addItem((i) => i.setTitle(t("page.insertPdf")).setIcon("file-input").onClick(() => void this.insertPdfAfter(index)));
 		menu.addItem((i) => i.setTitle(t("page.insertBlank")).setIcon("file-plus").onClick(() => this.addPageAfter(index)));
+		menu.addItem((i) => i.setTitle(t("page.exercise")).setIcon("pencil-ruler").onClick(() => this.exercisePageAfter(index)));
+		menu.addItem((i) => i.setTitle(t("page.exercisePaper")).setIcon("palette").onClick(() => this.chooseExercisePaper()));
 		menu.addItem((i) => i.setTitle(t("page.insertImage")).setIcon("image-plus").onClick(() => void this.insertImagePageAfter(index)));
 		menu.addItem((i) => i.setTitle(t("page.scanAfter")).setIcon("scan").onClick(() => void this.scanPagesAfter(index)));
 		menu.addItem((i) => i.setTitle(t("page.scanInsert")).setIcon("scan-line").onClick(() => void this.insertScanElement(index)));
@@ -764,9 +1038,15 @@ export class NotebookView extends FileView {
 			.onClick(() => this.pageCommand(new MovePage(page.id, index, index + 1), index + 1, page)));
 		const marked = doc.meta?.bookmarks.includes(page.id) ?? false;
 		menu.addItem((i) => i.setTitle(t(marked ? "page.unbookmark" : "page.bookmark")).setIcon("bookmark").onClick(() => this.toggleBookmarkOf(page.id)));
+		addOutlinePageMenuItems(menu, this.outlineHost(), page);
 		menu.addItem((i) => i.setTitle(t("page.moveToNotebook")).setIcon("folder-input").onClick(() => void this.movePagesToNotebook(index)));
 		menu.addItem((i) => i.setTitle(t("page.delete")).setIcon("trash-2").setSection("danger").setDisabled(doc.pages.length <= 1)
-			.onClick(() => this.pageCommand(new DeletePage(page, index), Math.max(0, index - 1), page)));
+			// Wave 0.6: a copy goes to the page trash first; the page is deleted only once that copy is on disk.
+			.onClick(() => void deletePageKeepingCopy(this.pageToolsHost(), doc, page, index, (at) => this.pageCommand(new DeletePage(page, at), Math.max(0, at - 1), page))));
+		menu.addItem((i) => i.setTitle(t("page.deletedPages")).setIcon("archive-restore").onClick(() => void openDeletedPages(this.pageToolsHost())));
+		menu.addItem((i) => i.setTitle(t("page.saveTemplate")).setIcon("layout-template")
+			.onClick(() => savePageAsTemplate(this.pageToolsHost(), doc, page, this.file?.basename ?? "")));
+		menu.addItem((i) => i.setTitle(t("page.newFromTemplate")).setIcon("file-plus-2").onClick(() => newPageFromTemplate(this.pageToolsHost(), index)));
 		menu.addSeparator();
 		for (const kind of PAPER_KINDS) {
 			menu.addItem((i) => i.setTitle(t("page.paper", { kind: t(`paper.${kind}`) })).setChecked(page.paper.kind === kind)
@@ -800,6 +1080,7 @@ export class NotebookView extends FileView {
 				.onClick(() => void exportSvg(this.app, file, page, ` p${index + 1}`, this.media)));
 		}
 		addPdfPageMenuItems(menu, this.pdfActionHost(), page);
+		addPdfSyncMenuItems(menu, this);
 		menu.showAtMouseEvent(evt);
 	}
 
@@ -831,6 +1112,18 @@ export class NotebookView extends FileView {
 		this.afterHistoryChange();
 	}
 
+	/** wave 0.6 (v7): what the outline, the bookmark editor and the page tags editor need (outline.ts). */
+	private outlineHost(): OutlineHost {
+		return {
+			app: this.app,
+			pages: () => this.session?.doc?.pages ?? [],
+			meta: () => this.session?.doc?.meta,
+			canEdit: () => this.editableDocument() !== null,
+			execute: (cmd) => void this.applyCommand(cmd),
+			goTo: (index) => this.goToPage(index),
+		};
+	}
+
 	private setPaper(page: Page, kind: PaperKind, index: number): void {
 		if (page.paper.kind === kind) return;
 		const after = { kind, spacing: PAPER_SPACING[kind] };
@@ -854,11 +1147,17 @@ export class NotebookView extends FileView {
 			.filter((it) => it.index >= 0)
 			.sort((a, b) => b.index - a.index);
 		for (const it of strokes) commands.push(new ReplaceStroke(page.id, it.stroke, [], it.index));
-		for (const el of sel.elements) if (page.elements?.includes(el)) commands.push(new RemoveElement(page.id, el));
+		const removedEls = sel.elements.filter((el) => page.elements?.includes(el));
+		for (const el of removedEls) commands.push(new RemoveElement(page.id, el));
+		// Ink written on a deleted object stays unless the user takes the offer shown afterwards (setting "Ink follows objects").
+		const owned = this.host.settings.inkFollowsObjects && removedEls.length > 0
+			? inkOnRemoved(page.strokes, page.elements ?? [], removedEls, new Set(sel.strokes), measureText)
+			: [];
 		this.clearSelection();
 		if (commands.length === 0) return;
 		this.history.execute(new Batch("Delete selection", commands));
 		this.afterHistoryChange();
+		if (owned.length > 0) this.offerDeleteInk(page, removedEls, owned);
 	}
 
 	// --- insert: PDF, image page, image element ---
@@ -875,6 +1174,13 @@ export class NotebookView extends FileView {
 	}
 
 	/** True when the view still shows the same editable document (the picker and the import are asynchronous). */
+	/** Any pointer contact or gesture in progress on the canvas. */
+	private inContact(): boolean {
+		return this.active !== null || this.erasing !== null || this.lasso !== null || this.drag !== null || this.shapeDrag !== null
+			|| this.spaceDrag !== null || this.lassoTap !== null || this.textTap !== null || this.controller?.navigating === true
+			|| this.gestures?.touching === true || this.rulerGesture?.dragging === true;
+	}
+
 	private stillHere(session: DocumentSession | null): boolean {
 		return !!session && this.session === session && this.editable() && !this.controller?.drawing;
 	}
@@ -898,16 +1204,19 @@ export class NotebookView extends FileView {
 			if (sizes.length === 0) throw new Error("the PDF has no pages");
 			const range = sizes.length === 1 ? { from: 1, to: 1 } : await askPdfRange(this.app, sizes.length);
 			if (!range || !this.stillHere(session)) return;
+			// Lecture pack layout (#192, #193): on the slide, slide + notes area, notes page after every slide.
+			const layout = await askLayoutOptions(this.app);
+			if (!layout || !this.stillHere(session)) return;
 			const doc = session.doc;
 			const at = doc ? doc.pages.indexOf(anchor) : -1;
 			if (!doc || at < 0) return;
-			const pages = createPdfPages(asset, sizes.slice(range.from - 1, range.to), range.from);
+			const pages = buildLecturePackPages(asset, sizes.slice(range.from - 1, range.to), range.from, layout);
 			this.commitText();
 			this.clearSelection();
 			this.history.execute(new Batch("Insert PDF", [new AddAsset(asset), new InsertPages(pages, at + 1)]));
 			this.afterHistoryChange();
 			this.scrollToPage(at + 1);
-			new Notice(t("insert.pdfDone", { n: String(pages.length) }));
+			new Notice(t("insert.pdfDone", { n: String(range.to - range.from + 1) }));
 		} catch (e) {
 			console.error("[notebook] insert PDF", e);
 			new Notice(t("insert.failed", { error: (e as Error).message }), 8000);
@@ -950,6 +1259,18 @@ export class NotebookView extends FileView {
 
 	// --- wave p1b: reliability (repair, conflicted copies, page restore; see integration/reliability.ts) ---
 
+	/** Page trash and templates (wave 0.6, see page-tools.ts). */
+	private pageToolsHost(): PageToolsHost {
+		const host = this.host;
+		return {
+			app: this.app,
+			get settings() { return host.settings; },
+			editableDocument: () => this.editableDocument(),
+			applyCommand: (cmd, scrollTo) => this.applyCommand(cmd, scrollTo),
+			flush: async () => (await this.flushNow()) && (this.session?.isSaved() ?? false),
+		};
+	}
+
 	private reliabilityDeps(): ReliabilityDeps {
 		return { app: this.app, settings: this.host.settings, journal: this.host.journal };
 	}
@@ -973,6 +1294,48 @@ export class NotebookView extends FileView {
 	/** Index of the page in view (for commands). */
 	currentPage(): number {
 		return this.currentPageIndex();
+	}
+
+	/** What the PDF reading tools (search, snapping highlighter, hide annotations, dimming) need from this view. */
+	private readingHost(): ReadingHost {
+		const save = (): void => void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
+		return {
+			stage: this.stage,
+			body: this.body,
+			toolbar: this.toolbar,
+			settings: () => this.host.settings,
+			save,
+			doc: () => this.session?.doc ?? null,
+			pageText: (asset, page) => {
+				const media = this.media;
+				return media ? media.pdf.pageText(asset, page) : Promise.reject(new Error("no media"));
+			},
+			viewport: () => this.viewport,
+			viewSize: () => this.viewSize,
+			layout: () => this.layout,
+			visibleRect: () => this.visibleRect(),
+			currentPage: () => this.currentPageIndex(),
+			setViewport: (v) => this.setViewport(v),
+			renderer: () => this.renderer,
+			isNarrow: () => this.body.hasClass("is-narrow"),
+			beforeHide: () => {
+				this.controller?.finishActiveStroke();
+				this.commitText();
+				this.clearSelection();
+				this.radial?.close();
+			},
+			editingChanged: () => {
+				this.applyInput();
+				this.toolbar.setEditable(this.editable());
+				this.updateHistoryButtons();
+				this.selectionActions?.update();
+			},
+		};
+	}
+
+	/** The PDF reading tools (search, hide annotations, dimming) for the commands; null before the view is open. */
+	get readingTools(): PdfReading | null {
+		return this.reading;
 	}
 
 	/** Wave p1a: what the PDF actions (margins, re-published slides, annotation export) need; null without a document. */
@@ -1110,7 +1473,8 @@ export class NotebookView extends FileView {
 		const session = this.session;
 		const media = this.media;
 		const doc = session?.doc;
-		if (!session || !media || !doc || !this.stillHere(session)) return null;
+		// A contact or gesture in progress (lasso drag, eraser, pan…) would lose its change to an edit from outside: busy.
+		if (!session || !media || !doc || !this.stillHere(session) || this.inContact()) return null;
 		return {
 			app: this.app,
 			folder: this.host.settings.folder,
@@ -1168,7 +1532,7 @@ export class NotebookView extends FileView {
 	}
 
 	private editable(): boolean {
-		return this.session?.mode === "ok" && !!this.session.doc;
+		return this.session?.mode === "ok" && !!this.session.doc && !this.reading?.annotationsHidden;
 	}
 
 	private pageAtIndex(i: number): Page | null {
@@ -1177,15 +1541,50 @@ export class NotebookView extends FileView {
 
 	private currentPageIndex(): number {
 		if (!this.layout) return 0;
+		if (this.pageMode?.enabled) return this.pageMode.current();
 		const [, y] = screenToPage(this.viewport, this.viewSize.width / 2, this.viewSize.height / 2);
 		return Math.max(0, nearestPage(this.layout, y));
 	}
 
+	/** The document to show: the complete one, or while a large notebook is still being read, the part-read one. */
+	private shownDoc(): NotebookDocument | null {
+		return this.session?.doc ?? this.session?.partialDoc ?? null;
+	}
+
+	/**
+	 * Staged load (#329): the page asked for is in, the others are stand-ins. Show it read-only: the toolbar stays off
+	 * and nothing can be edited or saved until `onDocumentLoaded` brings the complete document.
+	 */
+	private showPartial(): void {
+		if (!this.shownDoc()) return;
+		this.messageEl.hide();
+		this.body.show();
+		this.toolbar.setEditable(false);
+		this.toolbar.setStatus(t("status.loading"), "pending");
+		if (!this.media) {
+			this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged());
+			this.renderer?.setMedia(this.media);
+		}
+		this.refreshLayout();
+		this.refit(true);
+		this.pageNav?.invalidate();
+		this.applyStartPosition();
+	}
+
+	/** Staged load: these pages have their ink now; repaint if one of them is on screen. */
+	private onPagesRead(pages: number[]): void {
+		const layout = this.layout;
+		if (!layout) return;
+		const visible = visiblePages(layout, this.visibleRect());
+		if (visible.some((i) => pages.includes(i))) this.renderer?.invalidate();
+	}
+
 	private refreshLayout(): void {
-		const doc = this.session?.doc;
-		this.layout = doc ? layoutPages(doc.pages) : null;
+		const doc = this.shownDoc();
+		this.layout = doc ? (this.pageMode?.enabled ? layoutPagesHorizontal(doc.pages) : layoutPages(doc.pages)) : null;
 		this.renderer?.setDocument(doc?.pages ?? null, this.layout);
 		this.pushRuler();
+		this.reading?.docChanged();
 	}
 
 	private onDocumentLoaded(doc: NotebookDocument | null, mode: SessionMode, problem: string | null): void {
@@ -1209,21 +1608,23 @@ export class NotebookView extends FileView {
 		this.renderer?.setSpacePreview(null);
 		this.radial?.close();
 		this.ruler = null;
+		this.reading?.reset();
 		if (doc && mode === "ok") {
 			this.messageEl.hide();
 			this.body.show();
 			this.toolbar.setEditable(true);
 			if (!this.media) {
-				this.media = new NotebookMedia(this.app, () => this.session?.doc ?? null, () => this.host.settings.folder, () => this.onMediaChanged());
+				this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged());
 				this.renderer?.setMedia(this.media);
 			}
 			this.refreshLayout();
 			this.refit(true);
 			this.pageNav?.invalidate();
 			if (this.tools.ruler) this.placeRuler();
-			this.applyPendingPage();
+			this.applyStartPosition();
 			if (this.file) this.location.note(this.file.path, this.currentPageIndex() + 1);
 			void checkConflicts(this.reliabilityDeps(), this);
+			this.syncHooks?.loaded();
 		} else {
 			this.body.hide();
 			this.toolbar.setEditable(false);
@@ -1295,27 +1696,27 @@ export class NotebookView extends FileView {
 	}
 
 	private updatePageIndicator(): void {
-		const n = this.session?.doc?.pages.length ?? 0;
+		const n = this.shownDoc()?.pages.length ?? 0;
 		const current = n ? this.currentPageIndex() : -1;
 		this.toolbar.setPage(n ? current + 1 : 0, n);
+		if (n && this.file) this.pageClock.note(this.file.path, current, new Date());
 		if (current !== this.navCurrent) {
 			this.navCurrent = current;
 			this.pageNav?.markCurrent(current);
-			if (n && this.file && this.pendingPage === null) this.location.note(this.file.path, current + 1);
+			if (n && this.file && this.pendingPage === null) this.location.note(this.file.path, current + 1, this.currentPosition());
+			this.syncHooks?.page(current);
+		} else if (n && this.file && this.pendingPage === null) {
+			// Same page, but the zoom or the scroll position may have changed.
+			this.location.note(this.file.path, current + 1, this.currentPosition());
 		}
-	}
-
-	/** The tool used before the current one (the pen's side button can switch back to it while held). */
-	private previousTool(): ToolName {
-		return this.prevTool !== this.tools.tool ? this.prevTool : "pen";
 	}
 
 	private onToolsChanged(state: ToolbarState): void {
 		const before = this.tools;
 		this.tools = state;
-		if (state.tool !== before.tool) this.prevTool = before.tool;
 		this.pens?.onToolsChanged(state);
 		this.radial?.noteTools(state);
+		this.lastTool.note(state.tool);
 		if (state.tool !== "lasso") this.clearSelection();
 		this.selectionActions?.update();
 		if (before.tool === "text" && state.tool !== "text") this.commitText();
@@ -1414,6 +1815,7 @@ export class NotebookView extends FileView {
 		this.body.toggleClass("is-narrow", this.contentEl.clientWidth < NARROW_PX);
 		this.renderer?.resize(rect.width, rect.height, window.devicePixelRatio || 1);
 		this.refit(true);
+		if (this.pendingPage !== null) this.applyStartPosition();
 	}
 
 	/** In fit mode, rescales to the view width; `keepTop` keeps the same document line at the top (rotation). */
@@ -1424,6 +1826,10 @@ export class NotebookView extends FileView {
 			this.setViewport(this.viewport);
 			return;
 		}
+		if (this.pageMode?.enabled) {
+			this.pageMode.refit(keepTop);
+			return;
+		}
 		const topY = screenToPage(this.viewport, 0, 0)[1];
 		const fitted = fitWidth(this.viewSize, layout);
 		if (keepTop && topY > 0) fitted.offsetY = -topY * fitted.scale;
@@ -1432,11 +1838,33 @@ export class NotebookView extends FileView {
 
 	private setViewport(v: Viewport, interactive = false): void {
 		const layout = this.layout;
-		this.viewport = layout ? clampToPage(v, this.viewSize, layout) : v;
+		this.viewport = layout ? (this.pageMode?.enabled ? this.pageMode.clamp(v) : clampToPage(v, this.viewSize, layout)) : v;
 		this.renderer?.setViewport(this.viewport, interactive);
+		this.reading?.viewportChanged();
 		if (this.selection) this.pushSelection();
 		this.placeTextEditor();
 		this.updatePageIndicator();
+		this.overlayChanged?.();
+	}
+
+	// wave 0.6: zettelkasten — hooks for DOM overlays (card regions, src/zettel/overlay.ts)
+
+	/** Called after every viewport or layout change, so overlays can follow the pages. */
+	overlayChanged: (() => void) | null = null;
+
+	/** Stage element, viewport and page boxes (document space) for DOM overlays; null without a document. */
+	overlayGeometry(): { stage: HTMLElement; viewport: Viewport; boxes: readonly PageBox[] } | null {
+		return this.layout && this.stage ? { stage: this.stage, viewport: this.viewport, boxes: this.layout.boxes } : null;
+	}
+
+	/** Page and bounds (page coordinates, any pending drag applied) of the lasso selection, or null. */
+	selectionRegion(): { pageIndex: number; bounds: BBox } | null {
+		const sel = this.selection;
+		if (!sel) return null;
+		const corners = selectionCorners(sel.bounds, sel.matrix);
+		const xs = corners.map((c) => c[0]);
+		const ys = corners.map((c) => c[1]);
+		return { pageIndex: sel.pageIndex, bounds: { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) } };
 	}
 
 	// --- text boxes ---
@@ -1600,7 +2028,7 @@ export class NotebookView extends FileView {
 		this.commitText();
 		const [dx, dy] = this.toDoc(sample);
 		if (!Number.isFinite(dx) || !Number.isFinite(dy)) return false;
-		const tool = eraserButton ? "eraser" : held === "lasso" ? "lasso" : held === "previous" ? this.previousTool() : this.tools.tool;
+		const tool = eraserButton ? "eraser" : held === "lasso" ? "lasso" : held === "previous" ? (this.lastTool.previous() ?? this.tools.tool) : this.tools.tool;
 
 		if (tool === "eraser" && this.tools.eraserMode !== "area") {
 			// The selection may contain strokes about to be erased (e.g. erasing with the pen button).
@@ -1659,6 +2087,9 @@ export class NotebookView extends FileView {
 			return true;
 		}
 
+		// A selection made with the side button's lasso is not carried into new ink.
+		this.clearSelection();
+		this.strokeStart = sample.t;
 		const snap = !!page && this.rulerLatches(page, local);
 		const start = snap && this.ruler ? (projectToRuler(this.ruler.ruler, local, Infinity) ?? local) : local;
 		this.filter.reset(sample.x, sample.y, sample.t);
@@ -1666,6 +2097,7 @@ export class NotebookView extends FileView {
 		this.pressure.begin(sample.pointerType, sample.pressure);
 		const p = this.pressure.sample(sample.pointerType, sample.pressure, sample.x, sample.y, sample.t);
 		const highlighter = tool === "highlighter";
+		if (highlighter && page) this.reading?.prefetch(page);
 		const inkTool = highlighter ? "highlighter" : "pen";
 		const color = highlighter ? this.tools.highlighterColor : this.tools.penColor;
 		const width = highlighter ? this.tools.highlighterWidth : this.tools.penWidth;
@@ -1908,20 +2340,58 @@ export class NotebookView extends FileView {
 			return;
 		}
 		if (active.wet) {
+			if (this.eraseByScribble(active, page)) return;
 			// The line ends where the pen lifted (the filtered position may trail it slightly).
 			this.ink.add(active.rawX, active.rawY, active.rawP);
 			this.ink.finish();
 			const stroke = freezeStroke({ ...active.stroke, points: this.ink.toPoints() });
+			const snapped = this.reading?.snapStroke(page, stroke);
+			if (snapped) {
+				// Snap to text lines: straight highlights replace the hand-drawn stroke in the same undo step.
+				this.renderer?.cancelWet();
+				this.addStrokes(active.pageIndex, page, snapped);
+				if (active.liveFallback) this.renderer?.setLive(null);
+				return;
+			}
 			// The wet canvas shows exactly this geometry; the static layer takes it over without a change.
 			this.renderer?.endWet(stroke);
 			this.addStrokes(active.pageIndex, page, [stroke]);
 			if (active.liveFallback) this.renderer?.setLive(null);
+			const box = this.layout?.boxes[active.pageIndex];
+			if (box) this.gestures?.strokeEnded((box.y + active.rawY) * this.viewport.scale + this.viewport.offsetY);
 			return;
 		}
 		this.renderer?.setLive(null);
 		const stroke = freezeStroke(active.stroke);
+		const snapped = this.reading?.snapStroke(page, stroke);
+		if (snapped) {
+			this.addStrokes(active.pageIndex, page, snapped);
+			return;
+		}
 		const extras = active.extra.map((points) => freezeStroke({ ...active.stroke, id: createId(), points }));
 		this.addStrokes(active.pageIndex, page, [stroke, ...extras]);
+	}
+
+	/**
+	 * Scribble to erase (setting): a fast back-and-forth scratch over existing ink deletes the strokes it
+	 * crosses, as one undo step, and the scribble itself is not kept. Returns true when it did.
+	 */
+	private eraseByScribble(active: ActiveStroke, page: Page): boolean {
+		if (!this.host.settings.scribbleErase || active.stroke.tool !== "pen" || active.snap || active.recognized || !this.renderer) return false;
+		const stroke = freezeStroke({ ...active.stroke, points: this.ink.toPoints() });
+		const steps = scribbleEraseSteps(page, stroke, performance.now() - this.strokeStart, this.renderer.boundsOf);
+		if (!steps) return false;
+		this.clearSelection();
+		this.renderer.cancelWet();
+		this.renderer.setLive(null);
+		// The scribble is in the history as the user's stroke, so Undo after a false positive gives it back.
+		this.history.execute(steps.keep);
+		this.history.execute(steps.erase);
+		this.renderer.invalidate();
+		this.session?.markChanged();
+		this.updateHistoryButtons();
+		this.scheduleNavRefresh();
+		return true;
 	}
 
 	/** Commits strokes drawn on a page as one undo step; an infinite page grows in the same step. */
@@ -2134,7 +2604,9 @@ export class NotebookView extends FileView {
 	private pushSelection(): void {
 		const sel = this.selection;
 		this.toolbar.setSelection(!!sel);
-		this.renderer?.setSelection(sel ? { ...sel, handle: HANDLE_PX } : null);
+		// Ink written on the selected objects floats with them (setting "Ink follows objects").
+		const attached = sel ? this.attachedInk(sel) : [];
+		this.renderer?.setSelection(sel ? { ...sel, strokes: attached.length > 0 ? [...sel.strokes, ...attached] : sel.strokes, handle: HANDLE_PX } : null);
 		this.selectionActions?.update();
 	}
 
@@ -2241,8 +2713,12 @@ export class NotebookView extends FileView {
 		}
 		const moved = present.map((s) => freezeStroke(transformStroke(s, sel.matrix)));
 		const movedEls = presentEls.map((e) => transformElement(e, sel.matrix, measureText));
+		const onPage = new Set(page.strokes);
+		const attached = this.attachedInk(sel).filter((s) => onPage.has(s));
+		const movedAttached = attached.map((s) => freezeStroke(transformStroke(s, sel.matrix)));
 		const commands: Command[] = [
 			...present.map((s, i) => new ReplaceStroke(page.id, s, [moved[i]!], page.strokes.indexOf(s))),
+			...attached.map((s, i) => new ReplaceStroke(page.id, s, [movedAttached[i]!], page.strokes.indexOf(s))),
 			...presentEls.map((e, i) => new ReplaceElement(page.id, e, movedEls[i]!)),
 		];
 		this.history.execute(new Batch("Transform selection", commands));
@@ -2255,6 +2731,82 @@ export class NotebookView extends FileView {
 		this.session?.markChanged();
 		this.updateHistoryButtons();
 		this.scheduleNavRefresh();
+	}
+
+	// --- ink attached to objects (roadmap 149) ---
+
+	/** Strokes that float with the selection without being selected: the ink written on the selected objects (none when the setting is off). */
+	private attachedInk(sel: Selection): Stroke[] {
+		if (!this.host.settings.inkFollowsObjects) return [];
+		const page = this.pageAtIndex(sel.pageIndex);
+		return page ? this.objectInk.attachedTo(page, sel) : [];
+	}
+
+	/** After deleting objects that had ink on them: offers to delete that ink too (undone separately; ignored = the ink stays). */
+	private offerDeleteInk(page: Page, removed: readonly PageElement[], owned: Stroke[]): void {
+		this.objectInk.offerDelete(owned.length, () => {
+			const doc = this.session?.doc;
+			// Only while the objects are still deleted: an undo in between brings them back, and their ink stays where it is.
+			if (!doc || !this.editable() || !doc.pages.includes(page) || removed.some((e) => page.elements?.includes(e))) return;
+			const cmd = deleteInkCommand(page.id, page.strokes, owned);
+			if (!cmd) return;
+			this.clearSelection();
+			this.history.execute(cmd);
+			this.afterHistoryChange();
+			this.renderer?.invalidate();
+			new Notice(t("object.inkDeleted"));
+		});
+	}
+
+	// --- stamps (roadmap 142) ---
+
+	private mountStamps(): void {
+		this.stamps = new StampPalette(this.body, {
+			app: this.app,
+			folder: () => this.host.settings.folder,
+			editable: () => this.editable(),
+			doc: () => this.session?.doc ?? null,
+			captureSelection: () => this.captureSelectionClip(),
+			penStyle: () => ({ color: this.tools.penColor, width: this.tools.penWidth }),
+			viewTarget: () => this.pasteTarget(),
+			pageAtClient: (x, y) => this.pageAtClient(x, y),
+			execute: (cmd) => {
+				this.history.execute(cmd);
+				this.afterHistoryChange();
+				this.renderer?.invalidate();
+			},
+			select: (pageIndex, strokes, elements) => this.selectItems(pageIndex, strokes, elements),
+		});
+	}
+
+	private captureSelectionClip(): ClipContent | null {
+		const sel = this.selection;
+		const doc = this.session?.doc;
+		const page = sel && doc?.pages[sel.pageIndex];
+		if (!sel || !doc || !page) return null;
+		return captureClip(
+			sel.strokes.filter((s) => page.strokes.includes(s)),
+			sel.elements.filter((e) => page.elements?.includes(e)),
+			doc.assets, measureText,
+		);
+	}
+
+	/** The page under a screen point (CSS px of the window) and the point on it; null outside the page area. */
+	private pageAtClient(clientX: number, clientY: number): StampTarget | null {
+		const doc = this.session?.doc;
+		const layout = this.layout;
+		if (!doc || !layout) return null;
+		const rect = this.stage.getBoundingClientRect();
+		if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return null;
+		const [dx, dy] = screenToPage(this.viewport, clientX - rect.left, clientY - rect.top);
+		if (!Number.isFinite(dx) || !Number.isFinite(dy)) return null;
+		let index = pageAt(layout, dx, dy);
+		if (index < 0) index = nearestPage(layout, dy);
+		const page = doc.pages[index];
+		const box = layout.boxes[index];
+		if (!page || !box) return null;
+		const [x, y] = toPageLocal(box, dx, dy);
+		return { pageIndex: index, page, x, y };
 	}
 
 	// --- selection actions: restyle, copy, cut, paste, duplicate, white to transparent ---

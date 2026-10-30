@@ -2,6 +2,8 @@ import { Modal, Notice, Setting, type App } from "obsidian";
 import { t } from "../i18n";
 import { AddPage } from "../model/history";
 import type { EditContext } from "./edit-context";
+import { suggestedCourse } from "../timetable/current";
+import { applyCourseTag } from "../timetable/page-tag";
 import { buildLecturePage, cleanTitle, defaultLectureTitle, isoDate, parseIsoDate } from "./lecture-logic";
 
 export interface LectureAnswer {
@@ -80,16 +82,23 @@ export function askLecture(app: App, defaultTitle: string): Promise<LectureAnswe
 	return new Promise((resolve) => new LectureModal(app, defaultTitle, resolve).open());
 }
 
+/** Adds a lecture page (header: course and date) at the end of the notebook as one undo step. */
+export function addLecturePage(ctx: EditContext, title: string, date: Date, course?: string): void {
+	const pages = ctx.doc.pages;
+	let page = buildLecturePage(pages[pages.length - 1], title, date);
+	if (course) page = applyCourseTag(page, course);
+	ctx.execute(new AddPage(page, pages.length), pages.length);
+}
+
 /**
  * "New lecture": asks for the course/title and the date, then adds a page at the end of the notebook with that header
  * as a text box (one undo step). The model has no page titles, so the header is ordinary text: it is searchable in the
- * library and exported with the page.
+ * library and exported with the page. The course defaults to the class in progress in the timetable, else the notebook name.
  */
 export async function runNewLecture(ctx: EditContext): Promise<void> {
-	const answer = await askLecture(ctx.app, defaultLectureTitle(ctx.file?.path));
+	const fromTimetable = suggestedCourse(ctx.file?.path);
+	const answer = await askLecture(ctx.app, fromTimetable ?? defaultLectureTitle(ctx.file?.path));
 	if (!answer || !ctx.alive()) return;
-	const pages = ctx.doc.pages;
-	const page = buildLecturePage(pages[pages.length - 1], answer.title, answer.date);
-	ctx.execute(new AddPage(page, pages.length), pages.length);
+	addLecturePage(ctx, answer.title, answer.date, fromTimetable && answer.title ? answer.title : undefined);
 	new Notice(t("lecture.done"));
 }

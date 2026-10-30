@@ -16,6 +16,7 @@
  * The output depends only on the document and the notebook path (no clock, time zone, language or vault
  * name), so two synced devices generate byte-identical notes and never rewrite each other's copy.
  */
+import { computeSharedTags, normalizeTag, uniqueTags } from "./tags";
 import type { NotebookDocument, TextElement } from "./types";
 
 export const COMPANION_LINK_KEY = "notebook";
@@ -55,6 +56,7 @@ export interface CompanionContent {
 /** What the plugin wrote last time, stored on the start marker line so the next update knows what it owns. */
 export interface RegionState {
 	keys: string[];
+	/** Tags the plugin added to the note (not the ones the person wrote): the only tags it may remove later. */
 	tags: string[];
 }
 
@@ -69,26 +71,10 @@ export function companionTime(iso: unknown): string | null {
 
 /**
  * A notebook tag as an Obsidian tag: no leading `#`, spaces become `-`, characters Obsidian does not allow
- * in tags are dropped; purely numeric tags are not valid Obsidian tags and give null.
+ * in tags are dropped, nested tags are `a/b`; purely numeric tags are not valid Obsidian tags and give null.
+ * (The same function the tag editor uses, so what the person sees is what the note gets: model/tags.ts.)
  */
-export function obsidianTag(raw: string): string | null {
-	const tag = raw.trim().replace(/^#+/, "").replace(/\s+/g, "-").replace(/[^\p{L}\p{N}\p{M}_\-/]/gu, "").replace(/^\/+|\/+$/g, "");
-	if (!tag || /^[\d/]+$/.test(tag)) return null;
-	return tag;
-}
-
-function uniqueTags(tags: Iterable<string>): string[] {
-	const out: string[] = [];
-	const seen = new Set<string>();
-	for (const t of tags) {
-		const key = t.toLowerCase();
-		if (!seen.has(key)) {
-			seen.add(key);
-			out.push(t);
-		}
-	}
-	return out;
-}
+export const obsidianTag: (raw: string) => string | null = normalizeTag;
 
 function propertyValue(v: unknown): PropertyValue | null {
 	if (typeof v === "string") return v.trim() ? v : null;
@@ -169,6 +155,8 @@ export function companionContent(doc: NotebookDocument, ctx: CompanionContext): 
 			if (numbers.length > 0) properties[key] = numbers;
 			continue;
 		}
+		// v7 bookmark details (titles, colours, categories) belong to the outline, not to the note's properties.
+		if (key === "bookmarkInfo") continue;
 		const value = propertyValue(raw);
 		if (value !== null) properties[key] = value;
 	}
@@ -186,9 +174,12 @@ export function companionContent(doc: NotebookDocument, ctx: CompanionContext): 
 
 // ------------------------------------------------------------------- region
 
-/** The generated region, markers included, with the state the next update needs. */
-export function renderRegion(content: CompanionContent): string {
-	const state: RegionState = { keys: Object.keys(content.properties), tags: content.tags };
+/**
+ * The generated region, markers included, with the state the next update needs. `ownedTags` are the tags the plugin
+ * added to the note (default: all of the notebook's, as for a new note); only those may be removed again later.
+ */
+export function renderRegion(content: CompanionContent, ownedTags: readonly string[] = content.tags): string {
+	const state: RegionState = { keys: Object.keys(content.properties), tags: [...ownedTags] };
 	// `%` is escaped so a tag can never end the comment early.
 	const json = JSON.stringify({ v: 1, ...state }).replace(/%/g, "\\u0025");
 	const start = `${REGION_START} ${REGION_NOTE} ${json} %%`;
@@ -305,15 +296,17 @@ export type CompanionTextUpdate =
  * User properties, user text and the frontmatter as written are kept byte for byte when no plugin-owned
  * property changed; otherwise only the frontmatter block is re-serialized, as `processFrontMatter` would.
  */
-export function updateCompanionText(text: string, content: CompanionContent, region: string, deps: CompanionTextDeps): CompanionTextUpdate {
+export function updateCompanionText(
+	text: string, content: CompanionContent, region: string | ((ownedTags: readonly string[]) => string), deps: CompanionTextDeps,
+): CompanionTextUpdate {
 	const info = deps.frontmatterInfo(text);
 	const current = info.exists ? deps.parseFrontmatter(text.slice(info.from, info.to)) : {};
 	if (current === null) return { kind: "yaml" };
 	if (regionStatus(text) === "broken") return { kind: "markers" };
 	// What the last update owned: read before the region (which stores it) is replaced.
 	const previous = readRegionState(text);
-	const nextProps = mergeProperties(current, content, previous);
-	const merged = mergeRegion(text, region);
+	const { properties: nextProps, ownedTags } = mergeCompanion(current, content, previous);
+	const merged = mergeRegion(text, typeof region === "function" ? region(ownedTags) : region);
 	if (merged === null) return { kind: "markers" };
 	let out = merged;
 	if (!sameProperties(current, nextProps)) {
@@ -339,11 +332,33 @@ export function readTags(value: unknown): string[] {
 }
 
 /**
- * The frontmatter after an update. `current` is what the note has now; `previous` the state of the
- * last update (null when unknown: then nothing is removed, only added or overwritten).
- * Key order of `current` is kept; new keys are appended in generator order.
+ * The entries of a `tags` value that `readTags` does not read (numbers such as an unquoted `2026`, booleans, nulls,
+ * nested lists, empty strings), as they are. An update keeps them: it must not lose what the person wrote.
  */
+export function unreadTags(value: unknown): unknown[] {
+	if (Array.isArray(value)) return value.filter((t) => typeof t !== "string" || t.trim().replace(/^#+/, "").length === 0);
+	return typeof value === "number" || typeof value === "boolean" ? [value] : [];
+}
+
+export interface MergedCompanion {
+	/** The frontmatter after the update. */
+	properties: Record<string, unknown>;
+	/** Tags the plugin added to the note: stored on the start marker, the only ones it may remove later. */
+	ownedTags: string[];
+}
+
+/** The frontmatter after an update (see `mergeCompanion`). */
 export function mergeProperties(current: Readonly<Record<string, unknown>>, content: CompanionContent, previous: RegionState | null): Record<string, unknown> {
+	return mergeCompanion(current, content, previous).properties;
+}
+
+/**
+ * The frontmatter after an update, and the tags the plugin owns in it. `current` is what the note has now; `previous`
+ * the state of the last update (null when unknown: then nothing is removed, only added or overwritten, and a tag the
+ * note already has counts as the person's). Key order of `current` is kept; new keys are appended in generator order.
+ * `tags` follows the rule of `computeSharedTags` (model/tags.ts).
+ */
+export function mergeCompanion(current: Readonly<Record<string, unknown>>, content: CompanionContent, previous: RegionState | null): MergedCompanion {
 	const owned = new Set([...(previous?.keys ?? []), ...Object.keys(content.properties)]);
 	owned.delete(TAGS_KEY);
 	const next: Record<string, unknown> = {};
@@ -361,19 +376,24 @@ export function mergeProperties(current: Readonly<Record<string, unknown>>, cont
 	}
 
 	const hadTags = Object.prototype.hasOwnProperty.call(current, TAGS_KEY);
-	const currentTags = readTags(current[TAGS_KEY]);
-	const ours = new Set((previous?.tags ?? []).map((t) => t.toLowerCase()));
-	const fromNotebook = new Set(content.tags.map((t) => t.toLowerCase()));
-	const userTags = currentTags.filter((t) => !ours.has(t.toLowerCase()) && !fromNotebook.has(t.toLowerCase()));
-	const tags = uniqueTags([...content.tags, ...userTags]);
-	if (tags.length > 0) {
-		const same = Array.isArray(current[TAGS_KEY]) && JSON.stringify(current[TAGS_KEY]) === JSON.stringify(tags);
-		if (!same) next[TAGS_KEY] = tags;
+	const raw = current[TAGS_KEY];
+	const currentTags = readTags(raw);
+	// Entries that are not tag names (`2026` read by YAML as a number…) are not the plugin's: kept as they are, last.
+	const extras = unreadTags(raw);
+	const shared = computeSharedTags(content.tags, currentTags, previous?.tags ?? null);
+	if (shared.tags.length > 0 || extras.length > 0) {
+		const wanted = [...shared.tags, ...extras];
+		const same = Array.isArray(raw)
+			? JSON.stringify(raw) === JSON.stringify(wanted)
+				// Only where the kept entries sit differs: the note's own order stays.
+				|| (extras.length > 0 && JSON.stringify(raw.filter((t) => !extras.includes(t))) === JSON.stringify(shared.tags))
+			: shared.tags.length === 0;
+		if (!same) next[TAGS_KEY] = wanted;
 	} else if (hadTags && currentTags.length > 0) {
 		// Every tag left was ours: drop the property. (An empty `tags:` the user wrote stays.)
 		delete next[TAGS_KEY];
 	}
-	return next;
+	return { properties: next, ownedTags: shared.owned };
 }
 
 /** A YAML parser may read an unquoted timestamp as a Date: compare it as the string the generator writes. */

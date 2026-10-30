@@ -1,8 +1,12 @@
 import { inEdgeZone, type EdgeZones } from "./edge-zones";
 import { isBarrelSignal } from "./pen-button";
 
-/** What pressing the pen's side button does: open the radial menu, erase while it is held, or nothing. */
-export type PenButtonAction = "radial-eraser" | "radial" | "eraser" | "lasso" | "previous" | "off";
+/**
+ * What pressing the pen's side button does: a click opens the radial menu and holding it while the nib touches erases
+ * (the default), the radial menu only, erase / lasso / the previously used tool while it is held, or nothing.
+ */
+export const PEN_BUTTON_ACTIONS = ["radial-eraser", "radial", "eraser", "lasso", "previous", "off"] as const;
+export type PenButtonAction = (typeof PEN_BUTTON_ACTIONS)[number];
 
 /** A tool the pen acts as while the side button is held (and the nib touches the page). */
 export type HeldTool = "eraser" | "lasso" | "previous";

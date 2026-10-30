@@ -1,7 +1,10 @@
-import { setIcon } from "obsidian";
+import { Menu, setIcon } from "obsidian";
 import { t } from "../i18n";
 import { MAX_ASPECT } from "../library/thumbnail";
+import { bookmarkColor } from "../model/bookmarks";
+import { pageHasTag, pageTagCounts } from "../model/page-tags";
 import type { Page } from "../model/types";
+import { renderOutline, type OutlineHost } from "./outline";
 import { pageSignature } from "./view-helpers";
 
 export interface NavigatorHost {
@@ -14,6 +17,8 @@ export interface NavigatorHost {
 	move(from: number, to: number): void;
 	toggleBookmark(pageId: string): void;
 	pageMenu(index: number, evt: MouseEvent): void;
+	/** v7: bookmark details, outline and page tags. */
+	outline: OutlineHost;
 }
 
 const THUMB_WIDTH = 120;
@@ -21,14 +26,22 @@ const THUMB_WIDTH = 120;
 const LONG_PRESS_MS = 350;
 
 /**
- * Side panel with page thumbnails: tap to jump, drag to reorder, star to bookmark.
+ * Side panel with page thumbnails: tap to jump, drag to reorder, star to bookmark; filters by bookmark and
+ * by page tag. The outline mode lists the bookmarks instead (titles, colours, categories).
  * Thumbnails are rendered lazily (only when visible) and cached per page content.
  */
 export class PageNavigator {
 	readonly el: HTMLElement;
 	private readonly listEl: HTMLElement;
 	private readonly filterButton: HTMLButtonElement;
+	private readonly titleEl: HTMLElement;
+	private readonly outlineButton: HTMLButtonElement;
+	private readonly tagButton: HTMLButtonElement;
+	private readonly tagBar: HTMLElement;
 	private onlyBookmarks = false;
+	private outlineMode = false;
+	private tagFilter: string | null = null;
+	private outlineCategory: string | null = null;
 	private readonly thumbs = new Map<string, { key: string; url: string }>();
 	private readonly observer: IntersectionObserver;
 	private drag: { from: number; pointerId: number; ghost: HTMLElement; target: number } | null = null;
@@ -36,7 +49,21 @@ export class PageNavigator {
 	constructor(parent: HTMLElement, private readonly host: NavigatorHost) {
 		this.el = parent.createDiv({ cls: "notebook-navigator notebook-hidden" });
 		const header = this.el.createDiv({ cls: "notebook-navigator-header" });
-		header.createSpan({ text: t("nav.title"), cls: "notebook-navigator-title" });
+		this.titleEl = header.createSpan({ text: t("nav.title"), cls: "notebook-navigator-title" });
+		this.outlineButton = header.createEl("button", {
+			cls: "notebook-tool clickable-icon", attr: { "aria-label": t("nav.outline"), "aria-pressed": "false", type: "button" },
+		});
+		setIcon(this.outlineButton, "list-tree");
+		this.outlineButton.addEventListener("click", () => {
+			this.outlineMode = !this.outlineMode;
+			this.updateHeader();
+			this.refresh();
+		});
+		this.tagButton = header.createEl("button", {
+			cls: "notebook-tool clickable-icon", attr: { "aria-label": t("nav.filterTag"), type: "button" },
+		});
+		setIcon(this.tagButton, "tag");
+		this.tagButton.addEventListener("click", (e) => this.openTagMenu(e));
 		this.filterButton = header.createEl("button", {
 			cls: "notebook-tool clickable-icon", attr: { "aria-label": t("nav.onlyBookmarks"), type: "button" },
 		});
@@ -46,6 +73,7 @@ export class PageNavigator {
 			this.filterButton.toggleClass("is-active", this.onlyBookmarks);
 			this.refresh();
 		});
+		this.tagBar = this.el.createDiv({ cls: "notebook-navigator-tagbar notebook-hidden" });
 		this.listEl = this.el.createDiv({ cls: "notebook-navigator-list" });
 		this.observer = new IntersectionObserver((entries) => {
 			for (const e of entries) if (e.isIntersecting) this.loadThumb(e.target as HTMLElement);
@@ -80,9 +108,20 @@ export class PageNavigator {
 		const pages = this.host.pages();
 		const marks = this.host.bookmarks();
 		const current = this.host.current();
+		this.updateTagBar();
+		if (this.outlineMode) {
+			renderOutline(this.listEl, this.host.outline, { category: this.outlineCategory, current }, (category) => {
+				this.outlineCategory = category;
+				this.refresh();
+			});
+			this.listEl.scrollTop = scrollTop;
+			return;
+		}
+		const info = this.host.outline.meta()?.bookmarkInfo;
 		let shown = 0;
 		pages.forEach((page, index) => {
 			if (this.onlyBookmarks && !marks.has(page.id)) return;
+			if (this.tagFilter !== null && !pageHasTag(page, this.tagFilter)) return;
 			shown++;
 			const item = this.listEl.createDiv({ cls: "notebook-navigator-item", attr: { tabindex: "0", "data-index": String(index) } });
 			item.toggleClass("is-current", index === current);
@@ -90,6 +129,13 @@ export class PageNavigator {
 			img.setCssProps({ "--notebook-thumb-ratio": String(Math.min(page.height / page.width, MAX_ASPECT)) });
 			const cached = this.thumbs.get(page.id);
 			if (cached && cached.key === this.thumbKey(page)) img.src = cached.url;
+			// v7: the bookmark title and the page tags under the thumbnail.
+			const details = marks.has(page.id) ? info?.[page.id] : undefined;
+			if (details?.title || (page.tags?.length ?? 0) > 0) {
+				const caption = item.createDiv({ cls: "notebook-navigator-caption" });
+				if (details?.title) caption.createDiv({ cls: "notebook-navigator-caption-title", text: details.title });
+				if (page.tags?.length) caption.createDiv({ cls: "notebook-navigator-caption-tags", text: page.tags.map((x) => `#${x}`).join(" ") });
+			}
 			const footer = item.createDiv({ cls: "notebook-navigator-footer" });
 			footer.createSpan({ text: String(index + 1), cls: "notebook-navigator-number" });
 			const menu = footer.createEl("button", {
@@ -106,6 +152,8 @@ export class PageNavigator {
 			setIcon(star, "bookmark");
 			star.toggleClass("is-active", marks.has(page.id));
 			star.setAttribute("aria-pressed", String(marks.has(page.id)));
+			const color = marks.has(page.id) ? bookmarkColor(details) : null;
+			if (color) star.setCssProps({ "--notebook-bookmark-color": color });
 			star.addEventListener("click", (e) => {
 				e.stopPropagation();
 				this.host.toggleBookmark(page.id);
@@ -125,10 +173,53 @@ export class PageNavigator {
 		this.listEl.scrollTop = scrollTop;
 	}
 
+	private updateHeader(): void {
+		this.titleEl.setText(t(this.outlineMode ? "nav.outline" : "nav.title"));
+		this.outlineButton.toggleClass("is-active", this.outlineMode);
+		this.outlineButton.setAttribute("aria-pressed", String(this.outlineMode));
+		// The page filters apply to the thumbnails, not to the outline.
+		this.filterButton.toggleClass("notebook-hidden", this.outlineMode);
+		this.tagButton.toggleClass("notebook-hidden", this.outlineMode);
+	}
+
+	/** Shows the active page-tag filter (with a button to clear it); hides it in the outline. */
+	private updateTagBar(): void {
+		const pages = this.host.pages();
+		// A filter on a tag no page has any more (tag removed, undo) is dropped.
+		if (this.tagFilter !== null && !pages.some((p) => pageHasTag(p, this.tagFilter!))) this.tagFilter = null;
+		this.tagButton.toggleClass("is-active", this.tagFilter !== null);
+		this.tagBar.empty();
+		const show = this.tagFilter !== null && !this.outlineMode;
+		this.tagBar.toggleClass("notebook-hidden", !show);
+		if (!show) return;
+		this.tagBar.createSpan({ cls: "notebook-navigator-tagbar-text", text: t("nav.tagFilter", { tag: this.tagFilter! }) });
+		const clear = this.tagBar.createEl("button", { cls: "notebook-tool clickable-icon", attr: { "aria-label": t("nav.clearTagFilter"), type: "button" } });
+		setIcon(clear, "x");
+		clear.addEventListener("click", () => this.setTagFilter(null));
+	}
+
+	private setTagFilter(tag: string | null): void {
+		this.tagFilter = tag;
+		this.refresh();
+	}
+
+	/** Menu of the page tags in use (with the number of pages), plus "All pages". */
+	private openTagMenu(evt: MouseEvent): void {
+		const menu = new Menu();
+		const counts = pageTagCounts(this.host.pages());
+		menu.addItem((i) => i.setTitle(t("nav.allTags")).setChecked(this.tagFilter === null).onClick(() => this.setTagFilter(null)));
+		if (counts.length === 0) menu.addItem((i) => i.setTitle(t("nav.noPageTags")).setDisabled(true));
+		for (const { tag, count } of counts) {
+			const on = this.tagFilter !== null && this.tagFilter.toLowerCase() === tag.toLowerCase();
+			menu.addItem((i) => i.setTitle(`#${tag} (${count})`).setChecked(on).onClick(() => this.setTagFilter(tag)));
+		}
+		menu.showAtMouseEvent(evt);
+	}
+
 	/** Highlights the current page without rebuilding the list, and brings it into view. */
 	markCurrent(index: number): void {
 		if (!this.open) return;
-		this.listEl.querySelectorAll(".notebook-navigator-item").forEach((el) => {
+		this.listEl.querySelectorAll(".notebook-navigator-item, .notebook-outline-row").forEach((el) => {
 			const item = el as HTMLElement;
 			const current = Number(item.dataset.index) === index;
 			if (current !== item.hasClass("is-current")) {

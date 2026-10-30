@@ -2,10 +2,11 @@
 
 export const FORMAT_ID = "obsidian-notebook";
 /**
- * v6: optional page margins around a background (v5: per-stroke render version; v4: library metadata,
+ * v7: bookmark details (title, colour, category), page tags, the shared reading position and more paper
+ * kinds (v6: page margins around a background; v5: per-stroke render version; v4: library metadata,
  * assets, backgrounds, elements, infinite pages, "shape" tool; v3: paper kinds and page sizes).
  */
-export const CURRENT_VERSION = 6;
+export const CURRENT_VERSION = 7;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -55,12 +56,19 @@ export interface Stroke {
 }
 
 /**
- * Paper backgrounds. v3 adds everything but "grid".
- * `spacing` (pt): line height for ruled, cell for grid, dot pitch for dotted,
- * minor line (1 mm, a major line every 10) for millimetre; unused for blank.
+ * Paper backgrounds. v3 adds "blank" to "millimetre" (v2 had only "grid"); v7 adds "cornell" to "planner-week".
+ * `spacing` (pt): line height for ruled and cornell, cell for grid, dot pitch for dotted, minor line
+ * (1 mm, a major line every 10) for millimetre, gap between staff lines for music, triangle side for
+ * isometric, hexagon side for hexagonal, x-height for calligraphy, row height for the planners; unused
+ * for blank. Pattern geometry in ink/paper.ts.
  */
-export const PAPER_KINDS = ["blank", "ruled", "grid", "dotted", "millimetre"] as const;
+export const PAPER_KINDS = [
+	"blank", "ruled", "grid", "dotted", "millimetre",
+	"cornell", "music", "isometric", "hexagonal", "calligraphy", "planner-day", "planner-week",
+] as const;
 export type PaperKind = (typeof PAPER_KINDS)[number];
+/** Paper kinds that exist only from format v7: an older file that uses one was not written by this plugin. */
+export const PAPER_KINDS_V7: readonly PaperKind[] = ["cornell", "music", "isometric", "hexagonal", "calligraphy", "planner-day", "planner-week"];
 
 export interface Paper {
 	kind: PaperKind;
@@ -74,6 +82,13 @@ export const PAPER_SPACING: Readonly<Record<PaperKind, number>> = {
 	grid: GRID_5MM,
 	dotted: GRID_5MM,
 	millimetre: MM,
+	cornell: 8 * MM,
+	music: 2 * MM,
+	isometric: GRID_5MM,
+	hexagonal: 4 * MM,
+	calligraphy: 6 * MM,
+	"planner-day": 8 * MM,
+	"planner-week": 6 * MM,
 };
 
 /** v4: content-addressed file in the assets folder (`<notebooks folder>/_assets/<id>.<ext>`). */
@@ -147,6 +162,23 @@ export interface Page {
 	infinite?: boolean;
 	/** v6: margins around the background; absent = the background fills the page. Written only when present. */
 	margins?: PageMargins;
+	/** v7: tags of this page (#119): non-empty, without duplicates, in the order they were added. Written only when not empty. */
+	tags?: string[];
+}
+
+/** Built-in bookmark categories (#85); any other non-empty string is a custom category, shown as is. */
+export const BOOKMARK_CATEGORIES = ["important", "review"] as const;
+
+/**
+ * v7: details of a bookmark (#15, #85). Every field is optional and written only when present: a bookmark
+ * without a title shows the page number, without a colour the accent colour, without a category none.
+ */
+export interface BookmarkInfo {
+	title?: string;
+	/** #rrggbb */
+	color?: string;
+	/** "important", "review" or a custom name. */
+	category?: string;
 }
 
 /** v4 notebook metadata, shown and edited in the library. */
@@ -155,8 +187,13 @@ export interface NotebookMeta {
 	favorite: boolean;
 	/** Cover colour #rrggbb. */
 	cover: string;
-	/** Bookmarked page ids. */
+	/** Bookmarked page ids (which pages are bookmarked; the outline lists them in page order). */
 	bookmarks: string[];
+	/**
+	 * v7: details of bookmarked pages, keyed by page id. Only for ids in `bookmarks` (others are dropped on
+	 * read and write); an entry without fields is dropped. Written only when not empty.
+	 */
+	bookmarkInfo?: Record<string, BookmarkInfo>;
 }
 
 /** Metadata of a new notebook and of every migrated v3 file. Never mutate it: copy it (cloneMeta in document.ts). */
@@ -167,6 +204,19 @@ export const DEFAULT_META: Readonly<NotebookMeta> = {
 	bookmarks: [],
 };
 
+/**
+ * v7: where the notebook was last read (#125), so another device can open it there. Updated only by a save
+ * that writes content anyway (never a write of its own just for scrolling); last writer wins. Not undoable.
+ */
+export interface ReadingPosition {
+	/** Page id; a position on a page that is not in the document is dropped on read and write. */
+	page: string;
+	/** Page y (pt) at the top of the view, > 0; absent = the top of the page. */
+	y?: number;
+	/** When the reader was there (ISO time), to tell which device was there last. */
+	at: string;
+}
+
 export interface NotebookDocument {
 	format: typeof FORMAT_ID;
 	version: typeof CURRENT_VERSION;
@@ -176,6 +226,8 @@ export interface NotebookDocument {
 	pages: Page[];
 	/** v4 */
 	meta?: NotebookMeta;
+	/** v7: last reading position. Written only when present. */
+	position?: ReadingPosition;
 	/** v4: assets referenced by pages, keyed by Asset.id. */
 	assets?: Record<string, Asset>;
 }

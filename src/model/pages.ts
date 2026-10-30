@@ -30,6 +30,8 @@ export function duplicatePage(page: Page): Page {
 	if (page.background) copy.background = { ...page.background };
 	if (page.infinite !== undefined) copy.infinite = page.infinite;
 	if (page.margins) copy.margins = { ...page.margins };
+	// v7: the copy keeps the page's tags (its bookmark is not copied: bookmarks belong to the original page id).
+	if (page.tags && page.tags.length > 0) copy.tags = [...page.tags];
 	if (page.elements && page.elements.length > 0) copy.elements = page.elements.map(copyElement);
 	return copy;
 }

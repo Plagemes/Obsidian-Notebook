@@ -4,9 +4,14 @@ import { DEFAULT_SETTINGS, readSettings, type NotebookSettings } from "../settin
 import { PAGE_SIZES, PAPER_KINDS } from "../model/types";
 import { defaultLooseSheetPath } from "../library/loose-sheet-logic";
 import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "../ink/edge-zones";
+import { displayTimetableSettings } from "../timetable/settings-ui";
+import type { TimetableService } from "../timetable/service";
+import { displayGestureSettings, gestureSettingDefinitions, type GestureSettingsHost } from "./gesture-settings";
+import { displayTrashSettings, trashSettingDefinitions } from "./trash-settings";
 import { effectivePenHold } from "../ink/pen-button";
 import { PenTestModal, penSignalInfo } from "./pen-test-modal";
 import { companionSettingDefinitions, displayCompanionSettings, type CompanionSettingsHost } from "./companion-settings";
+import { displayZettelSettings, zettelSettingDefinitions, type ZettelSettingsHost } from "../zettel/settings-ui";
 
 const paperOptions = () => Object.fromEntries(PAPER_KINDS.map((k) => [k, t(`paper.${k}`)]));
 const sizeOptions = () => Object.fromEntries((Object.keys(PAGE_SIZES) as Array<keyof typeof PAGE_SIZES>).map((k) => [k, t(`size.${k}`)]));
@@ -14,6 +19,7 @@ const sizeOptions = () => Object.fromEntries((Object.keys(PAGE_SIZES) as Array<k
 export interface SettingsHost extends Plugin {
 	settings: NotebookSettings;
 	saveSettings(): Promise<void>;
+	timetable?: TimetableService;
 }
 
 type Key = keyof NotebookSettings;
@@ -25,6 +31,11 @@ const penButtonOptions = () => ({
 	lasso: t("settings.penButton.lasso"),
 	previous: t("settings.penButton.previous"),
 	off: t("settings.penButton.off"),
+});
+
+const scrollModeOptions = () => ({
+	continuous: t("settings.scrollMode.continuous"),
+	pages: t("settings.scrollMode.pages"),
 });
 
 const EDGE_KEYS = [
@@ -142,6 +153,11 @@ export class NotebookSettingTab extends PluginSettingTab {
 				desc: t("settings.eraseAreaElements.desc"),
 				control: { type: "toggle", key: "eraseAreaElements", defaultValue: DEFAULT_SETTINGS.eraseAreaElements },
 			},
+			{
+				name: t("settings.inkFollows"),
+				desc: t("settings.inkFollows.desc"),
+				control: { type: "toggle", key: "inkFollowsObjects", defaultValue: DEFAULT_SETTINGS.inkFollowsObjects },
+			},
 			// wave p1a: input
 			{
 				name: t("settings.edge"),
@@ -165,6 +181,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 				desc: t("settings.penButton.desc"),
 				control: { type: "dropdown", key: "penSideButton", defaultValue: DEFAULT_SETTINGS.penSideButton, options: penButtonOptions() },
 			},
+			...gestureSettingDefinitions(this.gestureHost()),
 			{
 				name: t("settings.penLongPress"),
 				desc: t("settings.penLongPress.desc"),
@@ -190,12 +207,30 @@ export class NotebookSettingTab extends PluginSettingTab {
 				desc: t("settings.penTest.desc"),
 				action: () => new PenTestModal(this.app, penSignalInfo(this.host)).open(),
 			},
+			// wave 0.6: navigation
+			{
+				name: t("settings.scrollMode"),
+				desc: t("settings.scrollMode.desc"),
+				control: { type: "dropdown", key: "scrollMode", defaultValue: DEFAULT_SETTINGS.scrollMode, options: scrollModeOptions() },
+			},
 			// Companion notes (O1)
 			...companionSettingDefinitions(this.companionHost()),
+			// wave 0.6: library trash, templates
+			...trashSettingDefinitions(),
+			// wave 0.6: zettelkasten
+			...zettelSettingDefinitions(this.zettelHost()),
 		];
 	}
 
+	private gestureHost(): GestureSettingsHost {
+		return { get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) };
+	}
+
 	private companionHost(): CompanionSettingsHost {
+		return { plugin: this.host, get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) };
+	}
+
+	private zettelHost(): ZettelSettingsHost {
 		return { plugin: this.host, get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) };
 	}
 
@@ -312,6 +347,10 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setName(t("settings.eraseAreaElements"))
 			.setDesc(t("settings.eraseAreaElements.desc"))
 			.addToggle((toggle) => toggle.setValue(s.eraseAreaElements).onChange((v) => this.setControlValue("eraseAreaElements", v)));
+		new Setting(containerEl)
+			.setName(t("settings.inkFollows"))
+			.setDesc(t("settings.inkFollows.desc"))
+			.addToggle((toggle) => toggle.setValue(s.inkFollowsObjects).onChange((v) => this.setControlValue("inkFollowsObjects", v)));
 		// wave p1a: input
 		new Setting(containerEl)
 			.setName(t("settings.edge"))
@@ -334,6 +373,11 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setDesc(t("settings.penButton.desc"))
 			.addDropdown((dd) => dd.addOptions(penButtonOptions()).setValue(s.penSideButton).onChange((v) => this.setControlValue("penSideButton", v)));
 		new Setting(containerEl)
+			.setName(t("settings.scrollMode"))
+			.setDesc(t("settings.scrollMode.desc"))
+			.addDropdown((dd) => dd.addOptions(scrollModeOptions()).setValue(s.scrollMode).onChange((v) => this.setControlValue("scrollMode", v)));
+		displayGestureSettings(containerEl, this.gestureHost());
+		new Setting(containerEl)
 			.setName(t("settings.penLongPress"))
 			.setDesc(t("settings.penLongPress.desc"))
 			.addToggle((toggle) => toggle.setValue(effectivePenHold(s.penHoldStill, s.penButtonSeen)).onChange((v) => this.setControlValue("penHoldStill", v)));
@@ -355,5 +399,8 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setDesc(t("settings.penTest.desc"))
 			.addButton((b) => b.setButtonText(t("settings.penTest")).onClick(() => new PenTestModal(this.app, penSignalInfo(this.host)).open()));
 		displayCompanionSettings(containerEl, this.companionHost());
+		displayTimetableSettings(containerEl, this.host);
+		displayTrashSettings(containerEl, { get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) });
+		displayZettelSettings(containerEl, this.zettelHost());
 	}
 }
