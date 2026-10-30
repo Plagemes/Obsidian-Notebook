@@ -272,6 +272,10 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Export as Markdown with page images (roadmap 382, wave 0.9): vault folder and 100 / 150 / 200 dpi; `page-001.png`… drawn on a canvas like the PDF export, then `notebook.md` (title, page images, text boxes as text in reading order, bookmarks as headings); unique names, never overwrites | ✅ | ✅ Markdown text (title, bookmarks with and without title, escaping of user text, link targets), file names (three digits, never an existing name, names already chosen in the same export), render size and caps; ❌ canvas drawing of pages, PNG encoding, writing through the vault, a Markdown viewer outside Obsidian | | ✅ | steps 268-270; PNG rendering of PDF and picture backgrounds depends on pdf.js and the WebView |
 | Night mode (roadmap 367, wave 0.9): dark page with light ink at render time (paper, paper lines, ink, text boxes, live and wet ink, highlighter with a screen blend, backgrounds dimmed); a view setting and a toggle (All actions, command); stored colours, exports and thumbnails unchanged | ✅ | ✅ colour mapping (near-black becomes light, hue kept, contrast at least 4.5:1 for a palette of 12 inks, translucency kept, unknown colours untouched, highlighter band, dim paper lines), settings defaults; ❌ canvas drawing, wet-ink highlighter blend in CSS, legibility on a real screen | | ✅ | step 271; the look of the colours is a judgement that needs real screens |
 | Crop PDF margins (roadmap 376, wave 0.9): content box of each PDF page from a ~100 px render, cached for the session; the view fits the box (widened by the ink) to the width in continuous and page-by-page mode; toggle on the PDF contextual bar, in All actions and as a command; view-only | ✅ | ✅ content-box detection on synthetic bitmaps (bounds, padding, speck and grey noise ignored, transparent pixels, blank page, minimum size), window of a page with margins and with ink in the margin, fit and pan clamp with a window, layout windows (union, dropped when useless), page-by-page fit; ❌ the measuring render with pdf.js, re-layout while pages are measured, use on a phone | | ✅ | steps 272-274; only side margins are cropped; continuous mode crops only when every page is a measured PDF page |
+| Rectangle selection (#63): the lasso's second shape; toggle on the lasso bar, in the lasso's tool options and in the sheet, command; drag from corner to corner, selects what a lasso of that outline selects; a tap picks the object under it; invisible ink stays out unless the solutions are shown | ✅ | ✅ `rectanglePolygon` (any drag direction, flat box selects nothing, same strokes as a lasso of the outline, hidden ink withheld by the caller); the toggle and the bar in the browser harness; ❌ pen and finger on a device | | | steps 420-422; same 50 % rule as the lasso (a stroke is in when half its points are), not "touching the box" |
+| Select by colour or tool (#64): *Select similar* (same colour, same tool, picker) on the selection bar; the picker of tools, colours and tool-colour pairs with counts on the lasso bar, the sheet and as a command; colour also takes text boxes, tool takes strokes only; the result replaces the selection | ✅ | ✅ `selectSimilar`, `selectByStyle`, `styleCatalog` (letter case of colours, several seeds, pairs, hidden ink withheld by the caller); the menu, the picker and the result in the browser harness; ❌ on a device | | | steps 423-425 |
+| Align and distribute (#38): six aligns and two distributes, as a menu on the selection bar and as sheet entries and commands; items are elements and clusters of strokes (6 pt); rigid moves; ink on a selected picture goes with it; one undo step | ✅ | ✅ `clusterStrokes`, `alignItems`, `alignPlacement`, `distributePlacement` (edges and centres, equal gaps, ends kept, pictures and ink together, ink follows objects, aligned twice is a no-op, one undo step, checked writer); the menu in the browser harness; ❌ on a device | | | steps 426-429; the 6 pt grouping is a heuristic (`GROUP_GAP`): two words closer than that move together |
+| Rotate 90°, mirror, exact size (#65): clockwise / anticlockwise, left-right / top-bottom, a size panel (W × H pt, keep proportions, top-left kept); applied to the points in page coordinates, pressure kept; pictures turn, mirrored pictures / text / equations / graphs are moved but not flipped; one undo step each | ✅ | ✅ `rotate90Matrix` (exact, four turns are the identity), `mirrorPlacement` (twice is the identity, ink on a picture translated with it), `sizeMatrix` (strokes, pictures and boxes reach the size, top-left kept, limits, bad input), `lockedSize`, `applyPlacement` (identity skipped, undo / redo, checked writer); the panel and the results in the browser harness; ❌ on a device | | ✅ | steps 430-433; the size includes the stroke thickness, text boxes and equations scale in proportion only; no flipped pictures (the format has no flip field, by design: no format change) |
 
 ## Automated checks
 
@@ -723,7 +727,32 @@ Export and view (roadmap 381, 382, 367, 376; wave 0.9). Not verified in Obsidian
 273. **Ink in the margin, mixed notebooks, page by page.** Switch the crop off, write a note in the left margin of a PDF page, switch it on: the margin note is inside the view (the box is wider on that page). In a notebook with a plain page between PDF pages the crop does nothing in continuous mode (the plain page needs the whole width); in *page by page* mode each PDF page is cropped and the plain page is not. Turn pages with swipes: each page fits its own box.
 274. **Nothing changes in the file; large PDFs.** With the crop on, make a change, close and reopen: the notebook, its ink and its exports are as before (an exported PDF is identical with the crop on and off). Open a 200-page PDF notebook and switch the crop on: the app stays responsive while pages are measured (the zoom may adjust a few times in the first seconds), and a blank page or a scan with a dark border does not crash or zoom absurdly.
 
-Results table for steps 1 to 274. Fill it in as you go.
+### Selection tools (wave 0.10, steps 420-439)
+
+Selection tools (roadmap 63, 64, 38, 65; wave 0.10). Not verified on a device. Setup: a notebook with a page holding some pen words in black and red, a few highlighter strokes in two colours, a text box, a picture with a little ink written on it, and a page with invisible ink (*Show solutions* off).
+
+420. **Rectangle mode.** Choose the lasso. The contextual bar shows *Paste*, *Rectangle selection* and *Select by colour or tool*. Tap *Rectangle selection*: it looks pressed. Tap the lasso button again: the tool options show *Lasso* | *Rectangle* with *Rectangle* chosen. Switch back with the options; the bar's button follows. The command *Rectangle selection (toggle)* does the same.
+421. **Rectangle drag.** In rectangle mode drag with the S Pen from one corner of some writing to the opposite one: a dashed box follows the pen, and when you lift, the strokes and objects inside are selected with the usual handles. Drag in the other three directions (right to left, bottom to top). A tiny tap on a picture selects the picture. Try the pen's side-button lasso: it uses the same mode. Invisible ink inside the box is not selected until *Show solutions* is on.
+422. **Move, scale, rotate after a rectangle.** The selection moves, scales and rotates with its handles as after a lasso, and the contextual bar offers the same actions; *Undo* undoes one move.
+423. **Select similar, same colour.** Select one red word. On the second row of the bar tap *Select similar*, then *Same colour*: every red stroke on the page (and red text boxes) is selected, black ones are not. A notice says how many.
+424. **Select similar, same tool.** Select one highlighter stroke, *Select similar* > *Same tool*: all highlighter strokes on the page, whatever their colour, and nothing else. With a picture only selected the *Select similar* button is not shown.
+425. **The picker.** With nothing selected, lasso, *Select by colour or tool*: a panel lists *Tool* (Pen, Highlighter), *Colour* (each colour in hex with a dot) and, if the page mixes, *Tool and colour*, each with a count. Tap *Highlighter*: all highlighter strokes are selected. Open it again on a page without ink: it says there is none. Invisible ink does not appear in the counts until *Show solutions* is on.
+426. **Align.** Select three separate words at different places. *Align and distribute* (second row) opens a menu: *Align left*, *centre*, *right*, *top*, *middle*, *bottom*, *Distribute horizontally*, *Distribute vertically*. Try each: the words line up on the edge or centre of the whole selection and each word stays whole (letters do not separate). Each choice is one undo step.
+427. **Distribute.** Three or more words or drawings in a row with uneven gaps: *Distribute horizontally* makes the gaps equal and keeps the outer two where they are; *Distribute vertically* does the same in a column. With only two items the notice says at least three separate groups are needed.
+428. **Pictures, text boxes and ink on a picture.** Select a picture, a text box and a word; *Align top* lines the three up. With *Ink follows objects* on, the ink written on the picture moves with it (select the picture only, align it with something else). With the setting off the ink stays where it is.
+429. **Nothing to do.** Align left twice in a row: the second time a notice says nothing moved. One group only: the notice says at least two separate groups are needed. Strokes that touch (a letter and its dot) count as one group.
+430. **Rotate.** Select a word written with a varying pressure and a picture; *Rotate, mirror, size* > *Rotate 90° clockwise*: both turn a quarter turn about the middle of the selection, the thickness of the writing varies as before, and the picture is turned (its rotation changes). *Anticlockwise* turns it back. Four turns bring everything back. Undo is one step.
+431. **Mirror.** Select a word and a drawing; *Mirror left to right*: the writing is reversed like in a mirror and the positions swap sides within the selection; *Mirror top to bottom* flips it upside down. Do it twice: back to the original. With a picture or a text box in the selection a notice says they were moved to the mirrored place but not flipped.
+432. **Exact size.** Select a drawing; *Rotate, mirror, size* > *Exact size…*: the panel shows the width and height in pt. With *Keep proportions* on, type a width: the height follows. Switch it off and type both. *Apply* (or Enter): the selection has that size (check with a ruler on the page or by reopening the panel: within a point, thickness included), the top-left corner stayed. A picture is exactly that size. Zero or letters: the panel says to enter a positive size and changes nothing. Undo restores the size in one step.
+433. **After saving.** Do each of the above, close and reopen the notebook: results are kept. Open the notebook in 0.9.0 (or look at the version in the file): the format is unchanged.
+434. **Phone.** At about 360 px wide the selection bar has two rows that fit the screen, every button is at least 40 px, the menus open next to the bar and can be used with a finger, and the panels (picker, size) fit with the keyboard open.
+435. **Sheet and commands.** ⊞ *All actions* with a selection shows the *Selection* section with Align, Distribute, Rotate, Mirror, Exact size and *Same colour / tool*; the command palette has the same commands (*Align selection to the left*…, *Set the exact size of the selection…*) and they do nothing without a selection (the palette hides them). Bind a hotkey to *Rotate selection 90° clockwise* and try it.
+436. **Italian.** In Italian the second row, the menus, the panels and the notices are translated (*Seleziona simili*, *Allinea e distribuisci*, *Dimensione esatta…*).
+437. **Pen and palm.** In rectangle mode keep a palm on the screen while dragging with the pen: no stray selection; a finger drag pans as usual (pen-only mode).
+438. **Many strokes.** On a page with a few hundred strokes select all with a big rectangle and *Rotate 90°*, *Mirror* and *Exact size*: each answers in about a second on the tablet, and undo is as fast.
+439. **Read-only and other pages.** A notebook opened read-only (another device has it open): the selection tools are disabled. *Select by colour or tool* picks from the page you are on, not another one; with a selection it picks from the selection's page.
+
+Results table for steps 1 to 274 and 420 to 439. Fill it in as you go.
 
 | Step | Device / Obsidian version | Result | Notes |
 |---|---|---|---|
@@ -1001,6 +1030,26 @@ Results table for steps 1 to 274. Fill it in as you go.
 | 272 Crop margins | | | |
 | 273 Ink in the margin, mixed notebooks, page by page | | | |
 | 274 Nothing changes in the file; large PDFs | | | |
+| 420 Rectangle mode | | | |
+| 421 Rectangle drag | | | |
+| 422 Move, scale, rotate after a rectangle | | | |
+| 423 Select similar, same colour | | | |
+| 424 Select similar, same tool | | | |
+| 425 The picker | | | |
+| 426 Align | | | |
+| 427 Distribute | | | |
+| 428 Pictures, text boxes and ink on a picture | | | |
+| 429 Nothing to do | | | |
+| 430 Rotate | | | |
+| 431 Mirror | | | |
+| 432 Exact size | | | |
+| 433 After saving (selection tools) | | | |
+| 434 Phone (selection tools) | | | |
+| 435 Sheet and commands | | | |
+| 436 Italian | | | |
+| 437 Pen and palm | | | |
+| 438 Many strokes | | | |
+| 439 Read-only and other pages | | | |
 
 Benchmark output (step 21): paste it here.
 

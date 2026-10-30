@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Selection tools** (roadmap 38, 63, 64, 65; manual steps 420-439 in `docs/testing.md`; no format change, not verified on Android hardware).
+  - **Rectangle selection** (63): the lasso tool has a second shape. *Rectangle selection* is a toggle on the lasso's bar, in the lasso's tool options (tap the lasso again: *Lasso* / *Rectangle*), in the All actions sheet and a command. Dragging draws the box from corner to corner; when the pen lifts it selects exactly what a lasso of that outline would (same rules, and invisible ink stays out unless the solutions are shown). A tap still picks the object under it. The mode is not remembered after the notebook closes.
+  - **Select by colour or tool** (64): *Select similar* on the second row of a selection's bar opens *Same colour*, *Same tool* and *Pick colour or tool…*. The same two are in the All actions sheet and are commands; the picker (*Select by colour or tool*, also on the lasso's bar, in the sheet and as a command) lists the tools, the colours and the tool-and-colour pairs on the page with how many strokes each would select. A colour also takes text boxes of that colour; a tool takes strokes only. The result replaces the selection.
+  - **Align and distribute** (38): *Align and distribute* on the second row of a selection's bar has *Align left / centre / right / top / middle / bottom* and *Distribute horizontally / vertically*; all eight are in the All actions sheet and are commands. "As groups": each picture, text box, equation, graph, box or marker is one item, and strokes that touch or lie within 6 pt of each other are one item, so a written word or a drawing is never torn apart. Items move rigidly, to the edge or centre of the whole selection; distributing makes the gaps between neighbours equal and needs three items. Ink written on a selected picture or text box goes with it when *Ink follows objects* is on. One undo step each.
+  - **Rotate, mirror, exact size** (65): *Rotate, mirror, size* on the second row of a selection's bar has *Rotate 90° clockwise / anticlockwise*, *Mirror left to right / top to bottom* and *Exact size…*; all are in the sheet and are commands. They are applied to the vector points in page coordinates (pressure and everything else kept), about the centre of the selection; pictures turn by 90°. Mirroring flips ink; pictures, text boxes, equations and graphs have no flipped form in the format, so they are moved to the mirrored place and keep their orientation (a notice says so). *Exact size* opens a panel with width and height in pt (stroke thickness included), *Keep proportions* on by default, and keeps the top-left corner; text boxes and equations scale in proportion only. One undo step each.
+  - **The selection bar has a second row** for these (Select similar, Align and distribute, Rotate / mirror / size), above the main row and under the colour rows, so the first row keeps the entries of wave 0.9 (copy, cut, duplicate, paste, delete, to front, to back…).
+
+### Changed
+- Dragging, scaling or rotating a selection with the handles now goes through the same pure routine as the new operations (`applyPlacement`); the result and the undo step are the same.
+
 ## 0.9.0 — 2026-10-30
 
 Not yet verified on Android hardware, or in Obsidian with its maths engine (the browser harness uses a stand-in for MathJax). The manual steps added in this version are numbered 233 to 274 in `docs/testing.md`; the ones that belong to each area are named below.
