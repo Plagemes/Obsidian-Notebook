@@ -30,7 +30,7 @@ Not yet verified on Android hardware (see `docs/testing.md`, steps G1-G6). No ch
   - **Finger taps** (roadmap 3): a tap with two fingers undoes, with three fingers redoes (setting *Finger taps*: two undo / three redo, swapped, or off; on by default). A tap needs all fingers to land within 150 ms, move at most 12 px, lift within 150 ms and finish within 350 ms, so panning and pinching never trigger it; touches while the pen is near (palm rejection time), palm-sized or edge-zone contacts, and a pen touching in the middle spoil it. The few pixels the view may have moved are put back, and a tap leaves no ink. A finger that lands among fingers that are already panning or pinching no longer starts a stroke (also with *Draw with finger*).
   - **Scribble to erase** (roadmap 4, setting, off by default): a fast back-and-forth scratch with the pen over existing ink deletes the strokes it crosses; the scribble is not kept and the whole thing is one undo step. Detector in `src/ink/scribble.ts`: at least four direction reversals between legs of 12 pt or more, roughly parallel, mostly piled up instead of travelling along a line (so "mmm" and sweeping zig-zag shading do not count), under 300 ms per leg on average; a stroke is deleted when at least two different legs cross it, and very large strokes (rulings, frames) are left alone. Off by default because a false positive deletes ink.
   - **Auto-scroll while writing** (roadmap 36, setting, off by default): when a stroke ends in the bottom 18 % of the view, the page scrolls up smoothly (320 ms, ease-out) after a 700 ms pause so the tip sits at 40 % of the height. It never moves while a pen or finger is down; a touch cancels it; it stops at the end of the document.
-  - **Pen side button** (roadmap 2): the setting *Pen side button* gains *Lasso while held* and *Previous tool while held* (the tool used before the current one; the eraser if there is none). The tool is chosen when the pen touches down. The default stays *Radial menu*. A selection made with the lasso option stays after the button is released and is cleared when you write.
+  - **Pen side button** (roadmap 2): the setting *Pen side button* gains *Lasso while held* and *Previous tool while held* (the tool used before the current one; the current tool if there is none). The tool is chosen when the pen touches down. The default stays *Radial menu*. A selection made with the lasso option stays after the button is released and is cleared when you write.
 Not yet verified on Android hardware (see `docs/testing.md`, steps L1-L10).
 
 ### Added
@@ -58,7 +58,35 @@ Not yet verified in Obsidian or on Android hardware (see `docs/testing.md`, step
 - Slip-boxes create cards only for pages made on this device in this session, so a page that arrives by sync before its card no longer gets a second one; timestamp card ids now carry seconds and a short random suffix, and untitled Luhmann cards a suffix in their file name, so two devices never create the same card file.
 - Following a page link with a page id (`#p3&id=…`) can now be resolved by id first (`resolvePageTarget`), reporting a deleted page instead of opening page 3; the notebook view does not use it yet.
 - Companion note updates keep `tags` entries they do not read, such as an unquoted `2026` (`tags: [2026, physics]` no longer loses 2026).
+- Tags typed in the editor are stored normalised (`linear algebra` becomes `linear-algebra`); tags already stored are not rewritten until you edit them.
+### Fixed
+- Page trash: every deleted page is now its own file (`_trash/pages/<notebook id>/<entry id>.json`), written once and never rewritten, so two devices deleting pages before they sync no longer lose one of the copies; conflicted copies are read, and the old one-file layout is moved over without losing entries.
+- Page trash: a deleted page keeps its bookmark (v7 title, colour and category), and restoring it brings the bookmark back in the same undo step.
+- Page trash: a restored page is discarded from *Deleted pages* once the notebook is saved, so it can no longer be restored twice; *Delete page* now waits for the copy and does not delete the page if the copy fails.
+- Library: moving a notebook (or a folder with open notebooks) to the trash waits for the open tab's final save instead of a fixed 50 ms, and is refused if the changes cannot be saved.
+- Library: deleting a folder that holds other files (.md, .pdf, images) lists them and asks whether to move only the notebooks or everything; such a folder is never emptied from the trash automatically, and the delete and empty confirmations name those files.
+- Timetable: saving never overwrites a file that changed since the editor opened it (for example synced from another device), not even after *Start a new timetable*; the draft is copied to the backup folder instead, and identical saves write nothing.
+- PDF links: the links file is now a vault file, `<notebooks folder>/_meta/pdf-links.json`, written through the Vault API; the file in the plugin's config folder is copied over once and left untouched.
+- API: an edit to an open notebook while a finger, the pen or a gesture (for example a lasso drag) is on the page now waits and reports `busy` instead of dropping the move.
+- API: `listNotebooks` and the other calls no longer see notebooks in the plugin trash, the templates folder or the other reserved folders.
+- Pen side button *Previous tool while held*: with no previous tool it keeps the current tool instead of erasing.
+- Scribble to erase: one Undo after a false positive now gives back both the erased strokes and the stroke you drew.
+- Tests: the repair fuzz test is reproducible (seeded ids) and has a longer timeout.
 
+
+### Fixed
+- Conflicted-copy merge combines bookmark details (title, colour, category) field by field: the main notebook's value of each field wins, missing fields are taken from the copy, differing fields are counted (`bookmarkInfoDiffer`), and the copy is moved away only when every one of its fields is in the result.
+- The new paper kinds stay bounded at extreme densities (calligraphy or hexagons at 0.5–1 pt, A0 or infinite pages): at most 30,000 segments per page, falling back to the major lines or to a coarser lattice, so exports are never blank and never freeze.
+- Reading position across devices: the workspace layout now records when the page in view last changed, not when the layout was saved, so a notebook left open no longer wins over a position another device stored later.
+- *Move to notebook…* keeps the moved pages' bookmarks and their details in the target (under the pages' new ids, in the same write); page tags travel with the page.
+- A bad bookmark colour or detail (even of a deleted page) or an invalid reading position no longer makes the whole notebook unreadable: the invalid value is dropped on read and counted, a `dropped-details` backup of the file is kept before it is rewritten, and what is written is still checked strictly.
+- The outline's category filter no longer lists categories of bookmarks left on deleted pages.
+- The library index of a newer plugin version (synced plugin folder) is ignored and left as it is instead of being overwritten.
+
+### Upgrade notes (0.5.x and 0.6 on synced devices)
+- 0.5.x opens notebooks saved in format v7 read-only, and each time it opens one it writes a `future-version` backup to the backup folder: update every device to 0.6.
+- On a 0.6 device, any edit of a notebook's properties from the library (tags, favourite, cover, bookmarks) rewrites a v6 file as v7 (with a backup of the original), after which 0.5.x devices can only read it.
+- The library index (a cache in the plugin folder) is version 3 in 0.6 and 2 in 0.5.x: a 0.5.x device discards a version 3 index and rebuilds its own, so with both versions on one synced plugin folder the index is rebuilt after each switch. No notebook data is affected.
 ## 0.5.1 — 2026-10-30
 
 Hotfix for 0.5.0. Not verified on Android hardware (see `docs/testing.md`); how the S Pen button is reported is the open question.

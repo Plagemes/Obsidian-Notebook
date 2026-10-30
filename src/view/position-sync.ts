@@ -28,6 +28,27 @@ export function pageState(page: number, now: Date): Record<string, unknown> {
 }
 
 /**
+ * When the page in view last changed, per file: the `pageAt` of the workspace layout. Obsidian saves the
+ * layout often (any pane change), so stamping the save time would make a notebook left open look freshly
+ * read and win over a position another device stored later.
+ */
+export class PageClock {
+	private last: { path: string; index: number; at: Date } | null = null;
+
+	/** The page in view is `index` of `path` (called whenever the page indicator updates). */
+	note(path: string, index: number, now: Date): void {
+		if (this.last && this.last.path === path && this.last.index === index) return;
+		this.last = { path, index, at: now };
+	}
+
+	/** Since when page `index` of `path` has been in view; `now` when it was never noted. */
+	since(path: string | null | undefined, index: number, now: Date): Date {
+		const last = this.last;
+		return last && path != null && last.path === path && last.index === index ? last.at : now;
+	}
+}
+
+/**
  * Where a freshly loaded notebook starts: `requested` is the page asked for (1-based) or null, `requestedAt`
  * its `pageAt` (null when it was an explicit request). Null keeps the default (the top of the first page).
  */

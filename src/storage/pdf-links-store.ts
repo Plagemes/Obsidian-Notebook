@@ -1,6 +1,6 @@
 import { applyLinkOp, emptyLinks, parseLinks, serializeLinks, type LinksData, type LinksOp } from "../pdf/sync-links";
 
-/** The slice of Obsidian's DataAdapter the store uses; declared here so the store is testable without Obsidian. */
+/** The file operations the store uses (vault-backed at runtime, see `vaultLinkFileAdapter`); testable without Obsidian. */
 export interface LinkFileAdapter {
 	exists(path: string): Promise<boolean>;
 	read(path: string): Promise<string>;
@@ -9,6 +9,20 @@ export interface LinkFileAdapter {
 }
 
 export const LINKS_FILE = "pdf-links.json";
+/** Reserved folder of the notebooks folder that holds the links file (`<notebooks folder>/_meta/pdf-links.json`). */
+export const META_DIRNAME = "_meta";
+
+/** Folder of the links file for a notebooks folder ("" = vault root). */
+export function linksFolder(notebooksFolder: string): string {
+	const root = notebooksFolder.replace(/^\/+|\/+$/g, "");
+	return root ? `${root}/${META_DIRNAME}` : META_DIRNAME;
+}
+
+/** Where 0.6 previews kept the file (`<config dir>/plugins/<id>/pdf-links.json`): read once to move it, never written. */
+export interface LegacyLinksFile {
+	adapter: Pick<LinkFileAdapter, "exists" | "read">;
+	path: string;
+}
 
 /** The file cannot be read or is from a newer version: nothing is written and the file is left as it is. */
 export class LinksBlockedError extends Error {
@@ -28,16 +42,26 @@ function textHash(text: string): string {
 }
 
 /**
- * Sidecar of the PDF links (`<plugin folder>/pdf-links.json`). Written only by `update`, which is called by explicit
- * link actions. Every update reads the file again first (another device may have synced a newer one) and applies
- * the operation to that, serialises, re-validates the text and writes only if it differs. A file that cannot be
- * parsed is never overwritten; a copy of it is kept next to it once.
+ * Sidecar of the PDF links (`<notebooks folder>/_meta/pdf-links.json`, a vault file, so it syncs with the notebooks).
+ * Written only by `update`, which is called by explicit link actions. Every update reads the file again first (another
+ * device may have synced a newer one) and applies the operation to that, serialises, re-validates the text and writes
+ * only if it differs. A file that cannot be parsed is never overwritten; a copy of it is kept next to it once.
+ * When the file does not exist yet, the file of the old location (`legacy`) is copied over if it can be read; the old
+ * file itself is left as it is.
  */
 export class PdfLinkStore {
 	private cache: LinksData = emptyLinks();
 	private queue: Promise<unknown> = Promise.resolve();
 
-	constructor(private readonly adapter: LinkFileAdapter, private readonly folder: string) {}
+	private readonly folderOf: () => string;
+
+	constructor(private readonly adapter: LinkFileAdapter, folder: string | (() => string), private readonly legacy: LegacyLinksFile | null = null) {
+		this.folderOf = typeof folder === "string" ? () => folder : folder;
+	}
+
+	private get folder(): string {
+		return this.folderOf();
+	}
 
 	get path(): string {
 		return `${this.folder}/${LINKS_FILE}`;
@@ -78,7 +102,7 @@ export class PdfLinkStore {
 
 	private async readCurrent(): Promise<LinksData> {
 		if (!(await this.adapter.exists(this.path))) {
-			this.cache = emptyLinks();
+			this.cache = (await this.migrateLegacy()) ?? emptyLinks();
 			return this.cache;
 		}
 		const text = await this.adapter.read(this.path);
@@ -88,6 +112,34 @@ export class PdfLinkStore {
 			throw new LinksBlockedError(parsed.message, parsed.reason);
 		}
 		this.cache = parsed.data;
+		return parsed.data;
+	}
+
+	/**
+	 * Copies the old file to the new place (re-validated; the new file then exists, so this runs once). An unreadable
+	 * old file is not used: a copy of it is kept next to the new file and the old one stays untouched.
+	 */
+	private async migrateLegacy(): Promise<LinksData | null> {
+		const legacy = this.legacy;
+		if (!legacy) return null;
+		let text: string;
+		try {
+			if (!(await legacy.adapter.exists(legacy.path))) return null;
+			text = await legacy.adapter.read(legacy.path);
+		} catch (e) {
+			console.warn("[notebook] old PDF links file not read", e);
+			return null;
+		}
+		const parsed = parseLinks(text);
+		if (!parsed.ok) {
+			await this.ensureFolder().catch(() => undefined);
+			await this.keepCopy(text);
+			return null;
+		}
+		const out = serializeLinks(parsed.data);
+		if (!parseLinks(out).ok) return null;
+		await this.ensureFolder();
+		await this.adapter.write(this.path, out);
 		return parsed.data;
 	}
 

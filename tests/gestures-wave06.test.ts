@@ -5,7 +5,7 @@ import { DEFAULT_GESTURE_SETTINGS, readGestureSettings } from "../src/ink/gestur
 import { InputPolicy, type InputSettings } from "../src/ink/input-policy";
 import { LastTool } from "../src/ink/last-tool";
 import { PointerController, type PointerHandlers } from "../src/ink/pointer-controller";
-import { detectScribble, resamplePath, scribbleEraseCommand, scribbleVictims } from "../src/ink/scribble";
+import { detectScribble, resamplePath, scribbleEraseCommand, scribbleEraseSteps, scribbleVictims } from "../src/ink/scribble";
 import { createStroke } from "../src/model/document";
 import { History } from "../src/model/history";
 import type { NotebookDocument, Point, Stroke } from "../src/model/types";
@@ -661,6 +661,25 @@ describe("scribble erase: which strokes go", () => {
 		// One undo step brings everything back, in order.
 		expect(history.undo()).toBeTruthy();
 		expect(p.strokes).toEqual(target);
+	});
+
+	it("as two undo steps: one Undo gives back the erased strokes and the scribble itself", () => {
+		const w = word(150, 100);
+		const doc: NotebookDocument = createDocument(new Date("2026-10-29T10:00:00.000Z"));
+		const p = doc.pages[0]!;
+		p.strokes.push(...w);
+		const scratch = stroke(zigzag({ cx: 190, cy: 100, half: 50, legs: 7, pitch: 4 }).map((q) => [q[0], q[1]] as [number, number]));
+		const steps = scribbleEraseSteps(p, scratch, 500)!;
+		expect(steps).not.toBeNull();
+		const history = new History(() => doc);
+		history.execute(steps.keep);
+		history.execute(steps.erase);
+		expect(p.strokes).toEqual([]);
+		history.undo();
+		expect(p.strokes).toEqual([...w, scratch]);
+		history.undo();
+		expect(p.strokes).toEqual(w);
+		expect(scribbleEraseSteps({ id: "p1", strokes: [] }, scratch, 500)).toBeNull();
 	});
 
 	it("keeps a stroke that is only grazed by one leg", () => {

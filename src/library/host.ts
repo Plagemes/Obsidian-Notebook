@@ -28,6 +28,9 @@ import { openLooseSheet } from "./loose-sheet";
 import type { LibraryHost } from "./library-view";
 import type { ThumbnailOptions } from "./thumbnail";
 
+/** Longest wait for a closing notebook view's final save before a library move goes on. */
+const CLOSE_WAIT_MS = 10_000;
+
 /** What the host needs from the plugin. */
 export interface HostPlugin {
 	app: App;
@@ -139,13 +142,25 @@ export class NotebookLibraryHost implements LibraryHost {
 		new NewNotebookModal(this.app, defaults, (options) => void this.createAndOpen(options, folder), pickTemplate).open();
 	}
 
-	/** Closes the notebook tabs that show `path` or something inside it, so they save before the file moves. */
+	/**
+	 * Closes the notebook tabs that show `path` or something inside it before the file moves. Each view is flushed
+	 * first (the move is refused if its changes cannot be written), then detached, and the move waits for the view's
+	 * own close (its final flush) to finish, so no save of the old path runs while `vault.rename` does.
+	 */
 	private async closeViewsOf(path: string): Promise<void> {
+		const closing: Promise<void>[] = [];
 		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
 			const file = leafFile(leaf);
-			if (file !== undefined && (file === path || file.startsWith(`${path}/`))) leaf.detach();
+			if (file === undefined || (file !== path && !file.startsWith(`${path}/`))) continue;
+			const view = leaf.view;
+			if (view instanceof NotebookView) {
+				if (!(await view.flushNow())) throw new Error(t("library.notice.unsavedBeforeMove", { name: file }));
+				closing.push(view.closed);
+			}
+			leaf.detach();
 		}
-		await new Promise<void>((resolve) => window.setTimeout(resolve, 50));
+		// A view that never gets its onClose (should not happen) must not block the move forever.
+		await Promise.race([Promise.all(closing), new Promise<void>((resolve) => window.setTimeout(resolve, CLOSE_WAIT_MS))]);
 	}
 
 	private async createAndOpen(o: NewNotebookOptions, folder: string): Promise<void> {

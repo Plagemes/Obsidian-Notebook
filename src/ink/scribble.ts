@@ -1,4 +1,4 @@
-import { removeStrokes, type Batch } from "../model/history";
+import { AddStroke, removeStrokes, type Batch } from "../model/history";
 import type { Page, Stroke } from "../model/types";
 import { segmentDistance, strokeBounds, type BBox } from "./hit-test";
 
@@ -261,6 +261,24 @@ function legTouches(leg: readonly P[], stroke: Stroke, reach: number): boolean {
  * One undoable step that deletes the strokes crossed by the scribble `points` on `page`, or null
  * when the stroke is not a scribble or crosses no ink (then it stays an ordinary stroke).
  */
+/**
+ * Scribble erase as two undo steps: the scribble is first added as the user's stroke, then one batch removes it
+ * together with the strokes it crossed. A single Undo after a false positive therefore gives back both the erased
+ * strokes and the stroke the user drew; a second Undo removes that stroke too. Null when it is not a scribble.
+ */
+export function scribbleEraseSteps(
+	page: Pick<Page, "id" | "strokes">, stroke: Stroke, durationMs: number,
+	boundsOf: (s: Stroke) => BBox = strokeBounds, options: Partial<ScribbleOptions> = {},
+): { keep: AddStroke; erase: Batch } | null {
+	const scribble = detectScribble(stroke.points, durationMs, options);
+	if (!scribble) return null;
+	const victims = scribbleVictims(scribble, page.strokes, stroke.width, boundsOf);
+	if (victims.length === 0) return null;
+	const after = [...page.strokes, stroke];
+	const erase = removeStrokes(page.id, after, [...victims, stroke], "Scribble erase");
+	return erase ? { keep: new AddStroke(page.id, stroke, page.strokes.length), erase } : null;
+}
+
 export function scribbleEraseCommand(
 	page: Pick<Page, "id" | "strokes">, points: readonly InkPoint[], durationMs: number, penWidth: number,
 	boundsOf: (s: Stroke) => BBox = strokeBounds, options: Partial<ScribbleOptions> = {},

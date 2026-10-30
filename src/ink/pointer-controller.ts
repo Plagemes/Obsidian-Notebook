@@ -188,6 +188,11 @@ export class PointerController {
 		return this.drawId !== null;
 	}
 
+	/** True while a finger or mouse pans or zooms. */
+	get navigating(): boolean {
+		return this.nav.size > 0;
+	}
+
 	/** Ends the stroke in progress and keeps it (app going to background, view closing). */
 	finishActiveStroke(): void {
 		if (this.drawId === null) return;

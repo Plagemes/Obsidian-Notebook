@@ -154,10 +154,15 @@ export function outlineEntries(pages: readonly Page[], meta: NotebookMeta | unde
 	return out;
 }
 
-/** Categories in use, built-in ones first (in their fixed order), then custom ones alphabetically. */
-export function categoriesInUse(meta: NotebookMeta | undefined): string[] {
+/**
+ * Categories in use, built-in ones first (in their fixed order), then custom ones alphabetically. With
+ * `pages`, only bookmarks of those pages count (a bookmark left on a deleted page would give an empty filter).
+ */
+export function categoriesInUse(meta: NotebookMeta | undefined, pages?: readonly Pick<Page, "id">[]): string[] {
+	const exists = pages ? new Set(pages.map((p) => p.id)) : null;
 	const used = new Set<string>();
 	for (const id of meta?.bookmarks ?? []) {
+		if (exists && !exists.has(id)) continue;
 		const c = meta?.bookmarkInfo?.[id]?.category;
 		if (c) used.add(c);
 	}

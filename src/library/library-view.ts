@@ -13,8 +13,8 @@ import { folderOf, isInside, LibraryIndex, SORTS, type Highlight, type LibraryEn
 import { openTagEditor } from "../integration/tags";
 import { ConfirmModal, CoverModal, FolderSuggestModal, PromptModal } from "./library-modals";
 import { entryFromFile, filesToRead, type NotebookFileInfo } from "./scan";
-import type { LibraryTrash } from "../storage/trash";
-import { addTrashNavItem, confirmMoveToTrash, TrashModal } from "./trash-modal";
+import { folderContents, type LibraryTrash } from "../storage/trash";
+import { addTrashNavItem, confirmMoveToTrash, FolderToTrashModal, TrashModal } from "./trash-modal";
 import { renderThumbnail, type ThumbnailOptions } from "./thumbnail";
 
 export const LIBRARY_VIEW_TYPE = "notebook-library";
@@ -1144,7 +1144,24 @@ export class LibraryView extends ItemView {
 		const folder = this.app.vault.getFolderByPath(path);
 		if (!folder) return;
 		const trash = this.host.trash;
-		if (trash) return confirmMoveToTrash(this.app, { name: folder.name, isFolder: true }, () => trash.trash(folder), (e) => this.fail(e));
+		if (trash) {
+			const { notebooks, others } = folderContents(folder);
+			if (others.length === 0) return confirmMoveToTrash(this.app, { name: folder.name, isFolder: true }, () => trash.trash(folder), (e) => this.fail(e));
+			// The folder holds the user's own files too: list them and let the user choose (never moved silently).
+			const opts = { name: folder.name, path: folder.path, notebooks: notebooks.length, others: others.map((f) => f.path) };
+			new FolderToTrashModal(this.app, opts, (choice) => {
+				void (async () => {
+					if (choice === "everything") {
+						await trash.trash(folder);
+						new Notice(t("trash.notice.moved", { name: folder.name }));
+						return;
+					}
+					for (const nb of notebooks) await trash.trash(nb);
+					new Notice(t("trash.notice.movedNotebooks", { n: String(notebooks.length), name: folder.name }));
+				})().catch((e) => this.fail(e));
+			}).open();
+			return;
+		}
 		if (folder.children.length > 0) {
 			new Notice(t("library.notice.folderNotEmpty", { name: folder.name }));
 			return;

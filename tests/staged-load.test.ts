@@ -165,6 +165,28 @@ describe("parseStaged", () => {
 		expect(bDoc).not.toBeNull();
 	});
 
+	it("invalid optional v7 details are dropped and counted exactly like the lenient full parse; everything else still fails", () => {
+		const raw = JSON.parse(text);
+		const firstId = raw.pages[0].id as string;
+		raw.meta.bookmarkInfo = { [firstId]: { title: 3, color: "red", category: "x" } };
+		raw.position = { page: firstId, y: "far", at: "2026-10-30T10:00:00.000Z" };
+		const damaged = JSON.stringify(raw, null, 1);
+		expect(damaged.length).toBeGreaterThan(STAGED_MIN_CHARS);
+		const whole = parse(damaged);
+		if (!whole.ok) throw new Error("the lenient parse should accept it");
+		expect(whole.dropped).toBeGreaterThan(0);
+		const staged = parseStaged(damaged, 3) as StagedParse;
+		const result = staged.finish();
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		expect(result.dropped).toBe(whole.dropped);
+		expect(serialize(result.doc)).toBe(serialize(whole.doc));
+		// A damaged required field is still fatal.
+		raw.pages[2].width = -1;
+		expect(parse(JSON.stringify(raw, null, 1)).ok).toBe(false);
+		expect((parseStaged(JSON.stringify(raw, null, 1), 3) as { ok: boolean }).ok).toBe(false);
+	});
+
 	it("an older format that needs migrating is parsed completely", () => {
 		const old = text.replace(`"version": ${CURRENT_VERSION}`, `"version": ${CURRENT_VERSION - 1}`);
 		const r = parseStaged(old, 2);

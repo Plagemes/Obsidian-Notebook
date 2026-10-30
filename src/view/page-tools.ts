@@ -30,11 +30,16 @@ export interface PageToolsHost {
 	editableDocument(): NotebookDocument | null;
 	/** Runs `cmd` as one undo step. False when the view cannot take it now. */
 	applyCommand(cmd: Command, scrollTo?: number): boolean;
+	/** Writes pending changes now; true only when the file holds everything (nothing left only in memory). */
+	flush(): Promise<boolean>;
 }
+
+/** The part of the page trash store the page tools use (a seam for tests). */
+export type PageTrash = Pick<PageTrashStore, "add" | "read" | "discard">;
 
 const stores = new WeakMap<App, PageTrashStore>();
 
-function storeFor(host: PageToolsHost): PageTrashStore {
+function storeFor(host: PageToolsHost): PageTrash {
 	let store = stores.get(host.app);
 	if (!store) {
 		// `host.settings` always reads the plugin's current settings, so the folder follows a later change.
@@ -46,16 +51,61 @@ function storeFor(host: PageToolsHost): PageTrashStore {
 
 // ------------------------------------------------------------------ page trash (#26)
 
-/** Keeps a copy of a page that is about to be deleted. Never throws: a failure only shows a notice. */
-export function stashDeletedPage(host: PageToolsHost, doc: NotebookDocument, page: Page, index: number): void {
+/** Keeps a copy of a page that is about to be deleted. Resolves to false (after a notice) when the copy could not be made. */
+export async function stashDeletedPage(host: PageToolsHost, doc: NotebookDocument, page: Page, index: number, store: PageTrash = storeFor(host)): Promise<boolean> {
 	try {
-		void storeFor(host).add(doc, page, index).catch((e) => {
-			console.error("[notebook] could not keep the deleted page", e);
-			new Notice(t("pageTrash.keepFailed", { error: (e as Error).message }));
-		});
+		await store.add(doc, page, index);
+		return true;
 	} catch (e) {
 		console.error("[notebook] could not keep the deleted page", e);
+		new Notice(t("pageTrash.keepFailed", { error: (e as Error).message }), 8000);
+		return false;
 	}
+}
+
+/**
+ * "Delete page": a copy goes to the page trash first, and only once it is on disk is the page deleted (`remove`, given
+ * the page's index at that moment). If the copy fails the page stays and the user is told; if the page was removed or
+ * the notebook changed meanwhile, nothing is deleted.
+ */
+export async function deletePageKeepingCopy(
+	host: PageToolsHost, doc: NotebookDocument, page: Page, index: number, remove: (index: number) => void, store: PageTrash = storeFor(host),
+): Promise<boolean> {
+	if (!(await stashDeletedPage(host, doc, page, index, store))) return false;
+	const now = host.editableDocument();
+	const at = now === doc ? doc.pages.indexOf(page) : -1;
+	if (at < 0) return false;
+	remove(at);
+	return true;
+}
+
+export type RestoreOutcome = "restored" | "restored-unsaved" | "failed";
+
+/**
+ * Restores one entry as an undo step. The entry is discarded only after the notebook is saved with the page in it,
+ * so the same entry cannot be restored twice (duplicate pages), and an unsaved restore still has its copy.
+ */
+export async function restoreDeletedPage(host: PageToolsHost, notebookId: string, entryId: string, store: PageTrash = storeFor(host)): Promise<RestoreOutcome> {
+	const file = await store.read(notebookId);
+	const doc = host.editableDocument();
+	if (!doc || doc.id !== notebookId) return "failed";
+	const entry = file.entries.find((e) => e.id === entryId);
+	const plan = entry ? planPageTrashRestore(doc, entry) : null;
+	if (!plan || !host.applyCommand(plan.command, plan.pageIndex)) return "failed";
+	let saved = false;
+	try {
+		saved = await host.flush();
+	} catch (e) {
+		console.error("[notebook] saving the restored page failed", e);
+	}
+	if (!saved) return "restored-unsaved";
+	try {
+		await store.discard(notebookId, entryId);
+	} catch (e) {
+		// The page is back and saved; the entry is hidden while the page is in the notebook.
+		console.warn("[notebook] restored page trash entry not discarded", e);
+	}
+	return "restored";
 }
 
 /** "Deleted pages…": lists the pages deleted from this notebook, with thumbnails, and restores one. */
@@ -124,15 +174,17 @@ class DeletedPagesModal extends Modal {
 
 	private restore(entryId: string): void {
 		void (async () => {
-			const doc = this.host.editableDocument();
-			const file = await storeFor(this.host).read(this.notebookId);
-			const entry = file.entries.find((e) => e.id === entryId);
-			const plan = doc && entry ? planPageTrashRestore(doc, entry) : null;
-			if (!plan || !this.host.applyCommand(plan.command, plan.pageIndex)) {
+			let outcome: RestoreOutcome = "failed";
+			try {
+				outcome = await restoreDeletedPage(this.host, this.notebookId, entryId);
+			} catch (e) {
+				console.error("[notebook] restoring a deleted page failed", e);
+			}
+			if (outcome === "failed") {
 				new Notice(t("pageTrash.cannotRestore"));
 				return;
 			}
-			new Notice(t("pageTrash.done"));
+			new Notice(t(outcome === "restored" ? "pageTrash.done" : "pageTrash.doneUnsaved"));
 			this.close();
 		})();
 	}
