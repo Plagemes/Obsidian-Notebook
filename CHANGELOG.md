@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+Not yet verified on Android hardware. The manual steps for this part are EX1 to EX10 in `docs/testing.md`.
+
+### Added
+- **Redo the exercise** (#303, wave 0.9: practice; manual steps EX1-EX10)
+  - **Redo this exercise…** (page menu and command): choose what to hide in a practice copy of the page: all your ink, only some colours or tools (pen, highlighter, shapes), or only the lasso selection. PDF and image backgrounds, text boxes and pictures stay. The copy goes right after the page, or to the end of an *Exercises* notebook (created in the notebooks folder when it does not exist; the name and the choice are remembered on this device), as one undo step in the notebook it goes to. The dialog says how many strokes will be hidden before anything is made.
+  - **Linked to the original without a format change**: the copy is a normal page tagged `practice` and `attempt/<n>` (the tags travel with the page), and `<notebooks folder>/_meta/practice.json` keeps the link (practice page id and original page id, notebook document ids with a path hint, attempt number, date, what was hidden, time spent). It is written only by *Redo this exercise* and the timer's *Stop*, re-reads the file before every write, keeps one line per attempt in a fixed order so two devices that each add an attempt do not conflict, and never overwrites a file it cannot read.
+  - **Original, Attempts, numbering**: a strip over a practice page has *Original* (goes to the original, in this or another notebook), *Attempts* (the original and its attempts, numbered, dated, with the time spent) and the commands *Go to the original exercise* and *Attempts of this exercise*. Redoing a practice page starts again from the original sheet, so each attempt starts from the same page.
+  - **Peek at the solution**: hold *Peek* in the strip (or use the command, which switches it on and off) to see the original's hidden ink over the practice page; let go and it disappears. It is only drawn on screen, never saved or exported.
+  - **Timer per attempt** (optional): *Start* and *Stop* in the strip add the time to the attempt's record; a running timer stops and is saved when the notebook view closes.
+  - Not done: variants of the exercise with different numbers (they need the variables and drawings with states of #182 and #241, which do not exist yet).
 ## 0.6.0 — 2026-10-30
 
 Not yet verified on Android hardware. The manual steps are numbered 64 to 134 in `docs/testing.md`; the ones that belong to each area are named below.

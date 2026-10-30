@@ -153,6 +153,7 @@ src/
     migrations.ts         chain of vN → vN+1 migrations (v0→v1 … v6→v7)
     margins.ts            page margins (v6): background box, size and resize rules, translating strokes and elements
     page-tags.ts          page tags (v7): normalisation, input parsing, counts, union, SetPageTags command
+    practice.ts           practice copies of exercises (#303): what to hide (`HideSpec`), the copy (`buildPracticePage`), `practice`/`attempt/<n>` tags, the sidecar records (parse, serialise, ops, queries, numbering), durations, remembered choices
     position.ts           reading position (v7): normalisation, position of the view, start-page choice
     bookmarks.ts          bookmark details (v7): set / patch / remove, outline entries, categories and colours
     history.ts            command-stack undo/redo (strokes, pages, paper/size, elements, meta, assets, infinite, Batch)
@@ -208,6 +209,7 @@ src/
     conflicts.ts          names of conflicted copies made by sync clients (pure)
     recovery.ts           repair sources: ranking, journal entries rebuilt as texts, backup names, combining two candidates (pure)
     vault-io.ts           Vault API adapter (read, process, backup) and the plugin-folder journal store
+    practice-store.ts     the practice sidecar `<notebooks folder>/_meta/practice.json`: read-modify-write, never overwrites an unreadable file (over the PDF links store's file adapter)
     stamps.ts             personal stamps in the vault: list, save (validated and read back, never overwrites), rename, trash (#142)
     idle.ts               wait for a quiet moment (delay + idle callback) for work nobody is looking at (pure, injectable scheduler)
     notebooks.ts          notebook creation in the configured folder
@@ -303,6 +305,11 @@ src/
     lecture-pack-modal.ts layout / header dialogs of the lecture pack (also used by Insert PDF)
     lecture-commands.ts   commands and ribbon icon for the three features above and the loose sheet
     pdf-sync.ts           synchronised PDF view (#106): command, "…" menu entries, reference picker, the controller that keeps the two sides together
+    practice.ts           "Redo this exercise" (#303): the service (sidecar, finding pages and notebooks by document id, redo flow, timers), the per-view controller, the commands
+    practice-modal.ts     the redo dialog (what to hide, where the copy goes) and the list of attempts
+    practice-banner.ts    the strip over a practice page: attempt, hold-to-peek, Original, Attempts, timer
+    practice-target.ts    where a copy goes: the Exercises notebook (create, append to an open or a closed notebook) and finding a notebook by document id
+    practice-types.ts     what the view hands out (`PracticeViewHost`) and takes (`PracticeHooks`, `PracticeProvider`); types only
     pdf-side-pane.ts      the PDF pane inside the notebook body: header, page, strip "Add notes page for this slide", divider
     pdf-reference.ts      what the pane shows: a plain vault PDF (own `PdfStore`) or another notebook's pages (own `NotebookMedia`)
     settings-tab.ts       settings UI
@@ -595,6 +602,19 @@ No change to the document format. All three live in plugin-owned folders under t
 4. **Warp**: a homography maps the quadrilateral to a rectangle (`geometry.ts`); the output size comes from the edge lengths.
 5. **Filter** (`filters.ts`): *Original*, *Document* (pixels clearly darker than their surroundings become black, the rest white, with a short soft ramp) and *Whiteboard*; rotate; the preview uses a smaller size than the final output.
 6. The result is encoded as JPEG, stored as an image asset and becomes a page with `background: { kind: "image" }` (`scan/pages.ts`, page size from the aspect ratio), inserted with `InsertPages` after the current page, or as an image element (**Insert scan as image**), or as the pages of a new notebook (library, command). Several sheets can follow one another in one session.
+
+### Redo the exercise (#303; wave 0.9: practice)
+
+No format change. *Redo this exercise…* (page menu entry and command) makes a **practice copy** of a page without some of its ink; the rules are pure (`model/practice.ts`), the dialogs, notices and files are in `view/practice*.ts`.
+
+- **What is hidden** (`HideSpec`): no criterion = every stroke; otherwise a stroke is hidden when it matches every criterion given: its colour is in `colors`, its tool in `tools` (pen, highlighter, shape), its id in `strokes` (the lasso selection, at most 4000 ids). Text boxes, images, the PDF/image background, margins and paper stay: they are the exercise. The copy is `duplicatePage` (new page, stroke and element ids) minus the hidden strokes; the original is never touched.
+- **Where it goes**: right after the page (`AddPage`, one undo step, scrolled to), or the end of the *Exercises* notebook (name configurable in the dialog; both choices are remembered on the device in local storage). The notebook is created in the notebooks folder when there is none. An open Exercises notebook takes the page as one `Batch` through its edit context and is saved; a closed one is parsed, extended, re-validated (`serializeChecked`), backed up (`before-move`), written only if the file is still what was read, and read back, exactly like *Move to notebook…* (which is not reused because it also removes the pages from the source). Asset records the target lacks are added; the asset files are content-addressed and shared. The link is written only after the page is safely in the target.
+- **Link** (no new fields): the copy carries the page tags `practice` and `attempt/<n>` (they travel with the page, and a copy of a copy never piles up markers), and the sidecar `<notebooks folder>/_meta/practice.json` (reserved folder, like `pdf-links.json`) holds one record per attempt, keyed by the practice page id: `{ practice: { doc, page, path? }, original: { doc, page, path? }, n, at, hide, seconds? }`. `doc` is the notebook's document id, so renaming or moving a notebook keeps the link (`path` is only a hint; a search of the notebooks folder by document id is the fallback). The text is deterministic (records sorted by original, number, time, practice page; one per line) so two devices that each add an attempt do not touch the same line; every write re-reads the file, applies the operation to it, re-validates and writes only if the text changed; entries a version does not understand are written back unchanged; an unreadable file or one from a newer version is never overwritten (one copy `practice.unreadable-<hash>.json` is kept) and *Redo this exercise* then refuses to make a copy it could not link. Written only by *Redo this exercise* (`add`) and the timer's *Stop* (`addSeconds`, which adds to what is stored, so two devices timing the same attempt add up). A moved page (*Move to notebook…*) gets new ids and keeps its tags but loses its record; a deleted page's record is ignored, not removed (undoing the delete brings the link back).
+- **Redoing a practice page** starts from the page it came from (found by the record), so every attempt begins from the same sheet and the numbers continue (`nextAttemptNumber`: one more than the highest for that original). The selection option is only offered on an original.
+- **The strip** (`practice-banner.ts`, in the view body, over the page): shown on a page with a record or the `practice` tag. *Peek*: while the button is held (pointer capture, so sliding off still ends it; Space or Enter on the keyboard) `Renderer.setPeek` draws the original's hidden strokes (`peekStrokes`) on the live layer at 85 % opacity, in the copy's page coordinates; released, on a page change or when the view closes, it is removed. It is never part of the document, the static layer, thumbnails or exports. The command *Peek at the solution* switches it on and off (a hotkey cannot be held). *Original* and *Attempts* open the page (scroll when it is in the same notebook, `openNotebookAtPage` otherwise); the attempts list shows the original and each attempt with its number, date and time spent.
+- **Timer**: *Start* keeps the start time in memory (per practice page, shared by the views, so it keeps running while another page is shown); *Stop* adds the elapsed seconds to the record; closing the view stops and saves the timers of its notebook. A timer still running when the plugin unloads is lost.
+- **Wiring**: `NotebookHost.practice` (the plugin's `PracticeService`) gives each view a `PracticeHooks` through `practiceHost()`; the view calls `practiceHooks.page(index)` from `updatePageIndicator` (cheap when nothing changed), `loaded()` and `destroy()`. The commands (`registerPracticeCommands`) go through `view.practiceHooks`.
+- **Not done**: variants with different numbers (they need the variables of #182 and the drawings with states of #241, which do not exist yet).
 
 ## 12. Obsidian integration
 
