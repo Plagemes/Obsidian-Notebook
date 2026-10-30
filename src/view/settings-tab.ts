@@ -90,7 +90,8 @@ export class NotebookSettingTab extends PluginSettingTab {
 	}
 
 	private applyStyle(): void {
-		this.containerEl.toggleClass("nb-style-obsidian", this.host.settings.appearanceStyle === "obsidian");
+		// DESIGN.md §2.2: the global `--nb-*` tokens follow Obsidian's variables under body.notebook-style-obsidian (also set by main.ts).
+		activeDocument.body.toggleClass("notebook-style-obsidian", this.host.settings.appearanceStyle === "obsidian");
 	}
 
 	private rowShown(spec: SettingSpec): boolean {

@@ -34,6 +34,15 @@ export function mergeMeta(base: NotebookMeta | undefined, patch: Partial<Noteboo
 		if (info) next.bookmarkInfo = info;
 		else delete next.bookmarkInfo;
 	}
+	// v11: present with `undefined` (or "") clears the field.
+	if ("description" in patch) {
+		if (patch.description) next.description = patch.description;
+		else delete next.description;
+	}
+	if ("coverArt" in patch) {
+		if (patch.coverArt) next.coverArt = { ...patch.coverArt };
+		else delete next.coverArt;
+	}
 	return next;
 }
 

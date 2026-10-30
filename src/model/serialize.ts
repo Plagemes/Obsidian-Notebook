@@ -6,12 +6,12 @@ import {
 } from "./math-elements";
 import { parseOutline } from "../math/outline";
 import { EXCERPT_ID_MAX, EXCERPT_PATH_MAX } from "./excerpts";
-import { detectVersion, migrate, MigrationError, v10OnlyElement, type RawObject } from "./migrations";
+import { detectVersion, migrate, MigrationError, v10OnlyElement, withoutV11Meta, type RawObject } from "./migrations";
 import { normalizePageTags } from "./page-tags";
 import { normalizePosition } from "./position";
 import {
-	CURRENT_VERSION, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, FORMAT_ID, PAPER_KINDS, RENDER_VERSIONS, TOOLS,
-	type Asset, type AssetKind, type BookmarkInfo, type BoxElement, type EquationElement, type ExcerptElement, type ExcerptSource, type GraphElement, type GraphFunction, type GraphParam,
+	COVER_ART_STYLES, CURRENT_VERSION, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, FORMAT_ID, META_DESCRIPTION_MAX, PAPER_KINDS, RENDER_VERSIONS, TOOLS,
+	type Asset, type CoverArt, type CoverArtStyle, type AssetKind, type BookmarkInfo, type BoxElement, type EquationElement, type ExcerptElement, type ExcerptSource, type GraphElement, type GraphFunction, type GraphParam,
 	type GraphPiece, type GraphTable, type GraphViewport, type ImageElement, type MarkerElement, type NotebookDocument, type NotebookMeta, type Page,
 	type PageBackground, type PageElement, type PageMargins, type PaperKind, type Point, type ReadingPosition, type RenderVersion, type Stroke,
 	type TextElement, type Tool,
@@ -171,7 +171,19 @@ function normalizeMeta(meta: NotebookMeta, pageIds: ReadonlySet<string>): Notebo
 	const out: NotebookMeta = { tags: [...new Set(meta.tags)], favorite: meta.favorite, cover: meta.cover, bookmarks };
 	const info = normalizeBookmarkInfoMap(meta.bookmarkInfo, bookmarks);
 	if (info) out.bookmarkInfo = info;
+	// v11: an empty description is no description; both fields are written only when present (strict on write, see readMeta).
+	if (meta.description !== undefined && meta.description !== "") out.description = meta.description;
+	if (meta.coverArt) out.coverArt = meta.coverArt.kind === "art"
+		? { kind: "art", style: meta.coverArt.style, seed: meta.coverArt.seed }
+		: { kind: "image", asset: meta.coverArt.asset };
 	return out;
+}
+
+/** v11 cover, fixed key order. */
+function coverArtLine(c: CoverArt): string {
+	return c.kind === "art"
+		? `{"kind":"art","style":${j(c.style)},"seed":${j(c.seed)}}`
+		: `{"kind":"image","asset":${j(c.asset)}}`;
 }
 
 function bookmarkInfoLine(info: BookmarkInfo): string {
@@ -185,10 +197,10 @@ function bookmarkInfoLine(info: BookmarkInfo): string {
 function metaLine(meta: NotebookMeta): string {
 	const base = `"tags":${j(meta.tags)},"favorite":${j(meta.favorite)},"cover":${j(meta.cover)},"bookmarks":${j(meta.bookmarks)}`;
 	const info = meta.bookmarkInfo;
-	if (!info) return `{${base}}`;
 	// In bookmark order (normalizeMeta), so the line does not depend on the order keys were added in memory.
-	const entries = meta.bookmarks.filter((id) => Object.prototype.hasOwnProperty.call(info, id)).map((id) => `${j(id)}:${bookmarkInfoLine(info[id]!)}`);
-	return `{${base},"bookmarkInfo":{${entries.join(",")}}}`;
+	const entries = info ? meta.bookmarks.filter((id) => Object.prototype.hasOwnProperty.call(info, id)).map((id) => `${j(id)}:${bookmarkInfoLine(info[id]!)}`) : null;
+	const v11 = `${meta.description !== undefined ? `,"description":${j(meta.description)}` : ""}${meta.coverArt ? `,"coverArt":${coverArtLine(meta.coverArt)}` : ""}`;
+	return `{${base}${entries ? `,"bookmarkInfo":{${entries.join(",")}}` : ""}${v11}}`;
 }
 
 function positionLine(p: ReadingPosition): string {
@@ -739,7 +751,7 @@ function readGraph(v: RawObject, id: string, path: string, drop: Dropped | null)
 	return g;
 }
 
-function readMeta(v: unknown, pageIds: ReadonlySet<string>, drop: Dropped | null): NotebookMeta {
+function readMeta(v: unknown, pageIds: ReadonlySet<string>, drop: Dropped | null, assets: Assets = {}): NotebookMeta {
 	if (v === undefined) return normalizeMeta(DEFAULT_META, pageIds);
 	if (!isObject(v)) fail("meta", "expected an object");
 	if (!Array.isArray(v.tags)) fail("meta.tags", "expected an array");
@@ -753,7 +765,33 @@ function readMeta(v: unknown, pageIds: ReadonlySet<string>, drop: Dropped | null
 		const info = readBookmarkInfo(v.bookmarkInfo, drop);
 		if (info) meta.bookmarkInfo = info;
 	}
+	// v11: optional details, dropped and counted when invalid on a lenient read; strict (on write) they fail.
+	const description = orDrop(drop, () => {
+		if (v.description === undefined) return undefined;
+		if (typeof v.description !== "string" || v.description === "") fail("meta.description", "expected a non-empty string");
+		if (v.description.length > META_DESCRIPTION_MAX) fail("meta.description", `longer than ${META_DESCRIPTION_MAX} characters`);
+		return v.description;
+	});
+	if (description !== undefined) meta.description = description;
+	const coverArt = orDrop(drop, () => (v.coverArt === undefined ? undefined : readCoverArt(v.coverArt, assets)));
+	if (coverArt) meta.coverArt = coverArt;
 	return normalizeMeta(meta, pageIds);
+}
+
+/** v11 cover: generated art (a known style and a seed) or an image asset of the document. */
+function readCoverArt(v: unknown, assets: Assets): CoverArt {
+	if (!isObject(v)) fail("meta.coverArt", "expected an object");
+	if (v.kind === "art") {
+		if (!COVER_ART_STYLES.includes(v.style as CoverArtStyle)) fail("meta.coverArt.style", "unknown style");
+		if (typeof v.seed !== "string" || v.seed.length === 0 || v.seed.length > 200) fail("meta.coverArt.seed", "expected a non-empty string of at most 200 characters");
+		return { kind: "art", style: v.style as CoverArtStyle, seed: v.seed };
+	}
+	if (v.kind === "image") {
+		const asset = str(v.asset, "meta.coverArt.asset");
+		if (assets[asset]?.kind !== "image") fail("meta.coverArt.asset", "not an image asset of this notebook");
+		return { kind: "image", asset };
+	}
+	return fail("meta.coverArt.kind", "expected \"art\" or \"image\"");
 }
 
 /**
@@ -932,7 +970,7 @@ function validateWith(raw: unknown, readPageAt: PageReader, ids: Set<string>, dr
 		pageIds.add(page.id);
 		return page;
 	});
-	const meta = readMeta(raw.meta, pageIds, drop);
+	const meta = readMeta(raw.meta, pageIds, drop, assets);
 	const doc: NotebookDocument = { format: FORMAT_ID, version: CURRENT_VERSION, id, createdAt, modifiedAt, pages, meta, assets };
 	const position = readPosition(raw.position, pageIds, drop);
 	if (position) doc.position = position;
@@ -1040,7 +1078,7 @@ export class StagedParse {
 		first: number,
 		/** Invalid optional details dropped so far: the document-level ones up front, page details as the pages are read. */
 		private readonly drop: Dropped,
-		/** v10: the version of the file (9: each page is checked for v10-only elements as it is read). */
+		/** The version of the file (9: each page is checked for v10-only elements as it is read; 9 and 10: v11 metadata is dropped). */
 		private readonly from: number = CURRENT_VERSION,
 	) {
 		// Nearest to the wanted page first: forward, then back (the next page is the likelier swipe).
@@ -1053,15 +1091,15 @@ export class StagedParse {
 	}
 
 	/**
-	 * Prepares a staged parse of a file at the current version, or (v10) at version 9, whose migration only refuses
-	 * excerpts (checked page by page as they are read), with page `first` (0-based) read in full.
+	 * Prepares a staged parse of a file at the current version, or at version 9 or 10, whose migrations only refuse
+	 * excerpts (v9: checked page by page as they are read) and drop the v11 metadata fields, with page `first` (0-based) read in full.
 	 */
 	static create(raw: RawObject, first: number, from: number = CURRENT_VERSION): StagedParse | ParseFailureResult {
 		try {
 			const ids = new Set<string>();
 			// Lenient like `parse`: invalid optional v7 details are dropped and counted; everything else still fails.
 			const drop: Dropped = { count: 0 };
-			const current = from === CURRENT_VERSION ? raw : { ...raw, version: CURRENT_VERSION };
+			const current = from === CURRENT_VERSION ? raw : { ...withoutV11Meta(raw), version: CURRENT_VERSION };
 			const doc = validateWith(current, readPageShell, ids, drop);
 			const rawPages = raw.pages as unknown[];
 			const at = Math.min(rawPages.length - 1, Math.max(0, first));
@@ -1075,7 +1113,7 @@ export class StagedParse {
 	}
 
 	private read(i: number): void {
-		if (this.from < CURRENT_VERSION) {
+		if (this.from < 10) {
 			const problem = v10OnlyElement(this.rawPages[i], i);
 			if (problem) fail(`pages[${i}]`, problem);
 		}
@@ -1134,8 +1172,8 @@ export function parseStaged(text: string, firstPage: number | null): StagedParse
 	const pre = preflight(text);
 	if (!pre.ok) return pre.failure;
 	const first = firstPage === null ? 0 : firstPage - 1;
-	// v10: the v9 → v10 migration changes nothing but the version and refuses excerpts, so a large v9 file is staged too.
-	if (pre.version === 9 && CURRENT_VERSION === 10) return StagedParse.create(pre.raw, first, 9);
+	// The v9 → v10 migration only refuses excerpts and v10 → v11 only drops two metadata fields, so large v9 and v10 files are staged too.
+	if (pre.version === 9 || pre.version === 10) return StagedParse.create(pre.raw, first, pre.version);
 	if (pre.version !== CURRENT_VERSION) return parseRaw(pre.raw, pre.version, true);
 	return StagedParse.create(pre.raw, first);
 }

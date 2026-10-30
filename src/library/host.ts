@@ -1,9 +1,13 @@
-import { loadPdfJs, normalizePath, Platform, type App, type TFile, type WorkspaceLeaf } from "obsidian";
+import { loadPdfJs, normalizePath, Platform, TFolder, type App, type TFile, type WorkspaceLeaf } from "obsidian";
 import { t } from "../i18n";
 import { createDocument, createId } from "../model/document";
 import { backgroundRect } from "../model/margins";
 import { parse, serializeChecked } from "../model/serialize";
 import { PAGE_SIZES, PAPER_SPACING, type Asset, type NotebookDocument, type NotebookMeta, type Page } from "../model/types";
+import { CreateDialog, type CreateTab, type FolderSpec } from "../view/create-dialog";
+import { applyNotebookMeta, joinPath, notebookDocument, type NotebookSpec } from "../view/create-logic";
+import type { PickedFile } from "../view/pick";
+import { FolderMetaStore } from "./folder-meta-store";
 import { assetExtension, assetPath, assetsFolder } from "../pdf/assets";
 import { scanFromCamera } from "../scan/scan-modal";
 import { scannedPage } from "../scan/pages";
@@ -18,7 +22,6 @@ import { openTemplateGallery } from "../view/page-tools";
 import { headerField } from "../storage/integrity";
 import { journalFolder, sidecarDeviceId, VaultDocumentIO, vaultDeviceFileAdapter } from "../storage/vault-io";
 import { resolveAssetFile, storeAsset } from "../view/media";
-import { NewNotebookModal, type NewNotebookOptions } from "../view/modals";
 import { NotebookView, VIEW_TYPE } from "../view/notebook-view";
 import { askLectureSetup } from "../view/lecture-pack-modal";
 import { pickFile } from "../view/pick";
@@ -31,6 +34,9 @@ import { LibraryStateStore } from "./library-state-store";
 import type { LibraryHost } from "./library-view";
 import type { ThumbnailOptions } from "./thumbnail";
 import { showNotice } from "../view/notice";
+
+/** This device's last folder of the creation dialog (local storage of the vault, not synced). */
+const LAST_FOLDER_KEY = "notebook-create-last-folder";
 
 /** Longest wait for a closing notebook view's final save before a library move goes on. */
 const CLOSE_WAIT_MS = 10_000;
@@ -59,9 +65,15 @@ export class NotebookLibraryHost implements LibraryHost {
 	readonly trash: LibraryTrash;
 	/** Roadmap 54: pinned, archived and manual order, one file per device in `_meta` (library/library-state.ts). */
 	readonly state: LibraryStateStore;
+	/**
+	 * Wave 0.12: colour, icon, description and art style of the library folders, one file per device in `_meta`
+	 * (library/folder-meta.ts). Read API for the cards: `folderMeta.getFolderMeta(path)` and `folderMeta.onFolderMetaChange(fn)`.
+	 */
+	readonly folderMeta: FolderMetaStore;
 
 	constructor(private readonly plugin: HostPlugin) {
 		this.state = new LibraryStateStore(vaultDeviceFileAdapter(plugin.app), () => plugin.settings.folder, sidecarDeviceId(plugin.app));
+		this.folderMeta = new FolderMetaStore(vaultDeviceFileAdapter(plugin.app), () => plugin.settings.folder, sidecarDeviceId(plugin.app));
 		this.trash = new LibraryTrash({
 			app: plugin.app,
 			root: () => plugin.settings.folder,
@@ -162,12 +174,37 @@ export class NotebookLibraryHost implements LibraryHost {
 
 	// ---------------------------------------------------------------- creating
 
-	createNotebook(folder: string): void {
-		const s = this.plugin.settings;
-		const defaults = { size: s.defaultPageSize, landscape: s.defaultLandscape, paper: s.defaultPaper };
-		const pickTemplate = (done: (template: { name: string; doc: NotebookDocument }) => void) =>
-			void openTemplateGallery(this.app, this.plugin.settings, (c) => done({ name: c.name, doc: c.doc }));
-		new NewNotebookModal(this.app, defaults, (options) => void this.createAndOpen(options, folder), pickTemplate).open();
+	/** Opens the creation dialog on the Notebook tab, in `folder` (the registry action `new-notebook`). */
+	createNotebook(folder?: string): void {
+		this.openCreate("notebook", folder);
+	}
+
+	/** Opens the creation dialog on the Folder tab, inside `parent` (the registry action `new-folder`). */
+	createFolder(parent?: string): void {
+		this.openCreate("folder", parent);
+	}
+
+	/** Wave 0.12: the creation dialog (view/create-dialog.ts). */
+	openCreate(tab: CreateTab, folder?: string): void {
+		const app = this.app;
+		new CreateDialog(app, {
+			root: () => this.root(),
+			allFolders: () => app.vault.getAllLoadedFiles().filter((f): f is TFolder => f instanceof TFolder).map((f) => f.path),
+			exists: (path) => app.vault.getAbstractFileByPath(normalizePath(path)) !== null,
+			folderMeta: (path) => this.folderMeta.getFolderMeta(path),
+			defaults: () => {
+				const s = this.plugin.settings;
+				return { size: s.defaultPageSize, landscape: s.defaultLandscape, paper: s.defaultPaper };
+			},
+			lastFolder: () => {
+				const v: unknown = app.loadLocalStorage(LAST_FOLDER_KEY);
+				return typeof v === "string" ? v : null;
+			},
+			pickTemplate: (done) => void openTemplateGallery(app, this.plugin.settings, (c) => done({ name: c.name, doc: c.doc })),
+			pickImage: () => pickFile(app, "image"),
+			createNotebook: (spec, extras) => this.createFromDialog(spec, extras),
+			createFolder: (spec) => this.createFolderFromDialog(spec),
+		}, tab, folder).open();
 	}
 
 	/**
@@ -191,24 +228,57 @@ export class NotebookLibraryHost implements LibraryHost {
 		await Promise.race([Promise.all(closing), new Promise<void>((resolve) => window.setTimeout(resolve, CLOSE_WAIT_MS))]);
 	}
 
-	private async createAndOpen(o: NewNotebookOptions, folder: string): Promise<void> {
+	/**
+	 * Creates the notebook the dialog describes and opens it: a blank first page of the chosen paper and size (or the
+	 * template's pages), the cover colour, description and cover art. The document is validated before the file exists.
+	 */
+	private async createFromDialog(spec: NotebookSpec, extras: { image?: PickedFile; template?: { name: string; doc: NotebookDocument } }): Promise<boolean> {
 		try {
 			const s = this.plugin.settings;
-			// Remember the choice for the next notebook.
-			if (!o.template && (o.size !== s.defaultPageSize || o.landscape !== s.defaultLandscape || o.paper !== s.defaultPaper)) {
-				this.plugin.settings = { ...s, defaultPageSize: o.size, defaultLandscape: o.landscape, defaultPaper: o.paper };
+			// Remember the choice for the next notebook (a custom size is not a default).
+			if (!extras.template && spec.size !== "custom" && (spec.size !== s.defaultPageSize || spec.landscape !== s.defaultLandscape || spec.paper !== s.defaultPaper)) {
+				this.plugin.settings = { ...s, defaultPageSize: spec.size, defaultLandscape: spec.landscape, defaultPaper: spec.paper };
 				await this.plugin.saveSettings();
 			}
-			const base = PAGE_SIZES[o.size];
-			const size = o.landscape ? { width: base.height, height: base.width } : { width: base.width, height: base.height };
-			const doc = o.template
-				? documentFromTemplate(o.template.doc)
-				: createDocument(new Date(), size, { kind: o.paper, spacing: PAPER_SPACING[o.paper] });
-			const file = await createNotebook(this.app, folder, o.name, doc);
+			const doc = extras.template ? documentFromTemplate(extras.template.doc) : notebookDocument(spec);
+			if (extras.template) applyNotebookMeta(doc, spec);
+			if (extras.image) {
+				const asset = await storeAsset(this.app, this.root(), extras.image.bytes, extras.image.name, "image");
+				this.assets.set(asset.id, asset);
+				doc.assets = { ...(doc.assets ?? {}), [asset.id]: asset };
+				applyNotebookMeta(doc, spec, { kind: "image", asset: asset.id });
+			}
+			const checked = serializeChecked(doc);
+			if (!checked.ok) throw new Error(checked.message);
+			const file = await createNotebook(this.app, spec.folder, spec.name, doc);
+			this.app.saveLocalStorage(LAST_FOLDER_KEY, spec.folder);
 			await this.openNotebook(file);
+			return true;
 		} catch (e) {
 			showNotice(t("notice.createFailed", { error: (e as Error).message }));
+			return false;
 		}
+	}
+
+	/** Creates the vault folder the dialog describes and stores its look (colour, icon, description, art style). */
+	private async createFolderFromDialog(spec: FolderSpec): Promise<boolean> {
+		const path = normalizePath(joinPath(spec.parent, spec.name));
+		try {
+			if (this.app.vault.getAbstractFileByPath(path)) throw new Error(t("create.error.folderExists", { name: spec.name }));
+			await this.app.vault.createFolder(path);
+			this.app.saveLocalStorage(LAST_FOLDER_KEY, spec.parent);
+		} catch (e) {
+			showNotice(t("create.failed", { error: (e as Error).message }));
+			return false;
+		}
+		try {
+			// Every field is written, so a new folder never shows the look of an older one that had the same path.
+			await this.folderMeta.set(path, { color: spec.color, icon: spec.icon, art: spec.art, description: spec.description || null });
+		} catch (e) {
+			// The folder exists: only its look could not be stored (e.g. this device's metadata file is unreadable).
+			showNotice(t("create.metaFailed", { error: (e as Error).message }), 8000);
+		}
+		return true;
 	}
 
 	/** Imports a PDF as a new notebook in `folder`: the one chosen in a picker, or `source` when it is already in the vault. */

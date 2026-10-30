@@ -91,14 +91,14 @@ export async function checkSettings(api: SettingsCheckApi): Promise<{ ok: boolea
 		await tick();
 		await tick();
 	}
-	add("Style: Follow Obsidian theme applies its class", root.hasClass("nb-style-obsidian") && host.settings.appearanceStyle === "obsidian");
+	add("Style: Follow Obsidian theme applies its class", activeDocument.body.hasClass("notebook-style-obsidian") && host.settings.appearanceStyle === "obsidian");
 	if (style) {
 		style.value = "notebook";
 		style.dispatchEvent(new Event("change"));
 		await tick();
 		await tick();
 	}
-	add("Style: Notebook is the default look", !root.hasClass("nb-style-obsidian"));
+	add("Style: Notebook is the default look", !activeDocument.body.hasClass("notebook-style-obsidian"));
 	add("settings survive a reload", readSettings(JSON.parse(JSON.stringify(host.settings))).companionNotes);
 
 	// Targets of at least 40 px, and nothing wider than the screen.

@@ -230,6 +230,29 @@ export function v10OnlyElement(page: unknown, index: number): string | null {
 	return null;
 }
 
+/**
+ * v11 adds two optional metadata fields: `meta.description` and `meta.coverArt` (a generated or image cover). Every valid
+ * v10 document is a valid v11 document without them. A v10 reader ignored unknown metadata fields, so these keys in a v10
+ * file were never ours and never had an effect: they are dropped, not interpreted (like `bookmarkInfo` in v6 -> v7).
+ * Nothing else changes, so a large v10 file can still be read page by page (StagedParse) after `withoutV11Meta`.
+ */
+function v10ToV11(raw: RawObject): RawObject {
+	return { ...withoutV11Meta(raw), version: 11 };
+}
+
+/** The metadata fields that exist only from v11. */
+export const META_FIELDS_V11: readonly string[] = ["description", "coverArt"];
+
+/** `raw` without the v11-only metadata fields (a copy when there is something to drop; `raw` itself otherwise). */
+export function withoutV11Meta(raw: RawObject): RawObject {
+	const meta = raw.meta;
+	if (typeof meta !== "object" || meta === null || Array.isArray(meta)) return raw;
+	if (!META_FIELDS_V11.some((k) => k in meta)) return raw;
+	const copy: RawObject = { ...(meta as RawObject) };
+	for (const k of META_FIELDS_V11) delete copy[k];
+	return { ...raw, meta: copy };
+}
+
 /** MIGRATIONS[n] takes a document from version n to n+1. */
 export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	0: v0ToV1,
@@ -242,6 +265,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	7: v7ToV8,
 	8: v8ToV9,
 	9: v9ToV10,
+	10: v10ToV11,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

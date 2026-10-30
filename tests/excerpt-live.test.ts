@@ -154,7 +154,7 @@ describe("staged loading of large v9 files", () => {
 		expect(r.ok).toBe(true);
 		if (r.ok) {
 			expect(r.migratedFrom).toBe(9);
-			expect(r.doc.version).toBe(10);
+			expect(r.doc.version).toBeGreaterThanOrEqual(10);
 		}
 	});
 

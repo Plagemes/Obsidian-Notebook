@@ -620,13 +620,14 @@ function salvageElements(raw: unknown, skeleton: RawObject, ctx: SalvageContext)
 	return out;
 }
 
-function salvageMeta(raw: unknown, pageIds: Set<string>, summary: RepairSummary): NotebookMeta {
+function salvageMeta(raw: unknown, pageIds: Set<string>, summary: RepairSummary, assets: Record<string, Asset> = {}): NotebookMeta {
 	const blank = [{ id: "p", width: 1, height: 1, paper: { kind: "blank", spacing: PAPER_SPACING.blank }, strokes: [] }];
 	if (raw === undefined) return { ...DEFAULT_META, tags: [], bookmarks: [] };
 	// Bookmark details are checked on their own below (against the real pages), so a damaged entry costs only itself.
 	const withoutInfo: RawObject | null = isObj(raw) ? { ...raw, bookmarks: [] } : null;
 	if (withoutInfo) delete withoutInfo.bookmarkInfo;
-	const asIs = withoutInfo ? tryDoc(blank, {}, withoutInfo) : null;
+	// v11: the assets are passed so an image cover whose asset survived is kept.
+	const asIs = withoutInfo ? tryDoc(blank, assets, withoutInfo) : null;
 	let meta: NotebookMeta;
 	if (asIs && isObj(raw)) {
 		const bookmarks = Array.isArray(raw.bookmarks) ? (raw.bookmarks as unknown[]).filter((b): b is string => typeof b === "string" && pageIds.has(b)) : [];
@@ -719,7 +720,7 @@ function salvage(raw: RawObject, summary: RepairSummary, now: Date, cut: WeakSet
 	};
 	const id = str(raw.id, createId);
 	const createdAt = str(raw.createdAt, () => iso);
-	const meta = salvageMeta(raw.meta, ctx.pageIds, summary);
+	const meta = salvageMeta(raw.meta, ctx.pageIds, summary, assets);
 	const position = salvagePosition(raw.position, ctx.pageIds, summary);
 	summary.unknownFields += unknownKeys(raw, { format: 1, version: 1, id: 1, createdAt: 1, modifiedAt: 1, pages: 1, meta: 1, assets: 1, position: 1 });
 	if (pages.length === 0) {

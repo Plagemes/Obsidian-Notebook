@@ -2,13 +2,13 @@
 
 export const FORMAT_ID = "obsidian-notebook";
 /**
- * v10: anchored excerpts (page elements that show a region of a page and jump back to it). v9: equations (LaTeX,
+ * v11: notebook description and generated or image cover (`meta.description`, `meta.coverArt`). v10: anchored excerpts (page elements that show a region of a page and jump back to it). v9: equations (LaTeX,
  * typeset with Obsidian's MathJax) and function graphs (page elements). v8: markers and structured boxes (page elements), hidden ("invisible ink") strokes. v7: bookmark details
  * (title, colour, category), page tags, the shared reading position and more paper kinds (v6: page margins
  * around a background; v5: per-stroke render version; v4: library metadata, assets, backgrounds, elements,
  * infinite pages, "shape" tool; v3: paper kinds and page sizes).
  */
-export const CURRENT_VERSION = 10;
+export const CURRENT_VERSION = 11;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -24,6 +24,8 @@ export const PAGE_SIZES = {
 	a4: { width: A4_WIDTH, height: A4_HEIGHT },
 	a5: { width: 419.53, height: A4_WIDTH },
 	letter: { width: 612, height: 792 },
+	/** ISO B5, 176 × 250 mm (a preset only: pages store their size, so adding one is no format change). */
+	b5: { width: 498.9, height: 708.66 },
 } as const;
 export type PageSizeName = keyof typeof PAGE_SIZES;
 
@@ -417,7 +419,27 @@ export interface NotebookMeta {
 	 * read and write); an entry without fields is dropped. Written only when not empty.
 	 */
 	bookmarkInfo?: Record<string, BookmarkInfo>;
+	/** v11: a short description shown in the library (trimmed, at most META_DESCRIPTION_MAX characters). Written only when not empty. */
+	description?: string;
+	/** v11: what the cover shows on top of the colour `cover`. Absent = the plain colour cover of before. Written only when present. */
+	coverArt?: CoverArt;
 }
+
+/** v11: longest notebook description, in characters. */
+export const META_DESCRIPTION_MAX = 500;
+
+/** v11: the generated art families of a cover (the names of `ArtStyle` in ui/art/generative-art.ts). */
+export const COVER_ART_STYLES = ["contours", "cells", "waves", "branches", "flow", "orbits", "grid"] as const;
+export type CoverArtStyle = (typeof COVER_ART_STYLES)[number];
+
+/**
+ * v11 cover. `art`: line art generated from `seed` in the style `style`, in the colour `meta.cover` (deterministic: the
+ * same three values give the same picture on every device). `image`: an image asset of the document (`doc.assets`,
+ * kind "image"), copied into `_assets/` like a page image.
+ */
+export type CoverArt =
+	| { kind: "art"; style: CoverArtStyle; seed: string }
+	| { kind: "image"; asset: string };
 
 /** Metadata of a new notebook and of every migrated v3 file. Never mutate it: copy it (cloneMeta in document.ts). */
 export const DEFAULT_META: Readonly<NotebookMeta> = {

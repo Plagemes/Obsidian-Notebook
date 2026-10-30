@@ -1032,6 +1032,11 @@ export function setIcon(el: HTMLElement, name: string): void {
 	s.title = name;
 }
 
+/** wave 0.12: the icon ids the "More icons…" search lists (a sample of Lucide's names, as Obsidian prefixes them). */
+export function getIconIds(): string[] {
+	return ["lucide-folder", "lucide-graduation-cap", "lucide-heart-pulse", "lucide-flask-conical", "lucide-sigma", "lucide-brain", "lucide-atom", "lucide-book-open", "lucide-palette", "lucide-star"];
+}
+
 export function getLanguage(): string {
 	return "en";
 }

@@ -190,11 +190,11 @@ describe("parseStaged", () => {
 	});
 
 	it("an older format that needs migrating is parsed completely", () => {
-		// v10: v9 files are staged too (tests/excerpt-live.test.ts); v8 and older still need the full migration.
-		const old = text.replace(`"version": ${CURRENT_VERSION}`, `"version": ${CURRENT_VERSION - 2}`);
+		// v9 and v10 files are staged too (tests/excerpt-live.test.ts, tests/model-v11.test.ts); v8 and older still need the full migration.
+		const old = text.replace(`"version": ${CURRENT_VERSION}`, `"version": 8`);
 		const r = parseStaged(old, 2);
 		expect(r instanceof StagedParse).toBe(false);
-		expect(r).toMatchObject({ ok: true, migratedFrom: CURRENT_VERSION - 2 });
+		expect(r).toMatchObject({ ok: true, migratedFrom: 8 });
 	});
 
 	it("files from a newer version and damaged files are reported without staging", () => {
