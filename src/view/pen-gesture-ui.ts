@@ -309,5 +309,3 @@ export class RecordGestureModal extends Modal {
 	}
 }
 
-/** A toolbar-sized icon for the mode entry; kept here so the entry and the badge agree. */
-export const PEN_GESTURE_ICON = "wand-2";

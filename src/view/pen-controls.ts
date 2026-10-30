@@ -1,4 +1,4 @@
-import { Menu, Notice, setIcon } from "obsidian";
+import { Menu, Notice } from "obsidian";
 import { t } from "../i18n";
 import {
 	activeFavourite, captureFavourite, DEFAULT_FAVOURITES, ERASER_SIZES, FAVOURITE_SLOTS, favouritePatch, withFavourite,
@@ -21,14 +21,13 @@ export interface PenStore {
 export const LONG_PRESS_MS = 450;
 
 /**
- * Toolbar controls for favourite pens, eraser size and the pen-only switch, plus the circle that shows the eraser
+ * Toolbar controls for favourite pens and eraser size, the pen-only switch (an action of the registry), plus the circle that shows the eraser
  * under the pen. Passive: it only listens to the stage and never takes part in the writing pipeline.
  */
 export class PenControls {
 	private readonly abort = new AbortController();
 	private readonly slotButtons: HTMLButtonElement[] = [];
 	private readonly sizeButtons = new Map<number, HTMLButtonElement>();
-	private readonly penOnlyButton: HTMLButtonElement;
 	private readonly cursor: HTMLElement;
 	private editable = false;
 	private pos: { x: number; y: number } | null = null;
@@ -52,15 +51,6 @@ export class PenControls {
 			});
 			this.sizeButtons.set(size, b);
 		}
-
-		// A row of the toolbar's "more" menu: icon and label, pressed while on.
-		this.penOnlyButton = toolbar.penOnlyEl.createEl("button", { cls: "notebook-menu-item", attr: { type: "button", role: "menuitem" } });
-		setIcon(this.penOnlyButton.createSpan({ cls: "notebook-menu-icon" }), "pen-tool");
-		this.penOnlyButton.createSpan({ cls: "notebook-menu-label", text: t("pens.penOnly") });
-		this.penOnlyButton.addEventListener("click", (e) => {
-			e.preventDefault();
-			this.togglePenOnly();
-		});
 
 		this.cursor = stage.createDiv({ cls: "notebook-eraser-cursor notebook-hidden" });
 		const opts = { signal: this.abort.signal, passive: true } as const;
@@ -112,11 +102,6 @@ export class PenControls {
 			b.setAttribute("aria-pressed", String(size === s.eraserSize));
 			b.disabled = !this.editable;
 		}
-
-		const penOnly = this.store.penOnly();
-		this.penOnlyButton.toggleClass("is-active", penOnly);
-		this.penOnlyButton.setAttribute("aria-pressed", String(penOnly));
-		this.penOnlyButton.setAttribute("aria-label", t(penOnly ? "pens.penOnly.on" : "pens.penOnly.off"));
 
 		this.cursor.setCssProps({ "--notebook-eraser-d": `${s.eraserSize * 2}px` });
 	}

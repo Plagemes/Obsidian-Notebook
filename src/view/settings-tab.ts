@@ -15,6 +15,7 @@ import { displayZettelSettings, zettelSettingDefinitions, type ZettelSettingsHos
 // wave 0.8: pen gestures
 import { displayPenGestureSettings, gestureKeyId, penGestureSettingDefinitions } from "./pen-gesture-settings";
 import { setGestureEnabled, type PenGestureUiHost } from "./pen-gesture-ui";
+import { displaySyncSettings, syncSettingDefinitions, type SyncSafetyService } from "./sync-safety";
 
 const paperOptions = () => Object.fromEntries(PAPER_KINDS.map((k) => [k, t(`paper.${k}`)]));
 const sizeOptions = () => Object.fromEntries((Object.keys(PAGE_SIZES) as Array<keyof typeof PAGE_SIZES>).map((k) => [k, t(`size.${k}`)]));
@@ -23,6 +24,7 @@ export interface SettingsHost extends Plugin {
 	settings: NotebookSettings;
 	saveSettings(): Promise<void>;
 	timetable?: TimetableService;
+	syncSafety?: SyncSafetyService;
 }
 
 type Key = keyof NotebookSettings;
@@ -226,6 +228,8 @@ export class NotebookSettingTab extends PluginSettingTab {
 			...zettelSettingDefinitions(this.zettelHost()),
 			// wave 0.8: pen gestures
 			...(penGestureSettingDefinitions(this.penGestureHost()) as SettingDefinitionItem<Key>[]),
+			// wave 0.7: sync safety
+			...syncSettingDefinitions(this.host.syncSafety),
 		];
 	}
 
@@ -421,5 +425,6 @@ export class NotebookSettingTab extends PluginSettingTab {
 		displayTrashSettings(containerEl, { get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) });
 		displayZettelSettings(containerEl, this.zettelHost());
 		displayPenGestureSettings(containerEl, this.penGestureHost());
+		displaySyncSettings(containerEl, this.host.syncSafety);
 	}
 }

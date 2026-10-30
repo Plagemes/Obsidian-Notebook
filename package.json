@@ -1,6 +1,6 @@
 {
   "name": "obsidian-notebook",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "Handwritten notes with a stylus inside Obsidian (Android + S Pen first).",
   "main": "main.js",
   "type": "module",
@@ -15,7 +15,8 @@
     "bench": "vitest run --project perf --silent=false",
     "harness": "node dev/harness/build.mjs --serve",
     "harness:check": "node dev/harness/check.mjs",
-    "bench:open": "node dev/harness/open-bench.mjs"
+    "bench:open": "node dev/harness/open-bench.mjs",
+    "bench:lod": "node dev/harness/lod-bench.mjs"
   },
   "keywords": [
     "obsidian",
