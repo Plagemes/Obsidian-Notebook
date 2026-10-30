@@ -120,6 +120,21 @@ export async function checkSettings(api: SettingsCheckApi): Promise<{ ok: boolea
 	add("Style: Notebook is the default look", !activeDocument.body.hasClass("notebook-style-obsidian"));
 	add("settings survive a reload", readSettings(JSON.parse(JSON.stringify(host.settings))).companionNotes);
 
+	// 0.12.3: native inside Obsidian's settings modal: no navy panels or bands, Obsidian's own surface shows through.
+	const bg = (el: Element | null) => (el ? getComputedStyle(el).backgroundColor : "none");
+	const clear = (c: string) => c === "rgba(0, 0, 0, 0)" || c === "transparent";
+	const sections = [...root.querySelectorAll<HTMLElement>(".notebook-settings-section")].filter((el) => visible(el));
+	add("the tab has no background of its own", clear(bg(root.querySelector(".notebook-settings-section")?.parentElement?.querySelector(".notebook-settings-top") ?? null)) && sections.length > 0 && sections.every((el) => clear(bg(el))), `${bg(root.querySelector(".notebook-settings-top"))} / ${bg(sections[0] ?? null)}`);
+	const border = document.body.createDiv();
+	border.setCssProps({ color: "var(--background-modifier-border)" });
+	const want = getComputedStyle(border).color;
+	border.remove();
+	add("the sections are framed by Obsidian's border colour", sections.every((el) => getComputedStyle(el).borderTopColor === want), `${sections[0] ? getComputedStyle(sections[0]).borderTopColor : "none"} vs ${want}`);
+	// Diagnostics → Device info: the WebView's user agent, Obsidian's version and the platform.
+	const info = row("Device info")?.querySelector(".notebook-settings-device-info")?.textContent ?? "";
+	add("Diagnostics shows the device info (WebView, Obsidian version, platform)", info.includes("WebView: Chrome") && info.includes("Obsidian API: 1.14.4-harness") && info.includes("Platform:") && info.includes("User agent: Mozilla/"), info.split(String.fromCharCode(10))[0] ?? "none");
+	add("Device info has a Copy button", !!row("Device info")?.querySelector("button"));
+
 	// Targets of at least 40 px, and nothing wider than the screen.
 	const controls = [...root.querySelectorAll<HTMLElement>("button, select, input[type=text], .notebook-settings-search-pill, .notebook-settings-disclosure")].filter((el) => visible(el));
 	const small = controls.filter((el) => el.getBoundingClientRect().height < 40).map((el) => `${el.tagName.toLowerCase()}.${el.className} ${Math.round(el.getBoundingClientRect().height)}px`);

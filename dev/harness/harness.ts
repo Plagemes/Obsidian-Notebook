@@ -34,6 +34,7 @@ import { checkReadOnly } from "./readonly-check";
 import { checkSettings } from "./settings-check";
 import { checkPlugin } from "./plugin-check";
 import { checkCreate, prepareShot } from "./create-check";
+import { checkHostile, HOSTILE_ERROR, hostileDialog, installHostile } from "./hostile";
 import { PracticeService } from "../../src/view/practice";
 import { NavController } from "../../src/view/nav-controller";
 import { NotebookStatusBar } from "../../src/view/status-bar";
@@ -129,6 +130,9 @@ window.addEventListener("error", (e) => errors.push(`uncaught: ${e.message} @${e
 window.addEventListener("unhandledrejection", (e) => errors.push(`unhandled rejection: ${String((e.reason as Error)?.stack ?? e.reason)}`));
 
 const params = new URLSearchParams(location.search);
+/** 0.12.3: hostile=1 removes newer built-ins and makes the art engine fail (hostile.ts). */
+const hostile = params.get("hostile") === "1";
+if (hostile) installHostile();
 
 /** Injected faults: the guards must keep the page drawn and the pen writing. */
 const fault = params.get("fault");
@@ -1941,7 +1945,7 @@ function applySize(): void {
 	if (h) root.style.height = `${Number(h)}px`;
 }
 
-const harnessApi: Record<string, unknown> = { app, checkLibrary, checkEmpty, emptyDialogShot, interactLibrary, libraryState, open, measureOpen, penStroke, setTool, openOptions, openMore, measureLod, compareLod, checkHeavy, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkCreate: async (tab: "notebook" | "folder" = "notebook") => { try { return JSON.parse(JSON.stringify(await checkCreate({ app, errors, notices }, tab))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`create check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, createShot: (tab: "notebook" | "folder") => prepareShot({ app, errors, notices }, tab), checkReadOnly: async () => { try { return JSON.parse(JSON.stringify(await checkReadOnly({ view, app, stage, penStroke, setTool, strokeCount, frames, openMore, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`readonly check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPractice: () => checkPractice({ view, app, service: practiceService, frames, errors, notices }), checkSettings: async () => { try { return JSON.parse(JSON.stringify(await checkSettings({ app, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`settings check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPlugin: async () => { try { return JSON.parse(JSON.stringify(await checkPlugin({ errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`plugin check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkExcerpt: () => checkExcerpt({ view, stage, penStroke, setTool, strokeCount, staticPixel, frames, errors, notices }), checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
+const harnessApi: Record<string, unknown> = { app, checkLibrary, checkEmpty, checkHostile: runHostile, hostileDialog, emptyDialogShot, interactLibrary, libraryState, open, measureOpen, penStroke, setTool, openOptions, openMore, measureLod, compareLod, checkHeavy, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkCreate: async (tab: "notebook" | "folder" = "notebook") => { try { return JSON.parse(JSON.stringify(await checkCreate({ app, errors, notices }, tab))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`create check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, createShot: (tab: "notebook" | "folder") => prepareShot({ app, errors, notices }, tab), checkReadOnly: async () => { try { return JSON.parse(JSON.stringify(await checkReadOnly({ view, app, stage, penStroke, setTool, strokeCount, frames, openMore, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`readonly check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPractice: () => checkPractice({ view, app, service: practiceService, frames, errors, notices }), checkSettings: async () => { try { return JSON.parse(JSON.stringify(await checkSettings({ app, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`settings check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPlugin: async () => { try { return JSON.parse(JSON.stringify(await checkPlugin({ errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`plugin check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkExcerpt: () => checkExcerpt({ view, stage, penStroke, setTool, strokeCount, staticPixel, frames, errors, notices }), checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
 	return view;
 } };
 
@@ -1958,6 +1962,14 @@ async function checkLibrary(): Promise<Record<string, unknown>> {
 async function checkEmpty(): Promise<Record<string, unknown>> {
 	const results = libraryHarness ? await checkEmptyLibrary(libraryHarness, librarySurface) : [];
 	return { ok: results.every((r) => r.ok) && errors.length === 0, results, errors: [...errors], env: { dpr: window.devicePixelRatio } };
+}
+
+/** 0.12.3: the hostile empty vault: everything but the art is drawn; only the injected failures may log. */
+async function runHostile(): Promise<Record<string, unknown>> {
+	const results = libraryHarness ? await checkHostile(librarySurface) : [];
+	const unexpected = errors.filter((e) => !HOSTILE_ERROR.test(e));
+	results.push({ name: "the injected failures were logged by the guards", ok: errors.some((e) => HOSTILE_ERROR.test(e)), detail: `${errors.length} errors` });
+	return { ok: results.every((r) => r.ok) && unexpected.length === 0, results, errors: unexpected, env: { dpr: window.devicePixelRatio } };
 }
 
 async function interactLibrary(): Promise<Record<string, unknown>> {

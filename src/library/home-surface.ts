@@ -9,6 +9,7 @@ import { Menu } from "obsidian";
 import { t } from "../i18n";
 import { setIconSafe } from "../ui/components/dom";
 import { createTile, type CreateTileOptions } from "../ui/components/create-tile";
+import { drawSafely } from "../ui/components/error-card";
 import { emptyState, type EmptyStateOptions } from "../ui/components/empty-state";
 import { kpiTile, type KpiTileOptions } from "../ui/components/kpi-tile";
 import { listRow, type ListRowOptions } from "../ui/components/list-row";
@@ -39,22 +40,21 @@ function periodLabel(weeks: StatPeriod): string {
 	return weeks === 1 ? t("home.stats.week") : t("home.stats.weeks", { n: String(weeks) });
 }
 
-/** Draws one section; a failure is logged and leaves the rest of Home (and creation) in place. */
-function part(name: string, draw: () => void): void {
-	try {
-		draw();
-	} catch (e) {
-		console.error(`[notebook] Home: the ${name} section could not be drawn`, e);
-	}
+/**
+ * Draws one section; a failure is logged and leaves the rest of Home (and creation) in place. 0.12.3: it is also shown
+ * as an error card (message and first stack frame) where the section would be, so a screenshot names the cause.
+ */
+function part(page: HTMLElement, name: string, label: string, draw: () => void): void {
+	drawSafely(page, `Home: the ${name} section`, label, draw);
 }
 
 export function renderHome(el: HTMLElement, h: HomeHost): void {
 	const page = el.createDiv({ cls: "nb-home" });
 
 	const empty = h.empty;
-	if (empty) part("empty state", () => emptyState(page, empty));
+	if (empty) part(page, "empty state", empty.title, () => emptyState(page, empty));
 
-	part("subjects", () => {
+	part(page, "subjects", t("home.subjects"), () => {
 		const sec = page.createEl("section", { cls: "nb-section nb-home-subjects" });
 		sectionHeader(sec, { icon: "folder", title: t("home.subjects"), link: h.moreSubjects ? { label: t("home.showAll"), onClick: h.moreSubjects } : undefined });
 		const grid = sec.createDiv({ cls: "nb-subject-grid is-rows" });
@@ -65,17 +65,17 @@ export function renderHome(el: HTMLElement, h: HomeHost): void {
 	if (h.recent.length > 0 || h.stats.length > 0) {
 		const middle = page.createDiv({ cls: "nb-home-middle" });
 		if (h.recent.length > 0) {
-			part("recent notes", () => {
+			part(middle, "recent notes", t("home.recent"), () => {
 				const panel = middle.createEl("section", { cls: "nb-panel nb-home-recent" });
 				sectionHeader(panel, { icon: "file-text", title: t("home.recent"), link: h.moreRecent ? { label: t("home.showAll"), onClick: h.moreRecent } : undefined });
 				const list = panel.createDiv({ cls: "nb-list" });
 				for (const r of h.recent) listRow(list, r);
 			});
 		}
-		if (h.stats.length > 0) part("statistics", () => renderStats(middle, h));
+		if (h.stats.length > 0) part(middle, "statistics", t("home.stats"), () => renderStats(middle, h));
 	}
 
-	part("quick actions", () => {
+	part(page, "quick actions", t("home.quick"), () => {
 		const sec = page.createEl("section", { cls: "nb-section nb-home-quick" });
 		sectionHeader(sec, { icon: "zap", title: t("home.quick") });
 		const grid = sec.createDiv({ cls: "nb-quick-grid" });

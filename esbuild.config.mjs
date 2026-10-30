@@ -30,7 +30,8 @@ const context = await esbuild.context({
 		...builtinModules,
 	],
 	format: "cjs",
-	target: "es2021",
+	// 0.12.3: syntax down-levelled for older Android System WebViews (Chrome 100+); tests/compat.test.ts bans newer built-ins.
+	target: ["es2020", "chrome100"],
 	logLevel: "info",
 	sourcemap: prod ? false : "inline",
 	treeShaking: true,

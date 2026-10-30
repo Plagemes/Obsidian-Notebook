@@ -34,7 +34,7 @@ function baseName(name: string): string {
  */
 export async function autoSheet(file: PickedFile, filter: ScanFilter): Promise<AutoSheet> {
 	const { canvas: work, ctx: wctx } = await decodePhoto(file.bytes, file.name, MAX_WORK_SIDE, file.type);
-	const out = activeDocument.createEl("canvas");
+	const out = createEl("canvas");
 	try {
 		const w = work.width;
 		const h = work.height;

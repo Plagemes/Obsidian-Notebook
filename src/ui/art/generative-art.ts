@@ -10,7 +10,7 @@ import { LruCache } from "./lru";
 import { flat, SOLID, type ArtContext, type Painter } from "./painter";
 import { hashString, rngFor } from "./prng";
 
-export { folderIconSvg } from "./folder-icon";
+import { folderIconSvg as folderSvg } from "./folder-icon";
 export type { ArtContext } from "./painter";
 
 export type ArtStyle = "contours" | "cells" | "waves" | "branches" | "flow" | "orbits" | "grid";
@@ -260,6 +260,48 @@ export function drawCover(ctx: ArtContext, w: number, h: number, spec: ArtSpec):
 }
 
 // ---------------------------------------------------------------------------------------------------------------
+// Never break a layout (0.12.3)
+
+/**
+ * The art is decoration (DESIGN.md §3): a failure must only drop the picture, never the card, the section or the
+ * dialog around it. Every public image function below runs through `decoration`: an exception is logged once (with its
+ * message, for the device's console) and the caller gets its fallback ("" = no image). After three failures the
+ * engine stops trying for the session, so a WebView that cannot make canvases does not pay for every card.
+ */
+const MAX_FAILURES = 3;
+let failures = 0;
+let lastFailure = "";
+
+/** `canvas`: the image needs a canvas (switched off with the engine); the folder icon is plain markup and does not. */
+function decoration<T>(what: string, fallback: T, make: () => T, canvas = true): T {
+	if (canvas && failures >= MAX_FAILURES) return fallback;
+	try {
+		return make();
+	} catch (e) {
+		failures++;
+		lastFailure = e instanceof Error ? e.message : String(e);
+		if (failures === 1) console.error(`[notebook] art: the ${what} could not be drawn; decoration dropped`, e);
+		return fallback;
+	}
+}
+
+/** Failures so far and the last message (the harness and the settings' device info). */
+export function artFailures(): { count: number; last: string; off: boolean } {
+	return { count: failures, last: lastFailure, off: failures >= MAX_FAILURES };
+}
+
+/** Forgets earlier failures (tests, or the harness between scenarios). */
+export function resetArtFailures(): void {
+	failures = 0;
+	lastFailure = "";
+}
+
+/** Inline SVG of the glossy folder (folder-icon.ts); "" if it cannot be made, and the caller shows a plain icon. */
+export function folderIconSvg(color: string, size = 56): string {
+	return decoration("folder icon", "", () => folderSvg(color, size), false);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
 // Cached images
 
 /** The 2D context the image functions need (the art context plus the transform). */
@@ -275,7 +317,8 @@ export interface ArtCanvas {
 	toDataURL(type?: string): string;
 }
 
-let makeCanvas: () => ArtCanvas = () => activeDocument.createEl("canvas");
+// A detached canvas: `createEl` on a Document would append to the document itself and throw (0.12.2 on the device).
+let makeCanvas: () => ArtCanvas = () => createEl("canvas");
 let scratch: ArtCanvas | null = null;
 const images = new LruCache<string>(40);
 
@@ -283,6 +326,7 @@ const images = new LruCache<string>(40);
 export function setArtCanvasFactory(factory: () => ArtCanvas): void {
 	makeCanvas = factory;
 	scratch = null;
+	resetArtFailures();
 	images.clear();
 }
 
@@ -331,17 +375,21 @@ function keyOf(kind: string, spec: ArtSpec, w: number, h: number, dpr: number): 
  */
 export function artImage(spec: ArtSpec, w: number, h: number, dpr?: number): string {
 	const cw = Math.round(w), ch = Math.round(h);
-	if (!(cw > 0 && ch > 0) || !artEnabled()) return "";
-	const ratio = pixelRatio(dpr);
-	return render(keyOf("art", spec, cw, ch, ratio), cw, ch, ratio, (ctx) => drawArtLayer(ctx, cw, ch, spec, CARD_LAYER));
+	return decoration("art image", "", () => {
+		if (!(cw > 0 && ch > 0) || !artEnabled()) return "";
+		const ratio = pixelRatio(dpr);
+		return render(keyOf("art", spec, cw, ch, ratio), cw, ch, ratio, (ctx) => drawArtLayer(ctx, cw, ch, spec, CARD_LAYER));
+	});
 }
 
-/** Notebook cover (portrait): soft gradient + art, as a cached data URL. */
+/** Notebook cover (portrait): soft gradient + art, as a cached data URL ("" if it cannot be drawn: show a plain colour). */
 export function coverImage(spec: ArtSpec, w: number, h: number, dpr?: number): string {
 	const cw = Math.round(w), ch = Math.round(h);
-	if (!(cw > 0 && ch > 0)) return "";
-	const ratio = pixelRatio(dpr);
-	return render(keyOf("cover", spec, cw, ch, ratio), cw, ch, ratio, (ctx) => drawCover(ctx, cw, ch, spec));
+	return decoration("cover", "", () => {
+		if (!(cw > 0 && ch > 0)) return "";
+		const ratio = pixelRatio(dpr);
+		return render(keyOf("cover", spec, cw, ch, ratio), cw, ch, ratio, (ctx) => drawCover(ctx, cw, ch, spec));
+	});
 }
 
 /**
@@ -350,7 +398,9 @@ export function coverImage(spec: ArtSpec, w: number, h: number, dpr?: number): s
  */
 export function emptyStateImage(spec: ArtSpec, w: number, h: number, dpr?: number): string {
 	const cw = Math.round(w), ch = Math.round(h);
-	if (!(cw > 0 && ch > 0) || !artEnabled()) return "";
-	const ratio = pixelRatio(dpr);
-	return render(keyOf("empty", spec, cw, ch, ratio), cw, ch, ratio, (ctx) => drawArtLayer(ctx, cw, ch, spec, EMPTY_LAYER));
+	return decoration("empty-state illustration", "", () => {
+		if (!(cw > 0 && ch > 0) || !artEnabled()) return "";
+		const ratio = pixelRatio(dpr);
+		return render(keyOf("empty", spec, cw, ch, ratio), cw, ch, ratio, (ctx) => drawArtLayer(ctx, cw, ch, spec, EMPTY_LAYER));
+	});
 }

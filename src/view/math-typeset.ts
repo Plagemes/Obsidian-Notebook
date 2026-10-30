@@ -173,7 +173,7 @@ export async function typesetEquation(latex: string, fontSize: number, inline: b
 		const pad = fontSize * PAD_EM;
 		const pw = w + 2 * pad, ph = h + 2 * pad;
 		const pxPerPt = Math.min(MAX_PX_PER_PT, Math.sqrt(MAX_PIXELS / (pw * ph)));
-		const canvas = activeDocument.createEl("canvas");
+		const canvas = createEl("canvas");
 		canvas.width = Math.max(1, Math.ceil(pw * pxPerPt));
 		canvas.height = Math.max(1, Math.ceil(ph * pxPerPt));
 		const ctx = canvas.getContext("2d", { willReadFrequently: true });

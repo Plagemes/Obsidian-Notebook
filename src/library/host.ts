@@ -85,7 +85,7 @@ export class NotebookLibraryHost implements LibraryHost {
 			loadPdfJs: () => loadPdfJs() as Promise<PdfLib>,
 			readAsset: (id) => this.readAsset(id),
 			createCanvas: (w, h) => {
-				const c = activeDocument.createEl("canvas");
+				const c = createEl("canvas");
 				c.width = w;
 				c.height = h;
 				return c;

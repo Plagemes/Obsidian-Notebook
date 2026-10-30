@@ -156,7 +156,7 @@ class CameraModal extends Modal {
 			const k = DETECT_WIDTH / v.videoWidth;
 			const w = DETECT_WIDTH;
 			const h = Math.max(1, Math.round(v.videoHeight * k));
-			if (!this.probe) this.probe = activeDocument.createEl("canvas");
+			if (!this.probe) this.probe = createEl("canvas");
 			this.probe.width = w;
 			this.probe.height = h;
 			const pctx = this.probe.getContext("2d", { willReadFrequently: true });
@@ -204,7 +204,7 @@ class CameraModal extends Modal {
 		this.shutterBtn.disabled = true;
 		try {
 			const size = safeSize(v.videoWidth, v.videoHeight);
-			const canvas = activeDocument.createEl("canvas");
+			const canvas = createEl("canvas");
 			canvas.width = size.width;
 			canvas.height = size.height;
 			const ctx = canvas.getContext("2d");

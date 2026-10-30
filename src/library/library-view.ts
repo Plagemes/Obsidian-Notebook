@@ -20,7 +20,8 @@ import { showNotice } from "../view/notice";
 import { colorFor, SUBJECT_COLORS } from "../ui/palette";
 import { artImage, artStyleFor, coverImage, emptyStateImage, folderIconSvg, type ArtStyle } from "../ui/art/generative-art";
 import type { FolderMeta } from "./folder-meta";
-import { iconButton, svgDataUrl } from "../ui/components/dom";
+import { decorate, iconButton, svgDataUrl } from "../ui/components/dom";
+import { drawSafely } from "../ui/components/error-card";
 import { filterChips, type FilterChip } from "../ui/components/chip";
 import { createTile, type CreateTileOptions } from "../ui/components/create-tile";
 import { emptyState, type EmptyStateAction, type EmptyStateOptions } from "../ui/components/empty-state";
@@ -853,9 +854,11 @@ export class LibraryView extends ItemView {
 		const focus = active instanceof HTMLElement && this.contentEl.contains(active) ? active.dataset.key : undefined;
 		const tree = this.tree();
 		this.applyLayout();
-		this.renderRail(tree);
-		this.renderHeader();
-		this.renderContent(tree);
+		// 0.12.3: the rail, the header and the content are drawn on their own: one that throws shows an error card (message
+		// and first stack frame) in its place, and the others are still drawn (the device's console cannot be read).
+		drawSafely(this.railEl, "the library's rail", t("ui.part.rail"), () => this.renderRail(tree));
+		drawSafely(this.toolsEl, "the library's header", t("ui.part.header"), () => this.renderHeader());
+		drawSafely(this.gridEl, "the library's content", t("ui.part.page"), () => this.renderContent(tree));
 		if (focus) {
 			for (const el of Array.from(this.contentEl.querySelectorAll<HTMLElement>("[data-key]"))) {
 				if (el.dataset.key === focus) {
@@ -970,8 +973,10 @@ export class LibraryView extends ItemView {
 	/** Decoration (DESIGN.md §2.6): a cached generated artwork, or undefined when effects are reduced. */
 	private art(seed: string, color: string, w: number, h: number): string | undefined {
 		if (!this.artOn()) return undefined;
-		const surface = activeDocument.body.hasClass("theme-light") ? "light" : "dark";
-		return artImage({ seed, color, surface }, w, h, Math.min(2, activeWindow.devicePixelRatio || 1)) || undefined;
+		return decorate(undefined, () => {
+			const surface = activeDocument.body.hasClass("theme-light") ? "light" : "dark";
+			return artImage({ seed, color, surface }, w, h, Math.min(2, activeWindow.devicePixelRatio || 1)) || undefined;
+		});
 	}
 
 	private subjectCardOptions(s: Subject, shape: "row" | "tile"): SubjectCardOptions {
@@ -1048,11 +1053,7 @@ export class LibraryView extends ItemView {
 		el.empty();
 		const top = el.createDiv({ cls: "nb-rail-top" });
 		railBrand(top, t("nav.brand"), t("nav.brandSub"));
-		// 0.12.2: creation from anywhere in the view (DESIGN.md §5): the header's New menu; on phone a choice closes the sheet.
-		newButton(top, {
-			label: t("lib.new"), tip: t("lib.new.tip"), compact: true, key: "nav:new", cls: "nb-rail-new",
-			onOpen: (b) => this.newMenu(b, () => this.setRailOpen(false)),
-		});
+		// 0.12.3: no + in the rail: creation is the header's + New and Home's quick actions (DESIGN.md §3, §5, home.png).
 		if (this.mode === "phone") iconButton(top, "x", t("library.sidebar.close"), () => this.setRailOpen(false), "nb-rail-close");
 		else if (this.mode === "wide") {
 			iconButton(top, this.railFolded ? "panel-left-open" : "panel-left-close", t("library.sidebar.toggle"), () => {
@@ -1094,7 +1095,7 @@ export class LibraryView extends ItemView {
 			railItem(row, {
 				key: `folder:${node.path}`,
 				icon: open && hasChildren ? "folder-open" : "folder",
-				image: color ? svgDataUrl(folderIconSvg(color, 24)) : undefined,
+				image: color ? decorate("", () => svgDataUrl(folderIconSvg(color, 24))) || undefined : undefined,
 				color: color ?? undefined,
 				label: node.path === this.root() ? this.rootLabel() : node.name,
 				count: counts.get(node.path) ?? 0,
@@ -1152,10 +1153,6 @@ export class LibraryView extends ItemView {
 	private renderHeader(): void {
 		const { title, subtitle } = this.placeTitle();
 		this.pageTitleEl.setText(title);
-		// Decoration: a faint band of generated art behind the header (quiet, never a control).
-		const headerArt = this.art(this.place === "home" ? "notebook-home" : "notebook-library", paletteColor("Indigo"), 640, 140);
-		this.headerArtEl.toggleClass("is-hidden", !headerArt);
-		if (headerArt) this.headerArtEl.setCssProps({ "--nb-art": `url("${headerArt}")` });
 		this.subtitleEl.empty();
 		const p = this.place;
 		if (isFolderPlace(p)) {
@@ -1199,6 +1196,10 @@ export class LibraryView extends ItemView {
 		}
 		// 0.12.2: the primary + New, on Home and in the library alike (DESIGN.md §5: creation is always reachable).
 		newButton(tools, { label: t("lib.new"), tip: t("lib.new.tip"), key: "header:new", onOpen: (b) => this.newMenu(b) });
+		// Decoration, drawn last so it can never keep the controls away: a faint band of generated art behind the header.
+		const headerArt = this.art(this.place === "home" ? "notebook-home" : "notebook-library", paletteColor("Indigo"), 640, 140);
+		this.headerArtEl.toggleClass("is-hidden", !headerArt);
+		if (headerArt) this.headerArtEl.setCssProps({ "--nb-art": `url("${headerArt}")` });
 	}
 
 	private showMenu(menu: Menu, anchor: HTMLElement): void {
@@ -1252,14 +1253,11 @@ export class LibraryView extends ItemView {
 		else this.runCreate("new-folder");
 	}
 
-	/** The New menu (header + New, the rail's +): `picked` runs first when an item is chosen (the rail closes its sheet). */
-	private newMenu(anchor: HTMLElement, picked?: () => void): void {
+	/** The New menu of the header's + New. */
+	private newMenu(anchor: HTMLElement): void {
 		const folder = this.currentFolder();
 		const menu = new Menu();
-		const item = (title: string, icon: string, run: () => void) => menu.addItem((i) => i.setTitle(title).setIcon(icon).onClick(() => {
-			picked?.();
-			run();
-		}));
+		const item = (title: string, icon: string, run: () => void) => menu.addItem((i) => i.setTitle(title).setIcon(icon).onClick(run));
 		item(t("library.action.newNotebook"), "file-plus", () => this.newNotebook());
 		item(t("library.action.newFolder"), "folder-plus", () => this.newFolder());
 		item(t("library.action.importPdf"), "file-up", () => this.host.importPdf(folder));
@@ -1275,8 +1273,10 @@ export class LibraryView extends ItemView {
 	/** Decoration (DESIGN.md §2.6): the art engine's empty-state illustration, or undefined when effects are reduced. */
 	private emptyArt(seed: string): string | undefined {
 		if (!this.artOn()) return undefined;
-		const surface = activeDocument.body.hasClass("theme-light") ? "light" : "dark";
-		return emptyStateImage({ seed, color: paletteColor("Indigo"), surface }, 280, 150, Math.min(2, activeWindow.devicePixelRatio || 1)) || undefined;
+		return decorate(undefined, () => {
+			const surface = activeDocument.body.hasClass("theme-light") ? "light" : "dark";
+			return emptyStateImage({ seed, color: paletteColor("Indigo"), surface }, 280, 150, Math.min(2, activeWindow.devicePixelRatio || 1)) || undefined;
+		});
 	}
 
 	/** 0.12.2: the empty state of a vault with no notebooks yet: what a notebook is, and the first step (DESIGN.md §5). */
@@ -1711,8 +1711,10 @@ export class LibraryView extends ItemView {
 			const file = this.app.vault.getFileByPath(art.path);
 			return file ? this.app.vault.getResourcePath(file) : null;
 		}
-		const surface = activeDocument.body.hasClass("theme-light") ? "light" : "dark";
-		return coverImage({ seed: art.seed, color: entry.cover, style: art.style, surface }, 150, 200, Math.min(2, activeWindow.devicePixelRatio || 1)) || null;
+		return decorate(null, () => {
+			const surface = activeDocument.body.hasClass("theme-light") ? "light" : "dark";
+			return coverImage({ seed: art.seed, color: entry.cover, style: art.style, surface }, 150, 200, Math.min(2, activeWindow.devicePixelRatio || 1)) || null;
+		});
 	}
 
 	private notebookCard(grid: HTMLElement, entry: LibraryEntry, now: number, hit?: SearchHit): void {

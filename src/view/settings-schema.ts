@@ -94,7 +94,7 @@ export const GROUPS: readonly GroupSpec[] = [
 /** Runs of the action rows; the tab maps each id to what it does. */
 export type SettingActionId = "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom";
 /** Rows drawn by the tab itself (no stored setting of their own). */
-export type SettingCustomId = "device-name" | "pen-key";
+export type SettingCustomId = "device-name" | "pen-key" | "device-info";
 
 export type ControlSpec =
 	| { type: "toggle" }
@@ -334,6 +334,8 @@ const DIAGNOSTICS: SettingSpec[] = [
 	{ id: "penTest", section: "diagnostics", order: 10, name: "settings.penTest", desc: "settings.penTest.desc", control: { type: "action", run: "pen-test", button: "settings.open" } },
 	{ id: "benchmark", section: "diagnostics", order: 20, name: "command.benchmark", desc: "settings.benchmark.desc", control: { type: "action", run: "benchmark", button: "settings.open" } },
 	{ id: "perfOverlay", section: "diagnostics", order: 30, name: "settings.perfOverlay", desc: "settings.perfOverlay.desc", control: { type: "toggle" } },
+	// 0.12.3: what a bug report needs (the WebView's Chrome version, Obsidian's version, the platform), read-only.
+	{ id: "deviceInfo", section: "diagnostics", order: 40, name: "settings.deviceInfo", desc: "settings.deviceInfo.desc", control: { type: "custom", render: "device-info" }, keywords: "webview chrome version android user agent" },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════

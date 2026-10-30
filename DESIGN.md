@@ -114,7 +114,7 @@ Each component lives in the plugin as one reusable builder, for example `ui/comp
 | Component | Anatomy (from the reference) | Behaviour |
 |---|---|---|
 | **Page header** | Large title + muted subtitle on the left. On the right: search pill, circular icon buttons (filter, sort, view toggle; the active one gets an accent fill), and last the primary **+ New** pill | The search pill searches the current surface. The `⌘K` / `Ctrl K` hint is shown only on desktop |
-| **New button** | Accent pill: plus icon + "Nuovo" / "New" (`ui/components/new-button.ts`); a compact round "+" in the rail next to the brand | Opens the New menu: New notebook, New folder, Import PDF, Scan (when available) and the other creation actions. On every surface that lists notebooks, empty or not |
+| **New button** | Accent pill: plus icon + "Nuovo" / "New" (`ui/components/new-button.ts`), last in the page header's row, aligned with the search pill and the bell. Not in the rail (0.12.3) | Opens the New menu: New notebook, New folder, Import PDF, Scan (when available) and the other creation actions. On every surface that lists notebooks, empty or not |
 | **Empty state** | Panel with a centred illustration from the art engine (`emptyStateImage`; an icon square with reduced effects), a title ("Inizia il tuo primo quaderno"), one line of explanation, a primary accent button and secondary pill buttons (`ui/components/empty-state.ts`) | Teaches the next step. Buttons only for things that can be created there |
 | **Create tile** | Dashed rounded tile the size of a card: icon square, title ("Crea una cartella"), one line (`ui/components/create-tile.ts`) | Stands in for the cards of a section that has none (subject folders); runs the creation it names |
 | **Search pill** | Fully rounded, `--nb-panel`, magnifier icon, placeholder ("Cerca quaderni, tag, contenuti…"), keyboard-hint chip | Live filtering, results grouped by type |
@@ -149,7 +149,7 @@ The bell is kept because it has a real job: it is the inbox. A new control appea
 - subtle pattern bands in headers;
 - decorative icons in icon squares.
 
-They use the same palette and art engine (§2.3, §2.6).
+They use the same palette and art engine (§2.3, §2.6). **Decoration never breaks a layout** (0.12.3): a picture that cannot be made is simply left out (the art engine and `decorate()` in `ui/components/dom.ts` guard it), and it is drawn after the controls it sits behind. A part of a surface that still fails shows the error card (`ui/components/error-card.ts`) in its place, never a blank area.
 
 ## 4. Surfaces mapped to the reference
 
@@ -196,7 +196,7 @@ They use the same palette and art engine (§2.3, §2.6).
   - options for features not in use are collapsed;
   - each section shows its most-used options first, with an *Advanced* group collapsed;
   - a search box filters every setting.
-- **Style:** the same tokens and components (section header, panels, chips, pill inputs).
+- **Style:** the same components (section header, grouped rows, pill inputs), but on Obsidian's own surfaces and colours: the tab lives inside Obsidian's settings modal, so its sections are transparent with a subtle `--background-modifier-border` frame and no band behind the search (0.12.3).
 - **Defaults** are right for a new user on an Android tablet with a pen. A new setting does not change behaviour for existing users unless that is the point of the change.
 - **Wording:** a short name in sentence case and at most one line of description, in English and Italian.
 

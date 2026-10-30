@@ -25,6 +25,8 @@ body {
 	--interactive-accent: #7c3aed;
 	--text-on-accent: #ffffff;
 	--text-error: #e93147;
+	--text-accent: #8a5cf5;
+	--font-monospace: ui-monospace, "Cascadia Mono", Consolas, monospace;
 	--text-highlight-bg: rgba(255, 208, 0, 0.4);
 	background: var(--background-primary);
 	color: var(--text-normal);
@@ -214,6 +216,9 @@ input[type=number]:where(:not(:disabled)):hover {
 	overflow: auto;
 	padding: 16px;
 	box-sizing: border-box;
+	/* 0.12.3: Obsidian's settings modal content surface (.vertical-tab-content), which the tab must look native on. */
+	background-color: var(--background-primary);
+	color: var(--text-normal);
 }
 
 .harness-settings .setting-item {
@@ -239,7 +244,7 @@ input[type=number]:where(:not(:disabled)):hover {
 	width: 42px;
 	height: 24px;
 	border-radius: 12px;
-	background-color: var(--nb-border-strong);
+	background-color: var(--background-modifier-border);
 	cursor: pointer;
 }
 

@@ -78,7 +78,8 @@ let measureCtx: CanvasRenderingContext2D | null = null;
 
 /** Text width in pt with the on-screen font (a canvas context shared by everything that lays text out). */
 export const measureText: MeasureText = (s, fontSize) => {
-	measureCtx ??= activeDocument.createEl("canvas").getContext("2d");
+	// A detached canvas (0.12.3): `createEl` on a Document appends to the document itself and throws.
+	measureCtx ??= createEl("canvas").getContext("2d");
 	if (!measureCtx) return Array.from(s).length * fontSize * 0.55;
 	measureCtx.font = `${fontSize}px ${TEXT_FONT}`;
 	return measureCtx.measureText(s).width;

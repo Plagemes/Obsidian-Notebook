@@ -21,7 +21,7 @@ interface Source {
 }
 
 function newCanvas(w: number, h: number): DecodedPhoto {
-	const canvas = activeDocument.createEl("canvas");
+	const canvas = createEl("canvas");
 	canvas.width = w;
 	canvas.height = h;
 	const ctx = canvas.getContext("2d", { willReadFrequently: true });

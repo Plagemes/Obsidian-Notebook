@@ -6,6 +6,7 @@
 import { t } from "../i18n";
 import { chip } from "../ui/components/chip";
 import { createTile, type CreateTileOptions } from "../ui/components/create-tile";
+import { drawSafely } from "../ui/components/error-card";
 import { favouriteRow, type FavouriteRowOptions } from "../ui/components/favourite-row";
 import { listRow, type ListRowOptions } from "../ui/components/list-row";
 import { quickAction, type QuickActionOptions } from "../ui/components/quick-action";
@@ -44,38 +45,48 @@ export function renderTagChips(parent: HTMLElement, tags: readonly TagChip[]): H
 }
 
 export function renderLibrarySections(el: HTMLElement, h: LibrarySectionsHost): void {
+	// 0.12.3: each section on its own: one that throws shows an error card in its place and the others are still drawn.
+	const part = (name: string, label: string, draw: () => void) => drawSafely(el, `Library: the ${name} section`, label, draw);
 	// Subject folders can be created: with none yet, a dashed tile takes the place of the cards (DESIGN.md §5).
-	{
+	part("subjects", t("home.subjects"), () => {
 		const sec = el.createEl("section", { cls: "nb-section nb-lib-subjects" });
 		sectionHeader(sec, { icon: "folder", title: t("home.subjects"), link: h.moreSubjects ? { label: t("home.showAll"), onClick: h.moreSubjects } : undefined });
 		const grid = sec.createDiv({ cls: "nb-subject-grid is-tiles" });
 		if (h.subjects.length === 0) createTile(grid, h.createSubject);
 		for (const s of h.subjects) subjectCard(grid, s);
-	}
+	});
 	if (h.collections.length > 0) {
-		const sec = el.createEl("section", { cls: "nb-section nb-lib-collections" });
-		sectionHeader(sec, { icon: "layers", title: t("lib.collections") });
-		const grid = sec.createDiv({ cls: "nb-collection-grid" });
-		for (const c of h.collections) quickAction(grid, c).addClass("is-collection");
+		part("collections", t("lib.collections"), () => {
+			const sec = el.createEl("section", { cls: "nb-section nb-lib-collections" });
+			sectionHeader(sec, { icon: "layers", title: t("lib.collections") });
+			const grid = sec.createDiv({ cls: "nb-collection-grid" });
+			for (const c of h.collections) quickAction(grid, c).addClass("is-collection");
+		});
 	}
 	if (h.tags.length > 0) {
-		const sec = el.createEl("section", { cls: "nb-section nb-lib-tags" });
-		sectionHeader(sec, { icon: "tag", title: t("lib.tags"), link: h.moreTags ? { label: t("lib.showAll"), onClick: h.moreTags } : undefined });
-		renderTagChips(sec, h.tags);
+		part("tags", t("lib.tags"), () => {
+			const sec = el.createEl("section", { cls: "nb-section nb-lib-tags" });
+			sectionHeader(sec, { icon: "tag", title: t("lib.tags"), link: h.moreTags ? { label: t("lib.showAll"), onClick: h.moreTags } : undefined });
+			renderTagChips(sec, h.tags);
+		});
 	}
 	if (h.recent.length > 0 || h.favourites.length > 0) {
 		const row = el.createDiv({ cls: "nb-lib-lists" });
 		if (h.recent.length > 0) {
-			const panel = row.createEl("section", { cls: "nb-panel nb-lib-recent" });
-			sectionHeader(panel, { icon: "file-text", title: t("lib.recent"), link: h.moreRecent ? { label: t("lib.showAll"), onClick: h.moreRecent } : undefined });
-			const list = panel.createDiv({ cls: "nb-list" });
-			for (const r of h.recent) listRow(list, r);
+			part("recent", t("lib.recent"), () => {
+				const panel = row.createEl("section", { cls: "nb-panel nb-lib-recent" });
+				sectionHeader(panel, { icon: "file-text", title: t("lib.recent"), link: h.moreRecent ? { label: t("lib.showAll"), onClick: h.moreRecent } : undefined });
+				const list = panel.createDiv({ cls: "nb-list" });
+				for (const r of h.recent) listRow(list, r);
+			});
 		}
 		if (h.favourites.length > 0) {
-			const panel = row.createEl("section", { cls: "nb-panel nb-lib-favourites" });
-			sectionHeader(panel, { icon: "star", title: t("lib.favourites"), link: h.moreFavourites ? { label: t("lib.showAll"), onClick: h.moreFavourites } : undefined });
-			const list = panel.createDiv({ cls: "nb-list" });
-			for (const f of h.favourites) favouriteRow(list, f);
+			part("favourites", t("lib.favourites"), () => {
+				const panel = row.createEl("section", { cls: "nb-panel nb-lib-favourites" });
+				sectionHeader(panel, { icon: "star", title: t("lib.favourites"), link: h.moreFavourites ? { label: t("lib.showAll"), onClick: h.moreFavourites } : undefined });
+				const list = panel.createDiv({ cls: "nb-list" });
+				for (const f of h.favourites) favouriteRow(list, f);
+			});
 		}
 	}
 }

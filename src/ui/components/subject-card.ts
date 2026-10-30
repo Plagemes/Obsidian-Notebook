@@ -1,7 +1,7 @@
 // The subject card (DESIGN.md §3): ONE component for every surface that shows a folder as a subject — the library
 // grid, Home and the creation dialog's folder preview — so the preview is exactly the card the folder will get.
 import { artImage, folderIconSvg, type ArtStyle } from "../art/generative-art";
-import { pressable, setIconSafe, subjectVars, svgDataUrl } from "./dom";
+import { decorate, pressable, setIconSafe, subjectVars, svgDataUrl } from "./dom";
 
 export interface SubjectCardOptions {
 	name: string;
@@ -38,16 +38,21 @@ export function subjectCard(parent: HTMLElement, o: SubjectCardOptions): HTMLEle
 	const label = [o.name, ...o.lines].join(", ");
 	if (o.onOpen) pressable(card, o.onOpen, label);
 	else card.setAttrs({ role: "img", "aria-label": label });
+	// 0.12.3: the art and the folder picture are decoration: if they cannot be made the card is drawn without them.
 	if (o.art) {
 		const [w, h] = ART_SIZE[o.shape];
-		const surface = activeDocument.body.hasClass("theme-light") ? "light" : "dark";
-		const url = artImage({ seed: o.seed, color: o.color, style: o.artStyle, surface }, w, h, Math.min(2, activeWindow.devicePixelRatio || 1));
+		const url = decorate("", () => {
+			const surface = activeDocument.body.hasClass("theme-light") ? "light" : "dark";
+			return artImage({ seed: o.seed, color: o.color, style: o.artStyle, surface }, w, h, Math.min(2, activeWindow.devicePixelRatio || 1));
+		});
 		if (url) card.createDiv({ cls: "nb-subject-art", attr: { "aria-hidden": "true" } }).setCssProps({ "--nb-art": `url("${url}")` });
 	}
 	// The folder SVG is shown as an image (never parsed into the page); the symbol sits on the folder's front.
 	const glyph = o.icon && o.icon !== "folder" ? o.icon : null;
 	const iconHost = glyph ? card.createDiv({ cls: "nb-folder-badge", attr: { "aria-hidden": "true" } }) : card;
-	iconHost.createEl("img", { cls: "nb-folder-icon", attr: { src: svgDataUrl(folderIconSvg(o.color, 64)), alt: "", draggable: "false" } });
+	const folder = decorate("", () => svgDataUrl(folderIconSvg(o.color, 64)));
+	if (folder) iconHost.createEl("img", { cls: "nb-folder-icon", attr: { src: folder, alt: "", draggable: "false" } });
+	else setIconSafe(iconHost.createSpan({ cls: "nb-folder-icon nb-folder-icon-plain" }), "folder");
 	if (glyph) setIconSafe(iconHost.createSpan({ cls: "nb-folder-glyph" }), glyph);
 	const text = card.createDiv({ cls: "nb-subject-text" });
 	text.createDiv({ cls: "nb-subject-title", text: o.name, attr: { title: o.name } });

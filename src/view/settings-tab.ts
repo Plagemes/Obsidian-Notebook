@@ -10,6 +10,7 @@ import { zettelService } from "../zettel";
 import { gestureKeyId } from "./pen-gesture-settings";
 import { CustomGesturesModal, GestureCheatSheet, setGestureEnabled, type PenGestureUiHost } from "./pen-gesture-ui";
 import { deviceNameRow, type SyncSafetyService } from "./sync-safety";
+import { renderDeviceInfo } from "./device-info";
 import {
 	ADVANCED, groupKey, groupSpec, SECTIONS, sectionGroups, settingSpecs, settingsView, translations,
 	type SectionSpec, type SettingActionId, type SettingCustomId, type SettingsContext, type SettingSpec, type SettingsView,
@@ -190,6 +191,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 
 	private renderCustom(id: SettingCustomId, setting: Setting): void {
 		if (id === "device-name" && this.host.syncSafety) deviceNameRow(setting, this.host.syncSafety);
+		if (id === "device-info") renderDeviceInfo(setting);
 		if (id === "pen-key") {
 			this.stopPenKey();
 			const host = { get: () => this.host.settings, set: (key: string, value: unknown) => this.setControlValue(key, value) };

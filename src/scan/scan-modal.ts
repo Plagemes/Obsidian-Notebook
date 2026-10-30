@@ -35,7 +35,7 @@ function nextFrame(): Promise<void> {
 }
 
 function newCanvas(w: number, h: number): HTMLCanvasElement {
-	const c = activeDocument.createEl("canvas");
+	const c = createEl("canvas");
 	c.width = w;
 	c.height = h;
 	return c;
