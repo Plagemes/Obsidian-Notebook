@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Navigation** (wave 0.6)
+  - **One page at a time** (#14): setting *Scrolling* (*Continuous (vertical)* or *One page at a time*), a toggle *One page at a time* in the toolbar "…" menu and the command *Toggle one page at a time*. In that mode the pages sit side by side and each one is fitted to the view width; a sideways finger swipe (one or two fingers, or a trackpad / Shift+wheel) drags the page along and turns to the next or previous one when it went past about a fifth of the width or was flicked, then the page snaps into place with a short animation (none with reduced motion). A vertical drag scrolls inside a tall page; zoomed in, you pan inside the page and a long push past its edge turns it. Pinch zoom still works. The pen never turns the page (it draws), and the fling after a swipe does not move the page. *Next page* / *Previous page* (commands) animate; the page panel jumps. No change to the file format, the writing pipeline or the ink.
+  - **Reopen where you left off** (O16): the workspace state now also keeps the zoom and the scroll position (relative to the fit-to-width zoom and to the page, so they survive rotation or a different pane size), and *Continue last notebook* restores them too (stored in the plugin settings, written at most every few seconds when only the position changed). Nothing is written into the notebook file. A link to a page (`#p3`) still opens that page fitted.
+  - **Progressive loading of large notebooks** (#329): a notebook over about 2 MB opens with the page you want shown first, read-only, while the other pages are read and validated in short slices (about 10 ms, nearest pages first) that leave input and painting free. Editing and saving start only when every page has been read and has passed the same validation as before; if a page turns out to be damaged the notebook is treated as an unreadable file (backup, never overwritten). Notebooks with edits in the instant-save journal are loaded in full first, as before. On a PC (`npm run bench:open`, headless Chrome, in-memory vault, not Android): 10,000 strokes on 10 pages, first painted page 207 ms → 150 ms; 100,000 strokes on 100 pages, 1771 ms → 1019 ms. Time until the notebook is complete and editable is about the same or a little longer (10,000: 145 ms plus the paint → 221 ms; 100,000: 1702 ms → 1922 ms) because the first paint now happens inside that window. The browser harness gets a scenario for each of the three features.
+
 ## 0.5.0 — 2026-10-29
 
 Not yet verified on Android hardware (see `docs/testing.md`).

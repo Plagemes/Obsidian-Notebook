@@ -573,8 +573,18 @@ export class NotebookView extends FileView {
 				busy: () => this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null
 					|| this.textEditor?.isOpen === true,
 				journal: this.host.journal,
-				// The first slice waits for the frame that paints the page just shown.
-				yieldTask: (fn, first) => (first ? void window.requestAnimationFrame(() => nextTask(fn)) : nextTask(fn)),
+				// The first slice waits for the frame that paints the page just shown (but not for long: no frames come while hidden).
+				yieldTask: (fn, first) => {
+					if (!first) return nextTask(fn);
+					let ran = false;
+					const go = (): void => {
+						if (ran) return;
+						ran = true;
+						nextTask(fn);
+					};
+					window.requestAnimationFrame(go);
+					window.setTimeout(go, 100);
+				},
 			},
 		);
 		this.session = session;

@@ -350,3 +350,62 @@ describe("DocumentSession staged load", () => {
 		s.dispose();
 	});
 });
+
+describe("DocumentSession staged load: robustness", () => {
+	beforeEach(() => vi.useFakeTimers());
+	afterEach(() => vi.useRealTimers());
+
+	it("a close that comes before the first slice, even before the file is read, is not forgotten", async () => {
+		const io = new FakeIO(bigText());
+		const loaded: string[] = [];
+		const s = new DocumentSession(io, timers, { onLoaded: (_d, mode) => loaded.push(mode) });
+		const loading = s.load({ staged: true, page: 1 });
+		const closed = s.flushForClose(); // the load has not even started reading
+		await vi.runAllTimersAsync();
+		expect(await closed).toBe(true);
+		await loading;
+		expect(loaded).toHaveLength(0);
+		expect(s.doc).toBeNull();
+		expect(io.writes).toHaveLength(0);
+		s.dispose();
+	});
+
+	it("a view callback that throws does not leave the load hanging", async () => {
+		const io = new FakeIO(bigText());
+		const errors: string[] = [];
+		const loaded: string[] = [];
+		const s = new DocumentSession(io, timers, {
+			onPartial: () => {
+				throw new Error("view broke");
+			},
+			onPartialProgress: () => {
+				throw new Error("view broke again");
+			},
+			onLoaded: (_d, mode) => loaded.push(mode),
+			onError: (m) => errors.push(m),
+		});
+		const loading = s.load({ staged: true, page: 2 });
+		await vi.runAllTimersAsync();
+		await loading;
+		expect(loaded).toEqual(["ok"]);
+		expect(s.mode).toBe("ok");
+		expect(errors.length).toBeGreaterThan(0);
+		s.dispose();
+	});
+
+	it("staging is only for the first load: a reload of an open session is parsed completely", async () => {
+		const text = bigText();
+		const io = new FakeIO(text);
+		const partials: unknown[] = [];
+		const s = new DocumentSession(io, timers, { onPartial: (d) => partials.push(d) });
+		const first = s.load({ staged: true, page: 1 });
+		await vi.runAllTimersAsync();
+		await first;
+		expect(partials).toHaveLength(1);
+		const again = s.load({ staged: true, page: 1 });
+		await vi.runAllTimersAsync();
+		await again;
+		expect(partials).toHaveLength(1);
+		s.dispose();
+	});
+});

@@ -276,6 +276,8 @@ export class DocumentSession {
 	}
 
 	load(options: LoadOptions = {}): Promise<void> {
+		// Set here, not when the slices start: a close that comes while the file is still being read must not be forgotten.
+		this.stagedAborted = false;
 		return this.enqueue(async () => {
 			const content = await this.io.read();
 			await this.applyDiskContent(content, true, options);
@@ -382,27 +384,38 @@ export class DocumentSession {
 	 */
 	private runStaged(staged: StagedParse): Promise<ParseResult | null> {
 		this.partialDoc = staged.doc;
-		this.stagedAborted = false;
-		this.events.onPartial?.(staged.doc);
 		return new Promise((resolve) => {
 			const done = (r: ParseResult | null): void => {
 				this.partialDoc = null;
 				resolve(r);
+			};
+			// A view callback that throws must not leave the load hanging (the whole session queue waits behind it).
+			const notify = (fn: () => void): void => {
+				try {
+					fn();
+				} catch (e) {
+					this.events.onError?.(`Showing the notebook while it loads failed: ${(e as Error).message}`);
+				}
 			};
 			const tick = (): void => {
 				if (this.disposed || this.stagedAborted) {
 					done(null);
 					return;
 				}
-				const r = staged.step(STAGED_SLICE_MS);
-				if (!r.ok) {
-					done(r.failure);
-					return;
+				try {
+					const r = staged.step(STAGED_SLICE_MS);
+					if (!r.ok) {
+						done(r.failure);
+						return;
+					}
+					if (r.changed.length > 0) notify(() => this.events.onPartialProgress?.(r.changed));
+					if (r.done) done({ ok: true, doc: staged.doc, migratedFrom: null });
+					else this.yieldTask(tick, false);
+				} catch (e) {
+					done({ ok: false, reason: "invalid", message: `unexpected error while reading the notebook: ${(e as Error).message}` });
 				}
-				if (r.changed.length > 0) this.events.onPartialProgress?.(r.changed);
-				if (r.done) done({ ok: true, doc: staged.doc, migratedFrom: null });
-				else this.yieldTask(tick, false);
 			};
+			notify(() => this.events.onPartial?.(staged.doc));
 			this.yieldTask(tick, true);
 		});
 	}
@@ -429,11 +442,11 @@ export class DocumentSession {
 		this.journaledRevision = -1;
 		let recoveredAt: string | null = null;
 		let result: ParseResult;
-		const parsed = initialLoad && options.staged ? parseStaged(content, options.page ?? null) : parse(content);
+		const parsed = initialLoad && options.staged && this.mode === "loading" ? parseStaged(content, options.page ?? null) : parse(content);
 		if (parsed instanceof StagedParse) {
 			// Edits left in the journal are merged into the complete document, so those loads are not staged.
 			const staged = (await this.hasJournalFor(parsed.doc.id)) ? null : parsed;
-			if (this.disposed) return;
+			if (this.disposed || this.stagedAborted) return;
 			const finished = staged ? await this.runStaged(staged) : parsed.finish();
 			if (finished === null) return; // the session was closed meanwhile
 			result = finished;
