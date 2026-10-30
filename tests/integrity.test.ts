@@ -263,8 +263,20 @@ describe("check of a notebook (command Check notebooks integrity)", () => {
 	});
 
 	it("reports missing asset files and asset files of the wrong size", () => {
-		const r = checkNotebookText(withAssets(), { assetFile: (a) => (a.kind === "pdf" ? null : { size: 12 }) });
+		const r = checkNotebookText(withAssets(), { assetFile: (a) => (a.kind === "pdf" ? null : { size: a.bytes + 12 }) });
 		expect(r.issues).toEqual([{ kind: "missing-asset", detail: "Slides.pdf" }, { kind: "damaged-asset", detail: "Photo.png" }]);
+	});
+
+	it("review: an empty or smaller asset file is still arriving, not damaged", () => {
+		const small = checkNotebookText(withAssets(), { assetFile: (a) => ({ size: a.kind === "pdf" ? 0 : Math.max(1, a.bytes - 1) }) });
+		expect(small.issues).toEqual([{ kind: "waiting-asset", detail: "Slides.pdf" }, { kind: "waiting-asset", detail: "Photo.png" }]);
+	});
+
+	it("review: a 0-byte or NUL-filled notebook is reported as not downloaded, not as unreadable", () => {
+		for (const text of ["", "\0".repeat(64), "  \n"]) {
+			const r = checkNotebookText(text, { assetFile: () => null });
+			expect(r.issues).toEqual([{ kind: "not-downloaded" }]);
+		}
 	});
 
 	it("reports unreadable and newer-version files with the parse message", () => {

@@ -85,10 +85,12 @@ describe("#344 not downloaded yet", () => {
 		const io = new FakeIO(serialize(sampleDocument(1)));
 		const s = new DocumentSession(io, timers);
 		await s.load();
+		const before = io.content;
 		io.content = "";
 		expect(await s.handleExternalChange()).toBe("reloaded");
 		expect(s.mode).toBe("not-downloaded");
-		expect(io.backups).toHaveLength(0);
+		// The version that was open is kept as a backup before it leaves memory (review fix).
+		expect(io.backups).toEqual([{ content: before, reason: "integrity" }]);
 	});
 
 	it("a save over a NUL placeholder does not back the placeholder up as a conflict", async () => {
@@ -104,7 +106,7 @@ describe("#344 not downloaded yet", () => {
 	});
 
 	it("real damage is still broken and backed up", async () => {
-		const io = new FakeIO("{\"format\": \"obsidian-notebook\", ");
+		const io = new FakeIO("{\"format\": \"obsidian-notebook\", ]");
 		const s = new DocumentSession(io, timers);
 		await s.load();
 		expect(s.mode).toBe("broken");

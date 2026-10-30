@@ -944,7 +944,9 @@ describe("journal review fixes", () => {
 		const events = { onRecovered: vi.fn() };
 		const second = open(io, journal, events);
 		await second.load();
-		expect(second.mode).toBe("broken");
+		// Cut off at the end: taken as still arriving (sync safety); the journal is evidence that it may be damage.
+		expect(second.mode).toBe("not-downloaded");
+		expect(second.awaiting).toMatchObject({ kind: "partial", damaged: true, kept: false });
 		expect(journal.under(first.doc!.id, io.filePath)).toHaveLength(1);
 
 		// Sync brings back the complete file.

@@ -90,6 +90,26 @@ export function assessAfterFailure(before: string, attempted: string, after: str
 	return "torn";
 }
 
+/**
+ * Whether `after` (the file read back) can be the remains of OUR write of `attempted`: empty, only NUL bytes or
+ * whitespace, or a strict prefix of what was written (optionally followed by NUL bytes). Anything else is someone else's
+ * content (a sync client writing the file in place): it is never "repaired" over.
+ */
+export function isPartialOf(attempted: string, after: string): boolean {
+	if (after === attempted) return false;
+	if (/^[\s\0]*$/.test(after)) return true;
+	const core = after.replace(/\0+$/, "");
+	return core.length <= attempted.length && attempted.startsWith(core);
+}
+
+/** The file read back after a write holds neither what was written nor a part of it: another app is writing it. */
+export class ForeignWriteError extends Error {
+	constructor(message = "another app changed the file while it was being saved") {
+		super(message);
+		this.name = "ForeignWriteError";
+	}
+}
+
 /** Snapshot of the write health, for the view's warning. */
 export interface WriteHealthState {
 	/** At least one write in a row failed and no write has succeeded since. */

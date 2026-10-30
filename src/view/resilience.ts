@@ -11,7 +11,7 @@ import { Modal, normalizePath, Notice, TFile, type App, type Plugin } from "obsi
 import { t, type MessageKey } from "../i18n";
 import type { HistoryService } from "../integration/history-service";
 import { openNotebookAtPage } from "../integration/open";
-import { openRepair } from "../integration/reliability";
+import { describeMerge, openRepair } from "../integration/reliability";
 import type { Command } from "../model/history";
 import { planMerge } from "../model/merge";
 import { parse } from "../model/serialize";
@@ -25,7 +25,7 @@ import {
 import type { JournalStore } from "../storage/journal";
 import { listNotebooks } from "../storage/notebooks";
 import { markSafeOpen, SafeModeTracker, SETTLE_MS, unmarkSafeOpen, type LocalSlot, type OpenDecision } from "../storage/safe-mode";
-import type { DiskContentInfo, SessionMode } from "../storage/session";
+import type { DiskContentInfo, ExternalNewerInfo, SessionMode } from "../storage/session";
 import { AdapterSpaceProbe, pluginFolder, VaultDocumentIO } from "../storage/vault-io";
 import type { SpaceProbe, WriteHealthState } from "../storage/write-guard";
 import { resolveAssetFile } from "./media";
@@ -122,7 +122,7 @@ export interface ResilienceViewHost {
 	applyCommand(cmd: Command): boolean;
 }
 
-type BannerKind = "safe" | "storage" | "integrity";
+type BannerKind = "safe" | "storage" | "integrity" | "external";
 
 interface BannerAction {
 	label: string;
@@ -356,6 +356,8 @@ export class ViewResilience {
 		const lines: string[] = [];
 		if (verdict.kind === "rolled-back") {
 			lines.push(t("integrity.banner.rolledBack", { old: formatSnapshotDate(new Date(verdict.version.at)), last: formatSnapshotDate(new Date(verdict.lastWrite.at)) }));
+			// It may be a restore made on purpose on another device (by an older version of the plugin): no action is the default.
+			lines.push(t("integrity.banner.rolledBackHint"));
 		} else if (verdict.kind === "altered") {
 			lines.push(t("integrity.banner.altered", { last: formatSnapshotDate(new Date(verdict.lastWrite.at)) }));
 		} else return;
@@ -365,7 +367,8 @@ export class ViewResilience {
 		if (newer?.ok) {
 			actions.push({
 				label: t("integrity.banner.restoreNewer"),
-				cta: true,
+				// Review: never the primary action for "rolled back", which may be a deliberate restore elsewhere.
+				cta: verdict.kind === "altered",
 				run: () => {
 					const doc = this.host.editableDocument();
 					if (!doc) return void new Notice(t("merge.notEditable"));
@@ -378,7 +381,7 @@ export class ViewResilience {
 				},
 			});
 		}
-		actions.push({ label: t("integrity.restore"), cta: !newer?.ok, run: () => this.services.chooseVersion(file) });
+		actions.push({ label: t("integrity.restore"), cta: !newer?.ok && verdict.kind === "altered", run: () => this.services.chooseVersion(file) });
 		actions.push({
 			label: t("integrity.keep"),
 			run: () => {
@@ -387,6 +390,41 @@ export class ViewResilience {
 			},
 		});
 		this.renderBanner("integrity", "is-warning", t("integrity.banner.title"), lines, actions);
+	}
+
+	// --- #347 review: a newer version found after a failing streak ---
+
+	/**
+	 * Saving failed for a while and meanwhile a newer version was saved elsewhere: offer to merge it into the open notebook
+	 * (one undo step, as for conflicted copies) or to keep this version. Saving waits for the choice.
+	 */
+	externalNewer(info: ExternalNewerInfo): void {
+		const doc = this.host.editableDocument();
+		const plan = doc ? planMerge(doc, info.doc) : null;
+		const lines = [t("external.banner.body", { date: formatSnapshotDate(new Date(info.doc.modifiedAt)) })];
+		if (plan) lines.push(...describeMerge(plan.summary));
+		if (info.backup) lines.push(t("integrity.banner.kept", { path: info.backup }));
+		this.renderBanner("external", "is-warning", t("external.banner.title"), lines, [
+			{
+				label: t("external.banner.merge"),
+				cta: true,
+				run: () => {
+					const current = this.host.editableDocument();
+					if (!current) return void new Notice(t("merge.notEditable"));
+					const merge = planMerge(current, info.doc);
+					if (merge.command && !this.host.applyCommand(merge.command)) return;
+					this.removeBanner("external");
+					info.accept();
+				},
+			},
+			{
+				label: t("external.banner.keepMine"),
+				run: () => {
+					this.removeBanner("external");
+					info.accept();
+				},
+			},
+		]);
 	}
 
 	// --- banners ---
@@ -505,11 +543,13 @@ class IntegrityModal extends Modal {
 			this.close();
 			void openNotebookAtPage(this.app, r.file, null);
 		});
-		if (kinds.has("unreadable")) {
+		if (kinds.has("unreadable") || kinds.has("not-downloaded")) {
+			// An empty file is usually still to be downloaded: Repair asks first (and is not the primary action).
 			button(t("integrity.repair"), () => {
 				this.close();
-				void openRepair({ app: this.app, settings: this.plugin.settings, journal: this.plugin.journal }, r.file);
-			}, true);
+				void openRepair({ app: this.app, settings: this.plugin.settings, journal: this.plugin.journal }, r.file,
+					{ docId: this.services.ledger.records(r.file.path)[0]?.id ?? null });
+			}, kinds.has("unreadable"));
 		}
 		if (r.result.docId !== null && !kinds.has("future-version")) {
 			button(t("integrity.restore"), () => {
