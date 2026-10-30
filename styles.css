@@ -7,21 +7,82 @@
 	overflow: hidden;
 }
 
-/* Two rows (tools; history, current pen, favourites, page, status, more): one line when the view is wide, stacked on a phone. Tool options and the less used actions open in popovers under the bar. */
+/* --- ui redesign: tokens (docs/design-ui.md §7), built on Obsidian's variables so light, dark and community themes apply --- */
+body {
+	--nb-surface: var(--background-primary);
+	--nb-surface-2: var(--background-secondary);
+	--nb-surface-raised: var(--background-primary);
+	--nb-border: var(--background-modifier-border);
+	--nb-hover: var(--background-modifier-hover);
+	--nb-text: var(--text-normal);
+	--nb-text-muted: var(--text-muted);
+	--nb-text-faint: var(--text-faint);
+	--nb-accent: var(--interactive-accent);
+	--nb-accent-soft: hsla(var(--interactive-accent-hsl, 258, 88%, 66%), 0.14);
+	--nb-accent-strong: hsla(var(--interactive-accent-hsl, 258, 88%, 66%), 0.24);
+	--nb-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 1px rgba(0, 0, 0, 0.04);
+	--nb-shadow-2: 0 10px 28px -6px rgba(0, 0, 0, 0.22), 0 2px 6px rgba(0, 0, 0, 0.08);
+	--nb-shadow-3: 0 22px 48px -10px rgba(0, 0, 0, 0.45), 0 4px 12px rgba(0, 0, 0, 0.2);
+	--nb-radius-s: 10px;
+	--nb-radius-m: 12px;
+	--nb-radius-l: 18px;
+	--nb-radius-pill: 999px;
+	--nb-space-1: 4px;
+	--nb-space-2: 8px;
+	--nb-space-3: 12px;
+	--nb-space-4: 16px;
+	--nb-space-5: 24px;
+	--nb-target: 40px;
+	--nb-text-s: var(--font-ui-smaller);
+	--nb-text-m: var(--font-ui-small);
+	--nb-text-l: var(--font-ui-medium);
+	--nb-motion-fast: 120ms;
+	--nb-motion: 180ms;
+	--nb-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+	--nb-dial-bg: #1d1e22;
+	--nb-dial-bg-2: #2a2b31;
+	--nb-dial-ring: rgba(255, 255, 255, 0.08);
+	--nb-dial-fg: #f4f4f6;
+	--nb-dial-muted: rgba(244, 244, 246, 0.62);
+}
+
+/* Ink dots keep an outline on a dark bar (a black pen on a dark theme). */
+.theme-dark .notebook-chip-dot,
+.theme-dark .notebook-fav-dot,
+.theme-dark .notebook-swatch-dot {
+	box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+
+.theme-dark {
+	--nb-surface-raised: var(--background-secondary);
+	--nb-accent-soft: hsla(var(--interactive-accent-hsl, 258, 88%, 66%), 0.2);
+	--nb-shadow-2: 0 12px 30px -6px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	body {
+		--nb-motion-fast: 0ms;
+		--nb-motion: 0ms;
+	}
+}
+
+/* --- ui redesign: primary toolbar. Row 1: pages panel and tools. Row 2: history, current pen, favourites, quick slots, page, save state, All actions. One line on a wide view (is-single-row), two otherwise. Tool options open in a popover under the bar. */
 .notebook-toolbar {
 	position: relative;
 	z-index: 10;
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: 0 8px;
-	padding: 2px 6px;
-	border-bottom: 1px solid var(--background-modifier-border);
-	background: var(--background-primary);
+	gap: 2px var(--nb-space-2);
+	padding: var(--nb-space-1) 6px;
+	border-bottom: 1px solid var(--nb-border);
+	background: var(--nb-surface);
 	flex: 0 0 auto;
 	min-width: 0;
-	container: notebook-toolbar / inline-size;
+	box-sizing: border-box;
 	user-select: none;
+	-webkit-user-select: none;
+	-webkit-tap-highlight-color: transparent;
 }
 
 .notebook-toolbar-row {
@@ -36,7 +97,15 @@
 }
 
 .notebook-toolbar-actions {
-	flex: 1 1 540px;
+	flex: 1 1 100%;
+}
+
+.notebook-toolbar.is-single-row {
+	flex-wrap: nowrap;
+}
+
+.notebook-toolbar.is-single-row > .notebook-toolbar-actions {
+	flex: 1 1 auto;
 }
 
 .notebook-toolbar-end {
@@ -47,6 +116,27 @@
 	margin-left: auto;
 }
 
+.notebook-toolbar-divider {
+	flex: 0 0 1px;
+	align-self: center;
+	height: 24px;
+	margin: 0 var(--nb-space-1);
+	background: var(--nb-border);
+}
+
+.notebook-toolbar-group {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.notebook-quick {
+	flex: 0 0 auto;
+	padding-left: var(--nb-space-2);
+	margin-left: var(--nb-space-1);
+	border-left: 1px solid var(--nb-border);
+}
+
 /* Favourite pens: a strip that scrolls sideways when the bar is narrow. */
 .notebook-favs {
 	position: relative;
@@ -55,7 +145,7 @@
 	align-items: center;
 	gap: 2px;
 	min-width: 0;
-	margin-left: 4px;
+	margin-left: 2px;
 	overflow-x: auto;
 	overflow-y: hidden;
 	scrollbar-width: none;
@@ -70,20 +160,54 @@
 	flex: 0 0 auto;
 }
 
-.notebook-toolbar-group {
-	display: flex;
-	align-items: center;
-	gap: 2px;
-}
-
+/* Icon buttons: 40 px targets, quiet until hovered or active. */
 .notebook-tool {
 	position: relative;
 	flex: 0 0 auto;
+	box-sizing: border-box;
 	min-width: 40px;
 	min-height: 40px;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
+	padding: 0;
+	border: 0;
+	border-radius: var(--nb-radius-s);
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text-muted);
+	transition: background-color var(--nb-motion-fast) var(--nb-ease), color var(--nb-motion-fast) var(--nb-ease);
+}
+
+.notebook-tool:hover {
+	background: var(--nb-hover);
+	color: var(--nb-text);
+}
+
+.notebook-tool:focus-visible,
+.notebook-menu-item:focus-visible,
+.notebook-page-indicator:focus-visible,
+.notebook-chip-choice:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 1px;
+}
+
+.notebook-tool.is-active {
+	background: var(--nb-accent-soft);
+	color: var(--nb-accent);
+}
+
+/* The active tool: a small accent bar under the icon. */
+.notebook-tool-button.is-active::before {
+	content: "";
+	position: absolute;
+	left: 50%;
+	bottom: 3px;
+	width: 14px;
+	height: 3px;
+	margin-left: -7px;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-accent);
 }
 
 /* A tool with options shows a small corner mark once it is the active one: tap it again for the options. */
@@ -91,20 +215,15 @@
 	content: "";
 	position: absolute;
 	right: 4px;
-	bottom: 4px;
+	top: 4px;
 	border: 3px solid transparent;
 	border-right-color: currentColor;
-	border-bottom-color: currentColor;
-	opacity: 0.7;
+	border-top-color: currentColor;
+	opacity: 0.55;
 }
 
 .notebook-tool[aria-expanded="true"].has-options::after {
 	opacity: 1;
-}
-
-.notebook-tool.is-active {
-	background: var(--background-modifier-active-hover);
-	color: var(--interactive-accent);
 }
 
 .notebook-tool:disabled {
@@ -113,16 +232,20 @@
 }
 
 .notebook-swatch-dot {
-	width: 20px;
-	height: 20px;
+	width: 22px;
+	height: 22px;
 	border-radius: 50%;
 	background-color: var(--notebook-swatch-color, var(--text-normal));
-	border: 1px solid var(--background-modifier-border);
+	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
 }
 
 .notebook-swatch.is-active .notebook-swatch-dot {
-	outline: 2px solid var(--interactive-accent);
+	outline: 2px solid var(--nb-accent);
 	outline-offset: 2px;
+}
+
+.notebook-swatch.is-active {
+	background: transparent;
 }
 
 .notebook-width-dot {
@@ -140,25 +263,69 @@
 .notebook-width-h2 { width: 18px; height: 12px; border-radius: 2px; }
 
 .notebook-text-tool {
-	font-size: var(--font-ui-small);
-	padding: 0 10px;
+	font-size: var(--nb-text-m);
+	padding: 0 12px;
+	color: var(--nb-text);
 }
 
 .notebook-hidden {
 	display: none;
 }
 
-.notebook-page-indicator {
-	min-width: 3.5em;
-	text-align: center;
-	font-size: var(--font-ui-smaller);
-	color: var(--text-muted);
-	font-variant-numeric: tabular-nums;
+/* Hidden wins over the display of any component class inside the view (ui redesign: bars and sheets are flex). */
+.notebook-view .notebook-hidden {
+	display: none;
 }
 
-/* Current-pen indicator: the colour and thickness of the tool in use (a ring for the eraser). */
+/* Page indicator: a pill that opens the page sheet. */
+.notebook-page-indicator {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	min-width: 56px;
+	min-height: 40px;
+	padding: 0 10px;
+	border: 0;
+	border-radius: var(--nb-radius-pill);
+	background: transparent;
+	box-shadow: none;
+	font-size: var(--nb-text-s);
+	font-weight: var(--font-medium, 500);
+	color: var(--nb-text-muted);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.notebook-page-indicator:hover {
+	background: var(--nb-hover);
+	color: var(--nb-text);
+}
+
+.notebook-page-indicator.is-active {
+	background: var(--nb-accent-soft);
+	color: var(--nb-accent);
+}
+
+.notebook-page-indicator:disabled {
+	opacity: 0.5;
+}
+
+/* Current-pen indicator: the colour and thickness of the tool in use (a ring for the eraser), inside a soft ring. */
 .notebook-chip.notebook-hidden {
 	display: none;
+}
+
+.notebook-chip::before {
+	content: "";
+	position: absolute;
+	inset: 6px;
+	border-radius: 50%;
+	border: 1.5px solid var(--nb-border);
+}
+
+.notebook-chip.is-active::before {
+	border-color: var(--nb-accent);
 }
 
 .notebook-chip-dot {
@@ -167,7 +334,7 @@
 	height: var(--notebook-chip-h, 10px);
 	border-radius: 50%;
 	background-color: var(--notebook-chip-color, var(--text-normal));
-	border: 1px solid var(--background-modifier-border-hover);
+	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
 	box-sizing: border-box;
 }
 
@@ -177,25 +344,35 @@
 
 .notebook-chip-dot.is-eraser {
 	border: 2px solid var(--text-muted);
+	box-shadow: none;
 }
 
-/* Popovers under the bar: tool options, and the "more" menu. They are outside the page, so a tap on them never reaches the pen input. */
+/* Popovers under the bar (tool options). They are outside the page, so a tap on them never reaches the pen input. */
 .notebook-popover {
 	position: absolute;
-	top: 100%;
+	top: calc(100% + 6px);
 	z-index: 2;
 	display: flex;
 	flex-direction: column;
-	gap: 2px;
+	gap: var(--nb-space-2);
 	box-sizing: border-box;
-	width: min(352px, calc(100% - 12px));
-	max-height: min(var(--notebook-popover-max, 70vh), 480px);
+	width: min(368px, calc(100% - 12px));
+	max-height: min(var(--notebook-popover-max, 70vh), 520px);
 	overflow-y: auto;
-	padding: 6px;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-l);
-	background: var(--background-primary);
-	box-shadow: var(--shadow-l);
+	padding: var(--nb-space-3);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-l);
+	background: var(--nb-surface-raised);
+	box-shadow: var(--nb-shadow-2);
+	animation: notebook-pop-in var(--nb-motion) var(--nb-ease);
+	transform-origin: top left;
+}
+
+@keyframes notebook-pop-in {
+	from {
+		opacity: 0;
+		transform: translateY(-4px) scale(0.98);
+	}
 }
 
 .notebook-popover.notebook-hidden {
@@ -204,11 +381,6 @@
 
 .notebook-options {
 	left: 6px;
-}
-
-.notebook-more {
-	right: 6px;
-	width: min(280px, calc(100% - 12px));
 }
 
 .notebook-popover-row {
@@ -226,43 +398,55 @@
 	display: none;
 }
 
-.notebook-more-slot {
-	display: contents;
+/* Segmented control: eraser mode and filter. */
+.notebook-segmented {
+	padding: 3px;
+	border-radius: var(--nb-radius-m);
+	background: var(--nb-surface-2);
+	gap: 2px;
 }
 
-.notebook-more-title {
-	padding: 4px 10px;
-	font-size: var(--font-ui-smaller);
-	color: var(--text-muted);
-	font-variant-numeric: tabular-nums;
+.notebook-segmented > .notebook-tool {
+	flex: 1 1 auto;
+	border-radius: 9px;
 }
 
-.notebook-more-title.notebook-hidden {
-	display: none;
+.notebook-segmented > .notebook-tool.is-active {
+	background: var(--nb-surface);
+	color: var(--nb-accent);
+	box-shadow: var(--nb-shadow-1);
 }
 
+/* Rows of the sheets: icon, label, optional switch. */
 .notebook-menu-item {
 	display: flex;
 	align-items: center;
-	gap: 10px;
+	gap: var(--nb-space-3);
 	width: 100%;
+	box-sizing: border-box;
 	min-height: 44px;
-	padding: 0 10px;
+	padding: 0 var(--nb-space-3);
 	border: 0;
+	border-radius: var(--nb-radius-s);
 	box-shadow: none;
 	background: transparent;
-	color: var(--text-normal);
-	font-size: var(--font-ui-small);
+	color: var(--nb-text);
+	font-size: var(--nb-text-m);
 	text-align: left;
+	transition: background-color var(--nb-motion-fast) var(--nb-ease);
 }
 
 .notebook-menu-item:hover {
-	background: var(--background-modifier-hover);
+	background: var(--nb-hover);
 }
 
 .notebook-menu-item.is-active {
-	background: var(--background-modifier-active-hover);
-	color: var(--interactive-accent);
+	background: var(--nb-accent-soft);
+	color: var(--nb-accent);
+}
+
+.notebook-menu-item.is-danger {
+	color: var(--text-error);
 }
 
 .notebook-menu-item:disabled {
@@ -273,50 +457,349 @@
 .notebook-menu-icon {
 	display: inline-flex;
 	flex: 0 0 auto;
+	color: var(--nb-text-muted);
+}
+
+.notebook-menu-item.is-danger .notebook-menu-icon {
+	color: inherit;
 }
 
 .notebook-menu-label {
 	flex: 1 1 auto;
+	line-height: 1.3;
 }
 
-.notebook-perf {
+/* A switch on toggle rows. */
+.notebook-switch {
+	position: relative;
+	flex: 0 0 auto;
+	width: 34px;
+	height: 20px;
+	border-radius: var(--nb-radius-pill);
+	background: var(--background-modifier-border-hover, var(--nb-border));
+	transition: background-color var(--nb-motion) var(--nb-ease);
+}
+
+.notebook-switch::after {
+	content: "";
 	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	background: #fff;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+	transition: transform var(--nb-motion) var(--nb-ease);
+}
+
+.notebook-menu-item.is-checked .notebook-switch {
+	background: var(--nb-accent);
+}
+
+.notebook-menu-item.is-checked .notebook-switch::after {
+	transform: translateX(14px);
+}
+
+.notebook-menu-range {
+	padding: var(--nb-space-1) var(--nb-space-3) var(--nb-space-2) 44px;
+}
+
+.notebook-menu-range input {
+	width: 100%;
+}
+
+/* --- ui redesign: the action sheets ("All actions", page sheet): a popover under the bar, a bottom sheet on a phone. */
+.notebook-sheet {
+	position: absolute;
+	top: var(--notebook-sheet-top, 56px);
 	right: 8px;
-	bottom: 8px;
-	z-index: 2;
-	padding: 4px 8px;
-	border-radius: var(--radius-s);
-	background: var(--background-primary);
-	color: var(--text-muted);
-	font-family: var(--font-monospace);
-	font-size: var(--font-ui-smaller);
-	white-space: pre;
-	pointer-events: none;
-	opacity: 0.9;
+	z-index: 30;
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+	width: min(392px, calc(100% - 16px));
+	max-height: var(--notebook-sheet-max, 70%);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-l);
+	background: var(--nb-surface-raised);
+	box-shadow: var(--nb-shadow-2);
+	overflow: hidden;
+	animation: notebook-pop-in var(--nb-motion) var(--nb-ease);
+	transform-origin: top right;
+	user-select: none;
+	-webkit-user-select: none;
 }
 
-.notebook-bench-stage {
-	position: fixed;
-	left: -100000px;
-	top: 0;
-	visibility: hidden;
-	pointer-events: none;
+.notebook-sheet.notebook-hidden {
+	display: none;
 }
 
-.notebook-bench-output {
-	white-space: pre-wrap;
-	font-size: var(--font-ui-smaller);
-	min-height: 8em;
+.notebook-sheet.is-bottom {
+	top: auto;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	width: auto;
+	max-height: 78%;
+	border-radius: var(--nb-radius-l) var(--nb-radius-l) 0 0;
+	border-bottom: 0;
+	animation: notebook-sheet-up var(--nb-motion) var(--nb-ease);
 }
 
-/* Save state: a dot (its text is the tooltip) on a narrow bar, dot and text on a wide one. */
+@keyframes notebook-sheet-up {
+	from {
+		transform: translateY(24px);
+		opacity: 0;
+	}
+}
+
+.notebook-sheet-grabber {
+	display: none;
+	order: -1;
+	align-self: center;
+	width: 36px;
+	height: 4px;
+	margin-top: 8px;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-border);
+}
+
+.notebook-sheet.is-bottom .notebook-sheet-grabber {
+	display: block;
+}
+
+.notebook-sheet-head {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-2);
+	padding: var(--nb-space-2) var(--nb-space-2) 0 var(--nb-space-4);
+}
+
+.notebook-sheet-title {
+	flex: 1 1 auto;
+	font-size: var(--nb-text-l);
+	font-weight: var(--font-semibold, 600);
+	color: var(--nb-text);
+}
+
+.notebook-sheet-search {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-2);
+	margin: var(--nb-space-2) var(--nb-space-3);
+	padding: 0 var(--nb-space-3);
+	min-height: 40px;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-surface-2);
+	color: var(--nb-text-muted);
+}
+
+.notebook-sheet-search input {
+	flex: 1 1 auto;
+	min-width: 0;
+	height: 38px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	font-size: var(--nb-text-m);
+	color: var(--nb-text);
+}
+
+.notebook-sheet-search input:focus,
+.notebook-sheet-search input:focus-visible {
+	box-shadow: none;
+	outline: none;
+}
+
+.notebook-sheet-search:focus-within {
+	box-shadow: 0 0 0 2px var(--nb-accent-soft);
+}
+
+.notebook-sheet-search-icon {
+	display: inline-flex;
+}
+
+.notebook-sheet-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	padding: 0 var(--nb-space-2) var(--nb-space-3);
+}
+
+.notebook-sheet-section + .notebook-sheet-section {
+	margin-top: var(--nb-space-1);
+	padding-top: var(--nb-space-1);
+	border-top: 1px solid var(--nb-border);
+}
+
+.notebook-sheet-section-title {
+	padding: var(--nb-space-3) var(--nb-space-3) var(--nb-space-1);
+	font-size: 11px;
+	font-weight: var(--font-semibold, 600);
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--nb-text-faint);
+}
+
+.notebook-sheet-list {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+
+.notebook-sheet-empty {
+	padding: var(--nb-space-5) var(--nb-space-4);
+	text-align: center;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-text-m);
+}
+
+.notebook-sheet-choices {
+	display: flex;
+	flex-direction: column;
+	gap: var(--nb-space-2);
+	padding: var(--nb-space-2) var(--nb-space-3);
+}
+
+.notebook-sheet-choices-label {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-3);
+	font-size: var(--nb-text-m);
+	color: var(--nb-text);
+}
+
+.notebook-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding-left: 32px;
+}
+
+.notebook-chip-choice {
+	min-height: 40px;
+	padding: 0 14px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background: transparent;
+	box-shadow: none;
+	font-size: var(--nb-text-s);
+	color: var(--nb-text);
+}
+
+.notebook-chip-choice.is-active {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-soft);
+	color: var(--nb-accent);
+	font-weight: var(--font-semibold, 600);
+}
+
+.notebook-sheet-extra {
+	padding: 0 var(--nb-space-1);
+}
+
+/* --- ui redesign: the contextual bar, a floating pill at the bottom of the page area (outside the stage, so taps never reach the pen input). */
+.notebook-context-bar {
+	position: absolute;
+	left: 50%;
+	bottom: 14px;
+	transform: translateX(-50%);
+	z-index: 6;
+	display: flex;
+	flex-direction: column-reverse;
+	align-items: center;
+	gap: 6px;
+	width: max-content;
+	max-width: calc(100% - 16px);
+	animation: notebook-context-in var(--nb-motion) var(--nb-ease);
+}
+
+@keyframes notebook-context-in {
+	from {
+		opacity: 0;
+		transform: translate(-50%, 8px);
+	}
+}
+
+.notebook-context-main,
+.notebook-selection-styles > .notebook-toolbar-group {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+	padding: 4px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-surface-raised);
+	box-shadow: var(--nb-shadow-2);
+}
+
+.notebook-context-main > .notebook-tool,
+.notebook-selection-styles .notebook-tool {
+	border-radius: var(--nb-radius-pill);
+}
+
+.notebook-context-main > .notebook-tool.is-danger {
+	color: var(--text-error);
+}
+
+.notebook-context-label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 40px;
+	padding: 0 var(--nb-space-3) 0 var(--nb-space-2);
+	margin-right: 2px;
+	border-right: 1px solid var(--nb-border);
+	font-size: var(--nb-text-s);
+	font-weight: var(--font-semibold, 600);
+	color: var(--nb-text-muted);
+	white-space: nowrap;
+}
+
+.notebook-context-label-icon {
+	display: inline-flex;
+	color: var(--nb-accent);
+}
+
+.notebook-context-collapse {
+	opacity: 0.7;
+}
+
+.notebook-context-bar.is-collapsed .notebook-context-main {
+	padding: 4px;
+}
+
+.notebook-context-chip {
+	color: var(--nb-accent);
+}
+
+.notebook-context-extra {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+}
+
+.notebook-selection-styles {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+}
+
+/* Save state: a dot (its text is the label) on a narrow bar, dot and text on a wide one. */
 .notebook-status {
 	display: inline-flex;
 	align-items: center;
-	gap: 4px;
+	gap: 6px;
 	padding: 0 6px;
-	font-size: var(--font-ui-smaller);
-	color: var(--text-muted);
+	font-size: var(--nb-text-s);
+	color: var(--nb-text-muted);
 }
 
 .notebook-status-dot {
@@ -324,6 +807,7 @@
 	height: 8px;
 	border-radius: 50%;
 	background: var(--text-faint);
+	transition: background-color var(--nb-motion) var(--nb-ease);
 }
 
 .notebook-status[data-kind="ok"] .notebook-status-dot {
@@ -354,17 +838,54 @@
 	white-space: nowrap;
 }
 
-@container notebook-toolbar (min-width: 900px) {
-	.notebook-status-text {
-		display: inline;
+.notebook-toolbar.is-single-row .notebook-status-text {
+	display: inline;
+}
+
+/* A phone: compact page pill, no context label text. */
+@media (max-width: 480px) {
+	.notebook-page-indicator {
+		min-width: 48px;
+		padding: 0 6px;
+	}
+
+	.notebook-context-label-text {
+		display: none;
+	}
+
+	.notebook-context-label {
+		padding: 0 6px;
 	}
 }
 
-/* Narrow bar: the page number moves into the "more" menu. */
-@container notebook-toolbar (max-width: 520px) {
-	.notebook-page-indicator {
-		display: none;
-	}
+.notebook-perf {
+	position: absolute;
+	right: 8px;
+	bottom: 8px;
+	z-index: 2;
+	padding: 4px 8px;
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+	color: var(--text-muted);
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	white-space: pre;
+	pointer-events: none;
+	opacity: 0.9;
+}
+
+.notebook-bench-stage {
+	position: fixed;
+	left: -100000px;
+	top: 0;
+	visibility: hidden;
+	pointer-events: none;
+}
+
+.notebook-bench-output {
+	white-space: pre-wrap;
+	font-size: var(--font-ui-smaller);
+	min-height: 8em;
 }
 
 .notebook-stage {
@@ -456,7 +977,7 @@
 	transform: translateX(-100%);
 	visibility: hidden;
 	transition: transform 0.2s ease, visibility 0s linear 0.2s;
-	box-shadow: var(--shadow-l);
+	box-shadow: var(--nb-shadow-2);
 }
 
 .notebook-lib-root.is-narrow.is-drawer-open .notebook-lib-sidebar {
@@ -702,7 +1223,7 @@
 .notebook-lib-card {
 	position: relative;
 	min-width: 0;
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 }
 
 .notebook-lib-card-main {
@@ -710,7 +1231,7 @@
 	flex-direction: column;
 	gap: 3px;
 	padding: 4px;
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 	cursor: pointer;
 	user-select: none;
 	-webkit-user-select: none;
@@ -735,7 +1256,7 @@
 	padding: 5px 5px 5px 0;
 	border-radius: 3px 8px 8px 3px;
 	background-color: var(--notebook-cover, var(--background-modifier-border));
-	box-shadow: var(--shadow-s);
+	box-shadow: var(--nb-shadow-2);
 	overflow: hidden;
 	transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
@@ -811,7 +1332,7 @@
 	justify-content: center;
 	border-radius: 50%;
 	background: var(--background-primary);
-	box-shadow: var(--shadow-s);
+	box-shadow: var(--nb-shadow-2);
 	color: var(--text-muted);
 	opacity: 0;
 	transition: opacity 0.12s ease;
@@ -850,7 +1371,7 @@
 
 .notebook-lib-card-main.is-lifted .notebook-lib-cover {
 	transform: scale(1.05);
-	box-shadow: var(--shadow-l);
+	box-shadow: var(--nb-shadow-2);
 }
 
 .notebook-lib-card-main.is-dragging {
@@ -869,7 +1390,7 @@
 	align-items: center;
 	justify-content: center;
 	aspect-ratio: 3 / 4;
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
 	color: var(--text-muted);
@@ -891,9 +1412,9 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 	background: var(--background-primary);
-	box-shadow: var(--shadow-l);
+	box-shadow: var(--nb-shadow-2);
 	font-size: var(--font-ui-small);
 	pointer-events: none;
 	transform: translate(calc(var(--notebook-drag-x, 0px) + 10px), calc(var(--notebook-drag-y, 0px) + 10px));
@@ -1003,7 +1524,7 @@
 	position: relative;
 	flex: 1 1 0;
 	min-height: 0;
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 	background-color: var(--background-secondary);
 	overflow: hidden;
 }
@@ -1155,7 +1676,7 @@
 	left: 0;
 	z-index: 5;
 	width: min(200px, 70%);
-	box-shadow: var(--shadow-l);
+	box-shadow: var(--nb-shadow-2);
 }
 
 .notebook-navigator-header {
@@ -1182,7 +1703,7 @@
 .notebook-navigator-item {
 	margin-bottom: 8px;
 	padding: 4px;
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 	cursor: pointer;
 	touch-action: pan-y;
 }
@@ -1327,7 +1848,7 @@
 	display: block;
 	max-width: 100%;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 	background-color: var(--background-secondary);
 	overflow: hidden;
 	cursor: pointer;
@@ -1356,7 +1877,7 @@
 	font-size: var(--font-ui-small);
 	color: var(--text-muted);
 	border: 1px dashed var(--background-modifier-border);
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 }
 
 /* --- writing engine --- */
@@ -1453,7 +1974,7 @@
 	overflow-y: auto;
 	margin-bottom: var(--size-4-3);
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 }
 
 .notebook-move-page {
@@ -1477,26 +1998,41 @@
 	font-size: var(--font-ui-small);
 }
 
-/* wave p1a: input — radial menu at the pen tip. */
+/* --- ui redesign: the pen's radial dial (docs/design-ui.md §6). Always dark, like a physical tool; soft shadow and a subtle inner ring. */
 .notebook-radial {
 	position: absolute;
 	inset: 0;
-	z-index: 40;
+	z-index: 20;
+	pointer-events: none;
 	touch-action: none;
 	user-select: none;
 	-webkit-user-select: none;
 }
 
-.notebook-radial-ring {
+.notebook-dial {
 	position: absolute;
-	left: calc(var(--notebook-radial-x, 0px) - var(--notebook-radial-size, 216px) / 2);
-	top: calc(var(--notebook-radial-y, 0px) - var(--notebook-radial-size, 216px) / 2);
-	width: var(--notebook-radial-size, 216px);
-	height: var(--notebook-radial-size, 216px);
-	filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
+	left: calc(var(--notebook-radial-x, 0px) - var(--notebook-dial-size, 264px) / 2);
+	top: calc(var(--notebook-radial-y, 0px) - var(--notebook-dial-size, 264px) / 2);
+	width: var(--notebook-dial-size, 264px);
+	height: var(--notebook-dial-size, 264px);
+	border-radius: 50%;
+	background: radial-gradient(circle at 50% 38%, var(--nb-dial-bg-2) 0%, var(--nb-dial-bg) 62%);
+	box-shadow: var(--nb-shadow-3), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+	color: var(--nb-dial-fg);
+	pointer-events: auto;
+	transform: scale(var(--notebook-dial-scale, 1));
+	animation: notebook-dial-open var(--nb-motion) var(--nb-ease);
 }
 
-.notebook-radial-svg {
+@keyframes notebook-dial-open {
+	from {
+		opacity: 0;
+		scale: 0.86;
+	}
+}
+
+.notebook-dial-deco,
+.notebook-dial-slider {
 	position: absolute;
 	inset: 0;
 	width: 100%;
@@ -1504,109 +2040,362 @@
 	pointer-events: none;
 }
 
-.notebook-radial-sector {
-	fill: var(--background-primary);
-	stroke: var(--background-modifier-border);
-	stroke-width: 1px;
+.notebook-dial-ring {
+	fill: none;
+	stroke: var(--nb-dial-ring);
+	stroke-width: 1;
 }
 
-.notebook-radial-sector.is-active {
-	stroke: var(--interactive-accent);
-	stroke-width: 2px;
+.notebook-dial-ring.is-inner {
+	fill: rgba(255, 255, 255, 0.025);
 }
 
-.notebook-radial-sector.is-hover {
-	fill: var(--interactive-accent);
-	stroke: var(--interactive-accent);
-	stroke-width: 2px;
-}
-
-.notebook-radial-sector.is-disabled {
-	fill: var(--background-secondary);
-}
-
-.notebook-radial-hub {
-	fill: var(--background-primary);
-	stroke: var(--background-modifier-border);
-	stroke-width: 1px;
-}
-
-.notebook-radial-item {
+.notebook-dial-layer {
 	position: absolute;
-	left: var(--notebook-radial-item-x, 0);
-	top: var(--notebook-radial-item-y, 0);
+	inset: 0;
+	transition: opacity var(--nb-motion) var(--nb-ease), transform var(--nb-motion) var(--nb-ease);
+}
+
+.notebook-dial-layer.is-entering {
+	opacity: 0;
+	transform: scale(0.92) rotate(-6deg);
+}
+
+.notebook-dial-item {
+	position: absolute;
+	left: calc(var(--x) - var(--s) / 2);
+	top: calc(var(--y) - var(--s) / 2);
+	width: var(--s);
+	height: var(--s);
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 28px;
-	height: 28px;
-	margin: -14px 0 0 -14px;
-	color: var(--text-normal);
+	box-sizing: border-box;
+	border-radius: 50%;
+	color: var(--nb-dial-fg);
+	cursor: pointer;
+	transition: background-color var(--nb-motion-fast) var(--nb-ease), transform var(--nb-motion-fast) var(--nb-ease), box-shadow var(--nb-motion-fast) var(--nb-ease);
+}
+
+.notebook-dial-item .svg-icon {
+	width: 20px;
+	height: 20px;
+}
+
+.notebook-dial-item.is-round {
+	background: rgba(255, 255, 255, 0.06);
+}
+
+.notebook-dial-item.is-flat {
+	background: transparent;
+}
+
+.notebook-dial-item.is-hover {
+	background: rgba(255, 255, 255, 0.16);
+	transform: scale(1.06);
+}
+
+.notebook-dial-item.is-active {
+	box-shadow: 0 0 0 2px var(--nb-dial-fg);
+}
+
+.notebook-dial-item.is-disabled {
+	opacity: 0.3;
 	pointer-events: none;
 }
 
-.notebook-radial-item.is-disabled {
-	opacity: 0.4;
+/* Main state: the tool drawn as a pen, tilted, on a soft disc. */
+.notebook-dial-centre {
+	background: radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02) 70%);
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
 }
 
-.notebook-radial-item.is-hover {
-	color: var(--text-on-accent);
+.notebook-dial-tilt {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transform: rotate(38deg);
 }
 
-.notebook-radial-item .svg-icon {
+.notebook-dial-art {
+	filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.45));
+}
+
+.notebook-dial-icon .svg-icon {
+	width: 30px;
+	height: 30px;
+}
+
+.notebook-dial-item.is-bubble {
+	background: rgba(255, 255, 255, 0.07);
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.notebook-dial-item.is-color {
+	background: var(--c);
+	box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.85), 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+
+.notebook-dial-dot {
+	width: var(--d);
+	height: var(--d);
+	border-radius: 50%;
+	background: var(--c);
+	box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.notebook-dial-dot.is-ring {
+	border: 2px solid var(--nb-dial-fg);
+	box-shadow: none;
+	box-sizing: border-box;
+}
+
+.notebook-dial-dot.is-chisel {
 	width: 22px;
-	height: 22px;
+	border-radius: 4px;
+	transform: rotate(-20deg);
 }
 
-.notebook-radial-label {
+.notebook-dial-caption {
 	position: absolute;
 	left: 50%;
-	top: 50%;
-	max-width: 64px;
+	top: var(--y);
 	transform: translate(-50%, -50%);
+	max-width: 140px;
 	overflow: hidden;
-	color: var(--text-normal);
-	font-size: 10px;
-	line-height: 1.2;
-	text-align: center;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	font-size: 11px;
+	letter-spacing: 0.02em;
+	color: var(--nb-dial-muted);
 	pointer-events: none;
+}
+
+.notebook-dial-pill {
+	position: absolute;
+	left: 50%;
+	top: var(--y);
+	width: 152px;
+	height: 46px;
+	transform: translate(-50%, -50%);
+	border-radius: var(--nb-radius-pill);
+	background: rgba(255, 255, 255, 0.07);
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+	pointer-events: none;
+}
+
+.notebook-dial-item.is-raised {
+	background: var(--nb-dial-fg);
+	color: var(--nb-dial-bg);
+	box-shadow: 0 6px 14px rgba(0, 0, 0, 0.5);
+}
+
+.notebook-dial-item.is-raised.is-hover {
+	background: #fff;
+}
+
+/* Sub-states: the centre goes back. */
+.notebook-dial-centre.is-back {
+	flex-direction: column;
+	gap: 2px;
+}
+
+.notebook-dial-back-icon {
+	display: inline-flex;
+	color: var(--nb-dial-muted);
+}
+
+.notebook-dial-centre.is-back.is-art .notebook-dial-back-icon,
+.notebook-dial-centre.is-color-preview .notebook-dial-back-icon {
+	position: absolute;
+	top: 4px;
+}
+
+.notebook-dial-centre.is-color-preview {
+	background: var(--c);
+	box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.85), 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+
+.notebook-dial-centre.is-color-preview .notebook-dial-back-icon {
+	position: static;
+	color: #fff;
+	filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.7));
+}
+
+.notebook-dial-item.is-swatch {
+	background: var(--c);
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.notebook-dial-item.is-swatch.is-active {
+	box-shadow: 0 0 0 2px var(--nb-dial-bg), 0 0 0 4px var(--nb-dial-fg);
+}
+
+.notebook-dial-item.is-rainbow {
+	background: conic-gradient(#f43f5e, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #ec4899, #f43f5e);
+}
+
+.notebook-dial-rainbow-dot {
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	background: var(--c);
+	box-shadow: 0 0 0 2px var(--nb-dial-bg);
+}
+
+.notebook-dial-color-input {
+	position: absolute;
+	left: var(--notebook-radial-x, 0px);
+	top: var(--notebook-radial-y, 0px);
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+	pointer-events: none;
+}
+
+/* Width: an arc slider of growing dots. */
+.notebook-dial-track {
+	fill: none;
+	stroke: rgba(255, 255, 255, 0.08);
+	stroke-width: 30;
+	stroke-linecap: round;
+}
+
+.notebook-dial-track.is-filled {
+	stroke: rgba(255, 255, 255, 0.14);
+}
+
+.notebook-dial-step {
+	fill: rgba(255, 255, 255, 0.35);
+}
+
+.notebook-dial-step.is-on {
+	fill: var(--nb-dial-fg);
+}
+
+.notebook-dial-knob {
+	fill: none;
+	stroke: var(--nb-dial-fg);
+	stroke-width: 2.5;
+}
+
+.notebook-dial-slider-hit {
+	position: absolute;
+	left: calc(var(--x) - 22px);
+	top: calc(var(--y) - 22px);
+	width: 44px;
+	height: 44px;
+	border-radius: 50%;
+	cursor: grab;
+}
+
+.notebook-dial-centre.is-value {
+	gap: 4px;
+}
+
+.notebook-dial-centre.is-value .notebook-dial-back-icon {
+	display: none;
+}
+
+.notebook-dial-centre.is-value .notebook-dial-back-icon {
+	position: absolute;
+	left: 2px;
+}
+
+.notebook-dial-unit {
+	margin-top: -4px;
+	font-size: 10px;
+	color: var(--nb-dial-muted);
+}
+
+.notebook-dial-number {
+	font-size: 22px;
+	line-height: 1;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	color: var(--nb-dial-fg);
+}
+
+/* Pen case. */
+.notebook-dial-item.is-case {
+	flex-direction: column;
+	gap: 1px;
+	border-radius: 14px;
+	background: rgba(255, 255, 255, 0.05);
+}
+
+.notebook-dial-item.is-case .notebook-dial-icon .svg-icon {
+	width: 20px;
+	height: 20px;
+}
+
+.notebook-dial-item.is-case.is-active {
+	background: rgba(255, 255, 255, 0.16);
+	box-shadow: inset 0 0 0 1.5px var(--nb-dial-fg);
+}
+
+.notebook-dial-preview {
+	flex: 0 0 auto;
+}
+
+.notebook-dial-item.is-plus {
+	border: 1.5px dashed rgba(255, 255, 255, 0.4);
+	background: transparent;
+}
+
+.notebook-dial-item.is-plus.is-active {
+	border-style: solid;
+	background: rgba(255, 255, 255, 0.16);
+	box-shadow: none;
+}
+
+.notebook-dial-item.is-fav.is-target {
+	box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.5);
+	animation: notebook-dial-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes notebook-dial-pulse {
+	50% {
+		box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.75);
+	}
+}
+
+.notebook-dial-hint {
+	position: absolute;
+	left: 50%;
+	top: calc(50% + 44px);
+	width: 120px;
+	transform: translateX(-50%);
+	font-size: 10px;
+	line-height: 1.25;
+	text-align: center;
+	color: var(--nb-dial-muted);
+	pointer-events: none;
+}
+
+.notebook-dial-live {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.notebook-dial,
+	.notebook-dial-item.is-fav.is-target,
+	.notebook-popover,
+	.notebook-sheet,
+	.notebook-context-bar {
+		animation: none;
+	}
+
+	.notebook-dial-layer.is-entering {
+		transform: none;
+	}
 }
 
 /* --- wave p1b: selection --- */
-/* Actions on the lasso selection (copy, cut, duplicate, paste, restyle): a floating bar over the bottom of the page area, outside the stage so its taps never reach the pen input. */
-.notebook-selection-bar {
-	position: absolute;
-	left: 50%;
-	bottom: 12px;
-	transform: translateX(-50%);
-	z-index: 6;
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	gap: 2px;
-	width: max-content;
-	max-width: calc(100% - 16px);
-	padding: 4px 6px;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-l);
-	background: var(--background-primary);
-	box-shadow: var(--shadow-s);
-}
-
-.notebook-selection-bar .notebook-toolbar-group,
-.notebook-selection-styles {
-	flex-wrap: wrap;
-	justify-content: center;
-}
-
-.notebook-selection-styles {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-}
-
 .notebook-paste-hint {
 	color: var(--text-muted);
 }
@@ -1620,7 +2409,7 @@
 	text-align: center;
 	color: var(--text-muted);
 	border: 2px dashed var(--background-modifier-border);
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 	user-select: text;
 	-webkit-user-select: text;
 }
@@ -1679,7 +2468,7 @@
 	gap: 8px;
 	padding: 10px;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 }
 
 .notebook-tt-row {
@@ -1878,7 +2667,7 @@
 	gap: 10px;
 	padding: 8px;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 }
 
 .notebook-trash-icon {
@@ -1955,9 +2744,9 @@
 	max-height: calc(100% - 16px);
 	padding: 6px;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-l);
+	border-radius: var(--nb-radius-l);
 	background: var(--background-primary);
-	box-shadow: var(--shadow-l);
+	box-shadow: var(--nb-shadow-2);
 }
 
 .notebook-stamp-panel.notebook-hidden {
@@ -2011,7 +2800,7 @@
 	gap: 2px;
 	padding: 4px;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 	cursor: pointer;
 	touch-action: pan-y;
 	user-select: none;
@@ -2089,7 +2878,7 @@
 	transform: translate(-50%, -50%);
 	border-radius: var(--radius-s);
 	background: rgba(255, 255, 255, 0.85);
-	box-shadow: var(--shadow-s);
+	box-shadow: var(--nb-shadow-2);
 	opacity: 0.9;
 	pointer-events: none;
 }
@@ -2179,7 +2968,7 @@
 	margin-bottom: 8px;
 	padding: 8px;
 	border: 2px dashed var(--background-modifier-border);
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 	color: var(--text-muted);
 	text-align: center;
 	touch-action: none;
@@ -2283,9 +3072,9 @@
 	max-width: 560px;
 	margin: 0 auto;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-l);
+	border-radius: var(--nb-radius-l);
 	background: var(--background-primary);
-	box-shadow: var(--shadow-s);
+	box-shadow: var(--nb-shadow-2);
 	overflow: hidden;
 }
 
@@ -2398,9 +3187,9 @@
 	max-width: calc(100% - 16px);
 	padding: 6px 6px 6px 12px;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-l);
+	border-radius: var(--nb-radius-l);
 	background: var(--background-primary);
-	box-shadow: var(--shadow-s);
+	box-shadow: var(--nb-shadow-2);
 	font-size: var(--font-ui-small);
 }
 
@@ -2510,7 +3299,7 @@
 	min-height: 40px;
 	margin-bottom: 4px;
 	padding: 4px 2px 4px 6px;
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 	cursor: pointer;
 	touch-action: pan-y;
 }
@@ -2595,4 +3384,171 @@
 
 .setting-item.notebook-hidden {
 	display: none;
+}
+
+/* --- ui redesign: panels, sheets and the library on the same visual system (docs/design-ui.md §7) --- */
+
+/* Floating panels over the page: one surface, radius and elevation. */
+.notebook-stamp-panel,
+.notebook-search {
+	border-color: var(--nb-border);
+	background: var(--nb-surface-raised);
+	animation: notebook-pop-in var(--nb-motion) var(--nb-ease);
+}
+
+.notebook-stamp-panel {
+	padding: var(--nb-space-2);
+	gap: var(--nb-space-2);
+}
+
+.notebook-stamp-title,
+.notebook-navigator-title {
+	font-weight: var(--font-semibold, 600);
+	color: var(--nb-text);
+}
+
+.notebook-stamp-tile {
+	border-radius: var(--nb-radius-m);
+	transition: background-color var(--nb-motion-fast) var(--nb-ease), transform var(--nb-motion-fast) var(--nb-ease);
+}
+
+.notebook-stamp-tile:hover {
+	background: var(--nb-hover);
+}
+
+/* Pages panel: a quiet secondary surface; the page in view has an accent ring. */
+.notebook-navigator {
+	background: var(--nb-surface-2);
+	border-right-color: var(--nb-border);
+}
+
+.notebook-body.is-narrow > .notebook-navigator {
+	border-radius: 0 var(--nb-radius-l) var(--nb-radius-l) 0;
+	box-shadow: var(--nb-shadow-2);
+	animation: notebook-drawer-in var(--nb-motion) var(--nb-ease);
+}
+
+@keyframes notebook-drawer-in {
+	from {
+		transform: translateX(-16px);
+		opacity: 0;
+	}
+}
+
+.notebook-navigator-item {
+	transition: background-color var(--nb-motion-fast) var(--nb-ease);
+}
+
+.notebook-navigator-item:hover {
+	background: var(--nb-hover);
+}
+
+.notebook-navigator-item.is-current {
+	background: var(--nb-accent-soft);
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 0;
+}
+
+.notebook-navigator-thumb {
+	border-radius: 6px;
+	border-color: var(--nb-border);
+	box-shadow: var(--nb-shadow-1);
+}
+
+.notebook-outline-row {
+	border-radius: var(--nb-radius-s);
+}
+
+/* PDF search panel. */
+.notebook-search-row {
+	border-radius: var(--nb-radius-s);
+}
+
+.notebook-search-bar input {
+	border-radius: var(--nb-radius-pill);
+}
+
+.notebook-reading-banner {
+	border-radius: var(--nb-radius-pill);
+	box-shadow: var(--nb-shadow-2);
+}
+
+/* PDF side pane. */
+.notebook-pdfside-header {
+	background: var(--nb-surface);
+	border-bottom: 1px solid var(--nb-border);
+}
+
+.notebook-pdfside-btn {
+	border-radius: var(--nb-radius-s);
+}
+
+/* The plugin's dialogs. */
+.modal.notebook-trash-modal,
+.modal.notebook-scan-modal,
+.modal.notebook-tt-modal,
+.modal.notebook-page-trash-modal,
+.modal.notebook-template-modal {
+	border-radius: var(--nb-radius-l);
+	box-shadow: var(--nb-shadow-3);
+}
+
+.notebook-modal-error {
+	border-radius: var(--nb-radius-s);
+}
+
+/* Library: pill navigation, lifted cards, rounded actions. */
+.notebook-lib-sidebar {
+	background: var(--nb-surface-2);
+}
+
+.notebook-lib-nav-item {
+	min-height: 36px;
+	border-radius: var(--nb-radius-s);
+	transition: background-color var(--nb-motion-fast) var(--nb-ease);
+}
+
+.notebook-lib-nav-item.is-active {
+	background: var(--nb-accent-soft);
+	color: var(--nb-accent);
+	font-weight: var(--font-semibold, 600);
+}
+
+.notebook-lib-btn {
+	min-height: 40px;
+	border-radius: var(--nb-radius-pill);
+}
+
+.notebook-lib-search {
+	border-radius: var(--nb-radius-pill);
+}
+
+.notebook-lib-card-main {
+	transition: background-color var(--nb-motion-fast) var(--nb-ease), transform var(--nb-motion-fast) var(--nb-ease);
+}
+
+.notebook-lib-card-main:hover {
+	background: var(--nb-hover);
+}
+
+.notebook-lib-cover {
+	box-shadow: var(--nb-shadow-1);
+	transition: box-shadow var(--nb-motion) var(--nb-ease), transform var(--nb-motion) var(--nb-ease);
+}
+
+.notebook-lib-card-main:hover .notebook-lib-cover {
+	box-shadow: var(--nb-shadow-2);
+	transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.notebook-stamp-panel,
+	.notebook-search,
+	.notebook-body.is-narrow > .notebook-navigator {
+		animation: none;
+	}
+
+	.notebook-lib-card-main:hover .notebook-lib-cover {
+		transform: none;
+	}
 }
