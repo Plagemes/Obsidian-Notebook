@@ -8,7 +8,7 @@ import { PhotoDecodeError, photoSize } from "../scan/decode";
 import { isHeic } from "../scan/image-bytes";
 import { t } from "../i18n";
 import { renderThumbnail } from "../library/thumbnail";
-import { needsNextPage } from "../ink/auto-page";
+import { needsNextPage, needsPageOffer } from "../ink/auto-page";
 import { deleteInkCommand, inkOnRemoved } from "../ink/attach";
 import { captureClip, type ClipContent } from "../ink/clipboard";
 import { elementsInLasso, hitElement, transformElement } from "../ink/elements";
@@ -89,6 +89,10 @@ import type { PdfActionHost } from "./pdf-actions";
 import { pickFile } from "./pick";
 import { pdfSideState, referenceSlideOf, type PageSyncHooks } from "./pdf-sync";
 import { MarkerTools, translatedBoxLabel } from "./markers";
+import { layerCommand, type LayerMove } from "../model/layers";
+import { FindReplaceModal } from "./find-replace";
+import { PageInfoModal } from "./page-info";
+import { PageOffer } from "./page-offer";
 import { visibleStrokes } from "../model/markers";
 import type { PageToolsHost } from "./page-tools";
 import { RulerGesture } from "./ruler-gesture";
@@ -145,6 +149,8 @@ export interface NotebookHost {
 	remember?(path: string, page: number, pos?: SavedPosition | null): void;
 	/** wave 0.7: a real edit on page `pageId` (`num`, 1-based) of notebook `nb`; feeds the per-device recent pages log. */
 	edited?(nb: string, path: string, pageId: string, num: number): void;
+	/** wave 0.9 (379): when this device last edited the page (ms since epoch), if it has a record. */
+	pageEditedAt?(nb: string, pageId: string): number | null;
 	/** Instant save journal shared by all views. */
 	journal?: JournalStore;
 	/** Persists the plugin settings (favourite pens, eraser size, pen-only). Optional: absent in tests. */
@@ -302,6 +308,8 @@ export class NotebookView extends FileView {
 	private readonly objectInk = new ObjectInk();
 	/** v8 markers, boxes, invisible ink and the end-of-lecture panel (view/markers.ts). */
 	private markers: MarkerTools | null = null;
+	/** wave 0.9 (389): the chip that offers a page after a page in the middle of the notebook (view/page-offer.ts). */
+	private pageOffer: PageOffer | null = null;
 
 	private viewport: Viewport = { scale: 1, offsetX: 0, offsetY: 0 };
 	private viewSize: Size = { width: 0, height: 0 };
@@ -485,6 +493,10 @@ export class NotebookView extends FileView {
 
 		this.renderer = new Renderer(this.stage, { lowLatency: this.host.settings.lowLatencyInk });
 		this.mountMarkers();
+		this.pageOffer = new PageOffer({
+			parent: () => this.body,
+			insertAfter: (pageId) => this.insertPageAfterId(pageId),
+		});
 		// Registered before the pointer controller: the ruler gesture swallows the touches that move the ruler.
 		this.rulerGesture = new RulerGesture(this.stage, {
 			enabled: () => this.tools.ruler && !!this.ruler && this.editable(),
@@ -633,6 +645,8 @@ export class NotebookView extends FileView {
 		this.selectionActions = null;
 		this.penLinks?.destroy();
 		this.penLinks = null;
+		this.pageOffer?.destroy();
+		this.pageOffer = null;
 		this.ui?.destroy();
 		this.ui = null;
 		this.stamps?.destroy();
@@ -980,6 +994,7 @@ export class NotebookView extends FileView {
 		this.commitText();
 		this.clearSelection();
 		this.penLinks?.hideChip();
+		this.pageOffer?.cancel();
 		if (this.history.undo()) this.afterHistoryChange();
 	}
 
@@ -988,6 +1003,7 @@ export class NotebookView extends FileView {
 		this.commitText();
 		this.clearSelection();
 		this.penLinks?.hideChip();
+		this.pageOffer?.cancel();
 		if (this.history.redo()) this.afterHistoryChange();
 	}
 
@@ -1035,6 +1051,62 @@ export class NotebookView extends FileView {
 	/** Deletes the selection (lasso), if any. */
 	removeSelection(): void {
 		if (this.editable()) this.deleteSelection();
+	}
+
+	/**
+	 * wave 0.9 (357): moves the selected strokes and elements in the layer order of their page (model/layers.ts), one undo
+	 * step. The selection is released afterwards: a selection floats on its own layer, so the new order is only visible once
+	 * it is dropped back on the page.
+	 */
+	moveSelectionLayer(move: LayerMove): void {
+		const sel = this.selection;
+		const page = sel && this.session?.doc?.pages[sel.pageIndex];
+		if (!sel || !page || !this.editableDocument()) return;
+		this.commitText();
+		const cmd = layerCommand(page, sel, move, { stroke: this.renderer?.boundsOf, measure: measureText });
+		if (!cmd) {
+			showNotice(t("layer.nothing"));
+			return;
+		}
+		this.clearSelection();
+		this.history.execute(cmd);
+		this.afterHistoryChange();
+		this.renderer?.invalidate();
+	}
+
+	/** wave 0.9 (361): the find and replace panel for the text boxes of this notebook. */
+	openFindReplace(): void {
+		if (!this.session?.doc) return;
+		this.commitText();
+		new FindReplaceModal({
+			app: this.app,
+			doc: () => this.session?.doc ?? null,
+			canEdit: () => this.editableDocument() !== null,
+			run: (cmd) => this.applyCommand(cmd),
+			goTo: (index) => this.goToPage(index),
+		}).open();
+	}
+
+	/** wave 0.9 (379): the information panel of page `index`. */
+	openPageInfo(index: number): void {
+		if (!this.session?.doc?.pages[index]) return;
+		new PageInfoModal({
+			app: this.app,
+			doc: () => this.session?.doc ?? null,
+			editedAt: (pageId) => {
+				const id = this.session?.doc?.id;
+				return id ? (this.host.pageEditedAt?.(id, pageId) ?? null) : null;
+			},
+		}, index).open();
+	}
+
+	/** wave 0.9 (389): inserts a page (same size and paper) right after the page with this id; false when it is gone or the document cannot be edited. */
+	private insertPageAfterId(pageId: string): boolean {
+		const doc = this.session?.doc;
+		const index = doc ? doc.pages.findIndex((p) => p.id === pageId) : -1;
+		if (index < 0 || !this.editableDocument()) return false;
+		this.addPageAfter(index);
+		return true;
 	}
 
 	/** Pen only: fingers pan and zoom but do not draw. */
@@ -1868,6 +1940,7 @@ export class NotebookView extends FileView {
 		this.textTap = null;
 		this.lassoTap = null;
 		this.penLinks?.reset();
+		this.pageOffer?.reset();
 		this.multiTap.reset();
 		this.stopHold();
 		this.textEditor?.close();
@@ -1997,6 +2070,7 @@ export class NotebookView extends FileView {
 		if (current !== this.navCurrent) {
 			this.navCurrent = current;
 			this.pageNav?.markCurrent(current);
+			this.pageOffer?.cancel(); // an offer made for the page that was in view
 			this.refreshUi(); // the contextual bar follows the kind of page in view
 			if (n && this.file && this.pendingPage === null) this.location.note(this.file.path, current + 1, this.currentPosition());
 			this.syncHooks?.page(current);
@@ -2415,6 +2489,7 @@ export class NotebookView extends FileView {
 		// A selection made with the side button's lasso is not carried into new ink.
 		this.clearSelection();
 		this.penLinks?.strokeStarted();
+		this.pageOffer?.penDown();
 		this.strokeStart = sample.t;
 		const snap = !!page && this.rulerLatches(page, local);
 		const start = snap && this.ruler ? (projectToRuler(this.ruler.ruler, local, Infinity) ?? local) : local;
@@ -2765,6 +2840,11 @@ export class NotebookView extends FileView {
 		}
 		this.history.execute(commands.length === 1 ? commands[0]! : new Batch("Draw", commands));
 		this.penLinks?.strokesAdded(pageIndex);
+		// Reaching the bottom of a page in the middle: offer (never add) a page right after it.
+		if (doc && this.renderer && !grew) {
+			const maxY = Math.max(...strokes.map((s) => this.renderer!.boundsOf(s).maxY));
+			if (needsPageOffer(page, doc.pages[doc.pages.length - 1] === page, maxY, this.host.settings.autoNextPage)) this.pageOffer?.offer(page.id);
+		}
 		if (grew) {
 			this.afterHistoryChange();
 			return;

@@ -36,6 +36,8 @@ export function sizeName(page: Page): PageSizeName | null {
 export function commandApplies(view: NotebookView, id: string): boolean {
 	if (id === "pdf-side-open") return pdfSideState(view).available;
 	if (id.startsWith("pdf-side-")) return pdfSideState(view).open;
+	// wave 0.9 (357): the layer order needs something selected.
+	if (id.startsWith("layer-")) return !!view.uiContext().selection;
 	return true;
 }
 
@@ -104,11 +106,16 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"link-selection": (v) => v.linkSelection(),
 	"selection-open-link": (v) => v.openSelectionLink(),
 	"stamps-save-selection": (v) => v.stampPalette?.saveSelection(),
+	"layer-front": (v) => v.moveSelectionLayer("front"),
+	"layer-forward": (v) => v.moveSelectionLayer("forward"),
+	"layer-backward": (v) => v.moveSelectionLayer("backward"),
+	"layer-back": (v) => v.moveSelectionLayer("back"),
 	"delete-selection": (v) => v.removeSelection(),
 
 	// navigation (wave 0.7)
 	"goto-page-number": (v) => new GotoPageModal(v.app, v).open(),
 	"toggle-page-mode": (v) => v.togglePageMode(),
+	"find-replace": (v) => v.openFindReplace(),
 
 	// insert
 	"insert-image": (v) => void v.insertImageElement(),
@@ -169,6 +176,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"practice-original": (v) => void v.practiceHooks?.goToOriginal(),
 	"practice-attempts": (v) => void v.practiceHooks?.attempts(),
 	"practice-timer": (v) => v.practiceHooks?.toggleTimer(),
+	"page-info": onPage((v, _p, i) => v.openPageInfo(i)),
 	"page-split": onPage((v, _p, i) => v.splitHeavyPage(i)),
 	"page-delete": onPage((v, p, i) => {
 		const doc = v.editableDocument();
