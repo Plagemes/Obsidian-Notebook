@@ -426,6 +426,7 @@ const en = {
 	"move.done": "Moved {n} page(s) to {name}",
 	"move.doneKept": "Copied {n} page(s) to {name}; {kept} stayed here because they changed while moving or this notebook was closed.",
 	"move.failed": "Could not move the pages: {error}",
+	"move.renamedNotRecorded": "The pages were moved, but some got a new id and that could not be recorded, so \"Update links to notebook pages\" may not find them: {error}",
 	// wave p1a: input
 	"settings.edge": "Edge rejection zones",
 	"settings.edge.desc": "Touches that start within the chosen width of an edge of the page area are ignored: they neither draw nor scroll, so a palm resting on the edge does nothing. The pen is never affected.",
@@ -1995,6 +1996,7 @@ const it: Partial<Record<MessageKey, string>> = {
 	"move.done": "Spostate {n} pagine in {name}",
 	"move.doneKept": "Copiate {n} pagine in {name}; {kept} sono rimaste qui perché sono cambiate durante lo spostamento o questo quaderno è stato chiuso.",
 	"move.failed": "Impossibile spostare le pagine: {error}",
+	"move.renamedNotRecorded": "Le pagine sono state spostate, ma alcune hanno ricevuto un nuovo id e non è stato possibile registrarlo, quindi \"Aggiorna i link alle pagine dei quaderni\" potrebbe non trovarle: {error}",
 	// wave p1a: input
 	"settings.edge": "Zone di rifiuto ai bordi",
 	"settings.edge.desc": "I tocchi che iniziano entro la larghezza scelta da un bordo dell'area della pagina vengono ignorati: non disegnano né scorrono, così un palmo appoggiato al bordo non fa nulla. La penna non è mai coinvolta.",

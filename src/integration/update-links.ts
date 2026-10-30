@@ -2,7 +2,9 @@ import { Modal, type App, type TFile } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import { parse } from "../model/serialize";
 import { isNotebookFile, NOTEBOOK_EXTENSIONS, readNotebookText } from "../storage/format";
+import { PageMoveStore } from "../storage/page-moves";
 import { isHiddenNotebookPath } from "../storage/trash-paths";
+import { sidecarDeviceId, vaultDeviceFileAdapter } from "../storage/vault-io";
 import type { NotebookSettings } from "../settings";
 import {
 	applyLinkChanges, isConflictedCopyPath, planNoteLinks, type LinkChange, type LinkPlan, type LinkSkip, type NotebookLookup, type SkipReason,
@@ -20,8 +22,9 @@ class VaultNotebooks implements NotebookLookup {
 	private readonly names = new Map<string, number>();
 	private readonly pages = new Map<string, Promise<string[] | null>>();
 	private index: Promise<Map<string, string[]>> | null = null;
+	private moves: Promise<Map<string, string[]>> | null = null;
 
-	constructor(private readonly app: App, hidden: (path: string) => boolean) {
+	constructor(private readonly app: App, hidden: (path: string) => boolean, private readonly moveStore: PageMoveStore) {
 		this.files = app.vault.getFiles().filter((f) => isNotebookFile(f) && !hidden(f.path));
 		for (const f of this.files) {
 			const key = f.basename.toLowerCase();
@@ -95,11 +98,20 @@ class VaultNotebooks implements NotebookLookup {
 	isConflictedCopy(path: string): boolean {
 		return isConflictedCopyPath(path, this.files.map((f) => f.path));
 	}
+
+	async movedPageIds(pageId: string): Promise<readonly string[]> {
+		this.moves ??= this.moveStore.load().catch((e: unknown) => {
+			console.warn("[notebook] update links: could not read the page moves", e);
+			return new Map<string, string[]>();
+		});
+		return (await this.moves).get(pageId) ?? [];
+	}
 }
 
 /** Plans the update for every note that could hold a page link. Reads notes, writes nothing. */
 export async function planVaultLinks(app: App, settings: NotebookSettings): Promise<LinkPlan> {
-	const lookup = new VaultNotebooks(app, (path) => isHiddenNotebookPath(path, settings.folder, settings.templatesFolder));
+	const moves = new PageMoveStore(vaultDeviceFileAdapter(app), () => settings.folder, sidecarDeviceId(app));
+	const lookup = new VaultNotebooks(app, (path) => isHiddenNotebookPath(path, settings.folder, settings.templatesFolder), moves);
 	const all: LinkPlan = { changes: [], skipped: [] };
 	for (const note of app.vault.getMarkdownFiles()) {
 		const cache = app.metadataCache.getFileCache(note);

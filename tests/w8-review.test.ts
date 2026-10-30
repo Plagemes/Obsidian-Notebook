@@ -315,3 +315,44 @@ describe("update links: relocation targets and masking", () => {
 		expect(plan.skipped[0]).toMatchObject({ line: 3, lineText: "[[Physics.notebook#p9]]" });
 	});
 });
+
+// --- 3. moved pages keep their ids; a clash is recorded for "Update links" ---
+
+describe("move to notebook: page ids", () => {
+	it("keeps the ids the target does not have and renames only a clash", async () => {
+		const { planPageMove } = await import("../src/library/page-move");
+		const src = createDocument(new Date("2026-10-30T10:00:00.000Z"));
+		src.pages.push({ ...src.pages[0]!, id: "p-two", strokes: [] });
+		const target = createDocument(new Date("2026-10-30T10:00:00.000Z"));
+		target.pages[0] = { ...target.pages[0]!, id: "p-two" };
+		const plan = planPageMove(src, [src.pages[0]!.id, "p-two"], target);
+		expect(plan.ok).toBe(true);
+		if (!plan.ok) return;
+		expect(plan.pages[0]!.id).toBe(src.pages[0]!.id);
+		expect(plan.pages[1]!.id).not.toBe("p-two");
+		expect(plan.renamed).toEqual([{ from: "p-two", to: plan.pages[1]!.id }]);
+		expect(new Set([...target.pages, ...plan.pages].map((p) => p.id)).size).toBe(3);
+	});
+
+	it("records renamed ids per device and merges every device's file on read", async () => {
+		const { FakeVault } = await import("./fake-vault");
+		const { PageMoveStore, PageMovesBlockedError } = await import("../src/storage/page-moves");
+		const vault = new FakeVault({ "Notebooks/_meta/page-moves-bbbbbbbb.json": `{"format":"obsidian-notebook-page-moves","version":1,"moves":[\n{"from":"x","to":"x3","doc":"d","at":"2026-10-30T12:00:00.000Z"}\n]}\n` });
+		const adapter = {
+			exists: async (p: string) => vault.files.has(p) || vault.folders.has(p),
+			read: async (p: string) => vault.files.get(p) ?? "",
+			write: async (p: string, d: string) => void vault.put(p, d),
+			mkdir: async (p: string) => void vault.folders.add(p),
+			list: async (f: string) => [...vault.files.keys()].filter((p) => p.startsWith(`${f}/`) && !p.slice(f.length + 1).includes("/")),
+		};
+		const store = new PageMoveStore(adapter, () => "Notebooks", "aaaaaaaa");
+		await store.record([{ from: "x", to: "x2", doc: "d", at: "2026-10-30T11:00:00.000Z" }]);
+		expect(vault.files.has("Notebooks/_meta/page-moves-aaaaaaaa.json")).toBe(true);
+		expect((await store.load()).get("x")).toEqual(["x2", "x3"]);
+		// An empty own file (not synced yet) is never written over: refused, and kept as a copy.
+		vault.put(store.ownPath, "");
+		await expect(store.record([{ from: "y", to: "y2", doc: "d", at: "2026-10-30T13:00:00.000Z" }])).rejects.toBeInstanceOf(PageMovesBlockedError);
+		expect(vault.files.get(store.ownPath)).toBe("");
+		expect([...vault.files.keys()].some((p) => p.includes("page-moves.unreadable-"))).toBe(true);
+	});
+});

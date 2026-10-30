@@ -1,4 +1,4 @@
-import { Notice, TFile, type App, type Plugin } from "obsidian";
+import { Notice, type App, type Plugin, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { openNotebookAtPage } from "../integration/open";
 import { findLooseSheet } from "../library/loose-sheet";
@@ -11,14 +11,14 @@ import { textUnderStroke } from "../pdf/annotations";
 import type { NotebookSettings } from "../settings";
 import { isNotebookFile, readNotebookText } from "../storage/format";
 import { listNotebooks } from "../storage/notebooks";
-import { vaultLinkFileAdapter } from "../storage/vault-io";
+import { sidecarDeviceId, vaultDeviceFileAdapter } from "../storage/vault-io";
 import { NotebookMedia } from "../view/media";
 import type { CardRecord } from "./card-content";
 import {
 	coveredBy, itemIdOf, looseSheetSource, pdfAnnotationSource, registeredInboxSources, sortItems, sourceLabel, suggestTitle, transcriptionText,
 	type InboxEnv, type InboxItem, type InboxNotebook, type InboxSource,
 } from "./inbox-items";
-import { newDeviceId, statusOf, validDeviceId, type InboxEntry, type InboxOp, type ItemStatus } from "./inbox-state";
+import { statusOf, type InboxEntry, type InboxOp, type ItemStatus } from "./inbox-state";
 import { InboxBlockedError, InboxStore, type InboxFileAdapter } from "./inbox-store";
 import type { CardAnswer } from "./modals";
 import type { ZettelService } from "./service";
@@ -26,8 +26,6 @@ import type { ZettelService } from "./service";
 export interface InboxHost extends Plugin {
 	settings: NotebookSettings;
 }
-
-const DEVICE_KEY = "notebook-inbox-device";
 
 export interface InboxSnapshot {
 	items: InboxItem[];
@@ -37,23 +35,7 @@ export interface InboxSnapshot {
 
 /** Where the Inbox state lives, for a vault. */
 function vaultInboxAdapter(app: App): InboxFileAdapter {
-	const base = vaultLinkFileAdapter(app);
-	return {
-		...base,
-		list: async (folder) => {
-			const dir = app.vault.getFolderByPath(folder);
-			return dir ? dir.children.filter((c): c is TFile => c instanceof TFile).map((f) => f.path) : [];
-		},
-	};
-}
-
-/** This device's id for the Inbox files (kept in the vault's local storage, never synced). */
-function deviceId(app: App): string {
-	const saved: unknown = app.loadLocalStorage(DEVICE_KEY);
-	if (validDeviceId(saved)) return saved;
-	const id = newDeviceId();
-	app.saveLocalStorage(DEVICE_KEY, id);
-	return id;
+	return vaultDeviceFileAdapter(app);
 }
 
 /**
@@ -68,7 +50,7 @@ export class InboxService {
 	private readonly listeners = new Set<() => void>();
 
 	constructor(private readonly plugin: InboxHost, private readonly zettel: ZettelService) {
-		this.store = new InboxStore(vaultInboxAdapter(plugin.app), () => plugin.settings.folder, deviceId(plugin.app));
+		this.store = new InboxStore(vaultInboxAdapter(plugin.app), () => plugin.settings.folder, sidecarDeviceId(plugin.app));
 	}
 
 	private get app(): App {

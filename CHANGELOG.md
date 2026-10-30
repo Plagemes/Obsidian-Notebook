@@ -9,6 +9,7 @@
 - **Error notices are never held back while writing.** Failed saves, backups of unreadable or conflicting files, integrity problems and a failed save before a version restore are shown at once instead of waiting until the pen is lifted.
 - **Update links: Markdown links to notebooks with parentheses, and conflicted copies.** A relocated Markdown link now encodes `(`, `)`, `#` and `?` (a link to `Physics (1).notebook` no longer breaks), the text it replaces is taken exactly as written in the note, and a link is never moved to a sync conflicted copy (`Notes (1).notebook` next to `Notes.notebook`), which holds the same page ids.
 - **Update links: fewer false links, and the line in the list.** Links inside fenced code in blockquotes, callouts and lists, inside `%% %%` comments and in the frontmatter are left alone, and the list shows the text of the line each link is on.
+- **Moved pages keep their ids.** *Move to notebook…* keeps each page's id, so stable links (`#p3&id=…`) can follow the page with *Update links to notebook pages*. Only a page whose id the target already has gets a new one; that old → new pair is recorded in `<notebooks folder>/_meta/page-moves-<device>.json` (one file per device) and *Update links* uses it.
 
 ## 0.7.0 — 2026-10-30
 
