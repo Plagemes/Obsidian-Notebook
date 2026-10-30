@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InputPolicy, type InputSettings } from "../src/ink/input-policy";
 import {
-	BarrelDetector, EventLog, StillHold, describeSideButton, formatEvent, isBarrelSignal, isEraserSignal, strokeIsYoung,
+	BarrelDetector, EventLog, HOLD_MS, StillHold, describeSideButton, formatEvent, isBarrelSignal, isEraserSignal, strokeIsYoung,
 	type LoggedEvent,
 } from "../src/ink/pen-button";
 import { PointerController, type PointerHandlers } from "../src/ink/pointer-controller";
@@ -402,11 +402,11 @@ describe("PointerController: every signal opens the menu once and draws nothing"
 	});
 
 	describe("still-hold fallback", () => {
-		it("a pen held still 600 ms opens the menu and discards the stroke", () => {
+		it("a pen held still HOLD_MS opens the menu and discards the stroke", () => {
 			vi.useFakeTimers();
 			const { el, log, menus } = setup({ penLongPress: true });
 			fire(el, "pointerdown", { button: 0, buttons: 1, pressure: 0.4, clientX: 400, clientY: 300 });
-			vi.advanceTimersByTime(599);
+			vi.advanceTimersByTime(HOLD_MS - 1);
 			expect(log).toEqual(["start"]);
 			vi.advanceTimersByTime(2);
 			expect(log).toEqual(["start", "cancel", "menu"]);
@@ -437,9 +437,8 @@ describe("PointerController: every signal opens the menu once and draws nothing"
 			expect(log).toEqual(["start", "end"]);
 		});
 
-		it("is off by default and when the side button is not the radial menu", () => {
+		it("is off in the policy by default and when the side button is not the radial menu", () => {
 			vi.useFakeTimers();
-			expect(DEFAULT_SETTINGS.penLongPress).toBe(false);
 			for (const s of [{}, { penLongPress: true, penButton: "off" as const }, { penLongPress: true, penButton: "eraser" as const }]) {
 				const { el, menus } = setup(s);
 				fire(el, "pointerdown", { button: 0, buttons: 1, pressure: 0.4 });
@@ -461,11 +460,13 @@ describe("PointerController: every signal opens the menu once and draws nothing"
 });
 
 describe("settings", () => {
-	it("penLongPress defaults to off, parses booleans only and reaches the input policy", () => {
-		expect(DEFAULT_SETTINGS.penLongPress).toBe(false);
-		expect(readSettings({ penLongPress: true }).penLongPress).toBe(true);
-		expect(readSettings({ penLongPress: "yes" }).penLongPress).toBe(false);
-		expect(policySettings(readSettings({ penLongPress: true })).penLongPress).toBe(true);
+	it("penHoldStill is a tri-state (null = automatic), parses booleans only and reaches the input policy", () => {
+		expect(DEFAULT_SETTINGS.penHoldStill).toBeNull();
+		expect(readSettings({ penHoldStill: true }).penHoldStill).toBe(true);
+		expect(readSettings({ penHoldStill: false }).penHoldStill).toBe(false);
+		expect(readSettings({ penHoldStill: "yes" }).penHoldStill).toBeNull();
+		expect(policySettings(readSettings({ penHoldStill: true })).penLongPress).toBe(true);
+		expect(policySettings(readSettings({ penHoldStill: false })).penLongPress).toBe(false);
 	});
 
 	it("the eraser bit stays an eraser in every mode and is never a menu route", () => {

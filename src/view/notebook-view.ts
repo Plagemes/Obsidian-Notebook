@@ -17,7 +17,7 @@ import { eraseAreaCommand } from "../ink/erase-area";
 import { filterErasable } from "../ink/erase-filter";
 import { findHitStrokes, type BBox } from "../ink/hit-test";
 import { growForInfinite } from "../ink/infinite";
-import { InputPolicy, type HeldTool } from "../ink/input-policy";
+import { InputPolicy } from "../ink/input-policy";
 import { strokesInLasso, transformStroke } from "../ink/lasso";
 import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layout, type PageBox } from "../ink/layout";
 import { HoldTracker } from "../ink/hold";
@@ -399,7 +399,12 @@ export class NotebookView extends FileView {
 				this.fitMode = false;
 				this.setViewport(zoomAt(this.viewport, factor, fx, fy), true);
 			},
-			penMenu: (x, y) => this.radial?.open(x, y),
+			penMenu: (x, y, source) => {
+				this.radial?.open(x, y, source);
+				// The menu swallows the lift of the contact that opened it: the gesture layer must not wait for it.
+				window.setTimeout(() => this.gestures?.releaseContacts(), 0);
+			},
+			sideButtonSeen: () => this.noteSideButtonSeen(),
 		}, { rawUpdates: this.host.settings.lowLatencyInk });
 		this.radial = new PenRadial(this.stage, {
 			editable: () => this.editable() && !this.controller?.drawing,
@@ -671,6 +676,15 @@ export class NotebookView extends FileView {
 			session.dispose();
 			if (this.session === session) this.session = null;
 		}
+	}
+
+	/** A side-button signal reached the page: remember it for the device (it turns the automatic hold-still default off). */
+	private noteSideButtonSeen(): void {
+		const s = this.host.settings;
+		if (s.penButtonSeen) return;
+		s.penButtonSeen = true;
+		this.applySettings(s);
+		void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
 	}
 
 	applySettings(settings: NotebookSettings): void {
@@ -1823,14 +1837,13 @@ export class NotebookView extends FileView {
 		return { x: b.x[i]!, y: b.y[i]! };
 	}
 
-	private drawStart(sample: InkSample, eraserButton: boolean, held?: HeldTool): boolean {
+	private drawStart(sample: InkSample, eraserButton: boolean, held?: "lasso" | "previous"): boolean {
 		const layout = this.layout;
 		if (!layout || !this.editable()) return false;
 		this.commitText();
 		const [dx, dy] = this.toDoc(sample);
 		if (!Number.isFinite(dx) || !Number.isFinite(dy)) return false;
-		// The pen's side button can select the eraser, the lasso or the previous tool for this contact only.
-		const tool = eraserButton ? "eraser" : held === "lasso" ? "lasso" : held === "last" ? (this.lastTool.previous() ?? this.tools.tool) : this.tools.tool;
+		const tool = eraserButton ? "eraser" : held === "lasso" ? "lasso" : held === "previous" ? (this.lastTool.previous() ?? this.tools.tool) : this.tools.tool;
 
 		if (tool === "eraser" && this.tools.eraserMode !== "area") {
 			// The selection may contain strokes about to be erased (e.g. erasing with the pen button).

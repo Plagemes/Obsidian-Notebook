@@ -255,24 +255,30 @@ describe("a finger tap leaves no ink", () => {
 describe("pen side button: lasso and previous tool", () => {
 	const base: InputSettings = { fingerDrawing: false, palmRejectionMs: 0 };
 
-	it("the new settings parse; the default stays the radial menu", () => {
-		expect(DEFAULT_SETTINGS.penButtonAction).toBe("radial");
-		expect(readSettings({ penButtonAction: "lasso" }).penButtonAction).toBe("lasso");
-		expect(readSettings({ penButtonAction: "lastTool" }).penButtonAction).toBe("lastTool");
-		expect(readSettings({ penButtonAction: "scissors" }).penButtonAction).toBe("radial");
+	it("the settings parse (key penSideButton); the default is radial + eraser; the old key is migrated", () => {
+		expect(DEFAULT_SETTINGS.penSideButton).toBe("radial-eraser");
+		expect(readSettings({ penSideButton: "lasso" }).penSideButton).toBe("lasso");
+		expect(readSettings({ penSideButton: "previous" }).penSideButton).toBe("previous");
+		expect(readSettings({ penSideButton: "scissors" }).penSideButton).toBe("radial-eraser");
+		// wave 0.6 saved penButtonAction: "lasso" / "lastTool"; 0.5.x saved "radial" as its default.
+		expect(readSettings({ penButtonAction: "lasso" }).penSideButton).toBe("lasso");
+		expect(readSettings({ penButtonAction: "lastTool" }).penSideButton).toBe("previous");
+		expect(readSettings({ penButtonAction: "radial" }).penSideButton).toBe("radial-eraser");
+		expect(readSettings({ penButtonAction: "scissors" }).penSideButton).toBe("radial-eraser");
+		expect(readSettings({ penButtonAction: "lasso", penSideButton: "off" }).penSideButton).toBe("off");
 	});
 
 	it("the side button draws (never opens the menu) and names the held tool", () => {
-		for (const [penButton, held] of [["lasso", "lasso"], ["lastTool", "last"]] as const) {
+		for (const [penButton, held] of [["lasso", "lasso"], ["previous", "previous"]] as const) {
 			const p = new InputPolicy({ ...base, penButton });
 			expect(p.route("pen", 1000, 0, 0, 3)).toBe("draw");
 			expect(p.route("pen", 1000, 2, 0, 2)).toBe("draw");
-			expect(p.penHeldTool(0, 3)).toBe(held);
-			expect(p.penHeldTool(0, 1)).toBeNull();
+			expect(p.penHeld(0, 3)).toBe(held);
+			expect(p.penHeld(0, 1)).toBeNull();
 			expect(p.penErases(0, 3)).toBe(false);
 		}
-		for (const penButton of ["radial", "eraser", "off"] as const) {
-			expect(new InputPolicy({ ...base, penButton }).penHeldTool(0, 3)).toBeNull();
+		for (const penButton of ["radial", "radial-eraser", "eraser", "off"] as const) {
+			expect(new InputPolicy({ ...base, penButton }).penHeld(0, 3)).toBeNull();
 		}
 	});
 

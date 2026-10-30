@@ -42,7 +42,7 @@ The toolbar has these tools:
 - **Insert or remove space**: touch a line and drag; everything below moves, onto the next page (created when needed) if it no longer fits. Removing never takes away more than the empty gap.
 - **Favourite pens** (six slots), a **Pen only** toggle, and a command for every tool and action (no default hotkeys). The toolbar is two rows and the tool options are in a popover.
 - **Selection bar** (lasso): copy, cut, duplicate, paste, change colour and width, and make white transparent in an image. With the lasso, a double tap selects a word and a triple tap a line (found from the strokes, no OCR). Paste also takes a picture or text from the system clipboard; Android WebViews may refuse it, so a paste box is the fallback.
-- **Pen side button**: opens a radial menu at the pen tip (or erases while held, or does nothing). Not verified on the S Pen: on Samsung tablets Air command may keep the button while the pen hovers (switch it off in the S Pen settings; the name may differ by One UI version). The setting and command *Pen button test* show what the pen sends, and *Open the radial menu by holding the pen still* is a fallback that does not need the button.
+- **Pen side button**: a click (press and release with the pen hovering just above the screen) opens a radial menu at the pen; pressing it and then touching the page erases while held (other options: radial menu only, erase only, lasso, previous tool, nothing). Press the button *before* touching the page. Not verified on hardware by the author; a user report says that on a Samsung tablet the button arrives as a press with zero pressure while the pen hovers, and that on some devices it never reaches Obsidian. The command *Pen button test* shows what the pen sends. Without the button: *Open the radial menu by holding the pen still* (on by default until the device has delivered a button signal) and *a finger long-press* (pen-only mode) open the same menu.
 - **Edge rejection zones** (off by default): touches near the chosen edges are ignored.
 
 Undo/redo: toolbar buttons, Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z (or Ctrl+Y) on desktop. Each transform, delete, insertion or eraser gesture is one step. The history lives in memory and is lost when the notebook is closed.
@@ -120,8 +120,11 @@ The PDF writer has no dependencies and does not compress, so a page with a lot o
 | Ignore large touches | experimental, 0 = off. Touches with a contact larger than this many px are treated as a palm and ignored, scrolling included. Depends on what the device reports |
 | Performance overlay | shows frame time, input-to-frame and input-to-paint times, whether raw input is in use, redraw time, and strokes and pages drawn |
 | Add a page when writing at the bottom | on by default; appends a page after the last page (not infinite or PDF/image pages) |
-| Pen side button | radial menu (default), erase while held, or nothing |
-| Open the radial menu by holding the pen still | off by default; a fallback when the side button does not reach the app |
+| Pen side button | radial menu on click + erase while held (default), radial menu only, erase while held, lasso while held, previous tool while held, or nothing |
+| A zero-pressure press is the side button | on by default; what Samsung tablets report for the button pressed while the pen hovers. Turn off if the pen reports pressure 0 while writing |
+| Side button pressed while writing | experimental, on by default; a pen move with `button 0` during contact finishes the stroke and switches to the button's tool. Turn off if writing is interrupted by itself |
+| Open the radial menu by holding the pen still | automatic: on until the device has delivered a side-button signal, then off; your own choice always wins. 0.7 s within 6 px of the first contact |
+| Open the radial menu with a finger long-press | on by default; 0.5 s within 10 px, only while finger drawing is off and the pen is not near |
 | Pen button test | opens a log of the events the pen sends, to see how its side button is reported |
 | Edge rejection zones | off by default; width 4-80 px and one switch per edge |
 | Erase area also removes text and images | off by default |
