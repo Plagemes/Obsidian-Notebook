@@ -5,6 +5,7 @@
  */
 import { t } from "../i18n";
 import { chip } from "../ui/components/chip";
+import { createTile, type CreateTileOptions } from "../ui/components/create-tile";
 import { favouriteRow, type FavouriteRowOptions } from "../ui/components/favourite-row";
 import { listRow, type ListRowOptions } from "../ui/components/list-row";
 import { quickAction, type QuickActionOptions } from "../ui/components/quick-action";
@@ -22,6 +23,8 @@ export interface TagChip {
 export interface LibrarySectionsHost {
 	subjects: SubjectCardOptions[];
 	moreSubjects: (() => void) | null;
+	/** 0.12.2: the dashed "Create a folder" tile shown in place of the subject cards when there are none. */
+	createSubject: CreateTileOptions;
 	collections: QuickActionOptions[];
 	tags: TagChip[];
 	moreTags: (() => void) | null;
@@ -41,10 +44,12 @@ export function renderTagChips(parent: HTMLElement, tags: readonly TagChip[]): H
 }
 
 export function renderLibrarySections(el: HTMLElement, h: LibrarySectionsHost): void {
-	if (h.subjects.length > 0) {
+	// Subject folders can be created: with none yet, a dashed tile takes the place of the cards (DESIGN.md §5).
+	{
 		const sec = el.createEl("section", { cls: "nb-section nb-lib-subjects" });
 		sectionHeader(sec, { icon: "folder", title: t("home.subjects"), link: h.moreSubjects ? { label: t("home.showAll"), onClick: h.moreSubjects } : undefined });
 		const grid = sec.createDiv({ cls: "nb-subject-grid is-tiles" });
+		if (h.subjects.length === 0) createTile(grid, h.createSubject);
 		for (const s of h.subjects) subjectCard(grid, s);
 	}
 	if (h.collections.length > 0) {

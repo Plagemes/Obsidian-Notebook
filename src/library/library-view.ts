@@ -18,10 +18,13 @@ import { writing } from "../ink/writing-guard";
 import { renderThumbnail, type ThumbnailOptions } from "./thumbnail";
 import { showNotice } from "../view/notice";
 import { colorFor, SUBJECT_COLORS } from "../ui/palette";
-import { artImage, artStyleFor, coverImage, folderIconSvg, type ArtStyle } from "../ui/art/generative-art";
+import { artImage, artStyleFor, coverImage, emptyStateImage, folderIconSvg, type ArtStyle } from "../ui/art/generative-art";
 import type { FolderMeta } from "./folder-meta";
 import { iconButton, svgDataUrl } from "../ui/components/dom";
 import { filterChips, type FilterChip } from "../ui/components/chip";
+import { createTile, type CreateTileOptions } from "../ui/components/create-tile";
+import { emptyState, type EmptyStateAction, type EmptyStateOptions } from "../ui/components/empty-state";
+import { newButton } from "../ui/components/new-button";
 import { listRow, type ListRowOptions, type Pill } from "../ui/components/list-row";
 import { railBrand, railItem, railLabel } from "../ui/components/nav-rail";
 import { searchPill } from "../ui/components/search-pill";
@@ -188,7 +191,8 @@ export class LibraryView extends ItemView {
 	private closed = false;
 	private rootEl!: HTMLElement;
 	private railEl!: HTMLElement;
-	private titleEl!: HTMLElement;
+	/** Not `titleEl`: Obsidian keeps its own view-header title in an ItemView field of that name. */
+	private pageTitleEl!: HTMLElement;
 	private headerArtEl!: HTMLElement;
 	private subtitleEl!: HTMLElement;
 	private statusEl!: HTMLElement;
@@ -367,7 +371,7 @@ export class LibraryView extends ItemView {
 		const lead = header.createDiv({ cls: "nb-header-lead" });
 		iconButton(lead, "menu", t("nav.open"), () => this.setRailOpen(!this.railOpen), "nb-rail-toggle");
 		const titles = lead.createDiv({ cls: "nb-header-titles" });
-		this.titleEl = titles.createEl("h1", { cls: "nb-page-title" });
+		this.pageTitleEl = titles.createEl("h1", { cls: "nb-page-title" });
 		this.subtitleEl = titles.createDiv({ cls: "nb-page-subtitle" });
 		this.statusEl = titles.createDiv({ cls: "notebook-lib-status nb-status", attr: { "aria-live": "polite" } });
 
@@ -1044,6 +1048,11 @@ export class LibraryView extends ItemView {
 		el.empty();
 		const top = el.createDiv({ cls: "nb-rail-top" });
 		railBrand(top, t("nav.brand"), t("nav.brandSub"));
+		// 0.12.2: creation from anywhere in the view (DESIGN.md §5): the header's New menu; on phone a choice closes the sheet.
+		newButton(top, {
+			label: t("lib.new"), tip: t("lib.new.tip"), compact: true, key: "nav:new", cls: "nb-rail-new",
+			onOpen: (b) => this.newMenu(b, () => this.setRailOpen(false)),
+		});
 		if (this.mode === "phone") iconButton(top, "x", t("library.sidebar.close"), () => this.setRailOpen(false), "nb-rail-close");
 		else if (this.mode === "wide") {
 			iconButton(top, this.railFolded ? "panel-left-open" : "panel-left-close", t("library.sidebar.toggle"), () => {
@@ -1142,7 +1151,7 @@ export class LibraryView extends ItemView {
 
 	private renderHeader(): void {
 		const { title, subtitle } = this.placeTitle();
-		this.titleEl.setText(title);
+		this.pageTitleEl.setText(title);
 		// Decoration: a faint band of generated art behind the header (quiet, never a control).
 		const headerArt = this.art(this.place === "home" ? "notebook-home" : "notebook-library", paletteColor("Indigo"), 640, 140);
 		this.headerArtEl.toggleClass("is-hidden", !headerArt);
@@ -1172,18 +1181,24 @@ export class LibraryView extends ItemView {
 			this.nowBtn = b;
 			this.refreshNow();
 		}
-		this.bell?.mount(tools);
-		if (p === "home") return;
-		iconButton(tools, "filter", t("lib.filter"), (b) => this.filterMenu(b), isTagPlace(p) ? "is-active" : "");
-		iconButton(tools, "arrow-up-down", t("library.sort.label"), (b) => this.sortMenu(b));
-		const list = this.layoutMode === "list";
-		const view = iconButton(tools, list ? "list" : "layout-grid", list ? t("lib.view.grid") : t("lib.view.list"), () => {
-			this.layoutMode = list ? "grid" : "list";
-			this.app.workspace.requestSaveLayout();
-			this.render();
-		}, "is-active");
-		view.setAttribute("aria-pressed", String(list));
-		iconButton(tools, "plus", t("lib.new"), (b) => this.newMenu(b), "is-primary");
+		try {
+			this.bell?.mount(tools);
+		} catch (e) {
+			console.error("[notebook] the inbox bell could not be shown", e);
+		}
+		if (p !== "home") {
+			iconButton(tools, "filter", t("lib.filter"), (b) => this.filterMenu(b), isTagPlace(p) ? "is-active" : "");
+			iconButton(tools, "arrow-up-down", t("library.sort.label"), (b) => this.sortMenu(b));
+			const list = this.layoutMode === "list";
+			const view = iconButton(tools, list ? "list" : "layout-grid", list ? t("lib.view.grid") : t("lib.view.list"), () => {
+				this.layoutMode = list ? "grid" : "list";
+				this.app.workspace.requestSaveLayout();
+				this.render();
+			}, "is-active");
+			view.setAttribute("aria-pressed", String(list));
+		}
+		// 0.12.2: the primary + New, on Home and in the library alike (DESIGN.md §5: creation is always reachable).
+		newButton(tools, { label: t("lib.new"), tip: t("lib.new.tip"), key: "header:new", onOpen: (b) => this.newMenu(b) });
 	}
 
 	private showMenu(menu: Menu, anchor: HTMLElement): void {
@@ -1237,16 +1252,51 @@ export class LibraryView extends ItemView {
 		else this.runCreate("new-folder");
 	}
 
-	private newMenu(anchor: HTMLElement): void {
+	/** The New menu (header + New, the rail's +): `picked` runs first when an item is chosen (the rail closes its sheet). */
+	private newMenu(anchor: HTMLElement, picked?: () => void): void {
 		const folder = this.currentFolder();
 		const menu = new Menu();
-		menu.addItem((i) => i.setTitle(t("library.action.newNotebook")).setIcon("file-plus").onClick(() => this.newNotebook()));
-		menu.addItem((i) => i.setTitle(t("library.action.newFolder")).setIcon("folder-plus").onClick(() => this.newFolder()));
-		menu.addItem((i) => i.setTitle(t("library.action.importPdf")).setIcon("file-up").onClick(() => this.host.importPdf(folder)));
-		if (this.host.lectureFromSlides) menu.addItem((i) => i.setTitle(t("library.action.lectureFromSlides")).setIcon("presentation").onClick(() => this.host.lectureFromSlides?.(folder)));
-		if (this.host.scanToNotebook) menu.addItem((i) => i.setTitle(t("library.action.scanNotebook")).setIcon("scan").onClick(() => this.host.scanToNotebook?.(folder)));
-		if (this.host.openLooseSheet) menu.addItem((i) => i.setTitle(t("library.action.looseSheet")).setIcon("sticky-note").onClick(() => this.host.openLooseSheet?.()));
+		const item = (title: string, icon: string, run: () => void) => menu.addItem((i) => i.setTitle(title).setIcon(icon).onClick(() => {
+			picked?.();
+			run();
+		}));
+		item(t("library.action.newNotebook"), "file-plus", () => this.newNotebook());
+		item(t("library.action.newFolder"), "folder-plus", () => this.newFolder());
+		item(t("library.action.importPdf"), "file-up", () => this.host.importPdf(folder));
+		const lecture = this.host.lectureFromSlides?.bind(this.host);
+		if (lecture) item(t("library.action.lectureFromSlides"), "presentation", () => lecture(folder));
+		const scan = this.host.scanToNotebook?.bind(this.host);
+		if (scan) item(t("library.action.scanNotebook"), "scan", () => scan(folder));
+		const loose = this.host.openLooseSheet?.bind(this.host);
+		if (loose) item(t("library.action.looseSheet"), "sticky-note", () => loose());
 		this.showMenu(menu, anchor);
+	}
+
+	/** Decoration (DESIGN.md §2.6): the art engine's empty-state illustration, or undefined when effects are reduced. */
+	private emptyArt(seed: string): string | undefined {
+		if (!this.artOn()) return undefined;
+		const surface = activeDocument.body.hasClass("theme-light") ? "light" : "dark";
+		return emptyStateImage({ seed, color: paletteColor("Indigo"), surface }, 280, 150, Math.min(2, activeWindow.devicePixelRatio || 1)) || undefined;
+	}
+
+	/** 0.12.2: the empty state of a vault with no notebooks yet: what a notebook is, and the first step (DESIGN.md §5). */
+	private firstSteps(): EmptyStateOptions {
+		return {
+			art: this.emptyArt("empty:first-notebook"),
+			icon: "book-open",
+			title: t("empty.first.title"),
+			body: t("empty.first.body"),
+			primary: { icon: "file-plus", label: t("empty.createNotebook"), key: "empty:new-notebook", onClick: () => this.newNotebook() },
+			secondary: [
+				{ icon: "folder-plus", label: t("empty.createFolder"), key: "empty:new-folder", onClick: () => this.newFolder() },
+				{ icon: "file-up", label: t("empty.importPdf"), key: "empty:import-pdf", onClick: () => this.host.importPdf(this.currentFolder()) },
+			],
+		};
+	}
+
+	/** 0.12.2: the dashed tile in place of the subject cards when there are none: opens the creation dialog's Folder tab. */
+	private createSubjectTile(): CreateTileOptions {
+		return { icon: "folder-plus", title: t("empty.createFolder"), description: t("home.quick.newFolder.desc"), key: "create:subject", onRun: () => this.runCreate("new-folder") };
 	}
 
 	// ---------------------------------------------------------------- content
@@ -1267,6 +1317,12 @@ export class LibraryView extends ItemView {
 		this.renderChips(el);
 		const p = this.place;
 		if (p === "all") {
+			// 0.12.2: an empty vault teaches the first step; the subject section keeps its "Create a folder" tile.
+			if (this.index.size === 0) {
+				emptyState(el, this.firstSteps());
+				this.renderDashboard(el, tree);
+				return;
+			}
 			this.renderDashboard(el, tree);
 			const sec = el.createEl("section", { cls: "nb-section nb-all" });
 			sectionHeader(sec, { icon: "library", title: t("library.nav.all") });
@@ -1310,6 +1366,7 @@ export class LibraryView extends ItemView {
 		renderLibrarySections(el, {
 			subjects: subjects.slice(0, DASH_SUBJECTS).map((s) => this.subjectCardOptions(s, "tile")),
 			moreSubjects: subjects.length > DASH_SUBJECTS ? () => this.navigate("subjects") : null,
+			createSubject: this.createSubjectTile(),
 			collections: collectionsOf(visible, c).map(({ id, count }): QuickActionOptions => ({
 				icon: COLLECTION_LOOK[id].icon,
 				color: COLLECTION_LOOK[id].color,
@@ -1335,11 +1392,10 @@ export class LibraryView extends ItemView {
 
 	private renderSubjectsPage(el: HTMLElement, tree: FolderNode): void {
 		const subjects = this.subjects(tree);
-		if (subjects.length === 0) {
-			this.renderEmpty(el, false);
-			return;
-		}
+		if (subjects.length === 0 && this.index.size === 0) emptyState(el, this.firstSteps());
 		const grid = el.createDiv({ cls: "nb-subject-grid is-tiles" });
+		// Subject folders can be created: with none yet, the dashed tile stands in for the cards (DESIGN.md §5).
+		if (subjects.length === 0) createTile(grid, this.createSubjectTile());
 		for (const s of subjects) this.wireFolderCard(subjectCard(grid, this.subjectCardOptions(s, "tile")), s.path);
 	}
 
@@ -1371,7 +1427,8 @@ export class LibraryView extends ItemView {
 		if (edits.length === 0) {
 			for (const e of [...visible].sort((a, b) => b.modified - a.modified).slice(0, DASH_ROWS)) recent.push(this.notebookRow(e, now, stampTime(e.modified, now, lang)));
 		}
-		const kpis = statsOf(visible, edits, now, this.weeks);
+		// An empty vault has nothing to count: the statistics wait for the first notebook.
+		const kpis = this.index.size === 0 ? [] : statsOf(visible, edits, now, this.weeks);
 		const look: Record<KpiId, { icon: string; color: string; label: MessageKey }> = {
 			created: { icon: "file-plus", color: paletteColor("Blue"), label: "home.stats.created" },
 			edited: { icon: "pencil", color: paletteColor("Violet"), label: "home.stats.edited" },
@@ -1408,6 +1465,8 @@ export class LibraryView extends ItemView {
 		];
 		if (this.host.scanToNotebook) quick.push({ icon: "scan", color: paletteColor("Teal"), title: t("home.quick.scan"), description: t("home.quick.scan.desc"), art: this.art("quick:scan", paletteColor("Teal"), 240, 96), key: "quick:scan", onRun: () => this.host.scanToNotebook?.(root) });
 		renderHome(el, {
+			empty: this.index.size === 0 ? this.firstSteps() : null,
+			createSubject: this.createSubjectTile(),
 			subjects: subjects.slice(0, DASH_SUBJECTS).map((s) => this.subjectCardOptions(s, "row")),
 			moreSubjects: subjects.length > DASH_SUBJECTS ? () => this.navigate("subjects") : null,
 			recent,
@@ -1557,54 +1616,57 @@ export class LibraryView extends ItemView {
 		this.moreButton(el, pinned.length + rest.length);
 	}
 
+	/**
+	 * The empty state of a place (DESIGN.md §5): it says why the place is empty and, where something can be created
+	 * there (the library itself, a folder), offers that next step. Lists that fill up by themselves (favourites, recent,
+	 * a tag, a collection, the archive, a search) only explain how.
+	 */
 	private renderEmpty(el: HTMLElement, searching: boolean): void {
-		const box = el.createDiv({ cls: "notebook-lib-empty" });
 		const s = this.place;
+		if (!searching && this.index.size === 0 && (s === "all" || s === "subjects" || isFolderPlace(s))) {
+			emptyState(el, this.firstSteps());
+			return;
+		}
 		let title: string;
-		let body = "";
-		let actions = false;
+		let icon = "library";
+		let creatable = false;
 		if (searching) {
 			title = t("library.empty.search", { query: this.search.trim() });
-		} else if (this.index.size === 0 && (s === "all" || s === "subjects" || isFolderPlace(s))) {
-			title = t("library.empty.noneTitle");
-			body = t("library.empty.noneBody");
-			actions = true;
+			icon = "search-x";
 		} else if (s === "archived") {
 			title = t("library.empty.archived");
-		} else if (s === "subjects") {
-			title = t("lib.empty.subjects");
-			actions = true;
-		} else if (s === "all" && this.index.size > 0) {
+			icon = "archive";
+		} else if (s === "all") {
 			title = t("library.empty.allArchived");
+			icon = "archive";
 		} else if (isCollectionPlace(s) && s.collection === "favourites") {
 			title = t("library.empty.favorites");
+			icon = "star";
 		} else if (s === "recent") {
 			title = t("library.empty.recent");
+			icon = "clock";
 		} else if (isTagPlace(s)) {
 			title = t("library.empty.tag");
+			icon = "tag";
 		} else if (isCollectionPlace(s)) {
 			title = t("lib.empty.collection");
+			icon = COLLECTION_LOOK[s.collection].icon;
 		} else {
 			title = t("library.empty.folder");
-			actions = isFolderPlace(s);
+			icon = "folder-open";
+			creatable = isFolderPlace(s);
 		}
-		const emptyArt = searching ? undefined : this.art(`empty:${typeof s === "string" ? s : JSON.stringify(s)}`, paletteColor("Indigo"), 240, 120);
-		if (emptyArt) box.createDiv({ cls: "nb-empty-art", attr: { "aria-hidden": "true" } }).setCssProps({ "--nb-art": `url("${emptyArt}")` });
-		else setIcon(box.createDiv({ cls: "notebook-lib-empty-icon" }), searching ? "search-x" : "library");
-		box.createDiv({ cls: "notebook-lib-empty-title", text: title });
-		if (body) box.createDiv({ cls: "notebook-lib-empty-body", text: body });
-		if (actions) {
-			const row = box.createDiv({ cls: "notebook-lib-empty-actions" });
-			const button = (icon: string, label: string, run: () => void, cta = false) => {
-				const b = row.createEl("button", { cls: `nb-pill-btn${cta ? " mod-cta" : ""}`, attr: { type: "button" } });
-				setIcon(b.createSpan({ attr: { "aria-hidden": "true" } }), icon);
-				b.createSpan({ text: label });
-				b.addEventListener("click", run);
-			};
-			button("file-plus", t("library.action.newNotebook"), () => this.newNotebook(), true);
-			if (s === "subjects") button("folder-plus", t("library.action.newFolder"), () => this.newFolder());
-			else button("file-up", t("library.action.importPdf"), () => this.host.importPdf(this.currentFolder()));
-		}
+		const primary: EmptyStateAction | undefined = creatable
+			? { icon: "file-plus", label: t("empty.createNotebook"), key: "empty:new-notebook", onClick: () => this.newNotebook() }
+			: undefined;
+		const secondary: EmptyStateAction[] = creatable
+			? [
+				{ icon: "folder-plus", label: t("empty.createFolder"), key: "empty:new-folder", onClick: () => this.newFolder() },
+				{ icon: "file-up", label: t("empty.importPdf"), key: "empty:import-pdf", onClick: () => this.host.importPdf(this.currentFolder()) },
+			]
+			: [];
+		const art = searching ? undefined : this.emptyArt(`empty:${typeof s === "string" ? s : JSON.stringify(s)}`);
+		emptyState(el, { art, icon, title, primary, secondary });
 	}
 
 	private plural(count: number, one: MessageKey, many: MessageKey): string {

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.12.2 — 2026-10-30
+
+Two fixes for what 0.12.1 showed on the tablet. **Not verified on the device**: checked in unit tests and in the browser harness only. Manual re-check: steps 478-484 in `docs/testing.md`. No change to the notebook format (still v11).
+
+### Fixed
+- **Settings tab:** "Impossibile mostrare le impostazioni: this.name is not a function". Obsidian 1.13+ sets `name` and `icon` fields on a `SettingTab`, which shadowed our private `name()` helper. The helpers are renamed, with a regression test, and the harness stub now sets those fields.
+- **Creation is always reachable, and an empty vault teaches the first steps.** On a vault with no notebooks, Home showed only its title and the search pill: no button to create a notebook or a folder. (The harness, on an empty vault, drew 0.12.1's statistics and quick actions, so what failed on the device after the header is not known; see below for the guard.) Now:
+  - Home and the library end their header with a primary **+ New** pill (*Nuovo*), and the rail has a compact **+** next to the brand, also in the phone's rail sheet. Both open the New menu: New notebook, New folder, Import PDF, Scan (when available), Lecture from slides, Loose sheet. The library's old round + is replaced by the same pill.
+  - Home's quick actions are always shown.
+  - With no notebooks, Home and the library (*All*, *Subjects*, an empty notebooks folder) show an empty state: an illustration from the art engine's `emptyStateImage` (an icon with reduced motion), *Start your first notebook* (*Inizia il tuo primo quaderno*), one line, and *Create a notebook* (primary), *Create a folder*, *Import a PDF*. Home's statistics wait for the first notebook.
+  - *Subject folders* with no subject folders shows a dashed *Create a folder* tile that opens the creation dialog's Folder tab, on Home, in the library dashboard and on the subjects page. An empty folder offers the same three buttons for that folder; lists that fill up by themselves (favourites, recent, tags, collections, archive, search) only explain how.
+  - Each Home section is drawn on its own: a section that throws is logged (`[notebook] Home: the … section could not be drawn`) and the rest of Home, with creation, stays. A failing inbox bell no longer stops the header either.
+  - The page title element is no longer called `titleEl`, the name of Obsidian's own view-header title field on an `ItemView`.
+  - New shared components `ui/components/new-button.ts`, `empty-state.ts`, `create-tile.ts`; DESIGN.md §3 and §5 ("Creation is always reachable") and `docs/design-ui.md` §11 are updated.
+
+### Added
+- Harness: `doc=empty` scenarios (Home and the library, tablet and phone, dark and light) on a vault with no notebooks and no notebooks folder. They check the + New pill and its menu, the rail's +, the quick actions, the empty state and the dashed tile, and that each opens the real creation dialog on the right tab with pen, finger and mouse. Screenshots in `dev/harness/dist/shots/design/empty-*.png`.
+
 ## 0.12.1 — 2026-10-30
 
 Fixes for two regressions of 0.12.0 found in Obsidian for Android: the new Home and the library rendered unstyled, and the plugin's settings tab was gone. **Not verified on the device**: the fixes are checked in unit tests and in the browser harness only, which now loads Obsidian's real button and input rules and runs the whole plugin's start-up. The exact error on the tablet could not be read from here, so part of the cause below is an inference; please report the developer console output if it happens again. Manual re-check: steps 470-477 in `docs/testing.md`. No change to the notebook format (still v11) or to the stroke pipeline.

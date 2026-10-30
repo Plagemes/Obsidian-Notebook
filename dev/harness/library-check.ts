@@ -16,6 +16,8 @@ import { parse, serialize } from "../../src/model/serialize";
 import type { NotebookDocument, NotebookMeta } from "../../src/model/types";
 import type { FolderMeta } from "../../src/library/folder-meta";
 import { FAKE_ASSET, FAKE_PAGE, FAKE_PATH, installFakePdf } from "./fake-pdf";
+import { closeCreate, showCreate } from "./create-check";
+import { t } from "../../src/i18n";
 import type { WorkspaceLeaf as ObsidianLeaf } from "obsidian";
 
 const DAY = 24 * 3600 * 1000;
@@ -98,16 +100,21 @@ export interface LibraryHarness {
 	host: LibraryHost;
 }
 
-/** Seeds the demo vault and opens Home (surface=home) or the library (surface=library) in the harness leaf. */
-export async function openLibraryHarness(app: App, surface: string): Promise<LibraryHarness> {
+/**
+ * Seeds the demo vault and opens Home (surface=home) or the library (surface=library) in the harness leaf.
+ * 0.12.2: `empty` opens them on a vault with no notebooks and no notebooks folder yet (a first start).
+ */
+export async function openLibraryHarness(app: App, surface: string, empty = false): Promise<LibraryHarness> {
 	const now = Date.now();
 	installFakePdf();
-	await app.vault.createFolder(ROOT);
-	await app.vault.createFolder(`${ROOT}/_assets`);
-	await app.vault.createBinary(FAKE_PATH, new Uint8Array(8).buffer);
 	const docs = new Map<string, NotebookDocument>();
-	for (const folder of ["Anatomia", "Fisiologia", "Biomateriali", "Matematica"]) await app.vault.createFolder(`${ROOT}/${folder}`);
-	for (const spec of SPECS) {
+	if (!empty) {
+		await app.vault.createFolder(ROOT);
+		await app.vault.createFolder(`${ROOT}/_assets`);
+		await app.vault.createBinary(FAKE_PATH, new Uint8Array(8).buffer);
+		for (const folder of ["Anatomia", "Fisiologia", "Biomateriali", "Matematica"]) await app.vault.createFolder(`${ROOT}/${folder}`);
+	}
+	for (const spec of empty ? [] : SPECS) {
 		const path = `${ROOT}/${spec.folder ? `${spec.folder}/` : ""}${spec.name}.notebook`;
 		const doc = notebook(spec, now);
 		docs.set(path, doc);
@@ -153,8 +160,15 @@ export async function openLibraryHarness(app: App, surface: string): Promise<Lib
 			return r.ok ? r.doc : null;
 		},
 		openNotebook: async (file, page) => void calls.push(`open:${file.path}${page === undefined ? "" : `#${page}`}`),
-		createNotebook: (folder) => void calls.push(`create:${folder}`),
-		createFolder: (parent) => void calls.push(`create-folder:${parent}`),
+		// 0.12.2: on the empty vault, creation opens the real creation dialog (create-check.ts), so the check sees it open.
+		createNotebook: (folder) => {
+			calls.push(`create:${folder}`);
+			if (empty) showCreate({ app, errors: [], notices: [] }, "notebook", folder);
+		},
+		createFolder: (parent) => {
+			calls.push(`create-folder:${parent}`);
+			if (empty) showCreate({ app, errors: [], notices: [] }, "folder", parent);
+		},
 		// wave 0.12: two folders with a stored look (creation dialog), the others from their names.
 		folderMeta: {
 			getFolderMeta: (path) => FOLDER_LOOKS[path.slice(path.lastIndexOf("/") + 1)] ?? null,
@@ -177,6 +191,7 @@ export async function openLibraryHarness(app: App, surface: string): Promise<Lib
 		},
 		runAction: (id) => {
 			calls.push(`action:${id}`);
+			if (empty && (id === "new-notebook" || id === "new-folder")) showCreate({ app, errors: [], notices: [] }, id === "new-folder" ? "folder" : "notebook");
 			return true;
 		},
 		openSettings: () => void calls.push("settings"),
@@ -380,4 +395,121 @@ export async function libraryInteractions(h: LibraryHarness, surface: string): P
 	await go(surface === "home" ? "nav:home" : "nav:all");
 	app().querySelector<HTMLElement>(".nb-scroll")!.scrollTop = 0;
 	return out;
+}
+
+/**
+ * 0.12.2: Home or the library on an empty vault. Creation is always reachable (the header's + New with its menu, the
+ * rail's +, Home's quick actions) and the empty state teaches the first step; each of them opens the creation dialog.
+ */
+export async function checkEmptyLibrary(h: LibraryHarness, surface: string): Promise<Result[]> {
+	const out: Result[] = [];
+	const add = (name: string, ok: boolean, detail = "") => out.push({ name: `empty ${surface} ${window.innerWidth}px: ${name}`, ok, detail });
+	const app = document.querySelector<HTMLElement>(".nb-app");
+	add("the view is built", !!app);
+	if (!app) return out;
+	const q = <T extends HTMLElement = HTMLElement>(sel: string) => app.querySelector<T>(sel);
+	const count = (sel: string) => Array.from(app.querySelectorAll(sel)).filter(visible).length;
+	const phone = app.classList.contains("is-phone");
+
+	// Layout: the styled look, no sideways scroll, 40 px targets.
+	add("styled layout: the root is a flex row", getComputedStyle(app).display === "flex", getComputedStyle(app).display);
+	const grey = obsidianStyledButtons(app);
+	add("styled layout: no button shows Obsidian's default button look", grey.length === 0, grey.slice(0, 4).map((el) => el.className || el.tagName).join(", "));
+	const scroll = q(".nb-scroll")!;
+	add("no sideways scroll", document.documentElement.scrollWidth <= window.innerWidth + 1 && scroll.scrollWidth <= scroll.clientWidth + 1, `${scroll.scrollWidth} / ${scroll.clientWidth}`);
+	const small = Array.from(app.querySelectorAll("button, [role='button']")).filter(visible).filter((el) => !el.closest(".nb-rail"))
+		.filter((el) => Math.min(el.getBoundingClientRect().width, el.getBoundingClientRect().height) < 39.5);
+	add("targets are at least 40 px", small.length === 0, small.slice(0, 5).map((el) => `${el.className || el.tagName} ${Math.round(el.getBoundingClientRect().width)}x${Math.round(el.getBoundingClientRect().height)}`).join(", "));
+
+	// What is on screen.
+	const newBtn = q(".nb-header-buttons .nb-new-btn");
+	add("the header has the primary + New button", !!newBtn && visible(newBtn) && newBtn.textContent === t("lib.new") && getComputedStyle(newBtn).backgroundColor !== "rgba(0, 0, 0, 0)", newBtn?.textContent ?? "none");
+	add("the empty state is shown", count(".nb-empty-state") === 1, String(count(".nb-empty-state")));
+	add("the empty state teaches the first step", q(".nb-empty-state .nb-empty-title")?.textContent === t("empty.first.title") && !!q(".nb-empty-state .nb-empty-body")?.textContent, q(".nb-empty-state .nb-empty-title")?.textContent ?? "");
+	add("the empty state has its primary button and two secondary ones", count(".nb-empty-state .nb-pill-btn.mod-cta") === 1 && count(".nb-empty-state .nb-pill-btn:not(.mod-cta)") === 2, `${count(".nb-empty-state .nb-pill-btn.mod-cta")} + ${count(".nb-empty-state .nb-pill-btn:not(.mod-cta)")}`);
+	add("the empty state shows the generated illustration", count(".nb-empty-state .nb-empty-art") === 1 && (q(".nb-empty-state .nb-empty-art")?.style.getPropertyValue("--nb-art") ?? "").includes("data:image/png"));
+	add("subject folders show the dashed Create a folder tile", count(".nb-subject-grid .nb-create-tile") === 1, String(count(".nb-subject-grid .nb-create-tile")));
+	if (surface === "home") {
+		add("the quick actions are shown", count(".nb-home-quick .nb-quick") === 4, String(count(".nb-home-quick .nb-quick")));
+		add("no statistics of an empty vault", count(".nb-home-stats") === 0, String(count(".nb-home-stats")));
+	} else {
+		add("the filter chips are shown", count(".nb-chips .nb-chip") === 6, String(count(".nb-chips .nb-chip")));
+	}
+
+	// Every way in opens the creation dialog on the right tab, with pen, finger and mouse.
+	const tap = (el: Element | null, pointerType: "pen" | "touch" | "mouse") => {
+		if (!el) return false;
+		const r = el.getBoundingClientRect();
+		const at = { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true, pointerType, isPrimary: true, pointerId: 9 };
+		el.dispatchEvent(new PointerEvent("pointerdown", at));
+		el.dispatchEvent(new PointerEvent("pointerup", at));
+		(el as HTMLElement).click();
+		return true;
+	};
+	const opens = async (name: string, el: Element | null, pointerType: "pen" | "touch" | "mouse", tab: "notebook" | "folder") => {
+		closeCreate();
+		const tapped = tap(el, pointerType);
+		await frames(2);
+		const shown = !!document.querySelector(".nb-create-tabs");
+		const got = closeCreate();
+		add(`${name} (${pointerType}) opens the creation dialog on the ${tab} tab`, tapped && shown && got === tab, tapped ? `dialog ${shown ? got : "not open"}` : "control missing");
+	};
+	type MenuApi = { titles: string[]; run: (title: string) => void };
+	const menuOf = async (button: Element | null, pointerType: "pen" | "touch" | "mouse"): Promise<MenuApi | null> => {
+		const w = window as unknown as { harnessMenu?: MenuApi };
+		w.harnessMenu = undefined;
+		tap(button, pointerType);
+		await frames(1);
+		return w.harnessMenu ?? null;
+	};
+	const viaMenu = async (name: string, button: () => Element | null, pointerType: "pen" | "touch" | "mouse", item: string, tab: "notebook" | "folder") => {
+		closeCreate();
+		const menu = await menuOf(button(), pointerType);
+		menu?.run(item);
+		await frames(2);
+		const shown = !!document.querySelector(".nb-create-tabs");
+		const got = closeCreate();
+		add(`${name} → ${item} (${pointerType}) opens the creation dialog on the ${tab} tab`, !!menu && shown && got === tab, menu ? `dialog ${shown ? got : "not open"}` : "no menu");
+	};
+	const header = () => q(".nb-header-buttons .nb-new-btn");
+	const menu = await menuOf(header(), "mouse");
+	const want = [t("library.action.newNotebook"), t("library.action.newFolder"), t("library.action.importPdf"), t("library.action.scanNotebook")];
+	add("+ New opens the New menu (notebook, folder, PDF, scan)", !!menu && want.every((x) => menu.titles.includes(x)), menu?.titles.join(" | ") ?? "no menu");
+	await viaMenu("+ New", header, "pen", t("library.action.newNotebook"), "notebook");
+	await viaMenu("+ New", header, "touch", t("library.action.newFolder"), "folder");
+	const before = h.calls.length;
+	(await menuOf(header(), "touch"))?.run(t("library.action.importPdf"));
+	add("+ New → Import PDF opens the PDF import", h.calls.slice(before).some((c) => c.startsWith("import-pdf:")), h.calls.slice(before).join());
+	await opens("the empty state's Create a notebook", q('[data-key="empty:new-notebook"]'), "touch", "notebook");
+	await opens("the empty state's Create a folder", q('[data-key="empty:new-folder"]'), "mouse", "folder");
+	const before2 = h.calls.length;
+	tap(q('[data-key="empty:import-pdf"]'), "pen");
+	add("the empty state's Import a PDF opens the PDF import", h.calls.slice(before2).some((c) => c.startsWith("import-pdf:")), h.calls.slice(before2).join());
+	await opens("the dashed Create a folder tile", q(".nb-create-tile"), "pen", "folder");
+	if (surface === "home") {
+		await opens("the New notebook quick action", q('[data-key="quick:new-notebook"]'), "touch", "notebook");
+		await opens("the New folder quick action", q('[data-key="quick:new-folder"]'), "pen", "folder");
+	}
+	// The rail's + (on phone inside the rail sheet, which closes when an item is chosen).
+	if (phone) {
+		tap(q(".nb-rail-toggle"), "touch");
+		await frames(2);
+	}
+	const railNew = () => q(".nb-rail .nb-new-btn");
+	add("the rail has its + button", !!railNew() && visible(railNew()!) && Math.min(railNew()!.getBoundingClientRect().width, railNew()!.getBoundingClientRect().height) >= 39.5, railNew() ? `${Math.round(railNew()!.getBoundingClientRect().width)} px` : "none");
+	await viaMenu("the rail's +", railNew, "touch", t("library.action.newNotebook"), "notebook");
+	if (phone) {
+		await frames(2);
+		add("choosing from the rail's + closes the rail sheet", !app.classList.contains("is-rail-open"), app.className);
+	}
+	q(".nb-scroll")!.scrollTop = 0;
+	return out;
+}
+
+/** 0.12.2: a review screenshot of the creation dialog opened from the empty state's primary button. */
+export async function emptyDialogShot(): Promise<boolean> {
+	closeCreate();
+	document.querySelector<HTMLElement>('.nb-app [data-key="empty:new-notebook"]')?.click();
+	await frames(3);
+	return !!document.querySelector(".nb-create-tabs");
 }

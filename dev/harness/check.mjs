@@ -43,6 +43,13 @@ for (const surface of ["home", "library"]) {
 		for (const device of ["reference", "tablet", "phone"]) SCENARIOS.push({ doc: "library", surface, theme, device, lowLatency: false });
 	}
 }
+// 0.12.2: Home and the library on an empty vault (no notebooks, no notebooks folder yet): the + New button, the quick
+// actions and the empty state are there and open the creation dialog. Screenshots in dev/harness/dist/shots/design/.
+for (const surface of ["home", "library"]) {
+	for (const theme of ["dark", "light"]) {
+		for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "empty", surface, theme, device, lowLatency: false });
+	}
+}
 // Phone held sideways: little height for the toolbar popovers.
 DEVICES.landscape = { width: 740, height: 360, deviceScaleFactor: 3, mobile: true, touch: true };
 SCENARIOS.push({ doc: "new", theme: "light", device: "landscape", lowLatency: false });
@@ -235,7 +242,7 @@ async function main() {
 					await sleep(100);
 				}
 				await cdp.evaluate("window.harness.ready.then(() => true)");
-				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "library" ? "window.harness.checkLibrary()" : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? "window.harness.checkEmpty()" : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}
@@ -285,6 +292,18 @@ async function main() {
 					problems.push(...r.results.filter((x) => !x.ok).map((x) => `${x.name}: ${x.detail}`));
 				} catch (e) {
 					problems.push(`library interactions: ${e.message}`);
+				}
+			}
+			// 0.12.2: review screenshots of the empty vault, and of the creation dialog its empty state opens.
+			if (s.doc === "empty") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				writeFileSync(join(designDir, `empty-${s.surface}-${s.theme}-${s.device}.png`), png);
+				try {
+					if (!(await cdp.evaluate("window.harness.emptyDialogShot()"))) problems.push("the empty state's Create a notebook did not open the dialog");
+					writeFileSync(join(designDir, `empty-${s.surface}-${s.theme}-${s.device}-dialog.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+				} catch (e) {
+					problems.push(`empty dialog screenshot: ${e.message}`);
 				}
 			}
 			// The toolbar with the eraser options and the "more" menu open (narrow phone and tablet, light theme).

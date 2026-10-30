@@ -297,7 +297,19 @@ Home (`docs/design/reference/home.png`) and the library (`library.png`) are two 
 (`src/library/library-view.ts`; `HomeView` in `home-view.ts` only opens it on Home). They share the library index,
 the reading pass and the thumbnail queue, and switch in place from the navigation rail. Everything they show is
 computed on the device from the index (`src/library/dashboard.ts`, pure and tested) and from this device's recent
-pages log; nothing is invented and empty sections are hidden.
+pages log; nothing is invented and empty sections are hidden, except where something can be created (below).
+
+**Creation is always reachable (0.12.2).** The header of Home and of the library ends with the primary **+ New** pill
+(`ui/components/new-button.ts`), and the rail has a compact **+** next to the brand (also in the phone sheet, which
+closes when an item is chosen); both open the same New menu. Home's quick actions are always shown. A vault with no
+notebooks shows an empty state (`ui/components/empty-state.ts`: the art engine's `emptyStateImage`, *Start your first
+notebook*, one line, *Create a notebook* · *Create a folder* · *Import a PDF*) on Home, in the library's *All* and
+*Subjects* and in an empty notebooks folder, and Home hides the statistics until there is something to count.
+*Subject folders* with no subject folders shows a dashed *Create a folder* tile (`ui/components/create-tile.ts`,
+the creation dialog's Folder tab) in place of the cards, on Home, in the library dashboard and on the subjects page.
+An empty folder offers the same three buttons for that folder; lists that fill up by themselves (favourites, recent,
+a tag, a collection, the archive, a search) only explain how. Each Home section is drawn on its own: one that fails is
+logged and does not take the rest of Home with it.
 
 **Shell.** Navigation rail (`ui/components/nav-rail.ts`): brand; *Home*, *Notebooks*, *PDF* (only when a notebook has
 PDF pages), *Tags*, *Settings* (opens the plugin's settings tab); *Vault*: the folder tree under the notebooks folder,
@@ -307,7 +319,7 @@ target for dragged notebooks; at the bottom *Archive*, *Trash*, *Check library*.
 icons only, subject folders only in the tree), **phone** (< 600 px: the rail is a sheet from the left, opened from the
 menu button of the header). Page header: title and subtitle (a folder shows its breadcrumb, each part a link and a
 drop target), the search pill (Ctrl/⌘ K on desktop), the *Now: course* button while a class is on, the inbox bell; on
-the library also tag filter, sort, grid / list and *New* (a menu of New notebook, New folder, Import PDF, Lecture from
+the library also tag filter, sort and grid / list; on both, last, the primary *+ New* (a menu of New notebook, New folder, Import PDF, Lecture from
 slides, Scan, Loose sheet; inside a folder the notebook and the folder go there, elsewhere New notebook and New folder
 run the registry actions `new-notebook` and `new-folder`; all of them open the creation dialog, `view/create-dialog.ts`).
 

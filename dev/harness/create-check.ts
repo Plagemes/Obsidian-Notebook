@@ -63,6 +63,17 @@ export function showCreate(api: CreateCheckApi, tab: CreateTab, folder?: string,
 	return dialog;
 }
 
+/** 0.12.2: closes the dialog that showCreate opened; the tab it was on ("notebook" | "folder"), or null when none was open. */
+export function closeCreate(): CreateTab | null {
+	if (!current) return null;
+	const tab: CreateTab = current.contentEl.hasClass("is-folder") ? "folder" : "notebook";
+	current.close();
+	backdrop?.remove();
+	current = null;
+	backdrop = null;
+	return tab;
+}
+
 const frames = (n = 2) => new Promise<void>((resolve) => {
 	let left = n;
 	const step = () => (--left <= 0 ? resolve() : window.requestAnimationFrame(step));
