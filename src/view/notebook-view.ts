@@ -1273,9 +1273,9 @@ export class NotebookView extends FileView {
 			get app() { return base.app; },
 			get settings() { return base.settings; },
 			get file() { return file(); },
-			editableDocument: base.editableDocument,
-			applyCommand: base.applyCommand,
-			flush: base.flush,
+			editableDocument: () => base.editableDocument(),
+			applyCommand: (cmd, scrollTo) => base.applyCommand(cmd, scrollTo),
+			flush: () => base.flush(),
 			moveToNotebook: async (ids) => {
 				const ctx = this.editContext();
 				const doc = this.session?.doc;

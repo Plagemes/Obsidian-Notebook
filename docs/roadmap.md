@@ -679,7 +679,7 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 371. ~~**P3** Samsung DeX layout for mouse and keyboard.~~ — dropped (user decision, 2026-10-29)
 372. **P2** Page turner: volume keys, a Bluetooth clicker or a keyboard turn pages and undo.
 373. ~~**P3** Phone as a remote page navigator for the tablet.~~ — dropped (user decision, 2026-10-29)
-374. **P1** Do not disturb while writing: no notices or pop-ups while the pen is on the screen.
+374. 🧪 **P1** Do not disturb while writing: no notices or pop-ups while the pen is on the screen. (Wave 0.8: the plugin's own notices and non-urgent background work wait for a pause; Obsidian's own notices cannot be held back.)
 375. **P2** Workspace presets, e.g. "lecture" (slides, notebook, outline) with one command.
 
 ### PDF
@@ -687,7 +687,7 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 377. **P3** Reflowed reading mode for a PDF's text on phones.
 
 ### Pages and notebooks
-378. **P1** Operations on several selected pages: move, change paper, export or delete them together.
+378. 🧪 **P1** Operations on several selected pages: move, change paper, export or delete them together. (Wave 0.8, in the page panel.)
 379. **P2** Page information: dates, devices, stroke count, size.
 380. **P2** Heavy page warning, with an offer to split the page.
 
@@ -703,7 +703,7 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 387. **P2** Level of detail: simplified strokes when zoomed out, for smoother scrolling.
 
 ### Extensions of earlier items
-388. **P1** Stable page links (extends O4): links based on the page id, so they still work after pages are reordered (today `#p3` points at a position).
+388. 🧪 **P1** Stable page links (extends O4): links based on the page id, so they still work after pages are reordered (today `#p3` points at a position). (Wave 0.8: generated links carry the id; command *Update links to notebook pages*. Recent pages and the quick switcher, 364 and 365, still have to use `stablePageSubpath`.)
 389. **P2** Automatic page in the middle of a notebook too (extends #95): filling a page offers to insert one right after it.
 390. **P1** Integrity check with checksums (extends #27): finds silent corruption caused by sync and offers to restore an earlier version.
 391. **P2** Stroke timestamps linked to the lecture video (extends #231): tapping ink jumps the video to the minute it was written.

@@ -6,6 +6,10 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 
 | Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
 |---|---|---|---|---|---|
+| Operations on several selected pages (roadmap 378, wave 0.8): multi-select in the page navigator (select button, long press on touch, Ctrl/Shift+click, range, select all) and move (start, end, position, another notebook), duplicate, bookmark, tag, paper, size, PDF export, delete through the page trash; one undo step each | ✅ | ✅ `tests/page-ops.test.ts` (order planning, ranges, every command as one step with exact undo, never deleting every page); ❌ the panel, the menus, touch long press, the dialogs | | ✅ | long press on touch both starts a selection and arms the old drag-to-reorder: to be checked on the tablet (steps PO1-PO3) |
+| Do not disturb while writing (roadmap 374, wave 0.8): the plugin's own notices and non-urgent background work (thumbnails in the page panel and the library, library re-index, version-history snapshots, the timetable offer) wait while a pen is on the screen and for 1.5 s after | ✅ | ✅ `tests/writing-guard.test.ts` (timing, queue order, same-key replacement, lost pen, reset); ❌ real pen events, the notice wrapper in Obsidian | | ✅ | Obsidian's own notices (and other plugins') cannot be held back; `pointerType` `pen` only (a finger or mouse does not count); notices from the toolbar, stamps, selection actions and Zettelkasten are not routed yet (steps PO6-PO7) |
+| Stable page links (roadmap 388, wave 0.8): copy/insert link and embed, page suggestions, `obsidian://` links, companion note links, PDF annotation note links and the API write `#p3&id=<page id>`; opening and embeds resolve by id first; API `getPageLink`, `openNotebook(file, pageId)` | ✅ | ✅ `tests/stable-links.test.ts` (subpaths, protocol, ephemeral state, resolve, API page refs), `tests/page-links.test.ts`; ❌ following a link in Obsidian | | | recent pages and the quick switcher (roadmap 364, 365) are not in this branch: they must use `stablePageSubpath` (steps PO4-PO5) |
+| Update links to notebook pages (wave 0.8): finds `#pN` links and id links in the notes, shows every change in a list first (nothing is written), pins old links to the page id, renumbers links whose page moved, follows an id to the one other notebook that has it, and lists what it leaves alone with the reason | ✅ | ✅ `tests/stable-links.test.ts` (scanning with offsets, code skipped, every plan case, applying from the end, stale text left alone); ❌ the command, the list and the writes in Obsidian | | ✅ | an old `#pN` link cannot be known to have been correct: it is tied to the page that has that number now, and the list says so |
 | Class timetable (roadmap 115): pure scheduling (current/next class, odd/even weeks, term dates, local time, overlaps), file parse/serialize round trip, target notebook choice | ✅ | ✅ `tests/timetable.test.ts` | | | |
 | Course page tag: a lecture page made with a course from the timetable (New lecture prefill, *Open the current class*) gets the course as a v7 page tag, in the same undo step | ✅ | ✅ `applyCourseTag` (normalisation, no duplicate, undo with `AddPage`); ❌ the two flows in Obsidian | | | |
 | Class timetable editor (settings, command), `_timetable.json` read/write through the Vault API, unreadable file never overwritten | ✅ | ❌ (needs Obsidian) | | | |
@@ -535,6 +539,13 @@ L10. **Notebook from template.** *New notebook* dialog → *Template* → *Choos
 | V2 Page tags | | | |
 | V3 Last position across devices | | | |
 | V4 New papers | | | |
+| PO1 Select pages | | | |
+| PO2 Move and duplicate | | | |
+| PO3 Paper, size, tags, bookmarks, export, delete | | | |
+| PO4 Copy link, insert link, embed | | | |
+| PO5 Other generated links | | | |
+| PO6 Update links | | | |
+| PO7 Do not disturb | | | |
 
 Benchmark output (step 21): paste it here.
 
@@ -556,6 +567,18 @@ Not verified on a device. Fill in the result table at the end of this file.
 - **O8. Stamp with an image and text.** Select an image and a text box together, save as a stamp, delete the originals, place the stamp. Expected: both come back; the image uses the same file in `_assets/` (no copy).
 - **O9. Rename and delete a stamp.** Use the pencil and trash buttons on a stamp. Expected: the name changes in the palette and the file; delete asks first and moves the file to the trash; notebooks that used the stamp are unchanged.
 - **O10. Palette on a phone and with a finger.** Open the palette on a narrow screen. Expected: it fits, the list scrolls vertically, a sideways drag from a tile onto the page places the stamp. Report whether a vertical or diagonal drag scrolls the list instead of dragging.
+
+### Page operations, stable links, do not disturb (wave 0.8)
+
+Not verified on a device. Fill in the result table at the end of this file.
+
+- **PO1. Select pages.** Open the page panel in a notebook with 10+ pages. Tap the select button (check-square). Tap three pages, then use *Select a range* and tap the last page of a run. Expected: ticks on the thumbnails, the count in the bar, *Select all pages shown* ticks the pages the filters show. On a touch screen: press and hold a thumbnail. Expected: it is selected and picked up like before; letting go without moving only selects it; with a selection active, press and hold another thumbnail adds the range. A quick swipe still scrolls the list. Escape or the X ends the selection.
+- **PO2. Move and duplicate.** Select 3 non-adjacent pages, *Actions*, *Move to the start*, then undo (one step brings every page back). *Move to position…* with 5, *Move to the end*, *Duplicate* (copies appear after the last selected page), *Move to notebook…* (the usual dialog opens with these pages ticked; each notebook gets one undo step).
+- **PO3. Paper, size, tags, bookmarks, export, delete.** On a selection: *Change paper…*, *Change size…* (each page keeps its orientation), *Add tags…*, *Remove tag #x*, *Bookmark* (and again to remove), *Export as PDF* (file name with `p3-5` or `selection`), *Delete…* (asks first; *Deleted pages…* shows the copies; undo restores the pages in place). Expected: one undo step each; selecting every page disables *Delete…*.
+- **PO4. Copy link, insert link, embed.** Page menu → *Copy link to this page*, paste into a note: the link ends in `#p3&id=…`. Reorder the pages in the notebook and follow the link from the note. Expected: it opens the same page, not page 3. Insert an embed and check the same.
+- **PO5. Other generated links.** Turn on companion notes: the *↗ Page* links of a companion note carry `&id=…` (the note is rewritten once). Export PDF annotations: the *Open page* links too. Type `[[Notebook.notebook#` in a note and pick a page: `p3&id=…` is written. Via the API: `await api.getPageLink("Notebooks/Physics", 3)`.
+- **PO6. Update links.** In a note write `[[Physics.notebook#p3]]` (old style), reorder the notebook, run *Update links to notebook pages…*. Expected: a list (nothing changed yet) with the link and *tied to the page that has this number now*; untick it and apply: the note is unchanged; run again and apply: the link gets `&id=…`. A link whose page moved gets its number fixed; a link to a deleted page is listed under *Left as they are*.
+- **PO7. Do not disturb.** Write with the pen continuously (the S Pen) and, meanwhile, trigger something that shows a notice (for example a PDF export from the page menu started just before, or *Copy link*). Expected: the notice does not appear while the pen is on the screen; it appears about 1.5 s after the last stroke. Page-panel thumbnails and the library cover thumbnails draw after you stop. Note anything that still interrupts (Obsidian's own notices cannot be held back).
 
 ## Quick check — Windows
 
