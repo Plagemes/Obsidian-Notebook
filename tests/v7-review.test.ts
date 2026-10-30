@@ -12,6 +12,7 @@ import { mergeChangeCount, mergeCovers, planMerge } from "../src/model/merge";
 import { repairNotebookText } from "../src/model/repair";
 import { parse, serialize, serializeChecked } from "../src/model/serialize";
 import { DocumentSession, type BackupReason, type DocumentIO, type Timers } from "../src/storage/session";
+import { PAGE_AT_KEY, PageClock, pageState, startPosition } from "../src/view/position-sync";
 import { DEFAULT_META, type NotebookDocument } from "../src/model/types";
 
 function parsed(text: string) {
@@ -168,5 +169,29 @@ describe("lenient read of invalid v7 details", () => {
 		expect(s.mode).toBe("ok");
 		expect(backups).toEqual([{ content: text, reason: "dropped-details" }]);
 		s.dispose();
+	});
+});
+
+describe("page time of the workspace layout", () => {
+	it("is when the page in view changed, not when the layout is saved", () => {
+		const clock = new PageClock();
+		const monday = new Date("2026-10-26T09:00:00.000Z");
+		const later = new Date("2026-10-28T09:00:00.000Z");
+		clock.note("A.notebook", 4, monday);
+		// Scrolling on the same page and layout saves days later keep Monday.
+		clock.note("A.notebook", 4, later);
+		expect(clock.since("A.notebook", 4, later)).toBe(monday);
+		const resumed = pageState(5, clock.since("A.notebook", 4, later));
+		expect(resumed[PAGE_AT_KEY]).toBe(monday.toISOString());
+		// So a position another device stored on Tuesday wins on the next restore.
+		const doc = twoPages();
+		doc.position = { page: "p2", at: "2026-10-27T09:00:00.000Z" };
+		expect(startPosition(doc, 1, resumed[PAGE_AT_KEY] as string)).toEqual({ index: 1, y: 0 });
+		// A real page change (or another file) restarts the time.
+		clock.note("A.notebook", 5, later);
+		expect(clock.since("A.notebook", 5, new Date())).toBe(later);
+		const now = new Date();
+		expect(clock.since("B.notebook", 5, now)).toBe(now);
+		expect(clock.since(null, 5, now)).toBe(now);
 	});
 });
