@@ -28,6 +28,7 @@ import { DocumentSession } from "../../src/storage/session";
 import { stressDocument } from "../../src/model/stress";
 import { FAKE_PATH, installFakePdf, slidesNotebook } from "./fake-pdf";
 import { checkReading } from "./reading-check";
+import { compareLod, measureLod } from "./lod-bench";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -50,10 +51,10 @@ if (fault === "wet") {
 	};
 } else if (fault === "stroke") {
 	const proto = Renderer.prototype as any;
-	const fill = proto.fillStroke as (ctx: CanvasRenderingContext2D, stroke: { id: string }) => void;
-	proto.fillStroke = function (ctx: CanvasRenderingContext2D, stroke: { id: string }) {
+	const fill = proto.fillStroke as (ctx: CanvasRenderingContext2D, stroke: { id: string }, ...rest: unknown[]) => void;
+	proto.fillStroke = function (ctx: CanvasRenderingContext2D, stroke: { id: string }, ...rest: unknown[]) {
 		if (stroke.id === "s1") throw new Error("harness: injected stroke failure");
-		fill.call(this, ctx, stroke);
+		fill.call(this, ctx, stroke, ...rest);
 	};
 }
 /** Console errors the injected fault is expected to produce (logged once by the guards). */
@@ -748,7 +749,7 @@ function applySize(): void {
 	if (h) root.style.height = `${Number(h)}px`;
 }
 
-(window as any).harness = { app, open, measureOpen, penStroke, setTool, openOptions, openMore, check, checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
+(window as any).harness = { app, open, measureOpen, measureLod, compareLod, penStroke, setTool, openOptions, openMore, check, checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
 	return view;
 } };
 
