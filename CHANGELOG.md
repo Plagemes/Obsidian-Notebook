@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+Not yet verified on Android hardware or in Obsidian with its maths engine (the harness uses a stand-in for MathJax). Manual steps MA1-MA15 in `docs/testing.md`.
+
+### Upgrade notes
+- **Document format v9.** Notebooks saved by this version open read-only (with a backup) in builds that read up to v8. v8 files are read unchanged and rewritten as v9 only on the first edit.
+
+### Added
+- **Equations** (roadmap #110): *Insert equation* (All actions → Insert, command) opens an in-place editor with a live preview typeset by Obsidian's maths engine, a palette of structures (fraction, roots, power, subscript, matrix, integral, sum, limit, system, lines aligned on =), display or inline style, automatic numbering "(n)" in reading order, size and colour. A new equation takes the size of the handwriting next to it. The typeset glyphs are stored as a vector outline in the element, so equations are drawn, exported (PDF, SVG) and converted without the maths engine. *Edit* and *Convert to ink* on the contextual bar of a selection; converting turns the glyphs into strokes in one undo step.
+- **Function graphs** (roadmap #113): *Insert graph* adds a graph and opens its panel: cartesian, parametric, polar, implicit and piecewise functions as expressions; parameters with sliders that update the curves live; roots, maxima and minima, intersections (marked and labelled), tangent at a point, shaded area with its value, table of values; axes, grid, labels, steps, degrees or radians. Pan by dragging inside the graph and zoom by pinching or with the wheel while the panel is open; ink written on the graph keeps its graph coordinates. Exported as vectors. Expressions are read by a small parser written for the plugin (no `eval`, no access to anything but the graph's own variables and parameters).
+
+### Development
+- `src/math/` (pure): expression parser, adaptive sampler with discontinuity handling and clipping, marching squares, numerical roots, extrema, intersections, derivatives and integrals, the graph scene shared by every renderer, outline tracing, equation layout and *Convert to ink*. Tests: `tests/model-v9.test.ts`, `tests/math-expr.test.ts`, `tests/math-graph.test.ts`.
+- The harness stub provides `loadMathJax`, `renderMath` and `finishRenderMath`.
+
 ## 0.7.0 — 2026-10-30
 
 Not yet verified on Android hardware. The manual steps added in this version are numbered 135 to 177 in `docs/testing.md`; the ones that belong to each area are named below.

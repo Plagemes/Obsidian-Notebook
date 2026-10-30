@@ -68,6 +68,8 @@ anywhere in `src/` is in the registry and that every action is placed somewhere.
 | PDF side by side: open, link, show slide, add notes page, close | PDF bar (open), side-pane bar (the rest), Side by side section | Appear only when they apply |
 | New lecture, exercise paper | Lecture bar during a class, Lecture section | Class-time tools |
 | Markers (`marker-gap`, `marker-question`, `marker-important`, `marker-critical`, `marker-star`, `marker-homework`), structured box (`marker-box`), End of lecture panel (`end-of-lecture`) | Lecture bar during a class, Lecture section, radial shapes ring → Markers ring (markers and box), page sheet (panel), commands | Captured while the lecture runs; the next tap or drag places one |
+| Insert equation, insert graph (`insert-equation`, `insert-graph`; wave 0.9: math) | All actions sheet (Insert), commands | Inserted now and then; not quick slots, so the designed slots stay |
+| Edit equation or graph, convert to ink (`math-edit`, `math-convert-ink`) | Contextual bar of a selection holding exactly one equation or graph (*Edit*) or equations (*Convert to ink*), commands | Act on what is selected; the graph panel and the equation editor float over the page while open |
 | Invisible ink (`invisible-ink`), show solutions (`show-solutions`, page: `show-page-solutions`) | View section of the sheet (ink and solutions), page sheet (page solutions), commands | A pen mode and view-only toggles |
 | Pen gesture mode (`pen-gesture-mode`) | Quick slot, All actions sheet (View & input) | A toggle used in bursts |
 | Gesture cheat sheet, custom gestures (`pen-gesture-sheet`, `pen-gesture-custom`) | All actions sheet (View & input), command palette; the cheat sheet also from the mode badge | Reference and set-up, rare |
