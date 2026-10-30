@@ -36,6 +36,7 @@ AI, no network, nothing leaves the device.
 | **Radial menu** | Dark dial at the pen tip: undo/redo, width bubble, colour bubble, tool illustration, favourites · pen case · shapes | S Pen side button (or long press, per settings) |
 | **Notebook menu** | Obsidian's "More options" of the notebook tab | Notebook-wide actions: open library, export notebook, zettel entries |
 | **Library** | The library view | Create, import PDF, lecture from slides, scan, timetable |
+| **Creation dialog** (wave 0.12) | One modal, two tabs as a segmented control: **Notebook** (cover preview with *Change cover*: pattern, colour, new variation, image; name, description, folder list with icons, page template tiles drawn by the paper renderer, page size A4 · A5 · B5 · Letter · Custom in mm, orientation tiles) and **Folder** (folder card preview with *Change colour* and *Change pattern*; name, description, location, icon row plus Lucide search, eight subject colours plus the colour picker). Inline name errors, Enter submits. A full-height sheet with the preview on top under 600 px. Decoration (header art band, glow behind the preview, faint art on the selected template tile) never acts as a control and is off with reduced motion | Registry actions `new-notebook` (Notebook tab) and `new-folder` (Folder tab), the command *New notebook* (`create`), *New folder*, the library's buttons and menus (through `host.createNotebook(folder)` / `host.createFolder(parent)`) |
 | **Settings** | Plugin settings tab | Diagnostics (pen button test, benchmark) are also commands |
 | **Command palette** | Every command, hotkeys | All actions with `command` (ids unchanged since 0.5) |
 
@@ -206,3 +207,5 @@ the accent soft fill and an accent underline dot; groups are separated by 1 px d
 | `NotebookView.uiContext()` / `runAction()` | The view's context for the engine, and the single entry point that runs and counts an action |
 | `src/view/toolbar.ts` | Primary toolbar (quick slots from the layout) |
 | `src/view/radial-menu.ts` | Radial dial |
+| `src/view/create-dialog.ts`, `src/view/create-logic.ts` | Creation dialog (wave 0.12) and its pure rules (names, sizes, folder list, the new document) |
+| `src/library/folder-meta.ts`, `folder-meta-store.ts`, `folder-meta-events.ts` | Folder colour, icon, description and art style (per-device sidecar in `_meta`), the read API `getFolderMeta` / `onFolderMetaChange`, renames |

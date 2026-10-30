@@ -55,6 +55,8 @@ SCENARIOS.push({ doc: "excerpt", theme: "dark", device: "tablet", lowLatency: fa
 SCENARIOS.push({ doc: "readonly", theme: "light", device: "desktop", lowLatency: false });
 SCENARIOS.push({ doc: "readonly", theme: "dark", device: "narrow", lowLatency: false });
 SCENARIOS.push({ doc: "readonly", theme: "light", device: "tablet", lowLatency: false });
+// wave 0.12: the creation dialog (both tabs) at tablet and phone widths, light and dark.
+for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "create", theme, device, lowLatency: false });
 
 function findChrome() {
 	const candidates = [
@@ -210,7 +212,7 @@ async function main() {
 					await sleep(100);
 				}
 				await cdp.evaluate("window.harness.ready.then(() => true)");
-				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}
@@ -232,6 +234,15 @@ async function main() {
 					if (c[0] < 100 && c[1] < 100 && c[2] < 100) dark = true;
 				}
 				if (!dark) problems.push(`composited ink missing at (${Math.round(ix)}, ${Math.round(iy)})`);
+			}
+			// wave 0.12: the creation dialog's Folder tab (the Notebook tab is the screenshot above).
+			if (s.doc === "create") {
+				try {
+					await cdp.evaluate("window.harness.createShot('folder').then(() => true)");
+					writeFileSync(join(shots, `${name}-folder.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+				} catch (e) {
+					problems.push(`folder tab screenshot: ${e.message}`);
+				}
 			}
 			// The toolbar with the eraser options and the "more" menu open (narrow phone and tablet, light theme).
 			if (!s.fault && s.doc === "new" && s.theme === "light" && (s.device === "narrow" || s.device === "tablet")) {

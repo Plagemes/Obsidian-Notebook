@@ -5,8 +5,8 @@ import { hexToHsv, hsvToHex, normaliseHex, type Hsv } from "../ink/colour";
 export interface ColourPickerHandlers {
 	/** The colour changed. `commit`: the choice is final (finger lifted, hex entered, recent colour tapped): remember it. */
 	change(hex: string, commit: boolean): void;
-	/** The eyedropper button: pick a colour from the page. */
-	eyedropper(): void;
+	/** The eyedropper button: pick a colour from the page. Absent: no eyedropper button (nothing to pick from, e.g. a dialog). */
+	eyedropper?(): void;
 	close(): void;
 }
 
@@ -79,12 +79,15 @@ export class ColourPicker {
 				commitHex();
 			}
 		});
-		const dropper = row.createEl("button", { cls: "notebook-colour-button", attr: { type: "button", "aria-label": t("radial.eyedropper"), title: t("radial.eyedropper") } });
-		setIcon(dropper, "pipette");
-		dropper.addEventListener("click", (e) => {
-			e.preventDefault();
-			handlers.eyedropper();
-		});
+		const eyedropper = handlers.eyedropper?.bind(handlers);
+		if (eyedropper) {
+			const dropper = row.createEl("button", { cls: "notebook-colour-button", attr: { type: "button", "aria-label": t("radial.eyedropper"), title: t("radial.eyedropper") } });
+			setIcon(dropper, "pipette");
+			dropper.addEventListener("click", (e) => {
+				e.preventDefault();
+				eyedropper();
+			});
+		}
 		const close = row.createEl("button", { cls: "notebook-colour-button", attr: { type: "button", "aria-label": t("colour.picker.close"), title: t("colour.picker.close") } });
 		setIcon(close, "x");
 		close.addEventListener("click", (e) => {

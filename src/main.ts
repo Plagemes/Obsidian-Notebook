@@ -9,6 +9,7 @@ import { NOTEBOOK_EXTENSIONS } from "./storage/format";
 import { AdapterJournalStore, journalFolder, sidecarDeviceId, vaultDeviceFileAdapter } from "./storage/vault-io";
 import { SharedClipStore } from "./storage/shared-clip-store";
 import { createNotebook } from "./storage/notebooks";
+import { registerFolderMeta } from "./library/folder-meta-events";
 import { BenchmarkModal } from "./view/benchmark";
 import { PenTestModal, penSignalInfo } from "./view/pen-test-modal";
 import { NotebookLibraryHost } from "./library/host";
@@ -81,6 +82,8 @@ export default class NotebookPlugin extends Plugin {
 		this.registerView(VIEW_TYPE, (leaf) => new NotebookView(leaf, this));
 		this.registerExtensions([...NOTEBOOK_EXTENSIONS], VIEW_TYPE);
 		this.host = new NotebookLibraryHost(this);
+		// wave 0.12: folder colours and icons follow renames and other devices' changes (library/folder-meta-events.ts).
+		registerFolderMeta(this, this.host.folderMeta);
 		this.registerView(LIBRARY_VIEW_TYPE, (leaf) => new LibraryView(leaf, this.host));
 		// wave 0.6: library trash auto-empty (setting, off by default)
 		this.app.workspace.onLayoutReady(() => void this.host.trash.purgeExpired().catch((e) => console.error("[notebook] trash auto-empty failed", e)));
@@ -112,6 +115,9 @@ export default class NotebookPlugin extends Plugin {
 		// ui redesign: every command of the plugin comes from the action registry (ui/actions.ts); ids are unchanged.
 		this.globalActions = {
 			"create": () => this.askNewNotebook(),
+			// wave 0.12: the creation dialog (library/host.ts openCreate); the library passes its current folder to the host directly.
+			"new-notebook": () => this.host.createNotebook(),
+			"new-folder": () => this.host.createFolder(),
 			"open": () => this.openPicker(),
 			"continue-last": () => void this.continueLast(),
 			"open-library": () => void this.openLibrary(),
@@ -268,7 +274,7 @@ export default class NotebookPlugin extends Plugin {
 	}
 
 	private askNewNotebook(): void {
-		this.host.createNotebook(this.settings.folder);
+		this.host.createNotebook();
 	}
 
 	/** Shows the library in its existing tab, or opens it in a new one. */

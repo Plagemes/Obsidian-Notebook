@@ -110,3 +110,14 @@ button {
 #harness-report:empty {
 	display: none;
 }
+
+/* wave 0.12: Obsidian's modal container (dimmed layer that centres a modal), for the creation dialog check. */
+.harness-modal-container {
+	position: fixed;
+	inset: 0;
+	z-index: 50;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(0, 0, 0, 0.45);
+}

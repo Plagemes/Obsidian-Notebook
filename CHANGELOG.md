@@ -2,9 +2,19 @@
 
 ## Unreleased
 
-No change to the notebook format (still v10). Clean-up for Obsidian's community Scorecard (runtime code and styles); not verified in Obsidian or on a device.
+**Document format v11** (wave 0.12, creation dialog): notebooks saved with a description or a generated / image cover open read-only (with a backup) in 0.11.x and older; a v10 notebook is read unchanged. Not verified in Obsidian or on a device. Manual steps 460-479 in `docs/testing.md`.
+
+### Added
+- **Creation dialog** (`view/create-dialog.ts`): one modal with the tabs *Notebook* and *Folder*. Notebook: a portrait cover preview (generated line art in a colour, or an image from the vault or the device) with *Change cover*, name, optional description, folder list with icons, page template tiles drawn by the real paper renderer (every paper kind), saved templates, page size A4 · A5 · B5 · Letter · Custom (mm) and orientation; the notebook is created through the usual checked path and opens. Folder: a folder card preview with *Change colour* and *Change pattern*, name, description, location, an icon row plus a search of every Lucide icon, eight subject colours plus the colour picker. Name errors show under the field (empty, invalid characters, already there); Enter submits; on a phone it is a full-height sheet with the preview on top. Faint generated art in the header, a glow behind the preview and on the selected template tile, off with reduced motion.
+- Registry actions `new-notebook` (Notebook tab) and `new-folder` (Folder tab; command *New folder*). The command *New notebook* keeps its id `create` and opens the dialog; the library's *New notebook* buttons and *New notebook here* open it too.
+- **Folder metadata** (`library/folder-meta*.ts`): colour, icon, description and art style of a folder, stored per device in `_meta/folders-<device>.json`, merged on read (latest change wins per folder and field), following renames and moves; unreadable files are never overwritten. Read API `getFolderMeta(path)` / `onFolderMetaChange(fn)` on `host.folderMeta` for the library cards (see `docs/architecture.md`).
+- Format v11: `meta.description` and `meta.coverArt` (`{ kind: "art", style, seed }` or `{ kind: "image", asset }`), with the v10 → v11 migration, lenient read and strict write.
+- Page size preset **B5** (176 × 250 mm), also in the page size menus.
 
 ### Changed
+- The colour picker's eyedropper button is optional (absent where there is nothing to pick from).
+- Temporary stubs `ui/art/generative-art.ts` and `ui/palette.ts` (replaced by the ART branch at merge) and temporary design tokens scoped to the dialog (`/* TEMP design tokens — removed at merge */`).
+- Clean-up for Obsidian's community Scorecard (runtime code and styles); not verified in Obsidian or on a device:
 - `npm run lint` now also runs `eslint-plugin-obsidianmd` 0.4.2 (`recommended`, type-checked; MIT, devDependency only) on `src/**` and `package.json`; a commented block in `eslint.config.mjs` extends it to `tests/**` and `dev/**`.
 - Destructive buttons (delete marker or box, remove bookmark, library confirmations) use `setDestructive()` on Obsidian 1.13+ and the same `mod-warning` class as before on older versions (`ui/destructive.ts`).
 - The settings tab no longer calls the deprecated `display()` itself: on Obsidian older than 1.13 a language change redraws through the tab's own drawing method (same content).
