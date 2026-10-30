@@ -548,3 +548,35 @@ describe("geometry, erasing and exports", () => {
 		expect(pdf).toContain("(Theorem");
 	});
 });
+
+describe("canvas drawing of markers and boxes", () => {
+	/** A 2D context that records calls; every method exists, every property can be set. */
+	function recordingContext(): { ctx: CanvasRenderingContext2D; calls: string[] } {
+		const calls: string[] = [];
+		const ctx = new Proxy({} as Record<string, unknown>, {
+			get: (target, key) => (key in target ? target[key as string] : (...args: unknown[]) => {
+				calls.push(String(key));
+				void args;
+			}),
+			set: (target, key, value) => {
+				target[key as string] = value;
+				return true;
+			},
+		});
+		return { ctx: ctx as unknown as CanvasRenderingContext2D, calls };
+	}
+
+	it("draws every kind and state with balanced save/restore", async () => {
+		const { drawBox, drawMarker } = await import("../src/ink/marker-render");
+		const { ctx, calls } = recordingContext();
+		for (const kind of ["gap", "question", "important", "critical", "star", "homework"] as const) {
+			drawMarker(ctx, { ...gap, kind });
+			drawMarker(ctx, { ...question, kind, done: true });
+		}
+		for (const kind of ["definition", "theorem", "example", "proof", "remark"] as const) drawBox(ctx, { ...theorem, kind });
+		expect(calls.filter((c) => c === "save").length).toBe(calls.filter((c) => c === "restore").length);
+		expect(calls).toContain("fillText");
+		expect(calls).toContain("arc");
+		expect(calls).toContain("strokeRect");
+	});
+});

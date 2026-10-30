@@ -2074,7 +2074,8 @@ export class NotebookView extends FileView {
 		if (!Number.isFinite(dx) || !Number.isFinite(dy)) return false;
 		const tool = eraserButton ? "eraser" : held === "lasso" ? "lasso" : held === "previous" ? (this.lastTool.previous() ?? this.tools.tool) : this.tools.tool;
 
-		if (tool === "eraser" && this.tools.eraserMode !== "area") {
+		// An armed marker or box takes the next contact whatever the tool (see below).
+		if (tool === "eraser" && this.tools.eraserMode !== "area" && !(this.markers?.armed && !eraserButton)) {
 			// The selection may contain strokes about to be erased (e.g. erasing with the pen button).
 			this.clearSelection();
 			this.erasing = { commands: [], last: [dx, dy] };
