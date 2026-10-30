@@ -1,8 +1,9 @@
-import type { Page, PageElement, Point, Stroke, TextElement, Tool } from "../model/types";
+import type { ExcerptElement, Page, PageElement, Point, Stroke, TextElement, Tool } from "../model/types";
 import { MM, RENDER_INK } from "../model/types";
 import { backgroundRect } from "../model/margins";
 import { transformElement } from "./elements";
 import { drawBox, drawMarker, type BoxLabel } from "./marker-render";
+import { drawExcerpt, drawExcerptBadge } from "./excerpt-render";
 import { drawEquation, drawGraph, type GraphPalette } from "./math-render";
 import { graphClips, strokeClip } from "./attach";
 import { equationNumbers } from "../model/math-elements";
@@ -35,6 +36,19 @@ export interface MediaSource {
 	/** Text shown on the placeholder (e.g. "Loading…" or a missing file name). */
 	backgroundLabel(page: Page): string | null;
 	image(assetId: string): CanvasImageSource | null;
+	/**
+	 * v10: the live picture of an excerpt's source region at `deviceScale` (device px per pt), when its source can be
+	 * drawn now (a page of the open notebook); null to draw the snapshot instead.
+	 */
+	excerpt?(el: ExcerptElement, deviceScale: number): CanvasImageSource | null;
+	/** v10: the excerpt's source page is known to be gone (its badge is drawn grey). */
+	excerptMissing?(el: ExcerptElement): boolean;
+}
+
+/** v10: the best picture of an excerpt: live from its source when the media can draw it, else its snapshot. */
+export function excerptImage(media: MediaSource | null | undefined, el: ExcerptElement, deviceScale: number): CanvasImageSource | null {
+	if (!media) return null;
+	return media.excerpt?.(el, deviceScale) ?? (el.asset !== undefined ? media.image(el.asset) : null);
 }
 
 /** Draws a text box in page coordinates; used by the renderer, thumbnails and the live layer. */
@@ -95,6 +109,10 @@ export function drawElement(
 	}
 	if (el.type === "graph") {
 		drawGraph(ctx, el);
+		return;
+	}
+	if (el.type === "excerpt") {
+		drawExcerpt(ctx, el, img);
 		return;
 	}
 	ctx.save();
@@ -921,13 +939,20 @@ export class Renderer {
 		return this.numbers;
 	}
 
-	/** Images, v9 graphs, v8 structured boxes, v9 equations, then text boxes; all under the ink. */
+	/** The bitmap an element draws: an image's asset, an excerpt's live picture or snapshot (v10); null for the others. */
+	private elementImage(el: PageElement): CanvasImageSource | null {
+		if (el.type === "image") return this.media?.image(el.asset) ?? null;
+		if (el.type === "excerpt") return excerptImage(this.media, el, this.viewport.scale * this.dpr);
+		return null;
+	}
+
+	/** Images and v10 excerpts, v9 graphs, v8 structured boxes, v9 equations, then text boxes; all under the ink. */
 	private drawElements(ctx: CanvasRenderingContext2D, page: Page): void {
 		const elements = page.elements ?? [];
 		const skip = (el: PageElement) => !!(this.hiddenElements?.has(el) || this.selectedElements?.has(el));
 		for (const el of elements) {
-			if (el.type !== "image" || skip(el)) continue;
-			this.guarded(ctx, "image element", () => drawElement(ctx, el, this.media?.image(el.asset) ?? null));
+			if ((el.type !== "image" && el.type !== "excerpt") || skip(el)) continue;
+			this.guarded(ctx, el.type === "image" ? "image element" : "excerpt element", () => drawElement(ctx, el, this.elementImage(el)));
 		}
 		for (const el of elements) {
 			if (el.type !== "graph" || skip(el)) continue;
@@ -949,11 +974,12 @@ export class Renderer {
 		}
 	}
 
-	/** v8 marker badges, above the ink. */
+	/** v8 marker badges and v10 excerpt badges, above the ink. */
 	private drawMarkers(ctx: CanvasRenderingContext2D, page: Page): void {
 		for (const el of page.elements ?? []) {
-			if (el.type !== "marker" || this.hiddenElements?.has(el) || this.selectedElements?.has(el)) continue;
-			this.guarded(ctx, "marker element", () => drawMarker(ctx, el));
+			if (this.hiddenElements?.has(el) || this.selectedElements?.has(el)) continue;
+			if (el.type === "marker") this.guarded(ctx, "marker element", () => drawMarker(ctx, el));
+			else if (el.type === "excerpt") this.guarded(ctx, "excerpt badge", () => drawExcerptBadge(ctx, el, this.media?.excerptMissing?.(el) ?? false));
 		}
 	}
 
@@ -1037,7 +1063,7 @@ export class Renderer {
 				this.beginPage(ctx, box);
 				for (const el of sel.elements) {
 					const moved = transformElement(el, sel.matrix, measureText);
-					drawElement(ctx, moved, moved.type === "image" ? this.media?.image(moved.asset) ?? null : null, this.boxLabel, this.equationNumbers());
+					drawElement(ctx, moved, this.elementImage(moved), this.boxLabel, this.equationNumbers());
 				}
 				ctx.restore();
 			}
@@ -1060,7 +1086,7 @@ export class Renderer {
 					const m = translate(0, e.dy);
 					for (const el of e.elements) {
 						const moved = transformElement(el, m, measureText);
-						drawElement(ctx, moved, moved.type === "image" ? this.media?.image(moved.asset) ?? null : null, this.boxLabel, this.equationNumbers());
+						drawElement(ctx, moved, this.elementImage(moved), this.boxLabel, this.equationNumbers());
 					}
 					ctx.restore();
 				}

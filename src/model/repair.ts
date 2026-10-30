@@ -409,12 +409,13 @@ function fixElement(v: unknown, assets: Record<string, Asset>): RawObject | null
 		return { id: v.id, type: "image", asset: v.asset, x: v.x, y: v.y, width: v.width, height: v.height, rotation: finite(v.rotation) ? v.rotation : 0 };
 	}
 	if (v.type === "marker" || v.type === "box") return fixMarkerOrBox(v, v.id);
-	if (v.type === "equation" || v.type === "graph") return fixMathElement(v, assets);
+	// v10 excerpts go through the same lenient reader: a bad snapshot reference is left out, the anchor is kept.
+	if (v.type === "equation" || v.type === "graph" || v.type === "excerpt") return fixMathElement(v, assets);
 	return null;
 }
 
 /**
- * v9 equation or graph with its valid parts: read by the lenient reader of the format on a one-element page, so an
+ * v9 equation or graph (or v10 excerpt) with its valid parts: read by the lenient reader of the format on a one-element page, so an
  * invalid detail (an outline, a function, a parameter, a setting) is left out and the rest is kept; null when what
  * the element needs (frame, source, viewport) is invalid.
  */

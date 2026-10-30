@@ -97,7 +97,14 @@ export function elementContentKey(e: PageElement): string {
 	if (rest.type === "marker") delete (rest as Partial<MarkerElement>).done;
 	// v9: graphs nest objects (viewport, functions): keys sorted at every level, none dropped. The cached outline of an
 	// equation is how it looks, not what it is: the same LaTeX typeset on two devices is the same equation.
+	// v10: an excerpt nests its source; its snapshot asset is how it looks, not what it shows (the same region excerpted on
+	// two devices is the same excerpt even if the snapshots differ by a pixel).
 	if (rest.type === "graph") return stableStringify(rest);
+	if (rest.type === "excerpt") {
+		const { asset: _a, ...ex } = rest;
+		void _a;
+		return stableStringify(ex);
+	}
 	if (rest.type === "equation") {
 		const { outline: _o, ...eq } = rest;
 		void _o;
@@ -148,7 +155,7 @@ function fitOnPage(target: Page, copy: Page, fresh: { strokes: readonly Stroke[]
 		}
 	}
 	for (const e of fresh.elements) {
-		if (e.type === "marker" || e.type === "box" || e.type === "equation" || e.type === "graph") {
+		if (e.type === "marker" || e.type === "box" || e.type === "equation" || e.type === "graph" || e.type === "excerpt") {
 			const b = e.type === "marker" ? markerBounds(e) : e.type === "box" ? boxBounds(e) : { minX: e.x, maxX: e.x + e.width, maxY: e.y + e.height };
 			minX = Math.min(minX, b.minX);
 			maxX = Math.max(maxX, b.maxX);

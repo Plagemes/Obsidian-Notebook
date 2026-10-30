@@ -1,5 +1,5 @@
 import { boxBounds, markerBounds, MARKER_BADGE } from "../model/markers";
-import type { BoxElement, EquationElement, GraphElement, ImageElement, MarkerElement, PageElement, TextElement } from "../model/types";
+import type { BoxElement, EquationElement, ExcerptElement, GraphElement, ImageElement, MarkerElement, PageElement, TextElement } from "../model/types";
 import { scaleOutline } from "../math/outline";
 import { EQUATION_OUTLINE_MAX, GRAPH_MAX_SIDE } from "../model/math-elements";
 import { MAX_FONT_SIZE } from "../model/serialize";
@@ -30,7 +30,7 @@ export function elementBounds(el: PageElement, measure: MeasureText = estimateMe
 	if (el.type === "marker") return markerBounds(el);
 	if (el.type === "box") return boxBounds(el);
 	if (el.type === "equation") return equationBounds(el);
-	if (el.type === "graph") return { minX: el.x, minY: el.y, maxX: el.x + el.width, maxY: el.y + el.height };
+	if (el.type === "graph" || el.type === "excerpt") return { minX: el.x, minY: el.y, maxX: el.x + el.width, maxY: el.y + el.height };
 	const c = imageCorners(el);
 	const xs = c.map((p) => p[0]);
 	const ys = c.map((p) => p[1]);
@@ -38,7 +38,7 @@ export function elementBounds(el: PageElement, measure: MeasureText = estimateMe
 }
 
 function hits(el: PageElement, x: number, y: number, tolerance: number, measure: MeasureText): boolean {
-	if (el.type === "marker" || el.type === "box" || el.type === "equation" || el.type === "graph") {
+	if (el.type === "marker" || el.type === "box" || el.type === "equation" || el.type === "graph" || el.type === "excerpt") {
 		const b = elementBounds(el, measure);
 		return x >= b.minX - tolerance && x <= b.maxX + tolerance && y >= b.minY - tolerance && y <= b.maxY + tolerance;
 	}
@@ -168,11 +168,24 @@ function transformGraph(el: GraphElement, m: Matrix): GraphElement {
 	return { ...el, ...r, width: Math.min(GRAPH_MAX_SIDE, r.width), height: Math.min(GRAPH_MAX_SIDE, r.height) };
 }
 
+/**
+ * v10 excerpt: like an equation it never rotates and scales uniformly (the region keeps its aspect ratio, so the picture
+ * is never distorted); its box follows the transformed centre. The source is unchanged.
+ */
+function transformExcerpt(el: ExcerptElement, m: Matrix): ExcerptElement {
+	const k = scaleFactor(m);
+	const [cx, cy] = apply(m, el.x + el.width / 2, el.y + el.height / 2);
+	const width = Math.max(1, round2(el.width * k));
+	const height = Math.max(1, round2(el.height * k));
+	return { ...el, x: round2(cx - width / 2), y: round2(cy - height / 2), width, height };
+}
+
 /** New element moved/scaled/rotated by `m` (elements are immutable). Text scales font size and width uniformly. */
 export function transformElement(el: PageElement, m: Matrix, measure: MeasureText = estimateMeasure): PageElement {
 	if (el.type === "marker") return transformMarker(el, m);
 	if (el.type === "box") return transformBox(el, m);
 	if (el.type === "equation") return transformEquation(el, m);
 	if (el.type === "graph") return transformGraph(el, m);
+	if (el.type === "excerpt") return transformExcerpt(el, m);
 	return el.type === "text" ? transformText(el, m, measure) : transformImage(el, m);
 }

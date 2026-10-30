@@ -2,6 +2,7 @@
 // the PNGs and notebook.md into a vault folder through the vault API. Nothing is ever overwritten: a name that exists gets
 // " 2", " 3"… The notebook.md is written last, so it only exists when every image does. The format of the notebook is not
 // touched.
+import { elementAssetId } from "../model/excerpts";
 import { normalizePath, TFile, TFolder, type App } from "obsidian";
 import { t } from "../i18n";
 import { drawPageRaster } from "../ink/page-raster";
@@ -63,18 +64,19 @@ async function elementBitmaps(media: NotebookMedia | null, page: Page, cache: Ma
 	const out = new Map<string, CanvasImageSource>();
 	if (!media) return out;
 	for (const el of page.elements ?? []) {
-		if (el.type !== "image" || out.has(el.asset)) continue;
-		let bmp = cache.get(el.asset);
+		const id = elementAssetId(el);
+		if (id === null || out.has(id)) continue;
+		let bmp = cache.get(id);
 		if (bmp === undefined) {
 			try {
-				bmp = await createImageBitmap(new Blob([await media.readAsset(el.asset)]));
+				bmp = await createImageBitmap(new Blob([await media.readAsset(id)]));
 			} catch (e) {
 				console.error("[notebook] markdown export image", e);
 				bmp = null;
 			}
-			cache.set(el.asset, bmp);
+			cache.set(id, bmp);
 		}
-		if (bmp) out.set(el.asset, bmp);
+		if (bmp) out.set(id, bmp);
 	}
 	return out;
 }

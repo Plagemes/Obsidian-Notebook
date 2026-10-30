@@ -107,15 +107,15 @@ function v9Content(page: Page): unknown {
 }
 
 describe("format v9", () => {
-	it("is at version 9 with a v8 step", () => {
-		expect(CURRENT_VERSION).toBe(9);
+	it("has a v8 step (the current version is checked in model-v10.test.ts)", () => {
+		expect(CURRENT_VERSION).toBeGreaterThanOrEqual(9);
 		expect(MIGRATIONS[8]).toBeTypeOf("function");
 	});
 
 	it("migrates a v8 file unchanged apart from the version", () => {
 		const r = parsed(JSON.stringify(v8Doc()));
 		expect(r.migratedFrom).toBe(8);
-		expect(r.doc.version).toBe(9);
+		expect(r.doc.version).toBe(CURRENT_VERSION);
 		expect(r.doc.pages[0]!.elements).toEqual([{ id: "m1", type: "marker", kind: "star", x: 1, y: 2 }]);
 		expect(r.dropped).toBeUndefined();
 	});

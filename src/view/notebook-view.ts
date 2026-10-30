@@ -2306,6 +2306,13 @@ export class NotebookView extends FileView {
 		}
 		const elements = page.elements ?? [];
 		for (const el of elements) {
+			if (el.type === "excerpt") {
+				// v10: thumbnails show an excerpt's snapshot (cheap, and never another page's live picture).
+				const img = el.asset !== undefined ? media.image(el.asset) : null;
+				if (el.asset !== undefined && !img) incomplete = true;
+				drawElement(ctx, el, img);
+				continue;
+			}
 			if (el.type !== "image") continue;
 			const img = media.image(el.asset);
 			if (!img) incomplete = true;

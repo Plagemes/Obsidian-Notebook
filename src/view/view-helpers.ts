@@ -73,6 +73,7 @@ export function pageSignature(page: Page): string {
 		else if (el.type === "box") parts.push(el.id, el.x, el.y, el.width, el.height, el.kind);
 		else if (el.type === "equation") parts.push(el.id, el.x, el.y, el.width, el.height, el.latex, el.fontSize, el.color, el.inline ? 1 : 0, el.numbered ? 1 : 0, el.outline?.length ?? 0);
 		else if (el.type === "graph") parts.push(el.id, stableStringify(el));
+		else if (el.type === "excerpt") parts.push(el.id, el.x, el.y, el.width, el.height, el.asset ?? "", stableStringify(el.source));
 		else parts.push(el.id, el.x, el.y, el.kind, el.done ? 1 : 0);
 	}
 	const bg = page.background;

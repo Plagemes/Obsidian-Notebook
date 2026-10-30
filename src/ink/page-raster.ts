@@ -9,6 +9,7 @@ import { defaultBoxLabel, drawBox, drawMarker, type BoxLabel } from "./marker-re
 import { PAPER_COLORS, paperPattern } from "./paper";
 import { drawElement, drawTextElement } from "./renderer";
 import { drawEquation, drawGraph } from "./math-render";
+import { drawExcerpt } from "./excerpt-render";
 import { graphClips, strokeClip } from "./attach";
 import { equationNumbers } from "../model/math-elements";
 import { HIGHLIGHTER_ALPHA, strokeSvgPath } from "./stroke-shape";
@@ -23,14 +24,24 @@ export interface RasterInputs {
 	layers?: ExportLayers;
 	/** v9: numbers of the numbered equations (default: counted on this page). */
 	equationNumbers?: ReadonlyMap<string, number>;
+	/**
+	 * v10: draw only this part of the page (pt), its top-left corner at the canvas origin: the canvas is then
+	 * `region.width × scale` by `region.height × scale` pixels (the picture of an anchored excerpt).
+	 */
+	region?: { x: number; y: number; width: number; height: number };
 }
 
-/** Paints `page` on `ctx` (a canvas of `page.width × scale` by `page.height × scale` pixels). */
+/**
+ * Paints `page` on `ctx` (a canvas of `page.width × scale` by `page.height × scale` pixels, or of the region's size).
+ * v10 excerpts on the page draw their snapshot (`images` by asset id), never live: an excerpt of a page holding an
+ * excerpt of it cannot recurse.
+ */
 export function drawPageRaster(ctx: CanvasRenderingContext2D, page: Page, scale: number, inputs: RasterInputs): void {
 	const flags = layerFlags(inputs.layers);
 	ctx.save();
 	try {
-		ctx.setTransform(scale, 0, 0, scale, 0, 0);
+		const region = inputs.region;
+		ctx.setTransform(scale, 0, 0, scale, region ? -region.x * scale : 0, region ? -region.y * scale : 0);
 		if (flags.background) {
 			ctx.fillStyle = "#ffffff";
 			ctx.fillRect(0, 0, page.width, page.height);
@@ -43,6 +54,10 @@ export function drawPageRaster(ctx: CanvasRenderingContext2D, page: Page, scale:
 		if (!flags.content) return;
 		const elements = page.elements ?? [];
 		for (const el of elements) {
+			if (el.type === "excerpt") {
+				drawExcerpt(ctx, el, el.asset !== undefined ? inputs.images.get(el.asset) ?? null : null);
+				continue;
+			}
 			if (el.type !== "image") continue;
 			const img = inputs.images.get(el.asset);
 			if (img) drawElement(ctx, el, img);

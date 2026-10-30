@@ -50,12 +50,15 @@ export function cloneMeta(meta: NotebookMeta): NotebookMeta {
 	return out;
 }
 
-/** Ids of the assets used by a page background or an image element anywhere in the document. */
+/** Ids of the assets used by a page background, an image element or (v10) an excerpt snapshot anywhere in the document. */
 export function referencedAssets(doc: NotebookDocument): Set<string> {
 	const used = new Set<string>();
 	for (const page of doc.pages) {
 		if (page.background) used.add(page.background.asset);
-		for (const el of page.elements ?? []) if (el.type === "image") used.add(el.asset);
+		for (const el of page.elements ?? []) {
+			if (el.type === "image") used.add(el.asset);
+			else if (el.type === "excerpt" && el.asset !== undefined) used.add(el.asset);
+		}
 	}
 	return used;
 }

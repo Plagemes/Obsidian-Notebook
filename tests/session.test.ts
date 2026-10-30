@@ -58,7 +58,8 @@ class FakeIO implements DocumentIO {
 
 const corrupt: Array<[string, string]> = [
 	// A cut-off file is "still arriving" (sync safety): tests/sync-review.test.ts.
-	["broken JSON", `${serialize(sampleDocument(3)).slice(0, 200)}]}`],
+	// A syntax error in the middle of a complete text (not a cut-off one, whatever the length of the header).
+	["broken JSON", serialize(sampleDocument(3)).replace('"pages": [', '"pages": [}')],
 	["invalid schema", JSON.stringify({ format: "obsidian-notebook", version: 1, id: "x", pages: "nope" })],
 	["not a notebook", JSON.stringify({ hello: "world" })],
 	["garbage", "\u0000\u0001\u0002"],
