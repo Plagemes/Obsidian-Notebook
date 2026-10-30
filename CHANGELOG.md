@@ -13,6 +13,7 @@
 - **An empty sidecar file is never read as "no data".** An existing empty Inbox, practice or textbooks file (a sync app that has not finished downloading it, or a write cut short) is now treated as not ready: the change is refused with a notice saying so, a copy is kept, and the file is not written over.
 - **Practice links and textbooks: one file per device.** `practice.json` and `textbooks.json` were shared by all devices, so the last device to write won and sync conflict copies were never read. Each device now writes only `_meta/practice-<device>.json` and `_meta/textbooks-<device>.json`, and every device's files are merged on read (attempt times add up across devices; for a textbook the latest setting or removal wins). The old shared files are still read, never written or deleted, so no record is lost.
 - **Deleting several pages never deletes a version without a copy.** A page edited or replaced while the copies for *Deleted pages* were being written gets a new copy before it is deleted; if the pages keep changing, nothing is deleted and a notice says so.
+- **Practice copies no longer repeat the open items of the original.** *Redo this exercise* leaves gap, question and homework markers out of the copy (they would add a second homework task to the companion note and count again as open items); importance markers and boxes are copied. A plain *Duplicate* still copies every marker with new ids, on purpose: the copy is a page of its own and its homework is a task of its own.
 
 ## 0.7.0 — 2026-10-30
 

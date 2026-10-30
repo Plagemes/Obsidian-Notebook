@@ -376,3 +376,24 @@ describe("deleting several pages: the copy must be the version deleted", () => {
 		expect(unstashedPages(doc, ids, stashed).map((p) => p.id)).toEqual(["b", "c"]);
 	});
 });
+
+// --- 10. practice copies leave the open items of the original out ---
+
+describe("practice copies and markers", () => {
+	it("gap, question and homework markers stay with the original; importance markers and boxes are copied", async () => {
+		const { buildPracticePage } = await import("../src/model/practice");
+		const { page } = docWith([stroke([[10, 10], [20, 20]])]);
+		page.elements = [
+			createMarker("homework", 10, 10, { text: "exercise 3" }), createMarker("gap", 30, 30), createMarker("question", 50, 50, { text: "why?" }),
+			createMarker("important", 70, 70), createBox("example", { x: 0, y: 0, width: 100, height: 100 }),
+		];
+		const copy = buildPracticePage(page, {}, 1);
+		expect(copy.markers).toBe(3);
+		expect(copy.page.elements!.map((e) => (e.type === "marker" ? e.kind : e.type))).toEqual(["important", "box"]);
+		expect(copy.page.elements!.every((e) => !page.elements!.some((o) => o.id === e.id))).toBe(true);
+		expect(page.elements).toHaveLength(5);
+		const bare = docWith([]).page;
+		bare.elements = [createMarker("gap", 1, 1)];
+		expect(buildPracticePage(bare, {}, 2).page.elements).toBeUndefined();
+	});
+});

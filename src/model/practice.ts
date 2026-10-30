@@ -13,6 +13,7 @@
  * every criterion given (its colour is one of `colors`, its tool one of `tools`, its id one of `strokes`: the lasso
  * selection). Text boxes and images are never hidden: they are the exercise.
  */
+import { isResolvable } from "./markers";
 import { duplicatePage } from "./pages";
 import { normalizePageTags } from "./page-tags";
 import { TOOLS, type Page, type Stroke, type Tool } from "./types";
@@ -130,12 +131,17 @@ export interface PracticeCopy {
 	page: Page;
 	/** Strokes of the original that the copy does not have. */
 	hidden: number;
+	/** Gap, question and homework markers of the original that the copy leaves out. */
+	markers: number;
 }
 
 /**
  * The practice copy of `original`: a duplicate (new page, stroke and element ids; size, paper, background, margins,
  * text boxes and images as they are) without the strokes `spec` hides, tagged `practice` and `attempt/<n>`. Its bookmark
- * is not copied (bookmarks belong to the original's id).
+ * is not copied (bookmarks belong to the original's id). v8: gap, question and homework markers are left out too: they are
+ * open items of the original (a homework task, a question for the lecturer), and a copy of them on every attempt would
+ * repeat the task in the companion note and the open-items count. Importance markers and boxes stay: they are part of
+ * the exercise.
  */
 export function buildPracticePage(original: Page, spec: HideSpec, attempt: number): PracticeCopy {
 	const copy = duplicatePage(original);
@@ -146,7 +152,11 @@ export function buildPracticePage(original: Page, spec: HideSpec, attempt: numbe
 	const hidden = copy.strokes.length - kept.length;
 	copy.strokes = kept;
 	copy.tags = practiceTags(original.tags, attempt);
-	return { page: copy, hidden };
+	const elements = (copy.elements ?? []).filter((el) => !(el.type === "marker" && isResolvable(el.kind)));
+	const markers = (copy.elements?.length ?? 0) - elements.length;
+	if (elements.length > 0) copy.elements = elements;
+	else delete copy.elements;
+	return { page: copy, hidden, markers };
 }
 
 /** What the peek shows over a practice copy: the strokes of the original that the spec hides. */
