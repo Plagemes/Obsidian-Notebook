@@ -16,7 +16,7 @@ import { addLodNodesPath, lodLevel, lodNodes, lodPolygon } from "./lod";
 import { WetInk, type PageTransform } from "./wet-ink";
 import { ErrorOnce } from "./errors";
 import type { SpacePreviewEntry } from "./space";
-import { translate, type Matrix } from "./transform";
+import { partMatrix, translate, type Matrix } from "./transform";
 import type { Viewport } from "./viewport";
 
 const PAPER = "#ffffff";
@@ -132,6 +132,11 @@ export interface SelectionOverlay {
 	bounds: BBox;
 	/** Handle size in CSS px. */
 	handle: number;
+	/**
+	 * wave 0.10 (359): the items of the other pages of a selection that crosses page boundaries. `offset` is what a point of
+	 * that page adds up to in the frame of `pageIndex` (the primary page, the one `matrix` and `bounds` are in).
+	 */
+	parts?: ReadonlyArray<{ pageIndex: number; strokes: readonly Stroke[]; elements: readonly PageElement[]; offset: readonly [number, number] }>;
 }
 
 export interface RendererOptions {
@@ -625,10 +630,13 @@ export class Renderer {
 	/** Shows a selection; its strokes are hidden from the static layer while it floats. */
 	setSelection(selection: SelectionOverlay | null): void {
 		this.selection = selection;
-		this.applyHidden(
-			selection ? new Set(selection.strokes) : null,
-			selection && selection.elements.length > 0 ? new Set(selection.elements) : null,
-		);
+		const hidden = selection ? new Set(selection.strokes) : null;
+		const hiddenEls = new Set<PageElement>(selection?.elements ?? []);
+		for (const part of selection?.parts ?? []) {
+			for (const s of part.strokes) hidden?.add(s);
+			for (const e of part.elements) hiddenEls.add(e);
+		}
+		this.applyHidden(hidden, hiddenEls.size > 0 ? hiddenEls : null);
 	}
 
 	/**
@@ -956,20 +964,13 @@ export class Renderer {
 		const sel = this.selection;
 		if (sel && boxes[sel.pageIndex]) this.guarded(ctx, "selection", () => {
 			const box = boxes[sel.pageIndex]!;
-			if (sel.elements.length > 0) {
-				// Elements are drawn as they will be once committed (a text box cannot rotate), under the ink.
-				this.beginPage(ctx, box);
-				for (const el of sel.elements) {
-					const moved = transformElement(el, sel.matrix, measureText);
-					drawElement(ctx, moved, moved.type === "image" ? this.media?.image(moved.asset) ?? null : null, this.boxLabel);
-				}
-				ctx.restore();
+			// A selection across pages floats over the gaps between them, so nothing is clipped to its page.
+			const clip = !sel.parts || sel.parts.length === 0;
+			this.drawSelectedItems(ctx, box, sel.strokes, sel.elements, sel.matrix, clip);
+			for (const part of sel.parts ?? []) {
+				const partBox = boxes[part.pageIndex];
+				if (partBox) this.drawSelectedItems(ctx, partBox, part.strokes, part.elements, partMatrix(sel.matrix, part.offset[0], part.offset[1]), false);
 			}
-			this.beginPage(ctx, box);
-			const [a, b, c, d, e, f] = sel.matrix;
-			ctx.transform(a, b, c, d, e, f);
-			for (const stroke of sel.strokes) this.fillStroke(ctx, stroke);
-			ctx.restore();
 			this.drawSelectionFrame(ctx, box, sel);
 		});
 
@@ -1088,6 +1089,25 @@ export class Renderer {
 			ctx.fillText(String(l.n), 0, 0);
 			ctx.restore();
 		}
+		ctx.restore();
+	}
+
+	/** Selected elements (under the ink, as they will be once committed: a text box cannot rotate) and strokes, with `matrix` applied. */
+	private drawSelectedItems(
+		ctx: CanvasRenderingContext2D, box: PageBox, strokes: readonly Stroke[], elements: readonly PageElement[], matrix: Matrix, clip: boolean,
+	): void {
+		if (elements.length > 0) {
+			this.beginPage(ctx, box, clip);
+			for (const el of elements) {
+				const moved = transformElement(el, matrix, measureText);
+				drawElement(ctx, moved, moved.type === "image" ? this.media?.image(moved.asset) ?? null : null, this.boxLabel);
+			}
+			ctx.restore();
+		}
+		this.beginPage(ctx, box, clip);
+		const [a, b, c, d, e, f] = matrix;
+		ctx.transform(a, b, c, d, e, f);
+		for (const stroke of strokes) this.fillStroke(ctx, stroke);
 		ctx.restore();
 	}
 

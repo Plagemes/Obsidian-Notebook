@@ -3,6 +3,8 @@ import { t } from "../i18n";
 import { captureClip, clipAssetIds, duplicateOffset, instantiateClip, pasteCommand, pasteOffset, type ClipContent } from "../ink/clipboard";
 import { whiteToTransparent } from "../ink/image-alpha";
 import { measureText } from "../ink/renderer";
+import { captureCrossPageClip, type PagePart } from "../ink/cross-page";
+import type { PageBox } from "../ink/layout";
 import { commonStyle, planRestyle, restyleAbilities, type StyleGroup } from "../ink/restyle";
 import { AddAsset, AddElement, Batch, ReplaceElement, type Command } from "../model/history";
 import type { Asset, ImageElement, NotebookDocument, Page, PageElement, Stroke } from "../model/types";
@@ -20,6 +22,17 @@ export interface SelectionState {
 	pageIndex: number;
 	strokes: Stroke[];
 	elements: PageElement[];
+	/** wave 0.10 (359): the items of the other pages when the lasso crossed a page boundary. */
+	others?: PagePart[];
+}
+
+/** Every selected stroke and element, whatever page it is on. */
+function allItems(sel: SelectionState): { strokes: Stroke[]; elements: PageElement[] } {
+	const others = sel.others ?? [];
+	return {
+		strokes: [...sel.strokes, ...others.flatMap((o) => o.strokes)],
+		elements: [...sel.elements, ...others.flatMap((o) => o.elements)],
+	};
 }
 
 /** The part of the notebook view the selection actions need. */
@@ -31,7 +44,9 @@ export interface SelectionHost {
 	editable(): boolean;
 	selection(): SelectionState | null;
 	/** Selects exactly these items of the page (switching to the lasso) so they can be moved right away. */
-	select(pageIndex: number, strokes: Stroke[], elements: PageElement[]): void;
+	select(pageIndex: number, strokes: Stroke[], elements: PageElement[], others?: PagePart[]): void;
+	/** wave 0.10 (359): the page boxes, to put the items of several pages in one frame. */
+	boxes(): readonly PageBox[];
 	/** Runs the command as one undo step and refreshes everything that depends on the document. */
 	execute(cmd: Command): void;
 	deleteSelection(): void;
@@ -69,14 +84,16 @@ export class SelectionActions {
 		this.el.toggleClass("notebook-hidden", !show);
 		this.styleRows.empty();
 		if (!sel) return;
-		const ability = restyleAbilities(sel.strokes, sel.elements);
+		const all = allItems(sel);
+		const ability = restyleAbilities(all.strokes, all.elements);
 		if (ability.inkColor || ability.inkWidth) this.styleRow(sel, "ink", ability.inkColor, ability.inkWidth);
 		if (ability.highlighterColor) this.styleRow(sel, "highlighter", true, ability.highlighterWidth);
 	}
 
 	private styleRow(sel: SelectionState, group: StyleGroup, colour: boolean, width: boolean): void {
 		const row = this.styleRows.createDiv({ cls: "notebook-toolbar-group" });
-		const common = commonStyle(sel.strokes, sel.elements, group);
+		const all = allItems(sel);
+		const common = commonStyle(all.strokes, all.elements, group);
 		const highlighter = group === "highlighter";
 		if (colour) {
 			for (const color of highlighter ? HIGHLIGHTER_COLORS : PEN_COLORS) {
@@ -109,8 +126,27 @@ export class SelectionActions {
 
 	private restyle(req: { group: StyleGroup; color?: string; width?: number }): void {
 		const sel = this.host.selection();
-		const page = sel && this.host.doc()?.pages[sel.pageIndex];
-		if (!sel || !page || !this.host.editable()) return;
+		const doc = this.host.doc();
+		const page = sel && doc?.pages[sel.pageIndex];
+		if (!sel || !doc || !page || !this.host.editable()) return;
+		if (sel.others?.length) {
+			// wave 0.10 (359): every page's items are restyled in their own page; one undo step.
+			const parts: PagePart[] = [{ pageIndex: sel.pageIndex, strokes: sel.strokes, elements: sel.elements }, ...sel.others];
+			const plans = parts.flatMap((part) => {
+				const target = doc.pages[part.pageIndex];
+				const one = target ? planRestyle(target, part.strokes, part.elements, req) : null;
+				return one ? [{ part, plan: one }] : [];
+			});
+			if (plans.length === 0) return;
+			this.host.execute(new Batch("Restyle selection", plans.map((p) => p.plan.command)));
+			const next = (part: PagePart): PagePart => {
+				const found = plans.find((p) => p.part === part);
+				return found ? { pageIndex: part.pageIndex, strokes: found.plan.strokes, elements: found.plan.elements } : part;
+			};
+			const [first, ...rest] = parts.map(next) as [PagePart, ...PagePart[]];
+			this.host.select(first.pageIndex, first.strokes, first.elements, rest);
+			return;
+		}
 		const plan = planRestyle(page, sel.strokes, sel.elements, req);
 		if (!plan) return;
 		this.host.execute(plan.command);
@@ -124,6 +160,11 @@ export class SelectionActions {
 		const doc = this.host.doc();
 		const page = sel && doc?.pages[sel.pageIndex];
 		if (!sel || !doc || !page) return null;
+		if (sel.others?.length) {
+			const parts: PagePart[] = [{ pageIndex: sel.pageIndex, strokes: sel.strokes, elements: sel.elements }, ...sel.others];
+			const crossClip = captureCrossPageClip(this.host.boxes(), doc.pages, parts, sel.pageIndex, doc.assets, measureText);
+			return crossClip ? { clip: crossClip, pageIndex: sel.pageIndex } : null;
+		}
 		const strokes = sel.strokes.filter((s) => page.strokes.includes(s));
 		const elements = sel.elements.filter((e) => page.elements?.includes(e));
 		const clip = captureClip(strokes, elements, doc.assets, measureText);
@@ -169,7 +210,36 @@ export class SelectionActions {
 		new Notice(t("selection.cutDone"));
 	}
 
+	/** wave 0.10 (359): duplicates a selection across pages, each page's items next to the originals on their own page. */
+	private duplicateAcross(sel: SelectionState, doc: NotebookDocument): void {
+		const parts: PagePart[] = [{ pageIndex: sel.pageIndex, strokes: sel.strokes, elements: sel.elements }, ...(sel.others ?? [])];
+		const commands: Command[] = [];
+		const made: PagePart[] = [];
+		for (const part of parts) {
+			const page = doc.pages[part.pageIndex];
+			if (!page) continue;
+			const clip = captureClip(
+				part.strokes.filter((s) => page.strokes.includes(s)), part.elements.filter((e) => page.elements?.includes(e)), doc.assets, measureText,
+			);
+			if (!clip) continue;
+			const [dx, dy] = duplicateOffset(clip.bounds, page);
+			const copy = instantiateClip(clip, dx, dy, undefined, measureText);
+			commands.push(pasteCommand(page, copy.strokes, copy.elements, [], "Duplicate selection"));
+			made.push({ pageIndex: part.pageIndex, strokes: copy.strokes, elements: copy.elements });
+		}
+		const [first, ...rest] = made;
+		if (!first) return;
+		this.host.execute(new Batch("Duplicate selection", commands));
+		this.host.select(first.pageIndex, first.strokes, first.elements, rest);
+	}
+
 	duplicate(): void {
+		const sel = this.host.selection();
+		const whole = this.host.doc();
+		if (sel?.others?.length && whole && this.host.editable()) {
+			this.duplicateAcross(sel, whole);
+			return;
+		}
 		const got = this.capture();
 		const doc = this.host.doc();
 		const page = doc?.pages[got?.pageIndex ?? -1];
