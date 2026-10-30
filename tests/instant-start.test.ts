@@ -105,9 +105,12 @@ describe("DocumentSession warm-up", () => {
 			},
 			clear: (h) => clearTimeout(h),
 		};
+		let disk = text;
 		const io: DocumentIO = {
-			read: async () => text,
-			process: async () => undefined,
+			read: async () => disk,
+			process: async (fn) => {
+				disk = fn(disk);
+			},
 			backup: async () => null,
 		};
 		const s = new DocumentSession(io, recording, {});

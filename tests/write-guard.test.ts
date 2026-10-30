@@ -398,14 +398,19 @@ describe("DocumentSession on a full or failing disk (#347)", () => {
 		const { s, health } = open(io);
 		await s.load();
 		addStroke(s);
+		// Another notebook altogether (another id): backed up, then written over on the next attempt (review N2).
 		const external = serialize(sampleDocument(4));
 		const realProcess = io.process.bind(io);
+		let once = true;
 		io.process = async (fn) => {
 			await realProcess(fn);
-			io.content = external;
+			if (once) io.content = external;
+			once = false;
 		};
 		expect(await s.flush()).toBe(true);
 		expect(health.filter((h) => h.failing)).toHaveLength(0);
 		expect(s.dirty).toBe(false);
+		expect(io.backups.map((b) => b.reason)).toEqual(["conflict"]);
+		expect(io.backups[0]!.content).toBe(external);
 	});
 });

@@ -15,6 +15,14 @@ export function isAwaitingDownload(text: string): boolean {
 	return /^[\s\0]*$/.test(text);
 }
 
+/**
+ * The text without a tail of NUL bytes (space a sync client reserved after the content). Review N6: a complete notebook
+ * followed by NUL bytes is read without them before it is called "arriving".
+ */
+export function withoutNulTail(text: string): string {
+	return text.endsWith("\0") ? text.replace(/\0+$/, "") : text;
+}
+
 /** Text that does not parse and changed less than this long ago is taken as still being written (by the sync client). */
 export const RECENT_WRITE_MS = 30_000;
 /** Repair asks for a confirmation when the file changed less than this long ago: it may still be arriving. */
