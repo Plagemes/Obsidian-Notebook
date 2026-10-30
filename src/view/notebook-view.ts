@@ -4222,6 +4222,11 @@ export class NotebookView extends FileView {
 			+ `redraw ${st.staticMs.toFixed(1)} ms · ${st.strokesDrawn} strokes · ${st.pagesDrawn} pages`,
 		);
 	}
+
+	/** Read-only: what this view holds in memory that can name an asset file (library check, roadmap 27): the document, its undo and redo history, media not yet in the document. */
+	libraryCheckRoots(): unknown[] {
+		return [this.session?.doc ?? null, this.history.pending(), this.media?.pendingAssets() ?? []];
+	}
 }
 
 /** Notice text for a failed image insert: HEIF/HEIC gets its own, actionable message. */

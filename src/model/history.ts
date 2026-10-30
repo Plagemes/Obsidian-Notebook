@@ -635,4 +635,9 @@ export class History {
 		this.undoStack = [];
 		this.redoStack = [];
 	}
+
+	/** Every command still in the undo and redo stacks (read-only: the library check asks what they still name). */
+	pending(): readonly Command[] {
+		return [...this.undoStack, ...this.redoStack];
+	}
 }

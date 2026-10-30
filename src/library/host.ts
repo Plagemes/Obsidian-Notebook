@@ -16,7 +16,7 @@ import { LibraryTrash } from "../storage/trash";
 import { documentFromTemplate } from "../model/templates";
 import { openTemplateGallery } from "../view/page-tools";
 import { headerField } from "../storage/integrity";
-import { sidecarDeviceId, VaultDocumentIO, vaultDeviceFileAdapter } from "../storage/vault-io";
+import { journalFolder, sidecarDeviceId, VaultDocumentIO, vaultDeviceFileAdapter } from "../storage/vault-io";
 import { resolveAssetFile, storeAsset } from "../view/media";
 import { NewNotebookModal, type NewNotebookOptions } from "../view/modals";
 import { NotebookView, VIEW_TYPE } from "../view/notebook-view";
@@ -135,7 +135,11 @@ export class NotebookLibraryHost implements LibraryHost {
 
 	/** Roadmap 27: the library check (unreadable notebooks, unused files). */
 	checkLibrary(): void {
-		openLibraryCheck(this.app, () => this.plugin.settings);
+		openLibraryCheck(this.app, () => this.plugin.settings, {
+			journalFolder: journalFolder(this.app, this.plugin.manifest.id),
+			// What every open notebook holds in memory: a view that cannot be inspected makes the check incomplete (it throws).
+			openRoots: () => this.app.workspace.getLeavesOfType(VIEW_TYPE).flatMap((leaf) => (leaf.view instanceof NotebookView ? leaf.view.libraryCheckRoots() : [])),
+		});
 	}
 
 	// ----------------------------------------------------------------- opening
