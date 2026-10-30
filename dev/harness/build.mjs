@@ -22,6 +22,19 @@ export async function buildHarness() {
 		alias: { obsidian: join(here, "obsidian-stub.ts") },
 		logLevel: "warning",
 	});
+	// The art gallery (src/ui/art): its own page, no plugin view.
+	await esbuild.build({
+		entryPoints: [join(here, "art-gallery.ts")],
+		bundle: true,
+		format: "iife",
+		target: "es2021",
+		sourcemap: "inline",
+		outfile: join(out, "art.js"),
+		alias: { obsidian: join(here, "obsidian-stub.ts") },
+		logLevel: "warning",
+	});
+	copyFileSync(join(here, "art.html"), join(out, "art.html"));
+	copyFileSync(join(here, "art.css"), join(out, "art.css"));
 	copyFileSync(join(here, "index.html"), join(out, "index.html"));
 	copyFileSync(join(here, "obsidian-base.css"), join(out, "obsidian-base.css"));
 	copyFileSync(join(root, "styles.css"), join(out, "styles.css"));

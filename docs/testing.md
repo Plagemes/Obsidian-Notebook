@@ -6,6 +6,7 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 
 | Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
 |---|---|---|---|---|---|
+| Procedural subject art and palette (wave 0.12, DESIGN.md §2.3, §2.6): seven line-art families, card art, header bands, covers, empty states, folder icon, LRU image cache, reduced-motion switch; `colorFor` | ✅ | ✅ `tests/generative-art.test.ts` (determinism, seeds, geometry vs colour, density, left side clean, intensity, surfaces, empty states, switch, cache keys and eviction, palette, folder icon); harness gallery screenshots and timing (`HARNESS_DOC=art`) | | ✅ | no surface uses it yet; timing measured only in headless desktop Chrome (steps 430-434) |
 | Operations on several selected pages (roadmap 378, wave 0.8): multi-select in the page navigator (select button, long press on touch, Ctrl/Shift+click, range, select all) and move (start, end, position, another notebook), duplicate, bookmark, tag, paper, size, PDF export, delete through the page trash; one undo step each | ✅ | ✅ `tests/page-ops.test.ts` (order planning, ranges, every command as one step with exact undo, never deleting every page); ❌ the panel, the menus, touch long press, the dialogs | | ✅ | long press on touch both starts a selection and arms the old drag-to-reorder: to be checked on the tablet (steps 200-202) |
 | Do not disturb while writing (roadmap 374, wave 0.8): the plugin's own notices and non-urgent background work (thumbnails in the page panel and the library, library re-index, version-history snapshots, the timetable offer) wait while a pen is on the screen and for 1.5 s after | ✅ | ✅ `tests/writing-guard.test.ts` (timing, queue order, same-key replacement, lost pen, reset); ❌ real pen events, the notice wrapper in Obsidian | | ✅ | Obsidian's own notices (and other plugins') cannot be held back; `pointerType` `pen` only (a finger or mouse does not count); notices from the toolbar, stamps, selection actions and Zettelkasten are not routed yet (steps 205-206) |
 | Stable page links (roadmap 388, wave 0.8): copy/insert link and embed, page suggestions, `obsidian://` links, companion note links, PDF annotation note links and the API write `#p3&id=<page id>`; opening and embeds resolve by id first; API `getPageLink`, `openNotebook(file, pageId)` | ✅ | ✅ `tests/stable-links.test.ts` (subpaths, protocol, ephemeral state, resolve, API page refs), `tests/page-links.test.ts`; ❌ following a link in Obsidian | | | recent pages and the quick switcher (roadmap 364, 365) are not in this branch: they must use `stablePageSubpath` (steps 203-204) |
@@ -941,7 +942,17 @@ Not verified in Obsidian or on a device. Setup: notebook **A** with a PDF page (
 405. **Radial menu from the button, anywhere over the page.** In a notebook with *Pen side button* = *Radial menu on click, erase while held*: hover the pen over the page and click the side button: the ring opens on release at the pen, nothing is drawn. Repeat with the pen over a floating bar or the toolbar lying on the page (if your layout has one over the page): the ring opens at the pen too. With the pen above the toolbar strip outside the page, or over a modal (open the Pen button test over the notebook), the click opens nothing in the notebook. Hold the button, then touch and drag over ink: it erases; release: no menu. A long-press with the pen on the page and on the toolbar shows no system menu, text selection or magnifier, and the pen keeps writing afterwards (in the Pen button test, no `pointercancel` appears during a long-press on the area).
 406. **Nothing else changes.** Write, dot an i, tap the toolbar with the pen and with a finger, scroll and pinch: no radial menu opens by itself, ink looks and feels the same, and the eraser end still erases.
 
-Results table for steps 1 to 406. Fill it in as you go.
+### Procedural subject art (wave 0.12, steps 430-434)
+
+The gallery of every style in the eight subject colours, as cards, covers, empty states and folder icons, is screenshotted by `npm run harness:check` into `dev/harness/dist/shots/art/` (`HARNESS_DOC=art` runs only those pages; `ART_BENCH=1` adds per-style timings). Steps 430-434 are for the real app once a surface (library, home, creation dialog) uses it.
+
+430. **Same picture every time.** Open the library: note the art of two subject cards and two notebook covers. Close and reopen Obsidian, then open the vault on a second device: each card and cover shows exactly the same drawing and colour. Rename a subject: its art (and its automatic colour) may change; renaming it back restores the original.
+431. **Left side stays clean.** On the tablet in portrait and landscape, and on a phone: the folder icon, title and counts of every subject card sit on a clean area; the line art fades in from the right half and never makes the title hard to read, in dark and light theme.
+432. **Fine lines, sharp.** Zoom into a card with the system magnifier or a screenshot: the lines are thin (about 1 device pixel or a little more), not blurry or blocky, on the tablet (dpr 2 or more) and on a desktop screen (dpr 1).
+433. **Switch off.** Turn on the system setting *Remove animations* (Android) or *Reduce motion* (Windows/macOS), restart Obsidian: cards, header bands and empty states show no line art; covers keep their colour gradient; nothing is missing or broken. Turn it off again: the art is back.
+434. **Fast on the tablet.** On the Android tablet, open a library with at least 12 subjects: the cards appear without a visible stall and scrolling stays smooth; scroll back up: cards show at once (cached). If you can, with remote DevTools on the WebView, report the time of the first library render and of a card's `artImage` call (target: under 30 ms per 600 × 200 card).
+
+Results table for steps 1 to 406 (and 430-434). Fill it in as you go.
 
 | Step | Device / Obsidian version | Result | Notes |
 |---|---|---|---|
@@ -1351,6 +1362,11 @@ Results table for steps 1 to 406. Fill it in as you go.
 | 404 Pen button test sees everything | | | |
 | 405 Radial menu from the button, anywhere over the page | | | |
 | 406 Nothing else changes (side button at window level) | | | |
+| 430 Same picture every time (subject art) | | | |
+| 431 Left side stays clean | | | |
+| 432 Fine lines, sharp | | | |
+| 433 Switch off (reduced motion) | | | |
+| 434 Fast on the tablet | | | |
 
 Benchmark output (step 21): paste it here.
 
