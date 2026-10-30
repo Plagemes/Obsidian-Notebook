@@ -47,7 +47,7 @@ import {
 	ReplaceStroke, SetMeta, SetPageSize, type Command,
 } from "../model/history";
 import { pageContentCommand } from "../model/page-content";
-import { freezeStroke } from "../model/serialize";
+import { checkContent, freezeStroke } from "../model/serialize";
 import {
 	DEFAULT_META, PAPER_SPACING,
 	type Asset, type ImageElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement,
@@ -263,7 +263,14 @@ export class NotebookView extends FileView {
 	navigation = true;
 
 	private session: DocumentSession | null = null;
-	private readonly history = new History(() => this.requireDoc());
+	/**
+	 * Every edit is checked strictly before it is kept (`checkContent`): an edit that the writer would refuse is undone
+	 * with a notice, so a bad element can never stop every later save.
+	 */
+	private readonly history = new History(() => this.requireDoc(), 500, checkContent, (message) => {
+		console.error("[notebook] edit refused, the notebook could not be saved with it:", message);
+		showNotice(t("history.refused", { message }), 10000);
+	});
 	private readonly policy: InputPolicy;
 	private readonly pressure: PressureModel;
 	/** Position filter (stabilization setting) and the geometry of the stroke being written. */

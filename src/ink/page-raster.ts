@@ -9,6 +9,7 @@ import { defaultBoxLabel, drawBox, drawMarker, type BoxLabel } from "./marker-re
 import { PAPER_COLORS, paperPattern } from "./paper";
 import { drawElement, drawTextElement } from "./renderer";
 import { drawEquation, drawGraph } from "./math-render";
+import { graphClips, strokeClip } from "./attach";
 import { equationNumbers } from "../model/math-elements";
 import { HIGHLIGHTER_ALPHA, strokeSvgPath } from "./stroke-shape";
 
@@ -53,6 +54,7 @@ export function drawPageRaster(ctx: CanvasRenderingContext2D, page: Page, scale:
 		const numbers = inputs.equationNumbers ?? equationNumbers([page]);
 		for (const el of elements) if (el.type === "equation") drawEquation(ctx, el, numbers.get(el.id));
 		for (const el of elements) if (el.type === "text") drawTextElement(ctx, el);
+		const clips = graphClips(page.elements);
 		for (const stroke of page.strokes) {
 			if (stroke.hidden && !inputs.hiddenInk) continue;
 			const d = strokeSvgPath(stroke);
@@ -61,7 +63,16 @@ export function drawPageRaster(ctx: CanvasRenderingContext2D, page: Page, scale:
 			ctx.fillStyle = stroke.color;
 			ctx.globalAlpha = highlighter ? HIGHLIGHTER_ALPHA : 1;
 			ctx.globalCompositeOperation = highlighter ? "multiply" : "source-over";
-			ctx.fill(new Path2D(d));
+			// v9: ink bound to a graph is clipped to its frame, as on screen.
+			const clip = strokeClip(stroke, clips);
+			if (clip) {
+				ctx.save();
+				ctx.beginPath();
+				ctx.rect(clip.x, clip.y, clip.width, clip.height);
+				ctx.clip();
+				ctx.fill(new Path2D(d));
+				ctx.restore();
+			} else ctx.fill(new Path2D(d));
 		}
 		ctx.globalAlpha = 1;
 		ctx.globalCompositeOperation = "source-over";

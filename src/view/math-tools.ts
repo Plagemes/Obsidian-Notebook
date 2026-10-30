@@ -9,7 +9,7 @@ import { outlineToInk } from "../math/skeleton";
 import { createStroke, quantizePoint } from "../model/document";
 import { AddElement, AddStroke, Batch, RemoveElement, ReplaceElement, type Command } from "../model/history";
 import { createEquation, createGraph } from "../model/math-elements";
-import { freezeElement, freezeStroke } from "../model/serialize";
+import { checkElement, freezeElement, freezeStroke } from "../model/serialize";
 import type { EquationElement, GraphElement, NotebookDocument, Page, PageElement, Point, Stroke } from "../model/types";
 import { EquationEditor, type EquationDraft } from "./equation-editor";
 import { GraphPanel } from "./graph-panel";
@@ -298,11 +298,12 @@ export class MathTools {
 		s.draft = freezeElement(draft);
 		const m = graphViewMatrix(s.before, s.draft);
 		this.host.renderer()?.setElementDraft({
-			pageIndex: s.pageIndex, before: s.before, after: s.draft, hideStrokes: s.ink, showStrokes: s.ink.map((st) => moveStroke(st, m)),
+			pageIndex: s.pageIndex, before: s.before, after: s.draft, hideStrokes: s.ink, showStrokes: s.ink.map((st) => moveStroke(st, m, s.before.id)),
 		});
 	}
 
 	private finishGraph(keep: boolean): void {
+		if (keep) this.graph?.panel.flush();
 		const s = this.graph;
 		this.graph = null;
 		this.pointers.clear();
@@ -311,6 +312,13 @@ export class MathTools {
 		this.host.renderer()?.setElementDraft(null);
 		const page = this.host.doc()?.pages.find((p) => p.id === s.pageId);
 		if (keep && page?.elements?.includes(s.before) && JSON.stringify(s.draft) !== JSON.stringify(s.before)) {
+			// The same strict check as the writer: a graph it would refuse is never committed (saves would stop).
+			const problem = checkElement(s.draft, this.host.doc()?.assets ?? {});
+			if (problem) {
+				showNotice(t("history.refused", { message: problem }), 10000);
+				this.host.refresh();
+				return;
+			}
 			const cmd = graphEditCommand(page, s.before, s.draft, s.ink.filter((st) => page.strokes.includes(st)));
 			if (cmd) this.host.execute(cmd);
 		}
@@ -411,8 +419,8 @@ export class MathTools {
 		if (!sel || !page || !this.host.editable()) return;
 		const eqs = sel.elements.filter((e): e is EquationElement => e.type === "equation" && !!page.elements?.includes(e));
 		if (eqs.length === 0) return;
-		const commands: Command[] = [];
-		let count = 0;
+		// Typesetting may wait: the strokes are computed first, the command is built afterwards from the page as it is then.
+		const converted: Array<{ eq: EquationElement; strokes: Stroke[] }> = [];
 		let missing = 0;
 		for (const eq of eqs) {
 			let o = equationOutline(eq);
@@ -434,15 +442,25 @@ export class MathTools {
 				missing++;
 				continue;
 			}
-			commands.push(new RemoveElement(page.id, eq));
-			for (const path of paths) {
+			const strokes = paths.map((path) => {
 				const points: Point[] = path.points.map(([x, y]) => quantizePoint(eq.x + x, eq.y + y, 0.5));
-				const stroke = freezeStroke(createStroke(eq.color, path.width, points, "shape"));
-				commands.push(new AddStroke(page.id, stroke, page.strokes.length + count));
-				count++;
-			}
+				return freezeStroke(createStroke(eq.color, path.width, points, "shape"));
+			});
+			converted.push({ eq, strokes });
 		}
+		// The document, the page and each equation must still be there (undo, sync or another edit may have run meanwhile).
 		if (!this.host.editable() || !this.host.doc()?.pages.includes(page)) return;
+		const commands: Command[] = [];
+		let count = 0;
+		const base = page.strokes.length;
+		for (const { eq, strokes } of converted) {
+			if (!page.elements?.includes(eq)) {
+				missing++;
+				continue;
+			}
+			commands.push(new RemoveElement(page.id, eq));
+			for (const stroke of strokes) commands.push(new AddStroke(page.id, stroke, base + count++));
+		}
 		if (commands.length > 0) this.host.execute(new Batch("Convert equation to ink", commands));
 		if (missing > 0) showNotice(t("math.convert.failed"), 6000);
 		else if (count > 0) showNotice(t("math.convert.done", { count: String(count) }), 3000);

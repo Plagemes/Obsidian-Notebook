@@ -81,6 +81,19 @@ export function escapeTextLine(line: string): string {
 }
 
 /**
+ * The punctuation Markdown and Obsidian give a meaning anywhere in a line: emphasis and code (`* _ \``), links and
+ * embeds (`[[`, `![[`, `[]`), tags (`#tag`), maths (`$`), comments (`%%`), highlights and strikes (`==`, `~~`), block
+ * ids (`^`), tables (`|`), HTML and entities (`< > &`), braces. Each is escaped with a backslash (CommonMark removes
+ * the backslash before any ASCII punctuation, Obsidian too), so a text box always shows its own text.
+ */
+const INLINE_SYNTAX = /[\\`*_[\]#$%=~^|<>&{}!]/g;
+
+/** A line of a text box as literal text: inline syntax escaped, then a line start that would make a block. */
+export function escapeMarkdownLine(line: string): string {
+	return escapeTextLine(line.replace(INLINE_SYNTAX, (c) => `\\${c}`));
+}
+
+/**
  * A v9 equation as Obsidian maths: `$$…$$` for display style (with `\tag{n}` when it is numbered), `$…$` inline. The
  * source is written as it is (a `$` in it would end the block, so it is escaped).
  */
@@ -101,7 +114,7 @@ export function pageTexts(page: Pick<Page, "elements">, numbers: ReadonlyMap<str
 	items.sort((a, b) => a.y - b.y || a.x - b.x);
 	return items.map((e) => (e.type === "equation"
 		? equationMarkdown(e, numbers.get(e.id))
-		: e.text.replace(/\r\n?/g, "\n").trim().split("\n").map(escapeTextLine).join("  \n")));
+		: e.text.replace(/\r\n?/g, "\n").trim().split("\n").map(escapeMarkdownLine).join("  \n")));
 }
 
 export interface NotebookMarkdownInput {

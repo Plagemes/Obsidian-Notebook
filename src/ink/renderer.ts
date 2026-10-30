@@ -4,6 +4,7 @@ import { backgroundRect } from "../model/margins";
 import { transformElement } from "./elements";
 import { drawBox, drawMarker, type BoxLabel } from "./marker-render";
 import { drawEquation, drawGraph, type GraphPalette } from "./math-render";
+import { graphClips, strokeClip } from "./attach";
 import { equationNumbers } from "../model/math-elements";
 import { drawLinkedLines, parseLinks } from "./link-text";
 import { layoutText, type MeasureText } from "./text-layout";
@@ -838,6 +839,7 @@ export class Renderer {
 				const bare = this.hideAnnotations && page.background?.kind === "pdf";
 				if (!bare && page.elements?.length) this.drawElements(ctx, page);
 				const reveal = this.revealHidden?.(page) ?? false;
+				const clips = graphClips(page.elements);
 				for (const stroke of page.strokes) {
 					if (bare || this.hidden?.has(stroke) || (stroke.hidden && !reveal)) continue;
 					try {
@@ -846,7 +848,16 @@ export class Renderer {
 						// the wet-ink curve may pass slightly outside its points.
 						const m = stroke.width * 0.3 + 1;
 						if (b.maxX + m < visible.minX || b.minX - m > visible.maxX || b.maxY + m < visible.minY || b.minY - m > visible.maxY) continue;
-						this.fillStroke(ctx, stroke, this.lod);
+						// v9: ink bound to a graph is clipped to its frame (a zoom may have carried it outside).
+						const clip = strokeClip(stroke, clips);
+						if (clip) {
+							ctx.save();
+							ctx.beginPath();
+							ctx.rect(clip.x, clip.y, clip.width, clip.height);
+							ctx.clip();
+							this.fillStroke(ctx, stroke, this.lod);
+							ctx.restore();
+						} else this.fillStroke(ctx, stroke, this.lod);
 						strokesDrawn++;
 					} catch (e) {
 						this.fault(ctx, "stroke", e);
@@ -1090,6 +1101,12 @@ export class Renderer {
 		if (draft && boxes[draft.pageIndex]) this.guarded(ctx, "element draft", () => {
 			this.beginPage(ctx, boxes[draft.pageIndex]!);
 			drawElement(ctx, draft.after, null, this.boxLabel, this.equationNumbers());
+			const a = draft.after;
+			if (a.type === "graph") {
+				ctx.beginPath();
+				ctx.rect(a.x, a.y, a.width, a.height);
+				ctx.clip();
+			}
 			for (const stroke of draft.showStrokes) this.fillStroke(ctx, stroke);
 			ctx.restore();
 		});

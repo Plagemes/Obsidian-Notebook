@@ -2,6 +2,8 @@ import { finishRenderMath, loadMathJax, renderMath } from "obsidian";
 import { EQUATION_OUTLINE_MAX } from "../model/math-elements";
 import { formatOutline, traceCoverage } from "../math/outline";
 import type { Typeset } from "../ink/math-render";
+import { unsafeLatexCommand } from "../math/layout";
+import { t } from "../i18n";
 
 /**
  * Typesetting equations (#110) with Obsidian's maths engine. `renderMath` gives MathJax output in the DOM; it is laid
@@ -35,6 +37,9 @@ export async function renderPreview(target: HTMLElement, latex: string, inline: 
 	await loadMathJax();
 	target.empty();
 	if (latex.trim() === "") return null;
+	// Commands that could link out, style the page or load MathJax extensions never reach MathJax.
+	const unsafe = unsafeLatexCommand(latex);
+	if (unsafe) return t("math.eq.unsafe", { command: unsafe });
 	const el = renderMath(latex, !inline);
 	target.appendChild(el);
 	await finishRenderMath();
@@ -147,6 +152,8 @@ async function paintChtml(ctx: CanvasRenderingContext2D, root: HTMLElement, orig
  * message for a TeX error, or when nothing could be painted.
  */
 export async function typesetEquation(latex: string, fontSize: number, inline: boolean): Promise<Typeset> {
+	const unsafe = unsafeLatexCommand(latex);
+	if (unsafe) throw new TypesetError(t("math.eq.unsafe", { command: unsafe }));
 	await loadMathJax();
 	const host = activeDocument.body.createDiv({ cls: "notebook-math-measure" });
 	host.setCssProps({ "--notebook-math-size": `${fontSize}px` });

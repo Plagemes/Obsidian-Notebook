@@ -25,7 +25,27 @@ export interface SampleOptions {
 	maxDepth?: number;
 	/** Largest deviation from a straight segment, pt (default 0.15). */
 	tolerance?: number;
+	/** Shared work limit (function evaluations); when it runs out the curve is finished with straight segments. */
+	budget?: Budget;
 }
+
+/**
+ * A limit on the number of function evaluations of a whole graph, so no expression (sin(99999x) twelve times) can
+ * freeze the app: refinement stops when it is spent and `simplified` says the picture is coarser than asked.
+ */
+export interface Budget {
+	left: number;
+	simplified: boolean;
+}
+
+export function createBudget(evaluations: number): Budget {
+	return { left: evaluations, simplified: false };
+}
+
+/** Largest number of initial samples of one curve. */
+export const MAX_BASE_SAMPLES = 1024;
+/** Largest grid side of an implicit curve, cells. */
+export const MAX_IMPLICIT_SIDE = 400;
 
 /** Cuts polylines to the rectangle [xMin, xMax] × [yMin, yMax] (Liang–Barsky per segment); a segment leaving it ends a polyline. */
 export function clipPolylines(lines: readonly Polyline[], r: ViewRect): Polyline[] {
@@ -100,8 +120,19 @@ function sampleCurve(
 ): Polyline[] {
 	const sx = o.width / (view.xMax - view.xMin);
 	const sy = o.height / (view.yMax - view.yMin);
-	const base = Math.max(8, Math.round(o.base ?? Math.max(64, o.width / 2)));
+	const base = Math.min(MAX_BASE_SAMPLES, Math.max(8, Math.round(o.base ?? Math.max(64, o.width / 2))));
 	const maxDepth = o.maxDepth ?? 10;
+	const budget = o.budget;
+	// One evaluation, counted against the budget.
+	const eval1 = (t: number): Pt => {
+		if (budget) budget.left--;
+		return at(t);
+	};
+	const spent = () => {
+		if (!budget || budget.left > 0) return false;
+		budget.simplified = true;
+		return true;
+	};
 	const tol = o.tolerance ?? 0.15;
 	const jumpPt = Math.max(o.height, o.width) * 0.5;
 	const finite = (p: Pt) => Number.isFinite(p[0]) && Number.isFinite(p[1]);
@@ -122,8 +153,12 @@ function sampleCurve(
 	// Distance in pt between two graph points.
 	const dist = (a: Pt, b: Pt) => Math.hypot((a[0] - b[0]) * sx, (a[1] - b[1]) * sy);
 	const refine = (ta: number, pa: Pt, tb: number, pb: Pt, depth: number): void => {
+		if (spent()) {
+			emit(pb);
+			return;
+		}
 		const tm = (ta + tb) / 2;
-		const pm = at(tm);
+		const pm = eval1(tm);
 		const fa = finite(pa), fb = finite(pb), fm = finite(pm);
 		if (!fa && !fb && !fm) {
 			// Undefined across the interval (sqrt of a negative, log of a negative): nothing to refine.
@@ -165,11 +200,13 @@ function sampleCurve(
 		emit(pb);
 	};
 	let ta = t0;
-	let pa = at(ta);
+	let pa = eval1(ta);
 	emit(pa);
+	// With the budget spent, the remaining initial samples are thinned out (the curve stays whole, coarser).
 	for (let k = 1; k <= base; k++) {
+		if (spent() && k < base && k % 16 !== 0) continue;
 		const tb = t0 + ((t1 - t0) * k) / base;
-		const pb = at(tb);
+		const pb = eval1(tb);
 		refine(ta, pa, tb, pb, 0);
 		ta = tb;
 		pa = pb;
@@ -183,7 +220,7 @@ export function sampleFunction(f: (x: number) => number, view: ViewRect, o: Samp
 	const a = Math.max(from, view.xMin);
 	const b = Math.min(to, view.xMax);
 	if (!(b > a)) return [];
-	return sampleCurve((x) => [x, f(x)], a, b, view, { ...o, base: Math.max(8, Math.round((o.base ?? Math.max(64, o.width / 2)) * (b - a) / (view.xMax - view.xMin))) });
+	return sampleCurve((x) => [x, f(x)], a, b, view, { ...o, base: Math.min(MAX_BASE_SAMPLES, Math.max(8, Math.round((o.base ?? Math.max(64, o.width / 2)) * (b - a) / (view.xMax - view.xMin)))) });
 }
 
 /** (x(t), y(t)) for t in [t0, t1]. */
@@ -203,15 +240,26 @@ export function samplePolar(r: (theta: number) => number, t0: number, t1: number
  * A sign change through a pole (|F| at the segment's midpoint larger than at the cell's corners) is not a curve.
  */
 export function sampleImplicit(F: (x: number, y: number) => number, view: ViewRect, o: SampleOptions, cells = 160 * 110): Polyline[] {
-	const aspect = o.width / o.height;
-	const ny = Math.max(8, Math.round(Math.sqrt(cells / aspect)));
-	const nx = Math.max(8, Math.round(ny * aspect));
+	const budget = o.budget;
+	// The grid uses at most half of what is left of the budget (the midpoint checks need some more), at least 64 cells.
+	if (budget) {
+		const room = Math.max(64, Math.floor(budget.left / 2));
+		if (room < cells) {
+			cells = room;
+			budget.simplified = true;
+		}
+	}
+	const aspect = Math.min(50, Math.max(1 / 50, o.width / o.height));
+	const ny = Math.min(MAX_IMPLICIT_SIDE, Math.max(8, Math.round(Math.sqrt(cells / aspect))));
+	const nx = Math.min(MAX_IMPLICIT_SIDE, Math.max(8, Math.round(ny * aspect)));
+	if (budget) budget.left -= (nx + 1) * (ny + 1);
 	const gx = (i: number) => view.xMin + ((view.xMax - view.xMin) * i) / nx;
 	const gy = (j: number) => view.yMin + ((view.yMax - view.yMin) * j) / ny;
 	const values = new Float64Array((nx + 1) * (ny + 1));
 	for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) values[j * (nx + 1) + i] = F(gx(i), gy(j));
 	const lines = contours({ nx: nx + 1, ny: ny + 1, values }, 0, (i, j, a, b) => {
 		const corners = [values[j * (nx + 1) + i]!, values[j * (nx + 1) + i + 1]!, values[(j + 1) * (nx + 1) + i]!, values[(j + 1) * (nx + 1) + i + 1]!];
+		if (budget) budget.left--;
 		const m = F(gx((a[0] + b[0]) / 2), gy((a[1] + b[1]) / 2));
 		return Number.isFinite(m) && Math.abs(m) <= Math.max(...corners.map(Math.abs));
 	});

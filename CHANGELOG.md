@@ -14,6 +14,17 @@ Not yet verified on Android hardware or in Obsidian with its maths engine (the h
 ### Changed
 - **With the other wave 0.9 features**: equations and graphs are content for *Export…* (drawn with *ink only*, left out of *background only*), are mapped by night mode (on screen only), keep their own band in the layer order (graphs above images, equations above boxes), can carry ink like text boxes and images, are drawn in the Markdown page images, and equations are written in `notebook.md` as `$$…$$` (or `$…$` inline, `\tag{n}` when numbered). *Page information* counts them.
 
+### Fixed
+- **Saves can no longer be stopped by an edit**: the graph panel puts ranges and areas in order (or removes them) and its draft is checked strictly before it is kept; every edit in the notebook is now checked like the writer checks before saving (`checkContent`), and an edit that would be refused is undone with a notice.
+- Scaling an equation or a text box stops at the largest size the format accepts (400 pt); a scaled equation outline that would be too long is dropped and typeset again; a graph frame stops at 4,000 pt (a larger one in a file is clamped and counted).
+- Graphs have a work limit (250,000 evaluations for the curves and 150,000 for roots, extrema, intersections, tangents and areas; at most 1,024 initial samples and a 400 × 400 implicit grid): twelve functions such as `sin(99999x)` take a fraction of a second instead of about 20 s, the graph shows "≈" and the panel says it is simplified; typing in the panel redraws once the typing pauses.
+- Ink on a graph stays the graph's ink after a pan or zoom: the moved strokes are bound to the graph by their id (no format change) and drawn clipped to its frame (also in PDF, SVG and the Markdown page images), so ink carried outside by a zoom comes back with the next zoom; moves in one session start from the original points, so rounding does not pile up.
+- Markdown export escapes the syntax of Markdown and Obsidian in text boxes (links and embeds, tags, maths, comments, highlights, HTML, tables, block ids, code).
+- Equations refuse `\href`, `\url`, `\style`, `\class`, `\cssId`, `\html`, `\data`, `\require`, `\unicode` and `\mmlToken` before they reach MathJax.
+- The session cache of typeset equations is least-recently-used (2,000 entries) instead of being cleared at 500, so a large export keeps every equation it typeset.
+- *Convert to ink* checks that each equation is still on the page after typesetting and computes the stroke positions right before the change.
+- *Add page to Obsidian bookmarks* gives the bookmark a creation time like the Bookmarks pane's own entries and only uses the core plugin when it reports itself enabled.
+
 ### Development
 - `src/math/` (pure): expression parser, adaptive sampler with discontinuity handling and clipping, marching squares, numerical roots, extrema, intersections, derivatives and integrals, the graph scene shared by every renderer, outline tracing, equation layout and *Convert to ink*. Tests: `tests/model-v9.test.ts`, `tests/math-expr.test.ts`, `tests/math-graph.test.ts`.
 - The harness stub provides `loadMathJax`, `renderMath` and `finishRenderMath`.

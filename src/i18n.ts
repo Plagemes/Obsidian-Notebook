@@ -1568,6 +1568,9 @@ const en = {
 	"practice.timer.stop.hint": "Stop the timer and keep the time with this attempt",
 	"practice.timer.stopped": "Time kept with this attempt: {time}",
 	// wave 0.9: math
+	"history.refused": "This change was not applied: the notebook could not be saved with it ({message}).",
+	"math.graph.simplified": "Simplified: the graph needs more work than a frame allows (zoom in to see more detail).",
+	"math.eq.unsafe": "The command {command} is not allowed in an equation.",
 	"info.objects.math": "{equations} equations, {graphs} graphs",
 	"math.insertEquation": "Insert equation",
 	"math.insertGraph": "Insert graph",
@@ -3350,6 +3353,9 @@ const it: Partial<Record<MessageKey, string>> = {
 	"practice.timer.stop.hint": "Ferma il cronometro e conserva il tempo con questo tentativo",
 	"practice.timer.stopped": "Tempo conservato con questo tentativo: {time}",
 	// wave 0.9: math
+	"history.refused": "Modifica non applicata: il quaderno non si potrebbe salvare con essa ({message}).",
+	"math.graph.simplified": "Semplificato: il grafico richiede più calcoli di quanti ne consenta un fotogramma (ingrandisci per vedere più dettagli).",
+	"math.eq.unsafe": "Il comando {command} non è consentito in un'equazione.",
 	"info.objects.math": "{equations} equazioni, {graphs} grafici",
 	"math.insertEquation": "Inserisci equazione",
 	"math.insertGraph": "Inserisci grafico",

@@ -1,7 +1,7 @@
 import { normalizeBookmarkInfoMap } from "./bookmarks";
 import { cleanMarkerText, isBoxKind, isIsoDate, isMarkerKind } from "./markers";
 import {
-	cleanGraphLabel, deepFreezeGraph, EQUATION_LATEX_MAX, EQUATION_OUTLINE_MAX, GRAPH_EXPR_MAX, GRAPH_ID_MAX, GRAPH_MAX_FUNCTIONS,
+	cleanGraphLabel, deepFreezeGraph, EQUATION_LATEX_MAX, GRAPH_MAX_SIDE, EQUATION_OUTLINE_MAX, GRAPH_EXPR_MAX, GRAPH_ID_MAX, GRAPH_MAX_FUNCTIONS,
 	GRAPH_MAX_LINE_WIDTH, GRAPH_MAX_PARAMS, GRAPH_MAX_PIECES, GRAPH_TABLE_MAX_ROWS, isGraphFunctionKind, isParamName, isViewport,
 } from "./math-elements";
 import { parseOutline } from "../math/outline";
@@ -591,6 +591,18 @@ function readGraphParam(v: unknown, path: string, drop: Dropped | null): GraphPa
 }
 
 /**
+ * A side of a graph's frame: positive, at most GRAPH_MAX_SIDE. A larger one is clamped and counted when reading
+ * leniently (it would make the sampling unbounded), refused when strict.
+ */
+function graphSide(v: unknown, path: string, drop: Dropped | null): number {
+	const n = positive(v, path);
+	if (n <= GRAPH_MAX_SIDE) return n;
+	if (!drop) fail(path, `must be at most ${GRAPH_MAX_SIDE} pt`);
+	drop.count++;
+	return GRAPH_MAX_SIDE;
+}
+
+/**
  * v9 graph. Frame, viewport and the function list are required (an invalid one fails the graph); each function,
  * parameter and setting is a detail, dropped and counted on its own when invalid and reading leniently. An expression
  * that does not parse is not a format error (the graph shows the message).
@@ -599,7 +611,7 @@ function readGraph(v: RawObject, id: string, path: string, drop: Dropped | null)
 	const g: GraphElement = {
 		id, type: "graph",
 		x: finite(v.x, `${path}.x`), y: finite(v.y, `${path}.y`),
-		width: positive(v.width, `${path}.width`), height: positive(v.height, `${path}.height`),
+		width: graphSide(v.width, `${path}.width`, drop), height: graphSide(v.height, `${path}.height`, drop),
 		view: readViewport(v.view, `${path}.view`),
 		functions: [],
 	};
@@ -1061,6 +1073,55 @@ export function parseStaged(text: string, firstPage: number | null): StagedParse
 }
 
 export type CheckedSerialization = { ok: true; text: string } | { ok: false; message: string };
+
+/** Elements that already passed `checkContent` (they are frozen, so they cannot change afterwards). */
+const checkedElements = new WeakSet<PageElement>();
+
+/**
+ * Strict check of one element exactly as the writer checks it (its line is read back without dropping anything and
+ * must write the same line): null when it is valid, else the message. `assets`: the document's assets (images).
+ */
+export function checkElement(el: PageElement, assets: Readonly<Record<string, Asset>> = {}): string | null {
+	try {
+		const line = elementLine(el);
+		const back = readElement(JSON.parse(line), `element ${el.id}`, assets, null);
+		if (elementLine(back) !== line) return `element ${el.id}: round-trip mismatch`;
+		return null;
+	} catch (e) {
+		if (e instanceof ValidationError || e instanceof SyntaxError) return e.message;
+		throw e;
+	}
+}
+
+/**
+ * Cheap guard for the history (every edit): the strokes and elements of `doc` that were not checked yet are checked
+ * strictly, as `serializeChecked` would before writing, so an edit that would make every later save fail can be refused
+ * at once. Checked strokes and elements are remembered (they are immutable). Null when everything is valid.
+ */
+export function checkContent(doc: NotebookDocument): string | null {
+	try {
+		const assets = doc.assets ?? {};
+		for (const page of doc.pages) {
+			for (const s of page.strokes) {
+				if (verifiedLines.has(s) || validatedStrokes.has(s)) continue;
+				const line = strokeLine(s);
+				const back = readStroke(JSON.parse(line), `stroke ${s.id}`);
+				if (strokeLine(back) !== line) return `stroke ${s.id}: round-trip mismatch`;
+				if (Object.isFrozen(s) && Object.isFrozen(s.points)) verifiedLines.set(s, line);
+			}
+			for (const el of page.elements ?? []) {
+				if (checkedElements.has(el)) continue;
+				const problem = checkElement(el, assets);
+				if (problem) return problem;
+				if (Object.isFrozen(el)) checkedElements.add(el);
+			}
+		}
+		return null;
+	} catch (e) {
+		if (e instanceof ValidationError || e instanceof SyntaxError) return e.message;
+		throw e;
+	}
+}
 
 /** Serialized line of each committed (frozen) stroke that already passed the round-trip check. */
 const verifiedLines = new WeakMap<Stroke, string>();

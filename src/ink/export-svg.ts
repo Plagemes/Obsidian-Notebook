@@ -4,6 +4,7 @@ import { EQUATION_NUMBER_GAP, equationNumberLabel, equationNumbers } from "../mo
 import { graphScene, GRAPH_STYLE, type GraphScene } from "../math/graph-scene";
 import type { Polygon } from "../math/outline";
 import { equationOutline } from "./math-render";
+import { boundGraphId } from "./attach";
 import type { BBox } from "./hit-test";
 import { BOX_COLORS, badgeColor, badgeFace, badgeIsSquare, boxLabelWidth, checkPoints, defaultBoxLabel, glyphSize, starPoints, type BoxLabel } from "./marker-render";
 import { layerFlags, type ExportLayers } from "./export-layers";
@@ -114,7 +115,13 @@ export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 	for (const img of images) if (img.layer !== "background") out.push(imageTag(img));
 	// v9 graphs: clip paths are numbered in page order, so the output stays deterministic.
 	let clip = 0;
-	for (const el of page.elements ?? []) if (el.type === "graph") out.push(graphTag(graphScene(el), `nb-graph-${++clip}`));
+	const clipIds = new Map<string, string>();
+	for (const el of page.elements ?? []) {
+		if (el.type !== "graph") continue;
+		const id = `nb-graph-${++clip}`;
+		clipIds.set(el.id, id);
+		out.push(graphTag(graphScene(el), id));
+	}
 	const boxLabel = options.boxLabel ?? ((b: BoxElement) => defaultBoxLabel(b));
 	for (const el of page.elements ?? []) if (el.type === "box") out.push(boxTag(el, boxLabel(el)));
 	const numbers = options.equationNumbers ?? equationNumbers([page]);
@@ -132,10 +139,13 @@ export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 		const d = strokeSvgPath(stroke);
 		if (!d) continue;
 		const fill = escapeAttr(stroke.color);
+		// v9: ink bound to a graph is clipped to its frame (the graph's own clip path), as on screen.
+		const graph = boundGraphId(stroke);
+		const clipped = graph !== null && clipIds.has(graph) ? ` clip-path="url(#${clipIds.get(graph)!})"` : "";
 		out.push(
 			stroke.tool === "highlighter"
-				? `<path d="${d}" fill="${fill}" fill-opacity="${HIGHLIGHTER_ALPHA}" style="mix-blend-mode:multiply"/>`
-				: `<path d="${d}" fill="${fill}"/>`,
+				? `<path d="${d}" fill="${fill}" fill-opacity="${HIGHLIGHTER_ALPHA}" style="mix-blend-mode:multiply"${clipped}/>`
+				: `<path d="${d}" fill="${fill}"${clipped}/>`,
 		);
 	}
 	for (const el of page.elements ?? []) if (el.type === "marker") out.push(markerTag(el));

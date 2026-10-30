@@ -10,6 +10,8 @@ export interface FileBookmark {
 	path: string;
 	subpath: string;
 	title: string;
+	/** Creation time (ms), as the Bookmarks plugin stores it for its own entries. */
+	ctime: number;
 }
 
 /** The part of the Bookmarks plugin instance this uses. */
@@ -18,8 +20,8 @@ export interface BookmarksInstance {
 	items?: unknown;
 }
 
-export function pageBookmark(path: string, page: number, pageId: string | null | undefined, title: string): FileBookmark {
-	return { type: "file", path, subpath: stablePageSubpath(page, pageId), title };
+export function pageBookmark(path: string, page: number, pageId: string | null | undefined, title: string, now: number = Date.now()): FileBookmark {
+	return { type: "file", ctime: now, path, subpath: stablePageSubpath(page, pageId), title };
 }
 
 /** Looks for a bookmark of the same path and subpath, also inside bookmark groups. */
@@ -44,7 +46,8 @@ export function bookmarksInstance(app: App): BookmarksInstance | null {
 	try {
 		const internal = (app as unknown as { internalPlugins?: { getPluginById?(id: string): { enabled?: boolean; instance?: unknown } | undefined } }).internalPlugins;
 		const plugin = internal?.getPluginById?.("bookmarks");
-		if (!plugin || plugin.enabled === false) return null;
+		// Only a plugin that says it is on (`enabled` missing or anything but true: treated as off).
+		if (!plugin || plugin.enabled !== true) return null;
 		return isBookmarksInstance(plugin.instance) ? plugin.instance : null;
 	} catch {
 		return null;

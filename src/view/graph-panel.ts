@@ -1,7 +1,7 @@
 import { setIcon } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import {
-	GRAPH_EXPR_MAX, GRAPH_MAX_FUNCTIONS, GRAPH_MAX_PARAMS, GRAPH_MAX_PIECES, GRAPH_TABLE_MAX_ROWS, isParamName, isViewport, newGraphFunction,
+	GRAPH_EXPR_MAX, GRAPH_MAX_FUNCTIONS, GRAPH_MAX_PARAMS, GRAPH_MAX_PIECES, GRAPH_TABLE_MAX_ROWS, isParamName, isViewport, newGraphFunction, normalizeGraph,
 } from "../model/math-elements";
 import { GRAPH_FUNCTION_KINDS, type GraphElement, type GraphFunction, type GraphFunctionKind, type GraphParam } from "../model/types";
 import { graphScene } from "../math/graph-scene";
@@ -53,6 +53,9 @@ export class GraphPanel {
 	private readonly tableBox: HTMLElement;
 	private readonly errors = new Map<string, HTMLElement>();
 	private closed = false;
+	/** Shown when the graph reached its work limits (see GraphScene.simplified). */
+	private readonly simplified: HTMLElement;
+	private soon: number | null = null;
 
 	constructor(parent: HTMLElement, graph: GraphElement, private readonly handlers: GraphPanelHandlers) {
 		this.original = graph;
@@ -68,6 +71,7 @@ export class GraphPanel {
 		const head = this.el.createDiv({ cls: "notebook-graph-head" });
 		head.createDiv({ cls: "notebook-graph-title", text: t("math.graph.title") });
 		head.createDiv({ cls: "notebook-graph-hint", text: t("math.graph.hint") });
+		this.simplified = head.createDiv({ cls: "notebook-graph-hint notebook-hidden", text: t("math.graph.simplified") });
 		const body = this.el.createDiv({ cls: "notebook-graph-body" });
 
 		this.section(body, "math.graph.functions");
@@ -148,10 +152,8 @@ export class GraphPanel {
 
 	/** The graph as edited so far (a new frozen-ready element; the same id). */
 	draft(): GraphElement {
-		const g = workingCopy(this.model);
-		if (g.params && g.params.length === 0) delete g.params;
-		if (g.table && !g.functions.some((f) => f.id === g.table!.fn)) delete g.table;
-		return g;
+		// What the fields hold may be out of order (a range typed backwards): the draft is always valid for the writer.
+		return normalizeGraph(this.model);
 	}
 
 	/** The view was panned or zoomed on the page: take it over. */
@@ -162,7 +164,26 @@ export class GraphPanel {
 	}
 
 	destroy(): void {
+		if (this.soon !== null) window.clearTimeout(this.soon);
+		this.soon = null;
 		this.el.remove();
+	}
+
+	/** Applies a change still waiting for the typing to pause (before a commit). */
+	flush(): void {
+		if (this.soon === null) return;
+		window.clearTimeout(this.soon);
+		this.soon = null;
+		if (!this.closed) this.changed();
+	}
+
+	/** A change from typing: the graph is redrawn once the typing pauses (each redraw samples every function). */
+	private changedSoon(): void {
+		if (this.soon !== null) window.clearTimeout(this.soon);
+		this.soon = window.setTimeout(() => {
+			this.soon = null;
+			if (!this.closed) this.changed();
+		}, 150);
 	}
 
 	private zoom(factor: number): void {
@@ -183,6 +204,7 @@ export class GraphPanel {
 	/** Parser messages next to the functions that do not compile. */
 	private showErrors(draft: GraphElement = this.draft()): void {
 		const scene = graphScene(draft);
+		this.simplified.toggleClass("notebook-hidden", !scene.simplified);
 		for (const [id, el] of this.errors) {
 			const err = scene.errors.find((e) => e.fn === id);
 			el.toggleClass("notebook-hidden", !err);
@@ -271,7 +293,7 @@ export class GraphPanel {
 			input.value = value;
 			input.addEventListener("input", () => {
 				set(input.value);
-				this.changed();
+				this.changedSoon();
 			});
 		};
 		if (fn.kind === "parametric") {
@@ -285,7 +307,7 @@ export class GraphPanel {
 				e.value = p.expr;
 				e.addEventListener("input", () => {
 					p.expr = e.value;
-					this.changed();
+					this.changedSoon();
 				});
 				line.createSpan({ text: t("math.graph.when") });
 				const w = line.createEl("input", { attr: { type: "text", maxlength: String(GRAPH_EXPR_MAX), spellcheck: "false", placeholder: t("math.graph.otherwise"), "aria-label": t("math.graph.when") } });
@@ -293,7 +315,7 @@ export class GraphPanel {
 				w.addEventListener("input", () => {
 					if (w.value.trim() === "") delete p.when;
 					else p.when = w.value;
-					this.changed();
+					this.changedSoon();
 				});
 				if (pieces.length > 1) {
 					this.iconButton(line, "x", "math.graph.remove", () => {
@@ -324,7 +346,7 @@ export class GraphPanel {
 					delete fn.max;
 				} else {
 					fn.min = v;
-					fn.max ??= v + 2 * Math.PI;
+					if (fn.max === undefined || fn.max <= v) fn.max = v + 2 * Math.PI;
 				}
 			});
 			this.num(opts, "math.graph.rangeTo", fn.max, (v) => {
@@ -333,7 +355,7 @@ export class GraphPanel {
 					delete fn.max;
 				} else {
 					fn.max = v;
-					fn.min ??= Math.min(0, v - 1);
+					if (fn.min === undefined || fn.min >= v) fn.min = v - 2 * Math.PI;
 				}
 			});
 		}
@@ -346,11 +368,11 @@ export class GraphPanel {
 			this.num(opts, "math.graph.tangent", fn.tangent, (v) => (v === undefined ? delete fn.tangent : (fn.tangent = v)));
 			this.num(opts, "math.graph.areaFrom", fn.area?.from, (v) => {
 				if (v === undefined) delete fn.area;
-				else fn.area = { from: v, to: fn.area?.to ?? v + 1 };
+				else fn.area = { from: v, to: fn.area?.to !== undefined && fn.area.to !== v ? fn.area.to : v + 1 };
 			});
 			this.num(opts, "math.graph.areaTo", fn.area?.to, (v) => {
 				if (v === undefined) delete fn.area;
-				else fn.area = { from: fn.area?.from ?? v - 1, to: v };
+				else fn.area = { from: fn.area?.from !== undefined && fn.area.from !== v ? fn.area.from : v - 1, to: v };
 			});
 		}
 		this.text(opts, "math.graph.label", fn.label ?? "", 60, (v) => (v.trim() ? (fn.label = v) : delete fn.label));
@@ -457,6 +479,7 @@ export class GraphPanel {
 
 	private done(): void {
 		if (this.closed) return;
+		this.flush();
 		this.closed = true;
 		this.destroy();
 		this.handlers.done();
