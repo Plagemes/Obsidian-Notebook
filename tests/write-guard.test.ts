@@ -173,7 +173,7 @@ describe("DocumentSession on a full or failing disk (#347)", () => {
 		expect(io.content).toBe(good);
 		expect(s.dirty).toBe(true);
 		expect(s.doc!.pages[0]!.strokes).toHaveLength(2);
-		expect(health.at(-1)).toMatchObject({ failing: true, kind: "no-space", failures: 1 });
+		expect(health[health.length - 1]).toMatchObject({ failing: true, kind: "no-space", failures: 1 });
 		expect(errors).toHaveLength(1);
 		expect(errors[0]).toMatch(/storage is full/);
 		// The journal still got the edit (it lives elsewhere and may have room).
@@ -192,12 +192,12 @@ describe("DocumentSession on a full or failing disk (#347)", () => {
 		await vi.advanceTimersByTimeAsync(1);
 		expect(calls()).toBe(before + 2);
 		expect(errors).toHaveLength(1); // one warning for the whole streak
-		expect(health.at(-1)).toMatchObject({ failing: true, failures: 3 });
+		expect(health[health.length - 1]).toMatchObject({ failing: true, failures: 3 });
 
 		io.freeChars = Number.POSITIVE_INFINITY;
 		await vi.advanceTimersByTimeAsync(4000);
 		expect(s.dirty).toBe(false);
-		expect(health.at(-1)).toMatchObject({ failing: false, failures: 0 });
+		expect(health[health.length - 1]).toMatchObject({ failing: false, failures: 0 });
 		const reread = parse(io.content);
 		expect(reread.ok && reread.doc.pages[0]!.strokes).toHaveLength(2);
 		expect(written).toEqual([io.content]);
@@ -236,7 +236,7 @@ describe("DocumentSession on a full or failing disk (#347)", () => {
 		expect(await s.flush()).toBe(false);
 		expect(io.content).toBe(good);
 		expect(parse(io.content).ok).toBe(true);
-		expect(health.at(-1)).toMatchObject({ failing: true, kind: "no-space", diskDamaged: false });
+		expect(health[health.length - 1]).toMatchObject({ failing: true, kind: "no-space", diskDamaged: false });
 		expect(s.dirty).toBe(true);
 		expect(io.backups).toHaveLength(0);
 	});
@@ -263,7 +263,7 @@ describe("DocumentSession on a full or failing disk (#347)", () => {
 		const torn = io.content;
 		expect(torn).not.toBe(good);
 		expect(parse(torn).ok).toBe(false);
-		expect(health.at(-1)).toMatchObject({ failing: true, diskDamaged: true });
+		expect(health[health.length - 1]).toMatchObject({ failing: true, diskDamaged: true });
 		// Its 'modify' event is the echo of our own partial write, not someone else's version.
 		expect(await s.handleExternalChange()).toBe("echo");
 		// While still full: no conflict backup of our own partial file.
@@ -275,7 +275,7 @@ describe("DocumentSession on a full or failing disk (#347)", () => {
 		expect(io.backups).toHaveLength(0);
 		const back = parse(io.content);
 		expect(back.ok && back.doc.pages[0]!.strokes).toHaveLength(8);
-		expect(health.at(-1)).toMatchObject({ failing: false, diskDamaged: false });
+		expect(health[health.length - 1]).toMatchObject({ failing: false, diskDamaged: false });
 	});
 
 	it("echo of our own partial file is not reloaded when there are no other changes", async () => {
@@ -317,7 +317,7 @@ describe("DocumentSession on a full or failing disk (#347)", () => {
 		};
 		expect(await s.flush()).toBe(false);
 		expect(io.content).toBe(good);
-		expect(health.at(-1)).toMatchObject({ failing: true, kind: "torn" });
+		expect(health[health.length - 1]).toMatchObject({ failing: true, kind: "torn" });
 		await vi.advanceTimersByTimeAsync(1000);
 		expect(s.dirty).toBe(false);
 		expect(parse(io.content).ok).toBe(true);
@@ -346,7 +346,7 @@ describe("DocumentSession on a full or failing disk (#347)", () => {
 		expect(probes).toHaveLength(2);
 		expect(probes[0]).toBeGreaterThanOrEqual(PROBE_MARGIN_CHARS);
 		expect(io.processCalls).toBe(calls); // never written while the probe fails
-		expect(health.at(-1)).toMatchObject({ kind: "no-space", failures: 3 });
+		expect(health[health.length - 1]).toMatchObject({ kind: "no-space", failures: 3 });
 		room = true;
 		io.freeChars = Number.POSITIVE_INFINITY;
 		expect(await s.flush()).toBe(true);
@@ -364,7 +364,7 @@ describe("DocumentSession on a full or failing disk (#347)", () => {
 		io.failWith = Object.assign(new Error("EACCES: permission denied, open"), { code: "EACCES" });
 		addStroke(s);
 		await s.flush();
-		expect(health.at(-1)?.kind).toBe("permission");
+		expect(health[health.length - 1]?.kind).toBe("permission");
 		expect(errors[0]).toMatch(/cannot be written/);
 	});
 
