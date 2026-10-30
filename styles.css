@@ -5044,3 +5044,260 @@ body {
 	justify-content: flex-end;
 	margin-top: var(--nb-space-2);
 }
+
+/* wave 0.10: tabs and lines (strip of open notebooks) */
+.notebook-tabs {
+	display: flex;
+	flex: 0 0 auto;
+	gap: 2px;
+	padding: 2px 6px 0;
+	overflow-x: auto;
+	scrollbar-width: none;
+	touch-action: pan-y;
+	background: var(--nb-surface);
+	border-bottom: 1px solid var(--nb-border);
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+.notebook-tab {
+	flex: 0 1 auto;
+	max-width: 14em;
+	min-height: 28px;
+	padding: 2px 10px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	background: transparent;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	border-radius: 0;
+	box-shadow: none;
+}
+
+.notebook-tab.is-active {
+	color: var(--text-normal);
+	border-bottom-color: var(--interactive-accent);
+}
+
+.notebook-view .notebook-toolbar {
+	touch-action: pan-y;
+}
+
+/* wave 0.10: clipboard and stamps (the list of clipboards copied on other devices) */
+.notebook-clipshare-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 8px 0;
+}
+
+.notebook-clipshare-row {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 2px;
+	width: 100%;
+	min-height: var(--nb-target, 44px);
+	padding: 8px 12px;
+	height: auto;
+	text-align: left;
+	border-radius: var(--nb-radius-m);
+}
+
+.notebook-clipshare-what {
+	font-weight: var(--font-semibold);
+}
+
+.notebook-clipshare-meta,
+.notebook-clipshare-hint {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+
+/* wave 0.10: pinned, archived and manual order in the library (roadmap 54); library check (roadmap 27) */
+.notebook-lib-group {
+	grid-column: 1 / -1;
+	margin-top: 4px;
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+}
+
+.notebook-lib-content > .notebook-lib-hint {
+	margin: 0 0 10px;
+}
+
+.notebook-lib-pin {
+	position: absolute;
+	top: 6px;
+	left: 6px;
+	z-index: 1;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	background: var(--background-primary);
+	box-shadow: var(--nb-shadow-2);
+	color: var(--interactive-accent);
+}
+
+.notebook-lib-pin svg {
+	width: 13px;
+	height: 13px;
+}
+
+.notebook-lib-card[data-drop-card].is-drop-target {
+	outline: 2px solid var(--interactive-accent);
+	background: var(--background-modifier-hover);
+}
+
+.modal.notebook-libcheck-modal {
+	width: min(640px, 92vw);
+}
+
+.notebook-libcheck-section {
+	margin-top: var(--size-4-3);
+}
+
+.notebook-libcheck-section h4 {
+	margin: 0 0 var(--size-4-1);
+}
+
+.notebook-libcheck-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-2);
+	max-height: 40vh;
+	overflow-y: auto;
+}
+
+.notebook-libcheck-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-4-2);
+	padding-bottom: var(--size-4-2);
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.notebook-libcheck-text {
+	min-width: 0;
+}
+
+.notebook-libcheck-name {
+	word-break: break-all;
+	user-select: text;
+}
+
+.notebook-libcheck-detail {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.notebook-libcheck-paths {
+	max-height: 20vh;
+	overflow-y: auto;
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	word-break: break-all;
+}
+
+
+/* wave 0.10 (51): read-only mode. The indicator replaces the pen indicator and the favourite pens, which cannot be used. */
+.notebook-readonly-chip {
+	flex: 0 1 auto;
+	gap: 6px;
+	padding: 0 10px;
+	max-width: 160px;
+	border-radius: var(--nb-radius-pill);
+	font-size: var(--nb-text-s);
+	font-weight: var(--font-medium, 500);
+	white-space: nowrap;
+}
+
+.notebook-readonly-chip .notebook-readonly-icon {
+	display: inline-flex;
+	align-items: center;
+}
+
+.notebook-toolbar.is-read-only .notebook-chip,
+.notebook-toolbar.is-read-only .notebook-favs {
+	display: none;
+}
+
+/* The save state says nothing while nothing can change; an error still shows. */
+.notebook-toolbar.is-read-only .notebook-status:not([data-kind="error"]) {
+	display: none;
+}
+
+/* A phone: only the lock, the label is its name for screen readers. */
+.notebook-toolbar:not(.is-single-row) .notebook-readonly-chip .notebook-readonly-label {
+	display: none;
+}
+
+.notebook-toolbar:not(.is-single-row) .notebook-readonly-chip {
+	padding: 0;
+	min-width: 40px;
+}
+
+.notebook-body.is-read-only .notebook-stage {
+	cursor: grab;
+}
+
+/* wave 0.10 (81): Print. The container exists only while the system print dialog is open; it is never visible on screen. */
+.notebook-print-root {
+	display: none;
+}
+
+@media print {
+	body.notebook-printing > *:not(.notebook-print-root) {
+		display: none !important;
+	}
+
+	body.notebook-printing {
+		overflow: visible !important;
+		height: auto !important;
+		background: #fff !important;
+	}
+
+	body.notebook-printing .notebook-print-root {
+		display: block;
+	}
+
+	.notebook-print-root .notebook-print-page {
+		break-after: page;
+		page-break-after: always;
+		break-inside: avoid;
+	}
+
+	.notebook-print-root .notebook-print-page:last-child {
+		break-after: auto;
+		page-break-after: auto;
+	}
+
+	/* A page is scaled down to fit one sheet, whatever the paper; a very long page (an infinite one) keeps its size and flows over several sheets. */
+	.notebook-print-root .notebook-print-page > img {
+		display: block;
+		width: 100%;
+		height: auto;
+		max-height: 100vh;
+		object-fit: contain;
+	}
+
+	.notebook-print-root .notebook-print-page.is-long {
+		break-inside: auto;
+	}
+
+	.notebook-print-root .notebook-print-page.is-long > img {
+		max-height: none;
+	}
+}

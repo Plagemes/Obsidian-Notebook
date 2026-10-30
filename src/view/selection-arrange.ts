@@ -62,6 +62,11 @@ export class SelectionArrange {
 		const sel = this.host.selection();
 		const page = sel && this.host.doc()?.pages[sel.pageIndex];
 		if (!sel || !page || !this.host.editable()) return null;
+		// A selection that crosses pages (359) is moved as it is by dragging; arranging it would need a rule per page.
+		if (sel.others?.length) {
+			showNotice(t("arrange.crossPage"));
+			return null;
+		}
 		const onPage = new Set(page.strokes);
 		const onPageEls = new Set(page.elements ?? []);
 		const strokes = sel.strokes.filter((s) => onPage.has(s));
@@ -177,6 +182,10 @@ export class SelectionArrange {
 		const sel = this.host.selection();
 		const at = this.pageForStyle();
 		if (!sel || !at || !this.host.editable()) return;
+		if (sel.others?.length) {
+			showNotice(t("arrange.crossPage"));
+			return;
+		}
 		const onPage = new Set(at.page.strokes);
 		const seed = { strokes: sel.strokes.filter((s) => onPage.has(s)), elements: sel.elements };
 		if (seed.strokes.length === 0) return;

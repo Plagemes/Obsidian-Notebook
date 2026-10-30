@@ -61,11 +61,14 @@ anywhere in `src/` is in the registry and that every action is placed somewhere.
 | Page switcher across notebooks (`go-to-page`) | All actions sheet (Go to), library, palette | Leaves the notebook |
 | Split a heavy page (`page-split`) | Heavy-page banner, page sheet (only on a heavy page) | Acts on that page |
 | Check sync safety, check notebooks integrity (`sync-check`, `check-integrity`) | All actions sheet (Notebooks), notebook menu, settings, palette | Folder-wide checks, rare |
+| Check library: unreadable notebooks and unused files (`library-check`; wave 0.10, roadmap 27) | Library sidebar (*Check library*), All actions sheet (Notebooks), notebook menu, palette | Folder-wide check, rare; opens a report that only lists, then a confirmation before anything moves to the trash |
 | Banner buttons (safe mode, storage, integrity, other device, heavy page) | Their status banner only | Meaningful only while the banner is shown |
 | Duplicate/move/delete page, bookmark, edit bookmark, page tags, paper, size, orientation, infinite, move to notebook, save as template, restore version, deleted pages | Page sheet (page indicator, thumbnail menu) and Page section | Act on one page, reached from the page |
 | Select similar, align and distribute, rotate / mirror / exact size of the selection (`selection-similar`, `selection-align-menu`, `selection-transform-menu` and their entries; wave 0.10) | **Second row** of the contextual bar of a selection: three buttons, each opening a native menu of registry actions (so the first row keeps copy, cut, duplicate, paste, delete, to front, to back); every entry is also in the All actions sheet (Selection section) and a command that applies only with a selection | Operations on a selection belong next to it, but the first row is full on a tablet; the row is cut to the bar width like the first and appears only when it has something to offer (align needs two things, similar needs ink) |
 | Rectangle selection, select by colour or tool (`select-rectangle`, `select-by-style`; wave 0.10) | Contextual bar of the lasso (a checked toggle and a button), *Lasso \| Rectangle* in the lasso's tool options (tap the lasso again), All actions sheet while the lasso is on or something is selected, commands | The shape of a selection is a setting *of* the lasso; choosing by style needs no selection first |
 | Layer order of the selection (`layer-front`, `layer-back`, `layer-forward`, `layer-backward`; wave 0.9) | Contextual bar of a selection (*To front* and *To back* rank above the rest of the second tier, so they fit the bar on a tablet; on a phone the bar is cut to its basics), All actions sheet, commands (they apply only with a selection) | Act on what is selected, next to it; the sheet and the hotkeys keep all four reachable |
+| Date and time stamp (`insert-date-stamp`; wave 0.10) | All actions sheet, command | Inserts at the pen, so it needs no place of its own; the format is a setting |
+| Copy to other devices (`selection-copy-devices`), Paste from another device (`selection-paste-device`; wave 0.10) | Contextual bar of a selection (copy) and of a selection or the lasso (paste), All actions sheet, commands (copy applies only with a selection) | Act on the selection or the lasso next to it; the sheet and the hotkeys keep them reachable on a phone |
 | Find and replace in text boxes (`find-replace`; wave 0.9) | All actions sheet (Go to), command | Notebook-wide, rare; opens a panel |
 | Page information (`page-info`; wave 0.9) | Page sheet, All actions sheet, command | Describes one page, reached from the page |
 | PDF search, hide annotations, dim backgrounds | PDF contextual bar + PDF & reading section; search next/previous in the search panel and commands | Relevant only with PDF pages |
@@ -76,6 +79,8 @@ anywhere in `src/` is in the registry and that every action is placed somewhere.
 | Insert equation, insert graph (`insert-equation`, `insert-graph`; wave 0.9: math) | All actions sheet (Insert), commands | Inserted now and then; not quick slots, so the designed slots stay |
 | Edit equation or graph, convert to ink (`math-edit`, `math-convert-ink`) | Contextual bar of a selection holding exactly one equation or graph (*Edit*) or equations (*Convert to ink*), commands | Act on what is selected; the graph panel and the equation editor float over the page while open |
 | Invisible ink (`invisible-ink`), show solutions (`show-solutions`, page: `show-page-solutions`) | View section of the sheet (ink and solutions), page sheet (page solutions), commands | A pen mode and view-only toggles |
+| Read-only mode (`toggle-read-only`; wave 0.10) | View section of the sheet, command; while on, the lock button in the toolbar replaces the pen indicator and the favourites (and switches it off) | A mode of this view: the toolbar says so and offers the way out in the same place |
+| Export pages as PNG images (`export-png`), Print (`print`; wave 0.10) | Sheet (Export & share), notebook menu, commands; both open *Export…* on that format. Print exists only where the device can print (desktop) | Choices of the one export dialog; no control that cannot work on a phone |
 | Pen gesture mode (`pen-gesture-mode`) | Quick slot, All actions sheet (View & input) | A toggle used in bursts |
 | Gesture cheat sheet, custom gestures (`pen-gesture-sheet`, `pen-gesture-custom`) | All actions sheet (View & input), command palette; the cheat sheet also from the mode badge | Reference and set-up, rare |
 | Ruler, pen only, fit to width | Quick slots + View & input section | Toggles used in bursts |
@@ -121,6 +126,12 @@ designed primary action out.
 - **Mouse** clicks; right click on a favourite offers save/reset (also reachable by long press and from the radial).
   Escape closes popovers, sheets and the radial menu. Every action has a command for hotkeys.
 - A tap outside an open popover/sheet closes it and is swallowed (no stray ink), as in Samsung Notes.
+- **Tabs of open notebooks** (wave 0.10, 363): an optional strip above the toolbar (setting, off by default) lists the open
+  notebook leaves; a two-finger sideways swipe on the toolbar strip, never on the page, goes to the next / previous one.
+  The registry actions `notebook-next` and `notebook-previous` (sheet, command palette) do the same. The strip is not an
+  action surface: its buttons are the open notebooks themselves.
+- **Automatic line break** (wave 0.10, 353): a setting, not an action. After pen-up near the right margin on ruled or grid
+  paper the view eases to the start of the next line; any touch cancels it, and it never moves while a contact is down.
 
 ## 6. Radial menu
 

@@ -116,7 +116,7 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 ### Data and reliability
 25. 🧪 **P1** Version history: automatic snapshots (e.g. daily per notebook) with restore.
 26. 🧪 **P1** Page trash: deleted pages stay recoverable after the session ends.
-27. **P2** Library check: find unreadable notebooks and orphaned assets, free space.
+27. **P2** 🧪 Library check: find unreadable notebooks and orphaned assets, free space.
 28. **P3** Password-protected notebooks: local encryption with Web Crypto, no cloud.
 
 ### Capture and sharing
@@ -154,12 +154,12 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 48. ~~**P1** Double tap to zoom: toggles fit-to-width and 100 %.~~ — dropped (user decision, 2026-10-29)
 49. **P2** Two-page spread view (landscape tablets).
 50. **P2** Fast scrollbar with a page preview while dragging.
-51. **P2** Read-only mode to read without accidental marks.
+51. **P2** 🧪 Read-only mode to read without accidental marks.
 52. **P2** Coloured sections inside a notebook (tab dividers, as in OneNote).
 
 ### Library
 53. **P2** Custom covers (image or template).
-54. **P2** Pinned notebooks, manual order and an archive that hides notebooks without deleting them.
+54. **P2** 🧪 Pinned notebooks, manual order and an archive that hides notebooks without deleting them.
 55. **P3** Study statistics: writing time per notebook and per day, kept on the device.
 
 ### Study
@@ -198,7 +198,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 78. **P2** Move a selection to another page.
 79. **P2** Drag files (images, PDFs) straight onto a page.
 80. **P2** Bulk import in the library: drop many PDFs or images and they become notebooks.
-81. **P2** Export all pages as PNG images, and print.
+81. **P2** 🧪 Export all pages as PNG images, and print.
 82. **P3** Portable package: a .zip with the notebook and its assets, to move it to another vault.
 83. **P3** Import from Xournal++ and from SVG.
 
@@ -654,21 +654,21 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 350. **P2** Pen width relative to zoom (option): the same width on screen at any zoom.
 351. **P2** Stroke taper settings: tapering at the start and end of a stroke.
 352. **P2** Write big, store small: write margin notes at a comfortable size and they are shrunk into place.
-353. **P2** Automatic line break: when writing reaches the right margin, the view jumps to the start of the next line.
+353. **P2** 🧪 Automatic line break: when writing reaches the right margin, the view jumps to the start of the next line.
 354. **P3** Right-to-left writing: automatic next page, word detection and the space tool also work for Arabic and Hebrew.
 355. **P2** Stylus profiles: S Pen, USI and other pens recognised automatically, with settings that suit them.
-356. **P2** Quick date and time stamp at the pen position.
+356. **P2** 🧪 Quick date and time stamp at the pen position.
 
 ### Objects and selection
 357. **P2** 🧪 Layer order: bring to front, send to back.
 358. **P2** Opacity slider for ink, highlighter and images.
-359. **P2** Lasso selection across page boundaries.
+359. **P2** 🧪 Lasso selection across page boundaries.
 360. **P3** Code text box: monospace with syntax colours.
 361. **P2** 🧪 Find and replace in the text boxes of a notebook.
-362. **P2** Cross-device clipboard: copy on the tablet, paste on the phone, through the vault.
+362. **P2** 🧪 Cross-device clipboard: copy on the tablet, paste on the phone, through the vault.
 
 ### Navigation and view
-363. **P2** Tabs of open notebooks, with a swipe from one to the next.
+363. **P2** 🧪 Tabs of open notebooks, with a swipe from one to the next.
 364. **P1** 🧪 Quick switcher for pages across all notebooks.
 365. **P1** 🧪 Recently edited pages across all notebooks.
 366. **P1** 🧪 Go to page by typing its number.

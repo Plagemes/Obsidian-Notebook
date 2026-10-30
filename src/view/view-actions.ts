@@ -21,6 +21,7 @@ import { deletePageKeepingCopy, newPageFromTemplate, openDeletedPages, savePageA
 import { insertReference, openPage, removeTextbook, setTextbook } from "./textbook-ref-ui";
 import { toggleBookmark } from "./view-helpers";
 import { showNotice } from "./notice";
+import { canPrint } from "./print";
 
 export interface ActionArg {
 	page?: number;
@@ -38,10 +39,16 @@ const SELECTION_ONLY = /^(layer-|selection-(align|distribute|rotate|mirror|resiz
 
 /** Whether a command of the registry applies to this view now (the palette hides it otherwise). */
 export function commandApplies(view: NotebookView, id: string): boolean {
+	// wave 0.10 (363): there has to be another notebook open to go to
+	if (id === "notebook-next" || id === "notebook-previous") return (view.tabTools?.count ?? 0) > 1;
 	if (id === "pdf-side-open") return pdfSideState(view).available;
 	if (id.startsWith("pdf-side-")) return pdfSideState(view).open;
 	// wave 0.9 (357): the layer order needs something selected. Wave 0.10: so do arranging it and selecting similar ink.
 	if (SELECTION_ONLY.test(id)) return !!view.uiContext().selection;
+	// wave 0.10 (362): copying to the other devices needs a selection (pasting does not).
+	if (id === "selection-copy-devices") return !!view.uiContext().selection;
+	// wave 0.10 (81): there is no print dialog on a phone or tablet.
+	if (id === "print") return canPrint();
 	return true;
 }
 
@@ -106,6 +113,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"selection-cut": (v) => void v.selectionTools?.cut(),
 	"selection-duplicate": (v) => v.selectionTools?.duplicate(),
 	"selection-paste": (v) => void v.selectionTools?.paste(),
+	"selection-copy-devices": (v) => void v.selectionTools?.copyToDevices(),
+	"selection-paste-device": (v) => void v.selectionTools?.pasteFromDevices(),
 	"selection-white-transparent": (v) => void v.selectionTools?.makeWhiteTransparent(),
 	"link-selection": (v) => v.linkSelection(),
 	"selection-open-link": (v) => v.openSelectionLink(),
@@ -149,6 +158,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"insert-graph": (v) => v.mathTools?.insertGraph(),
 	"math-edit": (v) => v.mathTools?.editSelected(),
 	"math-convert-ink": (v) => void v.mathTools?.convertSelectedToInk(),
+	"insert-date-stamp": (v) => v.insertDateStamp(),
 	"stamps": (v) => v.stampPalette?.toggle(),
 	"board-shot": (v) => void v.boardShot(),
 	"add-page": (v) => v.addPage(),
@@ -289,8 +299,18 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	// wave 0.9: export dialog (381, from a page's sheet it starts on that page), Markdown export (382), night mode (367), cropped margins (376)
 	"export-dialog": (v, arg) => v.openExportDialog(arg.page),
 	"export-markdown": (v) => v.openMarkdownExport(),
+	// wave 0.10: PNG images (81) and Print (81) are choices of the same dialog; read-only mode (51)
+	"export-png": (v) => v.openExportDialog(undefined, "png"),
+	"print": (v) => {
+		if (canPrint()) v.openExportDialog(undefined, "print");
+		else showNotice(t("export.print.unavailable"), 8000);
+	},
+	"toggle-read-only": (v) => v.toggleReadOnlyMode(),
 	"night-mode": (v) => v.displayTools?.toggleNight(),
 	"crop-margins": (v) => v.displayTools?.toggleCrop(),
+	// wave 0.10 (363): next / previous open notebook
+	"notebook-next": (v) => void v.tabTools?.step(1),
+	"notebook-previous": (v) => void v.tabTools?.step(-1),
 	// wave 0.8: quick textbook reference (view/textbook-ref-ui.ts)
 	"textbook-set": (v) => setTextbook(v),
 	"textbook-open": (v) => openPage(v),

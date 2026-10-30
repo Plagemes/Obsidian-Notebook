@@ -60,11 +60,16 @@ export interface UiContext {
 	toggles: {
 		ruler: boolean; penOnly: boolean; navigator: boolean; /** One page at a time (wave 0.7). */ pageMode?: boolean; /** Pen gesture mode (wave 0.8). */ penGestures?: boolean;
 		/** wave 0.10 (63): the lasso tool selects with a rectangle instead of a freehand outline. */ selectRectangle?: boolean;
+		/** wave 0.10 (51): the user switched this view to read-only mode. */ readOnly?: boolean;
 	};
+	/** wave 0.10 (81): the device can print (desktop with a print dialog); false or absent on a phone or tablet. */
+	canPrint?: boolean;
 	/** wave 0.8: invisible-ink pen mode and the view-only "Show solutions" toggles (notebook, page in view). Optional. */
 	markers?: { invisibleInk: boolean; solutions: boolean; pageSolutions: boolean };
 	/** wave 0.9: view-only night mode (367) and cropped PDF margins (376). Optional (both off when absent). */
 	display?: { night: boolean; crop: boolean };
+	/** wave 0.10: how many notebook views are open in the workspace (tabs). Optional (0 when absent). */
+	openNotebooks?: number;
 	/** Phone-sized view (the page panel is a drawer, the toolbar has two rows). */
 	narrow: boolean;
 }
@@ -110,6 +115,8 @@ const hasSelection = (c: UiContext) => !!c.selection && c.selection.strokes + c.
 const itemCount = (c: UiContext) => (c.selection?.strokes ?? 0) + (c.selection?.elements ?? 0);
 const lassoOrSelection = (c: UiContext) => c.tool === "lasso" || itemCount(c) > 0;
 const hasInk = (c: UiContext) => (c.selection?.strokes ?? 0) > 0;
+/** wave 0.10 (363): another notebook is open to go to. */
+const otherNotebooks = (c: UiContext) => (c.openNotebooks ?? 0) > 1;
 const sideOpen = (c: UiContext) => c.sidePane.available && c.sidePane.open;
 /** v9: exactly one equation or graph is selected (its editor or panel can open). */
 const oneMath = (c: UiContext) => (c.selection?.equations ?? 0) + (c.selection?.graphs ?? 0) === 1;
@@ -297,10 +304,16 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "show-solutions", label: "markers.command.solutions", icon: "eye", group: "view", surfaces: ["sheet"], priority: 30, scope: "view", command: true, readOnly: true, checked: (c) => !!c.markers?.solutions, keywords: "invisible ink hidden" },
 	{ id: "show-page-solutions", label: "markers.menu.pageSolutions", icon: "eye", group: "page", surfaces: ["page"], priority: 30, scope: "view", command: true, readOnly: true, checked: (c) => !!c.markers?.pageSolutions, keywords: "invisible ink hidden" },
 
+	// --- wave 0.10 (363): tabs of the open notebooks (the strip and the toolbar swipe call the same step).
+	{ id: "notebook-next", label: "command.notebookNext", icon: "chevron-right", group: "navigate", surfaces: ["sheet"], priority: 22, scope: "view", command: true, readOnly: true, when: otherNotebooks, keywords: "tab switch next notebook quaderno successivo scheda" },
+	{ id: "notebook-previous", label: "command.notebookPrevious", icon: "chevron-left", group: "navigate", surfaces: ["sheet"], priority: 21, scope: "view", command: true, readOnly: true, when: otherNotebooks, keywords: "tab switch previous notebook quaderno precedente scheda" },
+
 	// --- view and input.
 	{ id: "toggle-pages-panel", label: "tool.pages", icon: "panel-left", group: "view", surfaces: ["toolbar"], priority: 100, scope: "view", command: "command.toggleNavigator", readOnly: true, checked: (c) => c.toggles.navigator },
 	{ id: "toggle-ruler", label: "tool.ruler", icon: "ruler", group: "view", surfaces: ["quick", "radial", "sheet"], priority: 50, scope: "view", command: "command.toggleRuler", checked: (c) => c.toggles.ruler },
 	{ id: "pen-only", label: "pens.penOnly", icon: "pen-tool", group: "view", surfaces: ["quick", "sheet"], priority: 42, scope: "view", command: "command.penOnly", readOnly: true, checked: (c) => c.toggles.penOnly, keywords: "finger touch palm" },
+	// wave 0.10 (51): read-only mode of this view. The toolbar shows a button while it is on (tap to switch it off); the sheet and the command toggle it.
+	{ id: "toggle-read-only", label: "readonly.toggle", icon: "lock", group: "view", surfaces: ["sheet"], priority: 44, scope: "view", command: "command.readOnly", readOnly: true, checked: (c) => !!c.toggles.readOnly, keywords: "lock protect accidental marks reading view only sola lettura blocca proteggi" },
 	// wave 0.8: pen gestures. The mode toggle is a quick slot (the "move to page" gesture starts
 	// from a selection); the cheat sheet and the custom gestures live in the sheet only.
 	{ id: "pen-gesture-mode", label: "toolbar.penGestures", icon: "wand-2", group: "view", surfaces: ["quick", "sheet"], priority: 41, scope: "view", command: "command.penGestureMode", checked: (c) => !!c.toggles.penGestures, keywords: "gesture pen shortcut circle scribble" },
@@ -325,6 +338,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	// From a page's sheet the dialog starts on that page; from the sheet, the notebook menu and the palette on the notebook.
 	{ id: "export-dialog", label: "export.dialog.menu", icon: "share", group: "share", surfaces: ["page", "sheet", "notebook"], priority: 32, scope: "view", command: "command.exportDialog", readOnly: true, keywords: "pdf svg ink background layers page notebook esporta" },
 	{ id: "export-markdown", label: "export.markdown.menu", icon: "files", group: "share", surfaces: ["sheet", "notebook"], priority: 28, scope: "view", command: "command.exportMarkdown", readOnly: true, keywords: "md png images without obsidian share esporta" },
+	// wave 0.10 (81): the same dialog started on PNG images (a vault folder, a scale, a page range) or on Print (desktop only).
+	{ id: "export-png", label: "export.png.menu", icon: "images", group: "share", surfaces: ["sheet", "notebook"], priority: 27, scope: "view", command: "command.exportPng", readOnly: true, keywords: "png images pictures pages folder scale range esporta immagini" },
+	{ id: "print", label: "export.print.menu", icon: "printer", group: "share", surfaces: ["sheet", "notebook"], priority: 26, scope: "view", command: "command.print", readOnly: true, when: (c) => !!c.canPrint, keywords: "paper printer stampa carta" },
 
 	// --- notebooks: the library, the ribbon and the palette.
 	global("open-library", "command.library", "library", "app", ["notebook", "palette"], 30),
@@ -340,6 +356,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	// wave 0.7: safety checks of the whole notebooks folder (also from the settings tab).
 	global("sync-check", "command.syncCheck", "refresh-cw", "app", ["sheet", "notebook", "palette"], 15),
 	global("check-integrity", "command.checkIntegrity", "shield-check", "app", ["sheet", "notebook", "palette"], 15),
+	// wave 0.10 (27): unreadable notebooks and unused attachment files; the library sidebar has the same entry.
+	global("library-check", "command.libraryCheck", "hard-drive", "app", ["sheet", "notebook", "library", "palette"], 15),
 
 	// --- diagnostics: settings tab and palette.
 	global("pen-button-test", "command.penTest", "pen-tool", "dev", ["palette"], 5),
@@ -373,6 +391,11 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "textbook-open", label: "textbook.command.open", icon: "book-open", group: "reading", surfaces: ["sheet", "palette"], priority: 35, scope: "view", command: true, readOnly: true, keywords: "textbook book pdf page libro" },
 	{ id: "textbook-remove", label: "textbook.command.remove", icon: "book-x", group: "reading", surfaces: ["sheet", "palette"], priority: 10, scope: "view", command: true, readOnly: true },
 	{ id: "textbook-insert", label: "textbook.command.insert", icon: "book-marked", group: "insert", surfaces: ["sheet", "palette"], priority: 45, scope: "view", command: true, keywords: "textbook reference page libro" },
+
+	// wave 0.10: clipboard and stamps (356 date and time stamp, 362 clipboard shared between devices)
+	{ id: "insert-date-stamp", label: "datestamp.action", icon: "calendar-clock", group: "insert", surfaces: ["sheet"], priority: 48, scope: "view", command: "datestamp.command", keywords: "date time stamp timestamp clock now data ora" },
+	{ id: "selection-copy-devices", label: "clipshare.copy", icon: "monitor-smartphone", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 48, scope: "view", command: true, when: hasSelection, keywords: "clipboard tablet phone sync share vault appunti" },
+	{ id: "selection-paste-device", label: "clipshare.paste", icon: "monitor-down", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection", "lasso"], priority: 47, scope: "view", command: true, when: (c) => c.tool === "lasso" || hasSelection(c), keywords: "clipboard tablet phone sync share vault appunti" },
 
 	// --- status banners (wave 0.7): their buttons, listed so that every visible control has a documented place.
 	banner("safe-open-normally", "safe.banner.openNormally", "shield-off", "notebook", "view/resilience.ts"),
@@ -431,7 +454,7 @@ export function baseContext(patch: Partial<UiContext> = {}): UiContext {
 		page: { index: 0, count: 3, background: "none", infinite: false, bookmarked: false },
 		notebook: { pdfPages: false, backgrounds: false }, lecture: false,
 		sidePane: { available: true, open: false }, reading: { annotationsHidden: false, dim: false },
-		toggles: { ruler: false, penOnly: false, navigator: false, pageMode: false }, narrow: false,
+		toggles: { ruler: false, penOnly: false, navigator: false, pageMode: false }, narrow: false, canPrint: true,
 		...patch,
 	};
 }
