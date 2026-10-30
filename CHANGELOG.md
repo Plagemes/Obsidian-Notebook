@@ -9,7 +9,7 @@ Repository and documentation only: no change to the plugin or the notebook forma
 - **Public roadmap page** (`site/index.html`, GitHub Pages): counters, a progress bar, filters by status, area and priority, search, every feature with its status and release, and *Most requested* (open `feature-request` issues from the public GitHub API, sorted by 👍). No external fonts, cookies or analytics. Data from `scripts/roadmap-data.mjs` (docs/roadmap.md + CHANGELOG.md → `site/roadmap.json`), published by `.github/workflows/pages.yml`.
 - Issue forms (`feature_request.yml`, `bug_report.yml`, `config.yml` linking to Discussions → Ideas) and `CONTRIBUTING.md`.
 - Harness: `dev/harness/banner.html` renders the README banner (1280 × 400), the social preview (1280 × 640) and the roadmap page's art band (1600 × 240, very low intensity, no text) with the art engine, the cover painter and a pen stroke from the real pen outline; `npm run harness:check` screenshots and checks them, and the new `npm run harness:media` copies them and downscales the curated screenshots into `docs/media/`. The settings tab is also screenshotted on a light desktop, and the harness has stand-ins for the *Writing*, *Export* and *Diagnostics* section icons (it showed two letters). Headless Chrome helpers moved to `dev/harness/chrome.mjs`.
-- `docs/media/repo-settings.md`: description, topics, homepage and social preview to set on GitHub.
+- `.github/repo-settings.md`: description, topics, labels, homepage, Pages, Discussions and social preview settings for the maintainer.
 
 ## 0.12.2 — 2026-10-30
 
