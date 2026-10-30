@@ -50,6 +50,11 @@ export class TextEditor {
 		this.area.addEventListener("blur", () => this.onDone?.());
 	}
 
+	/** The text field itself (the `[[` note suggester listens to it). */
+	get element(): HTMLTextAreaElement {
+		return this.area;
+	}
+
 	get isOpen(): boolean {
 		return this.current !== null;
 	}

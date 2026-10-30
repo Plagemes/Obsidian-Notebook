@@ -40,6 +40,11 @@ export interface SelectionHost {
 	/** Page in view and the centre of the view in that page's coordinates. */
 	pasteTarget(): { pageIndex: number; page: Page; x: number; y: number } | null;
 	textStyle(): { fontSize: number; color: string };
+	/** Links written with the pen (O8): attaches a note to the selected ink; optional so hosts without it still work. */
+	linkSelection?(): void;
+	/** The selection holds a text box with a link, and opens it. */
+	selectionHasLink?(): boolean;
+	openSelectionLink?(): void;
 	/** True while the same document is still open and editable (everything here is asynchronous). */
 	stillHere(doc: NotebookDocument): boolean;
 }
@@ -80,6 +85,8 @@ export class SelectionActions {
 		}
 		this.button(this.actionsRow, "clipboard-paste", "selection.paste", () => void this.paste());
 		if (!sel) return;
+		if (this.host.linkSelection) this.button(this.actionsRow, "link", "penlinks.linkSelection", () => this.host.linkSelection?.());
+		if (this.host.selectionHasLink?.()) this.button(this.actionsRow, "external-link", "penlinks.openLink", () => this.host.openSelectionLink?.());
 		if (sel.elements.some((e) => e.type === "image")) {
 			this.button(this.actionsRow, "eraser", "selection.whiteTransparent", () => void this.makeWhiteTransparent());
 		}

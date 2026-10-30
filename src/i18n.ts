@@ -1037,6 +1037,23 @@ const en = {
 	"pageTags.modal.placeholder": "exam, chapter 2",
 	"pageTags.modal.suggestions": "Tags used in this notebook",
 	"pageTags.modal.save": "Save",
+	// wave 0.9: pen links
+	"command.linkSelection": "Link selection to a note…",
+	"penlinks.linkSelection": "Link to a note…",
+	"penlinks.openLink": "Open link",
+	"penlinks.selectFirst": "Circle some ink with the lasso first, then link it to a note.",
+	"penlinks.chip": "Link to a note…",
+	"penlinks.search": "Find a note to link…",
+	"penlinks.none": "No matching note.",
+	"penlinks.linkTo": "Link to \"{name}\"",
+	"penlinks.newNote": "Not created yet",
+	"penlinks.suggest": "Notes to link",
+	"penlinks.unresolved.title": "Note not found",
+	"penlinks.unresolved.text": "There is no note called \"{name}\" yet. Create it now?",
+	"penlinks.createNote": "Create note",
+	"penlinks.cancel": "Cancel",
+	"penlinks.badName": "\"{name}\" cannot be used as a note name.",
+	"penlinks.createFailed": "Could not create the note: {error}",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -2078,6 +2095,23 @@ const it: Partial<Record<MessageKey, string>> = {
 	"pageTags.modal.placeholder": "esame, capitolo 2",
 	"pageTags.modal.suggestions": "Tag usati in questo quaderno",
 	"pageTags.modal.save": "Salva",
+	// wave 0.9: pen links
+	"command.linkSelection": "Collega la selezione a una nota…",
+	"penlinks.linkSelection": "Collega a una nota…",
+	"penlinks.openLink": "Apri il collegamento",
+	"penlinks.selectFirst": "Cerchia prima dell'inchiostro con il lazo, poi collegalo a una nota.",
+	"penlinks.chip": "Collega a una nota…",
+	"penlinks.search": "Cerca una nota da collegare…",
+	"penlinks.none": "Nessuna nota corrispondente.",
+	"penlinks.linkTo": "Collega a \"{name}\"",
+	"penlinks.newNote": "Non ancora creata",
+	"penlinks.suggest": "Note da collegare",
+	"penlinks.unresolved.title": "Nota non trovata",
+	"penlinks.unresolved.text": "Non esiste ancora una nota chiamata \"{name}\". Vuoi crearla adesso?",
+	"penlinks.createNote": "Crea la nota",
+	"penlinks.cancel": "Annulla",
+	"penlinks.badName": "\"{name}\" non può essere usato come nome di nota.",
+	"penlinks.createFailed": "Impossibile creare la nota: {error}",
 };
 
 let table: Partial<Record<MessageKey, string>> | null = null;

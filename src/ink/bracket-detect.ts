@@ -167,9 +167,9 @@ export function openBracketsAt(strokes: readonly BracketStroke[], index: number)
 	const a = strokes[index];
 	const b = strokes[index + 1];
 	if (!a || !b || !isInk(a) || !isInk(b)) return null;
-	const sa = bracketShape(a.points as readonly Pt[]);
+	const sa = bracketShape(a.points);
 	if (!sa) return null;
-	const sb = bracketShape(b.points as readonly Pt[]);
+	const sb = bracketShape(b.points);
 	return sb && isOpenPair(sa, sb) ? { first: sa, second: sb } : null;
 }
 
@@ -203,7 +203,7 @@ export function penLinkCandidate(strokes: readonly BracketStroke[]): PenLinkCand
 		for (let j = i + 2; j <= last; j++) {
 			const s = strokes[j]!;
 			if (s.points.length === 0) return null;
-			const b = bounds(s.points as readonly Pt[]);
+			const b = bounds(s.points);
 			const mid = (b.minY + b.maxY) / 2;
 			const sameLine = mid >= top - LINE_SLACK * h && mid <= bottom + LINE_SLACK * h && b.maxY - b.minY <= 3 * h;
 			const toTheRight = b.minX >= pair.second.box.minX - 0.5 * h && b.minX - box.maxX <= WORD_GAP * h;

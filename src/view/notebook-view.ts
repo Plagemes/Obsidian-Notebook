@@ -82,6 +82,7 @@ import { addPdfSyncMenuItems, type PageSyncHooks } from "./pdf-sync";
 import { deletePageKeepingCopy, newPageFromTemplate, openDeletedPages, savePageAsTemplate, type PageToolsHost } from "./page-tools";
 import { RulerGesture } from "./ruler-gesture";
 import { ObjectInk } from "./object-ink";
+import { PenLinks } from "./pen-links";
 import { SelectionActions } from "./selection-actions";
 import { StampPalette, type StampTarget } from "./stamp-palette";
 import { TextEditor, type TextEditSession } from "./text-editor";
@@ -251,6 +252,8 @@ export class NotebookView extends FileView {
 		},
 	);
 	private selectionActions: SelectionActions | null = null;
+	/** Links written with the pen (O8): note links in text boxes, on ink, and the `[[` suggester. */
+	private penLinks: PenLinks | null = null;
 	/** One page at a time (#14); its gestures and animation live in page-mode.ts. */
 	private pageMode: PageMode | null = null;
 	private showPageMode: (on: boolean) => void = () => undefined;
@@ -384,6 +387,7 @@ export class NotebookView extends FileView {
 		// The panel sits to the left of the page (a drawer over it on narrow views).
 		this.body.insertBefore(this.pageNav.el, this.stage);
 		this.textEditor = new TextEditor(this.stage);
+		this.mountPenLinks(this.textEditor);
 		this.pens = new PenControls(this.toolbar, this.stage, this.penStore());
 		this.mountSelectionActions();
 		this.mountStamps();
@@ -519,6 +523,8 @@ export class NotebookView extends FileView {
 		this.pageMode = null;
 		this.selectionActions?.destroy();
 		this.selectionActions = null;
+		this.penLinks?.destroy();
+		this.penLinks = null;
 		this.stamps?.destroy();
 		this.stamps = null;
 		this.objectInk.destroy();
@@ -836,6 +842,7 @@ export class NotebookView extends FileView {
 		if (!this.editable() || this.controller?.drawing) return;
 		this.commitText();
 		this.clearSelection();
+		this.penLinks?.hideChip();
 		if (this.history.undo()) this.afterHistoryChange();
 	}
 
@@ -843,6 +850,7 @@ export class NotebookView extends FileView {
 		if (!this.editable() || this.controller?.drawing) return;
 		this.commitText();
 		this.clearSelection();
+		this.penLinks?.hideChip();
 		if (this.history.redo()) this.afterHistoryChange();
 	}
 
@@ -1596,6 +1604,7 @@ export class NotebookView extends FileView {
 		this.shapeDrag = null;
 		this.textTap = null;
 		this.lassoTap = null;
+		this.penLinks?.reset();
 		this.multiTap.reset();
 		this.stopHold();
 		this.textEditor?.close();
@@ -1840,6 +1849,7 @@ export class NotebookView extends FileView {
 		const layout = this.layout;
 		this.viewport = layout ? (this.pageMode?.enabled ? this.pageMode.clamp(v) : clampToPage(v, this.viewSize, layout)) : v;
 		this.renderer?.setViewport(this.viewport, interactive);
+		this.penLinks?.viewChanged();
 		this.reading?.viewportChanged();
 		if (this.selection) this.pushSelection();
 		this.placeTextEditor();
@@ -2089,6 +2099,7 @@ export class NotebookView extends FileView {
 
 		// A selection made with the side button's lasso is not carried into new ink.
 		this.clearSelection();
+		this.penLinks?.strokeStarted();
 		this.strokeStart = sample.t;
 		const snap = !!page && this.rulerLatches(page, local);
 		const start = snap && this.ruler ? (projectToRuler(this.ruler.ruler, local, Infinity) ?? local) : local;
@@ -2416,6 +2427,7 @@ export class NotebookView extends FileView {
 			}
 		}
 		this.history.execute(commands.length === 1 ? commands[0]! : new Batch("Draw", commands));
+		this.penLinks?.strokesAdded(pageIndex);
 		if (grew) {
 			this.afterHistoryChange();
 			return;
@@ -2829,8 +2841,63 @@ export class NotebookView extends FileView {
 			deleteSelection: () => this.deleteSelection(),
 			pasteTarget: () => this.pasteTarget(),
 			textStyle: () => ({ fontSize: this.tools.textSize, color: this.tools.penColor }),
+			linkSelection: () => this.linkSelection(),
+			selectionHasLink: () => !!this.selection && !!this.penLinks?.linkIn(this.selection.elements),
+			openSelectionLink: () => {
+				const link = this.selection && this.penLinks?.linkIn(this.selection.elements);
+				if (link) this.penLinks?.open(link);
+			},
 			stillHere: (doc) => this.session?.doc === doc && this.editable() && !this.controller?.drawing,
 		});
+	}
+
+	// --- links written with the pen (O8) ---
+
+	private mountPenLinks(editor: TextEditor): void {
+		this.penLinks = new PenLinks({
+			app: this.app,
+			sourcePath: () => this.file?.path ?? "",
+			stage: () => this.stage,
+			doc: () => this.session?.doc ?? null,
+			editable: () => this.editable() && !this.controller?.drawing,
+			execute: (cmd) => {
+				this.history.execute(cmd);
+				this.afterHistoryChange();
+				this.renderer?.invalidate();
+			},
+			invalidate: () => this.renderer?.invalidate(),
+			toStage: (pageIndex, x, y) => {
+				const box = this.layout?.boxes[pageIndex];
+				if (!box) return null;
+				const { scale, offsetX, offsetY } = this.viewport;
+				return [offsetX + (box.x + x) * scale, offsetY + (box.y + y) * scale];
+			},
+			pageAt: (clientX, clientY) => {
+				const layout = this.layout;
+				if (!layout) return null;
+				const rect = this.stage.getBoundingClientRect();
+				const [dx, dy] = this.toDoc({ x: clientX - rect.left, y: clientY - rect.top });
+				const pageIndex = pageAt(layout, dx, dy, 0);
+				const box = layout.boxes[pageIndex];
+				return box ? { pageIndex, local: toPageLocal(box, dx, dy), scale: this.viewport.scale } : null;
+			},
+			fingerNavigates: (e) => this.policy.route("touch", e.timeStamp, 0, Math.max(e.width || 0, e.height || 0), e.buttons) === "navigate",
+			tool: () => this.tools.tool,
+			labelColor: () => this.tools.penColor,
+			register: (ref) => this.registerEvent(ref),
+		});
+		this.penLinks.bindEditor(editor);
+	}
+
+	/** "Link…": attaches a note to the selected ink (a label above it that opens the note when tapped). */
+	linkSelection(): void {
+		const sel = this.selection;
+		if (!sel || !this.editable() || this.controller?.drawing) {
+			new Notice(t("penlinks.selectFirst"));
+			return;
+		}
+		const bounds = unionBounds(sel.strokes, sel.elements, measureText);
+		if (bounds) this.penLinks?.linkRegion(sel.pageIndex, bounds);
 	}
 
 	/** Selects exactly these items (the lasso tool is switched on, so they can be moved at once). */

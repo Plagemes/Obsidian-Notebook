@@ -49,6 +49,7 @@ export function toolCommands(): ToolCommand[] {
 	list.push({ id: "next-page", name: "command.nextPage", run: (v) => v.goToRelativePage(1) });
 	list.push({ id: "previous-page", name: "command.prevPage", run: (v) => v.goToRelativePage(-1) });
 	list.push({ id: "delete-selection", name: "command.deleteSelection", run: (v) => v.removeSelection() });
+	list.push({ id: "link-selection", name: "command.linkSelection", run: (v) => v.linkSelection() });
 	list.push({ id: "toggle-pages-panel", name: "command.toggleNavigator", run: (v) => v.toggleNavigator() });
 	list.push({ id: "toggle-ruler", name: "command.toggleRuler", run: (v) => v.toggleRuler() });
 	list.push({ id: "toggle-page-mode", name: "command.pageMode", run: (v) => v.togglePageMode() });

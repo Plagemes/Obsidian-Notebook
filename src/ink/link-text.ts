@@ -58,9 +58,9 @@ export function parseLinks(text: string): TextLink[] {
 		const inner = m[2]!;
 		const parts = splitLinkInner(inner);
 		if (!parts) continue;
-		const start = m.index! + m[1]!.length;
+		const start = m.index + m[1]!.length;
 		const written = inner.slice(0, inner.indexOf("|") < 0 ? inner.length : inner.indexOf("|")).trim();
-		out.push({ start, end: m.index! + m[0].length, inner, ...parts, display: parts.alias ?? written });
+		out.push({ start, end: m.index + m[0].length, inner, ...parts, display: parts.alias ?? written });
 	}
 	return out;
 }

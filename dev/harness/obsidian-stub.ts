@@ -476,6 +476,9 @@ export class MetadataCache extends Events {
 	getFirstLinkpathDest(): null {
 		return null;
 	}
+	fileToLinktext(file: { path: string }): string {
+		return file.path.replace(/.md$/, "");
+	}
 }
 
 export class App {
@@ -766,6 +769,23 @@ export class FuzzySuggestModal<T> extends Modal {
 		return String(item);
 	}
 	onChooseItem(item: T): void {
+		void item;
+	}
+}
+
+export class SuggestModal<T> extends Modal {
+	emptyStateText = "";
+	setPlaceholder(): void {
+		/* nothing */
+	}
+	getSuggestions(query: string): T[] {
+		void query;
+		return [];
+	}
+	renderSuggestion(item: T, el: HTMLElement): void {
+		el.textContent = String(item);
+	}
+	onChooseSuggestion(item: T): void {
 		void item;
 	}
 }
