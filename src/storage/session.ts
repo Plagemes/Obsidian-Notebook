@@ -1,6 +1,7 @@
 import { parse, serialize, serializeChecked, warmStrokeLines, type ParseFailure } from "../model/serialize";
 import type { NotebookDocument } from "../model/types";
 import { buildEntry, fullWriteGapMs, inspectJournal, journalKey, splitLines, type JournalStore } from "./journal";
+import { assessAfterFailure, probeSize, TornWriteError, WriteHealth, type SpaceProbe, type WriteFailureKind, type WriteHealthState } from "./write-guard";
 
 /** File access for one notebook. Implemented over the Vault API in vault-io.ts and by fakes in tests. */
 export interface DocumentIO {
@@ -13,7 +14,10 @@ export interface DocumentIO {
 	path?(): string;
 }
 
-export type BackupReason = "unreadable" | "future-version" | "conflict" | "unsaved" | "journal" | "before-restore" | "before-move" | "before-api";
+export type BackupReason =
+	| "unreadable" | "future-version" | "conflict" | "unsaved" | "journal" | "before-restore" | "before-move" | "before-api"
+	// wave 0.7: resilience (#390): the version replaced by a suspicious change on disk (integrity.ts)
+	| "integrity";
 
 /**
  * - `ok`: the document is editable and saved automatically.
@@ -33,6 +37,24 @@ export interface SessionEvents {
 	/** The app died before the last save: edits found in the journal were restored and are being saved. */
 	onRecovered?(info: { savedAt: string }): void;
 	onError?(message: string): void;
+	// wave 0.7: resilience
+	/** #347: writing started failing, keeps failing (new retry time) or works again. */
+	onWriteHealth?(state: WriteHealthState): void;
+	/** #390: `text` is now in the file, written and read back by this session (for the per-device integrity ledger). */
+	onWritten?(text: string): void;
+	/** #390: document text was read from the file and is being applied (first load or reload of an external change). */
+	onDiskContent?(info: DiskContentInfo): void;
+}
+
+/** wave 0.7: resilience (#390). What `onDiskContent` reports. */
+export interface DiskContentInfo {
+	content: string;
+	/** What the session held as the file content before (null on the first load). */
+	previous: string | null;
+	initial: boolean;
+	/** The parsed file (before any journal recovery), or null when it does not parse. */
+	doc: NotebookDocument | null;
+	failure: ParseFailure | null;
 }
 
 /** Timer functions, injected so the view can use its window's timers and tests can use Node's. */
@@ -79,6 +101,13 @@ export interface SessionOptions {
 	 * travels with content saves only and never causes a write of its own. Errors are ignored.
 	 */
 	beforeSerialize?: (doc: NotebookDocument) => void;
+	// wave 0.7: resilience (#347)
+	/** Longest wait between automatic retries of a failing save (backoff from `retryMs`, doubling). Default 60 s. */
+	retryMaxMs?: number;
+	/** Checks for free space before a write is retried after a full disk or a partial write. */
+	spaceProbe?: SpaceProbe;
+	/** Every write up to this size is read back and compared (always while saving is failing). Default 2,000,000 chars. */
+	verifyLimitChars?: number;
 }
 
 /** The stroke-line warm-up waits this long after a load, so the page is painted first. */
@@ -173,6 +202,15 @@ export class DocumentSession {
 	/** Poll of a timed save that is waiting for the pen; the due time is kept while it runs. */
 	private deferTimer: number | null = null;
 
+	// wave 0.7: resilience (#347): failing writes.
+	private readonly health: WriteHealth;
+	private readonly spaceProbe: SpaceProbe | null;
+	private readonly verifyLimitChars: number;
+	/** Automatic retry of a failing save (backoff). */
+	private retryTimer: number | null = null;
+	/** A partial file left by one of our failed writes that could not be undone: not someone else's version. */
+	private tornContent: string | null = null;
+
 	constructor(
 		private readonly io: DocumentIO,
 		private readonly timers: Timers,
@@ -194,6 +232,14 @@ export class DocumentSession {
 		this.journalQuietMs = options.journalQuietMs ?? 120;
 		this.journalMaxQuietDeferMs = options.journalMaxQuietDeferMs ?? 1000;
 		this.journalMaxBusyDeferMs = options.journalMaxBusyDeferMs ?? 1500;
+		this.health = new WriteHealth(this.retryMs, options.retryMaxMs ?? 60_000);
+		this.spaceProbe = options.spaceProbe ?? null;
+		this.verifyLimitChars = options.verifyLimitChars ?? 2_000_000;
+	}
+
+	/** #347: whether saving is failing, why, and when it is retried. */
+	writeHealth(): WriteHealthState {
+		return this.health.state();
 	}
 
 	/**
@@ -223,6 +269,11 @@ export class DocumentSession {
 	 */
 	private timedFlush(): void {
 		if (this.disposed) return;
+		// #347: while saving fails, timed saves wait for the backoff; the retry timer (or an explicit flush) writes.
+		if (this.health.failing && !this.health.retryDue(this.now().getTime())) {
+			this.scheduleRetry();
+			return;
+		}
 		if (this.deferForInput("flush")) {
 			this.deferTimer ??= this.timers.set(() => {
 				this.deferTimer = null;
@@ -299,6 +350,8 @@ export class DocumentSession {
 			if (this.disposed || this.mode === "loading" || this.mode === "deleted") return "ignored" as const;
 			const content = await this.io.read();
 			if (content === this.diskContent) return "echo" as const;
+			// #347: the partial file of our own failed write is not an external version.
+			if (content === this.tornContent) return "echo" as const;
 			// Local changes win; the next flush backs up the external version before overwriting it.
 			if (this.mode === "ok" && this.busy()) {
 				this.deferredExternal = true;
@@ -356,12 +409,21 @@ export class DocumentSession {
 		// A file that could not be used until now (broken or read-only) is recovered like a first load: its
 		// journal may hold edits made before the file was damaged or overwritten.
 		const recover = initialLoad || this.mode !== "ok";
+		const previous = this.diskContent;
 		this.diskContent = content;
+		this.tornContent = null;
 		this.revision = 0;
 		this.savedRevision = 0;
 		this.journaledRevision = -1;
 		let recoveredAt: string | null = null;
 		const result = parse(content);
+		try {
+			this.events.onDiskContent?.({
+				content, previous, initial: initialLoad, doc: result.ok ? result.doc : null, failure: result.ok ? null : result.reason,
+			});
+		} catch (e) {
+			console.error("[notebook] onDiskContent failed", e);
+		}
 		if (result.ok) {
 			let doc = result.doc;
 			if (this.journal) {
@@ -459,22 +521,31 @@ export class DocumentSession {
 			let written = false;
 			for (let attempt = 0; attempt < RACE_ATTEMPTS && !written; attempt++) {
 				const current = await this.io.read();
-				// Someone else wrote the file: keep their version before replacing it.
-				if (current !== this.diskContent && current.trim().length > 0) await this.backupConflict(current);
+				// Someone else wrote the file: keep their version before replacing it (not the partial file of our own failed write).
+				if (current !== this.diskContent && current !== this.tornContent && current.trim().length > 0) await this.backupConflict(current);
 				// Deleted or disposed meanwhile: never touch the file again.
 				if (this.mode !== "ok" || this.disposed) return true;
+				// #347: after a full disk or a partial write, the file is touched only once there is room for the new text.
+				if (this.health.needsProbe && this.spaceProbe) await this.spaceProbe.probe(probeSize(current, next));
 				let raced = false;
 				// Known before the write lands, so the `modify` event it fires is recognised as ours.
 				this.writing = next;
 				try {
-					await this.io.process((latest) => {
-						if (latest !== current) {
-							// Changed again since our read: leave it as is, back it up on the next attempt.
-							raced = true;
-							return latest;
-						}
-						return next;
-					});
+					try {
+						await this.io.process((latest) => {
+							if (latest !== current) {
+								// Changed again since our read: leave it as is, back it up on the next attempt.
+								raced = true;
+								return latest;
+							}
+							return next;
+						});
+					} catch (e) {
+						// #347: did the failed write leave the file as it was, happen after all, or leave a partial file?
+						if ((await this.inspectFailedWrite(current, next)) !== "written") throw e;
+						raced = false;
+					}
+					if (!raced) await this.verifyWrite(current, next);
 				} finally {
 					this.writing = null;
 				}
@@ -483,14 +554,20 @@ export class DocumentSession {
 			}
 			if (!written) throw new Error("the file keeps changing on disk");
 			this.diskContent = next;
+			this.tornContent = null;
 			this.savedRevision = Math.max(this.savedRevision, revision);
+			if (this.health.recordSuccess()) this.events.onWriteHealth?.(this.health.state());
+			this.events.onWritten?.(next);
 			this.afterSave();
 		} catch (e) {
+			const { changed } = this.health.recordFailure(e, this.now().getTime());
 			this.events.onSaveState?.("error");
-			this.events.onError?.(`Save failed: ${(e as Error).message}. Retrying.`);
+			// The view shows a persistent warning (onWriteHealth); a message only when the problem starts or changes.
+			if (changed) this.events.onError?.(failureMessage(this.health.state().kind, e));
+			this.events.onWriteHealth?.(this.health.state());
 			// A journal entry skipped during this attempt is still needed while the save keeps failing.
 			if (this.dirty && this.journaledRevision !== this.revision) this.scheduleJournal(this.journalDelayMs);
-			if (!this.disposed) this.debounceTimer = this.timers.set(() => void this.flush(), this.retryMs);
+			this.scheduleRetry();
 			return false;
 		}
 
@@ -501,6 +578,65 @@ export class DocumentSession {
 			this.events.onSaveState?.("saved");
 		}
 		return true;
+	}
+
+	/** #347: (re)arms the automatic retry of a failing save at the backoff time. */
+	private scheduleRetry(): void {
+		if (this.disposed || !this.health.failing) return;
+		if (this.retryTimer !== null) this.timers.clear(this.retryTimer);
+		const due = this.health.state().nextRetryAt ?? this.now().getTime();
+		this.retryTimer = this.timers.set(() => {
+			this.retryTimer = null;
+			void this.flush();
+		}, Math.max(0, due - this.now().getTime()));
+	}
+
+	/**
+	 * #347: reads the file back after a write that threw. A partial file (neither the old nor the new text, and not a
+	 * valid notebook someone else wrote meanwhile) is repaired by writing the old text back.
+	 */
+	private async inspectFailedWrite(before: string, attempted: string): Promise<"unchanged" | "written" | "torn"> {
+		let after: string;
+		try {
+			after = await this.io.read();
+		} catch {
+			return "unchanged"; // cannot tell; the next attempt reads again
+		}
+		const outcome = assessAfterFailure(before, attempted, after);
+		if (outcome !== "torn") return outcome;
+		if (after.trim().length > 0 && parse(after).ok) return "unchanged"; // another writer's version: backed up next time
+		await this.repairTorn(before, after);
+		return "torn";
+	}
+
+	/**
+	 * #347: a write that returned normally is read back (every write up to `verifyLimitChars`, all of them while saving
+	 * is failing). A file that does not hold what was written is a partial write: repaired and reported as a failure.
+	 */
+	private async verifyWrite(before: string, attempted: string): Promise<void> {
+		if (!this.health.failing && attempted.length > this.verifyLimitChars) return;
+		const back = await this.io.read();
+		if (back === attempted) return;
+		// A valid notebook written right after ours (Sync): our write landed; the 'modify' check handles theirs.
+		if (back.trim().length > 0 && parse(back).ok) return;
+		await this.repairTorn(before, back);
+		throw new TornWriteError();
+	}
+
+	/** Puts `good` (the file before our write) back over the partial `torn`; if that fails too, remembers `torn` as ours. */
+	private async repairTorn(good: string, torn: string): Promise<void> {
+		this.tornContent = torn;
+		this.health.diskDamaged = true;
+		if (good.trim().length === 0) return;
+		try {
+			await this.io.process((latest) => (latest === torn ? good : latest));
+			if ((await this.io.read()) === good) {
+				this.tornContent = null;
+				this.health.diskDamaged = false;
+			}
+		} catch (e) {
+			console.error("[notebook] could not put the previous file content back", e);
+		}
 	}
 
 	/** The file now holds our changes: the journal is obsolete, or must be rebased if newer changes exist. */
@@ -714,6 +850,8 @@ export class DocumentSession {
 	}
 
 	private clearTimers(): void {
+		if (this.retryTimer !== null) this.timers.clear(this.retryTimer);
+		this.retryTimer = null;
 		if (this.debounceTimer !== null) this.timers.clear(this.debounceTimer);
 		if (this.maxWaitTimer !== null) this.timers.clear(this.maxWaitTimer);
 		if (this.deferTimer !== null) this.timers.clear(this.deferTimer);
@@ -721,5 +859,21 @@ export class DocumentSession {
 		this.maxWaitTimer = null;
 		this.deferTimer = null;
 		this.flushDeferredSince = null;
+	}
+}
+
+/** wave 0.7: resilience (#347). The message of a failing save, by cause (the view shows a translated warning too). */
+function failureMessage(kind: WriteFailureKind | null, e: unknown): string {
+	const detail = e instanceof Error ? e.message : String(e);
+	switch (kind) {
+		case "no-space":
+			return `Save failed: the storage is full (${detail}). Your changes are kept in memory and in the journal, and saving is retried.`;
+		case "read-only":
+		case "permission":
+			return `Save failed: the file cannot be written (${detail}). Your changes are kept in memory and saving is retried.`;
+		case "torn":
+			return "Save failed: the file did not hold what was written. Your changes are kept in memory and saving is retried.";
+		default:
+			return `Save failed: ${detail}. Retrying.`;
 	}
 }
