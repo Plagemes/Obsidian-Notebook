@@ -106,6 +106,7 @@ import { DEFAULT_TOOLS, Toolbar, type ToolName, type ToolbarState } from "./tool
 import { hasBackgrounds, hasPdfPages } from "./reading-logic";
 import { commandApplies, runViewAction, sizeName, type ActionArg } from "./view-actions";
 import { ViewUi } from "./view-ui";
+import { pageKeyAction, shouldTurnPage, takesKey, type KeyScene } from "./page-keys";
 import { actionById, isEnabled, type UiContext } from "../ui/actions";
 import { actionLabel } from "../ui/action-sheet";
 import {
@@ -462,6 +463,7 @@ export class NotebookView extends FileView {
 				return page ? { paper: page.paper.kind, size: sizeName(page) } : null;
 			},
 			dimControl: () => (this.reading?.dimmed ? this.reading.dimControl : null),
+			toolbarSize: () => this.host.settings.toolbarSize,
 		});
 		this.mountSelectionActions();
 		this.mountStamps();
@@ -516,6 +518,7 @@ export class NotebookView extends FileView {
 			fitMode: () => this.fitMode,
 		});
 		this.radial = new PenRadial(this.stage, {
+			toolbarSize: () => this.host.settings.toolbarSize,
 			editable: () => this.editable() && !this.controller?.drawing,
 			tools: () => this.tools,
 			apply: (patch) => this.toolbar.apply(patch),
@@ -579,6 +582,8 @@ export class NotebookView extends FileView {
 			if (e.key === "Shift") this.shiftDown = false;
 		});
 		this.registerDomEvent(window, "blur", () => (this.shiftDown = false));
+		// wave 0.9 (372): the page turner (arrows, PageUp / PageDown, space, Bluetooth clickers).
+		this.registerDomEvent(document, "keydown", (e) => this.onPageTurnKey(e));
 		this.registerClipboardEvents();
 
 		this.registerEvent(this.app.vault.on("modify", (f) => {
@@ -706,6 +711,23 @@ export class NotebookView extends FileView {
 		this.pendingPos = null;
 		this.pendingAt = null;
 		if (this.layout) this.applyPendingPage();
+	}
+
+	/** wave 0.9 (372): keys that turn pages, only while this view is the active one and nothing else wants the key. */
+	private onPageTurnKey(e: KeyboardEvent): void {
+		const action = pageKeyAction(e);
+		if (action === null) return;
+		const scene: KeyScene = {
+			enabled: this.host.settings.pageTurnerKeys,
+			viewActive: this.app.workspace.getActiveViewOfType(NotebookView) === this,
+			targetEditable: takesKey(e.target as HTMLElement | null, e.key),
+			busy: this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null
+				|| this.textEditor?.isOpen === true || this.radial?.isOpen === true,
+			overlayOpen: !!activeDocument.querySelector(".modal-container, .menu, .suggestion-container"),
+		};
+		if (!shouldTurnPage(scene)) return;
+		e.preventDefault();
+		this.goToRelativePage(action === "next" ? 1 : -1);
 	}
 
 	private applyPendingPage(): void {
@@ -952,6 +974,8 @@ export class NotebookView extends FileView {
 		this.perfEl?.toggleClass("notebook-hidden", !settings.perfOverlay);
 		if (this.renderer) this.renderer.onFrame = settings.perfOverlay ? (t) => this.onFrame(t) : null;
 		this.reading?.settingsChanged();
+		// wave 0.9 (370): a new toolbar size changes the bar, the contextual bar and the number of quick slots.
+		this.ui?.refresh();
 	}
 
 	/** Input policy from the settings; while annotations are hidden the view is read-only and a finger only pans and zooms. */
@@ -2109,6 +2133,7 @@ export class NotebookView extends FileView {
 		if (rect.width === 0 || rect.height === 0) return;
 		this.viewSize = { width: rect.width, height: rect.height };
 		this.body.toggleClass("is-narrow", this.contentEl.clientWidth < NARROW_PX);
+		this.ui?.refresh();
 		this.renderer?.resize(rect.width, rect.height, window.devicePixelRatio || 1);
 		this.refit(true);
 		if (this.pendingPage !== null) this.applyStartPosition();

@@ -7,6 +7,7 @@ import { actionById, isChecked, isEnabled, type ContextKind, type UiContext } fr
 import { ActionSheet, actionLabel, type SheetKind } from "../ui/action-sheet";
 import { ContextBar } from "../ui/context-bar";
 import { buildLayout, type SectionId } from "../ui/layout";
+import { toolbarScale, toolsRowWraps, type ToolbarSize } from "../ui/toolbar-size";
 import { normaliseUsage, recordUse, USAGE_KEY, type UsageMap } from "../ui/usage";
 import type { Toolbar } from "./toolbar";
 
@@ -27,6 +28,8 @@ export interface ViewUiHost {
 	pageValues(pageIndex: number): { paper: PaperKind; size: PageSizeName | null } | null;
 	/** The dimming slider (pdf-reading.ts) while dimming is on, else null. */
 	dimControl(): HTMLElement | null;
+	/** wave 0.9 (370): the toolbar size setting. */
+	toolbarSize(): ToolbarSize;
 }
 
 export class ViewUi {
@@ -92,7 +95,14 @@ export class ViewUi {
 	refreshNow(): void {
 		const c = this.host.context();
 		const width = this.host.root.clientWidth || window.innerWidth;
-		const layout = buildLayout(c, width, this.usage, Date.now());
+		const size = this.host.toolbarSize();
+		const scale = toolbarScale(size);
+		// The size is CSS variables on the view (styles.css, wave 0.9 block): buttons, icons, the contextual bar and the sheets follow.
+		this.host.root.setCssProps({ "--nb-target": `${scale.target}px`, "--nb-icon": `${scale.icon}px` });
+		this.host.root.toggleClass("is-toolbar-compact", size === "compact");
+		this.host.root.toggleClass("is-toolbar-large", size === "large");
+		this.host.root.toggleClass("is-tools-wrapped", toolsRowWraps(size, width));
+		const layout = buildLayout(c, width, this.usage, Date.now(), undefined, scale.slot);
 		const tb = this.host.toolbar;
 		tb.setSingleRow(layout.singleRow);
 		tb.setQuick(layout.quick.map((id) => {

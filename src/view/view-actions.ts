@@ -3,6 +3,7 @@
 // default: the page in view); choices take their value (`arg.value`).
 
 import { t } from "../i18n";
+import { addPageToObsidianBookmarks } from "../integration/obsidian-bookmarks";
 import { copyPageLink, insertPageIntoNote } from "../integration/page-share";
 import { openPageRestore } from "../integration/reliability";
 import { cloneMeta } from "../model/document";
@@ -241,6 +242,9 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	}),
 	"share-insert-embed": onPage((v, p, i) => {
 		if (v.file) insertPageIntoNote(v.app, v.file, i + 1, "embed", p.id);
+	}),
+	"obsidian-bookmark-page": onPage((v, p, i) => {
+		if (v.file) addPageToObsidianBookmarks(v.app, v.file, i + 1, p.id);
 	}),
 	"export-page-pdf": onPage((v, p, i) => exportPage(v, p, i, "pdf")),
 	"export-page-svg": onPage((v, p, i) => exportPage(v, p, i, "svg")),
