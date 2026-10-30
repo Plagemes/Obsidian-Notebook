@@ -162,7 +162,9 @@ export function buildSheet(c: UiContext, opts: SheetOptions, actions: readonly A
 			.slice(0, RECENT_COUNT);
 		if (recent.length) sections.push({ id: "recent", actions: recent });
 	}
-	for (const group of GROUP_ORDER) {
+	// The page sheet starts with what acts on the page itself; inserting after it comes next.
+	const order: readonly ActionGroup[] = opts.kind === "page" ? ["page", ...GROUP_ORDER.filter((g) => g !== "page")] : GROUP_ORDER;
+	for (const group of order) {
 		const list = pool.filter((a) => a.group === group);
 		if (list.length) sections.push({ id: group, actions: list });
 	}

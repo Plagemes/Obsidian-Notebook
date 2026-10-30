@@ -71,14 +71,6 @@ export function editPageTags(host: OutlineHost, page: Page): void {
 	}).open();
 }
 
-/** "Edit bookmark…" (on a bookmarked page) and "Page tags…" for the page menu. */
-export function addOutlinePageMenuItems(menu: Menu, host: OutlineHost, page: Page): void {
-	if (metaOf(host).bookmarks.includes(page.id)) {
-		menu.addItem((i) => i.setTitle(t("page.editBookmark")).setIcon("pencil").onClick(() => editBookmark(host, page.id)));
-	}
-	menu.addItem((i) => i.setTitle(t("page.tags")).setIcon("tag").onClick(() => editPageTags(host, page)));
-}
-
 /**
  * The outline: one row per bookmark in page order (colour, title or page number, category, page number);
  * tap to jump, "…" to edit or delete. `category` filters the rows (null: all).

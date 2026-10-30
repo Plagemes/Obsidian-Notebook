@@ -1,8 +1,7 @@
-import { FileView, Menu, Notice, Scope, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
+import { FileView, Notice, Scope, type Menu, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 import { pageFromState } from "../integration/links";
 import { pageFromEphemeralState } from "../integration/page-links";
-import { addPageShareItems } from "../integration/page-share";
-import { checkConflicts, openPageRestore, openRepair, type ReliabilityDeps } from "../integration/reliability";
+import { checkConflicts, openRepair, type ReliabilityDeps } from "../integration/reliability";
 import { scanFromCamera } from "../scan/scan-modal";
 import { scannedPage } from "../scan/pages";
 import { PhotoDecodeError, photoSize } from "../scan/decode";
@@ -38,29 +37,28 @@ import { apply, IDENTITY, invert, isIdentity, multiply, rotateAbout, scaleAbout,
 import { clampToPage, fitWidth, pan, PAGE_MARGIN, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
 import { cloneMeta, createId, createPage, createStroke } from "../model/document";
 import { buildLecturePackPages, exercisePage } from "../model/lecture-pack";
-import { duplicatePage } from "../model/pages";
 import { backgroundRect } from "../model/margins";
 import {
-	AddAsset, AddElement, AddPage, AddStroke, Batch, DeletePage, History, InsertPages, MovePage, RemoveElement, ReplaceElement,
-	ReplaceStroke, SetMeta, SetPageInfinite, SetPageSize, SetPaper, type Command,
+	AddAsset, AddElement, AddPage, AddStroke, Batch, History, InsertPages, MovePage, RemoveElement, ReplaceElement,
+	ReplaceStroke, SetMeta, SetPageSize, type Command,
 } from "../model/history";
 import { pageContentCommand } from "../model/page-content";
 import { freezeStroke } from "../model/serialize";
 import {
-	DEFAULT_META, PAGE_SIZES, PAPER_KINDS, PAPER_SPACING,
-	type Asset, type ImageElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type PageSizeName,
-	type PaperKind, type Point, type Stroke, type TextElement, RENDER_FREEHAND, RENDER_INK,
+	DEFAULT_META, PAPER_SPACING,
+	type Asset, type ImageElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement,
+	type Point, type Stroke, type TextElement, RENDER_FREEHAND, RENDER_INK,
 } from "../model/types";
 import type { JournalStore } from "../storage/journal";
 import { DocumentSession, type SaveState, type SessionMode } from "../storage/session";
 import { isNotebookFile } from "../storage/format";
 import { VaultDocumentIO } from "../storage/vault-io";
 import { backupFolder, type NotebookSettings } from "../settings";
-import { exportPdf, exportSvg } from "./export";
+import { exportPdf } from "./export";
 import { policySettings } from "./input-settings";
 import { NotebookMedia, storeAsset } from "./media";
 import { PageNavigator } from "./navigator";
-import { addOutlinePageMenuItems, type OutlineHost } from "./outline";
+import type { OutlineHost } from "./outline";
 import { PAGE_AT_KEY, pageAtFromState, pageState, startPosition } from "./position-sync";
 import { positionAt, updatePosition } from "../model/position";
 import { LocationKeeper } from "./last-location";
@@ -72,10 +70,10 @@ import type { EditContext } from "./edit-context";
 import { runNewLecture } from "./lecture";
 import { askExercisePaper, askLayoutOptions, loadExercisePaper } from "./lecture-pack-modal";
 import { runMovePages } from "../library/move-pages";
-import { addPdfPageMenuItems, type PdfActionHost } from "./pdf-actions";
+import type { PdfActionHost } from "./pdf-actions";
 import { pickFile } from "./pick";
-import { addPdfSyncMenuItems, type PageSyncHooks } from "./pdf-sync";
-import { newPageFromTemplate, openDeletedPages, savePageAsTemplate, stashDeletedPage, type PageToolsHost } from "./page-tools";
+import { pdfSideState, type PageSyncHooks } from "./pdf-sync";
+import type { PageToolsHost } from "./page-tools";
 import { RulerGesture } from "./ruler-gesture";
 import { ObjectInk } from "./object-ink";
 import { SelectionActions } from "./selection-actions";
@@ -85,6 +83,11 @@ import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites"
 import { PenControls, type PenStore } from "./pen-controls";
 import { PdfReading, type ReadingHost } from "./pdf-reading";
 import { DEFAULT_TOOLS, Toolbar, type ToolName, type ToolbarState } from "./toolbar";
+import { hasBackgrounds, hasPdfPages } from "./reading-logic";
+import { commandApplies, runViewAction, sizeName, type ActionArg } from "./view-actions";
+import { ViewUi } from "./view-ui";
+import { actionById, isEnabled, type UiContext } from "../ui/actions";
+import { actionLabel } from "../ui/action-sheet";
 import {
 	centredPosition, imageElementSize, imagePageSize, mergeMeta, metaEquals, newTextBox, shapePoints, shouldGrabRuler, toggleBookmark,
 	unionBounds,
@@ -123,6 +126,10 @@ export interface NotebookHost {
 	journal?: JournalStore;
 	/** Persists the plugin settings (favourite pens, eraser size, pen-only). Optional: absent in tests. */
 	saveSettings?(): Promise<void>;
+	/** ui redesign: the course of the class on now (timetable), for the lecture contextual bar. Optional. */
+	classNow?(): string | null;
+	/** ui redesign: runs a plugin-level action of the registry (notebook menu). Optional. */
+	runGlobal?(id: string): void;
 }
 
 interface ActiveStroke {
@@ -248,6 +255,8 @@ export class NotebookView extends FileView {
 	);
 	private selectionActions: SelectionActions | null = null;
 	private stamps: StampPalette | null = null;
+	/** ui redesign: quick slots, contextual bar and sheets built from the action registry (view-ui.ts). */
+	private ui: ViewUi | null = null;
 	private readonly objectInk = new ObjectInk();
 
 	private viewport: Viewport = { scale: 1, offsetX: 0, offsetY: 0 };
@@ -343,19 +352,13 @@ export class NotebookView extends FileView {
 		this.contentEl.addClass("notebook-view");
 		this.toolbar = new Toolbar(this.contentEl, this.tools, {
 			change: (state) => this.onToolsChanged(state),
-			undo: () => this.undo(),
-			redo: () => this.redo(),
-			addPage: () => this.addPageAfter(this.currentPageIndex()),
-			exercisePage: () => this.exercisePageAfter(),
-			pageMenu: (evt) => this.openPageMenu(evt, this.currentPageIndex()),
-			deleteSelection: () => this.deleteSelection(),
-			fit: () => this.fitToWidth(),
-			toggleNavigator: () => this.setNavigatorOpen(!this.pageNav?.open),
-			insertImage: () => void this.insertImageElement(),
-			boardShot: () => void this.boardShot(),
-			stamps: () => this.stamps?.toggle(),
+			undo: () => this.runAction("undo"),
+			redo: () => this.runAction("redo"),
+			toggleNavigator: () => this.runAction("toggle-pages-panel"),
+			runAction: (id) => this.runAction(id),
+			openSheet: (anchor) => this.ui?.openSheet("all", anchor),
+			openPageSheet: (anchor) => this.ui?.openSheet("page", anchor, this.currentPageIndex()),
 		});
-		this.toolbar.setSelection(false);
 		this.body = this.contentEl.createDiv({ cls: "notebook-body" });
 		this.stage = this.body.createDiv({ cls: "notebook-stage" });
 		this.perfEl = this.stage.createDiv({ cls: "notebook-perf" });
@@ -367,13 +370,23 @@ export class NotebookView extends FileView {
 			goTo: (index) => this.goToPage(index),
 			move: (from, to) => this.movePage(from, to),
 			toggleBookmark: (pageId) => this.toggleBookmarkOf(pageId),
-			pageMenu: (index, evt) => this.openPageMenu(evt, index),
+			pageMenu: (index) => this.openPageMenu(index),
 			outline: this.outlineHost(),
 		});
 		// The panel sits to the left of the page (a drawer over it on narrow views).
 		this.body.insertBefore(this.pageNav.el, this.stage);
 		this.textEditor = new TextEditor(this.stage);
 		this.pens = new PenControls(this.toolbar, this.stage, this.penStore());
+		this.ui = new ViewUi({
+			app: this.app, root: this.contentEl, body: this.body, toolbar: this.toolbar,
+			context: (pageIndex) => this.uiContext(pageIndex),
+			run: (id, arg) => this.runAction(id, arg),
+			pageValues: (i) => {
+				const page = this.session?.doc?.pages[i];
+				return page ? { paper: page.paper.kind, size: sizeName(page) } : null;
+			},
+			dimControl: () => (this.reading?.dimmed ? this.reading.dimControl : null),
+		});
 		this.mountSelectionActions();
 		this.mountStamps();
 		this.messageEl = this.contentEl.createDiv({ cls: "notebook-message" });
@@ -403,7 +416,15 @@ export class NotebookView extends FileView {
 			tools: () => this.tools,
 			apply: (patch) => this.toolbar.apply(patch),
 			canUndo: () => this.history.canUndo(),
-			undo: () => this.undo(),
+			undo: () => this.runAction("undo"),
+			// ui redesign: the dial's redo, favourites, save-as-favourite, ruler and eyedropper hint.
+			canRedo: () => this.history.canRedo(),
+			redo: () => this.runAction("redo"),
+			favourites: () => this.host.settings.favouritePens,
+			applyFavourite: (i) => this.runAction(`favourite-${i + 1}`),
+			saveFavourite: (i) => this.pens?.saveCurrentTo(i),
+			toggleRuler: () => this.runAction("toggle-ruler"),
+			notify: (text) => new Notice(text, 2500),
 		});
 		this.lastTool.note(this.tools.tool);
 		this.gestures = new GestureInput(this.stage, {
@@ -489,6 +510,8 @@ export class NotebookView extends FileView {
 		this.rulerGesture = null;
 		this.selectionActions?.destroy();
 		this.selectionActions = null;
+		this.ui?.destroy();
+		this.ui = null;
 		this.stamps?.destroy();
 		this.stamps = null;
 		this.objectInk.destroy();
@@ -800,7 +823,7 @@ export class NotebookView extends FileView {
 	}
 
 	/** Inserts a blank page (size and paper of the page at `index`) after it. */
-	private addPageAfter(index: number): void {
+	addPageAfter(index: number): void {
 		const doc = this.session?.doc;
 		if (!doc || !this.editable() || this.controller?.drawing) return;
 		this.commitText();
@@ -848,75 +871,10 @@ export class NotebookView extends FileView {
 		this.toolbar.setNavigatorOpen(open);
 	}
 
-	/** Page menu: insert, reorder, duplicate, delete, bookmark, paper, size, infinite, export. Every change is undoable. */
-	private openPageMenu(evt: MouseEvent, index: number): void {
-		const doc = this.session?.doc;
-		if (!doc || !this.editable()) return;
-		const page = doc.pages[index];
-		if (!page) return;
-		const menu = new Menu();
-		menu.addItem((i) => i.setTitle(t("page.insertPdf")).setIcon("file-input").onClick(() => void this.insertPdfAfter(index)));
-		menu.addItem((i) => i.setTitle(t("page.insertBlank")).setIcon("file-plus").onClick(() => this.addPageAfter(index)));
-		menu.addItem((i) => i.setTitle(t("page.exercise")).setIcon("pencil-ruler").onClick(() => this.exercisePageAfter(index)));
-		menu.addItem((i) => i.setTitle(t("page.exercisePaper")).setIcon("palette").onClick(() => this.chooseExercisePaper()));
-		menu.addItem((i) => i.setTitle(t("page.insertImage")).setIcon("image-plus").onClick(() => void this.insertImagePageAfter(index)));
-		menu.addItem((i) => i.setTitle(t("page.scanAfter")).setIcon("scan").onClick(() => void this.scanPagesAfter(index)));
-		menu.addItem((i) => i.setTitle(t("page.scanInsert")).setIcon("scan-line").onClick(() => void this.insertScanElement(index)));
-		menu.addItem((i) => i.setTitle(t("page.newLecture")).setIcon("graduation-cap").onClick(() => void this.newLecture()));
-		menu.addSeparator();
-		menu.addItem((i) => i.setTitle(t("page.duplicate")).setIcon("copy").onClick(() => this.pageCommand(new AddPage(duplicatePage(page), index + 1), index + 1, page)));
-		menu.addItem((i) => i.setTitle(t("page.moveUp")).setIcon("arrow-up").setDisabled(index === 0)
-			.onClick(() => this.pageCommand(new MovePage(page.id, index, index - 1), index - 1, page)));
-		menu.addItem((i) => i.setTitle(t("page.moveDown")).setIcon("arrow-down").setDisabled(index >= doc.pages.length - 1)
-			.onClick(() => this.pageCommand(new MovePage(page.id, index, index + 1), index + 1, page)));
-		const marked = doc.meta?.bookmarks.includes(page.id) ?? false;
-		menu.addItem((i) => i.setTitle(t(marked ? "page.unbookmark" : "page.bookmark")).setIcon("bookmark").onClick(() => this.toggleBookmarkOf(page.id)));
-		addOutlinePageMenuItems(menu, this.outlineHost(), page);
-		menu.addItem((i) => i.setTitle(t("page.moveToNotebook")).setIcon("folder-input").onClick(() => void this.movePagesToNotebook(index)));
-		menu.addItem((i) => i.setTitle(t("page.delete")).setIcon("trash-2").setSection("danger").setDisabled(doc.pages.length <= 1)
-			.onClick(() => {
-				stashDeletedPage(this.pageToolsHost(), doc, page, index); // wave 0.6: kept in the page trash
-				this.pageCommand(new DeletePage(page, index), Math.max(0, index - 1), page);
-			}));
-		menu.addItem((i) => i.setTitle(t("page.deletedPages")).setIcon("archive-restore").onClick(() => void openDeletedPages(this.pageToolsHost())));
-		menu.addItem((i) => i.setTitle(t("page.saveTemplate")).setIcon("layout-template")
-			.onClick(() => savePageAsTemplate(this.pageToolsHost(), doc, page, this.file?.basename ?? "")));
-		menu.addItem((i) => i.setTitle(t("page.newFromTemplate")).setIcon("file-plus-2").onClick(() => newPageFromTemplate(this.pageToolsHost(), index)));
-		menu.addSeparator();
-		for (const kind of PAPER_KINDS) {
-			menu.addItem((i) => i.setTitle(t("page.paper", { kind: t(`paper.${kind}`) })).setChecked(page.paper.kind === kind)
-				.onClick(() => this.setPaper(page, kind, index)));
-		}
-		menu.addSeparator();
-		const landscape = page.width > page.height;
-		for (const name of Object.keys(PAGE_SIZES) as PageSizeName[]) {
-			const base = PAGE_SIZES[name];
-			const current = Math.min(page.width, page.height) === base.width && Math.max(page.width, page.height) === base.height;
-			menu.addItem((i) => i.setTitle(t("page.size", { size: t(`size.${name}`) })).setChecked(current)
-				.onClick(() => this.setSize(page, name, landscape, index)));
-		}
-		const sizeName = (Object.keys(PAGE_SIZES) as PageSizeName[]).find((n) =>
-			Math.min(page.width, page.height) === PAGE_SIZES[n].width && Math.max(page.width, page.height) === PAGE_SIZES[n].height);
-		if (sizeName) {
-			menu.addItem((i) => i.setTitle(t(landscape ? "page.portrait" : "page.landscape")).setIcon("rotate-cw")
-				.onClick(() => this.setSize(page, sizeName, !landscape, index)));
-		}
-		menu.addItem((i) => i.setTitle(t("page.infinite")).setIcon("infinity").setChecked(!!page.infinite)
-			.onClick(() => this.pageCommand(new SetPageInfinite(page.id, !page.infinite), index, page)));
-		menu.addItem((i) => i.setTitle(t("page.restoreVersion")).setIcon("history").onClick(() => openPageRestore(this.reliabilityDeps(), this, index)));
-		menu.addSeparator();
-		const file = this.file;
-		if (file) {
-			addPageShareItems(menu, this.app, file, index + 1);
-			menu.addItem((i) => i.setTitle(t("export.pagePdf")).setIcon("file-output")
-				.onClick(() => void exportPdf(this.app, file, [page], ` p${index + 1}`, this.media)));
-			menu.addItem((i) => i.setTitle(t("export.notebookPdf")).setIcon("file-output").onClick(() => void this.exportNotebookPdf()));
-			menu.addItem((i) => i.setTitle(t("export.pageSvg")).setIcon("image")
-				.onClick(() => void exportSvg(this.app, file, page, ` p${index + 1}`, this.media)));
-		}
-		addPdfPageMenuItems(menu, this.pdfActionHost(), page);
-		addPdfSyncMenuItems(menu, this);
-		menu.showAtMouseEvent(evt);
+	/** The page sheet of page `index` (ui redesign: replaces the old page menu; its actions are in ui/actions.ts). */
+	private openPageMenu(index: number): void {
+		if (!this.session?.doc?.pages[index]) return;
+		this.ui?.openSheet("page", null, index);
 	}
 
 	async exportNotebookPdf(): Promise<void> {
@@ -948,7 +906,7 @@ export class NotebookView extends FileView {
 	}
 
 	/** wave 0.6 (v7): what the outline, the bookmark editor and the page tags editor need (outline.ts). */
-	private outlineHost(): OutlineHost {
+	outlineHost(): OutlineHost {
 		return {
 			app: this.app,
 			pages: () => this.session?.doc?.pages ?? [],
@@ -957,19 +915,6 @@ export class NotebookView extends FileView {
 			execute: (cmd) => void this.applyCommand(cmd),
 			goTo: (index) => this.goToPage(index),
 		};
-	}
-
-	private setPaper(page: Page, kind: PaperKind, index: number): void {
-		if (page.paper.kind === kind) return;
-		const after = { kind, spacing: PAPER_SPACING[kind] };
-		this.pageCommand(new SetPaper(page.id, { ...page.paper }, after), index, page);
-	}
-
-	private setSize(page: Page, name: PageSizeName, landscape: boolean, index: number): void {
-		const base = PAGE_SIZES[name];
-		const after = landscape ? { width: base.height, height: base.width } : { width: base.width, height: base.height };
-		if (after.width === page.width && after.height === page.height) return;
-		this.pageCommand(new SetPageSize(page.id, { width: page.width, height: page.height }, after), index, page);
 	}
 
 	deleteSelection(): void {
@@ -1088,7 +1033,7 @@ export class NotebookView extends FileView {
 	// --- wave p1b: reliability (repair, conflicted copies, page restore; see integration/reliability.ts) ---
 
 	/** Page trash and templates (wave 0.6, see page-tools.ts). */
-	private pageToolsHost(): PageToolsHost {
+	pageToolsHost(): PageToolsHost {
 		const host = this.host;
 		return {
 			app: this.app,
@@ -1098,7 +1043,7 @@ export class NotebookView extends FileView {
 		};
 	}
 
-	private reliabilityDeps(): ReliabilityDeps {
+	reliabilityDeps(): ReliabilityDeps {
 		return { app: this.app, settings: this.host.settings, journal: this.host.journal };
 	}
 
@@ -1155,9 +1100,80 @@ export class NotebookView extends FileView {
 				this.applyInput();
 				this.toolbar.setEditable(this.editable());
 				this.updateHistoryButtons();
-				this.selectionActions?.update();
+				this.refreshUi();
 			},
 		};
+	}
+
+	// --- ui redesign: the bridge to the action registry (view-actions.ts, view-ui.ts) ---
+
+	/** Runs an action of the registry (toolbar, contextual bar, sheets, radial menu, commands) and counts the use. */
+	runAction(id: string, arg: ActionArg = {}): void {
+		if (!runViewAction(this, id, arg)) return;
+		this.ui?.record(id);
+		this.refreshUi();
+	}
+
+	/** Whether a command of the registry applies now (the palette hides it otherwise). */
+	commandApplies(id: string): boolean {
+		return commandApplies(this, id);
+	}
+
+	/** Recomputes the self-building UI (quick slots, contextual bar, open sheet) and the selection's restyle rows. */
+	refreshUi(): void {
+		this.selectionActions?.update();
+		this.ui?.refresh();
+	}
+
+	/** What the UI needs to know, for the page in view or page `pageIndex` (page sheet of a thumbnail). */
+	uiContext(pageIndex?: number): UiContext {
+		const doc = this.session?.doc ?? null;
+		const pages = doc?.pages ?? [];
+		const index = pageIndex ?? this.currentPageIndex();
+		const page = pages[index];
+		const sel = this.selection;
+		return {
+			editable: !!doc && this.editable() && !this.controller?.drawing,
+			open: !!doc,
+			tool: this.tools.tool,
+			selection: sel ? { strokes: sel.strokes.length, elements: sel.elements.length, images: sel.elements.filter((e) => e.type === "image").length } : null,
+			page: page ? {
+				index, count: pages.length, background: page.background?.kind ?? "none", infinite: !!page.infinite,
+				bookmarked: doc?.meta?.bookmarks.includes(page.id) ?? false,
+			} : null,
+			notebook: { pdfPages: hasPdfPages(pages), backgrounds: hasBackgrounds(pages) },
+			lecture: !!this.host.classNow?.(),
+			sidePane: pdfSideState(this),
+			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false },
+			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open },
+			narrow: this.body?.hasClass("is-narrow") ?? false,
+		};
+	}
+
+	/** The selection's copy, cut, paste, duplicate and white-to-transparent (contextual bar). */
+	get selectionTools(): SelectionActions | null {
+		return this.selectionActions;
+	}
+
+	get stampPalette(): StampPalette | null {
+		return this.stamps;
+	}
+
+	/** Media of the open notebook (PDF pages, images), for exports. */
+	get mediaCache(): NotebookMedia | null {
+		return this.media;
+	}
+
+	/** Obsidian's "More options" menu of the notebook tab: the notebook-wide actions of the registry. */
+	onPaneMenu(menu: Menu, source: string): void {
+		super.onPaneMenu(menu, source);
+		const c = this.uiContext();
+		for (const id of ["export-pdf", "open-library"]) {
+			const a = actionById(id);
+			if (!a) continue;
+			menu.addItem((i) => i.setTitle(actionLabel(a)).setIcon(a.icon).setSection("action").setDisabled(!isEnabled(a, c))
+				.onClick(() => (a.scope === "global" ? this.host.runGlobal?.(id) : this.runAction(id))));
+		}
 	}
 
 	/** The PDF reading tools (search, hide annotations, dimming) for the commands; null before the view is open. */
@@ -1425,7 +1441,7 @@ export class NotebookView extends FileView {
 			this.showProblem(problem);
 		}
 		this.updateHistoryButtons();
-		this.selectionActions?.update();
+		this.refreshUi();
 	}
 
 	private showProblem(problem = this.session?.problem ?? null): void {
@@ -1494,6 +1510,7 @@ export class NotebookView extends FileView {
 		if (current !== this.navCurrent) {
 			this.navCurrent = current;
 			this.pageNav?.markCurrent(current);
+			this.refreshUi(); // the contextual bar follows the kind of page in view
 			if (n && this.file && this.pendingPage === null) this.location.note(this.file.path, current + 1);
 			this.syncHooks?.page(current);
 		}
@@ -1506,7 +1523,7 @@ export class NotebookView extends FileView {
 		this.radial?.noteTools(state);
 		this.lastTool.note(state.tool);
 		if (state.tool !== "lasso") this.clearSelection();
-		this.selectionActions?.update();
+		this.refreshUi();
 		if (before.tool === "text" && state.tool !== "text") this.commitText();
 		if (state.ruler !== before.ruler) {
 			if (state.ruler && !this.ruler) this.placeRuler();
@@ -2378,17 +2395,15 @@ export class NotebookView extends FileView {
 		this.selection = null;
 		this.drag = null;
 		this.renderer?.setSelection(null);
-		this.toolbar?.setSelection(false);
-		this.selectionActions?.update();
+		this.refreshUi();
 	}
 
 	private pushSelection(): void {
 		const sel = this.selection;
-		this.toolbar.setSelection(!!sel);
 		// Ink written on the selected objects floats with them (setting "Ink follows objects").
 		const attached = sel ? this.attachedInk(sel) : [];
 		this.renderer?.setSelection(sel ? { ...sel, strokes: attached.length > 0 ? [...sel.strokes, ...attached] : sel.strokes, handle: HANDLE_PX } : null);
-		this.selectionActions?.update();
+		this.refreshUi();
 	}
 
 	/**
@@ -2593,13 +2608,12 @@ export class NotebookView extends FileView {
 	// --- selection actions: restyle, copy, cut, paste, duplicate, white to transparent ---
 
 	private mountSelectionActions(): void {
-		this.selectionActions = new SelectionActions(this.body, {
+		this.selectionActions = new SelectionActions(this.ui?.contextBar.extraEl ?? this.body, {
 			app: this.app,
 			folder: () => this.host.settings.folder,
 			media: () => this.media,
 			doc: () => this.session?.doc ?? null,
 			editable: () => this.editable(),
-			lassoActive: () => this.tools.tool === "lasso",
 			selection: () => this.selection,
 			select: (pageIndex, strokes, elements) => this.selectItems(pageIndex, strokes, elements),
 			execute: (cmd) => {

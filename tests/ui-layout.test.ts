@@ -134,6 +134,7 @@ describe("sheets", () => {
 		expect(ids).not.toContain("insert-image");
 		expect(ids).not.toContain("pen-only");
 		expect(s.map((x) => x.id)).not.toContain("recent");
+		expect(s[0]!.id).toBe("page");
 	});
 
 	it("searches labels, keywords and groups, ignoring case and accents", () => {

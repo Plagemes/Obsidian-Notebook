@@ -5,7 +5,6 @@
  * view: the toolbar entries, the search panel, the overlay that marks the hits and the reading options of the
  * renderer. Nothing here changes a notebook file: hits, hidden annotations and dimming are view state.
  */
-import { setIcon } from "obsidian";
 import { t } from "../i18n";
 import type { BBox } from "../ink/hit-test";
 import type { InputSettings } from "../ink/input-policy";
@@ -21,7 +20,7 @@ import { boxesOnPage, type PageTextContent, type TextMeasure } from "../pdf/text
 import { hitBoxes, normalizeQuery } from "../pdf/text-search";
 import { bandPoints, bandWidth, snapHighlight } from "../pdf/text-snap";
 import { SearchPanel } from "./pdf-search-panel";
-import { backgroundAlpha, hasBackgrounds, hasPdfPages, insertHits, revealViewport, searchTargets, stepIndex, type Rect } from "./reading-logic";
+import { backgroundAlpha, hasPdfPages, insertHits, revealViewport, searchTargets, stepIndex, type Rect } from "./reading-logic";
 import { DIM_MAX, DIM_MIN, DIM_STEP, normaliseDim, type ReadingSettings } from "./reading-settings";
 import type { Toolbar } from "./toolbar";
 
@@ -73,10 +72,8 @@ export class PdfReading {
 	private readonly panel: SearchPanel;
 	private readonly banner: HTMLElement;
 	private readonly cache: PageTextCache;
-	private readonly searchItem: HTMLButtonElement;
-	private readonly hideItem: HTMLButtonElement;
-	private readonly dimItem: HTMLButtonElement;
-	private readonly dimRow: HTMLElement;
+	/** ui redesign: the dimming strength slider, shown in the "PDF & reading" section of the sheet while dimming is on. */
+	readonly dimControl: HTMLElement;
 	private readonly dimRange: HTMLInputElement;
 	private readonly snapButton: HTMLButtonElement;
 	private readonly rects = new WeakMap<SearchHit, RectCache>();
@@ -122,12 +119,9 @@ export class PdfReading {
 			this.setAnnotationsHidden(false);
 		});
 
-		const slot = host.toolbar.readingEl;
-		this.searchItem = this.menuItem(slot, "search", t("reading.search"), () => this.openSearch());
-		this.hideItem = this.menuItem(slot, "eye-off", t("reading.annotations.hide"), () => this.toggleAnnotations());
-		this.dimItem = this.menuItem(slot, "sun", t("reading.dim"), () => this.toggleDim());
-		this.dimRow = slot.createDiv({ cls: "notebook-menu-range notebook-hidden" });
-		this.dimRange = this.dimRow.createEl("input", {
+		// Search, hide annotations and dim are actions of the registry (ui/actions.ts): contextual bar and sheet.
+		this.dimControl = createDiv({ cls: "notebook-menu-range" });
+		this.dimRange = this.dimControl.createEl("input", {
 			attr: { type: "range", min: String(Math.round(DIM_MIN * 100)), max: String(Math.round(DIM_MAX * 100)), step: String(Math.round(DIM_STEP * 100)), "aria-label": t("reading.dim.strength") },
 		});
 		this.dimRange.addEventListener("input", () => {
@@ -154,6 +148,11 @@ export class PdfReading {
 	}
 
 	// --- state the view asks about ---
+
+	/** Backgrounds are dimmed (setting). */
+	get dimmed(): boolean {
+		return this.host.settings().dimBackground;
+	}
 
 	/** Annotations on PDF pages are hidden: the view is read-only. */
 	get annotationsHidden(): boolean {
@@ -538,7 +537,7 @@ export class PdfReading {
 		this.panel.destroy();
 		this.banner.remove();
 		this.dropOverlay();
-		this.host.toolbar.readingEl.empty();
+		this.dimControl.remove();
 		this.host.toolbar.highlighterOptionsEl.empty();
 		this.cache.clear();
 	}
@@ -548,42 +547,13 @@ export class PdfReading {
 		this.host.renderer()?.setReading(this.hidden, backgroundAlpha(s.dimBackground, s.dimStrength));
 	}
 
-	/** Entries and toggles show the current state; entries that make no sense for this notebook are hidden. */
+	/** The slider, the snap toggle and the banner show the current state. */
 	private refreshControls(): void {
 		const s = this.host.settings();
-		const pages = this.host.doc()?.pages ?? [];
-		const pdf = hasPdfPages(pages);
-		const backgrounds = hasBackgrounds(pages);
-		this.searchItem.toggleClass("notebook-hidden", !pdf);
-		this.hideItem.toggleClass("notebook-hidden", !pdf);
-		this.dimItem.toggleClass("notebook-hidden", !backgrounds);
-		this.dimRow.toggleClass("notebook-hidden", !backgrounds || !s.dimBackground);
-
-		this.hideItem.toggleClass("is-active", this.hidden);
-		this.hideItem.setAttribute("aria-pressed", String(this.hidden));
-		const label = this.hideItem.querySelector<HTMLElement>(".notebook-menu-label");
-		if (label) label.setText(t(this.hidden ? "reading.annotations.show" : "reading.annotations.hide"));
-		const icon = this.hideItem.querySelector<HTMLElement>(".notebook-menu-icon");
-		if (icon) setIcon(icon, this.hidden ? "eye" : "eye-off");
-
-		this.dimItem.toggleClass("is-active", s.dimBackground);
-		this.dimItem.setAttribute("aria-pressed", String(s.dimBackground));
 		this.dimRange.value = String(Math.round(s.dimStrength * 100));
 
 		this.snapButton.toggleClass("is-active", s.snapHighlighter);
 		this.snapButton.setAttribute("aria-pressed", String(s.snapHighlighter));
 		this.banner.toggleClass("notebook-hidden", !this.hidden);
-	}
-
-	/** A row of the toolbar's "more" menu: icon and label, as the other entries. */
-	private menuItem(parent: HTMLElement, icon: string, label: string, onClick: () => void): HTMLButtonElement {
-		const b = parent.createEl("button", { cls: "notebook-menu-item", attr: { type: "button", role: "menuitem" } });
-		setIcon(b.createSpan({ cls: "notebook-menu-icon" }), icon);
-		b.createSpan({ cls: "notebook-menu-label", text: label });
-		b.addEventListener("click", (e) => {
-			e.preventDefault();
-			onClick();
-		});
-		return b;
 	}
 }

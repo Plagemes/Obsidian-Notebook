@@ -12,16 +12,15 @@ import { registerIntegration } from "./integration";
 import type { NotebookApi } from "./integration/api";
 import { registerReliability } from "./integration/reliability";
 import { LIBRARY_VIEW_TYPE, LibraryView } from "./library/library-view";
-import { registerToolCommands } from "./view/commands";
-import { registerReadingCommands } from "./view/reading-commands";
+import { registerActionCommands } from "./view/commands";
+import { openLooseSheet } from "./library/loose-sheet";
 import { OpenNotebookModal } from "./view/modals";
 import { openNotebookAtPage } from "./integration/open";
-import { exportPdfAnnotations, openMarginsModal, updatePdfFromNewVersion } from "./view/pdf-actions";
 import { NotebookView, VIEW_TYPE } from "./view/notebook-view";
 import { NotebookSettingTab } from "./view/settings-tab";
-import { registerLectureCommands } from "./view/lecture-commands";
+import { registerLectureRibbon } from "./view/lecture-commands";
 import { TimetableService } from "./timetable/service";
-import { registerPdfSyncCommands } from "./view/pdf-sync";
+import { initPdfSync } from "./view/pdf-sync";
 import { registerZettel } from "./zettel";
 
 export default class NotebookPlugin extends Plugin {
@@ -32,6 +31,8 @@ export default class NotebookPlugin extends Plugin {
 	timetable!: TimetableService;
 	/** Public API for other plugins and scripts (docs/api.md). */
 	api?: NotebookApi;
+	/** ui redesign: the plugin-level actions of the registry (ui/actions.ts), by id. */
+	private globalActions: Record<string, () => void> = {};
 
 	async onload(): Promise<void> {
 		this.settings = readSettings(await this.loadData());
@@ -46,51 +47,34 @@ export default class NotebookPlugin extends Plugin {
 
 		this.addRibbonIcon("library", t("command.library"), () => void this.openLibrary());
 
-		this.addCommand({ id: "create", name: t("command.new"), callback: () => this.askNewNotebook() });
-		this.addCommand({ id: "open", name: t("command.open"), callback: () => this.openPicker() });
-		this.addCommand({ id: "continue-last", name: t("command.continue"), callback: () => void this.continueLast() });
-		this.addCommand({ id: "open-library", name: t("command.library"), callback: () => void this.openLibrary() });
-		this.addCommand({ id: "import-pdf", name: t("command.importPdf"), callback: () => this.host.importPdf(this.settings.folder) });
-		this.addCommand({ id: "lecture-from-slides", name: t("command.lectureFromSlides"), callback: () => this.host.lectureFromSlides() });
-		this.addCommand({ id: "exercise-page", name: t("command.exercisePage"), checkCallback: (checking) => this.withView(checking, (v) => v.exercisePageAfter()) });
-		this.addCommand({ id: "exercise-paper", name: t("command.exercisePaper"), checkCallback: (checking) => this.withView(checking, (v) => v.chooseExercisePaper()) });
-		this.addCommand({ id: "undo", name: t("command.undo"), checkCallback: (checking) => this.withView(checking, (v) => v.undo()) });
-		this.addCommand({ id: "redo", name: t("command.redo"), checkCallback: (checking) => this.withView(checking, (v) => v.redo()) });
-		this.addCommand({ id: "fit-width", name: t("command.fit"), checkCallback: (checking) => this.withView(checking, (v) => v.fitToWidth()) });
-		this.addCommand({ id: "add-page", name: t("command.addPage"), checkCallback: (checking) => this.withView(checking, (v) => v.addPage()) });
-		this.addCommand({ id: "scan-into", name: t("command.scanInto"), checkCallback: (checking) => this.withView(checking, (v) => void v.scanPagesAfter(v.currentPage())) });
-		this.addCommand({ id: "scan-new", name: t("command.scanNew"), callback: () => this.host.scanToNotebook(this.settings.folder) });
-		this.addCommand({ id: "pen-button-test", name: t("command.penTest"), callback: () => new PenTestModal(this.app).open() });
-		this.addCommand({ id: "benchmark", name: t("command.benchmark"), callback: () => this.openBenchmark() });
-		this.addCommand({ id: "create-stress-test", name: t("command.stress"), callback: () => void this.createStressNotebook() });
-		this.addCommand({ id: "export-pdf", name: t("command.exportPdf"), checkCallback: (checking) => this.withView(checking, (v) => void v.exportNotebookPdf()) });
-
 		// wave p1b: repair (#140), conflicted copies (#122), page restore (#180).
 		registerReliability(this, this, () => this.views(), () => this.app.workspace.getActiveViewOfType(NotebookView));
 
-		// Wave p1a: PDF margins, re-published slides, annotation export (view/pdf-actions.ts).
-		this.addCommand({ id: "pdf-margins", name: t("command.pdfMargins"), checkCallback: (checking) => this.withView(checking, (v) => {
-			const host = v.pdfActionHost();
-			const page = host?.doc.pages[v.currentPage()];
-			if (!host || !page?.background || !host.editable()) new Notice(t("pdf.noPdfPage"));
-			else openMarginsModal(host, page);
-		}) });
-		this.addCommand({ id: "pdf-update", name: t("command.pdfUpdate"), checkCallback: (checking) => this.withView(checking, (v) => {
-			const host = v.pdfActionHost();
-			if (host) void updatePdfFromNewVersion(host, v.currentPage());
-		}) });
-		this.addCommand({ id: "pdf-annotations", name: t("command.pdfAnnotations"), checkCallback: (checking) => this.withView(checking, (v) => {
-			const host = v.pdfActionHost();
-			if (host) void exportPdfAnnotations(host);
-		}) });
-
-		registerLectureCommands(this, (file) => this.host.openNotebook(file));
-
+		registerLectureRibbon(this, (file) => this.host.openNotebook(file));
 		// Wave 0.6: synchronised PDF <-> notes view (view/pdf-sync.ts).
-		registerPdfSyncCommands(this, () => this.app.workspace.getActiveViewOfType(NotebookView), () => this.settings.folder);
+		initPdfSync(this, () => this.settings.folder);
 
-		registerToolCommands(this, (checking, run) => this.withView(checking, run));
-		registerReadingCommands(this, (checking, run) => this.withView(checking, run));
+		// ui redesign: every command of the plugin comes from the action registry (ui/actions.ts); ids are unchanged.
+		this.globalActions = {
+			"create": () => this.askNewNotebook(),
+			"open": () => this.openPicker(),
+			"continue-last": () => void this.continueLast(),
+			"open-library": () => void this.openLibrary(),
+			"import-pdf": () => this.host.importPdf(this.settings.folder),
+			"lecture-from-slides": () => this.host.lectureFromSlides(),
+			"scan-new": () => this.host.scanToNotebook(this.settings.folder),
+			"loose-sheet": () => void openLooseSheet(this, (file) => this.host.openNotebook(file)),
+			"timetable": () => void this.timetable.edit(),
+			"open-class": () => this.timetable.openNow(),
+			"pen-button-test": () => new PenTestModal(this.app).open(),
+			"benchmark": () => this.openBenchmark(),
+			"create-stress-test": () => void this.createStressNotebook(),
+		};
+		const missing = registerActionCommands(this, {
+			activeView: () => this.app.workspace.getActiveViewOfType(NotebookView),
+			globals: this.globalActions,
+		});
+		if (missing.length) console.error("[notebook] actions without a handler:", missing.join(", "));
 
 		registerIntegration(this, {
 			background: (doc, page, width) => this.host.thumbnailBackground(doc, page, width),
@@ -103,8 +87,6 @@ export default class NotebookPlugin extends Plugin {
 		// wave 0.6: timetable (src/timetable/): current class offer, library shortcut, editor.
 		this.timetable = new TimetableService(this, (file) => this.host.openNotebook(file));
 		this.timetable.start();
-		this.addCommand({ id: "timetable", name: t("command.timetable"), callback: () => void this.timetable.edit() });
-		this.addCommand({ id: "open-class", name: t("command.openClass"), callback: () => this.timetable.openNow() });
 
 		this.addSettingTab(new NotebookSettingTab(this.app, this));
 
@@ -133,11 +115,14 @@ export default class NotebookPlugin extends Plugin {
 		return Promise.all(this.views().map((v) => v.flushNow().catch((e) => console.error("[notebook] flush failed", e))));
 	}
 
-	private withView(checking: boolean, run: (view: NotebookView) => void): boolean {
-		const view = this.app.workspace.getActiveViewOfType(NotebookView);
-		if (!view) return false;
-		if (!checking) run(view);
-		return true;
+	/** ui redesign: runs a plugin-level action of the registry (the notebook tab's menu). */
+	runGlobal(id: string): void {
+		this.globalActions[id]?.();
+	}
+
+	/** ui redesign: the course of the class on now (timetable), for the lecture contextual bar; null when none. */
+	classNow(): string | null {
+		return this.timetable?.nowClass()?.course ?? null;
 	}
 
 	/** Instant start: remembers the page being read (called a moment after it changes). Only the plugin settings are written. */
