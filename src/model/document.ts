@@ -47,12 +47,15 @@ export function cloneMeta(meta: NotebookMeta): NotebookMeta {
 	const out: NotebookMeta = { tags: [...meta.tags], favorite: meta.favorite, cover: meta.cover, bookmarks: [...meta.bookmarks] };
 	const info = copyBookmarkInfoMap(meta.bookmarkInfo);
 	if (info) out.bookmarkInfo = info;
+	if (meta.description !== undefined) out.description = meta.description;
+	if (meta.coverArt) out.coverArt = { ...meta.coverArt };
 	return out;
 }
 
-/** Ids of the assets used by a page background, an image element or (v10) an excerpt snapshot anywhere in the document. */
+/** Ids of the assets used by a page background, an image element, (v10) an excerpt snapshot anywhere in the document or (v11) the cover. */
 export function referencedAssets(doc: NotebookDocument): Set<string> {
 	const used = new Set<string>();
+	if (doc.meta?.coverArt?.kind === "image") used.add(doc.meta.coverArt.asset);
 	for (const page of doc.pages) {
 		if (page.background) used.add(page.background.asset);
 		for (const el of page.elements ?? []) {

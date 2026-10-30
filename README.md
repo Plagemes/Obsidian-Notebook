@@ -9,7 +9,7 @@ Handwritten notebooks inside your Obsidian vault, designed first for **Android t
 - Local-first: no account, no cloud, no telemetry.
 - UI in English, and in Italian when Obsidian is set to Italian.
 
-> **Status: v0.11.2 (document format 10), early development.** The automated tests pass, but the plugin has **not been verified on Android hardware yet**, and most features are new in 0.5.x, 0.6.0, 0.7.0, 0.8.0 and 0.9.0 (the interface was redesigned in 0.7.0; markers, pen gestures and page operations came in 0.8.0; equations, graphs, export choices and night mode came in 0.9.0) and many are experimental (including the writing engine, the scanner, export and, in 0.9.0, equations, which have never been run with Obsidian's maths engine outside a test stand-in: the PDF and SVG were checked with other software on a PC, not opened on Android). See [docs/testing.md](docs/testing.md) for what is verified and how to test it.
+> **Status: v0.12.0 (document format 11), early development.** The automated tests pass, but the plugin has **not been verified on Android hardware yet**, and most features are new in 0.5.x, 0.6.0, 0.7.0, 0.8.0 and 0.9.0 (the interface was redesigned in 0.7.0; markers, pen gestures and page operations came in 0.8.0; equations, graphs, export choices and night mode came in 0.9.0) and many are experimental (including the writing engine, the scanner, export and, in 0.9.0, equations, which have never been run with Obsidian's maths engine outside a test stand-in: the PDF and SVG were checked with other software on a PC, not opened on Android). See [docs/testing.md](docs/testing.md) for what is verified and how to test it.
 
 ## Usage
 
@@ -45,6 +45,17 @@ Obsidian's mobile toolbar is set up by you (*Settings > Mobile*): a plugin canno
 #### Page turner and Bluetooth clickers
 
 While a notebook is the active view, **PageDown, ArrowRight, ArrowDown and space** go to the next page and **PageUp, ArrowLeft, ArrowUp and Shift+space** to the previous one, unless a text field or text box is being edited, a stroke is being drawn, or a dialog or menu is open. Bluetooth presentation clickers send PageUp/PageDown or the arrow keys, so they work; turn it off with *Turn pages with the keyboard*. The Android **volume keys cannot be used**: the system handles them and web content (so Obsidian plugins) never receives them. Undo and redo keep their keys (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl+Y).
+
+#### S Pen on Android
+
+Obsidian's Android app does not pass stylus **hover** to plugins (Chrome on the same tablet gets it; tracked on the Obsidian forum in the thread "Android Hover Support"). So the plugin never sees the pen while it hovers, and the side button works only in these ways (0.11.2, not yet verified on every device):
+
+- **Click while hovering**: the click arrives as a single "context menu" event, so it opens the **radial menu** (where the pen is if the event says so, otherwise where the pen last touched, otherwise in the middle of the page). With *Button click: next stroke erases* on, the click instead **arms the eraser for the next stroke** (a small ring on the current-pen indicator); click again, change tool or press Escape to cancel.
+- **Hold the button, then touch**: that stroke **erases** (or uses the tool chosen in *Pen side button*). On the Samsung tablet tested, the pen's own events do not show the button: it shows only as that same "context menu" event, just before or just after the nib lands, so the plugin decides within a short window (150 ms before, 350 ms after, adjustable under *Side button timing*); a click while hovering therefore acts about 150 ms late.
+- **Press the button while writing**: the ink written so far is kept and the rest of the stroke erases; lifting the pen brings the tool back.
+- **What does not work**: anything that needs hover, such as a cursor preview, opening the menu on press and choosing by releasing over an action, or holding the button in the air. Android 14 and later also keep the stylus button key codes from apps and accessibility services.
+
+**Pen key with Key Mapper + Shizuku (optional, advanced).** The *Pen key* setting (F9 to F12, or any key you capture) makes a key act as the side button: *Open the radial menu* or *Next stroke erases* (the default). With [Key Mapper](https://github.com/keymapperorg/KeyMapper) and [Shizuku](https://shizuku.rikka.app/) you can map the S Pen's remote button to that key: start Shizuku (wireless debugging), allow Key Mapper to use it, create a key map whose trigger is the pen button and whose action is the key code F9, then choose F9 as *Pen key*. Be aware: it is a **toggle only** (one press = one action, no holding), it works only with an S Pen that has **Bluetooth** (Air actions), there is **some delay**, and Key Mapper must keep running. If Obsidian already uses the key as a hotkey, the setting warns you. These settings are, for now, at the top of the *Pen button test* (Settings → *Pen button test*).
 
 ### Tools
 

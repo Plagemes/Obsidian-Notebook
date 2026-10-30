@@ -1,6 +1,6 @@
 # Design system
 
-This is the visual and interaction contract for every surface of Notebook. The reference designs are in `docs/design/reference/`: [`home.png`](docs/design/reference/home.png) (home dashboard), [`library.png`](docs/design/reference/library.png) (notebook library), [`subject-cards.jpg`](docs/design/reference/subject-cards.jpg) (subject cards with generated art), [`new-notebook.png`](docs/design/reference/new-notebook.png) and [`new-folder.png`](docs/design/reference/new-folder.png) (creation dialog). When a decision is not covered here, match those two images. The behavioural design (surfaces, layout engine, action registry) is in [`docs/design-ui.md`](docs/design-ui.md).
+This is the visual and interaction contract for every surface of Notebook. The reference designs are in `docs/design/reference/`: [`home.png`](docs/design/reference/home.png) (home dashboard), [`library.png`](docs/design/reference/library.png) (notebook library), [`subject-cards.jpg`](docs/design/reference/subject-cards.jpg) (subject cards with generated art), [`new-notebook.png`](docs/design/reference/new-notebook.png) and [`new-folder.png`](docs/design/reference/new-folder.png) (creation dialog). When a decision is not covered here, match those images. It applies to every screen, function and interface of the plugin, present and future (§4, scope rule). The behavioural design (surfaces, layout engine, action registry) is in [`docs/design-ui.md`](docs/design-ui.md).
 
 ## 1. Direction
 
@@ -8,7 +8,7 @@ This is the visual and interaction contract for every surface of Notebook. The r
 
 - **Premium.** A dark, deep-navy canvas. Content sits in calm, softly bordered panels. Each subject owns a colour, used with restraint: vivid on subject cards, a tint everywhere else. Typography is confident: large bold titles, quiet secondary text. It should feel like a first-class study app, not a developer tool.
 - **Minimal.** One idea per panel. Generous spacing, no visual noise, no walls of text. Each element has a single job, and secondary detail is muted rather than removed.
-- **Functional.** Every visible control works (CLAUDE.md rule 8). Every card, tile, chip and row is a real target that opens or does something. Pen, finger and mouse are all first-class.
+- **Functional.** Every visible control works (CLAUDE.md rule 8): no fake buttons, no dead menu items. Every card, tile, chip and row is a real target that opens or does something. Pen, finger and mouse are all first-class.
 - **Generative.** The interface is assembled at run time from the user's data and context. Subjects, smart collections, frequent tags, recent items, statistics and quick actions are computed locally. The procedural subject artwork is generated, not stock imagery. It is deterministic: no AI, no network, nothing leaves the device (CLAUDE.md rules 5 and 7).
 
 ## 2. Design tokens
@@ -128,13 +128,23 @@ Each component lives in the plugin as one reusable builder, for example `ui/comp
 | **Option tile** | Rounded rectangle, label (and an optional icon), accent border and tint when selected | Page format (A4 · A5 · B5 · Letter · Personalizzato) and orientation (Verticale · Orizzontale) |
 | **Icon picker / colour swatches** | A row of icon squares (folder, graduation-cap, heart-pulse, flask, sigma, brain, atom, plus more); a row of round swatches from the subject palette (§2.3) plus a custom swatch; the selected item has an accent ring | Folder tab |
 
-**Only functional items.** The reference images are a graphic example, not a feature list. The rail and headers show only things that work in the plugin:
+| **Inbox bell** | Circular icon button in the page header, with an accent count badge (hidden at 0) | The bell is the **Zettelkasten inbox**: quick notes and fleeting items waiting to be processed. Tap: popover (sheet on phone) titled "In arrivo" with list rows (icon square, first line, source notebook pill, relative time, kebab with the inbox actions) and "Apri inbox". Hidden when the Zettelkasten is off |
+
+**Only functional controls.** The reference images are a graphic example, not a feature list. Rails, headers and menus show only controls that work in the plugin:
 - no Canvas;
 - no AI Study (CLAUDE.md rule 7);
-- no notification bell;
 - no avatar.
 
-A new item appears only when it has a real function behind it.
+The bell is kept because it has a real job: it is the inbox. A new control appears only when it has a real function behind it.
+
+**Decoration is welcome.** Purely graphic elements are allowed and encouraged wherever they make a surface richer, as long as they never pose as controls, never hide content, stay quiet behind text, and switch off with *Reduce motion and effects*. Examples:
+- generated line art on cards, covers and section backgrounds;
+- soft colour glows and gradients;
+- illustrations for empty states and onboarding;
+- subtle pattern bands in headers;
+- decorative icons in icon squares.
+
+They use the same palette and art engine (§2.3, §2.6).
 
 ## 4. Surfaces mapped to the reference
 
@@ -142,6 +152,12 @@ A new item appears only when it has a real function behind it.
 - **Library** (`library.png`): page header with filter / sort / view buttons · filter chips · subject cards (4 in a row) · *Raccolte intelligenti* (smart collection tiles: Da studiare, Preferiti, Con PDF, Recenti, Esami) · *Tag frequenti* (tag chips) · *Quaderni recenti* (list panel) next to *Quaderni preferiti* (favourite rows).
 - **Notebook view:** the writing surface stays the page first. The toolbar, contextual bar, sheets and radial menu use the same tokens, radii, icon squares and chip styles, in their compact sizes.
 - **Settings:** the same tokens (§6).
+- **Zettelkasten:** the inbox (In arrivo), cards, links and their menus use the list panel, list row, chip and section header components. The inbox count shows on the header bell.
+- **Every other surface** uses the same tokens and components: modals and dialogs, popovers and sheets, banners and notices, the PDF bars, practice and lecture panels, the timetable, scan, export, find and replace, page info, library check, trash, move pages, and diagnostics. This includes surfaces that don't exist yet.
+
+**Scope rule.** This design system applies to **every screen, function and interface of the plugin, present and future**. No surface keeps an older or one-off style.
+- A new feature ships already styled with these tokens and components.
+- An existing surface that does not match is a bug, to be fixed when it is next touched or in a dedicated pass.
 
 ## 5. Generative UI / UX
 

@@ -9,6 +9,7 @@ import { NOTEBOOK_EXTENSIONS } from "./storage/format";
 import { AdapterJournalStore, journalFolder, sidecarDeviceId, vaultDeviceFileAdapter } from "./storage/vault-io";
 import { SharedClipStore } from "./storage/shared-clip-store";
 import { createNotebook } from "./storage/notebooks";
+import { registerFolderMeta } from "./library/folder-meta-events";
 import { BenchmarkModal } from "./view/benchmark";
 import { PenTestModal, penSignalInfo } from "./view/pen-test-modal";
 import { NotebookLibraryHost } from "./library/host";
@@ -26,8 +27,12 @@ import { NotebookSettingTab } from "./view/settings-tab";
 import { registerLectureRibbon } from "./view/lecture-commands";
 import { TimetableService } from "./timetable/service";
 import { initPdfSync } from "./view/pdf-sync";
-import { registerZettel } from "./zettel";
+import { inboxService, registerZettel } from "./zettel";
+import { HOME_VIEW_TYPE, HomeView } from "./library/home-view";
+import type { InboxPort } from "./library/inbox-bell";
+import type { LibraryPlace } from "./library/library-view";
 import { openInbox, processNextInbox } from "./zettel/inbox";
+import type { InboxService } from "./zettel/inbox-service";
 import { registerTextbookRefs } from "./view/textbook-ref-ui";
 import { PracticeService } from "./view/practice";
 import { openPageSwitcher, QuickNavService } from "./view/quick-switcher";
@@ -68,6 +73,7 @@ export default class NotebookPlugin extends Plugin {
 		this.settings = readSettings(await this.loadData());
 		// Command names (below) are registered once, so they follow the language at startup.
 		setUiLanguage(this.settings.uiLanguage);
+		this.applyAppearanceStyle();
 		this.register(onLanguageChanged(() => showNotice(t("settings.uiLanguage.changed"))));
 		// wave 0.8 (374): notices and non-urgent background work wait while the pen is on the screen.
 		trackWriting(this);
@@ -81,11 +87,33 @@ export default class NotebookPlugin extends Plugin {
 		this.registerView(VIEW_TYPE, (leaf) => new NotebookView(leaf, this));
 		this.registerExtensions([...NOTEBOOK_EXTENSIONS], VIEW_TYPE);
 		this.host = new NotebookLibraryHost(this);
+		// wave 0.12: folder colours and icons follow renames and other devices' changes (library/folder-meta-events.ts).
+		registerFolderMeta(this, this.host.folderMeta);
 		this.registerView(LIBRARY_VIEW_TYPE, (leaf) => new LibraryView(leaf, this.host));
+		// 0.12: Home (the library view on its Home surface); the rail, the quick actions and the bell reach the plugin through the host.
+		this.registerView(HOME_VIEW_TYPE, (leaf) => new HomeView(leaf, this.host));
+		Object.assign(this.host, {
+			runAction: (id: string): boolean => {
+				const run = this.globalActions[id];
+				if (!run) return false;
+				run();
+				return true;
+			},
+			openSettings: () => {
+				const setting = (this.app as unknown as { setting?: { open(): void; openTabById(id: string): void } }).setting;
+				setting?.open();
+				setting?.openTabById(this.manifest.id);
+			},
+			recentEdits: () => this.recentPages?.items() ?? [],
+			inbox: () => {
+				const service = inboxService(this);
+				return service ? this.inboxPort(service) : null;
+			},
+		});
 		// wave 0.6: library trash auto-empty (setting, off by default)
 		this.app.workspace.onLayoutReady(() => void this.host.trash.purgeExpired().catch((e) => console.error("[notebook] trash auto-empty failed", e)));
 
-		this.addRibbonIcon("library", t("command.library"), () => void this.openLibrary());
+		this.addRibbonIcon("home", t("home.command"), () => void this.openLibrary("home"));
 
 		// wave p1b: repair (#140), conflicted copies (#122), page restore (#180).
 		registerReliability(this, this, () => this.views(), () => this.app.workspace.getActiveViewOfType(NotebookView));
@@ -112,9 +140,13 @@ export default class NotebookPlugin extends Plugin {
 		// ui redesign: every command of the plugin comes from the action registry (ui/actions.ts); ids are unchanged.
 		this.globalActions = {
 			"create": () => this.askNewNotebook(),
+			// wave 0.12: the creation dialog (library/host.ts openCreate); the library passes its current folder to the host directly.
+			"new-notebook": () => this.host.createNotebook(),
+			"new-folder": () => this.host.createFolder(),
 			"open": () => this.openPicker(),
 			"continue-last": () => void this.continueLast(),
-			"open-library": () => void this.openLibrary(),
+			"open-library": () => void this.openLibrary("all"),
+			"open-home": () => void this.openLibrary("home"),
 			"import-pdf": () => this.host.importPdf(this.settings.folder),
 			"lecture-from-slides": () => this.host.lectureFromSlides(),
 			"scan-new": () => this.host.scanToNotebook(this.settings.folder),
@@ -168,11 +200,18 @@ export default class NotebookPlugin extends Plugin {
 		this.syncSafety.dispose();
 		this.timetable.stop();
 		this.host.dispose();
+		activeDocument.body.removeClass("notebook-style-obsidian");
 	}
 
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
+		this.applyAppearanceStyle();
 		for (const view of this.views()) view.applySettings(this.settings);
+	}
+
+	/** DESIGN.md §2.2, Appearance → Style: "Follow Obsidian theme" maps the global `--nb-*` tokens onto Obsidian's variables. */
+	private applyAppearanceStyle(): void {
+		activeDocument.body.toggleClass("notebook-style-obsidian", this.settings.appearanceStyle === "obsidian");
 	}
 
 	private views(): NotebookView[] {
@@ -268,18 +307,40 @@ export default class NotebookPlugin extends Plugin {
 	}
 
 	private askNewNotebook(): void {
-		this.host.createNotebook(this.settings.folder);
+		this.host.createNotebook();
 	}
 
-	/** Shows the library in its existing tab, or opens it in a new one. */
-	private async openLibrary(): Promise<void> {
+	/** Shows Home or the library in the existing library or Home tab (switching its surface), or opens a new tab. */
+	private async openLibrary(place: LibraryPlace): Promise<void> {
 		const { workspace } = this.app;
-		let leaf = workspace.getLeavesOfType(LIBRARY_VIEW_TYPE)[0];
+		const leaf = workspace.getLeavesOfType(place === "home" ? HOME_VIEW_TYPE : LIBRARY_VIEW_TYPE)[0]
+			?? workspace.getLeavesOfType(place === "home" ? LIBRARY_VIEW_TYPE : HOME_VIEW_TYPE)[0];
 		if (!leaf) {
-			leaf = workspace.getLeaf("tab");
-			await leaf.setViewState({ type: LIBRARY_VIEW_TYPE, active: true });
+			const fresh = workspace.getLeaf("tab");
+			await fresh.setViewState({ type: place === "home" ? HOME_VIEW_TYPE : LIBRARY_VIEW_TYPE, active: true });
+			await workspace.revealLeaf(fresh);
+			return;
 		}
 		await workspace.revealLeaf(leaf);
+		if (leaf.view instanceof LibraryView) leaf.view.show(place);
+	}
+
+	/** 0.12: the Inbox as the header bell sees it (zettel/inbox-service.ts, public API only). */
+	private inboxPort(service: InboxService): InboxPort {
+		let scanned = false;
+		return {
+			open: () => service.all.filter((i) => service.status(i).status === "open"),
+			scanned: () => scanned,
+			scan: async () => {
+				await service.refresh();
+				scanned = true;
+			},
+			onChange: (fn) => service.onChange(fn),
+			openItem: (item) => service.openItem(item),
+			discard: (item) => service.discard(item),
+			openInbox: () => void openInbox(this.app),
+			processInInbox: () => void processNextInbox(this.app),
+		};
 	}
 
 	private openBenchmark(): void {

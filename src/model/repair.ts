@@ -620,12 +620,17 @@ function salvageElements(raw: unknown, skeleton: RawObject, ctx: SalvageContext)
 	return out;
 }
 
-function salvageMeta(raw: unknown, pageIds: Set<string>, summary: RepairSummary): NotebookMeta {
+function salvageMeta(raw: unknown, pageIds: Set<string>, summary: RepairSummary, assets: Record<string, Asset> = {}): NotebookMeta {
 	const blank = [{ id: "p", width: 1, height: 1, paper: { kind: "blank", spacing: PAPER_SPACING.blank }, strokes: [] }];
 	if (raw === undefined) return { ...DEFAULT_META, tags: [], bookmarks: [] };
 	// Bookmark details are checked on their own below (against the real pages), so a damaged entry costs only itself.
+	// v11: so are the description and the cover, so a cover whose image asset was lost costs only the cover.
 	const withoutInfo: RawObject | null = isObj(raw) ? { ...raw, bookmarks: [] } : null;
-	if (withoutInfo) delete withoutInfo.bookmarkInfo;
+	if (withoutInfo) {
+		delete withoutInfo.bookmarkInfo;
+		delete withoutInfo.description;
+		delete withoutInfo.coverArt;
+	}
 	const asIs = withoutInfo ? tryDoc(blank, {}, withoutInfo) : null;
 	let meta: NotebookMeta;
 	if (asIs && isObj(raw)) {
@@ -644,7 +649,26 @@ function salvageMeta(raw: unknown, pageIds: Set<string>, summary: RepairSummary)
 	}
 	const info = isObj(raw) ? salvageBookmarkInfo(raw.bookmarkInfo, meta.bookmarks, summary) : undefined;
 	if (info) meta.bookmarkInfo = info;
+	if (isObj(raw)) salvageV11Meta(raw, meta, blank, summary, assets);
 	return meta;
+}
+
+/**
+ * v11 description and cover, each validated on its own (with the recovered assets, so an image cover whose asset
+ * survived is kept): a valid one is kept, an invalid one (an image cover whose asset was lost) is dropped and counted.
+ */
+function salvageV11Meta(raw: RawObject, meta: NotebookMeta, blank: unknown[], summary: RepairSummary, assets: Record<string, Asset>): void {
+	const base = { tags: [], favorite: false, cover: DEFAULT_META.cover, bookmarks: [] };
+	if (raw.description !== undefined) {
+		const d = tryDoc(blank, {}, { ...base, description: raw.description })?.meta?.description;
+		if (d !== undefined) meta.description = d;
+		else summary.fieldsReset++;
+	}
+	if (raw.coverArt !== undefined) {
+		const c = tryDoc(blank, assets, { ...base, coverArt: raw.coverArt })?.meta?.coverArt;
+		if (c) meta.coverArt = c;
+		else summary.fieldsReset++;
+	}
 }
 
 /**
@@ -719,7 +743,7 @@ function salvage(raw: RawObject, summary: RepairSummary, now: Date, cut: WeakSet
 	};
 	const id = str(raw.id, createId);
 	const createdAt = str(raw.createdAt, () => iso);
-	const meta = salvageMeta(raw.meta, ctx.pageIds, summary);
+	const meta = salvageMeta(raw.meta, ctx.pageIds, summary, assets);
 	const position = salvagePosition(raw.position, ctx.pageIds, summary);
 	summary.unknownFields += unknownKeys(raw, { format: 1, version: 1, id: 1, createdAt: 1, modifiedAt: 1, pages: 1, meta: 1, assets: 1, position: 1 });
 	if (pages.length === 0) {

@@ -141,6 +141,8 @@ export class Toolbar {
 	private readonly chipButton: HTMLButtonElement;
 	private readonly readOnlyButton: HTMLButtonElement;
 	private readonly chipDot: HTMLElement;
+	/** 0.11.2: "next stroke erases" is armed (a small badge on the current-pen indicator). */
+	private eraserNext = false;
 	private readonly moreButton: HTMLButtonElement;
 	private readonly navigatorButton: HTMLButtonElement;
 	private readonly undoButton: HTMLButtonElement;
@@ -196,6 +198,7 @@ export class Toolbar {
 		this.chipButton.addClass("notebook-chip");
 		this.chipButton.setAttribute("aria-haspopup", "true");
 		this.chipDot = this.chipButton.createSpan({ cls: "notebook-chip-dot" });
+		this.chipButton.createSpan({ cls: "notebook-chip-armed", attr: { "aria-hidden": "true" } });
 
 		this.favouritesEl = actionsRow.createDiv({ cls: "notebook-favs", attr: { role: "group", "aria-label": t("toolbar.favourites") } });
 		this.quickEl = actionsRow.createDiv({ cls: "notebook-quick notebook-toolbar-group notebook-hidden", attr: { role: "group", "aria-label": t("ui.quick") } });
@@ -336,6 +339,13 @@ export class Toolbar {
 	/** Applies a state change from code (favourite pens, hotkeys) and notifies the view. */
 	update(patch: Partial<ToolbarState>): void {
 		this.set(patch);
+	}
+
+	/** 0.11.2: shows (or hides) that the next pen stroke erases, armed by the pen button or the pen key. */
+	setEraserNext(armed: boolean): void {
+		if (this.eraserNext === armed) return;
+		this.eraserNext = armed;
+		this.renderChip();
 	}
 
 	setPage(current: number, total: number): void {
@@ -520,9 +530,11 @@ export class Toolbar {
 		const dot = this.chipDot;
 		dot.toggleClass("is-eraser", s.tool === "eraser");
 		dot.toggleClass("is-highlighter", s.tool === "highlighter");
+		this.chipButton.toggleClass("is-eraser-next", this.eraserNext);
 		if (!has) return;
 		const toolLabel = t(TOOL_DEFS.find((d) => d[0] === s.tool)![2]);
-		this.chipButton.setAttribute("aria-label", `${t("toolbar.options")}: ${toolLabel}`);
+		const armed = this.eraserNext ? ` (${t("penButton.eraserNextArmed")})` : "";
+		this.chipButton.setAttribute("aria-label", `${t("toolbar.options")}: ${toolLabel}${armed}`);
 		if (s.tool === "eraser") {
 			const d = Math.max(8, Math.min(24, Math.round(s.eraserSize * 0.6)));
 			dot.setCssProps({ "--notebook-chip-w": `${d}px`, "--notebook-chip-h": `${d}px`, "--notebook-chip-color": "transparent" });

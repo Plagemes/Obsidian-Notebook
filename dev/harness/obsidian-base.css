@@ -110,3 +110,67 @@ button {
 #harness-report:empty {
 	display: none;
 }
+
+/* doc=settings: the settings tab drawn over the page, like Obsidian's settings modal on a phone. */
+.harness-settings {
+	position: fixed;
+	inset: 0;
+	z-index: 1000;
+	overflow: auto;
+	padding: 16px;
+	box-sizing: border-box;
+}
+
+.harness-settings .setting-item {
+	display: flex;
+	align-items: center;
+}
+
+.harness-settings .setting-item-info {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.harness-settings .setting-item-control {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+}
+
+.harness-settings .checkbox-container {
+	position: relative;
+	width: 42px;
+	height: 24px;
+	border-radius: 12px;
+	background-color: var(--nb-border-strong);
+	cursor: pointer;
+}
+
+.harness-settings .checkbox-container::after {
+	content: "";
+	position: absolute;
+	top: 3px;
+	left: 3px;
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	background-color: #fff;
+	transition: left 120ms;
+}
+
+.harness-settings .checkbox-container.is-enabled::after {
+	left: 21px;
+}
+
+/* wave 0.12: Obsidian's modal container (dimmed layer that centres a modal), for the creation dialog check. */
+.harness-modal-container {
+	position: fixed;
+	inset: 0;
+	z-index: 50;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(0, 0, 0, 0.45);
+}

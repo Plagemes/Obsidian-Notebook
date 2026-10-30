@@ -28,7 +28,7 @@ API version: **1.1.0** (`api.version`). It is the version of this interface, not
 
 Creates `<folder>/<name>.notebook` (creating the folder if needed) and returns `{ path, name, id, file }`. If the name is taken, ` 2`, ` 3`… is appended; `name` in the result is the real one. `folder` is a vault path, `""` or `"/"` is the vault root.
 
-Options (all optional): `pageSize` (`"a4"`, `"a5"`, `"letter"`), `landscape`, `paper` (`"blank"`, `"ruled"`, `"grid"`, `"dotted"`, `"millimetre"`), `pages` (1 to 500), `tags` (written like Obsidian tags: `#exam` becomes `exam`, spaces become `-`, `a/b` is a nested tag; a tag that is only digits throws), `favorite`, `cover` (`"#rrggbb"`), `open` (open it in a tab). What is left out follows the defaults of the *New notebook* dialog.
+Options (all optional): `pageSize` (`"a4"`, `"a5"`, `"letter"`, `"b5"` since 0.12), `landscape`, `paper` (`"blank"`, `"ruled"`, `"grid"`, `"dotted"`, `"millimetre"`), `pages` (1 to 500), `tags` (written like Obsidian tags: `#exam` becomes `exam`, spaces become `-`, `a/b` is a nested tag; a tag that is only digits throws), `favorite`, `cover` (`"#rrggbb"`), `open` (open it in a tab). What is left out follows the defaults of the *New notebook* dialog.
 
 ```js
 const nb = await api.createNotebook("Notebooks/Physics", "Lecture 12", { paper: "ruled", tags: ["physics", "lecture"], open: true });
@@ -107,7 +107,7 @@ import type { TFile } from "obsidian";
 
 type NotebookFileRef = TFile | string | { path: string };
 type PaperKind = "blank" | "ruled" | "grid" | "dotted" | "millimetre";
-type PageSizeName = "a4" | "a5" | "letter";
+type PageSizeName = "a4" | "a5" | "letter" | "b5";
 
 interface NotebookApi {
   readonly version: string;

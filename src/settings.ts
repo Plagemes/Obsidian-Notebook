@@ -5,6 +5,7 @@ import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "./ink/edge-zones";
 import { DEFAULT_GESTURE_SETTINGS, readGestureSettings, type GestureSettings } from "./ink/gesture-settings";
 import { DEFAULT_PEN_GESTURE_SETTINGS, readPenGestureSettings, type PenGestureSettings } from "./ink/gestures/settings";
 import { PEN_BUTTON_ACTIONS, type PenButtonAction } from "./ink/input-policy";
+import { BUTTON_AFTER_MAX_MS, BUTTON_BEFORE_MAX_MS, DEFAULT_BUTTON_WINDOWS, cleanPenKey, cleanWindowMs, isPenKeyAction, type PenKeyAction } from "./ink/pen-hover";
 import { isScrollMode, type ScrollMode } from "./ink/page-mode";
 import { parsePosition, type SavedPosition } from "./ink/view-position";
 import { normaliseRecentColours } from "./ink/colour";
@@ -17,6 +18,10 @@ import { isUiLanguage, type UiLanguage } from "./i18n/languages";
 import { DEFAULT_READING_SETTINGS, readReadingSettings, type ReadingSettings } from "./view/reading-settings";
 
 /** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
+/** DESIGN.md §2.2: *Notebook* (its own tokens, the default) or *Follow Obsidian theme*. */
+export const APPEARANCE_STYLES = ["notebook", "obsidian"] as const;
+export type AppearanceStyle = (typeof APPEARANCE_STYLES)[number];
+
 export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings {
 	/** UI language: "auto" follows Obsidian. */
 	uiLanguage: UiLanguage;
@@ -90,6 +95,21 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	penChordButton: boolean;
 	/** A finger held still on the page opens the radial menu beside it (only while finger drawing is off). */
 	fingerLongPress: boolean;
+	/**
+	 * 0.11.2: a click of the side button while the pen hovers arms the eraser for the next pen stroke instead of opening
+	 * the radial menu ("Button click: next stroke erases"). Off by default.
+	 */
+	penButtonEraserNext: boolean;
+	/** 0.11.2: a key that stands in for the side button (S Pen mapped with Key Mapper + Shizuku): '' = off, else `KeyboardEvent.key`. */
+	penButtonKey: string;
+	/** 0.11.2: what the pen key does: the radial menu, or arm the eraser for the next stroke. */
+	penButtonKeyAction: PenKeyAction;
+	/**
+	 * 0.11.2: the side button seen only as a `contextmenu` (device finding). One at most this many ms before the pen's
+	 * pointerdown, or after it, means the button was held when the nib landed: that contact erases.
+	 */
+	penButtonContactBeforeMs: number;
+	penButtonContactAfterMs: number;
 	/** Instant start: the notebook and page (1-based) the reader was on last, for "Continue last notebook". Not shown in the settings tab. */
 	lastNotebookPath: string;
 	lastNotebookPage: number;
@@ -126,6 +146,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	recentColours: string[];
 	/** wave 0.10 (50): the draggable thumb with a page preview along the right edge in continuous scroll. */
 	fastScrollbar: boolean;
+	/** Look of the plugin's own surfaces (DESIGN.md §2.2): its own `--nb-*` palette, or those tokens mapped onto the Obsidian theme. */
+	appearanceStyle: AppearanceStyle;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -159,6 +181,11 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	penHoldStill: null,
 	penButtonSeen: false,
 	fingerLongPress: true,
+	penButtonEraserNext: false,
+	penButtonKey: "",
+	penButtonKeyAction: "eraser-next",
+	penButtonContactBeforeMs: DEFAULT_BUTTON_WINDOWS.beforeMs,
+	penButtonContactAfterMs: DEFAULT_BUTTON_WINDOWS.afterMs,
 	penZeroPressureButton: true,
 	penChordButton: true,
 	lastNotebookPath: "",
@@ -176,6 +203,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	dateStampFormat: DEFAULT_STAMP_FORMAT,
 	recentColours: [],
 	fastScrollbar: true,
+	appearanceStyle: "notebook",
 	...DEFAULT_COMPANION_SETTINGS,
 	...DEFAULT_GESTURE_SETTINGS,
 	...DEFAULT_PEN_GESTURE_SETTINGS,
@@ -228,6 +256,12 @@ export function readSettings(data: unknown): NotebookSettings {
 	else if (d.penLongPress === true) s.penHoldStill = true;
 	if (typeof d.penButtonSeen === "boolean") s.penButtonSeen = d.penButtonSeen;
 	if (typeof d.fingerLongPress === "boolean") s.fingerLongPress = d.fingerLongPress;
+	if (typeof d.penButtonEraserNext === "boolean") s.penButtonEraserNext = d.penButtonEraserNext;
+	const penKey = cleanPenKey(d.penButtonKey);
+	if (penKey !== null) s.penButtonKey = penKey;
+	if (isPenKeyAction(d.penButtonKeyAction)) s.penButtonKeyAction = d.penButtonKeyAction;
+	s.penButtonContactBeforeMs = cleanWindowMs(d.penButtonContactBeforeMs, BUTTON_BEFORE_MAX_MS) ?? s.penButtonContactBeforeMs;
+	s.penButtonContactAfterMs = cleanWindowMs(d.penButtonContactAfterMs, BUTTON_AFTER_MAX_MS) ?? s.penButtonContactAfterMs;
 	if (typeof d.penZeroPressureButton === "boolean") s.penZeroPressureButton = d.penZeroPressureButton;
 	if (typeof d.penChordButton === "boolean") s.penChordButton = d.penChordButton;
 	if (typeof d.lastNotebookPath === "string") s.lastNotebookPath = d.lastNotebookPath;
@@ -240,6 +274,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.dateStampFormat === "string") s.dateStampFormat = cleanStampFormat(d.dateStampFormat);
 	s.recentColours = normaliseRecentColours(d.recentColours);
 	if (typeof d.fastScrollbar === "boolean") s.fastScrollbar = d.fastScrollbar;
+	if (APPEARANCE_STYLES.includes(d.appearanceStyle as AppearanceStyle)) s.appearanceStyle = d.appearanceStyle as AppearanceStyle;
 	s.lastNotebookPos = parsePosition(d.lastNotebookPos);
 
 	if (typeof d.timetableOffer === "boolean") s.timetableOffer = d.timetableOffer;

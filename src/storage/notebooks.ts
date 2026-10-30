@@ -5,27 +5,26 @@ import type { NotebookDocument } from "../model/types";
 import { isNotebookFile, NEW_NOTEBOOK_EXTENSION, writeNotebookText } from "./format";
 import { isReservedPath } from "../library/folders";
 import { ensureFolder } from "./vault-io";
+import { existsInsensitive, sanitizeName } from "./names";
 
-/** Characters Obsidian does not allow in file names, plus those that break links. */
-const FORBIDDEN = /[\\/:*?"<>|#^[\]]/g;
-
-export function sanitizeName(name: string): string {
-	return name.replace(FORBIDDEN, " ").replace(/\s+/g, " ").trim().replace(/^\.+/, "");
-}
+export { sanitizeName } from "./names";
 
 export function defaultNotebookName(now = new Date()): string {
 	const p = (n: number) => String(n).padStart(2, "0");
 	return `Notebook ${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())} ${p(now.getHours())}.${p(now.getMinutes())}`;
 }
 
-/** Creates `<folder>/<name>.notebook` with one empty grid page, adding " 2", " 3"… if the name is taken. */
+/**
+ * Creates `<folder>/<name>.notebook` with one empty grid page, adding " 2", " 3"… if the name is taken. "Taken" ignores
+ * case (`anatomy.notebook` takes `Anatomy`), so an existing file is never written over on a case-insensitive disk.
+ */
 export async function createNotebook(app: App, folder: string, name: string, doc: NotebookDocument = createDocument()): Promise<TFile> {
 	const dir = normalizePath(folder || "/");
 	if (dir !== "/") await ensureFolder(app, dir);
 	const base = sanitizeName(name) || defaultNotebookName();
 	const prefix = dir === "/" ? "" : `${dir}/`;
 	let path = normalizePath(`${prefix}${base}.${NEW_NOTEBOOK_EXTENSION}`);
-	for (let i = 2; app.vault.getAbstractFileByPath(path); i++) {
+	for (let i = 2; existsInsensitive(app.vault, path); i++) {
 		path = normalizePath(`${prefix}${base} ${i}.${NEW_NOTEBOOK_EXTENSION}`);
 	}
 	return app.vault.create(path, writeNotebookText(NEW_NOTEBOOK_EXTENSION, serialize(doc), ""));

@@ -133,6 +133,7 @@ import { ColourTools, type PageInk } from "./colour-tools";
 import { commandApplies, runViewAction, sizeName, type ActionArg } from "./view-actions";
 import { ViewUi } from "./view-ui";
 import { pageKeyAction, shouldTurnPage, takesKey, type KeyScene } from "./page-keys";
+import { isTextField, penKeyMatches, penKeyMayAct } from "../ink/pen-hover";
 import { actionById, isEnabled, type UiContext } from "../ui/actions";
 import { actionLabel } from "../ui/action-sheet";
 import {
@@ -224,6 +225,8 @@ interface ActiveErase {
 	commands: Command[];
 	/** Last eraser position in document coordinates. */
 	last: [number, number];
+	/** Ids of strokes this eraser never touches: the ink its own contact committed just before it (side button mid-stroke). */
+	spare?: ReadonlySet<string>;
 }
 
 interface Lasso {
@@ -233,6 +236,8 @@ interface Lasso {
 	erase?: boolean;
 	/** wave 0.10 (63): rectangle selection: the outline is the box from `anchor` to the pen, not a freehand path. */
 	anchor?: [number, number];
+	/** Area erase: ids of strokes it never touches (the ink its own contact committed just before it). */
+	spare?: ReadonlySet<string>;
 }
 
 /** Insert/remove space: the line touched (page coordinates) and how far it was dragged (pt; down > 0). */
@@ -393,6 +398,12 @@ export class NotebookView extends FileView {
 
 	private active: ActiveStroke | null = null;
 	private erasing: ActiveErase | null = null;
+	/**
+	 * The strokes the last pen gesture committed and the undo step that holds them, until the next gesture: the eraser
+	 * that continues the same contact (side button pressed while writing) spares them, and a late button signal can
+	 * retract them (`retractStroke`).
+	 */
+	private justCommitted: { ids: ReadonlySet<string>; cmd: Command } | null = null;
 	private lasso: Lasso | null = null;
 	/** wave 0.10 (362): the clipboard files shared between devices (made when first used). */
 	private sharedClipStore: SharedClipStore | null = null;
@@ -591,7 +602,7 @@ export class NotebookView extends FileView {
 			update: (a, b) => this.moveRuler(a, b),
 		});
 		this.controller = new PointerController(this.stage, this.policy, {
-			drawStart: (s, eraser, held) => this.drawStart(s, eraser, held),
+			drawStart: (s, eraser, held, continued) => this.drawStart(s, eraser, held, continued),
 			drawMove: (samples, predicted) => this.drawMove(samples, predicted),
 			drawEnd: (cancelled) => this.drawEnd(cancelled),
 			pan: (dx, dy) => (this.pageMode?.enabled ? this.pageMode.pan(dx, dy) : this.setViewport(pan(this.viewport, dx, dy), true)),
@@ -606,6 +617,9 @@ export class NotebookView extends FileView {
 				window.setTimeout(() => this.gestures?.releaseContacts(), 0);
 			},
 			sideButtonSeen: () => this.noteSideButtonSeen(),
+			// 0.11.2: "next stroke erases" (pen button click while hovering, or the pen key) shows on the current-pen indicator.
+			eraserNextChanged: (armed) => this.toolbar.setEraserNext(armed),
+			retractStroke: () => this.retractStroke(),
 		}, {
 			rawUpdates: this.host.settings.lowLatencyInk,
 			// 0.11.1: the side button is also watched at window level over the whole view (toolbar, bars, overlays).
@@ -710,6 +724,8 @@ export class NotebookView extends FileView {
 		this.registerDomEvent(window, "blur", () => (this.shiftDown = false));
 		// wave 0.9 (372): the page turner (arrows, PageUp / PageDown, space, Bluetooth clickers).
 		this.registerDomEvent(document, "keydown", (e) => this.onPageTurnKey(e));
+		// 0.11.2: a key standing in for the S Pen button (mapped with Key Mapper + Shizuku). Capture phase: before Obsidian's hotkeys.
+		this.registerDomEvent(window, "keydown", (e) => this.onPenKey(e), { capture: true });
 		this.registerClipboardEvents();
 
 		this.registerEvent(this.app.vault.on("modify", (f) => {
@@ -726,7 +742,7 @@ export class NotebookView extends FileView {
 		this.scope.register(["Mod"], "y", () => (this.redo(), false));
 		this.scope.register([], "Delete", () => (this.deleteSelection(), false));
 		this.scope.register([], "Backspace", () => (this.deleteSelection(), false));
-		this.scope.register([], "Escape", () => (this.excerpts?.disarm(), this.clearSelection(), false));
+		this.scope.register([], "Escape", () => (this.excerpts?.disarm(), this.controller?.disarmEraserNext(), this.clearSelection(), false));
 	}
 
 	async onClose(): Promise<void> {
@@ -871,6 +887,24 @@ export class NotebookView extends FileView {
 		if (!shouldTurnPage(scene)) return;
 		e.preventDefault();
 		this.goToRelativePage(action === "next" ? 1 : -1);
+	}
+
+	/**
+	 * 0.11.2: the pen key (setting `penButtonKey`): opens the radial menu or toggles "next stroke erases", only while this
+	 * view is the active one, no text field has the focus and no modal is open. Only that key is cancelled; repeats are ignored.
+	 */
+	private onPenKey(e: KeyboardEvent): void {
+		const s = this.host.settings;
+		if (!penKeyMatches(e, s.penButtonKey)) return;
+		const may = penKeyMayAct({
+			viewActive: this.app.workspace.getActiveViewOfType(NotebookView) === this,
+			textFocused: isTextField(activeDocument.activeElement) || isTextField(e.target as HTMLElement | null),
+			modalOpen: !!activeDocument.querySelector(".modal-container"),
+		});
+		if (!may) return;
+		e.preventDefault();
+		if (!this.editable()) return;
+		this.controller?.penKey(s.penButtonKeyAction);
 	}
 
 	private applyPendingPage(): void {
@@ -1209,6 +1243,25 @@ export class NotebookView extends FileView {
 		this.penLinks?.hideChip();
 		this.pageOffer?.cancel();
 		if (this.history.undo()) this.afterHistoryChange();
+	}
+
+	/**
+	 * The side button turned out to be held at the pen contact that has just lifted (its `contextmenu` came late): the
+	 * stroke that contact committed is undone, one history step, so the contact can be replayed as the eraser. Only when
+	 * that stroke's step is still the latest one (nothing was done since); false otherwise, and nothing changes.
+	 */
+	private retractStroke(): boolean {
+		const c = this.justCommitted;
+		this.justCommitted = null;
+		if (!c || !this.editable() || this.controller?.drawing || this.history.canRedo()) return false;
+		const steps = this.history.pending();
+		if (steps[steps.length - 1] !== c.cmd) return false;
+		this.penLinks?.hideChip();
+		this.pageOffer?.cancel();
+		if (this.history.undo() !== c.cmd) return false;
+		this.renderer?.invalidate();
+		this.afterHistoryChange();
+		return true;
 	}
 
 	redo(): void {
@@ -2708,6 +2761,8 @@ export class NotebookView extends FileView {
 		this.lastTool.note(state.tool);
 		// v10: an armed excerpt region is for the tool it was armed with.
 		if (state.tool !== before.tool) this.excerpts?.disarm();
+		// 0.11.2: so is "next stroke erases".
+		if (state.tool !== before.tool) this.controller?.disarmEraserNext();
 		if (state.tool !== "lasso") this.clearSelection();
 		this.refreshUi();
 		if (before.tool === "text" && state.tool !== "text") this.commitText();
@@ -3044,7 +3099,10 @@ export class NotebookView extends FileView {
 		return { x: b.x[i]!, y: b.y[i]! };
 	}
 
-	private drawStart(sample: InkSample, eraserButton: boolean, held?: "lasso" | "previous" | "gesture"): boolean {
+	private drawStart(sample: InkSample, eraserButton: boolean, held?: "lasso" | "previous" | "gesture", continued = false): boolean {
+		// The ink the same contact committed just before (side button pressed while writing) is kept: the eraser spares it.
+		const spare = continued ? this.justCommitted?.ids : undefined;
+		this.justCommitted = null;
 		const layout = this.layout;
 		if (!layout || !this.editable()) return false;
 		this.commitText();
@@ -3062,7 +3120,7 @@ export class NotebookView extends FileView {
 		if (tool === "eraser" && this.tools.eraserMode !== "area" && !((this.markers?.armed || this.excerpts?.armed) && !eraserButton)) {
 			// The selection may contain strokes about to be erased (e.g. erasing with the pen button).
 			this.clearSelection();
-			this.erasing = { commands: [], last: [dx, dy] };
+			this.erasing = { commands: [], last: [dx, dy], spare };
 			this.eraseTo(dx, dy);
 			return true;
 		}
@@ -3091,7 +3149,7 @@ export class NotebookView extends FileView {
 		if (tool === "eraser") {
 			// Area mode: the outline drawn like a lasso erases what is inside it when the pen lifts.
 			this.clearSelection();
-			this.lasso = { pageIndex, points: [local], erase: true };
+			this.lasso = { pageIndex, points: [local], erase: true, spare };
 			this.renderer?.setLasso(this.lasso);
 			return true;
 		}
@@ -3369,6 +3427,8 @@ export class NotebookView extends FileView {
 	}
 
 	private drawEnd(cancelled: boolean): void {
+		// Only what this gesture commits (addStrokes) is "just committed".
+		this.justCommitted = null;
 		// v10: a short unmoved contact on an excerpt's badge was a tap: what it drew (a dot) is dropped, then the jump.
 		const badgeTap = this.excerpts?.takeBadgeTap(cancelled, performance.now(), () => this.contactExtentPx()) ?? null;
 		this.endGesture(cancelled || badgeTap !== null);
@@ -3534,7 +3594,8 @@ export class NotebookView extends FileView {
 				grew = true;
 			}
 		}
-		this.history.execute(commands.length === 1 ? commands[0]! : new Batch("Draw", commands));
+		const cmd = commands.length === 1 ? commands[0]! : new Batch("Draw", commands);
+		this.justCommitted = this.history.execute(cmd) ? { ids: new Set(strokes.map((s) => s.id)), cmd } : null;
 		this.penLinks?.strokesAdded(pageIndex);
 		// Reaching the bottom of a page in the middle: offer (never add) a page right after it.
 		if (doc && this.renderer && !grew) {
@@ -3645,6 +3706,7 @@ export class NotebookView extends FileView {
 		const hits = findHitStrokes(filterErasable(this.inkInView(page), this.eraseFilter()), ax, ay, bx, by, radius, this.renderer.boundsOf);
 		let changed = false;
 		for (const stroke of hits) {
+			if (erasing.spare?.has(stroke.id)) continue;
 			const index = page.strokes.indexOf(stroke);
 			if (index < 0) continue;
 			let after: Stroke[] = [];
@@ -3668,9 +3730,11 @@ export class NotebookView extends FileView {
 
 	/** Eraser Area mode: erases everything inside the outline (one undo step); text and images only if the setting is on. */
 	private eraseArea(lasso: Lasso, page: Page): void {
+		const revealed = this.markers?.isRevealed(page) ?? false;
+		const spare = lasso.spare;
 		const cmd = eraseAreaCommand(page, lasso.points, {
 			filter: this.eraseFilter(),
-			skip: this.markers?.isRevealed(page) ? undefined : (s) => !!s.hidden,
+			skip: revealed && !spare ? undefined : (s) => (!revealed && !!s.hidden) || !!spare?.has(s.id),
 			includeElements: this.host.settings.eraseAreaElements,
 			measure: measureText,
 		});

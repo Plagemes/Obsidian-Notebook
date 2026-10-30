@@ -26,10 +26,21 @@ const DEVICES = {
 	tabletLandscape: { width: 1280, height: 800, deviceScaleFactor: 2, mobile: true, touch: true },
 };
 
+// The families of src/ui/art/generative-art.ts (ART_STYLES), for the art gallery pages.
+const ART_STYLES = ["contours", "cells", "waves", "branches", "flow", "orbits", "grid"];
+
 const SCENARIOS = [];
 for (const doc of ["v3", "new"]) {
 	for (const theme of ["light", "dark"]) {
 		for (const device of Object.keys(DEVICES)) SCENARIOS.push({ doc, theme, device, lowLatency: false });
+	}
+}
+// 0.12 design system: Home and the library on a seeded demo vault, at the size of the reference images (1448 × 1086),
+// tablet portrait and phone, dark and light. Screenshots also go to dev/harness/dist/shots/design/ for review.
+DEVICES.reference = { width: 1448, height: 1086, deviceScaleFactor: 1, mobile: true, touch: true };
+for (const surface of ["home", "library"]) {
+	for (const theme of ["dark", "light"]) {
+		for (const device of ["reference", "tablet", "phone"]) SCENARIOS.push({ doc: "library", surface, theme, device, lowLatency: false });
 	}
 }
 // Phone held sideways: little height for the toolbar popovers.
@@ -55,6 +66,12 @@ SCENARIOS.push({ doc: "excerpt", theme: "dark", device: "tablet", lowLatency: fa
 SCENARIOS.push({ doc: "readonly", theme: "light", device: "desktop", lowLatency: false });
 SCENARIOS.push({ doc: "readonly", theme: "dark", device: "narrow", lowLatency: false });
 SCENARIOS.push({ doc: "readonly", theme: "light", device: "tablet", lowLatency: false });
+// The settings tab (sections, a dependent option, Advanced, search in both languages, Style, 40 px targets) on a phone, a tablet and a desktop.
+SCENARIOS.push({ doc: "settings", theme: "light", device: "narrow", lowLatency: false });
+SCENARIOS.push({ doc: "settings", theme: "dark", device: "tablet", lowLatency: false });
+SCENARIOS.push({ doc: "settings", theme: "dark", device: "desktop", lowLatency: false });
+// wave 0.12: the creation dialog (both tabs) at tablet and phone widths, light and dark.
+for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "create", theme, device, lowLatency: false });
 
 function findChrome() {
 	const candidates = [
@@ -181,6 +198,7 @@ async function main() {
 		"--no-default-browser-check", "--disable-extensions", "--hide-scrollbars", "about:blank",
 	], { stdio: "ignore" });
 	let failures = 0;
+	let total = SCENARIOS.filter((x) => !process.env.HARNESS_DOC || x.doc === process.env.HARNESS_DOC).length;
 	try {
 		let devtools = null;
 		for (let i = 0; i < 100 && !devtools; i++) {
@@ -198,10 +216,10 @@ async function main() {
 
 		for (const s of SCENARIOS.filter((x) => !process.env.HARNESS_DOC || x.doc === process.env.HARNESS_DOC)) {
 			const d = DEVICES[s.device];
-			const name = `${s.doc}-${s.theme}-${s.device}${s.lowLatency ? "-lowlatency" : ""}${s.fault ? `-fault-${s.fault}` : ""}`;
+			const name = `${s.doc}${s.surface ? `-${s.surface}` : ""}-${s.theme}-${s.device}${s.lowLatency ? "-lowlatency" : ""}${s.fault ? `-fault-${s.fault}` : ""}`;
 			await cdp.send("Emulation.setDeviceMetricsOverride", { width: d.width, height: d.height, deviceScaleFactor: d.deviceScaleFactor, mobile: d.mobile });
 			await cdp.send("Emulation.setTouchEmulationEnabled", d.touch ? { enabled: true, maxTouchPoints: 5 } : { enabled: false });
-			const url = `http://127.0.0.1:${port}/index.html?doc=${s.doc}&theme=${s.theme}${s.lowLatency ? "&lowLatency=1" : ""}${s.fault ? `&fault=${s.fault}` : ""}`;
+			const url = `http://127.0.0.1:${port}/index.html?doc=${s.doc}&theme=${s.theme}${s.lowLatency ? "&lowLatency=1" : ""}${s.fault ? `&fault=${s.fault}` : ""}${s.surface ? `&surface=${s.surface}` : ""}`;
 			await cdp.send("Page.navigate", { url });
 			let report;
 			try {
@@ -210,7 +228,7 @@ async function main() {
 					await sleep(100);
 				}
 				await cdp.evaluate("window.harness.ready.then(() => true)");
-				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "library" ? "window.harness.checkLibrary()" : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}
@@ -232,6 +250,35 @@ async function main() {
 					if (c[0] < 100 && c[1] < 100 && c[2] < 100) dark = true;
 				}
 				if (!dark) problems.push(`composited ink missing at (${Math.round(ix)}, ${Math.round(iy)})`);
+			}
+			// wave 0.12: the creation dialog's Folder tab (the Notebook tab is the screenshot above).
+			if (s.doc === "create") {
+				try {
+					await cdp.evaluate("window.harness.createShot('folder').then(() => true)");
+					writeFileSync(join(shots, `${name}-folder.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+				} catch (e) {
+					problems.push(`folder tab screenshot: ${e.message}`);
+				}
+			}
+			// 0.12: review screenshots of Home and the library, then their controls (bell, rail, quick actions, search, star, list).
+			if (s.doc === "library") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				writeFileSync(join(designDir, `${s.surface}-${s.theme}-${s.device}.png`), png);
+				const shotAs = async (file) => writeFileSync(join(designDir, `${s.surface}-${s.theme}-${s.device}-${file}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+				try {
+					if (s.theme === "dark") {
+						for (const state of ["bell", "search", "list"]) {
+							await cdp.evaluate(`window.harness.libraryState('${state}')`);
+							await shotAs(state);
+							await cdp.evaluate("window.harness.libraryState('reset')");
+						}
+					}
+					const r = await cdp.evaluate("window.harness.interactLibrary()", 60000);
+					problems.push(...r.results.filter((x) => !x.ok).map((x) => `${x.name}: ${x.detail}`));
+				} catch (e) {
+					problems.push(`library interactions: ${e.message}`);
+				}
 			}
 			// The toolbar with the eraser options and the "more" menu open (narrow phone and tablet, light theme).
 			if (!s.fault && s.doc === "new" && s.theme === "light" && (s.device === "narrow" || s.device === "tablet")) {
@@ -284,6 +331,55 @@ async function main() {
 				console.log(`ok   ${name}  (dpr ${report.env?.dpr}, pointerrawupdate ${report.env?.rawUpdates}, desynchronized ${report.env?.wetDesynchronized})`);
 			}
 		}
+		// The art gallery (src/ui/art): every style in the eight subject colours as cards and covers, plus the folder
+		// icons, in dark and light; full-page screenshots in dist/shots/art/. HARNESS_DOC=art runs only these.
+		if (!process.env.HARNESS_DOC || process.env.HARNESS_DOC === "art") {
+			const artDir = join(shots, "art");
+			mkdirSync(artDir, { recursive: true });
+			const pages = [];
+			for (const theme of ["dark", "light"]) {
+				for (const style of [...ART_STYLES, "icons"]) pages.push({ theme, style, device: "desktopHiDpi" });
+				for (const device of ["tablet", "phone"]) pages.push({ theme, style: "mix", device });
+			}
+			for (const a of pages) {
+				const d = a.device === "desktopHiDpi" ? { ...DEVICES.desktop, deviceScaleFactor: 2 } : DEVICES[a.device];
+				const name = `art-${a.theme}-${a.style}-${a.device}`;
+				await cdp.send("Emulation.setDeviceMetricsOverride", { width: d.width, height: d.height, deviceScaleFactor: d.deviceScaleFactor, mobile: d.mobile });
+				await cdp.send("Page.navigate", { url: `http://127.0.0.1:${port}/art.html?theme=${a.theme}&style=${a.style}` });
+				let report;
+				try {
+					for (let i = 0; i < 100; i++) {
+						if (await cdp.evaluate("typeof window.artGallery === 'object'")) break;
+						await sleep(100);
+					}
+					await cdp.evaluate("window.artGallery.ready.then(() => true)");
+					// The checks (timing, determinism, cache) once per theme, on the desktop page of one style.
+					report = a.style === "cells" ? await cdp.evaluate("window.artGallery.check()", 60000) : { ok: true, results: [], errors: [], timings: {} };
+					await sleep(150);
+				} catch (e) {
+					report = { ok: false, results: [], errors: [String(e.message ?? e)], timings: {} };
+				}
+				const metrics = await cdp.send("Page.getLayoutMetrics");
+				const size = metrics.cssContentSize ?? metrics.contentSize;
+				const shot = await cdp.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: { x: 0, y: 0, width: d.width, height: Math.ceil(size.height), scale: 1 } });
+				writeFileSync(join(artDir, `${name}.png`), Buffer.from(shot.data, "base64"));
+				const problems = report.results.filter((r) => !r.ok).map((r) => `${r.name}: ${r.detail}`);
+				problems.push(...report.errors.map((e) => `console error: ${e.split("\n")[0]}`));
+				total++;
+				const t = Object.entries(report.timings).map(([k, v]) => `${k} ${v} ms`).join(", ");
+				if (problems.length) {
+					failures++;
+					console.log(`FAIL ${name}${t ? `  (draw 600x200 @2x: ${t})` : ""}`);
+					for (const p of problems) console.log(`     ${p}`);
+				} else {
+					console.log(`ok   ${name}${t ? `  (draw 600x200 @2x: ${t})` : ""}`);
+				}
+				if (process.env.ART_BENCH && a.style === "cells") {
+					const v = await cdp.evaluate(`JSON.stringify(Object.fromEntries(${JSON.stringify(ART_STYLES)}.map((s) => [s, ["card", "noglow", "flat"].map((k) => window.artGallery.bench(s, 9, k)).join(" / ")])))`, 120000);
+					console.log(`     bench card / noglow / flat: ${v}`);
+				}
+			}
+		}
 		cdp.close();
 	} finally {
 		browser.kill();
@@ -295,7 +391,7 @@ async function main() {
 			// Chrome may still hold the profile on Windows.
 		}
 	}
-	console.log(failures ? `harness:check: ${failures} of ${SCENARIOS.length} scenarios failed (screenshots in ${shots})` : `harness:check: all ${SCENARIOS.length} scenarios ok (screenshots in ${shots})`);
+	console.log(failures ? `harness:check: ${failures} of ${total} scenarios failed (screenshots in ${shots})` : `harness:check: all ${total} scenarios ok (screenshots in ${shots})`);
 	process.exit(failures ? 1 : 0);
 }
 

@@ -35,8 +35,10 @@ AI, no network, nothing leaves the device.
 | **Status banners** | Safe mode (*Open normally*, *Repair…*, *Show images and PDFs*), storage full (*Retry now*), integrity (*Restore the newer version*, *Restore a version…*, *Keep this version*), open on another device (*Open read-only*, *Open anyway*, *Edit anyway*), heavy page (*Split page*, *Dismiss*) | Only while the situation lasts; the banner owns its recovery buttons (they are listed in the registry with the `banner` surface) |
 | **Radial menu** | Dark dial at the pen tip: undo/redo, width bubble, colour bubble, tool illustration, favourites · pen case · shapes | S Pen side button (or long press, per settings) |
 | **Notebook menu** | Obsidian's "More options" of the notebook tab | Notebook-wide actions: open library, export notebook, zettel entries |
-| **Library** | The library view | Create, import PDF, lecture from slides, scan, timetable |
-| **Settings** | Plugin settings tab | Diagnostics (pen button test, benchmark) are also commands |
+| **Home** | The library view on its Home surface (0.12, §11) | Subject folders, recent notes, statistics, quick actions (New notebook, New folder, Import PDF, Scan), inbox bell |
+| **Library** | The library view (0.12, §11): rail, filter chips, dashboard, notebook grid or list | Create, import PDF, lecture from slides, scan, loose sheet, library check, timetable |
+| **Settings** | Plugin settings tab, generated from `view/settings-schema.ts` (§10): eleven sections by task, a search, collapsed *Advanced* and feature groups | Diagnostics (pen button test, benchmark) are also commands |
+| **Creation dialog** (wave 0.12) | One modal, two tabs as a segmented control: **Notebook** (cover preview with *Change cover* (pattern, colour, image) and a shuffle button for a new variation; name, description, folder list with icons, page template tiles drawn by the paper renderer, page size A4 · A5 · B5 · Letter · Custom in mm, orientation tiles) and **Folder** (the library's own subject card as the preview, `ui/components/subject-card.ts`, above the form, with *Change colour* and *Change pattern*; name, description, location, icon row plus Lucide search, eight subject colours plus the colour picker). Inline name errors, Enter submits. A full-height sheet with the preview on top under 600 px. Decoration (header art band, glow behind the preview, faint art on the selected template tile) never acts as a control and is off with reduced motion | Registry actions `new-notebook` (Notebook tab) and `new-folder` (Folder tab), the command *New notebook* (`create`), *New folder*, the library's buttons and menus (through `host.createNotebook(folder)` / `host.createFolder(parent)`) |
 | **Command palette** | Every command, hotkeys | All actions with `command` (ids unchanged since 0.5) |
 
 ## 3. Information architecture
@@ -161,7 +163,10 @@ A dark dial (always dark, in both themes, like a physical tool), 264 px, soft sh
 
 ## 7. Visual system
 
-Tokens are declared on `.notebook-view`, `.notebook-lib-root` and modal roots, built on Obsidian variables:
+0.12: the tokens are the `--nb-*` set of DESIGN.md §2, declared once on `body` in `styles.css` (block *Notebook design
+tokens*): a dark and a light palette (`body.theme-dark`, `body.theme-light`) and the *Follow Obsidian theme* mapping on
+`body.notebook-style-obsidian`. The names below are kept as aliases (`--nb-surface` is `--nb-panel`, `--nb-accent-soft`
+is `--nb-accent-bg`, …); before 0.12 they were built on Obsidian variables:
 
 | Token | Value |
 |---|---|
@@ -198,6 +203,9 @@ the accent soft fill and an accent underline dot; groups are separated by 1 px d
 | `src/ui/usage.ts` | Use counts (pure) |
 | `src/ui/radial-model.ts` | Radial palettes, width scales, arc geometry (pure) |
 | `src/ui/action-sheet.ts` | Sheet component (All actions, page sheet) |
+| `src/ui/components/*.ts` | 0.12 design-system components: subject card, section header, chips, list row, favourite row, KPI tile, quick action, search pill, navigation rail, icon square |
+| `src/library/library-view.ts`, `home-view.ts`, `home-surface.ts`, `library-sections.ts`, `inbox-bell.ts` | 0.12 library and Home (§11) |
+| `src/library/dashboard.ts` | Subjects, smart collections, statistics (pure) |
 | `src/ui/context-bar.ts` | Contextual bar component |
 | `src/ui/dismiss.ts` | Tap-outside / Escape closing shared by popovers and sheets (a tap on the page draws nothing) |
 | `src/view/view-actions.ts` | What each view action does (one runner per registry id) |
@@ -206,3 +214,132 @@ the accent soft fill and an accent underline dot; groups are separated by 1 px d
 | `NotebookView.uiContext()` / `runAction()` | The view's context for the engine, and the single entry point that runs and counts an action |
 | `src/view/toolbar.ts` | Primary toolbar (quick slots from the layout) |
 | `src/view/radial-menu.ts` | Radial dial |
+| `src/view/settings-schema.ts` | The settings tab described once: sections, groups, rows, visibility and search (pure) |
+| `src/view/settings-tab.ts` | Draws the settings tab from the schema (Obsidian 1.13+ definitions and the older hand-drawn tab) |
+| `src/view/create-dialog.ts`, `src/view/create-logic.ts` | Creation dialog (wave 0.12) and its pure rules (names, sizes, folder list, the new document) |
+| `src/ui/components/subject-card.ts` | The subject card (DESIGN.md §3) shared by the library, Home and the creation dialog's folder preview: `subjectCard(parent, { name, color, seed, artStyle?, icon?, lines, shape, art, onOpen? })`. The art is laid out beside the icon and text, never under them: in a row from the end of the text to the right edge, in a tile the column right of them (a long name narrows it) |
+| `src/library/folder-meta.ts`, `folder-meta-store.ts`, `folder-meta-events.ts` | Folder colour, icon, description and art style (per-device sidecar in `_meta`), the read API `getFolderMeta` / `onFolderMetaChange`, renames |
+
+## 10. Settings
+
+The plugin's settings tab follows DESIGN.md §6. It is generated from one list, `src/view/settings-schema.ts`
+(pure, tested in Node), and drawn by `src/view/settings-tab.ts` in both ways Obsidian draws a tab: the declarative
+definitions of Obsidian 1.13+ (`getSettingDefinitions`, groups with `visible` predicates, re-evaluated with
+`refreshDomState()` after every change) and the hand-drawn tab of older versions (`display()`, the same rows, shown or
+hidden in place). Both read what to show from one function, `settingsView`, so they cannot drift.
+
+### Sections
+
+| # | Section | What goes there |
+|---|---|---|
+| 1 | **Writing** | Defaults of new notebooks (paper, page size, orientation), how ink behaves (stabilization, ink follows objects, automatic line break). Advanced: area eraser removes text and images, date stamp format, predicted ink, low-latency ink |
+| 2 | **Pen & input** | Finger drawing, palm rejection, pressure, the S Pen side button and its options, finger long-press, finger taps, scribble to erase. Group *Pen gestures*. Advanced: large touches, zero-pressure press, button while writing, edge rejection and its zones |
+| 3 | **Pages & navigation** | Scrolling, fast scrollbar, add a page at the bottom, scroll up near the bottom, page-turner keys |
+| 4 | **PDF & reading** | Snap highlighter to text, dim backgrounds and strength, crop PDF margins |
+| 5 | **Library & files** | Notebooks folder, trash retention, version history (backups). Advanced: loose sheet location, templates folder |
+| 6 | **Sync & safety** | Device name, check sync safety (only when the sync safety service runs) |
+| 7 | **Export** | Export settings, when there are any (the section is hidden while it is empty) |
+| 8 | **Obsidian integration** | Tabs of open notebooks, companion notes and their options |
+| 9 | **Study** | Groups *Class timetable* (edit, offer the current class, open without asking, start early) and *Zettelkasten* |
+| 10 | **Appearance & language** | Language, Style (Notebook / Follow Obsidian theme), toolbar size, night mode |
+| 11 | **Diagnostics** | Pen button test, performance benchmark, performance overlay (the first two are also commands) |
+
+### Rules
+
+- **Placement.** A new setting is a `SettingSpec` in the section where a person would look for it, next to related
+  settings, with an `order` (gaps of 10 leave room). Never at the end of the list, never a new section for one feature.
+- **Most used first.** The main rows of a section are the common choices; the rest gets `group: ADVANCED`, a collapsed
+  *Advanced* row that shows how many settings it holds.
+- **Relevance.** A dependent option has `parent` and `visible` and is shown only while its parent is on (a dependent of
+  a dependent also follows the root). Options of a feature not in use sit in a collapsible group (`GROUPS`) whose `open`
+  predicate says when the feature is in use; the person can open or close any group, and that choice lasts while the
+  tab is open. Rows that need a service (sync, timetable) are hidden when it is not running. A section with nothing to
+  show is hidden.
+- **Search.** The pill at the top filters every row by name, description, section and group title in every UI language
+  (accents and case ignored, every word must match) plus a few keywords. While searching, groups are expanded and their
+  disclosure rows hidden, the section headers of the matches stay, a match whose parent is off shows the parent instead,
+  and "No setting matches" appears when nothing does. Obsidian's own settings search also finds the rows: their names in
+  the other languages are passed as `aliases`.
+- **Wording.** Short names in sentence case, at most one line of description (`tests/settings-schema.test.ts` limits
+  names to 48 and descriptions to 90 characters in every language), all strings in `en.ts` and `it.ts`.
+- **Keys.** Every key of `DEFAULT_SETTINGS` is in exactly one section, except the internal keys listed with their reason
+  in `INTERNAL_SETTING_KEYS` (favourite pens, eraser size, recent colours, side-button-seen flag, last notebook / page /
+  position, Zettelkasten slip boxes). The test fails when a new key is in no section.
+- **Look.** The design-system tokens (DESIGN.md §2.1–2.2: `--nb-bg`, `--nb-panel`, `--nb-tile`, `--nb-border`,
+  `--nb-text`, `--nb-text-muted`, `--nb-accent`, `--nb-accent-bg` and radii) are the global ones of `styles.css` ("Notebook design tokens");
+  *Style → Follow Obsidian theme* (`appearanceStyle`, class `notebook-style-obsidian` on `body`) maps them onto Obsidian's variables.
+  Each section is a panel (16 px radius, 1 px border) with an icon square and a 20 px / 600 title; rows have a 15 px / 500
+  name and a muted 13 px description with the control on the right (under the name on a phone); dropdowns and buttons
+  are pills, text fields 14 px tiles, all at least 40 px tall; the search pill stays at the top while the list scrolls.
+
+### Extension point: S Pen button settings
+
+New rows of the side button are added to `PEN_BUTTON_EXTENSIONS` in `src/view/settings-schema.ts` (the marked block),
+with `section: "input"` and an `order` from 41 to 49, so they sit between *Pen side button* (40) and *Hold the pen still
+for the radial menu* (50); use `group: ADVANCED` for the rare ones, and `parent: "penSideButton", visible: penButtonOn`
+when they only matter while the button does something. Their keys go in `DEFAULT_SETTINGS` and their strings in
+`en.ts` / `it.ts` as usual; nothing else in the tab changes. The 0.11.2 S Pen settings live there:
+
+| Row | Key | Place | Shown |
+|---|---|---|---|
+| *Button click: next stroke erases* | `penButtonEraserNext` | order 41 | while the side button does something |
+| *Pen key* | `penButtonKey` | order 42, custom row `pen-key` (dropdown, key capture, hotkey warning; `view/pen-button-settings.ts`) | always (the key works whatever the button does) |
+| *Pen key action* | `penButtonKeyAction` | order 43, parent *Pen key* | once a key is set |
+| *Button before / after contact* (side button timing) | `penButtonContactBeforeMs`, `penButtonContactAfterMs` | *Advanced*, orders 31-32 | while the side button does something |
+
+A row that needs its own drawing uses `control: { type: "custom", render: … }` with a new `SettingCustomId` handled by
+`renderCustom` in `settings-tab.ts`; an action row uses `{ type: "action", run: … }` with a new `SettingActionId`
+handled by `run`.
+
+## 11. Home and the library (0.12, DESIGN.md §3–§4)
+
+Home (`docs/design/reference/home.png`) and the library (`library.png`) are two surfaces of one view
+(`src/library/library-view.ts`; `HomeView` in `home-view.ts` only opens it on Home). They share the library index,
+the reading pass and the thumbnail queue, and switch in place from the navigation rail. Everything they show is
+computed on the device from the index (`src/library/dashboard.ts`, pure and tested) and from this device's recent
+pages log; nothing is invented and empty sections are hidden.
+
+**Shell.** Navigation rail (`ui/components/nav-rail.ts`): brand; *Home*, *Notebooks*, *PDF* (only when a notebook has
+PDF pages), *Tags*, *Settings* (opens the plugin's settings tab); *Vault*: the folder tree under the notebooks folder,
+each folder with the colour of its subject (top-level folder) and its folder menu (long press or right click), a drop
+target for dragged notebooks; at the bottom *Archive*, *Trash*, *Check library*. Width classes of the view: **wide**
+(≥ 1100 px: rail with labels, which a fold button turns into icons), **medium** (600–1099 px, a tablet in portrait:
+icons only, subject folders only in the tree), **phone** (< 600 px: the rail is a sheet from the left, opened from the
+menu button of the header). Page header: title and subtitle (a folder shows its breadcrumb, each part a link and a
+drop target), the search pill (Ctrl/⌘ K on desktop), the *Now: course* button while a class is on, the inbox bell; on
+the library also tag filter, sort, grid / list and *New* (a menu of New notebook, New folder, Import PDF, Lecture from
+slides, Scan, Loose sheet; inside a folder the notebook and the folder go there, elsewhere New notebook and New folder
+run the registry actions `new-notebook` and `new-folder`; all of them open the creation dialog, `view/create-dialog.ts`).
+
+**Home.** *Subject folders*: one card per top-level folder (four at most, *Show all* opens the subjects page).
+*Recent notes*: the pages edited last on this device (bookmark title or notebook name, page number, time, subject
+and tag pills, kebab = the notebook menu; without a log, the notebooks changed last). *Statistics* (period 1, 4 or 12
+weeks, kept in the view state): notebooks created (with the change against the period before, the only exact
+comparison), pages edited on this device, PDF notebooks changed, tags used; each tile opens its detail. *Quick
+actions*: New notebook, New folder, Import PDF, Scan (when available).
+
+**Library.** Filter chips *All · Subjects · Recent · Favourites · With PDF · Archive* (single choice). *All* shows the
+dashboard: subject cards (four in a row, two on a tablet in portrait, two compact ones on a phone), *Smart
+collections* (To study: open gap, question or homework markers or a to-study tag; Favourites: starred or pinned;
+With PDF; Recent: changed in the last 7 days; Exams: an exam tag; empty ones hidden), *Frequent tags* (subject
+colours on tags that name a subject), *Recent notebooks* next to *Favourite notebooks* (page thumbnail from the index
+cache, amber star that writes the notebook's metadata), then *All notebooks*: the 0.10 grid (pinned group, manual
+order, drag, keyboard) or the same cards as a list, drawn 60 at a time with *Show more*. A folder shows its
+subfolders as subject cards and its notebooks. Search groups its results as folders, tags and notebooks (with the
+page of a text match); in a folder, tag or collection a chip switches between this view and everywhere.
+
+**Folder look and covers.** Subject and folder cards are the shared `ui/components/subject-card.ts` (also the creation
+dialog's folder preview). Their colour, the symbol on the folder icon and the art style come from the folder metadata
+(`host.folderMeta.getFolderMeta(path)`, redrawn on `onFolderMetaChange`), else from `colorFor(name)` and
+`artStyleFor(name)`; the rail tree and the subject pills use the same colour. A notebook made with a v11 cover
+(`meta.coverArt`, kept in the index as `coverArt`) shows that cover in the grid instead of its first page.
+
+**Inbox bell.** `library/inbox-bell.ts`, through the Inbox service's public API (`zettel/inbox-service.ts`): the
+badge counts the open items of the last scan (hidden at 0); the first scan runs once the library has been read and
+the pen is idle, and again when the bell opens if the last one is older than two minutes; the service's change
+events keep the badge current. The popover (a bottom sheet on a phone) lists eight items with *Open in notebook*,
+*Process in the inbox* and *Discard*; *Open inbox* opens the Inbox view.
+
+**Decoration.** Generated art (the art module) behind the page header, on subject cards, smart collections, quick
+actions and empty states, and a soft accent glow behind section titles. It never takes input, never covers text and
+is removed under `prefers-reduced-motion: reduce`.

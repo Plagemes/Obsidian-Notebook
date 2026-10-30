@@ -1,5 +1,5 @@
 import { inEdgeZone, type EdgeZones } from "./edge-zones";
-import { isBarrelSignal } from "./pen-button";
+import { isBarrelSignal, isEraserSignal } from "./pen-button";
 
 /**
  * What pressing the pen's side button does: a click opens the radial menu and holding it while the nib touches erases
@@ -61,6 +61,16 @@ export interface InputSettings {
 	chordButton?: boolean;
 	/** A finger held still on the page (pen-only mode) opens the radial menu beside it. */
 	fingerLongPress?: boolean;
+	/**
+	 * 0.11.2: a click of the side button while the pen hovers (seen only as a bare `contextmenu` on Android) arms the
+	 * eraser for the next pen stroke instead of opening the radial menu. Undefined = off.
+	 */
+	eraserNextOnClick?: boolean;
+	/**
+	 * 0.11.2: how close to the pen's pointerdown a bare `contextmenu` must be to mean "button held when the nib landed"
+	 * (default 150 ms before, 350 ms after; see `pen-hover.ts`).
+	 */
+	buttonWindows?: { beforeMs: number; afterMs: number };
 }
 
 /** `menu`: the pen's side button was pressed and the radial menu should open (nothing is drawn). */
@@ -100,10 +110,16 @@ export class InputPolicy {
 		return isBarrelSignal(button, buttons);
 	}
 
-	/** Does a pen contact erase? The eraser button / flipped pen always do; the side button when its action is "eraser". */
-	penErases(button: number, buttons: number): boolean {
-		if (button === 5 || (buttons & 32) !== 0) return true;
-		return this.settings.penButton === "eraser" && InputPolicy.barrel(button, buttons);
+	/**
+	 * Does a pen contact erase? The eraser button / flipped pen always do (`buttons & 32`, `button` 5); the side button
+	 * (`buttons & 2`, `button` 2) when its action is "eraser", or (0.11.2) when the nib touches (`pressure` > 0) with the
+	 * button held and its action erases while held ("Radial menu on click, erase while held").
+	 */
+	penErases(button: number, buttons: number, pressure?: number): boolean {
+		if (isEraserSignal(button, buttons)) return true;
+		if (!InputPolicy.barrel(button, buttons)) return false;
+		if (this.settings.penButton === "eraser") return true;
+		return pressure !== undefined && pressure > 0 && heldToolOf(this.settings.penButton) === "eraser";
 	}
 
 	/** The tool (other than the eraser) a contact takes because the side button (`buttons & 2`) is held with it. */
@@ -114,13 +130,15 @@ export class InputPolicy {
 
 	/**
 	 * What a new contact does. `button` is PointerEvent.button (0 = primary), `buttons` PointerEvent.buttons,
-	 * `contact` the contact size in CSS px.
+	 * `contact` the contact size in CSS px, `pressure` the pen's (0.11.2: above 0, the nib touches with the button held).
 	 */
-	route(pointerType: string, t: number, button = 0, contact = 0, buttons = 0): Route {
+	route(pointerType: string, t: number, button = 0, contact = 0, buttons = 0, pressure?: number): Route {
 		switch (pointerType) {
 			case "pen":
 				this.notePen(t);
 				if (InputPolicy.barrel(button, buttons)) {
+					// The nib touches (pressure above 0) with the button held: the button's tool for this stroke.
+					if (pressure !== undefined && pressure > 0 && heldToolOf(this.settings.penButton)) return "draw";
 					// A barrel bit (`buttons & 2`) cannot be told apart from contact: radial + eraser opens the menu.
 					if (opensRadial(this.settings.penButton)) return "menu";
 					if (heldToolOf(this.settings.penButton)) return "draw";

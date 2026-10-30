@@ -98,8 +98,8 @@ function content(page: Page): unknown {
 }
 
 describe("format v10", () => {
-	it("is at version 10 with a v9 step", () => {
-		expect(CURRENT_VERSION).toBe(10);
+	it("is at version 10 or later with a v9 step", () => {
+		expect(CURRENT_VERSION).toBeGreaterThanOrEqual(10);
 		expect(MIGRATIONS[9]).toBeTypeOf("function");
 	});
 
@@ -107,7 +107,7 @@ describe("format v10", () => {
 		const raw = v9Doc();
 		const r = parsed(JSON.stringify(raw));
 		expect(r.migratedFrom).toBe(9);
-		expect(r.doc.version).toBe(10);
+		expect(r.doc.version).toBe(CURRENT_VERSION);
 		expect(r.doc.pages[0]!.elements).toEqual(getAt(raw, ["pages", 0, "elements"]));
 		expect(r.doc.pages[0]!.strokes).toEqual(getAt(raw, ["pages", 0, "strokes"]));
 		expect(r.dropped).toBeUndefined();

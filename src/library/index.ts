@@ -2,9 +2,10 @@
 
 import { tagAncestors, tagIsWithin } from "../model/tags";
 import { stateKeys } from "./library-state";
+import { COVER_ART_STYLES, type CoverArtStyle } from "../model/types";
 
-/** v4: entries also carry the titled bookmarks (quick switcher); v3 added the page tags. Older indexes are rebuilt. */
-export const INDEX_VERSION = 4;
+/** v5: entries also count PDF pages and open markers (Home and smart collections) and carry the v11 cover (`coverArt`); v4 added the titled bookmarks (quick switcher); v3 the page tags. Older indexes are rebuilt. */
+export const INDEX_VERSION = 5;
 /** "Recent" shows this many notebooks. */
 export const RECENT_LIMIT = 20;
 
@@ -33,9 +34,15 @@ export interface LibraryEntry {
 	/** Titled bookmarks: 0-based page and title. Absent when there is none. */
 	bookmarks?: Array<{ page: number; title: string }>;
 	tags: string[];
+	/** v5: pages with a PDF background (absent: none). */
+	pdfPages?: number;
+	/** v5: markers still open (a gap to fill, an unanswered question, homework not done); absent: none. */
+	openMarkers?: number;
 	favorite: boolean;
 	/** Cover colour #rrggbb. */
 	cover: string;
+	/** v5 (0.12): the notebook's v11 cover on top of the colour: generated art, or the vault path of its image. Absent: the plain colour. */
+	coverArt?: IndexCoverArt;
 	/** First-page thumbnail as a data URL. */
 	thumb?: string;
 	/** File mtime the thumbnail was rendered from; the thumbnail is stale when it differs from `mtime`. */
@@ -179,6 +186,16 @@ function compare(sort: LibrarySort): (a: LibraryEntry, b: LibraryEntry) => numbe
 	}
 }
 
+/** The cover of an index entry (from `meta.coverArt`; an image cover is resolved to its asset's vault path). */
+export type IndexCoverArt = { kind: "art"; style: CoverArtStyle; seed: string } | { kind: "image"; path: string };
+
+export function isIndexCoverArt(v: unknown): v is IndexCoverArt {
+	if (typeof v !== "object" || v === null) return false;
+	const c = v as Record<string, unknown>;
+	if (c.kind === "art") return (COVER_ART_STYLES as readonly unknown[]).includes(c.style) && typeof c.seed === "string" && c.seed !== "";
+	return c.kind === "image" && typeof c.path === "string" && c.path !== "";
+}
+
 function isEntry(v: unknown): v is LibraryEntry {
 	if (typeof v !== "object" || v === null) return false;
 	const e = v as Record<string, unknown>;
@@ -189,6 +206,9 @@ function isEntry(v: unknown): v is LibraryEntry {
 		Number.isFinite(e.pages) && Array.isArray(e.tags) && e.tags.every((x) => typeof x === "string") &&
 		typeof e.favorite === "boolean" && typeof e.cover === "string" &&
 		(e.text === undefined || typeof e.text === "string") &&
+		(e.pdfPages === undefined || Number.isInteger(e.pdfPages)) &&
+		(e.openMarkers === undefined || Number.isInteger(e.openMarkers)) &&
+		(e.coverArt === undefined || isIndexCoverArt(e.coverArt)) &&
 		(e.textPages === undefined || (Array.isArray(e.textPages) && e.textPages.length % 2 === 0 && e.textPages.every((n) => Number.isFinite(n)))) &&
 		(e.pageTags === undefined || (Array.isArray(e.pageTags) && e.pageTags.every((p: unknown) => {
 			const o = p as { page?: unknown; tags?: unknown } | null;

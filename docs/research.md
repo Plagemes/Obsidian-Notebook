@@ -90,6 +90,10 @@ Date: 2026-10-30. The custom gestures use a template matcher in the style of the
 
 The built-in shapes (circle, "^", "#", star, line, retrace) are rule-based geometry written from scratch (Douglas-Peucker corner finding, turning angle sums, segment crossings); "?" uses the template matcher against hand-built reference paths for "?" and its look-alikes (`ink/gestures/glyphs.ts`). `app.commands.executeCommandById` / `listCommands` are not in the published `obsidian.d.ts` typings; they are used through a guarded wrapper (`view/obsidian-commands.ts`) and are the only unpublished Obsidian API this feature depends on.
 
+## Procedural subject art (wave 0.12)
+
+No external code was copied. The algorithms are textbook and written from scratch in `src/ui/art/`: mulberry32 (Tommy Ettinger, public domain) as the seeded generator; FNV-1a (public domain) with the 32-bit finaliser of MurmurHash3 (Austin Appleby, public domain) as the string hash; value noise with quintic smoothing; marching squares; Voronoi cells by half-plane clipping (Sutherland–Hodgman); streamlines with an occupancy grid (after Jobard and Lefer, 1997, the idea only). The reference images in `docs/design/reference/` were used for the look only; no image data is used.
+
 ## Equations and function graphs (#110, #113; wave 0.9: math)
 
 Date: 2026-10-30. No external code was copied or added as a dependency for this wave.

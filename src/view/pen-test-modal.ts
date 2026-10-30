@@ -1,8 +1,10 @@
 import { Modal, type App } from "obsidian";
 import { t } from "../i18n";
-import { EventLog, PEN_TEST_EVENT_TYPES, describeTarget, noSignalYet, type LoggedEvent } from "../ink/pen-button";
+import { EventLog, LOG_LINES, PEN_TEST_EVENT_TYPES, describeTarget, noSignalYet, type LoggedEvent } from "../ink/pen-button";
+import { capacitorInventory, formatCapacitorInventory } from "../ink/pen-hover";
 import type { NotebookSettings } from "../settings";
 import { showNotice } from "./notice";
+import type { PenButtonSettings, PenButtonSettingsHost } from "./pen-button-settings";
 
 /** What the test knows about this device's side button across sessions (a flag saved in the plugin settings). */
 export interface PenSignalInfo {
@@ -10,6 +12,8 @@ export interface PenSignalInfo {
 	seen(): boolean;
 	/** Remember that one has. */
 	markSeen(): void;
+	/** 0.11.2: the S Pen fallback settings; the test reads the side button timing windows for its verdict line. */
+	penButton?: PenButtonSettingsHost;
 }
 
 /** The plugin settings as the "side button seen" flag. */
@@ -20,6 +24,14 @@ export function penSignalInfo(host: { settings: NotebookSettings; saveSettings()
 			if (host.settings.penButtonSeen) return;
 			host.settings.penButtonSeen = true;
 			void host.saveSettings().catch((e) => console.error("[notebook] saving settings failed", e));
+		},
+		penButton: {
+			get: () => host.settings,
+			set: async (key, value) => {
+				const target: PenButtonSettings = host.settings;
+				target[key] = value;
+				await host.saveSettings();
+			},
 		},
 	};
 }
@@ -32,7 +44,8 @@ export function penSignalInfo(host: { settings: NotebookSettings; saveSettings()
  * test area, or that a handler would stop on its way, still shows. It draws nothing and changes nothing.
  */
 export class PenTestModal extends Modal {
-	private readonly log = new EventLog();
+	private readonly log: EventLog;
+	private verdictEl!: HTMLElement;
 	private t0 = 0;
 	private area!: HTMLElement;
 	private output!: HTMLTextAreaElement;
@@ -43,9 +56,12 @@ export class PenTestModal extends Modal {
 	private signal!: HTMLElement;
 	private stop: () => void = () => {};
 	private frame = 0;
+	private capacitor!: HTMLElement;
 
 	constructor(app: App, private readonly info: PenSignalInfo) {
 		super(app);
+		const s = info.penButton?.get();
+		this.log = new EventLog(LOG_LINES, s ? { beforeMs: s.penButtonContactBeforeMs, afterMs: s.penButtonContactAfterMs } : undefined);
 	}
 
 	onOpen(): void {
@@ -91,7 +107,12 @@ export class PenTestModal extends Modal {
 		};
 
 		this.signal = contentEl.createDiv({ cls: "notebook-pentest-note" });
+		// 0.11.2: what the native bridge offers (names only; nothing is called): a stylus plugin would show here.
+		this.capacitor = contentEl.createDiv({ cls: "notebook-pentest-note" });
+		this.capacitor.setText(t("penTest.capacitor", { text: formatCapacitorInventory(capacitorInventory(win)) }));
 		this.summary = contentEl.createDiv({ cls: "notebook-pentest-summary" });
+		// 0.11.2: what the last contextmenu meant (button held at contact, during a stroke, while hovering).
+		this.verdictEl = contentEl.createDiv({ cls: "notebook-pentest-summary" });
 		this.counts = contentEl.createDiv({ cls: "notebook-pentest-note" });
 		this.output = contentEl.createEl("textarea", { cls: "notebook-pentest-log", attr: { readonly: "true", rows: "14", "aria-label": t("penTest.logLabel") } });
 		const buttons = contentEl.createDiv({ cls: "notebook-pentest-buttons" });
@@ -123,6 +144,8 @@ export class PenTestModal extends Modal {
 			ev.pressure = pe.pressure;
 			ev.isPrimary = pe.isPrimary;
 			ev.pointerId = pe.pointerId;
+			ev.x = pe.clientX;
+			ev.y = pe.clientY;
 			const caps = (e as MouseEvent & { sourceCapabilities?: { firesTouchEvents?: boolean } | null }).sourceCapabilities;
 			if (caps?.firesTouchEvents === true) ev.fromTouch = true;
 		} else if (e.type.startsWith("touch")) {
@@ -133,7 +156,9 @@ export class PenTestModal extends Modal {
 		}
 		this.log.add(ev);
 		// The values of the last event, as the pen-tracker page shows them.
-		if (ev.kind !== "selectionchange") {
+		if (ev.kind === "keydown" || ev.kind === "keyup") {
+			this.lastText = `${ev.kind}  key=${JSON.stringify(ev.key ?? "")}  code=${ev.code ?? ""}  repeat=${pe.repeat ?? "-"}  target=${ev.target ?? "-"}`;
+		} else if (ev.kind !== "selectionchange") {
 			const fields = [`${ev.kind}`, `pointerType=${ev.pointerType ?? "-"}`, `button=${pe.button ?? "-"}`, `buttons=${pe.buttons ?? "-"}`,
 				`pressure=${pe.pressure ?? "-"}`, `tiltX=${pe.tiltX ?? "-"}`, `tiltY=${pe.tiltY ?? "-"}`, `isPrimary=${pe.isPrimary ?? "-"}`, `target=${ev.target ?? "-"}`];
 			this.lastText = fields.join("  ");
@@ -149,13 +174,15 @@ export class PenTestModal extends Modal {
 		this.output.scrollTop = this.output.scrollHeight;
 		this.last.setText(t("penTest.last", { text: this.lastText || "-" }));
 		this.summary.setText(t("penTest.summary", { n: String(this.log.sideButtonCount) }));
+		const verdict = this.log.verdict;
+		this.verdictEl.setText(verdict ? t("penTest.verdict", { text: verdict }) : t("penTest.verdictNone"));
 		this.counts.setText(this.log.total > 0 ? t("penTest.counts", { list: this.log.countsText() }) : t("penTest.countsNone"));
 		if (this.log.sideButtonCount > 0) this.info.markSeen();
 		this.signal.setText(noSignalYet(this.info.seen(), this.log.sideButtonCount) ? t("penTest.noSignal") : t("penTest.signalSeen"));
 	}
 
 	private async copy(): Promise<void> {
-		const text = [this.counts.getText(), this.last.getText(), this.log.text()].join("\n");
+		const text = [this.counts.getText(), this.verdictEl.getText(), this.capacitor.getText(), this.last.getText(), this.log.text()].join("\n");
 		try {
 			await navigator.clipboard.writeText(text);
 			showNotice(t("penTest.copied"));

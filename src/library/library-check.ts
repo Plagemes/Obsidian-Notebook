@@ -30,6 +30,9 @@
  */
 import { parse } from "../model/serialize";
 import { downloadState, formatBytes, isAwaitingDownload, withoutNulTail } from "../storage/sync-state";
+import { FOLDER_META_PREFIX } from "./folder-meta";
+import { SEEN_PREFIX } from "./library-check-seen";
+import { LIBRARY_STATE_PREFIX } from "./library-state";
 
 export { formatBytes };
 
@@ -41,8 +44,22 @@ export const ASSET_MTIME_GRACE_MS = 60 * 60_000;
 const ASSET_FILE = /^([0-9a-f]{24})\.(?:pdf|png|jpe?g|webp|gif)$/;
 /** Files that can name an asset outside the notebooks. */
 const HOLDER_EXTENSIONS = new Set(["notebook", "json", "snapshot", "bak", "stamp"]);
-/** `_meta/library-check-<device>.json`: this check's own record of what it saw unused. It names assets but is no reference. */
-const CHECK_RECORD = /(^|\/)library-check-[0-9a-f]{8}\.json$/;
+/**
+ * Device sidecars of `_meta` that are not holders: the folder metadata (`folders-<device>.json`) and the library state
+ * (`library-<device>.json`) never name an asset, and this check's own record (`library-check-<device>.json`) names assets
+ * but is no reference; nor are the copies kept of them when unreadable (`<prefix>.unreadable-<hash>.json`). Left out, an
+ * unsynced or empty one no longer makes the check incomplete. Every other file of the kept folders stays a holder.
+ */
+const NOT_HOLDERS: readonly string[] = [FOLDER_META_PREFIX, LIBRARY_STATE_PREFIX, SEEN_PREFIX];
+const SIDECAR_NAME = /^([a-z-]+?)(?:-[0-9a-f]{8}|\.unreadable-[0-9a-f]{8})\.json$/;
+
+/** Whether `path` is one of the `_meta` device sidecars that cannot name an asset (see NOT_HOLDERS). */
+export function isNonHolderSidecar(path: string, root: string): boolean {
+	const meta = root ? `${root}/_meta` : "_meta";
+	if (!underFolder(path, meta)) return false;
+	const m = SIDECAR_NAME.exec(path.slice(meta.length + 1));
+	return m !== null && NOT_HOLDERS.includes(m[1]!);
+}
 
 /** Where the check moves unused asset files: inside the plugin trash folder, so nothing leaves the vault. */
 export function assetTrashDir(root: string): string {
@@ -241,7 +258,7 @@ export async function runLibraryCheck(source: CheckSource, config: CheckConfig, 
 			const m = ASSET_FILE.exec(f.path.slice(dir.length + 1));
 			if (m) assets.push({ path: f.path, id: m[1]!, size: f.size, mtime: f.mtime });
 		} else if (kept.some((k) => underFolder(f.path, k))) {
-			if (HOLDER_EXTENSIONS.has(ext) && !CHECK_RECORD.test(f.path)) holderFiles.push(f);
+			if (HOLDER_EXTENSIONS.has(ext) && !isNonHolderSidecar(f.path, config.root)) holderFiles.push(f);
 		} else if (ext === "notebook") {
 			notebookFiles.push(f);
 		}

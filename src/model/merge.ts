@@ -416,7 +416,8 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 	const fields = bookmarkFieldChanges(before, other.meta ?? DEFAULT_META, meta.bookmarks);
 	summary.bookmarkInfoAdded = fields.added;
 	summary.bookmarkInfoDiffer = fields.differ;
-	if (summary.tagsAdded > 0 || summary.bookmarksAdded > 0 || summary.bookmarkInfoAdded > 0 || meta.favorite !== before.favorite) {
+	const v11Added = (meta.description !== undefined && before.description === undefined) || (!!meta.coverArt && !before.coverArt);
+	if (summary.tagsAdded > 0 || summary.bookmarksAdded > 0 || summary.bookmarkInfoAdded > 0 || meta.favorite !== before.favorite || v11Added) {
 		commands.push(new SetMeta(before, meta));
 	}
 
@@ -472,6 +473,12 @@ export function mergeMeta(main: NotebookMeta, other: NotebookMeta, pageIds: Read
 		}
 	}
 	if (n > 0) out.bookmarkInfo = info;
+	// v11: like the cover colour, the main notebook's description and cover win; the copy's fill a gap. The copy's image
+	// cover is not taken (its asset may not be in the main notebook, and a cover naming a missing asset cannot be saved).
+	const description = main.description ?? other.description;
+	if (description !== undefined) out.description = description;
+	const coverArt = main.coverArt ?? (other.coverArt?.kind === "art" ? other.coverArt : undefined);
+	if (coverArt) out.coverArt = { ...coverArt };
 	return out;
 }
 

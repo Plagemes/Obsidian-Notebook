@@ -867,7 +867,7 @@ export class PluginSettingTab {
 
 /**
  * Settings rows with working text fields, dropdowns and buttons (enough to try the plugin's modals in the
- * harness); toggles and sliders are inert.
+ * harness), toggles and sliders.
  */
 /** Builders handed to the callbacks of Setting; every setter returns the builder. */
 interface ButtonStub {
@@ -901,7 +901,7 @@ interface DropdownStub {
 	onChange(f: (v: string) => void): DropdownStub;
 }
 
-/** The inert builder of toggles and sliders: any call returns it. */
+/** The builder of toggles and sliders: the methods the harness needs work, any other call returns it. */
 type InertStub = { [method: string]: (...args: unknown[]) => InertStub };
 
 export class Setting {
@@ -926,6 +926,7 @@ export class Setting {
 		return this;
 	}
 	setHeading(): this {
+		this.settingEl.classList.add("setting-item-heading");
 		return this;
 	}
 	setClass(): this {
@@ -961,7 +962,32 @@ export class Setting {
 		return this;
 	}
 	addToggle(fn: (b: InertStub) => void): this {
-		fn(chain());
+		// A working switch (the settings tab scenario flips it): Obsidian's markup, a checkbox-container with is-enabled.
+		const el = this.controlEl.createDiv({ cls: "checkbox-container" });
+		el.setAttribute("role", "switch");
+		el.tabIndex = 0;
+		let value = false;
+		let change: ((v: boolean) => void) | null = null;
+		const set = (v: boolean) => {
+			value = v;
+			el.classList.toggle("is-enabled", v);
+			el.setAttribute("aria-checked", String(v));
+		};
+		el.addEventListener("click", () => {
+			set(!value);
+			change?.(value);
+		});
+		const b: InertStub = new Proxy((() => b) as unknown as InertStub, {
+			get: (_t, name) => {
+				if (name === "toggleEl") return el;
+				if (name === "setValue") return (v: unknown) => (set(v === true), b);
+				if (name === "getValue") return () => value;
+				if (name === "onChange") return (f: (v: boolean) => void) => ((change = f), b);
+				return () => b;
+			},
+		});
+		set(false);
+		fn(b);
 		return this;
 	}
 	addDropdown(fn: (b: DropdownStub) => void): this {
@@ -982,14 +1008,20 @@ export class Setting {
 		return this;
 	}
 	addSlider(fn: (b: InertStub) => void): this {
-		fn(chain());
+		const el = this.controlEl.createEl("input", { attr: { type: "range" } });
+		const b: InertStub = new Proxy((() => b) as unknown as InertStub, {
+			get: (_t, name) => {
+				if (name === "sliderEl") return el;
+				if (name === "setLimits") return (min: unknown, max: unknown, step: unknown) => ((el.min = String(min)), (el.max = String(max)), (el.step = String(step)), b);
+				if (name === "setValue") return (v: unknown) => ((el.value = String(v)), b);
+				if (name === "getValue") return () => Number(el.value);
+				if (name === "onChange") return (f: (v: number) => void) => (el.addEventListener("input", () => f(Number(el.value))), b);
+				return () => b;
+			},
+		});
+		fn(b);
 		return this;
 	}
-}
-
-function chain(): InertStub {
-	const p: InertStub = new Proxy((() => p) as unknown as InertStub, { get: () => () => p });
-	return p;
 }
 
 /** Icons: a harness stand-in of the Lucide icon (icons.ts), or a tiny glyph with the icon name as title. */
@@ -998,6 +1030,11 @@ export function setIcon(el: HTMLElement, name: string): void {
 	if (drawIcon(el, name)) return;
 	const s = el.createSpan({ cls: "harness-icon", text: name.slice(0, 2) });
 	s.title = name;
+}
+
+/** wave 0.12: the icon ids the "More icons…" search lists (a sample of Lucide's names, as Obsidian prefixes them). */
+export function getIconIds(): string[] {
+	return ["lucide-folder", "lucide-graduation-cap", "lucide-heart-pulse", "lucide-flask-conical", "lucide-sigma", "lucide-brain", "lucide-atom", "lucide-book-open", "lucide-palette", "lucide-star"];
 }
 
 export function getLanguage(): string {
@@ -1070,4 +1107,43 @@ export function renderMath(source: string, display: boolean): HTMLElement {
 	svg.appendChild(t);
 	el.appendChild(svg);
 	return el;
+}
+
+/**
+ * Front matter and YAML: the companion notes and the Zettelkasten import them (the settings tab scenario bundles them).
+ * The harness never writes either, so these only have to exist; they keep the shapes Obsidian returns.
+ */
+export function getFrontMatterInfo(content: string): { exists: boolean; frontmatter: string; from: number; to: number; contentStart: number } {
+	const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(content);
+	return m ? { exists: true, frontmatter: m[1] ?? "", from: 4, to: 4 + (m[1]?.length ?? 0), contentStart: m[0].length } : { exists: false, frontmatter: "", from: 0, to: 0, contentStart: 0 };
+}
+
+export function parseYaml(text: string): unknown {
+	const out: Record<string, string> = {};
+	for (const line of text.split(/\r?\n/)) {
+		const i = line.indexOf(":");
+		if (i > 0) out[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+	}
+	return out;
+}
+
+export function stringifyYaml(value: unknown): string {
+	if (typeof value !== "object" || value === null) return `${JSON.stringify(value)}\n`;
+	return Object.entries(value).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join("\n") + "\n";
+}
+
+// 0.12: the library view (doc=library) imports the tag editor and companion notes; the harness never opens them.
+export class AbstractInputSuggest<T> {
+	constructor(readonly app: App, readonly inputEl: HTMLInputElement) {}
+	getSuggestions(query: string): T[] | Promise<T[]> {
+		void query;
+		return [];
+	}
+	close(): void {
+		/* nothing */
+	}
+}
+
+export function getAllTags(): string[] | null {
+	return null;
 }

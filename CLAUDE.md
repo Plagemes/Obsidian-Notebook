@@ -19,7 +19,7 @@ Full vision and roadmap: `docs/spec.md`. Do not anticipate future phases without
 5. **No mandatory cloud**, no telemetry.
 6. **Licenses**: before copying or adapting external code, check the license and record it in `docs/research.md`. No GPL/AGPL code in the repo.
 7. **No AI** until writing and persistence are stable (see roadmap).
-8. **No decorative UI**: every visible control works.
+8. **No fake controls**: every visible control works. Decorative graphics (artwork, gradients, glows, illustrations) are welcome where they help the look, as long as they never pose as controls or get in the way (see `DESIGN.md`).
 9. **Honesty about status**: do not declare a feature complete if it is unverified. You cannot test on Android hardware: do not simulate those results.
 
 ## Architecture
@@ -46,7 +46,7 @@ tests/           vitest on ink/ and model/
 Only the user fills in the "verified on hardware" column.
 
 ## Workflow
-- Every interface change follows `DESIGN.md` (premium, minimal, functional, generative UI/UX). A new feature adds its settings in the same change, placed organically in the right section.
+- Every screen, function and interface (present and future) follows `DESIGN.md`: premium, minimal, functional, generative UI/UX, with its tokens and components. A new feature ships already styled and adds its settings in the same change, placed organically in the right section.
 - Small commits with clear messages.
 - A task is done only if `npm run build`, `npm run lint` and `npm test` pass.
 - Update `CHANGELOG.md` and `docs/` when the architecture or format changes.
