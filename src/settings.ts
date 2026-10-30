@@ -121,6 +121,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	// wave 0.10: colours
 	/** The last custom colours chosen with the colour picker or the eyedropper (newest first, `#rrggbb`). */
 	recentColours: string[];
+	/** wave 0.10 (50): the draggable thumb with a page preview along the right edge in continuous scroll. */
+	fastScrollbar: boolean;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -169,6 +171,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	autoLineBreak: false,
 	dateStampFormat: DEFAULT_STAMP_FORMAT,
 	recentColours: [],
+	fastScrollbar: true,
 	...DEFAULT_COMPANION_SETTINGS,
 	...DEFAULT_GESTURE_SETTINGS,
 	...DEFAULT_PEN_GESTURE_SETTINGS,
@@ -231,6 +234,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.autoLineBreak === "boolean") s.autoLineBreak = d.autoLineBreak;
 	if (typeof d.dateStampFormat === "string") s.dateStampFormat = cleanStampFormat(d.dateStampFormat);
 	s.recentColours = normaliseRecentColours(d.recentColours);
+	if (typeof d.fastScrollbar === "boolean") s.fastScrollbar = d.fastScrollbar;
 	s.lastNotebookPos = parsePosition(d.lastNotebookPos);
 
 	if (typeof d.timetableOffer === "boolean") s.timetableOffer = d.timetableOffer;

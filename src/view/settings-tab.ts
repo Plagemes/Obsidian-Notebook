@@ -253,6 +253,12 @@ export class NotebookSettingTab extends PluginSettingTab {
 				desc: t("settings.dateStamp.desc"),
 				control: { type: "text", key: "dateStampFormat", defaultValue: DEFAULT_SETTINGS.dateStampFormat, placeholder: DEFAULT_SETTINGS.dateStampFormat },
 			},
+			// wave 0.10 (50)
+			{
+				name: t("settings.fastScrollbar"),
+				desc: t("settings.fastScrollbar.desc"),
+				control: { type: "toggle", key: "fastScrollbar", defaultValue: DEFAULT_SETTINGS.fastScrollbar },
+			},
 			// Companion notes (O1)
 			...companionSettingDefinitions(this.companionHost()),
 			// wave 0.6: library trash, templates
@@ -452,6 +458,10 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setName(t("settings.dateStamp"))
 			.setDesc(t("settings.dateStamp.desc"))
 			.addText((text) => text.setPlaceholder(DEFAULT_SETTINGS.dateStampFormat).setValue(s.dateStampFormat).onChange((v) => this.setControlValue("dateStampFormat", v)));
+		new Setting(containerEl)
+			.setName(t("settings.fastScrollbar"))
+			.setDesc(t("settings.fastScrollbar.desc"))
+			.addToggle((tg) => tg.setValue(s.fastScrollbar).onChange((v) => this.setControlValue("fastScrollbar", v)));
 		displayGestureSettings(containerEl, this.gestureHost());
 		new Setting(containerEl)
 			.setName(t("settings.penLongPress"))

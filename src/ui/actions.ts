@@ -69,6 +69,8 @@ export interface UiContext {
 	display?: { night: boolean; crop: boolean };
 	/** wave 0.10: how many notebook views are open in the workspace (tabs). Optional (0 when absent). */
 	openNotebooks?: number;
+	/** wave 0.10 (18): the back/forward history of visited pages has somewhere to go. Optional (absent: nothing to go back to). */
+	nav?: { back: boolean; forward: boolean };
 	/** Phone-sized view (the page panel is a drawer, the toolbar has two rows). */
 	narrow: boolean;
 }
@@ -105,6 +107,8 @@ export interface ActionDef {
 	readonly keywords?: string;
 }
 
+/** Back and Forward only show once the history has somewhere to go. */
+const hasNav = (c: UiContext) => !!c.nav && (c.nav.back || c.nav.forward);
 const pdfPage = (c: UiContext) => c.page?.background === "pdf";
 const backgroundPage = (c: UiContext) => !!c.page && c.page.background !== "none";
 const hasSelection = (c: UiContext) => !!c.selection && c.selection.strokes + c.selection.elements > 0;
@@ -190,6 +194,10 @@ export const ACTIONS: readonly ActionDef[] = [
 	// --- navigation (wave 0.7): the first section of the page sheet (the page indicator opens it) and of the sheet.
 	{ id: "goto-page-number", label: "command.gotoPageNumber", icon: "hash", group: "navigate", surfaces: ["page", "sheet"], priority: 85, scope: "view", command: true, readOnly: true, keywords: "jump number bookmark" },
 	{ id: "recent-pages", label: "command.recentPages", icon: "history", group: "navigate", surfaces: ["page", "sheet", "library"], priority: 60, scope: "global", command: true, readOnly: true, keywords: "edited last" },
+	// wave 0.10 (18): back/forward through the visited pages, within and across notebooks. They are quick slots (when the
+	// width allows), part of the Go to section of the page sheet, commands (hotkeys) and the mouse side buttons on desktop.
+	{ id: "nav-back", label: "nav.back", icon: "arrow-left", group: "navigate", surfaces: ["quick", "page", "sheet"], priority: 64, scope: "view", command: "command.navBack", readOnly: true, when: hasNav, enabled: (c) => !!c.nav?.back, keywords: "previous history visited return indietro" },
+	{ id: "nav-forward", label: "nav.forward", icon: "arrow-right", group: "navigate", surfaces: ["quick", "page", "sheet"], priority: 63, scope: "view", command: "command.navForward", readOnly: true, when: hasNav, enabled: (c) => !!c.nav?.forward, keywords: "next history visited avanti" },
 	{ id: "go-to-page", label: "command.goToPage", icon: "file-search", group: "navigate", surfaces: ["sheet", "library"], priority: 55, scope: "global", command: true, readOnly: true, keywords: "switcher find notebook" },
 	{ id: "toggle-page-mode", label: "toolbar.pageMode", icon: "book-open", group: "navigate", surfaces: ["quick", "page", "sheet"], priority: 46, scope: "view", command: "command.pageMode", readOnly: true, checked: (c) => !!c.toggles.pageMode, keywords: "swipe paged continuous scroll" },
 	// wave 0.9 (361): find and replace in the text boxes of the notebook (a panel; the results jump to the page).

@@ -103,7 +103,7 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 15. **P1** 🧪 Notebook outline: titled bookmarks shown as a table of contents.
 16. 🧪 **P1** Global search in the library: titles, tags, text boxes (OCR later).
 17. **P2** Links on the page: a region or element opens another page, notebook, Obsidian note or URL.
-18. **P2** Back/forward history of visited pages.
+18. **P2** 🧪 Back/forward history of visited pages.
 19. **P2** Notebook templates: create a notebook from a saved notebook (planner, lab book).
 20. **P2** Sticky notes: movable coloured notes on the page.
 21. **P3** Paper colours (cream, dark, chalkboard) with ink adapted for contrast.
@@ -153,7 +153,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 ### Navigation and view
 48. ~~**P1** Double tap to zoom: toggles fit-to-width and 100 %.~~ — dropped (user decision, 2026-10-29)
 49. **P2** Two-page spread view (landscape tablets).
-50. **P2** Fast scrollbar with a page preview while dragging.
+50. **P2** 🧪 Fast scrollbar with a page preview while dragging.
 51. **P2** 🧪 Read-only mode to read without accidental marks.
 52. **P2** Coloured sections inside a notebook (tab dividers, as in OneNote).
 
@@ -229,7 +229,7 @@ Goal: notebooks behave like first-class Obsidian content. Several items depend o
 - **O12 P2** Daily notebook: "Today's page" adds a dated page and links it from the daily note.
 - **O13 P2** Obsidian templates: template notebooks and embeds in Templates/Templater.
 - **O14 P1** 🧪 Commands and hotkeys for every tool (pen, eraser, lasso…), assignable in Hotkeys.
-- **O15 P2** Status bar: "p. 3/12" and save state; tap opens the navigator.
+- **O15 P2** 🧪 Status bar: "p. 3/12" and save state; tap opens the navigator.
 - **O16 P1** 🧪 Reopen where you left off: workspace/session restore brings back the same page and zoom.
 - ~~**O17 P1** Theme integration: colours, accent and dark mode followed everywhere; documented CSS variables for snippets.~~ — dropped (user decision, 2026-10-29)
 - ~~**O18 P1** Sync conflicts: when Obsidian Sync creates a conflicted copy, a dialog compares both versions and merges their strokes.~~ — dropped: sync will go through Google Drive or OneDrive, not Obsidian Sync (user decision, 2026-10-29)
