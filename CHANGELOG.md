@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+Not yet verified on Android hardware. The manual steps for these features are CS1 to CS14 in `docs/testing.md`. No document format change.
+
+### Added
+- **Date and time stamp** (roadmap 356; steps CS1-CS3): *Date and time stamp* in the All actions sheet and the command palette inserts a text box with the date and time where the pen last touched the page (the middle of the page in view when there was no recent touch), in the format set in *Settings > Date and time stamp format* (`YYYY-MM-DD HH:mm` by default; `[text]` stays as written; month and weekday names follow Obsidian's language). One undo step; the box is selected afterwards.
+- **Lasso selection across pages** (roadmap 359; steps CS4-CS8): a lasso that reaches into another page selects the ink and elements inside it on every page it touches. Move, scale, rotate, delete, restyle, copy, cut, duplicate and layer order work on the whole selection; after a move each item belongs to the page under it, as one undo step. A lasso inside one page works as before.
+- **Cross-device clipboard** (roadmap 362; steps CS9-CS14): *Copy to other devices* writes the selection to `_meta/clipboard-<device>.json` (this device's own file, last five copies, 3 MB cap); *Paste from another device…* lists the copies of the other devices, newest first, and pastes the chosen one with new ids. Only the copy action writes; an unreadable, empty or newer-version file of this device is never overwritten (a copy is kept and the copy is refused).
+
 ## 0.8.0 — 2026-10-30
 
 Not yet verified on Android hardware. The manual steps added in this version are numbered 178 to 232 in `docs/testing.md`; the ones that belong to each area are named below.

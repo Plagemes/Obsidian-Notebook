@@ -657,15 +657,15 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 353. **P2** Automatic line break: when writing reaches the right margin, the view jumps to the start of the next line.
 354. **P3** Right-to-left writing: automatic next page, word detection and the space tool also work for Arabic and Hebrew.
 355. **P2** Stylus profiles: S Pen, USI and other pens recognised automatically, with settings that suit them.
-356. **P2** Quick date and time stamp at the pen position.
+356. **P2** 🧪 Quick date and time stamp at the pen position.
 
 ### Objects and selection
 357. **P2** 🧪 Layer order: bring to front, send to back.
 358. **P2** Opacity slider for ink, highlighter and images.
-359. **P2** Lasso selection across page boundaries.
+359. **P2** 🧪 Lasso selection across page boundaries.
 360. **P3** Code text box: monospace with syntax colours.
 361. **P2** 🧪 Find and replace in the text boxes of a notebook.
-362. **P2** Cross-device clipboard: copy on the tablet, paste on the phone, through the vault.
+362. **P2** 🧪 Cross-device clipboard: copy on the tablet, paste on the phone, through the vault.
 
 ### Navigation and view
 363. **P2** Tabs of open notebooks, with a swipe from one to the next.
