@@ -26,6 +26,9 @@ const DEVICES = {
 	tabletLandscape: { width: 1280, height: 800, deviceScaleFactor: 2, mobile: true, touch: true },
 };
 
+// The families of src/ui/art/generative-art.ts (ART_STYLES), for the art gallery pages.
+const ART_STYLES = ["contours", "cells", "waves", "branches", "flow", "orbits", "grid"];
+
 const SCENARIOS = [];
 for (const doc of ["v3", "new"]) {
 	for (const theme of ["light", "dark"]) {
@@ -181,6 +184,7 @@ async function main() {
 		"--no-default-browser-check", "--disable-extensions", "--hide-scrollbars", "about:blank",
 	], { stdio: "ignore" });
 	let failures = 0;
+	let total = SCENARIOS.filter((x) => !process.env.HARNESS_DOC || x.doc === process.env.HARNESS_DOC).length;
 	try {
 		let devtools = null;
 		for (let i = 0; i < 100 && !devtools; i++) {
@@ -284,6 +288,55 @@ async function main() {
 				console.log(`ok   ${name}  (dpr ${report.env?.dpr}, pointerrawupdate ${report.env?.rawUpdates}, desynchronized ${report.env?.wetDesynchronized})`);
 			}
 		}
+		// The art gallery (src/ui/art): every style in the eight subject colours as cards and covers, plus the folder
+		// icons, in dark and light; full-page screenshots in dist/shots/art/. HARNESS_DOC=art runs only these.
+		if (!process.env.HARNESS_DOC || process.env.HARNESS_DOC === "art") {
+			const artDir = join(shots, "art");
+			mkdirSync(artDir, { recursive: true });
+			const pages = [];
+			for (const theme of ["dark", "light"]) {
+				for (const style of [...ART_STYLES, "icons"]) pages.push({ theme, style, device: "desktopHiDpi" });
+				for (const device of ["tablet", "phone"]) pages.push({ theme, style: "mix", device });
+			}
+			for (const a of pages) {
+				const d = a.device === "desktopHiDpi" ? { ...DEVICES.desktop, deviceScaleFactor: 2 } : DEVICES[a.device];
+				const name = `art-${a.theme}-${a.style}-${a.device}`;
+				await cdp.send("Emulation.setDeviceMetricsOverride", { width: d.width, height: d.height, deviceScaleFactor: d.deviceScaleFactor, mobile: d.mobile });
+				await cdp.send("Page.navigate", { url: `http://127.0.0.1:${port}/art.html?theme=${a.theme}&style=${a.style}` });
+				let report;
+				try {
+					for (let i = 0; i < 100; i++) {
+						if (await cdp.evaluate("typeof window.artGallery === 'object'")) break;
+						await sleep(100);
+					}
+					await cdp.evaluate("window.artGallery.ready.then(() => true)");
+					// The checks (timing, determinism, cache) once per theme, on the desktop page of one style.
+					report = a.style === "cells" ? await cdp.evaluate("window.artGallery.check()", 60000) : { ok: true, results: [], errors: [], timings: {} };
+					await sleep(150);
+				} catch (e) {
+					report = { ok: false, results: [], errors: [String(e.message ?? e)], timings: {} };
+				}
+				const metrics = await cdp.send("Page.getLayoutMetrics");
+				const size = metrics.cssContentSize ?? metrics.contentSize;
+				const shot = await cdp.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: { x: 0, y: 0, width: d.width, height: Math.ceil(size.height), scale: 1 } });
+				writeFileSync(join(artDir, `${name}.png`), Buffer.from(shot.data, "base64"));
+				const problems = report.results.filter((r) => !r.ok).map((r) => `${r.name}: ${r.detail}`);
+				problems.push(...report.errors.map((e) => `console error: ${e.split("\n")[0]}`));
+				total++;
+				const t = Object.entries(report.timings).map(([k, v]) => `${k} ${v} ms`).join(", ");
+				if (problems.length) {
+					failures++;
+					console.log(`FAIL ${name}${t ? `  (draw 600x200 @2x: ${t})` : ""}`);
+					for (const p of problems) console.log(`     ${p}`);
+				} else {
+					console.log(`ok   ${name}${t ? `  (draw 600x200 @2x: ${t})` : ""}`);
+				}
+				if (process.env.ART_BENCH && a.style === "cells") {
+					const v = await cdp.evaluate(`JSON.stringify(Object.fromEntries(${JSON.stringify(ART_STYLES)}.map((s) => [s, ["card", "noglow", "flat"].map((k) => window.artGallery.bench(s, 9, k)).join(" / ")])))`, 120000);
+					console.log(`     bench card / noglow / flat: ${v}`);
+				}
+			}
+		}
 		cdp.close();
 	} finally {
 		browser.kill();
@@ -295,7 +348,7 @@ async function main() {
 			// Chrome may still hold the profile on Windows.
 		}
 	}
-	console.log(failures ? `harness:check: ${failures} of ${SCENARIOS.length} scenarios failed (screenshots in ${shots})` : `harness:check: all ${SCENARIOS.length} scenarios ok (screenshots in ${shots})`);
+	console.log(failures ? `harness:check: ${failures} of ${total} scenarios failed (screenshots in ${shots})` : `harness:check: all ${total} scenarios ok (screenshots in ${shots})`);
 	process.exit(failures ? 1 : 0);
 }
 

@@ -4,6 +4,11 @@
 
 No change to the notebook format (still v10). Clean-up for Obsidian's community Scorecard (runtime code and styles); not verified in Obsidian or on a device.
 
+### Added
+- Procedural subject art (`src/ui/art/`, DESIGN.md §2.6): deterministic line art from a seed and a subject colour in seven families (branches, cells, waves, contours, flow, orbits, grid), with a right-to-left fade and a soft glow in the subject colour. `drawArt`, cached `artImage` (also faint header bands through `intensity`), `coverImage` (portrait notebook covers), `emptyStateImage` and the glossy `folderIconSvg`; `artEnabled()` switches it all off under reduced motion. Images are cached (LRU, 40 entries) by spec, size and pixel ratio. Not used by any surface yet; not verified on a device.
+- Subject palette (`src/ui/palette.ts`): the eight colours of DESIGN.md §2.3 and `colorFor(name)`, a stable hash into them.
+- Harness: an art gallery page (`dev/harness/art.html`), screenshotted by `npm run harness:check` in dark and light at desktop, tablet and phone widths, with timing, determinism and cache checks.
+
 ### Changed
 - `npm run lint` now also runs `eslint-plugin-obsidianmd` 0.4.2 (`recommended`, type-checked; MIT, devDependency only) on `src/**` and `package.json`; a commented block in `eslint.config.mjs` extends it to `tests/**` and `dev/**`.
 - Destructive buttons (delete marker or box, remove bookmark, library confirmations) use `setDestructive()` on Obsidian 1.13+ and the same `mod-warning` class as before on older versions (`ui/destructive.ts`).
