@@ -4,7 +4,7 @@ import { createDocument, createStroke, createPage } from "../src/model/document"
 import {
 	applyPracticeOp, attemptFromTags, attemptsOf, attemptTag, buildPracticePage, elapsedSeconds, emptyPractice, exercisesName,
 	formatAttemptDate, formatDuration, hasPracticeTag, hidesAll, inkColours, inkTools, insertIndexAfter, newRecord, nextAttemptNumber,
-	normalizeHideSpec, parsePractice, peekStrokes, practiceTags, PRACTICE_FORMAT, recordOf, serializePractice, splitInk, totalSeconds,
+	normalizeHideSpec, parsePracticePrefs, parsePractice, peekStrokes, practiceTags, PRACTICE_FORMAT, recordOf, serializePractice, splitInk, totalSeconds,
 	type AttemptRecord, type PracticeData,
 } from "../src/model/practice";
 import { parse, serialize } from "../src/model/serialize";
@@ -323,5 +323,13 @@ describe("practice store", () => {
 		await Promise.all([1, 2, 3, 4].map((i) => store.update({ type: "add", record: rec(`p${i}`, "o1", i, `2026-10-0${i}T08:00:00.000Z`) })));
 		expect(store.snapshot().attempts.length).toBe(4);
 		expect(store.path).toBe("_meta/practice.json");
+	});
+});
+
+describe("remembered choices", () => {
+	it("anything stored becomes valid preferences", () => {
+		expect(parsePracticePrefs(null)).toEqual({ target: "after", exercises: "Exercises" });
+		expect(parsePracticePrefs({ target: "notebook", exercises: " Drills " })).toEqual({ target: "notebook", exercises: "Drills" });
+		expect(parsePracticePrefs({ target: "elsewhere", exercises: 4 })).toEqual({ target: "after", exercises: "Exercises" });
 	});
 });

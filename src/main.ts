@@ -24,6 +24,7 @@ import { registerLectureCommands } from "./view/lecture-commands";
 import { TimetableService } from "./timetable/service";
 import { registerPdfSyncCommands } from "./view/pdf-sync";
 import { registerZettel } from "./zettel";
+import { PracticeService, registerPracticeCommands } from "./view/practice";
 
 export default class NotebookPlugin extends Plugin {
 	settings!: NotebookSettings;
@@ -33,10 +34,13 @@ export default class NotebookPlugin extends Plugin {
 	timetable!: TimetableService;
 	/** Public API for other plugins and scripts (docs/api.md). */
 	api?: NotebookApi;
+	/** Wave 0.9: practice copies of exercises (view/practice.ts); the views attach to it. */
+	practice!: PracticeService;
 
 	async onload(): Promise<void> {
 		this.settings = readSettings(await this.loadData());
 
+		this.practice = new PracticeService(this);
 		this.journal = new AdapterJournalStore(this.app.vault.adapter, journalFolder(this.app, this.manifest.id));
 		this.registerView(VIEW_TYPE, (leaf) => new NotebookView(leaf, this));
 		this.registerExtensions([...NOTEBOOK_EXTENSIONS], VIEW_TYPE);
@@ -100,6 +104,10 @@ export default class NotebookPlugin extends Plugin {
 		});
 		// wave 0.6: zettelkasten (M15 Z1–Z3, Z11, Z12)
 		registerZettel(this);
+
+		// wave 0.9: redo the exercise (#303): practice copies, attempts, peek, timer (view/practice.ts)
+		registerPracticeCommands(this, (checking, run) => this.withView(checking, run));
+		this.practice.start();
 
 		// wave 0.6: timetable (src/timetable/): current class offer, library shortcut, editor.
 		this.timetable = new TimetableService(this, (file) => this.host.openNotebook(file));

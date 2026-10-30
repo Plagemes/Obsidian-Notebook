@@ -365,3 +365,23 @@ export function exercisesName(raw: string | null | undefined): string {
 export function insertIndexAfter(pageIndex: number, pageCount: number): number {
 	return Math.max(0, Math.min(pageIndex + 1, pageCount));
 }
+
+// --- remembered choices ---
+
+export type PracticeTarget = "after" | "notebook";
+
+/** What the dialog remembers on this device between uses. */
+export interface PracticePrefs {
+	target: PracticeTarget;
+	/** Name of the exercises notebook. */
+	exercises: string;
+}
+
+export const DEFAULT_PRACTICE_PREFS: Readonly<PracticePrefs> = { target: "after", exercises: DEFAULT_EXERCISES_NAME };
+
+/** Stored preferences (anything: a missing key, an older shape) as valid ones. */
+export function parsePracticePrefs(raw: unknown): PracticePrefs {
+	if (typeof raw !== "object" || raw === null) return { ...DEFAULT_PRACTICE_PREFS };
+	const r = raw as Record<string, unknown>;
+	return { target: r.target === "notebook" ? "notebook" : "after", exercises: exercisesName(typeof r.exercises === "string" ? r.exercises : null) };
+}
