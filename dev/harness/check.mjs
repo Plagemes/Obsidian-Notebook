@@ -51,6 +51,11 @@ for (const surface of ["home", "library"]) {
 		for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "empty", surface, theme, device, lowLatency: false });
 	}
 }
+// 0.12.3: the empty vault on a hostile WebView (newer built-ins deleted, the art engine failing): everything but the art
+// is drawn. Screenshots of Home / the library and of both tabs of the creation dialog in dev/harness/dist/shots/design/.
+SCENARIOS.push({ doc: "empty", surface: "home", theme: "dark", device: "tablet", lowLatency: false, hostile: true });
+SCENARIOS.push({ doc: "empty", surface: "library", theme: "dark", device: "tablet", lowLatency: false, hostile: true });
+SCENARIOS.push({ doc: "empty", surface: "home", theme: "light", device: "phone", lowLatency: false, hostile: true });
 // Phone held sideways: little height for the toolbar popovers.
 DEVICES.landscape = { width: 740, height: 360, deviceScaleFactor: 3, mobile: true, touch: true };
 SCENARIOS.push({ doc: "new", theme: "light", device: "landscape", lowLatency: false });
@@ -173,10 +178,10 @@ async function main() {
 
 		for (const s of SCENARIOS.filter((x) => !process.env.HARNESS_DOC || x.doc === process.env.HARNESS_DOC)) {
 			const d = DEVICES[s.device];
-			const name = `${s.doc}${s.surface ? `-${s.surface}` : ""}-${s.theme}-${s.device}${s.lowLatency ? "-lowlatency" : ""}${s.fault ? `-fault-${s.fault}` : ""}`;
+			const name = `${s.doc}${s.surface ? `-${s.surface}` : ""}-${s.theme}-${s.device}${s.lowLatency ? "-lowlatency" : ""}${s.fault ? `-fault-${s.fault}` : ""}${s.hostile ? "-hostile" : ""}`;
 			await cdp.send("Emulation.setDeviceMetricsOverride", { width: d.width, height: d.height, deviceScaleFactor: d.deviceScaleFactor, mobile: d.mobile });
 			await cdp.send("Emulation.setTouchEmulationEnabled", d.touch ? { enabled: true, maxTouchPoints: 5 } : { enabled: false });
-			const url = `http://127.0.0.1:${port}/index.html?doc=${s.doc}&theme=${s.theme}${s.lowLatency ? "&lowLatency=1" : ""}${s.fault ? `&fault=${s.fault}` : ""}${s.surface ? `&surface=${s.surface}` : ""}`;
+			const url = `http://127.0.0.1:${port}/index.html?doc=${s.doc}&theme=${s.theme}${s.lowLatency ? "&lowLatency=1" : ""}${s.fault ? `&fault=${s.fault}` : ""}${s.surface ? `&surface=${s.surface}` : ""}${s.hostile ? "&hostile=1" : ""}`;
 			await cdp.send("Page.navigate", { url });
 			let report;
 			try {
@@ -185,7 +190,7 @@ async function main() {
 					await sleep(100);
 				}
 				await cdp.evaluate("window.harness.ready.then(() => true)");
-				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? "window.harness.checkEmpty()" : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}
@@ -238,7 +243,20 @@ async function main() {
 				}
 			}
 			// 0.12.2: review screenshots of the empty vault, and of the creation dialog its empty state opens.
-			if (s.doc === "empty") {
+			if (s.doc === "empty" && s.hostile) {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				writeFileSync(join(designDir, `hostile-${s.surface}-${s.theme}-${s.device}.png`), png);
+				for (const tab of ["notebook", "folder"]) {
+					try {
+						if (!(await cdp.evaluate(`window.harness.hostileDialog('${tab}')`))) problems.push(`hostile: the creation dialog's ${tab} tab did not open`);
+						writeFileSync(join(designDir, `hostile-${s.surface}-${s.theme}-${s.device}-dialog-${tab}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`hostile dialog screenshot: ${e.message}`);
+					}
+				}
+			}
+			if (s.doc === "empty" && !s.hostile) {
 				const designDir = join(shots, "design");
 				mkdirSync(designDir, { recursive: true });
 				writeFileSync(join(designDir, `empty-${s.surface}-${s.theme}-${s.device}.png`), png);

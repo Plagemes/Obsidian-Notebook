@@ -300,8 +300,8 @@ computed on the device from the index (`src/library/dashboard.ts`, pure and test
 pages log; nothing is invented and empty sections are hidden, except where something can be created (below).
 
 **Creation is always reachable (0.12.2).** The header of Home and of the library ends with the primary **+ New** pill
-(`ui/components/new-button.ts`), and the rail has a compact **+** next to the brand (also in the phone sheet, which
-closes when an item is chosen); both open the same New menu. Home's quick actions are always shown. A vault with no
+(`ui/components/new-button.ts`), aligned in the header row; it opens the New menu. (0.12.2 also had a compact **+** in
+the rail; 0.12.3 removed it: it sat on the brand, and creation belongs to the header and the quick actions.) Home's quick actions are always shown. A vault with no
 notebooks shows an empty state (`ui/components/empty-state.ts`: the art engine's `emptyStateImage`, *Start your first
 notebook*, one line, *Create a notebook* · *Create a folder* · *Import a PDF*) on Home, in the library's *All* and
 *Subjects* and in an empty notebooks folder, and Home hides the statistics until there is something to count.

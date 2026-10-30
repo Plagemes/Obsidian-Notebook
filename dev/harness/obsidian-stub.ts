@@ -77,6 +77,9 @@ export function installDomHelpers(): void {
 	const create = function (this: Node, tag: string, o?: DomInfo | string, cb?: (el: HTMLElement) => void) {
 		return createElIn(this, tag, o, cb);
 	};
+	// 0.12.3: like Obsidian, `createEl` on a Document appends to that node too, so `activeDocument.createEl(...)` throws
+	// "Only one element on document allowed" here as it does in the app (the stub used to make it a detached create,
+	// which hid the cause of 0.12.2's empty Home and creation dialog). Detached elements: the global `createEl`.
 	for (const p of [N, D, F]) {
 		p.createEl = create;
 		p.createDiv = function (this: Node, o?: DomInfo | string, cb?: (el: HTMLElement) => void) {
@@ -86,9 +89,6 @@ export function installDomHelpers(): void {
 			return createElIn(this, "span", o, cb);
 		};
 	}
-	D.createEl = function (tag: string, o?: DomInfo | string, cb?: (el: HTMLElement) => void) {
-		return createElIn(null, tag, o, cb);
-	};
 	N.createSvg = function (this: Node, tag: string, o?: DomInfo | string, cb?: (el: SVGElement) => void) {
 		const el = dom.createElementNS("http://www.w3.org/2000/svg", tag);
 		applyInfo(el as unknown as HTMLElement, o);
@@ -1169,6 +1169,9 @@ export function getLanguage(): string {
 // This stub implements Obsidian's own Platform for the browser harness, so reading the user agent here is the point.
 const { userAgent } = window.navigator;
 const MOBILE_UA = /Android|iPhone|iPad/i.test(userAgent);
+
+/** Obsidian's API version (the settings tab's Diagnostics → Device info row shows it). */
+export const apiVersion = "1.14.4-harness";
 
 export const Platform = {
 	isMobile: MOBILE_UA,

@@ -38,7 +38,7 @@ function quantizeScale(s: number): number {
 }
 
 function createCanvas(width: number, height: number): HTMLCanvasElement {
-	const c = activeDocument.createEl("canvas");
+	const c = createEl("canvas");
 	c.width = width;
 	c.height = height;
 	return c;
@@ -135,7 +135,7 @@ export async function openNotebookReference(app: App, file: TFile, notebooksFold
 			const bg = page.background;
 			// Load the PDF page first so the synchronous drawing below finds it.
 			if (bg?.kind === "pdf") await media.pdf.render(bg.asset, bg.page, quantizeScale(pixels / page.width)).catch(() => undefined);
-			const img = activeDocument.createEl("img");
+			const img = createEl("img");
 			img.src = renderThumbnail(page, pixels, { mime: "image/jpeg", quality: 0.9, drawBackground: (ctx, p) => drawMedia(ctx, p) });
 			return img;
 		},

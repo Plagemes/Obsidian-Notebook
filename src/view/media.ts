@@ -110,7 +110,7 @@ export class NotebookMedia implements MediaSource {
 			loadPdfJs: () => loadPdfJs() as Promise<PdfLib>,
 			readAsset: (id) => this.readAsset(id),
 			createCanvas: (w, h) => {
-				const c = activeDocument.createEl("canvas");
+				const c = createEl("canvas");
 				c.width = w;
 				c.height = h;
 				return c;
@@ -314,7 +314,7 @@ export class NotebookMedia implements MediaSource {
 			}
 			return have.picture;
 		}
-		const canvas = have?.picture ?? activeDocument.createEl("canvas");
+		const canvas = have?.picture ?? createEl("canvas");
 		canvas.width = Math.max(1, Math.round(region.width * scale));
 		canvas.height = Math.max(1, Math.round(region.height * scale));
 		const ctx = canvas.getContext("2d");
@@ -354,7 +354,7 @@ export class NotebookMedia implements MediaSource {
 		}
 		const width = 480;
 		const height = Math.max(40, Math.round(width / ratio));
-		const c = activeDocument.createEl("canvas");
+		const c = createEl("canvas");
 		c.width = width;
 		c.height = height;
 		const ctx = c.getContext("2d");
@@ -387,7 +387,7 @@ export class NotebookMedia implements MediaSource {
 	/** JPEG of an image asset (any browser-decodable format), for exports. */
 	async imageJpeg(asset: string): Promise<{ jpeg: Uint8Array; pixelWidth: number; pixelHeight: number }> {
 		const bmp = await createImageBitmap(new Blob([await this.readAsset(asset)]));
-		const c = activeDocument.createEl("canvas");
+		const c = createEl("canvas");
 		c.width = bmp.width;
 		c.height = bmp.height;
 		const ctx = c.getContext("2d");

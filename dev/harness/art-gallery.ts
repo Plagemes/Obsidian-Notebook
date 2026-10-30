@@ -119,7 +119,7 @@ const median = (xs: number[]): number => [...xs].sort((a, b) => a - b)[Math.floo
 
 /** Median time (ms) to draw one 600 × 200 card at dpr 2 into a fresh canvas, raster work included. */
 function bench(style: ArtStyle, runs = 5, variant: "card" | "noglow" | "flat" = "card"): number {
-	const canvas = activeDocument.createEl("canvas");
+	const canvas = createEl("canvas");
 	canvas.width = 1200;
 	canvas.height = 400;
 	const ctx = canvas.getContext("2d");

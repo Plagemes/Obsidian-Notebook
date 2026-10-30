@@ -7431,12 +7431,47 @@ body.notebook-style-obsidian {
 	transition: none;
 }
 
-/* --- Settings tab (DESIGN.md §2 and §6, docs/design-ui.md "Settings"). Uses the global design tokens (see "Notebook
-   design tokens" at the top); the "Style" setting (appearanceStyle) maps them onto Obsidian's variables through
-   body.notebook-style-obsidian. --- */
-.notebook-settings {
-	background-color: var(--nb-bg);
+/* 0.12.3: the folder picture could not be made: a plain folder icon in the subject colour takes its place. */
+.nb-ui .nb-folder-icon-plain {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--nb-c, var(--nb-accent));
+	filter: none;
+}
+
+.nb-ui .nb-folder-icon-plain svg {
+	width: 56%;
+	height: 56%;
+}
+
+/* 0.12.3: a part of Home, the library or the creation dialog that could not be drawn (ui/components/error-card.ts),
+   in the style of the settings tab's error. */
+.nb-ui .nb-error-card {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 8px 0;
+	padding: 16px;
+	border: 1px solid var(--nb-danger);
+	border-radius: var(--nb-radius-panel);
 	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+	overflow-wrap: anywhere;
+}
+
+.nb-ui .nb-error-frame {
+	color: var(--nb-text-muted);
+	font-family: var(--font-monospace);
+	font-size: 12px;
+	white-space: pre-wrap;
+}
+
+/* --- Settings tab (DESIGN.md §6, docs/design-ui.md "Settings"). 0.12.3: it sits inside Obsidian's own settings modal,
+   so it uses Obsidian's surfaces and text colours (no navy panels or bands): transparent sections with a subtle border,
+   the same section headers, rows, toggles and spacing. The "Style" setting styles the plugin's own surfaces only. --- */
+.notebook-settings {
+	color: var(--text-normal);
 	font-family: var(--font-interface);
 }
 
@@ -7446,13 +7481,9 @@ body.notebook-style-obsidian {
 	display: none;
 }
 
-/* Search pill, kept in reach while the list scrolls. */
+/* Search pill at the top, on the modal's own surface (no band behind it). */
 .notebook-settings-top {
-	position: sticky;
-	top: 0;
-	z-index: 2;
-	padding: 4px 0 8px;
-	background-color: var(--nb-bg);
+	padding: 4px 0 12px;
 }
 
 .notebook-settings-top .setting-item {
@@ -7472,15 +7503,15 @@ body.notebook-style-obsidian {
 	width: 100%;
 	min-height: 44px;
 	padding: 0 16px;
-	border: 1px solid var(--nb-border-strong);
+	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--nb-radius-pill);
-	background-color: var(--nb-panel);
-	color: var(--nb-text-muted);
+	background-color: var(--background-modifier-form-field);
+	color: var(--text-muted);
 }
 
 .notebook-settings-search-pill:focus-within {
-	border-color: var(--nb-accent);
-	box-shadow: 0 0 0 2px var(--nb-accent-bg);
+	border-color: var(--interactive-accent);
+	box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
 }
 
 .notebook-settings-search-icon {
@@ -7500,7 +7531,7 @@ body.notebook-style-obsidian {
 	border: none;
 	background: transparent;
 	box-shadow: none;
-	color: var(--nb-text);
+	color: var(--text-normal);
 	font-size: 15px;
 }
 
@@ -7515,26 +7546,26 @@ body.notebook-style-obsidian {
 }
 
 .notebook-settings-empty .setting-item-name {
-	color: var(--nb-text-muted);
+	color: var(--text-muted);
 	font-size: 15px;
 }
 
 /* 0.12.1: shown in place of the tab when it cannot be drawn (settings-tab.ts display()). */
 .notebook-settings-error {
 	padding: 16px;
-	border: 1px solid var(--nb-danger);
+	border: 1px solid var(--text-error);
 	border-radius: var(--nb-radius-panel);
-	color: var(--nb-text);
+	color: var(--text-normal);
 	font-size: var(--nb-fs-row);
 }
 
-/* One panel per section. */
+/* One group per section: Obsidian's surface, a subtle border. */
 .notebook-settings-section {
 	margin: 0 0 24px;
 	padding: 4px 20px 8px;
-	border: 1px solid var(--nb-border);
+	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--nb-radius-panel);
-	background-color: var(--nb-panel);
+	background-color: transparent;
 }
 
 .notebook-settings-section .setting-item {
@@ -7542,11 +7573,11 @@ body.notebook-style-obsidian {
 	gap: 16px;
 	min-height: 56px;
 	padding: 12px 0;
-	border-top: 1px solid var(--nb-border);
+	border-top: 1px solid var(--background-modifier-border);
 }
 
 .notebook-settings-section .setting-item-name {
-	color: var(--nb-text);
+	color: var(--text-normal);
 	font-size: 15px;
 	font-weight: 500;
 	line-height: 1.35;
@@ -7554,7 +7585,7 @@ body.notebook-style-obsidian {
 
 .notebook-settings-section .setting-item-description {
 	padding-top: 2px;
-	color: var(--nb-text-muted);
+	color: var(--text-muted);
 	font-size: 13px;
 	line-height: 1.4;
 }
@@ -7587,8 +7618,8 @@ body.notebook-style-obsidian {
 	width: 40px;
 	height: 40px;
 	border-radius: var(--nb-radius-icon);
-	background-color: var(--nb-accent-bg);
-	color: var(--nb-accent);
+	background-color: var(--background-modifier-hover);
+	color: var(--text-accent);
 }
 
 .notebook-settings-header-icon svg {
@@ -7604,12 +7635,12 @@ body.notebook-style-obsidian {
 }
 
 .notebook-settings-section .notebook-settings-disclosure .setting-item-name {
-	color: var(--nb-text-muted);
+	color: var(--text-muted);
 }
 
 .notebook-settings-section .notebook-settings-disclosure:hover .setting-item-name,
 .notebook-settings-section .notebook-settings-disclosure.is-open .setting-item-name {
-	color: var(--nb-text);
+	color: var(--text-normal);
 }
 
 .notebook-settings-chevron {
@@ -7618,7 +7649,7 @@ body.notebook-style-obsidian {
 	justify-content: center;
 	width: 40px;
 	height: 40px;
-	color: var(--nb-text-muted);
+	color: var(--text-muted);
 	transition: transform 150ms ease-out;
 }
 
@@ -7636,11 +7667,11 @@ body.notebook-style-obsidian {
 .notebook-settings-section .setting-item-control button {
 	min-height: var(--nb-target);
 	padding: 0 16px;
-	border: 1px solid var(--nb-border-strong);
+	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--nb-radius-pill);
-	background-color: var(--nb-tile);
+	background-color: var(--interactive-normal);
 	box-shadow: none;
-	color: var(--nb-text);
+	color: var(--text-normal);
 	font-size: 13px;
 	font-weight: 500;
 }
@@ -7653,23 +7684,35 @@ body.notebook-style-obsidian {
 .notebook-settings-section .setting-item-control input[type="search"] {
 	min-height: var(--nb-target);
 	padding: 0 12px;
-	border: 1px solid var(--nb-border-strong);
+	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--nb-radius-tile);
-	background-color: var(--nb-tile);
-	color: var(--nb-text);
+	background-color: var(--background-modifier-form-field);
+	color: var(--text-normal);
 }
 
 .notebook-settings-section .setting-item-control input[type="range"] {
-	accent-color: var(--nb-accent);
+	accent-color: var(--interactive-accent);
 }
 
 .notebook-settings-section .checkbox-container.is-enabled {
-	background-color: var(--nb-accent);
+	background-color: var(--interactive-accent);
+}
+
+/* Diagnostics → Device info: the lines a bug report needs, selectable. */
+.notebook-settings-device-info {
+	margin-top: 6px;
+	color: var(--text-muted);
+	font-family: var(--font-monospace);
+	font-size: 12px;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	user-select: text;
 }
 
 .notebook-settings :focus-visible,
 .notebook-settings-section .notebook-settings-disclosure:focus-visible {
-	outline: 2px solid var(--nb-accent);
+	outline: 2px solid var(--interactive-accent);
 	outline-offset: 2px;
 }
 
@@ -7896,7 +7939,8 @@ body.notebook-style-obsidian {
 	border: 1px solid var(--nb-border-strong);
 	border-radius: 6px 14px 14px 6px;
 	overflow: hidden;
-	background: var(--nb-tile);
+	/* 0.12.3: the plain cover colour when the generated cover could not be drawn (the image covers it otherwise). */
+	background: var(--nb-create-cover, var(--nb-tile));
 }
 
 .nb-ui .nb-create-cover-img {

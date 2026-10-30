@@ -20,6 +20,8 @@ import { COVER_ART_STYLES, META_DESCRIPTION_MAX, PAPER_KINDS, PAPER_SPACING, typ
 import { FOLDER_DESCRIPTION_MAX, type FolderMeta } from "../library/folder-meta";
 import { renderThumbnail } from "../library/thumbnail";
 import { artEnabled, artImage, artStyleFor, coverImage, type ArtSpec } from "../ui/art/generative-art";
+import { decorate } from "../ui/components/dom";
+import { drawSafely, errorCard } from "../ui/components/error-card";
 import { subjectCard } from "../ui/components/subject-card";
 import { colorFor, SUBJECT_COLORS } from "../ui/palette";
 import { ColourPicker } from "./colour-picker";
@@ -79,9 +81,10 @@ function paperPreview(kind: PaperKind, size: { width: number; height: number }):
 	const key = `${kind}|${size.width}x${size.height}|${px}`;
 	let url = paperPreviews.get(key);
 	if (url === undefined) {
-		url = renderThumbnail(createPage(size, { kind, spacing: PAPER_SPACING[kind] }), px);
+		// 0.12.3: a preview that cannot be drawn leaves the tile with its label only (never the dialog without its form).
+		url = decorate("", () => renderThumbnail(createPage(size, { kind, spacing: PAPER_SPACING[kind] }), px));
 		if (paperPreviews.size > 200) paperPreviews.clear();
-		paperPreviews.set(key, url);
+		if (url) paperPreviews.set(key, url);
 	}
 	return url;
 }
@@ -144,7 +147,21 @@ export class CreateDialog extends Modal {
 
 	// ------------------------------------------------------------------ layout
 
+	/**
+	 * 0.12.3: draws the dialog and never leaves it blank: the preview and the form are drawn on their own, and anything
+	 * that still throws is shown as an error card (message and first stack frame) under what was drawn, with the close
+	 * button and Cancel in reach. On the device 0.12.2 showed an empty bar here and the console could not be read.
+	 */
 	private render(focusName = true): void {
+		try {
+			this.draw(focusName);
+		} catch (e) {
+			console.error("[notebook] the creation dialog could not be drawn", e);
+			errorCard(this.contentEl, t("ui.part.dialog"), e);
+		}
+	}
+
+	private draw(focusName: boolean): void {
 		this.cancelCardRefresh();
 		this.closePopover?.();
 		this.picker?.destroy();
@@ -155,7 +172,7 @@ export class CreateDialog extends Modal {
 		const head = el.createDiv({ cls: "nb-create-head" });
 		// Decoration only: a faint band of the chosen colour's line art behind the header (off with reduced motion).
 		const band = head.createDiv({ cls: "nb-create-band", attr: { "aria-hidden": "true" } });
-		band.setCssProps({ "--nb-create-band": cssImage(artImage({ seed: "create-header", color: this.color(), style: this.tab === "folder" ? this.fd.art : this.nb.art.style, density: 0.4, intensity: 0.35, surface: surface() }, 480, 64)) });
+		band.setCssProps({ "--nb-create-band": cssImage(decorate("", () => artImage({ seed: "create-header", color: this.color(), style: this.tab === "folder" ? this.fd.art : this.nb.art.style, density: 0.4, intensity: 0.35, surface: surface() }, 480, 64))) });
 		const tabs = head.createDiv({ cls: "nb-create-tabs", attr: { role: "tablist", "aria-label": t("create.tabs") } });
 		for (const id of ["notebook", "folder"] as const) {
 			const on = this.tab === id;
@@ -176,11 +193,11 @@ export class CreateDialog extends Modal {
 		const preview = body.createDiv({ cls: "nb-create-preview" });
 		const form = body.createDiv({ cls: "nb-create-form" });
 		if (this.tab === "notebook") {
-			this.renderCover(preview);
-			this.renderNotebookForm(form);
+			drawSafely(preview, "the creation dialog's cover", t("ui.part.preview"), () => this.renderCover(preview));
+			drawSafely(form, "the creation dialog's notebook form", t("ui.part.form"), () => this.renderNotebookForm(form));
 		} else {
-			this.renderFolderPreview(preview);
-			this.renderFolderForm(form);
+			drawSafely(preview, "the creation dialog's folder card", t("ui.part.preview"), () => this.renderFolderPreview(preview));
+			drawSafely(form, "the creation dialog's folder form", t("ui.part.form"), () => this.renderFolderForm(form));
 		}
 
 		const foot = el.createDiv({ cls: "nb-create-foot" });
@@ -394,7 +411,7 @@ export class CreateDialog extends Modal {
 	// ---------------------------------------------------------------- notebook
 
 	private coverUrl(w: number, h: number): string {
-		return this.image ? this.image.url : coverImage({ seed: this.nb.art.seed, color: this.nb.color, style: this.nb.art.style, surface: surface() }, w, h, dpr());
+		return this.image ? this.image.url : decorate("", () => coverImage({ seed: this.nb.art.seed, color: this.nb.color, style: this.nb.art.style, surface: surface() }, w, h, dpr()));
 	}
 
 	private renderCover(preview: HTMLElement): void {
@@ -402,7 +419,10 @@ export class CreateDialog extends Modal {
 		const frame = preview.createDiv({ cls: "nb-create-cover-frame" });
 		frame.createDiv({ cls: "nb-create-glow", attr: { "aria-hidden": "true" } });
 		const cover = frame.createEl("button", { cls: "nb-create-cover", attr: { type: "button", "aria-label": t("create.cover.next") } });
-		cover.createEl("img", { cls: "nb-create-cover-img", attr: { src: this.coverUrl(180, 252), alt: "" } });
+		// Without a generated cover (it could not be drawn) the button shows the plain cover colour (styles.css).
+		cover.setCssProps({ "--nb-create-cover": this.nb.color });
+		const coverSrc = this.coverUrl(180, 252);
+		if (coverSrc) cover.createEl("img", { cls: "nb-create-cover-img", attr: { src: coverSrc, alt: "" } });
 		cover.createDiv({ cls: "nb-create-cover-title", text: this.nb.name.trim() || t("create.tab.notebook") });
 		cover.createDiv({
 			cls: "nb-create-badge",
@@ -442,7 +462,10 @@ export class CreateDialog extends Modal {
 			styles.addClass("nb-create-styles");
 			this.radioTiles(styles, COVER_ART_STYLES.map((style) => ({
 				id: style, label: t(`create.style.${style}` as MessageKey), cls: "nb-create-style",
-				build: (tile: HTMLElement) => void tile.createEl("img", { attr: { src: coverImage({ seed: this.nb.art.seed, color: this.nb.color, style, surface: surface() }, 36, 50, dpr()), alt: "" } }),
+				build: (tile: HTMLElement) => {
+					const src = decorate("", () => coverImage({ seed: this.nb.art.seed, color: this.nb.color, style, surface: surface() }, 36, 50, dpr()));
+					if (src) tile.createEl("img", { attr: { src, alt: "" } });
+				},
 			})), this.nb.art.style, (style) => {
 				this.nb.art = { ...this.nb.art, style };
 				this.render(false);
@@ -503,9 +526,10 @@ export class CreateDialog extends Modal {
 			id: kind, label: t(`paper.${kind}`), cls: "nb-create-paper",
 			build: (tile: HTMLElement) => {
 				// Decoration only: subtle line art behind the selected tile.
-				if (kind === this.nb.paper) tile.setCssProps({ "--nb-create-tile-art": cssImage(artImage({ seed: kind, color: this.nb.color, style: this.nb.art.style, density: 0.3, intensity: 0.6, surface: surface() }, 96, 120)) });
+				if (kind === this.nb.paper) tile.setCssProps({ "--nb-create-tile-art": cssImage(decorate("", () => artImage({ seed: kind, color: this.nb.color, style: this.nb.art.style, density: 0.3, intensity: 0.6, surface: surface() }, 96, 120))) });
 				const thumb = tile.createDiv({ cls: "nb-create-paper-thumb" });
-				thumb.createEl("img", { attr: { src: paperPreview(kind, size), alt: "" } });
+				const src = paperPreview(kind, size);
+				if (src) thumb.createEl("img", { attr: { src, alt: "" } });
 				tile.createSpan({ cls: "nb-create-tile-label", text: t(`paper.${kind}`) });
 			},
 		})), this.nb.paper, (kind) => {

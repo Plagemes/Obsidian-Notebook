@@ -490,17 +490,20 @@ export async function checkEmptyLibrary(h: LibraryHarness, surface: string): Pro
 		await opens("the New notebook quick action", q('[data-key="quick:new-notebook"]'), "touch", "notebook");
 		await opens("the New folder quick action", q('[data-key="quick:new-folder"]'), "pen", "folder");
 	}
-	// The rail's + (on phone inside the rail sheet, which closes when an item is chosen).
-	if (phone) {
-		tap(q(".nb-rail-toggle"), "touch");
-		await frames(2);
-	}
-	const railNew = () => q(".nb-rail .nb-new-btn");
-	add("the rail has its + button", !!railNew() && visible(railNew()!) && Math.min(railNew()!.getBoundingClientRect().width, railNew()!.getBoundingClientRect().height) >= 39.5, railNew() ? `${Math.round(railNew()!.getBoundingClientRect().width)} px` : "none");
-	await viaMenu("the rail's +", railNew, "touch", t("library.action.newNotebook"), "notebook");
-	if (phone) {
-		await frames(2);
-		add("choosing from the rail's + closes the rail sheet", !app.classList.contains("is-rail-open"), app.className);
+	// 0.12.3: no + in the rail (it sat on the brand on the device): creation is the header's + New and the quick actions.
+	add("the rail has no + of its own", count(".nb-rail .nb-new-btn") === 0 && !q(".nb-rail .nb-new-btn"), String(count(".nb-rail .nb-new-btn")));
+	const brand = q(".nb-rail-brand");
+	const brandOverlap = brand ? Array.from(app.querySelectorAll<HTMLElement>(".nb-rail button")).filter(visible).filter((b) => {
+		const r = b.getBoundingClientRect(), k = brand.getBoundingClientRect();
+		return r.left < k.right - 1 && r.right > k.left + 1 && r.top < k.bottom - 1 && r.bottom > k.top + 1;
+	}) : [];
+	add("nothing in the rail sits on the brand", brandOverlap.length === 0, brandOverlap.map((b) => b.className).join(", "));
+	// + New is in the header row: on its right edge, and (wider than a phone) beside the search pill, centred on it.
+	const nb = header(), pill = q(".nb-header-tools .nb-search"), head = q(".nb-page-header");
+	if (nb && pill && head) {
+		const r = nb.getBoundingClientRect(), p = pill.getBoundingClientRect(), hd = head.getBoundingClientRect();
+		add("+ New is inside the header", r.top >= hd.top - 1 && r.bottom <= hd.bottom + 1 && r.right <= hd.right + 1, `${Math.round(r.top)}-${Math.round(r.bottom)} in ${Math.round(hd.top)}-${Math.round(hd.bottom)}`);
+		if (!phone) add("+ New is aligned with the search pill", Math.abs((r.top + r.bottom) / 2 - (p.top + p.bottom) / 2) <= 3 && r.left >= p.right, `+ New centre ${Math.round((r.top + r.bottom) / 2)}, pill centre ${Math.round((p.top + p.bottom) / 2)}`);
 	}
 	q(".nb-scroll")!.scrollTop = 0;
 	return out;

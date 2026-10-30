@@ -32,7 +32,7 @@ export function thumbnailSize(page: Page, width: number): { width: number; heigh
 export function renderThumbnail(page: Page, width: number, options: ThumbnailOptions = {}): string {
 	const region = options.region;
 	const size = region ? regionSize(region, width) : thumbnailSize(page, width);
-	const canvas = activeDocument.createEl("canvas");
+	const canvas = createEl("canvas");
 	canvas.width = size.width;
 	canvas.height = size.height;
 	const ctx = canvas.getContext("2d");

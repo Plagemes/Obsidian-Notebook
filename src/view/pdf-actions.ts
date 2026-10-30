@@ -133,7 +133,7 @@ function scratchStore(media: NotebookMedia, bytes: ArrayBuffer): PdfStore {
 		// pdf.js may take ownership of the buffer it is given: always hand it a copy.
 		readAsset: (id) => (id === NEW_PDF ? Promise.resolve(bytes.slice(0)) : media.readAsset(id)),
 		createCanvas: (w, h) => {
-			const c = activeDocument.createEl("canvas");
+			const c = createEl("canvas");
 			c.width = w;
 			c.height = h;
 			return c;

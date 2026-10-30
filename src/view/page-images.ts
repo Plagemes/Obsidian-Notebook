@@ -85,7 +85,7 @@ export class PageImageRenderer {
 	async render(page: Page, dpi: number): Promise<PageImage> {
 		const size = renderSize(page, dpi);
 		const flags = layerFlags(this.options.layers);
-		const canvas = activeDocument.createEl("canvas");
+		const canvas = createEl("canvas");
 		canvas.width = size.width;
 		canvas.height = size.height;
 		try {

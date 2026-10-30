@@ -494,7 +494,7 @@ export class PdfReading {
 
 	/** Width of a text in a font, from a canvas: how wide the characters of a run are relative to each other. */
 	private readonly measure: TextMeasure = (text, font) => {
-		if (this.measureCtx === undefined) this.measureCtx = activeDocument.createEl("canvas").getContext("2d");
+		if (this.measureCtx === undefined) this.measureCtx = createEl("canvas").getContext("2d");
 		const ctx = this.measureCtx;
 		if (!ctx) return 0;
 		const css = `100px ${font ? `${font}, ` : ""}sans-serif`;

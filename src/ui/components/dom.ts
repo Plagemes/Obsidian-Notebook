@@ -1,6 +1,25 @@
 // Shared helpers of the design-system components (DESIGN.md §3).
 import { setIcon } from "obsidian";
 
+let decorationWarned = false;
+
+/**
+ * 0.12.3: runs a decoration (generated art, a folder SVG, a paper preview). It never breaks the surface around it: a
+ * failure is logged once and the caller gets `fallback` (no picture). The art engine guards itself too; this is the
+ * second line, for everything a component does with the result.
+ */
+export function decorate<T>(fallback: T, make: () => T): T {
+	try {
+		return make();
+	} catch (e) {
+		if (!decorationWarned) {
+			decorationWarned = true;
+			console.error("[notebook] a decoration could not be drawn and was dropped", e);
+		}
+		return fallback;
+	}
+}
+
 /** `#rrggbb` with an alpha, as `rgba()`; anything else is returned as it is. */
 export function tint(hex: string, alpha: number): string {
 	const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
@@ -15,6 +34,7 @@ export function subjectVars(el: HTMLElement, color: string): void {
 
 /** An SVG document as an image URL (shown with <img>, never parsed into the page). */
 export function svgDataUrl(svg: string): string {
+	if (!svg) return "";
 	return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 

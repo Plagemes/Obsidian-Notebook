@@ -491,7 +491,7 @@ export class ExcerptTools {
 					// A missing picture is left out, as on screen.
 				}
 			}
-			const canvas = activeDocument.createEl("canvas");
+			const canvas = createEl("canvas");
 			canvas.width = Math.max(1, Math.round(region.width * scale));
 			canvas.height = Math.max(1, Math.round(region.height * scale));
 			const ctx = canvas.getContext("2d");
