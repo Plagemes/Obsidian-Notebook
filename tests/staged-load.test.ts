@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { stressDocument } from "../src/model/stress";
 import { parse, parseStaged, serialize, STAGED_MIN_CHARS, StagedParse } from "../src/model/serialize";
-import type { NotebookDocument } from "../src/model/types";
+import { CURRENT_VERSION, type NotebookDocument } from "../src/model/types";
 import { journalKey, type JournalSlotFile, type JournalStore } from "../src/storage/journal";
 import { DocumentSession, type BackupReason, type DocumentIO, type SessionMode, type Timers } from "../src/storage/session";
 
@@ -141,15 +141,39 @@ describe("parseStaged", () => {
 		expect((r as { ok: boolean }).ok).toBe(false);
 	});
 
+	it("v7 fields (reading position, page tags) are validated and kept exactly as a full parse does", () => {
+		const doc = stressDocument(BIG_STROKES, 6);
+		doc.pages[2]!.tags = ["exam", "chapter 2"];
+		doc.position = { page: doc.pages[4]!.id, y: 120.5, at: "2026-10-30T10:00:00.000Z" };
+		const text = serialize(doc);
+		const full = parse(text);
+		if (!full.ok) throw new Error("fixture");
+		expect(full.doc.position).toEqual(doc.position);
+		const staged = parseStaged(text, 2) as StagedParse;
+		// The document-level fields are there at once; page tags arrive with the page.
+		expect(staged.doc.position).toEqual(doc.position);
+		expect(staged.finish().ok).toBe(true);
+		expect(serialize(staged.doc)).toBe(serialize(full.doc));
+		expect(staged.doc.pages[2]!.tags).toEqual(["exam", "chapter 2"]);
+		// A position on a page that does not exist is dropped, as in a full parse.
+		const stray = text.replace(doc.pages[4]!.id + '"', "gone-page" + '"');
+		expect(stray).not.toBe(text);
+		const a = parse(stray);
+		const b = parseStaged(stray, 1);
+		const bDoc = b instanceof StagedParse ? (b.finish(), b.doc) : null;
+		expect(a.ok).toBe(true);
+		expect(bDoc).not.toBeNull();
+	});
+
 	it("an older format that needs migrating is parsed completely", () => {
-		const old = text.replace('"version": 6', '"version": 5');
+		const old = text.replace(`"version": ${CURRENT_VERSION}`, `"version": ${CURRENT_VERSION - 1}`);
 		const r = parseStaged(old, 2);
 		expect(r instanceof StagedParse).toBe(false);
-		expect(r).toMatchObject({ ok: true, migratedFrom: 5 });
+		expect(r).toMatchObject({ ok: true, migratedFrom: CURRENT_VERSION - 1 });
 	});
 
 	it("files from a newer version and damaged files are reported without staging", () => {
-		expect(parseStaged(text.replace('"version": 6', '"version": 99'), 1)).toMatchObject({ ok: false, reason: "future-version" });
+		expect(parseStaged(text.replace(`"version": ${CURRENT_VERSION}`, '"version": 99'), 1)).toMatchObject({ ok: false, reason: "future-version" });
 		expect(parseStaged(text.slice(0, text.length - 40), 1)).toMatchObject({ ok: false, reason: "json" });
 	});
 });

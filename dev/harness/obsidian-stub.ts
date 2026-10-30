@@ -72,6 +72,13 @@ export function installDomHelpers(): void {
 	D.createEl = function (tag: string, o?: DomInfo | string, cb?: (el: HTMLElement) => void) {
 		return createElIn(null, tag, o, cb);
 	};
+	N.createSvg = function (this: Node, tag: string, o?: DomInfo | string, cb?: (el: SVGElement) => void) {
+		const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+		applyInfo(el as unknown as HTMLElement, o);
+		this.appendChild(el);
+		cb?.(el as SVGElement);
+		return el;
+	};
 	N.empty = function (this: Node) {
 		while (this.firstChild) this.removeChild(this.firstChild);
 	};
@@ -574,6 +581,9 @@ export class View extends Component {
 	onResize(): void {
 		/* override */
 	}
+	setEphemeralState(state: unknown): void {
+		void state;
+	}
 	getState(): Record<string, unknown> {
 		return {};
 	}
@@ -652,6 +662,8 @@ export class Plugin extends Component {
 // --- UI ---
 
 export const notices: string[] = [];
+/** The DOM of notices created with a fragment (buttons inside a notice), newest last. */
+export const noticeEls: HTMLElement[] = [];
 
 export class Notice {
 	readonly noticeEl: HTMLElement;
@@ -661,6 +673,10 @@ export class Notice {
 		notices.push(text);
 		console.warn("[harness] Notice:", text);
 		this.noticeEl = document.createElement("div");
+		if (typeof message !== "string") {
+			this.noticeEl.appendChild(message);
+			noticeEls.push(this.noticeEl);
+		}
 	}
 	setMessage(message: string): this {
 		notices.push(message);
@@ -693,6 +709,8 @@ export class Menu {
 	}
 	showAtMouseEvent(): this {
 		console.warn("[harness] menu:", this.items.map((i) => i.title).join(" | "));
+		// The last menu can be driven from the console: harnessMenu.run("Page tags…").
+		(window as any).harnessMenu = { titles: this.items.map((i) => i.title), run: (title: string) => this.items.find((i) => i.title === title)?.cb?.() };
 		return this;
 	}
 	showAtPosition(): this {
@@ -757,15 +775,29 @@ export class PluginSettingTab {
 	constructor(readonly app: App, readonly plugin: unknown) {}
 }
 
+/**
+ * Settings rows with working text fields, dropdowns and buttons (enough to try the plugin's modals in the
+ * harness); toggles and sliders are inert.
+ */
 export class Setting {
 	readonly settingEl: HTMLElement;
+	readonly infoEl: HTMLElement;
+	readonly nameEl: HTMLElement;
+	readonly descEl: HTMLElement;
+	readonly controlEl: HTMLElement;
 	constructor(containerEl: HTMLElement) {
 		this.settingEl = containerEl.createDiv({ cls: "setting-item" });
+		this.infoEl = this.settingEl.createDiv({ cls: "setting-item-info" });
+		this.nameEl = this.infoEl.createDiv({ cls: "setting-item-name" });
+		this.descEl = this.infoEl.createDiv({ cls: "setting-item-description" });
+		this.controlEl = this.settingEl.createDiv({ cls: "setting-item-control" });
 	}
-	setName(): this {
+	setName(name?: string): this {
+		this.nameEl.textContent = name ?? "";
 		return this;
 	}
-	setDesc(): this {
+	setDesc(desc?: string): this {
+		this.descEl.textContent = desc ?? "";
 		return this;
 	}
 	setHeading(): this {
@@ -775,11 +807,32 @@ export class Setting {
 		return this;
 	}
 	addButton(fn: (b: any) => void): this {
-		fn(chain());
+		const buttonEl = this.controlEl.createEl("button");
+		const b: any = {
+			buttonEl,
+			setButtonText: (s: string) => ((buttonEl.textContent = s), b),
+			setCta: () => (buttonEl.classList.add("mod-cta"), b),
+			setWarning: () => (buttonEl.classList.add("mod-warning"), b),
+			setDestructive: () => (buttonEl.classList.add("mod-destructive"), b),
+			setIcon: () => b,
+			setTooltip: () => b,
+			setDisabled: (d: boolean) => ((buttonEl.disabled = d), b),
+			onClick: (f: () => void) => (buttonEl.addEventListener("click", f), b),
+		};
+		fn(b);
 		return this;
 	}
 	addText(fn: (b: any) => void): this {
-		fn(chain());
+		const inputEl = this.controlEl.createEl("input", { attr: { type: "text" } });
+		const b: any = {
+			inputEl,
+			getValue: () => inputEl.value,
+			setValue: (v: string) => ((inputEl.value = v), b),
+			setPlaceholder: (v: string) => ((inputEl.placeholder = v), b),
+			setDisabled: (d: boolean) => ((inputEl.disabled = d), b),
+			onChange: (f: (v: string) => void) => (inputEl.addEventListener("input", () => f(inputEl.value)), b),
+		};
+		fn(b);
 		return this;
 	}
 	addToggle(fn: (b: any) => void): this {
@@ -787,7 +840,20 @@ export class Setting {
 		return this;
 	}
 	addDropdown(fn: (b: any) => void): this {
-		fn(chain());
+		const selectEl = this.controlEl.createEl("select", { cls: "dropdown" });
+		const b: any = {
+			selectEl,
+			addOption: (value: string, text: string) => (selectEl.createEl("option", { text, value }), b),
+			addOptions: (o: Record<string, string>) => {
+				for (const [value, text] of Object.entries(o)) selectEl.createEl("option", { text, value });
+				return b;
+			},
+			getValue: () => selectEl.value,
+			setValue: (v: string) => ((selectEl.value = v), b),
+			setDisabled: (d: boolean) => ((selectEl.disabled = d), b),
+			onChange: (f: (v: string) => void) => (selectEl.addEventListener("change", () => f(selectEl.value)), b),
+		};
+		fn(b);
 		return this;
 	}
 	addSlider(fn: (b: any) => void): this {
@@ -824,6 +890,9 @@ export const Platform = {
 };
 
 export async function loadPdfJs(): Promise<never> {
+	// `doc=pdf` installs a fake library (fake-pdf.ts); otherwise there is no pdf.js in the harness.
+	const fake = (globalThis as { __harnessPdfJs?: unknown }).__harnessPdfJs;
+	if (fake) return fake as never;
 	throw new Error("pdf.js is not available in the harness");
 }
 

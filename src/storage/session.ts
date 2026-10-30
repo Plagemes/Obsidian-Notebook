@@ -13,7 +13,7 @@ export interface DocumentIO {
 	path?(): string;
 }
 
-export type BackupReason = "unreadable" | "future-version" | "conflict" | "unsaved" | "journal" | "before-restore" | "before-move";
+export type BackupReason = "unreadable" | "future-version" | "conflict" | "unsaved" | "journal" | "before-restore" | "before-move" | "before-api";
 
 /**
  * - `ok`: the document is editable and saved automatically.
@@ -86,6 +86,12 @@ export interface SessionOptions {
 	 * which should wait until the page just announced has been painted. Default: a 0 ms timer.
 	 */
 	yieldTask?: (fn: () => void, first: boolean) => void;
+	/**
+	 * v7: called just before a changed revision is serialized for the first time (by the journal or by the save),
+	 * never for a revision that is not being written anyway. The view stores the reading position here, so it
+	 * travels with content saves only and never causes a write of its own. Errors are ignored.
+	 */
+	beforeSerialize?: (doc: NotebookDocument) => void;
 }
 
 /** The stroke-line warm-up waits this long after a load, so the page is painted first. */
@@ -177,6 +183,7 @@ export class DocumentSession {
 	private readonly retryMs: number;
 	private readonly now: () => Date;
 	private readonly busy: () => boolean;
+	private readonly beforeSerialize: ((doc: NotebookDocument) => void) | null;
 	private readonly quietMs: number;
 	private readonly maxQuietDeferMs: number;
 	private readonly maxBusyDeferMs: number;
@@ -205,6 +212,7 @@ export class DocumentSession {
 		this.retryMs = options.retryMs ?? 5000;
 		this.now = options.now ?? (() => new Date());
 		this.busy = options.busy ?? (() => false);
+		this.beforeSerialize = options.beforeSerialize ?? null;
 		this.journal = options.journal ?? null;
 		this.journalDelayMs = options.journalDelayMs ?? 200;
 		this.journalOwner = options.journalOwner ?? newOwnerId();
@@ -504,6 +512,16 @@ export class DocumentSession {
 		}
 	}
 
+	/** The `beforeSerialize` hook; a failing hook never stops a save. */
+	private runBeforeSerialize(doc: NotebookDocument): void {
+		if (!this.beforeSerialize) return;
+		try {
+			this.beforeSerialize(doc);
+		} catch (e) {
+			console.error("[notebook] beforeSerialize failed", e);
+		}
+	}
+
 	private async doFlush(): Promise<boolean> {
 		if (this.mode !== "ok" || !this.doc || !this.dirty) return true;
 		const revision = this.revision;
@@ -523,7 +541,10 @@ export class DocumentSession {
 		const previousModifiedAt = doc.modifiedAt;
 		// If the journal already serialized this revision, keep its modifiedAt: the saved text is then identical
 		// to the journal entry's result, so a crash between the save and the cleanup is recognised as "merged".
-		if (this.journaledRevision !== revision) doc.modifiedAt = this.now().toISOString();
+		if (this.journaledRevision !== revision) {
+			this.runBeforeSerialize(doc);
+			doc.modifiedAt = this.now().toISOString();
+		}
 		const checked = serializeChecked(doc);
 		if (!checked.ok) {
 			doc.modifiedAt = previousModifiedAt;
@@ -638,6 +659,7 @@ export class DocumentSession {
 		// save and the cleanup leaves an entry whose result equals the file.
 		const revision = this.revision;
 		const previousModifiedAt = doc.modifiedAt;
+		this.runBeforeSerialize(doc);
 		doc.modifiedAt = this.now().toISOString();
 		const checked = serializeChecked(doc);
 		if (!checked.ok) {

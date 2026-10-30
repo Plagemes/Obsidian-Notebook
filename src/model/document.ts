@@ -1,3 +1,4 @@
+import { copyBookmarkInfoMap } from "./bookmarks";
 import {
 	CURRENT_VERSION, DEFAULT_META, FORMAT_ID, PAGE_SIZES, PAPER_SPACING, RENDER_FREEHAND,
 	type NotebookDocument, type NotebookMeta, type Page, type Paper, type Point, type RenderVersion, type Stroke, type Tool,
@@ -41,9 +42,12 @@ export function createDocument(
 	};
 }
 
-/** Deep copy of the metadata (arrays are not shared). */
+/** Deep copy of the metadata (arrays and v7 bookmark details are not shared). */
 export function cloneMeta(meta: NotebookMeta): NotebookMeta {
-	return { tags: [...meta.tags], favorite: meta.favorite, cover: meta.cover, bookmarks: [...meta.bookmarks] };
+	const out: NotebookMeta = { tags: [...meta.tags], favorite: meta.favorite, cover: meta.cover, bookmarks: [...meta.bookmarks] };
+	const info = copyBookmarkInfoMap(meta.bookmarkInfo);
+	if (info) out.bookmarkInfo = info;
+	return out;
 }
 
 /** Ids of the assets used by a page background or an image element anywhere in the document. */

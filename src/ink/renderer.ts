@@ -182,6 +182,9 @@ export class Renderer {
 	private spacePreview: readonly SpacePreviewEntry[] | null = null;
 	private hidden: ReadonlySet<Stroke> | null = null;
 	private hiddenElements: ReadonlySet<PageElement> | null = null;
+	/** Reading options of the view (never saved): ink and elements of PDF pages are not drawn; backgrounds are drawn with this opacity. */
+	private hideAnnotations = false;
+	private backgroundAlpha = 1;
 	private selectedElements: ReadonlySet<PageElement> | null = null;
 	private ruler: RulerOverlay | null = null;
 	private media: MediaSource | null = null;
@@ -318,6 +321,14 @@ export class Renderer {
 	/** Elements being edited or transformed are drawn elsewhere (live layer or DOM editor). */
 	setHiddenElements(elements: ReadonlySet<PageElement> | null): void {
 		this.hiddenElements = elements;
+		this.invalidate();
+	}
+
+	/** View-only reading options: hide the ink and elements of PDF pages (to reread the clean PDF) and/or draw backgrounds lighter (`backgroundAlpha` < 1). */
+	setReading(hideAnnotations: boolean, backgroundAlpha: number): void {
+		if (hideAnnotations === this.hideAnnotations && backgroundAlpha === this.backgroundAlpha) return;
+		this.hideAnnotations = hideAnnotations;
+		this.backgroundAlpha = backgroundAlpha;
 		this.invalidate();
 	}
 
@@ -696,9 +707,10 @@ export class Renderer {
 				};
 				if (page.background) this.guarded(ctx, "background", () => this.drawBackground(ctx, page));
 				this.guarded(ctx, "paper", () => this.drawPaper(ctx, page, visible));
-				if (page.elements?.length) this.drawElements(ctx, page);
+				const bare = this.hideAnnotations && page.background?.kind === "pdf";
+				if (!bare && page.elements?.length) this.drawElements(ctx, page);
 				for (const stroke of page.strokes) {
-					if (this.hidden?.has(stroke)) continue;
+					if (bare || this.hidden?.has(stroke)) continue;
 					try {
 						const b = this.boundsOf(stroke);
 						// Bounds are padded by half the width; pen ink reaches 0.8 × width at full pressure, and
@@ -730,6 +742,7 @@ export class Renderer {
 		// v6: the background keeps its box when the page has margins.
 		const r = backgroundRect(page);
 		if (img) {
+			ctx.globalAlpha = this.backgroundAlpha;
 			ctx.drawImage(img, r.x, r.y, r.width, r.height);
 			return;
 		}

@@ -10,8 +10,11 @@ import { attachPress, DROP_ATTR } from "./drag";
 import { breadcrumb, buildFolderTree, flattenTree, isReservedPath, type FolderNode } from "./folders";
 import { relativeTime, uniquePath } from "./format";
 import { folderOf, isInside, LibraryIndex, SORTS, type Highlight, type LibraryEntry, type LibraryScope, type LibrarySort, type SearchHit } from "./index";
-import { ConfirmModal, CoverModal, FolderSuggestModal, PromptModal, TagsModal } from "./library-modals";
+import { openTagEditor } from "../integration/tags";
+import { ConfirmModal, CoverModal, FolderSuggestModal, PromptModal } from "./library-modals";
 import { entryFromFile, filesToRead, type NotebookFileInfo } from "./scan";
+import type { LibraryTrash } from "../storage/trash";
+import { addTrashNavItem, confirmMoveToTrash, TrashModal } from "./trash-modal";
 import { renderThumbnail, type ThumbnailOptions } from "./thumbnail";
 
 export const LIBRARY_VIEW_TYPE = "notebook-library";
@@ -28,16 +31,25 @@ export interface LibraryHost {
 	createNotebook(folder: string): void;
 	/** Opens the PDF import flow for that folder. */
 	importPdf(folder: string): void;
+	/** Opens "New lecture from slides…" (course PDF, layout, header) for that folder. */
+	lectureFromSlides?(folder: string): void;
 	/** Scans pages with the camera into a new notebook in that folder. */
 	scanToNotebook?(folder: string): void;
 	/** Opens the loose sheet (quick notes), creating it the first time. */
 	openLooseSheet?(): void;
+	/** Class in progress according to the timetable (wave 0.6), for the "Now: <course>" shortcut. */
+	nowClass?(): { course: string; room?: string } | null;
+	openNowClass?(): void;
+	/** Called when the library opens (offers the class in progress). */
+	libraryOpened?(): void;
 	/** Writes metadata into the notebook (routed through an open view if there is one). */
 	updateMeta(file: TFile, patch: Partial<NotebookMeta>): Promise<void>;
 	/** Loads what a page shows under the ink (PDF page, image) so the cover can draw it. Null if there is none. */
 	thumbnailBackground?(doc: NotebookDocument, page: Page, width: number): Promise<ThumbnailOptions["drawBackground"] | null>;
 	/** Called after the library copied a notebook, so the copy can get its own identity. */
 	afterDuplicate?(file: TFile): Promise<void>;
+	/** Library trash (#160): deleting moves to the plugin trash instead of deleting. */
+	trash?: LibraryTrash;
 	loadIndex(): Promise<unknown>;
 	saveIndex(data: unknown): Promise<void>;
 }
@@ -97,6 +109,8 @@ export class LibraryView extends ItemView {
 	private readonly cards = new Map<string, HTMLElement>();
 
 	private renderQueued = false;
+	/** "Now: <course>" shortcut (timetable); hidden when no class is in progress. */
+	private nowBtn: HTMLButtonElement | null = null;
 	private saveTimer = 0;
 	private reconcileTimer = 0;
 	private reconcileAt = 0;
@@ -154,6 +168,9 @@ export class LibraryView extends ItemView {
 		this.built = true;
 		this.expanded.add(this.root());
 		this.render();
+		this.refreshNow();
+		this.registerInterval(window.setInterval(() => this.refreshNow(), 30_000));
+		this.host.libraryOpened?.();
 
 		const vault = this.app.vault;
 		this.registerEvent(vault.on("create", (f) => this.onVaultChange(f)));
@@ -251,8 +268,14 @@ export class LibraryView extends ItemView {
 		this.actionButton(actions, "file-plus", t("library.action.newNotebook"), () => this.host.createNotebook(this.currentFolder()), true);
 		this.actionButton(actions, "folder-plus", t("library.action.newFolder"), () => this.askNewFolder(this.currentFolder()));
 		this.actionButton(actions, "file-up", t("library.action.importPdf"), () => this.host.importPdf(this.currentFolder()));
+		if (this.host.lectureFromSlides) this.actionButton(actions, "graduation-cap", t("library.action.lectureFromSlides"), () => this.host.lectureFromSlides?.(this.currentFolder()));
 		if (this.host.scanToNotebook) this.actionButton(actions, "scan", t("library.action.scanNotebook"), () => this.host.scanToNotebook?.(this.currentFolder()));
 		if (this.host.openLooseSheet) this.actionButton(actions, "sticky-note", t("library.action.looseSheet"), () => this.host.openLooseSheet?.());
+		if (this.host.nowClass && this.host.openNowClass) {
+			this.nowBtn = this.actionButton(actions, "graduation-cap", "", () => this.host.openNowClass?.());
+			this.nowBtn.addClass("notebook-lib-now");
+			this.nowBtn.title = t("library.now.tip");
+		}
 
 		this.scrollEl = main.createDiv({ cls: "notebook-lib-scroll" });
 		this.gridEl = this.scrollEl.createDiv({ cls: "notebook-lib-content" });
@@ -546,6 +569,7 @@ export class LibraryView extends ItemView {
 	}
 
 	private render(): void {
+		this.refreshNow();
 		this.fixScope();
 		const focus = this.contentEl.ownerDocument.activeElement instanceof HTMLElement && this.contentEl.contains(this.contentEl.ownerDocument.activeElement)
 			? this.contentEl.ownerDocument.activeElement.dataset.key
@@ -562,6 +586,18 @@ export class LibraryView extends ItemView {
 				}
 			}
 		}
+	}
+
+	/** Shows or hides the "Now: <course>" shortcut for the class in progress. */
+	private refreshNow(): void {
+		const btn = this.nowBtn;
+		if (!btn) return;
+		const now = this.host.nowClass?.() ?? null;
+		btn.toggleClass("is-hidden", !now);
+		if (!now) return;
+		const label = t("library.now", { course: now.course });
+		btn.setAttribute("aria-label", label);
+		btn.querySelector(".notebook-lib-btn-label")?.setText(label);
 	}
 
 	private currentFolder(): string {
@@ -624,6 +660,13 @@ export class LibraryView extends ItemView {
 		this.navItem(nav, { icon: "library", label: t("library.nav.all"), count: this.index.size, scope: "all", key: "nav:all" });
 		this.navItem(nav, { icon: "star", label: t("library.nav.favorites"), count: favorites, scope: "favorites", key: "nav:favorites" });
 		this.navItem(nav, { icon: "clock", label: t("library.nav.recent"), scope: "recent", key: "nav:recent" });
+		const trash = this.host.trash;
+		if (trash) {
+			addTrashNavItem(nav, () => {
+				this.setDrawer(false);
+				new TrashModal(this.app, trash).open();
+			});
+		}
 
 		el.createDiv({ cls: "notebook-lib-section", text: t("library.nav.folders") });
 		const counts = this.folderCounts();
@@ -829,7 +872,26 @@ export class LibraryView extends ItemView {
 		more.addEventListener("click", (e) => this.notebookMenu(entry.path, e.clientX, e.clientY, more));
 
 		const textHit = hit?.text;
-		const open = () => this.openEntry(entry.path, hit?.fields[0] === "text" ? textHit?.page : undefined);
+		const tagHit = hit?.pageTag;
+		const first = hit?.fields[0];
+		const open = () => this.openEntry(entry.path, first === "text" ? textHit?.page : first === "pageTag" ? tagHit?.page : undefined);
+		if (tagHit) {
+			// v7: a page tag matched: the row opens that page.
+			const row = card.createDiv({
+				cls: "notebook-lib-hit",
+				attr: { role: "button", tabindex: "0", "data-key": `taghit:${entry.path}`, "aria-label": t("library.search.openPage", { page: String(tagHit.page + 1) }) },
+			});
+			row.createSpan({ cls: "notebook-lib-hit-page", text: t("library.search.page", { page: String(tagHit.page + 1) }) });
+			this.appendHighlight(row.createSpan({ cls: "notebook-lib-hit-snippet" }), { text: `#${tagHit.tag.text}`, ranges: tagHit.tag.ranges.map(([a, b]): [number, number] => [a + 1, b + 1]) });
+			const openPage = () => this.openEntry(entry.path, tagHit.page);
+			row.addEventListener("click", openPage);
+			row.addEventListener("keydown", (e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					openPage();
+				}
+			});
+		}
 		if (textHit) {
 			const row = card.createDiv({
 				cls: "notebook-lib-hit",
@@ -972,6 +1034,7 @@ export class LibraryView extends ItemView {
 		menu.addItem((i) => i.setTitle(t("library.menu.newNotebookHere")).setIcon("file-plus").onClick(() => this.host.createNotebook(path)));
 		menu.addItem((i) => i.setTitle(t("library.menu.newFolderHere")).setIcon("folder-plus").onClick(() => this.askNewFolder(path)));
 		menu.addItem((i) => i.setTitle(t("library.menu.importPdfHere")).setIcon("file-up").onClick(() => this.host.importPdf(path)));
+		if (this.host.lectureFromSlides) menu.addItem((i) => i.setTitle(t("library.menu.lectureFromSlidesHere")).setIcon("graduation-cap").onClick(() => this.host.lectureFromSlides?.(path)));
 		if (this.host.scanToNotebook) menu.addItem((i) => i.setTitle(t("library.menu.scanHere")).setIcon("scan").onClick(() => this.host.scanToNotebook?.(path)));
 		if (!isRoot) {
 			menu.addSeparator();
@@ -1029,6 +1092,8 @@ export class LibraryView extends ItemView {
 	}
 
 	private askDelete(file: TFile): void {
+		const trash = this.host.trash;
+		if (trash) return confirmMoveToTrash(this.app, { name: file.basename, isFolder: false }, () => trash.trash(file), (e) => this.fail(e));
 		new ConfirmModal(
 			this.app,
 			{ title: t("library.modal.deleteTitle"), body: t("library.modal.deleteBody", { name: file.basename }), cta: t("library.modal.deleteConfirm") },
@@ -1039,7 +1104,8 @@ export class LibraryView extends ItemView {
 	private askTags(path: string): void {
 		const entry = this.index.get(path);
 		if (!entry) return;
-		new TagsModal(this.app, entry.tags, this.index.tags().map((x) => x.tag), (tags) => void this.setMeta(path, { tags })).open();
+		// O2: suggestions from Obsidian's tags, Obsidian-style normalisation, hint about companion notes (integration/tags.ts).
+		openTagEditor(this.app, { file: this.app.vault.getFileByPath(path), current: entry.tags, libraryTags: this.index.tags().map((x) => x.tag), onSave: (tags) => this.setMeta(path, { tags }) });
 	}
 
 	private askCover(path: string): void {
@@ -1077,6 +1143,8 @@ export class LibraryView extends ItemView {
 	private askDeleteFolder(path: string): void {
 		const folder = this.app.vault.getFolderByPath(path);
 		if (!folder) return;
+		const trash = this.host.trash;
+		if (trash) return confirmMoveToTrash(this.app, { name: folder.name, isFolder: true }, () => trash.trash(folder), (e) => this.fail(e));
 		if (folder.children.length > 0) {
 			new Notice(t("library.notice.folderNotEmpty", { name: folder.name }));
 			return;

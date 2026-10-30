@@ -1,5 +1,6 @@
 import { MM, type Page } from "../model/types";
 import type { BBox } from "./hit-test";
+import { v7PaperLines } from "./paper-kinds";
 
 export type PaperLineKind = "minor" | "major" | "margin";
 
@@ -47,6 +48,9 @@ export function paperPattern(page: Page, visible: BBox, options: { includeMinor?
 	if (kind === "blank" || !(spacing > 0)) return { lines, dots };
 	// Safety cap for documents that bypassed validation: never walk more than MAX_PATTERN_STEPS per axis.
 	if (Math.max(width, height) / spacing > MAX_PATTERN_STEPS) return { lines, dots };
+	// v7 kinds (Cornell, music, isometric, hexagonal, calligraphy, planners): paper-kinds.ts.
+	const extra = v7PaperLines(page, visible, includeMinor);
+	if (extra) return { lines: extra, dots };
 
 	const vx = (x: number) => x >= visible.minX && x <= visible.maxX;
 	const vy = (y: number) => y >= visible.minY && y <= visible.maxY;

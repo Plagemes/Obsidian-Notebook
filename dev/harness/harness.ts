@@ -3,7 +3,7 @@
  * navigator) running in a plain web page on top of dev/harness/obsidian-stub.ts.
  *
  * URL parameters (all optional):
- *   doc=v3|new       notebook to open (v3: written by 0.3.0, grid paper and a few strokes; new: empty)
+ *   doc=v3|new|pdf   notebook to open (v3: written by 0.3.0, grid paper and a few strokes; new: empty; pdf: three pages of a fake PDF)
  *   theme=light|dark
  *   w=800&h=1280     size of the Obsidian leaf in CSS px (default: the window)
  *   lowLatency=1     turn on the low-latency ink setting
@@ -15,15 +15,19 @@
  * `harness.setTool("highlighter")`, `await harness.check()`.
  */
 import "./setup";
-import { App, notices, WorkspaceLeaf, type TFile } from "./obsidian-stub";
+import { App, noticeEls, notices, WorkspaceLeaf, type TFile } from "./obsidian-stub";
 import { NotebookView } from "../../src/view/notebook-view";
 import { DEFAULT_SETTINGS, type NotebookSettings } from "../../src/settings";
-import { createDocument } from "../../src/model/document";
+import { createDocument, createStroke } from "../../src/model/document";
+import { AddElement, AddStroke, Batch } from "../../src/model/history";
+import { translate } from "../../src/ink/transform";
 import { parse, serialize, StagedParse } from "../../src/model/serialize";
 import { WetInk } from "../../src/ink/wet-ink";
 import { Renderer } from "../../src/ink/renderer";
 import { DocumentSession } from "../../src/storage/session";
 import { stressDocument } from "../../src/model/stress";
+import { FAKE_PATH, installFakePdf, slidesNotebook } from "./fake-pdf";
+import { checkReading } from "./reading-check";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -95,6 +99,11 @@ async function seed(): Promise<void> {
 	await app.vault.createFolder("Notebooks");
 	await app.vault.create("Notebooks/Old v3.notebook", v3Notebook());
 	await app.vault.create("Notebooks/New.notebook", serialize(createDocument()));
+	// doc=pdf: three pages that show the pages of a fake PDF (fake-pdf.ts).
+	installFakePdf();
+	await app.vault.createFolder("Notebooks/_assets");
+	await app.vault.createBinary(FAKE_PATH, new Uint8Array(8).buffer);
+	await app.vault.create("Notebooks/Slides.notebook", slidesNotebook());
 }
 
 function settings(): NotebookSettings {
@@ -110,7 +119,8 @@ async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	leaf = new WorkspaceLeaf(app, root);
 	view = new NotebookView(leaf as any, { settings: settings() });
 	await view.onOpen();
-	const file = app.vault.getFileByPath(doc === "new" ? "Notebooks/New.notebook" : "Notebooks/Old v3.notebook") as TFile;
+	const path = doc === "new" ? "Notebooks/New.notebook" : doc === "pdf" ? "Notebooks/Slides.notebook" : "Notebooks/Old v3.notebook";
+	const file = app.vault.getFileByPath(path) as TFile;
 	await (view as any).loadFile(file);
 	view.onResize();
 	await frames(3);
@@ -310,6 +320,8 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 	await checkToolbar(add);
 	await checkRestore(add);
 	await checkStagedLoad(add);
+	await checkPageLinks(add);
+	await checkObjects(add);
 
 	const unexpected = errors.filter((e) => !expectedError?.test(e));
 	if (fault) add("injected fault was reported", errors.some((e) => expectedError!.test(e)), errors[0]?.split("\n")[0] ?? "no error logged");
@@ -559,6 +571,26 @@ async function checkStagedLoad(add: (name: string, ok: boolean, detail?: string)
 	await frames(3);
 }
 
+/** Links to a page by id: a page that moved is found, a page that was deleted says so and the view stays where it is. */
+async function checkPageLinks(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
+	const v = view as any;
+	const label = `page links ${window.innerWidth}px`;
+	if (v.session.doc.pages.length < 2) v.addPage();
+	v.scrollToPage(0);
+	await frames(2);
+	const second = v.session.doc.pages[1].id as string;
+	const before = notices.length;
+	v.setEphemeralState({ subpath: `#p1&id=${second}` });
+	await frames(2);
+	add(`${label}: a link with a page id opens that page`, v.currentPageIndex() === 1 && notices.length === before, `page ${v.currentPageIndex() + 1}, notices ${notices.length - before}`);
+	v.setEphemeralState({ subpath: "#p1&id=deadbeefdeadbeef" });
+	await frames(2);
+	add(`${label}: a link to a deleted page says so and does not move`, v.currentPageIndex() === 1 && notices.length === before + 1 && /no longer in/.test(notices[notices.length - 1] ?? ""),
+		`page ${v.currentPageIndex() + 1}, last notice "${notices[notices.length - 1] ?? ""}"`);
+	v.scrollToPage(0);
+	await frames(2);
+}
+
 /** Fraction of the stage height that is still on the first page, a little above its bottom edge (at most 0.75). */
 function lowOnPage(): number {
 	const v = view as any;
@@ -703,7 +735,7 @@ async function checkToolbar(add: (name: string, ok: boolean, detail?: string) =>
 	const menu = bar.querySelector(".notebook-more") as HTMLElement;
 	r = menu.getBoundingClientRect();
 	const items = Array.from(menu.querySelectorAll("button")).filter((b) => b.offsetParent !== null);
-	add(`${label}: the more menu opens inside the view with its 8 actions`, tb.openPopover === "more" && inView(r) && r.bottom <= window.innerHeight && items.length === 8,
+	add(`${label}: the more menu opens inside the view with its actions`, tb.openPopover === "more" && inView(r) && r.bottom <= window.innerHeight && items.length >= 8,
 		`menu ${Math.round(r.left)}–${Math.round(r.right)}, bottom ${Math.round(r.bottom)} of ${window.innerHeight}, ${items.length} items, ${tb.openPopover}`);
 	add(`${label}: more menu rows are at least 40 px`, items.every((b) => b.offsetHeight >= 40), items.map((b) => b.offsetHeight).join(","));
 	click(byText(menu, "Ruler"), "Ruler");
@@ -714,6 +746,152 @@ async function checkToolbar(add: (name: string, ok: boolean, detail?: string) =>
 	tb.update({ tool: "pen", penColor: "#1e1e1e", penWidth: 2 });
 	tb.closePopover();
 	await frames(2);
+}
+
+/**
+ * Objects (wave 0.6): the stamp palette (opens inside the view, tap and drag place a stamp, saving writes a vault file)
+ * and ink attached to objects (ink written over a text box moves with it, one undo step; deleting the box offers to
+ * delete the ink). Leaves the document as it found it.
+ */
+async function checkObjects(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
+	const v = view as any;
+	const doc = view!.document!;
+	const page = doc.pages[0]!;
+	const startStrokes = strokeCount();
+	const startElements = page.elements?.length ?? 0;
+	const tb = v.toolbar;
+	const pointer = (target: Element, name: string, x: number, y: number) =>
+		target.dispatchEvent(new PointerEvent(name, {
+			bubbles: true, cancelable: true, composed: true, pointerId: 91, pointerType: "mouse", isPrimary: true,
+			button: 0, buttons: name === "pointerup" ? 0 : 1, clientX: x, clientY: y,
+		}));
+	const centre = (el: Element): [number, number] => {
+		const r = el.getBoundingClientRect();
+		return [r.left + r.width / 2, r.top + r.height / 2];
+	};
+
+	// --- stamps
+	tb.closePopover();
+	click(byLabel(document, "More actions"), "more button");
+	await frames(2);
+	click(byText(document.querySelector(".notebook-more") as HTMLElement, "Stamps"), "Stamps");
+	await frames(3);
+	const panel = document.querySelector(".notebook-stamp-panel") as HTMLElement;
+	const pr = panel.getBoundingClientRect();
+	const body = (document.querySelector(".notebook-body") as HTMLElement).getBoundingClientRect();
+	const builtin = panel.querySelectorAll(".notebook-stamp-tile");
+	add("stamps: the palette opens inside the view with the 3 built-in stamps",
+		!panel.classList.contains("notebook-hidden") && pr.width > 0 && pr.left >= body.left - 1 && pr.right <= body.right + 1 && pr.bottom <= body.bottom + 1 && builtin.length === 3,
+		`panel ${Math.round(pr.left)}–${Math.round(pr.right)} × ${Math.round(pr.top)}–${Math.round(pr.bottom)} in body ${Math.round(body.left)}–${Math.round(body.right)} × ${Math.round(body.top)}–${Math.round(body.bottom)}, ${builtin.length} tiles`);
+	add("stamps: every tile shows a drawing", Array.from(builtin).every((t) => t.querySelector("svg path")), "");
+
+	let [x, y] = centre(builtin[0]!);
+	pointer(builtin[0]!, "pointerdown", x, y);
+	pointer(builtin[0]!, "pointerup", x, y);
+	await frames(2);
+	add("stamps: tapping a built-in stamp adds one stroke and selects it", strokeCount() === startStrokes + 1 && v.selection?.strokes.length === 1,
+		`${startStrokes} → ${strokeCount()}, selected ${v.selection?.strokes.length}`);
+	v.undo();
+	await frames(2);
+	add("stamps: undo takes the placed stamp away in one step", strokeCount() === startStrokes, `${strokeCount()} strokes`);
+
+	[x, y] = centre(builtin[1]!);
+	pointer(builtin[1]!, "pointerdown", x, y);
+	pointer(builtin[1]!, "pointerup", x, y);
+	await frames(2);
+	await v.stamps.doSave("Harness stamp", v.captureSelectionClip());
+	await frames(3);
+	const file = app.vault.getFileByPath("Notebooks/_stamps/Harness stamp.stamp");
+	const mine = Array.from(panel.querySelectorAll(".notebook-stamp-tile")).find((t) => t.textContent?.includes("Harness stamp"));
+	add("stamps: saving the selection writes a .stamp file and lists it in the palette", !!file && !!mine, `file ${!!file}, tile ${!!mine}`);
+	v.undo();
+	await frames(2);
+
+	// Drag the personal stamp from the palette onto the page.
+	const st = stage().getBoundingClientRect();
+	const drop: [number, number] = [st.left + st.width * 0.3, st.top + st.height * 0.3];
+	if (mine) {
+		[x, y] = centre(mine);
+		pointer(mine, "pointerdown", x, y);
+		pointer(mine, "pointermove", x - 20, y + 20);
+		await frames(1);
+		const ghost = document.querySelector(".notebook-stamp-ghost");
+		pointer(mine, "pointermove", drop[0], drop[1]);
+		pointer(mine, "pointerup", drop[0], drop[1]);
+		await frames(2);
+		const target = v.pageAtClient(drop[0], drop[1]);
+		const placed = v.selection?.strokes[0];
+		const xs: number[] = placed ? placed.points.map((p: number[]) => p[0]!) : [0];
+		const mid = (Math.min(...xs) + Math.max(...xs)) / 2;
+		add("stamps: dragging a stamp onto the page places it at the drop point", !!ghost && !!target && strokeCount() === startStrokes + 1 && Math.abs(mid - target.x) < 6,
+			`ghost ${!!ghost}, strokes ${strokeCount()}, centre x ${mid.toFixed(1)} vs drop ${target?.x.toFixed(1)}`);
+		add("stamps: the drag ghost is gone after the drop", !document.querySelector(".notebook-stamp-ghost"), "");
+		v.undo();
+		await frames(2);
+	}
+	click(byLabel(panel, "Close stamps"), "close stamps");
+	await frames(1);
+	add("stamps: the close button hides the palette", panel.classList.contains("notebook-hidden"), "");
+	if (file) await app.vault.delete(file);
+
+	// --- ink attached to a text box
+	const box = { id: "obj-text", type: "text", x: 100, y: 300, width: 320, text: "Hello world, handwritten notes", fontSize: 20, color: "#1e1e1e" } as const;
+	const over = createStroke("#1e1e1e", 2, [[110, 312, 0.5], [180, 314, 0.5], [250, 312, 0.5]], "pen");
+	const away = createStroke("#1e1e1e", 2, [[110, 700, 0.5], [180, 702, 0.5], [250, 700, 0.5]], "pen");
+	v.history.execute(new Batch("harness setup", [
+		new AddElement(page.id, box, page.elements?.length ?? 0),
+		new AddStroke(page.id, over, page.strokes.length),
+		new AddStroke(page.id, away, page.strokes.length + 1),
+	]));
+	v.afterHistoryChange();
+	const boxElement = () => page.elements!.find((e) => e.id === "obj-text")!;
+	v.selectItems(0, [], [boxElement()]);
+	await frames(2);
+	const floating = (v.renderer as any).selection?.strokes?.length ?? 0;
+	add("objects: ink written over a selected text box floats with it (and the other ink does not)", floating === 1, `${floating} floating strokes`);
+	v.selection.matrix = translate(60, 40);
+	v.commitSelectionTransform();
+	await frames(2);
+	const movedOver = page.strokes.find((s) => s.id === over.id)!;
+	const stayed = page.strokes.find((s) => s.id === away.id)!;
+	add("objects: moving the text box moves its ink in the same undo step", movedOver.points[0]![0] === 170 && movedOver.points[0]![1] === 352 && stayed.points[0]![0] === 110,
+		`ink at ${movedOver.points[0]!.slice(0, 2).join(",")}, other ink at ${stayed.points[0]!.slice(0, 2).join(",")}`);
+	v.undo();
+	await frames(2);
+	const back = page.strokes.find((s) => s.id === over.id)!;
+	const backBox = boxElement() as { x: number };
+	add("objects: one undo puts the box and its ink back", back.points[0]![0] === 110 && backBox.x === 100, `ink x ${back.points[0]![0]}, box x ${backBox.x}`);
+
+	v.host.settings.inkFollowsObjects = false;
+	v.selectItems(0, [], [boxElement()]);
+	v.selection.matrix = translate(60, 40);
+	v.commitSelectionTransform();
+	await frames(2);
+	const still = page.strokes.find((s) => s.id === over.id)!;
+	add("objects: with the setting off the ink stays where it is", still.points[0]![0] === 110, `ink x ${still.points[0]![0]}`);
+	v.undo();
+	v.host.settings.inkFollowsObjects = true;
+	await frames(2);
+
+	const noticesBefore = noticeEls.length;
+	v.selectItems(0, [], [boxElement()]);
+	v.deleteSelection();
+	await frames(2);
+	const offer = noticeEls.length > noticesBefore ? noticeEls[noticeEls.length - 1]! : null;
+	add("objects: deleting a box with ink offers to delete the ink", !!offer && /1 stroke was written/.test(offer.textContent ?? "") && !!offer.querySelector("button"), offer?.textContent ?? "no notice");
+	const inkBefore = strokeCount();
+	(offer?.querySelector("button") as HTMLElement | null)?.click();
+	await frames(2);
+	add("objects: taking the offer deletes the ink", strokeCount() === inkBefore - 1, `${inkBefore} → ${strokeCount()}`);
+	v.undo();
+	v.undo();
+	await frames(2);
+	add("objects: undoing the deletion restores the box and its ink", strokeCount() === inkBefore && !!page.elements?.some((e) => e.id === "obj-text"), `${strokeCount()} strokes`);
+
+	// Back to the start.
+	v.undo();
+	await frames(2);
+	add("objects: the document is back to how it was", strokeCount() === startStrokes && (page.elements?.length ?? 0) === startElements, `${strokeCount()} strokes, ${page.elements?.length ?? 0} elements`);
 }
 
 interface OpenSample {
@@ -864,7 +1042,7 @@ function applySize(): void {
 	if (h) root.style.height = `${Number(h)}px`;
 }
 
-(window as any).harness = { app, open, measureOpen, penStroke, setTool, openOptions, openMore, check, staticPixel, strokeCount, errors, notices, applyTheme, get view() {
+(window as any).harness = { app, open, measureOpen, penStroke, setTool, openOptions, openMore, check, checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
 	return view;
 } };
 

@@ -1,7 +1,15 @@
 import { inEdgeZone, type EdgeZones } from "./edge-zones";
+import { isBarrelSignal } from "./pen-button";
 
-/** What pressing the pen's side button does: open the radial menu, erase while it is held, or nothing. */
-export type PenButtonAction = "radial" | "eraser" | "off";
+/**
+ * What pressing the pen's side button does: open the radial menu, erase while it is held, use the
+ * lasso while it is held, use the previously used tool while it is held, or nothing.
+ */
+export const PEN_BUTTON_ACTIONS = ["radial", "eraser", "lasso", "lastTool", "off"] as const;
+export type PenButtonAction = (typeof PEN_BUTTON_ACTIONS)[number];
+
+/** A tool the side button selects for the contact it is held on (the eraser has its own flag). */
+export type HeldTool = "lasso" | "last";
 
 export interface InputSettings {
 	/** Fingers draw (unless the pen was seen in the last `palmRejectionMs`). */
@@ -13,13 +21,12 @@ export interface InputSettings {
 	edge?: EdgeZones;
 	/** Side (barrel) button of the pen; `button === 2` / `buttons & 2`. Default "off". */
 	penButton?: PenButtonAction;
+	/** Fallback for pens whose button never reaches the page: holding the nib still opens the radial menu. Default off. */
+	penLongPress?: boolean;
 }
 
 /** `menu`: the pen's side button was pressed and the radial menu should open (nothing is drawn). */
 export type Route = "draw" | "navigate" | "ignore" | "menu";
-
-/** PointerEvent.buttons bit of the pen's side (barrel) button. */
-export const BARREL_BUTTONS = 2;
 
 /**
  * Basic palm rejection: while the pen is down, or was seen (hover included) in the last
@@ -50,15 +57,22 @@ export class InputPolicy {
 		return pointerType === "touch" && inEdgeZone(this.settings.edge, x, y, width, height);
 	}
 
-	/** The pen's side button is part of this event (`button` 2, or bit 2 of `buttons`). */
+	/** The pen's side button is part of this event (`button` 2, or bit 2 of `buttons`); the eraser (bit 32, `button` 5) is not. */
 	static barrel(button: number, buttons: number): boolean {
-		return button === 2 || (buttons & BARREL_BUTTONS) !== 0;
+		return isBarrelSignal(button, buttons);
 	}
 
 	/** Does a pen contact erase? The eraser button / flipped pen always do; the side button when its action is "eraser". */
 	penErases(button: number, buttons: number): boolean {
 		if (button === 5 || (buttons & 32) !== 0) return true;
 		return this.settings.penButton === "eraser" && InputPolicy.barrel(button, buttons);
+	}
+
+	/** The tool the side button selects for a pen contact (setting "lasso" or "lastTool"), or null. Decided when the pen touches down. */
+	penHeldTool(button: number, buttons: number): HeldTool | null {
+		if (!InputPolicy.barrel(button, buttons)) return null;
+		if (this.settings.penButton === "lasso") return "lasso";
+		return this.settings.penButton === "lastTool" ? "last" : null;
 	}
 
 	/**
@@ -71,7 +85,7 @@ export class InputPolicy {
 				this.notePen(t);
 				if (InputPolicy.barrel(button, buttons)) {
 					if (this.settings.penButton === "radial") return "menu";
-					if (this.settings.penButton === "eraser") return "draw";
+					if (this.settings.penButton !== undefined && this.settings.penButton !== "off") return "draw";
 				}
 				return button === 0 || button === 5 ? "draw" : "ignore";
 			case "mouse":

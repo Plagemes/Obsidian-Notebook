@@ -1,5 +1,5 @@
 import { createId, quantizePoint } from "./document";
-import { A4_HEIGHT, A4_WIDTH, DEFAULT_META, FORMAT_ID, GRID_5MM, RENDER_FREEHAND } from "./types";
+import { A4_HEIGHT, A4_WIDTH, DEFAULT_META, FORMAT_ID, GRID_5MM, PAPER_KINDS_V7, RENDER_FREEHAND } from "./types";
 
 export type RawObject = Record<string, unknown>;
 
@@ -114,6 +114,39 @@ function v5ToV6(raw: RawObject): RawObject {
 	return { ...raw, version: 6, pages };
 }
 
+/**
+ * v7 adds bookmark details (`meta.bookmarkInfo`), page tags (`pages[i].tags`), the shared reading position
+ * (`position`) and the paper kinds in PAPER_KINDS_V7. All new fields are optional, so every valid v6 document
+ * is a valid v7 document without them. A v6 reader ignored unknown fields, so these keys in a v6 file were
+ * never ours and never had an effect: they are dropped, not interpreted (as `margins` in v5 -> v6). A v6
+ * reader rejected the new paper kinds, so a pre-v7 file that uses one was not written by any version of
+ * this plugin: it is rejected rather than guessed at (like "shape" before v4).
+ */
+function v6ToV7(raw: RawObject): RawObject {
+	const isObj = (v: unknown): v is RawObject => typeof v === "object" && v !== null && !Array.isArray(v);
+	const out: RawObject = { ...raw, version: 7 };
+	delete out.position;
+	if (isObj(raw.meta) && "bookmarkInfo" in raw.meta) {
+		const meta = { ...raw.meta };
+		delete meta.bookmarkInfo;
+		out.meta = meta;
+	}
+	if (Array.isArray(raw.pages)) {
+		out.pages = (raw.pages as unknown[]).map((page, i) => {
+			if (!isObj(page)) return page;
+			const kind = isObj(page.paper) ? page.paper.kind : undefined;
+			if (typeof kind === "string" && (PAPER_KINDS_V7 as readonly string[]).includes(kind)) {
+				throw new MigrationError(`v6: paper '${kind}' (page ${i + 1}) exists only from v7`);
+			}
+			if (!("tags" in page)) return page;
+			const copy = { ...page };
+			delete copy.tags;
+			return copy;
+		});
+	}
+	return out;
+}
+
 /** MIGRATIONS[n] takes a document from version n to n+1. */
 export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	0: v0ToV1,
@@ -122,6 +155,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	3: v3ToV4,
 	4: v4ToV5,
 	5: v5ToV6,
+	6: v6ToV7,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

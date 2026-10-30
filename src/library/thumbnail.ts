@@ -9,6 +9,8 @@ export interface ThumbnailOptions {
 	/** Encoding of the data URL. JPEG keeps the index small; default is PNG. */
 	mime?: "image/png" | "image/jpeg" | "image/webp";
 	quality?: number;
+	/** Z1 cards: only this part of the page (page units), at its own aspect ratio. */
+	region?: { x: number; y: number; width: number; height: number };
 }
 
 /** Tall pages (infinite pages) show only their top part: height is at most this many times the width. */
@@ -27,7 +29,8 @@ export function thumbnailSize(page: Page, width: number): { width: number; heigh
 
 /** Renders `page` to a data URL, `width` px wide. White paper, pattern hairlines, then the ink. */
 export function renderThumbnail(page: Page, width: number, options: ThumbnailOptions = {}): string {
-	const size = thumbnailSize(page, width);
+	const region = options.region;
+	const size = region ? regionSize(region, width) : thumbnailSize(page, width);
 	const canvas = document.createElement("canvas");
 	canvas.width = size.width;
 	canvas.height = size.height;
@@ -39,10 +42,13 @@ export function renderThumbnail(page: Page, width: number, options: ThumbnailOpt
 	ctx.fillRect(0, 0, size.width, size.height);
 	ctx.save();
 	ctx.scale(scale, scale);
+	if (region) ctx.translate(-region.x, -region.y);
 
 	options.drawBackground?.(ctx, page, scale);
 
-	const visible = { minX: 0, minY: 0, maxX: page.width, maxY: page.height };
+	const visible = region
+		? { minX: region.x, minY: region.y, maxX: region.x + region.width, maxY: region.y + region.height }
+		: { minX: 0, minY: 0, maxX: page.width, maxY: page.height };
 	const { lines, dots } = paperPattern(page, visible, { includeMinor: minorVisible(page.paper.spacing, scale) });
 	ctx.lineWidth = Math.max(0.5, 0.8 / scale);
 	for (const kind of ["minor", "major", "margin"] as const) {
@@ -72,6 +78,7 @@ export function renderThumbnail(page: Page, width: number, options: ThumbnailOpt
 	let drawn = 0;
 	for (const stroke of page.strokes) {
 		if (stroke.points.length === 0) continue;
+		if (region && !strokeNear(stroke.points, visible, stroke.width)) continue;
 		if (++drawn % 64 === 0 && performance.now() - started > TIME_BUDGET_MS) break;
 		const highlighter = stroke.tool === "highlighter";
 		ctx.fillStyle = stroke.color;
@@ -84,4 +91,17 @@ export function renderThumbnail(page: Page, width: number, options: ThumbnailOpt
 	ctx.restore();
 
 	return canvas.toDataURL(options.mime ?? "image/png", options.quality);
+}
+
+/** Canvas size for a region `width` px wide (no height cap: a card region is drawn whole). */
+export function regionSize(region: { width: number; height: number }, width: number): { width: number; height: number; scale: number } {
+	const w = Math.max(1, Math.round(width));
+	const scale = region.width > 0 ? w / region.width : 1;
+	return { width: w, height: Math.max(1, Math.round(region.height * scale)), scale };
+}
+
+/** Whether any point of a stroke lies within `width` of the box (strokes far from a card region are skipped). */
+function strokeNear(points: ReadonlyArray<readonly [number, number, number]>, box: { minX: number; minY: number; maxX: number; maxY: number }, width: number): boolean {
+	const m = width * 2;
+	return points.some(([x, y]) => x >= box.minX - m && x <= box.maxX + m && y >= box.minY - m && y <= box.maxY + m);
 }

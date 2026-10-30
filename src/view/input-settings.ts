@@ -9,5 +9,6 @@ export function policySettings(s: NotebookSettings): InputSettings {
 		palmContactPx: s.palmContactPx,
 		edge: { enabled: s.edgeRejection, widthPx: s.edgeRejectionPx, left: s.edgeLeft, right: s.edgeRight, top: s.edgeTop, bottom: s.edgeBottom },
 		penButton: s.penButtonAction,
+		penLongPress: s.penLongPress,
 	};
 }

@@ -9,6 +9,7 @@
  */
 import { createId } from "./document";
 import { AddAsset, AddPage, Batch, type Command } from "./history";
+import { unionPageTags } from "./page-tags";
 import { duplicatePage } from "./pages";
 import { freezeElement, freezeStroke } from "./serialize";
 import type { Asset, NotebookDocument, Page } from "./types";
@@ -111,6 +112,10 @@ export function planPageRestore(
 	};
 	if (source.background) page.background = { ...source.background };
 	if (source.infinite !== undefined) page.infinite = source.infinite;
+	// v7 page tags: the tags of the page in view and of the restored version, so restoring never drops a tag.
+	// (Bookmark details are keyed by the page id, which is kept, so they stay as they are.)
+	const tags = unionPageTags(target.tags, source.tags);
+	if (tags) page.tags = tags;
 	if (source.margins) page.margins = { ...source.margins };
 	if (source.elements && source.elements.length > 0) page.elements = source.elements.map((e) => freezeElement({ ...e, id: idFor(e.id) }));
 	commands.push(new ReplacePage(target, page));

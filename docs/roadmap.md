@@ -85,9 +85,9 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 
 ### Writing and tools
 1. **P1** 🧪 Favourite pens: 4–6 saved presets (tool + colour + width), one tap to switch.
-2. **P1** Configurable S Pen side button: hold for eraser, lasso or last tool.
-3. **P1** Multi-finger gestures: two-finger tap = undo, three-finger tap = redo (configurable).
-4. **P1** Scribble to erase: scratching over strokes deletes them.
+2. **P1** 🧪 Configurable S Pen side button: hold for eraser, lasso or last tool.
+3. **P1** 🧪 Multi-finger gestures: two-finger tap = undo, three-finger tap = redo (configurable).
+4. **P1** 🧪 Scribble to erase: scratching over strokes deletes them.
 5. **P1** 🧪 Restyle selection: change colour and width of lasso-selected strokes.
 6. **P1** 🧪 Copy, cut, paste and duplicate selections across pages and notebooks.
 7. **P2** Free colour picker with recent colours and an eyedropper.
@@ -115,7 +115,7 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 
 ### Data and reliability
 25. 🧪 **P1** Version history: automatic snapshots (e.g. daily per notebook) with restore.
-26. **P1** Page trash: deleted pages stay recoverable after the session ends.
+26. 🧪 **P1** Page trash: deleted pages stay recoverable after the session ends.
 27. **P2** Library check: find unreadable notebooks and orphaned assets, free space.
 28. **P3** Password-protected notebooks: local encryption with Web Crypto, no cloud.
 
@@ -135,7 +135,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 
 ### Advanced writing
 35. **P1** New pen types: fountain pen (angle-dependent width), brush, marker.
-36. **P1** Auto-scroll while writing near the bottom of the screen.
+36. **P1** 🧪 Auto-scroll while writing near the bottom of the screen.
 37. **P2** Filled shapes and dashed or dotted lines.
 38. **P2** Align and distribute the selection.
 39. **P2** Group elements and lock elements (for example a background image that must not move).
@@ -191,7 +191,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 
 ### Pages and documents
 73. **P1** More papers: Cornell, music staff, isometric, hexagonal, calligraphy, planner.
-74. **P1** Save a page as a template, with a template gallery.
+74. 🧪 **P1** Save a page as a template, with a template gallery.
 75. **P2** Automatic header with date and page number.
 76. **P2** Rotate and crop imported PDF pages.
 77. **P2** Merge notebooks, split a notebook, extract pages into a new notebook.
@@ -216,7 +216,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 Goal: notebooks behave like first-class Obsidian content. Several items depend on the container decision ("File format transition" below): O1 is the companion-note option (C) and must be designed together with it.
 
 - **O1 P1** 🧪 Automatic companion note: every notebook has a `.md` with properties (tags, course, pages, dates) and the text of its text boxes, so search, graph, Dataview and Bases see notebooks.
-- **O2 P1** Shared tags: notebook tags are real Obsidian tags, visible in the Tags pane.
+- **O2 P1** 🧪 Shared tags: notebook tags are real Obsidian tags, visible in the Tags pane (through the companion note's `tags`; tag editor with the vault's tag suggestions, Obsidian-style normalisation, library filter by tag including nested tags; a tag the person added to the note by hand is never removed).
 - **O3 P2** Native properties: course, teacher, exam date and similar edited from Obsidian's Properties panel.
 - **O4 P1** 🧪 Page links: `[[Physics#p3]]` opens the notebook at that page, with link suggestions while typing.
 - **O5 P2** Hover preview: hovering a notebook link shows the page thumbnail (page preview).
@@ -258,7 +258,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 ### B. PDF and study material
 104. **P1** 🧪 Expandable margins on PDFs: widen a PDF page sideways to annotate without covering the text.
 105. **P1** Anchored excerpts: cut a region of a PDF, drop it on another page as an excerpt; tapping the excerpt jumps back to the exact source location.
-106. **P1** Synchronised PDF ↔ notes view: the PDF on one side and the linked note pages on the other; turning a PDF page follows on the notes side.
+106. **P1** 🧪 Synchronised PDF ↔ notes view: the PDF on one side and the linked note pages on the other; turning a PDF page follows on the notes side.
 107. **P2** Floating reference window: another page or notebook stays visible while you write.
 108. ~~**P3** Read the PDF text aloud with the system's speech synthesis, offline.~~ — dropped (user decision, 2026-10-29)
 109. ~~**P3** Reading ruler on PDFs: highlights the line being read (accessibility, dyslexia).~~ — dropped (user decision, 2026-10-29)
@@ -338,7 +338,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 159. **P3** Split scanned two-page spreads into two pages.
 
 ### C. Library
-160. **P1** Library trash with restore.
+160. 🧪 **P1** Library trash with restore.
 161. **P2** Board view with statuses (in progress, done, to print).
 162. **P2** Calendar view: what you wrote on a given day.
 163. **P2** Per-notebook settings: stabilization, palm rejection, default paper, sync.
@@ -355,7 +355,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 167. **P2** Documented format with a JSON Schema, so other tools can read notebooks.
 
 ### E. Automation
-168. **P1** Public API for other plugins (Templater, QuickAdd, Dataview): create notebooks, add pages, insert images, export.
+168. **P1** 🧪 Public API for other plugins (Templater, QuickAdd, Dataview): create notebooks, add pages, insert images, export. See `docs/api.md`.
 169. **P2** If/then rules (e.g. "notebook in folder Physics → millimetre paper", "on close → update the PDF copy").
 170. **P2** Macros: a sequence of commands on one toolbar button.
 
@@ -540,7 +540,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 
 ## M15 — Zettelkasten with handwriting (planned 2026-10-29)
 
-A complete Zettelkasten workflow where handwriting is first-class. Everything goes through the companion note (O1) and the format layer, so it stays valid if notebooks move to a Markdown container. Status: ⏳ for all.
+A complete Zettelkasten workflow where handwriting is first-class. Everything goes through the companion note (O1) and the format layer, so it stays valid if notebooks move to a Markdown container. Status: Z1, Z2, Z3, Z11 and Z12 🧪 implemented in wave 0.6 (not verified on hardware; design in `docs/architecture.md` §12 "Zettelkasten"); the rest ⏳.
 
 - **Z1 P1** Real cards: a region of a page, or an A6 "card" page, becomes a Zettel — a Markdown note with a unique id (timestamp or Luhmann numbering, configurable), properties (type, source, tags, date) and the ink embedded live (no copy: editing the ink in the notebook updates the card).
 - **Z2 P1** Slip-box notebook type: every page is a Zettel; a new page creates its note automatically.
@@ -635,6 +635,78 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 339. **P3** Step-by-step procedures with the time recorded at each tick, for labs.
 340. **P3** Book from ISBN: scan the barcode and create the book note for the bibliography.
 341. ~~**P2** Night mode for PDFs: inverted pages with ink always readable.~~ — dropped (user decision, 2026-10-29)
+
+## M17 — More features (backlog, planned 2026-10-29)
+
+Checked against every earlier item before being added. Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for all.
+
+### Sync and data safety
+342. **P1** "Open on another device" warning: a small presence file, refreshed while a notebook is open, warns before Google Drive or OneDrive can create a conflicted copy.
+343. **P1** Assets waiting for sync: images and PDFs referenced by a page but not yet downloaded show a "waiting for sync" placeholder instead of an error, and appear by themselves when they arrive.
+344. **P1** Online-only notebooks: files that the sync client has not downloaded yet (0 bytes) are shown as "not downloaded yet" and never treated as damaged.
+345. **P2** Warning when the notebooks folder is excluded from sync, or when a file exceeds the cloud provider's limits.
+346. **P1** Safe mode: if opening a notebook crashed last time, it reopens without low-latency ink, thumbnails and companion notes, and says so.
+347. **P1** Storage full: edits stay in the journal, a clear warning appears and saving retries by itself.
+348. **P3** Readable change summaries for Obsidian Git users: what changed in a notebook in each commit (pages, strokes, assets).
+
+### Writing and pen
+349. **P2** Pressure lock: while the pen button is held, the width stays constant (even lines).
+350. **P2** Pen width relative to zoom (option): the same width on screen at any zoom.
+351. **P2** Stroke taper settings: tapering at the start and end of a stroke.
+352. **P2** Write big, store small: write margin notes at a comfortable size and they are shrunk into place.
+353. **P2** Automatic line break: when writing reaches the right margin, the view jumps to the start of the next line.
+354. **P3** Right-to-left writing: automatic next page, word detection and the space tool also work for Arabic and Hebrew.
+355. **P2** Stylus profiles: S Pen, USI and other pens recognised automatically, with settings that suit them.
+356. **P2** Quick date and time stamp at the pen position.
+
+### Objects and selection
+357. **P2** Layer order: bring to front, send to back.
+358. **P2** Opacity slider for ink, highlighter and images.
+359. **P2** Lasso selection across page boundaries.
+360. **P3** Code text box: monospace with syntax colours.
+361. **P2** Find and replace in the text boxes of a notebook.
+362. **P2** Cross-device clipboard: copy on the tablet, paste on the phone, through the vault.
+
+### Navigation and view
+363. **P2** Tabs of open notebooks, with a swipe from one to the next.
+364. **P1** Quick switcher for pages across all notebooks.
+365. **P1** Recently edited pages across all notebooks.
+366. **P1** Go to page by typing its number.
+367. **P2** Night mode: dark page display without changing the stored ink colours.
+368. **P3** Projector and high-contrast mode.
+369. **P3** One-hand mode on phones.
+370. **P2** Adjustable toolbar size and large icons.
+371. ~~**P3** Samsung DeX layout for mouse and keyboard.~~ — dropped (user decision, 2026-10-29)
+372. **P2** Page turner: volume keys, a Bluetooth clicker or a keyboard turn pages and undo.
+373. ~~**P3** Phone as a remote page navigator for the tablet.~~ — dropped (user decision, 2026-10-29)
+374. **P1** Do not disturb while writing: no notices or pop-ups while the pen is on the screen.
+375. **P2** Workspace presets, e.g. "lecture" (slides, notebook, outline) with one command.
+
+### PDF
+376. **P2** View-only crop of a PDF's white margins, for small screens.
+377. **P3** Reflowed reading mode for a PDF's text on phones.
+
+### Pages and notebooks
+378. **P1** Operations on several selected pages: move, change paper, export or delete them together.
+379. **P2** Page information: dates, devices, stroke count, size.
+380. **P2** Heavy page warning, with an offer to split the page.
+
+### Export and Obsidian
+381. **P2** Export choices: ink only, background only, or both.
+382. **P2** Export a notebook as Markdown with page images, for people without Obsidian.
+383. **P3** Obsidian Publish support: pages published as images.
+384. **P2** Notebook commands in the Obsidian mobile toolbar.
+385. **P2** Bookmark a notebook page in Obsidian's Bookmarks pane.
+
+### Performance
+386. **P3** Optional WebGL renderer for very large pages.
+387. **P2** Level of detail: simplified strokes when zoomed out, for smoother scrolling.
+
+### Extensions of earlier items
+388. **P1** Stable page links (extends O4): links based on the page id, so they still work after pages are reordered (today `#p3` points at a position).
+389. **P2** Automatic page in the middle of a notebook too (extends #95): filling a page offers to insert one right after it.
+390. **P1** Integrity check with checksums (extends #27): finds silent corruption caused by sync and offers to restore an earlier version.
+391. **P2** Stroke timestamps linked to the lecture video (extends #231): tapping ink jumps the video to the minute it was written.
 
 ### Study and exam update (to be designed later)
 
