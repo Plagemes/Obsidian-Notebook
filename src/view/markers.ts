@@ -4,7 +4,7 @@
  * `MarkerTools` instance. The UI is deliberately small (commands, one page-menu entry, dialogs), so the action
  * registry of the redesigned toolbar and radial menu can call `MarkerTools.arm()` and the toggles directly.
  */
-import { Modal, Notice, Setting, SuggestModal, type App, type Menu, type Plugin } from "obsidian";
+import { FuzzySuggestModal, Modal, Notice, Setting, type App, type Menu, type Plugin } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import type { BoxLabel } from "../ink/marker-render";
 import { defaultBoxLabel } from "../ink/marker-render";
@@ -383,23 +383,21 @@ class BoxEditModal extends Modal {
 }
 
 /** Which kind of box was just drawn. */
-class BoxKindModal extends SuggestModal<BoxKind> {
+class BoxKindModal extends FuzzySuggestModal<BoxKind> {
 	constructor(app: App, private readonly chosen: (kind: BoxKind) => void) {
 		super(app);
 		this.setPlaceholder(t("markers.box.choose"));
 	}
 
-	getSuggestions(query: string): BoxKind[] {
-		const q = query.trim().toLowerCase();
-		return BOX_KINDS.filter((k) => boxKindName(k).toLowerCase().includes(q));
+	getItems(): BoxKind[] {
+		return [...BOX_KINDS];
 	}
 
-	renderSuggestion(kind: BoxKind, el: HTMLElement): void {
-		el.createSpan({ cls: `notebook-marker-swatch notebook-box-${kind}` });
-		el.createSpan({ text: boxKindName(kind) });
+	getItemText(kind: BoxKind): string {
+		return boxKindName(kind);
 	}
 
-	onChooseSuggestion(kind: BoxKind): void {
+	onChooseItem(kind: BoxKind): void {
 		this.chosen(kind);
 	}
 }
@@ -410,15 +408,15 @@ interface MarkerAction {
 }
 
 /** The page-menu entry: place a marker or box, invisible ink, solutions, the panel. */
-class MarkerActionModal extends SuggestModal<MarkerAction> {
+class MarkerActionModal extends FuzzySuggestModal<MarkerAction> {
 	constructor(app: App, private readonly tools: MarkerTools) {
 		super(app);
 		this.setPlaceholder(t("markers.menu.placeholder"));
 	}
 
-	getSuggestions(query: string): MarkerAction[] {
+	getItems(): MarkerAction[] {
 		const tools = this.tools;
-		const list: MarkerAction[] = [
+		return [
 			...MARKER_KINDS.map((k) => ({ label: t("markers.menu.place", { kind: markerKindName(k) }), run: () => tools.arm(k) })),
 			{ label: t("markers.menu.box"), run: () => tools.arm("box") },
 			{ label: t("markers.menu.panel"), run: () => tools.openPanel() },
@@ -426,15 +424,13 @@ class MarkerActionModal extends SuggestModal<MarkerAction> {
 			{ label: t(tools.solutionsShown ? "markers.menu.solutionsHide" : "markers.menu.solutionsShow"), run: () => tools.toggleSolutions() },
 			{ label: t("markers.menu.pageSolutions"), run: () => tools.togglePageSolutions() },
 		];
-		const q = query.trim().toLowerCase();
-		return list.filter((a) => a.label.toLowerCase().includes(q));
 	}
 
-	renderSuggestion(a: MarkerAction, el: HTMLElement): void {
-		el.setText(a.label);
+	getItemText(a: MarkerAction): string {
+		return a.label;
 	}
 
-	onChooseSuggestion(a: MarkerAction): void {
+	onChooseItem(a: MarkerAction): void {
 		a.run();
 	}
 }
