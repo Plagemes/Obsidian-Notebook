@@ -84,6 +84,10 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"notice.conflict": "Notebook: il file è stato modificato altrove; l'altra versione è stata salvata in {path}",
 	"notice.created": "Quaderno creato: {path}",
 	"notice.createFailed": "Impossibile creare il quaderno: {error}",
+	"notice.startupFailed": "Notebook: alcune funzioni non sono partite ({steps}). Il resto funziona; i dettagli sono nella console per sviluppatori.",
+	"notice.settingsNotSaved": "Notebook: il file delle impostazioni non è leggibile, quindi le modifiche non vengono salvate fino al riavvio di Obsidian. Il file non è stato toccato.",
+	"settings.renderFailed": "Impossibile mostrare le impostazioni: {error}",
+	"notice.stylesMissing": "Notebook: i suoi stili (styles.css) non sono caricati, quindi Home e la libreria appaiono senza stile. Aggiorna o reinstalla il plugin, poi riavvia Obsidian.",
 
 	"settings.uiLanguage": "Lingua",
 	"settings.uiLanguage.desc": "Automatica segue Obsidian. I nomi dei comandi cambiano dopo un riavvio.",

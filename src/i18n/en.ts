@@ -82,6 +82,10 @@ export const en = {
 	"notice.conflict": "Notebook: the file was changed elsewhere; the other version was saved to {path}",
 	"notice.created": "Notebook created: {path}",
 	"notice.createFailed": "Could not create the notebook: {error}",
+	"notice.startupFailed": "Notebook: some features could not start ({steps}). The rest works; details are in the developer console.",
+	"notice.settingsNotSaved": "Notebook: the settings file could not be read, so changes are not saved until Obsidian restarts. Your file was left untouched.",
+	"settings.renderFailed": "The settings could not be shown: {error}",
+	"notice.stylesMissing": "Notebook: its styles (styles.css) are not loaded, so Home and the library look unstyled. Update or reinstall the plugin, then restart Obsidian.",
 
 	"settings.uiLanguage": "Language",
 	"settings.uiLanguage.desc": "Automatic follows Obsidian. Command names change after a restart.",
