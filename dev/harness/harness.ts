@@ -15,7 +15,7 @@
  * `harness.setTool("highlighter")`, `await harness.check()`.
  */
 import "./setup";
-import { App, noticeEls, notices, WorkspaceLeaf, type TFile } from "./obsidian-stub";
+import { App, noticeEls, notices, Platform, WorkspaceLeaf, type TFile } from "./obsidian-stub";
 import { NotebookView } from "../../src/view/notebook-view";
 import { DEFAULT_SETTINGS, type NotebookSettings } from "../../src/settings";
 import { createDocument, createStroke } from "../../src/model/document";
@@ -37,7 +37,83 @@ import { NotebookStatusBar } from "../../src/view/status-bar";
 import { checkNavigation } from "./nav-check";
 import { compareLod, measureLod } from "./lod-bench";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import type { Layout } from "../../src/ink/layout";
+import type { Viewport } from "../../src/ink/viewport";
+import type { SavedPosition } from "../../src/ink/view-position";
+import type { Matrix } from "../../src/ink/transform";
+import type { History } from "../../src/model/history";
+import type { NotebookDocument, PageElement, Stroke } from "../../src/model/types";
+import type { ActionArg } from "../../src/view/view-actions";
+import type { ColourTools } from "../../src/view/colour-tools";
+import type { PageMode } from "../../src/view/page-mode";
+import type { PageNavigator } from "../../src/view/navigator";
+import type { PenRadial } from "../../src/view/radial-menu";
+import type { StampPalette, StampTarget } from "../../src/view/stamp-palette";
+import type { ToolbarState, ToolName, Toolbar } from "../../src/view/toolbar";
+import type { ViewUi } from "../../src/view/view-ui";
+import type { TFile as ObsidianFile, WorkspaceLeaf as ObsidianLeaf } from "obsidian";
+
+/** The public surface of a class (a mapped type drops the private members, so the harness can add them back with their types). */
+type Pub<T> = { [K in keyof T]: T[K] };
+
+/**
+ * The private members of NotebookView that the harness drives (it runs the real view in a page, so it may reach into it).
+ * The cast is made in one place per function (`view as unknown as HarnessView`).
+ */
+type HarnessView = Omit<Pub<NotebookView>, "document"> & {
+	document: NotebookDocument;
+	session: Omit<Pub<DocumentSession>, "doc" | "partialDoc"> & { doc: NotebookDocument; partialDoc: NotebookDocument };
+	history: Pub<History>;
+	toolbar: Pub<Toolbar>;
+	renderer: HarnessRenderer;
+	controller: { rawUpdates: boolean } | null;
+	pageNav: Pub<PageNavigator> | null;
+	loadFile(file: TFile | ObsidianFile): Promise<void>;
+	radial: Pub<PenRadial>;
+	pageMode: Pub<PageMode>;
+	ui: Pub<ViewUi>;
+	viewport: Viewport;
+	layout: Layout;
+	fitMode: boolean;
+	tools: ToolbarState;
+	selection: { pageIndex: number; strokes: Stroke[]; elements: PageElement[]; matrix: Matrix };
+	stamps: Pub<StampPalette> & { doSave(name: string, clip: unknown): Promise<void> };
+	stampPalette: Pub<StampPalette> | null;
+	colourTools: Pub<ColourTools>;
+	host: { settings: NotebookSettings };
+	setNavigatorOpen(open: boolean): void;
+	currentPageIndex(): number;
+	currentPosition(): SavedPosition;
+	scrollToPage(index: number, y?: number, animate?: boolean): void;
+	selectItems(pageIndex: number, strokes: Stroke[], elements: PageElement[]): void;
+	clearSelection(): void;
+	commitSelectionTransform(): void;
+	captureSelectionClip(): unknown;
+	pageAtClient(clientX: number, clientY: number): StampTarget | null;
+	afterHistoryChange(): void;
+	setViewport(v: Viewport, interactive?: boolean): void;
+	editable(): boolean;
+	showPartial(): void;
+	onDocumentLoaded(doc: unknown, mode: string, problem: string | null): void;
+	applyPendingPage(): void;
+	runAction(id: string, arg?: ActionArg): void;
+};
+
+interface HarnessRenderer {
+	stats: { strokesDrawn: number };
+	onFrame: (() => void) | null;
+	selection?: { strokes?: unknown[] } | null;
+	fillStroke: (ctx: CanvasRenderingContext2D, stroke: { id: string }, ...rest: unknown[]) => void;
+}
+
+/** The two private methods of the view that the load checks replace for a while. */
+interface ViewProto {
+	showPartial: (this: HarnessView) => void;
+	onDocumentLoaded: (...a: unknown[]) => void;
+}
+
+/** What the harness needs from the Obsidian leaf stand-in when it builds a view. */
+const asLeaf = (l: WorkspaceLeaf | null): ObsidianLeaf => l as unknown as ObsidianLeaf;
 
 const errors: string[] = [];
 const origError = console.error.bind(console);
@@ -57,8 +133,8 @@ if (fault === "wet") {
 		throw new Error("harness: injected wet ink failure");
 	};
 } else if (fault === "stroke") {
-	const proto = Renderer.prototype as any;
-	const fill = proto.fillStroke as (ctx: CanvasRenderingContext2D, stroke: { id: string }, ...rest: unknown[]) => void;
+	const proto = Renderer.prototype as unknown as Pick<HarnessRenderer, "fillStroke">;
+	const fill = proto.fillStroke;
 	proto.fillStroke = function (ctx: CanvasRenderingContext2D, stroke: { id: string }, ...rest: unknown[]) {
 		if (stroke.id === "s1") throw new Error("harness: injected stroke failure");
 		fill.call(this, ctx, stroke, ...rest);
@@ -115,24 +191,24 @@ async function seed(): Promise<void> {
 }
 
 /** The practice feature (doc=practice) on a stand-in plugin: the views attach to it as they do to the real one. */
-const practiceService = new PracticeService({ app, settings: { ...DEFAULT_SETTINGS }, registerEvent: () => undefined } as any);
+const practiceService = new PracticeService({ app, settings: { ...DEFAULT_SETTINGS }, registerEvent: () => undefined } as unknown as ConstructorParameters<typeof PracticeService>[0]);
 
 /** Back/forward history (roadmap 18) and the status bar item (roadmap O15) on the harness's single view. */
 const harnessNav: NavController = new NavController({
-	here: () => (view as any)?.navPlace() ?? null,
-	exists: async (pl) => !!(view as any)?.document?.pages.some((p: { id: string }) => p.id === pl.pageId),
+	here: () => (view as unknown as HarnessView)?.navPlace() ?? null,
+	exists: async (pl) => !!(view as unknown as HarnessView)?.document?.pages.some((p: { id: string }) => p.id === pl.pageId),
 	open: async (pl) => {
-		(view as any).showPlace(pl);
+		(view as unknown as HarnessView).showPlace(pl);
 		harnessNav.shown();
 	},
 });
-const harnessStatusBarEl = document.createElement("div");
+const harnessStatusBarEl = createDiv();
 harnessStatusBarEl.className = "status-bar-item";
 document.body.appendChild(harnessStatusBarEl);
 let statusBarClicks = 0;
 const harnessStatusBar = new NotebookStatusBar(harnessStatusBarEl, () => {
 	statusBarClicks++;
-	(view as any)?.openNavigator();
+	(view as unknown as HarnessView)?.openNavigator();
 });
 
 function settings(): NotebookSettings {
@@ -143,29 +219,29 @@ function settings(): NotebookSettings {
 
 async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	const root = document.getElementById("harness-app")!;
-	if (view) await (view as any).onClose();
+	if (view) await (view as unknown as HarnessView).onClose();
 	root.empty();
 	leaf = new WorkspaceLeaf(app, root);
-	view = new NotebookView(leaf as any, { settings: settings(), practice: doc === "practice" ? practiceService : undefined, nav: harnessNav, statusChanged: (v) => harnessStatusBar.update(v.statusSnapshot()) });
+	view = new NotebookView(asLeaf(leaf), { settings: settings(), practice: doc === "practice" ? practiceService : undefined, nav: harnessNav, statusChanged: (v) => harnessStatusBar.update(v.statusSnapshot()) });
 	await view.onOpen();
 	const path = doc === "new" || doc === "practice" || doc === "readonly" ? "Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" ? "Notebooks/Slides.notebook" : "Notebooks/Old v3.notebook";
-	const file = app.vault.getFileByPath(path) as TFile;
-	await (view as any).loadFile(file);
+	const file = app.vault.getFileByPath(path)!;
+	await (view as unknown as HarnessView).loadFile(file);
 	view.onResize();
 	await frames(3);
 }
 
 function frames(n = 1): Promise<void> {
 	return new Promise((resolve) => {
-		const step = () => (n-- <= 0 ? resolve() : requestAnimationFrame(step));
-		requestAnimationFrame(step);
+		const step = () => (n-- <= 0 ? resolve() : window.requestAnimationFrame(step));
+		window.requestAnimationFrame(step);
 	});
 }
 
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 
 function stage(): HTMLElement {
-	return document.querySelector(".notebook-stage") as HTMLElement;
+	return document.querySelector<HTMLElement>(".notebook-stage")!;
 }
 
 let pointerId = 10;
@@ -209,12 +285,12 @@ async function penStroke(points: Array<[number, number]>, opts: { pointerType?: 
 
 function setTool(tool: string): void {
 	// Same path as a tap on the toolbar button.
-	(view as any).toolbar.setTool(tool);
+	(view as unknown as HarnessView).toolbar.setTool(tool as ToolName);
 }
 
 /** RGBA of the static canvas at a point given as fractions of the stage. */
 function staticPixel(fx: number, fy: number, canvasCls = "notebook-canvas-static"): number[] {
-	const c = stage().querySelector(`canvas.${canvasCls}`) as HTMLCanvasElement;
+	const c = stage().querySelector<HTMLCanvasElement>(`canvas.${canvasCls}`)!;
 	const ctx = c.getContext("2d")!;
 	const x = Math.min(c.width - 1, Math.floor(fx * c.width)), y = Math.min(c.height - 1, Math.floor(fy * c.height));
 	return Array.from(ctx.getImageData(x, y, 1, 1).data);
@@ -222,7 +298,7 @@ function staticPixel(fx: number, fy: number, canvasCls = "notebook-canvas-static
 
 /** Dark ink in a short vertical band around the point (the toolbar may wrap and move the page a little). */
 function inkNear(fx: number, fy: number): boolean {
-	const c = stage().querySelector("canvas.notebook-canvas-static") as HTMLCanvasElement;
+	const c = stage().querySelector<HTMLCanvasElement>("canvas.notebook-canvas-static")!;
 	const ctx = c.getContext("2d")!;
 	const dpr = window.devicePixelRatio || 1;
 	const x = Math.floor(fx * c.width), y = Math.floor(fy * c.height), band = Math.ceil(32 * dpr);
@@ -246,12 +322,12 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 	const results: CheckResult[] = [];
 	const add = (name: string, ok: boolean, detail = "") => results.push({ name, ok, detail });
 	const st = stage();
-	const leafRect = (document.querySelector(".workspace-leaf") as HTMLElement).getBoundingClientRect();
+	const leafRect = (document.querySelector<HTMLElement>(".workspace-leaf")!).getBoundingClientRect();
 	const r = st.getBoundingClientRect();
 	add("stage has a size", r.width >= leafRect.width * 0.5 && r.height >= leafRect.height * 0.5,
 		`stage ${Math.round(r.width)}×${Math.round(r.height)} in leaf ${Math.round(leafRect.width)}×${Math.round(leafRect.height)}`);
 	const dpr = window.devicePixelRatio || 1;
-	const canvases = Array.from(st.querySelectorAll("canvas")) as HTMLCanvasElement[];
+	const canvases = Array.from(st.querySelectorAll<HTMLCanvasElement>("canvas"));
 	for (const c of canvases) {
 		const cr = c.getBoundingClientRect();
 		const cs = getComputedStyle(c);
@@ -274,7 +350,7 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 	await penStroke([[0.3, 0.5], [0.5, 0.52], [0.7, 0.5]]);
 	add("pen stroke is stored", strokeCount() === before + 1, `${before} → ${strokeCount()}`);
 	add("pen stroke is painted", inkNear(0.5, 0.52), `pixel rgba(${staticPixel(0.5, 0.52).join(",")})`);
-	const wet = st.querySelector("canvas.notebook-canvas-wet") as HTMLCanvasElement | null;
+	const wet = st.querySelector<HTMLCanvasElement>("canvas.notebook-canvas-wet");
 	if (wet) {
 		const w = wet.getContext("2d")!.getImageData(0, 0, wet.width, wet.height).data;
 		let left = 0;
@@ -299,7 +375,7 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 	await frames(4);
 
 	// Page navigator: open it, the first thumbnail must load (it worked on the device even in 0.4.0).
-	const v = view as any;
+	const v = view as unknown as HarnessView;
 	const wasOpen = !!v.pageNav?.open;
 	v.setNavigatorOpen(true);
 	let thumb: HTMLImageElement | null = null;
@@ -309,12 +385,12 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 		if (thumb && thumb.complete && thumb.naturalWidth > 0) break;
 		await wait(25);
 	}
-	const navRect = (document.querySelector(".notebook-navigator") as HTMLElement | null)?.getBoundingClientRect();
+	const navRect = (document.querySelector<HTMLElement>(".notebook-navigator"))?.getBoundingClientRect();
 	add("navigator shows thumbnails", !!thumb && thumb.naturalWidth > 0 && !!navRect && navRect.width > 0 && navRect.height > 0,
 		`${thumb ? `${thumb.naturalWidth}×${thumb.naturalHeight}` : "no thumbnail"}, panel ${navRect ? `${Math.round(navRect.width)}×${Math.round(navRect.height)}` : "missing"}`);
 	// Multi-selection in the page panel (wave 0.8): the select button, ticks, the action bar, Escape ends it.
 	{
-		const nav = document.querySelector(".notebook-navigator") as HTMLElement;
+		const nav = document.querySelector<HTMLElement>(".notebook-navigator")!;
 		const selectButton = nav.querySelector<HTMLButtonElement>(".notebook-navigator-header button[aria-label='Select pages']");
 		selectButton?.click();
 		await frames(2);
@@ -340,7 +416,7 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 	// Reaching the radial menu without the side button: pen hold-still, finger long-press, and the Samsung button
 	// (a pressure-0 primary press while hovering: click = menu on release, touch while held = erase). None draws ink.
 	{
-		const v = view as any;
+		const v = view as unknown as HarnessView;
 		setTool("pen");
 		v.host.settings.penButtonSeen = false;
 		v.host.settings.penHoldStill = null;
@@ -389,7 +465,7 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 		const fx = r4.left + r4.width * 0.5, fy = r4.top + r4.height * 0.6;
 		st.dispatchEvent(mk("pointerdown", id, fx, fy, { pointerType: "touch", pressure: 0.5 }));
 		await wait(700);
-		const ring = st.querySelector(".notebook-radial") as HTMLElement | null;
+		const ring = st.querySelector<HTMLElement>(".notebook-radial");
 		const cxs = ring ? parseFloat(ring.style.getPropertyValue("--notebook-radial-x")) : NaN;
 		const cys = ring ? parseFloat(ring.style.getPropertyValue("--notebook-radial-y")) : NaN;
 		const dist = Math.hypot(fx - r4.left - cxs, fy - r4.top - cys);
@@ -456,9 +532,9 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 		ink: [r2.left + r2.width * 0.5, r2.top + r2.height * 0.52],
 	};
 	const env = {
-		userAgent: navigator.userAgent, dpr, rawUpdates: (view as any)?.controller?.rawUpdates ?? null, fault,
+		platform: Platform.isMobile ? "mobile" : "desktop", dpr, rawUpdates: (view as unknown as HarnessView)?.controller?.rawUpdates ?? null, fault,
 		theme: document.body.className, doc: params.get("doc") ?? "v3",
-		wetDesynchronized: (wet?.getContext("2d") as any)?.getContextAttributes?.()?.desynchronized ?? null,
+		wetDesynchronized: wet?.getContext("2d")?.getContextAttributes?.()?.desynchronized ?? null,
 	};
 	return { ok, results, errors: unexpected, notices: [...notices], env, points };
 }
@@ -494,7 +570,7 @@ async function tapDial(action: string): Promise<boolean> {
 
 /** Closes every popover, sheet and dial and goes back to the pen with nothing selected. For screenshots. */
 async function closeAll(): Promise<void> {
-	const v = view as any;
+	const v = view as unknown as HarnessView;
 	v.radial?.close();
 	v.toolbar.closePopover();
 	v.ui.sheet.close();
@@ -506,7 +582,7 @@ async function closeAll(): Promise<void> {
 
 /** Opens the dial in `state` (main, color, width, tools, favourites, shapes). For screenshots. */
 async function radialState(state: string): Promise<void> {
-	const v = view as any;
+	const v = view as unknown as HarnessView;
 	v.radial?.close();
 	await openRadial();
 	if (state === "save") {
@@ -523,12 +599,12 @@ async function radialState(state: string): Promise<void> {
  * shapes; the colour ring sets the colour, the width slider the width, the pen case the tool; nothing is drawn.
  */
 async function checkRadial(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
-	const v = view as any;
+	const v = view as unknown as HarnessView;
 	setTool("pen");
 	v.toolbar.update({ penColor: "#1e1e1e", penWidth: 2 });
 	const before = strokeCount();
 	await openRadial();
-	const dial = document.querySelector(".notebook-dial") as HTMLElement | null;
+	const dial = document.querySelector<HTMLElement>(".notebook-dial");
 	const actions = dial ? Array.from(dial.querySelectorAll("[data-dial]")).map((e) => (e as HTMLElement).dataset.dial) : [];
 	add("radial: the side button opens the dial and lifting keeps it open", !!dial && v.radial.state === "main"
 		&& ["undo", "redo", "width", "color", "tools", "favourites", "shapes"].every((x) => actions.includes(x)), actions.join(","));
@@ -550,7 +626,7 @@ async function checkRadial(add: (name: string, ok: boolean, detail?: string) => 
 	const knob = document.querySelector(".notebook-dial [data-dial='slider']");
 	add("radial: the width bubble opens the arc slider", v.radial.state === "width" && !!knob && document.querySelectorAll(".notebook-dial .notebook-dial-step").length >= 8, `${v.radial.state}`);
 	// Drag the knob along the arc to its end (lower right).
-	const d = (document.querySelector(".notebook-dial") as HTMLElement).getBoundingClientRect();
+	const d = (document.querySelector<HTMLElement>(".notebook-dial")!).getBoundingClientRect();
 	const cx = d.left + d.width / 2, cy = d.top + d.height / 2;
 	const k = (knob as HTMLElement).getBoundingClientRect();
 	penAt("pointerdown", k.left + k.width / 2, k.top + k.height / 2);
@@ -563,7 +639,7 @@ async function checkRadial(add: (name: string, ok: boolean, detail?: string) => 
 	const number = document.querySelector(".notebook-dial .notebook-dial-number")?.textContent;
 	add("radial: dragging the slider sets the width and shows it", v.tools.penWidth === 8 && number === "8" && v.radial.state === "width", `width ${v.tools.penWidth}, label ${number}`);
 	await tapDial("back");
-	add("radial: the centre goes back to the dial", v.radial.state === "main", v.radial.state);
+	add("radial: the centre goes back to the dial", v.radial.state === "main", String(v.radial.state));
 	v.toolbar.update({ penWidth: 2 });
 
 	await tapDial("tools");
@@ -606,7 +682,7 @@ function contact(name: string, x: number, y: number, id = 91): void {
  * takes colour, width and tool from a stroke; Escape and a tap outside the page end them; none of it draws.
  */
 async function checkColour(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
-	const v = view as any;
+	const v = view as unknown as HarnessView;
 	setTool("pen");
 	v.toolbar.update({ penColor: "#1e1e1e", penWidth: 2 });
 	v.host.settings.recentColours = [];
@@ -615,8 +691,8 @@ async function checkColour(add: (name: string, ok: boolean, detail?: string) => 
 
 	v.runAction("colour-picker");
 	await frames(1);
-	const panel = document.querySelector(".notebook-colour-picker") as HTMLElement | null;
-	const hex = panel?.querySelector("input.notebook-colour-hex") as HTMLInputElement | null;
+	const panel = document.querySelector<HTMLElement>(".notebook-colour-picker");
+	const hex = panel?.querySelector<HTMLInputElement>("input.notebook-colour-hex");
 	add("colour: the action opens the picker with the area, the hue bar, the hex field and the eyedropper",
 		!!panel && !!panel.querySelector(".notebook-colour-area") && !!panel.querySelector(".notebook-colour-hue") && !!hex && !!panel.querySelector("button[aria-label]") && hex.value === "#1e1e1e", hex?.value ?? "none");
 	const pr = panel?.getBoundingClientRect();
@@ -629,7 +705,7 @@ async function checkColour(add: (name: string, ok: boolean, detail?: string) => 
 		hex.dispatchEvent(new Event("change", { bubbles: true }));
 	}
 	await frames(1);
-	add("colour: a hex value sets the pen colour and is remembered", v.tools.penColor === "#12ab34" && v.host.settings.recentColours[0] === "#12ab34", `${v.tools.penColor} ${v.host.settings.recentColours}`);
+	add("colour: a hex value sets the pen colour and is remembered", v.tools.penColor === "#12ab34" && v.host.settings.recentColours[0] === "#12ab34", `${v.tools.penColor} ${v.host.settings.recentColours.join(",")}`);
 	if (hex) {
 		hex.value = "#zzz";
 		hex.dispatchEvent(new Event("input", { bubbles: true }));
@@ -637,7 +713,7 @@ async function checkColour(add: (name: string, ok: boolean, detail?: string) => 
 	}
 	add("colour: an invalid hex changes nothing", v.tools.penColor === "#12ab34" && v.host.settings.recentColours.length === 1, v.tools.penColor);
 
-	const area = panel?.querySelector(".notebook-colour-area") as HTMLElement | null;
+	const area = panel?.querySelector<HTMLElement>(".notebook-colour-area");
 	if (area) {
 		const r = area.getBoundingClientRect();
 		const ev = (name: string, x: number, y: number) => area.dispatchEvent(new PointerEvent(name, {
@@ -656,14 +732,14 @@ async function checkColour(add: (name: string, ok: boolean, detail?: string) => 
 	add("colour: a recent colour sets the pen colour again", swatches === 2 && v.tools.penColor === "#12ab34" && v.host.settings.recentColours[0] === "#12ab34", `${swatches} swatches, ${v.tools.penColor}`);
 	v.toolbar.update({ penColor: "#dc2626" });
 	await frames(1);
-	add("colour: the picker follows a colour changed elsewhere", (document.querySelector(".notebook-colour-picker input.notebook-colour-hex") as HTMLInputElement | null)?.value === "#dc2626", "");
+	add("colour: the picker follows a colour changed elsewhere", (document.querySelector<HTMLInputElement>(".notebook-colour-picker input.notebook-colour-hex"))?.value === "#dc2626", "");
 	panel?.querySelector<HTMLElement>("button[aria-label='Close the colour picker']")?.click();
 	await frames(1);
 	add("colour: the close button closes the picker", !document.querySelector(".notebook-colour-picker"), "");
 
 	// The tool options carry the same actions as buttons.
 	await openOptions("pen");
-	const row = document.querySelector(".notebook-options") as HTMLElement | null;
+	const row = document.querySelector<HTMLElement>(".notebook-options");
 	const labels = Array.from(row?.querySelectorAll("button") ?? []).map((b) => b.getAttribute("aria-label"));
 	add("colour: the colour row has the free colour, the eyedropper and (for ink) the style eyedropper",
 		["Colour picker…", "Eyedropper: pick a colour from the page", "Style eyedropper: take colour, width and tool from a stroke"].every((l) => labels.includes(l)), labels.slice(-4).join(" | "));
@@ -685,10 +761,10 @@ async function checkColour(add: (name: string, ok: boolean, detail?: string) => 
 	add("colour: while the contact is down a loupe shows the colour under it", !!document.querySelector(".notebook-eyedropper-loupe"), "");
 	contact("pointerup", mid.x, mid.y);
 	await frames(1);
-	const picked = v.tools.penColor as string;
+	const picked = v.tools.penColor;
 	const close = (a: string, b: string) => [1, 3, 5].every((i) => Math.abs(parseInt(a.slice(i, i + 2), 16) - parseInt(b.slice(i, i + 2), 16)) <= 24);
 	add("colour: the eyedropper takes the colour of the rendered page under the contact", close(picked, "#dc2626") && v.colourTools.armed === null, `${picked}, armed ${v.colourTools.armed}`);
-	add("colour: the picked colour is remembered", v.host.settings.recentColours[0] === picked, `${v.host.settings.recentColours}`);
+	add("colour: the picked colour is remembered", v.host.settings.recentColours[0] === picked, `${v.host.settings.recentColours.join(",")}`);
 	add("colour: picking draws nothing", strokeCount() === afterInk, `${afterInk} -> ${strokeCount()}`);
 
 	// Escape and a contact outside the page end the eyedropper.
@@ -696,7 +772,7 @@ async function checkColour(add: (name: string, ok: boolean, detail?: string) => 
 	window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
 	add("colour: Escape ends the eyedropper", v.colourTools.armed === null, String(v.colourTools.armed));
 	v.runAction("style-eyedropper");
-	const bar = document.querySelector(".notebook-toolbar button") as HTMLElement | null;
+	const bar = document.querySelector<HTMLElement>(".notebook-toolbar button");
 	if (bar) {
 		const br = bar.getBoundingClientRect();
 		contact("pointerdown", br.left + br.width / 2, br.top + br.height / 2);
@@ -760,7 +836,7 @@ async function checkColour(add: (name: string, ok: boolean, detail?: string) => 
  * snaps, a vertical finger drag does not, a pen drag across the page draws and does not, and the mode switches back.
  */
 async function checkPageMode(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
-	const v = view as any;
+	const v = view as unknown as HarnessView;
 	const st = stage();
 	if (v.session.doc.pages.length < 2) v.addPage();
 	v.scrollToPage(0);
@@ -817,7 +893,7 @@ async function checkPageMode(add: (name: string, ok: boolean, detail?: string) =
 	add(`${label}: a short drag springs back`, v.currentPageIndex() === 0 && Math.abs(v.viewport.offsetX - x0) < 1, `page ${v.currentPageIndex() + 1}, offsetX ${v.viewport.offsetX.toFixed(1)}`);
 	await swipe([0.85, 0.5], [0.15, 0.5]);
 	const snapped = v.currentPageIndex() === 1;
-	const box1 = v.layout.boxes[1];
+	const box1 = v.layout.boxes[1]!;
 	const left = box1.x * v.viewport.scale + v.viewport.offsetX;
 	add(`${label}: a finger swipe turns to the next page and it snaps`, snapped && left >= 0 && left < st.getBoundingClientRect().width * 0.5 && !v.pageMode.busy,
 		`page ${v.currentPageIndex() + 1}, left edge ${left.toFixed(1)} px`);
@@ -845,40 +921,40 @@ async function checkPageMode(add: (name: string, ok: boolean, detail?: string) =
  * size). A state with only a page (a link) lands on the page at fit. The view is reopened fresh at the end.
  */
 async function checkRestore(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
-	const v0 = view as any;
+	const v0 = view as unknown as HarnessView;
 	const label = `restore ${window.innerWidth}px`;
 	await v0.flushNow();
-	const file = v0.file as TFile;
+	const file = v0.file!;
 	if (v0.session.doc.pages.length < 2) v0.addPage();
 	v0.scrollToPage(1);
 	await frames(2);
 	v0.fitMode = false;
-	const box1 = v0.layout.boxes[1];
+	const box1 = v0.layout.boxes[1]!;
 	const zoomed = v0.viewport.scale * 2.2;
 	v0.setViewport({ scale: zoomed, offsetX: -(box1.x + 40) * zoomed, offsetY: -(box1.y + 300) * zoomed });
 	await frames(3);
 	const before = v0.currentPosition();
-	const state = JSON.parse(JSON.stringify(v0.getState()));
+	const state = JSON.parse(JSON.stringify(v0.getState())) as { page?: number; view?: { page?: number; zoom: number } };
 	add(`${label}: the view state carries page, zoom and position`, !!before && state.page === 2 && state.view?.page === 2 && Math.abs(state.view.zoom - 2.2) < 0.2,
 		JSON.stringify(state.view ?? null));
 	await v0.flushNow();
 
 	const reopen = async (s: unknown, size?: { w: number; h: number }) => {
 		const root = document.getElementById("harness-app")!;
-		await (view as any).onClose();
+		await (view as unknown as HarnessView).onClose();
 		root.empty();
 		if (size) {
 			root.style.width = `${size.w}px`;
 			root.style.height = `${size.h}px`;
 		}
 		leaf = new WorkspaceLeaf(app, root);
-		view = new NotebookView(leaf as any, { settings: settings() });
+		view = new NotebookView(asLeaf(leaf), { settings: settings() });
 		await view.onOpen();
 		await view.setState(s, { history: false });
-		await (view as any).loadFile(file);
+		await (view as unknown as HarnessView).loadFile(file);
 		view.onResize();
 		await frames(4);
-		return view as any;
+		return view as unknown as HarnessView;
 	};
 
 	let v = await reopen(state);
@@ -928,27 +1004,27 @@ async function checkStagedLoad(add: (name: string, ok: boolean, detail?: string)
 	const text = serialize(source);
 	const path = "Notebooks/Staged check.notebook";
 	if (!app.vault.getFileByPath(path)) await app.vault.create(path, text);
-	const file = app.vault.getFileByPath(path) as TFile;
+	const file = app.vault.getFileByPath(path)!;
 	const root = document.getElementById("harness-app")!;
-	await (view as any).onClose();
+	await (view as unknown as HarnessView).onClose();
 	root.empty();
 	leaf = new WorkspaceLeaf(app, root);
-	view = new NotebookView(leaf as any, { settings: settings() });
+	view = new NotebookView(asLeaf(leaf), { settings: settings() });
 	await view.onOpen();
-	const v = view as any;
+	const v = view as unknown as HarnessView;
 	v.onResize();
 	const seen = { partial: false, editable: false, doc: false, painted: false, page: -1, pageStrokes: -1, otherStrokes: -1, status: "" };
-	const proto = NotebookView.prototype as any;
-	const orig = proto.showPartial as () => void;
-	proto.showPartial = function (this: any) {
+	const proto = NotebookView.prototype as unknown as ViewProto;
+	const orig = proto.showPartial;
+	proto.showPartial = function (this: HarnessView) {
 		orig.call(this);
 		seen.partial = true;
 		seen.editable = this.editable();
 		seen.doc = !!this.session.doc;
 		seen.page = this.currentPageIndex();
 		const pages = this.session.partialDoc.pages;
-		seen.pageStrokes = pages[3].strokes.length;
-		seen.otherStrokes = pages[0].strokes.length;
+		seen.pageStrokes = pages[3]!.strokes.length;
+		seen.otherStrokes = pages[0]!.strokes.length;
 		seen.status = document.querySelector(".notebook-status")?.textContent ?? "";
 	};
 	try {
@@ -987,12 +1063,12 @@ async function checkStagedLoad(add: (name: string, ok: boolean, detail?: string)
 
 /** Links to a page by id: a page that moved is found, a page that was deleted says so and the view stays where it is. */
 async function checkPageLinks(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
-	const v = view as any;
+	const v = view as unknown as HarnessView;
 	const label = `page links ${window.innerWidth}px`;
 	if (v.session.doc.pages.length < 2) v.addPage();
 	v.scrollToPage(0);
 	await frames(2);
-	const second = v.session.doc.pages[1].id as string;
+	const second = v.session.doc.pages[1]!.id;
 	const before = notices.length;
 	v.setEphemeralState({ subpath: `#p1&id=${second}` });
 	await frames(2);
@@ -1007,7 +1083,7 @@ async function checkPageLinks(add: (name: string, ok: boolean, detail?: string) 
 
 /** Fraction of the stage height that is still on the first page, a little above its bottom edge (at most 0.75). */
 function lowOnPage(): number {
-	const v = view as any;
+	const v = view as unknown as HarnessView;
 	const box = v.layout?.boxes?.[0];
 	const h = stage().getBoundingClientRect().height;
 	if (!box || !h) return 0.75;
@@ -1016,7 +1092,7 @@ function lowOnPage(): number {
 
 /** Buttons of the bar itself (not those inside a popover) that are laid out. */
 function barButtons(): HTMLButtonElement[] {
-	const bar = document.querySelector(".notebook-toolbar") as HTMLElement;
+	const bar = document.querySelector<HTMLElement>(".notebook-toolbar")!;
 	return Array.from(bar.querySelectorAll("button")).filter((b) => !b.closest(".notebook-popover") && b.offsetParent !== null);
 }
 
@@ -1037,16 +1113,16 @@ const TOOL_LABELS: Record<string, string> = { pen: "Pen", highlighter: "Highligh
 
 /** Opens the options popover of a tool the way a user does: select the tool, tap it again. For screenshots. */
 async function openOptions(tool: string): Promise<void> {
-	const tb = (view as any).toolbar;
+	const tb = (view as unknown as HarnessView).toolbar;
 	tb.closePopover();
-	tb.setTool(tool);
+	tb.setTool(tool as ToolName);
 	click(byLabel(document, TOOL_LABELS[tool] ?? tool), `tool ${tool}`);
 	await wait(250);
 }
 
 /** Opens the "All actions" sheet. For screenshots. */
 async function openMore(): Promise<void> {
-	const v = view as any;
+	const v = view as unknown as HarnessView;
 	v.toolbar.closePopover();
 	if (v.ui.sheet.isOpen) v.ui.sheet.close();
 	click(byLabel(document, "All actions"), "All actions button");
@@ -1055,7 +1131,7 @@ async function openMore(): Promise<void> {
 
 /** Opens the page sheet from the page indicator. For screenshots. */
 async function openPageSheet(): Promise<void> {
-	const v = view as any;
+	const v = view as unknown as HarnessView;
 	v.toolbar.closePopover();
 	if (v.ui.sheet.isOpen) v.ui.sheet.close();
 	click(document.querySelector(".notebook-page-indicator"), "page indicator");
@@ -1064,8 +1140,8 @@ async function openPageSheet(): Promise<void> {
 
 /** Selects the first stroke of the first page with the lasso (the contextual bar shows the selection actions). For screenshots. */
 async function selectFirstStroke(): Promise<void> {
-	const v = view as any;
-	const page = v.document.pages[0];
+	const v = view as unknown as HarnessView;
+	const page = v.document.pages[0]!;
 	v.selectItems(0, page.strokes.slice(0, 2), []);
 	await wait(250);
 }
@@ -1076,12 +1152,12 @@ async function selectFirstStroke(): Promise<void> {
  * setting, and "normal" comes back unchanged.
  */
 async function checkToolbarSize(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
-	const v = view as any;
+	const v = view as unknown as HarnessView;
 	const width = window.innerWidth;
 	const inView = (r: DOMRect) => r.left >= -0.5 && r.right <= width + 0.5;
-	const bar = document.querySelector(".notebook-toolbar") as HTMLElement;
+	const bar = document.querySelector<HTMLElement>(".notebook-toolbar")!;
 	const set = async (size: string) => {
-		v.host.settings.toolbarSize = size;
+		v.host.settings.toolbarSize = size as NotebookSettings["toolbarSize"];
 		v.applySettings(v.host.settings);
 		await frames(3);
 		await wait(120);
@@ -1098,28 +1174,28 @@ async function checkToolbarSize(add: (name: string, ok: boolean, detail?: string
 		const tools = barButtons().filter((b) => b.classList.contains("notebook-tool"));
 		const wrong = tools.filter((b) => b.offsetWidth < target - 0.5 || b.offsetHeight < target - 0.5);
 		add(`${label}: buttons are at least ${target} px`, wrong.length === 0, wrong.map((b) => `${b.getAttribute("aria-label")} ${b.offsetWidth}×${b.offsetHeight}`).join(", "));
-		const svg = tools.map((b) => b.querySelector(".svg-icon") as SVGElement | null).find((x) => x);
+		const svg = tools.map((b) => b.querySelector<SVGElement>(".svg-icon")).find((x) => x);
 		add(`${label}: icons are ${icon} px`, !!svg && Math.round(svg.getBoundingClientRect().width) === icon, `${svg ? svg.getBoundingClientRect().width : "no icon"}`);
 		const rows = Math.ceil(bar.getBoundingClientRect().height / (target + 8));
 		add(`${label}: at most three rows`, rows <= 3, `height ${Math.round(bar.getBoundingClientRect().height)} px`);
-		const favs = bar.querySelector(".notebook-favs") as HTMLElement;
+		const favs = bar.querySelector<HTMLElement>(".notebook-favs")!;
 		add(`${label}: favourite pens strip is inside the view`, inView(favs.getBoundingClientRect()), `${Math.round(favs.getBoundingClientRect().left)}–${Math.round(favs.getBoundingClientRect().right)}`);
 
 		await openOptions("eraser");
-		const opts = bar.querySelector(".notebook-options") as HTMLElement;
+		const opts = bar.querySelector<HTMLElement>(".notebook-options")!;
 		const r = opts.getBoundingClientRect();
 		add(`${label}: the tool options fit the view`, inView(r) && r.bottom <= window.innerHeight, `${Math.round(r.left)}–${Math.round(r.right)}, bottom ${Math.round(r.bottom)} of ${window.innerHeight}`);
 		await closeAll();
 
 		await openMore();
-		const sheet = document.querySelector(".notebook-sheet") as HTMLElement | null;
+		const sheet = document.querySelector<HTMLElement>(".notebook-sheet");
 		const sr = sheet?.getBoundingClientRect();
 		add(`${label}: the All actions sheet fits the view`, !!sr && inView(sr) && sr.bottom <= window.innerHeight + 0.5, sr ? `${Math.round(sr.left)}–${Math.round(sr.right)}` : "no sheet");
 		await closeAll();
 
 		await selectFirstStroke();
 		await wait(200);
-		const ctx = document.querySelector(".notebook-context-bar") as HTMLElement | null;
+		const ctx = document.querySelector<HTMLElement>(".notebook-context-bar");
 		const cr = ctx?.getBoundingClientRect();
 		add(`${label}: the contextual bar fits the view`, !!cr && cr.width > 0 && inView(cr), cr ? `${Math.round(cr.left)}–${Math.round(cr.right)}` : "no contextual bar");
 		await closeAll();
@@ -1131,7 +1207,7 @@ async function checkToolbarSize(add: (name: string, ok: boolean, detail?: string
 
 /** wave 0.9 (372): the page turner keys reach goToRelativePage when the view is active and nothing else wants the key. */
 async function checkPageTurnerKeys(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
-	const v = view as any;
+	const v = view as unknown as HarnessView;
 	await closeAll();
 	const deltas: number[] = [];
 	const original = v.goToRelativePage;
@@ -1150,7 +1226,7 @@ async function checkPageTurnerKeys(add: (name: string, ok: boolean, detail?: str
 		press(" ", document.body, { shiftKey: true });
 		add("page turner: PageDown, PageUp, arrows and space turn pages", deltas.join(",") === "1,-1,1,-1,1,-1" && down.defaultPrevented, `deltas ${deltas.join(",")}`);
 		deltas.length = 0;
-		const input = document.createElement("input");
+		const input = createEl("input");
 		document.body.appendChild(input);
 		press("ArrowRight", input);
 		press("a");
@@ -1178,9 +1254,9 @@ async function checkPageTurnerKeys(add: (name: string, ok: boolean, detail?: str
  * "more" menu open inside the view, choosing in them works, and tapping them, or outside them, draws nothing.
  */
 async function checkToolbar(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
-	const v = view as any;
+	const v = view as unknown as HarnessView;
 	const tb = v.toolbar;
-	const bar = document.querySelector(".notebook-toolbar") as HTMLElement;
+	const bar = document.querySelector<HTMLElement>(".notebook-toolbar")!;
 	const width = window.innerWidth;
 	const label = `toolbar ${width}px`;
 	const inView = (r: DOMRect) => r.left >= -0.5 && r.right <= width + 0.5;
@@ -1191,7 +1267,7 @@ async function checkToolbar(add: (name: string, ok: boolean, detail?: string) =>
 		`page ${doc.scrollWidth}, toolbar scroll ${bar.scrollWidth} / client ${bar.clientWidth}, view ${width}`);
 	const strays = barButtons().filter((b) => !b.closest(".notebook-favs") && !inView(b.getBoundingClientRect()));
 	add(`${label}: every control is inside the view`, strays.length === 0, strays.map((b) => b.getAttribute("aria-label")).join(", "));
-	const favs = bar.querySelector(".notebook-favs") as HTMLElement;
+	const favs = bar.querySelector<HTMLElement>(".notebook-favs")!;
 	const favRect = favs.getBoundingClientRect();
 	const favCount = favs.querySelectorAll("button").length;
 	add(`${label}: favourite pens strip is inside the view`, inView(favRect) && favCount === 6,
@@ -1208,7 +1284,7 @@ async function checkToolbar(add: (name: string, ok: boolean, detail?: string) =>
 	setTool("eraser");
 	click(byLabel(bar, "Eraser"), "eraser button");
 	await frames(2);
-	const opts = bar.querySelector(".notebook-options") as HTMLElement;
+	const opts = bar.querySelector<HTMLElement>(".notebook-options")!;
 	let r = opts.getBoundingClientRect();
 	add(`${label}: tapping the active tool opens its options`, tb.openPopover === "options" && r.width > 0 && r.height > 0 && inView(r) && r.bottom <= window.innerHeight,
 		`popover ${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}×${Math.round(r.height)} in ${width}×${window.innerHeight}`);
@@ -1240,7 +1316,7 @@ async function checkToolbar(add: (name: string, ok: boolean, detail?: string) =>
 	click(byLabel(opts, "Width 4"), "width 4");
 	add(`${label}: pen colour and width from the popover`, v.tools.penColor === "#1d4ed8" && v.tools.penWidth === 3.2 && strokeCount() === strokes,
 		`${v.tools.penColor} ${v.tools.penWidth}, strokes ${strokes} → ${strokeCount()}`);
-	const chip = bar.querySelector(".notebook-chip-dot") as HTMLElement;
+	const chip = bar.querySelector<HTMLElement>(".notebook-chip-dot")!;
 	add(`${label}: the current-pen indicator follows the pen`, getComputedStyle(chip).backgroundColor === "rgb(29, 78, 216)", getComputedStyle(chip).backgroundColor);
 	// A pen over the popover writes on the popover, not on the page.
 	const st = stage().getBoundingClientRect();
@@ -1268,7 +1344,7 @@ async function checkToolbar(add: (name: string, ok: boolean, detail?: string) =>
 	const ui = v.ui;
 	click(byLabel(bar, "All actions"), "All actions button");
 	await wait(260); // the opening animation
-	const sheet = document.querySelector(".notebook-sheet") as HTMLElement;
+	const sheet = document.querySelector<HTMLElement>(".notebook-sheet")!;
 	r = sheet.getBoundingClientRect();
 	const items = Array.from(sheet.querySelectorAll("button.notebook-menu-item")).filter((b) => (b as HTMLElement).offsetParent !== null) as HTMLElement[];
 	const sections = Array.from(sheet.querySelectorAll(".notebook-sheet-section-title")).map((e) => e.textContent);
@@ -1279,7 +1355,7 @@ async function checkToolbar(add: (name: string, ok: boolean, detail?: string) =>
 	click(byText(sheet, "Ruler"), "Ruler");
 	await frames(2);
 	add(`${label}: a toggle in the sheet works and keeps it open`, v.tools.ruler === true && ui.sheet.isOpen, `ruler ${v.tools.ruler}, sheet ${ui.sheet.isOpen}`);
-	const search = sheet.querySelector(".notebook-sheet-search input") as HTMLInputElement;
+	const search = sheet.querySelector<HTMLInputElement>(".notebook-sheet-search input")!;
 	search.value = "stamp";
 	search.dispatchEvent(new Event("input", { bubbles: true }));
 	await frames(1);
@@ -1299,7 +1375,7 @@ async function checkToolbar(add: (name: string, ok: boolean, detail?: string) =>
 	const strokesBefore = strokeCount();
 	click(bar.querySelector(".notebook-page-indicator"), "page indicator");
 	await wait(260);
-	const pageSheet = document.querySelector(".notebook-sheet") as HTMLElement;
+	const pageSheet = document.querySelector<HTMLElement>(".notebook-sheet")!;
 	r = pageSheet.getBoundingClientRect();
 	add(`${label}: the page indicator opens the page sheet`, ui.sheet.openKind === "page" && inView(r) && !!byText(pageSheet, "Duplicate page") && !byText(pageSheet, "Insert image"),
 		`kind ${ui.sheet.openKind}, title ${pageSheet.querySelector(".notebook-sheet-title")?.textContent}`);
@@ -1307,27 +1383,27 @@ async function checkToolbar(add: (name: string, ok: boolean, detail?: string) =>
 	add(`${label}: the page sheet starts with Go to (page number, recent pages, one page at a time)`, firstSection?.querySelector(".notebook-sheet-section-title")?.textContent === "Go to"
 		&& ["Go to page number…", "Recently edited pages", "One page at a time"].every((x) => !!byText(firstSection as HTMLElement, x)),
 		Array.from(firstSection?.querySelectorAll("button") ?? []).map((b) => b.textContent).join(" | "));
-	const paperBefore = v.document.pages[v.currentPage()].paper.kind;
+	const paperBefore = v.document.pages[v.currentPage()]!.paper.kind;
 	const dotted = Array.from(pageSheet.querySelectorAll(".notebook-chip-choice")).find((b) => b.textContent === "Dotted") as HTMLElement | undefined;
 	click(dotted, "Dotted chip");
 	await frames(2);
-	const paperAfter = v.document.pages[v.currentPage()].paper.kind;
+	const paperAfter = v.document.pages[v.currentPage()]!.paper.kind;
 	add(`${label}: a paper chip changes the page and keeps the sheet open`, paperAfter === "dotted" && ui.sheet.isOpen && dotted?.getAttribute("aria-checked") !== null, `${paperBefore} → ${paperAfter}`);
 	v.undo();
 	await frames(1);
-	add(`${label}: undo restores the paper`, v.document.pages[v.currentPage()].paper.kind === paperBefore, v.document.pages[v.currentPage()].paper.kind);
+	add(`${label}: undo restores the paper`, v.document.pages[v.currentPage()]!.paper.kind === paperBefore, v.document.pages[v.currentPage()]!.paper.kind);
 	window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
 	await frames(1);
 	add(`${label}: Escape closes the sheet; nothing was drawn`, !ui.sheet.isOpen && strokeCount() === strokesBefore && v.document.pages.length === pageCount, `sheet ${ui.sheet.isOpen}, strokes ${strokesBefore} → ${strokeCount()}`);
 
 	// 5. Quick slots: as many as the layout engine planned, all inside the bar.
-	const quick = Array.from(bar.querySelectorAll(".notebook-quick button")) as HTMLElement[];
+	const quick = Array.from(bar.querySelectorAll<HTMLElement>(".notebook-quick button"));
 	const plan = v.toolbar.quickIds.length;
 	add(`${label}: quick slots follow the width`, quick.length === plan && (width < 480 ? plan === 0 : width >= 760 ? plan >= 4 : true) && quick.every((b) => inView(b.getBoundingClientRect())),
 		`${quick.length} quick (${v.toolbar.quickIds.join(", ")}) at ${width}px`);
 
 	// 6. The contextual bar follows the context: none with the pen, paste and the excerpt actions (v10) for the lasso, the selection actions for a selection.
-	const ctx = () => (document.querySelector(".notebook-context-bar") as HTMLElement);
+	const ctx = () => (document.querySelector<HTMLElement>(".notebook-context-bar")!);
 	const ctxKind = () => (ctx().classList.contains("notebook-hidden") ? "none" : ctx().dataset.context ?? "?");
 	ui.refreshNow();
 	const k0 = ctxKind();
@@ -1369,7 +1445,7 @@ async function checkToolbar(add: (name: string, ok: boolean, detail?: string) =>
  * delete the ink). Leaves the document as it found it.
  */
 async function checkObjects(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
-	const v = view as any;
+	const v = view as unknown as HarnessView;
 	const doc = view!.document!;
 	const page = doc.pages[0]!;
 	const startStrokes = strokeCount();
@@ -1388,11 +1464,11 @@ async function checkObjects(add: (name: string, ok: boolean, detail?: string) =>
 	// --- stamps
 	tb.closePopover();
 	await openMore();
-	click(byText(document.querySelector(".notebook-sheet") as HTMLElement, "Stamps"), "Stamps");
+	click(byText(document.querySelector<HTMLElement>(".notebook-sheet")!, "Stamps"), "Stamps");
 	await frames(3);
-	const panel = document.querySelector(".notebook-stamp-panel") as HTMLElement;
+	const panel = document.querySelector<HTMLElement>(".notebook-stamp-panel")!;
 	const pr = panel.getBoundingClientRect();
-	const body = (document.querySelector(".notebook-body") as HTMLElement).getBoundingClientRect();
+	const body = (document.querySelector<HTMLElement>(".notebook-body")!).getBoundingClientRect();
 	const builtin = panel.querySelectorAll(".notebook-stamp-tile");
 	add("stamps: the palette opens inside the view with the 3 built-in stamps",
 		!panel.classList.contains("notebook-hidden") && pr.width > 0 && pr.left >= body.left - 1 && pr.right <= body.right + 1 && pr.bottom <= body.bottom + 1 && builtin.length === 3,
@@ -1446,7 +1522,7 @@ async function checkObjects(add: (name: string, ok: boolean, detail?: string) =>
 	click(byLabel(panel, "Close stamps"), "close stamps");
 	await frames(1);
 	add("stamps: the close button hides the palette", panel.classList.contains("notebook-hidden"), "");
-	if (file) await app.vault.delete(file);
+	if (file) await app.fileManager.trashFile(file);
 
 	// --- ink attached to a text box
 	const box = { id: "obj-text", type: "text", x: 100, y: 300, width: 320, text: "Hello world, handwritten notes", fontSize: 20, color: "#1e1e1e" } as const;
@@ -1461,7 +1537,7 @@ async function checkObjects(add: (name: string, ok: boolean, detail?: string) =>
 	const boxElement = () => page.elements!.find((e) => e.id === "obj-text")!;
 	v.selectItems(0, [], [boxElement()]);
 	await frames(2);
-	const floating = (v.renderer as any).selection?.strokes?.length ?? 0;
+	const floating = v.renderer.selection?.strokes?.length ?? 0;
 	add("objects: ink written over a selected text box floats with it (and the other ink does not)", floating === 1, `${floating} floating strokes`);
 	v.selection.matrix = translate(60, 40);
 	v.commitSelectionTransform();
@@ -1494,7 +1570,7 @@ async function checkObjects(add: (name: string, ok: boolean, detail?: string) =>
 	const offer = noticeEls.length > noticesBefore ? noticeEls[noticeEls.length - 1]! : null;
 	add("objects: deleting a box with ink offers to delete the ink", !!offer && /1 stroke was written/.test(offer.textContent ?? "") && !!offer.querySelector("button"), offer?.textContent ?? "no notice");
 	const inkBefore = strokeCount();
-	(offer?.querySelector("button") as HTMLElement | null)?.click();
+	(offer?.querySelector<HTMLElement>("button"))?.click();
 	await frames(2);
 	add("objects: taking the offer deletes the ink", strokeCount() === inkBefore - 1, `${inkBefore} → ${strokeCount()}`);
 	v.undo();
@@ -1547,20 +1623,20 @@ async function measureOpen(
 	const text = serialize(stressDocument(strokes, pages));
 	const path = `Notebooks/Bench ${strokes}x${pages}.notebook`;
 	if (!app.vault.getFileByPath(path)) await app.vault.create(path, text);
-	const file = app.vault.getFileByPath(path) as TFile;
+	const file = app.vault.getFileByPath(path)!;
 
-	const proto = NotebookView.prototype as any;
-	const origLoaded = proto.onDocumentLoaded as (...a: unknown[]) => void;
-	const origLoad = DocumentSession.prototype.load;
-	const origShowPartial = proto.showPartial as (...a: unknown[]) => void;
-	const origStep = StagedParse.prototype.step;
+	const proto = NotebookView.prototype as unknown as ViewProto;
+	const origLoaded = proto.onDocumentLoaded;
+	const origLoad = Reflect.get<DocumentSession, "load">(DocumentSession.prototype, "load");
+	const origShowPartial = proto.showPartial;
+	const origStep = Reflect.get<StagedParse, "step">(StagedParse.prototype, "step");
 	let sessionMs = 0, viewMs = 0, partialMs = -1, maxSlice = 0, maxGap = 0, t0 = 0;
 	let gapTimer: number | null = null;
 	const stopGap = () => {
 		if (gapTimer !== null) window.clearInterval(gapTimer);
 		gapTimer = null;
 	};
-	proto.showPartial = function (this: unknown, ...a: unknown[]) {
+	proto.showPartial = function (this: HarnessView) {
 		partialMs = performance.now() - t0;
 		let last = performance.now();
 		stopGap();
@@ -1569,7 +1645,7 @@ async function measureOpen(
 			maxGap = Math.max(maxGap, n - last);
 			last = n;
 		}, 1);
-		origShowPartial.apply(this, a);
+		origShowPartial.call(this);
 	};
 	StagedParse.prototype.step = function (this: StagedParse, ...a: Parameters<StagedParse["step"]>) {
 		const t = performance.now();
@@ -1591,13 +1667,13 @@ async function measureOpen(
 	try {
 		for (let rep = 0; rep < reps + 1; rep++) {
 			const root = document.getElementById("harness-app")!;
-			if (view) await (view as any).onClose();
+			if (view) await (view as unknown as HarnessView).onClose();
 			root.empty();
 			await frames(2);
 			leaf = new WorkspaceLeaf(app, root);
-			view = new NotebookView(leaf as any, { settings: settings() });
+			view = new NotebookView(asLeaf(leaf), { settings: settings() });
 			await view.onOpen();
-			const v = view as any;
+			const v = view as unknown as HarnessView;
 			let firstPaint = -1, targetPaint = -1;
 			partialMs = -1;
 			maxSlice = 0;
@@ -1617,7 +1693,7 @@ async function measureOpen(
 				};
 				void run();
 			}
-			if (restore) await v.setState({ file: path, page: goTo }, {});
+			if (restore) await v.setState({ file: path, page: goTo }, { history: false });
 			// The stub's FileView does not load the file from setState: do what Obsidian does after it.
 			await v.loadFile(file);
 			const loadMs = performance.now() - t0;
@@ -1650,24 +1726,24 @@ async function measureOpen(
  */
 async function checkHeavy(strokes = 3500): Promise<Record<string, unknown>> {
 	const path = "Notebooks/Heavy.notebook";
-	const file = (app.vault.getFileByPath(path) ?? (await app.vault.create(path, serialize(stressDocument(strokes, 1))))) as TFile;
+	const file = (app.vault.getFileByPath(path) ?? (await app.vault.create(path, serialize(stressDocument(strokes, 1)))));
 	const root = document.getElementById("harness-app")!;
 	const openFresh = async () => {
-		if (view) await (view as any).onClose();
+		if (view) await (view as unknown as HarnessView).onClose();
 		root.empty();
 		leaf = new WorkspaceLeaf(app, root);
-		view = new NotebookView(leaf as any, { settings: settings() });
+		view = new NotebookView(asLeaf(leaf), { settings: settings() });
 		await view.onOpen();
-		await (view as any).loadFile(file);
+		await (view as unknown as HarnessView).loadFile(file);
 		await wait(1300);
 	};
 	const banner = () => {
-		const el = root.querySelector(".notebook-heavy") as HTMLElement | null;
+		const el = root.querySelector<HTMLElement>(".notebook-heavy");
 		const shown = !!el && el.style.display !== "none" && el.offsetParent !== null;
-		return { shown, text: shown ? el!.innerText.replace(/\s+/g, " ").trim() : "", buttons: shown ? [...el!.querySelectorAll("button")].map((b) => b.textContent) : [] };
+		return { shown, text: shown ? el.innerText.replace(/\s+/g, " ").trim() : "", buttons: shown ? [...el.querySelectorAll("button")].map((b) => b.textContent) : [] };
 	};
 	const click = (label: string) => ([...root.querySelectorAll(".notebook-heavy button")].find((b) => b.textContent === label) as HTMLElement | undefined)?.click();
-	const counts = () => ((view as any).session.doc.pages as Array<{ strokes: unknown[] }>).map((p) => p.strokes.length);
+	const counts = () => ((view as unknown as HarnessView).session.doc.pages).map((p) => p.strokes.length);
 
 	await openFresh();
 	const shown = banner();
@@ -1676,15 +1752,15 @@ async function checkHeavy(strokes = 3500): Promise<Record<string, unknown>> {
 	await wait(300);
 	const afterSplit = counts();
 	const bannerAfterSplit = banner();
-	(view as any).undo();
+	(view as unknown as HarnessView).undo();
 	await wait(100);
 	const afterUndo = counts();
 	click("Dismiss");
 	await wait(1300);
 	const dismissed = banner();
 	await openFresh();
-	const light = (app.vault.getFileByPath("Notebooks/Light.notebook") ?? (await app.vault.create("Notebooks/Light.notebook", serialize(stressDocument(500, 1))))) as TFile;
-	await (view as any).loadFile(light);
+	const light = (app.vault.getFileByPath("Notebooks/Light.notebook") ?? (await app.vault.create("Notebooks/Light.notebook", serialize(stressDocument(500, 1)))));
+	await (view as unknown as HarnessView).loadFile(light);
 	await wait(1300);
 	return { shown, before, afterSplit, bannerAfterSplit, afterUndo, dismissedHides: !dismissed.shown, lightHasNoBanner: !banner().shown };
 }
@@ -1700,7 +1776,7 @@ function applyTheme(theme = params.get("theme") ?? "light"): void {
  * step. Leaves the document as it found it.
  */
 async function checkSelectionTools(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
-	const v = view as any;
+	const v = view as unknown as HarnessView;
 	const doc = view!.document!;
 	const page = doc.pages[0]!;
 	const start = strokeCount();
@@ -1713,14 +1789,14 @@ async function checkSelectionTools(add: (name: string, ok: boolean, detail?: str
 	view!.applyCommand(new Batch("Add test ink", mine.map((s, i) => new AddStroke(page.id, s, page.strokes.length + i))));
 	await frames(2);
 	const find = (id: string) => page.strokes.find((s) => s.id === id)!;
-	const minX = (s: any) => Math.min(...s.points.map((p: number[]) => p[0]!));
-	const maxX = (s: any) => Math.max(...s.points.map((p: number[]) => p[0]!));
-	const selectedIds = () => new Set<string>((v.selection?.strokes ?? []).map((s: any) => s.id));
-	const bar = () => document.querySelector(".notebook-context-bar") as HTMLElement;
+	const minX = (s: Stroke) => Math.min(...s.points.map((p: number[]) => p[0]!));
+	const maxX = (s: Stroke) => Math.max(...s.points.map((p: number[]) => p[0]!));
+	const selectedIds = () => new Set<string>((v.selection?.strokes ?? []).map((s) => s.id));
+	const bar = () => document.querySelector<HTMLElement>(".notebook-context-bar")!;
 	const barIds = (sel: string) => Array.from(bar().querySelectorAll(`${sel} [data-action]`)).map((b) => (b as HTMLElement).dataset.action);
 	const stageBox = stage().getBoundingClientRect();
 	const frac = (px: number, py: number): [number, number] => {
-		const box = v.layout.boxes[0];
+		const box = v.layout.boxes[0]!;
 		const { scale, offsetX, offsetY } = v.viewport;
 		return [(offsetX + (box.x + px) * scale) / stageBox.width, (offsetY + (box.y + py) * scale) / stageBox.height];
 	};
@@ -1734,12 +1810,12 @@ async function checkSelectionTools(add: (name: string, ok: boolean, detail?: str
 	tb.update({ tool: "lasso" });
 	v.refreshUi();
 	v.ui.refreshNow();
-	const toggle = bar().querySelector('[data-action="select-rectangle"]') as HTMLElement | null;
+	const toggle = bar().querySelector<HTMLElement>('[data-action="select-rectangle"]');
 	add(`${label}: the lasso bar offers rectangle selection and select by colour or tool`, !!toggle && barIds("").includes("select-by-style") && toggle.getAttribute("aria-pressed") === "false", barIds("").join());
 	click(toggle, "rectangle toggle");
 	await frames(2);
 	v.ui.refreshNow();
-	const pressed = (bar().querySelector('[data-action="select-rectangle"]') as HTMLElement | null)?.getAttribute("aria-pressed");
+	const pressed = (bar().querySelector<HTMLElement>('[data-action="select-rectangle"]'))?.getAttribute("aria-pressed");
 	add(`${label}: the toggle switches the lasso to a rectangle`, tb.state.selectMode === "rectangle" && pressed === "true", `${tb.state.selectMode}, pressed ${pressed}`);
 	if (visible) {
 		await penStroke([frac(20, 80), frac(280, 210)], { pointerType: "pen", steps: 10 });
@@ -1766,7 +1842,7 @@ async function checkSelectionTools(add: (name: string, ok: boolean, detail?: str
 	v.ui.refreshNow();
 	const first = mine.map((s) => minX(find(s.id)));
 	click(bar().querySelector('[data-action="selection-align-menu"]'), "align menu");
-	const menu = (window as any).harnessMenu as { titles: string[]; run(title: string): void } | undefined;
+	const menu = (window as unknown as { harnessMenu?: unknown }).harnessMenu as { titles: string[]; run(title: string): void } | undefined;
 	add(`${label}: the align button opens a menu with every align and distribute entry`,
 		!!menu && ["Align left", "Align centre", "Align right", "Align top", "Align middle", "Align bottom", "Distribute horizontally", "Distribute vertically"].every((x) => menu.titles.includes(x)), menu?.titles.join(", ") ?? "no menu");
 	menu?.run("Align left");
@@ -1798,9 +1874,9 @@ async function checkSelectionTools(add: (name: string, ok: boolean, detail?: str
 	reselect();
 	v.runAction("selection-resize");
 	await frames(2);
-	const panel = document.querySelector(".notebook-resize-panel") as HTMLElement | null;
-	const wIn = panel?.querySelector("#notebook-resize-width") as HTMLInputElement | null;
-	const hIn = panel?.querySelector("#notebook-resize-height") as HTMLInputElement | null;
+	const panel = document.querySelector<HTMLElement>(".notebook-resize-panel");
+	const wIn = panel?.querySelector<HTMLInputElement>("#notebook-resize-width");
+	const hIn = panel?.querySelector<HTMLInputElement>("#notebook-resize-height");
 	add(`${label}: exact size opens a panel with the current size`, !!wIn && !!hIn && Number(wIn.value) > 0 && Number(hIn.value) > 0, `${wIn?.value} x ${hIn?.value}`);
 	if (wIn && hIn && panel) {
 		const w1 = Number(wIn.value), h1 = Number(hIn.value);
@@ -1830,8 +1906,8 @@ async function checkSelectionTools(add: (name: string, ok: boolean, detail?: str
 	v.clearSelection();
 	v.runAction("select-by-style");
 	await frames(2);
-	const picker = document.querySelector(".notebook-style-panel") as HTMLElement | null;
-	const rows = Array.from(picker?.querySelectorAll("button.notebook-style-row") ?? []) as HTMLElement[];
+	const picker = document.querySelector<HTMLElement>(".notebook-style-panel");
+	const rows = Array.from(picker?.querySelectorAll<HTMLElement>("button.notebook-style-row") ?? []);
 	const hl = rows.find((r) => r.textContent?.startsWith("Highlighter"));
 	add(`${label}: the picker lists the tools and colours of the page`, !!picker && rows.length >= 3 && !!hl, `${rows.length} rows`);
 	click(hl, "Highlighter row");
@@ -1855,7 +1931,7 @@ function applySize(): void {
 	if (h) root.style.height = `${Number(h)}px`;
 }
 
-(window as any).harness = { app, open, measureOpen, penStroke, setTool, openOptions, openMore, measureLod, compareLod, checkHeavy, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkReadOnly: async () => { try { return JSON.parse(JSON.stringify(await checkReadOnly({ view, app, stage, penStroke, setTool, strokeCount, frames, openMore, errors, notices }))); } catch (e) { return { ok: false, results: [], errors: [`readonly check: ${(e as Error).stack ?? e}`], notices: [], env: {} }; } }, checkPractice: () => checkPractice({ view, app, service: practiceService, frames, errors, notices }), checkExcerpt: () => checkExcerpt({ view, stage, penStroke, setTool, strokeCount, staticPixel, frames, errors, notices }), checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
+const harnessApi: Record<string, unknown> = { app, open, measureOpen, penStroke, setTool, openOptions, openMore, measureLod, compareLod, checkHeavy, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkReadOnly: async () => { try { return JSON.parse(JSON.stringify(await checkReadOnly({ view, app, stage, penStroke, setTool, strokeCount, frames, openMore, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`readonly check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPractice: () => checkPractice({ view, app, service: practiceService, frames, errors, notices }), checkExcerpt: () => checkExcerpt({ view, stage, penStroke, setTool, strokeCount, staticPixel, frames, errors, notices }), checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
 	return view;
 } };
 
@@ -1878,4 +1954,5 @@ async function main(): Promise<void> {
 	}
 }
 
-(window as any).harness.ready = main();
+(window as unknown as { harness: Record<string, unknown> }).harness = harnessApi;
+harnessApi.ready = main();
