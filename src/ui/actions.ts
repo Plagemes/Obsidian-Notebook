@@ -59,6 +59,8 @@ export interface UiContext {
 	markers?: { invisibleInk: boolean; solutions: boolean; pageSolutions: boolean };
 	/** wave 0.9: view-only night mode (367) and cropped PDF margins (376). Optional (both off when absent). */
 	display?: { night: boolean; crop: boolean };
+	/** wave 0.10: how many notebook views are open in the workspace (tabs). Optional (0 when absent). */
+	openNotebooks?: number;
 	/** Phone-sized view (the page panel is a drawer, the toolbar has two rows). */
 	narrow: boolean;
 }
@@ -98,6 +100,8 @@ export interface ActionDef {
 const pdfPage = (c: UiContext) => c.page?.background === "pdf";
 const backgroundPage = (c: UiContext) => !!c.page && c.page.background !== "none";
 const hasSelection = (c: UiContext) => !!c.selection && c.selection.strokes + c.selection.elements > 0;
+/** wave 0.10 (363): another notebook is open to go to. */
+const otherNotebooks = (c: UiContext) => (c.openNotebooks ?? 0) > 1;
 const sideOpen = (c: UiContext) => c.sidePane.available && c.sidePane.open;
 
 function tool(id: ToolId, icon: string, label: MessageKey, command: MessageKey, priority: number): ActionDef {
@@ -251,6 +255,10 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "invisible-ink", label: "markers.command.invisible", icon: "eye-off", group: "view", surfaces: ["sheet"], priority: 35, scope: "view", command: true, checked: (c) => !!c.markers?.invisibleInk, keywords: "hidden solutions self-test" },
 	{ id: "show-solutions", label: "markers.command.solutions", icon: "eye", group: "view", surfaces: ["sheet"], priority: 30, scope: "view", command: true, readOnly: true, checked: (c) => !!c.markers?.solutions, keywords: "invisible ink hidden" },
 	{ id: "show-page-solutions", label: "markers.menu.pageSolutions", icon: "eye", group: "page", surfaces: ["page"], priority: 30, scope: "view", command: true, readOnly: true, checked: (c) => !!c.markers?.pageSolutions, keywords: "invisible ink hidden" },
+
+	// --- wave 0.10 (363): tabs of the open notebooks (the strip and the toolbar swipe call the same step).
+	{ id: "notebook-next", label: "command.notebookNext", icon: "chevron-right", group: "navigate", surfaces: ["sheet"], priority: 22, scope: "view", command: true, readOnly: true, when: otherNotebooks, keywords: "tab switch next notebook quaderno successivo scheda" },
+	{ id: "notebook-previous", label: "command.notebookPrevious", icon: "chevron-left", group: "navigate", surfaces: ["sheet"], priority: 21, scope: "view", command: true, readOnly: true, when: otherNotebooks, keywords: "tab switch previous notebook quaderno precedente scheda" },
 
 	// --- view and input.
 	{ id: "toggle-pages-panel", label: "tool.pages", icon: "panel-left", group: "view", surfaces: ["toolbar"], priority: 100, scope: "view", command: "command.toggleNavigator", readOnly: true, checked: (c) => c.toggles.navigator },

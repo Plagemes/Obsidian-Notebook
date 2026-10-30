@@ -18,6 +18,7 @@ import { findHitStrokes, type BBox } from "../ink/hit-test";
 import { growForInfinite } from "../ink/infinite";
 import { InputPolicy } from "../ink/input-policy";
 import { strokesInLasso, transformStroke } from "../ink/lasso";
+import { lineBreakTarget } from "../ink/line-break";
 import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layout, type PageBox } from "../ink/layout";
 import { HoldTracker } from "../ink/hold";
 import { LastTool } from "../ink/last-tool";
@@ -109,6 +110,7 @@ import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites"
 import { PenControls, type PenStore } from "./pen-controls";
 import { PdfReading, type ReadingHost } from "./pdf-reading";
 import type { PracticeHooks, PracticeProvider, PracticeViewHost } from "./practice-types";
+import { NotebookTabs } from "./notebook-tabs";
 import { DEFAULT_TOOLS, Toolbar, type ToolName, type ToolbarState } from "./toolbar";
 import { hasBackgrounds, hasPdfPages } from "./reading-logic";
 import { commandApplies, runViewAction, sizeName, type ActionArg } from "./view-actions";
@@ -269,6 +271,8 @@ export class NotebookView extends FileView {
 	private readonly ink = new InkBuilder();
 
 	private toolbar!: Toolbar;
+	/** wave 0.10 (363): the strip of open notebooks and the swipe between them. */
+	private tabs: NotebookTabs | null = null;
 	private body!: HTMLElement;
 	private stage!: HTMLElement;
 	private messageEl!: HTMLElement;
@@ -429,6 +433,13 @@ export class NotebookView extends FileView {
 			openSheet: (anchor) => this.ui?.openSheet("all", anchor),
 			openPageSheet: (anchor) => this.ui?.openSheet("page", anchor, this.currentPageIndex()),
 		});
+		this.tabs = new NotebookTabs(this.contentEl, this.toolbar.el, {
+			app: this.app,
+			viewType: VIEW_TYPE,
+			leaf: () => this.leaf,
+			enabled: () => this.host.settings.notebookTabs,
+			register: (ref) => this.registerEvent(ref),
+		}, [this.toolbar.el]);
 		this.bannerHost = this.contentEl.createDiv({ cls: "notebook-resilience" });
 		if (this.host.resilience) this.resilience = new ViewResilience(this.resilienceHost(), this.host.resilience);
 		this.body = this.contentEl.createDiv({ cls: "notebook-body" });
@@ -571,6 +582,11 @@ export class NotebookView extends FileView {
 				offsetY: () => this.viewport.offsetY,
 				panBy: (dy) => this.setViewport(pan(this.viewport, 0, dy), true),
 			},
+			lineBreak: {
+				enabled: () => this.host.settings.autoLineBreak && this.editable(),
+				viewport: () => this.viewport,
+				setViewport: (v) => this.setViewport(v, true),
+			},
 		});
 		this.reading = new PdfReading(this.readingHost());
 		this.display = new ViewDisplay(this.displayHost());
@@ -644,6 +660,8 @@ export class NotebookView extends FileView {
 		this.display = null;
 		this.practiceHooks?.destroy();
 		this.practiceHooks = null;
+		this.tabs?.destroy();
+		this.tabs = null;
 		this.toolbar?.destroy();
 		this.controller?.destroy();
 		this.controller = null;
@@ -1000,6 +1018,7 @@ export class NotebookView extends FileView {
 		// wave 0.9 (370): a new toolbar size changes the bar, the contextual bar and the number of quick slots.
 		this.ui?.refresh();
 		this.display?.settingsChanged();
+		this.tabs?.refresh();
 	}
 
 	/** Input policy from the settings; while annotations are hidden the view is read-only and a finger only pans and zooms. */
@@ -1311,6 +1330,11 @@ export class NotebookView extends FileView {
 	}
 
 	/** wave 0.9: view-only night mode and cropped margins (null before the view is open). */
+	/** wave 0.10 (363): the open notebooks (view actions). */
+	get tabTools(): NotebookTabs | null {
+		return this.tabs;
+	}
+
 	get displayTools(): ViewDisplay | null {
 		return this.display;
 	}
@@ -1700,6 +1724,7 @@ export class NotebookView extends FileView {
 				pageSolutions: !!page && (this.markers?.pageSolutionsShown(page) ?? false),
 			},
 			narrow: this.body?.hasClass("is-narrow") ?? false,
+			openNotebooks: this.tabs?.count ?? 0,
 		};
 	}
 
@@ -2875,7 +2900,13 @@ export class NotebookView extends FileView {
 			this.addStrokes(active.pageIndex, page, [stroke]);
 			if (active.liveFallback) this.renderer?.setLive(null);
 			const box = this.layout?.boxes[active.pageIndex];
-			if (box) this.gestures?.strokeEnded((box.y + active.rawY) * this.viewport.scale + this.viewport.offsetY);
+			if (box) {
+				// wave 0.10 (353): on ruled or grid paper a stroke that ends at the right margin moves the view to the next line.
+				const lineBreak = this.host.settings.autoLineBreak
+					? lineBreakTarget({ tipX: active.rawX, tipY: active.rawY, box, paper: page.paper, viewport: this.viewport, view: this.viewSize })
+					: null;
+				this.gestures?.strokeEnded((box.y + active.rawY) * this.viewport.scale + this.viewport.offsetY, lineBreak);
+			}
 			return;
 		}
 		this.renderer?.setLive(null);

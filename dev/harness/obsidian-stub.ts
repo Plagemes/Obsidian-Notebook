@@ -439,6 +439,9 @@ export class Workspace extends Events {
 	getLeavesOfType(type: string): WorkspaceLeaf[] {
 		return this.leaves.filter((l) => l.view?.getViewType?.() === type);
 	}
+	setActiveLeaf(): void {
+		/* the harness shows one notebook */
+	}
 	getActiveViewOfType<T>(type: new (...args: any[]) => T): T | null {
 		for (const l of this.leaves) if (l.view instanceof type) return l.view as T;
 		return null;
@@ -554,6 +557,9 @@ export class WorkspaceLeaf {
 	}
 	async setViewState(): Promise<void> {
 		/* single view */
+	}
+	getDisplayText(): string {
+		return this.view?.getDisplayText?.() ?? "";
 	}
 	getViewState(): { type: string; state: Record<string, unknown> } {
 		return { type: this.view?.getViewType?.() ?? "empty", state: {} };

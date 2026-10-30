@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Tabs of open notebooks and automatic line break** (roadmap 363, 353; steps TL1-TL6; no change to the notebook format or to the writing engine). Not yet verified on Android hardware.
+  - **Tabs** (363): the new setting *Tabs of open notebooks* (off by default) shows a compact strip above the toolbar that lists the notebooks open in Obsidian (the leaves of the notebook view type) and switches between them; two notebooks with the same name show their folder. The strip appears when two or more notebooks are open. A two-finger sideways swipe on the toolbar strip (or the tab strip) goes to the next or previous notebook, whether or not the tab strip is shown; the page never reacts to it, so the pen and one-finger gestures are untouched. The commands *Go to the next / previous open notebook* do the same from the keyboard. Only Obsidian's public workspace API is used.
+  - **Automatic line break** (353): the new setting *Automatic line break* (off by default). On ruled or grid paper, when the pen lifts within the right 12 % of the visible area, the view scrolls smoothly after a short pause (never while the pen or a finger is down; any touch cancels it) so that the start of the next line is under the hand: the left edge of the page at the left of the view, one line height below the pen. If that would leave the line in the bottom band, the view also moves up. In one-page-at-a-time mode it stays on the page; it does nothing when the whole page width already fits, on blank or dotted paper, or when the next line is off the page (automatic next page owns that). When it applies, it replaces the bottom-band auto-scroll for that stroke.
+
 ## 0.8.0 — 2026-10-30
 
 Not yet verified on Android hardware. The manual steps added in this version are numbered 178 to 232 in `docs/testing.md`; the ones that belong to each area are named below.

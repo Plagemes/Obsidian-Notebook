@@ -35,6 +35,8 @@ export function sizeName(page: Page): PageSizeName | null {
 
 /** Whether a command of the registry applies to this view now (the palette hides it otherwise). */
 export function commandApplies(view: NotebookView, id: string): boolean {
+	// wave 0.10 (363): there has to be another notebook open to go to
+	if (id === "notebook-next" || id === "notebook-previous") return (view.tabTools?.count ?? 0) > 1;
 	if (id === "pdf-side-open") return pdfSideState(view).available;
 	if (id.startsWith("pdf-side-")) return pdfSideState(view).open;
 	// wave 0.9 (357): the layer order needs something selected.
@@ -262,6 +264,9 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"export-markdown": (v) => v.openMarkdownExport(),
 	"night-mode": (v) => v.displayTools?.toggleNight(),
 	"crop-margins": (v) => v.displayTools?.toggleCrop(),
+	// wave 0.10 (363): next / previous open notebook
+	"notebook-next": (v) => void v.tabTools?.step(1),
+	"notebook-previous": (v) => void v.tabTools?.step(-1),
 	// wave 0.8: quick textbook reference (view/textbook-ref-ui.ts)
 	"textbook-set": (v) => setTextbook(v),
 	"textbook-open": (v) => openPage(v),
