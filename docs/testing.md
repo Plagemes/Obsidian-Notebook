@@ -319,7 +319,7 @@ Numbers from the final run of 0.9.0 (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 2828 tests passed |
+| `npm test` (unit project only; benchmarks are separate) | 2831 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: 0 errors; `eslint-plugin-obsidianmd` recommended rules: 0 errors |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
@@ -1059,7 +1059,19 @@ Update to 0.12.1 (community browser or BRAT), then **fully close Obsidian** (swi
 476. **Light theme and phone width.** Switch Obsidian to the light theme: Home stays styled. On a phone (or split screen narrower than 600 px) the rail is hidden behind the ☰ button and opens as a sheet.
 477. **Creation dialog.** *New notebook* from Home's quick actions: the dialog has the tabs, the cover preview and the paper tiles as in `create-dark-tablet.png`; *Cancel* and *Create notebook* are styled buttons, not grey pills.
 
-Results table for steps 1 to 477. Fill it in as you go.
+### 0.12.2: settings tab, creation always reachable (steps 478-484)
+
+Update to 0.12.2 and fully close and reopen Obsidian. Steps 479-483 need a vault with **no notebooks** (a new test vault, or a notebooks folder set to an empty folder in *Library & files*). Reference screenshots: `dev/harness/dist/shots/design/empty-*.png` after `npm run harness:check`.
+
+478. **Settings tab opens.** Settings → Community plugins → *Notebook*: the tab opens with its sections, with no "Impossibile mostrare le impostazioni: this.name is not a function".
+479. **Empty Home teaches the first step.** Open *Notebook home*: under the header a panel with an illustration (an icon with reduced motion), *Inizia il tuo primo quaderno* (*Start your first notebook*), one line, and the buttons *Crea un quaderno* (accent), *Crea una cartella*, *Importa un PDF*. Below: *Cartelle per materia* with a dashed *Crea una cartella* tile, then the four *Azioni rapide*. No statistics panel.
+480. **+ Nuovo in the header.** At the right of the search pill and the bell, an accent pill *+ Nuovo*. Tap it with the S Pen: a menu with *Nuovo quaderno*, *Nuova cartella*, *Importa PDF* (and *Nuovo quaderno da scansione*). *Nuovo quaderno* opens the creation dialog on the *Quaderno* tab; Cancel. Repeat with a finger choosing *Nuova cartella*: the dialog opens on the *Cartella* tab.
+481. **Every way in opens the dialog.** With pen and finger: *Crea un quaderno* → Quaderno tab; *Crea una cartella* and the dashed tile → Cartella tab; *Importa un PDF* → the file picker; the quick actions *Nuovo quaderno* / *Nuova cartella* → their tabs. Cancel each time.
+482. **Rail +.** On the tablet in portrait, a round **+** under the brand icon in the rail opens the same menu. On a phone (or a split screen under 600 px): ☰ opens the rail sheet with the **+** next to the brand; choosing an item closes the sheet and opens the dialog.
+483. **Empty library.** Tap *Quaderni* in the rail: the library shows the chips, the same empty state and the dashed *Crea una cartella* tile, and *+ Nuovo* at the end of the header buttons. Light theme: the same, readable.
+484. **First notebook.** Create a notebook from the empty state: the empty state disappears, the notebook is listed, the statistics come back on Home. Create a subject folder: its card replaces the dashed tile.
+
+Results table for steps 1 to 484. Fill it in as you go.
 
 | Step | Device / Obsidian version | Result | Notes |
 |---|---|---|---|
@@ -1540,6 +1552,13 @@ Results table for steps 1 to 477. Fill it in as you go.
 | 475 Library and rail | | | |
 | 476 Light theme and phone width | | | |
 | 477 Creation dialog | | | |
+| 478 Settings tab opens | | | |
+| 479 Empty Home teaches the first step | | | |
+| 480 + Nuovo in the header | | | |
+| 481 Every way in opens the dialog | | | |
+| 482 Rail + | | | |
+| 483 Empty library | | | |
+| 484 First notebook | | | |
 
 Benchmark output (step 21): paste it here.
 

@@ -83,13 +83,13 @@ export class NotebookSettingTab extends PluginSettingTab {
 	 * 0.12.1: false while the base class is still being constructed (this class's fields and `host` are not set yet),
 	 * in case Obsidian asks for the definitions or a redraw from its own constructor.
 	 */
-	private ready(): boolean {
+	private isReady(): boolean {
 		return this.host !== undefined && this.updaters !== undefined;
 	}
 
 	// ------------------------------------------------------------------------------------------------- state
 
-	private context(): SettingsContext {
+	private schemaContext(): SettingsContext {
 		const timetable = this.host.timetable;
 		return {
 			sync: !!this.host.syncSafety,
@@ -99,10 +99,10 @@ export class NotebookSettingTab extends PluginSettingTab {
 		};
 	}
 
-	private view(): SettingsView {
+	private schemaView(): SettingsView {
 		this.cached ??= settingsView(this.specs, {
 			settings: this.host.settings,
-			context: this.context(),
+			context: this.schemaContext(),
 			query: this.query,
 			groupOverrides: this.groupOverrides,
 		});
@@ -110,7 +110,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 	}
 
 	/** A setting, the search or an open group changed: recompute what is shown and apply it in place. */
-	private changed(): void {
+	private schemaChanged(): void {
 		this.cached = null;
 		this.applyStyle();
 		for (const update of this.updaters.values()) update();
@@ -129,19 +129,19 @@ export class NotebookSettingTab extends PluginSettingTab {
 	}
 
 	private rowShown(spec: SettingSpec): boolean {
-		return this.view().rows.get(spec.id) ?? false;
+		return this.schemaView().rows.get(spec.id) ?? false;
 	}
 
 	private sectionShown(section: SectionSpec): boolean {
-		return this.view().sections.get(section.id) ?? false;
+		return this.schemaView().sections.get(section.id) ?? false;
 	}
 
 	private groupShown(section: SectionSpec, group: string): boolean {
-		return this.view().groups.get(groupKey(section.id, group))?.visible ?? false;
+		return this.schemaView().groups.get(groupKey(section.id, group))?.visible ?? false;
 	}
 
 	private emptyShown(): boolean {
-		return this.query.trim() !== "" && this.view().matches === 0;
+		return this.query.trim() !== "" && this.schemaView().matches === 0;
 	}
 
 	// ------------------------------------------------------------------------------------- values and actions
@@ -169,14 +169,14 @@ export class NotebookSettingTab extends PluginSettingTab {
 		}
 		// The card regions are drawn from the settings: redraw them.
 		if (key === "zettelShowRegions") zettelService(this.host)?.refreshOverlays();
-		this.changed();
+		this.schemaChanged();
 	}
 
 	private penGestureHost(): PenGestureUiHost {
 		return { app: this.app, get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) };
 	}
 
-	private run(id: SettingActionId): void {
+	private runAction(id: SettingActionId): void {
 		switch (id) {
 			case "pen-test": new PenTestModal(this.app, penSignalInfo(this.host)).open(); break;
 			case "benchmark": this.host.runGlobal("benchmark"); break;
@@ -215,12 +215,12 @@ export class NotebookSettingTab extends PluginSettingTab {
 
 	// ------------------------------------------------------------------------------- rows shared by both paths
 
-	private name(spec: SettingSpec): string {
+	private specName(spec: SettingSpec): string {
 		return t(spec.name);
 	}
 
-	private desc(spec: SettingSpec): string {
-		return spec.desc ? t(spec.desc, spec.descVars?.(this.context())) : "";
+	private specDesc(spec: SettingSpec): string {
+		return spec.desc ? t(spec.desc, spec.descVars?.(this.schemaContext())) : "";
 	}
 
 	/** The search pill at the top: filters every row by name, description and section, in every language. */
@@ -237,7 +237,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 		input.value = this.query;
 		const onInput = () => {
 			this.query = input.value;
-			this.changed();
+			this.schemaChanged();
 		};
 		const onKey = (e: KeyboardEvent) => {
 			if (e.key !== "Escape" || !input.value) return;
@@ -284,7 +284,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 		setting.setName(title);
 		setIcon(setting.controlEl.createSpan({ cls: "notebook-settings-chevron" }), "chevron-right");
 		const update = () => {
-			const view = this.view().groups.get(key);
+			const view = this.schemaView().groups.get(key);
 			const open = view?.open ?? false;
 			el.toggleClass("is-open", open);
 			el.setAttr("aria-expanded", open);
@@ -293,8 +293,8 @@ export class NotebookSettingTab extends PluginSettingTab {
 		update();
 		this.updaters.set(key, update);
 		const toggle = () => {
-			this.groupOverrides.set(key, !(this.view().groups.get(key)?.open ?? false));
-			this.changed();
+			this.groupOverrides.set(key, !(this.schemaView().groups.get(key)?.open ?? false));
+			this.schemaChanged();
 		};
 		const onKey = (e: KeyboardEvent) => {
 			if (e.key !== "Enter" && e.key !== " ") return;
@@ -318,7 +318,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 	 * makes Obsidian fall back to `display()`, the hand-drawn tab, instead of losing the tab.
 	 */
 	getSettingDefinitions(): SettingDefinitionItem[] {
-		if (!this.ready()) return [];
+		if (!this.isReady()) return [];
 		try {
 			return this.definitions();
 		} catch (e) {
@@ -368,8 +368,8 @@ export class NotebookSettingTab extends PluginSettingTab {
 
 	private definition(spec: SettingSpec): SettingDefinition {
 		const base = {
-			name: this.name(spec),
-			desc: this.desc(spec),
+			name: this.specName(spec),
+			desc: this.specDesc(spec),
 			aliases: [...translations(spec.name), ...(spec.keywords ? [spec.keywords] : [])],
 			visible: safeVisible(spec.id, () => this.rowShown(spec)),
 		};
@@ -382,7 +382,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 			case "slider": return { ...base, control: { type: "slider", key, defaultValue: num(value), min: c.min, max: c.max, step: c.step, displayFormat: c.format ? (v) => c.format?.(v, t) ?? String(v) : undefined } };
 			case "text": return { ...base, control: { type: "text", key, defaultValue: str(value), placeholder: c.placeholder } };
 			case "folder": return { ...base, control: { type: "folder", key, defaultValue: str(value), placeholder: c.placeholder } };
-			case "action": return { ...base, action: () => this.run(c.run) };
+			case "action": return { ...base, action: () => this.runAction(c.run) };
 			case "custom": return { ...base, render: safeRender(spec.id, (setting) => this.renderCustom(c.render, setting)) };
 		}
 	}
@@ -400,7 +400,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 	 * (1.13+ calls it too when the definitions are empty). 0.12.1: a failure is shown in the tab, never a blank page.
 	 */
 	display(): void {
-		if (!this.ready()) return;
+		if (!this.isReady()) return;
 		try {
 			this.renderLegacy();
 		} catch (e) {
@@ -441,8 +441,8 @@ export class NotebookSettingTab extends PluginSettingTab {
 					rows.push({ el: disclosure.settingEl, shown: () => this.groupShown(section, group) });
 				}
 				for (const spec of specs) {
-					const setting = new Setting(sectionEl).setName(this.name(spec));
-					const desc = this.desc(spec);
+					const setting = new Setting(sectionEl).setName(this.specName(spec));
+					const desc = this.specDesc(spec);
 					if (desc) setting.setDesc(desc);
 					safeRender(spec.id, (s) => this.legacyControl(s, spec))(setting);
 					rows.push({ el: setting.settingEl, shown: safeVisible(spec.id, () => this.rowShown(spec)) });
@@ -472,7 +472,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 				setting.addText((text) => text.setPlaceholder(c.placeholder ?? "").setValue(str(value)).onChange(save));
 				break;
 			case "action":
-				setting.addButton((b) => b.setButtonText(t(c.button ?? spec.name)).onClick(() => this.run(c.run)));
+				setting.addButton((b) => b.setButtonText(t(c.button ?? spec.name)).onClick(() => this.runAction(c.run)));
 				break;
 			case "custom":
 				this.renderCustom(c.render, setting);

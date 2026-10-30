@@ -113,7 +113,10 @@ Each component lives in the plugin as one reusable builder, for example `ui/comp
 
 | Component | Anatomy (from the reference) | Behaviour |
 |---|---|---|
-| **Page header** | Large title + muted subtitle on the left. On the right: search pill, circular icon buttons (filter, sort, view toggle; the active one gets an accent fill) | The search pill searches the current surface. The `⌘K` / `Ctrl K` hint is shown only on desktop |
+| **Page header** | Large title + muted subtitle on the left. On the right: search pill, circular icon buttons (filter, sort, view toggle; the active one gets an accent fill), and last the primary **+ New** pill | The search pill searches the current surface. The `⌘K` / `Ctrl K` hint is shown only on desktop |
+| **New button** | Accent pill: plus icon + "Nuovo" / "New" (`ui/components/new-button.ts`); a compact round "+" in the rail next to the brand | Opens the New menu: New notebook, New folder, Import PDF, Scan (when available) and the other creation actions. On every surface that lists notebooks, empty or not |
+| **Empty state** | Panel with a centred illustration from the art engine (`emptyStateImage`; an icon square with reduced effects), a title ("Inizia il tuo primo quaderno"), one line of explanation, a primary accent button and secondary pill buttons (`ui/components/empty-state.ts`) | Teaches the next step. Buttons only for things that can be created there |
+| **Create tile** | Dashed rounded tile the size of a card: icon square, title ("Crea una cartella"), one line (`ui/components/create-tile.ts`) | Stands in for the cards of a section that has none (subject folders); runs the creation it names |
 | **Search pill** | Fully rounded, `--nb-panel`, magnifier icon, placeholder ("Cerca quaderni, tag, contenuti…"), keyboard-hint chip | Live filtering, results grouped by type |
 | **Filter chips** | A row of pills: "Tutti" (active: accent tint + accent border) · "Materie" · "Recenti" · "Preferiti" · "Con PDF" · "Archivio", each with a leading icon | Single-select filter of the current surface. They wrap on phone |
 | **Section header** | Icon + section title on the left; "Mostra tutte →" link in accent on the right | The link opens the full list. It is hidden when everything is already shown |
@@ -170,6 +173,7 @@ They use the same palette and art engine (§2.3, §2.6).
   - frequent tags come from usage;
   - statistics come from local counters.
 - **Empty or irrelevant sections are hidden,** not shown empty. Order adapts to use only where it is meant to: quick slots, "Recenti". Fixed tools never move.
+- **Creation is always reachable** (header + New, quick actions). An empty vault or section shows an empty state that teaches the next step instead of hiding the section's purpose. A section of things that can be created (subject folders, notebooks in a folder) shows a dashed create tile in place of its cards; a list that fills up by itself (favourites, recent, a tag) only says how it fills.
 - **Layout responds to width:** wide tablet, tablet portrait, phone.
 
 ## 6. Settings
