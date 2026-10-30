@@ -691,6 +691,8 @@ export function repairNotebookText(text: string, now: Date = new Date()): Repair
 	if (parsed.ok) {
 		summary.alreadyReadable = true;
 		summary.sourceVersion = parsed.migratedFrom ?? CURRENT_VERSION;
+		// v7 details that were invalid and left out on read (a bad bookmark colour, the reading position).
+		summary.fieldsReset += parsed.dropped ?? 0;
 		for (const p of parsed.doc.pages) {
 			summary.pages.recovered++;
 			summary.strokes.recovered += p.strokes.length;

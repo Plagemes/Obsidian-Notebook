@@ -2,10 +2,11 @@
  * Pure planning of "Move to notebook…" (no DOM, no 'obsidian'): which pages and files travel, and which pages may leave
  * the source afterwards. The caller does the writing: target first, then — only if it saved — the removal from the source.
  */
-import { createPage } from "../model/document";
+import { normalizeBookmarkInfo, setBookmark } from "../model/bookmarks";
+import { cloneMeta, createPage } from "../model/document";
 import { duplicatePage } from "../model/pages";
 import { parse } from "../model/serialize";
-import type { Asset, NotebookDocument, Page } from "../model/types";
+import { DEFAULT_META, type Asset, type BookmarkInfo, type NotebookDocument, type NotebookMeta, type Page } from "../model/types";
 
 export type PageMoveFailure =
 	| { ok: false; reason: "no-pages" }
@@ -20,6 +21,19 @@ export interface PageMovePlan {
 	assets: Asset[];
 	/** Source pages that move, with a snapshot of how they were when copied (to notice later edits). */
 	moved: Array<{ pageId: string; snapshot: string }>;
+	/**
+	 * v7: bookmarks of the moved pages, under the copies' new page ids, with their details (title, colour,
+	 * category). Added to the target's metadata in the same write as the pages (`withMovedBookmarks`). Page
+	 * tags need nothing here: they travel with the page.
+	 */
+	bookmarks: Array<{ pageId: string; info?: BookmarkInfo }>;
+}
+
+/** `meta` (the target's, current) with the bookmarks of the moved pages added; `meta` itself when there are none. */
+export function withMovedBookmarks(meta: NotebookMeta | undefined, bookmarks: PageMovePlan["bookmarks"]): NotebookMeta {
+	let out = meta ? cloneMeta(meta) : cloneMeta(DEFAULT_META);
+	for (const b of bookmarks) out = setBookmark(out, b.pageId, b.info);
+	return out;
 }
 
 /** Ids of the assets a page uses (its background and its image elements). */
@@ -56,11 +70,20 @@ export function planPageMove(source: NotebookDocument, pageIds: readonly string[
 			assets.push({ ...record });
 		}
 	}
+	const pages = chosen.map((p) => duplicatePage(p));
+	const marked = new Set(source.meta?.bookmarks ?? []);
+	const bookmarks: PageMovePlan["bookmarks"] = [];
+	chosen.forEach((p, i) => {
+		if (!marked.has(p.id)) return;
+		const info = Object.prototype.hasOwnProperty.call(source.meta?.bookmarkInfo ?? {}, p.id) ? normalizeBookmarkInfo(source.meta?.bookmarkInfo?.[p.id]) : undefined;
+		bookmarks.push(info ? { pageId: pages[i]!.id, info } : { pageId: pages[i]!.id });
+	});
 	return {
 		ok: true,
-		pages: chosen.map((p) => duplicatePage(p)),
+		pages,
 		assets,
 		moved: chosen.map((p) => ({ pageId: p.id, snapshot: pageSnapshot(p) })),
+		bookmarks,
 	};
 }
 

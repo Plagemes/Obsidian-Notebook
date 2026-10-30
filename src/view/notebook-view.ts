@@ -61,7 +61,7 @@ import { policySettings } from "./input-settings";
 import { NotebookMedia, storeAsset } from "./media";
 import { PageNavigator } from "./navigator";
 import { addOutlinePageMenuItems, type OutlineHost } from "./outline";
-import { PAGE_AT_KEY, pageAtFromState, pageState, startPosition } from "./position-sync";
+import { PAGE_AT_KEY, PageClock, pageAtFromState, pageState, startPosition } from "./position-sync";
 import { positionAt, updatePosition } from "../model/position";
 import { LocationKeeper } from "./last-location";
 import { GestureInput } from "./gesture-input";
@@ -518,13 +518,16 @@ export class NotebookView extends FileView {
 	private pendingAt: string | null = null;
 	/** wave 0.6 (v7): the next load is the first one of this file, so it may start at the stored reading position. */
 	private startPending = false;
+	/** wave 0.6 (v7): when the page in view last changed, for the `pageAt` of the layout. */
+	private readonly pageClock = new PageClock();
 
 	/** The page being read (and, v7, when) goes into the workspace layout, so reopening Obsidian shows the same page. */
 	getState(): Record<string, unknown> {
 		const state = super.getState();
 		if (this.pendingPage !== null) return { ...state, page: this.pendingPage, ...(this.pendingAt ? { [PAGE_AT_KEY]: this.pendingAt } : {}) };
 		const total = this.session?.doc?.pages.length ?? 0;
-		return total > 0 ? { ...state, ...pageState(this.currentPageIndex() + 1, new Date()) } : state;
+		const index = this.currentPageIndex();
+		return total > 0 ? { ...state, ...pageState(index + 1, this.pageClock.since(this.file?.path, index, new Date())) } : state;
 	}
 
 	async setState(state: unknown, result: ViewStateResult): Promise<void> {
@@ -1505,6 +1508,7 @@ export class NotebookView extends FileView {
 		const n = this.session?.doc?.pages.length ?? 0;
 		const current = n ? this.currentPageIndex() : -1;
 		this.toolbar.setPage(n ? current + 1 : 0, n);
+		if (n && this.file) this.pageClock.note(this.file.path, current, new Date());
 		if (current !== this.navCurrent) {
 			this.navCurrent = current;
 			this.pageNav?.markCurrent(current);
