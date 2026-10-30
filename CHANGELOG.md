@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Back and forward through visited pages** (roadmap 18; steps 440-445). New actions and commands *Back* and *Forward* (registry ids `nav-back`, `nav-forward`). They remember deliberate jumps only (a page link, a thumbnail or bookmark in the page panel, *Go to page number…*, a search result, a marker, the fast scrollbar, opening another notebook or a recent page), within and across notebooks, up to 50 places, for the session only (nothing is saved). Back returns to the place you actually left; going back and then jumping elsewhere discards the forward places, as in a browser. Entries follow a renamed notebook and are skipped when the notebook or page is gone. They show as quick slots of the toolbar (once there is a history and the width allows), in the *Go to* section of the page sheet and the *All actions* sheet, and on desktop the mouse's back and forward buttons use them while the pointer is over a notebook. No format change.
+- **Fast scrollbar with a page preview** (roadmap 50; steps 446-452). In continuous scroll a thumb along the right edge appears when you scroll (or when a mouse nears the edge) and fades. Dragging it runs through the notebook; a bubble shows the page number and a thumbnail of the page. The thumbnail comes from the page panel's cache and is drawn only when the thumb rests, so a fast drag costs no more than a pan. Setting *Fast scrollbar* (on by default); not shown in one-page-at-a-time mode.
+- **Status bar item** (roadmap O15; steps 453-457). On desktop Obsidian's status bar shows "p. 3/12 · Saved" for the active notebook (page in view; saved, saving, unsaved changes or save failed); clicking it opens the page panel. Obsidian mobile has no status bar, so no item is created there.
+
 ## 0.9.0 — 2026-10-30
 
 Not yet verified on Android hardware, or in Obsidian with its maths engine (the browser harness uses a stand-in for MathJax). The manual steps added in this version are numbered 233 to 274 in `docs/testing.md`; the ones that belong to each area are named below.
