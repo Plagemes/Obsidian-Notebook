@@ -6,7 +6,7 @@
  *   notebook view (view/pdf-side-pane.ts); the notebook stays the notes side.
  * - Turning the PDF page shows the notes page linked to it; scrolling the notes shows the PDF page its page is linked to.
  *   A slide without a notes page offers "Add notes page for this slide" (one undo step, plus its link).
- * - Links live in a sidecar JSON in the plugin's folder (storage/pdf-links-store.ts), written only by explicit link
+ * - Links live in a sidecar JSON in `<notebooks folder>/_meta/` (storage/pdf-links-store.ts), written only by explicit link
  *   actions, never by turning pages or scrolling. The notebook format is not touched.
  */
 import { FuzzySuggestModal, Notice, type App, type Plugin, type TFile } from "obsidian";
@@ -18,7 +18,8 @@ import {
 	decideFromPdf, insertionIndex, linkOf, linkState, notesPagesFor, type LinksOp, type PdfLink, type PdfRef,
 } from "../pdf/sync-links";
 import { isNotebookFile } from "../storage/format";
-import { LinksBlockedError, PdfLinkStore } from "../storage/pdf-links-store";
+import { LINKS_FILE, linksFolder, LinksBlockedError, PdfLinkStore } from "../storage/pdf-links-store";
+import { vaultLinkFileAdapter } from "../storage/vault-io";
 import type { NotebookView } from "./notebook-view";
 import { openNotebookReference, openPdfReference, type ReferenceSource } from "./pdf-reference";
 import { PdfSidePane, type Banner } from "./pdf-side-pane";
@@ -424,8 +425,10 @@ class PdfSyncController implements PageSyncHooks {
  * (ui/actions.ts → view/commands.ts) and run through `runPdfSideAction`.
  */
 export function initPdfSync(plugin: Plugin, folder: () => string): void {
-	const configDir = plugin.app.vault.configDir;
-	services = { app: plugin.app, store: new PdfLinkStore(plugin.app.vault.adapter, `${configDir}/plugins/${plugin.manifest.id}`), folder };
+	// The links file is a vault file in the notebooks folder's reserved `_meta`; the old file in the plugin's config folder
+	// is only read (through the adapter, the one way to reach the config dir) to move it over. See docs/architecture.md.
+	const legacy = { adapter: plugin.app.vault.adapter, path: `${plugin.app.vault.configDir}/plugins/${plugin.manifest.id}/${LINKS_FILE}` };
+	services = { app: plugin.app, store: new PdfLinkStore(vaultLinkFileAdapter(plugin.app), () => linksFolder(folder()), legacy), folder };
 	plugin.register(() => {
 		services = null;
 	});

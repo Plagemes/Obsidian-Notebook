@@ -15,7 +15,7 @@ import type { NotebookView } from "./notebook-view";
 import { editBookmark, editPageTags } from "./outline";
 import { exportPdfAnnotations, openMarginsModal, updatePdfFromNewVersion } from "./pdf-actions";
 import { pdfSideState, runPdfSideAction, type PdfSideAction } from "./pdf-sync";
-import { newPageFromTemplate, openDeletedPages, savePageAsTemplate, stashDeletedPage } from "./page-tools";
+import { deletePageKeepingCopy, newPageFromTemplate, openDeletedPages, savePageAsTemplate } from "./page-tools";
 import { toggleBookmark } from "./view-helpers";
 
 export interface ActionArg {
@@ -155,8 +155,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"page-delete": onPage((v, p, i) => {
 		const doc = v.editableDocument();
 		if (!doc || doc.pages.length <= 1) return;
-		stashDeletedPage(v.pageToolsHost(), doc, p, i); // wave 0.6: kept in the page trash
-		v.applyCommand(new DeletePage(p, i), Math.max(0, i - 1));
+		// A copy goes to the page trash first; the page is deleted only once that copy is on disk.
+		void deletePageKeepingCopy(v.pageToolsHost(), doc, p, i, (at) => void v.applyCommand(new DeletePage(p, at), Math.max(0, at - 1)));
 	}),
 
 	// PDF and reading

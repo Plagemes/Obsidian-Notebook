@@ -1,17 +1,20 @@
+import { normalizePageTag, unionPageTags } from "../model/page-tags";
 import type { Page } from "../model/types";
 
 /**
- * HOOK: tag a new lecture page with its course (roadmap 115, "new pages are tagged with the course in progress").
+ * Tags a new lecture page with its course (roadmap 115, "new pages are tagged with the course in progress"), using the
+ * v7 page tags (`page.tags`, model/page-tags.ts).
  *
- * Page tags do not exist in the document format yet (another change adds them), and this feature must not change
- * the format. Until then this returns the page unchanged. When page tags exist, implement this function ONLY: make
- * the page's tags include `course` (using the model's own helper and freezing rules) and set `PAGE_TAG_HOOK_ACTIVE`
- * to true. It is called for every page created by "New lecture" (with a course known from the timetable) and by the
- * timetable's "open the current class" flow, before the page is added to the document.
+ * Called for every page created by "New lecture" (with a course known from the timetable) and by the timetable's
+ * "open the current class" flow, before the page is added to the document: the tag is part of the page that the
+ * `AddPage` command inserts, so it is in the same undo step. The page is never modified in place (a copy is returned);
+ * a course that normalises to nothing leaves the page as it is.
  */
-export const PAGE_TAG_HOOK_ACTIVE = false;
+export const PAGE_TAG_HOOK_ACTIVE = true;
 
 export function applyCourseTag(page: Page, course: string): Page {
-	void course;
-	return page;
+	const tag = normalizePageTag(course);
+	if (tag === null) return page;
+	const tags = unionPageTags(page.tags, [tag]);
+	return tags ? { ...page, tags } : page;
 }

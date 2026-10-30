@@ -1,6 +1,7 @@
 import { setIcon } from "obsidian";
 import { t, type MessageKey } from "../i18n";
-import { clampCenter, pushRecentColor } from "../ink/radial";
+import { clampCenter, fingerMenuCenter, pushRecentColor } from "../ink/radial";
+import type { MenuSource } from "../ink/pointer-controller";
 import type { ToolId } from "../ui/actions";
 import {
 	angleOf, arcAngles, bubbleDot, colourSlot, DIAL_RADIUS, DIAL_SIZE, formatWidth, nearestStep, paletteFor, PEN_CASE, polar, RING_RADIUS,
@@ -135,13 +136,21 @@ export class PenRadial {
 		if (this.root && this.sliding === null) this.render(false);
 	}
 
-	/** Opens the dial centred near (x, y) (CSS px relative to the host). `buttonHeld`: the pen's side button is still down. */
-	open(x: number, y: number, buttonHeld = true): void {
+	/**
+	 * Opens the dial near (x, y) (CSS px relative to the host). `source`: how it was asked for. Only the side button is
+	 * still down when the dial opens (releasing it over an action chooses it); after a pen hold or a finger long-press
+	 * the contact is already on the page and its lift never chooses. For a finger the dial opens beside it, not under it.
+	 */
+	open(x: number, y: number, source: MenuSource = "button"): void {
 		if (!this.ctx.editable() || this.root) return;
 		this.cancelEyedropper();
+		const buttonHeld = source === "button";
 		const rect = this.host.getBoundingClientRect();
 		this.scale = Math.max(0.6, Math.min(1, (Math.min(rect.width, rect.height) - 16) / DIAL_SIZE));
-		[this.cx, this.cy] = clampCenter(x, y, rect.width, rect.height, DIAL_RADIUS * this.scale);
+		const outer = DIAL_RADIUS * this.scale;
+		[this.cx, this.cy] = source === "finger"
+			? fingerMenuCenter(x, y, rect.width, rect.height, outer)
+			: clampCenter(x, y, rect.width, rect.height, outer);
 		this.dialState = "main";
 		this.saveMode = false;
 		this.downs.clear();

@@ -21,13 +21,14 @@ import { DEFAULT_SETTINGS, type NotebookSettings } from "../../src/settings";
 import { createDocument, createStroke } from "../../src/model/document";
 import { AddElement, AddStroke, Batch } from "../../src/model/history";
 import { translate } from "../../src/ink/transform";
-import { parse, serialize } from "../../src/model/serialize";
+import { parse, serialize, StagedParse } from "../../src/model/serialize";
 import { WetInk } from "../../src/ink/wet-ink";
 import { Renderer } from "../../src/ink/renderer";
 import { DocumentSession } from "../../src/storage/session";
 import { stressDocument } from "../../src/model/stress";
 import { FAKE_PATH, installFakePdf, slidesNotebook } from "./fake-pdf";
 import { checkReading } from "./reading-check";
+import { compareLod, measureLod } from "./lod-bench";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -50,10 +51,10 @@ if (fault === "wet") {
 	};
 } else if (fault === "stroke") {
 	const proto = Renderer.prototype as any;
-	const fill = proto.fillStroke as (ctx: CanvasRenderingContext2D, stroke: { id: string }) => void;
-	proto.fillStroke = function (ctx: CanvasRenderingContext2D, stroke: { id: string }) {
+	const fill = proto.fillStroke as (ctx: CanvasRenderingContext2D, stroke: { id: string }, ...rest: unknown[]) => void;
+	proto.fillStroke = function (ctx: CanvasRenderingContext2D, stroke: { id: string }, ...rest: unknown[]) {
 		if (stroke.id === "s1") throw new Error("harness: injected stroke failure");
-		fill.call(this, ctx, stroke);
+		fill.call(this, ctx, stroke, ...rest);
 	};
 }
 /** Console errors the injected fault is expected to produce (logged once by the guards). */
@@ -286,17 +287,115 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 	if (!wasOpen) v.setNavigatorOpen(false);
 	await frames(4);
 
+	// Reaching the radial menu without the side button: pen hold-still, finger long-press, and the Samsung button
+	// (a pressure-0 primary press while hovering: click = menu on release, touch while held = erase). None draws ink.
+	{
+		const v = view as any;
+		setTool("pen");
+		v.host.settings.penButtonSeen = false;
+		v.host.settings.penHoldStill = null;
+		v.applySettings(v.host.settings);
+		const r4 = st.getBoundingClientRect();
+		const px = r4.left + r4.width * 0.5, py = r4.top + r4.height * 0.4;
+		let nid = 200;
+		const mk = (type: string, id: number, x: number, y: number, extra: PointerEventInit = {}) =>
+			new PointerEvent(type, {
+				bubbles: true, cancelable: true, composed: true, pointerId: id, pointerType: "pen", isPrimary: true,
+				pressure: 0.5, width: 1, height: 1, button: 0, buttons: 1, clientX: x, clientY: y, ...extra,
+			});
+		const menuOpen = () => !!st.querySelector(".notebook-radial");
+		const closeMenu = async () => {
+			v.radial?.close();
+			await frames(2);
+		};
+		const canUndo = () => !!v.history?.canUndo?.();
+		const base = strokeCount();
+		const undoBefore = canUndo();
+
+		// Pen held still from the first contact.
+		let id = nid++;
+		st.dispatchEvent(mk("pointerdown", id, px, py));
+		await wait(950);
+		add("pen held still opens the radial menu", menuOpen(), menuOpen() ? "open" : "no menu");
+		add("the hold leaves no dot and nothing to undo", strokeCount() === base && canUndo() === undoBefore, `${base} → ${strokeCount()}, undo ${undoBefore} → ${canUndo()}`);
+		st.dispatchEvent(mk("pointerup", id, px, py, { buttons: 0, pressure: 0 }));
+		await closeMenu();
+
+		// A slow stroke that moves before the time is up never opens it.
+		id = nid++;
+		st.dispatchEvent(mk("pointerdown", id, px, py));
+		await wait(300);
+		st.dispatchEvent(mk("pointermove", id, px + 30, py));
+		await wait(900);
+		add("a pause after moving does not open the menu", !menuOpen(), menuOpen() ? "menu opened" : "closed");
+		st.dispatchEvent(mk("pointerup", id, px + 30, py, { buttons: 0, pressure: 0 }));
+		await frames(4);
+		add("the slow stroke is stored", strokeCount() === base + 1, `${base} → ${strokeCount()}`);
+		const base2 = strokeCount();
+
+		// Finger long-press (pen-only mode): the ring opens beside the finger, no ink.
+		await wait(700);
+		id = nid++;
+		const fx = r4.left + r4.width * 0.5, fy = r4.top + r4.height * 0.6;
+		st.dispatchEvent(mk("pointerdown", id, fx, fy, { pointerType: "touch", pressure: 0.5 }));
+		await wait(700);
+		const ring = st.querySelector(".notebook-radial") as HTMLElement | null;
+		const cxs = ring ? parseFloat(ring.style.getPropertyValue("--notebook-radial-x")) : NaN;
+		const cys = ring ? parseFloat(ring.style.getPropertyValue("--notebook-radial-y")) : NaN;
+		const dist = Math.hypot(fx - r4.left - cxs, fy - r4.top - cys);
+		add("finger long-press opens the radial menu beside the finger", !!ring && dist > 108, ring ? `distance ${Math.round(dist)} px` : "no menu");
+		st.dispatchEvent(mk("pointerup", id, fx, fy, { pointerType: "touch", buttons: 0, pressure: 0 }));
+		add("the long-press draws nothing", strokeCount() === base2, `${base2} → ${strokeCount()}`);
+		await closeMenu();
+
+		// Samsung: hover, button down (pressure 0), button up = click -> menu on release.
+		id = nid++;
+		st.dispatchEvent(mk("pointermove", id, px, py, { button: -1, buttons: 0, pressure: 0 }));
+		st.dispatchEvent(mk("pointerdown", id, px, py, { button: 0, buttons: 1, pressure: 0 }));
+		await frames(1);
+		add("the pressure-0 button press opens nothing yet", !menuOpen(), "");
+		st.dispatchEvent(mk("pointerup", id, px, py, { button: 0, buttons: 0, pressure: 0 }));
+		await frames(1);
+		add("releasing the pressure-0 button opens the menu", menuOpen(), menuOpen() ? "open" : "no menu");
+		add("the click draws nothing", strokeCount() === base2, `${base2} → ${strokeCount()}`);
+		await closeMenu();
+
+		// Samsung: button down while hovering, then touch = erase (no menu on release).
+		await penStroke([[0.3, 0.9], [0.7, 0.9]]);
+		const withLine = strokeCount();
+		id = nid++;
+		const ey = r4.top + r4.height * 0.9;
+		st.dispatchEvent(mk("pointermove", id, r4.left + r4.width * 0.25, ey, { button: -1, buttons: 0, pressure: 0 }));
+		st.dispatchEvent(mk("pointerdown", id, r4.left + r4.width * 0.25, ey, { button: 0, buttons: 1, pressure: 0 }));
+		for (let i = 0; i <= 12; i++) {
+			st.dispatchEvent(mk("pointermove", id, r4.left + r4.width * (0.25 + i * 0.04), ey, { button: -1, buttons: 1, pressure: 0.6 }));
+			await wait(10);
+		}
+		st.dispatchEvent(mk("pointerup", id, r4.left + r4.width * 0.73, ey, { button: 0, buttons: 0, pressure: 0 }));
+		await frames(3);
+		add("button held + touch erases", strokeCount() < withLine, `${withLine} → ${strokeCount()}`);
+		add("and opens no menu on release", !menuOpen(), "");
+		await closeMenu();
+		v.host.settings.penButtonSeen = false;
+		v.applySettings(v.host.settings);
+		setTool("pen");
+	}
+
 	// Radial dial: the pen's side button opens it without drawing; its states open and choose correctly.
 	await checkRadial(add);
 
+	await checkPageMode(add);
 	await checkToolbar(add);
+	await checkRestore(add);
+	await checkStagedLoad(add);
+	await checkPageLinks(add);
 	await checkObjects(add);
 
 	const unexpected = errors.filter((e) => !expectedError?.test(e));
 	if (fault) add("injected fault was reported", errors.some((e) => expectedError!.test(e)), errors[0]?.split("\n")[0] ?? "no error logged");
 	const ok = results.every((x) => x.ok) && unexpected.length === 0;
 	/** Viewport CSS px where the composited page must show paper and ink (checked on a screenshot by check.mjs). */
-	const r2 = st.getBoundingClientRect();
+	const r2 = stage().getBoundingClientRect();
 	const points = {
 		paper: [r2.left + r2.width * 0.5, r2.top + r2.height * 0.3],
 		ink: [r2.left + r2.width * 0.5, r2.top + r2.height * 0.52],
@@ -434,6 +533,256 @@ async function checkRadial(add: (name: string, ok: boolean, detail?: string) => 
 	add("radial: the dial draws nothing", strokeCount() === before, `${before} → ${strokeCount()}`);
 	setTool("pen");
 	v.toolbar.update({ penColor: "#1e1e1e", penWidth: 2, shapeKind: "line" });
+	await frames(2);
+}
+
+/**
+ * One page at a time (#14): the toolbar item turns it on, pages sit side by side, a finger swipe turns the page and it
+ * snaps, a vertical finger drag does not, a pen drag across the page draws and does not, and the mode switches back.
+ */
+async function checkPageMode(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
+	const v = view as any;
+	const st = stage();
+	if (v.session.doc.pages.length < 2) v.addPage();
+	v.scrollToPage(0);
+	await frames(3);
+	const pages = v.session.doc.pages.length;
+	const label = `page mode ${window.innerWidth}px`;
+	const swipe = async (from: [number, number], to: [number, number], opts: { type?: string; steps?: number; stepMs?: number; rest?: number } = {}) => {
+		const r = st.getBoundingClientRect();
+		const id = pointerId++;
+		const type = opts.type ?? "touch";
+		const steps = opts.steps ?? 10;
+		const ev = (name: string, fx: number, fy: number, extra: PointerEventInit = {}) =>
+			new PointerEvent(name, {
+				bubbles: true, cancelable: true, composed: true, pointerId: id, pointerType: type, isPrimary: true,
+				pressure: 0.5, width: 1, height: 1, button: 0, buttons: 1, clientX: r.left + fx * r.width, clientY: r.top + fy * r.height, ...extra,
+			});
+		st.dispatchEvent(ev("pointerdown", from[0], from[1]));
+		for (let i = 1; i <= steps; i++) {
+			st.dispatchEvent(ev("pointermove", from[0] + ((to[0] - from[0]) * i) / steps, from[1] + ((to[1] - from[1]) * i) / steps));
+			await wait(opts.stepMs ?? 8);
+		}
+		if (opts.rest) await wait(opts.rest);
+		st.dispatchEvent(ev("pointerup", to[0], to[1], { buttons: 0, pressure: 0 }));
+		for (let i = 0; i < 60 && v.pageMode?.busy; i++) await frames(1);
+		await frames(3);
+	};
+
+	// The toolbar item switches the mode on.
+	await openMore();
+	click(byText(document.querySelector(".notebook-sheet")!, "One page at a time"), "One page at a time");
+	v.ui.sheet.close();
+	await frames(3);
+	add(`${label}: the toolbar item turns on one page at a time`, v.pageMode.enabled === true && v.host.settings.scrollMode === "pages", `enabled ${v.pageMode.enabled}, setting ${v.host.settings.scrollMode}`);
+	const boxes = v.layout.boxes as Array<{ x: number; y: number; width: number }>;
+	add(`${label}: pages sit side by side`, boxes.length === pages && boxes.every((b, i) => b.y === 0 && (i === 0 || b.x > boxes[i - 1]!.x)), `${boxes.length} boxes`);
+	add(`${label}: starts on the first page`, v.currentPageIndex() === 0, `page ${v.currentPageIndex() + 1}`);
+	const paper = staticPixel(0.5, 0.3);
+	add(`${label}: the page is painted`, paper[3]! > 250 && paper[0]! > 200, `rgba(${paper.join(",")})`);
+	const x0 = v.viewport.offsetX;
+
+	// A mostly vertical finger drag scrolls (or does nothing) but never turns the page.
+	await swipe([0.5, 0.7], [0.45, 0.3]);
+	add(`${label}: a vertical drag does not turn the page`, v.currentPageIndex() === 0 && Math.abs(v.viewport.offsetX - x0) < 1, `page ${v.currentPageIndex() + 1}, offsetX ${v.viewport.offsetX.toFixed(1)} vs ${x0.toFixed(1)}`);
+	await swipe([0.45, 0.3], [0.5, 0.7]);
+
+	// A pen drag across the page draws, it does not turn the page.
+	setTool("pen");
+	const before = strokeCount();
+	await penStroke([[0.85, 0.45], [0.15, 0.45]]);
+	add(`${label}: a pen drag draws and does not turn the page`, v.currentPageIndex() === 0 && strokeCount() === before + 1, `page ${v.currentPageIndex() + 1}, strokes ${before} → ${strokeCount()}`);
+
+	// A short slow drag springs back; a long swipe turns and snaps.
+	await swipe([0.5, 0.5], [0.4, 0.5], { stepMs: 30, rest: 150 });
+	add(`${label}: a short drag springs back`, v.currentPageIndex() === 0 && Math.abs(v.viewport.offsetX - x0) < 1, `page ${v.currentPageIndex() + 1}, offsetX ${v.viewport.offsetX.toFixed(1)}`);
+	await swipe([0.85, 0.5], [0.15, 0.5]);
+	const snapped = v.currentPageIndex() === 1;
+	const box1 = v.layout.boxes[1];
+	const left = box1.x * v.viewport.scale + v.viewport.offsetX;
+	add(`${label}: a finger swipe turns to the next page and it snaps`, snapped && left >= 0 && left < st.getBoundingClientRect().width * 0.5 && !v.pageMode.busy,
+		`page ${v.currentPageIndex() + 1}, left edge ${left.toFixed(1)} px`);
+	const toolbarPage = document.querySelector(".notebook-page-indicator")?.textContent ?? "";
+	add(`${label}: the page indicator follows`, toolbarPage.includes(`2 / ${pages}`) || toolbarPage === "", `"${toolbarPage}"`);
+	const second = staticPixel(0.5, 0.3);
+	add(`${label}: the next page is painted`, second[3]! > 250 && second[0]! > 200, `rgba(${second.join(",")})`);
+	await swipe([0.15, 0.5], [0.85, 0.5]);
+	add(`${label}: and back to the first`, v.currentPageIndex() === 0 && Math.abs(v.viewport.offsetX - x0) < 1, `page ${v.currentPageIndex() + 1}`);
+
+	// Back to continuous scrolling.
+	await openMore();
+	click(byText(document.querySelector(".notebook-sheet")!, "One page at a time"), "One page at a time");
+	v.ui.sheet.close();
+	await frames(3);
+	const ys = (v.layout.boxes as Array<{ y: number }>).map((b) => b.y);
+	add(`${label}: the toolbar item switches back to continuous`, v.pageMode.enabled === false && ys[1]! > ys[0]! && v.currentPageIndex() === 0 && v.host.settings.scrollMode === "continuous",
+		`enabled ${v.pageMode.enabled}, page ${v.currentPageIndex() + 1}`);
+	await frames(2);
+}
+
+/**
+ * Reopen where you left off (O16): zoom in and scroll, take the view state the workspace would store, close the view,
+ * open a new one with that state and check page, zoom and scroll position come back (also in a view of another
+ * size). A state with only a page (a link) lands on the page at fit. The view is reopened fresh at the end.
+ */
+async function checkRestore(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
+	const v0 = view as any;
+	const label = `restore ${window.innerWidth}px`;
+	await v0.flushNow();
+	const file = v0.file as TFile;
+	if (v0.session.doc.pages.length < 2) v0.addPage();
+	v0.scrollToPage(1);
+	await frames(2);
+	v0.fitMode = false;
+	const box1 = v0.layout.boxes[1];
+	const zoomed = v0.viewport.scale * 2.2;
+	v0.setViewport({ scale: zoomed, offsetX: -(box1.x + 40) * zoomed, offsetY: -(box1.y + 300) * zoomed });
+	await frames(3);
+	const before = v0.currentPosition();
+	const state = JSON.parse(JSON.stringify(v0.getState()));
+	add(`${label}: the view state carries page, zoom and position`, !!before && state.page === 2 && state.view?.page === 2 && Math.abs(state.view.zoom - 2.2) < 0.2,
+		JSON.stringify(state.view ?? null));
+	await v0.flushNow();
+
+	const reopen = async (s: unknown, size?: { w: number; h: number }) => {
+		const root = document.getElementById("harness-app")!;
+		await (view as any).onClose();
+		root.empty();
+		if (size) {
+			root.style.width = `${size.w}px`;
+			root.style.height = `${size.h}px`;
+		}
+		leaf = new WorkspaceLeaf(app, root);
+		view = new NotebookView(leaf as any, { settings: settings() });
+		await view.onOpen();
+		await view.setState(s, { history: false });
+		await (view as any).loadFile(file);
+		view.onResize();
+		await frames(4);
+		return view as any;
+	};
+
+	let v = await reopen(state);
+	let after = v.currentPosition();
+	add(`${label}: reopening brings back the same page, zoom and position`,
+		!!after && after.page === before.page && Math.abs(after.zoom - before.zoom) < 0.02 && Math.abs(after.x - before.x) < 3 && Math.abs(after.y - before.y) < 3 && v.fitMode === false,
+		`${JSON.stringify(before)} → ${JSON.stringify(after)}`);
+
+	// A fitted page comes back fitted (and keeps fitting when the view changes size).
+	v.fitToWidth();
+	await frames(2);
+	const fitted = v.currentPosition();
+	v = await reopen(JSON.parse(JSON.stringify(v.getState())));
+	after = v.currentPosition();
+	add(`${label}: a fitted page comes back fitted`, !!fitted && !!after && v.fitMode === true && Math.abs(after.zoom - 1) < 0.02 && after.page === fitted.page,
+		`${JSON.stringify(fitted)} → ${JSON.stringify(after)}`);
+
+	// A link only names the page: no stale zoom.
+	v = await reopen({ file: file.path, page: 1 });
+	after = v.currentPosition();
+	add(`${label}: a state with only a page opens that page at fit`, !!after && after.page === 1 && v.fitMode === true && Math.abs(after.zoom - 1) < 0.02, JSON.stringify(after));
+
+	// Another view size: the same page point at the corner, the zoom relative to the fit.
+	const root = document.getElementById("harness-app")!;
+	const w0 = root.style.width, h0 = root.style.height;
+	v = await reopen(state, { w: Math.max(360, Math.round(window.innerWidth * 0.7)), h: Math.max(400, Math.round(window.innerHeight * 0.8)) });
+	after = v.currentPosition();
+	add(`${label}: in a view of another size the page point and the relative zoom hold`,
+		!!after && after.page === before.page && Math.abs(after.zoom - before.zoom) < 0.05 && Math.abs(after.x - before.x) < 6 && Math.abs(after.y - before.y) < 6,
+		`${JSON.stringify(before)} → ${JSON.stringify(after)}`);
+	root.style.width = w0;
+	root.style.height = h0;
+
+	// Leave a fresh view on page 1 for the screenshot.
+	await open();
+	await frames(3);
+}
+
+/**
+ * Progressive loading (#329): a large notebook (over the staged-load limit) opened on page 4 shows that page, read-only,
+ * before the rest is read; nothing can be edited or saved until every page is in; then it is complete, editable and
+ * saves a file with all its ink. A fresh view is opened at the end.
+ */
+async function checkStagedLoad(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
+	const label = `staged load ${window.innerWidth}px`;
+	const source = stressDocument(3300, 6);
+	const text = serialize(source);
+	const path = "Notebooks/Staged check.notebook";
+	if (!app.vault.getFileByPath(path)) await app.vault.create(path, text);
+	const file = app.vault.getFileByPath(path) as TFile;
+	const root = document.getElementById("harness-app")!;
+	await (view as any).onClose();
+	root.empty();
+	leaf = new WorkspaceLeaf(app, root);
+	view = new NotebookView(leaf as any, { settings: settings() });
+	await view.onOpen();
+	const v = view as any;
+	v.onResize();
+	const seen = { partial: false, editable: false, doc: false, painted: false, page: -1, pageStrokes: -1, otherStrokes: -1, status: "" };
+	const proto = NotebookView.prototype as any;
+	const orig = proto.showPartial as () => void;
+	proto.showPartial = function (this: any) {
+		orig.call(this);
+		seen.partial = true;
+		seen.editable = this.editable();
+		seen.doc = !!this.session.doc;
+		seen.page = this.currentPageIndex();
+		const pages = this.session.partialDoc.pages;
+		seen.pageStrokes = pages[3].strokes.length;
+		seen.otherStrokes = pages[0].strokes.length;
+		seen.status = document.querySelector(".notebook-status")?.textContent ?? "";
+	};
+	try {
+		v.renderer.onFrame = () => {
+			if (v.session?.mode === "loading" && v.renderer.stats.strokesDrawn > 0) seen.painted = true;
+		};
+		await v.setState({ file: path, page: 4 }, { history: false });
+		await v.loadFile(file);
+	} finally {
+		proto.showPartial = orig;
+	}
+	v.onResize();
+	await frames(3);
+	const total = v.session.doc.pages.reduce((n: number, p: { strokes: unknown[] }) => n + p.strokes.length, 0);
+	add(`${label}: the wanted page is shown before the rest is read`, seen.partial && seen.page === 3 && seen.pageStrokes > 0 && seen.otherStrokes === 0,
+		`partial ${seen.partial}, page ${seen.page + 1}, ink ${seen.pageStrokes} / ${seen.otherStrokes}`);
+	add(`${label}: it is painted while the notebook is still loading`, seen.painted, `painted ${seen.painted}`);
+	add(`${label}: nothing can be edited meanwhile`, !seen.editable && !seen.doc, `editable ${seen.editable}, session.doc ${seen.doc}`);
+	add(`${label}: then it is complete and editable`, v.session.mode === "ok" && v.editable() && !v.session.partialDoc && total === 3300 && v.currentPageIndex() === 3,
+		`mode ${v.session.mode}, ${total} strokes, page ${v.currentPageIndex() + 1}`);
+	add(`${label}: the status says saved, not loading`, !/loading/i.test(document.querySelector(".notebook-status")?.textContent ?? ""), document.querySelector(".notebook-status")?.textContent ?? "");
+
+	// Writing works on the loaded notebook and the saved file holds every stroke.
+	setTool("pen");
+	const before = strokeCount();
+	await penStroke([[0.3, 0.4], [0.7, 0.42]]);
+	await v.flushNow();
+	const saved = parse(await app.vault.read(file));
+	const savedStrokes = saved.ok ? saved.doc.pages.reduce((n, p) => n + p.strokes.length, 0) : -1;
+	add(`${label}: writing and saving work, and nothing is lost`, strokeCount() === before + 1 && savedStrokes === 3301, `strokes ${before} → ${strokeCount()}, saved ${savedStrokes}`);
+
+	// Back to a fresh view for the screenshot.
+	await open();
+	await frames(3);
+}
+
+/** Links to a page by id: a page that moved is found, a page that was deleted says so and the view stays where it is. */
+async function checkPageLinks(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
+	const v = view as any;
+	const label = `page links ${window.innerWidth}px`;
+	if (v.session.doc.pages.length < 2) v.addPage();
+	v.scrollToPage(0);
+	await frames(2);
+	const second = v.session.doc.pages[1].id as string;
+	const before = notices.length;
+	v.setEphemeralState({ subpath: `#p1&id=${second}` });
+	await frames(2);
+	add(`${label}: a link with a page id opens that page`, v.currentPageIndex() === 1 && notices.length === before, `page ${v.currentPageIndex() + 1}, notices ${notices.length - before}`);
+	v.setEphemeralState({ subpath: "#p1&id=deadbeefdeadbeef" });
+	await frames(2);
+	add(`${label}: a link to a deleted page says so and does not move`, v.currentPageIndex() === 1 && notices.length === before + 1 && /no longer in/.test(notices[notices.length - 1] ?? ""),
+		`page ${v.currentPageIndex() + 1}, last notice "${notices[notices.length - 1] ?? ""}"`);
+	v.scrollToPage(0);
 	await frames(2);
 }
 
@@ -846,6 +1195,12 @@ interface OpenSample {
 	targetPaintMs: number;
 	/** Page (1-based) in view at that moment. */
 	page: number;
+	/** Staged load: until the part-read document was shown (the page asked for is in), or -1 when the load is not staged. */
+	partialMs: number;
+	/** Staged load: the longest slice spent reading pages (the event loop is free in between). */
+	maxSliceMs: number;
+	/** Staged load: the longest stretch the event loop was blocked between the page being shown and the load ending. */
+	maxGapMs: number;
 }
 
 /**
@@ -858,9 +1213,10 @@ interface OpenSample {
  * `snapshot` emulates the version-history snapshot that the plugin starts when a notebook opens
  * (integration/history-service.ts maybeSnapshot: read the file, parse it again): "eager" parses right away,
  * as before; "deferred" reads the file now and parses it once the page is on screen; "none" leaves it out.
+ * `staged` false loads the whole notebook before showing anything (how 0.5.0 did it).
  */
 async function measureOpen(
-	strokes = 10_000, pages = 10, reps = 5, goTo = 7, restore = true, snapshot: "none" | "eager" | "deferred" = "none",
+	strokes = 10_000, pages = 10, reps = 5, goTo = 7, restore = true, snapshot: "none" | "eager" | "deferred" = "none", staged = true,
 ): Promise<{ samples: OpenSample[]; bytes: number; strokes: number }> {
 	const text = serialize(stressDocument(strokes, pages));
 	const path = `Notebooks/Bench ${strokes}x${pages}.notebook`;
@@ -870,15 +1226,39 @@ async function measureOpen(
 	const proto = NotebookView.prototype as any;
 	const origLoaded = proto.onDocumentLoaded as (...a: unknown[]) => void;
 	const origLoad = DocumentSession.prototype.load;
-	let sessionMs = 0, viewMs = 0;
+	const origShowPartial = proto.showPartial as (...a: unknown[]) => void;
+	const origStep = StagedParse.prototype.step;
+	let sessionMs = 0, viewMs = 0, partialMs = -1, maxSlice = 0, maxGap = 0, t0 = 0;
+	let gapTimer: number | null = null;
+	const stopGap = () => {
+		if (gapTimer !== null) window.clearInterval(gapTimer);
+		gapTimer = null;
+	};
+	proto.showPartial = function (this: unknown, ...a: unknown[]) {
+		partialMs = performance.now() - t0;
+		let last = performance.now();
+		stopGap();
+		gapTimer = window.setInterval(() => {
+			const n = performance.now();
+			maxGap = Math.max(maxGap, n - last);
+			last = n;
+		}, 1);
+		origShowPartial.apply(this, a);
+	};
+	StagedParse.prototype.step = function (this: StagedParse, ...a: Parameters<StagedParse["step"]>) {
+		const t = performance.now();
+		const r = origStep.apply(this, a);
+		maxSlice = Math.max(maxSlice, performance.now() - t);
+		return r;
+	};
 	proto.onDocumentLoaded = function (this: unknown, ...a: unknown[]) {
 		const t = performance.now();
 		origLoaded.apply(this, a);
 		viewMs = performance.now() - t;
 	};
-	DocumentSession.prototype.load = async function (this: DocumentSession) {
+	DocumentSession.prototype.load = async function (this: DocumentSession, opts?: Parameters<DocumentSession["load"]>[0]) {
 		const t = performance.now();
-		await origLoad.call(this);
+		await origLoad.call(this, staged ? opts : {});
 		sessionMs = performance.now() - t;
 	};
 	const samples: OpenSample[] = [];
@@ -893,7 +1273,11 @@ async function measureOpen(
 			await view.onOpen();
 			const v = view as any;
 			let firstPaint = -1, targetPaint = -1;
-			const t0 = performance.now();
+			partialMs = -1;
+			maxSlice = 0;
+			maxGap = 0;
+			stopGap();
+			t0 = performance.now();
 			v.renderer.onFrame = () => {
 				const now = performance.now() - t0;
 				if (firstPaint < 0 && v.renderer.stats.strokesDrawn > 0) firstPaint = now;
@@ -911,6 +1295,7 @@ async function measureOpen(
 			// The stub's FileView does not load the file from setState: do what Obsidian does after it.
 			await v.loadFile(file);
 			const loadMs = performance.now() - t0;
+			stopGap();
 			if (restore) v.applyPendingPage?.();
 			for (let i = 0; i < 60 && firstPaint < 0; i++) await frames(1);
 			if (!restore) {
@@ -921,13 +1306,61 @@ async function measureOpen(
 				for (let i = 0; i < 60 && targetPaint < 0; i++) await frames(1);
 			}
 			if (rep === 0) continue; // warm-up: JIT, caches
-			samples.push({ loadMs, sessionMs, viewMs, firstPaintMs: firstPaint, targetPaintMs: targetPaint, page: v.currentPageIndex() + 1 });
+			samples.push({ loadMs, sessionMs, viewMs, firstPaintMs: firstPaint, targetPaintMs: targetPaint, page: v.currentPageIndex() + 1, partialMs, maxSliceMs: maxSlice, maxGapMs: maxGap });
 		}
 	} finally {
 		proto.onDocumentLoaded = origLoaded;
+		proto.showPartial = origShowPartial;
+		StagedParse.prototype.step = origStep;
+		stopGap();
 		DocumentSession.prototype.load = origLoad;
 	}
 	return { samples, bytes: text.length, strokes };
+}
+
+/**
+ * Heavy page warning check (wave 0.7: lod): a notebook with one page of 3,500 strokes shows the banner; "Split page" moves the
+ * lower part to a new page in one undo step; undo puts it back; "Dismiss" hides the banner for the page.
+ */
+async function checkHeavy(strokes = 3500): Promise<Record<string, unknown>> {
+	const path = "Notebooks/Heavy.notebook";
+	const file = (app.vault.getFileByPath(path) ?? (await app.vault.create(path, serialize(stressDocument(strokes, 1))))) as TFile;
+	const root = document.getElementById("harness-app")!;
+	const openFresh = async () => {
+		if (view) await (view as any).onClose();
+		root.empty();
+		leaf = new WorkspaceLeaf(app, root);
+		view = new NotebookView(leaf as any, { settings: settings() });
+		await view.onOpen();
+		await (view as any).loadFile(file);
+		await wait(1300);
+	};
+	const banner = () => {
+		const el = root.querySelector(".notebook-heavy") as HTMLElement | null;
+		const shown = !!el && el.style.display !== "none" && el.offsetParent !== null;
+		return { shown, text: shown ? el!.innerText.replace(/\s+/g, " ").trim() : "", buttons: shown ? [...el!.querySelectorAll("button")].map((b) => b.textContent) : [] };
+	};
+	const click = (label: string) => ([...root.querySelectorAll(".notebook-heavy button")].find((b) => b.textContent === label) as HTMLElement | undefined)?.click();
+	const counts = () => ((view as any).session.doc.pages as Array<{ strokes: unknown[] }>).map((p) => p.strokes.length);
+
+	await openFresh();
+	const shown = banner();
+	const before = counts();
+	click("Split page");
+	await wait(300);
+	const afterSplit = counts();
+	const bannerAfterSplit = banner();
+	(view as any).undo();
+	await wait(100);
+	const afterUndo = counts();
+	click("Dismiss");
+	await wait(1300);
+	const dismissed = banner();
+	await openFresh();
+	const light = (app.vault.getFileByPath("Notebooks/Light.notebook") ?? (await app.vault.create("Notebooks/Light.notebook", serialize(stressDocument(500, 1))))) as TFile;
+	await (view as any).loadFile(light);
+	await wait(1300);
+	return { shown, before, afterSplit, bannerAfterSplit, afterUndo, dismissedHides: !dismissed.shown, lightHasNoBanner: !banner().shown };
 }
 
 function applyTheme(theme = params.get("theme") ?? "light"): void {
@@ -942,7 +1375,7 @@ function applySize(): void {
 	if (h) root.style.height = `${Number(h)}px`;
 }
 
-(window as any).harness = { app, open, measureOpen, penStroke, setTool, openOptions, openMore, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
+(window as any).harness = { app, open, measureOpen, penStroke, setTool, openOptions, openMore, measureLod, compareLod, checkHeavy, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
 	return view;
 } };
 

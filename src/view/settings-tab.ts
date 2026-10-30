@@ -8,9 +8,11 @@ import { displayTimetableSettings } from "../timetable/settings-ui";
 import type { TimetableService } from "../timetable/service";
 import { displayGestureSettings, gestureSettingDefinitions, type GestureSettingsHost } from "./gesture-settings";
 import { displayTrashSettings, trashSettingDefinitions } from "./trash-settings";
-import { PenTestModal } from "./pen-test-modal";
+import { effectivePenHold } from "../ink/pen-button";
+import { PenTestModal, penSignalInfo } from "./pen-test-modal";
 import { companionSettingDefinitions, displayCompanionSettings, type CompanionSettingsHost } from "./companion-settings";
 import { displayZettelSettings, zettelSettingDefinitions, type ZettelSettingsHost } from "../zettel/settings-ui";
+import { displaySyncSettings, syncSettingDefinitions, type SyncSafetyService } from "./sync-safety";
 
 const paperOptions = () => Object.fromEntries(PAPER_KINDS.map((k) => [k, t(`paper.${k}`)]));
 const sizeOptions = () => Object.fromEntries((Object.keys(PAGE_SIZES) as Array<keyof typeof PAGE_SIZES>).map((k) => [k, t(`size.${k}`)]));
@@ -19,16 +21,23 @@ export interface SettingsHost extends Plugin {
 	settings: NotebookSettings;
 	saveSettings(): Promise<void>;
 	timetable?: TimetableService;
+	syncSafety?: SyncSafetyService;
 }
 
 type Key = keyof NotebookSettings;
 
 const penButtonOptions = () => ({
+	"radial-eraser": t("settings.penButton.radialEraser"),
 	radial: t("settings.penButton.radial"),
 	eraser: t("settings.penButton.eraser"),
 	lasso: t("settings.penButton.lasso"),
-	lastTool: t("settings.penButton.lastTool"),
+	previous: t("settings.penButton.previous"),
 	off: t("settings.penButton.off"),
+});
+
+const scrollModeOptions = () => ({
+	continuous: t("settings.scrollMode.continuous"),
+	pages: t("settings.scrollMode.pages"),
 });
 
 const EDGE_KEYS = [
@@ -172,18 +181,39 @@ export class NotebookSettingTab extends PluginSettingTab {
 			{
 				name: t("settings.penButton"),
 				desc: t("settings.penButton.desc"),
-				control: { type: "dropdown", key: "penButtonAction", defaultValue: DEFAULT_SETTINGS.penButtonAction, options: penButtonOptions() },
+				control: { type: "dropdown", key: "penSideButton", defaultValue: DEFAULT_SETTINGS.penSideButton, options: penButtonOptions() },
 			},
 			...gestureSettingDefinitions(this.gestureHost()),
 			{
 				name: t("settings.penLongPress"),
 				desc: t("settings.penLongPress.desc"),
-				control: { type: "toggle", key: "penLongPress", defaultValue: DEFAULT_SETTINGS.penLongPress },
+				control: { type: "toggle", key: "penHoldStill", defaultValue: true },
+			},
+			{
+				name: t("settings.penZeroPressure"),
+				desc: t("settings.penZeroPressure.desc"),
+				control: { type: "toggle", key: "penZeroPressureButton", defaultValue: DEFAULT_SETTINGS.penZeroPressureButton },
+			},
+			{
+				name: t("settings.penChord"),
+				desc: t("settings.penChord.desc"),
+				control: { type: "toggle", key: "penChordButton", defaultValue: DEFAULT_SETTINGS.penChordButton },
+			},
+			{
+				name: t("settings.fingerLongPress"),
+				desc: t("settings.fingerLongPress.desc"),
+				control: { type: "toggle", key: "fingerLongPress", defaultValue: DEFAULT_SETTINGS.fingerLongPress },
 			},
 			{
 				name: t("settings.penTest"),
 				desc: t("settings.penTest.desc"),
-				action: () => new PenTestModal(this.app).open(),
+				action: () => new PenTestModal(this.app, penSignalInfo(this.host)).open(),
+			},
+			// wave 0.6: navigation
+			{
+				name: t("settings.scrollMode"),
+				desc: t("settings.scrollMode.desc"),
+				control: { type: "dropdown", key: "scrollMode", defaultValue: DEFAULT_SETTINGS.scrollMode, options: scrollModeOptions() },
 			},
 			// Companion notes (O1)
 			...companionSettingDefinitions(this.companionHost()),
@@ -191,6 +221,8 @@ export class NotebookSettingTab extends PluginSettingTab {
 			...trashSettingDefinitions(),
 			// wave 0.6: zettelkasten
 			...zettelSettingDefinitions(this.zettelHost()),
+			// wave 0.7: sync safety
+			...syncSettingDefinitions(this.host.syncSafety),
 		];
 	}
 
@@ -207,6 +239,8 @@ export class NotebookSettingTab extends PluginSettingTab {
 	}
 
 	getControlValue(key: string): unknown {
+		// The hold-still toggle shows what is in effect: without a choice of the user that depends on the device.
+		if (key === "penHoldStill") return effectivePenHold(this.host.settings.penHoldStill, this.host.settings.penButtonSeen);
 		return this.host.settings[key as Key];
 	}
 
@@ -341,20 +375,37 @@ export class NotebookSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName(t("settings.penButton"))
 			.setDesc(t("settings.penButton.desc"))
-			.addDropdown((dd) => dd.addOptions(penButtonOptions()).setValue(s.penButtonAction).onChange((v) => this.setControlValue("penButtonAction", v)));
+			.addDropdown((dd) => dd.addOptions(penButtonOptions()).setValue(s.penSideButton).onChange((v) => this.setControlValue("penSideButton", v)));
+		new Setting(containerEl)
+			.setName(t("settings.scrollMode"))
+			.setDesc(t("settings.scrollMode.desc"))
+			.addDropdown((dd) => dd.addOptions(scrollModeOptions()).setValue(s.scrollMode).onChange((v) => this.setControlValue("scrollMode", v)));
 		displayGestureSettings(containerEl, this.gestureHost());
 		new Setting(containerEl)
 			.setName(t("settings.penLongPress"))
 			.setDesc(t("settings.penLongPress.desc"))
-			.addToggle((toggle) => toggle.setValue(s.penLongPress).onChange((v) => this.setControlValue("penLongPress", v)));
+			.addToggle((toggle) => toggle.setValue(effectivePenHold(s.penHoldStill, s.penButtonSeen)).onChange((v) => this.setControlValue("penHoldStill", v)));
+		new Setting(containerEl)
+			.setName(t("settings.penZeroPressure"))
+			.setDesc(t("settings.penZeroPressure.desc"))
+			.addToggle((toggle) => toggle.setValue(s.penZeroPressureButton).onChange((v) => this.setControlValue("penZeroPressureButton", v)));
+		new Setting(containerEl)
+			.setName(t("settings.penChord"))
+			.setDesc(t("settings.penChord.desc"))
+			.addToggle((toggle) => toggle.setValue(s.penChordButton).onChange((v) => this.setControlValue("penChordButton", v)));
+		new Setting(containerEl)
+			.setName(t("settings.fingerLongPress"))
+			.setDesc(t("settings.fingerLongPress.desc"))
+			.addToggle((toggle) => toggle.setValue(s.fingerLongPress).onChange((v) => this.setControlValue("fingerLongPress", v)));
 
 		new Setting(containerEl)
 			.setName(t("settings.penTest"))
 			.setDesc(t("settings.penTest.desc"))
-			.addButton((b) => b.setButtonText(t("settings.penTest")).onClick(() => new PenTestModal(this.app).open()));
+			.addButton((b) => b.setButtonText(t("settings.penTest")).onClick(() => new PenTestModal(this.app, penSignalInfo(this.host)).open()));
 		displayCompanionSettings(containerEl, this.companionHost());
 		displayTimetableSettings(containerEl, this.host);
 		displayTrashSettings(containerEl, { get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) });
 		displayZettelSettings(containerEl, this.zettelHost());
+		displaySyncSettings(containerEl, this.host.syncSafety);
 	}
 }

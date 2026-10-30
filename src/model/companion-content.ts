@@ -331,6 +331,15 @@ export function readTags(value: unknown): string[] {
 	return raw.filter((t): t is string => typeof t === "string").map((t) => t.trim().replace(/^#+/, "")).filter((t) => t.length > 0);
 }
 
+/**
+ * The entries of a `tags` value that `readTags` does not read (numbers such as an unquoted `2026`, booleans, nulls,
+ * nested lists, empty strings), as they are. An update keeps them: it must not lose what the person wrote.
+ */
+export function unreadTags(value: unknown): unknown[] {
+	if (Array.isArray(value)) return value.filter((t) => typeof t !== "string" || t.trim().replace(/^#+/, "").length === 0);
+	return typeof value === "number" || typeof value === "boolean" ? [value] : [];
+}
+
 export interface MergedCompanion {
 	/** The frontmatter after the update. */
 	properties: Record<string, unknown>;
@@ -367,11 +376,19 @@ export function mergeCompanion(current: Readonly<Record<string, unknown>>, conte
 	}
 
 	const hadTags = Object.prototype.hasOwnProperty.call(current, TAGS_KEY);
-	const currentTags = readTags(current[TAGS_KEY]);
+	const raw = current[TAGS_KEY];
+	const currentTags = readTags(raw);
+	// Entries that are not tag names (`2026` read by YAML as a number…) are not the plugin's: kept as they are, last.
+	const extras = unreadTags(raw);
 	const shared = computeSharedTags(content.tags, currentTags, previous?.tags ?? null);
-	if (shared.tags.length > 0) {
-		const same = Array.isArray(current[TAGS_KEY]) && JSON.stringify(current[TAGS_KEY]) === JSON.stringify(shared.tags);
-		if (!same) next[TAGS_KEY] = shared.tags;
+	if (shared.tags.length > 0 || extras.length > 0) {
+		const wanted = [...shared.tags, ...extras];
+		const same = Array.isArray(raw)
+			? JSON.stringify(raw) === JSON.stringify(wanted)
+				// Only where the kept entries sit differs: the note's own order stays.
+				|| (extras.length > 0 && JSON.stringify(raw.filter((t) => !extras.includes(t))) === JSON.stringify(shared.tags))
+			: shared.tags.length === 0;
+		if (!same) next[TAGS_KEY] = wanted;
 	} else if (hadTags && currentTags.length > 0) {
 		// Every tag left was ours: drop the property. (An empty `tags:` the user wrote stays.)
 		delete next[TAGS_KEY];

@@ -11,8 +11,10 @@ import {
 	readCard, titleChanges, TRANSCRIPTION_HEADING, type NewCard,
 } from "../src/zettel/card-content";
 import {
-	cardFileName, idSet, indexLetters, letterIndex, localDate, nextCardId, nextLuhmannChild, nextLuhmannTop, parseLuhmann, timestampId,
+	cardFileName, idSet, indexLetters, isUntitledCardName, letterIndex, localDate, nameSuffixFor, nextCardId, nextLuhmannChild, nextLuhmannTop,
+	parseLuhmann, randomSuffix, timestampId,
 } from "../src/zettel/ids";
+import { LocalPages } from "../src/zettel/local-pages";
 import { A6_PAGE, readZettelSettings } from "../src/zettel/settings";
 import {
 	cardSubpath, clampRegion, formatRegion, lookupPage, parseRegion, parseSubpathParams, regionFromBounds,
@@ -46,14 +48,63 @@ const deps: CompanionTextDeps = {
 	},
 };
 
+function unquote(v: string): string {
+	const m = /^"(.*)"$/.exec(v.trim()) ?? /^'(.*)'$/.exec(v.trim());
+	return m ? m[1]! : v.trim();
+}
+
+/** A small YAML reader for the line-edit tests: plain and quoted scalars, block lists, comments, blank lines. */
+const yamlDeps: CompanionTextDeps = {
+	frontmatterInfo: deps.frontmatterInfo,
+	parseFrontmatter(yaml) {
+		const out: Record<string, unknown> = {};
+		let list: unknown[] | null = null;
+		for (const raw of yaml.split(/\r?\n/)) {
+			const line = raw.replace(/\s+#.*$/, "");
+			if (!line.trim() || line.trim().startsWith("#")) continue;
+			const item = /^\s*-\s+(.*)$/.exec(line);
+			if (item) {
+				if (!list) return null;
+				list.push(unquote(item[1]!));
+				continue;
+			}
+			const kv = /^([^\s:][^:]*):\s*(.*)$/.exec(line);
+			if (!kv) return null;
+			const key = unquote(kv[1]!);
+			if (kv[2] === "") out[key] = list = [];
+			else {
+				list = null;
+				out[key] = kv[2] === "true" ? true : unquote(kv[2]!);
+			}
+		}
+		return out;
+	},
+	stringify(data) {
+		return Object.entries(data).map(([k, v]) => (Array.isArray(v) ? `${k}:\n${v.map((x) => `  - ${JSON.stringify(x)}`).join("\n")}` : `${k}: ${JSON.stringify(v)}`)).join("\n") + "\n";
+	},
+};
+
 describe("card ids", () => {
 	const at = new Date(2026, 9, 29, 14, 42, 7);
 
-	it("timestamp: minute, then seconds, then a counter", () => {
-		expect(timestampId(at, new Set())).toBe("202610291442");
-		expect(timestampId(at, idSet(["202610291442"]))).toBe("20261029144207");
-		expect(timestampId(at, idSet(["202610291442", "20261029144207"]))).toBe("20261029144207-2");
-		expect(timestampId(at, idSet(["202610291442", "20261029144207", "20261029144207-2"]))).toBe("20261029144207-3");
+	it("timestamp: seconds and a random suffix (collision-safe across devices), then a counter", () => {
+		expect(timestampId(at, new Set(), "k3f9")).toBe("20261029144207-k3f9");
+		expect(timestampId(at, idSet(["20261029144207-K3F9"]), "k3f9")).toBe("20261029144207-k3f9-2");
+		expect(timestampId(at, idSet(["20261029144207-k3f9", "20261029144207-k3f9-2"]), "k3f9")).toBe("20261029144207-k3f9-3");
+		// Two devices, same second, neither knowing the other's card: different ids (and so different file names).
+		const a = timestampId(at, new Set());
+		const b = timestampId(at, new Set());
+		expect(a).toMatch(/^20261029144207-[a-z0-9]{4}$/);
+		expect(a).not.toBe(b);
+		expect(parseLuhmann(a)).toBeNull();
+	});
+
+	it("random suffixes are short, lower case and use the whole alphabet", () => {
+		expect(randomSuffix(() => 0)).toBe("aaaa");
+		expect(randomSuffix(() => 0.999999)).toBe("9999");
+		const many = new Set(Array.from({ length: 200 }, () => randomSuffix()));
+		expect(many.size).toBeGreaterThan(190);
+		for (const s of many) expect(s).toMatch(/^[a-z0-9]{4}$/);
 	});
 
 	it("parses Luhmann ids", () => {
@@ -87,7 +138,7 @@ describe("card ids", () => {
 
 	it("nextCardId follows the scheme; a bad parent gives a top-level id", () => {
 		const taken = idSet(["1", "1a"]);
-		expect(nextCardId("timestamp", at, taken)).toBe("202610291442");
+		expect(nextCardId("timestamp", at, taken, null, "abcd")).toBe("20261029144207-abcd");
 		expect(nextCardId("luhmann", at, taken)).toBe("2");
 		expect(nextCardId("luhmann", at, taken, "1")).toBe("1b");
 		expect(nextCardId("luhmann", at, taken, "not an id")).toBe("2");
@@ -99,6 +150,23 @@ describe("card ids", () => {
 		expect(cardFileName("1a", "[[x]] #tag | y")).toBe("1a x tag y");
 		expect(cardFileName("1", "a".repeat(200)).length).toBeLessThanOrEqual(2 + 80);
 		expect(localDate(at)).toBe("2026-10-29");
+	});
+
+	it("untitled Luhmann cards get a suffix in the file name, never in the id", () => {
+		expect(cardFileName("2", "", "k3f9")).toBe("2-k3f9");
+		expect(cardFileName("2", "Energy", "k3f9")).toBe("2 Energy");
+		expect(nameSuffixFor("luhmann", "")).toMatch(/^[a-z0-9]{4}$/);
+		expect(nameSuffixFor("luhmann", "  ")).not.toBeNull();
+		expect(nameSuffixFor("luhmann", "Energy")).toBeNull();
+		expect(nameSuffixFor("timestamp", "")).toBeNull();
+		// Numbering is unaffected: ids stay 1, 2, 2a… whatever the file names are.
+		expect(nextCardId("luhmann", at, idSet(["1", "2"]), "2")).toBe("2a");
+		// Typing a title later renames a note that still has the plugin's name, with or without a suffix.
+		expect(isUntitledCardName("2-k3f9", "2")).toBe(true);
+		expect(isUntitledCardName("2", "2")).toBe(true);
+		expect(isUntitledCardName("2-my notes", "2")).toBe(false);
+		expect(isUntitledCardName("2 Energy", "2")).toBe(false);
+		expect(isUntitledCardName("20261029144207-k3f9", "20261029144207-k3f9")).toBe(true);
 	});
 });
 
@@ -165,8 +233,11 @@ describe("card notes", () => {
 	it("builds a new card: properties, the live embed and a transcription section", () => {
 		expect(cardProperties(card)).toEqual({
 			"zettel-id": "202610291442", title: "Energy", aliases: ["Energy"], type: "permanent", source: "Feynman I", date: "2026-10-29",
-			tags: ["physics", "big-idea"], notebook: "[[Notebooks/Box.notebook|Box]]", "notebook-id": "doc-1", "page-id": "page-1", region: "1,2,30,40",
+			tags: ["physics", "big-idea"], "zettel-notebook": "[[Notebooks/Box.notebook|Box]]", "zettel-notebook-id": "doc-1", "page-id": "page-1", region: "1,2,30,40",
 		});
+		// Never the companion note's keys: an older device with companion notes on would claim the card.
+		expect(cardProperties(card)).not.toHaveProperty("notebook");
+		expect(cardProperties(card)).not.toHaveProperty("notebook-id");
 		const text = newCardText(card, deps.stringify);
 		expect(text.startsWith("---\nzettel-id: \"202610291442\"\n")).toBe(true);
 		expect(text).toContain("\n---\n![[Notebooks/Box.notebook#p3&id=page-1&r=1,2,30,40]]\n\n## Transcription\n\n");
@@ -191,6 +262,54 @@ describe("card notes", () => {
 		expect(readCard("x.md", { "notebook-id": "doc-1", notebook: "[[x]]" })).toBeNull();
 		expect(isCardFrontmatter({ "zettel-id": "1" })).toBe(true);
 		expect(isCardFrontmatter({ "notebook-id": "doc-1" })).toBe(false);
+		expect(readCard("x.md", { "notebook-id": "doc-1", notebook: "[[x]]", "page-id": "p" })).toBeNull();
+	});
+
+	it("cards made with the companion keys (unreleased builds) are still read, only with zettel-id", () => {
+		const legacy = { "zettel-id": "1", title: "", notebook: "[[Notebooks/Box.notebook|Box]]", "notebook-id": "doc-1", "page-id": "page-1" };
+		expect(readCard("Z/1.md", legacy)).toMatchObject({ id: "1", notebookId: "doc-1", notebookLink: "[[Notebooks/Box.notebook|Box]]", pageId: "page-1" });
+		// The card's own keys win over the companion keys.
+		expect(readCard("Z/1.md", { ...legacy, "zettel-notebook-id": "doc-2", "zettel-notebook": "[[B.notebook]]" }))
+			.toMatchObject({ notebookId: "doc-2", notebookLink: "[[B.notebook]]" });
+		// With its own id, a stray companion `notebook` link is not taken for the card's.
+		expect(readCard("Z/1.md", { "zettel-id": "1", "zettel-notebook-id": "doc-2", notebook: "[[Other.notebook]]", "page-id": "p" }))
+			.toMatchObject({ notebookId: "doc-2", notebookLink: "" });
+	});
+
+	it("frontmatter edits touch only the changed keys: comments, quoting and the user's properties stay", () => {
+		const fm = [
+			"# my comment",
+			"zettel-id: '1a'",
+			"title: \"Energy\"   # typed on the tablet",
+			"source:   Feynman I",
+			"links:",
+			"  - \"[[1]]\"",
+			"",
+			"my-list:",
+			"- a",
+			"- b",
+			"",
+		].join("\n");
+		const body = "![[B.notebook#p1&id=x]]\n\nMy words.\n";
+		const text = `---\n${fm}---\n${body}`;
+		const added = editProperties(text, { orphaned: true }, yamlDeps);
+		expect(added).toEqual({ kind: "changed", text: `---\n${fm}orphaned: true\n---\n${body}` });
+		const links = editProperties(text, { links: ["[[1]]", "[[2]]"] }, yamlDeps);
+		expect(links.kind === "changed" && links.text).toBe(text.replace("links:\n  - \"[[1]]\"\n", "links:\n  - \"[[1]]\"\n  - \"[[2]]\"\n"));
+		const removed = editProperties(added.kind === "changed" ? added.text : "", { orphaned: undefined }, yamlDeps);
+		expect(removed).toEqual({ kind: "changed", text });
+		// A changed value in the middle: only that line.
+		const title = editProperties(text, { title: "Work" }, yamlDeps);
+		expect(title.kind === "changed" && title.text).toBe(text.replace("title: \"Energy\"   # typed on the tablet", "title: \"Work\""));
+		// CRLF notes stay CRLF.
+		const crlf = text.replace(/\n/g, "\r\n");
+		const r = editProperties(crlf, { orphaned: true }, yamlDeps);
+		expect(r.kind === "changed" && r.text).toBe(`---\r\n${fm.replace(/\n/g, "\r\n")}orphaned: true\r\n---\r\n${body.replace(/\n/g, "\r\n")}`);
+		// Something the line edit cannot express safely falls back to re-serializing the block (values still right).
+		const odd = "---\nlinks: &a\n  - x\nother: *a\n---\nbody";
+		const anchorDeps: CompanionTextDeps = { ...yamlDeps, parseFrontmatter: (y) => (y.includes("&a") ? { links: ["x"], other: ["x"] } : yamlDeps.parseFrontmatter(y)) };
+		const fallback = editProperties(odd, { links: ["x", "y"] }, anchorDeps);
+		expect(fallback.kind === "changed" && fallback.text).toBe("---\nlinks:\n  - \"x\"\n  - \"y\"\nother:\n  - \"x\"\n---\nbody");
 	});
 
 	it("edits only the frontmatter, keeps the body byte for byte, writes nothing when unchanged", () => {
@@ -234,6 +353,22 @@ describe("card notes", () => {
 
 	it("parses typed tags", () => {
 		expect(parseTagInput("#a, b c,,a 12")).toEqual(["a", "b", "c"]);
+	});
+});
+
+describe("slip-box: pages made on this device", () => {
+	it("the first look records every page; only pages added afterwards are fresh", () => {
+		const pages = new LocalPages();
+		expect(pages.seen("doc")).toBe(false);
+		expect([...pages.fresh("doc", ["a", "b"])]).toEqual([]);
+		expect(pages.seen("doc")).toBe(true);
+		expect([...pages.fresh("doc", ["a", "b", "c"])]).toEqual(["c"]);
+		// Pages that arrived through sync are recorded before this device's next save includes them.
+		pages.know("doc", ["d"]);
+		expect([...pages.fresh("doc", ["a", "b", "c", "d"])]).toEqual(["c"]);
+		pages.know("doc", ["c"]);
+		expect(pages.fresh("doc", ["a", "b", "c", "d"]).size).toBe(0);
+		expect(pages.fresh("other", ["x"]).size).toBe(0);
 	});
 });
 

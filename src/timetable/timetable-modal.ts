@@ -10,6 +10,8 @@ export interface TimetableModalOptions {
 	timetable: Timetable;
 	/** Why the file cannot be read, when it cannot: nothing is editable then until the user chooses to start over. */
 	loadError: string | null;
+	/** The file's text when the editor opened (null: no file). A save refuses to overwrite a file that differs from it. */
+	base: string | null;
 	/** Suggestions for the linked notebook or folder. */
 	choices: string[];
 	saved(timetable: Timetable): void;
@@ -187,7 +189,7 @@ export class TimetableModal extends Modal {
 			}
 		}
 		try {
-			const { backup } = await this.opts.store.save(tt, this.replaceUnreadable);
+			const { backup } = await this.opts.store.save(tt, { base: this.opts.base, replaceUnreadable: this.replaceUnreadable });
 			this.opts.saved(clone(tt));
 			if (backup) new Notice(t("timetable.backedUp", { path: backup }), 8000);
 			new Notice(t("timetable.saved"));

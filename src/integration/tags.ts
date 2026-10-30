@@ -1,6 +1,6 @@
 import { AbstractInputSuggest, getAllTags, Modal, Notice, Setting, type App, type Plugin, type TFile } from "obsidian";
 import { t } from "../i18n";
-import { normalizeTagList, parseTagInput, suggestTags, tagsFromVault, uniqueTags, tagKey, type TagCount } from "../model/tags";
+import { addTypedTags, isObsidianTag, normalizeTagList, parseTagInput, suggestTags, tagsFromVault, tagKey, type TagCount } from "../model/tags";
 import type { NotebookSettings } from "../settings";
 import { NotebookView } from "../view/notebook-view";
 import { activeCompanion } from "./companion";
@@ -11,7 +11,8 @@ import { activeCompanion } from "./companion";
  * The notebook's tags live in the notebook (`meta.tags`). Obsidian only indexes Markdown, so they reach the Tags pane
  * through the companion note's `tags` property (integration/companion.ts, merge rule in model/tags.ts). The editor
  * suggests the tags that already exist in the vault, normalises what is typed the way Obsidian writes tags, and says so
- * when companion notes are off, offering to turn them on.
+ * when companion notes are off, offering to turn them on. Tags the notebook already has are shown and saved exactly as
+ * they are (those Obsidian would not accept, such as `2026` or `C++`, are flagged): only what the person removes goes.
  */
 
 export interface TagsHost extends Plugin {
@@ -86,7 +87,7 @@ export interface TagEditorOptions {
 	current: readonly string[];
 	/** Tags known to the library but maybe not (yet) to Obsidian: suggested too. */
 	libraryTags?: readonly string[];
-	/** Receives the normalised tags. May return a promise; the companion note is refreshed when it settles. */
+	/** Receives the tags: the existing ones as they were (minus those removed), then the new ones, normalised. May return a promise; the companion note is refreshed when it settles. */
 	onSave: (tags: string[]) => void | Promise<void>;
 }
 
@@ -127,7 +128,8 @@ class TagEditorModal extends Modal {
 
 	constructor(app: App, private readonly opts: TagEditorOptions) {
 		super(app);
-		this.tags = normalizeTagList(opts.current).tags;
+		// As they are: normalising here would silently drop or rename tags the person never touched.
+		this.tags = opts.current.filter((x): x is string => typeof x === "string");
 		this.candidates = vaultTags(app, opts.libraryTags);
 	}
 
@@ -177,16 +179,20 @@ class TagEditorModal extends Modal {
 			this.chipsEl.createSpan({ cls: "notebook-tags-none", text: t("tags.editor.none") });
 			return;
 		}
-		for (const tag of this.tags) {
-			const chip = this.chipsEl.createEl("button", { cls: "notebook-tags-chip", attr: { "aria-label": t("tags.editor.remove", { tag }) } });
+		this.tags.forEach((tag, index) => {
+			const valid = isObsidianTag(tag);
+			const label = valid ? t("tags.editor.remove", { tag }) : `${t("tags.editor.notObsidian", { tag })} ${t("tags.editor.remove", { tag })}`;
+			const chip = this.chipsEl.createEl("button", { cls: valid ? "notebook-tags-chip" : "notebook-tags-chip notebook-tags-chip-invalid", attr: { "aria-label": label, title: valid ? "" : t("tags.editor.notObsidian", { tag }) } });
 			chip.createSpan({ text: `#${tag}` });
+			if (!valid) chip.createSpan({ cls: "notebook-tags-flag", text: "!" });
 			chip.createSpan({ cls: "notebook-tags-x", text: "×" });
 			chip.addEventListener("click", () => {
-				this.tags = this.tags.filter((x) => tagKey(x) !== tagKey(tag));
+				// Only this entry: another spelling of the same tag stays until it is removed too.
+				this.tags = this.tags.filter((_, i) => i !== index);
 				this.renderChips();
 				this.inputEl.focus();
 			});
-		}
+		});
 	}
 
 	/** Adds what is in the field (one or several tags). Entries that cannot be tags stay in the field with a message. */
@@ -201,7 +207,7 @@ class TagEditorModal extends Modal {
 	}
 
 	private add(tags: readonly string[]): void {
-		this.tags = uniqueTags([...this.tags, ...tags]);
+		this.tags = addTypedTags(this.tags, tags);
 		this.errorEl.setText("");
 		this.renderChips();
 	}

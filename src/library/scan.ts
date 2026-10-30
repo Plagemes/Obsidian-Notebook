@@ -50,7 +50,21 @@ export function extractText(doc: NotebookDocument, cap = TEXT_CAP): { text: stri
 	return { text, textPages };
 }
 
-export type DocumentFields = Pick<LibraryEntry, "pages" | "tags" | "favorite" | "cover" | "created" | "modified" | "text" | "textPages" | "pageTags">;
+export type DocumentFields = Pick<LibraryEntry, "pages" | "tags" | "favorite" | "cover" | "created" | "modified" | "text" | "textPages" | "pageTags" | "bookmarks">;
+
+/** Titled bookmarks for the index (0-based pages, in page order). */
+export function extractBookmarks(doc: NotebookDocument): Array<{ page: number; title: string }> {
+	const out: Array<{ page: number; title: string }> = [];
+	const pages = Array.isArray(doc.pages) ? doc.pages : [];
+	const ids = Array.isArray(doc.meta?.bookmarks) ? doc.meta.bookmarks : [];
+	const info = doc.meta?.bookmarkInfo;
+	pages.forEach((p, page) => {
+		if (!p || !ids.includes(p.id) || !info || !Object.prototype.hasOwnProperty.call(info, p.id)) return;
+		const title = info[p.id]?.title;
+		if (typeof title === "string" && title.trim()) out.push({ page, title: title.trim() });
+	});
+	return out;
+}
 
 /** v7 page tags for the index: the pages that have tags (0-based), with their tags. */
 export function extractPageTags(doc: NotebookDocument): Array<{ page: number; tags: string[] }> {
@@ -84,7 +98,9 @@ export function metaFromDocument(doc: NotebookDocument, fallbackTime = 0): Docum
 	const created = time(doc.createdAt, fallbackTime);
 	const { text, textPages } = extractText(doc);
 	const pageTags = extractPageTags(doc);
+	const bookmarks = extractBookmarks(doc);
 	return {
+		...(bookmarks.length > 0 ? { bookmarks } : {}),
 		...(text ? { text, textPages } : {}),
 		...(pageTags.length > 0 ? { pageTags } : {}),
 		pages: Array.isArray(doc.pages) ? doc.pages.length : 0,

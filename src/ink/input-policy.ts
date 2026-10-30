@@ -2,14 +2,34 @@ import { inEdgeZone, type EdgeZones } from "./edge-zones";
 import { isBarrelSignal } from "./pen-button";
 
 /**
- * What pressing the pen's side button does: open the radial menu, erase while it is held, use the
- * lasso while it is held, use the previously used tool while it is held, or nothing.
+ * What pressing the pen's side button does: a click opens the radial menu and holding it while the nib touches erases
+ * (the default), the radial menu only, erase / lasso / the previously used tool while it is held, or nothing.
  */
-export const PEN_BUTTON_ACTIONS = ["radial", "eraser", "lasso", "lastTool", "off"] as const;
+export const PEN_BUTTON_ACTIONS = ["radial-eraser", "radial", "eraser", "lasso", "previous", "off"] as const;
 export type PenButtonAction = (typeof PEN_BUTTON_ACTIONS)[number];
 
-/** A tool the side button selects for the contact it is held on (the eraser has its own flag). */
-export type HeldTool = "lasso" | "last";
+/** A tool the pen acts as while the side button is held (and the nib touches the page). */
+export type HeldTool = "eraser" | "lasso" | "previous";
+
+/** Does a click of the side button open the radial menu? */
+export function opensRadial(action: PenButtonAction | undefined): boolean {
+	return action === "radial" || action === "radial-eraser";
+}
+
+/** The tool the pen takes while the side button is held and the nib touches: undefined for the actions without one. */
+export function heldToolOf(action: PenButtonAction | undefined): HeldTool | null {
+	switch (action) {
+		case "radial-eraser":
+		case "eraser":
+			return "eraser";
+		case "lasso":
+			return "lasso";
+		case "previous":
+			return "previous";
+		default:
+			return null;
+	}
+}
 
 export interface InputSettings {
 	/** Fingers draw (unless the pen was seen in the last `palmRejectionMs`). */
@@ -19,10 +39,25 @@ export interface InputSettings {
 	palmContactPx?: number;
 	/** Touches that start in these edge zones are ignored. */
 	edge?: EdgeZones;
-	/** Side (barrel) button of the pen; `button === 2` / `buttons & 2`. Default "off". */
+	/** What the pen's side button does; the default is "radial-eraser" (see settings). Unset = "off". */
 	penButton?: PenButtonAction;
-	/** Fallback for pens whose button never reaches the page: holding the nib still opens the radial menu. Default off. */
+	/**
+	 * Fallback for pens whose button never reaches the page: holding the nib still from the first contact opens
+	 * the radial menu. The effective value (the user's choice, or the automatic default); see `effectivePenHold`.
+	 */
 	penLongPress?: boolean;
+	/**
+	 * Samsung / Chromium report the side button, pressed while the pen hovers, as a primary press with pressure
+	 * exactly 0. On by default; off for a device that reports 0 on real contact. Undefined = on.
+	 */
+	zeroPressureButton?: boolean;
+	/**
+	 * Side button pressed while the nib touches, seen as a pen move with `button 0` (see `ChordDetector`): finishes
+	 * the stroke and switches to the action's tool until the next such event or the lift. Undefined = on.
+	 */
+	chordButton?: boolean;
+	/** A finger held still on the page (pen-only mode) opens the radial menu beside it. */
+	fingerLongPress?: boolean;
 }
 
 /** `menu`: the pen's side button was pressed and the radial menu should open (nothing is drawn). */
@@ -68,11 +103,10 @@ export class InputPolicy {
 		return this.settings.penButton === "eraser" && InputPolicy.barrel(button, buttons);
 	}
 
-	/** The tool the side button selects for a pen contact (setting "lasso" or "lastTool"), or null. Decided when the pen touches down. */
-	penHeldTool(button: number, buttons: number): HeldTool | null {
-		if (!InputPolicy.barrel(button, buttons)) return null;
-		if (this.settings.penButton === "lasso") return "lasso";
-		return this.settings.penButton === "lastTool" ? "last" : null;
+	/** The tool (other than the eraser) a contact takes because the side button (`buttons & 2`) is held with it. */
+	penHeld(button: number, buttons: number): "lasso" | "previous" | null {
+		const tool = heldToolOf(this.settings.penButton);
+		return (tool === "lasso" || tool === "previous") && InputPolicy.barrel(button, buttons) ? tool : null;
 	}
 
 	/**
@@ -84,8 +118,9 @@ export class InputPolicy {
 			case "pen":
 				this.notePen(t);
 				if (InputPolicy.barrel(button, buttons)) {
-					if (this.settings.penButton === "radial") return "menu";
-					if (this.settings.penButton !== undefined && this.settings.penButton !== "off") return "draw";
+					// A barrel bit (`buttons & 2`) cannot be told apart from contact: radial + eraser opens the menu.
+					if (opensRadial(this.settings.penButton)) return "menu";
+					if (heldToolOf(this.settings.penButton)) return "draw";
 				}
 				return button === 0 || button === 5 ? "draw" : "ignore";
 			case "mouse":

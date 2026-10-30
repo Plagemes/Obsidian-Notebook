@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { buildLecturePage } from "../src/view/lecture-logic";
 import { findLecturePage } from "../src/timetable/lecture-open";
-import { applyCourseTag } from "../src/timetable/page-tag";
+import { applyCourseTag, PAGE_TAG_HOOK_ACTIVE } from "../src/timetable/page-tag";
+import { createDocument } from "../src/model/document";
+import { AddPage, History } from "../src/model/history";
 import { setLectureCourseProvider, suggestedCourse } from "../src/timetable/current";
 import {
 	classesAt, classesOn, courseForNotebook, currentClass, entryProblem, findOverlaps, isoWeekNumber, isoWeekday, linkCovers,
@@ -221,9 +223,27 @@ describe("lecture page, tag hook, provider, settings", () => {
 		expect(findLecturePage([a, b], "Physics", at(16))).toBe(-1);
 		expect(findLecturePage([a, b], "Maths", at(2))).toBe(-1);
 	});
-	it("the page tag hook leaves the page unchanged until page tags exist", () => {
-		const page = buildLecturePage(undefined, "Physics", at(2));
-		expect(applyCourseTag(page, "Physics")).toBe(page);
+	it("the page tag hook tags a new lecture page with the course, in the same undo step", () => {
+		expect(PAGE_TAG_HOOK_ACTIVE).toBe(true);
+		const page = buildLecturePage(undefined, "Quantum  Physics", at(2));
+		const tagged = applyCourseTag(page, " #Quantum  Physics ");
+		expect(tagged.tags).toEqual(["Quantum Physics"]);
+		// A copy: the page passed in is not changed.
+		expect(page.tags).toBeUndefined();
+		expect(tagged.strokes).toBe(page.strokes);
+		// Existing tags stay first; the course is not added twice (ignoring case).
+		expect(applyCourseTag({ ...page, tags: ["exam"] }, "Physics").tags).toEqual(["exam", "Physics"]);
+		expect(applyCourseTag({ ...page, tags: ["physics"] }, "Physics").tags).toEqual(["physics"]);
+		// Nothing left after normalising: the page as it is.
+		expect(applyCourseTag(page, " # ")).toBe(page);
+		// Inserted with AddPage, undo removes the page together with its tag.
+		const doc = createDocument(at(2));
+		const history = new History(() => doc);
+		history.execute(new AddPage(tagged, doc.pages.length));
+		expect(doc.pages[1]?.tags).toEqual(["Quantum Physics"]);
+		history.undo();
+		expect(doc.pages).toHaveLength(1);
+		expect(doc.pages[0]?.tags).toBeUndefined();
 	});
 	it("provider failures never break New lecture", () => {
 		expect(suggestedCourse("x")).toBeNull();

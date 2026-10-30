@@ -7,7 +7,11 @@
  *   - `pointermove` / `pointerrawupdate` of the pen where `buttons & 2` turns on (button pressed
  *     while hovering, or while touching);
  *   - a `contextmenu` event that comes from the pen (never from a touch long-press);
- *   - an `auxclick` with button 2 from the pen.
+ *   - an `auxclick` with button 2 from the pen;
+ *   - Samsung / Chromium (reported on a Galaxy tablet): the button pressed while the pen HOVERS arrives as a
+ *     primary press with no pressure: `pointerdown` with `button 0`, `buttons 1` and `pressure` exactly 0 (a
+ *     real nib contact has pressure > 0). It is accepted only for a pointer that was hovering just before
+ *     (events with `buttons 0` seen for the same `pointerId`), and can be switched off in the settings.
  * The eraser (`buttons & 32`, `button 5`) is never a barrel press.
  */
 
@@ -33,11 +37,31 @@ export const BARREL_RECENT_MS = 1000;
 
 export type PointerKind = "down" | "move" | "up" | "cancel";
 
+export type ZeroPressureTransition = "none" | "press" | "contact-start" | "contact-end" | "release-click" | "release";
+
 export class BarrelDetector {
 	private penContact = false;
 	private touches = 0;
 	private lastPenT = -Infinity;
 	private lastBarrelT = -Infinity;
+	/** The pointer that last reported `buttons 0` (hovering, or just lifted): a pressure-0 press is only believed after that. */
+	private hoverId: number | null = null;
+	/** A pressure-0 primary press is the side button (the setting; on by default). */
+	zeroPressureEnabled = true;
+	/** The press in progress (or the last one) came as a pressure-0 primary press, not as `buttons & 2`. */
+	private zp = false;
+	/**
+	 * What the last event did to a pressure-0 press (Samsung): `press` (the button went down while hovering),
+	 * `contact-start` / `contact-end` (the nib touches / leaves while the button stays down),
+	 * `release-click` (the button came up and the nib never touched: a click), `release` (it came up after
+	 * contact, or the pointer was cancelled), or `none`.
+	 */
+	transition: ZeroPressureTransition = "none";
+	/** In a pressure-0 press: the nib is touching, and whether it touched at all. */
+	private contact = false;
+	private used = false;
+	/** Time of the last event of a pressure-0 press. */
+	private zpT = -Infinity;
 	/** The side button is down (a press was reported and no release has been seen yet). */
 	private held = false;
 	/** A press was handled and its trailing `contextmenu` / `auxclick` are still expected. */
@@ -49,18 +73,28 @@ export class BarrelDetector {
 		return this.held;
 	}
 
+	/** The press just reported (or still held) is a pressure-0 primary press: never a stroke, even when the nib touches while it is held. */
+	get zeroPressureHeld(): boolean {
+		return this.held && this.zp;
+	}
+
 	reset(): void {
 		this.penContact = false;
 		this.touches = 0;
 		this.held = false;
+		this.zp = false;
 		this.armed = false;
+		this.hoverId = null;
+		this.contact = false;
+		this.used = false;
+		this.transition = "none";
 	}
 
 	/**
 	 * A pointer event. Returns true when it starts a new press of the side button (the caller opens the
 	 * menu), false for everything else: releases, repeated reports of the same press, the eraser, touch.
 	 */
-	pointer(kind: PointerKind, pointerType: string, button: number, buttons: number, t: number): boolean {
+	pointer(kind: PointerKind, pointerType: string, button: number, buttons: number, t: number, pressure?: number, pointerId?: number): boolean {
 		if (pointerType === "touch") {
 			if (kind === "down") this.touches++;
 			else if (kind === "up" || kind === "cancel") this.touches = Math.max(0, this.touches - 1);
@@ -71,29 +105,68 @@ export class BarrelDetector {
 			if (!this.penRecent(t) || !isBarrelSignal(button, buttons)) return false;
 		} else if (pointerType === "pen") {
 			this.lastPenT = t;
-			if (kind === "down") this.penContact = true;
-			else if (kind === "up" || kind === "cancel") this.penContact = false;
-			// The up may never arrive (the radial menu swallows it): a move without the contact bit heals the state.
-			else if ((buttons & 1) === 0) this.penContact = false;
+			if (buttons === 0 && pointerId !== undefined) this.hoverId = pointerId;
 		} else {
 			return false;
 		}
 
+		// Samsung: the side button pressed while hovering is a primary press with pressure exactly 0. A real
+		// contact has pressure > 0, so a stroke that merely ends with pressure 0 is no press (the pen is in contact).
+		let zeroPress = false;
+		if (pointerType === "pen" && this.zeroPressureEnabled && kind !== "up" && kind !== "cancel" && pressure === 0 && (buttons & 1) !== 0) {
+			const hovering = pointerId !== undefined && this.hoverId === pointerId;
+			zeroPress = hovering && !isEraserSignal(button, buttons) && (kind === "down" ? button === 0 : !this.penContact);
+		}
+		if (pointerType === "pen") {
+			if (kind === "down") this.penContact = !zeroPress && !(this.zp && this.held && (buttons & 1) !== 0);
+			else if (kind === "up" || kind === "cancel") this.penContact = false;
+			// The up may never arrive (the radial menu swallows it): a move without the contact bit heals the state.
+			else if ((buttons & 1) === 0) this.penContact = false;
+		}
+
+		this.transition = "none";
+		const wasZero = this.held && this.zp;
+		if (wasZero) this.zpT = t;
 		if (kind === "up" || kind === "cancel") {
+			if (wasZero) this.transition = kind === "up" && !this.used ? "release-click" : "release";
 			this.held = false;
 			return false;
 		}
+		// While a pressure-0 press is held the nib may touch (pressure > 0, still `buttons & 1`): same press.
+		const zeroContinues = pointerType === "pen" && wasZero && (buttons & 1) !== 0 && !isEraserSignal(button, buttons);
 		// A move reports the state in `buttons`; `button` there is -1 or the button that changed (maybe released).
-		const pressed = kind === "down" ? isBarrelSignal(button, buttons) : !isEraserSignal(button, buttons) && (buttons & BARREL_BUTTONS) !== 0;
+		const sideBit = kind === "down" ? isBarrelSignal(button, buttons) : !isEraserSignal(button, buttons) && (buttons & BARREL_BUTTONS) !== 0;
+		const pressed = sideBit || zeroPress || zeroContinues;
 		if (!pressed) {
+			if (wasZero) this.transition = this.used ? "release" : "release-click";
 			this.held = false;
 			return false;
 		}
 		this.lastBarrelT = t;
-		if (this.held) return false;
+		if (this.held) {
+			if (wasZero) {
+				// The nib touches (pressure > 0) or leaves again (pressure 0) while the button stays down.
+				if (pressure !== undefined && pressure > 0 && !this.contact) {
+					this.contact = true;
+					this.used = true;
+					this.transition = "contact-start";
+				} else if (pressure === 0 && this.contact) {
+					this.contact = false;
+					this.transition = "contact-end";
+				}
+			}
+			return false;
+		}
+		this.zp = zeroPress && !sideBit;
 		this.held = true;
 		this.armed = true;
 		this.armedT = t;
+		if (this.zp) {
+			this.zpT = t;
+			this.contact = false;
+			this.used = false;
+			this.transition = "press";
+		}
 		return true;
 	}
 
@@ -102,7 +175,7 @@ export class BarrelDetector {
 	 * (undefined for a plain MouseEvent). True when it is a pen button press that was not handled yet.
 	 */
 	contextMenu(pointerType: string | undefined, t: number): boolean {
-		if (!this.fromPen(pointerType, t, true)) return false;
+		if (this.nearZeroPress(t) || !this.fromPen(pointerType, t, true)) return false;
 		if (this.armed && t - this.armedT < 1500) return false;
 		this.armed = true;
 		this.armedT = t;
@@ -111,13 +184,18 @@ export class BarrelDetector {
 
 	/** An `auxclick`. True when it is a pen side-button click that was not handled yet. */
 	auxClick(pointerType: string | undefined, button: number, t: number): boolean {
-		if (button !== 2 || !this.fromPen(pointerType, t, false)) return false;
+		if (button !== 2 || this.nearZeroPress(t) || !this.fromPen(pointerType, t, false)) return false;
 		if (this.armed) {
 			// The click that closes a press already handled by its pointer events / contextmenu.
 			this.armed = false;
 			return false;
 		}
 		return true;
+	}
+
+	/** A pressure-0 press is down or just ended: its trailing contextmenu / auxclick are part of it. */
+	private nearZeroPress(t: number): boolean {
+		return (this.held && this.zp) || t - this.zpT < 1500;
 	}
 
 	private penRecent(t: number): boolean {
@@ -148,20 +226,30 @@ export class BarrelDetector {
 	}
 }
 
-/** CSS px the pen may drift during a still hold. */
+/** CSS px the pen may drift during a still hold (measured from the very first contact). */
 export const HOLD_RADIUS_PX = 6;
-/** Default duration of the still-hold fallback, ms. */
-export const HOLD_MS = 600;
+/**
+ * How long the pen must stay still from the first contact to open the menu, ms. Longer than a tap or a dot
+ * (well under 300 ms) and than the pause before a slow, careful first stroke; short enough to feel deliberate.
+ */
+export const HOLD_MS = 700;
+/** A finger must stay still this long to open the radial menu, ms (a pan or a two-finger tap starts earlier). */
+export const FINGER_HOLD_MS = 500;
+/** CSS px a finger may drift during a long-press (fingers are less steady than the nib). */
+export const FINGER_HOLD_RADIUS_PX = 10;
 
 /**
- * The still-hold fallback for pens whose button never reaches the page: holding the nib on the page
- * without moving for `HOLD_MS` opens the same menu. Only a hold that never left a small radius counts.
+ * The still-hold fallback for devices whose side button never reaches the page: holding a contact on the page
+ * without moving opens the radial menu. Only a hold that never left a small radius around the *first* contact
+ * counts: once it has moved it never becomes a hold again, however still it gets afterwards.
  */
 export class StillHold {
 	private ox = 0;
 	private oy = 0;
 	private moved = true;
 	private active = false;
+
+	constructor(private readonly radius = HOLD_RADIUS_PX) {}
 
 	begin(x: number, y: number): void {
 		this.ox = x;
@@ -172,7 +260,7 @@ export class StillHold {
 
 	move(x: number, y: number): void {
 		if (!this.active || this.moved) return;
-		if (Math.hypot(x - this.ox, y - this.oy) > HOLD_RADIUS_PX) this.moved = true;
+		if (Math.hypot(x - this.ox, y - this.oy) > this.radius) this.moved = true;
 	}
 
 	end(): void {
@@ -180,9 +268,102 @@ export class StillHold {
 		this.moved = true;
 	}
 
-	/** The hold is armed and the pen has not left the radius. */
+	/** The hold is armed and the contact has not left the radius. */
 	get still(): boolean {
 		return this.active && !this.moved;
+	}
+}
+
+/**
+ * Does the pen hold-still fallback apply? `choice` is the user's explicit setting (null = never chosen): it always
+ * wins. Without a choice it is on only while this device has never delivered a side-button signal; once one has
+ * arrived the button works and resting the pen must not open anything.
+ */
+export function effectivePenHold(choice: boolean | null | undefined, sideButtonSeen: boolean): boolean {
+	return typeof choice === "boolean" ? choice : !sideButtonSeen;
+}
+
+/** What decides whether a pen contact may become a hold-still menu. */
+export interface PenHoldFacts {
+	/** The effective hold-still setting. */
+	enabled: boolean;
+	/** The side-button action is the radial menu. */
+	radialAction: boolean;
+	/** The contact is the eraser (flipped pen / eraser button). */
+	eraser: boolean;
+}
+
+export function penHoldMayStart(f: PenHoldFacts): boolean {
+	return f.enabled && f.radialAction && !f.eraser;
+}
+
+/** What decides whether a finger contact may become a long-press menu. */
+export interface FingerHoldFacts {
+	enabled: boolean;
+	/** Finger drawing is on: the finger writes, so a still finger is a dot or a pause, not a menu request. */
+	fingerDrawing: boolean;
+	/** The palm-rejection window says a pen is (or was just) near. */
+	penNear: boolean;
+	/** Fingers on the page including this one: a second finger means pinch or a two-finger tap. */
+	fingersDown: number;
+}
+
+export function fingerHoldMayStart(f: FingerHoldFacts): boolean {
+	return f.enabled && !f.fingerDrawing && !f.penNear && f.fingersDown === 1;
+}
+
+/** Does the test say "no side-button signal yet"? Not once the log or an earlier session saw one. */
+export function noSignalYet(seenBefore: boolean, loggedSideButtonEvents: number): boolean {
+	return !seenBefore && loggedSideButtonEvents === 0;
+}
+
+/** A chord event this soon after the nib landed is ignored (the pointerdown itself has `button 0`). */
+export const CHORD_MIN_AFTER_DOWN_MS = 40;
+/** Two chord events closer than this are one (`pointerrawupdate` and `pointermove` report the same change). */
+export const CHORD_DEBOUNCE_MS = 120;
+
+/**
+ * Side button pressed WHILE the nib touches (reported on a Galaxy tablet, medium confidence): the browser sends a
+ * dispatched `pointermove` / `pointerrawupdate` with `button 0` (a button changed) instead of the usual -1, while
+ * `buttons` stays 1. Each such event toggles "side button held". Conservative on purpose: only events of the pen
+ * in contact, never the pointerdown, only after an ordinary move (`button -1`) was seen in this contact, never the
+ * eraser bits, never closer than the debounce to the previous toggle. A device whose moves all carry `button 0` never
+ * toggles. Only the dispatched event is judged, never its coalesced or predicted ones.
+ */
+export class ChordDetector {
+	private contact = false;
+	private downT = -Infinity;
+	private ordinary = false;
+	private lastT = -Infinity;
+
+	/** The nib landed (a real contact with pressure, not a pressure-0 hover press). */
+	down(t: number): void {
+		this.contact = true;
+		this.downT = t;
+		this.ordinary = false;
+		this.lastT = -Infinity;
+	}
+
+	up(): void {
+		this.contact = false;
+	}
+
+	get inContact(): boolean {
+		return this.contact;
+	}
+
+	/** A dispatched pen move during the contact. True when it is a chord event (toggles the held state). */
+	move(button: number, buttons: number, pressure: number | undefined, t: number): boolean {
+		if (!this.contact || (buttons & 1) === 0 || isEraserSignal(button, buttons)) return false;
+		if (button === -1) {
+			this.ordinary = true;
+			return false;
+		}
+		if (button !== 0 || !this.ordinary || t - this.downT < CHORD_MIN_AFTER_DOWN_MS) return false;
+		if (pressure !== undefined && pressure <= 0) return false;
+		if (t - this.lastT < CHORD_DEBOUNCE_MS) return false;
+		this.lastT = t;
+		return true;
 	}
 }
 
@@ -200,6 +381,8 @@ export interface PenEventFacts {
 	pointerType?: string;
 	button?: number;
 	buttons?: number;
+	pressure?: number;
+	pointerId?: number;
 }
 
 /** Would the plugin treat this event as the side button (for the "Pen button test" log)? */
@@ -227,7 +410,13 @@ export interface LoggedEvent extends PenEventFacts {
 	isPrimary?: boolean;
 	key?: string;
 	code?: string;
+	/** Set by the log: what the event means for a pressure-0 side-button press (see `ZeroPressureTransition`). */
+	note?: string;
 }
+
+const POINTER_KIND: Record<string, PointerKind | undefined> = {
+	pointerdown: "down", pointermove: "move", pointerrawupdate: "move", pointerup: "up", pointercancel: "cancel",
+};
 
 /** The log keeps this many lines. */
 export const LOG_LINES = 30;
@@ -239,12 +428,13 @@ export function formatEvent(ev: LoggedEvent): string {
 	const time = `${(ev.t / 1000).toFixed(3)}s`;
 	if (ev.kind === "keydown" || ev.kind === "keyup") return `${time} ${ev.kind} key=${JSON.stringify(ev.key ?? "")} code=${ev.code ?? ""}`;
 	const parts = [time, ev.kind, `type=${ev.pointerType || "-"}`];
+	if (ev.pointerId !== undefined) parts.push(`id=${ev.pointerId}`);
 	if (ev.button !== undefined) parts.push(`button=${ev.button}`);
 	if (ev.buttons !== undefined) parts.push(`buttons=${ev.buttons}`);
 	if (ev.pressure !== undefined) parts.push(`pressure=${fix(ev.pressure, 2)}`);
 	if (ev.isPrimary !== undefined) parts.push(`primary=${ev.isPrimary}`);
 	const verdict = describeSideButton(ev);
-	parts.push(verdict === "side-button" ? "=> SIDE BUTTON" : verdict === "eraser" ? "=> eraser" : "=> -");
+	parts.push(ev.note ? `=> ${ev.note}` : verdict === "side-button" ? "=> SIDE BUTTON" : verdict === "eraser" ? "=> eraser" : "=> -");
 	return parts.join(" ");
 }
 
@@ -253,30 +443,64 @@ export function formatEvent(ev: LoggedEvent): string {
  * flag fold into one line with a counter, so hovering does not push the interesting events out.
  */
 export class EventLog {
-	private lines: Array<{ key: string; text: string; count: number }> = [];
+	private lines: Array<{ key: string; text: string; count: number; noted: boolean }> = [];
 	/** Events that would be treated as the side button. */
 	sideButtonCount = 0;
 
 	constructor(private readonly max = LOG_LINES) {}
 
-	add(ev: LoggedEvent): void {
-		if (describeSideButton(ev) === "side-button") this.sideButtonCount++;
+	/** The plugin's own detector, so the log says exactly what the plugin would do with the events. */
+	private readonly detector = new BarrelDetector();
+	private readonly chord = new ChordDetector();
+
+	add(logged: LoggedEvent): void {
+		const ev: LoggedEvent = { ...logged };
+		const kind = POINTER_KIND[ev.kind];
+		let zero = false;
+		if (kind && ev.pointerType === "pen") {
+			const press = this.detector.pointer(kind, "pen", ev.button ?? -1, ev.buttons ?? 0, ev.t, ev.pressure, ev.pointerId);
+			const tr = this.detector.transition;
+			if (press && tr === "press") {
+				zero = true;
+				ev.note = "SIDE BUTTON (pressure 0 primary press)";
+			} else if (tr === "contact-start") {
+				ev.note = "nib touches while the button is held (erases)";
+			} else if (tr === "contact-end") {
+				ev.note = "nib lifted, button still held";
+			} else if (tr === "release-click") {
+				ev.note = "button released without contact (click: opens the menu)";
+			} else if (tr === "release") {
+				ev.note = "button released";
+			}
+		}
+		if (ev.pointerType === "pen") {
+			if (ev.kind === "pointerdown" && ev.pressure !== 0 && !zero) this.chord.down(ev.t);
+			else if (ev.kind === "pointerup" || ev.kind === "pointercancel") this.chord.up();
+			else if ((ev.kind === "pointermove" || ev.kind === "pointerrawupdate") && this.chord.move(ev.button ?? -1, ev.buttons ?? 0, ev.pressure, ev.t)) {
+				ev.note = "pointermove with button 0 during contact (possible side button)";
+			}
+		}
+		const verdict = describeSideButton(ev);
+		if (zero || verdict === "side-button") this.sideButtonCount++;
 		const text = formatEvent(ev);
-		const foldable = ev.kind === "pointermove" || ev.kind === "pointerrawupdate";
+		// A line with a note (what the plugin made of the event) is never folded into or over.
+		const foldable = (ev.kind === "pointermove" || ev.kind === "pointerrawupdate") && !ev.note;
 		const key = `${ev.kind}|${ev.pointerType}|${ev.button}|${ev.buttons}|${ev.isPrimary}`;
 		const last = this.lines[this.lines.length - 1];
-		if (foldable && last && last.key === key) {
+		if (foldable && last && !last.noted && last.key === key) {
 			last.count++;
 			last.text = text;
 			return;
 		}
-		this.lines.push({ key, text, count: 1 });
+		this.lines.push({ key, text, count: 1, noted: !!ev.note });
 		if (this.lines.length > this.max) this.lines.shift();
 	}
 
 	clear(): void {
 		this.lines = [];
 		this.sideButtonCount = 0;
+		this.detector.reset();
+		this.chord.up();
 	}
 
 	get length(): number {

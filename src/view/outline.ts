@@ -49,7 +49,7 @@ export function editBookmark(host: OutlineHost, pageId: string): void {
 		pageNumber: index + 1,
 		exists: meta.bookmarks.includes(pageId),
 		info: meta.bookmarkInfo?.[pageId] ?? {},
-		customCategories: categoriesInUse(meta).filter((c) => !isBuiltInCategory(c)),
+		customCategories: categoriesInUse(meta, host.pages()).filter((c) => !isBuiltInCategory(c)),
 		onSave: (info) => {
 			const page = host.pages().find((p) => p.id === pageId);
 			if (page) changeMeta(host, setBookmark(metaOf(host), pageId, info));
@@ -84,7 +84,7 @@ export function renderOutline(
 	const meta = host.meta();
 	const editable = host.canEdit();
 	const bar = list.createDiv({ cls: "notebook-outline-bar" });
-	const categories = categoriesInUse(meta);
+	const categories = categoriesInUse(meta, host.pages());
 	const category = state.category !== null && categories.includes(state.category) ? state.category : null;
 	if (categories.length > 0) {
 		const select = bar.createEl("select", { cls: "dropdown notebook-outline-category", attr: { "aria-label": t("bookmark.modal.category") } });
