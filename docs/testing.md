@@ -8,6 +8,9 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 |---|---|---|---|---|---|
 | Class timetable (roadmap 115): pure scheduling (current/next class, odd/even weeks, term dates, local time, overlaps), file parse/serialize round trip, target notebook choice | ✅ | ✅ `tests/timetable.test.ts` | | | |
 | Course page tag: a lecture page made with a course from the timetable (New lecture prefill, *Open the current class*) gets the course as a v7 page tag, in the same undo step | ✅ | ✅ `applyCourseTag` (normalisation, no duplicate, undo with `AddPage`); ❌ the two flows in Obsidian | | | |
+| Level of detail (roadmap 387): zoom → level (`lodLevel`, tolerance within 0.5 device px at any scale and pixel ratio), Douglas–Peucker on outlines (render 1) and on ink nodes with their radius (render 2), simplified paths kept per stroke and level, thumbnails | ✅ | ✅ `tests/lod.test.ts` (worst outline difference 0.44 device px over handwriting, stress strokes, pen/highlighter/shape); ✅ `npm run bench:lod` (PC pixel comparison and frame times) | | | not measured on Android |
+| Heavy page warning (roadmap 380): thresholds (strokes, points, image bytes), split plan (cut at the widest gap near half the load, text boxes and images, one undo step, nothing lost or duplicated), banner with Split page / Dismiss | ✅ | ✅ `tests/heavy-page.test.ts`; ✅ harness check (`npm run bench:lod -- --check-heavy`: banner, split, undo, dismiss) | | | the banner's look on a phone |
+| Class timetable (roadmap 115): pure scheduling (current/next class, odd/even weeks, term dates, local time, overlaps), file parse/serialize round trip, target notebook choice | ✅ | ✅ `tests/timetable.test.ts` | | | page tag (hook only until page tags exist) |
 | Class timetable editor (settings, command), `_timetable.json` read/write through the Vault API, unreadable file never overwritten | ✅ | ❌ (needs Obsidian) | | | |
 | Offer / auto-open the current class at a new lecture page; "New lecture" course prefill; library "Now: <course>" shortcut | ✅ | ❌ (needs Obsidian; the choices behind it are tested) | | | |
 | Ribbon icon + "New notebook" / "Open notebooks" commands | ✅ | ❌ (needs Obsidian) | | | |
@@ -35,12 +38,16 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Favourite pens: 6 slots (tool, colour, width) in the plugin settings, one tap to select, long press or menu to save the current pen | ✅ | ✅ slot logic, settings read; ❌ UI | | | |
 | Eraser size (5 presets in the toolbar, persisted) for both eraser modes, and an eraser circle that follows the pen/mouse | ✅ | ✅ radius and presets; ❌ circle (harness only) | | ✅ | circle position under a real S Pen hover untested |
 | "Pen only" toggle in the toolbar (the inverse of *Draw with finger*; fingers still pan and zoom) | ✅ | ✅ routing (existing); ❌ toggle | | | |
-| Compact toolbar: two rows that stack on a phone, tool options (colours, widths, eraser mode / filter / size, shape kind, text size) in a popover opened by tapping the active tool again or the current-pen indicator, favourite pens in a strip that scrolls sideways, board shot / image / ruler / pen only / add page / page options / fit in a "more" menu; touch targets ≥ 40 px; a tap outside closes the popover without drawing, Escape closes it | ✅ | ✅ harness at 360×740, 412×915, 740×360 (sideways phone), 800×1280, 1280×800: no sideways overflow, 40 px targets, popovers inside the view, choosing mode / filter / colour / size / pen colour and width works, a pen over the popover and a tap outside draw nothing, Escape, more-menu action; ❌ unit (DOM only) | | ✅ | the harness draws icons as two letters and uses synthetic events: real S Pen, finger and WebView layout untested |
-| Commands for every tool and action (pen, highlighter, eraser, lasso, shapes, text, favourites 1–6, pen only, next/previous page, eraser size…), `checkCallback`, no default hotkeys | ✅ | ✅ ids and checkCallback | | | |
+| Toolbar (ui redesign): row 1 pages panel + seven tools; row 2 undo/redo, current pen (opens the tool options), favourite pens, ranked quick slots, page indicator (opens the page sheet), save state, *All actions*; one row on a wide view, two otherwise; touch targets ≥ 40 px; a tap outside the options popover closes it without drawing, Escape closes it | ✅ | ✅ `tests/ui-layout.test.ts` (row plan and quick slots per width); ✅ harness at 360×740, 412×915, 740×360, 800×1280, 1280×800 (tablet landscape and desktop): no sideways overflow, 40 px targets, options popover, quick slots follow the width | | ✅ | the harness draws stand-in icons and uses synthetic events: real S Pen, finger and WebView layout untested |
+| Commands for every tool and action, generated from the action registry with the ids of 0.5 (hotkeys keep working), `checkCallback`, no default hotkeys; side-by-side commands only while they apply | ✅ | ✅ `tests/tool-commands.test.ts`, `tests/ui-registry.test.ts` (every command registered in `src/` is in the registry; every view action has a runner, every global one a handler) | | | |
+| Action registry (ui redesign, `src/ui/actions.ts`): every action with label, icon, group, surfaces, contexts, priority and command; every action reachable on a touch surface or the palette | ✅ | ✅ `tests/ui-registry.test.ts` | | | |
+| Contextual bar (ui redesign): selection (copy, cut, duplicate, paste, white → transparent, save as stamp, delete, restyle rows), lasso (paste), PDF side pane open, class now, PDF page (search, hide annotations, dim, margins, open side by side), image page; collapsible per context (remembered on the device) | ✅ | ✅ `tests/ui-layout.test.ts` (context choice and ranking); ✅ harness: none with the pen → lasso → selection, duplicate works, collapse and expand; ✅ harness `pdf`: PDF bar | | ✅ | finger and S Pen taps on the floating bar over the page untested on a device |
+| *All actions* sheet and page sheet (ui redesign): grouped sections (Recent, Insert, Page, PDF & reading, Side by side, Lecture, View & input, Export & share), search (accents ignored), paper and size chips, toggles with switches; popover on a tablet or desktop, bottom sheet on a phone; replaces the "more" menu and the page menu | ✅ | ✅ `tests/ui-layout.test.ts` (sections, Recent, search, page sheet); ✅ harness: opens inside the view, rows ≥ 40 px, toggle keeps it open, search, action closes it, paper chip + undo, Escape | | | |
+| Ranking by use (ui redesign): use counts per device in Obsidian's local storage (half-life 14 days, at most +30 priority), quick slots and *Recent* follow them | ✅ | ✅ `tests/ui-layout.test.ts` (counts, decay, normalising stored data) | | | |
 | Segment eraser (cuts strokes; works across pages in one gesture) | ✅ | ✅ cutting logic; ❌ across pages (view) | | | |
 | Pen eraser button (`buttons & 32`) | ✅ | ✅ routing, kept unchanged by the new side-button action | | ✅ | S Pen button mapping unknown |
 | Edge rejection zones (setting, **off by default**): touches that start within N px of the chosen edges are ignored; pen, mouse and touches that started inside are not | ✅ | ✅ zone maths, policy routing, controller with a fake element | | ✅ | depends on the device reporting touches near the bezel; tune the width on the tablet |
-| Pen side button → radial menu at the nib (pen, highlighter, eraser, lasso, undo, last 3 colours); choose by lifting or tapping on a sector, no stroke drawn | ✅ | ✅ sector hit test, centre clamping, recent colours, routing (down with button, hover press once per press), pen not left "down"; ✅ harness: opens, tap on a sector chooses and closes, draws nothing | S Pen side button: no event reaches Obsidian (user report, Samsung tablet, 2026-10-30) | ✅ | 0.5.1: how the S Pen button reaches the page is still unknown (Air command may keep it while hovering); detection now accepts every plausible signal, see the step *Pen button test* |
+| Pen side button → radial dial at the nib (ui redesign): undo/redo, width bubble, colour bubble, the tool drawn as a pen; favourites · pen case · shapes; colour ring (12 swatches, custom colour, eyedropper), width arc slider, pen case with stroke previews and "+" (save a favourite), favourites ring, shapes and ruler; flick (release the button over an action) or tap; Escape or a tap outside closes; nothing is drawn | ✅ | ✅ `tests/ui-layout.test.ts` (palettes, width scales, arc geometry); ✅ input routing (unchanged); ✅ harness: opens, lifting keeps it open, colour ring sets the colour, slider drag sets the width, pen case chooses a tool, + opens save mode, shapes, tap outside closes, draws nothing | | ✅ | 0.5.1: how the S Pen button reaches the page is still unknown, see the step *Pen button test*; the eyedropper and the native colour picker are untested on Android |
 | Setting *Pen side button* (0.5.2, extended in 0.6.0): radial menu on click + erase while held (default) / radial menu only / erase while held / lasso while held / previous tool while held / nothing; key `penSideButton` | ✅ | ✅ routing for each value, settings parsing and migration of the 0.5.x and wave-0.6 keys, held tool passed to the stroke start, previous-tool memory; ❌ settings tab, the S Pen's real button reporting | | ✅ | the tool is chosen when the pen touches down; pressing the button after the pen touched down does not switch (same as the eraser option) |
 | 0.5.2 Samsung side button = `pointerdown` `button 0`, `buttons 1`, `pressure 0` while the pen hovers (also `buttons` 0→1 in a pen move): click → menu on release; button held then touch → erases (current eraser mode / size / filter), no menu; the pressure-0 phase never draws; only for a pointer seen hovering before; setting to turn it off; press-before-touch limit (pressed after the nib is down it cannot be detected) | ✅ | ✅ synthetic sequences (`tests/side-button.test.ts`): click, move-based press, release by move, contact, lift and re-touch, pointerdown with pressure, repeated clicks, no hover / other pointer id / setting off still draw, contextmenu around the click; ✅ harness: press opens nothing, release opens the menu, press + touch erases and opens no menu | | ✅ | S Pen side button: no event reaches Obsidian (user report, Samsung tablet, 2026-10-30); the same tablet's Chrome shows the pen-hover button press as `button 0`, `buttons 1`, `pressure 0` (user report, pen-tracker page). The plugin's handling of it is not verified on hardware |
 | 0.5.2 side button pressed while the nib touches (chord): a dispatched pen move with `button 0` during contact finishes the stroke (kept) and the contact then acts as the button's tool until the next such event or the lift | ✅ | ✅ synthetic sequences incl. ordinary writing with button 0 in coalesced events, an all-button-0 device, rawupdate + move pair, early/first events, setting off (`tests/side-button.test.ts`) | | ✅ | **Hypothesis** from one observation (pressure 0.92, `button 0`, `buttons 1` after pressing during contact); unconfirmed on a device, may fire at other moments |
@@ -125,6 +132,9 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Repair of a damaged notebook into a new notebook (#140): tolerant reader, line scan after damage, per-item validation, journal / snapshots / backups as further sources, summary of recovered and lost items; the original is never written | ✅ | ✅ `tests/repair.test.ts`: truncation, garbage in the middle, bad strokes and fields, duplicate ids, older versions through the migrations, v0, fuzzed inputs (300 damaged variants), source ranking, journal rebuild; ❌ dialog and vault side (needs Obsidian) | | | unknown fields of a newer version are not carried into the repaired notebook (they stay in the original) |
 | Merge of conflicted copies from Google Drive / OneDrive / Dropbox / Syncthing / Android sync apps (#122): detection by name **and** same document id, diff summary, one undo step, copy kept or moved to `_backup/conflicts/` only after a verified save | ✅ | ✅ `tests/merge.test.ts`: nothing lost, idempotent, commutative content, undo restores the exact file, fuzzed divergent edits, name patterns; ❌ dialog, notice and file move (needs Obsidian) | | | name patterns of the Android sync apps are from their documentation and reports, not observed here |
 | Restore a single page from a previous version (#180): pick a snapshot or backup, see its pages, insert as new page or replace the current one (one undo step) | ✅ | ✅ `tests/merge.test.ts`: replace keeps the page id and the rest, insert uses new ids, missing assets added back, undo; ❌ dialog (needs Obsidian) | | | preview thumbnails do not draw PDF or image backgrounds |
+| Safe mode (#346): per-device opening marker (vault local storage, never synced) set before the load and cleared 1 s after the first paint; the next open after a crash or freeze uses safe mode (no low-latency ink or prediction, no page thumbnails, no companion note, no PDF text prefetch, backgrounds after the ink, skipped if they were loading when the last safe open died); banner with *Open normally* and *Repair…*; two consecutive failures suggest the repair | ✅ | ✅ `tests/safe-mode.test.ts`: marker before load, crash → safe, two failures → repair, stays safe until *Open normally*, forced normal open that crashes again, media stage, abandoned opens, renames, broken storage, size limit; ❌ view banner, first-paint detection and the switches (need Obsidian) | | ✅ | a real crash or freeze while opening was never reproduced here; going to the background before the open settled is not counted |
+| Storage full (#347): write errors classified (no space, read-only/permission, partial write, other), persistent *Not saved* banner with *Retry now*, retries with exponential backoff (5 s doubling to 60 s; timed saves wait for it), every write up to 2M characters read back (all while failing), a partial file is replaced by the previous content, a space probe in the plugin folder before the file is touched again after a full disk; the document stays in memory and in the journal | ✅ | ✅ `tests/write-guard.test.ts` with a fake vault that throws, truncates and fills up: classification, backoff timing, one warning per streak, journal still written, torn write undone, partial file recognised as ours (no conflict backup), silent partial write caught by the read-back, probe gating, permission errors, close with a full disk, a valid external write right after ours; ❌ `AdapterSpaceProbe` and the banner (need Obsidian) | | ✅ | the error text of a full disk on Android (Capacitor) is not known; matched by `ENOSPC`, "no space", "quota", "disk full" and similar. A file larger than 2M characters is not read back while saving works |
+| Integrity check (#390): per-device ledger (vault local storage) of the last 5 versions this device wrote per notebook; on open and on reload the file is compared: an older version of ours put back (not explained by a version-history restore) or different pages under the same edit time are reported with *Restore the newer version* (merge, one undo step, only after a reload), *Restore a version…* and *Keep this version*; the version that was open is kept as an `integrity` backup when a reload replaces it with a suspicious or unreadable file; command *Check notebooks integrity* (parse, save check, ledger, asset files present and of the recorded size) with a report and actions | ✅ | ✅ `tests/integrity.test.ts`: normal edits from another device (also with a clock behind, deletions, metadata patches, another serializer layout) never flagged, rollback, restore explained, altered, unreadable, newer format, ledger limits/rename/throttling, check of a notebook (missing and damaged assets); ❌ banner, backups, report dialog (need Obsidian) | | ✅ | a rollback to a version this device never wrote, or one older than its last 5 writes, is not detected; a crash within 2 s of a save may lose the last ledger entry (never causes a false report) |
 | Embeds: `notebook` code block and wikilink form, refresh on change, click opens the page | ✅ | ✅ parsing and building; ❌ rendering in Obsidian | | | not tried in reading view and live preview on Android |
 | `obsidian://notebook?path=…&page=…` links; command to insert an embed | ✅ | ✅ parsing; ❌ protocol handler | | ✅ | whether Android hands the link to Obsidian is untested |
 | Page jump when opening from search, links and embeds | ✅ | ✅ page parsing; ❌ view | | | |
@@ -193,7 +203,7 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Card regions on the page (outline + id badge, `pointer-events: none`), setting and command to hide them | ✅ | ❌ (DOM over the canvas) | | | not checked that the overlay never disturbs S Pen input |
 | Cards never deleted; `orphaned` set/cleared with the page; *Show orphaned cards*; card notes edited only in the frontmatter (only the lines of the changed keys: comments and quoting kept), body kept byte for byte, no write when unchanged; flags written only after this device's own saves, never for synced changes | ✅ | ✅ frontmatter line edit, orphan rule; ❌ triggers and `vault.process` | | | |
 | Companion notes never claim a card note (cards have their own `zettel-notebook` keys; old cards with the companion keys are skipped by `zettel-id`) | ✅ | ❌ (needs the Vault) | | | |
-| Search the PDF text of the open notebook (#44): command and "more" menu entry, results list with page and snippet, hits marked on the pages (transient overlay, never saved), next/previous, accent/case/ligature-insensitive, at least 2 characters | ✅ | ✅ `tests/pdf-reading.test.ts`: page text assembly, normalisation with offsets, matching, snippets, hit boxes, measured character widths, cache, chunked search (order, limit, cancel, yield, unreadable PDF, shared pages); ✅ harness scenario `pdf` (fake pdf.js: results, marks, next, accents, short query, close); ❌ real pdf.js text on real files | | ✅ | marks inside a long run depend on the font metrics the WebView measures (`measureText`); hits are cut at 500; speed on a PDF with hundreds of pages unmeasured |
+| Search the PDF text of the open notebook (#44): command, PDF contextual bar and *All actions* sheet, results list with page and snippet, hits marked on the pages (transient overlay, never saved), next/previous, accent/case/ligature-insensitive, at least 2 characters | ✅ | ✅ `tests/pdf-reading.test.ts`: page text assembly, normalisation with offsets, matching, snippets, hit boxes, measured character widths, cache, chunked search (order, limit, cancel, yield, unreadable PDF, shared pages); ✅ harness scenario `pdf` (fake pdf.js: results, marks, next, accents, short query, close); ❌ real pdf.js text on real files | | ✅ | marks inside a long run depend on the font metrics the WebView measures (`measureText`); hits are cut at 500; speed on a PDF with hundreds of pages unmeasured |
 | Highlighter that snaps to the PDF text lines (#43): option in the highlighter's options, one straight highlighter stroke per line crossed (whole words), one undo step, hand-drawn stroke kept when no text is under it | ✅ | ✅ `tests/pdf-reading.test.ts`: words, 40% coverage, lines, gap between lines, columns, taps, blank and vertical runs, stroke points; ✅ harness scenario `pdf` (strokes in the real view: width, one undo step, no text, option off); ❌ real PDFs | | ✅ | text geometry from pdf.js (baseline and font size); rotated text is not snapped; the text of a page must be read before pen-up |
 | Show/hide all annotations on PDF pages (#188): view only, indicator banner with a button to show them again, editing and the toolbar disabled meanwhile, a finger still scrolls, nothing saved or changed | ✅ | ✅ harness scenario `pdf`: ink disappears from the static layer, no stroke can be added, tools disabled, finger pans, banner button restores; ❌ on a device | | | exports and thumbnails still contain the ink |
 | Links in text boxes (O8): `[[Note]]`, `[[Note|alias]]`, `[[Note#Heading]]` drawn as links (colour, underline, dimmed and dashed when the note does not exist); finger tap or Ctrl/Cmd+click opens the note in a new tab; the text tool still edits; *Create note* for an unresolved link | ✅ | ✅ `tests/link-text.test.ts`: parsing (aliases, headings, embeds, odd input), wrapped layout and hit rectangles, hit testing, new-note path rules; ❌ drawing, opening and creating in Obsidian | | ✅ | the brackets stay visible; relative links (`[[../x]]`) resolve from the notebook's folder; a renamed note is not followed (Obsidian rewrites links in Markdown only) |
@@ -202,6 +212,13 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Handwritten `[[` (O8): two bracket strokes → *Link to a note…* chip, never automatic; not triggered by l1, ||, (( ), [], letters | ✅ | ✅ `tests/bracket-detect.test.ts`: synthetic strokes with jitter in both directions, ] and [ told apart, negatives (l, 1, |, parentheses, S, Z, wide letters, different sizes, other lines, far apart, highlighter/shape), candidate tracking while the name is written; ❌ real handwriting | | ✅ | thresholds are tuned on synthetic strokes only: real S Pen handwriting may need adjusting (hook size, spine tilt) |
 | Links in the companion note (O8): text-box and ink links are copied with the text of the page, so graph and backlinks see them | ✅ | ✅ `tests/pen-links-companion.test.ts`: links, aliases and headings kept, ink link listed once, region markers cannot be closed from a link; ❌ Obsidian's graph | | | |
 | Dim the background (#199): toggle and strength slider (10-80%) in the "more" menu, kept in the plugin settings; PDF and image backgrounds only; exports and thumbnails are not dimmed | ✅ | ✅ settings parsing and opacity; ✅ harness scenario `pdf`: background pixel lighter, slider changes it, off restores it; ❌ on a device | | | |
+| Dim the background (#199): toggle in the PDF contextual bar and the *All actions* sheet, strength slider (10-80%) in the sheet, kept in the plugin settings; PDF and image backgrounds only; exports and thumbnails are not dimmed | ✅ | ✅ settings parsing and opacity; ✅ harness scenario `pdf`: background pixel lighter, slider changes it, off restores it; ❌ on a device | | | |
+| Sync safety (#342–#345) pure logic: presence file names, records, freshness, device id and name; not-downloaded placeholders; waiting assets; sync check of folders, names, paths, case clashes and sizes | ✅ | ✅ `tests/sync-safety.test.ts` | | | |
+| Not-downloaded session mode (#344): 0-byte / whitespace / NUL file never broken, backed up or written; loads when the content arrives; no conflict backup of a placeholder | ✅ | ✅ `tests/sync-safety.test.ts`, `tests/session.test.ts` | | | |
+| "Open on another device" (#342): presence file per notebook and device, heartbeat every 60 s only while visible, removed on close, own leftovers removed at startup; banner with *Open read-only* / *Open anyway*; device name setting (local storage) | ✅ | ❌ (needs Obsidian and two devices) | | ✅ | freshness window (15 min) to be tuned against real sync intervals |
+| Assets waiting for sync (#343): placeholder card / label, page editable, asset reloaded on vault create/modify/rename | ✅ | ✅ availability rule; ❌ rendering and vault events in Obsidian | | | |
+| Not downloaded yet (#344) in the view (message, status, 4 s re-read while visible), library card, embed and repair command | ✅ | ❌ (needs Obsidian) | | | |
+| Check sync safety (#345): command, settings row, startup notice when the issues change, per-notebook warning on open, other devices seen | ✅ | ✅ issue detection; ❌ dialog and notices | | | |
 
 ## Automated checks
 
@@ -235,13 +252,15 @@ Added in 0.5.0 (companion notes): `companion.test.ts` — the companion note gen
 
 Not covered automatically: everything that needs Obsidian or a real browser (DOM, canvas, Pointer Events, Vault API, view lifecycle, the toolbar, the page menu and dialogs, the library view, the navigator panel, the scanner camera and crop UI, rendering PDFs with pdf.js, the text editor, writing the export files, selection handles and gestures, the fast path and fling, protocol and Markdown embeds). That is what the manual protocol is for.
 
+Added in wave 0.7 (level of detail and heavy pages): `tests/lod.test.ts` (zoom → level for every pixel ratio from 1 to 3, the simplified shape stays within 0.5 device px of the exact one for perfect-freehand outlines and wet-ink nodes, ring simplification keeps corners, nothing simplified at normal zoom or for short strokes, saved points untouched, SVG paths for thumbnails) and `tests/heavy-page.test.ts` (thresholds are strict, asset bytes counted once per file, PDF background not counted, split plan: cut in the gap near the middle, load-balanced, text boxes and images, strokes crossing the cut, deterministic, no split for backgrounds or a single item, one undo step restores the serialized document exactly). `npm run bench:lod` (PC): frame time scrolling through the 10,000-stroke notebook at 49, 35 and 25 % with the level of detail off and on, and the pixel difference between the two on a page of 1,000 strokes; `-- --check-heavy` runs the banner check in the harness. Measured on the dev PC (desktop Chrome, 1280×800, canvas read back after each frame so rasterization counts; not Android): redraw with strokes cached, off → on, 1x screen: render 1 `52 → 23`, `64 → 27`, `81 → 29` ms at 49, 35, 25 %; render 2 `61 → 37`, `72 → 45`, `91 → 52` ms; 2x screen: render 1 `88 → 51`, `100 → 53`, `114 → 58` ms, render 2 `90 → 72`, `109 → 79`, `130 → 85` ms.
+
 ## Browser harness
 
 A web page that runs the **real** notebook view (renderer, pointer controller, session, toolbar, navigator, `styles.css`) on a minimal stand-in for the `obsidian` module (`dev/harness/obsidian-stub.ts`: views, an in-memory vault, notices, menus, Obsidian's DOM helpers). It is built with esbuild into `dev/harness/dist/` (ignored by git) and never goes into `main.js`. It catches layout, CSS and exception bugs in a real Chromium without a device: the 0.4.0 "black page, nothing draws" bug (stage with zero height) fails it.
 
-**Automatic: `npm run harness:check`.** Needs Chrome, Chromium or Edge (found in the usual install paths, or set `CHROME_PATH`); exits with code 2 if none is found. It builds the harness, serves it on a random local port, starts a headless browser and, over the DevTools protocol, runs these scenarios: an old notebook written by 0.3.0 (format v3, grid paper, pen and highlighter strokes, a second ruled page) and a new empty one, each in the light and dark theme, on a tablet (800×1280 CSS px, device pixel ratio 2, touch), a phone (412×915, DPR 2.625, touch) and a desktop (1280×800, DPR 1), a small phone (360×740, DPR 3) and a phone held sideways (740×360, new notebook only); the *Low-latency ink* setting on (tablet dark, phone light); and injected faults (wet ink throwing on every paint, with and without low latency; one stored stroke that cannot be drawn). Two more scenarios (`doc=pdf`, desktop light and narrow dark) open a notebook of three pages that show a fake PDF (`dev/harness/fake-pdf.ts`: a stand-in for pdf.js that draws text lines and reports the same runs) and run the PDF reading checks in `dev/harness/reading-check.ts` instead of the list below: the search finds, lists, marks and steps through matches (case, accents, short query, close), the snapping highlighter replaces strokes over text with one band per line in one undo step and leaves strokes over nothing alone, hiding the annotations removes the ink and blocks editing while a finger still scrolls, and dimming lightens the background without touching the notebook. For each of the other scenarios it checks: the stage fills the leaf; every canvas covers the stage with a backing store of CSS size × DPR; the live and wet canvases let input through; the pen's wet canvas is not translucent or blended; a point in the middle of the stage hits the stage; the paper is painted; a pen stroke (synthetic `pen` PointerEvents with pressure, `pointerrawupdate` before each `pointermove` as Chromium does) is stored and painted and the wet canvas is clear afterwards; a highlighter stroke is stored; the eraser removes a stroke; the page navigator opens and its first thumbnail loads; the toolbar fits the width without sideways overflow with touch targets of at least 40 px, the eraser options popover (mode, filter, colour swatch, size) and the pen options (colour, width) work and keep drawing out of the page (a pen over the popover and a tap outside it write nothing; Escape closes it), the current-pen indicator follows the pen, and the more menu opens inside the view and its actions work; no unexpected console error (an injected fault must be logged once as `[notebook] render …`). Then it takes a screenshot (`dev/harness/dist/shots/<scenario>.png`) and checks the **composited** pixels: white paper where the page is, dark ink where the pen wrote.
+**Automatic: `npm run harness:check`.** Needs Chrome, Chromium or Edge (found in the usual install paths, or set `CHROME_PATH`); exits with code 2 if none is found. It builds the harness, serves it on a random local port, starts a headless browser and, over the DevTools protocol, runs these scenarios: an old notebook written by 0.3.0 (format v3, grid paper, pen and highlighter strokes, a second ruled page) and a new empty one, each in the light and dark theme, on a tablet (800×1280 CSS px, device pixel ratio 2, touch), a phone (412×915, DPR 2.625, touch) and a desktop (1280×800, DPR 1), a small phone (360×740, DPR 3) and a phone held sideways (740×360, new notebook only); the *Low-latency ink* setting on (tablet dark, phone light); and injected faults (wet ink throwing on every paint, with and without low latency; one stored stroke that cannot be drawn). Two more scenarios (`doc=pdf`, desktop light and narrow dark) open a notebook of three pages that show a fake PDF (`dev/harness/fake-pdf.ts`: a stand-in for pdf.js that draws text lines and reports the same runs) and run the PDF reading checks in `dev/harness/reading-check.ts` instead of the list below: the search finds, lists, marks and steps through matches (case, accents, short query, close), the snapping highlighter replaces strokes over text with one band per line in one undo step and leaves strokes over nothing alone, hiding the annotations removes the ink and blocks editing while a finger still scrolls, and dimming lightens the background without touching the notebook. For each of the other scenarios it checks: the stage fills the leaf; every canvas covers the stage with a backing store of CSS size × DPR; the live and wet canvases let input through; the pen's wet canvas is not translucent or blended; a point in the middle of the stage hits the stage; the paper is painted; a pen stroke (synthetic `pen` PointerEvents with pressure, `pointerrawupdate` before each `pointermove` as Chromium does) is stored and painted and the wet canvas is clear afterwards; a highlighter stroke is stored; the eraser removes a stroke; the page navigator opens and its first thumbnail loads; the toolbar fits the width without sideways overflow with touch targets of at least 40 px, the eraser options popover (mode, filter, colour swatch, size) and the pen options (colour, width) work and keep drawing out of the page (a pen over the popover and a tap outside it write nothing; Escape closes it), the current-pen indicator follows the pen; the *All actions* sheet opens inside the view (a bottom sheet under 600 px), is grouped and searchable, a toggle keeps it open and an action closes it; the page indicator opens the page sheet and a paper chip changes the page (one undo step); the quick slots follow the width; the contextual bar follows the context (none, lasso, selection) and its actions work; the radial dial opens on the side button and its colour, width, pen case, favourites and shapes states choose correctly without drawing; no unexpected console error (an injected fault must be logged once as `[notebook] render …`). Then it takes a screenshot (`dev/harness/dist/shots/<scenario>.png`) and checks the **composited** pixels: white paper where the page is, dark ink where the pen wrote.
 
-**Manual: `npm run harness`**, then open `http://localhost:8377/`. URL parameters: `doc=v3|new|pdf` (`pdf`: three pages of a fake PDF, `await harness.checkReading()` runs the reading checks), `theme=light|dark`, `w=…&h=…` (leaf size in CSS px), `lowLatency=1`, `fault=wet|stroke`, `check=1` (writes the JSON report at the bottom right). Use the browser's device toolbar for a tablet or phone viewport with touch. Write with the mouse, or from the console: `await harness.penStroke([[0.3, 0.5], [0.7, 0.5]])` (fractions of the stage), `harness.setTool("highlighter")`, `await harness.check()`.
+**Manual: `npm run harness`**, then open `http://localhost:8377/`. URL parameters: `doc=v3|new|pdf` (`pdf`: three pages of a fake PDF, `await harness.checkReading()` runs the reading checks), `theme=light|dark`, `w=…&h=…` (leaf size in CSS px), `lowLatency=1`, `fault=wet|stroke`, `check=1` (writes the JSON report at the bottom right). Use the browser's device toolbar for a tablet or phone viewport with touch. With `UI_SHOTS=<folder>` set, `npm run harness:check` also saves the main interface states (toolbar, tool options, sheets, selection bar, PDF bar, every radial state) at phone, tablet portrait and landscape and desktop size. From the console: `await harness.openMore()`, `harness.openPageSheet()`, `harness.selectFirstStroke()`, `harness.radialState("color")`, `harness.closeAll()`. Write with the mouse, or from the console: `await harness.penStroke([[0.3, 0.5], [0.7, 0.5]])` (fractions of the stage), `harness.setTool("highlighter")`, `await harness.check()`.
 
 What it cannot show: how the Android WebView and its GPU compose the canvases (a `desynchronized` canvas can be promoted to a hardware overlay there, which desktop Chromium does not do), real S Pen events (timing, coalesced and predicted samples, the eraser button, palm contacts), Obsidian's own CSS, themes and snippets, and the Vault on a device. Those stay in the manual protocol.
 
@@ -588,12 +607,239 @@ Results table for steps 1 to 134 (PL1 to PL8 have their own rows after the last 
 | PL6 Handwritten brackets | | | |
 | PL7 Companion note | | | |
 | PL8 No interference | | | |
+| T1 Timetable editor: add two classes (one on odd weeks, one with a term and a room, one linked to a course folder), save, reopen: values are kept; `Notebooks/_timetable.json` exists and is readable | | | |
+| T2 Open Obsidian (or the library) during a class: notice with *Open lecture page*; tap it: the course's notebook opens with a new page headed "<course> — <date>"; do it again: the existing page is shown, no second page | | | |
+| T3 Turn on *Open it without asking*, restart during a class: the notebook opens on the new lecture page by itself; turn it off and the notice returns (once per class and day) | | | |
+| T4 During a class, *New lecture* in a linked notebook has the course filled in; in an unrelated linked notebook it shows the notebook name | | | |
+| T5 Library shows *Now: <course>* during a class (also a few minutes before, per the lead setting) and nothing outside classes; tapping it opens the lecture page | | | |
+| T6 Edit `_timetable.json` by hand (also from another device through sync), including a deliberate mistake: a good edit is picked up; a bad file is reported in the editor and is not overwritten | | | |
+| S1 Open side by side (tablet sideways) | | | |
+| S2 Phone and tablet upright | | | |
+| S3 Add a notes page for a slide | | | |
+| S4 Follow both ways | | | |
+| S5 Link and unlink | | | |
+| S6 Links survive restarts and renames | | | |
+| S7 Notebook with PDF backgrounds as the PDF side | | | |
+| S8 Damaged links file | | | |
+
+### Lecture pack (wave 0.6)
+
+K1. **Lecture from slides, slide + notes right.** Library → *New lecture from slides* (or the command). Choose a slides PDF from the vault, then from the device. In the dialog leave the course as proposed, set today, header *Header page before the slides*, layout *Slide with notes on the right*, notes paper *Ruled*. Expected: the notebook "<course> <date>" appears in the folder and opens; page 1 is the header page ("Course — date"); the next pages show one slide each in the left part with ruled lines to its right; the slide is not stretched; writing in the notes area and on the slide works and stays where it was written after reopening.
+K2. **Notes below.** Same with *Slide with notes below* and header *Header text on the first page*: the text sits below the first slide; no header page. Rotate the tablet: pages refit.
+K3. **On the slide.** Layout *On the slide*, header *No header*: the pages are the slides at their own size, as with *Import PDF*.
+K4. **Notes page after every slide.** Turn on *Notes page after every slide* with paper *Millimetre* (also combined with a notes layout): after each slide page there is a blank millimetre page of the same size. Count the pages: twice the slides (plus the header page).
+K5. **Insert PDF with layout.** In an existing notebook, page menu → *Insert PDF*, choose a PDF and a range: a layout dialog follows (the last choice is proposed; Enter confirms). Pick a layout with notes and notes pages: the pages are inserted after the current page; one undo removes all of them; the PDF is not copied again if it was already imported (check the assets folder).
+K6. **Cancel.** Cancel at each dialog (file choice, setup, range, layout): nothing is created or inserted, and cancelling the setup dialog of a new lecture leaves no PDF in the assets folder.
+K8. **Exercise page here.** On a slide page with a notes area, tap … in the toolbar → *Exercise page here* (also page menu and the command): a blank grid page as large as the whole slide page appears right after it and is shown; one undo removes it. *Exercise page paper…* (page menu) changes the paper to millimetre: the next exercise page uses it, also after restarting Obsidian.
+K7. **Large deck on the tablet.** Import a deck of 60+ slides with notes on the right: the progress message appears and the notebook opens; scrolling and zoom stay smooth.
+
+| Step | Device / Obsidian version | Result | Notes |
+|---|---|---|---|
+| K1 Slide + notes right | | | |
+| K2 Notes below, header text | | | |
+| K3 On the slide | | | |
+| K4 Notes page after every slide | | | |
+| K5 Insert PDF with layout | | | |
+| K6 Cancel | | | |
+| K7 Large deck | | | |
+| K8 Exercise page here | | | |
+| G1 Finger taps | | | |
+| G2 Scribble to erase | | | |
+| G3 Auto-scroll | | | |
+| G4 Side button: lasso | | | |
+| G5 Side button: previous tool | | | |
+| G6 Defaults | | | |
+| L1 Library trash: move to trash | | | |
+| L2 Library trash: restore (original place, free name) | | | |
+| L3 Delete permanently and empty trash | | | |
+| L4 Trash auto-empty | | | |
+| L5 Trash is invisible to library, search, companion notes, conflicts | | | |
+| L6 Trash through sync | | | |
+| L7 Deleted pages: list and restore | | | |
+| L8 Save page as template | | | |
+| L9 New page from template | | | |
+| L10 New notebook from template | | | |
+
+### Library trash, page trash and templates (wave 0.6)
+
+L1. **Move to trash.** In the library, delete a notebook (card menu) and a non-empty folder. Expected: a confirmation that says it can be restored; both disappear from the library and from search; the notebook tab, if open, closes; in the file explorer they are under `Notebooks/_trash/items/<id>/` with a `meta.json`.
+L2. **Restore.** Library sidebar → *Trash*. Restore the notebook: it returns to its folder and opens with all pages and ink. Create a new notebook with the same name, trash the first one again and restore it: expected the name `<name> 2`. Restore the folder: its notebooks are back inside it.
+L3. **Delete permanently and empty.** In *Trash*, *Delete permanently* on one item: a confirmation first, then it is gone (or in the system trash, per Obsidian's *Deleted files* setting). *Empty trash*: confirmation, then everything goes. Cancel both once and check nothing was deleted.
+L4. **Auto-empty.** Setting *Empty the trash automatically* = 1 day, trash a notebook, set the device clock two days ahead (or change `deletedAt` in `meta.json` to an old time), restart Obsidian. Expected: the item is removed; with the setting at 0 nothing is ever removed.
+L5. **Trash is invisible.** With companion notes on, trash a notebook: no companion note is created inside `_trash`; the existing note stays. Trashed notebooks do not appear in *Open notebooks*, search, or *Move to notebook*. A copy named `Name (1)` made by Google Drive inside `_trash` produces no merge notice.
+L6. **Sync.** Trash a notebook on one device, let Google Drive / OneDrive sync, open the library on the other device. Expected: the notebook is gone from the library there and listed in *Trash*; restore on that device works.
+L7. **Deleted pages.** Delete a page from the page menu, fully close Obsidian and reopen the notebook. Page menu → *Deleted pages...*: the page is listed with a thumbnail. *Restore*: it comes back after the page that preceded it; *Undo* removes it again and it is listed again. Delete a page that has a PDF background or an image and restore it: the background shows.
+L8. **Save as template.** On a page with ink, text and a ruled A5 paper choose *Save page as template...*, name it. Expected: a notice, and a `.notebook` file in the templates folder (default `Notebooks/_templates/`).
+L9. **Page from template.** Page menu → *New page from template...*: the gallery shows the built-in templates and yours with thumbnails; *Use* adds a page after the current one with the same content, paper and size; one *Undo* removes it. Do it twice: both pages are independent.
+L10. **Notebook from template.** *New notebook* dialog → *Template* → *Choose...* → pick one → *Create*. Expected: the notebook opens with the template's pages. *Clear* goes back to the paper and size choices. Delete one of your templates from the gallery: it disappears and the file goes to the Obsidian trash.
+
+| O1 Ink follows an image | | | |
+| O2 Ink follows a text box | | | |
+| O3 Setting off | | | |
+| O4 Delete an object with ink | | | |
+| O5 Undo before taking the offer | | | |
+| O6 Built-in stamps | | | |
+| O7 Save a stamp | | | |
+| O8 Stamp with image and text | | | |
+| O9 Rename and delete a stamp | | | |
+| O10 Palette on a phone and with a finger | | | |
+| A1 Shared tags | | | |
+| A2 Tags and the companion note you edit | | | |
+| A3 Tag editor hint | | | |
+| A4 API: create, pages, info | | | |
+| A5 API: images and PDF | | | |
+| A6 API: errors and safety | | | |
+| Z1 Cards | | | |
+| Z2 Slip-box | | | |
+| Z3 Drawn links | | | |
+| Z11 Title and transcription | | | |
+| Z12 Regions and container | | | |
+| R1 Search the PDF text | | | |
+| R2 Search on a big PDF | | | |
+| R3 Snapping highlighter | | | |
+| R4 Hide annotations | | | |
+| R5 Dim background | | | |
+| V1 Outline and coloured bookmarks | | | |
+| V2 Page tags | | | |
+| V3 Last position across devices | | | |
+| V4 New papers | | | |
+| X1 Safe mode after a crash | | | |
+| X2 Open normally | | | |
+| X3 Two failures | | | |
+| X4 Not a failure | | | |
+| X5 Storage full | | | |
+| X6 Storage full while closing | | | |
+| X7 Rolled back by sync | | | |
+| X8 No false alarm | | | |
+| X9 Check notebooks integrity | | | |
+| Q1 Page switcher: search | | | |
+| Q2 Page switcher: thumbnails | | | |
+| Q3 Recent pages: log | | | |
+| Q4 Recent pages: library | | | |
+| Q5 Go to page number | | | |
+| Q6 Page indicator tap | | | |
+
+### Resilience (wave 0.7: safe mode, storage full, integrity)
+
+Not verified on a device. Fill in the result table at the end of this file.
+
+X1. **Safe mode after a crash.** Open a big notebook and, while it is still opening (before the page shows), kill Obsidian from the recent apps (or force-stop it in the Android settings). Open the same notebook again. Expected: the *Safe mode* banner; the page panel has no thumbnails; writing works (without low-latency ink); PDF or image backgrounds appear a moment after the ink. No companion note is written while it is open.
+X2. **Open normally.** In the safe-mode banner tap *Open normally*. Expected: the notebook reopens without the banner, with thumbnails; close and reopen it: still normal.
+X3. **Two failures.** Repeat X1 twice in a row (kill during the normal open, then kill during the safe open). Expected: the banner says it failed twice and *Repair…* is highlighted; *Repair…* opens the integrity report of this notebook with *Open* and *Restore a version…*.
+X4. **Not a failure.** Open a notebook and switch to another app at once, or close the tab right away; reopen it. Expected: no safe mode.
+X5. **Storage full.** Fill the device storage (large video or a big file copied until the system says the storage is full), then write a few strokes. Expected: within a few seconds the red *Not saved* banner says the storage is full; the strokes stay on the page; the next attempt time moves further out (5 s, 10 s, 20 s… up to a minute). Free some space and tap *Retry now* (or wait). Expected: the banner goes, a notice says saving works again; close and reopen: all strokes are there and the file opens normally (not damaged).
+X6. **Storage full while closing.** As X5 but close the notebook tab while the banner is shown, free space, reopen. Report what was kept (the strokes may be in the journal or an `unsaved` backup) and whether any file in `Notebooks/` became unreadable.
+X7. **Rolled back by sync.** On device A write in a notebook, wait for the sync, close it. Write more on A, sync. With the sync app's version history (Google Drive / OneDrive web *Manage versions*), put the older version back; let it reach A and open the notebook there. Expected: the *Unexpected change on disk* banner with the two dates, *Restore a version…* and *Keep this version*. Repeat with the notebook open on A (not editing): the banner also offers *Restore the newer version*, which brings the newer strokes back as one undo step; a backup `… integrity ….bak` exists in `Notebooks/_backup/`.
+X8. **No false alarm.** Edit the notebook on device B (also with B's clock a few minutes behind), and change tags or the favourite from the library on B with the notebook closed. Open it on A. Expected: no banner, in every case. Restore a snapshot with *Restore a previous version* on A: no banner.
+X9. **Check notebooks integrity.** Run the command. Expected: a progress line, then a summary; a notebook made unreadable on purpose (truncate a copy of a `.notebook` file in a text editor) is listed with *Repair…*; deleting a PDF from `Notebooks/_assets/` lists *The file of … is missing* for the notebooks using it.
 
 Benchmark output (step 21): paste it here.
 
 ```
 (paste results)
 ```
+
+### Objects wave 0.6 (ink on objects, stamps)
+
+Not verified on a device. Fill in the result table at the end of this file.
+
+- **O1. Ink follows an image.** Insert an image, write a few words over it with the pen, switch to the lasso and tap the image (or lasso it). Drag it, then scale it with the bottom-right handle and rotate it with the top handle. Expected: the words move, scale and rotate with the picture and stay on it; one undo step puts everything back. Words written next to the image stay where they were.
+- **O2. Ink follows a text box.** Same with a text box (text boxes move and scale but do not rotate). Expected: ink written over the text moves with it.
+- **O3. Setting off.** Turn off *Ink follows objects* in the settings and move the image again. Expected: only the image moves; the ink stays.
+- **O4. Delete an object with ink.** Select an image that has ink on it and delete it. Expected: a notice says how many strokes were written on it, with *Delete the ink too*. Ignore it: the ink stays. Repeat and tap the button: the ink goes, and one undo brings it back; a second undo brings the image back.
+- **O5. Undo before taking the offer.** Delete an image with ink, press undo, then tap *Delete the ink too* in the notice. Expected: nothing happens (the image is back).
+- **O6. Built-in stamps.** More menu → *Stamps*. Tap *Checkmark*: a checkmark appears in the middle of the page in the current pen colour and width and is selected; move it. Drag *Star* onto another place. Expected: it lands where the finger or pen was lifted. Undo removes it.
+- **O7. Save a stamp.** Write a small signature, select it with the lasso, open *Stamps* and tap the save button, name it. Expected: it appears under *My stamps*; the file `Notebooks/_stamps/<name>.stamp` exists. Tap it on another page and in another notebook.
+- **O8. Stamp with an image and text.** Select an image and a text box together, save as a stamp, delete the originals, place the stamp. Expected: both come back; the image uses the same file in `_assets/` (no copy).
+- **O9. Rename and delete a stamp.** Use the pencil and trash buttons on a stamp. Expected: the name changes in the palette and the file; delete asks first and moves the file to the trash; notebooks that used the stamp are unchanged.
+- **O10. Palette on a phone and with a finger.** Open the palette on a narrow screen. Expected: it fits, the list scrolls vertically, a sideways drag from a tile onto the page places the stamp. Report whether a vertical or diagonal drag scrolls the list instead of dragging.
+
+### Interface redesign (ui redesign)
+
+Not verified on a device. Fill in the table after the steps.
+
+- **U1. Toolbar on the tablet.** Open a notebook on the tablet in portrait, then landscape. Expected: portrait has two rows (tools; undo/redo, current pen, favourites, 4-5 quick actions, page "1 / n", save dot, ⊞); landscape has one row with up to six quick actions. Nothing is cut off; every button reacts to the S Pen and to a finger.
+- **U2. Quick actions learn.** Use *Fit to width* from the ⊞ sheet five times. Expected: after a while it appears among the quick actions; *Recent* in the sheet lists the actions you use. Close and reopen Obsidian: the order is kept (local to the device).
+- **U3. All actions sheet.** Tap ⊞. Expected: a sheet grouped in sections (Insert, Page, …) with a search field; typing "stamp" or "timbro" (Italian UI) finds *Stamps*; the keyboard does not pop up by itself. *Ruler* toggles with a switch and the sheet stays open; *Insert image* closes it. A tap on the page closes the sheet and draws nothing. On a phone it is a bottom sheet within thumb reach.
+- **U4. Page sheet.** Tap the page indicator "2 / 5". Expected: the first section *Go to* (*Go to page number…*, *Recently edited pages*, *One page at a time*), then *Page 2* actions (duplicate, move, bookmark, tags, paper and size chips, turn, infinite, …, delete). Tap *Dotted*: the page changes at once and one undo restores it. Open the pages panel and use a thumbnail's menu: the same sheet opens for that page.
+- **U5. Selection bar.** Select ink with the lasso. Expected: a pill at the bottom with *Selection*, copy, cut, duplicate, paste, save as stamp, delete, and the colour/width rows above it; with an image selected also *Make white transparent*. The chevron collapses it to one round button, which opens it again. With the lasso and nothing selected only *Paste* is offered.
+- **U6. PDF page and side by side.** Scroll to a PDF page. Expected: the bar shows *PDF page* with search, hide annotations, dim, margins and *Open PDF side by side*; on a plain page it disappears. Open a PDF side by side: the bar shows link, add notes page, show slide and close.
+- **U7. Class now.** With a class of the timetable on now, open a notebook. Expected: the bar shows *Class now* with new lecture, board shot and exercise page.
+- **U8. Radial dial.** Press the S Pen button over the page. Expected: a dark dial at the nib with the pen drawn in the middle, undo/redo at the top, the width dot on the left and the colour on the right, and favourites · tool · shapes at the bottom. Releasing the button over undo undoes (flick); nothing is drawn while it is open; Escape or a tap outside closes it.
+- **U9. Dial colours and width.** Tap the colour bubble: 12 colours around the ring; pick one (the dial goes back, the pen uses it). Tap the rainbow button: the system colour picker opens. Tap the pipette and then a coloured stroke on the page: the pen takes that colour and nothing is drawn. Tap the width bubble and drag along the arc: the number and the dots follow; the pen writes with the new width.
+- **U10. Pen case and favourites.** Tap the pen in the middle: the tools drawn as pens with a stroke preview; tap the highlighter (the dial closes, the highlighter is active). Open it again, tap "+": the six favourites pulse; tap one to save the current pen there; the toolbar strip shows it.
+- **U12. Go to and banners.** Tap the page indicator, then *Go to page number…*, type `p3`: page 3 opens. Toggle *One page at a time* from the same sheet: pages turn with a swipe and the toggle shows a switch. Open a very large page: the heavy-page banner offers *Split page*; dismiss it and the page sheet still offers *Split page*. *Check sync safety* and *Check notebooks integrity* are in the ⊞ sheet under *Notebooks*.
+- **U11. Themes and accessibility.** Switch Obsidian to the dark theme and to a community theme. Expected: bars, sheets and panels follow the theme colours; the dial stays dark and readable; a black pen dot stays visible on a dark bar. With *Reduce motion* on in Android, nothing animates.
+
+| Step | Device / Obsidian version | Result | Notes |
+|---|---|---|---|
+| U1 Toolbar on the tablet | | | |
+| U2 Quick actions learn | | | |
+| U3 All actions sheet | | | |
+| U4 Page sheet | | | |
+| U5 Selection bar | | | |
+| U6 PDF page and side by side | | | |
+| U7 Class now | | | |
+| U8 Radial dial | | | |
+| U9 Dial colours and width | | | |
+| U10 Pen case and favourites | | | |
+| U11 Themes and accessibility | | | |
+| U12 Go to and banners | | | |
+
+### Level of detail and heavy pages (wave 0.7)
+
+Not verified on a device. Use **Create stress-test notebook** (10,000 strokes, 10 pages) for D1-D3.
+
+- **D1. Zoomed out looks the same.** Open the stress notebook, fit the width, then pinch out until the page is below half of its width on screen. Expected: the handwriting looks the same as before (no jagged or thinner strokes, no strokes missing); pinch back in: the strokes are as smooth as at the start.
+- **D2. Scrolling and zooming out is smooth.** In the same notebook scroll quickly through all pages at about 30 % zoom, and pinch in and out. Expected: no stutter that was not there before; note it as faster, same or slower than 0.5.x if you remember.
+- **D3. Thumbnails.** Open the page panel and the library. Expected: thumbnails of dense pages look right and appear at least as quickly as before.
+- **D4. Warning appears.** Open the stress notebook and make a page heavy (the stress notebook has about 1,000 strokes per page: duplicate a page 3 times and paste its content into one page, or open a notebook with more than 3,000 strokes on one page). Expected: after a moment a bar at the bottom says the page is very large, with *Split page* and *Dismiss*; it does not appear while the pen is writing and does not cover the toolbar.
+- **D5. Split page.** Press *Split page*. Expected: a notice, a new page right after this one with the lower half of the writing (same x positions, starting near the top of the page), the upper half still on this page; undo once puts everything back on one page.
+- **D6. Dismiss.** Press *Dismiss*. Expected: the bar goes away and does not come back for that page until you close the notebook tab; other heavy pages still warn. On a page that shows a PDF the bar has only *Dismiss*.
+
+| Step | Device / Obsidian version | Result | Notes |
+|---|---|---|---|
+| D1 Zoomed out looks the same | | | |
+| D2 Scrolling and zooming out | | | |
+| D3 Thumbnails | | | |
+| D4 Warning appears | | | |
+| D5 Split page | | | |
+| D6 Dismiss | | | |
+### Quick navigation (wave 0.7)
+
+Not verified on a device. Commands: *Go to page…*, *Recently edited pages*, *Go to page number…*.
+
+- **Q1. Page switcher: search.** Have two notebooks, one with a titled bookmark, one with a page tag and a text box. Run *Go to page…* and type: part of a notebook name; `name 3`; `p3`; the bookmark title; the tag; a word from the text box. Expected: each result opens the right notebook at the right page; a page number beyond the notebook is not offered.
+- **Q2. Page switcher: thumbnails.** With many notebooks (including a PDF one) type a common letter. Expected: the list appears at once, thumbnails fill in one after another without freezing typing; closing the dialog stops them.
+- **Q3. Recent pages: log.** Write on page 4 of a notebook, wait 5 seconds, then run *Recently edited pages*. Expected: that page is first, "Edited just now". Only scroll/open another notebook: nothing new is logged.
+- **Q4. Recent pages: library.** Open the library, tap *Recent pages* in the sidebar. Expected: the same list. Rename the notebook, reopen the list: the entry follows the new name; delete it: the entry disappears.
+- **Q5. Go to page number.** In an open notebook run *Go to page number…*, type `7`, then `p7`, then the start of a bookmark title. Expected: each scrolls to the page; `999` offers nothing.
+- **Q6. Page indicator tap.** Tap the "3 / 12" indicator in the toolbar. Expected: the same dialog opens.
+- **Q7. Recent pages after reordering.** Edit page 5, move it to position 2, open it from the list. Expected: the page that was edited opens (found by id).
+- **Q8. Not synced.** Check that no new file appeared in the vault or the plugin folder because of the recent pages (the log is in device-local storage only).
+### Sync safety (wave 0.7)
+
+Not verified in Obsidian or on a device. Needs two devices syncing the same vault through Google Drive or OneDrive (for example Autosync or FolderSync on Android) unless said otherwise.
+
+- **Y1. Open on another device.** Open a notebook on device A, wait for the sync app to upload `Notebooks/_meta/presence/`, sync device B and open the same notebook there. Expected: a banner above the page on B names device A and how long ago it was active, with *Open read-only* and *Open anyway*; the page can be used meanwhile. On A, nothing changes (or, if B's file arrives while A is open, the banner appears on A too).
+- **Y2. Read-only.** On B tap *Open read-only*. Expected: the toolbar is disabled, the pen does not write, nothing is saved (the file's modification time does not change); *Edit anyway* enables editing again. *Open anyway* instead only hides the banner.
+- **Y3. Heartbeat stops in the background and the file goes on close.** On A, put Obsidian in the background for 5 minutes, then check (file manager or the other device) that the presence file's time did not change; bring it back: it is refreshed at once. Close the notebook on A: the file disappears (and, after syncing, from B). Kill Obsidian on A with a notebook open, restart it: its own leftover file is removed at startup. No `(1)` or conflict copy of any file in `_meta` appears on either device.
+- **Y4. Device name.** *Settings, Device name*: change it on A, reopen the notebook on A. Expected on B (after syncing): the banner shows the new name. The name is not in the plugin's `data.json`.
+- **Y5. Asset waiting for sync.** On A, insert an image and import a PDF into a notebook; on B, let the sync app download the notebook but not `_assets` (pause it, or delete the asset file on B only). Open the notebook on B. Expected: a dashed "Waiting for sync…" card where the image is, "Waiting for sync: <name>" on the PDF page, no error notice, and the page can still be written on. Resume syncing: the image and PDF appear by themselves without reopening.
+- **Y6. Not downloaded yet.** Make a notebook file 0 bytes on B (an online-only file of the sync app, or create an empty `Test.notebook` with a file manager). Expected: the library card says *Not downloaded yet*; opening it shows *Not downloaded yet* (no *Repair…* button), the status says *Not downloaded*; the command *Repair damaged notebook* says it is not damaged; no `.bak` is created in `_backup`. Then put the real content in the file (let the sync app download it, or copy a notebook over it): it opens by itself within a few seconds, in the library too.
+- **Y7. Sync check.** Command *Check sync safety* (also in the settings). Create `Notebooks/What?.notebook` (on Windows, or with a file manager that allows it), a 15 MB PDF in a notebook, and two notebooks named `Notes` and `notes` (on a case-sensitive device). Expected: each is listed with a clear explanation; the dialog says whether other devices were seen in this folder and what cannot be checked. Restart Obsidian: a notice appears once; restart again with nothing changed: no notice.
+- **Y8. Folder excluded.** Set the notebooks folder to `.obsidian/Notebooks` (or a hidden folder) in the settings and run the check. Expected: the first line explains that this folder is often not synced. Set it back.
+
+| Step | Device | Result | Notes |
+|---|---|---|---|
+| Y1 Open on another device | | | |
+| Y2 Read-only | | | |
+| Y3 Heartbeat, close, leftovers | | | |
+| Y4 Device name | | | |
+| Y5 Asset waiting for sync | | | |
+| Y6 Not downloaded yet | | | |
+| Y7 Sync check | | | |
+| Y8 Folder excluded | | | |
 
 ## Quick check — Windows
 
@@ -624,4 +870,6 @@ Mouse: draw, erase (both modes), undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scr
 - Notebooks are invisible to Obsidian search, tags, backlinks and graph unless *Companion notes* is on (off by default); the companion note carries the text boxes, not the handwriting (no OCR yet).
 - Companion notes: a note the user moved is found by its `notebook-id`, but deleting that property makes the plugin create a new note; changing the location or name setting does not move existing notes; a companion folder inside the notebooks folder shows in the library sidebar.
 - Library trash, page trash and templates are not verified in Obsidian or on Android (steps 82-91). Trashed items move with `vault.rename`, so notes that linked to a trashed notebook show a broken link until it is restored. Permanent deletion follows Obsidian's *Deleted files* setting. The page trash keeps the 50 most recent pages per notebook for 30 days (fixed limits); it is not synced into the notebook, only through one vault file per deleted page under `_trash/pages/<notebook id>/`, so two devices deleting pages at the same time keep both. Page trash and template thumbnails do not draw PDF or image backgrounds. A folder named `_trash`, `_templates` or `_meta` directly under the notebooks folder is hidden from the library. A trashed folder that holds files other than notebooks is never emptied automatically.
+- Library trash, page trash and templates (wave 0.6) are not verified in Obsidian or on Android (steps L1-L10). Trashed items move with `vault.rename`, so notes that linked to a trashed notebook show a broken link until it is restored. Permanent deletion follows Obsidian's *Deleted files* setting. The page trash keeps the 50 most recent pages per notebook for 30 days (fixed limits); it is not synced into the notebook, only through the vault file `_trash/pages/<notebook id>.json`, and two devices deleting pages at the same time can overwrite each other's entries. Page trash and template thumbnails do not draw PDF or image backgrounds. A folder named `_trash` or `_templates` directly under the notebooks folder is hidden from the library.
+- Level of detail and heavy pages (wave 0.7) are not verified in Obsidian or on Android (steps D1-D6). The level of detail applies to committed strokes only (not to the stroke being written or to a floating selection) and switches when a redraw runs after the zoom settles, so a pinch shows the old bitmap scaled until then, as before. The heavy page limits (3,000 strokes, 120,000 points, 20 MB of images) are fixed; the split moves whole strokes, so a stroke that crosses the cut goes to the side of its middle.
 - PDF reading tools: the search and the snapping highlighter need the PDF's text layer (scanned PDFs have none), positions inside a long line of text are estimated from the font's character widths and can be a few points off, rotated and vertical text is not snapped, and the search lists at most 500 matches. Dimming and hiding annotations are view settings: exports, thumbnails and embeds are not affected.

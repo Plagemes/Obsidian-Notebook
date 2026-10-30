@@ -10,6 +10,7 @@ import { visiblePages, type Layout, type PageBox } from "./layout";
 import { rulerEdge, rulerTicks, type Ruler } from "./ruler";
 import { inkPath, type InkBuilder } from "./ink-geometry";
 import { HIGHLIGHTER_ALPHA, strokePath } from "./stroke-shape";
+import { addLodNodesPath, lodLevel, lodNodes, lodPolygon } from "./lod";
 import { WetInk, type PageTransform } from "./wet-ink";
 import { ErrorOnce } from "./errors";
 import type { SpacePreviewEntry } from "./space";
@@ -149,6 +150,8 @@ export interface RenderStats {
 	/** Strokes drawn in the last full static redraw (after page and bounds culling). */
 	strokesDrawn: number;
 	pagesDrawn: number;
+	/** Level of detail of the last full static redraw: 0 = exact strokes, 1..4 = simplified (see ink/lod.ts). */
+	lodLevel: number;
 }
 
 /**
@@ -167,7 +170,7 @@ export class Renderer {
 	wetCanvas: HTMLCanvasElement;
 	/** The pen's wet canvas has a desynchronized context. */
 	desynchronized = false;
-	readonly stats: RenderStats = { staticMs: 0, strokesDrawn: 0, pagesDrawn: 0 };
+	readonly stats: RenderStats = { staticMs: 0, strokesDrawn: 0, pagesDrawn: 0, lodLevel: 0 };
 	/** Called after each animation frame that drew something (for the performance overlay). */
 	onFrame: ((frameStart: number) => void) | null = null;
 
@@ -220,6 +223,11 @@ export class Renderer {
 	private readonly wetRelease: Array<{ wet: WetInk; frames: number }> = [];
 
 	private readonly paths = new WeakMap<Stroke, Path2D>();
+	/** Paths of strokes drawn from simplified points, per LOD level (drawing cache only, see ink/lod.ts). */
+	private readonly lodPaths = new WeakMap<Stroke, Array<Path2D | null | undefined>>();
+	/** Level of detail for committed strokes: set by each full static redraw from the zoom. */
+	private lod = 0;
+	private lodEnabled = true;
 	private readonly bounds = new WeakMap<Stroke, BBox>();
 
 	constructor(container: HTMLElement, options: RendererOptions = {}) {
@@ -346,6 +354,13 @@ export class Renderer {
 		this.invalidate();
 	}
 
+	/** Turns the level of detail for zoomed-out strokes on or off (on by default; off only to compare in benchmarks). */
+	setLodEnabled(enabled: boolean): void {
+		if (this.lodEnabled === enabled) return;
+		this.lodEnabled = enabled;
+		this.invalidate();
+	}
+
 	/** Full redraw of the static layer on the next frame. */
 	invalidate(): void {
 		this.staticDirty = true;
@@ -376,7 +391,7 @@ export class Renderer {
 		this.beginPage(ctx, box);
 		let drawn = true;
 		try {
-			this.fillStroke(ctx, stroke);
+			this.fillStroke(ctx, stroke, this.lod);
 		} catch (e) {
 			this.fault(ctx, "stroke", e);
 			drawn = false;
@@ -680,6 +695,7 @@ export class Renderer {
 		}
 		this.staticDirty = false;
 		this.drawnViewport = this.viewport;
+		this.lod = this.lodEnabled ? lodLevel(this.viewport.scale, this.dpr) : 0;
 		this.staticCanvas.setCssStyles({ transform: "" });
 		const ctx = this.staticCtx;
 		this.resetIfFaulted(ctx);
@@ -724,7 +740,7 @@ export class Renderer {
 						// the wet-ink curve may pass slightly outside its points.
 						const m = stroke.width * 0.3 + 1;
 						if (b.maxX + m < visible.minX || b.minX - m > visible.maxX || b.maxY + m < visible.minY || b.minY - m > visible.maxY) continue;
-						this.fillStroke(ctx, stroke);
+						this.fillStroke(ctx, stroke, this.lod);
 						strokesDrawn++;
 					} catch (e) {
 						this.fault(ctx, "stroke", e);
@@ -738,6 +754,7 @@ export class Renderer {
 		this.stats.staticMs = performance.now() - t0;
 		this.stats.strokesDrawn = strokesDrawn;
 		this.stats.pagesDrawn = indices.length;
+		this.stats.lodLevel = this.lod;
 	}
 
 	/**
@@ -1011,20 +1028,59 @@ export class Renderer {
 		}
 	}
 
-	private fillStroke(ctx: CanvasRenderingContext2D, stroke: Stroke): void {
-		let path = this.paths.get(stroke);
-		if (!path) {
-			if (stroke.render === RENDER_INK) {
-				path = new Path2D();
-				inkPath(path, stroke.points, stroke.width, stroke.tool);
-			} else {
-				path = new Path2D(strokePath(stroke.points, stroke.width, true, stroke.tool));
-			}
-			this.paths.set(stroke, path);
-		}
+	/** `lod` > 0: the path comes from simplified points (committed strokes of a zoomed-out view only; 0 = exact). */
+	private fillStroke(ctx: CanvasRenderingContext2D, stroke: Stroke, lod = 0): void {
+		const path = (lod > 0 ? this.lodPath(stroke, lod) : null) ?? this.exactPath(stroke);
 		this.setInk(ctx, stroke.tool, stroke.color);
 		ctx.fill(path);
 		if (stroke.tool === "highlighter") this.setInk(ctx, "pen", stroke.color);
+	}
+
+	private exactPath(stroke: Stroke): Path2D {
+		let path = this.paths.get(stroke);
+		if (!path) {
+			path = this.buildPath(stroke, stroke.points);
+			this.paths.set(stroke, path);
+		}
+		return path;
+	}
+
+	/** The stroke's path at a level of detail, or null when the exact path is to be used (remembered either way). */
+	private lodPath(stroke: Stroke, lod: number): Path2D | null {
+		let perLevel = this.lodPaths.get(stroke);
+		if (!perLevel) this.lodPaths.set(stroke, (perLevel = []));
+		let path = perLevel[lod];
+		if (path === undefined) {
+			path = this.buildLodPath(stroke, lod);
+			perLevel[lod] = path;
+		}
+		return path;
+	}
+
+	private buildLodPath(stroke: Stroke, lod: number): Path2D | null {
+		if (stroke.render === RENDER_INK) {
+			const nodes = lodNodes(stroke.points, stroke.width, stroke.tool, lod);
+			if (!nodes) return null;
+			const path = new Path2D();
+			addLodNodesPath(path, nodes);
+			return path;
+		}
+		const xy = lodPolygon(stroke.points, stroke.width, stroke.tool, lod);
+		if (!xy) return null;
+		const path = new Path2D();
+		path.moveTo(xy[0]!, xy[1]!);
+		for (let k = 2; k < xy.length; k += 2) path.lineTo(xy[k]!, xy[k + 1]!);
+		path.closePath();
+		return path;
+	}
+
+	private buildPath(stroke: Stroke, points: readonly Point[]): Path2D {
+		if (stroke.render === RENDER_INK) {
+			const path = new Path2D();
+			inkPath(path, points, stroke.width, stroke.tool);
+			return path;
+		}
+		return new Path2D(strokePath(points, stroke.width, true, stroke.tool));
 	}
 
 	/** Visible area in document coordinates. */
