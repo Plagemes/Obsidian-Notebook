@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+No document format change. Not verified on Android hardware. The manual steps are numbered 475 to 489 in `docs/testing.md` (renumbered at merge).
+
+### Added
+- **Read-only mode** (roadmap 51; steps 475-481). *Read-only mode* (All actions → View & input, command) switches the open notebook view to read-only: the pen, a finger and the mouse never write, erase or edit, no tool can be chosen, undo and redo do nothing, and nothing can be inserted, pasted, deleted or reordered (the history itself refuses to run commands, as a last guard). Scrolling, zooming, the page panel, links, search, page-by-page mode and exports keep working; a finger always pans and zooms, and a tap on a link opens it. A lock button in the toolbar shows the mode (it replaces the pen indicator and the favourite pens, which cannot be used) and switches it off with one tap. It is a view state only: nothing is stored in the file, nothing is written or backed up, and it ends when the notebook is closed. Whatever was being written is finished and saved normally just before it switches on. It reuses the view's existing read-only path (the same "not editable" state as the other-device banner and hidden PDF annotations) but is independent of them.
+- **Export all pages as PNG images** (roadmap 81; steps 482-484, 488). *Export…* has a new format, *PNG images* (also *Export pages as PNG images…* in the All actions sheet and the notebook menu, and a command): one PNG per page in a vault folder (suggested: *Notebook (PNG)* next to the notebook, created when missing), at a scale of 1x to 4x (1x = 72 dpi; very large pages are drawn smaller, as in the Markdown export), with the same *Contents* choice as the other formats (ink only gives transparent images). Files are named by the real page number (`page-003.png`) and a name that exists gets " 2", " 3"…; nothing is replaced and nothing is deleted when it fails.
+- **Page ranges** (roadmap 81). The *Export…* dialog has *Some pages…* for every format: type pages like `1-3, 5, 8-`; a page that does not exist is refused with a message instead of being skipped. A PDF of a range is named `Name p2-4.pdf`, an SVG range is one file per page.
+- **Print** (roadmap 81; steps 485-487). *Export…* → Print (also *Print…* in the All actions sheet, the notebook menu and the command palette) draws the chosen pages like the PNG export, puts them one per sheet in a container that is only visible when printing, and opens the system print dialog; there you can also save as PDF. Pages are scaled to the sheet; a very long infinite page flows over several sheets. Nothing is written to the vault. Printing exists on desktop only: on a phone or tablet, which have no print dialog, the *Print…* actions and the format are hidden (use PNG or PDF export instead).
+
+### Changed
+- The page drawing of the Markdown export moved to a shared module (`view/page-images.ts`) used by the PNG export and printing; its output is unchanged, except that a picture that cannot be loaded now counts in the "images could not be included" notice too.
+
 ## 0.9.0 — 2026-10-30
 
 Not yet verified on Android hardware, or in Obsidian with its maths engine (the browser harness uses a stand-in for MathJax). The manual steps added in this version are numbered 233 to 274 in `docs/testing.md`; the ones that belong to each area are named below.
