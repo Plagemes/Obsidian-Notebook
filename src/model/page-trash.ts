@@ -1,23 +1,30 @@
 /**
  * Page trash (roadmap #26): deleted pages that stay recoverable after the session ends. Pure, no Obsidian.
  *
- * This is NOT part of the notebook format. Each notebook has one JSON file in the plugin trash folder
- * (storage/trash-paths.ts); an entry holds the deleted page as a one-page notebook document (so it is
- * validated and migrated by the normal reader) together with the asset records it needs. The assets
- * themselves stay in `_assets/` and are referenced by id, as in the notebook.
+ * This is NOT part of the notebook format. Every entry is one small JSON file of its own in the plugin trash folder
+ * (`_trash/pages/<notebook id>/<entry id>.json`, see storage/trash-paths.ts), written once and never rewritten, so
+ * two devices that delete pages before they sync never write the same file (a shared, rewritten file would let the
+ * last writer win, or leave a conflicted copy nobody reads). Files of the first layout (one file per notebook holding
+ * every entry, `PageTrashFile`) are still read and moved over entry by entry. An entry holds the deleted page as a
+ * one-page notebook document (so it is validated and migrated by the normal reader) together with the asset records
+ * it needs. The assets themselves stay in `_assets/` and are referenced by id, as in the notebook.
  *
  * Retention: at most `PAGE_TRASH_MAX_ENTRIES` pages per notebook (the oldest go first) and none older than
  * `PAGE_TRASH_RETENTION_DAYS` days. The limits are applied each time a page is added.
  * Entries are kept as raw JSON; one that no longer validates is never rewritten or dropped except by those limits.
  */
 import { cloneMeta, createId } from "./document";
-import { AddAsset, AddPage, Batch, type Command } from "./history";
+import { copyBookmarkInfoMap } from "./bookmarks";
+import { AddAsset, AddPage, Batch, SetMeta, type Command } from "./history";
 import { duplicatePage } from "./pages";
 import { parse, serialize } from "./serialize";
 import { CURRENT_VERSION, DEFAULT_META, FORMAT_ID, type Asset, type NotebookDocument, type Page } from "./types";
 
 export const PAGE_TRASH_FORMAT = "obsidian-notebook-page-trash";
 export const PAGE_TRASH_VERSION = 1;
+/** One entry per file (the current layout). */
+export const PAGE_TRASH_ENTRY_FORMAT = "obsidian-notebook-page-trash-entry";
+export const PAGE_TRASH_ENTRY_VERSION = 1;
 export const PAGE_TRASH_MAX_ENTRIES = 50;
 export const PAGE_TRASH_RETENTION_DAYS = 30;
 const DAY_MS = 86_400_000;
@@ -47,6 +54,13 @@ export function emptyPageTrash(notebookId: string): PageTrashFile {
 
 export type PageTrashParse = { ok: true; file: PageTrashFile } | { ok: false; message: string };
 
+function parseEntry(e: unknown): PageTrashEntry | null {
+	if (typeof e !== "object" || e === null) return null;
+	const x = e as Record<string, unknown>;
+	if (typeof x.id !== "string" || x.id === "" || typeof x.deletedAt !== "number" || typeof x.index !== "number") return null;
+	return { id: x.id, deletedAt: x.deletedAt, index: x.index, afterPageId: typeof x.afterPageId === "string" ? x.afterPageId : null, document: x.document };
+}
+
 export function parsePageTrash(text: string): PageTrashParse {
 	let raw: unknown;
 	try {
@@ -61,12 +75,64 @@ export function parsePageTrash(text: string): PageTrashParse {
 	if (typeof r.notebookId !== "string" || !Array.isArray(r.entries)) return { ok: false, message: "malformed page trash file" };
 	const entries: PageTrashEntry[] = [];
 	for (const e of r.entries) {
-		if (typeof e !== "object" || e === null) return { ok: false, message: "malformed entry" };
-		const x = e as Record<string, unknown>;
-		if (typeof x.id !== "string" || typeof x.deletedAt !== "number" || typeof x.index !== "number") return { ok: false, message: "malformed entry" };
-		entries.push({ id: x.id, deletedAt: x.deletedAt, index: x.index, afterPageId: typeof x.afterPageId === "string" ? x.afterPageId : null, document: x.document });
+		const entry = parseEntry(e);
+		if (!entry) return { ok: false, message: "malformed entry" };
+		entries.push(entry);
 	}
 	return { ok: true, file: { format: PAGE_TRASH_FORMAT, version: PAGE_TRASH_VERSION, notebookId: r.notebookId, entries } };
+}
+
+export type PageTrashEntryParse = { ok: true; notebookId: string; entry: PageTrashEntry } | { ok: false; message: string };
+
+/** Text of the file that holds one entry (current layout). */
+export function serializePageTrashEntry(notebookId: string, entry: PageTrashEntry): string {
+	return JSON.stringify({ format: PAGE_TRASH_ENTRY_FORMAT, version: PAGE_TRASH_ENTRY_VERSION, notebookId, entry });
+}
+
+export function parsePageTrashEntry(text: string): PageTrashEntryParse {
+	let raw: unknown;
+	try {
+		raw = JSON.parse(text);
+	} catch (e) {
+		return { ok: false, message: `invalid JSON: ${(e as Error).message}` };
+	}
+	if (typeof raw !== "object" || raw === null) return { ok: false, message: "not a page trash entry" };
+	const r = raw as Record<string, unknown>;
+	if (r.format !== PAGE_TRASH_ENTRY_FORMAT) return { ok: false, message: "not a page trash entry" };
+	if (typeof r.version !== "number" || r.version > PAGE_TRASH_ENTRY_VERSION) return { ok: false, message: "page trash entry written by a newer version" };
+	if (typeof r.notebookId !== "string") return { ok: false, message: "malformed page trash entry" };
+	const entry = parseEntry(r.entry);
+	return entry ? { ok: true, notebookId: r.notebookId, entry } : { ok: false, message: "malformed page trash entry" };
+}
+
+/**
+ * Entries read from several files (entry files, their conflicted copies, files of the first layout), one per id.
+ * Copies of an entry are identical (entry files are never rewritten); if two ever differ, the first one read is kept.
+ */
+export function mergeEntries(lists: ReadonlyArray<readonly PageTrashEntry[]>): PageTrashEntry[] {
+	const byId = new Map<string, PageTrashEntry>();
+	for (const list of lists) for (const e of list) if (!byId.has(e.id)) byId.set(e.id, e);
+	return [...byId.values()];
+}
+
+/**
+ * Ids of the entries that go when the limits are applied: an older entry of a page that was deleted again (the newest
+ * one stays), entries older than the retention, and the oldest beyond the maximum count. Same rules as `addEntry`.
+ */
+export function entriesToDrop(entries: readonly PageTrashEntry[], now: number, max = PAGE_TRASH_MAX_ENTRIES, retentionDays = PAGE_TRASH_RETENTION_DAYS): Set<string> {
+	const newestByPage = new Map<string, PageTrashEntry>();
+	for (const e of entries) {
+		const pageId = entryPageId(e);
+		if (pageId === null) continue;
+		const seen = newestByPage.get(pageId);
+		if (!seen || e.deletedAt > seen.deletedAt || (e.deletedAt === seen.deletedAt && e.id > seen.id)) newestByPage.set(pageId, e);
+	}
+	const unique = entries.filter((e) => {
+		const pageId = entryPageId(e);
+		return pageId === null || newestByPage.get(pageId) === e;
+	});
+	const keep = new Set(pruneEntries(unique, now, max, retentionDays).map((e) => e.id));
+	return new Set(entries.filter((e) => !keep.has(e.id)).map((e) => e.id));
 }
 
 export function serializePageTrash(file: PageTrashFile): string {
@@ -89,9 +155,16 @@ function assetsNeeded(page: Page, doc: NotebookDocument): Record<string, Asset> 
 /** Entry for `page`, which sits at `index` in `doc` (call it before the page is removed). */
 export function makeEntry(doc: NotebookDocument, page: Page, index: number, now: number): PageTrashEntry {
 	const iso = new Date(now).toISOString();
+	// The page's bookmark (v7: with its title, colour and category) travels with it, so a restore brings it back.
+	const meta = cloneMeta(DEFAULT_META);
+	if (doc.meta?.bookmarks.includes(page.id)) {
+		meta.bookmarks = [page.id];
+		const info = doc.meta.bookmarkInfo?.[page.id];
+		if (info) meta.bookmarkInfo = copyBookmarkInfoMap({ [page.id]: info });
+	}
 	const mini: NotebookDocument = {
 		format: FORMAT_ID, version: CURRENT_VERSION, id: createId(), createdAt: iso, modifiedAt: iso,
-		pages: [page], meta: cloneMeta(DEFAULT_META), assets: assetsNeeded(page, doc),
+		pages: [page], meta, assets: assetsNeeded(page, doc),
 	};
 	return {
 		id: createId(),
@@ -185,6 +258,15 @@ export function planPageTrashRestore(doc: NotebookDocument, entry: PageTrashEntr
 	}
 	const pageIndex = restoreIndex(doc, entry);
 	commands.push(new AddPage(page, pageIndex));
+	// The bookmark the page had (under its new id when the ids had to change).
+	if (saved.meta?.bookmarks.includes(source.id)) {
+		const before = cloneMeta(doc.meta ?? DEFAULT_META);
+		const after = cloneMeta(before);
+		if (!after.bookmarks.includes(page.id)) after.bookmarks.push(page.id);
+		const info = saved.meta.bookmarkInfo?.[source.id];
+		if (info) after.bookmarkInfo = { ...(after.bookmarkInfo ?? {}), ...copyBookmarkInfoMap({ [page.id]: info }) };
+		commands.push(new SetMeta(before, after));
+	}
 	return { command: new Batch("Restore deleted page", commands), pageIndex };
 }
 

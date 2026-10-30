@@ -39,6 +39,11 @@ export class GestureInput {
 	private readonly taps = new FingerTapDetector();
 	private readonly scroller: AutoScroller;
 	private readonly contacts = new Set<number>();
+
+	/** True while a finger of a tap or swipe gesture is down. */
+	get touching(): boolean {
+		return this.contacts.size > 0;
+	}
 	private restoreView: (() => void) | null = null;
 	private readonly disposers: Array<() => void> = [];
 

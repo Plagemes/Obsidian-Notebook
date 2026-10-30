@@ -4,7 +4,22 @@ import {
 	expiredIds, isValidTrashId, newTrashId, parseTrashMeta, restorePath, serializeTrashMeta, sortTrash,
 	trashItemFolder, trashItemPath, trashItemsFolder, trashMetaPath, type TrashKind, type TrashMeta,
 } from "./trash-paths";
+import { isNotebookFile } from "./format";
 import { ensureFolder } from "./vault-io";
+
+/** Every file inside `folder` (all levels), split into notebooks and the user's other files (.md, .pdf, images…). */
+export function folderContents(folder: TFolder): { notebooks: TFile[]; others: TFile[] } {
+	const notebooks: TFile[] = [];
+	const others: TFile[] = [];
+	const walk = (f: TFolder) => {
+		for (const child of f.children) {
+			if (child instanceof TFolder) walk(child);
+			else if (child instanceof TFile) (isNotebookFile(child) ? notebooks : others).push(child);
+		}
+	};
+	walk(folder);
+	return { notebooks, others };
+}
 
 /** What the library trash needs from the plugin. */
 export interface TrashHost {
@@ -144,11 +159,22 @@ export class LibraryTrash {
 		return n;
 	}
 
-	/** Auto-empty: deletes the items older than the retention setting. Does nothing when the setting is 0. */
+	/** Vault paths of the files in a trashed folder that are not notebooks (empty for a notebook item). */
+	otherFiles(item: TrashItem): string[] {
+		if (item.kind !== "folder") return [];
+		const folder = this.app.vault.getFolderByPath(item.trashPath);
+		return folder ? folderContents(folder).others.map((f) => f.path) : [];
+	}
+
+	/**
+	 * Auto-empty: deletes the items older than the retention setting. Does nothing when the setting is 0. A folder that
+	 * holds files other than notebooks (the user's notes, PDFs, images) is never emptied automatically: only an explicit
+	 * "Delete permanently" or "Empty trash", whose confirmation lists those files, removes it.
+	 */
 	async purgeExpired(now = Date.now()): Promise<number> {
 		const days = this.host.retentionDays();
 		if (!(days > 0)) return 0;
-		const items = await this.list();
+		const items = (await this.list()).filter((item) => this.otherFiles(item).length === 0);
 		const ids = expiredIds(items, now, days);
 		for (const id of ids) await this.deletePermanently(id);
 		return ids.length;
