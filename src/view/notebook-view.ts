@@ -1,5 +1,5 @@
-import { FileView, Notice, Scope, type Menu, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
-import { pageFromState } from "../integration/links";
+import { FileView, Scope, type Menu, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
+import { pageFromState, pageIdFromState } from "../integration/links";
 import { pageTargetFromEphemeralState, resolvePageTarget, type PageTarget } from "../integration/page-links";
 import { checkConflicts, openRepair, type ReliabilityDeps } from "../integration/reliability";
 import { scanFromCamera } from "../scan/scan-modal";
@@ -65,6 +65,7 @@ import { NotebookMedia, storeAsset } from "./media";
 import { HeavyPageBanner } from "./heavy-page-banner";
 import { ViewSyncSafety, type SyncSafetyService } from "./sync-safety";
 import { PageNavigator } from "./navigator";
+import { openPageOpsMenu, type PageOpsHost } from "./page-ops-menu";
 import type { OutlineHost } from "./outline";
 import { PAGE_AT_KEY, PageClock, pageAtFromState, pageState, startPosition } from "./position-sync";
 import { positionAt, updatePosition } from "../model/position";
@@ -103,6 +104,7 @@ import {
 	centredPosition, imageElementSize, imagePageSize, mergeMeta, metaEquals, newTextBox, shapePoints, shouldGrabRuler, toggleBookmark,
 	unionBounds,
 } from "./view-helpers";
+import { showNotice, type NoticeHandle } from "./notice";
 
 export const VIEW_TYPE = "notebook-view";
 
@@ -410,6 +412,7 @@ export class NotebookView extends FileView {
 			toggleBookmark: (pageId) => this.toggleBookmarkOf(pageId),
 			pageMenu: (index) => this.openPageMenu(index),
 			outline: this.outlineHost(),
+			selectionMenu: (ids, evt) => openPageOpsMenu(this.pageOpsHost(), ids, evt),
 		});
 		// The panel sits to the left of the page (a drawer over it on narrow views).
 		this.body.insertBefore(this.pageNav.el, this.stage);
@@ -499,7 +502,7 @@ export class NotebookView extends FileView {
 			toggleRuler: () => this.runAction("toggle-ruler"),
 			// wave 0.8: the shapes ring's Markers entry places a marker or box with the next contact.
 			placeMarker: (kind) => this.runAction(kind === "box" ? "marker-box" : `marker-${kind}`),
-			notify: (text) => new Notice(text, 2500),
+			notify: (text) => showNotice(text, 2500),
 		});
 		this.lastTool.note(this.tools.tool);
 		this.gestures = new GestureInput(this.stage, {
@@ -645,10 +648,12 @@ export class NotebookView extends FileView {
 	}
 
 	async setState(state: unknown, result: ViewStateResult): Promise<void> {
-		this.pendingPage = pageFromState(state);
-		this.pendingPos = positionFromState(state);
-		this.pendingAt = this.pendingPage !== null ? pageAtFromState(state) : null;
-		this.pendingTarget = null;
+		// wave 0.8 (388): a page id in the state (links the plugin made) wins over the number and over any stored position.
+		const pageId = pageIdFromState(state);
+		this.pendingPage = pageFromState(state) ?? (pageId ? 1 : null);
+		this.pendingPos = pageId ? null : positionFromState(state);
+		this.pendingAt = this.pendingPage !== null && !pageId ? pageAtFromState(state) : null;
+		this.pendingTarget = pageId ? { page: pageFromState(state), pageId } : null;
 		await super.setState(state, result);
 		// Already loaded (the same file was shown): jump now; otherwise onDocumentLoaded applies it.
 		if (this.pendingPage !== null && this.layout) this.applyPendingPage();
@@ -683,7 +688,7 @@ export class NotebookView extends FileView {
 			// A link to a page that was deleted says so and stays where it is.
 			const found = resolvePageTarget(doc.pages, target);
 			if ("missing" in found) {
-				new Notice(t("links.pageDeleted", { name: this.file?.basename ?? "" }));
+				showNotice(t("links.pageDeleted", { name: this.file?.basename ?? "" }));
 				return;
 			}
 			this.scrollToPage(found.index);
@@ -776,11 +781,11 @@ export class NotebookView extends FileView {
 				},
 				onRecovered: ({ savedAt }) => {
 					const when = new Date(savedAt);
-					new Notice(t("notice.recovered", { time: Number.isNaN(when.getTime()) ? savedAt : when.toLocaleString() }), 8000);
+					showNotice(t("notice.recovered", { time: Number.isNaN(when.getTime()) ? savedAt : when.toLocaleString() }), 8000);
 				},
 				onBackup: (path, reason) => {
 					const key = reason === "conflict" ? "notice.conflict" : reason === "journal" ? "notice.journalBackup" : "notice.backup";
-					new Notice(t(key, { path }), 8000);
+					showNotice(t(key, { path }), 8000);
 					if (!current()) return;
 					this.lastBackupPath = path;
 					if (session.mode === "broken" || session.mode === "readonly") this.showProblem();
@@ -973,6 +978,12 @@ export class NotebookView extends FileView {
 	/** Steps the eraser size to the next larger (1) or smaller (-1) preset. */
 	stepEraserSize(direction: 1 | -1): void {
 		if (this.editable()) this.toolbar.update({ eraserSize: stepEraserSize(this.tools.eraserSize, direction) });
+	}
+
+	/** wave 0.8 (378): opens the page panel in selection mode (action "pages-select"). */
+	selectPages(): void {
+		this.setNavigatorOpen(true);
+		this.pageNav?.beginSelection();
 	}
 
 	toggleNavigator(): void {
@@ -1256,12 +1267,12 @@ export class NotebookView extends FileView {
 		const anchor = session?.doc?.pages[index];
 		if (!session || !media || !anchor || !this.stillHere(session)) return;
 		let asset: Asset | null = null;
-		let working: Notice | null = null;
+		let working: NoticeHandle | null = null;
 		try {
 			const picked = await this.pickAndStore("pdf");
 			if (!picked) return;
 			asset = picked.asset;
-			working = new Notice(t("insert.working"), 0);
+			working = showNotice(t("insert.working"), 0);
 			const sizes = await media.pdf.pageSizes(asset.id);
 			working.hide();
 			working = null;
@@ -1280,10 +1291,10 @@ export class NotebookView extends FileView {
 			this.history.execute(new Batch("Insert PDF", [new AddAsset(asset), new InsertPages(pages, at + 1)]));
 			this.afterHistoryChange();
 			this.scrollToPage(at + 1);
-			new Notice(t("insert.pdfDone", { n: String(range.to - range.from + 1) }));
+			showNotice(t("insert.pdfDone", { n: String(range.to - range.from + 1) }));
 		} catch (e) {
 			console.error("[notebook] insert PDF", e);
-			new Notice(t("insert.failed", { error: (e as Error).message }), 8000);
+			showNotice(t("insert.failed", { error: (e as Error).message }), 8000);
 		} finally {
 			working?.hide();
 			if (asset) media.removePending(asset.id);
@@ -1315,7 +1326,7 @@ export class NotebookView extends FileView {
 			this.scrollToPage(at + 1);
 		} catch (e) {
 			console.error("[notebook] insert image page", e);
-			new Notice(insertFailure(e), 8000);
+			showNotice(insertFailure(e), 8000);
 		} finally {
 			if (asset) media.removePending(asset.id);
 		}
@@ -1324,6 +1335,30 @@ export class NotebookView extends FileView {
 	// --- wave p1b: reliability (repair, conflicted copies, page restore; see integration/reliability.ts) ---
 
 	/** Page trash and templates (wave 0.6, see page-tools.ts). */
+	/** wave 0.8 (378): what the navigator's multi-selection actions need (view/page-ops-menu.ts). */
+	private pageOpsHost(): PageOpsHost {
+		const base = this.pageToolsHost();
+		const file = () => this.file;
+		return {
+			get app() { return base.app; },
+			get settings() { return base.settings; },
+			get file() { return file(); },
+			editableDocument: () => base.editableDocument(),
+			applyCommand: (cmd, scrollTo) => base.applyCommand(cmd, scrollTo),
+			flush: () => base.flush(),
+			moveToNotebook: async (ids) => {
+				const ctx = this.editContext();
+				const doc = this.session?.doc;
+				if (!ctx || !doc) return;
+				const indices = ids.map((id) => doc.pages.findIndex((p) => p.id === id)).filter((i) => i >= 0);
+				if (indices.length > 0) await runMovePages(ctx, this.host.settings, indices);
+			},
+			exportPages: async (pages, suffix) => {
+				if (this.file) await exportPdf(this.app, this.file, pages, suffix, this.media);
+			},
+		};
+	}
+
 	pageToolsHost(): PageToolsHost {
 		const host = this.host;
 		return {
@@ -1568,10 +1603,10 @@ export class NotebookView extends FileView {
 			this.history.execute(new Batch("Insert scan", [...assets.map((a) => new AddAsset(a)), new InsertPages(pages, at + 1)]));
 			this.afterHistoryChange();
 			this.scrollToPage(at + 1);
-			new Notice(t("scan.pagesDone", { n: String(pages.length) }));
+			showNotice(t("scan.pagesDone", { n: String(pages.length) }));
 		} catch (e) {
 			console.error("[notebook] scan pages", e);
-			new Notice(t("scan.failed", { error: (e as Error).message }), 8000);
+			showNotice(t("scan.failed", { error: (e as Error).message }), 8000);
 		} finally {
 			for (const a of assets) media.removePending(a.id);
 		}
@@ -1597,10 +1632,10 @@ export class NotebookView extends FileView {
 			this.clearSelection();
 			this.history.execute(new Batch("Insert scan", [new AddAsset(asset), new AddElement(anchor.id, element, anchor.elements?.length ?? 0)]));
 			this.afterHistoryChange();
-			new Notice(t("scan.imageDone"));
+			showNotice(t("scan.imageDone"));
 		} catch (e) {
 			console.error("[notebook] insert scan", e);
-			new Notice(t("scan.failed", { error: (e as Error).message }), 8000);
+			showNotice(t("scan.failed", { error: (e as Error).message }), 8000);
 		} finally {
 			if (asset) media.removePending(asset.id);
 		}
@@ -1643,7 +1678,7 @@ export class NotebookView extends FileView {
 			}
 		} catch (e) {
 			console.error("[notebook] insert image", e);
-			new Notice(insertFailure(e), 8000);
+			showNotice(insertFailure(e), 8000);
 		} finally {
 			if (asset) media.removePending(asset.id);
 		}
@@ -1858,7 +1893,7 @@ export class NotebookView extends FileView {
 		const now = Date.now();
 		if (now - this.lastErrorAt < 10000) return;
 		this.lastErrorAt = now;
-		new Notice(`Notebook: ${message}`, 8000);
+		showNotice(`Notebook: ${message}`, 8000);
 	}
 
 	/** Every real change of the document: schedules the save and logs the page as recently edited (365). */
@@ -2824,7 +2859,7 @@ export class NotebookView extends FileView {
 		if (!doc || !page || !this.editable()) return;
 		const plan = planPageSplit(page, index, doc.assets, measureText, this.renderer?.boundsOf);
 		if (!plan) {
-			new Notice(t("heavy.split.none"));
+			showNotice(t("heavy.split.none"));
 			return;
 		}
 		this.clearSelection();
@@ -2832,7 +2867,7 @@ export class NotebookView extends FileView {
 		this.renderer?.invalidate();
 		this.afterHistoryChange();
 		this.heavy?.hide();
-		new Notice(t("heavy.split.done", { n: String(index + 2) }));
+		showNotice(t("heavy.split.done", { n: String(index + 2) }));
 		this.scheduleHeavyCheck();
 	}
 
@@ -2862,7 +2897,7 @@ export class NotebookView extends FileView {
 		const plan = planSpaceChange(doc.pages, drag.pageIndex, drag.y, drag.delta, measureText, this.renderer?.boundsOf);
 		if (!plan) {
 			// A deliberate drag that moved nothing deserves an explanation; a tap does not.
-			if (Math.abs(drag.delta) * this.viewport.scale >= TAP_SLOP_PX) new Notice(t("space.nothing"));
+			if (Math.abs(drag.delta) * this.viewport.scale >= TAP_SLOP_PX) showNotice(t("space.nothing"));
 			return;
 		}
 		this.history.execute(pageContentCommand(doc, plan, plan.delta > 0 ? "Insert space" : "Remove space"));
@@ -3032,7 +3067,7 @@ export class NotebookView extends FileView {
 			this.history.execute(cmd);
 			this.afterHistoryChange();
 			this.renderer?.invalidate();
-			new Notice(t("object.inkDeleted"));
+			showNotice(t("object.inkDeleted"));
 		});
 	}
 

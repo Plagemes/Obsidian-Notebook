@@ -10,6 +10,8 @@ export interface AnnotationItem {
 	kind: "highlight" | "comment";
 	/** 1-based index of the notebook page. */
 	notebookPage: number;
+	/** Id of that page: links to it keep working when pages are reordered (wave 0.8, 388). */
+	pageId: string;
 	/** Asset id and 1-based page of the PDF under the item. */
 	asset: string;
 	pdfPage: number;
@@ -113,11 +115,11 @@ export function collectAnnotations(doc: NotebookDocument, textOf: (page: Page) =
 		const boxes = highlights.length > 0 ? textOf(page) : null;
 		for (const s of highlights) {
 			const box = strokeBox(s);
-			items.push({ kind: "highlight", notebookPage: i + 1, asset: bg.asset, pdfPage: bg.page, text: boxes ? textUnderStroke(s, boxes) : "", x: box.minX, y: box.minY });
+			items.push({ kind: "highlight", notebookPage: i + 1, pageId: page.id, asset: bg.asset, pdfPage: bg.page, text: boxes ? textUnderStroke(s, boxes) : "", x: box.minX, y: box.minY });
 		}
 		for (const el of page.elements ?? []) {
 			if (el.type !== "text" || el.text.trim() === "") continue;
-			items.push({ kind: "comment", notebookPage: i + 1, asset: bg.asset, pdfPage: bg.page, text: el.text.trim(), x: el.x, y: el.y });
+			items.push({ kind: "comment", notebookPage: i + 1, pageId: page.id, asset: bg.asset, pdfPage: bg.page, text: el.text.trim(), x: el.x, y: el.y });
 		}
 		items.sort((a, b) => a.y - b.y || a.x - b.x);
 		out.push(...items);
@@ -154,7 +156,7 @@ export interface AnnotationNoteInput {
 	/** Display name of an asset (its original file name). */
 	pdfName: (asset: string) => string;
 	/** URL that opens the notebook at a page (`obsidian://notebook?…`, see integration/links.ts). */
-	pageUrl: (notebookPage: number) => string;
+	pageUrl: (notebookPage: number, pageId?: string) => string;
 	labels: AnnotationLabels;
 }
 
@@ -182,7 +184,7 @@ export function annotationsMarkdown(input: AnnotationNoteInput): string {
 			lines.push(...quoted(it.text));
 		}
 		// Parentheses would end the Markdown link early (encodeURIComponent keeps them).
-		const url = input.pageUrl(it.notebookPage).replace(/\(/g, "%28").replace(/\)/g, "%29");
+		const url = input.pageUrl(it.notebookPage, it.pageId).replace(/\(/g, "%28").replace(/\)/g, "%29");
 		lines.push(">", `> [${labels.openPage(it.notebookPage)}](${url})`);
 	}
 	lines.push("");

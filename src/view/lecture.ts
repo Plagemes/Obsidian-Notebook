@@ -1,10 +1,11 @@
-import { Modal, Notice, Setting, type App } from "obsidian";
+import { Modal, Setting, type App } from "obsidian";
 import { t } from "../i18n";
 import { AddPage } from "../model/history";
 import type { EditContext } from "./edit-context";
 import { suggestedCourse } from "../timetable/current";
 import { applyCourseTag } from "../timetable/page-tag";
 import { buildLecturePage, cleanTitle, defaultLectureTitle, isoDate, parseIsoDate } from "./lecture-logic";
+import { showNotice } from "./notice";
 
 export interface LectureAnswer {
 	title: string;
@@ -53,7 +54,7 @@ class LectureModal extends Modal {
 			.addButton((b) => b.setButtonText(t("lecture.cancel")).onClick(() => this.close()))
 			.addButton((b) => b.setButtonText(t("lecture.create")).setCta().onClick(() => {
 				if (!parseIsoDate(this.dateText)) {
-					new Notice(t("lecture.badDate"));
+					showNotice(t("lecture.badDate"));
 					dateEl?.focus();
 					return;
 				}
@@ -64,7 +65,7 @@ class LectureModal extends Modal {
 	private submit(): void {
 		const date = parseIsoDate(this.dateText);
 		if (!date) {
-			new Notice(t("lecture.badDate"));
+			showNotice(t("lecture.badDate"));
 			return;
 		}
 		this.done = true;
@@ -100,5 +101,5 @@ export async function runNewLecture(ctx: EditContext): Promise<void> {
 	const answer = await askLecture(ctx.app, fromTimetable ?? defaultLectureTitle(ctx.file?.path));
 	if (!answer || !ctx.alive()) return;
 	addLecturePage(ctx, answer.title, answer.date, fromTimetable && answer.title ? answer.title : undefined);
-	new Notice(t("lecture.done"));
+	showNotice(t("lecture.done"));
 }

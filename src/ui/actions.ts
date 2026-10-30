@@ -173,6 +173,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "scan-element", label: "page.scanInsert", icon: "scan-line", group: "insert", surfaces: ["sheet", "page"], priority: 30, scope: "view", keywords: "camera" },
 
 	// --- page: the page sheet (and its section in the "All actions" sheet).
+	// wave 0.8 (378): starts selecting pages in the page panel; its actions (move, duplicate, bookmark, tags, paper, size, PDF, delete) are
+	// the bar of the panel itself (view/navigator.ts, view/page-ops-menu.ts), one undo step each.
+	{ id: "pages-select", label: "pageOps.select", icon: "check-square", group: "page", surfaces: ["page", "sheet"], priority: 52, scope: "view", command: "command.selectPages", keywords: "several multiple move delete export" },
 	{ id: "page-duplicate", label: "page.duplicate", icon: "copy", group: "page", surfaces: ["page"], priority: 50, scope: "view" },
 	{ id: "page-move-up", label: "page.moveUp", icon: "arrow-up", group: "page", surfaces: ["page"], priority: 40, scope: "view", enabled: (c) => c.editable && (c.page?.index ?? 0) > 0 },
 	{ id: "page-move-down", label: "page.moveDown", icon: "arrow-down", group: "page", surfaces: ["page"], priority: 40, scope: "view", enabled: (c) => c.editable && !!c.page && c.page.index < c.page.count - 1 },
@@ -263,6 +266,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	// --- registered by other modules (listed so that every command has a documented place).
 	external("insert-embed", "command.embedInsert", "picture-in-picture", "integration", "integration/index.ts"),
 	external("restore-version", "command.restore", "history", "integration", "integration/index.ts"),
+	// wave 0.8 (388): lists the old #pN links of the notes, then rewrites the ones the user accepts.
+	external("update-page-links", "command.updateLinks", "link-2", "integration", "integration/index.ts", ["notebook", "palette"]),
 	external("edit-tags", "command.editTags", "tags", "integration", "integration/tags.ts", ["notebook", "palette"]),
 	external("companion-update-all", "command.companionUpdateAll", "refresh-cw", "integration", "integration/companion.ts"),
 	external("companion-open", "command.companionOpen", "file-text", "integration", "integration/companion.ts"),

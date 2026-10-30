@@ -1,4 +1,4 @@
-import { FuzzySuggestModal, Modal, normalizePath, Notice, Setting, TFile, type App, type FuzzyMatch, type WorkspaceLeaf } from "obsidian";
+import { FuzzySuggestModal, Modal, normalizePath, Setting, TFile, type App, type FuzzyMatch, type WorkspaceLeaf } from "obsidian";
 import { t } from "../i18n";
 import { parse } from "../model/serialize";
 import { backupFolder, type NotebookSettings } from "../settings";
@@ -11,6 +11,7 @@ import { ensureFolder, VaultDocumentIO } from "../storage/vault-io";
 import { viewsOf } from "./open";
 import { NotebookPickerModal } from "./picker";
 
+import { showNotice } from "../view/notice";
 
 export interface HistoryHost {
 	app: App;
@@ -129,12 +130,12 @@ export class HistoryService {
 		try {
 			const docId = extractDocId(readNotebookText(file.extension, await this.app.vault.read(file)));
 			if (!docId) {
-				new Notice(t("history.noId"));
+				showNotice(t("history.noId"));
 				return;
 			}
 			const found = this.snapshotFiles(docId);
 			if (found.length === 0) {
-				new Notice(t("history.empty"));
+				showNotice(t("history.empty"));
 				return;
 			}
 			const items: SnapshotItem[] = [];
@@ -145,7 +146,7 @@ export class HistoryService {
 				new ConfirmRestoreModal(this.app, item.date, () => void this.restore(file, item)).open();
 			}).open();
 		} catch (e) {
-			new Notice(t("history.failed", { error: (e as Error).message }));
+			showNotice(t("history.failed", { error: (e as Error).message }));
 		}
 	}
 
@@ -171,7 +172,7 @@ export class HistoryService {
 				}
 				// Anything left only in memory would be lost when the tab is emptied: do not restore.
 				if (!saved) {
-					new Notice(t("history.flushFailed"));
+					showNotice(t("history.flushFailed"));
 					return;
 				}
 			}
@@ -179,7 +180,7 @@ export class HistoryService {
 			// The file may have changed since the version was chosen (Sync, another leaf): it must still be this notebook.
 			const check = checkRestoreTarget(readNotebookText(file.extension, await this.app.vault.read(file)), snapshot);
 			if (check === "other-notebook") {
-				new Notice(t("history.otherNotebook"));
+				showNotice(t("history.otherNotebook"));
 				return;
 			}
 			if (check === "unreadable" && !(await confirmOverUnreadable(this.app, item.date))) return;
@@ -189,10 +190,10 @@ export class HistoryService {
 			}
 
 			const backup = await this.writeSnapshot(file, snapshot);
-			new Notice(backup ? t("history.done", { date: when, backup }) : t("history.doneNoBackup", { date: when }), 8000);
+			showNotice(backup ? t("history.done", { date: when, backup }) : t("history.doneNoBackup", { date: when }), 8000);
 		} catch (e) {
 			console.error("[notebook] restore failed", e);
-			new Notice(t("history.failed", { error: (e as Error).message }));
+			showNotice(t("history.failed", { error: (e as Error).message }));
 		} finally {
 			for (const { leaf, state } of states) {
 				try {

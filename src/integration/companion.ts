@@ -1,4 +1,4 @@
-import { getFrontMatterInfo, normalizePath, Notice, parseYaml, stringifyYaml, TFile, type App, type Plugin, type TAbstractFile } from "obsidian";
+import { getFrontMatterInfo, normalizePath, parseYaml, stringifyYaml, TFile, type App, type Plugin, type TAbstractFile } from "obsidian";
 import { t } from "../i18n";
 import {
 	COMPANION_ID_KEY, COMPANION_LINK_KEY, companionClaim, companionContent, mergeProperties, newCompanionText, renderRegion, updateCompanionText,
@@ -15,6 +15,7 @@ import { ensureFolder } from "../storage/vault-io";
 import { isCardFrontmatter } from "../zettel/card-content";
 import { notebookUri } from "./links";
 import { viewsOf } from "./open";
+import { showNotice } from "../view/notice";
 import { isOpenInSafeMode } from "../storage/safe-mode";
 
 /**
@@ -184,7 +185,7 @@ export class CompanionService {
 	private report(key: string, message: string): void {
 		if (this.reported.has(key)) return;
 		this.reported.add(key);
-		new Notice(message, 8000);
+		showNotice(message, 8000);
 	}
 
 	// ------------------------------------------------------------------- reading
@@ -199,7 +200,7 @@ export class CompanionService {
 	}
 
 	private content(file: TFile, doc: NotebookDocument): CompanionContent {
-		return companionContent(doc, { notebookPath: file.path, pageUri: (page) => notebookUri("", file.path, page) });
+		return companionContent(doc, { notebookPath: file.path, pageUri: (page, pageId) => notebookUri("", file.path, page, pageId) });
 	}
 
 	/** Frontmatter of a note's text; null when it is not valid YAML. */
@@ -384,7 +385,7 @@ export class CompanionService {
 			this.keptTimer = null;
 			const kept = this.kept;
 			this.kept = [];
-			new Notice(kept.length === 1 ? t("notice.companionKept", { path: kept[0]! }) : t("notice.companionKeptMany", { n: String(kept.length) }), 8000);
+			showNotice(kept.length === 1 ? t("notice.companionKept", { path: kept[0]! }) : t("notice.companionKeptMany", { n: String(kept.length) }), 8000);
 		}, 500);
 	}
 
@@ -393,7 +394,7 @@ export class CompanionService {
 	/** Creates or updates the companion of every notebook in the vault, one at a time. */
 	async updateAll(): Promise<void> {
 		if (!this.plugin.settings.companionNotes) {
-			new Notice(t("notice.companionOff"));
+			showNotice(t("notice.companionOff"));
 			return;
 		}
 		const files = this.app.vault.getFiles().filter((f) => isNotebookFile(f) && !this.isInternal(f.path));
@@ -404,7 +405,7 @@ export class CompanionService {
 			const result = await this.enqueue(() => this.update(file));
 			counts[result ?? "skipped"]++;
 		}
-		new Notice(t("notice.companionDone", {
+		showNotice(t("notice.companionDone", {
 			created: String(counts.created), updated: String(counts.updated), unchanged: String(counts.unchanged), skipped: String(counts.skipped),
 		}));
 	}
@@ -412,7 +413,7 @@ export class CompanionService {
 	/** Brings the companion of `file` up to date now and opens it in a new tab. */
 	async open(file: TFile): Promise<void> {
 		if (!this.plugin.settings.companionNotes) {
-			new Notice(t("notice.companionOff"));
+			showNotice(t("notice.companionOff"));
 			return;
 		}
 		const doc = await this.readDocument(file);

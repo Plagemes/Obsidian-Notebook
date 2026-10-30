@@ -1,4 +1,4 @@
-import { Notice, normalizePath, type App, type TFile } from "obsidian";
+import { normalizePath, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { pagesToPdf, type PdfPlacedImage } from "../ink/export-pdf";
 import { pageToSvg, type SvgPlacedImage } from "../ink/export-svg";
@@ -6,6 +6,7 @@ import type { BoxLabel } from "../ink/marker-render";
 import { backgroundRect } from "../model/margins";
 import type { Page } from "../model/types";
 import type { NotebookMedia } from "./media";
+import { showNotice } from "./notice";
 
 /** Resolution of rasterised PDF pages in exports. */
 const PDF_DPI = 200;
@@ -77,7 +78,7 @@ export function jpegDataUrl(jpeg: Uint8Array): string {
 }
 
 function reportSkipped(skipped: number): void {
-	if (skipped > 0) new Notice(t("export.skipped", { n: String(skipped) }), 8000);
+	if (skipped > 0) showNotice(t("export.skipped", { n: String(skipped) }), 8000);
 }
 
 /** v8: which hidden ink an export draws (default none: it is the solutions) and how boxes are labelled. */
@@ -90,7 +91,7 @@ export interface ExportOptions {
 export async function exportPdf(
 	app: App, notebook: TFile, pages: readonly Page[], suffix = "", media: NotebookMedia | null = null, options: ExportOptions = {},
 ): Promise<void> {
-	const working = new Notice(t("export.working"), 0);
+	const working = showNotice(t("export.working"), 0);
 	try {
 		const { images, skipped } = await collectPageImages(media, pages);
 		const bytes = pagesToPdf(pages, {
@@ -99,17 +100,17 @@ export async function exportPdf(
 		});
 		const path = freePath(app, notebook, suffix, "pdf");
 		await app.vault.createBinary(path, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
-		new Notice(t("export.done", { path }));
+		showNotice(t("export.done", { path }));
 		reportSkipped(skipped);
 	} catch (e) {
-		new Notice(t("export.failed", { error: (e as Error).message }));
+		showNotice(t("export.failed", { error: (e as Error).message }));
 	} finally {
 		working.hide();
 	}
 }
 
 export async function exportSvg(app: App, notebook: TFile, page: Page, suffix: string, media: NotebookMedia | null = null, options: ExportOptions = {}): Promise<void> {
-	const working = new Notice(t("export.working"), 0);
+	const working = showNotice(t("export.working"), 0);
 	try {
 		const { images, skipped } = await collectPageImages(media, [page]);
 		const svgImages = (p: Page): SvgPlacedImage[] => (images.get(p) ?? []).map((img) => ({
@@ -121,10 +122,10 @@ export async function exportSvg(app: App, notebook: TFile, page: Page, suffix: s
 		await app.vault.create(path, pageToSvg(page, {
 			paper: true, images: svgImages, hiddenInk: options.hiddenInk?.(page) ?? false, ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 		}));
-		new Notice(t("export.done", { path }));
+		showNotice(t("export.done", { path }));
 		reportSkipped(skipped);
 	} catch (e) {
-		new Notice(t("export.failed", { error: (e as Error).message }));
+		showNotice(t("export.failed", { error: (e as Error).message }));
 	} finally {
 		working.hide();
 	}

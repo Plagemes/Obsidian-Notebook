@@ -1,5 +1,5 @@
 // wave 0.7: sync safety (roadmap #342–#345). The UI side; pure logic in storage/presence-logic.ts and storage/sync-state.ts.
-import { debounce, Modal, Notice, Setting, TFile, type App, type Component, type Plugin, type SettingDefinitionAction, type SettingDefinitionRender, type TAbstractFile } from "obsidian";
+import { debounce, Modal, Setting, TFile, type App, type Component, type Plugin, type SettingDefinitionAction, type SettingDefinitionRender, type TAbstractFile } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import type { NotebookDocument } from "../model/types";
 import { PresenceService } from "../storage/presence";
@@ -8,6 +8,7 @@ import type { AwaitingState, DocumentSession, SessionMode } from "../storage/ses
 import {
 	formatBytes, issueSignature, LONG_PATH_CHARS, scanForSyncIssues, segmentIssue, sizeIssue, type SyncIssue,
 } from "../storage/sync-state";
+import { showNotice } from "./notice";
 
 /** Plugin local storage key of the last startup check result (the notice is shown again only when it changes). */
 const CHECK_KEY = "notebook-sync-check";
@@ -113,7 +114,7 @@ export class SyncSafetyService {
 		try {
 			new SyncCheckModal(this.plugin.app, await this.check()).open();
 		} catch (e) {
-			new Notice(t("sync.check.failed", { error: (e as Error).message }));
+			showNotice(t("sync.check.failed", { error: (e as Error).message }));
 		}
 	}
 
@@ -150,7 +151,7 @@ export class SyncSafetyService {
 					else void this.openCheck();
 				});
 		});
-		new Notice(fragment, 12000);
+		showNotice(fragment, 12000);
 	}
 }
 

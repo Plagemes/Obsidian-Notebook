@@ -1,6 +1,7 @@
 import { Notice, Vault, TFile, TFolder, type App, type Plugin } from "obsidian";
 import { t } from "../i18n";
 import { openNotebookAtPage, viewsOf } from "../integration/open";
+import { writing } from "../ink/writing-guard";
 import { createDocument } from "../model/document";
 import { PAGE_SIZES, PAPER_SPACING } from "../model/types";
 import type { NotebookSettings } from "../settings";
@@ -125,12 +126,15 @@ export class TimetableService {
 			return;
 		}
 		const room = c.room ? t("timetable.offer.room", { room: c.room }) : "";
-		const notice = new Notice("", 15000);
-		notice.messageEl.createSpan({ text: `${t("timetable.offer", { course: c.course, room })} ` });
-		const button = notice.messageEl.createEl("button", { text: t("timetable.offer.open"), cls: "mod-cta" });
-		button.addEventListener("click", () => {
-			notice.hide();
-			void this.openClass(c);
+		// Wave 0.8 (374): never while the pen is on the screen; the offer appears at the first pause.
+		writing.whenQuiet(() => {
+			const notice = new Notice("", 15000);
+			notice.messageEl.createSpan({ text: `${t("timetable.offer", { course: c.course, room })} ` });
+			const button = notice.messageEl.createEl("button", { text: t("timetable.offer.open"), cls: "mod-cta" });
+			button.addEventListener("click", () => {
+				notice.hide();
+				void this.openClass(c);
+			});
 		});
 	}
 

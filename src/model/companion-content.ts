@@ -42,8 +42,8 @@ export type Properties = Record<string, PropertyValue>;
 export interface CompanionContext {
 	/** Vault path of the notebook (in M4: of the note itself). */
 	notebookPath: string;
-	/** Link that opens the notebook at a 1-based page (integration/links.ts `notebookUri`). */
-	pageUri(page: number): string;
+	/** Link that opens the notebook at a 1-based page, by page id first (integration/links.ts `notebookUri`). */
+	pageUri(page: number, pageId?: string): string;
 }
 
 export interface CompanionContent {
@@ -209,7 +209,7 @@ export function companionContent(doc: NotebookDocument, ctx: CompanionContext): 
 		const blocks = [...textBlocks(page?.elements), ...boxCallouts(page, i + 1, ctx.notebookPath), ...homeworkTasks(page?.elements)];
 		if (blocks.length === 0) return;
 		// Parentheses would end the Markdown link early.
-		const uri = ctx.pageUri(i + 1).replace(/\(/g, "%28").replace(/\)/g, "%29");
+		const uri = ctx.pageUri(i + 1, page.id).replace(/\(/g, "%28").replace(/\)/g, "%29");
 		sections.push([`### ${pageHeading(i + 1)}`, `[↗ ${pageHeading(i + 1)}](${uri})`, "", blocks.join("\n\n")].join("\n"));
 	});
 	return { properties, tags: uniqueTags(tags), text: sections.join("\n\n") };

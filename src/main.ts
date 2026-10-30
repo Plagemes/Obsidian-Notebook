@@ -1,4 +1,6 @@
-import { Notice, Plugin, type TFile } from "obsidian";
+import { trackWriting } from "./view/writing-quiet";
+import { showNotice } from "./view/notice";
+import { Plugin, type TFile } from "obsidian";
 import { t } from "./i18n";
 import { readSettings, type NotebookSettings } from "./settings";
 import { positionEquals, type SavedPosition } from "./ink/view-position";
@@ -50,6 +52,8 @@ export default class NotebookPlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		this.settings = readSettings(await this.loadData());
+		// wave 0.8 (374): notices and non-urgent background work wait while the pen is on the screen.
+		trackWriting(this);
 
 		this.journal = new AdapterJournalStore(this.app.vault.adapter, journalFolder(this.app, this.manifest.id));
 		this.syncSafety = new SyncSafetyService(this);
@@ -194,12 +198,12 @@ export default class NotebookPlugin extends Plugin {
 	private async continueLast(): Promise<void> {
 		const { lastNotebookPath: path, lastNotebookPage: page, lastNotebookPos: pos } = this.settings;
 		if (!path) {
-			new Notice(t("notice.noLastNotebook"));
+			showNotice(t("notice.noLastNotebook"));
 			return;
 		}
 		const file = this.app.vault.getFileByPath(path);
 		if (!file) {
-			new Notice(t("notice.lastNotebookGone", { path }));
+			showNotice(t("notice.lastNotebookGone", { path }));
 			return;
 		}
 		await openNotebookAtPage(this.app, file, page, pos?.page === page ? pos : null);
@@ -236,7 +240,7 @@ export default class NotebookPlugin extends Plugin {
 			const file = await createNotebook(this.app, this.settings.folder, "Stress test 10000", stressDocument(10_000, 10, Date.now() % 100000));
 			await this.openFile(file);
 		} catch (e) {
-			new Notice(t("notice.createFailed", { error: (e as Error).message }));
+			showNotice(t("notice.createFailed", { error: (e as Error).message }));
 		}
 	}
 

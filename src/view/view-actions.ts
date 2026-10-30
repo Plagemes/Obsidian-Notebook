@@ -1,7 +1,7 @@
 // ui redesign: what each view action of the registry (ui/actions.ts) does. One place for the toolbar quick slots, the
 // contextual bar, the sheets, the radial menu and the commands. Page actions take the page they act on (`arg.page`,
 // default: the page in view); choices take their value (`arg.value`).
-import { Notice } from "obsidian";
+
 import { t } from "../i18n";
 import { copyPageLink, insertPageIntoNote } from "../integration/page-share";
 import { openPageRestore } from "../integration/reliability";
@@ -18,6 +18,7 @@ import { exportPdfAnnotations, openMarginsModal, updatePdfFromNewVersion } from 
 import { pdfSideState, runPdfSideAction, type PdfSideAction } from "./pdf-sync";
 import { deletePageKeepingCopy, newPageFromTemplate, openDeletedPages, savePageAsTemplate } from "./page-tools";
 import { toggleBookmark } from "./view-helpers";
+import { showNotice } from "./notice";
 
 export interface ActionArg {
 	page?: number;
@@ -120,6 +121,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"scan-element": onPage((v, _p, i) => void v.insertScanElement(i)),
 
 	// page
+	"pages-select": (v) => v.selectPages(),
 	"page-duplicate": onPage((v, p, i) => v.applyCommand(new AddPage(duplicatePage(p), i + 1), i + 1)),
 	"page-move-up": onPage((v, p, i) => {
 		if (i > 0) v.applyCommand(new MovePage(p.id, i, i - 1), i - 1);
@@ -174,7 +176,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"toggle-dim-background": (v) => v.readingTools?.toggleDim(),
 	"pdf-margins": onPage((v, p) => {
 		const host = v.pdfActionHost();
-		if (!host || !p.background || !host.editable()) new Notice(t("pdf.noPdfPage"));
+		if (!host || !p.background || !host.editable()) showNotice(t("pdf.noPdfPage"));
 		else openMarginsModal(host, p);
 	}),
 	"pdf-update": onPage((v, _p, i) => {
@@ -219,14 +221,14 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"previous-page": (v) => v.goToRelativePage(-1),
 
 	// export and share
-	"share-copy-link": onPage((v, _p, i) => {
-		if (v.file) void copyPageLink(v.app, v.file, i + 1);
+	"share-copy-link": onPage((v, p, i) => {
+		if (v.file) void copyPageLink(v.app, v.file, i + 1, p.id);
 	}),
-	"share-insert-link": onPage((v, _p, i) => {
-		if (v.file) insertPageIntoNote(v.app, v.file, i + 1, "link");
+	"share-insert-link": onPage((v, p, i) => {
+		if (v.file) insertPageIntoNote(v.app, v.file, i + 1, "link", p.id);
 	}),
-	"share-insert-embed": onPage((v, _p, i) => {
-		if (v.file) insertPageIntoNote(v.app, v.file, i + 1, "embed");
+	"share-insert-embed": onPage((v, p, i) => {
+		if (v.file) insertPageIntoNote(v.app, v.file, i + 1, "embed", p.id);
 	}),
 	"export-page-pdf": onPage((v, p, i) => exportPage(v, p, i, "pdf")),
 	"export-page-svg": onPage((v, p, i) => exportPage(v, p, i, "svg")),

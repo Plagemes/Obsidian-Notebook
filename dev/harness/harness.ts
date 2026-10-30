@@ -284,6 +284,28 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 	const navRect = (document.querySelector(".notebook-navigator") as HTMLElement | null)?.getBoundingClientRect();
 	add("navigator shows thumbnails", !!thumb && thumb.naturalWidth > 0 && !!navRect && navRect.width > 0 && navRect.height > 0,
 		`${thumb ? `${thumb.naturalWidth}×${thumb.naturalHeight}` : "no thumbnail"}, panel ${navRect ? `${Math.round(navRect.width)}×${Math.round(navRect.height)}` : "missing"}`);
+	// Multi-selection in the page panel (wave 0.8): the select button, ticks, the action bar, Escape ends it.
+	{
+		const nav = document.querySelector(".notebook-navigator") as HTMLElement;
+		const selectButton = nav.querySelector<HTMLButtonElement>(".notebook-navigator-header button[aria-label='Select pages']");
+		selectButton?.click();
+		await frames(2);
+		const items = Array.from(nav.querySelectorAll<HTMLElement>(".notebook-navigator-item"));
+		for (const item of items.slice(0, 2)) item.click();
+		await frames(2);
+		const bar = nav.querySelector<HTMLElement>(".notebook-navigator-selectbar");
+		const barShown = !!bar && bar.getBoundingClientRect().height > 0;
+		const ticked = nav.querySelectorAll(".notebook-navigator-item.is-selected").length;
+		const tick = nav.querySelector<HTMLElement>(".notebook-navigator-item.is-selected .notebook-navigator-check");
+		const tickShown = !!tick && tick.getBoundingClientRect().width > 0;
+		const count = nav.querySelector(".notebook-navigator-selectcount")?.textContent ?? "";
+		nav.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+		await frames(2);
+		const ended = nav.querySelectorAll(".notebook-navigator-item.is-selected").length === 0 && (bar?.getBoundingClientRect().height ?? 1) === 0;
+		const want = Math.min(2, items.length);
+		add("page panel multi-selection", !!selectButton && barShown && ticked === want && tickShown && ended,
+			`ticked ${ticked}/${want}, bar ${barShown}, tick ${tickShown}, "${count}", ended ${ended}`);
+	}
 	if (!wasOpen) v.setNavigatorOpen(false);
 	await frames(4);
 

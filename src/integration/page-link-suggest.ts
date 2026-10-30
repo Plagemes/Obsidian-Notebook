@@ -6,11 +6,11 @@ import { parse } from "../model/serialize";
 import type { Page } from "../model/types";
 import { isNotebookFile, NOTEBOOK_EXTENSIONS, readNotebookText } from "../storage/format";
 import { candidatePaths } from "./links";
-import { pageSuggestions, parsePageLinkTrigger, type PageSuggestion } from "./page-links";
+import { pageSuggestions, parsePageLinkTrigger, stablePageSubpath, type PageSuggestion } from "./page-links";
 
 /**
  * Suggests the pages of a notebook while typing `[[Physics.notebook#`: the page number and the
- * first text box of the page. Choosing one writes `p3`.
+ * first text box of the page. Choosing one writes `p3&id=<page id>` (wave 0.8: the id keeps the link on the page).
  */
 export class PageLinkSuggest extends EditorSuggest<PageSuggestion> {
 	private target: TFile | null = null;
@@ -73,7 +73,7 @@ export class PageLinkSuggest extends EditorSuggest<PageSuggestion> {
 		const context = this.context;
 		if (!context) return;
 		const { editor, start, end } = context;
-		const text = `p${suggestion.page}`;
+		const text = stablePageSubpath(suggestion.page, suggestion.pageId).slice(1);
 		editor.replaceRange(text, start, end);
 		// Obsidian closes `[[` automatically: leave the cursor after the `]]` that is already there.
 		const after = editor.getLine(start.line).slice(start.ch + text.length, start.ch + text.length + 2);

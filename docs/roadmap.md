@@ -641,6 +641,78 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 Checked against every earlier item before being added. Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for all.
 
 ### Sync and data safety
+342. **P1** "Open on another device" warning: a small presence file, refreshed while a notebook is open, warns before Google Drive or OneDrive can create a conflicted copy.
+343. **P1** Assets waiting for sync: images and PDFs referenced by a page but not yet downloaded show a "waiting for sync" placeholder instead of an error, and appear by themselves when they arrive.
+344. **P1** Online-only notebooks: files that the sync client has not downloaded yet (0 bytes) are shown as "not downloaded yet" and never treated as damaged.
+345. **P2** Warning when the notebooks folder is excluded from sync, or when a file exceeds the cloud provider's limits.
+346. **P1** Safe mode: if opening a notebook crashed last time, it reopens without low-latency ink, thumbnails and companion notes, and says so.
+347. **P1** Storage full: edits stay in the journal, a clear warning appears and saving retries by itself.
+348. **P3** Readable change summaries for Obsidian Git users: what changed in a notebook in each commit (pages, strokes, assets).
+
+### Writing and pen
+349. **P2** Pressure lock: while the pen button is held, the width stays constant (even lines).
+350. **P2** Pen width relative to zoom (option): the same width on screen at any zoom.
+351. **P2** Stroke taper settings: tapering at the start and end of a stroke.
+352. **P2** Write big, store small: write margin notes at a comfortable size and they are shrunk into place.
+353. **P2** Automatic line break: when writing reaches the right margin, the view jumps to the start of the next line.
+354. **P3** Right-to-left writing: automatic next page, word detection and the space tool also work for Arabic and Hebrew.
+355. **P2** Stylus profiles: S Pen, USI and other pens recognised automatically, with settings that suit them.
+356. **P2** Quick date and time stamp at the pen position.
+
+### Objects and selection
+357. **P2** Layer order: bring to front, send to back.
+358. **P2** Opacity slider for ink, highlighter and images.
+359. **P2** Lasso selection across page boundaries.
+360. **P3** Code text box: monospace with syntax colours.
+361. **P2** Find and replace in the text boxes of a notebook.
+362. **P2** Cross-device clipboard: copy on the tablet, paste on the phone, through the vault.
+
+### Navigation and view
+363. **P2** Tabs of open notebooks, with a swipe from one to the next.
+364. **P1** Quick switcher for pages across all notebooks.
+365. **P1** Recently edited pages across all notebooks.
+366. **P1** Go to page by typing its number.
+367. **P2** Night mode: dark page display without changing the stored ink colours.
+368. **P3** Projector and high-contrast mode.
+369. **P3** One-hand mode on phones.
+370. **P2** Adjustable toolbar size and large icons.
+371. ~~**P3** Samsung DeX layout for mouse and keyboard.~~ — dropped (user decision, 2026-10-29)
+372. **P2** Page turner: volume keys, a Bluetooth clicker or a keyboard turn pages and undo.
+373. ~~**P3** Phone as a remote page navigator for the tablet.~~ — dropped (user decision, 2026-10-29)
+374. 🧪 **P1** Do not disturb while writing: no notices or pop-ups while the pen is on the screen. (Wave 0.8: the plugin's own notices and non-urgent background work wait for a pause; Obsidian's own notices cannot be held back.)
+375. **P2** Workspace presets, e.g. "lecture" (slides, notebook, outline) with one command.
+
+### PDF
+376. **P2** View-only crop of a PDF's white margins, for small screens.
+377. **P3** Reflowed reading mode for a PDF's text on phones.
+
+### Pages and notebooks
+378. 🧪 **P1** Operations on several selected pages: move, change paper, export or delete them together. (Wave 0.8, in the page panel.)
+379. **P2** Page information: dates, devices, stroke count, size.
+380. **P2** Heavy page warning, with an offer to split the page.
+
+### Export and Obsidian
+381. **P2** Export choices: ink only, background only, or both.
+382. **P2** Export a notebook as Markdown with page images, for people without Obsidian.
+383. **P3** Obsidian Publish support: pages published as images.
+384. **P2** Notebook commands in the Obsidian mobile toolbar.
+385. **P2** Bookmark a notebook page in Obsidian's Bookmarks pane.
+
+### Performance
+386. **P3** Optional WebGL renderer for very large pages.
+387. **P2** Level of detail: simplified strokes when zoomed out, for smoother scrolling.
+
+### Extensions of earlier items
+388. 🧪 **P1** Stable page links (extends O4): links based on the page id, so they still work after pages are reordered (today `#p3` points at a position). (Wave 0.8: generated links carry the id; command *Update links to notebook pages*. Recent pages and the quick switcher, 364 and 365, still have to use `stablePageSubpath`.)
+389. **P2** Automatic page in the middle of a notebook too (extends #95): filling a page offers to insert one right after it.
+390. **P1** Integrity check with checksums (extends #27): finds silent corruption caused by sync and offers to restore an earlier version.
+391. **P2** Stroke timestamps linked to the lecture video (extends #231): tapping ink jumps the video to the minute it was written.
+
+## M17 — More features (backlog, planned 2026-10-29)
+
+Checked against every earlier item before being added. Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for all.
+
+### Sync and data safety
 342. **P1** 🧪 "Open on another device" warning: a small presence file, refreshed while a notebook is open, warns before Google Drive or OneDrive can create a conflicted copy.
 343. **P1** 🧪 Assets waiting for sync: images and PDFs referenced by a page but not yet downloaded show a "waiting for sync" placeholder instead of an error, and appear by themselves when they arrive.
 344. **P1** 🧪 Online-only notebooks: files that the sync client has not downloaded yet (0 bytes) are shown as "not downloaded yet" and never treated as damaged.

@@ -3397,6 +3397,91 @@ body {
 	display: none;
 }
 
+
+/* wave 0.8: page ops — multi-selection in the page panel, the "update links" list. */
+.notebook-navigator-selectbar {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 2px 8px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.notebook-navigator-selectbar.notebook-hidden {
+	display: none;
+}
+
+.notebook-navigator-selectcount {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.notebook-navigator-selectbar .notebook-tool.is-active {
+	color: var(--interactive-accent);
+}
+
+.notebook-navigator-item {
+	position: relative;
+}
+
+.notebook-navigator-check {
+	display: none;
+	position: absolute;
+	top: 8px;
+	left: 8px;
+	z-index: 1;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border: 2px solid var(--text-faint);
+	border-radius: 50%;
+	background: var(--background-primary);
+	color: transparent;
+	pointer-events: none;
+}
+
+.notebook-navigator-check svg {
+	width: 14px;
+	height: 14px;
+}
+
+.notebook-navigator-list.is-selecting .notebook-navigator-check {
+	display: flex;
+}
+
+.notebook-navigator-item.is-selected {
+	background: var(--background-modifier-hover);
+	outline: 2px solid var(--interactive-accent);
+}
+
+.notebook-navigator-item.is-selected .notebook-navigator-check {
+	border-color: var(--interactive-accent);
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.notebook-update-links .notebook-update-links-list {
+	max-height: 40vh;
+	overflow-y: auto;
+}
+
+.notebook-update-links-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 4px 0;
+}
+
+.notebook-update-links-note {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
 /* wave 0.7: resilience — safe mode, "not saved" and integrity banners (view/resilience.ts), integrity report */
 .notebook-resilience:empty {
 	display: none;

@@ -15,18 +15,24 @@ function leafFile(leaf: WorkspaceLeaf): string | undefined {
  * (1-based) through the view state `{ page }`: `NotebookView.setState` reads it. `view` (zoom and scroll position on
  * that page) is passed along when known.
  */
-export async function openNotebookAtPage(app: App, file: TFile, page: number | null, view: SavedPosition | null = null): Promise<void> {
+export async function openNotebookAtPage(
+	app: App, file: TFile, page: number | null, view: SavedPosition | null = null, pageId: string | null = null,
+): Promise<void> {
 	const { workspace } = app;
 	const open = workspace.getLeavesOfType(VIEW_TYPE).find((leaf) => leafFile(leaf) === file.path);
+	// wave 0.8 (388): `pageId` (a link made by the plugin) wins over the number; the view resolves it once the document is loaded.
+	const wanted = page !== null || pageId !== null;
 	if (open) {
-		if (page !== null) {
+		if (wanted) {
 			const state = open.getViewState().state ?? {};
-			await open.setViewState({ type: VIEW_TYPE, state: { ...state, file: file.path, page, view: view ?? undefined }, active: true });
+			await open.setViewState({ type: VIEW_TYPE, state: { ...state, file: file.path, page: page ?? undefined, pageId: pageId ?? undefined, view: view ?? undefined }, active: true });
 		}
 		await workspace.revealLeaf(open);
 		return;
 	}
-	await workspace.getLeaf("tab").openFile(file, { active: true, state: page !== null ? { page, view: view ?? undefined } : undefined });
+	await workspace.getLeaf("tab").openFile(file, {
+		active: true, state: wanted ? { page: page ?? undefined, pageId: pageId ?? undefined, view: view ?? undefined } : undefined,
+	});
 }
 
 /** Notebook views currently showing `file`. */

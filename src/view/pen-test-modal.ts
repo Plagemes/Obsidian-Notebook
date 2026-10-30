@@ -1,7 +1,8 @@
-import { Modal, Notice, type App } from "obsidian";
+import { Modal, type App } from "obsidian";
 import { t } from "../i18n";
 import { EventLog, noSignalYet, type LoggedEvent } from "../ink/pen-button";
 import type { NotebookSettings } from "../settings";
+import { showNotice } from "./notice";
 
 /** What the test knows about this device's side button across sessions (a flag saved in the plugin settings). */
 export interface PenSignalInfo {
@@ -113,12 +114,12 @@ export class PenTestModal extends Modal {
 		const text = this.log.text();
 		try {
 			await navigator.clipboard.writeText(text);
-			new Notice(t("penTest.copied"));
+			showNotice(t("penTest.copied"));
 		} catch {
 			// No clipboard permission in this WebView: select the text so a long-press and Copy works.
 			this.output.focus();
 			this.output.select();
-			new Notice(t("penTest.copySelect"));
+			showNotice(t("penTest.copySelect"));
 		}
 	}
 }

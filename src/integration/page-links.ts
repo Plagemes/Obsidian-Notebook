@@ -3,8 +3,8 @@
  * page suggestions and the file explorer menu. No Obsidian imports: testable in Node.
  */
 import type { Page } from "../model/types";
-import { parseSubpathParams } from "../zettel/subpath";
-import { pageFromState, parsePageFragment } from "./links";
+import { cardSubpath, parseSubpathParams, validPageId } from "../zettel/subpath";
+import { pageFromState, pageIdFromState, parsePageFragment } from "./links";
 
 // ------------------------------------------------------------------------- subpaths
 
@@ -17,6 +17,15 @@ export function pageFromSubpath(subpath: string): number | null {
 /** Link subpath that points at a page, as Obsidian writes it after the file name. */
 export function pageSubpath(page: number): string {
 	return `#p${Math.max(1, Math.floor(page))}`;
+}
+
+/**
+ * wave 0.8 (388): subpath of every link the plugin writes. It names the page by id (`#p3&id=<page id>`), so the link
+ * still opens the same page after pages are reordered or inserted; `p3` stays for readability and for readers that
+ * only know numbers. Without a usable id it falls back to the plain `#p3`.
+ */
+export function stablePageSubpath(page: number, pageId: string | null | undefined): string {
+	return pageId && validPageId(pageId) ? cardSubpath(page, pageId, null) : pageSubpath(page);
 }
 
 /**
@@ -57,7 +66,8 @@ export function pageTargetFromEphemeralState(state: unknown): PageTarget | null 
 		if (target) return target;
 	}
 	const page = pageFromState(state);
-	return page === null ? null : { page, pageId: null };
+	const pageId = pageIdFromState(state);
+	return page === null && pageId === null ? null : { page, pageId };
 }
 
 export type PageTargetResult = { index: number } | { missing: "deleted" };
@@ -143,6 +153,8 @@ export function pageTitle(page: Page): string | null {
 export interface PageSuggestion {
 	/** 1-based page number. */
 	page: number;
+	/** Id of the page: the link written for it names the page, not its position (wave 0.8, 388). */
+	pageId: string;
 	title: string | null;
 	hasInk: boolean;
 }
@@ -166,7 +178,7 @@ export function pageSuggestions(pages: readonly Page[], query: string): PageSugg
 		if (q === "") match = true;
 		else if (numeric) match = number.startsWith(numeric[1] ?? "");
 		else match = (title ?? "").toLowerCase().includes(q);
-		if (match) out.push({ page: i + 1, title, hasInk: page.strokes.length > 0 });
+		if (match) out.push({ page: i + 1, pageId: page.id, title, hasInk: page.strokes.length > 0 });
 	}
 	return out;
 }

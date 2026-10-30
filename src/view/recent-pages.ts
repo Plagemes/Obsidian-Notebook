@@ -1,10 +1,11 @@
-import { getLanguage, Notice, SuggestModal, type App, type Plugin, type TFile } from "obsidian";
+import { getLanguage, SuggestModal, type App, type Plugin, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { openNotebookAtPage } from "../integration/open";
 import { fuzzyScore } from "../library/page-search";
 import { nameOf, normalizeText } from "../library/index";
 import { ago, RecentLog, RecentRecorder, type RecentItem } from "../library/recent-log";
 import type { NotebookDocument } from "../model/types";
+import { showNotice } from "./notice";
 
 const STORAGE_KEY = "notebook-recent-pages";
 
@@ -81,10 +82,11 @@ export class RecentPagesService {
 	async open(item: RecentItem): Promise<void> {
 		const target = await this.resolve(item);
 		if (!target) {
-			new Notice(t("quicknav.pageGone"));
+			showNotice(t("quicknav.pageGone"));
 			return;
 		}
-		await openNotebookAtPage(this.app, target.file, target.page);
+		// Wave 0.8 (388): by page id first, the number is only the fallback.
+		await openNotebookAtPage(this.app, target.file, target.page, null, item.page);
 	}
 }
 
