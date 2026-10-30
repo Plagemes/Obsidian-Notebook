@@ -272,6 +272,11 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Export as Markdown with page images (roadmap 382, wave 0.9): vault folder and 100 / 150 / 200 dpi; `page-001.png`… drawn on a canvas like the PDF export, then `notebook.md` (title, page images, text boxes as text in reading order, bookmarks as headings); unique names, never overwrites | ✅ | ✅ Markdown text (title, bookmarks with and without title, escaping of user text, link targets), file names (three digits, never an existing name, names already chosen in the same export), render size and caps; ❌ canvas drawing of pages, PNG encoding, writing through the vault, a Markdown viewer outside Obsidian | | ✅ | steps 268-270; PNG rendering of PDF and picture backgrounds depends on pdf.js and the WebView |
 | Night mode (roadmap 367, wave 0.9): dark page with light ink at render time (paper, paper lines, ink, text boxes, live and wet ink, highlighter with a screen blend, backgrounds dimmed); a view setting and a toggle (All actions, command); stored colours, exports and thumbnails unchanged | ✅ | ✅ colour mapping (near-black becomes light, hue kept, contrast at least 4.5:1 for a palette of 12 inks, translucency kept, unknown colours untouched, highlighter band, dim paper lines), settings defaults; ❌ canvas drawing, wet-ink highlighter blend in CSS, legibility on a real screen | | ✅ | step 271; the look of the colours is a judgement that needs real screens |
 | Crop PDF margins (roadmap 376, wave 0.9): content box of each PDF page from a ~100 px render, cached for the session; the view fits the box (widened by the ink) to the width in continuous and page-by-page mode; toggle on the PDF contextual bar, in All actions and as a command; view-only | ✅ | ✅ content-box detection on synthetic bitmaps (bounds, padding, speck and grey noise ignored, transparent pixels, blank page, minimum size), window of a page with margins and with ink in the margin, fit and pan clamp with a window, layout windows (union, dropped when useless), page-by-page fit; ❌ the measuring render with pdf.js, re-layout while pages are measured, use on a phone | | ✅ | steps 272-274; only side margins are cropped; continuous mode crops only when every page is a measured PDF page |
+| Format v10 (anchored excerpts, #105): `excerpt` element (target frame, source notebook path, document id, stable page id, source region, optional snapshot asset); v9 → v10 migration (v9 files read unchanged; a pre-v10 file with an excerpt is rejected); lenient read (an invalid excerpt is dropped and counted, an invalid snapshot reference only loses the snapshot; also in staged loading); strict write and history guard; a newer version opens read-only | ✅ | ✅ `tests/model-v10.test.ts` (migration, one-line serialization, every lenient drop counted, strict-write refusals, incremental save path, history guard accept/refuse, staged loading, future version, freeze) | | ✅ | |
+| Excerpt data kept by every copy path (duplicate page, page restore, page trash, *Move to notebook…*, clipboard with the snapshot renamed when stored again, stamps, templates, merge with the snapshot not counted as content, repair keeping the anchor) and counted by page information and the heavy-page load | ✅ | ✅ `tests/model-v10.test.ts` | | ✅ | |
+| *Excerpt to page…* and *Copy as excerpt* (selection bar, lasso bar with nothing selected, All actions → Insert, commands): region from the selection or from the next drag, PNG snapshot asset, go-to-page picker (this page, next page, a new page, number or bookmark), one undo step; paste in another notebook | ✅ | ✅ harness `doc=excerpt` (region drag, picker, new page, snapshot asset, check before writing, selection, undo); registry and layout tests; ❌ copy and paste across notebooks in Obsidian | | ✅ | steps 400-406, 412 |
+| Excerpt drawing: live from a page of the same notebook (throttled while editing), snapshot otherwise and in exports, thumbnails and the Markdown page images; placeholder without either; badge on the top-right corner (grey when the source page is gone) | ✅ | ✅ harness (live picture, badge drawn); pure geometry in `tests/model-v10.test.ts` | | ✅ | steps 407-410, 416 |
+| Jump back: a tap on the badge (any tool but lasso and eraser) or *Go to source*: same notebook scrolls to the page by id and outlines the region; another notebook opens at the page id with the region outlined; a missing page or notebook gives "Source not found" and changes nothing | ✅ | ✅ harness (tap jumps to the source page and writes no ink); `excerptSourceState` tests; ❌ opening another notebook (needs Obsidian) | | ✅ | steps 411, 413-415, 417-419 |
 
 ## Automated checks
 
@@ -306,6 +311,8 @@ Added in 0.5.0 (companion notes): `companion.test.ts` — the companion note gen
 Not covered automatically: everything that needs Obsidian or a real browser (DOM, canvas, Pointer Events, Vault API, view lifecycle, the toolbar, the page menu and dialogs, the library view, the navigator panel, the scanner camera and crop UI, rendering PDFs with pdf.js, the text editor, writing the export files, selection handles and gestures, the fast path and fling, protocol and Markdown embeds). That is what the manual protocol is for.
 
 Added in wave 0.7 (level of detail and heavy pages): `tests/lod.test.ts` (zoom → level for every pixel ratio from 1 to 3, the simplified shape stays within 0.5 device px of the exact one for perfect-freehand outlines and wet-ink nodes, ring simplification keeps corners, nothing simplified at normal zoom or for short strokes, saved points untouched, SVG paths for thumbnails) and `tests/heavy-page.test.ts` (thresholds are strict, asset bytes counted once per file, PDF background not counted, split plan: cut in the gap near the middle, load-balanced, text boxes and images, strokes crossing the cut, deterministic, no split for backgrounds or a single item, one undo step restores the serialized document exactly). `npm run bench:lod` (PC): frame time scrolling through the 10,000-stroke notebook at 49, 35 and 25 % with the level of detail off and on, and the pixel difference between the two on a page of 1,000 strokes; `-- --check-heavy` runs the banner check in the harness. Measured on the dev PC (desktop Chrome, 1280×800, canvas read back after each frame so rasterization counts; not Android): redraw with strokes cached, off → on, 1x screen: render 1 `52 → 23`, `64 → 27`, `81 → 29` ms at 49, 35, 25 %; render 2 `61 → 37`, `72 → 45`, `91 → 52` ms; 2x screen: render 1 `88 → 51`, `100 → 53`, `114 → 58` ms, render 2 `90 → 72`, `109 → 79`, `130 → 85` ms.
+
+Added in wave 0.10 (anchored excerpts, #105): `tests/model-v10.test.ts` (v9 → v10 migration, rejection of a pre-v10 excerpt, one-line serialization, lenient drops counted, strict write, incremental save path, history guard, staged loading, future version, every copy path keeping the excerpt and its snapshot, merge, repair, region, placement, badge, source state); harness scenarios `excerpt-light-desktop` and `excerpt-dark-tablet` (`doc=excerpt`: region drag, picker, new page, live picture, badge, jump back, undo).
 
 ## Browser harness
 
@@ -723,7 +730,32 @@ Export and view (roadmap 381, 382, 367, 376; wave 0.9). Not verified in Obsidian
 273. **Ink in the margin, mixed notebooks, page by page.** Switch the crop off, write a note in the left margin of a PDF page, switch it on: the margin note is inside the view (the box is wider on that page). In a notebook with a plain page between PDF pages the crop does nothing in continuous mode (the plain page needs the whole width); in *page by page* mode each PDF page is cropped and the plain page is not. Turn pages with swipes: each page fits its own box.
 274. **Nothing changes in the file; large PDFs.** With the crop on, make a change, close and reopen: the notebook, its ink and its exports are as before (an exported PDF is identical with the crop on and off). Open a 200-page PDF notebook and switch the crop on: the app stays responsive while pages are measured (the zoom may adjust a few times in the first seconds), and a blank page or a scan with a dark border does not crash or zoom absurdly.
 
-Results table for steps 1 to 274. Fill it in as you go.
+### Anchored excerpts (wave 0.10, roadmap 105, steps 400-419)
+
+Not verified in Obsidian or on a device. Setup: notebook **A** with a PDF page (slides) and two plain pages, some handwriting on the PDF page; notebook **B** with one plain page. Keep a copy of both files.
+
+400. **Excerpt a lassoed selection.** In A, lasso some handwriting on the PDF page. The contextual bar offers *Excerpt to page…* (on a narrow phone it may be in ⊞ *All actions* → Insert). Tap it: the go-to-page picker opens with *This page*, *Next page* and *A new page after page n*. Choose *Next page*: the view goes to that page, the excerpt (the handwriting and the PDF behind it) is in the middle, selected, with a small teal badge on its top-right corner; a notice says which page.
+401. **Excerpt a bare PDF region.** Choose the lasso, with nothing selected the bar shows *Paste*, *Excerpt to page…*, *Copy as excerpt*. Tap *Excerpt to page…*: a notice asks to drag over the region. Drag a rectangle over a figure of the PDF (the dashed outline follows the pen). On lift the picker opens; type a page number and choose it. Expected: that page has the figure.
+402. **Too small, cancel.** Arm *Excerpt to page…* and just tap: a notice says the region is too small and the next drag still outlines a region. Arm it again and close the picker without choosing: nothing is added (undo history unchanged).
+403. **New page, undo.** Excerpt to *A new page after page n*: a page with the size and paper of that page is inserted with the excerpt. One undo removes both the excerpt and the new page; redo brings them back.
+404. **Move, resize, never stretch.** Select the excerpt with the lasso, move it, scale it with a corner, try to rotate it: it moves and scales keeping its proportions and never rotates; the picture stays sharp after the scale. Write over it with the pen, then move the excerpt: the ink written on it moves with it (setting *Ink follows objects*).
+405. **Copy, duplicate, delete.** Duplicate the excerpt, copy and paste it on another page of A, delete one: each copy keeps its badge and jumps to the same source. Undo restores the deleted one.
+406. **Copy as excerpt to another notebook.** In A, lasso a region and tap *Copy as excerpt*: a notice says it was copied. Open B, choose the lasso, *Paste*: the excerpt appears in B with its picture.
+407. **Live in the same notebook.** In A, keep the excerpt of step 400 and its source page both reachable. Write a new word on the source region, go back to the excerpt: the new word is in the excerpt (within about half a second). Erase it: it goes away in the excerpt too.
+408. **Snapshot in another notebook.** In B, the pasted excerpt shows the region as it was when it was copied: write on the source region in A, reopen B: B's excerpt does not change (by design: snapshots of other notebooks are not refreshed).
+409. **Exports and thumbnails.** Export the page of A holding the excerpt as PDF and SVG, and the notebook as Markdown with page images: the excerpt is in all three as a picture (no badge). The thumbnail in the pages panel shows it too.
+410. **Hidden ink stays hidden.** Write invisible ink in a region, show the solutions, lasso it and excerpt it: the excerpt does not show the hidden ink (snapshot and live picture), and copy/paste of the excerpt does not reveal it.
+411. **Jump back in the same notebook.** With the pen (not the lasso), tap the excerpt's badge in A: the view scrolls to the source page and a dashed outline marks the exact region for about two seconds. Nothing is written by the tap. Do it with a finger and with the mouse too.
+412. **Go to source from the bar.** Lasso-select the excerpt: the bar shows *Go to source* first. Tap it: same jump as step 411. The command *Go to the source of the selected excerpt* in the palette does the same and is only offered with an excerpt selected.
+413. **Jump to another notebook.** In B, tap the badge of the pasted excerpt: A opens (or its tab comes forward) at the source page with the region outlined, even after reordering A's pages (move the source page elsewhere first).
+414. **Source page deleted.** In A, delete the source page of an excerpt (it goes to the page trash): the excerpt keeps its last picture (the snapshot), its badge turns grey; a tap on it says "Source not found" and nothing changes. Restore the page from the page trash: the badge is teal again and the excerpt is live again.
+415. **Source notebook moved, renamed, deleted.** Move A to another folder (same name): the badge in B still opens it. Rename A: the badge in B says the notebook is not found (by design: the excerpt stores the path; see docs/architecture.md); rename it back and it works again. Excerpts of A inside A keep working after the rename (same document id).
+416. **A notebook made by this version in 0.9.x.** Copy A (with excerpts, saved by this version) to a vault with 0.9.x: it opens read-only with a warning and is not rewritten; a backup is kept. A v9 notebook opened by this version shows no change until the first edit, then it is written as v10.
+417. **Damaged excerpt.** In a copy of A, edit the file in a text editor: set an excerpt's `asset` to `"nope"`, and remove the `source` of another. Open it: a notice reports details left out; the first excerpt keeps its anchor and jumps (live or placeholder), the second is gone; the backup of the original is kept. Saving writes a valid file.
+418. **Sync both ways.** With a sync service, make an excerpt on device 1, sync, open on device 2: the excerpt shows (the snapshot file arrives with the vault's `_assets`; until it does, the excerpt is a placeholder or live). Tap the badge on device 2: the jump works.
+419. **Pen gestures and markers around excerpts.** Arm a marker (lecture bar) and tap on an excerpt's badge: the marker is placed (an armed marker wins). With the eraser, touching the badge erases ink as usual and does not jump. With the lasso, a tap on the excerpt selects it.
+
+Results table for steps 1 to 274 and 400 to 419. Fill it in as you go.
 
 | Step | Device / Obsidian version | Result | Notes |
 |---|---|---|---|
@@ -1001,6 +1033,26 @@ Results table for steps 1 to 274. Fill it in as you go.
 | 272 Crop margins | | | |
 | 273 Ink in the margin, mixed notebooks, page by page | | | |
 | 274 Nothing changes in the file; large PDFs | | | |
+| 400 Excerpt a lassoed selection | | | |
+| 401 Excerpt a bare PDF region | | | |
+| 402 Too small, cancel | | | |
+| 403 New page, undo | | | |
+| 404 Move, resize, never stretch | | | |
+| 405 Copy, duplicate, delete | | | |
+| 406 Copy as excerpt to another notebook | | | |
+| 407 Live in the same notebook | | | |
+| 408 Snapshot in another notebook | | | |
+| 409 Exports and thumbnails | | | |
+| 410 Hidden ink stays hidden | | | |
+| 411 Jump back in the same notebook | | | |
+| 412 Go to source from the bar | | | |
+| 413 Jump to another notebook | | | |
+| 414 Source page deleted | | | |
+| 415 Source notebook moved, renamed, deleted | | | |
+| 416 A notebook made by this version in 0.9.x | | | |
+| 417 Damaged excerpt | | | |
+| 418 Sync both ways | | | |
+| 419 Pen gestures and markers around excerpts | | | |
 
 Benchmark output (step 21): paste it here.
 

@@ -28,6 +28,7 @@ import { stressDocument } from "../src/model/stress";
 import { pageFromTemplate, templateDocument } from "../src/model/templates";
 import { CURRENT_VERSION, FORMAT_ID, type Asset, type ExcerptElement, type NotebookDocument, type Page } from "../src/model/types";
 import { pageSignature } from "../src/view/view-helpers";
+import { regionFromState } from "../src/integration/links";
 import { line } from "./helpers";
 
 const stamp = "2026-10-30T10:00:00.000Z";
@@ -261,6 +262,16 @@ describe("a source that moved, was renamed or deleted degrades gracefully", () =
 	it("names the source notebook from its stored path", () => {
 		expect(excerptSourceName(remote.source)).toBe("Lecture 3");
 		expect(excerptSourceName({ ...remote.source, notebook: "plain" })).toBe("plain");
+	});
+});
+
+describe("the jump back", () => {
+	it("reads the region to outline from a view state, and only a valid one", () => {
+		expect(regionFromState({ pageId: "p", region: { x: 1, y: 2, width: 3, height: 4 } })).toEqual({ x: 1, y: 2, width: 3, height: 4 });
+		expect(regionFromState({ region: { x: 1, y: 2, width: 0, height: 4 } })).toBeNull();
+		expect(regionFromState({ region: { x: "1", y: 2, width: 3, height: 4 } })).toBeNull();
+		expect(regionFromState({ region: null })).toBeNull();
+		expect(regionFromState(null)).toBeNull();
 	});
 });
 
