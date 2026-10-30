@@ -1,5 +1,5 @@
 import { FileView, getLanguage, Scope, type Menu, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
-import { pageFromState, pageIdFromState } from "../integration/links";
+import { pageFromState, pageIdFromState, regionFromState } from "../integration/links";
 import { pageTargetFromEphemeralState, resolvePageTarget, type PageTarget } from "../integration/page-links";
 import { checkConflicts, openRepair, type ReliabilityDeps } from "../integration/reliability";
 import { scanFromCamera } from "../scan/scan-modal";
@@ -105,6 +105,7 @@ import type { PdfActionHost } from "./pdf-actions";
 import { pickFile } from "./pick";
 import { pdfSideState, referenceSlideOf, type PageSyncHooks } from "./pdf-sync";
 import { MarkerTools, translatedBoxLabel } from "./markers";
+import { ExcerptTools } from "./excerpts";
 import { layerCommand, type LayerMove } from "../model/layers";
 import { FindReplaceModal } from "./find-replace";
 import { PageInfoModal } from "./page-info";
@@ -374,6 +375,8 @@ export class NotebookView extends FileView {
 	private readonly objectInk = new ObjectInk();
 	/** v8 markers, boxes, invisible ink and the end-of-lecture panel (view/markers.ts). */
 	private markers: MarkerTools | null = null;
+	/** v10 anchored excerpts: making them, their badge taps and the jump back to the source (view/excerpts.ts). */
+	private excerpts: ExcerptTools | null = null;
 	/** wave 0.9 (389): the chip that offers a page after a page in the middle of the notebook (view/page-offer.ts). */
 	private pageOffer: PageOffer | null = null;
 
@@ -576,6 +579,7 @@ export class NotebookView extends FileView {
 
 		this.renderer = new Renderer(this.stage, { lowLatency: this.host.settings.lowLatencyInk });
 		this.mountMarkers();
+		this.mountExcerpts();
 		this.pageOffer = new PageOffer({
 			parent: () => this.body,
 			insertAfter: (pageId) => this.insertPageAfterId(pageId),
@@ -718,7 +722,7 @@ export class NotebookView extends FileView {
 		this.scope.register(["Mod"], "y", () => (this.redo(), false));
 		this.scope.register([], "Delete", () => (this.deleteSelection(), false));
 		this.scope.register([], "Backspace", () => (this.deleteSelection(), false));
-		this.scope.register([], "Escape", () => (this.clearSelection(), false));
+		this.scope.register([], "Escape", () => (this.excerpts?.disarm(), this.clearSelection(), false));
 	}
 
 	async onClose(): Promise<void> {
@@ -775,6 +779,7 @@ export class NotebookView extends FileView {
 		this.stamps = null;
 		this.objectInk.destroy();
 		this.math?.destroy();
+		this.excerpts?.destroy();
 		this.math = null;
 		this.textEditor?.destroy();
 		this.textEditor = null;
@@ -827,7 +832,8 @@ export class NotebookView extends FileView {
 		this.pendingPage = pageFromState(state) ?? (pageId ? 1 : null);
 		this.pendingPos = pageId ? null : positionFromState(state);
 		this.pendingAt = this.pendingPage !== null && !pageId ? pageAtFromState(state) : null;
-		this.pendingTarget = pageId ? { page: pageFromState(state), pageId } : null;
+		// v10: the jump back from an anchored excerpt also names the region to outline.
+		this.pendingTarget = pageId ? { page: pageFromState(state), pageId, region: regionFromState(state) } : null;
 		await super.setState(state, result);
 		// Already loaded (the same file was shown): jump now; otherwise onDocumentLoaded applies it.
 		if (this.pendingPage !== null && this.layout) this.applyPendingPage();
@@ -885,7 +891,8 @@ export class NotebookView extends FileView {
 				return;
 			}
 			this.recordArrival(found.index);
-			this.scrollToPage(found.index);
+			// v10: the jump back from an excerpt outlines the region (also while a large file is still loading).
+			if (!target.region || !this.excerpts?.reveal(found.index, target.region)) this.scrollToPage(found.index);
 			return;
 		}
 		const index = Math.min(doc.pages.length, Math.max(1, page)) - 1;
@@ -1155,6 +1162,7 @@ export class NotebookView extends FileView {
 			this.commitText();
 			this.clearSelection();
 			this.markers?.disarm();
+			this.excerpts?.disarm();
 			this.penLinks?.hideChip();
 			this.pageOffer?.cancel();
 			this.radial?.close();
@@ -1588,9 +1596,60 @@ export class NotebookView extends FileView {
 		return visibleStrokes(page.strokes, this.markers?.isRevealed(page) ?? false);
 	}
 
+	/** v10: anchored excerpts of this view (null before the view is open). */
+	get excerptTools(): ExcerptTools | null {
+		return this.excerpts;
+	}
+
+	private mountExcerpts(): void {
+		this.excerpts = new ExcerptTools({
+			app: this.app,
+			doc: () => this.session?.doc ?? null,
+			shownDoc: () => this.shownDoc(),
+			path: () => this.file?.path ?? null,
+			folder: () => this.host.settings.folder,
+			editable: () => !!this.editableDocument(),
+			media: () => this.media,
+			execute: (cmd) => {
+				if (!this.editableDocument()) return false;
+				this.commitText();
+				this.clearSelection();
+				const ok = this.history.execute(cmd);
+				this.afterHistoryChange();
+				this.renderer?.invalidate();
+				return ok;
+			},
+			currentPageIndex: () => this.currentPageIndex(),
+			scrollTo: (index, y) => this.scrollToPage(index, y),
+			selection: () => {
+				const sel = this.selection;
+				return sel ? { pageIndex: sel.pageIndex, elements: sel.elements, bounds: sel.bounds, matrix: sel.matrix } : null;
+			},
+			select: (pageIndex, elements) => this.selectItems(pageIndex, [], elements),
+			preview: (pageIndex, rect) => this.renderer?.setLasso(rect
+				? { pageIndex, points: [[rect.x, rect.y], [rect.x + rect.width, rect.y], [rect.x + rect.width, rect.y + rect.height], [rect.x, rect.y + rect.height], [rect.x, rect.y]] }
+				: null),
+			previewFree: () => this.lasso === null && (this.markers?.gesturePage ?? null) === null,
+			scale: () => this.viewport.scale,
+			gotoContext: () => this.gotoContext(),
+			disarmOthers: () => this.markers?.disarm(),
+			pageAtClient: (clientX, clientY) => {
+				const layout = this.layout;
+				if (!layout) return null;
+				const r = this.stage.getBoundingClientRect();
+				const [dx, dy] = screenToPage(this.viewport, clientX - r.left, clientY - r.top);
+				const pageIndex = pageAt(layout, dx, dy, 0);
+				return pageIndex < 0 ? null : { pageIndex, local: toPageLocal(layout.boxes[pageIndex]!, dx, dy) };
+			},
+		});
+		// The jump back edits nothing: it also works while the notebook cannot be edited.
+		this.excerpts.attachReadOnlyTaps(this.stage);
+	}
+
 	private mountMarkers(): void {
 		this.markers = new MarkerTools({
 			app: this.app,
+			armed: () => this.excerpts?.disarm(),
 			doc: () => this.session?.doc ?? null,
 			editable: () => this.editable(),
 			execute: (cmd) => {
@@ -2122,6 +2181,8 @@ export class NotebookView extends FileView {
 			// The maths actions (Edit, Convert to ink) work on the primary page's elements only (see mathTools).
 			equations: sel.elements.filter((e) => e.type === "equation").length,
 			graphs: sel.elements.filter((e) => e.type === "graph").length,
+			// v10: "Go to source" acts on the first excerpt of the primary page's elements.
+			excerpts: sel.elements.filter((e) => e.type === "excerpt").length,
 		};
 	}
 
@@ -2577,6 +2638,8 @@ export class NotebookView extends FileView {
 		// wave 0.10 (51): read-only mode never schedules a save (nothing changed; a stray call must not write the file).
 		if (this.userReadOnly) return;
 		this.session?.markChanged();
+		// v10: live pictures of excerpts of this notebook's pages follow the edit (throttled).
+		this.media?.excerptsChanged();
 		const doc = this.session?.doc;
 		if (!doc || !this.file || this.session?.mode !== "ok") return;
 		const num = this.currentPageIndex() + 1;
@@ -2639,6 +2702,8 @@ export class NotebookView extends FileView {
 		this.radial?.noteTools(state);
 		this.colour?.noteTools(state);
 		this.lastTool.note(state.tool);
+		// v10: an armed excerpt region is for the tool it was armed with.
+		if (state.tool !== before.tool) this.excerpts?.disarm();
 		if (state.tool !== "lasso") this.clearSelection();
 		this.refreshUi();
 		if (before.tool === "text" && state.tool !== "text") this.commitText();
@@ -2695,6 +2760,13 @@ export class NotebookView extends FileView {
 		}
 		const elements = page.elements ?? [];
 		for (const el of elements) {
+			if (el.type === "excerpt") {
+				// v10: thumbnails show an excerpt's snapshot (cheap, and never another page's live picture).
+				const img = el.asset !== undefined ? media.image(el.asset) : null;
+				if (el.asset !== undefined && !img) incomplete = true;
+				drawElement(ctx, el, img);
+				continue;
+			}
 			if (el.type !== "image") continue;
 			const img = media.image(el.asset);
 			if (!img) incomplete = true;
@@ -2983,7 +3055,7 @@ export class NotebookView extends FileView {
 		const tool = eraserButton ? "eraser" : held === "lasso" ? "lasso" : held === "previous" ? (this.lastTool.previous() ?? this.tools.tool) : this.tools.tool;
 
 		// An armed marker or box takes the next contact whatever the tool (see below).
-		if (tool === "eraser" && this.tools.eraserMode !== "area" && !(this.markers?.armed && !eraserButton)) {
+		if (tool === "eraser" && this.tools.eraserMode !== "area" && !((this.markers?.armed || this.excerpts?.armed) && !eraserButton)) {
 			// The selection may contain strokes about to be erased (e.g. erasing with the pen button).
 			this.clearSelection();
 			this.erasing = { commands: [], last: [dx, dy] };
@@ -3002,6 +3074,12 @@ export class NotebookView extends FileView {
 
 		// v8: an armed marker or box is placed, a tap on a badge toggles it (eraser and lasso keep their own taps).
 		if (page && !eraserButton && this.markers?.begin(pageIndex, page, local, sample, tool)) {
+			this.clearSelection();
+			return true;
+		}
+		// v10: an armed excerpt takes the drag of its region. A contact on an excerpt's badge is only noted: it is ink
+		// unless it lifts soon without moving (then drawEnd drops the dot and jumps to the source).
+		if (page && !eraserButton && this.excerpts?.begin(pageIndex, page, local, sample, tool)) {
 			this.clearSelection();
 			return true;
 		}
@@ -3096,6 +3174,8 @@ export class NotebookView extends FileView {
 	private drawMove(samples: SampleBuffer, predicted: SampleBuffer): void {
 		const n = samples.count;
 		if (n > 0) this.perfInput = samples.t[n - 1]!;
+		// v10: a contact that started on an excerpt's badge and moves is ink, not a tap.
+		if (this.excerpts) for (let i = 0; i < n; i++) this.excerpts.watch(NotebookView.at(samples, i));
 
 		if (this.penGestures?.active) {
 			this.penGestures.move(samples);
@@ -3115,6 +3195,12 @@ export class NotebookView extends FileView {
 		if (markerPage !== null) {
 			const last = n > 0 ? NotebookView.at(samples, n - 1) : null;
 			this.markers!.move(last ? this.toLocal(markerPage, last) : null, last);
+			return;
+		}
+		const excerptPage = this.excerpts?.gesturePage ?? null;
+		if (excerptPage !== null) {
+			const last = n > 0 ? NotebookView.at(samples, n - 1) : null;
+			this.excerpts!.move(last ? this.toLocal(excerptPage, last) : null, last);
 			return;
 		}
 
@@ -3253,14 +3339,43 @@ export class NotebookView extends FileView {
 		this.renderer.setLive({ pageIndex: active.pageIndex, tool, color, width, points, predicted: [] });
 	}
 
+	/**
+	 * v10: how far (CSS px) what the contact in progress drew reaches: every point of the stroke and where the pen is
+	 * now (the lift), a shape's drag, a text tap that moved. A badge tap is only a contact that reaches no further than
+	 * a tap may move.
+	 */
+	private contactExtentPx(): number {
+		const s = this.viewport.scale;
+		const active = this.active;
+		if (active) {
+			const points = active.wet ? this.ink.toPoints() : active.stroke.points;
+			let minX = active.rawX, maxX = active.rawX, minY = active.rawY, maxY = active.rawY;
+			for (const [x, y] of points) {
+				if (x < minX) minX = x;
+				if (x > maxX) maxX = x;
+				if (y < minY) minY = y;
+				if (y > maxY) maxY = y;
+			}
+			return Math.hypot(maxX - minX, maxY - minY) * s;
+		}
+		const shape = this.shapeDrag;
+		if (shape) return Math.hypot(shape.b[0] - shape.a[0], shape.b[1] - shape.a[1]) * s;
+		if (this.textTap?.moved) return Infinity;
+		return 0;
+	}
+
 	private drawEnd(cancelled: boolean): void {
-		this.endGesture(cancelled);
+		// v10: a short unmoved contact on an excerpt's badge was a tap: what it drew (a dot) is dropped, then the jump.
+		const badgeTap = this.excerpts?.takeBadgeTap(cancelled, performance.now(), () => this.contactExtentPx()) ?? null;
+		this.endGesture(cancelled || badgeTap !== null);
+		if (badgeTap) this.excerpts?.openSource(badgeTap);
 		// An external change seen during the gesture was postponed; check it now.
 		this.session?.gestureEnded();
 	}
 
 	private endGesture(cancelled: boolean): void {
 		if (this.markers?.end(cancelled)) return;
+		if (this.excerpts?.end(cancelled)) return;
 		if (this.penGestures?.active) {
 			this.penGestures.end(cancelled);
 			return;

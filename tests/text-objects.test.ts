@@ -317,7 +317,7 @@ describe("page information (379)", () => {
 		expect(info.total).toBe(2);
 		expect(info.strokes).toEqual({ total: 3, byTool: { pen: 2, highlighter: 1, shape: 0 }, hidden: 1 });
 		expect(info.points).toBe(11 + 5 + 3);
-		expect(info.elements).toEqual({ total: 6, text: 1, image: 2, marker: 2, box: 1, equation: 0, graph: 0 });
+		expect(info.elements).toEqual({ total: 6, text: 1, image: 2, marker: 2, box: 1, equation: 0, graph: 0, excerpt: 0 });
 		expect(info.markers).toEqual({ total: 2, open: 1, byKind: { question: 1, star: 1 } });
 		expect(info.tags).toEqual(["physics", "exam"]);
 		expect(info.bookmark).toEqual({ title: "Start", category: "important" });

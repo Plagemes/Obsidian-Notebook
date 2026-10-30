@@ -1,3 +1,4 @@
+import { elementAssetId } from "../model/excerpts";
 import type { NewPageContent, PageContentChange, PageContentPlan } from "../model/page-content";
 import { freezeStroke } from "../model/serialize";
 import type { Asset, PageElement, Stroke } from "../model/types";
@@ -47,7 +48,10 @@ export function pageLoad(page: LoadPage, assets: Readonly<Record<string, Pick<As
 	let points = 0;
 	for (const s of page.strokes) points += s.points.length;
 	const used = new Set<string>();
-	for (const el of page.elements ?? []) if (el.type === "image") used.add(el.asset);
+	for (const el of page.elements ?? []) {
+		const id = elementAssetId(el);
+		if (id !== null) used.add(id);
+	}
 	if (page.background?.kind === "image") used.add(page.background.asset);
 	let assetBytes = 0;
 	for (const id of used) assetBytes += assets?.[id]?.bytes ?? 0;
@@ -124,7 +128,8 @@ export function planPageSplit(
 	});
 	(page.elements ?? []).forEach((element, index) => {
 		const b = elementBounds(element, measure);
-		const weight = element.type === "image" ? Math.max(IMAGE_MIN_WEIGHT, Math.round((assets?.[element.asset]?.bytes ?? 0) / 256)) : TEXT_WEIGHT;
+		const asset = elementAssetId(element);
+		const weight = asset !== null ? Math.max(IMAGE_MIN_WEIGHT, Math.round((assets?.[asset]?.bytes ?? 0) / 256)) : TEXT_WEIGHT;
 		items.push({ element, index, minY: b.minY, maxY: b.maxY, centre: (b.minY + b.maxY) / 2, weight });
 	});
 	const n = items.length;

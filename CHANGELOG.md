@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.11.0 — 2026-10-30
+
+Not yet verified on Android hardware or in Obsidian. Document format v10: notebooks saved by 0.11.0 open read-only (with a backup) in 0.10.x and older. Manual steps 384–403 in `docs/testing.md`.
+
+### Upgrade notes
+- **Document format v10** (0.10 wrote v9). Notebooks saved by 0.11.0 open **read-only** (with a backup) in 0.10.x, 0.9.x and older builds, which read up to v9. v9 files are read unchanged and rewritten as v10 only on the first edit. The only change is the new `excerpt` element; nothing else changes in how notebooks are saved.
+
+### Added
+- **Anchored excerpts** (roadmap 105, format v10; manual steps 384-403). Cut a region of a page (a PDF page or any other page) and drop it on another page; the excerpt remembers exactly where it came from.
+  - *Excerpt to page…* on the contextual bar of a lasso selection, on the lasso bar with nothing selected, in the *All actions* sheet (Insert) and as a command. With a selection the region is the selection's box (plus 4 pt); with nothing selected the next drag on a page outlines the region. The go-to-page picker then asks where it goes: this page, the next page, a new page after this one, or any page by number or bookmark. The excerpt is placed at the region's size (scaled down to fit the page), selected, and added in one undo step.
+  - *Copy as excerpt* (same places) puts the excerpt on the plugin clipboard: paste it (lasso → *Paste*) on any page of **any notebook**.
+  - The excerpt is an element like a picture: it can be selected, moved and resized with the lasso (uniformly: it never rotates or stretches), copied, duplicated, deleted, reordered among pictures, and ink written on it moves with it.
+  - **Jump back**: a pen, finger or mouse tap on the badge in its top-right corner (also in read-only mode) (a stroke that starts on the badge and moves stays ink) (or *Go to source* on the contextual bar of a selected excerpt) goes to the source: the same notebook scrolls to the page and outlines the region for a moment; another notebook is opened at the source page (found by its stable id, so it still works after pages were reordered) with the region outlined.
+  - **What is drawn**: an excerpt of a page of the same notebook is drawn **live** from its source (writing on the source shows in the excerpt a moment later); otherwise, and in exports, thumbnails and the Markdown page images, it shows the **snapshot** taken when it was made (a PNG image asset in `_assets`). See docs/architecture.md (v10).
+  - **A source that is gone** never breaks anything: a deleted source page turns the badge grey and a tap says "Source not found"; a source notebook that was moved or renamed is found by its document id (its path, then its name, then the whole vault), never another notebook with the same name, and the stored path is updated; when it is not found a tap says so. The excerpt keeps showing its snapshot (or a placeholder card when it has none) and nothing is changed or lost.
+
+### Changed
+- *Page information* counts excerpts; the files of a page include excerpt snapshots; the library check never reports a snapshot as unused; the PNG export and printing draw the snapshot; the clipboard between devices and the lasso across pages carry excerpts. Every path that copies pages or elements (duplicate, page restore, page trash, *Move to notebook…*, templates, stamps, clipboard, conflicted-copy merge, repair) keeps excerpts and brings their snapshot asset along.
+
 ## 0.10.1 — 2026-10-30
 
 Not yet verified on Android hardware or in Obsidian. No change to the notebook format (still v9). Manual steps 380-383 in `docs/testing.md`.

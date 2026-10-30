@@ -2,13 +2,14 @@
 // PDF and SVG exports: white sheet, background, paper, pictures, boxes, text, ink, markers; never the night-mode colours,
 // never hidden ink unless the caller says so. The caller owns the canvas and the bitmaps (no 'obsidian' import).
 import { backgroundRect } from "../model/margins";
-import type { Page } from "../model/types";
+import type { Page, PageElement, Stroke } from "../model/types";
 import { PAPER_DOT_RADIUS, PAPER_LINE_WIDTH } from "./export-svg";
 import { layerFlags, type ExportLayers } from "./export-layers";
 import { defaultBoxLabel, drawBox, drawMarker, type BoxLabel } from "./marker-render";
 import { PAPER_COLORS, paperPattern } from "./paper";
 import { drawElement, drawTextElement } from "./renderer";
 import { drawEquation, drawGraph } from "./math-render";
+import { drawExcerpt } from "./excerpt-render";
 import { graphClips, strokeClip } from "./attach";
 import { equationNumbers } from "../model/math-elements";
 import { HIGHLIGHTER_ALPHA, strokeSvgPath } from "./stroke-shape";
@@ -23,14 +24,31 @@ export interface RasterInputs {
 	layers?: ExportLayers;
 	/** v9: numbers of the numbered equations (default: counted on this page). */
 	equationNumbers?: ReadonlyMap<string, number>;
+	/**
+	 * v10: draw only this part of the page (pt), its top-left corner at the canvas origin: the canvas is then
+	 * `region.width × scale` by `region.height × scale` pixels (the picture of an anchored excerpt).
+	 */
+	region?: { x: number; y: number; width: number; height: number };
+	/**
+	 * v10: the elements whose graph frames clip bound ink (default: `page.elements`); a caller that passes a page with
+	 * only some of its elements (the live picture of an excerpt) passes all of them here.
+	 */
+	clipElements?: readonly PageElement[];
+	/** v10: shapes of strokes already built (strokes are immutable), filled as strokes are drawn. */
+	paths?: WeakMap<Stroke, Path2D>;
 }
 
-/** Paints `page` on `ctx` (a canvas of `page.width × scale` by `page.height × scale` pixels). */
+/**
+ * Paints `page` on `ctx` (a canvas of `page.width × scale` by `page.height × scale` pixels, or of the region's size).
+ * v10 excerpts on the page draw their snapshot (`images` by asset id), never live: an excerpt of a page holding an
+ * excerpt of it cannot recurse.
+ */
 export function drawPageRaster(ctx: CanvasRenderingContext2D, page: Page, scale: number, inputs: RasterInputs): void {
 	const flags = layerFlags(inputs.layers);
 	ctx.save();
 	try {
-		ctx.setTransform(scale, 0, 0, scale, 0, 0);
+		const region = inputs.region;
+		ctx.setTransform(scale, 0, 0, scale, region ? -region.x * scale : 0, region ? -region.y * scale : 0);
 		if (flags.background) {
 			ctx.fillStyle = "#ffffff";
 			ctx.fillRect(0, 0, page.width, page.height);
@@ -43,6 +61,10 @@ export function drawPageRaster(ctx: CanvasRenderingContext2D, page: Page, scale:
 		if (!flags.content) return;
 		const elements = page.elements ?? [];
 		for (const el of elements) {
+			if (el.type === "excerpt") {
+				drawExcerpt(ctx, el, el.asset !== undefined ? inputs.images.get(el.asset) ?? null : null);
+				continue;
+			}
 			if (el.type !== "image") continue;
 			const img = inputs.images.get(el.asset);
 			if (img) drawElement(ctx, el, img);
@@ -54,11 +76,11 @@ export function drawPageRaster(ctx: CanvasRenderingContext2D, page: Page, scale:
 		const numbers = inputs.equationNumbers ?? equationNumbers([page]);
 		for (const el of elements) if (el.type === "equation") drawEquation(ctx, el, numbers.get(el.id));
 		for (const el of elements) if (el.type === "text") drawTextElement(ctx, el);
-		const clips = graphClips(page.elements);
+		const clips = graphClips(inputs.clipElements ?? page.elements);
 		for (const stroke of page.strokes) {
 			if (stroke.hidden && !inputs.hiddenInk) continue;
-			const d = strokeSvgPath(stroke);
-			if (!d) continue;
+			const path = strokePath2D(stroke, inputs.paths);
+			if (!path) continue;
 			const highlighter = stroke.tool === "highlighter";
 			ctx.fillStyle = stroke.color;
 			ctx.globalAlpha = highlighter ? HIGHLIGHTER_ALPHA : 1;
@@ -70,9 +92,9 @@ export function drawPageRaster(ctx: CanvasRenderingContext2D, page: Page, scale:
 				ctx.beginPath();
 				ctx.rect(clip.x, clip.y, clip.width, clip.height);
 				ctx.clip();
-				ctx.fill(new Path2D(d));
+				ctx.fill(path);
 				ctx.restore();
-			} else ctx.fill(new Path2D(d));
+			} else ctx.fill(path);
 		}
 		ctx.globalAlpha = 1;
 		ctx.globalCompositeOperation = "source-over";
@@ -80,6 +102,17 @@ export function drawPageRaster(ctx: CanvasRenderingContext2D, page: Page, scale:
 	} finally {
 		ctx.restore();
 	}
+}
+
+/** The fill shape of a stroke, from `cache` when it has it. Null for a stroke with no shape. */
+function strokePath2D(stroke: Stroke, cache: WeakMap<Stroke, Path2D> | undefined): Path2D | null {
+	const have = cache?.get(stroke);
+	if (have) return have;
+	const d = strokeSvgPath(stroke);
+	if (!d) return null;
+	const path = new Path2D(d);
+	cache?.set(stroke, path);
+	return path;
 }
 
 function drawPaperLines(ctx: CanvasRenderingContext2D, page: Page): void {

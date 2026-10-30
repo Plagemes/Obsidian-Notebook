@@ -24,6 +24,8 @@ export type PlaceKind = MarkerKind | "box";
 /** What the view gives the marker tools. */
 export interface MarkerHost {
 	app: App;
+	/** v10: a marker or box was armed: any other one-shot placement (an armed excerpt region) is forgotten. */
+	armed?(): void;
 	doc(): NotebookDocument | null;
 	editable(): boolean;
 	/** Runs one undoable step and refreshes the view. */
@@ -134,6 +136,7 @@ export class MarkerTools {
 	/** The next tap (a point) or drag (a region) on a page places `kind`. A box needs a drag. */
 	arm(kind: PlaceKind): void {
 		if (!this.host.editable()) return;
+		this.host.armed?.();
 		this.armed = kind;
 		new Notice(t(kind === "box" ? "markers.hint.box" : "markers.hint.marker", { kind: kind === "box" ? "" : markerKindName(kind) }));
 	}

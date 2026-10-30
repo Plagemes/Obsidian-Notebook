@@ -3,6 +3,7 @@
  * stored for it, so there is no format change: the dates are the ones the file has (the notebook's), and a page's own
  * last edit is known only on this device (the recent-pages log), which the caller passes in when it has it.
  */
+import { elementAssetId } from "./excerpts";
 import { MARKER_KINDS, PAGE_SIZES, type MarkerKind, type NotebookDocument, type Page, type PageSizeName, type Tool } from "./types";
 
 export interface PageInfo {
@@ -19,7 +20,7 @@ export interface PageInfo {
 	strokes: { total: number; byTool: Record<Tool, number>; /** Invisible-ink strokes (they are in the total). */ hidden: number };
 	/** Points of all strokes. */
 	points: number;
-	elements: { total: number; text: number; image: number; marker: number; box: number; /** v9 */ equation: number; graph: number };
+	elements: { total: number; text: number; image: number; marker: number; box: number; /** v9 */ equation: number; graph: number; /** v10 */ excerpt: number };
 	/** Distinct files the page uses (its PDF or image background and its images), and their size when known. */
 	assets: { count: number; bytes: number; /** Files the document has no record of. */ unknown: number };
 	tags: string[];
@@ -38,7 +39,10 @@ export interface PageInfo {
 export function pageAssetIds(page: Page): string[] {
 	const ids = new Set<string>();
 	if (page.background) ids.add(page.background.asset);
-	for (const el of page.elements ?? []) if (el.type === "image") ids.add(el.asset);
+	for (const el of page.elements ?? []) {
+		const id = elementAssetId(el);
+		if (id !== null) ids.add(id);
+	}
 	return [...ids];
 }
 
@@ -63,7 +67,7 @@ export function pageInfo(doc: NotebookDocument, index: number, editedHere: numbe
 		points += s.points.length;
 		if (s.hidden) hidden++;
 	}
-	const elements = { total: 0, text: 0, image: 0, marker: 0, box: 0, equation: 0, graph: 0 };
+	const elements = { total: 0, text: 0, image: 0, marker: 0, box: 0, equation: 0, graph: 0, excerpt: 0 };
 	const byKind: Partial<Record<MarkerKind, number>> = {};
 	let markers = 0;
 	let open = 0;

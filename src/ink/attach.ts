@@ -32,11 +32,11 @@ function overlap(a: BBox, b: BBox): boolean {
 }
 
 /**
- * Whether ink can belong to the element: texts and images, and v9 equations and graphs (ink written on a graph keeps
+ * Whether ink can belong to the element: texts and images (and v10 excerpts), and v9 equations and graphs (ink written on a graph keeps
  * its graph coordinates, ink/graph-ink.ts); v8 markers and boxes only frame the page.
  */
 export function ownsInk(el: PageElement): boolean {
-	return el.type === "text" || el.type === "image" || el.type === "equation" || el.type === "graph";
+	return el.type === "text" || el.type === "image" || el.type === "equation" || el.type === "graph" || el.type === "excerpt";
 }
 
 /**

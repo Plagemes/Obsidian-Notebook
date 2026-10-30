@@ -1,3 +1,4 @@
+import { elementAssetId } from "../model/excerpts";
 import { createDocument, createStroke } from "../model/document";
 import type { Batch } from "../model/history";
 import { freezeStroke, parse, serializeChecked } from "../model/serialize";
@@ -152,13 +153,22 @@ export function planStampPlacement(
 ): (StampPlacement & { skipped: number }) | null {
 	const measure = options.measure ?? estimateMeasure;
 	const keep = (e: PageElement) => e.type !== "image" || !options.usable || options.usable(e.asset);
-	const elements = clip.elements.filter(keep);
+	// v10: an excerpt whose snapshot cannot be used keeps its anchor without the snapshot.
+	const elements = clip.elements.filter(keep).map((e) => {
+		if (e.type !== "excerpt" || e.asset === undefined || !options.usable || options.usable(e.asset)) return e;
+		const { asset: _a, ...rest } = e;
+		void _a;
+		return rest;
+	});
 	const skipped = clip.elements.length - elements.length;
 	if (clip.strokes.length === 0 && elements.length === 0) return null;
 	const content: ClipContent = { ...clip, elements };
 	const [dx, dy] = pasteOffset(content.bounds, page, centre, 0);
 	const made = instantiateClip(content, dx, dy, undefined, measure);
-	const wanted = new Set(made.elements.flatMap((e) => (e.type === "image" ? [e.asset] : [])));
+	const wanted = new Set(made.elements.flatMap((e) => {
+		const id = elementAssetId(e);
+		return id !== null ? [id] : [];
+	}));
 	const newAssets = clip.assets.filter((a) => wanted.has(a.id) && !doc.assets?.[a.id]);
 	const command = pasteCommand(page, made.strokes, made.elements, newAssets, "Place stamp");
 	return { command, strokes: made.strokes, elements: made.elements, skipped };

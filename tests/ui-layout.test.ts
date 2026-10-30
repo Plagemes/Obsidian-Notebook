@@ -60,7 +60,8 @@ describe("layout engine", () => {
 		expect(sel.actions).toContain("delete-selection");
 		const lasso = contextBar(baseContext({ tool: "lasso" }), 800, {}, NOW)!;
 		// wave 0.10: pasting from another device (362) and the lasso's shape (rectangle) and select by colour or tool sit beside paste.
-		expect(lasso).toEqual({ kind: "lasso", actions: ["selection-paste", "select-rectangle", "select-by-style", "selection-paste-device"] });
+		// v10: then the excerpt actions (the next drag outlines the region), last, so a narrow bar cuts them first.
+		expect(lasso).toEqual({ kind: "lasso", actions: ["selection-paste", "select-rectangle", "select-by-style", "selection-paste-device", "excerpt-to-page", "excerpt-copy"] });
 		const noImage = contextBar(baseContext({ tool: "lasso", selection: { strokes: 3, elements: 0, images: 0 } }), 800, {}, NOW)!;
 		expect(noImage.actions).not.toContain("selection-white-transparent");
 	});

@@ -13,6 +13,7 @@
  * `PAGE_TRASH_RETENTION_DAYS` days. The limits are applied each time a page is added.
  * Entries are kept as raw JSON; one that no longer validates is never rewritten or dropped except by those limits.
  */
+import { elementAssetId } from "./excerpts";
 import { cloneMeta, createId } from "./document";
 import { copyBookmarkInfoMap } from "./bookmarks";
 import { AddAsset, AddPage, Batch, SetMeta, type Command } from "./history";
@@ -144,7 +145,10 @@ function assetsNeeded(page: Page, doc: NotebookDocument): Record<string, Asset> 
 	const out: Record<string, Asset> = {};
 	const ids = new Set<string>();
 	if (page.background) ids.add(page.background.asset);
-	for (const el of page.elements ?? []) if (el.type === "image") ids.add(el.asset);
+	for (const el of page.elements ?? []) {
+		const id = elementAssetId(el);
+		if (id !== null) ids.add(id);
+	}
 	for (const id of ids) {
 		const a = doc.assets?.[id];
 		if (a) out[id] = { ...a };

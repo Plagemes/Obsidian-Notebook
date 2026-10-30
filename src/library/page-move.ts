@@ -2,6 +2,7 @@
  * Pure planning of "Move to notebook…" (no DOM, no 'obsidian'): which pages and files travel, and which pages may leave
  * the source afterwards. The caller does the writing: target first, then — only if it saved — the removal from the source.
  */
+import { elementAssetId } from "../model/excerpts";
 import { normalizeBookmarkInfo, setBookmark } from "../model/bookmarks";
 import { cloneMeta, createPage } from "../model/document";
 import { duplicatePage } from "../model/pages";
@@ -46,7 +47,10 @@ export function withMovedBookmarks(meta: NotebookMeta | undefined, bookmarks: Pa
 export function pageAssetIds(page: Page): string[] {
 	const ids = new Set<string>();
 	if (page.background) ids.add(page.background.asset);
-	for (const el of page.elements ?? []) if (el.type === "image") ids.add(el.asset);
+	for (const el of page.elements ?? []) {
+		const id = elementAssetId(el);
+		if (id !== null) ids.add(id);
+	}
 	return [...ids];
 }
 
