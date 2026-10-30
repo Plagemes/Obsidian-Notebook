@@ -356,3 +356,23 @@ describe("move to notebook: page ids", () => {
 		expect([...vault.files.keys()].some((p) => p.includes("page-moves.unreadable-"))).toBe(true);
 	});
 });
+
+// --- 9. multi-delete deletes only the version that was kept ---
+
+describe("deleting several pages: the copy must be the version deleted", () => {
+	it("a page edited or replaced after its copy needs a new copy", async () => {
+		const { stashSnapshot, unstashedPages } = await import("../src/model/page-ops");
+		const doc = createDocument(new Date("2026-10-30T10:00:00.000Z"));
+		doc.pages.push({ ...doc.pages[0]!, id: "b", strokes: [] }, { ...doc.pages[0]!, id: "c", strokes: [] });
+		const ids = ["b", "c"];
+		const stashed = new Map<string, { page: Page; snapshot: string }>();
+		expect(unstashedPages(doc, ids, stashed).map((p) => p.id)).toEqual(["b", "c"]);
+		for (const p of doc.pages.slice(1)) stashed.set(p.id, { page: p, snapshot: stashSnapshot(p) });
+		expect(unstashedPages(doc, ids, stashed)).toEqual([]);
+		// Written on after its copy was made.
+		doc.pages[1]!.strokes.push(stroke([[1, 1], [2, 2]]));
+		// Replaced by another object with the same id (a version restore).
+		doc.pages[2] = { ...doc.pages[2]! };
+		expect(unstashedPages(doc, ids, stashed).map((p) => p.id)).toEqual(["b", "c"]);
+	});
+});

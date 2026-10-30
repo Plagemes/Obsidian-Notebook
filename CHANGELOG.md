@@ -12,6 +12,7 @@
 - **Moved pages keep their ids.** *Move to notebook…* keeps each page's id, so stable links (`#p3&id=…`) can follow the page with *Update links to notebook pages*. Only a page whose id the target already has gets a new one; that old → new pair is recorded in `<notebooks folder>/_meta/page-moves-<device>.json` (one file per device) and *Update links* uses it.
 - **An empty sidecar file is never read as "no data".** An existing empty Inbox, practice or textbooks file (a sync app that has not finished downloading it, or a write cut short) is now treated as not ready: the change is refused with a notice saying so, a copy is kept, and the file is not written over.
 - **Practice links and textbooks: one file per device.** `practice.json` and `textbooks.json` were shared by all devices, so the last device to write won and sync conflict copies were never read. Each device now writes only `_meta/practice-<device>.json` and `_meta/textbooks-<device>.json`, and every device's files are merged on read (attempt times add up across devices; for a textbook the latest setting or removal wins). The old shared files are still read, never written or deleted, so no record is lost.
+- **Deleting several pages never deletes a version without a copy.** A page edited or replaced while the copies for *Deleted pages* were being written gets a new copy before it is deleted; if the pages keep changing, nothing is deleted and a notice says so.
 
 ## 0.7.0 — 2026-10-30
 

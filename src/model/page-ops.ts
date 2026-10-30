@@ -167,6 +167,28 @@ export function duplicateCommand(doc: NotebookDocument, ids: Iterable<string>): 
 }
 
 /** Deletes the selected pages. Null when nothing is selected or when it would leave the notebook without pages. */
+/** A copy of a page as it was kept in the page trash before a delete: the object and its content then. */
+export interface StashedPage {
+	page: Page;
+	snapshot: string;
+}
+
+export function stashSnapshot(page: Page): string {
+	return JSON.stringify(page);
+}
+
+/**
+ * Pages among `ids` whose copy in the page trash is not the version the notebook has now: no copy yet, the page object
+ * was replaced (a version restore, a reload) or it changed after its copy was written. Deleting one of them would lose
+ * what the copy lacks, so it needs a new copy first.
+ */
+export function unstashedPages(doc: Pick<NotebookDocument, "pages">, ids: Iterable<string>, stashed: ReadonlyMap<string, StashedPage>): Page[] {
+	return selectedPages(doc, ids).filter((page) => {
+		const kept = stashed.get(page.id);
+		return !kept || kept.page !== page || kept.snapshot !== stashSnapshot(page);
+	});
+}
+
 export function deleteCommand(doc: NotebookDocument, ids: Iterable<string>): Command | null {
 	const pages = selectedPages(doc, ids);
 	if (pages.length === 0 || pages.length >= doc.pages.length) return null;

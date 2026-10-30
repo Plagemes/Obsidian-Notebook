@@ -10,7 +10,7 @@ import { ConfirmModal, PromptModal } from "../library/library-modals";
 import type { Command } from "../model/history";
 import {
 	addTagsCommand, allBookmarked, bookmarkCommand, deleteCommand, duplicateCommand, exportSuffix, moveCommand, paperCommand, removeTagCommand,
-	selectedPages, selectionTags, sizeCommand, type MoveTarget,
+	selectedPages, selectionTags, sizeCommand, stashSnapshot, unstashedPages, type MoveTarget, type StashedPage,
 } from "../model/page-ops";
 import { parsePageTagInput } from "../model/page-tags";
 import { PAGE_SIZES, PAPER_KINDS, type NotebookDocument, type Page, type PageSizeName } from "../model/types";
@@ -84,13 +84,26 @@ function askDelete(host: PageOpsHost, ids: readonly string[]): void {
 	}
 	new ConfirmModal(host.app, { title: t("pageOps.deleteTitle", { n: String(pages.length) }), body: t("pageOps.deleteBody"), cta: t("page.delete") }, () => {
 		void (async () => {
-			for (const page of pages) {
-				if (!(await stashDeletedPage(host, doc, page, doc.pages.indexOf(page)))) return;
+			const stashed = new Map<string, StashedPage>();
+			// The copies are written one after the other; the notebook stays editable meanwhile. A page that was edited or
+			// replaced after its copy was written gets a new copy (one more round); if it keeps changing, nothing is deleted.
+			for (let round = 0; ; round++) {
+				if (host.editableDocument() !== doc) return;
+				const missing = unstashedPages(doc, ids, stashed);
+				if (missing.length === 0) break;
+				if (round >= 2) {
+					showNotice(t("pageOps.deleteChanged"), 8000);
+					return;
+				}
+				for (const page of missing) {
+					const snapshot = stashSnapshot(page);
+					if (!(await stashDeletedPage(host, doc, page, doc.pages.indexOf(page)))) return;
+					stashed.set(page.id, { page, snapshot });
+				}
 			}
-			// The notebook may have changed while the copies were written: delete only what is still there and still editable.
-			const now = host.editableDocument();
-			if (now !== doc) return;
-			const first = Math.max(0, doc.pages.indexOf(pages[0]!) - 1);
+			// Delete only what is still there, still editable, and exactly the version that was kept.
+			const at = selectedPages(doc, ids).map((p) => doc.pages.indexOf(p));
+			const first = at.length > 0 ? Math.max(0, Math.min(...at) - 1) : 0;
 			run(host, (d) => deleteCommand(d, ids), () => first);
 		})();
 	}).open();
