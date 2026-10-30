@@ -6,46 +6,49 @@
  * view, the excerpt tools, the renderer and the document format.
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { SuggestModal } from "obsidian";
 import { excerptBadgeRect } from "../../src/model/excerpts";
 import { serializeChecked } from "../../src/model/serialize";
+import type { ExcerptElement } from "../../src/model/types";
+import type { HarnessPicker, HarnessView } from "./harness-types";
 import type { CheckResult } from "./reading-check";
 
 export interface ExcerptCheckApi {
-	view: any;
-	stage(): HTMLElement;
-	penStroke(points: Array<[number, number]>, opts?: { pointerType?: string }): Promise<void>;
-	setTool(tool: string): void;
-	strokeCount(): number;
-	staticPixel(fx: number, fy: number): number[];
-	frames(n: number): Promise<void>;
+	/** The notebook view (a `HarnessView`). */
+	view: unknown;
+	stage: () => HTMLElement;
+	penStroke: (points: Array<[number, number]>, opts?: { pointerType?: string }) => Promise<void>;
+	setTool: (tool: string) => void;
+	strokeCount: () => number;
+	staticPixel: (fx: number, fy: number) => number[];
+	frames: (n: number) => Promise<void>;
 	errors: string[];
 	notices: string[];
 }
 
 export async function checkExcerpt(api: ExcerptCheckApi): Promise<{ ok: boolean; results: CheckResult[]; errors: string[]; notices: string[]; env: Record<string, unknown> }> {
-	const { view: v, stage, penStroke, setTool, strokeCount, staticPixel, frames } = api;
+	const { stage, penStroke, setTool, strokeCount, staticPixel, frames } = api;
+	const v = api.view as HarnessView;
 	const results: CheckResult[] = [];
 	const add = (name: string, ok: boolean, detail = "") => results.push({ name, ok, detail });
-	const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+	const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 	/** Fractions of the stage for a point (pt) of page `index`. */
 	const at = (index: number, x: number, y: number): [number, number] => {
 		const r = stage().getBoundingClientRect();
 		const vp = v.viewport;
-		const box = v.layout.boxes[index];
+		const box = v.layout.boxes[index]!;
 		return [(vp.offsetX + (box.x + x) * vp.scale) / r.width, (vp.offsetY + (box.y + y) * vp.scale) / r.height];
 	};
 	const doc = v.document;
-	const source = doc.pages[0];
+	const source = doc.pages[0]!;
 	const pagesBefore = doc.pages.length;
 
 	// The picker is captured when it opens (the stub modal draws no rows).
-	const opened: any[] = [];
-	const open = SuggestModal.prototype.open;
-	SuggestModal.prototype.open = function (this: any) {
-		opened.push(this);
+	const opened: HarnessPicker[] = [];
+	const proto = SuggestModal.prototype as unknown as { open: (this: unknown) => void };
+	const open = proto.open;
+	proto.open = function (this: unknown) {
+		opened.push(this as HarnessPicker);
 		open.call(this);
 	};
 	try {
@@ -63,14 +66,14 @@ export async function checkExcerpt(api: ExcerptCheckApi): Promise<{ ok: boolean;
 		add("the go-to-page picker opens", !!picker);
 		if (!picker) return done();
 		const rows = picker.getSuggestions("");
-		const fresh = rows.find((r: any) => r.index < 0);
-		add("the picker offers this page, the next one and a new page", rows.length >= 3 && !!fresh, rows.map((r: any) => r.label).join(" | "));
+		const fresh = rows.find((r) => r.index < 0);
+		add("the picker offers this page, the next one and a new page", rows.length >= 3 && !!fresh, rows.map((r) => r.label).join(" | "));
 		picker.close();
 		picker.onChooseSuggestion(fresh);
 		await frames(4);
 		add("a new page holds the excerpt", doc.pages.length === pagesBefore + 1, `${doc.pages.length} pages`);
 		const page = doc.pages[1];
-		const el = page?.elements?.find((e: any) => e.type === "excerpt");
+		const el = page?.elements?.find((e): e is ExcerptElement => e.type === "excerpt");
 		add("the excerpt points at the source page by id with the dragged region", !!el && el.source.page === source.id && el.source.doc === doc.id
 			&& Math.abs(el.source.x - 80) < 2 && Math.abs(el.source.width - 240) < 2, JSON.stringify(el?.source ?? null));
 		add("the snapshot is stored as an image asset", !!el?.asset && doc.assets?.[el.asset]?.kind === "image", String(el?.asset));
@@ -128,11 +131,11 @@ export async function checkExcerpt(api: ExcerptCheckApi): Promise<{ ok: boolean;
 		// Undo: the excerpt and its page go away in one step.
 		v.undo();
 		await frames(2);
-		add("undo removes the excerpt and its page", doc.pages.length === pagesBefore && !doc.pages.some((p: any) => p.elements?.some((e: any) => e.type === "excerpt")));
+		add("undo removes the excerpt and its page", doc.pages.length === pagesBefore && !doc.pages.some((p) => p.elements?.some((e) => e.type === "excerpt")));
 	} catch (e) {
 		add("no exception", false, String((e as Error)?.stack ?? e));
 	} finally {
-		SuggestModal.prototype.open = open;
+		proto.open = open;
 	}
 	return done();
 

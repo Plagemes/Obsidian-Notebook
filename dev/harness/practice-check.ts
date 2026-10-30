@@ -4,18 +4,20 @@
  * through the service, and the strip and the peek overlay are then driven through the real view, DOM and renderer.
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { createStroke } from "../../src/model/document";
 import { AddPage, AddStroke } from "../../src/model/history";
 import { buildPracticePage, newRecord } from "../../src/model/practice";
+import type { PracticeService } from "../../src/view/practice";
+import type { HarnessApp, HarnessView } from "./harness-types";
 import type { CheckResult } from "./reading-check";
 
 export interface PracticeCheckApi {
-	view: any;
-	app: any;
-	service: any;
-	frames(n: number): Promise<void>;
+	/** The notebook view (a `HarnessView`). */
+	view: unknown;
+	/** The stand-in app (a `HarnessApp`). */
+	app: unknown;
+	service: PracticeService;
+	frames: (n: number) => Promise<void>;
 	errors: string[];
 	notices: string[];
 }
@@ -23,18 +25,19 @@ export interface PracticeCheckApi {
 const RED = "#dc2626";
 
 export async function checkPractice(api: PracticeCheckApi): Promise<{ ok: boolean; results: CheckResult[]; errors: string[]; notices: string[]; env: Record<string, unknown> }> {
-	const { view: v, service, frames } = api;
-	const vault = api.app.vault;
+	const { service, frames } = api;
+	const v = api.view as HarnessView;
+	const vault = (api.app as HarnessApp).vault;
 	const results: CheckResult[] = [];
 	const add = (name: string, ok: boolean, detail = "") => results.push({ name, ok, detail });
-	const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+	const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 	const banner = (): HTMLElement | null => document.querySelector(".notebook-practice-banner");
 	const shown = (): boolean => !!banner() && !banner()!.classList.contains("notebook-hidden");
 	const content = (): string => JSON.stringify(v.document.pages);
 
 	// An original page with a red horizontal line (the solution) and a black one (the statement).
 	const doc = v.document;
-	const original = doc.pages[0];
+	const original = doc.pages[0]!;
 	const line = (y: number, color: string) => createStroke(color, 6, [[100, y, 0.5], [250, y, 0.5], [400, y, 0.5]]);
 	const red = line(300, RED);
 	const black = line(500, "#111111");
@@ -54,7 +57,7 @@ export async function checkPractice(api: PracticeCheckApi): Promise<{ ok: boolea
 		record: newRecord({ practice: { doc: doc.id, page: copy.page.id }, original: { doc: doc.id, page: original.id }, n: 1, hide: spec }),
 	});
 	// One sidecar file per device (`practice-<device>.json`); the old shared `practice.json` is never written.
-	const sidecars = vault.getFiles().filter((f: { path: string }) => /^Notebooks\/_meta\/practice-[0-9a-f]{8}\.json$/.test(f.path));
+	const sidecars = vault.getFiles().filter((f) => /^Notebooks\/_meta\/practice-[0-9a-f]{8}\.json$/.test(f.path));
 	add("the link is written to this device's sidecar", linked === true && sidecars.length === 1 && !vault.getFileByPath("Notebooks/_meta/practice.json"));
 	await frames(3);
 	await sleep(100);
@@ -69,7 +72,7 @@ export async function checkPractice(api: PracticeCheckApi): Promise<{ ok: boolea
 	const redOnLive = (): boolean => {
 		const c = live();
 		const r = c.getBoundingClientRect();
-		const box = v.layout.boxes[1];
+		const box = v.layout.boxes[1]!;
 		const vp = v.viewport;
 		const dpr = c.width / r.width;
 		const x = Math.round((vp.offsetX + (box.x + 250) * vp.scale) * dpr);

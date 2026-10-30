@@ -3,7 +3,8 @@
  * snapping highlighter, hidden annotations and dimmed backgrounds, driven through the real view, toolbar and renderer.
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import type { Stroke } from "../../src/model/types";
+import type { HarnessView } from "./harness-types";
 
 export interface CheckResult {
 	name: string;
@@ -13,26 +14,28 @@ export interface CheckResult {
 
 /** What the harness lends to the check. */
 export interface ReadingCheckApi {
-	view: any;
-	stage(): HTMLElement;
-	penStroke(points: Array<[number, number]>, opts?: { pointerType?: string }): Promise<void>;
-	setTool(tool: string): void;
-	strokeCount(): number;
-	staticPixel(fx: number, fy: number): number[];
-	inkNear(fx: number, fy: number): boolean;
-	frames(n: number): Promise<void>;
-	openMore(): Promise<void>;
+	/** The notebook view (a `HarnessView`). */
+	view: unknown;
+	stage: () => HTMLElement;
+	penStroke: (points: Array<[number, number]>, opts?: { pointerType?: string }) => Promise<void>;
+	setTool: (tool: string) => void;
+	strokeCount: () => number;
+	staticPixel: (fx: number, fy: number) => number[];
+	inkNear: (fx: number, fy: number) => boolean;
+	frames: (n: number) => Promise<void>;
+	openMore: () => Promise<void>;
 	errors: string[];
 	notices: string[];
 }
 
 export async function checkReading(api: ReadingCheckApi): Promise<{ ok: boolean; results: CheckResult[]; errors: string[]; notices: string[]; env: Record<string, unknown> }> {
-	const { view: v, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore } = api;
+	const { stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore } = api;
+	const v = api.view as HarnessView;
 	const results: CheckResult[] = [];
 	const add = (name: string, ok: boolean, detail = "") => results.push({ name, ok, detail });
 	const reading = v.readingTools;
 	const settings = v.host.settings;
-	const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+	const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 	const text = (sel: string): string => document.querySelector(sel)?.textContent ?? "";
 	const search = async (query: string): Promise<void> => {
 		const input = document.querySelector(".notebook-search-input") as HTMLInputElement;
@@ -47,15 +50,15 @@ export async function checkReading(api: ReadingCheckApi): Promise<{ ok: boolean;
 		return [(vp.offsetX + x * vp.scale) / r.width, (vp.offsetY + y * vp.scale) / r.height];
 	};
 	const overlayPixels = (): number => {
-		const c = document.querySelector(".notebook-reading-overlay") as HTMLCanvasElement | null;
+		const c = document.querySelector<HTMLCanvasElement>(".notebook-reading-overlay");
 		if (!c) return 0;
 		const d = c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data;
 		let n = 0;
 		for (let i = 3; i < d.length; i += 4) if (d[i]! > 0) n++;
 		return n;
 	};
-	const lastStroke = (): any => {
-		const strokes = v.document.pages[0].strokes;
+	const lastStroke = (): Stroke | undefined => {
+		const strokes = v.document.pages[0]!.strokes;
 		return strokes[strokes.length - 1];
 	};
 
@@ -105,7 +108,7 @@ export async function checkReading(api: ReadingCheckApi): Promise<{ ok: boolean;
 	const snapped = lastStroke();
 	add("a highlighter stroke over text becomes one straight stroke as high as the line",
 		strokeCount() === strokes0 + 1 && snapped?.tool === "highlighter" && snapped.width > 14 && snapped.width < 17
-			&& Math.abs(snapped.points[0][1] - snapped.points[snapped.points.length - 1][1]) < 0.01,
+			&& Math.abs(snapped.points[0]![1] - snapped.points[snapped.points.length - 1]![1]) < 0.01,
 		snapped ? `width ${snapped.width}, ${snapped.points.length} points` : "no stroke");
 	v.undo();
 	add("the snap is one undo step", strokeCount() === strokes0);
@@ -162,7 +165,7 @@ export async function checkReading(api: ReadingCheckApi): Promise<{ ok: boolean;
 	reading.toggleDim();
 	await sleep(300);
 	const dimmed = paper();
-	add("dimming makes the PDF background lighter", settings.dimBackground === true && dimmed[0]! > normal[0]! && dimmed[1]! > normal[1]! && dimmed[2]! > normal[2]!, `${normal.slice(0, 3)} -> ${dimmed.slice(0, 3)}`);
+	add("dimming makes the PDF background lighter", settings.dimBackground === true && dimmed[0]! > normal[0]! && dimmed[1]! > normal[1]! && dimmed[2]! > normal[2]!, `${normal.slice(0, 3).join(",")} -> ${dimmed.slice(0, 3).join(",")}`);
 	await openMore();
 	const range = document.querySelector(".notebook-menu-range input") as HTMLInputElement;
 	range.value = "75";
@@ -170,12 +173,12 @@ export async function checkReading(api: ReadingCheckApi): Promise<{ ok: boolean;
 	range.dispatchEvent(new Event("change", { bubbles: true }));
 	await sleep(300);
 	const lighter = paper();
-	add("the slider sets the strength and keeps the menu open", settings.dimStrength === 0.75 && lighter[0]! > dimmed[0]! && v.ui.sheet.isOpen, `strength ${settings.dimStrength}, ${dimmed.slice(0, 3)} -> ${lighter.slice(0, 3)}`);
+	add("the slider sets the strength and keeps the menu open", settings.dimStrength === 0.75 && lighter[0]! > dimmed[0]! && v.ui.sheet.isOpen, `strength ${settings.dimStrength}, ${dimmed.slice(0, 3).join(",")} -> ${lighter.slice(0, 3).join(",")}`);
 	v.ui.sheet.close();
 	reading.toggleDim();
 	await sleep(300);
 	const restored = paper();
-	add("turning it off restores the background", restored.every((c, i) => c === normal[i]), `${restored.slice(0, 3)}`);
+	add("turning it off restores the background", restored.every((c, i) => c === normal[i]), `${restored.slice(0, 3).join(",")}`);
 	add("none of this changed the notebook content", content() === before);
 
 	return { ok: results.every((r) => r.ok) && api.errors.length === 0, results, errors: [...api.errors], notices: [...api.notices], env: { dpr: window.devicePixelRatio || 1 } };
