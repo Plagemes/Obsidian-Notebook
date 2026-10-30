@@ -31,7 +31,7 @@ function overlap(a: BBox, b: BBox): boolean {
 /** Whether (x, y) is on the element: the rotated rectangle of an image, the laid-out box of a text. */
 export function pointOnElement(el: PageElement, x: number, y: number, measure: MeasureText = estimateMeasure): boolean {
 	if (el.type === "image") return inImage(el, x, y);
-	const b = textElementBounds(el, measure);
+	const b = el.type === "text" ? textElementBounds(el, measure) : elementBounds(el, measure);
 	return x >= b.minX && x <= b.maxX && y >= b.minY && y <= b.maxY;
 }
 

@@ -10,8 +10,8 @@
 import { createId } from "./document";
 import { AddAsset, AddPage, Batch, type Command } from "./history";
 import { unionPageTags } from "./page-tags";
-import { duplicatePage } from "./pages";
-import { freezeElement, freezeStroke } from "./serialize";
+import { copyStroke, duplicatePage } from "./pages";
+import { freezeElement } from "./serialize";
 import type { Asset, NotebookDocument, Page } from "./types";
 
 /** Replaces one page object with another at the same position. A missing page is a no-op both ways. */
@@ -105,10 +105,8 @@ export function planPageRestore(
 		width: source.width,
 		height: source.height,
 		paper: { kind: source.paper.kind, spacing: source.paper.spacing },
-		strokes: source.strokes.map((s) => freezeStroke({
-			id: idFor(s.id), tool: s.tool, color: s.color, width: s.width, render: s.render,
-			points: s.points.map((p) => [p[0], p[1], p[2]] as [number, number, number]),
-		})),
+		// v8: copyStroke keeps every field (hidden ink stays hidden); elements are copied whole (markers, boxes).
+		strokes: source.strokes.map((s) => copyStroke(s, idFor(s.id))),
 	};
 	if (source.background) page.background = { ...source.background };
 	if (source.infinite !== undefined) page.infinite = source.infinite;

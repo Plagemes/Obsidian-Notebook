@@ -62,14 +62,14 @@ function richDoc(): NotebookDocument {
 
 describe("format v7", () => {
 	it("is at version 7 with a v6 step", () => {
-		expect(CURRENT_VERSION).toBe(7);
+		expect(CURRENT_VERSION).toBeGreaterThanOrEqual(7);
 		expect(MIGRATIONS[6]).toBeTypeOf("function");
 	});
 
 	it("migrates a v6 file unchanged apart from the version", () => {
 		const r = parsed(JSON.stringify(v6Doc()));
 		expect(r.migratedFrom).toBe(6);
-		expect(r.doc.version).toBe(7);
+		expect(r.doc.version).toBe(CURRENT_VERSION);
 		expect(r.doc.position).toBeUndefined();
 		expect(r.doc.meta?.bookmarks).toEqual(["p1"]);
 		expect(r.doc.meta?.bookmarkInfo).toBeUndefined();
@@ -195,7 +195,7 @@ describe("format v7", () => {
 	});
 
 	it("a file of a later version is a future version (opens read-only)", () => {
-		const r = parse(serialize(richDoc()).replace('"version": 7', '"version": 8'));
+		const r = parse(serialize(richDoc()).replace(`"version": ${CURRENT_VERSION}`, `"version": ${CURRENT_VERSION + 1}`));
 		expect(r.ok).toBe(false);
 		if (!r.ok) expect(r.reason).toBe("future-version");
 	});
