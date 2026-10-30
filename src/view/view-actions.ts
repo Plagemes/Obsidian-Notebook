@@ -245,6 +245,11 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"export-page-pdf": onPage((v, p, i) => exportPage(v, p, i, "pdf")),
 	"export-page-svg": onPage((v, p, i) => exportPage(v, p, i, "svg")),
 	"export-pdf": (v) => void v.exportNotebookPdf(),
+	// wave 0.9: export dialog (381, from a page's sheet it starts on that page), Markdown export (382), night mode (367), cropped margins (376)
+	"export-dialog": (v, arg) => v.openExportDialog(arg.page),
+	"export-markdown": (v) => v.openMarkdownExport(),
+	"night-mode": (v) => v.displayTools?.toggleNight(),
+	"crop-margins": (v) => v.displayTools?.toggleCrop(),
 	// wave 0.8: quick textbook reference (view/textbook-ref-ui.ts)
 	"textbook-set": (v) => setTextbook(v),
 	"textbook-open": (v) => openPage(v),
