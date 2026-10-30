@@ -9,7 +9,7 @@ Handwritten notebooks inside your Obsidian vault, designed first for **Android t
 - Local-first: no account, no cloud, no telemetry.
 - UI in English, and in Italian when Obsidian is set to Italian.
 
-> **Status: v0.8.0, early development.** The automated tests pass, but the plugin has **not been verified on Android hardware yet**, and most features are new in 0.5.x, 0.6.0, 0.7.0 and 0.8.0 (the interface was redesigned in 0.7.0; markers, pen gestures and page operations came in 0.8.0) and many are experimental (including the writing engine, the scanner and export: the PDF and SVG were checked with other software on a PC, not opened on Android). See [docs/testing.md](docs/testing.md) for what is verified and how to test it.
+> **Status: v0.9.0 (document format 9), early development.** The automated tests pass, but the plugin has **not been verified on Android hardware yet**, and most features are new in 0.5.x, 0.6.0, 0.7.0, 0.8.0 and 0.9.0 (the interface was redesigned in 0.7.0; markers, pen gestures and page operations came in 0.8.0; equations, graphs, export choices and night mode came in 0.9.0) and many are experimental (including the writing engine, the scanner, export and, in 0.9.0, equations, which have never been run with Obsidian's maths engine outside a test stand-in: the PDF and SVG were checked with other software on a PC, not opened on Android). See [docs/testing.md](docs/testing.md) for what is verified and how to test it.
 
 ## Usage
 
@@ -103,6 +103,20 @@ All of this is new in 0.8.0 and **not verified on Android hardware**; the manual
 - **Links written with the pen**: `[[Note]]` in a text box is a link, circled ink can be linked to a note, and two handwritten brackets offer the note chooser.
 - Per-device files in `<notebooks folder>/_meta/` (inbox, practice, textbooks, moved pages) are merged when read, so synced devices never write the same file.
 
+### Equations, graphs and more (0.9.0)
+
+All of this is new in 0.9.0 and **not verified on Android hardware**; the manual steps are in [docs/testing.md](docs/testing.md) (steps 233-274).
+
+- **Equations**: *Insert equation* (*All actions* > Insert, or the command) opens an editor with a live preview typeset by Obsidian's maths engine, a palette of structures (fractions, roots, powers, matrices, integrals, sums, systems, aligned lines), display or inline style, automatic numbering, size and colour. The typeset glyphs are stored as a vector outline, so equations are drawn and exported without the maths engine. *Convert to ink* turns an equation into strokes.
+- **Function graphs**: *Insert graph* adds a graph with a panel: cartesian, parametric, polar, implicit and piecewise functions, parameters with sliders, roots, extrema, intersections, tangents, shaded area, table of values, axes and grid. Pan and zoom inside the graph; ink written on it keeps its graph coordinates. Expressions are read by a small built-in parser (no `eval`).
+- **Layer order**: *To front*, *To back*, *Forward* and *Backward* for the selected strokes and elements (contextual bar and *All actions*).
+- **Find and replace in text boxes** across the notebook, with *Match case* and *Whole word*; *Replace all* is one undo step.
+- **Page information** (page sheet): size, paper, strokes, objects, files, tags, markers and dates. **A page in the middle**: writing at the bottom of a page that is not the last offers a chip *Add a page after this one*.
+- **Export…** (page sheet, *All actions*, notebook menu): PDF or SVG, one page or the whole notebook, with ink and background, ink only or background only. **Export as Markdown with page images…** writes `page-001.png`… and a `notebook.md` into a vault folder. See *Export*.
+- **Night mode** (*All actions*): a dark page with light ink, applied when drawing only; stored colours and exports are unchanged.
+- **Crop PDF margins** (PDF contextual bar, *All actions*): fits the content of each PDF page to the screen width, a view setting for small screens; the document and exports are untouched.
+- **Obsidian integration and input**: command icons for the mobile toolbar, *Add page to Obsidian bookmarks*, the page turner and the *Toolbar size* setting are described under *Interface*.
+
 ### PDFs and scans
 
 - **Import PDF as notebook** (library button or command): one notebook page per PDF page, with the PDF page as the background; you write on top of it.
@@ -121,6 +135,8 @@ All of this is new in 0.8.0 and **not verified on Android hardware**; the manual
 ### Export
 
 From the page sheet: **Export page as PDF**, **Export notebook as PDF** and **Export page as SVG**; the command palette also has **Notebook: Export notebook as PDF**. The file is written next to the notebook (`My notebook.pdf`; single pages as `My notebook p3.pdf` or `My notebook p3.svg`), with ` 2`, ` 3`… added if the name is taken, and a notice shows the path. The export includes the paper pattern and keeps the ink as vector shapes; the highlighter stays translucent. PDF page backgrounds and images are rasterised as JPEG (PDF pages at 200 dpi). Page sizes are the real sizes (A4 prints as A4).
+
+**Export…** (page sheet, *All actions*, notebook menu and command palette) lets you choose PDF or SVG, this page or the whole notebook (SVG: one file per page), and what is drawn: **ink and background**, **ink only** (writing, text, pictures, boxes and markers on no paper; an SVG is transparent) or **background only** (paper and PDF or picture, no writing). File names say the choice (`My notebook ink.pdf`) and an existing file is never replaced. Equations and graphs are exported as vectors. **Export as Markdown with page images…** asks for a vault folder and a resolution (100, 150 or 200 dpi) and writes `page-001.png`… (each page drawn like the PDF export) and `notebook.md` with the page images, the text of the text boxes, the equations as `$$…$$` and a heading for each bookmarked page; nothing is overwritten.
 
 The PDF writer has no dependencies and does not compress, so a page with a lot of ink or images can give a large file. The exported PDF was parsed with pdf.js and the SVG rendered with resvg on a PC; they have not been opened on Android yet.
 
@@ -265,7 +281,7 @@ Enable USB debugging on the device, connect it to a PC with Chrome and open `chr
 
 ## File format
 
-A `.notebook` file is JSON with `format: "obsidian-notebook"` and an integer `version` (currently 8). Version 2 added the highlighter, 3 the paper kinds, 4 the notebook metadata, assets, PDF/image page backgrounds, text and image elements, infinite pages and the shape tool, and 5 a per-stroke `render` field (1 = the previous pen look, kept for every existing stroke; 2 = the new ink engine), 6 optional page margins (files saved by 0.5.0 with margins open read-only in 0.4.x), and 7 bookmark details, page tags, the last reading position and the new paper kinds (files saved by 0.6.0 open read-only in 0.5.x, with a backup), and 8 markers, structured boxes and hidden (invisible) ink (files saved by 0.8.0 open read-only in 0.7.x, with a backup). Older notebooks open normally and are rewritten in the current version only when you edit them; after that, **older versions of the plugin open them read-only** (and keep a backup copy) instead of editing them. Coordinates are in typographic points (A4 = 595.28 × 841.89 pt). PDFs and images are not inside the file: they are in `<notebooks folder>/_assets/` and referenced by id. Details and the reasoning behind the format choice are in [docs/architecture.md](docs/architecture.md).
+A `.notebook` file is JSON with `format: "obsidian-notebook"` and an integer `version` (currently 9). Version 2 added the highlighter, 3 the paper kinds, 4 the notebook metadata, assets, PDF/image page backgrounds, text and image elements, infinite pages and the shape tool, and 5 a per-stroke `render` field (1 = the previous pen look, kept for every existing stroke; 2 = the new ink engine), 6 optional page margins (files saved by 0.5.0 with margins open read-only in 0.4.x), and 7 bookmark details, page tags, the last reading position and the new paper kinds (files saved by 0.6.0 open read-only in 0.5.x, with a backup), and 8 markers, structured boxes and hidden (invisible) ink (files saved by 0.8.0 open read-only in 0.7.x, with a backup), and 9 equations and function graphs (files saved by 0.9.0 open read-only in 0.8.x, with a backup). Older notebooks open normally and are rewritten in the current version only when you edit them; after that, **older versions of the plugin open them read-only** (and keep a backup copy) instead of editing them. Coordinates are in typographic points (A4 = 595.28 × 841.89 pt). PDFs and images are not inside the file: they are in `<notebooks folder>/_assets/` and referenced by id. Details and the reasoning behind the format choice are in [docs/architecture.md](docs/architecture.md).
 
 Backups of unreadable files, of versions changed elsewhere (conflicts), of changes that could not be saved and of journals that could not be applied are written to `Notebooks/_backup/` as `.bak` files; version snapshots go to `Notebooks/_backup/history/`. Obsidian does not show these folders in the file explorer; open them with a file manager. If you sync the vault, sync `_assets` and `_backup` too (with Obsidian Sync, turn on **Other types** so that `.notebook` files, PDFs and snapshots are synced). The journal and the library index live in the plugin folder and are not meant to be synced.
 
