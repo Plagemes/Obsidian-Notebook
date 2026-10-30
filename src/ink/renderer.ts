@@ -2,6 +2,8 @@ import type { Page, PageElement, Point, Stroke, TextElement, Tool } from "../mod
 import { MM, RENDER_INK } from "../model/types";
 import { backgroundRect } from "../model/margins";
 import { transformElement } from "./elements";
+import { drawBox, drawMarker, type BoxLabel } from "./marker-render";
+import { drawLinkedLines, parseLinks } from "./link-text";
 import { layoutText, type MeasureText } from "./text-layout";
 import { strokeBounds, type BBox } from "./hit-test";
 import { minorVisible, paperPattern, PAPER_COLORS } from "./paper";
@@ -39,6 +41,12 @@ export function drawTextElement(ctx: CanvasRenderingContext2D, el: TextElement):
 		ctx.fillStyle = el.color;
 		ctx.textBaseline = "top";
 		const layout = layoutText(el.text, el.fontSize, el.width, (str) => ctx.measureText(str).width);
+		// Links ([[Note]]) are drawn in their own colour (ink/link-text.ts); text without any takes the plain path.
+		const links = el.text.includes("[[") ? parseLinks(el.text) : [];
+		if (links.length > 0) {
+			drawLinkedLines(ctx, el, layout.lines, layout.lineHeight, links);
+			return;
+		}
 		layout.lines.forEach((line, i) => ctx.fillText(line, el.x, el.y + i * layout.lineHeight + (layout.lineHeight - el.fontSize) / 2));
 	} finally {
 		ctx.restore();
@@ -58,10 +66,18 @@ export const measureText: MeasureText = (s, fontSize) => {
 	return measureCtx.measureText(s).width;
 };
 
-/** Draws one image or text element in page coordinates (images may be rotated; `img` null draws a placeholder). */
-export function drawElement(ctx: CanvasRenderingContext2D, el: PageElement, img: CanvasImageSource | null): void {
+/** Draws one element in page coordinates (images may be rotated; `img` null draws a placeholder). */
+export function drawElement(ctx: CanvasRenderingContext2D, el: PageElement, img: CanvasImageSource | null, boxLabel?: BoxLabel): void {
 	if (el.type === "text") {
 		drawTextElement(ctx, el);
+		return;
+	}
+	if (el.type === "marker") {
+		drawMarker(ctx, el);
+		return;
+	}
+	if (el.type === "box") {
+		drawBox(ctx, el, boxLabel);
 		return;
 	}
 	ctx.save();
@@ -91,6 +107,12 @@ export interface LiveStroke {
 export interface LassoOverlay {
 	pageIndex: number;
 	points: ReadonlyArray<readonly [number, number]>;
+}
+
+/** Strokes drawn over a page for a moment and never saved (the "peek at the solution" of a practice copy), page coordinates. */
+export interface PeekOverlay {
+	pageIndex: number;
+	strokes: readonly Stroke[];
 }
 
 /** Ruler placed on a page, drawn on the live layer (page coordinates). */
@@ -181,6 +203,7 @@ export class Renderer {
 	private live: LiveStroke | null = null;
 	private lasso: LassoOverlay | null = null;
 	private selection: SelectionOverlay | null = null;
+	private peek: PeekOverlay | null = null;
 	/** Content shown shifted while the insert/remove-space tool is dragged (hidden from the static layer meanwhile). */
 	private spacePreview: readonly SpacePreviewEntry[] | null = null;
 	private hidden: ReadonlySet<Stroke> | null = null;
@@ -191,6 +214,10 @@ export class Renderer {
 	private selectedElements: ReadonlySet<PageElement> | null = null;
 	private ruler: RulerOverlay | null = null;
 	private media: MediaSource | null = null;
+	/** v8 invisible ink: whether the hidden strokes of a page are shown ("Show solutions", view-only). Null: never. */
+	private revealHidden: ((page: Page) => boolean) | null = null;
+	/** v8: the label of a structured box (translated by the view). */
+	private boxLabel: BoxLabel | undefined = undefined;
 
 	private staticDirty = true;
 	private liveDirty = false;
@@ -323,6 +350,18 @@ export class Renderer {
 	/** Bitmaps for PDF/scan backgrounds and image elements. */
 	setMedia(media: MediaSource | null): void {
 		this.media = media;
+		this.invalidate();
+	}
+
+	/** v8 invisible ink: hidden strokes are drawn only on the pages for which `reveal` is true (null: on none). */
+	setHiddenInk(reveal: ((page: Page) => boolean) | null): void {
+		this.revealHidden = reveal;
+		this.invalidate();
+	}
+
+	/** v8: how structured boxes are labelled (the view passes translated kind names). */
+	setBoxLabel(label: BoxLabel | undefined): void {
+		this.boxLabel = label;
 		this.invalidate();
 	}
 
@@ -597,6 +636,13 @@ export class Renderer {
 		this.schedule();
 	}
 
+	/** Strokes of another page drawn over this one while a button is held (wave 0.9: practice); view only, null removes them. */
+	setPeek(peek: PeekOverlay | null): void {
+		this.peek = peek;
+		this.liveDirty = true;
+		this.schedule();
+	}
+
 	/** Straight edge drawn over the page (null hides it). */
 	setRuler(ruler: RulerOverlay | null): void {
 		this.ruler = ruler;
@@ -725,8 +771,9 @@ export class Renderer {
 				this.guarded(ctx, "paper", () => this.drawPaper(ctx, page, visible));
 				const bare = this.hideAnnotations && page.background?.kind === "pdf";
 				if (!bare && page.elements?.length) this.drawElements(ctx, page);
+				const reveal = this.revealHidden?.(page) ?? false;
 				for (const stroke of page.strokes) {
-					if (bare || this.hidden?.has(stroke)) continue;
+					if (bare || this.hidden?.has(stroke) || (stroke.hidden && !reveal)) continue;
 					try {
 						const b = this.boundsOf(stroke);
 						// Bounds are padded by half the width; pen ink reaches 0.8 × width at full pressure, and
@@ -740,6 +787,8 @@ export class Renderer {
 						this.setInk(ctx, "pen", PAPER);
 					}
 				}
+				// v8 marker badges go above the ink, so they stay visible and tappable.
+				if (!bare && page.elements?.length) this.drawMarkers(ctx, page);
 			} finally {
 				ctx.restore();
 			}
@@ -773,7 +822,7 @@ export class Renderer {
 		}
 	}
 
-	/** Images, then text boxes; both under the ink. */
+	/** Images, then v8 structured boxes, then text boxes; all under the ink. */
 	private drawElements(ctx: CanvasRenderingContext2D, page: Page): void {
 		const elements = page.elements ?? [];
 		const skip = (el: PageElement) => !!(this.hiddenElements?.has(el) || this.selectedElements?.has(el));
@@ -782,8 +831,20 @@ export class Renderer {
 			this.guarded(ctx, "image element", () => drawElement(ctx, el, this.media?.image(el.asset) ?? null));
 		}
 		for (const el of elements) {
+			if (el.type !== "box" || skip(el)) continue;
+			this.guarded(ctx, "box element", () => drawBox(ctx, el, this.boxLabel));
+		}
+		for (const el of elements) {
 			if (el.type !== "text" || skip(el)) continue;
 			this.guarded(ctx, "text element", () => drawTextElement(ctx, el));
+		}
+	}
+
+	/** v8 marker badges, above the ink. */
+	private drawMarkers(ctx: CanvasRenderingContext2D, page: Page): void {
+		for (const el of page.elements ?? []) {
+			if (el.type !== "marker" || this.hiddenElements?.has(el) || this.selectedElements?.has(el)) continue;
+			this.guarded(ctx, "marker element", () => drawMarker(ctx, el));
 		}
 	}
 
@@ -867,7 +928,7 @@ export class Renderer {
 				this.beginPage(ctx, box);
 				for (const el of sel.elements) {
 					const moved = transformElement(el, sel.matrix, measureText);
-					drawElement(ctx, moved, moved.type === "image" ? this.media?.image(moved.asset) ?? null : null);
+					drawElement(ctx, moved, moved.type === "image" ? this.media?.image(moved.asset) ?? null : null, this.boxLabel);
 				}
 				ctx.restore();
 			}
@@ -890,7 +951,7 @@ export class Renderer {
 					const m = translate(0, e.dy);
 					for (const el of e.elements) {
 						const moved = transformElement(el, m, measureText);
-						drawElement(ctx, moved, moved.type === "image" ? this.media?.image(moved.asset) ?? null : null);
+						drawElement(ctx, moved, moved.type === "image" ? this.media?.image(moved.asset) ?? null : null, this.boxLabel);
 					}
 					ctx.restore();
 				}
@@ -899,13 +960,32 @@ export class Renderer {
 				const maxY = visibleDoc.maxY - box.y - e.dy;
 				this.beginPage(ctx, box);
 				ctx.translate(0, e.dy);
+				const page = this.pages[e.pageIndex];
+				const reveal = !!page && (this.revealHidden?.(page) ?? false);
 				for (const stroke of e.strokes) {
+					if (stroke.hidden && !reveal) continue;
 					const b = this.boundsOf(stroke);
 					if (b.maxY + stroke.width < minY || b.minY - stroke.width > maxY) continue;
 					this.fillStroke(ctx, stroke);
 				}
 				ctx.restore();
 			}
+		});
+
+		const peek = this.peek;
+		if (peek && peek.strokes.length > 0 && boxes[peek.pageIndex]) this.guarded(ctx, "peek", () => {
+			const visibleDoc = this.visibleRect();
+			const box = boxes[peek.pageIndex]!;
+			const minY = visibleDoc.minY - box.y;
+			const maxY = visibleDoc.maxY - box.y;
+			this.beginPage(ctx, box);
+			ctx.globalAlpha = 0.85;
+			for (const stroke of peek.strokes) {
+				const b = this.boundsOf(stroke);
+				if (b.maxY + stroke.width < minY || b.minY - stroke.width > maxY) continue;
+				this.fillStroke(ctx, stroke);
+			}
+			ctx.restore();
 		});
 
 		const ruler = this.ruler;

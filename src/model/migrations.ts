@@ -1,5 +1,5 @@
 import { createId, quantizePoint } from "./document";
-import { A4_HEIGHT, A4_WIDTH, DEFAULT_META, FORMAT_ID, GRID_5MM, PAPER_KINDS_V7, RENDER_FREEHAND } from "./types";
+import { A4_HEIGHT, A4_WIDTH, DEFAULT_META, ELEMENT_TYPES_V8, FORMAT_ID, GRID_5MM, PAPER_KINDS_V7, RENDER_FREEHAND } from "./types";
 
 export type RawObject = Record<string, unknown>;
 
@@ -147,6 +147,38 @@ function v6ToV7(raw: RawObject): RawObject {
 	return out;
 }
 
+/**
+ * v8 adds the element types "marker" and "box" and the optional stroke field `hidden` (invisible ink). Every
+ * valid v7 document is a valid v8 document without them. A v7 reader rejected unknown element types, so a
+ * pre-v8 file with a marker or box was not written by any version of this plugin: it is rejected rather than
+ * guessed at (like "shape" before v4). A v7 reader ignored unknown stroke fields, so a `hidden` key in a v7
+ * file was never ours and never hid anything: it is dropped, not interpreted (like `margins` in v5 -> v6).
+ */
+function v7ToV8(raw: RawObject): RawObject {
+	const isObj = (v: unknown): v is RawObject => typeof v === "object" && v !== null && !Array.isArray(v);
+	if (!Array.isArray(raw.pages)) return { ...raw, version: 8 };
+	const pages = (raw.pages as unknown[]).map((page, i) => {
+		if (!isObj(page)) return page;
+		if (Array.isArray(page.elements)) {
+			for (const el of page.elements as unknown[]) {
+				const type = isObj(el) ? el.type : undefined;
+				if (typeof type === "string" && ELEMENT_TYPES_V8.includes(type)) {
+					throw new MigrationError(`v7: element type '${type}' (page ${i + 1}) exists only from v8`);
+				}
+			}
+		}
+		if (!Array.isArray(page.strokes) || !(page.strokes as unknown[]).some((s) => isObj(s) && "hidden" in s)) return page;
+		const strokes = (page.strokes as unknown[]).map((s) => {
+			if (!isObj(s) || !("hidden" in s)) return s;
+			const copy = { ...s };
+			delete copy.hidden;
+			return copy;
+		});
+		return { ...page, strokes };
+	});
+	return { ...raw, version: 8, pages };
+}
+
 /** MIGRATIONS[n] takes a document from version n to n+1. */
 export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	0: v0ToV1,
@@ -156,6 +188,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	4: v4ToV5,
 	5: v5ToV6,
 	6: v6ToV7,
+	7: v7ToV8,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

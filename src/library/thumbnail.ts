@@ -80,7 +80,8 @@ export function renderThumbnail(page: Page, width: number, options: ThumbnailOpt
 	const started = performance.now();
 	let drawn = 0;
 	for (const stroke of page.strokes) {
-		if (stroke.points.length === 0) continue;
+		// v8 invisible ink is never in a thumbnail (library cards, navigator, embeds, cards): it is the solutions.
+		if (stroke.points.length === 0 || stroke.hidden) continue;
 		if (region && !strokeNear(stroke.points, visible, stroke.width)) continue;
 		if (++drawn % 64 === 0 && performance.now() - started > TIME_BUDGET_MS) break;
 		const highlighter = stroke.tool === "highlighter";

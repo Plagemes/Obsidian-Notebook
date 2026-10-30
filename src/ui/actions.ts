@@ -42,7 +42,7 @@ export interface UiContext {
 	/** A document is open (possibly read-only). */
 	open: boolean;
 	tool: ToolId;
-	selection: { strokes: number; elements: number; images: number } | null;
+	selection: { strokes: number; elements: number; images: number; /** 1 when a selected text box holds a [[link]] */ links?: number } | null;
 	/** The page in view (index of the page sheet when it was opened from a thumbnail). */
 	page: {
 		index: number; count: number; background: "none" | "pdf" | "image"; infinite: boolean; bookmarked: boolean;
@@ -54,7 +54,9 @@ export interface UiContext {
 	lecture: boolean;
 	sidePane: { available: boolean; open: boolean };
 	reading: { annotationsHidden: boolean; dim: boolean };
-	toggles: { ruler: boolean; penOnly: boolean; navigator: boolean; /** One page at a time (wave 0.7). */ pageMode?: boolean };
+	toggles: { ruler: boolean; penOnly: boolean; navigator: boolean; /** One page at a time (wave 0.7). */ pageMode?: boolean; /** Pen gesture mode (wave 0.8). */ penGestures?: boolean };
+	/** wave 0.8: invisible-ink pen mode and the view-only "Show solutions" toggles (notebook, page in view). Optional. */
+	markers?: { invisibleInk: boolean; solutions: boolean; pageSolutions: boolean };
 	/** Phone-sized view (the page panel is a drawer, the toolbar has two rows). */
 	narrow: boolean;
 }
@@ -148,6 +150,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "selection-duplicate", label: "selection.duplicate", icon: "copy-plus", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 80, scope: "view", when: hasSelection },
 	{ id: "selection-paste", label: "selection.paste", icon: "clipboard-paste", group: "selection", surfaces: ["context"], contexts: ["selection", "lasso"], priority: 75, scope: "view", when: (c) => c.tool === "lasso" || hasSelection(c) },
 	{ id: "selection-white-transparent", label: "selection.whiteTransparent", icon: "eraser", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 60, scope: "view", when: (c) => (c.selection?.images ?? 0) > 0 },
+	{ id: "link-selection", label: "penlinks.linkSelection", icon: "link", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 55, scope: "view", command: "command.linkSelection", when: hasSelection },
+	{ id: "selection-open-link", label: "penlinks.openLink", icon: "external-link", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 56, scope: "view", when: (c) => (c.selection?.links ?? 0) > 0 },
 	{ id: "stamps-save-selection", label: "stamps.save", icon: "stamp", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 50, scope: "view", when: hasSelection },
 	{ id: "delete-selection", label: "tool.deleteSelection", icon: "trash-2", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 70, scope: "view", command: "command.deleteSelection", when: hasSelection, danger: true },
 
@@ -171,6 +175,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "scan-element", label: "page.scanInsert", icon: "scan-line", group: "insert", surfaces: ["sheet", "page"], priority: 30, scope: "view", keywords: "camera" },
 
 	// --- page: the page sheet (and its section in the "All actions" sheet).
+	// wave 0.8 (378): starts selecting pages in the page panel; its actions (move, duplicate, bookmark, tags, paper, size, PDF, delete) are
+	// the bar of the panel itself (view/navigator.ts, view/page-ops-menu.ts), one undo step each.
+	{ id: "pages-select", label: "pageOps.select", icon: "check-square", group: "page", surfaces: ["page", "sheet"], priority: 52, scope: "view", command: "command.selectPages", keywords: "several multiple move delete export" },
 	{ id: "page-duplicate", label: "page.duplicate", icon: "copy", group: "page", surfaces: ["page"], priority: 50, scope: "view" },
 	{ id: "page-move-up", label: "page.moveUp", icon: "arrow-up", group: "page", surfaces: ["page"], priority: 40, scope: "view", enabled: (c) => c.editable && (c.page?.index ?? 0) > 0 },
 	{ id: "page-move-down", label: "page.moveDown", icon: "arrow-down", group: "page", surfaces: ["page"], priority: 40, scope: "view", enabled: (c) => c.editable && !!c.page && c.page.index < c.page.count - 1 },
@@ -186,6 +193,13 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "page-restore-version", label: "page.restoreVersion", icon: "history", group: "page", surfaces: ["page"], priority: 20, scope: "view" },
 	{ id: "page-deleted-pages", label: "page.deletedPages", icon: "archive-restore", group: "page", surfaces: ["page"], priority: 20, scope: "view", keywords: "trash restore" },
 	{ id: "page-split", label: "heavy.split", icon: "split", group: "page", surfaces: ["page", "banner"], priority: 45, scope: "view", when: (c) => !!c.page?.splittable, keywords: "heavy large slow" },
+	// wave 0.9 (#303): practice copies of exercises (view/practice.ts). Only "redo" is in the page sheet: the strip over a
+	// practice page has the other buttons, the commands are in the palette.
+	{ id: "practice-redo", label: "page.redoExercise", icon: "rotate-ccw", group: "page", surfaces: ["page"], priority: 28, scope: "view", command: "command.practiceRedo", keywords: "practice attempt repeat hide solution exam" },
+	{ id: "practice-peek", label: "command.practicePeek", icon: "eye", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
+	{ id: "practice-original", label: "command.practiceOriginal", icon: "corner-up-left", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
+	{ id: "practice-attempts", label: "command.practiceAttempts", icon: "list-ordered", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
+	{ id: "practice-timer", label: "command.practiceTimer", icon: "timer", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
 	{ id: "page-delete", label: "page.delete", icon: "trash-2", group: "page", surfaces: ["page"], priority: 10, scope: "view", danger: true, enabled: (c) => c.editable && (c.page?.count ?? 0) > 1 },
 
 	// --- PDF and reading: the contextual bar of a PDF page, and the sheet.
@@ -208,11 +222,29 @@ export const ACTIONS: readonly ActionDef[] = [
 	// --- lecture: the contextual bar while a class of the timetable is on.
 	{ id: "new-lecture", label: "page.newLecture", icon: "graduation-cap", group: "lecture", surfaces: ["context", "sheet"], contexts: ["lecture"], priority: 70, scope: "view", command: "command.newLecture" },
 	{ id: "exercise-paper", label: "page.exercisePaper", icon: "palette", group: "lecture", surfaces: ["sheet"], priority: 20, scope: "view", command: "command.exercisePaper", readOnly: true },
+	// wave 0.8: markers (#201-#203, #209) and structured boxes (#204): the next tap or drag on a page places one. Also on the radial dial (shapes ring → Markers).
+	...([
+		["gap", "ellipsis", 44], ["question", "help-circle", 43], ["homework", "calendar-check", 41], ["important", "alert-circle", 40], ["critical", "alert-triangle", 25], ["star", "star", 25],
+	] as const).map(([kind, icon, priority]): ActionDef => ({
+		id: `marker-${kind}`, label: `markers.place.${kind}`, icon, group: "lecture", surfaces: ["context", "radial", "sheet"], contexts: ["lecture"],
+		priority, scope: "view", command: true, keywords: "marker badge",
+	})),
+	{ id: "marker-box", label: "markers.menu.box", icon: "square-dashed", group: "lecture", surfaces: ["context", "radial", "sheet"], contexts: ["lecture"], priority: 38, scope: "view", command: true, keywords: "definition theorem example proof remark callout" },
+	{ id: "end-of-lecture", label: "markers.menu.panel", icon: "list-checks", group: "lecture", surfaces: ["context", "sheet", "page"], contexts: ["lecture"], priority: 42, scope: "view", command: true, readOnly: true, keywords: "questions gaps homework markers" },
+	// wave 0.8: invisible ink (#100): a pen mode, and the view-only "Show solutions".
+	{ id: "invisible-ink", label: "markers.command.invisible", icon: "eye-off", group: "view", surfaces: ["sheet"], priority: 35, scope: "view", command: true, checked: (c) => !!c.markers?.invisibleInk, keywords: "hidden solutions self-test" },
+	{ id: "show-solutions", label: "markers.command.solutions", icon: "eye", group: "view", surfaces: ["sheet"], priority: 30, scope: "view", command: true, readOnly: true, checked: (c) => !!c.markers?.solutions, keywords: "invisible ink hidden" },
+	{ id: "show-page-solutions", label: "markers.menu.pageSolutions", icon: "eye", group: "page", surfaces: ["page"], priority: 30, scope: "view", command: true, readOnly: true, checked: (c) => !!c.markers?.pageSolutions, keywords: "invisible ink hidden" },
 
 	// --- view and input.
 	{ id: "toggle-pages-panel", label: "tool.pages", icon: "panel-left", group: "view", surfaces: ["toolbar"], priority: 100, scope: "view", command: "command.toggleNavigator", readOnly: true, checked: (c) => c.toggles.navigator },
 	{ id: "toggle-ruler", label: "tool.ruler", icon: "ruler", group: "view", surfaces: ["quick", "radial", "sheet"], priority: 50, scope: "view", command: "command.toggleRuler", checked: (c) => c.toggles.ruler },
 	{ id: "pen-only", label: "pens.penOnly", icon: "pen-tool", group: "view", surfaces: ["quick", "sheet"], priority: 42, scope: "view", command: "command.penOnly", readOnly: true, checked: (c) => c.toggles.penOnly, keywords: "finger touch palm" },
+	// wave 0.8: pen gestures. The mode toggle is a quick slot (the "move to page" gesture starts
+	// from a selection); the cheat sheet and the custom gestures live in the sheet only.
+	{ id: "pen-gesture-mode", label: "toolbar.penGestures", icon: "wand-2", group: "view", surfaces: ["quick", "sheet"], priority: 41, scope: "view", command: "command.penGestureMode", checked: (c) => !!c.toggles.penGestures, keywords: "gesture pen shortcut circle scribble" },
+	{ id: "pen-gesture-sheet", label: "gesture.cheatSheet", icon: "help-circle", group: "view", surfaces: ["sheet"], priority: 20, scope: "view", command: "command.penGestureSheet", readOnly: true, keywords: "gestures help" },
+	{ id: "pen-gesture-custom", label: "settings.penGestureCustom", icon: "wand", group: "view", surfaces: ["sheet"], priority: 15, scope: "view", command: "command.penGestureCustom", readOnly: true, keywords: "gestures record bind command" },
 	{ id: "fit-width", label: "tool.fit", icon: "move-horizontal", group: "view", surfaces: ["quick", "sheet"], priority: 38, scope: "view", command: "command.fit", readOnly: true, keywords: "zoom" },
 	{ id: "next-page", label: "command.nextPage", icon: "chevron-down", group: "view", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
 	{ id: "previous-page", label: "command.prevPage", icon: "chevron-up", group: "view", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
@@ -248,6 +280,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	// --- registered by other modules (listed so that every command has a documented place).
 	external("insert-embed", "command.embedInsert", "picture-in-picture", "integration", "integration/index.ts"),
 	external("restore-version", "command.restore", "history", "integration", "integration/index.ts"),
+	// wave 0.8 (388): lists the old #pN links of the notes, then rewrites the ones the user accepts.
+	external("update-page-links", "command.updateLinks", "link-2", "integration", "integration/index.ts", ["notebook", "palette"]),
 	external("edit-tags", "command.editTags", "tags", "integration", "integration/tags.ts", ["notebook", "palette"]),
 	external("companion-update-all", "command.companionUpdateAll", "refresh-cw", "integration", "integration/companion.ts"),
 	external("companion-open", "command.companionOpen", "file-text", "integration", "integration/companion.ts"),
@@ -263,6 +297,13 @@ export const ACTIONS: readonly ActionDef[] = [
 	external("zettel-new-slip-box", "zettel.command.newSlipBox", "archive", "zettel", "zettel/index.ts"),
 	external("zettel-orphans", "zettel.command.orphans", "unlink", "zettel", "zettel/index.ts"),
 	external("zettel-toggle-regions", "zettel.command.toggleRegions", "scan", "zettel", "zettel/index.ts"),
+	// wave 0.8: processing flow (Z4): the Inbox view; quick textbook reference (208)
+	global("zettel-inbox", "inbox.command.open", "inbox", "zettel", ["sheet", "palette"], 30),
+	global("zettel-inbox-process", "inbox.command.process", "list-checks", "zettel", ["sheet", "palette"], 30),
+	{ id: "textbook-set", label: "textbook.command.set", icon: "book-open-check", group: "reading", surfaces: ["sheet", "palette"], priority: 25, scope: "view", command: true, readOnly: true, keywords: "textbook book pdf reference course libro" },
+	{ id: "textbook-open", label: "textbook.command.open", icon: "book-open", group: "reading", surfaces: ["sheet", "palette"], priority: 35, scope: "view", command: true, readOnly: true, keywords: "textbook book pdf page libro" },
+	{ id: "textbook-remove", label: "textbook.command.remove", icon: "book-x", group: "reading", surfaces: ["sheet", "palette"], priority: 10, scope: "view", command: true, readOnly: true },
+	{ id: "textbook-insert", label: "textbook.command.insert", icon: "book-marked", group: "insert", surfaces: ["sheet", "palette"], priority: 45, scope: "view", command: true, keywords: "textbook reference page libro" },
 
 	// --- status banners (wave 0.7): their buttons, listed so that every visible control has a documented place.
 	banner("safe-open-normally", "safe.banner.openNormally", "shield-off", "notebook", "view/resilience.ts"),

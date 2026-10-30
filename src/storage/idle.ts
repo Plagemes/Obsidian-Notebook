@@ -1,7 +1,10 @@
 /**
  * Waiting for a quiet moment, for work that nobody is looking at (version-history snapshot, stroke-line
  * warm-up) so it does not compete with the first paint of a notebook that was just opened.
+ * Wave 0.8 (374): `whenIdle` also waits while the pen is on the screen (ink/writing-guard.ts).
  */
+import { writing } from "../ink/writing-guard";
+
 export interface IdleScheduler {
 	/** Calls `fn` after about `ms` milliseconds. */
 	delay(fn: () => void, ms: number): void;
@@ -29,8 +32,9 @@ export function windowScheduler(w: IdleWindow = window): IdleScheduler {
 export function whenIdle(delayMs = 1500, timeoutMs = 10_000, scheduler: IdleScheduler = windowScheduler()): Promise<void> {
 	return new Promise((resolve) => {
 		scheduler.delay(() => {
-			if (scheduler.idle) scheduler.idle(resolve, timeoutMs);
-			else resolve();
+			const quiet = () => writing.whenQuiet(resolve);
+			if (scheduler.idle) scheduler.idle(quiet, timeoutMs);
+			else quiet();
 		}, delayMs);
 	});
 }

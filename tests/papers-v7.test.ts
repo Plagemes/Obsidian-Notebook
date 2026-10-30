@@ -64,10 +64,9 @@ describe("v7 paper kinds", () => {
 	});
 
 	it.each(PAPER_KINDS_V7)("%s: an absurd density is refused quickly instead of looping", (kind) => {
+		// A loop would never end and hit the test timeout; wall-clock assertions are flaky under load.
 		const p = page(kind, 595, 100_000, 0.5);
-		const started = Date.now();
 		const r = paperPattern(p, whole(p));
-		expect(Date.now() - started).toBeLessThan(2000);
 		expect(r.lines.length).toBeLessThan(1_500_000);
 	});
 

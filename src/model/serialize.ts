@@ -1,10 +1,11 @@
 import { normalizeBookmarkInfoMap } from "./bookmarks";
+import { cleanMarkerText, isBoxKind, isIsoDate, isMarkerKind } from "./markers";
 import { detectVersion, migrate, MigrationError, type RawObject } from "./migrations";
 import { normalizePageTags } from "./page-tags";
 import { normalizePosition } from "./position";
 import {
-	CURRENT_VERSION, DEFAULT_META, FORMAT_ID, PAPER_KINDS, RENDER_VERSIONS, TOOLS,
-	type Asset, type AssetKind, type BookmarkInfo, type ImageElement, type NotebookDocument, type NotebookMeta, type Page,
+	CURRENT_VERSION, DEFAULT_META, ELEMENT_TYPES_V8, FORMAT_ID, PAPER_KINDS, RENDER_VERSIONS, TOOLS,
+	type Asset, type AssetKind, type BookmarkInfo, type BoxElement, type ImageElement, type MarkerElement, type NotebookDocument, type NotebookMeta, type Page,
 	type PageBackground, type PageElement, type PageMargins, type PaperKind, type Point, type ReadingPosition, type RenderVersion, type Stroke,
 	type TextElement, type Tool,
 } from "./types";
@@ -19,7 +20,8 @@ export type ParseFailure =
 export type ParseResult =
 	/**
 	 * `dropped` (v7, only when > 0): optional details that were invalid and left out on read (a bookmark detail
-	 * field such as a bad colour, the reading position or its y) instead of making the whole notebook unreadable.
+	 * field such as a bad colour, the reading position or its y; v8: a marker or box, one of their optional fields,
+	 * or a stroke's `hidden` flag) instead of making the whole notebook unreadable.
 	 * Saving writes the document without them, so callers keep a backup of the original text first.
 	 */
 	| { ok: true; doc: NotebookDocument; migratedFrom: number | null; dropped?: number }
@@ -42,7 +44,30 @@ function fail(path: string, what: string): never {
 }
 
 function strokeLine(s: Stroke): string {
-	return `\t\t\t\t{"id":${j(s.id)},"tool":${j(s.tool)},"color":${j(s.color)},"width":${j(s.width)},"render":${j(s.render)},"points":${j(s.points)}}`;
+	// v8: `hidden` only when set, between render and points.
+	const hidden = s.hidden !== undefined ? `,"hidden":${j(s.hidden)}` : "";
+	return `\t\t\t\t{"id":${j(s.id)},"tool":${j(s.tool)},"color":${j(s.color)},"width":${j(s.width)},"render":${j(s.render)}${hidden},"points":${j(s.points)}}`;
+}
+
+/** v8 marker: required fields, then the optional ones in a fixed order, each only when present (the label normalised). */
+function markerLine(e: MarkerElement): string {
+	let out = `{"id":${j(e.id)},"type":"marker","kind":${j(e.kind)},"x":${j(e.x)},"y":${j(e.y)}`;
+	if (e.width !== undefined) out += `,"width":${j(e.width)}`;
+	if (e.height !== undefined) out += `,"height":${j(e.height)}`;
+	if (e.at !== undefined) out += `,"at":${j(e.at)}`;
+	if (e.done !== undefined) out += `,"done":${j(e.done)}`;
+	if (e.slide !== undefined) out += `,"slide":${j(e.slide)}`;
+	if (e.due !== undefined) out += `,"due":${j(e.due)}`;
+	const text = cleanMarkerText(e.text);
+	if (text !== undefined) out += `,"text":${j(text)}`;
+	return `\t\t\t\t${out}}`;
+}
+
+/** v8 structured box: kind and frame, then the title when present (normalised). */
+function boxLine(e: BoxElement): string {
+	const title = cleanMarkerText(e.title);
+	const t = title !== undefined ? `,"title":${j(title)}` : "";
+	return `\t\t\t\t{"id":${j(e.id)},"type":"box","kind":${j(e.kind)},"x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)}${t}}`;
 }
 
 function elementLine(e: PageElement): string {
@@ -52,6 +77,8 @@ function elementLine(e: PageElement): string {
 	if (e.type === "image") {
 		return `\t\t\t\t{"id":${j(e.id)},"type":"image","asset":${j(e.asset)},"x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"rotation":${j(e.rotation)}}`;
 	}
+	if (e.type === "marker") return markerLine(e);
+	if (e.type === "box") return boxLine(e);
 	return fail("element", "unknown element type");
 }
 
@@ -196,7 +223,7 @@ function readPoint(v: unknown, path: string): Point {
 	return [x, y, p];
 }
 
-function readStroke(v: unknown, path: string): Stroke {
+function readStroke(v: unknown, path: string, drop: Dropped | null = null): Stroke {
 	if (!isObject(v)) fail(path, "expected an object");
 	const id = str(v.id, `${path}.id`);
 	if (!TOOLS.includes(v.tool as Tool)) fail(`${path}.tool`, "unknown tool");
@@ -205,7 +232,14 @@ function readStroke(v: unknown, path: string): Stroke {
 	if (!RENDER_VERSIONS.includes(v.render as RenderVersion)) fail(`${path}.render`, "expected render version 1 or 2");
 	if (!Array.isArray(v.points) || v.points.length === 0) fail(`${path}.points`, "expected at least one point");
 	const points = v.points.map((pt, i) => readPoint(pt, `${path}.points[${i}]`));
-	return { id, tool: v.tool as Tool, color: v.color, width, render: v.render as RenderVersion, points };
+	const tool = v.tool as Tool;
+	const render = v.render as RenderVersion;
+	if (v.hidden !== undefined) {
+		// v8 invisible ink. Anything but `true` is invalid: dropped and counted when reading leniently (the stroke shows).
+		const hidden = orDrop(drop, () => (v.hidden === true ? true : fail(`${path}.hidden`, "expected true")));
+		if (hidden) return { id, tool, color: v.color, width, render, hidden, points };
+	}
+	return { id, tool, color: v.color, width, render, points };
 }
 
 type Assets = Readonly<Record<string, Asset>>;
@@ -263,7 +297,7 @@ function readMargins(v: unknown, path: string, width: number, height: number): P
 	return { left, right, bottom };
 }
 
-function readElement(v: unknown, path: string, assets: Assets): PageElement {
+function readElement(v: unknown, path: string, assets: Assets, drop: Dropped | null = null): PageElement {
 	if (!isObject(v)) fail(path, "expected an object");
 	const id = str(v.id, `${path}.id`);
 	if (v.type === "text") {
@@ -289,7 +323,76 @@ function readElement(v: unknown, path: string, assets: Assets): PageElement {
 		};
 		return el;
 	}
+	if (v.type === "marker") return readMarker(v, id, path, drop);
+	if (v.type === "box") return readBox(v, id, path, drop);
 	return fail(`${path}.type`, "unknown element type");
+}
+
+/**
+ * One line of text (a marker label, a box title): any string, normalised; an invalid one is dropped and counted when
+ * lenient. A label that normalising changes (extra spaces, line breaks, longer than the limit, blank) is not what this
+ * plugin writes: read leniently it is kept normalised and counted as dropped (so the repair notice tells the user that
+ * something changed); read strictly it fails.
+ */
+function readLabel(v: unknown, path: string, drop: Dropped | null): string | undefined {
+	return orDrop(drop, () => {
+		if (v === undefined) return undefined;
+		if (typeof v !== "string") fail(path, "expected a string");
+		const clean = cleanMarkerText(v);
+		if (clean !== v) {
+			if (!drop) fail(path, "not a normalised label");
+			drop.count++;
+		}
+		return clean;
+	});
+}
+
+/**
+ * v8 marker. Kind and position are required (an invalid one fails the marker); the region, time, state, slide,
+ * due date and label are optional details, each dropped and counted on its own when invalid and reading leniently.
+ */
+function readMarker(v: RawObject, id: string, path: string, drop: Dropped | null): MarkerElement {
+	if (!isMarkerKind(v.kind)) fail(`${path}.kind`, "unknown marker kind");
+	const el: MarkerElement = { id, type: "marker", kind: v.kind, x: finite(v.x, `${path}.x`), y: finite(v.y, `${path}.y`) };
+	if (v.width !== undefined || v.height !== undefined) {
+		const r = orDrop(drop, () => ({ width: positive(v.width, `${path}.width`), height: positive(v.height, `${path}.height`) }));
+		if (r) {
+			el.width = r.width;
+			el.height = r.height;
+		}
+	}
+	const at = orDrop(drop, () => (v.at === undefined ? undefined : str(v.at, `${path}.at`)));
+	if (at !== undefined) el.at = at;
+	const done = orDrop(drop, () => (v.done === undefined ? undefined : v.done === true ? true : fail(`${path}.done`, "expected true")));
+	if (done) el.done = done;
+	const slide = orDrop(drop, () => {
+		if (v.slide === undefined) return undefined;
+		if (typeof v.slide !== "number" || !Number.isSafeInteger(v.slide) || v.slide < 1) fail(`${path}.slide`, "expected an integer >= 1");
+		return v.slide;
+	});
+	if (slide !== undefined) el.slide = slide;
+	const due = orDrop(drop, () => {
+		if (v.due === undefined) return undefined;
+		if (!isIsoDate(v.due)) fail(`${path}.due`, "expected a YYYY-MM-DD date");
+		return v.due;
+	});
+	if (due !== undefined) el.due = due;
+	const text = readLabel(v.text, `${path}.text`, drop);
+	if (text !== undefined) el.text = text;
+	return el;
+}
+
+/** v8 structured box: kind and frame are required, the title is optional. */
+function readBox(v: RawObject, id: string, path: string, drop: Dropped | null): BoxElement {
+	if (!isBoxKind(v.kind)) fail(`${path}.kind`, "unknown box kind");
+	const el: BoxElement = {
+		id, type: "box", kind: v.kind,
+		x: finite(v.x, `${path}.x`), y: finite(v.y, `${path}.y`),
+		width: positive(v.width, `${path}.width`), height: positive(v.height, `${path}.height`),
+	};
+	const title = readLabel(v.title, `${path}.title`, drop);
+	if (title !== undefined) el.title = title;
+	return el;
 }
 
 function readMeta(v: unknown, pageIds: ReadonlySet<string>, drop: Dropped | null): NotebookMeta {
@@ -393,7 +496,7 @@ function readAssets(v: unknown): Record<string, Asset> {
 	return assets;
 }
 
-function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets): Page {
+function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null = null): Page {
 	if (!isObject(v)) fail(path, "expected an object");
 	const id = str(v.id, `${path}.id`);
 	const width = positive(v.width, `${path}.width`);
@@ -405,7 +508,7 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets): P
 	if (spacing < MIN_PAPER_SPACING) fail(`${path}.paper.spacing`, `must be at least ${MIN_PAPER_SPACING} pt`);
 	if (!Array.isArray(v.strokes)) fail(`${path}.strokes`, "expected an array");
 	const strokes = v.strokes.map((s, i) => {
-		const stroke = readStroke(s, `${path}.strokes[${i}]`);
+		const stroke = readStroke(s, `${path}.strokes[${i}]`, drop);
 		if (ids.has(stroke.id)) fail(`${path}.strokes[${i}].id`, "duplicate id");
 		ids.add(stroke.id);
 		freezeStroke(stroke);
@@ -425,11 +528,16 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets): P
 	}
 	if (v.elements !== undefined) {
 		if (!Array.isArray(v.elements)) fail(`${path}.elements`, "expected an array");
-		const elements = v.elements.map((e, i) => {
-			const el = readElement(e, `${path}.elements[${i}]`, assets);
-			if (ids.has(el.id)) fail(`${path}.elements[${i}].id`, "duplicate id");
+		const elements: PageElement[] = [];
+		v.elements.forEach((e, i) => {
+			const at = `${path}.elements[${i}]`;
+			// v8 markers and boxes are details: an invalid one is dropped and counted when reading leniently.
+			const v8 = isObject(e) && typeof e.type === "string" && ELEMENT_TYPES_V8.includes(e.type);
+			const el = v8 ? orDrop(drop, () => readElement(e, at, assets, drop)) : readElement(e, at, assets, drop);
+			if (!el) return;
+			if (ids.has(el.id)) fail(`${at}.id`, "duplicate id");
 			ids.add(el.id);
-			return freezeElement(el);
+			elements.push(freezeElement(el));
 		});
 		if (elements.length > 0) page.elements = elements;
 	}
@@ -456,7 +564,7 @@ export function validate(raw: unknown, drop: Dropped | null = null): NotebookDoc
 	return validateWith(raw, readPage, new Set<string>(), drop);
 }
 
-type PageReader = (v: unknown, path: string, ids: Set<string>, assets: Assets) => Page;
+type PageReader = (v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null) => Page;
 
 /** `validate` with the page reader and the set of ids injected: staged loading reads page shells first (see StagedParse). */
 function validateWith(raw: unknown, readPageAt: PageReader, ids: Set<string>, drop: Dropped | null): NotebookDocument {
@@ -470,7 +578,7 @@ function validateWith(raw: unknown, readPageAt: PageReader, ids: Set<string>, dr
 	const assets = readAssets(raw.assets);
 	const pageIds = new Set<string>();
 	const pages = raw.pages.map((p, i) => {
-		const page = readPageAt(p, `pages[${i}]`, ids, assets);
+		const page = readPageAt(p, `pages[${i}]`, ids, assets, drop);
 		// Page ids key bookmarks, jumps and caches: two pages with one id would be confused with each other.
 		if (pageIds.has(page.id)) fail(`pages[${i}].id`, "duplicate id");
 		pageIds.add(page.id);
@@ -582,8 +690,8 @@ export class StagedParse {
 		private readonly rawPages: readonly unknown[],
 		private readonly ids: Set<string>,
 		first: number,
-		/** Invalid optional v7 details dropped while reading the document-level fields (they are all read up front). */
-		private readonly dropped: number,
+		/** Invalid optional details dropped so far: the document-level ones up front, page details as the pages are read. */
+		private readonly drop: Dropped,
 	) {
 		// Nearest to the wanted page first: forward, then back (the next page is the likelier swipe).
 		const order: number[] = [];
@@ -603,7 +711,7 @@ export class StagedParse {
 			const doc = validateWith(raw, readPageShell, ids, drop);
 			const rawPages = raw.pages as unknown[];
 			const at = Math.min(rawPages.length - 1, Math.max(0, first));
-			const staged = new StagedParse(doc, rawPages, ids, at, drop.count);
+			const staged = new StagedParse(doc, rawPages, ids, at, drop);
 			staged.read(at);
 			return staged;
 		} catch (e) {
@@ -613,7 +721,7 @@ export class StagedParse {
 	}
 
 	private read(i: number): void {
-		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {});
+		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop);
 	}
 
 	get pending(): number {
@@ -652,7 +760,8 @@ export class StagedParse {
 
 	/** The result once every page has been read (same shape as `parse`: `dropped` only when > 0). */
 	result(): ParseResult {
-		return this.dropped > 0 ? { ok: true, doc: this.doc, migratedFrom: null, dropped: this.dropped } : { ok: true, doc: this.doc, migratedFrom: null };
+		const dropped = this.drop.count;
+		return dropped > 0 ? { ok: true, doc: this.doc, migratedFrom: null, dropped } : { ok: true, doc: this.doc, migratedFrom: null };
 	}
 }
 

@@ -24,6 +24,7 @@ const CONTEXTS: Array<[string, UiContext]> = [
 	["plain page", baseContext()],
 	["bookmarked last page", baseContext({ page: { index: 2, count: 3, background: "none", infinite: true, bookmarked: true } })],
 	["selection with an image", baseContext({ tool: "lasso", selection: { strokes: 2, elements: 1, images: 1 } })],
+	["selection with a link", baseContext({ tool: "lasso", selection: { strokes: 0, elements: 1, images: 0, links: 1 } })],
 	["lasso, nothing selected", baseContext({ tool: "lasso" })],
 	["PDF page", baseContext({ page: { index: 1, count: 3, background: "pdf", infinite: false, bookmarked: false }, notebook: { pdfPages: true, backgrounds: true } })],
 	["image page", baseContext({ page: { index: 1, count: 3, background: "image", infinite: false, bookmarked: false }, notebook: { pdfPages: false, backgrounds: true } })],

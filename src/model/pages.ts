@@ -1,9 +1,20 @@
 import { createId, createPage } from "./document";
 import { freezeElement, freezeStroke } from "./serialize";
-import { PAPER_SPACING, type Asset, type Page, type PageElement } from "./types";
+import { PAPER_SPACING, type Asset, type Page, type PageElement, type Stroke } from "./types";
 
 function copyElement(el: PageElement): PageElement {
 	return freezeElement({ ...el, id: createId() });
+}
+
+/**
+ * Deep copy of a stroke with id `id` (points copied, not shared), frozen. Every field is kept, v8 `hidden`
+ * included: every path that copies ink (duplicate, restore, merge, clipboard) goes through here.
+ */
+export function copyStroke(s: Stroke, id: string = s.id): Stroke {
+	const points = s.points.map((p) => [p[0], p[1], p[2]] as [number, number, number]);
+	return freezeStroke(s.hidden
+		? { id, tool: s.tool, color: s.color, width: s.width, render: s.render, hidden: true, points }
+		: { id, tool: s.tool, color: s.color, width: s.width, render: s.render, points });
 }
 
 /**
@@ -18,14 +29,7 @@ export function duplicatePage(page: Page): Page {
 		width: page.width,
 		height: page.height,
 		paper: { kind: page.paper.kind, spacing: page.paper.spacing },
-		strokes: page.strokes.map((s) => freezeStroke({
-			id: createId(),
-			tool: s.tool,
-			color: s.color,
-			width: s.width,
-			render: s.render,
-			points: s.points.map((p) => [p[0], p[1], p[2]] as [number, number, number]),
-		})),
+		strokes: page.strokes.map((s) => copyStroke(s, createId())),
 	};
 	if (page.background) copy.background = { ...page.background };
 	if (page.infinite !== undefined) copy.infinite = page.infinite;

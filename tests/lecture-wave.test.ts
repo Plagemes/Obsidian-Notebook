@@ -265,7 +265,7 @@ describe("moving pages between notebooks", () => {
 		expect(pageAssetIds(source().pages[0]!)).toEqual([]);
 	});
 
-	it("copies the chosen pages in source order with new ids, and the assets the target lacks", () => {
+	it("copies the chosen pages in source order, keeping their page ids (new stroke ids), and the assets the target lacks", () => {
 		const src = source();
 		const target = createDocument();
 		target.assets = { aa11: asset("aa11") };
@@ -275,7 +275,9 @@ describe("moving pages between notebooks", () => {
 		expect(plan.pages).toHaveLength(2);
 		expect(plan.pages[0]!.background).toEqual({ kind: "image", asset: "aa11" });
 		expect(plan.pages[1]!.background).toEqual({ kind: "pdf", asset: "cc33", page: 1 });
-		expect(plan.pages.map((p) => p.id)).not.toContain(src.pages[1]!.id);
+		// Page ids travel with the page (stable links follow it); the target had none of them.
+		expect(plan.pages.map((p) => p.id)).toEqual([src.pages[1]!.id, src.pages[2]!.id]);
+		expect(plan.renamed).toEqual([]);
 		expect(plan.pages[1]!.strokes[0]!.id).not.toBe(src.pages[2]!.strokes[0]!.id);
 		expect(plan.pages[1]!.strokes[0]!.points).toEqual(src.pages[2]!.strokes[0]!.points);
 		expect(plan.assets.map((a) => a.id).sort()).toEqual(["bb22", "cc33"]); // aa11 is already in the target

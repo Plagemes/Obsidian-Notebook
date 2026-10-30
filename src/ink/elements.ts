@@ -1,4 +1,5 @@
-import type { ImageElement, PageElement, TextElement } from "../model/types";
+import { boxBounds, markerBounds, MARKER_BADGE } from "../model/markers";
+import type { BoxElement, ImageElement, MarkerElement, PageElement, TextElement } from "../model/types";
 import type { BBox } from "./hit-test";
 import { pointInPolygon, type Polygon } from "./lasso";
 import { estimateMeasure, textElementBounds, type MeasureText } from "./text-layout";
@@ -23,6 +24,8 @@ function imageCorners(el: ImageElement): Array<[number, number]> {
 /** Axis-aligned box of an element: text is laid out with `measure`; an image is its rotated rectangle's bounding box. */
 export function elementBounds(el: PageElement, measure: MeasureText = estimateMeasure): BBox {
 	if (el.type === "text") return textElementBounds(el, measure);
+	if (el.type === "marker") return markerBounds(el);
+	if (el.type === "box") return boxBounds(el);
 	const c = imageCorners(el);
 	const xs = c.map((p) => p[0]);
 	const ys = c.map((p) => p[1]);
@@ -30,6 +33,10 @@ export function elementBounds(el: PageElement, measure: MeasureText = estimateMe
 }
 
 function hits(el: PageElement, x: number, y: number, tolerance: number, measure: MeasureText): boolean {
+	if (el.type === "marker" || el.type === "box") {
+		const b = elementBounds(el, measure);
+		return x >= b.minX - tolerance && x <= b.maxX + tolerance && y >= b.minY - tolerance && y <= b.maxY + tolerance;
+	}
 	if (el.type === "text") {
 		const b = textElementBounds(el, measure);
 		return x >= b.minX - tolerance && x <= b.maxX + tolerance && y >= b.minY - tolerance && y <= b.maxY + tolerance;
@@ -94,7 +101,33 @@ function transformImage(el: ImageElement, m: Matrix): ImageElement {
 	};
 }
 
+/** Corners of a rectangle mapped by `m`, as an axis-aligned box (markers and boxes never rotate). */
+function mappedRect(x: number, y: number, w: number, h: number, m: Matrix): { x: number; y: number; width: number; height: number } {
+	const pts = [apply(m, x, y), apply(m, x + w, y), apply(m, x, y + h), apply(m, x + w, y + h)];
+	const xs = pts.map((p) => p[0]);
+	const ys = pts.map((p) => p[1]);
+	const minX = Math.min(...xs);
+	const minY = Math.min(...ys);
+	return { x: round2(minX), y: round2(minY), width: Math.max(1, round2(Math.max(...xs) - minX)), height: Math.max(1, round2(Math.max(...ys) - minY)) };
+}
+
+/** v8 marker: its region follows the transform; a point marker moves its badge centre (the badge keeps its size). */
+function transformMarker(el: MarkerElement, m: Matrix): MarkerElement {
+	if (el.width !== undefined && el.height !== undefined) {
+		const r = mappedRect(el.x, el.y, el.width, el.height, m);
+		return { ...el, x: r.x, y: r.y, width: r.width, height: r.height };
+	}
+	const [cx, cy] = apply(m, el.x + MARKER_BADGE / 2, el.y + MARKER_BADGE / 2);
+	return { ...el, x: round2(cx - MARKER_BADGE / 2), y: round2(cy - MARKER_BADGE / 2) };
+}
+
+function transformBox(el: BoxElement, m: Matrix): BoxElement {
+	return { ...el, ...mappedRect(el.x, el.y, el.width, el.height, m) };
+}
+
 /** New element moved/scaled/rotated by `m` (elements are immutable). Text scales font size and width uniformly. */
 export function transformElement(el: PageElement, m: Matrix, measure: MeasureText = estimateMeasure): PageElement {
+	if (el.type === "marker") return transformMarker(el, m);
+	if (el.type === "box") return transformBox(el, m);
 	return el.type === "text" ? transformText(el, m, measure) : transformImage(el, m);
 }

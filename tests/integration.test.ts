@@ -105,12 +105,12 @@ describe("obsidian:// links", () => {
 		const url = new URL(notebookUri("Vault & more", "Dir/é #1.notebook", 12));
 		const params = Object.fromEntries(url.searchParams.entries());
 		expect(params.vault).toBe("Vault & more");
-		expect(parseProtocolParams(params)).toEqual({ ok: true, path: "Dir/é #1.notebook", page: 12 });
+		expect(parseProtocolParams(params)).toEqual({ ok: true, path: "Dir/é #1.notebook", page: 12, pageId: null });
 	});
 
 	it("reads protocol parameters leniently", () => {
-		expect(parseProtocolParams({ path: "/A.notebook", page: "x" })).toEqual({ ok: true, path: "A.notebook", page: null });
-		expect(parseProtocolParams({ file: "B.notebook", page: "0" })).toEqual({ ok: true, path: "B.notebook", page: null });
+		expect(parseProtocolParams({ path: "/A.notebook", page: "x" })).toEqual({ ok: true, path: "A.notebook", page: null, pageId: null });
+		expect(parseProtocolParams({ file: "B.notebook", page: "0" })).toEqual({ ok: true, path: "B.notebook", page: null, pageId: null });
 		expect(parseProtocolParams({ page: "2" })).toEqual({ ok: false });
 		expect(parseProtocolParams({ path: "  " })).toEqual({ ok: false });
 	});

@@ -1,4 +1,6 @@
-import { Notice, Plugin, type TFile } from "obsidian";
+import { trackWriting } from "./view/writing-quiet";
+import { showNotice } from "./view/notice";
+import { Plugin, type TFile } from "obsidian";
 import { t } from "./i18n";
 import { readSettings, type NotebookSettings } from "./settings";
 import { positionEquals, type SavedPosition } from "./ink/view-position";
@@ -24,6 +26,9 @@ import { registerLectureRibbon } from "./view/lecture-commands";
 import { TimetableService } from "./timetable/service";
 import { initPdfSync } from "./view/pdf-sync";
 import { registerZettel } from "./zettel";
+import { openInbox, processNextInbox } from "./zettel/inbox";
+import { registerTextbookRefs } from "./view/textbook-ref-ui";
+import { PracticeService } from "./view/practice";
 import { openPageSwitcher, QuickNavService } from "./view/quick-switcher";
 import { openRecentPages, RecentPagesService } from "./view/recent-pages";
 import { SyncSafetyService } from "./view/sync-safety";
@@ -39,6 +44,8 @@ export default class NotebookPlugin extends Plugin {
 	recentPages!: RecentPagesService;
 	/** Public API for other plugins and scripts (docs/api.md). */
 	api?: NotebookApi;
+	/** Wave 0.9: practice copies of exercises (view/practice.ts); the views attach to it. */
+	practice!: PracticeService;
 	/** ui redesign: the plugin-level actions of the registry (ui/actions.ts), by id. */
 	private globalActions: Record<string, () => void> = {};
 	/** wave 0.7: sync safety (presence files, sync check). */
@@ -50,7 +57,10 @@ export default class NotebookPlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		this.settings = readSettings(await this.loadData());
+		// wave 0.8 (374): notices and non-urgent background work wait while the pen is on the screen.
+		trackWriting(this);
 
+		this.practice = new PracticeService(this);
 		this.journal = new AdapterJournalStore(this.app.vault.adapter, journalFolder(this.app, this.manifest.id));
 		this.syncSafety = new SyncSafetyService(this);
 		this.syncSafety.register();
@@ -101,6 +111,8 @@ export default class NotebookPlugin extends Plugin {
 			"recent-pages": () => openRecentPages(this.app, this.recentPages),
 			"sync-check": () => void this.syncSafety.openCheck(),
 			"check-integrity": () => void this.resilience?.check(),
+			"zettel-inbox": () => void openInbox(this.app),
+			"zettel-inbox-process": () => void processNextInbox(this.app),
 			"benchmark": () => this.openBenchmark(),
 			"create-stress-test": () => void this.createStressNotebook(),
 		};
@@ -117,6 +129,11 @@ export default class NotebookPlugin extends Plugin {
 		});
 		// wave 0.6: zettelkasten (M15 Z1–Z3, Z11, Z12)
 		registerZettel(this);
+		// wave 0.8: quick textbook reference (roadmap 208): "p. 134" in a text box opens the textbook at that page
+		registerTextbookRefs(this, () => this.settings.folder);
+
+		// wave 0.9: redo the exercise (#303): practice copies, attempts, peek, timer (view/practice.ts)
+		this.practice.start();
 
 		// wave 0.6: timetable (src/timetable/): current class offer, library shortcut, editor.
 		this.timetable = new TimetableService(this, (file) => this.host.openNotebook(file));
@@ -194,12 +211,12 @@ export default class NotebookPlugin extends Plugin {
 	private async continueLast(): Promise<void> {
 		const { lastNotebookPath: path, lastNotebookPage: page, lastNotebookPos: pos } = this.settings;
 		if (!path) {
-			new Notice(t("notice.noLastNotebook"));
+			showNotice(t("notice.noLastNotebook"));
 			return;
 		}
 		const file = this.app.vault.getFileByPath(path);
 		if (!file) {
-			new Notice(t("notice.lastNotebookGone", { path }));
+			showNotice(t("notice.lastNotebookGone", { path }));
 			return;
 		}
 		await openNotebookAtPage(this.app, file, page, pos?.page === page ? pos : null);
@@ -236,7 +253,7 @@ export default class NotebookPlugin extends Plugin {
 			const file = await createNotebook(this.app, this.settings.folder, "Stress test 10000", stressDocument(10_000, 10, Date.now() % 100000));
 			await this.openFile(file);
 		} catch (e) {
-			new Notice(t("notice.createFailed", { error: (e as Error).message }));
+			showNotice(t("notice.createFailed", { error: (e as Error).message }));
 		}
 	}
 

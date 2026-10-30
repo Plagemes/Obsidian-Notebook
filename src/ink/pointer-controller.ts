@@ -81,7 +81,7 @@ export function isNewSample(lastT: number, lastX: number, lastY: number, t: numb
 
 export interface PointerHandlers {
 	/** `eraser`: the pen has its eraser button pressed or is flipped. Return false to reject the stroke. */
-	drawStart(sample: InkSample, eraser: boolean, held?: "lasso" | "previous"): boolean;
+	drawStart(sample: InkSample, eraser: boolean, held?: "lasso" | "previous" | "gesture"): boolean;
 	/**
 	 * New samples of the drawing pointer (never repeated: each sample is delivered once, whether it
 	 * came from `pointerrawupdate` or `pointermove`) and the browser's predicted samples (may be empty).
@@ -320,7 +320,7 @@ export class PointerController {
 	}
 
 	/** Starts a stroke for the contact `e`; false when the view refuses it. */
-	private beginDraw(e: PointerEvent, eraser: boolean, held?: "lasso" | "previous"): boolean {
+	private beginDraw(e: PointerEvent, eraser: boolean, held?: "lasso" | "previous" | "gesture"): boolean {
 		if (e.pointerType === "pen") this.nav.clear();
 		if (!this.handlers.drawStart(this.sample(e), eraser, held)) return false;
 		this.drawId = e.pointerId;

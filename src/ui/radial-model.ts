@@ -2,7 +2,12 @@
 // no 'obsidian'); the dial itself is view/radial-menu.ts.
 import type { ToolId } from "./actions";
 
-export type DialState = "main" | "color" | "width" | "tools" | "favourites" | "shapes";
+export type DialState = "main" | "color" | "width" | "tools" | "favourites" | "shapes" | "markers";
+
+/** wave 0.8: what the dial's Markers ring places (marker kinds, then a structured box), with the badge glyph it shows. */
+export const MARKER_RING: ReadonlyArray<readonly ["gap" | "question" | "important" | "critical" | "star" | "homework" | "box", string]> = [
+	["gap", "…"], ["question", "?"], ["important", "!"], ["critical", "!!"], ["star", "★"], ["homework", "HW"], ["box", "▭"],
+];
 
 /** Diameter of the dial, CSS px. */
 export const DIAL_SIZE = 264;

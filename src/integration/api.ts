@@ -13,18 +13,22 @@ import { VaultDocumentIO } from "../storage/vault-io";
 import type { EditContext } from "../view/edit-context";
 import { collectPageImages, freePath } from "../view/export";
 import { NotebookMedia, storeAsset } from "../view/media";
+import { t } from "../i18n";
+import { validPageId } from "../zettel/subpath";
 import { NotebookApiError, invalid } from "./api-errors";
 import {
-	API_METHODS, API_VERSION, KeyedQueue, MAX_IMAGE_BYTES, buildNewDocument, checkFolder, checkName, checkPageNumber, describeNotebook, imageExtension,
+	API_METHODS, API_VERSION, KeyedQueue, MAX_IMAGE_BYTES, buildNewDocument, checkFolder, checkName, checkPageNumber, checkPageRef, describeNotebook, imageExtension,
 	parseCreateOptions, parseImageOptions, parsePageSpec, planClosedEdit, prepareAddPages, prepareInsertImage,
-	type AddPagesResult, type CreateNotebookOptions, type InsertImageOptions, type InsertImageResult, type NotebookInfo, type PageTemplate, type Prepare,
+	type AddPagesResult, type CreateNotebookOptions, type InsertImageOptions, type InsertImageResult, type NotebookInfo, type PageLinkInfo, type PageTemplate, type Prepare,
 } from "./api-plan";
+import { notebookUri } from "./links";
 import { openNotebookAtPage, viewsOf } from "./open";
+import { stablePageSubpath, withEmbedMarker } from "./page-links";
 
 export { NotebookApiError } from "./api-errors";
 export type { NotebookApiErrorCode } from "./api-errors";
 export type {
-	AddPagesResult, CreateNotebookOptions, InsertImageOptions, InsertImageResult, NotebookInfo, PageInfo, PageTemplate,
+	AddPagesResult, CreateNotebookOptions, InsertImageOptions, InsertImageResult, NotebookInfo, PageInfo, PageLinkInfo, PageTemplate,
 } from "./api-plan";
 
 /**
@@ -42,7 +46,10 @@ export interface NotebookApi {
 	insertImage(file: NotebookFileRef, page: number, image: Uint8Array | ArrayBuffer | string, options?: InsertImageOptions): Promise<InsertImageResult>;
 	exportPdf(file: NotebookFileRef, options?: ExportPdfOptions): Promise<ExportPdfResult>;
 	getNotebookInfo(file: NotebookFileRef): Promise<NotebookInfo>;
-	openNotebook(file: NotebookFileRef, page?: number): Promise<void>;
+	/** The links that point at a page (by number or page id); they follow the page when pages are reordered. */
+	getPageLink(file: NotebookFileRef, page: number | string): Promise<PageLinkInfo>;
+	/** `page`: a 1-based number, or a page id (a string), which wins over any number when the page moved. */
+	openNotebook(file: NotebookFileRef, page?: number | string): Promise<void>;
 	listNotebooks(options?: ListNotebooksOptions): NotebookSummary[];
 }
 
@@ -197,14 +204,28 @@ class NotebookApiImpl implements NotebookApi {
 		return { path: file.path, name: file.basename, id: doc.id, file };
 	}
 
-	async openNotebook(file: NotebookFileRef, page?: number): Promise<void> {
+	async getPageLink(file: NotebookFileRef, page: number | string): Promise<PageLinkInfo> {
 		const f = this.resolve(file);
-		if (page !== undefined && page !== null && (typeof page !== "number" || !Number.isInteger(page) || page < 1)) {
+		const doc = await this.document(f);
+		const number = checkPageRef("page", page, doc.pages);
+		const id = doc.pages[number - 1]!.id;
+		const subpath = stablePageSubpath(number, id);
+		const link = this.app.fileManager.generateMarkdownLink(f, "", subpath, t("share.linkAlias", { name: f.basename, page: String(number) }));
+		const embed = withEmbedMarker(this.app.fileManager.generateMarkdownLink(f, "", subpath), true);
+		return { page: number, id, subpath, link: withEmbedMarker(link, false), embed, uri: notebookUri(this.app.vault.getName(), f.path, number, id) };
+	}
+
+	async openNotebook(file: NotebookFileRef, page?: number | string): Promise<void> {
+		const f = this.resolve(file);
+		if (typeof page === "string") {
+			if (!validPageId(page)) throw invalid("page", "expected a page number of 1 or more, or a page id", { value: page });
+		} else if (page !== undefined && page !== null && (typeof page !== "number" || !Number.isInteger(page) || page < 1)) {
 			throw invalid("page", "expected a page number of 1 or more (a number past the last page opens the last page)", { value: page });
 		}
-		const number = page ?? null;
+		const number = typeof page === "number" ? page : null;
+		const pageId = typeof page === "string" ? page : null;
 		try {
-			await openNotebookAtPage(this.app, f, number);
+			await openNotebookAtPage(this.app, f, number, null, pageId);
 		} catch (e) {
 			throw new NotebookApiError("open-failed", `"${f.path}" could not be opened: ${message(e)}`, { path: f.path });
 		}

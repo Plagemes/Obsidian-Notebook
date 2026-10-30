@@ -8,7 +8,7 @@ const api = app.plugins.plugins["notebook"]?.api;
 
 `api` is `undefined` when the Notebook plugin is not installed or not enabled yet, so check before using it. In a Templater script it is `tp.app.plugins.plugins["notebook"].api`; in QuickAdd, `this.app...` or `params.app...`.
 
-API version: **1.0.0** (`api.version`). It is the version of this interface, not of the plugin. A new method or option raises the minor number; a change that breaks existing calls raises the major number, so a script can check `api.version.startsWith("1.")`.
+API version: **1.1.0** (`api.version`). It is the version of this interface, not of the plugin. A new method or option raises the minor number; a change that breaks existing calls raises the major number, so a script can check `api.version.startsWith("1.")`.
 
 ## Rules every call follows
 
@@ -59,9 +59,13 @@ Writes a PDF of the whole notebook next to it (`Physics.pdf`, ` 2`… if taken) 
 
 Returns a plain, JSON-safe object: `path`, `name`, `id`, `formatVersion`, `createdAt`, `modifiedAt`, `pageCount`, `pages` (per page: `number`, `id`, `width`, `height`, `paper`, `infinite`, `strokes`, `textBoxes`, `images`, `background` = `"pdf"`, `"image"` or `null`, `bookmarked`), `tags`, `meta` (`favorite`, `cover`, `bookmarks` as page numbers) and `open`. Tags are the notebook's own, as stored; with companion notes on they are also in the companion note's `tags` property and therefore in Dataview and in Obsidian's Tags pane.
 
+### `api.getPageLink(file, page)`
+
+Returns the ways to point at one page: `{ page, id, subpath, link, embed, uri }`. `page` is a 1-based number or a page id (a string). Every one of them names the page by its **id** (`#p3&id=<page id>`, `p3` stays for readability and for readers that only know numbers), so a link written now still opens the same page after pages are reordered. `link` and `embed` follow the user's link style (`[[Physics.notebook#p3&id=…|Physics, p. 3]]`), `uri` is an `obsidian://notebook?…&id=…` address for use outside Obsidian. An id that no page has throws `invalid-argument` (the page may have been deleted).
+
 ### `api.openNotebook(file, page?)`
 
-Opens the notebook in a tab (focusing the tab that already shows it), at `page` if given. A page number past the end opens the last page.
+Opens the notebook in a tab (focusing the tab that already shows it), at `page` if given: a page number (past the end opens the last page) or, as a string, a page id. An id wins over any number; if no page has that id the view says the page was deleted and stays where it is.
 
 ### `api.listNotebooks(options?)`
 
@@ -113,7 +117,8 @@ interface NotebookApi {
   insertImage(file: NotebookFileRef, page: number, image: Uint8Array | ArrayBuffer | string, options?: InsertImageOptions): Promise<InsertImageResult>;
   exportPdf(file: NotebookFileRef, options?: { strict?: boolean }): Promise<{ path: string; pages: number; skippedImages: number }>;
   getNotebookInfo(file: NotebookFileRef): Promise<NotebookInfo>;
-  openNotebook(file: NotebookFileRef, page?: number): Promise<void>;
+  getPageLink(file: NotebookFileRef, page: number | string): Promise<PageLinkInfo>;
+  openNotebook(file: NotebookFileRef, page?: number | string): Promise<void>;
   listNotebooks(options?: { folder?: string }): NotebookSummary[];
 }
 
@@ -180,6 +185,8 @@ interface NotebookInfo {
   meta: { favorite: boolean; cover: string; bookmarks: number[] };
   open: boolean;
 }
+
+interface PageLinkInfo { page: number; id: string; subpath: string; link: string; embed: string; uri: string }
 
 interface NotebookSummary { path: string; name: string; folder: string; mtime: number; size: number; open: boolean }
 ```

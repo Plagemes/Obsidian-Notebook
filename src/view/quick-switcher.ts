@@ -1,4 +1,4 @@
-import { Notice, SuggestModal, type App, type TFile } from "obsidian";
+import { SuggestModal, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { openNotebookAtPage } from "../integration/open";
 import { LibraryIndex, type LibraryEntry } from "../library/index";
@@ -9,6 +9,7 @@ import { listNotebooks } from "../storage/notebooks";
 import type { NotebookDocument, Page } from "../model/types";
 import { formatAgo, type RecentPagesService } from "./recent-pages";
 import type { RecentItem } from "../library/recent-log";
+import { showNotice } from "./notice";
 
 /** What the quick switcher needs from the plugin host. */
 export interface QuickNavHost {
@@ -229,7 +230,7 @@ export class PageSwitcherModal extends SuggestModal<PageHit> {
 		}
 		const file = this.app.vault.getFileByPath(hit.path);
 		if (!file) {
-			new Notice(t("quicknav.notebookGone"));
+			showNotice(t("quicknav.notebookGone"));
 			return;
 		}
 		void openNotebookAtPage(this.app, file, hit.page + 1);

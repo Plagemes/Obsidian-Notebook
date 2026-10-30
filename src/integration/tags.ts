@@ -1,9 +1,10 @@
-import { AbstractInputSuggest, getAllTags, Modal, Notice, Setting, type App, type Plugin, type TFile } from "obsidian";
+import { AbstractInputSuggest, getAllTags, Modal, Setting, type App, type Plugin, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { addTypedTags, isObsidianTag, normalizeTagList, parseTagInput, suggestTags, tagsFromVault, tagKey, type TagCount } from "../model/tags";
 import type { NotebookSettings } from "../settings";
 import { NotebookView } from "../view/notebook-view";
 import { activeCompanion } from "./companion";
+import { showNotice } from "../view/notice";
 
 /**
  * Shared tags (O2): the tag editor of a notebook, used by the library and by the *Edit tags* command.
@@ -234,7 +235,7 @@ class TagEditorModal extends Modal {
 				console.error("[notebook] could not turn on companion notes", e);
 				plugin.settings = { ...plugin.settings, companionNotes: false };
 				button.disabled = false;
-				new Notice(t("tags.editor.enableFailed", { error: e instanceof Error ? e.message : String(e) }));
+				showNotice(t("tags.editor.enableFailed", { error: e instanceof Error ? e.message : String(e) }));
 			});
 		});
 	}
@@ -245,7 +246,7 @@ class TagEditorModal extends Modal {
 			await this.opts.onSave([...this.tags]);
 		} catch (e) {
 			console.error("[notebook] tags", e);
-			new Notice(t("library.notice.failed", { error: e instanceof Error ? e.message : String(e) }));
+			showNotice(t("library.notice.failed", { error: e instanceof Error ? e.message : String(e) }));
 		}
 		const file = this.opts.file;
 		if (file) activeCompanion()?.schedule(file, 2_000);

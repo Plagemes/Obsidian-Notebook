@@ -7,7 +7,7 @@
  * the only automatic write is a backup copy (reason `integrity`) of the version that was open when a suspicious
  * version replaced it on disk.
  */
-import { Modal, normalizePath, Notice, TFile, type App, type Plugin } from "obsidian";
+import { Modal, normalizePath, TFile, type App, type Plugin } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import type { HistoryService } from "../integration/history-service";
 import { openNotebookAtPage } from "../integration/open";
@@ -29,6 +29,7 @@ import type { DiskContentInfo, ExternalNewerInfo, SessionMode } from "../storage
 import { AdapterSpaceProbe, pluginFolder, VaultDocumentIO } from "../storage/vault-io";
 import type { SpaceProbe, WriteHealthState } from "../storage/write-guard";
 import { resolveAssetFile } from "./media";
+import { showErrorNotice, showNotice } from "./notice";
 
 const SAFE_MODE_KEY = "notebook-safe-mode";
 const LEDGER_KEY = "notebook-integrity-ledger";
@@ -289,7 +290,7 @@ export class ViewResilience {
 	writeHealth(state: WriteHealthState): void {
 		if (!state.failing) {
 			this.removeBanner("storage");
-			if (!this.healthy) new Notice(t("storage.recovered"), 6000);
+			if (!this.healthy) showNotice(t("storage.recovered"), 6000);
 			this.healthy = true;
 			return;
 		}
@@ -336,7 +337,7 @@ export class ViewResilience {
 		const kept = previous !== null && previous.trim().length > 0 && parse(previous).ok ? this.keepCopy(file, previous) : Promise.resolve(null);
 		if (verdict.kind !== "rolled-back" && verdict.kind !== "altered") {
 			// The broken page with Repair is shown by the view; just say that the open version was kept.
-			void kept.then((path) => path && new Notice(t("integrity.unreadableKept", { path }), 10000));
+			void kept.then((path) => path && showErrorNotice(t("integrity.unreadableKept", { path }), 10000));
 			return;
 		}
 		void kept.then((path) => this.renderIntegrityBanner(file, verdict, info.content, previous, path));
@@ -371,11 +372,11 @@ export class ViewResilience {
 				cta: verdict.kind === "altered",
 				run: () => {
 					const doc = this.host.editableDocument();
-					if (!doc) return void new Notice(t("merge.notEditable"));
+					if (!doc) return void showNotice(t("merge.notEditable"));
 					const plan = planMerge(doc, newer.doc);
-					if (!plan.command) return void new Notice(t("integrity.nothingToRestore"));
+					if (!plan.command) return void showNotice(t("integrity.nothingToRestore"));
 					if (this.host.applyCommand(plan.command)) {
-						new Notice(t("integrity.restoredNewer"), 8000);
+						showNotice(t("integrity.restoredNewer"), 8000);
 						this.removeBanner("integrity");
 					}
 				},
@@ -410,7 +411,7 @@ export class ViewResilience {
 				cta: true,
 				run: () => {
 					const current = this.host.editableDocument();
-					if (!current) return void new Notice(t("merge.notEditable"));
+					if (!current) return void showNotice(t("merge.notEditable"));
 					const merge = planMerge(current, info.doc);
 					if (merge.command && !this.host.applyCommand(merge.command)) return;
 					this.removeBanner("external");
@@ -562,7 +563,7 @@ class IntegrityModal extends Modal {
 			button(t("integrity.keep"), () => {
 				this.services.ledger.accept(r.file.path, text);
 				r.result = { ...r.result, issues: r.result.issues.filter((i) => i.kind !== "rolled-back" && i.kind !== "altered") };
-				new Notice(t("integrity.kept"));
+				showNotice(t("integrity.kept"));
 				this.render();
 			});
 		}

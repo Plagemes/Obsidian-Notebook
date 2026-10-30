@@ -67,9 +67,10 @@ export function pageSignature(page: Page): string {
 	for (let i = 0; i < n; i += stride) sample(page.strokes[i]!);
 	if (n > 0 && (n - 1) % stride !== 0) sample(page.strokes[n - 1]!);
 	for (const el of page.elements ?? []) {
-		parts.push(el.id, el.x, el.y, el.width);
-		if (el.type === "text") parts.push(el.text, el.fontSize, el.color);
-		else parts.push(el.height, el.rotation, el.asset);
+		if (el.type === "text") parts.push(el.id, el.x, el.y, el.width, el.text, el.fontSize, el.color);
+		else if (el.type === "image") parts.push(el.id, el.x, el.y, el.width, el.height, el.rotation, el.asset);
+		else if (el.type === "box") parts.push(el.id, el.x, el.y, el.width, el.height, el.kind);
+		else parts.push(el.id, el.x, el.y, el.kind, el.done ? 1 : 0);
 	}
 	const bg = page.background;
 	if (bg) parts.push(bg.kind, bg.asset, bg.kind === "pdf" ? bg.page : 0);

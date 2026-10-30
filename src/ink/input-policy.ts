@@ -5,15 +5,15 @@ import { isBarrelSignal } from "./pen-button";
  * What pressing the pen's side button does: a click opens the radial menu and holding it while the nib touches erases
  * (the default), the radial menu only, erase / lasso / the previously used tool while it is held, or nothing.
  */
-export const PEN_BUTTON_ACTIONS = ["radial-eraser", "radial", "eraser", "lasso", "previous", "off"] as const;
+export const PEN_BUTTON_ACTIONS = ["radial-eraser", "radial", "eraser", "lasso", "previous", "gesture", "radial-gesture", "off"] as const;
 export type PenButtonAction = (typeof PEN_BUTTON_ACTIONS)[number];
 
 /** A tool the pen acts as while the side button is held (and the nib touches the page). */
-export type HeldTool = "eraser" | "lasso" | "previous";
+export type HeldTool = "eraser" | "lasso" | "previous" | "gesture";
 
 /** Does a click of the side button open the radial menu? */
 export function opensRadial(action: PenButtonAction | undefined): boolean {
-	return action === "radial" || action === "radial-eraser";
+	return action === "radial" || action === "radial-eraser" || action === "radial-gesture";
 }
 
 /** The tool the pen takes while the side button is held and the nib touches: undefined for the actions without one. */
@@ -26,6 +26,9 @@ export function heldToolOf(action: PenButtonAction | undefined): HeldTool | null
 			return "lasso";
 		case "previous":
 			return "previous";
+		case "gesture":
+		case "radial-gesture":
+			return "gesture";
 		default:
 			return null;
 	}
@@ -104,9 +107,9 @@ export class InputPolicy {
 	}
 
 	/** The tool (other than the eraser) a contact takes because the side button (`buttons & 2`) is held with it. */
-	penHeld(button: number, buttons: number): "lasso" | "previous" | null {
+	penHeld(button: number, buttons: number): "lasso" | "previous" | "gesture" | null {
 		const tool = heldToolOf(this.settings.penButton);
-		return (tool === "lasso" || tool === "previous") && InputPolicy.barrel(button, buttons) ? tool : null;
+		return (tool === "lasso" || tool === "previous" || tool === "gesture") && InputPolicy.barrel(button, buttons) ? tool : null;
 	}
 
 	/**

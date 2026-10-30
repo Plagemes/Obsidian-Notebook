@@ -16,8 +16,10 @@
  * The output depends only on the document and the notebook path (no clock, time zone, language or vault
  * name), so two synced devices generate byte-identical notes and never rewrite each other's copy.
  */
+import { cardSubpath, clampRegion, validPageId } from "../zettel/subpath";
+import { cleanMarkerText, isBoxKind, isIsoDate } from "./markers";
 import { computeSharedTags, normalizeTag, uniqueTags } from "./tags";
-import type { NotebookDocument, TextElement } from "./types";
+import type { BoxElement, MarkerElement, NotebookDocument, Page, TextElement } from "./types";
 
 export const COMPANION_LINK_KEY = "notebook";
 export const COMPANION_ID_KEY = "notebook-id";
@@ -40,8 +42,8 @@ export type Properties = Record<string, PropertyValue>;
 export interface CompanionContext {
 	/** Vault path of the notebook (in M4: of the note itself). */
 	notebookPath: string;
-	/** Link that opens the notebook at a 1-based page (integration/links.ts `notebookUri`). */
-	pageUri(page: number): string;
+	/** Link that opens the notebook at a 1-based page, by page id first (integration/links.ts `notebookUri`). */
+	pageUri(page: number, pageId?: string): string;
 }
 
 export interface CompanionContent {
@@ -51,6 +53,8 @@ export interface CompanionContent {
 	tags: string[];
 	/** Generated Markdown (between the markers). */
 	text: string;
+	/** v8: anchors (`nb-<marker id>`) of the homework tasks written ticked because the notebook has them done. */
+	homeworkDone?: string[];
 }
 
 /** What the plugin wrote last time, stored on the start marker line so the next update knows what it owns. */
@@ -58,6 +62,11 @@ export interface RegionState {
 	keys: string[];
 	/** Tags the plugin added to the note (not the ones the person wrote): the only tags it may remove later. */
 	tags: string[];
+	/**
+	 * v8: anchors of the homework tasks the plugin wrote ticked because the notebook had them done. A ticked task that is not
+	 * in this list was ticked in the note (by the person or the Tasks plugin). Present only when not empty.
+	 */
+	done?: string[];
 }
 
 // ------------------------------------------------------------------- generator
@@ -118,13 +127,123 @@ function textBlocks(elements: readonly unknown[] | undefined): string[] {
 	return out;
 }
 
+/** Elements of one v8 type in reading order (top to bottom, then left to right; stable). */
+function inReadingOrder<T extends BoxElement | MarkerElement>(elements: readonly unknown[] | undefined, type: T["type"]): T[] {
+	const items = (elements ?? []).filter((e): e is T => typeof e === "object" && e !== null && (e as T).type === type);
+	return items.map((e, i) => ({ e, i })).sort((a, b) =>
+		(Number(a.e.y) || 0) - (Number(b.e.y) || 0) || (Number(a.e.x) || 0) - (Number(b.e.x) || 0) || a.i - b.i).map(({ e }) => e);
+}
+
+/**
+ * v8 structured boxes as callouts (`> [!theorem] Title`) holding a live embed of the boxed region, through the card
+ * subpath of Z1 (`#p3&id=<page id>&r=x,y,w,h`). The callout type is the English kind (Obsidian shows it as the
+ * callout's name when there is no title), so the note does not depend on the language.
+ */
+function boxCallouts(page: Page | undefined, number: number, notebookPath: string): string[] {
+	if (!page) return [];
+	const out: string[] = [];
+	for (const box of inReadingOrder<BoxElement>(page.elements, "box")) {
+		if (!isBoxKind(box.kind)) continue;
+		const title = cleanMarkerText(box.title);
+		const region = clampRegion({ x: box.x, y: box.y, width: box.width, height: box.height }, page);
+		const subpath = typeof page.id === "string" && validPageId(page.id) ? cardSubpath(number, page.id, region) : `#p${number}`;
+		out.push([`> [!${box.kind}]${title ? ` ${escapeLine(title)}` : ""}`, `> ![[${notebookPath}${subpath}]]`].join("\n"));
+	}
+	return out;
+}
+
+/** The block id that ties a homework task line of the note to its marker: `nb-<marker id>`; null for an id a block id cannot hold. */
+export function homeworkAnchor(markerId: unknown): string | null {
+	return typeof markerId === "string" && /^[A-Za-z0-9-]{1,80}$/.test(markerId) ? `nb-${markerId}` : null;
+}
+
+/** A homework task line as found in the note's generated region. */
+export interface NoteTask {
+	ticked: boolean;
+	/** The Tasks plugin's done date (`✅ YYYY-MM-DD`) on the line, if any. */
+	doneDate: string | null;
+}
+
+const TASK_LINE = /^\s*[-*+] \[(.)\] (.*?)\s+\^(nb-[A-Za-z0-9-]+)\s*$/;
+
+/** The homework task lines of the note's generated region, by anchor (lines outside the region are the person's). */
+export function readHomeworkTasks(text: string): Map<string, NoteTask> {
+	const out = new Map<string, NoteTask>();
+	const lines = text.split(/\r?\n/);
+	const region = findRegion(lines);
+	if (region.kind !== "ok") return out;
+	for (const line of lines.slice(region.start + 1, region.end)) {
+		const m = TASK_LINE.exec(line);
+		if (!m || out.has(m[3]!)) continue;
+		const done = /(?:^|\s)✅ (\d{4}-\d{2}-\d{2})(?=\s|$)/.exec(m[2]!);
+		out.set(m[3]!, { ticked: m[1] === "x" || m[1] === "X", doneDate: done && isIsoDate(done[1]) ? done[1] : null });
+	}
+	return out;
+}
+
+/** What the note says about its homework tasks, for the next generation (see `homeworkFromNote`). */
+export interface HomeworkNote {
+	tasks: ReadonlyMap<string, NoteTask>;
+	/** Anchors of tasks ticked in the note that the notebook does not have done yet: written ticked all the same. */
+	pending: ReadonlySet<string>;
+}
+
+/**
+ * Homework markers ticked in the note but not done in the notebook: the tick was made in the note (by the person, or by
+ * the Tasks plugin), since the plugin only writes a tick it records in `previous.done`. The caller marks them done in the
+ * notebook (one undo step, through the open view) or, when it cannot, keeps the tick (`pending`). A tick made in the note is
+ * never undone; a task the plugin wrote ticked follows the notebook (reopened there, it is written unticked again).
+ */
+export function userTicks(doc: NotebookDocument, tasks: ReadonlyMap<string, NoteTask>, previous: RegionState | null): Array<{ pageId: string; markerId: string; anchor: string }> {
+	const wroteDone = new Set(previous?.done ?? []);
+	const out: Array<{ pageId: string; markerId: string; anchor: string }> = [];
+	for (const page of Array.isArray(doc.pages) ? doc.pages : []) {
+		for (const m of inReadingOrder<MarkerElement>(page?.elements, "marker")) {
+			const anchor = m.kind === "homework" && !m.done ? homeworkAnchor(m.id) : null;
+			if (anchor && tasks.get(anchor)?.ticked && !wroteDone.has(anchor)) out.push({ pageId: page.id, markerId: m.id, anchor });
+		}
+	}
+	return out;
+}
+
+/** `homework` for `companionContent` from the note's text: its task lines and the ticks the notebook does not have yet. */
+export function homeworkFromNote(doc: NotebookDocument, noteText: string): HomeworkNote {
+	const tasks = readHomeworkTasks(noteText);
+	return { tasks, pending: new Set(userTicks(doc, tasks, readRegionState(noteText)).map((t) => t.anchor)) };
+}
+
+/**
+ * v8 homework markers as Obsidian tasks, one line each: `- [ ] what 📅 YYYY-MM-DD ^nb-<marker id>` (the Tasks plugin's due
+ * date; the block id ties the line to its marker), `- [x]` once done in the notebook. A task ticked in the note is read
+ * back (`userTicks`): it stays ticked, with the Tasks plugin's done date, and the marker is marked done in the notebook.
+ */
+function homeworkTasks(elements: readonly unknown[] | undefined, homework: HomeworkNote | undefined, done: string[], used: Set<string>): string[] {
+	const lines: string[] = [];
+	for (const m of inReadingOrder<MarkerElement>(elements, "marker")) {
+		if (m.kind !== "homework") continue;
+		const what = escapeLine(cleanMarkerText(m.text) ?? "Homework");
+		let anchor = homeworkAnchor(m.id);
+		// A block id must be unique in the note: a repeated marker id (a copied page in an old file) gets none.
+		if (anchor && used.has(anchor)) anchor = null;
+		if (anchor) used.add(anchor);
+		const ticked = !!m.done || (anchor !== null && !!homework?.pending.has(anchor));
+		if (m.done && anchor) done.push(anchor);
+		const doneDate = ticked && anchor ? homework?.tasks.get(anchor)?.doneDate ?? null : null;
+		lines.push(`- [${ticked ? "x" : " "}] ${what}${isIsoDate(m.due) ? ` 📅 ${m.due}` : ""}${doneDate ? ` ✅ ${doneDate}` : ""}${anchor ? ` ^${anchor}` : ""}`);
+	}
+	return lines.length > 0 ? [lines.join("\n")] : [];
+}
+
 /** Page heading in the region; language-neutral so two devices in different languages write the same note. */
 export function pageHeading(page: number): string {
 	return `p. ${page}`;
 }
 
-/** Properties, tags and generated text for a notebook. */
-export function companionContent(doc: NotebookDocument, ctx: CompanionContext): CompanionContent {
+/**
+ * Properties, tags and generated text for a notebook. `homework`: what the note says about its homework tasks
+ * (`homeworkFromNote`), so that ticks made in the note are kept; without it the notebook alone decides.
+ */
+export function companionContent(doc: NotebookDocument, ctx: CompanionContext, homework?: HomeworkNote): CompanionContent {
 	const pages = Array.isArray(doc.pages) ? doc.pages : [];
 	const name = ctx.notebookPath.slice(ctx.notebookPath.lastIndexOf("/") + 1).replace(/\.[^.]+$/, "");
 	const properties: Properties = {
@@ -162,14 +281,21 @@ export function companionContent(doc: NotebookDocument, ctx: CompanionContext): 
 	}
 
 	const sections: string[] = [];
+	const homeworkDone: string[] = [];
+	const anchors = new Set<string>();
 	pages.forEach((page, i) => {
-		const blocks = textBlocks(page?.elements);
+		// v8: structured boxes become callouts with a live embed of their region, homework becomes Obsidian tasks.
+		const blocks = [
+			...textBlocks(page?.elements), ...boxCallouts(page, i + 1, ctx.notebookPath), ...homeworkTasks(page?.elements, homework, homeworkDone, anchors),
+		];
 		if (blocks.length === 0) return;
 		// Parentheses would end the Markdown link early.
-		const uri = ctx.pageUri(i + 1).replace(/\(/g, "%28").replace(/\)/g, "%29");
+		const uri = ctx.pageUri(i + 1, page.id).replace(/\(/g, "%28").replace(/\)/g, "%29");
 		sections.push([`### ${pageHeading(i + 1)}`, `[↗ ${pageHeading(i + 1)}](${uri})`, "", blocks.join("\n\n")].join("\n"));
 	});
-	return { properties, tags: uniqueTags(tags), text: sections.join("\n\n") };
+	const content: CompanionContent = { properties, tags: uniqueTags(tags), text: sections.join("\n\n") };
+	if (homeworkDone.length > 0) content.homeworkDone = homeworkDone;
+	return content;
 }
 
 // ------------------------------------------------------------------- region
@@ -180,6 +306,7 @@ export function companionContent(doc: NotebookDocument, ctx: CompanionContext): 
  */
 export function renderRegion(content: CompanionContent, ownedTags: readonly string[] = content.tags): string {
 	const state: RegionState = { keys: Object.keys(content.properties), tags: [...ownedTags] };
+	if (content.homeworkDone?.length) state.done = [...content.homeworkDone];
 	// `%` is escaped so a tag can never end the comment early.
 	const json = JSON.stringify({ v: 1, ...state }).replace(/%/g, "\\u0025");
 	const start = `${REGION_START} ${REGION_NOTE} ${json} %%`;
@@ -216,9 +343,12 @@ export function readRegionState(text: string): RegionState | null {
 	const close = line.lastIndexOf("}");
 	if (open < 0 || close < open) return null;
 	try {
-		const data = JSON.parse(line.slice(open, close + 1)) as { keys?: unknown; tags?: unknown };
+		const data = JSON.parse(line.slice(open, close + 1)) as { keys?: unknown; tags?: unknown; done?: unknown };
 		const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
-		return { keys: strings(data.keys), tags: strings(data.tags) };
+		const state: RegionState = { keys: strings(data.keys), tags: strings(data.tags) };
+		const done = strings(data.done);
+		if (done.length > 0) state.done = done;
+		return state;
 	} catch {
 		return null;
 	}

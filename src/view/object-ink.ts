@@ -1,8 +1,8 @@
-import { Notice } from "obsidian";
 import { t } from "../i18n";
 import { attachedInk } from "../ink/attach";
 import { measureText } from "../ink/renderer";
 import type { Page, PageElement, Stroke } from "../model/types";
+import { showNotice, type NoticeHandle } from "./notice";
 
 /**
  * View side of "ink attached to objects" (roadmap 149). The geometry is in ink/attach.ts; this keeps the answer
@@ -21,7 +21,7 @@ interface Memo {
 
 export class ObjectInk {
 	private memo: Memo | null = null;
-	private offer: Notice | null = null;
+	private offer: NoticeHandle | null = null;
 
 	/**
 	 * Strokes of `page` that move with the selected elements without being selected themselves. Cached while the
@@ -55,7 +55,7 @@ export class ObjectInk {
 				onDelete();
 			});
 		});
-		this.offer = new Notice(fragment, 10000);
+		this.offer = showNotice(fragment, 10000);
 	}
 
 	dismissOffer(): void {

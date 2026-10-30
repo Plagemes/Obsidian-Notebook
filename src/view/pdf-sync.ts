@@ -9,7 +9,7 @@
  * - Links live in a sidecar JSON in `<notebooks folder>/_meta/` (storage/pdf-links-store.ts), written only by explicit link
  *   actions, never by turning pages or scrolling. The notebook format is not touched.
  */
-import { FuzzySuggestModal, Notice, type App, type Plugin, type TFile } from "obsidian";
+import { FuzzySuggestModal, type App, type Plugin, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { createPage } from "../model/document";
 import { AddPage } from "../model/history";
@@ -23,6 +23,7 @@ import { vaultLinkFileAdapter } from "../storage/vault-io";
 import type { NotebookView } from "./notebook-view";
 import { openNotebookReference, openPdfReference, type ReferenceSource } from "./pdf-reference";
 import { PdfSidePane, type Banner } from "./pdf-side-pane";
+import { showNotice } from "./notice";
 
 /** What the notebook view tells the controller (NotebookView.syncHooks). */
 export interface PageSyncHooks {
@@ -119,12 +120,33 @@ class PdfSyncController implements PageSyncHooks {
 		return this.pane !== null;
 	}
 
+	/** 1-based reference page in view, or null when the pane is closed. */
+	get slideInView(): number | null {
+		return this.pane ? this.index + 1 : null;
+	}
+
+	/** The file shown in the pane, or null. */
+	get shownFile(): TFile | null {
+		return this.source?.file ?? null;
+	}
+
+	/** Shows a page (1-based) of a PDF in the pane, opening the pane first when it shows something else. */
+	async showPage(file: TFile, page: number): Promise<void> {
+		if (this.source?.file !== file) await this.open(file);
+		const source = this.source;
+		if (!this.pane || !source) return;
+		const index = Math.min(source.pageCount(), Math.max(1, Math.floor(page))) - 1;
+		this.index = index;
+		this.pane.show(index);
+		this.updateChrome();
+	}
+
 	// --- opening and closing ---
 
 	pick(): void {
 		const files = candidateFiles(this.svc.app, this.view.file);
 		if (files.length === 0) {
-			new Notice(t("pdfSide.pick.none"));
+			showNotice(t("pdfSide.pick.none"));
 			return;
 		}
 		new ReferencePickModal(this.svc.app, files, (f) => void this.open(f)).open();
@@ -140,7 +162,7 @@ class PdfSyncController implements PageSyncHooks {
 				? await openPdfReference(this.svc.app, file)
 				: await openNotebookReference(this.svc.app, file, this.svc.folder(), () => this.pane?.refresh());
 		} catch (e) {
-			new Notice(t("pdfSide.openFailed", { name: file.name, error: (e as Error).message }));
+			showNotice(t("pdfSide.openFailed", { name: file.name, error: (e as Error).message }));
 			return;
 		}
 		if (ticket !== this.opening || !this.view.contentEl.isConnected) {
@@ -294,7 +316,7 @@ class PdfSyncController implements PageSyncHooks {
 		const link = doc && page ? linkOf(this.svc.store.snapshot(), doc.id, page.id) : null;
 		const target = link && this.source ? this.source.indexOf(link) : -1;
 		if (target < 0 || !this.pane) {
-			new Notice(t("pdfSide.noSlide"));
+			showNotice(t("pdfSide.noSlide"));
 			return;
 		}
 		this.index = target;
@@ -311,7 +333,7 @@ class PdfSyncController implements PageSyncHooks {
 		const page = doc?.pages[index];
 		if (!doc || !page) return null;
 		if (!ref) {
-			new Notice(t("pdfSide.notAPdfPage"));
+			showNotice(t("pdfSide.notAPdfPage"));
 			return null;
 		}
 		return { doc, pageId: page.id, ref, index };
@@ -323,9 +345,9 @@ class PdfSyncController implements PageSyncHooks {
 		if (!cur || this.blocked) return;
 		const state = linkState(this.svc.store.snapshot(), cur.doc.id, cur.pageId, cur.ref);
 		if (state === "here") {
-			if (await this.write({ type: "remove", notebook: cur.doc.id, notesPage: cur.pageId })) new Notice(t("pdfSide.unlinked"));
+			if (await this.write({ type: "remove", notebook: cur.doc.id, notesPage: cur.pageId })) showNotice(t("pdfSide.unlinked"));
 		} else if (await this.write({ type: "set", link: this.makeLink(cur.doc.id, cur.pageId, cur.ref) })) {
-			new Notice(t("pdfSide.linked", { notes: String(cur.index + 1), slide: String(cur.ref.page) }));
+			showNotice(t("pdfSide.linked", { notes: String(cur.index + 1), slide: String(cur.ref.page) }));
 		}
 		this.updateChrome();
 	}
@@ -342,7 +364,7 @@ class PdfSyncController implements PageSyncHooks {
 		if (!cur) return;
 		const doc = this.view.editableDocument();
 		if (!doc || doc !== cur.doc) {
-			new Notice(t("pdfSide.readOnly"));
+			showNotice(t("pdfSide.readOnly"));
 			return;
 		}
 		const like = doc.pages[cur.index]!;
@@ -357,13 +379,13 @@ class PdfSyncController implements PageSyncHooks {
 			this.applying = false;
 		}
 		if (!added) {
-			new Notice(t("pdfSide.readOnly"));
+			showNotice(t("pdfSide.readOnly"));
 			return;
 		}
 		this.pinned = at;
 		this.pinnedObserved = this.view.currentPage();
 		if (!this.blocked && (await this.write({ type: "set", link: this.makeLink(doc.id, page.id, cur.ref) }))) {
-			new Notice(t("pdfSide.added", { slide: String(cur.ref.page) }));
+			showNotice(t("pdfSide.added", { slide: String(cur.ref.page) }));
 		}
 		this.updateChrome();
 	}
@@ -381,10 +403,10 @@ class PdfSyncController implements PageSyncHooks {
 		} catch (e) {
 			if (e instanceof LinksBlockedError) {
 				this.blocked = true;
-				new Notice(t("pdfSide.linksBlocked", { path: this.svc.store.path }), 10000);
+				showNotice(t("pdfSide.linksBlocked", { path: this.svc.store.path }), 10000);
 			} else {
 				console.error("[notebook] saving the PDF link failed", e);
-				new Notice(t("pdfSide.linkSaveFailed", { error: (e as Error).message }));
+				showNotice(t("pdfSide.linkSaveFailed", { error: (e as Error).message }));
 			}
 			return false;
 		}
@@ -397,7 +419,7 @@ class PdfSyncController implements PageSyncHooks {
 		} catch (e) {
 			if (!(e instanceof LinksBlockedError)) console.error("[notebook] reading the PDF links failed", e);
 			this.blocked = true;
-			new Notice(t("pdfSide.linksBlocked", { path: this.svc.store.path }), 10000);
+			showNotice(t("pdfSide.linksBlocked", { path: this.svc.store.path }), 10000);
 		}
 	}
 
@@ -419,6 +441,12 @@ class PdfSyncController implements PageSyncHooks {
 
 // --- registration, commands and menu ---
 
+/** Textbook references (roadmap 208): what the PDF pane of a notebook view shows now, and a way to show a page in it. */
+export function referencePane(view: NotebookView): { open: boolean; file: TFile | null; show(file: TFile, page: number): Promise<void> } | null {
+	const c = controllerOf(view);
+	return c ? { open: c.isOpen, file: c.shownFile, show: (file, page) => c.showPage(file, page) } : null;
+}
+
 /** Registers the commands. `activeView` is the notebook view that has focus, if any. */
 /**
  * Sets up the side-by-side services (link store). The commands are generated from the action registry
@@ -432,6 +460,11 @@ export function initPdfSync(plugin: Plugin, folder: () => string): void {
 	plugin.register(() => {
 		services = null;
 	});
+}
+
+/** v8 gap markers: the 1-based page of the reference beside the notes, or null when none is open. */
+export function referenceSlideOf(view: NotebookView): number | null {
+	return controllerOf(view)?.slideInView ?? null;
 }
 
 /** ui redesign: whether side by side is available for this view and whether its pane is open (creates nothing). */

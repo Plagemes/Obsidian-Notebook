@@ -58,6 +58,8 @@ export interface NewCard {
 	page: number;
 	/** Null: the whole page is the card. */
 	region: Region | null;
+	/** Text for the Transcription section (Z4: the typed text or PDF quote of an Inbox item); written once, at creation. */
+	transcription?: string;
 }
 
 /** A card as found in the metadata cache. */
@@ -120,7 +122,8 @@ export function cardEmbed(card: Pick<NewCard, "notebookPath" | "page" | "pageId"
 export function newCardText(card: NewCard, stringify: CompanionTextDeps["stringify"]): string {
 	const yaml = stringify(cardProperties(card));
 	const fm = yaml.endsWith("\n") ? yaml : `${yaml}\n`;
-	return `---\n${fm}---\n${cardEmbed(card)}\n\n${TRANSCRIPTION_HEADING}\n\n`;
+	const body = card.transcription?.trim();
+	return `---\n${fm}---\n${cardEmbed(card)}\n\n${TRANSCRIPTION_HEADING}\n\n${body ? `${body}\n` : ""}`;
 }
 
 function str(v: unknown): string | null {

@@ -19,9 +19,9 @@ import { centredPosition, imageElementSize } from "../view/view-helpers";
 import { invalid, NotebookApiError } from "./api-errors";
 
 /** Version of the public API (semver): a new method or option raises the minor number, a breaking change the major one. */
-export const API_VERSION = "1.0.0";
+export const API_VERSION = "1.1.0";
 /** Names of the methods of the API (`NotebookApi` in api.ts), for the check that docs/api.md describes all of them. */
-export const API_METHODS = ["createNotebook", "addPages", "insertImage", "exportPdf", "getNotebookInfo", "openNotebook", "listNotebooks"] as const;
+export const API_METHODS = ["createNotebook", "addPages", "insertImage", "exportPdf", "getNotebookInfo", "getPageLink", "openNotebook", "listNotebooks"] as const;
 /** Pages one call may create. */
 export const MAX_PAGES_PER_CALL = 500;
 /** Largest image `insertImage` accepts, bytes. */
@@ -103,6 +103,32 @@ export function checkPageNumber(argument: string, v: unknown, pageCount: number)
 		throw invalid(argument, `expected a page number from 1 to ${pageCount}`, { value: v, pageCount });
 	}
 	return v;
+}
+
+/**
+ * A page named by number (1-based) or by page id (wave 0.8, 388), as its 1-based number. An id that no page has is an
+ * error, never "some other page": the page may have been deleted.
+ */
+export function checkPageRef(argument: string, v: unknown, pages: ReadonlyArray<{ id: string }>): number {
+	if (typeof v !== "string") return checkPageNumber(argument, v, pages.length);
+	const index = pages.findIndex((p) => p.id === v);
+	if (index < 0) throw invalid(argument, "no page has this id (it may have been deleted)", { value: v, pageCount: pages.length });
+	return index + 1;
+}
+
+/** What `getPageLink` returns: the ways to point at one page. All of them carry the page id. */
+export interface PageLinkInfo {
+	/** 1-based number the page has now. */
+	page: number;
+	id: string;
+	/** `#p3&id=<page id>`. */
+	subpath: string;
+	/** Link in the user's link style, e.g. `[[Physics.notebook#p3&id=…|Physics p3]]`. */
+	link: string;
+	/** The same as an embed (`![[…]]`). */
+	embed: string;
+	/** `obsidian://notebook?…`, for use outside Obsidian. */
+	uri: string;
 }
 
 /** `after` of `addPages`: 0 inserts at the start, `pageCount` (or omitted) at the end. */

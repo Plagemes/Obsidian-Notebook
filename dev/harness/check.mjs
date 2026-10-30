@@ -6,7 +6,7 @@
 // ratios, plus the low-latency ink setting) it runs the in-page check (layout, canvases, pen,
 // highlighter and eraser input through synthetic pen PointerEvents), then takes a screenshot and
 // checks the *composited* pixels: paper where the page is, ink where the pen wrote. Screenshots go to
-// dev/harness/dist/shots/. Exit code 1 on any failure.
+// dev/harness/dist/shots/. Exit code 1 on any failure. HARNESS_DOC=practice runs only the scenarios of that notebook.
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -45,6 +45,9 @@ SCENARIOS.push({ doc: "v3", theme: "light", device: "tablet", lowLatency: false,
 // The PDF reading tools (search, snapping highlighter, hidden annotations, dimming) on a notebook of three fake PDF pages.
 SCENARIOS.push({ doc: "pdf", theme: "light", device: "desktop", lowLatency: false });
 SCENARIOS.push({ doc: "pdf", theme: "dark", device: "narrow", lowLatency: false });
+// The practice strip, the peek and the timer on a notebook with a practice copy (wave 0.9).
+SCENARIOS.push({ doc: "practice", theme: "light", device: "desktop", lowLatency: false });
+SCENARIOS.push({ doc: "practice", theme: "dark", device: "narrow", lowLatency: false });
 
 function findChrome() {
 	const candidates = [
@@ -186,7 +189,7 @@ async function main() {
 		await cdp.send("Page.enable");
 		await cdp.send("Runtime.enable");
 
-		for (const s of SCENARIOS) {
+		for (const s of SCENARIOS.filter((x) => !process.env.HARNESS_DOC || x.doc === process.env.HARNESS_DOC)) {
 			const d = DEVICES[s.device];
 			const name = `${s.doc}-${s.theme}-${s.device}${s.lowLatency ? "-lowlatency" : ""}${s.fault ? `-fault-${s.fault}` : ""}`;
 			await cdp.send("Emulation.setDeviceMetricsOverride", { width: d.width, height: d.height, deviceScaleFactor: d.deviceScaleFactor, mobile: d.mobile });
@@ -200,7 +203,7 @@ async function main() {
 					await sleep(100);
 				}
 				await cdp.evaluate("window.harness.ready.then(() => true)");
-				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}

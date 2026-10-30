@@ -341,7 +341,7 @@ export class ZettelService implements OverlaySource {
 	}
 
 	/** Creates a card note. Returns the new note. */
-	private async writeCard(file: TFile, doc: NotebookDocument, pageIndex: number, region: Region | null, answer: CardAnswer): Promise<TFile> {
+	private async writeCard(file: TFile, doc: NotebookDocument, pageIndex: number, region: Region | null, answer: CardAnswer, transcription?: string): Promise<TFile> {
 		const page = doc.pages[pageIndex];
 		if (!page) throw new Error(`page ${pageIndex + 1} not found`);
 		const now = new Date();
@@ -349,7 +349,7 @@ export class ZettelService implements OverlaySource {
 		const id = nextCardId(scheme, now, idSet([...this.cards.values()].map((c) => c.id)), answer.parent || null);
 		const card: NewCard = {
 			id, title: answer.title, type: answer.type, source: answer.source, tags: answer.tags, date: localDate(now),
-			notebookPath: file.path, notebookId: doc.id, pageId: page.id, page: pageIndex + 1, region,
+			notebookPath: file.path, notebookId: doc.id, pageId: page.id, page: pageIndex + 1, region, transcription,
 		};
 		const folder = normalizePath(this.settings.zettelFolder || "/");
 		if (folder !== "/") await ensureFolder(this.app, folder);
@@ -607,6 +607,29 @@ export class ZettelService implements OverlaySource {
 		await this.setSlipBox(doc.id, true);
 		await this.enqueue(() => this.fillSlipBox(file, doc, 1));
 		await openNotebookAtPage(this.app, file, 1);
+	}
+
+	// wave 0.8: processing — what the Inbox (inbox-service.ts) uses
+
+	/** Every card of the vault (a copy; orphaned ones included). */
+	allCards(): CardRecord[] {
+		return [...this.cards.values()];
+	}
+
+	/**
+	 * Z4: creates a card for a page (and region) of a notebook, with the answers of the card dialog and an optional text
+	 * for the Transcription section. Goes through the same queue and writer as every other card. Null when it failed
+	 * (a notice says why) or the page is gone.
+	 */
+	createCardFor(file: TFile, doc: NotebookDocument, pageId: string, region: Region | null, answer: CardAnswer, transcription?: string): Promise<TFile | null> {
+		const index = doc.pages.findIndex((p) => p.id === pageId);
+		if (index < 0) return Promise.resolve(null);
+		return this.enqueue(() => this.writeCard(file, doc, index, region, answer, transcription));
+	}
+
+	/** Opens a card's note in a tab. */
+	openCardNote(card: CardRecord): Promise<void> {
+		return this.openCard(card);
 	}
 
 	async toggleRegions(): Promise<void> {

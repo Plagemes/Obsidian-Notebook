@@ -1,7 +1,8 @@
 import { createId } from "../model/document";
 import { AddAsset, AddElement, AddStroke, Batch, type Command } from "../model/history";
+import { copyStroke as copyStrokeWithId } from "../model/pages";
 import { freezeElement, freezeStroke } from "../model/serialize";
-import type { Asset, Page, PageElement, Point, Stroke } from "../model/types";
+import type { Asset, Page, PageElement, Stroke } from "../model/types";
 import { elementBounds, transformElement } from "./elements";
 import { strokeBounds, type BBox } from "./hit-test";
 import { transformStroke } from "./lasso";
@@ -26,10 +27,8 @@ export interface ClipContent {
 /** Distance (pt) between a pasted or duplicated copy and the one before it. */
 export const PASTE_STEP = 12;
 
-const copyStroke = (s: Stroke): Stroke => freezeStroke({
-	id: s.id, tool: s.tool, color: s.color, width: s.width, render: s.render,
-	points: s.points.map((p) => [p[0], p[1], p[2]] as Point),
-});
+/** v8: model/pages copyStroke keeps every stroke field (hidden ink stays hidden when pasted). */
+const copyStroke = (s: Stroke): Stroke => copyStrokeWithId(s);
 
 /** Deep copy of a selection. Null when it is empty. Image elements bring their asset records from `assets`. */
 export function captureClip(

@@ -27,6 +27,7 @@
  */
 import { normalizeBookmarkInfo, normalizeBookmarkInfoMap } from "./bookmarks";
 import { createId } from "./document";
+import { cleanMarkerText, isBoxKind, isIsoDate, isMarkerKind } from "./markers";
 import { parseLenient } from "./lenient-json";
 import { detectVersion, migrate, type RawObject } from "./migrations";
 import { normalizePageTags } from "./page-tags";
@@ -350,14 +351,43 @@ function fixStroke(v: unknown): RawObject | null {
 	if (!isObj(v)) return null;
 	const points = fixPoints(v.points);
 	if (points.length === 0) return null;
-	return {
+	const out: RawObject = {
 		id: typeof v.id === "string" && v.id.length > 0 ? v.id : createId(),
 		tool: TOOLS.includes(v.tool as never) ? v.tool : "pen",
 		color: typeof v.color === "string" && COLOR_RE.test(v.color) ? v.color : "#000000",
 		width: positiveOr(v.width, 2).value,
 		render: RENDER_VERSIONS.includes(v.render as never) ? v.render : RENDER_FREEHAND,
-		points,
 	};
+	// v8 invisible ink stays invisible: a repaired solution is not revealed.
+	if (v.hidden === true) out.hidden = true;
+	out.points = points;
+	return out;
+}
+
+/** v8 marker or box with its valid fields: kind and position must be valid, invalid optional fields are dropped. */
+function fixMarkerOrBox(v: RawObject, id: string): RawObject | null {
+	const finite = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n);
+	const positive = (n: unknown): n is number => finite(n) && n > 0;
+	if (v.type === "box") {
+		if (!isBoxKind(v.kind) || !positive(v.width) || !positive(v.height)) return null;
+		const out: RawObject = { id, type: "box", kind: v.kind, x: v.x, y: v.y, width: v.width, height: v.height };
+		const title = cleanMarkerText(v.title);
+		if (title) out.title = title;
+		return out;
+	}
+	if (!isMarkerKind(v.kind)) return null;
+	const out: RawObject = { id, type: "marker", kind: v.kind, x: v.x, y: v.y };
+	if (positive(v.width) && positive(v.height)) {
+		out.width = v.width;
+		out.height = v.height;
+	}
+	if (typeof v.at === "string" && v.at.length > 0) out.at = v.at;
+	if (v.done === true) out.done = true;
+	if (typeof v.slide === "number" && Number.isSafeInteger(v.slide) && v.slide >= 1) out.slide = v.slide;
+	if (isIsoDate(v.due)) out.due = v.due;
+	const text = cleanMarkerText(v.text);
+	if (text) out.text = text;
+	return out;
 }
 
 function fixElement(v: unknown, assets: Record<string, Asset>): RawObject | null {
@@ -378,11 +408,12 @@ function fixElement(v: unknown, assets: Record<string, Asset>): RawObject | null
 		if (!(typeof v.width === "number" && v.width > 0 && typeof v.height === "number" && v.height > 0)) return null;
 		return { id: v.id, type: "image", asset: v.asset, x: v.x, y: v.y, width: v.width, height: v.height, rotation: finite(v.rotation) ? v.rotation : 0 };
 	}
+	if (v.type === "marker" || v.type === "box") return fixMarkerOrBox(v, v.id);
 	return null;
 }
 
 function strokeKey(s: Stroke): string {
-	return JSON.stringify([s.tool, s.color, s.width, s.render, s.points]);
+	return JSON.stringify([s.tool, s.color, s.width, s.render, s.hidden === true, s.points]);
 }
 
 function elementKey(e: PageElement): string {
