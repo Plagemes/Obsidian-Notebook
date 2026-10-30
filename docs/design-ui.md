@@ -156,6 +156,10 @@ the accent soft fill and an accent underline dot; groups are separated by 1 px d
 | `src/ui/radial-model.ts` | Radial palettes, width scales, arc geometry (pure) |
 | `src/ui/action-sheet.ts` | Sheet component (All actions, page sheet) |
 | `src/ui/context-bar.ts` | Contextual bar component |
-| `src/view/view-actions.ts` | Runs view actions, builds the `UiContext`, generates commands |
+| `src/ui/dismiss.ts` | Tap-outside / Escape closing shared by popovers and sheets (a tap on the page draws nothing) |
+| `src/view/view-actions.ts` | What each view action does (one runner per registry id) |
+| `src/view/view-ui.ts` | Mounts the contextual bar and the sheets, runs the layout engine once per frame, keeps the use counts |
+| `src/view/commands.ts` | Generates the Obsidian commands from the registry |
+| `NotebookView.uiContext()` / `runAction()` | The view's context for the engine, and the single entry point that runs and counts an action |
 | `src/view/toolbar.ts` | Primary toolbar (quick slots from the layout) |
 | `src/view/radial-menu.ts` | Radial dial |

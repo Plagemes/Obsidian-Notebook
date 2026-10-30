@@ -320,6 +320,8 @@ scripts/make-stress-notebook.mjs  writes a stress .notebook from the PC (alterna
 tests/                    vitest on model/, ink/, storage/, library/, pdf/, scan/, integration/ ("unit" project, `npm test`); model.perf.ts is the `npm run bench` suite ("perf" project)
 ```
 
+**Interface (ui redesign).** `src/ui/` holds the action registry (`actions.ts`), the layout engine (`layout.ts`), use counts (`usage.ts`) and the radial dial's model (`radial-model.ts`), all pure and tested in Node, plus the sheet, contextual bar and dismiss components. The view builds a `UiContext` (`NotebookView.uiContext()`), `view/view-ui.ts` asks the engine for the quick slots and the contextual bar once per frame, and every action runs through `NotebookView.runAction()` → `view/view-actions.ts`. Commands are generated from the registry (`view/commands.ts`) with stable ids. Design and information architecture: `docs/design-ui.md`.
+
 ## 4. Save flow (rule 4: zero data loss)
 
 Session state: `doc`, `revision` (incremented on every change), `savedRevision`, `diskContent` (last content read or written by us), `mode` = `ok` | `readonly` (future version) | `broken` (unreadable) | `deleted`. **All disk operations of a session (load, flush, external-change check) run one at a time through a single queue**, so a check never interleaves with a write.

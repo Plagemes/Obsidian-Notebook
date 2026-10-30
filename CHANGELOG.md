@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Changed
+- **Interface redesign** (docs/design-ui.md). Every action of the plugin is now described once in an action registry (`src/ui/actions.ts`) and the interface is built from it and from the context:
+  - **Toolbar**: tools in the first row; undo/redo, the current pen (opens the tool options), the favourite pens, up to six **quick actions** (ranked by priority and by your own use on this device), the page indicator and the save state in the second; one row on wide views.
+  - **Contextual bar** at the bottom of the page: the selection's actions (copy, cut, duplicate, paste, white → transparent, save as stamp, delete, colour and width), paste for the lasso, the PDF page's actions (search, hide annotations, dim, margins, side by side), the side-by-side pane's actions, and the lecture actions while a class of the timetable is on. It can be collapsed.
+  - The long "…" menu and the page menu are replaced by **sheets**: *All actions* (⊞, grouped sections with search and a *Recent* section) and the **page sheet** (tap the page indicator or a thumbnail's menu) with paper and size as chips. On a phone they are bottom sheets.
+  - **Radial dial** at the pen tip, redesigned: undo/redo, a width bubble, a colour bubble, the active tool drawn as a pen, and favourites · pen case · shapes. The colour ring has 12 colours, a custom colour and an eyedropper; the width bubble opens an arc slider; the pen case shows the tools with a stroke preview and "+" to save a favourite.
+  - A visual system built on Obsidian's CSS variables (surfaces, elevation, radii, spacing, motion with *reduced motion* respected) applied to bars, popovers, sheets, panels, dialogs and the library.
+  - Commands are generated from the registry; their ids are unchanged, so hotkeys keep working. New command *Tool: space*. Use counts are stored per device in Obsidian's local storage, never in the vault.
+  - No change to the document format, the writing engine or saving. Not yet verified on Android hardware (see `docs/testing.md`, steps U1-U11).
+
 ### Added
 - **Class timetable** (roadmap 115). Define your weekly classes (course, weekday, start and end time, room, a linked notebook or course folder, alternating odd/even weeks, term start and end dates) from *Settings, Class timetable, Edit timetable* or the command **Edit class timetable**. Stored in the plain JSON file `<notebooks folder>/_timetable.json` (human-editable, syncs like any file; an unreadable file is never overwritten, a copy goes to `_backup/` before it is replaced). Times are local; overlapping classes are flagged in the editor.
   - Opening Obsidian or the library during a class (or up to a few minutes before, setting *Count a class as started this many minutes early*) shows a notice with **Open lecture page**; setting *Open it without asking* does it by itself. The class's notebook opens with a new lecture page (header: course and date, as in New lecture); if that page already exists it is shown instead. With no linked notebook, the one named like the course is used, else a new one is created. Command **Open the current class** does the same on demand.
