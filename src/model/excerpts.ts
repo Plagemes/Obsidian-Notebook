@@ -146,3 +146,26 @@ export function excerptsOf(doc: Pick<NotebookDocument, "pages">, docId: string, 
 	for (const p of doc.pages) for (const e of p.elements ?? []) if (e.type === "excerpt" && e.source.doc === docId && e.source.page === pageId) out.push(e);
 	return out;
 }
+
+/**
+ * The document id of a notebook file's text (to tell a renamed source notebook from another one of the same name): read
+ * from the header the writer puts at the start (no full parse of a large file), else from the parsed JSON. Null when
+ * there is none.
+ */
+export function documentIdOf(text: string): string | null {
+	const head = /^\{\s*"format":\s*"[^"]*",\s*"version":\s*\d+,\s*"id":\s*"((?:[^"\\]|\\.)*)"/.exec(text.slice(0, 4096));
+	if (head) {
+		try {
+			return JSON.parse(`"${head[1]}"`) as string;
+		} catch {
+			return null;
+		}
+	}
+	try {
+		const raw = JSON.parse(text) as unknown;
+		const id = typeof raw === "object" && raw !== null ? (raw as { id?: unknown }).id : undefined;
+		return typeof id === "string" && id.length > 0 ? id : null;
+	} catch {
+		return null;
+	}
+}

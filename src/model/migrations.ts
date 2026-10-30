@@ -206,19 +206,28 @@ function v8ToV9(raw: RawObject): RawObject {
  * plugin: it is rejected rather than guessed at (like equations before v9). Nothing else changes.
  */
 function v9ToV10(raw: RawObject): RawObject {
-	const isObj = (v: unknown): v is RawObject => typeof v === "object" && v !== null && !Array.isArray(v);
 	if (Array.isArray(raw.pages)) {
 		(raw.pages as unknown[]).forEach((page, i) => {
-			if (!isObj(page) || !Array.isArray(page.elements)) return;
-			for (const el of page.elements as unknown[]) {
-				const type = isObj(el) ? el.type : undefined;
-				if (typeof type === "string" && ELEMENT_TYPES_V10.includes(type)) {
-					throw new MigrationError(`v9: element type '${type}' (page ${i + 1}) exists only from v10`);
-				}
-			}
+			const problem = v10OnlyElement(page, i);
+			if (problem) throw new MigrationError(problem);
 		});
 	}
 	return { ...raw, version: 10 };
+}
+
+/**
+ * Why page `index` (0-based) of a v9 file cannot be read as v10 (it holds an element type that exists only from v10),
+ * or null. Everything else of a v9 page is a valid v10 page, so staged loading reads large v9 files page by page with
+ * this check instead of migrating them in one go.
+ */
+export function v10OnlyElement(page: unknown, index: number): string | null {
+	const isObj = (v: unknown): v is RawObject => typeof v === "object" && v !== null && !Array.isArray(v);
+	if (!isObj(page) || !Array.isArray(page.elements)) return null;
+	for (const el of page.elements as unknown[]) {
+		const type = isObj(el) ? el.type : undefined;
+		if (typeof type === "string" && ELEMENT_TYPES_V10.includes(type)) return `v9: element type '${type}' (page ${index + 1}) exists only from v10`;
+	}
+	return null;
 }
 
 /** MIGRATIONS[n] takes a document from version n to n+1. */

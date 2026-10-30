@@ -6,7 +6,7 @@ import {
 } from "./math-elements";
 import { parseOutline } from "../math/outline";
 import { EXCERPT_ID_MAX, EXCERPT_PATH_MAX } from "./excerpts";
-import { detectVersion, migrate, MigrationError, type RawObject } from "./migrations";
+import { detectVersion, migrate, MigrationError, v10OnlyElement, type RawObject } from "./migrations";
 import { normalizePageTags } from "./page-tags";
 import { normalizePosition } from "./position";
 import {
@@ -1040,6 +1040,8 @@ export class StagedParse {
 		first: number,
 		/** Invalid optional details dropped so far: the document-level ones up front, page details as the pages are read. */
 		private readonly drop: Dropped,
+		/** v10: the version of the file (9: each page is checked for v10-only elements as it is read). */
+		private readonly from: number = CURRENT_VERSION,
 	) {
 		// Nearest to the wanted page first: forward, then back (the next page is the likelier swipe).
 		const order: number[] = [];
@@ -1050,25 +1052,33 @@ export class StagedParse {
 		this.queue = order;
 	}
 
-	/** Prepares a staged parse of a file already at the current version, with page `first` (0-based) read in full. */
-	static create(raw: RawObject, first: number): StagedParse | ParseFailureResult {
+	/**
+	 * Prepares a staged parse of a file at the current version, or (v10) at version 9, whose migration only refuses
+	 * excerpts (checked page by page as they are read), with page `first` (0-based) read in full.
+	 */
+	static create(raw: RawObject, first: number, from: number = CURRENT_VERSION): StagedParse | ParseFailureResult {
 		try {
 			const ids = new Set<string>();
 			// Lenient like `parse`: invalid optional v7 details are dropped and counted; everything else still fails.
 			const drop: Dropped = { count: 0 };
-			const doc = validateWith(raw, readPageShell, ids, drop);
+			const current = from === CURRENT_VERSION ? raw : { ...raw, version: CURRENT_VERSION };
+			const doc = validateWith(current, readPageShell, ids, drop);
 			const rawPages = raw.pages as unknown[];
 			const at = Math.min(rawPages.length - 1, Math.max(0, first));
-			const staged = new StagedParse(doc, rawPages, ids, at, drop);
+			const staged = new StagedParse(doc, rawPages, ids, at, drop, from);
 			staged.read(at);
 			return staged;
 		} catch (e) {
-			if (e instanceof ValidationError) return { ok: false, reason: "invalid", message: e.message, version: CURRENT_VERSION };
+			if (e instanceof ValidationError) return { ok: false, reason: "invalid", message: e.message, version: from };
 			throw e;
 		}
 	}
 
 	private read(i: number): void {
+		if (this.from < CURRENT_VERSION) {
+			const problem = v10OnlyElement(this.rawPages[i], i);
+			if (problem) fail(`pages[${i}]`, problem);
+		}
 		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop);
 	}
 
@@ -1094,7 +1104,7 @@ export class StagedParse {
 			}
 		} catch (e) {
 			if (!(e instanceof ValidationError)) throw e;
-			this.failure = { ok: false, reason: "invalid", message: e.message, version: CURRENT_VERSION };
+			this.failure = { ok: false, reason: "invalid", message: e.message, version: this.from };
 			return { ok: false, failure: this.failure };
 		}
 		return { ok: true, changed, done: this.queue.length === 0 };
@@ -1109,7 +1119,8 @@ export class StagedParse {
 	/** The result once every page has been read (same shape as `parse`: `dropped` only when > 0). */
 	result(): ParseResult {
 		const dropped = this.drop.count;
-		return dropped > 0 ? { ok: true, doc: this.doc, migratedFrom: null, dropped } : { ok: true, doc: this.doc, migratedFrom: null };
+		const migratedFrom = this.from === CURRENT_VERSION ? null : this.from;
+		return dropped > 0 ? { ok: true, doc: this.doc, migratedFrom, dropped } : { ok: true, doc: this.doc, migratedFrom };
 	}
 }
 
@@ -1122,8 +1133,11 @@ export function parseStaged(text: string, firstPage: number | null): StagedParse
 	if (text.length < STAGED_MIN_CHARS) return parse(text);
 	const pre = preflight(text);
 	if (!pre.ok) return pre.failure;
+	const first = firstPage === null ? 0 : firstPage - 1;
+	// v10: the v9 → v10 migration changes nothing but the version and refuses excerpts, so a large v9 file is staged too.
+	if (pre.version === 9 && CURRENT_VERSION === 10) return StagedParse.create(pre.raw, first, 9);
 	if (pre.version !== CURRENT_VERSION) return parseRaw(pre.raw, pre.version, true);
-	return StagedParse.create(pre.raw, firstPage === null ? 0 : firstPage - 1);
+	return StagedParse.create(pre.raw, first);
 }
 
 export type CheckedSerialization = { ok: true; text: string } | { ok: false; message: string };

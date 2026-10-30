@@ -715,7 +715,7 @@ export class NotebookView extends FileView {
 		this.scope.register(["Mod"], "y", () => (this.redo(), false));
 		this.scope.register([], "Delete", () => (this.deleteSelection(), false));
 		this.scope.register([], "Backspace", () => (this.deleteSelection(), false));
-		this.scope.register([], "Escape", () => (this.clearSelection(), false));
+		this.scope.register([], "Escape", () => (this.excerpts?.disarm(), this.clearSelection(), false));
 	}
 
 	async onClose(): Promise<void> {
@@ -883,8 +883,8 @@ export class NotebookView extends FileView {
 				return;
 			}
 			this.recordArrival(found.index);
-			if (target.region && this.excerpts) this.excerpts.reveal(found.index, target.region);
-			else this.scrollToPage(found.index);
+			// v10: the jump back from an excerpt outlines the region (also while a large file is still loading).
+			if (!target.region || !this.excerpts?.reveal(found.index, target.region)) this.scrollToPage(found.index);
 			return;
 		}
 		const index = Math.min(doc.pages.length, Math.max(1, page)) - 1;
@@ -1154,6 +1154,7 @@ export class NotebookView extends FileView {
 			this.commitText();
 			this.clearSelection();
 			this.markers?.disarm();
+			this.excerpts?.disarm();
 			this.penLinks?.hideChip();
 			this.pageOffer?.cancel();
 			this.radial?.close();
@@ -1596,6 +1597,7 @@ export class NotebookView extends FileView {
 		this.excerpts = new ExcerptTools({
 			app: this.app,
 			doc: () => this.session?.doc ?? null,
+			shownDoc: () => this.shownDoc(),
 			path: () => this.file?.path ?? null,
 			folder: () => this.host.settings.folder,
 			editable: () => !!this.editableDocument(),
@@ -2667,6 +2669,8 @@ export class NotebookView extends FileView {
 		this.radial?.noteTools(state);
 		this.colour?.noteTools(state);
 		this.lastTool.note(state.tool);
+		// v10: an armed excerpt region is for the tool it was armed with.
+		if (state.tool !== before.tool) this.excerpts?.disarm();
 		if (state.tool !== "lasso") this.clearSelection();
 		this.refreshUi();
 		if (before.tool === "text" && state.tool !== "text") this.commitText();
@@ -3040,7 +3044,8 @@ export class NotebookView extends FileView {
 			this.clearSelection();
 			return true;
 		}
-		// v10: an armed excerpt takes the drag of its region; a tap on an excerpt's badge jumps to its source.
+		// v10: an armed excerpt takes the drag of its region. A contact on an excerpt's badge is only noted: it is ink
+		// unless it lifts soon without moving (then drawEnd drops the dot and jumps to the source).
 		if (page && !eraserButton && this.excerpts?.begin(pageIndex, page, local, sample, tool)) {
 			this.clearSelection();
 			return true;
@@ -3136,6 +3141,8 @@ export class NotebookView extends FileView {
 	private drawMove(samples: SampleBuffer, predicted: SampleBuffer): void {
 		const n = samples.count;
 		if (n > 0) this.perfInput = samples.t[n - 1]!;
+		// v10: a contact that started on an excerpt's badge and moves is ink, not a tap.
+		if (n > 0) this.excerpts?.watch(NotebookView.at(samples, n - 1));
 
 		if (this.penGestures?.active) {
 			this.penGestures.move(samples);
@@ -3293,7 +3300,10 @@ export class NotebookView extends FileView {
 	}
 
 	private drawEnd(cancelled: boolean): void {
-		this.endGesture(cancelled);
+		// v10: a short unmoved contact on an excerpt's badge was a tap: what it drew (a dot) is dropped, then the jump.
+		const badgeTap = this.excerpts?.takeBadgeTap(cancelled, performance.now()) ?? null;
+		this.endGesture(cancelled || badgeTap !== null);
+		if (badgeTap) this.excerpts?.openSource(badgeTap);
 		// An external change seen during the gesture was postponed; check it now.
 		this.session?.gestureEnded();
 	}

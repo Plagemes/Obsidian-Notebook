@@ -4,42 +4,51 @@
  * plugin clipboard (so it can be pasted in another notebook), and the jump back to the source when its badge is tapped
  * or "Go to source" is chosen. Snapshots are drawn with the page raster and stored as image assets through the vault.
  */
-import { Notice, type App } from "obsidian";
+import { Notice, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { captureClip } from "../ink/clipboard";
+import { elementBounds } from "../ink/elements";
 import type { BBox } from "../ink/hit-test";
 import { drawPageRaster } from "../ink/page-raster";
 import { apply, type Matrix } from "../ink/transform";
 import { openNotebookAtPage, resolveNotebookFile } from "../integration/open";
 import { createPage } from "../model/document";
 import {
-	clampSourceRegion, createExcerpt, elementAssetId, excerptBadgeAt, excerptRegion, excerptSourceName, excerptSourceState,
+	clampSourceRegion, createExcerpt, documentIdOf, elementAssetId, excerptBadgeAt, excerptRegion, excerptSourceName, excerptSourceState,
 	MIN_EXCERPT_SIDE, placeExcerpt, type Rect,
 } from "../model/excerpts";
-import { AddAsset, AddElement, AddPage, Batch, type Command } from "../model/history";
+import { AddAsset, AddElement, AddPage, Batch, ReplaceElement, type Command } from "../model/history";
+import { boxesOverlap } from "../model/layers";
 import type { Asset, ExcerptElement, NotebookDocument, Page, PageElement } from "../model/types";
 import { isNotebookFile } from "../storage/format";
 import { internalClip, writeSystemText } from "./clipboard";
 import { GotoPageModal, type GotoView } from "./goto-page";
 import type { GotoTarget } from "./goto-logic";
 import { translatedBoxLabel } from "./markers";
-import { storeAsset, type NotebookMedia } from "./media";
+import { assetRecord, storeAsset, type NotebookMedia } from "./media";
 import { showNotice } from "./notice";
 
 /** Contact moved further than this (CSS px): a drag, not a tap. */
 const TAP_SLOP_PX = 8;
 /** A tap this close to a badge (CSS px) still hits it. */
 const BADGE_TOLERANCE_PX = 6;
+/** Longest contact that still counts as a tap on a badge, ms. */
+const TAP_MS = 500;
 /** Snapshot resolution, px per pt (about 216 dpi), and its longest side, px. */
 const SNAPSHOT_SCALE = 3;
 const SNAPSHOT_MAX_SIDE = 2048;
 /** How long the source region is outlined after a jump, ms. */
 const FLASH_MS = 1800;
+/** At most this many notebooks are read to find a renamed source notebook by its id. */
+const FIND_BY_ID_LIMIT = 400;
 
 /** What the view lends to the excerpt tools. */
 export interface ExcerptHost {
 	app: App;
+	/** The document being edited (null while loading or when it cannot be edited). */
 	doc(): NotebookDocument | null;
+	/** The document shown, also while a large file is still loading and when it is read-only. */
+	shownDoc(): NotebookDocument | null;
 	/** Vault path of the open notebook. */
 	path(): string | null;
 	folder(): string;
@@ -71,13 +80,10 @@ interface ReadOnlyTap {
 	moved: boolean;
 }
 
-/** Longest contact that still counts as a tap in read-only mode, ms. */
-const READ_ONLY_TAP_MS = 500;
-
 type Mode = "page" | "copy";
 
-interface Gesture {
-	mode: "region" | "tap";
+/** The region being dragged after "Excerpt to page…" or "Copy as excerpt" with nothing selected. */
+interface RegionDrag {
 	pageIndex: number;
 	pageId: string;
 	start: [number, number];
@@ -85,14 +91,30 @@ interface Gesture {
 	sx: number;
 	sy: number;
 	moved: boolean;
-	target: ExcerptElement | null;
+}
+
+/** A contact that started on a badge: a tap if it lifts soon without moving, otherwise ordinary ink (never taken). */
+interface BadgeContact {
+	pageId: string;
+	target: ExcerptElement;
+	sx: number;
+	sy: number;
+	t: number;
+	moved: boolean;
+}
+
+/** A snapshot drawn but not written yet: it is stored only when the excerpt is placed (or pasted). */
+interface Snapshot {
+	asset: Asset;
+	bytes: ArrayBuffer;
 }
 
 /** The excerpt actions and gestures of one notebook view. */
 export class ExcerptTools {
 	/** The next drag on a page outlines the region to excerpt (one-shot), or null. */
 	armed: Mode | null = null;
-	private gesture: Gesture | null = null;
+	private drag: RegionDrag | null = null;
+	private contact: BadgeContact | null = null;
 	private flashTimer: number | null = null;
 	private busy = false;
 	private readOnlyTap: ReadOnlyTap | null = null;
@@ -100,9 +122,9 @@ export class ExcerptTools {
 
 	constructor(private readonly host: ExcerptHost) {}
 
-	/** The page of the gesture in progress (the view feeds it the moves), or null. */
+	/** The page of the region drag in progress (the view feeds it the moves), or null. */
 	get gesturePage(): number | null {
-		return this.gesture?.pageIndex ?? null;
+		return this.drag?.pageIndex ?? null;
 	}
 
 	/** "Excerpt to page…": the selection's region, or (nothing selected) the next region dragged on a page. */
@@ -121,6 +143,7 @@ export class ExcerptTools {
 		const doc = this.host.doc();
 		const page = sel ? doc?.pages[sel.pageIndex] : undefined;
 		if (sel && page) {
+			this.armed = null;
 			const region = excerptRegion(movedBounds(sel.bounds, sel.matrix), page);
 			if (!region) {
 				new Notice(t("excerpt.tooSmall"));
@@ -133,53 +156,71 @@ export class ExcerptTools {
 		new Notice(t("excerpt.hint.region"));
 	}
 
+	/** Forgets an armed region (tool changed, Escape, read-only mode, another one-shot mode armed). */
 	disarm(): void {
 		this.armed = null;
+		if (this.drag) this.host.preview(this.drag.pageIndex, null);
+		this.drag = null;
 	}
 
 	/**
-	 * Pen or finger down at `local` on page `pageIndex`. True when the contact is ours: the region of an armed
-	 * excerpt, or a tap on an excerpt's badge (any tool but the lasso and the eraser, which select and erase).
+	 * Pen or finger down at `local` on page `pageIndex`. True when the contact is ours: the region of an armed excerpt.
+	 * A contact on an excerpt's badge (any tool but the lasso and the eraser, which select and erase) is only noted:
+	 * it goes on as ink, and `takeBadgeTap` says at the end whether it was a tap.
 	 */
-	begin(pageIndex: number, page: Page, local: [number, number], screen: { x: number; y: number }, tool: string): boolean {
-		this.gesture = null;
+	begin(pageIndex: number, page: Page, local: [number, number], screen: { x: number; y: number; t: number }, tool: string): boolean {
+		this.drag = null;
+		this.contact = null;
 		if (this.armed) {
-			this.gesture = { mode: "region", pageIndex, pageId: page.id, start: local, end: local, sx: screen.x, sy: screen.y, moved: false, target: null };
+			this.drag = { pageIndex, pageId: page.id, start: local, end: local, sx: screen.x, sy: screen.y, moved: false };
 			return true;
 		}
 		if (tool === "lasso" || tool === "eraser") return false;
 		const tol = BADGE_TOLERANCE_PX / Math.max(0.05, this.host.scale());
 		const hit = excerptBadgeAt(page.elements ?? [], local[0], local[1], tol);
-		if (!hit) return false;
-		this.gesture = { mode: "tap", pageIndex, pageId: page.id, start: local, end: local, sx: screen.x, sy: screen.y, moved: false, target: hit };
-		return true;
+		if (hit) this.contact = { pageId: page.id, target: hit, sx: screen.x, sy: screen.y, t: screen.t, moved: false };
+		return false;
 	}
 
-	/** The contact moved. True while the gesture is ours. */
+	/** The contact moved (stage px): a badge contact that moves is ink from now on. */
+	watch(screen: { x: number; y: number } | null): void {
+		const c = this.contact;
+		if (c && screen && Math.hypot(screen.x - c.sx, screen.y - c.sy) > TAP_SLOP_PX) this.contact = null;
+	}
+
+	/**
+	 * The contact ended: the excerpt whose badge was tapped (short, unmoved, not cancelled), or null. The view then
+	 * discards the dot the tap would have left and jumps; any other contact stays the ink it was.
+	 */
+	takeBadgeTap(cancelled: boolean, now: number): ExcerptElement | null {
+		const c = this.contact;
+		this.contact = null;
+		if (!c || cancelled || c.moved || now - c.t > TAP_MS) return null;
+		const page = this.host.doc()?.pages.find((p) => p.id === c.pageId);
+		return page?.elements?.includes(c.target) ? c.target : null;
+	}
+
+	/** The region drag moved. True while it is ours. */
 	move(local: [number, number] | null, screen: { x: number; y: number } | null): boolean {
-		const g = this.gesture;
+		const g = this.drag;
 		if (!g) return false;
 		if (screen && Math.hypot(screen.x - g.sx, screen.y - g.sy) > TAP_SLOP_PX) g.moved = true;
 		if (local) g.end = local;
-		if (g.mode === "region" && g.moved) this.host.preview(g.pageIndex, rectOf(g.start, g.end));
+		if (g.moved) this.host.preview(g.pageIndex, rectOf(g.start, g.end));
 		return true;
 	}
 
-	/** The contact ended. True when it was ours. */
+	/** The region drag ended. True when it was ours. */
 	end(cancelled: boolean): boolean {
-		const g = this.gesture;
+		const g = this.drag;
 		if (!g) return false;
-		this.gesture = null;
-		if (g.mode === "region") this.host.preview(g.pageIndex, null);
+		this.drag = null;
+		this.host.preview(g.pageIndex, null);
 		if (cancelled) return true;
 		const doc = this.host.doc();
 		const page = doc?.pages[g.pageIndex];
 		// The document may have been reloaded meanwhile: never act on another page.
 		if (!doc || !page || page.id !== g.pageId) return true;
-		if (g.mode === "tap") {
-			if (!g.moved && g.target && page.elements?.includes(g.target)) this.openSource(g.target);
-			return true;
-		}
 		const mode = this.armed;
 		this.armed = null;
 		if (!mode) return true;
@@ -206,10 +247,13 @@ export class ExcerptTools {
 
 	/**
 	 * Jumps to the excerpt's source: a page of this notebook is scrolled to and its region outlined; another notebook is
-	 * opened at the page (by id) with the region outlined there. A source that is gone says so; nothing is changed.
+	 * opened at the page (by id) with the region outlined there. The other notebook must have the source's document id:
+	 * its stored path first, then a notebook of the same name, then any notebook of the vault (renamed); when it is found
+	 * under another path, the path stored in the excerpts of this notebook is updated (one undo step, editable only). A
+	 * source that is gone says so; nothing else is changed.
 	 */
 	openSource(el: ExcerptElement): void {
-		const doc = this.host.doc();
+		const doc = this.host.shownDoc();
 		if (!doc) return;
 		const state = excerptSourceState(el, doc);
 		const name = excerptSourceName(el.source);
@@ -223,35 +267,83 @@ export class ExcerptTools {
 			this.reveal(state.index, region);
 			return;
 		}
+		void this.openOther(el, region, name);
+	}
+
+	private async openOther(el: ExcerptElement, region: Rect, name: string): Promise<void> {
 		const { app } = this.host;
-		const byPath = app.vault.getFileByPath(source.notebook);
-		const file = byPath && isNotebookFile(byPath)
-			? byPath
-			: resolveNotebookFile(app, { kind: "path", value: source.notebook }, this.host.path() ?? "", this.host.folder());
+		const source = el.source;
+		const file = await this.findNotebook(source.notebook, source.doc);
 		if (!file) {
 			showNotice(t("excerpt.notebookMissing", { name }), 8000);
 			return;
 		}
+		if (file.path !== source.notebook) this.updateSourcePath(source.doc, source.notebook, file.path);
 		// The notebook view resolves the page by id once loaded (a missing page says so there) and outlines the region.
-		void openNotebookAtPage(app, file, null, null, source.page, region);
+		await openNotebookAtPage(app, file, null, null, source.page, region);
 	}
 
-	/** Scrolls page `index` of this notebook so the region shows, and outlines it for a moment. */
-	reveal(index: number, region: Rect): void {
-		const page = this.host.doc()?.pages[index];
-		if (!page) return;
+	/** The notebook file whose document id is `docId`: at `path`, else of the same name, else anywhere in the vault. */
+	private async findNotebook(path: string, docId: string): Promise<TFile | null> {
+		const { app } = this.host;
+		const tried = new Set<string>();
+		const matches = async (f: TFile | null): Promise<boolean> => {
+			if (!f || tried.has(f.path) || !isNotebookFile(f)) return false;
+			tried.add(f.path);
+			return (await this.notebookId(f)) === docId;
+		};
+		const byPath = app.vault.getFileByPath(path);
+		if (await matches(byPath)) return byPath;
+		const byName = resolveNotebookFile(app, { kind: "path", value: path }, this.host.path() ?? "", this.host.folder());
+		if (await matches(byName)) return byName;
+		const all = app.vault.getFiles().filter((f) => isNotebookFile(f) && !tried.has(f.path)).slice(0, FIND_BY_ID_LIMIT);
+		for (const f of all) if (await matches(f)) return f;
+		return null;
+	}
+
+	/** The document id written at the start of a notebook file, or null when it cannot be read. */
+	private async notebookId(file: TFile): Promise<string | null> {
+		try {
+			return documentIdOf(await this.host.app.vault.cachedRead(file));
+		} catch {
+			return null;
+		}
+	}
+
+	/** The excerpts of this notebook that point at `oldPath` of document `docId` now point at `newPath` (one undo step). */
+	private updateSourcePath(docId: string, oldPath: string, newPath: string): void {
+		const doc = this.host.doc();
+		if (!doc || !this.host.editable()) return;
+		const commands: Command[] = [];
+		for (const page of doc.pages) {
+			for (const e of page.elements ?? []) {
+				if (e.type !== "excerpt" || e.source.doc !== docId || e.source.notebook !== oldPath) continue;
+				commands.push(new ReplaceElement(page.id, e, { ...e, source: { ...e.source, notebook: newPath } }));
+			}
+		}
+		if (commands.length > 0) this.host.execute(new Batch("Update excerpt source", commands));
+	}
+
+	/**
+	 * Scrolls page `index` of the shown notebook so the region shows, and outlines it for a moment. Works while a large
+	 * file is still loading (the pages are laid out) and in a read-only notebook. False when the page is not there.
+	 */
+	reveal(index: number, region: Rect): boolean {
+		const page = this.host.shownDoc()?.pages[index];
+		if (!page) return false;
 		const clamped = clampSourceRegion({ notebook: "", doc: "", page: "", ...region }, page) ?? region;
 		this.host.scrollTo(index, Math.max(0, clamped.y - 24));
 		if (this.flashTimer !== null) window.clearTimeout(this.flashTimer);
-		if (!this.host.previewFree()) return;
+		if (!this.host.previewFree()) return true;
 		this.host.preview(index, clamped);
 		this.flashTimer = window.setTimeout(() => {
 			this.flashTimer = null;
 			if (this.host.previewFree()) this.host.preview(index, null);
 		}, FLASH_MS);
+		return true;
 	}
 
-	/** A region was chosen: snapshot it, then place it (picker) or copy it. */
+	/** A region was chosen: snapshot it (in memory), then place it (picker) or copy it. */
 	private async made(mode: Mode, pageIndex: number, page: Page, region: Rect): Promise<void> {
 		const doc = this.host.doc();
 		const path = this.host.path();
@@ -266,7 +358,8 @@ export class ExcerptTools {
 				this.copy(excerpt, snapshot);
 				return;
 			}
-			new ExcerptTargetModal(this.host.app, this.host.gotoContext, (target) => this.place(doc, excerpt, snapshot, target)).open();
+			// Nothing is written until a page is chosen: closing the picker leaves no file behind.
+			new ExcerptTargetModal(this.host.app, this.host.gotoContext, (target) => void this.place(doc, excerpt, snapshot, target)).open();
 		} catch (e) {
 			console.error("[notebook] excerpt", e);
 			new Notice(t("excerpt.failed", { error: (e as Error).message }));
@@ -275,11 +368,23 @@ export class ExcerptTools {
 		}
 	}
 
-	/** Puts the excerpt on page `target.index` (a new page after the last one when it is one past it), one undo step. */
-	private place(doc: NotebookDocument, excerpt: ExcerptElement, snapshot: { asset: Asset } | null, target: ExcerptTarget): void {
+	/** Stores the snapshot and puts the excerpt on page `target.index` (or a new page there), one undo step. */
+	private async place(doc: NotebookDocument, excerpt: ExcerptElement, snapshot: Snapshot | null, target: ExcerptTarget): Promise<void> {
+		if (this.host.doc() !== doc || !this.host.editable()) return;
+		let asset: Asset | null = null;
+		if (snapshot) {
+			try {
+				asset = await storeAsset(this.host.app, this.host.folder(), snapshot.bytes, snapshot.asset.name, "image");
+				this.host.media()?.addPending(asset);
+			} catch (e) {
+				console.error("[notebook] excerpt snapshot", e);
+				new Notice(t("excerpt.failed", { error: (e as Error).message }));
+				return;
+			}
+		}
 		if (this.host.doc() !== doc || !this.host.editable()) return;
 		const commands: Command[] = [];
-		if (snapshot && !doc.assets?.[snapshot.asset.id]) commands.push(new AddAsset(snapshot.asset));
+		if (asset && !doc.assets?.[asset.id]) commands.push(new AddAsset(asset));
 		let page = doc.pages[target.index];
 		if (target.newPage) {
 			const like = doc.pages[target.index - 1] ?? doc.pages[doc.pages.length - 1];
@@ -288,7 +393,7 @@ export class ExcerptTools {
 		}
 		if (!page) return;
 		const box = placeExcerpt(excerpt, page);
-		const placed: ExcerptElement = { ...excerpt, ...box };
+		const placed: ExcerptElement = asset ? { ...excerpt, ...box, asset: asset.id } : { ...excerpt, ...box };
 		commands.push(new AddElement(page.id, placed, page.elements?.length ?? 0));
 		if (!this.host.execute(new Batch("Excerpt", commands))) return;
 		const index = doc.pages.indexOf(page);
@@ -299,8 +404,11 @@ export class ExcerptTools {
 		new Notice(t("excerpt.done", { n: String(index + 1) }));
 	}
 
-	/** The excerpt (with its snapshot's bytes) on the plugin clipboard, so "Paste" puts it on a page of any notebook. */
-	private copy(excerpt: ExcerptElement, snapshot: { asset: Asset; bytes: ArrayBuffer } | null): void {
+	/**
+	 * The excerpt (with its snapshot's bytes) on the plugin clipboard, so "Paste" puts it on a page of any notebook. The
+	 * snapshot file is written by the paste, like the picture of any copied image.
+	 */
+	private copy(excerpt: ExcerptElement, snapshot: Snapshot | null): void {
 		const assets: Record<string, Asset> = snapshot ? { [snapshot.asset.id]: snapshot.asset } : {};
 		const content = captureClip([], [excerpt], assets);
 		if (!content) return;
@@ -312,44 +420,58 @@ export class ExcerptTools {
 	}
 
 	/**
-	 * Draws the region of `page` with the page raster (background, paper, pictures, boxes, equations, text, visible ink;
-	 * never hidden ink) and stores it as a PNG image asset. Null when nothing can be drawn (no canvas).
+	 * Draws the region of `page` with the page raster (background, paper, the pictures and elements that meet the region,
+	 * visible ink; never hidden ink) into PNG bytes, with the record the asset will have once stored. Nothing is written
+	 * here. Null when nothing can be drawn (no canvas, background missing).
 	 */
-	private async snapshot(media: NotebookMedia, page: Page, region: Rect, pageIndex: number): Promise<{ asset: Asset; bytes: ArrayBuffer } | null> {
+	private async snapshot(media: NotebookMedia, page: Page, region: Rect, pageIndex: number): Promise<Snapshot | null> {
 		const scale = Math.min(SNAPSHOT_SCALE, SNAPSHOT_MAX_SIDE / Math.max(region.width, region.height));
-		let background: CanvasImageSource | null = null;
-		const bg = page.background;
+		const opened: ImageBitmap[] = [];
 		try {
-			if (bg?.kind === "pdf") background = await media.pdf.render(bg.asset, bg.page, scale);
-			else if (bg?.kind === "image") background = await createImageBitmap(new Blob([await media.readAsset(bg.asset)]));
-		} catch (e) {
-			// Without its background the picture would be wrong: better no snapshot (the excerpt draws live or as a card).
-			console.error("[notebook] excerpt background", e);
-			return null;
-		}
-		const images = new Map<string, CanvasImageSource>();
-		for (const el of page.elements ?? []) {
-			const id = elementAssetId(el);
-			if (id === null || images.has(id)) continue;
+			let background: CanvasImageSource | null = null;
+			const bg = page.background;
 			try {
-				images.set(id, await createImageBitmap(new Blob([await media.readAsset(id)])));
-			} catch {
-				// A missing picture is left out, as on screen.
+				if (bg?.kind === "pdf") background = await media.pdf.render(bg.asset, bg.page, scale);
+				else if (bg?.kind === "image") {
+					const bmp = await createImageBitmap(new Blob([await media.readAsset(bg.asset)]));
+					opened.push(bmp);
+					background = bmp;
+				}
+			} catch (e) {
+				// Without its background the picture would be wrong: better no snapshot (the excerpt draws live or as a card).
+				console.error("[notebook] excerpt background", e);
+				return null;
 			}
+			const images = new Map<string, CanvasImageSource>();
+			const box = { minX: region.x, minY: region.y, maxX: region.x + region.width, maxY: region.y + region.height };
+			for (const el of page.elements ?? []) {
+				const id = elementAssetId(el);
+				if (id === null || images.has(id) || !boxesOverlap(elementBounds(el), box)) continue;
+				try {
+					const bmp = await createImageBitmap(new Blob([await media.readAsset(id)]));
+					opened.push(bmp);
+					images.set(id, bmp);
+				} catch {
+					// A missing picture is left out, as on screen.
+				}
+			}
+			const canvas = activeDocument.createEl("canvas");
+			canvas.width = Math.max(1, Math.round(region.width * scale));
+			canvas.height = Math.max(1, Math.round(region.height * scale));
+			const ctx = canvas.getContext("2d");
+			if (!ctx) return null;
+			drawPageRaster(ctx, page, scale, { background, images, region, boxLabel: translatedBoxLabel });
+			const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+			canvas.width = 0;
+			canvas.height = 0;
+			if (!blob) return null;
+			const bytes = await blob.arrayBuffer();
+			const base = (this.host.path()?.split("/").pop() ?? "notebook").replace(/\.[^.]+$/, "");
+			const asset = await assetRecord(this.host.folder(), bytes, `${base} p${pageIndex + 1} excerpt.png`, "image");
+			return { asset, bytes };
+		} finally {
+			for (const bmp of opened) bmp.close();
 		}
-		const canvas = activeDocument.createEl("canvas");
-		canvas.width = Math.max(1, Math.round(region.width * scale));
-		canvas.height = Math.max(1, Math.round(region.height * scale));
-		const ctx = canvas.getContext("2d");
-		if (!ctx) return null;
-		drawPageRaster(ctx, page, scale, { background, images, region, boxLabel: translatedBoxLabel });
-		const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
-		if (!blob) return null;
-		const bytes = await blob.arrayBuffer();
-		const base = (this.host.path()?.split("/").pop() ?? "notebook").replace(/\.[^.]+$/, "");
-		const asset = await storeAsset(this.host.app, this.host.folder(), bytes, `${base} p${pageIndex + 1} excerpt.png`, "image");
-		media.addPending(asset);
-		return { asset, bytes };
 	}
 
 	/**
@@ -375,9 +497,9 @@ export class ExcerptTools {
 		on("pointerup", (e) => {
 			const tap = this.readOnlyTap;
 			this.readOnlyTap = null;
-			if (!tap || tap.id !== e.pointerId || tap.moved || e.timeStamp - tap.t > READ_ONLY_TAP_MS || this.host.editable()) return;
+			if (!tap || tap.id !== e.pointerId || tap.moved || e.timeStamp - tap.t > TAP_MS || this.host.editable()) return;
 			const at = this.host.pageAtClient(e.clientX, e.clientY);
-			const page = at ? this.host.doc()?.pages[at.pageIndex] : undefined;
+			const page = at ? this.host.shownDoc()?.pages[at.pageIndex] : undefined;
 			if (!at || !page) return;
 			const tol = BADGE_TOLERANCE_PX / Math.max(0.05, this.host.scale());
 			const hit = excerptBadgeAt(page.elements ?? [], at.local[0], at.local[1], tol);
@@ -390,7 +512,8 @@ export class ExcerptTools {
 		this.readOnlyTap = null;
 		if (this.flashTimer !== null) window.clearTimeout(this.flashTimer);
 		this.flashTimer = null;
-		this.gesture = null;
+		this.drag = null;
+		this.contact = null;
 		this.armed = null;
 	}
 }
