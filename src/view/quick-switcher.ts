@@ -1,4 +1,4 @@
-import { Notice, SuggestModal, type App, type Plugin, type TFile } from "obsidian";
+import { Notice, SuggestModal, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { openNotebookAtPage } from "../integration/open";
 import { LibraryIndex } from "../library/index";

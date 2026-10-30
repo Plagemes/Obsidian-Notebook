@@ -80,6 +80,10 @@ const P: Record<string, string> = {
 	"check": "M5 12l5 5 9-10",
 	"chevron-left": "M15 6l-6 6 6 6",
 	"sparkles": "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z M19 3v4 M17 5h4",
+	"hash": "M4 9h16 M4 15h16 M10 3L8 21 M16 3l-2 18",
+	"book-open": "M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z",
+	"split": "M16 3h5v5 M8 3H3v5 M12 22v-8.3a4 4 0 0 0-1.2-2.8L3 3 M15 9l6-6",
+	"shield-check": "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z M9 12l2 2 4-4",
 	"sticky-note": "M4 4h16v10l-6 6H4z M14 20v-6h6",
 };
 

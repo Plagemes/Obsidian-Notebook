@@ -31,7 +31,8 @@ AI, no network, nothing leaves the device.
 | **Tool options popover** | Colour, width, eraser mode/filter/size, shape kind, text size, snap-to-text | Tap the active tool again, or the current-pen indicator |
 | **Contextual bar** | Floating pill at the bottom of the page with a context label and its actions; can be collapsed to a single chip | Selection (copy, cut, duplicate, paste, white → transparent, save as stamp, delete, restyle rows) › lasso (paste) › PDF side pane open (link, add notes page, show slide, close) › class now (board shot, new lecture, exercise page) › PDF page (search, hide annotations, dim, margins, open side by side) › image page (dim, margins) |
 | **All actions sheet** | Grouped, searchable sheet (popover on tablet/desktop, bottom sheet on phone). Sections: Recent, Insert, Page, PDF & reading, Side by side, Lecture, View & input, Export & share | The ⊞ button at the end of the toolbar |
-| **Page sheet** | The same component scoped to one page: insert after, arrange, bookmark, paper and size as chips, orientation, infinite, PDF page actions, share/export, delete | Tap the page indicator, or a thumbnail's menu in the pages panel |
+| **Page sheet** | The same component scoped to one page. First section **Go to**: *Go to page number…* (page number, `p12` or a bookmark), *Recently edited pages*, *One page at a time*. Then the page: arrange, bookmark, tags, paper and size as chips, orientation, infinite, split (heavy page), delete; insert after; PDF page actions; share/export | Tap the page indicator, or a thumbnail's menu in the pages panel |
+| **Status banners** | Safe mode (*Open normally*, *Repair…*, *Show images and PDFs*), storage full (*Retry now*), integrity (*Restore the newer version*, *Restore a version…*, *Keep this version*), open on another device (*Open read-only*, *Open anyway*, *Edit anyway*), heavy page (*Split page*, *Dismiss*) | Only while the situation lasts; the banner owns its recovery buttons (they are listed in the registry with the `banner` surface) |
 | **Radial menu** | Dark dial at the pen tip: undo/redo, width bubble, colour bubble, tool illustration, favourites · pen case · shapes | S Pen side button (or long press, per settings) |
 | **Notebook menu** | Obsidian's "More options" of the notebook tab | Notebook-wide actions: open library, export notebook, zettel entries |
 | **Library** | The library view | Create, import PDF, lecture from slides, scan, timetable |
@@ -56,6 +57,11 @@ anywhere in `src/` is in the registry and that every action is placed somewhere.
 | Restyle selection (colour, width) | Contextual bar, second row | Same |
 | Insert image, stamps, add page, board shot | Quick slots (ranked) + Insert section | Frequent inserts one tap away when there is room |
 | Exercise page, page from template, insert PDF pages, image page, scan pages, scan as image | Insert section of the sheets; exercise page also on the lecture bar | Less frequent; grouped |
+| Go to page number, recently edited pages, one page at a time (`goto-page-number`, `recent-pages`, `toggle-page-mode`) | **Page sheet, first section "Go to"** (tap the page indicator); also in the All actions sheet; one page at a time is also a quick slot | Getting to a page starts where the page number is |
+| Page switcher across notebooks (`go-to-page`) | All actions sheet (Go to), library, palette | Leaves the notebook |
+| Split a heavy page (`page-split`) | Heavy-page banner, page sheet (only on a heavy page) | Acts on that page |
+| Check sync safety, check notebooks integrity (`sync-check`, `check-integrity`) | All actions sheet (Notebooks), notebook menu, settings, palette | Folder-wide checks, rare |
+| Banner buttons (safe mode, storage, integrity, other device, heavy page) | Their status banner only | Meaningful only while the banner is shown |
 | Duplicate/move/delete page, bookmark, edit bookmark, page tags, paper, size, orientation, infinite, move to notebook, save as template, restore version, deleted pages | Page sheet (page indicator, thumbnail menu) and Page section | Act on one page, reached from the page |
 | PDF search, hide annotations, dim backgrounds | PDF contextual bar + PDF & reading section; search next/previous in the search panel and commands | Relevant only with PDF pages |
 | PDF margins, update PDF, export annotations | PDF bar (margins), page sheet, PDF & reading section | Page-level PDF work |
@@ -68,6 +74,14 @@ anywhere in `src/` is in the registry and that every action is placed somewhere.
 | New/open/continue notebook, library, import PDF, lecture from slides, scan to new notebook, loose sheet, timetable, open class | Library, ribbon, command palette | Not inside a notebook |
 | Pen button test, benchmark, stress test | Command palette (diagnostics) | Developer tools |
 | Embed, restore version, tags, companion, repair, merge copies, restore page, zettel | Registered by their modules (integration, zettel); notebook menu where they add entries | Other features own them |
+
+### Page indicator: one behaviour
+
+Tapping the page indicator ("3 / 12") always opens the **page sheet** of the page in view. Its first section is
+**Go to**, with *Go to page number…* first, so jumping to a page is two taps (indicator → Go to page number…) and the
+page's own actions are one scroll away. The old direct "tap → go to page" (wave 0.7) and the "…" page menu are merged
+into this one sheet, so the indicator never means two different things; *Go to page number…* keeps its command for a
+hotkey.
 
 ## 4. The layout engine ("generative UI")
 

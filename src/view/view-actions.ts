@@ -11,6 +11,7 @@ import { duplicatePage } from "../model/pages";
 import { DEFAULT_META, PAGE_SIZES, PAPER_KINDS, PAPER_SPACING, type Page, type PageSizeName, type PaperKind } from "../model/types";
 import { actionById } from "../ui/actions";
 import { exportPdf, exportSvg } from "./export";
+import { GotoPageModal } from "./goto-page";
 import type { NotebookView } from "./notebook-view";
 import { editBookmark, editPageTags } from "./outline";
 import { exportPdfAnnotations, openMarginsModal, updatePdfFromNewVersion } from "./pdf-actions";
@@ -100,6 +101,10 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"stamps-save-selection": (v) => v.stampPalette?.saveSelection(),
 	"delete-selection": (v) => v.removeSelection(),
 
+	// navigation (wave 0.7)
+	"goto-page-number": (v) => new GotoPageModal(v.app, v).open(),
+	"toggle-page-mode": (v) => v.togglePageMode(),
+
 	// insert
 	"insert-image": (v) => void v.insertImageElement(),
 	"stamps": (v) => v.stampPalette?.toggle(),
@@ -152,6 +157,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	}),
 	"page-restore-version": onPage((v, _p, i) => openPageRestore(v.reliabilityDeps(), v, i)),
 	"page-deleted-pages": (v) => void openDeletedPages(v.pageToolsHost()),
+	"page-split": onPage((v, _p, i) => v.splitHeavyPage(i)),
 	"page-delete": onPage((v, p, i) => {
 		const doc = v.editableDocument();
 		if (!doc || doc.pages.length <= 1) return;

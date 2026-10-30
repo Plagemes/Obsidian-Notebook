@@ -1,4 +1,4 @@
-import { SuggestModal, type App, type Plugin } from "obsidian";
+import { SuggestModal, type App } from "obsidian";
 import { t } from "../i18n";
 import { gotoTargets, type GotoBookmark, type GotoTarget } from "./goto-logic";
 

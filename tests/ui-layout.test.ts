@@ -38,7 +38,7 @@ describe("toolbar plan", () => {
 describe("layout engine", () => {
 	it("fills the quick slots by priority on a plain page", () => {
 		const l = buildLayout(baseContext(), 1280, {}, NOW);
-		expect(l.quick).toEqual(["insert-image", "add-page", "stamps", "board-shot", "toggle-ruler", "pen-only"]);
+		expect(l.quick).toEqual(["insert-image", "add-page", "stamps", "board-shot", "toggle-ruler", "toggle-page-mode"]);
 		expect(l.context).toBeNull();
 	});
 
@@ -93,7 +93,7 @@ describe("layout engine", () => {
 
 	it("offers no insert quick actions on a read-only document", () => {
 		const l = buildLayout(baseContext({ editable: false }), 1280, {}, NOW);
-		expect(l.quick).toEqual(["pen-only", "fit-width"]);
+		expect(l.quick).toEqual(["toggle-page-mode", "pen-only", "fit-width"]);
 	});
 
 	it("ranks with a stable order for equal scores", () => {
@@ -105,7 +105,7 @@ describe("layout engine", () => {
 describe("sheets", () => {
 	it("groups the All actions sheet in a fixed order and includes the page actions", () => {
 		const s = buildSheet(baseContext(), { kind: "all", usage: {}, now: NOW, label });
-		expect(s.map((x) => x.id)).toEqual(["insert", "page", "side", "lecture", "view", "share"]);
+		expect(s.map((x) => x.id)).toEqual(["navigate", "insert", "page", "side", "lecture", "view", "share", "app"]);
 		expect(s.find((x) => x.id === "page")!.actions.map((a) => a.id)).toContain("page-delete");
 	});
 
@@ -134,7 +134,11 @@ describe("sheets", () => {
 		expect(ids).not.toContain("insert-image");
 		expect(ids).not.toContain("pen-only");
 		expect(s.map((x) => x.id)).not.toContain("recent");
-		expect(s[0]!.id).toBe("page");
+		expect(s.map((x) => x.id).slice(0, 2)).toEqual(["navigate", "page"]);
+		expect(ids).toContain("goto-page-number");
+		expect(ids).not.toContain("page-split");
+		const heavy = buildSheet(baseContext({ page: { index: 0, count: 2, background: "none", infinite: false, bookmarked: false, splittable: true } }), { kind: "page", usage: {}, now: NOW, label });
+		expect(heavy.flatMap((x) => x.actions.map((a) => a.id))).toContain("page-split");
 	});
 
 	it("searches labels, keywords and groups, ignoring case and accents", () => {

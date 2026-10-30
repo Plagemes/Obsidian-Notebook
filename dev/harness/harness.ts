@@ -981,6 +981,10 @@ async function checkToolbar(add: (name: string, ok: boolean, detail?: string) =>
 	r = pageSheet.getBoundingClientRect();
 	add(`${label}: the page indicator opens the page sheet`, ui.sheet.openKind === "page" && inView(r) && !!byText(pageSheet, "Duplicate page") && !byText(pageSheet, "Insert image"),
 		`kind ${ui.sheet.openKind}, title ${pageSheet.querySelector(".notebook-sheet-title")?.textContent}`);
+	const firstSection = pageSheet.querySelector(".notebook-sheet-section");
+	add(`${label}: the page sheet starts with Go to (page number, recent pages, one page at a time)`, firstSection?.querySelector(".notebook-sheet-section-title")?.textContent === "Go to"
+		&& ["Go to page number…", "Recently edited pages", "One page at a time"].every((x) => !!byText(firstSection as HTMLElement, x)),
+		Array.from(firstSection?.querySelectorAll("button") ?? []).map((b) => b.textContent).join(" | "));
 	const paperBefore = v.document.pages[v.currentPage()].paper.kind;
 	const dotted = Array.from(pageSheet.querySelectorAll(".notebook-chip-choice")).find((b) => b.textContent === "Dotted") as HTMLElement | undefined;
 	click(dotted, "Dotted chip");

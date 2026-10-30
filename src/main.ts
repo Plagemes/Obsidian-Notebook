@@ -10,6 +10,7 @@ import { BenchmarkModal } from "./view/benchmark";
 import { PenTestModal, penSignalInfo } from "./view/pen-test-modal";
 import { NotebookLibraryHost } from "./library/host";
 import { registerIntegration } from "./integration";
+import type { HistoryService } from "./integration/history-service";
 import type { NotebookApi } from "./integration/api";
 import { registerReliability } from "./integration/reliability";
 import { LIBRARY_VIEW_TYPE, LibraryView } from "./library/library-view";
@@ -26,6 +27,7 @@ import { registerZettel } from "./zettel";
 import { openPageSwitcher, QuickNavService } from "./view/quick-switcher";
 import { openRecentPages, RecentPagesService } from "./view/recent-pages";
 import { SyncSafetyService } from "./view/sync-safety";
+import { registerResilience, type ResilienceServices } from "./view/resilience";
 
 export default class NotebookPlugin extends Plugin {
 	settings!: NotebookSettings;
@@ -41,6 +43,10 @@ export default class NotebookPlugin extends Plugin {
 	private globalActions: Record<string, () => void> = {};
 	/** wave 0.7: sync safety (presence files, sync check). */
 	syncSafety!: SyncSafetyService;
+	/** wave 0.7: resilience: safe mode, storage-full warning, integrity check (view/resilience.ts). */
+	resilience?: ResilienceServices;
+	/** Version history (set by registerIntegration), for the integrity check. */
+	private history: HistoryService | null = null;
 
 	async onload(): Promise<void> {
 		this.settings = readSettings(await this.loadData());
@@ -48,6 +54,8 @@ export default class NotebookPlugin extends Plugin {
 		this.journal = new AdapterJournalStore(this.app.vault.adapter, journalFolder(this.app, this.manifest.id));
 		this.syncSafety = new SyncSafetyService(this);
 		this.syncSafety.register();
+		// wave 0.7: resilience (#346 safe mode, #347 storage full, #390 integrity check); before the views exist.
+		this.resilience = registerResilience(this, () => this.history);
 		this.registerView(VIEW_TYPE, (leaf) => new NotebookView(leaf, this));
 		this.registerExtensions([...NOTEBOOK_EXTENSIONS], VIEW_TYPE);
 		this.host = new NotebookLibraryHost(this);
@@ -91,6 +99,7 @@ export default class NotebookPlugin extends Plugin {
 			"go-to-page": () => openPageSwitcher(quickNav),
 			"recent-pages": () => openRecentPages(this.app, this.recentPages),
 			"sync-check": () => void this.syncSafety.openCheck(),
+			"check-integrity": () => void this.resilience?.check(),
 			"benchmark": () => this.openBenchmark(),
 			"create-stress-test": () => void this.createStressNotebook(),
 		};
@@ -100,7 +109,7 @@ export default class NotebookPlugin extends Plugin {
 		});
 		if (missing.length) console.error("[notebook] actions without a handler:", missing.join(", "));
 
-		registerIntegration(this, {
+		this.history = registerIntegration(this, {
 			background: (doc, page, width) => this.host.thumbnailBackground(doc, page, width),
 			newNotebookIn: (folder) => this.host.createNotebook(folder),
 			annotatePdf: (pdf) => this.host.importPdf(this.settings.folder, pdf),

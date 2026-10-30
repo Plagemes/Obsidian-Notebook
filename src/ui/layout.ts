@@ -162,8 +162,8 @@ export function buildSheet(c: UiContext, opts: SheetOptions, actions: readonly A
 			.slice(0, RECENT_COUNT);
 		if (recent.length) sections.push({ id: "recent", actions: recent });
 	}
-	// The page sheet starts with what acts on the page itself; inserting after it comes next.
-	const order: readonly ActionGroup[] = opts.kind === "page" ? ["page", ...GROUP_ORDER.filter((g) => g !== "page")] : GROUP_ORDER;
+	// The page sheet starts with getting to a page (go to, recent, one page at a time), then what acts on the page itself.
+	const order: readonly ActionGroup[] = opts.kind === "page" ? ["navigate", "page", ...GROUP_ORDER.filter((g) => g !== "page" && g !== "navigate")] : GROUP_ORDER;
 	for (const group of order) {
 		const list = pool.filter((a) => a.group === group);
 		if (list.length) sections.push({ id: group, actions: list });
@@ -179,7 +179,7 @@ export function placementsOf(id: string, c: UiContext, width: number, actions: r
 	const a = actions.find((x) => x.id === id);
 	if (!a || !isRelevant(a, c)) return [];
 	const out = new Set<Surface>();
-	const fixed: Surface[] = ["toolbar", "options", "favourites", "radial", "palette", "notebook", "library"];
+	const fixed: Surface[] = ["toolbar", "options", "favourites", "radial", "palette", "notebook", "library", "banner"];
 	for (const s of a.surfaces) if (fixed.includes(s)) out.add(s);
 	const layout = buildLayout(c, width, {}, 0, actions);
 	if (layout.quick.includes(id)) out.add("quick");

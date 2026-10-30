@@ -29,6 +29,7 @@ const CONTEXTS: Array<[string, UiContext]> = [
 	["image page", baseContext({ page: { index: 1, count: 3, background: "image", infinite: false, bookmarked: false }, notebook: { pdfPages: false, backgrounds: true } })],
 	["PDF side pane open", baseContext({ sidePane: { available: true, open: true }, notebook: { pdfPages: true, backgrounds: true } })],
 	["class now", baseContext({ lecture: true })],
+	["heavy page", baseContext({ page: { index: 0, count: 3, background: "none", infinite: false, bookmarked: false, splittable: true } })],
 ];
 const WIDTHS = [360, 800, 1280];
 
@@ -42,6 +43,7 @@ describe("action registry", () => {
 			expect(a.priority, a.id).toBeLessThanOrEqual(100);
 			if (a.surfaces.includes("context")) expect(a.contexts?.length, `${a.id} needs contexts`).toBeGreaterThan(0);
 			if (a.scope === "external") expect(a.owner, a.id).toBeTruthy();
+			if (a.scope === "external" && !a.command) expect(a.surfaces, `${a.id}: a banner button`).toEqual(["banner"]);
 			expect(a.icon, a.id).toMatch(/^[a-z0-9-]+$/);
 		}
 	});
@@ -59,7 +61,7 @@ describe("action registry", () => {
 		const commands = new Set(ACTIONS.filter((a) => a.command).map((a) => a.id));
 		for (const [id, file] of literal) expect(commands.has(id), `${id} (${file}) is not in the registry`).toBe(true);
 		// External commands are really registered by their owner.
-		for (const a of ACTIONS.filter((x) => x.scope === "external")) {
+		for (const a of ACTIONS.filter((x) => x.scope === "external" && x.command)) {
 			expect(literal.get(a.id)?.replace(/\\/g, "/").endsWith(a.owner!), `${a.id} should be registered in ${a.owner}`).toBe(true);
 		}
 	});
@@ -75,6 +77,8 @@ describe("action registry", () => {
 			"previous-page", "delete-selection", "toggle-pages-panel", "toggle-ruler", "pdf-search", "pdf-search-next", "pdf-search-previous",
 			"toggle-annotations", "toggle-dim-background", "board-shot", "new-lecture", "loose-sheet", "move-pages", "pdf-side-open",
 			"pdf-side-close", "pdf-side-link", "pdf-side-add-page",
+			// wave 0.7
+			"toggle-page-mode", "go-to-page", "goto-page-number", "recent-pages", "sync-check", "check-integrity",
 		]) expect(ids.has(id), id).toBe(true);
 	});
 

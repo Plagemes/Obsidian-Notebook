@@ -83,6 +83,7 @@ import { pickFile } from "./pick";
 import { pdfSideState, type PageSyncHooks } from "./pdf-sync";
 import type { PageToolsHost } from "./page-tools";
 import { RulerGesture } from "./ruler-gesture";
+import { BLANK_THUMBNAIL, ViewResilience, type ResilienceServices, type ResilienceViewHost } from "./resilience";
 import { ObjectInk } from "./object-ink";
 import { SelectionActions } from "./selection-actions";
 import { StampPalette, type StampTarget } from "./stamp-palette";
@@ -142,6 +143,8 @@ export interface NotebookHost {
 	runGlobal?(id: string): void;
 	/** wave 0.7: sync safety (presence files, sync check). Optional: absent in tests and the harness. */
 	syncSafety?: SyncSafetyService;
+	/** wave 0.7: resilience: safe mode, storage-full warning, integrity ledger. Optional: absent in tests. */
+	resilience?: ResilienceServices;
 }
 
 interface ActiveStroke {
@@ -246,6 +249,9 @@ export class NotebookView extends FileView {
 	private stage!: HTMLElement;
 	private messageEl!: HTMLElement;
 	private perfEl!: HTMLElement;
+	/** wave 0.7: resilience: banners (safe mode, not saved, unexpected change on disk) and the per-file opening marker. */
+	private bannerHost!: HTMLElement;
+	private resilience: ViewResilience | null = null;
 	private renderer: Renderer | null = null;
 	private controller: PointerController | null = null;
 	private resizeObserver: ResizeObserver | null = null;
@@ -307,6 +313,8 @@ export class NotebookView extends FileView {
 	private heavyTimer: number | null = null;
 	/** Pages the reader dismissed the warning for, until this view closes. */
 	private readonly heavyDismissed = new Set<string>();
+	/** ui redesign: id of the page in view when it is heavy and can be split (page sheet), else null. */
+	private heavyPageId: string | null = null;
 	private navCurrent = -1;
 	/** Pages whose thumbnail was drawn without all its media; redrawn when media arrives. */
 	private readonly thumbPending = new Set<string>();
@@ -383,6 +391,8 @@ export class NotebookView extends FileView {
 			openSheet: (anchor) => this.ui?.openSheet("all", anchor),
 			openPageSheet: (anchor) => this.ui?.openSheet("page", anchor, this.currentPageIndex()),
 		});
+		this.bannerHost = this.contentEl.createDiv({ cls: "notebook-resilience" });
+		if (this.host.resilience) this.resilience = new ViewResilience(this.resilienceHost(), this.host.resilience);
 		this.body = this.contentEl.createDiv({ cls: "notebook-body" });
 		this.stage = this.body.createDiv({ cls: "notebook-stage" });
 		this.perfEl = this.stage.createDiv({ cls: "notebook-perf" });
@@ -514,7 +524,9 @@ export class NotebookView extends FileView {
 
 		// Android may kill a backgrounded app without notice: save as soon as we are hidden.
 		this.registerDomEvent(document, "visibilitychange", () => {
-			if (document.visibilityState === "hidden") void this.flushNow();
+			if (document.visibilityState !== "hidden") return;
+			this.resilience?.hidden();
+			void this.flushNow();
 		});
 		this.registerDomEvent(window, "pagehide", () => void this.flushNow());
 		this.registerDomEvent(document, "keydown", (e) => {
@@ -550,6 +562,7 @@ export class NotebookView extends FileView {
 		} finally {
 			this.resolveClosed?.();
 		}
+		this.resilience?.end();
 		this.stopHold();
 		for (const timer of [this.navTimer, this.thumbTimer, this.snapFlashTimer, this.heavyTimer]) if (timer !== null) window.clearTimeout(timer);
 		this.navTimer = this.thumbTimer = this.snapFlashTimer = this.heavyTimer = null;
@@ -732,6 +745,8 @@ export class NotebookView extends FileView {
 		this.pageMode?.reset();
 		// Callbacks of a session that is no longer the current one (file switched while loading) are ignored.
 		const current = () => this.session === session;
+		// wave 0.7: resilience (#346): the opening marker is set before the file is read.
+		this.resilience?.begin(file);
 		const session: DocumentSession = new DocumentSession(
 			new VaultDocumentIO(this.app, file, () => backupFolder(this.host.settings)),
 			{ set: (fn, ms) => window.setTimeout(fn, ms), clear: (h) => window.clearTimeout(h) },
@@ -762,6 +777,16 @@ export class NotebookView extends FileView {
 				onError: (message) => {
 					if (current()) this.showError(message);
 				},
+				// wave 0.7: resilience (#347, #390)
+				onWriteHealth: (state) => {
+					if (current()) this.resilience?.writeHealth(state);
+				},
+				onWritten: (text) => {
+					if (current()) this.resilience?.written(text);
+				},
+				onDiskContent: (info) => {
+					if (current()) this.resilience?.diskContent(info);
+				},
 			},
 			{
 				busy: () => this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null
@@ -780,6 +805,7 @@ export class NotebookView extends FileView {
 					window.setTimeout(go, 100);
 				},
 				beforeSerialize: (doc) => this.storePosition(doc),
+				spaceProbe: this.host.resilience?.spaceProbe,
 			},
 		);
 		this.session = session;
@@ -794,6 +820,7 @@ export class NotebookView extends FileView {
 	async onUnloadFile(file: TFile): Promise<void> {
 		await this.closeSession();
 		this.syncSafety?.closed();
+		this.resilience?.end();
 		this.history.clear();
 		this.clearSelection();
 		this.layout = null;
@@ -854,11 +881,13 @@ export class NotebookView extends FileView {
 		if (this.toolbar && this.tools.eraserSize !== settings.eraserSize) this.toolbar.update({ eraserSize: settings.eraserSize });
 		this.pens?.refresh();
 		this.filter.params = stabilizationParams(settings.stabilization);
+		// wave 0.7: resilience (#346): safe mode turns low-latency ink and prediction off for this view.
+		const fast = this.resilience?.lowLatencyAllowed() !== false;
 		if (this.controller) {
-			this.controller.predictionEnabled = settings.inkPrediction;
-			if (!this.controller.drawing) this.controller.setRawUpdates(settings.lowLatencyInk);
+			this.controller.predictionEnabled = settings.inkPrediction && fast;
+			if (!this.controller.drawing) this.controller.setRawUpdates(settings.lowLatencyInk && fast);
 		}
-		if (this.renderer && !this.active) this.renderer.setLowLatency(settings.lowLatencyInk);
+		if (this.renderer && !this.active) this.renderer.setLowLatency(settings.lowLatencyInk && fast);
 		this.setScrollMode(settings.scrollMode);
 		this.perfEl?.toggleClass("notebook-hidden", !settings.perfOverlay);
 		if (this.renderer) this.renderer.onFrame = settings.perfOverlay ? (t) => this.onFrame(t) : null;
@@ -1249,6 +1278,33 @@ export class NotebookView extends FileView {
 		};
 	}
 
+	/** wave 0.7: resilience: what the safe-mode, storage and integrity banners need from the view. */
+	private resilienceHost(): ResilienceViewHost {
+		return {
+			app: this.app,
+			settings: () => this.host.settings,
+			journal: this.host.journal,
+			file: () => this.file,
+			bannerHost: this.bannerHost,
+			attachMedia: () => {
+				if (this.media) this.renderer?.setMedia(this.media);
+			},
+			modeChanged: () => {
+				this.applySettings(this.host.settings);
+				this.pageNav?.invalidate();
+			},
+			reopen: async () => {
+				const leaf = this.leaf;
+				const state = leaf.getViewState();
+				await leaf.setViewState({ type: "empty" });
+				await leaf.setViewState(state);
+			},
+			flush: () => this.flushNow(),
+			editableDocument: () => this.editableDocument(),
+			applyCommand: (cmd) => this.applyCommand(cmd),
+		};
+	}
+
 	reliabilityDeps(): ReliabilityDeps {
 		return { app: this.app, settings: this.host.settings, journal: this.host.journal };
 	}
@@ -1314,6 +1370,7 @@ export class NotebookView extends FileView {
 				this.clearSelection();
 				this.radial?.close();
 			},
+			prefetchAllowed: () => this.resilience?.prefetchAllowed() !== false,
 			editingChanged: () => {
 				this.applyInput();
 				this.toolbar.setEditable(this.editable());
@@ -1327,7 +1384,11 @@ export class NotebookView extends FileView {
 
 	/** Runs an action of the registry (toolbar, contextual bar, sheets, radial menu, commands) and counts the use. */
 	runAction(id: string, arg: ActionArg = {}): void {
-		if (!runViewAction(this, id, arg)) return;
+		if (actionById(id)?.scope === "global") {
+			// A plugin-level action shown in a sheet (recent pages, sync check…).
+			if (!this.host.runGlobal) return;
+			this.host.runGlobal(id);
+		} else if (!runViewAction(this, id, arg)) return;
 		this.ui?.record(id);
 		this.refreshUi();
 	}
@@ -1357,13 +1418,13 @@ export class NotebookView extends FileView {
 			selection: sel ? { strokes: sel.strokes.length, elements: sel.elements.length, images: sel.elements.filter((e) => e.type === "image").length } : null,
 			page: page ? {
 				index, count: pages.length, background: page.background?.kind ?? "none", infinite: !!page.infinite,
-				bookmarked: doc?.meta?.bookmarks.includes(page.id) ?? false,
+				bookmarked: doc?.meta?.bookmarks.includes(page.id) ?? false, splittable: page.id === this.heavyPageId,
 			} : null,
 			notebook: { pdfPages: hasPdfPages(pages), backgrounds: hasBackgrounds(pages) },
 			lecture: !!this.host.classNow?.(),
 			sidePane: pdfSideState(this),
 			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false },
-			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open },
+			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled },
 			narrow: this.body?.hasClass("is-narrow") ?? false,
 		};
 	}
@@ -1624,7 +1685,7 @@ export class NotebookView extends FileView {
 		this.toolbar.setStatus(t("status.loading"), "pending");
 		if (!this.media) {
 			this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged());
-			this.renderer?.setMedia(this.media);
+			if (this.resilience?.mediaAtLoad() !== false) this.renderer?.setMedia(this.media); // wave 0.7: resilience (#346)
 		}
 		this.refreshLayout();
 		this.refit(true);
@@ -1676,7 +1737,8 @@ export class NotebookView extends FileView {
 			this.toolbar.setEditable(true);
 			if (!this.media) {
 				this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged());
-				this.renderer?.setMedia(this.media);
+				// wave 0.7: resilience (#346): in safe mode the backgrounds come after the first paint.
+				if (this.resilience?.mediaAtLoad() !== false) this.renderer?.setMedia(this.media);
 			}
 			this.refreshLayout();
 			this.refit(true);
@@ -1696,6 +1758,7 @@ export class NotebookView extends FileView {
 		this.updateHistoryButtons();
 		this.refreshUi();
 		this.syncSafety?.loaded(doc, mode);
+		this.resilience?.loaded(mode);
 	}
 
 	private showProblem(problem = this.session?.problem ?? null): void {
@@ -1820,6 +1883,7 @@ export class NotebookView extends FileView {
 	}
 
 	private thumbnail(page: Page, width: number): string {
+		if (this.resilience?.thumbnailsAllowed() === false) return BLANK_THUMBNAIL;
 		const dpr = Math.min(2, window.devicePixelRatio || 1);
 		return renderThumbnail(page, Math.round(Math.min(width, THUMB_CSS_WIDTH) * dpr), {
 			mime: "image/jpeg",
@@ -2654,16 +2718,28 @@ export class NotebookView extends FileView {
 		if (!heavy) return;
 		const index = this.currentPageIndex();
 		const page = doc?.pages[index];
-		if (!doc || !page || this.session?.mode === "broken" || this.heavyDismissed.has(page.id)) return heavy.hide();
+		const was = this.heavyPageId;
+		this.heavyPageId = null;
+		if (!doc || !page || this.session?.mode === "broken") return this.heavyChecked(was, () => heavy.hide());
 		const load = pageLoad(page, doc.assets);
 		const reasons = heavyReasons(load);
-		if (reasons.length === 0) return heavy.hide();
+		if (reasons.length === 0) return this.heavyChecked(was, () => heavy.hide());
 		const items = page.strokes.length + (page.elements?.length ?? 0);
-		heavy.show({ pageIndex: index, load, reasons, canSplit: this.editable() && !page.background && items >= 2 });
+		const canSplit = this.editable() && !page.background && items >= 2;
+		// ui redesign: a heavy page offers "Split page" in its page sheet too, also after the banner was dismissed.
+		if (canSplit) this.heavyPageId = page.id;
+		this.heavyChecked(was, () => (this.heavyDismissed.has(page.id) ? heavy.hide() : heavy.show({ pageIndex: index, load, reasons, canSplit })));
+	}
+
+	/** Shows or hides the banner and refreshes the UI when the heavy page changed. */
+	private heavyChecked(was: string | null, banner: () => void): void {
+		banner();
+		if (was !== this.heavyPageId) this.refreshUi();
 	}
 
 	/** Moves the lower half of the page to a new page after it, in one undo step (see planPageSplit). */
-	private splitHeavyPage(index: number): void {
+	/** Splits a heavy page in two (banner and page sheet). */
+	splitHeavyPage(index: number): void {
 		const doc = this.session?.doc;
 		const page = doc?.pages[index];
 		if (!doc || !page || !this.editable()) return;

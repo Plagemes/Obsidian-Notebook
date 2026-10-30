@@ -8,7 +8,7 @@ export type ToolId = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "tex
 
 /** Sections of the sheets and of docs/design-ui.md, in display order. */
 export const GROUP_ORDER = [
-	"tool", "history", "selection", "insert", "page", "reading", "side", "lecture", "view", "share", "notebook", "app", "zettel", "integration", "dev",
+	"tool", "history", "selection", "navigate", "insert", "page", "reading", "side", "lecture", "view", "share", "notebook", "app", "zettel", "integration", "dev",
 ] as const;
 export type ActionGroup = typeof GROUP_ORDER[number];
 
@@ -25,8 +25,10 @@ export type ActionGroup = typeof GROUP_ORDER[number];
  * - notebook: Obsidian's "More options" menu of the notebook tab.
  * - library: the library view.
  * - palette: the command palette only (every action with `command` is also there).
+ * - banner: a status banner of the view (safe mode, storage full, integrity, open on another device, heavy page); the
+ *   banner owns its recovery buttons because they only make sense while it is shown.
  */
-export type Surface = "toolbar" | "quick" | "context" | "options" | "favourites" | "radial" | "sheet" | "page" | "notebook" | "library" | "palette";
+export type Surface = "toolbar" | "quick" | "context" | "options" | "favourites" | "radial" | "sheet" | "page" | "notebook" | "library" | "palette" | "banner";
 
 /** Situations that bring their own contextual bar. */
 export type ContextKind = "selection" | "lasso" | "side-pane" | "lecture" | "pdf" | "image";
@@ -42,13 +44,17 @@ export interface UiContext {
 	tool: ToolId;
 	selection: { strokes: number; elements: number; images: number } | null;
 	/** The page in view (index of the page sheet when it was opened from a thumbnail). */
-	page: { index: number; count: number; background: "none" | "pdf" | "image"; infinite: boolean; bookmarked: boolean } | null;
+	page: {
+		index: number; count: number; background: "none" | "pdf" | "image"; infinite: boolean; bookmarked: boolean;
+		/** wave 0.7: the page is flagged as heavy and can be split. Optional (false when absent). */
+		splittable?: boolean;
+	} | null;
 	notebook: { pdfPages: boolean; backgrounds: boolean };
 	/** A class of the timetable is on now. */
 	lecture: boolean;
 	sidePane: { available: boolean; open: boolean };
 	reading: { annotationsHidden: boolean; dim: boolean };
-	toggles: { ruler: boolean; penOnly: boolean; navigator: boolean };
+	toggles: { ruler: boolean; penOnly: boolean; navigator: boolean; /** One page at a time (wave 0.7). */ pageMode?: boolean };
 	/** Phone-sized view (the page panel is a drawer, the toolbar has two rows). */
 	narrow: boolean;
 }
@@ -102,6 +108,11 @@ function external(id: string, label: MessageKey, icon: string, group: ActionGrou
 	return { id, label, icon, group, surfaces, priority: 10, scope: "external", command: true, owner, readOnly: true };
 }
 
+/** A recovery button of a status banner (no command: it only applies while its banner is shown). */
+function banner(id: string, label: MessageKey, icon: string, group: ActionGroup, owner: string): ActionDef {
+	return { id, label, icon, group, surfaces: ["banner"], priority: 50, scope: "external", owner, readOnly: true };
+}
+
 function global(id: string, label: MessageKey, icon: string, group: ActionGroup, surfaces: readonly Surface[], priority = 20): ActionDef {
 	return { id, label, icon, group, surfaces, priority, scope: "global", command: true, readOnly: true };
 }
@@ -140,6 +151,12 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "stamps-save-selection", label: "stamps.save", icon: "stamp", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 50, scope: "view", when: hasSelection },
 	{ id: "delete-selection", label: "tool.deleteSelection", icon: "trash-2", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 70, scope: "view", command: "command.deleteSelection", when: hasSelection, danger: true },
 
+	// --- navigation (wave 0.7): the first section of the page sheet (the page indicator opens it) and of the sheet.
+	{ id: "goto-page-number", label: "command.gotoPageNumber", icon: "hash", group: "navigate", surfaces: ["page", "sheet"], priority: 85, scope: "view", command: true, readOnly: true, keywords: "jump number bookmark" },
+	{ id: "recent-pages", label: "command.recentPages", icon: "history", group: "navigate", surfaces: ["page", "sheet", "library"], priority: 60, scope: "global", command: true, readOnly: true, keywords: "edited last" },
+	{ id: "go-to-page", label: "command.goToPage", icon: "file-search", group: "navigate", surfaces: ["sheet", "library"], priority: 55, scope: "global", command: true, readOnly: true, keywords: "switcher find notebook" },
+	{ id: "toggle-page-mode", label: "toolbar.pageMode", icon: "book-open", group: "navigate", surfaces: ["quick", "page", "sheet"], priority: 46, scope: "view", command: "command.pageMode", readOnly: true, checked: (c) => !!c.toggles.pageMode, keywords: "swipe paged continuous scroll" },
+
 	// --- insert: quick slots (ranked) and the sheet.
 	{ id: "insert-image", label: "tool.image", icon: "image-plus", group: "insert", surfaces: ["quick", "sheet"], priority: 70, scope: "view", keywords: "picture photo" },
 	{ id: "stamps", label: "stamps.menu", icon: "stamp", group: "insert", surfaces: ["quick", "sheet"], priority: 62, scope: "view", keywords: "sticker" },
@@ -168,6 +185,7 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "page-save-template", label: "page.saveTemplate", icon: "layout-template", group: "page", surfaces: ["page"], priority: 25, scope: "view" },
 	{ id: "page-restore-version", label: "page.restoreVersion", icon: "history", group: "page", surfaces: ["page"], priority: 20, scope: "view" },
 	{ id: "page-deleted-pages", label: "page.deletedPages", icon: "archive-restore", group: "page", surfaces: ["page"], priority: 20, scope: "view", keywords: "trash restore" },
+	{ id: "page-split", label: "heavy.split", icon: "split", group: "page", surfaces: ["page", "banner"], priority: 45, scope: "view", when: (c) => !!c.page?.splittable, keywords: "heavy large slow" },
 	{ id: "page-delete", label: "page.delete", icon: "trash-2", group: "page", surfaces: ["page"], priority: 10, scope: "view", danger: true, enabled: (c) => c.editable && (c.page?.count ?? 0) > 1 },
 
 	// --- PDF and reading: the contextual bar of a PDF page, and the sheet.
@@ -218,6 +236,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	global("loose-sheet", "command.looseSheet", "sticky-note", "app", ["palette"]),
 	global("timetable", "command.timetable", "calendar-clock", "app", ["library", "palette"]),
 	global("open-class", "command.openClass", "calendar-check", "app", ["library", "palette"]),
+	// wave 0.7: safety checks of the whole notebooks folder (also from the settings tab).
+	global("sync-check", "command.syncCheck", "refresh-cw", "app", ["sheet", "notebook", "palette"], 15),
+	global("check-integrity", "command.checkIntegrity", "shield-check", "app", ["sheet", "notebook", "palette"], 15),
 
 	// --- diagnostics: settings tab and palette.
 	global("pen-button-test", "command.penTest", "pen-tool", "dev", ["palette"], 5),
@@ -242,6 +263,19 @@ export const ACTIONS: readonly ActionDef[] = [
 	external("zettel-new-slip-box", "zettel.command.newSlipBox", "archive", "zettel", "zettel/index.ts"),
 	external("zettel-orphans", "zettel.command.orphans", "unlink", "zettel", "zettel/index.ts"),
 	external("zettel-toggle-regions", "zettel.command.toggleRegions", "scan", "zettel", "zettel/index.ts"),
+
+	// --- status banners (wave 0.7): their buttons, listed so that every visible control has a documented place.
+	banner("safe-open-normally", "safe.banner.openNormally", "shield-off", "notebook", "view/resilience.ts"),
+	banner("safe-repair", "safe.banner.repair", "wrench", "notebook", "view/resilience.ts"),
+	banner("safe-show-media", "safe.banner.showMedia", "image", "notebook", "view/resilience.ts"),
+	banner("storage-retry", "storage.banner.retryNow", "refresh-cw", "notebook", "view/resilience.ts"),
+	banner("integrity-restore-newer", "integrity.banner.restoreNewer", "history", "notebook", "view/resilience.ts"),
+	banner("integrity-restore", "integrity.restore", "history", "notebook", "view/resilience.ts"),
+	banner("integrity-keep", "integrity.keep", "check", "notebook", "view/resilience.ts"),
+	banner("sync-open-read-only", "sync.other.readOnly", "lock", "notebook", "view/sync-safety.ts"),
+	banner("sync-open-anyway", "sync.other.anyway", "lock-open", "notebook", "view/sync-safety.ts"),
+	banner("sync-edit-anyway", "sync.other.edit", "pencil", "notebook", "view/sync-safety.ts"),
+	banner("heavy-dismiss", "heavy.dismiss", "x", "page", "view/heavy-page-banner.ts"),
 ];
 
 const BY_ID = new Map(ACTIONS.map((a) => [a.id, a]));
@@ -287,7 +321,7 @@ export function baseContext(patch: Partial<UiContext> = {}): UiContext {
 		page: { index: 0, count: 3, background: "none", infinite: false, bookmarked: false },
 		notebook: { pdfPages: false, backgrounds: false }, lecture: false,
 		sidePane: { available: true, open: false }, reading: { annotationsHidden: false, dim: false },
-		toggles: { ruler: false, penOnly: false, navigator: false }, narrow: false,
+		toggles: { ruler: false, penOnly: false, navigator: false, pageMode: false }, narrow: false,
 		...patch,
 	};
 }
