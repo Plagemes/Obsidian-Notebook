@@ -1,6 +1,7 @@
 /* Notebook — handwritten notebooks */
 
 .workspace-leaf-content .view-content.notebook-view {
+	position: relative;
 	display: flex;
 	flex-direction: column;
 	padding: 0;
