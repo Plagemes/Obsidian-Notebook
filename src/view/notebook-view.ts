@@ -34,6 +34,7 @@ import { drawElement, drawTextElement, measureText, Renderer, selectionCorners, 
 import { projectToRuler, rulerFromTwoTouches, RULER_LENGTH, type Ruler } from "../ink/ruler";
 import { eraseSegment } from "../ink/segment-erase";
 import { analyseSpace, planSpaceChange, spacePreview } from "../ink/space";
+import { heavyReasons, pageLoad, planPageSplit } from "../ink/heavy-page";
 import { apply, IDENTITY, invert, isIdentity, multiply, rotateAbout, scaleAbout, translate, type Matrix } from "../ink/transform";
 import { clampToPage, fitWidth, pan, PAGE_MARGIN, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
 import { cloneMeta, createId, createPage, createStroke } from "../model/document";
@@ -59,6 +60,7 @@ import { backupFolder, type NotebookSettings } from "../settings";
 import { exportPdf, exportSvg } from "./export";
 import { policySettings } from "./input-settings";
 import { NotebookMedia, storeAsset } from "./media";
+import { HeavyPageBanner } from "./heavy-page-banner";
 import { PageNavigator } from "./navigator";
 import { addOutlinePageMenuItems, type OutlineHost } from "./outline";
 import { PAGE_AT_KEY, pageAtFromState, pageState, startPosition } from "./position-sync";
@@ -277,6 +279,11 @@ export class NotebookView extends FileView {
 	private snapFlashTimer: number | null = null;
 
 	private navTimer: number | null = null;
+	// wave 0.7: lod — heavy page warning
+	private heavy: HeavyPageBanner | null = null;
+	private heavyTimer: number | null = null;
+	/** Pages the reader dismissed the warning for, until this view closes. */
+	private readonly heavyDismissed = new Set<string>();
 	private navCurrent = -1;
 	/** Pages whose thumbnail was drawn without all its media; redrawn when media arrives. */
 	private readonly thumbPending = new Set<string>();
@@ -372,6 +379,13 @@ export class NotebookView extends FileView {
 		});
 		// The panel sits to the left of the page (a drawer over it on narrow views).
 		this.body.insertBefore(this.pageNav.el, this.stage);
+		this.heavy = new HeavyPageBanner(this.body, {
+			split: (index) => this.splitHeavyPage(index),
+			dismiss: (index) => {
+				const id = this.pageAtIndex(index)?.id;
+				if (id) this.heavyDismissed.add(id);
+			},
+		});
 		this.textEditor = new TextEditor(this.stage);
 		this.pens = new PenControls(this.toolbar, this.stage, this.penStore());
 		this.mountSelectionActions();
@@ -472,8 +486,8 @@ export class NotebookView extends FileView {
 		this.location.flush();
 		await this.closeSession();
 		this.stopHold();
-		for (const timer of [this.navTimer, this.thumbTimer, this.snapFlashTimer]) if (timer !== null) window.clearTimeout(timer);
-		this.navTimer = this.thumbTimer = this.snapFlashTimer = null;
+		for (const timer of [this.navTimer, this.thumbTimer, this.snapFlashTimer, this.heavyTimer]) if (timer !== null) window.clearTimeout(timer);
+		this.navTimer = this.thumbTimer = this.snapFlashTimer = this.heavyTimer = null;
 		this.pens?.destroy();
 		this.pens = null;
 		this.reading?.destroy();
@@ -1474,6 +1488,7 @@ export class NotebookView extends FileView {
 
 	/** The page panel shows thumbnails of what was just drawn, a moment after the pen lifts. */
 	private scheduleNavRefresh(): void {
+		this.scheduleHeavyCheck();
 		if (!this.pageNav?.open || this.navTimer !== null) return;
 		this.navTimer = window.setTimeout(() => {
 			this.navTimer = null;
@@ -1491,6 +1506,7 @@ export class NotebookView extends FileView {
 		const n = this.session?.doc?.pages.length ?? 0;
 		const current = n ? this.currentPageIndex() : -1;
 		this.toolbar.setPage(n ? current + 1 : 0, n);
+		this.scheduleHeavyCheck();
 		if (current !== this.navCurrent) {
 			this.navCurrent = current;
 			this.pageNav?.markCurrent(current);
@@ -2335,6 +2351,51 @@ export class NotebookView extends FileView {
 		this.session?.markChanged();
 		this.updateHistoryButtons();
 		this.scheduleNavRefresh();
+	}
+
+	// --- heavy page warning (wave 0.7: lod) ---
+
+	/** Looks at the page in view a moment from now (never while writing): too many strokes, points or image bytes show the banner. */
+	private scheduleHeavyCheck(): void {
+		if (this.heavyTimer !== null || !this.heavy) return;
+		this.heavyTimer = window.setTimeout(() => {
+			this.heavyTimer = null;
+			if (this.active || this.erasing) this.scheduleHeavyCheck();
+			else this.checkHeavyPage();
+		}, 800);
+	}
+
+	private checkHeavyPage(): void {
+		const doc = this.session?.doc;
+		const heavy = this.heavy;
+		if (!heavy) return;
+		const index = this.currentPageIndex();
+		const page = doc?.pages[index];
+		if (!doc || !page || this.session?.mode === "broken" || this.heavyDismissed.has(page.id)) return heavy.hide();
+		const load = pageLoad(page, doc.assets);
+		const reasons = heavyReasons(load);
+		if (reasons.length === 0) return heavy.hide();
+		const items = page.strokes.length + (page.elements?.length ?? 0);
+		heavy.show({ pageIndex: index, load, reasons, canSplit: this.editable() && !page.background && items >= 2 });
+	}
+
+	/** Moves the lower half of the page to a new page after it, in one undo step (see planPageSplit). */
+	private splitHeavyPage(index: number): void {
+		const doc = this.session?.doc;
+		const page = doc?.pages[index];
+		if (!doc || !page || !this.editable()) return;
+		const plan = planPageSplit(page, index, doc.assets, measureText, this.renderer?.boundsOf);
+		if (!plan) {
+			new Notice(t("heavy.split.none"));
+			return;
+		}
+		this.clearSelection();
+		this.history.execute(pageContentCommand(doc, plan, "Split page"));
+		this.renderer?.invalidate();
+		this.afterHistoryChange();
+		this.heavy?.hide();
+		new Notice(t("heavy.split.done", { n: String(index + 2) }));
+		this.scheduleHeavyCheck();
 	}
 
 	// --- insert or remove space ---

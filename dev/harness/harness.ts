@@ -737,6 +737,51 @@ async function measureOpen(
 	return { samples, bytes: text.length, strokes };
 }
 
+/**
+ * Heavy page warning check (wave 0.7: lod): a notebook with one page of 3,500 strokes shows the banner; "Split page" moves the
+ * lower part to a new page in one undo step; undo puts it back; "Dismiss" hides the banner for the page.
+ */
+async function checkHeavy(strokes = 3500): Promise<Record<string, unknown>> {
+	const path = "Notebooks/Heavy.notebook";
+	const file = (app.vault.getFileByPath(path) ?? (await app.vault.create(path, serialize(stressDocument(strokes, 1))))) as TFile;
+	const root = document.getElementById("harness-app")!;
+	const openFresh = async () => {
+		if (view) await (view as any).onClose();
+		root.empty();
+		leaf = new WorkspaceLeaf(app, root);
+		view = new NotebookView(leaf as any, { settings: settings() });
+		await view.onOpen();
+		await (view as any).loadFile(file);
+		await wait(1300);
+	};
+	const banner = () => {
+		const el = root.querySelector(".notebook-heavy") as HTMLElement | null;
+		const shown = !!el && el.style.display !== "none" && el.offsetParent !== null;
+		return { shown, text: shown ? el!.innerText.replace(/\s+/g, " ").trim() : "", buttons: shown ? [...el!.querySelectorAll("button")].map((b) => b.textContent) : [] };
+	};
+	const click = (label: string) => ([...root.querySelectorAll(".notebook-heavy button")].find((b) => b.textContent === label) as HTMLElement | undefined)?.click();
+	const counts = () => ((view as any).session.doc.pages as Array<{ strokes: unknown[] }>).map((p) => p.strokes.length);
+
+	await openFresh();
+	const shown = banner();
+	const before = counts();
+	click("Split page");
+	await wait(300);
+	const afterSplit = counts();
+	const bannerAfterSplit = banner();
+	(view as any).undo();
+	await wait(100);
+	const afterUndo = counts();
+	click("Dismiss");
+	await wait(1300);
+	const dismissed = banner();
+	await openFresh();
+	const light = (app.vault.getFileByPath("Notebooks/Light.notebook") ?? (await app.vault.create("Notebooks/Light.notebook", serialize(stressDocument(500, 1))))) as TFile;
+	await (view as any).loadFile(light);
+	await wait(1300);
+	return { shown, before, afterSplit, bannerAfterSplit, afterUndo, dismissedHides: !dismissed.shown, lightHasNoBanner: !banner().shown };
+}
+
 function applyTheme(theme = params.get("theme") ?? "light"): void {
 	document.body.classList.toggle("theme-dark", theme === "dark");
 	document.body.classList.toggle("theme-light", theme !== "dark");
@@ -749,7 +794,7 @@ function applySize(): void {
 	if (h) root.style.height = `${Number(h)}px`;
 }
 
-(window as any).harness = { app, open, measureOpen, measureLod, compareLod, penStroke, setTool, openOptions, openMore, check, checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
+(window as any).harness = { app, open, measureOpen, measureLod, compareLod, checkHeavy, penStroke, setTool, openOptions, openMore, check, checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
 	return view;
 } };
 

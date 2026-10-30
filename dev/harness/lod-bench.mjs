@@ -6,7 +6,8 @@
 // each frame so rasterisation is included.
 //
 // This is time on a PC. It is NOT a measurement on Android.
-// Usage: node dev/harness/lod-bench.mjs [--strokes=10000] [--pages=10] [--frames=100] [--dpr=2]
+// Usage: node dev/harness/lod-bench.mjs [--strokes=10000] [--pages=10] [--frames=100] [--dpr=2] [--check-heavy]
+// --check-heavy also runs the heavy page warning check (banner, Split page, undo, Dismiss).
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -116,6 +117,12 @@ try {
 	console.log("pixel difference, exact vs simplified strokes (one page of 1,000 strokes):");
 	for (const d of diffs) {
 		console.log(`  render ${d.render} scale ${d.scale.toFixed(2)}: ${d.bigDiffPct.toFixed(3)}% of pixels differ by more than 64/255, ${d.anyDiffPct.toFixed(1)}% differ at all, mean difference ${d.meanDiff.toFixed(3)}/255 (ink covers ${d.inkPct.toFixed(1)}%)`);
+	}
+	if (process.argv.includes("--check-heavy")) {
+		await cdp.send("Page.navigate", { url: `http://127.0.0.1:${port}/index.html?doc=new` });
+		await sleep(1500);
+		await cdp.evaluate("window.harness.ready.then(() => true)");
+		console.log("heavy page check:", JSON.stringify(await cdp.evaluate("window.harness.checkHeavy(3500)")));
 	}
 	cdp.ws.close();
 } finally {
