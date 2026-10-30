@@ -348,6 +348,25 @@ body {
 	box-shadow: none;
 }
 
+/* 0.11.2: "next stroke erases" is armed (pen button click or pen key): a small accent ring at the corner of the indicator. */
+.notebook-chip-armed {
+	display: none;
+	position: absolute;
+	top: 5px;
+	right: 5px;
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	border: 2px solid var(--nb-accent);
+	background-color: var(--background-primary);
+	box-sizing: border-box;
+	pointer-events: none;
+}
+
+.notebook-chip.is-eraser-next .notebook-chip-armed {
+	display: block;
+}
+
 /* Popovers under the bar (tool options). They are outside the page, so a tap on them never reaches the pen input. */
 .notebook-popover {
 	position: absolute;

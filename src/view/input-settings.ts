@@ -15,5 +15,7 @@ export function policySettings(s: NotebookSettings): InputSettings {
 		fingerLongPress: s.fingerLongPress,
 		zeroPressureButton: s.penZeroPressureButton,
 		chordButton: s.penChordButton,
+		eraserNextOnClick: s.penButtonEraserNext,
+		buttonWindows: { beforeMs: s.penButtonContactBeforeMs, afterMs: s.penButtonContactAfterMs },
 	};
 }

@@ -133,6 +133,7 @@ import { ColourTools, type PageInk } from "./colour-tools";
 import { commandApplies, runViewAction, sizeName, type ActionArg } from "./view-actions";
 import { ViewUi } from "./view-ui";
 import { pageKeyAction, shouldTurnPage, takesKey, type KeyScene } from "./page-keys";
+import { isTextField, penKeyMatches, penKeyMayAct } from "../ink/pen-hover";
 import { actionById, isEnabled, type UiContext } from "../ui/actions";
 import { actionLabel } from "../ui/action-sheet";
 import {
@@ -606,6 +607,8 @@ export class NotebookView extends FileView {
 				window.setTimeout(() => this.gestures?.releaseContacts(), 0);
 			},
 			sideButtonSeen: () => this.noteSideButtonSeen(),
+			// 0.11.2: "next stroke erases" (pen button click while hovering, or the pen key) shows on the current-pen indicator.
+			eraserNextChanged: (armed) => this.toolbar.setEraserNext(armed),
 		}, {
 			rawUpdates: this.host.settings.lowLatencyInk,
 			// 0.11.1: the side button is also watched at window level over the whole view (toolbar, bars, overlays).
@@ -710,6 +713,8 @@ export class NotebookView extends FileView {
 		this.registerDomEvent(window, "blur", () => (this.shiftDown = false));
 		// wave 0.9 (372): the page turner (arrows, PageUp / PageDown, space, Bluetooth clickers).
 		this.registerDomEvent(document, "keydown", (e) => this.onPageTurnKey(e));
+		// 0.11.2: a key standing in for the S Pen button (mapped with Key Mapper + Shizuku). Capture phase: before Obsidian's hotkeys.
+		this.registerDomEvent(window, "keydown", (e) => this.onPenKey(e), { capture: true });
 		this.registerClipboardEvents();
 
 		this.registerEvent(this.app.vault.on("modify", (f) => {
@@ -726,7 +731,7 @@ export class NotebookView extends FileView {
 		this.scope.register(["Mod"], "y", () => (this.redo(), false));
 		this.scope.register([], "Delete", () => (this.deleteSelection(), false));
 		this.scope.register([], "Backspace", () => (this.deleteSelection(), false));
-		this.scope.register([], "Escape", () => (this.excerpts?.disarm(), this.clearSelection(), false));
+		this.scope.register([], "Escape", () => (this.excerpts?.disarm(), this.controller?.disarmEraserNext(), this.clearSelection(), false));
 	}
 
 	async onClose(): Promise<void> {
@@ -871,6 +876,24 @@ export class NotebookView extends FileView {
 		if (!shouldTurnPage(scene)) return;
 		e.preventDefault();
 		this.goToRelativePage(action === "next" ? 1 : -1);
+	}
+
+	/**
+	 * 0.11.2: the pen key (setting `penButtonKey`): opens the radial menu or toggles "next stroke erases", only while this
+	 * view is the active one, no text field has the focus and no modal is open. Only that key is cancelled; repeats are ignored.
+	 */
+	private onPenKey(e: KeyboardEvent): void {
+		const s = this.host.settings;
+		if (!penKeyMatches(e, s.penButtonKey)) return;
+		const may = penKeyMayAct({
+			viewActive: this.app.workspace.getActiveViewOfType(NotebookView) === this,
+			textFocused: isTextField(activeDocument.activeElement) || isTextField(e.target as HTMLElement | null),
+			modalOpen: !!activeDocument.querySelector(".modal-container"),
+		});
+		if (!may) return;
+		e.preventDefault();
+		if (!this.editable()) return;
+		this.controller?.penKey(s.penButtonKeyAction);
 	}
 
 	private applyPendingPage(): void {
@@ -2708,6 +2731,8 @@ export class NotebookView extends FileView {
 		this.lastTool.note(state.tool);
 		// v10: an armed excerpt region is for the tool it was armed with.
 		if (state.tool !== before.tool) this.excerpts?.disarm();
+		// 0.11.2: so is "next stroke erases".
+		if (state.tool !== before.tool) this.controller?.disarmEraserNext();
 		if (state.tool !== "lasso") this.clearSelection();
 		this.refreshUi();
 		if (before.tool === "text" && state.tool !== "text") this.commitText();

@@ -2,9 +2,19 @@
 
 ## Unreleased
 
-No change to the notebook format (still v10). Clean-up for Obsidian's community Scorecard (runtime code and styles); not verified in Obsidian or on a device.
+No change to the notebook format (still v10). Clean-up for Obsidian's community Scorecard (runtime code and styles); S Pen fallbacks for Obsidian's Android app, which drops stylus hover. Not verified in Obsidian or on a device.
+
+### Added
+- S Pen click while hovering: Obsidian for Android reports it only as one bare `contextmenu` (no `pointerType`, no pointer in progress). Such an event over the notebook view, with no pointer down and no text field focused, now opens the radial menu (at the event's position, else the last pen position, else the centre of the page area). A finger long-press (a `contextmenu` while a finger is down, or within 600 ms of a long contact), a mouse right click and text fields keep their behaviour (`ink/pen-hover.ts`).
+- Setting *Button click: next stroke erases* (`penButtonEraserNext`, off by default): the hover click arms the eraser for the next pen stroke only, shown by a small ring on the current-pen indicator; a second click, a tool change or Escape disarms it.
+- Settings *Pen key* (`penButtonKey`: off, F9 to F12 or a captured key) and *Pen key action* (`penButtonKeyAction`: radial menu or next stroke erases, default the latter): the key acts as the side button in the active notebook view (no repeats, not in text fields or modals, only that key cancelled), with a warning when an Obsidian hotkey uses it. Meant for an S Pen mapped to a key with Key Mapper + Shizuku. The UI is in `view/pen-button-settings.ts` (declarative definitions and a classic renderer) and shown for now at the top of the *Pen button test*.
+- *Pen button test*: a read-only Capacitor inventory line (platform, plugin headers and keys, bridge-like globals; nothing is called); key events show `key`, `code` and `repeat` in the last-event line too.
+
+- The side button seen only as a `contextmenu` around a pen contact (device finding: on the Samsung tablet tested, the pen's pointer events never show the button). A bare `contextmenu` at most 150 ms before or 350 ms after the pen's pointerdown (new settings `penButtonContactBeforeMs`, `penButtonContactAfterMs`, under *Side button timing*) makes the whole contact the eraser: when it comes after the landing, the live ink of the contact is dropped (nothing committed) and the samples so far are replayed as the eraser. Later in the stroke, the ink so far is committed and the rest of the contact erases; the pen up ends it. A nib resting still is treated as a long-press, not the button. The event is always cancelled. A hover click now waits for the before-window. The stroke pipeline is unchanged: only which tool the contact uses.
+- *Pen button test*: notes the order and the gaps between the pen's pointerdown, the `contextmenu` and the first pointermove (`contextmenu Δ=+42 ms after pen down`), and shows a verdict line (button held at contact, during stroke, while hovering).
 
 ### Changed
+- The side button held while the nib touches: a pen landing with `buttons & 2` or `button` 2 and pressure above 0 now starts the button's tool (the eraser by default) instead of opening the radial menu; with pressure 0 (a press while hovering) it still opens the menu. `buttons & 2` / `button` 2 or `buttons & 32` / `button` 5 appearing on a move of an ordinary stroke keep the ink so far and make the rest of the contact the eraser (or the button's tool). The stroke pipeline is unchanged.
 - `npm run lint` now also runs `eslint-plugin-obsidianmd` 0.4.2 (`recommended`, type-checked; MIT, devDependency only) on `src/**` and `package.json`; a commented block in `eslint.config.mjs` extends it to `tests/**` and `dev/**`.
 - Destructive buttons (delete marker or box, remove bookmark, library confirmations) use `setDestructive()` on Obsidian 1.13+ and the same `mod-warning` class as before on older versions (`ui/destructive.ts`).
 - The settings tab no longer calls the deprecated `display()` itself: on Obsidian older than 1.13 a language change redraws through the tab's own drawing method (same content).

@@ -430,10 +430,13 @@ describe("barrel bit signals keep working", () => {
 		expect(log).toEqual(["menu:button"]);
 	});
 
-	it("a pen contact with the barrel bit opens the menu on the press", () => {
-		const { el, log } = setup();
-		fire(el, "pointerdown", { button: 2, buttons: 3, pressure: 0.5, timeStamp: 1000 });
-		expect(log).toEqual(["menu:button"]);
+	it("0.11.2: a pen contact (pressure above 0) with the barrel bit erases that stroke; with pressure 0 it opens the menu on the press", () => {
+		const touching = setup();
+		fire(touching.el, "pointerdown", { button: 2, buttons: 3, pressure: 0.5, timeStamp: 1000 });
+		expect(touching.log).toEqual(["start:eraser"]);
+		const hovering = setup();
+		fire(hovering.el, "pointerdown", { button: 2, buttons: 2, pressure: 0, timeStamp: 1000 });
+		expect(hovering.log).toEqual(["menu:button"]);
 	});
 
 	it("lasso / previous with the barrel bit held at the landing pass the held tool", () => {

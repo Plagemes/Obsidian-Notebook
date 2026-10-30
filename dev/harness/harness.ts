@@ -551,7 +551,8 @@ function penAt(name: string, x: number, y: number, extra: PointerEventInit = {})
 async function openRadial(): Promise<void> {
 	const r = stage().getBoundingClientRect();
 	const cx = r.left + r.width * 0.5, cy = r.top + r.height * 0.5;
-	penAt("pointerdown", cx, cy, { button: 2, buttons: 3 });
+	// The button pressed while hovering (pressure 0): the dial. With the nib touching (pressure above 0) it erases (0.11.2).
+	penAt("pointerdown", cx, cy, { button: 2, buttons: 2, pressure: 0 });
 	await frames(1);
 	penAt("pointerup", cx, cy, { button: 2, buttons: 0 });
 	await frames(1);
