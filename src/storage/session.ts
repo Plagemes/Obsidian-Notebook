@@ -13,7 +13,10 @@ export interface DocumentIO {
 	path?(): string;
 }
 
-export type BackupReason = "unreadable" | "future-version" | "conflict" | "unsaved" | "journal" | "before-restore" | "before-move" | "before-api";
+export type BackupReason =
+	| "unreadable" | "future-version" | "conflict" | "unsaved" | "journal" | "before-restore" | "before-move" | "before-api"
+	/** v7: the file opened, but invalid details were dropped on read; the next save writes it without them. */
+	| "dropped-details";
 
 /**
  * - `ok`: the document is editable and saved automatically.
@@ -364,6 +367,8 @@ export class DocumentSession {
 		const result = parse(content);
 		if (result.ok) {
 			let doc = result.doc;
+			if (result.dropped) await this.backupDropped(content);
+			if (this.disposed) return;
 			if (this.journal) {
 				if (recover) {
 					const recovered = await this.recoverFromJournal(content, doc);
@@ -672,6 +677,20 @@ export class DocumentSession {
 	private async backupJournalCopy(text: string): Promise<void> {
 		const path = await this.io.backup(text, "journal");
 		if (path && !this.disposed) this.events.onBackup?.(path, "journal");
+	}
+
+	/**
+	 * v7: the file was read with invalid details left out (`ParseResult.dropped`): keep its text before a save
+	 * rewrites it without them. Only invalid optional details are at stake, so a failed backup is reported
+	 * and the notebook still opens.
+	 */
+	private async backupDropped(content: string): Promise<void> {
+		try {
+			const path = await this.io.backup(content, "dropped-details");
+			if (path && !this.disposed) this.events.onBackup?.(path, "dropped-details");
+		} catch (e) {
+			this.events.onError?.(`Could not create a backup: ${(e as Error).message}`);
+		}
 	}
 
 	private async backupConflict(content: string): Promise<void> {
