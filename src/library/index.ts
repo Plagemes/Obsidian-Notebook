@@ -189,6 +189,17 @@ function isEntry(v: unknown): v is LibraryEntry {
 
 export class LibraryIndex {
 	private readonly map = new Map<string, LibraryEntry>();
+	/**
+	 * Saved data of a newer index version (a newer plugin version on another device syncs the same plugin
+	 * folder). Kept as read and returned by `toJSON`, so saving does not overwrite that device's index; this
+	 * device works from an index rebuilt in memory.
+	 */
+	private newer: { version: number; entries: LibraryEntry[] } | null = null;
+
+	/** True when the saved data was a newer index version, which `toJSON` hands back unchanged. */
+	get keepsNewerVersion(): boolean {
+		return this.newer !== null;
+	}
 
 	get size(): number {
 		return this.map.size;
@@ -394,14 +405,23 @@ export class LibraryIndex {
 	}
 
 	toJSON(): { version: number; entries: LibraryEntry[] } {
+		if (this.newer) return this.newer;
 		return { version: INDEX_VERSION, entries: this.all() };
 	}
 
-	/** Reads saved data. Anything unknown, old or malformed gives an empty index (it is rebuilt lazily). */
+	/**
+	 * Reads saved data. Anything unknown, old or malformed gives an empty index (it is rebuilt lazily). A newer
+	 * index version also gives an empty index, but is not overwritten: `toJSON` returns it as it was read.
+	 */
 	static fromJSON(data: unknown): LibraryIndex {
 		const index = new LibraryIndex();
 		if (typeof data !== "object" || data === null) return index;
 		const d = data as { version?: unknown; entries?: unknown };
+		if (typeof d.version === "number" && Number.isInteger(d.version) && d.version > INDEX_VERSION) {
+			// Only handed back to be saved again: never read by this version.
+			index.newer = data as { version: number; entries: LibraryEntry[] };
+			return index;
+		}
 		if (d.version !== INDEX_VERSION || !Array.isArray(d.entries)) return index;
 		for (const e of d.entries) {
 			if (isEntry(e)) index.upsert(e);

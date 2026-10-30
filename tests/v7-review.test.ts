@@ -5,7 +5,9 @@
  */
 import { describe, expect, it } from "vitest";
 import { patchNotebookMeta } from "../src/library/host-logic";
+import { INDEX_VERSION, LibraryIndex } from "../src/library/index";
 import { planPageMove, withMovedBookmarks } from "../src/library/page-move";
+import { entryFromFile } from "../src/library/scan";
 import { categoriesInUse, setBookmark } from "../src/model/bookmarks";
 import { cloneMeta, createDocument, createPage } from "../src/model/document";
 import { Batch, History, InsertPages, SetMeta } from "../src/model/history";
@@ -232,5 +234,20 @@ describe("moving pages keeps their bookmarks", () => {
 		src.meta = setBookmark(src.meta!, "p1", { title: "stays" });
 		const plan = planPageMove(src, ["p2"], twoPages());
 		expect(plan.ok && plan.bookmarks).toEqual([]);
+	});
+});
+
+describe("library index of another plugin version", () => {
+	it("a newer index version is ignored and saved back unchanged; an older one is rebuilt", () => {
+		const future = { version: INDEX_VERSION + 1, entries: [{ path: "N/a.notebook", somethingNew: true }], extra: 1 };
+		const idx = LibraryIndex.fromJSON(JSON.parse(JSON.stringify(future)));
+		expect(idx.size).toBe(0);
+		expect(idx.keepsNewerVersion).toBe(true);
+		idx.upsert(entryFromFile({ path: "N/b.notebook", mtime: 1, size: 1 }, twoPages()));
+		expect(idx.size).toBe(1);
+		expect(JSON.parse(JSON.stringify(idx.toJSON()))).toEqual(future);
+		const old = LibraryIndex.fromJSON({ version: INDEX_VERSION - 1, entries: [] });
+		expect(old.keepsNewerVersion).toBe(false);
+		expect(old.toJSON()).toEqual({ version: INDEX_VERSION, entries: [] });
 	});
 });
