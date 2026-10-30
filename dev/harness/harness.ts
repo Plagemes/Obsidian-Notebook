@@ -32,6 +32,7 @@ import { checkPractice } from "./practice-check";
 import { checkExcerpt } from "./excerpt-check";
 import { checkReadOnly } from "./readonly-check";
 import { checkSettings } from "./settings-check";
+import { checkPlugin } from "./plugin-check";
 import { checkCreate, prepareShot } from "./create-check";
 import { PracticeService } from "../../src/view/practice";
 import { NavController } from "../../src/view/nav-controller";
@@ -1772,6 +1773,11 @@ async function checkHeavy(strokes = 3500): Promise<Record<string, unknown>> {
 function applyTheme(theme = params.get("theme") ?? "light"): void {
 	document.body.classList.toggle("theme-dark", theme === "dark");
 	document.body.classList.toggle("theme-light", theme !== "dark");
+	// 0.12.1: the device classes Obsidian puts on body (a touch screen is a phone or tablet in the scenarios).
+	const mobile = window.matchMedia("(pointer: coarse)").matches;
+	document.body.classList.toggle("is-mobile", mobile);
+	document.body.classList.toggle("is-phone", mobile && window.innerWidth < 600);
+	document.body.classList.toggle("is-tablet", mobile && window.innerWidth >= 600);
 }
 
 /**
@@ -1935,7 +1941,7 @@ function applySize(): void {
 	if (h) root.style.height = `${Number(h)}px`;
 }
 
-const harnessApi: Record<string, unknown> = { app, checkLibrary, interactLibrary, libraryState, open, measureOpen, penStroke, setTool, openOptions, openMore, measureLod, compareLod, checkHeavy, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkCreate: async (tab: "notebook" | "folder" = "notebook") => { try { return JSON.parse(JSON.stringify(await checkCreate({ app, errors, notices }, tab))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`create check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, createShot: (tab: "notebook" | "folder") => prepareShot({ app, errors, notices }, tab), checkReadOnly: async () => { try { return JSON.parse(JSON.stringify(await checkReadOnly({ view, app, stage, penStroke, setTool, strokeCount, frames, openMore, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`readonly check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPractice: () => checkPractice({ view, app, service: practiceService, frames, errors, notices }), checkSettings: async () => { try { return JSON.parse(JSON.stringify(await checkSettings({ app, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`settings check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkExcerpt: () => checkExcerpt({ view, stage, penStroke, setTool, strokeCount, staticPixel, frames, errors, notices }), checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
+const harnessApi: Record<string, unknown> = { app, checkLibrary, interactLibrary, libraryState, open, measureOpen, penStroke, setTool, openOptions, openMore, measureLod, compareLod, checkHeavy, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkCreate: async (tab: "notebook" | "folder" = "notebook") => { try { return JSON.parse(JSON.stringify(await checkCreate({ app, errors, notices }, tab))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`create check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, createShot: (tab: "notebook" | "folder") => prepareShot({ app, errors, notices }, tab), checkReadOnly: async () => { try { return JSON.parse(JSON.stringify(await checkReadOnly({ view, app, stage, penStroke, setTool, strokeCount, frames, openMore, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`readonly check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPractice: () => checkPractice({ view, app, service: practiceService, frames, errors, notices }), checkSettings: async () => { try { return JSON.parse(JSON.stringify(await checkSettings({ app, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`settings check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPlugin: async () => { try { return JSON.parse(JSON.stringify(await checkPlugin({ errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`plugin check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkExcerpt: () => checkExcerpt({ view, stage, penStroke, setTool, strokeCount, staticPixel, frames, errors, notices }), checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
 	return view;
 } };
 
@@ -1960,6 +1966,8 @@ async function main(): Promise<void> {
 		libraryHarness = await openLibraryHarness(app, librarySurface);
 		return;
 	}
+	// 0.12.1: doc=plugin starts the whole plugin on its own stub app (plugin-check.ts); no notebook is opened.
+	if (params.get("doc") === "plugin") return;
 	await seed();
 	await open();
 	if (params.get("check") === "1") {

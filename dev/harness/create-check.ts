@@ -13,6 +13,7 @@ import { vaultDeviceFileAdapter } from "../../src/storage/vault-io";
 import { CreateDialog, type CreateDialogHost, type CreateTab } from "../../src/view/create-dialog";
 import { notebookDocument } from "../../src/view/create-logic";
 import type { CheckResult } from "./reading-check";
+import { obsidianStyledButtons } from "./library-check";
 
 export interface CreateCheckApi {
 	app: unknown;
@@ -114,6 +115,10 @@ export async function checkCreate(api: CreateCheckApi, finalTab: CreateTab): Pro
 	add("every target is at least 40 px", tooSmall.length === 0, tooSmall.map((b) => b.className).join(", "));
 	const body = q(".nb-create-body")!;
 	add("nothing overflows sideways", body.scrollWidth <= body.clientWidth + 1, `${body.scrollWidth} > ${body.clientWidth}`);
+	// 0.12.1: Obsidian's own button rules (dev/harness/obsidian-base.css) never win over the dialog's components.
+	const modal = document.querySelector<HTMLElement>(".notebook-create-modal");
+	const grey = modal ? obsidianStyledButtons(modal) : [];
+	add("no button shows Obsidian's default button look", !!modal && grey.length === 0, grey.slice(0, 4).map((el) => el.className || el.tagName).join(", "));
 
 	// Validation: empty, invalid characters, taken.
 	tap(q(".nb-create-primary"), "mouse");

@@ -212,12 +212,39 @@ function visible(el: Element): el is HTMLElement {
 }
 
 /** Layout checks of the surface on screen (no state change). */
+/**
+ * 0.12.1: the visible buttons under `root` that are drawn with Obsidian's own button look (grey fill and shadow of
+ * `button:not(.clickable-icon)`, read from a plain button outside the plugin) instead of their component's style.
+ */
+export function obsidianStyledButtons(root: HTMLElement): HTMLElement[] {
+	const probe = document.body.createEl("button", { text: "Probe" });
+	const plain = getComputedStyle(probe);
+	const look = `${plain.backgroundColor} ${plain.boxShadow}`;
+	probe.remove();
+	return Array.from(root.querySelectorAll<HTMLElement>("button")).filter(visible).filter((el) => {
+		const cs = getComputedStyle(el);
+		return `${cs.backgroundColor} ${cs.boxShadow}` === look;
+	});
+}
+
 export function checkLibraryLayout(surface: string): Result[] {
 	const out: Result[] = [];
 	const add = (name: string, ok: boolean, detail = "") => out.push({ name: `${surface} ${window.innerWidth}px: ${name}`, ok, detail });
 	const app = document.querySelector<HTMLElement>(".nb-app");
 	add("the view is built", !!app);
 	if (!app) return out;
+	// 0.12.1: the styled layout is really applied (0.12.0 rendered unstyled in Obsidian): the root, the rail and the grids
+	// are laid out by the plugin's CSS, the tokens resolve, and no button falls back to Obsidian's own button look.
+	const css = (sel: string, prop: string) => {
+		const el = app.matches(sel) ? app : app.querySelector(sel);
+		return el ? getComputedStyle(el).getPropertyValue(prop).trim() : "missing";
+	};
+	add("styled layout: the root is a flex row", css(".nb-app", "display") === "flex" && css(".nb-app", "flex-direction") === "row", `${css(".nb-app", "display")} ${css(".nb-app", "flex-direction")}`);
+	add("styled layout: the rail is a flex column", css(".nb-rail", "display") === "flex" && css(".nb-rail", "flex-direction") === "column", `${css(".nb-rail", "display")} ${css(".nb-rail", "flex-direction")}`);
+	add("styled layout: the subject cards are on a grid", css(".nb-subject-grid", "display") === "grid", css(".nb-subject-grid", "display"));
+	add("styled layout: the design tokens resolve", css(".nb-app", "--nb-bg") !== "" && css(".nb-app", "background-color") !== "rgba(0, 0, 0, 0)", `${css(".nb-app", "--nb-bg")} ${css(".nb-app", "background-color")}`);
+	const grey = obsidianStyledButtons(app);
+	add("styled layout: no button shows Obsidian's default button look", grey.length === 0, grey.slice(0, 4).map((el) => el.className || el.tagName).join(", "));
 	const scroll = app.querySelector<HTMLElement>(".nb-scroll")!;
 	add("no sideways scroll", document.documentElement.scrollWidth <= window.innerWidth + 1 && scroll.scrollWidth <= scroll.clientWidth + 1, `${scroll.scrollWidth} / ${scroll.clientWidth}`);
 	const small = Array.from(app.querySelectorAll("button, [role='button'], input")).filter(visible)
