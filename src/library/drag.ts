@@ -1,6 +1,6 @@
 /**
  * Pointer-based press handling for library cards: context menu (right click, keyboard, touch long-press) and
- * drag-and-drop onto elements carrying `data-drop-folder`. Works with mouse, pen and touch.
+ * drag-and-drop onto elements carrying `data-drop-folder` (move to a folder) or `data-drop-card` (take that card's place). Works with mouse, pen and touch.
  *
  * Mouse and pen start dragging after a few pixels. Touch needs a long press first (the card lifts); lifting the
  * finger without moving then opens the menu, moving starts the drag. A touch that moves before the long press
@@ -8,6 +8,8 @@
  */
 
 export const DROP_ATTR = "data-drop-folder";
+/** A notebook card that another card can be dropped on to take its place in the manual order (the value is the notebook path). */
+export const DROP_CARD_ATTR = "data-drop-card";
 const LONG_PRESS_MS = 420;
 const DRAG_SLOP = 6;
 const SCROLL_SLOP = 10;
@@ -25,7 +27,7 @@ export interface PressOptions {
 }
 
 export function dropTargetAt(doc: Document, x: number, y: number): HTMLElement | null {
-	return doc.elementFromPoint(x, y)?.closest<HTMLElement>(`[${DROP_ATTR}]`) ?? null;
+	return doc.elementFromPoint(x, y)?.closest<HTMLElement>(`[${DROP_ATTR}], [${DROP_CARD_ATTR}]`) ?? null;
 }
 
 export function attachPress(o: PressOptions): void {
