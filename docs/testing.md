@@ -261,6 +261,10 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Find and replace in text boxes (#361; All actions sheet, command): find, replace with, match case, whole word, results with page and snippet (tap to show the page, arrow to show it and close the panel), *Replace* for the chosen result, *Replace all*; handwriting, marker labels and box titles are not searched | ✅ | ✅ literal matching (no patterns, `$` kept), case, whole word with accents, results in reading order, cap of 500 listed results with the full count, replace all as one undo step (same objects back on undo), one match, next match after a replacement that contains the query, stale hit refused, empty text box kept; ❌ the panel, jumping to the page, touch | | | steps TO4-TO6; no regular expressions |
 | Page information (#379; page sheet, command *Page information*): size and preset, paper, background, ink (strokes by tool, points, invisible), objects, files (distinct files and their size), tags, bookmark with title and category, markers (open of total, by kind), notebook created / saved, and when this device last edited the page | ✅ | ✅ counts, files counted once and files the notebook does not list, bookmark details, empty page, dates, custom size and landscape preset; ❌ the panel and its text | | | step TO7; a page has no dates of its own in the file, and the device log keeps 100 pages |
 | Page offered in the middle of a notebook (#389; extends #95): writing in the bottom tenth of a page that is not the last, with *Add a page when writing at the bottom* on, shows a chip *Add a page after this one*; one tap inserts a page right after it (same size and paper, one undo step, scrolled to); never automatic; the chip hides when the pen goes down again, after 9 s, on a page change or undo, and is not offered again for that page | ✅ | ✅ `needsPageOffer` (the exact complement of the automatic append, setting, infinite and background pages), `OfferGate`; ❌ the chip, its position over the writing area, touch | | ✅ | step TO8; check that the chip never gets in the way of writing |
+| Export choices (roadmap 381, wave 0.9): *Export…* dialog (page sheet, All actions, notebook menu, command): PDF or SVG, this page or the whole notebook, ink and background / ink only / background only; a notebook as SVG is one file per page; file names carry the choice; existing files are never replaced; hidden ink follows the solutions rule | ✅ | ✅ `tests/export-view.test.ts`: layer flags and file names, the export plan, SVG and PDF with each choice (no sheet or paper for ink only, no ink for background only, `both` identical to the old output, images by layer, hidden ink); ❌ dialog, writing into a vault, large notebooks | | | steps EV1-EV3 |
+| Export as Markdown with page images (roadmap 382, wave 0.9): vault folder and 100 / 150 / 200 dpi; `page-001.png`… drawn on a canvas like the PDF export, then `notebook.md` (title, page images, text boxes as text in reading order, bookmarks as headings); unique names, never overwrites | ✅ | ✅ Markdown text (title, bookmarks with and without title, escaping of user text, link targets), file names (three digits, never an existing name, names already chosen in the same export), render size and caps; ❌ canvas drawing of pages, PNG encoding, writing through the vault, a Markdown viewer outside Obsidian | | ✅ | steps EV4-EV6; PNG rendering of PDF and picture backgrounds depends on pdf.js and the WebView |
+| Night mode (roadmap 367, wave 0.9): dark page with light ink at render time (paper, paper lines, ink, text boxes, live and wet ink, highlighter with a screen blend, backgrounds dimmed); a view setting and a toggle (All actions, command); stored colours, exports and thumbnails unchanged | ✅ | ✅ colour mapping (near-black becomes light, hue kept, contrast at least 4.5:1 for a palette of 12 inks, translucency kept, unknown colours untouched, highlighter band, dim paper lines), settings defaults; ❌ canvas drawing, wet-ink highlighter blend in CSS, legibility on a real screen | | ✅ | step EV7; the look of the colours is a judgement that needs real screens |
+| Crop PDF margins (roadmap 376, wave 0.9): content box of each PDF page from a ~100 px render, cached for the session; the view fits the box (widened by the ink) to the width in continuous and page-by-page mode; toggle on the PDF contextual bar, in All actions and as a command; view-only | ✅ | ✅ content-box detection on synthetic bitmaps (bounds, padding, speck and grey noise ignored, transparent pixels, blank page, minimum size), window of a page with margins and with ink in the margin, fit and pan clamp with a window, layout windows (union, dropped when useless), page-by-page fit; ❌ the measuring render with pdf.js, re-layout while pages are measured, use on a phone | | ✅ | steps EV8-EV10; only side margins are cropped; continuous mode crops only when every page is a measured PDF page |
 
 ## Automated checks
 
@@ -651,6 +655,20 @@ Not verified on a device. Fill in the result table at the end of this file.
 232. **No interference.** With *Draw with finger* off, pan and pinch over a link: the tap opens only when the finger barely moves and lifts quickly. With *Draw with finger* on, tapping a link draws a dot and does not open it. While writing with the S Pen near a link nothing opens. Check that writing latency feels the same on a page full of links.
 
 Results table for steps 1 to 232. Fill it in as you go.
+Export and view (roadmap 381, 382, 367, 376; wave 0.9). Not verified in Obsidian or on a device. Setup: a notebook with a PDF page (slides with wide white margins), a plain ruled page and a grid page, each with pen strokes, the highlighter and a text box; one bookmark with a title on the PDF page and one without a title on the grid page; one page with invisible ink.
+
+EV1. **Export dialog.** Open the page sheet of the PDF page > *Export…*: the dialog starts on "This page". Choose SVG, *Ink only* > *Export*: a notice shows `<Notebook> p1 ink.svg` next to the notebook. Open it in a browser or Inkscape: the writing and the text box on a transparent background, no paper, no PDF. Choose *Background only* in the same way: `… p1 background.svg` shows the PDF page and the paper with no writing. *Ink and background* gives the same file as the old *Export page as SVG*. Export the same choice twice: the second file is named with " 2"; nothing is replaced.
+EV2. **PDF choices.** Same dialog, PDF, whole notebook, *Ink only*: `<Notebook> ink.pdf` has one page per notebook page, with the writing and text and no PDF page or paper behind them (white in a viewer); it is much smaller when the notebook has PDF pages. *Background only*: the PDF pages and the paper, no writing. The old *Export notebook as PDF* is unchanged.
+EV3. **Whole notebook as SVG, invisible ink.** SVG, whole notebook: one file per page, `Name p1.svg`…, and a notice with the count. The page with invisible ink: its hidden strokes are in the file only if *Show solutions* is on for that page (or the notebook); switch it on and export again to check.
+EV4. **Markdown export.** *All actions > Export as Markdown with page images…* (or the command). Keep the suggested folder (`<Notebook> (Markdown)` next to the notebook) and 150 dpi > *Export*. Expected: the folder has `page-001.png`, `page-002.png`, `page-003.png` and `notebook.md`. Open `notebook.md` in any Markdown viewer (VS Code, GitHub, a browser extension) with the PNGs next to it: the title, then each page as an image, the text box of a page below its image, a heading with the bookmark's title above the PDF page and "Page 3" above the grid page. Open a PNG: the PDF page with its writing, in colour, not rotated, sharp when zoomed in.
+EV5. **Never overwrite.** Run the export again into the same folder: new files `page-001 2.png`… and `notebook 2.md`, whose links point at the " 2" files (check that the images show). Nothing from the first export changed (compare file times). Try a path that is an existing file: the dialog says it is a file and does not start. Try a folder inside a folder that does not exist: it is created.
+EV6. **Resolutions and a long page.** Export at 100 and 200 dpi: the PNG widths are about 827 and 1654 px for an A4 page. Make an infinite page very long (scroll far down and write) and export: its PNG is smaller than the other pages (capped at 8192 px a side) but complete. On a phone, check that the export of a 30-page notebook finishes without the app being closed by the system, and that the notice counts up.
+EV7. **Night mode.** *All actions > Night mode*: the pages turn dark, black ink is light grey, red/blue/green/orange ink are lighter versions of the same colours, the grid lines are dim, a text box is readable, a PDF page is dimmed (not inverted). Write with the pen in black and in blue: while writing it already has the night colour (no flash of dark ink). Write with the highlighter in yellow: it glows over the PDF text and over your ink, also while the stroke is being written. Switch it off: every colour is back exactly as it was (the stored colours never changed). Export a page to PDF with it on: the PDF is the normal white page. The page panel thumbnails stay white. Close and reopen the notebook: the mode is remembered.
+EV8. **Crop margins.** Open a notebook made only of PDF pages with wide white margins on a phone. On a PDF page use *Crop PDF margins* on the bar at the bottom (or *All actions*): within a second or two the page is shown larger, with the text filling the screen width; the white sides are off screen. Scroll through the notebook: all pages keep the same zoom. Switch it off: back to the whole page. Write on a page with it on and off: the ink lands in the same place (check it with the toggle off).
+EV9. **Ink in the margin, mixed notebooks, page by page.** Switch the crop off, write a note in the left margin of a PDF page, switch it on: the margin note is inside the view (the box is wider on that page). In a notebook with a plain page between PDF pages the crop does nothing in continuous mode (the plain page needs the whole width); in *page by page* mode each PDF page is cropped and the plain page is not. Turn pages with swipes: each page fits its own box.
+EV10. **Nothing changes in the file; large PDFs.** With the crop on, make a change, close and reopen: the notebook, its ink and its exports are as before (an exported PDF is identical with the crop on and off). Open a 200-page PDF notebook and switch the crop on: the app stays responsive while pages are measured (the zoom may adjust a few times in the first seconds), and a blank page or a scan with a dark border does not crash or zoom absurdly.
+
+Results table for steps 1 to 134 (and EV1 to EV10). Fill it in as you go.
 
 | Step | Device / Obsidian version | Result | Notes |
 |---|---|---|---|
@@ -886,6 +904,184 @@ Results table for steps 1 to 232. Fill it in as you go.
 | 230 Handwritten brackets | | | |
 | 231 Companion note | | | |
 | 232 No interference | | | |
+| PL1 Link in a text box | | | |
+| PL2 Open a link | | | |
+| PL3 Unresolved link | | | |
+| PL4 Ink link from the lasso | | | |
+| PL5 Ink link moves with its ink | | | |
+| PL6 Handwritten brackets | | | |
+| PL7 Companion note | | | |
+| PL8 No interference | | | |
+| EX1 Redo, hide everything | | | |
+| EX2 Hide by colour and by tool | | | |
+| EX3 Hide the selection | | | |
+| EX4 The strip and the tags | | | |
+| EX5 Peek at the solution | | | |
+| EX6 Original and attempts | | | |
+| EX7 Exercises notebook | | | |
+| EX8 Timer | | | |
+| EX9 Links survive renames, moves and sync | | | |
+| EX10 Damaged links file and read-only | | | |
+| EV1 Export dialog | | | |
+| EV2 PDF choices | | | |
+| EV3 Whole notebook as SVG, invisible ink | | | |
+| EV4 Markdown export | | | |
+| EV5 Never overwrite | | | |
+| EV6 Resolutions and a long page | | | |
+| EV7 Night mode | | | |
+| EV8 Crop margins | | | |
+| EV9 Ink in the margin, mixed notebooks, page by page | | | |
+| EV10 Nothing changes in the file; large PDFs | | | |
+| T1 Timetable editor: add two classes (one on odd weeks, one with a term and a room, one linked to a course folder), save, reopen: values are kept; `Notebooks/_timetable.json` exists and is readable | | | |
+| T2 Open Obsidian (or the library) during a class: notice with *Open lecture page*; tap it: the course's notebook opens with a new page headed "<course> — <date>"; do it again: the existing page is shown, no second page | | | |
+| T3 Turn on *Open it without asking*, restart during a class: the notebook opens on the new lecture page by itself; turn it off and the notice returns (once per class and day) | | | |
+| T4 During a class, *New lecture* in a linked notebook has the course filled in; in an unrelated linked notebook it shows the notebook name | | | |
+| T5 Library shows *Now: <course>* during a class (also a few minutes before, per the lead setting) and nothing outside classes; tapping it opens the lecture page | | | |
+| T6 Edit `_timetable.json` by hand (also from another device through sync), including a deliberate mistake: a good edit is picked up; a bad file is reported in the editor and is not overwritten | | | |
+| S1 Open side by side (tablet sideways) | | | |
+| S2 Phone and tablet upright | | | |
+| S3 Add a notes page for a slide | | | |
+| S4 Follow both ways | | | |
+| S5 Link and unlink | | | |
+| S6 Links survive restarts and renames | | | |
+| S7 Notebook with PDF backgrounds as the PDF side | | | |
+| S8 Damaged links file | | | |
+
+### Lecture pack (wave 0.6)
+
+K1. **Lecture from slides, slide + notes right.** Library → *New lecture from slides* (or the command). Choose a slides PDF from the vault, then from the device. In the dialog leave the course as proposed, set today, header *Header page before the slides*, layout *Slide with notes on the right*, notes paper *Ruled*. Expected: the notebook "<course> <date>" appears in the folder and opens; page 1 is the header page ("Course — date"); the next pages show one slide each in the left part with ruled lines to its right; the slide is not stretched; writing in the notes area and on the slide works and stays where it was written after reopening.
+K2. **Notes below.** Same with *Slide with notes below* and header *Header text on the first page*: the text sits below the first slide; no header page. Rotate the tablet: pages refit.
+K3. **On the slide.** Layout *On the slide*, header *No header*: the pages are the slides at their own size, as with *Import PDF*.
+K4. **Notes page after every slide.** Turn on *Notes page after every slide* with paper *Millimetre* (also combined with a notes layout): after each slide page there is a blank millimetre page of the same size. Count the pages: twice the slides (plus the header page).
+K5. **Insert PDF with layout.** In an existing notebook, page menu → *Insert PDF*, choose a PDF and a range: a layout dialog follows (the last choice is proposed; Enter confirms). Pick a layout with notes and notes pages: the pages are inserted after the current page; one undo removes all of them; the PDF is not copied again if it was already imported (check the assets folder).
+K6. **Cancel.** Cancel at each dialog (file choice, setup, range, layout): nothing is created or inserted, and cancelling the setup dialog of a new lecture leaves no PDF in the assets folder.
+K8. **Exercise page here.** On a slide page with a notes area, tap … in the toolbar → *Exercise page here* (also page menu and the command): a blank grid page as large as the whole slide page appears right after it and is shown; one undo removes it. *Exercise page paper…* (page menu) changes the paper to millimetre: the next exercise page uses it, also after restarting Obsidian.
+K7. **Large deck on the tablet.** Import a deck of 60+ slides with notes on the right: the progress message appears and the notebook opens; scrolling and zoom stay smooth.
+
+| Step | Device / Obsidian version | Result | Notes |
+|---|---|---|---|
+| K1 Slide + notes right | | | |
+| K2 Notes below, header text | | | |
+| K3 On the slide | | | |
+| K4 Notes page after every slide | | | |
+| K5 Insert PDF with layout | | | |
+| K6 Cancel | | | |
+| K7 Large deck | | | |
+| K8 Exercise page here | | | |
+| G1 Finger taps | | | |
+| G2 Scribble to erase | | | |
+| G3 Auto-scroll | | | |
+| G4 Side button: lasso | | | |
+| G5 Side button: previous tool | | | |
+| G6 Defaults | | | |
+| L1 Library trash: move to trash | | | |
+| L2 Library trash: restore (original place, free name) | | | |
+| L3 Delete permanently and empty trash | | | |
+| L4 Trash auto-empty | | | |
+| L5 Trash is invisible to library, search, companion notes, conflicts | | | |
+| L6 Trash through sync | | | |
+| L7 Deleted pages: list and restore | | | |
+| L8 Save page as template | | | |
+| L9 New page from template | | | |
+| L10 New notebook from template | | | |
+
+### Library trash, page trash and templates (wave 0.6)
+
+L1. **Move to trash.** In the library, delete a notebook (card menu) and a non-empty folder. Expected: a confirmation that says it can be restored; both disappear from the library and from search; the notebook tab, if open, closes; in the file explorer they are under `Notebooks/_trash/items/<id>/` with a `meta.json`.
+L2. **Restore.** Library sidebar → *Trash*. Restore the notebook: it returns to its folder and opens with all pages and ink. Create a new notebook with the same name, trash the first one again and restore it: expected the name `<name> 2`. Restore the folder: its notebooks are back inside it.
+L3. **Delete permanently and empty.** In *Trash*, *Delete permanently* on one item: a confirmation first, then it is gone (or in the system trash, per Obsidian's *Deleted files* setting). *Empty trash*: confirmation, then everything goes. Cancel both once and check nothing was deleted.
+L4. **Auto-empty.** Setting *Empty the trash automatically* = 1 day, trash a notebook, set the device clock two days ahead (or change `deletedAt` in `meta.json` to an old time), restart Obsidian. Expected: the item is removed; with the setting at 0 nothing is ever removed.
+L5. **Trash is invisible.** With companion notes on, trash a notebook: no companion note is created inside `_trash`; the existing note stays. Trashed notebooks do not appear in *Open notebooks*, search, or *Move to notebook*. A copy named `Name (1)` made by Google Drive inside `_trash` produces no merge notice.
+L6. **Sync.** Trash a notebook on one device, let Google Drive / OneDrive sync, open the library on the other device. Expected: the notebook is gone from the library there and listed in *Trash*; restore on that device works.
+L7. **Deleted pages.** Delete a page from the page menu, fully close Obsidian and reopen the notebook. Page menu → *Deleted pages...*: the page is listed with a thumbnail. *Restore*: it comes back after the page that preceded it; *Undo* removes it again and it is listed again. Delete a page that has a PDF background or an image and restore it: the background shows.
+L8. **Save as template.** On a page with ink, text and a ruled A5 paper choose *Save page as template...*, name it. Expected: a notice, and a `.notebook` file in the templates folder (default `Notebooks/_templates/`).
+L9. **Page from template.** Page menu → *New page from template...*: the gallery shows the built-in templates and yours with thumbnails; *Use* adds a page after the current one with the same content, paper and size; one *Undo* removes it. Do it twice: both pages are independent.
+L10. **Notebook from template.** *New notebook* dialog → *Template* → *Choose...* → pick one → *Create*. Expected: the notebook opens with the template's pages. *Clear* goes back to the paper and size choices. Delete one of your templates from the gallery: it disappears and the file goes to the Obsidian trash.
+
+| O1 Ink follows an image | | | |
+| O2 Ink follows a text box | | | |
+| O3 Setting off | | | |
+| O4 Delete an object with ink | | | |
+| O5 Undo before taking the offer | | | |
+| O6 Built-in stamps | | | |
+| O7 Save a stamp | | | |
+| O8 Stamp with image and text | | | |
+| O9 Rename and delete a stamp | | | |
+| O10 Palette on a phone and with a finger | | | |
+| A1 Shared tags | | | |
+| A2 Tags and the companion note you edit | | | |
+| A3 Tag editor hint | | | |
+| A4 API: create, pages, info | | | |
+| A5 API: images and PDF | | | |
+| A6 API: errors and safety | | | |
+| Z1 Cards | | | |
+| Z2 Slip-box | | | |
+| Z3 Drawn links | | | |
+| Z11 Title and transcription | | | |
+| Z12 Regions and container | | | |
+| ZP1 Inbox of loose notes | | | |
+| ZP2 Process | | | |
+| ZP3 New writing | | | |
+| ZP4 PDF highlights | | | |
+| ZP5 Two devices | | | |
+| TB1 Set up | | | |
+| TB2 Slides open | | | |
+| TB3 Insert and writing | | | |
+| R1 Search the PDF text | | | |
+| R2 Search on a big PDF | | | |
+| R3 Snapping highlighter | | | |
+| R4 Hide annotations | | | |
+| R5 Dim background | | | |
+| V1 Outline and coloured bookmarks | | | |
+| V2 Page tags | | | |
+| V3 Last position across devices | | | |
+| V4 New papers | | | |
+| M1 Place markers | | | |
+| M2 Tap a badge | | | |
+| M3 Gap with the slide | | | |
+| M4 Homework | | | |
+| M5 Structured boxes | | | |
+| M6 End of lecture panel | | | |
+| M7 Invisible ink | | | |
+| M8 Sync and conflicts | | | |
+| M9 Older plugin | | | |
+| M10 Phone | | | |
+| PO1 Select pages | | | |
+| PO2 Move and duplicate | | | |
+| PO3 Paper, size, tags, bookmarks, export, delete | | | |
+| PO4 Copy link, insert link, embed | | | |
+| PO5 Other generated links | | | |
+| PO6 Update links | | | |
+| PO7 Do not disturb | | | |
+| X1 Safe mode after a crash | | | |
+| X2 Open normally | | | |
+| X3 Two failures | | | |
+| X4 Not a failure | | | |
+| X5 Storage full | | | |
+| X6 Storage full while closing | | | |
+| X7 Rolled back by sync | | | |
+| X8 No false alarm | | | |
+| X9 Check notebooks integrity | | | |
+| Q1 Page switcher: search | | | |
+| Q2 Page switcher: thumbnails | | | |
+| Q3 Recent pages: log | | | |
+| Q4 Recent pages: library | | | |
+| Q5 Go to page number | | | |
+| Q6 Page indicator tap | | | |
+
+### Resilience (wave 0.7: safe mode, storage full, integrity)
+
+Not verified on a device. Fill in the result table at the end of this file.
+
+X1. **Safe mode after a crash.** Open a big notebook and, while it is still opening (before the page shows), kill Obsidian from the recent apps (or force-stop it in the Android settings). Open the same notebook again. Expected: the *Safe mode* banner; the page panel has no thumbnails; writing works (without low-latency ink); PDF or image backgrounds appear a moment after the ink. No companion note is written while it is open.
+X2. **Open normally.** In the safe-mode banner tap *Open normally*. Expected: the notebook reopens without the banner, with thumbnails; close and reopen it: still normal.
+X3. **Two failures.** Repeat X1 twice in a row (kill during the normal open, then kill during the safe open). Expected: the banner says it failed twice and *Repair…* is highlighted; *Repair…* opens the integrity report of this notebook with *Open* and *Restore a version…*.
+X4. **Not a failure.** Open a notebook and switch to another app at once, or close the tab right away; reopen it. Expected: no safe mode.
+X5. **Storage full.** Fill the device storage (large video or a big file copied until the system says the storage is full), then write a few strokes. Expected: within a few seconds the red *Not saved* banner says the storage is full; the strokes stay on the page; the next attempt time moves further out (5 s, 10 s, 20 s… up to a minute). Free some space and tap *Retry now* (or wait). Expected: the banner goes, a notice says saving works again; close and reopen: all strokes are there and the file opens normally (not damaged).
+X6. **Storage full while closing.** As X5 but close the notebook tab while the banner is shown, free space, reopen. Report what was kept (the strokes may be in the journal or an `unsaved` backup) and whether any file in `Notebooks/` became unreadable.
+X7. **Rolled back by sync.** On device A write in a notebook, wait for the sync, close it. Write more on A, sync. With the sync app's version history (Google Drive / OneDrive web *Manage versions*), put the older version back; let it reach A and open the notebook there. Expected: the *Unexpected change on disk* banner with the two dates, *Restore a version…* and *Keep this version*. Repeat with the notebook open on A (not editing): the banner also offers *Restore the newer version*, which brings the newer strokes back as one undo step; a backup `… integrity ….bak` exists in `Notebooks/_backup/`.
+X8. **No false alarm.** Edit the notebook on device B (also with B's clock a few minutes behind), and change tags or the favourite from the library on B with the notebook closed. Open it on A. Expected: no banner, in every case. Restore a snapshot with *Restore a previous version* on A: no banner.
+X9. **Check notebooks integrity.** Run the command. Expected: a progress line, then a summary; a notebook made unreadable on purpose (truncate a copy of a `.notebook` file in a text editor) is listed with *Repair…*; deleting a PDF from `Notebooks/_assets/` lists *The file of … is missing* for the notebooks using it.
 
 Benchmark output (step 21): paste it here.
 

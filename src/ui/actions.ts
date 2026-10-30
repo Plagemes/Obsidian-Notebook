@@ -57,6 +57,8 @@ export interface UiContext {
 	toggles: { ruler: boolean; penOnly: boolean; navigator: boolean; /** One page at a time (wave 0.7). */ pageMode?: boolean; /** Pen gesture mode (wave 0.8). */ penGestures?: boolean };
 	/** wave 0.8: invisible-ink pen mode and the view-only "Show solutions" toggles (notebook, page in view). Optional. */
 	markers?: { invisibleInk: boolean; solutions: boolean; pageSolutions: boolean };
+	/** wave 0.9: view-only night mode (367) and cropped PDF margins (376). Optional (both off when absent). */
+	display?: { night: boolean; crop: boolean };
 	/** Phone-sized view (the page panel is a drawer, the toolbar has two rows). */
 	narrow: boolean;
 }
@@ -221,6 +223,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "toggle-annotations", label: "reading.annotations.hide", icon: "eye-off", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 60, scope: "view", command: "command.annotationsToggle", readOnly: true, when: (c) => c.notebook.pdfPages, checked: (c) => c.reading.annotationsHidden },
 	{ id: "toggle-dim-background", label: "reading.dim", icon: "sun-dim", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf", "image"], priority: 50, scope: "view", command: "command.dimToggle", readOnly: true, when: (c) => c.notebook.backgrounds, checked: (c) => c.reading.dim },
 	{ id: "pdf-margins", label: "pdf.margins.menu", icon: "move-horizontal", group: "reading", surfaces: ["context", "page"], contexts: ["pdf", "image"], priority: 40, scope: "view", command: "command.pdfMargins", when: backgroundPage },
+	// wave 0.9 (376): the white margins of PDF pages fall off screen (view-only; the notebook, the ink and the exports are unchanged).
+	{ id: "crop-margins", label: "display.crop", icon: "crop", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 42, scope: "view", command: "command.cropMargins", readOnly: true, when: (c) => c.notebook.pdfPages, checked: (c) => !!c.display?.crop, keywords: "margins zoom small screen phone content ritaglia margini" },
 	{ id: "pdf-update", label: "pdf.update.menu", icon: "refresh-cw", group: "reading", surfaces: ["page", "sheet"], priority: 20, scope: "view", command: "command.pdfUpdate", when: pdfPage },
 	{ id: "pdf-annotations", label: "pdf.annotations.menu", icon: "file-text", group: "reading", surfaces: ["sheet", "page"], priority: 20, scope: "view", command: "command.pdfAnnotations", readOnly: true, when: (c) => c.notebook.pdfPages },
 
@@ -257,6 +261,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "pen-gesture-mode", label: "toolbar.penGestures", icon: "wand-2", group: "view", surfaces: ["quick", "sheet"], priority: 41, scope: "view", command: "command.penGestureMode", checked: (c) => !!c.toggles.penGestures, keywords: "gesture pen shortcut circle scribble" },
 	{ id: "pen-gesture-sheet", label: "gesture.cheatSheet", icon: "help-circle", group: "view", surfaces: ["sheet"], priority: 20, scope: "view", command: "command.penGestureSheet", readOnly: true, keywords: "gestures help" },
 	{ id: "pen-gesture-custom", label: "settings.penGestureCustom", icon: "wand", group: "view", surfaces: ["sheet"], priority: 15, scope: "view", command: "command.penGestureCustom", readOnly: true, keywords: "gestures record bind command" },
+	// wave 0.9 (367): night mode, a view setting (dark page, stored colours unchanged, exports unaffected).
+	{ id: "night-mode", label: "display.night", icon: "moon", group: "view", surfaces: ["sheet"], priority: 36, scope: "view", command: "command.nightMode", readOnly: true, checked: (c) => !!c.display?.night, keywords: "dark black theme notte scuro" },
 	{ id: "fit-width", label: "tool.fit", icon: "move-horizontal", group: "view", surfaces: ["quick", "sheet"], priority: 38, scope: "view", command: "command.fit", readOnly: true, keywords: "zoom" },
 	{ id: "next-page", label: "command.nextPage", icon: "chevron-down", group: "view", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
 	{ id: "previous-page", label: "command.prevPage", icon: "chevron-up", group: "view", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
@@ -270,6 +276,10 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "export-page-pdf", label: "export.pagePdf", icon: "file-output", group: "share", surfaces: ["page"], priority: 30, scope: "view", readOnly: true },
 	{ id: "export-page-svg", label: "export.pageSvg", icon: "image", group: "share", surfaces: ["page"], priority: 20, scope: "view", readOnly: true },
 	{ id: "export-pdf", label: "export.notebookPdf", icon: "file-down", group: "share", surfaces: ["sheet", "notebook"], priority: 30, scope: "view", command: "command.exportPdf", readOnly: true },
+	// wave 0.9 (381, 382): the export dialog (PDF or SVG, page or notebook, ink and/or background) and the Markdown export.
+	// From a page's sheet the dialog starts on that page; from the sheet, the notebook menu and the palette on the notebook.
+	{ id: "export-dialog", label: "export.dialog.menu", icon: "share", group: "share", surfaces: ["page", "sheet", "notebook"], priority: 32, scope: "view", command: "command.exportDialog", readOnly: true, keywords: "pdf svg ink background layers page notebook esporta" },
+	{ id: "export-markdown", label: "export.markdown.menu", icon: "files", group: "share", surfaces: ["sheet", "notebook"], priority: 28, scope: "view", command: "command.exportMarkdown", readOnly: true, keywords: "md png images without obsidian share esporta" },
 
 	// --- notebooks: the library, the ribbon and the palette.
 	global("open-library", "command.library", "library", "app", ["notebook", "palette"], 30),

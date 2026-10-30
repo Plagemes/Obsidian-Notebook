@@ -4669,3 +4669,24 @@ body {
 		flex: none;
 	}
 }
+
+
+/* wave 0.9: export and view (export dialogs, night mode) */
+.notebook-export-note {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	margin: 6px 0;
+}
+
+.notebook-export-problem {
+	color: var(--text-error);
+	font-size: var(--font-ui-small);
+	min-height: 1.2em;
+	margin: 4px 0;
+}
+
+/* Night mode: the wet highlighter canvas lights the page ("screen") instead of darkening it ("multiply"); opacity = NIGHT_HIGHLIGHTER_ALPHA in src/ink/night.ts. */
+.notebook-night .notebook-canvas-wet.is-highlighter {
+	opacity: 0.45;
+	mix-blend-mode: screen;
+}

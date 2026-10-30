@@ -2,6 +2,7 @@ import { BOX_LABEL_HEIGHT, MARKER_BADGE, markerRegion } from "../model/markers";
 import type { BoxElement, MarkerElement, Page, TextElement } from "../model/types";
 import type { BBox } from "./hit-test";
 import { BOX_COLORS, badgeColor, badgeFace, badgeIsSquare, boxLabelWidth, checkPoints, defaultBoxLabel, glyphSize, starPoints, type BoxLabel } from "./marker-render";
+import { layerFlags, type ExportLayers } from "./export-layers";
 import { PAPER_COLORS, paperPattern, type PaperLineKind } from "./paper";
 import { HIGHLIGHTER_ALPHA, strokeSvgPath } from "./stroke-shape";
 
@@ -46,6 +47,8 @@ export interface SvgOptions {
 	hiddenInk?: boolean;
 	/** v8: label of a structured box (default: the English kind name and the title). */
 	boxLabel?: BoxLabel;
+	/** wave 0.9 (381): "ink" has no white sheet (transparent), PDF/picture background or paper; "background" has no ink. Default "both". */
+	layers?: ExportLayers;
 }
 
 /** Line height of text elements as a multiple of the font size (same as the PDF export). */
@@ -67,12 +70,13 @@ export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 	out.push(
 		`<svg xmlns="http://www.w3.org/2000/svg" width="${num(width * PT_TO_MM)}mm" height="${num(height * PT_TO_MM)}mm" viewBox="0 0 ${num(width)} ${num(height)}">`,
 	);
-	out.push(`<rect width="${num(width)}" height="${num(height)}" fill="#ffffff"/>`);
+	const layers = layerFlags(options.layers);
+	if (layers.background) out.push(`<rect width="${num(width)}" height="${num(height)}" fill="#ffffff"/>`);
 
 	const images = options.images?.(page) ?? [];
-	for (const img of images) if (img.layer === "background") out.push(imageTag(img));
+	if (layers.background) for (const img of images) if (img.layer === "background") out.push(imageTag(img));
 
-	if (options.paper ?? true) {
+	if (layers.background && (options.paper ?? true)) {
 		const whole: BBox = { minX: 0, minY: 0, maxX: width, maxY: height };
 		const { lines, dots } = paperPattern(page, whole);
 		for (const kind of ["minor", "major", "margin"] as const) {
@@ -95,6 +99,10 @@ export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 		}
 	}
 
+	if (!layers.content) {
+		out.push("</svg>");
+		return out.join("\n") + "\n";
+	}
 	for (const img of images) if (img.layer !== "background") out.push(imageTag(img));
 	const boxLabel = options.boxLabel ?? ((b: BoxElement) => defaultBoxLabel(b));
 	for (const el of page.elements ?? []) if (el.type === "box") out.push(boxTag(el, boxLabel(el)));

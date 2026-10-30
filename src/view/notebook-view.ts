@@ -59,7 +59,10 @@ import { nextTask } from "../storage/idle";
 import { isNotebookFile } from "../storage/format";
 import { VaultDocumentIO } from "../storage/vault-io";
 import { backupFolder, readSettings, type NotebookSettings } from "../settings";
-import { exportPdf } from "./export";
+import { defaultMarkdownFolder, exportMarkdown } from "./export-markdown";
+import { ExportModal, MarkdownExportModal } from "./export-dialog";
+import { exportPdf, runExport } from "./export";
+import { ViewDisplay, type DisplayHost } from "./display";
 import { policySettings } from "./input-settings";
 import { NotebookMedia, storeAsset } from "./media";
 import { HeavyPageBanner } from "./heavy-page-banner";
@@ -320,6 +323,8 @@ export class NotebookView extends FileView {
 	private pens: PenControls | null = null;
 	/** Wave 0.6: PDF search, snapping highlighter, hide annotations, dimmed backgrounds (pdf-reading.ts). */
 	private reading: PdfReading | null = null;
+	/** wave 0.9: night mode (367) and the cropped view of PDF pages (376). */
+	private display: ViewDisplay | null = null;
 
 	private active: ActiveStroke | null = null;
 	private erasing: ActiveErase | null = null;
@@ -568,6 +573,8 @@ export class NotebookView extends FileView {
 			},
 		});
 		this.reading = new PdfReading(this.readingHost());
+		this.display = new ViewDisplay(this.displayHost());
+		this.display.applyNight();
 		this.practiceHooks = this.host.practice?.attach(this.practiceHost()) ?? null;
 		this.applySettings(this.host.settings);
 
@@ -633,6 +640,8 @@ export class NotebookView extends FileView {
 		this.pens = null;
 		this.reading?.destroy();
 		this.reading = null;
+		this.display?.destroy();
+		this.display = null;
 		this.practiceHooks?.destroy();
 		this.practiceHooks = null;
 		this.toolbar?.destroy();
@@ -990,6 +999,7 @@ export class NotebookView extends FileView {
 		this.reading?.settingsChanged();
 		// wave 0.9 (370): a new toolbar size changes the bar, the contextual bar and the number of quick slots.
 		this.ui?.refresh();
+		this.display?.settingsChanged();
 	}
 
 	/** Input policy from the settings; while annotations are hidden the view is read-only and a finger only pans and zooms. */
@@ -1271,6 +1281,38 @@ export class NotebookView extends FileView {
 	async exportNotebookPdf(): Promise<void> {
 		const doc = this.session?.doc;
 		if (doc && this.file) await exportPdf(this.app, this.file, doc.pages, "", this.media, this.exportOptions());
+	}
+
+	/** wave 0.9 (381): the export dialog (format, page or notebook, ink and/or background). `pageIndex`: opened from that page's sheet. */
+	openExportDialog(pageIndex?: number): void {
+		const doc = this.session?.doc;
+		const file = this.file;
+		if (!doc || !file || doc.pages.length === 0) return;
+		new ExportModal({
+			app: this.app,
+			pageCount: doc.pages.length,
+			pageIndex: Math.min(doc.pages.length - 1, Math.max(0, pageIndex ?? this.currentPageIndex())),
+			pageFirst: pageIndex !== undefined,
+			run: (request) => void runExport(this.app, file, doc.pages, request, this.media, this.exportOptions()),
+		}).open();
+	}
+
+	/** wave 0.9 (382): the dialog of the Markdown export (folder, resolution). */
+	openMarkdownExport(): void {
+		const doc = this.session?.doc;
+		const file = this.file;
+		if (!doc || !file || doc.pages.length === 0) return;
+		new MarkdownExportModal({
+			app: this.app,
+			pageCount: doc.pages.length,
+			defaultFolder: defaultMarkdownFolder(file),
+			run: (folder, dpi) => void exportMarkdown(this.app, file, doc, this.media, { folder, dpi, ...this.exportOptions() }),
+		}).open();
+	}
+
+	/** wave 0.9: view-only night mode and cropped margins (null before the view is open). */
+	get displayTools(): ViewDisplay | null {
+		return this.display;
 	}
 
 	/** v8: exports draw hidden ink only where the solutions are shown, and label boxes in the reader's language. */
@@ -1651,6 +1693,7 @@ export class NotebookView extends FileView {
 			lecture: !!this.host.classNow?.(),
 			sidePane: pdfSideState(this),
 			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false },
+			display: { night: this.display?.night ?? false, crop: this.display?.crop ?? false },
 			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true },
 			markers: {
 				invisibleInk: !!this.markers?.invisibleInk, solutions: !!this.markers?.solutionsShown,
@@ -1949,10 +1992,34 @@ export class NotebookView extends FileView {
 
 	private refreshLayout(): void {
 		const doc = this.shownDoc();
-		this.layout = doc ? (this.pageMode?.enabled ? layoutPagesHorizontal(doc.pages) : layoutPages(doc.pages)) : null;
+		const plain = doc ? (this.pageMode?.enabled ? layoutPagesHorizontal(doc.pages) : layoutPages(doc.pages)) : null;
+		// wave 0.9 (376): with the margins cropped, the PDF pages carry the window the view fits (nothing else changes).
+		this.layout = plain && doc && this.display ? this.display.shape(plain, doc.pages) : plain;
 		this.renderer?.setDocument(doc?.pages ?? null, this.layout);
 		this.pushRuler();
 		this.reading?.docChanged();
+		this.display?.docChanged();
+	}
+
+	/** wave 0.9 (376): the windows of the cropped view changed (or the toggle did): lay the pages out again and fit. */
+	private reflow(): void {
+		if (!this.shownDoc()) return;
+		this.refreshLayout();
+		this.refit(true);
+		this.pageNav?.invalidate();
+	}
+
+	private displayHost(): DisplayHost {
+		return {
+			settings: () => this.host.settings,
+			save: () => void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e)),
+			renderer: () => this.renderer,
+			doc: () => this.shownDoc(),
+			media: () => this.media,
+			currentPage: () => this.currentPageIndex(),
+			reflow: () => this.reflow(),
+			refreshUi: () => this.refreshUi(),
+		};
 	}
 
 	private onDocumentLoaded(doc: NotebookDocument | null, mode: SessionMode, problem: string | null): void {
