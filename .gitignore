@@ -8,4 +8,4 @@ stress.notebook
 dev/harness/dist/
 # Built by scripts/roadmap-data.mjs (the Pages workflow builds them on every deploy)
 site/roadmap.json
-site/media/
+site/assets/

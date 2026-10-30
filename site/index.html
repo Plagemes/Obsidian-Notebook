@@ -9,7 +9,7 @@
 <title>Notebook roadmap</title>
 <meta name="description" content="Live roadmap of Notebook, the handwriting plugin for Obsidian: what has shipped, what is next, and the most requested features.">
 <style>
-/* Tokens from DESIGN.md §2 (dark is the reference, light is derived). */
+/* Tokens from DESIGN.md §2 (dark is the reference and the default, light is derived and follows the system). */
 :root {
 	--nb-bg: #0A0E17; --nb-bg-elevated: #0F1420; --nb-panel: #121826; --nb-tile: #161D2D;
 	--nb-border: rgba(255,255,255,0.07); --nb-border-strong: rgba(255,255,255,0.12);
@@ -21,13 +21,14 @@
 	--nb-danger: #F2555A; --nb-danger-bg: rgba(242,85,90,0.14);
 	--nb-neutral-bg: rgba(154,163,181,0.14);
 	--shadow: 0 8px 24px rgba(0,0,0,0.25);
+	--hero-fade: rgba(15,20,32,0.92);
 	color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
 	:root {
 		--nb-bg: #F6F7FB; --nb-bg-elevated: #EEF0F6; --nb-panel: #FFFFFF; --nb-tile: #F1F3F9;
 		--nb-border: rgba(15,23,42,0.08); --nb-border-strong: rgba(15,23,42,0.14);
-		--nb-text: #0E1424; --nb-text-muted: #5B6478; --nb-text-faint: #7A8396;
+		--nb-text: #0E1424; --nb-text-muted: #5B6478; --nb-text-faint: #6B7487;
 		--nb-accent: #4F6BF0; --nb-accent-bg: rgba(79,107,240,0.12); --nb-on-accent: #FFFFFF;
 		--nb-success: #15925A; --nb-success-bg: rgba(21,146,90,0.12);
 		--nb-amber: #B45309; --nb-amber-bg: rgba(245,158,11,0.14);
@@ -35,6 +36,7 @@
 		--nb-danger: #C9363B; --nb-danger-bg: rgba(242,85,90,0.12);
 		--nb-neutral-bg: rgba(91,100,120,0.10);
 		--shadow: 0 8px 24px rgba(15,23,42,0.10);
+		--hero-fade: rgba(238,240,246,0.92);
 		color-scheme: light;
 	}
 }
@@ -50,30 +52,50 @@ a:hover { text-decoration: underline; }
 .wrap { max-width: 1120px; margin: 0 auto; padding: 0 32px; }
 @media (max-width: 640px) { .wrap { padding: 0 16px; } }
 
-/* Hero */
-.hero { position: relative; overflow: hidden; border-bottom: 1px solid var(--nb-border); background: var(--nb-bg-elevated); }
-.hero picture, .hero img.band { position: absolute; inset: 0; width: 100%; height: 100%; }
-.hero img.band { object-fit: cover; object-position: right center; }
-.hero-inner { position: relative; padding: 56px 0 48px; }
+/* Hero: a generated-art band (assets/art-band-*.png, copied at build time) over a CSS gradient that is always there. */
+.hero {
+	position: relative; overflow: hidden; border-bottom: 1px solid var(--nb-border); background-color: var(--nb-bg-elevated);
+	background-image:
+		radial-gradient(60% 120% at 88% 0%, var(--nb-accent-bg), transparent 70%),
+		radial-gradient(40% 90% at 100% 100%, var(--nb-violet-bg), transparent 70%),
+		radial-gradient(30% 70% at 70% 100%, var(--nb-success-bg), transparent 70%);
+}
+.hero::before { /* faint graph paper, like the plugin's grid page */
+	content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.6;
+	background-image: linear-gradient(var(--nb-border) 1px, transparent 1px), linear-gradient(90deg, var(--nb-border) 1px, transparent 1px);
+	background-size: 32px 32px;
+	-webkit-mask-image: linear-gradient(90deg, transparent 20%, #000 100%); mask-image: linear-gradient(90deg, transparent 20%, #000 100%);
+}
+.hero img.band { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: right center; }
+.hero::after { /* keeps the text on the left clean over the art */
+	content: ""; position: absolute; inset: 0; pointer-events: none;
+	background: linear-gradient(90deg, var(--hero-fade) 0%, var(--hero-fade) 35%, transparent 80%);
+}
+.hero-inner { position: relative; z-index: 1; padding: 56px 0 48px; }
+.topbar { position: absolute; z-index: 2; top: 12px; right: 32px; }
+@media (max-width: 640px) { .topbar { right: 16px; top: 8px; } .hero-inner { padding-top: 56px; } }
 .eyebrow { display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--nb-text-muted); padding: 5px 12px; border-radius: 999px; background: var(--nb-panel); border: 1px solid var(--nb-border); }
 h1 { font-size: 44px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; margin: 16px 0 8px; }
 .sub { font-size: 17px; color: var(--nb-text-muted); max-width: 560px; margin: 0; }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
-.btn { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 20px; border-radius: 999px; font-weight: 600; font-size: 15px; border: 1px solid var(--nb-border-strong); background: var(--nb-panel); color: var(--nb-text); transition: transform 150ms ease-out, background 150ms ease-out; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 20px; border-radius: 999px; font: inherit; font-weight: 600; font-size: 15px; border: 1px solid var(--nb-border-strong); background: var(--nb-panel); color: var(--nb-text); cursor: pointer; transition: transform 150ms ease-out, background 150ms ease-out; }
 .btn:hover { text-decoration: none; background: var(--nb-tile); }
 .btn:active { transform: scale(0.98); }
 .btn.primary { background: var(--nb-accent); border-color: var(--nb-accent); color: var(--nb-on-accent); box-shadow: var(--shadow); }
 .btn.primary:hover { filter: brightness(1.08); background: var(--nb-accent); }
-@media (max-width: 640px) { h1 { font-size: 34px; } .hero-inner { padding: 40px 0 32px; } }
+.lang { min-height: 40px; min-width: 44px; padding: 0 14px; font-size: 13px; }
+@media (max-width: 640px) { h1 { font-size: 34px; } .hero-inner { padding-bottom: 32px; } .actions .btn { flex: 1 1 auto; } }
 
 /* Sections */
 main { padding: 32px 0 48px; }
 section { margin-top: 32px; }
-h2 { font-size: 20px; font-weight: 600; margin: 0 0 16px; display: flex; align-items: center; gap: 10px; }
+section:first-child { margin-top: 0; }
+h2 { font-size: 20px; font-weight: 600; margin: 0 0 16px; }
 .panel { background: var(--nb-panel); border: 1px solid var(--nb-border); border-radius: 16px; padding: 20px; }
 .muted { color: var(--nb-text-muted); }
 .faint { color: var(--nb-text-faint); }
 .small { font-size: 13px; }
+[hidden] { display: none !important; }
 
 /* Counters */
 .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
@@ -84,38 +106,43 @@ h2 { font-size: 20px; font-weight: 600; margin: 0 0 16px; display: flex; align-i
 .kpi-label { font-size: 13px; color: var(--nb-text-muted); display: flex; align-items: center; gap: 6px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
 .progress { margin-top: 20px; }
-.progress-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; font-size: 13px; color: var(--nb-text-muted); }
+.progress-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 8px; font-size: 13px; color: var(--nb-text-muted); }
 .progress-head strong { color: var(--nb-text); font-size: 15px; }
 .bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--nb-tile); border: 1px solid var(--nb-border); }
 .bar span { display: block; height: 100%; }
 
 /* Requests */
-.req-list { list-style: none; margin: 0; padding: 0; }
-.req-list li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--nb-border); }
-.req-list li:first-child { border-top: 0; }
-.votes { flex: none; min-width: 56px; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; padding: 4px 10px; border-radius: 999px; background: var(--nb-accent-bg); color: var(--nb-accent); font-size: 13px; }
-.req-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .req-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.req-head h2 { margin: 0; }
+.req-list { list-style: none; margin: 0; padding: 0; }
+.req-list li { display: flex; align-items: center; gap: 12px; padding: 4px 0; border-top: 1px solid var(--nb-border); }
+.req-list li:first-child { border-top: 0; }
+.req-list a.req-title { flex: 1; min-width: 0; overflow-wrap: anywhere; display: flex; align-items: center; min-height: 40px; color: var(--nb-text); }
+.req-list a.req-title:hover { color: var(--nb-accent); }
+.votes { flex: none; min-width: 60px; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; padding: 4px 10px; border-radius: 999px; background: var(--nb-accent-bg); color: var(--nb-accent); font-size: 13px; }
 
 /* Filters */
 .filters { display: grid; gap: 12px; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .label { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--nb-text-faint); min-width: 72px; }
-.chip { min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--nb-border-strong); background: transparent; color: var(--nb-text); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
-.chip[aria-pressed="true"] { background: var(--nb-accent-bg); border-color: var(--nb-accent); color: var(--nb-text); }
+.chip { min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--nb-border-strong); background: transparent; color: var(--nb-text); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.chip:hover { background: var(--nb-tile); }
+.chip[aria-pressed="true"] { background: var(--nb-accent-bg); border-color: var(--nb-accent); }
 .chip .n { color: var(--nb-text-muted); font-variant-numeric: tabular-nums; }
-.search, select { min-height: 40px; border-radius: 999px; border: 1px solid var(--nb-border-strong); background: var(--nb-tile); color: var(--nb-text); font: inherit; padding: 0 16px; }
+.search, select { min-height: 40px; border-radius: 999px; border: 1px solid var(--nb-border-strong); background: var(--nb-tile); color: var(--nb-text); font: inherit; font-size: 14px; padding: 0 16px; }
 .search { flex: 1; min-width: 200px; }
-select { max-width: 100%; padding-right: 32px; }
-@media (max-width: 640px) { .label { min-width: 100%; } select { width: 100%; } }
+select { max-width: 100%; }
+@media (max-width: 640px) { .label { min-width: 100%; } select { flex: 1 1 100%; } .search { flex-basis: 100%; } }
 
 /* Features */
 .count { font-size: 13px; color: var(--nb-text-muted); margin: 16px 0 8px; }
-.group { margin-top: 20px; }
-.group-title { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--nb-text-faint); margin: 0 0 8px; }
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 12px; }
-.card { background: var(--nb-panel); border: 1px solid var(--nb-border); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
-.card-title { font-size: 15px; font-weight: 500; line-height: 1.35; }
+.group { margin-top: 24px; }
+.group-title { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--nb-text-faint); margin: 0 0 4px; }
+.group-title .n { font-variant-numeric: tabular-nums; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 12px; margin-top: 8px; }
+.card { background: var(--nb-panel); border: 1px solid var(--nb-border); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.card-title { font-size: 15px; font-weight: 500; line-height: 1.35; overflow-wrap: anywhere; }
+.card-area { font-size: 13px; color: var(--nb-text-muted); }
 .card-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: auto; }
 .pill { font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 999px; background: var(--nb-neutral-bg); color: var(--nb-text-muted); white-space: nowrap; }
 .pill.s-done { background: var(--nb-success-bg); color: var(--nb-success); }
@@ -125,64 +152,69 @@ select { max-width: 100%; padding-right: 32px; }
 .pill.s-dropped { background: var(--nb-danger-bg); color: var(--nb-danger); }
 .pill.p1 { background: var(--nb-violet-bg); color: var(--nb-violet); }
 .pill.rel { background: transparent; border: 1px solid var(--nb-border-strong); color: var(--nb-text); font-variant-numeric: tabular-nums; }
-.id { font-size: 12px; color: var(--nb-text-faint); font-variant-numeric: tabular-nums; }
+.id { font-size: 12px; color: var(--nb-text-faint); font-variant-numeric: tabular-nums; margin-left: auto; }
 .card.dropped .card-title { text-decoration: line-through; color: var(--nb-text-muted); }
 .more { margin-top: 16px; text-align: center; }
 .empty { padding: 32px; text-align: center; color: var(--nb-text-muted); }
 
 footer { border-top: 1px solid var(--nb-border); padding: 24px 0 40px; font-size: 13px; color: var(--nb-text-muted); }
-footer .row { justify-content: space-between; }
+footer .row { justify-content: space-between; align-items: flex-start; gap: 12px 24px; }
+footer .row > span { max-width: 640px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
 <body>
 <header class="hero">
-	<picture>
-		<source srcset="media/art-band-light.png" media="(prefers-color-scheme: light)">
-		<img class="band" src="media/art-band-dark.png" alt="">
-	</picture>
+	<img class="band" id="band" src="assets/art-band-dark.png" alt="" width="1280" height="400" decoding="async">
+	<div class="wrap" style="position:relative">
+		<div class="topbar"><button type="button" class="btn lang" id="lang"></button></div>
+	</div>
 	<div class="wrap hero-inner">
-		<span class="eyebrow">Notebook for Obsidian · public roadmap</span>
-		<h1>What's shipped, what's next</h1>
-		<p class="sub">Every feature on the roadmap of Notebook, the free and open-source handwriting plugin for Obsidian, built from <a href="https://github.com/Plagemes/Obsidian-Notebook/blob/main/docs/roadmap.md">docs/roadmap.md</a> on every change.</p>
+		<span class="eyebrow" data-i18n="eyebrow">Notebook for Obsidian · public roadmap</span>
+		<h1 data-i18n="title">Notebook roadmap</h1>
+		<p class="sub"><span data-i18n="sub">Every feature planned for Notebook, the free and open-source handwriting plugin for Obsidian, rebuilt from</span> <a href="https://github.com/Plagemes/Obsidian-Notebook/blob/main/docs/roadmap.md">docs/roadmap.md</a> <span data-i18n="sub2">on every change.</span></p>
 		<div class="actions">
-			<a class="btn primary" href="https://github.com/Plagemes/Obsidian-Notebook/issues/new?template=feature_request.yml">＋ Request a feature</a>
-			<a class="btn" href="https://github.com/Plagemes/Obsidian-Notebook#readme">Install Notebook</a>
-			<a class="btn" href="https://github.com/Plagemes/Obsidian-Notebook">View on GitHub</a>
+			<a class="btn primary" href="https://github.com/Plagemes/Obsidian-Notebook/issues/new?template=feature_request.yml" data-i18n="request">Request a feature</a>
+			<a class="btn" href="https://github.com/Plagemes/Obsidian-Notebook" data-i18n="github">View on GitHub</a>
 		</div>
 	</div>
 </header>
 
 <main class="wrap">
 	<section aria-labelledby="progress-title">
-		<h2 id="progress-title">Progress</h2>
+		<h2 id="progress-title" data-i18n="progress">Progress</h2>
 		<div class="panel">
 			<div class="kpis" id="kpis"></div>
 			<div class="progress">
-				<div class="progress-head"><span id="progress-text">Loading the roadmap…</span><span id="release"></span></div>
-				<div class="bar" id="bar" role="img" aria-label="Roadmap progress"></div>
+				<div class="progress-head"><span id="progress-text"></span><span id="release"></span></div>
+				<div class="bar" id="bar" role="img"></div>
 			</div>
 		</div>
 	</section>
 
-	<section aria-labelledby="requests-title">
+	<section aria-labelledby="requests-title" id="requests-section" hidden>
 		<div class="req-head">
-			<h2 id="requests-title" style="margin:0">Most requested</h2>
-			<a class="btn primary" href="https://github.com/Plagemes/Obsidian-Notebook/issues/new?template=feature_request.yml">＋ Request a feature</a>
+			<h2 id="requests-title" data-i18n="requested">Most requested</h2>
+			<a class="btn primary" href="https://github.com/Plagemes/Obsidian-Notebook/issues/new?template=feature_request.yml" data-i18n="request">Request a feature</a>
 		</div>
-		<p class="muted small" style="margin-top:0">Open feature requests on GitHub, sorted by 👍. Vote with a 👍 reaction on the issue.</p>
-		<div class="panel" id="requests"><p class="muted" style="margin:0">Loading requests…</p></div>
+		<p class="muted small" style="margin-top:0" data-i18n="requestedHint">Open feature requests on GitHub, most 👍 first. Add your 👍 on the issue to vote.</p>
+		<div class="panel" id="requests"></div>
 	</section>
 
 	<section aria-labelledby="features-title">
-		<h2 id="features-title">All features</h2>
+		<h2 id="features-title" data-i18n="features">All features</h2>
 		<div class="panel filters">
-			<div class="row" role="group" aria-label="Status"><span class="label">Status</span><span class="row" id="f-status"></span></div>
-			<div class="row" role="group" aria-label="Priority"><span class="label">Priority</span><span class="row" id="f-priority"></span></div>
+			<div class="row" role="group" aria-labelledby="l-status"><span class="label" id="l-status" data-i18n="fStatus">Status</span><span class="row" id="f-status"></span></div>
+			<div class="row" role="group" aria-labelledby="l-priority"><span class="label" id="l-priority" data-i18n="fPriority">Priority</span><span class="row" id="f-priority"></span></div>
 			<div class="row">
-				<span class="label">Area</span>
-				<select id="f-area" aria-label="Area"><option value="">All areas</option></select>
-				<input class="search" id="f-search" type="search" placeholder="Search features…" aria-label="Search features" autocomplete="off">
+				<label class="label" for="f-milestone" data-i18n="fMilestone">Milestone</label>
+				<select id="f-milestone"></select>
+				<label class="label" for="f-area" data-i18n="fArea" style="min-width:auto">Area</label>
+				<select id="f-area"></select>
+			</div>
+			<div class="row">
+				<label class="label" for="f-search" data-i18n="fSearch">Search</label>
+				<input class="search" id="f-search" type="search" autocomplete="off">
 			</div>
 		</div>
 		<div class="count" id="count" aria-live="polite"></div>
@@ -194,8 +226,8 @@ footer .row { justify-content: space-between; }
 <footer>
 	<div class="wrap">
 		<div class="row">
-			<span><strong>Shipped</strong> means implemented, released and covered by automated tests. Notebook has not been verified on Android hardware yet; see <a href="https://github.com/Plagemes/Obsidian-Notebook/blob/main/docs/testing.md">docs/testing.md</a>.</span>
-			<span>MIT licence · no cookies, no analytics, no trackers</span>
+			<span><span data-i18n="note">Shipped means implemented, released and covered by automated tests. It has not been verified on Android hardware yet; see</span> <a href="https://github.com/Plagemes/Obsidian-Notebook/blob/main/docs/testing.md">docs/testing.md</a>.</span>
+			<span><span data-i18n="licence">MIT licence · no cookies, no analytics, no trackers</span><br><span id="generated"></span></span>
 		</div>
 	</div>
 </footer>
@@ -204,17 +236,65 @@ footer .row { justify-content: space-between; }
 (() => {
 	"use strict";
 	const REPO = "Plagemes/Obsidian-Notebook";
+	const NEW_ISSUE = `https://github.com/${REPO}/issues/new?template=feature_request.yml`;
+	const PAGE = 150;
+
+	const STRINGS = {
+		en: {
+			eyebrow: "Notebook for Obsidian · public roadmap", title: "Notebook roadmap",
+			sub: "Every feature planned for Notebook, the free and open-source handwriting plugin for Obsidian, rebuilt from", sub2: "on every change.",
+			request: "Request a feature", github: "View on GitHub", progress: "Progress", requested: "Most requested",
+			requestedHint: "Open feature requests on GitHub, most 👍 first. Add your 👍 on the issue to vote.",
+			noRequests: "No open requests yet. Be the first to ask for something.",
+			features: "All features", fStatus: "Status", fPriority: "Priority", fMilestone: "Milestone", fArea: "Area", fSearch: "Search",
+			searchPh: "Search features, ids, areas…", all: "All", allMilestones: "All milestones", allAreas: "All areas",
+			s_done: "Shipped", s_progress: "In progress", s_todo: "To do", s_deferred: "Deferred", s_dropped: "Dropped",
+			p_P1: "P1 · next", p_P2: "P2 · very useful", p_P3: "P3 · nice to have",
+			shippedPct: "{pct}% shipped", shippedOf: " · {done} of {planned} planned features (deferred and dropped not counted)",
+			latest: "Latest release {v}", barLabel: "{done} shipped, {progress} in progress, {todo} to do",
+			countOf: "{n} of {total} features", none: "No feature matches these filters.", requestIt: "Request it",
+			more: "Show {n} more", early: "v{v} or earlier", loadFail: "The roadmap data could not be loaded. Read it on GitHub:",
+			note: "Shipped means implemented, released and covered by automated tests. It has not been verified on Android hardware yet; see",
+			licence: "MIT licence · no cookies, no analytics, no trackers", generated: "Updated {d}", votes: "{n} 👍", langBtn: "Italiano", langLabel: "Passa all'italiano",
+			features_n: "{n} features", features_1: "1 feature",
+		},
+		it: {
+			eyebrow: "Notebook per Obsidian · roadmap pubblica", title: "Roadmap di Notebook",
+			sub: "Tutte le funzioni previste per Notebook, il plugin gratuito e open source per scrivere a mano in Obsidian, ricostruite da", sub2: "a ogni modifica.",
+			request: "Richiedi una funzione", github: "Vedi su GitHub", progress: "Avanzamento", requested: "Più richieste",
+			requestedHint: "Richieste aperte su GitHub, prima quelle con più 👍. Aggiungi il tuo 👍 sull'issue per votare.",
+			noRequests: "Nessuna richiesta aperta. Sii il primo a chiedere qualcosa.",
+			features: "Tutte le funzioni", fStatus: "Stato", fPriority: "Priorità", fMilestone: "Milestone", fArea: "Area", fSearch: "Cerca",
+			searchPh: "Cerca funzioni, id, aree…", all: "Tutte", allMilestones: "Tutte le milestone", allAreas: "Tutte le aree",
+			s_done: "Rilasciate", s_progress: "In sviluppo", s_todo: "Da fare", s_deferred: "Rimandate", s_dropped: "Scartate",
+			p_P1: "P1 · prossime", p_P2: "P2 · molto utili", p_P3: "P3 · belle da avere",
+			shippedPct: "{pct}% rilasciato", shippedOf: " · {done} su {planned} funzioni previste (rimandate e scartate escluse)",
+			latest: "Ultima versione {v}", barLabel: "{done} rilasciate, {progress} in sviluppo, {todo} da fare",
+			countOf: "{n} funzioni su {total}", none: "Nessuna funzione corrisponde ai filtri.", requestIt: "Richiedila",
+			more: "Mostrane altre {n}", early: "v{v} o precedente", loadFail: "Impossibile caricare i dati della roadmap. Leggila su GitHub:",
+			note: "Rilasciata significa implementata, pubblicata e coperta da test automatici. Non è ancora stata verificata su hardware Android; vedi",
+			licence: "Licenza MIT · niente cookie, analytics o tracker", generated: "Aggiornato {d}", votes: "{n} 👍", langBtn: "English", langLabel: "Switch to English",
+			features_n: "{n} funzioni", features_1: "1 funzione",
+		},
+	};
+	const guess = () => ((navigator.language || "en").toLowerCase().startsWith("it") ? "it" : "en");
+	let lang = guess();
+	try {
+		const saved = localStorage.getItem("nb-roadmap-lang");
+		if (saved === "it" || saved === "en") lang = saved;
+	} catch { /* storage may be blocked */ }
+	const t = (key, vars) => {
+		let s = STRINGS[lang][key] ?? STRINGS.en[key] ?? key;
+		if (vars) for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, String(v));
+		return s;
+	};
+
 	const STATUS = [
-		["done", "Shipped", "var(--nb-success)"],
-		["progress", "In progress", "var(--nb-accent)"],
-		["todo", "To do", "var(--nb-text-faint)"],
-		["deferred", "Deferred", "var(--nb-amber)"],
-		["dropped", "Dropped", "var(--nb-danger)"],
+		["done", "var(--nb-success)"], ["progress", "var(--nb-accent)"], ["todo", "var(--nb-text-faint)"],
+		["deferred", "var(--nb-amber)"], ["dropped", "var(--nb-danger)"],
 	];
-	const LABEL = Object.fromEntries(STATUS.map(([k, l]) => [k, l]));
-	const PRIORITY = [["P1", "P1 · next"], ["P2", "P2 · very useful"], ["P3", "P3 · nice to have"]];
-	const PAGE = 120;
-	const state = { status: "all", priority: "all", area: "", q: "", shown: PAGE };
+	const state = { status: "all", priority: "all", milestone: "", area: "", q: "", shown: PAGE };
+	let data = null;
 	let features = [];
 
 	const $ = (id) => document.getElementById(id);
@@ -224,7 +304,6 @@ footer .row { justify-content: space-between; }
 		if (text !== undefined) e.textContent = text;
 		return e;
 	}
-
 	function chip(label, pressed, onClick, n) {
 		const b = el("button", "chip", label);
 		b.type = "button";
@@ -234,67 +313,68 @@ footer .row { justify-content: space-between; }
 		return b;
 	}
 
-	function renderCounters(data) {
+	function applyStatic() {
+		document.documentElement.lang = lang;
+		for (const node of document.querySelectorAll("[data-i18n]")) node.textContent = t(node.getAttribute("data-i18n"));
+		document.title = t("title");
+		const b = $("lang");
+		b.textContent = t("langBtn");
+		b.setAttribute("aria-label", t("langLabel"));
+		$("f-search").placeholder = t("searchPh");
+	}
+
+	function renderCounters() {
 		const c = data.counts;
 		const kpis = $("kpis");
 		kpis.replaceChildren();
-		for (const [key, label, colour] of STATUS) {
+		for (const [key, colour] of STATUS) {
 			const k = el("div", "kpi");
 			k.append(el("div", "kpi-num", String(c[key] ?? 0)));
 			const l = el("div", "kpi-label");
 			const d = el("span", "dot");
 			d.style.background = colour;
-			l.append(d, document.createTextNode(label));
+			l.append(d, document.createTextNode(t(`s_${key}`)));
 			k.append(l);
 			kpis.append(k);
 		}
 		const planned = c.done + c.progress + c.todo;
 		const pct = planned ? Math.round((c.done / planned) * 100) : 0;
-		const t = $("progress-text");
-		t.replaceChildren(el("strong", "", `${pct}% shipped`), document.createTextNode(` · ${c.done} of ${planned} planned features (deferred and dropped not counted)`));
-		$("release").textContent = data.latestRelease ? `Latest release ${data.latestRelease}` : "";
+		$("progress-text").replaceChildren(el("strong", "", t("shippedPct", { pct })), document.createTextNode(t("shippedOf", { done: c.done, planned })));
+		$("release").textContent = data.latestRelease ? t("latest", { v: data.latestRelease }) : "";
 		const bar = $("bar");
 		bar.replaceChildren();
-		bar.setAttribute("aria-label", `${c.done} shipped, ${c.progress} in progress, ${c.todo} to do`);
-		for (const [key, , colour] of STATUS.slice(0, 2)) {
+		bar.setAttribute("aria-label", t("barLabel", c));
+		for (const [key, colour] of STATUS.slice(0, 2)) {
 			const s = el("span");
 			s.style.width = `${planned ? (c[key] / planned) * 100 : 0}%`;
 			s.style.background = colour;
 			bar.append(s);
 		}
+		$("generated").textContent = data.generatedAt ? t("generated", { d: data.generatedAt.slice(0, 10) }) : "";
 	}
 
 	function renderFilters() {
 		const counts = {};
 		for (const f of features) counts[f.status] = (counts[f.status] ?? 0) + 1;
 		const fs = $("f-status");
-		fs.replaceChildren(chip("All", state.status === "all", () => setState({ status: "all" }), features.length));
-		for (const [key, label] of STATUS) if (counts[key]) fs.append(chip(label, state.status === key, () => setState({ status: key }), counts[key]));
+		fs.replaceChildren(chip(t("all"), state.status === "all", () => setState({ status: "all" }), features.length));
+		for (const [key] of STATUS) if (counts[key]) fs.append(chip(t(`s_${key}`), state.status === key, () => setState({ status: key }), counts[key]));
 		const fp = $("f-priority");
-		fp.replaceChildren(chip("All", state.priority === "all", () => setState({ priority: "all" })));
-		for (const [key, label] of PRIORITY) fp.append(chip(label, state.priority === key, () => setState({ priority: key })));
+		fp.replaceChildren(chip(t("all"), state.priority === "all", () => setState({ priority: "all" })));
+		for (const p of ["P1", "P2", "P3"]) fp.append(chip(t(`p_${p}`), state.priority === p, () => setState({ priority: p })));
+		fillSelects();
 	}
 
-	function fillAreas() {
-		const select = $("f-area");
-		const groups = new Map();
-		for (const f of features) {
-			const m = `${f.milestone}${f.milestoneTitle ? ` — ${f.milestoneTitle}` : ""}`;
-			if (!groups.has(m)) groups.set(m, new Set());
-			groups.get(m).add(f.area);
-		}
-		for (const [m, areas] of groups) {
-			const g = document.createElement("optgroup");
-			g.label = m;
-			for (const a of areas) {
-				const o = document.createElement("option");
-				o.value = `${m.split(" — ")[0]}|${a}`;
-				o.textContent = a;
-				g.append(o);
-			}
-			select.append(g);
-		}
-		select.addEventListener("change", () => setState({ area: select.value }));
+	function fillSelects() {
+		const ms = $("f-milestone");
+		ms.replaceChildren(new Option(t("allMilestones"), ""));
+		for (const m of data.milestones) ms.append(new Option(`${m.id}${m.title ? ` — ${m.title}` : ""} (${m.features})`, m.id));
+		ms.value = state.milestone;
+		const ar = $("f-area");
+		ar.replaceChildren(new Option(t("allAreas"), ""));
+		const areas = [...new Set(features.filter((f) => !state.milestone || f.milestone === state.milestone).map((f) => f.area))];
+		for (const a of areas) ar.append(new Option(a, a));
+		ar.value = areas.includes(state.area) ? state.area : "";
 	}
 
 	const norm = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -302,7 +382,8 @@ footer .row { justify-content: space-between; }
 	function matches(f) {
 		if (state.status !== "all" && f.status !== state.status) return false;
 		if (state.priority !== "all" && f.priority !== state.priority) return false;
-		if (state.area && `${f.milestone}|${f.area}` !== state.area) return false;
+		if (state.milestone && f.milestone !== state.milestone) return false;
+		if (state.area && f.area !== state.area) return false;
 		if (state.q) {
 			const hay = norm(`${f.id} ${f.title} ${f.area} ${f.milestone} ${f.milestoneTitle} ${f.release}`);
 			if (!state.q.split(/\s+/).every((w) => hay.includes(w))) return false;
@@ -310,12 +391,19 @@ footer .row { justify-content: space-between; }
 		return true;
 	}
 
+	function releaseLabel(r) {
+		const early = /^(\d+\.\d+\.\d+) or earlier$/.exec(r);
+		if (early) return t("early", { v: early[1] });
+		return /^\d+\.\d+\.\d+$/.test(r) ? `v${r}` : r;
+	}
+
 	function card(f) {
 		const c = el("article", `card ${f.status}`);
 		c.append(el("div", "card-title", f.title));
+		if (f.area && f.area !== f.milestoneTitle) c.append(el("div", "card-area", f.area));
 		const meta = el("div", "card-meta");
-		meta.append(el("span", `pill s-${f.status}`, LABEL[f.status] ?? f.status));
-		if (f.release) meta.append(el("span", "pill rel", /^\d/.test(f.release) && !f.release.includes(" ") ? `v${f.release}` : f.release));
+		meta.append(el("span", `pill s-${f.status}`, t(`s_${f.status}`)));
+		if (f.release) meta.append(el("span", "pill rel", releaseLabel(f.release)));
 		meta.append(el("span", `pill ${f.priority === "P1" ? "p1" : ""}`, f.priority));
 		meta.append(el("span", "id", `#${f.id}`));
 		c.append(meta);
@@ -324,36 +412,40 @@ footer .row { justify-content: space-between; }
 
 	function renderList() {
 		const hits = features.filter(matches);
-		$("count").textContent = `${hits.length} of ${features.length} features`;
+		$("count").textContent = t("countOf", { n: hits.length, total: features.length });
 		const list = $("list");
+		const more = $("more");
 		list.replaceChildren();
+		more.replaceChildren();
 		if (!hits.length) {
-			const e = el("div", "panel empty", "No feature matches these filters. ");
-			const a = el("a", "", "Request it");
-			a.href = `https://github.com/${REPO}/issues/new?template=feature_request.yml`;
+			const e = el("div", "panel empty", `${t("none")} `);
+			const a = el("a", "", t("requestIt"));
+			a.href = NEW_ISSUE;
 			e.append(a);
 			list.append(e);
-			$("more").replaceChildren();
 			return;
 		}
-		let group = null;
+		const visible = hits.slice(0, state.shown);
+		const totals = new Map();
+		for (const f of hits) totals.set(f.milestone, (totals.get(f.milestone) ?? 0) + 1);
+		let current = null;
 		let grid = null;
-		for (const f of hits.slice(0, state.shown)) {
-			const key = `${f.milestone} · ${f.area}`;
-			if (key !== group) {
-				group = key;
+		for (const f of visible) {
+			if (f.milestone !== current) {
+				current = f.milestone;
 				const g = el("div", "group");
-				g.append(el("h3", "group-title", f.area === f.milestoneTitle ? `${f.milestone} · ${f.area}` : `${f.milestone} ${f.milestoneTitle ? `${f.milestoneTitle} · ` : ""}${f.area}`));
+				const h = el("h3", "group-title", `${f.milestone}${f.milestoneTitle ? ` · ${f.milestoneTitle}` : ""} · `);
+				const n = totals.get(f.milestone);
+				h.append(el("span", "n", n === 1 ? t("features_1") : t("features_n", { n })));
+				g.append(h);
 				grid = el("div", "cards");
 				g.append(grid);
 				list.append(g);
 			}
 			grid.append(card(f));
 		}
-		const more = $("more");
-		more.replaceChildren();
 		if (hits.length > state.shown) {
-			const b = el("button", "btn", `Show ${Math.min(PAGE, hits.length - state.shown)} more`);
+			const b = el("button", "btn", t("more", { n: Math.min(PAGE, hits.length - state.shown) }));
 			b.type = "button";
 			b.addEventListener("click", () => {
 				state.shown += PAGE;
@@ -365,6 +457,7 @@ footer .row { justify-content: space-between; }
 
 	function setState(patch) {
 		Object.assign(state, patch, { shown: PAGE });
+		if ("milestone" in patch) state.area = "";
 		renderFilters();
 		renderList();
 	}
@@ -374,20 +467,70 @@ footer .row { justify-content: space-between; }
 		clearTimeout(timer);
 		timer = setTimeout(() => setState({ q: norm(e.target.value.trim()) }), 120);
 	});
+	$("f-milestone").addEventListener("change", (e) => setState({ milestone: e.target.value }));
+	$("f-area").addEventListener("change", (e) => setState({ area: e.target.value }));
+
+	let requests = null; // null = section hidden (not loaded, error or rate limit)
+	function renderRequests() {
+		const section = $("requests-section");
+		if (!requests) {
+			section.hidden = true;
+			return;
+		}
+		section.hidden = false;
+		const box = $("requests");
+		if (!requests.length) {
+			const p = el("p", "muted", t("noRequests"));
+			p.style.margin = "0";
+			box.replaceChildren(p);
+			return;
+		}
+		const ul = el("ul", "req-list");
+		for (const i of requests) {
+			const li = el("li");
+			li.append(el("span", "votes", t("votes", { n: i.votes })));
+			const a = el("a", "req-title", i.title);
+			a.href = i.url;
+			a.rel = "noopener";
+			li.append(a, el("span", "faint small", `#${i.number}`));
+			ul.append(li);
+		}
+		box.replaceChildren(ul);
+	}
+
+	function renderAll() {
+		applyStatic();
+		if (data) {
+			renderCounters();
+			renderFilters();
+			renderList();
+		}
+		renderRequests();
+	}
+
+	$("lang").addEventListener("click", () => {
+		lang = lang === "en" ? "it" : "en";
+		try { localStorage.setItem("nb-roadmap-lang", lang); } catch { /* storage may be blocked */ }
+		renderAll();
+	});
+
+	// Dark art by default, the light one when the system is light. A missing file leaves the CSS gradient.
+	const band = $("band");
+	const light = window.matchMedia("(prefers-color-scheme: light)");
+	const setBand = () => { band.hidden = false; band.src = `assets/art-band-${light.matches ? "light" : "dark"}.png`; };
+	band.addEventListener("error", () => { band.hidden = true; });
+	light.addEventListener("change", setBand);
+	setBand();
 
 	async function loadRoadmap() {
 		try {
 			const r = await fetch("roadmap.json", { cache: "no-cache" });
 			if (!r.ok) throw new Error(String(r.status));
-			const data = await r.json();
+			data = await r.json();
 			features = data.features;
-			renderCounters(data);
-			fillAreas();
-			renderFilters();
-			renderList();
+			renderAll();
 		} catch {
-			$("progress-text").textContent = "The roadmap data could not be loaded.";
-			const p = el("div", "panel empty", "The roadmap could not be loaded. Read it on GitHub: ");
+			const p = el("div", "panel empty", `${t("loadFail")} `);
 			const a = el("a", "", "docs/roadmap.md");
 			a.href = `https://github.com/${REPO}/blob/main/docs/roadmap.md`;
 			p.append(a);
@@ -395,44 +538,30 @@ footer .row { justify-content: space-between; }
 		}
 	}
 
+	// The only network call: GitHub's public REST API for open feature requests. On any error or rate limit the section stays hidden.
 	async function loadRequests() {
-		const box = $("requests");
-		const fallback = (text) => {
-			const p = el("p", "muted", text);
-			p.style.margin = "0";
-			const a = el("a", "", "See the requests on GitHub");
-			a.href = `https://github.com/${REPO}/issues?q=is%3Aissue+is%3Aopen+label%3Afeature-request+sort%3Areactions-%2B1-desc`;
-			p.append(document.createTextNode(" "), a);
-			box.replaceChildren(p);
-		};
 		try {
-			const r = await fetch(`https://api.github.com/repos/${REPO}/issues?labels=feature-request&state=open&per_page=100`, {
+			const r = await fetch(`https://api.github.com/repos/${REPO}/issues?labels=feature-request&state=open&per_page=50`, {
 				headers: { Accept: "application/vnd.github+json" },
 				credentials: "omit",
 				referrerPolicy: "no-referrer",
 			});
 			if (!r.ok) throw new Error(String(r.status));
 			const issues = (await r.json()).filter((i) => !i.pull_request);
-			if (!issues.length) {
-				fallback("No open requests yet. Be the first to ask for something.");
-				return;
-			}
 			issues.sort((a, b) => (b.reactions?.["+1"] ?? 0) - (a.reactions?.["+1"] ?? 0) || b.comments - a.comments);
-			const ul = el("ul", "req-list");
-			for (const i of issues.slice(0, 10)) {
-				const li = el("li");
-				li.append(el("span", "votes", `👍 ${i.reactions?.["+1"] ?? 0}`));
-				const a = el("a", "req-title", i.title);
-				a.href = /^https:\/\/github\.com\//.test(i.html_url) ? i.html_url : `https://github.com/${REPO}/issues/${Number(i.number)}`;
-				li.append(a, el("span", "faint small", `#${Number(i.number)}`));
-				ul.append(li);
-			}
-			box.replaceChildren(ul);
+			requests = issues.slice(0, 10).map((i) => ({
+				title: String(i.title),
+				number: Number(i.number),
+				votes: Number(i.reactions?.["+1"] ?? 0),
+				url: `https://github.com/${REPO}/issues/${Number(i.number)}`,
+			}));
 		} catch {
-			fallback("The requests could not be loaded right now (GitHub may be rate-limiting).");
+			requests = null;
 		}
+		renderRequests();
 	}
 
+	applyStatic();
 	loadRoadmap();
 	loadRequests();
 })();
