@@ -76,6 +76,8 @@ function readEntries(raw: unknown): Map<string, Entry> {
 /** Opening markers of all notebooks on this device. Every change is saved at once (local storage is synchronous). */
 export class SafeModeTracker {
 	private readonly entries: Map<string, Entry>;
+	/** Opens in progress in this app run, per path: a marker they set is not a crash (two tabs of one notebook). */
+	private readonly live = new Map<string, number>();
 
 	constructor(
 		private readonly slot: LocalSlot,
@@ -93,7 +95,7 @@ export class SafeModeTracker {
 	/** Call right before the notebook file is read. Decides normal or safe mode and sets the marker. */
 	begin(path: string): OpenDecision {
 		const e = this.entries.get(path) ?? { pending: null, failures: 0, mediaFailed: false, forceNormal: false, updatedAt: 0 };
-		if (e.pending) {
+		if (e.pending && !this.live.has(path)) {
 			// The previous open never finished: the app crashed, froze or was killed while opening.
 			e.failures = Math.min(99, e.failures + 1);
 			e.mediaFailed = e.pending.safe && e.pending.stage === "media";
@@ -101,7 +103,9 @@ export class SafeModeTracker {
 		const forcedNormal = e.forceNormal && e.failures > 0;
 		e.forceNormal = false;
 		const safe = e.failures > 0 && !forcedNormal;
-		e.pending = { at: this.now(), safe, stage: "load" };
+		// A second tab opening the same notebook keeps the stage of the first.
+		e.pending = { at: this.now(), safe, stage: this.live.has(path) && e.pending ? e.pending.stage : "load" };
+		this.live.set(path, (this.live.get(path) ?? 0) + 1);
 		this.put(path, e);
 		return { safe, failures: e.failures, suggestRepair: e.failures >= 2, skipMedia: safe && e.mediaFailed, forcedNormal };
 	}
@@ -116,6 +120,7 @@ export class SafeModeTracker {
 
 	/** The open settled: painted and alive for SETTLE_MS. */
 	succeeded(path: string): void {
+		this.release(path);
 		const e = this.entries.get(path);
 		if (!e?.pending) return;
 		const { safe, stage } = e.pending;
@@ -133,6 +138,8 @@ export class SafeModeTracker {
 
 	/** The view closed (or the app went to the background) before the open settled: not a failure. */
 	abandoned(path: string): void {
+		this.release(path);
+		if (this.live.has(path)) return; // another tab is still opening it: its marker stays
 		const e = this.entries.get(path);
 		if (!e?.pending) return;
 		e.pending = null;
@@ -155,6 +162,11 @@ export class SafeModeTracker {
 	}
 
 	rename(oldPath: string, newPath: string): void {
+		const n = this.live.get(oldPath);
+		if (n !== undefined) {
+			this.live.delete(oldPath);
+			this.live.set(newPath, n);
+		}
 		const e = this.entries.get(oldPath);
 		if (!e) return;
 		this.entries.delete(oldPath);
@@ -163,6 +175,12 @@ export class SafeModeTracker {
 
 	forget(path: string): void {
 		if (this.entries.delete(path)) this.save();
+	}
+
+	private release(path: string): void {
+		const n = (this.live.get(path) ?? 0) - 1;
+		if (n > 0) this.live.set(path, n);
+		else this.live.delete(path);
 	}
 
 	private put(path: string, e: Entry): void {

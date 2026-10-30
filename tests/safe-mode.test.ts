@@ -159,3 +159,25 @@ describe("safe mode (#346)", () => {
 		expect(isOpenInSafeMode(P)).toBe(false);
 	});
 });
+
+describe("safe mode with two tabs of one notebook", () => {
+	it("a second tab opening the same notebook in the same app run is not a crash", () => {
+		const slot = new Slot();
+		const t = new SafeModeTracker(slot);
+		expect(t.begin(P).safe).toBe(false);
+		expect(t.begin(P)).toMatchObject({ safe: false, failures: 0 }); // workspace restore with two tabs
+		t.succeeded(P);
+		t.succeeded(P);
+		expect(new SafeModeTracker(slot).begin(P).safe).toBe(false);
+	});
+
+	it("closing one of two opening tabs keeps the marker of the other", () => {
+		const slot = new Slot();
+		const t = new SafeModeTracker(slot);
+		t.begin(P);
+		t.begin(P);
+		t.abandoned(P);
+		// The app dies while the other tab is still opening.
+		expect(new SafeModeTracker(slot).begin(P).safe).toBe(true);
+	});
+});
