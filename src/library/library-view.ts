@@ -50,6 +50,8 @@ export interface LibraryHost {
 	afterDuplicate?(file: TFile): Promise<void>;
 	/** Library trash (#160): deleting moves to the plugin trash instead of deleting. */
 	trash?: LibraryTrash;
+	/** wave 0.7: opens the list of recently edited pages (roadmap 365). */
+	openRecentPages?(): void;
 	loadIndex(): Promise<unknown>;
 	saveIndex(data: unknown): Promise<void>;
 }
@@ -660,6 +662,16 @@ export class LibraryView extends ItemView {
 		this.navItem(nav, { icon: "library", label: t("library.nav.all"), count: this.index.size, scope: "all", key: "nav:all" });
 		this.navItem(nav, { icon: "star", label: t("library.nav.favorites"), count: favorites, scope: "favorites", key: "nav:favorites" });
 		this.navItem(nav, { icon: "clock", label: t("library.nav.recent"), scope: "recent", key: "nav:recent" });
+		const recentPages = this.host.openRecentPages?.bind(this.host); // wave 0.7: quick nav
+		if (recentPages) {
+			const b = nav.createEl("button", { cls: "notebook-lib-nav-item", attr: { "data-key": "nav:recent-pages" } });
+			setIcon(b.createSpan({ cls: "notebook-lib-nav-icon" }), "history");
+			b.createSpan({ cls: "notebook-lib-nav-label", text: t("library.nav.recentPages") });
+			b.addEventListener("click", () => {
+				this.setDrawer(false);
+				recentPages();
+			});
+		}
 		const trash = this.host.trash;
 		if (trash) {
 			addTrashNavItem(nav, () => {

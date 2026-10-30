@@ -569,6 +569,108 @@ Results table for steps 1 to 134. Fill it in as you go.
 | 132 API: create, pages, info | | | |
 | 133 API: images and PDF | | | |
 | 134 API: errors and safety | | | |
+| T1 Timetable editor: add two classes (one on odd weeks, one with a term and a room, one linked to a course folder), save, reopen: values are kept; `Notebooks/_timetable.json` exists and is readable | | | |
+| T2 Open Obsidian (or the library) during a class: notice with *Open lecture page*; tap it: the course's notebook opens with a new page headed "<course> — <date>"; do it again: the existing page is shown, no second page | | | |
+| T3 Turn on *Open it without asking*, restart during a class: the notebook opens on the new lecture page by itself; turn it off and the notice returns (once per class and day) | | | |
+| T4 During a class, *New lecture* in a linked notebook has the course filled in; in an unrelated linked notebook it shows the notebook name | | | |
+| T5 Library shows *Now: <course>* during a class (also a few minutes before, per the lead setting) and nothing outside classes; tapping it opens the lecture page | | | |
+| T6 Edit `_timetable.json` by hand (also from another device through sync), including a deliberate mistake: a good edit is picked up; a bad file is reported in the editor and is not overwritten | | | |
+| S1 Open side by side (tablet sideways) | | | |
+| S2 Phone and tablet upright | | | |
+| S3 Add a notes page for a slide | | | |
+| S4 Follow both ways | | | |
+| S5 Link and unlink | | | |
+| S6 Links survive restarts and renames | | | |
+| S7 Notebook with PDF backgrounds as the PDF side | | | |
+| S8 Damaged links file | | | |
+
+### Lecture pack (wave 0.6)
+
+K1. **Lecture from slides, slide + notes right.** Library → *New lecture from slides* (or the command). Choose a slides PDF from the vault, then from the device. In the dialog leave the course as proposed, set today, header *Header page before the slides*, layout *Slide with notes on the right*, notes paper *Ruled*. Expected: the notebook "<course> <date>" appears in the folder and opens; page 1 is the header page ("Course — date"); the next pages show one slide each in the left part with ruled lines to its right; the slide is not stretched; writing in the notes area and on the slide works and stays where it was written after reopening.
+K2. **Notes below.** Same with *Slide with notes below* and header *Header text on the first page*: the text sits below the first slide; no header page. Rotate the tablet: pages refit.
+K3. **On the slide.** Layout *On the slide*, header *No header*: the pages are the slides at their own size, as with *Import PDF*.
+K4. **Notes page after every slide.** Turn on *Notes page after every slide* with paper *Millimetre* (also combined with a notes layout): after each slide page there is a blank millimetre page of the same size. Count the pages: twice the slides (plus the header page).
+K5. **Insert PDF with layout.** In an existing notebook, page menu → *Insert PDF*, choose a PDF and a range: a layout dialog follows (the last choice is proposed; Enter confirms). Pick a layout with notes and notes pages: the pages are inserted after the current page; one undo removes all of them; the PDF is not copied again if it was already imported (check the assets folder).
+K6. **Cancel.** Cancel at each dialog (file choice, setup, range, layout): nothing is created or inserted, and cancelling the setup dialog of a new lecture leaves no PDF in the assets folder.
+K8. **Exercise page here.** On a slide page with a notes area, tap … in the toolbar → *Exercise page here* (also page menu and the command): a blank grid page as large as the whole slide page appears right after it and is shown; one undo removes it. *Exercise page paper…* (page menu) changes the paper to millimetre: the next exercise page uses it, also after restarting Obsidian.
+K7. **Large deck on the tablet.** Import a deck of 60+ slides with notes on the right: the progress message appears and the notebook opens; scrolling and zoom stay smooth.
+
+| Step | Device / Obsidian version | Result | Notes |
+|---|---|---|---|
+| K1 Slide + notes right | | | |
+| K2 Notes below, header text | | | |
+| K3 On the slide | | | |
+| K4 Notes page after every slide | | | |
+| K5 Insert PDF with layout | | | |
+| K6 Cancel | | | |
+| K7 Large deck | | | |
+| K8 Exercise page here | | | |
+| G1 Finger taps | | | |
+| G2 Scribble to erase | | | |
+| G3 Auto-scroll | | | |
+| G4 Side button: lasso | | | |
+| G5 Side button: previous tool | | | |
+| G6 Defaults | | | |
+| L1 Library trash: move to trash | | | |
+| L2 Library trash: restore (original place, free name) | | | |
+| L3 Delete permanently and empty trash | | | |
+| L4 Trash auto-empty | | | |
+| L5 Trash is invisible to library, search, companion notes, conflicts | | | |
+| L6 Trash through sync | | | |
+| L7 Deleted pages: list and restore | | | |
+| L8 Save page as template | | | |
+| L9 New page from template | | | |
+| L10 New notebook from template | | | |
+
+### Library trash, page trash and templates (wave 0.6)
+
+L1. **Move to trash.** In the library, delete a notebook (card menu) and a non-empty folder. Expected: a confirmation that says it can be restored; both disappear from the library and from search; the notebook tab, if open, closes; in the file explorer they are under `Notebooks/_trash/items/<id>/` with a `meta.json`.
+L2. **Restore.** Library sidebar → *Trash*. Restore the notebook: it returns to its folder and opens with all pages and ink. Create a new notebook with the same name, trash the first one again and restore it: expected the name `<name> 2`. Restore the folder: its notebooks are back inside it.
+L3. **Delete permanently and empty.** In *Trash*, *Delete permanently* on one item: a confirmation first, then it is gone (or in the system trash, per Obsidian's *Deleted files* setting). *Empty trash*: confirmation, then everything goes. Cancel both once and check nothing was deleted.
+L4. **Auto-empty.** Setting *Empty the trash automatically* = 1 day, trash a notebook, set the device clock two days ahead (or change `deletedAt` in `meta.json` to an old time), restart Obsidian. Expected: the item is removed; with the setting at 0 nothing is ever removed.
+L5. **Trash is invisible.** With companion notes on, trash a notebook: no companion note is created inside `_trash`; the existing note stays. Trashed notebooks do not appear in *Open notebooks*, search, or *Move to notebook*. A copy named `Name (1)` made by Google Drive inside `_trash` produces no merge notice.
+L6. **Sync.** Trash a notebook on one device, let Google Drive / OneDrive sync, open the library on the other device. Expected: the notebook is gone from the library there and listed in *Trash*; restore on that device works.
+L7. **Deleted pages.** Delete a page from the page menu, fully close Obsidian and reopen the notebook. Page menu → *Deleted pages...*: the page is listed with a thumbnail. *Restore*: it comes back after the page that preceded it; *Undo* removes it again and it is listed again. Delete a page that has a PDF background or an image and restore it: the background shows.
+L8. **Save as template.** On a page with ink, text and a ruled A5 paper choose *Save page as template...*, name it. Expected: a notice, and a `.notebook` file in the templates folder (default `Notebooks/_templates/`).
+L9. **Page from template.** Page menu → *New page from template...*: the gallery shows the built-in templates and yours with thumbnails; *Use* adds a page after the current one with the same content, paper and size; one *Undo* removes it. Do it twice: both pages are independent.
+L10. **Notebook from template.** *New notebook* dialog → *Template* → *Choose...* → pick one → *Create*. Expected: the notebook opens with the template's pages. *Clear* goes back to the paper and size choices. Delete one of your templates from the gallery: it disappears and the file goes to the Obsidian trash.
+
+| O1 Ink follows an image | | | |
+| O2 Ink follows a text box | | | |
+| O3 Setting off | | | |
+| O4 Delete an object with ink | | | |
+| O5 Undo before taking the offer | | | |
+| O6 Built-in stamps | | | |
+| O7 Save a stamp | | | |
+| O8 Stamp with image and text | | | |
+| O9 Rename and delete a stamp | | | |
+| O10 Palette on a phone and with a finger | | | |
+| A1 Shared tags | | | |
+| A2 Tags and the companion note you edit | | | |
+| A3 Tag editor hint | | | |
+| A4 API: create, pages, info | | | |
+| A5 API: images and PDF | | | |
+| A6 API: errors and safety | | | |
+| Z1 Cards | | | |
+| Z2 Slip-box | | | |
+| Z3 Drawn links | | | |
+| Z11 Title and transcription | | | |
+| Z12 Regions and container | | | |
+| R1 Search the PDF text | | | |
+| R2 Search on a big PDF | | | |
+| R3 Snapping highlighter | | | |
+| R4 Hide annotations | | | |
+| R5 Dim background | | | |
+| V1 Outline and coloured bookmarks | | | |
+| V2 Page tags | | | |
+| V3 Last position across devices | | | |
+| V4 New papers | | | |
+| Q1 Page switcher: search | | | |
+| Q2 Page switcher: thumbnails | | | |
+| Q3 Recent pages: log | | | |
+| Q4 Recent pages: library | | | |
+| Q5 Go to page number | | | |
+| Q6 Page indicator tap | | | |
 
 Benchmark output (step 21): paste it here.
 
@@ -610,6 +712,18 @@ Not verified on a device. Use **Create stress-test notebook** (10,000 strokes, 1
 | D4 Warning appears | | | |
 | D5 Split page | | | |
 | D6 Dismiss | | | |
+### Quick navigation (wave 0.7)
+
+Not verified on a device. Commands: *Go to page…*, *Recently edited pages*, *Go to page number…*.
+
+- **Q1. Page switcher: search.** Have two notebooks, one with a titled bookmark, one with a page tag and a text box. Run *Go to page…* and type: part of a notebook name; `name 3`; `p3`; the bookmark title; the tag; a word from the text box. Expected: each result opens the right notebook at the right page; a page number beyond the notebook is not offered.
+- **Q2. Page switcher: thumbnails.** With many notebooks (including a PDF one) type a common letter. Expected: the list appears at once, thumbnails fill in one after another without freezing typing; closing the dialog stops them.
+- **Q3. Recent pages: log.** Write on page 4 of a notebook, wait 5 seconds, then run *Recently edited pages*. Expected: that page is first, "Edited just now". Only scroll/open another notebook: nothing new is logged.
+- **Q4. Recent pages: library.** Open the library, tap *Recent pages* in the sidebar. Expected: the same list. Rename the notebook, reopen the list: the entry follows the new name; delete it: the entry disappears.
+- **Q5. Go to page number.** In an open notebook run *Go to page number…*, type `7`, then `p7`, then the start of a bookmark title. Expected: each scrolls to the page; `999` offers nothing.
+- **Q6. Page indicator tap.** Tap the "3 / 12" indicator in the toolbar. Expected: the same dialog opens.
+- **Q7. Recent pages after reordering.** Edit page 5, move it to position 2, open it from the list. Expected: the page that was edited opens (found by id).
+- **Q8. Not synced.** Check that no new file appeared in the vault or the plugin folder because of the recent pages (the log is in device-local storage only).
 
 ## Quick check — Windows
 

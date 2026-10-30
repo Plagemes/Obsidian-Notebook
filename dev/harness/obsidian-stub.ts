@@ -770,6 +770,29 @@ export class FuzzySuggestModal<T> extends Modal {
 	}
 }
 
+/** wave 0.7: quick nav. */
+export class SuggestModal<T> extends Modal {
+	inputEl = document.createElement("input");
+	emptyStateText = "";
+	setPlaceholder(): void {
+		/* nothing */
+	}
+	setInstructions(): void {
+		/* nothing */
+	}
+	getSuggestions(query: string): T[] {
+		void query;
+		return [];
+	}
+	renderSuggestion(value: T, el: HTMLElement): void {
+		void value;
+		void el;
+	}
+	onChooseSuggestion(value: T): void {
+		void value;
+	}
+}
+
 export class PluginSettingTab {
 	readonly containerEl = document.createElement("div");
 	constructor(readonly app: App, readonly plugin: unknown) {}

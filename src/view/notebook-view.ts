@@ -70,6 +70,8 @@ import { addOutlinePageMenuItems, type OutlineHost } from "./outline";
 import { PAGE_AT_KEY, PageClock, pageAtFromState, pageState, startPosition } from "./position-sync";
 import { positionAt, updatePosition } from "../model/position";
 import { LocationKeeper } from "./last-location";
+import { attachPageIndicatorTap, GotoPageModal } from "./goto-page"; // wave 0.7: quick nav
+import { extractBookmarks } from "../library/scan";
 import { GestureInput } from "./gesture-input";
 import { PenRadial } from "./radial-menu";
 import { askPdfRange } from "./pdf-range-modal";
@@ -125,6 +127,8 @@ export interface NotebookHost {
 	settings: NotebookSettings;
 	/** Instant start: the reader is on this page (1-based) of this notebook. Called a moment after it changes. */
 	remember?(path: string, page: number, pos?: SavedPosition | null): void;
+	/** wave 0.7: a real edit on page `pageId` (`num`, 1-based) of notebook `nb`; feeds the per-device recent pages log. */
+	edited?(nb: string, path: string, pageId: string, num: number): void;
 	/** Instant save journal shared by all views. */
 	journal?: JournalStore;
 	/** Persists the plugin settings (favourite pens, eraser size, pen-only). Optional: absent in tests. */
@@ -374,6 +378,7 @@ export class NotebookView extends FileView {
 		});
 		this.toolbar.setSelection(false);
 		this.showPageMode = this.toolbar.addMoreToggle("book-open", "toolbar.pageMode", () => this.togglePageMode());
+		attachPageIndicatorTap(this.contentEl, () => new GotoPageModal(this.app, this).open()); // wave 0.7: quick nav
 		this.body = this.contentEl.createDiv({ cls: "notebook-body" });
 		this.stage = this.body.createDiv({ cls: "notebook-stage" });
 		this.perfEl = this.stage.createDiv({ cls: "notebook-perf" });
@@ -1305,6 +1310,18 @@ export class NotebookView extends FileView {
 		return true;
 	}
 
+	/** wave 0.7 (366): what "Go to page number" needs. */
+	gotoContext(): { total: number; current: number; bookmarks: Array<{ index: number; title: string }> } {
+		const doc = this.session?.doc;
+		return { total: doc?.pages.length ?? 0, current: this.currentPageIndex(), bookmarks: doc ? extractBookmarks(doc).map((b) => ({ index: b.page, title: b.title })) : [] };
+	}
+
+	/** wave 0.7 (366): scrolls to the page (0-based). */
+	jumpToPage(index: number): void {
+		const n = this.session?.doc?.pages.length ?? 0;
+		if (n > 0) this.goToPage(Math.min(n - 1, Math.max(0, index)));
+	}
+
 	/** Index of the page in view (for commands). */
 	currentPage(): number {
 		return this.currentPageIndex();
@@ -1684,11 +1701,21 @@ export class NotebookView extends FileView {
 		new Notice(`Notebook: ${message}`, 8000);
 	}
 
+	/** Every real change of the document: schedules the save and logs the page as recently edited (365). */
+	private markChanged(): void {
+		this.session?.markChanged();
+		const doc = this.session?.doc;
+		if (!doc || !this.file || this.session?.mode !== "ok") return;
+		const num = this.currentPageIndex() + 1;
+		const page = doc.pages[num - 1];
+		if (page) this.host.edited?.(doc.id, this.file.path, page.id, num);
+	}
+
 	private afterHistoryChange(): void {
 		this.refreshLayout();
 		// The document may be shorter now (page deleted or made smaller): keep the view inside it.
 		this.setViewport(this.viewport);
-		this.session?.markChanged();
+		this.markChanged();
 		this.updateHistoryButtons();
 		this.updatePageIndicator();
 		this.pageNav?.refresh();
@@ -2294,7 +2321,7 @@ export class NotebookView extends FileView {
 			this.erasing = null;
 			if (erasing.commands.length > 0) {
 				this.history.record(new Batch("Erase", erasing.commands));
-				this.session?.markChanged();
+				this.markChanged();
 				this.updateHistoryButtons();
 				this.scheduleNavRefresh();
 			}
@@ -2404,7 +2431,7 @@ export class NotebookView extends FileView {
 		this.history.execute(steps.keep);
 		this.history.execute(steps.erase);
 		this.renderer.invalidate();
-		this.session?.markChanged();
+		this.markChanged();
 		this.updateHistoryButtons();
 		this.scheduleNavRefresh();
 		return true;
@@ -2437,7 +2464,7 @@ export class NotebookView extends FileView {
 			return;
 		}
 		for (const s of strokes) this.renderer?.appendStroke(pageIndex, s);
-		this.session?.markChanged();
+		this.markChanged();
 		this.updateHistoryButtons();
 		this.scheduleNavRefresh();
 	}
@@ -2567,7 +2594,7 @@ export class NotebookView extends FileView {
 		if (!cmd) return;
 		this.history.execute(cmd);
 		this.renderer?.invalidate();
-		this.session?.markChanged();
+		this.markChanged();
 		this.updateHistoryButtons();
 		this.scheduleNavRefresh();
 	}
@@ -2789,7 +2816,7 @@ export class NotebookView extends FileView {
 		sel.bounds = unionBounds(moved, movedEls, measureText) ?? sel.bounds;
 		this.pushSelection();
 		this.renderer?.invalidate();
-		this.session?.markChanged();
+		this.markChanged();
 		this.updateHistoryButtons();
 		this.scheduleNavRefresh();
 	}
