@@ -128,7 +128,8 @@ export class CreateDialog extends Modal {
 	}
 
 	onOpen(): void {
-		this.modalEl.addClass("notebook-create-modal");
+		// nb-ui: the scope of the design-system styles (styles.css, 0.12 section), above Obsidian's own button and input rules.
+		this.modalEl.addClass("notebook-create-modal", "nb-ui");
 		this.titleEl.empty();
 		this.render();
 	}

@@ -82,6 +82,37 @@ describe("styles.css", () => {
 		expectDecl(".notebook-favs", "overflow-x", "auto");
 	});
 
+	it("scopes every design-system rule under .nb-ui, above Obsidian's own button and input rules (0.12.1)", () => {
+		// Obsidian's app.css styles `button:not(.clickable-icon)`, `button:hover` and `input[type=…]` at specificity 0,1,1:
+		// a single-class component rule loses to them (0.12.0 showed Obsidian's grey pills on the device). Every rule of
+		// the 0.12 section carries the .nb-ui scope (0,2,0 or more); the settings tab and the leaf rule are outside it.
+		const start = css.indexOf("/* ===== 0.12: Home and the library on the design system");
+		expect(start).toBeGreaterThan(0);
+		const section = parseRules(css.slice(start)).rules;
+		const splitTop = (list: string) => {
+			const out: string[] = [];
+			let depth = 0;
+			let cur = "";
+			for (const ch of list) {
+				if (ch === "(") depth++;
+				if (ch === ")") depth--;
+				if (ch === "," && depth === 0) {
+					out.push(cur.trim());
+					cur = "";
+				} else cur += ch;
+			}
+			return [...out, cur.trim()];
+		};
+		const unscoped = [...section.keys()].flatMap(splitTop)
+			.filter((sel) => !sel.startsWith(".workspace-leaf-content") && !sel.startsWith(".notebook-settings"))
+			.filter((sel) => !sel.includes(".nb-ui"));
+		expect(unscoped).toEqual([]);
+		// The reset that neutralises Obsidian's defaults inside the scope.
+		expect(section.get(".nb-ui button")?.get("background-color")).toBe("transparent");
+		expect(section.get(".nb-ui button")?.get("box-shadow")).toBe("none");
+		expect(section.get(".nb-ui button")?.get("height")).toBe("auto");
+	});
+
 	it("never makes the pen's wet canvas translucent or blended", () => {
 		const wet = rules.get(".notebook-canvas-wet");
 		expect(wet?.get("opacity")).toBeUndefined();
