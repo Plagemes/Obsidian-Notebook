@@ -41,6 +41,10 @@ const SNAPSHOT_MAX_SIDE = 2048;
 const FLASH_MS = 1800;
 /** At most this many notebooks are read to find a renamed source notebook by its id. */
 const FIND_BY_ID_LIMIT = 400;
+/** A source notebook not found is not looked for again for this long, ms. */
+const MISS_TTL_MS = 60_000;
+/** Where each source notebook (by document id) was found this session, or null (not found) and when. */
+const notebookPaths = new Map<string, { path: string | null; at: number }>();
 
 /** What the view lends to the excerpt tools. */
 export interface ExcerptHost {
@@ -67,6 +71,8 @@ export interface ExcerptHost {
 	previewFree(): boolean;
 	scale(): number;
 	gotoContext: GotoView["gotoContext"];
+	/** Forgets any other one-shot placement armed in the view (an armed marker or box). */
+	disarmOthers(): void;
 	/** The page and page point under a client position, or null (between pages, nothing laid out). */
 	pageAtClient(clientX: number, clientY: number): { pageIndex: number; local: [number, number] } | null;
 }
@@ -118,6 +124,8 @@ export class ExcerptTools {
 	private flashTimer: number | null = null;
 	private busy = false;
 	private readOnlyTap: ReadOnlyTap | null = null;
+	/** A search for a source notebook is running (badge taps meanwhile are ignored). */
+	private finding = false;
 	private readonly disposers: Array<() => void> = [];
 
 	constructor(private readonly host: ExcerptHost) {}
@@ -139,6 +147,8 @@ export class ExcerptTools {
 
 	private start(mode: Mode): void {
 		if (!this.host.editable()) return;
+		// One one-shot placement at a time: an armed marker would otherwise take the region's drag (or the reverse).
+		this.host.disarmOthers();
 		const sel = this.host.selection();
 		const doc = this.host.doc();
 		const page = sel ? doc?.pages[sel.pageIndex] : undefined;
@@ -192,10 +202,11 @@ export class ExcerptTools {
 	 * The contact ended: the excerpt whose badge was tapped (short, unmoved, not cancelled), or null. The view then
 	 * discards the dot the tap would have left and jumps; any other contact stays the ink it was.
 	 */
-	takeBadgeTap(cancelled: boolean, now: number): ExcerptElement | null {
+	takeBadgeTap(cancelled: boolean, now: number, extentPx: () => number): ExcerptElement | null {
 		const c = this.contact;
 		this.contact = null;
-		if (!c || cancelled || c.moved || now - c.t > TAP_MS) return null;
+		// `extentPx`: how far what the contact drew reaches (every point and where it lifted): anything longer is ink.
+		if (!c || cancelled || c.moved || now - c.t > TAP_MS || extentPx() > TAP_SLOP_PX) return null;
 		const page = this.host.doc()?.pages.find((p) => p.id === c.pageId);
 		return page?.elements?.includes(c.target) ? c.target : null;
 	}
@@ -273,7 +284,15 @@ export class ExcerptTools {
 	private async openOther(el: ExcerptElement, region: Rect, name: string): Promise<void> {
 		const { app } = this.host;
 		const source = el.source;
-		const file = await this.findNotebook(source.notebook, source.doc);
+		// One search at a time: more taps while one runs are ignored.
+		if (this.finding) return;
+		this.finding = true;
+		let file: TFile | null;
+		try {
+			file = await this.findNotebook(source.notebook, source.doc);
+		} finally {
+			this.finding = false;
+		}
 		if (!file) {
 			showNotice(t("excerpt.notebookMissing", { name }), 8000);
 			return;
@@ -283,22 +302,39 @@ export class ExcerptTools {
 		await openNotebookAtPage(app, file, null, null, source.page, region);
 	}
 
-	/** The notebook file whose document id is `docId`: at `path`, else of the same name, else anywhere in the vault. */
+	/**
+	 * The notebook file whose document id is `docId`: at `path`, else of the same name, else anywhere in the vault,
+	 * notebooks in the stored path's folder first (a copy made with "Make a copy" keeps the id). Results, misses too,
+	 * are remembered for the session (a remembered file is checked again; a miss is retried after a while).
+	 */
 	private async findNotebook(path: string, docId: string): Promise<TFile | null> {
 		const { app } = this.host;
+		const known = notebookPaths.get(docId);
+		if (known && known.path === null && Date.now() - known.at < MISS_TTL_MS) return null;
 		const tried = new Set<string>();
 		const matches = async (f: TFile | null): Promise<boolean> => {
 			if (!f || tried.has(f.path) || !isNotebookFile(f)) return false;
 			tried.add(f.path);
 			return (await this.notebookId(f)) === docId;
 		};
-		const byPath = app.vault.getFileByPath(path);
-		if (await matches(byPath)) return byPath;
-		const byName = resolveNotebookFile(app, { kind: "path", value: path }, this.host.path() ?? "", this.host.folder());
-		if (await matches(byName)) return byName;
-		const all = app.vault.getFiles().filter((f) => isNotebookFile(f) && !tried.has(f.path)).slice(0, FIND_BY_ID_LIMIT);
-		for (const f of all) if (await matches(f)) return f;
-		return null;
+		const found = async (): Promise<TFile | null> => {
+			if (known?.path) {
+				const f = app.vault.getFileByPath(known.path);
+				if (await matches(f)) return f;
+			}
+			const byPath = app.vault.getFileByPath(path);
+			if (await matches(byPath)) return byPath;
+			const byName = resolveNotebookFile(app, { kind: "path", value: path }, this.host.path() ?? "", this.host.folder());
+			if (await matches(byName)) return byName;
+			const folder = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+			const rank = (f: TFile) => ((f.parent?.path ?? "") === folder || (folder === "" && f.parent?.path === "/") ? 0 : 1);
+			const all = app.vault.getFiles().filter((f) => isNotebookFile(f) && !tried.has(f.path)).sort((a, b) => rank(a) - rank(b)).slice(0, FIND_BY_ID_LIMIT);
+			for (const f of all) if (await matches(f)) return f;
+			return null;
+		};
+		const file = await found();
+		notebookPaths.set(docId, { path: file?.path ?? null, at: Date.now() });
+		return file;
 	}
 
 	/** The document id written at the start of a notebook file, or null when it cannot be read. */

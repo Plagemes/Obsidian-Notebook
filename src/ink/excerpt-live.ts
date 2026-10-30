@@ -94,6 +94,21 @@ export function regionContent(page: Page, region: Region, tokens: Tokens, bounds
 	return { strokes, elements, fingerprint: parts.join(",") };
 }
 
+/**
+ * Everything of the source page that changes how its region looks, apart from the scale: the region's content
+ * fingerprint, the page size, paper, background and margins (they place the background), and the automatic numbers of
+ * the numbered equations in the region (they depend on the whole notebook).
+ */
+export function liveContentKey(page: Page, content: RegionContent, numbers: ReadonlyMap<string, number>): string {
+	const bg = page.background;
+	const m = page.margins;
+	const eq = content.elements.filter((e) => e.type === "equation" && e.numbered).map((e) => `${e.id}=${numbers.get(e.id) ?? ""}`);
+	return [
+		content.fingerprint, page.width, page.height, page.paper.kind, page.paper.spacing,
+		bg ? `${bg.kind}:${bg.asset}:${bg.kind === "pdf" ? bg.page : 0}` : "", m ? `${m.left},${m.right},${m.bottom}` : "", eq.join(";"),
+	].join("|");
+}
+
 /** A cached picture and what it was drawn from. */
 export interface LiveEntry<T> {
 	key: string;
@@ -101,7 +116,7 @@ export interface LiveEntry<T> {
 	bytes: number;
 	/** When it was drawn (ms). */
 	at: number;
-	/** Fingerprint of the region content it shows (to tell, after an edit, whether it must be drawn again). */
+	/** `liveContentKey` of what it shows (to tell, after an edit, whether it must be drawn again). */
 	fingerprint: string;
 	/** The excerpt's source, to find its region content again. */
 	source: { page: string; region: Region };

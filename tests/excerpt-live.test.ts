@@ -4,7 +4,7 @@
  * on-screen scale cap, the document id of a notebook file (renamed sources), and the staged loading of large v9 files.
  */
 import { describe, expect, it } from "vitest";
-import { BoundsCache, LiveCache, liveScale, LIVE_MAX_SIDE, regionContent, Tokens, type LiveEntry } from "../src/ink/excerpt-live";
+import { BoundsCache, LiveCache, liveContentKey, liveScale, LIVE_MAX_SIDE, regionContent, Tokens, type LiveEntry } from "../src/ink/excerpt-live";
 import { createDocument, createPage } from "../src/model/document";
 import { documentIdOf } from "../src/model/excerpts";
 import { v10OnlyElement } from "../src/model/migrations";
@@ -93,6 +93,21 @@ describe("region content", () => {
 		expect(after).not.toBe(before);
 		p.strokes[0] = line(120, 120, 180, 150);
 		expect(regionContent(p, region, tokens, bounds).fingerprint).not.toBe(after);
+	});
+});
+
+describe("live content key", () => {
+	it("changes with the page's margins, paper, size, background and the numbers of the region's equations", () => {
+		const p = createPage({ width: 600, height: 800 });
+		p.elements = [{ id: "e1", type: "equation", x: 120, y: 120, width: 40, height: 14, latex: "x", fontSize: 12, color: "#000000", numbered: true }];
+		const c = regionContent(p, region, new Tokens(), new BoundsCache());
+		const base = liveContentKey(p, c, new Map([["e1", 1]]));
+		expect(liveContentKey(p, c, new Map([["e1", 1]]))).toBe(base);
+		expect(liveContentKey(p, c, new Map([["e1", 2]]))).not.toBe(base);
+		expect(liveContentKey({ ...p, margins: { left: 20, right: 0, bottom: 0 } }, c, new Map([["e1", 1]]))).not.toBe(base);
+		expect(liveContentKey({ ...p, paper: { kind: "ruled", spacing: 20 } }, c, new Map([["e1", 1]]))).not.toBe(base);
+		expect(liveContentKey({ ...p, width: 700 }, c, new Map([["e1", 1]]))).not.toBe(base);
+		expect(liveContentKey({ ...p, background: { kind: "pdf", asset: "a", page: 2 } }, c, new Map([["e1", 1]]))).not.toBe(base);
 	});
 });
 

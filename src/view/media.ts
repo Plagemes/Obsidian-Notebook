@@ -2,7 +2,7 @@ import { loadPdfJs, normalizePath, Platform, type App, type TFile } from "obsidi
 import { t } from "../i18n";
 import type { MediaSource } from "../ink/renderer";
 import { drawPageRaster } from "../ink/page-raster";
-import { BoundsCache, LIVE_BUDGET_BYTES, LiveCache, liveScale, regionContent, Tokens } from "../ink/excerpt-live";
+import { BoundsCache, LIVE_BUDGET_BYTES, LiveCache, liveContentKey, liveScale, regionContent, Tokens } from "../ink/excerpt-live";
 import { clampSourceRegion, elementAssetId, excerptSourceState } from "../model/excerpts";
 import { equationNumbers } from "../model/math-elements";
 import type { Asset, AssetKind, ExcerptElement, NotebookDocument, Page, Stroke } from "../model/types";
@@ -89,7 +89,10 @@ export class NotebookMedia implements MediaSource {
 		c.width = 0;
 		c.height = 0;
 	});
+	/** The check after an edit (excerptsChanged). */
 	private liveTimer: number | null = null;
+	/** The repaint of a picture that was drawn too recently to be drawn again at once (its own timer). */
+	private throttleTimer: number | null = null;
 	private readonly tokens = new Tokens();
 	private readonly bounds = new BoundsCache();
 	/** v10: stroke shapes reused by the live pictures (strokes are immutable). */
@@ -250,9 +253,12 @@ export class NotebookMedia implements MediaSource {
 		const ids = new Set<string>();
 		for (const p of doc.pages) for (const e of p.elements ?? []) if (e.type === "excerpt") ids.add(e.id);
 		this.live.retain(ids);
+		let numbers: ReadonlyMap<string, number> | null = null;
 		for (const [, entry] of this.live.values()) {
 			const page = doc.pages.find((p) => p.id === entry.source.page);
-			if (!page || regionContent(page, entry.source.region, this.tokens, this.bounds).fingerprint !== entry.fingerprint) return true;
+			if (!page) return true;
+			numbers ??= equationNumbers(doc.pages);
+			if (liveContentKey(page, regionContent(page, entry.source.region, this.tokens, this.bounds), numbers) !== entry.fingerprint) return true;
 		}
 		return false;
 	}
@@ -294,18 +300,17 @@ export class NotebookMedia implements MediaSource {
 			else if (this.images.get(id) === "loading") return have?.picture ?? null;
 		}
 		const bgWidth = background && "width" in background ? Number(background.width) : 0;
-		const key = [
-			content.fingerprint, page.width, page.height, page.paper.kind, page.paper.spacing, bg ? `${bg.asset}:${bg.kind === "pdf" ? bg.page : 0}` : "",
-			scale, region.x, region.y, region.width, region.height, bgWidth, this.imageRevision,
-		].join("|");
+		const numbers = equationNumbers(doc.pages);
+		const contentKey = liveContentKey(page, content, numbers);
+		const key = [contentKey, scale, region.x, region.y, region.width, region.height, bgWidth, this.imageRevision].join("|");
 		if (have?.key === key) return have.picture;
 		const now = Date.now();
 		if (have && now - have.at < LIVE_MIN_INTERVAL_MS) {
-			if (this.liveTimer === null) {
-				this.liveTimer = window.setTimeout(() => {
-					this.liveTimer = null;
+			if (this.throttleTimer === null) {
+				this.throttleTimer = window.setTimeout(() => {
+					this.throttleTimer = null;
 					this.changed();
-				}, LIVE_MIN_INTERVAL_MS);
+				}, LIVE_MIN_INTERVAL_MS - (now - have.at));
 			}
 			return have.picture;
 		}
@@ -315,10 +320,10 @@ export class NotebookMedia implements MediaSource {
 		const ctx = canvas.getContext("2d");
 		if (!ctx) return null;
 		drawPageRaster(ctx, { ...page, strokes: content.strokes, elements: content.elements }, scale, {
-			background, images, region, clipElements: page.elements ?? [], paths: this.paths, equationNumbers: equationNumbers(doc.pages),
+			background, images, region, clipElements: page.elements ?? [], paths: this.paths, equationNumbers: numbers,
 		});
 		this.live.set(el.id, {
-			key, picture: canvas, bytes: canvas.width * canvas.height * 4, at: now, fingerprint: content.fingerprint,
+			key, picture: canvas, bytes: canvas.width * canvas.height * 4, at: now, fingerprint: contentKey,
 			source: { page: page.id, region },
 		});
 		return canvas;
@@ -396,6 +401,8 @@ export class NotebookMedia implements MediaSource {
 	destroy(): void {
 		if (this.liveTimer !== null) window.clearTimeout(this.liveTimer);
 		this.liveTimer = null;
+		if (this.throttleTimer !== null) window.clearTimeout(this.throttleTimer);
+		this.throttleTimer = null;
 		this.live.clear();
 		this.pdf.clear();
 		this.pending.clear();

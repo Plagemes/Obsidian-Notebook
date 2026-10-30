@@ -50,7 +50,12 @@ export async function checkExcerpt(api: ExcerptCheckApi): Promise<{ ok: boolean;
 	};
 	try {
 		setTool("lasso");
+		// One one-shot placement at a time: arming a marker forgets an armed excerpt region, and the reverse.
 		v.excerptTools.excerptToPage();
+		v.markerTools.arm("star");
+		add("arming a marker disarms an armed excerpt", v.excerptTools.armed === null && v.markerTools.armed === "star");
+		v.excerptTools.excerptToPage();
+		add("arming an excerpt disarms an armed marker", v.excerptTools.armed === "page" && v.markerTools.armed === null);
 		add("nothing selected: the next drag outlines the region", v.excerptTools.armed === "page", String(v.excerptTools.armed));
 		await penStroke([at(0, 80, 80), at(0, 200, 140), at(0, 320, 220)]);
 		for (let i = 0; i < 60 && opened.length === 0; i++) await sleep(50);

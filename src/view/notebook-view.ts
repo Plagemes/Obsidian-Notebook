@@ -1632,6 +1632,7 @@ export class NotebookView extends FileView {
 			previewFree: () => this.lasso === null && (this.markers?.gesturePage ?? null) === null,
 			scale: () => this.viewport.scale,
 			gotoContext: () => this.gotoContext(),
+			disarmOthers: () => this.markers?.disarm(),
 			pageAtClient: (clientX, clientY) => {
 				const layout = this.layout;
 				if (!layout) return null;
@@ -1648,6 +1649,7 @@ export class NotebookView extends FileView {
 	private mountMarkers(): void {
 		this.markers = new MarkerTools({
 			app: this.app,
+			armed: () => this.excerpts?.disarm(),
 			doc: () => this.session?.doc ?? null,
 			editable: () => this.editable(),
 			execute: (cmd) => {
@@ -3173,7 +3175,7 @@ export class NotebookView extends FileView {
 		const n = samples.count;
 		if (n > 0) this.perfInput = samples.t[n - 1]!;
 		// v10: a contact that started on an excerpt's badge and moves is ink, not a tap.
-		if (n > 0) this.excerpts?.watch(NotebookView.at(samples, n - 1));
+		if (this.excerpts) for (let i = 0; i < n; i++) this.excerpts.watch(NotebookView.at(samples, i));
 
 		if (this.penGestures?.active) {
 			this.penGestures.move(samples);
@@ -3337,9 +3339,34 @@ export class NotebookView extends FileView {
 		this.renderer.setLive({ pageIndex: active.pageIndex, tool, color, width, points, predicted: [] });
 	}
 
+	/**
+	 * v10: how far (CSS px) what the contact in progress drew reaches: every point of the stroke and where the pen is
+	 * now (the lift), a shape's drag, a text tap that moved. A badge tap is only a contact that reaches no further than
+	 * a tap may move.
+	 */
+	private contactExtentPx(): number {
+		const s = this.viewport.scale;
+		const active = this.active;
+		if (active) {
+			const points = active.wet ? this.ink.toPoints() : active.stroke.points;
+			let minX = active.rawX, maxX = active.rawX, minY = active.rawY, maxY = active.rawY;
+			for (const [x, y] of points) {
+				if (x < minX) minX = x;
+				if (x > maxX) maxX = x;
+				if (y < minY) minY = y;
+				if (y > maxY) maxY = y;
+			}
+			return Math.hypot(maxX - minX, maxY - minY) * s;
+		}
+		const shape = this.shapeDrag;
+		if (shape) return Math.hypot(shape.b[0] - shape.a[0], shape.b[1] - shape.a[1]) * s;
+		if (this.textTap?.moved) return Infinity;
+		return 0;
+	}
+
 	private drawEnd(cancelled: boolean): void {
 		// v10: a short unmoved contact on an excerpt's badge was a tap: what it drew (a dot) is dropped, then the jump.
-		const badgeTap = this.excerpts?.takeBadgeTap(cancelled, performance.now()) ?? null;
+		const badgeTap = this.excerpts?.takeBadgeTap(cancelled, performance.now(), () => this.contactExtentPx()) ?? null;
 		this.endGesture(cancelled || badgeTap !== null);
 		if (badgeTap) this.excerpts?.openSource(badgeTap);
 		// An external change seen during the gesture was postponed; check it now.
