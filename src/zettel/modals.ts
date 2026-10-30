@@ -19,12 +19,18 @@ const typeOptions = (): Record<CardType, string> => ({
 
 /** "Make card": typed title (Z11), type, source, tags and, with Luhmann numbering, the card it branches from. */
 export class CardModal extends Modal {
-	private readonly answer: CardAnswer = { title: "", type: "permanent", source: "", tags: [], parent: "" };
+	private readonly answer: CardAnswer;
 	private tagText = "";
 	private done = false;
 
-	constructor(app: App, private readonly opts: { luhmann: boolean; preview: string | null }, private readonly finish: (answer: CardAnswer | null) => void) {
+	constructor(
+		app: App,
+		private readonly opts: { luhmann: boolean; preview: string | null; /** Z4: values the dialog starts with. */ defaults?: Partial<CardAnswer> },
+		private readonly finish: (answer: CardAnswer | null) => void,
+	) {
 		super(app);
+		this.answer = { title: "", type: "permanent", source: "", tags: [], parent: "", ...opts.defaults };
+		this.tagText = this.answer.tags.join(", ");
 	}
 
 	onOpen(): void {
@@ -45,6 +51,7 @@ export class CardModal extends Modal {
 			.setName(t("zettel.modal.cardTitle"))
 			.setDesc(t("zettel.modal.cardTitle.desc"))
 			.addText((text) => {
+				text.setValue(this.answer.title);
 				text.onChange((v) => (this.answer.title = v));
 				enter(text.inputEl);
 				window.setTimeout(() => text.inputEl.focus(), 0);
@@ -58,6 +65,7 @@ export class CardModal extends Modal {
 			.setName(t("zettel.modal.source"))
 			.setDesc(t("zettel.modal.source.desc"))
 			.addText((text) => {
+				text.setValue(this.answer.source);
 				text.onChange((v) => (this.answer.source = v));
 				enter(text.inputEl);
 			});
@@ -65,6 +73,7 @@ export class CardModal extends Modal {
 			.setName(t("zettel.modal.tags"))
 			.setDesc(t("zettel.modal.tags.desc"))
 			.addText((text) => {
+				text.setValue(this.tagText);
 				text.onChange((v) => (this.tagText = v));
 				enter(text.inputEl);
 			});

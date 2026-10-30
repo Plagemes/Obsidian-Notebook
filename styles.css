@@ -2606,3 +2606,205 @@
 .setting-item.notebook-hidden {
 	display: none;
 }
+
+/* wave 0.8: processing (Inbox view, textbook references over typed text) */
+.notebook-inbox {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 12px 16px 24px;
+	overflow-y: auto;
+}
+
+.notebook-inbox-bar {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.notebook-inbox-heading {
+	margin: 0;
+	flex: 0 0 auto;
+}
+
+.notebook-inbox-summary {
+	flex: 1 1 auto;
+	color: var(--text-muted);
+}
+
+.notebook-inbox-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.notebook-inbox-toggle {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 32px;
+}
+
+.notebook-inbox-filter {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.notebook-inbox-chip {
+	min-height: 32px;
+	padding: 0 12px;
+	border-radius: 16px;
+}
+
+.notebook-inbox-chip.is-active {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.notebook-inbox-hint {
+	margin: 0;
+}
+
+.notebook-inbox-group {
+	margin: 16px 0 4px;
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	text-transform: none;
+}
+
+.notebook-inbox-item {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-primary);
+}
+
+.notebook-inbox-item.is-selected {
+	border-color: var(--interactive-accent);
+}
+
+.notebook-inbox-item.is-done .notebook-inbox-item-text {
+	color: var(--text-faint);
+}
+
+.notebook-inbox-item-head {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+	width: 100%;
+	min-height: 44px;
+	padding: 8px 12px;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	text-align: start;
+	cursor: pointer;
+}
+
+.notebook-inbox-item-place {
+	flex: 0 0 auto;
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.notebook-inbox-item-text {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.notebook-inbox-item-badge {
+	flex: 0 0 auto;
+	padding: 0 6px;
+	border-radius: 8px;
+	background: var(--background-modifier-hover);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.notebook-inbox-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 0 12px 12px;
+}
+
+.notebook-inbox-preview {
+	max-width: 100%;
+	max-height: 60vh;
+	object-fit: contain;
+	align-self: flex-start;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: #fff;
+}
+
+.notebook-inbox-text {
+	white-space: pre-wrap;
+	user-select: text;
+}
+
+.notebook-inbox-text.is-empty {
+	color: var(--text-faint);
+}
+
+.notebook-inbox-covered {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px;
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+}
+
+.notebook-inbox-covered > div {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.notebook-inbox-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.notebook-inbox-buttons button {
+	min-height: 40px;
+}
+
+.notebook-inbox-empty {
+	padding: 24px 0;
+	color: var(--text-muted);
+}
+
+/* Textbook references: transparent hot spots over typed "p. 134" (small; hidden while the text tool is active). */
+.notebook-textbook-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 3;
+	overflow: hidden;
+	pointer-events: none;
+}
+
+.notebook-textbook-ref {
+	position: absolute;
+	left: var(--notebook-textbook-x, 0);
+	top: var(--notebook-textbook-y, 0);
+	width: var(--notebook-textbook-w, 0);
+	height: var(--notebook-textbook-h, 0);
+	box-sizing: border-box;
+	border-bottom: 2px solid var(--interactive-accent);
+	border-radius: 2px;
+	background: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+	cursor: pointer;
+	pointer-events: auto;
+}
+
+.notebook-textbook-ref:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+}
