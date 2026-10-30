@@ -218,15 +218,19 @@ export const MAX_VICTIM_SPAN = 4;
 /**
  * The strokes a scribble deletes: those it crosses with at least two different legs (a single
  * graze does not count), except very large strokes. `penWidth` is the width of the scribble's own ink.
+ * v8: hidden ("invisible ink") strokes are never victims unless `includeHidden` (the solutions of the page are
+ * shown): scratching out visible writing must not silently delete the solutions written under it.
  */
 export function scribbleVictims(
 	scribble: Scribble, strokes: readonly Stroke[], penWidth: number, boundsOf: (s: Stroke) => BBox = strokeBounds,
+	includeHidden = false,
 ): Stroke[] {
 	const sb = scribble.bounds;
 	const pad = penWidth;
 	const diag = Math.hypot(sb.maxX - sb.minX, sb.maxY - sb.minY);
 	const victims: Stroke[] = [];
 	for (const stroke of strokes) {
+		if (stroke.hidden && !includeHidden) continue;
 		const b = boundsOf(stroke);
 		if (b.maxX < sb.minX - pad || b.minX > sb.maxX + pad || b.maxY < sb.minY - pad || b.minY > sb.maxY + pad) continue;
 		if (Math.hypot(b.maxX - b.minX, b.maxY - b.minY) > MAX_VICTIM_SPAN * Math.max(diag, 1)) continue;
@@ -258,33 +262,34 @@ function legTouches(leg: readonly P[], stroke: Stroke, reach: number): boolean {
 }
 
 /**
- * One undoable step that deletes the strokes crossed by the scribble `points` on `page`, or null
- * when the stroke is not a scribble or crosses no ink (then it stays an ordinary stroke).
- */
-/**
  * Scribble erase as two undo steps: the scribble is first added as the user's stroke, then one batch removes it
  * together with the strokes it crossed. A single Undo after a false positive therefore gives back both the erased
  * strokes and the stroke the user drew; a second Undo removes that stroke too. Null when it is not a scribble.
+ * Hidden strokes are left alone unless `includeHidden` (see scribbleVictims); indices are against all of `page.strokes`.
  */
 export function scribbleEraseSteps(
 	page: Pick<Page, "id" | "strokes">, stroke: Stroke, durationMs: number,
-	boundsOf: (s: Stroke) => BBox = strokeBounds, options: Partial<ScribbleOptions> = {},
+	boundsOf: (s: Stroke) => BBox = strokeBounds, options: Partial<ScribbleOptions> = {}, includeHidden = false,
 ): { keep: AddStroke; erase: Batch } | null {
 	const scribble = detectScribble(stroke.points, durationMs, options);
 	if (!scribble) return null;
-	const victims = scribbleVictims(scribble, page.strokes, stroke.width, boundsOf);
+	const victims = scribbleVictims(scribble, page.strokes, stroke.width, boundsOf, includeHidden);
 	if (victims.length === 0) return null;
 	const after = [...page.strokes, stroke];
 	const erase = removeStrokes(page.id, after, [...victims, stroke], "Scribble erase");
 	return erase ? { keep: new AddStroke(page.id, stroke, page.strokes.length), erase } : null;
 }
 
+/**
+ * One undoable step that deletes the strokes crossed by the scribble `points` on `page`, or null
+ * when the stroke is not a scribble or crosses no ink (then it stays an ordinary stroke). Hidden strokes as in scribbleVictims.
+ */
 export function scribbleEraseCommand(
 	page: Pick<Page, "id" | "strokes">, points: readonly InkPoint[], durationMs: number, penWidth: number,
-	boundsOf: (s: Stroke) => BBox = strokeBounds, options: Partial<ScribbleOptions> = {},
+	boundsOf: (s: Stroke) => BBox = strokeBounds, options: Partial<ScribbleOptions> = {}, includeHidden = false,
 ): Batch | null {
 	const scribble = detectScribble(points, durationMs, options);
 	if (!scribble) return null;
-	const victims = scribbleVictims(scribble, page.strokes, penWidth, boundsOf);
+	const victims = scribbleVictims(scribble, page.strokes, penWidth, boundsOf, includeHidden);
 	return removeStrokes(page.id, page.strokes, victims, "Scribble erase");
 }

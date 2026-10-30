@@ -116,6 +116,16 @@ export interface Textbook {
 	label?: string;
 	/** Added to the printed page number to get the PDF page (front matter: a book whose "p. 1" is PDF page 12 has offset 11). */
 	offset: number;
+	/** Per-device files: when it was set (ISO time); the latest setting of the same textbook wins when the files are merged. */
+	at?: string;
+}
+
+/** A textbook a device removed (per-device files): wins over a setting of it that is not newer. */
+export interface TextbookRemoval {
+	scope: TextbookScope;
+	target: string;
+	pdf: string;
+	at: string;
 }
 
 export interface TextbookData {
@@ -123,11 +133,13 @@ export interface TextbookData {
 	books: Textbook[];
 	/** Entries this version does not understand: kept and written back as they were. */
 	unknown: unknown[];
+	/** Per-device files: textbooks this device removed. Written only when not empty. */
+	removed?: TextbookRemoval[];
 }
 
 export type TextbookParse =
 	| { ok: true; data: TextbookData }
-	| { ok: false; reason: "json" | "format" | "future"; message: string };
+	| { ok: false; reason: "json" | "format" | "future" | "empty"; message: string };
 
 export function emptyTextbooks(): TextbookData {
 	return { version: TEXTBOOKS_VERSION, books: [], unknown: [] };
@@ -153,11 +165,19 @@ function readBook(v: unknown): Textbook | null {
 	}
 	const book: Textbook = { scope, target: scope === "all" ? "" : t, pdf, offset: off };
 	if (typeof label === "string" && label.trim() !== "") book.label = label.trim();
+	if (typeof v.at === "string" && !Number.isNaN(Date.parse(v.at))) book.at = v.at;
 	return book;
 }
 
+/** Why an existing empty file is not read as "no textbooks": it may not have finished syncing (same text as device-files.ts). */
+export const EMPTY_TEXTBOOKS_MESSAGE = "the file is empty: it may not have finished syncing yet. Nothing was changed; try again once it has synced";
+
+/**
+ * Reads a textbooks file. An existing empty one is reported, not read as "no textbooks" (a missing file is the empty
+ * configuration; the store never asks this for one): a sync app that has not finished downloading it leaves exactly that.
+ */
 export function parseTextbooks(text: string): TextbookParse {
-	if (text.trim() === "") return { ok: true, data: emptyTextbooks() };
+	if (text.trim() === "") return { ok: false, reason: "empty", message: EMPTY_TEXTBOOKS_MESSAGE };
 	let raw: unknown;
 	try {
 		raw = JSON.parse(text);
@@ -175,7 +195,16 @@ export function parseTextbooks(text: string): TextbookParse {
 		if (b) books.push(b);
 		else unknown.push(v);
 	}
-	return { ok: true, data: { version: TEXTBOOKS_VERSION, books, unknown } };
+	const data: TextbookData = { version: TEXTBOOKS_VERSION, books, unknown };
+	if (Array.isArray(raw.removed)) {
+		const removed: TextbookRemoval[] = [];
+		for (const v of raw.removed) {
+			const b = readBook(v);
+			if (b && b.at) removed.push({ scope: b.scope, target: b.target, pdf: b.pdf, at: b.at });
+		}
+		if (removed.length > 0) data.removed = removed;
+	}
+	return { ok: true, data };
 }
 
 function sameBook(a: Textbook, b: Pick<Textbook, "scope" | "target" | "pdf">): boolean {
@@ -186,7 +215,9 @@ function sameBook(a: Textbook, b: Pick<Textbook, "scope" | "target" | "pdf">): b
 export function serializeTextbooks(data: TextbookData): string {
 	const head = `{"format":${JSON.stringify(TEXTBOOKS_FORMAT)},"version":${TEXTBOOKS_VERSION},"textbooks":[`;
 	const lines = [...data.books.map((b) => JSON.stringify(b)), ...data.unknown.map((u) => JSON.stringify(u))];
-	return `${head}${lines.length ? `\n${lines.join(",\n")}\n` : ""}]}\n`;
+	const removed = (data.removed ?? []).map((r) => JSON.stringify({ scope: r.scope, target: r.target, pdf: r.pdf, at: r.at }));
+	const tail = removed.length ? `,"removed":[\n${removed.join(",\n")}\n]` : "";
+	return `${head}${lines.length ? `\n${lines.join(",\n")}\n` : ""}]${tail}}\n`;
 }
 
 export type TextbookOp = { type: "set"; book: Textbook } | { type: "remove"; book: Pick<Textbook, "scope" | "target" | "pdf"> };
@@ -198,6 +229,63 @@ export function applyTextbookOp(data: TextbookData, op: TextbookOp): TextbookDat
 	const books = data.books.slice();
 	books[at] = op.book;
 	return { ...data, books };
+}
+
+// ---------------------------------------------------------------------------------------------------- one file per device
+
+const keyOf = (b: Pick<Textbook, "scope" | "target" | "pdf">) => JSON.stringify([b.scope, b.target, b.pdf]);
+
+/**
+ * Per-device files (`textbooks-<device>.json`, textbook-store.ts): this device's change applied to its own file. A set is
+ * stamped with the time, a removal leaves a mark so that the same textbook in another device's file or in the old shared
+ * file stays removed (unless it is set again later).
+ */
+export function applyDeviceTextbookOp(own: TextbookData, op: TextbookOp, now: Date = new Date()): TextbookData {
+	const at = now.toISOString();
+	const key = keyOf(op.book);
+	const removed = (own.removed ?? []).filter((r) => keyOf(r) !== key);
+	const next: TextbookData = op.type === "set"
+		? applyTextbookOp(own, { type: "set", book: { ...op.book, at } })
+		: applyTextbookOp(own, op);
+	delete next.removed;
+	if (op.type === "remove") removed.push({ scope: op.book.scope, target: op.book.scope === "all" ? "" : op.book.target, pdf: op.book.pdf, at });
+	if (removed.length > 0) next.removed = removed;
+	return next;
+}
+
+/**
+ * Every file together (this device's first, the old shared `textbooks.json` last): per textbook the latest setting or
+ * removal wins (the old file's entries count as the oldest); textbooks keep the order they were first set in (the old
+ * file's first, in its order), whatever the device that reads them.
+ */
+export function mergeTextbooks(files: readonly TextbookData[]): TextbookData {
+	interface Entry { at: string; book: Textbook | null; first: [string, number, number] }
+	const best = new Map<string, Entry>();
+	const earlier = (x: Entry["first"], y: Entry["first"]) => x[0] < y[0] || (x[0] === y[0] && (x[1] < y[1] || (x[1] === y[1] && x[2] < y[2])));
+	files.forEach((f, rank) => {
+		f.books.forEach((book, index) => {
+			const key = keyOf(book);
+			const at = book.at ?? "";
+			const first: Entry["first"] = [at, rank, index];
+			const old = best.get(key);
+			if (!old) best.set(key, { at, book, first });
+			else {
+				if (at > old.at) Object.assign(old, { at, book });
+				if (earlier(first, old.first)) old.first = first;
+			}
+		});
+		for (const r of f.removed ?? []) {
+			const key = keyOf(r);
+			const old = best.get(key);
+			if (!old) best.set(key, { at: r.at, book: null, first: [r.at, rank, Infinity] });
+			else if (r.at >= old.at) Object.assign(old, { at: r.at, book: null });
+		}
+	});
+	const books = [...best.values()]
+		.filter((e): e is Entry & { book: Textbook } => e.book !== null)
+		.sort((x, y) => (earlier(x.first, y.first) ? -1 : earlier(y.first, x.first) ? 1 : 0))
+		.map((e) => e.book);
+	return { ...emptyTextbooks(), books };
 }
 
 /**

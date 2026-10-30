@@ -1,6 +1,7 @@
 import { normalizePath, TFile, type App, type DataAdapter } from "obsidian";
 import { readNotebookText, writeNotebookText } from "./format";
 import type { JournalSlotFile, JournalStore } from "./journal";
+import type { DeviceFileAdapter } from "./device-files";
 import type { LinkFileAdapter } from "./pdf-links-store";
 import type { BackupReason, DocumentIO } from "./session";
 import type { SpaceProbe } from "./write-guard";
@@ -212,4 +213,32 @@ export class AdapterSpaceProbe implements SpaceProbe {
 /** Folder of the plugin's own technical files: `<config dir>/plugins/<plugin id>`. */
 export function pluginFolder(app: App, pluginId: string): string {
 	return normalizePath(`${app.vault.configDir}/plugins/${pluginId}`);
+}
+
+/** The Inbox's key: every per-device sidecar file uses the same id (`inbox-<id>.json`, `practice-<id>.json`, …). */
+const SIDECAR_DEVICE_KEY = "notebook-inbox-device";
+
+/**
+ * This device's id for the per-device sidecar files in `_meta` (8 hex digits), kept in the vault's local storage on the
+ * device and never synced, so every device has its own.
+ */
+export function sidecarDeviceId(app: App): string {
+	const saved: unknown = app.loadLocalStorage(SIDECAR_DEVICE_KEY);
+	if (typeof saved === "string" && /^[0-9a-f]{8}$/.test(saved)) return saved;
+	let id = "";
+	for (let i = 0; i < 8; i++) id += Math.floor(Math.random() * 16).toString(16);
+	app.saveLocalStorage(SIDECAR_DEVICE_KEY, id);
+	return id;
+}
+
+/** A `DeviceFileAdapter` (storage/device-files.ts) on the vault: the link file operations plus listing a folder. */
+export function vaultDeviceFileAdapter(app: App): DeviceFileAdapter {
+	const base = vaultLinkFileAdapter(app);
+	return {
+		...base,
+		list: async (folder) => {
+			const dir = app.vault.getFolderByPath(normalizePath(folder));
+			return dir ? dir.children.filter((c): c is TFile => c instanceof TFile).map((f) => f.path) : [];
+		},
+	};
 }

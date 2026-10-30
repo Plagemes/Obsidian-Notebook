@@ -5,7 +5,7 @@
  *   practice copy of the page: right after it, or in an "exercises" notebook. The copy is one undo step in the notebook it
  *   goes to. PDF and image backgrounds, text boxes and images stay.
  * - The copy is tagged `practice` and `attempt/<n>` (page tags: no format change) and linked to the original through
- *   `<notebooks folder>/_meta/practice.json` (model/practice.ts, storage/practice-store.ts), written only by the actions
+ *   `<notebooks folder>/_meta/practice-<device>.json` (model/practice.ts, storage/practice-store.ts), written only by the actions
  *   here (redo, the timer's stop). A notebook is found again by its document id, so renaming or moving it keeps the link.
  * - On a practice page a small banner (practice-banner.ts) offers *Peek at the solution* (hold), *Original*, *Attempts* and
  *   the optional timer.
@@ -26,7 +26,7 @@ import { openNotebookAtPage } from "../integration/open";
 import type { NotebookSettings } from "../settings";
 import { readNotebookText } from "../storage/format";
 import { PracticeBlockedError, PracticeStore } from "../storage/practice-store";
-import { vaultLinkFileAdapter } from "../storage/vault-io";
+import { sidecarDeviceId, vaultDeviceFileAdapter } from "../storage/vault-io";
 import { PracticeBanner } from "./practice-banner";
 import { askRedo, attemptRows, loadPracticePrefs, showAttempts } from "./practice-modal";
 import { addCopyToExercises, findExercisesNotebook, findNotebookByDocId } from "./practice-target";
@@ -59,7 +59,7 @@ export class PracticeService implements PracticeProvider {
 	private warned = false;
 
 	constructor(private readonly plugin: PracticePlugin) {
-		this.store = new PracticeStore(vaultLinkFileAdapter(plugin.app), () => plugin.settings.folder);
+		this.store = new PracticeStore(vaultDeviceFileAdapter(plugin.app), () => plugin.settings.folder, sidecarDeviceId(plugin.app));
 	}
 
 	get app(): App {
@@ -69,7 +69,7 @@ export class PracticeService implements PracticeProvider {
 	start(): void {
 		const { vault, workspace } = this.app;
 		const changed = (file: { path: string }) => {
-			if (file.path === this.store.path) void this.reload();
+			if (this.store.watches(file.path)) void this.reload();
 		};
 		this.plugin.registerEvent(vault.on("modify", changed));
 		this.plugin.registerEvent(vault.on("create", changed));
@@ -93,7 +93,9 @@ export class PracticeService implements PracticeProvider {
 	async reload(): Promise<PracticeData | null> {
 		try {
 			const data = await this.store.load();
-			this.warned = false;
+			// Files of other devices (or this one) that cannot be read are left as they are; said once.
+			if (this.store.unreadable.length > 0) this.reportBlocked(new PracticeBlockedError(this.store.unreadable.join("; "), "format"));
+			else this.warned = false;
 			for (const c of this.controllers) c.refresh();
 			return data;
 		} catch (e) {

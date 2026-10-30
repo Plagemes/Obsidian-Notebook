@@ -216,7 +216,9 @@ describe("inbox state files", () => {
 	});
 
 	it("reports foreign, broken and newer files; keeps entries it does not understand", () => {
-		expect(parseInbox("", "0a1b2c3d")).toEqual({ ok: true, data: emptyInbox("0a1b2c3d") });
+		// An existing empty file may not be downloaded yet: reported, never read as "nothing dealt with".
+		expect(parseInbox("", "0a1b2c3d")).toMatchObject({ ok: false, reason: "empty" });
+		expect(parseInbox(" 	 ", "0a1b2c3d")).toMatchObject({ ok: false, reason: "empty" });
 		expect(parseInbox("{ nope", "0a1b2c3d")).toMatchObject({ ok: false, reason: "json" });
 		expect(parseInbox("{\"a\":1}", "0a1b2c3d")).toMatchObject({ ok: false, reason: "format" });
 		expect(parseInbox(`{"format":"${INBOX_FORMAT}","version":2,"entries":[]}`, "0a1b2c3d")).toMatchObject({ ok: false, reason: "future" });

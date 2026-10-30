@@ -9,6 +9,7 @@
  * A link is changed only when there is exactly one answer. Everything else is listed as skipped with the reason and left as
  * it is. Nothing here writes anything: the caller shows the plan (a dry run) and applies only what the user accepts.
  */
+import { conflictBaseCandidates } from "../storage/conflicts";
 import { parseSubpathParams, validPageId } from "../zettel/subpath";
 import { parsePageFragment } from "./links";
 
@@ -25,25 +26,88 @@ export interface LinkRef {
 	fragment: string;
 	/** 1-based line, for the list. */
 	line: number;
+	/** The text of that line (trimmed), so the list shows where the link is. */
+	lineText: string;
 }
 
-/** Blanks out fenced code blocks and inline code (same length, so offsets stay valid): links in code are not links. */
-function maskCode(text: string): string {
+/** Blank of the same length (offsets stay valid); line breaks are kept so that line numbers do too. */
+function blank(s: string): string {
+	return s.replace(/[^\n]/g, " ");
+}
+
+/**
+ * A fence line: up to three spaces, or any indentation inside a list item or a blockquote/callout (`> `, `> > `, a
+ * list marker), then three or more backticks or tildes.
+ */
+const FENCE = /^(?:[ \t]*>)*[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)?(`{3,}|~{3,})/;
+
+/**
+ * Blanks out what holds no links (same length, so offsets stay valid): the YAML frontmatter, fenced code blocks (also
+ * inside blockquotes, callouts and lists), inline code and `%% … %%` comments (which may span lines).
+ */
+export function maskCode(text: string): string {
 	const lines = text.split("\n");
-	let fence: string | null = null;
-	const out = lines.map((line) => {
-		const m = /^\s{0,3}(`{3,}|~{3,})/.exec(line);
+	let start = 0;
+	// Frontmatter: `---` on the first line, up to the next `---` or `...` line.
+	if (/^---[ \t]*\r?$/.test(lines[0] ?? "")) {
+		const end = lines.findIndex((l, i) => i > 0 && /^(?:---|\.\.\.)[ \t]*\r?$/.test(l));
+		if (end > 0) {
+			for (let i = 0; i <= end; i++) lines[i] = blank(lines[i]!);
+			start = end + 1;
+		}
+	}
+	let fence: { char: string; length: number } | null = null;
+	for (let i = start; i < lines.length; i++) {
+		const line = lines[i]!;
+		const m = FENCE.exec(line);
+		const run = m?.[1] ?? "";
 		if (fence === null) {
 			if (m) {
-				fence = (m[1] ?? "")[0] ?? null;
-				return " ".repeat(line.length);
-			}
-			return line.replace(/(`+)[^`\n]*?\1/g, (s) => " ".repeat(s.length));
+				fence = { char: run[0]!, length: run.length };
+				lines[i] = blank(line);
+			} else lines[i] = line.replace(/(`+)[^`\n]*?\1/g, (c) => blank(c));
+			continue;
 		}
-		if (m && (m[1] ?? "")[0] === fence) fence = null;
-		return " ".repeat(line.length);
-	});
-	return out.join("\n");
+		// A closing fence: the same character, at least as long, nothing after it.
+		if (m && run[0] === fence.char && run.length >= fence.length && line.slice(m[0].length).trim() === "") fence = null;
+		lines[i] = blank(line);
+	}
+	// Comments, outside code: from a %% to the next one (an unclosed one runs to the end of the note, as Obsidian shows it).
+	return lines.join("\n").replace(/%%[\s\S]*?(?:%%|$)/g, (c) => blank(c));
+}
+
+function lineTextAt(text: string, offset: number): string {
+	const from = text.lastIndexOf("\n", offset - 1) + 1;
+	const to = text.indexOf("\n", offset);
+	return text.slice(from, to < 0 ? text.length : to).trim();
+}
+
+/**
+ * A notebook path as a Markdown link target: percent-encoded like `encodeURI`, and also `(`, `)`, `#` and `?`, which would
+ * end the link or start its fragment (`Physics (1).notebook` -> `Physics%20%281%29.notebook`).
+ */
+export function encodeMarkdownPath(path: string): string {
+	return encodeURI(path).replace(/[()#?]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
+/**
+ * Whether `path` is named like a sync conflicted copy (`Notes (1).notebook`, `Notes-DESKTOP-AB12.notebook`…) of another
+ * notebook among `paths` in the same folder (storage/conflicts.ts). A link is never moved onto such a copy.
+ */
+export function isConflictedCopyPath(path: string, paths: Iterable<string>): boolean {
+	const slash = path.lastIndexOf("/");
+	const folder = path.slice(0, slash + 1);
+	const stemOf = (name: string) => {
+		const dot = name.lastIndexOf(".");
+		return dot > 0 ? name.slice(0, dot) : name;
+	};
+	const bases = conflictBaseCandidates(stemOf(path.slice(slash + 1)));
+	if (bases.length === 0) return false;
+	for (const other of paths) {
+		if (other === path || !other.startsWith(folder) || other.slice(folder.length).includes("/")) continue;
+		if (bases.includes(stemOf(other.slice(folder.length)))) return true;
+	}
+	return false;
 }
 
 function lineOf(text: string, offset: number): number {
@@ -84,7 +148,7 @@ export function scanPageLinks(text: string): LinkRef[] {
 			}
 			out.push({
 				kind, embed: m[1] === "!", path, pathStart, pathEnd: pathStart + rawPath.length, fragStart, fragEnd: fragStart + fragment.length,
-				fragment, line: lineOf(text, m.index),
+				fragment, line: lineOf(text, m.index), lineText: lineTextAt(text, m.index),
 			});
 		}
 	}
@@ -109,6 +173,13 @@ export interface NotebookLookup {
 	notebooksWithPage(pageId: string): Promise<readonly string[]>;
 	/** Link path to write for a notebook, from the note `source` (Obsidian's shortest unique name). */
 	linkPathFor(path: string, source: string): string;
+	/** Whether the notebook is a sync conflicted copy of another one: never the target of a relocation. */
+	isConflictedCopy?(path: string): boolean;
+	/**
+	 * New ids of a page that "Move to notebook" had to give a new id (the target already had a page with its id), oldest
+	 * move first. Empty when it never had to.
+	 */
+	movedPageIds?(pageId: string): Promise<readonly string[]>;
 }
 
 export type ChangeKind = "pin" | "renumber" | "relocate";
@@ -116,6 +187,8 @@ export type ChangeKind = "pin" | "renumber" | "relocate";
 export interface LinkChange {
 	notePath: string;
 	line: number;
+	/** The text of the line, trimmed (the list shows it). */
+	lineText: string;
 	kind: ChangeKind;
 	/** Notebook the link points at after the change. */
 	notebook: string;
@@ -136,6 +209,8 @@ export interface LinkSkip {
 	reason: SkipReason;
 	/** The link subpath as written. */
 	text: string;
+	/** The text of the line, trimmed. */
+	lineText: string;
 }
 
 export interface LinkPlan {
@@ -151,9 +226,9 @@ export async function planNoteLinks(notePath: string, text: string, lookup: Note
 		if (!notebook) continue;
 		const params = parseSubpathParams(ref.fragment);
 		const page = parsePageFragment(params.head);
-		const skip = (reason: SkipReason) => plan.skipped.push({ notePath, line: ref.line, reason, text: `#${ref.fragment}` });
+		const skip = (reason: SkipReason) => plan.skipped.push({ notePath, line: ref.line, lineText: ref.lineText, reason, text: `#${ref.fragment}` });
 		const fragmentChange = (kind: ChangeKind, number: number, id: string): LinkChange => ({
-			notePath, line: ref.line, kind, notebook: notebook.path, start: ref.fragStart, end: ref.fragEnd, before: ref.fragment,
+			notePath, line: ref.line, lineText: ref.lineText, kind, notebook: notebook.path, start: ref.fragStart, end: ref.fragEnd, before: ref.fragment,
 			after: rewriteFragment(ref.fragment, number, id), page: number,
 		});
 
@@ -180,8 +255,21 @@ export async function planNoteLinks(notePath: string, text: string, lookup: Note
 			skip("unreadable");
 			continue;
 		}
-		// The page is not in the linked notebook: exactly one other notebook with that id is the answer.
-		const others = (await lookup.notebooksWithPage(params.pageId)).filter((p) => p !== notebook.path);
+		// The page is not in the linked notebook: exactly one other notebook with that id is the answer. Conflicted copies of
+		// a notebook hold the same ids and are never the answer. A page that "Move to notebook" gave a new id is found under it.
+		const holders = async (id: string) =>
+			(await lookup.notebooksWithPage(id)).filter((p) => p !== notebook.path && !lookup.isConflictedCopy?.(p));
+		let pageId = params.pageId;
+		let others = await holders(pageId);
+		if (others.length === 0) {
+			for (const renamed of (await lookup.movedPageIds?.(params.pageId)) ?? []) {
+				const found = await holders(renamed);
+				if (found.length === 0) continue;
+				pageId = renamed;
+				others = found;
+				break;
+			}
+		}
 		if (others.length === 0) {
 			skip("page-gone");
 			continue;
@@ -192,17 +280,18 @@ export async function planNoteLinks(notePath: string, text: string, lookup: Note
 		}
 		const target = others[0]!;
 		const targetIds = await lookup.pageIds(target);
-		const at = targetIds ? targetIds.indexOf(params.pageId) : -1;
+		const at = targetIds ? targetIds.indexOf(pageId) : -1;
 		if (at < 0) {
 			skip("unreadable");
 			continue;
 		}
 		const linkPath = lookup.linkPathFor(target, notePath);
-		const written = ref.kind === "md" ? encodeURI(linkPath) : linkPath;
+		const written = ref.kind === "md" ? encodeMarkdownPath(linkPath) : linkPath;
 		plan.changes.push({
-			notePath, line: ref.line, kind: "relocate", notebook: target, start: ref.pathStart, end: ref.fragEnd,
-			before: `${ref.kind === "md" ? encodeURI(ref.path) : ref.path}#${ref.fragment}`,
-			after: `${written}#${rewriteFragment(ref.fragment, at + 1, params.pageId)}`, page: at + 1,
+			notePath, line: ref.line, lineText: ref.lineText, kind: "relocate", notebook: target, start: ref.pathStart, end: ref.fragEnd,
+			// Exactly what the note has there now (a Markdown path can be encoded in more than one way).
+			before: text.slice(ref.pathStart, ref.fragEnd),
+			after: `${written}#${rewriteFragment(ref.fragment, at + 1, pageId)}`, page: at + 1,
 		});
 	}
 	return plan;

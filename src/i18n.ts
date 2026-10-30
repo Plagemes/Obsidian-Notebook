@@ -426,6 +426,7 @@ const en = {
 	"move.done": "Moved {n} page(s) to {name}",
 	"move.doneKept": "Copied {n} page(s) to {name}; {kept} stayed here because they changed while moving or this notebook was closed.",
 	"move.failed": "Could not move the pages: {error}",
+	"move.renamedNotRecorded": "The pages were moved, but some got a new id and that could not be recorded, so \"Update links to notebook pages\" may not find them: {error}",
 	// wave p1a: input
 	"settings.edge": "Edge rejection zones",
 	"settings.edge.desc": "Touches that start within the chosen width of an edge of the page area are ignored: they neither draw nor scroll, so a palm resting on the edge does nothing. The pen is never affected.",
@@ -1085,6 +1086,7 @@ const en = {
 	"pageOps.deleteTitle": "Delete {n} pages?",
 	"pageOps.deleteBody": "A copy of each page is kept in Deleted pages, so you can bring them back.",
 	"pageOps.deleteAll": "A notebook needs at least one page: select fewer pages.",
+	"pageOps.deleteChanged": "The pages kept changing while their copies were being saved, so nothing was deleted. Try again.",
 	"pageOps.nothingToChange": "Nothing to change: the selected pages are already like that.",
 	"pageOps.positionTitle": "Move to position",
 	"pageOps.positionLabel": "Page number for the first selected page (1 to {max})",
@@ -1995,6 +1997,7 @@ const it: Partial<Record<MessageKey, string>> = {
 	"move.done": "Spostate {n} pagine in {name}",
 	"move.doneKept": "Copiate {n} pagine in {name}; {kept} sono rimaste qui perché sono cambiate durante lo spostamento o questo quaderno è stato chiuso.",
 	"move.failed": "Impossibile spostare le pagine: {error}",
+	"move.renamedNotRecorded": "Le pagine sono state spostate, ma alcune hanno ricevuto un nuovo id e non è stato possibile registrarlo, quindi \"Aggiorna i link alle pagine dei quaderni\" potrebbe non trovarle: {error}",
 	// wave p1a: input
 	"settings.edge": "Zone di rifiuto ai bordi",
 	"settings.edge.desc": "I tocchi che iniziano entro la larghezza scelta da un bordo dell'area della pagina vengono ignorati: non disegnano né scorrono, così un palmo appoggiato al bordo non fa nulla. La penna non è mai coinvolta.",
@@ -2654,6 +2657,7 @@ const it: Partial<Record<MessageKey, string>> = {
 	"pageOps.deleteTitle": "Eliminare {n} pagine?",
 	"pageOps.deleteBody": "Di ogni pagina resta una copia in Pagine eliminate, così puoi recuperarle.",
 	"pageOps.deleteAll": "Un quaderno ha bisogno di almeno una pagina: seleziona meno pagine.",
+	"pageOps.deleteChanged": "Le pagine hanno continuato a cambiare mentre se ne salvavano le copie, quindi non è stato eliminato nulla. Riprova.",
 	"pageOps.nothingToChange": "Niente da cambiare: le pagine selezionate sono già così.",
 	"pageOps.positionTitle": "Sposta alla posizione",
 	"pageOps.positionLabel": "Numero di pagina per la prima pagina selezionata (da 1 a {max})",

@@ -4,7 +4,7 @@ import {
 	textbookName, textbooksFor, TEXTBOOKS_FORMAT, type Textbook, type TextbookData,
 } from "../src/view/textbook-ref";
 import { TextbooksBlockedError, TextbookStore } from "../src/view/textbook-store";
-import type { LinkFileAdapter } from "../src/storage/pdf-links-store";
+import type { DeviceFileAdapter } from "../src/storage/device-files";
 
 const pages = (text: string) => findPageRefs(text).map((r) => r.page);
 
@@ -100,8 +100,9 @@ describe("textbook configuration", () => {
 		expect(back.ok && back.data.books).toEqual(d.books);
 	});
 
-	it("empty text is empty; foreign, broken and newer files are reported", () => {
-		expect(parseTextbooks("")).toEqual({ ok: true, data: emptyTextbooks() });
+	it("an existing empty file, foreign, broken and newer files are reported", () => {
+		// Empty: it may not be downloaded yet (a missing file is no textbooks; the store never parses one).
+		expect(parseTextbooks("")).toMatchObject({ ok: false, reason: "empty" });
 		expect(parseTextbooks("{ nope")).toMatchObject({ ok: false, reason: "json" });
 		expect(parseTextbooks("{\"a\":1}")).toMatchObject({ ok: false, reason: "format" });
 		expect(parseTextbooks(`{"format":"${TEXTBOOKS_FORMAT}","version":2,"textbooks":[]}`)).toMatchObject({ ok: false, reason: "future" });
@@ -147,7 +148,7 @@ describe("textbook configuration", () => {
 	});
 });
 
-class MemoryAdapter implements LinkFileAdapter {
+class MemoryAdapter implements DeviceFileAdapter {
 	files = new Map<string, string>();
 	folders = new Set<string>();
 	writes: string[] = [];
@@ -159,49 +160,65 @@ class MemoryAdapter implements LinkFileAdapter {
 	}
 	async write(p: string, d: string) { this.files.set(p, d); this.writes.push(p); }
 	async mkdir(p: string) { this.folders.add(p); }
+	async list(folder: string) { return [...this.files.keys()].filter((k) => k.startsWith(`${folder}/`) && !k.slice(folder.length + 1).includes("/")); }
 }
 
-describe("textbook store", () => {
-	const make = () => {
-		const adapter = new MemoryAdapter();
-		return { adapter, store: new TextbookStore(adapter, () => "Notebooks") };
-	};
+/** Books without the time stamp of the per-device files, to compare with what was set. */
+const plain = (d: TextbookData) => d.books.map((b) => {
+	const copy = { ...b };
+	delete copy.at;
+	return copy;
+});
+
+describe("textbook store (one file per device)", () => {
+	const LEGACY = "Notebooks/_meta/textbooks.json";
+	const make = (device = "aaaaaaaa", adapter = new MemoryAdapter()) => ({ adapter, store: new TextbookStore(adapter, () => "Notebooks", device) });
 
 	it("lives in _meta of the notebooks folder and reading never writes", async () => {
 		const { adapter, store } = make();
-		expect(store.path).toBe("Notebooks/_meta/textbooks.json");
+		expect(store.path).toBe("Notebooks/_meta/textbooks-aaaaaaaa.json");
+		expect(store.watches(LEGACY) && store.watches("Notebooks/_meta/textbooks-bbbbbbbb.json")).toBe(true);
 		expect((await store.load()).books).toEqual([]);
 		expect(adapter.writes).toEqual([]);
 	});
 
-	it("writes on update, once, and not again when nothing changes", async () => {
+	it("writes this device's file on update, once, and not again when nothing changes", async () => {
 		const { adapter, store } = make();
 		await store.update({ type: "set", book: nb("n1", "a.pdf", 3) });
-		expect(adapter.writes).toEqual(["Notebooks/_meta/textbooks.json"]);
+		expect(adapter.writes).toEqual(["Notebooks/_meta/textbooks-aaaaaaaa.json"]);
 		expect(adapter.folders.has("Notebooks/_meta")).toBe(true);
-		await store.update({ type: "set", book: nb("n1", "a.pdf", 3) });
-		expect(adapter.writes).toHaveLength(1);
-		const fresh = new TextbookStore(adapter, () => "Notebooks");
-		expect((await fresh.load()).books).toEqual([nb("n1", "a.pdf", 3)]);
+		const fresh = make("aaaaaaaa", adapter).store;
+		expect(plain(await fresh.load())).toEqual([nb("n1", "a.pdf", 3)]);
 	});
 
-	it("applies an update to what another device synced in meanwhile", async () => {
-		const { adapter, store } = make();
-		await store.update({ type: "set", book: nb("n1", "a.pdf") });
-		adapter.files.set(store.path, serializeTextbooks(data(nb("n1", "a.pdf"), nb("n2", "synced.pdf"))));
-		const after = await store.update({ type: "set", book: nb("n3", "mine.pdf") });
-		expect(after.books.map((b) => b.pdf)).toEqual(["a.pdf", "synced.pdf", "mine.pdf"]);
+	it("merges the other devices' files and the old shared file, which is never written", async () => {
+		const adapter = new MemoryAdapter();
+		const legacy = serializeTextbooks(data(nb("n1", "old.pdf"), nb("n2", "gone.pdf")));
+		adapter.files.set(LEGACY, legacy);
+		const mine = make("aaaaaaaa", adapter).store;
+		const theirs = make("bbbbbbbb", adapter).store;
+		await theirs.update({ type: "set", book: nb("n3", "theirs.pdf") });
+		await mine.update({ type: "set", book: nb("n4", "mine.pdf") });
+		await mine.update({ type: "remove", book: nb("n2", "gone.pdf") });
+		expect(plain(await mine.load()).map((b) => b.pdf)).toEqual(["old.pdf", "theirs.pdf", "mine.pdf"]);
+		expect(plain(await theirs.load()).map((b) => b.pdf)).toEqual(["old.pdf", "theirs.pdf", "mine.pdf"]);
+		expect(adapter.files.get(LEGACY)).toBe(legacy);
+		// Set again later on the other device: the newer setting wins over the removal.
+		await new Promise((r) => setTimeout(r, 5));
+		await theirs.update({ type: "set", book: nb("n2", "gone.pdf", 4) });
+		expect(plain(await mine.load()).find((b) => b.pdf === "gone.pdf")?.offset).toBe(4);
 	});
 
-	it("never overwrites a file it cannot read; one copy is kept", async () => {
-		const { adapter, store } = make();
-		adapter.files.set(store.path, "{ not json");
-		await expect(store.update({ type: "set", book: nb("n1") })).rejects.toBeInstanceOf(TextbooksBlockedError);
-		await expect(store.update({ type: "set", book: nb("n1") })).rejects.toBeInstanceOf(TextbooksBlockedError);
-		expect(adapter.files.get(store.path)).toBe("{ not json");
-		const copies = [...adapter.files.keys()].filter((k) => k.includes("unreadable"));
-		expect(copies).toHaveLength(1);
-		expect(store.blocked).not.toBeNull();
+	it("never overwrites its own file when it cannot read it or it is empty; one copy is kept", async () => {
+		for (const bad of ["{ not json", ""]) {
+			const { adapter, store } = make();
+			adapter.files.set(store.path, bad);
+			await expect(store.update({ type: "set", book: nb("n1") })).rejects.toBeInstanceOf(TextbooksBlockedError);
+			await expect(store.update({ type: "set", book: nb("n1") })).rejects.toBeInstanceOf(TextbooksBlockedError);
+			expect(adapter.files.get(store.path)).toBe(bad);
+			expect([...adapter.files.keys()].filter((k) => k.includes("unreadable"))).toHaveLength(1);
+			expect(store.blocked).not.toBeNull();
+		}
 	});
 
 	it("a newer file is not overwritten either, and loading it gives no textbooks", async () => {

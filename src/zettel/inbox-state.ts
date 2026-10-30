@@ -8,6 +8,8 @@
  * item be reopened by any device.
  */
 
+import { EMPTY_FILE_MESSAGE } from "../storage/device-files";
+
 export const INBOX_FORMAT = "obsidian-notebook-inbox";
 export const INBOX_VERSION = 1;
 
@@ -36,7 +38,7 @@ export interface InboxFile {
 
 export type InboxParse =
 	| { ok: true; data: InboxFile }
-	| { ok: false; reason: "json" | "format" | "future"; message: string };
+	| { ok: false; reason: "json" | "format" | "future" | "empty"; message: string };
 
 export function emptyInbox(device: string): InboxFile {
 	return { version: INBOX_VERSION, device, entries: [], unknown: [] };
@@ -80,9 +82,13 @@ function readEntry(v: unknown): InboxEntry | null {
 	return entry;
 }
 
-/** Reads a device file. A file that is not ours or comes from a newer version is reported, never "fixed". */
+/**
+ * Reads a device file. A file that is not ours or comes from a newer version is reported, never "fixed". An existing empty
+ * file is not "nothing dealt with": a sync app may not have finished downloading it, so it is reported too (a missing file
+ * is the empty state; the store never asks this for one).
+ */
 export function parseInbox(text: string, device: string): InboxParse {
-	if (text.trim() === "") return { ok: true, data: emptyInbox(device) };
+	if (text.trim() === "") return { ok: false, reason: "empty", message: EMPTY_FILE_MESSAGE };
 	let raw: unknown;
 	try {
 		raw = JSON.parse(text);
