@@ -4,7 +4,9 @@ Requires Obsidian 1.8.7 or later. Back to the [README](../README.md).
 
 ## From the community plugins directory
 
-Submitted, waiting for review. Once it is approved: **Settings → Community plugins → Browse**, search for **Notebook**, then **Install** and **Enable**.
+Notebook is listed in Obsidian's community plugins ([community page](https://community.obsidian.md/plugins/notebook)): **Settings → Community plugins → Browse**, search for **Notebook**, then **Install** and **Enable**. From a browser on the same device, `obsidian://show-plugin?id=notebook` opens the plugin's page inside Obsidian.
+
+The directory can lag a little behind the newest GitHub release; BRAT (below) always installs the latest one.
 
 ## With BRAT (works now, updates automatically)
 

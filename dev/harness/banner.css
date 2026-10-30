@@ -2,7 +2,10 @@
 html, body { margin: 0; padding: 0; }
 body { width: 1280px; height: 400px; overflow: hidden; font-family: system-ui, "Segoe UI", Roboto, sans-serif; }
 body.kind-social { height: 640px; }
-body.kind-band { width: 1600px; height: 320px; }
+body.kind-band { width: 1600px; height: 240px; }
+/* The band: the background glows at a fraction of their strength. */
+.theme-dark.kind-band .banner-root { background: radial-gradient(45% 90% at 78% 45%, rgba(99,102,241,0.08) 0%, rgba(99,102,241,0) 100%), #0A0E17; }
+.theme-light.kind-band .banner-root { background: radial-gradient(45% 90% at 78% 45%, rgba(99,102,241,0.05) 0%, rgba(99,102,241,0) 100%), #F6F7FB; }
 body.theme-dark { --bg: #0A0E17; --panel: #121826; --text: #F4F6FB; --muted: #9AA3B5; --faint: #6B7487; --border: rgba(255,255,255,0.10); --accent-bg: rgba(109,139,255,0.16); background: var(--bg); color: var(--text); }
 body.theme-light { --bg: #F6F7FB; --panel: #FFFFFF; --text: #0E1424; --muted: #5B6478; --faint: #7A8396; --border: rgba(15,23,42,0.10); --accent-bg: rgba(79,107,240,0.12); background: var(--bg); color: var(--text); }
 .banner-root { position: relative; width: 100%; height: 100%; overflow: hidden; }
@@ -17,34 +20,36 @@ body.theme-light { --bg: #F6F7FB; --panel: #FFFFFF; --text: #0E1424; --muted: #5
 		radial-gradient(120% 140% at 85% 40%, #FFFFFF 0%, #F6F7FB 60%);
 }
 .banner-art { position: absolute; inset: 0; width: 100%; height: 100%; }
-.banner-text { position: absolute; left: 80px; top: 50%; transform: translateY(-50%); max-width: 600px; }
+.banner-text { position: absolute; left: 80px; top: 50%; transform: translateY(-50%); width: max-content; max-width: 760px; }
 .banner-eyebrow {
 	display: inline-block; font-size: 14px; font-weight: 600; letter-spacing: 0.04em; color: var(--muted);
 	padding: 6px 14px; border-radius: 999px; background: var(--panel); border: 1px solid var(--border);
 }
-.banner-title { font-size: 92px; font-weight: 800; letter-spacing: -0.035em; line-height: 1; margin-top: 18px; }
+.banner-title { font-size: 84px; font-weight: 800; letter-spacing: -0.035em; line-height: 1; margin-top: 18px; }
 .banner-underline { height: 28px; margin-top: 2px; margin-left: 4px; }
 .banner-underline svg { display: block; }
-.banner-tagline { font-size: 26px; font-weight: 500; color: var(--muted); margin-top: 10px; letter-spacing: -0.01em; }
-.banner-chips { display: flex; gap: 10px; margin-top: 22px; }
+.banner-tagline { font-size: 24px; font-weight: 600; line-height: 1.3; color: var(--text); margin-top: 8px; letter-spacing: -0.01em; white-space: nowrap; }
+.banner-value { font-size: 16px; font-weight: 500; line-height: 1.4; color: var(--muted); margin-top: 6px; white-space: nowrap; }
+.banner-chips { display: flex; gap: 10px; margin-top: 18px; }
 .banner-chip {
 	font-size: 14px; font-weight: 600; padding: 7px 14px; border-radius: 999px; color: var(--text);
 	background: var(--accent-bg); border: 1px solid var(--border);
 }
-.banner-covers { position: absolute; right: 120px; top: 50%; width: 330px; height: 260px; transform: translateY(-50%); }
+.banner-covers { position: absolute; right: 64px; top: 50%; width: 330px; height: 260px; transform: translateY(-50%); }
 .banner-cover { position: absolute; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.25); }
 .theme-light .banner-cover { box-shadow: 0 8px 24px rgba(15,23,42,0.18); }
 .banner-cover-0 { left: 0; top: 30px; transform: rotate(-9deg); }
 .banner-cover-1 { left: 90px; top: 8px; transform: rotate(-1deg); }
 .banner-cover-2 { left: 180px; top: 26px; transform: rotate(8deg); }
 /* Social preview: 1280 × 640, larger type and covers. */
-.kind-social .banner-text { left: 96px; max-width: 640px; }
+.kind-social .banner-text { left: 96px; max-width: 660px; }
 .kind-social .banner-eyebrow { font-size: 17px; padding: 8px 18px; }
 .kind-social .banner-title { font-size: 116px; margin-top: 24px; }
-.kind-social .banner-tagline { font-size: 29px; margin-top: 14px; white-space: nowrap; }
+.kind-social .banner-tagline { font-size: 30px; margin-top: 12px; white-space: normal; }
+.kind-social .banner-value { font-size: 19px; margin-top: 10px; white-space: normal; }
 .kind-social .banner-chips { margin-top: 30px; gap: 12px; }
 .kind-social .banner-chip { font-size: 17px; padding: 9px 18px; }
-.kind-social .banner-covers { right: 56px; width: 460px; height: 360px; }
+.kind-social .banner-covers { right: 24px; width: 460px; height: 360px; }
 .kind-social .banner-cover-0 { left: 0; top: 40px; }
 .kind-social .banner-cover-1 { left: 125px; top: 10px; }
 .kind-social .banner-cover-2 { left: 250px; top: 36px; }

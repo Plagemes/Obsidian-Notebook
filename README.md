@@ -1,33 +1,41 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: light)" srcset="docs/media/banner-light.png">
-    <img src="docs/media/banner-dark.png" width="1280" alt="Notebook: handwrite in Obsidian like on a real notebook">
+    <img src="docs/media/banner-dark.png" width="1280" alt="Notebook: handwrite in Obsidian, like a real notebook, with your S Pen">
   </picture>
 </p>
 
 <p align="center">
   <a href="https://github.com/Plagemes/Obsidian-Notebook/releases/latest"><img src="https://img.shields.io/github/v/release/Plagemes/Obsidian-Notebook?label=release&color=6D8BFF" alt="Latest release"></a>
-  <a href="https://github.com/Plagemes/Obsidian-Notebook/releases"><img src="https://img.shields.io/github/downloads/Plagemes/Obsidian-Notebook/total?label=downloads&color=16C2A3" alt="GitHub release downloads"></a>
+  <a href="https://github.com/Plagemes/Obsidian-Notebook/releases"><img src="https://img.shields.io/github/downloads/Plagemes/Obsidian-Notebook/total?label=downloads&color=16C2A3" alt="Total downloads of GitHub releases"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8B5CF6" alt="License: MIT"></a>
-  <a href="https://obsidian.md"><img src="https://img.shields.io/badge/Obsidian-1.8.7%2B-7C3AED?logo=obsidian&logoColor=white" alt="Obsidian 1.8.7 or later"></a>
+  <a href="https://obsidian.md"><img src="https://img.shields.io/badge/Obsidian-%E2%89%A5%201.8.7-7C3AED?logo=obsidian&logoColor=white" alt="Obsidian 1.8.7 or later"></a>
   <img src="https://img.shields.io/badge/platforms-Android%20%C2%B7%20Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-2F80F7" alt="Platforms: Android, Windows, macOS, Linux">
 </p>
 
+<h3 align="center">Handwrite in Obsidian — like a real notebook, with your S Pen.</h3>
+
 <p align="center">
-  <b>Pressure-sensitive handwriting, PDFs, equations and a beautiful library, saved as plain files in your vault.</b><br>
-  Built for Android tablets with an S Pen, and at home on Windows too. Free, open source, local-first.
+  Pressure-sensitive ink, PDFs, equations and a beautiful library, saved as plain files in your vault.<br>
+  Built first for Android tablets with a stylus, and at home on Windows too. Free, open source, local-first.
 </p>
 
 <p align="center">
-  <a href="https://obsidian.md/plugins?id=notebook"><img src="https://img.shields.io/badge/Install_from_Community_plugins-6D8BFF?style=for-the-badge&logo=obsidian&logoColor=white" alt="Install from Community plugins"></a>
+  <a href="https://community.obsidian.md/plugins/notebook"><img src="https://img.shields.io/badge/Install_from_Community_plugins-6D8BFF?style=for-the-badge&logo=obsidian&logoColor=white" alt="Install from Obsidian Community plugins"></a>
   &nbsp;
-  <a href="#install-with-brat"><img src="https://img.shields.io/badge/Install_with_BRAT-121826?style=for-the-badge" alt="Install with BRAT"></a>
+  <a href="#install-with-brat"><img src="https://img.shields.io/badge/Or_install_with_BRAT-121826?style=for-the-badge" alt="Or install with BRAT"></a>
 </p>
 
 <p align="center">
+  <sub>Already in Obsidian? Open <code>obsidian://show-plugin?id=notebook</code> from your browser, or search for <b>Notebook</b> in <b>Settings → Community plugins → Browse</b>.</sub>
+</p>
+
+<p align="center">
+  <a href="#gallery">Gallery</a> ·
+  <a href="#features-at-a-glance">Features</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#faq">FAQ</a> ·
   <a href="https://plagemes.github.io/Obsidian-Notebook/">Live roadmap</a> ·
-  <a href="docs/features.md">All features</a> ·
-  <a href="https://github.com/Plagemes/Obsidian-Notebook/issues/new?template=feature_request.yml">Request a feature</a> ·
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
@@ -36,40 +44,40 @@
 <table>
   <tr>
     <td width="50%" valign="top">
-      <h3>✍️ Real handwriting</h3>
-      Vector ink that follows S Pen pressure, with a wet-ink engine that paints as the pen moves and never changes shape when you lift it. Palm rejection, a radial dial at the pen tip, the side button as an eraser.
+      <h3>Handwriting that feels natural</h3>
+      Vector ink that follows your pen's pressure, painted as the pen moves and never reshaped when you lift it. Palm rejection, a radial menu next to the pen, the S Pen side button as an eraser, and ink that stays sharp at any zoom.
     </td>
     <td width="50%" valign="top">
-      <h3>🔒 Yours, on your device</h3>
-      Every notebook is a file in your vault. No account, no cloud, no telemetry, no AI. Sync it with whatever you already use: Obsidian Sync, Syncthing, Google Drive or OneDrive.
+      <h3>Local-first, yours for good</h3>
+      Every notebook is a file in your vault. No account, no cloud, no telemetry, no AI. Sync it with what you already use: Obsidian Sync, Google Drive, OneDrive or any folder-sync app.
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <h3>📄 Made for studying</h3>
-      Write on PDFs and scans, typeset equations, draw function graphs, and cut a figure out of a slide into your notes with an anchor that jumps back to the source.
+      <h3>Made for studying</h3>
+      Write on PDFs and scans, typeset equations, draw function graphs, cut a figure into your notes with an anchor back to its source, mark what to review, and practise with your answers hidden.
     </td>
     <td width="50%" valign="top">
-      <h3>🎨 A library you'll enjoy</h3>
-      A home dashboard and a library of subject folders, smart collections and covers, decorated with line art generated from each subject's name and colour.
+      <h3>A library you'll enjoy opening</h3>
+      A home dashboard and a library of subject folders, smart collections and covers, decorated with line art generated on your device from each subject's name and colour.
     </td>
   </tr>
 </table>
 
-## Screenshots
+## Gallery
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: light)" srcset="docs/media/home-light.png">
-    <img src="docs/media/home-dark.png" width="900" alt="Notebook home: subject folder cards, recent notes, statistics and quick actions">
+    <source media="(prefers-color-scheme: light)" srcset="docs/media/home-light.webp">
+    <img src="docs/media/home-dark.webp" width="900" alt="Notebook home: subject folder cards, recent pages, statistics and quick actions">
   </picture>
   <br><sub><b>Home.</b> Subject folders, the pages you edited last, statistics computed on your device, quick actions.</sub>
 </p>
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: light)" srcset="docs/media/library-light.png">
-    <img src="docs/media/library-dark.png" width="900" alt="Notebook library: filter chips, subject cards, smart collections, frequent tags, recent and favourite notebooks">
+    <source media="(prefers-color-scheme: light)" srcset="docs/media/library-light.webp">
+    <img src="docs/media/library-dark.webp" width="900" alt="Notebook library: filter chips, subject cards, smart collections, frequent tags, recent and favourite notebooks">
   </picture>
   <br><sub><b>Library.</b> Filter chips, smart collections, frequent tags, recent and favourite notebooks with page thumbnails.</sub>
 </p>
@@ -77,12 +85,28 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: light)" srcset="docs/media/notebook-light.png">
-    <img src="docs/media/notebook-dark.png" width="900" alt="A notebook page with the toolbar and the radial dial open at the pen tip">
+    <img src="docs/media/notebook-dark.png" width="900" alt="A notebook page with the toolbar and the radial menu open">
   </picture>
-  <br><sub><b>Writing.</b> The toolbar and the radial dial that opens at the pen tip: undo, redo, width, colour and tools.</sub>
+  <br><sub><b>Writing.</b> The toolbar and the radial menu: undo, redo, width, colour and tools, one tap from the pen.</sub>
 </p>
 
 <table>
+  <tr>
+    <td width="50%" align="center">
+      <picture>
+        <source media="(prefers-color-scheme: light)" srcset="docs/media/radial-color-light.png">
+        <img src="docs/media/radial-color-dark.png" alt="The radial menu's colour ring: twelve colours, a custom colour and an eyedropper">
+      </picture>
+      <br><sub><b>Colour, at the pen.</b> Twelve colours, a custom colour and an eyedropper, without leaving the page.</sub>
+    </td>
+    <td width="50%" align="center">
+      <picture>
+        <source media="(prefers-color-scheme: light)" srcset="docs/media/radial-shapes-light.png">
+        <img src="docs/media/radial-shapes-dark.png" alt="The radial menu's shapes ring: rectangle, ellipse, arrow, line and ruler">
+      </picture>
+      <br><sub><b>Shapes and tools.</b> Lines, arrows, rectangles, ellipses and the ruler from the same dial.</sub>
+    </td>
+  </tr>
   <tr>
     <td width="50%" align="center">
       <picture>
@@ -111,25 +135,25 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: light)" srcset="docs/media/art-gallery-light.png">
-    <img src="docs/media/art-gallery-dark.png" width="900" alt="Generated art: subject cards and notebook covers in seven line-art families">
+    <source media="(prefers-color-scheme: light)" srcset="docs/media/art-gallery-light.webp">
+    <img src="docs/media/art-gallery-dark.webp" width="700" alt="Generated art: subject cards with contour, cell, wave and branch line art">
   </picture>
-  <br><sub><b>Generated art.</b> Seven line-art families (contours, cells, waves, branches, flow, orbits, grid), drawn on the device from a name and a colour.</sub>
+  <br><sub><b>Generated art.</b> Four of the seven line-art families (contours, cells, waves, branches; also flow, orbits and grid), drawn on the device from a subject's name and colour.</sub>
 </p>
 
-<p align="center"><sub>Screenshots come from the browser test harness (<code>npm run harness:check</code>) with a demo vault.</sub></p>
+<p align="center"><sub>Screenshots are taken in the project's browser test harness (<code>npm run harness:check</code>) with a demo vault, not on a device.</sub></p>
 
-## Features
+## Features at a glance
 
-The highlights are below; the complete guide is in **[docs/features.md](docs/features.md)**.
+The highlights are below; the complete guide, with every setting, is in **[docs/features.md](docs/features.md)**.
 
 ### Writing
 
 Ink that feels like paper and stays sharp at any zoom, because every stroke is stored as vector points with pressure.
 
-- Pen, highlighter that darkens what is under it instead of covering it, and an eraser for whole strokes, segments or an outlined area.
+- Pen, a highlighter that darkens what is under it instead of covering it, and an eraser for whole strokes, segments or an outlined area.
 - Lasso to move, resize and rotate; shapes that turn clean when you hold still at the end; text boxes, images, a ruler and stamps.
-- Radial dial at the pen tip, favourite pens, palm rejection, two- and three-finger taps for undo and redo.
+- Radial menu next to the pen, favourite pens, palm rejection, two- and three-finger taps for undo and redo.
 - Equations typeset with Obsidian's maths engine and function graphs (cartesian, parametric, polar, implicit), both kept as vectors.
 - Papers: blank, ruled, grid, dotted, millimetre, Cornell, music, isometric, hexagonal, planners, and infinite pages.
 
@@ -182,14 +206,15 @@ Your notes are files you own, and the plugin works hard never to lose them.
 
 ## Quick start
 
-1. **Install.** In Obsidian open **Settings → Community plugins → Browse**, search for **Notebook**, then **Install** and **Enable** ([direct link](https://obsidian.md/plugins?id=notebook)). If it is not listed yet, use BRAT (below).
-2. **Create your first notebook.** Tap the ribbon icon to open **Notebook home**, then **New notebook**. Pick a cover, a paper and a page size, then **Create**.
-3. **Write.** The pen writes; one finger scrolls and two fingers zoom (turn on *Draw with finger* in the settings to write with a finger). Click the S Pen side button while the pen hovers, or hold the pen still for a moment, to open the radial dial.
-4. **S Pen tips.** What the side button can and cannot do inside Obsidian on Android is explained in [S Pen on Android](docs/features.md#s-pen-on-android).
+1. **Install.** In Obsidian open **Settings → Community plugins → Browse**, search for **Notebook**, then **Install** and **Enable** (or open the [community page](https://community.obsidian.md/plugins/notebook)). Prefer the newest build, or a pre-release? Use [BRAT](#install-with-brat).
+2. **Create your first notebook.** Tap the ribbon icon to open **Notebook home**, then **New notebook**. The creation dialog has two tabs: **Notebook** (cover, name, folder, paper, page size and orientation) and **Folder** (a subject with its own icon and colour). Choose, then **Create**.
+3. **Write.** The pen writes; one finger scrolls and two fingers zoom (turn on *Draw with finger* in the settings to write with a finger). Click the S Pen side button while the pen hovers, or hold the pen still for a moment, to open the radial menu; hold the button while you write to erase.
+4. **S Pen tips.** What the side button can and cannot do inside Obsidian on Android, and how to map the pen's remote button to a key, is in [S Pen on Android](docs/features.md#s-pen-on-android).
+5. **Sync.** Notebooks are ordinary files: a Google Drive or OneDrive folder-sync app, Syncthing or Obsidian Sync (turn on **Other types**) all work. Sync the `_assets` and `_backup` folders too. Details in the [FAQ](#faq) and in [Versions and recovery](docs/features.md#versions-and-recovery).
 
 ### Install with BRAT
 
-BRAT installs the latest release and keeps it updated:
+BRAT installs the latest GitHub release, pre-releases included, and keeps it updated:
 
 1. **Settings → Community plugins → Browse**, search for **BRAT** (Obsidian42 - BRAT), install and enable it.
 2. Command palette → **BRAT: Add a beta plugin for testing** → enter `https://github.com/Plagemes/Obsidian-Notebook` → choose the latest version → **Add plugin**.
@@ -206,36 +231,36 @@ Yes. Notebook is free and open source under the MIT licence. There is no paid ti
 </details>
 
 <details>
-<summary><b>Where are my notes stored?</b></summary>
+<summary><b>Where are my notes?</b></summary>
 
-In your vault, as `.notebook` files (by default in the `Notebooks/` folder). PDFs and images live once in `Notebooks/_assets/`, backups and version snapshots in `Notebooks/_backup/`. The format is documented in [docs/features.md](docs/features.md#file-format) and [docs/architecture.md](docs/architecture.md).
+In your vault, as `.notebook` files (by default in the `Notebooks/` folder). PDFs and images live once in `Notebooks/_assets/`, backups and version snapshots in `Notebooks/_backup/`. Uninstalling the plugin leaves every file where it is. The format is documented in [docs/features.md](docs/features.md#file-format) and [docs/architecture.md](docs/architecture.md).
 </details>
 
 <details>
 <summary><b>Does it work on Android, iPad and Windows?</b></summary>
 
-It is designed first for Android tablets with a stylus (S Pen) and also for Windows. It uses no desktop-only code, so it also loads on macOS, Linux and iPad, but those are not a focus and have not been tested. On Android, Obsidian does not pass pen hover to plugins, which limits what the S Pen side button can do (see [S Pen on Android](docs/features.md#s-pen-on-android)).
+It is designed first for Android tablets with a stylus (S Pen) and also for Windows. It uses no desktop-only code, so it also loads on macOS, Linux and iPad, but those are not a focus and have not been tested. On Android, Obsidian does not pass pen hover to plugins, which limits what the S Pen side button can do (see the next question).
 </details>
 
 <details>
-<summary><b>Can I sync with Google Drive or OneDrive?</b></summary>
+<summary><b>What does the S Pen button do?</b></summary>
 
-Yes. Notebooks are ordinary files, so any folder-sync app works (for example a Drive or OneDrive sync app on Android, or Syncthing); nothing depends on Obsidian Sync. Sync the `_assets` and `_backup` folders too. With Obsidian Sync, turn on **Other types**, or `.notebook` files are not synced. The plugin warns when a notebook is open on another device and never silently replaces a newer version.
+A click while the pen hovers opens the radial menu (or, if you choose, makes the next stroke erase). Holding the button while the nib touches the page erases, and pressing it mid-stroke erases the rest of that stroke. Because Obsidian for Android does not pass hover to plugins, anything that needs hover (a cursor preview, choosing by releasing over an action) cannot work. The full explanation, the timing settings and an optional key-mapping setup are in [S Pen on Android](docs/features.md#s-pen-on-android).
 </details>
 
 <details>
-<summary><b>Does it use AI?</b></summary>
+<summary><b>Does it use AI or the cloud?</b></summary>
 
-No. Everything, including the generated art and the statistics, is computed by ordinary code on your device. Optional AI features are only an idea for much later on the roadmap, after writing and saving are proven stable, and would be local first with any cloud use as an explicit opt-in.
+No. Everything, including the generated art and the statistics, is computed by ordinary code on your device, and nothing is sent anywhere: no account, no server, no telemetry. Syncing is up to you and the tools you already use (Google Drive, OneDrive, Syncthing or Obsidian Sync). Optional AI features are only an idea for much later on the roadmap, after writing and saving are proven stable, and would be local first with any cloud use as an explicit opt-in.
 </details>
 
 ## Roadmap
 
 <p>
-  <a href="https://plagemes.github.io/Obsidian-Notebook/"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fplagemes.github.io%2FObsidian-Notebook%2Froadmap.json&query=%24.badge&label=roadmap&color=3DD68C" alt="Roadmap progress"></a>
+  <a href="https://plagemes.github.io/Obsidian-Notebook/"><img src="https://img.shields.io/badge/roadmap-129%20of%20437%20shipped-3DD68C" alt="Roadmap: 129 of 437 features shipped"></a>
 </p>
 
-As of 0.12.0 the roadmap has **129 features shipped**, **0 in progress** and **308 to do** (plus 5 deferred and 22 dropped). The live page is rebuilt from [docs/roadmap.md](docs/roadmap.md) on every change, with filters, search and the most requested features.
+As of 0.12.1 the roadmap has **129 features shipped**, **0 in progress** and **308 to do** (plus 5 deferred and 22 dropped). The live page is rebuilt from [docs/roadmap.md](docs/roadmap.md) on every change, with filters, search and the most requested features.
 
 <p>
   <a href="https://plagemes.github.io/Obsidian-Notebook/"><img src="https://img.shields.io/badge/Open_the_live_roadmap-6D8BFF?style=for-the-badge" alt="Open the live roadmap"></a>
@@ -247,10 +272,10 @@ As of 0.12.0 the roadmap has **129 features shipped**, **0 in progress** and **3
 
 - **Want something?** [Request a feature](https://github.com/Plagemes/Obsidian-Notebook/issues/new?template=feature_request.yml), or 👍 an existing request: the roadmap page ranks them by votes. Loose ideas are welcome in [Discussions → Ideas](https://github.com/Plagemes/Obsidian-Notebook/discussions/categories/ideas).
 - **Found a bug?** [Report it](https://github.com/Plagemes/Obsidian-Notebook/issues/new?template=bug_report.yml). Reports from Android tablets with a pen help most.
-- **Want to code?** Read [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/development.md](docs/development.md).
+- **Want to code?** Read [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/development.md](docs/development.md). Please follow the [Code of Conduct](CODE_OF_CONDUCT.md); security issues go through [SECURITY.md](SECURITY.md).
 
-> **Status:** v0.12.0, early development. The automated tests and the browser harness pass, but Notebook has not been verified on Android hardware yet; see [docs/testing.md](docs/testing.md).
+<sub><b>Status:</b> v0.12.1, early development. The automated tests and the browser harness pass, but Notebook has not been verified on Android hardware yet; what is verified, and how to test it, is in <a href="docs/testing.md">docs/testing.md</a>.</sub>
 
 ## Licence
 
-MIT. Third-party code: perfect-freehand (MIT). PDFs are rendered with the pdf.js that Obsidian provides. No code was copied from the other projects studied in [docs/research.md](docs/research.md).
+MIT, see [LICENSE](LICENSE). Third-party code: perfect-freehand (MIT). PDFs are rendered with the pdf.js that Obsidian provides. No code was copied from the other projects studied in [docs/research.md](docs/research.md).

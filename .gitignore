@@ -6,6 +6,6 @@ data.json
 coverage/
 stress.notebook
 dev/harness/dist/
-# Built by scripts/roadmap-data.mjs (the Pages workflow builds them on every deploy)
+# Built on every deploy by the Pages workflow (scripts/roadmap-data.mjs writes roadmap.json; the art bands are copied from docs/media/)
 site/roadmap.json
-site/media/
+site/assets/

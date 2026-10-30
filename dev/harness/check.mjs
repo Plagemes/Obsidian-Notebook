@@ -330,13 +330,13 @@ async function main() {
 				}
 			}
 		}
-		// The repository banner (1280 × 400), the social preview (1280 × 640) and the roadmap page's art band (1600 × 320), dark
+		// The repository banner (1280 × 400), the social preview (1280 × 640) and the roadmap page's art band (1600 × 240), dark
 		// and light: exact-size screenshots in dist/shots/banner/, copied into docs/media/ when the art changes.
 		// HARNESS_DOC=banner runs only these.
 		if (!process.env.HARNESS_DOC || process.env.HARNESS_DOC === "banner") {
 			const bannerDir = join(shots, "banner");
 			mkdirSync(bannerDir, { recursive: true });
-			for (const b of [{ kind: "banner", theme: "dark", height: 400 }, { kind: "banner", theme: "light", height: 400 }, { kind: "social", theme: "dark", height: 640 }, { kind: "social", theme: "light", height: 640 }, { kind: "band", theme: "dark", width: 1600, height: 320 }, { kind: "band", theme: "light", width: 1600, height: 320 }]) {
+			for (const b of [{ kind: "banner", theme: "dark", height: 400 }, { kind: "banner", theme: "light", height: 400 }, { kind: "social", theme: "dark", height: 640 }, { kind: "social", theme: "light", height: 640 }, { kind: "band", theme: "dark", width: 1600, height: 240 }, { kind: "band", theme: "light", width: 1600, height: 240 }]) {
 				const name = `${b.kind}-${b.theme}`;
 				const width = b.width ?? 1280;
 				await cdp.send("Emulation.setDeviceMetricsOverride", { width, height: b.height, deviceScaleFactor: 1, mobile: false });

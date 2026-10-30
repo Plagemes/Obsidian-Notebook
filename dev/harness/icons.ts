@@ -3,6 +3,10 @@
  * for the harness (24 × 24, 2 px strokes); not Lucide's artwork. Unknown names fall back to two letters.
  */
 const P: Record<string, string> = {
+	// Settings section headers (view/settings-schema.ts) that had no stand-in
+	"pen-line": "M12 20h9 M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z",
+	"share": "M4 12v8h16v-8 M16 6l-4-4-4 4 M12 2v13",
+	"stethoscope": "M5 3v6a5 5 0 0 0 10 0V3 M10 14v2a5 5 0 0 0 10 0v-3 M20 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
 	// 0.12: Home, library, rail and inbox bell
 	"home": "M3 10.5L12 3l9 7.5 M5 9v11h5v-6h4v6h5V9",
 	"folder": "M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z",
