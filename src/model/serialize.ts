@@ -339,14 +339,14 @@ function readBookmarkInfo(v: unknown, drop: Dropped | null): Record<string, Book
 				const info: BookmarkInfo = {};
 				const title = orDrop(drop, () => {
 					if (raw.title !== undefined && typeof raw.title !== "string") fail(`${path}.title`, "expected a string");
-					return raw.title as string | undefined;
+					return raw.title;
 				});
 				if (title !== undefined) info.title = title;
 				const color = orDrop(drop, () => (raw.color === undefined ? undefined : colour(raw.color, `${path}.color`)));
 				if (color !== undefined) info.color = color;
 				const category = orDrop(drop, () => {
 					if (raw.category !== undefined && typeof raw.category !== "string") fail(`${path}.category`, "expected a string");
-					return raw.category as string | undefined;
+					return raw.category;
 				});
 				if (category !== undefined) info.category = category;
 				return info;
