@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.10.1 — 2026-10-30
+
+Not yet verified on Android hardware or in Obsidian. No change to the notebook format (still v9). Manual steps 380-383 in `docs/testing.md`.
 
 ### Added
 - **Language setting** (*Settings, Language*): Automatic (follows Obsidian, default), English or Italiano; applies at once to the settings tab and to anything opened afterwards. Open notebooks update when reopened, and command names follow the language chosen at startup (a notice says so). The message tables now live in `src/i18n/en.ts` and `src/i18n/it.ts` with a `LANGUAGES` registry, so adding a language is one file; `tests/i18n.test.ts` checks that English and Italian have the same keys, that every key used by `t("…")` in `src/` exists, that no key was dropped, plus empty strings, `{placeholders}` and duplicate keys.
