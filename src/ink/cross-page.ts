@@ -2,6 +2,7 @@ import type { Command } from "../model/history";
 import { AddElement, AddStroke, Batch, RemoveElement, ReplaceElement, ReplaceStroke } from "../model/history";
 import { freezeElement, freezeStroke } from "../model/serialize";
 import type { Asset, Page, PageElement, Stroke } from "../model/types";
+import { attachedInk, boundGraphId, inkOwner } from "./attach";
 import { captureClip, type ClipContent } from "./clipboard";
 import { elementBounds, elementsInLasso, transformElement } from "./elements";
 import { strokeBounds, type BBox } from "./hit-test";
@@ -115,6 +116,31 @@ export function pageUnder(boxes: readonly PageBox[], x: number, y: number): numb
 	return boxes.findIndex((b) => x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height);
 }
 
+/** A stroke that is not moved on its own but with the object it belongs to. */
+export interface InkFollower {
+	stroke: Stroke;
+	owner: PageElement;
+}
+
+/**
+ * The ink that goes where an object of `part` goes (pure): the ink bound to a selected graph (always: it is clipped to its
+ * graph and meaningless without it) and, with `geometric`, the ink written on a selected object (setting "Ink follows
+ * objects", ink/attach.ts). A selected stroke that is bound to a selected graph is a follower too, so it cannot be left on
+ * another page than its graph; any other selected stroke moves on its own.
+ */
+export function inkFollowers(page: Page, part: PagePart, geometric: boolean, measure: MeasureText = estimateMeasure): InkFollower[] {
+	const elements = page.elements ?? [];
+	if (part.elements.length === 0 || elements.length === 0) return [];
+	const selected = new Set(part.strokes);
+	const out: InkFollower[] = [];
+	for (const stroke of attachedInk(page.strokes, elements, part.elements, new Set(), measure)) {
+		if (boundGraphId(stroke) === null && (!geometric || selected.has(stroke))) continue;
+		const owner = inkOwner(stroke, elements, measure);
+		if (owner && part.elements.includes(owner)) out.push({ stroke, owner });
+	}
+	return out;
+}
+
 export interface CrossPageTransformInput {
 	boxes: readonly PageBox[];
 	pages: readonly Page[];
@@ -123,6 +149,8 @@ export interface CrossPageTransformInput {
 	parts: readonly PagePart[];
 	matrix: Matrix;
 	measure?: MeasureText;
+	/** Setting "Ink follows objects": ink written on a moved object goes to the page the object goes to. Bound graph ink always does. */
+	followInk?: boolean;
 }
 
 export interface CrossPageTransformPlan {
@@ -171,16 +199,26 @@ export function planCrossPageTransform(input: CrossPageTransformInput): CrossPag
 		if (!page || !boxes[part.pageIndex]) continue;
 		const [ox, oy] = frameOffset(boxes, primary, part.pageIndex);
 		const m = partMatrix(matrix, ox, oy);
-		for (const stroke of part.strokes) {
+		// Where each object ends up, so the ink that belongs to it can follow (decided before the strokes are placed).
+		const placed = new Map<PageElement, { inPlace: PageElement; to: number }>();
+		for (const el of part.elements) {
+			if (!page.elements?.includes(el)) continue;
+			const inPlace = transformElement(el, m, measure);
+			placed.set(el, { inPlace, to: target(part.pageIndex, elementBounds(inPlace, measure)) });
+		}
+		const followers = inkFollowers(page, part, input.followInk === true, measure);
+		const followerOwner = new Map<Stroke, PageElement>(followers.map((f) => [f.stroke, f.owner]));
+		const moveStroke = (stroke: Stroke, selected: boolean): void => {
 			const index = page.strokes.indexOf(stroke);
-			if (index < 0) continue;
+			if (index < 0) return;
 			count++;
 			const inPlace = freezeStroke(transformStroke(stroke, m));
-			const to = target(part.pageIndex, strokeBounds(inPlace));
+			const owner = followerOwner.get(stroke);
+			const to = owner ? (placed.get(owner)?.to ?? part.pageIndex) : target(part.pageIndex, strokeBounds(inPlace));
 			if (to === part.pageIndex) {
 				replace.push(new ReplaceStroke(page.id, stroke, [inPlace], index));
-				partFor(to).strokes.push(inPlace);
-				continue;
+				if (selected) partFor(to).strokes.push(inPlace);
+				return;
 			}
 			const [tx, ty] = frameOffset(boxes, to, part.pageIndex);
 			const moved = freezeStroke(transformStroke(stroke, multiply(translate(tx, ty), m)));
@@ -189,14 +227,17 @@ export function planCrossPageTransform(input: CrossPageTransformInput): CrossPag
 			lengthOf.set(to, at + 1);
 			add.push(new AddStroke(dest.id, moved, at));
 			removals.push({ page: part.pageIndex, index, command: new ReplaceStroke(page.id, stroke, [], index) });
-			partFor(to).strokes.push(moved);
+			if (selected) partFor(to).strokes.push(moved);
 			reparented++;
-		}
+		};
+		for (const stroke of part.strokes) moveStroke(stroke, true);
+		const own = new Set(part.strokes);
+		for (const f of followers) if (!own.has(f.stroke)) moveStroke(f.stroke, false);
 		for (const el of part.elements) {
-			if (!page.elements?.includes(el)) continue;
+			const done = placed.get(el);
+			if (!done) continue;
 			count++;
-			const inPlace = transformElement(el, m, measure);
-			const to = target(part.pageIndex, elementBounds(inPlace, measure));
+			const { inPlace, to } = done;
 			if (to === part.pageIndex) {
 				replace.push(new ReplaceElement(page.id, el, inPlace));
 				partFor(to).elements.push(inPlace);

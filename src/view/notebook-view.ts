@@ -13,7 +13,7 @@ import { deleteInkCommand, inkOnRemoved } from "../ink/attach";
 import { captureClip, type ClipContent } from "../ink/clipboard";
 import { cleanStampFormat, formatStamp, stampElement, stampSpot } from "../ink/date-stamp";
 import {
-	captureCrossPageClip, frameOffset, pagesTouchedBy, partsBounds, planCrossPageTransform, selectAcrossPages, type PagePart,
+	captureCrossPageClip, frameOffset, inkFollowers, pagesTouchedBy, partsBounds, planCrossPageTransform, selectAcrossPages, type PagePart,
 } from "../ink/cross-page";
 import { elementsInLasso, hitElement } from "../ink/elements";
 import { eraseAreaCommand } from "../ink/erase-area";
@@ -191,6 +191,8 @@ export interface NotebookHost {
 	syncSafety?: SyncSafetyService;
 	/** wave 0.7: resilience: safe mode, storage-full warning, integrity ledger. Optional: absent in tests. */
 	resilience?: ResilienceServices;
+	/** wave 0.10 (362): the plugin's one store of the shared clipboard file (views must not each write it). Optional: absent in tests. */
+	sharedClips?(): SharedClipStore;
 }
 
 interface ActiveStroke {
@@ -1672,7 +1674,7 @@ export class NotebookView extends FileView {
 		if (commands.length === 0) return;
 		this.history.execute(new Batch("Delete selection", commands));
 		this.afterHistoryChange();
-		if (owned.length > 0) this.offerDeleteInk(page, removedEls, owned);
+		if (owned.length > 0) this.offerDeleteInk([{ page, removed: removedEls, owned }]);
 	}
 
 	/**
@@ -1696,11 +1698,15 @@ export class NotebookView extends FileView {
 		this.selectItems(spot.pageIndex, [], [el]);
 	}
 
-	/** wave 0.10 (359): deletes a selection that spans several pages, one undo step (no offer about ink written on objects). */
+	/**
+	 * wave 0.10 (359): deletes a selection that spans several pages, one undo step. Like on a single page, the ink written
+	 * on (or bound to) a deleted object stays unless the user takes the offer shown afterwards (setting "Ink follows objects").
+	 */
 	private deleteAcrossPages(sel: Selection): void {
 		const doc = this.session?.doc;
 		if (!doc) return;
 		const commands: Command[] = [];
+		const offers: Array<{ page: Page; removed: PageElement[]; owned: Stroke[] }> = [];
 		for (const part of this.selectionParts(sel)) {
 			const page = doc.pages[part.pageIndex];
 			if (!page) continue;
@@ -1709,12 +1715,21 @@ export class NotebookView extends FileView {
 				.filter((it) => it.index >= 0)
 				.sort((a, b) => b.index - a.index);
 			for (const it of strokes) commands.push(new ReplaceStroke(page.id, it.stroke, [], it.index));
-			for (const el of part.elements) if (page.elements?.includes(el)) commands.push(new RemoveElement(page.id, el));
+			const removedEls = part.elements.filter((el) => page.elements?.includes(el));
+			for (const el of removedEls) commands.push(new RemoveElement(page.id, el));
+			if (this.host.settings.inkFollowsObjects && removedEls.length > 0) {
+				// v8: hidden ink is never offered (nor counted) while the solutions of the page are not shown.
+				const visible = new Set(this.inkInView(page));
+				const own = new Set(part.strokes);
+				const owned = inkFollowers(page, part, true, measureText).map((f) => f.stroke).filter((s) => visible.has(s) && !own.has(s));
+				if (owned.length > 0) offers.push({ page, removed: removedEls, owned });
+			}
 		}
 		this.clearSelection();
 		if (commands.length === 0) return;
-		this.history.execute(new Batch("Delete selection", commands));
+		if (!this.history.execute(new Batch("Delete selection", commands))) return;
 		this.afterHistoryChange();
+		if (offers.length > 0) this.offerDeleteInk(offers);
 	}
 
 	/** The selected items page by page: the primary page first, then the other pages of a cross-page selection. */
@@ -3767,9 +3782,13 @@ export class NotebookView extends FileView {
 	private pushSelection(): void {
 		const sel = this.selection;
 		// Ink written on the selected objects floats with them (setting "Ink follows objects").
-		const attached = sel ? this.attachedInk(sel) : [];
+		const across = sel?.others?.length ? this.crossPageInk(sel) : null;
+		const attached = sel ? (across ? across[0] ?? [] : this.attachedInk(sel)) : [];
 		const boxes = this.layout?.boxes ?? [];
-		const parts = sel?.others?.map((o) => ({ ...o, offset: frameOffset(boxes, sel.pageIndex, o.pageIndex) }));
+		const parts = sel?.others?.map((o, i) => {
+			const extra = across?.[i + 1] ?? [];
+			return { ...o, strokes: extra.length > 0 ? [...o.strokes, ...extra] : o.strokes, offset: frameOffset(boxes, sel.pageIndex, o.pageIndex) };
+		});
 		this.renderer?.setSelection(sel ? { ...sel, parts, strokes: attached.length > 0 ? [...sel.strokes, ...attached] : sel.strokes, handle: HANDLE_PX } : null);
 		this.refreshUi();
 	}
@@ -3911,7 +3930,12 @@ export class NotebookView extends FileView {
 		const attached = this.attachedInk(sel).filter((s) => onPage.has(s));
 		const plan = applyPlacement(page, present, presentEls, uniformPlacement(present, presentEls, attached, sel.matrix), measureText, "Transform selection");
 		if (!plan) return;
-		this.history.execute(plan.command);
+		if (!this.history.execute(plan.command)) {
+			// Refused (the content guard, or read-only): the document is unchanged, so the floating selection is dropped.
+			this.clearSelection();
+			this.renderer?.invalidate();
+			return;
+		}
 		const moved = plan.strokes;
 		const movedEls = plan.elements;
 		sel.strokes = moved;
@@ -3927,7 +3951,8 @@ export class NotebookView extends FileView {
 
 	/**
 	 * wave 0.10 (359): applies the dragged transform to a selection across pages. Every item ends up on the page under it
-	 * (items outside every page stay where they were); one undo step. Ink that follows objects is not carried across pages.
+	 * (items outside every page stay where they were); one undo step. The ink bound to a graph (and, with the setting "Ink
+	 * follows objects", the ink written on an object) goes to the page its object goes to.
 	 */
 	private commitCrossPageTransform(sel: Selection): void {
 		const doc = this.session?.doc;
@@ -3935,12 +3960,13 @@ export class NotebookView extends FileView {
 		if (!doc || !boxes) return;
 		const plan = planCrossPageTransform({
 			boxes, pages: doc.pages, primary: sel.pageIndex, parts: this.selectionParts(sel), matrix: sel.matrix, measure: measureText,
+			followInk: this.host.settings.inkFollowsObjects,
 		});
-		if (!plan) {
+		if (!plan || !this.history.execute(plan.command)) {
 			this.clearSelection();
+			this.renderer?.invalidate();
 			return;
 		}
-		this.history.execute(plan.command);
 		const [first, ...rest] = plan.parts;
 		const bounds = first ? partsBounds(boxes, plan.parts, first.pageIndex, measureText) : null;
 		if (!first || !bounds) {
@@ -3960,6 +3986,13 @@ export class NotebookView extends FileView {
 
 	// --- ink attached to objects (roadmap 149) ---
 
+	/** wave 0.10 (359): per part of a selection across pages (the primary page first), the unselected ink that floats with its objects. */
+	private crossPageInk(sel: Selection): Stroke[][] {
+		return this.objectInk.attachedAcross(
+			this.selectionParts(sel).map((part) => ({ part, page: this.pageAtIndex(part.pageIndex) ?? undefined })), this.host.settings.inkFollowsObjects,
+		);
+	}
+
 	/** Strokes that float with the selection without being selected: the ink written on the selected objects (none when the setting is off). */
 	private attachedInk(sel: Selection): Stroke[] {
 		if (!this.host.settings.inkFollowsObjects || sel.others?.length) return [];
@@ -3967,16 +4000,24 @@ export class NotebookView extends FileView {
 		return page ? this.objectInk.attachedTo(page, sel) : [];
 	}
 
-	/** After deleting objects that had ink on them: offers to delete that ink too (undone separately; ignored = the ink stays). */
-	private offerDeleteInk(page: Page, removed: readonly PageElement[], owned: Stroke[]): void {
-		this.objectInk.offerDelete(owned.length, () => {
+	/**
+	 * After deleting objects that had ink on them: offers to delete that ink too (undone separately; ignored = the ink
+	 * stays). One group per page; the offer is for all of them and skips a page whose object an undo brought back.
+	 */
+	private offerDeleteInk(groups: ReadonlyArray<{ page: Page; removed: readonly PageElement[]; owned: Stroke[] }>): void {
+		this.objectInk.offerDelete(groups.reduce((n, g) => n + g.owned.length, 0), () => {
 			const doc = this.session?.doc;
-			// Only while the objects are still deleted: an undo in between brings them back, and their ink stays where it is.
-			if (!doc || !this.editable() || !doc.pages.includes(page) || removed.some((e) => page.elements?.includes(e))) return;
-			const cmd = deleteInkCommand(page.id, page.strokes, owned);
-			if (!cmd) return;
+			if (!doc || !this.editable()) return;
+			const commands: Command[] = [];
+			for (const { page, removed, owned } of groups) {
+				// Only while the objects are still deleted: an undo in between brings them back, and their ink stays where it is.
+				if (!doc.pages.includes(page) || removed.some((e) => page.elements?.includes(e))) continue;
+				const cmd = deleteInkCommand(page.id, page.strokes, owned);
+				if (cmd) commands.push(cmd);
+			}
+			if (commands.length === 0) return;
 			this.clearSelection();
-			this.history.execute(cmd);
+			if (!this.history.execute(commands.length === 1 ? commands[0]! : new Batch("Delete ink on deleted objects", commands))) return;
 			this.afterHistoryChange();
 			this.renderer?.invalidate();
 			showNotice(t("object.inkDeleted"));
@@ -4049,13 +4090,14 @@ export class NotebookView extends FileView {
 			selection: () => this.selection,
 			select: (pageIndex, strokes, elements, others) => this.selectItems(pageIndex, strokes, elements, others),
 			execute: (cmd) => {
-				this.history.execute(cmd);
+				if (!this.history.execute(cmd)) return false;
 				this.afterHistoryChange();
 				this.renderer?.invalidate();
+				return true;
 			},
 			deleteSelection: () => this.deleteSelection(),
 			boxes: () => this.layout?.boxes ?? [],
-			sharedClips: () => (this.sharedClipStore ??= new SharedClipStore(vaultDeviceFileAdapter(this.app), () => this.host.settings.folder, sidecarDeviceId(this.app))),
+			sharedClips: () => this.host.sharedClips?.() ?? (this.sharedClipStore ??= new SharedClipStore(vaultDeviceFileAdapter(this.app), () => this.host.settings.folder, sidecarDeviceId(this.app))),
 			pasteTarget: () => this.pasteTarget(),
 			textStyle: () => ({ fontSize: this.tools.textSize, color: this.tools.penColor }),
 			stillHere: (doc) => this.session?.doc === doc && this.editable() && !this.controller?.drawing,

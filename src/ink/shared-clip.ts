@@ -1,4 +1,8 @@
 import { createId } from "../model/document";
+import type { Asset } from "../model/types";
+import { ASSETS_DIRNAME, assetPath, assetsFolder } from "../pdf/assets";
+import { ASSET_ID_LENGTH, assetIdFromHash, sha256Hex } from "../pdf/hash";
+import { assetAvailability } from "../storage/sync-state";
 import type { ClipContent } from "./clipboard";
 import { readStamp, serializeStamp } from "./stamps";
 
@@ -25,6 +29,8 @@ export const MAX_SHARED_ENTRIES = 5;
  * pictures, not for a notebook, and Google Drive or OneDrive upload it every time it changes.
  */
 export const MAX_SHARED_CHARS = 3_000_000;
+/** A file of another device bigger than this is not read (bytes): far above what the cap above lets a version of this plugin write. */
+export const MAX_SHARED_FILE_BYTES = 8 * 1024 * 1024;
 /** Biggest side (pt) of a copied selection: several pages of ink still fit. */
 export const MAX_SHARED_SIDE = 20_000;
 /** How many entries of other devices the paste list shows. */
@@ -123,12 +129,19 @@ export type AddedEntry = { ok: true; data: SharedClipFile; dropped: number } | {
  */
 export function addSharedEntry(data: SharedClipFile, entry: SharedClipEntry, maxChars: number = MAX_SHARED_CHARS): AddedEntry {
 	let entries = [entry, ...data.entries.filter((e) => e.id !== entry.id)];
-	const total = (list: SharedClipEntry[]) => serializeSharedClip({ entries: list, unknown: data.unknown }).length;
-	if (total([entry]) > maxChars) return { ok: false, reason: "too-large", message: "the selection is too large to share between devices" };
+	let unknown = data.unknown;
+	const total = (list: SharedClipEntry[]) => serializeSharedClip({ entries: list, unknown }).length;
 	const before = entries.length;
 	entries = entries.slice(0, MAX_SHARED_ENTRIES);
 	while (entries.length > 1 && total(entries) > maxChars) entries.pop();
-	return { ok: true, data: { entries, unknown: data.unknown }, dropped: before - entries.length };
+	// Entries a newer version wrote are kept as they are, but they must not make every later copy fail: when the file is
+	// still over the cap with only the new entry in it, they go last, the oldest first (never dropped otherwise).
+	if (total(entries) > maxChars) {
+		unknown = [...unknown];
+		while (unknown.length > 0 && total(entries) > maxChars) unknown.shift();
+	}
+	if (total(entries) > maxChars) return { ok: false, reason: "too-large", message: "the selection is too large to share between devices" };
+	return { ok: true, data: { entries, unknown }, dropped: before - entries.length };
 }
 
 /** An entry of another device's file, as the paste list shows it. */
@@ -158,4 +171,51 @@ export function clipAge(now: number, at: number): { unit: "now" | "minutes" | "h
 	const hours = Math.floor(minutes / 60);
 	if (hours < 48) return { unit: "hours", n: hours };
 	return { unit: "days", n: Math.floor(hours / 24) };
+}
+
+// --- the pictures a pasted clip points at ---
+
+/** Largest picture file pasted from another device's clipboard (bytes): it is read whole into memory. */
+export const MAX_SHARED_IMAGE_BYTES = 50 * 1024 * 1024;
+
+const SHARED_IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "gif"];
+
+export type SharedAssetPlan =
+	| { ok: true; path: string }
+	| { ok: false; reason: "invalid" | "missing" | "waiting" | "too-large" };
+
+/**
+ * The file to read for the picture of a record that came from another device's file, or null when the record is not an
+ * image in the shape `<…>/_assets/<id>.<ext>` (a content-addressed image). The record is untrusted: the path returned
+ * is that name in this vault's own assets folder, never the path as written.
+ */
+export function sharedAssetPath(record: Asset, notebooksFolder: string): string | null {
+	if (record.kind !== "image" || typeof record.id !== "string" || !new RegExp(`^[0-9a-f]{${ASSET_ID_LENGTH}}$`).test(record.id)) return null;
+	const parts = typeof record.path === "string" ? record.path.split("/") : [];
+	const name = parts[parts.length - 1] ?? "";
+	const dot = name.lastIndexOf(".");
+	const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+	if (name.slice(0, dot) !== record.id || !SHARED_IMAGE_EXTENSIONS.includes(ext) || parts[parts.length - 2] !== ASSETS_DIRNAME) return null;
+	return assetPath(assetsFolder(notebooksFolder), record.id, ext);
+}
+
+/**
+ * Whether the file of a shared picture can be read now: `size` is its size in the vault (null: no file). A file that is
+ * empty or smaller than the record says is a placeholder or a download in progress (`waiting`); one over
+ * MAX_SHARED_IMAGE_BYTES is never read whole (it could exhaust the memory of a phone).
+ */
+export function planSharedAsset(record: Asset, notebooksFolder: string, size: number | null): SharedAssetPlan {
+	const path = sharedAssetPath(record, notebooksFolder);
+	if (path === null) return { ok: false, reason: "invalid" };
+	const expected = typeof record.bytes === "number" && Number.isFinite(record.bytes) ? record.bytes : 0;
+	if (expected > MAX_SHARED_IMAGE_BYTES) return { ok: false, reason: "too-large" };
+	if (size === null) return { ok: false, reason: "missing" };
+	if (size > MAX_SHARED_IMAGE_BYTES) return { ok: false, reason: "too-large" };
+	if (assetAvailability(size, expected) === "waiting") return { ok: false, reason: "waiting" };
+	return { ok: true, path };
+}
+
+/** Whether the bytes are the content the (content-addressed) id names: false for a partly downloaded or replaced file. */
+export async function bytesMatchAssetId(bytes: ArrayBuffer, id: string): Promise<boolean> {
+	return assetIdFromHash(await sha256Hex(bytes)) === id;
 }

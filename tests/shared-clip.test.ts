@@ -224,10 +224,12 @@ describe("shared clipboard with equations and graphs (format v9)", () => {
 		expect(readEq).toMatchObject({ latex: "x^2+1", numbered: true });
 		// The ink keeps the id that binds it to its graph, and the graph keeps its id, inside the entry.
 		expect(boundGraphId(read.clip.strokes[0]!)).toBe(readGraph.id);
-		// Pasting gives new ids: the copied ink is no longer bound, so the geometric rule owns it (ink/attach.ts).
+		// Pasting gives new ids, and the copied ink is bound to the copied graph (not to the original).
 		const pasted = instantiateClip(read.clip, 10, 10);
 		expect(pasted.elements.map((e) => e.type).sort()).toEqual(["equation", "graph"]);
-		expect(pasted.strokes[0]!.id.includes(BOUND_SEPARATOR)).toBe(false);
+		const pastedGraph = pasted.elements.find((e) => e.type === "graph")!;
+		expect(boundGraphId(pasted.strokes[0]!)).toBe(pastedGraph.id);
+		expect(pasted.strokes[0]!.id).not.toBe(read.clip.strokes[0]!.id);
 		expect(pasted.elements.every((e) => e.id !== eq.id && e.id !== graph.id)).toBe(true);
 	});
 

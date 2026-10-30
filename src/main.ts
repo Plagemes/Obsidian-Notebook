@@ -6,7 +6,8 @@ import { readSettings, type NotebookSettings } from "./settings";
 import { positionEquals, type SavedPosition } from "./ink/view-position";
 import { stressDocument } from "./model/stress";
 import { NOTEBOOK_EXTENSIONS } from "./storage/format";
-import { AdapterJournalStore, journalFolder } from "./storage/vault-io";
+import { AdapterJournalStore, journalFolder, sidecarDeviceId, vaultDeviceFileAdapter } from "./storage/vault-io";
+import { SharedClipStore } from "./storage/shared-clip-store";
 import { createNotebook } from "./storage/notebooks";
 import { BenchmarkModal } from "./view/benchmark";
 import { PenTestModal, penSignalInfo } from "./view/pen-test-modal";
@@ -60,6 +61,8 @@ export default class NotebookPlugin extends Plugin {
 	resilience?: ResilienceServices;
 	/** Version history (set by registerIntegration), for the integrity check. */
 	private history: HistoryService | null = null;
+	/** wave 0.10 (362): the clipboard shared between devices; one store (one write queue) for every view. */
+	private sharedClipStore: SharedClipStore | null = null;
 
 	async onload(): Promise<void> {
 		this.settings = readSettings(await this.loadData());
@@ -182,6 +185,11 @@ export default class NotebookPlugin extends Plugin {
 	/** ui redesign: runs a plugin-level action of the registry (the notebook tab's menu). */
 	runGlobal(id: string): void {
 		this.globalActions[id]?.();
+	}
+
+	/** wave 0.10 (362): the store of this device's shared clipboard file, shared by the views so two of them never race on it. */
+	sharedClips(): SharedClipStore {
+		return (this.sharedClipStore ??= new SharedClipStore(vaultDeviceFileAdapter(this.app), () => this.settings.folder, sidecarDeviceId(this.app)));
 	}
 
 	/** ui redesign: the course of the class on now (timetable), for the lecture contextual bar; null when none. */
