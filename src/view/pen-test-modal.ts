@@ -27,7 +27,7 @@ export function penSignalInfo(host: { settings: NotebookSettings; saveSettings()
 /**
  * "Pen button test": lists, in plain text, the last events the pen (or anything else) sends anywhere in the
  * window, and whether the plugin would treat each as the side button. Like the pen-tracker page it shows the
- * values of the last event too. After 0.10.1: every pointer, mouse, touch, contextmenu, auxclick, selection and key
+ * values of the last event too. 0.11.1: every pointer, mouse, touch, contextmenu, auxclick, selection and key
  * event is recorded at window level in the capture phase, so an event that targets another element than the
  * test area, or that a handler would stop on its way, still shows. It draws nothing and changes nothing.
  */
@@ -67,16 +67,25 @@ export class PenTestModal extends Modal {
 		const opts = { capture: true, passive: true } as const;
 		for (const type of PEN_TEST_EVENT_TYPES) win.addEventListener(type, rec, opts);
 		doc.addEventListener("selectionchange", rec, opts);
-		const noMenu = (e: Event) => {
-			if (this.area.contains(e.target as Node)) e.preventDefault();
+		// The test area blocks like the pen-tracker page: no native menu or auxclick action, and the pen's
+		// pointerdown is cancelled (no WebView long-press or selection that would cancel the pen stream). Not
+		// passive; the window-level log above stays passive.
+		const block = (e: Event) => {
+			if (e.cancelable) e.preventDefault();
 		};
-		win.addEventListener("contextmenu", noMenu, true);
-		win.addEventListener("auxclick", noMenu, true);
+		const penDown = (e: PointerEvent) => {
+			if (e.pointerType === "pen" && e.cancelable) e.preventDefault();
+		};
+		const blockOpts = { capture: true, passive: false } as const;
+		this.area.addEventListener("contextmenu", block, blockOpts);
+		this.area.addEventListener("auxclick", block, blockOpts);
+		this.area.addEventListener("pointerdown", penDown, blockOpts);
 		this.stop = () => {
 			for (const type of PEN_TEST_EVENT_TYPES) win.removeEventListener(type, rec, opts);
 			doc.removeEventListener("selectionchange", rec, opts);
-			win.removeEventListener("contextmenu", noMenu, true);
-			win.removeEventListener("auxclick", noMenu, true);
+			this.area.removeEventListener("contextmenu", block, blockOpts);
+			this.area.removeEventListener("auxclick", block, blockOpts);
+			this.area.removeEventListener("pointerdown", penDown, blockOpts);
 			if (this.frame) win.cancelAnimationFrame(this.frame);
 			this.frame = 0;
 		};

@@ -117,19 +117,36 @@ export interface PointerControllerOptions {
 	 */
 	rawUpdates?: boolean;
 	/**
-	 * The view's root element (after 0.10.1). With it, the side-button detector also listens at window level in the
+	 * The view's root element (0.11.1). With it, the side-button detector also listens at window level in the
 	 * capture phase: pen events over the view that never reach the element (they target the toolbar or another
 	 * part of the view, or a handler above the element stopped them) and mouse-only presses still count. Events
 	 * outside the scope (other views, modals, Obsidian's own UI) are ignored. Only the side button is detected
 	 * there: strokes, panning and zooming come from the element's own listeners, as before.
 	 */
-	scope?: { contains(node: Node | null): boolean };
+	scope?: ScopeTarget;
 	/** Where the window-level listeners go (default: the element's window). For tests. */
 	windowTarget?: EventTarget;
 }
 
-/** Event types the window-level side-button watch listens to (capture phase). */
-const WINDOW_TYPES = ["pointerdown", "pointermove", "pointerup", "pointercancel", "contextmenu", "auxclick", "mousedown"] as const;
+/** The view's root as the controller uses it: a node that receives events and can say what it contains. */
+export type ScopeTarget = EventTarget & { contains(node: Node | null): boolean };
+
+/**
+ * Event types the window-level side-button watch listens to (capture phase). `contextmenu` is listened on the
+ * scope instead (capture, not passive), so that only the notebook view's native menu is ever blocked.
+ */
+const WINDOW_TYPES = ["pointerdown", "pointermove", "pointerup", "pointercancel", "auxclick", "mousedown"] as const;
+/** The stage marks these as "reached" in its capture phase (the window and scope copies are then left to it). */
+const STAGE_MARKED = [...WINDOW_TYPES, "contextmenu"] as const;
+
+/** Is the target a text field (text box editor, equation input, ...)? Its native menu (paste, select) stays. */
+function isTextEditing(target: EventTarget | null): boolean {
+	const el = target as Partial<HTMLElement> | null;
+	if (!el) return false;
+	if (el.isContentEditable === true) return true;
+	const closest = typeof el.closest === "function" ? el.closest.bind(el) : null;
+	return !!closest?.("input, textarea, select, [contenteditable]:not([contenteditable='false'])");
+}
 const WINDOW_KIND: Record<string, PointerKind | undefined> = { pointerdown: "down", pointermove: "move", pointerup: "up", pointercancel: "cancel" };
 
 export class PointerController {
@@ -181,7 +198,14 @@ export class PointerController {
 	) {
 		this.rect = el.getBoundingClientRect();
 		// Handlers are guarded: an exception in one event must not leave a stroke half-open or stop the next ones.
-		this.listen("pointerdown", (e) => this.errors.run("pointerdown", () => this.onDown(e)));
+		this.listen("pointerdown", (e) => {
+			this.errors.run("pointerdown", () => this.onDown(e));
+			// As pen-tracker does: the pen's pointerdown on the drawing surface (the stage, touch-action none, or one of
+			// its canvases) is always cancelled, also when it draws nothing (read-only, palm edge), so the WebView
+			// starts no long-press, selection or compatibility mouse handling of its own. Strokes are unchanged: a
+			// stroke start already cancelled it. Controls inside the stage (text boxes, panels) keep theirs.
+			if (e.pointerType === "pen" && e.cancelable && !e.defaultPrevented && this.isSurface(e.target)) e.preventDefault();
+		});
 		this.listen("pointermove", (e) => this.errors.run("pointermove", () => this.onMove(e)));
 		this.setRawUpdates(options.rawUpdates === true);
 		this.disposers.push(() => this.setRawUpdates(false));
@@ -207,16 +231,30 @@ export class PointerController {
 	 * An event over the element is left to the element's listeners when it reaches them (the normal case); one
 	 * that was stopped before it got there, or that targets another part of the view, is fed to the detector here.
 	 */
-	private watchWindow(win: EventTarget, scope: { contains(node: Node | null): boolean }): void {
-		for (const type of WINDOW_TYPES) {
+	/** The stage itself or one of its canvases (not a control placed on the page). */
+	private isSurface(target: EventTarget | null): boolean {
+		if (target === (this.el as unknown as EventTarget)) return true;
+		const tag = (target as Partial<Element> | null)?.tagName;
+		return typeof tag === "string" && tag.toUpperCase() === "CANVAS" && this.el.contains(target as Node);
+	}
+
+	private watchWindow(win: EventTarget, scope: ScopeTarget): void {
+		for (const type of STAGE_MARKED) {
 			this.listen(type, (e: Event) => this.reached.add(e), { capture: true, passive: true });
 		}
+		// The view's native context menu: capture phase on the view, not passive (it must be cancellable).
+		const onMenu = (e: Event): void => {
+			this.errors.run("contextmenu", () => this.onScopeContextMenu(e as MouseEvent, scope));
+		};
+		const menuOpts: AddEventListenerOptions = { capture: true, passive: false };
+		scope.addEventListener("contextmenu", onMenu, menuOpts);
+		this.disposers.push(() => scope.removeEventListener("contextmenu", onMenu, menuOpts));
 		const fn = (e: Event): void => {
 			this.errors.run("window", () => this.onWindowEvent(e, scope));
 		};
 		for (const type of WINDOW_TYPES) {
-			// contextmenu / auxclick of the pen button are prevented (no native menu over the view).
-			const opts: AddEventListenerOptions = { capture: true, passive: type !== "contextmenu" && type !== "auxclick" };
+			// auxclick of the pen button is prevented (no native action over the view).
+			const opts: AddEventListenerOptions = { capture: true, passive: type !== "auxclick" };
 			win.addEventListener(type, fn, opts);
 			this.disposers.push(() => win.removeEventListener(type, fn, opts));
 		}
@@ -227,7 +265,27 @@ export class PointerController {
 		});
 	}
 
-	private onWindowEvent(e: Event, scope: { contains(node: Node | null): boolean }): void {
+	/**
+	 * A `contextmenu` anywhere in the view (capture phase, before the page's elements). On Samsung the side button may
+	 * surface as one, or as a long-press: left alone, the WebView starts its own long-press or selection handling and
+	 * cancels the pen stream (`pointercancel`). With the pen near (hovering or touching), from the pen, or with no
+	 * `pointerType` it is cancelled, as pen-tracker does, and judged by the detector like every other button signal.
+	 * Text fields keep their menu.
+	 */
+	private onScopeContextMenu(e: MouseEvent, scope: ScopeTarget): void {
+		const target = e.target as Node | null;
+		if (!target || !scope.contains(target) || isTextEditing(target)) return;
+		if (this.barrel.blocksContextMenu((e as Partial<PointerEvent>).pointerType, e.timeStamp) && e.cancelable) e.preventDefault();
+		if (target === (this.el as unknown as Node) || this.el.contains(target)) {
+			// The stage's own listener judges it when it gets there (and always cancels it).
+			this.pending.push(e);
+			if (this.pendingTimer === null) this.pendingTimer = window.setTimeout(() => this.flushPending(), 0);
+			return;
+		}
+		this.sideButtonElsewhere(e);
+	}
+
+	private onWindowEvent(e: Event, scope: ScopeTarget): void {
 		const target = e.target as Node | null;
 		if (!target || !scope.contains(target)) return;
 		const pe = e as Partial<PointerEvent>;

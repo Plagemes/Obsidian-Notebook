@@ -3,7 +3,7 @@ import { InputPolicy, type InputSettings } from "../src/ink/input-policy";
 import { BarrelDetector, ChordDetector, EventLog, PEN_TEST_EVENT_TYPES, describeSideButton, describeTarget, formatEvent, type LoggedEvent } from "../src/ink/pen-button";
 import { PointerController, type MenuSource, type PointerHandlers } from "../src/ink/pointer-controller";
 
-// After 0.10.1: the S Pen button as the user read it off the pen-tracker page (Chrome, Samsung tablet), and the
+// 0.11.1: the S Pen button as the user read it off the pen-tracker page (Chrome, Samsung tablet), and the
 // window-level capture watch that also sees events that never reach the page element.
 
 /** The user's three readings, as recorded event sequences: [type, button, buttons, pressure, t]. */
@@ -130,7 +130,7 @@ class FakeStage extends FakeNode {
 	}
 }
 
-function setup(settings: Partial<InputSettings> = {}) {
+function setup(settings: Partial<InputSettings> = {}, accept = true) {
 	const win = new EventTarget();
 	const view = new FakeNode("view");
 	const stage = new FakeStage("stage", view);
@@ -141,7 +141,7 @@ function setup(settings: Partial<InputSettings> = {}) {
 	const menus: Array<[number, number, MenuSource]> = [];
 	let seen = 0;
 	const handlers: PointerHandlers = {
-		drawStart: (_s, eraser) => (log.push(`start${eraser ? ":eraser" : ""}`), true),
+		drawStart: (_s, eraser) => (log.push(`start${eraser ? ":eraser" : ""}`), accept),
 		drawMove: () => log.push("move"),
 		drawEnd: (cancelled) => log.push(cancelled ? "cancel" : "end"),
 		pan: () => log.push("pan"),
@@ -163,6 +163,7 @@ function setup(settings: Partial<InputSettings> = {}) {
 		for (const [k, v] of Object.entries(props)) Object.defineProperty(e, k, { value: v });
 		Object.defineProperty(e, "target", { value: target });
 		win.dispatchEvent(e);
+		if (view.contains(target)) view.dispatchEvent(e);
 		if (reachesStage && stage.contains(target)) stage.dispatchEvent(e);
 		return e;
 	};
@@ -329,5 +330,77 @@ describe("Pen button test log: window-level events", () => {
 		expect(describeTarget(inside, area, win, doc)).toBe("span.a(area)");
 		expect(describeTarget({ tagName: "CANVAS", className: "" } as unknown as EventTarget, area, win, doc)).toBe("canvas");
 		expect(describeTarget(null, null, win, doc)).toBe("-");
+	});
+});
+
+describe("cancelling the native long-press / context menu, as pen-tracker does", () => {
+	beforeEach(() => {
+		(globalThis as { window?: unknown }).window = globalThis;
+	});
+	afterEach(() => {
+		delete (globalThis as { window?: unknown }).window;
+	});
+
+	it("blocksContextMenu: from the pen, with no pointerType, or with the pen near; not a finger or mouse far from the pen", () => {
+		const d = new BarrelDetector();
+		expect(d.blocksContextMenu("pen", 0)).toBe(true);
+		expect(d.blocksContextMenu(undefined, 0)).toBe(true);
+		expect(d.blocksContextMenu("", 0)).toBe(true);
+		expect(d.blocksContextMenu("touch", 5000)).toBe(false);
+		expect(d.blocksContextMenu("mouse", 5000)).toBe(false);
+		d.pointer("move", "pen", -1, 0, 5000, 0, 1);
+		expect(d.blocksContextMenu("touch", 5100)).toBe(true);
+		expect(d.blocksContextMenu("touch", 6000)).toBe(false);
+	});
+
+	it("a pen contextmenu over the toolbar is cancelled and is a button signal (the menu, once)", () => {
+		const s = setup();
+		s.fire(s.canvas, "pointermove", { timeStamp: 1000 });
+		const e = s.fire(s.toolbar, "contextmenu", { button: 2, buttons: 0, timeStamp: 1100 });
+		expect(e.defaultPrevented).toBe(true);
+		expect(s.log).toEqual(["menu:button"]);
+		expect(s.seen()).toBe(1);
+	});
+
+	it("a plain MouseEvent contextmenu (no pointerType) is cancelled too; one from a finger with the pen away is not", () => {
+		const s = setup();
+		const plain = s.fire(s.toolbar, "contextmenu", { pointerType: undefined, button: 2, timeStamp: 1000 });
+		expect(plain.defaultPrevented).toBe(true);
+		const finger = s.fire(s.toolbar, "contextmenu", { pointerType: "touch", button: 2, timeStamp: 9000 });
+		expect(finger.defaultPrevented).toBe(false);
+		expect(s.log).toEqual([]);
+	});
+
+	it("a text field keeps its native menu, and events outside the view are left alone", () => {
+		const s = setup();
+		const field = Object.assign(new FakeNode("textarea", s.stage), { tagName: "TEXTAREA", closest: (sel: string) => (sel.includes("textarea") ? field : null) });
+		s.fire(s.canvas, "pointermove", { timeStamp: 1000 });
+		expect(s.fire(field, "contextmenu", { button: 2, timeStamp: 1100 }, false).defaultPrevented).toBe(false);
+		expect(s.fire(s.modal, "contextmenu", { button: 2, timeStamp: 1200 }).defaultPrevented).toBe(false);
+	});
+
+	it("a pen contextmenu on the page (while a bare nib rests on it) is cancelled but not taken for the button", () => {
+		const s = setup();
+		s.fire(s.canvas, "pointermove", { timeStamp: 1000 });
+		s.fire(s.canvas, "pointerdown", { button: 0, buttons: 1, pressure: 0.6, timeStamp: 1016 });
+		const e = s.fire(s.canvas, "contextmenu", { button: 2, buttons: 1, timeStamp: 1800 });
+		expect(e.defaultPrevented).toBe(true);
+		expect(s.log).toEqual(["start"]);
+	});
+
+	it("the pen's pointerdown on the page is cancelled even when it draws nothing (read-only); strokes are unchanged", () => {
+		const ro = setup({}, false);
+		const canvasEl = Object.assign(new FakeNode("c2", ro.stage), { tagName: "CANVAS" });
+		expect(ro.fire(canvasEl, "pointerdown", { button: 0, buttons: 1, pressure: 0.5, timeStamp: 1000 }).defaultPrevented).toBe(true);
+		expect(ro.log).toEqual(["start"]); // asked, refused: no stroke
+		const rw = setup();
+		expect(rw.fire(rw.stage, "pointerdown", { button: 0, buttons: 1, pressure: 0.5, timeStamp: 1000 }).defaultPrevented).toBe(true);
+		expect(rw.log).toEqual(["start"]);
+	});
+
+	it("not for a control placed on the page (it keeps its own default handling)", () => {
+		const s = setup({}, false);
+		const control = Object.assign(new FakeNode("button", s.stage), { tagName: "BUTTON" });
+		expect(s.fire(control, "pointerdown", { button: 0, buttons: 1, pressure: 0.5, timeStamp: 1000 }).defaultPrevented).toBe(false);
 	});
 });

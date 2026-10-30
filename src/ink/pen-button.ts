@@ -12,7 +12,7 @@
  *     primary press with no pressure: `pointerdown` with `button 0`, `buttons 1` and `pressure` exactly 0 (a
  *     real nib contact has pressure > 0). It is accepted only for a pointer that was hovering just before
  *     (events with `buttons 0` seen for the same `pointerId`), and can be switched off in the settings.
- *   - After 0.10.1: a `mousedown` that no pointer event announced (an "orphan": no `pointerdown` just before, no finger,
+ *   - 0.11.1: a `mousedown` that no pointer event announced (an "orphan": no `pointerdown` just before, no finger,
  *     not derived from touch) with `button` 0 or 2, while the pen hovers: in case the WebView delivers the button
  *     only as a mouse event. The view feeds this from window-level capture listeners (`PointerController`).
  * The eraser (`buttons & 32`, `button 5`) is never a barrel press.
@@ -221,6 +221,16 @@ export class BarrelDetector {
 		this.armed = true;
 		this.armedT = t;
 		return true;
+	}
+
+	/**
+	 * Should a `contextmenu` over the notebook view be cancelled (no native menu, no WebView long-press or selection
+	 * handling that would cancel the pen)? Yes when it comes from the pen, carries no `pointerType` (a plain
+	 * MouseEvent, as some WebViews send it), or the pen is near (hovering or touching, seen within `PEN_RECENT_MS`).
+	 * Whether it is also a side-button press is `contextMenu`'s decision.
+	 */
+	blocksContextMenu(pointerType: string | undefined, t: number): boolean {
+		return pointerType === "pen" || !pointerType || this.penRecent(t);
 	}
 
 	/** An `auxclick`. True when it is a pen side-button click that was not handled yet. */
@@ -469,7 +479,7 @@ const POINTER_KIND: Record<string, PointerKind | undefined> = {
 
 /**
  * Every event type the "Pen button test" records, at window level in the capture phase, whatever element it is
- * dispatched to (S Pen fix after 0.10.1). Types a browser never fires are harmless. `selectionchange` is listened on the document.
+ * dispatched to (0.11.1). Types a browser never fires are harmless. `selectionchange` is listened on the document.
  */
 export const PEN_TEST_EVENT_TYPES: readonly string[] = [
 	"pointerover", "pointerenter", "pointerdown", "pointermove", "pointerrawupdate", "pointerup", "pointercancel", "pointerout", "pointerleave",
