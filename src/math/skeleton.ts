@@ -53,14 +53,14 @@ export function distanceTransform(img: Uint8Array, w: number, h: number): Float3
 		for (let i = 0; i < w; i++) {
 			const k = j * w + i;
 			if (!d[k]) continue;
-			d[k] = Math.min(d[k]!, get(i - 1, j) + 3, get(i, j - 1) + 3, get(i - 1, j - 1) + 4, get(i + 1, j - 1) + 4);
+			d[k] = Math.min(d[k], get(i - 1, j) + 3, get(i, j - 1) + 3, get(i - 1, j - 1) + 4, get(i + 1, j - 1) + 4);
 		}
 	}
 	for (let j = h - 1; j >= 0; j--) {
 		for (let i = w - 1; i >= 0; i--) {
 			const k = j * w + i;
 			if (!d[k]) continue;
-			d[k] = Math.min(d[k]!, get(i + 1, j) + 3, get(i, j + 1) + 3, get(i + 1, j + 1) + 4, get(i - 1, j + 1) + 4);
+			d[k] = Math.min(d[k], get(i + 1, j) + 3, get(i, j + 1) + 3, get(i + 1, j + 1) + 4, get(i - 1, j + 1) + 4);
 		}
 	}
 	for (let k = 0; k < w * h; k++) d[k] = d[k]! / 3;

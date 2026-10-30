@@ -112,6 +112,11 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 
 	// insert
 	"insert-image": (v) => void v.insertImageElement(),
+	// wave 0.9: math
+	"insert-equation": (v) => v.mathTools?.insertEquation(),
+	"insert-graph": (v) => v.mathTools?.insertGraph(),
+	"math-edit": (v) => v.mathTools?.editSelected(),
+	"math-convert-ink": (v) => void v.mathTools?.convertSelectedToInk(),
 	"stamps": (v) => v.stampPalette?.toggle(),
 	"board-shot": (v) => void v.boardShot(),
 	"add-page": (v) => v.addPage(),

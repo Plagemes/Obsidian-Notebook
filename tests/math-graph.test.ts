@@ -11,6 +11,7 @@ import { derivative, findExtrema, findIntersections, findRoots, integrate } from
 import { formatOutline, outlineBounds, parseOutline, polygonArea, rasterize, scaleOutline, traceCoverage } from "../src/math/outline";
 import { clipPolylines, sampleFunction, sampleImplicit, sampleParametric, samplePolar } from "../src/math/sample";
 import { outlineToInk } from "../src/math/skeleton";
+import { EQUATION_SNIPPETS, equationSizeNear, insertSnippet } from "../src/math/layout";
 import { createGraph } from "../src/model/math-elements";
 import type { GraphElement } from "../src/model/types";
 
@@ -297,5 +298,24 @@ describe("equation outlines", () => {
 		const pts = loops.flatMap((l) => l.points);
 		for (const [x, y] of pts) expect(Math.abs(Math.hypot(x - 10, y - 10) - 5.25)).toBeLessThan(0.6);
 		expect(outlineToInk("bad", 10, 10)).toEqual([]);
+	});
+});
+
+describe("equation layout", () => {
+	it("sizes an equation like the handwriting next to it", () => {
+		const lines = [
+			{ bounds: { minX: 50, minY: 100, maxX: 300, maxY: 112 }, letterHeight: 8 },
+			{ bounds: { minX: 50, minY: 300, maxX: 300, maxY: 330 }, letterHeight: 20 },
+		];
+		expect(equationSizeNear(lines, 320, 106)).toBe(15);
+		expect(equationSizeNear(lines, 100, 340)).toBe(38);
+		expect(equationSizeNear(lines, 100, 600)).toBeNull();
+		expect(equationSizeNear([{ bounds: { minX: 0, minY: 0, maxX: 10, maxY: 1 }, letterHeight: 1 }], 5, 0)).toBe(8);
+	});
+
+	it("inserts palette structures at the caret", () => {
+		expect(insertSnippet("a + b", 4, 5, "\\frac{□}{}")).toEqual({ text: "a + \\frac{}{}", caret: 10 });
+		expect(insertSnippet("", 0, 0, "x")).toEqual({ text: "x", caret: 1 });
+		for (const snippet of Object.values(EQUATION_SNIPPETS)) expect(snippet.split("□")).toHaveLength(2);
 	});
 });

@@ -148,6 +148,19 @@ export interface SelectionOverlay {
 	handle: number;
 }
 
+/**
+ * v9: an element being edited in a panel (a graph whose functions, parameters or view change live): `before` and
+ * `hideStrokes` are hidden from the static layer, `after` and `showStrokes` (the ink on it, moved) are drawn on the live
+ * layer, until the edit is committed or cancelled.
+ */
+export interface ElementDraft {
+	pageIndex: number;
+	before: PageElement;
+	after: PageElement;
+	hideStrokes: readonly Stroke[];
+	showStrokes: readonly Stroke[];
+}
+
 export interface RendererOptions {
 	/**
 	 * Ask for a low-latency (`desynchronized`) context for the pen's wet canvas. Off by default: on
@@ -222,6 +235,7 @@ export class Renderer {
 	private lasso: LassoOverlay | null = null;
 	private selection: SelectionOverlay | null = null;
 	private peek: PeekOverlay | null = null;
+	private draft: ElementDraft | null = null;
 	/** Content shown shifted while the insert/remove-space tool is dragged (hidden from the static layer meanwhile). */
 	private spacePreview: readonly SpacePreviewEntry[] | null = null;
 	private hidden: ReadonlySet<Stroke> | null = null;
@@ -655,6 +669,12 @@ export class Renderer {
 		this.schedule();
 	}
 
+	/** v9: shows an element being edited live (see ElementDraft); null ends it. Never together with a floating selection. */
+	setElementDraft(draft: ElementDraft | null): void {
+		this.draft = draft;
+		this.applyHidden(draft ? new Set(draft.hideStrokes) : null, draft ? new Set([draft.before]) : null);
+	}
+
 	/** Strokes of another page drawn over this one while a button is held (wave 0.9: practice); view only, null removes them. */
 	setPeek(peek: PeekOverlay | null): void {
 		this.peek = peek;
@@ -1024,6 +1044,14 @@ export class Renderer {
 				if (b.maxY + stroke.width < minY || b.minY - stroke.width > maxY) continue;
 				this.fillStroke(ctx, stroke);
 			}
+			ctx.restore();
+		});
+
+		const draft = this.draft;
+		if (draft && boxes[draft.pageIndex]) this.guarded(ctx, "element draft", () => {
+			this.beginPage(ctx, boxes[draft.pageIndex]!);
+			drawElement(ctx, draft.after, null, this.boxLabel, this.equationNumbers());
+			for (const stroke of draft.showStrokes) this.fillStroke(ctx, stroke);
 			ctx.restore();
 		});
 

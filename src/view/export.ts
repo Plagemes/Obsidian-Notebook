@@ -85,6 +85,10 @@ function reportSkipped(skipped: number): void {
 export interface ExportOptions {
 	hiddenInk?: (page: Page) => boolean;
 	boxLabel?: BoxLabel;
+	/** v9: runs before writing (typesets the equations that have no cached outline yet). */
+	prepare?: (pages: readonly Page[]) => Promise<void>;
+	/** v9: numbers of the numbered equations, counted over the whole notebook (a single page keeps its numbers). */
+	equationNumbers?: ReadonlyMap<string, number>;
 }
 
 /** Writes a PDF of `pages` next to the notebook; `suffix` distinguishes single-page exports. */
@@ -94,9 +98,11 @@ export async function exportPdf(
 	const working = showNotice(t("export.working"), 0);
 	try {
 		const { images, skipped } = await collectPageImages(media, pages);
+		await options.prepare?.(pages);
 		const bytes = pagesToPdf(pages, {
 			paper: true, title: notebook.basename, images: (p) => images.get(p) ?? [],
 			...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+			...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}),
 		});
 		const path = freePath(app, notebook, suffix, "pdf");
 		await app.vault.createBinary(path, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
@@ -113,6 +119,7 @@ export async function exportSvg(app: App, notebook: TFile, page: Page, suffix: s
 	const working = showNotice(t("export.working"), 0);
 	try {
 		const { images, skipped } = await collectPageImages(media, [page]);
+		await options.prepare?.([page]);
 		const svgImages = (p: Page): SvgPlacedImage[] => (images.get(p) ?? []).map((img) => ({
 			href: jpegDataUrl(img.jpeg), x: img.x, y: img.y, width: img.width, height: img.height,
 			...(img.rotation !== undefined ? { rotation: img.rotation } : {}),
@@ -121,6 +128,7 @@ export async function exportSvg(app: App, notebook: TFile, page: Page, suffix: s
 		const path = freePath(app, notebook, suffix, "svg");
 		await app.vault.create(path, pageToSvg(page, {
 			paper: true, images: svgImages, hiddenInk: options.hiddenInk?.(page) ?? false, ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+			...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}),
 		}));
 		showNotice(t("export.done", { path }));
 		reportSkipped(skipped);

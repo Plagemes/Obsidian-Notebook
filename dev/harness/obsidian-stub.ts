@@ -951,3 +951,36 @@ export function debounce<T extends (...args: any[]) => any>(fn: T, ms: number): 
 export async function requestUrl(): Promise<never> {
 	throw new Error("network is not available in the harness");
 }
+
+/**
+ * MathJax stand-in (wave 0.9: math): Obsidian ships MathJax; the harness has none. `renderMath` returns a container
+ * with a small SVG that writes the source in italic serif, so the editor preview and the typesetter (its SVG branch)
+ * run end to end. It is not TeX: the harness checks the plumbing, not the typesetting.
+ */
+export async function loadMathJax(): Promise<void> {}
+
+export async function finishRenderMath(): Promise<void> {}
+
+export function renderMath(source: string, display: boolean): HTMLElement {
+	const el = document.createElement("mjx-container");
+	el.setAttribute("display", String(display));
+	const text = source.replace(/\\[a-zA-Z]+/g, (m) => m.slice(1)).replace(/[{}]/g, "") || " ";
+	const w = Math.max(1, text.length) * 6;
+	const ns = "http://www.w3.org/2000/svg";
+	const svg = document.createElementNS(ns, "svg");
+	svg.setAttribute("xmlns", ns);
+	svg.setAttribute("viewBox", `0 0 ${w} 14`);
+	svg.setAttribute("width", `${w / 10}em`);
+	svg.setAttribute("height", "1.4em");
+	const t = document.createElementNS(ns, "text");
+	t.setAttribute("x", "0");
+	t.setAttribute("y", "11");
+	t.setAttribute("font-family", "serif");
+	t.setAttribute("font-style", "italic");
+	t.setAttribute("font-size", "10");
+	t.setAttribute("fill", "currentColor");
+	t.textContent = text;
+	svg.appendChild(t);
+	el.appendChild(svg);
+	return el;
+}

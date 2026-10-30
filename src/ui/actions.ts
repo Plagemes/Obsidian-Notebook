@@ -42,7 +42,10 @@ export interface UiContext {
 	/** A document is open (possibly read-only). */
 	open: boolean;
 	tool: ToolId;
-	selection: { strokes: number; elements: number; images: number; /** 1 when a selected text box holds a [[link]] */ links?: number } | null;
+	selection: {
+		strokes: number; elements: number; images: number; /** 1 when a selected text box holds a [[link]] */ links?: number;
+		/** v9: selected equations and graphs (optional, 0 when absent). */ equations?: number; graphs?: number;
+	} | null;
 	/** The page in view (index of the page sheet when it was opened from a thumbnail). */
 	page: {
 		index: number; count: number; background: "none" | "pdf" | "image"; infinite: boolean; bookmarked: boolean;
@@ -97,6 +100,8 @@ const pdfPage = (c: UiContext) => c.page?.background === "pdf";
 const backgroundPage = (c: UiContext) => !!c.page && c.page.background !== "none";
 const hasSelection = (c: UiContext) => !!c.selection && c.selection.strokes + c.selection.elements > 0;
 const sideOpen = (c: UiContext) => c.sidePane.available && c.sidePane.open;
+/** v9: exactly one equation or graph is selected (its editor or panel can open). */
+const oneMath = (c: UiContext) => (c.selection?.equations ?? 0) + (c.selection?.graphs ?? 0) === 1;
 
 function tool(id: ToolId, icon: string, label: MessageKey, command: MessageKey, priority: number): ActionDef {
 	return { id: `tool-${id}`, label, icon, group: "tool", surfaces: ["toolbar", "radial"], priority, scope: "view", command, checked: (c) => c.tool === id };
@@ -152,6 +157,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "selection-white-transparent", label: "selection.whiteTransparent", icon: "eraser", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 60, scope: "view", when: (c) => (c.selection?.images ?? 0) > 0 },
 	{ id: "link-selection", label: "penlinks.linkSelection", icon: "link", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 55, scope: "view", command: "command.linkSelection", when: hasSelection },
 	{ id: "selection-open-link", label: "penlinks.openLink", icon: "external-link", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 56, scope: "view", when: (c) => (c.selection?.links ?? 0) > 0 },
+	// wave 0.9: math — edit the selected equation or graph, turn equations into ink.
+	{ id: "math-edit", label: "math.edit", icon: "square-function", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 92, scope: "view", command: "math.command.edit", when: oneMath },
+	{ id: "math-convert-ink", label: "math.convertInk", icon: "pen-line", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 58, scope: "view", command: "math.command.convertInk", when: (c) => (c.selection?.equations ?? 0) > 0 },
 	{ id: "stamps-save-selection", label: "stamps.save", icon: "stamp", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 50, scope: "view", when: hasSelection },
 	{ id: "delete-selection", label: "tool.deleteSelection", icon: "trash-2", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 70, scope: "view", command: "command.deleteSelection", when: hasSelection, danger: true },
 
@@ -165,6 +173,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "insert-image", label: "tool.image", icon: "image-plus", group: "insert", surfaces: ["quick", "sheet"], priority: 70, scope: "view", keywords: "picture photo" },
 	{ id: "stamps", label: "stamps.menu", icon: "stamp", group: "insert", surfaces: ["quick", "sheet"], priority: 62, scope: "view", keywords: "sticker" },
 	{ id: "board-shot", label: "tool.boardShot", icon: "camera", group: "insert", surfaces: ["quick", "context", "sheet"], contexts: ["lecture"], priority: 55, scope: "view", command: "command.boardShot", keywords: "photo camera blackboard" },
+	// wave 0.9: math
+	{ id: "insert-equation", label: "math.insertEquation", icon: "sigma", group: "insert", surfaces: ["sheet"], priority: 52, scope: "view", command: "math.command.insertEquation", keywords: "formula latex maths math equazione formula" },
+	{ id: "insert-graph", label: "math.insertGraph", icon: "chart-spline", group: "insert", surfaces: ["sheet"], priority: 50, scope: "view", command: "math.command.insertGraph", keywords: "function plot chart curve grafico funzione" },
 	{ id: "add-page", label: "tool.addPage", icon: "file-plus", group: "insert", surfaces: ["quick", "sheet"], priority: 66, scope: "view", command: "command.addPage" },
 	{ id: "insert-blank-page", label: "page.insertBlank", icon: "file-plus", group: "insert", surfaces: ["page"], priority: 60, scope: "view" },
 	{ id: "exercise-page", label: "page.exercise", icon: "pencil-ruler", group: "insert", surfaces: ["context", "sheet", "page"], contexts: ["lecture"], priority: 45, scope: "view", command: "command.exercisePage" },

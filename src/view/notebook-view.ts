@@ -59,7 +59,7 @@ import { nextTask } from "../storage/idle";
 import { isNotebookFile } from "../storage/format";
 import { VaultDocumentIO } from "../storage/vault-io";
 import { backupFolder, readSettings, type NotebookSettings } from "../settings";
-import { exportPdf } from "./export";
+import { exportPdf, type ExportOptions } from "./export";
 import { policySettings } from "./input-settings";
 import { NotebookMedia, storeAsset } from "./media";
 import { HeavyPageBanner } from "./heavy-page-banner";
@@ -98,6 +98,8 @@ import { PenLinks } from "./pen-links";
 import { SelectionActions } from "./selection-actions";
 import { StampPalette, type StampTarget } from "./stamp-palette";
 import { TextEditor, type TextEditSession } from "./text-editor";
+import { MathTools, type MathHost } from "./math-tools";
+import { equationNumbers } from "../model/math-elements";
 import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites";
 import { PenControls, type PenStore } from "./pen-controls";
 import { PdfReading, type ReadingHost } from "./pdf-reading";
@@ -274,6 +276,8 @@ export class NotebookView extends FileView {
 	private syncSafety: ViewSyncSafety | null = null;
 	private pageNav: PageNavigator | null = null;
 	private textEditor: TextEditor | null = null;
+	/** v9: equations and graphs (editor, panel, typesetting, convert to ink). */
+	private math: MathTools | null = null;
 	private rulerGesture: RulerGesture | null = null;
 	private radial: PenRadial | null = null;
 	/** Pen gestures (roadmap 139, view/pen-gestures.ts): gesture mode and the gesture in progress. */
@@ -442,6 +446,7 @@ export class NotebookView extends FileView {
 			},
 		});
 		this.textEditor = new TextEditor(this.stage);
+		this.math = new MathTools(this.mathHost());
 		this.penGestures = new PenGestureLayer({
 			stage: this.stage,
 			body: this.body,
@@ -562,7 +567,9 @@ export class NotebookView extends FileView {
 
 		// Tapping anywhere else ends text editing. Pointer events on the canvas are cancelled, so the textarea would not blur.
 		this.registerDomEvent(this.stage, "pointerdown", (e) => {
-			if (!(e.target as HTMLElement | null)?.closest?.(".notebook-text-editor")) this.commitText();
+			// v9: the equation editor and the graph panel, and pan/zoom inside the graph being edited, keep them open.
+			if ((e.target as HTMLElement | null)?.closest?.(".notebook-text-editor, .notebook-math-panel") || this.math?.ownsPointer(e)) return;
+			this.commitText();
 		}, true);
 
 		// Android may kill a backgrounded app without notice: save as soon as we are hidden.
@@ -638,6 +645,8 @@ export class NotebookView extends FileView {
 		this.stamps?.destroy();
 		this.stamps = null;
 		this.objectInk.destroy();
+		this.math?.destroy();
+		this.math = null;
 		this.textEditor?.destroy();
 		this.textEditor = null;
 		this.pageNav?.destroy();
@@ -1178,8 +1187,60 @@ export class NotebookView extends FileView {
 	}
 
 	/** v8: exports draw hidden ink only where the solutions are shown, and label boxes in the reader's language. */
-	exportOptions(): { hiddenInk: (page: Page) => boolean; boxLabel: typeof translatedBoxLabel } {
-		return { hiddenInk: (page) => this.markers?.isRevealed(page) ?? false, boxLabel: translatedBoxLabel };
+	exportOptions(): ExportOptions {
+		const doc = this.session?.doc;
+		return {
+			hiddenInk: (page) => this.markers?.isRevealed(page) ?? false, boxLabel: translatedBoxLabel,
+			// v9: equations without a cached outline are typeset first; numbers count over the whole notebook.
+			prepare: (pages) => this.math?.prepareExport(pages) ?? Promise.resolve(),
+			...(doc ? { equationNumbers: equationNumbers(doc.pages) } : {}),
+		};
+	}
+
+	/** v9: equations and graphs of this view (null before the view is open). */
+	get mathTools(): MathTools | null {
+		return this.math;
+	}
+
+	/** What the equation editor, the graph panel and their gestures need from the view. */
+	private mathHost(): MathHost {
+		const boxOf = (pageIndex: number) => this.layout?.boxes[pageIndex] ?? null;
+		return {
+			stage: this.stage,
+			doc: () => this.session?.doc ?? null,
+			editable: () => !!this.editableDocument(),
+			renderer: () => this.renderer,
+			execute: (cmd) => this.applyCommand(cmd),
+			insertTarget: () => {
+				const index = this.currentPageIndex();
+				const box = boxOf(index);
+				if (!box || !this.session?.doc?.pages[index]) return null;
+				const [dx, dy] = screenToPage(this.viewport, this.viewSize.width / 2, this.viewSize.height / 2);
+				const [x, y] = toPageLocal(box, dx, dy);
+				const page = this.session.doc.pages[index];
+				return { pageIndex: index, x: Math.min(page.width, Math.max(0, x)), y: Math.min(page.height, Math.max(0, y)) };
+			},
+			toStage: (pageIndex, x, y) => {
+				const box = boxOf(pageIndex);
+				if (!box) return null;
+				const { scale, offsetX, offsetY } = this.viewport;
+				return [offsetX + (box.x + x) * scale, offsetY + (box.y + y) * scale];
+			},
+			toPage: (pageIndex, clientX, clientY) => {
+				const box = boxOf(pageIndex);
+				if (!box) return null;
+				const r = this.stage.getBoundingClientRect();
+				const [dx, dy] = screenToPage(this.viewport, clientX - r.left, clientY - r.top);
+				return toPageLocal(box, dx, dy);
+			},
+			scale: () => this.viewport.scale,
+			selection: () => (this.selection ? { pageIndex: this.selection.pageIndex, elements: this.selection.elements } : null),
+			select: (pageIndex, elements) => this.selectItems(pageIndex, [], elements),
+			deselect: () => this.clearSelection(),
+			pen: () => ({ color: this.tools.penColor, textSize: this.tools.textSize }),
+			inkFollows: () => this.host.settings.inkFollowsObjects,
+			refresh: () => this.refreshUi(),
+		};
 	}
 
 	/** Markers, boxes and invisible ink of this view (null before the view is open). */
@@ -1545,7 +1606,10 @@ export class NotebookView extends FileView {
 			editable: !!doc && this.editable() && !this.controller?.drawing,
 			open: !!doc,
 			tool: this.tools.tool,
-			selection: sel ? { strokes: sel.strokes.length, elements: sel.elements.length, images: sel.elements.filter((e) => e.type === "image").length, links: this.penLinks?.linkIn(sel.elements) ? 1 : 0 } : null,
+			selection: sel ? {
+				strokes: sel.strokes.length, elements: sel.elements.length, images: sel.elements.filter((e) => e.type === "image").length, links: this.penLinks?.linkIn(sel.elements) ? 1 : 0,
+				equations: sel.elements.filter((e) => e.type === "equation").length, graphs: sel.elements.filter((e) => e.type === "graph").length,
+			} : null,
 			page: page ? {
 				index, count: pages.length, background: page.background?.kind ?? "none", infinite: !!page.infinite,
 				bookmarked: doc?.meta?.bookmarks.includes(page.id) ?? false, splittable: page.id === this.heavyPageId,
@@ -2140,6 +2204,7 @@ export class NotebookView extends FileView {
 		this.reading?.viewportChanged();
 		if (this.selection) this.pushSelection();
 		this.placeTextEditor();
+		this.math?.place();
 		this.updatePageIndicator();
 		this.overlayChanged?.();
 		for (const fn of this.overlayListeners) fn();
@@ -2213,8 +2278,12 @@ export class NotebookView extends FileView {
 		editor.focus();
 	}
 
-	/** Ends text editing: adds, changes or (when emptied) removes the text box, as one undo step. */
+	/**
+	 * Ends text editing: adds, changes or (when emptied) removes the text box, as one undo step. v9: also commits the
+	 * equation editor and the graph panel when one is open (saving, closing, another command).
+	 */
 	private commitText(): void {
+		this.math?.commitOpen();
 		const result = this.textEditor?.close();
 		if (!result) return;
 		this.renderer?.setHiddenElements(null);

@@ -6,6 +6,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { captureClip, instantiateClip } from "../src/ink/clipboard";
+import { planStampPlacement, readStamp, serializeStamp } from "../src/ink/stamps";
 import { elementBounds, hitElement, transformElement } from "../src/ink/elements";
 import { pagesToPdf } from "../src/ink/export-pdf";
 import { pageToSvg } from "../src/ink/export-svg";
@@ -350,6 +351,23 @@ describe("paths that copy pages and elements keep the v9 data", () => {
 		expect(g.id).not.toBe(plot.id);
 		const doc = v9Doc();
 		doc.pages[1]!.elements = made.elements;
+		expect(serializeChecked(doc).ok).toBe(true);
+	});
+
+	it("stamps: saving a selection with an equation and a graph as a stamp and placing it", () => {
+		const page = p1();
+		const clip = captureClip([], page.elements!, {})!;
+		const text = serializeStamp(clip, new Date(stamp));
+		expect(text.ok).toBe(true);
+		if (!text.ok) return;
+		const read = readStamp(text.text);
+		expect(read.ok).toBe(true);
+		if (!read.ok) return;
+		const doc = roundTrip(v9Doc());
+		const placed = planStampPlacement(read.clip, doc, doc.pages[1]!, [300, 400])!;
+		placed.command.apply(doc);
+		expect(v9Content({ ...doc.pages[1]!, elements: doc.pages[1]!.elements!.map((e) => ({ ...e, x: 0, y: 0 })) }))
+			.toEqual(v9Content({ ...page, elements: page.elements!.map((e) => ({ ...e, x: 0, y: 0 })) }));
 		expect(serializeChecked(doc).ok).toBe(true);
 	});
 
