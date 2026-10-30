@@ -42,10 +42,10 @@ export async function checkExcerpt(api: ExcerptCheckApi): Promise<{ ok: boolean;
 	const pagesBefore = doc.pages.length;
 
 	// The picker is captured when it opens (the stub modal draws no rows).
-	let picker: any = null;
+	const opened: any[] = [];
 	const open = SuggestModal.prototype.open;
 	SuggestModal.prototype.open = function (this: any) {
-		picker = this;
+		opened.push(this);
 		open.call(this);
 	};
 	try {
@@ -53,7 +53,8 @@ export async function checkExcerpt(api: ExcerptCheckApi): Promise<{ ok: boolean;
 		v.excerptTools.excerptToPage();
 		add("nothing selected: the next drag outlines the region", v.excerptTools.armed === "page", String(v.excerptTools.armed));
 		await penStroke([at(0, 80, 80), at(0, 200, 140), at(0, 320, 220)]);
-		for (let i = 0; i < 60 && !picker; i++) await sleep(50);
+		for (let i = 0; i < 60 && opened.length === 0; i++) await sleep(50);
+		const picker = opened[0];
 		add("the go-to-page picker opens", !!picker);
 		if (!picker) return done();
 		const rows = picker.getSuggestions("");
