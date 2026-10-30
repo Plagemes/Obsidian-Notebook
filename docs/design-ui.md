@@ -50,6 +50,7 @@ anywhere in `src/` is in the registry and that every action is placed somewhere.
 | Pen, highlighter, eraser, lasso, shape, text, space (`tool-*`) | Toolbar row 1, radial pen case, commands | Used constantly; fixed position |
 | Shape kind (`shape-*`), eraser mode (`eraser-*`), eraser size ± | Tool options popover, radial shapes ring (shapes), commands | Settings *of* a tool belong to the tool |
 | Colour, width, text size, eraser filter, snap to text | Tool options popover; colour and width also on the radial | Same |
+| Colour picker, eyedropper, style eyedropper (`colour-picker`, `colour-eyedropper`, `style-eyedropper`; wave 0.10) | Last buttons of the colour row of the tool options (the style eyedropper only for ink tools); picker and eyedropper also on the radial colour ring; commands | A free colour belongs with the other colours; they act on the pen in use. The picker is a floating panel over the page, the eyedroppers take the next contact on the page |
 | Favourite pens 1–6 (`favourite-*`) | Toolbar strip, radial favourites ring, commands | One tap to a saved pen; long press / radial "+" saves |
 | Undo, redo | Toolbar, radial, two/three-finger taps, commands | Always needed |
 | Pages panel (`toggle-pages-panel`) | Toolbar row 1 (first button) | Navigation is primary |
@@ -58,12 +59,18 @@ anywhere in `src/` is in the registry and that every action is placed somewhere.
 | Insert image, stamps, add page, board shot | Quick slots (ranked) + Insert section | Frequent inserts one tap away when there is room |
 | Exercise page, page from template, insert PDF pages, image page, scan pages, scan as image | Insert section of the sheets; exercise page also on the lecture bar | Less frequent; grouped |
 | Go to page number, recently edited pages, one page at a time (`goto-page-number`, `recent-pages`, `toggle-page-mode`) | **Page sheet, first section "Go to"** (tap the page indicator); also in the All actions sheet; one page at a time is also a quick slot | Getting to a page starts where the page number is |
+| Back, forward (`nav-back`, `nav-forward`; wave 0.10) | **Quick slots** of the toolbar (rank 64 and 63, after insert image and add page) once the history of visited pages has somewhere to go; **page sheet, first section "Go to"**; All actions sheet; commands (hotkeys); the mouse's back and forward buttons on desktop | Returning to where you were is a navigation act and belongs next to getting to a page. Hidden until there is a history, so no slot is wasted; on a phone there are no quick slots, so the page sheet is the way |
+| Fast scrollbar (wave 0.10) | A thumb along the right edge of the page in continuous scroll; shown after a scroll or when a mouse nears the edge; setting *Fast scrollbar* | A control of the scroll itself, not an action: it has no command and no registry entry (page by page mode has its own swipe) |
+| Status bar item (wave 0.10) | Obsidian's status bar, desktop only: "p. 3/12 · Saved"; a click opens the page panel | Mobile has no status bar: the toolbar's page indicator and save state show the same |
 | Page switcher across notebooks (`go-to-page`) | All actions sheet (Go to), library, palette | Leaves the notebook |
 | Split a heavy page (`page-split`) | Heavy-page banner, page sheet (only on a heavy page) | Acts on that page |
 | Check sync safety, check notebooks integrity (`sync-check`, `check-integrity`) | All actions sheet (Notebooks), notebook menu, settings, palette | Folder-wide checks, rare |
+| Check library: unreadable notebooks and unused files (`library-check`; wave 0.10, roadmap 27) | Library sidebar (*Check library*), All actions sheet (Notebooks), notebook menu, palette | Folder-wide check, rare; opens a report that only lists, then a confirmation before anything moves to the trash |
 | Banner buttons (safe mode, storage, integrity, other device, heavy page) | Their status banner only | Meaningful only while the banner is shown |
 | Duplicate/move/delete page, bookmark, edit bookmark, page tags, paper, size, orientation, infinite, move to notebook, save as template, restore version, deleted pages | Page sheet (page indicator, thumbnail menu) and Page section | Act on one page, reached from the page |
 | Layer order of the selection (`layer-front`, `layer-back`, `layer-forward`, `layer-backward`; wave 0.9) | Contextual bar of a selection (*To front* and *To back* rank above the rest of the second tier, so they fit the bar on a tablet; on a phone the bar is cut to its basics), All actions sheet, commands (they apply only with a selection) | Act on what is selected, next to it; the sheet and the hotkeys keep all four reachable |
+| Date and time stamp (`insert-date-stamp`; wave 0.10) | All actions sheet, command | Inserts at the pen, so it needs no place of its own; the format is a setting |
+| Copy to other devices (`selection-copy-devices`), Paste from another device (`selection-paste-device`; wave 0.10) | Contextual bar of a selection (copy) and of a selection or the lasso (paste), All actions sheet, commands (copy applies only with a selection) | Act on the selection or the lasso next to it; the sheet and the hotkeys keep them reachable on a phone |
 | Find and replace in text boxes (`find-replace`; wave 0.9) | All actions sheet (Go to), command | Notebook-wide, rare; opens a panel |
 | Page information (`page-info`; wave 0.9) | Page sheet, All actions sheet, command | Describes one page, reached from the page |
 | PDF search, hide annotations, dim backgrounds | PDF contextual bar + PDF & reading section; search next/previous in the search panel and commands | Relevant only with PDF pages |
@@ -74,8 +81,10 @@ anywhere in `src/` is in the registry and that every action is placed somewhere.
 | Insert equation, insert graph (`insert-equation`, `insert-graph`; wave 0.9: math) | All actions sheet (Insert), commands | Inserted now and then; not quick slots, so the designed slots stay |
 | Edit equation or graph, convert to ink (`math-edit`, `math-convert-ink`) | Contextual bar of a selection holding exactly one equation or graph (*Edit*) or equations (*Convert to ink*), commands | Act on what is selected; the graph panel and the equation editor float over the page while open |
 | Excerpt to page…, copy as excerpt (`excerpt-to-page`, `excerpt-copy`; v10, roadmap 105) | Contextual bar of a selection and of the lasso with nothing selected (then the next drag outlines the region), All actions sheet (Insert), commands | Cut from what is selected or from the page under the lasso; the go-to-page picker chooses the target page, the clipboard carries it to another notebook |
-| Go to source (`excerpt-open-source`) | Contextual bar of a selection holding an excerpt (first), command; also a tap on the excerpt's corner badge with any tool but the lasso and the eraser | The way back is next to the excerpt (not in a read-only notebook: pen and lasso input is off there) |
+| Go to source (`excerpt-open-source`) | Contextual bar of a selection holding an excerpt (first), command; also a tap on the excerpt's corner badge with any tool but the lasso and the eraser | The way back is next to the excerpt; the badge also works in read-only mode (it edits nothing) |
 | Invisible ink (`invisible-ink`), show solutions (`show-solutions`, page: `show-page-solutions`) | View section of the sheet (ink and solutions), page sheet (page solutions), commands | A pen mode and view-only toggles |
+| Read-only mode (`toggle-read-only`; wave 0.10) | View section of the sheet, command; while on, the lock button in the toolbar replaces the pen indicator and the favourites (and switches it off) | A mode of this view: the toolbar says so and offers the way out in the same place |
+| Export pages as PNG images (`export-png`), Print (`print`; wave 0.10) | Sheet (Export & share), notebook menu, commands; both open *Export…* on that format. Print exists only where the device can print (desktop) | Choices of the one export dialog; no control that cannot work on a phone |
 | Pen gesture mode (`pen-gesture-mode`) | Quick slot, All actions sheet (View & input) | A toggle used in bursts |
 | Gesture cheat sheet, custom gestures (`pen-gesture-sheet`, `pen-gesture-custom`) | All actions sheet (View & input), command palette; the cheat sheet also from the mode badge | Reference and set-up, rare |
 | Ruler, pen only, fit to width | Quick slots + View & input section | Toggles used in bursts |
@@ -121,6 +130,12 @@ designed primary action out.
 - **Mouse** clicks; right click on a favourite offers save/reset (also reachable by long press and from the radial).
   Escape closes popovers, sheets and the radial menu. Every action has a command for hotkeys.
 - A tap outside an open popover/sheet closes it and is swallowed (no stray ink), as in Samsung Notes.
+- **Tabs of open notebooks** (wave 0.10, 363): an optional strip above the toolbar (setting, off by default) lists the open
+  notebook leaves; a two-finger sideways swipe on the toolbar strip, never on the page, goes to the next / previous one.
+  The registry actions `notebook-next` and `notebook-previous` (sheet, command palette) do the same. The strip is not an
+  action surface: its buttons are the open notebooks themselves.
+- **Automatic line break** (wave 0.10, 353): a setting, not an action. After pen-up near the right margin on ruled or grid
+  paper the view eases to the start of the next line; any touch cancels it, and it never moves while a contact is down.
 
 ## 6. Radial menu
 

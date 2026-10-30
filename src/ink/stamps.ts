@@ -67,11 +67,11 @@ export function normalizeStamp(clip: ClipContent, measure: MeasureText = estimat
 export type StampText = { ok: true; text: string } | { ok: false; message: string };
 
 /** The text of a stamp file for `clip`, serialized and validated again before it is returned (nothing invalid is ever written). */
-export function serializeStamp(clip: ClipContent, now: Date = new Date()): StampText {
+export function serializeStamp(clip: ClipContent, now: Date = new Date(), maxSide: number = MAX_STAMP_SIDE): StampText {
 	const stamp = normalizeStamp(clip);
 	const w = stamp.bounds.maxX;
 	const h = stamp.bounds.maxY;
-	if (w > MAX_STAMP_SIDE || h > MAX_STAMP_SIDE) return { ok: false, message: "the selection is too large for a stamp" };
+	if (w > maxSide || h > maxSide) return { ok: false, message: "the selection is too large for a stamp" };
 	const doc = createDocument(now, { width: Math.max(1, Math.ceil(w) + 1), height: Math.max(1, Math.ceil(h) + 1) });
 	const page = doc.pages[0]!;
 	page.strokes.push(...stamp.strokes);

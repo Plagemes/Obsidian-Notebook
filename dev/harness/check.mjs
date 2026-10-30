@@ -51,6 +51,10 @@ SCENARIOS.push({ doc: "practice", theme: "dark", device: "narrow", lowLatency: f
 // Anchored excerpts (v10): a region of a fake PDF page excerpted to a new page, drawn live, and the badge's jump back.
 SCENARIOS.push({ doc: "excerpt", theme: "light", device: "desktop", lowLatency: false });
 SCENARIOS.push({ doc: "excerpt", theme: "dark", device: "tablet", lowLatency: false });
+// Read-only mode, PNG export with ranges and Print (wave 0.10): desktop can print, a phone and a tablet cannot.
+SCENARIOS.push({ doc: "readonly", theme: "light", device: "desktop", lowLatency: false });
+SCENARIOS.push({ doc: "readonly", theme: "dark", device: "narrow", lowLatency: false });
+SCENARIOS.push({ doc: "readonly", theme: "light", device: "tablet", lowLatency: false });
 
 function findChrome() {
 	const candidates = [
@@ -206,7 +210,7 @@ async function main() {
 					await sleep(100);
 				}
 				await cdp.evaluate("window.harness.ready.then(() => true)");
-				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}

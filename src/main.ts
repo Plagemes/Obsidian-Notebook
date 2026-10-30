@@ -1,6 +1,6 @@
 import { trackWriting } from "./view/writing-quiet";
 import { showNotice } from "./view/notice";
-import { Plugin, type TFile } from "obsidian";
+import { Platform, Plugin, type TFile } from "obsidian";
 import { t } from "./i18n";
 import { readSettings, type NotebookSettings } from "./settings";
 import { positionEquals, type SavedPosition } from "./ink/view-position";
@@ -32,6 +32,9 @@ import { PracticeService } from "./view/practice";
 import { openPageSwitcher, QuickNavService } from "./view/quick-switcher";
 import { openRecentPages, RecentPagesService } from "./view/recent-pages";
 import { SyncSafetyService } from "./view/sync-safety";
+import type { NavController } from "./view/nav-controller";
+import { registerNavigation } from "./view/nav-service";
+import { NotebookStatusBar } from "./view/status-bar";
 import { registerResilience, type ResilienceServices } from "./view/resilience";
 
 export default class NotebookPlugin extends Plugin {
@@ -42,6 +45,9 @@ export default class NotebookPlugin extends Plugin {
 	timetable!: TimetableService;
 	/** wave 0.7: quick navigation (364-366). */
 	recentPages!: RecentPagesService;
+	/** wave 0.10 (18): back/forward history of visited pages (view/nav-controller.ts). */
+	nav!: NavController;
+	private statusBar: NotebookStatusBar | null = null;
 	/** Public API for other plugins and scripts (docs/api.md). */
 	api?: NotebookApi;
 	/** Wave 0.9: practice copies of exercises (view/practice.ts); the views attach to it. */
@@ -85,6 +91,9 @@ export default class NotebookPlugin extends Plugin {
 		// wave 0.7: quick nav (page switcher, recently edited pages; "Go to page number" is a view action of the registry)
 		this.recentPages = new RecentPagesService(this.app, (file) => this.host.readNotebook(file));
 		this.recentPages.register(this);
+		// wave 0.10: back/forward history of visited pages (18) and the status bar item (O15); views reach both through the host.
+		this.nav = registerNavigation(this, (file) => this.host.readNotebook(file));
+		this.registerStatusBar();
 		Object.assign(this.host, { openRecentPages: () => openRecentPages(this.app, this.recentPages) });
 		const quickNav = new QuickNavService(this.app, {
 			root: () => this.settings.folder,
@@ -111,6 +120,7 @@ export default class NotebookPlugin extends Plugin {
 			"recent-pages": () => openRecentPages(this.app, this.recentPages),
 			"sync-check": () => void this.syncSafety.openCheck(),
 			"check-integrity": () => void this.resilience?.check(),
+			"library-check": () => this.host.checkLibrary(),
 			"zettel-inbox": () => void openInbox(this.app),
 			"zettel-inbox-process": () => void processNextInbox(this.app),
 			"benchmark": () => this.openBenchmark(),
@@ -177,6 +187,21 @@ export default class NotebookPlugin extends Plugin {
 	/** ui redesign: the course of the class on now (timetable), for the lecture contextual bar; null when none. */
 	classNow(): string | null {
 		return this.timetable?.nowClass()?.course ?? null;
+	}
+
+	/** wave 0.10 (O15): Obsidian's status bar item shows the page and save state of the active notebook. Desktop only: mobile has no status bar. */
+	private registerStatusBar(): void {
+		if (Platform.isMobile) return;
+		const bar = new NotebookStatusBar(this.addStatusBarItem(), () => this.app.workspace.getActiveViewOfType(NotebookView)?.openNavigator());
+		this.statusBar = bar;
+		const refresh = (): void => bar.update(this.app.workspace.getActiveViewOfType(NotebookView)?.statusSnapshot() ?? null);
+		this.registerEvent(this.app.workspace.on("active-leaf-change", refresh));
+		this.app.workspace.onLayoutReady(refresh);
+	}
+
+	/** wave 0.10 (O15): the page in view or the save state of a view changed. */
+	statusChanged(view: NotebookView): void {
+		if (view === this.app.workspace.getActiveViewOfType(NotebookView)) this.statusBar?.update(view.statusSnapshot());
 	}
 
 	/** wave 0.7: a real edit; the recent pages log collapses and stores it (device-local). */

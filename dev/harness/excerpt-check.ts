@@ -94,6 +94,21 @@ export async function checkExcerpt(api: ExcerptCheckApi): Promise<{ ok: boolean;
 		add("a tap on the badge jumps back to the source page", v.currentPage() === 0, `page ${v.currentPage() + 1}`);
 		add("the tap wrote no ink", strokeCount() === strokes);
 
+		// wave 0.10 (51): in read-only mode a finger tap on the badge still jumps (it edits nothing) and writes nothing.
+		if (typeof v.setReadOnlyMode === "function") {
+			v.setReadOnlyMode(true, false);
+			v.jumpToPage(1);
+			await frames(4);
+			const before = JSON.stringify(doc.pages);
+			const [rx, ry] = at(1, b.x + b.width / 2, b.y + b.height / 2);
+			await penStroke([[rx, ry]], { pointerType: "touch" });
+			await frames(4);
+			add("read-only mode: a finger tap on the badge jumps back to the source", v.currentPage() === 0, `page ${v.currentPage() + 1}`);
+			add("read-only mode: the jump changes nothing", JSON.stringify(doc.pages) === before);
+			v.setReadOnlyMode(false, false);
+			await frames(2);
+		}
+
 		// Undo: the excerpt and its page go away in one step.
 		v.undo();
 		await frames(2);

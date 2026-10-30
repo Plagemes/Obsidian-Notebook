@@ -387,13 +387,25 @@ export class PageNavigator {
 		const page = this.host.pages()[index];
 		const img = item.querySelector("img");
 		if (!page || !img) return;
+		const url = this.thumbnailOf(page);
+		if (img.src !== url) img.src = url;
+	}
+
+	/** The thumbnail of `page` if it is already drawn and still current (roadmap 50: the fast scrollbar's preview reuses this cache). */
+	cachedThumbnail(page: Page): string | null {
+		const cached = this.thumbs.get(page.id);
+		return cached && cached.key === this.thumbKey(page) ? cached.url : null;
+	}
+
+	/** The thumbnail of `page`: the cached one, or drawn now and cached (the same cache as the panel's list). */
+	thumbnailOf(page: Page): string {
 		const key = this.thumbKey(page);
 		let cached = this.thumbs.get(page.id);
 		if (!cached || cached.key !== key) {
 			cached = { key, url: this.host.thumbnail(page, THUMB_WIDTH) };
 			this.thumbs.set(page.id, cached);
 		}
-		if (img.src !== cached.url) img.src = cached.url;
+		return cached.url;
 	}
 
 	/** Mouse/pen: drag immediately. Touch: long-press, then drag; a quick swipe scrolls the list. */

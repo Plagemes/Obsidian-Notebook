@@ -236,6 +236,29 @@ export class NotebookSettingTab extends PluginSettingTab {
 				desc: t("settings.pageTurnerKeys.desc"),
 				control: { type: "toggle", key: "pageTurnerKeys", defaultValue: DEFAULT_SETTINGS.pageTurnerKeys },
 			},
+			// wave 0.10: tabs and lines
+			{
+				name: t("settings.notebookTabs"),
+				desc: t("settings.notebookTabs.desc"),
+				control: { type: "toggle", key: "notebookTabs", defaultValue: DEFAULT_SETTINGS.notebookTabs },
+			},
+			{
+				name: t("settings.autoLineBreak"),
+				desc: t("settings.autoLineBreak.desc"),
+				control: { type: "toggle", key: "autoLineBreak", defaultValue: DEFAULT_SETTINGS.autoLineBreak },
+			},
+			// wave 0.10: clipboard and stamps
+			{
+				name: t("settings.dateStamp"),
+				desc: t("settings.dateStamp.desc"),
+				control: { type: "text", key: "dateStampFormat", defaultValue: DEFAULT_SETTINGS.dateStampFormat, placeholder: DEFAULT_SETTINGS.dateStampFormat },
+			},
+			// wave 0.10 (50)
+			{
+				name: t("settings.fastScrollbar"),
+				desc: t("settings.fastScrollbar.desc"),
+				control: { type: "toggle", key: "fastScrollbar", defaultValue: DEFAULT_SETTINGS.fastScrollbar },
+			},
 			// Companion notes (O1)
 			...companionSettingDefinitions(this.companionHost()),
 			// wave 0.6: library trash, templates
@@ -422,6 +445,23 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setName(t("settings.pageTurnerKeys"))
 			.setDesc(t("settings.pageTurnerKeys.desc"))
 			.addToggle((tg) => tg.setValue(s.pageTurnerKeys).onChange((v) => this.setControlValue("pageTurnerKeys", v)));
+		// wave 0.10: tabs and lines
+		new Setting(containerEl)
+			.setName(t("settings.notebookTabs"))
+			.setDesc(t("settings.notebookTabs.desc"))
+			.addToggle((tg) => tg.setValue(s.notebookTabs).onChange((v) => this.setControlValue("notebookTabs", v)));
+		new Setting(containerEl)
+			.setName(t("settings.autoLineBreak"))
+			.setDesc(t("settings.autoLineBreak.desc"))
+			.addToggle((tg) => tg.setValue(s.autoLineBreak).onChange((v) => this.setControlValue("autoLineBreak", v)));
+		new Setting(containerEl)
+			.setName(t("settings.dateStamp"))
+			.setDesc(t("settings.dateStamp.desc"))
+			.addText((text) => text.setPlaceholder(DEFAULT_SETTINGS.dateStampFormat).setValue(s.dateStampFormat).onChange((v) => this.setControlValue("dateStampFormat", v)));
+		new Setting(containerEl)
+			.setName(t("settings.fastScrollbar"))
+			.setDesc(t("settings.fastScrollbar.desc"))
+			.addToggle((tg) => tg.setValue(s.fastScrollbar).onChange((v) => this.setControlValue("fastScrollbar", v)));
 		displayGestureSettings(containerEl, this.gestureHost());
 		new Setting(containerEl)
 			.setName(t("settings.penLongPress"))

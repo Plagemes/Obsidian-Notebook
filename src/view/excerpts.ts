@@ -58,7 +58,21 @@ export interface ExcerptHost {
 	previewFree(): boolean;
 	scale(): number;
 	gotoContext: GotoView["gotoContext"];
+	/** The page and page point under a client position, or null (between pages, nothing laid out). */
+	pageAtClient(clientX: number, clientY: number): { pageIndex: number; local: [number, number] } | null;
 }
+
+/** A contact that may be a tap on a badge while the notebook is read-only (see attachReadOnlyTaps). */
+interface ReadOnlyTap {
+	id: number;
+	x: number;
+	y: number;
+	t: number;
+	moved: boolean;
+}
+
+/** Longest contact that still counts as a tap in read-only mode, ms. */
+const READ_ONLY_TAP_MS = 500;
 
 type Mode = "page" | "copy";
 
@@ -81,6 +95,8 @@ export class ExcerptTools {
 	private gesture: Gesture | null = null;
 	private flashTimer: number | null = null;
 	private busy = false;
+	private readOnlyTap: ReadOnlyTap | null = null;
+	private readonly disposers: Array<() => void> = [];
 
 	constructor(private readonly host: ExcerptHost) {}
 
@@ -336,7 +352,42 @@ export class ExcerptTools {
 		return { asset, bytes };
 	}
 
+	/**
+	 * wave 0.10 (51): in a notebook that cannot be edited (read-only mode, a hidden-annotations view, a file opened
+	 * read-only) the page takes no strokes, so a tap never reaches `begin`. The jump back does not edit anything, so a
+	 * tap (pen, finger or mouse) on an excerpt's badge is watched here, passively: panning and zooming are untouched.
+	 */
+	attachReadOnlyTaps(stage: HTMLElement): void {
+		const on = <K extends keyof HTMLElementEventMap>(type: K, fn: (e: HTMLElementEventMap[K]) => void) => {
+			stage.addEventListener(type, fn, { passive: true });
+			this.disposers.push(() => stage.removeEventListener(type, fn));
+		};
+		on("pointerdown", (e) => {
+			this.readOnlyTap = this.host.editable() || !e.isPrimary ? null : { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp, moved: false };
+		});
+		on("pointermove", (e) => {
+			const tap = this.readOnlyTap;
+			if (tap && tap.id === e.pointerId && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > TAP_SLOP_PX) tap.moved = true;
+		});
+		on("pointercancel", () => {
+			this.readOnlyTap = null;
+		});
+		on("pointerup", (e) => {
+			const tap = this.readOnlyTap;
+			this.readOnlyTap = null;
+			if (!tap || tap.id !== e.pointerId || tap.moved || e.timeStamp - tap.t > READ_ONLY_TAP_MS || this.host.editable()) return;
+			const at = this.host.pageAtClient(e.clientX, e.clientY);
+			const page = at ? this.host.doc()?.pages[at.pageIndex] : undefined;
+			if (!at || !page) return;
+			const tol = BADGE_TOLERANCE_PX / Math.max(0.05, this.host.scale());
+			const hit = excerptBadgeAt(page.elements ?? [], at.local[0], at.local[1], tol);
+			if (hit) this.openSource(hit);
+		});
+	}
+
 	destroy(): void {
+		for (const off of this.disposers.splice(0)) off();
+		this.readOnlyTap = null;
 		if (this.flashTimer !== null) window.clearTimeout(this.flashTimer);
 		this.flashTimer = null;
 		this.gesture = null;

@@ -15,7 +15,8 @@ import { createNotebook } from "../storage/notebooks";
 import { LibraryTrash } from "../storage/trash";
 import { documentFromTemplate } from "../model/templates";
 import { openTemplateGallery } from "../view/page-tools";
-import { VaultDocumentIO } from "../storage/vault-io";
+import { headerField } from "../storage/integrity";
+import { sidecarDeviceId, VaultDocumentIO, vaultDeviceFileAdapter } from "../storage/vault-io";
 import { resolveAssetFile, storeAsset } from "../view/media";
 import { NewNotebookModal, type NewNotebookOptions } from "../view/modals";
 import { NotebookView, VIEW_TYPE } from "../view/notebook-view";
@@ -25,6 +26,8 @@ import { libraryIndexPath, parseStoredJson, patchNotebookId, patchNotebookMeta, 
 import { importPdfAsNotebook } from "./import-pdf";
 import { createLectureFromSlides } from "./lecture-pack";
 import { openLooseSheet } from "./loose-sheet";
+import { openLibraryCheck } from "./library-check-modal";
+import { LibraryStateStore } from "./library-state-store";
 import type { LibraryHost } from "./library-view";
 import type { ThumbnailOptions } from "./thumbnail";
 import { showNotice } from "../view/notice";
@@ -54,8 +57,11 @@ export class NotebookLibraryHost implements LibraryHost {
 	private readonly assets = new Map<string, Asset>();
 	/** Library trash (#160): deleting from the library moves to `_trash/`. */
 	readonly trash: LibraryTrash;
+	/** Roadmap 54: pinned, archived and manual order, one file per device in `_meta` (library/library-state.ts). */
+	readonly state: LibraryStateStore;
 
 	constructor(private readonly plugin: HostPlugin) {
+		this.state = new LibraryStateStore(vaultDeviceFileAdapter(plugin.app), () => plugin.settings.folder, sidecarDeviceId(plugin.app));
 		this.trash = new LibraryTrash({
 			app: plugin.app,
 			root: () => plugin.settings.folder,
@@ -113,6 +119,23 @@ export class NotebookLibraryHost implements LibraryHost {
 			console.error("[notebook] could not read", file.path, e);
 			return null;
 		}
+	}
+
+	/** The id at the start of the file, without parsing it; the whole parse when the file is laid out differently. */
+	async readNotebookId(file: TFile): Promise<string | null> {
+		try {
+			const quick = headerField(readNotebookText(file.extension, await this.app.vault.cachedRead(file)), "id");
+			if (quick) return quick;
+		} catch (e) {
+			console.error("[notebook] could not read", file.path, e);
+			return null;
+		}
+		return (await this.readNotebook(file))?.id ?? null;
+	}
+
+	/** Roadmap 27: the library check (unreadable notebooks, unused files). */
+	checkLibrary(): void {
+		openLibraryCheck(this.app, () => this.plugin.settings);
 	}
 
 	// ----------------------------------------------------------------- opening

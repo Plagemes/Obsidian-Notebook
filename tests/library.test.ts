@@ -276,7 +276,7 @@ describe("scan", () => {
 		const doc = sampleDocument();
 		const m = metaFromDocument(doc);
 		expect(m).toEqual({
-			pages: 1, tags: [], favorite: false, cover: DEFAULT_COVER,
+			id: doc.id, pages: 1, tags: [], favorite: false, cover: DEFAULT_COVER,
 			created: Date.parse("2026-10-29T10:00:00.000Z"), modified: Date.parse("2026-10-29T10:00:00.000Z"),
 		});
 	});

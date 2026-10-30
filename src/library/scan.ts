@@ -50,7 +50,7 @@ export function extractText(doc: NotebookDocument, cap = TEXT_CAP): { text: stri
 	return { text, textPages };
 }
 
-export type DocumentFields = Pick<LibraryEntry, "pages" | "tags" | "favorite" | "cover" | "created" | "modified" | "text" | "textPages" | "pageTags" | "bookmarks">;
+export type DocumentFields = Pick<LibraryEntry, "id" | "pages" | "tags" | "favorite" | "cover" | "created" | "modified" | "text" | "textPages" | "pageTags" | "bookmarks">;
 
 /** Titled bookmarks for the index (0-based pages, in page order). */
 export function extractBookmarks(doc: NotebookDocument): Array<{ page: number; title: string }> {
@@ -100,6 +100,7 @@ export function metaFromDocument(doc: NotebookDocument, fallbackTime = 0): Docum
 	const pageTags = extractPageTags(doc);
 	const bookmarks = extractBookmarks(doc);
 	return {
+		...(typeof doc.id === "string" && doc.id !== "" ? { id: doc.id } : {}),
 		...(bookmarks.length > 0 ? { bookmarks } : {}),
 		...(text ? { text, textPages } : {}),
 		...(pageTags.length > 0 ? { pageTags } : {}),
