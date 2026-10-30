@@ -726,6 +726,7 @@ body {
 }
 
 .notebook-context-main,
+.notebook-context-second,
 .notebook-selection-styles > .notebook-toolbar-group {
 	display: flex;
 	flex-wrap: wrap;
@@ -740,6 +741,7 @@ body {
 }
 
 .notebook-context-main > .notebook-tool,
+.notebook-context-second > .notebook-tool,
 .notebook-selection-styles .notebook-tool {
 	border-radius: var(--nb-radius-pill);
 }
@@ -784,6 +786,11 @@ body {
 	flex-direction: column;
 	align-items: center;
 	gap: 6px;
+}
+
+/* wave 0.10: the second row (select similar, align, transform) sits right above the main row, the restyle rows above it. */
+.notebook-context-extra > .notebook-context-second {
+	order: 2;
 }
 
 .notebook-selection-styles {
@@ -4928,6 +4935,106 @@ body {
 	mix-blend-mode: screen;
 }
 
+/* wave 0.10: selection tools (select by colour or tool, exact size) */
+.notebook-style-panel {
+	width: min(420px, 94vw);
+}
+
+.notebook-style-hint,
+.notebook-resize-now,
+.notebook-resize-note {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	margin: 0 0 var(--nb-space-2);
+}
+
+.notebook-style-empty {
+	color: var(--text-muted);
+	padding: var(--nb-space-3) 0;
+}
+
+.notebook-style-section {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin-bottom: var(--nb-space-2);
+}
+
+.notebook-style-title {
+	font-size: 11px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+	margin: var(--nb-space-1) 0;
+}
+
+.notebook-style-row {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-2);
+	min-height: var(--nb-target, 40px);
+	padding: 0 var(--nb-space-2);
+	border-radius: var(--nb-radius-s);
+	background: transparent;
+	box-shadow: none;
+	text-align: left;
+}
+
+.notebook-style-row:hover,
+.notebook-style-row:focus-visible {
+	background: var(--nb-accent-soft);
+}
+
+.notebook-style-label {
+	flex: 1;
+}
+
+.notebook-style-count {
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.notebook-resize-panel {
+	width: min(380px, 94vw);
+}
+
+.notebook-resize-row {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-2);
+	margin-bottom: var(--nb-space-2);
+}
+
+.notebook-resize-row > label {
+	flex: 0 0 5.5em;
+}
+
+.notebook-resize-row > input {
+	flex: 1;
+	min-height: var(--nb-target, 40px);
+}
+
+.notebook-resize-unit {
+	color: var(--text-muted);
+}
+
+.notebook-resize-lock {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-2);
+	min-height: var(--nb-target, 40px);
+}
+
+.notebook-resize-error {
+	color: var(--text-error);
+	margin-bottom: var(--nb-space-2);
+}
+
+.notebook-resize-actions {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: var(--nb-space-2);
+}
 
 /* wave 0.10: tabs and lines (strip of open notebooks) */
 .notebook-tabs {

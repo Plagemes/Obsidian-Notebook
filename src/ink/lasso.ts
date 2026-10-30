@@ -26,6 +26,14 @@ export function strokesInLasso(strokes: readonly Stroke[], poly: Polygon, share 
 	});
 }
 
+/**
+ * Rectangle selection (roadmap 63): the four corners of the box dragged from `a` to `b` as a polygon, starting at the
+ * anchor `a`. It is handed to the same selection code as a freehand lasso, so both modes pick the same things.
+ */
+export function rectanglePolygon(a: readonly [number, number], b: readonly [number, number]): Array<[number, number]> {
+	return [[a[0], a[1]], [b[0], a[1]], [b[0], b[1]], [a[0], b[1]]];
+}
+
 export function selectionBounds(strokes: readonly Stroke[]): BBox | null {
 	if (strokes.length === 0) return null;
 	return strokes.map(strokeBounds).reduce((a, b) => ({
