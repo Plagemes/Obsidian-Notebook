@@ -26,7 +26,7 @@ Not yet verified on Android hardware (see `docs/testing.md`, steps G1-G6). No ch
   - **Finger taps** (roadmap 3): a tap with two fingers undoes, with three fingers redoes (setting *Finger taps*: two undo / three redo, swapped, or off; on by default). A tap needs all fingers to land within 150 ms, move at most 12 px, lift within 150 ms and finish within 350 ms, so panning and pinching never trigger it; touches while the pen is near (palm rejection time), palm-sized or edge-zone contacts, and a pen touching in the middle spoil it. The few pixels the view may have moved are put back, and a tap leaves no ink. A finger that lands among fingers that are already panning or pinching no longer starts a stroke (also with *Draw with finger*).
   - **Scribble to erase** (roadmap 4, setting, off by default): a fast back-and-forth scratch with the pen over existing ink deletes the strokes it crosses; the scribble is not kept and the whole thing is one undo step. Detector in `src/ink/scribble.ts`: at least four direction reversals between legs of 12 pt or more, roughly parallel, mostly piled up instead of travelling along a line (so "mmm" and sweeping zig-zag shading do not count), under 300 ms per leg on average; a stroke is deleted when at least two different legs cross it, and very large strokes (rulings, frames) are left alone. Off by default because a false positive deletes ink.
   - **Auto-scroll while writing** (roadmap 36, setting, off by default): when a stroke ends in the bottom 18 % of the view, the page scrolls up smoothly (320 ms, ease-out) after a 700 ms pause so the tip sits at 40 % of the height. It never moves while a pen or finger is down; a touch cancels it; it stops at the end of the document.
-  - **Pen side button** (roadmap 2): the setting *Pen side button* gains *Lasso while held* and *Previous tool while held* (the tool used before the current one; the eraser if there is none). The tool is chosen when the pen touches down. The default stays *Radial menu*. A selection made with the lasso option stays after the button is released and is cleared when you write.
+  - **Pen side button** (roadmap 2): the setting *Pen side button* gains *Lasso while held* and *Previous tool while held* (the tool used before the current one; the current tool if there is none). The tool is chosen when the pen touches down. The default stays *Radial menu*. A selection made with the lasso option stays after the button is released and is cleared when you write.
 Not yet verified on Android hardware (see `docs/testing.md`, steps L1-L10).
 
 ### Added
@@ -46,6 +46,20 @@ Not yet verified in Obsidian or on Android hardware (see `docs/testing.md`, step
 ### Changed
 - **Companion notes: which tags the plugin may remove.** The tags of the notebook that the note already had (written by you) are no longer treated as the plugin's: removing such a tag from the notebook leaves it in the note. Only tags the plugin added itself are removed when the notebook drops them. Notes written by 0.5.0 keep their old behaviour until their next update.
 - Tags typed in the editor are stored normalised (`linear algebra` becomes `linear-algebra`); tags already stored are not rewritten until you edit them.
+### Fixed
+- Page trash: every deleted page is now its own file (`_trash/pages/<notebook id>/<entry id>.json`), written once and never rewritten, so two devices deleting pages before they sync no longer lose one of the copies; conflicted copies are read, and the old one-file layout is moved over without losing entries.
+- Page trash: a deleted page keeps its bookmark (v7 title, colour and category), and restoring it brings the bookmark back in the same undo step.
+- Page trash: a restored page is discarded from *Deleted pages* once the notebook is saved, so it can no longer be restored twice; *Delete page* now waits for the copy and does not delete the page if the copy fails.
+- Library: moving a notebook (or a folder with open notebooks) to the trash waits for the open tab's final save instead of a fixed 50 ms, and is refused if the changes cannot be saved.
+- Library: deleting a folder that holds other files (.md, .pdf, images) lists them and asks whether to move only the notebooks or everything; such a folder is never emptied from the trash automatically, and the delete and empty confirmations name those files.
+- Timetable: saving never overwrites a file that changed since the editor opened it (for example synced from another device), not even after *Start a new timetable*; the draft is copied to the backup folder instead, and identical saves write nothing.
+- PDF links: the links file is now a vault file, `<notebooks folder>/_meta/pdf-links.json`, written through the Vault API; the file in the plugin's config folder is copied over once and left untouched.
+- API: an edit to an open notebook while a finger, the pen or a gesture (for example a lasso drag) is on the page now waits and reports `busy` instead of dropping the move.
+- API: `listNotebooks` and the other calls no longer see notebooks in the plugin trash, the templates folder or the other reserved folders.
+- Pen side button *Previous tool while held*: with no previous tool it keeps the current tool instead of erasing.
+- Scribble to erase: one Undo after a false positive now gives back both the erased strokes and the stroke you drew.
+- Tests: the repair fuzz test is reproducible (seeded ids) and has a longer timeout.
+
 ## 0.5.1 — 2026-10-30
 
 Hotfix for 0.5.0. Not verified on Android hardware (see `docs/testing.md`); how the S Pen button is reported is the open question.
