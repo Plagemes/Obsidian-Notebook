@@ -858,7 +858,8 @@ export class LibraryView extends ItemView {
 		const card = grid.createDiv({ cls: "notebook-lib-card", attr: { role: "listitem" } });
 		card.dataset.path = entry.path;
 		const placeholder = entry.mtime < 0;
-		const meta = placeholder ? "" : entry.pages === 0 ? t("library.unreadable") : `${this.plural(entry.pages, "library.pages.one", "library.pages.many")} · ${relativeTime(entry.modified, now, getLanguage())}`;
+		// wave 0.7: a 0-byte file is a notebook the sync client has not downloaded yet, not a damaged one (#344).
+		const meta = placeholder ? "" : entry.pages === 0 ? t(entry.size === 0 ? "sync.library.notDownloaded" : "library.unreadable") : `${this.plural(entry.pages, "library.pages.one", "library.pages.many")} · ${relativeTime(entry.modified, now, getLanguage())}`;
 		const main = card.createDiv({ cls: "notebook-lib-card-main", attr: { role: "button", tabindex: "0", "data-key": `card:${entry.path}`, "aria-label": [entry.name, meta].filter(Boolean).join(", ") } });
 		const cover = main.createDiv({ cls: "notebook-lib-cover" });
 		cover.setCssProps({ "--notebook-cover": entry.cover });

@@ -27,6 +27,7 @@ import { registerZettel } from "./zettel";
 import { registerGotoPage } from "./view/goto-page";
 import { QuickNavService, registerQuickSwitcher } from "./view/quick-switcher";
 import { openRecentPages, RecentPagesService, registerRecentPages } from "./view/recent-pages";
+import { SyncSafetyService } from "./view/sync-safety";
 
 export default class NotebookPlugin extends Plugin {
 	settings!: NotebookSettings;
@@ -38,11 +39,15 @@ export default class NotebookPlugin extends Plugin {
 	recentPages!: RecentPagesService;
 	/** Public API for other plugins and scripts (docs/api.md). */
 	api?: NotebookApi;
+	/** wave 0.7: sync safety (presence files, sync check). */
+	syncSafety!: SyncSafetyService;
 
 	async onload(): Promise<void> {
 		this.settings = readSettings(await this.loadData());
 
 		this.journal = new AdapterJournalStore(this.app.vault.adapter, journalFolder(this.app, this.manifest.id));
+		this.syncSafety = new SyncSafetyService(this);
+		this.syncSafety.register();
 		this.registerView(VIEW_TYPE, (leaf) => new NotebookView(leaf, this));
 		this.registerExtensions([...NOTEBOOK_EXTENSIONS], VIEW_TYPE);
 		this.host = new NotebookLibraryHost(this);
@@ -134,6 +139,7 @@ export default class NotebookPlugin extends Plugin {
 		if (this.rememberTimer !== null) this.writeLocation();
 		this.recentPages.flush();
 		void this.flushAll();
+		this.syncSafety.dispose();
 		this.timetable.stop();
 		this.host.dispose();
 	}

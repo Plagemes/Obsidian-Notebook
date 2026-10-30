@@ -2657,3 +2657,42 @@
 .notebook-quicknav-status:not(:empty) { padding: 4px 12px; color: var(--text-muted); font-size: var(--font-ui-smaller); }
 .notebook-recent-main, .notebook-goto-row { display: flex; justify-content: space-between; gap: 8px; }
 .notebook-page-indicator { cursor: pointer; }
+
+
+/* wave 0.7: sync safety (#342 open on another device, #344 not downloaded yet, #345 sync check) */
+.notebook-sync-banner {
+	display: flex;
+	flex: 0 0 auto;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 12px;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+}
+
+.notebook-sync-banner-text {
+	flex: 1 1 240px;
+	min-width: 0;
+}
+
+.notebook-sync-banner-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.notebook-sync-muted {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.notebook-sync-issues {
+	max-height: 50vh;
+	overflow-y: auto;
+	padding-left: 1.2em;
+	font-size: var(--font-ui-small);
+	overflow-wrap: anywhere;
+}

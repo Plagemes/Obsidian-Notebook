@@ -1,6 +1,7 @@
 import { parse, parseStaged, serialize, serializeChecked, StagedParse, warmStrokeLines, type ParseFailure, type ParseResult } from "../model/serialize";
 import type { NotebookDocument } from "../model/types";
 import { buildEntry, fullWriteGapMs, inspectJournal, journalKey, splitLines, type JournalStore } from "./journal";
+import { isAwaitingDownload } from "./sync-state";
 
 /** File access for one notebook. Implemented over the Vault API in vault-io.ts and by fakes in tests. */
 export interface DocumentIO {
@@ -23,8 +24,10 @@ export type BackupReason =
  * - `readonly`: written by a newer format version; never written.
  * - `broken`: unreadable (invalid JSON or schema, empty); never written.
  * - `deleted`: the file was deleted; never written.
+ * - `not-downloaded` (wave 0.7: sync safety): the sync client has not downloaded the content yet (0 bytes); never
+ *   written, backed up or repaired; the next external change with content loads it like a first load.
  */
-export type SessionMode = "loading" | "ok" | "readonly" | "broken" | "deleted";
+export type SessionMode = "loading" | "ok" | "readonly" | "broken" | "deleted" | "not-downloaded";
 
 export type SaveState = "saved" | "pending" | "saving" | "error";
 
@@ -492,6 +495,12 @@ export class DocumentSession {
 				this.debounceTimer = this.timers.set(() => this.timedFlush(), this.debounceMs);
 				this.maxWaitTimer = this.timers.set(() => this.timedFlush(), this.maxWaitMs);
 			}
+		} else if (isAwaitingDownload(content)) {
+			// wave 0.7: sync safety (#344): a placeholder of a file still in the cloud is not damaged.
+			this.doc = null;
+			this.mode = "not-downloaded";
+			this.problem = null;
+			this.problemReason = null;
 		} else {
 			this.doc = null;
 			this.mode = result.reason === "future-version" ? "readonly" : "broken";
@@ -564,7 +573,7 @@ export class DocumentSession {
 			for (let attempt = 0; attempt < RACE_ATTEMPTS && !written; attempt++) {
 				const current = await this.io.read();
 				// Someone else wrote the file: keep their version before replacing it.
-				if (current !== this.diskContent && current.trim().length > 0) await this.backupConflict(current);
+				if (current !== this.diskContent && !isAwaitingDownload(current)) await this.backupConflict(current);
 				// Deleted or disposed meanwhile: never touch the file again.
 				if (this.mode !== "ok" || this.disposed) return true;
 				let raced = false;

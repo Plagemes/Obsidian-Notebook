@@ -65,6 +65,7 @@ import { exportPdf, exportSvg } from "./export";
 import { policySettings } from "./input-settings";
 import { NotebookMedia, storeAsset } from "./media";
 import { HeavyPageBanner } from "./heavy-page-banner";
+import { ViewSyncSafety, type SyncSafetyService } from "./sync-safety";
 import { PageNavigator } from "./navigator";
 import { addOutlinePageMenuItems, type OutlineHost } from "./outline";
 import { PAGE_AT_KEY, PageClock, pageAtFromState, pageState, startPosition } from "./position-sync";
@@ -133,6 +134,8 @@ export interface NotebookHost {
 	journal?: JournalStore;
 	/** Persists the plugin settings (favourite pens, eraser size, pen-only). Optional: absent in tests. */
 	saveSettings?(): Promise<void>;
+	/** wave 0.7: sync safety (presence files, sync check). Optional: absent in tests and the harness. */
+	syncSafety?: SyncSafetyService;
 }
 
 interface ActiveStroke {
@@ -241,6 +244,8 @@ export class NotebookView extends FileView {
 	private controller: PointerController | null = null;
 	private resizeObserver: ResizeObserver | null = null;
 	private media: NotebookMedia | null = null;
+	/** wave 0.7: sync safety (#342–#344). */
+	private syncSafety: ViewSyncSafety | null = null;
 	private pageNav: PageNavigator | null = null;
 	private textEditor: TextEditor | null = null;
 	private rulerGesture: RulerGesture | null = null;
@@ -407,6 +412,16 @@ export class NotebookView extends FileView {
 		this.mountSelectionActions();
 		this.mountStamps();
 		this.messageEl = this.contentEl.createDiv({ cls: "notebook-message" });
+		this.syncSafety = new ViewSyncSafety({
+			app: this.app, component: this, container: this.contentEl, before: this.body, service: this.host.syncSafety ?? null,
+			file: () => this.file, session: () => this.session, assetFileChanged: (f) => this.media?.assetFileChanged(f),
+			editingChanged: () => {
+				this.applyInput();
+				this.toolbar.setEditable(this.editable());
+				this.updateHistoryButtons();
+				this.selectionActions?.update();
+			},
+		});
 		this.messageEl.hide();
 		this.toolbar.setEditable(false);
 
@@ -759,6 +774,7 @@ export class NotebookView extends FileView {
 
 	async onUnloadFile(file: TFile): Promise<void> {
 		await this.closeSession();
+		this.syncSafety?.closed();
 		this.history.clear();
 		this.clearSelection();
 		this.layout = null;
@@ -1563,7 +1579,7 @@ export class NotebookView extends FileView {
 	}
 
 	private editable(): boolean {
-		return this.session?.mode === "ok" && !!this.session.doc && !this.reading?.annotationsHidden;
+		return this.session?.mode === "ok" && !!this.session.doc && !this.reading?.annotationsHidden && !this.syncSafety?.readOnly;
 	}
 
 	private pageAtIndex(i: number): Page | null {
@@ -1665,9 +1681,14 @@ export class NotebookView extends FileView {
 		}
 		this.updateHistoryButtons();
 		this.selectionActions?.update();
+		this.syncSafety?.loaded(doc, mode);
 	}
 
 	private showProblem(problem = this.session?.problem ?? null): void {
+		if (this.session?.mode === "not-downloaded" && this.syncSafety) {
+			this.syncSafety.renderNotDownloaded(this.messageEl);
+			return this.toolbar.setStatus(t("sync.status.notDownloaded"), "pending");
+		}
 		const readonly = this.session?.mode === "readonly";
 		this.messageEl.empty();
 		this.messageEl.createEl("h3", { text: t(readonly ? "view.readonly.title" : "view.broken.title") });
@@ -1686,6 +1707,7 @@ export class NotebookView extends FileView {
 
 	private showSaveState(state: SaveState): void {
 		if (this.session && this.session.mode !== "ok") {
+			if (this.session.mode === "not-downloaded") return this.toolbar.setStatus(t("sync.status.notDownloaded"), "pending");
 			this.toolbar.setStatus(t("status.readonly"), "error");
 			return;
 		}

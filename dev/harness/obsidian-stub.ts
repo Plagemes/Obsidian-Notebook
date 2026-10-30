@@ -358,6 +358,7 @@ export class Vault extends Events {
 	async createBinary(p: string, data: ArrayBuffer): Promise<TFile> {
 		const f = this.addFile(p);
 		this.binary.set(f.path, data);
+		f.stat.size = data.byteLength;
 		this.trigger("create", f);
 		return f;
 	}
@@ -390,6 +391,7 @@ export class Vault extends Events {
 
 	async modifyBinary(f: TFile, data: ArrayBuffer): Promise<void> {
 		this.binary.set(f.path, data);
+		f.stat.size = data.byteLength;
 		this.trigger("modify", f);
 	}
 
