@@ -2984,6 +2984,24 @@ body {
 	user-select: none;
 }
 
+/* 0.11.1: as on the pen-tracker page, the browser handles no touch or pen gesture over the test (no pan, long-press or
+   selection that would cancel the pen); only the log keeps vertical scrolling so it can be read with a finger. */
+.notebook-pentest {
+	touch-action: none;
+}
+
+.notebook-pentest .notebook-pentest-log {
+	touch-action: pan-y;
+}
+
+/* 0.11.1: the values of the last event (as the pen-tracker page shows them) */
+.notebook-pentest-last {
+	margin-bottom: 8px;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	overflow-wrap: anywhere;
+}
+
 .notebook-pentest-summary {
 	margin-bottom: 4px;
 	font-weight: var(--font-semibold);

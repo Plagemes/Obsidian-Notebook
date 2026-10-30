@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InputPolicy, type InputSettings } from "../src/ink/input-policy";
 import {
-	BarrelDetector, EventLog, HOLD_MS, StillHold, describeSideButton, formatEvent, isBarrelSignal, isEraserSignal, strokeIsYoung,
+	BarrelDetector, EventLog, HOLD_MS, LOG_LINES, StillHold, describeSideButton, formatEvent, isBarrelSignal, isEraserSignal, strokeIsYoung,
 	type LoggedEvent,
 } from "../src/ink/pen-button";
 import { PointerController, type PointerHandlers } from "../src/ink/pointer-controller";
@@ -192,16 +192,16 @@ describe("diagnostic log", () => {
 		expect(formatEvent({ kind: "keydown", t: 50, key: "F13", code: "F13" })).toBe('0.050s keydown key="F13" code=F13');
 	});
 
-	it("keeps the last 30 lines, folds repeated moves and counts side-button events", () => {
+	it("keeps the last LOG_LINES lines, folds repeated moves and counts side-button events", () => {
 		const log = new EventLog();
 		for (let i = 0; i < 100; i++) log.add(ev({ t: i }));
 		expect(log.length).toBe(1);
 		expect(log.text()).toContain("(x100)");
 		log.add(ev({ kind: "pointermove", buttons: 2, t: 101 }));
 		expect(log.sideButtonCount).toBe(1);
-		for (let i = 0; i < 40; i++) log.add(ev({ kind: "contextmenu", t: 200 + i }));
-		expect(log.length).toBe(30);
-		expect(log.text().split("\n").length).toBe(30);
+		for (let i = 0; i < LOG_LINES + 10; i++) log.add(ev({ kind: "contextmenu", t: 200 + i }));
+		expect(log.length).toBe(LOG_LINES);
+		expect(log.text().split("\n").length).toBe(LOG_LINES);
 		log.clear();
 		expect(log.length).toBe(0);
 		expect(log.sideButtonCount).toBe(0);

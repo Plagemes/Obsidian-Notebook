@@ -12,6 +12,9 @@
  *     primary press with no pressure: `pointerdown` with `button 0`, `buttons 1` and `pressure` exactly 0 (a
  *     real nib contact has pressure > 0). It is accepted only for a pointer that was hovering just before
  *     (events with `buttons 0` seen for the same `pointerId`), and can be switched off in the settings.
+ *   - 0.11.1: a `mousedown` that no pointer event announced (an "orphan": no `pointerdown` just before, no finger,
+ *     not derived from touch) with `button` 0 or 2, while the pen hovers: in case the WebView delivers the button
+ *     only as a mouse event. The view feeds this from window-level capture listeners (`PointerController`).
  * The eraser (`buttons & 32`, `button 5`) is never a barrel press.
  */
 
@@ -34,6 +37,10 @@ export function isBarrelSignal(button: number, buttons: number): boolean {
 export const PEN_RECENT_MS = 700;
 /** A barrel signal this recent makes a `contextmenu` during pen contact a button press and not a long-press. */
 export const BARREL_RECENT_MS = 1000;
+/** A `mousedown` this soon after any `pointerdown` is that pointer's compatibility mouse event, not a press of its own. */
+export const COMPAT_MOUSE_MS = 500;
+/** A `mousedown` this soon after any finger activity may be the finger's compatibility click: never the pen button. */
+export const TOUCH_RECENT_MS = 1000;
 
 export type PointerKind = "down" | "move" | "up" | "cancel";
 
@@ -44,6 +51,10 @@ export class BarrelDetector {
 	private touches = 0;
 	private lastPenT = -Infinity;
 	private lastBarrelT = -Infinity;
+	/** Last `pointerdown` of any pointer type (a compat `mousedown` follows it). */
+	private lastDownT = -Infinity;
+	/** Last pointer event of a finger. */
+	private lastTouchT = -Infinity;
 	/** The pointer that last reported `buttons 0` (hovering, or just lifted): a pressure-0 press is only believed after that. */
 	private hoverId: number | null = null;
 	/** A pressure-0 primary press is the side button (the setting; on by default). */
@@ -88,6 +99,35 @@ export class BarrelDetector {
 		this.contact = false;
 		this.used = false;
 		this.transition = "none";
+		this.lastDownT = -Infinity;
+		this.lastTouchT = -Infinity;
+	}
+
+	/**
+	 * Any pointer event seen at window level before it reaches its target (capture phase), also for pointers the
+	 * detector is not fed: a `pointerdown` makes the next `mousedown` its compatibility event, a finger blocks
+	 * mouse-only presses for a while.
+	 */
+	noteAny(kind: PointerKind, pointerType: string, t: number): void {
+		if (kind === "down") this.lastDownT = Math.max(this.lastDownT, t);
+		if (pointerType === "touch") this.lastTouchT = Math.max(this.lastTouchT, t);
+	}
+
+	/**
+	 * A `mousedown` (window level). True when it is a pen side-button press that came ONLY as a mouse event: no
+	 * `pointerdown` just before it (else it is that pointer's compatibility event), no finger on or near the page,
+	 * not derived from touch (`sourceCapabilities.firesTouchEvents`), the pen seen hovering (not touching) just
+	 * before, `button` 0 or 2, not the eraser, and no press already handled.
+	 */
+	mouseDown(button: number, buttons: number, t: number, firesTouchEvents = false): boolean {
+		if (firesTouchEvents || (button !== 0 && button !== 2) || isEraserSignal(button, buttons)) return false;
+		if (t - this.lastDownT < COMPAT_MOUSE_MS || this.touches > 0 || t - this.lastTouchT < TOUCH_RECENT_MS) return false;
+		if (!this.penRecent(t) || this.penContact || this.held || this.nearZeroPress(t)) return false;
+		if (this.armed && t - this.armedT < 1500) return false;
+		this.lastBarrelT = t;
+		this.armed = true;
+		this.armedT = t;
+		return true;
 	}
 
 	/**
@@ -95,6 +135,7 @@ export class BarrelDetector {
 	 * menu), false for everything else: releases, repeated reports of the same press, the eraser, touch.
 	 */
 	pointer(kind: PointerKind, pointerType: string, button: number, buttons: number, t: number, pressure?: number, pointerId?: number): boolean {
+		this.noteAny(kind, pointerType, t);
 		if (pointerType === "touch") {
 			if (kind === "down") this.touches++;
 			else if (kind === "up" || kind === "cancel") this.touches = Math.max(0, this.touches - 1);
@@ -180,6 +221,16 @@ export class BarrelDetector {
 		this.armed = true;
 		this.armedT = t;
 		return true;
+	}
+
+	/**
+	 * Should a `contextmenu` over the notebook view be cancelled (no native menu, no WebView long-press or selection
+	 * handling that would cancel the pen)? Yes when it comes from the pen, carries no `pointerType` (a plain
+	 * MouseEvent, as some WebViews send it), or the pen is near (hovering or touching, seen within `PEN_RECENT_MS`).
+	 * Whether it is also a side-button press is `contextMenu`'s decision.
+	 */
+	blocksContextMenu(pointerType: string | undefined, t: number): boolean {
+		return pointerType === "pen" || !pointerType || this.penRecent(t);
 	}
 
 	/** An `auxclick`. True when it is a pen side-button click that was not handled yet. */
@@ -390,7 +441,9 @@ export function describeSideButton(f: PenEventFacts): "side-button" | "eraser" |
 	const button = f.button ?? -1;
 	const buttons = f.buttons ?? 0;
 	const penLike = f.pointerType === "pen" || f.pointerType === "mouse" || f.pointerType === undefined || f.pointerType === "";
-	if (f.kind.startsWith("pointer")) {
+	if (f.kind.startsWith("pointer") || f.kind.endsWith("pointercapture")) {
+		// Enter / leave / over / out and capture changes only repeat the state: they are never a press of their own.
+		if (POINTER_KIND[f.kind] === undefined) return "no";
 		if (f.pointerType !== "pen" && f.pointerType !== "mouse") return "no";
 		if (isEraserSignal(button, buttons)) return "eraser";
 		const up = f.kind === "pointerup" || f.kind === "pointercancel";
@@ -410,6 +463,12 @@ export interface LoggedEvent extends PenEventFacts {
 	isPrimary?: boolean;
 	key?: string;
 	code?: string;
+	/** The event's own `timeStamp`, ms. */
+	timeStamp?: number;
+	/** A short name of the element the event was dispatched to (`div.notebook-pentest-area`, `window`, ...). */
+	target?: string;
+	/** `MouseEvent.sourceCapabilities.firesTouchEvents` (Chromium): the mouse event was derived from touch. */
+	fromTouch?: boolean;
 	/** Set by the log: what the event means for a pressure-0 side-button press (see `ZeroPressureTransition`). */
 	note?: string;
 }
@@ -418,8 +477,41 @@ const POINTER_KIND: Record<string, PointerKind | undefined> = {
 	pointerdown: "down", pointermove: "move", pointerrawupdate: "move", pointerup: "up", pointercancel: "cancel",
 };
 
+/**
+ * Every event type the "Pen button test" records, at window level in the capture phase, whatever element it is
+ * dispatched to (0.11.1). Types a browser never fires are harmless. `selectionchange` is listened on the document.
+ */
+export const PEN_TEST_EVENT_TYPES: readonly string[] = [
+	"pointerover", "pointerenter", "pointerdown", "pointermove", "pointerrawupdate", "pointerup", "pointercancel", "pointerout", "pointerleave",
+	"gotpointercapture", "lostpointercapture",
+	"mouseover", "mouseenter", "mousedown", "mousemove", "mouseup", "mouseout", "mouseleave", "click", "dblclick", "auxclick", "contextmenu",
+	"touchstart", "touchmove", "touchend", "touchcancel",
+	"selectstart", "dragstart",
+	"keydown", "keyup",
+];
+
+/** A short name for an event target: `window`, `document`, `div.notebook-pentest-area`, ... (`(area)` inside the test area). */
+export function describeTarget(target: EventTarget | null, area: { contains(n: Node | null): boolean } | null, win: unknown, doc: unknown): string {
+	if (!target) return "-";
+	if (target === win) return "window";
+	if (target === doc) return "document";
+	const el = target as Partial<Element>;
+	if (typeof el.tagName !== "string") return "?";
+	const cls = typeof el.className === "string" ? el.className.trim().split(/\s+/)[0] : "";
+	const name = cls ? `${el.tagName.toLowerCase()}.${cls}` : el.tagName.toLowerCase();
+	return area?.contains(target as Node) ? `${name}(area)` : name;
+}
+
+/** Kinds that repeat while the pen merely moves or crosses elements: they fold into one line with a counter. */
+const FOLDABLE = new Set([
+	"pointermove", "pointerrawupdate", "pointerover", "pointerout", "pointerenter", "pointerleave",
+	"mousemove", "mouseover", "mouseout", "mouseenter", "mouseleave", "touchmove", "selectionchange",
+]);
+/** How many trailing lines a repeated event may fold into (moves of pointer, mouse and rawupdate interleave). */
+const FOLD_LOOKBACK = 8;
+
 /** The log keeps this many lines. */
-export const LOG_LINES = 30;
+export const LOG_LINES = 80;
 
 const fix = (n: number | undefined, d: number): string => (n === undefined || Number.isNaN(n) ? "-" : n.toFixed(d));
 
@@ -433,19 +525,26 @@ export function formatEvent(ev: LoggedEvent): string {
 	if (ev.buttons !== undefined) parts.push(`buttons=${ev.buttons}`);
 	if (ev.pressure !== undefined) parts.push(`pressure=${fix(ev.pressure, 2)}`);
 	if (ev.isPrimary !== undefined) parts.push(`primary=${ev.isPrimary}`);
+	if (ev.fromTouch) parts.push("fromTouch");
+	if (ev.target) parts.push(`@${ev.target}`);
+	if (ev.timeStamp !== undefined) parts.push(`ts=${fix(ev.timeStamp, 1)}`);
 	const verdict = describeSideButton(ev);
 	parts.push(ev.note ? `=> ${ev.note}` : verdict === "side-button" ? "=> SIDE BUTTON" : verdict === "eraser" ? "=> eraser" : "=> -");
 	return parts.join(" ");
 }
 
 /**
- * The last `LOG_LINES` events as lines. Repeated pointer moves with the same type, button, buttons and primary
- * flag fold into one line with a counter, so hovering does not push the interesting events out.
+ * The last `LOG_LINES` events as lines. Repeated moves (and enter / leave / over / out) with the same type,
+ * button, buttons and primary flag fold into one line with a counter, so hovering does not push the
+ * interesting events out; a count per event type is kept for the whole test.
  */
 export class EventLog {
-	private lines: Array<{ key: string; text: string; count: number; noted: boolean }> = [];
+	private lines: Array<{ key: string; text: string; count: number; noted: boolean; foldable: boolean }> = [];
 	/** Events that would be treated as the side button. */
 	sideButtonCount = 0;
+	/** Events of every type since the test started (or was cleared). */
+	readonly counts = new Map<string, number>();
+	total = 0;
 
 	constructor(private readonly max = LOG_LINES) {}
 
@@ -455,11 +554,14 @@ export class EventLog {
 
 	add(logged: LoggedEvent): void {
 		const ev: LoggedEvent = { ...logged };
+		this.total++;
+		this.counts.set(ev.kind, (this.counts.get(ev.kind) ?? 0) + 1);
 		const kind = POINTER_KIND[ev.kind];
 		let zero = false;
-		if (kind && ev.pointerType === "pen") {
-			const press = this.detector.pointer(kind, "pen", ev.button ?? -1, ev.buttons ?? 0, ev.t, ev.pressure, ev.pointerId);
-			const tr = this.detector.transition;
+		let mouseOnly = false;
+		if (kind && ev.pointerType) {
+			const press = this.detector.pointer(kind, ev.pointerType, ev.button ?? -1, ev.buttons ?? 0, ev.t, ev.pressure, ev.pointerId);
+			const tr = ev.pointerType === "pen" ? this.detector.transition : "none";
 			if (press && tr === "press") {
 				zero = true;
 				ev.note = "SIDE BUTTON (pressure 0 primary press)";
@@ -472,6 +574,9 @@ export class EventLog {
 			} else if (tr === "release") {
 				ev.note = "button released";
 			}
+		} else if (ev.kind === "mousedown" && this.detector.mouseDown(ev.button ?? 0, ev.buttons ?? 0, ev.t, ev.fromTouch === true)) {
+			mouseOnly = true;
+			ev.note = "SIDE BUTTON? (mousedown with no pointerdown, pen hovering)";
 		}
 		if (ev.pointerType === "pen") {
 			if (ev.kind === "pointerdown" && ev.pressure !== 0 && !zero) this.chord.down(ev.t);
@@ -481,24 +586,33 @@ export class EventLog {
 			}
 		}
 		const verdict = describeSideButton(ev);
-		if (zero || verdict === "side-button") this.sideButtonCount++;
+		if (zero || mouseOnly || verdict === "side-button") this.sideButtonCount++;
 		const text = formatEvent(ev);
 		// A line with a note (what the plugin made of the event) is never folded into or over.
-		const foldable = (ev.kind === "pointermove" || ev.kind === "pointerrawupdate") && !ev.note;
+		const foldable = FOLDABLE.has(ev.kind) && !ev.note;
 		const key = `${ev.kind}|${ev.pointerType}|${ev.button}|${ev.buttons}|${ev.isPrimary}`;
-		const last = this.lines[this.lines.length - 1];
-		if (foldable && last && !last.noted && last.key === key) {
-			last.count++;
-			last.text = text;
-			return;
+		if (foldable) {
+			// Fold into the newest matching line among the trailing foldable ones (pointermove, mousemove and
+			// pointerrawupdate of one hover interleave).
+			for (let i = this.lines.length - 1; i >= 0 && i >= this.lines.length - FOLD_LOOKBACK; i--) {
+				const line = this.lines[i]!;
+				if (line.noted || !line.foldable) break;
+				if (line.key === key) {
+					line.count++;
+					line.text = text;
+					return;
+				}
+			}
 		}
-		this.lines.push({ key, text, count: 1, noted: !!ev.note });
+		this.lines.push({ key, text, count: 1, noted: !!ev.note, foldable });
 		if (this.lines.length > this.max) this.lines.shift();
 	}
 
 	clear(): void {
 		this.lines = [];
 		this.sideButtonCount = 0;
+		this.counts.clear();
+		this.total = 0;
 		this.detector.reset();
 		this.chord.up();
 	}
@@ -509,5 +623,10 @@ export class EventLog {
 
 	text(): string {
 		return this.lines.map((l) => (l.count > 1 ? `${l.text} (x${l.count})` : l.text)).join("\n");
+	}
+
+	/** "pointermove 120, pointerdown 2, ...": how many events of each type arrived, most frequent first. */
+	countsText(): string {
+		return [...this.counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k, n]) => `${k} ${n}`).join(", ");
 	}
 }

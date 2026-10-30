@@ -606,7 +606,11 @@ export class NotebookView extends FileView {
 				window.setTimeout(() => this.gestures?.releaseContacts(), 0);
 			},
 			sideButtonSeen: () => this.noteSideButtonSeen(),
-		}, { rawUpdates: this.host.settings.lowLatencyInk });
+		}, {
+			rawUpdates: this.host.settings.lowLatencyInk,
+			// 0.11.1: the side button is also watched at window level over the whole view (toolbar, bars, overlays).
+			scope: this.contentEl,
+		});
 		this.pageMode = new PageMode(this.stage, {
 			viewport: () => this.viewport,
 			viewSize: () => this.viewSize,
