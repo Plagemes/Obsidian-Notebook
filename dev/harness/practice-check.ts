@@ -53,7 +53,9 @@ export async function checkPractice(api: PracticeCheckApi): Promise<{ ok: boolea
 		type: "add",
 		record: newRecord({ practice: { doc: doc.id, page: copy.page.id }, original: { doc: doc.id, page: original.id }, n: 1, hide: spec }),
 	});
-	add("the link is written to the sidecar", linked === true && !!vault.getFileByPath("Notebooks/_meta/practice.json"));
+	// One sidecar file per device (`practice-<device>.json`); the old shared `practice.json` is never written.
+	const sidecars = vault.getFiles().filter((f: { path: string }) => /^Notebooks\/_meta\/practice-[0-9a-f]{8}\.json$/.test(f.path));
+	add("the link is written to this device's sidecar", linked === true && sidecars.length === 1 && !vault.getFileByPath("Notebooks/_meta/practice.json"));
 	await frames(3);
 	await sleep(100);
 
