@@ -4936,3 +4936,96 @@ body {
 	opacity: 0.45;
 	mix-blend-mode: screen;
 }
+
+/* wave 0.10: pinned, archived and manual order in the library (roadmap 54); library check (roadmap 27) */
+.notebook-lib-group {
+	grid-column: 1 / -1;
+	margin-top: 4px;
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+}
+
+.notebook-lib-content > .notebook-lib-hint {
+	margin: 0 0 10px;
+}
+
+.notebook-lib-pin {
+	position: absolute;
+	top: 6px;
+	left: 6px;
+	z-index: 1;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	background: var(--background-primary);
+	box-shadow: var(--nb-shadow-2);
+	color: var(--interactive-accent);
+}
+
+.notebook-lib-pin svg {
+	width: 13px;
+	height: 13px;
+}
+
+.notebook-lib-card[data-drop-card].is-drop-target {
+	outline: 2px solid var(--interactive-accent);
+	background: var(--background-modifier-hover);
+}
+
+.modal.notebook-libcheck-modal {
+	width: min(640px, 92vw);
+}
+
+.notebook-libcheck-section {
+	margin-top: var(--size-4-3);
+}
+
+.notebook-libcheck-section h4 {
+	margin: 0 0 var(--size-4-1);
+}
+
+.notebook-libcheck-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-2);
+	max-height: 40vh;
+	overflow-y: auto;
+}
+
+.notebook-libcheck-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-4-2);
+	padding-bottom: var(--size-4-2);
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.notebook-libcheck-text {
+	min-width: 0;
+}
+
+.notebook-libcheck-name {
+	word-break: break-all;
+	user-select: text;
+}
+
+.notebook-libcheck-detail {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.notebook-libcheck-paths {
+	max-height: 20vh;
+	overflow-y: auto;
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	word-break: break-all;
+}

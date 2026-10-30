@@ -306,6 +306,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	// wave 0.7: safety checks of the whole notebooks folder (also from the settings tab).
 	global("sync-check", "command.syncCheck", "refresh-cw", "app", ["sheet", "notebook", "palette"], 15),
 	global("check-integrity", "command.checkIntegrity", "shield-check", "app", ["sheet", "notebook", "palette"], 15),
+	// wave 0.10 (27): unreadable notebooks and unused attachment files; the library sidebar has the same entry.
+	global("library-check", "command.libraryCheck", "hard-drive", "app", ["sheet", "notebook", "library", "palette"], 15),
 
 	// --- diagnostics: settings tab and palette.
 	global("pen-button-test", "command.penTest", "pen-tool", "dev", ["palette"], 5),
