@@ -672,7 +672,7 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 364. **P1** 🧪 Quick switcher for pages across all notebooks.
 365. **P1** 🧪 Recently edited pages across all notebooks.
 366. **P1** 🧪 Go to page by typing its number.
-367. **P2** Night mode: dark page display without changing the stored ink colours.
+367. **P2** 🧪 Night mode: dark page display without changing the stored ink colours.
 368. **P3** Projector and high-contrast mode.
 369. **P3** One-hand mode on phones.
 370. **P2** Adjustable toolbar size and large icons.
@@ -683,7 +683,7 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 375. **P2** Workspace presets, e.g. "lecture" (slides, notebook, outline) with one command.
 
 ### PDF
-376. **P2** View-only crop of a PDF's white margins, for small screens.
+376. **P2** 🧪 View-only crop of a PDF's white margins, for small screens.
 377. **P3** Reflowed reading mode for a PDF's text on phones.
 
 ### Pages and notebooks
@@ -692,8 +692,8 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 380. **P2** 🧪 Heavy page warning, with an offer to split the page.
 
 ### Export and Obsidian
-381. **P2** Export choices: ink only, background only, or both.
-382. **P2** Export a notebook as Markdown with page images, for people without Obsidian.
+381. **P2** 🧪 Export choices: ink only, background only, or both.
+382. **P2** 🧪 Export a notebook as Markdown with page images, for people without Obsidian.
 383. **P3** Obsidian Publish support: pages published as images.
 384. **P2** Notebook commands in the Obsidian mobile toolbar.
 385. **P2** Bookmark a notebook page in Obsidian's Bookmarks pane.
