@@ -101,6 +101,7 @@ import { TextEditor, type TextEditSession } from "./text-editor";
 import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites";
 import { PenControls, type PenStore } from "./pen-controls";
 import { PdfReading, type ReadingHost } from "./pdf-reading";
+import type { PracticeHooks, PracticeProvider, PracticeViewHost } from "./practice-types";
 import { DEFAULT_TOOLS, Toolbar, type ToolName, type ToolbarState } from "./toolbar";
 import { hasBackgrounds, hasPdfPages } from "./reading-logic";
 import { commandApplies, runViewAction, sizeName, type ActionArg } from "./view-actions";
@@ -148,6 +149,8 @@ export interface NotebookHost {
 	journal?: JournalStore;
 	/** Persists the plugin settings (favourite pens, eraser size, pen-only). Optional: absent in tests. */
 	saveSettings?(): Promise<void>;
+	/** Wave 0.9: practice copies of exercises (view/practice.ts). Optional: absent in tests and the harness. */
+	practice?: PracticeProvider;
 	/** ui redesign: the course of the class on now (timetable), for the lecture contextual bar. Optional. */
 	classNow?(): string | null;
 	/** ui redesign: runs a plugin-level action of the registry (notebook menu). Optional. */
@@ -342,6 +345,8 @@ export class NotebookView extends FileView {
 
 	/** Wave 0.6 (#106): the synchronised PDF pane, when one is open (view/pdf-sync.ts). */
 	syncHooks: PageSyncHooks | null = null;
+	/** Wave 0.9 (#303): the practice banner and commands of this view (view/practice.ts). */
+	practiceHooks: PracticeHooks | null = null;
 
 	private lastBackupPath: string | null = null;
 	private lastErrorAt = 0;
@@ -548,6 +553,7 @@ export class NotebookView extends FileView {
 			},
 		});
 		this.reading = new PdfReading(this.readingHost());
+		this.practiceHooks = this.host.practice?.attach(this.practiceHost()) ?? null;
 		this.applySettings(this.host.settings);
 
 		this.resizeObserver = new ResizeObserver(() => this.measure());
@@ -610,6 +616,8 @@ export class NotebookView extends FileView {
 		this.pens = null;
 		this.reading?.destroy();
 		this.reading = null;
+		this.practiceHooks?.destroy();
+		this.practiceHooks = null;
 		this.toolbar?.destroy();
 		this.controller?.destroy();
 		this.controller = null;
@@ -1771,6 +1779,21 @@ export class NotebookView extends FileView {
 		if (ctx) await runMovePages(ctx, this.host.settings, [index]);
 	}
 
+	/** Wave 0.9 (#303): what the practice flows may do with this view (view/practice*.ts). */
+	practiceHost(): PracticeViewHost {
+		return {
+			app: this.app,
+			file: this.file,
+			body: this.body,
+			doc: () => this.session?.doc ?? null,
+			editContext: () => this.editContext(),
+			currentPage: () => this.currentPageIndex(),
+			goToPage: (index) => this.scrollToPage(index),
+			selectedStrokes: () => (this.selection ? { pageIndex: this.selection.pageIndex, strokes: this.selection.strokes } : null),
+			setPeek: (pageIndex, strokes) => this.renderer?.setPeek(strokes ? { pageIndex, strokes } : null),
+		};
+	}
+
 	// --- document ---
 
 	private requireDoc(): NotebookDocument {
@@ -1875,6 +1898,7 @@ export class NotebookView extends FileView {
 			if (this.file) this.location.note(this.file.path, this.currentPageIndex() + 1);
 			void checkConflicts(this.reliabilityDeps(), this);
 			this.syncHooks?.loaded();
+			this.practiceHooks?.loaded();
 		} else {
 			this.body.hide();
 			this.toolbar.setEditable(false);
@@ -1967,6 +1991,7 @@ export class NotebookView extends FileView {
 		const n = this.shownDoc()?.pages.length ?? 0;
 		const current = n ? this.currentPageIndex() : -1;
 		this.toolbar.setPage(n ? current + 1 : 0, n);
+		if (n) this.practiceHooks?.page(current);
 		if (n && this.file) this.pageClock.note(this.file.path, current, new Date());
 		this.scheduleHeavyCheck();
 		if (current !== this.navCurrent) {

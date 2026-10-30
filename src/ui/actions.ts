@@ -193,6 +193,13 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "page-restore-version", label: "page.restoreVersion", icon: "history", group: "page", surfaces: ["page"], priority: 20, scope: "view" },
 	{ id: "page-deleted-pages", label: "page.deletedPages", icon: "archive-restore", group: "page", surfaces: ["page"], priority: 20, scope: "view", keywords: "trash restore" },
 	{ id: "page-split", label: "heavy.split", icon: "split", group: "page", surfaces: ["page", "banner"], priority: 45, scope: "view", when: (c) => !!c.page?.splittable, keywords: "heavy large slow" },
+	// wave 0.9 (#303): practice copies of exercises (view/practice.ts). Only "redo" is in the page sheet: the strip over a
+	// practice page has the other buttons, the commands are in the palette.
+	{ id: "practice-redo", label: "page.redoExercise", icon: "rotate-ccw", group: "page", surfaces: ["page"], priority: 28, scope: "view", command: "command.practiceRedo", keywords: "practice attempt repeat hide solution exam" },
+	{ id: "practice-peek", label: "command.practicePeek", icon: "eye", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
+	{ id: "practice-original", label: "command.practiceOriginal", icon: "corner-up-left", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
+	{ id: "practice-attempts", label: "command.practiceAttempts", icon: "list-ordered", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
+	{ id: "practice-timer", label: "command.practiceTimer", icon: "timer", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
 	{ id: "page-delete", label: "page.delete", icon: "trash-2", group: "page", surfaces: ["page"], priority: 10, scope: "view", danger: true, enabled: (c) => c.editable && (c.page?.count ?? 0) > 1 },
 
 	// --- PDF and reading: the contextual bar of a PDF page, and the sheet.

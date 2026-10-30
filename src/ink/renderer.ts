@@ -109,6 +109,12 @@ export interface LassoOverlay {
 	points: ReadonlyArray<readonly [number, number]>;
 }
 
+/** Strokes drawn over a page for a moment and never saved (the "peek at the solution" of a practice copy), page coordinates. */
+export interface PeekOverlay {
+	pageIndex: number;
+	strokes: readonly Stroke[];
+}
+
 /** Ruler placed on a page, drawn on the live layer (page coordinates). */
 export interface RulerOverlay {
 	pageIndex: number;
@@ -197,6 +203,7 @@ export class Renderer {
 	private live: LiveStroke | null = null;
 	private lasso: LassoOverlay | null = null;
 	private selection: SelectionOverlay | null = null;
+	private peek: PeekOverlay | null = null;
 	/** Content shown shifted while the insert/remove-space tool is dragged (hidden from the static layer meanwhile). */
 	private spacePreview: readonly SpacePreviewEntry[] | null = null;
 	private hidden: ReadonlySet<Stroke> | null = null;
@@ -629,6 +636,13 @@ export class Renderer {
 		this.schedule();
 	}
 
+	/** Strokes of another page drawn over this one while a button is held (wave 0.9: practice); view only, null removes them. */
+	setPeek(peek: PeekOverlay | null): void {
+		this.peek = peek;
+		this.liveDirty = true;
+		this.schedule();
+	}
+
 	/** Straight edge drawn over the page (null hides it). */
 	setRuler(ruler: RulerOverlay | null): void {
 		this.ruler = ruler;
@@ -956,6 +970,22 @@ export class Renderer {
 				}
 				ctx.restore();
 			}
+		});
+
+		const peek = this.peek;
+		if (peek && peek.strokes.length > 0 && boxes[peek.pageIndex]) this.guarded(ctx, "peek", () => {
+			const visibleDoc = this.visibleRect();
+			const box = boxes[peek.pageIndex]!;
+			const minY = visibleDoc.minY - box.y;
+			const maxY = visibleDoc.maxY - box.y;
+			this.beginPage(ctx, box);
+			ctx.globalAlpha = 0.85;
+			for (const stroke of peek.strokes) {
+				const b = this.boundsOf(stroke);
+				if (b.maxY + stroke.width < minY || b.minY - stroke.width > maxY) continue;
+				this.fillStroke(ctx, stroke);
+			}
+			ctx.restore();
 		});
 
 		const ruler = this.ruler;

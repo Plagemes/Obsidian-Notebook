@@ -28,6 +28,7 @@ import { initPdfSync } from "./view/pdf-sync";
 import { registerZettel } from "./zettel";
 import { openInbox, processNextInbox } from "./zettel/inbox";
 import { registerTextbookRefs } from "./view/textbook-ref-ui";
+import { PracticeService } from "./view/practice";
 import { openPageSwitcher, QuickNavService } from "./view/quick-switcher";
 import { openRecentPages, RecentPagesService } from "./view/recent-pages";
 import { SyncSafetyService } from "./view/sync-safety";
@@ -43,6 +44,8 @@ export default class NotebookPlugin extends Plugin {
 	recentPages!: RecentPagesService;
 	/** Public API for other plugins and scripts (docs/api.md). */
 	api?: NotebookApi;
+	/** Wave 0.9: practice copies of exercises (view/practice.ts); the views attach to it. */
+	practice!: PracticeService;
 	/** ui redesign: the plugin-level actions of the registry (ui/actions.ts), by id. */
 	private globalActions: Record<string, () => void> = {};
 	/** wave 0.7: sync safety (presence files, sync check). */
@@ -57,6 +60,7 @@ export default class NotebookPlugin extends Plugin {
 		// wave 0.8 (374): notices and non-urgent background work wait while the pen is on the screen.
 		trackWriting(this);
 
+		this.practice = new PracticeService(this);
 		this.journal = new AdapterJournalStore(this.app.vault.adapter, journalFolder(this.app, this.manifest.id));
 		this.syncSafety = new SyncSafetyService(this);
 		this.syncSafety.register();
@@ -127,6 +131,9 @@ export default class NotebookPlugin extends Plugin {
 		registerZettel(this);
 		// wave 0.8: quick textbook reference (roadmap 208): "p. 134" in a text box opens the textbook at that page
 		registerTextbookRefs(this, () => this.settings.folder);
+
+		// wave 0.9: redo the exercise (#303): practice copies, attempts, peek, timer (view/practice.ts)
+		this.practice.start();
 
 		// wave 0.6: timetable (src/timetable/): current class offer, library shortcut, editor.
 		this.timetable = new TimetableService(this, (file) => this.host.openNotebook(file));

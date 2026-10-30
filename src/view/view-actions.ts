@@ -163,6 +163,12 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	}),
 	"page-restore-version": onPage((v, _p, i) => openPageRestore(v.reliabilityDeps(), v, i)),
 	"page-deleted-pages": (v) => void openDeletedPages(v.pageToolsHost()),
+	// practice copies (wave 0.9, view/practice.ts)
+	"practice-redo": onPage((v, _p, i) => void v.practiceHooks?.redo(i)),
+	"practice-peek": (v) => v.practiceHooks?.togglePeek(),
+	"practice-original": (v) => void v.practiceHooks?.goToOriginal(),
+	"practice-attempts": (v) => void v.practiceHooks?.attempts(),
+	"practice-timer": (v) => v.practiceHooks?.toggleTimer(),
 	"page-split": onPage((v, _p, i) => v.splitHeavyPage(i)),
 	"page-delete": onPage((v, p, i) => {
 		const doc = v.editableDocument();
