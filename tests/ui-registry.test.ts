@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ACTIONS, activeContexts, baseContext, isEnabled, isRelevant, type UiContext } from "../src/ui/actions";
 import { placementsOf } from "../src/ui/layout";
 
-import i18n from "../src/i18n.ts?raw";
+import enSrc from "../src/i18n/en.ts?raw";
 
 /** The text of every source file, by path ("../src/…"). */
 const SOURCES = import.meta.glob<string>("../src/**/*.ts", { query: "?raw", import: "default", eager: true });
@@ -54,7 +54,7 @@ describe("action registry", () => {
 	});
 
 	it("uses label and command names that exist in the English strings", () => {
-		const en = i18n.slice(0, i18n.indexOf("} as const;"));
+		const en = enSrc;
 		for (const a of ACTIONS) {
 			expect(en.includes(`"${a.label}":`), `${a.id}: ${a.label}`).toBe(true);
 			if (typeof a.command === "string") expect(en.includes(`"${a.command}":`), `${a.id}: ${a.command}`).toBe(true);

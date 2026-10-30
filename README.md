@@ -9,7 +9,7 @@ Handwritten notebooks inside your Obsidian vault, designed first for **Android t
 - Local-first: no account, no cloud, no telemetry.
 - UI in English, and in Italian when Obsidian is set to Italian.
 
-> **Status: v0.9.0 (document format 9), early development.** The automated tests pass, but the plugin has **not been verified on Android hardware yet**, and most features are new in 0.5.x, 0.6.0, 0.7.0, 0.8.0 and 0.9.0 (the interface was redesigned in 0.7.0; markers, pen gestures and page operations came in 0.8.0; equations, graphs, export choices and night mode came in 0.9.0) and many are experimental (including the writing engine, the scanner, export and, in 0.9.0, equations, which have never been run with Obsidian's maths engine outside a test stand-in: the PDF and SVG were checked with other software on a PC, not opened on Android). See [docs/testing.md](docs/testing.md) for what is verified and how to test it.
+> **Status: v0.11.0 (document format 10), early development.** The automated tests pass, but the plugin has **not been verified on Android hardware yet**, and most features are new in 0.5.x, 0.6.0, 0.7.0, 0.8.0 and 0.9.0 (the interface was redesigned in 0.7.0; markers, pen gestures and page operations came in 0.8.0; equations, graphs, export choices and night mode came in 0.9.0) and many are experimental (including the writing engine, the scanner, export and, in 0.9.0, equations, which have never been run with Obsidian's maths engine outside a test stand-in: the PDF and SVG were checked with other software on a PC, not opened on Android). See [docs/testing.md](docs/testing.md) for what is verified and how to test it.
 
 ## Usage
 
@@ -129,6 +129,19 @@ All of this is new in 0.10.0 and **not verified on Android hardware**; the manua
 - **Library**: pin notebooks, archive them, order them by hand, and **Check library** (unreadable notebooks, unused files moved inside the vault, never deleted).
 - **Read-only mode** per notebook view; **Export…** to PNG images, page ranges for every format, and **Print** (desktop).
 - **Free colour picker** with recent colours, a page **eyedropper** and a **style eyedropper** (colour, width and tool from a stroke).
+
+### Language (0.10.1)
+
+- **Interface language** (*Settings, Language*): Automatic (follows Obsidian), English or Italiano. Command names follow the language chosen at startup. Not verified on Android hardware (manual steps 380-383 in `docs/testing.md`).
+
+### Anchored excerpts (0.11.0)
+
+New in 0.11.0 and **not verified on Android hardware**; the manual steps are in [docs/testing.md](docs/testing.md) (steps 384-403). This version writes **document format 10**: notebooks saved by 0.11.0 open read-only (with a backup) in 0.10.x and older.
+
+- **Excerpt to page…**: lasso something (or, with nothing selected, drag over a region, for example a figure of a PDF page), choose the target page (this page, the next one, a new page, a number or a bookmark) and the region is placed there as an excerpt you can move and resize.
+- **Copy as excerpt**: the same, onto the clipboard, to paste on a page of another notebook.
+- **Tap the corner badge** (or *Go to source*) to jump back to the exact place it came from, even in another notebook and in read-only mode; the region is outlined for a moment.
+- An excerpt of a page of the same notebook follows its source live; otherwise it shows a snapshot taken when it was made. A source page or notebook that is gone never breaks anything: the excerpt keeps its picture and says "Source not found".
 
 ### PDFs and scans
 
@@ -294,7 +307,7 @@ Enable USB debugging on the device, connect it to a PC with Chrome and open `chr
 
 ## File format
 
-A `.notebook` file is JSON with `format: "obsidian-notebook"` and an integer `version` (currently 9). Version 2 added the highlighter, 3 the paper kinds, 4 the notebook metadata, assets, PDF/image page backgrounds, text and image elements, infinite pages and the shape tool, and 5 a per-stroke `render` field (1 = the previous pen look, kept for every existing stroke; 2 = the new ink engine), 6 optional page margins (files saved by 0.5.0 with margins open read-only in 0.4.x), and 7 bookmark details, page tags, the last reading position and the new paper kinds (files saved by 0.6.0 open read-only in 0.5.x, with a backup), and 8 markers, structured boxes and hidden (invisible) ink (files saved by 0.8.0 open read-only in 0.7.x, with a backup), and 9 equations and function graphs (files saved by 0.9.0 open read-only in 0.8.x, with a backup). Older notebooks open normally and are rewritten in the current version only when you edit them; after that, **older versions of the plugin open them read-only** (and keep a backup copy) instead of editing them. Coordinates are in typographic points (A4 = 595.28 × 841.89 pt). PDFs and images are not inside the file: they are in `<notebooks folder>/_assets/` and referenced by id. Details and the reasoning behind the format choice are in [docs/architecture.md](docs/architecture.md).
+A `.notebook` file is JSON with `format: "obsidian-notebook"` and an integer `version` (currently 10). Version 2 added the highlighter, 3 the paper kinds, 4 the notebook metadata, assets, PDF/image page backgrounds, text and image elements, infinite pages and the shape tool, and 5 a per-stroke `render` field (1 = the previous pen look, kept for every existing stroke; 2 = the new ink engine), 6 optional page margins (files saved by 0.5.0 with margins open read-only in 0.4.x), and 7 bookmark details, page tags, the last reading position and the new paper kinds (files saved by 0.6.0 open read-only in 0.5.x, with a backup), and 8 markers, structured boxes and hidden (invisible) ink (files saved by 0.8.0 open read-only in 0.7.x, with a backup), and 9 equations and function graphs (files saved by 0.9.0 open read-only in 0.8.x, with a backup), and 10 anchored excerpts (files saved by 0.11.0 open read-only in 0.10.x, with a backup). Older notebooks open normally and are rewritten in the current version only when you edit them; after that, **older versions of the plugin open them read-only** (and keep a backup copy) instead of editing them. Coordinates are in typographic points (A4 = 595.28 × 841.89 pt). PDFs and images are not inside the file: they are in `<notebooks folder>/_assets/` and referenced by id. Details and the reasoning behind the format choice are in [docs/architecture.md](docs/architecture.md).
 
 Backups of unreadable files, of versions changed elsewhere (conflicts), of changes that could not be saved and of journals that could not be applied are written to `Notebooks/_backup/` as `.bak` files; version snapshots go to `Notebooks/_backup/history/`. Obsidian does not show these folders in the file explorer; open them with a file manager. If you sync the vault, sync `_assets` and `_backup` too (with Obsidian Sync, turn on **Other types** so that `.notebook` files, PDFs and snapshots are synced). The journal and the library index live in the plugin folder and are not meant to be synced.
 

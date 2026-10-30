@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import i18n from "../src/i18n.ts?raw";
+import enSrc from "../src/i18n/en.ts?raw";
+import itSrc from "../src/i18n/it.ts?raw";
 import { ACTIONS, baseContext, isChecked, type UiContext } from "../src/ui/actions";
 import { buildSheet, contextBar } from "../src/ui/layout";
 import toolbarSource from "../src/view/toolbar.ts?raw";
@@ -490,9 +491,8 @@ describe("registry and bar placement (wave 0.10)", () => {
 	});
 
 	it("gives every new action an English and an Italian string for its label and command", () => {
-		const src = i18n;
-		const en = src.slice(0, src.indexOf("} as const;"));
-		const it = src.slice(src.indexOf("const it:"));
+		const en = enSrc;
+		const it = itSrc;
 		const mine = ACTIONS.filter((a) => /^(select-|selection-(align|distribute|rotate|mirror|resize|transform|similar))/.test(a.id));
 		expect(mine.length).toBeGreaterThanOrEqual(20);
 		for (const a of mine) {

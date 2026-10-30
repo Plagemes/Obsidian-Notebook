@@ -1,14 +1,14 @@
 # Changelog
 
-## Unreleased (format v10)
+## 0.11.0 — 2026-10-30
 
-Anchored excerpts and format v10 ship in the release after 0.10 (0.11); this section is kept apart from the 0.10 entries below so it can be split at release.
+Not yet verified on Android hardware or in Obsidian. Document format v10: notebooks saved by 0.11.0 open read-only (with a backup) in 0.10.x and older. Manual steps 384–403 in `docs/testing.md`.
 
 ### Upgrade notes
-- **Document format v10** (0.9 and 0.10 write v9). Notebooks saved by this version open **read-only** (with a backup) in 0.10.x, 0.9.x and older builds, which read up to v9. v9 files are read unchanged and rewritten as v10 only on the first edit. The only change is the new `excerpt` element; nothing else changes in how notebooks are saved.
+- **Document format v10** (0.10 wrote v9). Notebooks saved by 0.11.0 open **read-only** (with a backup) in 0.10.x, 0.9.x and older builds, which read up to v9. v9 files are read unchanged and rewritten as v10 only on the first edit. The only change is the new `excerpt` element; nothing else changes in how notebooks are saved.
 
 ### Added
-- **Anchored excerpts** (roadmap 105, format v10; manual steps 400-419). Cut a region of a page (a PDF page or any other page) and drop it on another page; the excerpt remembers exactly where it came from.
+- **Anchored excerpts** (roadmap 105, format v10; manual steps 384-403). Cut a region of a page (a PDF page or any other page) and drop it on another page; the excerpt remembers exactly where it came from.
   - *Excerpt to page…* on the contextual bar of a lasso selection, on the lasso bar with nothing selected, in the *All actions* sheet (Insert) and as a command. With a selection the region is the selection's box (plus 4 pt); with nothing selected the next drag on a page outlines the region. The go-to-page picker then asks where it goes: this page, the next page, a new page after this one, or any page by number or bookmark. The excerpt is placed at the region's size (scaled down to fit the page), selected, and added in one undo step.
   - *Copy as excerpt* (same places) puts the excerpt on the plugin clipboard: paste it (lasso → *Paste*) on any page of **any notebook**.
   - The excerpt is an element like a picture: it can be selected, moved and resized with the lasso (uniformly: it never rotates or stretches), copied, duplicated, deleted, reordered among pictures, and ink written on it moves with it.
@@ -18,6 +18,13 @@ Anchored excerpts and format v10 ship in the release after 0.10 (0.11); this sec
 
 ### Changed
 - *Page information* counts excerpts; the files of a page include excerpt snapshots; the library check never reports a snapshot as unused; the PNG export and printing draw the snapshot; the clipboard between devices and the lasso across pages carry excerpts. Every path that copies pages or elements (duplicate, page restore, page trash, *Move to notebook…*, templates, stamps, clipboard, conflicted-copy merge, repair) keeps excerpts and brings their snapshot asset along.
+
+## 0.10.1 — 2026-10-30
+
+Not yet verified on Android hardware or in Obsidian. No change to the notebook format (still v9). Manual steps 380-383 in `docs/testing.md`.
+
+### Added
+- **Language setting** (*Settings, Language*): Automatic (follows Obsidian, default), English or Italiano; applies at once to the settings tab and to anything opened afterwards. Open notebooks update when reopened, and command names follow the language chosen at startup (a notice says so). The message tables now live in `src/i18n/en.ts` and `src/i18n/it.ts` with a `LANGUAGES` registry, so adding a language is one file; `tests/i18n.test.ts` checks that English and Italian have the same keys, that every key used by `t("…")` in `src/` exists, that no key was dropped, plus empty strings, `{placeholders}` and duplicate keys.
 
 ## 0.10.0 — 2026-10-30
 

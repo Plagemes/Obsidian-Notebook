@@ -1,7 +1,7 @@
 import { trackWriting } from "./view/writing-quiet";
 import { showNotice } from "./view/notice";
 import { Platform, Plugin, type TFile } from "obsidian";
-import { t } from "./i18n";
+import { onLanguageChanged, setUiLanguage, t } from "./i18n";
 import { readSettings, type NotebookSettings } from "./settings";
 import { positionEquals, type SavedPosition } from "./ink/view-position";
 import { stressDocument } from "./model/stress";
@@ -66,6 +66,9 @@ export default class NotebookPlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		this.settings = readSettings(await this.loadData());
+		// Command names (below) are registered once, so they follow the language at startup.
+		setUiLanguage(this.settings.uiLanguage);
+		this.register(onLanguageChanged(() => showNotice(t("settings.uiLanguage.changed"))));
 		// wave 0.8 (374): notices and non-urgent background work wait while the pen is on the screen.
 		trackWriting(this);
 
