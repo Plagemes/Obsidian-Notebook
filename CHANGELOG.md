@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.5.2 — unreleased
+
+Hotfix for 0.5.1. Not verified on Android hardware (see `docs/testing.md`). What the S Pen really sends was observed by the user on a Samsung tablet with the Pen button test and Chrome's pen-tracker page; the chorded press during contact (item 3 of *Fixed*) is a hypothesis from one observation and may not hold.
+
+### Fixed
+- **The radial menu could not be reached on a Samsung tablet.** With Air command off, the Pen button test saw no event at all when the S Pen side button was pressed *on the page it was tested in*, while Chrome on the same tablet shows the button as a primary press with zero pressure. The menu is now reachable in four ways:
+  1. **Side button pressed while the pen hovers** (Samsung / Chromium): `pointerdown` with `button 0`, `buttons 1` and `pressure` exactly 0 (a real nib contact has pressure above 0), also `buttons` going 0 to 1 in a pen `pointermove` / `pointerrawupdate` with pressure 0. It only counts for a pointer that was hovering just before (`buttons 0` seen for the same `pointerId`), never draws and never erases from the pressure-0 phase, and can be switched off (*A zero-pressure press is the side button*). Press the button *before* touching the page: pressed after the nib is down, `buttons` is already 1 and it cannot be told apart.
+  2. **Hold the pen still** on the page (see *Changed*).
+  3. **Side button pressed while the nib touches** (experimental, setting *Side button pressed while writing*): a dispatched pen `pointermove` / `pointerrawupdate` with `button 0` (instead of -1) while `buttons` stays 1 finishes the stroke so far (kept, never discarded) and the contact then acts as the button's tool until the next such event or the lift. Never from `pointerdown`, never from coalesced or predicted events, only after an ordinary move was seen in the contact, not within 40 ms of the landing, debounced 120 ms; a device whose moves all carry `button 0` never triggers it.
+  4. **Finger long-press** (see *Added*).
+- The side-button signals that other devices may deliver (`buttons & 2`, `contextmenu`, `auxclick`, a mouse right button after pen activity) are kept.
+- Honest texts (English and Italian): the *Pen side button* setting says the button works on Samsung only with the pen hovering, that it may never reach Obsidian on some devices, and names the two alternatives; the Pen button test shows *No side-button signal received yet on this device* until one arrives.
+
+### Changed
+- **Pen side button** default is now **Radial menu on click, erase while held**: with the pen hovering, press and release the button to open the menu on the release (at the pen position); press the button and then touch the page to erase (current eraser mode, size and filter) for as long as the contact lasts in that button session; no menu then. New options: *Lasso while held* and *Previous tool while held* (the others: radial menu only, erase while held, nothing). The setting is stored under a new key (`penSideButton`): the 0.5.x default "radial" is not carried over, an explicit "erase while held" or "nothing" is.
+- **Open the radial menu by holding the pen still** is more robust and **on by default only while the device has never delivered a side-button signal** (the app remembers the first signal in the settings: `penButtonSeen`). Once one has arrived the default is off; an explicit choice always wins. The pen must be still from the very first contact: 700 ms (was 600 ms) within 6 px of where it landed. Once the stroke has moved it can never open the menu, however long it then rests, so dots, slow strokes and pauses in a stroke are safe. The discarded stroke leaves no dot and nothing for undo, and the pen is not left "down" for palm rejection afterwards. Never for the eraser end; needs the side button action to open the radial menu.
+- The Pen button test shows the event type and the pointer id on every line, labels the pressure-0 press (*side button (pressure 0 primary press)*), the touch while it is held, the lift and the release (with *click: opens the menu*), and `pointermove` with `button 0` during contact as *possible side button*. A pressure-0 press counts as a side-button signal and turns the hold-still default off.
+
+### Added
+- **Finger long-press opens the radial menu** at the finger (setting *Open the radial menu with a finger long-press*, on by default): a finger still for 500 ms within 10 px, only while finger drawing is off (pen-only), only a single finger, and not when the palm-rejection window says a pen is near. The ring opens beside the finger, not under it, so the fingertip does not cover the sectors. A pan, a pinch or a two-finger tap that starts before 500 ms is not affected.
+
 ## 0.5.1 — 2026-10-30
 
 Hotfix for 0.5.0. Not verified on Android hardware (see `docs/testing.md`); how the S Pen button is reported is the open question.
