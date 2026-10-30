@@ -1,7 +1,7 @@
 import { InputPolicy, heldToolOf, opensRadial } from "./input-policy";
 import {
-	DEFAULT_BUTTON_WINDOWS, EraserNextArm, HoverClickTracker, contactVerdict, heldBeforeContact, hoverClickAction, hoverMenuPosition, isTextField,
-	type ButtonWindows, type ClientPoint,
+	DEFAULT_BUTTON_WINDOWS, EraserNextArm, HoverClickTracker, STILL_RADIUS_PX, clampWindows, contactVerdict, heldBeforeContact, hoverClickAction,
+	hoverMenuPosition, isTextField, type ButtonWindows, type ClientPoint,
 } from "./pen-hover";
 import { ErrorOnce } from "./errors";
 import {
@@ -84,8 +84,12 @@ export function isNewSample(lastT: number, lastX: number, lastY: number, t: numb
 }
 
 export interface PointerHandlers {
-	/** `eraser`: the pen has its eraser button pressed or is flipped. Return false to reject the stroke. */
-	drawStart(sample: InkSample, eraser: boolean, held?: "lasso" | "previous" | "gesture"): boolean;
+	/**
+	 * `eraser`: the pen has its eraser button pressed or is flipped. Return false to reject the stroke. `continued`: the
+	 * same contact goes on after its ink so far was committed (the side button pressed while writing): what that ink
+	 * committed is kept as it is, so this part of the contact (eraser or held tool) never touches it.
+	 */
+	drawStart(sample: InkSample, eraser: boolean, held?: "lasso" | "previous" | "gesture", continued?: boolean): boolean;
 	/**
 	 * New samples of the drawing pointer (never repeated: each sample is delivered once, whether it
 	 * came from `pointerrawupdate` or `pointermove`) and the browser's predicted samples (may be empty).
@@ -105,6 +109,12 @@ export interface PointerHandlers {
 	sideButtonSeen?(): void;
 	/** 0.11.2: "next stroke erases" was armed or disarmed (the toolbar shows it on the current-pen indicator). */
 	eraserNextChanged?(armed: boolean): void;
+	/**
+	 * The side button turned out to be held at a contact that has already lifted (its `contextmenu` came after a short
+	 * flick): drop the stroke that contact committed, as one undo step, so it can be replayed as the button's tool.
+	 * False when that stroke cannot be dropped (nothing committed, or the history moved on): nothing is replayed then.
+	 */
+	retractStroke?(): boolean;
 }
 
 interface NavPointer {
@@ -211,6 +221,13 @@ export class PointerController {
 	private trailOn = false;
 	private contactDownT = -Infinity;
 	private lastP = 0;
+	/** Whether the nib has stayed within `STILL_RADIUS_PX` of where it landed (a nib long-press, not the button). */
+	private readonly contactStill = new StillHold(STILL_RADIUS_PX);
+	/**
+	 * The last pen contact that lifted: when it landed, whether it rested still, and whether it was an ordinary stroke
+	 * whose whole path is in `trail` (it can be replayed as the button's tool if the button's `contextmenu` comes late).
+	 */
+	private lastContact: { downT: number; still: boolean; replayable: boolean } | null = null;
 	/** A bare contextmenu with no contact: the button clicked while hovering, unless a pen contact starts within `beforeMs`. */
 	private pendingClick: { t: number; x: number; y: number } | null = null;
 	private pendingClickTimer: number | null = null;
@@ -501,7 +518,11 @@ export class PointerController {
 		const pressed = this.barrelPointer("down", e);
 		if (pressed) this.handlers.sideButtonSeen?.();
 		// A pen near ends a finger long-press in the making (a second finger does too, in armFingerHold).
-		if (e.pointerType === "pen") this.cancelFingerHold();
+		if (e.pointerType === "pen") {
+			this.cancelFingerHold();
+			// A new contact: a late contextmenu can no longer be the button held at the previous one.
+			this.lastContact = null;
+		}
 		// Samsung: the button pressed while hovering arrives as a pointerdown with pressure 0. It never draws, nor erases:
 		// a click opens the menu on release; touching while it is held acts as the button's tool (zpStep).
 		if (e.pointerType === "pen" && this.barrel.zeroPressureHeld) {
@@ -575,6 +596,7 @@ export class PointerController {
 				this.trail.clear("pen");
 				this.trailOn = !this.drawHeld;
 				if (this.trailOn) this.trail.push(e.clientX - this.rect.left, e.clientY - this.rect.top, e.pressure, e.timeStamp);
+				this.contactStill.begin(e.clientX, e.clientY);
 				this.armHold(e, eraser);
 				this.chordHeld = false;
 				// A stroke started with the eraser end or the barrel bit already is the button's doing: no chord event then.
@@ -588,9 +610,9 @@ export class PointerController {
 	}
 
 	/** Starts a stroke for the contact `e`; false when the view refuses it. */
-	private beginDraw(e: PointerEvent, eraser: boolean, held?: "lasso" | "previous" | "gesture"): boolean {
+	private beginDraw(e: PointerEvent, eraser: boolean, held?: "lasso" | "previous" | "gesture", continued = false): boolean {
 		if (e.pointerType === "pen") this.nav.clear();
-		if (!this.handlers.drawStart(this.sample(e), eraser, held)) return false;
+		if (!this.handlers.drawStart(this.sample(e), eraser, held, continued)) return false;
 		this.drawId = e.pointerId;
 		this.drawType = e.pointerType;
 		this.rawSeen = false;
@@ -627,7 +649,13 @@ export class PointerController {
 				}
 				this.rect = this.el.getBoundingClientRect();
 				this.policy.setPenDown(true, e.timeStamp);
-				if (!this.beginDraw(e, tool === "eraser", tool === "eraser" ? undefined : tool)) this.policy.setPenDown(false, e.timeStamp);
+				if (this.beginDraw(e, tool === "eraser", tool === "eraser" ? undefined : tool)) {
+					// Already the button's tool: a contextmenu during (or right after) this contact changes nothing.
+					this.drawHeld = true;
+					this.trailOn = false;
+				} else {
+					this.policy.setPenDown(false, e.timeStamp);
+				}
 				return;
 			}
 			case "contact-end":
@@ -672,7 +700,8 @@ export class PointerController {
 			this.beginDraw(e, false);
 		} else if (tool) {
 			this.chordHeld = true;
-			if (this.beginDraw(e, tool === "eraser", tool === "eraser" ? undefined : tool)) this.drawHeld = true;
+			// The ink just committed stays: the button's tool continues from here and never touches it.
+			if (this.beginDraw(e, tool === "eraser", tool === "eraser" ? undefined : tool, true)) this.drawHeld = true;
 		} else {
 			// Radial menu only: it takes over the contact (its lift is swallowed).
 			this.policy.setPenDown(false, e.timeStamp);
@@ -724,11 +753,15 @@ export class PointerController {
 		// Device finding: the button pressed with the nib on the page (held when it landed, or pressed while writing).
 		if (this.drawId !== null && this.drawType === "pen") {
 			if (e.cancelable) e.preventDefault();
+			// A finger or palm on the page (or just lifted) explains it: a palm long-press while writing, never the
+			// button. The stroke goes on as it is.
+			if (this.hover.touchRecent(t)) return true;
 			this.contactButton(t);
 			return true;
 		}
 		const focused = this.el.ownerDocument?.activeElement ?? null;
 		const textFocused = isTextField(focused) || isTextEditing(e.target);
+		if (!textFocused && this.lateContactButton(e)) return true;
 		if (this.hover.classify(raw ? raw : undefined, t, textFocused) !== "hover-click") return false;
 		if (!this.barrel.claimClick(t)) return false;
 		if (e.cancelable) e.preventDefault();
@@ -744,7 +777,46 @@ export class PointerController {
 	}
 
 	private windows(): ButtonWindows {
-		return this.policy.settings.buttonWindows ?? DEFAULT_BUTTON_WINDOWS;
+		return clampWindows(this.policy.settings.buttonWindows ?? DEFAULT_BUTTON_WINDOWS);
+	}
+
+	/**
+	 * A bare contextmenu within `afterMs` of the landing of a pen contact that has already lifted (a short flick with the
+	 * button held: the event came after the pointerup). It is the button held at that contact, not a hover click: the
+	 * stroke it committed is dropped (one undo step, through `retractStroke`) and its samples are replayed as the
+	 * button's tool. A contact that was already the eraser (or the button's tool), a resting nib, or a finger or palm on
+	 * the page leave it at that. True when it was taken (and cancelled).
+	 */
+	private lateContactButton(e: MouseEvent): boolean {
+		const t = e.timeStamp;
+		const c = this.lastContact;
+		if (!c || this.drawId !== null) return false;
+		const w = this.windows();
+		const downT = this.hover.liftedPenContact(t, w.afterMs);
+		if (downT === null || downT !== c.downT) return false;
+		if (this.hover.touchRecent(t)) return false;
+		this.lastContact = null;
+		if (e.cancelable) e.preventDefault();
+		const s = this.policy.settings;
+		if (!s.penButton || s.penButton === "off") return true;
+		if (contactVerdict(t - c.downT, c.still, w) !== "held-at-contact") return true;
+		this.handlers.sideButtonSeen?.();
+		const tr = this.trail;
+		if (!c.replayable || tr.count === 0 || !this.handlers.retractStroke?.()) return true;
+		const tool = heldToolOf(s.penButton) ?? "eraser";
+		const eraser = tool === "eraser";
+		this.rect = this.el.getBoundingClientRect();
+		const start: InkSample = { x: tr.x[0]!, y: tr.y[0]!, pressure: tr.p[0]!, t: tr.t[0]!, pointerType: "pen" };
+		if (!this.handlers.drawStart(start, eraser, eraser ? undefined : tool)) return true;
+		if (tr.count > 1) {
+			const buf = this.samples;
+			buf.clear("pen");
+			for (let i = 1; i < tr.count; i++) buf.push(tr.x[i]!, tr.y[i]!, tr.p[i]!, tr.t[i]!);
+			this.predicted.clear("pen");
+			this.handlers.drawMove(buf, this.predicted);
+		}
+		this.handlers.drawEnd(false);
+		return true;
 	}
 
 	private dropPendingClick(): void {
@@ -775,13 +847,14 @@ export class PointerController {
 	/**
 	 * A contextmenu during the pen contact (device finding): within `afterMs` of the landing, the button was held when the
 	 * nib landed: the live ink of the contact is dropped (nothing committed) and its samples so far are replayed as the
-	 * eraser. Later, the button was pressed while writing: the ink so far is kept and the rest of the contact erases. A nib
-	 * that has rested still since it landed is a long-press, not the button. Lifting ends it; the tool never changed.
+	 * eraser. Later, the button was pressed while writing: the ink so far is kept (the eraser that continues the contact
+	 * never touches it) and the rest of the contact erases. A nib that has rested still since it landed is a long-press,
+	 * not the button. Lifting ends it; the tool never changed.
 	 */
 	private contactButton(t: number): void {
 		const s = this.policy.settings;
 		if (this.drawHeld || !s.penButton || s.penButton === "off") return;
-		const verdict = contactVerdict(t - this.contactDownT, this.hold.still, this.windows());
+		const verdict = contactVerdict(t - this.contactDownT, this.contactStill.still, this.windows());
 		if (verdict === "none") return;
 		this.handlers.sideButtonSeen?.();
 		const tool = heldToolOf(s.penButton) ?? "eraser";
@@ -803,7 +876,7 @@ export class PointerController {
 			this.handlers.drawEnd(false);
 		}
 		this.trailOn = false;
-		if (!this.handlers.drawStart(start, eraser, held)) {
+		if (!this.handlers.drawStart(start, eraser, held, !replay)) {
 			this.releaseDraw();
 			this.policy.setPenDown(false, t);
 			return;
@@ -844,7 +917,8 @@ export class PointerController {
 		this.policy.setPenDown(true, e.timeStamp);
 		this.chord.up();
 		this.chordHeld = false;
-		if (this.beginDraw(e, tool === "eraser", tool === "eraser" ? undefined : tool)) this.drawHeld = true;
+		// The ink just committed stays: the rest of the contact never touches it.
+		if (this.beginDraw(e, tool === "eraser", tool === "eraser" ? undefined : tool, true)) this.drawHeld = true;
 		else this.policy.setPenDown(false, e.timeStamp);
 	}
 
@@ -1035,6 +1109,7 @@ export class PointerController {
 	private addSample(buf: SampleBuffer, ce: PointerEvent, left: number, top: number, strict: boolean): void {
 		const t = ce.timeStamp, x = ce.clientX, y = ce.clientY;
 		this.hold.move(x, y);
+		this.contactStill.move(x, y);
 		if (!isNewSample(this.lastT, this.lastX, this.lastY, t, x, y, strict)) return;
 		this.lastT = t;
 		this.lastX = x;
@@ -1065,6 +1140,10 @@ export class PointerController {
 		}
 		if (e.pointerType === "pen" && e.type !== "lostpointercapture") this.policy.setPenDown(false, e.timeStamp);
 		if (e.pointerId === this.drawId) {
+			if (this.drawType === "pen" && e.type !== "lostpointercapture") {
+				// For a late contextmenu (the button held at this contact): an ordinary stroke whose whole path is in the trail.
+				this.lastContact = { downT: this.contactDownT, still: this.contactStill.still, replayable: !this.drawHeld && this.trailOn };
+			}
 			this.releaseDraw(e.pointerId);
 			this.handlers.drawEnd(false);
 			return;

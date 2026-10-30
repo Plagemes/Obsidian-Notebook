@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InputPolicy, type InputSettings } from "../src/ink/input-policy";
 import {
+	BUTTON_AFTER_MAX_MS, NIB_LONG_PRESS_MS, STILL_RADIUS_PX, TOUCH_RECENT_MS, clampWindows,
 	ButtonTimeline, DEFAULT_BUTTON_WINDOWS, EraserNextArm, HoverClickTracker, LONG_PRESS_AFTER_MS, cleanWindowMs, contactVerdict, formatDelta, heldBeforeContact, STALE_POINTER_MS, capacitorInventory, capturedKey, cleanPenKey, formatCapacitorInventory,
 	hotkeyConflicts, hoverClickAction, hoverMenuPosition, isPenKeyAction, isTextField, keyName, penKeyMatches, penKeyMayAct, type ContextMenuKind,
 } from "../src/ink/pen-hover";
@@ -283,8 +284,13 @@ function setup(settings: Partial<InputSettings> = {}) {
 	const armed: boolean[] = [];
 	const moves: number[] = [];
 	const starts: number[] = [];
+	/** The `continued` flag of each drawStart (the same contact goes on after its ink was committed). */
+	const continued: boolean[] = [];
+	/** What retractStroke answers (the view: the stroke's undo step is still the latest one). */
+	const ctl = { retractOk: true };
 	const handlers: PointerHandlers = {
-		drawStart: (smp, eraser, held) => (starts.push(Math.round(smp.x)), log.push(`start${eraser ? ":eraser" : held ? `:${held}` : ""}`), true),
+		drawStart: (smp, eraser, held, cont) => (starts.push(Math.round(smp.x)), continued.push(cont === true), log.push(`start${eraser ? ":eraser" : held ? `:${held}` : ""}`), true),
+		retractStroke: () => (log.push("retract"), ctl.retractOk),
 		drawMove: (b) => moves.push(...Array.from({ length: b.count }, (_v, i) => Math.round(b.x[i]!))),
 		drawEnd: (cancelled) => log.push(cancelled ? "cancel" : "end"),
 		pan: () => {},
@@ -317,7 +323,7 @@ function setup(settings: Partial<InputSettings> = {}) {
 		fire(canvas, "pointerdown", { button: 0, buttons: 1, pressure: 0.6, timeStamp: t, ...init });
 		fire(canvas, "pointerup", { button: 0, buttons: 0, pressure: 0, timeStamp: t + 100, clientX: init.clientX ?? 400, clientY: init.clientY ?? 300 });
 	};
-	return { stage, canvas, log, menus, armed, moves, starts, controller, fire, bareMenu, hoverClick, stroke };
+	return { stage, canvas, log, menus, armed, moves, starts, continued, ctl, controller, fire, bareMenu, hoverClick, stroke };
 }
 
 describe("PointerController: the side button clicked while hovering (bare contextmenu)", () => {
@@ -554,12 +560,35 @@ describe("ButtonTimeline and contactVerdict (Pen button test timing)", () => {
 		expect(formatDelta(-30)).toBe("-30 ms");
 	});
 
-	it("window settings: defaults 150 / 350 ms, validated", () => {
+	it("window settings: defaults 150 / 350 ms, validated, the after-window clamped to 400 ms on read", () => {
 		expect(DEFAULT_BUTTON_WINDOWS).toEqual({ beforeMs: 150, afterMs: 350 });
+		expect(BUTTON_AFTER_MAX_MS).toBe(400);
 		expect(readSettings({})).toMatchObject({ penButtonContactBeforeMs: 150, penButtonContactAfterMs: 350 });
-		expect(readSettings({ penButtonContactBeforeMs: 80, penButtonContactAfterMs: 500 })).toMatchObject({ penButtonContactBeforeMs: 80, penButtonContactAfterMs: 500 });
-		expect(readSettings({ penButtonContactBeforeMs: -1, penButtonContactAfterMs: 5000 })).toMatchObject({ penButtonContactBeforeMs: 150, penButtonContactAfterMs: 350 });
+		expect(readSettings({ penButtonContactBeforeMs: 80, penButtonContactAfterMs: 300 })).toMatchObject({ penButtonContactBeforeMs: 80, penButtonContactAfterMs: 300 });
+		// A value saved by 0.11.2 (range up to 1000 ms) reads as the new maximum.
+		expect(readSettings({ penButtonContactAfterMs: 1000 })).toMatchObject({ penButtonContactAfterMs: 400 });
+		expect(readSettings({ penButtonContactBeforeMs: -1, penButtonContactAfterMs: 5000 })).toMatchObject({ penButtonContactBeforeMs: 150, penButtonContactAfterMs: 400 });
 		expect(cleanWindowMs(12.5, 500)).toBeNull();
+		expect(cleanWindowMs(1000, 400)).toBe(400);
+		expect(clampWindows({ beforeMs: 900, afterMs: 1000 })).toEqual({ beforeMs: 500, afterMs: 400 });
+	});
+
+	it("a nib resting still for 350 ms is a long-press, whatever the after-window; the still radius is above Android's slop", () => {
+		expect(STILL_RADIUS_PX).toBeGreaterThanOrEqual(10);
+		expect(NIB_LONG_PRESS_MS).toBe(350);
+		expect(contactVerdict(349, true)).toBe("held-at-contact");
+		expect(contactVerdict(350, true)).toBe("none");
+		expect(contactVerdict(350, false)).toBe("held-at-contact");
+		// An after-window saved larger than the cap is used as 400 ms.
+		const wide = { beforeMs: 150, afterMs: 1000 };
+		expect(contactVerdict(380, false, wide)).toBe("held-at-contact");
+		expect(contactVerdict(450, false, wide)).toBe("during-stroke");
+		expect(contactVerdict(600, true, wide)).toBe("none");
+		// The Pen button test judges the same way: a nib drifting 8 px (Android's slop) still rests.
+		const tl = new ButtonTimeline(wide);
+		tl.penDown(1000, 0, 0);
+		tl.penMove(1100, 8, 0);
+		expect(tl.contextMenu(1450)).toContain("not the button");
 	});
 });
 
@@ -667,5 +696,153 @@ describe("PointerController: the button seen only as a contextmenu around a pen 
 		pen(s, "pointermove", 1016, 420);
 		s.bareMenu(1040);
 		expect(s.log).toEqual(["start", "end", "start:eraser"]);
+	});
+
+	// --- review fixes (wave 0.12) ---
+
+	it("mid-stroke conversion keeps the ink it committed: the eraser that continues the contact is told so (contextmenu, buttons & 2, chord)", () => {
+		// contextmenu while writing (case 2)
+		const a = setup();
+		pen(a, "pointerdown", 1000, 400);
+		for (let i = 1; i <= 10; i++) pen(a, "pointermove", 1000 + i * 50, 400 + i * 10);
+		a.bareMenu(1520);
+		expect(a.log).toEqual(["start", "end", "start:eraser"]);
+		expect(a.continued).toEqual([false, true]);
+		// buttons & 2 appearing on a move
+		const b = setup();
+		b.fire(b.canvas, "pointerdown", { button: 0, buttons: 1, pressure: 0.6, clientX: 400, timeStamp: 1000 });
+		b.fire(b.canvas, "pointermove", { button: -1, buttons: 1, pressure: 0.6, clientX: 440, timeStamp: 1400 });
+		b.fire(b.canvas, "pointermove", { button: -1, buttons: 3, pressure: 0.6, clientX: 460, timeStamp: 1500 });
+		expect(b.log).toEqual(["start", "end", "start:eraser"]);
+		expect(b.continued).toEqual([false, true]);
+		// the chord event (a move with button 0 instead of -1 while touching)
+		const c = setup();
+		for (const [type, button, buttons, pressure, t] of [
+			["pointerdown", 0, 1, 0.9, 1064], ["pointermove", -1, 1, 1, 1080], ["pointermove", -1, 1, 1, 1120], ["pointermove", 0, 1, 0.92, 1200],
+		] as const) c.fire(c.canvas, type, { button, buttons, pressure, timeStamp: t });
+		expect(c.log).toEqual(["start", "end", "start:eraser"]);
+		expect(c.continued).toEqual([false, true]);
+		// the button held at contact: nothing was committed (the live ink is dropped), so nothing is spared
+		const d = setup();
+		pen(d, "pointerdown", 1000, 400);
+		pen(d, "pointermove", 1016, 410);
+		d.bareMenu(1042);
+		expect(d.log).toEqual(["start", "cancel", "start:eraser"]);
+		expect(d.continued).toEqual([false, false]);
+	});
+
+	it("a short flick with the button held, its contextmenu after the pen up: the stroke is retracted and replayed as the eraser", () => {
+		const s = setup();
+		pen(s, "pointerdown", 1000, 400);
+		pen(s, "pointermove", 1016, 410);
+		pen(s, "pointermove", 1032, 420);
+		pen(s, "pointerup", 1080, 420);
+		const e = s.bareMenu(1200);
+		expect(e.defaultPrevented).toBe(true);
+		vi.advanceTimersByTime(500);
+		// One retract (the view undoes the stroke's single step), then the same path as one eraser stroke.
+		expect(s.log).toEqual(["start", "end", "retract", "start:eraser", "end"]);
+		expect(s.starts).toEqual([300, 300]);
+		expect(s.moves).toEqual([310, 320, 310, 320]);
+		expect(s.menus).toEqual([]);
+		pen(s, "pointerdown", 3000, 400, { pointerId: 4 });
+		expect(s.log[s.log.length - 1]).toBe("start"); // the tool is back for the next stroke
+	});
+
+	it("a late contextmenu: no replay when the stroke cannot be retracted, a hover click once the after-window has passed", () => {
+		const s = setup();
+		s.ctl.retractOk = false;
+		pen(s, "pointerdown", 1000, 400);
+		pen(s, "pointermove", 1016, 410);
+		pen(s, "pointerup", 1080, 410);
+		s.bareMenu(1150);
+		vi.advanceTimersByTime(500);
+		expect(s.log).toEqual(["start", "end", "retract"]);
+		expect(s.menus).toEqual([]);
+		const late = setup();
+		pen(late, "pointerdown", 1000, 400);
+		pen(late, "pointerup", 1080, 400);
+		late.bareMenu(1400); // 400 ms after the landing: past the 350 ms window
+		vi.advanceTimersByTime(500);
+		expect(late.log).toEqual(["start", "end", "menu:click"]);
+		// A contact that already was the eraser (contextmenu before it): a late one changes nothing and opens nothing.
+		const held = setup();
+		held.bareMenu(1000);
+		pen(held, "pointerdown", 1080, 400);
+		pen(held, "pointerup", 1200, 400);
+		held.bareMenu(1300);
+		vi.advanceTimersByTime(500);
+		expect(held.log).toEqual(["start:eraser", "end"]);
+		expect(held.menus).toEqual([]);
+	});
+
+	it("a nib long-press is not the button, even with an after-window saved above the cap and a drift up to Android's slop", () => {
+		const s = setup({ buttonWindows: { beforeMs: 150, afterMs: 1000 } });
+		pen(s, "pointerdown", 1000, 400);
+		pen(s, "pointermove", 1100, 408);
+		const e = s.bareMenu(1380);
+		expect(e.defaultPrevented).toBe(true);
+		pen(s, "pointerup", 1500, 408);
+		vi.advanceTimersByTime(500);
+		expect(s.log).toEqual(["start", "end"]);
+		expect(s.menus).toEqual([]);
+		// A nib that moved is still the button held at contact within the window.
+		const m = setup();
+		pen(m, "pointerdown", 1000, 400);
+		pen(m, "pointermove", 1100, 440);
+		m.bareMenu(1300);
+		expect(m.log).toEqual(["start", "cancel", "start:eraser"]);
+	});
+
+	it("a palm or finger on the page while the pen writes: its contextmenu never turns the stroke into the eraser", () => {
+		const s = setup();
+		pen(s, "pointerdown", 1000, 400);
+		for (let i = 1; i <= 10; i++) pen(s, "pointermove", 1000 + i * 50, 400 + i * 10);
+		s.fire(s.canvas, "pointerdown", { pointerType: "touch", pointerId: 7, button: 0, buttons: 1, clientX: 700, clientY: 500, timeStamp: 1200 });
+		const e = s.bareMenu(1700);
+		expect(e.defaultPrevented).toBe(true);
+		s.fire(s.canvas, "pointerup", { pointerType: "touch", pointerId: 7, button: 0, buttons: 0, clientX: 700, clientY: 500, timeStamp: 1800 });
+		pen(s, "pointermove", 1850, 520);
+		pen(s, "pointerup", 1900, 520);
+		vi.advanceTimersByTime(500);
+		expect(s.log).toEqual(["start", "end"]);
+		expect(s.menus).toEqual([]);
+	});
+
+	it(`a finger lifted less than ${TOUCH_RECENT_MS} ms before still explains it; later the button works again`, () => {
+		const s = setup();
+		pen(s, "pointerdown", 1000, 400);
+		for (let i = 1; i <= 24; i++) pen(s, "pointermove", 1000 + i * 50, 400 + i * 5);
+		s.fire(s.canvas, "pointerdown", { pointerType: "touch", pointerId: 7, button: 0, buttons: 1, clientX: 700, clientY: 500, timeStamp: 1100 });
+		s.fire(s.canvas, "pointerup", { pointerType: "touch", pointerId: 7, button: 0, buttons: 0, clientX: 700, clientY: 500, timeStamp: 1300 });
+		s.bareMenu(1600);
+		expect(s.log).toEqual(["start"]);
+		s.bareMenu(1950);
+		expect(s.log).toEqual(["start", "end", "start:eraser"]);
+		expect(s.continued).toEqual([false, true]);
+	});
+});
+
+describe("HoverClickTracker: the last pen contact and recent touches", () => {
+	it("remembers the last pen contact once it lifted, within the after-window of its landing", () => {
+		const h = new HoverClickTracker();
+		h.pointer("down", "pen", 3, 1000);
+		expect(h.liftedPenContact(1100, 350)).toBeNull(); // still down
+		h.pointer("up", "pen", 3, 1080);
+		expect(h.liftedPenContact(1200, 350)).toBe(1000);
+		expect(h.liftedPenContact(1351, 350)).toBeNull();
+		h.pointer("down", "pen", 4, 2000);
+		h.pointer("move", "pen", 4, 2050, 0); // a move without the contact bit: lifted (up swallowed)
+		expect(h.liftedPenContact(2100, 350)).toBe(2000);
+	});
+
+	it("a finger on the view, or lifted less than 600 ms before, is recent", () => {
+		const h = new HoverClickTracker();
+		expect(h.touchRecent(1000)).toBe(false);
+		h.pointer("down", "touch", 7, 1000);
+		expect(h.touchRecent(5000)).toBe(true);
+		h.pointer("up", "touch", 7, 5100);
+		expect(h.touchRecent(5100 + TOUCH_RECENT_MS - 1)).toBe(true);
+		expect(h.touchRecent(5100 + TOUCH_RECENT_MS)).toBe(false);
 	});
 });

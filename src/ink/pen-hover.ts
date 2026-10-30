@@ -20,6 +20,11 @@ export const LONG_CONTACT_MS = 350;
 export const MOUSE_AFTER_MS = 600;
 /** A pointer that sent nothing for this long is gone (its up was swallowed by a menu, or never sent). */
 export const STALE_POINTER_MS = 5000;
+/**
+ * A finger or palm on the view, or one that touched it this recently, explains a bare `contextmenu` during a pen stroke
+ * (a palm long-press while writing): it is never the side button then, ms.
+ */
+export const TOUCH_RECENT_MS = 600;
 
 export type HoverPointerKind = "down" | "move" | "up" | "cancel";
 
@@ -48,36 +53,73 @@ export class HoverClickTracker {
 	private readonly down = new Map<number, Tracked>();
 	private lastTouchUpT = -Infinity;
 	private lastTouchContactMs = 0;
+	/** Last event of any finger or palm (down, move, up). */
+	private lastTouchT = -Infinity;
 	private lastMouseT = -Infinity;
+	/** The last pen contact: when it landed, and when it lifted (null while it is down). */
+	private penDownT = -Infinity;
+	private penUpT: number | null = null;
 
 	reset(): void {
 		this.down.clear();
 		this.lastTouchUpT = -Infinity;
 		this.lastTouchContactMs = 0;
+		this.lastTouchT = -Infinity;
 		this.lastMouseT = -Infinity;
+		this.penDownT = -Infinity;
+		this.penUpT = null;
 	}
 
 	pointer(kind: HoverPointerKind, pointerType: string, pointerId: number, t: number, buttons = 0): void {
 		if (pointerType === "mouse" && (kind === "down" || kind === "up")) this.lastMouseT = Math.max(this.lastMouseT, t);
+		if (pointerType === "touch") this.lastTouchT = Math.max(this.lastTouchT, t);
 		const known = this.down.get(pointerId);
 		if (kind === "down") {
-			if (!known || known.type !== pointerType) this.down.set(pointerId, { type: pointerType, downT: t, seenT: t });
-			else known.seenT = Math.max(known.seenT, t);
+			if (!known || known.type !== pointerType) {
+				this.down.set(pointerId, { type: pointerType, downT: t, seenT: t });
+				if (pointerType === "pen") {
+					this.penDownT = t;
+					this.penUpT = null;
+				}
+			} else {
+				known.seenT = Math.max(known.seenT, t);
+			}
 			return;
 		}
 		if (kind === "move") {
 			if (!known) return;
 			// A pen or mouse move without the contact bit: it has lifted (its up was swallowed).
-			if (pointerType !== "touch" && (buttons & 1) === 0) this.down.delete(pointerId);
+			if (pointerType !== "touch" && (buttons & 1) === 0) this.lifted(pointerId, known, t);
 			else known.seenT = Math.max(known.seenT, t);
 			return;
 		}
 		if (!known) return;
-		this.down.delete(pointerId);
+		this.lifted(pointerId, known, t);
 		if (known.type === "touch") {
 			this.lastTouchUpT = t;
 			this.lastTouchContactMs = t - known.downT;
 		}
+	}
+
+	private lifted(pointerId: number, known: Tracked, t: number): void {
+		this.down.delete(pointerId);
+		if (known.type === "pen" && known.downT === this.penDownT) this.penUpT = t;
+	}
+
+	/**
+	 * When the last pen contact landed, if it has already lifted (at or before `t`) and landed at most `afterMs` before
+	 * `t`: a bare `contextmenu` then is the button held at that contact, arriving after the lift of a short flick. Null
+	 * otherwise (no such contact, still down, or too long ago).
+	 */
+	liftedPenContact(t: number, afterMs: number): number | null {
+		if (this.penUpT === null || this.penUpT > t) return null;
+		const dt = t - this.penDownT;
+		return dt >= 0 && dt <= afterMs ? this.penDownT : null;
+	}
+
+	/** A finger or palm is on the view at `t`, or touched it less than `TOUCH_RECENT_MS` before. */
+	touchRecent(t: number): boolean {
+		return this.activeCount(t, "touch") > 0 || t - this.lastTouchT < TOUCH_RECENT_MS;
 	}
 
 	/** Pointers of `type` (any type when omitted) down on the view at `t`, stale ones dropped. */
@@ -384,17 +426,33 @@ export interface ButtonWindows {
 }
 export const DEFAULT_BUTTON_WINDOWS: Readonly<ButtonWindows> = { beforeMs: 150, afterMs: 350 };
 export const BUTTON_BEFORE_MAX_MS = 500;
-export const BUTTON_AFTER_MAX_MS = 1000;
+/**
+ * The after-window never reaches Android's long-press timeout (about 400 to 500 ms): a longer one would let the
+ * `contextmenu` of a resting nib's long-press pass for the button held at contact.
+ */
+export const BUTTON_AFTER_MAX_MS = 400;
 
-/** A window setting: a whole number of ms in [0, max], else null. */
+/** A window setting: a whole number of ms from 0, clamped to `max` (an older, larger value reads as `max`), else null. */
 export function cleanWindowMs(v: unknown, max: number): number | null {
-	return typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= max ? v : null;
+	return typeof v === "number" && Number.isInteger(v) && v >= 0 ? Math.min(v, max) : null;
+}
+
+/** The windows as used: each clamped to [0, its maximum] (settings saved by an older version may hold more). */
+export function clampWindows(w: ButtonWindows): ButtonWindows {
+	const clamp = (v: number, max: number) => (Number.isFinite(v) ? Math.min(Math.max(0, v), max) : 0);
+	return { beforeMs: clamp(w.beforeMs, BUTTON_BEFORE_MAX_MS), afterMs: clamp(w.afterMs, BUTTON_AFTER_MAX_MS) };
 }
 
 export type ContactButtonVerdict = "held-at-contact" | "during-stroke" | "hovering" | "none";
 
-/** CSS px the nib may drift and still count as resting (the pen hold-still radius). */
-export const STILL_RADIUS_PX = 6;
+/**
+ * CSS px the nib may drift and still count as resting, to tell a nib long-press from the button. Above Android's touch
+ * slop (8 dp), which its long-press tolerates: in the WebView one CSS px is one dp (`devicePixelRatio` is the screen
+ * density), so no further scaling applies. Wider than the hold-still menu's `HOLD_RADIUS_PX`, which serves another purpose.
+ */
+export const STILL_RADIUS_PX = 12;
+/** A nib resting still this long (ms) when a `contextmenu` comes is a long-press, even inside the after-window. */
+export const NIB_LONG_PRESS_MS = LONG_CONTACT_MS;
 
 export const VERDICT_TEXT: Record<ContactButtonVerdict, string> = {
 	"held-at-contact": "button held at contact",
@@ -404,12 +462,14 @@ export const VERDICT_TEXT: Record<ContactButtonVerdict, string> = {
 };
 
 /**
- * A `contextmenu` while the pen touches, `dt` ms after its pointerdown. Within the after-window: the button was held
- * when the nib landed (the whole stroke erases). Later: pressed while writing (the rest erases), unless the nib has
- * rested still since it landed: that is a long-press of the nib, not the button.
+ * A `contextmenu` while the pen touches, `dt` ms after its pointerdown. A nib that has rested still (within
+ * `STILL_RADIUS_PX`) since it landed, for at least `NIB_LONG_PRESS_MS`, is a long-press of the nib, not the button,
+ * whatever the windows. Otherwise, within the after-window (at most `BUTTON_AFTER_MAX_MS`): the button was held when the
+ * nib landed (the whole stroke erases). Later: pressed while writing (the rest erases), unless the nib has rested still.
  */
 export function contactVerdict(dt: number, still: boolean, w: ButtonWindows = DEFAULT_BUTTON_WINDOWS): ContactButtonVerdict {
-	if (dt <= w.afterMs) return "held-at-contact";
+	if (still && dt >= NIB_LONG_PRESS_MS) return "none";
+	if (dt <= Math.min(w.afterMs, BUTTON_AFTER_MAX_MS)) return "held-at-contact";
 	return still ? "none" : "during-stroke";
 }
 
