@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Links written with the pen (roadmap O8)**, manual steps PL1 to PL8 in `docs/testing.md`. No format change: a link is ordinary text in a text box.
+  - **Links in text boxes**: `[[Note]]`, `[[Note|alias]]` and `[[Note#Heading]]` typed in a text box are drawn as links (link colour, underlined; the brackets stay visible so the text, its wrapping and the editor always agree; embeds `![[…]]` are left alone). A finger tap on a link (or Ctrl/Cmd+click with a mouse) opens the note in a new tab; the text tool still edits the box. Links to notes that do not exist are drawn dimmed and dashed, and tapping one offers *Create note* (Obsidian's new-note location; a name with folders is taken from the vault root).
+  - **`[[` suggester in the text editor**: typing `[[` opens a list of the vault's notes (and of the notebooks), ranked by name; after `#` it lists the headings of the note. Arrow keys and Enter/Tab choose, Escape closes it, a tap chooses; the typed text becomes `[[note]]`.
+  - **Ink links**: with the lasso, circle some ink and tap *Link to a note…* in the selection bar (also the command *Link selection to a note…*): a chooser lists notes (or links to a name that does not exist yet). The note becomes a small text element `[[Note]]` placed above the ink, with a link badge; tapping the label or the ink under it (with a finger, or Ctrl/Cmd+click) opens the note. The ink is not changed, and with *Ink follows objects* it moves with the label. The selection bar also has *Open link* for a selected text box with a link.
+  - **Handwritten `[[`**: two bracket-shaped strokes side by side (`src/ink/bracket-detect.ts`: a spine with a hook at each end, both on the same side; not `l1`, `||`, parentheses, `[]` or letters) make a *Link to a note…* chip appear next to the ink, also while the name is being written to the right of the brackets on the same line. Nothing is converted unless you tap the chip; the chip goes away when you write elsewhere, scroll, undo or after 10 seconds.
+  - **Companion notes** already copy the text of text boxes, so links in text boxes and ink links appear in the companion note and in Obsidian's graph and backlinks (the empty lines that stretch an ink link's box are not copied).
+
 ## 0.6.0 — 2026-10-30
 
 Not yet verified on Android hardware. The manual steps are numbered 64 to 134 in `docs/testing.md`; the ones that belong to each area are named below.
