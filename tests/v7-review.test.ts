@@ -5,9 +5,10 @@
  */
 import { describe, expect, it } from "vitest";
 import { patchNotebookMeta } from "../src/library/host-logic";
+import { planPageMove, withMovedBookmarks } from "../src/library/page-move";
 import { categoriesInUse, setBookmark } from "../src/model/bookmarks";
 import { cloneMeta, createDocument, createPage } from "../src/model/document";
-import { History } from "../src/model/history";
+import { Batch, History, InsertPages, SetMeta } from "../src/model/history";
 import { mergeChangeCount, mergeCovers, planMerge } from "../src/model/merge";
 import { repairNotebookText } from "../src/model/repair";
 import { parse, serialize, serializeChecked } from "../src/model/serialize";
@@ -193,5 +194,43 @@ describe("page time of the workspace layout", () => {
 		const now = new Date();
 		expect(clock.since("B.notebook", 5, now)).toBe(now);
 		expect(clock.since(null, 5, now)).toBe(now);
+	});
+});
+
+describe("moving pages keeps their bookmarks", () => {
+	it("carries bookmarks and details to the copies' new ids; tags travel with the page", () => {
+		const src = twoPages();
+		src.pages[1]!.tags = ["exam"];
+		src.meta = setBookmark(src.meta!, "p2", { title: "Chapter 3", color: "#3b82f6", category: "review" });
+		src.meta = setBookmark(src.meta, "p1", undefined);
+		const target = twoPages();
+		target.id = "target";
+		target.meta = setBookmark(target.meta!, "p1", { title: "Target's own" });
+		const plan = planPageMove(src, ["p1", "p2"], target);
+		expect(plan.ok).toBe(true);
+		if (!plan.ok) return;
+		const [n1, n2] = plan.pages.map((p) => p.id);
+		expect(plan.bookmarks).toEqual([{ pageId: n1 }, { pageId: n2, info: { title: "Chapter 3", color: "#3b82f6", category: "review" } }]);
+		expect(plan.pages[1]!.tags).toEqual(["exam"]);
+		// Applied as one write (an open target: one undo step).
+		const history = new History(() => target);
+		history.execute(new Batch("Move pages in", [
+			new InsertPages(plan.pages, target.pages.length),
+			new SetMeta(target.meta, withMovedBookmarks(target.meta, plan.bookmarks)),
+		]));
+		const saved = parsed(serialize(target)).doc;
+		expect(saved.meta?.bookmarks).toEqual(["p1", n1, n2]);
+		expect(saved.meta?.bookmarkInfo).toEqual({ p1: { title: "Target's own" }, [n2!]: { title: "Chapter 3", color: "#3b82f6", category: "review" } });
+		expect(saved.pages[3]!.tags).toEqual(["exam"]);
+		history.undo();
+		expect(target.meta?.bookmarks).toEqual(["p1"]);
+		expect(target.pages).toHaveLength(2);
+	});
+
+	it("adds nothing to the metadata when no moved page is bookmarked", () => {
+		const src = twoPages();
+		src.meta = setBookmark(src.meta!, "p1", { title: "stays" });
+		const plan = planPageMove(src, ["p2"], twoPages());
+		expect(plan.ok && plan.bookmarks).toEqual([]);
 	});
 });
