@@ -29,7 +29,11 @@ import { stressDocument } from "../../src/model/stress";
 import { FAKE_PATH, installFakePdf, slidesNotebook } from "./fake-pdf";
 import { checkReading } from "./reading-check";
 import { checkPractice } from "./practice-check";
+import { checkReadOnly } from "./readonly-check";
 import { PracticeService } from "../../src/view/practice";
+import { NavController } from "../../src/view/nav-controller";
+import { NotebookStatusBar } from "../../src/view/status-bar";
+import { checkNavigation } from "./nav-check";
 import { compareLod, measureLod } from "./lod-bench";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -112,6 +116,24 @@ async function seed(): Promise<void> {
 /** The practice feature (doc=practice) on a stand-in plugin: the views attach to it as they do to the real one. */
 const practiceService = new PracticeService({ app, settings: { ...DEFAULT_SETTINGS }, registerEvent: () => undefined } as any);
 
+/** Back/forward history (roadmap 18) and the status bar item (roadmap O15) on the harness's single view. */
+const harnessNav: NavController = new NavController({
+	here: () => (view as any)?.navPlace() ?? null,
+	exists: async (pl) => !!(view as any)?.document?.pages.some((p: { id: string }) => p.id === pl.pageId),
+	open: async (pl) => {
+		(view as any).showPlace(pl);
+		harnessNav.shown();
+	},
+});
+const harnessStatusBarEl = document.createElement("div");
+harnessStatusBarEl.className = "status-bar-item";
+document.body.appendChild(harnessStatusBarEl);
+let statusBarClicks = 0;
+const harnessStatusBar = new NotebookStatusBar(harnessStatusBarEl, () => {
+	statusBarClicks++;
+	(view as any)?.openNavigator();
+});
+
 function settings(): NotebookSettings {
 	const s: NotebookSettings = { ...DEFAULT_SETTINGS };
 	if (params.get("lowLatency") === "1") s.lowLatencyInk = true;
@@ -123,9 +145,9 @@ async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	if (view) await (view as any).onClose();
 	root.empty();
 	leaf = new WorkspaceLeaf(app, root);
-	view = new NotebookView(leaf as any, { settings: settings(), practice: doc === "practice" ? practiceService : undefined });
+	view = new NotebookView(leaf as any, { settings: settings(), practice: doc === "practice" ? practiceService : undefined, nav: harnessNav, statusChanged: (v) => harnessStatusBar.update(v.statusSnapshot()) });
 	await view.onOpen();
-	const path = doc === "new" || doc === "practice" ? "Notebooks/New.notebook" : doc === "pdf" ? "Notebooks/Slides.notebook" : "Notebooks/Old v3.notebook";
+	const path = doc === "new" || doc === "practice" || doc === "readonly" ? "Notebooks/New.notebook" : doc === "pdf" ? "Notebooks/Slides.notebook" : "Notebooks/Old v3.notebook";
 	const file = app.vault.getFileByPath(path) as TFile;
 	await (view as any).loadFile(file);
 	view.onResize();
@@ -410,6 +432,7 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 
 	// Radial dial: the pen's side button opens it without drawing; its states open and choose correctly.
 	await checkRadial(add);
+	await checkColour(add);
 
 	await checkPageMode(add);
 	await checkToolbar(add);
@@ -419,6 +442,8 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 	await checkStagedLoad(add);
 	await checkPageLinks(add);
 	await checkObjects(add);
+	await checkNavigation({ view, nav: harnessNav, stage, statusBarEl: harnessStatusBarEl, statusBarClicks: () => statusBarClicks, strokeCount, frames, closeAll }, add);
+	await checkSelectionTools(add);
 
 	const unexpected = errors.filter((e) => !expectedError?.test(e));
 	if (fault) add("injected fault was reported", errors.some((e) => expectedError!.test(e)), errors[0]?.split("\n")[0] ?? "no error logged");
@@ -562,6 +587,170 @@ async function checkRadial(add: (name: string, ok: boolean, detail?: string) => 
 	add("radial: the dial draws nothing", strokeCount() === before, `${before} → ${strokeCount()}`);
 	setTool("pen");
 	v.toolbar.update({ penColor: "#1e1e1e", penWidth: 2, shapeKind: "line" });
+	await frames(2);
+}
+
+/** A synthetic pointer event of one contact at window point (x, y), sent to the element under it (as the browser does). */
+function contact(name: string, x: number, y: number, id = 91): void {
+	const target = document.elementFromPoint(x, y) ?? stage();
+	target.dispatchEvent(new PointerEvent(name, {
+		bubbles: true, cancelable: true, composed: true, pointerId: id, pointerType: "pen", isPrimary: true,
+		pressure: name === "pointerup" ? 0 : 0.5, width: 1, height: 1, button: 0, buttons: name === "pointerup" ? 0 : 1, clientX: x, clientY: y,
+	}));
+}
+
+/**
+ * The free colour picker, the page eyedropper and the style eyedropper (roadmap 7, 68): the picker sets the pen colour from its
+ * hex field and area and remembers the colour; the eyedropper reads the rendered page under a tap; the style eyedropper
+ * takes colour, width and tool from a stroke; Escape and a tap outside the page end them; none of it draws.
+ */
+async function checkColour(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
+	const v = view as any;
+	setTool("pen");
+	v.toolbar.update({ penColor: "#1e1e1e", penWidth: 2 });
+	v.host.settings.recentColours = [];
+	const startInk = strokeCount();
+	const st = stage().getBoundingClientRect();
+
+	v.runAction("colour-picker");
+	await frames(1);
+	const panel = document.querySelector(".notebook-colour-picker") as HTMLElement | null;
+	const hex = panel?.querySelector("input.notebook-colour-hex") as HTMLInputElement | null;
+	add("colour: the action opens the picker with the area, the hue bar, the hex field and the eyedropper",
+		!!panel && !!panel.querySelector(".notebook-colour-area") && !!panel.querySelector(".notebook-colour-hue") && !!hex && !!panel.querySelector("button[aria-label]") && hex.value === "#1e1e1e", hex?.value ?? "none");
+	const pr = panel?.getBoundingClientRect();
+	add("colour: the picker is inside the page area", !!pr && pr.left >= st.left - 0.5 && pr.right <= st.right + 0.5 && pr.top >= st.top - 0.5 && pr.bottom <= st.bottom + 0.5,
+		pr ? `${Math.round(pr.width)}x${Math.round(pr.height)}` : "none");
+
+	if (hex) {
+		hex.value = "#12AB34";
+		hex.dispatchEvent(new Event("input", { bubbles: true }));
+		hex.dispatchEvent(new Event("change", { bubbles: true }));
+	}
+	await frames(1);
+	add("colour: a hex value sets the pen colour and is remembered", v.tools.penColor === "#12ab34" && v.host.settings.recentColours[0] === "#12ab34", `${v.tools.penColor} ${v.host.settings.recentColours}`);
+	if (hex) {
+		hex.value = "#zzz";
+		hex.dispatchEvent(new Event("input", { bubbles: true }));
+		hex.dispatchEvent(new Event("change", { bubbles: true }));
+	}
+	add("colour: an invalid hex changes nothing", v.tools.penColor === "#12ab34" && v.host.settings.recentColours.length === 1, v.tools.penColor);
+
+	const area = panel?.querySelector(".notebook-colour-area") as HTMLElement | null;
+	if (area) {
+		const r = area.getBoundingClientRect();
+		const ev = (name: string, x: number, y: number) => area.dispatchEvent(new PointerEvent(name, {
+			bubbles: true, cancelable: true, pointerId: 92, pointerType: "touch", isPrimary: true, clientX: x, clientY: y, buttons: name === "pointerup" ? 0 : 1,
+		}));
+		ev("pointerdown", r.left + 2, r.top + 2);
+		ev("pointermove", r.left + r.width - 1, r.top + 1);
+		ev("pointerup", r.left + r.width - 1, r.top + 1);
+	}
+	await frames(1);
+	add("colour: dragging in the area picks saturation and brightness and remembers the colour",
+		/^#[0-9a-f]{6}$/.test(v.tools.penColor) && v.tools.penColor !== "#12ab34" && v.host.settings.recentColours.length === 2, `${v.tools.penColor} ${v.host.settings.recentColours.length}`);
+	const swatches = panel?.querySelectorAll(".notebook-colour-recent-swatch").length ?? 0;
+	(panel?.querySelectorAll(".notebook-colour-recent-swatch")[1] as HTMLElement | undefined)?.click();
+	await frames(1);
+	add("colour: a recent colour sets the pen colour again", swatches === 2 && v.tools.penColor === "#12ab34" && v.host.settings.recentColours[0] === "#12ab34", `${swatches} swatches, ${v.tools.penColor}`);
+	v.toolbar.update({ penColor: "#dc2626" });
+	await frames(1);
+	add("colour: the picker follows a colour changed elsewhere", (document.querySelector(".notebook-colour-picker input.notebook-colour-hex") as HTMLInputElement | null)?.value === "#dc2626", "");
+	panel?.querySelector<HTMLElement>("button[aria-label='Close the colour picker']")?.click();
+	await frames(1);
+	add("colour: the close button closes the picker", !document.querySelector(".notebook-colour-picker"), "");
+
+	// The tool options carry the same actions as buttons.
+	await openOptions("pen");
+	const row = document.querySelector(".notebook-options") as HTMLElement | null;
+	const labels = Array.from(row?.querySelectorAll("button") ?? []).map((b) => b.getAttribute("aria-label"));
+	add("colour: the colour row has the free colour, the eyedropper and (for ink) the style eyedropper",
+		["Colour picker…", "Eyedropper: pick a colour from the page", "Style eyedropper: take colour, width and tool from a stroke"].every((l) => labels.includes(l)), labels.slice(-4).join(" | "));
+	byLabel(row ?? document, "Colour picker…")?.click();
+	await frames(1);
+	add("colour: the free colour button opens the picker and closes the options", !!document.querySelector(".notebook-colour-picker") && !!document.querySelector(".notebook-options.notebook-hidden"), "");
+	v.colourTools.closePicker();
+
+	// Eyedropper on the rendered page: write a stroke in a known colour, then pick it back.
+	v.toolbar.update({ penColor: "#dc2626", penWidth: 6 });
+	await penStroke([[0.3, 0.3], [0.7, 0.3]]);
+	const mid = { x: st.left + st.width * 0.5, y: st.top + st.height * 0.3 };
+	v.toolbar.update({ penColor: "#1e1e1e", penWidth: 2 });
+	const afterInk = strokeCount();
+	v.runAction("colour-eyedropper");
+	add("colour: the eyedropper waits for a contact on the page", v.colourTools.armed === "colour", String(v.colourTools.armed));
+	contact("pointerdown", mid.x, mid.y);
+	await frames(1);
+	add("colour: while the contact is down a loupe shows the colour under it", !!document.querySelector(".notebook-eyedropper-loupe"), "");
+	contact("pointerup", mid.x, mid.y);
+	await frames(1);
+	const picked = v.tools.penColor as string;
+	const close = (a: string, b: string) => [1, 3, 5].every((i) => Math.abs(parseInt(a.slice(i, i + 2), 16) - parseInt(b.slice(i, i + 2), 16)) <= 24);
+	add("colour: the eyedropper takes the colour of the rendered page under the contact", close(picked, "#dc2626") && v.colourTools.armed === null, `${picked}, armed ${v.colourTools.armed}`);
+	add("colour: the picked colour is remembered", v.host.settings.recentColours[0] === picked, `${v.host.settings.recentColours}`);
+	add("colour: picking draws nothing", strokeCount() === afterInk, `${afterInk} -> ${strokeCount()}`);
+
+	// Escape and a contact outside the page end the eyedropper.
+	v.runAction("colour-eyedropper");
+	window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+	add("colour: Escape ends the eyedropper", v.colourTools.armed === null, String(v.colourTools.armed));
+	v.runAction("style-eyedropper");
+	const bar = document.querySelector(".notebook-toolbar button") as HTMLElement | null;
+	if (bar) {
+		const br = bar.getBoundingClientRect();
+		contact("pointerdown", br.left + br.width / 2, br.top + br.height / 2);
+		contact("pointerup", br.left + br.width / 2, br.top + br.height / 2);
+	}
+	add("colour: a contact on the toolbar ends the style eyedropper", v.colourTools.armed === null, String(v.colourTools.armed));
+
+	// Style eyedropper: a highlighter stroke gives its tool, colour and width; a miss keeps waiting.
+	setTool("highlighter");
+	v.toolbar.update({ highlighterColor: "#4ade80", highlighterWidth: 14 });
+	await penStroke([[0.3, 0.6], [0.7, 0.6]]);
+	const hl = { x: st.left + st.width * 0.5, y: st.top + st.height * 0.6 };
+	setTool("pen");
+	v.toolbar.update({ penColor: "#1e1e1e", penWidth: 2 });
+	const inkBefore = strokeCount();
+	v.runAction("style-eyedropper");
+	contact("pointerdown", st.left + st.width * 0.5, st.top + st.height * 0.9);
+	contact("pointerup", st.left + st.width * 0.5, st.top + st.height * 0.9);
+	await frames(1);
+	add("colour: a tap on empty paper takes nothing and the style eyedropper keeps waiting", v.colourTools.armed === "style" && v.tools.tool === "pen", `${v.colourTools.armed} ${v.tools.tool}`);
+	contact("pointerdown", hl.x, hl.y);
+	contact("pointerup", hl.x, hl.y);
+	await frames(1);
+	add("colour: a tap on a stroke takes its tool, colour and width",
+		v.tools.tool === "highlighter" && v.tools.highlighterColor === "#4ade80" && v.tools.highlighterWidth === 14 && v.colourTools.armed === null,
+		`${v.tools.tool} ${v.tools.highlighterColor} ${v.tools.highlighterWidth}`);
+	setTool("pen");
+	v.runAction("style-eyedropper");
+	contact("pointerdown", mid.x, mid.y);
+	contact("pointerup", mid.x, mid.y);
+	await frames(1);
+	add("colour: the style of a pen stroke sets the pen colour and width", v.tools.tool === "pen" && v.tools.penColor === "#dc2626" && v.tools.penWidth === 6, `${v.tools.tool} ${v.tools.penColor} ${v.tools.penWidth}`);
+	add("colour: the style eyedropper draws nothing and changes no stroke", strokeCount() === inkBefore, `${inkBefore} -> ${strokeCount()}`);
+
+	// The dial offers the same picker and eyedropper.
+	setTool("pen");
+	await openRadial();
+	await tapDial("color");
+	await tapDial("custom");
+	await frames(1);
+	add("colour: the custom colour of the dial opens the free picker and closes the dial", !!document.querySelector(".notebook-colour-picker") && !v.radial.isOpen, "");
+	v.colourTools.closePicker();
+	await openRadial();
+	await tapDial("color");
+	await tapDial("eyedropper");
+	add("colour: the eyedropper of the dial arms the page eyedropper and closes the dial", v.colourTools.armed === "colour" && !v.radial.isOpen, String(v.colourTools.armed));
+	v.colourTools.cancelEyedropper();
+
+	// Leave the notebook as it was: the two strokes written for the checks are undone.
+	v.undo();
+	v.undo();
+	await frames(2);
+	add("colour: the strokes written for these checks are undone", strokeCount() === startInk, `${startInk} -> ${strokeCount()}`);
+	setTool("pen");
+	v.toolbar.update({ penColor: "#1e1e1e", penWidth: 2 });
 	await frames(2);
 }
 
@@ -1151,7 +1340,7 @@ async function checkToolbar(add: (name: string, ok: boolean, detail?: string) =>
 	const k2 = ctxKind();
 	const selActions = Array.from(ctx().querySelectorAll("[data-action]")).map((b) => (b as HTMLElement).dataset.action);
 	const cr = ctx().getBoundingClientRect();
-	add(`${label}: the contextual bar changes with the context`, k0 === "none" && k1 === "lasso" && lassoActions.join() === "selection-paste" && k2 === "selection" && selActions.includes("selection-copy") && selActions.includes("delete-selection"),
+	add(`${label}: the contextual bar changes with the context`, k0 === "none" && k1 === "lasso" && lassoActions.join() === "selection-paste,select-rectangle,select-by-style,selection-paste-device" && k2 === "selection" && selActions.includes("selection-copy") && selActions.includes("delete-selection"),
 		`${k0} → ${k1} (${lassoActions.join()}) → ${k2} (${selActions.join()})`);
 	add(`${label}: the contextual bar is inside the view with 40 px targets`, inView(cr) && cr.bottom <= window.innerHeight + 0.5 && Array.from(ctx().querySelectorAll("button")).every((b) => (b as HTMLElement).offsetHeight >= 40 && (b as HTMLElement).offsetWidth >= 40),
 		`bar ${Math.round(cr.left)}–${Math.round(cr.right)}, bottom ${Math.round(cr.bottom)}`);
@@ -1504,6 +1693,160 @@ function applyTheme(theme = params.get("theme") ?? "light"): void {
 	document.body.classList.toggle("theme-light", theme !== "dark");
 }
 
+/**
+ * wave 0.10: the selection tools through the real view. Rectangle selection by a pen drag, the second row of the selection
+ * bar and its menus, align, rotate, mirror, exact size, select similar and the colour/tool picker; each change is one undo
+ * step. Leaves the document as it found it.
+ */
+async function checkSelectionTools(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
+	const v = view as any;
+	const doc = view!.document!;
+	const page = doc.pages[0]!;
+	const start = strokeCount();
+	const tb = v.toolbar;
+	const label = `selection tools ${window.innerWidth}px`;
+	const red = createStroke("#dc2626", 2, [[40, 100, 0.3], [60, 102, 0.5], [80, 100, 0.7]], "pen");
+	const red2 = createStroke("#dc2626", 2, [[120, 140, 0.3], [160, 142, 0.5], [200, 140, 0.7]], "pen");
+	const yellow = createStroke("#facc15", 14, [[240, 190, 0.5], [250, 192, 0.5], [260, 190, 0.5]], "highlighter");
+	const mine = [red, red2, yellow];
+	view!.applyCommand(new Batch("Add test ink", mine.map((s, i) => new AddStroke(page.id, s, page.strokes.length + i))));
+	await frames(2);
+	const find = (id: string) => page.strokes.find((s) => s.id === id)!;
+	const minX = (s: any) => Math.min(...s.points.map((p: number[]) => p[0]!));
+	const maxX = (s: any) => Math.max(...s.points.map((p: number[]) => p[0]!));
+	const selectedIds = () => new Set<string>((v.selection?.strokes ?? []).map((s: any) => s.id));
+	const bar = () => document.querySelector(".notebook-context-bar") as HTMLElement;
+	const barIds = (sel: string) => Array.from(bar().querySelectorAll(`${sel} [data-action]`)).map((b) => (b as HTMLElement).dataset.action);
+	const stageBox = stage().getBoundingClientRect();
+	const frac = (px: number, py: number): [number, number] => {
+		const box = v.layout.boxes[0];
+		const { scale, offsetX, offsetY } = v.viewport;
+		return [(offsetX + (box.x + px) * scale) / stageBox.width, (offsetY + (box.y + py) * scale) / stageBox.height];
+	};
+	const visible = (() => {
+		const a = frac(20, 80), b = frac(280, 210);
+		return a[0] >= 0 && a[1] >= 0 && b[0] <= 1 && b[1] <= 1;
+	})();
+	const reselect = () => v.selectItems(0, mine.map((s) => find(s.id)), []);
+
+	// Rectangle selection (63): the toggle is on the lasso bar, and a diagonal drag picks what the box holds.
+	tb.update({ tool: "lasso" });
+	v.refreshUi();
+	v.ui.refreshNow();
+	const toggle = bar().querySelector('[data-action="select-rectangle"]') as HTMLElement | null;
+	add(`${label}: the lasso bar offers rectangle selection and select by colour or tool`, !!toggle && barIds("").includes("select-by-style") && toggle.getAttribute("aria-pressed") === "false", barIds("").join());
+	click(toggle, "rectangle toggle");
+	await frames(2);
+	v.ui.refreshNow();
+	const pressed = (bar().querySelector('[data-action="select-rectangle"]') as HTMLElement | null)?.getAttribute("aria-pressed");
+	add(`${label}: the toggle switches the lasso to a rectangle`, tb.state.selectMode === "rectangle" && pressed === "true", `${tb.state.selectMode}, pressed ${pressed}`);
+	if (visible) {
+		await penStroke([frac(20, 80), frac(280, 210)], { pointerType: "pen", steps: 10 });
+		const got = selectedIds();
+		add(`${label}: dragging a rectangle selects the ink inside it`, mine.every((s) => got.has(s.id)), `${got.size} selected`);
+	} else {
+		reselect();
+		await wait(200);
+		add(`${label}: dragging a rectangle selects the ink inside it`, true, "region not in view at this size: selected through the view");
+	}
+	v.ui.refreshNow();
+	const second = barIds(".notebook-context-second");
+	add(`${label}: the selection bar has a second row with select similar, align and transform`,
+		second.includes("selection-similar") && second.includes("selection-align-menu") && second.includes("selection-transform-menu"), second.join());
+	const cr = bar().getBoundingClientRect();
+	add(`${label}: the two-row selection bar fits the view with 40 px targets`, cr.left >= -0.5 && cr.right <= window.innerWidth + 0.5 && Array.from(bar().querySelectorAll("button")).every((b) => (b as HTMLElement).offsetHeight >= 40),
+		`bar ${Math.round(cr.left)}-${Math.round(cr.right)}`);
+	if (tb.state.selectMode === "rectangle") v.runAction("select-rectangle");
+	add(`${label}: the rectangle mode toggles back to the lasso`, tb.state.selectMode === "lasso", tb.state.selectMode);
+
+	// Align (38) from the menu of the bar: the left edges meet, in one undo step.
+	reselect();
+	await frames(2);
+	v.ui.refreshNow();
+	const first = mine.map((s) => minX(find(s.id)));
+	click(bar().querySelector('[data-action="selection-align-menu"]'), "align menu");
+	const menu = (window as any).harnessMenu as { titles: string[]; run(title: string): void } | undefined;
+	add(`${label}: the align button opens a menu with every align and distribute entry`,
+		!!menu && ["Align left", "Align centre", "Align right", "Align top", "Align middle", "Align bottom", "Distribute horizontally", "Distribute vertically"].every((x) => menu.titles.includes(x)), menu?.titles.join(", ") ?? "no menu");
+	menu?.run("Align left");
+	await frames(2);
+	const lefts = mine.map((s) => minX(find(s.id)) - s.width / 2);
+	add(`${label}: align left puts the ink on one edge`, Math.max(...lefts) - Math.min(...lefts) < 8.01, lefts.map((x) => x.toFixed(1)).join(", "));
+	v.undo();
+	await frames(2);
+	add(`${label}: one undo restores the places`, mine.every((s, i) => Math.abs(minX(find(s.id)) - first[i]!) < 0.01), "");
+
+	// Rotate, mirror and exact size (65): one undo step each, ink kept as vectors.
+	reselect();
+	// The panel measures the ink with its thickness, like the selection box does.
+	const widthOf = () => Math.max(...mine.map((s) => maxX(find(s.id)) + find(s.id).width / 2)) - Math.min(...mine.map((s) => minX(find(s.id)) - find(s.id).width / 2));
+	const before = widthOf();
+	v.runAction("selection-rotate-cw");
+	await frames(2);
+	add(`${label}: rotate 90 degrees turns the selection (width becomes its height)`, Math.abs(widthOf() - before) > 20 && selectedIds().size === 3, `${before.toFixed(1)} -> ${widthOf().toFixed(1)}`);
+	v.undo();
+	await frames(2);
+	add(`${label}: undo of the rotation is one step`, Math.abs(widthOf() - before) < 0.05, `${widthOf().toFixed(2)} vs ${before.toFixed(2)}`);
+	reselect();
+	const redLeft = minX(find(red.id));
+	v.runAction("selection-mirror-h");
+	await frames(2);
+	add(`${label}: mirror left to right swaps the sides`, minX(find(red.id)) > redLeft + 50 && Math.abs(widthOf() - before) < 0.1, `${redLeft} -> ${minX(find(red.id))}`);
+	v.undo();
+	await frames(2);
+	reselect();
+	v.runAction("selection-resize");
+	await frames(2);
+	const panel = document.querySelector(".notebook-resize-panel") as HTMLElement | null;
+	const wIn = panel?.querySelector("#notebook-resize-width") as HTMLInputElement | null;
+	const hIn = panel?.querySelector("#notebook-resize-height") as HTMLInputElement | null;
+	add(`${label}: exact size opens a panel with the current size`, !!wIn && !!hIn && Number(wIn.value) > 0 && Number(hIn.value) > 0, `${wIn?.value} x ${hIn?.value}`);
+	if (wIn && hIn && panel) {
+		const w1 = Number(wIn.value), h1 = Number(hIn.value);
+		const half = Math.round(w1 / 2);
+		wIn.value = String(half);
+		wIn.dispatchEvent(new Event("input", { bubbles: true }));
+		add(`${label}: with the lock on, the height follows the width`, Math.abs(Number(hIn.value) - (h1 * half) / w1) < 0.02, `${hIn.value}`);
+		click(panel.querySelector("button.mod-cta"), "Apply");
+		await frames(2);
+		add(`${label}: Apply gives the selection that size`, Math.abs(widthOf() - half) < 1.2, `${widthOf().toFixed(2)} vs ${half}`);
+		v.undo();
+		await frames(2);
+		add(`${label}: undo restores the size`, Math.abs(widthOf() - before) < 0.05, `${widthOf().toFixed(2)}`);
+	}
+
+	// Select similar and the picker (64).
+	v.selectItems(0, [find(red.id)], []);
+	v.runAction("select-same-colour");
+	await frames(2);
+	const same = selectedIds();
+	add(`${label}: select similar (same colour) takes the other red stroke and not the highlighter`, same.has(red.id) && same.has(red2.id) && !same.has(yellow.id), `${same.size} selected`);
+	v.selectItems(0, [find(yellow.id)], []);
+	v.runAction("select-same-tool");
+	await frames(2);
+	const byTool = selectedIds();
+	add(`${label}: select similar (same tool) takes the highlighter strokes only`, byTool.has(yellow.id) && !byTool.has(red.id) && [...byTool].every((id) => find(id)?.tool === "highlighter"), `${byTool.size} selected`);
+	v.clearSelection();
+	v.runAction("select-by-style");
+	await frames(2);
+	const picker = document.querySelector(".notebook-style-panel") as HTMLElement | null;
+	const rows = Array.from(picker?.querySelectorAll("button.notebook-style-row") ?? []) as HTMLElement[];
+	const hl = rows.find((r) => r.textContent?.startsWith("Highlighter"));
+	add(`${label}: the picker lists the tools and colours of the page`, !!picker && rows.length >= 3 && !!hl, `${rows.length} rows`);
+	click(hl, "Highlighter row");
+	await frames(2);
+	const picked = selectedIds();
+	add(`${label}: picking the highlighter selects all highlighter strokes`, picked.size > 0 && [...picked].every((id) => find(id)?.tool === "highlighter") && picked.has(yellow.id), `${picked.size} selected`);
+
+	// Leave the document as it was.
+	v.clearSelection();
+	v.undo();
+	await frames(2);
+	setTool("pen");
+	v.refreshUi();
+	add(`${label}: the test ink is gone again`, strokeCount() === start, `${start} -> ${strokeCount()}`);
+}
+
 function applySize(): void {
 	const w = params.get("w"), h = params.get("h");
 	const root = document.getElementById("harness-app")!;
@@ -1511,7 +1854,7 @@ function applySize(): void {
 	if (h) root.style.height = `${Number(h)}px`;
 }
 
-(window as any).harness = { app, open, measureOpen, penStroke, setTool, openOptions, openMore, measureLod, compareLod, checkHeavy, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkPractice: () => checkPractice({ view, app, service: practiceService, frames, errors, notices }), checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
+(window as any).harness = { app, open, measureOpen, penStroke, setTool, openOptions, openMore, measureLod, compareLod, checkHeavy, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkReadOnly: async () => { try { return JSON.parse(JSON.stringify(await checkReadOnly({ view, app, stage, penStroke, setTool, strokeCount, frames, openMore, errors, notices }))); } catch (e) { return { ok: false, results: [], errors: [`readonly check: ${(e as Error).stack ?? e}`], notices: [], env: {} }; } }, checkPractice: () => checkPractice({ view, app, service: practiceService, frames, errors, notices }), checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
 	return view;
 } };
 

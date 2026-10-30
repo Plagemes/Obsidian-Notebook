@@ -4,10 +4,13 @@ import { layerFlags, planExport, type ExportFormat, type ExportLayers, type Expo
 import { pagesToPdf, type PdfPlacedImage } from "../ink/export-pdf";
 import { pageToSvg, type SvgPlacedImage } from "../ink/export-svg";
 import type { BoxLabel } from "../ink/marker-render";
+import { DEFAULT_PNG_SCALE } from "../model/export-pages";
 import { backgroundRect } from "../model/margins";
 import type { Page } from "../model/types";
+import { exportPngPages } from "./export-png";
 import type { NotebookMedia } from "./media";
 import { showNotice } from "./notice";
+import { printPages } from "./print";
 
 /** Resolution of rasterised PDF pages in exports. */
 const PDF_DPI = 200;
@@ -159,16 +162,30 @@ export interface ExportRequest {
 	/** The page of a single-page export (0-based). */
 	pageIndex: number;
 	layers: ExportLayers;
+	/** wave 0.10: the pages of a "range" scope (0-based). */
+	range?: readonly number[];
+	/** wave 0.10 (81), PNG images: the vault folder (created when missing) and the pixels per pt. */
+	folder?: string;
+	scale?: number;
 }
 
 /**
- * Writes the files an export dialog asked for next to the notebook: one PDF, or one SVG per page for a whole notebook.
+ * Writes the files an export dialog asked for next to the notebook: one PDF, or one SVG per page for a whole notebook or a
+ * range; PNG images go to a vault folder; Print writes nothing and opens the system print dialog (wave 0.10, 81).
  * Existing files are never overwritten (the name gets " 2", " 3"…).
  */
 export async function runExport(app: App, notebook: TFile, pages: readonly Page[], request: ExportRequest, media: NotebookMedia | null, options: ExportOptions = {}): Promise<void> {
-	const jobs = planExport(request.format, request.scope, request.pageIndex, pages.length, request.layers);
+	const jobs = planExport(request.format, request.scope, request.pageIndex, pages.length, request.layers, request.range);
 	const opts: ExportOptions = { ...options, layers: request.layers };
 	if (jobs.length === 0) return;
+	if (request.format === "png") {
+		await exportPngPages(app, pages, { folder: request.folder ?? "", scale: request.scale ?? DEFAULT_PNG_SCALE, pages: jobs[0]!.pages }, media, opts);
+		return;
+	}
+	if (request.format === "print") {
+		await printPages(pages, jobs[0]!.pages, media, opts);
+		return;
+	}
 	if (request.format === "pdf") {
 		const job = jobs[0]!;
 		await exportPdf(app, notebook, job.pages.map((i) => pages[i]!), job.suffix, media, opts);

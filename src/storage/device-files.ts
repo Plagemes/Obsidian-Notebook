@@ -9,6 +9,8 @@ import type { LinkFileAdapter } from "./pdf-links-store";
 export interface DeviceFileAdapter extends LinkFileAdapter {
 	/** Paths of the files directly inside `folder` (empty when it does not exist). */
 	list(folder: string): Promise<string[]>;
+	/** Size in bytes of the file (null when there is none); lets a reader skip a file far bigger than it can be. */
+	size?(path: string): Promise<number | null>;
 }
 
 /**

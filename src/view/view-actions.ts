@@ -21,6 +21,7 @@ import { deletePageKeepingCopy, newPageFromTemplate, openDeletedPages, savePageA
 import { insertReference, openPage, removeTextbook, setTextbook } from "./textbook-ref-ui";
 import { toggleBookmark } from "./view-helpers";
 import { showNotice } from "./notice";
+import { canPrint } from "./print";
 
 export interface ActionArg {
 	page?: number;
@@ -33,12 +34,24 @@ export function sizeName(page: Page): PageSizeName | null {
 	return (Object.keys(PAGE_SIZES) as PageSizeName[]).find((n) => PAGE_SIZES[n].width === short && PAGE_SIZES[n].height === long) ?? null;
 }
 
+/** The commands that work on a selection (layer order; wave 0.10: align, distribute, rotate, mirror, size, select similar). */
+const SELECTION_ONLY = /^(layer-|selection-(align|distribute|rotate|mirror|resize|transform|similar)|select-same-)/;
+
 /** Whether a command of the registry applies to this view now (the palette hides it otherwise). */
 export function commandApplies(view: NotebookView, id: string): boolean {
+	// wave 0.10 (363): there has to be another notebook open to go to
+	if (id === "notebook-next" || id === "notebook-previous") return (view.tabTools?.count ?? 0) > 1;
 	if (id === "pdf-side-open") return pdfSideState(view).available;
 	if (id.startsWith("pdf-side-")) return pdfSideState(view).open;
-	// wave 0.9 (357): the layer order needs something selected.
-	if (id.startsWith("layer-")) return !!view.uiContext().selection;
+	// wave 0.9 (357): the layer order needs something selected. Wave 0.10: so do arranging it and selecting similar ink.
+	if (SELECTION_ONLY.test(id)) return !!view.uiContext().selection;
+	// wave 0.10 (362): copying to the other devices needs a selection (pasting does not).
+	if (id === "selection-copy-devices") return !!view.uiContext().selection;
+	// wave 0.10 (81): there is no print dialog on a phone or tablet.
+	if (id === "print") return canPrint();
+	// wave 0.10 (18): back and forward need a place to go to.
+	if (id === "nav-back") return view.navState().back;
+	if (id === "nav-forward") return view.navState().forward;
 	return true;
 }
 
@@ -95,6 +108,10 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"favourite-4": (v) => v.selectFavourite(3),
 	"favourite-5": (v) => v.selectFavourite(4),
 	"favourite-6": (v) => v.selectFavourite(5),
+	// wave 0.10 (7, 68): colour picker, page eyedropper, style eyedropper
+	"colour-picker": (v) => v.colourTools?.togglePicker(),
+	"colour-eyedropper": (v) => v.colourTools?.armEyedropper("colour"),
+	"style-eyedropper": (v) => v.colourTools?.armEyedropper("style"),
 	"undo": (v) => v.undo(),
 	"redo": (v) => v.redo(),
 
@@ -103,6 +120,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"selection-cut": (v) => void v.selectionTools?.cut(),
 	"selection-duplicate": (v) => v.selectionTools?.duplicate(),
 	"selection-paste": (v) => void v.selectionTools?.paste(),
+	"selection-copy-devices": (v) => void v.selectionTools?.copyToDevices(),
+	"selection-paste-device": (v) => void v.selectionTools?.pasteFromDevices(),
 	"selection-white-transparent": (v) => void v.selectionTools?.makeWhiteTransparent(),
 	"link-selection": (v) => v.linkSelection(),
 	"selection-open-link": (v) => v.openSelectionLink(),
@@ -112,9 +131,32 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"layer-backward": (v) => v.moveSelectionLayer("backward"),
 	"layer-back": (v) => v.moveSelectionLayer("back"),
 	"delete-selection": (v) => v.removeSelection(),
+	// wave 0.10: rectangle selection (63), select by colour or tool (64), align and distribute (38), rotate, mirror, size (65)
+	"select-rectangle": (v) => v.toggleSelectRectangle(),
+	"select-by-style": (v) => v.arrangeTools?.pickStyle(),
+	"selection-similar": (v) => v.arrangeTools?.menu("similar"),
+	"select-same-colour": (v) => v.arrangeTools?.similar("colour"),
+	"select-same-tool": (v) => v.arrangeTools?.similar("tool"),
+	"selection-align-menu": (v) => v.arrangeTools?.menu("align"),
+	"selection-align-left": (v) => v.arrangeTools?.align("left"),
+	"selection-align-centre": (v) => v.arrangeTools?.align("centre"),
+	"selection-align-right": (v) => v.arrangeTools?.align("right"),
+	"selection-align-top": (v) => v.arrangeTools?.align("top"),
+	"selection-align-middle": (v) => v.arrangeTools?.align("middle"),
+	"selection-align-bottom": (v) => v.arrangeTools?.align("bottom"),
+	"selection-distribute-h": (v) => v.arrangeTools?.distribute("horizontal"),
+	"selection-distribute-v": (v) => v.arrangeTools?.distribute("vertical"),
+	"selection-transform-menu": (v) => v.arrangeTools?.menu("transform"),
+	"selection-rotate-cw": (v) => v.arrangeTools?.rotate(true),
+	"selection-rotate-ccw": (v) => v.arrangeTools?.rotate(false),
+	"selection-mirror-h": (v) => v.arrangeTools?.mirror("horizontal"),
+	"selection-mirror-v": (v) => v.arrangeTools?.mirror("vertical"),
+	"selection-resize": (v) => v.arrangeTools?.resize(),
 
 	// navigation (wave 0.7)
 	"goto-page-number": (v) => new GotoPageModal(v.app, v).open(),
+	"nav-back": (v) => v.navigate(-1),
+	"nav-forward": (v) => v.navigate(1),
 	"toggle-page-mode": (v) => v.togglePageMode(),
 	"find-replace": (v) => v.openFindReplace(),
 
@@ -125,6 +167,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"insert-graph": (v) => v.mathTools?.insertGraph(),
 	"math-edit": (v) => v.mathTools?.editSelected(),
 	"math-convert-ink": (v) => void v.mathTools?.convertSelectedToInk(),
+	"insert-date-stamp": (v) => v.insertDateStamp(),
 	"stamps": (v) => v.stampPalette?.toggle(),
 	"board-shot": (v) => void v.boardShot(),
 	"add-page": (v) => v.addPage(),
@@ -265,8 +308,18 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	// wave 0.9: export dialog (381, from a page's sheet it starts on that page), Markdown export (382), night mode (367), cropped margins (376)
 	"export-dialog": (v, arg) => v.openExportDialog(arg.page),
 	"export-markdown": (v) => v.openMarkdownExport(),
+	// wave 0.10: PNG images (81) and Print (81) are choices of the same dialog; read-only mode (51)
+	"export-png": (v) => v.openExportDialog(undefined, "png"),
+	"print": (v) => {
+		if (canPrint()) v.openExportDialog(undefined, "print");
+		else showNotice(t("export.print.unavailable"), 8000);
+	},
+	"toggle-read-only": (v) => v.toggleReadOnlyMode(),
 	"night-mode": (v) => v.displayTools?.toggleNight(),
 	"crop-margins": (v) => v.displayTools?.toggleCrop(),
+	// wave 0.10 (363): next / previous open notebook
+	"notebook-next": (v) => void v.tabTools?.step(1),
+	"notebook-previous": (v) => void v.tabTools?.step(-1),
 	// wave 0.8: quick textbook reference (view/textbook-ref-ui.ts)
 	"textbook-set": (v) => setTextbook(v),
 	"textbook-open": (v) => openPage(v),

@@ -9,7 +9,7 @@ Handwritten notebooks inside your Obsidian vault, designed first for **Android t
 - Local-first: no account, no cloud, no telemetry.
 - UI in English, and in Italian when Obsidian is set to Italian.
 
-> **Status: v0.9.0 (document format 9), early development.** The automated tests pass, but the plugin has **not been verified on Android hardware yet**, and most features are new in 0.5.x, 0.6.0, 0.7.0, 0.8.0 and 0.9.0 (the interface was redesigned in 0.7.0; markers, pen gestures and page operations came in 0.8.0; equations, graphs, export choices and night mode came in 0.9.0) and many are experimental (including the writing engine, the scanner, export and, in 0.9.0, equations, which have never been run with Obsidian's maths engine outside a test stand-in: the PDF and SVG were checked with other software on a PC, not opened on Android). See [docs/testing.md](docs/testing.md) for what is verified and how to test it.
+> **Status: v0.10.0 (document format 9), early development.** The automated tests pass, but the plugin has **not been verified on Android hardware yet**, and most features are new in 0.5.x, 0.6.0, 0.7.0, 0.8.0 and 0.9.0 (the interface was redesigned in 0.7.0; markers, pen gestures and page operations came in 0.8.0; equations, graphs, export choices and night mode came in 0.9.0) and many are experimental (including the writing engine, the scanner, export and, in 0.9.0, equations, which have never been run with Obsidian's maths engine outside a test stand-in: the PDF and SVG were checked with other software on a PC, not opened on Android). See [docs/testing.md](docs/testing.md) for what is verified and how to test it.
 
 ## Usage
 
@@ -21,7 +21,7 @@ Handwritten notebooks inside your Obsidian vault, designed first for **Android t
 
 The library is a screen with a sidebar (**All notebooks**, **Favourites**, **Recent**, the folder tree, tags) and a grid of cards showing the cover, name, page count and date. Covers are thumbnails of the first page, also for PDF and image pages, on a cover colour you choose.
 
-- Sort by last modified, name or date created.
+- Sort by last modified, name or date created, or by hand (**Manual order**: drag a card onto another, or *Move up* / *Move down* in its menu). *Pin to the top* keeps a notebook first; *Archive* hides a notebook everywhere (under **Archived** in the sidebar, where *Restore from the archive* brings it back) without moving or changing its file. This is kept per device in `_meta/library-<device>.json`, so it merges when two devices sync. **Check library** (sidebar) lists notebooks that cannot be read and unused files in `_assets`, and moves the unused ones to the trash after you confirm.
 - Per notebook: open, rename, move to a folder (menu or drag onto a folder), duplicate, delete (to the library trash, with restore), favourite, edit tags, cover colour. Folders are real vault folders: create, rename, delete (to the trash, also non-empty ones). **Trash** in the sidebar lists the deleted notebooks and folders: restore (to the original place, or under `Name 2` if the name is taken), delete permanently or empty it, both after a confirmation; setting *Empty the trash automatically* (days, off by default).
 - **Search** looks in notebook titles, tags and the text of text boxes, everywhere, in this folder or in this view. A text hit shows a snippet and opens the notebook at that page. Handwriting is not searched (no OCR).
 - Metadata and thumbnails are cached in `library-index.json` in the plugin folder. It is only a cache: it can be deleted at any time and is rebuilt (the library shows "Indexing…").
@@ -116,6 +116,19 @@ All of this is new in 0.9.0 and **not verified on Android hardware**; the manual
 - **Night mode** (*All actions*): a dark page with light ink, applied when drawing only; stored colours and exports are unchanged.
 - **Crop PDF margins** (PDF contextual bar, *All actions*): fits the content of each PDF page to the screen width, a view setting for small screens; the document and exports are untouched.
 - **Obsidian integration and input**: command icons for the mobile toolbar, *Add page to Obsidian bookmarks*, the page turner and the *Toolbar size* setting are described under *Interface*.
+
+### Navigation, selection and library (0.10.0)
+
+All of this is new in 0.10.0 and **not verified on Android hardware**; the manual steps are in [docs/testing.md](docs/testing.md) (steps 275-379). The notebook format does not change.
+
+- **Tabs of open notebooks** (setting, off by default): a strip above the toolbar lists the open notebooks; a two-finger sideways swipe on the toolbar goes to the next or previous one.
+- **Automatic line break** (setting, off by default): on ruled or grid paper, lifting the pen at the right edge scrolls to the start of the next line.
+- **Back and Forward** through the pages you jumped between; a **fast scrollbar** with a page preview; a **status bar item** ("p. 3/12 · Saved", desktop only).
+- **Date and time stamp** at the pen position; **lasso selection across pages**; **Copy to other devices** / **Paste from another device…** through the vault.
+- **Selection tools**: rectangle selection, select by colour or tool, align and distribute, rotate 90°, mirror and exact size.
+- **Library**: pin notebooks, archive them, order them by hand, and **Check library** (unreadable notebooks, unused files moved inside the vault, never deleted).
+- **Read-only mode** per notebook view; **Export…** to PNG images, page ranges for every format, and **Print** (desktop).
+- **Free colour picker** with recent colours, a page **eyedropper** and a **style eyedropper** (colour, width and tool from a stroke).
 
 ### PDFs and scans
 

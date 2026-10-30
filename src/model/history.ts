@@ -576,10 +576,16 @@ export class History {
 	constructor(
 		private readonly doc: () => NotebookDocument, readonly limit = 500,
 		private readonly guard: ContentGuard | null = null, private readonly refused: ((message: string) => void) | null = null,
+		/** wave 0.10 (51): true while the document must not change (read-only mode): nothing is run, undone or redone. */
+		private readonly locked: (() => boolean) | null = null,
 	) {}
 
-	/** Runs the command and records it. False when the guard refused it (it is undone and not recorded). */
+	/**
+	 * Runs the command and records it. False when the guard refused it (it is undone and not recorded) or the history is
+	 * locked (read-only mode: the command is not even applied).
+	 */
 	execute(cmd: Command): boolean {
+		if (this.locked?.()) return false;
 		const doc = this.doc();
 		cmd.apply(doc);
 		const problem = this.guard?.(doc) ?? null;
@@ -600,6 +606,7 @@ export class History {
 	}
 
 	undo(): Command | null {
+		if (this.locked?.()) return null;
 		const cmd = this.undoStack.pop();
 		if (!cmd) return null;
 		cmd.revert(this.doc());
@@ -608,6 +615,7 @@ export class History {
 	}
 
 	redo(): Command | null {
+		if (this.locked?.()) return null;
 		const cmd = this.redoStack.pop();
 		if (!cmd) return null;
 		cmd.apply(this.doc());
@@ -626,5 +634,10 @@ export class History {
 	clear(): void {
 		this.undoStack = [];
 		this.redoStack = [];
+	}
+
+	/** Every command still in the undo and redo stacks (read-only: the library check asks what they still name). */
+	pending(): readonly Command[] {
+		return [...this.undoStack, ...this.redoStack];
 	}
 }

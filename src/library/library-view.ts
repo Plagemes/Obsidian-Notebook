@@ -3,12 +3,14 @@ import { t, type MessageKey } from "../i18n";
 import type { NotebookDocument, NotebookMeta, Page } from "../model/types";
 import { isNotebookFile } from "../storage/format";
 import { sanitizeName } from "../storage/notebooks";
-import { attachPress, DROP_ATTR } from "./drag";
+import { attachPress, DROP_ATTR, DROP_CARD_ATTR } from "./drag";
 import { breadcrumb, buildFolderTree, flattenTree, isReservedPath, type FolderNode } from "./folders";
 import { relativeTime, uniquePath } from "./format";
 import { folderOf, isInside, LibraryIndex, SORTS, type Highlight, type LibraryEntry, type LibraryScope, type LibrarySort, type SearchHit } from "./index";
 import { openTagEditor } from "../integration/tags";
 import { ConfirmModal, CoverModal, FolderSuggestModal, PromptModal } from "./library-modals";
+import { arrangeEntries, planMove, type LibraryMap, type LibraryOp } from "./library-state";
+import { LibraryStateBlockedError, type LibraryStateStore } from "./library-state-store";
 import { entryFromFile, filesToRead, type NotebookFileInfo } from "./scan";
 import { folderContents, type LibraryTrash } from "../storage/trash";
 import { addTrashNavItem, confirmMoveToTrash, FolderToTrashModal, TrashModal } from "./trash-modal";
@@ -51,6 +53,12 @@ export interface LibraryHost {
 	trash?: LibraryTrash;
 	/** wave 0.7: opens the list of recently edited pages (roadmap 365). */
 	openRecentPages?(): void;
+	/** Roadmap 54: pinned, archived and manual order, kept per device in `_meta` (library/library-state.ts). */
+	state?: LibraryStateStore;
+	/** The notebook's document id from the start of its file (no full parse), or null. */
+	readNotebookId?(file: TFile): Promise<string | null>;
+	/** Roadmap 27: opens the library check (unreadable notebooks, unused files). */
+	checkLibrary?(): void;
 	loadIndex(): Promise<unknown>;
 	saveIndex(data: unknown): Promise<void>;
 }
@@ -75,7 +83,7 @@ function sameScope(a: LibraryScope, b: LibraryScope): boolean {
 }
 
 function parseScope(v: unknown): LibraryScope {
-	if (v === "all" || v === "favorites" || v === "recent") return v;
+	if (v === "all" || v === "favorites" || v === "recent" || v === "archived") return v;
 	if (typeof v === "object" && v !== null) {
 		const o = v as { folder?: unknown; tag?: unknown };
 		if (typeof o.folder === "string") return { folder: o.folder };
@@ -122,6 +130,13 @@ export class LibraryView extends ItemView {
 	private dirty = false;
 	private searchTimer = 0;
 
+	/** Roadmap 54: pinned / archived / manual order, merged from every device's file in `_meta`. */
+	private state: LibraryMap = new Map();
+	private stateTimer = 0;
+	/** The notebooks of the grid as shown (paths), per group, so a move up / down / drop knows its neighbours. */
+	private arrangement: { pinned: string[]; rest: string[] } = { pinned: [], rest: [] };
+	private backfilling = false;
+
 	private readonly thumbQueue: string[] = [];
 	private readonly thumbPending = new Set<string>();
 	private readonly thumbFailed = new Set<string>();
@@ -167,6 +182,11 @@ export class LibraryView extends ItemView {
 		} catch (e) {
 			console.error("[notebook] library index unreadable, rebuilding", e);
 		}
+		try {
+			this.state = (await this.host.state?.load()) ?? new Map();
+		} catch (e) {
+			console.error("[notebook] library state unreadable", e);
+		}
 		this.buildShell();
 		this.built = true;
 		this.expanded.add(this.root());
@@ -179,6 +199,10 @@ export class LibraryView extends ItemView {
 		this.registerEvent(vault.on("create", (f) => this.onVaultChange(f)));
 		this.registerEvent(vault.on("modify", (f) => this.onVaultChange(f, MODIFY_DELAY_MS)));
 		this.registerEvent(vault.on("delete", (f) => this.onVaultDelete(f)));
+		// A device synced its library file: pinned, archived and order change here too.
+		this.registerEvent(vault.on("create", (f) => this.onStateFile(f)));
+		this.registerEvent(vault.on("modify", (f) => this.onStateFile(f)));
+		this.registerEvent(vault.on("delete", (f) => this.onStateFile(f)));
 		this.registerEvent(vault.on("rename", (f, oldPath) => this.onVaultRename(f, oldPath)));
 		this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.revealed()));
 
@@ -190,6 +214,7 @@ export class LibraryView extends ItemView {
 		window.clearTimeout(this.saveTimer);
 		window.clearTimeout(this.reconcileTimer);
 		window.clearTimeout(this.searchTimer);
+		window.clearTimeout(this.stateTimer);
 		this.observer?.disconnect();
 		this.resizeObserver?.disconnect();
 		this.thumbQueue.length = 0;
@@ -327,6 +352,134 @@ export class LibraryView extends ItemView {
 	}
 
 	// -------------------------------------------------------------- vault
+
+	// ---------------------------------------------------------- pinned, archived, manual order (roadmap 54)
+
+	private keyOf = (e: LibraryEntry): string => this.index.stateKey(e);
+	private isArchived = (e: LibraryEntry): boolean => this.state.get(this.keyOf(e))?.archived === true;
+	private isPinned = (e: LibraryEntry): boolean => this.state.get(this.keyOf(e))?.pinned === true;
+	private notArchived = (e: LibraryEntry): boolean => !this.isArchived(e);
+
+	private onStateFile(f: TAbstractFile): void {
+		if (!(f instanceof TFile) || !this.host.state?.watches(f.path)) return;
+		window.clearTimeout(this.stateTimer);
+		this.stateTimer = window.setTimeout(() => {
+			void this.host.state?.load().then((state) => {
+				if (this.closed) return;
+				this.state = state;
+				this.requestRender();
+			}).catch((e) => console.error("[notebook] library state unreadable", e));
+		}, 600);
+	}
+
+	/** Writes the changes to this device's file, then shows the merged result. A file that cannot be read is never overwritten. */
+	private async updateState(ops: LibraryOp[]): Promise<boolean> {
+		const store = this.host.state;
+		if (!store || ops.length === 0) return false;
+		try {
+			this.state = await store.update(ops);
+			this.requestRender();
+			return true;
+		} catch (e) {
+			if (e instanceof LibraryStateBlockedError) showNotice(t("library.notice.stateBlocked", { error: e.message }));
+			else this.fail(e);
+			return false;
+		}
+	}
+
+	/** Reads the id of notebooks the index has no id for (an index from before ids were kept), so their state is keyed by id. */
+	private async ensureIds(paths: readonly string[]): Promise<void> {
+		for (const path of paths) {
+			if (!this.index.needsId(path)) continue;
+			const file = this.app.vault.getFileByPath(path);
+			if (!file) continue;
+			try {
+				const id = await this.host.readNotebookId?.(file);
+				if (id) this.index.patch(path, { id });
+			} catch (e) {
+				console.error("[notebook] could not read the notebook id", path, e);
+			}
+		}
+	}
+
+	/** In the background, after indexing: gives every entry its id (cheap: the start of the file). */
+	private async backfillIds(): Promise<void> {
+		if (this.backfilling || !this.host.readNotebookId) return;
+		this.backfilling = true;
+		try {
+			let n = 0;
+			for (const e of this.index.all()) {
+				if (this.closed) return;
+				if (!this.index.needsId(e.path)) continue;
+				await writing.idle();
+				await this.ensureIds([e.path]);
+				if (++n % 16 === 0) {
+					this.afterIndexChange();
+					await tick();
+				}
+			}
+			if (n > 0) this.afterIndexChange();
+		} finally {
+			this.backfilling = false;
+		}
+	}
+
+	private setSort(sort: LibrarySort): void {
+		this.sort = sort;
+		this.sortEl.value = sort;
+		this.app.workspace.requestSaveLayout();
+	}
+
+	private async togglePinned(path: string): Promise<void> {
+		await this.ensureIds([path]);
+		const e = this.index.get(path);
+		if (!e) return;
+		await this.updateState([{ kind: "pinned", key: this.keyOf(e), value: !this.isPinned(e) }]);
+	}
+
+	private async toggleArchived(path: string): Promise<void> {
+		await this.ensureIds([path]);
+		const e = this.index.get(path);
+		if (!e) return;
+		const archive = !this.isArchived(e);
+		if (await this.updateState([{ kind: "archived", key: this.keyOf(e), value: archive }])) {
+			showNotice(t(archive ? "library.notice.archived" : "library.notice.unarchived", { name: e.name }));
+		}
+	}
+
+	/** The group (pinned or the rest) of the grid that shows `path`, as paths in the order shown. */
+	private groupOf(path: string): string[] | null {
+		if (this.arrangement.pinned.includes(path)) return this.arrangement.pinned;
+		return this.arrangement.rest.includes(path) ? this.arrangement.rest : null;
+	}
+
+	/** Whether the order of the grid can be changed by hand: a plain list (not a search, not Recent or Archived) with two or more in a group. */
+	private reorderable(path: string): boolean {
+		const group = this.groupOf(path);
+		return !!group && group.length > 1 && this.search.trim() === "" && this.place !== "recent" && this.place !== "archived";
+	}
+
+	/** Puts `path` at `toIndex` of its group. A grid that is not in manual order is first fixed as it is shown, then moved. */
+	private async placeAt(path: string, toIndex: number): Promise<void> {
+		const group = this.groupOf(path);
+		if (!group || !this.reorderable(path)) return;
+		await this.ensureIds(group);
+		const manual = this.sort === "manual";
+		const entries = group.map((p) => this.index.get(p));
+		if (entries.some((e) => !e)) return;
+		const keys = entries.map((e) => this.keyOf(e!));
+		const own = this.index.get(path);
+		if (!own) return;
+		const changes = planMove(keys, this.keyOf(own), toIndex, manual ? (k) => this.state.get(k)?.rank : () => undefined);
+		if (changes.length === 0) return;
+		if (!manual) this.setSort("manual");
+		await this.updateState(changes.map((c): LibraryOp => ({ kind: "rank", key: c.key, value: c.rank })));
+	}
+
+	private moveBy(path: string, delta: number): Promise<void> {
+		const group = this.groupOf(path);
+		return group ? this.placeAt(path, group.indexOf(path) + delta) : Promise.resolve();
+	}
 
 	private notebookFiles(): TFile[] {
 		const root = this.root();
@@ -470,6 +623,7 @@ export class LibraryView extends ItemView {
 				}
 				if (todo.length > 0) this.afterIndexChange();
 			} while (this.reconcileAgain && !this.closed);
+			void this.backfillIds();
 		} finally {
 			this.reconciling = false;
 			this.setStatus(0, 0);
@@ -577,7 +731,7 @@ export class LibraryView extends ItemView {
 			if (!known) this.place = "all";
 		} else if (typeof s === "object" && "tag" in s) {
 			const tag = s.tag.toLowerCase();
-			if (!this.index.tags().some((x) => x.tag.toLowerCase() === tag)) this.place = "all";
+			if (!this.index.tags(this.notArchived).some((x) => x.tag.toLowerCase() === tag)) this.place = "all";
 		}
 	}
 
@@ -650,7 +804,7 @@ export class LibraryView extends ItemView {
 	private folderCounts(): Map<string, number> {
 		const counts = new Map<string, number>();
 		const root = this.root();
-		for (const e of this.index.all()) {
+		for (const e of this.index.all().filter(this.notArchived)) {
 			let p = e.folder;
 			for (;;) {
 				counts.set(p, (counts.get(p) ?? 0) + 1);
@@ -668,9 +822,11 @@ export class LibraryView extends ItemView {
 		setIcon(close, "x");
 		close.addEventListener("click", () => this.setDrawer(false));
 
-		const favorites = this.index.all().filter((e) => e.favorite).length;
+		const visible = this.index.all().filter(this.notArchived);
+		const favorites = visible.filter((e) => e.favorite).length;
+		const archived = this.index.size - visible.length;
 		const nav = el.createEl("nav", { cls: "notebook-lib-nav" });
-		this.navItem(nav, { icon: "library", label: t("library.nav.all"), count: this.index.size, scope: "all", key: "nav:all" });
+		this.navItem(nav, { icon: "library", label: t("library.nav.all"), count: visible.length, scope: "all", key: "nav:all" });
 		this.navItem(nav, { icon: "star", label: t("library.nav.favorites"), count: favorites, scope: "favorites", key: "nav:favorites" });
 		this.navItem(nav, { icon: "clock", label: t("library.nav.recent"), scope: "recent", key: "nav:recent" });
 		const recentPages = this.host.openRecentPages?.bind(this.host); // wave 0.7: quick nav
@@ -683,11 +839,23 @@ export class LibraryView extends ItemView {
 				recentPages();
 			});
 		}
+		// Roadmap 54: the archive is a filter, shown once something is archived (or while it is open).
+		if (archived > 0 || this.place === "archived") this.navItem(nav, { icon: "archive", label: t("library.nav.archived"), count: archived, scope: "archived", key: "nav:archived" });
 		const trash = this.host.trash;
 		if (trash) {
 			addTrashNavItem(nav, () => {
 				this.setDrawer(false);
 				new TrashModal(this.app, trash).open();
+			});
+		}
+		const check = this.host.checkLibrary?.bind(this.host); // roadmap 27
+		if (check) {
+			const b = nav.createEl("button", { cls: "notebook-lib-nav-item", attr: { "data-key": "nav:check" } });
+			setIcon(b.createSpan({ cls: "notebook-lib-nav-icon" }), "hard-drive");
+			b.createSpan({ cls: "notebook-lib-nav-label", text: t("libcheck.nav") });
+			b.addEventListener("click", () => {
+				this.setDrawer(false);
+				check();
 			});
 		}
 
@@ -724,7 +892,7 @@ export class LibraryView extends ItemView {
 		walk(tree, 0);
 
 		el.createDiv({ cls: "notebook-lib-section", text: t("library.nav.tags") });
-		const tags = this.index.tags();
+		const tags = this.index.tags(this.notArchived);
 		if (tags.length === 0) {
 			el.createDiv({ cls: "notebook-lib-hint", text: t("library.nav.noTags") });
 		} else {
@@ -753,7 +921,7 @@ export class LibraryView extends ItemView {
 			});
 			return;
 		}
-		const title = s === "all" ? t("library.nav.all") : s === "favorites" ? t("library.nav.favorites") : s === "recent" ? t("library.nav.recent") : `#${s.tag}`;
+		const title = s === "all" ? t("library.nav.all") : s === "favorites" ? t("library.nav.favorites") : s === "recent" ? t("library.nav.recent") : s === "archived" ? t("library.nav.archived") : `#${s.tag}`;
 		el.createSpan({ cls: "notebook-lib-crumb is-current", text: title, attr: { "aria-current": "page" } });
 	}
 
@@ -776,11 +944,13 @@ export class LibraryView extends ItemView {
 		el.empty();
 		this.observer?.disconnect();
 		this.cards.clear();
+		this.arrangement = { pinned: [], rest: [] };
 		const searching = this.search.trim().length > 0;
+		const archivedView = this.place === "archived";
 		this.updateScopeButton(searching);
 		if (searching) {
 			const place: LibraryScope = typeof this.place === "object" && "folder" in this.place ? { folder: this.place.folder, recursive: true } : this.place;
-			const hits = this.index.search({ search: this.search, scope: this.searchesWide() ? "all" : place, sort: this.sort });
+			const hits = this.index.search({ search: this.search, scope: this.searchesWide() ? "all" : place, sort: this.sort, filter: archivedView && !this.searchesWide() ? this.isArchived : this.notArchived });
 			if (hits.length === 0) {
 				this.renderEmpty(el, true);
 				return;
@@ -791,7 +961,11 @@ export class LibraryView extends ItemView {
 			return;
 		}
 		const scope: LibraryScope = typeof this.place === "object" && "folder" in this.place ? { folder: this.place.folder, recursive: false } : this.place;
-		const entries = this.index.query({ scope, sort: this.sort });
+		const found = this.index.query({ scope, sort: this.sort, filter: archivedView ? this.isArchived : this.notArchived });
+		// Pinned notebooks first (not in Recent or the archive), then each group in manual order when that sort is chosen.
+		const { pinned, rest } = arrangeEntries(found, this.keyOf, this.state, { manual: this.sort === "manual", pinnedFirst: this.place !== "recent" && !archivedView });
+		this.arrangement = { pinned: pinned.map((e) => e.path), rest: rest.map((e) => e.path) };
+		const entries = [...pinned, ...rest];
 		const folder = typeof this.place === "object" && "folder" in this.place ? this.place.folder : null;
 		const subfolders = folder !== null ? (flattenTree(tree).find((n) => n.path === folder)?.children ?? []) : [];
 
@@ -799,11 +973,16 @@ export class LibraryView extends ItemView {
 			this.renderEmpty(el, searching);
 			return;
 		}
+		if (archivedView) el.createDiv({ cls: "notebook-lib-hint", text: t("library.archived.hint") });
+		else if (this.sort === "manual" && entries.length > 1) el.createDiv({ cls: "notebook-lib-hint", text: t("library.manual.hint") });
 		const grid = el.createDiv({ cls: "notebook-lib-grid", attr: { role: "list" } });
 		const counts = this.folderCounts();
 		for (const node of subfolders) this.folderCard(grid, node, counts.get(node.path) ?? 0);
 		const now = Date.now();
-		for (const entry of entries) this.notebookCard(grid, entry, now);
+		if (pinned.length > 0) grid.createDiv({ cls: "notebook-lib-group", text: t("library.group.pinned") });
+		for (const entry of pinned) this.notebookCard(grid, entry, now);
+		if (pinned.length > 0 && rest.length > 0) grid.createDiv({ cls: "notebook-lib-group", text: t("library.group.others") });
+		for (const entry of rest) this.notebookCard(grid, entry, now);
 	}
 
 	private renderEmpty(el: HTMLElement, searching: boolean): void {
@@ -818,6 +997,10 @@ export class LibraryView extends ItemView {
 			title = t("library.empty.noneTitle");
 			body = t("library.empty.noneBody");
 			actions = true;
+		} else if (s === "archived") {
+			title = t("library.empty.archived");
+		} else if (s === "all" && this.index.size > 0) {
+			title = t("library.empty.allArchived");
 		} else if (s === "favorites") {
 			title = t("library.empty.favorites");
 		} else if (s === "recent") {
@@ -868,6 +1051,10 @@ export class LibraryView extends ItemView {
 	private notebookCard(grid: HTMLElement, entry: LibraryEntry, now: number, hit?: SearchHit): void {
 		const card = grid.createDiv({ cls: "notebook-lib-card", attr: { role: "listitem" } });
 		card.dataset.path = entry.path;
+		const pinned = this.isPinned(entry) && this.place !== "archived";
+		card.toggleClass("is-pinned", pinned);
+		// In manual order another card can be dropped here to take this place (same group only).
+		if (!hit && this.sort === "manual" && this.reorderable(entry.path)) card.setAttribute(DROP_CARD_ATTR, entry.path);
 		const placeholder = entry.mtime < 0;
 		// wave 0.7: a 0-byte file is a notebook the sync client has not downloaded yet, not a damaged one (#344).
 		const meta = placeholder ? "" : entry.pages === 0 ? t(entry.size === 0 ? "sync.library.notDownloaded" : "library.unreadable") : `${this.plural(entry.pages, "library.pages.one", "library.pages.many")} · ${relativeTime(entry.modified, now, getLanguage())}`;
@@ -876,6 +1063,7 @@ export class LibraryView extends ItemView {
 		cover.setCssProps({ "--notebook-cover": entry.cover });
 		cover.createDiv({ cls: "notebook-lib-spine" });
 		cover.createDiv({ cls: "notebook-lib-page" });
+		if (pinned) setIcon(cover.createDiv({ cls: "notebook-lib-pin", attr: { role: "img", "aria-label": t("library.pinned"), title: t("library.pinned") } }), "pin");
 		const titleEl = main.createDiv({ cls: "notebook-lib-title", attr: { title: entry.name } });
 		if (hit?.title) this.appendHighlight(titleEl, hit.title);
 		else titleEl.setText(entry.name);
@@ -941,8 +1129,18 @@ export class LibraryView extends ItemView {
 				if (this.narrow) this.setDrawer(true);
 				return createDiv({ cls: "notebook-lib-ghost", text: entry.name });
 			},
-			canDrop: (target) => target.getAttribute(DROP_ATTR) !== (this.index.get(entry.path)?.folder ?? ""),
+			canDrop: (target) => {
+				const other = target.getAttribute(DROP_CARD_ATTR);
+				if (other !== null) return other !== entry.path && this.groupOf(other) !== null && this.groupOf(other) === this.groupOf(entry.path);
+				return target.getAttribute(DROP_ATTR) !== (this.index.get(entry.path)?.folder ?? "");
+			},
 			onDrop: (target) => {
+				const other = target.getAttribute(DROP_CARD_ATTR);
+				if (other !== null) {
+					const at = this.groupOf(other)?.indexOf(other) ?? -1;
+					if (at >= 0) void this.placeAt(entry.path, at);
+					return;
+				}
 				const file = this.app.vault.getFileByPath(entry.path);
 				const folder = target.getAttribute(DROP_ATTR);
 				if (file && folder !== null) void this.moveFile(file, folder);
@@ -1036,6 +1234,16 @@ export class LibraryView extends ItemView {
 		menu.addItem((i) =>
 			i.setTitle(entry.favorite ? t("library.favorite.remove") : t("library.favorite.add")).setIcon("star").onClick(() => void this.toggleFavorite(path)),
 		);
+		// Roadmap 54: pin, manual order (also on touch, where dragging is a long press) and the archive.
+		const archived = this.isArchived(entry);
+		if (!archived) menu.addItem((i) => i.setTitle(this.isPinned(entry) ? t("library.menu.unpin") : t("library.menu.pin")).setIcon(this.isPinned(entry) ? "pin-off" : "pin").onClick(() => void this.togglePinned(path)));
+		if (!archived && this.reorderable(path)) {
+			const group = this.groupOf(path)!;
+			const at = group.indexOf(path);
+			if (at > 0) menu.addItem((i) => i.setTitle(t("library.menu.moveUp")).setIcon("arrow-up").onClick(() => void this.moveBy(path, -1)));
+			if (at < group.length - 1) menu.addItem((i) => i.setTitle(t("library.menu.moveDown")).setIcon("arrow-down").onClick(() => void this.moveBy(path, 1)));
+		}
+		menu.addItem((i) => i.setTitle(archived ? t("library.menu.unarchive") : t("library.menu.archive")).setIcon(archived ? "archive-restore" : "archive").onClick(() => void this.toggleArchived(path)));
 		menu.addSeparator();
 		menu.addItem((i) => i.setTitle(t("library.menu.rename")).setIcon("pencil").onClick(() => this.askRename(file)));
 		menu.addItem((i) => i.setTitle(t("library.menu.move")).setIcon("folder-input").onClick(() => this.askMove(file)));

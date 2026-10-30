@@ -34,6 +34,10 @@ export interface RadialContext {
 	placeMarker?(kind: (typeof MARKER_RING)[number][0]): void;
 	/** Shows a short message (eyedropper hint). */
 	notify?(text: string): void;
+	/** wave 0.10 (7): opens the free colour picker (hue/saturation/value area, hex, recent colours). */
+	openColourPicker?(): void;
+	/** wave 0.10 (7): the next contact on the page picks the colour under it. */
+	pickColour?(): void;
 }
 
 const TOOL_LABEL: Record<ToolId, MessageKey> = {
@@ -101,7 +105,6 @@ export class PenRadial {
 	private dial: HTMLElement | null = null;
 	private layer: HTMLElement | null = null;
 	private live: HTMLElement | null = null;
-	private colorInput: HTMLInputElement | null = null;
 	private recent: string[] = [];
 	private cx = 0;
 	private cy = 0;
@@ -115,7 +118,6 @@ export class PenRadial {
 	private sliding: number | null = null;
 	private buttonHeld = false;
 	private hover: HTMLElement | null = null;
-	private eyedropperOff: (() => void) | null = null;
 
 	constructor(private readonly host: HTMLElement, private readonly ctx: RadialContext) {
 		this.recent = [ctx.tools().penColor];
@@ -148,7 +150,6 @@ export class PenRadial {
 	 */
 	open(x: number, y: number, source: MenuSource = "button"): void {
 		if (!this.ctx.editable() || this.root) return;
-		this.cancelEyedropper();
 		const buttonHeld = source === "button";
 		const rect = this.host.getBoundingClientRect();
 		this.scale = dialScale((Math.min(rect.width, rect.height) - 16) / DIAL_SIZE, this.ctx.toolbarSize?.() ?? "normal");
@@ -170,10 +171,6 @@ export class PenRadial {
 		svg(deco, "circle", { cx: DIAL_RADIUS, cy: DIAL_RADIUS, r: DIAL_RADIUS - 10, class: "notebook-dial-ring" });
 		svg(deco, "circle", { cx: DIAL_RADIUS, cy: DIAL_RADIUS, r: 58, class: "notebook-dial-ring is-inner" });
 		this.live = dial.createDiv({ cls: "notebook-dial-live", attr: { "aria-live": "polite" } });
-		const input = root.createEl("input", { cls: "notebook-dial-color-input", attr: { type: "color", tabindex: "-1", "aria-hidden": "true" } });
-		this.colorInput = input;
-		input.addEventListener("input", () => this.applyColor(input.value, false));
-		input.addEventListener("change", () => this.applyColor(input.value, true));
 		this.render(false);
 		this.listen("pointerdown", (e) => this.onDown(e as PointerEvent));
 		this.listen("pointermove", (e) => this.onMove(e as PointerEvent));
@@ -181,7 +178,6 @@ export class PenRadial {
 		this.listen("pointerup", (e) => this.onUp(e as PointerEvent));
 		this.listen("pointercancel", (e) => this.onCancel(e as PointerEvent));
 		this.listen("click", (e) => {
-			if (e.target === this.colorInput) return;
 			e.stopPropagation();
 			e.preventDefault();
 		});
@@ -198,14 +194,13 @@ export class PenRadial {
 		for (const off of this.listeners) off();
 		this.listeners.length = 0;
 		this.root?.remove();
-		this.root = this.dial = this.layer = this.live = this.colorInput = this.hover = null;
+		this.root = this.dial = this.layer = this.live = this.hover = null;
 		this.downs.clear();
 		this.sliding = null;
 	}
 
 	destroy(): void {
 		this.close();
-		this.cancelEyedropper();
 	}
 
 	// --- rendering ---
@@ -311,9 +306,12 @@ export class PenRadial {
 		const centre = this.back(layer);
 		centre.addClass("is-color-preview");
 		centre.setCssProps({ "--c": current });
-		const custom = this.item(layer, "custom", t("radial.custom"), ...this.at(-135, 50), 32, "is-round is-rainbow");
-		custom.createSpan({ cls: "notebook-dial-rainbow-dot" }).setCssProps({ "--c": current });
-		setIcon(this.item(layer, "eyedropper", t("radial.eyedropper"), ...this.at(135, 50), 32, "is-round"), "pipette");
+		// wave 0.10 (7): the free picker and the page eyedropper (view/colour-tools.ts) are offered when the view provides them.
+		if (this.ctx.openColourPicker) {
+			const custom = this.item(layer, "custom", t("radial.custom"), ...this.at(-135, 50), 32, "is-round is-rainbow");
+			custom.createSpan({ cls: "notebook-dial-rainbow-dot" }).setCssProps({ "--c": current });
+		}
+		if (this.ctx.pickColour) setIcon(this.item(layer, "eyedropper", t("radial.eyedropper"), ...this.at(135, 50), 32, "is-round"), "pipette");
 		this.say(t("radial.color"));
 	}
 
@@ -469,7 +467,6 @@ export class PenRadial {
 	}
 
 	private onDown(e: PointerEvent): void {
-		if (e.target === this.colorInput) return;
 		e.stopPropagation();
 		e.preventDefault();
 		const hit = this.actionAt(e);
@@ -503,7 +500,6 @@ export class PenRadial {
 	}
 
 	private onUp(e: PointerEvent): void {
-		if (e.target === this.colorInput) return;
 		e.stopPropagation();
 		e.preventDefault();
 		if (this.sliding === e.pointerId) {
@@ -597,10 +593,12 @@ export class PenRadial {
 				this.applyColor(arg, true);
 				return;
 			case "custom":
-				this.colorInput?.click();
+				this.close();
+				this.ctx.openColourPicker?.();
 				return;
 			case "eyedropper":
-				this.armEyedropper();
+				this.close();
+				this.ctx.pickColour?.();
 				return;
 			case "tool":
 				this.ctx.apply({ tool: arg as ToolName });
@@ -650,68 +648,5 @@ export class PenRadial {
 		if (!this.root) return;
 		if (done) this.go("main");
 		else this.render(false);
-	}
-
-	// --- eyedropper: the next tap on the page picks the colour under it (the stage's canvases, composited) ---
-
-	private armEyedropper(): void {
-		this.close();
-		this.cancelEyedropper();
-		this.ctx.notify?.(t("radial.eyedropperHint"));
-		const stop = (e: Event): void => {
-			e.stopPropagation();
-			e.preventDefault();
-		};
-		const onDown = (e: PointerEvent): void => {
-			stop(e);
-			const rect = this.host.getBoundingClientRect();
-			const inside = e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
-			const color = inside ? this.sample(e.clientX - rect.left, e.clientY - rect.top) : null;
-			// The rest of this pointer's sequence must not draw either.
-			const id = e.pointerId;
-			const types = ["pointermove", "pointerrawupdate", "pointerup", "pointercancel"];
-			const swallow = (ev: Event): void => {
-				if ((ev as PointerEvent).pointerId !== id) return;
-				stop(ev);
-				if (ev.type === "pointerup" || ev.type === "pointercancel") for (const type of types) window.removeEventListener(type, swallow, true);
-			};
-			for (const type of types) window.addEventListener(type, swallow, true);
-			this.cancelEyedropper();
-			if (color) this.applyColor(color, true);
-		};
-		window.addEventListener("pointerdown", onDown, true);
-		this.eyedropperOff = () => window.removeEventListener("pointerdown", onDown, true);
-	}
-
-	private cancelEyedropper(): void {
-		this.eyedropperOff?.();
-		this.eyedropperOff = null;
-	}
-
-	/** The colour at (x, y) (CSS px in the stage): every canvas of the stage composited over white paper. */
-	private sample(x: number, y: number): string | null {
-		try {
-			const out = createEl("canvas");
-			out.width = out.height = 1;
-			const g = out.getContext("2d");
-			if (!g) return null;
-			g.fillStyle = "#ffffff";
-			g.fillRect(0, 0, 1, 1);
-			const stage = this.host.getBoundingClientRect();
-			for (const c of Array.from(this.host.querySelectorAll("canvas"))) {
-				const r = c.getBoundingClientRect();
-				if (r.width === 0 || r.height === 0) continue;
-				const px = Math.floor((x + stage.left - r.left) * (c.width / r.width));
-				const py = Math.floor((y + stage.top - r.top) * (c.height / r.height));
-				if (px < 0 || py < 0 || px >= c.width || py >= c.height) continue;
-				g.drawImage(c, px, py, 1, 1, 0, 0, 1, 1);
-			}
-			const d = g.getImageData(0, 0, 1, 1).data;
-			const hex = (v: number | undefined): string => (v ?? 0).toString(16).padStart(2, "0");
-			return `#${hex(d[0])}${hex(d[1])}${hex(d[2])}`;
-		} catch (e) {
-			console.error("[notebook] eyedropper failed", e);
-			return null;
-		}
 	}
 }

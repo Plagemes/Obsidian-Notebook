@@ -7,6 +7,8 @@ import { SHAPE_KINDS, type ShapeKind } from "./view-helpers";
 
 export type ToolName = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "space";
 export type EraserMode = "stroke" | "segment" | "area";
+/** wave 0.10 (63): how the lasso tool selects: a freehand outline, or a rectangle dragged from corner to corner. */
+export type SelectMode = "lasso" | "rectangle";
 
 export const PEN_COLORS = ["#1e1e1e", "#6b7280", "#1d4ed8", "#0891b2", "#15803d", "#ca8a04", "#ea580c", "#dc2626", "#9333ea"] as const;
 export const HIGHLIGHTER_COLORS = ["#facc15", "#4ade80", "#f472b6", "#60a5fa", "#fb923c"] as const;
@@ -33,6 +35,8 @@ export interface ToolbarState {
 	textSize: number;
 	/** The ruler is shown and pen strokes near its edge snap to it. */
 	ruler: boolean;
+	/** The shape of a selection made with the lasso tool. */
+	selectMode: SelectMode;
 }
 
 export const DEFAULT_TOOLS: ToolbarState = {
@@ -48,6 +52,7 @@ export const DEFAULT_TOOLS: ToolbarState = {
 	shapeKind: "line",
 	textSize: TEXT_SIZES[1],
 	ruler: false,
+	selectMode: "lasso",
 };
 
 export interface ToolbarActions {
@@ -102,7 +107,7 @@ const SHAPE_DEFS: Record<ShapeKind, [string, MessageKey]> = {
 
 
 /** Tools that have options (colour, width, eraser mode, …): tapping the active tool again opens them. */
-const TOOLS_WITH_OPTIONS: ReadonlySet<ToolName> = new Set<ToolName>(["pen", "highlighter", "eraser", "shape", "text"]);
+const TOOLS_WITH_OPTIONS: ReadonlySet<ToolName> = new Set<ToolName>(["pen", "highlighter", "eraser", "lasso", "shape", "text"]);
 
 type PopoverKind = "options";
 
@@ -129,9 +134,12 @@ export class Toolbar {
 	private readonly filterGroup: HTMLElement;
 	private readonly filterButtons = new Map<EraseFilterKind, HTMLButtonElement>();
 	private readonly shapeGroup: HTMLElement;
+	private readonly selectGroup: HTMLElement;
+	private readonly selectButtons = new Map<SelectMode, HTMLButtonElement>();
 	private readonly shapeButtons = new Map<ShapeKind, HTMLButtonElement>();
 	private readonly sizeGroup: HTMLElement;
 	private readonly chipButton: HTMLButtonElement;
+	private readonly readOnlyButton: HTMLButtonElement;
 	private readonly chipDot: HTMLElement;
 	private readonly moreButton: HTMLButtonElement;
 	private readonly navigatorButton: HTMLButtonElement;
@@ -176,6 +184,14 @@ export class Toolbar {
 		this.redoButton = this.iconButton(history, "redo", "tool.redo", () => this.actions.redo());
 		actionsRow.createDiv({ cls: "notebook-toolbar-divider", attr: { "aria-hidden": "true" } });
 
+		// wave 0.10 (51): while read-only mode is on this button takes the place of the pen indicator and the favourite pens;
+		// tapping it switches the mode off.
+		this.readOnlyButton = this.button(actionsRow, t("readonly.chip.hint"), () => this.actions.runAction("toggle-read-only"));
+		this.readOnlyButton.addClasses(["notebook-readonly-chip", "notebook-hidden", "is-active"]);
+		this.readOnlyButton.setAttribute("aria-pressed", "true");
+		setIcon(this.readOnlyButton.createSpan({ cls: "notebook-readonly-icon" }), "lock");
+		this.readOnlyButton.createSpan({ cls: "notebook-readonly-label", text: t("readonly.chip") });
+
 		this.chipButton = this.button(actionsRow, t("toolbar.options"), () => this.togglePopover("options"));
 		this.chipButton.addClass("notebook-chip");
 		this.chipButton.setAttribute("aria-haspopup", "true");
@@ -214,6 +230,11 @@ export class Toolbar {
 		this.eraserButtons.set("stroke", this.textButton(this.eraserGroup, "tool.eraser.stroke", () => this.set({ eraserMode: "stroke" })));
 		this.eraserButtons.set("segment", this.textButton(this.eraserGroup, "tool.eraser.segment", () => this.set({ eraserMode: "segment" })));
 		this.eraserButtons.set("area", this.textButton(this.eraserGroup, "tool.eraser.area", () => this.set({ eraserMode: "area" })));
+		this.selectGroup = this.row(this.optionsEl);
+		this.selectGroup.addClass("notebook-segmented");
+		this.selectGroup.setAttribute("aria-label", t("select.mode"));
+		this.selectButtons.set("lasso", this.textButton(this.selectGroup, "select.mode.lasso", () => this.set({ selectMode: "lasso" })));
+		this.selectButtons.set("rectangle", this.textButton(this.selectGroup, "select.mode.rectangle", () => this.set({ selectMode: "rectangle" })));
 		this.eraserSizeEl = this.row(this.optionsEl);
 		this.filterGroup = this.row(this.optionsEl);
 		this.filterGroup.addClass("notebook-segmented");
@@ -247,6 +268,13 @@ export class Toolbar {
 		this.render();
 		this.onEditableChange?.(editable);
 		if (!editable) this.setHistory(false, false);
+	}
+
+	/** wave 0.10 (51): shows or hides the read-only indicator (it is also the button that switches the mode off). */
+	setReadOnly(on: boolean): void {
+		this.el.toggleClass("is-read-only", on);
+		this.readOnlyButton.toggleClass("notebook-hidden", !on);
+		if (on) this.closePopover();
 	}
 
 	/** Reflects the state of the page panel on its button. */
@@ -407,6 +435,12 @@ export class Toolbar {
 			b.toggleClass("is-active", kind === s.eraserFilter);
 			b.disabled = !this.editable;
 		}
+		this.selectGroup.toggleClass("notebook-hidden", s.tool !== "lasso");
+		for (const [mode, b] of this.selectButtons) {
+			b.toggleClass("is-active", mode === s.selectMode);
+			b.setAttribute("aria-pressed", String(mode === s.selectMode));
+			b.disabled = !this.editable;
+		}
 		this.shapeGroup.toggleClass("notebook-hidden", s.tool !== "shape");
 		for (const [kind, b] of this.shapeButtons) {
 			b.toggleClass("is-active", kind === s.shapeKind);
@@ -437,6 +471,19 @@ export class Toolbar {
 				b.disabled = !this.editable;
 				b.createSpan({ cls: "notebook-swatch-dot" }).setCssProps({ "--notebook-swatch-color": color });
 			}
+			// wave 0.10 (7, 68): the free picker, the page eyedropper and (for ink) the style eyedropper.
+			const free = this.button(this.colorGroup, t("command.colourPicker"), () => this.runColourAction("colour-picker"));
+			free.addClass("notebook-swatch", "is-free");
+			free.disabled = !this.editable;
+			free.createSpan({ cls: "notebook-swatch-dot" });
+			const dropper = this.button(this.colorGroup, t("command.colourEyedropper"), () => this.runColourAction("colour-eyedropper"));
+			setIcon(dropper, "pipette");
+			dropper.disabled = !this.editable;
+			if (inking) {
+				const style = this.button(this.colorGroup, t("command.styleEyedropper"), () => this.runColourAction("style-eyedropper"));
+				setIcon(style, "droplets");
+				style.disabled = !this.editable;
+			}
 		}
 
 		if (inking) {
@@ -466,7 +513,8 @@ export class Toolbar {
 	/** The current-pen indicator: colour and thickness of the tool in use; a ring the size of the eraser for the eraser. */
 	private renderChip(): void {
 		const s = this.state;
-		const has = TOOLS_WITH_OPTIONS.has(s.tool);
+		// The lasso has options (its shape) but no pen to show: the indicator stays for the tools that draw or erase.
+		const has = TOOLS_WITH_OPTIONS.has(s.tool) && s.tool !== "lasso";
 		this.chipButton.toggleClass("notebook-hidden", !has);
 		this.chipButton.disabled = !this.editable;
 		const dot = this.chipDot;
@@ -484,6 +532,12 @@ export class Toolbar {
 			const d = chipDiameter(s.penWidth);
 			dot.setCssProps({ "--notebook-chip-w": `${d}px`, "--notebook-chip-h": `${d}px`, "--notebook-chip-color": s.penColor });
 		}
+	}
+
+	/** The picker and the eyedroppers float over the page: close the options first so they do not cover it. */
+	private runColourAction(id: string): void {
+		this.closePopover();
+		this.actions.runAction(id);
 	}
 
 	private row(parent: HTMLElement): HTMLElement {

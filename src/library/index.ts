@@ -1,6 +1,7 @@
 /** Library index: a disposable cache of notebook metadata and thumbnails. Pure, no 'obsidian'. */
 
 import { tagAncestors, tagIsWithin } from "../model/tags";
+import { stateKeys } from "./library-state";
 
 /** v4: entries also carry the titled bookmarks (quick switcher); v3 added the page tags. Older indexes are rebuilt. */
 export const INDEX_VERSION = 4;
@@ -10,6 +11,8 @@ export const RECENT_LIMIT = 20;
 export interface LibraryEntry {
 	/** Vault path of the notebook file. */
 	path: string;
+	/** Document id (stable across renames and moves): the key of the pinned / archived / manual order state. Absent until the file was read. */
+	id?: string;
 	/** Parent folder path ("" for the vault root). */
 	folder: string;
 	/** File name without extension. */
@@ -39,16 +42,20 @@ export interface LibraryEntry {
 	thumbMtime?: number;
 }
 
-export type LibrarySort = "modified" | "name" | "created";
-export type LibraryScope = "all" | "favorites" | "recent" | { folder: string; recursive?: boolean } | { tag: string };
+/** `manual`: the order set by hand (library/library-state.ts); the index returns the notebooks by last change and the view orders them. */
+export type LibrarySort = "modified" | "name" | "created" | "manual";
+/** `archived`: the notebooks the user hid (the index returns all of them; the view's `filter` picks the archived ones). */
+export type LibraryScope = "all" | "favorites" | "recent" | "archived" | { folder: string; recursive?: boolean } | { tag: string };
 
 export interface LibraryQuery {
 	scope: LibraryScope;
 	search?: string;
 	sort: LibrarySort;
+	/** Keeps only the entries for which it is true (applied before the notebooks of "recent" are cut to RECENT_LIMIT). */
+	filter?: (entry: LibraryEntry) => boolean;
 }
 
-export const SORTS: readonly LibrarySort[] = ["modified", "name", "created"];
+export const SORTS: readonly LibrarySort[] = ["modified", "name", "created", "manual"];
 
 /** Lower-case, accent-free form used for searching and comparing. */
 export function normalizeText(text: string): string {
@@ -97,6 +104,8 @@ export interface SearchQuery {
 	/** Where to look; default: every notebook. */
 	scope?: LibraryScope;
 	sort: LibrarySort;
+	/** Keeps only the entries for which it is true. */
+	filter?: (entry: LibraryEntry) => boolean;
 }
 
 /** Characters of context kept on each side of a text match. */
@@ -175,6 +184,7 @@ function isEntry(v: unknown): v is LibraryEntry {
 	const e = v as Record<string, unknown>;
 	return (
 		typeof e.path === "string" && typeof e.folder === "string" && typeof e.name === "string" &&
+		(e.id === undefined || typeof e.id === "string") &&
 		Number.isFinite(e.mtime) && Number.isFinite(e.size) && Number.isFinite(e.created) && Number.isFinite(e.modified) &&
 		Number.isFinite(e.pages) && Array.isArray(e.tags) && e.tags.every((x) => typeof x === "string") &&
 		typeof e.favorite === "boolean" && typeof e.cover === "string" &&
@@ -215,6 +225,25 @@ export class LibraryIndex {
 		return this.map.get(path);
 	}
 
+	/** Bumped by every change of the entries; the state keys below are worked out again when it moved. */
+	private revision = 0;
+	private keyCache: { revision: number; keys: Map<string, string> } | null = null;
+
+	/**
+	 * The key of the notebook's pinned / archived / manual order state (library-state.ts `stateKeys`): its document id, except
+	 * for a copy that shares the id of another notebook (a sync conflict copy), which is keyed by id and path so that the
+	 * original's state (archived, pinned) does not hide it.
+	 */
+	stateKey(entry: { id?: string; path: string }): string {
+		if (!this.keyCache || this.keyCache.revision !== this.revision) {
+			this.keyCache = { revision: this.revision, keys: stateKeys(this.all()) };
+		}
+		// An entry that is not (or no longer) in the index, or whose id the index does not know yet: its own key.
+		const known = this.map.get(entry.path);
+		if (!known || known.id !== entry.id) return entry.id ? `id:${entry.id}` : `path:${entry.path}`;
+		return this.keyCache.keys.get(entry.path) ?? (entry.id ? `id:${entry.id}` : `path:${entry.path}`);
+	}
+
 	has(path: string): boolean {
 		return this.map.has(path);
 	}
@@ -229,6 +258,7 @@ export class LibraryIndex {
 		if (entry.bookmarks) copy.bookmarks = entry.bookmarks.map((b) => ({ ...b }));
 		if (entry.pageTags) copy.pageTags = entry.pageTags.map((p) => ({ page: p.page, tags: [...p.tags] }));
 		this.map.set(entry.path, copy);
+		this.revision++;
 	}
 
 	/** Merges fields into an existing entry; returns false if the path is unknown. */
@@ -236,10 +266,12 @@ export class LibraryIndex {
 		const e = this.map.get(path);
 		if (!e) return false;
 		this.map.set(path, { ...e, ...patch });
+		this.revision++;
 		return true;
 	}
 
 	remove(path: string): boolean {
+		this.revision++;
 		return this.map.delete(path);
 	}
 
@@ -249,6 +281,7 @@ export class LibraryIndex {
 		if (!e || oldPath === newPath) return false;
 		this.map.delete(oldPath);
 		this.map.set(newPath, { ...e, path: newPath, folder: folderOf(newPath), name: nameOf(newPath) });
+		this.revision++;
 		return true;
 	}
 
@@ -270,6 +303,12 @@ export class LibraryIndex {
 		return !e || e.mtime !== mtime || e.size !== size;
 	}
 
+	/** True when the notebook was read but its id is not in the entry (an index from before the id was kept). */
+	needsId(path: string): boolean {
+		const e = this.map.get(path);
+		return !!e && e.pages > 0 && e.id === undefined && e.mtime >= 0;
+	}
+
 	/** True when the thumbnail is missing or was rendered from an older version of the file. */
 	needsThumb(path: string): boolean {
 		const e = this.map.get(path);
@@ -284,11 +323,12 @@ export class LibraryIndex {
 			if (!keep.has(path)) removed.push(path);
 		}
 		for (const path of removed) this.map.delete(path);
+		this.revision++;
 		return removed;
 	}
 
-	private inScope(scope: LibraryScope): LibraryEntry[] {
-		let list = this.all();
+	private inScope(scope: LibraryScope, filter?: (entry: LibraryEntry) => boolean): LibraryEntry[] {
+		let list = filter ? this.all().filter(filter) : this.all();
 		if (scope === "favorites") {
 			list = list.filter((e) => e.favorite);
 		} else if (scope === "recent") {
@@ -305,7 +345,7 @@ export class LibraryIndex {
 	}
 
 	query(q: LibraryQuery): LibraryEntry[] {
-		let list = this.inScope(q.scope);
+		let list = this.inScope(q.scope, q.filter);
 		const terms = normalizeText(q.search ?? "").split(/\s+/).filter(Boolean);
 		if (terms.length > 0) {
 			list = list.filter((e) => {
@@ -337,7 +377,7 @@ export class LibraryIndex {
 		const terms = [...new Set(normalizeText(q.search).split(/\s+/).filter(Boolean))];
 		if (terms.length === 0) return [];
 		const ranked: Array<{ hit: SearchHit; rank: number }> = [];
-		for (const e of this.inScope(q.scope ?? "all")) {
+		for (const e of this.inScope(q.scope ?? "all", q.filter)) {
 			const name = normalizeText(e.name);
 			const tags = e.tags.map(normalizeText);
 			const folded = this.foldedText(e);
@@ -393,9 +433,10 @@ export class LibraryIndex {
 	 * Tags with the number of notebooks using them, most used first (ties alphabetically). Case-insensitive. A nested tag
 	 * `a/b` also counts for its parent `a` (as in Obsidian's Tags pane), so the parent can be chosen as a filter.
 	 */
-	tags(): Array<{ tag: string; count: number }> {
+	tags(filter?: (entry: LibraryEntry) => boolean): Array<{ tag: string; count: number }> {
 		const counts = new Map<string, { tag: string; count: number }>();
 		for (const e of this.map.values()) {
+			if (filter && !filter(e)) continue;
 			const seen = new Set<string>();
 			for (const full of e.tags) {
 				for (const tag of [...tagAncestors(full), full]) {

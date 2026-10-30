@@ -1,4 +1,6 @@
 import { AutoScroller, type AutoScrollClock } from "../ink/auto-scroll";
+import { LineBreaker } from "../ink/line-break";
+import type { Viewport } from "../ink/viewport";
 import { FingerTapDetector, tapActionFor, type TapAction } from "../ink/finger-taps";
 import type { TapGestureMode } from "../ink/gesture-settings";
 import type { InputPolicy } from "../ink/input-policy";
@@ -20,6 +22,13 @@ export interface GestureContext {
 		/** Moves the page by `dy` CSS px (the view clamps it). */
 		panBy(dy: number): void;
 	};
+	/** wave 0.10 (353): automatic line break. */
+	lineBreak?: {
+		enabled(): boolean;
+		viewport(): Viewport;
+		/** Applies a viewport (the view clamps it). */
+		setViewport(v: Viewport): void;
+	};
 }
 
 const browserClock: AutoScrollClock = {
@@ -38,6 +47,7 @@ const browserClock: AutoScrollClock = {
 export class GestureInput {
 	private readonly taps = new FingerTapDetector();
 	private readonly scroller: AutoScroller;
+	private readonly breaker: LineBreaker;
 	private readonly contacts = new Set<number>();
 
 	/** True while a finger of a tap or swipe gesture is down. */
@@ -55,17 +65,30 @@ export class GestureInput {
 			panBy: (dy) => this.ctx.autoScroll.panBy(dy),
 			busy: () => this.contacts.size > 0 || this.ctx.drawing(),
 		}, clock);
+		this.breaker = new LineBreaker({
+			enabled: () => this.ctx.lineBreak?.enabled() ?? false,
+			viewport: () => this.ctx.lineBreak?.viewport() ?? { scale: 1, offsetX: 0, offsetY: 0 },
+			setViewport: (v) => this.ctx.lineBreak?.setViewport(v),
+			busy: () => this.contacts.size > 0 || this.ctx.drawing(),
+		}, clock);
 		this.listen("pointerdown", (e) => this.onDown(e as PointerEvent));
 		this.listen("pointermove", (e) => this.onMove(e as PointerEvent));
 		this.listen("pointerup", (e) => this.onUp(e as PointerEvent, false));
 		this.listen("pointercancel", (e) => this.onUp(e as PointerEvent, true));
-		this.listen("wheel", () => this.scroller.cancel());
+		this.listen("wheel", () => this.cancelScrolls());
 		this.disposers.push(() => this.taps.reset());
 	}
 
 	/** A pen stroke ended with its tip `tipY` CSS px from the top of the view: scroll up soon if it is near the bottom. */
-	strokeEnded(tipY: number): void {
-		this.scroller.strokeEnded(tipY);
+	strokeEnded(tipY: number, lineBreak: Viewport | null = null): void {
+		// wave 0.10 (353): a line break (the view moves to the start of the next line) replaces the bottom-band scroll.
+		if (this.breaker.strokeEnded(lineBreak)) this.scroller.cancel();
+		else this.scroller.strokeEnded(tipY);
+	}
+
+	private cancelScrolls(): void {
+		this.scroller.cancel();
+		this.breaker.cancel();
 	}
 
 	/** The radial menu took the pointer events (its lifts never arrive): forget the contacts so no tap or scroll waits for them. */
@@ -76,7 +99,7 @@ export class GestureInput {
 	}
 
 	destroy(): void {
-		this.scroller.cancel();
+		this.cancelScrolls();
 		for (const d of this.disposers) d();
 		this.disposers.length = 0;
 	}
@@ -97,7 +120,7 @@ export class GestureInput {
 
 	private onDown(e: PointerEvent): void {
 		// Anything that touches the screen takes the view back.
-		this.scroller.cancel();
+		this.cancelScrolls();
 		this.contacts.add(e.pointerId);
 		if (e.pointerType !== "touch") {
 			if (this.taps.landed > 0) this.taps.interrupt();

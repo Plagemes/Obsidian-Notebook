@@ -90,7 +90,7 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 4. **P1** 🧪 Scribble to erase: scratching over strokes deletes them.
 5. **P1** 🧪 Restyle selection: change colour and width of lasso-selected strokes.
 6. **P1** 🧪 Copy, cut, paste and duplicate selections across pages and notebooks.
-7. **P2** Free colour picker with recent colours and an eyedropper.
+7. **P2** 🧪 Free colour picker with recent colours and an eyedropper.
 8. **P2** Pressure curve calibration per device, with a test area.
 9. **P2** Tilt-aware pencil (tiltX/tiltY widen and lighten the stroke).
 10. **P2** Study tape: opaque strips that hide parts of a page and reveal on tap.
@@ -103,7 +103,7 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 15. **P1** 🧪 Notebook outline: titled bookmarks shown as a table of contents.
 16. 🧪 **P1** Global search in the library: titles, tags, text boxes (OCR later).
 17. **P2** Links on the page: a region or element opens another page, notebook, Obsidian note or URL.
-18. **P2** Back/forward history of visited pages.
+18. **P2** 🧪 Back/forward history of visited pages.
 19. **P2** Notebook templates: create a notebook from a saved notebook (planner, lab book).
 20. **P2** Sticky notes: movable coloured notes on the page.
 21. **P3** Paper colours (cream, dark, chalkboard) with ink adapted for contrast.
@@ -116,7 +116,7 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 ### Data and reliability
 25. 🧪 **P1** Version history: automatic snapshots (e.g. daily per notebook) with restore.
 26. 🧪 **P1** Page trash: deleted pages stay recoverable after the session ends.
-27. **P2** Library check: find unreadable notebooks and orphaned assets, free space.
+27. **P2** 🧪 Library check: find unreadable notebooks and orphaned assets, free space.
 28. **P3** Password-protected notebooks: local encryption with Web Crypto, no cloud.
 
 ### Capture and sharing
@@ -137,7 +137,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 35. **P1** New pen types: fountain pen (angle-dependent width), brush, marker.
 36. **P1** 🧪 Auto-scroll while writing near the bottom of the screen.
 37. **P2** Filled shapes and dashed or dotted lines.
-38. **P2** Align and distribute the selection.
+38. **P2** 🧪 Align and distribute the selection.
 39. **P2** Group elements and lock elements (for example a background image that must not move).
 40. **P2** Layers: annotations on a layer separate from the PDF, which can be hidden or locked.
 41. **P2** Hand-drawn tables: insert a grid of cells and write inside it.
@@ -153,13 +153,13 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 ### Navigation and view
 48. ~~**P1** Double tap to zoom: toggles fit-to-width and 100 %.~~ — dropped (user decision, 2026-10-29)
 49. **P2** Two-page spread view (landscape tablets).
-50. **P2** Fast scrollbar with a page preview while dragging.
-51. **P2** Read-only mode to read without accidental marks.
+50. **P2** 🧪 Fast scrollbar with a page preview while dragging.
+51. **P2** 🧪 Read-only mode to read without accidental marks.
 52. **P2** Coloured sections inside a notebook (tab dividers, as in OneNote).
 
 ### Library
 53. **P2** Custom covers (image or template).
-54. **P2** Pinned notebooks, manual order and an archive that hides notebooks without deleting them.
+54. **P2** 🧪 Pinned notebooks, manual order and an archive that hides notebooks without deleting them.
 55. **P3** Study statistics: writing time per notebook and per day, kept on the device.
 
 ### Study
@@ -178,12 +178,12 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 ### Writing and tools
 61. ~~**P1** Pen hover preview: with the S Pen near the screen, a circle shows the nib size and colour.~~ — dropped: the S Pen and Android already show the hover pointer (user decision, 2026-10-29)
 62. **P1** 🧪 Adjustable eraser size with a visible eraser circle.
-63. **P2** Rectangle selection in addition to the lasso.
-64. **P2** Select by colour or tool (e.g. all highlighter strokes on this page).
-65. **P2** Rotate by 90°, mirror and exact size for the selection.
+63. **P2** 🧪 Rectangle selection in addition to the lasso.
+64. **P2** 🧪 Select by colour or tool (e.g. all highlighter strokes on this page).
+65. **P2** 🧪 Rotate by 90°, mirror and exact size for the selection.
 66. **P2** Smooth or straighten selected strokes.
 67. **P2** Textured pens: graphite pencil and gel.
-68. **P2** Style eyedropper: take colour, width and tool from an existing stroke.
+68. **P2** 🧪 Style eyedropper: take colour, width and tool from an existing stroke.
 69. **P2** Smart connectors between shapes (diagrams).
 70. **P3** Mind maps: linked text nodes that move together.
 71. **P2** Magnetic snap to the grid and alignment guides.
@@ -198,7 +198,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 78. **P2** Move a selection to another page.
 79. **P2** Drag files (images, PDFs) straight onto a page.
 80. **P2** Bulk import in the library: drop many PDFs or images and they become notebooks.
-81. **P2** Export all pages as PNG images, and print.
+81. **P2** 🧪 Export all pages as PNG images, and print.
 82. **P3** Portable package: a .zip with the notebook and its assets, to move it to another vault.
 83. **P3** Import from Xournal++ and from SVG.
 
@@ -229,7 +229,7 @@ Goal: notebooks behave like first-class Obsidian content. Several items depend o
 - **O12 P2** Daily notebook: "Today's page" adds a dated page and links it from the daily note.
 - **O13 P2** Obsidian templates: template notebooks and embeds in Templates/Templater.
 - **O14 P1** 🧪 Commands and hotkeys for every tool (pen, eraser, lasso…), assignable in Hotkeys.
-- **O15 P2** Status bar: "p. 3/12" and save state; tap opens the navigator.
+- **O15 P2** 🧪 Status bar: "p. 3/12" and save state; tap opens the navigator.
 - **O16 P1** 🧪 Reopen where you left off: workspace/session restore brings back the same page and zoom.
 - ~~**O17 P1** Theme integration: colours, accent and dark mode followed everywhere; documented CSS variables for snippets.~~ — dropped (user decision, 2026-10-29)
 - ~~**O18 P1** Sync conflicts: when Obsidian Sync creates a conflicted copy, a dialog compares both versions and merges their strokes.~~ — dropped: sync will go through Google Drive or OneDrive, not Obsidian Sync (user decision, 2026-10-29)
@@ -654,21 +654,21 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 350. **P2** Pen width relative to zoom (option): the same width on screen at any zoom.
 351. **P2** Stroke taper settings: tapering at the start and end of a stroke.
 352. **P2** Write big, store small: write margin notes at a comfortable size and they are shrunk into place.
-353. **P2** Automatic line break: when writing reaches the right margin, the view jumps to the start of the next line.
+353. **P2** 🧪 Automatic line break: when writing reaches the right margin, the view jumps to the start of the next line.
 354. **P3** Right-to-left writing: automatic next page, word detection and the space tool also work for Arabic and Hebrew.
 355. **P2** Stylus profiles: S Pen, USI and other pens recognised automatically, with settings that suit them.
-356. **P2** Quick date and time stamp at the pen position.
+356. **P2** 🧪 Quick date and time stamp at the pen position.
 
 ### Objects and selection
 357. **P2** 🧪 Layer order: bring to front, send to back.
 358. **P2** Opacity slider for ink, highlighter and images.
-359. **P2** Lasso selection across page boundaries.
+359. **P2** 🧪 Lasso selection across page boundaries.
 360. **P3** Code text box: monospace with syntax colours.
 361. **P2** 🧪 Find and replace in the text boxes of a notebook.
-362. **P2** Cross-device clipboard: copy on the tablet, paste on the phone, through the vault.
+362. **P2** 🧪 Cross-device clipboard: copy on the tablet, paste on the phone, through the vault.
 
 ### Navigation and view
-363. **P2** Tabs of open notebooks, with a swipe from one to the next.
+363. **P2** 🧪 Tabs of open notebooks, with a swipe from one to the next.
 364. **P1** 🧪 Quick switcher for pages across all notebooks.
 365. **P1** 🧪 Recently edited pages across all notebooks.
 366. **P1** 🧪 Go to page by typing its number.
