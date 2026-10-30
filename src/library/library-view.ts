@@ -38,6 +38,9 @@ import { renderHome } from "./home-surface";
 import { renderLibrarySections, renderTagChips, type TagChip } from "./library-sections";
 import { InboxBell, type InboxPort } from "./inbox-bell";
 
+/** The missing-styles diagnostic (LibraryView.checkStyles) is shown once per session. */
+let stylesWarned = false;
+
 export const LIBRARY_VIEW_TYPE = "notebook-library";
 
 /** The read API of the folder metadata (library/folder-meta-store.ts) that the cards use. */
@@ -276,6 +279,7 @@ export class LibraryView extends ItemView {
 			console.error("[notebook] library state unreadable", e);
 		}
 		this.buildShell();
+		window.requestAnimationFrame(() => this.checkStyles());
 		const inbox = this.host.inbox?.() ?? null;
 		if (inbox) {
 			this.bell = new InboxBell(inbox, {
@@ -351,7 +355,8 @@ export class LibraryView extends ItemView {
 	private buildShell(): void {
 		const el = this.contentEl;
 		el.empty();
-		this.rootEl = el.createDiv({ cls: "notebook-lib-root nb-app nb-no-anim" });
+		// nb-ui: the scope of the design-system styles (styles.css, 0.12 section), above Obsidian's own button and input rules.
+		this.rootEl = el.createDiv({ cls: "notebook-lib-root nb-app nb-ui nb-no-anim" });
 		this.railEl = this.rootEl.createEl("aside", { cls: "nb-rail", attr: { "aria-label": t("nav.label") } });
 		this.rootEl.createDiv({ cls: "nb-rail-backdrop" }).addEventListener("click", () => this.setRailOpen(false));
 
@@ -408,6 +413,18 @@ export class LibraryView extends ItemView {
 		this.resizeObserver.observe(this.contentEl);
 		this.mode = this.widthMode(this.contentEl.clientWidth);
 		this.applyLayout();
+	}
+
+	/**
+	 * 0.12.1 diagnostic: Obsidian did not apply the plugin's styles.css (0.12.0 rendered unstyled on a device; the likely
+	 * cause was a failed start-up, after which the sheet is not applied). Said once per session, in the console and a notice.
+	 */
+	private checkStyles(): void {
+		if (stylesWarned || this.closed || !this.rootEl.isConnected || this.contentEl.clientWidth === 0) return;
+		if (getComputedStyle(this.rootEl).display === "flex") return;
+		stylesWarned = true;
+		console.error("[notebook] the plugin's styles.css is not applied: Home and the library cannot be drawn as designed");
+		showNotice(t("notice.stylesMissing"), 15000);
 	}
 
 	private widthMode(w: number): WidthMode {

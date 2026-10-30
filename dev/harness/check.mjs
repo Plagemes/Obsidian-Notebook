@@ -72,6 +72,10 @@ SCENARIOS.push({ doc: "settings", theme: "dark", device: "tablet", lowLatency: f
 SCENARIOS.push({ doc: "settings", theme: "dark", device: "desktop", lowLatency: false });
 // wave 0.12: the creation dialog (both tabs) at tablet and phone widths, light and dark.
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "create", theme, device, lowLatency: false });
+// 0.12.1: the whole plugin's onload against the stub: what it registers, the settings tab through both of Obsidian's paths,
+// and injected failures (a failing step, failing settings definitions, an unreadable data.json).
+SCENARIOS.push({ doc: "plugin", theme: "dark", device: "tablet", lowLatency: false });
+SCENARIOS.push({ doc: "plugin", theme: "light", device: "desktop", lowLatency: false });
 
 function findChrome() {
 	const candidates = [
@@ -195,7 +199,10 @@ async function main() {
 	const profile = mkdtempSync(join(tmpdir(), "notebook-harness-"));
 	const browser = spawn(chrome, [
 		"--headless=new", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "--no-first-run",
-		"--no-default-browser-check", "--disable-extensions", "--hide-scrollbars", "about:blank",
+		"--no-default-browser-check", "--disable-extensions", "--hide-scrollbars",
+		// Chrome refuses to start as root (containers, CI images) unless its sandbox is off.
+		...(process.getuid?.() === 0 ? ["--no-sandbox"] : []),
+		"about:blank",
 	], { stdio: "ignore" });
 	let failures = 0;
 	let total = SCENARIOS.filter((x) => !process.env.HARNESS_DOC || x.doc === process.env.HARNESS_DOC).length;
@@ -228,7 +235,7 @@ async function main() {
 					await sleep(100);
 				}
 				await cdp.evaluate("window.harness.ready.then(() => true)");
-				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "library" ? "window.harness.checkLibrary()" : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "library" ? "window.harness.checkLibrary()" : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}

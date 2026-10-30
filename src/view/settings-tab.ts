@@ -34,6 +34,29 @@ const bool = (v: unknown): boolean => v === true;
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 const num = (v: unknown): number => (typeof v === "number" ? v : 0);
 
+/** 0.12.1: a row that cannot be drawn is logged and left empty, so one row never breaks the whole tab. */
+function safeRender(row: string, render: (setting: Setting) => void | (() => void)): (setting: Setting) => void | (() => void) {
+	return (setting) => {
+		try {
+			return render(setting);
+		} catch (e) {
+			console.error(`[notebook] settings row "${row}" could not be drawn`, e);
+		}
+	};
+}
+
+/** 0.12.1: a `visible` predicate that throws shows its row instead of breaking the tab. */
+function safeVisible(row: string, visible: () => boolean): () => boolean {
+	return () => {
+		try {
+			return visible();
+		} catch (e) {
+			console.error(`[notebook] settings row "${row}": visibility check failed`, e);
+			return true;
+		}
+	};
+}
+
 /**
  * The plugin's settings tab (DESIGN.md §6, docs/design-ui.md *Settings*). Both ways Obsidian draws a tab come from the
  * one list in `settings-schema.ts`: `getSettingDefinitions()` on Obsidian 1.13+, `display()` on older versions. What is
@@ -54,6 +77,14 @@ export class NotebookSettingTab extends PluginSettingTab {
 	constructor(app: App, private readonly host: SettingsHost) {
 		super(app, host);
 		this.containerEl.addClass("notebook-settings");
+	}
+
+	/**
+	 * 0.12.1: false while the base class is still being constructed (this class's fields and `host` are not set yet),
+	 * in case Obsidian asks for the definitions or a redraw from its own constructor.
+	 */
+	private ready(): boolean {
+		return this.host !== undefined && this.updaters !== undefined;
 	}
 
 	// ------------------------------------------------------------------------------------------------- state
@@ -281,8 +312,22 @@ export class NotebookSettingTab extends PluginSettingTab {
 
 	// ------------------------------------------------------------------------- Obsidian 1.13+: definitions
 
-	/** Obsidian 1.13+: the declarative tab, also indexed by Obsidian's own settings search. */
+	/**
+	 * Obsidian 1.13+: the declarative tab, also indexed by Obsidian's own settings search. Obsidian calls this inside
+	 * `addSettingTab` and on every display. 0.12.1: it never throws: if the definitions cannot be built, an empty list
+	 * makes Obsidian fall back to `display()`, the hand-drawn tab, instead of losing the tab.
+	 */
 	getSettingDefinitions(): SettingDefinitionItem[] {
+		if (!this.ready()) return [];
+		try {
+			return this.definitions();
+		} catch (e) {
+			console.error("[notebook] the settings definitions could not be built; using the hand-drawn tab", e);
+			return [];
+		}
+	}
+
+	private definitions(): SettingDefinitionItem[] {
 		this.legacyRows = null;
 		this.specs = settingSpecs();
 		this.cached = null;
@@ -293,16 +338,16 @@ export class NotebookSettingTab extends PluginSettingTab {
 				type: "group",
 				cls: "notebook-settings-top",
 				items: [
-					{ name: t("settings.search.placeholder"), searchable: false, render: (setting) => this.renderSearch(setting) },
-					{ name: t("settings.search.placeholder"), searchable: false, visible: () => this.emptyShown(), render: (setting) => this.renderEmpty(setting) },
+					{ name: t("settings.search.placeholder"), searchable: false, render: safeRender("search", (setting) => this.renderSearch(setting)) },
+					{ name: t("settings.search.placeholder"), searchable: false, visible: safeVisible("no match", () => this.emptyShown()), render: safeRender("no match", (setting) => this.renderEmpty(setting)) },
 				],
 			},
 			...SECTIONS.map((section): SettingDefinitionItem => ({
 				type: "group",
 				cls: "notebook-settings-section",
-				visible: () => this.sectionShown(section),
+				visible: safeVisible(section.id, () => this.sectionShown(section)),
 				items: [
-					{ name: t(section.title), searchable: false, render: (setting) => this.renderHeader(setting, section) },
+					{ name: t(section.title), searchable: false, render: safeRender(section.id, (setting) => this.renderHeader(setting, section)) },
 					...sectionGroups(section.id).flatMap((group) => this.groupDefinitions(section, group)),
 				],
 			})),
@@ -316,7 +361,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 		if (group === undefined) return rows;
 		const title = group === ADVANCED ? "settings.group.advanced" : groupSpec(section.id, group)?.title ?? "settings.group.advanced";
 		return [
-			{ name: t(title), searchable: false, visible: () => this.groupShown(section, group), render: (setting) => this.renderDisclosure(setting, section, group) },
+			{ name: t(title), searchable: false, visible: safeVisible(groupKey(section.id, group), () => this.groupShown(section, group)), render: safeRender(groupKey(section.id, group), (setting) => this.renderDisclosure(setting, section, group)) },
 			...rows,
 		];
 	}
@@ -326,7 +371,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 			name: this.name(spec),
 			desc: this.desc(spec),
 			aliases: [...translations(spec.name), ...(spec.keywords ? [spec.keywords] : [])],
-			visible: () => this.rowShown(spec),
+			visible: safeVisible(spec.id, () => this.rowShown(spec)),
 		};
 		const c = spec.control;
 		const key = spec.id;
@@ -338,7 +383,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 			case "text": return { ...base, control: { type: "text", key, defaultValue: str(value), placeholder: c.placeholder } };
 			case "folder": return { ...base, control: { type: "folder", key, defaultValue: str(value), placeholder: c.placeholder } };
 			case "action": return { ...base, action: () => this.run(c.run) };
-			case "custom": return { ...base, render: (setting) => this.renderCustom(c.render, setting) };
+			case "custom": return { ...base, render: safeRender(spec.id, (setting) => this.renderCustom(c.render, setting)) };
 		}
 	}
 
@@ -350,9 +395,20 @@ export class NotebookSettingTab extends PluginSettingTab {
 
 	// -------------------------------------------------------------------- Obsidian older than 1.13: by hand
 
-	/** Fallback for Obsidian older than 1.13, which does not read getSettingDefinitions() and calls display() instead. */
+	/**
+	 * Fallback for Obsidian older than 1.13, which does not read getSettingDefinitions() and calls display() instead
+	 * (1.13+ calls it too when the definitions are empty). 0.12.1: a failure is shown in the tab, never a blank page.
+	 */
 	display(): void {
-		this.renderLegacy();
+		if (!this.ready()) return;
+		try {
+			this.renderLegacy();
+		} catch (e) {
+			console.error("[notebook] the settings tab could not be drawn", e);
+			this.legacyRows = null;
+			this.containerEl.empty();
+			this.containerEl.createDiv({ cls: "notebook-settings-error", text: t("settings.renderFailed", { error: e instanceof Error ? e.message : String(e) }) });
+		}
 	}
 
 	/** The same tab drawn by hand from the same list, for Obsidian older than 1.13 (see `display`). */
@@ -388,8 +444,8 @@ export class NotebookSettingTab extends PluginSettingTab {
 					const setting = new Setting(sectionEl).setName(this.name(spec));
 					const desc = this.desc(spec);
 					if (desc) setting.setDesc(desc);
-					this.legacyControl(setting, spec);
-					rows.push({ el: setting.settingEl, shown: () => this.rowShown(spec) });
+					safeRender(spec.id, (s) => this.legacyControl(s, spec))(setting);
+					rows.push({ el: setting.settingEl, shown: safeVisible(spec.id, () => this.rowShown(spec)) });
 				}
 			}
 		}
