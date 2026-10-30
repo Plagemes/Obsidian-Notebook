@@ -2,6 +2,7 @@ import type { Page, PageElement, Point, Stroke, TextElement, Tool } from "../mod
 import { MM, RENDER_INK } from "../model/types";
 import { backgroundRect } from "../model/margins";
 import { transformElement } from "./elements";
+import { drawLinkedLines, parseLinks } from "./link-text";
 import { layoutText, type MeasureText } from "./text-layout";
 import { strokeBounds, type BBox } from "./hit-test";
 import { minorVisible, paperPattern, PAPER_COLORS } from "./paper";
@@ -38,6 +39,12 @@ export function drawTextElement(ctx: CanvasRenderingContext2D, el: TextElement):
 		ctx.fillStyle = el.color;
 		ctx.textBaseline = "top";
 		const layout = layoutText(el.text, el.fontSize, el.width, (str) => ctx.measureText(str).width);
+		// Links ([[Note]]) are drawn in their own colour (ink/link-text.ts); text without any takes the plain path.
+		const links = el.text.includes("[[") ? parseLinks(el.text) : [];
+		if (links.length > 0) {
+			drawLinkedLines(ctx, el, layout.lines, layout.lineHeight, links);
+			return;
+		}
 		layout.lines.forEach((line, i) => ctx.fillText(line, el.x, el.y + i * layout.lineHeight + (layout.lineHeight - el.fontSize) / 2));
 	} finally {
 		ctx.restore();
