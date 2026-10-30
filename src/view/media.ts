@@ -155,6 +155,9 @@ export class NotebookMedia implements MediaSource {
 				}, (e) => {
 					if (!this.waiting.has(id)) console.error("[notebook] image", e);
 					this.images.set(id, "missing");
+					// A file that is there but does not decode is usually still arriving (written in place by the sync
+					// client): wait for it, so the next change of its file (assetFileChanged) loads it again.
+					if (this.asset(id)) this.waiting.add(id);
 					this.changed();
 				});
 		}
