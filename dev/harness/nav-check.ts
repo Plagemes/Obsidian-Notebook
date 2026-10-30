@@ -4,24 +4,25 @@
  * the jumps it records; the status bar item (roadmap O15) shows the page and save state. Driven through the real view.
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import type { NavController } from "../../src/view/nav-controller";
+import type { HarnessView } from "./harness-types";
 
 export interface NavCheckApi {
-	view: any;
+	/** The notebook view (a `HarnessView`). */
+	view: unknown;
 	nav: NavController;
-	stage(): HTMLElement;
+	stage: () => HTMLElement;
 	statusBarEl: HTMLElement;
-	statusBarClicks(): number;
-	strokeCount(): number;
-	frames(n: number): Promise<void>;
-	closeAll(): Promise<void>;
+	statusBarClicks: () => number;
+	strokeCount: () => number;
+	frames: (n: number) => Promise<void>;
+	closeAll: () => Promise<void>;
 }
 
 export async function checkNavigation(api: NavCheckApi, add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
-	const { view: v, nav, stage, statusBarEl, strokeCount, frames } = api;
-	const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+	const { nav, stage, statusBarEl, strokeCount, frames } = api;
+	const v = api.view as HarnessView;
+	const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 	await api.closeAll();
 	const pagesBefore = v.session.doc.pages.length;
 	const total = Math.max(pagesBefore, 8);
@@ -30,7 +31,7 @@ export async function checkNavigation(api: NavCheckApi, add: (name: string, ok: 
 	v.scrollToPage(3);
 	await frames(3);
 
-	const bar = v.scrollbar.el as HTMLElement;
+	const bar = v.scrollbar.el;
 	const thumb = bar.querySelector(".notebook-scrollbar-thumb") as HTMLElement;
 	const bubble = bar.querySelector(".notebook-scrollbar-bubble") as HTMLElement;
 	add("scrollbar: it shows after a scroll, with a thumb of at least 44 px",

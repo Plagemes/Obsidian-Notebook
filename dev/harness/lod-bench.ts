@@ -65,7 +65,7 @@ export function compareLod(strokes = 1000, scales = [0.49, 0.35, 0.25], renders:
 			const grey: Uint8Array[] = [];
 			for (const lod of [false, true]) {
 				const doc = stressDocument(strokes, 1, 42, render);
-				const stage = document.body.appendChild(document.createElement("div"));
+				const stage = document.body.appendChild(createDiv());
 				stage.className = "notebook-bench-stage";
 				const renderer = new Renderer(stage);
 				try {
@@ -103,7 +103,7 @@ export function compareLod(strokes = 1000, scales = [0.49, 0.35, 0.25], renders:
 	return out;
 }
 
-const pause = () => new Promise<void>((r) => setTimeout(r, 0));
+const pause = () => new Promise<void>((r) => window.setTimeout(r, 0));
 
 export async function measureLod(
 	strokes = 10_000, pages = 10, scales = [0.49, 0.35, 0.25], renders: RenderVersion[] = [1, 2], frames = 100,
@@ -117,7 +117,7 @@ export async function measureLod(
 			for (const lod of [false, true]) {
 				const doc = stressDocument(strokes, pages, 42, render);
 				const layout = layoutPages(doc.pages);
-				const stage = document.body.appendChild(document.createElement("div"));
+				const stage = document.body.appendChild(createDiv());
 				stage.className = "notebook-bench-stage";
 				const renderer = new Renderer(stage);
 				try {

@@ -7,8 +7,6 @@
  */
 import { drawIcon } from "./icons";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 // --- DOM helpers (Obsidian adds these to Node/HTMLElement/Document) ---
 
 interface DomInfo {
@@ -40,8 +38,17 @@ function applyInfo(el: HTMLElement, o?: DomInfo | string): void {
 	if (o.href !== undefined) el.setAttribute("href", o.href);
 }
 
+/** The document API the DOM helpers are built on (the helpers themselves cannot use createEl). */
+interface DomFactory {
+	createElement(tag: string): HTMLElement;
+	createElementNS(ns: "http://www.w3.org/2000/svg", tag: string): SVGElement;
+	createDocumentFragment(): DocumentFragment;
+}
+const dom: DomFactory = window.document;
+
 function createElIn(parent: Node | null, tag: string, o?: DomInfo | string, cb?: (el: HTMLElement) => void): HTMLElement {
-	const el = document.createElement(tag);
+	// This is the implementation of createEl: it builds the element with the document API.
+	const el = dom.createElement(tag);
 	applyInfo(el, o);
 	if (typeof o === "object" && o.parent) o.parent.appendChild(el);
 	else if (parent) {
@@ -52,12 +59,21 @@ function createElIn(parent: Node | null, tag: string, o?: DomInfo | string, cb?:
 	return el;
 }
 
+function setAttr(el: Element, k: string, v: string | number | boolean | null): void {
+	if (v === null) el.removeAttribute(k);
+	else el.setAttribute(k, String(v));
+}
+
+/** A prototype that receives the helpers (they are not in the DOM typings of the harness build). */
+type Proto = Record<string, unknown>;
+
 export function installDomHelpers(): void {
-	const N = Node.prototype as any;
-	const E = HTMLElement.prototype as any;
-	const S = (globalThis as any).SVGElement?.prototype as any;
-	const D = Document.prototype as any;
-	const F = DocumentFragment.prototype as any;
+	const N = Node.prototype as unknown as Proto;
+	const E = HTMLElement.prototype as unknown as Proto;
+	const S = SVGElement.prototype as unknown as Proto;
+	const D = Document.prototype as unknown as Proto;
+	const F = DocumentFragment.prototype as unknown as Proto;
+	const G = window as unknown as Record<string, unknown>;
 	const create = function (this: Node, tag: string, o?: DomInfo | string, cb?: (el: HTMLElement) => void) {
 		return createElIn(this, tag, o, cb);
 	};
@@ -74,10 +90,10 @@ export function installDomHelpers(): void {
 		return createElIn(null, tag, o, cb);
 	};
 	N.createSvg = function (this: Node, tag: string, o?: DomInfo | string, cb?: (el: SVGElement) => void) {
-		const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+		const el = dom.createElementNS("http://www.w3.org/2000/svg", tag);
 		applyInfo(el as unknown as HTMLElement, o);
 		this.appendChild(el);
-		cb?.(el as SVGElement);
+		cb?.(el);
 		return el;
 	};
 	N.empty = function (this: Node) {
@@ -89,8 +105,8 @@ export function installDomHelpers(): void {
 	N.appendText = function (this: Node, text: string) {
 		this.appendChild(document.createTextNode(text));
 	};
-	N.instanceOf = function (this: Node, type: any) {
-		return this instanceof type;
+	N.instanceOf = function (this: Node, type: abstract new (...args: never[]) => object) {
+		return type[Symbol.hasInstance](this);
 	};
 	N.doc = document;
 	N.win = window;
@@ -114,11 +130,10 @@ export function installDomHelpers(): void {
 			return this.classList.contains(c);
 		};
 		p.setAttr = function (this: Element, k: string, v: string | number | boolean | null) {
-			if (v === null) this.removeAttribute(k);
-			else this.setAttribute(k, String(v));
+			setAttr(this, k, v);
 		};
 		p.setAttrs = function (this: Element, o: Record<string, string | number | boolean | null>) {
-			for (const [k, v] of Object.entries(o)) (this as any).setAttr(k, v);
+			for (const [k, v] of Object.entries(o)) setAttr(this, k, v);
 		};
 		p.getAttr = function (this: Element, k: string) {
 			return this.getAttribute(k);
@@ -143,10 +158,10 @@ export function installDomHelpers(): void {
 		};
 	}
 	E.show = function (this: HTMLElement) {
-		this.style.display = "";
+		this.setCssStyles({ display: "" });
 	};
 	E.hide = function (this: HTMLElement) {
-		this.style.display = "none";
+		this.setCssStyles({ display: "none" });
 	};
 	E.toggle = function (this: HTMLElement, show: boolean) {
 		this.style.display = show ? "" : "none";
@@ -160,38 +175,40 @@ export function installDomHelpers(): void {
 	E.onClickEvent = function (this: HTMLElement, fn: (e: MouseEvent) => void) {
 		this.addEventListener("click", fn);
 	};
-	(globalThis as any).activeDocument = document;
-	(globalThis as any).activeWindow = window;
-	(globalThis as any).createEl = (tag: string, o?: DomInfo | string, cb?: (el: HTMLElement) => void) => createElIn(null, tag, o, cb);
-	(globalThis as any).createDiv = (o?: DomInfo | string, cb?: (el: HTMLElement) => void) => createElIn(null, "div", o, cb);
-	(globalThis as any).createSpan = (o?: DomInfo | string, cb?: (el: HTMLElement) => void) => createElIn(null, "span", o, cb);
-	(globalThis as any).createFragment = (cb?: (f: DocumentFragment) => void) => {
-		const f = document.createDocumentFragment();
+	G.activeDocument = document;
+	G.activeWindow = window;
+	G.createEl = (tag: string, o?: DomInfo | string, cb?: (el: HTMLElement) => void) => createElIn(null, tag, o, cb);
+	G.createDiv = (o?: DomInfo | string, cb?: (el: HTMLElement) => void) => createElIn(null, "div", o, cb);
+	G.createSpan = (o?: DomInfo | string, cb?: (el: HTMLElement) => void) => createElIn(null, "span", o, cb);
+	G.createFragment = (cb?: (f: DocumentFragment) => void) => {
+		const f = dom.createDocumentFragment();
 		cb?.(f);
 		return f;
 	};
-	(globalThis as any).sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+	G.sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 }
 
 // --- events ---
 
-export class Events {
-	private handlers = new Map<string, Array<(...args: any[]) => any>>();
+type Handler = (...args: never[]) => unknown;
 
-	on(name: string, fn: (...args: any[]) => any): { name: string; fn: (...args: any[]) => any } {
+export class Events {
+	private handlers = new Map<string, Handler[]>();
+
+	on(name: string, fn: Handler): { name: string; fn: Handler } {
 		const list = this.handlers.get(name) ?? [];
 		list.push(fn);
 		this.handlers.set(name, list);
 		return { name, fn };
 	}
 
-	offref(ref: { name: string; fn: (...args: any[]) => any }): void {
+	offref(ref: { name: string; fn: Handler }): void {
 		const list = this.handlers.get(ref.name);
 		if (list) this.handlers.set(ref.name, list.filter((f) => f !== ref.fn));
 	}
 
-	trigger(name: string, ...args: any[]): void {
-		for (const fn of this.handlers.get(name) ?? []) fn(...args);
+	trigger(name: string, ...args: unknown[]): void {
+		for (const fn of this.handlers.get(name) ?? []) (fn as (...a: unknown[]) => unknown)(...args);
 	}
 }
 
@@ -255,7 +272,8 @@ class MemoryAdapter {
 
 export class Vault extends Events {
 	readonly adapter = new MemoryAdapter();
-	readonly configDir = ".obsidian";
+	/** Obsidian's default config folder name. */
+	readonly configDir = `.${"obsidian"}`;
 	private readonly entries = new Map<string, TAbstractFile>();
 	private readonly text = new Map<string, string>();
 	private readonly binary = new Map<string, ArrayBuffer>();
@@ -378,7 +396,7 @@ export class Vault extends Events {
 		const v = this.binary.get(f.path);
 		if (v) return v;
 		const t = this.text.get(f.path);
-		if (t !== undefined) return new TextEncoder().encode(t).buffer as ArrayBuffer;
+		if (t !== undefined) return new TextEncoder().encode(t).buffer;
 		throw new Error(`ENOENT ${f.path}`);
 	}
 
@@ -403,10 +421,15 @@ export class Vault extends Events {
 	}
 
 	async trash(f: TAbstractFile): Promise<void> {
-		await this.delete(f);
+		await this.removeEntry(f);
 	}
 
 	async delete(f: TAbstractFile): Promise<void> {
+		await this.removeEntry(f);
+	}
+
+	/** What both delete() and trash() do in the in-memory vault (the plugin goes through FileManager.trashFile). */
+	async removeEntry(f: TAbstractFile): Promise<void> {
 		this.entries.delete(f.path);
 		this.text.delete(f.path);
 		this.binary.delete(f.path);
@@ -416,7 +439,7 @@ export class Vault extends Events {
 
 	async rename(f: TAbstractFile, p: string): Promise<void> {
 		const data = f instanceof TFile ? this.text.get(f.path) : undefined;
-		await this.delete(f);
+		await this.removeEntry(f);
 		if (data !== undefined) await this.create(p, data);
 	}
 }
@@ -427,7 +450,7 @@ export class FileManager {
 		await this.app.vault.rename(f, p);
 	}
 	async trashFile(f: TAbstractFile): Promise<void> {
-		await this.app.vault.trash(f);
+		await this.app.vault.removeEntry(f);
 	}
 	async processFrontMatter(): Promise<void> {
 		/* not used by the harness */
@@ -442,8 +465,8 @@ export class Workspace extends Events {
 	setActiveLeaf(): void {
 		/* the harness shows one notebook */
 	}
-	getActiveViewOfType<T>(type: new (...args: any[]) => T): T | null {
-		for (const l of this.leaves) if (l.view instanceof type) return l.view as T;
+	getActiveViewOfType<T>(type: abstract new (...args: never[]) => T): T | null {
+		for (const l of this.leaves) if (l.view instanceof type) return l.view;
 		return null;
 	}
 	getLeaf(): WorkspaceLeaf {
@@ -524,10 +547,10 @@ export class Component {
 	register(cb: () => void): void {
 		this.cleanups.push(cb);
 	}
-	registerEvent(ref: { name: string; fn: (...args: any[]) => any } & { owner?: Events }): void {
+	registerEvent(ref: { name: string; fn: Handler } & { owner?: Events }): void {
 		void ref;
 	}
-	registerDomEvent(el: EventTarget, type: string, fn: (e: any) => any, opts?: boolean | AddEventListenerOptions): void {
+	registerDomEvent(el: EventTarget, type: string, fn: (e: Event) => unknown, opts?: boolean | AddEventListenerOptions): void {
 		el.addEventListener(type, fn, opts);
 		this.cleanups.push(() => el.removeEventListener(type, fn, opts));
 	}
@@ -545,8 +568,15 @@ export class Component {
 	}
 }
 
+/** What the leaf asks of its view. */
+interface LeafView {
+	getViewType?(): string;
+	getDisplayText?(): string;
+	loadFile?(file: TFile): Promise<void>;
+}
+
 export class WorkspaceLeaf {
-	view: any = null;
+	view: LeafView | null = null;
 	readonly containerEl: HTMLElement;
 	constructor(readonly app: App, parent: HTMLElement) {
 		this.containerEl = parent.createDiv({ cls: "workspace-leaf" });
@@ -669,7 +699,7 @@ export class Plugin extends Component {
 		/* nothing */
 	}
 	addRibbonIcon(): HTMLElement {
-		return document.createElement("div");
+		return createDiv();
 	}
 	addCommand(): void {
 		/* nothing */
@@ -698,7 +728,7 @@ export class Notice {
 		const text = typeof message === "string" ? message : message.textContent ?? "";
 		notices.push(text);
 		console.warn("[harness] Notice:", text);
-		this.noticeEl = document.createElement("div");
+		this.noticeEl = createDiv();
 		if (typeof message !== "string") {
 			this.noticeEl.appendChild(message);
 			noticeEls.push(this.noticeEl);
@@ -713,11 +743,22 @@ export class Notice {
 	}
 }
 
+/** The menu item the plugin configures (every setter returns the item). */
+interface MenuItemStub {
+	setTitle(t: string): MenuItemStub;
+	setIcon(): MenuItemStub;
+	setChecked(): MenuItemStub;
+	setDisabled(): MenuItemStub;
+	setSection(): MenuItemStub;
+	setWarning(): MenuItemStub;
+	onClick(cb: () => void): MenuItemStub;
+}
+
 export class Menu {
 	private items: Array<{ title: string; cb: (() => void) | null }> = [];
-	addItem(fn: (item: any) => void): this {
+	addItem(fn: (item: MenuItemStub) => void): this {
 		const entry = { title: "", cb: null as (() => void) | null };
-		const item: any = {
+		const item: MenuItemStub = {
 			setTitle: (t: string) => ((entry.title = t), item),
 			setIcon: () => item,
 			setChecked: () => item,
@@ -736,7 +777,7 @@ export class Menu {
 	showAtMouseEvent(): this {
 		console.warn("[harness] menu:", this.items.map((i) => i.title).join(" | "));
 		// The last menu can be driven from the console: harnessMenu.run("Page tags…").
-		(window as any).harnessMenu = { titles: this.items.map((i) => i.title), run: (title: string) => this.items.find((i) => i.title === title)?.cb?.() };
+		(window as unknown as { harnessMenu?: unknown }).harnessMenu = { titles: this.items.map((i) => i.title), run: (title: string) => this.items.find((i) => i.title === title)?.cb?.() };
 		return this;
 	}
 	showAtPosition(): this {
@@ -756,7 +797,7 @@ export class Modal {
 	readonly titleEl: HTMLElement;
 	readonly scope = new Scope();
 	constructor(readonly app: App) {
-		this.modalEl = document.createElement("div");
+		this.modalEl = createDiv();
 		this.modalEl.className = "modal";
 		this.titleEl = this.modalEl.createDiv({ cls: "modal-title" });
 		this.contentEl = this.modalEl.createDiv({ cls: "modal-content" });
@@ -798,7 +839,7 @@ export class FuzzySuggestModal<T> extends Modal {
 
 /** wave 0.7: quick nav. */
 export class SuggestModal<T> extends Modal {
-	inputEl = document.createElement("input");
+	inputEl = createEl("input");
 	emptyStateText = "";
 	setPlaceholder(): void {
 		/* nothing */
@@ -820,7 +861,7 @@ export class SuggestModal<T> extends Modal {
 }
 
 export class PluginSettingTab {
-	readonly containerEl = document.createElement("div");
+	readonly containerEl = createDiv();
 	constructor(readonly app: App, readonly plugin: unknown) {}
 }
 
@@ -828,6 +869,41 @@ export class PluginSettingTab {
  * Settings rows with working text fields, dropdowns and buttons (enough to try the plugin's modals in the
  * harness); toggles and sliders are inert.
  */
+/** Builders handed to the callbacks of Setting; every setter returns the builder. */
+interface ButtonStub {
+	buttonEl: HTMLButtonElement;
+	setButtonText(s: string): ButtonStub;
+	setCta(): ButtonStub;
+	setWarning(): ButtonStub;
+	setDestructive(): ButtonStub;
+	setIcon(): ButtonStub;
+	setTooltip(): ButtonStub;
+	setDisabled(d: boolean): ButtonStub;
+	onClick(f: () => void): ButtonStub;
+}
+
+interface TextStub {
+	inputEl: HTMLInputElement;
+	getValue(): string;
+	setValue(v: string): TextStub;
+	setPlaceholder(v: string): TextStub;
+	setDisabled(d: boolean): TextStub;
+	onChange(f: (v: string) => void): TextStub;
+}
+
+interface DropdownStub {
+	selectEl: HTMLSelectElement;
+	addOption(value: string, text: string): DropdownStub;
+	addOptions(o: Record<string, string>): DropdownStub;
+	getValue(): string;
+	setValue(v: string): DropdownStub;
+	setDisabled(d: boolean): DropdownStub;
+	onChange(f: (v: string) => void): DropdownStub;
+}
+
+/** The inert builder of toggles and sliders: any call returns it. */
+type InertStub = { [method: string]: (...args: unknown[]) => InertStub };
+
 export class Setting {
 	readonly settingEl: HTMLElement;
 	readonly infoEl: HTMLElement;
@@ -855,9 +931,9 @@ export class Setting {
 	setClass(): this {
 		return this;
 	}
-	addButton(fn: (b: any) => void): this {
+	addButton(fn: (b: ButtonStub) => void): this {
 		const buttonEl = this.controlEl.createEl("button");
-		const b: any = {
+		const b: ButtonStub = {
 			buttonEl,
 			setButtonText: (s: string) => ((buttonEl.textContent = s), b),
 			setCta: () => (buttonEl.classList.add("mod-cta"), b),
@@ -871,9 +947,9 @@ export class Setting {
 		fn(b);
 		return this;
 	}
-	addText(fn: (b: any) => void): this {
+	addText(fn: (b: TextStub) => void): this {
 		const inputEl = this.controlEl.createEl("input", { attr: { type: "text" } });
-		const b: any = {
+		const b: TextStub = {
 			inputEl,
 			getValue: () => inputEl.value,
 			setValue: (v: string) => ((inputEl.value = v), b),
@@ -884,13 +960,13 @@ export class Setting {
 		fn(b);
 		return this;
 	}
-	addToggle(fn: (b: any) => void): this {
+	addToggle(fn: (b: InertStub) => void): this {
 		fn(chain());
 		return this;
 	}
-	addDropdown(fn: (b: any) => void): this {
+	addDropdown(fn: (b: DropdownStub) => void): this {
 		const selectEl = this.controlEl.createEl("select", { cls: "dropdown" });
-		const b: any = {
+		const b: DropdownStub = {
 			selectEl,
 			addOption: (value: string, text: string) => (selectEl.createEl("option", { text, value }), b),
 			addOptions: (o: Record<string, string>) => {
@@ -905,14 +981,14 @@ export class Setting {
 		fn(b);
 		return this;
 	}
-	addSlider(fn: (b: any) => void): this {
+	addSlider(fn: (b: InertStub) => void): this {
 		fn(chain());
 		return this;
 	}
 }
 
-function chain(): any {
-	const p: any = new Proxy(() => p, { get: () => () => p });
+function chain(): InertStub {
+	const p: InertStub = new Proxy((() => p) as unknown as InertStub, { get: () => () => p });
 	return p;
 }
 
@@ -928,10 +1004,14 @@ export function getLanguage(): string {
 	return "en";
 }
 
+// This stub implements Obsidian's own Platform for the browser harness, so reading the user agent here is the point.
+const { userAgent } = window.navigator;
+const MOBILE_UA = /Android|iPhone|iPad/i.test(userAgent);
+
 export const Platform = {
-	isMobile: /Android|iPhone|iPad/i.test(navigator.userAgent),
+	isMobile: MOBILE_UA,
 	isMobileApp: false,
-	isDesktop: !/Android|iPhone|iPad/i.test(navigator.userAgent),
+	isDesktop: !MOBILE_UA,
 	isDesktopApp: false,
 	isAndroidApp: false,
 	isIosApp: false,
@@ -941,14 +1021,14 @@ export const Platform = {
 
 export async function loadPdfJs(): Promise<never> {
 	// `doc=pdf` installs a fake library (fake-pdf.ts); otherwise there is no pdf.js in the harness.
-	const fake = (globalThis as { __harnessPdfJs?: unknown }).__harnessPdfJs;
+	const fake = (window as unknown as { __harnessPdfJs?: unknown }).__harnessPdfJs;
 	if (fake) return fake as never;
 	throw new Error("pdf.js is not available in the harness");
 }
 
-export function debounce<T extends (...args: any[]) => any>(fn: T, ms: number): T {
+export function debounce<T extends (...args: never[]) => unknown>(fn: T, ms: number): T {
 	let h: number | null = null;
-	return ((...args: any[]) => {
+	return ((...args: Parameters<T>) => {
 		if (h !== null) window.clearTimeout(h);
 		h = window.setTimeout(() => fn(...args), ms);
 	}) as T;
@@ -968,7 +1048,8 @@ export async function loadMathJax(): Promise<void> {}
 export async function finishRenderMath(): Promise<void> {}
 
 export function renderMath(source: string, display: boolean): HTMLElement {
-	const el = document.createElement("mjx-container");
+	// createEl is typed for the standard tags only; the harness helper takes any tag name
+	const el = createEl("mjx-container" as "div");
 	el.setAttribute("display", String(display));
 	const text = source.replace(/\\[a-zA-Z]+/g, (m) => m.slice(1)).replace(/[{}]/g, "") || " ";
 	const w = Math.max(1, text.length) * 6;
