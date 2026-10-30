@@ -125,7 +125,8 @@ export class HistoryService {
 		new NotebookPickerModal(this.app, this.host.settings.folder, (file) => void this.chooseVersion(file)).open();
 	}
 
-	private async chooseVersion(file: TFile): Promise<void> {
+	/** Lists the snapshots of `file` and restores the chosen one (public for the integrity check, wave 0.7). */
+	async chooseVersion(file: TFile): Promise<void> {
 		try {
 			const docId = extractDocId(readNotebookText(file.extension, await this.app.vault.read(file)));
 			if (!docId) {

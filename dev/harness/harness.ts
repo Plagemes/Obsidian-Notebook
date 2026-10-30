@@ -28,6 +28,7 @@ import { DocumentSession } from "../../src/storage/session";
 import { stressDocument } from "../../src/model/stress";
 import { FAKE_PATH, installFakePdf, slidesNotebook } from "./fake-pdf";
 import { checkReading } from "./reading-check";
+import { compareLod, measureLod } from "./lod-bench";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -50,10 +51,10 @@ if (fault === "wet") {
 	};
 } else if (fault === "stroke") {
 	const proto = Renderer.prototype as any;
-	const fill = proto.fillStroke as (ctx: CanvasRenderingContext2D, stroke: { id: string }) => void;
-	proto.fillStroke = function (ctx: CanvasRenderingContext2D, stroke: { id: string }) {
+	const fill = proto.fillStroke as (ctx: CanvasRenderingContext2D, stroke: { id: string }, ...rest: unknown[]) => void;
+	proto.fillStroke = function (ctx: CanvasRenderingContext2D, stroke: { id: string }, ...rest: unknown[]) {
 		if (stroke.id === "s1") throw new Error("harness: injected stroke failure");
-		fill.call(this, ctx, stroke);
+		fill.call(this, ctx, stroke, ...rest);
 	};
 }
 /** Console errors the injected fault is expected to produce (logged once by the guards). */
@@ -402,35 +403,8 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 		setTool("pen");
 	}
 
-	// Radial menu: the pen's side button opens it without drawing; lifting on a sector chooses it.
-	{
-		setTool("pen");
-		const rb = strokeCount();
-		const r3 = st.getBoundingClientRect();
-		const cx = r3.left + r3.width * 0.5, cy = r3.top + r3.height * 0.5;
-		const pen = (name: string, x: number, y: number, extra: PointerEventInit = {}) =>
-			new PointerEvent(name, {
-				bubbles: true, cancelable: true, composed: true, pointerId: 77, pointerType: "pen", isPrimary: true,
-				pressure: 0.5, width: 1, height: 1, button: 0, buttons: 1, clientX: x, clientY: y, ...extra,
-			});
-		st.dispatchEvent(pen("pointerdown", cx, cy, { button: 2, buttons: 3 }));
-		await frames(1);
-		const menu = st.querySelector(".notebook-radial");
-		add("radial menu opens on the pen side button", !!menu && menu.querySelectorAll(".notebook-radial-item").length === 8,
-			menu ? `${menu.querySelectorAll(".notebook-radial-item").length} items` : "no menu");
-		st.dispatchEvent(pen("pointerup", cx, cy, { button: 2, buttons: 0, pressure: 0 }));
-		await frames(1);
-		add("lifting in the middle keeps the menu open", !!st.querySelector(".notebook-radial"), "");
-		// Sector 2 (eraser) is to the right of the middle.
-		st.dispatchEvent(pen("pointerdown", cx + 72, cy));
-		st.dispatchEvent(pen("pointerup", cx + 72, cy, { buttons: 0, pressure: 0 }));
-		await frames(2);
-		add("tapping a sector chooses its tool and closes the menu", !st.querySelector(".notebook-radial") && (view as any).tools.tool === "eraser",
-			`tool ${(view as any).tools.tool}, menu ${st.querySelector(".notebook-radial") ? "open" : "closed"}`);
-		add("the radial menu draws nothing", strokeCount() === rb, `${rb} → ${strokeCount()}`);
-		setTool("pen");
-		await frames(2);
-	}
+	// Radial dial: the pen's side button opens it without drawing; its states open and choose correctly.
+	await checkRadial(add);
 
 	await checkPageMode(add);
 	await checkToolbar(add);
@@ -454,6 +428,134 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 		wetDesynchronized: (wet?.getContext("2d") as any)?.getContextAttributes?.()?.desynchronized ?? null,
 	};
 	return { ok, results, errors: unexpected, notices: [...notices], env, points };
+}
+
+/** Pen events on the stage at window point (x, y). */
+function penAt(name: string, x: number, y: number, extra: PointerEventInit = {}): void {
+	stage().dispatchEvent(new PointerEvent(name, {
+		bubbles: true, cancelable: true, composed: true, pointerId: 77, pointerType: "pen", isPrimary: true,
+		pressure: name === "pointerup" ? 0 : 0.5, width: 1, height: 1, button: 0, buttons: name === "pointerup" ? 0 : 1, clientX: x, clientY: y, ...extra,
+	}));
+}
+
+/** Opens the radial dial with the side button in the middle of the stage. */
+async function openRadial(): Promise<void> {
+	const r = stage().getBoundingClientRect();
+	const cx = r.left + r.width * 0.5, cy = r.top + r.height * 0.5;
+	penAt("pointerdown", cx, cy, { button: 2, buttons: 3 });
+	await frames(1);
+	penAt("pointerup", cx, cy, { button: 2, buttons: 0 });
+	await frames(1);
+}
+
+/** Taps the dial action `action` with the pen (down and up on it). */
+async function tapDial(action: string): Promise<boolean> {
+	const el = document.querySelector(`.notebook-dial [data-dial="${action}"]`);
+	if (!el) return false;
+	const r = el.getBoundingClientRect();
+	penAt("pointerdown", r.left + r.width / 2, r.top + r.height / 2);
+	penAt("pointerup", r.left + r.width / 2, r.top + r.height / 2);
+	await wait(220); // the state transition
+	return true;
+}
+
+/** Closes every popover, sheet and dial and goes back to the pen with nothing selected. For screenshots. */
+async function closeAll(): Promise<void> {
+	const v = view as any;
+	v.radial?.close();
+	v.toolbar.closePopover();
+	v.ui.sheet.close();
+	v.stampPalette?.close();
+	setTool("pen");
+	v.refreshUi();
+	await wait(250);
+}
+
+/** Opens the dial in `state` (main, color, width, tools, favourites, shapes). For screenshots. */
+async function radialState(state: string): Promise<void> {
+	const v = view as any;
+	v.radial?.close();
+	await openRadial();
+	if (state === "save") {
+		await tapDial("tools");
+		await tapDial("save-favourite");
+	} else if (state !== "main") {
+		await tapDial(state);
+	}
+	await wait(200);
+}
+
+/**
+ * The radial dial: opens on the side button (lifting keeps it open), shows undo/redo, width, colour, tool, favourites and
+ * shapes; the colour ring sets the colour, the width slider the width, the pen case the tool; nothing is drawn.
+ */
+async function checkRadial(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
+	const v = view as any;
+	setTool("pen");
+	v.toolbar.update({ penColor: "#1e1e1e", penWidth: 2 });
+	const before = strokeCount();
+	await openRadial();
+	const dial = document.querySelector(".notebook-dial") as HTMLElement | null;
+	const actions = dial ? Array.from(dial.querySelectorAll("[data-dial]")).map((e) => (e as HTMLElement).dataset.dial) : [];
+	add("radial: the side button opens the dial and lifting keeps it open", !!dial && v.radial.state === "main"
+		&& ["undo", "redo", "width", "color", "tools", "favourites", "shapes"].every((x) => actions.includes(x)), actions.join(","));
+	const r = dial?.getBoundingClientRect();
+	const st = stage().getBoundingClientRect();
+	add("radial: the dial is inside the page area", !!r && r.left >= st.left - 0.5 && r.right <= st.right + 0.5 && r.top >= st.top - 0.5 && r.bottom <= st.bottom + 0.5,
+		r ? `${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}×${Math.round(r.height)}` : "none");
+	const small = dial ? Array.from(dial.querySelectorAll("[data-dial]")).filter((e) => (e as HTMLElement).offsetWidth < 32) : [];
+	add("radial: every control is at least 32 px", small.length === 0, small.map((e) => (e as HTMLElement).dataset.dial).join(","));
+
+	await tapDial("color");
+	const swatches = document.querySelectorAll(".notebook-dial [data-dial^='swatch:']").length;
+	const hasCustom = !!document.querySelector(".notebook-dial [data-dial='custom']") && !!document.querySelector(".notebook-dial [data-dial='eyedropper']");
+	add("radial: the colour bubble opens the colour ring (12 swatches, custom, eyedropper)", v.radial.state === "color" && swatches === 12 && hasCustom, `${v.radial.state}, ${swatches} swatches`);
+	await tapDial("swatch:#1d4ed8");
+	add("radial: a swatch sets the pen colour and returns to the dial", v.tools.penColor === "#1d4ed8" && v.radial.state === "main", `${v.tools.penColor}, ${v.radial.state}`);
+
+	await tapDial("width");
+	const knob = document.querySelector(".notebook-dial [data-dial='slider']");
+	add("radial: the width bubble opens the arc slider", v.radial.state === "width" && !!knob && document.querySelectorAll(".notebook-dial .notebook-dial-step").length >= 8, `${v.radial.state}`);
+	// Drag the knob along the arc to its end (lower right).
+	const d = (document.querySelector(".notebook-dial") as HTMLElement).getBoundingClientRect();
+	const cx = d.left + d.width / 2, cy = d.top + d.height / 2;
+	const k = (knob as HTMLElement).getBoundingClientRect();
+	penAt("pointerdown", k.left + k.width / 2, k.top + k.height / 2);
+	for (const deg of [30, 70, 110, 130]) {
+		const a = (deg * Math.PI) / 180;
+		penAt("pointermove", cx + Math.sin(a) * 98, cy - Math.cos(a) * 98);
+	}
+	penAt("pointerup", cx + Math.sin((130 * Math.PI) / 180) * 98, cy - Math.cos((130 * Math.PI) / 180) * 98);
+	await frames(1);
+	const number = document.querySelector(".notebook-dial .notebook-dial-number")?.textContent;
+	add("radial: dragging the slider sets the width and shows it", v.tools.penWidth === 8 && number === "8" && v.radial.state === "width", `width ${v.tools.penWidth}, label ${number}`);
+	await tapDial("back");
+	add("radial: the centre goes back to the dial", v.radial.state === "main", v.radial.state);
+	v.toolbar.update({ penWidth: 2 });
+
+	await tapDial("tools");
+	const caseTools = document.querySelectorAll(".notebook-dial [data-dial^='tool:']").length;
+	add("radial: the centre opens the pen case with every tool and +", v.radial.state === "tools" && caseTools === 7 && !!document.querySelector(".notebook-dial [data-dial='save-favourite']"), `${caseTools} tools`);
+	await tapDial("save-favourite");
+	add("radial: + opens the favourites in save mode", v.radial.state === "favourites" && document.querySelectorAll(".notebook-dial .is-target").length === 6, `${v.radial.state}`);
+	await tapDial("back");
+	await tapDial("back");
+	await tapDial("shapes");
+	await tapDial("shape:arrow");
+	add("radial: a shape chooses the shape tool and closes the dial", v.tools.tool === "shape" && v.tools.shapeKind === "arrow" && !v.radial.isOpen, `${v.tools.tool} ${v.tools.shapeKind}, open ${v.radial.isOpen}`);
+	await openRadial();
+	await tapDial("tools");
+	await tapDial("tool:eraser");
+	add("radial: a tool of the pen case chooses it and closes the dial", v.tools.tool === "eraser" && !v.radial.isOpen, `${v.tools.tool}, open ${v.radial.isOpen}`);
+	await openRadial();
+	penAt("pointerdown", st.left + 6, st.top + 6);
+	penAt("pointerup", st.left + 6, st.top + 6);
+	await frames(1);
+	add("radial: a tap outside closes it", !v.radial.isOpen, "");
+	add("radial: the dial draws nothing", strokeCount() === before, `${before} → ${strokeCount()}`);
+	setTool("pen");
+	v.toolbar.update({ penColor: "#1e1e1e", penWidth: 2, shapeKind: "line" });
+	await frames(2);
 }
 
 /**
@@ -490,10 +592,9 @@ async function checkPageMode(add: (name: string, ok: boolean, detail?: string) =
 	};
 
 	// The toolbar item switches the mode on.
-	(v.toolbar as any).closePopover();
-	click(byLabel(document, "More actions"), "more button");
-	await frames(2);
-	click(byText(document.querySelector(".notebook-more")!, "One page at a time"), "One page at a time");
+	await openMore();
+	click(byText(document.querySelector(".notebook-sheet")!, "One page at a time"), "One page at a time");
+	v.ui.sheet.close();
 	await frames(3);
 	add(`${label}: the toolbar item turns on one page at a time`, v.pageMode.enabled === true && v.host.settings.scrollMode === "pages", `enabled ${v.pageMode.enabled}, setting ${v.host.settings.scrollMode}`);
 	const boxes = v.layout.boxes as Array<{ x: number; y: number; width: number }>;
@@ -531,9 +632,9 @@ async function checkPageMode(add: (name: string, ok: boolean, detail?: string) =
 	add(`${label}: and back to the first`, v.currentPageIndex() === 0 && Math.abs(v.viewport.offsetX - x0) < 1, `page ${v.currentPageIndex() + 1}`);
 
 	// Back to continuous scrolling.
-	click(byLabel(document, "More actions"), "more button");
-	await frames(2);
-	click(byText(document.querySelector(".notebook-more")!, "One page at a time"), "One page at a time");
+	await openMore();
+	click(byText(document.querySelector(".notebook-sheet")!, "One page at a time"), "One page at a time");
+	v.ui.sheet.close();
 	await frames(3);
 	const ys = (v.layout.boxes as Array<{ y: number }>).map((b) => b.y);
 	add(`${label}: the toolbar item switches back to continuous`, v.pageMode.enabled === false && ys[1]! > ys[0]! && v.currentPageIndex() === 0 && v.host.settings.scrollMode === "continuous",
@@ -743,15 +844,33 @@ async function openOptions(tool: string): Promise<void> {
 	tb.closePopover();
 	tb.setTool(tool);
 	click(byLabel(document, TOOL_LABELS[tool] ?? tool), `tool ${tool}`);
-	await frames(3);
+	await wait(250);
 }
 
-/** Opens the "more" menu. For screenshots. */
+/** Opens the "All actions" sheet. For screenshots. */
 async function openMore(): Promise<void> {
-	const tb = (view as any).toolbar;
-	tb.closePopover();
-	click(byLabel(document, "More actions"), "more button");
-	await frames(3);
+	const v = view as any;
+	v.toolbar.closePopover();
+	if (v.ui.sheet.isOpen) v.ui.sheet.close();
+	click(byLabel(document, "All actions"), "All actions button");
+	await wait(260);
+}
+
+/** Opens the page sheet from the page indicator. For screenshots. */
+async function openPageSheet(): Promise<void> {
+	const v = view as any;
+	v.toolbar.closePopover();
+	if (v.ui.sheet.isOpen) v.ui.sheet.close();
+	click(document.querySelector(".notebook-page-indicator"), "page indicator");
+	await wait(260);
+}
+
+/** Selects the first stroke of the first page with the lasso (the contextual bar shows the selection actions). For screenshots. */
+async function selectFirstStroke(): Promise<void> {
+	const v = view as any;
+	const page = v.document.pages[0];
+	v.selectItems(0, page.strokes.slice(0, 2), []);
+	await wait(250);
 }
 
 /**
@@ -845,20 +964,100 @@ async function checkToolbar(add: (name: string, ok: boolean, detail?: string) =>
 	document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
 	add(`${label}: the pen indicator opens the options and Escape closes them`, wasOpen && tb.openPopover === null, `opened ${wasOpen}, now ${tb.openPopover}`);
 
-	// 3. "More" menu: opens inside the view, an item works and closes it.
-	click(byLabel(bar, "More actions"), "more button");
+	// 3. "All actions" sheet: opens inside the view, grouped and searchable; a toggle works and keeps it open; an action closes it.
+	const ui = v.ui;
+	click(byLabel(bar, "All actions"), "All actions button");
+	await wait(260); // the opening animation
+	const sheet = document.querySelector(".notebook-sheet") as HTMLElement;
+	r = sheet.getBoundingClientRect();
+	const items = Array.from(sheet.querySelectorAll("button.notebook-menu-item")).filter((b) => (b as HTMLElement).offsetParent !== null) as HTMLElement[];
+	const sections = Array.from(sheet.querySelectorAll(".notebook-sheet-section-title")).map((e) => e.textContent);
+	add(`${label}: the All actions sheet opens inside the view, grouped`, ui.sheet.isOpen && inView(r) && r.bottom <= window.innerHeight + 0.5 && items.length >= 12 && sections.includes("Insert") && sections.includes("Page"),
+		`sheet ${Math.round(r.left)}–${Math.round(r.right)}, bottom ${Math.round(r.bottom)} of ${window.innerHeight}, ${items.length} items, sections ${sections.join(", ")}`);
+	add(`${label}: sheet rows are at least 40 px`, items.every((b) => b.offsetHeight >= 40), items.filter((b) => b.offsetHeight < 40).map((b) => b.textContent).join(","));
+	add(`${label}: the sheet is a bottom sheet on a phone only`, sheet.classList.contains("is-bottom") === (window.innerWidth < 600), sheet.className);
+	click(byText(sheet, "Ruler"), "Ruler");
 	await frames(2);
-	const menu = bar.querySelector(".notebook-more") as HTMLElement;
-	r = menu.getBoundingClientRect();
-	const items = Array.from(menu.querySelectorAll("button")).filter((b) => b.offsetParent !== null);
-	add(`${label}: the more menu opens inside the view with its actions`, tb.openPopover === "more" && inView(r) && r.bottom <= window.innerHeight && items.length >= 8,
-		`menu ${Math.round(r.left)}–${Math.round(r.right)}, bottom ${Math.round(r.bottom)} of ${window.innerHeight}, ${items.length} items, ${tb.openPopover}`);
-	add(`${label}: more menu rows are at least 40 px`, items.every((b) => b.offsetHeight >= 40), items.map((b) => b.offsetHeight).join(","));
-	click(byText(menu, "Ruler"), "Ruler");
+	add(`${label}: a toggle in the sheet works and keeps it open`, v.tools.ruler === true && ui.sheet.isOpen, `ruler ${v.tools.ruler}, sheet ${ui.sheet.isOpen}`);
+	const search = sheet.querySelector(".notebook-sheet-search input") as HTMLInputElement;
+	search.value = "stamp";
+	search.dispatchEvent(new Event("input", { bubbles: true }));
+	await frames(1);
+	const found = Array.from(sheet.querySelectorAll("button.notebook-menu-item")).map((b) => b.textContent ?? "");
+	add(`${label}: searching the sheet finds an action`, found.length >= 1 && found.some((f) => f.includes("Stamps")) && sheet.querySelector(".notebook-sheet-section-title")?.textContent === "Results", found.join(" | "));
+	search.value = "";
+	search.dispatchEvent(new Event("input", { bubbles: true }));
+	await frames(1);
+	click(byText(sheet, "Fit to width"), "Fit to width");
 	await frames(2);
-	add(`${label}: a more-menu action works and closes the menu`, v.tools.ruler === true && tb.openPopover === null, `ruler ${v.tools.ruler}, popover ${tb.openPopover}`);
+	add(`${label}: an action of the sheet runs and closes it`, !ui.sheet.isOpen, `sheet ${ui.sheet.isOpen}`);
 	tb.update({ ruler: false });
 	await frames(2);
+	const pageCount = v.document.pages.length;
+
+	// 4. Page sheet from the page indicator: page actions, paper as chips (one undo step), drawing nothing.
+	const strokesBefore = strokeCount();
+	click(bar.querySelector(".notebook-page-indicator"), "page indicator");
+	await wait(260);
+	const pageSheet = document.querySelector(".notebook-sheet") as HTMLElement;
+	r = pageSheet.getBoundingClientRect();
+	add(`${label}: the page indicator opens the page sheet`, ui.sheet.openKind === "page" && inView(r) && !!byText(pageSheet, "Duplicate page") && !byText(pageSheet, "Insert image"),
+		`kind ${ui.sheet.openKind}, title ${pageSheet.querySelector(".notebook-sheet-title")?.textContent}`);
+	const firstSection = pageSheet.querySelector(".notebook-sheet-section");
+	add(`${label}: the page sheet starts with Go to (page number, recent pages, one page at a time)`, firstSection?.querySelector(".notebook-sheet-section-title")?.textContent === "Go to"
+		&& ["Go to page number…", "Recently edited pages", "One page at a time"].every((x) => !!byText(firstSection as HTMLElement, x)),
+		Array.from(firstSection?.querySelectorAll("button") ?? []).map((b) => b.textContent).join(" | "));
+	const paperBefore = v.document.pages[v.currentPage()].paper.kind;
+	const dotted = Array.from(pageSheet.querySelectorAll(".notebook-chip-choice")).find((b) => b.textContent === "Dotted") as HTMLElement | undefined;
+	click(dotted, "Dotted chip");
+	await frames(2);
+	const paperAfter = v.document.pages[v.currentPage()].paper.kind;
+	add(`${label}: a paper chip changes the page and keeps the sheet open`, paperAfter === "dotted" && ui.sheet.isOpen && dotted?.getAttribute("aria-checked") !== null, `${paperBefore} → ${paperAfter}`);
+	v.undo();
+	await frames(1);
+	add(`${label}: undo restores the paper`, v.document.pages[v.currentPage()].paper.kind === paperBefore, v.document.pages[v.currentPage()].paper.kind);
+	window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+	await frames(1);
+	add(`${label}: Escape closes the sheet; nothing was drawn`, !ui.sheet.isOpen && strokeCount() === strokesBefore && v.document.pages.length === pageCount, `sheet ${ui.sheet.isOpen}, strokes ${strokesBefore} → ${strokeCount()}`);
+
+	// 5. Quick slots: as many as the layout engine planned, all inside the bar.
+	const quick = Array.from(bar.querySelectorAll(".notebook-quick button")) as HTMLElement[];
+	const plan = v.toolbar.quickIds.length;
+	add(`${label}: quick slots follow the width`, quick.length === plan && (width < 480 ? plan === 0 : width >= 760 ? plan >= 4 : true) && quick.every((b) => inView(b.getBoundingClientRect())),
+		`${quick.length} quick (${v.toolbar.quickIds.join(", ")}) at ${width}px`);
+
+	// 6. The contextual bar follows the context: none with the pen, paste for the lasso, the selection actions for a selection.
+	const ctx = () => (document.querySelector(".notebook-context-bar") as HTMLElement);
+	const ctxKind = () => (ctx().classList.contains("notebook-hidden") ? "none" : ctx().dataset.context ?? "?");
+	ui.refreshNow();
+	const k0 = ctxKind();
+	setTool("lasso");
+	ui.refreshNow();
+	const k1 = ctxKind();
+	const lassoActions = Array.from(ctx().querySelectorAll("[data-action]")).map((b) => (b as HTMLElement).dataset.action);
+	await selectFirstStroke();
+	ui.refreshNow();
+	const nSel = v.selection?.strokes.length ?? 0;
+	const k2 = ctxKind();
+	const selActions = Array.from(ctx().querySelectorAll("[data-action]")).map((b) => (b as HTMLElement).dataset.action);
+	const cr = ctx().getBoundingClientRect();
+	add(`${label}: the contextual bar changes with the context`, k0 === "none" && k1 === "lasso" && lassoActions.join() === "selection-paste" && k2 === "selection" && selActions.includes("selection-copy") && selActions.includes("delete-selection"),
+		`${k0} → ${k1} (${lassoActions.join()}) → ${k2} (${selActions.join()})`);
+	add(`${label}: the contextual bar is inside the view with 40 px targets`, inView(cr) && cr.bottom <= window.innerHeight + 0.5 && Array.from(ctx().querySelectorAll("button")).every((b) => (b as HTMLElement).offsetHeight >= 40 && (b as HTMLElement).offsetWidth >= 40),
+		`bar ${Math.round(cr.left)}–${Math.round(cr.right)}, bottom ${Math.round(cr.bottom)}`);
+	click(ctx().querySelector('[data-action="selection-duplicate"]'), "duplicate");
+	await frames(2);
+	add(`${label}: a contextual action works (duplicate: one undo step)`, nSel > 0 && strokeCount() === strokesBefore + nSel, `${strokesBefore} → ${strokeCount()} (${nSel} selected)`);
+	v.undo();
+	await frames(1);
+	click(ctx().querySelector(".notebook-context-collapse"), "collapse");
+	await frames(1);
+	add(`${label}: the contextual bar collapses to one button and opens again`, ctx().classList.contains("is-collapsed") && ctx().querySelectorAll("button").length === 1, `${ctx().querySelectorAll("button").length} buttons`);
+	click(ctx().querySelector(".notebook-context-chip"), "expand");
+	await frames(1);
+	setTool("pen");
+	ui.refreshNow();
+	add(`${label}: back to the pen, no contextual bar`, ctxKind() === "none" && strokeCount() === strokesBefore, ctxKind());
 	tb.update({ tool: "pen", penColor: "#1e1e1e", penWidth: 2 });
 	tb.closePopover();
 	await frames(2);
@@ -888,9 +1087,8 @@ async function checkObjects(add: (name: string, ok: boolean, detail?: string) =>
 
 	// --- stamps
 	tb.closePopover();
-	click(byLabel(document, "More actions"), "more button");
-	await frames(2);
-	click(byText(document.querySelector(".notebook-more") as HTMLElement, "Stamps"), "Stamps");
+	await openMore();
+	click(byText(document.querySelector(".notebook-sheet") as HTMLElement, "Stamps"), "Stamps");
 	await frames(3);
 	const panel = document.querySelector(".notebook-stamp-panel") as HTMLElement;
 	const pr = panel.getBoundingClientRect();
@@ -1146,6 +1344,51 @@ async function measureOpen(
 	return { samples, bytes: text.length, strokes };
 }
 
+/**
+ * Heavy page warning check (wave 0.7: lod): a notebook with one page of 3,500 strokes shows the banner; "Split page" moves the
+ * lower part to a new page in one undo step; undo puts it back; "Dismiss" hides the banner for the page.
+ */
+async function checkHeavy(strokes = 3500): Promise<Record<string, unknown>> {
+	const path = "Notebooks/Heavy.notebook";
+	const file = (app.vault.getFileByPath(path) ?? (await app.vault.create(path, serialize(stressDocument(strokes, 1))))) as TFile;
+	const root = document.getElementById("harness-app")!;
+	const openFresh = async () => {
+		if (view) await (view as any).onClose();
+		root.empty();
+		leaf = new WorkspaceLeaf(app, root);
+		view = new NotebookView(leaf as any, { settings: settings() });
+		await view.onOpen();
+		await (view as any).loadFile(file);
+		await wait(1300);
+	};
+	const banner = () => {
+		const el = root.querySelector(".notebook-heavy") as HTMLElement | null;
+		const shown = !!el && el.style.display !== "none" && el.offsetParent !== null;
+		return { shown, text: shown ? el!.innerText.replace(/\s+/g, " ").trim() : "", buttons: shown ? [...el!.querySelectorAll("button")].map((b) => b.textContent) : [] };
+	};
+	const click = (label: string) => ([...root.querySelectorAll(".notebook-heavy button")].find((b) => b.textContent === label) as HTMLElement | undefined)?.click();
+	const counts = () => ((view as any).session.doc.pages as Array<{ strokes: unknown[] }>).map((p) => p.strokes.length);
+
+	await openFresh();
+	const shown = banner();
+	const before = counts();
+	click("Split page");
+	await wait(300);
+	const afterSplit = counts();
+	const bannerAfterSplit = banner();
+	(view as any).undo();
+	await wait(100);
+	const afterUndo = counts();
+	click("Dismiss");
+	await wait(1300);
+	const dismissed = banner();
+	await openFresh();
+	const light = (app.vault.getFileByPath("Notebooks/Light.notebook") ?? (await app.vault.create("Notebooks/Light.notebook", serialize(stressDocument(500, 1))))) as TFile;
+	await (view as any).loadFile(light);
+	await wait(1300);
+	return { shown, before, afterSplit, bannerAfterSplit, afterUndo, dismissedHides: !dismissed.shown, lightHasNoBanner: !banner().shown };
+}
+
 function applyTheme(theme = params.get("theme") ?? "light"): void {
 	document.body.classList.toggle("theme-dark", theme === "dark");
 	document.body.classList.toggle("theme-light", theme !== "dark");
@@ -1158,7 +1401,7 @@ function applySize(): void {
 	if (h) root.style.height = `${Number(h)}px`;
 }
 
-(window as any).harness = { app, open, measureOpen, penStroke, setTool, openOptions, openMore, check, checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
+(window as any).harness = { app, open, measureOpen, penStroke, setTool, openOptions, openMore, measureLod, compareLod, checkHeavy, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
 	return view;
 } };
 

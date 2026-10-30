@@ -3,7 +3,7 @@
  * the annotation export to Markdown (#155). The logic is in pure modules (model/margins.ts,
  * pdf/republish.ts, pdf/annotations.ts); this file is the Obsidian glue (menus, modals, files).
  */
-import { loadPdfJs, Modal, normalizePath, Setting, type App, type Menu, type TFile } from "obsidian";
+import { loadPdfJs, Modal, normalizePath, Setting, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { notebookUri } from "../integration/links";
 import { Batch, SetPageMargins, type Command } from "../model/history";
@@ -34,20 +34,6 @@ export interface PdfActionHost {
 	editable(): boolean;
 	/** Runs `cmd` as one undo step and refreshes the view; false when the document can no longer be edited. */
 	run(cmd: Command, scrollTo?: number): boolean;
-}
-
-/** Page menu entries for a page with a background. */
-export function addPdfPageMenuItems(menu: Menu, host: PdfActionHost | null, page: Page): void {
-	if (!host || !page.background) return;
-	const index = host.doc.pages.indexOf(page);
-	menu.addSeparator();
-	menu.addItem((i) => i.setTitle(t("pdf.margins.menu")).setIcon("move-horizontal").setDisabled(!host.editable())
-		.onClick(() => openMarginsModal(host, page)));
-	if (page.background.kind !== "pdf") return;
-	menu.addItem((i) => i.setTitle(t("pdf.update.menu")).setIcon("refresh-cw").setDisabled(!host.editable())
-		.onClick(() => void updatePdfFromNewVersion(host, index)));
-	menu.addItem((i) => i.setTitle(t("pdf.annotations.menu")).setIcon("file-text")
-		.onClick(() => void exportPdfAnnotations(host)));
 }
 
 // ------------------------------------------------------------------------------------------ margins

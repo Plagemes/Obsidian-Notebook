@@ -9,8 +9,8 @@
  * - Links live in a sidecar JSON in `<notebooks folder>/_meta/` (storage/pdf-links-store.ts), written only by explicit link
  *   actions, never by turning pages or scrolling. The notebook format is not touched.
  */
-import { FuzzySuggestModal, type App, type Menu, type Plugin, type TFile } from "obsidian";
-import { t, type MessageKey } from "../i18n";
+import { FuzzySuggestModal, type App, type Plugin, type TFile } from "obsidian";
+import { t } from "../i18n";
 import { createPage } from "../model/document";
 import { AddPage } from "../model/history";
 import { ASSETS_DIRNAME } from "../pdf/assets";
@@ -168,6 +168,7 @@ class PdfSyncController implements PageSyncHooks {
 		this.index = Math.max(0, link ? source.indexOf(link) : 0);
 		this.pane.setSource(source, this.index);
 		this.updateChrome();
+		this.view.refreshUi(); // ui redesign: the side-pane contextual bar
 	}
 
 	close(): void {
@@ -181,6 +182,7 @@ class PdfSyncController implements PageSyncHooks {
 		this.source = null;
 		this.pinned = null;
 		if (this.view.syncHooks === this) this.view.syncHooks = null;
+		this.view.refreshUi();
 	}
 
 	// --- hooks from the notebook view ---
@@ -419,7 +421,11 @@ class PdfSyncController implements PageSyncHooks {
 // --- registration, commands and menu ---
 
 /** Registers the commands. `activeView` is the notebook view that has focus, if any. */
-export function registerPdfSyncCommands(plugin: Plugin, activeView: () => NotebookView | null, folder: () => string): void {
+/**
+ * Sets up the side-by-side services (link store). The commands are generated from the action registry
+ * (ui/actions.ts → view/commands.ts) and run through `runPdfSideAction`.
+ */
+export function initPdfSync(plugin: Plugin, folder: () => string): void {
 	// The links file is a vault file in the notebooks folder's reserved `_meta`; the old file in the plugin's config folder
 	// is only read (through the adapter, the one way to reach the config dir) to move it over. See docs/architecture.md.
 	const legacy = { adapter: plugin.app.vault.adapter, path: `${plugin.app.vault.configDir}/plugins/${plugin.manifest.id}/${LINKS_FILE}` };
@@ -427,37 +433,24 @@ export function registerPdfSyncCommands(plugin: Plugin, activeView: () => Notebo
 	plugin.register(() => {
 		services = null;
 	});
-
-	/** A command that needs a notebook view; with `whenOpen` also a PDF pane beside it. */
-	const command = (id: string, name: MessageKey, whenOpen: boolean, run: (c: PdfSyncController) => void): void => {
-		plugin.addCommand({
-			id, name: t(name),
-			checkCallback: (checking) => {
-				const view = activeView();
-				const c = view ? controllerOf(view) : null;
-				if (!c || (whenOpen && !c.isOpen)) return false;
-				if (!checking) run(c);
-				return true;
-			},
-		});
-	};
-	command("pdf-side-open", "command.pdfSideOpen", false, (c) => c.pick());
-	command("pdf-side-close", "command.pdfSideClose", true, (c) => c.close());
-	command("pdf-side-link", "command.pdfSideLink", true, (c) => void c.linkCurrent());
-	command("pdf-side-add-page", "command.pdfSideAdd", true, (c) => void c.addNotesPage());
 }
 
-/** Entries of the "…" page menu: open the PDF side by side, or work with it when it is open. */
-export function addPdfSyncMenuItems(menu: Menu, view: NotebookView): void {
+/** ui redesign: whether side by side is available for this view and whether its pane is open (creates nothing). */
+export function pdfSideState(view: NotebookView): { available: boolean; open: boolean } {
+	return { available: services !== null, open: controllers.get(view)?.isOpen ?? false };
+}
+
+export type PdfSideAction = "pdf-side-open" | "pdf-side-close" | "pdf-side-link" | "pdf-side-add-page" | "pdf-side-show-slide";
+
+/** ui redesign: runs a side-by-side action of the registry on this view; false when it does not apply now. */
+export function runPdfSideAction(view: NotebookView, id: PdfSideAction): boolean {
 	const c = controllerOf(view);
-	if (!c) return;
-	menu.addSeparator();
-	if (!c.isOpen) {
-		menu.addItem((i) => i.setTitle(t("command.pdfSideOpen")).setIcon("columns-2").onClick(() => c.pick()));
-		return;
-	}
-	menu.addItem((i) => i.setTitle(t("command.pdfSideLink")).setIcon("link").onClick(() => void c.linkCurrent()));
-	menu.addItem((i) => i.setTitle(t("pdfSide.menu.showSlide")).setIcon("file-search").onClick(() => c.showSlideOfNotes()));
-	menu.addItem((i) => i.setTitle(t("command.pdfSideAdd")).setIcon("file-plus").onClick(() => void c.addNotesPage()));
-	menu.addItem((i) => i.setTitle(t("command.pdfSideClose")).setIcon("columns-2").onClick(() => c.close()));
+	if (!c || (id !== "pdf-side-open" && !c.isOpen)) return false;
+	if (id === "pdf-side-open") c.pick();
+	else if (id === "pdf-side-close") c.close();
+	else if (id === "pdf-side-link") void c.linkCurrent();
+	else if (id === "pdf-side-add-page") void c.addNotesPage();
+	else c.showSlideOfNotes();
+	return true;
 }
+

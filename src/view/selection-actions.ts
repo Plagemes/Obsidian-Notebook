@@ -1,5 +1,5 @@
-import { Notice, setIcon, type App } from "obsidian";
-import { t, type MessageKey } from "../i18n";
+import { Notice, type App } from "obsidian";
+import { t } from "../i18n";
 import { captureClip, clipAssetIds, duplicateOffset, instantiateClip, pasteCommand, pasteOffset, type ClipContent } from "../ink/clipboard";
 import { whiteToTransparent } from "../ink/image-alpha";
 import { measureText } from "../ink/renderer";
@@ -29,8 +29,6 @@ export interface SelectionHost {
 	media(): NotebookMedia | null;
 	doc(): NotebookDocument | null;
 	editable(): boolean;
-	/** The lasso tool is active (the bar then offers Paste even with nothing selected). */
-	lassoActive(): boolean;
 	selection(): SelectionState | null;
 	/** Selects exactly these items of the page (switching to the lasso) so they can be moved right away. */
 	select(pageIndex: number, strokes: Stroke[], elements: PageElement[]): void;
@@ -49,40 +47,28 @@ const MAX_TRANSPARENT_SIDE = 2048;
 
 export class SelectionActions {
 	readonly el: HTMLElement;
-	private readonly actionsRow: HTMLElement;
 	private readonly styleRows: HTMLElement;
 	private busy = false;
 
+	/** `parent`: the contextual bar's extra slot (ui redesign); copy, cut, paste… are actions of the registry there. */
 	constructor(parent: HTMLElement, private readonly host: SelectionHost) {
-		this.el = parent.createDiv({ cls: "notebook-selection-bar notebook-hidden", attr: { role: "toolbar", "aria-label": t("selection.bar") } });
-		this.actionsRow = this.el.createDiv({ cls: "notebook-toolbar-group" });
-		this.styleRows = this.el.createDiv({ cls: "notebook-selection-styles" });
+		this.el = parent.createDiv({ cls: "notebook-selection-styles notebook-hidden", attr: { role: "group", "aria-label": t("selection.bar") } });
+		this.styleRows = this.el;
 	}
 
 	destroy(): void {
 		this.el.remove();
 	}
 
-	// --- bar ---
+	// --- restyle rows ---
 
-	/** Rebuilds the bar for the current selection and tool; hides it when there is nothing to offer. */
+	/** Rebuilds the restyle rows (colour, width) for the current selection; hidden without one. */
 	update(): void {
 		const sel = this.host.selection();
-		const show = this.host.editable() && (!!sel || this.host.lassoActive());
+		const show = this.host.editable() && !!sel;
 		this.el.toggleClass("notebook-hidden", !show);
-		if (!show) return;
-		this.actionsRow.empty();
 		this.styleRows.empty();
-		if (sel) {
-			this.button(this.actionsRow, "copy", "selection.copy", () => void this.copy());
-			this.button(this.actionsRow, "scissors", "selection.cut", () => void this.cut());
-			this.button(this.actionsRow, "copy-plus", "selection.duplicate", () => this.duplicate());
-		}
-		this.button(this.actionsRow, "clipboard-paste", "selection.paste", () => void this.paste());
 		if (!sel) return;
-		if (sel.elements.some((e) => e.type === "image")) {
-			this.button(this.actionsRow, "eraser", "selection.whiteTransparent", () => void this.makeWhiteTransparent());
-		}
 		const ability = restyleAbilities(sel.strokes, sel.elements);
 		if (ability.inkColor || ability.inkWidth) this.styleRow(sel, "ink", ability.inkColor, ability.inkWidth);
 		if (ability.highlighterColor) this.styleRow(sel, "highlighter", true, ability.highlighterWidth);
@@ -116,12 +102,6 @@ export class SelectionActions {
 			e.preventDefault();
 			onClick();
 		});
-		return b;
-	}
-
-	private button(parent: HTMLElement, icon: string, label: MessageKey, onClick: () => void): HTMLButtonElement {
-		const b = this.rawButton(parent, t(label), onClick);
-		setIcon(b, icon);
 		return b;
 	}
 

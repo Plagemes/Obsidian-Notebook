@@ -4,6 +4,7 @@ import { renderThumbnail, type ThumbnailOptions } from "../library/thumbnail";
 import { parse } from "../model/serialize";
 import type { NotebookDocument, Page } from "../model/types";
 import { readNotebookText } from "../storage/format";
+import { isAwaitingDownload } from "../storage/sync-state";
 import { clampRegion, lookupPage } from "../zettel/subpath";
 import { embedPixelWidth, parseEmbedSource } from "./links";
 import { resolveNotebookFile } from "./open";
@@ -96,7 +97,7 @@ export class NotebookEmbed extends MarkdownRenderChild {
 			const result = parse(readNotebookText(file.extension, raw));
 			if (stale()) return;
 			if (!result.ok) {
-				this.message(t("embed.unreadable", { name: file.basename }));
+				this.message(t(isAwaitingDownload(raw) ? "sync.embed.notDownloaded" : "embed.unreadable", { name: file.basename }));
 				return;
 			}
 			const doc = result.doc;

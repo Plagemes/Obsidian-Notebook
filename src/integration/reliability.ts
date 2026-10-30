@@ -33,6 +33,7 @@ import {
 } from "../storage/recovery";
 import { ensureFolder } from "../storage/vault-io";
 import { showNotice } from "../view/notice";
+import { isAwaitingDownload } from "../storage/sync-state";
 
 export interface ReliabilityDeps {
 	app: App;
@@ -95,6 +96,11 @@ export async function openRepair(deps: ReliabilityDeps, file: TFile): Promise<vo
 		const raw = readNotebookText(file.extension, await app.vault.read(file));
 		if (parse(raw).ok) {
 			showNotice(t("repair.notBroken"));
+			return;
+		}
+		// wave 0.7: sync safety (#344): a file still in the cloud is not damaged; never "repaired".
+		if (isAwaitingDownload(raw)) {
+			showNotice(t("sync.repair.notDownloaded"));
 			return;
 		}
 		const docId = extractDocId(raw);

@@ -251,6 +251,11 @@ export class PageNavigator {
 		return this.host.pages().filter((p) => this.selected.has(p.id)).map((p) => p.id);
 	}
 
+	/** Switches the panel to selection mode (nothing selected yet). */
+	beginSelection(): void {
+		if (!this.selecting) this.startSelecting(null);
+	}
+
 	/** Starts selecting (optionally with `id` already selected). */
 	private startSelecting(id: string | null): void {
 		this.selecting = true;

@@ -60,8 +60,16 @@ export async function checkReading(api: ReadingCheckApi): Promise<{ ok: boolean;
 	};
 
 	add("the reading tools are in the view", !!reading && !!document.querySelector(".notebook-search") && !!document.querySelector(".notebook-reading-banner"));
-	const entries = [...document.querySelectorAll(".notebook-more .notebook-menu-item")].filter((b) => getComputedStyle(b).display !== "none").map((b) => b.textContent ?? "");
-	add("the more menu offers search, hide annotations and dim", ["Search PDF text", "Hide annotations", "Dim backgrounds"].every((l) => entries.some((e) => e.includes(l))), entries.join(" | "));
+	v.refreshUi();
+	await sleep(50);
+	const bar = document.querySelector(".notebook-context-bar") as HTMLElement;
+	const barActions = [...bar.querySelectorAll("[data-action]")].map((b) => b.getAttribute("aria-label") ?? "");
+	add("a PDF page shows the PDF contextual bar with search, hide annotations and dim", !bar.classList.contains("notebook-hidden") && bar.dataset.context === "pdf"
+		&& ["Search PDF text", "Hide annotations", "Dim backgrounds"].every((l) => barActions.includes(l)), `${bar.dataset.context}: ${barActions.join(" | ")}`);
+	await openMore();
+	const entries = [...document.querySelectorAll(".notebook-sheet .notebook-menu-item")].map((b) => b.textContent ?? "");
+	add("the All actions sheet offers search, hide annotations and dim", ["Search PDF text", "Hide annotations", "Dim backgrounds"].every((l) => entries.some((e) => e.includes(l))), entries.join(" | "));
+	v.ui.sheet.close();
 	/** The content of the notebook (the modification time moves with every save and is not compared). */
 	const content = (): string => JSON.stringify([v.document.pages, v.document.assets]);
 	const before = content();
@@ -162,8 +170,8 @@ export async function checkReading(api: ReadingCheckApi): Promise<{ ok: boolean;
 	range.dispatchEvent(new Event("change", { bubbles: true }));
 	await sleep(300);
 	const lighter = paper();
-	add("the slider sets the strength and keeps the menu open", settings.dimStrength === 0.75 && lighter[0]! > dimmed[0]! && v.toolbar.openPopover === "more", `strength ${settings.dimStrength}, ${dimmed.slice(0, 3)} -> ${lighter.slice(0, 3)}`);
-	v.toolbar.closePopover();
+	add("the slider sets the strength and keeps the menu open", settings.dimStrength === 0.75 && lighter[0]! > dimmed[0]! && v.ui.sheet.isOpen, `strength ${settings.dimStrength}, ${dimmed.slice(0, 3)} -> ${lighter.slice(0, 3)}`);
+	v.ui.sheet.close();
 	reading.toggleDim();
 	await sleep(300);
 	const restored = paper();
