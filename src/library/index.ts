@@ -3,8 +3,8 @@
 import { tagAncestors, tagIsWithin } from "../model/tags";
 import { stateKeys } from "./library-state";
 
-/** v4: entries also carry the titled bookmarks (quick switcher); v3 added the page tags. Older indexes are rebuilt. */
-export const INDEX_VERSION = 4;
+/** v5: entries also count PDF pages and open markers (Home and smart collections); v4 added the titled bookmarks (quick switcher); v3 the page tags. Older indexes are rebuilt. */
+export const INDEX_VERSION = 5;
 /** "Recent" shows this many notebooks. */
 export const RECENT_LIMIT = 20;
 
@@ -33,6 +33,10 @@ export interface LibraryEntry {
 	/** Titled bookmarks: 0-based page and title. Absent when there is none. */
 	bookmarks?: Array<{ page: number; title: string }>;
 	tags: string[];
+	/** v5: pages with a PDF background (absent: none). */
+	pdfPages?: number;
+	/** v5: markers still open (a gap to fill, an unanswered question, homework not done); absent: none. */
+	openMarkers?: number;
 	favorite: boolean;
 	/** Cover colour #rrggbb. */
 	cover: string;
@@ -189,6 +193,8 @@ function isEntry(v: unknown): v is LibraryEntry {
 		Number.isFinite(e.pages) && Array.isArray(e.tags) && e.tags.every((x) => typeof x === "string") &&
 		typeof e.favorite === "boolean" && typeof e.cover === "string" &&
 		(e.text === undefined || typeof e.text === "string") &&
+		(e.pdfPages === undefined || Number.isInteger(e.pdfPages)) &&
+		(e.openMarkers === undefined || Number.isInteger(e.openMarkers)) &&
 		(e.textPages === undefined || (Array.isArray(e.textPages) && e.textPages.length % 2 === 0 && e.textPages.every((n) => Number.isFinite(n)))) &&
 		(e.pageTags === undefined || (Array.isArray(e.pageTags) && e.pageTags.every((p: unknown) => {
 			const o = p as { page?: unknown; tags?: unknown } | null;

@@ -35,7 +35,8 @@ AI, no network, nothing leaves the device.
 | **Status banners** | Safe mode (*Open normally*, *Repair…*, *Show images and PDFs*), storage full (*Retry now*), integrity (*Restore the newer version*, *Restore a version…*, *Keep this version*), open on another device (*Open read-only*, *Open anyway*, *Edit anyway*), heavy page (*Split page*, *Dismiss*) | Only while the situation lasts; the banner owns its recovery buttons (they are listed in the registry with the `banner` surface) |
 | **Radial menu** | Dark dial at the pen tip: undo/redo, width bubble, colour bubble, tool illustration, favourites · pen case · shapes | S Pen side button (or long press, per settings) |
 | **Notebook menu** | Obsidian's "More options" of the notebook tab | Notebook-wide actions: open library, export notebook, zettel entries |
-| **Library** | The library view | Create, import PDF, lecture from slides, scan, timetable |
+| **Home** | The library view on its Home surface (0.12, §10) | Subject folders, recent notes, statistics, quick actions (New notebook, New folder, Import PDF, Scan), inbox bell |
+| **Library** | The library view (0.12, §10): rail, filter chips, dashboard, notebook grid or list | Create, import PDF, lecture from slides, scan, loose sheet, library check, timetable |
 | **Settings** | Plugin settings tab | Diagnostics (pen button test, benchmark) are also commands |
 | **Command palette** | Every command, hotkeys | All actions with `command` (ids unchanged since 0.5) |
 
@@ -161,7 +162,10 @@ A dark dial (always dark, in both themes, like a physical tool), 264 px, soft sh
 
 ## 7. Visual system
 
-Tokens are declared on `.notebook-view`, `.notebook-lib-root` and modal roots, built on Obsidian variables:
+0.12: the tokens are the `--nb-*` set of DESIGN.md §2, declared once on `body` in `styles.css` (block *Notebook design
+tokens*): a dark and a light palette (`body.theme-dark`, `body.theme-light`) and the *Follow Obsidian theme* mapping on
+`body.notebook-style-obsidian`. The names below are kept as aliases (`--nb-surface` is `--nb-panel`, `--nb-accent-soft`
+is `--nb-accent-bg`, …); before 0.12 they were built on Obsidian variables:
 
 | Token | Value |
 |---|---|
@@ -198,6 +202,9 @@ the accent soft fill and an accent underline dot; groups are separated by 1 px d
 | `src/ui/usage.ts` | Use counts (pure) |
 | `src/ui/radial-model.ts` | Radial palettes, width scales, arc geometry (pure) |
 | `src/ui/action-sheet.ts` | Sheet component (All actions, page sheet) |
+| `src/ui/components/*.ts` | 0.12 design-system components: subject card, section header, chips, list row, favourite row, KPI tile, quick action, search pill, navigation rail, icon square |
+| `src/library/library-view.ts`, `home-view.ts`, `home-surface.ts`, `library-sections.ts`, `inbox-bell.ts` | 0.12 library and Home (§10) |
+| `src/library/dashboard.ts` | Subjects, smart collections, statistics (pure) |
 | `src/ui/context-bar.ts` | Contextual bar component |
 | `src/ui/dismiss.ts` | Tap-outside / Escape closing shared by popovers and sheets (a tap on the page draws nothing) |
 | `src/view/view-actions.ts` | What each view action does (one runner per registry id) |
@@ -206,3 +213,50 @@ the accent soft fill and an accent underline dot; groups are separated by 1 px d
 | `NotebookView.uiContext()` / `runAction()` | The view's context for the engine, and the single entry point that runs and counts an action |
 | `src/view/toolbar.ts` | Primary toolbar (quick slots from the layout) |
 | `src/view/radial-menu.ts` | Radial dial |
+
+## 10. Home and the library (0.12, DESIGN.md §3–§4)
+
+Home (`docs/design/reference/home.png`) and the library (`library.png`) are two surfaces of one view
+(`src/library/library-view.ts`; `HomeView` in `home-view.ts` only opens it on Home). They share the library index,
+the reading pass and the thumbnail queue, and switch in place from the navigation rail. Everything they show is
+computed on the device from the index (`src/library/dashboard.ts`, pure and tested) and from this device's recent
+pages log; nothing is invented and empty sections are hidden.
+
+**Shell.** Navigation rail (`ui/components/nav-rail.ts`): brand; *Home*, *Notebooks*, *PDF* (only when a notebook has
+PDF pages), *Tags*, *Settings* (opens the plugin's settings tab); *Vault*: the folder tree under the notebooks folder,
+each folder with the colour of its subject (top-level folder) and its folder menu (long press or right click), a drop
+target for dragged notebooks; at the bottom *Archive*, *Trash*, *Check library*. Width classes of the view: **wide**
+(≥ 1100 px: rail with labels, which a fold button turns into icons), **medium** (600–1099 px, a tablet in portrait:
+icons only, subject folders only in the tree), **phone** (< 600 px: the rail is a sheet from the left, opened from the
+menu button of the header). Page header: title and subtitle (a folder shows its breadcrumb, each part a link and a
+drop target), the search pill (Ctrl/⌘ K on desktop), the *Now: course* button while a class is on, the inbox bell; on
+the library also tag filter, sort, grid / list and *New* (a menu of New notebook, New folder, Import PDF, Lecture from
+slides, Scan, Loose sheet; inside a folder the notebook and the folder go there, elsewhere New notebook and New folder
+run the registry actions `new-notebook` and `new-folder`).
+
+**Home.** *Subject folders*: one card per top-level folder (four at most, *Show all* opens the subjects page).
+*Recent notes*: the pages edited last on this device (bookmark title or notebook name, page number, time, subject
+and tag pills, kebab = the notebook menu; without a log, the notebooks changed last). *Statistics* (period 1, 4 or 12
+weeks, kept in the view state): notebooks created (with the change against the period before, the only exact
+comparison), pages edited on this device, PDF notebooks changed, tags used; each tile opens its detail. *Quick
+actions*: New notebook, New folder, Import PDF, Scan (when available).
+
+**Library.** Filter chips *All · Subjects · Recent · Favourites · With PDF · Archive* (single choice). *All* shows the
+dashboard: subject cards (four in a row, two on a tablet in portrait, two compact ones on a phone), *Smart
+collections* (To study: open gap, question or homework markers or a to-study tag; Favourites: starred or pinned;
+With PDF; Recent: changed in the last 7 days; Exams: an exam tag; empty ones hidden), *Frequent tags* (subject
+colours on tags that name a subject), *Recent notebooks* next to *Favourite notebooks* (page thumbnail from the index
+cache, amber star that writes the notebook's metadata), then *All notebooks*: the 0.10 grid (pinned group, manual
+order, drag, keyboard) or the same cards as a list, drawn 60 at a time with *Show more*. A folder shows its
+subfolders as subject cards and its notebooks. Search groups its results as folders, tags and notebooks (with the
+page of a text match); in a folder, tag or collection a chip switches between this view and everywhere.
+
+**Inbox bell.** `library/inbox-bell.ts`, through the Inbox service's public API (`zettel/inbox-service.ts`): the
+badge counts the open items of the last scan (hidden at 0); the first scan runs once the library has been read and
+the pen is idle, and again when the bell opens if the last one is older than two minutes; the service's change
+events keep the badge current. The popover (a bottom sheet on a phone) lists eight items with *Open in notebook*,
+*Process in the inbox* and *Discard*; *Open inbox* opens the Inbox view.
+
+**Decoration.** Generated art (the art module) behind the page header, on subject cards, smart collections, quick
+actions and empty states, and a soft accent glow behind section titles. It never takes input, never covers text and
+is removed under `prefers-reduced-motion: reduce`.

@@ -36,6 +36,7 @@ import { NavController } from "../../src/view/nav-controller";
 import { NotebookStatusBar } from "../../src/view/status-bar";
 import { checkNavigation } from "./nav-check";
 import { compareLod, measureLod } from "./lod-bench";
+import { checkLibraryLayout, libraryInteractions, libraryState, openLibraryHarness, type LibraryHarness } from "./library-check";
 
 import type { Layout } from "../../src/ink/layout";
 import type { Viewport } from "../../src/ink/viewport";
@@ -1931,13 +1932,31 @@ function applySize(): void {
 	if (h) root.style.height = `${Number(h)}px`;
 }
 
-const harnessApi: Record<string, unknown> = { app, open, measureOpen, penStroke, setTool, openOptions, openMore, measureLod, compareLod, checkHeavy, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkReadOnly: async () => { try { return JSON.parse(JSON.stringify(await checkReadOnly({ view, app, stage, penStroke, setTool, strokeCount, frames, openMore, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`readonly check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPractice: () => checkPractice({ view, app, service: practiceService, frames, errors, notices }), checkExcerpt: () => checkExcerpt({ view, stage, penStroke, setTool, strokeCount, staticPixel, frames, errors, notices }), checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
+const harnessApi: Record<string, unknown> = { app, checkLibrary, interactLibrary, libraryState, open, measureOpen, penStroke, setTool, openOptions, openMore, measureLod, compareLod, checkHeavy, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkReadOnly: async () => { try { return JSON.parse(JSON.stringify(await checkReadOnly({ view, app, stage, penStroke, setTool, strokeCount, frames, openMore, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`readonly check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPractice: () => checkPractice({ view, app, service: practiceService, frames, errors, notices }), checkExcerpt: () => checkExcerpt({ view, stage, penStroke, setTool, strokeCount, staticPixel, frames, errors, notices }), checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
 	return view;
 } };
+
+/** 0.12: doc=library opens Home or the library (surface=home|library) on a seeded demo vault instead of a notebook. */
+let libraryHarness: LibraryHarness | null = null;
+const librarySurface = params.get("surface") ?? "library";
+
+async function checkLibrary(): Promise<Record<string, unknown>> {
+	const results = checkLibraryLayout(librarySurface);
+	return { ok: results.every((r) => r.ok) && errors.length === 0, results, errors: [...errors], env: { dpr: window.devicePixelRatio } };
+}
+
+async function interactLibrary(): Promise<Record<string, unknown>> {
+	const results = libraryHarness ? await libraryInteractions(libraryHarness, librarySurface) : [];
+	return { ok: results.every((r) => r.ok) && errors.length === 0, results, errors: [...errors] };
+}
 
 async function main(): Promise<void> {
 	applyTheme();
 	applySize();
+	if (params.get("doc") === "library") {
+		libraryHarness = await openLibraryHarness(app, librarySurface);
+		return;
+	}
 	await seed();
 	await open();
 	if (params.get("check") === "1") {

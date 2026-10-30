@@ -363,6 +363,8 @@ export const ACTIONS: readonly ActionDef[] = [
 
 	// --- notebooks: the library, the ribbon and the palette.
 	global("open-library", "command.library", "library", "app", ["notebook", "palette"], 30),
+	// 0.12: the Notebook home (Home surface of the library view); the ribbon opens it.
+	global("open-home", "home.command", "home", "app", ["notebook", "palette"], 30),
 	global("create", "command.new", "file-plus-2", "app", ["library", "palette"]),
 	global("open", "command.open", "folder-open", "app", ["library", "palette"]),
 	global("continue-last", "command.continue", "history", "app", ["palette"]),

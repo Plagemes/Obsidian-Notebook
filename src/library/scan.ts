@@ -50,7 +50,23 @@ export function extractText(doc: NotebookDocument, cap = TEXT_CAP): { text: stri
 	return { text, textPages };
 }
 
-export type DocumentFields = Pick<LibraryEntry, "id" | "pages" | "tags" | "favorite" | "cover" | "created" | "modified" | "text" | "textPages" | "pageTags" | "bookmarks">;
+export type DocumentFields = Pick<LibraryEntry, "id" | "pages" | "tags" | "favorite" | "cover" | "created" | "modified" | "text" | "textPages" | "pageTags" | "bookmarks" | "pdfPages" | "openMarkers">;
+
+/** Markers that still ask for something: a gap to fill, a question for the lecturer, homework (not marked done). */
+const OPEN_MARKERS: ReadonlySet<string> = new Set(["gap", "question", "homework"]);
+
+/** v5 index fields: pages with a PDF background and markers still open (for Home and the smart collections). */
+export function extractStudyCounts(doc: NotebookDocument): { pdfPages: number; openMarkers: number } {
+	let pdfPages = 0;
+	let openMarkers = 0;
+	for (const p of Array.isArray(doc.pages) ? doc.pages : []) {
+		if (p?.background?.kind === "pdf") pdfPages++;
+		for (const el of Array.isArray(p?.elements) ? p.elements : []) {
+			if (el.type === "marker" && OPEN_MARKERS.has(el.kind) && el.done !== true) openMarkers++;
+		}
+	}
+	return { pdfPages, openMarkers };
+}
 
 /** Titled bookmarks for the index (0-based pages, in page order). */
 export function extractBookmarks(doc: NotebookDocument): Array<{ page: number; title: string }> {
@@ -99,7 +115,10 @@ export function metaFromDocument(doc: NotebookDocument, fallbackTime = 0): Docum
 	const { text, textPages } = extractText(doc);
 	const pageTags = extractPageTags(doc);
 	const bookmarks = extractBookmarks(doc);
+	const { pdfPages, openMarkers } = extractStudyCounts(doc);
 	return {
+		...(pdfPages > 0 ? { pdfPages } : {}),
+		...(openMarkers > 0 ? { openMarkers } : {}),
 		...(typeof doc.id === "string" && doc.id !== "" ? { id: doc.id } : {}),
 		...(bookmarks.length > 0 ? { bookmarks } : {}),
 		...(text ? { text, textPages } : {}),

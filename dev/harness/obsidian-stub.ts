@@ -1071,3 +1071,33 @@ export function renderMath(source: string, display: boolean): HTMLElement {
 	el.appendChild(svg);
 	return el;
 }
+
+// 0.12: the library view (doc=library) imports the tag editor and companion notes; the harness never opens them.
+export class AbstractInputSuggest<T> {
+	constructor(readonly app: App, readonly inputEl: HTMLInputElement) {}
+	getSuggestions(query: string): T[] | Promise<T[]> {
+		void query;
+		return [];
+	}
+	close(): void {
+		/* nothing */
+	}
+}
+
+export function getAllTags(): string[] | null {
+	return null;
+}
+
+export function getFrontMatterInfo(content: string): { exists: boolean; frontmatter: string; from: number; to: number; contentStart: number } {
+	void content;
+	return { exists: false, frontmatter: "", from: 0, to: 0, contentStart: 0 };
+}
+
+export function parseYaml(text: string): unknown {
+	void text;
+	return {};
+}
+
+export function stringifyYaml(value: unknown): string {
+	return JSON.stringify(value);
+}

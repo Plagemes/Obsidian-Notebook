@@ -1,4 +1,4 @@
-import { getLanguage, ItemView, Menu, normalizePath, setIcon, TFile, TFolder, Vault, type TAbstractFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
+import { getLanguage, ItemView, Menu, normalizePath, Platform, Scope, setIcon, TFile, TFolder, Vault, type TAbstractFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import type { NotebookDocument, NotebookMeta, Page } from "../model/types";
 import { isNotebookFile } from "../storage/format";
@@ -6,17 +6,36 @@ import { sanitizeName } from "../storage/notebooks";
 import { attachPress, DROP_ATTR, DROP_CARD_ATTR } from "./drag";
 import { breadcrumb, buildFolderTree, flattenTree, isReservedPath, type FolderNode } from "./folders";
 import { relativeTime, uniquePath } from "./format";
-import { folderOf, isInside, LibraryIndex, SORTS, type Highlight, type LibraryEntry, type LibraryScope, type LibrarySort, type SearchHit } from "./index";
+import { folderOf, isInside, LibraryIndex, normalizeText, SORTS, type Highlight, type LibraryEntry, type LibraryScope, type LibrarySort, type SearchHit } from "./index";
 import { openTagEditor } from "../integration/tags";
 import { ConfirmModal, CoverModal, FolderSuggestModal, PromptModal } from "./library-modals";
 import { arrangeEntries, planMove, type LibraryMap, type LibraryOp } from "./library-state";
 import { LibraryStateBlockedError, type LibraryStateStore } from "./library-state-store";
 import { entryFromFile, filesToRead, type NotebookFileInfo } from "./scan";
 import { folderContents, type LibraryTrash } from "../storage/trash";
-import { addTrashNavItem, confirmMoveToTrash, FolderToTrashModal, TrashModal } from "./trash-modal";
+import { confirmMoveToTrash, FolderToTrashModal, TrashModal } from "./trash-modal";
 import { writing } from "../ink/writing-guard";
 import { renderThumbnail, type ThumbnailOptions } from "./thumbnail";
 import { showNotice } from "../view/notice";
+import { colorFor, SUBJECT_COLORS } from "../ui/palette";
+import { artImage, folderIconSvg } from "../ui/art/generative-art";
+import { iconButton, svgDataUrl } from "../ui/components/dom";
+import { filterChips, type FilterChip } from "../ui/components/chip";
+import { listRow, type ListRowOptions, type Pill } from "../ui/components/list-row";
+import { railBrand, railItem, railLabel } from "../ui/components/nav-rail";
+import { searchPill } from "../ui/components/search-pill";
+import { sectionHeader } from "../ui/components/section-header";
+import { subjectCard, type SubjectCardOptions } from "../ui/components/subject-card";
+import type { FavouriteRowOptions } from "../ui/components/favourite-row";
+import type { KpiTileOptions } from "../ui/components/kpi-tile";
+import type { QuickActionOptions } from "../ui/components/quick-action";
+import {
+	collectionsOf, deltaPercent, inCollection, stampTime, STAT_PERIODS, statsOf, subjectsOf, topFolderOf,
+	type CollectionContext, type CollectionId, type KpiId, type StatPeriod, type Subject,
+} from "./dashboard";
+import { renderHome } from "./home-surface";
+import { renderLibrarySections, renderTagChips, type TagChip } from "./library-sections";
+import { InboxBell, type InboxPort } from "./inbox-bell";
 
 export const LIBRARY_VIEW_TYPE = "notebook-library";
 
@@ -61,10 +80,26 @@ export interface LibraryHost {
 	checkLibrary?(): void;
 	loadIndex(): Promise<unknown>;
 	saveIndex(data: unknown): Promise<void>;
+	/** 0.12: runs a plugin-level action of the registry (ui/actions.ts) by id; false when it has no handler. */
+	runAction?(id: string): boolean;
+	/** 0.12: opens the plugin's settings tab. */
+	openSettings?(): void;
+	/** 0.12: this device's recently edited pages, newest first (the recent pages log, roadmap 365). */
+	recentEdits?(): Array<{ path: string; page: string; num: number; at: number }>;
+	/** 0.12: the Zettelkasten Inbox for the header bell; null when the feature is not available. */
+	inbox?(): InboxPort | null;
 }
 
-/** Below this width of the view the sidebar becomes a drawer. */
-const NARROW_PX = 680;
+/**
+ * 0.12: where the view is. The library's scopes, plus Home, the subjects page, the tags page and a smart collection.
+ * Home and the library are two surfaces of one view, so they share one index, one reading pass and one thumbnail queue.
+ */
+export type LibraryPlace = LibraryScope | "home" | "subjects" | "tags" | { collection: CollectionId };
+
+/** Width classes (DESIGN.md §5): phone (rail as a sheet), tablet portrait (icon rail), wide tablet and desktop (full rail). */
+type WidthMode = "phone" | "medium" | "wide";
+const PHONE_PX = 600;
+const WIDE_PX = 1100;
 const THUMB_WIDTH = 320;
 const SAVE_DELAY_MS = 2000;
 /** Saves of an open notebook come often: wait for it to settle before reading it again. */
@@ -72,52 +107,83 @@ const MODIFY_DELAY_MS = 3000;
 /** Looking again this soon after finding the pen on the screen. */
 const QUIET_RETRY_MS = 1500;
 const STRUCTURE_DELAY_MS = 300;
+/** Cards of a notebook grid drawn at once; "Show more" adds this many (no layout thrash with thousands of notebooks). */
+const GRID_PAGE = 60;
+/** Dashboard sizes. */
+const DASH_SUBJECTS = 4;
+const DASH_ROWS = 5;
+const DASH_FAVOURITES = 4;
+const DASH_TAGS = 11;
 
 const tick = (ms = 0) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
-function sameScope(a: LibraryScope, b: LibraryScope): boolean {
-	if (typeof a === "string" || typeof b === "string") return a === b;
-	if ("folder" in a && "folder" in b) return a.folder === b.folder;
-	if ("tag" in a && "tag" in b) return a.tag.toLowerCase() === b.tag.toLowerCase();
-	return false;
-}
+const COLLECTION_IDS: readonly CollectionId[] = ["study", "favourites", "pdf", "recent", "exams"];
 
-function parseScope(v: unknown): LibraryScope {
-	if (v === "all" || v === "favorites" || v === "recent" || v === "archived") return v;
+function parsePlace(v: unknown, fallback: LibraryPlace): LibraryPlace {
+	// The favourites filter of 0.11 is the Favourites smart collection now (starred or pinned).
+	if (v === "favorites") return { collection: "favourites" };
+	if (v === "all" || v === "recent" || v === "archived" || v === "home" || v === "subjects" || v === "tags") return v;
 	if (typeof v === "object" && v !== null) {
-		const o = v as { folder?: unknown; tag?: unknown };
+		const o = v as { folder?: unknown; tag?: unknown; collection?: unknown };
 		if (typeof o.folder === "string") return { folder: o.folder };
 		if (typeof o.tag === "string") return { tag: o.tag };
+		if (COLLECTION_IDS.includes(o.collection as CollectionId)) return { collection: o.collection as CollectionId };
 	}
-	return "all";
+	return fallback;
 }
+
+const isFolderPlace = (p: LibraryPlace): p is { folder: string; recursive?: boolean } => typeof p === "object" && "folder" in p;
+const isTagPlace = (p: LibraryPlace): p is { tag: string } => typeof p === "object" && "tag" in p;
+const isCollectionPlace = (p: LibraryPlace): p is { collection: CollectionId } => typeof p === "object" && "collection" in p;
+
+/** The base colour of a palette entry by name (the smart collections and quick actions use fixed ones). */
+function paletteColor(name: string): string {
+	return SUBJECT_COLORS.find((c) => c.name === name)?.base ?? SUBJECT_COLORS[0]!.base;
+}
+
+const COLLECTION_LOOK: Record<CollectionId, { icon: string; color: string; label: MessageKey }> = {
+	study: { icon: "play", color: paletteColor("Blue"), label: "lib.collection.study" },
+	favourites: { icon: "sparkles", color: paletteColor("Violet"), label: "lib.collection.favourites" },
+	pdf: { icon: "file-text", color: paletteColor("Pink"), label: "lib.collection.pdf" },
+	recent: { icon: "clock", color: paletteColor("Indigo"), label: "lib.collection.recent" },
+	exams: { icon: "graduation-cap", color: paletteColor("Amber"), label: "lib.collection.exams" },
+};
+
+type ChipId = "all" | "subjects" | "recent" | "favourites" | "pdf" | "archived";
 
 export class LibraryView extends ItemView {
 	private index = new LibraryIndex();
-	private place: LibraryScope = "all";
+	private place: LibraryPlace;
 	private sort: LibrarySort = "modified";
 	private search = "";
-	/** Search the whole library (true) or only the current view (false); null = automatic (everywhere in "All notebooks"). */
+	/** Search the whole library (true) or only the current view (false); null = automatic. */
 	private searchWide: boolean | null = null;
-	private sidebarCollapsed = false;
-	private narrow = false;
-	private drawerOpen = false;
+	/** 0.12: notebook grid as cards or as a list. */
+	private layoutMode: "grid" | "list" = "grid";
+	/** 0.12: the period of Home's statistics, in weeks. */
+	private weeks: StatPeriod = 4;
+	/** Wide view: the rail folded to icons by the user. */
+	private railFolded = false;
+	private mode: WidthMode = "wide";
+	private railOpen = false;
 	private readonly expanded = new Set<string>();
+	/** Cards of the notebook grid drawn so far (grows with "Show more"). */
+	private gridLimit = GRID_PAGE;
 
 	private built = false;
 	private closed = false;
 	private rootEl!: HTMLElement;
-	private sidebarEl!: HTMLElement;
-	private crumbEl!: HTMLElement;
+	private railEl!: HTMLElement;
+	private titleEl!: HTMLElement;
+	private headerArtEl!: HTMLElement;
+	private subtitleEl!: HTMLElement;
 	private statusEl!: HTMLElement;
+	private toolsEl!: HTMLElement;
 	private scrollEl!: HTMLElement;
 	private gridEl!: HTMLElement;
 	private searchEl!: HTMLInputElement;
-	private scopeEl!: HTMLButtonElement;
-	private sortEl!: HTMLSelectElement;
 	private observer: IntersectionObserver | null = null;
 	private resizeObserver: ResizeObserver | null = null;
-	private readonly cards = new Map<string, HTMLElement>();
 
 	private renderQueued = false;
 	/** "Now: <course>" shortcut (timetable); hidden when no class is in progress. */
@@ -141,9 +207,12 @@ export class LibraryView extends ItemView {
 	private readonly thumbPending = new Set<string>();
 	private readonly thumbFailed = new Set<string>();
 	private thumbRunning = false;
+	/** 0.12: the inbox bell of the header (null without the Zettelkasten Inbox). */
+	private bell: InboxBell | null = null;
 
-	constructor(leaf: WorkspaceLeaf, private readonly host: LibraryHost) {
+	constructor(leaf: WorkspaceLeaf, private readonly host: LibraryHost, private readonly startPlace: LibraryPlace = "all") {
 		super(leaf);
+		this.place = startPlace;
 	}
 
 	getViewType(): string {
@@ -159,20 +228,28 @@ export class LibraryView extends ItemView {
 	}
 
 	getState(): Record<string, unknown> {
-		return { ...super.getState(), scope: this.place, sort: this.sort };
+		return { ...super.getState(), scope: this.place, sort: this.sort, layout: this.layoutMode, weeks: this.weeks };
 	}
 
 	async setState(state: unknown, result: ViewStateResult): Promise<void> {
 		if (typeof state === "object" && state !== null) {
-			const s = state as { scope?: unknown; sort?: unknown };
-			this.place = parseScope(s.scope);
+			const s = state as { scope?: unknown; sort?: unknown; layout?: unknown; weeks?: unknown };
+			this.place = parsePlace(s.scope, this.startPlace);
 			if (SORTS.includes(s.sort as LibrarySort)) this.sort = s.sort as LibrarySort;
-			if (this.built) {
-				this.sortEl.value = this.sort;
-				this.requestRender();
-			}
+			if (s.layout === "grid" || s.layout === "list") this.layoutMode = s.layout;
+			if (STAT_PERIODS.includes(s.weeks as StatPeriod)) this.weeks = s.weeks as StatPeriod;
+			if (this.built) this.requestRender();
 		}
 		await super.setState(state, result);
+	}
+
+	/** 0.12: shows Home or a place of the library in this view (the ribbon, the commands, the rail). */
+	show(place: LibraryPlace): void {
+		if (!this.built) {
+			this.place = place;
+			return;
+		}
+		this.navigate(place);
 	}
 
 	async onOpen(): Promise<void> {
@@ -188,6 +265,21 @@ export class LibraryView extends ItemView {
 			console.error("[notebook] library state unreadable", e);
 		}
 		this.buildShell();
+		const inbox = this.host.inbox?.() ?? null;
+		if (inbox) {
+			this.bell = new InboxBell(inbox, {
+				container: this.rootEl,
+				phone: () => this.mode === "phone",
+				colorOf: (path) => {
+					const e = this.index.get(path);
+					return e ? (this.subjectOf(e)?.color ?? null) : null;
+				},
+				when: (path) => {
+					const e = this.index.get(path);
+					return e && e.modified > 0 ? stampTime(e.modified, Date.now(), getLanguage()) : "";
+				},
+			});
+		}
 		this.built = true;
 		this.expanded.add(this.root());
 		this.render();
@@ -206,11 +298,15 @@ export class LibraryView extends ItemView {
 		this.registerEvent(vault.on("rename", (f, oldPath) => this.onVaultRename(f, oldPath)));
 		this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.revealed()));
 
-		void this.reconcile(true);
+		// The bell's first look through the notebooks waits for the library's own reading and for a pause in writing.
+		void this.reconcile(true).then(() => writing.idle()).then(() => {
+			if (!this.closed) this.bell?.scanIfStale();
+		});
 	}
 
 	async onClose(): Promise<void> {
 		this.closed = true;
+		this.bell?.dispose();
 		window.clearTimeout(this.saveTimer);
 		window.clearTimeout(this.reconcileTimer);
 		window.clearTimeout(this.searchTimer);
@@ -241,109 +337,83 @@ export class LibraryView extends ItemView {
 	private buildShell(): void {
 		const el = this.contentEl;
 		el.empty();
-		this.rootEl = el.createDiv({ cls: "notebook-lib-root" });
-		this.sidebarEl = this.rootEl.createEl("aside", { cls: "notebook-lib-sidebar" });
-		this.rootEl.createDiv({ cls: "notebook-lib-backdrop" }).addEventListener("click", () => this.setDrawer(false));
+		this.rootEl = el.createDiv({ cls: "notebook-lib-root nb-app nb-no-anim" });
+		this.railEl = this.rootEl.createEl("aside", { cls: "nb-rail", attr: { "aria-label": t("nav.label") } });
+		this.rootEl.createDiv({ cls: "nb-rail-backdrop" }).addEventListener("click", () => this.setRailOpen(false));
 
-		const main = this.rootEl.createDiv({ cls: "notebook-lib-main" });
-		const bar = main.createDiv({ cls: "notebook-lib-bar" });
-		const toggle = bar.createEl("button", { cls: "notebook-lib-icon-btn clickable-icon", attr: { "aria-label": t("library.sidebar.toggle"), title: t("library.sidebar.toggle") } });
-		setIcon(toggle, "panel-left");
-		toggle.addEventListener("click", () => {
-			if (this.narrow) this.setDrawer(!this.drawerOpen);
-			else {
-				this.sidebarCollapsed = !this.sidebarCollapsed;
-				this.applyLayout();
-			}
-		});
-		this.crumbEl = bar.createEl("nav", { cls: "notebook-lib-crumbs", attr: { "aria-label": t("library.breadcrumb") } });
-		this.statusEl = bar.createDiv({ cls: "notebook-lib-status", attr: { "aria-live": "polite" } });
+		const main = this.rootEl.createDiv({ cls: "nb-main" });
+		this.scrollEl = main.createDiv({ cls: "notebook-lib-scroll nb-scroll" });
+		const header = this.scrollEl.createEl("header", { cls: "nb-page-header" });
+		this.headerArtEl = header.createDiv({ cls: "nb-header-art", attr: { "aria-hidden": "true" } });
+		const lead = header.createDiv({ cls: "nb-header-lead" });
+		iconButton(lead, "menu", t("nav.open"), () => this.setRailOpen(!this.railOpen), "nb-rail-toggle");
+		const titles = lead.createDiv({ cls: "nb-header-titles" });
+		this.titleEl = titles.createEl("h1", { cls: "nb-page-title" });
+		this.subtitleEl = titles.createDiv({ cls: "nb-page-subtitle" });
+		this.statusEl = titles.createDiv({ cls: "notebook-lib-status nb-status", attr: { "aria-live": "polite" } });
 
-		const tools = main.createDiv({ cls: "notebook-lib-tools" });
-		this.searchEl = tools.createEl("input", {
-			cls: "notebook-lib-search",
-			attr: { type: "search", placeholder: t("library.search.placeholder"), "aria-label": t("library.search.label"), enterkeyhint: "search" },
+		const tools = header.createDiv({ cls: "nb-header-tools" });
+		const { input } = searchPill(tools, {
+			placeholder: t("lib.search.placeholder"),
+			label: t("library.search.label"),
+			hint: Platform.isDesktop ? (Platform.isMacOS ? "⌘ K" : "Ctrl K") : null,
+			onInput: (value) => {
+				window.clearTimeout(this.searchTimer);
+				this.searchTimer = window.setTimeout(() => {
+					this.search = value;
+					this.requestRender();
+				}, 150);
+			},
 		});
-		this.searchEl.addEventListener("input", () => {
-			window.clearTimeout(this.searchTimer);
-			this.searchTimer = window.setTimeout(() => {
-				this.search = this.searchEl.value;
-				this.requestRender();
-			}, 150);
+		this.searchEl = input;
+		this.toolsEl = tools.createDiv({ cls: "nb-header-buttons" });
+		this.scope = new Scope(this.app.scope);
+		this.scope.register(["Mod"], "k", () => {
+			this.searchEl.focus();
+			this.searchEl.select();
+			return false;
 		});
-		this.searchEl.addEventListener("keydown", (e) => {
-			if (e.key === "Escape" && this.searchEl.value) {
-				e.preventDefault();
-				e.stopPropagation();
-				this.searchEl.value = "";
-				this.search = "";
-				this.requestRender();
-			}
-		});
-		this.scopeEl = tools.createEl("button", { cls: "notebook-lib-search-scope", attr: { type: "button", "aria-label": t("library.search.scope") } });
-		this.scopeEl.addEventListener("click", () => {
-			this.searchWide = !this.searchesWide();
-			this.requestRender();
-		});
-		this.sortEl = tools.createEl("select", { cls: "dropdown notebook-lib-sort", attr: { "aria-label": t("library.sort.label"), title: t("library.sort.label") } });
-		for (const s of SORTS) this.sortEl.createEl("option", { value: s, text: t(`library.sort.${s}` as MessageKey) });
-		this.sortEl.value = this.sort;
-		this.sortEl.addEventListener("change", () => {
-			this.sort = this.sortEl.value as LibrarySort;
-			this.app.workspace.requestSaveLayout();
-			this.requestRender();
-		});
-		const actions = tools.createDiv({ cls: "notebook-lib-actions" });
-		this.actionButton(actions, "file-plus", t("library.action.newNotebook"), () => this.host.createNotebook(this.currentFolder()), true);
-		this.actionButton(actions, "folder-plus", t("library.action.newFolder"), () => this.askNewFolder(this.currentFolder()));
-		this.actionButton(actions, "file-up", t("library.action.importPdf"), () => this.host.importPdf(this.currentFolder()));
-		if (this.host.lectureFromSlides) this.actionButton(actions, "graduation-cap", t("library.action.lectureFromSlides"), () => this.host.lectureFromSlides?.(this.currentFolder()));
-		if (this.host.scanToNotebook) this.actionButton(actions, "scan", t("library.action.scanNotebook"), () => this.host.scanToNotebook?.(this.currentFolder()));
-		if (this.host.openLooseSheet) this.actionButton(actions, "sticky-note", t("library.action.looseSheet"), () => this.host.openLooseSheet?.());
-		if (this.host.nowClass && this.host.openNowClass) {
-			this.nowBtn = this.actionButton(actions, "graduation-cap", "", () => this.host.openNowClass?.());
-			this.nowBtn.addClass("notebook-lib-now");
-			this.nowBtn.title = t("library.now.tip");
-		}
 
-		this.scrollEl = main.createDiv({ cls: "notebook-lib-scroll" });
-		this.gridEl = this.scrollEl.createDiv({ cls: "notebook-lib-content" });
+		this.gridEl = this.scrollEl.createDiv({ cls: "notebook-lib-content nb-content" });
 
 		this.observer = new IntersectionObserver((records) => this.onIntersect(records), { root: this.scrollEl, rootMargin: "240px 0px" });
 		this.resizeObserver = new ResizeObserver(() => {
 			const w = this.contentEl.clientWidth;
 			if (w === 0) return;
-			const narrow = w < NARROW_PX;
-			if (narrow !== this.narrow) {
-				this.narrow = narrow;
-				this.drawerOpen = false;
+			const mode = this.widthMode(w);
+			// The first size known: from now on the rail may slide.
+			if (this.rootEl.hasClass("nb-no-anim")) window.requestAnimationFrame(() => window.requestAnimationFrame(() => this.rootEl.removeClass("nb-no-anim")));
+			if (mode !== this.mode) {
+				this.mode = mode;
+				this.railOpen = false;
+				this.requestRender();
 			}
 			this.applyLayout();
 			if (this.dirty) void this.reconcile();
 		});
 		this.resizeObserver.observe(this.contentEl);
-		this.narrow = this.contentEl.clientWidth > 0 && this.contentEl.clientWidth < NARROW_PX;
+		this.mode = this.widthMode(this.contentEl.clientWidth);
 		this.applyLayout();
 	}
 
-	private actionButton(parent: HTMLElement, icon: string, label: string, onClick: () => void, primary = false): HTMLButtonElement {
-		const b = parent.createEl("button", { cls: "notebook-lib-btn", attr: { "aria-label": label, title: label } });
-		if (primary) b.addClass("mod-cta");
-		setIcon(b.createSpan({ cls: "notebook-lib-btn-icon" }), icon);
-		b.createSpan({ cls: "notebook-lib-btn-label", text: label });
-		b.addEventListener("click", onClick);
-		return b;
+	private widthMode(w: number): WidthMode {
+		if (w <= 0) return this.mode;
+		return w < PHONE_PX ? "phone" : w < WIDE_PX ? "medium" : "wide";
 	}
 
 	private applyLayout(): void {
 		const r = this.rootEl;
-		r.toggleClass("is-narrow", this.narrow);
-		r.toggleClass("is-sidebar-hidden", !this.narrow && this.sidebarCollapsed);
-		r.toggleClass("is-drawer-open", this.narrow && this.drawerOpen);
+		r.toggleClass("is-phone", this.mode === "phone");
+		r.toggleClass("is-medium", this.mode === "medium");
+		r.toggleClass("is-wide", this.mode === "wide");
+		// A folded rail on a wide view, and always on a tablet in portrait: icons only.
+		r.toggleClass("is-rail-compact", this.mode === "medium" || (this.mode === "wide" && this.railFolded));
+		r.toggleClass("is-rail-open", this.mode === "phone" && this.railOpen);
+		r.toggleClass("is-list", this.layoutMode === "list");
 	}
 
-	private setDrawer(open: boolean): void {
-		this.drawerOpen = open;
+	private setRailOpen(open: boolean): void {
+		this.railOpen = open;
 		this.applyLayout();
 	}
 
@@ -426,7 +496,6 @@ export class LibraryView extends ItemView {
 
 	private setSort(sort: LibrarySort): void {
 		this.sort = sort;
-		this.sortEl.value = sort;
 		this.app.workspace.requestSaveLayout();
 	}
 
@@ -569,7 +638,9 @@ export class LibraryView extends ItemView {
 
 	/** The view became visible again: catch up with what changed meanwhile. */
 	private revealed(): void {
-		if (this.dirty && this.contentEl.isShown()) void this.reconcile();
+		if (!this.contentEl.isShown()) return;
+		if (this.dirty) void this.reconcile();
+		this.bell?.scanIfStale();
 	}
 
 	/** Brings the index in line with the vault: forget deleted files, read new and changed ones. */
@@ -639,17 +710,18 @@ export class LibraryView extends ItemView {
 		}, SAVE_DELAY_MS);
 	}
 
+
 	// ------------------------------------------------------------- thumbnails
 
 	private onIntersect(records: IntersectionObserverEntry[]): void {
 		for (const r of records) {
 			if (!r.isIntersecting) continue;
-			const card = r.target as HTMLElement;
-			this.observer?.unobserve(card);
-			const path = card.dataset.path;
+			const el = r.target as HTMLElement;
+			this.observer?.unobserve(el);
+			const path = el.dataset.thumbPath;
 			const entry = path ? this.index.get(path) : undefined;
 			if (!path || !entry) continue;
-			this.fillCover(card, entry);
+			this.fillThumb(el, entry);
 			this.requestThumb(entry);
 		}
 	}
@@ -682,8 +754,7 @@ export class LibraryView extends ItemView {
 						if (thumb) {
 							this.index.patch(path, { thumb, thumbMtime: entry.mtime });
 							const next = this.index.get(path);
-							const card = this.cards.get(path);
-							if (next && card) this.fillCover(card, next);
+							if (next) for (const el of this.thumbsOf(path)) this.fillThumb(el, next);
 							this.scheduleSave();
 						} else {
 							this.thumbFailed.add(`${path}@${entry.mtime}`);
@@ -701,15 +772,20 @@ export class LibraryView extends ItemView {
 		}
 	}
 
-	private fillCover(card: HTMLElement, entry: LibraryEntry): void {
-		const page = card.querySelector<HTMLElement>(".notebook-lib-page");
-		if (!page) return;
-		page.empty();
-		if (entry.thumb) {
-			page.createEl("img", { attr: { src: entry.thumb, alt: "", draggable: "false", decoding: "async" } });
-		} else {
-			setIcon(page.createDiv({ cls: "notebook-lib-page-empty" }), "file-text");
-		}
+	/** Every thumbnail box that shows this notebook (a grid card, a favourite row). */
+	private thumbsOf(path: string): HTMLElement[] {
+		return Array.from(this.gridEl.querySelectorAll<HTMLElement>("[data-thumb-path]")).filter((el) => el.dataset.thumbPath === path);
+	}
+
+	private fillThumb(el: HTMLElement, entry: LibraryEntry): void {
+		el.empty();
+		if (entry.thumb) el.createEl("img", { attr: { src: entry.thumb, alt: "", draggable: "false", decoding: "async" } });
+		else setIcon(el.createDiv({ cls: "notebook-lib-page-empty" }), "file-text");
+	}
+
+	/** Watches a thumbnail box: it is filled (and rendered if missing) when it scrolls into view. */
+	private watchThumb(el: HTMLElement): void {
+		this.observer?.observe(el);
 	}
 
 	// ------------------------------------------------------------- rendering
@@ -723,13 +799,13 @@ export class LibraryView extends ItemView {
 		});
 	}
 
-	/** Falls back to "all" / the root when the folder or tag of the current scope no longer exists. */
+	/** Falls back to the library when the folder or tag of the current place no longer exists. */
 	private fixScope(): void {
 		const s = this.place;
-		if (typeof s === "object" && "folder" in s) {
+		if (isFolderPlace(s)) {
 			const known = s.folder === this.root() || this.app.vault.getFolderByPath(s.folder);
 			if (!known) this.place = "all";
-		} else if (typeof s === "object" && "tag" in s) {
+		} else if (isTagPlace(s)) {
 			const tag = s.tag.toLowerCase();
 			if (!this.index.tags(this.notArchived).some((x) => x.tag.toLowerCase() === tag)) this.place = "all";
 		}
@@ -738,13 +814,13 @@ export class LibraryView extends ItemView {
 	private render(): void {
 		this.refreshNow();
 		this.fixScope();
-		const focus = this.contentEl.ownerDocument.activeElement instanceof HTMLElement && this.contentEl.contains(this.contentEl.ownerDocument.activeElement)
-			? this.contentEl.ownerDocument.activeElement.dataset.key
-			: undefined;
+		const active = this.contentEl.ownerDocument.activeElement;
+		const focus = active instanceof HTMLElement && this.contentEl.contains(active) ? active.dataset.key : undefined;
 		const tree = this.tree();
-		this.renderSidebar(tree);
-		this.renderBreadcrumb();
-		this.renderGrid(tree);
+		this.applyLayout();
+		this.renderRail(tree);
+		this.renderHeader();
+		this.renderContent(tree);
 		if (focus) {
 			for (const el of Array.from(this.contentEl.querySelectorAll<HTMLElement>("[data-key]"))) {
 				if (el.dataset.key === focus) {
@@ -764,41 +840,33 @@ export class LibraryView extends ItemView {
 		if (!now) return;
 		const label = t("library.now", { course: now.course });
 		btn.setAttribute("aria-label", label);
-		btn.querySelector(".notebook-lib-btn-label")?.setText(label);
+		btn.querySelector(".nb-now-label")?.setText(label);
 	}
 
 	private currentFolder(): string {
-		return typeof this.place === "object" && "folder" in this.place ? this.place.folder : this.root();
+		return isFolderPlace(this.place) ? this.place.folder : this.root();
 	}
 
-	private navigate(scope: LibraryScope): void {
-		this.place = scope;
+	private navigate(place: LibraryPlace): void {
+		this.place = place;
 		this.searchWide = null;
-		if (typeof scope === "object" && "folder" in scope) {
+		this.gridLimit = GRID_PAGE;
+		if (this.search) {
+			this.search = "";
+			this.searchEl.value = "";
+		}
+		if (isFolderPlace(place)) {
 			// Make the folder visible in the tree.
-			let p = scope.folder;
+			let p = place.folder;
 			while (p !== "" && p.length > this.root().length) {
 				p = folderOf(p);
 				this.expanded.add(p);
 			}
 		}
-		if (this.narrow) this.drawerOpen = false;
-		this.applyLayout();
+		if (this.mode === "phone") this.railOpen = false;
 		this.app.workspace.requestSaveLayout();
 		this.render();
 		this.scrollEl.scrollTop = 0;
-	}
-
-	private navItem(parent: HTMLElement, o: { icon: string; label: string; count?: number; scope: LibraryScope; key: string; dropFolder?: string }): HTMLElement {
-		const active = sameScope(this.place, o.scope);
-		const b = parent.createEl("button", { cls: "notebook-lib-nav-item", attr: { "data-key": o.key } });
-		b.toggleClass("is-active", active);
-		if (active) b.setAttribute("aria-current", "page");
-		setIcon(b.createSpan({ cls: "notebook-lib-nav-icon" }), o.icon);
-		b.createSpan({ cls: "notebook-lib-nav-label", text: o.label });
-		if (o.count !== undefined) b.createSpan({ cls: "notebook-lib-nav-count", text: String(o.count) });
-		b.addEventListener("click", () => this.navigate(o.scope));
-		return b;
 	}
 
 	private folderCounts(): Map<string, number> {
@@ -815,174 +883,626 @@ export class LibraryView extends ItemView {
 		return counts;
 	}
 
-	private renderSidebar(tree: FolderNode): void {
-		const el = this.sidebarEl;
+	// ---------------------------------------------------------- subjects and colours
+
+	/** The subject (top-level folder) a folder belongs to, or null for the notebooks root. */
+	private subjectFolderOf(folder: string): string | null {
+		return topFolderOf(`${folder}/_`, this.root());
+	}
+
+	/** The subject colour of a folder (its top-level folder's), or null at the root. */
+	private folderColor(folder: string): string | null {
+		const top = this.subjectFolderOf(folder);
+		return top === null ? null : colorFor(top.slice(top.lastIndexOf("/") + 1));
+	}
+
+	/** The subject of a notebook: its top-level folder's name and colour, or null for a notebook at the root. */
+	private subjectOf(e: LibraryEntry): { label: string; color: string } | null {
+		const top = topFolderOf(e.path, this.root());
+		if (top === null) return null;
+		const label = top.slice(top.lastIndexOf("/") + 1);
+		return { label, color: colorFor(label) };
+	}
+
+	private visible(): LibraryEntry[] {
+		return this.index.all().filter(this.notArchived);
+	}
+
+	private subjects(tree: FolderNode): Subject[] {
+		return subjectsOf(this.visible(), this.root(), tree.children.map((c) => c.path));
+	}
+
+	private collectionCtx(): CollectionContext {
+		return { now: Date.now(), pinned: this.isPinned };
+	}
+
+	/** Procedural artwork is off when the system asks for reduced motion and effects (DESIGN.md §2.6, §7). */
+	private artOn(): boolean {
+		return !activeWindow.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+	}
+
+	/** Decoration (DESIGN.md §2.6): a cached generated artwork, or undefined when effects are reduced. */
+	private art(seed: string, color: string, w: number, h: number): string | undefined {
+		if (!this.artOn()) return undefined;
+		return artImage({ seed, color }, w, h, Math.min(2, activeWindow.devicePixelRatio || 1)) || undefined;
+	}
+
+	private subjectCardOptions(s: Subject, shape: "row" | "tile"): SubjectCardOptions {
+		const lines = shape === "row"
+			? [this.plural(s.notebooks, "library.notebooks.one", "library.notebooks.many")]
+			: [this.plural(s.notebooks, "library.notebooks.one", "library.notebooks.many"), this.plural(s.pages, "library.pages.one", "library.pages.many")];
+		return { name: s.name, color: colorFor(s.name), seed: s.path, lines, shape, art: this.artOn(), key: `subject:${s.path}`, onOpen: () => this.navigate({ folder: s.path }) };
+	}
+
+	/** A subject card is also a drop target (move a notebook into the subject) and has the folder menu. */
+	private wireFolderCard(card: HTMLElement, path: string): void {
+		card.setAttribute(DROP_ATTR, path);
+		attachPress({ el: card, onMenu: (x, y) => this.folderMenu(path, x, y) });
+	}
+
+	private notebookPills(e: LibraryEntry): Pill[] {
+		const out: Pill[] = [];
+		const subject = this.subjectOf(e);
+		if (subject) out.push(subject);
+		const tag = e.tags.find((x) => !subject || normalizeText(x) !== normalizeText(subject.label));
+		if (tag) out.push({ label: tag });
+		return out;
+	}
+
+	private notebookRow(e: LibraryEntry, now: number, meta?: string, open?: () => void): ListRowOptions {
+		return {
+			icon: (e.pdfPages ?? 0) > 0 ? "file-type" : "file-text",
+			title: e.name,
+			meta: meta ?? t("lib.modified", { time: stampTime(e.modified, now, getLanguage()) }),
+			pills: this.notebookPills(e),
+			key: `row:${e.path}`,
+			menuLabel: t("library.menu.more"),
+			onOpen: open ?? (() => this.openEntry(e.path)),
+			onMenu: (anchor) => this.notebookMenu(e.path, 0, 0, anchor),
+		};
+	}
+
+	private favouriteOptions(e: LibraryEntry, now: number): FavouriteRowOptions {
+		return {
+			path: e.path,
+			title: e.name,
+			subject: this.subjectOf(e),
+			count: this.plural(e.pages, "library.pages.one", "library.pages.many"),
+			updated: t("lib.updated", { time: stampTime(e.modified, now, getLanguage()) }),
+			starred: e.favorite,
+			starLabel: e.favorite ? t("library.favorite.remove") : t("library.favorite.add"),
+			menuLabel: t("library.menu.more"),
+			key: `fav:${e.path}`,
+			onOpen: () => this.openEntry(e.path),
+			onStar: () => void this.toggleFavorite(e.path),
+			onMenu: (anchor) => this.notebookMenu(e.path, 0, 0, anchor),
+		};
+	}
+
+	/** Colours of tags that name a subject (the dot of a tag chip). */
+	private tagColor(tag: string, subjects: readonly Subject[]): string | null {
+		const key = normalizeText(tag.split("/").pop() ?? tag);
+		const s = subjects.find((x) => normalizeText(x.name) === key);
+		return s ? colorFor(s.name) : null;
+	}
+
+	private tagChips(tags: ReadonlyArray<{ tag: string; count: number }>, subjects: readonly Subject[]): TagChip[] {
+		return tags.map(({ tag, count }) => ({ tag, count, color: this.tagColor(tag, subjects), onClick: () => this.navigate({ tag }) }));
+	}
+
+	// ---------------------------------------------------------------- rail
+
+	private renderRail(tree: FolderNode): void {
+		const el = this.railEl;
 		el.empty();
-		const close = el.createEl("button", { cls: "notebook-lib-drawer-close clickable-icon", attr: { "aria-label": t("library.sidebar.close"), title: t("library.sidebar.close") } });
-		setIcon(close, "x");
-		close.addEventListener("click", () => this.setDrawer(false));
+		const top = el.createDiv({ cls: "nb-rail-top" });
+		railBrand(top, t("nav.brand"), t("nav.brandSub"));
+		if (this.mode === "phone") iconButton(top, "x", t("library.sidebar.close"), () => this.setRailOpen(false), "nb-rail-close");
+		else if (this.mode === "wide") {
+			iconButton(top, this.railFolded ? "panel-left-open" : "panel-left-close", t("library.sidebar.toggle"), () => {
+				this.railFolded = !this.railFolded;
+				this.applyLayout();
+				this.renderRail(this.tree());
+			}, "nb-rail-fold");
+		}
 
-		const visible = this.index.all().filter(this.notArchived);
-		const favorites = visible.filter((e) => e.favorite).length;
+		const visible = this.visible();
 		const archived = this.index.size - visible.length;
-		const nav = el.createEl("nav", { cls: "notebook-lib-nav" });
-		this.navItem(nav, { icon: "library", label: t("library.nav.all"), count: visible.length, scope: "all", key: "nav:all" });
-		this.navItem(nav, { icon: "star", label: t("library.nav.favorites"), count: favorites, scope: "favorites", key: "nav:favorites" });
-		this.navItem(nav, { icon: "clock", label: t("library.nav.recent"), scope: "recent", key: "nav:recent" });
-		const recentPages = this.host.openRecentPages?.bind(this.host); // wave 0.7: quick nav
-		if (recentPages) {
-			const b = nav.createEl("button", { cls: "notebook-lib-nav-item", attr: { "data-key": "nav:recent-pages" } });
-			setIcon(b.createSpan({ cls: "notebook-lib-nav-icon" }), "history");
-			b.createSpan({ cls: "notebook-lib-nav-label", text: t("library.nav.recentPages") });
-			b.addEventListener("click", () => {
-				this.setDrawer(false);
-				recentPages();
-			});
+		const nav = el.createEl("nav", { cls: "nb-rail-nav" });
+		const p = this.place;
+		const libraryActive = !(p === "home" || p === "tags" || p === "archived" || isFolderPlace(p) || isTagPlace(p) || (isCollectionPlace(p) && p.collection === "pdf"));
+		railItem(nav, { key: "nav:home", icon: "home", label: t("nav.home"), active: p === "home", onClick: () => this.navigate("home") });
+		railItem(nav, { key: "nav:all", icon: "folder", label: t("nav.notebooks"), active: libraryActive, onClick: () => this.navigate("all") });
+		if (visible.some((e) => (e.pdfPages ?? 0) > 0)) {
+			railItem(nav, { key: "nav:pdf", icon: "file-text", label: t("nav.pdf"), active: isCollectionPlace(p) && p.collection === "pdf", onClick: () => this.navigate({ collection: "pdf" }) });
 		}
-		// Roadmap 54: the archive is a filter, shown once something is archived (or while it is open).
-		if (archived > 0 || this.place === "archived") this.navItem(nav, { icon: "archive", label: t("library.nav.archived"), count: archived, scope: "archived", key: "nav:archived" });
-		const trash = this.host.trash;
-		if (trash) {
-			addTrashNavItem(nav, () => {
-				this.setDrawer(false);
-				new TrashModal(this.app, trash).open();
-			});
-		}
-		const check = this.host.checkLibrary?.bind(this.host); // roadmap 27
-		if (check) {
-			const b = nav.createEl("button", { cls: "notebook-lib-nav-item", attr: { "data-key": "nav:check" } });
-			setIcon(b.createSpan({ cls: "notebook-lib-nav-icon" }), "hard-drive");
-			b.createSpan({ cls: "notebook-lib-nav-label", text: t("libcheck.nav") });
-			b.addEventListener("click", () => {
-				this.setDrawer(false);
-				check();
-			});
+		railItem(nav, { key: "nav:tags", icon: "tag", label: t("nav.tags"), active: p === "tags" || isTagPlace(p), onClick: () => this.navigate("tags") });
+		const settings = this.host.openSettings?.bind(this.host);
+		if (settings) {
+			railItem(nav, { key: "nav:settings", icon: "settings", label: t("nav.settings"), onClick: () => {
+				this.setRailOpen(false);
+				settings();
+			} });
 		}
 
-		el.createDiv({ cls: "notebook-lib-section", text: t("library.nav.folders") });
+		railLabel(el, t("nav.vault"));
 		const counts = this.folderCounts();
-		const treeEl = el.createDiv({ cls: "notebook-lib-tree", attr: { role: "tree" } });
+		const treeEl = el.createDiv({ cls: "nb-rail-tree", attr: { role: "tree" } });
 		const walk = (node: FolderNode, depth: number) => {
 			const hasChildren = node.children.length > 0;
 			const open = this.expanded.has(node.path);
-			const row = treeEl.createDiv({ cls: "notebook-lib-tree-row", attr: { role: "treeitem", [DROP_ATTR]: node.path, "aria-expanded": hasChildren ? String(open) : "" } });
-			if (!hasChildren) row.removeAttribute("aria-expanded");
+			const row = treeEl.createDiv({ cls: `nb-tree-row nb-depth-${Math.min(depth, 3)}`, attr: { role: "treeitem", [DROP_ATTR]: node.path } });
+			if (hasChildren) row.setAttribute("aria-expanded", String(open));
 			row.setCssProps({ "--notebook-depth": String(depth) });
-			if (hasChildren) {
-				const tg = row.createEl("button", { cls: "notebook-lib-tree-toggle clickable-icon", attr: { "aria-label": t("library.folder.toggle"), "data-key": `toggle:${node.path}` } });
-				setIcon(tg, open ? "chevron-down" : "chevron-right");
-				tg.addEventListener("click", () => {
-					if (open) this.expanded.delete(node.path);
-					else this.expanded.add(node.path);
-					this.render();
-				});
-			} else {
-				row.createSpan({ cls: "notebook-lib-tree-toggle is-spacer" });
-			}
-			this.navItem(row, {
+			const color = this.folderColor(node.path);
+			railItem(row, {
+				key: `folder:${node.path}`,
 				icon: open && hasChildren ? "folder-open" : "folder",
+				image: color ? svgDataUrl(folderIconSvg(color, 24)) : undefined,
+				color: color ?? undefined,
 				label: node.path === this.root() ? this.rootLabel() : node.name,
 				count: counts.get(node.path) ?? 0,
-				scope: { folder: node.path },
-				key: `folder:${node.path}`,
+				active: isFolderPlace(p) && p.folder === node.path,
+				onClick: () => this.navigate({ folder: node.path }),
 			});
+			if (hasChildren) {
+				const tg = iconButton(row, open ? "chevron-down" : "chevron-right", t("library.folder.toggle"), () => {
+					if (open) this.expanded.delete(node.path);
+					else this.expanded.add(node.path);
+					this.renderRail(this.tree());
+				}, "nb-tree-toggle");
+				tg.dataset.key = `toggle:${node.path}`;
+			}
 			attachPress({ el: row, onMenu: (x, y) => this.folderMenu(node.path, x, y) });
 			if (open) node.children.forEach((c) => walk(c, depth + 1));
 		};
 		walk(tree, 0);
 
-		el.createDiv({ cls: "notebook-lib-section", text: t("library.nav.tags") });
-		const tags = this.index.tags(this.notArchived);
-		if (tags.length === 0) {
-			el.createDiv({ cls: "notebook-lib-hint", text: t("library.nav.noTags") });
-		} else {
-			const list = el.createDiv({ cls: "notebook-lib-nav" });
-			for (const { tag, count } of tags) {
-				this.navItem(list, { icon: "tag", label: tag, count, scope: { tag }, key: `tag:${tag}` });
-			}
+		const bottom = el.createDiv({ cls: "nb-rail-bottom" });
+		railItem(bottom, { key: "nav:archived", icon: "archive", label: t("nav.archive"), count: archived, active: p === "archived", onClick: () => this.navigate("archived") });
+		const trash = this.host.trash;
+		if (trash) {
+			railItem(bottom, { key: "nav:trash", icon: "trash-2", label: t("library.nav.trash"), onClick: () => {
+				this.setRailOpen(false);
+				new TrashModal(this.app, trash).open();
+			} });
+		}
+		const check = this.host.checkLibrary?.bind(this.host); // roadmap 27
+		if (check) {
+			railItem(bottom, { key: "nav:check", icon: "hard-drive", label: t("libcheck.nav"), onClick: () => {
+				this.setRailOpen(false);
+				check();
+			} });
 		}
 	}
 
-	private renderBreadcrumb(): void {
-		const el = this.crumbEl;
-		el.empty();
-		const s = this.place;
-		if (typeof s === "object" && "folder" in s) {
-			const parts = breadcrumb(this.root(), s.folder);
+	// ---------------------------------------------------------------- header
+
+	private placeTitle(): { title: string; subtitle: string } {
+		const p = this.place;
+		if (p === "home") return { title: t("home.title"), subtitle: t("home.subtitle") };
+		if (isFolderPlace(p)) {
+			const parts = breadcrumb(this.root(), p.folder);
+			const names = parts.map((x) => (x.path === this.root() ? this.rootLabel() : x.name));
+			return { title: names[names.length - 1] ?? this.rootLabel(), subtitle: names.slice(0, -1).join(" › ") };
+		}
+		if (isTagPlace(p)) return { title: `#${p.tag}`, subtitle: t("lib.subtitle.tag") };
+		if (p === "tags") return { title: t("nav.tags"), subtitle: t("lib.subtitle.tags") };
+		if (p === "archived") return { title: t("nav.archive"), subtitle: t("library.archived.hint") };
+		if (isCollectionPlace(p)) return { title: t(COLLECTION_LOOK[p.collection].label), subtitle: t(`lib.collection.${p.collection}.hint` as MessageKey) };
+		return { title: t("lib.title"), subtitle: t("lib.subtitle") };
+	}
+
+	private renderHeader(): void {
+		const { title, subtitle } = this.placeTitle();
+		this.titleEl.setText(title);
+		// Decoration: a faint band of generated art behind the header (quiet, never a control).
+		const headerArt = this.art(this.place === "home" ? "notebook-home" : "notebook-library", paletteColor("Indigo"), 640, 140);
+		this.headerArtEl.toggleClass("is-hidden", !headerArt);
+		if (headerArt) this.headerArtEl.setCssProps({ "--nb-art": `url("${headerArt}")` });
+		this.subtitleEl.empty();
+		const p = this.place;
+		if (isFolderPlace(p)) {
+			// The breadcrumb: each folder above is a link (and a drop target).
+			const parts = breadcrumb(this.root(), p.folder).slice(0, -1);
 			parts.forEach((part, i) => {
-				if (i > 0) el.createSpan({ cls: "notebook-lib-crumb-sep", text: "›", attr: { "aria-hidden": "true" } });
-				const label = part.path === this.root() ? this.rootLabel() : part.name;
-				if (i === parts.length - 1) {
-					el.createSpan({ cls: "notebook-lib-crumb is-current", text: label, attr: { "aria-current": "page" } });
-				} else {
-					const b = el.createEl("button", { cls: "notebook-lib-crumb", text: label, attr: { [DROP_ATTR]: part.path } });
-					b.addEventListener("click", () => this.navigate({ folder: part.path }));
-				}
+				if (i > 0) this.subtitleEl.createSpan({ cls: "nb-crumb-sep", text: "›", attr: { "aria-hidden": "true" } });
+				const b = this.subtitleEl.createEl("button", { cls: "nb-crumb", text: part.path === this.root() ? this.rootLabel() : part.name, attr: { type: "button", [DROP_ATTR]: part.path } });
+				b.addEventListener("click", () => this.navigate({ folder: part.path }));
 			});
-			return;
+		} else {
+			this.subtitleEl.setText(subtitle);
 		}
-		const title = s === "all" ? t("library.nav.all") : s === "favorites" ? t("library.nav.favorites") : s === "recent" ? t("library.nav.recent") : s === "archived" ? t("library.nav.archived") : `#${s.tag}`;
-		el.createSpan({ cls: "notebook-lib-crumb is-current", text: title, attr: { "aria-current": "page" } });
+
+		const tools = this.toolsEl;
+		tools.empty();
+		this.nowBtn = null;
+		if (this.host.nowClass && this.host.openNowClass) {
+			const b = tools.createEl("button", { cls: "nb-now-btn", attr: { type: "button", title: t("library.now.tip") } });
+			setIcon(b.createSpan({ cls: "nb-now-icon", attr: { "aria-hidden": "true" } }), "graduation-cap");
+			b.createSpan({ cls: "nb-now-label" });
+			b.addEventListener("click", () => this.host.openNowClass?.());
+			this.nowBtn = b;
+			this.refreshNow();
+		}
+		this.bell?.mount(tools);
+		if (p === "home") return;
+		iconButton(tools, "filter", t("lib.filter"), (b) => this.filterMenu(b), isTagPlace(p) ? "is-active" : "");
+		iconButton(tools, "arrow-up-down", t("library.sort.label"), (b) => this.sortMenu(b));
+		const list = this.layoutMode === "list";
+		const view = iconButton(tools, list ? "list" : "layout-grid", list ? t("lib.view.grid") : t("lib.view.list"), () => {
+			this.layoutMode = list ? "grid" : "list";
+			this.app.workspace.requestSaveLayout();
+			this.render();
+		}, "is-active");
+		view.setAttribute("aria-pressed", String(list));
+		iconButton(tools, "plus", t("lib.new"), (b) => this.newMenu(b), "is-primary");
 	}
 
-	private searchesWide(): boolean {
-		return this.searchWide ?? this.place === "all";
+	private showMenu(menu: Menu, anchor: HTMLElement): void {
+		const r = anchor.getBoundingClientRect();
+		menu.showAtPosition({ x: r.left, y: r.bottom + 4 });
 	}
 
-	private updateScopeButton(searching: boolean): void {
-		const show = searching && this.place !== "all";
-		this.scopeEl.toggleClass("is-hidden", !show);
-		if (!show) return;
-		const wide = this.searchesWide();
-		this.scopeEl.setText(wide ? t("library.search.everywhere") : typeof this.place === "object" && "folder" in this.place ? t("library.search.thisFolder") : t("library.search.thisView"));
-		this.scopeEl.setAttribute("aria-pressed", String(wide));
-		this.scopeEl.setAttribute("title", t("library.search.scope"));
+	private filterMenu(anchor: HTMLElement): void {
+		const menu = new Menu();
+		const p = this.place;
+		menu.addItem((i) => i.setTitle(t("library.nav.all")).setIcon("library").setChecked(p === "all").onClick(() => this.navigate("all")));
+		const tags = this.index.tags(this.notArchived);
+		if (tags.length === 0) menu.addItem((i) => i.setTitle(t("library.nav.noTags")).setDisabled(true));
+		for (const { tag, count } of tags.slice(0, 30)) {
+			menu.addItem((i) => i.setTitle(`#${tag} (${count})`).setIcon("tag").setChecked(isTagPlace(p) && p.tag.toLowerCase() === tag.toLowerCase()).onClick(() => this.navigate({ tag })));
+		}
+		this.showMenu(menu, anchor);
 	}
 
-	private renderGrid(tree: FolderNode): void {
+	private sortMenu(anchor: HTMLElement): void {
+		const menu = new Menu();
+		for (const s of SORTS) {
+			menu.addItem((i) => i.setTitle(t(`library.sort.${s}` as MessageKey)).setChecked(this.sort === s).onClick(() => {
+				this.setSort(s);
+				this.render();
+			}));
+		}
+		this.showMenu(menu, anchor);
+	}
+
+	/** Runs an action of the registry (ui/actions.ts); `fallback` when the plugin has no handler for it. */
+	private runAction(id: string, fallback: () => void): void {
+		if (!this.host.runAction?.(id)) fallback();
+	}
+
+	private newNotebook(): void {
+		const folder = this.currentFolder();
+		// Inside a folder the notebook goes there; elsewhere the creation dialog of the registry decides.
+		if (folder !== this.root()) this.host.createNotebook(folder);
+		else this.runAction("new-notebook", () => this.host.createNotebook(folder));
+	}
+
+	private newFolder(): void {
+		const folder = this.currentFolder();
+		if (folder !== this.root()) this.askNewFolder(folder);
+		else this.runAction("new-folder", () => this.askNewFolder(folder));
+	}
+
+	private newMenu(anchor: HTMLElement): void {
+		const folder = this.currentFolder();
+		const menu = new Menu();
+		menu.addItem((i) => i.setTitle(t("library.action.newNotebook")).setIcon("file-plus").onClick(() => this.newNotebook()));
+		menu.addItem((i) => i.setTitle(t("library.action.newFolder")).setIcon("folder-plus").onClick(() => this.newFolder()));
+		menu.addItem((i) => i.setTitle(t("library.action.importPdf")).setIcon("file-up").onClick(() => this.host.importPdf(folder)));
+		if (this.host.lectureFromSlides) menu.addItem((i) => i.setTitle(t("library.action.lectureFromSlides")).setIcon("presentation").onClick(() => this.host.lectureFromSlides?.(folder)));
+		if (this.host.scanToNotebook) menu.addItem((i) => i.setTitle(t("library.action.scanNotebook")).setIcon("scan").onClick(() => this.host.scanToNotebook?.(folder)));
+		if (this.host.openLooseSheet) menu.addItem((i) => i.setTitle(t("library.action.looseSheet")).setIcon("sticky-note").onClick(() => this.host.openLooseSheet?.()));
+		this.showMenu(menu, anchor);
+	}
+
+	// ---------------------------------------------------------------- content
+
+	private renderContent(tree: FolderNode): void {
 		const el = this.gridEl;
 		el.empty();
 		this.observer?.disconnect();
-		this.cards.clear();
 		this.arrangement = { pinned: [], rest: [] };
-		const searching = this.search.trim().length > 0;
-		const archivedView = this.place === "archived";
-		this.updateScopeButton(searching);
-		if (searching) {
-			const place: LibraryScope = typeof this.place === "object" && "folder" in this.place ? { folder: this.place.folder, recursive: true } : this.place;
-			const hits = this.index.search({ search: this.search, scope: this.searchesWide() ? "all" : place, sort: this.sort, filter: archivedView && !this.searchesWide() ? this.isArchived : this.notArchived });
-			if (hits.length === 0) {
-				this.renderEmpty(el, true);
-				return;
-			}
-			const grid = el.createDiv({ cls: "notebook-lib-grid is-search", attr: { role: "list" } });
-			const now = Date.now();
-			for (const hit of hits) this.notebookCard(grid, hit.entry, now, hit);
+		if (this.search.trim().length > 0) {
+			this.renderSearch(el, tree);
 			return;
 		}
-		const scope: LibraryScope = typeof this.place === "object" && "folder" in this.place ? { folder: this.place.folder, recursive: false } : this.place;
-		const found = this.index.query({ scope, sort: this.sort, filter: archivedView ? this.isArchived : this.notArchived });
+		if (this.place === "home") {
+			this.renderHomeSurface(el, tree);
+			return;
+		}
+		this.renderChips(el);
+		const p = this.place;
+		if (p === "all") {
+			this.renderDashboard(el, tree);
+			const sec = el.createEl("section", { cls: "nb-section nb-all" });
+			sectionHeader(sec, { icon: "library", title: t("library.nav.all") });
+			this.renderGrid(sec, tree);
+		} else if (p === "subjects") {
+			this.renderSubjectsPage(el, tree);
+		} else if (p === "tags") {
+			this.renderTagsPage(el, tree);
+		} else {
+			this.renderGrid(el, tree);
+		}
+	}
+
+	private activeChip(): ChipId | null {
+		const p = this.place;
+		if (p === "all" || p === "subjects" || p === "recent" || p === "archived") return p;
+		if (isCollectionPlace(p) && (p.collection === "favourites" || p.collection === "pdf")) return p.collection;
+		return null;
+	}
+
+	private renderChips(el: HTMLElement): void {
+		const items: Array<FilterChip<ChipId>> = [
+			{ id: "all", label: t("lib.chip.all") },
+			{ id: "subjects", label: t("lib.chip.subjects") },
+			{ id: "recent", label: t("lib.chip.recent"), icon: "clock" },
+			{ id: "favourites", label: t("lib.chip.favourites"), icon: "star" },
+			{ id: "pdf", label: t("lib.chip.pdf"), icon: "file-text" },
+			{ id: "archived", label: t("lib.chip.archived"), icon: "archive" },
+		];
+		filterChips(el, items, this.activeChip(), (id) => this.navigate(id === "favourites" || id === "pdf" ? { collection: id } : id), t("lib.chips"));
+	}
+
+	private renderDashboard(el: HTMLElement, tree: FolderNode): void {
+		const now = Date.now();
+		const visible = this.visible();
+		const subjects = this.subjects(tree);
+		const c = this.collectionCtx();
+		const byModified = [...visible].sort((a, b) => b.modified - a.modified);
+		const favourites = byModified.filter((e) => inCollection("favourites", e, c));
+		const tags = this.index.tags(this.notArchived);
+		renderLibrarySections(el, {
+			subjects: subjects.slice(0, DASH_SUBJECTS).map((s) => this.subjectCardOptions(s, "tile")),
+			moreSubjects: subjects.length > DASH_SUBJECTS ? () => this.navigate("subjects") : null,
+			collections: collectionsOf(visible, c).map(({ id, count }): QuickActionOptions => ({
+				icon: COLLECTION_LOOK[id].icon,
+				color: COLLECTION_LOOK[id].color,
+				title: t(COLLECTION_LOOK[id].label),
+				description: this.plural(count, "library.notebooks.one", "library.notebooks.many"),
+				art: this.art(`collection:${id}`, COLLECTION_LOOK[id].color, 240, 96),
+				key: `collection:${id}`,
+				onRun: () => this.navigate(id === "recent" ? "recent" : { collection: id }),
+			})),
+			tags: this.tagChips(tags.slice(0, DASH_TAGS), subjects),
+			moreTags: tags.length > DASH_TAGS ? () => this.navigate("tags") : null,
+			recent: byModified.slice(0, DASH_ROWS).map((e) => this.notebookRow(e, now)),
+			moreRecent: byModified.length > DASH_ROWS ? () => this.navigate("recent") : null,
+			favourites: favourites.slice(0, DASH_FAVOURITES).map((e) => this.favouriteOptions(e, now)),
+			moreFavourites: favourites.length > DASH_FAVOURITES ? () => this.navigate({ collection: "favourites" }) : null,
+		});
+		for (const thumb of Array.from(el.querySelectorAll<HTMLElement>(".nb-fav-thumb"))) this.watchThumb(thumb);
+		for (const card of Array.from(el.querySelectorAll<HTMLElement>(".nb-subject-card"))) {
+			const path = card.dataset.key?.slice("subject:".length);
+			if (path) this.wireFolderCard(card, path);
+		}
+	}
+
+	private renderSubjectsPage(el: HTMLElement, tree: FolderNode): void {
+		const subjects = this.subjects(tree);
+		if (subjects.length === 0) {
+			this.renderEmpty(el, false);
+			return;
+		}
+		const grid = el.createDiv({ cls: "nb-subject-grid is-tiles" });
+		for (const s of subjects) this.wireFolderCard(subjectCard(grid, this.subjectCardOptions(s, "tile")), s.path);
+	}
+
+	private renderTagsPage(el: HTMLElement, tree: FolderNode): void {
+		const tags = this.index.tags(this.notArchived);
+		if (tags.length === 0) {
+			el.createDiv({ cls: "notebook-lib-hint nb-hint", text: t("library.nav.noTags") });
+			return;
+		}
+		renderTagChips(el, this.tagChips(tags, this.subjects(tree)));
+	}
+
+	private renderHomeSurface(el: HTMLElement, tree: FolderNode): void {
+		const now = Date.now();
+		const visible = this.visible();
+		const subjects = this.subjects(tree);
+		const lang = getLanguage();
+		// Recent notes: the pages this device edited last (recent pages log); without a log, the notebooks changed last.
+		const recent: ListRowOptions[] = [];
+		const edits = this.host.recentEdits?.() ?? [];
+		for (const x of edits) {
+			if (recent.length >= DASH_ROWS) break;
+			const e = this.index.get(x.path);
+			if (!e || this.isArchived(e)) continue;
+			const bookmark = e.bookmarks?.find((b) => b.page === x.num - 1);
+			const meta = t("home.recent.page", { page: String(x.num), time: stampTime(x.at, now, lang) });
+			recent.push({ ...this.notebookRow(e, now, meta, () => this.openEntry(e.path, x.num - 1)), title: bookmark ? bookmark.title : e.name, key: `recent:${x.path}#${x.page}` });
+		}
+		if (edits.length === 0) {
+			for (const e of [...visible].sort((a, b) => b.modified - a.modified).slice(0, DASH_ROWS)) recent.push(this.notebookRow(e, now, stampTime(e.modified, now, lang)));
+		}
+		const kpis = statsOf(visible, edits, now, this.weeks);
+		const look: Record<KpiId, { icon: string; color: string; label: MessageKey }> = {
+			created: { icon: "file-plus", color: paletteColor("Blue"), label: "home.stats.created" },
+			edited: { icon: "pencil", color: paletteColor("Violet"), label: "home.stats.edited" },
+			pdf: { icon: "file-text", color: paletteColor("Pink"), label: "home.stats.pdf" },
+			tags: { icon: "tag", color: paletteColor("Indigo"), label: "home.stats.tags" },
+		};
+		const open: Record<KpiId, () => void> = {
+			created: () => {
+				this.setSort("created");
+				this.navigate("all");
+			},
+			edited: () => (this.host.openRecentPages ? this.host.openRecentPages() : this.navigate("recent")),
+			pdf: () => this.navigate({ collection: "pdf" }),
+			tags: () => this.navigate("tags"),
+		};
+		const stats = kpis.map((k): KpiTileOptions => {
+			const d = deltaPercent(k);
+			return {
+				icon: look[k.id].icon,
+				color: look[k.id].color,
+				value: k.value.toLocaleString(lang),
+				label: t(look[k.id].label),
+				delta: d === null ? null : { text: `${d >= 0 ? "+" : ""}${d}%`, up: d >= 0, label: t("home.stats.delta") },
+				series: k.series,
+				key: `kpi:${k.id}`,
+				onOpen: open[k.id],
+			};
+		});
+		const root = this.root();
+		const quick: QuickActionOptions[] = [
+			{ icon: "file-plus", color: paletteColor("Violet"), title: t("home.quick.newNotebook"), description: t("home.quick.newNotebook.desc"), art: this.art("quick:new-notebook", paletteColor("Violet"), 240, 96), key: "quick:new-notebook", onRun: () => this.runAction("new-notebook", () => this.host.createNotebook(root)) },
+			{ icon: "folder-plus", color: paletteColor("Blue"), title: t("home.quick.newFolder"), description: t("home.quick.newFolder.desc"), art: this.art("quick:new-folder", paletteColor("Blue"), 240, 96), key: "quick:new-folder", onRun: () => this.runAction("new-folder", () => this.askNewFolder(root)) },
+			{ icon: "file-up", color: paletteColor("Pink"), title: t("home.quick.importPdf"), description: t("home.quick.importPdf.desc"), art: this.art("quick:import-pdf", paletteColor("Pink"), 240, 96), key: "quick:import-pdf", onRun: () => this.host.importPdf(root) },
+		];
+		if (this.host.scanToNotebook) quick.push({ icon: "scan", color: paletteColor("Teal"), title: t("home.quick.scan"), description: t("home.quick.scan.desc"), art: this.art("quick:scan", paletteColor("Teal"), 240, 96), key: "quick:scan", onRun: () => this.host.scanToNotebook?.(root) });
+		renderHome(el, {
+			subjects: subjects.slice(0, DASH_SUBJECTS).map((s) => this.subjectCardOptions(s, "row")),
+			moreSubjects: subjects.length > DASH_SUBJECTS ? () => this.navigate("subjects") : null,
+			recent,
+			moreRecent: edits.length > 0 && this.host.openRecentPages ? () => this.host.openRecentPages?.() : visible.length > DASH_ROWS ? () => this.navigate("recent") : null,
+			stats,
+			weeks: this.weeks,
+			setWeeks: (w) => {
+				this.weeks = w;
+				this.app.workspace.requestSaveLayout();
+				this.render();
+			},
+			quick,
+		});
+		for (const card of Array.from(el.querySelectorAll<HTMLElement>(".nb-subject-card"))) {
+			const path = card.dataset.key?.slice("subject:".length);
+			if (path) this.wireFolderCard(card, path);
+		}
+	}
+
+	// ---------------------------------------------------------------- search
+
+	private searchesWide(): boolean {
+		const p = this.place;
+		return this.searchWide ?? (p === "all" || p === "home" || p === "subjects" || p === "tags");
+	}
+
+	/** The scope and filter of the current place, for the grid and for a search of "this view". */
+	private placeQuery(recursive: boolean): { scope: LibraryScope; filter: (e: LibraryEntry) => boolean } {
+		const p = this.place;
+		if (p === "archived") return { scope: "all", filter: this.isArchived };
+		if (isCollectionPlace(p)) {
+			const id = p.collection;
+			const c = this.collectionCtx();
+			return { scope: "all", filter: (e) => this.notArchived(e) && inCollection(id, e, c) };
+		}
+		if (p === "home" || p === "subjects" || p === "tags") return { scope: "all", filter: this.notArchived };
+		if (isFolderPlace(p)) return { scope: { folder: p.folder, recursive }, filter: this.notArchived };
+		return { scope: p, filter: this.notArchived };
+	}
+
+	/** Search results grouped by type (DESIGN.md §3): folders, tags, then notebooks with their matching page. */
+	private renderSearch(el: HTMLElement, tree: FolderNode): void {
+		const query = this.search.trim();
+		const wide = this.searchesWide();
+		const p = this.place;
+		const scoped = !(p === "all" || p === "home" || p === "subjects" || p === "tags");
+		if (scoped) {
+			const label = wide ? t("library.search.everywhere") : isFolderPlace(p) ? t("library.search.thisFolder") : t("library.search.thisView");
+			const b = el.createEl("button", { cls: "nb-chip notebook-lib-search-scope is-active", text: label, attr: { type: "button", "aria-pressed": String(wide), title: t("library.search.scope") } });
+			b.addEventListener("click", () => {
+				this.searchWide = !wide;
+				this.requestRender();
+			});
+		}
+		const terms = normalizeText(query).split(/\s+/).filter(Boolean);
+		const matches = (name: string) => {
+			const n = normalizeText(name);
+			return terms.every((x) => n.includes(x));
+		};
+		let any = false;
+		if (wide) {
+			const folders = flattenTree(tree).filter((n) => n.path !== this.root() && matches(n.name)).slice(0, 8);
+			if (folders.length > 0) {
+				any = true;
+				const sec = el.createEl("section", { cls: "nb-section nb-search-group" });
+				sectionHeader(sec, { icon: "folder", title: t("lib.search.folders") });
+				const list = sec.createDiv({ cls: "nb-panel nb-list" });
+				const counts = this.folderCounts();
+				for (const n of folders) {
+					const row = listRow(list, {
+						icon: "folder",
+						title: n.name,
+						meta: this.plural(counts.get(n.path) ?? 0, "library.notebooks.one", "library.notebooks.many"),
+						pills: [],
+						key: `sfolder:${n.path}`,
+						menuLabel: t("library.menu.more"),
+						onOpen: () => this.navigate({ folder: n.path }),
+						onMenu: (anchor) => {
+							const r = anchor.getBoundingClientRect();
+							this.folderMenu(n.path, r.left, r.bottom);
+						},
+					});
+					row.setAttribute(DROP_ATTR, n.path);
+				}
+			}
+			const tags = this.index.tags(this.notArchived).filter((x) => matches(x.tag)).slice(0, 12);
+			if (tags.length > 0) {
+				any = true;
+				const sec = el.createEl("section", { cls: "nb-section nb-search-group" });
+				sectionHeader(sec, { icon: "tag", title: t("lib.search.tags") });
+				renderTagChips(sec, this.tagChips(tags, this.subjects(tree)));
+			}
+		}
+		const { scope, filter } = this.placeQuery(true);
+		const hits = this.index.search({ search: query, scope: wide ? "all" : scope, sort: this.sort, filter: wide ? this.notArchived : filter });
+		if (hits.length > 0) {
+			any = true;
+			const sec = el.createEl("section", { cls: "nb-section nb-search-group" });
+			sectionHeader(sec, { icon: "library", title: t("lib.search.notebooks") });
+			const grid = sec.createDiv({ cls: "notebook-lib-grid is-search", attr: { role: "list" } });
+			const now = Date.now();
+			for (const hit of hits.slice(0, this.gridLimit)) this.notebookCard(grid, hit.entry, now, hit);
+			this.moreButton(sec, hits.length);
+		}
+		if (!any) this.renderEmpty(el, true);
+	}
+
+	private moreButton(parent: HTMLElement, total: number): void {
+		if (total <= this.gridLimit) return;
+		const b = parent.createEl("button", { cls: "nb-more-btn", text: t("lib.showMore", { n: String(Math.min(GRID_PAGE, total - this.gridLimit)) }), attr: { type: "button" } });
+		b.addEventListener("click", () => {
+			this.gridLimit += GRID_PAGE;
+			this.render();
+		});
+	}
+
+	// ---------------------------------------------------------------- notebook grid
+
+	private renderGrid(el: HTMLElement, tree: FolderNode): void {
+		const archivedView = this.place === "archived";
+		const { scope, filter } = this.placeQuery(false);
+		const found = this.index.query({ scope, sort: this.sort, filter });
 		// Pinned notebooks first (not in Recent or the archive), then each group in manual order when that sort is chosen.
 		const { pinned, rest } = arrangeEntries(found, this.keyOf, this.state, { manual: this.sort === "manual", pinnedFirst: this.place !== "recent" && !archivedView });
 		this.arrangement = { pinned: pinned.map((e) => e.path), rest: rest.map((e) => e.path) };
-		const entries = [...pinned, ...rest];
-		const folder = typeof this.place === "object" && "folder" in this.place ? this.place.folder : null;
+		const folder = isFolderPlace(this.place) ? this.place.folder : null;
 		const subfolders = folder !== null ? (flattenTree(tree).find((n) => n.path === folder)?.children ?? []) : [];
 
-		if (entries.length === 0 && subfolders.length === 0) {
-			this.renderEmpty(el, searching);
+		if (pinned.length + rest.length === 0 && subfolders.length === 0) {
+			this.renderEmpty(el, false);
 			return;
 		}
-		if (archivedView) el.createDiv({ cls: "notebook-lib-hint", text: t("library.archived.hint") });
-		else if (this.sort === "manual" && entries.length > 1) el.createDiv({ cls: "notebook-lib-hint", text: t("library.manual.hint") });
+		if (this.sort === "manual" && pinned.length + rest.length > 1 && !archivedView) el.createDiv({ cls: "notebook-lib-hint nb-hint", text: t("library.manual.hint") });
+		if (subfolders.length > 0) {
+			const counts = this.folderCounts();
+			const grid = el.createDiv({ cls: "nb-subject-grid is-tiles nb-subfolders" });
+			for (const node of subfolders) this.folderCard(grid, node, counts.get(node.path) ?? 0);
+		}
 		const grid = el.createDiv({ cls: "notebook-lib-grid", attr: { role: "list" } });
-		const counts = this.folderCounts();
-		for (const node of subfolders) this.folderCard(grid, node, counts.get(node.path) ?? 0);
 		const now = Date.now();
+		let shown = 0;
+		const limit = this.gridLimit;
 		if (pinned.length > 0) grid.createDiv({ cls: "notebook-lib-group", text: t("library.group.pinned") });
-		for (const entry of pinned) this.notebookCard(grid, entry, now);
-		if (pinned.length > 0 && rest.length > 0) grid.createDiv({ cls: "notebook-lib-group", text: t("library.group.others") });
-		for (const entry of rest) this.notebookCard(grid, entry, now);
+		for (const entry of pinned) if (shown++ < limit) this.notebookCard(grid, entry, now);
+		if (pinned.length > 0 && rest.length > 0 && shown < limit) grid.createDiv({ cls: "notebook-lib-group", text: t("library.group.others") });
+		for (const entry of rest) if (shown++ < limit) this.notebookCard(grid, entry, now);
+		this.moreButton(el, pinned.length + rest.length);
 	}
 
 	private renderEmpty(el: HTMLElement, searching: boolean): void {
@@ -993,31 +1513,45 @@ export class LibraryView extends ItemView {
 		let actions = false;
 		if (searching) {
 			title = t("library.empty.search", { query: this.search.trim() });
-		} else if (this.index.size === 0 && (s === "all" || (typeof s === "object" && "folder" in s))) {
+		} else if (this.index.size === 0 && (s === "all" || s === "subjects" || isFolderPlace(s))) {
 			title = t("library.empty.noneTitle");
 			body = t("library.empty.noneBody");
 			actions = true;
 		} else if (s === "archived") {
 			title = t("library.empty.archived");
+		} else if (s === "subjects") {
+			title = t("lib.empty.subjects");
+			actions = true;
 		} else if (s === "all" && this.index.size > 0) {
 			title = t("library.empty.allArchived");
-		} else if (s === "favorites") {
+		} else if (isCollectionPlace(s) && s.collection === "favourites") {
 			title = t("library.empty.favorites");
 		} else if (s === "recent") {
 			title = t("library.empty.recent");
-		} else if (typeof s === "object" && "tag" in s) {
+		} else if (isTagPlace(s)) {
 			title = t("library.empty.tag");
+		} else if (isCollectionPlace(s)) {
+			title = t("lib.empty.collection");
 		} else {
 			title = t("library.empty.folder");
-			actions = typeof s === "object" && "folder" in s;
+			actions = isFolderPlace(s);
 		}
-		setIcon(box.createDiv({ cls: "notebook-lib-empty-icon" }), searching ? "search-x" : "library");
+		const emptyArt = searching ? undefined : this.art(`empty:${typeof s === "string" ? s : JSON.stringify(s)}`, paletteColor("Indigo"), 240, 120);
+		if (emptyArt) box.createDiv({ cls: "nb-empty-art", attr: { "aria-hidden": "true" } }).setCssProps({ "--nb-art": `url("${emptyArt}")` });
+		else setIcon(box.createDiv({ cls: "notebook-lib-empty-icon" }), searching ? "search-x" : "library");
 		box.createDiv({ cls: "notebook-lib-empty-title", text: title });
 		if (body) box.createDiv({ cls: "notebook-lib-empty-body", text: body });
 		if (actions) {
 			const row = box.createDiv({ cls: "notebook-lib-empty-actions" });
-			this.actionButton(row, "file-plus", t("library.action.newNotebook"), () => this.host.createNotebook(this.currentFolder()), true);
-			this.actionButton(row, "file-up", t("library.action.importPdf"), () => this.host.importPdf(this.currentFolder()));
+			const button = (icon: string, label: string, run: () => void, cta = false) => {
+				const b = row.createEl("button", { cls: `nb-pill-btn${cta ? " mod-cta" : ""}`, attr: { type: "button" } });
+				setIcon(b.createSpan({ attr: { "aria-hidden": "true" } }), icon);
+				b.createSpan({ text: label });
+				b.addEventListener("click", run);
+			};
+			button("file-plus", t("library.action.newNotebook"), () => this.newNotebook(), true);
+			if (s === "subjects") button("folder-plus", t("library.action.newFolder"), () => this.newFolder());
+			else button("file-up", t("library.action.importPdf"), () => this.host.importPdf(this.currentFolder()));
 		}
 	}
 
@@ -1026,15 +1560,19 @@ export class LibraryView extends ItemView {
 	}
 
 	private folderCard(grid: HTMLElement, node: FolderNode, count: number): void {
-		const card = grid.createDiv({ cls: "notebook-lib-card is-folder", attr: { role: "listitem", [DROP_ATTR]: node.path } });
-		const main = card.createDiv({ cls: "notebook-lib-card-main", attr: { role: "button", tabindex: "0", "data-key": `fcard:${node.path}`, "aria-label": node.name } });
-		setIcon(main.createDiv({ cls: "notebook-lib-folder-cover" }), "folder");
-		main.createDiv({ cls: "notebook-lib-title", text: node.name, attr: { title: node.name } });
-		main.createDiv({ cls: "notebook-lib-meta", text: this.plural(count, "library.notebooks.one", "library.notebooks.many") });
-		const go = () => this.navigate({ folder: node.path });
-		main.addEventListener("click", go);
-		this.cardKeys(main, go);
-		attachPress({ el: main, onMenu: (x, y) => this.folderMenu(node.path, x, y) });
+		const color = this.folderColor(node.path) ?? colorFor(node.name);
+		const card = subjectCard(grid, {
+			name: node.name,
+			color,
+			seed: node.path,
+			lines: [this.plural(count, "library.notebooks.one", "library.notebooks.many")],
+			shape: "tile",
+			art: this.artOn(),
+			key: `fcard:${node.path}`,
+			onOpen: () => this.navigate({ folder: node.path }),
+		});
+		card.addClass("is-folder");
+		this.wireFolderCard(card, node.path);
 	}
 
 	/** Appends `h.text` with the highlighted ranges as <mark> nodes (no HTML parsing). */
@@ -1062,7 +1600,7 @@ export class LibraryView extends ItemView {
 		const cover = main.createDiv({ cls: "notebook-lib-cover" });
 		cover.setCssProps({ "--notebook-cover": entry.cover });
 		cover.createDiv({ cls: "notebook-lib-spine" });
-		cover.createDiv({ cls: "notebook-lib-page" });
+		const pageEl = cover.createDiv({ cls: "notebook-lib-page", attr: { "data-thumb-path": entry.path } });
 		if (pinned) setIcon(cover.createDiv({ cls: "notebook-lib-pin", attr: { role: "img", "aria-label": t("library.pinned"), title: t("library.pinned") } }), "pin");
 		const titleEl = main.createDiv({ cls: "notebook-lib-title", attr: { title: entry.name } });
 		if (hit?.title) this.appendHighlight(titleEl, hit.title);
@@ -1126,7 +1664,7 @@ export class LibraryView extends ItemView {
 			el: main,
 			onMenu: (x, y) => this.notebookMenu(entry.path, x, y),
 			startDrag: () => {
-				if (this.narrow) this.setDrawer(true);
+				if (this.mode === "phone") this.setRailOpen(true);
 				return createDiv({ cls: "notebook-lib-ghost", text: entry.name });
 			},
 			canDrop: (target) => {
@@ -1146,12 +1684,11 @@ export class LibraryView extends ItemView {
 				if (file && folder !== null) void this.moveFile(file, folder);
 			},
 			onDragEnd: () => {
-				if (this.narrow) this.setDrawer(false);
+				if (this.mode === "phone") this.setRailOpen(false);
 			},
 		});
 
-		this.cards.set(entry.path, card);
-		this.observer?.observe(card);
+		this.watchThumb(pageEl);
 	}
 
 	/** Enter/Space activate; arrows move between cards. */

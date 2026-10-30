@@ -14,6 +14,22 @@ No change to the notebook format (still v10). Clean-up for Obsidian's community 
 ### Fixed
 - Lint findings in runtime code: `globalThis` in the Zettelkasten id suffix (now the `crypto` global, same fallback), `document.createElement` in page thumbnails (now `activeDocument.createEl`).
 
+### Design system: Home and the library (0.12, DESIGN.md)
+
+No change to the notebook format (still v10). The library index is rebuilt once (index v5). Checked in the browser harness only; not verified in Obsidian or on a device. Manual steps 440-459 in `docs/testing.md`.
+
+#### Added
+- **Notebook home** (`src/library/home-view.ts`, `home-surface.ts`): a new view and command *Open Notebook home*; the ribbon icon opens it. Subject folder cards, recent notes (this device's recently edited pages), statistics over 1, 4 or 12 weeks computed on the device (notebooks created, pages edited, PDF notebooks changed, tags used, with a sparkline), quick actions (New notebook and New folder through the registry actions `new-notebook` / `new-folder`, Import PDF, Scan). Home and the library are two surfaces of one view: one index, one reading pass, one thumbnail queue.
+- **Inbox bell** (`src/library/inbox-bell.ts`) in the Home and library headers: the number of Zettelkasten Inbox items to process, a popover (a sheet on a phone) with the items and the Inbox's actions, and *Open inbox*. `zettel/index.ts` exposes the Inbox service (`inboxService(plugin)`).
+- **Design tokens** (`styles.css`, *Notebook design tokens*): the `--nb-*` palette of DESIGN.md §2 for the dark and light themes and the *Follow Obsidian theme* mapping on `body.notebook-style-obsidian`; the older token names are aliases, so the notebook view follows the same palette.
+- **Components** (`src/ui/components/`): subject card, section header, chips and filter chips, list row and pills, favourite row, KPI tile, quick action, search pill, navigation rail, icon square.
+- Decoration that switches off with reduced motion: generated art behind the page header, on subject cards, smart collections, quick actions and empty states, and a soft glow behind section titles (`src/ui/art/generative-art.ts` and `src/ui/palette.ts` are stubs of the art module until it is merged).
+
+#### Changed
+- **Library rebuilt** (`src/library/library-view.ts`): a navigation rail (Home, Notebooks, PDF, Tags, Settings, the folder tree with subject colours, Archive, Trash, Check library) that folds to icons on a tablet in portrait and becomes a sheet on a phone; header with search, tag filter, sort, grid / list and *New*; filter chips; subject cards; smart collections (To study, Favourites, With PDF, Recent, Exams, computed and shown only when not empty); frequent tags; recent and favourite notebooks with page thumbnails; the grid of all notebooks drawn 60 at a time; search results grouped as folders, tags and notebooks. Pin, archive, manual order, drag and drop, the library check, import, scan, lecture, move, rename and delete keep their code paths.
+- The *Favourites* filter now also lists pinned notebooks (the *Favourites* smart collection).
+- Library index v5: entries also count PDF pages and open markers (gap, question, homework), for *With PDF* and *To study*.
+
 ## 0.11.1 — 2026-10-30
 
 No change to the notebook format (still v10). S Pen side-button detection and a much more complete Pen button test log; not verified on the device. Manual steps 404-406 in `docs/testing.md`.
