@@ -53,10 +53,30 @@ export interface NotebookSettings extends CompanionSettings {
 	edgeRight: boolean;
 	edgeTop: boolean;
 	edgeBottom: boolean;
-	/** What the pen's side button does: radial menu at the nib, erase while held, or nothing. */
-	penButtonAction: PenButtonAction;
-	/** Fallback for pens whose button never reaches the app: holding the nib still opens the radial menu. */
-	penLongPress: boolean;
+	/**
+	 * What the pen's side button does. Default: a click opens the radial menu, the button held while the nib
+	 * touches erases. (Replaces the 0.5 key `penButtonAction`, whose saved default "radial" must not stick.)
+	 */
+	penSideButton: PenButtonAction;
+	/**
+	 * Fallback for pens whose button never reaches the app: holding the nib still opens the radial menu. `null` =
+	 * never chosen: it is on only while `penButtonSeen` is false. An explicit true / false always wins.
+	 */
+	penHoldStill: boolean | null;
+	/** The device has delivered a side-button signal at least once (set by the app, not shown in the settings tab). */
+	penButtonSeen: boolean;
+	/**
+	 * A pen press with pressure exactly 0, after the pen was hovering, is the side button (what Samsung / Chromium
+	 * report). Turn off for a device that reports pressure 0 on real contact.
+	 */
+	penZeroPressureButton: boolean;
+	/**
+	 * Side button pressed while the nib touches (a pen move with `button 0`, not confirmed on every device): ends the
+	 * stroke without discarding it and switches to the side button's tool. Turn off if ordinary writing misfires.
+	 */
+	penChordButton: boolean;
+	/** A finger held still on the page opens the radial menu beside it (only while finger drawing is off). */
+	fingerLongPress: boolean;
 	/** Instant start: the notebook and page (1-based) the reader was on last, for "Continue last notebook". Not shown in the settings tab. */
 	lastNotebookPath: string;
 	lastNotebookPage: number;
@@ -88,12 +108,18 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	edgeRight: true,
 	edgeTop: false,
 	edgeBottom: true,
-	penButtonAction: "radial",
-	penLongPress: false,
+	penSideButton: "radial-eraser",
+	penHoldStill: null,
+	penButtonSeen: false,
+	fingerLongPress: true,
+	penZeroPressureButton: true,
+	penChordButton: true,
 	lastNotebookPath: "",
 	lastNotebookPage: 1,
 	...DEFAULT_COMPANION_SETTINGS,
 };
+
+const PEN_BUTTON_ACTIONS: readonly PenButtonAction[] = ["radial-eraser", "radial", "eraser", "lasso", "previous", "off"];
 
 /** Merges saved data over the defaults, ignoring values of the wrong type. */
 export function readSettings(data: unknown): NotebookSettings {
@@ -125,8 +151,16 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.edgeRight === "boolean") s.edgeRight = d.edgeRight;
 	if (typeof d.edgeTop === "boolean") s.edgeTop = d.edgeTop;
 	if (typeof d.edgeBottom === "boolean") s.edgeBottom = d.edgeBottom;
-	if (d.penButtonAction === "radial" || d.penButtonAction === "eraser" || d.penButtonAction === "off") s.penButtonAction = d.penButtonAction;
-	if (typeof d.penLongPress === "boolean") s.penLongPress = d.penLongPress;
+	if (PEN_BUTTON_ACTIONS.includes(d.penSideButton as PenButtonAction)) s.penSideButton = d.penSideButton as PenButtonAction;
+	// 0.5.x saved every setting, so its "radial" is only the old default; an explicit "eraser" / "off" is kept.
+	else if (d.penButtonAction === "eraser" || d.penButtonAction === "off") s.penSideButton = d.penButtonAction;
+	// 0.5.1 saved `penLongPress: false` for everyone (its default), so only an explicit true is carried over.
+	if (typeof d.penHoldStill === "boolean") s.penHoldStill = d.penHoldStill;
+	else if (d.penLongPress === true) s.penHoldStill = true;
+	if (typeof d.penButtonSeen === "boolean") s.penButtonSeen = d.penButtonSeen;
+	if (typeof d.fingerLongPress === "boolean") s.fingerLongPress = d.fingerLongPress;
+	if (typeof d.penZeroPressureButton === "boolean") s.penZeroPressureButton = d.penZeroPressureButton;
+	if (typeof d.penChordButton === "boolean") s.penChordButton = d.penChordButton;
 	if (typeof d.lastNotebookPath === "string") s.lastNotebookPath = d.lastNotebookPath;
 	if (typeof d.lastNotebookPage === "number" && Number.isInteger(d.lastNotebookPage) && d.lastNotebookPage >= 1) s.lastNotebookPage = d.lastNotebookPage;
 	Object.assign(s, readCompanionSettings(d));

@@ -1,6 +1,7 @@
 import { setIcon } from "obsidian";
 import { t } from "../i18n";
-import { clampCenter, pushRecentColor, recentColors, sectorAt, sectorPath, sectorPoint, type RadialShape } from "../ink/radial";
+import { clampCenter, fingerMenuCenter, pushRecentColor, recentColors, sectorAt, sectorPath, sectorPoint, type RadialShape } from "../ink/radial";
+import type { MenuSource } from "../ink/pointer-controller";
 import { HIGHLIGHTER_COLORS, PEN_COLORS, type ToolbarState, type ToolName } from "./toolbar";
 
 export interface RadialItem {
@@ -46,12 +47,18 @@ export class RadialMenu {
 		return this.root !== null;
 	}
 
-	/** Opens the menu centred near (x, y) (CSS px relative to the host). `buttonHeld`: the pen's side button is still down. */
-	open(x: number, y: number, items: RadialItem[], buttonHeld = true): void {
+	/**
+	 * Opens the menu near (x, y) (CSS px relative to the host). `buttonHeld`: the pen's side button is still down
+	 * (releasing it over a sector chooses it). `finger`: a finger holds the page at (x, y); the ring opens beside it.
+	 */
+	open(x: number, y: number, items: RadialItem[], opts: { buttonHeld?: boolean; finger?: boolean } = {}): void {
+		const buttonHeld = opts.buttonHeld ?? true;
 		this.close();
 		if (items.length === 0) return;
 		const rect = this.host.getBoundingClientRect();
-		[this.cx, this.cy] = clampCenter(x, y, rect.width, rect.height, RADIAL_OUTER);
+		[this.cx, this.cy] = opts.finger
+			? fingerMenuCenter(x, y, rect.width, rect.height, RADIAL_OUTER)
+			: clampCenter(x, y, rect.width, rect.height, RADIAL_OUTER);
 		this.items = items;
 		this.shape = { inner: RADIAL_INNER, outer: RADIAL_OUTER, count: items.length };
 		this.hover = -1;
@@ -242,7 +249,11 @@ export class PenRadial {
 		if (this.recent[0]?.toLowerCase() !== state.penColor.toLowerCase()) this.recent = pushRecentColor(this.recent, state.penColor);
 	}
 
-	open(x: number, y: number): void {
+	/**
+	 * `source`: how it was asked for. Only the side button is still down when the menu opens; after a pen hold
+	 * or a finger long-press the contact is already on the page, and lifting it must not choose by itself.
+	 */
+	open(x: number, y: number, source: MenuSource = "button"): void {
 		if (!this.ctx.editable() || this.menu.isOpen) return;
 		const tools = this.ctx.tools();
 		const items: RadialItem[] = TOOL_ITEMS.map(([tool, icon, label]) => ({ id: `tool:${tool}`, label: t(label), icon, active: tools.tool === tool }));
@@ -252,7 +263,10 @@ export class PenRadial {
 		for (const color of colors.reverse()) {
 			items.push({ id: `color:${color}`, label: `${t("tool.color")} ${color}`, color, active: tools.tool === "pen" && tools.penColor.toLowerCase() === color.toLowerCase() });
 		}
-		this.menu.open(x, y, items);
+		this.menu.open(x, y, items, {
+			buttonHeld: source === "button",
+			finger: source === "finger",
+		});
 	}
 
 	close(): void {

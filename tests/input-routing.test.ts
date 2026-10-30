@@ -157,17 +157,21 @@ describe("radial menu geometry", () => {
 describe("settings for input routing", () => {
 	it("has safe defaults and ignores bad values", () => {
 		expect(DEFAULT_SETTINGS.edgeRejection).toBe(false);
-		expect(DEFAULT_SETTINGS.penButtonAction).toBe("radial");
-		const s = readSettings({ edgeRejection: true, edgeRejectionPx: 1000, edgeLeft: "yes", penButtonAction: "launch" });
+		expect(DEFAULT_SETTINGS.penSideButton).toBe("radial-eraser");
+		const s = readSettings({ edgeRejection: true, edgeRejectionPx: 1000, edgeLeft: "yes", penSideButton: "launch" });
 		expect(s.edgeRejection).toBe(true);
 		expect(s.edgeRejectionPx).toBe(DEFAULT_SETTINGS.edgeRejectionPx);
 		expect(s.edgeLeft).toBe(DEFAULT_SETTINGS.edgeLeft);
-		expect(s.penButtonAction).toBe("radial");
-		expect(readSettings({ penButtonAction: "eraser", edgeRejectionPx: 40, edgeTop: true }).penButtonAction).toBe("eraser");
+		expect(s.penSideButton).toBe("radial-eraser");
+		expect(readSettings({ penSideButton: "eraser", edgeRejectionPx: 40, edgeTop: true }).penSideButton).toBe("eraser");
+		// 0.5.x saved its default "radial" for everyone: it does not stick; an explicit "eraser" / "off" does.
+		expect(readSettings({ penButtonAction: "radial" }).penSideButton).toBe("radial-eraser");
+		expect(readSettings({ penButtonAction: "eraser" }).penSideButton).toBe("eraser");
+		expect(readSettings({ penButtonAction: "off" }).penSideButton).toBe("off");
 	});
 
 	it("maps to the policy settings", () => {
-		const p = policySettings(readSettings({ edgeRejection: true, edgeRejectionPx: 30, edgeBottom: false, penButtonAction: "off" }));
+		const p = policySettings(readSettings({ edgeRejection: true, edgeRejectionPx: 30, edgeBottom: false, penSideButton: "off" }));
 		expect(p.edge).toEqual({ enabled: true, widthPx: 30, left: true, right: true, top: false, bottom: false });
 		expect(p.penButton).toBe("off");
 	});
