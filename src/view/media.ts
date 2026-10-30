@@ -101,6 +101,11 @@ export class NotebookMedia implements MediaSource {
 		this.pending.delete(id);
 	}
 
+	/** The assets stored but not yet in the document (read-only: the library check protects their files). */
+	pendingAssets(): Asset[] {
+		return [...this.pending.values()];
+	}
+
 	async readAsset(id: string): Promise<ArrayBuffer> {
 		const asset = this.asset(id);
 		const file = asset && resolveAssetFile(this.app, asset, this.folder());

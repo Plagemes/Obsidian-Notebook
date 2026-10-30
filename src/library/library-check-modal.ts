@@ -1,16 +1,20 @@
 /**
  * The Obsidian side of the library check (roadmap 27): the vault as a `CheckSource`, the report dialog and the confirmation
- * that lists the files before they go to the Obsidian trash. The decisions live in library/library-check.ts.
+ * that lists the files before they are moved to the recoverable folder `<notebooks folder>/_trash/assets/`. The decisions
+ * live in library/library-check.ts.
  */
 import { Modal, normalizePath, type App } from "obsidian";
 import { t } from "../i18n";
 import { openNotebookAtPage } from "../integration/open";
 import { backupFolder, type NotebookSettings } from "../settings";
+import { ensureFolder, sidecarDeviceId, vaultDeviceFileAdapter } from "../storage/vault-io";
 import { showErrorNotice, showNotice } from "../view/notice";
 import {
-	assetsDir, formatBytes, runLibraryCheck, trashOrphans, type AssetFile, type CheckConfig, type CheckSource, type LibraryCheckReport,
-	type ScanCache, type Trasher,
+	assetsDir, assetTrashDir, formatBytes, moveOrphans, runLibraryCheck, type AssetFile, type CheckConfig, type CheckSource,
+	type LibraryCheckReport, type LiveReferences, type Mover, type RunOptions, type ScanCache,
 } from "./library-check";
+import { liveAssetIds, type JournalReader } from "./library-check-live";
+import { LibraryCheckSeenStore } from "./library-check-seen";
 
 /** Unchanged notebooks are not read again when the check is repeated (keyed by path, modification time and size). */
 const sessionCache: ScanCache = new Map();
@@ -28,16 +32,36 @@ export function vaultCheckSource(app: App): CheckSource {
 }
 
 /**
- * Files go to the trash with `vault.trash(file, true)`: the system trash, or Obsidian's `.trash` when that is not available.
- * Deliberately not `fileManager.trashFile`: that follows the user's *Deleted files* setting, which can be "permanently delete".
+ * Files are moved with a plain rename to `<notebooks folder>/_trash/assets/`: they stay in the vault, so a sync service sees a
+ * move and not a delete, and putting one back is a move back into `_assets/`. Deliberately not `vault.trash` or
+ * `fileManager.trashFile`: both are deletions as far as the vault (and so the other devices) is concerned, and the second
+ * follows the *Deleted files* setting, which can be "permanently delete". A plain rename rewrites no links.
  */
-function vaultTrasher(app: App): Trasher {
+function vaultMover(app: App): Mover {
 	return {
-		trash: async (path) => {
-			const file = app.vault.getFileByPath(path);
-			if (!file) throw new Error(`"${path}" does not exist`);
-			await app.vault.trash(file, true);
+		move: async (from, to) => {
+			const file = app.vault.getFileByPath(from);
+			if (!file) throw new Error(`"${from}" does not exist`);
+			await ensureFolder(app, to.slice(0, to.lastIndexOf("/")));
+			await app.vault.rename(file, to);
 		},
+	};
+}
+
+/** What the check needs besides the vault: where the instant-save journal is, and what the open notebooks hold in memory. */
+export interface LibraryCheckLive {
+	/** The journal folder in the plugin's config folder. */
+	journalFolder: string;
+	/** For every open notebook view: its document, its undo and redo history and its pending media (NotebookView.libraryCheckRoots). */
+	openRoots(): readonly unknown[];
+}
+
+function journalReader(app: App): JournalReader {
+	const adapter = app.vault.adapter;
+	return {
+		exists: (path) => adapter.exists(path),
+		list: async (folder) => (await adapter.list(folder)).files,
+		read: (path) => adapter.read(path),
 	};
 }
 
@@ -48,9 +72,18 @@ function configFor(settings: NotebookSettings): CheckConfig {
 
 const breathe = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
+/** What the check is given besides the vault: the open notebooks and the journal, and this device's record of first sightings. */
+function checkOptions(app: App, settings: () => NotebookSettings, live: LibraryCheckLive): Pick<RunOptions, "cache" | "live" | "seen"> {
+	return {
+		cache: sessionCache,
+		live: (): Promise<LiveReferences> => liveAssetIds(() => live.openRoots(), journalReader(app), live.journalFolder),
+		seen: new LibraryCheckSeenStore(vaultDeviceFileAdapter(app), () => settings().folder, sidecarDeviceId(app)),
+	};
+}
+
 /** Opens the library check. */
-export function openLibraryCheck(app: App, settings: () => NotebookSettings): void {
-	new LibraryCheckModal(app, settings).open();
+export function openLibraryCheck(app: App, settings: () => NotebookSettings, live: LibraryCheckLive): void {
+	new LibraryCheckModal(app, settings, live).open();
 }
 
 class LibraryCheckModal extends Modal {
@@ -58,7 +91,7 @@ class LibraryCheckModal extends Modal {
 	private busy = false;
 	private report: LibraryCheckReport | null = null;
 
-	constructor(app: App, private readonly settings: () => NotebookSettings) {
+	constructor(app: App, private readonly settings: () => NotebookSettings, private readonly live: LibraryCheckLive) {
 		super(app);
 	}
 
@@ -81,7 +114,7 @@ class LibraryCheckModal extends Modal {
 		const config = configFor(this.settings());
 		try {
 			this.report = await runLibraryCheck(vaultCheckSource(this.app), config, {
-				cache: sessionCache,
+				...checkOptions(this.app, this.settings, this.live),
 				progress: (done, total) => status.setText(t("libcheck.checking", { done: String(done), total: String(total) })),
 				cancelled: () => this.cancelled,
 				breathe,
@@ -133,12 +166,14 @@ class LibraryCheckModal extends Modal {
 		// Unused files.
 		const orphans = this.section(t("libcheck.orphans.title", { n: String(r.orphans.length), size: formatBytes(r.orphanBytes) }));
 		if (!r.complete) {
-			orphans.createEl("p", { cls: "setting-item-description", text: t("libcheck.incomplete", { n: String(r.unavailable) }) });
+			if (r.unavailable > 0) orphans.createEl("p", { cls: "setting-item-description", text: t("libcheck.incomplete", { n: String(r.unavailable) }) });
+			if (r.openIncomplete) orphans.createEl("p", { cls: "setting-item-description", text: t("libcheck.openIncomplete") });
 			if (r.unjudged.count > 0) orphans.createEl("p", { cls: "setting-item-description", text: t("libcheck.unjudged", { n: String(r.unjudged.count), size: formatBytes(r.unjudged.bytes) }) });
 		} else if (r.orphans.length === 0) {
 			orphans.createEl("p", { cls: "setting-item-description", text: t("libcheck.orphans.none") });
 		} else {
-			orphans.createEl("p", { cls: "setting-item-description", text: t("libcheck.orphans.note", { folder: assetsDir(configFor(this.settings()).root) }) });
+			const root = configFor(this.settings()).root;
+			orphans.createEl("p", { cls: "setting-item-description", text: t("libcheck.orphans.note", { folder: assetsDir(root), target: assetTrashDir(root) }) });
 			const review = orphans.createEl("button", { cls: "mod-warning", text: t("libcheck.orphans.review") });
 			review.addEventListener("click", () => this.review(r.orphans));
 		}
@@ -166,21 +201,22 @@ class LibraryCheckModal extends Modal {
 	}
 
 	private review(orphans: readonly AssetFile[]): void {
-		new OrphanReviewModal(this.app, orphans, () => void this.moveToTrash(orphans)).open();
+		const root = configFor(this.settings()).root;
+		new OrphanReviewModal(this.app, orphans, assetsDir(root), assetTrashDir(root), () => void this.moveToTrash(orphans)).open();
 	}
 
 	private async moveToTrash(confirmed: readonly AssetFile[]): Promise<void> {
 		if (this.busy) return;
 		this.busy = true;
 		try {
-			const result = await trashOrphans(vaultCheckSource(this.app), configFor(this.settings()), confirmed, vaultTrasher(this.app), {
-				cache: sessionCache,
+			const result = await moveOrphans(vaultCheckSource(this.app), configFor(this.settings()), confirmed, vaultMover(this.app), {
+				...checkOptions(this.app, this.settings, this.live),
 				breathe,
 			});
 			if (result.incomplete) showNotice(t("libcheck.incompleteNow"));
 			else {
 				const bytes = result.moved.reduce((n, f) => n + f.size, 0);
-				showNotice(t("libcheck.moved", { n: String(result.moved.length), size: formatBytes(bytes) }));
+				showNotice(t("libcheck.moved", { n: String(result.moved.length), size: formatBytes(bytes), target: result.folder }));
 				if (result.skipped.length > 0) showNotice(t("libcheck.skipped", { n: String(result.skipped.length) }));
 				if (result.failed.length > 0) showErrorNotice(t("libcheck.moveFailed", { n: String(result.failed.length), error: result.failed[0]!.error }));
 			}
@@ -195,7 +231,10 @@ class LibraryCheckModal extends Modal {
 
 /** The confirmation: every file that would be moved is listed, with its size. Nothing happens before the button. */
 class OrphanReviewModal extends Modal {
-	constructor(app: App, private readonly files: readonly AssetFile[], private readonly confirm: () => void) {
+	constructor(
+		app: App, private readonly files: readonly AssetFile[], private readonly source: string, private readonly target: string,
+		private readonly confirm: () => void,
+	) {
 		super(app);
 	}
 
@@ -204,7 +243,7 @@ class OrphanReviewModal extends Modal {
 		this.setTitle(t("libcheck.confirm.title"));
 		const el = this.contentEl;
 		const bytes = this.files.reduce((n, f) => n + f.size, 0);
-		el.createEl("p", { text: t("libcheck.confirm.body", { n: String(this.files.length), size: formatBytes(bytes) }) });
+		el.createEl("p", { text: t("libcheck.confirm.body", { n: String(this.files.length), size: formatBytes(bytes), target: this.target, source: this.source }) });
 		const list = el.createDiv({ cls: "notebook-libcheck-list" });
 		for (const f of this.files) {
 			const row = list.createDiv({ cls: "notebook-libcheck-row" });
@@ -225,4 +264,3 @@ class OrphanReviewModal extends Modal {
 		this.contentEl.empty();
 	}
 }
-
