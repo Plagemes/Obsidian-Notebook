@@ -274,6 +274,9 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Export as Markdown with page images (roadmap 382, wave 0.9): vault folder and 100 / 150 / 200 dpi; `page-001.png`… drawn on a canvas like the PDF export, then `notebook.md` (title, page images, text boxes as text in reading order, bookmarks as headings); unique names, never overwrites | ✅ | ✅ Markdown text (title, bookmarks with and without title, escaping of user text, link targets), file names (three digits, never an existing name, names already chosen in the same export), render size and caps; ❌ canvas drawing of pages, PNG encoding, writing through the vault, a Markdown viewer outside Obsidian | | ✅ | steps 268-270; PNG rendering of PDF and picture backgrounds depends on pdf.js and the WebView |
 | Night mode (roadmap 367, wave 0.9): dark page with light ink at render time (paper, paper lines, ink, text boxes, live and wet ink, highlighter with a screen blend, backgrounds dimmed); a view setting and a toggle (All actions, command); stored colours, exports and thumbnails unchanged | ✅ | ✅ colour mapping (near-black becomes light, hue kept, contrast at least 4.5:1 for a palette of 12 inks, translucency kept, unknown colours untouched, highlighter band, dim paper lines), settings defaults; ❌ canvas drawing, wet-ink highlighter blend in CSS, legibility on a real screen | | ✅ | step 271; the look of the colours is a judgement that needs real screens |
 | Crop PDF margins (roadmap 376, wave 0.9): content box of each PDF page from a ~100 px render, cached for the session; the view fits the box (widened by the ink) to the width in continuous and page-by-page mode; toggle on the PDF contextual bar, in All actions and as a command; view-only | ✅ | ✅ content-box detection on synthetic bitmaps (bounds, padding, speck and grey noise ignored, transparent pixels, blank page, minimum size), window of a page with margins and with ink in the margin, fit and pan clamp with a window, layout windows (union, dropped when useless), page-by-page fit; ❌ the measuring render with pdf.js, re-layout while pages are measured, use on a phone | | ✅ | steps 272-274; only side margins are cropped; continuous mode crops only when every page is a measured PDF page |
+| Quick date and time stamp (roadmap 356, wave 0.10): *Date and time stamp* (All actions sheet, command) inserts a text box with the date and time at the place the pen last touched a page (within the last 5 minutes; otherwise the middle of the page in view), sized to the text and kept inside the page; format set in the settings (tokens YYYY MM DD HH hh mm ss A MMMM dddd, literal text in [brackets], month and weekday names in Obsidian's language); one undo step; the box is selected afterwards | ✅ | ✅ `tests/date-stamp.test.ts` (format, tokens, 12 hour clock, language, fall back to the default, placement, one undo step, valid document); ❌ the action, the pen position and the settings field | | ✅ | steps CS1-CS3 |
+| Lasso selection across page boundaries (roadmap 359, wave 0.10): a lasso that reaches into another page selects the ink and the elements inside it on every page it touches; one frame (the first page with something selected) for the frame, handles and drag; move, scale, rotate, delete, restyle, copy, cut, duplicate, layer order and *Save as stamp* work on the whole selection; after a move every item belongs to the page under its centre (re-parented, ids kept; items outside every page stay on their own page), as one undo step; a lasso inside one page behaves as before | ✅ | ✅ `tests/cross-page.test.ts` (frames, pages touched, selection on both pages, bounds, move without and with re-parenting and one undo step, undo order of several removals, text boxes, copy in one frame); ❌ the lasso, the drag and the floating drawing over the gap between pages (renderer), restyle and duplicate on the view | | ✅ | steps CS4-CS8 |
+| Cross-device clipboard (roadmap 362, wave 0.10): *Copy to other devices* writes the selection (strokes, elements, picture records; the pictures themselves are already in `_assets`) to this device's `_meta/clipboard-<device>.json` (last 5 copies, 3 MB cap); *Paste from another device…* lists the other devices' copies newest first (what, how long ago, which device) and pastes the chosen one with new ids; written only by the copy action; this device's file is never overwritten when it is unreadable, empty or from a newer version (a copy is kept and the copy refused); other devices' files are only read | ✅ | ✅ `tests/shared-clip.test.ts` (entry round trip, new ids, file parse and unknown entries, entry and size limits, store: create, list, never overwrite unreadable / empty / future files, too large, skipped unreadable files); ❌ the actions, the list and pasting pictures (needs two devices and a synced vault) | | ✅ | steps CS9-CS14 |
 
 ## Automated checks
 
@@ -1030,6 +1033,55 @@ TL6. **Limits.** Write on the last line of the page near the right edge: the vie
 | TL5 | | |
 | TL6 | | |
 
+### Clipboard and stamps (wave 0.10)
+
+Not verified on a device. Setup: a notebook with at least three pages (plain paper) and some writing near the bottom of page 1 and the top of page 2; for CS9 to CS14 two devices (tablet and phone) with the same synced vault and a notebook open on each.
+
+CS1. **Stamp at the pen.** Write a word with the pen, lift it, then ⊞ *All actions* → *Date and time stamp* (or the command from the palette). Expected: a text box with the date and time (`2026-10-29 14:05`) appears where the pen last touched, inside the page, and is selected; one *Undo* removes it. The text size and colour are the text tool's.
+
+CS2. **Stamp without a pen position.** Open a notebook, scroll to another page without touching it with the pen and run the action: the stamp is in the middle of the page in view. Wait more than 5 minutes after the last pen touch and run it again: middle of the page again.
+
+CS3. **Format.** Settings → *Date and time stamp format*: type `dddd D MMMM [at] HH:mm` and stamp: `Thursday 29 October at 14:05` (Italian names when Obsidian is in Italian). Clear the field: the default format returns. Try `hh:mm A`.
+
+CS4. **Lasso over two pages.** Zoom out until the bottom of page 1 and the top of page 2 are on the screen. With the lasso draw a loop that starts on page 1 and ends on page 2, around writing on both. Expected: the writing on both pages is inside one dashed frame, with the handles at the corners of that frame (they may be over the gap between the pages).
+
+CS5. **Move across.** Drag the selection down so that the writing from page 1 lies over page 2: while dragging it floats over the gap without being cut at the page edge. Lift: the writing that is over page 2 now belongs to page 2 (lasso it from page 2 alone to check; save and reopen), the writing that stayed over page 1 is on page 1. One *Undo* puts everything back where it was; *Redo* moves it again. Drag so that part ends outside every page: that part stays on its own page.
+
+CS6. **Scale and delete.** Select across two pages again and drag the scale handle: all of it scales together. Select again and *Delete* (button or key): the writing on both pages goes; one *Undo* brings it back.
+
+CS7. **Colour, copy, duplicate.** With a cross-page selection change the colour or width in the bar: the ink on both pages changes, one *Undo* restores both. *Copy*, go to page 3, *Paste*: the writing arrives as one piece. *Duplicate*: each page gets its copy next to its own original.
+
+CS8. **Single page is unchanged.** Draw a lasso inside one page: it selects as before, with no frame over the gap, and moving it keeps it on its page. A lasso that touches a second page but encloses nothing there selects as before.
+
+CS9. **Copy to other devices.** On the tablet lasso some writing and a picture, tap *Copy to other devices* in the selection bar (⊞ *All actions* on a narrow screen; also a command). Expected: a notice says it was copied. In the vault, `<notebooks folder>/_meta/clipboard-<device>.json` exists (the device id is 8 hex digits).
+
+CS10. **Paste on the phone.** Wait until the vault has synced. On the phone open a notebook, choose the lasso tool and tap *Paste from another device…* (bar, ⊞ *All actions* or the command). Expected: a list with the copy from the tablet (strokes, pictures, text boxes, "2 min ago", "device xxxxxxxx"), newest first. Tap it: the writing and the picture appear in the middle of the page in view, selected, as one undo step. Paste it a second time: new copies (not the same objects).
+
+CS11. **The phone's own clipboard is untouched.** On the phone copy something with the ordinary *Copy*, paste from the tablet, then *Paste*: the ordinary paste still pastes what you copied on the phone.
+
+CS12. **Picture not synced yet.** Copy a picture on the tablet and, before the picture file reaches the phone (airplane mode or a paused sync), paste on the phone: the strokes arrive and a notice says a picture could not be found; paste again after the sync: the picture arrives.
+
+CS13. **Damaged or empty file.** Cut this device's `clipboard-<device>.json` in half (or empty it) and tap *Copy to other devices*: a notice says the file cannot be read and nothing was written; the file is as you left it and one `clipboard.unreadable-….json` copy exists next to it (not for an empty file). Do the same to the other device's file: the paste list says some files cannot be read yet and still lists the others.
+
+CS14. **Size limit and age.** Copy ten times: the file keeps the last five. Select an entire notebook's worth of ink (or paste a very large picture selection) and copy: a notice says the selection is too large (the cap is about 3 MB) and the file is not changed. Nothing is written to any clipboard file except by the copy action.
+
+| Step | Device / Obsidian version | Result | Notes |
+|---|---|---|---|
+| CS1 Stamp at the pen | | | |
+| CS2 Stamp without a pen position | | | |
+| CS3 Format | | | |
+| CS4 Lasso over two pages | | | |
+| CS5 Move across | | | |
+| CS6 Scale and delete | | | |
+| CS7 Colour, copy, duplicate | | | |
+| CS8 Single page is unchanged | | | |
+| CS9 Copy to other devices | | | |
+| CS10 Paste on the phone | | | |
+| CS11 The phone's own clipboard is untouched | | | |
+| CS12 Picture not synced yet | | | |
+| CS13 Damaged or empty file | | | |
+| CS14 Size limit and age | | | |
+
 ## Quick check — Windows
 
 Mouse: draw, erase (both modes), undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scroll, Ctrl+wheel zoom, resize the window (the page refits), add a page, use every page menu action with undo, create notebooks with each paper and size, export PDF and SVG and open them, lasso select/move/resize/rotate/delete, close and reopen the notebook. Also: open the library and use every action, import a PDF and write on it, insert a PDF range and an image page, use the shape, text, image and ruler tools, scan from a photo file, use the Pages panel, run *Restore a previous version*, insert an embed in a note and open an `obsidian://notebook` link. With a pen tablet or Surface pen: pressure and eraser end (`buttons & 32`).
@@ -1045,7 +1097,8 @@ Mouse: draw, erase (both modes), undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scr
 - Library: search covers titles, tags, page tags and text-box text only (no handwriting recognition). Folders are deleted to the trash (see steps 82-91). The library index is a cache and is rebuilt after it is deleted or when it is out of date. Duplicating a notebook that uses a PDF shares the same asset file.
 - PDFs and images live in `_assets/` and are referenced by content hash; deleting or renaming those files breaks the pages that use them (a placeholder is shown and the ink is kept). There is no library check or clean-up of unused assets yet. A notebook moved to another vault needs its `_assets` files too.
 - Scans: the corners are detected on a downscaled image and may need correcting by hand; the photo comes from the system camera or a file picker, there is no live camera view inside the plugin.
-- A lasso selection belongs to one page: moving it to another page is done with cut and paste (or copy and paste). Resize is uniform only (one handle). Strokes moved partly outside their page are clipped when drawn.
+- A lasso selection normally belongs to one page; a lasso that reaches into another page selects on both (wave 0.10, steps CS4-CS8) and moving it re-parents the items to the page under them. Cross-page selections do not carry ink that follows objects, and *Make white transparent* only acts on the images of the first page. Resize is uniform only (one handle). Strokes moved partly outside their page are clipped when drawn.
+- Cross-device clipboard (wave 0.10): not verified with two devices. It needs a synced vault; it keeps the last five copies of each device (3 MB cap) and lists devices by an 8 digit id, not by name; a picture that has not synced yet is skipped with a notice. Nothing is removed from another device's file; old files are not cleaned up.
 - Stabilization is applied while writing and the filtered points are what is saved; it cannot be changed after the fact. New strokes use the new ink geometry (render 2); old strokes keep their look (render 1).
 - The segment eraser removes whole point runs: very short leftover pieces (a single point) are dropped.
 - Every save serializes the whole document. The re-validation is full under 1 MB and incremental above it, so very large notebooks save faster than in 0.1, but a short freeze is still possible on slow tablets (to be measured with the in-app benchmark). Saves, journal entries and thumbnails wait while the pen writes.

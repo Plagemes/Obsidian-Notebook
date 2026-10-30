@@ -1,5 +1,6 @@
 import type { PressureMode } from "./ink/pressure";
 import { DEFAULT_ERASER_SIZE, DEFAULT_FAVOURITES, normaliseEraserSize, normaliseFavourites, type FavouritePen } from "./view/favourites";
+import { cleanStampFormat, DEFAULT_STAMP_FORMAT } from "./ink/date-stamp";
 import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "./ink/edge-zones";
 import { DEFAULT_GESTURE_SETTINGS, readGestureSettings, type GestureSettings } from "./ink/gesture-settings";
 import { DEFAULT_PEN_GESTURE_SETTINGS, readPenGestureSettings, type PenGestureSettings } from "./ink/gestures/settings";
@@ -113,6 +114,9 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	notebookTabs: boolean;
 	/** After the pen lifts near the right margin of ruled or grid paper, the view moves to the start of the next line (353). Off by default. */
 	autoLineBreak: boolean;
+	// wave 0.10: clipboard and stamps
+	/** Format of the quick date and time stamp (356): tokens YYYY MM DD HH mm ss and so on, text in [brackets]. */
+	dateStampFormat: string;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -159,6 +163,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	pageTurnerKeys: true,
 	notebookTabs: false,
 	autoLineBreak: false,
+	dateStampFormat: DEFAULT_STAMP_FORMAT,
 	...DEFAULT_COMPANION_SETTINGS,
 	...DEFAULT_GESTURE_SETTINGS,
 	...DEFAULT_PEN_GESTURE_SETTINGS,
@@ -219,6 +224,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.pageTurnerKeys === "boolean") s.pageTurnerKeys = d.pageTurnerKeys;
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;
 	if (typeof d.autoLineBreak === "boolean") s.autoLineBreak = d.autoLineBreak;
+	if (typeof d.dateStampFormat === "string") s.dateStampFormat = cleanStampFormat(d.dateStampFormat);
 	s.lastNotebookPos = parsePosition(d.lastNotebookPos);
 
 	if (typeof d.timetableOffer === "boolean") s.timetableOffer = d.timetableOffer;

@@ -3,14 +3,19 @@ import { t } from "../i18n";
 import { captureClip, clipAssetIds, duplicateOffset, instantiateClip, pasteCommand, pasteOffset, type ClipContent } from "../ink/clipboard";
 import { whiteToTransparent } from "../ink/image-alpha";
 import { measureText } from "../ink/renderer";
+import { captureCrossPageClip, type PagePart } from "../ink/cross-page";
+import type { PageBox } from "../ink/layout";
 import { commonStyle, planRestyle, restyleAbilities, type StyleGroup } from "../ink/restyle";
 import { AddAsset, AddElement, Batch, ReplaceElement, type Command } from "../model/history";
 import type { Asset, ImageElement, NotebookDocument, Page, PageElement, Stroke } from "../model/types";
 import { decodePhoto, PhotoDecodeError, photoSize } from "../scan/decode";
 import { isHeic } from "../scan/image-bytes";
-import { internalClip, readSystemClipboard, systemClipFromEvent, writeSystemText, type SystemClip, type SystemImage } from "./clipboard";
+import { internalClip, readSystemClipboard, systemClipFromEvent, writeSystemText, type InternalClip, type SystemClip, type SystemImage } from "./clipboard";
 import { resolveAssetFile, storeAsset, type NotebookMedia } from "./media";
 import { PasteModal } from "./paste-modal";
+import { readSharedEntry, type SharedClipItem } from "../ink/shared-clip";
+import { SharedClipBlockedError, SharedClipRefusedError, type SharedClipStore } from "../storage/shared-clip-store";
+import { SharedClipModal } from "./shared-clip-modal";
 import {
 	clipMarker, decidePaste, MAX_PASTED_TEXT, normalizePastedText, pastedImageElement, pastedImageName, pastedTextElement,
 } from "./paste-logic";
@@ -20,6 +25,17 @@ export interface SelectionState {
 	pageIndex: number;
 	strokes: Stroke[];
 	elements: PageElement[];
+	/** wave 0.10 (359): the items of the other pages when the lasso crossed a page boundary. */
+	others?: PagePart[];
+}
+
+/** Every selected stroke and element, whatever page it is on. */
+function allItems(sel: SelectionState): { strokes: Stroke[]; elements: PageElement[] } {
+	const others = sel.others ?? [];
+	return {
+		strokes: [...sel.strokes, ...others.flatMap((o) => o.strokes)],
+		elements: [...sel.elements, ...others.flatMap((o) => o.elements)],
+	};
 }
 
 /** The part of the notebook view the selection actions need. */
@@ -31,7 +47,11 @@ export interface SelectionHost {
 	editable(): boolean;
 	selection(): SelectionState | null;
 	/** Selects exactly these items of the page (switching to the lasso) so they can be moved right away. */
-	select(pageIndex: number, strokes: Stroke[], elements: PageElement[]): void;
+	select(pageIndex: number, strokes: Stroke[], elements: PageElement[], others?: PagePart[]): void;
+	/** wave 0.10 (359): the page boxes, to put the items of several pages in one frame. */
+	boxes(): readonly PageBox[];
+	/** wave 0.10 (362): the clipboard files shared between devices through the vault. */
+	sharedClips(): SharedClipStore;
 	/** Runs the command as one undo step and refreshes everything that depends on the document. */
 	execute(cmd: Command): void;
 	deleteSelection(): void;
@@ -69,14 +89,16 @@ export class SelectionActions {
 		this.el.toggleClass("notebook-hidden", !show);
 		this.styleRows.empty();
 		if (!sel) return;
-		const ability = restyleAbilities(sel.strokes, sel.elements);
+		const all = allItems(sel);
+		const ability = restyleAbilities(all.strokes, all.elements);
 		if (ability.inkColor || ability.inkWidth) this.styleRow(sel, "ink", ability.inkColor, ability.inkWidth);
 		if (ability.highlighterColor) this.styleRow(sel, "highlighter", true, ability.highlighterWidth);
 	}
 
 	private styleRow(sel: SelectionState, group: StyleGroup, colour: boolean, width: boolean): void {
 		const row = this.styleRows.createDiv({ cls: "notebook-toolbar-group" });
-		const common = commonStyle(sel.strokes, sel.elements, group);
+		const all = allItems(sel);
+		const common = commonStyle(all.strokes, all.elements, group);
 		const highlighter = group === "highlighter";
 		if (colour) {
 			for (const color of highlighter ? HIGHLIGHTER_COLORS : PEN_COLORS) {
@@ -109,8 +131,27 @@ export class SelectionActions {
 
 	private restyle(req: { group: StyleGroup; color?: string; width?: number }): void {
 		const sel = this.host.selection();
-		const page = sel && this.host.doc()?.pages[sel.pageIndex];
-		if (!sel || !page || !this.host.editable()) return;
+		const doc = this.host.doc();
+		const page = sel && doc?.pages[sel.pageIndex];
+		if (!sel || !doc || !page || !this.host.editable()) return;
+		if (sel.others?.length) {
+			// wave 0.10 (359): every page's items are restyled in their own page; one undo step.
+			const parts: PagePart[] = [{ pageIndex: sel.pageIndex, strokes: sel.strokes, elements: sel.elements }, ...sel.others];
+			const plans = parts.flatMap((part) => {
+				const target = doc.pages[part.pageIndex];
+				const one = target ? planRestyle(target, part.strokes, part.elements, req) : null;
+				return one ? [{ part, plan: one }] : [];
+			});
+			if (plans.length === 0) return;
+			this.host.execute(new Batch("Restyle selection", plans.map((p) => p.plan.command)));
+			const next = (part: PagePart): PagePart => {
+				const found = plans.find((p) => p.part === part);
+				return found ? { pageIndex: part.pageIndex, strokes: found.plan.strokes, elements: found.plan.elements } : part;
+			};
+			const [first, ...rest] = parts.map(next) as [PagePart, ...PagePart[]];
+			this.host.select(first.pageIndex, first.strokes, first.elements, rest);
+			return;
+		}
 		const plan = planRestyle(page, sel.strokes, sel.elements, req);
 		if (!plan) return;
 		this.host.execute(plan.command);
@@ -124,6 +165,11 @@ export class SelectionActions {
 		const doc = this.host.doc();
 		const page = sel && doc?.pages[sel.pageIndex];
 		if (!sel || !doc || !page) return null;
+		if (sel.others?.length) {
+			const parts: PagePart[] = [{ pageIndex: sel.pageIndex, strokes: sel.strokes, elements: sel.elements }, ...sel.others];
+			const crossClip = captureCrossPageClip(this.host.boxes(), doc.pages, parts, sel.pageIndex, doc.assets, measureText);
+			return crossClip ? { clip: crossClip, pageIndex: sel.pageIndex } : null;
+		}
 		const strokes = sel.strokes.filter((s) => page.strokes.includes(s));
 		const elements = sel.elements.filter((e) => page.elements?.includes(e));
 		const clip = captureClip(strokes, elements, doc.assets, measureText);
@@ -169,7 +215,36 @@ export class SelectionActions {
 		new Notice(t("selection.cutDone"));
 	}
 
+	/** wave 0.10 (359): duplicates a selection across pages, each page's items next to the originals on their own page. */
+	private duplicateAcross(sel: SelectionState, doc: NotebookDocument): void {
+		const parts: PagePart[] = [{ pageIndex: sel.pageIndex, strokes: sel.strokes, elements: sel.elements }, ...(sel.others ?? [])];
+		const commands: Command[] = [];
+		const made: PagePart[] = [];
+		for (const part of parts) {
+			const page = doc.pages[part.pageIndex];
+			if (!page) continue;
+			const clip = captureClip(
+				part.strokes.filter((s) => page.strokes.includes(s)), part.elements.filter((e) => page.elements?.includes(e)), doc.assets, measureText,
+			);
+			if (!clip) continue;
+			const [dx, dy] = duplicateOffset(clip.bounds, page);
+			const copy = instantiateClip(clip, dx, dy, undefined, measureText);
+			commands.push(pasteCommand(page, copy.strokes, copy.elements, [], "Duplicate selection"));
+			made.push({ pageIndex: part.pageIndex, strokes: copy.strokes, elements: copy.elements });
+		}
+		const [first, ...rest] = made;
+		if (!first) return;
+		this.host.execute(new Batch("Duplicate selection", commands));
+		this.host.select(first.pageIndex, first.strokes, first.elements, rest);
+	}
+
 	duplicate(): void {
+		const sel = this.host.selection();
+		const whole = this.host.doc();
+		if (sel?.others?.length && whole && this.host.editable()) {
+			this.duplicateAcross(sel, whole);
+			return;
+		}
 		const got = this.capture();
 		const doc = this.host.doc();
 		const page = doc?.pages[got?.pageIndex ?? -1];
@@ -178,6 +253,60 @@ export class SelectionActions {
 		const made = instantiateClip(got.clip, dx, dy, undefined, measureText);
 		this.host.execute(pasteCommand(page, made.strokes, made.elements, [], "Duplicate selection"));
 		this.host.select(got.pageIndex, made.strokes, made.elements);
+	}
+
+	// --- wave 0.10 (362): the clipboard shared with the other devices ---
+
+	/** "Copy to other devices": writes the selection (strokes, elements and picture records) to this device's clipboard file. */
+	async copyToDevices(): Promise<void> {
+		const got = this.capture();
+		if (!got) return;
+		try {
+			await this.host.sharedClips().publish(got.clip);
+			new Notice(t("clipshare.copied"));
+		} catch (e) {
+			console.error("[notebook] copy to other devices", e);
+			if (e instanceof SharedClipBlockedError) new Notice(t("clipshare.blocked", { error: e.message }), 10000);
+			else if (e instanceof SharedClipRefusedError) new Notice(e.reason === "too-large" ? t("clipshare.tooLarge") : t("clipshare.failed", { error: e.message }), 8000);
+			else new Notice(t("clipshare.failed", { error: e instanceof Error ? e.message : String(e) }), 8000);
+		}
+	}
+
+	/** "Paste from another device": lists the recent clipboards of the other devices' files and pastes the one chosen. */
+	async pasteFromDevices(): Promise<void> {
+		if (this.busy || !this.host.editable()) return;
+		let found;
+		try {
+			found = await this.host.sharedClips().listOthers();
+		} catch (e) {
+			console.error("[notebook] list shared clipboards", e);
+			new Notice(t("clipshare.failed", { error: e instanceof Error ? e.message : String(e) }), 8000);
+			return;
+		}
+		if (found.items.length === 0) {
+			new Notice(found.unreadable.length > 0 ? t("clipshare.unreadable", { n: String(found.unreadable.length) }) : t("clipshare.none"), 8000);
+			return;
+		}
+		new SharedClipModal(this.host.app, found.items, found.unreadable.length, (item) => void this.pasteShared(item)).open();
+	}
+
+	private async pasteShared(item: SharedClipItem): Promise<void> {
+		if (this.busy || !this.host.editable()) return;
+		const read = readSharedEntry(item.entry);
+		if (!read.ok) {
+			new Notice(t("clipshare.pasteFailed", { error: read.message }), 8000);
+			return;
+		}
+		this.busy = true;
+		try {
+			// Pasted like a copy made here, but it never replaces this device's own plugin clipboard.
+			await this.pasteInternal({ content: read.clip, bytes: new Map(), pastes: 0 });
+		} catch (e) {
+			console.error("[notebook] paste from another device", e);
+			new Notice(t("clipshare.pasteFailed", { error: e instanceof Error ? e.message : String(e) }), 8000);
+		} finally {
+			this.busy = false;
+		}
 	}
 
 	// --- paste ---
@@ -232,8 +361,8 @@ export class SelectionActions {
 	}
 
 	/** Pastes the plugin clipboard on the page in view; images are stored again in this vault's assets folder when needed. */
-	private async pasteInternal(): Promise<void> {
-		const clip = internalClip.get();
+	private async pasteInternal(source?: Pick<InternalClip, "content" | "bytes" | "pastes">): Promise<void> {
+		const clip = source ?? internalClip.get();
 		const target = this.host.pasteTarget();
 		const doc = this.host.doc();
 		const media = this.host.media();
