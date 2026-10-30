@@ -99,15 +99,20 @@ function transformText(el: TextElement, m: Matrix, measure: MeasureText): TextEl
 
 function transformImage(el: ImageElement, m: Matrix): ImageElement {
 	const [cx, cy] = apply(m, el.x + el.width / 2, el.y + el.height / 2);
-	const width = Math.max(1, round2(el.width * Math.hypot(m[0], m[1])));
-	const height = Math.max(1, round2(el.height * Math.hypot(m[2], m[3])));
+	// The picture's own axes (rotated by its rotation) are what the matrix stretches: with a non-uniform scale a rotated
+	// picture must be measured along them, not along the page axes. For a plain move, scale or rotation this is the same as before.
+	const c = Math.cos(el.rotation), s = Math.sin(el.rotation);
+	const ux = m[0] * c + m[2] * s, uy = m[1] * c + m[3] * s;
+	const vx = -m[0] * s + m[2] * c, vy = -m[1] * s + m[3] * c;
+	const width = Math.max(1, round2(el.width * Math.hypot(ux, uy)));
+	const height = Math.max(1, round2(el.height * Math.hypot(vx, vy)));
 	return {
 		...el,
 		x: round2(cx - width / 2),
 		y: round2(cy - height / 2),
 		width,
 		height,
-		rotation: Math.round((el.rotation + Math.atan2(m[1], m[0])) * 1e6) / 1e6,
+		rotation: Math.round(Math.atan2(uy, ux) * 1e6) / 1e6,
 	};
 }
 

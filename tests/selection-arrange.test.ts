@@ -8,14 +8,14 @@ import { elementBounds } from "../src/ink/elements";
 import { strokeBounds } from "../src/ink/hit-test";
 import { pointInPolygon, rectanglePolygon, strokesInLasso } from "../src/ink/lasso";
 import {
-	applyPlacement, inkOwnership, itemsBounds, lockedSize, mirrorPlacement, rotate90Matrix, sizeMatrix, uniformPlacement,
+	applyPlacement, inkOwnership, itemsBounds, lockedSize, mirrorPlacement, rotate90Matrix, rotatePlacement, sizeMatrix, uniformPlacement,
 } from "../src/ink/selection-transform";
 import { styleCatalog, selectByStyle, selectSimilar } from "../src/ink/select-similar";
 import { apply } from "../src/ink/transform";
 import { createDocument, createId, createStroke, quantizePoint } from "../src/model/document";
 import { History } from "../src/model/history";
 import { serializeChecked } from "../src/model/serialize";
-import type { BoxElement, ImageElement, NotebookDocument, Stroke, TextElement } from "../src/model/types";
+import type { BoxElement, GraphElement, ImageElement, NotebookDocument, Stroke, TextElement } from "../src/model/types";
 import { line } from "./helpers";
 
 const NOW = new Date("2026-10-29T10:00:00.000Z");
@@ -29,7 +29,7 @@ const image = (x: number, y: number, w = 80, h = 60, rotation = 0): ImageElement
 const text = (x: number, y: number, color = "#1e1e1e"): TextElement => ({ id: createId(), type: "text", x, y, width: 100, text: "hello", fontSize: 14, color });
 const box = (x: number, y: number, w = 50, h = 30): BoxElement => ({ id: createId(), type: "box", kind: "definition", x, y, width: w, height: h });
 
-function pageWith(strokes: Stroke[], elements: Array<ImageElement | TextElement | BoxElement> = []): { doc: NotebookDocument; page: NotebookDocument["pages"][number]; history: History } {
+function pageWith(strokes: Stroke[], elements: Array<ImageElement | TextElement | BoxElement | GraphElement> = []): { doc: NotebookDocument; page: NotebookDocument["pages"][number]; history: History } {
 	const doc = createDocument(NOW);
 	const page = doc.pages[0]!;
 	page.strokes.push(...strokes);
@@ -507,5 +507,95 @@ describe("registry and bar placement (wave 0.10)", () => {
 	it("keeps the toolbar's default selection mode the lasso", () => {
 		// (the toolbar imports Obsidian, so its source is read instead)
 		expect(/DEFAULT_TOOLS[^]*?selectMode: "lasso"/.test(toolbarSource)).toBe(true);
+	});
+});
+
+describe("review fixes (selection tools)", () => {
+	const graph = (x: number, y: number, w = 200, h = 100): GraphElement => ({
+		id: createId(), type: "graph", x, y, width: w, height: h, view: { xMin: -5, xMax: 5, yMin: -2.5, yMax: 2.5 }, functions: [],
+	});
+
+	it("a rotated picture resized to a non-uniform size ends up with the requested bounds (not 10 x 2000)", () => {
+		const img = image(100, 100, 200, 100, Math.PI / 2);
+		const before = itemsBounds([], [img])!;
+		expect([before.maxX - before.minX, before.maxY - before.minY].map(Math.round)).toEqual([100, 200]);
+		const m = sizeMatrix([], [img], 100, 400)!;
+		const { page } = pageWith([], [img]);
+		const plan = applyPlacement(page, [], [img], uniformPlacement([], [img], [], m))!;
+		const after = itemsBounds([], plan.elements)!;
+		expect(after.maxX - after.minX).toBeCloseTo(100, 1);
+		expect(after.maxY - after.minY).toBeCloseTo(400, 1);
+		const out = plan.elements[0] as ImageElement;
+		expect(out.width).toBeCloseTo(400, 1);
+		expect(out.height).toBeCloseTo(100, 1);
+	});
+
+	it("an unrotated picture and a plain rotation behave as before", () => {
+		const img = image(10, 10, 80, 60, 0.4);
+		const { page } = pageWith([], [img]);
+		const turned = applyPlacement(page, [], [img], uniformPlacement([], [img], [], rotate90Matrix(itemsBounds([], [img])!, true)))!.elements[0] as ImageElement;
+		expect(turned.width).toBe(80);
+		expect(turned.height).toBe(60);
+		expect(turned.rotation).toBeCloseTo(0.4 + Math.PI / 2, 5);
+	});
+
+	it("rotating keeps a graph's size and moves its centre, and the ink bound to it moves with it instead of turning", () => {
+		const g = graph(100, 100, 200, 100);
+		const bound = createStroke("#dc2626", 2, [quantizePoint(150, 140, 0.5), quantizePoint(250, 150, 0.5)]);
+		bound.id = `${g.id}~${createId()}`;
+		const free = bar(0, 300, 40);
+		const { page } = pageWith([bound, free], [g]);
+		const own = inkOwnership(page, [bound, free], [g], undefined, false); // "Ink follows objects" off: bound ink still belongs to its graph
+		expect(own.owner.get(bound)).toBe(g);
+		const bounds = itemsBounds([bound, free], [g])!;
+		const plan = applyPlacement(page, [bound, free], [g], rotatePlacement([bound, free], [g], bounds, true, own))!;
+		const rg = plan.elements[0] as GraphElement;
+		expect([rg.width, rg.height]).toEqual([200, 100]);
+		// the bound ink kept its shape (translated by exactly what the graph moved)
+		const dx = rg.x - g.x, dy = rg.y - g.y;
+		const rb = plan.strokes[0]!;
+		bound.points.forEach((p, i) => {
+			expect(rb.points[i]![0]).toBeCloseTo(p[0] + dx, 1);
+			expect(rb.points[i]![1]).toBeCloseTo(p[1] + dy, 1);
+		});
+		// the free stroke turned
+		const rf = plan.strokes[1]!;
+		expect(rf.points[0]![1]).not.toBeCloseTo(free.points[0]![1], 0);
+	});
+
+	it("text boxes keep their orientation when rotated, and ink on them moves with them", () => {
+		const tx = text(100, 100);
+		const on = bar(105, 105, 30);
+		const far = bar(400, 400, 30); // moves the centre of the selection away from the text box
+		const { page } = pageWith([on, far], [tx]);
+		const own = inkOwnership(page, [on, far], [tx]);
+		const bounds = itemsBounds([on, far], [tx])!;
+		const plan = applyPlacement(page, [on, far], [tx], rotatePlacement([on, far], [tx], bounds, false, own))!;
+		const rt = plan.elements[0] as TextElement;
+		expect(rt.width).toBe(tx.width);
+		const dx = rt.x - tx.x;
+		expect(plan.strokes[0]!.points[0]![0] - on.points[0]![0]).toBeCloseTo(dx, 1);
+		expect(plan.strokes[0]!.points[4]![1]).toBeCloseTo(on.points[4]![1] + (rt.y - tx.y), 1);
+	});
+
+	it("with Ink follows objects off, align and mirror keep graph-bound ink with its graph", () => {
+		const g = graph(100, 200, 100, 60);
+		const bound = createStroke("#1e1e1e", 2, [quantizePoint(120, 220, 0.5), quantizePoint(160, 230, 0.5)]);
+		bound.id = `${g.id}~${createId()}`;
+		const free = bar(0, 0, 20);
+		const { page } = pageWith([bound, free], [g]);
+		const own = inkOwnership(page, [bound, free], [g], undefined, false);
+		const items = alignItems([bound, free], [g], own);
+		expect(items.length).toBe(2);
+		const plan = applyPlacement(page, [bound, free], [g], alignPlacement(items, "left")!)!;
+		const dx = (plan.elements[0] as GraphElement).x - g.x;
+		expect(plan.strokes[0]!.points[0]![0] - bound.points[0]![0]).toBeCloseTo(dx, 1);
+		const mir = applyPlacement(page, [bound, free], [g], mirrorPlacement([bound, free], [g], itemsBounds([bound, free], [g])!, "horizontal", own))!;
+		const mdx = (mir.elements[0] as GraphElement).x - g.x;
+		expect(mir.strokes[0]!.points[1]![0] - bound.points[1]![0]).toBeCloseTo(mdx, 1);
+		// Ink that merely lies on a graph is not tied to it when the setting is off.
+		const loose = bar(110, 210, 20);
+		page.strokes.push(loose);
+		expect(inkOwnership(page, [loose], [g], undefined, false).owner.has(loose)).toBe(false);
 	});
 });

@@ -42,6 +42,7 @@ Not yet verified on Android hardware or in Obsidian. The manual steps for these 
 - **Library check**: backups, version history and trash copies are now accepted only as whole JSON; a copy that is only partly downloaded (cut off, NUL bytes, does not parse) makes the answer unsure instead of hiding the assets it should have named.
 - **Library check**: while a notebook is unreadable or not downloaded the check still lists it but no longer offers any file for removal.
 - **Archive (roadmap 54)**: a sync conflict copy of a notebook (same document id) is no longer hidden when the original is archived, and archiving a copy no longer hides the original: copies are keyed by id and path.
+- **Selection tools** (review fixes). A rotated picture resized to a non-uniform size no longer comes out hugely distorted (its own axes are stretched, not the page's). *Rotate 90°* no longer turns a graph's frame under its plot or turns ink written on text boxes, equations and graphs: those move their centre and keep their orientation, and their ink moves with them. Ink bound to a graph (`<graph id>~…`) now stays with its graph in align, distribute, mirror and rotate even with *Ink follows objects* off. A change the document refuses (read-only lock, size guard) no longer leaves a selection on copies that are not in the notebook. *Select same colour* works from a selection of text boxes alone, and says so when nothing matches. *Exact size* tells you when the size was limited or text boxes kept their proportions.
 
 ## 0.9.0 — 2026-10-30
 

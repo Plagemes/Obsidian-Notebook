@@ -4067,9 +4067,10 @@ export class NotebookView extends FileView {
 			selection: () => this.selection,
 			select: (pageIndex, strokes, elements) => this.selectItems(pageIndex, strokes, elements),
 			execute: (cmd) => {
-				this.history.execute(cmd);
+				if (!this.history.execute(cmd)) return false;
 				this.afterHistoryChange();
 				this.renderer?.invalidate();
+				return true;
 			},
 			ink: (page) => this.inkInView(page),
 			inkFollowsObjects: () => this.host.settings.inkFollowsObjects,
