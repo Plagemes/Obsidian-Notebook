@@ -50,6 +50,7 @@ anywhere in `src/` is in the registry and that every action is placed somewhere.
 | Pen, highlighter, eraser, lasso, shape, text, space (`tool-*`) | Toolbar row 1, radial pen case, commands | Used constantly; fixed position |
 | Shape kind (`shape-*`), eraser mode (`eraser-*`), eraser size ± | Tool options popover, radial shapes ring (shapes), commands | Settings *of* a tool belong to the tool |
 | Colour, width, text size, eraser filter, snap to text | Tool options popover; colour and width also on the radial | Same |
+| Colour picker, eyedropper, style eyedropper (`colour-picker`, `colour-eyedropper`, `style-eyedropper`; wave 0.10) | Last buttons of the colour row of the tool options (the style eyedropper only for ink tools); picker and eyedropper also on the radial colour ring; commands | A free colour belongs with the other colours; they act on the pen in use. The picker is a floating panel over the page, the eyedroppers take the next contact on the page |
 | Favourite pens 1–6 (`favourite-*`) | Toolbar strip, radial favourites ring, commands | One tap to a saved pen; long press / radial "+" saves |
 | Undo, redo | Toolbar, radial, two/three-finger taps, commands | Always needed |
 | Pages panel (`toggle-pages-panel`) | Toolbar row 1 (first button) | Navigation is primary |

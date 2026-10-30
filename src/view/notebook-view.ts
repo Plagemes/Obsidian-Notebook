@@ -122,6 +122,7 @@ import type { PracticeHooks, PracticeProvider, PracticeViewHost } from "./practi
 import { NotebookTabs } from "./notebook-tabs";
 import { DEFAULT_TOOLS, Toolbar, type ToolName, type ToolbarState } from "./toolbar";
 import { hasBackgrounds, hasPdfPages } from "./reading-logic";
+import { ColourTools, type PageInk } from "./colour-tools";
 import { commandApplies, runViewAction, sizeName, type ActionArg } from "./view-actions";
 import { ViewUi } from "./view-ui";
 import { pageKeyAction, shouldTurnPage, takesKey, type KeyScene } from "./page-keys";
@@ -320,6 +321,7 @@ export class NotebookView extends FileView {
 	private math: MathTools | null = null;
 	private rulerGesture: RulerGesture | null = null;
 	private radial: PenRadial | null = null;
+	private colour: ColourTools | null = null;
 	/** Pen gestures (roadmap 139, view/pen-gestures.ts): gesture mode and the gesture in progress. */
 	private penGestures: PenGestureLayer | null = null;
 	/** Long-press trigger: the ink stroke that may turn into a gesture if the pen rests, and its timer. */
@@ -597,6 +599,22 @@ export class NotebookView extends FileView {
 			// wave 0.8: the shapes ring's Markers entry places a marker or box with the next contact.
 			placeMarker: (kind) => this.runAction(kind === "box" ? "marker-box" : `marker-${kind}`),
 			notify: (text) => showNotice(text, 2500),
+			// wave 0.10 (7): the colour ring's custom colour and eyedropper use the free picker and the page eyedropper.
+			openColourPicker: () => this.colour?.openPicker(),
+			pickColour: () => this.colour?.armEyedropper("colour"),
+		});
+		this.colour = new ColourTools({
+			stage: this.stage,
+			editable: () => this.editable() && !this.controller?.drawing,
+			tools: () => this.tools,
+			apply: (patch) => this.toolbar.apply(patch),
+			recent: () => this.host.settings.recentColours,
+			setRecent: (list) => {
+				this.host.settings.recentColours = list;
+				void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
+			},
+			notify: (text) => showNotice(text, 2500),
+			inkAt: (x, y) => this.inkAtPoint(x, y),
 		});
 		this.lastTool.note(this.tools.tool);
 		this.gestures = new GestureInput(this.stage, {
@@ -704,6 +722,8 @@ export class NotebookView extends FileView {
 		this.controller = null;
 		this.radial?.destroy();
 		this.radial = null;
+		this.colour?.destroy();
+		this.colour = null;
 		this.gestures?.destroy();
 		this.gestures = null;
 		this.rulerGesture?.destroy();
@@ -1492,6 +1512,25 @@ export class NotebookView extends FileView {
 			inkFollows: () => this.host.settings.inkFollowsObjects,
 			refresh: () => this.refreshUi(),
 		};
+	}
+
+	/** Colour picker and eyedroppers of this view (null before the view is open). */
+	get colourTools(): ColourTools | null {
+		return this.colour;
+	}
+
+	/** The strokes in view of the page under a screen point, with the point in page coordinates (style eyedropper); null off the pages. */
+	private inkAtPoint(clientX: number, clientY: number): PageInk | null {
+		const layout = this.layout;
+		if (!layout) return null;
+		const r = this.stage.getBoundingClientRect();
+		const [dx, dy] = screenToPage(this.viewport, clientX - r.left, clientY - r.top);
+		const index = pageAt(layout, dx, dy, PAGE_TOLERANCE);
+		const page = index < 0 ? null : this.pageAtIndex(index);
+		const box = index < 0 ? null : layout.boxes[index];
+		if (!page || !box) return null;
+		const [x, y] = toPageLocal(box, dx, dy);
+		return { strokes: this.inkInView(page), x, y, scale: this.viewport.scale };
 	}
 
 	/** Markers, boxes and invisible ink of this view (null before the view is open). */
@@ -2422,6 +2461,7 @@ export class NotebookView extends FileView {
 		this.tools = state;
 		this.pens?.onToolsChanged(state);
 		this.radial?.noteTools(state);
+		this.colour?.noteTools(state);
 		this.lastTool.note(state.tool);
 		if (state.tool !== "lasso") this.clearSelection();
 		this.refreshUi();

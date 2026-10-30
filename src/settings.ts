@@ -7,6 +7,7 @@ import { DEFAULT_PEN_GESTURE_SETTINGS, readPenGestureSettings, type PenGestureSe
 import { PEN_BUTTON_ACTIONS, type PenButtonAction } from "./ink/input-policy";
 import { isScrollMode, type ScrollMode } from "./ink/page-mode";
 import { parsePosition, type SavedPosition } from "./ink/view-position";
+import { normaliseRecentColours } from "./ink/colour";
 import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./model/types";
 import { DEFAULT_COMPANION_SETTINGS, readCompanionSettings, type CompanionSettings } from "./storage/companion-path";
 import { DEFAULT_TRASH_SETTINGS, readTrashSettings, type TrashSettings } from "./storage/trash-settings";
@@ -117,6 +118,9 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	// wave 0.10: clipboard and stamps
 	/** Format of the quick date and time stamp (356): tokens YYYY MM DD HH mm ss and so on, text in [brackets]. */
 	dateStampFormat: string;
+	// wave 0.10: colours
+	/** The last custom colours chosen with the colour picker or the eyedropper (newest first, `#rrggbb`). */
+	recentColours: string[];
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -164,6 +168,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	notebookTabs: false,
 	autoLineBreak: false,
 	dateStampFormat: DEFAULT_STAMP_FORMAT,
+	recentColours: [],
 	...DEFAULT_COMPANION_SETTINGS,
 	...DEFAULT_GESTURE_SETTINGS,
 	...DEFAULT_PEN_GESTURE_SETTINGS,
@@ -225,6 +230,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;
 	if (typeof d.autoLineBreak === "boolean") s.autoLineBreak = d.autoLineBreak;
 	if (typeof d.dateStampFormat === "string") s.dateStampFormat = cleanStampFormat(d.dateStampFormat);
+	s.recentColours = normaliseRecentColours(d.recentColours);
 	s.lastNotebookPos = parsePosition(d.lastNotebookPos);
 
 	if (typeof d.timetableOffer === "boolean") s.timetableOffer = d.timetableOffer;

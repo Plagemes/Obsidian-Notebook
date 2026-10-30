@@ -2244,15 +2244,6 @@ body {
 	box-shadow: 0 0 0 2px var(--nb-dial-bg);
 }
 
-.notebook-dial-color-input {
-	position: absolute;
-	left: var(--notebook-radial-x, 0px);
-	top: var(--notebook-radial-y, 0px);
-	width: 1px;
-	height: 1px;
-	opacity: 0;
-	pointer-events: none;
-}
 
 /* Width: an arc slider of growing dots. */
 .notebook-dial-track {
@@ -5193,4 +5184,165 @@ body {
 	.notebook-print-root .notebook-print-page.is-long > img {
 		max-height: none;
 	}
+}
+
+/* wave 0.10 (7, 68): free colour picker, page eyedropper loupe, free-colour swatch. */
+.notebook-swatch.is-free .notebook-swatch-dot {
+	background: conic-gradient(#f43f5e, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #ec4899, #f43f5e);
+}
+
+.notebook-stage .notebook-colour-picker {
+	position: absolute;
+	top: var(--nb-space-3, 12px);
+	right: var(--nb-space-3, 12px);
+	z-index: 6;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	gap: var(--nb-space-2, 8px);
+	width: 244px;
+	max-width: calc(100% - 24px);
+	/* A short view (a phone held sideways): the panel scrolls instead of leaving the page area. */
+	max-height: calc(100% - 24px);
+	overflow-y: auto;
+	padding: var(--nb-space-3, 12px);
+	border: 1px solid var(--nb-border, var(--background-modifier-border));
+	border-radius: var(--nb-radius-l, 18px);
+	background: var(--nb-surface-raised, var(--background-primary));
+	box-shadow: var(--nb-shadow-2, 0 8px 24px rgba(0, 0, 0, 0.18));
+	font-family: var(--nb-font-ui, var(--font-interface));
+	font-size: var(--nb-text-m, var(--font-ui-small));
+	touch-action: pan-y;
+}
+
+.notebook-colour-area {
+	position: relative;
+	flex: none;
+	height: clamp(72px, 26vh, 150px);
+	border-radius: var(--nb-radius-m, 10px);
+	background:
+		linear-gradient(to top, #000, rgba(0, 0, 0, 0)),
+		linear-gradient(to right, #fff, var(--hue, #f00));
+	touch-action: none;
+	cursor: crosshair;
+}
+
+.notebook-colour-hue {
+	position: relative;
+	flex: none;
+	height: 22px;
+	border-radius: 11px;
+	background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+	touch-action: none;
+	cursor: ew-resize;
+}
+
+.notebook-colour-thumb {
+	position: absolute;
+	width: 20px;
+	height: 20px;
+	margin: -10px 0 0 -10px;
+	border: 3px solid #fff;
+	border-radius: 50%;
+	background: var(--c, transparent);
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), 0 1px 4px rgba(0, 0, 0, 0.35);
+	pointer-events: none;
+}
+
+.notebook-colour-hue .notebook-colour-thumb {
+	top: 50%;
+}
+
+.notebook-colour-area:focus-visible,
+.notebook-colour-hue:focus-visible {
+	outline: 2px solid var(--nb-accent, var(--interactive-accent));
+	outline-offset: 2px;
+}
+
+.notebook-colour-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.notebook-colour-preview {
+	flex: none;
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	background: var(--c, transparent);
+	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+.notebook-colour-row input.notebook-colour-hex {
+	flex: 1;
+	min-width: 0;
+	height: 36px;
+	font-family: var(--font-monospace);
+	text-transform: lowercase;
+}
+
+.notebook-colour-row input.notebook-colour-hex.is-invalid {
+	border-color: var(--text-error);
+}
+
+.notebook-colour-button {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	box-shadow: none;
+	background: transparent;
+}
+
+.notebook-colour-recent {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	min-height: 28px;
+}
+
+.notebook-colour-hint {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.notebook-colour-recent-swatch {
+	flex: none;
+	width: 28px;
+	height: 28px;
+	min-width: 28px;
+	padding: 0;
+	border-radius: 50%;
+	background: var(--c, transparent);
+	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+.notebook-stage .notebook-eyedropper-loupe {
+	position: absolute;
+	z-index: 7;
+	transform: translate(-50%, calc(-100% - 36px));
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 8px 4px 4px;
+	border-radius: 999px;
+	background: var(--nb-surface-raised, var(--background-primary));
+	box-shadow: var(--nb-shadow-2, 0 4px 14px rgba(0, 0, 0, 0.3));
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-normal);
+	pointer-events: none;
+}
+
+.notebook-stage .notebook-eyedropper-loupe::before {
+	content: "";
+	width: 24px;
+	height: 24px;
+	border-radius: 50%;
+	background: var(--c, transparent);
+	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
 }
