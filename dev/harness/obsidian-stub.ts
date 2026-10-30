@@ -913,6 +913,9 @@ export class PluginSettingTab {
 	settingItems: unknown[] = [];
 	/** The drawn declarative rows and their `visible`, for `refreshDomState()`. */
 	private shown: Array<{ el: HTMLElement; visible: DefinitionStub["visible"] }> = [];
+	/** Set as instance fields like Obsidian 1.13+ does, so a subclass method of the same name is shadowed here too. */
+	name = "Notebook";
+	icon = "book-open";
 	constructor(readonly app: App, readonly plugin: unknown) {}
 	getSettingDefinitions(): unknown[] {
 		return [];
