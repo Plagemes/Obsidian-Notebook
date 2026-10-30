@@ -1137,7 +1137,7 @@ async function checkToolbar(add: (name: string, ok: boolean, detail?: string) =>
 	add(`${label}: quick slots follow the width`, quick.length === plan && (width < 480 ? plan === 0 : width >= 760 ? plan >= 4 : true) && quick.every((b) => inView(b.getBoundingClientRect())),
 		`${quick.length} quick (${v.toolbar.quickIds.join(", ")}) at ${width}px`);
 
-	// 6. The contextual bar follows the context: none with the pen, paste for the lasso, the selection actions for a selection.
+	// 6. The contextual bar follows the context: none with the pen, paste and the excerpt actions (v10) for the lasso, the selection actions for a selection.
 	const ctx = () => (document.querySelector(".notebook-context-bar") as HTMLElement);
 	const ctxKind = () => (ctx().classList.contains("notebook-hidden") ? "none" : ctx().dataset.context ?? "?");
 	ui.refreshNow();
@@ -1152,7 +1152,7 @@ async function checkToolbar(add: (name: string, ok: boolean, detail?: string) =>
 	const k2 = ctxKind();
 	const selActions = Array.from(ctx().querySelectorAll("[data-action]")).map((b) => (b as HTMLElement).dataset.action);
 	const cr = ctx().getBoundingClientRect();
-	add(`${label}: the contextual bar changes with the context`, k0 === "none" && k1 === "lasso" && lassoActions.join() === "selection-paste" && k2 === "selection" && selActions.includes("selection-copy") && selActions.includes("delete-selection"),
+	add(`${label}: the contextual bar changes with the context`, k0 === "none" && k1 === "lasso" && lassoActions.join() === "selection-paste,excerpt-to-page,excerpt-copy" && k2 === "selection" && selActions.includes("selection-copy") && selActions.includes("delete-selection"),
 		`${k0} → ${k1} (${lassoActions.join()}) → ${k2} (${selActions.join()})`);
 	add(`${label}: the contextual bar is inside the view with 40 px targets`, inView(cr) && cr.bottom <= window.innerHeight + 0.5 && Array.from(ctx().querySelectorAll("button")).every((b) => (b as HTMLElement).offsetHeight >= 40 && (b as HTMLElement).offsetWidth >= 40),
 		`bar ${Math.round(cr.left)}–${Math.round(cr.right)}, bottom ${Math.round(cr.bottom)}`);
