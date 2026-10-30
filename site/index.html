@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.github.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="dark light">
+<title>Notebook roadmap</title>
+<meta name="description" content="Live roadmap of Notebook, the handwriting plugin for Obsidian: what has shipped, what is next, and the most requested features.">
+<style>
+/* Tokens from DESIGN.md §2 (dark is the reference, light is derived). */
+:root {
+	--nb-bg: #0A0E17; --nb-bg-elevated: #0F1420; --nb-panel: #121826; --nb-tile: #161D2D;
+	--nb-border: rgba(255,255,255,0.07); --nb-border-strong: rgba(255,255,255,0.12);
+	--nb-text: #F4F6FB; --nb-text-muted: #9AA3B5; --nb-text-faint: #6B7487;
+	--nb-accent: #6D8BFF; --nb-accent-bg: rgba(109,139,255,0.16); --nb-on-accent: #0A0E17;
+	--nb-success: #3DD68C; --nb-success-bg: rgba(61,214,140,0.14);
+	--nb-amber: #F59E0B; --nb-amber-bg: rgba(245,158,11,0.16);
+	--nb-violet: #8B5CF6; --nb-violet-bg: rgba(139,92,246,0.16);
+	--nb-danger: #F2555A; --nb-danger-bg: rgba(242,85,90,0.14);
+	--nb-neutral-bg: rgba(154,163,181,0.14);
+	--shadow: 0 8px 24px rgba(0,0,0,0.25);
+	color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+	:root {
+		--nb-bg: #F6F7FB; --nb-bg-elevated: #EEF0F6; --nb-panel: #FFFFFF; --nb-tile: #F1F3F9;
+		--nb-border: rgba(15,23,42,0.08); --nb-border-strong: rgba(15,23,42,0.14);
+		--nb-text: #0E1424; --nb-text-muted: #5B6478; --nb-text-faint: #7A8396;
+		--nb-accent: #4F6BF0; --nb-accent-bg: rgba(79,107,240,0.12); --nb-on-accent: #FFFFFF;
+		--nb-success: #15925A; --nb-success-bg: rgba(21,146,90,0.12);
+		--nb-amber: #B45309; --nb-amber-bg: rgba(245,158,11,0.14);
+		--nb-violet: #6D3FE0; --nb-violet-bg: rgba(139,92,246,0.12);
+		--nb-danger: #C9363B; --nb-danger-bg: rgba(242,85,90,0.12);
+		--nb-neutral-bg: rgba(91,100,120,0.10);
+		--shadow: 0 8px 24px rgba(15,23,42,0.10);
+		color-scheme: light;
+	}
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+	margin: 0; background: var(--nb-bg); color: var(--nb-text);
+	font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, "Helvetica Neue", sans-serif;
+}
+a { color: var(--nb-accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--nb-accent); outline-offset: 2px; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 32px; }
+@media (max-width: 640px) { .wrap { padding: 0 16px; } }
+
+/* Hero */
+.hero { position: relative; overflow: hidden; border-bottom: 1px solid var(--nb-border); background: var(--nb-bg-elevated); }
+.hero picture, .hero img.band { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hero img.band { object-fit: cover; object-position: right center; }
+.hero-inner { position: relative; padding: 56px 0 48px; }
+.eyebrow { display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--nb-text-muted); padding: 5px 12px; border-radius: 999px; background: var(--nb-panel); border: 1px solid var(--nb-border); }
+h1 { font-size: 44px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; margin: 16px 0 8px; }
+.sub { font-size: 17px; color: var(--nb-text-muted); max-width: 560px; margin: 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 20px; border-radius: 999px; font-weight: 600; font-size: 15px; border: 1px solid var(--nb-border-strong); background: var(--nb-panel); color: var(--nb-text); transition: transform 150ms ease-out, background 150ms ease-out; }
+.btn:hover { text-decoration: none; background: var(--nb-tile); }
+.btn:active { transform: scale(0.98); }
+.btn.primary { background: var(--nb-accent); border-color: var(--nb-accent); color: var(--nb-on-accent); box-shadow: var(--shadow); }
+.btn.primary:hover { filter: brightness(1.08); background: var(--nb-accent); }
+@media (max-width: 640px) { h1 { font-size: 34px; } .hero-inner { padding: 40px 0 32px; } }
+
+/* Sections */
+main { padding: 32px 0 48px; }
+section { margin-top: 32px; }
+h2 { font-size: 20px; font-weight: 600; margin: 0 0 16px; display: flex; align-items: center; gap: 10px; }
+.panel { background: var(--nb-panel); border: 1px solid var(--nb-border); border-radius: 16px; padding: 20px; }
+.muted { color: var(--nb-text-muted); }
+.faint { color: var(--nb-text-faint); }
+.small { font-size: 13px; }
+
+/* Counters */
+.kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+@media (max-width: 860px) { .kpis { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 520px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+.kpi { background: var(--nb-tile); border: 1px solid var(--nb-border); border-radius: 14px; padding: 16px; }
+.kpi-num { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.kpi-label { font-size: 13px; color: var(--nb-text-muted); display: flex; align-items: center; gap: 6px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+.progress { margin-top: 20px; }
+.progress-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; font-size: 13px; color: var(--nb-text-muted); }
+.progress-head strong { color: var(--nb-text); font-size: 15px; }
+.bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--nb-tile); border: 1px solid var(--nb-border); }
+.bar span { display: block; height: 100%; }
+
+/* Requests */
+.req-list { list-style: none; margin: 0; padding: 0; }
+.req-list li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--nb-border); }
+.req-list li:first-child { border-top: 0; }
+.votes { flex: none; min-width: 56px; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; padding: 4px 10px; border-radius: 999px; background: var(--nb-accent-bg); color: var(--nb-accent); font-size: 13px; }
+.req-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.req-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+
+/* Filters */
+.filters { display: grid; gap: 12px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.label { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--nb-text-faint); min-width: 72px; }
+.chip { min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--nb-border-strong); background: transparent; color: var(--nb-text); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.chip[aria-pressed="true"] { background: var(--nb-accent-bg); border-color: var(--nb-accent); color: var(--nb-text); }
+.chip .n { color: var(--nb-text-muted); font-variant-numeric: tabular-nums; }
+.search, select { min-height: 40px; border-radius: 999px; border: 1px solid var(--nb-border-strong); background: var(--nb-tile); color: var(--nb-text); font: inherit; padding: 0 16px; }
+.search { flex: 1; min-width: 200px; }
+select { max-width: 100%; padding-right: 32px; }
+@media (max-width: 640px) { .label { min-width: 100%; } select { width: 100%; } }
+
+/* Features */
+.count { font-size: 13px; color: var(--nb-text-muted); margin: 16px 0 8px; }
+.group { margin-top: 20px; }
+.group-title { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--nb-text-faint); margin: 0 0 8px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 12px; }
+.card { background: var(--nb-panel); border: 1px solid var(--nb-border); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.card-title { font-size: 15px; font-weight: 500; line-height: 1.35; }
+.card-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: auto; }
+.pill { font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 999px; background: var(--nb-neutral-bg); color: var(--nb-text-muted); white-space: nowrap; }
+.pill.s-done { background: var(--nb-success-bg); color: var(--nb-success); }
+.pill.s-progress { background: var(--nb-accent-bg); color: var(--nb-accent); }
+.pill.s-todo { background: var(--nb-neutral-bg); color: var(--nb-text-muted); }
+.pill.s-deferred { background: var(--nb-amber-bg); color: var(--nb-amber); }
+.pill.s-dropped { background: var(--nb-danger-bg); color: var(--nb-danger); }
+.pill.p1 { background: var(--nb-violet-bg); color: var(--nb-violet); }
+.pill.rel { background: transparent; border: 1px solid var(--nb-border-strong); color: var(--nb-text); font-variant-numeric: tabular-nums; }
+.id { font-size: 12px; color: var(--nb-text-faint); font-variant-numeric: tabular-nums; }
+.card.dropped .card-title { text-decoration: line-through; color: var(--nb-text-muted); }
+.more { margin-top: 16px; text-align: center; }
+.empty { padding: 32px; text-align: center; color: var(--nb-text-muted); }
+
+footer { border-top: 1px solid var(--nb-border); padding: 24px 0 40px; font-size: 13px; color: var(--nb-text-muted); }
+footer .row { justify-content: space-between; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="hero">
+	<picture>
+		<source srcset="media/art-band-light.png" media="(prefers-color-scheme: light)">
+		<img class="band" src="media/art-band-dark.png" alt="">
+	</picture>
+	<div class="wrap hero-inner">
+		<span class="eyebrow">Notebook for Obsidian · public roadmap</span>
+		<h1>What's shipped, what's next</h1>
+		<p class="sub">Every feature on the roadmap of Notebook, the free and open-source handwriting plugin for Obsidian, built from <a href="https://github.com/Plagemes/Obsidian-Notebook/blob/main/docs/roadmap.md">docs/roadmap.md</a> on every change.</p>
+		<div class="actions">
+			<a class="btn primary" href="https://github.com/Plagemes/Obsidian-Notebook/issues/new?template=feature_request.yml">＋ Request a feature</a>
+			<a class="btn" href="https://github.com/Plagemes/Obsidian-Notebook#readme">Install Notebook</a>
+			<a class="btn" href="https://github.com/Plagemes/Obsidian-Notebook">View on GitHub</a>
+		</div>
+	</div>
+</header>
+
+<main class="wrap">
+	<section aria-labelledby="progress-title">
+		<h2 id="progress-title">Progress</h2>
+		<div class="panel">
+			<div class="kpis" id="kpis"></div>
+			<div class="progress">
+				<div class="progress-head"><span id="progress-text">Loading the roadmap…</span><span id="release"></span></div>
+				<div class="bar" id="bar" role="img" aria-label="Roadmap progress"></div>
+			</div>
+		</div>
+	</section>
+
+	<section aria-labelledby="requests-title">
+		<div class="req-head">
+			<h2 id="requests-title" style="margin:0">Most requested</h2>
+			<a class="btn primary" href="https://github.com/Plagemes/Obsidian-Notebook/issues/new?template=feature_request.yml">＋ Request a feature</a>
+		</div>
+		<p class="muted small" style="margin-top:0">Open feature requests on GitHub, sorted by 👍. Vote with a 👍 reaction on the issue.</p>
+		<div class="panel" id="requests"><p class="muted" style="margin:0">Loading requests…</p></div>
+	</section>
+
+	<section aria-labelledby="features-title">
+		<h2 id="features-title">All features</h2>
+		<div class="panel filters">
+			<div class="row" role="group" aria-label="Status"><span class="label">Status</span><span class="row" id="f-status"></span></div>
+			<div class="row" role="group" aria-label="Priority"><span class="label">Priority</span><span class="row" id="f-priority"></span></div>
+			<div class="row">
+				<span class="label">Area</span>
+				<select id="f-area" aria-label="Area"><option value="">All areas</option></select>
+				<input class="search" id="f-search" type="search" placeholder="Search features…" aria-label="Search features" autocomplete="off">
+			</div>
+		</div>
+		<div class="count" id="count" aria-live="polite"></div>
+		<div id="list"></div>
+		<div class="more" id="more"></div>
+	</section>
+</main>
+
+<footer>
+	<div class="wrap">
+		<div class="row">
+			<span><strong>Shipped</strong> means implemented, released and covered by automated tests. Notebook has not been verified on Android hardware yet; see <a href="https://github.com/Plagemes/Obsidian-Notebook/blob/main/docs/testing.md">docs/testing.md</a>.</span>
+			<span>MIT licence · no cookies, no analytics, no trackers</span>
+		</div>
+	</div>
+</footer>
+
+<script>
+(() => {
+	"use strict";
+	const REPO = "Plagemes/Obsidian-Notebook";
+	const STATUS = [
+		["done", "Shipped", "var(--nb-success)"],
+		["progress", "In progress", "var(--nb-accent)"],
+		["todo", "To do", "var(--nb-text-faint)"],
+		["deferred", "Deferred", "var(--nb-amber)"],
+		["dropped", "Dropped", "var(--nb-danger)"],
+	];
+	const LABEL = Object.fromEntries(STATUS.map(([k, l]) => [k, l]));
+	const PRIORITY = [["P1", "P1 · next"], ["P2", "P2 · very useful"], ["P3", "P3 · nice to have"]];
+	const PAGE = 120;
+	const state = { status: "all", priority: "all", area: "", q: "", shown: PAGE };
+	let features = [];
+
+	const $ = (id) => document.getElementById(id);
+	function el(tag, cls, text) {
+		const e = document.createElement(tag);
+		if (cls) e.className = cls;
+		if (text !== undefined) e.textContent = text;
+		return e;
+	}
+
+	function chip(label, pressed, onClick, n) {
+		const b = el("button", "chip", label);
+		b.type = "button";
+		b.setAttribute("aria-pressed", String(pressed));
+		if (n !== undefined) b.append(el("span", "n", String(n)));
+		b.addEventListener("click", onClick);
+		return b;
+	}
+
+	function renderCounters(data) {
+		const c = data.counts;
+		const kpis = $("kpis");
+		kpis.replaceChildren();
+		for (const [key, label, colour] of STATUS) {
+			const k = el("div", "kpi");
+			k.append(el("div", "kpi-num", String(c[key] ?? 0)));
+			const l = el("div", "kpi-label");
+			const d = el("span", "dot");
+			d.style.background = colour;
+			l.append(d, document.createTextNode(label));
+			k.append(l);
+			kpis.append(k);
+		}
+		const planned = c.done + c.progress + c.todo;
+		const pct = planned ? Math.round((c.done / planned) * 100) : 0;
+		const t = $("progress-text");
+		t.replaceChildren(el("strong", "", `${pct}% shipped`), document.createTextNode(` · ${c.done} of ${planned} planned features (deferred and dropped not counted)`));
+		$("release").textContent = data.latestRelease ? `Latest release ${data.latestRelease}` : "";
+		const bar = $("bar");
+		bar.replaceChildren();
+		bar.setAttribute("aria-label", `${c.done} shipped, ${c.progress} in progress, ${c.todo} to do`);
+		for (const [key, , colour] of STATUS.slice(0, 2)) {
+			const s = el("span");
+			s.style.width = `${planned ? (c[key] / planned) * 100 : 0}%`;
+			s.style.background = colour;
+			bar.append(s);
+		}
+	}
+
+	function renderFilters() {
+		const counts = {};
+		for (const f of features) counts[f.status] = (counts[f.status] ?? 0) + 1;
+		const fs = $("f-status");
+		fs.replaceChildren(chip("All", state.status === "all", () => setState({ status: "all" }), features.length));
+		for (const [key, label] of STATUS) if (counts[key]) fs.append(chip(label, state.status === key, () => setState({ status: key }), counts[key]));
+		const fp = $("f-priority");
+		fp.replaceChildren(chip("All", state.priority === "all", () => setState({ priority: "all" })));
+		for (const [key, label] of PRIORITY) fp.append(chip(label, state.priority === key, () => setState({ priority: key })));
+	}
+
+	function fillAreas() {
+		const select = $("f-area");
+		const groups = new Map();
+		for (const f of features) {
+			const m = `${f.milestone}${f.milestoneTitle ? ` — ${f.milestoneTitle}` : ""}`;
+			if (!groups.has(m)) groups.set(m, new Set());
+			groups.get(m).add(f.area);
+		}
+		for (const [m, areas] of groups) {
+			const g = document.createElement("optgroup");
+			g.label = m;
+			for (const a of areas) {
+				const o = document.createElement("option");
+				o.value = `${m.split(" — ")[0]}|${a}`;
+				o.textContent = a;
+				g.append(o);
+			}
+			select.append(g);
+		}
+		select.addEventListener("change", () => setState({ area: select.value }));
+	}
+
+	const norm = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+	function matches(f) {
+		if (state.status !== "all" && f.status !== state.status) return false;
+		if (state.priority !== "all" && f.priority !== state.priority) return false;
+		if (state.area && `${f.milestone}|${f.area}` !== state.area) return false;
+		if (state.q) {
+			const hay = norm(`${f.id} ${f.title} ${f.area} ${f.milestone} ${f.milestoneTitle} ${f.release}`);
+			if (!state.q.split(/\s+/).every((w) => hay.includes(w))) return false;
+		}
+		return true;
+	}
+
+	function card(f) {
+		const c = el("article", `card ${f.status}`);
+		c.append(el("div", "card-title", f.title));
+		const meta = el("div", "card-meta");
+		meta.append(el("span", `pill s-${f.status}`, LABEL[f.status] ?? f.status));
+		if (f.release) meta.append(el("span", "pill rel", /^\d/.test(f.release) && !f.release.includes(" ") ? `v${f.release}` : f.release));
+		meta.append(el("span", `pill ${f.priority === "P1" ? "p1" : ""}`, f.priority));
+		meta.append(el("span", "id", `#${f.id}`));
+		c.append(meta);
+		return c;
+	}
+
+	function renderList() {
+		const hits = features.filter(matches);
+		$("count").textContent = `${hits.length} of ${features.length} features`;
+		const list = $("list");
+		list.replaceChildren();
+		if (!hits.length) {
+			const e = el("div", "panel empty", "No feature matches these filters. ");
+			const a = el("a", "", "Request it");
+			a.href = `https://github.com/${REPO}/issues/new?template=feature_request.yml`;
+			e.append(a);
+			list.append(e);
+			$("more").replaceChildren();
+			return;
+		}
+		let group = null;
+		let grid = null;
+		for (const f of hits.slice(0, state.shown)) {
+			const key = `${f.milestone} · ${f.area}`;
+			if (key !== group) {
+				group = key;
+				const g = el("div", "group");
+				g.append(el("h3", "group-title", f.area === f.milestoneTitle ? `${f.milestone} · ${f.area}` : `${f.milestone} ${f.milestoneTitle ? `${f.milestoneTitle} · ` : ""}${f.area}`));
+				grid = el("div", "cards");
+				g.append(grid);
+				list.append(g);
+			}
+			grid.append(card(f));
+		}
+		const more = $("more");
+		more.replaceChildren();
+		if (hits.length > state.shown) {
+			const b = el("button", "btn", `Show ${Math.min(PAGE, hits.length - state.shown)} more`);
+			b.type = "button";
+			b.addEventListener("click", () => {
+				state.shown += PAGE;
+				renderList();
+			});
+			more.append(b);
+		}
+	}
+
+	function setState(patch) {
+		Object.assign(state, patch, { shown: PAGE });
+		renderFilters();
+		renderList();
+	}
+
+	let timer = 0;
+	$("f-search").addEventListener("input", (e) => {
+		clearTimeout(timer);
+		timer = setTimeout(() => setState({ q: norm(e.target.value.trim()) }), 120);
+	});
+
+	async function loadRoadmap() {
+		try {
+			const r = await fetch("roadmap.json", { cache: "no-cache" });
+			if (!r.ok) throw new Error(String(r.status));
+			const data = await r.json();
+			features = data.features;
+			renderCounters(data);
+			fillAreas();
+			renderFilters();
+			renderList();
+		} catch {
+			$("progress-text").textContent = "The roadmap data could not be loaded.";
+			const p = el("div", "panel empty", "The roadmap could not be loaded. Read it on GitHub: ");
+			const a = el("a", "", "docs/roadmap.md");
+			a.href = `https://github.com/${REPO}/blob/main/docs/roadmap.md`;
+			p.append(a);
+			$("list").replaceChildren(p);
+		}
+	}
+
+	async function loadRequests() {
+		const box = $("requests");
+		const fallback = (text) => {
+			const p = el("p", "muted", text);
+			p.style.margin = "0";
+			const a = el("a", "", "See the requests on GitHub");
+			a.href = `https://github.com/${REPO}/issues?q=is%3Aissue+is%3Aopen+label%3Afeature-request+sort%3Areactions-%2B1-desc`;
+			p.append(document.createTextNode(" "), a);
+			box.replaceChildren(p);
+		};
+		try {
+			const r = await fetch(`https://api.github.com/repos/${REPO}/issues?labels=feature-request&state=open&per_page=100`, {
+				headers: { Accept: "application/vnd.github+json" },
+				credentials: "omit",
+				referrerPolicy: "no-referrer",
+			});
+			if (!r.ok) throw new Error(String(r.status));
+			const issues = (await r.json()).filter((i) => !i.pull_request);
+			if (!issues.length) {
+				fallback("No open requests yet. Be the first to ask for something.");
+				return;
+			}
+			issues.sort((a, b) => (b.reactions?.["+1"] ?? 0) - (a.reactions?.["+1"] ?? 0) || b.comments - a.comments);
+			const ul = el("ul", "req-list");
+			for (const i of issues.slice(0, 10)) {
+				const li = el("li");
+				li.append(el("span", "votes", `👍 ${i.reactions?.["+1"] ?? 0}`));
+				const a = el("a", "req-title", i.title);
+				a.href = /^https:\/\/github\.com\//.test(i.html_url) ? i.html_url : `https://github.com/${REPO}/issues/${Number(i.number)}`;
+				li.append(a, el("span", "faint small", `#${Number(i.number)}`));
+				ul.append(li);
+			}
+			box.replaceChildren(ul);
+		} catch {
+			fallback("The requests could not be loaded right now (GitHub may be rate-limiting).");
+		}
+	}
+
+	loadRoadmap();
+	loadRequests();
+})();
+</script>
+</body>
+</html>

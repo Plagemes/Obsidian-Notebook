@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ideas and discussion
+    url: https://github.com/Plagemes/Obsidian-Notebook/discussions/categories/ideas
+    about: Not sure it is a feature yet? Talk it through in Discussions → Ideas.
+  - name: Public roadmap
+    url: https://plagemes.github.io/Obsidian-Notebook/
+    about: See what has shipped, what is planned and the most requested features.

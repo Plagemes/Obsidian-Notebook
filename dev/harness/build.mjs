@@ -33,6 +33,19 @@ export async function buildHarness() {
 		alias: { obsidian: join(here, "obsidian-stub.ts") },
 		logLevel: "warning",
 	});
+	// The repository banner and social preview (docs/media/): the art engine, covers and a pen stroke, no plugin view.
+	await esbuild.build({
+		entryPoints: [join(here, "banner.ts")],
+		bundle: true,
+		format: "iife",
+		target: "es2021",
+		sourcemap: "inline",
+		outfile: join(out, "banner.js"),
+		alias: { obsidian: join(here, "obsidian-stub.ts") },
+		logLevel: "warning",
+	});
+	copyFileSync(join(here, "banner.html"), join(out, "banner.html"));
+	copyFileSync(join(here, "banner.css"), join(out, "banner.css"));
 	copyFileSync(join(here, "art.html"), join(out, "art.html"));
 	copyFileSync(join(here, "art.css"), join(out, "art.css"));
 	copyFileSync(join(here, "index.html"), join(out, "index.html"));
