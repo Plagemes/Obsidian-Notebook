@@ -23,7 +23,7 @@ import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layou
 import { HoldTracker } from "../ink/hold";
 import { LastTool } from "../ink/last-tool";
 import { MultiTap } from "../ink/multitap";
-import { scribbleEraseCommand } from "../ink/scribble";
+import { scribbleEraseSteps } from "../ink/scribble";
 import { lineAt, TextLayoutCache, wordAt } from "../ink/words";
 import { InkBuilder } from "../ink/ink-geometry";
 import { OneEuroFilter, stabilizationParams } from "../ink/one-euro";
@@ -2176,12 +2176,15 @@ export class NotebookView extends FileView {
 	 */
 	private eraseByScribble(active: ActiveStroke, page: Page): boolean {
 		if (!this.host.settings.scribbleErase || active.stroke.tool !== "pen" || active.snap || active.recognized || !this.renderer) return false;
-		const cmd = scribbleEraseCommand(page, this.ink.toPoints(), performance.now() - this.strokeStart, active.stroke.width, this.renderer.boundsOf);
-		if (!cmd) return false;
+		const stroke = freezeStroke({ ...active.stroke, points: this.ink.toPoints() });
+		const steps = scribbleEraseSteps(page, stroke, performance.now() - this.strokeStart, this.renderer.boundsOf);
+		if (!steps) return false;
 		this.clearSelection();
 		this.renderer.cancelWet();
 		this.renderer.setLive(null);
-		this.history.execute(cmd);
+		// The scribble is in the history as the user's stroke, so Undo after a false positive gives it back.
+		this.history.execute(steps.keep);
+		this.history.execute(steps.erase);
 		this.renderer.invalidate();
 		this.session?.markChanged();
 		this.updateHistoryButtons();
