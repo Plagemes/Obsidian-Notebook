@@ -11,6 +11,8 @@ import { parse, serialize } from "../src/model/serialize";
 import type { NotebookDocument, Page, Point, Stroke } from "../src/model/types";
 
 const { gestureWorld, runGesture } = await import("../src/view/pen-gesture-actions");
+const { encodeMarkdownPath, isConflictedCopyPath, maskCode, planNoteLinks, applyLinkChanges, scanPageLinks } = await import("../src/integration/link-update");
+type Lookup = import("../src/integration/link-update").NotebookLookup;
 
 // --- shared helpers ---
 
@@ -219,5 +221,97 @@ describe("error notices while the pen is down", () => {
 			writing.reset();
 			vi.unstubAllGlobals();
 		}
+	});
+});
+
+// --- 6 and 8. "Update links": encoding, conflicted copies, what is masked, the line shown ---
+
+describe("update links: relocation targets and masking", () => {
+	const note = "n/Note.md";
+	function lookupOf(books: Record<string, string[]>, moved: Record<string, string[]> = {}): Lookup {
+		const byName = new Map(Object.keys(books).map((p) => [p.split("/").pop()!.toLowerCase(), p] as const));
+		return {
+			resolve: (lp) => {
+				const path = byName.get((lp.split("/").pop() ?? "").toLowerCase());
+				return path ? { path, ambiguous: false } : null;
+			},
+			pageIds: async (p) => books[p] ?? null,
+			notebooksWithPage: async (id) => Object.entries(books).filter(([, ids]) => ids.includes(id)).map(([p]) => p),
+			linkPathFor: (p) => p.split("/").pop()!,
+			isConflictedCopy: (p) => isConflictedCopyPath(p, Object.keys(books)),
+			movedPageIds: async (id) => moved[id] ?? [],
+		};
+	}
+
+	it("encodes parentheses, # and ? in a Markdown link target", () => {
+		expect(encodeMarkdownPath("Physics (1).notebook")).toBe("Physics%20%281%29.notebook");
+		expect(encodeMarkdownPath("C# notes?.notebook")).toBe("C%23%20notes%3F.notebook");
+		expect(decodeURIComponent(encodeMarkdownPath("A (b) #c.notebook"))).toBe("A (b) #c.notebook");
+	});
+
+	it("relocates a Markdown link to a notebook with parentheses so that it still parses", async () => {
+		const books = { "N/Old.notebook": ["a"], "N/Physics (2026).notebook": ["z", "b"] };
+		const text = "[x](Old.notebook#p1&id=b)";
+		const plan = await planNoteLinks(note, text, lookupOf(books));
+		const out = applyLinkChanges(text, plan.changes).text;
+		expect(out).toBe("[x](Physics%20%282026%29.notebook#p2&id=b)");
+		expect(scanPageLinks(out).map((l) => [l.path, l.fragment])).toEqual([["Physics (2026).notebook", "p2&id=b"]]);
+	});
+
+	it("keeps the path exactly as written in `before`, however it was encoded", async () => {
+		const books = { "N/My Old.notebook": ["a"], "N/New.notebook": ["b"] };
+		const text = "[x](My%20Old.notebook#p1&id=b)";
+		const plan = await planNoteLinks(note, text, lookupOf(books));
+		expect(plan.changes[0]!.before).toBe("My%20Old.notebook#p1&id=b");
+		expect(applyLinkChanges(text, plan.changes)).toMatchObject({ text: "[x](New.notebook#p1&id=b)", applied: 1, stale: 0 });
+	});
+
+	it("never relocates to a conflicted copy, which holds the same page ids", async () => {
+		const books = { "N/Old.notebook": ["a"], "N/New.notebook": ["b"], "N/New (1).notebook": ["b"], "N/Gone (1).notebook": ["q"], "N/Gone.notebook": [] };
+		const plan = await planNoteLinks(note, "[[Old.notebook#p1&id=b]] [[Old.notebook#p1&id=q]]", lookupOf(books));
+		expect(plan.changes.map((c) => c.notebook)).toEqual(["N/New.notebook"]);
+		expect(plan.skipped.map((s) => s.reason)).toEqual(["page-gone"]);
+		expect(isConflictedCopyPath("N/New (1).notebook", Object.keys(books))).toBe(true);
+		expect(isConflictedCopyPath("N/New.notebook", Object.keys(books))).toBe(false);
+		// "(1)" alone, without the base notebook in the same folder, is a name like any other.
+		expect(isConflictedCopyPath("M/New (1).notebook", ["M/New (1).notebook", "N/New.notebook"])).toBe(false);
+	});
+
+	it("follows a page that a move gave a new id", async () => {
+		const books = { "N/Old.notebook": ["a"], "N/New.notebook": ["z", "b2"] };
+		const plan = await planNoteLinks(note, "[[Old.notebook#p1&id=b]]", lookupOf(books, { b: ["b2"] }));
+		expect(plan.changes[0]).toMatchObject({ kind: "relocate", notebook: "N/New.notebook", after: "New.notebook#p2&id=b2" });
+	});
+
+	it("masks fences in blockquotes, callouts and lists, comments and the frontmatter", () => {
+		const text = [
+			"---",
+			"source: \"[[Physics.notebook#p1]]\"",
+			"---",
+			"> [!note]",
+			"> ```",
+			"> [[Physics.notebook#p2]]",
+			"> ```",
+			"- item",
+			"    ~~~~",
+			"    [[Physics.notebook#p3]]",
+			"    ~~~",
+			"    still code [[Physics.notebook#p4]]",
+			"    ~~~~",
+			"%% hidden [[Physics.notebook#p5]]",
+			"still hidden %% [[Physics.notebook#p6]]",
+		].join("\n");
+		const masked = maskCode(text);
+		expect(masked).toHaveLength(text.length);
+		expect(masked.split("\n")).toHaveLength(text.split("\n").length);
+		expect(scanPageLinks(text).map((l) => l.fragment)).toEqual(["p6"]);
+	});
+
+	it("tells each link apart in the list by the text of its line", async () => {
+		const books = { "N/Physics.notebook": ["a", "b"] };
+		const text = "intro\n  - see [[Physics.notebook#p2]] for the proof  \n[[Physics.notebook#p9]]";
+		const plan = await planNoteLinks(note, text, lookupOf(books));
+		expect(plan.changes[0]).toMatchObject({ line: 2, lineText: "- see [[Physics.notebook#p2]] for the proof" });
+		expect(plan.skipped[0]).toMatchObject({ line: 3, lineText: "[[Physics.notebook#p9]]" });
 	});
 });

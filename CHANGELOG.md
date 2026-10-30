@@ -7,6 +7,8 @@
 - **Deleting a box or a marker no longer offers to delete the ink it frames.** Structured boxes and region markers do not own ink (they annotate a region, the ink is not written on them), so moving or deleting one leaves that ink alone; the offer after deleting a text box or an image never counts or deletes hidden ink while the solutions are not shown.
 - **Marker labels changed on read are reported.** A marker label or box title that reading has to normalise (extra spaces, line breaks, too long, blank) now counts as a dropped detail, so the notice about repaired details appears instead of the label changing silently.
 - **Error notices are never held back while writing.** Failed saves, backups of unreadable or conflicting files, integrity problems and a failed save before a version restore are shown at once instead of waiting until the pen is lifted.
+- **Update links: Markdown links to notebooks with parentheses, and conflicted copies.** A relocated Markdown link now encodes `(`, `)`, `#` and `?` (a link to `Physics (1).notebook` no longer breaks), the text it replaces is taken exactly as written in the note, and a link is never moved to a sync conflicted copy (`Notes (1).notebook` next to `Notes.notebook`), which holds the same page ids.
+- **Update links: fewer false links, and the line in the list.** Links inside fenced code in blockquotes, callouts and lists, inside `%% %%` comments and in the frontmatter are left alone, and the list shows the text of the line each link is on.
 
 ## 0.7.0 — 2026-10-30
 

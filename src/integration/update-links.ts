@@ -4,7 +4,9 @@ import { parse } from "../model/serialize";
 import { isNotebookFile, NOTEBOOK_EXTENSIONS, readNotebookText } from "../storage/format";
 import { isHiddenNotebookPath } from "../storage/trash-paths";
 import type { NotebookSettings } from "../settings";
-import { applyLinkChanges, planNoteLinks, type LinkChange, type LinkPlan, type LinkSkip, type NotebookLookup, type SkipReason } from "./link-update";
+import {
+	applyLinkChanges, isConflictedCopyPath, planNoteLinks, type LinkChange, type LinkPlan, type LinkSkip, type NotebookLookup, type SkipReason,
+} from "./link-update";
 import { candidatePaths } from "./links";
 import { viewsOf } from "./open";
 
@@ -89,6 +91,10 @@ class VaultNotebooks implements NotebookLookup {
 		const file = this.files.find((f) => f.path === path);
 		return file ? this.app.metadataCache.fileToLinktext(file, source, false) : path;
 	}
+
+	isConflictedCopy(path: string): boolean {
+		return isConflictedCopyPath(path, this.files.map((f) => f.path));
+	}
 }
 
 /** Plans the update for every note that could hold a page link. Reads notes, writes nothing. */
@@ -163,12 +169,17 @@ class UpdateLinksModal extends Modal {
 				const shown = (s: string) => (c.kind === "relocate" ? s : `#${s}`);
 				text.createDiv({ text: `${t("links.update.line", { n: String(c.line) })}: ${shown(c.before)} → ${shown(c.after)}` });
 				text.createDiv({ text: t(KINDS[c.kind]), cls: "notebook-update-links-note" });
+				if (c.lineText) text.createDiv({ text: c.lineText, cls: "notebook-update-links-line" });
 			}
 		}
 		if (this.plan.skipped.length > 0) {
 			contentEl.createEl("h4", { text: t("links.update.skipped", { n: String(this.plan.skipped.length) }) });
 			const skipped = contentEl.createDiv({ cls: "notebook-update-links-list" });
-			for (const s of this.plan.skipped) skipped.createDiv({ text: skipLine(s), cls: "notebook-update-links-note" });
+			for (const s of this.plan.skipped) {
+				const row = skipped.createDiv();
+				row.createDiv({ text: skipLine(s), cls: "notebook-update-links-note" });
+				if (s.lineText) row.createDiv({ text: s.lineText, cls: "notebook-update-links-line" });
+			}
 		}
 		const bar = contentEl.createDiv({ cls: "modal-button-container" });
 		const applyButton = bar.createEl("button", { cls: "mod-cta", attr: { type: "button" } });

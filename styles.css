@@ -3482,6 +3482,15 @@ body {
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
 }
+
+/* The line of the note that holds the link, so the user can tell links apart before updating. */
+.notebook-update-links-line {
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
 /* wave 0.7: resilience — safe mode, "not saved" and integrity banners (view/resilience.ts), integrity report */
 .notebook-resilience:empty {
 	display: none;
