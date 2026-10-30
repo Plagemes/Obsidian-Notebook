@@ -1263,8 +1263,9 @@ export class NotebookView extends FileView {
 		const removedEls = sel.elements.filter((el) => page.elements?.includes(el));
 		for (const el of removedEls) commands.push(new RemoveElement(page.id, el));
 		// Ink written on a deleted object stays unless the user takes the offer shown afterwards (setting "Ink follows objects").
+		// v8: hidden ink is never offered (nor counted) while the solutions of the page are not shown.
 		const owned = this.host.settings.inkFollowsObjects && removedEls.length > 0
-			? inkOnRemoved(page.strokes, page.elements ?? [], removedEls, new Set(sel.strokes), measureText)
+			? inkOnRemoved(this.inkInView(page), page.elements ?? [], removedEls, new Set(sel.strokes), measureText)
 			: [];
 		this.clearSelection();
 		if (commands.length === 0) return;
@@ -2727,7 +2728,8 @@ export class NotebookView extends FileView {
 	private eraseByScribble(active: ActiveStroke, page: Page): boolean {
 		if (!this.host.settings.scribbleErase || active.stroke.tool !== "pen" || active.snap || active.recognized || !this.renderer) return false;
 		const stroke = freezeStroke({ ...active.stroke, points: this.ink.toPoints() });
-		const steps = scribbleEraseSteps(page, stroke, performance.now() - this.strokeStart, this.renderer.boundsOf);
+		// v8: hidden ink (the solutions) is never scratched out while it is not shown.
+		const steps = scribbleEraseSteps(page, stroke, performance.now() - this.strokeStart, this.renderer.boundsOf, {}, this.markers?.isRevealed(page) ?? false);
 		if (!steps) return false;
 		this.clearSelection();
 		this.renderer.cancelWet();
@@ -2954,6 +2956,7 @@ export class NotebookView extends FileView {
 			toLocal: (pageIndex, p) => this.toLocal(pageIndex, p),
 			stageRect: () => this.stage.getBoundingClientRect(),
 			boundsOf: () => this.renderer?.boundsOf,
+			revealed: (page) => this.markers?.isRevealed(page) ?? false,
 			selection: () => this.selection,
 			selectionHit: (pageIndex, local) => this.selection?.pageIndex === pageIndex && this.selectionHit(local) !== null,
 			selectPolygon: (pageIndex, polygon) => {

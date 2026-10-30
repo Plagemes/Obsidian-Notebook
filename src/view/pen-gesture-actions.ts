@@ -12,6 +12,7 @@ import { movePlan } from "../ink/gestures/move";
 import { planSpaceChange } from "../ink/space";
 import { cloneMeta, createStroke } from "../model/document";
 import { AddStroke, SetMeta, type Command } from "../model/history";
+import { visibleStrokes } from "../model/markers";
 import { pageContentCommand } from "../model/page-content";
 import { freezeStroke } from "../model/serialize";
 import { DEFAULT_META, RENDER_INK, type NotebookDocument, type Page, type PageElement, type Point, type Stroke } from "../model/types";
@@ -31,6 +32,8 @@ export interface PenGestureView {
 	toLocal(pageIndex: number, p: Pt): [number, number] | null;
 	stageRect(): DOMRect;
 	boundsOf(): ((s: Stroke) => BBox) | undefined;
+	/** v8: whether the hidden ink of `page` is shown (solutions revealed); hidden ink is never a gesture target otherwise. */
+	revealed(page: Page): boolean;
 	/** The current lasso selection, if any (page, strokes, objects). */
 	selection(): { pageIndex: number; strokes: readonly Stroke[]; elements: readonly PageElement[] } | null;
 	/** Is this page-local point on the selection (box or handles)? */
@@ -68,7 +71,7 @@ export function gestureWorld(v: PenGestureView): GestureWorld {
 			const page = v.doc()?.pages[idx];
 			if (!page) return 0;
 			const poly = toLocalPoints(v, idx, loop);
-			return strokesInLasso(page.strokes, poly).length + elementsInLasso(page.elements ?? [], poly, measureText).length;
+			return strokesInLasso(visibleStrokes(page.strokes, v.revealed(page)), poly).length + elementsInLasso(page.elements ?? [], poly, measureText).length;
 		},
 		scribbleVictims(trail) {
 			if (trail.length < 6) return 0;
@@ -82,7 +85,7 @@ export function gestureWorld(v: PenGestureView): GestureWorld {
 			}
 			const duration = trail[trail.length - 1]!.t - trail[0]!.t;
 			const scribble = detectScribble(pts, duration);
-			return scribble ? scribbleVictims(scribble, page.strokes, v.penStyle().width, v.boundsOf()).length : 0;
+			return scribble ? scribbleVictims(scribble, page.strokes, v.penStyle().width, v.boundsOf(), v.revealed(page)).length : 0;
 		},
 		onPage: (p) => v.pageIndexAt(p) >= 0,
 		onSelection(p) {
@@ -165,7 +168,7 @@ export function runGesture(v: PenGestureView, r: Recognition, trail: readonly Tr
 	switch (r.id) {
 		case "delete": {
 			if (!ink) return;
-			const steps = scribbleEraseSteps(ink.page, ink.stroke, trail[trail.length - 1]!.t - trail[0]!.t, v.boundsOf());
+			const steps = scribbleEraseSteps(ink.page, ink.stroke, trail[trail.length - 1]!.t - trail[0]!.t, v.boundsOf(), {}, v.revealed(ink.page));
 			if (steps) {
 				v.clearSelection();
 				v.execute([steps.keep, steps.erase]);

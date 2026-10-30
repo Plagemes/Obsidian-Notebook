@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **Hidden ink is safe from scribble erase and pen gestures.** Scratching out visible writing (scribble erase or the delete gesture) no longer deletes the invisible-ink solutions under it, and hidden ink no longer counts for the delete or circle-select gestures, unless the solutions of that page are shown. Insert space still moves hidden ink with the rest of the page so that solutions stay next to their exercise.
+- **Deleting a box or a marker no longer offers to delete the ink it frames.** Structured boxes and region markers do not own ink (they annotate a region, the ink is not written on them), so moving or deleting one leaves that ink alone; the offer after deleting a text box or an image never counts or deletes hidden ink while the solutions are not shown.
+
 ## 0.7.0 — 2026-10-30
 
 Not yet verified on Android hardware. The manual steps added in this version are numbered 135 to 177 in `docs/testing.md`; the ones that belong to each area are named below.
