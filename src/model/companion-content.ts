@@ -176,7 +176,7 @@ export function readHomeworkTasks(text: string): Map<string, NoteTask> {
 		const m = TASK_LINE.exec(line);
 		if (!m || out.has(m[3]!)) continue;
 		const done = /(?:^|\s)✅ (\d{4}-\d{2}-\d{2})(?=\s|$)/.exec(m[2]!);
-		out.set(m[3]!, { ticked: m[1] === "x" || m[1] === "X", doneDate: done && isIsoDate(done[1]) ? done[1]! : null });
+		out.set(m[3]!, { ticked: m[1] === "x" || m[1] === "X", doneDate: done && isIsoDate(done[1]) ? done[1] : null });
 	}
 	return out;
 }

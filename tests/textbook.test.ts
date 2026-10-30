@@ -164,7 +164,11 @@ class MemoryAdapter implements DeviceFileAdapter {
 }
 
 /** Books without the time stamp of the per-device files, to compare with what was set. */
-const plain = (d: TextbookData) => d.books.map(({ at: _at, ...b }) => b);
+const plain = (d: TextbookData) => d.books.map((b) => {
+	const copy = { ...b };
+	delete copy.at;
+	return copy;
+});
 
 describe("textbook store (one file per device)", () => {
 	const LEGACY = "Notebooks/_meta/textbooks.json";
