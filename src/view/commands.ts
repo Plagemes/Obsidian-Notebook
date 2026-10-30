@@ -51,6 +51,7 @@ export function toolCommands(): ToolCommand[] {
 	list.push({ id: "delete-selection", name: "command.deleteSelection", run: (v) => v.removeSelection() });
 	list.push({ id: "toggle-pages-panel", name: "command.toggleNavigator", run: (v) => v.toggleNavigator() });
 	list.push({ id: "toggle-ruler", name: "command.toggleRuler", run: (v) => v.toggleRuler() });
+	list.push({ id: "toggle-page-mode", name: "command.pageMode", run: (v) => v.togglePageMode() });
 	return list;
 }
 

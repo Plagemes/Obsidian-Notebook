@@ -608,6 +608,14 @@ const en = {
 	"pageRestore.unreadable": "This version cannot be read.",
 	"pageRestore.otherNotebook": "This version belongs to a different notebook.",
 	"pageRestore.done": "Page restored",
+	// wave 0.6: navigation
+	"settings.scrollMode": "Scrolling",
+	"settings.scrollMode.desc": "Continuous: the pages are stacked vertically. One page at a time: swipe sideways with a finger (or the mouse wheel) to turn the page, which snaps into place. The pen never turns the page.",
+	"settings.scrollMode.continuous": "Continuous (vertical)",
+	"settings.scrollMode.pages": "One page at a time",
+	"toolbar.pageMode": "One page at a time",
+	"command.pageMode": "Toggle one page at a time",
+	"status.loading": "Loading…",
 	// wave 0.6: timetable
 	"command.timetable": "Edit class timetable",
 	"command.openClass": "Open the current class (new lecture page)",
@@ -1641,6 +1649,14 @@ const it: Partial<Record<MessageKey, string>> = {
 	"pageRestore.unreadable": "Questa versione non è leggibile.",
 	"pageRestore.otherNotebook": "Questa versione appartiene a un altro quaderno.",
 	"pageRestore.done": "Pagina ripristinata",
+	// wave 0.6: navigation
+	"settings.scrollMode": "Scorrimento",
+	"settings.scrollMode.desc": "Continuo: le pagine sono in colonna. Una pagina alla volta: scorri di lato con un dito (o la rotellina) per girare pagina, che si ferma al suo posto. La penna non gira mai pagina.",
+	"settings.scrollMode.continuous": "Continuo (verticale)",
+	"settings.scrollMode.pages": "Una pagina alla volta",
+	"toolbar.pageMode": "Una pagina alla volta",
+	"command.pageMode": "Attiva o disattiva una pagina alla volta",
+	"status.loading": "Caricamento…",
 	// wave 0.6: timetable
 	"command.timetable": "Modifica orario delle lezioni",
 	"command.openClass": "Apri la lezione in corso (nuova pagina)",

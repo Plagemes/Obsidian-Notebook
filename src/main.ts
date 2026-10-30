@@ -1,6 +1,7 @@
 import { Notice, Plugin, type TFile } from "obsidian";
 import { t } from "./i18n";
 import { readSettings, type NotebookSettings } from "./settings";
+import { positionEquals, type SavedPosition } from "./ink/view-position";
 import { stressDocument } from "./model/stress";
 import { NOTEBOOK_EXTENSIONS } from "./storage/format";
 import { AdapterJournalStore, journalFolder } from "./storage/vault-io";
@@ -113,6 +114,7 @@ export default class NotebookPlugin extends Plugin {
 	}
 
 	onunload(): void {
+		if (this.rememberTimer !== null) this.writeLocation();
 		void this.flushAll();
 		this.timetable.stop();
 		this.host.dispose();
@@ -141,16 +143,31 @@ export default class NotebookPlugin extends Plugin {
 	}
 
 	/** Instant start: remembers the page being read (called a moment after it changes). Only the plugin settings are written. */
-	remember(path: string, page: number): void {
-		if (this.settings.lastNotebookPath === path && this.settings.lastNotebookPage === page) return;
-		this.settings.lastNotebookPath = path;
-		this.settings.lastNotebookPage = page;
+	remember(path: string, page: number, pos: SavedPosition | null = null): void {
+		const s = this.settings;
+		const samePlace = s.lastNotebookPath === path && s.lastNotebookPage === page;
+		if (samePlace && positionEquals(s.lastNotebookPos, pos)) return;
+		s.lastNotebookPath = path;
+		s.lastNotebookPage = page;
+		s.lastNotebookPos = pos;
+		// A new page is written at once; zoom and scroll alone only every few seconds, so a long read does not make Sync busy.
+		if (this.rememberTimer !== null) window.clearTimeout(this.rememberTimer);
+		this.rememberTimer = null;
+		if (!samePlace) this.writeLocation();
+		else this.rememberTimer = window.setTimeout(() => this.writeLocation(), 5000);
+	}
+
+	private rememberTimer: number | null = null;
+
+	private writeLocation(): void {
+		if (this.rememberTimer !== null) window.clearTimeout(this.rememberTimer);
+		this.rememberTimer = null;
 		void this.saveData(this.settings).catch((e) => console.error("[notebook] could not save the last location", e));
 	}
 
 	/** Opens the notebook that was open last, on the page that was in view. */
 	private async continueLast(): Promise<void> {
-		const { lastNotebookPath: path, lastNotebookPage: page } = this.settings;
+		const { lastNotebookPath: path, lastNotebookPage: page, lastNotebookPos: pos } = this.settings;
 		if (!path) {
 			new Notice(t("notice.noLastNotebook"));
 			return;
@@ -160,7 +177,7 @@ export default class NotebookPlugin extends Plugin {
 			new Notice(t("notice.lastNotebookGone", { path }));
 			return;
 		}
-		await openNotebookAtPage(this.app, file, page);
+		await openNotebookAtPage(this.app, file, page, pos?.page === page ? pos : null);
 	}
 
 	private openPicker(): void {

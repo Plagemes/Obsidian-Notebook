@@ -3,6 +3,8 @@ import { DEFAULT_ERASER_SIZE, DEFAULT_FAVOURITES, normaliseEraserSize, normalise
 import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "./ink/edge-zones";
 import { DEFAULT_GESTURE_SETTINGS, readGestureSettings, type GestureSettings } from "./ink/gesture-settings";
 import { PEN_BUTTON_ACTIONS, type PenButtonAction } from "./ink/input-policy";
+import { isScrollMode, type ScrollMode } from "./ink/page-mode";
+import { parsePosition, type SavedPosition } from "./ink/view-position";
 import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./model/types";
 import { DEFAULT_COMPANION_SETTINGS, readCompanionSettings, type CompanionSettings } from "./storage/companion-path";
 import { DEFAULT_TRASH_SETTINGS, readTrashSettings, type TrashSettings } from "./storage/trash-settings";
@@ -84,6 +86,11 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Tr
 	/** Instant start: the notebook and page (1-based) the reader was on last, for "Continue last notebook". Not shown in the settings tab. */
 	lastNotebookPath: string;
 	lastNotebookPage: number;
+	// wave 0.6: navigation
+	/** Continuous vertical scrolling, or one page at a time with a sideways swipe (#14). */
+	scrollMode: ScrollMode;
+	/** Zoom and scroll position on `lastNotebookPage` (O16), for "Continue last notebook". Not shown in the settings tab. */
+	lastNotebookPos: SavedPosition | null;
 	// wave 0.6: timetable
 	/** Offer to open the current class's notebook at a new lecture page when the app or the library is opened during a class. */
 	timetableOffer: boolean;
@@ -130,6 +137,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	penChordButton: true,
 	lastNotebookPath: "",
 	lastNotebookPage: 1,
+	scrollMode: "continuous",
+	lastNotebookPos: null,
 	timetableOffer: true,
 	timetableAutoOpen: false,
 	timetableLeadMinutes: 5,
@@ -186,6 +195,9 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.penChordButton === "boolean") s.penChordButton = d.penChordButton;
 	if (typeof d.lastNotebookPath === "string") s.lastNotebookPath = d.lastNotebookPath;
 	if (typeof d.lastNotebookPage === "number" && Number.isInteger(d.lastNotebookPage) && d.lastNotebookPage >= 1) s.lastNotebookPage = d.lastNotebookPage;
+	if (isScrollMode(d.scrollMode)) s.scrollMode = d.scrollMode;
+	s.lastNotebookPos = parsePosition(d.lastNotebookPos);
+
 	if (typeof d.timetableOffer === "boolean") s.timetableOffer = d.timetableOffer;
 	if (typeof d.timetableAutoOpen === "boolean") s.timetableAutoOpen = d.timetableAutoOpen;
 	if (typeof d.timetableLeadMinutes === "number" && Number.isInteger(d.timetableLeadMinutes) && d.timetableLeadMinutes >= 0 && d.timetableLeadMinutes <= 30) s.timetableLeadMinutes = d.timetableLeadMinutes;

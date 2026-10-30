@@ -1,6 +1,6 @@
 import { FileView, Menu, Notice, Scope, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 import { pageFromState } from "../integration/links";
-import { pageFromEphemeralState } from "../integration/page-links";
+import { pageTargetFromEphemeralState, resolvePageTarget, type PageTarget } from "../integration/page-links";
 import { addPageShareItems } from "../integration/page-share";
 import { checkConflicts, openPageRestore, openRepair, type ReliabilityDeps } from "../integration/reliability";
 import { scanFromCamera } from "../scan/scan-modal";
@@ -36,6 +36,9 @@ import { eraseSegment } from "../ink/segment-erase";
 import { analyseSpace, planSpaceChange, spacePreview } from "../ink/space";
 import { apply, IDENTITY, invert, isIdentity, multiply, rotateAbout, scaleAbout, translate, type Matrix } from "../ink/transform";
 import { clampToPage, fitWidth, pan, PAGE_MARGIN, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
+import { layoutPagesHorizontal, type ScrollMode } from "../ink/page-mode";
+import { capturePosition, positionFromState, restoreViewport, type SavedPosition } from "../ink/view-position";
+import { PageMode } from "./page-mode";
 import { cloneMeta, createId, createPage, createStroke } from "../model/document";
 import { buildLecturePackPages, exercisePage } from "../model/lecture-pack";
 import { duplicatePage } from "../model/pages";
@@ -53,6 +56,7 @@ import {
 } from "../model/types";
 import type { JournalStore } from "../storage/journal";
 import { DocumentSession, type SaveState, type SessionMode } from "../storage/session";
+import { nextTask } from "../storage/idle";
 import { isNotebookFile } from "../storage/format";
 import { VaultDocumentIO } from "../storage/vault-io";
 import { backupFolder, type NotebookSettings } from "../settings";
@@ -118,7 +122,7 @@ const THUMB_CSS_WIDTH = 120;
 export interface NotebookHost {
 	settings: NotebookSettings;
 	/** Instant start: the reader is on this page (1-based) of this notebook. Called a moment after it changes. */
-	remember?(path: string, page: number): void;
+	remember?(path: string, page: number, pos?: SavedPosition | null): void;
 	/** Instant save journal shared by all views. */
 	journal?: JournalStore;
 	/** Persists the plugin settings (favourite pens, eraser size, pen-only). Optional: absent in tests. */
@@ -241,12 +245,15 @@ export class NotebookView extends FileView {
 	private strokeStart = 0;
 	private readonly location = new LocationKeeper(
 		{ set: (fn, ms) => window.setTimeout(fn, ms), clear: (h) => window.clearTimeout(h) },
-		(path, page) => {
-			this.host.remember?.(path, page);
+		(path, page, pos) => {
+			this.host.remember?.(path, page, pos);
 			this.app.workspace.requestSaveLayout();
 		},
 	);
 	private selectionActions: SelectionActions | null = null;
+	/** One page at a time (#14); its gestures and animation live in page-mode.ts. */
+	private pageMode: PageMode | null = null;
+	private showPageMode: (on: boolean) => void = () => undefined;
 	private stamps: StampPalette | null = null;
 	private readonly objectInk = new ObjectInk();
 
@@ -359,13 +366,14 @@ export class NotebookView extends FileView {
 			stamps: () => this.stamps?.toggle(),
 		});
 		this.toolbar.setSelection(false);
+		this.showPageMode = this.toolbar.addMoreToggle("book-open", "toolbar.pageMode", () => this.togglePageMode());
 		this.body = this.contentEl.createDiv({ cls: "notebook-body" });
 		this.stage = this.body.createDiv({ cls: "notebook-stage" });
 		this.perfEl = this.stage.createDiv({ cls: "notebook-perf" });
 		this.pageNav = new PageNavigator(this.body, {
-			pages: () => this.session?.doc?.pages ?? [],
+			pages: () => this.shownDoc()?.pages ?? [],
 			current: () => this.currentPageIndex(),
-			bookmarks: () => new Set(this.session?.doc?.meta?.bookmarks ?? []),
+			bookmarks: () => new Set(this.shownDoc()?.meta?.bookmarks ?? []),
 			thumbnail: (page, width) => this.thumbnail(page, width),
 			goTo: (index) => this.goToPage(index),
 			move: (from, to) => this.movePage(from, to),
@@ -394,9 +402,10 @@ export class NotebookView extends FileView {
 			drawStart: (s, eraser, held) => this.drawStart(s, eraser, held),
 			drawMove: (samples, predicted) => this.drawMove(samples, predicted),
 			drawEnd: (cancelled) => this.drawEnd(cancelled),
-			pan: (dx, dy) => this.setViewport(pan(this.viewport, dx, dy), true),
+			pan: (dx, dy) => (this.pageMode?.enabled ? this.pageMode.pan(dx, dy) : this.setViewport(pan(this.viewport, dx, dy), true)),
 			zoom: (factor, fx, fy) => {
 				this.fitMode = false;
+				this.pageMode?.zoomed(factor);
 				this.setViewport(zoomAt(this.viewport, factor, fx, fy), true);
 			},
 			penMenu: (x, y, source) => {
@@ -406,6 +415,13 @@ export class NotebookView extends FileView {
 			},
 			sideButtonSeen: () => this.noteSideButtonSeen(),
 		}, { rawUpdates: this.host.settings.lowLatencyInk });
+		this.pageMode = new PageMode(this.stage, {
+			viewport: () => this.viewport,
+			viewSize: () => this.viewSize,
+			layout: () => this.layout,
+			setViewport: (v, interactive) => this.setViewport(v, interactive),
+			fitMode: () => this.fitMode,
+		});
 		this.radial = new PenRadial(this.stage, {
 			editable: () => this.editable() && !this.controller?.drawing,
 			tools: () => this.tools,
@@ -499,6 +515,8 @@ export class NotebookView extends FileView {
 		this.gestures = null;
 		this.rulerGesture?.destroy();
 		this.rulerGesture = null;
+		this.pageMode?.destroy();
+		this.pageMode = null;
 		this.selectionActions?.destroy();
 		this.selectionActions = null;
 		this.stamps?.destroy();
@@ -519,6 +537,10 @@ export class NotebookView extends FileView {
 
 	/** Page (1-based) requested by the view state, applied once the document is loaded. */
 	private pendingPage: number | null = null;
+	/** Zoom and scroll position to restore on `pendingPage` (O16). */
+	private pendingPos: SavedPosition | null = null;
+	/** Link target (`#p3`, `#p3&id=...`) requested through the ephemeral state: always wins over any restored position. */
+	private pendingTarget: PageTarget | null = null;
 	/** wave 0.6 (v7): when the reader was on `pendingPage` (workspace layout), null for an explicit request. */
 	private pendingAt: string | null = null;
 	/** wave 0.6 (v7): the next load is the first one of this file, so it may start at the stored reading position. */
@@ -529,15 +551,27 @@ export class NotebookView extends FileView {
 	/** The page being read (and, v7, when) goes into the workspace layout, so reopening Obsidian shows the same page. */
 	getState(): Record<string, unknown> {
 		const state = super.getState();
-		if (this.pendingPage !== null) return { ...state, page: this.pendingPage, ...(this.pendingAt ? { [PAGE_AT_KEY]: this.pendingAt } : {}) };
-		const total = this.session?.doc?.pages.length ?? 0;
+		if (this.pendingPage !== null) {
+			return {
+				...state, page: this.pendingPage,
+				...(this.pendingAt ? { [PAGE_AT_KEY]: this.pendingAt } : {}),
+				...(this.pendingPos ? { view: this.pendingPos } : {}),
+			};
+		}
+		const total = this.shownDoc()?.pages.length ?? 0;
 		const index = this.currentPageIndex();
-		return total > 0 ? { ...state, ...pageState(index + 1, this.pageClock.since(this.file?.path, index, new Date())) } : state;
+		// Where exactly (zoom and scroll) goes with the page; `pageAt` is when the reader arrived on it.
+		const pos = this.currentPosition();
+		return total > 0
+			? { ...state, ...pageState(index + 1, this.pageClock.since(this.file?.path, index, new Date())), ...(pos ? { view: pos } : {}) }
+			: state;
 	}
 
 	async setState(state: unknown, result: ViewStateResult): Promise<void> {
 		this.pendingPage = pageFromState(state);
+		this.pendingPos = positionFromState(state);
 		this.pendingAt = this.pendingPage !== null ? pageAtFromState(state) : null;
+		this.pendingTarget = null;
 		await super.setState(state, result);
 		// Already loaded (the same file was shown): jump now; otherwise onDocumentLoaded applies it.
 		if (this.pendingPage !== null && this.layout) this.applyPendingPage();
@@ -546,31 +580,84 @@ export class NotebookView extends FileView {
 	/** Following `[[Notebook.notebook#p3]]` passes the subpath here (after `setState` when the file was not open yet). */
 	setEphemeralState(state: unknown): void {
 		super.setEphemeralState(state);
-		const page = pageFromEphemeralState(state);
-		if (page === null) return;
-		this.pendingPage = page;
+		const target = pageTargetFromEphemeralState(state);
+		if (target === null) return;
+		// A link to a page by id only has no number: any page keeps the request pending until it is resolved.
+		this.pendingPage = target.page ?? 1;
+		this.pendingTarget = target;
+		this.pendingPos = null;
 		this.pendingAt = null;
 		if (this.layout) this.applyPendingPage();
 	}
 
 	private applyPendingPage(): void {
-		const doc = this.session?.doc;
+		const doc = this.shownDoc();
 		const page = this.pendingPage;
 		if (page === null || !doc || !this.layout) return;
+		// A saved zoom needs the size of the view: wait for the first measurement.
+		if (this.pendingPos && this.viewSize.width === 0) return;
 		this.pendingPage = null;
+		const pos = this.pendingPos;
+		const target = this.pendingTarget;
+		this.pendingPos = null;
+		this.pendingTarget = null;
 		this.pendingAt = null;
-		this.scrollToPage(Math.min(doc.pages.length, Math.max(1, page)) - 1);
+		if (target) {
+			// A link to a page that was deleted says so and stays where it is.
+			const found = resolvePageTarget(doc.pages, target);
+			if ("missing" in found) {
+				new Notice(t("links.pageDeleted", { name: this.file?.basename ?? "" }));
+				return;
+			}
+			this.scrollToPage(found.index);
+			return;
+		}
+		const index = Math.min(doc.pages.length, Math.max(1, page)) - 1;
+		if (pos && pos.page === index + 1 && this.restorePosition(pos)) return;
+		this.scrollToPage(index);
+	}
+
+	/** Shows the page, zoom and scroll position of a saved place (O16). False if the view cannot show it yet. */
+	private restorePosition(pos: SavedPosition): boolean {
+		const layout = this.layout;
+		const restored = layout ? restoreViewport(pos, this.pageMode?.enabled ? "pages" : "continuous", this.viewSize, layout) : null;
+		if (!restored) return false;
+		this.pageMode?.goTo(restored.pageIndex);
+		this.fitMode = restored.fit;
+		this.setViewport(restored.viewport);
+		return true;
+	}
+
+	/** Page, zoom and scroll position in view now, or null while the view has no size or no document. */
+	private currentPosition(): SavedPosition | null {
+		const layout = this.layout;
+		if (!layout) return null;
+		return capturePosition(this.pageMode?.enabled ? "pages" : "continuous", this.viewport, this.viewSize, layout, this.currentPageIndex());
 	}
 
 	/** wave 0.6 (v7): the first load of a file starts at the requested page or at the stored reading position. */
 	private applyStartPosition(): void {
-		const doc = this.session?.doc;
-		if (!this.startPending || !doc || !this.layout) return this.applyPendingPage();
+		const doc = this.shownDoc();
+		if (!doc || !this.layout) return;
+		if (!this.startPending) return this.applyPendingPage();
+		// A link (or search hit) always wins; it also needs no stored position.
+		if (this.pendingTarget) {
+			this.startPending = false;
+			return this.applyPendingPage();
+		}
+		// A saved zoom needs the size of the view: wait for the first measurement.
+		if (this.pendingPos && this.viewSize.width === 0) return;
 		this.startPending = false;
+		// An explicit page (Continue last notebook, search) wins; a restored layout page yields to a newer stored position.
 		const start = startPosition(doc, this.pendingPage, this.pendingAt);
+		const pos = this.pendingPos;
 		this.pendingPage = null;
 		this.pendingAt = null;
-		if (start) this.scrollToPage(start.index, start.y);
+		this.pendingPos = null;
+		if (!start) return;
+		// The workspace position (zoom and scroll) applies when its page is the one chosen, at the page top.
+		if (pos && pos.page === start.index + 1 && start.y === 0 && this.restorePosition(pos)) return;
+		this.scrollToPage(start.index, start.y);
 	}
 
 	/** wave 0.6 (v7): stores where the reader is, just before a content save serializes (DocumentSession.beforeSerialize). */
@@ -589,6 +676,7 @@ export class NotebookView extends FileView {
 		this.lastBackupPath = null;
 		this.fitMode = true;
 		this.viewport = { scale: 1, offsetX: 0, offsetY: 0 };
+		this.pageMode?.reset();
 		// Callbacks of a session that is no longer the current one (file switched while loading) are ignored.
 		const current = () => this.session === session;
 		const session: DocumentSession = new DocumentSession(
@@ -597,6 +685,12 @@ export class NotebookView extends FileView {
 			{
 				onLoaded: (doc, mode, problem) => {
 					if (current()) this.onDocumentLoaded(doc, mode, problem);
+				},
+				onPartial: () => {
+					if (current()) this.showPartial();
+				},
+				onPartialProgress: (pages) => {
+					if (current()) this.onPagesRead(pages);
 				},
 				onSaveState: (state) => {
 					if (current()) this.showSaveState(state);
@@ -620,12 +714,25 @@ export class NotebookView extends FileView {
 				busy: () => this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null
 					|| this.textEditor?.isOpen === true,
 				journal: this.host.journal,
+				// The first slice waits for the frame that paints the page just shown (but not for long: no frames come while hidden).
+				yieldTask: (fn, first) => {
+					if (!first) return nextTask(fn);
+					let ran = false;
+					const go = (): void => {
+						if (ran) return;
+						ran = true;
+						nextTask(fn);
+					};
+					window.requestAnimationFrame(go);
+					window.setTimeout(go, 100);
+				},
 				beforeSerialize: (doc) => this.storePosition(doc),
 			},
 		);
 		this.session = session;
 		try {
-			await session.load();
+			// A large notebook is shown as soon as the page asked for is read; the rest follows (see StagedParse).
+			await session.load({ staged: true, page: this.pendingPage });
 		} catch (e) {
 			this.showError((e as Error).message);
 		}
@@ -698,6 +805,7 @@ export class NotebookView extends FileView {
 			if (!this.controller.drawing) this.controller.setRawUpdates(settings.lowLatencyInk);
 		}
 		if (this.renderer && !this.active) this.renderer.setLowLatency(settings.lowLatencyInk);
+		this.setScrollMode(settings.scrollMode);
 		this.perfEl?.toggleClass("notebook-hidden", !settings.perfOverlay);
 		if (this.renderer) this.renderer.onFrame = settings.perfOverlay ? (t) => this.onFrame(t) : null;
 		this.reading?.settingsChanged();
@@ -785,9 +893,9 @@ export class NotebookView extends FileView {
 
 	/** Scrolls to the page delta pages away from the one in view. */
 	goToRelativePage(delta: number): void {
-		const n = this.session?.doc?.pages.length ?? 0;
+		const n = this.shownDoc()?.pages.length ?? 0;
 		if (n === 0) return;
-		this.scrollToPage(Math.min(n - 1, Math.max(0, this.currentPageIndex() + delta)));
+		this.scrollToPage(Math.min(n - 1, Math.max(0, this.currentPageIndex() + delta)), 0, true);
 	}
 
 	private penStore(): PenStore {
@@ -811,6 +919,32 @@ export class NotebookView extends FileView {
 				save();
 			},
 		};
+	}
+
+	/** Switches between continuous scrolling and one page at a time, staying on the page in view. */
+	setScrollMode(mode: ScrollMode): void {
+		const pm = this.pageMode;
+		const on = mode === "pages";
+		this.showPageMode(on);
+		if (!pm || pm.enabled === on) return;
+		const index = this.currentPageIndex();
+		pm.setEnabled(on);
+		this.fitMode = true;
+		this.refreshLayout();
+		if (!this.layout) return;
+		if (on) pm.goTo(index);
+		else {
+			this.refit(false);
+			this.scrollToPage(index);
+		}
+	}
+
+	/** Toolbar and command: flips the setting (saved with the plugin settings, applied to every open notebook). */
+	togglePageMode(): void {
+		const s = this.host.settings;
+		s.scrollMode = s.scrollMode === "pages" ? "continuous" : "pages";
+		this.setScrollMode(s.scrollMode);
+		void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
 	}
 
 	fitToWidth(): void {
@@ -854,8 +988,17 @@ export class NotebookView extends FileView {
 		void askExercisePaper(this.app);
 	}
 
-	/** Shows page `index` from its top, or (v7 reading position) with page y `y` at the top of the view. */
-	private scrollToPage(index: number, y = 0): void {
+
+	/** Shows page `index` from its top, or (v7 reading position) with page y `y` at the top of the view. `animate`: page-by-page turn. */
+	private scrollToPage(index: number, y = 0, animate = false): void {
+		if (this.pageMode?.enabled) {
+			this.pageMode.goTo(index, animate);
+			if (y > 0) {
+				const box = this.layout?.boxes[index];
+				if (box) this.setViewport({ ...this.viewport, offsetY: -(box.y + y) * this.viewport.scale });
+			}
+			return;
+		}
 		const box = this.layout?.boxes[index];
 		if (!box) return;
 		const offsetY = y > 0 ? -(box.y + y) * this.viewport.scale : PAGE_MARGIN - box.y * this.viewport.scale;
@@ -1398,13 +1541,47 @@ export class NotebookView extends FileView {
 
 	private currentPageIndex(): number {
 		if (!this.layout) return 0;
+		if (this.pageMode?.enabled) return this.pageMode.current();
 		const [, y] = screenToPage(this.viewport, this.viewSize.width / 2, this.viewSize.height / 2);
 		return Math.max(0, nearestPage(this.layout, y));
 	}
 
+	/** The document to show: the complete one, or while a large notebook is still being read, the part-read one. */
+	private shownDoc(): NotebookDocument | null {
+		return this.session?.doc ?? this.session?.partialDoc ?? null;
+	}
+
+	/**
+	 * Staged load (#329): the page asked for is in, the others are stand-ins. Show it read-only: the toolbar stays off
+	 * and nothing can be edited or saved until `onDocumentLoaded` brings the complete document.
+	 */
+	private showPartial(): void {
+		if (!this.shownDoc()) return;
+		this.messageEl.hide();
+		this.body.show();
+		this.toolbar.setEditable(false);
+		this.toolbar.setStatus(t("status.loading"), "pending");
+		if (!this.media) {
+			this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged());
+			this.renderer?.setMedia(this.media);
+		}
+		this.refreshLayout();
+		this.refit(true);
+		this.pageNav?.invalidate();
+		this.applyStartPosition();
+	}
+
+	/** Staged load: these pages have their ink now; repaint if one of them is on screen. */
+	private onPagesRead(pages: number[]): void {
+		const layout = this.layout;
+		if (!layout) return;
+		const visible = visiblePages(layout, this.visibleRect());
+		if (visible.some((i) => pages.includes(i))) this.renderer?.invalidate();
+	}
+
 	private refreshLayout(): void {
-		const doc = this.session?.doc;
-		this.layout = doc ? layoutPages(doc.pages) : null;
+		const doc = this.shownDoc();
+		this.layout = doc ? (this.pageMode?.enabled ? layoutPagesHorizontal(doc.pages) : layoutPages(doc.pages)) : null;
 		this.renderer?.setDocument(doc?.pages ?? null, this.layout);
 		this.pushRuler();
 		this.reading?.docChanged();
@@ -1437,7 +1614,7 @@ export class NotebookView extends FileView {
 			this.body.show();
 			this.toolbar.setEditable(true);
 			if (!this.media) {
-				this.media = new NotebookMedia(this.app, () => this.session?.doc ?? null, () => this.host.settings.folder, () => this.onMediaChanged());
+				this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged());
 				this.renderer?.setMedia(this.media);
 			}
 			this.refreshLayout();
@@ -1519,15 +1696,18 @@ export class NotebookView extends FileView {
 	}
 
 	private updatePageIndicator(): void {
-		const n = this.session?.doc?.pages.length ?? 0;
+		const n = this.shownDoc()?.pages.length ?? 0;
 		const current = n ? this.currentPageIndex() : -1;
 		this.toolbar.setPage(n ? current + 1 : 0, n);
 		if (n && this.file) this.pageClock.note(this.file.path, current, new Date());
 		if (current !== this.navCurrent) {
 			this.navCurrent = current;
 			this.pageNav?.markCurrent(current);
-			if (n && this.file && this.pendingPage === null) this.location.note(this.file.path, current + 1);
+			if (n && this.file && this.pendingPage === null) this.location.note(this.file.path, current + 1, this.currentPosition());
 			this.syncHooks?.page(current);
+		} else if (n && this.file && this.pendingPage === null) {
+			// Same page, but the zoom or the scroll position may have changed.
+			this.location.note(this.file.path, current + 1, this.currentPosition());
 		}
 	}
 
@@ -1635,6 +1815,7 @@ export class NotebookView extends FileView {
 		this.body.toggleClass("is-narrow", this.contentEl.clientWidth < NARROW_PX);
 		this.renderer?.resize(rect.width, rect.height, window.devicePixelRatio || 1);
 		this.refit(true);
+		if (this.pendingPage !== null) this.applyStartPosition();
 	}
 
 	/** In fit mode, rescales to the view width; `keepTop` keeps the same document line at the top (rotation). */
@@ -1645,6 +1826,10 @@ export class NotebookView extends FileView {
 			this.setViewport(this.viewport);
 			return;
 		}
+		if (this.pageMode?.enabled) {
+			this.pageMode.refit(keepTop);
+			return;
+		}
 		const topY = screenToPage(this.viewport, 0, 0)[1];
 		const fitted = fitWidth(this.viewSize, layout);
 		if (keepTop && topY > 0) fitted.offsetY = -topY * fitted.scale;
@@ -1653,7 +1838,7 @@ export class NotebookView extends FileView {
 
 	private setViewport(v: Viewport, interactive = false): void {
 		const layout = this.layout;
-		this.viewport = layout ? clampToPage(v, this.viewSize, layout) : v;
+		this.viewport = layout ? (this.pageMode?.enabled ? this.pageMode.clamp(v) : clampToPage(v, this.viewSize, layout)) : v;
 		this.renderer?.setViewport(this.viewport, interactive);
 		this.reading?.viewportChanged();
 		if (this.selection) this.pushSelection();

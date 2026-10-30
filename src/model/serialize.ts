@@ -339,14 +339,14 @@ function readBookmarkInfo(v: unknown, drop: Dropped | null): Record<string, Book
 				const info: BookmarkInfo = {};
 				const title = orDrop(drop, () => {
 					if (raw.title !== undefined && typeof raw.title !== "string") fail(`${path}.title`, "expected a string");
-					return raw.title as string | undefined;
+					return raw.title;
 				});
 				if (title !== undefined) info.title = title;
 				const color = orDrop(drop, () => (raw.color === undefined ? undefined : colour(raw.color, `${path}.color`)));
 				if (color !== undefined) info.color = color;
 				const category = orDrop(drop, () => {
 					if (raw.category !== undefined && typeof raw.category !== "string") fail(`${path}.category`, "expected a string");
-					return raw.category as string | undefined;
+					return raw.category;
 				});
 				if (category !== undefined) info.category = category;
 				return info;
@@ -453,6 +453,13 @@ export function freezeElement<T extends PageElement>(element: T): T {
  * `drop`, invalid optional v7 details are left out and counted there instead of failing (see `Dropped`).
  */
 export function validate(raw: unknown, drop: Dropped | null = null): NotebookDocument {
+	return validateWith(raw, readPage, new Set<string>(), drop);
+}
+
+type PageReader = (v: unknown, path: string, ids: Set<string>, assets: Assets) => Page;
+
+/** `validate` with the page reader and the set of ids injected: staged loading reads page shells first (see StagedParse). */
+function validateWith(raw: unknown, readPageAt: PageReader, ids: Set<string>, drop: Dropped | null): NotebookDocument {
 	if (!isObject(raw)) fail("document", "expected an object");
 	if (raw.format !== FORMAT_ID) fail("format", `expected "${FORMAT_ID}"`);
 	if (raw.version !== CURRENT_VERSION) fail("version", `expected ${CURRENT_VERSION}`);
@@ -461,10 +468,9 @@ export function validate(raw: unknown, drop: Dropped | null = null): NotebookDoc
 	const modifiedAt = str(raw.modifiedAt, "modifiedAt");
 	if (!Array.isArray(raw.pages) || raw.pages.length === 0) fail("pages", "expected at least one page");
 	const assets = readAssets(raw.assets);
-	const ids = new Set<string>();
 	const pageIds = new Set<string>();
 	const pages = raw.pages.map((p, i) => {
-		const page = readPage(p, `pages[${i}]`, ids, assets);
+		const page = readPageAt(p, `pages[${i}]`, ids, assets);
 		// Page ids key bookmarks, jumps and caches: two pages with one id would be confused with each other.
 		if (pageIds.has(page.id)) fail(`pages[${i}].id`, "duplicate id");
 		pageIds.add(page.id);
@@ -477,30 +483,37 @@ export function validate(raw: unknown, drop: Dropped | null = null): NotebookDoc
 	return doc;
 }
 
-/** Parses a notebook file (any supported version). Invalid optional v7 details are dropped, see `ParseResult`. */
-export function parse(text: string): ParseResult {
-	return parseText(text, true);
-}
+type ParseFailureResult = ParseResult & { ok: false };
 
-function parseText(text: string, lenient: boolean): ParseResult {
-	if (text.trim().length === 0) return { ok: false, reason: "empty", message: "the file is empty" };
+type Preflight = { ok: true; raw: RawObject; version: number } | { ok: false; failure: ParseFailureResult };
+
+/** JSON syntax, "is it a notebook" and the version check: everything before the content is looked at. */
+function preflight(text: string): Preflight {
+	if (text.trim().length === 0) return { ok: false, failure: { ok: false, reason: "empty", message: "the file is empty" } };
 	let raw: unknown;
 	try {
 		raw = JSON.parse(text);
 	} catch (e) {
-		return { ok: false, reason: "json", message: `invalid JSON: ${(e as Error).message}` };
+		return { ok: false, failure: { ok: false, reason: "json", message: `invalid JSON: ${(e as Error).message}` } };
 	}
-	if (!isObject(raw)) return { ok: false, reason: "not-notebook", message: "not a Notebook document" };
+	const notNotebook: Preflight = { ok: false, failure: { ok: false, reason: "not-notebook", message: "not a Notebook document" } };
+	if (!isObject(raw)) return notNotebook;
 	const version = detectVersion(raw);
-	if (version === null || (version >= 1 && raw.format !== FORMAT_ID)) {
-		return { ok: false, reason: "not-notebook", message: "not a Notebook document" };
-	}
+	if (version === null || (version >= 1 && raw.format !== FORMAT_ID)) return notNotebook;
 	if (version > CURRENT_VERSION) {
 		return {
-			ok: false, reason: "future-version", version,
-			message: `created by a newer version of Notebook (format v${version}, this version reads up to v${CURRENT_VERSION})`,
+			ok: false,
+			failure: {
+				ok: false, reason: "future-version", version,
+				message: `created by a newer version of Notebook (format v${version}, this version reads up to v${CURRENT_VERSION})`,
+			},
 		};
 	}
+	return { ok: true, raw, version };
+}
+
+/** Migrates and validates a parsed file. `lenient`: invalid optional v7 details are dropped and counted. */
+function parseRaw(raw: RawObject, version: number, lenient: boolean): ParseResult {
 	try {
 		const migrated = version < CURRENT_VERSION ? migrate(raw, version, CURRENT_VERSION) : raw;
 		const drop: Dropped | null = lenient ? { count: 0 } : null;
@@ -513,6 +526,147 @@ function parseText(text: string, lenient: boolean): ParseResult {
 		}
 		throw e;
 	}
+}
+
+/** Parses a notebook file (any supported version). Invalid optional v7 details are dropped, see `ParseResult`. */
+export function parse(text: string): ParseResult {
+	return parseText(text, true);
+}
+
+function parseText(text: string, lenient: boolean): ParseResult {
+	const pre = preflight(text);
+	return pre.ok ? parseRaw(pre.raw, pre.version, lenient) : pre.failure;
+}
+
+/**
+ * Texts shorter than this (characters, about 3,000 strokes) are always parsed in one go: that is tens of milliseconds
+ * on a PC, and staging has a fixed cost of its own (slices, an extra paint before the end).
+ */
+export const STAGED_MIN_CHARS = 2_000_000;
+
+/** A page that has not been read yet: right id, size and paper, no ink, nothing else. */
+function readPageShell(v: unknown, path: string): Page {
+	if (!isObject(v)) fail(path, "expected an object");
+	const id = str(v.id, `${path}.id`);
+	const width = positive(v.width, `${path}.width`);
+	const height = positive(v.height, `${path}.height`);
+	const paper = v.paper;
+	if (!isObject(paper) || !PAPER_KINDS.includes(paper.kind as PaperKind)) fail(`${path}.paper`, "unknown paper");
+	const spacing = positive(paper.spacing, `${path}.paper.spacing`);
+	if (spacing < MIN_PAPER_SPACING) fail(`${path}.paper.spacing`, `must be at least ${MIN_PAPER_SPACING} pt`);
+	return { id, width, height, paper: { kind: paper.kind as PaperKind, spacing }, strokes: [] };
+}
+
+export type StagedStep =
+	| { ok: true; /** Indices of the pages read by this step. */ changed: number[]; done: boolean }
+	| { ok: false; failure: ParseFailureResult };
+
+/**
+ * A file parsed in stages (#329). `parseStaged` runs the JSON parse and validates the header, the assets, the
+ * metadata and the pages one level deep (every page's id, size and paper), and reads one page completely: the
+ * one the reader wants. `doc` then has real content on that page and stand-ins (right size, no ink) elsewhere,
+ * so the page can be painted at once. `step` reads the other pages, nearest first, in slices of time that leave
+ * the input alone; `finish` reads whatever is left.
+ *
+ * `doc` is for DISPLAY ONLY until `done`: it is missing the ink of the unread pages, so saving it would erase
+ * them. `DocumentSession` therefore keeps it out of `session.doc` and `mode` stays "loading" until the last page is
+ * read and every page has passed exactly the validation `validate` applies (same readers, one shared set of
+ * ids, so duplicate ids across pages are still found). A page that fails ends the load like a damaged file.
+ */
+export class StagedParse {
+	private readonly queue: number[];
+	private failure: ParseFailureResult | null = null;
+
+	private constructor(
+		readonly doc: NotebookDocument,
+		private readonly rawPages: readonly unknown[],
+		private readonly ids: Set<string>,
+		first: number,
+		/** Invalid optional v7 details dropped while reading the document-level fields (they are all read up front). */
+		private readonly dropped: number,
+	) {
+		// Nearest to the wanted page first: forward, then back (the next page is the likelier swipe).
+		const order: number[] = [];
+		for (let d = 1; d < rawPages.length; d++) {
+			if (first + d < rawPages.length) order.push(first + d);
+			if (first - d >= 0) order.push(first - d);
+		}
+		this.queue = order;
+	}
+
+	/** Prepares a staged parse of a file already at the current version, with page `first` (0-based) read in full. */
+	static create(raw: RawObject, first: number): StagedParse | ParseFailureResult {
+		try {
+			const ids = new Set<string>();
+			// Lenient like `parse`: invalid optional v7 details are dropped and counted; everything else still fails.
+			const drop: Dropped = { count: 0 };
+			const doc = validateWith(raw, readPageShell, ids, drop);
+			const rawPages = raw.pages as unknown[];
+			const at = Math.min(rawPages.length - 1, Math.max(0, first));
+			const staged = new StagedParse(doc, rawPages, ids, at, drop.count);
+			staged.read(at);
+			return staged;
+		} catch (e) {
+			if (e instanceof ValidationError) return { ok: false, reason: "invalid", message: e.message, version: CURRENT_VERSION };
+			throw e;
+		}
+	}
+
+	private read(i: number): void {
+		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {});
+	}
+
+	get pending(): number {
+		return this.queue.length;
+	}
+
+	get done(): boolean {
+		return this.queue.length === 0 && this.failure === null;
+	}
+
+	/** Reads pages for about `budgetMs` (at least one page, if any is left). */
+	step(budgetMs: number, now: () => number = () => performance.now()): StagedStep {
+		if (this.failure) return { ok: false, failure: this.failure };
+		const changed: number[] = [];
+		const end = now() + budgetMs;
+		try {
+			while (this.queue.length > 0) {
+				const i = this.queue.shift()!;
+				this.read(i);
+				changed.push(i);
+				if (now() >= end) break;
+			}
+		} catch (e) {
+			if (!(e instanceof ValidationError)) throw e;
+			this.failure = { ok: false, reason: "invalid", message: e.message, version: CURRENT_VERSION };
+			return { ok: false, failure: this.failure };
+		}
+		return { ok: true, changed, done: this.queue.length === 0 };
+	}
+
+	/** Reads every page that is left, at once. */
+	finish(): ParseResult {
+		const r = this.step(Infinity);
+		return r.ok ? this.result() : r.failure;
+	}
+
+	/** The result once every page has been read (same shape as `parse`: `dropped` only when > 0). */
+	result(): ParseResult {
+		return this.dropped > 0 ? { ok: true, doc: this.doc, migratedFrom: null, dropped: this.dropped } : { ok: true, doc: this.doc, migratedFrom: null };
+	}
+}
+
+/**
+ * Like `parse`, but a large file at the current version comes back as a StagedParse. Everything else (small
+ * files, older versions that need migrating, damaged files) is parsed completely and returned as a ParseResult.
+ * `firstPage` is 1-based (the page the reader wants), or null.
+ */
+export function parseStaged(text: string, firstPage: number | null): StagedParse | ParseResult {
+	if (text.length < STAGED_MIN_CHARS) return parse(text);
+	const pre = preflight(text);
+	if (!pre.ok) return pre.failure;
+	if (pre.version !== CURRENT_VERSION) return parseRaw(pre.raw, pre.version, true);
+	return StagedParse.create(pre.raw, firstPage === null ? 0 : firstPage - 1);
 }
 
 export type CheckedSerialization = { ok: true; text: string } | { ok: false; message: string };

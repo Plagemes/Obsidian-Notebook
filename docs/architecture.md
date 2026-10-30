@@ -161,6 +161,8 @@ src/
     stress.ts             deterministic generated notebook (10,000 strokes / 10 pages by default) for benchmarks and the stress-test command
   ink/                    (does not import 'obsidian')
     viewport.ts           screen ↔ page transform, fit-width, zoom around a point (scale 0.25–8), pan
+    page-mode.ts          one page at a time (#14): horizontal page layout, per-page fit and clamp, turn decision, swipe direction lock (pure)
+    view-position.ts      page, zoom and scroll position that survive a different view size (O16, pure)
     paper.ts              paper pattern geometry (lines and dots in page coordinates) and paper colours (pure)
     paper-kinds.ts        geometry of the v7 papers (Cornell, music, isometric, hexagonal, calligraphy, planners), pure
     export-svg.ts         page → standalone SVG string, images as data URLs (pure)
@@ -288,7 +290,8 @@ src/
     text-editor.ts        in-place text box editor
     ruler-gesture.ts      two-finger ruler placement
     radial-menu.ts        radial menu at the pen tip (DOM, window-level pointer capture) and the pen's quick-tools list
-    last-location.ts      debounced memory of the notebook and page being read (instant start)
+    last-location.ts      debounced memory of the notebook, page, zoom and scroll position being read (instant start, O16)
+    page-mode.ts          one page at a time: swipe gestures, drag, page-turn animation, wheel (DOM side of ink/page-mode.ts)
     input-settings.ts     plugin settings to input-policy settings
     export.ts             writes PDF/SVG files next to the notebook (Vault API), rasterises backgrounds and images, free file names
     benchmark.ts          in-app benchmark (off-screen render of a generated notebook, writing replay) and its modal
@@ -396,6 +399,12 @@ The *Pen button test* modal (`view/pen-test-modal.ts`, log logic in `ink/pen-but
 - The viewport maps document space to the screen. Fit-to-width uses the layout width; zoom is clamped to 0.25–8.
 - **Virtualization**: the static redraw asks `visiblePages` for the pages intersecting the screen and draws only those; within a page it skips strokes whose cached bounding box is outside the visible area. Stroke `Path2D`s and bounds are cached per (frozen) stroke object and built the first time a stroke is drawn.
 - **Add page** (toolbar button and command) inserts a blank page with the size and paper of the page in view **after the page at the centre of the view** as an undoable `AddPage`, then scrolls to it. The toolbar shows `n / total` for the page at the centre of the view. Further page commands are in "Page commands" below.
+
+**Scroll modes (#14)** (`ink/page-mode.ts`, `view/page-mode.ts`, setting `scrollMode`). *Continuous* is the layout above. *One page at a time* uses `layoutPagesHorizontal`: the same page boxes side by side (64 pt gap, top aligned), so turning a page is just a viewport move and the renderer, hit tests and everything else keep working on document-space boxes. Each page is fitted to the view width on its own (`fitPageViewport`), the viewport is clamped to the *anchor* page (`clampToAnchor`) plus a sideways drag that rides on top. The pointer controller is unchanged: its `pan` handler goes to `PageMode.pan`, which tells a finger (a capture-phase listener counts touch and middle-mouse contacts; the pen is never one), the wheel and the fling after a lift apart. `SwipeLock` locks the direction after 10 px: sideways drags the page, vertical scrolls inside it, and a page wider than the view (zoomed in) pans freely, turning only after an overscroll. On lift `decideTurn` turns the page for a drag over 22 % of the width or a quick flick, and an animation (220 ms, none with reduced motion) settles on the page's own viewport. A pinch cancels the drag; a finger put down during the animation finishes it first. The setting and the toggle in the "…" menu are the only persistent state; the file format does not change.
+
+**Reopen where you left off (O16)** (`ink/view-position.ts`). The view state carries `view: { page, zoom, x, y }` next to `page`: `zoom` is the scale relative to the fit-to-width scale and (x, y) the page point at the top-left corner of the view, so the same part of the page is shown after a rotation or in a different pane (a zoom within 1 % of the fit stays "fitted" and keeps re-fitting). The position only applies when its `page` equals the state's `page` (a link or the page panel that changes the page drops it); a position that needs the view size waits for the first measurement. It goes through the same debounce as the page (`LocationKeeper`), into the workspace layout, and into the plugin settings (`lastNotebookPos`, for *Continue last notebook*; a change of position alone is written at most every 5 s). Never into the notebook file.
+
+**Staged loading (#329)** (`StagedParse` in `model/serialize.ts`, `DocumentSession.load({ staged, page })`). Over `STAGED_MIN_CHARS` (2 MB) a notebook at the current version is parsed in stages: JSON parse, then `validateWith` with a *shell* page reader (header, assets, metadata, and every page's id, size and paper; duplicate page ids are found here), then the wanted page in full, then `onPartial` shows that document read-only. The other pages are read with the real `readPage` (one shared set of ids, so duplicate stroke ids across pages are still found) in slices of about `STAGED_SLICE_MS` (10 ms), nearest first, each in its own task (`nextTask`, MessageChannel); the first slice waits for the frame that paints the page. The partial document is `session.partialDoc` for display only: `session.doc` stays null and `mode` "loading" (so `markChanged`, `flush`, the journal and every edit path refuse) until the last page has passed validation; then the same document object (stand-ins replaced in place) becomes `session.doc`, `mode` "ok", and `onLoaded` runs as before. A failing page ends the load like a damaged file (backup `unreadable`, nothing written). Not staged: small files, older versions (migration), files with a journal entry (recovery needs the complete document), reloads. `flushForClose` stops a load in progress. The parse itself (JSON.parse of the whole text) is still one block.
 
 ### Page commands
 

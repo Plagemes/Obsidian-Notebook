@@ -581,6 +581,9 @@ export class View extends Component {
 	onResize(): void {
 		/* override */
 	}
+	setEphemeralState(state: unknown): void {
+		void state;
+	}
 	getState(): Record<string, unknown> {
 		return {};
 	}
