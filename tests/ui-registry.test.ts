@@ -31,6 +31,7 @@ const CONTEXTS: Array<[string, UiContext]> = [
 	["image page", baseContext({ page: { index: 1, count: 3, background: "image", infinite: false, bookmarked: false }, notebook: { pdfPages: false, backgrounds: true } })],
 	["PDF side pane open", baseContext({ sidePane: { available: true, open: true }, notebook: { pdfPages: true, backgrounds: true } })],
 	["class now", baseContext({ lecture: true })],
+	["history to go back and forward (wave 0.10)", baseContext({ nav: { back: true, forward: true } })],
 	["heavy page", baseContext({ page: { index: 0, count: 3, background: "none", infinite: false, bookmarked: false, splittable: true } })],
 ];
 const WIDTHS = [360, 800, 1280];

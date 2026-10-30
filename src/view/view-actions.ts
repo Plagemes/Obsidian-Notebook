@@ -39,6 +39,9 @@ export function commandApplies(view: NotebookView, id: string): boolean {
 	if (id.startsWith("pdf-side-")) return pdfSideState(view).open;
 	// wave 0.9 (357): the layer order needs something selected.
 	if (id.startsWith("layer-")) return !!view.uiContext().selection;
+	// wave 0.10 (18): back and forward need a place to go to.
+	if (id === "nav-back") return view.navState().back;
+	if (id === "nav-forward") return view.navState().forward;
 	return true;
 }
 
@@ -115,6 +118,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 
 	// navigation (wave 0.7)
 	"goto-page-number": (v) => new GotoPageModal(v.app, v).open(),
+	"nav-back": (v) => v.navigate(-1),
+	"nav-forward": (v) => v.navigate(1),
 	"toggle-page-mode": (v) => v.togglePageMode(),
 	"find-replace": (v) => v.openFindReplace(),
 

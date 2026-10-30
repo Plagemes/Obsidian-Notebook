@@ -68,6 +68,10 @@ import { NotebookMedia, storeAsset } from "./media";
 import { HeavyPageBanner } from "./heavy-page-banner";
 import { ViewSyncSafety, type SyncSafetyService } from "./sync-safety";
 import { PageNavigator } from "./navigator";
+import type { NavController } from "./nav-controller";
+import { FastScrollbar, type ScrollbarHost } from "./scrollbar";
+import type { StatusBarInfo } from "./status-bar-logic";
+import type { NavPlace } from "../model/nav-history";
 import { openPageOpsMenu, type PageOpsHost } from "./page-ops-menu";
 import type { OutlineHost } from "./outline";
 import { PAGE_AT_KEY, PageClock, pageAtFromState, pageState, startPosition } from "./position-sync";
@@ -157,6 +161,10 @@ export interface NotebookHost {
 	edited?(nb: string, path: string, pageId: string, num: number): void;
 	/** wave 0.9 (379): when this device last edited the page (ms since epoch), if it has a record. */
 	pageEditedAt?(nb: string, pageId: string): number | null;
+	/** Roadmap 18: the session's back/forward history of visited pages, across notebooks (view/nav-controller.ts). Optional: absent in tests. */
+	nav?: NavController;
+	/** Roadmap O15: the page in view or the save state of `view` changed (the status bar item follows the active view). Optional. */
+	statusChanged?(view: NotebookView): void;
 	/** Instant save journal shared by all views. */
 	journal?: JournalStore;
 	/** Persists the plugin settings (favourite pens, eraser size, pen-only). Optional: absent in tests. */
@@ -292,6 +300,17 @@ export class NotebookView extends FileView {
 	/** wave 0.7: sync safety (#342–#344). */
 	private syncSafety: ViewSyncSafety | null = null;
 	private pageNav: PageNavigator | null = null;
+	/** Roadmap 50: the fast scrollbar with a page preview (view/scrollbar.ts). */
+	private scrollbar: FastScrollbar | null = null;
+	/** Roadmap 18: stops following the history's changes (the quick slots and the page sheet enable or disable Back and Forward). */
+	private stopNav: (() => void) | null = null;
+	/** Roadmap 18: the next explicit arrival is the first load of this file, so the place left is the last one seen anywhere. */
+	private navFresh = true;
+	private arrivalFresh = false;
+	/** Roadmap O15: what the status bar item shows. */
+	private saveText = "";
+	private saveKind: StatusBarInfo["kind"] = "pending";
+	private statusKey = "";
 	private textEditor: TextEditor | null = null;
 	/** v9: equations and graphs (editor, panel, typesetting, convert to ink). */
 	private math: MathTools | null = null;
@@ -459,6 +478,8 @@ export class NotebookView extends FileView {
 		});
 		// The panel sits to the left of the page (a drawer over it on narrow views).
 		this.body.insertBefore(this.pageNav.el, this.stage);
+		this.scrollbar = new FastScrollbar(this.body, this.scrollbarHost());
+		this.stopNav = this.host.nav?.onChange(() => this.refreshUi()) ?? null;
 		this.heavy = new HeavyPageBanner(this.body, {
 			split: (index) => this.splitHeavyPage(index),
 			dismiss: (index) => {
@@ -669,6 +690,10 @@ export class NotebookView extends FileView {
 		this.rulerGesture = null;
 		this.pageMode?.destroy();
 		this.pageMode = null;
+		this.scrollbar?.destroy();
+		this.scrollbar = null;
+		this.stopNav?.();
+		this.stopNav = null;
 		this.selectionActions?.destroy();
 		this.selectionActions = null;
 		this.penLinks?.destroy();
@@ -776,6 +801,8 @@ export class NotebookView extends FileView {
 		// A saved zoom needs the size of the view: wait for the first measurement.
 		if (this.pendingPos && this.viewSize.width === 0) return;
 		this.pendingPage = null;
+		// Roadmap 18: a request from outside (a link, the switcher, Back/Forward) is a jump; restoring the workspace is not.
+		const explicit = this.pendingAt === null;
 		const pos = this.pendingPos;
 		const target = this.pendingTarget;
 		this.pendingPos = null;
@@ -788,10 +815,12 @@ export class NotebookView extends FileView {
 				showNotice(t("links.pageDeleted", { name: this.file?.basename ?? "" }));
 				return;
 			}
+			this.recordArrival(found.index);
 			this.scrollToPage(found.index);
 			return;
 		}
 		const index = Math.min(doc.pages.length, Math.max(1, page)) - 1;
+		if (explicit) this.recordArrival(index);
 		if (pos && pos.page === index + 1 && this.restorePosition(pos)) return;
 		this.scrollToPage(index);
 	}
@@ -818,6 +847,9 @@ export class NotebookView extends FileView {
 	private applyStartPosition(): void {
 		const doc = this.shownDoc();
 		if (!doc || !this.layout) return;
+		// Roadmap 18: the first request on a file that has just opened comes from wherever the reader was before.
+		this.arrivalFresh = this.navFresh;
+		this.navFresh = false;
 		if (!this.startPending) return this.applyPendingPage();
 		// A link (or search hit) always wins; it also needs no stored position.
 		if (this.pendingTarget) {
@@ -829,11 +861,13 @@ export class NotebookView extends FileView {
 		this.startPending = false;
 		// An explicit page (Continue last notebook, search) wins; a restored layout page yields to a newer stored position.
 		const start = startPosition(doc, this.pendingPage, this.pendingAt);
+		const explicit = this.pendingPage !== null && this.pendingAt === null;
 		const pos = this.pendingPos;
 		this.pendingPage = null;
 		this.pendingAt = null;
 		this.pendingPos = null;
 		if (!start) return;
+		if (explicit) this.recordArrival(start.index);
 		// The workspace position (zoom and scroll) applies when its page is the one chosen, at the page top.
 		if (pos && pos.page === start.index + 1 && start.y === 0 && this.restorePosition(pos)) return;
 		this.scrollToPage(start.index, start.y);
@@ -852,6 +886,7 @@ export class NotebookView extends FileView {
 	async onLoadFile(file: TFile): Promise<void> {
 		await super.onLoadFile(file);
 		this.startPending = true;
+		this.navFresh = true;
 		this.lastBackupPath = null;
 		this.fitMode = true;
 		this.viewport = { scale: 1, offsetX: 0, offsetY: 0 };
@@ -1001,6 +1036,7 @@ export class NotebookView extends FileView {
 		this.pressure.mode = settings.pressureMode;
 		if (this.toolbar && this.tools.eraserSize !== settings.eraserSize) this.toolbar.update({ eraserSize: settings.eraserSize });
 		this.pens?.refresh();
+		this.scrollbar?.update();
 		this.filter.params = stabilizationParams(settings.stabilization);
 		// wave 0.7: resilience (#346): safe mode turns low-latency ink and prediction off for this view.
 		const fast = this.resilience?.lowLatencyAllowed() !== false;
@@ -1279,6 +1315,7 @@ export class NotebookView extends FileView {
 	}
 
 	private goToPage(index: number): void {
+		this.recordJump(index);
 		this.scrollToPage(index);
 		if (this.body.hasClass("is-narrow")) this.setNavigatorOpen(false);
 	}
@@ -1409,7 +1446,10 @@ export class NotebookView extends FileView {
 				this.renderer?.invalidate();
 			},
 			currentPageIndex: () => this.currentPageIndex(),
-			scrollTo: (index, y) => this.scrollToPage(index, y),
+			scrollTo: (index, y) => {
+				this.recordJump(index);
+				this.scrollToPage(index, y);
+			},
 			referenceSlide: () => referenceSlideOf(this),
 			preview: (pageIndex, rect) => this.renderer?.setLasso(rect
 				? { pageIndex, points: [[rect.x, rect.y], [rect.x + rect.width, rect.y], [rect.x + rect.width, rect.y + rect.height], [rect.x, rect.y + rect.height], [rect.x, rect.y]] }
@@ -1679,6 +1719,85 @@ export class NotebookView extends FileView {
 		return this.currentPageIndex();
 	}
 
+	// --- roadmap 18: back/forward history of visited pages (model/nav-history.ts, view/nav-controller.ts) ---
+
+	/** Page `index` (0-based) of this notebook as a place of the history, or null without a document. */
+	private placeAt(index: number): NavPlace | null {
+		const page = this.shownDoc()?.pages[index];
+		return page && this.file ? { path: this.file.path, pageId: page.id, page: index + 1 } : null;
+	}
+
+	/** The page in view as a place of the history. */
+	navPlace(): NavPlace | null {
+		return this.layout ? this.placeAt(this.currentPageIndex()) : null;
+	}
+
+	/** Records a deliberate jump from the page in view to page `index` (links, the page panel, Go to, search, the scrollbar). */
+	private recordJump(index: number): void {
+		const to = this.placeAt(index);
+		if (to) this.host.nav?.arrive(this.navPlace(), to);
+	}
+
+	/** A page was asked for by a link or a command from outside (the view is already loaded, or has just loaded). */
+	private recordArrival(index: number): void {
+		const to = this.placeAt(index);
+		if (!to) return;
+		const from = this.arrivalFresh ? null : this.navPlace();
+		this.arrivalFresh = false;
+		this.host.nav?.arrive(from, to);
+	}
+
+	/** Back/Forward: shows a place of this notebook without recording a jump. False when its page is gone. */
+	showPlace(place: NavPlace): boolean {
+		const pages = this.shownDoc()?.pages;
+		if (!pages || !this.layout) return false;
+		const index = pages.findIndex((p) => p.id === place.pageId);
+		if (index < 0) return false;
+		this.scrollToPage(index);
+		return true;
+	}
+
+	/** Back and Forward through the visited pages. */
+	navigate(dir: -1 | 1): void {
+		void this.host.nav?.go(dir);
+	}
+
+	/** Back and Forward are possible (for the buttons). */
+	navState(): { back: boolean; forward: boolean } {
+		return { back: this.host.nav?.canBack ?? false, forward: this.host.nav?.canForward ?? false };
+	}
+
+	/** Opens the page panel (the status bar item). */
+	openNavigator(): void {
+		this.setNavigatorOpen(true);
+	}
+
+	private scrollbarHost(): ScrollbarHost {
+		const pageAtIndex = (i: number): Page | null => this.shownDoc()?.pages[i] ?? null;
+		return {
+			state: () => (this.layout && !this.pageMode?.enabled && this.viewSize.width > 0 ? { layout: this.layout, viewport: this.viewport, view: this.viewSize } : null),
+			enabled: () => this.host.settings.fastScrollbar,
+			busy: () => !!this.controller?.drawing || this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null,
+			scrollTo: (offsetY) => this.setViewport({ ...this.viewport, offsetY }, true),
+			pageRatio: (i) => {
+				const p = pageAtIndex(i);
+				return p && p.width > 0 ? p.height / p.width : 1.41;
+			},
+			cachedThumbnail: (i) => {
+				const p = pageAtIndex(i);
+				return p ? this.pageNav?.cachedThumbnail(p) ?? null : null;
+			},
+			drawThumbnail: (i) => {
+				const p = pageAtIndex(i);
+				return p && this.pageNav ? this.pageNav.thumbnailOf(p) : null;
+			},
+			dragged: (from, to) => {
+				const a = this.placeAt(from), b = this.placeAt(to);
+				if (a && b) this.host.nav?.arrive(a, b);
+			},
+		};
+	}
+
 	/** What the PDF reading tools (search, snapping highlighter, hide annotations, dimming) need from this view. */
 	private readingHost(): ReadingHost {
 		const save = (): void => void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
@@ -1770,6 +1889,7 @@ export class NotebookView extends FileView {
 				invisibleInk: !!this.markers?.invisibleInk, solutions: !!this.markers?.solutionsShown,
 				pageSolutions: !!page && (this.markers?.pageSolutionsShown(page) ?? false),
 			},
+			nav: this.navState(),
 			narrow: this.body?.hasClass("is-narrow") ?? false,
 		};
 	}
@@ -2042,7 +2162,7 @@ export class NotebookView extends FileView {
 		this.messageEl.hide();
 		this.body.show();
 		this.toolbar.setEditable(false);
-		this.toolbar.setStatus(t("status.loading"), "pending");
+		this.setStatus(t("status.loading"), "pending");
 		if (!this.media) {
 			this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged());
 			if (this.resilience?.mediaAtLoad() !== false) this.renderer?.setMedia(this.media); // wave 0.7: resilience (#346)
@@ -2151,7 +2271,7 @@ export class NotebookView extends FileView {
 	private showProblem(problem = this.session?.problem ?? null): void {
 		if (this.session?.mode === "not-downloaded" && this.syncSafety) {
 			this.syncSafety.renderNotDownloaded(this.messageEl);
-			return this.toolbar.setStatus(t("sync.status.notDownloaded"), "pending");
+			return this.setStatus(t("sync.status.notDownloaded"), "pending");
 		}
 		const readonly = this.session?.mode === "readonly";
 		this.messageEl.empty();
@@ -2166,17 +2286,40 @@ export class NotebookView extends FileView {
 				.addEventListener("click", () => void openRepair(this.reliabilityDeps(), file));
 		}
 		this.messageEl.show();
-		this.toolbar.setStatus(t("status.readonly"), "error");
+		this.setStatus(t("status.readonly"), "error");
+	}
+
+	/** The save state shown in the toolbar and in the status bar item (roadmap O15). */
+	private setStatus(text: string, kind: StatusBarInfo["kind"]): void {
+		this.toolbar.setStatus(text, kind);
+		this.saveText = text;
+		this.saveKind = kind;
+		this.notifyStatus();
+	}
+
+	/** What the status bar item shows for this view: the page in view and the save state; null while there is no document. */
+	statusSnapshot(): StatusBarInfo | null {
+		const total = this.shownDoc()?.pages.length ?? 0;
+		if (total === 0 || !this.layout) return null;
+		return { page: this.currentPageIndex() + 1, total, save: this.saveText, kind: this.saveKind };
+	}
+
+	private notifyStatus(): void {
+		const snap = this.statusSnapshot();
+		const key = snap ? `${snap.page}/${snap.total}|${snap.save}|${snap.kind}` : "";
+		if (key === this.statusKey) return;
+		this.statusKey = key;
+		this.host.statusChanged?.(this);
 	}
 
 	private showSaveState(state: SaveState): void {
 		if (this.session && this.session.mode !== "ok") {
-			if (this.session.mode === "not-downloaded") return this.toolbar.setStatus(t("sync.status.notDownloaded"), "pending");
-			this.toolbar.setStatus(t("status.readonly"), "error");
+			if (this.session.mode === "not-downloaded") return this.setStatus(t("sync.status.notDownloaded"), "pending");
+			this.setStatus(t("status.readonly"), "error");
 			return;
 		}
 		const text = { saved: "status.saved", pending: "status.pending", saving: "status.saving", error: "status.error" } as const;
-		this.toolbar.setStatus(t(text[state]), state === "error" ? "error" : state === "saved" ? "ok" : "pending");
+		this.setStatus(t(text[state]), state === "error" ? "error" : state === "saved" ? "ok" : "pending");
 	}
 
 	private showError(message: string): void {
@@ -2228,11 +2371,13 @@ export class NotebookView extends FileView {
 		const n = this.shownDoc()?.pages.length ?? 0;
 		const current = n ? this.currentPageIndex() : -1;
 		this.toolbar.setPage(n ? current + 1 : 0, n);
+		this.notifyStatus();
 		if (n) this.practiceHooks?.page(current);
 		if (n && this.file) this.pageClock.note(this.file.path, current, new Date());
 		this.scheduleHeavyCheck();
 		if (current !== this.navCurrent) {
 			this.navCurrent = current;
+			if (n && this.app.workspace.getActiveViewOfType(NotebookView) === this) this.host.nav?.seen(this.navPlace());
 			this.pageNav?.markCurrent(current);
 			this.pageOffer?.cancel(); // an offer made for the page that was in view
 			this.refreshUi(); // the contextual bar follows the kind of page in view
@@ -2381,6 +2526,7 @@ export class NotebookView extends FileView {
 		this.placeTextEditor();
 		this.math?.place();
 		this.updatePageIndicator();
+		this.scrollbar?.update();
 		this.overlayChanged?.();
 		for (const fn of this.overlayListeners) fn();
 	}

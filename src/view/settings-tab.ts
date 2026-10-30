@@ -236,6 +236,12 @@ export class NotebookSettingTab extends PluginSettingTab {
 				desc: t("settings.pageTurnerKeys.desc"),
 				control: { type: "toggle", key: "pageTurnerKeys", defaultValue: DEFAULT_SETTINGS.pageTurnerKeys },
 			},
+			// wave 0.10 (50)
+			{
+				name: t("settings.fastScrollbar"),
+				desc: t("settings.fastScrollbar.desc"),
+				control: { type: "toggle", key: "fastScrollbar", defaultValue: DEFAULT_SETTINGS.fastScrollbar },
+			},
 			// Companion notes (O1)
 			...companionSettingDefinitions(this.companionHost()),
 			// wave 0.6: library trash, templates
@@ -422,6 +428,10 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setName(t("settings.pageTurnerKeys"))
 			.setDesc(t("settings.pageTurnerKeys.desc"))
 			.addToggle((tg) => tg.setValue(s.pageTurnerKeys).onChange((v) => this.setControlValue("pageTurnerKeys", v)));
+		new Setting(containerEl)
+			.setName(t("settings.fastScrollbar"))
+			.setDesc(t("settings.fastScrollbar.desc"))
+			.addToggle((tg) => tg.setValue(s.fastScrollbar).onChange((v) => this.setControlValue("fastScrollbar", v)));
 		displayGestureSettings(containerEl, this.gestureHost());
 		new Setting(containerEl)
 			.setName(t("settings.penLongPress"))

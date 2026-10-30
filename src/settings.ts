@@ -108,6 +108,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	toolbarSize: ToolbarSize;
 	/** Keyboard arrows, PageUp / PageDown, space and Bluetooth clickers turn pages (372). */
 	pageTurnerKeys: boolean;
+	/** wave 0.10 (50): the draggable thumb with a page preview along the right edge in continuous scroll. */
+	fastScrollbar: boolean;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -152,6 +154,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	inkFollowsObjects: true,
 	toolbarSize: DEFAULT_TOOLBAR_SIZE,
 	pageTurnerKeys: true,
+	fastScrollbar: true,
 	...DEFAULT_COMPANION_SETTINGS,
 	...DEFAULT_GESTURE_SETTINGS,
 	...DEFAULT_PEN_GESTURE_SETTINGS,
@@ -210,6 +213,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (isScrollMode(d.scrollMode)) s.scrollMode = d.scrollMode;
 	if (isToolbarSize(d.toolbarSize)) s.toolbarSize = d.toolbarSize;
 	if (typeof d.pageTurnerKeys === "boolean") s.pageTurnerKeys = d.pageTurnerKeys;
+	if (typeof d.fastScrollbar === "boolean") s.fastScrollbar = d.fastScrollbar;
 	s.lastNotebookPos = parsePosition(d.lastNotebookPos);
 
 	if (typeof d.timetableOffer === "boolean") s.timetableOffer = d.timetableOffer;

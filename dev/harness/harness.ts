@@ -30,6 +30,9 @@ import { FAKE_PATH, installFakePdf, slidesNotebook } from "./fake-pdf";
 import { checkReading } from "./reading-check";
 import { checkPractice } from "./practice-check";
 import { PracticeService } from "../../src/view/practice";
+import { NavController } from "../../src/view/nav-controller";
+import { NotebookStatusBar } from "../../src/view/status-bar";
+import { checkNavigation } from "./nav-check";
 import { compareLod, measureLod } from "./lod-bench";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -112,6 +115,24 @@ async function seed(): Promise<void> {
 /** The practice feature (doc=practice) on a stand-in plugin: the views attach to it as they do to the real one. */
 const practiceService = new PracticeService({ app, settings: { ...DEFAULT_SETTINGS }, registerEvent: () => undefined } as any);
 
+/** Back/forward history (roadmap 18) and the status bar item (roadmap O15) on the harness's single view. */
+const harnessNav: NavController = new NavController({
+	here: () => (view as any)?.navPlace() ?? null,
+	exists: async (pl) => !!(view as any)?.document?.pages.some((p: { id: string }) => p.id === pl.pageId),
+	open: async (pl) => {
+		(view as any).showPlace(pl);
+		harnessNav.shown();
+	},
+});
+const harnessStatusBarEl = document.createElement("div");
+harnessStatusBarEl.className = "status-bar-item";
+document.body.appendChild(harnessStatusBarEl);
+let statusBarClicks = 0;
+const harnessStatusBar = new NotebookStatusBar(harnessStatusBarEl, () => {
+	statusBarClicks++;
+	(view as any)?.openNavigator();
+});
+
 function settings(): NotebookSettings {
 	const s: NotebookSettings = { ...DEFAULT_SETTINGS };
 	if (params.get("lowLatency") === "1") s.lowLatencyInk = true;
@@ -123,7 +144,7 @@ async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	if (view) await (view as any).onClose();
 	root.empty();
 	leaf = new WorkspaceLeaf(app, root);
-	view = new NotebookView(leaf as any, { settings: settings(), practice: doc === "practice" ? practiceService : undefined });
+	view = new NotebookView(leaf as any, { settings: settings(), practice: doc === "practice" ? practiceService : undefined, nav: harnessNav, statusChanged: (v) => harnessStatusBar.update(v.statusSnapshot()) });
 	await view.onOpen();
 	const path = doc === "new" || doc === "practice" ? "Notebooks/New.notebook" : doc === "pdf" ? "Notebooks/Slides.notebook" : "Notebooks/Old v3.notebook";
 	const file = app.vault.getFileByPath(path) as TFile;
@@ -419,6 +440,7 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 	await checkStagedLoad(add);
 	await checkPageLinks(add);
 	await checkObjects(add);
+	await checkNavigation({ view, nav: harnessNav, stage, statusBarEl: harnessStatusBarEl, statusBarClicks: () => statusBarClicks, strokeCount, frames, closeAll }, add);
 
 	const unexpected = errors.filter((e) => !expectedError?.test(e));
 	if (fault) add("injected fault was reported", errors.some((e) => expectedError!.test(e)), errors[0]?.split("\n")[0] ?? "no error logged");
