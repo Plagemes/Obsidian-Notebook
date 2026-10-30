@@ -28,6 +28,8 @@ import { DocumentSession } from "../../src/storage/session";
 import { stressDocument } from "../../src/model/stress";
 import { FAKE_PATH, installFakePdf, slidesNotebook } from "./fake-pdf";
 import { checkReading } from "./reading-check";
+import { checkPractice } from "./practice-check";
+import { PracticeService } from "../../src/view/practice";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -106,6 +108,9 @@ async function seed(): Promise<void> {
 	await app.vault.create("Notebooks/Slides.notebook", slidesNotebook());
 }
 
+/** The practice feature (doc=practice) on a stand-in plugin: the views attach to it as they do to the real one. */
+const practiceService = new PracticeService({ app, settings: { ...DEFAULT_SETTINGS }, registerEvent: () => undefined } as any);
+
 function settings(): NotebookSettings {
 	const s: NotebookSettings = { ...DEFAULT_SETTINGS };
 	if (params.get("lowLatency") === "1") s.lowLatencyInk = true;
@@ -117,9 +122,9 @@ async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	if (view) await (view as any).onClose();
 	root.empty();
 	leaf = new WorkspaceLeaf(app, root);
-	view = new NotebookView(leaf as any, { settings: settings() });
+	view = new NotebookView(leaf as any, { settings: settings(), practice: doc === "practice" ? practiceService : undefined });
 	await view.onOpen();
-	const path = doc === "new" ? "Notebooks/New.notebook" : doc === "pdf" ? "Notebooks/Slides.notebook" : "Notebooks/Old v3.notebook";
+	const path = doc === "new" || doc === "practice" ? "Notebooks/New.notebook" : doc === "pdf" ? "Notebooks/Slides.notebook" : "Notebooks/Old v3.notebook";
 	const file = app.vault.getFileByPath(path) as TFile;
 	await (view as any).loadFile(file);
 	view.onResize();
@@ -1136,7 +1141,7 @@ function applySize(): void {
 	if (h) root.style.height = `${Number(h)}px`;
 }
 
-(window as any).harness = { app, open, measureOpen, penStroke, setTool, openOptions, openMore, check, checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
+(window as any).harness = { app, open, measureOpen, penStroke, setTool, openOptions, openMore, check, checkPractice: () => checkPractice({ view, app, service: practiceService, frames, errors, notices }), checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
 	return view;
 } };
 
