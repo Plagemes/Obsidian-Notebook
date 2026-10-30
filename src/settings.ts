@@ -17,6 +17,10 @@ import { isUiLanguage, type UiLanguage } from "./i18n/languages";
 import { DEFAULT_READING_SETTINGS, readReadingSettings, type ReadingSettings } from "./view/reading-settings";
 
 /** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
+/** DESIGN.md §2.2: *Notebook* (its own tokens, the default) or *Follow Obsidian theme*. */
+export const APPEARANCE_STYLES = ["notebook", "obsidian"] as const;
+export type AppearanceStyle = (typeof APPEARANCE_STYLES)[number];
+
 export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings {
 	/** UI language: "auto" follows Obsidian. */
 	uiLanguage: UiLanguage;
@@ -126,6 +130,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	recentColours: string[];
 	/** wave 0.10 (50): the draggable thumb with a page preview along the right edge in continuous scroll. */
 	fastScrollbar: boolean;
+	/** Look of the plugin's own surfaces (DESIGN.md §2.2): its own `--nb-*` palette, or those tokens mapped onto the Obsidian theme. */
+	appearanceStyle: AppearanceStyle;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -176,6 +182,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	dateStampFormat: DEFAULT_STAMP_FORMAT,
 	recentColours: [],
 	fastScrollbar: true,
+	appearanceStyle: "notebook",
 	...DEFAULT_COMPANION_SETTINGS,
 	...DEFAULT_GESTURE_SETTINGS,
 	...DEFAULT_PEN_GESTURE_SETTINGS,
@@ -240,6 +247,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.dateStampFormat === "string") s.dateStampFormat = cleanStampFormat(d.dateStampFormat);
 	s.recentColours = normaliseRecentColours(d.recentColours);
 	if (typeof d.fastScrollbar === "boolean") s.fastScrollbar = d.fastScrollbar;
+	if (APPEARANCE_STYLES.includes(d.appearanceStyle as AppearanceStyle)) s.appearanceStyle = d.appearanceStyle as AppearanceStyle;
 	s.lastNotebookPos = parsePosition(d.lastNotebookPos);
 
 	if (typeof d.timetableOffer === "boolean") s.timetableOffer = d.timetableOffer;

@@ -36,7 +36,7 @@ AI, no network, nothing leaves the device.
 | **Radial menu** | Dark dial at the pen tip: undo/redo, width bubble, colour bubble, tool illustration, favourites · pen case · shapes | S Pen side button (or long press, per settings) |
 | **Notebook menu** | Obsidian's "More options" of the notebook tab | Notebook-wide actions: open library, export notebook, zettel entries |
 | **Library** | The library view | Create, import PDF, lecture from slides, scan, timetable |
-| **Settings** | Plugin settings tab | Diagnostics (pen button test, benchmark) are also commands |
+| **Settings** | Plugin settings tab, generated from `view/settings-schema.ts` (§10): eleven sections by task, a search, collapsed *Advanced* and feature groups | Diagnostics (pen button test, benchmark) are also commands |
 | **Command palette** | Every command, hotkeys | All actions with `command` (ids unchanged since 0.5) |
 
 ## 3. Information architecture
@@ -206,3 +206,77 @@ the accent soft fill and an accent underline dot; groups are separated by 1 px d
 | `NotebookView.uiContext()` / `runAction()` | The view's context for the engine, and the single entry point that runs and counts an action |
 | `src/view/toolbar.ts` | Primary toolbar (quick slots from the layout) |
 | `src/view/radial-menu.ts` | Radial dial |
+| `src/view/settings-schema.ts` | The settings tab described once: sections, groups, rows, visibility and search (pure) |
+| `src/view/settings-tab.ts` | Draws the settings tab from the schema (Obsidian 1.13+ definitions and the older hand-drawn tab) |
+
+## 10. Settings
+
+The plugin's settings tab follows DESIGN.md §6. It is generated from one list, `src/view/settings-schema.ts`
+(pure, tested in Node), and drawn by `src/view/settings-tab.ts` in both ways Obsidian draws a tab: the declarative
+definitions of Obsidian 1.13+ (`getSettingDefinitions`, groups with `visible` predicates, re-evaluated with
+`refreshDomState()` after every change) and the hand-drawn tab of older versions (`display()`, the same rows, shown or
+hidden in place). Both read what to show from one function, `settingsView`, so they cannot drift.
+
+### Sections
+
+| # | Section | What goes there |
+|---|---|---|
+| 1 | **Writing** | Defaults of new notebooks (paper, page size, orientation), how ink behaves (stabilization, ink follows objects, automatic line break). Advanced: area eraser removes text and images, date stamp format, predicted ink, low-latency ink |
+| 2 | **Pen & input** | Finger drawing, palm rejection, pressure, the S Pen side button and its options, finger long-press, finger taps, scribble to erase. Group *Pen gestures*. Advanced: large touches, zero-pressure press, button while writing, edge rejection and its zones |
+| 3 | **Pages & navigation** | Scrolling, fast scrollbar, add a page at the bottom, scroll up near the bottom, page-turner keys |
+| 4 | **PDF & reading** | Snap highlighter to text, dim backgrounds and strength, crop PDF margins |
+| 5 | **Library & files** | Notebooks folder, trash retention, version history (backups). Advanced: loose sheet location, templates folder |
+| 6 | **Sync & safety** | Device name, check sync safety (only when the sync safety service runs) |
+| 7 | **Export** | Export settings, when there are any (the section is hidden while it is empty) |
+| 8 | **Obsidian integration** | Tabs of open notebooks, companion notes and their options |
+| 9 | **Study** | Groups *Class timetable* (edit, offer the current class, open without asking, start early) and *Zettelkasten* |
+| 10 | **Appearance & language** | Language, Style (Notebook / Follow Obsidian theme), toolbar size, night mode |
+| 11 | **Diagnostics** | Pen button test, performance benchmark, performance overlay (the first two are also commands) |
+
+### Rules
+
+- **Placement.** A new setting is a `SettingSpec` in the section where a person would look for it, next to related
+  settings, with an `order` (gaps of 10 leave room). Never at the end of the list, never a new section for one feature.
+- **Most used first.** The main rows of a section are the common choices; the rest gets `group: ADVANCED`, a collapsed
+  *Advanced* row that shows how many settings it holds.
+- **Relevance.** A dependent option has `parent` and `visible` and is shown only while its parent is on (a dependent of
+  a dependent also follows the root). Options of a feature not in use sit in a collapsible group (`GROUPS`) whose `open`
+  predicate says when the feature is in use; the person can open or close any group, and that choice lasts while the
+  tab is open. Rows that need a service (sync, timetable) are hidden when it is not running. A section with nothing to
+  show is hidden.
+- **Search.** The pill at the top filters every row by name, description, section and group title in every UI language
+  (accents and case ignored, every word must match) plus a few keywords. While searching, groups are expanded and their
+  disclosure rows hidden, the section headers of the matches stay, a match whose parent is off shows the parent instead,
+  and "No setting matches" appears when nothing does. Obsidian's own settings search also finds the rows: their names in
+  the other languages are passed as `aliases`.
+- **Wording.** Short names in sentence case, at most one line of description (`tests/settings-schema.test.ts` limits
+  names to 48 and descriptions to 90 characters in every language), all strings in `en.ts` and `it.ts`.
+- **Keys.** Every key of `DEFAULT_SETTINGS` is in exactly one section, except the internal keys listed with their reason
+  in `INTERNAL_SETTING_KEYS` (favourite pens, eraser size, recent colours, side-button-seen flag, last notebook / page /
+  position, Zettelkasten slip boxes). The test fails when a new key is in no section.
+- **Look.** The design-system tokens (DESIGN.md §2.1–2.2: `--nb-bg`, `--nb-panel`, `--nb-tile`, `--nb-border`,
+  `--nb-text`, `--nb-text-muted`, `--nb-accent`, `--nb-accent-bg` and radii) are declared on `.notebook-settings`;
+  *Style → Follow Obsidian theme* (`appearanceStyle`, class `nb-style-obsidian`) maps them onto Obsidian's variables.
+  Each section is a panel (16 px radius, 1 px border) with an icon square and a 20 px / 600 title; rows have a 15 px / 500
+  name and a muted 13 px description with the control on the right (under the name on a phone); dropdowns and buttons
+  are pills, text fields 14 px tiles, all at least 40 px tall; the search pill stays at the top while the list scrolls.
+
+### Extension point: S Pen button settings
+
+New rows of the side button are added to `PEN_BUTTON_EXTENSIONS` in `src/view/settings-schema.ts` (the marked block),
+with `section: "input"` and an `order` from 41 to 49, so they sit between *Pen side button* (40) and *Hold the pen still
+for the radial menu* (50); use `group: ADVANCED` for the rare ones, and `parent: "penSideButton", visible: penButtonOn`
+when they only matter while the button does something. Their keys go in `DEFAULT_SETTINGS` and their strings in
+`en.ts` / `it.ts` as usual; nothing else in the tab changes. For example, for `penButtonEraserNext` (boolean) and
+`penButtonKey` (string, `''` = off):
+
+```ts
+export const PEN_BUTTON_EXTENSIONS: SettingSpec[] = [
+	{ id: "penButtonEraserNext", section: "input", order: 41, name: "settings.penButtonEraserNext", desc: "settings.penButtonEraserNext.desc", control: { type: "toggle" }, parent: "penSideButton", visible: penButtonOn },
+	{ id: "penButtonKey", section: "input", group: ADVANCED, order: 25, name: "settings.penButtonKey", desc: "settings.penButtonKey.desc", control: { type: "text" }, parent: "penSideButton", visible: penButtonOn },
+];
+```
+
+A row that needs its own drawing uses `control: { type: "custom", render: … }` with a new `SettingCustomId` handled by
+`renderCustom` in `settings-tab.ts`; an action row uses `{ type: "action", run: … }` with a new `SettingActionId`
+handled by `run`.

@@ -1,5 +1,5 @@
 // wave 0.7: sync safety (roadmap #342–#345). The UI side; pure logic in storage/presence-logic.ts and storage/sync-state.ts.
-import { debounce, Modal, Setting, TFile, type App, type Component, type Plugin, type SettingDefinitionAction, type SettingDefinitionRender, type TAbstractFile } from "obsidian";
+import { debounce, Modal, Setting, TFile, type App, type Component, type Plugin, type TAbstractFile } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import type { NotebookDocument } from "../model/types";
 import { PresenceService } from "../storage/presence";
@@ -218,26 +218,8 @@ export class SyncCheckModal extends Modal {
 	}
 }
 
-/** Settings rows: this device's name (local, never synced) and the check. Obsidian 1.13+ definitions. */
-export function syncSettingDefinitions(service: SyncSafetyService | undefined): Array<SettingDefinitionRender | SettingDefinitionAction> {
-	if (!service) return [];
-	return [
-		{ name: t("settings.deviceName"), desc: t("settings.deviceName.desc"), render: (setting) => deviceNameRow(setting, service) },
-		{ name: t("settings.syncCheck"), desc: t("settings.syncCheck.desc"), action: () => void service.openCheck() },
-	];
-}
-
-/** Fallback for Obsidian older than 1.13 (classic settings tab). */
-export function displaySyncSettings(containerEl: HTMLElement, service: SyncSafetyService | undefined): void {
-	if (!service) return;
-	deviceNameRow(new Setting(containerEl).setName(t("settings.deviceName")).setDesc(t("settings.deviceName.desc")), service);
-	new Setting(containerEl)
-		.setName(t("settings.syncCheck"))
-		.setDesc(t("settings.syncCheck.desc"))
-		.addButton((b) => b.setButtonText(t("sync.check.button")).onClick(() => void service.openCheck()));
-}
-
-function deviceNameRow(setting: Setting, service: SyncSafetyService): void {
+/** The settings row of this device's name (local, never synced); the tab gives it the row with its name and description. */
+export function deviceNameRow(setting: Setting, service: SyncSafetyService): void {
 	const save = debounce((v: string) => service.presence.setDeviceName(v), 800, true);
 	setting.addText((text) => text.setValue(service.presence.device().name).onChange((v) => save(v)));
 }
