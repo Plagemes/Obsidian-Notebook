@@ -52,6 +52,10 @@ export function toolCommands(): ToolCommand[] {
 	list.push({ id: "toggle-pages-panel", name: "command.toggleNavigator", run: (v) => v.toggleNavigator() });
 	list.push({ id: "toggle-ruler", name: "command.toggleRuler", run: (v) => v.toggleRuler() });
 	list.push({ id: "toggle-page-mode", name: "command.pageMode", run: (v) => v.togglePageMode() });
+	// wave 0.8: pen gestures
+	list.push({ id: "pen-gesture-mode", name: "command.penGestureMode", run: (v) => v.togglePenGestureMode() });
+	list.push({ id: "pen-gesture-sheet", name: "command.penGestureSheet", run: (v) => v.openGestureCheatSheet() });
+	list.push({ id: "pen-gesture-custom", name: "command.penGestureCustom", run: (v) => v.openCustomGestures() });
 	return list;
 }
 

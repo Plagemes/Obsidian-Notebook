@@ -12,6 +12,9 @@ import { effectivePenHold } from "../ink/pen-button";
 import { PenTestModal, penSignalInfo } from "./pen-test-modal";
 import { companionSettingDefinitions, displayCompanionSettings, type CompanionSettingsHost } from "./companion-settings";
 import { displayZettelSettings, zettelSettingDefinitions, type ZettelSettingsHost } from "../zettel/settings-ui";
+// wave 0.8: pen gestures
+import { displayPenGestureSettings, gestureKeyId, penGestureSettingDefinitions } from "./pen-gesture-settings";
+import { setGestureEnabled, type PenGestureUiHost } from "./pen-gesture-ui";
 
 const paperOptions = () => Object.fromEntries(PAPER_KINDS.map((k) => [k, t(`paper.${k}`)]));
 const sizeOptions = () => Object.fromEntries((Object.keys(PAGE_SIZES) as Array<keyof typeof PAGE_SIZES>).map((k) => [k, t(`size.${k}`)]));
@@ -30,6 +33,8 @@ const penButtonOptions = () => ({
 	eraser: t("settings.penButton.eraser"),
 	lasso: t("settings.penButton.lasso"),
 	previous: t("settings.penButton.previous"),
+	gesture: t("settings.penButton.gesture"),
+	"radial-gesture": t("settings.penButton.radialGesture"),
 	off: t("settings.penButton.off"),
 });
 
@@ -219,11 +224,17 @@ export class NotebookSettingTab extends PluginSettingTab {
 			...trashSettingDefinitions(),
 			// wave 0.6: zettelkasten
 			...zettelSettingDefinitions(this.zettelHost()),
+			// wave 0.8: pen gestures
+			...(penGestureSettingDefinitions(this.penGestureHost()) as SettingDefinitionItem<Key>[]),
 		];
 	}
 
 	private gestureHost(): GestureSettingsHost {
 		return { get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) };
+	}
+
+	private penGestureHost(): PenGestureUiHost {
+		return { app: this.app, get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) };
 	}
 
 	private companionHost(): CompanionSettingsHost {
@@ -237,10 +248,17 @@ export class NotebookSettingTab extends PluginSettingTab {
 	getControlValue(key: string): unknown {
 		// The hold-still toggle shows what is in effect: without a choice of the user that depends on the device.
 		if (key === "penHoldStill") return effectivePenHold(this.host.settings.penHoldStill, this.host.settings.penButtonSeen);
+		const gesture = gestureKeyId(key);
+		if (gesture) return !this.host.settings.penGesturesOff.includes(gesture);
 		return this.host.settings[key as Key];
 	}
 
 	async setControlValue(key: string, value: unknown): Promise<void> {
+		const gesture = gestureKeyId(key);
+		if (gesture) {
+			await setGestureEnabled(this.penGestureHost(), gesture, value === true);
+			return;
+		}
 		// readSettings drops values of the wrong type and keeps the defaults.
 		this.host.settings = readSettings({ ...this.host.settings, [key]: value });
 		await this.host.saveSettings();
@@ -402,5 +420,6 @@ export class NotebookSettingTab extends PluginSettingTab {
 		displayTimetableSettings(containerEl, this.host);
 		displayTrashSettings(containerEl, { get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) });
 		displayZettelSettings(containerEl, this.zettelHost());
+		displayPenGestureSettings(containerEl, this.penGestureHost());
 	}
 }

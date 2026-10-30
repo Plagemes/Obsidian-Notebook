@@ -59,7 +59,7 @@ import { DocumentSession, type SaveState, type SessionMode } from "../storage/se
 import { nextTask } from "../storage/idle";
 import { isNotebookFile } from "../storage/format";
 import { VaultDocumentIO } from "../storage/vault-io";
-import { backupFolder, type NotebookSettings } from "../settings";
+import { backupFolder, readSettings, type NotebookSettings } from "../settings";
 import { exportPdf, exportSvg } from "./export";
 import { policySettings } from "./input-settings";
 import { NotebookMedia, storeAsset } from "./media";
@@ -70,6 +70,12 @@ import { positionAt, updatePosition } from "../model/position";
 import { LocationKeeper } from "./last-location";
 import { GestureInput } from "./gesture-input";
 import { PenRadial } from "./radial-menu";
+// wave 0.8: pen gestures
+import { DwellTracker, DWELL_MS, dwellMayStart, gestureStarts } from "../ink/gestures/trigger";
+import { PenGestureLayer } from "./pen-gestures";
+import { gestureWorld, runGesture, type PenGestureView } from "./pen-gesture-actions";
+import { CustomGesturesModal, GestureCheatSheet, PEN_GESTURE_ICON, type PenGestureUiHost } from "./pen-gesture-ui";
+import { editPageTags } from "./outline";
 import { askPdfRange } from "./pdf-range-modal";
 import { runBoardShot } from "./board-shot";
 import type { EditContext } from "./edit-context";
@@ -239,6 +245,11 @@ export class NotebookView extends FileView {
 	private textEditor: TextEditor | null = null;
 	private rulerGesture: RulerGesture | null = null;
 	private radial: PenRadial | null = null;
+	/** Pen gestures (roadmap 139, view/pen-gestures.ts): gesture mode and the gesture in progress. */
+	private penGestures: PenGestureLayer | null = null;
+	/** Long-press trigger: the ink stroke that may turn into a gesture if the pen rests, and its timer. */
+	private dwell: { tracker: DwellTracker; timer: number } | null = null;
+	private showGestureMode: (on: boolean) => void = () => undefined;
 	/** Multi-finger taps and auto-scroll (wave 0.6: gestures), the previous tool, and when the stroke in progress began. */
 	private gestures: GestureInput | null = null;
 	private readonly lastTool = new LastTool<ToolName>();
@@ -367,6 +378,7 @@ export class NotebookView extends FileView {
 		});
 		this.toolbar.setSelection(false);
 		this.showPageMode = this.toolbar.addMoreToggle("book-open", "toolbar.pageMode", () => this.togglePageMode());
+		this.showGestureMode = this.toolbar.addMoreToggle(PEN_GESTURE_ICON, "toolbar.penGestures", () => this.togglePenGestureMode());
 		this.body = this.contentEl.createDiv({ cls: "notebook-body" });
 		this.stage = this.body.createDiv({ cls: "notebook-stage" });
 		this.perfEl = this.stage.createDiv({ cls: "notebook-perf" });
@@ -384,6 +396,15 @@ export class NotebookView extends FileView {
 		// The panel sits to the left of the page (a drawer over it on narrow views).
 		this.body.insertBefore(this.pageNav.el, this.stage);
 		this.textEditor = new TextEditor(this.stage);
+		this.penGestures = new PenGestureLayer({
+			stage: this.stage,
+			body: this.body,
+			settings: () => this.host.settings,
+			world: () => gestureWorld(this.gestureView()),
+			run: (r, trail) => runGesture(this.gestureView(), r, trail),
+			openCheatSheet: () => this.openGestureCheatSheet(),
+			modeChanged: (on) => this.showGestureMode(on),
+		});
 		this.pens = new PenControls(this.toolbar, this.stage, this.penStore());
 		this.mountSelectionActions();
 		this.mountStamps();
@@ -500,6 +521,9 @@ export class NotebookView extends FileView {
 			this.resolveClosed?.();
 		}
 		this.stopHold();
+		this.clearDwell();
+		this.penGestures?.destroy();
+		this.penGestures = null;
 		for (const timer of [this.navTimer, this.thumbTimer, this.snapFlashTimer]) if (timer !== null) window.clearTimeout(timer);
 		this.navTimer = this.thumbTimer = this.snapFlashTimer = null;
 		this.pens?.destroy();
@@ -1178,7 +1202,7 @@ export class NotebookView extends FileView {
 	private inContact(): boolean {
 		return this.active !== null || this.erasing !== null || this.lasso !== null || this.drag !== null || this.shapeDrag !== null
 			|| this.spaceDrag !== null || this.lassoTap !== null || this.textTap !== null || this.controller?.navigating === true
-			|| this.gestures?.touching === true || this.rulerGesture?.dragging === true;
+			|| this.gestures?.touching === true || this.rulerGesture?.dragging === true || this.penGestures?.active === true;
 	}
 
 	private stillHere(session: DocumentSession | null): boolean {
@@ -2022,12 +2046,18 @@ export class NotebookView extends FileView {
 		return { x: b.x[i]!, y: b.y[i]! };
 	}
 
-	private drawStart(sample: InkSample, eraserButton: boolean, held?: "lasso" | "previous"): boolean {
+	private drawStart(sample: InkSample, eraserButton: boolean, held?: "lasso" | "previous" | "gesture"): boolean {
 		const layout = this.layout;
 		if (!layout || !this.editable()) return false;
 		this.commitText();
 		const [dx, dy] = this.toDoc(sample);
 		if (!Number.isFinite(dx) || !Number.isFinite(dy)) return false;
+		// Pen gestures start only when asked for: gesture mode, or the side button held with its action set to gestures.
+		// Normal writing never gets here. A selection is kept: the gesture may move it.
+		if (this.penGestures && gestureStarts({ pointerType: sample.pointerType, eraser: eraserButton, buttonGesture: held === "gesture", modeOn: this.penGestures.mode })) {
+			this.penGestures.start(sample.x, sample.y, sample.t);
+			return true;
+		}
 		const tool = eraserButton ? "eraser" : held === "lasso" ? "lasso" : held === "previous" ? (this.lastTool.previous() ?? this.tools.tool) : this.tools.tool;
 
 		if (tool === "eraser" && this.tools.eraserMode !== "area") {
@@ -2120,6 +2150,7 @@ export class NotebookView extends FileView {
 		this.hold.clear();
 		this.hold.push(sample.x, sample.y, performance.now());
 		this.startHold();
+		this.armDwell(sample, eraserButton, !!held, inkTool);
 		// The first point shows as a dot right away.
 		const painted = !!this.renderer?.beginWet(pageIndex, this.ink, inkTool, color) && this.renderer.paintWet();
 		if (!painted) this.showLiveFallback(this.active);
@@ -2129,6 +2160,12 @@ export class NotebookView extends FileView {
 	private drawMove(samples: SampleBuffer, predicted: SampleBuffer): void {
 		const n = samples.count;
 		if (n > 0) this.perfInput = samples.t[n - 1]!;
+
+		if (this.penGestures?.active) {
+			this.penGestures.move(samples);
+			return;
+		}
+		if (this.dwell) this.watchDwell(samples);
 
 		if (this.erasing) {
 			for (let i = 0; i < n; i++) {
@@ -2273,6 +2310,11 @@ export class NotebookView extends FileView {
 	}
 
 	private endGesture(cancelled: boolean): void {
+		if (this.penGestures?.active) {
+			this.penGestures.end(cancelled);
+			return;
+		}
+		this.clearDwell();
 		const erasing = this.erasing;
 		if (erasing) {
 			this.erasing = null;
@@ -2554,6 +2596,120 @@ export class NotebookView extends FileView {
 		this.session?.markChanged();
 		this.updateHistoryButtons();
 		this.scheduleNavRefresh();
+	}
+
+	// --- pen gestures (roadmap 139; recognition in ink/gestures/, overlay in view/pen-gestures.ts) ---
+
+	/** Gesture mode on or off: while on, every pen stroke is a gesture (the toolbar menu, the command). */
+	togglePenGestureMode(): void {
+		this.penGestures?.toggleMode();
+	}
+
+	get penGestureMode(): boolean {
+		return this.penGestures?.mode === true;
+	}
+
+	openGestureCheatSheet(): void {
+		new GestureCheatSheet(this.gestureUiHost()).open();
+	}
+
+	openCustomGestures(): void {
+		new CustomGesturesModal(this.gestureUiHost()).open();
+	}
+
+	/** What the gesture dialogs need: the app and the settings with a validated setter (the plugin saves and re-applies them). */
+	gestureUiHost(): PenGestureUiHost {
+		return {
+			app: this.app,
+			get: () => this.host.settings,
+			set: async (key, value) => {
+				// Same rule as the settings tab: readSettings drops values of the wrong type.
+				this.host.settings = readSettings({ ...this.host.settings, [key]: value });
+				await this.host.saveSettings?.();
+			},
+		};
+	}
+
+	/** The view as the gesture actions see it. */
+	private gestureView(): PenGestureView {
+		return {
+			app: this.app,
+			settings: () => this.host.settings,
+			doc: () => this.session?.doc ?? null,
+			editable: () => this.editable(),
+			pageIndexAt: (p) => {
+				const layout = this.layout;
+				if (!layout) return -1;
+				const [x, y] = this.toDoc(p);
+				return Number.isFinite(x) && Number.isFinite(y) ? pageAt(layout, x, y, 0) : -1;
+			},
+			toLocal: (pageIndex, p) => this.toLocal(pageIndex, p),
+			stageRect: () => this.stage.getBoundingClientRect(),
+			boundsOf: () => this.renderer?.boundsOf,
+			selection: () => this.selection,
+			selectionHit: (pageIndex, local) => this.selection?.pageIndex === pageIndex && this.selectionHit(local) !== null,
+			selectPolygon: (pageIndex, polygon) => {
+				const page = this.pageAtIndex(pageIndex);
+				if (page) this.selectFromLasso({ pageIndex, points: polygon }, page);
+			},
+			clearSelection: () => this.clearSelection(),
+			penStyle: () => ({ color: this.tools.penColor, width: this.tools.penWidth }),
+			execute: (commands) => {
+				this.commitText();
+				for (const c of commands) this.history.execute(c);
+				this.renderer?.invalidate();
+				this.afterHistoryChange();
+			},
+			editTags: (page) => editPageTags(this.outlineHost(), page),
+			openSearch: () => this.reading?.openSearch(),
+		};
+	}
+
+	/**
+	 * Long-press trigger (setting, off by default): an ink stroke whose nib stays within a few px of the first contact for
+	 * about 0.65 s turns into a gesture the moment the timer fires; the dot written so far is dropped.
+	 */
+	private armDwell(sample: InkSample, eraser: boolean, held: boolean, inkTool: string): void {
+		this.clearDwell();
+		if (!dwellMayStart({
+			enabled: this.host.settings.penGestureLongPress, pointerType: sample.pointerType, eraser, held,
+			modeOn: this.penGestures?.mode === true, inking: inkTool === "pen" || inkTool === "highlighter",
+		})) return;
+		const tracker = new DwellTracker();
+		tracker.begin(sample.x, sample.y, performance.now());
+		this.dwell = { tracker, timer: window.setTimeout(() => this.dwellElapsed(sample), DWELL_MS) };
+	}
+
+	private watchDwell(samples: SampleBuffer): void {
+		const d = this.dwell;
+		if (!d) return;
+		for (let i = 0; i < samples.count; i++) d.tracker.move(samples.x[i]!, samples.y[i]!);
+		if (!d.tracker.resting) this.clearDwell();
+	}
+
+	private clearDwell(): void {
+		if (!this.dwell) return;
+		window.clearTimeout(this.dwell.timer);
+		this.dwell.tracker.end();
+		this.dwell = null;
+	}
+
+	private dwellElapsed(sample: InkSample): void {
+		const d = this.dwell;
+		this.dwell = null;
+		if (!d || !d.tracker.ready(performance.now()) || !this.active || !this.penGestures) return;
+		// The ink written so far is only the dot of the first contact: drop it, no undo step, nothing saved.
+		this.active = null;
+		this.stopHold();
+		this.renderer?.cancelWet();
+		this.renderer?.setLive(null);
+		this.clearSelection();
+		this.penGestures.start(sample.x, sample.y, performance.now());
+		try {
+			navigator.vibrate?.(20);
+		} catch {
+			// No haptics here.
+		}
 	}
 
 	// --- insert or remove space ---
