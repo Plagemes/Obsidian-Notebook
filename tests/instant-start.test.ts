@@ -6,10 +6,11 @@ import { DocumentSession, WARM_UP_DELAY_MS, type DocumentIO, type Timers } from 
 import { DEFAULT_SETTINGS, readSettings } from "../src/settings";
 import { LocationKeeper } from "../src/view/last-location";
 import { sampleDocument } from "./helpers";
+import { nodeClearTimeout, nodeSetTimeout } from "./node-env";
 
 const timers: Timers = {
-	set: (fn, ms) => setTimeout(fn, ms) as unknown as number,
-	clear: (h) => clearTimeout(h),
+	set: (fn, ms) => nodeSetTimeout(fn, ms),
+	clear: (h) => nodeClearTimeout(h),
 };
 
 describe("LocationKeeper (remember the page being read)", () => {
@@ -101,9 +102,9 @@ describe("DocumentSession warm-up", () => {
 		const recording: Timers = {
 			set: (fn, ms) => {
 				delays.push(ms);
-				return setTimeout(fn, ms) as unknown as number;
+				return nodeSetTimeout(fn, ms);
 			},
-			clear: (h) => clearTimeout(h),
+			clear: (h) => nodeClearTimeout(h),
 		};
 		let disk = text;
 		const io: DocumentIO = {

@@ -5,12 +5,13 @@ import { createDocument } from "../src/model/document";
 import { parse, serialize, serializeChecked } from "../src/model/serialize";
 import type { Asset } from "../src/model/types";
 import { DEFAULT_META } from "../src/model/types";
+import { CONFIG_DIR } from "./node-env";
 
 const asset: Asset = { id: "a".repeat(24), kind: "pdf", path: "Notebooks/_assets/aaaa.pdf", name: "Paper.pdf", bytes: 10 };
 
 describe("library index path", () => {
 	it("lives in the plugin folder", () => {
-		expect(libraryIndexPath(".obsidian", "notebook")).toBe(".obsidian/plugins/notebook/library-index.json");
+		expect(libraryIndexPath(CONFIG_DIR, "notebook")).toBe(`${CONFIG_DIR}/plugins/notebook/library-index.json`);
 		expect(libraryIndexPath("/.config/", "notebook")).toBe(".config/plugins/notebook/library-index.json");
 	});
 

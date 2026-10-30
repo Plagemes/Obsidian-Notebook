@@ -61,7 +61,7 @@ describe("ink links need no format change", () => {
 		const links = pageLinks(back.doc.pages[0]!.elements ?? []);
 		expect(links).toHaveLength(1);
 		expect(links[0]).toMatchObject({ target: "Folder/Note", subpath: "Heading" });
-		expect((back.doc.pages[0]!.elements?.[0] as TextElement).text).toBe(doc.pages[0]!.elements![0] && (doc.pages[0]!.elements![0] as TextElement).text);
+		expect((back.doc.pages[0]!.elements?.[0] as TextElement).text).toBe(doc.pages[0]!.elements[0] && (doc.pages[0]!.elements[0] as TextElement).text);
 		expect(parseLinks((back.doc.pages[0]!.elements?.[0] as TextElement).text)).toHaveLength(1);
 	});
 });

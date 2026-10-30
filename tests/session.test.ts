@@ -3,11 +3,12 @@ import { parse, serialize } from "../src/model/serialize";
 import { CURRENT_VERSION } from "../src/model/types";
 import { DocumentSession, type BackupReason, type DocumentIO, type Timers } from "../src/storage/session";
 import { line, sampleDocument } from "./helpers";
+import { nodeClearTimeout, nodeSetTimeout } from "./node-env";
 
 /** Node timers, resolved at call time so vitest's fake timers apply. */
 const timers: Timers = {
-	set: (fn, ms) => setTimeout(fn, ms) as unknown as number,
-	clear: (h) => clearTimeout(h),
+	set: (fn, ms) => nodeSetTimeout(fn, ms),
+	clear: (h) => nodeClearTimeout(h),
 };
 
 /** In-memory file with the same contract as the Vault-backed IO. */

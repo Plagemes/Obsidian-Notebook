@@ -83,6 +83,6 @@ it("benchmarks (10,000 strokes, 10 pages; tools on 1,000 strokes of one page)", 
 		const { mean, runs } = measure(fn);
 		lines.push(`${name.padEnd(42)} ${mean.toFixed(mean < 1 ? 4 : 1).padStart(9)} ms  (${runs} runs)`);
 	}
-	console.log(`\n${lines.join("\n")}\n`);
+	console.debug(`\n${lines.join("\n")}\n`);
 	expect(serializeChecked(doc).ok).toBe(true);
 });

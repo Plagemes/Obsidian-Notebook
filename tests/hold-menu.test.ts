@@ -7,6 +7,7 @@ import { PointerController, type MenuSource, type PointerHandlers } from "../src
 import { FINGER_GAP, fingerMenuCenter } from "../src/ink/radial";
 import { DEFAULT_SETTINGS, readSettings } from "../src/settings";
 import { policySettings } from "../src/view/input-settings";
+import { installFakeWindow, removeFakeWindow } from "./node-env";
 
 class FakeEl extends EventTarget {
 	captured = new Set<number>();
@@ -128,12 +129,12 @@ describe("decision helpers", () => {
 
 describe("pen hold-still on the controller", () => {
 	beforeEach(() => {
-		(globalThis as { window?: unknown }).window = globalThis;
+		installFakeWindow();
 		vi.useFakeTimers();
 	});
 	afterEach(() => {
 		vi.useRealTimers();
-		delete (globalThis as { window?: unknown }).window;
+		removeFakeWindow();
 	});
 
 	it("opens at HOLD_MS from the first contact, discards the stroke (no dot, nothing to undo) and releases the pen", () => {
@@ -276,12 +277,12 @@ describe("pen hold-still on the controller", () => {
 
 describe("finger long-press on the controller", () => {
 	beforeEach(() => {
-		(globalThis as { window?: unknown }).window = globalThis;
+		installFakeWindow();
 		vi.useFakeTimers();
 	});
 	afterEach(() => {
 		vi.useRealTimers();
-		delete (globalThis as { window?: unknown }).window;
+		removeFakeWindow();
 	});
 
 	const on = { fingerLongPress: true };

@@ -440,7 +440,7 @@ describe("library search", () => {
 	});
 
 	it("rejects a malformed textPages", () => {
-		const j = JSON.parse(JSON.stringify({ version: INDEX_VERSION, entries: [{ ...entry("a.notebook"), text: "x", textPages: [0] }] }));
+		const j: unknown = JSON.parse(JSON.stringify({ version: INDEX_VERSION, entries: [{ ...entry("a.notebook"), text: "x", textPages: [0] }] }));
 		expect(LibraryIndex.fromJSON(j).size).toBe(0);
 	});
 

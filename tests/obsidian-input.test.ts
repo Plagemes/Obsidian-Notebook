@@ -127,7 +127,7 @@ describe("Obsidian bookmarks (385)", () => {
 	it("feature-detects the core plugin and never throws", () => {
 		const addItem = () => undefined;
 		const app = (internalPlugins: unknown) => ({ internalPlugins }) as never;
-		expect(bookmarksInstance(app({ getPluginById: () => ({ enabled: true, instance: { addItem } }) }))?.addItem).toBe(addItem);
+		expect(Reflect.get(bookmarksInstance(app({ getPluginById: () => ({ enabled: true, instance: { addItem } }) })) ?? {}, "addItem")).toBe(addItem);
 		expect(bookmarksInstance(app({ getPluginById: () => ({ enabled: false, instance: { addItem } }) }))).toBeNull();
 		expect(bookmarksInstance(app({ getPluginById: () => ({ instance: { addItem } }) }))).toBeNull();
 		expect(bookmarksInstance(app({ getPluginById: () => ({ enabled: true, instance: {} }) }))).toBeNull();

@@ -139,7 +139,7 @@ describe("accuracy: the simplified stroke stays within half a device pixel", () 
 				total += r.total;
 			}
 		}
-		console.log(`LOD render 1, handwriting: worst outline difference ${worstPx.toFixed(3)} device px, ${(100 * kept / total).toFixed(0)}% of outline vertices kept`);
+		console.debug(`LOD render 1, handwriting: worst outline difference ${worstPx.toFixed(3)} device px, ${(100 * kept / total).toFixed(0)}% of outline vertices kept`);
 		expect(worstPx).toBeLessThanOrEqual(LOD_TOLERANCE_PX);
 	});
 
@@ -154,7 +154,7 @@ describe("accuracy: the simplified stroke stays within half a device pixel", () 
 				}
 			}
 		}
-		console.log(`LOD stress strokes (pen, highlighter, shape): worst ${worstPx.toFixed(3)} device px`);
+		console.debug(`LOD stress strokes (pen, highlighter, shape): worst ${worstPx.toFixed(3)} device px`);
 		expect(worstPx).toBeLessThanOrEqual(LOD_TOLERANCE_PX);
 	});
 
@@ -190,7 +190,7 @@ describe("accuracy: the simplified stroke stays within half a device pixel", () 
 				total += exact.nodeCount;
 			}
 		}
-		console.log(`LOD render 2: worst outline difference ${worstPx.toFixed(3)} device px, ${(100 * kept / total).toFixed(0)}% of nodes kept`);
+		console.debug(`LOD render 2: worst outline difference ${worstPx.toFixed(3)} device px, ${(100 * kept / total).toFixed(0)}% of nodes kept`);
 		expect(worstPx).toBeLessThanOrEqual(LOD_TOLERANCE_PX);
 	});
 

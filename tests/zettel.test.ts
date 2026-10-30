@@ -55,7 +55,7 @@ function unquote(v: string): string {
 
 /** A small YAML reader for the line-edit tests: plain and quoted scalars, block lists, comments, blank lines. */
 const yamlDeps: CompanionTextDeps = {
-	frontmatterInfo: deps.frontmatterInfo,
+	frontmatterInfo: (text) => deps.frontmatterInfo(text),
 	parseFrontmatter(yaml) {
 		const out: Record<string, unknown> = {};
 		let list: unknown[] | null = null;
@@ -238,7 +238,7 @@ describe("card notes", () => {
 		// Never the companion note's keys: an older device with companion notes on would claim the card.
 		expect(cardProperties(card)).not.toHaveProperty("notebook");
 		expect(cardProperties(card)).not.toHaveProperty("notebook-id");
-		const text = newCardText(card, deps.stringify);
+		const text = newCardText(card, (props) => deps.stringify(props));
 		expect(text.startsWith("---\nzettel-id: \"202610291442\"\n")).toBe(true);
 		expect(text).toContain("\n---\n![[Notebooks/Box.notebook#p3&id=page-1&r=1,2,30,40]]\n\n## Transcription\n\n");
 		expect(TRANSCRIPTION_HEADING).toBe("## Transcription");

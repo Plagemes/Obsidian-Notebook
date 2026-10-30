@@ -21,6 +21,7 @@ import { assetIdFromHash } from "../src/pdf/hash";
 import type { DeviceFileAdapter } from "../src/storage/device-files";
 import { SharedClipStore } from "../src/storage/shared-clip-store";
 import { line } from "./helpers";
+import { CONFIG_DIR } from "./node-env";
 
 function twoPages(): { doc: NotebookDocument; boxes: ReturnType<typeof layoutPages>["boxes"] } {
 	const doc = createDocument(new Date("2026-10-29T10:00:00.000Z"), { width: 200, height: 300 });
@@ -42,7 +43,7 @@ describe("shared paste: the picture record is not trusted (1)", () => {
 
 	it("refuses records that are not an image in the shape _assets/<id>.<ext>", () => {
 		for (const bad of [
-			record({ path: ".obsidian/plugins/x/data.json" }),
+			record({ path: `${CONFIG_DIR}/plugins/x/data.json` }),
 			record({ path: "../../secret.png" }),
 			record({ path: `Notebooks/_assets/${"cd".repeat(12)}.png` }),
 			record({ path: `Notebooks/${id}.png` }),

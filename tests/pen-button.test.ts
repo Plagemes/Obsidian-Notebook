@@ -7,6 +7,7 @@ import {
 import { PointerController, type PointerHandlers } from "../src/ink/pointer-controller";
 import { DEFAULT_SETTINGS, readSettings } from "../src/settings";
 import { policySettings } from "../src/view/input-settings";
+import { installFakeWindow, removeFakeWindow } from "./node-env";
 
 describe("signal shapes", () => {
 	it("the side button is button 2 or bit 2; the eraser is never the side button", () => {
@@ -254,11 +255,11 @@ function setup(settings: Partial<InputSettings> = {}) {
 describe("PointerController: every signal opens the menu once and draws nothing", () => {
 	beforeEach(() => {
 		// The controller uses window.setTimeout; in Node the global object stands in for window.
-		(globalThis as { window?: unknown }).window = globalThis;
+		installFakeWindow();
 	});
 	afterEach(() => {
 		vi.useRealTimers();
-		delete (globalThis as { window?: unknown }).window;
+		removeFakeWindow();
 	});
 
 	it("hover press as pointermove with buttons 2", () => {
@@ -279,7 +280,7 @@ describe("PointerController: every signal opens the menu once and draws nothing"
 		const policy = new InputPolicy({ fingerDrawing: false, palmRejectionMs: 0, penButton: "radial" });
 		const controller = new PointerController(el as unknown as HTMLElement, policy, handlers);
 		// pointerrawupdate needs `window`; install the listener directly the way setRawUpdates would.
-		(globalThis as { window?: unknown }).window = { onpointerrawupdate: null };
+		installFakeWindow({ onpointerrawupdate: null });
 		try {
 			controller.setRawUpdates(true);
 			fire(el, "pointerrawupdate", { buttons: 2, button: 2 });
@@ -287,7 +288,7 @@ describe("PointerController: every signal opens the menu once and draws nothing"
 			expect(menus.length).toBe(1);
 			controller.setRawUpdates(false);
 		} finally {
-			delete (globalThis as { window?: unknown }).window;
+			removeFakeWindow();
 		}
 	});
 

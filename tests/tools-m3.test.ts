@@ -119,7 +119,7 @@ describe("shape generators", () => {
 		const wings = p.slice(tipIdx).filter(([x, y]) => Math.hypot(x - 100, y) > 19.9);
 		expect(wings.length).toBe(2);
 		expect(wings.every(([x]) => x < 100)).toBe(true);
-		expect(wings[0]![1]! * wings[1]![1]!).toBeLessThan(0);
+		expect(wings[0]![1] * wings[1]![1]).toBeLessThan(0);
 		// Head capped at 60 % of a short shaft.
 		const short = arrowPoints([0, 0], [10, 0], 50);
 		expect(Math.min(...short.map((q) => q[0]))).toBeGreaterThanOrEqual(-0.01);
@@ -188,8 +188,8 @@ describe("shape recognition: clean shapes", () => {
 		expect(Math.hypot(p[p.length - 1]![0] - 210, p[p.length - 1]![1] - 60)).toBeLessThan(3);
 		// It is exactly straight.
 		const slope = (60 - 10) / (210 - 10);
-		const y0 = p[0]![1]!, x0 = p[0]![0]!;
-		for (const [x, y] of p) expect(Math.abs(y - (y0 + (x - x0) * ((p[p.length - 1]![1]! - y0) / (p[p.length - 1]![0]! - x0))))).toBeLessThan(0.02);
+		const y0 = p[0]![1], x0 = p[0]![0];
+		for (const [x, y] of p) expect(Math.abs(y - (y0 + (x - x0) * ((p[p.length - 1]![1] - y0) / (p[p.length - 1]![0] - x0))))).toBeLessThan(0.02);
 		expect(slope).toBeGreaterThan(0);
 	});
 
