@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+Not yet verified on Android hardware. The manual steps for this section are TO1 to TO8 in `docs/testing.md`. No change to the document format (still v8).
+
+### Added
+- **Text and objects** (wave 0.9; roadmap 357, 361, 379, 389; steps TO1-TO8).
+  - **Layer order** (357): *To front*, *To back*, *Forward* and *Backward* for the selected strokes and elements, in one undo step. *To front* and *To back* are in the contextual bar of a selection; all four are in the All actions sheet and are commands for hotkeys. Strokes can be reordered (a highlighter can go behind pen ink); elements are reordered among elements of the same kind, because the page always draws images, then boxes, then text boxes under the ink (and marker badges above it), so ink never goes under an element and a picture never goes above a text box. *Forward* and *Backward* step past the nearest overlapping item. The selection is released after the move so the new order can be seen.
+  - **Find and replace in text boxes** (361): *Find and replace in text boxes* (All actions sheet and command) with *Replace with*, *Match case*, *Whole word*, a list of results with their page (tap to look at the page; the arrow also closes the panel), *Replace* for the chosen result and *Replace all*. The search is literal, not a pattern; handwriting, marker labels and box titles are not searched. *Replace all* is one undo step for the whole notebook.
+  - **Page information** (379): *Page information* in the page sheet and the palette: size, paper, background, strokes and points, objects, files and their size, tags, bookmark, markers, and dates. A page has no dates of its own in the file, so the notebook's created and saved dates are shown, plus when this device last edited the page when it knows.
+  - **A page in the middle of a notebook** (389, extends 95): with *Add a page when writing at the bottom* on, writing in the bottom tenth of a page that is not the last shows a chip *Add a page after this one*. One tap inserts a page with the same size and paper right after it; nothing is ever added by itself in the middle. The chip goes away when the pen goes down, after a few seconds, or when you change page, and does not come back for that page. The last page still appends automatically.
+  - Not yet verified on Android hardware.
+
 ## 0.7.0 — 2026-10-30
 
 Not yet verified on Android hardware. The manual steps added in this version are numbered 135 to 177 in `docs/testing.md`; the ones that belong to each area are named below.

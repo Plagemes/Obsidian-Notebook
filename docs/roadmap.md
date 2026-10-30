@@ -660,11 +660,11 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 356. **P2** Quick date and time stamp at the pen position.
 
 ### Objects and selection
-357. **P2** Layer order: bring to front, send to back.
+357. **P2** 🧪 Layer order: bring to front, send to back.
 358. **P2** Opacity slider for ink, highlighter and images.
 359. **P2** Lasso selection across page boundaries.
 360. **P3** Code text box: monospace with syntax colours.
-361. **P2** Find and replace in the text boxes of a notebook.
+361. **P2** 🧪 Find and replace in the text boxes of a notebook.
 362. **P2** Cross-device clipboard: copy on the tablet, paste on the phone, through the vault.
 
 ### Navigation and view
@@ -688,7 +688,7 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 
 ### Pages and notebooks
 378. **P1** Operations on several selected pages: move, change paper, export or delete them together.
-379. **P2** Page information: dates, devices, stroke count, size.
+379. **P2** 🧪 Page information: dates, devices, stroke count, size.
 380. **P2** 🧪 Heavy page warning, with an offer to split the page.
 
 ### Export and Obsidian
@@ -704,7 +704,7 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 
 ### Extensions of earlier items
 388. **P1** Stable page links (extends O4): links based on the page id, so they still work after pages are reordered (today `#p3` points at a position).
-389. **P2** Automatic page in the middle of a notebook too (extends #95): filling a page offers to insert one right after it.
+389. **P2** 🧪 Automatic page in the middle of a notebook too (extends #95): filling a page offers to insert one right after it.
 390. **P1** 🧪 Integrity check with checksums (extends #27): finds silent corruption caused by sync and offers to restore an earlier version.
 391. **P2** Stroke timestamps linked to the lecture video (extends #231): tapping ink jumps the video to the minute it was written.
 
