@@ -15,14 +15,20 @@ export type PageMoveFailure =
 
 export interface PageMovePlan {
 	ok: true;
-	/** Copies of the pages (new page, stroke and element ids), in source order, ready to be inserted in the target. */
+	/**
+	 * Copies of the pages, in source order, ready to be inserted in the target. Each keeps its page id, so stable links
+	 * (`#p3&id=…`) can follow it, unless the target already has a page with that id: then it gets a new one (`renamed`).
+	 * Strokes and elements get new ids.
+	 */
 	pages: Page[];
+	/** Pages that had to get a new id in the target (old id -> new id), for "Update links" (storage/page-moves.ts). */
+	renamed: Array<{ from: string; to: string }>;
 	/** Asset records the target needs and does not have yet. The files are content-addressed and shared. */
 	assets: Asset[];
 	/** Source pages that move, with a snapshot of how they were when copied (to notice later edits). */
 	moved: Array<{ pageId: string; snapshot: string }>;
 	/**
-	 * v7: bookmarks of the moved pages, under the copies' new page ids, with their details (title, colour,
+	 * v7: bookmarks of the moved pages, under the copies' page ids, with their details (title, colour,
 	 * category). Added to the target's metadata in the same write as the pages (`withMovedBookmarks`). Page
 	 * tags need nothing here: they travel with the page.
 	 */
@@ -70,7 +76,16 @@ export function planPageMove(source: NotebookDocument, pageIds: readonly string[
 			assets.push({ ...record });
 		}
 	}
-	const pages = chosen.map((p) => duplicatePage(p));
+	// Keep the page ids unless the target already uses one (a copy of the notebook, a page moved there before).
+	const taken = new Set(target.pages.map((p) => p.id));
+	const renamed: PageMovePlan["renamed"] = [];
+	const pages = chosen.map((p) => {
+		const copy = duplicatePage(p);
+		if (taken.has(p.id)) renamed.push({ from: p.id, to: copy.id });
+		else copy.id = p.id;
+		taken.add(copy.id);
+		return copy;
+	});
 	const marked = new Set(source.meta?.bookmarks ?? []);
 	const bookmarks: PageMovePlan["bookmarks"] = [];
 	chosen.forEach((p, i) => {
@@ -81,6 +96,7 @@ export function planPageMove(source: NotebookDocument, pageIds: readonly string[
 	return {
 		ok: true,
 		pages,
+		renamed,
 		assets,
 		moved: chosen.map((p) => ({ pageId: p.id, snapshot: pageSnapshot(p) })),
 		bookmarks,

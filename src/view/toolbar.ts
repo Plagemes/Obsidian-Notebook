@@ -1,4 +1,5 @@
 import { setIcon } from "obsidian";
+import { listenDismiss, releaseSwallowed } from "../ui/dismiss";
 import { t, type MessageKey } from "../i18n";
 import { ERASE_FILTER_KINDS, type EraseFilterKind } from "../ink/erase-filter";
 import { DEFAULT_ERASER_SIZE } from "./favourites";
@@ -6,6 +7,8 @@ import { SHAPE_KINDS, type ShapeKind } from "./view-helpers";
 
 export type ToolName = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "space";
 export type EraserMode = "stroke" | "segment" | "area";
+/** wave 0.10 (63): how the lasso tool selects: a freehand outline, or a rectangle dragged from corner to corner. */
+export type SelectMode = "lasso" | "rectangle";
 
 export const PEN_COLORS = ["#1e1e1e", "#6b7280", "#1d4ed8", "#0891b2", "#15803d", "#ca8a04", "#ea580c", "#dc2626", "#9333ea"] as const;
 export const HIGHLIGHTER_COLORS = ["#facc15", "#4ade80", "#f472b6", "#60a5fa", "#fb923c"] as const;
@@ -32,6 +35,8 @@ export interface ToolbarState {
 	textSize: number;
 	/** The ruler is shown and pen strokes near its edge snap to it. */
 	ruler: boolean;
+	/** The shape of a selection made with the lasso tool. */
+	selectMode: SelectMode;
 }
 
 export const DEFAULT_TOOLS: ToolbarState = {
@@ -47,21 +52,30 @@ export const DEFAULT_TOOLS: ToolbarState = {
 	shapeKind: "line",
 	textSize: TEXT_SIZES[1],
 	ruler: false,
+	selectMode: "lasso",
 };
 
 export interface ToolbarActions {
 	change(state: ToolbarState): void;
 	undo(): void;
 	redo(): void;
-	addPage(): void;
-	exercisePage(): void;
-	pageMenu(evt: MouseEvent): void;
-	deleteSelection(): void;
-	fit(): void;
 	toggleNavigator(): void;
-	insertImage(): void;
-	boardShot(): void;
-	stamps(): void;
+	/** Runs an action of the registry (quick slots). */
+	runAction(id: string): void;
+	/** Opens (or closes) the "All actions" sheet under `anchor`. */
+	openSheet(anchor: HTMLElement): void;
+	/** Opens (or closes) the page sheet of the page in view under `anchor`. */
+	openPageSheet(anchor: HTMLElement): void;
+}
+
+/** A quick slot: an action of the registry chosen by the layout engine (ui/layout.ts). */
+export interface QuickItem {
+	id: string;
+	icon: string;
+	label: string;
+	enabled: boolean;
+	/** Toggle actions: on or off; undefined for plain actions. */
+	checked?: boolean;
 }
 
 const TOOL_DEFS: Array<[ToolName, string, MessageKey]> = [
@@ -93,9 +107,9 @@ const SHAPE_DEFS: Record<ShapeKind, [string, MessageKey]> = {
 
 
 /** Tools that have options (colour, width, eraser mode, …): tapping the active tool again opens them. */
-const TOOLS_WITH_OPTIONS: ReadonlySet<ToolName> = new Set<ToolName>(["pen", "highlighter", "eraser", "shape", "text"]);
+const TOOLS_WITH_OPTIONS: ReadonlySet<ToolName> = new Set<ToolName>(["pen", "highlighter", "eraser", "lasso", "shape", "text"]);
 
-type PopoverKind = "options" | "more";
+type PopoverKind = "options";
 
 /** Diameter of the pen dot in the current-pen indicator, CSS px (same scale as the favourite pens). */
 function chipDiameter(width: number): number {
@@ -103,15 +117,16 @@ function chipDiameter(width: number): number {
 }
 
 /**
- * The toolbar: two rows (tools; history, current pen, favourite pens, page, status, more) that share one line on a wide
- * view and stack on a phone. Tool options (colours, widths, eraser mode, filter, size) live in a popover that opens
- * when the active tool is tapped again (or from the current-pen indicator); the less used actions are in a "more" menu.
+ * The primary toolbar (ui redesign, docs/design-ui.md). Row 1: pages panel and the seven tools. Row 2: undo and redo,
+ * the current pen (opens the tool options), the favourite pens, the quick slots chosen by the layout engine, the page
+ * indicator (opens the page sheet), the save state and "All actions". Both rows share one line on a wide view.
+ * Tool options (colours, widths, eraser mode, filter, size) live in a popover that opens when the active tool is tapped
+ * again (or from the current-pen indicator).
  */
 export class Toolbar {
 	readonly el: HTMLElement;
 	private readonly toolButtons = new Map<ToolName, HTMLButtonElement>();
 	private readonly optionsEl: HTMLElement;
-	private readonly moreEl: HTMLElement;
 	private readonly colorGroup: HTMLElement;
 	private readonly widthGroup: HTMLElement;
 	private readonly eraserGroup: HTMLElement;
@@ -119,31 +134,29 @@ export class Toolbar {
 	private readonly filterGroup: HTMLElement;
 	private readonly filterButtons = new Map<EraseFilterKind, HTMLButtonElement>();
 	private readonly shapeGroup: HTMLElement;
+	private readonly selectGroup: HTMLElement;
+	private readonly selectButtons = new Map<SelectMode, HTMLButtonElement>();
 	private readonly shapeButtons = new Map<ShapeKind, HTMLButtonElement>();
 	private readonly sizeGroup: HTMLElement;
 	private readonly chipButton: HTMLButtonElement;
+	private readonly readOnlyButton: HTMLButtonElement;
 	private readonly chipDot: HTMLElement;
 	private readonly moreButton: HTMLButtonElement;
-	private readonly rulerButton: HTMLButtonElement;
-	private readonly moreItems: HTMLButtonElement[] = [];
 	private readonly navigatorButton: HTMLButtonElement;
 	private readonly undoButton: HTMLButtonElement;
 	private readonly redoButton: HTMLButtonElement;
-	private readonly deleteButton: HTMLButtonElement;
-	private readonly pageEl: HTMLElement;
-	private readonly pageLabelEl: HTMLElement;
+	private readonly quickEl: HTMLElement;
+	private readonly pageButton: HTMLButtonElement;
 	private readonly statusEl: HTMLElement;
 	private readonly statusTextEl: HTMLElement;
 	private editable = false;
 	private popover: PopoverKind | null = null;
-	private popoverOff: Array<() => void> = [];
-	private readonly swallowOff = new Map<number, () => void>();
-	/** Slots filled by pen-controls.ts: favourite pens, eraser size, pen-only toggle. */
+	private stopDismiss: (() => void) | null = null;
+	private quick: QuickItem[] = [];
+	/** Slots filled by pen-controls.ts: favourite pens and eraser size. */
 	readonly favouritesEl: HTMLElement;
 	readonly eraserSizeEl: HTMLElement;
-	readonly penOnlyEl: HTMLElement;
-	/** Slots filled by pdf-reading.ts: the PDF reading entries of the "more" menu, and the highlighter's snap-to-text option. */
-	readonly readingEl: HTMLElement;
+	/** Slot filled by pdf-reading.ts: the highlighter's snap-to-text option. */
 	readonly highlighterOptionsEl: HTMLElement;
 	onEditableChange: ((editable: boolean) => void) | null = null;
 
@@ -152,8 +165,12 @@ export class Toolbar {
 
 		const toolsRow = this.el.createDiv({ cls: "notebook-toolbar-row notebook-toolbar-tools" });
 		this.navigatorButton = this.iconButton(toolsRow, "panel-left", "tool.pages", () => this.actions.toggleNavigator());
+		this.navigatorButton.setAttribute("aria-pressed", "false");
+		toolsRow.createDiv({ cls: "notebook-toolbar-divider", attr: { "aria-hidden": "true" } });
+		const toolGroup = toolsRow.createDiv({ cls: "notebook-toolbar-group notebook-tool-group", attr: { role: "group", "aria-label": t("ui.group.tool") } });
 		for (const [tool, icon, label] of TOOL_DEFS) {
-			const b = this.iconButton(toolsRow, icon, label, () => this.onToolTap(tool));
+			const b = this.iconButton(toolGroup, icon, label, () => this.onToolTap(tool));
+			b.addClass("notebook-tool-button");
 			if (TOOLS_WITH_OPTIONS.has(tool)) {
 				b.addClass("has-options");
 				b.setAttribute("aria-haspopup", "true");
@@ -162,9 +179,18 @@ export class Toolbar {
 		}
 
 		const actionsRow = this.el.createDiv({ cls: "notebook-toolbar-row notebook-toolbar-actions" });
-		this.undoButton = this.iconButton(actionsRow, "undo", "tool.undo", () => this.actions.undo());
-		this.redoButton = this.iconButton(actionsRow, "redo", "tool.redo", () => this.actions.redo());
-		this.deleteButton = this.iconButton(actionsRow, "trash-2", "tool.deleteSelection", () => this.actions.deleteSelection());
+		const history = actionsRow.createDiv({ cls: "notebook-toolbar-group", attr: { role: "group", "aria-label": t("ui.group.history") } });
+		this.undoButton = this.iconButton(history, "undo", "tool.undo", () => this.actions.undo());
+		this.redoButton = this.iconButton(history, "redo", "tool.redo", () => this.actions.redo());
+		actionsRow.createDiv({ cls: "notebook-toolbar-divider", attr: { "aria-hidden": "true" } });
+
+		// wave 0.10 (51): while read-only mode is on this button takes the place of the pen indicator and the favourite pens;
+		// tapping it switches the mode off.
+		this.readOnlyButton = this.button(actionsRow, t("readonly.chip.hint"), () => this.actions.runAction("toggle-read-only"));
+		this.readOnlyButton.addClasses(["notebook-readonly-chip", "notebook-hidden", "is-active"]);
+		this.readOnlyButton.setAttribute("aria-pressed", "true");
+		setIcon(this.readOnlyButton.createSpan({ cls: "notebook-readonly-icon" }), "lock");
+		this.readOnlyButton.createSpan({ cls: "notebook-readonly-label", text: t("readonly.chip") });
 
 		this.chipButton = this.button(actionsRow, t("toolbar.options"), () => this.togglePopover("options"));
 		this.chipButton.addClass("notebook-chip");
@@ -172,14 +198,25 @@ export class Toolbar {
 		this.chipDot = this.chipButton.createSpan({ cls: "notebook-chip-dot" });
 
 		this.favouritesEl = actionsRow.createDiv({ cls: "notebook-favs", attr: { role: "group", "aria-label": t("toolbar.favourites") } });
+		this.quickEl = actionsRow.createDiv({ cls: "notebook-quick notebook-toolbar-group notebook-hidden", attr: { role: "group", "aria-label": t("ui.quick") } });
 
 		const end = actionsRow.createDiv({ cls: "notebook-toolbar-end" });
-		this.pageEl = end.createSpan({ cls: "notebook-page-indicator" });
+		this.pageButton = end.createEl("button", { cls: "notebook-page-indicator", attr: { type: "button", "aria-haspopup": "dialog", "aria-expanded": "false" } });
+		this.pageButton.addEventListener("click", (e) => {
+			e.preventDefault();
+			this.closePopover();
+			this.actions.openPageSheet(this.pageButton);
+		});
 		this.statusEl = end.createSpan({ cls: "notebook-status", attr: { role: "status" } });
 		this.statusEl.createSpan({ cls: "notebook-status-dot" });
 		this.statusTextEl = this.statusEl.createSpan({ cls: "notebook-status-text" });
-		this.moreButton = this.iconButton(end, "more-horizontal", "toolbar.more", () => this.togglePopover("more"));
-		this.moreButton.setAttribute("aria-haspopup", "true");
+		this.moreButton = this.iconButton(end, "layout-grid", "ui.sheet.title", () => {
+			this.closePopover();
+			this.actions.openSheet(this.moreButton);
+		});
+		this.moreButton.addClass("notebook-more-button");
+		this.moreButton.setAttribute("aria-haspopup", "dialog");
+		this.moreButton.setAttribute("aria-expanded", "false");
 
 		// Tool options: persistent sections, each shown for the tools that use it.
 		this.optionsEl = this.el.createDiv({ cls: "notebook-popover notebook-options notebook-hidden", attr: { role: "group", "aria-label": t("toolbar.options") } });
@@ -189,11 +226,18 @@ export class Toolbar {
 			this.shapeButtons.set(kind, this.iconButton(this.shapeGroup, icon, label, () => this.set({ shapeKind: kind })));
 		}
 		this.eraserGroup = this.row(this.optionsEl);
+		this.eraserGroup.addClass("notebook-segmented");
 		this.eraserButtons.set("stroke", this.textButton(this.eraserGroup, "tool.eraser.stroke", () => this.set({ eraserMode: "stroke" })));
 		this.eraserButtons.set("segment", this.textButton(this.eraserGroup, "tool.eraser.segment", () => this.set({ eraserMode: "segment" })));
 		this.eraserButtons.set("area", this.textButton(this.eraserGroup, "tool.eraser.area", () => this.set({ eraserMode: "area" })));
+		this.selectGroup = this.row(this.optionsEl);
+		this.selectGroup.addClass("notebook-segmented");
+		this.selectGroup.setAttribute("aria-label", t("select.mode"));
+		this.selectButtons.set("lasso", this.textButton(this.selectGroup, "select.mode.lasso", () => this.set({ selectMode: "lasso" })));
+		this.selectButtons.set("rectangle", this.textButton(this.selectGroup, "select.mode.rectangle", () => this.set({ selectMode: "rectangle" })));
 		this.eraserSizeEl = this.row(this.optionsEl);
 		this.filterGroup = this.row(this.optionsEl);
+		this.filterGroup.addClass("notebook-segmented");
 		for (const kind of ERASE_FILTER_KINDS) {
 			this.filterButtons.set(kind, this.textButton(this.filterGroup, FILTER_LABELS[kind], () =>
 				// "Colour" starts from the pen colour in use; the swatches then change it.
@@ -204,32 +248,13 @@ export class Toolbar {
 		this.sizeGroup = this.row(this.optionsEl);
 		this.highlighterOptionsEl = this.row(this.optionsEl);
 
-		// The less used actions.
-		this.moreEl = this.el.createDiv({ cls: "notebook-popover notebook-more notebook-hidden", attr: { role: "menu", "aria-label": t("toolbar.more") } });
-		this.pageLabelEl = this.moreEl.createDiv({ cls: "notebook-more-title notebook-hidden" });
-		this.moreItem("image-plus", "tool.image", () => this.actions.insertImage());
-		this.moreItem("stamp", "stamps.menu", () => this.actions.stamps());
-		this.moreItem("camera", "tool.boardShot", () => this.actions.boardShot());
-		this.rulerButton = this.moreItem("ruler", "tool.ruler", () => this.set({ ruler: !this.state.ruler }));
-		this.penOnlyEl = this.moreEl.createDiv({ cls: "notebook-more-slot" });
-		this.readingEl = this.moreEl.createDiv({ cls: "notebook-more-slot" });
-		this.moreItem("file-plus", "tool.addPage", () => this.actions.addPage());
-		this.moreItem("pencil-ruler", "page.exercise", () => this.actions.exercisePage());
-		const pageMenu = this.moreItem("more-vertical", "page.menu", () => undefined);
-		pageMenu.addEventListener("click", (e) => this.actions.pageMenu(e));
-		this.moreItem("move-horizontal", "tool.fit", () => this.actions.fit());
-		// Any choice in the menu closes it (the click bubbles up here after the item has acted).
-		this.moreEl.addEventListener("click", (e) => {
-			if ((e.target as HTMLElement).closest("button")) this.closePopover();
-		});
-
 		this.render();
 	}
 
 	/** Removes the listeners of an open popover. Call when the view closes. */
 	destroy(): void {
 		this.closePopover();
-		for (const off of [...this.swallowOff.values()]) off();
+		releaseSwallowed();
 	}
 
 	setHistory(canUndo: boolean, canRedo: boolean): void {
@@ -245,14 +270,57 @@ export class Toolbar {
 		if (!editable) this.setHistory(false, false);
 	}
 
-	setSelection(active: boolean): void {
-		this.deleteButton.toggleClass("notebook-hidden", !active);
+	/** wave 0.10 (51): shows or hides the read-only indicator (it is also the button that switches the mode off). */
+	setReadOnly(on: boolean): void {
+		this.el.toggleClass("is-read-only", on);
+		this.readOnlyButton.toggleClass("notebook-hidden", !on);
+		if (on) this.closePopover();
 	}
 
 	/** Reflects the state of the page panel on its button. */
 	setNavigatorOpen(open: boolean): void {
 		this.navigatorButton.toggleClass("is-active", open);
 		this.navigatorButton.setAttribute("aria-pressed", String(open));
+	}
+
+	/** One row (wide view) or two (tablet in portrait, phone), as planned by the layout engine. */
+	setSingleRow(single: boolean): void {
+		this.el.toggleClass("is-single-row", single);
+	}
+
+	/** The quick slots chosen by the layout engine. Rebuilt only when they change. */
+	setQuick(items: QuickItem[]): void {
+		const same = items.length === this.quick.length && items.every((q, i) => {
+			const p = this.quick[i]!;
+			return p.id === q.id && p.enabled === q.enabled && p.checked === q.checked && p.label === q.label;
+		});
+		if (same) return;
+		this.quick = items;
+		this.quickEl.empty();
+		this.quickEl.toggleClass("notebook-hidden", items.length === 0);
+		for (const q of items) {
+			const b = this.button(this.quickEl, q.label, () => this.actions.runAction(q.id));
+			setIcon(b, q.icon);
+			b.dataset.action = q.id;
+			b.disabled = !q.enabled;
+			if (q.checked !== undefined) {
+				b.toggleClass("is-active", q.checked);
+				b.setAttribute("aria-pressed", String(q.checked));
+			}
+		}
+	}
+
+	/** Ids of the quick slots shown now. */
+	get quickIds(): string[] {
+		return this.quick.map((q) => q.id);
+	}
+
+	/** Marks the button of the open sheet. */
+	setSheetOpen(kind: "all" | "page" | null): void {
+		this.moreButton.toggleClass("is-active", kind === "all");
+		this.moreButton.setAttribute("aria-expanded", String(kind === "all"));
+		this.pageButton.toggleClass("is-active", kind === "page");
+		this.pageButton.setAttribute("aria-expanded", String(kind === "page"));
 	}
 
 	/** Selects a tool from code (e.g. the lasso after inserting an image) and notifies the view. */
@@ -271,16 +339,14 @@ export class Toolbar {
 	}
 
 	setPage(current: number, total: number): void {
-		const text = total > 0 ? `${current} / ${total}` : "";
-		this.pageEl.setText(text);
-		// On a narrow view the indicator is hidden in the bar; the overflow menu shows it.
-		this.pageLabelEl.setText(total > 0 ? t("toolbar.page", { n: text }) : "");
-		this.pageLabelEl.toggleClass("notebook-hidden", total <= 0);
+		this.pageButton.setText(total > 0 ? `${current} / ${total}` : "–");
+		this.pageButton.setAttribute("aria-label", total > 0 ? t("ui.pageSheet.open", { n: String(current), total: String(total) }) : t("page.menu"));
+		this.pageButton.disabled = total <= 0;
 	}
 
 	setStatus(text: string, kind: "ok" | "pending" | "error"): void {
 		this.statusTextEl.setText(text);
-		this.statusEl.setAttribute("title", text);
+		this.statusEl.setAttribute("aria-label", text);
 		this.statusEl.dataset.kind = kind;
 	}
 
@@ -290,8 +356,8 @@ export class Toolbar {
 	}
 
 	closePopover(): void {
-		for (const off of this.popoverOff) off();
-		this.popoverOff = [];
+		this.stopDismiss?.();
+		this.stopDismiss = null;
 		if (this.popover === null) return;
 		this.popover = null;
 		this.syncPopover();
@@ -312,80 +378,33 @@ export class Toolbar {
 			this.closePopover();
 			return;
 		}
-		if (!this.editable || (kind === "options" && !TOOLS_WITH_OPTIONS.has(this.state.tool))) return;
+		if (!this.editable || !TOOLS_WITH_OPTIONS.has(this.state.tool)) return;
 		this.closePopover();
 		this.popover = kind;
 		this.syncPopover();
-		this.listenOutside();
+		// A tap on the page only closes the popover (as in Samsung Notes and Goodnotes) and leaves no ink; the bar's
+		// own buttons act as usual.
+		this.stopDismiss = listenDismiss({
+			inside: () => [this.optionsEl, ...Array.from(this.el.querySelectorAll(".notebook-toolbar-row"))],
+			close: () => this.closePopover(),
+			page: ".notebook-stage",
+		});
 	}
 
 	private syncPopover(): void {
-		const kind = this.popover;
-		this.optionsEl.toggleClass("notebook-hidden", kind !== "options");
-		this.moreEl.toggleClass("notebook-hidden", kind !== "more");
-		this.moreButton.toggleClass("is-active", kind === "more");
-		this.moreButton.setAttribute("aria-expanded", String(kind === "more"));
+		const open = this.popover === "options";
+		this.optionsEl.toggleClass("notebook-hidden", !open);
 		// A popover never grows past the bottom of the view (a phone held sideways has little room): it scrolls instead.
-		const shown = kind === "options" ? this.optionsEl : kind === "more" ? this.moreEl : null;
 		const host = this.el.parentElement;
-		if (shown && host) {
-			const room = host.getBoundingClientRect().bottom - shown.getBoundingClientRect().top - 8;
-			shown.setCssProps({ "--notebook-popover-max": `${Math.max(120, Math.floor(room))}px` });
+		if (open && host) {
+			const room = host.getBoundingClientRect().bottom - this.optionsEl.getBoundingClientRect().top - 8;
+			this.optionsEl.setCssProps({ "--notebook-popover-max": `${Math.max(120, Math.floor(room))}px` });
 		}
-		const open = kind === "options";
 		this.chipButton.toggleClass("is-active", open);
 		this.chipButton.setAttribute("aria-expanded", String(open));
 		for (const [tool, b] of this.toolButtons) {
 			if (TOOLS_WITH_OPTIONS.has(tool)) b.setAttribute("aria-expanded", String(open && tool === this.state.tool));
 		}
-	}
-
-	/**
-	 * While a popover is open, Escape closes it and so does a tap outside it. A tap on the page only closes the popover
-	 * (as in Samsung Notes and Goodnotes): the rest of that pointer's sequence is kept from the page, so it leaves no ink.
-	 */
-	private listenOutside(): void {
-		const on = <K extends keyof WindowEventMap>(type: K, fn: (e: WindowEventMap[K]) => void): void => {
-			window.addEventListener(type, fn, true);
-			this.popoverOff.push(() => window.removeEventListener(type, fn, true));
-		};
-		on("pointerdown", (e) => {
-			const target = e.target as Element | null;
-			if (!target || typeof target.closest !== "function") return;
-			if (this.optionsEl.contains(target) || this.moreEl.contains(target)) return;
-			// The bar's own buttons act as usual (and may switch to the other popover).
-			if (this.el.contains(target) && target.closest(".notebook-toolbar-row")) return;
-			const onPage = !!target.closest(".notebook-stage");
-			this.closePopover();
-			if (onPage) this.swallow(e);
-		});
-		on("keydown", (e) => {
-			if (e.key !== "Escape") return;
-			e.preventDefault();
-			e.stopPropagation();
-			this.closePopover();
-		});
-	}
-
-	/** Keeps a pointer sequence (down … up) from reaching the page. */
-	private swallow(down: PointerEvent): void {
-		const id = down.pointerId;
-		const types = ["pointerdown", "pointermove", "pointerrawupdate", "pointerup", "pointercancel"] as const;
-		const stop = (e: Event): void => {
-			const pe = e as PointerEvent;
-			if (pe.pointerId !== id) return;
-			e.stopPropagation();
-			e.preventDefault();
-			if (e.type === "pointerup" || e.type === "pointercancel") off();
-		};
-		const off = (): void => {
-			for (const type of types) window.removeEventListener(type, stop, true);
-			this.swallowOff.delete(id);
-		};
-		this.swallowOff.get(id)?.();
-		for (const type of types) window.addEventListener(type, stop, true);
-		this.swallowOff.set(id, off);
-		stop(down);
 	}
 
 	private set(patch: Partial<ToolbarState>): void {
@@ -401,11 +420,7 @@ export class Toolbar {
 			b.toggleClass("is-active", tool === s.tool);
 			b.disabled = !this.editable;
 		}
-		this.moreButton.disabled = !this.editable;
-		for (const b of this.moreItems) b.disabled = !this.editable;
-		this.navigatorButton.disabled = !this.editable;
-		this.rulerButton.toggleClass("is-active", s.ruler);
-		this.rulerButton.setAttribute("aria-pressed", String(s.ruler));
+		for (const [tool, b] of this.toolButtons) b.setAttribute("aria-pressed", String(tool === s.tool));
 		if (this.popover === "options" && !TOOLS_WITH_OPTIONS.has(s.tool)) this.closePopover();
 		else this.syncPopover();
 		this.renderChip();
@@ -418,6 +433,12 @@ export class Toolbar {
 		this.filterGroup.toggleClass("notebook-hidden", s.tool !== "eraser");
 		for (const [kind, b] of this.filterButtons) {
 			b.toggleClass("is-active", kind === s.eraserFilter);
+			b.disabled = !this.editable;
+		}
+		this.selectGroup.toggleClass("notebook-hidden", s.tool !== "lasso");
+		for (const [mode, b] of this.selectButtons) {
+			b.toggleClass("is-active", mode === s.selectMode);
+			b.setAttribute("aria-pressed", String(mode === s.selectMode));
 			b.disabled = !this.editable;
 		}
 		this.shapeGroup.toggleClass("notebook-hidden", s.tool !== "shape");
@@ -450,6 +471,19 @@ export class Toolbar {
 				b.disabled = !this.editable;
 				b.createSpan({ cls: "notebook-swatch-dot" }).setCssProps({ "--notebook-swatch-color": color });
 			}
+			// wave 0.10 (7, 68): the free picker, the page eyedropper and (for ink) the style eyedropper.
+			const free = this.button(this.colorGroup, t("command.colourPicker"), () => this.runColourAction("colour-picker"));
+			free.addClass("notebook-swatch", "is-free");
+			free.disabled = !this.editable;
+			free.createSpan({ cls: "notebook-swatch-dot" });
+			const dropper = this.button(this.colorGroup, t("command.colourEyedropper"), () => this.runColourAction("colour-eyedropper"));
+			setIcon(dropper, "pipette");
+			dropper.disabled = !this.editable;
+			if (inking) {
+				const style = this.button(this.colorGroup, t("command.styleEyedropper"), () => this.runColourAction("style-eyedropper"));
+				setIcon(style, "droplets");
+				style.disabled = !this.editable;
+			}
 		}
 
 		if (inking) {
@@ -479,7 +513,8 @@ export class Toolbar {
 	/** The current-pen indicator: colour and thickness of the tool in use; a ring the size of the eraser for the eraser. */
 	private renderChip(): void {
 		const s = this.state;
-		const has = TOOLS_WITH_OPTIONS.has(s.tool);
+		// The lasso has options (its shape) but no pen to show: the indicator stays for the tools that draw or erase.
+		const has = TOOLS_WITH_OPTIONS.has(s.tool) && s.tool !== "lasso";
 		this.chipButton.toggleClass("notebook-hidden", !has);
 		this.chipButton.disabled = !this.editable;
 		const dot = this.chipDot;
@@ -497,6 +532,12 @@ export class Toolbar {
 			const d = chipDiameter(s.penWidth);
 			dot.setCssProps({ "--notebook-chip-w": `${d}px`, "--notebook-chip-h": `${d}px`, "--notebook-chip-color": s.penColor });
 		}
+	}
+
+	/** The picker and the eyedroppers float over the page: close the options first so they do not cover it. */
+	private runColourAction(id: string): void {
+		this.closePopover();
+		this.actions.runAction(id);
 	}
 
 	private row(parent: HTMLElement): HTMLElement {
@@ -522,19 +563,6 @@ export class Toolbar {
 		const b = this.button(parent, t(label), onClick);
 		b.addClass("notebook-text-tool");
 		b.setText(t(label));
-		return b;
-	}
-
-	/** A row of the "more" menu: icon and label. */
-	private moreItem(icon: string, label: MessageKey, onClick: () => void): HTMLButtonElement {
-		const b = this.moreEl.createEl("button", { cls: "notebook-menu-item", attr: { type: "button", role: "menuitem" } });
-		setIcon(b.createSpan({ cls: "notebook-menu-icon" }), icon);
-		b.createSpan({ cls: "notebook-menu-label", text: t(label) });
-		b.addEventListener("click", (e) => {
-			e.preventDefault();
-			onClick();
-		});
-		this.moreItems.push(b);
 		return b;
 	}
 }

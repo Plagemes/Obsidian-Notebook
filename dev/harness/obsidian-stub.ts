@@ -5,6 +5,7 @@
  * It implements just what the notebook view touches: views, an in-memory vault, notices, menus,
  * modals, settings rows, icons, and Obsidian's DOM helpers on HTMLElement.prototype.
  */
+import { drawIcon } from "./icons";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -358,6 +359,7 @@ export class Vault extends Events {
 	async createBinary(p: string, data: ArrayBuffer): Promise<TFile> {
 		const f = this.addFile(p);
 		this.binary.set(f.path, data);
+		f.stat.size = data.byteLength;
 		this.trigger("create", f);
 		return f;
 	}
@@ -390,6 +392,7 @@ export class Vault extends Events {
 
 	async modifyBinary(f: TFile, data: ArrayBuffer): Promise<void> {
 		this.binary.set(f.path, data);
+		f.stat.size = data.byteLength;
 		this.trigger("modify", f);
 	}
 
@@ -436,6 +439,9 @@ export class Workspace extends Events {
 	getLeavesOfType(type: string): WorkspaceLeaf[] {
 		return this.leaves.filter((l) => l.view?.getViewType?.() === type);
 	}
+	setActiveLeaf(): void {
+		/* the harness shows one notebook */
+	}
 	getActiveViewOfType<T>(type: new (...args: any[]) => T): T | null {
 		for (const l of this.leaves) if (l.view instanceof type) return l.view as T;
 		return null;
@@ -476,6 +482,9 @@ export class MetadataCache extends Events {
 	getFirstLinkpathDest(): null {
 		return null;
 	}
+	fileToLinktext(file: { path: string }): string {
+		return file.path.replace(/.md$/, "");
+	}
 }
 
 export class App {
@@ -484,6 +493,15 @@ export class App {
 	readonly fileManager = new FileManager(this);
 	readonly metadataCache = new MetadataCache();
 	readonly scope = new Scope();
+	/** Per-device local storage, as Obsidian's (kept in memory in the harness). */
+	private readonly local = new Map<string, unknown>();
+	loadLocalStorage(key: string): unknown {
+		return this.local.has(key) ? JSON.parse(JSON.stringify(this.local.get(key))) : null;
+	}
+	saveLocalStorage(key: string, data: unknown): void {
+		if (data === null) this.local.delete(key);
+		else this.local.set(key, JSON.parse(JSON.stringify(data)));
+	}
 }
 
 // --- views ---
@@ -540,6 +558,9 @@ export class WorkspaceLeaf {
 	async setViewState(): Promise<void> {
 		/* single view */
 	}
+	getDisplayText(): string {
+		return this.view?.getDisplayText?.() ?? "";
+	}
 	getViewState(): { type: string; state: Record<string, unknown> } {
 		return { type: this.view?.getViewType?.() ?? "empty", state: {} };
 	}
@@ -581,6 +602,9 @@ export class View extends Component {
 	onResize(): void {
 		/* override */
 	}
+	setEphemeralState(state: unknown): void {
+		void state;
+	}
 	getState(): Record<string, unknown> {
 		return {};
 	}
@@ -595,7 +619,12 @@ export class View extends Component {
 	}
 }
 
-export class ItemView extends View {}
+export class ItemView extends View {
+	/** Obsidian adds its own entries to the tab menu here. */
+	onPaneMenu(): void {
+		return;
+	}
+}
 
 export class FileView extends ItemView {
 	file: TFile | null = null;
@@ -767,6 +796,29 @@ export class FuzzySuggestModal<T> extends Modal {
 	}
 }
 
+/** wave 0.7: quick nav. */
+export class SuggestModal<T> extends Modal {
+	inputEl = document.createElement("input");
+	emptyStateText = "";
+	setPlaceholder(): void {
+		/* nothing */
+	}
+	setInstructions(): void {
+		/* nothing */
+	}
+	getSuggestions(query: string): T[] {
+		void query;
+		return [];
+	}
+	renderSuggestion(value: T, el: HTMLElement): void {
+		void value;
+		void el;
+	}
+	onChooseSuggestion(value: T): void {
+		void value;
+	}
+}
+
 export class PluginSettingTab {
 	readonly containerEl = document.createElement("div");
 	constructor(readonly app: App, readonly plugin: unknown) {}
@@ -864,9 +916,10 @@ function chain(): any {
 	return p;
 }
 
-/** Icons: a tiny inline glyph with the icon name as title, so buttons are visible and identifiable. */
+/** Icons: a harness stand-in of the Lucide icon (icons.ts), or a tiny glyph with the icon name as title. */
 export function setIcon(el: HTMLElement, name: string): void {
 	el.textContent = "";
+	if (drawIcon(el, name)) return;
 	const s = el.createSpan({ cls: "harness-icon", text: name.slice(0, 2) });
 	s.title = name;
 }
@@ -903,4 +956,37 @@ export function debounce<T extends (...args: any[]) => any>(fn: T, ms: number): 
 
 export async function requestUrl(): Promise<never> {
 	throw new Error("network is not available in the harness");
+}
+
+/**
+ * MathJax stand-in (wave 0.9: math): Obsidian ships MathJax; the harness has none. `renderMath` returns a container
+ * with a small SVG that writes the source in italic serif, so the editor preview and the typesetter (its SVG branch)
+ * run end to end. It is not TeX: the harness checks the plumbing, not the typesetting.
+ */
+export async function loadMathJax(): Promise<void> {}
+
+export async function finishRenderMath(): Promise<void> {}
+
+export function renderMath(source: string, display: boolean): HTMLElement {
+	const el = document.createElement("mjx-container");
+	el.setAttribute("display", String(display));
+	const text = source.replace(/\\[a-zA-Z]+/g, (m) => m.slice(1)).replace(/[{}]/g, "") || " ";
+	const w = Math.max(1, text.length) * 6;
+	const ns = "http://www.w3.org/2000/svg";
+	const svg = document.createElementNS(ns, "svg");
+	svg.setAttribute("xmlns", ns);
+	svg.setAttribute("viewBox", `0 0 ${w} 14`);
+	svg.setAttribute("width", `${w / 10}em`);
+	svg.setAttribute("height", "1.4em");
+	const t = document.createElementNS(ns, "text");
+	t.setAttribute("x", "0");
+	t.setAttribute("y", "11");
+	t.setAttribute("font-family", "serif");
+	t.setAttribute("font-style", "italic");
+	t.setAttribute("font-size", "10");
+	t.setAttribute("fill", "currentColor");
+	t.textContent = text;
+	svg.appendChild(t);
+	el.appendChild(svg);
+	return el;
 }

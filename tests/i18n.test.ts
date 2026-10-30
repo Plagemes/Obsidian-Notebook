@@ -65,3 +65,21 @@ describe("language resolution", () => {
 		expect(isUiLanguage(3)).toBe(false);
 	});
 });
+
+describe("keys used in the code", () => {
+	const SRC = import.meta.glob<string>("../src/**/*.ts", { query: "?raw", import: "default", eager: true });
+
+	it("English and Italian have exactly the same keys", () => {
+		expect(Object.keys(LANGUAGES.it.messages).sort()).toEqual(Object.keys(en).sort());
+	});
+
+	it("every statically visible t(\"…\") key exists", () => {
+		const used = new Set<string>();
+		for (const [file, text] of Object.entries(SRC)) {
+			if (file.includes("/i18n/")) continue;
+			for (const m of text.matchAll(/\bt\(\s*"([A-Za-z0-9_.]+)"/g)) used.add(m[1] as string);
+		}
+		expect(used.size).toBeGreaterThan(50);
+		expect([...used].filter((k) => !(k in en))).toEqual([]);
+	});
+});

@@ -12,6 +12,10 @@ import { effectivePenHold } from "../ink/pen-button";
 import { PenTestModal, penSignalInfo } from "./pen-test-modal";
 import { companionSettingDefinitions, displayCompanionSettings, type CompanionSettingsHost } from "./companion-settings";
 import { displayZettelSettings, zettelSettingDefinitions, type ZettelSettingsHost } from "../zettel/settings-ui";
+// wave 0.8: pen gestures
+import { displayPenGestureSettings, gestureKeyId, penGestureSettingDefinitions } from "./pen-gesture-settings";
+import { setGestureEnabled, type PenGestureUiHost } from "./pen-gesture-ui";
+import { displaySyncSettings, syncSettingDefinitions, type SyncSafetyService } from "./sync-safety";
 
 const paperOptions = () => Object.fromEntries(PAPER_KINDS.map((k) => [k, t(`paper.${k}`)]));
 const sizeOptions = () => Object.fromEntries((Object.keys(PAGE_SIZES) as Array<keyof typeof PAGE_SIZES>).map((k) => [k, t(`size.${k}`)]));
@@ -25,6 +29,7 @@ export interface SettingsHost extends Plugin {
 	settings: NotebookSettings;
 	saveSettings(): Promise<void>;
 	timetable?: TimetableService;
+	syncSafety?: SyncSafetyService;
 }
 
 type Key = keyof NotebookSettings;
@@ -35,7 +40,19 @@ const penButtonOptions = () => ({
 	eraser: t("settings.penButton.eraser"),
 	lasso: t("settings.penButton.lasso"),
 	previous: t("settings.penButton.previous"),
+	gesture: t("settings.penButton.gesture"),
+	"radial-gesture": t("settings.penButton.radialGesture"),
 	off: t("settings.penButton.off"),
+});
+
+const toolbarSizeOptions = () => ({
+	compact: t("settings.toolbarSize.compact"),
+	normal: t("settings.toolbarSize.normal"),
+	large: t("settings.toolbarSize.large"),
+});
+const scrollModeOptions = () => ({
+	continuous: t("settings.scrollMode.continuous"),
+	pages: t("settings.scrollMode.pages"),
 });
 
 const EDGE_KEYS = [
@@ -212,17 +229,65 @@ export class NotebookSettingTab extends PluginSettingTab {
 				desc: t("settings.penTest.desc"),
 				action: () => new PenTestModal(this.app, penSignalInfo(this.host)).open(),
 			},
+			// wave 0.6: navigation
+			{
+				name: t("settings.scrollMode"),
+				desc: t("settings.scrollMode.desc"),
+				control: { type: "dropdown", key: "scrollMode", defaultValue: DEFAULT_SETTINGS.scrollMode, options: scrollModeOptions() },
+			},
+			// wave 0.9: obsidian and input
+			{
+				name: t("settings.toolbarSize"),
+				desc: t("settings.toolbarSize.desc"),
+				control: { type: "dropdown", key: "toolbarSize", defaultValue: DEFAULT_SETTINGS.toolbarSize, options: toolbarSizeOptions() },
+			},
+			{
+				name: t("settings.pageTurnerKeys"),
+				desc: t("settings.pageTurnerKeys.desc"),
+				control: { type: "toggle", key: "pageTurnerKeys", defaultValue: DEFAULT_SETTINGS.pageTurnerKeys },
+			},
+			// wave 0.10: tabs and lines
+			{
+				name: t("settings.notebookTabs"),
+				desc: t("settings.notebookTabs.desc"),
+				control: { type: "toggle", key: "notebookTabs", defaultValue: DEFAULT_SETTINGS.notebookTabs },
+			},
+			{
+				name: t("settings.autoLineBreak"),
+				desc: t("settings.autoLineBreak.desc"),
+				control: { type: "toggle", key: "autoLineBreak", defaultValue: DEFAULT_SETTINGS.autoLineBreak },
+			},
+			// wave 0.10: clipboard and stamps
+			{
+				name: t("settings.dateStamp"),
+				desc: t("settings.dateStamp.desc"),
+				control: { type: "text", key: "dateStampFormat", defaultValue: DEFAULT_SETTINGS.dateStampFormat, placeholder: DEFAULT_SETTINGS.dateStampFormat },
+			},
+			// wave 0.10 (50)
+			{
+				name: t("settings.fastScrollbar"),
+				desc: t("settings.fastScrollbar.desc"),
+				control: { type: "toggle", key: "fastScrollbar", defaultValue: DEFAULT_SETTINGS.fastScrollbar },
+			},
 			// Companion notes (O1)
 			...companionSettingDefinitions(this.companionHost()),
 			// wave 0.6: library trash, templates
 			...trashSettingDefinitions(),
 			// wave 0.6: zettelkasten
 			...zettelSettingDefinitions(this.zettelHost()),
+			// wave 0.8: pen gestures
+			...(penGestureSettingDefinitions(this.penGestureHost()) as SettingDefinitionItem<Key>[]),
+			// wave 0.7: sync safety
+			...syncSettingDefinitions(this.host.syncSafety),
 		];
 	}
 
 	private gestureHost(): GestureSettingsHost {
 		return { get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) };
+	}
+
+	private penGestureHost(): PenGestureUiHost {
+		return { app: this.app, get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) };
 	}
 
 	private companionHost(): CompanionSettingsHost {
@@ -236,10 +301,17 @@ export class NotebookSettingTab extends PluginSettingTab {
 	getControlValue(key: string): unknown {
 		// The hold-still toggle shows what is in effect: without a choice of the user that depends on the device.
 		if (key === "penHoldStill") return effectivePenHold(this.host.settings.penHoldStill, this.host.settings.penButtonSeen);
+		const gesture = gestureKeyId(key);
+		if (gesture) return !this.host.settings.penGesturesOff.includes(gesture);
 		return this.host.settings[key as Key];
 	}
 
 	async setControlValue(key: string, value: unknown): Promise<void> {
+		const gesture = gestureKeyId(key);
+		if (gesture) {
+			await setGestureEnabled(this.penGestureHost(), gesture, value === true);
+			return;
+		}
 		// readSettings drops values of the wrong type and keeps the defaults.
 		this.host.settings = readSettings({ ...this.host.settings, [key]: value });
 		await this.host.saveSettings();
@@ -386,6 +458,35 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setName(t("settings.penButton"))
 			.setDesc(t("settings.penButton.desc"))
 			.addDropdown((dd) => dd.addOptions(penButtonOptions()).setValue(s.penSideButton).onChange((v) => this.setControlValue("penSideButton", v)));
+		new Setting(containerEl)
+			.setName(t("settings.scrollMode"))
+			.setDesc(t("settings.scrollMode.desc"))
+			.addDropdown((dd) => dd.addOptions(scrollModeOptions()).setValue(s.scrollMode).onChange((v) => this.setControlValue("scrollMode", v)));
+		new Setting(containerEl)
+			.setName(t("settings.toolbarSize"))
+			.setDesc(t("settings.toolbarSize.desc"))
+			.addDropdown((dd) => dd.addOptions(toolbarSizeOptions()).setValue(s.toolbarSize).onChange((v) => this.setControlValue("toolbarSize", v)));
+		new Setting(containerEl)
+			.setName(t("settings.pageTurnerKeys"))
+			.setDesc(t("settings.pageTurnerKeys.desc"))
+			.addToggle((tg) => tg.setValue(s.pageTurnerKeys).onChange((v) => this.setControlValue("pageTurnerKeys", v)));
+		// wave 0.10: tabs and lines
+		new Setting(containerEl)
+			.setName(t("settings.notebookTabs"))
+			.setDesc(t("settings.notebookTabs.desc"))
+			.addToggle((tg) => tg.setValue(s.notebookTabs).onChange((v) => this.setControlValue("notebookTabs", v)));
+		new Setting(containerEl)
+			.setName(t("settings.autoLineBreak"))
+			.setDesc(t("settings.autoLineBreak.desc"))
+			.addToggle((tg) => tg.setValue(s.autoLineBreak).onChange((v) => this.setControlValue("autoLineBreak", v)));
+		new Setting(containerEl)
+			.setName(t("settings.dateStamp"))
+			.setDesc(t("settings.dateStamp.desc"))
+			.addText((text) => text.setPlaceholder(DEFAULT_SETTINGS.dateStampFormat).setValue(s.dateStampFormat).onChange((v) => this.setControlValue("dateStampFormat", v)));
+		new Setting(containerEl)
+			.setName(t("settings.fastScrollbar"))
+			.setDesc(t("settings.fastScrollbar.desc"))
+			.addToggle((tg) => tg.setValue(s.fastScrollbar).onChange((v) => this.setControlValue("fastScrollbar", v)));
 		displayGestureSettings(containerEl, this.gestureHost());
 		new Setting(containerEl)
 			.setName(t("settings.penLongPress"))
@@ -412,5 +513,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 		displayTimetableSettings(containerEl, this.host);
 		displayTrashSettings(containerEl, { get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) });
 		displayZettelSettings(containerEl, this.zettelHost());
+		displayPenGestureSettings(containerEl, this.penGestureHost());
+		displaySyncSettings(containerEl, this.host.syncSafety);
 	}
 }

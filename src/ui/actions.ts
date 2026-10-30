@@ -1,0 +1,473 @@
+// ui redesign: the action registry. One entry per user-facing action of the plugin: where it may appear, when it is
+// relevant, how important it is and which command (hotkey) it is. Pure data and predicates: no 'obsidian' import, so the
+// layout engine and the coverage tests run in Node. The behaviour lives elsewhere: view actions in view/view-actions.ts,
+// global ones in main.ts, external ones in the module named by `owner`.
+import type { MessageKey } from "../i18n";
+
+export type ToolId = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "space";
+
+/** Sections of the sheets and of docs/design-ui.md, in display order. */
+export const GROUP_ORDER = [
+	"tool", "history", "selection", "navigate", "insert", "page", "reading", "side", "lecture", "view", "share", "notebook", "app", "zettel", "integration", "dev",
+] as const;
+export type ActionGroup = typeof GROUP_ORDER[number];
+
+/**
+ * Where an action may be placed.
+ * - toolbar: fixed slot of the primary toolbar (tools, history, pages panel, page indicator, more).
+ * - quick: candidate for the ranked quick slots of the primary toolbar (as many as fit the width).
+ * - context: the contextual bar, for the contexts listed in `contexts`.
+ * - options: the tool options popover (tap the active tool again).
+ * - favourites: the favourite pens strip (and the radial favourites ring).
+ * - radial: the pen's radial menu.
+ * - sheet: the grouped "All actions" sheet (more button).
+ * - page: the page sheet (page indicator, navigator thumbnail menu): actions on one page.
+ * - notebook: Obsidian's "More options" menu of the notebook tab.
+ * - library: the library view.
+ * - palette: the command palette only (every action with `command` is also there).
+ * - banner: a status banner of the view (safe mode, storage full, integrity, open on another device, heavy page); the
+ *   banner owns its recovery buttons because they only make sense while it is shown.
+ */
+export type Surface = "toolbar" | "quick" | "context" | "options" | "favourites" | "radial" | "sheet" | "page" | "notebook" | "library" | "palette" | "banner";
+
+/** Situations that bring their own contextual bar. */
+export type ContextKind = "selection" | "lasso" | "side-pane" | "lecture" | "pdf" | "image";
+/** When several apply, the first one in this list wins. */
+export const CONTEXT_ORDER: readonly ContextKind[] = ["selection", "lasso", "side-pane", "lecture", "pdf", "image"];
+
+/** Everything the UI needs to know to decide what to show. Built by the view (view/view-actions.ts) from its state. */
+export interface UiContext {
+	/** A document is open and can be edited (false: loading, read-only, annotations hidden). */
+	editable: boolean;
+	/** A document is open (possibly read-only). */
+	open: boolean;
+	tool: ToolId;
+	selection: {
+		strokes: number; elements: number; images: number; /** 1 when a selected text box holds a [[link]] */ links?: number;
+		/** v9: selected equations and graphs (optional, 0 when absent). */ equations?: number; graphs?: number;
+	} | null;
+	/** The page in view (index of the page sheet when it was opened from a thumbnail). */
+	page: {
+		index: number; count: number; background: "none" | "pdf" | "image"; infinite: boolean; bookmarked: boolean;
+		/** wave 0.7: the page is flagged as heavy and can be split. Optional (false when absent). */
+		splittable?: boolean;
+	} | null;
+	notebook: { pdfPages: boolean; backgrounds: boolean };
+	/** A class of the timetable is on now. */
+	lecture: boolean;
+	sidePane: { available: boolean; open: boolean };
+	reading: { annotationsHidden: boolean; dim: boolean };
+	toggles: {
+		ruler: boolean; penOnly: boolean; navigator: boolean; /** One page at a time (wave 0.7). */ pageMode?: boolean; /** Pen gesture mode (wave 0.8). */ penGestures?: boolean;
+		/** wave 0.10 (63): the lasso tool selects with a rectangle instead of a freehand outline. */ selectRectangle?: boolean;
+		/** wave 0.10 (51): the user switched this view to read-only mode. */ readOnly?: boolean;
+	};
+	/** wave 0.10 (81): the device can print (desktop with a print dialog); false or absent on a phone or tablet. */
+	canPrint?: boolean;
+	/** wave 0.8: invisible-ink pen mode and the view-only "Show solutions" toggles (notebook, page in view). Optional. */
+	markers?: { invisibleInk: boolean; solutions: boolean; pageSolutions: boolean };
+	/** wave 0.9: view-only night mode (367) and cropped PDF margins (376). Optional (both off when absent). */
+	display?: { night: boolean; crop: boolean };
+	/** wave 0.10: how many notebook views are open in the workspace (tabs). Optional (0 when absent). */
+	openNotebooks?: number;
+	/** wave 0.10 (18): the back/forward history of visited pages has somewhere to go. Optional (absent: nothing to go back to). */
+	nav?: { back: boolean; forward: boolean };
+	/** Phone-sized view (the page panel is a drawer, the toolbar has two rows). */
+	narrow: boolean;
+}
+
+export interface ActionDef {
+	/** Stable id. For actions with `command` it is the Obsidian command id (hotkeys depend on it: never rename). */
+	readonly id: string;
+	readonly label: MessageKey;
+	/** Lucide icon name (setIcon). */
+	readonly icon: string;
+	readonly group: ActionGroup;
+	readonly surfaces: readonly Surface[];
+	/** 0–100: higher comes first in the quick slots and the contextual bar. */
+	readonly priority: number;
+	/** view: runs on the active notebook view; global: runs on the plugin; external: registered by another module. */
+	readonly scope: "view" | "global" | "external";
+	/** Registers an Obsidian command (name: this key, or the label). */
+	readonly command?: MessageKey | true;
+	/** The module that registers an external command (documentation and tests). */
+	readonly owner?: string;
+	readonly contexts?: readonly ContextKind[];
+	/** Relevant in this context (hidden otherwise). Default: always. */
+	readonly when?: (c: UiContext) => boolean;
+	/** Shown but disabled when false. Default: view actions need an editable document unless `readOnly`. */
+	readonly enabled?: (c: UiContext) => boolean;
+	/** Works on a read-only document (navigation, export, reading). */
+	readonly readOnly?: boolean;
+	/** Toggle state shown on the control. */
+	readonly checked?: (c: UiContext) => boolean;
+	readonly danger?: boolean;
+	/** wave 0.10: on the second row of the contextual bar (under the main row), for contexts that have one (the selection). */
+	readonly second?: true;
+	/** An inline row of choices in the sheets instead of a single row. */
+	readonly choices?: "paper" | "size";
+	/** Extra search words (any language). */
+	readonly keywords?: string;
+}
+
+/** Back and Forward only show once the history has somewhere to go. */
+const hasNav = (c: UiContext) => !!c.nav && (c.nav.back || c.nav.forward);
+const pdfPage = (c: UiContext) => c.page?.background === "pdf";
+const backgroundPage = (c: UiContext) => !!c.page && c.page.background !== "none";
+const hasSelection = (c: UiContext) => !!c.selection && c.selection.strokes + c.selection.elements > 0;
+/** wave 0.10: how many things are selected (strokes and elements), and whether the selection holds ink. */
+const itemCount = (c: UiContext) => (c.selection?.strokes ?? 0) + (c.selection?.elements ?? 0);
+const lassoOrSelection = (c: UiContext) => c.tool === "lasso" || itemCount(c) > 0;
+const hasInk = (c: UiContext) => (c.selection?.strokes ?? 0) > 0;
+/** wave 0.10 (363): another notebook is open to go to. */
+const otherNotebooks = (c: UiContext) => (c.openNotebooks ?? 0) > 1;
+const sideOpen = (c: UiContext) => c.sidePane.available && c.sidePane.open;
+/** v9: exactly one equation or graph is selected (its editor or panel can open). */
+const oneMath = (c: UiContext) => (c.selection?.equations ?? 0) + (c.selection?.graphs ?? 0) === 1;
+
+function tool(id: ToolId, icon: string, label: MessageKey, command: MessageKey, priority: number): ActionDef {
+	return { id: `tool-${id}`, label, icon, group: "tool", surfaces: ["toolbar", "radial"], priority, scope: "view", command, checked: (c) => c.tool === id };
+}
+
+function favourite(n: number): ActionDef {
+	return { id: `favourite-${n}`, label: "command.favourite", icon: "star", group: "tool", surfaces: ["favourites", "radial"], priority: 50, scope: "view", command: true };
+}
+
+function external(id: string, label: MessageKey, icon: string, group: ActionGroup, owner: string, surfaces: readonly Surface[] = ["palette"]): ActionDef {
+	return { id, label, icon, group, surfaces, priority: 10, scope: "external", command: true, owner, readOnly: true };
+}
+
+/** A recovery button of a status banner (no command: it only applies while its banner is shown). */
+function banner(id: string, label: MessageKey, icon: string, group: ActionGroup, owner: string): ActionDef {
+	return { id, label, icon, group, surfaces: ["banner"], priority: 50, scope: "external", owner, readOnly: true };
+}
+
+function global(id: string, label: MessageKey, icon: string, group: ActionGroup, surfaces: readonly Surface[], priority = 20): ActionDef {
+	return { id, label, icon, group, surfaces, priority, scope: "global", command: true, readOnly: true };
+}
+
+/** Every action, in a designed order (the order of the sheets inside each group). */
+export const ACTIONS: readonly ActionDef[] = [
+	// --- tools: always in the primary toolbar, and in the radial pen case.
+	tool("pen", "pencil", "tool.pen", "command.tool.pen", 100),
+	tool("highlighter", "highlighter", "tool.highlighter", "command.tool.highlighter", 99),
+	tool("eraser", "eraser", "tool.eraser", "command.tool.eraser", 98),
+	tool("lasso", "lasso", "tool.lasso", "command.tool.lasso", 97),
+	tool("shape", "shapes", "tool.shape", "command.tool.shape", 96),
+	tool("text", "type", "tool.text", "command.tool.text", 95),
+	tool("space", "move-vertical", "tool.space", "command.tool.space", 94),
+	...(["line", "arrow", "rectangle", "ellipse"] as const).map((kind): ActionDef => ({
+		id: `shape-${kind}`, label: `shape.${kind}`, icon: { line: "minus", arrow: "arrow-up-right", rectangle: "square", ellipse: "circle" }[kind],
+		group: "tool", surfaces: ["options", "radial"], priority: 60, scope: "view", command: `command.tool.${kind}`,
+	})),
+	{ id: "eraser-stroke", label: "tool.eraser.stroke", icon: "eraser", group: "tool", surfaces: ["options"], priority: 60, scope: "view", command: "command.tool.eraserStroke" },
+	{ id: "eraser-segment", label: "tool.eraser.segment", icon: "scissors", group: "tool", surfaces: ["options"], priority: 60, scope: "view", command: "command.tool.eraserSegment" },
+	{ id: "eraser-area", label: "tool.eraser.area", icon: "square-dashed", group: "tool", surfaces: ["options"], priority: 60, scope: "view" },
+	{ id: "eraser-larger", label: "command.eraserLarger", icon: "plus", group: "tool", surfaces: ["options", "palette"], priority: 40, scope: "view", command: true },
+	{ id: "eraser-smaller", label: "command.eraserSmaller", icon: "minus", group: "tool", surfaces: ["options", "palette"], priority: 40, scope: "view", command: true },
+	// wave 0.10 (7, 68): the free colour picker, the page eyedropper and the style eyedropper (view/colour-tools.ts). The picker and the
+	// eyedropper are also on the radial colour ring; all three are buttons of the colour row of the tool options.
+	{ id: "colour-picker", label: "command.colourPicker", icon: "palette", group: "tool", surfaces: ["options", "radial", "palette"], priority: 45, scope: "view", command: true, keywords: "colour color custom hex hue recent" },
+	{ id: "colour-eyedropper", label: "command.colourEyedropper", icon: "pipette", group: "tool", surfaces: ["options", "radial", "palette"], priority: 44, scope: "view", command: true, keywords: "colour color pick sample" },
+	{ id: "style-eyedropper", label: "command.styleEyedropper", icon: "droplets", group: "tool", surfaces: ["options", "palette"], priority: 43, scope: "view", command: true, keywords: "style pen width tool copy format stroke" },
+	...[1, 2, 3, 4, 5, 6].map(favourite),
+
+	// --- history: fixed in the toolbar, also in the radial menu and as gestures.
+	{ id: "undo", label: "tool.undo", icon: "undo", group: "history", surfaces: ["toolbar", "radial"], priority: 100, scope: "view", command: "command.undo" },
+	{ id: "redo", label: "tool.redo", icon: "redo", group: "history", surfaces: ["toolbar", "radial"], priority: 99, scope: "view", command: "command.redo" },
+
+	// --- selection: the contextual bar of the lasso.
+	{ id: "selection-copy", label: "selection.copy", icon: "copy", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 90, scope: "view", when: hasSelection },
+	{ id: "selection-cut", label: "selection.cut", icon: "scissors", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 85, scope: "view", when: hasSelection },
+	{ id: "selection-duplicate", label: "selection.duplicate", icon: "copy-plus", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 80, scope: "view", when: hasSelection },
+	{ id: "selection-paste", label: "selection.paste", icon: "clipboard-paste", group: "selection", surfaces: ["context"], contexts: ["selection", "lasso"], priority: 75, scope: "view", when: (c) => c.tool === "lasso" || hasSelection(c) },
+	{ id: "selection-white-transparent", label: "selection.whiteTransparent", icon: "eraser", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 60, scope: "view", when: (c) => (c.selection?.images ?? 0) > 0 },
+	{ id: "link-selection", label: "penlinks.linkSelection", icon: "link", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 55, scope: "view", command: "command.linkSelection", when: hasSelection },
+	{ id: "selection-open-link", label: "penlinks.openLink", icon: "external-link", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 56, scope: "view", when: (c) => (c.selection?.links ?? 0) > 0 },
+	// wave 0.9: math — edit the selected equation or graph, turn equations into ink.
+	{ id: "math-edit", label: "math.edit", icon: "square-function", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 92, scope: "view", command: "math.command.edit", when: oneMath },
+	{ id: "math-convert-ink", label: "math.convertInk", icon: "pen-line", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 58, scope: "view", command: "math.command.convertInk", when: (c) => (c.selection?.equations ?? 0) > 0 },
+	{ id: "stamps-save-selection", label: "stamps.save", icon: "stamp", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 50, scope: "view", when: hasSelection },
+	// wave 0.9 (357): layer order of the selection. Front and back are the strongest moves, so they rank higher in a narrow bar.
+	...([
+		["front", "bring-to-front", 52, "command.layerFront"], ["back", "send-to-back", 51, "command.layerBack"],
+		["forward", "move-up", 45, "command.layerForward"], ["backward", "move-down", 44, "command.layerBackward"],
+	] as const).map(([move, icon, priority, command]): ActionDef => ({
+		id: `layer-${move}`, label: `layer.${move}`, icon, group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"],
+		priority, scope: "view", command, when: hasSelection, keywords: "layer order z arrange stack front back behind above below",
+	})),
+	// wave 0.10: rectangle selection mode (63) and select by colour or tool (64) belong to the lasso; the rest of the arranging
+	// (38, 65) and "Select similar" (64) are menus on the second row of the selection bar, each entry also in the sheet and a command.
+	{ id: "select-rectangle", label: "select.rectangle", icon: "box-select", group: "selection", surfaces: ["context", "sheet"], contexts: ["lasso"], priority: 66, scope: "view", command: "command.selectRectangle", when: lassoOrSelection, checked: (c) => !!c.toggles.selectRectangle, keywords: "lasso freehand box marquee mode" },
+	{ id: "select-by-style", label: "select.byStyle", icon: "palette", group: "selection", surfaces: ["context", "sheet"], contexts: ["lasso"], priority: 64, scope: "view", command: "command.selectByStyle", when: lassoOrSelection, keywords: "colour color tool pen highlighter same similar all page" },
+	{ id: "selection-similar", label: "select.similar", icon: "check-check", group: "selection", surfaces: ["context"], contexts: ["selection"], second: true, priority: 62, scope: "view", when: hasInk },
+	{ id: "select-same-colour", label: "select.sameColour", icon: "palette", group: "selection", surfaces: ["sheet"], priority: 48, scope: "view", command: "command.selectSameColour", when: hasInk, keywords: "similar color all" },
+	{ id: "select-same-tool", label: "select.sameTool", icon: "highlighter", group: "selection", surfaces: ["sheet"], priority: 47, scope: "view", command: "command.selectSameTool", when: hasInk, keywords: "similar pen highlighter all" },
+	{ id: "selection-align-menu", label: "arrange.align", icon: "align-horizontal-distribute-center", group: "selection", surfaces: ["context"], contexts: ["selection"], second: true, priority: 60, scope: "view", when: (c) => itemCount(c) >= 2 },
+	...([
+		["left", "align-start-vertical"], ["centre", "align-center-vertical"], ["right", "align-end-vertical"],
+		["top", "align-start-horizontal"], ["middle", "align-center-horizontal"], ["bottom", "align-end-horizontal"],
+	] as const).map(([mode, icon]): ActionDef => ({
+		id: `selection-align-${mode}`, label: `arrange.align.${mode}`, icon, group: "selection", surfaces: ["sheet"], priority: 40, scope: "view",
+		command: `command.align.${mode}`, when: (c) => itemCount(c) >= 2, keywords: "align arrange edge centre center middle",
+	})),
+	...([["horizontal", "align-horizontal-distribute-center"], ["vertical", "align-vertical-distribute-center"]] as const).map(([axis, icon]): ActionDef => ({
+		id: `selection-distribute-${axis === "horizontal" ? "h" : "v"}`, label: `arrange.distribute.${axis}`, icon, group: "selection", surfaces: ["sheet"], priority: 39, scope: "view",
+		command: `command.distribute.${axis}`, when: (c) => itemCount(c) >= 3, keywords: "distribute spread space evenly arrange",
+	})),
+	{ id: "selection-transform-menu", label: "transform.menu", icon: "rotate-3d", group: "selection", surfaces: ["context"], contexts: ["selection"], second: true, priority: 58, scope: "view", when: hasSelection },
+	{ id: "selection-rotate-cw", label: "transform.rotateCw", icon: "rotate-cw", group: "selection", surfaces: ["sheet"], priority: 38, scope: "view", command: "command.rotateCw", when: hasSelection, keywords: "turn quarter 90 clockwise" },
+	{ id: "selection-rotate-ccw", label: "transform.rotateCcw", icon: "rotate-ccw", group: "selection", surfaces: ["sheet"], priority: 37, scope: "view", command: "command.rotateCcw", when: hasSelection, keywords: "turn quarter 90 anticlockwise counterclockwise" },
+	{ id: "selection-mirror-h", label: "transform.mirrorH", icon: "flip-horizontal", group: "selection", surfaces: ["sheet"], priority: 36, scope: "view", command: "command.mirrorH", when: hasSelection, keywords: "flip reflect left right" },
+	{ id: "selection-mirror-v", label: "transform.mirrorV", icon: "flip-vertical", group: "selection", surfaces: ["sheet"], priority: 35, scope: "view", command: "command.mirrorV", when: hasSelection, keywords: "flip reflect up down top bottom" },
+	{ id: "selection-resize", label: "transform.resize", icon: "maximize-2", group: "selection", surfaces: ["sheet"], priority: 34, scope: "view", command: "command.resizeSelection", when: hasSelection, keywords: "size width height scale exact dimensions proportions" },
+	{ id: "delete-selection", label: "tool.deleteSelection", icon: "trash-2", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 70, scope: "view", command: "command.deleteSelection", when: hasSelection, danger: true },
+
+	// --- navigation (wave 0.7): the first section of the page sheet (the page indicator opens it) and of the sheet.
+	{ id: "goto-page-number", label: "command.gotoPageNumber", icon: "hash", group: "navigate", surfaces: ["page", "sheet"], priority: 85, scope: "view", command: true, readOnly: true, keywords: "jump number bookmark" },
+	{ id: "recent-pages", label: "command.recentPages", icon: "history", group: "navigate", surfaces: ["page", "sheet", "library"], priority: 60, scope: "global", command: true, readOnly: true, keywords: "edited last" },
+	// wave 0.10 (18): back/forward through the visited pages, within and across notebooks. They are quick slots (when the
+	// width allows), part of the Go to section of the page sheet, commands (hotkeys) and the mouse side buttons on desktop.
+	{ id: "nav-back", label: "nav.back", icon: "arrow-left", group: "navigate", surfaces: ["quick", "page", "sheet"], priority: 64, scope: "view", command: "command.navBack", readOnly: true, when: hasNav, enabled: (c) => !!c.nav?.back, keywords: "previous history visited return indietro" },
+	{ id: "nav-forward", label: "nav.forward", icon: "arrow-right", group: "navigate", surfaces: ["quick", "page", "sheet"], priority: 63, scope: "view", command: "command.navForward", readOnly: true, when: hasNav, enabled: (c) => !!c.nav?.forward, keywords: "next history visited avanti" },
+	{ id: "go-to-page", label: "command.goToPage", icon: "file-search", group: "navigate", surfaces: ["sheet", "library"], priority: 55, scope: "global", command: true, readOnly: true, keywords: "switcher find notebook" },
+	{ id: "toggle-page-mode", label: "toolbar.pageMode", icon: "book-open", group: "navigate", surfaces: ["quick", "page", "sheet"], priority: 46, scope: "view", command: "command.pageMode", readOnly: true, checked: (c) => !!c.toggles.pageMode, keywords: "swipe paged continuous scroll" },
+	// wave 0.9 (361): find and replace in the text boxes of the notebook (a panel; the results jump to the page).
+	{ id: "find-replace", label: "command.findReplace", icon: "replace", group: "navigate", surfaces: ["sheet"], priority: 48, scope: "view", command: true, readOnly: true, keywords: "search text box substitute change word" },
+
+	// --- insert: quick slots (ranked) and the sheet.
+	{ id: "insert-image", label: "tool.image", icon: "image-plus", group: "insert", surfaces: ["quick", "sheet"], priority: 70, scope: "view", keywords: "picture photo" },
+	{ id: "stamps", label: "stamps.menu", icon: "stamp", group: "insert", surfaces: ["quick", "sheet"], priority: 62, scope: "view", keywords: "sticker" },
+	{ id: "board-shot", label: "tool.boardShot", icon: "camera", group: "insert", surfaces: ["quick", "context", "sheet"], contexts: ["lecture"], priority: 55, scope: "view", command: "command.boardShot", keywords: "photo camera blackboard" },
+	// wave 0.9: math
+	{ id: "insert-equation", label: "math.insertEquation", icon: "sigma", group: "insert", surfaces: ["sheet"], priority: 52, scope: "view", command: "math.command.insertEquation", keywords: "formula latex maths math equazione formula" },
+	{ id: "insert-graph", label: "math.insertGraph", icon: "chart-spline", group: "insert", surfaces: ["sheet"], priority: 50, scope: "view", command: "math.command.insertGraph", keywords: "function plot chart curve grafico funzione" },
+	{ id: "add-page", label: "tool.addPage", icon: "file-plus", group: "insert", surfaces: ["quick", "sheet"], priority: 66, scope: "view", command: "command.addPage" },
+	{ id: "insert-blank-page", label: "page.insertBlank", icon: "file-plus", group: "insert", surfaces: ["page"], priority: 60, scope: "view" },
+	{ id: "exercise-page", label: "page.exercise", icon: "pencil-ruler", group: "insert", surfaces: ["context", "sheet", "page"], contexts: ["lecture"], priority: 45, scope: "view", command: "command.exercisePage" },
+	{ id: "page-from-template", label: "page.newFromTemplate", icon: "file-plus-2", group: "insert", surfaces: ["sheet", "page"], priority: 40, scope: "view", keywords: "template" },
+	{ id: "insert-pdf-pages", label: "page.insertPdf", icon: "file-input", group: "insert", surfaces: ["sheet", "page"], priority: 40, scope: "view" },
+	{ id: "insert-image-page", label: "page.insertImage", icon: "image", group: "insert", surfaces: ["sheet", "page"], priority: 35, scope: "view" },
+	{ id: "scan-into", label: "page.scanAfter", icon: "scan", group: "insert", surfaces: ["sheet", "page"], priority: 35, scope: "view", command: "command.scanInto", keywords: "camera document" },
+	{ id: "scan-element", label: "page.scanInsert", icon: "scan-line", group: "insert", surfaces: ["sheet", "page"], priority: 30, scope: "view", keywords: "camera" },
+
+	// --- page: the page sheet (and its section in the "All actions" sheet).
+	// wave 0.8 (378): starts selecting pages in the page panel; its actions (move, duplicate, bookmark, tags, paper, size, PDF, delete) are
+	// the bar of the panel itself (view/navigator.ts, view/page-ops-menu.ts), one undo step each.
+	{ id: "pages-select", label: "pageOps.select", icon: "check-square", group: "page", surfaces: ["page", "sheet"], priority: 52, scope: "view", command: "command.selectPages", keywords: "several multiple move delete export" },
+	{ id: "page-duplicate", label: "page.duplicate", icon: "copy", group: "page", surfaces: ["page"], priority: 50, scope: "view" },
+	{ id: "page-move-up", label: "page.moveUp", icon: "arrow-up", group: "page", surfaces: ["page"], priority: 40, scope: "view", enabled: (c) => c.editable && (c.page?.index ?? 0) > 0 },
+	{ id: "page-move-down", label: "page.moveDown", icon: "arrow-down", group: "page", surfaces: ["page"], priority: 40, scope: "view", enabled: (c) => c.editable && !!c.page && c.page.index < c.page.count - 1 },
+	{ id: "page-bookmark", label: "page.bookmark", icon: "bookmark", group: "page", surfaces: ["page"], priority: 55, scope: "view", checked: (c) => !!c.page?.bookmarked },
+	{ id: "page-edit-bookmark", label: "page.editBookmark", icon: "bookmark-plus", group: "page", surfaces: ["page"], priority: 40, scope: "view", when: (c) => !!c.page?.bookmarked },
+	{ id: "page-tags", label: "page.tags", icon: "tag", group: "page", surfaces: ["page"], priority: 40, scope: "view" },
+	{ id: "page-paper", label: "ui.paper", icon: "grid-3x3", group: "page", surfaces: ["page"], priority: 45, scope: "view", choices: "paper", keywords: "ruled grid dotted lined" },
+	{ id: "page-size", label: "ui.size", icon: "ratio", group: "page", surfaces: ["page"], priority: 40, scope: "view", choices: "size", keywords: "a4 a5 letter" },
+	{ id: "page-orientation", label: "ui.orientation", icon: "rotate-cw", group: "page", surfaces: ["page"], priority: 35, scope: "view", keywords: "landscape portrait" },
+	{ id: "page-infinite", label: "page.infinite", icon: "infinity", group: "page", surfaces: ["page"], priority: 35, scope: "view", checked: (c) => !!c.page?.infinite },
+	{ id: "move-pages", label: "page.moveToNotebook", icon: "folder-input", group: "page", surfaces: ["page"], priority: 30, scope: "view", command: "command.movePages" },
+	{ id: "page-save-template", label: "page.saveTemplate", icon: "layout-template", group: "page", surfaces: ["page"], priority: 25, scope: "view" },
+	{ id: "page-restore-version", label: "page.restoreVersion", icon: "history", group: "page", surfaces: ["page"], priority: 20, scope: "view" },
+	{ id: "page-deleted-pages", label: "page.deletedPages", icon: "archive-restore", group: "page", surfaces: ["page"], priority: 20, scope: "view", keywords: "trash restore" },
+	// wave 0.9 (379): dates, ink, objects, files, tags, bookmark and markers of one page.
+	{ id: "page-info", label: "page.info", icon: "info", group: "page", surfaces: ["page", "sheet"], priority: 42, scope: "view", command: true, readOnly: true, keywords: "properties details statistics strokes points size dates" },
+	{ id: "page-split", label: "heavy.split", icon: "split", group: "page", surfaces: ["page", "banner"], priority: 45, scope: "view", when: (c) => !!c.page?.splittable, keywords: "heavy large slow" },
+	// wave 0.9 (#303): practice copies of exercises (view/practice.ts). Only "redo" is in the page sheet: the strip over a
+	// practice page has the other buttons, the commands are in the palette.
+	{ id: "practice-redo", label: "page.redoExercise", icon: "rotate-ccw", group: "page", surfaces: ["page"], priority: 28, scope: "view", command: "command.practiceRedo", keywords: "practice attempt repeat hide solution exam" },
+	{ id: "practice-peek", label: "command.practicePeek", icon: "eye", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
+	{ id: "practice-original", label: "command.practiceOriginal", icon: "corner-up-left", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
+	{ id: "practice-attempts", label: "command.practiceAttempts", icon: "list-ordered", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
+	{ id: "practice-timer", label: "command.practiceTimer", icon: "timer", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
+	{ id: "page-delete", label: "page.delete", icon: "trash-2", group: "page", surfaces: ["page"], priority: 10, scope: "view", danger: true, enabled: (c) => c.editable && (c.page?.count ?? 0) > 1 },
+
+	// --- PDF and reading: the contextual bar of a PDF page, and the sheet.
+	{ id: "pdf-search", label: "reading.search", icon: "search", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 80, scope: "view", command: "command.pdfSearch", readOnly: true, when: (c) => c.notebook.pdfPages },
+	{ id: "pdf-search-next", label: "command.pdfSearchNext", icon: "chevron-down", group: "reading", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
+	{ id: "pdf-search-previous", label: "command.pdfSearchPrev", icon: "chevron-up", group: "reading", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
+	{ id: "toggle-annotations", label: "reading.annotations.hide", icon: "eye-off", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 60, scope: "view", command: "command.annotationsToggle", readOnly: true, when: (c) => c.notebook.pdfPages, checked: (c) => c.reading.annotationsHidden },
+	{ id: "toggle-dim-background", label: "reading.dim", icon: "sun-dim", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf", "image"], priority: 50, scope: "view", command: "command.dimToggle", readOnly: true, when: (c) => c.notebook.backgrounds, checked: (c) => c.reading.dim },
+	{ id: "pdf-margins", label: "pdf.margins.menu", icon: "move-horizontal", group: "reading", surfaces: ["context", "page"], contexts: ["pdf", "image"], priority: 40, scope: "view", command: "command.pdfMargins", when: backgroundPage },
+	// wave 0.9 (376): the white margins of PDF pages fall off screen (view-only; the notebook, the ink and the exports are unchanged).
+	{ id: "crop-margins", label: "display.crop", icon: "crop", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 42, scope: "view", command: "command.cropMargins", readOnly: true, when: (c) => c.notebook.pdfPages, checked: (c) => !!c.display?.crop, keywords: "margins zoom small screen phone content ritaglia margini" },
+	{ id: "pdf-update", label: "pdf.update.menu", icon: "refresh-cw", group: "reading", surfaces: ["page", "sheet"], priority: 20, scope: "view", command: "command.pdfUpdate", when: pdfPage },
+	{ id: "pdf-annotations", label: "pdf.annotations.menu", icon: "file-text", group: "reading", surfaces: ["sheet", "page"], priority: 20, scope: "view", command: "command.pdfAnnotations", readOnly: true, when: (c) => c.notebook.pdfPages },
+
+	// --- PDF side by side: the contextual bar while the pane is open.
+	{ id: "pdf-side-open", label: "command.pdfSideOpen", icon: "columns-2", group: "side", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 45, scope: "view", command: true, readOnly: true, when: (c) => c.sidePane.available && !c.sidePane.open },
+	{ id: "pdf-side-link", label: "command.pdfSideLink", icon: "link", group: "side", surfaces: ["context", "sheet"], contexts: ["side-pane"], priority: 80, scope: "view", command: true, when: sideOpen },
+	{ id: "pdf-side-show-slide", label: "pdfSide.menu.showSlide", icon: "file-search", group: "side", surfaces: ["context", "sheet"], contexts: ["side-pane"], priority: 70, scope: "view", readOnly: true, when: sideOpen },
+	{ id: "pdf-side-add-page", label: "command.pdfSideAdd", icon: "file-plus", group: "side", surfaces: ["context", "sheet"], contexts: ["side-pane"], priority: 75, scope: "view", command: true, when: sideOpen },
+	{ id: "pdf-side-close", label: "command.pdfSideClose", icon: "panel-right-close", group: "side", surfaces: ["context", "sheet"], contexts: ["side-pane"], priority: 30, scope: "view", command: true, readOnly: true, when: sideOpen },
+
+	// --- lecture: the contextual bar while a class of the timetable is on.
+	{ id: "new-lecture", label: "page.newLecture", icon: "graduation-cap", group: "lecture", surfaces: ["context", "sheet"], contexts: ["lecture"], priority: 70, scope: "view", command: "command.newLecture" },
+	{ id: "exercise-paper", label: "page.exercisePaper", icon: "palette", group: "lecture", surfaces: ["sheet"], priority: 20, scope: "view", command: "command.exercisePaper", readOnly: true },
+	// wave 0.8: markers (#201-#203, #209) and structured boxes (#204): the next tap or drag on a page places one. Also on the radial dial (shapes ring → Markers).
+	...([
+		["gap", "ellipsis", 44], ["question", "help-circle", 43], ["homework", "calendar-check", 41], ["important", "alert-circle", 40], ["critical", "alert-triangle", 25], ["star", "star", 25],
+	] as const).map(([kind, icon, priority]): ActionDef => ({
+		id: `marker-${kind}`, label: `markers.place.${kind}`, icon, group: "lecture", surfaces: ["context", "radial", "sheet"], contexts: ["lecture"],
+		priority, scope: "view", command: true, keywords: "marker badge",
+	})),
+	{ id: "marker-box", label: "markers.menu.box", icon: "square-dashed", group: "lecture", surfaces: ["context", "radial", "sheet"], contexts: ["lecture"], priority: 38, scope: "view", command: true, keywords: "definition theorem example proof remark callout" },
+	{ id: "end-of-lecture", label: "markers.menu.panel", icon: "list-checks", group: "lecture", surfaces: ["context", "sheet", "page"], contexts: ["lecture"], priority: 42, scope: "view", command: true, readOnly: true, keywords: "questions gaps homework markers" },
+	// wave 0.8: invisible ink (#100): a pen mode, and the view-only "Show solutions".
+	{ id: "invisible-ink", label: "markers.command.invisible", icon: "eye-off", group: "view", surfaces: ["sheet"], priority: 35, scope: "view", command: true, checked: (c) => !!c.markers?.invisibleInk, keywords: "hidden solutions self-test" },
+	{ id: "show-solutions", label: "markers.command.solutions", icon: "eye", group: "view", surfaces: ["sheet"], priority: 30, scope: "view", command: true, readOnly: true, checked: (c) => !!c.markers?.solutions, keywords: "invisible ink hidden" },
+	{ id: "show-page-solutions", label: "markers.menu.pageSolutions", icon: "eye", group: "page", surfaces: ["page"], priority: 30, scope: "view", command: true, readOnly: true, checked: (c) => !!c.markers?.pageSolutions, keywords: "invisible ink hidden" },
+
+	// --- wave 0.10 (363): tabs of the open notebooks (the strip and the toolbar swipe call the same step).
+	{ id: "notebook-next", label: "command.notebookNext", icon: "chevron-right", group: "navigate", surfaces: ["sheet"], priority: 22, scope: "view", command: true, readOnly: true, when: otherNotebooks, keywords: "tab switch next notebook quaderno successivo scheda" },
+	{ id: "notebook-previous", label: "command.notebookPrevious", icon: "chevron-left", group: "navigate", surfaces: ["sheet"], priority: 21, scope: "view", command: true, readOnly: true, when: otherNotebooks, keywords: "tab switch previous notebook quaderno precedente scheda" },
+
+	// --- view and input.
+	{ id: "toggle-pages-panel", label: "tool.pages", icon: "panel-left", group: "view", surfaces: ["toolbar"], priority: 100, scope: "view", command: "command.toggleNavigator", readOnly: true, checked: (c) => c.toggles.navigator },
+	{ id: "toggle-ruler", label: "tool.ruler", icon: "ruler", group: "view", surfaces: ["quick", "radial", "sheet"], priority: 50, scope: "view", command: "command.toggleRuler", checked: (c) => c.toggles.ruler },
+	{ id: "pen-only", label: "pens.penOnly", icon: "pen-tool", group: "view", surfaces: ["quick", "sheet"], priority: 42, scope: "view", command: "command.penOnly", readOnly: true, checked: (c) => c.toggles.penOnly, keywords: "finger touch palm" },
+	// wave 0.10 (51): read-only mode of this view. The toolbar shows a button while it is on (tap to switch it off); the sheet and the command toggle it.
+	{ id: "toggle-read-only", label: "readonly.toggle", icon: "lock", group: "view", surfaces: ["sheet"], priority: 44, scope: "view", command: "command.readOnly", readOnly: true, checked: (c) => !!c.toggles.readOnly, keywords: "lock protect accidental marks reading view only sola lettura blocca proteggi" },
+	// wave 0.8: pen gestures. The mode toggle is a quick slot (the "move to page" gesture starts
+	// from a selection); the cheat sheet and the custom gestures live in the sheet only.
+	{ id: "pen-gesture-mode", label: "toolbar.penGestures", icon: "wand-2", group: "view", surfaces: ["quick", "sheet"], priority: 41, scope: "view", command: "command.penGestureMode", checked: (c) => !!c.toggles.penGestures, keywords: "gesture pen shortcut circle scribble" },
+	{ id: "pen-gesture-sheet", label: "gesture.cheatSheet", icon: "help-circle", group: "view", surfaces: ["sheet"], priority: 20, scope: "view", command: "command.penGestureSheet", readOnly: true, keywords: "gestures help" },
+	{ id: "pen-gesture-custom", label: "settings.penGestureCustom", icon: "wand", group: "view", surfaces: ["sheet"], priority: 15, scope: "view", command: "command.penGestureCustom", readOnly: true, keywords: "gestures record bind command" },
+	// wave 0.9 (367): night mode, a view setting (dark page, stored colours unchanged, exports unaffected).
+	{ id: "night-mode", label: "display.night", icon: "moon", group: "view", surfaces: ["sheet"], priority: 36, scope: "view", command: "command.nightMode", readOnly: true, checked: (c) => !!c.display?.night, keywords: "dark black theme notte scuro" },
+	{ id: "fit-width", label: "tool.fit", icon: "move-horizontal", group: "view", surfaces: ["quick", "sheet"], priority: 38, scope: "view", command: "command.fit", readOnly: true, keywords: "zoom" },
+	{ id: "next-page", label: "command.nextPage", icon: "chevron-down", group: "view", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
+	{ id: "previous-page", label: "command.prevPage", icon: "chevron-up", group: "view", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
+
+	// --- export and share.
+	{ id: "share-copy-link", label: "share.copyLink", icon: "link", group: "share", surfaces: ["page"], priority: 40, scope: "view", readOnly: true },
+	{ id: "share-insert-link", label: "share.insertLink", icon: "file-symlink", group: "share", surfaces: ["page"], priority: 35, scope: "view", readOnly: true },
+	{ id: "share-insert-embed", label: "share.insertEmbed", icon: "picture-in-picture", group: "share", surfaces: ["page"], priority: 35, scope: "view", readOnly: true },
+	// wave 0.9 (385): Obsidian's own Bookmarks pane (core plugin, feature-detected in integration/obsidian-bookmarks.ts).
+	{ id: "obsidian-bookmark-page", label: "bookmarks.add", icon: "bookmark-check", group: "share", surfaces: ["page", "sheet", "palette"], priority: 33, scope: "view", command: true, readOnly: true, keywords: "bookmarks pane obsidian star favourite" },
+	{ id: "export-page-pdf", label: "export.pagePdf", icon: "file-output", group: "share", surfaces: ["page"], priority: 30, scope: "view", readOnly: true },
+	{ id: "export-page-svg", label: "export.pageSvg", icon: "image", group: "share", surfaces: ["page"], priority: 20, scope: "view", readOnly: true },
+	{ id: "export-pdf", label: "export.notebookPdf", icon: "file-down", group: "share", surfaces: ["sheet", "notebook"], priority: 30, scope: "view", command: "command.exportPdf", readOnly: true },
+	// wave 0.9 (381, 382): the export dialog (PDF or SVG, page or notebook, ink and/or background) and the Markdown export.
+	// From a page's sheet the dialog starts on that page; from the sheet, the notebook menu and the palette on the notebook.
+	{ id: "export-dialog", label: "export.dialog.menu", icon: "share", group: "share", surfaces: ["page", "sheet", "notebook"], priority: 32, scope: "view", command: "command.exportDialog", readOnly: true, keywords: "pdf svg ink background layers page notebook esporta" },
+	{ id: "export-markdown", label: "export.markdown.menu", icon: "files", group: "share", surfaces: ["sheet", "notebook"], priority: 28, scope: "view", command: "command.exportMarkdown", readOnly: true, keywords: "md png images without obsidian share esporta" },
+	// wave 0.10 (81): the same dialog started on PNG images (a vault folder, a scale, a page range) or on Print (desktop only).
+	{ id: "export-png", label: "export.png.menu", icon: "images", group: "share", surfaces: ["sheet", "notebook"], priority: 27, scope: "view", command: "command.exportPng", readOnly: true, keywords: "png images pictures pages folder scale range esporta immagini" },
+	{ id: "print", label: "export.print.menu", icon: "printer", group: "share", surfaces: ["sheet", "notebook"], priority: 26, scope: "view", command: "command.print", readOnly: true, when: (c) => !!c.canPrint, keywords: "paper printer stampa carta" },
+
+	// --- notebooks: the library, the ribbon and the palette.
+	global("open-library", "command.library", "library", "app", ["notebook", "palette"], 30),
+	global("create", "command.new", "file-plus-2", "app", ["library", "palette"]),
+	global("open", "command.open", "folder-open", "app", ["library", "palette"]),
+	global("continue-last", "command.continue", "history", "app", ["palette"]),
+	global("import-pdf", "command.importPdf", "file-input", "app", ["library", "palette"]),
+	global("lecture-from-slides", "command.lectureFromSlides", "presentation", "app", ["library", "palette"]),
+	global("scan-new", "command.scanNew", "scan", "app", ["library", "palette"]),
+	global("loose-sheet", "command.looseSheet", "sticky-note", "app", ["palette"]),
+	global("timetable", "command.timetable", "calendar-clock", "app", ["library", "palette"]),
+	global("open-class", "command.openClass", "calendar-check", "app", ["library", "palette"]),
+	// wave 0.7: safety checks of the whole notebooks folder (also from the settings tab).
+	global("sync-check", "command.syncCheck", "refresh-cw", "app", ["sheet", "notebook", "palette"], 15),
+	global("check-integrity", "command.checkIntegrity", "shield-check", "app", ["sheet", "notebook", "palette"], 15),
+	// wave 0.10 (27): unreadable notebooks and unused attachment files; the library sidebar has the same entry.
+	global("library-check", "command.libraryCheck", "hard-drive", "app", ["sheet", "notebook", "library", "palette"], 15),
+
+	// --- diagnostics: settings tab and palette.
+	global("pen-button-test", "command.penTest", "pen-tool", "dev", ["palette"], 5),
+	global("benchmark", "command.benchmark", "gauge", "dev", ["palette"], 5),
+	global("create-stress-test", "command.stress", "flask-conical", "dev", ["palette"], 5),
+
+	// --- registered by other modules (listed so that every command has a documented place).
+	external("insert-embed", "command.embedInsert", "picture-in-picture", "integration", "integration/index.ts"),
+	external("restore-version", "command.restore", "history", "integration", "integration/index.ts"),
+	// wave 0.8 (388): lists the old #pN links of the notes, then rewrites the ones the user accepts.
+	external("update-page-links", "command.updateLinks", "link-2", "integration", "integration/index.ts", ["notebook", "palette"]),
+	external("edit-tags", "command.editTags", "tags", "integration", "integration/tags.ts", ["notebook", "palette"]),
+	external("companion-update-all", "command.companionUpdateAll", "refresh-cw", "integration", "integration/companion.ts"),
+	external("companion-open", "command.companionOpen", "file-text", "integration", "integration/companion.ts"),
+	external("repair-damaged", "command.repair", "wrench", "integration", "integration/reliability.ts"),
+	external("merge-conflicted-copies", "command.mergeConflicts", "git-merge", "integration", "integration/reliability.ts"),
+	external("restore-page", "command.restorePage", "history", "integration", "integration/reliability.ts"),
+	external("zettel-card-from-selection", "zettel.command.fromSelection", "square-dashed", "zettel", "zettel/index.ts", ["notebook", "palette"]),
+	external("zettel-card-from-page", "zettel.command.fromPage", "id-card", "zettel", "zettel/index.ts", ["notebook", "palette"]),
+	external("zettel-card-title", "zettel.command.title", "heading", "zettel", "zettel/index.ts", ["notebook", "palette"]),
+	external("zettel-link-arrows", "zettel.command.linkArrows", "arrow-right-left", "zettel", "zettel/index.ts"),
+	external("zettel-show-cards", "zettel.command.showCards", "layout-list", "zettel", "zettel/index.ts", ["notebook", "palette"]),
+	external("zettel-toggle-slip-box", "zettel.command.toggleSlipBox", "archive", "zettel", "zettel/index.ts", ["notebook", "palette"]),
+	external("zettel-new-slip-box", "zettel.command.newSlipBox", "archive", "zettel", "zettel/index.ts"),
+	external("zettel-orphans", "zettel.command.orphans", "unlink", "zettel", "zettel/index.ts"),
+	external("zettel-toggle-regions", "zettel.command.toggleRegions", "scan", "zettel", "zettel/index.ts"),
+	// wave 0.8: processing flow (Z4): the Inbox view; quick textbook reference (208)
+	global("zettel-inbox", "inbox.command.open", "inbox", "zettel", ["sheet", "palette"], 30),
+	global("zettel-inbox-process", "inbox.command.process", "list-checks", "zettel", ["sheet", "palette"], 30),
+	{ id: "textbook-set", label: "textbook.command.set", icon: "book-open-check", group: "reading", surfaces: ["sheet", "palette"], priority: 25, scope: "view", command: true, readOnly: true, keywords: "textbook book pdf reference course libro" },
+	{ id: "textbook-open", label: "textbook.command.open", icon: "book-open", group: "reading", surfaces: ["sheet", "palette"], priority: 35, scope: "view", command: true, readOnly: true, keywords: "textbook book pdf page libro" },
+	{ id: "textbook-remove", label: "textbook.command.remove", icon: "book-x", group: "reading", surfaces: ["sheet", "palette"], priority: 10, scope: "view", command: true, readOnly: true },
+	{ id: "textbook-insert", label: "textbook.command.insert", icon: "book-marked", group: "insert", surfaces: ["sheet", "palette"], priority: 45, scope: "view", command: true, keywords: "textbook reference page libro" },
+
+	// wave 0.10: clipboard and stamps (356 date and time stamp, 362 clipboard shared between devices)
+	{ id: "insert-date-stamp", label: "datestamp.action", icon: "calendar-clock", group: "insert", surfaces: ["sheet"], priority: 48, scope: "view", command: "datestamp.command", keywords: "date time stamp timestamp clock now data ora" },
+	{ id: "selection-copy-devices", label: "clipshare.copy", icon: "monitor-smartphone", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 48, scope: "view", command: true, when: hasSelection, keywords: "clipboard tablet phone sync share vault appunti" },
+	{ id: "selection-paste-device", label: "clipshare.paste", icon: "monitor-down", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection", "lasso"], priority: 47, scope: "view", command: true, when: (c) => c.tool === "lasso" || hasSelection(c), keywords: "clipboard tablet phone sync share vault appunti" },
+
+	// --- status banners (wave 0.7): their buttons, listed so that every visible control has a documented place.
+	banner("safe-open-normally", "safe.banner.openNormally", "shield-off", "notebook", "view/resilience.ts"),
+	banner("safe-repair", "safe.banner.repair", "wrench", "notebook", "view/resilience.ts"),
+	banner("safe-show-media", "safe.banner.showMedia", "image", "notebook", "view/resilience.ts"),
+	banner("storage-retry", "storage.banner.retryNow", "refresh-cw", "notebook", "view/resilience.ts"),
+	banner("integrity-restore-newer", "integrity.banner.restoreNewer", "history", "notebook", "view/resilience.ts"),
+	banner("integrity-restore", "integrity.restore", "history", "notebook", "view/resilience.ts"),
+	banner("integrity-keep", "integrity.keep", "check", "notebook", "view/resilience.ts"),
+	banner("sync-open-read-only", "sync.other.readOnly", "lock", "notebook", "view/sync-safety.ts"),
+	banner("sync-open-anyway", "sync.other.anyway", "lock-open", "notebook", "view/sync-safety.ts"),
+	banner("sync-edit-anyway", "sync.other.edit", "pencil", "notebook", "view/sync-safety.ts"),
+	banner("heavy-dismiss", "heavy.dismiss", "x", "page", "view/heavy-page-banner.ts"),
+];
+
+const BY_ID = new Map(ACTIONS.map((a) => [a.id, a]));
+
+export function actionById(id: string): ActionDef | undefined {
+	return BY_ID.get(id);
+}
+
+/** The action is meaningful in this context (otherwise it is not shown at all). */
+export function isRelevant(a: ActionDef, c: UiContext): boolean {
+	return a.when ? a.when(c) : true;
+}
+
+/** The action can be used now (shown disabled otherwise). */
+export function isEnabled(a: ActionDef, c: UiContext): boolean {
+	if (a.enabled) return a.enabled(c);
+	if (a.scope !== "view") return true;
+	return a.readOnly ? c.open : c.editable;
+}
+
+export function isChecked(a: ActionDef, c: UiContext): boolean {
+	return a.checked ? a.checked(c) : false;
+}
+
+/** The contexts that apply, most specific first. */
+export function activeContexts(c: UiContext): ContextKind[] {
+	if (!c.open) return [];
+	const on: Record<ContextKind, boolean> = {
+		selection: !!c.selection && c.selection.strokes + c.selection.elements > 0,
+		lasso: c.tool === "lasso",
+		"side-pane": c.sidePane.available && c.sidePane.open,
+		lecture: c.lecture,
+		pdf: c.page?.background === "pdf",
+		image: c.page?.background === "image",
+	};
+	return CONTEXT_ORDER.filter((k) => on[k]);
+}
+
+/** A context for tests and docs: an open, editable plain page with the pen. */
+export function baseContext(patch: Partial<UiContext> = {}): UiContext {
+	return {
+		editable: true, open: true, tool: "pen", selection: null,
+		page: { index: 0, count: 3, background: "none", infinite: false, bookmarked: false },
+		notebook: { pdfPages: false, backgrounds: false }, lecture: false,
+		sidePane: { available: true, open: false }, reading: { annotationsHidden: false, dim: false },
+		toggles: { ruler: false, penOnly: false, navigator: false, pageMode: false }, narrow: false, canPrint: true,
+		...patch,
+	};
+}

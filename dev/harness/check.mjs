@@ -6,7 +6,7 @@
 // ratios, plus the low-latency ink setting) it runs the in-page check (layout, canvases, pen,
 // highlighter and eraser input through synthetic pen PointerEvents), then takes a screenshot and
 // checks the *composited* pixels: paper where the page is, ink where the pen wrote. Screenshots go to
-// dev/harness/dist/shots/. Exit code 1 on any failure.
+// dev/harness/dist/shots/. Exit code 1 on any failure. HARNESS_DOC=practice runs only the scenarios of that notebook.
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -22,6 +22,8 @@ const DEVICES = {
 	// Small phone (360 CSS px is the common narrow Android width): the toolbar must still fit.
 	narrow: { width: 360, height: 740, deviceScaleFactor: 3, mobile: true, touch: true },
 	desktop: { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false, touch: false },
+	// The same tablet held sideways.
+	tabletLandscape: { width: 1280, height: 800, deviceScaleFactor: 2, mobile: true, touch: true },
 };
 
 const SCENARIOS = [];
@@ -33,6 +35,7 @@ for (const doc of ["v3", "new"]) {
 // Phone held sideways: little height for the toolbar popovers.
 DEVICES.landscape = { width: 740, height: 360, deviceScaleFactor: 3, mobile: true, touch: true };
 SCENARIOS.push({ doc: "new", theme: "light", device: "landscape", lowLatency: false });
+SCENARIOS.push({ doc: "pdf", theme: "light", device: "tablet", lowLatency: false });
 SCENARIOS.push({ doc: "v3", theme: "dark", device: "tablet", lowLatency: true });
 SCENARIOS.push({ doc: "new", theme: "light", device: "phone", lowLatency: true });
 // Injected faults: wet ink failing on every paint, and one stored stroke that cannot be drawn.
@@ -42,6 +45,13 @@ SCENARIOS.push({ doc: "v3", theme: "light", device: "tablet", lowLatency: false,
 // The PDF reading tools (search, snapping highlighter, hidden annotations, dimming) on a notebook of three fake PDF pages.
 SCENARIOS.push({ doc: "pdf", theme: "light", device: "desktop", lowLatency: false });
 SCENARIOS.push({ doc: "pdf", theme: "dark", device: "narrow", lowLatency: false });
+// The practice strip, the peek and the timer on a notebook with a practice copy (wave 0.9).
+SCENARIOS.push({ doc: "practice", theme: "light", device: "desktop", lowLatency: false });
+SCENARIOS.push({ doc: "practice", theme: "dark", device: "narrow", lowLatency: false });
+// Read-only mode, PNG export with ranges and Print (wave 0.10): desktop can print, a phone and a tablet cannot.
+SCENARIOS.push({ doc: "readonly", theme: "light", device: "desktop", lowLatency: false });
+SCENARIOS.push({ doc: "readonly", theme: "dark", device: "narrow", lowLatency: false });
+SCENARIOS.push({ doc: "readonly", theme: "light", device: "tablet", lowLatency: false });
 
 function findChrome() {
 	const candidates = [
@@ -183,7 +193,7 @@ async function main() {
 		await cdp.send("Page.enable");
 		await cdp.send("Runtime.enable");
 
-		for (const s of SCENARIOS) {
+		for (const s of SCENARIOS.filter((x) => !process.env.HARNESS_DOC || x.doc === process.env.HARNESS_DOC)) {
 			const d = DEVICES[s.device];
 			const name = `${s.doc}-${s.theme}-${s.device}${s.lowLatency ? "-lowlatency" : ""}${s.fault ? `-fault-${s.fault}` : ""}`;
 			await cdp.send("Emulation.setDeviceMetricsOverride", { width: d.width, height: d.height, deviceScaleFactor: d.deviceScaleFactor, mobile: d.mobile });
@@ -197,7 +207,7 @@ async function main() {
 					await sleep(100);
 				}
 				await cdp.evaluate("window.harness.ready.then(() => true)");
-				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}
@@ -229,6 +239,38 @@ async function main() {
 					writeFileSync(join(shots, `${name}-more.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 				} catch (e) {
 					problems.push(`popover screenshots: ${e.message}`);
+				}
+			}
+			// ui redesign: the main states of the interface, for review (UI_SHOTS, default dist/shots/ui).
+			const uiDevices = ["narrow", "tablet", "tabletLandscape", "desktop"];
+			if (!s.fault && !s.lowLatency && uiDevices.includes(s.device) && (s.doc === "new" || s.doc === "pdf")) {
+				const uiDir = process.env.UI_SHOTS ?? join(shots, "ui");
+				mkdirSync(uiDir, { recursive: true });
+				const shotAs = async (file) => writeFileSync(join(uiDir, `${s.device}-${s.theme}-${file}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+				try {
+					await cdp.evaluate("window.harness.closeAll().then(() => true)");
+					if (s.doc === "pdf") {
+						await shotAs("pdf-context");
+						await cdp.evaluate("window.harness.openMore().then(() => true)");
+						await shotAs("pdf-sheet");
+					} else {
+						await shotAs("toolbar");
+						const states = [
+							["options-pen", "window.harness.openOptions('pen')"],
+							["sheet", "window.harness.openMore()"],
+							["page-sheet", "window.harness.openPageSheet()"],
+							["selection", "window.harness.closeAll().then(() => window.harness.selectFirstStroke())"],
+						];
+						for (const state of ["main", "color", "width", "tools", "save", "shapes"]) states.push([`radial-${state}`, `window.harness.radialState('${state}')`]);
+						for (const [file, expr] of states) {
+							if (s.theme === "dark" && !file.startsWith("radial")) continue;
+							await cdp.evaluate(`window.harness.closeAll().then(() => ${expr}).then(() => true)`);
+							await shotAs(file);
+						}
+					}
+					await cdp.evaluate("window.harness.closeAll().then(() => true)");
+				} catch (e) {
+					problems.push(`ui screenshots: ${e.message}`);
 				}
 			}
 			if (problems.length) {

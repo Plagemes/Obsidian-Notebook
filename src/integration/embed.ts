@@ -4,6 +4,7 @@ import { renderThumbnail, type ThumbnailOptions } from "../library/thumbnail";
 import { parse } from "../model/serialize";
 import type { NotebookDocument, Page } from "../model/types";
 import { readNotebookText } from "../storage/format";
+import { isAwaitingDownload } from "../storage/sync-state";
 import { clampRegion, lookupPage } from "../zettel/subpath";
 import { embedPixelWidth, parseEmbedSource } from "./links";
 import { resolveNotebookFile } from "./open";
@@ -13,7 +14,8 @@ export interface EmbedDeps {
 	folder: () => string;
 	/** Loads the PDF page or image behind a page (null when there is none or it cannot be loaded). */
 	background: (doc: NotebookDocument, page: Page, width: number) => Promise<ThumbnailOptions["drawBackground"] | null>;
-	open: (file: TFile, page: number) => void;
+	/** `pageId`: the page's id, so the click opens the same page even if it moved (wave 0.8, 388). */
+	open: (file: TFile, page: number, pageId?: string) => void;
 }
 
 const REFRESH_MS = 400;
@@ -95,7 +97,7 @@ export class NotebookEmbed extends MarkdownRenderChild {
 			const result = parse(readNotebookText(file.extension, raw));
 			if (stale()) return;
 			if (!result.ok) {
-				this.message(t("embed.unreadable", { name: file.basename }));
+				this.message(t(isAwaitingDownload(raw) ? "sync.embed.notDownloaded" : "embed.unreadable", { name: file.basename }));
 				return;
 			}
 			const doc = result.doc;
@@ -115,13 +117,13 @@ export class NotebookEmbed extends MarkdownRenderChild {
 			if (stale()) return;
 			const url = renderThumbnail(page, px, { ...(background ? { drawBackground: background } : {}), ...(region ? { region } : {}) });
 			if (!url) throw new Error("Canvas 2D is not available");
-			this.show(file, found.index + 1, url);
+			this.show(file, found.index + 1, url, page.id);
 		} catch (e) {
 			if (!stale()) this.message(t("embed.failed", { error: (e as Error).message }));
 		}
 	}
 
-	private show(file: TFile, page: number, url: string): void {
+	private show(file: TFile, page: number, url: string, pageId: string): void {
 		const title = t("embed.title", { name: file.basename, page: String(page) });
 		const card = createDiv({ cls: "notebook-embed" });
 		card.setAttribute("role", "button");
@@ -131,7 +133,7 @@ export class NotebookEmbed extends MarkdownRenderChild {
 		const img = card.createEl("img", { cls: "notebook-embed-image" });
 		img.alt = title;
 		img.src = url;
-		const open = () => this.deps.open(file, page);
+		const open = () => this.deps.open(file, page, pageId);
 		card.addEventListener("click", open);
 		card.addEventListener("keydown", (e) => {
 			if (e.key === "Enter" || e.key === " ") {

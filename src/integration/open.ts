@@ -2,6 +2,7 @@ import { normalizePath, type App, type TFile, type WorkspaceLeaf } from "obsidia
 import { isNotebookFile, NOTEBOOK_EXTENSIONS } from "../storage/format";
 import { listNotebooks } from "../storage/notebooks";
 import { NotebookView, VIEW_TYPE } from "../view/notebook-view";
+import type { SavedPosition } from "../ink/view-position";
 import { candidatePaths, type EmbedTarget } from "./links";
 
 function leafFile(leaf: WorkspaceLeaf): string | undefined {
@@ -11,20 +12,27 @@ function leafFile(leaf: WorkspaceLeaf): string | undefined {
 
 /**
  * Opens a notebook, focusing the tab that already shows it, and asks the view to go to `page`
- * (1-based) through the view state `{ page }`: `NotebookView.setState` reads it.
+ * (1-based) through the view state `{ page }`: `NotebookView.setState` reads it. `view` (zoom and scroll position on
+ * that page) is passed along when known.
  */
-export async function openNotebookAtPage(app: App, file: TFile, page: number | null): Promise<void> {
+export async function openNotebookAtPage(
+	app: App, file: TFile, page: number | null, view: SavedPosition | null = null, pageId: string | null = null,
+): Promise<void> {
 	const { workspace } = app;
 	const open = workspace.getLeavesOfType(VIEW_TYPE).find((leaf) => leafFile(leaf) === file.path);
+	// wave 0.8 (388): `pageId` (a link made by the plugin) wins over the number; the view resolves it once the document is loaded.
+	const wanted = page !== null || pageId !== null;
 	if (open) {
-		if (page !== null) {
+		if (wanted) {
 			const state = open.getViewState().state ?? {};
-			await open.setViewState({ type: VIEW_TYPE, state: { ...state, file: file.path, page }, active: true });
+			await open.setViewState({ type: VIEW_TYPE, state: { ...state, file: file.path, page: page ?? undefined, pageId: pageId ?? undefined, view: view ?? undefined }, active: true });
 		}
 		await workspace.revealLeaf(open);
 		return;
 	}
-	await workspace.getLeaf("tab").openFile(file, { active: true, state: page !== null ? { page } : undefined });
+	await workspace.getLeaf("tab").openFile(file, {
+		active: true, state: wanted ? { page: page ?? undefined, pageId: pageId ?? undefined, view: view ?? undefined } : undefined,
+	});
 }
 
 /** Notebook views currently showing `file`. */

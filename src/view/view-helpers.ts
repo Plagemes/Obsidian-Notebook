@@ -1,4 +1,5 @@
 /** Pure helpers of the notebook view (no DOM, no 'obsidian'): testable in Node. */
+import { stableStringify } from "../model/math-elements";
 import { elementBounds, type MeasureText } from "../ink/elements";
 import { strokeBounds, type BBox } from "../ink/hit-test";
 import { projectToRuler, type Ruler } from "../ink/ruler";
@@ -67,9 +68,12 @@ export function pageSignature(page: Page): string {
 	for (let i = 0; i < n; i += stride) sample(page.strokes[i]!);
 	if (n > 0 && (n - 1) % stride !== 0) sample(page.strokes[n - 1]!);
 	for (const el of page.elements ?? []) {
-		parts.push(el.id, el.x, el.y, el.width);
-		if (el.type === "text") parts.push(el.text, el.fontSize, el.color);
-		else parts.push(el.height, el.rotation, el.asset);
+		if (el.type === "text") parts.push(el.id, el.x, el.y, el.width, el.text, el.fontSize, el.color);
+		else if (el.type === "image") parts.push(el.id, el.x, el.y, el.width, el.height, el.rotation, el.asset);
+		else if (el.type === "box") parts.push(el.id, el.x, el.y, el.width, el.height, el.kind);
+		else if (el.type === "equation") parts.push(el.id, el.x, el.y, el.width, el.height, el.latex, el.fontSize, el.color, el.inline ? 1 : 0, el.numbered ? 1 : 0, el.outline?.length ?? 0);
+		else if (el.type === "graph") parts.push(el.id, stableStringify(el));
+		else parts.push(el.id, el.x, el.y, el.kind, el.done ? 1 : 0);
 	}
 	const bg = page.background;
 	if (bg) parts.push(bg.kind, bg.asset, bg.kind === "pdf" ? bg.page : 0);

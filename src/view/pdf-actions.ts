@@ -3,7 +3,7 @@
  * the annotation export to Markdown (#155). The logic is in pure modules (model/margins.ts,
  * pdf/republish.ts, pdf/annotations.ts); this file is the Obsidian glue (menus, modals, files).
  */
-import { loadPdfJs, Modal, normalizePath, Notice, Setting, type App, type Menu, type TFile } from "obsidian";
+import { loadPdfJs, Modal, normalizePath, Setting, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { notebookUri } from "../integration/links";
 import { Batch, SetPageMargins, type Command } from "../model/history";
@@ -20,6 +20,7 @@ import {
 import { boxesOnPage, type TextBox } from "../pdf/text-items";
 import { storeAsset, type NotebookMedia } from "./media";
 import { pickFile } from "./pick";
+import { showNotice } from "./notice";
 
 /** What the actions need from the notebook view (NotebookView.pdfActionHost). */
 export interface PdfActionHost {
@@ -33,20 +34,6 @@ export interface PdfActionHost {
 	editable(): boolean;
 	/** Runs `cmd` as one undo step and refreshes the view; false when the document can no longer be edited. */
 	run(cmd: Command, scrollTo?: number): boolean;
-}
-
-/** Page menu entries for a page with a background. */
-export function addPdfPageMenuItems(menu: Menu, host: PdfActionHost | null, page: Page): void {
-	if (!host || !page.background) return;
-	const index = host.doc.pages.indexOf(page);
-	menu.addSeparator();
-	menu.addItem((i) => i.setTitle(t("pdf.margins.menu")).setIcon("move-horizontal").setDisabled(!host.editable())
-		.onClick(() => openMarginsModal(host, page)));
-	if (page.background.kind !== "pdf") return;
-	menu.addItem((i) => i.setTitle(t("pdf.update.menu")).setIcon("refresh-cw").setDisabled(!host.editable())
-		.onClick(() => void updatePdfFromNewVersion(host, index)));
-	menu.addItem((i) => i.setTitle(t("pdf.annotations.menu")).setIcon("file-text")
-		.onClick(() => void exportPdfAnnotations(host)));
 }
 
 // ------------------------------------------------------------------------------------------ margins
@@ -179,7 +166,7 @@ export async function updatePdfFromNewVersion(host: PdfActionHost, anchorIndex: 
 	const picked = await pickFile(host.app, "pdf");
 	if (!picked || !host.editable()) return;
 	const store = scratchStore(host.media, picked.bytes);
-	const working = new Notice(t("pdf.update.reading"), 0);
+	const working = showNotice(t("pdf.update.reading"), 0);
 	try {
 		const assetId = assetIdFromHash(await sha256Hex(picked.bytes));
 		const sizes = await store.pageSizes(NEW_PDF);
@@ -208,7 +195,7 @@ export async function updatePdfFromNewVersion(host: PdfActionHost, anchorIndex: 
 		const result = matchRepublished(old, fresh, anchorAsset);
 		const counts = countMatches(result);
 		if (counts.added === 0 && counts.updated === 0) {
-			new Notice(t("pdf.update.nothing"), 6000);
+			showNotice(t("pdf.update.nothing"), 6000);
 			return;
 		}
 		const choice = await askRepublish(host, result, unreadable);
@@ -219,17 +206,17 @@ export async function updatePdfFromNewVersion(host: PdfActionHost, anchorIndex: 
 		try {
 			const plan = planRepublish(host.doc, result, asset, sizes, choice);
 			if (!plan.command) {
-				new Notice(t("pdf.update.nothing"), 6000);
+				showNotice(t("pdf.update.nothing"), 6000);
 				return;
 			}
 			if (!host.run(plan.command, plan.added > 0 ? plan.insertAt : undefined)) return;
-			new Notice(t("pdf.update.done", { added: String(plan.added), switched: String(plan.switched) }));
+			showNotice(t("pdf.update.done", { added: String(plan.added), switched: String(plan.switched) }));
 		} finally {
 			host.media.removePending(asset.id);
 		}
 	} catch (e) {
 		console.error("[notebook] update PDF", e);
-		new Notice(t("pdf.update.failed", { error: (e as Error).message }), 8000);
+		showNotice(t("pdf.update.failed", { error: (e as Error).message }), 8000);
 	} finally {
 		working.hide();
 		store.clear();
@@ -299,10 +286,10 @@ function localDate(d: Date): string {
 export async function exportPdfAnnotations(host: PdfActionHost): Promise<void> {
 	const { app, file, doc, media } = host;
 	if (!hasPdfAnnotations(doc)) {
-		new Notice(t("pdf.annotations.none"), 6000);
+		showNotice(t("pdf.annotations.none"), 6000);
 		return;
 	}
-	const working = new Notice(t("pdf.annotations.working"), 0);
+	const working = showNotice(t("pdf.annotations.working"), 0);
 	try {
 		const texts = new Map<Page, TextBox[] | null>();
 		const contents = new Map<string, Promise<Awaited<ReturnType<PdfStore["pageText"]>> | null>>();
@@ -328,7 +315,7 @@ export async function exportPdfAnnotations(host: PdfActionHost): Promise<void> {
 			notebookLink: app.fileManager.generateMarkdownLink(file, "", undefined, file.basename),
 			date: localDate(new Date()),
 			pdfName: (id) => doc.assets?.[id]?.name ?? id,
-			pageUrl: (n) => notebookUri(vault, file.path, n),
+			pageUrl: (n, id) => notebookUri(vault, file.path, n, id),
 			labels: {
 				title: t("pdf.annotations.title", { name: file.basename }),
 				source: t("pdf.annotations.source"),
@@ -344,11 +331,11 @@ export async function exportPdfAnnotations(host: PdfActionHost): Promise<void> {
 		const path = normalizePath(uniquePath((p) => !!app.vault.getAbstractFileByPath(normalizePath(p)), dir, `${file.basename} ${t("pdf.annotations.fileSuffix")}`, "md"));
 		const note = await app.vault.create(path, markdown);
 		working.hide();
-		new Notice(t("pdf.annotations.done", { path, n: String(items.length) }));
+		showNotice(t("pdf.annotations.done", { path, n: String(items.length) }));
 		await app.workspace.getLeaf("tab").openFile(note);
 	} catch (e) {
 		console.error("[notebook] annotations", e);
-		new Notice(t("pdf.annotations.failed", { error: (e as Error).message }), 8000);
+		showNotice(t("pdf.annotations.failed", { error: (e as Error).message }), 8000);
 	} finally {
 		working.hide();
 	}

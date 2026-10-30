@@ -1,9 +1,10 @@
-import { getLanguage, Modal, Notice, setIcon, type App } from "obsidian";
+import { getLanguage, Modal, setIcon, type App } from "obsidian";
 import { t } from "../i18n";
 import { daysLeft } from "../storage/trash-paths";
 import type { LibraryTrash, TrashItem } from "../storage/trash";
 import { relativeTime } from "./format";
 import { ConfirmModal } from "./library-modals";
+import { showNotice } from "../view/notice";
 
 /** Moves a notebook or folder to the library trash, after a confirmation that says it can be restored. */
 export function confirmMoveToTrash(app: App, target: { name: string; isFolder: boolean }, run: () => Promise<unknown>, failed: (e: unknown) => void): void {
@@ -14,7 +15,7 @@ export function confirmMoveToTrash(app: App, target: { name: string; isFolder: b
 			body: t(target.isFolder ? "trash.moveFolder.body" : "trash.move.body", { name: target.name }),
 			cta: t("trash.move.cta"),
 		},
-		() => void run().then(() => new Notice(t("trash.notice.moved", { name: target.name }))).catch(failed),
+		() => void run().then(() => showNotice(t("trash.notice.moved", { name: target.name }))).catch(failed),
 	).open();
 }
 
@@ -90,7 +91,7 @@ export class TrashModal extends Modal {
 			this.items = await this.trash.list();
 		} catch (e) {
 			console.error("[notebook] could not list the trash", e);
-			new Notice(t("trash.notice.failed", { error: (e as Error).message }));
+			showNotice(t("trash.notice.failed", { error: (e as Error).message }));
 			this.items = [];
 		}
 		this.render();
@@ -132,9 +133,9 @@ export class TrashModal extends Modal {
 		this.busy = true;
 		try {
 			const path = await this.trash.restore(item.id);
-			new Notice(t("trash.notice.restored", { path }));
+			showNotice(t("trash.notice.restored", { path }));
 		} catch (e) {
-			new Notice(t("trash.notice.failed", { error: (e as Error).message }));
+			showNotice(t("trash.notice.failed", { error: (e as Error).message }));
 		} finally {
 			this.busy = false;
 		}
@@ -164,7 +165,7 @@ export class TrashModal extends Modal {
 			{ title: t("trash.emptyConfirm.title"), body: this.withOthers(t("trash.emptyConfirm.body", { n: String(this.items.length) }), this.items), cta: t("trash.emptyAll") },
 			() => void this.run(async () => {
 				const n = await this.trash.empty();
-				new Notice(t("trash.notice.emptied", { n: String(n) }));
+				showNotice(t("trash.notice.emptied", { n: String(n) }));
 			}),
 		).open();
 	}
@@ -175,7 +176,7 @@ export class TrashModal extends Modal {
 		try {
 			await job();
 		} catch (e) {
-			new Notice(t("trash.notice.failed", { error: (e as Error).message }));
+			showNotice(t("trash.notice.failed", { error: (e as Error).message }));
 		} finally {
 			this.busy = false;
 		}

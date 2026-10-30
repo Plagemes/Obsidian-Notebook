@@ -1,4 +1,4 @@
-import { Modal, Notice, Platform, type App } from "obsidian";
+import { Modal, Platform, type App } from "obsidian";
 import { t } from "../i18n";
 import { findHitStrokes } from "../ink/hit-test";
 import { layoutPages } from "../ink/layout";
@@ -8,6 +8,7 @@ import { fitWidth, pan, zoomAt } from "../ink/viewport";
 import { runWritingBench } from "../ink/writing-bench";
 import { parse, serialize, serializeChecked } from "../model/serialize";
 import { stressDocument } from "../model/stress";
+import { showNotice } from "./notice";
 
 interface MemoryInfo {
 	usedJSHeapSize: number;
@@ -132,7 +133,7 @@ export class BenchmarkModal extends Modal {
 		const copy = this.contentEl.createEl("button", { text: t("bench.copy") });
 		copy.disabled = true;
 		copy.addEventListener("click", () => {
-			void navigator.clipboard.writeText(this.lines.join("\n")).then(() => new Notice(t("bench.copied")));
+			void navigator.clipboard.writeText(this.lines.join("\n")).then(() => showNotice(t("bench.copied")));
 		});
 		const log = (line: string) => {
 			this.lines.push(line);

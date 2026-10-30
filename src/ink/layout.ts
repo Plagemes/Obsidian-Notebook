@@ -6,17 +6,60 @@ import type { BBox } from "./hit-test";
  */
 export const PAGE_GAP = 24;
 
+/**
+ * wave 0.9 (376): a horizontal part of a page or of a layout that the view fits to its width instead of the whole page
+ * ("crop the white margins", view-only). In a box's own coordinates for `PageBox.window`, in document space for
+ * `Layout.window`. Nothing but the zoom and the pan limits read it: boxes, pages and ink coordinates are unchanged.
+ */
+export interface Range {
+	x: number;
+	width: number;
+}
+
 export interface PageBox {
 	x: number;
 	y: number;
 	width: number;
 	height: number;
+	/** wave 0.9: the part of the page the view fits (see `Range`). */
+	window?: Range;
 }
 
 export interface Layout {
 	boxes: PageBox[];
 	width: number;
 	height: number;
+	/** wave 0.9: the part of the document width the view fits in continuous mode (the union of the boxes' windows). */
+	window?: Range;
+}
+
+/** A window that is at least this much of the page width is not worth a different zoom. */
+const WINDOW_MAX_SHARE = 0.97;
+
+/**
+ * The same layout with the windows `windowOf` returns (box-local; null: the whole page). Windows that would not change
+ * the zoom are dropped. The layout window is the union of the boxes' windows (a box without one counts as whole), so
+ * every page stays reachable.
+ */
+export function withWindows(layout: Layout, windowOf: (index: number) => Range | null): Layout {
+	let any = false;
+	const boxes = layout.boxes.map((b, i): PageBox => {
+		const w = windowOf(i);
+		if (!w || !(w.width > 0) || w.width >= b.width * WINDOW_MAX_SHARE) return b;
+		const x = Math.min(Math.max(0, w.x), b.width - 1);
+		any = true;
+		return { ...b, window: { x, width: Math.min(w.width, b.width - x) } };
+	});
+	if (!any) return layout;
+	let lo = Infinity, hi = -Infinity;
+	for (const b of boxes) {
+		const x = b.x + (b.window?.x ?? 0);
+		lo = Math.min(lo, x);
+		hi = Math.max(hi, x + (b.window?.width ?? b.width));
+	}
+	const next: Layout = { ...layout, boxes };
+	if (hi - lo < layout.width * WINDOW_MAX_SHARE) next.window = { x: lo, width: hi - lo };
+	return next;
 }
 
 export function layoutPages(pages: ReadonlyArray<{ width: number; height: number }>, gap = PAGE_GAP): Layout {

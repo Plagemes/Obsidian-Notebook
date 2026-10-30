@@ -1,17 +1,23 @@
 import type { PressureMode } from "./ink/pressure";
 import { DEFAULT_ERASER_SIZE, DEFAULT_FAVOURITES, normaliseEraserSize, normaliseFavourites, type FavouritePen } from "./view/favourites";
+import { cleanStampFormat, DEFAULT_STAMP_FORMAT } from "./ink/date-stamp";
 import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "./ink/edge-zones";
 import { DEFAULT_GESTURE_SETTINGS, readGestureSettings, type GestureSettings } from "./ink/gesture-settings";
+import { DEFAULT_PEN_GESTURE_SETTINGS, readPenGestureSettings, type PenGestureSettings } from "./ink/gestures/settings";
 import { PEN_BUTTON_ACTIONS, type PenButtonAction } from "./ink/input-policy";
+import { isScrollMode, type ScrollMode } from "./ink/page-mode";
+import { parsePosition, type SavedPosition } from "./ink/view-position";
+import { normaliseRecentColours } from "./ink/colour";
 import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./model/types";
 import { DEFAULT_COMPANION_SETTINGS, readCompanionSettings, type CompanionSettings } from "./storage/companion-path";
 import { DEFAULT_TRASH_SETTINGS, readTrashSettings, type TrashSettings } from "./storage/trash-settings";
 import { DEFAULT_ZETTEL_SETTINGS, readZettelSettings, type ZettelSettings } from "./zettel/settings";
+import { DEFAULT_TOOLBAR_SIZE, isToolbarSize, type ToolbarSize } from "./ui/toolbar-size";
 import { isUiLanguage, type UiLanguage } from "./i18n/languages";
 import { DEFAULT_READING_SETTINGS, readReadingSettings, type ReadingSettings } from "./view/reading-settings";
 
 /** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
-export interface NotebookSettings extends CompanionSettings, GestureSettings, TrashSettings, ZettelSettings, ReadingSettings {
+export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings {
 	/** UI language: "auto" follows Obsidian. */
 	uiLanguage: UiLanguage;
 	folder: string;
@@ -87,6 +93,11 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Tr
 	/** Instant start: the notebook and page (1-based) the reader was on last, for "Continue last notebook". Not shown in the settings tab. */
 	lastNotebookPath: string;
 	lastNotebookPage: number;
+	// wave 0.6: navigation
+	/** Continuous vertical scrolling, or one page at a time with a sideways swipe (#14). */
+	scrollMode: ScrollMode;
+	/** Zoom and scroll position on `lastNotebookPage` (O16), for "Continue last notebook". Not shown in the settings tab. */
+	lastNotebookPos: SavedPosition | null;
 	// wave 0.6: timetable
 	/** Offer to open the current class's notebook at a new lecture page when the app or the library is opened during a class. */
 	timetableOffer: boolean;
@@ -97,6 +108,24 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Tr
 	// wave 0.6: objects
 	/** Ink written over an image or a text box moves, scales and rotates with it (geometric attachment, nothing stored). */
 	inkFollowsObjects: boolean;
+	// wave 0.9: obsidian and input
+	/** Size of the toolbar, the contextual bar and the radial menu (370). */
+	toolbarSize: ToolbarSize;
+	/** Keyboard arrows, PageUp / PageDown, space and Bluetooth clickers turn pages (372). */
+	pageTurnerKeys: boolean;
+	// wave 0.10: tabs and lines
+	/** A strip listing the open notebooks (363). Off by default. */
+	notebookTabs: boolean;
+	/** After the pen lifts near the right margin of ruled or grid paper, the view moves to the start of the next line (353). Off by default. */
+	autoLineBreak: boolean;
+	// wave 0.10: clipboard and stamps
+	/** Format of the quick date and time stamp (356): tokens YYYY MM DD HH mm ss and so on, text in [brackets]. */
+	dateStampFormat: string;
+	// wave 0.10: colours
+	/** The last custom colours chosen with the colour picker or the eyedropper (newest first, `#rrggbb`). */
+	recentColours: string[];
+	/** wave 0.10 (50): the draggable thumb with a page preview along the right edge in continuous scroll. */
+	fastScrollbar: boolean;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -134,12 +163,24 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	penChordButton: true,
 	lastNotebookPath: "",
 	lastNotebookPage: 1,
+	scrollMode: "continuous",
+	lastNotebookPos: null,
 	timetableOffer: true,
 	timetableAutoOpen: false,
 	timetableLeadMinutes: 5,
 	inkFollowsObjects: true,
+	toolbarSize: DEFAULT_TOOLBAR_SIZE,
+	pageTurnerKeys: true,
+	notebookTabs: false,
+	autoLineBreak: false,
+	dateStampFormat: DEFAULT_STAMP_FORMAT,
+	recentColours: [],
+	fastScrollbar: true,
 	...DEFAULT_COMPANION_SETTINGS,
 	...DEFAULT_GESTURE_SETTINGS,
+	...DEFAULT_PEN_GESTURE_SETTINGS,
+	penGesturesOff: [],
+	penGesturesCustom: [],
 	...DEFAULT_TRASH_SETTINGS,
 	...DEFAULT_ZETTEL_SETTINGS,
 	zettelSlipBoxes: [],
@@ -191,10 +232,20 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.penChordButton === "boolean") s.penChordButton = d.penChordButton;
 	if (typeof d.lastNotebookPath === "string") s.lastNotebookPath = d.lastNotebookPath;
 	if (typeof d.lastNotebookPage === "number" && Number.isInteger(d.lastNotebookPage) && d.lastNotebookPage >= 1) s.lastNotebookPage = d.lastNotebookPage;
+	if (isScrollMode(d.scrollMode)) s.scrollMode = d.scrollMode;
+	if (isToolbarSize(d.toolbarSize)) s.toolbarSize = d.toolbarSize;
+	if (typeof d.pageTurnerKeys === "boolean") s.pageTurnerKeys = d.pageTurnerKeys;
+	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;
+	if (typeof d.autoLineBreak === "boolean") s.autoLineBreak = d.autoLineBreak;
+	if (typeof d.dateStampFormat === "string") s.dateStampFormat = cleanStampFormat(d.dateStampFormat);
+	s.recentColours = normaliseRecentColours(d.recentColours);
+	if (typeof d.fastScrollbar === "boolean") s.fastScrollbar = d.fastScrollbar;
+	s.lastNotebookPos = parsePosition(d.lastNotebookPos);
+
 	if (typeof d.timetableOffer === "boolean") s.timetableOffer = d.timetableOffer;
 	if (typeof d.timetableAutoOpen === "boolean") s.timetableAutoOpen = d.timetableAutoOpen;
 	if (typeof d.timetableLeadMinutes === "number" && Number.isInteger(d.timetableLeadMinutes) && d.timetableLeadMinutes >= 0 && d.timetableLeadMinutes <= 30) s.timetableLeadMinutes = d.timetableLeadMinutes;
-	Object.assign(s, readCompanionSettings(d), readGestureSettings(d));
+	Object.assign(s, readCompanionSettings(d), readGestureSettings(d), readPenGestureSettings(d));
 	Object.assign(s, readTrashSettings(d));
 	if (typeof d.inkFollowsObjects === "boolean") s.inkFollowsObjects = d.inkFollowsObjects;
 	Object.assign(s, readZettelSettings(d));

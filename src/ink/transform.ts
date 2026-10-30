@@ -49,3 +49,11 @@ export function invert(m: Matrix): Matrix {
 	const [a, b, c, d, e, f] = m;
 	return [d / det, -b / det, -c / det, a / det, (c * f - d * e) / det, (b * e - a * f) / det];
 }
+
+/**
+ * wave 0.10 (359): the transform `m`, given in one page's frame, as seen from a page whose frame is `[ox, oy]` away
+ * (a point `p` of that page is `p + [ox, oy]` in the first frame): translate there, apply `m`, translate back.
+ */
+export function partMatrix(m: Matrix, ox: number, oy: number): Matrix {
+	return multiply(translate(-ox, -oy), multiply(m, translate(ox, oy)));
+}

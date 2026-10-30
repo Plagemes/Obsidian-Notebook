@@ -1,27 +1,89 @@
 /* Notebook — handwritten notebooks */
 
 .workspace-leaf-content .view-content.notebook-view {
+	position: relative;
 	display: flex;
 	flex-direction: column;
 	padding: 0;
 	overflow: hidden;
 }
 
-/* Two rows (tools; history, current pen, favourites, page, status, more): one line when the view is wide, stacked on a phone. Tool options and the less used actions open in popovers under the bar. */
+/* --- ui redesign: tokens (docs/design-ui.md §7), built on Obsidian's variables so light, dark and community themes apply --- */
+body {
+	--nb-surface: var(--background-primary);
+	--nb-surface-2: var(--background-secondary);
+	--nb-surface-raised: var(--background-primary);
+	--nb-border: var(--background-modifier-border);
+	--nb-hover: var(--background-modifier-hover);
+	--nb-text: var(--text-normal);
+	--nb-text-muted: var(--text-muted);
+	--nb-text-faint: var(--text-faint);
+	--nb-accent: var(--interactive-accent);
+	--nb-accent-soft: hsla(var(--interactive-accent-hsl, 258, 88%, 66%), 0.14);
+	--nb-accent-strong: hsla(var(--interactive-accent-hsl, 258, 88%, 66%), 0.24);
+	--nb-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 1px rgba(0, 0, 0, 0.04);
+	--nb-shadow-2: 0 10px 28px -6px rgba(0, 0, 0, 0.22), 0 2px 6px rgba(0, 0, 0, 0.08);
+	--nb-shadow-3: 0 22px 48px -10px rgba(0, 0, 0, 0.45), 0 4px 12px rgba(0, 0, 0, 0.2);
+	--nb-radius-s: 10px;
+	--nb-radius-m: 12px;
+	--nb-radius-l: 18px;
+	--nb-radius-pill: 999px;
+	--nb-space-1: 4px;
+	--nb-space-2: 8px;
+	--nb-space-3: 12px;
+	--nb-space-4: 16px;
+	--nb-space-5: 24px;
+	--nb-target: 40px;
+	--nb-text-s: var(--font-ui-smaller);
+	--nb-text-m: var(--font-ui-small);
+	--nb-text-l: var(--font-ui-medium);
+	--nb-motion-fast: 120ms;
+	--nb-motion: 180ms;
+	--nb-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+	--nb-dial-bg: #1d1e22;
+	--nb-dial-bg-2: #2a2b31;
+	--nb-dial-ring: rgba(255, 255, 255, 0.08);
+	--nb-dial-fg: #f4f4f6;
+	--nb-dial-muted: rgba(244, 244, 246, 0.62);
+}
+
+/* Ink dots keep an outline on a dark bar (a black pen on a dark theme). */
+.theme-dark .notebook-chip-dot,
+.theme-dark .notebook-fav-dot,
+.theme-dark .notebook-swatch-dot {
+	box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+
+.theme-dark {
+	--nb-surface-raised: var(--background-secondary);
+	--nb-accent-soft: hsla(var(--interactive-accent-hsl, 258, 88%, 66%), 0.2);
+	--nb-shadow-2: 0 12px 30px -6px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	body {
+		--nb-motion-fast: 0ms;
+		--nb-motion: 0ms;
+	}
+}
+
+/* --- ui redesign: primary toolbar. Row 1: pages panel and tools. Row 2: history, current pen, favourites, quick slots, page, save state, All actions. One line on a wide view (is-single-row), two otherwise. Tool options open in a popover under the bar. */
 .notebook-toolbar {
 	position: relative;
 	z-index: 10;
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: 0 8px;
-	padding: 2px 6px;
-	border-bottom: 1px solid var(--background-modifier-border);
-	background: var(--background-primary);
+	gap: 2px var(--nb-space-2);
+	padding: var(--nb-space-1) 6px;
+	border-bottom: 1px solid var(--nb-border);
+	background: var(--nb-surface);
 	flex: 0 0 auto;
 	min-width: 0;
-	container: notebook-toolbar / inline-size;
+	box-sizing: border-box;
 	user-select: none;
+	-webkit-user-select: none;
+	-webkit-tap-highlight-color: transparent;
 }
 
 .notebook-toolbar-row {
@@ -36,7 +98,15 @@
 }
 
 .notebook-toolbar-actions {
-	flex: 1 1 540px;
+	flex: 1 1 100%;
+}
+
+.notebook-toolbar.is-single-row {
+	flex-wrap: nowrap;
+}
+
+.notebook-toolbar.is-single-row > .notebook-toolbar-actions {
+	flex: 1 1 auto;
 }
 
 .notebook-toolbar-end {
@@ -47,6 +117,27 @@
 	margin-left: auto;
 }
 
+.notebook-toolbar-divider {
+	flex: 0 0 1px;
+	align-self: center;
+	height: 24px;
+	margin: 0 var(--nb-space-1);
+	background: var(--nb-border);
+}
+
+.notebook-toolbar-group {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.notebook-quick {
+	flex: 0 0 auto;
+	padding-left: var(--nb-space-2);
+	margin-left: var(--nb-space-1);
+	border-left: 1px solid var(--nb-border);
+}
+
 /* Favourite pens: a strip that scrolls sideways when the bar is narrow. */
 .notebook-favs {
 	position: relative;
@@ -55,7 +146,7 @@
 	align-items: center;
 	gap: 2px;
 	min-width: 0;
-	margin-left: 4px;
+	margin-left: 2px;
 	overflow-x: auto;
 	overflow-y: hidden;
 	scrollbar-width: none;
@@ -70,20 +161,54 @@
 	flex: 0 0 auto;
 }
 
-.notebook-toolbar-group {
-	display: flex;
-	align-items: center;
-	gap: 2px;
-}
-
+/* Icon buttons: 40 px targets, quiet until hovered or active. */
 .notebook-tool {
 	position: relative;
 	flex: 0 0 auto;
+	box-sizing: border-box;
 	min-width: 40px;
 	min-height: 40px;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
+	padding: 0;
+	border: 0;
+	border-radius: var(--nb-radius-s);
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text-muted);
+	transition: background-color var(--nb-motion-fast) var(--nb-ease), color var(--nb-motion-fast) var(--nb-ease);
+}
+
+.notebook-tool:hover {
+	background: var(--nb-hover);
+	color: var(--nb-text);
+}
+
+.notebook-tool:focus-visible,
+.notebook-menu-item:focus-visible,
+.notebook-page-indicator:focus-visible,
+.notebook-chip-choice:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 1px;
+}
+
+.notebook-tool.is-active {
+	background: var(--nb-accent-soft);
+	color: var(--nb-accent);
+}
+
+/* The active tool: a small accent bar under the icon. */
+.notebook-tool-button.is-active::before {
+	content: "";
+	position: absolute;
+	left: 50%;
+	bottom: 3px;
+	width: 14px;
+	height: 3px;
+	margin-left: -7px;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-accent);
 }
 
 /* A tool with options shows a small corner mark once it is the active one: tap it again for the options. */
@@ -91,20 +216,15 @@
 	content: "";
 	position: absolute;
 	right: 4px;
-	bottom: 4px;
+	top: 4px;
 	border: 3px solid transparent;
 	border-right-color: currentColor;
-	border-bottom-color: currentColor;
-	opacity: 0.7;
+	border-top-color: currentColor;
+	opacity: 0.55;
 }
 
 .notebook-tool[aria-expanded="true"].has-options::after {
 	opacity: 1;
-}
-
-.notebook-tool.is-active {
-	background: var(--background-modifier-active-hover);
-	color: var(--interactive-accent);
 }
 
 .notebook-tool:disabled {
@@ -113,16 +233,20 @@
 }
 
 .notebook-swatch-dot {
-	width: 20px;
-	height: 20px;
+	width: 22px;
+	height: 22px;
 	border-radius: 50%;
 	background-color: var(--notebook-swatch-color, var(--text-normal));
-	border: 1px solid var(--background-modifier-border);
+	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
 }
 
 .notebook-swatch.is-active .notebook-swatch-dot {
-	outline: 2px solid var(--interactive-accent);
+	outline: 2px solid var(--nb-accent);
 	outline-offset: 2px;
+}
+
+.notebook-swatch.is-active {
+	background: transparent;
 }
 
 .notebook-width-dot {
@@ -140,25 +264,69 @@
 .notebook-width-h2 { width: 18px; height: 12px; border-radius: 2px; }
 
 .notebook-text-tool {
-	font-size: var(--font-ui-small);
-	padding: 0 10px;
+	font-size: var(--nb-text-m);
+	padding: 0 12px;
+	color: var(--nb-text);
 }
 
 .notebook-hidden {
 	display: none;
 }
 
-.notebook-page-indicator {
-	min-width: 3.5em;
-	text-align: center;
-	font-size: var(--font-ui-smaller);
-	color: var(--text-muted);
-	font-variant-numeric: tabular-nums;
+/* Hidden wins over the display of any component class inside the view (ui redesign: bars and sheets are flex). */
+.notebook-view .notebook-hidden {
+	display: none;
 }
 
-/* Current-pen indicator: the colour and thickness of the tool in use (a ring for the eraser). */
+/* Page indicator: a pill that opens the page sheet. */
+.notebook-page-indicator {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	min-width: 56px;
+	min-height: 40px;
+	padding: 0 10px;
+	border: 0;
+	border-radius: var(--nb-radius-pill);
+	background: transparent;
+	box-shadow: none;
+	font-size: var(--nb-text-s);
+	font-weight: var(--font-medium, 500);
+	color: var(--nb-text-muted);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.notebook-page-indicator:hover {
+	background: var(--nb-hover);
+	color: var(--nb-text);
+}
+
+.notebook-page-indicator.is-active {
+	background: var(--nb-accent-soft);
+	color: var(--nb-accent);
+}
+
+.notebook-page-indicator:disabled {
+	opacity: 0.5;
+}
+
+/* Current-pen indicator: the colour and thickness of the tool in use (a ring for the eraser), inside a soft ring. */
 .notebook-chip.notebook-hidden {
 	display: none;
+}
+
+.notebook-chip::before {
+	content: "";
+	position: absolute;
+	inset: 6px;
+	border-radius: 50%;
+	border: 1.5px solid var(--nb-border);
+}
+
+.notebook-chip.is-active::before {
+	border-color: var(--nb-accent);
 }
 
 .notebook-chip-dot {
@@ -167,7 +335,7 @@
 	height: var(--notebook-chip-h, 10px);
 	border-radius: 50%;
 	background-color: var(--notebook-chip-color, var(--text-normal));
-	border: 1px solid var(--background-modifier-border-hover);
+	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
 	box-sizing: border-box;
 }
 
@@ -177,25 +345,35 @@
 
 .notebook-chip-dot.is-eraser {
 	border: 2px solid var(--text-muted);
+	box-shadow: none;
 }
 
-/* Popovers under the bar: tool options, and the "more" menu. They are outside the page, so a tap on them never reaches the pen input. */
+/* Popovers under the bar (tool options). They are outside the page, so a tap on them never reaches the pen input. */
 .notebook-popover {
 	position: absolute;
-	top: 100%;
+	top: calc(100% + 6px);
 	z-index: 2;
 	display: flex;
 	flex-direction: column;
-	gap: 2px;
+	gap: var(--nb-space-2);
 	box-sizing: border-box;
-	width: min(352px, calc(100% - 12px));
-	max-height: min(var(--notebook-popover-max, 70vh), 480px);
+	width: min(368px, calc(100% - 12px));
+	max-height: min(var(--notebook-popover-max, 70vh), 520px);
 	overflow-y: auto;
-	padding: 6px;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-l);
-	background: var(--background-primary);
-	box-shadow: var(--shadow-l);
+	padding: var(--nb-space-3);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-l);
+	background: var(--nb-surface-raised);
+	box-shadow: var(--nb-shadow-2);
+	animation: notebook-pop-in var(--nb-motion) var(--nb-ease);
+	transform-origin: top left;
+}
+
+@keyframes notebook-pop-in {
+	from {
+		opacity: 0;
+		transform: translateY(-4px) scale(0.98);
+	}
 }
 
 .notebook-popover.notebook-hidden {
@@ -204,11 +382,6 @@
 
 .notebook-options {
 	left: 6px;
-}
-
-.notebook-more {
-	right: 6px;
-	width: min(280px, calc(100% - 12px));
 }
 
 .notebook-popover-row {
@@ -226,43 +399,55 @@
 	display: none;
 }
 
-.notebook-more-slot {
-	display: contents;
+/* Segmented control: eraser mode and filter. */
+.notebook-segmented {
+	padding: 3px;
+	border-radius: var(--nb-radius-m);
+	background: var(--nb-surface-2);
+	gap: 2px;
 }
 
-.notebook-more-title {
-	padding: 4px 10px;
-	font-size: var(--font-ui-smaller);
-	color: var(--text-muted);
-	font-variant-numeric: tabular-nums;
+.notebook-segmented > .notebook-tool {
+	flex: 1 1 auto;
+	border-radius: 9px;
 }
 
-.notebook-more-title.notebook-hidden {
-	display: none;
+.notebook-segmented > .notebook-tool.is-active {
+	background: var(--nb-surface);
+	color: var(--nb-accent);
+	box-shadow: var(--nb-shadow-1);
 }
 
+/* Rows of the sheets: icon, label, optional switch. */
 .notebook-menu-item {
 	display: flex;
 	align-items: center;
-	gap: 10px;
+	gap: var(--nb-space-3);
 	width: 100%;
+	box-sizing: border-box;
 	min-height: 44px;
-	padding: 0 10px;
+	padding: 0 var(--nb-space-3);
 	border: 0;
+	border-radius: var(--nb-radius-s);
 	box-shadow: none;
 	background: transparent;
-	color: var(--text-normal);
-	font-size: var(--font-ui-small);
+	color: var(--nb-text);
+	font-size: var(--nb-text-m);
 	text-align: left;
+	transition: background-color var(--nb-motion-fast) var(--nb-ease);
 }
 
 .notebook-menu-item:hover {
-	background: var(--background-modifier-hover);
+	background: var(--nb-hover);
 }
 
 .notebook-menu-item.is-active {
-	background: var(--background-modifier-active-hover);
-	color: var(--interactive-accent);
+	background: var(--nb-accent-soft);
+	color: var(--nb-accent);
+}
+
+.notebook-menu-item.is-danger {
+	color: var(--text-error);
 }
 
 .notebook-menu-item:disabled {
@@ -273,50 +458,356 @@
 .notebook-menu-icon {
 	display: inline-flex;
 	flex: 0 0 auto;
+	color: var(--nb-text-muted);
+}
+
+.notebook-menu-item.is-danger .notebook-menu-icon {
+	color: inherit;
 }
 
 .notebook-menu-label {
 	flex: 1 1 auto;
+	line-height: 1.3;
 }
 
-.notebook-perf {
+/* A switch on toggle rows. */
+.notebook-switch {
+	position: relative;
+	flex: 0 0 auto;
+	width: 34px;
+	height: 20px;
+	border-radius: var(--nb-radius-pill);
+	background: var(--background-modifier-border-hover, var(--nb-border));
+	transition: background-color var(--nb-motion) var(--nb-ease);
+}
+
+.notebook-switch::after {
+	content: "";
 	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	background: #fff;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+	transition: transform var(--nb-motion) var(--nb-ease);
+}
+
+.notebook-menu-item.is-checked .notebook-switch {
+	background: var(--nb-accent);
+}
+
+.notebook-menu-item.is-checked .notebook-switch::after {
+	transform: translateX(14px);
+}
+
+.notebook-menu-range {
+	padding: var(--nb-space-1) var(--nb-space-3) var(--nb-space-2) 44px;
+}
+
+.notebook-menu-range input {
+	width: 100%;
+}
+
+/* --- ui redesign: the action sheets ("All actions", page sheet): a popover under the bar, a bottom sheet on a phone. */
+.notebook-sheet {
+	position: absolute;
+	top: var(--notebook-sheet-top, 56px);
 	right: 8px;
-	bottom: 8px;
-	z-index: 2;
-	padding: 4px 8px;
-	border-radius: var(--radius-s);
-	background: var(--background-primary);
-	color: var(--text-muted);
-	font-family: var(--font-monospace);
-	font-size: var(--font-ui-smaller);
-	white-space: pre;
-	pointer-events: none;
-	opacity: 0.9;
+	z-index: 30;
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+	width: min(392px, calc(100% - 16px));
+	max-height: var(--notebook-sheet-max, 70%);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-l);
+	background: var(--nb-surface-raised);
+	box-shadow: var(--nb-shadow-2);
+	overflow: hidden;
+	animation: notebook-pop-in var(--nb-motion) var(--nb-ease);
+	transform-origin: top right;
+	user-select: none;
+	-webkit-user-select: none;
 }
 
-.notebook-bench-stage {
-	position: fixed;
-	left: -100000px;
-	top: 0;
-	visibility: hidden;
-	pointer-events: none;
+.notebook-sheet.notebook-hidden {
+	display: none;
 }
 
-.notebook-bench-output {
-	white-space: pre-wrap;
-	font-size: var(--font-ui-smaller);
-	min-height: 8em;
+.notebook-sheet.is-bottom {
+	top: auto;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	width: auto;
+	max-height: 78%;
+	border-radius: var(--nb-radius-l) var(--nb-radius-l) 0 0;
+	border-bottom: 0;
+	animation: notebook-sheet-up var(--nb-motion) var(--nb-ease);
 }
 
-/* Save state: a dot (its text is the tooltip) on a narrow bar, dot and text on a wide one. */
+@keyframes notebook-sheet-up {
+	from {
+		transform: translateY(24px);
+		opacity: 0;
+	}
+}
+
+.notebook-sheet-grabber {
+	display: none;
+	order: -1;
+	align-self: center;
+	width: 36px;
+	height: 4px;
+	margin-top: 8px;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-border);
+}
+
+.notebook-sheet.is-bottom .notebook-sheet-grabber {
+	display: block;
+}
+
+.notebook-sheet-head {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-2);
+	padding: var(--nb-space-2) var(--nb-space-2) 0 var(--nb-space-4);
+}
+
+.notebook-sheet-title {
+	flex: 1 1 auto;
+	font-size: var(--nb-text-l);
+	font-weight: var(--font-semibold, 600);
+	color: var(--nb-text);
+}
+
+.notebook-sheet-search {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-2);
+	margin: var(--nb-space-2) var(--nb-space-3);
+	padding: 0 var(--nb-space-3);
+	min-height: 40px;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-surface-2);
+	color: var(--nb-text-muted);
+}
+
+.notebook-sheet-search input {
+	flex: 1 1 auto;
+	min-width: 0;
+	height: 38px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	font-size: var(--nb-text-m);
+	color: var(--nb-text);
+}
+
+.notebook-sheet-search input:focus,
+.notebook-sheet-search input:focus-visible {
+	box-shadow: none;
+	outline: none;
+}
+
+.notebook-sheet-search:focus-within {
+	box-shadow: 0 0 0 2px var(--nb-accent-soft);
+}
+
+.notebook-sheet-search-icon {
+	display: inline-flex;
+}
+
+.notebook-sheet-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	padding: 0 var(--nb-space-2) var(--nb-space-3);
+}
+
+.notebook-sheet-section + .notebook-sheet-section {
+	margin-top: var(--nb-space-1);
+	padding-top: var(--nb-space-1);
+	border-top: 1px solid var(--nb-border);
+}
+
+.notebook-sheet-section-title {
+	padding: var(--nb-space-3) var(--nb-space-3) var(--nb-space-1);
+	font-size: 11px;
+	font-weight: var(--font-semibold, 600);
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--nb-text-faint);
+}
+
+.notebook-sheet-list {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+
+.notebook-sheet-empty {
+	padding: var(--nb-space-5) var(--nb-space-4);
+	text-align: center;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-text-m);
+}
+
+.notebook-sheet-choices {
+	display: flex;
+	flex-direction: column;
+	gap: var(--nb-space-2);
+	padding: var(--nb-space-2) var(--nb-space-3);
+}
+
+.notebook-sheet-choices-label {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-3);
+	font-size: var(--nb-text-m);
+	color: var(--nb-text);
+}
+
+.notebook-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding-left: 32px;
+}
+
+.notebook-chip-choice {
+	min-height: 40px;
+	padding: 0 14px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background: transparent;
+	box-shadow: none;
+	font-size: var(--nb-text-s);
+	color: var(--nb-text);
+}
+
+.notebook-chip-choice.is-active {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-soft);
+	color: var(--nb-accent);
+	font-weight: var(--font-semibold, 600);
+}
+
+.notebook-sheet-extra {
+	padding: 0 var(--nb-space-1);
+}
+
+/* --- ui redesign: the contextual bar, a floating pill at the bottom of the page area (outside the stage, so taps never reach the pen input). */
+.notebook-context-bar {
+	position: absolute;
+	left: 50%;
+	bottom: 14px;
+	transform: translateX(-50%);
+	z-index: 6;
+	display: flex;
+	flex-direction: column-reverse;
+	align-items: center;
+	gap: 6px;
+	width: max-content;
+	max-width: calc(100% - 16px);
+	animation: notebook-context-in var(--nb-motion) var(--nb-ease);
+}
+
+@keyframes notebook-context-in {
+	from {
+		opacity: 0;
+		transform: translate(-50%, 8px);
+	}
+}
+
+.notebook-context-main,
+.notebook-context-second,
+.notebook-selection-styles > .notebook-toolbar-group {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+	padding: 4px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-surface-raised);
+	box-shadow: var(--nb-shadow-2);
+}
+
+.notebook-context-main > .notebook-tool,
+.notebook-context-second > .notebook-tool,
+.notebook-selection-styles .notebook-tool {
+	border-radius: var(--nb-radius-pill);
+}
+
+.notebook-context-main > .notebook-tool.is-danger {
+	color: var(--text-error);
+}
+
+.notebook-context-label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 40px;
+	padding: 0 var(--nb-space-3) 0 var(--nb-space-2);
+	margin-right: 2px;
+	border-right: 1px solid var(--nb-border);
+	font-size: var(--nb-text-s);
+	font-weight: var(--font-semibold, 600);
+	color: var(--nb-text-muted);
+	white-space: nowrap;
+}
+
+.notebook-context-label-icon {
+	display: inline-flex;
+	color: var(--nb-accent);
+}
+
+.notebook-context-collapse {
+	opacity: 0.7;
+}
+
+.notebook-context-bar.is-collapsed .notebook-context-main {
+	padding: 4px;
+}
+
+.notebook-context-chip {
+	color: var(--nb-accent);
+}
+
+.notebook-context-extra {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+}
+
+/* wave 0.10: the second row (select similar, align, transform) sits right above the main row, the restyle rows above it. */
+.notebook-context-extra > .notebook-context-second {
+	order: 2;
+}
+
+.notebook-selection-styles {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+}
+
+/* Save state: a dot (its text is the label) on a narrow bar, dot and text on a wide one. */
 .notebook-status {
 	display: inline-flex;
 	align-items: center;
-	gap: 4px;
+	gap: 6px;
 	padding: 0 6px;
-	font-size: var(--font-ui-smaller);
-	color: var(--text-muted);
+	font-size: var(--nb-text-s);
+	color: var(--nb-text-muted);
 }
 
 .notebook-status-dot {
@@ -324,6 +815,7 @@
 	height: 8px;
 	border-radius: 50%;
 	background: var(--text-faint);
+	transition: background-color var(--nb-motion) var(--nb-ease);
 }
 
 .notebook-status[data-kind="ok"] .notebook-status-dot {
@@ -354,17 +846,54 @@
 	white-space: nowrap;
 }
 
-@container notebook-toolbar (min-width: 900px) {
-	.notebook-status-text {
-		display: inline;
+.notebook-toolbar.is-single-row .notebook-status-text {
+	display: inline;
+}
+
+/* A phone: compact page pill, no context label text. */
+@media (max-width: 480px) {
+	.notebook-page-indicator {
+		min-width: 48px;
+		padding: 0 6px;
+	}
+
+	.notebook-context-label-text {
+		display: none;
+	}
+
+	.notebook-context-label {
+		padding: 0 6px;
 	}
 }
 
-/* Narrow bar: the page number moves into the "more" menu. */
-@container notebook-toolbar (max-width: 520px) {
-	.notebook-page-indicator {
-		display: none;
-	}
+.notebook-perf {
+	position: absolute;
+	right: 8px;
+	bottom: 8px;
+	z-index: 2;
+	padding: 4px 8px;
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+	color: var(--text-muted);
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	white-space: pre;
+	pointer-events: none;
+	opacity: 0.9;
+}
+
+.notebook-bench-stage {
+	position: fixed;
+	left: -100000px;
+	top: 0;
+	visibility: hidden;
+	pointer-events: none;
+}
+
+.notebook-bench-output {
+	white-space: pre-wrap;
+	font-size: var(--font-ui-smaller);
+	min-height: 8em;
 }
 
 .notebook-stage {
@@ -456,7 +985,7 @@
 	transform: translateX(-100%);
 	visibility: hidden;
 	transition: transform 0.2s ease, visibility 0s linear 0.2s;
-	box-shadow: var(--shadow-l);
+	box-shadow: var(--nb-shadow-2);
 }
 
 .notebook-lib-root.is-narrow.is-drawer-open .notebook-lib-sidebar {
@@ -702,7 +1231,7 @@
 .notebook-lib-card {
 	position: relative;
 	min-width: 0;
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 }
 
 .notebook-lib-card-main {
@@ -710,7 +1239,7 @@
 	flex-direction: column;
 	gap: 3px;
 	padding: 4px;
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 	cursor: pointer;
 	user-select: none;
 	-webkit-user-select: none;
@@ -735,7 +1264,7 @@
 	padding: 5px 5px 5px 0;
 	border-radius: 3px 8px 8px 3px;
 	background-color: var(--notebook-cover, var(--background-modifier-border));
-	box-shadow: var(--shadow-s);
+	box-shadow: var(--nb-shadow-2);
 	overflow: hidden;
 	transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
@@ -811,7 +1340,7 @@
 	justify-content: center;
 	border-radius: 50%;
 	background: var(--background-primary);
-	box-shadow: var(--shadow-s);
+	box-shadow: var(--nb-shadow-2);
 	color: var(--text-muted);
 	opacity: 0;
 	transition: opacity 0.12s ease;
@@ -850,7 +1379,7 @@
 
 .notebook-lib-card-main.is-lifted .notebook-lib-cover {
 	transform: scale(1.05);
-	box-shadow: var(--shadow-l);
+	box-shadow: var(--nb-shadow-2);
 }
 
 .notebook-lib-card-main.is-dragging {
@@ -869,7 +1398,7 @@
 	align-items: center;
 	justify-content: center;
 	aspect-ratio: 3 / 4;
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);
 	color: var(--text-muted);
@@ -891,9 +1420,9 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 	background: var(--background-primary);
-	box-shadow: var(--shadow-l);
+	box-shadow: var(--nb-shadow-2);
 	font-size: var(--font-ui-small);
 	pointer-events: none;
 	transform: translate(calc(var(--notebook-drag-x, 0px) + 10px), calc(var(--notebook-drag-y, 0px) + 10px));
@@ -1003,7 +1532,7 @@
 	position: relative;
 	flex: 1 1 0;
 	min-height: 0;
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 	background-color: var(--background-secondary);
 	overflow: hidden;
 }
@@ -1155,7 +1684,7 @@
 	left: 0;
 	z-index: 5;
 	width: min(200px, 70%);
-	box-shadow: var(--shadow-l);
+	box-shadow: var(--nb-shadow-2);
 }
 
 .notebook-navigator-header {
@@ -1182,7 +1711,7 @@
 .notebook-navigator-item {
 	margin-bottom: 8px;
 	padding: 4px;
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 	cursor: pointer;
 	touch-action: pan-y;
 }
@@ -1327,7 +1856,7 @@
 	display: block;
 	max-width: 100%;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 	background-color: var(--background-secondary);
 	overflow: hidden;
 	cursor: pointer;
@@ -1356,7 +1885,7 @@
 	font-size: var(--font-ui-small);
 	color: var(--text-muted);
 	border: 1px dashed var(--background-modifier-border);
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 }
 
 /* --- writing engine --- */
@@ -1453,7 +1982,7 @@
 	overflow-y: auto;
 	margin-bottom: var(--size-4-3);
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 }
 
 .notebook-move-page {
@@ -1477,26 +2006,41 @@
 	font-size: var(--font-ui-small);
 }
 
-/* wave p1a: input — radial menu at the pen tip. */
+/* --- ui redesign: the pen's radial dial (docs/design-ui.md §6). Always dark, like a physical tool; soft shadow and a subtle inner ring. */
 .notebook-radial {
 	position: absolute;
 	inset: 0;
-	z-index: 40;
+	z-index: 20;
+	pointer-events: none;
 	touch-action: none;
 	user-select: none;
 	-webkit-user-select: none;
 }
 
-.notebook-radial-ring {
+.notebook-dial {
 	position: absolute;
-	left: calc(var(--notebook-radial-x, 0px) - var(--notebook-radial-size, 216px) / 2);
-	top: calc(var(--notebook-radial-y, 0px) - var(--notebook-radial-size, 216px) / 2);
-	width: var(--notebook-radial-size, 216px);
-	height: var(--notebook-radial-size, 216px);
-	filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
+	left: calc(var(--notebook-radial-x, 0px) - var(--notebook-dial-size, 264px) / 2);
+	top: calc(var(--notebook-radial-y, 0px) - var(--notebook-dial-size, 264px) / 2);
+	width: var(--notebook-dial-size, 264px);
+	height: var(--notebook-dial-size, 264px);
+	border-radius: 50%;
+	background: radial-gradient(circle at 50% 38%, var(--nb-dial-bg-2) 0%, var(--nb-dial-bg) 62%);
+	box-shadow: var(--nb-shadow-3), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+	color: var(--nb-dial-fg);
+	pointer-events: auto;
+	transform: scale(var(--notebook-dial-scale, 1));
+	animation: notebook-dial-open var(--nb-motion) var(--nb-ease);
 }
 
-.notebook-radial-svg {
+@keyframes notebook-dial-open {
+	from {
+		opacity: 0;
+		scale: 0.86;
+	}
+}
+
+.notebook-dial-deco,
+.notebook-dial-slider {
 	position: absolute;
 	inset: 0;
 	width: 100%;
@@ -1504,109 +2048,353 @@
 	pointer-events: none;
 }
 
-.notebook-radial-sector {
-	fill: var(--background-primary);
-	stroke: var(--background-modifier-border);
-	stroke-width: 1px;
+.notebook-dial-ring {
+	fill: none;
+	stroke: var(--nb-dial-ring);
+	stroke-width: 1;
 }
 
-.notebook-radial-sector.is-active {
-	stroke: var(--interactive-accent);
-	stroke-width: 2px;
+.notebook-dial-ring.is-inner {
+	fill: rgba(255, 255, 255, 0.025);
 }
 
-.notebook-radial-sector.is-hover {
-	fill: var(--interactive-accent);
-	stroke: var(--interactive-accent);
-	stroke-width: 2px;
-}
-
-.notebook-radial-sector.is-disabled {
-	fill: var(--background-secondary);
-}
-
-.notebook-radial-hub {
-	fill: var(--background-primary);
-	stroke: var(--background-modifier-border);
-	stroke-width: 1px;
-}
-
-.notebook-radial-item {
+.notebook-dial-layer {
 	position: absolute;
-	left: var(--notebook-radial-item-x, 0);
-	top: var(--notebook-radial-item-y, 0);
+	inset: 0;
+	transition: opacity var(--nb-motion) var(--nb-ease), transform var(--nb-motion) var(--nb-ease);
+}
+
+.notebook-dial-layer.is-entering {
+	opacity: 0;
+	transform: scale(0.92) rotate(-6deg);
+}
+
+.notebook-dial-item {
+	position: absolute;
+	left: calc(var(--x) - var(--s) / 2);
+	top: calc(var(--y) - var(--s) / 2);
+	width: var(--s);
+	height: var(--s);
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 28px;
-	height: 28px;
-	margin: -14px 0 0 -14px;
-	color: var(--text-normal);
+	box-sizing: border-box;
+	border-radius: 50%;
+	color: var(--nb-dial-fg);
+	cursor: pointer;
+	transition: background-color var(--nb-motion-fast) var(--nb-ease), transform var(--nb-motion-fast) var(--nb-ease), box-shadow var(--nb-motion-fast) var(--nb-ease);
+}
+
+.notebook-dial-item .svg-icon {
+	width: 20px;
+	height: 20px;
+}
+
+.notebook-dial-item.is-round {
+	background: rgba(255, 255, 255, 0.06);
+}
+
+.notebook-dial-item.is-flat {
+	background: transparent;
+}
+
+.notebook-dial-item.is-hover {
+	background: rgba(255, 255, 255, 0.16);
+	transform: scale(1.06);
+}
+
+.notebook-dial-item.is-active {
+	box-shadow: 0 0 0 2px var(--nb-dial-fg);
+}
+
+.notebook-dial-item.is-disabled {
+	opacity: 0.3;
 	pointer-events: none;
 }
 
-.notebook-radial-item.is-disabled {
-	opacity: 0.4;
+/* Main state: the tool drawn as a pen, tilted, on a soft disc. */
+.notebook-dial-centre {
+	background: radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02) 70%);
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
 }
 
-.notebook-radial-item.is-hover {
-	color: var(--text-on-accent);
+.notebook-dial-tilt {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transform: rotate(38deg);
 }
 
-.notebook-radial-item .svg-icon {
+.notebook-dial-art {
+	filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.45));
+}
+
+.notebook-dial-icon .svg-icon {
+	width: 30px;
+	height: 30px;
+}
+
+.notebook-dial-item.is-bubble {
+	background: rgba(255, 255, 255, 0.07);
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.notebook-dial-item.is-color {
+	background: var(--c);
+	box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.85), 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+
+.notebook-dial-dot {
+	width: var(--d);
+	height: var(--d);
+	border-radius: 50%;
+	background: var(--c);
+	box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.notebook-dial-dot.is-ring {
+	border: 2px solid var(--nb-dial-fg);
+	box-shadow: none;
+	box-sizing: border-box;
+}
+
+.notebook-dial-dot.is-chisel {
 	width: 22px;
-	height: 22px;
+	border-radius: 4px;
+	transform: rotate(-20deg);
 }
 
-.notebook-radial-label {
+.notebook-dial-caption {
 	position: absolute;
 	left: 50%;
-	top: 50%;
-	max-width: 64px;
+	top: var(--y);
 	transform: translate(-50%, -50%);
+	max-width: 140px;
 	overflow: hidden;
-	color: var(--text-normal);
-	font-size: 10px;
-	line-height: 1.2;
-	text-align: center;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	font-size: 11px;
+	letter-spacing: 0.02em;
+	color: var(--nb-dial-muted);
 	pointer-events: none;
+}
+
+.notebook-dial-pill {
+	position: absolute;
+	left: 50%;
+	top: var(--y);
+	width: 152px;
+	height: 46px;
+	transform: translate(-50%, -50%);
+	border-radius: var(--nb-radius-pill);
+	background: rgba(255, 255, 255, 0.07);
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+	pointer-events: none;
+}
+
+.notebook-dial-item.is-raised {
+	background: var(--nb-dial-fg);
+	color: var(--nb-dial-bg);
+	box-shadow: 0 6px 14px rgba(0, 0, 0, 0.5);
+}
+
+.notebook-dial-item.is-raised.is-hover {
+	background: #fff;
+}
+
+/* Sub-states: the centre goes back. */
+.notebook-dial-centre.is-back {
+	flex-direction: column;
+	gap: 2px;
+}
+
+.notebook-dial-back-icon {
+	display: inline-flex;
+	color: var(--nb-dial-muted);
+}
+
+.notebook-dial-centre.is-back.is-art .notebook-dial-back-icon,
+.notebook-dial-centre.is-color-preview .notebook-dial-back-icon {
+	position: absolute;
+	top: 4px;
+}
+
+.notebook-dial-centre.is-color-preview {
+	background: var(--c);
+	box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.85), 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+
+.notebook-dial-centre.is-color-preview .notebook-dial-back-icon {
+	position: static;
+	color: #fff;
+	filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.7));
+}
+
+.notebook-dial-item.is-swatch {
+	background: var(--c);
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.notebook-dial-item.is-swatch.is-active {
+	box-shadow: 0 0 0 2px var(--nb-dial-bg), 0 0 0 4px var(--nb-dial-fg);
+}
+
+.notebook-dial-item.is-rainbow {
+	background: conic-gradient(#f43f5e, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #ec4899, #f43f5e);
+}
+
+.notebook-dial-rainbow-dot {
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	background: var(--c);
+	box-shadow: 0 0 0 2px var(--nb-dial-bg);
+}
+
+
+/* Width: an arc slider of growing dots. */
+.notebook-dial-track {
+	fill: none;
+	stroke: rgba(255, 255, 255, 0.08);
+	stroke-width: 30;
+	stroke-linecap: round;
+}
+
+.notebook-dial-track.is-filled {
+	stroke: rgba(255, 255, 255, 0.14);
+}
+
+.notebook-dial-step {
+	fill: rgba(255, 255, 255, 0.35);
+}
+
+.notebook-dial-step.is-on {
+	fill: var(--nb-dial-fg);
+}
+
+.notebook-dial-knob {
+	fill: none;
+	stroke: var(--nb-dial-fg);
+	stroke-width: 2.5;
+}
+
+.notebook-dial-slider-hit {
+	position: absolute;
+	left: calc(var(--x) - 22px);
+	top: calc(var(--y) - 22px);
+	width: 44px;
+	height: 44px;
+	border-radius: 50%;
+	cursor: grab;
+}
+
+.notebook-dial-centre.is-value {
+	gap: 4px;
+}
+
+.notebook-dial-centre.is-value .notebook-dial-back-icon {
+	display: none;
+}
+
+.notebook-dial-centre.is-value .notebook-dial-back-icon {
+	position: absolute;
+	left: 2px;
+}
+
+.notebook-dial-unit {
+	margin-top: -4px;
+	font-size: 10px;
+	color: var(--nb-dial-muted);
+}
+
+.notebook-dial-number {
+	font-size: 22px;
+	line-height: 1;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	color: var(--nb-dial-fg);
+}
+
+/* Pen case. */
+.notebook-dial-item.is-case {
+	flex-direction: column;
+	gap: 1px;
+	border-radius: 14px;
+	background: rgba(255, 255, 255, 0.05);
+}
+
+.notebook-dial-item.is-case .notebook-dial-icon .svg-icon {
+	width: 20px;
+	height: 20px;
+}
+
+.notebook-dial-item.is-case.is-active {
+	background: rgba(255, 255, 255, 0.16);
+	box-shadow: inset 0 0 0 1.5px var(--nb-dial-fg);
+}
+
+.notebook-dial-preview {
+	flex: 0 0 auto;
+}
+
+.notebook-dial-item.is-plus {
+	border: 1.5px dashed rgba(255, 255, 255, 0.4);
+	background: transparent;
+}
+
+.notebook-dial-item.is-plus.is-active {
+	border-style: solid;
+	background: rgba(255, 255, 255, 0.16);
+	box-shadow: none;
+}
+
+.notebook-dial-item.is-fav.is-target {
+	box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.5);
+	animation: notebook-dial-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes notebook-dial-pulse {
+	50% {
+		box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.75);
+	}
+}
+
+.notebook-dial-hint {
+	position: absolute;
+	left: 50%;
+	top: calc(50% + 44px);
+	width: 120px;
+	transform: translateX(-50%);
+	font-size: 10px;
+	line-height: 1.25;
+	text-align: center;
+	color: var(--nb-dial-muted);
+	pointer-events: none;
+}
+
+.notebook-dial-live {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.notebook-dial,
+	.notebook-dial-item.is-fav.is-target,
+	.notebook-popover,
+	.notebook-sheet,
+	.notebook-context-bar {
+		animation: none;
+	}
+
+	.notebook-dial-layer.is-entering {
+		transform: none;
+	}
 }
 
 /* --- wave p1b: selection --- */
-/* Actions on the lasso selection (copy, cut, duplicate, paste, restyle): a floating bar over the bottom of the page area, outside the stage so its taps never reach the pen input. */
-.notebook-selection-bar {
-	position: absolute;
-	left: 50%;
-	bottom: 12px;
-	transform: translateX(-50%);
-	z-index: 6;
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	gap: 2px;
-	width: max-content;
-	max-width: calc(100% - 16px);
-	padding: 4px 6px;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-l);
-	background: var(--background-primary);
-	box-shadow: var(--shadow-s);
-}
-
-.notebook-selection-bar .notebook-toolbar-group,
-.notebook-selection-styles {
-	flex-wrap: wrap;
-	justify-content: center;
-}
-
-.notebook-selection-styles {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-}
-
 .notebook-paste-hint {
 	color: var(--text-muted);
 }
@@ -1620,7 +2408,7 @@
 	text-align: center;
 	color: var(--text-muted);
 	border: 2px dashed var(--background-modifier-border);
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 	user-select: text;
 	-webkit-user-select: text;
 }
@@ -1679,7 +2467,7 @@
 	gap: 8px;
 	padding: 10px;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 }
 
 .notebook-tt-row {
@@ -1878,7 +2666,7 @@
 	gap: 10px;
 	padding: 8px;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 }
 
 .notebook-trash-icon {
@@ -1955,9 +2743,9 @@
 	max-height: calc(100% - 16px);
 	padding: 6px;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-l);
+	border-radius: var(--nb-radius-l);
 	background: var(--background-primary);
-	box-shadow: var(--shadow-l);
+	box-shadow: var(--nb-shadow-2);
 }
 
 .notebook-stamp-panel.notebook-hidden {
@@ -2011,7 +2799,7 @@
 	gap: 2px;
 	padding: 4px;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 	cursor: pointer;
 	touch-action: pan-y;
 	user-select: none;
@@ -2089,7 +2877,7 @@
 	transform: translate(-50%, -50%);
 	border-radius: var(--radius-s);
 	background: rgba(255, 255, 255, 0.85);
-	box-shadow: var(--shadow-s);
+	box-shadow: var(--nb-shadow-2);
 	opacity: 0.9;
 	pointer-events: none;
 }
@@ -2189,7 +2977,7 @@
 	margin-bottom: 8px;
 	padding: 8px;
 	border: 2px dashed var(--background-modifier-border);
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 	color: var(--text-muted);
 	text-align: center;
 	touch-action: none;
@@ -2293,9 +3081,9 @@
 	max-width: 560px;
 	margin: 0 auto;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-l);
+	border-radius: var(--nb-radius-l);
 	background: var(--background-primary);
-	box-shadow: var(--shadow-s);
+	box-shadow: var(--nb-shadow-2);
 	overflow: hidden;
 }
 
@@ -2408,9 +3196,9 @@
 	max-width: calc(100% - 16px);
 	padding: 6px 6px 6px 12px;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-l);
+	border-radius: var(--nb-radius-l);
 	background: var(--background-primary);
-	box-shadow: var(--shadow-s);
+	box-shadow: var(--nb-shadow-2);
 	font-size: var(--font-ui-small);
 }
 
@@ -2520,7 +3308,7 @@
 	min-height: 40px;
 	margin-bottom: 4px;
 	padding: 4px 2px 4px 6px;
-	border-radius: var(--radius-m);
+	border-radius: var(--nb-radius-m);
 	cursor: pointer;
 	touch-action: pan-y;
 }
@@ -2605,4 +3393,2219 @@
 
 .setting-item.notebook-hidden {
 	display: none;
+}
+
+
+/* wave 0.8: page ops — multi-selection in the page panel, the "update links" list. */
+.notebook-navigator-selectbar {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 2px 8px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.notebook-navigator-selectbar.notebook-hidden {
+	display: none;
+}
+
+.notebook-navigator-selectcount {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.notebook-navigator-selectbar .notebook-tool.is-active {
+	color: var(--interactive-accent);
+}
+
+.notebook-navigator-item {
+	position: relative;
+}
+
+.notebook-navigator-check {
+	display: none;
+	position: absolute;
+	top: 8px;
+	left: 8px;
+	z-index: 1;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border: 2px solid var(--text-faint);
+	border-radius: 50%;
+	background: var(--background-primary);
+	color: transparent;
+	pointer-events: none;
+}
+
+.notebook-navigator-check svg {
+	width: 14px;
+	height: 14px;
+}
+
+.notebook-navigator-list.is-selecting .notebook-navigator-check {
+	display: flex;
+}
+
+.notebook-navigator-item.is-selected {
+	background: var(--background-modifier-hover);
+	outline: 2px solid var(--interactive-accent);
+}
+
+.notebook-navigator-item.is-selected .notebook-navigator-check {
+	border-color: var(--interactive-accent);
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.notebook-update-links .notebook-update-links-list {
+	max-height: 40vh;
+	overflow-y: auto;
+}
+
+.notebook-update-links-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 4px 0;
+}
+
+.notebook-update-links-note {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+/* The line of the note that holds the link, so the user can tell links apart before updating. */
+.notebook-update-links-line {
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+/* wave 0.7: resilience — safe mode, "not saved" and integrity banners (view/resilience.ts), integrity report */
+.notebook-resilience:empty {
+	display: none;
+}
+
+.notebook-resilience {
+	flex: 0 0 auto;
+	max-height: 40vh;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-1);
+	padding: var(--size-4-1) var(--size-4-2);
+}
+
+.notebook-resilience-banner {
+	border: 1px solid var(--background-modifier-border);
+	border-left-width: 4px;
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	padding: var(--size-4-2) var(--size-4-3);
+	font-size: var(--font-ui-small);
+}
+
+.notebook-resilience-banner.is-safe {
+	border-left-color: var(--color-blue);
+}
+
+.notebook-resilience-banner.is-warning {
+	border-left-color: var(--color-orange);
+}
+
+.notebook-resilience-banner.is-error {
+	border-left-color: var(--text-error);
+}
+
+.notebook-resilience-banner-title {
+	font-weight: var(--font-semibold);
+	margin-bottom: var(--size-2-1);
+}
+
+.notebook-resilience-banner-text {
+	color: var(--text-muted);
+	user-select: text;
+}
+
+.notebook-resilience-banner-actions,
+.notebook-integrity-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-2);
+	margin-top: var(--size-4-2);
+}
+
+.notebook-integrity-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-3);
+	max-height: 60vh;
+	overflow-y: auto;
+}
+
+.notebook-integrity-row {
+	border-bottom: 1px solid var(--background-modifier-border);
+	padding-bottom: var(--size-4-2);
+}
+
+.notebook-integrity-name {
+	font-weight: var(--font-semibold);
+	word-break: break-all;
+}
+
+.notebook-integrity-issue {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+/* wave 0.7: lod — heavy page warning */
+.notebook-heavy {
+	position: absolute;
+	right: 8px;
+	bottom: 8px;
+	left: 8px;
+	z-index: 4;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 6px 12px;
+	max-width: 560px;
+	margin: 0 auto;
+	padding: 6px 10px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--nb-radius-m);
+	background: var(--background-primary);
+	box-shadow: var(--nb-shadow-2);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.notebook-heavy-text {
+	flex: 1 1 220px;
+	min-width: 0;
+}
+
+.notebook-heavy-actions {
+	display: flex;
+	flex: 0 0 auto;
+	gap: 6px;
+}
+
+.notebook-heavy-actions button {
+	min-height: 32px;
+}
+
+
+/* wave 0.7: quick nav */
+.notebook-quicknav-row { display: flex; align-items: center; gap: 10px; }
+.notebook-quicknav-thumb { width: 36px; min-height: 48px; max-height: 54px; object-fit: cover; border: 1px solid var(--background-modifier-border); border-radius: 3px; background: var(--background-secondary); flex: none; }
+.notebook-quicknav-body { min-width: 0; flex: 1; }
+.notebook-quicknav-top { display: flex; justify-content: space-between; gap: 8px; }
+.notebook-quicknav-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notebook-quicknav-page, .notebook-recent-page, .notebook-goto-num { color: var(--text-muted); font-variant-numeric: tabular-nums; flex: none; }
+.notebook-quicknav-detail, .notebook-recent-when { color: var(--text-muted); font-size: var(--font-ui-smaller); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notebook-quicknav-status:not(:empty) { padding: 4px 12px; color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.notebook-recent-main, .notebook-goto-row { display: flex; justify-content: space-between; gap: 8px; }
+.notebook-page-indicator { cursor: pointer; }
+
+
+/* wave 0.7: sync safety (#342 open on another device, #344 not downloaded yet, #345 sync check) */
+.notebook-sync-banner {
+	display: flex;
+	flex: 0 0 auto;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 12px;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+}
+
+.notebook-sync-banner-text {
+	flex: 1 1 240px;
+	min-width: 0;
+}
+
+.notebook-sync-banner-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.notebook-sync-muted {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.notebook-sync-issues {
+	max-height: 50vh;
+	overflow-y: auto;
+	padding-left: 1.2em;
+	font-size: var(--font-ui-small);
+	overflow-wrap: anywhere;
+}
+
+/* --- ui redesign: panels, sheets and the library on the same visual system (docs/design-ui.md §7) --- */
+
+/* Floating panels over the page: one surface, radius and elevation. */
+.notebook-stamp-panel,
+.notebook-search {
+	border-color: var(--nb-border);
+	background: var(--nb-surface-raised);
+	animation: notebook-pop-in var(--nb-motion) var(--nb-ease);
+}
+
+.notebook-stamp-panel {
+	padding: var(--nb-space-2);
+	gap: var(--nb-space-2);
+}
+
+.notebook-stamp-title,
+.notebook-navigator-title {
+	font-weight: var(--font-semibold, 600);
+	color: var(--nb-text);
+}
+
+.notebook-stamp-tile {
+	border-radius: var(--nb-radius-m);
+	transition: background-color var(--nb-motion-fast) var(--nb-ease), transform var(--nb-motion-fast) var(--nb-ease);
+}
+
+.notebook-stamp-tile:hover {
+	background: var(--nb-hover);
+}
+
+/* Pages panel: a quiet secondary surface; the page in view has an accent ring. */
+.notebook-navigator {
+	background: var(--nb-surface-2);
+	border-right-color: var(--nb-border);
+}
+
+.notebook-body.is-narrow > .notebook-navigator {
+	border-radius: 0 var(--nb-radius-l) var(--nb-radius-l) 0;
+	box-shadow: var(--nb-shadow-2);
+	animation: notebook-drawer-in var(--nb-motion) var(--nb-ease);
+}
+
+@keyframes notebook-drawer-in {
+	from {
+		transform: translateX(-16px);
+		opacity: 0;
+	}
+}
+
+.notebook-navigator-item {
+	transition: background-color var(--nb-motion-fast) var(--nb-ease);
+}
+
+.notebook-navigator-item:hover {
+	background: var(--nb-hover);
+}
+
+.notebook-navigator-item.is-current {
+	background: var(--nb-accent-soft);
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 0;
+}
+
+.notebook-navigator-thumb {
+	border-radius: 6px;
+	border-color: var(--nb-border);
+	box-shadow: var(--nb-shadow-1);
+}
+
+.notebook-outline-row {
+	border-radius: var(--nb-radius-s);
+}
+
+/* PDF search panel. */
+.notebook-search-row {
+	border-radius: var(--nb-radius-s);
+}
+
+.notebook-search-bar input {
+	border-radius: var(--nb-radius-pill);
+}
+
+.notebook-reading-banner {
+	border-radius: var(--nb-radius-pill);
+	box-shadow: var(--nb-shadow-2);
+}
+
+/* PDF side pane. */
+.notebook-pdfside-header {
+	background: var(--nb-surface);
+	border-bottom: 1px solid var(--nb-border);
+}
+
+.notebook-pdfside-btn {
+	border-radius: var(--nb-radius-s);
+}
+
+/* The plugin's dialogs. */
+.modal.notebook-trash-modal,
+.modal.notebook-scan-modal,
+.modal.notebook-tt-modal,
+.modal.notebook-page-trash-modal,
+.modal.notebook-template-modal {
+	border-radius: var(--nb-radius-l);
+	box-shadow: var(--nb-shadow-3);
+}
+
+.notebook-modal-error {
+	border-radius: var(--nb-radius-s);
+}
+
+/* Library: pill navigation, lifted cards, rounded actions. */
+.notebook-lib-sidebar {
+	background: var(--nb-surface-2);
+}
+
+.notebook-lib-nav-item {
+	min-height: 36px;
+	border-radius: var(--nb-radius-s);
+	transition: background-color var(--nb-motion-fast) var(--nb-ease);
+}
+
+.notebook-lib-nav-item.is-active {
+	background: var(--nb-accent-soft);
+	color: var(--nb-accent);
+	font-weight: var(--font-semibold, 600);
+}
+
+.notebook-lib-btn {
+	min-height: 40px;
+	border-radius: var(--nb-radius-pill);
+}
+
+.notebook-lib-search {
+	border-radius: var(--nb-radius-pill);
+}
+
+.notebook-lib-card-main {
+	transition: background-color var(--nb-motion-fast) var(--nb-ease), transform var(--nb-motion-fast) var(--nb-ease);
+}
+
+.notebook-lib-card-main:hover {
+	background: var(--nb-hover);
+}
+
+.notebook-lib-cover {
+	box-shadow: var(--nb-shadow-1);
+	transition: box-shadow var(--nb-motion) var(--nb-ease), transform var(--nb-motion) var(--nb-ease);
+}
+
+.notebook-lib-card-main:hover .notebook-lib-cover {
+	box-shadow: var(--nb-shadow-2);
+	transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.notebook-stamp-panel,
+	.notebook-search,
+	.notebook-body.is-narrow > .notebook-navigator {
+		animation: none;
+	}
+
+	.notebook-lib-card-main:hover .notebook-lib-cover {
+		transform: none;
+	}
+}
+
+/* wave 0.8: markers — end-of-lecture panel, marker badges and box swatches in lists (the badges on the page are drawn on the canvas). */
+.notebook-lecture-panel .notebook-marker-summary {
+	color: var(--text-muted);
+	margin-bottom: var(--size-4-2);
+}
+
+.notebook-lecture-panel .notebook-marker-section {
+	margin: var(--size-4-3) 0 var(--size-4-1);
+}
+
+.notebook-marker-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-2-2);
+}
+
+.notebook-marker-row {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	min-height: 40px;
+}
+
+.notebook-marker-check {
+	width: 20px;
+	height: 20px;
+	flex: none;
+}
+
+.notebook-marker-badge,
+.notebook-marker-swatch {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	color: #ffffff;
+	font-weight: 700;
+	font-size: var(--font-ui-smaller);
+	margin-right: var(--size-2-2);
+}
+
+.notebook-marker-swatch {
+	width: 14px;
+	height: 14px;
+	border-radius: 3px;
+}
+
+.notebook-marker-gap { background-color: #d97706; }
+.notebook-marker-question { background-color: #2563eb; }
+.notebook-marker-important { background-color: #dc2626; }
+.notebook-marker-critical { background-color: #991b1b; }
+.notebook-marker-star { background-color: #ca8a04; }
+.notebook-marker-homework { background-color: #7c3aed; border-radius: 4px; }
+.notebook-box-definition { background-color: #2563eb; }
+.notebook-box-theorem { background-color: #7c3aed; }
+.notebook-box-example { background-color: #16a34a; }
+.notebook-box-proof { background-color: #475569; }
+.notebook-box-remark { background-color: #d97706; }
+
+.notebook-marker-main {
+	flex: 1;
+	min-width: 0;
+	cursor: pointer;
+}
+
+.notebook-marker-label {
+	overflow-wrap: anywhere;
+}
+
+.notebook-marker-label.is-done {
+	text-decoration: line-through;
+	color: var(--text-muted);
+}
+
+.notebook-marker-meta {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.notebook-marker-edit {
+	flex: none;
+}
+
+/* The radial dial's Markers ring shows each kind as its badge. */
+.notebook-dial-item.notebook-dial-marker {
+	font-weight: 700;
+	color: #ffffff;
+}
+.notebook-dial-marker.is-gap { background-color: #d97706; }
+.notebook-dial-marker.is-question { background-color: #2563eb; }
+.notebook-dial-marker.is-important { background-color: #dc2626; }
+.notebook-dial-marker.is-critical { background-color: #991b1b; }
+.notebook-dial-marker.is-star { background-color: #ca8a04; }
+.notebook-dial-marker.is-homework { background-color: #7c3aed; }
+.notebook-dial-marker.is-box { background-color: #475569; }
+
+/* wave 0.8: pen gestures (roadmap 139) */
+.notebook-gesture-overlay {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+	z-index: 6;
+}
+
+.notebook-gesture-overlay.notebook-hidden,
+.notebook-gesture-label.notebook-hidden,
+.notebook-gesture-badge.notebook-hidden {
+	display: none;
+}
+
+.notebook-gesture-trail {
+	fill: none;
+	stroke: var(--interactive-accent);
+	stroke-width: 3;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	stroke-dasharray: 1 6;
+	opacity: 0.9;
+}
+
+.notebook-gesture-label {
+	position: absolute;
+	left: var(--notebook-gesture-x, 0);
+	top: var(--notebook-gesture-y, 0);
+	z-index: 7;
+	max-width: 70%;
+	padding: 4px 10px;
+	border-radius: 999px;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+	line-height: 1.4;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	pointer-events: none;
+	box-shadow: var(--shadow-s);
+}
+
+.notebook-gesture-label.is-cancel {
+	background: var(--background-modifier-border);
+	color: var(--text-muted);
+}
+
+.notebook-gesture-badge {
+	position: absolute;
+	top: 8px;
+	left: 50%;
+	z-index: 8;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 2px 4px 2px 12px;
+	border: 1px solid var(--interactive-accent);
+	border-radius: 999px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+	transform: translateX(-50%);
+	box-shadow: var(--shadow-s);
+}
+
+.notebook-gesture-badge-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 32px;
+	min-height: 32px;
+}
+
+.notebook-stage.is-gesture-mode {
+	cursor: crosshair;
+}
+
+.notebook-gesture-sheet .notebook-gesture-sheet-intro,
+.notebook-gesture-sheet .notebook-gesture-sheet-note,
+.notebook-gesture-sheet .notebook-gesture-sheet-empty {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.notebook-gesture-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 6px 0;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.notebook-gesture-row .setting-item {
+	flex: 0 0 auto;
+	padding: 0;
+	border: 0;
+}
+
+.notebook-gesture-row-text {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.notebook-gesture-row-name {
+	font-weight: 600;
+}
+
+.notebook-gesture-row-how {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.notebook-gesture-icon {
+	flex: 0 0 44px;
+	width: 44px;
+	height: 44px;
+	fill: none;
+	stroke: var(--text-normal);
+	stroke-width: 2.5;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.notebook-gesture-icon.is-custom {
+	stroke: var(--interactive-accent);
+	stroke-width: 1.5;
+}
+
+.notebook-gesture-pad {
+	position: relative;
+	height: 220px;
+	margin: 8px 0;
+	border: 1px dashed var(--background-modifier-border-hover);
+	border-radius: var(--radius-m);
+	background: var(--background-secondary);
+	touch-action: none;
+}
+
+.notebook-gesture-pad-svg {
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+}
+
+.notebook-gesture-pad-sample {
+	fill: none;
+	stroke: var(--text-faint);
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.notebook-gesture-pad-status {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+
+/* wave 0.8: processing (Inbox view, textbook references over typed text) */
+.notebook-inbox {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 12px 16px 24px;
+	overflow-y: auto;
+}
+
+.notebook-inbox-bar {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.notebook-inbox-heading {
+	margin: 0;
+	flex: 0 0 auto;
+}
+
+.notebook-inbox-summary {
+	flex: 1 1 auto;
+	color: var(--text-muted);
+}
+
+.notebook-inbox-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.notebook-inbox-toggle {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 32px;
+}
+
+.notebook-inbox-filter {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.notebook-inbox-chip {
+	min-height: 32px;
+	padding: 0 12px;
+	border-radius: 16px;
+}
+
+.notebook-inbox-chip.is-active {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.notebook-inbox-hint {
+	margin: 0;
+}
+
+.notebook-inbox-group {
+	margin: 16px 0 4px;
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	text-transform: none;
+}
+
+.notebook-inbox-item {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-primary);
+}
+
+.notebook-inbox-item.is-selected {
+	border-color: var(--interactive-accent);
+}
+
+.notebook-inbox-item.is-done .notebook-inbox-item-text {
+	color: var(--text-faint);
+}
+
+.notebook-inbox-item-head {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+	width: 100%;
+	min-height: 44px;
+	padding: 8px 12px;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	text-align: start;
+	cursor: pointer;
+}
+
+.notebook-inbox-item-place {
+	flex: 0 0 auto;
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.notebook-inbox-item-text {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.notebook-inbox-item-badge {
+	flex: 0 0 auto;
+	padding: 0 6px;
+	border-radius: 8px;
+	background: var(--background-modifier-hover);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.notebook-inbox-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 0 12px 12px;
+}
+
+.notebook-inbox-preview {
+	max-width: 100%;
+	max-height: 60vh;
+	object-fit: contain;
+	align-self: flex-start;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: #fff;
+}
+
+.notebook-inbox-text {
+	white-space: pre-wrap;
+	user-select: text;
+}
+
+.notebook-inbox-text.is-empty {
+	color: var(--text-faint);
+}
+
+.notebook-inbox-covered {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px;
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+}
+
+.notebook-inbox-covered > div {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.notebook-inbox-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.notebook-inbox-buttons button {
+	min-height: 40px;
+}
+
+.notebook-inbox-empty {
+	padding: 24px 0;
+	color: var(--text-muted);
+}
+
+/* Textbook references: transparent hot spots over typed "p. 134" (small; hidden while the text tool is active). */
+.notebook-textbook-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 3;
+	overflow: hidden;
+	pointer-events: none;
+}
+
+.notebook-textbook-ref {
+	position: absolute;
+	left: var(--notebook-textbook-x, 0);
+	top: var(--notebook-textbook-y, 0);
+	width: var(--notebook-textbook-w, 0);
+	height: var(--notebook-textbook-h, 0);
+	box-sizing: border-box;
+	border-bottom: 2px solid var(--interactive-accent);
+	border-radius: 2px;
+	background: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+	cursor: pointer;
+	pointer-events: auto;
+}
+
+.notebook-textbook-ref:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+}
+
+
+/* wave 0.9: pen links */
+.notebook-link-suggest {
+	position: absolute;
+	left: var(--notebook-suggest-x, 0);
+	top: var(--notebook-suggest-y, 0);
+	z-index: 30;
+	width: min(320px, 90%);
+	max-height: 40%;
+	overflow-y: auto;
+	padding: 4px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m, 8px);
+	background: var(--background-primary);
+	box-shadow: var(--shadow-s);
+}
+
+.notebook-link-suggest-item {
+	min-height: 40px;
+	padding: 6px 10px;
+	border-radius: var(--radius-s, 6px);
+	cursor: pointer;
+}
+
+.notebook-link-suggest-item.is-selected,
+.notebook-link-suggest-item:hover {
+	background: var(--background-modifier-hover);
+}
+
+.notebook-link-choice-title {
+	color: var(--text-normal);
+}
+
+.notebook-link-choice-path {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.notebook-pen-link-chip {
+	position: absolute;
+	left: var(--notebook-chip-x, 0);
+	top: var(--notebook-chip-y, 0);
+	z-index: 25;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 40px;
+	padding: 0 14px;
+	border-radius: 20px;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	box-shadow: var(--shadow-s);
+	cursor: pointer;
+}
+
+.notebook-pen-link-chip-icon {
+	display: inline-flex;
+}
+
+/* wave 0.9: practice (Redo this exercise: dialog, banner over a practice page, list of attempts) */
+.notebook-practice-banner.notebook-hidden,
+.notebook-practice-filters.notebook-hidden {
+	display: none;
+}
+
+.notebook-practice-banner {
+	position: absolute;
+	top: 8px;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 7;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 6px 8px;
+	width: max-content;
+	max-width: calc(100% - 16px);
+	padding: 4px 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-l);
+	background: var(--background-primary);
+	box-shadow: var(--shadow-s);
+	font-size: var(--font-ui-small);
+}
+
+.notebook-practice-title {
+	font-weight: var(--font-semibold);
+}
+
+.notebook-practice-note {
+	color: var(--text-muted);
+}
+
+.notebook-practice-button {
+	min-height: 36px;
+	padding: 0 12px;
+}
+
+/* Held to peek: no text selection, no scrolling or context menu from a long press. */
+.notebook-practice-peek {
+	touch-action: none;
+	user-select: none;
+	-webkit-user-select: none;
+	-webkit-touch-callout: none;
+}
+
+.notebook-practice-peek.is-held,
+.notebook-practice-timer.is-running {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.notebook-practice-timer {
+	font-variant-numeric: tabular-nums;
+}
+
+.notebook-practice-filters {
+	margin: 4px 0 8px;
+}
+
+.notebook-practice-filter-title {
+	margin: 6px 0 2px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.notebook-practice-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.notebook-practice-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 32px;
+	padding: 0 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+
+.notebook-practice-swatch {
+	width: 18px;
+	height: 18px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 50%;
+	background: var(--notebook-practice-color, var(--text-normal));
+}
+
+.notebook-practice-summary {
+	color: var(--text-muted);
+}
+
+.notebook-practice-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.notebook-practice-row {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+	min-height: 44px;
+	text-align: left;
+}
+
+.notebook-practice-row-detail {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+/* wave 0.9: math (equation editor and graph panel float over the page; the typesetter measures off screen) */
+.notebook-math-measure {
+	position: fixed;
+	left: -100000px;
+	top: 0;
+	font-size: var(--notebook-math-size, 16px);
+	line-height: normal;
+	color: #000000;
+	white-space: nowrap;
+	pointer-events: none;
+}
+
+.notebook-math-measure mjx-container[display="true"] {
+	margin: 0;
+}
+
+.notebook-stage .notebook-math-panel {
+	position: absolute;
+	z-index: 6;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	gap: var(--nb-space-2, 8px);
+	padding: var(--nb-space-3, 12px);
+	border: 1px solid var(--nb-border, var(--background-modifier-border));
+	border-radius: var(--nb-radius-l, 18px);
+	background: var(--nb-surface-raised, var(--background-primary));
+	box-shadow: var(--nb-shadow-2, 0 8px 24px rgba(0, 0, 0, 0.18));
+	font-family: var(--nb-font-ui, var(--font-interface));
+	font-size: var(--nb-text-m, var(--font-ui-small));
+	touch-action: auto;
+	user-select: text;
+	-webkit-user-select: text;
+}
+
+.notebook-stage .notebook-eq-editor {
+	left: var(--notebook-math-x, 16px);
+	top: var(--notebook-math-y, 16px);
+	width: min(420px, calc(100% - 16px));
+}
+
+.notebook-eq-palette {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.notebook-eq-palette .notebook-eq-snippet {
+	min-width: var(--nb-target, 40px);
+	min-height: var(--nb-target, 40px);
+	padding: 0 8px;
+	font-family: serif;
+	font-size: 16px;
+}
+
+.notebook-eq-source {
+	width: 100%;
+	min-height: 64px;
+	font-family: var(--font-monospace);
+	resize: vertical;
+}
+
+.notebook-eq-preview {
+	min-height: 48px;
+	max-height: 200px;
+	overflow: auto;
+	padding: var(--nb-space-2, 8px);
+	border-radius: var(--nb-radius-s, 8px);
+	background: var(--nb-surface-2, var(--background-secondary));
+	text-align: center;
+}
+
+.notebook-eq-error,
+.notebook-graph-error {
+	color: var(--text-error);
+	font-size: var(--nb-text-s, var(--font-ui-smaller));
+}
+
+.notebook-eq-options,
+.notebook-eq-actions,
+.notebook-graph-actions,
+.notebook-graph-zoom,
+.notebook-graph-add,
+.notebook-graph-style,
+.notebook-graph-view,
+.notebook-graph-fn-opts,
+.notebook-graph-param-range,
+.notebook-graph-table {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--nb-space-2, 8px);
+}
+
+.notebook-eq-actions,
+.notebook-graph-actions {
+	justify-content: flex-end;
+}
+
+.notebook-eq-actions .notebook-eq-delete {
+	margin-right: auto;
+}
+
+.notebook-eq-options button,
+.notebook-eq-actions button,
+.notebook-graph-panel button {
+	min-height: var(--nb-target, 40px);
+}
+
+.notebook-eq-toggle.is-active {
+	background: var(--nb-accent-soft, hsla(var(--interactive-accent-hsl), 0.14));
+	color: var(--nb-accent, var(--interactive-accent));
+}
+
+.notebook-eq-field,
+.notebook-graph-field {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	color: var(--text-muted);
+}
+
+.notebook-eq-field input[type="number"],
+.notebook-graph-field input[type="number"] {
+	width: 5.5em;
+}
+
+.notebook-stage .notebook-graph-panel {
+	top: 8px;
+	right: 8px;
+	bottom: 8px;
+	width: min(380px, calc(100% - 16px));
+}
+
+.notebook-body.is-narrow .notebook-stage .notebook-graph-panel {
+	top: auto;
+	left: 8px;
+	right: 8px;
+	width: auto;
+	max-height: 55%;
+}
+
+.notebook-graph-head {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.notebook-graph-title {
+	font-size: var(--nb-text-l, var(--font-ui-medium));
+	font-weight: 600;
+}
+
+.notebook-graph-hint {
+	color: var(--text-muted);
+	font-size: var(--nb-text-s, var(--font-ui-smaller));
+}
+
+.notebook-graph-body {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: var(--nb-space-2, 8px);
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+.notebook-graph-section {
+	margin-top: var(--nb-space-2, 8px);
+	color: var(--text-muted);
+	font-size: 11px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.notebook-graph-fn,
+.notebook-graph-param {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: var(--nb-space-2, 8px);
+	border: 1px solid var(--nb-border, var(--background-modifier-border));
+	border-radius: var(--nb-radius-m, 12px);
+}
+
+.notebook-graph-fn-top,
+.notebook-graph-piece {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.notebook-graph-kind {
+	flex: 1 1 auto;
+	color: var(--text-muted);
+}
+
+.notebook-graph-exprs {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.notebook-graph-expr {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-family: var(--font-monospace);
+}
+
+.notebook-graph-expr input,
+.notebook-graph-piece input {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-family: var(--font-monospace);
+}
+
+.notebook-graph-check {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	min-height: var(--nb-target, 40px);
+}
+
+.notebook-graph-param-name {
+	width: 5em;
+	font-family: var(--font-monospace);
+}
+
+.notebook-graph-slider {
+	width: 100%;
+	min-height: var(--nb-target, 40px);
+}
+
+.notebook-graph-param-value {
+	width: 7em;
+}
+
+.notebook-graph-panel input[type="color"],
+.notebook-eq-editor input[type="color"] {
+	width: 36px;
+	height: 36px;
+	padding: 2px;
+}
+
+/* wave 0.9: obsidian and input (toolbar size: view-ui.ts sets --nb-target and --nb-icon on the view; large lets the tools wrap on a narrow phone) */
+.notebook-view .notebook-tool {
+	min-width: var(--nb-target, 40px);
+	min-height: var(--nb-target, 40px);
+}
+
+.notebook-view .notebook-tool .svg-icon {
+	width: var(--nb-icon, 18px);
+	height: var(--nb-icon, 18px);
+}
+
+.notebook-view .notebook-context-label,
+.notebook-view .notebook-page-indicator {
+	min-height: var(--nb-target, 40px);
+}
+
+.notebook-view.is-tools-wrapped .notebook-toolbar-tools {
+	flex-wrap: wrap;
+	max-width: 100%;
+}
+
+.notebook-view.is-tools-wrapped .notebook-toolbar-tools > .notebook-toolbar-divider {
+	display: none;
+}
+
+.notebook-view.is-tools-wrapped .notebook-toolbar-tools .notebook-toolbar-group {
+	flex-wrap: wrap;
+}
+
+
+/* wave 0.9: text and objects (find and replace panel, page information, the chip that offers a page in the middle of a notebook) */
+.notebook-find-panel {
+	width: min(560px, 96vw);
+}
+
+.notebook-find-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+
+.notebook-find-row > label {
+	flex: 0 0 7.5em;
+	color: var(--text-muted);
+}
+
+.notebook-find-row > input {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 40px;
+}
+
+.notebook-find-options,
+.notebook-find-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 16px;
+	margin-bottom: 8px;
+}
+
+.notebook-find-check {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 40px;
+}
+
+.notebook-find-actions button {
+	min-height: 40px;
+}
+
+.notebook-find-status {
+	margin: 4px 0 8px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.notebook-find-results {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	max-height: 40vh;
+	overflow-y: auto;
+}
+
+.notebook-find-row-result {
+	display: flex;
+	align-items: stretch;
+	border-radius: var(--radius-s);
+}
+
+.notebook-find-row-result.is-active {
+	background: var(--background-modifier-hover);
+	box-shadow: inset 3px 0 0 var(--interactive-accent);
+}
+
+.notebook-find-hit {
+	display: flex;
+	flex: 1 1 auto;
+	align-items: baseline;
+	gap: 10px;
+	min-width: 0;
+	min-height: 40px;
+	padding: 6px 10px;
+	background: transparent;
+	box-shadow: none;
+	text-align: left;
+}
+
+.notebook-find-page {
+	flex: 0 0 auto;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.notebook-find-snippet {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.notebook-find-snippet mark {
+	padding: 0 1px;
+	background: var(--text-highlight-bg);
+	color: inherit;
+}
+
+.notebook-find-go {
+	flex: 0 0 auto;
+	width: 40px;
+	min-height: 40px;
+}
+
+.notebook-info-list {
+	display: grid;
+	grid-template-columns: minmax(7em, max-content) 1fr;
+	gap: 6px 14px;
+	margin: 0 0 12px;
+}
+
+.notebook-info-list dt {
+	color: var(--text-muted);
+}
+
+.notebook-info-list dd {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.notebook-info-note {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.notebook-page-offer {
+	position: absolute;
+	left: 50%;
+	bottom: 72px;
+	transform: translateX(-50%);
+	z-index: 7;
+	display: flex;
+	align-items: center;
+	max-width: calc(100% - 16px);
+	border-radius: 22px;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	box-shadow: var(--shadow-s);
+}
+
+.notebook-page-offer-add {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 44px;
+	padding: 0 8px 0 16px;
+	background: transparent;
+	box-shadow: none;
+	color: inherit;
+	cursor: pointer;
+}
+
+.notebook-page-offer-icon {
+	display: inline-flex;
+}
+
+.notebook-page-offer-close {
+	width: 40px;
+	min-height: 44px;
+	color: inherit;
+}
+
+@media (max-width: 480px) {
+	.notebook-find-row {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 2px;
+	}
+
+	.notebook-find-row > label {
+		flex: none;
+	}
+}
+
+
+/* wave 0.9: export and view (export dialogs, night mode) */
+.notebook-export-note {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	margin: 6px 0;
+}
+
+.notebook-export-problem {
+	color: var(--text-error);
+	font-size: var(--font-ui-small);
+	min-height: 1.2em;
+	margin: 4px 0;
+}
+
+/* Night mode: the wet highlighter canvas lights the page ("screen") instead of darkening it ("multiply"); opacity = NIGHT_HIGHLIGHTER_ALPHA in src/ink/night.ts. */
+.notebook-night .notebook-canvas-wet.is-highlighter {
+	opacity: 0.45;
+	mix-blend-mode: screen;
+}
+
+/* wave 0.10: selection tools (select by colour or tool, exact size) */
+.notebook-style-panel {
+	width: min(420px, 94vw);
+}
+
+.notebook-style-hint,
+.notebook-resize-now,
+.notebook-resize-note {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	margin: 0 0 var(--nb-space-2);
+}
+
+.notebook-style-empty {
+	color: var(--text-muted);
+	padding: var(--nb-space-3) 0;
+}
+
+.notebook-style-section {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin-bottom: var(--nb-space-2);
+}
+
+.notebook-style-title {
+	font-size: 11px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+	margin: var(--nb-space-1) 0;
+}
+
+.notebook-style-row {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-2);
+	min-height: var(--nb-target, 40px);
+	padding: 0 var(--nb-space-2);
+	border-radius: var(--nb-radius-s);
+	background: transparent;
+	box-shadow: none;
+	text-align: left;
+}
+
+.notebook-style-row:hover,
+.notebook-style-row:focus-visible {
+	background: var(--nb-accent-soft);
+}
+
+.notebook-style-label {
+	flex: 1;
+}
+
+.notebook-style-count {
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.notebook-resize-panel {
+	width: min(380px, 94vw);
+}
+
+.notebook-resize-row {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-2);
+	margin-bottom: var(--nb-space-2);
+}
+
+.notebook-resize-row > label {
+	flex: 0 0 5.5em;
+}
+
+.notebook-resize-row > input {
+	flex: 1;
+	min-height: var(--nb-target, 40px);
+}
+
+.notebook-resize-unit {
+	color: var(--text-muted);
+}
+
+.notebook-resize-lock {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-2);
+	min-height: var(--nb-target, 40px);
+}
+
+.notebook-resize-error {
+	color: var(--text-error);
+	margin-bottom: var(--nb-space-2);
+}
+
+.notebook-resize-actions {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: var(--nb-space-2);
+}
+
+/* wave 0.10: tabs and lines (strip of open notebooks) */
+.notebook-tabs {
+	display: flex;
+	flex: 0 0 auto;
+	gap: 2px;
+	padding: 2px 6px 0;
+	overflow-x: auto;
+	scrollbar-width: none;
+	touch-action: pan-y;
+	background: var(--nb-surface);
+	border-bottom: 1px solid var(--nb-border);
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+.notebook-tab {
+	flex: 0 1 auto;
+	max-width: 14em;
+	min-height: 28px;
+	padding: 2px 10px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	background: transparent;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	border-radius: 0;
+	box-shadow: none;
+}
+
+.notebook-tab.is-active {
+	color: var(--text-normal);
+	border-bottom-color: var(--interactive-accent);
+}
+
+.notebook-view .notebook-toolbar {
+	touch-action: pan-y;
+}
+
+/* wave 0.10: clipboard and stamps (the list of clipboards copied on other devices) */
+.notebook-clipshare-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 8px 0;
+}
+
+.notebook-clipshare-row {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 2px;
+	width: 100%;
+	min-height: var(--nb-target, 44px);
+	padding: 8px 12px;
+	height: auto;
+	text-align: left;
+	border-radius: var(--nb-radius-m);
+}
+
+.notebook-clipshare-what {
+	font-weight: var(--font-semibold);
+}
+
+.notebook-clipshare-meta,
+.notebook-clipshare-hint {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+
+/* wave 0.10: pinned, archived and manual order in the library (roadmap 54); library check (roadmap 27) */
+.notebook-lib-group {
+	grid-column: 1 / -1;
+	margin-top: 4px;
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+}
+
+.notebook-lib-content > .notebook-lib-hint {
+	margin: 0 0 10px;
+}
+
+.notebook-lib-pin {
+	position: absolute;
+	top: 6px;
+	left: 6px;
+	z-index: 1;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	background: var(--background-primary);
+	box-shadow: var(--nb-shadow-2);
+	color: var(--interactive-accent);
+}
+
+.notebook-lib-pin svg {
+	width: 13px;
+	height: 13px;
+}
+
+.notebook-lib-card[data-drop-card].is-drop-target {
+	outline: 2px solid var(--interactive-accent);
+	background: var(--background-modifier-hover);
+}
+
+.modal.notebook-libcheck-modal {
+	width: min(640px, 92vw);
+}
+
+.notebook-libcheck-section {
+	margin-top: var(--size-4-3);
+}
+
+.notebook-libcheck-section h4 {
+	margin: 0 0 var(--size-4-1);
+}
+
+.notebook-libcheck-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-2);
+	max-height: 40vh;
+	overflow-y: auto;
+}
+
+.notebook-libcheck-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-4-2);
+	padding-bottom: var(--size-4-2);
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.notebook-libcheck-text {
+	min-width: 0;
+}
+
+.notebook-libcheck-name {
+	word-break: break-all;
+	user-select: text;
+}
+
+.notebook-libcheck-detail {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.notebook-libcheck-paths {
+	max-height: 20vh;
+	overflow-y: auto;
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	word-break: break-all;
+}
+
+
+/* wave 0.10 (51): read-only mode. The indicator replaces the pen indicator and the favourite pens, which cannot be used. */
+.notebook-readonly-chip {
+	flex: 0 1 auto;
+	gap: 6px;
+	padding: 0 10px;
+	max-width: 160px;
+	border-radius: var(--nb-radius-pill);
+	font-size: var(--nb-text-s);
+	font-weight: var(--font-medium, 500);
+	white-space: nowrap;
+}
+
+.notebook-readonly-chip .notebook-readonly-icon {
+	display: inline-flex;
+	align-items: center;
+}
+
+.notebook-toolbar.is-read-only .notebook-chip,
+.notebook-toolbar.is-read-only .notebook-favs {
+	display: none;
+}
+
+/* The save state says nothing while nothing can change; an error still shows. */
+.notebook-toolbar.is-read-only .notebook-status:not([data-kind="error"]) {
+	display: none;
+}
+
+/* A phone: only the lock, the label is its name for screen readers. */
+.notebook-toolbar:not(.is-single-row) .notebook-readonly-chip .notebook-readonly-label {
+	display: none;
+}
+
+.notebook-toolbar:not(.is-single-row) .notebook-readonly-chip {
+	padding: 0;
+	min-width: 40px;
+}
+
+.notebook-body.is-read-only .notebook-stage {
+	cursor: grab;
+}
+
+/* wave 0.10 (81): Print. The container exists only while the system print dialog is open; it is never visible on screen. */
+.notebook-print-root {
+	display: none;
+}
+
+@media print {
+	body.notebook-printing > *:not(.notebook-print-root) {
+		display: none !important;
+	}
+
+	body.notebook-printing {
+		overflow: visible !important;
+		height: auto !important;
+		background: #fff !important;
+	}
+
+	body.notebook-printing .notebook-print-root {
+		display: block;
+	}
+
+	.notebook-print-root .notebook-print-page {
+		break-after: page;
+		page-break-after: always;
+		break-inside: avoid;
+	}
+
+	.notebook-print-root .notebook-print-page:last-child {
+		break-after: auto;
+		page-break-after: auto;
+	}
+
+	/* A page is scaled down to fit one sheet, whatever the paper; a very long page (an infinite one) keeps its size and flows over several sheets. */
+	.notebook-print-root .notebook-print-page > img {
+		display: block;
+		width: 100%;
+		height: auto;
+		max-height: 100vh;
+		object-fit: contain;
+	}
+
+	.notebook-print-root .notebook-print-page.is-long {
+		break-inside: auto;
+	}
+
+	.notebook-print-root .notebook-print-page.is-long > img {
+		max-height: none;
+	}
+}
+
+/* wave 0.10 (7, 68): free colour picker, page eyedropper loupe, free-colour swatch. */
+.notebook-swatch.is-free .notebook-swatch-dot {
+	background: conic-gradient(#f43f5e, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #ec4899, #f43f5e);
+}
+
+.notebook-stage .notebook-colour-picker {
+	position: absolute;
+	top: var(--nb-space-3, 12px);
+	right: var(--nb-space-3, 12px);
+	z-index: 6;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	gap: var(--nb-space-2, 8px);
+	width: 244px;
+	max-width: calc(100% - 24px);
+	/* A short view (a phone held sideways): the panel scrolls instead of leaving the page area. */
+	max-height: calc(100% - 24px);
+	overflow-y: auto;
+	padding: var(--nb-space-3, 12px);
+	border: 1px solid var(--nb-border, var(--background-modifier-border));
+	border-radius: var(--nb-radius-l, 18px);
+	background: var(--nb-surface-raised, var(--background-primary));
+	box-shadow: var(--nb-shadow-2, 0 8px 24px rgba(0, 0, 0, 0.18));
+	font-family: var(--nb-font-ui, var(--font-interface));
+	font-size: var(--nb-text-m, var(--font-ui-small));
+	touch-action: pan-y;
+}
+
+.notebook-colour-area {
+	position: relative;
+	flex: none;
+	height: clamp(72px, 26vh, 150px);
+	border-radius: var(--nb-radius-m, 10px);
+	background:
+		linear-gradient(to top, #000, rgba(0, 0, 0, 0)),
+		linear-gradient(to right, #fff, var(--hue, #f00));
+	touch-action: none;
+	cursor: crosshair;
+}
+
+.notebook-colour-hue {
+	position: relative;
+	flex: none;
+	height: 22px;
+	border-radius: 11px;
+	background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+	touch-action: none;
+	cursor: ew-resize;
+}
+
+.notebook-colour-thumb {
+	position: absolute;
+	width: 20px;
+	height: 20px;
+	margin: -10px 0 0 -10px;
+	border: 3px solid #fff;
+	border-radius: 50%;
+	background: var(--c, transparent);
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), 0 1px 4px rgba(0, 0, 0, 0.35);
+	pointer-events: none;
+}
+
+.notebook-colour-hue .notebook-colour-thumb {
+	top: 50%;
+}
+
+.notebook-colour-area:focus-visible,
+.notebook-colour-hue:focus-visible {
+	outline: 2px solid var(--nb-accent, var(--interactive-accent));
+	outline-offset: 2px;
+}
+
+.notebook-colour-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.notebook-colour-preview {
+	flex: none;
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	background: var(--c, transparent);
+	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+.notebook-colour-row input.notebook-colour-hex {
+	flex: 1;
+	min-width: 0;
+	height: 36px;
+	font-family: var(--font-monospace);
+	text-transform: lowercase;
+}
+
+.notebook-colour-row input.notebook-colour-hex.is-invalid {
+	border-color: var(--text-error);
+}
+
+.notebook-colour-button {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	box-shadow: none;
+	background: transparent;
+}
+
+.notebook-colour-recent {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	min-height: 28px;
+}
+
+.notebook-colour-hint {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.notebook-colour-recent-swatch {
+	flex: none;
+	width: 28px;
+	height: 28px;
+	min-width: 28px;
+	padding: 0;
+	border-radius: 50%;
+	background: var(--c, transparent);
+	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+.notebook-stage .notebook-eyedropper-loupe {
+	position: absolute;
+	z-index: 7;
+	transform: translate(-50%, calc(-100% - 36px));
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 8px 4px 4px;
+	border-radius: 999px;
+	background: var(--nb-surface-raised, var(--background-primary));
+	box-shadow: var(--nb-shadow-2, 0 4px 14px rgba(0, 0, 0, 0.3));
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-normal);
+	pointer-events: none;
+}
+
+.notebook-stage .notebook-eyedropper-loupe::before {
+	content: "";
+	width: 24px;
+	height: 24px;
+	border-radius: 50%;
+	background: var(--c, transparent);
+	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+
+/* wave 0.10: fast scrollbar with a page preview (roadmap 50). The track ignores the pointer; only the thumb, while shown, takes it. */
+.notebook-scrollbar {
+	position: absolute;
+	top: 8px;
+	right: 0;
+	bottom: 8px;
+	z-index: 6;
+	width: 24px;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity var(--nb-motion) var(--nb-ease);
+}
+
+.notebook-scrollbar.notebook-hidden {
+	display: none;
+}
+
+.notebook-scrollbar.is-visible,
+.notebook-scrollbar.is-dragging {
+	opacity: 1;
+}
+
+.notebook-scrollbar-thumb {
+	position: absolute;
+	top: 0;
+	right: 0;
+	width: 24px;
+	height: var(--notebook-sb-length, 44px);
+	transform: translateY(var(--notebook-sb-top, 0px));
+	cursor: grab;
+	pointer-events: none;
+	touch-action: none;
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+.notebook-scrollbar.is-visible .notebook-scrollbar-thumb {
+	pointer-events: auto;
+}
+
+.notebook-scrollbar-thumb::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	right: 4px;
+	bottom: 0;
+	width: 6px;
+	border-radius: var(--nb-radius-pill);
+	background: var(--text-muted);
+	opacity: 0.6;
+	transition: width var(--nb-motion) var(--nb-ease), background-color var(--nb-motion) var(--nb-ease);
+}
+
+.notebook-scrollbar-thumb:hover::after {
+	opacity: 0.85;
+}
+
+.notebook-scrollbar.is-dragging .notebook-scrollbar-thumb {
+	cursor: grabbing;
+}
+
+.notebook-scrollbar.is-dragging .notebook-scrollbar-thumb::after {
+	width: 10px;
+	right: 2px;
+	background: var(--interactive-accent);
+	opacity: 1;
+}
+
+.notebook-scrollbar-bubble {
+	position: absolute;
+	top: var(--notebook-sb-bubble, 0px);
+	right: 34px;
+	display: none;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	padding: 8px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-m);
+	background: var(--background-primary);
+	box-shadow: var(--nb-shadow-2);
+	transform: translateY(-50%);
+	pointer-events: none;
+}
+
+.notebook-scrollbar-bubble.is-shown {
+	display: flex;
+}
+
+.notebook-scrollbar-preview {
+	display: block;
+	width: 96px;
+	aspect-ratio: 1 / var(--notebook-thumb-ratio, 1.414);
+	object-fit: contain;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: #fff;
+	-webkit-user-drag: none;
+}
+
+/* Before the thumbnail is drawn the bubble shows an empty page of the right shape (an image without a source). */
+.notebook-scrollbar-preview.is-empty {
+	color: transparent;
+}
+
+.notebook-scrollbar-label {
+	font-size: var(--nb-text-s);
+	font-variant-numeric: tabular-nums;
+	color: var(--text-normal);
+	white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.notebook-scrollbar,
+	.notebook-scrollbar-thumb::after {
+		transition: none;
+	}
+}
+
+/* wave 0.10: Obsidian status bar item (roadmap O15; desktop only). */
+.notebook-statusbar {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	cursor: pointer;
+}
+
+.notebook-statusbar.notebook-hidden {
+	display: none;
+}
+
+.notebook-statusbar-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--text-faint);
+}
+
+.notebook-statusbar-dot[data-kind="ok"] {
+	background: var(--color-green);
+}
+
+.notebook-statusbar-dot[data-kind="pending"] {
+	background: var(--color-orange);
+}
+
+.notebook-statusbar-dot[data-kind="error"] {
+	background: var(--text-error);
+}
+
+.notebook-statusbar:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: -2px;
 }

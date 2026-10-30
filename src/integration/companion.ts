@@ -1,9 +1,11 @@
-import { getFrontMatterInfo, normalizePath, Notice, parseYaml, stringifyYaml, TFile, type App, type Plugin, type TAbstractFile } from "obsidian";
+import { getFrontMatterInfo, normalizePath, parseYaml, stringifyYaml, TFile, type App, type Plugin, type TAbstractFile } from "obsidian";
 import { t } from "../i18n";
 import {
-	COMPANION_ID_KEY, COMPANION_LINK_KEY, companionClaim, companionContent, mergeProperties, newCompanionText, renderRegion, updateCompanionText,
-	type CompanionContent, type CompanionTextDeps,
+	COMPANION_ID_KEY, COMPANION_LINK_KEY, companionClaim, companionContent, homeworkFromNote, mergeProperties, newCompanionText, readHomeworkTasks,
+	readRegionState, renderRegion, updateCompanionText, userTicks, type CompanionContent, type CompanionTextDeps, type HomeworkNote,
 } from "../model/companion-content";
+import { Batch } from "../model/history";
+import { SetMarkerDone } from "../model/marker-commands";
 import { parse } from "../model/serialize";
 import type { NotebookDocument } from "../model/types";
 import type { NotebookSettings } from "../settings";
@@ -15,6 +17,8 @@ import { ensureFolder } from "../storage/vault-io";
 import { isCardFrontmatter } from "../zettel/card-content";
 import { notebookUri } from "./links";
 import { viewsOf } from "./open";
+import { showNotice } from "../view/notice";
+import { isOpenInSafeMode } from "../storage/safe-mode";
 
 /**
  * Companion notes (O1): keeps a Markdown note per notebook in step with it. The content comes from the pure
@@ -159,7 +163,8 @@ export class CompanionService {
 
 	private fire(path: string): void {
 		this.timers.delete(path);
-		if (!this.enabled) return;
+		// wave 0.7: resilience (#346): no companion note while the notebook is shown in safe mode.
+		if (!this.enabled || isOpenInSafeMode(path)) return;
 		// Never while writing: the companion write (and the metadata indexing it starts) waits for a pause.
 		if (this.input.active()) {
 			this.timers.set(path, window.setTimeout(() => this.fire(path), INPUT_POLL_MS));
@@ -182,7 +187,7 @@ export class CompanionService {
 	private report(key: string, message: string): void {
 		if (this.reported.has(key)) return;
 		this.reported.add(key);
-		new Notice(message, 8000);
+		showNotice(message, 8000);
 	}
 
 	// ------------------------------------------------------------------- reading
@@ -196,8 +201,26 @@ export class CompanionService {
 		return result.ok ? result.doc : null;
 	}
 
-	private content(file: TFile, doc: NotebookDocument): CompanionContent {
-		return companionContent(doc, { notebookPath: file.path, pageUri: (page) => notebookUri("", file.path, page) });
+	private content(file: TFile, doc: NotebookDocument, homework?: HomeworkNote): CompanionContent {
+		return companionContent(doc, { notebookPath: file.path, pageUri: (page, pageId) => notebookUri("", file.path, page, pageId) }, homework);
+	}
+
+	/**
+	 * v8: homework ticked in the companion note (by the person or the Tasks plugin) is marked done in the notebook, as one
+	 * undo step through the notebook's open, editable view on this device (its session saves it). The notebook file is never
+	 * written from here: when it is not open (or not editable) on this device, the tick is kept in the note and applied the
+	 * next time this device has the notebook open. Returns the document to generate from.
+	 */
+	private applyNoteTicks(file: TFile, doc: NotebookDocument, noteText: string): NotebookDocument {
+		const ticks = userTicks(doc, readHomeworkTasks(noteText), readRegionState(noteText));
+		if (ticks.length === 0) return doc;
+		for (const { view } of viewsOf(this.app, file)) {
+			const live = view.editableDocument();
+			if (!live || live.id !== doc.id) continue;
+			const step = new Batch("Homework done in the companion note", ticks.map((tick) => new SetMarkerDone(tick.pageId, tick.markerId, true)));
+			if (view.applyCommand(step)) return live;
+		}
+		return doc;
 	}
 
 	/** Frontmatter of a note's text; null when it is not valid YAML. */
@@ -290,11 +313,8 @@ export class CompanionService {
 	/** Brings the companion of `file` up to date. Writes nothing when the note already matches. */
 	async update(file: TFile): Promise<UpdateResult> {
 		if (this.isInternal(file.path)) return "skipped";
-		const doc = await this.readDocument(file);
+		let doc = await this.readDocument(file);
 		if (!doc) return "skipped";
-		const content = this.content(file, doc);
-		// A new note owns every tag it gets; an existing one records which tags the plugin added (model/tags.ts).
-		const region = (owned: readonly string[]) => renderRegion(content, owned);
 		const target = await this.locate(file, doc.id);
 		if (!target) {
 			const path = companionPath(file.path, this.plugin.settings, this.plugin.settings.folder);
@@ -303,6 +323,9 @@ export class CompanionService {
 		}
 
 		if ("create" in target) {
+			const content = this.content(file, doc);
+			// A new note owns every tag it gets; an existing one records which tags the plugin added (model/tags.ts).
+			const region = (owned: readonly string[]) => renderRegion(content, owned);
 			const dir = target.create.includes("/") ? target.create.slice(0, target.create.lastIndexOf("/")) : "";
 			if (dir) await ensureFolder(this.app, dir);
 			const yaml = stringifyYaml(mergeProperties({}, content, null));
@@ -318,7 +341,14 @@ export class CompanionService {
 
 		const note = target.file;
 		const text = await this.app.vault.read(note);
-		const planned = updateCompanionText(text, content, region, TEXT_DEPS);
+		doc = this.applyNoteTicks(file, doc, text);
+		const current = doc;
+		// What the note says about its homework counts too: a task ticked there stays ticked (model/companion-content.ts).
+		const plan = (noteText: string) => {
+			const content = this.content(file, current, homeworkFromNote(current, noteText));
+			return updateCompanionText(noteText, content, (owned) => renderRegion(content, owned), TEXT_DEPS);
+		};
+		const planned = plan(text);
 		if (planned.kind === "yaml") {
 			this.report(`yaml:${note.path}`, t("notice.companionYaml", { path: note.path }));
 			return "skipped";
@@ -332,7 +362,7 @@ export class CompanionService {
 		// One write for frontmatter and region, on the note as it is at that moment (the user may have just typed in it).
 		let written = false;
 		await this.app.vault.process(note, (latest) => {
-			const next = latest === text ? planned : updateCompanionText(latest, content, region, TEXT_DEPS);
+			const next = latest === text ? planned : plan(latest);
 			if (next.kind !== "changed") return latest;
 			written = true;
 			return next.text;
@@ -382,7 +412,7 @@ export class CompanionService {
 			this.keptTimer = null;
 			const kept = this.kept;
 			this.kept = [];
-			new Notice(kept.length === 1 ? t("notice.companionKept", { path: kept[0]! }) : t("notice.companionKeptMany", { n: String(kept.length) }), 8000);
+			showNotice(kept.length === 1 ? t("notice.companionKept", { path: kept[0]! }) : t("notice.companionKeptMany", { n: String(kept.length) }), 8000);
 		}, 500);
 	}
 
@@ -391,7 +421,7 @@ export class CompanionService {
 	/** Creates or updates the companion of every notebook in the vault, one at a time. */
 	async updateAll(): Promise<void> {
 		if (!this.plugin.settings.companionNotes) {
-			new Notice(t("notice.companionOff"));
+			showNotice(t("notice.companionOff"));
 			return;
 		}
 		const files = this.app.vault.getFiles().filter((f) => isNotebookFile(f) && !this.isInternal(f.path));
@@ -402,7 +432,7 @@ export class CompanionService {
 			const result = await this.enqueue(() => this.update(file));
 			counts[result ?? "skipped"]++;
 		}
-		new Notice(t("notice.companionDone", {
+		showNotice(t("notice.companionDone", {
 			created: String(counts.created), updated: String(counts.updated), unchanged: String(counts.unchanged), skipped: String(counts.skipped),
 		}));
 	}
@@ -410,7 +440,7 @@ export class CompanionService {
 	/** Brings the companion of `file` up to date now and opens it in a new tab. */
 	async open(file: TFile): Promise<void> {
 		if (!this.plugin.settings.companionNotes) {
-			new Notice(t("notice.companionOff"));
+			showNotice(t("notice.companionOff"));
 			return;
 		}
 		const doc = await this.readDocument(file);

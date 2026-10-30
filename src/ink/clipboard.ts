@@ -1,12 +1,14 @@
 import { createId } from "../model/document";
 import { AddAsset, AddElement, AddStroke, Batch, type Command } from "../model/history";
+import { copyStroke as copyStrokeWithId } from "../model/pages";
 import { freezeElement, freezeStroke } from "../model/serialize";
-import type { Asset, Page, PageElement, Point, Stroke } from "../model/types";
+import type { Asset, Page, PageElement, Stroke } from "../model/types";
+import { boundGraphId, BOUND_SEPARATOR } from "./attach";
 import { elementBounds, transformElement } from "./elements";
 import { strokeBounds, type BBox } from "./hit-test";
 import { transformStroke } from "./lasso";
 import { estimateMeasure, type MeasureText } from "./text-layout";
-import { translate } from "./transform";
+import { multiply, scaleAbout, translate } from "./transform";
 
 /**
  * Copy, cut, paste and duplicate of a lasso selection (pure). A clip is a deep copy of strokes and elements
@@ -26,10 +28,8 @@ export interface ClipContent {
 /** Distance (pt) between a pasted or duplicated copy and the one before it. */
 export const PASTE_STEP = 12;
 
-const copyStroke = (s: Stroke): Stroke => freezeStroke({
-	id: s.id, tool: s.tool, color: s.color, width: s.width, render: s.render,
-	points: s.points.map((p) => [p[0], p[1], p[2]] as Point),
-});
+/** v8: model/pages copyStroke keeps every stroke field (hidden ink stays hidden when pasted). */
+const copyStroke = (s: Stroke): Stroke => copyStrokeWithId(s);
 
 /** Deep copy of a selection. Null when it is empty. Image elements bring their asset records from `assets`. */
 export function captureClip(
@@ -66,35 +66,63 @@ export function clipAssetIds(clip: ClipContent): string[] {
 }
 
 /**
- * Fresh strokes and elements (new ids, frozen) moved by (dx, dy). `assetMap` renames the asset an image uses
- * (when storing its bytes in another vault location gave it another id); an image whose asset is not in the map
- * keeps its id.
+ * Fresh strokes and elements (new ids, frozen) scaled by `scale` about the top-left corner of the clip's box (1: not
+ * scaled) and then moved by (dx, dy). `assetMap` renames the asset an image uses (when storing its bytes in another
+ * vault location gave it another id); an image whose asset is not in the map keeps its id. Ink bound to a graph of the
+ * clip (`<graph id>~…`, ink/attach.ts) is bound to the copy of that graph, so it stays clipped to it and follows it.
  */
 export function instantiateClip(
 	clip: ClipContent, dx: number, dy: number, assetMap?: ReadonlyMap<string, string>, measure: MeasureText = estimateMeasure,
+	scale = 1,
 ): { strokes: Stroke[]; elements: PageElement[] } {
-	const m = translate(dx, dy);
-	const strokes = clip.strokes.map((s) => freezeStroke({ ...transformStroke(s, m), id: createId() }));
+	const m = scale === 1 ? translate(dx, dy) : multiply(translate(dx, dy), scaleAbout(scale, scale, clip.bounds.minX, clip.bounds.minY));
+	const newIds = new Map<string, string>();
 	const elements = clip.elements.map((e) => {
 		const moved = transformElement(e, m, measure);
 		const asset = moved.type === "image" ? (assetMap?.get(moved.asset) ?? moved.asset) : undefined;
 		const base = moved.type === "image" && asset !== undefined ? { ...moved, asset } : moved;
-		return freezeElement({ ...base, id: createId() });
+		const id = createId();
+		if (e.type === "graph") newIds.set(e.id, id);
+		return freezeElement({ ...base, id });
+	});
+	const strokes = clip.strokes.map((s) => {
+		const graph = boundGraphId(s);
+		const owner = graph === null ? undefined : newIds.get(graph);
+		return freezeStroke({ ...transformStroke(s, m), id: owner === undefined ? createId() : `${owner}${BOUND_SEPARATOR}${createId()}` });
 	});
 	return { strokes, elements };
 }
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
+/** A clip is not scaled down below this factor to fit a page (the same floor as dragging a scale handle): it would be a speck. */
+export const MIN_PASTE_SCALE = 0.05;
+
 /**
- * Offset that puts the clip's centre on `centre` (+ `nudge` steps of PASTE_STEP, so repeated pastes do not
- * hide each other), kept inside the page when the clip fits in it.
+ * Factor (at most 1) that makes a clip fit the page it is pasted on, uniformly: 1 when it already fits. An infinite
+ * page only limits the width (it grows downwards). A clip taller than a sheet but not wider than it is scaled too: a
+ * paste that lands mostly outside the page would be invisible, unselectable and left out of the exports.
  */
-export function pasteOffset(
-	bounds: BBox, page: { width: number; height: number }, centre: readonly [number, number], nudge = 0,
-): [number, number] {
+export function pasteScale(bounds: BBox, page: { width: number; height: number; infinite?: boolean }): number {
 	const w = bounds.maxX - bounds.minX;
 	const h = bounds.maxY - bounds.minY;
+	let k = 1;
+	if (w > page.width && w > 0) k = Math.min(k, page.width / w);
+	if (!page.infinite && h > page.height && h > 0) k = Math.min(k, page.height / h);
+	// Round down so the scaled box does not poke out of the page by a rounding error.
+	return k < 1 ? Math.floor(k * 10000) / 10000 : 1;
+}
+
+/**
+ * Offset that puts the clip's centre on `centre` (+ `nudge` steps of PASTE_STEP, so repeated pastes do not
+ * hide each other), kept inside the page when the clip fits in it. `scale`: the factor the clip is pasted with
+ * (`pasteScale`, `instantiateClip` scales about the top-left corner of the box).
+ */
+export function pasteOffset(
+	bounds: BBox, page: { width: number; height: number }, centre: readonly [number, number], nudge = 0, scale = 1,
+): [number, number] {
+	const w = (bounds.maxX - bounds.minX) * scale;
+	const h = (bounds.maxY - bounds.minY) * scale;
 	const x = placeAxis(centre[0] - w / 2 + nudge * PASTE_STEP, w, page.width);
 	const y = placeAxis(centre[1] - h / 2 + nudge * PASTE_STEP, h, page.height);
 	return [round2(x - bounds.minX), round2(y - bounds.minY)];

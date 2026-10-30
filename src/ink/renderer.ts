@@ -2,17 +2,24 @@ import type { Page, PageElement, Point, Stroke, TextElement, Tool } from "../mod
 import { MM, RENDER_INK } from "../model/types";
 import { backgroundRect } from "../model/margins";
 import { transformElement } from "./elements";
+import { drawBox, drawMarker, type BoxLabel } from "./marker-render";
+import { drawEquation, drawGraph, type GraphPalette } from "./math-render";
+import { graphClips, strokeClip } from "./attach";
+import { equationNumbers } from "../model/math-elements";
+import { drawLinkedLines, parseLinks } from "./link-text";
 import { layoutText, type MeasureText } from "./text-layout";
 import { strokeBounds, type BBox } from "./hit-test";
+import { memoColors, nightHighlighter, nightInk, nightLine, NIGHT_BACKGROUND_VEIL, NIGHT_HIGHLIGHTER_ALPHA, NIGHT_PAPER } from "./night";
 import { minorVisible, paperPattern, PAPER_COLORS } from "./paper";
 import { visiblePages, type Layout, type PageBox } from "./layout";
 import { rulerEdge, rulerTicks, type Ruler } from "./ruler";
 import { inkPath, type InkBuilder } from "./ink-geometry";
 import { HIGHLIGHTER_ALPHA, strokePath } from "./stroke-shape";
+import { addLodNodesPath, lodLevel, lodNodes, lodPolygon } from "./lod";
 import { WetInk, type PageTransform } from "./wet-ink";
 import { ErrorOnce } from "./errors";
 import type { SpacePreviewEntry } from "./space";
-import { translate, type Matrix } from "./transform";
+import { partMatrix, translate, type Matrix } from "./transform";
 import type { Viewport } from "./viewport";
 
 const PAPER = "#ffffff";
@@ -38,6 +45,12 @@ export function drawTextElement(ctx: CanvasRenderingContext2D, el: TextElement):
 		ctx.fillStyle = el.color;
 		ctx.textBaseline = "top";
 		const layout = layoutText(el.text, el.fontSize, el.width, (str) => ctx.measureText(str).width);
+		// Links ([[Note]]) are drawn in their own colour (ink/link-text.ts); text without any takes the plain path.
+		const links = el.text.includes("[[") ? parseLinks(el.text) : [];
+		if (links.length > 0) {
+			drawLinkedLines(ctx, el, layout.lines, layout.lineHeight, links);
+			return;
+		}
 		layout.lines.forEach((line, i) => ctx.fillText(line, el.x, el.y + i * layout.lineHeight + (layout.lineHeight - el.fontSize) / 2));
 	} finally {
 		ctx.restore();
@@ -57,10 +70,31 @@ export const measureText: MeasureText = (s, fontSize) => {
 	return measureCtx.measureText(s).width;
 };
 
-/** Draws one image or text element in page coordinates (images may be rotated; `img` null draws a placeholder). */
-export function drawElement(ctx: CanvasRenderingContext2D, el: PageElement, img: CanvasImageSource | null): void {
+/**
+ * Draws one element in page coordinates (images may be rotated; `img` null draws a placeholder). `numbers`: the
+ * automatic numbers of numbered equations (v9).
+ */
+export function drawElement(
+	ctx: CanvasRenderingContext2D, el: PageElement, img: CanvasImageSource | null, boxLabel?: BoxLabel, numbers?: ReadonlyMap<string, number>,
+): void {
 	if (el.type === "text") {
 		drawTextElement(ctx, el);
+		return;
+	}
+	if (el.type === "marker") {
+		drawMarker(ctx, el);
+		return;
+	}
+	if (el.type === "box") {
+		drawBox(ctx, el, boxLabel);
+		return;
+	}
+	if (el.type === "equation") {
+		drawEquation(ctx, el, numbers?.get(el.id));
+		return;
+	}
+	if (el.type === "graph") {
+		drawGraph(ctx, el);
 		return;
 	}
 	ctx.save();
@@ -92,6 +126,12 @@ export interface LassoOverlay {
 	points: ReadonlyArray<readonly [number, number]>;
 }
 
+/** Strokes drawn over a page for a moment and never saved (the "peek at the solution" of a practice copy), page coordinates. */
+export interface PeekOverlay {
+	pageIndex: number;
+	strokes: readonly Stroke[];
+}
+
 /** Ruler placed on a page, drawn on the live layer (page coordinates). */
 export interface RulerOverlay {
 	pageIndex: number;
@@ -108,6 +148,24 @@ export interface SelectionOverlay {
 	bounds: BBox;
 	/** Handle size in CSS px. */
 	handle: number;
+	/**
+	 * wave 0.10 (359): the items of the other pages of a selection that crosses page boundaries. `offset` is what a point of
+	 * that page adds up to in the frame of `pageIndex` (the primary page, the one `matrix` and `bounds` are in).
+	 */
+	parts?: ReadonlyArray<{ pageIndex: number; strokes: readonly Stroke[]; elements: readonly PageElement[]; offset: readonly [number, number] }>;
+}
+
+/**
+ * v9: an element being edited in a panel (a graph whose functions, parameters or view change live): `before` and
+ * `hideStrokes` are hidden from the static layer, `after` and `showStrokes` (the ink on it, moved) are drawn on the live
+ * layer, until the edit is committed or cancelled.
+ */
+export interface ElementDraft {
+	pageIndex: number;
+	before: PageElement;
+	after: PageElement;
+	hideStrokes: readonly Stroke[];
+	showStrokes: readonly Stroke[];
 }
 
 export interface RendererOptions {
@@ -142,6 +200,8 @@ export interface RenderStats {
 	/** Strokes drawn in the last full static redraw (after page and bounds culling). */
 	strokesDrawn: number;
 	pagesDrawn: number;
+	/** Level of detail of the last full static redraw: 0 = exact strokes, 1..4 = simplified (see ink/lod.ts). */
+	lodLevel: number;
 }
 
 /**
@@ -160,7 +220,7 @@ export class Renderer {
 	wetCanvas: HTMLCanvasElement;
 	/** The pen's wet canvas has a desynchronized context. */
 	desynchronized = false;
-	readonly stats: RenderStats = { staticMs: 0, strokesDrawn: 0, pagesDrawn: 0 };
+	readonly stats: RenderStats = { staticMs: 0, strokesDrawn: 0, pagesDrawn: 0, lodLevel: 0 };
 	/** Called after each animation frame that drew something (for the performance overlay). */
 	onFrame: ((frameStart: number) => void) | null = null;
 
@@ -174,10 +234,15 @@ export class Renderer {
 	/** Viewport the static bitmap was drawn with (for the CSS fast path). */
 	private drawnViewport: Viewport = this.viewport;
 	private pages: readonly Page[] = [];
+	/** v9: numbers of the numbered equations, recomputed when the numbered equations change. */
+	private numbers: ReadonlyMap<string, number> = new Map();
+	private numbersKey = "";
 	private layout: Layout | null = null;
 	private live: LiveStroke | null = null;
 	private lasso: LassoOverlay | null = null;
 	private selection: SelectionOverlay | null = null;
+	private peek: PeekOverlay | null = null;
+	private draft: ElementDraft | null = null;
 	/** Content shown shifted while the insert/remove-space tool is dragged (hidden from the static layer meanwhile). */
 	private spacePreview: readonly SpacePreviewEntry[] | null = null;
 	private hidden: ReadonlySet<Stroke> | null = null;
@@ -185,9 +250,18 @@ export class Renderer {
 	/** Reading options of the view (never saved): ink and elements of PDF pages are not drawn; backgrounds are drawn with this opacity. */
 	private hideAnnotations = false;
 	private backgroundAlpha = 1;
+	/** wave 0.9 (367): night mode, view-only. Colours are mapped when they are drawn; the document is never touched. */
+	private night = false;
+	private readonly nightInkColor = memoColors(nightInk);
+	private readonly nightHighlighterColor = memoColors(nightHighlighter);
+	private readonly nightLineColor = memoColors(nightLine);
 	private selectedElements: ReadonlySet<PageElement> | null = null;
 	private ruler: RulerOverlay | null = null;
 	private media: MediaSource | null = null;
+	/** v8 invisible ink: whether the hidden strokes of a page are shown ("Show solutions", view-only). Null: never. */
+	private revealHidden: ((page: Page) => boolean) | null = null;
+	/** v8: the label of a structured box (translated by the view). */
+	private boxLabel: BoxLabel | undefined = undefined;
 
 	private staticDirty = true;
 	private liveDirty = false;
@@ -213,6 +287,11 @@ export class Renderer {
 	private readonly wetRelease: Array<{ wet: WetInk; frames: number }> = [];
 
 	private readonly paths = new WeakMap<Stroke, Path2D>();
+	/** Paths of strokes drawn from simplified points, per LOD level (drawing cache only, see ink/lod.ts). */
+	private readonly lodPaths = new WeakMap<Stroke, Array<Path2D | null | undefined>>();
+	/** Level of detail for committed strokes: set by each full static redraw from the zoom. */
+	private lod = 0;
+	private lodEnabled = true;
 	private readonly bounds = new WeakMap<Stroke, BBox>();
 
 	constructor(container: HTMLElement, options: RendererOptions = {}) {
@@ -312,9 +391,42 @@ export class Renderer {
 		this.invalidate();
 	}
 
+	/**
+	 * wave 0.9 (367): dark paper, light ink, lively highlighter (ink/night.ts). View-only: stored colours, exports and
+	 * thumbnails are not affected. The container gets the class `notebook-night` (the wet highlighter canvas blends with CSS).
+	 */
+	setNight(on: boolean): void {
+		if (on === this.night) return;
+		this.night = on;
+		this.container.toggleClass("notebook-night", on);
+		this.invalidate();
+	}
+
+	get nightMode(): boolean {
+		return this.night;
+	}
+
+	/** The colour `color` is drawn with: itself, or its night-mode counterpart. */
+	private inkColor(tool: Tool, color: string): string {
+		if (!this.night) return color;
+		return tool === "highlighter" ? this.nightHighlighterColor(color) : this.nightInkColor(color);
+	}
+
 	/** Bitmaps for PDF/scan backgrounds and image elements. */
 	setMedia(media: MediaSource | null): void {
 		this.media = media;
+		this.invalidate();
+	}
+
+	/** v8 invisible ink: hidden strokes are drawn only on the pages for which `reveal` is true (null: on none). */
+	setHiddenInk(reveal: ((page: Page) => boolean) | null): void {
+		this.revealHidden = reveal;
+		this.invalidate();
+	}
+
+	/** v8: how structured boxes are labelled (the view passes translated kind names). */
+	setBoxLabel(label: BoxLabel | undefined): void {
+		this.boxLabel = label;
 		this.invalidate();
 	}
 
@@ -334,8 +446,16 @@ export class Renderer {
 
 	setDocument(pages: readonly Page[] | null, layout: Layout | null): void {
 		this.pages = pages ?? [];
+		this.numbersKey = "";
 		this.layout = layout;
 		this.retransformWet();
+		this.invalidate();
+	}
+
+	/** Turns the level of detail for zoomed-out strokes on or off (on by default; off only to compare in benchmarks). */
+	setLodEnabled(enabled: boolean): void {
+		if (this.lodEnabled === enabled) return;
+		this.lodEnabled = enabled;
 		this.invalidate();
 	}
 
@@ -369,7 +489,7 @@ export class Renderer {
 		this.beginPage(ctx, box);
 		let drawn = true;
 		try {
-			this.fillStroke(ctx, stroke);
+			this.fillStroke(ctx, stroke, this.lod);
 		} catch (e) {
 			this.fault(ctx, "stroke", e);
 			drawn = false;
@@ -402,7 +522,7 @@ export class Renderer {
 				wet.clear();
 				this.wetRelease.splice(i, 1);
 			}
-			wet.begin(g, tool, color, t);
+			wet.begin(g, tool, this.inkColor(tool, color), t);
 			this.wet = wet;
 			this.wetPage = pageIndex;
 			return true;
@@ -544,10 +664,13 @@ export class Renderer {
 	/** Shows a selection; its strokes are hidden from the static layer while it floats. */
 	setSelection(selection: SelectionOverlay | null): void {
 		this.selection = selection;
-		this.applyHidden(
-			selection ? new Set(selection.strokes) : null,
-			selection && selection.elements.length > 0 ? new Set(selection.elements) : null,
-		);
+		const hidden = selection ? new Set(selection.strokes) : null;
+		const hiddenEls = new Set<PageElement>(selection?.elements ?? []);
+		for (const part of selection?.parts ?? []) {
+			for (const s of part.strokes) hidden?.add(s);
+			for (const e of part.elements) hiddenEls.add(e);
+		}
+		this.applyHidden(hidden, hiddenEls.size > 0 ? hiddenEls : null);
 	}
 
 	/**
@@ -578,6 +701,19 @@ export class Renderer {
 		this.hidden = hidden;
 		this.selectedElements = hiddenEls;
 		if (changedHidden) this.staticDirty = true;
+		this.liveDirty = true;
+		this.schedule();
+	}
+
+	/** v9: shows an element being edited live (see ElementDraft); null ends it. Never together with a floating selection. */
+	setElementDraft(draft: ElementDraft | null): void {
+		this.draft = draft;
+		this.applyHidden(draft ? new Set(draft.hideStrokes) : null, draft ? new Set([draft.before]) : null);
+	}
+
+	/** Strokes of another page drawn over this one while a button is held (wave 0.9: practice); view only, null removes them. */
+	setPeek(peek: PeekOverlay | null): void {
+		this.peek = peek;
 		this.liveDirty = true;
 		this.schedule();
 	}
@@ -673,6 +809,7 @@ export class Renderer {
 		}
 		this.staticDirty = false;
 		this.drawnViewport = this.viewport;
+		this.lod = this.lodEnabled ? lodLevel(this.viewport.scale, this.dpr) : 0;
 		this.staticCanvas.setCssStyles({ transform: "" });
 		const ctx = this.staticCtx;
 		this.resetIfFaulted(ctx);
@@ -691,7 +828,7 @@ export class Renderer {
 				ctx.shadowColor = SHADOW;
 				ctx.shadowBlur = 8 * this.dpr;
 				ctx.shadowOffsetY = 2 * this.dpr;
-				ctx.fillStyle = PAPER;
+				ctx.fillStyle = this.night ? NIGHT_PAPER : PAPER;
 				ctx.fillRect(0, 0, page.width, page.height);
 			} finally {
 				ctx.restore();
@@ -709,21 +846,34 @@ export class Renderer {
 				this.guarded(ctx, "paper", () => this.drawPaper(ctx, page, visible));
 				const bare = this.hideAnnotations && page.background?.kind === "pdf";
 				if (!bare && page.elements?.length) this.drawElements(ctx, page);
+				const reveal = this.revealHidden?.(page) ?? false;
+				const clips = graphClips(page.elements);
 				for (const stroke of page.strokes) {
-					if (bare || this.hidden?.has(stroke)) continue;
+					if (bare || this.hidden?.has(stroke) || (stroke.hidden && !reveal)) continue;
 					try {
 						const b = this.boundsOf(stroke);
 						// Bounds are padded by half the width; pen ink reaches 0.8 × width at full pressure, and
 						// the wet-ink curve may pass slightly outside its points.
 						const m = stroke.width * 0.3 + 1;
 						if (b.maxX + m < visible.minX || b.minX - m > visible.maxX || b.maxY + m < visible.minY || b.minY - m > visible.maxY) continue;
-						this.fillStroke(ctx, stroke);
+						// v9: ink bound to a graph is clipped to its frame (a zoom may have carried it outside).
+						const clip = strokeClip(stroke, clips);
+						if (clip) {
+							ctx.save();
+							ctx.beginPath();
+							ctx.rect(clip.x, clip.y, clip.width, clip.height);
+							ctx.clip();
+							this.fillStroke(ctx, stroke, this.lod);
+							ctx.restore();
+						} else this.fillStroke(ctx, stroke, this.lod);
 						strokesDrawn++;
 					} catch (e) {
 						this.fault(ctx, "stroke", e);
 						this.setInk(ctx, "pen", PAPER);
 					}
 				}
+				// v8 marker badges go above the ink, so they stay visible and tappable.
+				if (!bare && page.elements?.length) this.drawMarkers(ctx, page);
 			} finally {
 				ctx.restore();
 			}
@@ -731,6 +881,7 @@ export class Renderer {
 		this.stats.staticMs = performance.now() - t0;
 		this.stats.strokesDrawn = strokesDrawn;
 		this.stats.pagesDrawn = indices.length;
+		this.stats.lodLevel = this.lod;
 	}
 
 	/**
@@ -744,6 +895,12 @@ export class Renderer {
 		if (img) {
 			ctx.globalAlpha = this.backgroundAlpha;
 			ctx.drawImage(img, r.x, r.y, r.width, r.height);
+			if (this.night) {
+				// Night mode dims a PDF or picture instead of inverting it (inverted pages change what a figure means).
+				ctx.globalAlpha = NIGHT_BACKGROUND_VEIL;
+				ctx.fillStyle = NIGHT_PAPER;
+				ctx.fillRect(r.x, r.y, r.width, r.height);
+			}
 			return;
 		}
 		ctx.fillStyle = PLACEHOLDER;
@@ -756,7 +913,23 @@ export class Renderer {
 		}
 	}
 
-	/** Images, then text boxes; both under the ink. */
+	/** v9 + wave 0.9 night mode: how a graph's colours are drawn at night (ink colours for curves, line colours for the grid). */
+	private nightPalette(): GraphPalette {
+		return { paper: NIGHT_PAPER, ink: this.nightInkColor, line: this.nightLineColor };
+	}
+
+	/** v9: the automatic equation numbers of the document (cheap when nothing numbered changed). */
+	equationNumbers(): ReadonlyMap<string, number> {
+		let key = "";
+		for (const p of this.pages) for (const e of p.elements ?? []) if (e.type === "equation" && e.numbered) key += `${e.id}:${e.x}:${e.y};`;
+		if (key !== this.numbersKey) {
+			this.numbersKey = key;
+			this.numbers = key === "" ? new Map() : equationNumbers(this.pages);
+		}
+		return this.numbers;
+	}
+
+	/** Images, v9 graphs, v8 structured boxes, v9 equations, then text boxes; all under the ink. */
 	private drawElements(ctx: CanvasRenderingContext2D, page: Page): void {
 		const elements = page.elements ?? [];
 		const skip = (el: PageElement) => !!(this.hiddenElements?.has(el) || this.selectedElements?.has(el));
@@ -765,8 +938,30 @@ export class Renderer {
 			this.guarded(ctx, "image element", () => drawElement(ctx, el, this.media?.image(el.asset) ?? null));
 		}
 		for (const el of elements) {
+			if (el.type !== "graph" || skip(el)) continue;
+			// wave 0.9 night mode: the graph's paper, lines, curves and labels are mapped like the page's.
+			this.guarded(ctx, "graph element", () => drawGraph(ctx, el, this.night ? this.nightPalette() : undefined));
+		}
+		for (const el of elements) {
+			if (el.type !== "box" || skip(el)) continue;
+			this.guarded(ctx, "box element", () => drawBox(ctx, el, this.boxLabel));
+		}
+		const numbers = this.equationNumbers();
+		for (const el of elements) {
+			if (el.type !== "equation" || skip(el)) continue;
+			this.guarded(ctx, "equation element", () => drawEquation(ctx, this.night ? { ...el, color: this.nightInkColor(el.color) } : el, numbers.get(el.id)));
+		}
+		for (const el of elements) {
 			if (el.type !== "text" || skip(el)) continue;
-			this.guarded(ctx, "text element", () => drawTextElement(ctx, el));
+			this.guarded(ctx, "text element", () => drawTextElement(ctx, this.night ? { ...el, color: this.nightInkColor(el.color) } : el));
+		}
+	}
+
+	/** v8 marker badges, above the ink. */
+	private drawMarkers(ctx: CanvasRenderingContext2D, page: Page): void {
+		for (const el of page.elements ?? []) {
+			if (el.type !== "marker" || this.hiddenElements?.has(el) || this.selectedElements?.has(el)) continue;
+			this.guarded(ctx, "marker element", () => drawMarker(ctx, el));
 		}
 	}
 
@@ -808,7 +1003,7 @@ export class Renderer {
 		const hairline = Math.max(0.6, this.dpr) / (scale * this.dpr);
 		ctx.lineWidth = hairline;
 		for (const kind of ["minor", "major", "margin"] as const) {
-			ctx.strokeStyle = PAPER_COLORS[kind];
+			ctx.strokeStyle = this.night ? this.nightLineColor(PAPER_COLORS[kind]) : PAPER_COLORS[kind];
 			ctx.beginPath();
 			let any = false;
 			for (const l of lines) {
@@ -822,7 +1017,7 @@ export class Renderer {
 		if (dots.length > 0) {
 			// About one device pixel in radius at any zoom.
 			const r = Math.max(1, this.dpr * 0.6) / (scale * this.dpr);
-			ctx.fillStyle = PAPER_COLORS.dot;
+			ctx.fillStyle = this.night ? this.nightLineColor(PAPER_COLORS.dot) : PAPER_COLORS.dot;
 			ctx.beginPath();
 			for (const [x, y] of dots) {
 				ctx.moveTo(x + r, y);
@@ -845,20 +1040,13 @@ export class Renderer {
 		const sel = this.selection;
 		if (sel && boxes[sel.pageIndex]) this.guarded(ctx, "selection", () => {
 			const box = boxes[sel.pageIndex]!;
-			if (sel.elements.length > 0) {
-				// Elements are drawn as they will be once committed (a text box cannot rotate), under the ink.
-				this.beginPage(ctx, box);
-				for (const el of sel.elements) {
-					const moved = transformElement(el, sel.matrix, measureText);
-					drawElement(ctx, moved, moved.type === "image" ? this.media?.image(moved.asset) ?? null : null);
-				}
-				ctx.restore();
+			// A selection across pages floats over the gaps between them, so nothing is clipped to its page.
+			const clip = !sel.parts || sel.parts.length === 0;
+			this.drawSelectedItems(ctx, box, sel.strokes, sel.elements, sel.matrix, clip);
+			for (const part of sel.parts ?? []) {
+				const partBox = boxes[part.pageIndex];
+				if (partBox) this.drawSelectedItems(ctx, partBox, part.strokes, part.elements, partMatrix(sel.matrix, part.offset[0], part.offset[1]), false);
 			}
-			this.beginPage(ctx, box);
-			const [a, b, c, d, e, f] = sel.matrix;
-			ctx.transform(a, b, c, d, e, f);
-			for (const stroke of sel.strokes) this.fillStroke(ctx, stroke);
-			ctx.restore();
 			this.drawSelectionFrame(ctx, box, sel);
 		});
 
@@ -873,7 +1061,7 @@ export class Renderer {
 					const m = translate(0, e.dy);
 					for (const el of e.elements) {
 						const moved = transformElement(el, m, measureText);
-						drawElement(ctx, moved, moved.type === "image" ? this.media?.image(moved.asset) ?? null : null);
+						drawElement(ctx, moved, moved.type === "image" ? this.media?.image(moved.asset) ?? null : null, this.boxLabel, this.equationNumbers());
 					}
 					ctx.restore();
 				}
@@ -882,13 +1070,46 @@ export class Renderer {
 				const maxY = visibleDoc.maxY - box.y - e.dy;
 				this.beginPage(ctx, box);
 				ctx.translate(0, e.dy);
+				const page = this.pages[e.pageIndex];
+				const reveal = !!page && (this.revealHidden?.(page) ?? false);
 				for (const stroke of e.strokes) {
+					if (stroke.hidden && !reveal) continue;
 					const b = this.boundsOf(stroke);
 					if (b.maxY + stroke.width < minY || b.minY - stroke.width > maxY) continue;
 					this.fillStroke(ctx, stroke);
 				}
 				ctx.restore();
 			}
+		});
+
+		const peek = this.peek;
+		if (peek && peek.strokes.length > 0 && boxes[peek.pageIndex]) this.guarded(ctx, "peek", () => {
+			const visibleDoc = this.visibleRect();
+			const box = boxes[peek.pageIndex]!;
+			const minY = visibleDoc.minY - box.y;
+			const maxY = visibleDoc.maxY - box.y;
+			this.beginPage(ctx, box);
+			ctx.globalAlpha = 0.85;
+			for (const stroke of peek.strokes) {
+				const b = this.boundsOf(stroke);
+				if (b.maxY + stroke.width < minY || b.minY - stroke.width > maxY) continue;
+				this.fillStroke(ctx, stroke);
+			}
+			ctx.restore();
+		});
+
+		const draft = this.draft;
+		if (draft && boxes[draft.pageIndex]) this.guarded(ctx, "element draft", () => {
+			this.beginPage(ctx, boxes[draft.pageIndex]!);
+			drawElement(ctx, draft.after, null, this.boxLabel, this.equationNumbers());
+			const a = draft.after;
+			if (a.type === "graph") {
+				ctx.beginPath();
+				ctx.rect(a.x, a.y, a.width, a.height);
+				ctx.clip();
+			}
+			for (const stroke of draft.showStrokes) this.fillStroke(ctx, stroke);
+			ctx.restore();
 		});
 
 		const ruler = this.ruler;
@@ -961,6 +1182,25 @@ export class Renderer {
 		ctx.restore();
 	}
 
+	/** Selected elements (under the ink, as they will be once committed: a text box cannot rotate) and strokes, with `matrix` applied. */
+	private drawSelectedItems(
+		ctx: CanvasRenderingContext2D, box: PageBox, strokes: readonly Stroke[], elements: readonly PageElement[], matrix: Matrix, clip: boolean,
+	): void {
+		if (elements.length > 0) {
+			this.beginPage(ctx, box, clip);
+			for (const el of elements) {
+				const moved = transformElement(el, matrix, measureText);
+				drawElement(ctx, moved, moved.type === "image" ? this.media?.image(moved.asset) ?? null : null, this.boxLabel, this.equationNumbers());
+			}
+			ctx.restore();
+		}
+		this.beginPage(ctx, box, clip);
+		const [a, b, c, d, e, f] = matrix;
+		ctx.transform(a, b, c, d, e, f);
+		for (const stroke of strokes) this.fillStroke(ctx, stroke);
+		ctx.restore();
+	}
+
 	/** Dashed box with a scale handle (bottom-right) and a rotate handle (above the top edge), in screen space. */
 	private drawSelectionFrame(ctx: CanvasRenderingContext2D, box: PageBox, sel: SelectionOverlay): void {
 		const corners = selectionCorners(sel.bounds, sel.matrix).map(([x, y]) => this.pageToScreen(box, x, y));
@@ -994,30 +1234,70 @@ export class Renderer {
 	}
 
 	private setInk(ctx: CanvasRenderingContext2D, tool: Tool, color: string): void {
-		ctx.fillStyle = color;
+		ctx.fillStyle = this.inkColor(tool, color);
 		if (tool === "highlighter") {
-			ctx.globalAlpha = HIGHLIGHTER_ALPHA;
-			ctx.globalCompositeOperation = "multiply";
+			// Night mode: "multiply" would vanish on the dark paper, "screen" lights it.
+			ctx.globalAlpha = this.night ? NIGHT_HIGHLIGHTER_ALPHA : HIGHLIGHTER_ALPHA;
+			ctx.globalCompositeOperation = this.night ? "screen" : "multiply";
 		} else {
 			ctx.globalAlpha = 1;
 			ctx.globalCompositeOperation = "source-over";
 		}
 	}
 
-	private fillStroke(ctx: CanvasRenderingContext2D, stroke: Stroke): void {
-		let path = this.paths.get(stroke);
-		if (!path) {
-			if (stroke.render === RENDER_INK) {
-				path = new Path2D();
-				inkPath(path, stroke.points, stroke.width, stroke.tool);
-			} else {
-				path = new Path2D(strokePath(stroke.points, stroke.width, true, stroke.tool));
-			}
-			this.paths.set(stroke, path);
-		}
+	/** `lod` > 0: the path comes from simplified points (committed strokes of a zoomed-out view only; 0 = exact). */
+	private fillStroke(ctx: CanvasRenderingContext2D, stroke: Stroke, lod = 0): void {
+		const path = (lod > 0 ? this.lodPath(stroke, lod) : null) ?? this.exactPath(stroke);
 		this.setInk(ctx, stroke.tool, stroke.color);
 		ctx.fill(path);
 		if (stroke.tool === "highlighter") this.setInk(ctx, "pen", stroke.color);
+	}
+
+	private exactPath(stroke: Stroke): Path2D {
+		let path = this.paths.get(stroke);
+		if (!path) {
+			path = this.buildPath(stroke, stroke.points);
+			this.paths.set(stroke, path);
+		}
+		return path;
+	}
+
+	/** The stroke's path at a level of detail, or null when the exact path is to be used (remembered either way). */
+	private lodPath(stroke: Stroke, lod: number): Path2D | null {
+		let perLevel = this.lodPaths.get(stroke);
+		if (!perLevel) this.lodPaths.set(stroke, (perLevel = []));
+		let path = perLevel[lod];
+		if (path === undefined) {
+			path = this.buildLodPath(stroke, lod);
+			perLevel[lod] = path;
+		}
+		return path;
+	}
+
+	private buildLodPath(stroke: Stroke, lod: number): Path2D | null {
+		if (stroke.render === RENDER_INK) {
+			const nodes = lodNodes(stroke.points, stroke.width, stroke.tool, lod);
+			if (!nodes) return null;
+			const path = new Path2D();
+			addLodNodesPath(path, nodes);
+			return path;
+		}
+		const xy = lodPolygon(stroke.points, stroke.width, stroke.tool, lod);
+		if (!xy) return null;
+		const path = new Path2D();
+		path.moveTo(xy[0]!, xy[1]!);
+		for (let k = 2; k < xy.length; k += 2) path.lineTo(xy[k]!, xy[k + 1]!);
+		path.closePath();
+		return path;
+	}
+
+	private buildPath(stroke: Stroke, points: readonly Point[]): Path2D {
+		if (stroke.render === RENDER_INK) {
+			const path = new Path2D();
+			inkPath(path, points, stroke.width, stroke.tool);
+			return path;
+		}
+		return new Path2D(strokePath(points, stroke.width, true, stroke.tool));
 	}
 
 	/** Visible area in document coordinates. */

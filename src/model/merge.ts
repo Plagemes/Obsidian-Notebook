@@ -13,6 +13,9 @@
  *   merged field by field: the main notebook's value of each field wins, fields it lacks are filled in from
  *   the copy, and fields set to a different value on the two sides are counted in the summary; the reading
  *   position of the main notebook is kept (it is not content, and the next save writes the current one);
+ * - v8: hidden (invisible) ink is part of a stroke's content; markers and boxes are elements like the others, except
+ *   that a marker's resolved state is not content: the same marker resolved on one side only is resolved in the
+ *   result (counted in `markersResolved`), never added twice;
  * - v6 margins: a left margin shifts the whole page content by its width, so when a common page has a
  *   different left margin in the copy, the copy's strokes and elements are first moved into the main
  *   page's frame (by the difference of the left margins). Ink that is the same relative to the
@@ -31,11 +34,15 @@ import { cloneMeta, createId } from "./document";
 import { growForInfinite } from "../ink/infinite";
 import { textElementBounds } from "../ink/text-layout";
 import { AddAsset, AddElement, AddPage, AddStroke, Batch, SetMeta, SetPageMargins, SetPageSize, type Command } from "./history";
+import { SetMarkerDone } from "./marker-commands";
+import { boxBounds, markerBounds } from "./markers";
+import { stableStringify } from "./math-elements";
 import { marginsEqual, marginsOf, normalizeMargins, translateElement, translateStroke } from "./margins";
 import { normalizeBookmarkInfo } from "./bookmarks";
 import { SetPageTags, unionPageTags } from "./page-tags";
-import { freezeElement, freezeStroke } from "./serialize";
-import { DEFAULT_META, type BookmarkInfo, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type PageMargins, type Stroke } from "./types";
+import { copyStroke as copyStrokeWithId } from "./pages";
+import { freezeElement } from "./serialize";
+import { DEFAULT_META, type BookmarkInfo, type MarkerElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type PageMargins, type Stroke } from "./types";
 
 export interface MergeSummary {
 	/** Pages only in the copy, added. */
@@ -68,6 +75,8 @@ export interface MergeSummary {
 	pagesEnlarged: number;
 	/** Items of the main notebook missing from the copy (kept: deletions are not inferred). */
 	onlyInMain: number;
+	/** v8: markers resolved in the copy only, resolved in the main notebook too ("either", like favourite). */
+	markersResolved: number;
 }
 
 export interface MergePlan {
@@ -77,12 +86,23 @@ export interface MergePlan {
 }
 
 export function strokeContentKey(s: Stroke): string {
-	return JSON.stringify([s.tool, s.color, s.width, s.render, s.points]);
+	// v8: hidden ink differs from the same ink shown.
+	return s.hidden ? JSON.stringify([s.tool, s.color, s.width, s.render, s.points, true]) : JSON.stringify([s.tool, s.color, s.width, s.render, s.points]);
 }
 
 export function elementContentKey(e: PageElement): string {
 	const { id: _id, ...rest } = e;
 	void _id;
+	// v8: whether a marker is resolved is its state, not its content (see planMerge).
+	if (rest.type === "marker") delete (rest as Partial<MarkerElement>).done;
+	// v9: graphs nest objects (viewport, functions): keys sorted at every level, none dropped. The cached outline of an
+	// equation is how it looks, not what it is: the same LaTeX typeset on two devices is the same equation.
+	if (rest.type === "graph") return stableStringify(rest);
+	if (rest.type === "equation") {
+		const { outline: _o, ...eq } = rest;
+		void _o;
+		return stableStringify(eq);
+	}
 	return JSON.stringify(rest, Object.keys(rest).sort());
 }
 
@@ -128,6 +148,13 @@ function fitOnPage(target: Page, copy: Page, fresh: { strokes: readonly Stroke[]
 		}
 	}
 	for (const e of fresh.elements) {
+		if (e.type === "marker" || e.type === "box" || e.type === "equation" || e.type === "graph") {
+			const b = e.type === "marker" ? markerBounds(e) : e.type === "box" ? boxBounds(e) : { minX: e.x, maxX: e.x + e.width, maxY: e.y + e.height };
+			minX = Math.min(minX, b.minX);
+			maxX = Math.max(maxX, b.maxX);
+			maxY = Math.max(maxY, b.maxY);
+			continue;
+		}
 		const bottom = e.type === "image" ? e.y + e.height : textElementBounds(e).maxY;
 		minX = Math.min(minX, e.x);
 		maxX = Math.max(maxX, e.x + e.width);
@@ -168,7 +195,7 @@ function inFrame(page: Page, dx: number): { strokes: readonly Stroke[]; elements
 }
 
 function copyStroke(s: Stroke, id: string): Stroke {
-	return freezeStroke({ id, tool: s.tool, color: s.color, width: s.width, render: s.render, points: s.points.map((p) => [p[0], p[1], p[2]] as [number, number, number]) });
+	return copyStrokeWithId(s, id);
 }
 
 function copyElement(e: PageElement, id: string): PageElement {
@@ -179,13 +206,15 @@ function copyElement(e: PageElement, id: string): PageElement {
 export function planMerge(main: NotebookDocument, other: NotebookDocument): MergePlan {
 	const summary: MergeSummary = {
 		pagesAdded: 0, strokesAdded: 0, strokesCopied: 0, elementsAdded: 0, elementsCopied: 0, assetsAdded: 0,
-		tagsAdded: 0, bookmarksAdded: 0, bookmarkInfoAdded: 0, bookmarkInfoDiffer: 0, pageTagsAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0,
+		tagsAdded: 0, bookmarksAdded: 0, bookmarkInfoAdded: 0, bookmarkInfoDiffer: 0, pageTagsAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0, markersResolved: 0,
 	};
 	const commands: Command[] = [];
 
 	// Ids in use (strokes and elements share one id space) and the content of each.
 	const used = new Map<string, string>();
 	const mainPages = new Map<string, Page>();
+	/** v8: markers of the main notebook by id, to carry a resolved state over (see `resolveFrom`). */
+	const mainMarkers = new Map<string, { pageId: string; done: boolean }>();
 	/** Content keys present on each page of the result, for the idempotence of copies. */
 	const contentOn = new Map<string, Set<string>>();
 	for (const page of main.pages) {
@@ -200,9 +229,22 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 			const k = `e${elementContentKey(e)}`;
 			used.set(e.id, k);
 			keys.add(k);
+			if (e.type === "marker") mainMarkers.set(e.id, { pageId: page.id, done: !!e.done });
 		}
 		contentOn.set(page.id, keys);
 	}
+	/**
+	 * A marker of the copy that is the same marker as one of the main notebook (same id, same content: `key`): resolved
+	 * there too when the copy resolved it. Found by id when applied, so a margin change in the same step does not matter.
+	 */
+	const resolveFrom = (e: PageElement, key: string): void => {
+		if (e.type !== "marker" || !e.done || used.get(e.id) !== key) return;
+		const main = mainMarkers.get(e.id);
+		if (!main || main.done) return;
+		commands.push(new SetMarkerDone(main.pageId, e.id, true));
+		mainMarkers.set(e.id, { pageId: main.pageId, done: true });
+		summary.markersResolved++;
+	};
 	const freshId = () => {
 		let id = createId();
 		while (used.has(id)) id = createId();
@@ -305,7 +347,10 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 			for (const e of content.elements) {
 				const key = `e${elementContentKey(e)}`;
 				const d = decide(e.id, key, page.id, "element");
-				if (d.kind === "skip") continue;
+				if (d.kind === "skip") {
+					resolveFrom(e, key);
+					continue;
+				}
 				const el = d.kind === "keep" ? e : copyElement(e, d.id);
 				commands.push(new AddElement(page.id, el, elAt++));
 				keys.add(key);
@@ -426,7 +471,7 @@ export function mergeMeta(main: NotebookMeta, other: NotebookMeta, pageIds: Read
 /** Number of changes a summary describes (0: the copy holds nothing new). */
 export function mergeChangeCount(s: MergeSummary): number {
 	return s.pagesEnlarged + s.pagesAdded + s.strokesAdded + s.strokesCopied + s.elementsAdded + s.elementsCopied + s.assetsAdded + s.tagsAdded
-		+ s.bookmarksAdded + s.bookmarkInfoAdded + s.pageTagsAdded;
+		+ s.bookmarksAdded + s.bookmarkInfoAdded + s.pageTagsAdded + s.markersResolved;
 }
 
 /**
@@ -440,6 +485,9 @@ export function mergeChangeCount(s: MergeSummary): number {
 export function mergeCovers(result: NotebookDocument, other: NotebookDocument): boolean {
 	const byId = new Map<string, string>();
 	const onPage = new Map<string, Set<string>>();
+	/** v8: content keys of resolved markers per page, and resolved marker ids. */
+	const resolvedOn = new Map<string, Set<string>>();
+	const resolvedIds = new Set<string>();
 	for (const p of result.pages) {
 		const keys = new Set<string>();
 		for (const s of p.strokes) {
@@ -447,12 +495,18 @@ export function mergeCovers(result: NotebookDocument, other: NotebookDocument): 
 			byId.set(s.id, k);
 			keys.add(k);
 		}
+		const resolved = new Set<string>();
 		for (const e of p.elements ?? []) {
 			const k = `e${elementContentKey(e)}`;
 			byId.set(e.id, k);
 			keys.add(k);
+			if (e.type === "marker" && e.done) {
+				resolved.add(k);
+				resolvedIds.add(e.id);
+			}
 		}
 		onPage.set(p.id, keys);
+		resolvedOn.set(p.id, resolved);
 	}
 	const resultPages = new Map(result.pages.map((p) => [p.id, p]));
 	for (const p of other.pages) {
@@ -467,6 +521,8 @@ export function mergeCovers(result: NotebookDocument, other: NotebookDocument): 
 		for (const e of content.elements) {
 			const k = `e${elementContentKey(e)}`;
 			if (byId.get(e.id) !== k && !keys.has(k)) return false;
+			// v8: a marker the copy resolved is resolved in the result (the same marker, or the same content on the page).
+			if (e.type === "marker" && e.done && !(byId.get(e.id) === k && resolvedIds.has(e.id)) && !resolvedOn.get(p.id)?.has(k)) return false;
 		}
 	}
 	for (const id of Object.keys(other.assets ?? {})) if (!result.assets?.[id]) return false;

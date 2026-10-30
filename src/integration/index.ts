@@ -15,6 +15,7 @@ import { registerNativeEmbed } from "./native-embed";
 import { openNotebookAtPage } from "./open";
 import { PageLinkSuggest } from "./page-link-suggest";
 import { trackActiveNote } from "./page-share";
+import { runUpdateLinks } from "./update-links";
 import { NotebookPickerModal } from "./picker";
 import { registerProtocol } from "./protocol";
 import { registerTags } from "./tags";
@@ -38,13 +39,13 @@ export interface IntegrationDeps {
 }
 
 /** Registers embeds, the `obsidian://notebook` link, version history and companion notes. Called once from onload. */
-export function registerIntegration(plugin: IntegrationPlugin, deps: IntegrationDeps): void {
+export function registerIntegration(plugin: IntegrationPlugin, deps: IntegrationDeps): HistoryService {
 	const { app } = plugin;
 	const folder = () => plugin.settings.folder;
-	const open = (file: TFile, page: number | null) => void openNotebookAtPage(app, file, page);
+	const open = (file: TFile, page: number | null, pageId: string | null = null) => void openNotebookAtPage(app, file, page, null, pageId);
 
 	// #22 Embed a page in a Markdown note.
-	registerEmbed(plugin, { app, folder, background: deps.background, open: (file, page) => open(file, page) });
+	registerEmbed(plugin, { app, folder, background: deps.background, open: (file, page, pageId) => open(file, page, pageId ?? null) });
 	plugin.addCommand({
 		id: "insert-embed",
 		name: t("command.embedInsert"),
@@ -56,10 +57,13 @@ export function registerIntegration(plugin: IntegrationPlugin, deps: Integration
 	});
 
 	// O6 `![[Notebook.notebook#p3]]`, O4 page suggestions, O9 file explorer menu, O20 insert into a note.
-	registerNativeEmbed(plugin, { app, folder, background: deps.background, open: (file, page) => open(file, page) });
+	registerNativeEmbed(plugin, { app, folder, background: deps.background, open: (file, page, pageId) => open(file, page, pageId ?? null) });
 	plugin.registerEditorSuggest(new PageLinkSuggest(app));
 	registerFileMenu(plugin, { newNotebookIn: deps.newNotebookIn, annotatePdf: deps.annotatePdf });
 	trackActiveNote(plugin);
+
+	// wave 0.8 (388): rewrites old `#pN` links to name the page by id (dry run first).
+	plugin.addCommand({ id: "update-page-links", name: t("command.updateLinks"), callback: () => void runUpdateLinks(plugin) });
 
 	// #58 obsidian://notebook?path=...&page=...
 	registerProtocol(plugin, { app, folder, open });
@@ -82,4 +86,6 @@ export function registerIntegration(plugin: IntegrationPlugin, deps: Integration
 
 	// #168 Public API for other plugins.
 	plugin.api = createNotebookApi(plugin);
+	// wave 0.7: resilience: the integrity check offers the version history of a notebook.
+	return history;
 }

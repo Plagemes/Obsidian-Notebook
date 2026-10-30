@@ -9,6 +9,9 @@ import { estimateMeasure, textElementBounds, type MeasureText } from "./text-lay
  * topmost element under which at least `ATTACH_SHARE` of its points lie. Moving, scaling or rotating that
  * element transforms those strokes with it; deleting the element offers to delete them too. Pure: the view
  * decides when to ask and which setting applies.
+ *
+ * v8 markers and structured boxes never own ink: they annotate a region of the page, they are not a surface the ink
+ * is written on, so moving or deleting one leaves the ink it frames where it is (see `ownsInk`).
  */
 
 /** Share of a stroke's points that must lie inside an element for the stroke to belong to it. */
@@ -28,10 +31,55 @@ function overlap(a: BBox, b: BBox): boolean {
 	return a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY;
 }
 
+/**
+ * Whether ink can belong to the element: texts and images, and v9 equations and graphs (ink written on a graph keeps
+ * its graph coordinates, ink/graph-ink.ts); v8 markers and boxes only frame the page.
+ */
+export function ownsInk(el: PageElement): boolean {
+	return el.type === "text" || el.type === "image" || el.type === "equation" || el.type === "graph";
+}
+
+/**
+ * v9: ink bound to a graph. When panning or zooming a graph moves the ink on it, the moved strokes get the id
+ * `<graph id>~<new id>`: from then on they belong to that graph whatever their position (a zoom may carry them outside
+ * the frame, where they are clipped away, and a later zoom brings them back). No format change: an id is any string.
+ * Copies give strokes new ids, so a copied graph falls back to the geometric rule.
+ */
+export const BOUND_SEPARATOR = "~";
+
+/** The id of the graph a stroke is bound to, or null. */
+export function boundGraphId(stroke: Stroke): string | null {
+	const at = stroke.id.indexOf(BOUND_SEPARATOR);
+	return at > 0 ? stroke.id.slice(0, at) : null;
+}
+
+/** Whether `stroke` is bound to `el` (a graph). */
+export function boundTo(stroke: Stroke, el: PageElement): boolean {
+	return el.type === "graph" && boundGraphId(stroke) === el.id;
+}
+
+/** Frames of the graphs of a page by id (null when it has none): bound ink is drawn clipped to its graph's frame. */
+export function graphClips(elements: readonly PageElement[] | undefined): Map<string, { x: number; y: number; width: number; height: number }> | null {
+	let out: Map<string, { x: number; y: number; width: number; height: number }> | null = null;
+	for (const el of elements ?? []) {
+		if (el.type !== "graph") continue;
+		out ??= new Map();
+		out.set(el.id, { x: el.x, y: el.y, width: el.width, height: el.height });
+	}
+	return out;
+}
+
+/** The frame a stroke is clipped to (its graph is on the page), or null. */
+export function strokeClip(stroke: Stroke, clips: ReturnType<typeof graphClips>): { x: number; y: number; width: number; height: number } | null {
+	if (!clips) return null;
+	const id = boundGraphId(stroke);
+	return id === null ? null : clips.get(id) ?? null;
+}
+
 /** Whether (x, y) is on the element: the rotated rectangle of an image, the laid-out box of a text. */
 export function pointOnElement(el: PageElement, x: number, y: number, measure: MeasureText = estimateMeasure): boolean {
 	if (el.type === "image") return inImage(el, x, y);
-	const b = textElementBounds(el, measure);
+	const b = el.type === "text" ? textElementBounds(el, measure) : elementBounds(el, measure);
 	return x >= b.minX && x <= b.maxX && y >= b.minY && y <= b.maxY;
 }
 
@@ -48,9 +96,16 @@ export function inkOwner(
 	stroke: Stroke, elements: readonly PageElement[], measure: MeasureText = estimateMeasure, share = ATTACH_SHARE,
 	boxes?: ReadonlyMap<PageElement, BBox>,
 ): PageElement | null {
+	// Bound ink belongs to its graph wherever it is (see BOUND_SEPARATOR).
+	const graphId = boundGraphId(stroke);
+	if (graphId !== null) {
+		const g = elements.find((e) => e.type === "graph" && e.id === graphId);
+		if (g) return g;
+	}
 	const sb = strokeBounds(stroke);
 	for (let i = elements.length - 1; i >= 0; i--) {
 		const el = elements[i]!;
+		if (!ownsInk(el)) continue;
 		const eb = boxes?.get(el) ?? elementBounds(el, measure);
 		if (!overlap(sb, eb)) continue;
 		if (shareOnElement(stroke, el, measure) >= share) return el;
@@ -71,14 +126,20 @@ export function attachedInk(
 	strokes: readonly Stroke[], elements: readonly PageElement[], moving: readonly PageElement[],
 	exclude: ReadonlySet<Stroke> = new Set(), measure: MeasureText = estimateMeasure, share = ATTACH_SHARE,
 ): Stroke[] {
-	if (moving.length === 0 || elements.length === 0) return [];
-	const movingSet = new Set(moving);
+	const owners = moving.filter(ownsInk);
+	if (owners.length === 0 || elements.length === 0) return [];
+	const movingSet = new Set(owners);
 	const boxes = boxesOf(elements, measure);
 	// Only strokes that touch a moving element can belong to it.
-	const movingBoxes = moving.map((e) => boxes.get(e) ?? elementBounds(e, measure));
+	const movingBoxes = owners.map((e) => boxes.get(e) ?? elementBounds(e, measure));
 	const out: Stroke[] = [];
 	for (const stroke of strokes) {
 		if (exclude.has(stroke)) continue;
+		const bound = boundGraphId(stroke);
+		if (bound !== null && owners.some((e) => e.type === "graph" && e.id === bound)) {
+			out.push(stroke);
+			continue;
+		}
 		const sb = strokeBounds(stroke);
 		if (!movingBoxes.some((b) => overlap(sb, b))) continue;
 		const owner = inkOwner(stroke, elements, measure, share, boxes);

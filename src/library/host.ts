@@ -1,4 +1,4 @@
-import { loadPdfJs, normalizePath, Notice, Platform, type App, type TFile, type WorkspaceLeaf } from "obsidian";
+import { loadPdfJs, normalizePath, Platform, type App, type TFile, type WorkspaceLeaf } from "obsidian";
 import { t } from "../i18n";
 import { createDocument, createId } from "../model/document";
 import { backgroundRect } from "../model/margins";
@@ -15,7 +15,8 @@ import { createNotebook } from "../storage/notebooks";
 import { LibraryTrash } from "../storage/trash";
 import { documentFromTemplate } from "../model/templates";
 import { openTemplateGallery } from "../view/page-tools";
-import { VaultDocumentIO } from "../storage/vault-io";
+import { headerField } from "../storage/integrity";
+import { journalFolder, sidecarDeviceId, VaultDocumentIO, vaultDeviceFileAdapter } from "../storage/vault-io";
 import { resolveAssetFile, storeAsset } from "../view/media";
 import { NewNotebookModal, type NewNotebookOptions } from "../view/modals";
 import { NotebookView, VIEW_TYPE } from "../view/notebook-view";
@@ -25,8 +26,11 @@ import { libraryIndexPath, parseStoredJson, patchNotebookId, patchNotebookMeta, 
 import { importPdfAsNotebook } from "./import-pdf";
 import { createLectureFromSlides } from "./lecture-pack";
 import { openLooseSheet } from "./loose-sheet";
+import { openLibraryCheck } from "./library-check-modal";
+import { LibraryStateStore } from "./library-state-store";
 import type { LibraryHost } from "./library-view";
 import type { ThumbnailOptions } from "./thumbnail";
+import { showNotice } from "../view/notice";
 
 /** Longest wait for a closing notebook view's final save before a library move goes on. */
 const CLOSE_WAIT_MS = 10_000;
@@ -53,8 +57,11 @@ export class NotebookLibraryHost implements LibraryHost {
 	private readonly assets = new Map<string, Asset>();
 	/** Library trash (#160): deleting from the library moves to `_trash/`. */
 	readonly trash: LibraryTrash;
+	/** Roadmap 54: pinned, archived and manual order, one file per device in `_meta` (library/library-state.ts). */
+	readonly state: LibraryStateStore;
 
 	constructor(private readonly plugin: HostPlugin) {
+		this.state = new LibraryStateStore(vaultDeviceFileAdapter(plugin.app), () => plugin.settings.folder, sidecarDeviceId(plugin.app));
 		this.trash = new LibraryTrash({
 			app: plugin.app,
 			root: () => plugin.settings.folder,
@@ -112,6 +119,27 @@ export class NotebookLibraryHost implements LibraryHost {
 			console.error("[notebook] could not read", file.path, e);
 			return null;
 		}
+	}
+
+	/** The id at the start of the file, without parsing it; the whole parse when the file is laid out differently. */
+	async readNotebookId(file: TFile): Promise<string | null> {
+		try {
+			const quick = headerField(readNotebookText(file.extension, await this.app.vault.cachedRead(file)), "id");
+			if (quick) return quick;
+		} catch (e) {
+			console.error("[notebook] could not read", file.path, e);
+			return null;
+		}
+		return (await this.readNotebook(file))?.id ?? null;
+	}
+
+	/** Roadmap 27: the library check (unreadable notebooks, unused files). */
+	checkLibrary(): void {
+		openLibraryCheck(this.app, () => this.plugin.settings, {
+			journalFolder: journalFolder(this.app, this.plugin.manifest.id),
+			// What every open notebook holds in memory: a view that cannot be inspected makes the check incomplete (it throws).
+			openRoots: () => this.app.workspace.getLeavesOfType(VIEW_TYPE).flatMap((leaf) => (leaf.view instanceof NotebookView ? leaf.view.libraryCheckRoots() : [])),
+		});
 	}
 
 	// ----------------------------------------------------------------- opening
@@ -179,7 +207,7 @@ export class NotebookLibraryHost implements LibraryHost {
 			const file = await createNotebook(this.app, folder, o.name, doc);
 			await this.openNotebook(file);
 		} catch (e) {
-			new Notice(t("notice.createFailed", { error: (e as Error).message }));
+			showNotice(t("notice.createFailed", { error: (e as Error).message }));
 		}
 	}
 
@@ -198,10 +226,10 @@ export class NotebookLibraryHost implements LibraryHost {
 			create: (dir, name, doc) => createNotebook(this.app, dir, name, doc),
 			open: (file) => this.openNotebook(file),
 			progress: (text) => {
-				const notice = new Notice(text, 0);
+				const notice = showNotice(text, 0);
 				return () => notice.hide();
 			},
-			notify: (text) => void new Notice(text),
+			notify: (text) => void showNotice(text),
 			messages: {
 				working: (name) => t("import.working", { name }),
 				failed: (error) => t("import.failed", { error }),
@@ -242,10 +270,10 @@ export class NotebookLibraryHost implements LibraryHost {
 			create: (dir, name, doc) => createNotebook(this.app, dir, name, doc),
 			open: (file) => this.openNotebook(file),
 			progress: (text) => {
-				const notice = new Notice(text, 0);
+				const notice = showNotice(text, 0);
 				return () => notice.hide();
 			},
-			notify: (text) => void new Notice(text),
+			notify: (text) => void showNotice(text),
 			messages: {
 				working: (name) => t("import.working", { name }),
 				failed: (error) => t("import.failed", { error }),
@@ -283,7 +311,7 @@ export class NotebookLibraryHost implements LibraryHost {
 			const file = await createNotebook(this.app, folder, name, doc);
 			await this.openNotebook(file);
 		} catch (e) {
-			new Notice(t("scan.failed", { error: (e as Error).message }), 8000);
+			showNotice(t("scan.failed", { error: (e as Error).message }), 8000);
 		}
 	}
 
