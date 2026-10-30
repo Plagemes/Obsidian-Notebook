@@ -190,6 +190,12 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Highlighter that snaps to the PDF text lines (#43): option in the highlighter's options, one straight highlighter stroke per line crossed (whole words), one undo step, hand-drawn stroke kept when no text is under it | ✅ | ✅ `tests/pdf-reading.test.ts`: words, 40% coverage, lines, gap between lines, columns, taps, blank and vertical runs, stroke points; ✅ harness scenario `pdf` (strokes in the real view: width, one undo step, no text, option off); ❌ real PDFs | | ✅ | text geometry from pdf.js (baseline and font size); rotated text is not snapped; the text of a page must be read before pen-up |
 | Show/hide all annotations on PDF pages (#188): view only, indicator banner with a button to show them again, editing and the toolbar disabled meanwhile, a finger still scrolls, nothing saved or changed | ✅ | ✅ harness scenario `pdf`: ink disappears from the static layer, no stroke can be added, tools disabled, finger pans, banner button restores; ❌ on a device | | | exports and thumbnails still contain the ink |
 | Dim the background (#199): toggle and strength slider (10-80%) in the "more" menu, kept in the plugin settings; PDF and image backgrounds only; exports and thumbnails are not dimmed | ✅ | ✅ settings parsing and opacity; ✅ harness scenario `pdf`: background pixel lighter, slider changes it, off restores it; ❌ on a device | | | |
+| Sync safety (#342–#345) pure logic: presence file names, records, freshness, device id and name; not-downloaded placeholders; waiting assets; sync check of folders, names, paths, case clashes and sizes | ✅ | ✅ `tests/sync-safety.test.ts` | | | |
+| Not-downloaded session mode (#344): 0-byte / whitespace / NUL file never broken, backed up or written; loads when the content arrives; no conflict backup of a placeholder | ✅ | ✅ `tests/sync-safety.test.ts`, `tests/session.test.ts` | | | |
+| "Open on another device" (#342): presence file per notebook and device, heartbeat every 60 s only while visible, removed on close, own leftovers removed at startup; banner with *Open read-only* / *Open anyway*; device name setting (local storage) | ✅ | ❌ (needs Obsidian and two devices) | | ✅ | freshness window (15 min) to be tuned against real sync intervals |
+| Assets waiting for sync (#343): placeholder card / label, page editable, asset reloaded on vault create/modify/rename | ✅ | ✅ availability rule; ❌ rendering and vault events in Obsidian | | | |
+| Not downloaded yet (#344) in the view (message, status, 4 s re-read while visible), library card, embed and repair command | ✅ | ❌ (needs Obsidian) | | | |
+| Check sync safety (#345): command, settings row, startup notice when the issues change, per-notebook warning on open, other devices seen | ✅ | ✅ issue detection; ❌ dialog and notices | | | |
 
 ## Automated checks
 
@@ -543,6 +549,30 @@ Not verified on a device. Fill in the result table at the end of this file.
 - **O8. Stamp with an image and text.** Select an image and a text box together, save as a stamp, delete the originals, place the stamp. Expected: both come back; the image uses the same file in `_assets/` (no copy).
 - **O9. Rename and delete a stamp.** Use the pencil and trash buttons on a stamp. Expected: the name changes in the palette and the file; delete asks first and moves the file to the trash; notebooks that used the stamp are unchanged.
 - **O10. Palette on a phone and with a finger.** Open the palette on a narrow screen. Expected: it fits, the list scrolls vertically, a sideways drag from a tile onto the page places the stamp. Report whether a vertical or diagonal drag scrolls the list instead of dragging.
+
+### Sync safety (wave 0.7)
+
+Not verified in Obsidian or on a device. Needs two devices syncing the same vault through Google Drive or OneDrive (for example Autosync or FolderSync on Android) unless said otherwise.
+
+- **Y1. Open on another device.** Open a notebook on device A, wait for the sync app to upload `Notebooks/_meta/presence/`, sync device B and open the same notebook there. Expected: a banner above the page on B names device A and how long ago it was active, with *Open read-only* and *Open anyway*; the page can be used meanwhile. On A, nothing changes (or, if B's file arrives while A is open, the banner appears on A too).
+- **Y2. Read-only.** On B tap *Open read-only*. Expected: the toolbar is disabled, the pen does not write, nothing is saved (the file's modification time does not change); *Edit anyway* enables editing again. *Open anyway* instead only hides the banner.
+- **Y3. Heartbeat stops in the background and the file goes on close.** On A, put Obsidian in the background for 5 minutes, then check (file manager or the other device) that the presence file's time did not change; bring it back: it is refreshed at once. Close the notebook on A: the file disappears (and, after syncing, from B). Kill Obsidian on A with a notebook open, restart it: its own leftover file is removed at startup. No `(1)` or conflict copy of any file in `_meta` appears on either device.
+- **Y4. Device name.** *Settings, Device name*: change it on A, reopen the notebook on A. Expected on B (after syncing): the banner shows the new name. The name is not in the plugin's `data.json`.
+- **Y5. Asset waiting for sync.** On A, insert an image and import a PDF into a notebook; on B, let the sync app download the notebook but not `_assets` (pause it, or delete the asset file on B only). Open the notebook on B. Expected: a dashed "Waiting for sync…" card where the image is, "Waiting for sync: <name>" on the PDF page, no error notice, and the page can still be written on. Resume syncing: the image and PDF appear by themselves without reopening.
+- **Y6. Not downloaded yet.** Make a notebook file 0 bytes on B (an online-only file of the sync app, or create an empty `Test.notebook` with a file manager). Expected: the library card says *Not downloaded yet*; opening it shows *Not downloaded yet* (no *Repair…* button), the status says *Not downloaded*; the command *Repair damaged notebook* says it is not damaged; no `.bak` is created in `_backup`. Then put the real content in the file (let the sync app download it, or copy a notebook over it): it opens by itself within a few seconds, in the library too.
+- **Y7. Sync check.** Command *Check sync safety* (also in the settings). Create `Notebooks/What?.notebook` (on Windows, or with a file manager that allows it), a 15 MB PDF in a notebook, and two notebooks named `Notes` and `notes` (on a case-sensitive device). Expected: each is listed with a clear explanation; the dialog says whether other devices were seen in this folder and what cannot be checked. Restart Obsidian: a notice appears once; restart again with nothing changed: no notice.
+- **Y8. Folder excluded.** Set the notebooks folder to `.obsidian/Notebooks` (or a hidden folder) in the settings and run the check. Expected: the first line explains that this folder is often not synced. Set it back.
+
+| Step | Device | Result | Notes |
+|---|---|---|---|
+| Y1 Open on another device | | | |
+| Y2 Read-only | | | |
+| Y3 Heartbeat, close, leftovers | | | |
+| Y4 Device name | | | |
+| Y5 Asset waiting for sync | | | |
+| Y6 Not downloaded yet | | | |
+| Y7 Sync check | | | |
+| Y8 Folder excluded | | | |
 
 ## Quick check — Windows
 
