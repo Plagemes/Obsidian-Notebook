@@ -1,10 +1,10 @@
-import { Modal, Setting, type App } from "obsidian";
+import { Modal, type App } from "obsidian";
 import { t } from "../i18n";
 import { EventLog, LOG_LINES, PEN_TEST_EVENT_TYPES, describeTarget, noSignalYet, type LoggedEvent } from "../ink/pen-button";
 import { capacitorInventory, formatCapacitorInventory } from "../ink/pen-hover";
 import type { NotebookSettings } from "../settings";
 import { showNotice } from "./notice";
-import { displayPenButtonSettings, type PenButtonSettings, type PenButtonSettingsHost } from "./pen-button-settings";
+import type { PenButtonSettings, PenButtonSettingsHost } from "./pen-button-settings";
 
 /** What the test knows about this device's side button across sessions (a flag saved in the plugin settings). */
 export interface PenSignalInfo {
@@ -12,10 +12,7 @@ export interface PenSignalInfo {
 	seen(): boolean;
 	/** Remember that one has. */
 	markSeen(): void;
-	/**
-	 * 0.11.2: the S Pen fallback settings, shown at the top of the test until the settings tab has its *Pen & input*
-	 * section (see `pen-button-settings.ts`). Absent: no settings in the test.
-	 */
+	/** 0.11.2: the S Pen fallback settings; the test reads the side button timing windows for its verdict line. */
 	penButton?: PenButtonSettingsHost;
 }
 
@@ -58,7 +55,6 @@ export class PenTestModal extends Modal {
 	private lastText = "";
 	private signal!: HTMLElement;
 	private stop: () => void = () => {};
-	private stopSettings: () => void = () => {};
 	private frame = 0;
 	private capacitor!: HTMLElement;
 
@@ -76,10 +72,6 @@ export class PenTestModal extends Modal {
 		contentEl.createEl("p", { text: t("penTest.intro") });
 		contentEl.createEl("p", { text: t("penTest.window"), cls: "notebook-pentest-note" });
 		contentEl.createEl("p", { text: t("penTest.air"), cls: "notebook-pentest-note" });
-		if (this.info.penButton) {
-			new Setting(contentEl).setName(t("penTest.settings")).setHeading();
-			this.stopSettings = displayPenButtonSettings(contentEl, this.app, this.info.penButton);
-		}
 
 		this.area = contentEl.createDiv({ cls: "notebook-pentest-area", text: t("penTest.area") });
 		this.last = contentEl.createDiv({ cls: "notebook-pentest-last" });
@@ -136,8 +128,6 @@ export class PenTestModal extends Modal {
 	onClose(): void {
 		this.stop();
 		this.stop = () => {};
-		this.stopSettings();
-		this.stopSettings = () => {};
 		this.contentEl.empty();
 	}
 

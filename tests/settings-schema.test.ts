@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { en, type MessageKey } from "../src/i18n/en";
 import { LANGUAGES, LANGUAGE_CODES } from "../src/i18n/languages";
 import { DEFAULT_SETTINGS, type NotebookSettings } from "../src/settings";
@@ -160,14 +160,27 @@ describe("what the tab shows", () => {
 });
 
 describe("Pen & input extension point", () => {
-	afterEach(() => {
-		PEN_BUTTON_EXTENSIONS.length = 0;
+	it("places the S Pen rows after the side button and before the hold-still option, the timing in Advanced", () => {
+		const ids = settingSpecs().filter((s) => s.section === "input" && !s.group).map((s) => s.id);
+		const at = ids.indexOf("penSideButton");
+		expect(ids.slice(at, at + 5)).toEqual(["penSideButton", "penButtonEraserNext", "penButtonKey", "penButtonKeyAction", "penHoldStill"]);
+		const advanced = settingSpecs().filter((s) => s.section === "input" && s.group === ADVANCED).map((s) => s.id);
+		expect(advanced).toEqual(expect.arrayContaining(["penButtonContactBeforeMs", "penButtonContactAfterMs"]));
+		expect(PEN_BUTTON_EXTENSIONS.every((s) => s.section === "input")).toBe(true);
 	});
 
-	it("places an added S Pen row after the side button and before the hold-still option", () => {
-		PEN_BUTTON_EXTENSIONS.push({ id: "penChordButton-copy", section: "input", order: 41, name: "settings.penChord", control: { type: "action", run: "pen-test" } });
-		const ids = settingSpecs().filter((s) => s.section === "input" && !s.group).map((s) => s.id);
-		expect(ids.indexOf("penChordButton-copy")).toBe(ids.indexOf("penSideButton") + 1);
-		expect(ids.indexOf("penHoldStill")).toBe(ids.indexOf("penChordButton-copy") + 1);
+	it("shows the key action only once a key is set, and the button rows only while the button does something", () => {
+		const open = new Map([[groupKey("input", ADVANCED), true]]);
+		const on = shown(state({ penSideButton: "radial-eraser", penButtonKey: "" }, { groupOverrides: open }));
+		expect(on.has("penButtonEraserNext")).toBe(true);
+		expect(on.has("penButtonKey")).toBe(true);
+		expect(on.has("penButtonKeyAction")).toBe(false);
+		expect(on.has("penButtonContactBeforeMs") && on.has("penButtonContactAfterMs")).toBe(true);
+		expect(shown(state({ penButtonKey: "F9" })).has("penButtonKeyAction")).toBe(true);
+		const off = shown(state({ penSideButton: "off", penButtonKey: "F9" }, { groupOverrides: open }));
+		expect(off.has("penButtonEraserNext")).toBe(false);
+		expect(off.has("penButtonContactBeforeMs")).toBe(false);
+		// The pen key works whatever the side button does.
+		expect(off.has("penButtonKey") && off.has("penButtonKeyAction")).toBe(true);
 	});
 });

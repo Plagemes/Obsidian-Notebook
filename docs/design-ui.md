@@ -37,7 +37,7 @@ AI, no network, nothing leaves the device.
 | **Notebook menu** | Obsidian's "More options" of the notebook tab | Notebook-wide actions: open library, export notebook, zettel entries |
 | **Library** | The library view | Create, import PDF, lecture from slides, scan, timetable |
 | **Settings** | Plugin settings tab, generated from `view/settings-schema.ts` (§10): eleven sections by task, a search, collapsed *Advanced* and feature groups | Diagnostics (pen button test, benchmark) are also commands |
-| **Creation dialog** (wave 0.12) | One modal, two tabs as a segmented control: **Notebook** (cover preview with *Change cover*: pattern, colour, new variation, image; name, description, folder list with icons, page template tiles drawn by the paper renderer, page size A4 · A5 · B5 · Letter · Custom in mm, orientation tiles) and **Folder** (folder card preview with *Change colour* and *Change pattern*; name, description, location, icon row plus Lucide search, eight subject colours plus the colour picker). Inline name errors, Enter submits. A full-height sheet with the preview on top under 600 px. Decoration (header art band, glow behind the preview, faint art on the selected template tile) never acts as a control and is off with reduced motion | Registry actions `new-notebook` (Notebook tab) and `new-folder` (Folder tab), the command *New notebook* (`create`), *New folder*, the library's buttons and menus (through `host.createNotebook(folder)` / `host.createFolder(parent)`) |
+| **Creation dialog** (wave 0.12) | One modal, two tabs as a segmented control: **Notebook** (cover preview with *Change cover* (pattern, colour, image) and a shuffle button for a new variation; name, description, folder list with icons, page template tiles drawn by the paper renderer, page size A4 · A5 · B5 · Letter · Custom in mm, orientation tiles) and **Folder** (the library's own subject card as the preview, `ui/components/subject-card.ts`, above the form, with *Change colour* and *Change pattern*; name, description, location, icon row plus Lucide search, eight subject colours plus the colour picker). Inline name errors, Enter submits. A full-height sheet with the preview on top under 600 px. Decoration (header art band, glow behind the preview, faint art on the selected template tile) never acts as a control and is off with reduced motion | Registry actions `new-notebook` (Notebook tab) and `new-folder` (Folder tab), the command *New notebook* (`create`), *New folder*, the library's buttons and menus (through `host.createNotebook(folder)` / `host.createFolder(parent)`) |
 | **Command palette** | Every command, hotkeys | All actions with `command` (ids unchanged since 0.5) |
 
 ## 3. Information architecture
@@ -210,6 +210,7 @@ the accent soft fill and an accent underline dot; groups are separated by 1 px d
 | `src/view/settings-schema.ts` | The settings tab described once: sections, groups, rows, visibility and search (pure) |
 | `src/view/settings-tab.ts` | Draws the settings tab from the schema (Obsidian 1.13+ definitions and the older hand-drawn tab) |
 | `src/view/create-dialog.ts`, `src/view/create-logic.ts` | Creation dialog (wave 0.12) and its pure rules (names, sizes, folder list, the new document) |
+| `src/ui/components/subject-card.ts` | The subject card (DESIGN.md §3) shared by the library, Home and the creation dialog's folder preview: `subjectCard(parent, { name, color, seed, artStyle?, icon?, lines, shape, art, onOpen? })` |
 | `src/library/folder-meta.ts`, `folder-meta-store.ts`, `folder-meta-events.ts` | Folder colour, icon, description and art style (per-device sidecar in `_meta`), the read API `getFolderMeta` / `onFolderMetaChange`, renames |
 
 ## 10. Settings
@@ -258,8 +259,8 @@ hidden in place). Both read what to show from one function, `settingsView`, so t
   in `INTERNAL_SETTING_KEYS` (favourite pens, eraser size, recent colours, side-button-seen flag, last notebook / page /
   position, Zettelkasten slip boxes). The test fails when a new key is in no section.
 - **Look.** The design-system tokens (DESIGN.md §2.1–2.2: `--nb-bg`, `--nb-panel`, `--nb-tile`, `--nb-border`,
-  `--nb-text`, `--nb-text-muted`, `--nb-accent`, `--nb-accent-bg` and radii) are declared on `.notebook-settings`;
-  *Style → Follow Obsidian theme* (`appearanceStyle`, class `nb-style-obsidian`) maps them onto Obsidian's variables.
+  `--nb-text`, `--nb-text-muted`, `--nb-accent`, `--nb-accent-bg` and radii) are the global ones of `styles.css` ("Notebook design tokens");
+  *Style → Follow Obsidian theme* (`appearanceStyle`, class `notebook-style-obsidian` on `body`) maps them onto Obsidian's variables.
   Each section is a panel (16 px radius, 1 px border) with an icon square and a 20 px / 600 title; rows have a 15 px / 500
   name and a muted 13 px description with the control on the right (under the name on a phone); dropdowns and buttons
   are pills, text fields 14 px tiles, all at least 40 px tall; the search pill stays at the top while the list scrolls.
@@ -270,15 +271,14 @@ New rows of the side button are added to `PEN_BUTTON_EXTENSIONS` in `src/view/se
 with `section: "input"` and an `order` from 41 to 49, so they sit between *Pen side button* (40) and *Hold the pen still
 for the radial menu* (50); use `group: ADVANCED` for the rare ones, and `parent: "penSideButton", visible: penButtonOn`
 when they only matter while the button does something. Their keys go in `DEFAULT_SETTINGS` and their strings in
-`en.ts` / `it.ts` as usual; nothing else in the tab changes. For example, for `penButtonEraserNext` (boolean) and
-`penButtonKey` (string, `''` = off):
+`en.ts` / `it.ts` as usual; nothing else in the tab changes. The 0.11.2 S Pen settings live there:
 
-```ts
-export const PEN_BUTTON_EXTENSIONS: SettingSpec[] = [
-	{ id: "penButtonEraserNext", section: "input", order: 41, name: "settings.penButtonEraserNext", desc: "settings.penButtonEraserNext.desc", control: { type: "toggle" }, parent: "penSideButton", visible: penButtonOn },
-	{ id: "penButtonKey", section: "input", group: ADVANCED, order: 25, name: "settings.penButtonKey", desc: "settings.penButtonKey.desc", control: { type: "text" }, parent: "penSideButton", visible: penButtonOn },
-];
-```
+| Row | Key | Place | Shown |
+|---|---|---|---|
+| *Button click: next stroke erases* | `penButtonEraserNext` | order 41 | while the side button does something |
+| *Pen key* | `penButtonKey` | order 42, custom row `pen-key` (dropdown, key capture, hotkey warning; `view/pen-button-settings.ts`) | always (the key works whatever the button does) |
+| *Pen key action* | `penButtonKeyAction` | order 43, parent *Pen key* | once a key is set |
+| *Button before / after contact* (side button timing) | `penButtonContactBeforeMs`, `penButtonContactAfterMs` | *Advanced*, orders 31-32 | while the side button does something |
 
 A row that needs its own drawing uses `control: { type: "custom", render: … }` with a new `SettingCustomId` handled by
 `renderCustom` in `settings-tab.ts`; an action row uses `{ type: "action", run: … }` with a new `SettingActionId`

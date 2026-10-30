@@ -4,7 +4,8 @@
  * - Notebook: a portrait cover preview (generated art in a colour, or an image) with "Change cover"; name, description,
  *   folder, page template (paper tiles drawn by the real paper renderer), page size (A4 · A5 · B5 · Letter · Custom) and
  *   orientation. The host creates the file through the normal path (storage/notebooks.ts) and opens it.
- * - Folder: a preview card (folder icon on its line art, in the chosen colour) with "Change colour"; name, description,
+ * - Folder: a preview that is the library's own subject card (ui/components/subject-card.ts: glossy folder icon with the
+ *   chosen symbol, name, description, line art), with "Change colour" and "Change pattern"; name, description,
  *   location, icon (a row plus a Lucide icon search) and colour (eight subject colours and a custom picker). The host
  *   creates the vault folder and stores its look in the folder metadata (library/folder-meta-store.ts).
  *
@@ -18,7 +19,8 @@ import { createId, createPage } from "../model/document";
 import { COVER_ART_STYLES, META_DESCRIPTION_MAX, PAPER_KINDS, PAPER_SPACING, type CoverArtStyle, type NotebookDocument, type PageSizeName, type PaperKind } from "../model/types";
 import { FOLDER_DESCRIPTION_MAX, type FolderMeta } from "../library/folder-meta";
 import { renderThumbnail } from "../library/thumbnail";
-import { artImage, artStyleFor, coverImage, folderIconSvg, type ArtSpec } from "../ui/art/generative-art";
+import { artEnabled, artImage, artStyleFor, coverImage, type ArtSpec } from "../ui/art/generative-art";
+import { subjectCard } from "../ui/components/subject-card";
 import { colorFor, SUBJECT_COLORS } from "../ui/palette";
 import { ColourPicker } from "./colour-picker";
 import {
@@ -63,7 +65,6 @@ export interface CreateDialogHost {
 /** Icons offered directly on the Folder tab (DESIGN.md subjects); "More icons…" searches every Lucide icon. */
 export const FOLDER_ICONS = ["folder", "graduation-cap", "heart-pulse", "flask-conical", "sigma", "brain", "atom"] as const;
 
-const svgUrl = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 const dpr = () => Math.min(3, activeWindow.devicePixelRatio || 1);
 /** The surface the art sits on (the real engine draws deeper lines on light themes). */
 const surface = (): ArtSpec["surface"] => (activeDocument.body.hasClass("theme-light") ? "light" : "dark");
@@ -108,6 +109,8 @@ export class CreateDialog extends Modal {
 	private nameTouched = false;
 	private picker: ColourPicker | null = null;
 	private closePopover: (() => void) | null = null;
+	/** Rebuilds the folder card (its art seed is the path) once typing pauses. */
+	private cardTimer: number | null = null;
 
 	constructor(app: App, private readonly host: CreateDialogHost, tab: CreateTab = "notebook", folder?: string) {
 		super(app);
@@ -130,6 +133,7 @@ export class CreateDialog extends Modal {
 	}
 
 	onClose(): void {
+		this.cancelCardRefresh();
 		this.closePopover?.();
 		this.picker?.destroy();
 		if (this.image) URL.revokeObjectURL(this.image.url);
@@ -139,6 +143,7 @@ export class CreateDialog extends Modal {
 	// ------------------------------------------------------------------ layout
 
 	private render(focusName = true): void {
+		this.cancelCardRefresh();
 		this.closePopover?.();
 		this.picker?.destroy();
 		this.picker = null;
@@ -402,10 +407,19 @@ export class CreateDialog extends Modal {
 			this.nb.art = { ...this.nb.art, style: nextArtStyle(this.nb.art.style) };
 			this.render(false);
 		});
-		const change = preview.createEl("button", { cls: "nb-create-secondary nb-create-change", attr: { type: "button", "aria-expanded": String(this.coverOptionsOpen) } });
+		const actions = preview.createDiv({ cls: "nb-create-row nb-create-preview-actions" });
+		const change = actions.createEl("button", { cls: "nb-create-secondary nb-create-change", attr: { type: "button", "aria-expanded": String(this.coverOptionsOpen) } });
 		setIcon(change.createSpan({ cls: "nb-create-button-icon" }), "palette");
 		change.createSpan({ text: t("create.cover.change") });
 		change.addEventListener("click", () => this.toggleCoverOptions());
+		// A new variation of the same pattern (a new seed), like the Folder tab's pattern button.
+		if (!this.image) {
+			iconButton(actions, "shuffle", t("create.cover.shuffle"), "nb-create-reseed").addEventListener("click", () => {
+				this.nb.art = { ...this.nb.art, seed: createId() };
+				this.render(false);
+				this.contentEl.querySelector<HTMLElement>(".nb-create-reseed")?.focus();
+			});
+		}
 		if (this.coverOptionsOpen) this.renderCoverOptions(preview);
 	}
 
@@ -435,15 +449,6 @@ export class CreateDialog extends Modal {
 			});
 		}
 		const row = box.createDiv({ cls: "nb-create-row" });
-		if (!this.image) {
-			const shuffle = row.createEl("button", { cls: "nb-create-secondary", attr: { type: "button" } });
-			setIcon(shuffle.createSpan({ cls: "nb-create-button-icon" }), "shuffle");
-			shuffle.createSpan({ text: t("create.cover.shuffle") });
-			shuffle.addEventListener("click", () => {
-				this.nb.art = { ...this.nb.art, seed: createId() };
-				this.render(false);
-			});
-		}
 		const image = row.createEl("button", { cls: "nb-create-secondary", attr: { type: "button" } });
 		setIcon(image.createSpan({ cls: "nb-create-button-icon" }), this.image ? "image-off" : "image");
 		image.createSpan({ text: t(this.image ? "create.cover.removeImage" : "create.cover.image") });
@@ -570,18 +575,9 @@ export class CreateDialog extends Modal {
 
 	private renderFolderPreview(preview: HTMLElement): void {
 		preview.setCssProps({ "--nb-create-glow": this.fd.color });
-		const frame = preview.createDiv({ cls: "nb-create-cover-frame" });
+		const frame = preview.createDiv({ cls: "nb-create-card-frame" });
 		frame.createDiv({ cls: "nb-create-glow", attr: { "aria-hidden": "true" } });
-		const card = frame.createDiv({ cls: "nb-create-folder-card", attr: { role: "img", "aria-label": this.fd.name.trim() || t("create.tab.folder") } });
-		card.setCssProps({
-			"--nb-folder-color": this.fd.color,
-			"--nb-folder-art": cssImage(artImage({ seed: this.fd.name.trim() || "folder", color: this.fd.color, style: this.fd.art, surface: surface() }, 220, 260, dpr())),
-		});
-		const icon = card.createDiv({ cls: "nb-create-folder-icon-big" });
-		icon.createEl("img", { attr: { src: svgUrl(folderIconSvg(this.fd.color, 88)), alt: "" } });
-		if (this.fd.icon !== "folder") setIcon(icon.createSpan({ cls: "nb-create-folder-glyph" }), this.fd.icon);
-		card.createDiv({ cls: "nb-create-folder-name", text: this.fd.name.trim() || t("create.tab.folder") });
-		if (this.fd.description.trim()) card.createDiv({ cls: "nb-create-folder-desc", text: this.fd.description.trim() });
+		this.folderCard(frame);
 		const row = preview.createDiv({ cls: "nb-create-row nb-create-preview-actions" });
 		const change = row.createEl("button", { cls: "nb-create-secondary nb-create-change", attr: { type: "button" } });
 		setIcon(change.createSpan({ cls: "nb-create-button-icon" }), "palette");
@@ -670,23 +666,49 @@ export class CreateDialog extends Modal {
 		});
 	}
 
+	/**
+	 * The folder exactly as the library will show it: the shared subject card (tile), seeded with the path the folder will
+	 * have, in its colour, symbol and art style; the description, else the empty count, as its meta line.
+	 */
+	private folderCard(frame: HTMLElement): HTMLElement {
+		const name = this.fd.name.trim() || t("create.tab.folder");
+		return subjectCard(frame, {
+			name, color: this.fd.color, seed: joinPath(this.fd.parent, name), artStyle: this.fd.art, icon: this.fd.icon,
+			lines: [this.folderMetaLine()], shape: "tile", art: artEnabled(),
+		});
+	}
+
+	private folderMetaLine(): string {
+		return this.fd.description.trim() || t("library.notebooks.many", { count: "0" });
+	}
+
+	private cancelCardRefresh(): void {
+		if (this.cardTimer !== null) window.clearTimeout(this.cardTimer);
+		this.cardTimer = null;
+	}
+
 	// ------------------------------------------------------------------ submit
 
 	/** Updates the parts of the preview that show the name and description, without rebuilding the form (focus stays). */
 	private refreshPreview(): void {
-		const name = this.contentEl.querySelector(".nb-create-cover-title, .nb-create-folder-name");
-		const fallback = t(this.tab === "notebook" ? "create.tab.notebook" : "create.tab.folder");
-		if (name) name.textContent = (this.tab === "notebook" ? this.nb.name : this.fd.name).trim() || fallback;
-		if (this.tab === "folder") {
-			const card = this.contentEl.querySelector<HTMLElement>(".nb-create-folder-card");
-			let desc = this.contentEl.querySelector(".nb-create-folder-desc");
-			const text = this.fd.description.trim();
-			if (card && text && !desc) desc = card.createDiv({ cls: "nb-create-folder-desc" });
-			if (desc) {
-				if (text) desc.textContent = text;
-				else desc.remove();
-			}
+		if (this.tab === "notebook") {
+			const title = this.contentEl.querySelector(".nb-create-cover-title");
+			if (title) title.textContent = this.nb.name.trim() || t("create.tab.notebook");
+			return;
 		}
+		// The text follows at once; the card (its art is seeded by the folder's path) is rebuilt when typing pauses.
+		const card = this.contentEl.querySelector(".nb-create-card-frame .nb-subject-card");
+		const title = card?.querySelector(".nb-subject-title");
+		const meta = card?.querySelector(".nb-subject-meta");
+		if (title) title.textContent = this.fd.name.trim() || t("create.tab.folder");
+		if (meta) meta.textContent = this.folderMetaLine();
+		this.cancelCardRefresh();
+		this.cardTimer = window.setTimeout(() => {
+			this.cardTimer = null;
+			const frame = this.contentEl.querySelector<HTMLElement>(".nb-create-card-frame");
+			const old = frame?.querySelector(".nb-subject-card");
+			if (frame && old) old.replaceWith(this.folderCard(frame));
+		}, 250);
 	}
 
 	private async submit(): Promise<void> {

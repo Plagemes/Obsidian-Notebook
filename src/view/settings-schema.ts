@@ -12,6 +12,7 @@ import type { MessageKey } from "../i18n/en";
 import { LANGUAGES, LANGUAGE_CODES } from "../i18n/languages";
 import { PAGE_SIZES, PAPER_KINDS } from "../model/types";
 import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "../ink/edge-zones";
+import { BUTTON_AFTER_MAX_MS, BUTTON_BEFORE_MAX_MS } from "../ink/pen-hover";
 import { BUILTIN_GESTURES } from "../ink/gestures/registry";
 import { SPACE_PT_MAX, SPACE_PT_MIN } from "../ink/gestures/settings";
 import { TRASH_RETENTION_MAX_DAYS } from "../storage/trash-settings";
@@ -93,7 +94,7 @@ export const GROUPS: readonly GroupSpec[] = [
 /** Runs of the action rows; the tab maps each id to what it does. */
 export type SettingActionId = "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom";
 /** Rows drawn by the tab itself (no stored setting of their own). */
-export type SettingCustomId = "device-name";
+export type SettingCustomId = "device-name" | "pen-key";
 
 export type ControlSpec =
 	| { type: "toggle" }
@@ -346,7 +347,31 @@ const DIAGNOSTICS: SettingSpec[] = [
 //   { id: "penButtonEraserNext", section: "input", order: 41, name: "settings.penButtonEraserNext",
 //     desc: "settings.penButtonEraserNext.desc", control: { type: "toggle" }, parent: "penSideButton", visible: penButtonOn },
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
-export const PEN_BUTTON_EXTENSIONS: SettingSpec[] = [];
+export const PEN_BUTTON_EXTENSIONS: SettingSpec[] = [
+	// 0.11.2 S Pen fallback (ink/pen-hover.ts): the hover click arms the eraser; a key (Key Mapper + Shizuku) acts as the button.
+	{ id: "penButtonEraserNext", section: "input", order: 41, name: "settings.penButtonEraserNext", desc: "settings.penButtonEraserNext.desc", control: { type: "toggle" }, parent: "penSideButton", visible: penButtonOn },
+	// The key works whatever the side button does, so it is not hidden with it. A custom row: key capture and the hotkey warning.
+	{
+		id: "penButtonKey", section: "input", order: 42, name: "settings.penButtonKey", desc: "settings.penButtonKey.desc", keywords: "key mapper shizuku s pen f9 f10 f11 f12 tasto",
+		control: { type: "custom", render: "pen-key" }, edits: ["penButtonKey"], parent: "penSideButton",
+	},
+	{
+		id: "penButtonKeyAction", section: "input", order: 43, name: "settings.penButtonKeyAction", desc: "settings.penButtonKeyAction.desc",
+		control: { type: "dropdown", options: options([["eraser-next", "settings.penButtonKeyAction.eraserNext"], ["menu", "settings.penButtonKeyAction.menu"]]) },
+		parent: "penButtonKey", visible: (s) => s.penButtonKey !== "",
+	},
+	// Side button timing around a pen contact (Advanced, next to the other button options).
+	{
+		id: "penButtonContactBeforeMs", section: "input", group: ADVANCED, order: 31, name: "settings.penButtonBeforeMs", desc: "settings.penButtonBeforeMs.desc",
+		keywords: "side button timing tempi del pulsante laterale", control: { type: "slider", min: 0, max: BUTTON_BEFORE_MAX_MS, step: 10, format: suffix("ms") },
+		parent: "penSideButton", visible: penButtonOn,
+	},
+	{
+		id: "penButtonContactAfterMs", section: "input", group: ADVANCED, order: 32, name: "settings.penButtonAfterMs", desc: "settings.penButtonAfterMs.desc",
+		keywords: "side button timing tempi del pulsante laterale", control: { type: "slider", min: 0, max: BUTTON_AFTER_MAX_MS, step: 10, format: suffix("ms") },
+		parent: "penSideButton", visible: penButtonOn,
+	},
+];
 
 /**
  * Settings keys that are not in the tab, and why: state the app keeps by itself, or edited where it is used.

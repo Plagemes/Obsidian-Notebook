@@ -131,6 +131,10 @@ export async function checkCreate(api: CreateCheckApi, finalTab: CreateTab): Pro
 	tap(q('.nb-create-paper[data-id="dotted"]'), "pen");
 	tap(q('.nb-create-chip[data-id="a5"]'), "touch");
 	tap(q('.nb-create-orient-tile[data-id="landscape"]'), "pen");
+	const coverBefore = q<HTMLImageElement>(".nb-create-cover-img")?.src ?? "";
+	tap(q(".nb-create-reseed"), "pen");
+	await frames();
+	add("the shuffle button next to Change cover draws a new variation", !!coverBefore && q<HTMLImageElement>(".nb-create-cover-img")?.src !== coverBefore);
 	tap(q(".nb-create-change"), "touch");
 	tap(q('.nb-create-style[data-id="cells"]'), "pen");
 	tap(q('.nb-create-cover-options .nb-create-swatch[data-id="#16C2A3"]'), "touch");
@@ -159,8 +163,11 @@ export async function checkCreate(api: CreateCheckApi, finalTab: CreateTab): Pro
 	key(q(".nb-create-tab.is-active"), "ArrowRight");
 	await frames();
 	add("the arrow keys switch to the Folder tab and keep the name", q(".nb-create-tab.is-active")?.textContent === "Folder" && q<HTMLInputElement>(".nb-create-name")?.value === "Fisiologia");
-	add("shows the folder preview card", !!q(".nb-create-folder-card img"));
+	add("the folder preview is the library's subject card", !!q(".nb-create-card-frame .nb-subject-card.is-tile img.nb-folder-icon") && q(".nb-create-card-frame .nb-subject-title")?.textContent === "Fisiologia");
+	add("with the real line art", !!q(".nb-create-card-frame .nb-subject-art"));
 	tap(q('.nb-create-icon-tile[data-id="brain"]'), "pen");
+	await frames();
+	add("the chosen symbol sits on the folder icon", !!q(".nb-create-card-frame .nb-folder-badge .nb-folder-glyph svg"));
 	tap(q('.nb-create-swatch[data-id="#8B5CF6"]'), "touch");
 	tap(q(".nb-create-art"), "mouse");
 	tap(q(".nb-create-select"), "touch");

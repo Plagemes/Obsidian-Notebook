@@ -72,6 +72,25 @@ export async function checkSettings(api: SettingsCheckApi): Promise<{ ok: boolea
 	advancedRow?.click();
 	await tick();
 
+	// S Pen rows (PEN_BUTTON_EXTENSIONS): in Pen & input, the key action only once a key is set, the timing under Advanced.
+	add("the S Pen rows are in Pen & input", !!inputSection && visible(row("Button click: next stroke erases")) && visible(row("Pen key")) && inputSection.contains(row("Pen key")));
+	add("the pen key action is hidden while no key is set", !visible(row("Pen key action")));
+	const keySelect = row("Pen key")?.querySelector<HTMLSelectElement>("select");
+	if (keySelect) {
+		keySelect.value = "F9";
+		keySelect.dispatchEvent(new Event("change"));
+		await tick();
+		await tick();
+	}
+	add("choosing a pen key saves it and shows its action", host.settings.penButtonKey === "F9" && visible(row("Pen key action")), host.settings.penButtonKey);
+	add("the side button timing is under Advanced", !visible(row("Button before contact")));
+	if (keySelect) {
+		keySelect.value = "";
+		keySelect.dispatchEvent(new Event("change"));
+		await tick();
+		await tick();
+	}
+
 	// Search: names and sections, Italian, accents, nothing found.
 	await type("palm");
 	add("a search keeps only the matching section", JSON.stringify(headers()) === JSON.stringify(["Pen & input"]), headers().join(" · "));

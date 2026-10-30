@@ -4,6 +4,7 @@ import { DEFAULT_SETTINGS, readSettings, type NotebookSettings } from "../settin
 import type { TimetableService } from "../timetable/service";
 import { effectivePenHold } from "../ink/pen-button";
 import { PenTestModal, penSignalInfo } from "./pen-test-modal";
+import { renderPenKeySetting } from "./pen-button-settings";
 import { companionService } from "../integration/companion";
 import { zettelService } from "../zettel";
 import { gestureKeyId } from "./pen-gesture-settings";
@@ -47,6 +48,8 @@ export class NotebookSettingTab extends PluginSettingTab {
 	private legacyRows: LegacyRow[] | null = null;
 	/** Rows that redraw a part of themselves when the state changes (disclosure rows, the "no match" line), by id. */
 	private readonly updaters = new Map<string, () => void>();
+	/** Stops a pen key capture that is still waiting for a key (the tab was closed or redrawn). */
+	private stopPenKey: () => void = () => {};
 
 	constructor(app: App, private readonly host: SettingsHost) {
 		super(app, host);
@@ -156,6 +159,18 @@ export class NotebookSettingTab extends PluginSettingTab {
 
 	private renderCustom(id: SettingCustomId, setting: Setting): void {
 		if (id === "device-name" && this.host.syncSafety) deviceNameRow(setting, this.host.syncSafety);
+		if (id === "pen-key") {
+			this.stopPenKey();
+			const host = { get: () => this.host.settings, set: (key: string, value: unknown) => this.setControlValue(key, value) };
+			// The new key has been saved (setControlValue already re-evaluated which rows show, e.g. the key action).
+			this.stopPenKey = renderPenKeySetting(setting, this.app, host, () => {});
+		}
+	}
+
+	hide(): void {
+		this.stopPenKey();
+		this.stopPenKey = () => {};
+		super.hide();
 	}
 
 	/** Applies the new language and redraws this tab; open notebooks pick it up when reopened (see `onLanguageChanged`). */
