@@ -200,3 +200,24 @@ describe("marker labels that reading normalises", () => {
 		expect(clean.ok && clean.dropped).toBeUndefined();
 	});
 });
+
+// --- 12. error notices skip the writing-quiet queue ---
+
+describe("error notices while the pen is down", () => {
+	it("an ordinary notice waits, an error notice is shown at once", async () => {
+		const { writing } = await import("../src/ink/writing-guard");
+		const { showErrorNotice, showNotice } = await import("../src/view/notice");
+		const { Notice } = (await import("obsidian")) as unknown as { Notice: { shown: string[] } };
+		Notice.shown.length = 0;
+		vi.stubGlobal("window", { setTimeout: () => 0, clearTimeout: () => undefined });
+		writing.penDown(7);
+		try {
+			showNotice("tool changed");
+			showErrorNotice("Notebook: save failed");
+			expect(Notice.shown).toEqual(["Notebook: save failed"]);
+		} finally {
+			writing.reset();
+			vi.unstubAllGlobals();
+		}
+	});
+});
