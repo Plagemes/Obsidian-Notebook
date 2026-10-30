@@ -291,7 +291,8 @@ export class StampPalette {
 
 	// --- save, rename, delete ---
 
-	private saveSelection(): void {
+	/** Saves the lasso selection as a personal stamp (asks for a name). */
+	saveSelection(): void {
 		const clip = this.host.captureSelection();
 		if (!clip) {
 			new Notice(t("stamps.saveNone"));

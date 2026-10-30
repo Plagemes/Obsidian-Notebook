@@ -3,6 +3,7 @@ import { readNotebookText, writeNotebookText } from "./format";
 import type { JournalSlotFile, JournalStore } from "./journal";
 import type { LinkFileAdapter } from "./pdf-links-store";
 import type { BackupReason, DocumentIO } from "./session";
+import type { SpaceProbe } from "./write-guard";
 
 /** Vault-backed file operations for small plugin sidecar files that live in the vault (e.g. the PDF links file). */
 export function vaultLinkFileAdapter(app: App): LinkFileAdapter {
@@ -76,6 +77,12 @@ export class VaultDocumentIO implements DocumentIO {
 	/** Current vault path of the file (follows renames): part of the journal's file identity. */
 	path(): string {
 		return this.file.path;
+	}
+
+	/** Last modification time known to the vault (sync safety: a file still being written). */
+	mtime(): number | null {
+		const m = this.file.stat?.mtime;
+		return typeof m === "number" && m > 0 ? m : null;
 	}
 
 	async backup(content: string, reason: BackupReason): Promise<string | null> {
@@ -172,4 +179,37 @@ export class AdapterJournalStore implements JournalStore {
 	release(owner: string): void {
 		this.live.delete(owner.replace(/[^A-Za-z0-9_-]/g, "_"));
 	}
+}
+
+/**
+ * wave 0.7: resilience (#347). Space probe over the vault adapter: writes `chars` characters to a scratch file in the
+ * plugin's config folder (not synced, no vault events), checks the length read back and deletes it.
+ */
+export class AdapterSpaceProbe implements SpaceProbe {
+	constructor(
+		private readonly adapter: DataAdapter,
+		private readonly folder: string,
+	) {}
+
+	async probe(chars: number): Promise<void> {
+		const path = normalizePath(`${this.folder}/space-probe.tmp`);
+		const text = "0".repeat(Math.max(1, Math.floor(chars)));
+		try {
+			if (!(await this.adapter.exists(this.folder))) await this.adapter.mkdir(this.folder);
+			await this.adapter.write(path, text);
+			const back = await this.adapter.read(path);
+			if (back.length !== text.length) throw new Error("no space left: the space check could not be written in full");
+		} finally {
+			try {
+				if (await this.adapter.exists(path)) await this.adapter.remove(path);
+			} catch (e) {
+				console.error("[notebook] could not remove the space check file", e);
+			}
+		}
+	}
+}
+
+/** Folder of the plugin's own technical files: `<config dir>/plugins/<plugin id>`. */
+export function pluginFolder(app: App, pluginId: string): string {
+	return normalizePath(`${app.vault.configDir}/plugins/${pluginId}`);
 }

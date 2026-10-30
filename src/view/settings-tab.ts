@@ -12,6 +12,7 @@ import { effectivePenHold } from "../ink/pen-button";
 import { PenTestModal, penSignalInfo } from "./pen-test-modal";
 import { companionSettingDefinitions, displayCompanionSettings, type CompanionSettingsHost } from "./companion-settings";
 import { displayZettelSettings, zettelSettingDefinitions, type ZettelSettingsHost } from "../zettel/settings-ui";
+import { displaySyncSettings, syncSettingDefinitions, type SyncSafetyService } from "./sync-safety";
 
 const paperOptions = () => Object.fromEntries(PAPER_KINDS.map((k) => [k, t(`paper.${k}`)]));
 const sizeOptions = () => Object.fromEntries((Object.keys(PAGE_SIZES) as Array<keyof typeof PAGE_SIZES>).map((k) => [k, t(`size.${k}`)]));
@@ -20,6 +21,7 @@ export interface SettingsHost extends Plugin {
 	settings: NotebookSettings;
 	saveSettings(): Promise<void>;
 	timetable?: TimetableService;
+	syncSafety?: SyncSafetyService;
 }
 
 type Key = keyof NotebookSettings;
@@ -219,6 +221,8 @@ export class NotebookSettingTab extends PluginSettingTab {
 			...trashSettingDefinitions(),
 			// wave 0.6: zettelkasten
 			...zettelSettingDefinitions(this.zettelHost()),
+			// wave 0.7: sync safety
+			...syncSettingDefinitions(this.host.syncSafety),
 		];
 	}
 
@@ -402,5 +406,6 @@ export class NotebookSettingTab extends PluginSettingTab {
 		displayTimetableSettings(containerEl, this.host);
 		displayTrashSettings(containerEl, { get: () => this.host.settings, set: (key, value) => this.setControlValue(key, value) });
 		displayZettelSettings(containerEl, this.zettelHost());
+		displaySyncSettings(containerEl, this.host.syncSafety);
 	}
 }

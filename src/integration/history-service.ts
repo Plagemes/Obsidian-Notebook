@@ -5,7 +5,7 @@ import { backupFolder, type NotebookSettings } from "../settings";
 import { isNotebookFile, readNotebookText, writeNotebookText } from "../storage/format";
 import {
 	checkRestoreTarget, extractDocId, formatBytes, formatSnapshotDate, shouldSnapshot, snapshotFileName, snapshotFolder, snapshotPageCount,
-	snapshotsToPrune, sortSnapshots,
+	restoredText, snapshotsToPrune, sortSnapshots,
 } from "../storage/history";
 import { ensureFolder, VaultDocumentIO } from "../storage/vault-io";
 import { viewsOf } from "./open";
@@ -124,7 +124,8 @@ export class HistoryService {
 		new NotebookPickerModal(this.app, this.host.settings.folder, (file) => void this.chooseVersion(file)).open();
 	}
 
-	private async chooseVersion(file: TFile): Promise<void> {
+	/** Lists the snapshots of `file` and restores the chosen one (public for the integrity check, wave 0.7). */
+	async chooseVersion(file: TFile): Promise<void> {
 		try {
 			const docId = extractDocId(readNotebookText(file.extension, await this.app.vault.read(file)));
 			if (!docId) {
@@ -207,6 +208,8 @@ export class HistoryService {
 	private async writeSnapshot(file: TFile, snapshotJson: string): Promise<string | null> {
 		const ext = file.extension;
 		const io = new VaultDocumentIO(this.app, file, () => backupFolder(this.host.settings));
+		// A new edit time: other devices see a restore, not a rollback of their own older version (review).
+		const restored = restoredText(snapshotJson, new Date());
 		for (let attempt = 0; attempt < 2; attempt++) {
 			const raw = await this.app.vault.read(file);
 			const current = readNotebookText(ext, raw);
@@ -218,7 +221,7 @@ export class HistoryService {
 					stale = true;
 					return now;
 				}
-				return writeNotebookText(ext, snapshotJson, now);
+				return writeNotebookText(ext, restored, now);
 			});
 			if (!stale) return backup;
 		}

@@ -5,6 +5,7 @@
  * It implements just what the notebook view touches: views, an in-memory vault, notices, menus,
  * modals, settings rows, icons, and Obsidian's DOM helpers on HTMLElement.prototype.
  */
+import { drawIcon } from "./icons";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -358,6 +359,7 @@ export class Vault extends Events {
 	async createBinary(p: string, data: ArrayBuffer): Promise<TFile> {
 		const f = this.addFile(p);
 		this.binary.set(f.path, data);
+		f.stat.size = data.byteLength;
 		this.trigger("create", f);
 		return f;
 	}
@@ -390,6 +392,7 @@ export class Vault extends Events {
 
 	async modifyBinary(f: TFile, data: ArrayBuffer): Promise<void> {
 		this.binary.set(f.path, data);
+		f.stat.size = data.byteLength;
 		this.trigger("modify", f);
 	}
 
@@ -484,6 +487,15 @@ export class App {
 	readonly fileManager = new FileManager(this);
 	readonly metadataCache = new MetadataCache();
 	readonly scope = new Scope();
+	/** Per-device local storage, as Obsidian's (kept in memory in the harness). */
+	private readonly local = new Map<string, unknown>();
+	loadLocalStorage(key: string): unknown {
+		return this.local.has(key) ? JSON.parse(JSON.stringify(this.local.get(key))) : null;
+	}
+	saveLocalStorage(key: string, data: unknown): void {
+		if (data === null) this.local.delete(key);
+		else this.local.set(key, JSON.parse(JSON.stringify(data)));
+	}
 }
 
 // --- views ---
@@ -598,7 +610,12 @@ export class View extends Component {
 	}
 }
 
-export class ItemView extends View {}
+export class ItemView extends View {
+	/** Obsidian adds its own entries to the tab menu here. */
+	onPaneMenu(): void {
+		return;
+	}
+}
 
 export class FileView extends ItemView {
 	file: TFile | null = null;
@@ -770,6 +787,29 @@ export class FuzzySuggestModal<T> extends Modal {
 	}
 }
 
+/** wave 0.7: quick nav. */
+export class SuggestModal<T> extends Modal {
+	inputEl = document.createElement("input");
+	emptyStateText = "";
+	setPlaceholder(): void {
+		/* nothing */
+	}
+	setInstructions(): void {
+		/* nothing */
+	}
+	getSuggestions(query: string): T[] {
+		void query;
+		return [];
+	}
+	renderSuggestion(value: T, el: HTMLElement): void {
+		void value;
+		void el;
+	}
+	onChooseSuggestion(value: T): void {
+		void value;
+	}
+}
+
 export class PluginSettingTab {
 	readonly containerEl = document.createElement("div");
 	constructor(readonly app: App, readonly plugin: unknown) {}
@@ -867,9 +907,10 @@ function chain(): any {
 	return p;
 }
 
-/** Icons: a tiny inline glyph with the icon name as title, so buttons are visible and identifiable. */
+/** Icons: a harness stand-in of the Lucide icon (icons.ts), or a tiny glyph with the icon name as title. */
 export function setIcon(el: HTMLElement, name: string): void {
 	el.textContent = "";
+	if (drawIcon(el, name)) return;
 	const s = el.createSpan({ cls: "harness-icon", text: name.slice(0, 2) });
 	s.title = name;
 }

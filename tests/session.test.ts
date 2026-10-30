@@ -57,7 +57,8 @@ class FakeIO implements DocumentIO {
 }
 
 const corrupt: Array<[string, string]> = [
-	["truncated JSON", serialize(sampleDocument(3)).slice(0, 200)],
+	// A cut-off file is "still arriving" (sync safety): tests/sync-review.test.ts.
+	["broken JSON", `${serialize(sampleDocument(3)).slice(0, 200)}]}`],
 	["invalid schema", JSON.stringify({ format: "obsidian-notebook", version: 1, id: "x", pages: "nope" })],
 	["not a notebook", JSON.stringify({ hello: "world" })],
 	["garbage", "\u0000\u0001\u0002"],
@@ -129,7 +130,7 @@ describe("DocumentSession", () => {
 		const io = new FakeIO("");
 		const s = new DocumentSession(io, timers);
 		await s.load();
-		expect(s.mode).toBe("broken");
+		expect(s.mode).toBe("not-downloaded"); // wave 0.7 (#344): an empty file is not damaged, it is not downloaded yet
 		await s.flush();
 		expect(io.writes).toHaveLength(0);
 		expect(io.backups).toHaveLength(0);
