@@ -479,6 +479,9 @@ export class MetadataCache extends Events {
 	getFirstLinkpathDest(): null {
 		return null;
 	}
+	fileToLinktext(file: { path: string }): string {
+		return file.path.replace(/.md$/, "");
+	}
 }
 
 export class App {

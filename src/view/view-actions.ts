@@ -101,6 +101,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"selection-duplicate": (v) => v.selectionTools?.duplicate(),
 	"selection-paste": (v) => void v.selectionTools?.paste(),
 	"selection-white-transparent": (v) => void v.selectionTools?.makeWhiteTransparent(),
+	"link-selection": (v) => v.linkSelection(),
+	"selection-open-link": (v) => v.openSelectionLink(),
 	"stamps-save-selection": (v) => v.stampPalette?.saveSelection(),
 	"delete-selection": (v) => v.removeSelection(),
 

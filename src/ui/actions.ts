@@ -42,7 +42,7 @@ export interface UiContext {
 	/** A document is open (possibly read-only). */
 	open: boolean;
 	tool: ToolId;
-	selection: { strokes: number; elements: number; images: number } | null;
+	selection: { strokes: number; elements: number; images: number; /** 1 when a selected text box holds a [[link]] */ links?: number } | null;
 	/** The page in view (index of the page sheet when it was opened from a thumbnail). */
 	page: {
 		index: number; count: number; background: "none" | "pdf" | "image"; infinite: boolean; bookmarked: boolean;
@@ -150,6 +150,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "selection-duplicate", label: "selection.duplicate", icon: "copy-plus", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 80, scope: "view", when: hasSelection },
 	{ id: "selection-paste", label: "selection.paste", icon: "clipboard-paste", group: "selection", surfaces: ["context"], contexts: ["selection", "lasso"], priority: 75, scope: "view", when: (c) => c.tool === "lasso" || hasSelection(c) },
 	{ id: "selection-white-transparent", label: "selection.whiteTransparent", icon: "eraser", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 60, scope: "view", when: (c) => (c.selection?.images ?? 0) > 0 },
+	{ id: "link-selection", label: "penlinks.linkSelection", icon: "link", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 55, scope: "view", command: "command.linkSelection", when: hasSelection },
+	{ id: "selection-open-link", label: "penlinks.openLink", icon: "external-link", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 56, scope: "view", when: (c) => (c.selection?.links ?? 0) > 0 },
 	{ id: "stamps-save-selection", label: "stamps.save", icon: "stamp", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 50, scope: "view", when: hasSelection },
 	{ id: "delete-selection", label: "tool.deleteSelection", icon: "trash-2", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 70, scope: "view", command: "command.deleteSelection", when: hasSelection, danger: true },
 
