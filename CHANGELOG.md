@@ -46,6 +46,20 @@ Not yet verified in Obsidian or on Android hardware (see `docs/testing.md`, step
 ### Changed
 - **Companion notes: which tags the plugin may remove.** The tags of the notebook that the note already had (written by you) are no longer treated as the plugin's: removing such a tag from the notebook leaves it in the note. Only tags the plugin added itself are removed when the notebook drops them. Notes written by 0.5.0 keep their old behaviour until their next update.
 - Tags typed in the editor are stored normalised (`linear algebra` becomes `linear-algebra`); tags already stored are not rewritten until you edit them.
+
+### Fixed
+- Conflicted-copy merge combines bookmark details (title, colour, category) field by field: the main notebook's value of each field wins, missing fields are taken from the copy, differing fields are counted (`bookmarkInfoDiffer`), and the copy is moved away only when every one of its fields is in the result.
+- The new paper kinds stay bounded at extreme densities (calligraphy or hexagons at 0.5–1 pt, A0 or infinite pages): at most 30,000 segments per page, falling back to the major lines or to a coarser lattice, so exports are never blank and never freeze.
+- Reading position across devices: the workspace layout now records when the page in view last changed, not when the layout was saved, so a notebook left open no longer wins over a position another device stored later.
+- *Move to notebook…* keeps the moved pages' bookmarks and their details in the target (under the pages' new ids, in the same write); page tags travel with the page.
+- A bad bookmark colour or detail (even of a deleted page) or an invalid reading position no longer makes the whole notebook unreadable: the invalid value is dropped on read and counted, a `dropped-details` backup of the file is kept before it is rewritten, and what is written is still checked strictly.
+- The outline's category filter no longer lists categories of bookmarks left on deleted pages.
+- The library index of a newer plugin version (synced plugin folder) is ignored and left as it is instead of being overwritten.
+
+### Upgrade notes (0.5.x and 0.6 on synced devices)
+- 0.5.x opens notebooks saved in format v7 read-only, and each time it opens one it writes a `future-version` backup to the backup folder: update every device to 0.6.
+- On a 0.6 device, any edit of a notebook's properties from the library (tags, favourite, cover, bookmarks) rewrites a v6 file as v7 (with a backup of the original), after which 0.5.x devices can only read it.
+- The library index (a cache in the plugin folder) is version 3 in 0.6 and 2 in 0.5.x: a 0.5.x device discards a version 3 index and rebuilds its own, so with both versions on one synced plugin folder the index is rebuilt after each switch. No notebook data is affected.
 ## 0.5.1 — 2026-10-30
 
 Hotfix for 0.5.0. Not verified on Android hardware (see `docs/testing.md`); how the S Pen button is reported is the open question.
