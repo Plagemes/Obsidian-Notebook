@@ -1,5 +1,5 @@
 import { FileView, Scope, type Menu, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
-import { pageFromState, pageIdFromState } from "../integration/links";
+import { pageFromState, pageIdFromState, regionFromState } from "../integration/links";
 import { pageTargetFromEphemeralState, resolvePageTarget, type PageTarget } from "../integration/page-links";
 import { checkConflicts, openRepair, type ReliabilityDeps } from "../integration/reliability";
 import { scanFromCamera } from "../scan/scan-modal";
@@ -92,6 +92,7 @@ import type { PdfActionHost } from "./pdf-actions";
 import { pickFile } from "./pick";
 import { pdfSideState, referenceSlideOf, type PageSyncHooks } from "./pdf-sync";
 import { MarkerTools, translatedBoxLabel } from "./markers";
+import { ExcerptTools } from "./excerpts";
 import { layerCommand, type LayerMove } from "../model/layers";
 import { FindReplaceModal } from "./find-replace";
 import { PageInfoModal } from "./page-info";
@@ -323,6 +324,8 @@ export class NotebookView extends FileView {
 	private readonly objectInk = new ObjectInk();
 	/** v8 markers, boxes, invisible ink and the end-of-lecture panel (view/markers.ts). */
 	private markers: MarkerTools | null = null;
+	/** v10 anchored excerpts: making them, their badge taps and the jump back to the source (view/excerpts.ts). */
+	private excerpts: ExcerptTools | null = null;
 	/** wave 0.9 (389): the chip that offers a page after a page in the middle of the notebook (view/page-offer.ts). */
 	private pageOffer: PageOffer | null = null;
 
@@ -512,6 +515,7 @@ export class NotebookView extends FileView {
 
 		this.renderer = new Renderer(this.stage, { lowLatency: this.host.settings.lowLatencyInk });
 		this.mountMarkers();
+		this.mountExcerpts();
 		this.pageOffer = new PageOffer({
 			parent: () => this.body,
 			insertAfter: (pageId) => this.insertPageAfterId(pageId),
@@ -681,6 +685,7 @@ export class NotebookView extends FileView {
 		this.stamps = null;
 		this.objectInk.destroy();
 		this.math?.destroy();
+		this.excerpts?.destroy();
 		this.math = null;
 		this.textEditor?.destroy();
 		this.textEditor = null;
@@ -733,7 +738,8 @@ export class NotebookView extends FileView {
 		this.pendingPage = pageFromState(state) ?? (pageId ? 1 : null);
 		this.pendingPos = pageId ? null : positionFromState(state);
 		this.pendingAt = this.pendingPage !== null && !pageId ? pageAtFromState(state) : null;
-		this.pendingTarget = pageId ? { page: pageFromState(state), pageId } : null;
+		// v10: the jump back from an anchored excerpt also names the region to outline.
+		this.pendingTarget = pageId ? { page: pageFromState(state), pageId, region: regionFromState(state) } : null;
 		await super.setState(state, result);
 		// Already loaded (the same file was shown): jump now; otherwise onDocumentLoaded applies it.
 		if (this.pendingPage !== null && this.layout) this.applyPendingPage();
@@ -788,7 +794,8 @@ export class NotebookView extends FileView {
 				showNotice(t("links.pageDeleted", { name: this.file?.basename ?? "" }));
 				return;
 			}
-			this.scrollToPage(found.index);
+			if (target.region && this.excerpts) this.excerpts.reveal(found.index, target.region);
+			else this.scrollToPage(found.index);
 			return;
 		}
 		const index = Math.min(doc.pages.length, Math.max(1, page)) - 1;
@@ -1398,6 +1405,44 @@ export class NotebookView extends FileView {
 		return visibleStrokes(page.strokes, this.markers?.isRevealed(page) ?? false);
 	}
 
+	/** v10: anchored excerpts of this view (null before the view is open). */
+	get excerptTools(): ExcerptTools | null {
+		return this.excerpts;
+	}
+
+	private mountExcerpts(): void {
+		this.excerpts = new ExcerptTools({
+			app: this.app,
+			doc: () => this.session?.doc ?? null,
+			path: () => this.file?.path ?? null,
+			folder: () => this.host.settings.folder,
+			editable: () => !!this.editableDocument(),
+			media: () => this.media,
+			execute: (cmd) => {
+				if (!this.editableDocument()) return false;
+				this.commitText();
+				this.clearSelection();
+				const ok = this.history.execute(cmd);
+				this.afterHistoryChange();
+				this.renderer?.invalidate();
+				return ok;
+			},
+			currentPageIndex: () => this.currentPageIndex(),
+			scrollTo: (index, y) => this.scrollToPage(index, y),
+			selection: () => {
+				const sel = this.selection;
+				return sel ? { pageIndex: sel.pageIndex, elements: sel.elements, bounds: sel.bounds, matrix: sel.matrix } : null;
+			},
+			select: (pageIndex, elements) => this.selectItems(pageIndex, [], elements),
+			preview: (pageIndex, rect) => this.renderer?.setLasso(rect
+				? { pageIndex, points: [[rect.x, rect.y], [rect.x + rect.width, rect.y], [rect.x + rect.width, rect.y + rect.height], [rect.x, rect.y + rect.height], [rect.x, rect.y]] }
+				: null),
+			previewFree: () => this.lasso === null && (this.markers?.gesturePage ?? null) === null,
+			scale: () => this.viewport.scale,
+			gotoContext: () => this.gotoContext(),
+		});
+	}
+
 	private mountMarkers(): void {
 		this.markers = new MarkerTools({
 			app: this.app,
@@ -1755,6 +1800,7 @@ export class NotebookView extends FileView {
 			selection: sel ? {
 				strokes: sel.strokes.length, elements: sel.elements.length, images: sel.elements.filter((e) => e.type === "image").length, links: this.penLinks?.linkIn(sel.elements) ? 1 : 0,
 				equations: sel.elements.filter((e) => e.type === "equation").length, graphs: sel.elements.filter((e) => e.type === "graph").length,
+				excerpts: sel.elements.filter((e) => e.type === "excerpt").length,
 			} : null,
 			page: page ? {
 				index, count: pages.length, background: page.background?.kind ?? "none", infinite: !!page.infinite,
@@ -2191,6 +2237,8 @@ export class NotebookView extends FileView {
 	/** Every real change of the document: schedules the save and logs the page as recently edited (365). */
 	private markChanged(): void {
 		this.session?.markChanged();
+		// v10: live pictures of excerpts of this notebook's pages follow the edit (throttled).
+		this.media?.excerptsChanged();
 		const doc = this.session?.doc;
 		if (!doc || !this.file || this.session?.mode !== "ok") return;
 		const num = this.currentPageIndex() + 1;
@@ -2600,7 +2648,7 @@ export class NotebookView extends FileView {
 		const tool = eraserButton ? "eraser" : held === "lasso" ? "lasso" : held === "previous" ? (this.lastTool.previous() ?? this.tools.tool) : this.tools.tool;
 
 		// An armed marker or box takes the next contact whatever the tool (see below).
-		if (tool === "eraser" && this.tools.eraserMode !== "area" && !(this.markers?.armed && !eraserButton)) {
+		if (tool === "eraser" && this.tools.eraserMode !== "area" && !((this.markers?.armed || this.excerpts?.armed) && !eraserButton)) {
 			// The selection may contain strokes about to be erased (e.g. erasing with the pen button).
 			this.clearSelection();
 			this.erasing = { commands: [], last: [dx, dy] };
@@ -2618,6 +2666,11 @@ export class NotebookView extends FileView {
 
 		// v8: an armed marker or box is placed, a tap on a badge toggles it (eraser and lasso keep their own taps).
 		if (page && !eraserButton && this.markers?.begin(pageIndex, page, local, sample, tool)) {
+			this.clearSelection();
+			return true;
+		}
+		// v10: an armed excerpt takes the drag of its region; a tap on an excerpt's badge jumps to its source.
+		if (page && !eraserButton && this.excerpts?.begin(pageIndex, page, local, sample, tool)) {
 			this.clearSelection();
 			return true;
 		}
@@ -2729,6 +2782,12 @@ export class NotebookView extends FileView {
 		if (markerPage !== null) {
 			const last = n > 0 ? NotebookView.at(samples, n - 1) : null;
 			this.markers!.move(last ? this.toLocal(markerPage, last) : null, last);
+			return;
+		}
+		const excerptPage = this.excerpts?.gesturePage ?? null;
+		if (excerptPage !== null) {
+			const last = n > 0 ? NotebookView.at(samples, n - 1) : null;
+			this.excerpts!.move(last ? this.toLocal(excerptPage, last) : null, last);
 			return;
 		}
 
@@ -2868,6 +2927,7 @@ export class NotebookView extends FileView {
 
 	private endGesture(cancelled: boolean): void {
 		if (this.markers?.end(cancelled)) return;
+		if (this.excerpts?.end(cancelled)) return;
 		if (this.penGestures?.active) {
 			this.penGestures.end(cancelled);
 			return;

@@ -48,6 +48,9 @@ SCENARIOS.push({ doc: "pdf", theme: "dark", device: "narrow", lowLatency: false 
 // The practice strip, the peek and the timer on a notebook with a practice copy (wave 0.9).
 SCENARIOS.push({ doc: "practice", theme: "light", device: "desktop", lowLatency: false });
 SCENARIOS.push({ doc: "practice", theme: "dark", device: "narrow", lowLatency: false });
+// Anchored excerpts (v10): a region of a fake PDF page excerpted to a new page, drawn live, and the badge's jump back.
+SCENARIOS.push({ doc: "excerpt", theme: "light", device: "desktop", lowLatency: false });
+SCENARIOS.push({ doc: "excerpt", theme: "dark", device: "tablet", lowLatency: false });
 
 function findChrome() {
 	const candidates = [
@@ -203,7 +206,7 @@ async function main() {
 					await sleep(100);
 				}
 				await cdp.evaluate("window.harness.ready.then(() => true)");
-				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}

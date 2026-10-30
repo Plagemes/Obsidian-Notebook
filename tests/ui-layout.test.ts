@@ -59,7 +59,8 @@ describe("layout engine", () => {
 		expect(sel.actions).toContain("selection-white-transparent");
 		expect(sel.actions).toContain("delete-selection");
 		const lasso = contextBar(baseContext({ tool: "lasso" }), 800, {}, NOW)!;
-		expect(lasso).toEqual({ kind: "lasso", actions: ["selection-paste"] });
+		// v10: with nothing selected the lasso bar also offers the excerpt actions (the next drag outlines the region).
+		expect(lasso).toEqual({ kind: "lasso", actions: ["selection-paste", "excerpt-to-page", "excerpt-copy"] });
 		const noImage = contextBar(baseContext({ tool: "lasso", selection: { strokes: 3, elements: 0, images: 0 } }), 800, {}, NOW)!;
 		expect(noImage.actions).not.toContain("selection-white-transparent");
 	});

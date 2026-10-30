@@ -39,6 +39,8 @@ export function commandApplies(view: NotebookView, id: string): boolean {
 	if (id.startsWith("pdf-side-")) return pdfSideState(view).open;
 	// wave 0.9 (357): the layer order needs something selected.
 	if (id.startsWith("layer-")) return !!view.uiContext().selection;
+	// v10: "Go to source" needs a selected excerpt.
+	if (id === "excerpt-open-source") return (view.uiContext().selection?.excerpts ?? 0) > 0;
 	return true;
 }
 
@@ -107,6 +109,10 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"link-selection": (v) => v.linkSelection(),
 	"selection-open-link": (v) => v.openSelectionLink(),
 	"stamps-save-selection": (v) => v.stampPalette?.saveSelection(),
+	// v10: anchored excerpts
+	"excerpt-to-page": (v) => v.excerptTools?.excerptToPage(),
+	"excerpt-copy": (v) => v.excerptTools?.copyAsExcerpt(),
+	"excerpt-open-source": (v) => v.excerptTools?.openSelectedSource(),
 	"layer-front": (v) => v.moveSelectionLayer("front"),
 	"layer-forward": (v) => v.moveSelectionLayer("forward"),
 	"layer-backward": (v) => v.moveSelectionLayer("backward"),

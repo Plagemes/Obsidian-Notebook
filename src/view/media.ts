@@ -1,7 +1,9 @@
 import { loadPdfJs, normalizePath, Platform, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
 import type { MediaSource } from "../ink/renderer";
-import type { Asset, AssetKind, NotebookDocument, Page } from "../model/types";
+import { drawPageRaster } from "../ink/page-raster";
+import { clampSourceRegion, elementAssetId, excerptSourceState } from "../model/excerpts";
+import type { Asset, AssetKind, ExcerptElement, NotebookDocument, Page } from "../model/types";
 import { assetExtension, assetPath, assetsFolder, kindFromName } from "../pdf/assets";
 import { assetIdFromHash, sha256Hex } from "../pdf/hash";
 import type { PdfLib } from "../pdf/pdfjs-types";
@@ -55,6 +57,17 @@ export async function storeAsset(app: App, notebooksFolder: string, bytes: Array
 	return { id, kind: k, path, name, bytes: bytes.byteLength };
 }
 
+/** v10: longest side of a live excerpt picture, px. */
+const LIVE_MAX_SIDE = 2048;
+/** v10: a live excerpt picture is drawn again at most this often while its notebook is being edited, ms. */
+const LIVE_MIN_INTERVAL_MS = 400;
+
+interface LivePicture {
+	key: string;
+	canvas: HTMLCanvasElement;
+	at: number;
+}
+
 /** PDF pages, scans and images of the open notebook, for the renderer and exports. */
 export class NotebookMedia implements MediaSource {
 	readonly pdf: PdfStore;
@@ -66,6 +79,13 @@ export class NotebookMedia implements MediaSource {
 	private readonly placeholders = new Map<string, HTMLCanvasElement>();
 	/** Assets stored but not yet in the document (an import in progress), readable by id. */
 	private readonly pending = new Map<string, Asset>();
+	/** v10: live pictures of excerpts of this notebook's own pages, by excerpt id. */
+	private readonly live = new Map<string, LivePicture>();
+	/** v10: bumped on every content change of the document, so live pictures are drawn again. */
+	private revision = 0;
+	private liveTimer: number | null = null;
+	private readonly pageTokens = new WeakMap<Page, number>();
+	private nextPageToken = 1;
 
 	constructor(
 		private readonly app: App,
@@ -187,6 +207,91 @@ export class NotebookMedia implements MediaSource {
 		return hit;
 	}
 
+	/**
+	 * v10: the content of the document changed. Live excerpt pictures are drawn again (throttled): a repaint is asked
+	 * for a moment later, so writing on a source page shows in its excerpts without redrawing the page at every stroke.
+	 */
+	excerptsChanged(): void {
+		this.revision++;
+		if (this.live.size === 0 || this.liveTimer !== null) return;
+		this.liveTimer = window.setTimeout(() => {
+			this.liveTimer = null;
+			this.changed();
+		}, LIVE_MIN_INTERVAL_MS);
+	}
+
+	/**
+	 * v10: the live picture of an excerpt whose source is a page of this notebook (drawn with the page raster, at the
+	 * excerpt's size on screen); null when the source is another notebook, is gone, or its background is still loading
+	 * (the renderer then draws the snapshot). The source page's own excerpts are drawn from their snapshots, so an
+	 * excerpt of a page that holds an excerpt of it cannot recurse.
+	 */
+	excerpt(el: ExcerptElement, deviceScale: number): CanvasImageSource | null {
+		const doc = this.doc();
+		if (!doc) return null;
+		const state = excerptSourceState(el, doc);
+		if (state.kind !== "here") return null;
+		const page = doc.pages[state.index]!;
+		const region = clampSourceRegion(el.source, page);
+		if (!region) return null;
+		const scale = Math.min(quantizeScale((deviceScale * el.width) / region.width), LIVE_MAX_SIDE / Math.max(region.width, region.height));
+		let background: CanvasImageSource | null = null;
+		const bg = page.background;
+		if (bg) {
+			// Any bitmap of the page already rendered first: asking for another scale of a page the view is drawing would
+			// cancel its render in flight (one render per page at a time).
+			const have = bg.kind === "pdf" && !this.missing.has(bg.asset) ? this.pdf.peek(bg.asset, bg.page, scale) : null;
+			background = (have?.canvas as CanvasImageSource | undefined) ?? this.background(page, scale);
+			if (!background) return this.live.get(el.id)?.canvas ?? null;
+		}
+		const images = new Map<string, CanvasImageSource>();
+		for (const e of page.elements ?? []) {
+			const id = elementAssetId(e);
+			if (id === null || images.has(id)) continue;
+			const img = this.image(id);
+			if (img) images.set(id, img);
+			// Wait for pictures still loading rather than show the region without them.
+			else if (this.images.get(id) === "loading") return this.live.get(el.id)?.canvas ?? null;
+		}
+		const bgWidth = background && "width" in background ? Number(background.width) : 0;
+		const key = [this.pageToken(page), this.revision, scale, region.x, region.y, region.width, region.height, bgWidth, images.size].join("|");
+		const have = this.live.get(el.id);
+		if (have?.key === key) return have.canvas;
+		const now = Date.now();
+		if (have && now - have.at < LIVE_MIN_INTERVAL_MS) {
+			if (this.liveTimer === null) {
+				this.liveTimer = window.setTimeout(() => {
+					this.liveTimer = null;
+					this.changed();
+				}, LIVE_MIN_INTERVAL_MS);
+			}
+			return have.canvas;
+		}
+		const canvas = have?.canvas ?? activeDocument.createEl("canvas");
+		canvas.width = Math.max(1, Math.round(region.width * scale));
+		canvas.height = Math.max(1, Math.round(region.height * scale));
+		const ctx = canvas.getContext("2d");
+		if (!ctx) return null;
+		drawPageRaster(ctx, page, scale, { background, images, region });
+		this.live.set(el.id, { key, canvas, at: now });
+		return canvas;
+	}
+
+	/** v10: the excerpt's source is this notebook and its page is not in it any more. */
+	excerptMissing(el: ExcerptElement): boolean {
+		const doc = this.doc();
+		return !!doc && excerptSourceState(el, doc).kind === "page-missing";
+	}
+
+	private pageToken(page: Page): number {
+		let t = this.pageTokens.get(page);
+		if (t === undefined) {
+			t = this.nextPageToken++;
+			this.pageTokens.set(page, t);
+		}
+		return t;
+	}
+
 	/** Whether an asset is waiting for the sync client (for labels and tests). */
 	isWaiting(id: string): boolean {
 		return this.waiting.has(id);
@@ -251,6 +356,9 @@ export class NotebookMedia implements MediaSource {
 	}
 
 	destroy(): void {
+		if (this.liveTimer !== null) window.clearTimeout(this.liveTimer);
+		this.liveTimer = null;
+		this.live.clear();
 		this.pdf.clear();
 		this.pending.clear();
 		this.placeholders.clear();

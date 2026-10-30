@@ -45,6 +45,7 @@ export interface UiContext {
 	selection: {
 		strokes: number; elements: number; images: number; /** 1 when a selected text box holds a [[link]] */ links?: number;
 		/** v9: selected equations and graphs (optional, 0 when absent). */ equations?: number; graphs?: number;
+		/** v10: selected anchored excerpts (optional, 0 when absent). */ excerpts?: number;
 	} | null;
 	/** The page in view (index of the page sheet when it was opened from a thumbnail). */
 	page: {
@@ -162,6 +163,11 @@ export const ACTIONS: readonly ActionDef[] = [
 	// wave 0.9: math — edit the selected equation or graph, turn equations into ink.
 	{ id: "math-edit", label: "math.edit", icon: "square-function", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 92, scope: "view", command: "math.command.edit", when: oneMath },
 	{ id: "math-convert-ink", label: "math.convertInk", icon: "pen-line", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 58, scope: "view", command: "math.command.convertInk", when: (c) => (c.selection?.equations ?? 0) > 0 },
+	// v10: anchored excerpts (#105). With a selection they excerpt its region; with nothing selected the next drag on a page
+	// outlines the region (lasso bar, All actions sheet). "Go to source" when an excerpt is selected.
+	{ id: "excerpt-open-source", label: "excerpt.openSource", icon: "corner-up-left", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 93, scope: "view", command: "excerpt.command.openSource", readOnly: true, when: (c) => (c.selection?.excerpts ?? 0) > 0, keywords: "excerpt source back jump origin estratto fonte" },
+	{ id: "excerpt-to-page", label: "excerpt.toPage", icon: "crop", group: "insert", surfaces: ["context", "sheet"], contexts: ["selection", "lasso"], priority: 49, scope: "view", command: "excerpt.command.toPage", keywords: "excerpt clip cut region quote anchor pdf estratto ritaglio citazione" },
+	{ id: "excerpt-copy", label: "excerpt.copy", icon: "clipboard-copy", group: "insert", surfaces: ["context", "sheet"], contexts: ["selection", "lasso"], priority: 47, scope: "view", command: "excerpt.command.copy", keywords: "excerpt clip region another notebook estratto copia quaderno" },
 	{ id: "stamps-save-selection", label: "stamps.save", icon: "stamp", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 50, scope: "view", when: hasSelection },
 	// wave 0.9 (357): layer order of the selection. Front and back are the strongest moves, so they rank higher in a narrow bar.
 	...([

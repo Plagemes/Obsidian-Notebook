@@ -167,6 +167,16 @@ export function pageIdFromState(state: unknown): string | null {
 	return typeof id === "string" && validPageId(id) ? id : null;
 }
 
+/** v10: the region to outline from a view state (`{ region: { x, y, width, height } }`, page coordinates), or null. */
+export function regionFromState(state: unknown): { x: number; y: number; width: number; height: number } | null {
+	if (typeof state !== "object" || state === null) return null;
+	const r = (state as { region?: unknown }).region;
+	if (typeof r !== "object" || r === null) return null;
+	const { x, y, width, height } = r as Record<string, unknown>;
+	const ok = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+	return ok(x) && ok(y) && ok(width) && ok(height) && width > 0 && height > 0 ? { x, y, width, height } : null;
+}
+
 /** Page number from a view state (`{ page }`), as a 1-based integer or null. */
 export function pageFromState(state: unknown): number | null {
 	if (typeof state !== "object" || state === null) return null;
