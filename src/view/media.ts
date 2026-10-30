@@ -7,6 +7,7 @@ import { assetIdFromHash, sha256Hex } from "../pdf/hash";
 import type { PdfLib } from "../pdf/pdfjs-types";
 import { isAbortError, PdfStore } from "../pdf/pdf-store";
 import { ensureFolder } from "../storage/vault-io";
+import { assetAvailability } from "../storage/sync-state";
 
 /** Render scales are rounded to steps of √2 so zooming does not re-render on every frame. */
 function quantizeScale(s: number): number {
@@ -59,6 +60,10 @@ export class NotebookMedia implements MediaSource {
 	readonly pdf: PdfStore;
 	private readonly images = new Map<string, ImageBitmap | "loading" | "missing">();
 	private readonly missing = new Set<string>();
+	/** wave 0.7: sync safety (#343): assets whose file is not in the vault yet, or still arriving. Not an error. */
+	private readonly waiting = new Set<string>();
+	/** Placeholders drawn for image assets that are waiting for sync. */
+	private readonly placeholders = new Map<string, HTMLCanvasElement>();
 	/** Assets stored but not yet in the document (an import in progress), readable by id. */
 	private readonly pending = new Map<string, Asset>();
 
@@ -99,24 +104,27 @@ export class NotebookMedia implements MediaSource {
 	async readAsset(id: string): Promise<ArrayBuffer> {
 		const asset = this.asset(id);
 		const file = asset && resolveAssetFile(this.app, asset, this.folder());
-		if (!file) {
-			this.missing.add(id);
-			throw new Error(`missing asset ${asset?.name ?? id}`);
+		// wave 0.7: an asset the sync client has not (completely) downloaded yet is waiting, not missing.
+		if (!file || assetAvailability(file.stat.size, asset.bytes) === "waiting") {
+			if (asset) this.waiting.add(id);
+			else this.missing.add(id);
+			throw new Error(`${file ? "incomplete" : "missing"} asset ${asset?.name ?? id}`);
 		}
+		this.waiting.delete(id);
 		return this.app.vault.readBinary(file);
 	}
 
 	background(page: Page, deviceScale: number): CanvasImageSource | null {
 		const bg = page.background;
 		if (!bg) return null;
-		if (bg.kind === "image") return this.image(bg.asset);
-		if (this.missing.has(bg.asset)) return null;
+		if (bg.kind === "image") return this.waiting.has(bg.asset) ? null : this.image(bg.asset);
+		if (this.missing.has(bg.asset) || this.waiting.has(bg.asset)) return null;
 		const scale = quantizeScale(deviceScale);
 		const have = this.pdf.peek(bg.asset, bg.page, scale);
 		if (!have || have.scale < scale * 0.99) {
 			this.pdf.render(bg.asset, bg.page, scale).then(() => this.changed(), (e) => {
 				if (!isAbortError(e)) {
-					console.error("[notebook] PDF page", e);
+					if (!this.waiting.has(bg.asset)) console.error("[notebook] PDF page", e);
 					this.missing.add(bg.asset);
 					this.changed();
 				}
@@ -129,12 +137,14 @@ export class NotebookMedia implements MediaSource {
 		const bg = page.background;
 		if (!bg) return null;
 		const name = this.asset(bg.asset)?.name ?? bg.asset;
+		if (this.waiting.has(bg.asset)) return t("sync.asset.waiting", { name });
 		return this.missing.has(bg.asset) ? t("media.missing", { name }) : t("media.loading");
 	}
 
 	image(id: string): CanvasImageSource | null {
 		const cached = this.images.get(id);
 		if (cached && cached !== "loading" && cached !== "missing") return cached;
+		if (cached === "missing" && this.waiting.has(id)) return this.placeholder(id);
 		if (!cached) {
 			this.images.set(id, "loading");
 			this.readAsset(id)
@@ -143,12 +153,78 @@ export class NotebookMedia implements MediaSource {
 					this.images.set(id, bmp);
 					this.changed();
 				}, (e) => {
-					console.error("[notebook] image", e);
+					if (!this.waiting.has(id)) console.error("[notebook] image", e);
 					this.images.set(id, "missing");
 					this.changed();
 				});
 		}
 		return null;
+	}
+
+	/**
+	 * wave 0.7: sync safety (#343). A file was created, changed or renamed in the vault: if it is the file of an asset
+	 * that was waiting (or could not be read), forget what is cached so it is loaded again. Returns true if it was.
+	 */
+	assetFileChanged(file: TFile): boolean {
+		const ids = [...new Set([...this.waiting, ...this.missing])];
+		let hit = false;
+		for (const id of ids) {
+			const asset = this.asset(id);
+			if (!asset || resolveAssetFile(this.app, asset, this.folder()) !== file) continue;
+			hit = true;
+			this.waiting.delete(id);
+			this.missing.delete(id);
+			this.placeholders.delete(id);
+			const cached = this.images.get(id);
+			if (typeof cached === "object") cached.close();
+			this.images.delete(id);
+			this.pdf.evictAsset(id);
+		}
+		if (hit) this.changed();
+		return hit;
+	}
+
+	/** Whether an asset is waiting for the sync client (for labels and tests). */
+	isWaiting(id: string): boolean {
+		return this.waiting.has(id);
+	}
+
+	/** A light "waiting for sync" card in the shape of the first image element that shows `id`. */
+	private placeholder(id: string): HTMLCanvasElement {
+		const have = this.placeholders.get(id);
+		if (have) return have;
+		let ratio = 4 / 3;
+		for (const page of this.doc()?.pages ?? []) {
+			const el = page.elements?.find((e) => e.type === "image" && e.asset === id);
+			if (el && el.type === "image" && el.width > 0 && el.height > 0) {
+				ratio = Math.min(8, Math.max(1 / 8, el.width / el.height));
+				break;
+			}
+		}
+		const width = 480;
+		const height = Math.max(40, Math.round(width / ratio));
+		const c = activeDocument.createEl("canvas");
+		c.width = width;
+		c.height = height;
+		const ctx = c.getContext("2d");
+		if (ctx) {
+			ctx.fillStyle = "#f1f5f9";
+			ctx.fillRect(0, 0, width, height);
+			ctx.strokeStyle = "#94a3b8";
+			ctx.lineWidth = 3;
+			ctx.setLineDash([12, 8]);
+			ctx.strokeRect(2, 2, width - 4, height - 4);
+			ctx.fillStyle = "#64748b";
+			ctx.textAlign = "center";
+			ctx.textBaseline = "middle";
+			const size = Math.max(12, Math.min(28, height / 5));
+			ctx.font = `${size}px sans-serif`;
+			const name = this.asset(id)?.name ?? "";
+			const lines = name && height >= size * 3.2 ? [t("sync.asset.waitingShort"), name] : [t("sync.asset.waitingShort")];
+			lines.forEach((line, i) => ctx.fillText(line, width / 2, height / 2 + (i - (lines.length - 1) / 2) * size * 1.4, width - 24));
+		}
+		this.placeholders.set(id, c);
+		return c;
 	}
 
 	/** JPEG of a PDF page at `dpi`, for exports. */
@@ -174,6 +250,8 @@ export class NotebookMedia implements MediaSource {
 	destroy(): void {
 		this.pdf.clear();
 		this.pending.clear();
+		this.placeholders.clear();
+		this.waiting.clear();
 		for (const v of this.images.values()) if (typeof v === "object") v.close();
 		this.images.clear();
 	}

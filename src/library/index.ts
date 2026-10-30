@@ -2,8 +2,8 @@
 
 import { tagAncestors, tagIsWithin } from "../model/tags";
 
-/** v3: entries carry the page tags (format v7), so older indexes are rebuilt. */
-export const INDEX_VERSION = 3;
+/** v4: entries also carry the titled bookmarks (quick switcher); v3 added the page tags. Older indexes are rebuilt. */
+export const INDEX_VERSION = 4;
 /** "Recent" shows this many notebooks. */
 export const RECENT_LIMIT = 20;
 
@@ -27,6 +27,8 @@ export interface LibraryEntry {
 	textPages?: number[];
 	/** v7 page tags: the 0-based pages that have tags, with their tags. Absent when no page has any. */
 	pageTags?: Array<{ page: number; tags: string[] }>;
+	/** Titled bookmarks: 0-based page and title. Absent when there is none. */
+	bookmarks?: Array<{ page: number; title: string }>;
 	tags: string[];
 	favorite: boolean;
 	/** Cover colour #rrggbb. */
@@ -182,6 +184,10 @@ function isEntry(v: unknown): v is LibraryEntry {
 			const o = p as { page?: unknown; tags?: unknown } | null;
 			return typeof o === "object" && o !== null && Number.isInteger(o.page) && Array.isArray(o.tags) && o.tags.every((x) => typeof x === "string");
 		}))) &&
+		(e.bookmarks === undefined || (Array.isArray(e.bookmarks) && e.bookmarks.every((b: unknown) => {
+			const o = b as { page?: unknown; title?: unknown } | null;
+			return typeof o === "object" && o !== null && Number.isInteger(o.page) && typeof o.title === "string";
+		}))) &&
 		(e.thumb === undefined || typeof e.thumb === "string") &&
 		(e.thumbMtime === undefined || Number.isFinite(e.thumbMtime))
 	);
@@ -220,6 +226,7 @@ export class LibraryIndex {
 	/** Inserts or replaces the entry stored under `entry.path`. */
 	upsert(entry: LibraryEntry): void {
 		const copy: LibraryEntry = { ...entry, tags: [...entry.tags] };
+		if (entry.bookmarks) copy.bookmarks = entry.bookmarks.map((b) => ({ ...b }));
 		if (entry.pageTags) copy.pageTags = entry.pageTags.map((p) => ({ page: p.page, tags: [...p.tags] }));
 		this.map.set(entry.path, copy);
 	}

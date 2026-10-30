@@ -393,7 +393,7 @@ function pdfFiles(app: App): TFile[] {
 	return app.vault.getFiles().filter((f) => f.extension.toLowerCase() === "pdf" && !/(^|\/)_assets\//.test(f.path)).sort((a, b) => a.path.localeCompare(b.path));
 }
 
-function setTextbook(view: NotebookView): void {
+export function setTextbook(view: NotebookView): void {
 	if (!services) return;
 	const { app, store } = services;
 	const doc = view.document;
@@ -415,7 +415,7 @@ function setTextbook(view: NotebookView): void {
 	}).open();
 }
 
-function removeTextbook(view: NotebookView): void {
+export function removeTextbook(view: NotebookView): void {
 	if (!services) return;
 	const { app, store } = services;
 	const doc = view.document;
@@ -432,7 +432,7 @@ function removeTextbook(view: NotebookView): void {
 }
 
 /** Opens the first textbook of the notebook at a printed page typed in a dialog. */
-function openPage(view: NotebookView): void {
+export function openPage(view: NotebookView): void {
 	if (!services) return;
 	const doc = view.document;
 	const file = view.file;
@@ -451,7 +451,7 @@ function openPage(view: NotebookView): void {
 }
 
 /** *Insert textbook reference*: types "p. N" where the pen was last seen. */
-function insertReference(view: NotebookView): void {
+export function insertReference(view: NotebookView): void {
 	if (!services) return;
 	const doc = view.document;
 	if (!doc) return;
@@ -496,7 +496,10 @@ function refreshAll(): void {
 	for (const view of views(services.app)) overlays.get(view)?.refresh();
 }
 
-/** Registers the textbook commands and the reference overlay (roadmap 208). Called once from `onload`. */
+/**
+ * Registers the reference overlay and the configuration watcher (roadmap 208). Called once from `onload`. The commands
+ * (`textbook-set`, `-remove`, `-open`, `-insert`) are view actions of the action registry (ui/actions.ts, view/view-actions.ts).
+ */
 export function registerTextbookRefs(plugin: Plugin, folder: () => string): void {
 	const { app } = plugin;
 	const store = new TextbookStore(vaultLinkFileAdapter(app), folder);
@@ -505,17 +508,6 @@ export function registerTextbookRefs(plugin: Plugin, folder: () => string): void
 		for (const view of views(app)) overlays.get(view)?.detach();
 		services = null;
 	});
-
-	const withView = (checking: boolean, run: (view: NotebookView) => void): boolean => {
-		const view = app.workspace.getActiveViewOfType(NotebookView);
-		if (!view?.document) return false;
-		if (!checking) run(view);
-		return true;
-	};
-	plugin.addCommand({ id: "textbook-set", name: t("textbook.command.set"), checkCallback: (c) => withView(c, setTextbook) });
-	plugin.addCommand({ id: "textbook-remove", name: t("textbook.command.remove"), checkCallback: (c) => withView(c, removeTextbook) });
-	plugin.addCommand({ id: "textbook-open", name: t("textbook.command.open"), checkCallback: (c) => withView(c, openPage) });
-	plugin.addCommand({ id: "textbook-insert", name: t("textbook.command.insert"), checkCallback: (c) => withView(c, insertReference) });
 
 	const attach = () => {
 		if (!services) return;
