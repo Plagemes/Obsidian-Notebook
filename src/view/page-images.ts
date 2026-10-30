@@ -1,9 +1,11 @@
 // Draws pages to PNG images, one page at a time: shared by the Markdown export (382), the PNG export and printing (81).
 // The pixels come from ink/page-raster.ts (same look as the PDF export, never the night colours); this file only loads
-// the PDF page / pictures a page needs and encodes the canvas. Memory stays at one page: the canvas is shrunk to nothing
-// after each page and the picture bitmaps are closed by `close()`.
+// the PDF page / pictures a page needs and encodes the canvas. Memory stays near one page: the canvas is shrunk to nothing
+// after each page, and the decoded picture bitmaps kept between pages are bounded (a few, and a size budget; the ones the
+// page being drawn uses are never freed); `close()` frees the rest.
 import { layerFlags, type ExportLayers } from "../ink/export-layers";
 import type { BoxLabel } from "../ink/marker-render";
+import { BitmapCache, MAX_CACHED_BITMAP_BYTES, MAX_CACHED_BITMAPS } from "../ink/bitmap-cache";
 import { drawPageRaster } from "../ink/page-raster";
 import { renderSize } from "../model/export-markdown";
 import type { Page } from "../model/types";
@@ -27,7 +29,8 @@ export interface PageImage {
 }
 
 export class PageImageRenderer {
-	private readonly bitmaps = new Map<string, ImageBitmap | null>();
+	/** Decoded pictures by asset (null: it could not be loaded, so it is not tried again); least recently used go first. */
+	private readonly bitmaps = new BitmapCache<ImageBitmap | null>((bmp) => bmp?.close());
 
 	constructor(private readonly media: NotebookMedia | null, private readonly options: PageImageOptions = {}) {}
 
@@ -49,6 +52,10 @@ export class PageImageRenderer {
 	private async elementImages(page: Page, failed: { n: number }): Promise<Map<string, CanvasImageSource>> {
 		const out = new Map<string, CanvasImageSource>();
 		const media = this.media;
+		const needed = new Set<string>();
+		for (const el of page.elements ?? []) if (el.type === "image") needed.add(el.asset);
+		// Pictures of earlier pages are freed before this page's are decoded, so a photo-heavy notebook never holds them all.
+		this.bitmaps.trim(MAX_CACHED_BITMAPS, MAX_CACHED_BITMAP_BYTES, needed);
 		for (const el of page.elements ?? []) {
 			if (el.type !== "image" || out.has(el.asset)) continue;
 			let bmp = this.bitmaps.get(el.asset);
@@ -60,7 +67,7 @@ export class PageImageRenderer {
 					console.error("[notebook] page image picture", e);
 					bmp = null;
 				}
-				this.bitmaps.set(el.asset, bmp);
+				this.bitmaps.set(el.asset, bmp, bmp ? bmp.width * bmp.height * 4 : 0);
 			}
 			if (bmp) out.set(el.asset, bmp);
 			else failed.n++;
@@ -103,7 +110,6 @@ export class PageImageRenderer {
 
 	/** Closes the picture bitmaps kept between pages. */
 	close(): void {
-		for (const bmp of this.bitmaps.values()) bmp?.close();
 		this.bitmaps.clear();
 	}
 }

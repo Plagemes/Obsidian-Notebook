@@ -35,6 +35,16 @@ Not yet verified on Android hardware or in Obsidian. The manual steps for these 
 - The radial dial's custom colour button opens the new picker instead of the system colour dialog, and its eyedropper uses the new page eyedropper (which now also ends on Escape or a tap on the toolbar instead of swallowing it).
 - Dragging, scaling or rotating a selection with the handles now goes through the same pure routine as the new operations (`applyPlacement`); the result and the undo step are the same.
 
+### Fixed
+- **Paste from another device no longer binds a picture to a junk file.** The picture records of another device's clipboard file are not trusted: only `_assets/<id>.<ext>` images are read (from this vault's own assets folder, never the path written in the file), at most 50 MB, only when the file is complete, and only if its content hashes to the id. A placeholder or half-downloaded picture is skipped with a notice that it is not synced yet.
+- **A graph moved or deleted across pages takes its ink with it.** The ink bound to a moved graph (and, with *Ink follows objects*, the ink written on an object) goes to the page its object goes to and floats with the selection while it is dragged; deleting objects across pages offers to delete their ink, like on a single page.
+- **A paste bigger than the page** (a cross-page copy, a clip shared from a device with a bigger page) is scaled down uniformly to fit, with a notice, or refused when it would shrink below 5%, instead of landing mostly outside the page.
+- **Graph ink in a pasted or duplicated clip** is bound to the copy of its graph, so it stays clipped to it and follows it.
+- **Exporting a photo-heavy notebook to PNG or Markdown** frees the decoded pictures of earlier pages (at most 8 pictures and 96 MB are kept between pages).
+- **Printing a long range** is capped at 100 pages per job (with a notice suggesting a range) and uses a lower resolution above 10 and 40 pages, so the print preview cannot exhaust a WebView.
+- A selection transform that the document refused (content guard, read-only) now drops the floating selection instead of leaving objects that are not in the document.
+- **Copy to other devices**: one clipboard store for the whole plugin (two notebooks open at once can no longer lose an entry), entries a newer version wrote no longer make every later copy fail as "too large" (they are dropped last, oldest first, and never otherwise), and another device's clipboard file larger than 8 MB is skipped without being read.
+
 ## 0.9.0 — 2026-10-30
 
 Not yet verified on Android hardware, or in Obsidian with its maths engine (the browser harness uses a stand-in for MathJax). The manual steps added in this version are numbered 233 to 274 in `docs/testing.md`; the ones that belong to each area are named below.

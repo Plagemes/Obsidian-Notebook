@@ -31,3 +31,27 @@ export function planPageImages(folder: string, indices: readonly number[], count
 		return name;
 	});
 }
+
+// --- print: how much one job may hold ---
+
+/**
+ * Pages printed in one job at most. Every page of a print job is drawn to an image and decoded before the dialog opens, and
+ * they all stay in memory until it closes, so a whole book would exhaust a WebView; a range prints the rest.
+ */
+export const MAX_PRINT_PAGES = 100;
+
+export interface PrintPlan {
+	/** The pages printed (0-based), the first MAX_PRINT_PAGES of the ones asked for. */
+	indices: number[];
+	/** How many were asked for beyond the cap and are left out. */
+	left: number;
+	/** Resolution of the images: lower for a long job (a page is about 4 times lighter at 75 dpi than at 150). */
+	dpi: number;
+}
+
+/** The pages and the resolution of a print job: 150 dpi up to 10 pages, 110 up to 40, then 75. */
+export function planPrint(indices: readonly number[], highDpi = 150): PrintPlan {
+	const kept = indices.slice(0, MAX_PRINT_PAGES);
+	const dpi = kept.length <= 10 ? highDpi : kept.length <= 40 ? Math.round(highDpi * 0.75) : Math.round(highDpi * 0.5);
+	return { indices: kept, left: indices.length - kept.length, dpi };
+}

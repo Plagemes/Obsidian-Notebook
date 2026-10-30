@@ -1,6 +1,6 @@
 import type { ClipContent } from "../ink/clipboard";
 import {
-	addSharedEntry, emptySharedClip, listSharedItems, makeSharedEntry, parseSharedClip, serializeSharedClip, SHARED_CLIP_PREFIX,
+	addSharedEntry, emptySharedClip, listSharedItems, makeSharedEntry, MAX_SHARED_FILE_BYTES, parseSharedClip, serializeSharedClip, SHARED_CLIP_PREFIX,
 	type SharedClipFile, type SharedClipItem,
 } from "../ink/shared-clip";
 import { deviceFileName, ensureFolderPath, keepUnreadableCopy, listDeviceFiles, type DeviceFileAdapter } from "./device-files";
@@ -80,6 +80,12 @@ export class SharedClipStore {
 			for (const { path, device } of await listDeviceFiles(this.adapter, this.folder, SHARED_CLIP_PREFIX)) {
 				if (device === this.device) continue;
 				try {
+					// A file of another device is read whole: skip one that is far bigger than a clipboard file can be.
+					const size = await this.adapter.size?.(path);
+					if (size !== undefined && size !== null && size > MAX_SHARED_FILE_BYTES) {
+						unreadable.push(`${path}: file too large (${size} bytes)`);
+						continue;
+					}
 					const parsed = parseSharedClip(await this.adapter.read(path));
 					if (parsed.ok) files.push({ device, data: parsed.data });
 					else unreadable.push(`${path}: ${parsed.message}`);

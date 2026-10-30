@@ -240,5 +240,6 @@ export function vaultDeviceFileAdapter(app: App): DeviceFileAdapter {
 			const dir = app.vault.getFolderByPath(normalizePath(folder));
 			return dir ? dir.children.filter((c): c is TFile => c instanceof TFile).map((f) => f.path) : [];
 		},
+		size: async (p) => app.vault.getFileByPath(normalizePath(p))?.stat.size ?? null,
 	};
 }

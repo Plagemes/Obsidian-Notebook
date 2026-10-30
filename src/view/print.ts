@@ -4,13 +4,14 @@
 // print dialog, so the action is hidden there (`canPrint`) and the export dialog does not offer it.
 import { Platform } from "obsidian";
 import { t } from "../i18n";
+import { MAX_PRINT_PAGES, planPrint } from "../model/export-pages";
 import type { Page } from "../model/types";
 import type { ExportOptions } from "./export";
 import type { NotebookMedia } from "./media";
 import { showNotice } from "./notice";
 import { PageImageRenderer } from "./page-images";
 
-/** Resolution of the printed images: sharp on paper, light enough for a notebook of some dozens of pages. */
+/** Resolution of the printed images of a short job: sharp on paper (a long job is drawn at a lower one, see `planPrint`). */
 export const PRINT_DPI = 150;
 /** A page taller than this many times its width is printed over several sheets instead of being shrunk onto one. */
 const LONG_PAGE_RATIO = 1.9;
@@ -33,8 +34,12 @@ export async function printPages(all: readonly Page[], indices: readonly number[
 		return false;
 	}
 	if (printing) return false;
-	const chosen = indices.filter((i) => i >= 0 && i < all.length);
-	if (chosen.length === 0) return false;
+	const wanted = indices.filter((i) => i >= 0 && i < all.length);
+	if (wanted.length === 0) return false;
+	// Every page is drawn and decoded before the dialog opens and they all stay in memory: a long job is capped and lighter.
+	const plan = planPrint(wanted, PRINT_DPI);
+	const chosen = plan.indices;
+	if (plan.left > 0) showNotice(t("export.print.capped", { max: String(MAX_PRINT_PAGES), left: String(plan.left) }), 10000);
 	printing = true;
 	const doc = activeDocument;
 	const win = activeWindow;
@@ -61,7 +66,7 @@ export async function printPages(all: readonly Page[], indices: readonly number[
 		for (let k = 0; k < chosen.length; k++) {
 			working.setMessage(t("export.print.preparing", { done: String(k), total: String(chosen.length) }));
 			const page = all[chosen[k]!]!;
-			const image = await renderer.render(page, PRINT_DPI);
+			const image = await renderer.render(page, plan.dpi);
 			skipped += image.skipped;
 			const url = URL.createObjectURL(image.blob);
 			urls.push(url);
