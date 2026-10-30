@@ -95,6 +95,10 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"favourite-4": (v) => v.selectFavourite(3),
 	"favourite-5": (v) => v.selectFavourite(4),
 	"favourite-6": (v) => v.selectFavourite(5),
+	// wave 0.10 (7, 68): colour picker, page eyedropper, style eyedropper
+	"colour-picker": (v) => v.colourTools?.togglePicker(),
+	"colour-eyedropper": (v) => v.colourTools?.armEyedropper("colour"),
+	"style-eyedropper": (v) => v.colourTools?.armEyedropper("style"),
 	"undo": (v) => v.undo(),
 	"redo": (v) => v.redo(),
 

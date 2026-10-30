@@ -437,6 +437,19 @@ export class Toolbar {
 				b.disabled = !this.editable;
 				b.createSpan({ cls: "notebook-swatch-dot" }).setCssProps({ "--notebook-swatch-color": color });
 			}
+			// wave 0.10 (7, 68): the free picker, the page eyedropper and (for ink) the style eyedropper.
+			const free = this.button(this.colorGroup, t("command.colourPicker"), () => this.runColourAction("colour-picker"));
+			free.addClass("notebook-swatch", "is-free");
+			free.disabled = !this.editable;
+			free.createSpan({ cls: "notebook-swatch-dot" });
+			const dropper = this.button(this.colorGroup, t("command.colourEyedropper"), () => this.runColourAction("colour-eyedropper"));
+			setIcon(dropper, "pipette");
+			dropper.disabled = !this.editable;
+			if (inking) {
+				const style = this.button(this.colorGroup, t("command.styleEyedropper"), () => this.runColourAction("style-eyedropper"));
+				setIcon(style, "droplets");
+				style.disabled = !this.editable;
+			}
 		}
 
 		if (inking) {
@@ -484,6 +497,12 @@ export class Toolbar {
 			const d = chipDiameter(s.penWidth);
 			dot.setCssProps({ "--notebook-chip-w": `${d}px`, "--notebook-chip-h": `${d}px`, "--notebook-chip-color": s.penColor });
 		}
+	}
+
+	/** The picker and the eyedroppers float over the page: close the options first so they do not cover it. */
+	private runColourAction(id: string): void {
+		this.closePopover();
+		this.actions.runAction(id);
 	}
 
 	private row(parent: HTMLElement): HTMLElement {

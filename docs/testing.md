@@ -39,6 +39,9 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | "Draw with finger" setting | ✅ | ✅ | | | |
 | Palm rejection by contact size (setting, off by default) | ✅ | ✅ routing logic only | | ✅ | depends on what the device reports for touch size |
 | Pen: 9 colours, 5 widths | ✅ | ❌ | | | |
+| Free colour picker (roadmap 7, wave 0.10): hue / saturation-value area, hue bar, hex field (3 or 6 digits), recent custom colours (last 12, plugin setting `recentColours`, not in the notebook file), reached from the colour row of the tool options, the radial colour ring and the command; edits the colour of the tool in use (pen, shape and text: pen; highlighter: its own; eraser filtering by colour: the filter colour; any other tool switches to the pen) | ✅ | ✅ `tests/colour.test.ts`: hex parsing, hex / rgb / hsv conversions (round trip), recent list (order, duplicates, limit, invalid input, settings read), which colour a tool edits; ✅ harness (Chromium): opens, hex, invalid hex, area drag, recent, follows the toolbar, close, from the options and the dial; ❌ on a device (steps 460-465, 472-473) | | ✅ | |
+| Page eyedropper (roadmap 7, wave 0.10): the next contact on the page picks the colour under it, read from the rendered canvases composited over white at the canvas pixel (device pixels, so the device pixel ratio and zoom are taken into account), with a swatch above the contact while it is down; Escape, another tool or a contact on the toolbar ends it; nothing is drawn | ✅ | ✅ `canvasPixelAt` (dpr 1, 2, 2.625, CSS-scaled canvas, edges, empty box); ✅ harness: picks the colour of a red stroke, loupe, remembered, Escape, toolbar tap, draws nothing; ❌ on a device (steps 466-467) | | ✅ | picks what is drawn: a highlighter shows blended with the paper and night mode shows its dark rendering |
+| Style eyedropper (roadmap 68, wave 0.10): a tap on a stroke makes its tool (pen or highlighter; a shape stroke gives the pen), colour and width the current pen; hit test on the vector points in page coordinates with a 10 px tolerance, topmost stroke under the tap first, then the closest; hidden ink only while shown | ✅ | ✅ `pickStrokeAt` (under / near / topmost / closest / dot / empty), `styleOfStroke`; ✅ harness: miss keeps waiting, highlighter and pen stroke taken, draws nothing; ❌ on a device (steps 468-471) | | ✅ | |
 | Highlighter: 5 colours, 3 widths, constant width | ✅ | ✅ format round-trip | | | |
 | Highlighter translucent with `multiply` blending, also while writing (CSS on the wet canvas) | ✅ | ❌ (canvas) | | ✅ | |
 | Stabilization (0–10, default 2): adaptive 1€ filter | ✅ | ✅ jitter and lag vs the old stabilizer | | | tune levels on the device |
@@ -723,6 +726,26 @@ Export and view (roadmap 381, 382, 367, 376; wave 0.9). Not verified in Obsidian
 273. **Ink in the margin, mixed notebooks, page by page.** Switch the crop off, write a note in the left margin of a PDF page, switch it on: the margin note is inside the view (the box is wider on that page). In a notebook with a plain page between PDF pages the crop does nothing in continuous mode (the plain page needs the whole width); in *page by page* mode each PDF page is cropped and the plain page is not. Turn pages with swipes: each page fits its own box.
 274. **Nothing changes in the file; large PDFs.** With the crop on, make a change, close and reopen: the notebook, its ink and its exports are as before (an exported PDF is identical with the crop on and off). Open a 200-page PDF notebook and switch the crop on: the app stays responsive while pages are measured (the zoom may adjust a few times in the first seconds), and a blank page or a scan with a dark border does not crash or zoom absurdly.
 
+### Colour picker and style eyedropper (wave 0.10: colours, steps 460-474)
+
+Free colour picker with recent colours and an eyedropper (roadmap 7), style eyedropper (68). Not verified on a device. Setup: a notebook page with a few strokes: a red pen stroke, a thick green highlighter stroke, a thin blue pen stroke and a short line drawn with the shape tool, plus some typed text.
+
+460. **Open the picker.** Tap the pen twice (or the current-pen indicator) to open the tool options. At the end of the colour row there are three new buttons: a rainbow circle (*Colour picker…*), a pipette (*Eyedropper*) and, for the pen, highlighter and shapes, a droplets icon (*Style eyedropper…*). Tap the rainbow circle: the options close and a panel opens at the top right of the page with a colour square, a hue bar, a hex field showing the colour in use, a pipette, an X and the recent colours (a hint while there are none). It stays inside the page area on a phone in portrait.
+461. **Choose by area and hue.** Drag a finger or the pen in the square and on the hue bar: the pen colour in the current-pen indicator follows at once; write a few words and check they are in that colour. Lifting does not close the panel. Arrow keys (with a keyboard) on the square and on the hue bar also move the colour. Drag the hue bar to the far right and left: no jump, no error.
+462. **Hex field.** Tap the hex field and type `#12ab34`, then Enter (or tap away): the pen takes that colour. Type `abc` (three digits, no hash) and Enter: the pen becomes `#aabbcc`. Type `#zzz`: the field turns red and the colour does not change. The on-screen keyboard does not hide the panel on the phone.
+463. **Recent colours.** Every colour you finish choosing (lifting the finger, Enter in the hex field, a recent swatch, the eyedropper) appears first in the recent row; the same colour is not repeated; at most 12 are kept. Tap an older one: the pen takes it and it moves to the front. Close the notebook and Obsidian, open the notebook again, open the picker: the same recent colours are there (they are in the plugin settings, not in the notebook file).
+464. **Which colour it changes.** With the highlighter selected, the picker edits the highlighter colour (the pen colour stays). With the eraser in *Colour* filter mode it edits the colour the eraser is limited to. With the lasso or *Space* tool selected it switches to the pen. Change the pen colour from a toolbar swatch or a favourite while the panel is open: the panel follows. The X, Escape (keyboard) and the *Colour picker…* command close it.
+465. **From the dial.** Open the radial dial (S Pen button), tap the colour bubble, then the rainbow button on the ring: the dial closes and the same picker opens (no system colour dialog). Open the dial again, colour ring, tap the pipette: the dial closes and a notice says to tap the page.
+466. **Eyedropper on the page.** Start the eyedropper (pipette in the options, on the dial, or the *Eyedropper* command). Put the pen (or a finger) down on the red stroke and keep it down: a small swatch with the hex colour shows above the contact and follows it as you move. Lift on the red stroke: the pen takes red (within a few shades, antialiasing) and the colour is in the recent list. Repeat with a finger on a high-density tablet and on a page zoomed in and zoomed out: the colour picked is the one under the contact (not a few millimetres away), also after zooming in to 300 %. Nothing is drawn and the undo stack does not change.
+467. **Eyedropper limits.** Lift on empty paper: white (or the paper colour) is picked. The highlighter picks the colour as it looks on the paper (blended), not the original highlighter colour; a page in night mode picks what is shown. Escape (keyboard) ends the mode; so does a tap on the toolbar, the page panel or a button of the contextual bar (that tap then acts as usual); selecting another tool also ends it.
+468. **Style eyedropper: pen.** Select the pen with a different colour and width. Start *Style eyedropper* (droplets in the options, or the command). Tap the thin blue stroke: the pen, its colour and its width become those of that stroke (a notice names them), the mode ends. Write a line: same colour and width as the blue one. Tap exactly on the stroke and a few millimetres beside it (about 1 cm with a finger is too far): the near tap works, the far one does not.
+469. **Style eyedropper: highlighter and shape.** From the pen, start the style eyedropper and tap the green highlighter stroke: the tool becomes the highlighter with that colour and width. Tap the shape-tool line: you get the pen with the colour and width of that line (a shape's kind is not stored, so the shape tool is not selected).
+470. **Style eyedropper misses and overlaps.** Tap empty paper or text: a notice says there is no stroke and the mode stays on; Escape or a tap on the toolbar ends it. Where a pen stroke crosses a highlighter stroke, a tap on the crossing takes the one drawn last (on top); a tap on the highlighter beside the crossing takes the highlighter.
+471. **Hidden ink and read-only.** With invisible ink hidden (*Show solutions* off), tapping where hidden ink is takes nothing; turn *Show solutions* on and the hidden stroke can be tapped. On a read-only notebook (annotations hidden, or a notebook open on another device) the three actions are disabled.
+472. **Commands and hotkeys.** The command palette lists *Colour picker…*, *Eyedropper: pick a colour from the page* and *Style eyedropper: take colour, width and tool from a stroke*; give one a hotkey and use it. In Italian the three names, the hints and the panel labels are in Italian.
+473. **Phone.** On a phone in portrait the picker fits the width, the square and hue bar are easy to drag with a thumb, the buttons are at least 40 px, and the panel does not cover the toolbar. In large toolbar size and in the dark theme the panel and the loupe stay readable.
+474. **Nothing else changes.** Write with the pen before and after using the picker and the eyedroppers: latency, smoothing and the look of the ink are the same. The notebook file is not changed by picking colours (no save is triggered by the picker or the eyedroppers alone), and a notebook written after using them opens in the previous version.
+
 Results table for steps 1 to 274. Fill it in as you go.
 
 | Step | Device / Obsidian version | Result | Notes |
@@ -1001,6 +1024,21 @@ Results table for steps 1 to 274. Fill it in as you go.
 | 272 Crop margins | | | |
 | 273 Ink in the margin, mixed notebooks, page by page | | | |
 | 274 Nothing changes in the file; large PDFs | | | |
+| 460 Open the picker | | | |
+| 461 Choose by area and hue | | | |
+| 462 Hex field | | | |
+| 463 Recent colours | | | |
+| 464 Which colour it changes | | | |
+| 465 From the dial | | | |
+| 466 Eyedropper on the page | | | |
+| 467 Eyedropper limits | | | |
+| 468 Style eyedropper: pen | | | |
+| 469 Style eyedropper: highlighter and shape | | | |
+| 470 Style eyedropper misses and overlaps | | | |
+| 471 Hidden ink and read-only | | | |
+| 472 Commands and hotkeys | | | |
+| 473 Phone | | | |
+| 474 Nothing else changes | | | |
 
 Benchmark output (step 21): paste it here.
 

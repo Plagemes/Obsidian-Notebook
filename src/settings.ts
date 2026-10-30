@@ -6,6 +6,7 @@ import { DEFAULT_PEN_GESTURE_SETTINGS, readPenGestureSettings, type PenGestureSe
 import { PEN_BUTTON_ACTIONS, type PenButtonAction } from "./ink/input-policy";
 import { isScrollMode, type ScrollMode } from "./ink/page-mode";
 import { parsePosition, type SavedPosition } from "./ink/view-position";
+import { normaliseRecentColours } from "./ink/colour";
 import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./model/types";
 import { DEFAULT_COMPANION_SETTINGS, readCompanionSettings, type CompanionSettings } from "./storage/companion-path";
 import { DEFAULT_TRASH_SETTINGS, readTrashSettings, type TrashSettings } from "./storage/trash-settings";
@@ -108,6 +109,9 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	toolbarSize: ToolbarSize;
 	/** Keyboard arrows, PageUp / PageDown, space and Bluetooth clickers turn pages (372). */
 	pageTurnerKeys: boolean;
+	// wave 0.10: colours
+	/** The last custom colours chosen with the colour picker or the eyedropper (newest first, `#rrggbb`). */
+	recentColours: string[];
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -152,6 +156,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	inkFollowsObjects: true,
 	toolbarSize: DEFAULT_TOOLBAR_SIZE,
 	pageTurnerKeys: true,
+	recentColours: [],
 	...DEFAULT_COMPANION_SETTINGS,
 	...DEFAULT_GESTURE_SETTINGS,
 	...DEFAULT_PEN_GESTURE_SETTINGS,
@@ -210,6 +215,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (isScrollMode(d.scrollMode)) s.scrollMode = d.scrollMode;
 	if (isToolbarSize(d.toolbarSize)) s.toolbarSize = d.toolbarSize;
 	if (typeof d.pageTurnerKeys === "boolean") s.pageTurnerKeys = d.pageTurnerKeys;
+	s.recentColours = normaliseRecentColours(d.recentColours);
 	s.lastNotebookPos = parsePosition(d.lastNotebookPos);
 
 	if (typeof d.timetableOffer === "boolean") s.timetableOffer = d.timetableOffer;

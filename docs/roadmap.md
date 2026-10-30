@@ -90,7 +90,7 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 4. **P1** 🧪 Scribble to erase: scratching over strokes deletes them.
 5. **P1** 🧪 Restyle selection: change colour and width of lasso-selected strokes.
 6. **P1** 🧪 Copy, cut, paste and duplicate selections across pages and notebooks.
-7. **P2** Free colour picker with recent colours and an eyedropper.
+7. **P2** 🧪 Free colour picker with recent colours and an eyedropper.
 8. **P2** Pressure curve calibration per device, with a test area.
 9. **P2** Tilt-aware pencil (tiltX/tiltY widen and lighten the stroke).
 10. **P2** Study tape: opaque strips that hide parts of a page and reveal on tap.
@@ -183,7 +183,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 65. **P2** Rotate by 90°, mirror and exact size for the selection.
 66. **P2** Smooth or straighten selected strokes.
 67. **P2** Textured pens: graphite pencil and gel.
-68. **P2** Style eyedropper: take colour, width and tool from an existing stroke.
+68. **P2** 🧪 Style eyedropper: take colour, width and tool from an existing stroke.
 69. **P2** Smart connectors between shapes (diagrams).
 70. **P3** Mind maps: linked text nodes that move together.
 71. **P2** Magnetic snap to the grid and alignment guides.

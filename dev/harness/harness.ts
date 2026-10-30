@@ -410,6 +410,7 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 
 	// Radial dial: the pen's side button opens it without drawing; its states open and choose correctly.
 	await checkRadial(add);
+	await checkColour(add);
 
 	await checkPageMode(add);
 	await checkToolbar(add);
@@ -562,6 +563,170 @@ async function checkRadial(add: (name: string, ok: boolean, detail?: string) => 
 	add("radial: the dial draws nothing", strokeCount() === before, `${before} → ${strokeCount()}`);
 	setTool("pen");
 	v.toolbar.update({ penColor: "#1e1e1e", penWidth: 2, shapeKind: "line" });
+	await frames(2);
+}
+
+/** A synthetic pointer event of one contact at window point (x, y), sent to the element under it (as the browser does). */
+function contact(name: string, x: number, y: number, id = 91): void {
+	const target = document.elementFromPoint(x, y) ?? stage();
+	target.dispatchEvent(new PointerEvent(name, {
+		bubbles: true, cancelable: true, composed: true, pointerId: id, pointerType: "pen", isPrimary: true,
+		pressure: name === "pointerup" ? 0 : 0.5, width: 1, height: 1, button: 0, buttons: name === "pointerup" ? 0 : 1, clientX: x, clientY: y,
+	}));
+}
+
+/**
+ * The free colour picker, the page eyedropper and the style eyedropper (roadmap 7, 68): the picker sets the pen colour from its
+ * hex field and area and remembers the colour; the eyedropper reads the rendered page under a tap; the style eyedropper
+ * takes colour, width and tool from a stroke; Escape and a tap outside the page end them; none of it draws.
+ */
+async function checkColour(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
+	const v = view as any;
+	setTool("pen");
+	v.toolbar.update({ penColor: "#1e1e1e", penWidth: 2 });
+	v.host.settings.recentColours = [];
+	const startInk = strokeCount();
+	const st = stage().getBoundingClientRect();
+
+	v.runAction("colour-picker");
+	await frames(1);
+	const panel = document.querySelector(".notebook-colour-picker") as HTMLElement | null;
+	const hex = panel?.querySelector("input.notebook-colour-hex") as HTMLInputElement | null;
+	add("colour: the action opens the picker with the area, the hue bar, the hex field and the eyedropper",
+		!!panel && !!panel.querySelector(".notebook-colour-area") && !!panel.querySelector(".notebook-colour-hue") && !!hex && !!panel.querySelector("button[aria-label]") && hex.value === "#1e1e1e", hex?.value ?? "none");
+	const pr = panel?.getBoundingClientRect();
+	add("colour: the picker is inside the page area", !!pr && pr.left >= st.left - 0.5 && pr.right <= st.right + 0.5 && pr.top >= st.top - 0.5 && pr.bottom <= st.bottom + 0.5,
+		pr ? `${Math.round(pr.width)}x${Math.round(pr.height)}` : "none");
+
+	if (hex) {
+		hex.value = "#12AB34";
+		hex.dispatchEvent(new Event("input", { bubbles: true }));
+		hex.dispatchEvent(new Event("change", { bubbles: true }));
+	}
+	await frames(1);
+	add("colour: a hex value sets the pen colour and is remembered", v.tools.penColor === "#12ab34" && v.host.settings.recentColours[0] === "#12ab34", `${v.tools.penColor} ${v.host.settings.recentColours}`);
+	if (hex) {
+		hex.value = "#zzz";
+		hex.dispatchEvent(new Event("input", { bubbles: true }));
+		hex.dispatchEvent(new Event("change", { bubbles: true }));
+	}
+	add("colour: an invalid hex changes nothing", v.tools.penColor === "#12ab34" && v.host.settings.recentColours.length === 1, v.tools.penColor);
+
+	const area = panel?.querySelector(".notebook-colour-area") as HTMLElement | null;
+	if (area) {
+		const r = area.getBoundingClientRect();
+		const ev = (name: string, x: number, y: number) => area.dispatchEvent(new PointerEvent(name, {
+			bubbles: true, cancelable: true, pointerId: 92, pointerType: "touch", isPrimary: true, clientX: x, clientY: y, buttons: name === "pointerup" ? 0 : 1,
+		}));
+		ev("pointerdown", r.left + 2, r.top + 2);
+		ev("pointermove", r.left + r.width - 1, r.top + 1);
+		ev("pointerup", r.left + r.width - 1, r.top + 1);
+	}
+	await frames(1);
+	add("colour: dragging in the area picks saturation and brightness and remembers the colour",
+		/^#[0-9a-f]{6}$/.test(v.tools.penColor) && v.tools.penColor !== "#12ab34" && v.host.settings.recentColours.length === 2, `${v.tools.penColor} ${v.host.settings.recentColours.length}`);
+	const swatches = panel?.querySelectorAll(".notebook-colour-recent-swatch").length ?? 0;
+	(panel?.querySelectorAll(".notebook-colour-recent-swatch")[1] as HTMLElement | undefined)?.click();
+	await frames(1);
+	add("colour: a recent colour sets the pen colour again", swatches === 2 && v.tools.penColor === "#12ab34" && v.host.settings.recentColours[0] === "#12ab34", `${swatches} swatches, ${v.tools.penColor}`);
+	v.toolbar.update({ penColor: "#dc2626" });
+	await frames(1);
+	add("colour: the picker follows a colour changed elsewhere", (document.querySelector(".notebook-colour-picker input.notebook-colour-hex") as HTMLInputElement | null)?.value === "#dc2626", "");
+	panel?.querySelector<HTMLElement>("button[aria-label='Close the colour picker']")?.click();
+	await frames(1);
+	add("colour: the close button closes the picker", !document.querySelector(".notebook-colour-picker"), "");
+
+	// The tool options carry the same actions as buttons.
+	await openOptions("pen");
+	const row = document.querySelector(".notebook-options") as HTMLElement | null;
+	const labels = Array.from(row?.querySelectorAll("button") ?? []).map((b) => b.getAttribute("aria-label"));
+	add("colour: the colour row has the free colour, the eyedropper and (for ink) the style eyedropper",
+		["Colour picker…", "Eyedropper: pick a colour from the page", "Style eyedropper: take colour, width and tool from a stroke"].every((l) => labels.includes(l)), labels.slice(-4).join(" | "));
+	byLabel(row ?? document, "Colour picker…")?.click();
+	await frames(1);
+	add("colour: the free colour button opens the picker and closes the options", !!document.querySelector(".notebook-colour-picker") && !!document.querySelector(".notebook-options.notebook-hidden"), "");
+	v.colourTools.closePicker();
+
+	// Eyedropper on the rendered page: write a stroke in a known colour, then pick it back.
+	v.toolbar.update({ penColor: "#dc2626", penWidth: 6 });
+	await penStroke([[0.3, 0.3], [0.7, 0.3]]);
+	const mid = { x: st.left + st.width * 0.5, y: st.top + st.height * 0.3 };
+	v.toolbar.update({ penColor: "#1e1e1e", penWidth: 2 });
+	const afterInk = strokeCount();
+	v.runAction("colour-eyedropper");
+	add("colour: the eyedropper waits for a contact on the page", v.colourTools.armed === "colour", String(v.colourTools.armed));
+	contact("pointerdown", mid.x, mid.y);
+	await frames(1);
+	add("colour: while the contact is down a loupe shows the colour under it", !!document.querySelector(".notebook-eyedropper-loupe"), "");
+	contact("pointerup", mid.x, mid.y);
+	await frames(1);
+	const picked = v.tools.penColor as string;
+	const close = (a: string, b: string) => [1, 3, 5].every((i) => Math.abs(parseInt(a.slice(i, i + 2), 16) - parseInt(b.slice(i, i + 2), 16)) <= 24);
+	add("colour: the eyedropper takes the colour of the rendered page under the contact", close(picked, "#dc2626") && v.colourTools.armed === null, `${picked}, armed ${v.colourTools.armed}`);
+	add("colour: the picked colour is remembered", v.host.settings.recentColours[0] === picked, `${v.host.settings.recentColours}`);
+	add("colour: picking draws nothing", strokeCount() === afterInk, `${afterInk} -> ${strokeCount()}`);
+
+	// Escape and a contact outside the page end the eyedropper.
+	v.runAction("colour-eyedropper");
+	window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+	add("colour: Escape ends the eyedropper", v.colourTools.armed === null, String(v.colourTools.armed));
+	v.runAction("style-eyedropper");
+	const bar = document.querySelector(".notebook-toolbar button") as HTMLElement | null;
+	if (bar) {
+		const br = bar.getBoundingClientRect();
+		contact("pointerdown", br.left + br.width / 2, br.top + br.height / 2);
+		contact("pointerup", br.left + br.width / 2, br.top + br.height / 2);
+	}
+	add("colour: a contact on the toolbar ends the style eyedropper", v.colourTools.armed === null, String(v.colourTools.armed));
+
+	// Style eyedropper: a highlighter stroke gives its tool, colour and width; a miss keeps waiting.
+	setTool("highlighter");
+	v.toolbar.update({ highlighterColor: "#4ade80", highlighterWidth: 14 });
+	await penStroke([[0.3, 0.6], [0.7, 0.6]]);
+	const hl = { x: st.left + st.width * 0.5, y: st.top + st.height * 0.6 };
+	setTool("pen");
+	v.toolbar.update({ penColor: "#1e1e1e", penWidth: 2 });
+	const inkBefore = strokeCount();
+	v.runAction("style-eyedropper");
+	contact("pointerdown", st.left + st.width * 0.5, st.top + st.height * 0.9);
+	contact("pointerup", st.left + st.width * 0.5, st.top + st.height * 0.9);
+	await frames(1);
+	add("colour: a tap on empty paper takes nothing and the style eyedropper keeps waiting", v.colourTools.armed === "style" && v.tools.tool === "pen", `${v.colourTools.armed} ${v.tools.tool}`);
+	contact("pointerdown", hl.x, hl.y);
+	contact("pointerup", hl.x, hl.y);
+	await frames(1);
+	add("colour: a tap on a stroke takes its tool, colour and width",
+		v.tools.tool === "highlighter" && v.tools.highlighterColor === "#4ade80" && v.tools.highlighterWidth === 14 && v.colourTools.armed === null,
+		`${v.tools.tool} ${v.tools.highlighterColor} ${v.tools.highlighterWidth}`);
+	setTool("pen");
+	v.runAction("style-eyedropper");
+	contact("pointerdown", mid.x, mid.y);
+	contact("pointerup", mid.x, mid.y);
+	await frames(1);
+	add("colour: the style of a pen stroke sets the pen colour and width", v.tools.tool === "pen" && v.tools.penColor === "#dc2626" && v.tools.penWidth === 6, `${v.tools.tool} ${v.tools.penColor} ${v.tools.penWidth}`);
+	add("colour: the style eyedropper draws nothing and changes no stroke", strokeCount() === inkBefore, `${inkBefore} -> ${strokeCount()}`);
+
+	// The dial offers the same picker and eyedropper.
+	setTool("pen");
+	await openRadial();
+	await tapDial("color");
+	await tapDial("custom");
+	await frames(1);
+	add("colour: the custom colour of the dial opens the free picker and closes the dial", !!document.querySelector(".notebook-colour-picker") && !v.radial.isOpen, "");
+	v.colourTools.closePicker();
+	await openRadial();
+	await tapDial("color");
+	await tapDial("eyedropper");
+	add("colour: the eyedropper of the dial arms the page eyedropper and closes the dial", v.colourTools.armed === "colour" && !v.radial.isOpen, String(v.colourTools.armed));
+	v.colourTools.cancelEyedropper();
+
+	// Leave the notebook as it was: the two strokes written for the checks are undone.
+	v.undo();
+	v.undo();
+	await frames(2);
+	add("colour: the strokes written for these checks are undone", strokeCount() === startInk, `${startInk} -> ${strokeCount()}`);
+	setTool("pen");
+	v.toolbar.update({ penColor: "#1e1e1e", penWidth: 2 });
 	await frames(2);
 }
 

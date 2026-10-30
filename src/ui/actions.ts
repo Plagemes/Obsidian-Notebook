@@ -145,6 +145,11 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "eraser-area", label: "tool.eraser.area", icon: "square-dashed", group: "tool", surfaces: ["options"], priority: 60, scope: "view" },
 	{ id: "eraser-larger", label: "command.eraserLarger", icon: "plus", group: "tool", surfaces: ["options", "palette"], priority: 40, scope: "view", command: true },
 	{ id: "eraser-smaller", label: "command.eraserSmaller", icon: "minus", group: "tool", surfaces: ["options", "palette"], priority: 40, scope: "view", command: true },
+	// wave 0.10 (7, 68): the free colour picker, the page eyedropper and the style eyedropper (view/colour-tools.ts). The picker and the
+	// eyedropper are also on the radial colour ring; all three are buttons of the colour row of the tool options.
+	{ id: "colour-picker", label: "command.colourPicker", icon: "palette", group: "tool", surfaces: ["options", "radial", "palette"], priority: 45, scope: "view", command: true, keywords: "colour color custom hex hue recent" },
+	{ id: "colour-eyedropper", label: "command.colourEyedropper", icon: "pipette", group: "tool", surfaces: ["options", "radial", "palette"], priority: 44, scope: "view", command: true, keywords: "colour color pick sample" },
+	{ id: "style-eyedropper", label: "command.styleEyedropper", icon: "droplets", group: "tool", surfaces: ["options", "palette"], priority: 43, scope: "view", command: true, keywords: "style pen width tool copy format stroke" },
 	...[1, 2, 3, 4, 5, 6].map(favourite),
 
 	// --- history: fixed in the toolbar, also in the radial menu and as gestures.

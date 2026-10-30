@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Free colour picker and eyedroppers** (roadmap 7 and 68; steps 460-474). The colour row of the tool options and the radial colour ring now offer a free colour picker: a saturation / brightness area, a hue bar, a hex field (`#rrggbb` or `rgb`), the recent custom colours and an eyedropper button. The last 12 custom colours are remembered in the plugin settings (`recentColours`; no change to the notebook format). The *Eyedropper* picks the colour under the next contact on the page by reading the rendered canvases at the device pixel under it (so the device pixel ratio and the zoom are taken into account), with a swatch above the contact while it is down. The *Style eyedropper* takes the tool, colour and width of the stroke you tap (hit test on the vector points in page coordinates; a shape stroke gives the pen). Three new registry actions and commands: *Colour picker…*, *Eyedropper: pick a colour from the page*, *Style eyedropper: take colour, width and tool from a stroke*.
+
+### Changed
+- The radial dial's custom colour button opens the new picker instead of the system colour dialog, and its eyedropper uses the new page eyedropper (which now also ends on Escape or a tap on the toolbar instead of swallowing it).
+
 ## 0.9.0 — 2026-10-30
 
 Not yet verified on Android hardware, or in Obsidian with its maths engine (the browser harness uses a stand-in for MathJax). The manual steps added in this version are numbered 233 to 274 in `docs/testing.md`; the ones that belong to each area are named below.
