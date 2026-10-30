@@ -1,5 +1,5 @@
 import { createId, quantizePoint } from "./document";
-import { A4_HEIGHT, A4_WIDTH, DEFAULT_META, ELEMENT_TYPES_V8, FORMAT_ID, GRID_5MM, PAPER_KINDS_V7, RENDER_FREEHAND } from "./types";
+import { A4_HEIGHT, A4_WIDTH, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, FORMAT_ID, GRID_5MM, PAPER_KINDS_V7, RENDER_FREEHAND } from "./types";
 
 export type RawObject = Record<string, unknown>;
 
@@ -179,6 +179,27 @@ function v7ToV8(raw: RawObject): RawObject {
 	return { ...raw, version: 8, pages };
 }
 
+/**
+ * v9 adds the element types "equation" and "graph". Every valid v8 document is a valid v9 document. A v8 reader
+ * rejected unknown element types, so a pre-v9 file with an equation or a graph was not written by any version of this
+ * plugin: it is rejected rather than guessed at (like markers before v8). Nothing else changes.
+ */
+function v8ToV9(raw: RawObject): RawObject {
+	const isObj = (v: unknown): v is RawObject => typeof v === "object" && v !== null && !Array.isArray(v);
+	if (Array.isArray(raw.pages)) {
+		(raw.pages as unknown[]).forEach((page, i) => {
+			if (!isObj(page) || !Array.isArray(page.elements)) return;
+			for (const el of page.elements as unknown[]) {
+				const type = isObj(el) ? el.type : undefined;
+				if (typeof type === "string" && ELEMENT_TYPES_V9.includes(type)) {
+					throw new MigrationError(`v8: element type '${type}' (page ${i + 1}) exists only from v9`);
+				}
+			}
+		});
+	}
+	return { ...raw, version: 9 };
+}
+
 /** MIGRATIONS[n] takes a document from version n to n+1. */
 export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	0: v0ToV1,
@@ -189,6 +210,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	5: v5ToV6,
 	6: v6ToV7,
 	7: v7ToV8,
+	8: v8ToV9,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

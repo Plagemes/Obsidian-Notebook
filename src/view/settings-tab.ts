@@ -40,6 +40,11 @@ const penButtonOptions = () => ({
 	off: t("settings.penButton.off"),
 });
 
+const toolbarSizeOptions = () => ({
+	compact: t("settings.toolbarSize.compact"),
+	normal: t("settings.toolbarSize.normal"),
+	large: t("settings.toolbarSize.large"),
+});
 const scrollModeOptions = () => ({
 	continuous: t("settings.scrollMode.continuous"),
 	pages: t("settings.scrollMode.pages"),
@@ -220,6 +225,17 @@ export class NotebookSettingTab extends PluginSettingTab {
 				desc: t("settings.scrollMode.desc"),
 				control: { type: "dropdown", key: "scrollMode", defaultValue: DEFAULT_SETTINGS.scrollMode, options: scrollModeOptions() },
 			},
+			// wave 0.9: obsidian and input
+			{
+				name: t("settings.toolbarSize"),
+				desc: t("settings.toolbarSize.desc"),
+				control: { type: "dropdown", key: "toolbarSize", defaultValue: DEFAULT_SETTINGS.toolbarSize, options: toolbarSizeOptions() },
+			},
+			{
+				name: t("settings.pageTurnerKeys"),
+				desc: t("settings.pageTurnerKeys.desc"),
+				control: { type: "toggle", key: "pageTurnerKeys", defaultValue: DEFAULT_SETTINGS.pageTurnerKeys },
+			},
 			// Companion notes (O1)
 			...companionSettingDefinitions(this.companionHost()),
 			// wave 0.6: library trash, templates
@@ -398,6 +414,14 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setName(t("settings.scrollMode"))
 			.setDesc(t("settings.scrollMode.desc"))
 			.addDropdown((dd) => dd.addOptions(scrollModeOptions()).setValue(s.scrollMode).onChange((v) => this.setControlValue("scrollMode", v)));
+		new Setting(containerEl)
+			.setName(t("settings.toolbarSize"))
+			.setDesc(t("settings.toolbarSize.desc"))
+			.addDropdown((dd) => dd.addOptions(toolbarSizeOptions()).setValue(s.toolbarSize).onChange((v) => this.setControlValue("toolbarSize", v)));
+		new Setting(containerEl)
+			.setName(t("settings.pageTurnerKeys"))
+			.setDesc(t("settings.pageTurnerKeys.desc"))
+			.addToggle((tg) => tg.setValue(s.pageTurnerKeys).onChange((v) => this.setControlValue("pageTurnerKeys", v)));
 		displayGestureSettings(containerEl, this.gestureHost());
 		new Setting(containerEl)
 			.setName(t("settings.penLongPress"))

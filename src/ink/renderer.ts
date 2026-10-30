@@ -3,9 +3,13 @@ import { MM, RENDER_INK } from "../model/types";
 import { backgroundRect } from "../model/margins";
 import { transformElement } from "./elements";
 import { drawBox, drawMarker, type BoxLabel } from "./marker-render";
+import { drawEquation, drawGraph, type GraphPalette } from "./math-render";
+import { graphClips, strokeClip } from "./attach";
+import { equationNumbers } from "../model/math-elements";
 import { drawLinkedLines, parseLinks } from "./link-text";
 import { layoutText, type MeasureText } from "./text-layout";
 import { strokeBounds, type BBox } from "./hit-test";
+import { memoColors, nightHighlighter, nightInk, nightLine, NIGHT_BACKGROUND_VEIL, NIGHT_HIGHLIGHTER_ALPHA, NIGHT_PAPER } from "./night";
 import { minorVisible, paperPattern, PAPER_COLORS } from "./paper";
 import { visiblePages, type Layout, type PageBox } from "./layout";
 import { rulerEdge, rulerTicks, type Ruler } from "./ruler";
@@ -66,8 +70,13 @@ export const measureText: MeasureText = (s, fontSize) => {
 	return measureCtx.measureText(s).width;
 };
 
-/** Draws one element in page coordinates (images may be rotated; `img` null draws a placeholder). */
-export function drawElement(ctx: CanvasRenderingContext2D, el: PageElement, img: CanvasImageSource | null, boxLabel?: BoxLabel): void {
+/**
+ * Draws one element in page coordinates (images may be rotated; `img` null draws a placeholder). `numbers`: the
+ * automatic numbers of numbered equations (v9).
+ */
+export function drawElement(
+	ctx: CanvasRenderingContext2D, el: PageElement, img: CanvasImageSource | null, boxLabel?: BoxLabel, numbers?: ReadonlyMap<string, number>,
+): void {
 	if (el.type === "text") {
 		drawTextElement(ctx, el);
 		return;
@@ -78,6 +87,14 @@ export function drawElement(ctx: CanvasRenderingContext2D, el: PageElement, img:
 	}
 	if (el.type === "box") {
 		drawBox(ctx, el, boxLabel);
+		return;
+	}
+	if (el.type === "equation") {
+		drawEquation(ctx, el, numbers?.get(el.id));
+		return;
+	}
+	if (el.type === "graph") {
+		drawGraph(ctx, el);
 		return;
 	}
 	ctx.save();
@@ -131,6 +148,19 @@ export interface SelectionOverlay {
 	bounds: BBox;
 	/** Handle size in CSS px. */
 	handle: number;
+}
+
+/**
+ * v9: an element being edited in a panel (a graph whose functions, parameters or view change live): `before` and
+ * `hideStrokes` are hidden from the static layer, `after` and `showStrokes` (the ink on it, moved) are drawn on the live
+ * layer, until the edit is committed or cancelled.
+ */
+export interface ElementDraft {
+	pageIndex: number;
+	before: PageElement;
+	after: PageElement;
+	hideStrokes: readonly Stroke[];
+	showStrokes: readonly Stroke[];
 }
 
 export interface RendererOptions {
@@ -199,11 +229,15 @@ export class Renderer {
 	/** Viewport the static bitmap was drawn with (for the CSS fast path). */
 	private drawnViewport: Viewport = this.viewport;
 	private pages: readonly Page[] = [];
+	/** v9: numbers of the numbered equations, recomputed when the numbered equations change. */
+	private numbers: ReadonlyMap<string, number> = new Map();
+	private numbersKey = "";
 	private layout: Layout | null = null;
 	private live: LiveStroke | null = null;
 	private lasso: LassoOverlay | null = null;
 	private selection: SelectionOverlay | null = null;
 	private peek: PeekOverlay | null = null;
+	private draft: ElementDraft | null = null;
 	/** Content shown shifted while the insert/remove-space tool is dragged (hidden from the static layer meanwhile). */
 	private spacePreview: readonly SpacePreviewEntry[] | null = null;
 	private hidden: ReadonlySet<Stroke> | null = null;
@@ -211,6 +245,11 @@ export class Renderer {
 	/** Reading options of the view (never saved): ink and elements of PDF pages are not drawn; backgrounds are drawn with this opacity. */
 	private hideAnnotations = false;
 	private backgroundAlpha = 1;
+	/** wave 0.9 (367): night mode, view-only. Colours are mapped when they are drawn; the document is never touched. */
+	private night = false;
+	private readonly nightInkColor = memoColors(nightInk);
+	private readonly nightHighlighterColor = memoColors(nightHighlighter);
+	private readonly nightLineColor = memoColors(nightLine);
 	private selectedElements: ReadonlySet<PageElement> | null = null;
 	private ruler: RulerOverlay | null = null;
 	private media: MediaSource | null = null;
@@ -347,6 +386,27 @@ export class Renderer {
 		this.invalidate();
 	}
 
+	/**
+	 * wave 0.9 (367): dark paper, light ink, lively highlighter (ink/night.ts). View-only: stored colours, exports and
+	 * thumbnails are not affected. The container gets the class `notebook-night` (the wet highlighter canvas blends with CSS).
+	 */
+	setNight(on: boolean): void {
+		if (on === this.night) return;
+		this.night = on;
+		this.container.toggleClass("notebook-night", on);
+		this.invalidate();
+	}
+
+	get nightMode(): boolean {
+		return this.night;
+	}
+
+	/** The colour `color` is drawn with: itself, or its night-mode counterpart. */
+	private inkColor(tool: Tool, color: string): string {
+		if (!this.night) return color;
+		return tool === "highlighter" ? this.nightHighlighterColor(color) : this.nightInkColor(color);
+	}
+
 	/** Bitmaps for PDF/scan backgrounds and image elements. */
 	setMedia(media: MediaSource | null): void {
 		this.media = media;
@@ -381,6 +441,7 @@ export class Renderer {
 
 	setDocument(pages: readonly Page[] | null, layout: Layout | null): void {
 		this.pages = pages ?? [];
+		this.numbersKey = "";
 		this.layout = layout;
 		this.retransformWet();
 		this.invalidate();
@@ -456,7 +517,7 @@ export class Renderer {
 				wet.clear();
 				this.wetRelease.splice(i, 1);
 			}
-			wet.begin(g, tool, color, t);
+			wet.begin(g, tool, this.inkColor(tool, color), t);
 			this.wet = wet;
 			this.wetPage = pageIndex;
 			return true;
@@ -636,6 +697,12 @@ export class Renderer {
 		this.schedule();
 	}
 
+	/** v9: shows an element being edited live (see ElementDraft); null ends it. Never together with a floating selection. */
+	setElementDraft(draft: ElementDraft | null): void {
+		this.draft = draft;
+		this.applyHidden(draft ? new Set(draft.hideStrokes) : null, draft ? new Set([draft.before]) : null);
+	}
+
 	/** Strokes of another page drawn over this one while a button is held (wave 0.9: practice); view only, null removes them. */
 	setPeek(peek: PeekOverlay | null): void {
 		this.peek = peek;
@@ -753,7 +820,7 @@ export class Renderer {
 				ctx.shadowColor = SHADOW;
 				ctx.shadowBlur = 8 * this.dpr;
 				ctx.shadowOffsetY = 2 * this.dpr;
-				ctx.fillStyle = PAPER;
+				ctx.fillStyle = this.night ? NIGHT_PAPER : PAPER;
 				ctx.fillRect(0, 0, page.width, page.height);
 			} finally {
 				ctx.restore();
@@ -772,6 +839,7 @@ export class Renderer {
 				const bare = this.hideAnnotations && page.background?.kind === "pdf";
 				if (!bare && page.elements?.length) this.drawElements(ctx, page);
 				const reveal = this.revealHidden?.(page) ?? false;
+				const clips = graphClips(page.elements);
 				for (const stroke of page.strokes) {
 					if (bare || this.hidden?.has(stroke) || (stroke.hidden && !reveal)) continue;
 					try {
@@ -780,7 +848,16 @@ export class Renderer {
 						// the wet-ink curve may pass slightly outside its points.
 						const m = stroke.width * 0.3 + 1;
 						if (b.maxX + m < visible.minX || b.minX - m > visible.maxX || b.maxY + m < visible.minY || b.minY - m > visible.maxY) continue;
-						this.fillStroke(ctx, stroke, this.lod);
+						// v9: ink bound to a graph is clipped to its frame (a zoom may have carried it outside).
+						const clip = strokeClip(stroke, clips);
+						if (clip) {
+							ctx.save();
+							ctx.beginPath();
+							ctx.rect(clip.x, clip.y, clip.width, clip.height);
+							ctx.clip();
+							this.fillStroke(ctx, stroke, this.lod);
+							ctx.restore();
+						} else this.fillStroke(ctx, stroke, this.lod);
 						strokesDrawn++;
 					} catch (e) {
 						this.fault(ctx, "stroke", e);
@@ -810,6 +887,12 @@ export class Renderer {
 		if (img) {
 			ctx.globalAlpha = this.backgroundAlpha;
 			ctx.drawImage(img, r.x, r.y, r.width, r.height);
+			if (this.night) {
+				// Night mode dims a PDF or picture instead of inverting it (inverted pages change what a figure means).
+				ctx.globalAlpha = NIGHT_BACKGROUND_VEIL;
+				ctx.fillStyle = NIGHT_PAPER;
+				ctx.fillRect(r.x, r.y, r.width, r.height);
+			}
 			return;
 		}
 		ctx.fillStyle = PLACEHOLDER;
@@ -822,7 +905,23 @@ export class Renderer {
 		}
 	}
 
-	/** Images, then v8 structured boxes, then text boxes; all under the ink. */
+	/** v9 + wave 0.9 night mode: how a graph's colours are drawn at night (ink colours for curves, line colours for the grid). */
+	private nightPalette(): GraphPalette {
+		return { paper: NIGHT_PAPER, ink: this.nightInkColor, line: this.nightLineColor };
+	}
+
+	/** v9: the automatic equation numbers of the document (cheap when nothing numbered changed). */
+	equationNumbers(): ReadonlyMap<string, number> {
+		let key = "";
+		for (const p of this.pages) for (const e of p.elements ?? []) if (e.type === "equation" && e.numbered) key += `${e.id}:${e.x}:${e.y};`;
+		if (key !== this.numbersKey) {
+			this.numbersKey = key;
+			this.numbers = key === "" ? new Map() : equationNumbers(this.pages);
+		}
+		return this.numbers;
+	}
+
+	/** Images, v9 graphs, v8 structured boxes, v9 equations, then text boxes; all under the ink. */
 	private drawElements(ctx: CanvasRenderingContext2D, page: Page): void {
 		const elements = page.elements ?? [];
 		const skip = (el: PageElement) => !!(this.hiddenElements?.has(el) || this.selectedElements?.has(el));
@@ -831,12 +930,22 @@ export class Renderer {
 			this.guarded(ctx, "image element", () => drawElement(ctx, el, this.media?.image(el.asset) ?? null));
 		}
 		for (const el of elements) {
+			if (el.type !== "graph" || skip(el)) continue;
+			// wave 0.9 night mode: the graph's paper, lines, curves and labels are mapped like the page's.
+			this.guarded(ctx, "graph element", () => drawGraph(ctx, el, this.night ? this.nightPalette() : undefined));
+		}
+		for (const el of elements) {
 			if (el.type !== "box" || skip(el)) continue;
 			this.guarded(ctx, "box element", () => drawBox(ctx, el, this.boxLabel));
 		}
+		const numbers = this.equationNumbers();
+		for (const el of elements) {
+			if (el.type !== "equation" || skip(el)) continue;
+			this.guarded(ctx, "equation element", () => drawEquation(ctx, this.night ? { ...el, color: this.nightInkColor(el.color) } : el, numbers.get(el.id)));
+		}
 		for (const el of elements) {
 			if (el.type !== "text" || skip(el)) continue;
-			this.guarded(ctx, "text element", () => drawTextElement(ctx, el));
+			this.guarded(ctx, "text element", () => drawTextElement(ctx, this.night ? { ...el, color: this.nightInkColor(el.color) } : el));
 		}
 	}
 
@@ -886,7 +995,7 @@ export class Renderer {
 		const hairline = Math.max(0.6, this.dpr) / (scale * this.dpr);
 		ctx.lineWidth = hairline;
 		for (const kind of ["minor", "major", "margin"] as const) {
-			ctx.strokeStyle = PAPER_COLORS[kind];
+			ctx.strokeStyle = this.night ? this.nightLineColor(PAPER_COLORS[kind]) : PAPER_COLORS[kind];
 			ctx.beginPath();
 			let any = false;
 			for (const l of lines) {
@@ -900,7 +1009,7 @@ export class Renderer {
 		if (dots.length > 0) {
 			// About one device pixel in radius at any zoom.
 			const r = Math.max(1, this.dpr * 0.6) / (scale * this.dpr);
-			ctx.fillStyle = PAPER_COLORS.dot;
+			ctx.fillStyle = this.night ? this.nightLineColor(PAPER_COLORS.dot) : PAPER_COLORS.dot;
 			ctx.beginPath();
 			for (const [x, y] of dots) {
 				ctx.moveTo(x + r, y);
@@ -928,7 +1037,7 @@ export class Renderer {
 				this.beginPage(ctx, box);
 				for (const el of sel.elements) {
 					const moved = transformElement(el, sel.matrix, measureText);
-					drawElement(ctx, moved, moved.type === "image" ? this.media?.image(moved.asset) ?? null : null, this.boxLabel);
+					drawElement(ctx, moved, moved.type === "image" ? this.media?.image(moved.asset) ?? null : null, this.boxLabel, this.equationNumbers());
 				}
 				ctx.restore();
 			}
@@ -951,7 +1060,7 @@ export class Renderer {
 					const m = translate(0, e.dy);
 					for (const el of e.elements) {
 						const moved = transformElement(el, m, measureText);
-						drawElement(ctx, moved, moved.type === "image" ? this.media?.image(moved.asset) ?? null : null, this.boxLabel);
+						drawElement(ctx, moved, moved.type === "image" ? this.media?.image(moved.asset) ?? null : null, this.boxLabel, this.equationNumbers());
 					}
 					ctx.restore();
 				}
@@ -985,6 +1094,20 @@ export class Renderer {
 				if (b.maxY + stroke.width < minY || b.minY - stroke.width > maxY) continue;
 				this.fillStroke(ctx, stroke);
 			}
+			ctx.restore();
+		});
+
+		const draft = this.draft;
+		if (draft && boxes[draft.pageIndex]) this.guarded(ctx, "element draft", () => {
+			this.beginPage(ctx, boxes[draft.pageIndex]!);
+			drawElement(ctx, draft.after, null, this.boxLabel, this.equationNumbers());
+			const a = draft.after;
+			if (a.type === "graph") {
+				ctx.beginPath();
+				ctx.rect(a.x, a.y, a.width, a.height);
+				ctx.clip();
+			}
+			for (const stroke of draft.showStrokes) this.fillStroke(ctx, stroke);
 			ctx.restore();
 		});
 
@@ -1091,10 +1214,11 @@ export class Renderer {
 	}
 
 	private setInk(ctx: CanvasRenderingContext2D, tool: Tool, color: string): void {
-		ctx.fillStyle = color;
+		ctx.fillStyle = this.inkColor(tool, color);
 		if (tool === "highlighter") {
-			ctx.globalAlpha = HIGHLIGHTER_ALPHA;
-			ctx.globalCompositeOperation = "multiply";
+			// Night mode: "multiply" would vanish on the dark paper, "screen" lights it.
+			ctx.globalAlpha = this.night ? NIGHT_HIGHLIGHTER_ALPHA : HIGHLIGHTER_ALPHA;
+			ctx.globalCompositeOperation = this.night ? "screen" : "multiply";
 		} else {
 			ctx.globalAlpha = 1;
 			ctx.globalCompositeOperation = "source-over";

@@ -4463,3 +4463,476 @@ body {
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);
 }
+
+/* wave 0.9: math (equation editor and graph panel float over the page; the typesetter measures off screen) */
+.notebook-math-measure {
+	position: fixed;
+	left: -100000px;
+	top: 0;
+	font-size: var(--notebook-math-size, 16px);
+	line-height: normal;
+	color: #000000;
+	white-space: nowrap;
+	pointer-events: none;
+}
+
+.notebook-math-measure mjx-container[display="true"] {
+	margin: 0;
+}
+
+.notebook-stage .notebook-math-panel {
+	position: absolute;
+	z-index: 6;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	gap: var(--nb-space-2, 8px);
+	padding: var(--nb-space-3, 12px);
+	border: 1px solid var(--nb-border, var(--background-modifier-border));
+	border-radius: var(--nb-radius-l, 18px);
+	background: var(--nb-surface-raised, var(--background-primary));
+	box-shadow: var(--nb-shadow-2, 0 8px 24px rgba(0, 0, 0, 0.18));
+	font-family: var(--nb-font-ui, var(--font-interface));
+	font-size: var(--nb-text-m, var(--font-ui-small));
+	touch-action: auto;
+	user-select: text;
+	-webkit-user-select: text;
+}
+
+.notebook-stage .notebook-eq-editor {
+	left: var(--notebook-math-x, 16px);
+	top: var(--notebook-math-y, 16px);
+	width: min(420px, calc(100% - 16px));
+}
+
+.notebook-eq-palette {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.notebook-eq-palette .notebook-eq-snippet {
+	min-width: var(--nb-target, 40px);
+	min-height: var(--nb-target, 40px);
+	padding: 0 8px;
+	font-family: serif;
+	font-size: 16px;
+}
+
+.notebook-eq-source {
+	width: 100%;
+	min-height: 64px;
+	font-family: var(--font-monospace);
+	resize: vertical;
+}
+
+.notebook-eq-preview {
+	min-height: 48px;
+	max-height: 200px;
+	overflow: auto;
+	padding: var(--nb-space-2, 8px);
+	border-radius: var(--nb-radius-s, 8px);
+	background: var(--nb-surface-2, var(--background-secondary));
+	text-align: center;
+}
+
+.notebook-eq-error,
+.notebook-graph-error {
+	color: var(--text-error);
+	font-size: var(--nb-text-s, var(--font-ui-smaller));
+}
+
+.notebook-eq-options,
+.notebook-eq-actions,
+.notebook-graph-actions,
+.notebook-graph-zoom,
+.notebook-graph-add,
+.notebook-graph-style,
+.notebook-graph-view,
+.notebook-graph-fn-opts,
+.notebook-graph-param-range,
+.notebook-graph-table {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--nb-space-2, 8px);
+}
+
+.notebook-eq-actions,
+.notebook-graph-actions {
+	justify-content: flex-end;
+}
+
+.notebook-eq-actions .notebook-eq-delete {
+	margin-right: auto;
+}
+
+.notebook-eq-options button,
+.notebook-eq-actions button,
+.notebook-graph-panel button {
+	min-height: var(--nb-target, 40px);
+}
+
+.notebook-eq-toggle.is-active {
+	background: var(--nb-accent-soft, hsla(var(--interactive-accent-hsl), 0.14));
+	color: var(--nb-accent, var(--interactive-accent));
+}
+
+.notebook-eq-field,
+.notebook-graph-field {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	color: var(--text-muted);
+}
+
+.notebook-eq-field input[type="number"],
+.notebook-graph-field input[type="number"] {
+	width: 5.5em;
+}
+
+.notebook-stage .notebook-graph-panel {
+	top: 8px;
+	right: 8px;
+	bottom: 8px;
+	width: min(380px, calc(100% - 16px));
+}
+
+.notebook-body.is-narrow .notebook-stage .notebook-graph-panel {
+	top: auto;
+	left: 8px;
+	right: 8px;
+	width: auto;
+	max-height: 55%;
+}
+
+.notebook-graph-head {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.notebook-graph-title {
+	font-size: var(--nb-text-l, var(--font-ui-medium));
+	font-weight: 600;
+}
+
+.notebook-graph-hint {
+	color: var(--text-muted);
+	font-size: var(--nb-text-s, var(--font-ui-smaller));
+}
+
+.notebook-graph-body {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: var(--nb-space-2, 8px);
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+.notebook-graph-section {
+	margin-top: var(--nb-space-2, 8px);
+	color: var(--text-muted);
+	font-size: 11px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.notebook-graph-fn,
+.notebook-graph-param {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: var(--nb-space-2, 8px);
+	border: 1px solid var(--nb-border, var(--background-modifier-border));
+	border-radius: var(--nb-radius-m, 12px);
+}
+
+.notebook-graph-fn-top,
+.notebook-graph-piece {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.notebook-graph-kind {
+	flex: 1 1 auto;
+	color: var(--text-muted);
+}
+
+.notebook-graph-exprs {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.notebook-graph-expr {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-family: var(--font-monospace);
+}
+
+.notebook-graph-expr input,
+.notebook-graph-piece input {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-family: var(--font-monospace);
+}
+
+.notebook-graph-check {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	min-height: var(--nb-target, 40px);
+}
+
+.notebook-graph-param-name {
+	width: 5em;
+	font-family: var(--font-monospace);
+}
+
+.notebook-graph-slider {
+	width: 100%;
+	min-height: var(--nb-target, 40px);
+}
+
+.notebook-graph-param-value {
+	width: 7em;
+}
+
+.notebook-graph-panel input[type="color"],
+.notebook-eq-editor input[type="color"] {
+	width: 36px;
+	height: 36px;
+	padding: 2px;
+}
+
+/* wave 0.9: obsidian and input (toolbar size: view-ui.ts sets --nb-target and --nb-icon on the view; large lets the tools wrap on a narrow phone) */
+.notebook-view .notebook-tool {
+	min-width: var(--nb-target, 40px);
+	min-height: var(--nb-target, 40px);
+}
+
+.notebook-view .notebook-tool .svg-icon {
+	width: var(--nb-icon, 18px);
+	height: var(--nb-icon, 18px);
+}
+
+.notebook-view .notebook-context-label,
+.notebook-view .notebook-page-indicator {
+	min-height: var(--nb-target, 40px);
+}
+
+.notebook-view.is-tools-wrapped .notebook-toolbar-tools {
+	flex-wrap: wrap;
+	max-width: 100%;
+}
+
+.notebook-view.is-tools-wrapped .notebook-toolbar-tools > .notebook-toolbar-divider {
+	display: none;
+}
+
+.notebook-view.is-tools-wrapped .notebook-toolbar-tools .notebook-toolbar-group {
+	flex-wrap: wrap;
+}
+
+
+/* wave 0.9: text and objects (find and replace panel, page information, the chip that offers a page in the middle of a notebook) */
+.notebook-find-panel {
+	width: min(560px, 96vw);
+}
+
+.notebook-find-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+
+.notebook-find-row > label {
+	flex: 0 0 7.5em;
+	color: var(--text-muted);
+}
+
+.notebook-find-row > input {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 40px;
+}
+
+.notebook-find-options,
+.notebook-find-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 16px;
+	margin-bottom: 8px;
+}
+
+.notebook-find-check {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 40px;
+}
+
+.notebook-find-actions button {
+	min-height: 40px;
+}
+
+.notebook-find-status {
+	margin: 4px 0 8px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.notebook-find-results {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	max-height: 40vh;
+	overflow-y: auto;
+}
+
+.notebook-find-row-result {
+	display: flex;
+	align-items: stretch;
+	border-radius: var(--radius-s);
+}
+
+.notebook-find-row-result.is-active {
+	background: var(--background-modifier-hover);
+	box-shadow: inset 3px 0 0 var(--interactive-accent);
+}
+
+.notebook-find-hit {
+	display: flex;
+	flex: 1 1 auto;
+	align-items: baseline;
+	gap: 10px;
+	min-width: 0;
+	min-height: 40px;
+	padding: 6px 10px;
+	background: transparent;
+	box-shadow: none;
+	text-align: left;
+}
+
+.notebook-find-page {
+	flex: 0 0 auto;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.notebook-find-snippet {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.notebook-find-snippet mark {
+	padding: 0 1px;
+	background: var(--text-highlight-bg);
+	color: inherit;
+}
+
+.notebook-find-go {
+	flex: 0 0 auto;
+	width: 40px;
+	min-height: 40px;
+}
+
+.notebook-info-list {
+	display: grid;
+	grid-template-columns: minmax(7em, max-content) 1fr;
+	gap: 6px 14px;
+	margin: 0 0 12px;
+}
+
+.notebook-info-list dt {
+	color: var(--text-muted);
+}
+
+.notebook-info-list dd {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.notebook-info-note {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.notebook-page-offer {
+	position: absolute;
+	left: 50%;
+	bottom: 72px;
+	transform: translateX(-50%);
+	z-index: 7;
+	display: flex;
+	align-items: center;
+	max-width: calc(100% - 16px);
+	border-radius: 22px;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	box-shadow: var(--shadow-s);
+}
+
+.notebook-page-offer-add {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 44px;
+	padding: 0 8px 0 16px;
+	background: transparent;
+	box-shadow: none;
+	color: inherit;
+	cursor: pointer;
+}
+
+.notebook-page-offer-icon {
+	display: inline-flex;
+}
+
+.notebook-page-offer-close {
+	width: 40px;
+	min-height: 44px;
+	color: inherit;
+}
+
+@media (max-width: 480px) {
+	.notebook-find-row {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 2px;
+	}
+
+	.notebook-find-row > label {
+		flex: none;
+	}
+}
+
+
+/* wave 0.9: export and view (export dialogs, night mode) */
+.notebook-export-note {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	margin: 6px 0;
+}
+
+.notebook-export-problem {
+	color: var(--text-error);
+	font-size: var(--font-ui-small);
+	min-height: 1.2em;
+	margin: 4px 0;
+}
+
+/* Night mode: the wet highlighter canvas lights the page ("screen") instead of darkening it ("multiply"); opacity = NIGHT_HIGHLIGHTER_ALPHA in src/ink/night.ts. */
+.notebook-night .notebook-canvas-wet.is-highlighter {
+	opacity: 0.45;
+	mix-blend-mode: screen;
+}

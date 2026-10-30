@@ -1,5 +1,8 @@
 import { boxBounds, markerBounds, MARKER_BADGE } from "../model/markers";
-import type { BoxElement, ImageElement, MarkerElement, PageElement, TextElement } from "../model/types";
+import type { BoxElement, EquationElement, GraphElement, ImageElement, MarkerElement, PageElement, TextElement } from "../model/types";
+import { scaleOutline } from "../math/outline";
+import { EQUATION_OUTLINE_MAX, GRAPH_MAX_SIDE } from "../model/math-elements";
+import { MAX_FONT_SIZE } from "../model/serialize";
 import type { BBox } from "./hit-test";
 import { pointInPolygon, type Polygon } from "./lasso";
 import { estimateMeasure, textElementBounds, type MeasureText } from "./text-layout";
@@ -26,6 +29,8 @@ export function elementBounds(el: PageElement, measure: MeasureText = estimateMe
 	if (el.type === "text") return textElementBounds(el, measure);
 	if (el.type === "marker") return markerBounds(el);
 	if (el.type === "box") return boxBounds(el);
+	if (el.type === "equation") return equationBounds(el);
+	if (el.type === "graph") return { minX: el.x, minY: el.y, maxX: el.x + el.width, maxY: el.y + el.height };
 	const c = imageCorners(el);
 	const xs = c.map((p) => p[0]);
 	const ys = c.map((p) => p[1]);
@@ -33,7 +38,7 @@ export function elementBounds(el: PageElement, measure: MeasureText = estimateMe
 }
 
 function hits(el: PageElement, x: number, y: number, tolerance: number, measure: MeasureText): boolean {
-	if (el.type === "marker" || el.type === "box") {
+	if (el.type === "marker" || el.type === "box" || el.type === "equation" || el.type === "graph") {
 		const b = elementBounds(el, measure);
 		return x >= b.minX - tolerance && x <= b.maxX + tolerance && y >= b.minY - tolerance && y <= b.maxY + tolerance;
 	}
@@ -71,9 +76,14 @@ export function elementsInLasso(elements: readonly PageElement[], poly: Polygon,
 	});
 }
 
+/** The scale factor of `m`, limited so that `fontSize` stays within what the format accepts (MAX_FONT_SIZE). */
+function fontScale(m: Matrix, fontSize: number): number {
+	return Math.min(scaleFactor(m), MAX_FONT_SIZE / Math.max(fontSize, 1e-9));
+}
+
 function transformText(el: TextElement, m: Matrix, measure: MeasureText): TextElement {
-	const k = scaleFactor(m);
-	const fontSize = Math.max(1, round2(el.fontSize * k));
+	const k = fontScale(m, el.fontSize);
+	const fontSize = Math.min(MAX_FONT_SIZE, Math.max(1, round2(el.fontSize * k)));
 	const width = Math.max(1, round2(el.width * k));
 	// Text boxes cannot rotate or flip: with a plain move/scale the top-left corner is mapped; otherwise the box keeps its
 	// orientation and follows the transformed centre.
@@ -125,9 +135,44 @@ function transformBox(el: BoxElement, m: Matrix): BoxElement {
 	return { ...el, ...mappedRect(el.x, el.y, el.width, el.height, m) };
 }
 
+/** v9 equation box (the number, when there is one, is drawn outside it: see equationNumberBox). */
+export function equationBounds(el: EquationElement): BBox {
+	return { minX: el.x, minY: el.y, maxX: el.x + el.width, maxY: el.y + el.height };
+}
+
+/**
+ * v9 equation: it never rotates; its box follows the transformed centre and scales uniformly with the font size, and
+ * the cached outline scales with it (or is dropped if it cannot be read, to be typeset again).
+ */
+function transformEquation(el: EquationElement, m: Matrix): EquationElement {
+	// The size never passes MAX_FONT_SIZE (the writer refuses more): a larger scale stops there.
+	const k = fontScale(m, el.fontSize);
+	const [cx, cy] = apply(m, el.x + el.width / 2, el.y + el.height / 2);
+	const width = Math.max(1, round2(el.width * k));
+	const height = Math.max(1, round2(el.height * k));
+	const fontSize = Math.min(MAX_FONT_SIZE, Math.max(1, round2(el.fontSize * k)));
+	const out: EquationElement = { ...el, x: round2(cx - width / 2), y: round2(cy - height / 2), width, height, fontSize };
+	if (el.outline !== undefined && (width !== el.width || height !== el.height)) {
+		// Scaled numbers can be longer: an outline the writer would refuse is dropped (the equation is typeset again).
+		const scaled = scaleOutline(el.outline, width / el.width, height / el.height);
+		if (scaled !== null && scaled.length <= EQUATION_OUTLINE_MAX) out.outline = scaled;
+		else delete out.outline;
+	}
+	return out;
+}
+
+/** v9 graph: the frame follows the transform (as a box, never rotated); the viewport stays, so the curves stretch with it. */
+function transformGraph(el: GraphElement, m: Matrix): GraphElement {
+	const r = mappedRect(el.x, el.y, el.width, el.height, m);
+	// The frame never grows past GRAPH_MAX_SIDE (the reader's limit, which also bounds the sampling work).
+	return { ...el, ...r, width: Math.min(GRAPH_MAX_SIDE, r.width), height: Math.min(GRAPH_MAX_SIDE, r.height) };
+}
+
 /** New element moved/scaled/rotated by `m` (elements are immutable). Text scales font size and width uniformly. */
 export function transformElement(el: PageElement, m: Matrix, measure: MeasureText = estimateMeasure): PageElement {
 	if (el.type === "marker") return transformMarker(el, m);
 	if (el.type === "box") return transformBox(el, m);
+	if (el.type === "equation") return transformEquation(el, m);
+	if (el.type === "graph") return transformGraph(el, m);
 	return el.type === "text" ? transformText(el, m, measure) : transformImage(el, m);
 }

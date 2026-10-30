@@ -432,13 +432,14 @@ describe("reading logic", () => {
 
 describe("reading settings", () => {
 	it("defaults to everything off and a mid strength", () => {
-		expect(readReadingSettings({})).toEqual({ snapHighlighter: false, dimBackground: false, dimStrength: DEFAULT_DIM });
+		expect(readReadingSettings({})).toEqual({ snapHighlighter: false, dimBackground: false, dimStrength: DEFAULT_DIM, nightMode: false, cropMargins: false });
 		expect(readSettings(undefined)).toMatchObject({ snapHighlighter: false, dimBackground: false, dimStrength: DEFAULT_DIM });
 	});
 
 	it("reads valid values, clamps the strength and ignores the wrong types", () => {
-		expect(readReadingSettings({ snapHighlighter: true, dimBackground: true, dimStrength: 0.6 })).toEqual({ snapHighlighter: true, dimBackground: true, dimStrength: 0.6 });
-		expect(readReadingSettings({ snapHighlighter: "yes", dimBackground: 1, dimStrength: "x" })).toEqual({ snapHighlighter: false, dimBackground: false, dimStrength: DEFAULT_DIM });
+		expect(readReadingSettings({ snapHighlighter: true, dimBackground: true, dimStrength: 0.6 })).toEqual({ snapHighlighter: true, dimBackground: true, dimStrength: 0.6, nightMode: false, cropMargins: false });
+		expect(readReadingSettings({ snapHighlighter: "yes", dimBackground: 1, dimStrength: "x", nightMode: 1, cropMargins: "yes" })).toEqual({ snapHighlighter: false, dimBackground: false, dimStrength: DEFAULT_DIM, nightMode: false, cropMargins: false });
+		expect(readReadingSettings({ nightMode: true, cropMargins: true })).toMatchObject({ nightMode: true, cropMargins: true });
 		expect(normaliseDim(5)).toBeCloseTo(DIM_MAX, 10);
 		expect(normaliseDim(-1)).toBeCloseTo(DIM_MIN, 10);
 		expect(normaliseDim(0.47)).toBeCloseTo(0.45, 10);

@@ -10,6 +10,7 @@ import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./mo
 import { DEFAULT_COMPANION_SETTINGS, readCompanionSettings, type CompanionSettings } from "./storage/companion-path";
 import { DEFAULT_TRASH_SETTINGS, readTrashSettings, type TrashSettings } from "./storage/trash-settings";
 import { DEFAULT_ZETTEL_SETTINGS, readZettelSettings, type ZettelSettings } from "./zettel/settings";
+import { DEFAULT_TOOLBAR_SIZE, isToolbarSize, type ToolbarSize } from "./ui/toolbar-size";
 import { DEFAULT_READING_SETTINGS, readReadingSettings, type ReadingSettings } from "./view/reading-settings";
 
 /** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
@@ -102,6 +103,11 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	// wave 0.6: objects
 	/** Ink written over an image or a text box moves, scales and rotates with it (geometric attachment, nothing stored). */
 	inkFollowsObjects: boolean;
+	// wave 0.9: obsidian and input
+	/** Size of the toolbar, the contextual bar and the radial menu (370). */
+	toolbarSize: ToolbarSize;
+	/** Keyboard arrows, PageUp / PageDown, space and Bluetooth clickers turn pages (372). */
+	pageTurnerKeys: boolean;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -144,6 +150,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	timetableAutoOpen: false,
 	timetableLeadMinutes: 5,
 	inkFollowsObjects: true,
+	toolbarSize: DEFAULT_TOOLBAR_SIZE,
+	pageTurnerKeys: true,
 	...DEFAULT_COMPANION_SETTINGS,
 	...DEFAULT_GESTURE_SETTINGS,
 	...DEFAULT_PEN_GESTURE_SETTINGS,
@@ -200,6 +208,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.lastNotebookPath === "string") s.lastNotebookPath = d.lastNotebookPath;
 	if (typeof d.lastNotebookPage === "number" && Number.isInteger(d.lastNotebookPage) && d.lastNotebookPage >= 1) s.lastNotebookPage = d.lastNotebookPage;
 	if (isScrollMode(d.scrollMode)) s.scrollMode = d.scrollMode;
+	if (isToolbarSize(d.toolbarSize)) s.toolbarSize = d.toolbarSize;
+	if (typeof d.pageTurnerKeys === "boolean") s.pageTurnerKeys = d.pageTurnerKeys;
 	s.lastNotebookPos = parsePosition(d.lastNotebookPos);
 
 	if (typeof d.timetableOffer === "boolean") s.timetableOffer = d.timetableOffer;

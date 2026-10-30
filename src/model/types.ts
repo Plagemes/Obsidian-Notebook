@@ -2,12 +2,13 @@
 
 export const FORMAT_ID = "obsidian-notebook";
 /**
- * v8: markers and structured boxes (page elements), hidden ("invisible ink") strokes. v7: bookmark details
+ * v9: equations (LaTeX, typeset with Obsidian's MathJax) and function graphs (page elements). v8: markers and
+ * structured boxes (page elements), hidden ("invisible ink") strokes. v7: bookmark details
  * (title, colour, category), page tags, the shared reading position and more paper kinds (v6: page margins
  * around a background; v5: per-stroke render version; v4: library metadata, assets, backgrounds, elements,
  * infinite pages, "shape" tool; v3: paper kinds and page sizes).
  */
-export const CURRENT_VERSION = 8;
+export const CURRENT_VERSION = 9;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -191,9 +192,138 @@ export interface BoxElement {
 /** Longest marker label or box title, characters. */
 export const MARKER_TEXT_MAX = 300;
 
-export type PageElement = TextElement | ImageElement | MarkerElement | BoxElement;
+/**
+ * v9 equation (#110): LaTeX source typeset with Obsidian's maths engine (MathJax) into the box `width` × `height`
+ * whose top-left corner is (`x`, `y`). Optional fields are written only when present.
+ */
+export interface EquationElement {
+	id: string;
+	type: "equation";
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+	/** LaTeX source, without delimiters (no `$`); several lines allowed (`aligned`, `cases`). */
+	latex: string;
+	/** Size of the typeset maths, pt (the em of MathJax). */
+	fontSize: number;
+	/** `#rrggbb` */
+	color: string;
+	/** Inline style (text-style fractions and limits). Absent: display style. */
+	inline?: true;
+	/** Numbered: "(n)" is drawn at its right, n counting the numbered equations in reading order. */
+	numbered?: true;
+	/**
+	 * Cached vector outline of the typeset glyphs: a path of absolute `M`/`L`/`Z` commands in pt relative to (`x`, `y`),
+	 * filled with the even-odd rule. Drawn, exported and converted to ink without MathJax. Absent: typeset when shown.
+	 */
+	outline?: string;
+}
+
+/** v9 kinds of graphed functions (#113). */
+export const GRAPH_FUNCTION_KINDS = ["cartesian", "parametric", "polar", "implicit", "piecewise"] as const;
+export type GraphFunctionKind = (typeof GRAPH_FUNCTION_KINDS)[number];
+
+/** One piece of a piecewise function: `expr` where `when` holds (absent `when`: everywhere else). */
+export interface GraphPiece {
+	expr: string;
+	when?: string;
+}
+
+/**
+ * v9 graphed function. Expressions are plain strings for the safe parser in src/math/expr.ts (never eval): cartesian
+ * `expr` is y(x); polar `expr` is r(θ); implicit `expr` is `lhs = rhs` (or F(x, y) = 0); parametric `x` and `y` are
+ * functions of t; piecewise `pieces` are y(x). `min`/`max`: range of t (parametric) or θ (polar), or a domain
+ * restriction of x (cartesian, piecewise). A syntax error in an expression is not a format error: the graph shows it.
+ */
+export interface GraphFunction {
+	/** Unique within the graph. */
+	id: string;
+	kind: GraphFunctionKind;
+	/** `#rrggbb` */
+	color: string;
+	expr?: string;
+	x?: string;
+	y?: string;
+	pieces?: GraphPiece[];
+	min?: number;
+	max?: number;
+	/** Line width, pt (default GRAPH_LINE_WIDTH). */
+	width?: number;
+	/** Not drawn (kept with its settings). */
+	hidden?: true;
+	/** Mark the roots, the maxima and minima, the intersections with the other functions (cartesian and piecewise). */
+	roots?: true;
+	extrema?: true;
+	intersections?: true;
+	/** x of a tangent line drawn at (x, f(x)). */
+	tangent?: number;
+	/** Area between the curve and the x axis, shaded from `from` to `to`, with its value. */
+	area?: { from: number; to: number };
+	/** Shown in the legend. */
+	label?: string;
+}
+
+/** v9 parameter of a graph (a slider in the edit panel): a name the expressions use, its value and range. */
+export interface GraphParam {
+	name: string;
+	value: number;
+	min: number;
+	max: number;
+	/** Slider step (absent: continuous). */
+	step?: number;
+}
+
+/** v9 part of the plane shown by a graph, in graph units. */
+export interface GraphViewport {
+	xMin: number;
+	xMax: number;
+	yMin: number;
+	yMax: number;
+}
+
+/** v9 table of values of one function: `rows` values of x from `from`, `step` apart. */
+export interface GraphTable {
+	/** Id of the function. */
+	fn: string;
+	from: number;
+	step: number;
+	rows: number;
+}
+
+/**
+ * v9 function graph (#113): a frame `width` × `height` with its top-left corner at (`x`, `y`) showing `view` of the
+ * plane. Ink written on it follows its coordinates when it is moved, scaled, panned or zoomed (see ink/graph-ink.ts).
+ */
+export interface GraphElement {
+	id: string;
+	type: "graph";
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+	view: GraphViewport;
+	functions: GraphFunction[];
+	params?: GraphParam[];
+	/** Axes hidden. */
+	axes?: false;
+	/** Grid hidden. */
+	grid?: false;
+	/** Grid and tick steps, graph units (absent: chosen from the view). */
+	xStep?: number;
+	yStep?: number;
+	xLabel?: string;
+	yLabel?: string;
+	/** Trigonometric functions in degrees (absent: radians). */
+	degrees?: true;
+	table?: GraphTable;
+}
+
+export type PageElement = TextElement | ImageElement | MarkerElement | BoxElement | EquationElement | GraphElement;
 /** Element types that exist only from format v8: an older file that uses one was not written by this plugin. */
 export const ELEMENT_TYPES_V8: readonly string[] = ["marker", "box"];
+/** Element types that exist only from format v9. */
+export const ELEMENT_TYPES_V9: readonly string[] = ["equation", "graph"];
 
 /**
  * v6: blank space added around a page's background (a PDF page or a scan), in pt. The background is

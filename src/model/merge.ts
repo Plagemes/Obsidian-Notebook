@@ -36,6 +36,7 @@ import { textElementBounds } from "../ink/text-layout";
 import { AddAsset, AddElement, AddPage, AddStroke, Batch, SetMeta, SetPageMargins, SetPageSize, type Command } from "./history";
 import { SetMarkerDone } from "./marker-commands";
 import { boxBounds, markerBounds } from "./markers";
+import { stableStringify } from "./math-elements";
 import { marginsEqual, marginsOf, normalizeMargins, translateElement, translateStroke } from "./margins";
 import { normalizeBookmarkInfo } from "./bookmarks";
 import { SetPageTags, unionPageTags } from "./page-tags";
@@ -94,6 +95,14 @@ export function elementContentKey(e: PageElement): string {
 	void _id;
 	// v8: whether a marker is resolved is its state, not its content (see planMerge).
 	if (rest.type === "marker") delete (rest as Partial<MarkerElement>).done;
+	// v9: graphs nest objects (viewport, functions): keys sorted at every level, none dropped. The cached outline of an
+	// equation is how it looks, not what it is: the same LaTeX typeset on two devices is the same equation.
+	if (rest.type === "graph") return stableStringify(rest);
+	if (rest.type === "equation") {
+		const { outline: _o, ...eq } = rest;
+		void _o;
+		return stableStringify(eq);
+	}
 	return JSON.stringify(rest, Object.keys(rest).sort());
 }
 
@@ -139,8 +148,8 @@ function fitOnPage(target: Page, copy: Page, fresh: { strokes: readonly Stroke[]
 		}
 	}
 	for (const e of fresh.elements) {
-		if (e.type === "marker" || e.type === "box") {
-			const b = e.type === "marker" ? markerBounds(e) : boxBounds(e);
+		if (e.type === "marker" || e.type === "box" || e.type === "equation" || e.type === "graph") {
+			const b = e.type === "marker" ? markerBounds(e) : e.type === "box" ? boxBounds(e) : { minX: e.x, maxX: e.x + e.width, maxY: e.y + e.height };
 			minX = Math.min(minX, b.minX);
 			maxX = Math.max(maxX, b.maxX);
 			maxY = Math.max(maxY, b.maxY);

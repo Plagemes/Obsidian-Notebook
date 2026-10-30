@@ -1,5 +1,6 @@
 import { normalizePath, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
+import { layerFlags, planExport, type ExportFormat, type ExportLayers, type ExportScope } from "../ink/export-layers";
 import { pagesToPdf, type PdfPlacedImage } from "../ink/export-pdf";
 import { pageToSvg, type SvgPlacedImage } from "../ink/export-svg";
 import type { BoxLabel } from "../ink/marker-render";
@@ -33,9 +34,11 @@ export interface PageImages {
  * re-encoded as JPEG. The same asset on several pages shares one `Uint8Array`, so the writers embed it once.
  * Pages are processed one after the other to keep memory low.
  */
-export async function collectPageImages(media: NotebookMedia | null, pages: readonly Page[]): Promise<PageImages> {
+export async function collectPageImages(media: NotebookMedia | null, pages: readonly Page[], layers: ExportLayers = "both"): Promise<PageImages> {
 	const out: PageImages = { images: new Map(), skipped: 0 };
 	if (!media) return out;
+	// wave 0.9 (381): what the export leaves out is not loaded either (an ink-only export never rasterises the PDF).
+	const flags = layerFlags(layers);
 	const cache = new Map<string, Promise<Jpeg | null>>();
 	const load = (key: string, make: () => Promise<Jpeg>): Promise<Jpeg | null> => {
 		let p = cache.get(key);
@@ -50,7 +53,7 @@ export async function collectPageImages(media: NotebookMedia | null, pages: read
 	};
 	for (const page of pages) {
 		const list: PdfPlacedImage[] = [];
-		const bg = page.background;
+		const bg = flags.background ? page.background : undefined;
 		if (bg) {
 			const jpeg = bg.kind === "pdf"
 				? await load(`pdf:${bg.asset}:${bg.page}`, () => media.pdfPageJpeg(bg.asset, bg.page, PDF_DPI))
@@ -58,7 +61,7 @@ export async function collectPageImages(media: NotebookMedia | null, pages: read
 			if (jpeg) list.push({ ...jpeg, ...backgroundRect(page), layer: "background" });
 			else out.skipped++;
 		}
-		for (const el of page.elements ?? []) {
+		for (const el of flags.content ? page.elements ?? [] : []) {
 			if (el.type !== "image") continue;
 			const jpeg = await load(`img:${el.asset}`, () => media.imageJpeg(el.asset));
 			if (jpeg) list.push({ ...jpeg, x: el.x, y: el.y, width: el.width, height: el.height, rotation: el.rotation, layer: "element" });
@@ -85,6 +88,12 @@ function reportSkipped(skipped: number): void {
 export interface ExportOptions {
 	hiddenInk?: (page: Page) => boolean;
 	boxLabel?: BoxLabel;
+	/** v9: runs before writing (typesets the equations that have no cached outline yet). */
+	prepare?: (pages: readonly Page[]) => Promise<void>;
+	/** v9: numbers of the numbered equations, counted over the whole notebook (a single page keeps its numbers). */
+	equationNumbers?: ReadonlyMap<string, number>;
+	/** wave 0.9 (381): ink only, background only or both (default). */
+	layers?: ExportLayers;
 }
 
 /** Writes a PDF of `pages` next to the notebook; `suffix` distinguishes single-page exports. */
@@ -93,10 +102,13 @@ export async function exportPdf(
 ): Promise<void> {
 	const working = showNotice(t("export.working"), 0);
 	try {
-		const { images, skipped } = await collectPageImages(media, pages);
+		const { images, skipped } = await collectPageImages(media, pages, options.layers);
+		await options.prepare?.(pages);
 		const bytes = pagesToPdf(pages, {
 			paper: true, title: notebook.basename, images: (p) => images.get(p) ?? [],
 			...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+			...(options.layers ? { layers: options.layers } : {}),
+			...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}),
 		});
 		const path = freePath(app, notebook, suffix, "pdf");
 		await app.vault.createBinary(path, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
@@ -109,23 +121,79 @@ export async function exportPdf(
 	}
 }
 
+/** SVG of one page: the text, the images it needs and the path it is written to. */
+async function buildSvg(app: App, notebook: TFile, page: Page, suffix: string, media: NotebookMedia | null, options: ExportOptions): Promise<{ path: string; skipped: number }> {
+	const { images, skipped } = await collectPageImages(media, [page], options.layers);
+	await options.prepare?.([page]);
+	const svgImages = (p: Page): SvgPlacedImage[] => (images.get(p) ?? []).map((img) => ({
+		href: jpegDataUrl(img.jpeg), x: img.x, y: img.y, width: img.width, height: img.height,
+		...(img.rotation !== undefined ? { rotation: img.rotation } : {}),
+		...(img.layer !== undefined ? { layer: img.layer } : {}),
+	}));
+	const path = freePath(app, notebook, suffix, "svg");
+	await app.vault.create(path, pageToSvg(page, {
+		paper: true, images: svgImages, hiddenInk: options.hiddenInk?.(page) ?? false, ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+		...(options.layers ? { layers: options.layers } : {}),
+		...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}),
+	}));
+	return { path, skipped };
+}
+
 export async function exportSvg(app: App, notebook: TFile, page: Page, suffix: string, media: NotebookMedia | null = null, options: ExportOptions = {}): Promise<void> {
 	const working = showNotice(t("export.working"), 0);
 	try {
-		const { images, skipped } = await collectPageImages(media, [page]);
-		const svgImages = (p: Page): SvgPlacedImage[] => (images.get(p) ?? []).map((img) => ({
-			href: jpegDataUrl(img.jpeg), x: img.x, y: img.y, width: img.width, height: img.height,
-			...(img.rotation !== undefined ? { rotation: img.rotation } : {}),
-			...(img.layer !== undefined ? { layer: img.layer } : {}),
-		}));
-		const path = freePath(app, notebook, suffix, "svg");
-		await app.vault.create(path, pageToSvg(page, {
-			paper: true, images: svgImages, hiddenInk: options.hiddenInk?.(page) ?? false, ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
-		}));
+		const { path, skipped } = await buildSvg(app, notebook, page, suffix, media, options);
 		showNotice(t("export.done", { path }));
 		reportSkipped(skipped);
 	} catch (e) {
 		showNotice(t("export.failed", { error: (e as Error).message }));
+	} finally {
+		working.hide();
+	}
+}
+
+/** What the export dialog asks for (wave 0.9, 381). */
+export interface ExportRequest {
+	format: ExportFormat;
+	scope: ExportScope;
+	/** The page of a single-page export (0-based). */
+	pageIndex: number;
+	layers: ExportLayers;
+}
+
+/**
+ * Writes the files an export dialog asked for next to the notebook: one PDF, or one SVG per page for a whole notebook.
+ * Existing files are never overwritten (the name gets " 2", " 3"…).
+ */
+export async function runExport(app: App, notebook: TFile, pages: readonly Page[], request: ExportRequest, media: NotebookMedia | null, options: ExportOptions = {}): Promise<void> {
+	const jobs = planExport(request.format, request.scope, request.pageIndex, pages.length, request.layers);
+	const opts: ExportOptions = { ...options, layers: request.layers };
+	if (jobs.length === 0) return;
+	if (request.format === "pdf") {
+		const job = jobs[0]!;
+		await exportPdf(app, notebook, job.pages.map((i) => pages[i]!), job.suffix, media, opts);
+		return;
+	}
+	if (jobs.length === 1) {
+		await exportSvg(app, notebook, pages[jobs[0]!.pages[0]!]!, jobs[0]!.suffix, media, opts);
+		return;
+	}
+	const working = showNotice(t("export.working"), 0);
+	let skipped = 0;
+	let written = 0;
+	let last = "";
+	try {
+		for (const job of jobs) {
+			const result = await buildSvg(app, notebook, pages[job.pages[0]!]!, job.suffix, media, opts);
+			skipped += result.skipped;
+			written++;
+			last = result.path;
+			working.setMessage(t("export.progress", { done: String(written), total: String(jobs.length) }));
+		}
+		showNotice(t("export.doneMany", { n: String(written), path: last }));
+		reportSkipped(skipped);
+	} catch (e) {
+		showNotice(t("export.failedMany", { done: String(written), error: (e as Error).message }), 8000);
 	} finally {
 		working.hide();
 	}

@@ -264,10 +264,10 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 109. ~~**P3** Reading ruler on PDFs: highlights the line being read (accessibility, dyslexia).~~ — dropped (user decision, 2026-10-29)
 
 ### C. Rich native Obsidian elements
-110. **P1** Formulas and equations (advanced): an equation element with a live-preview editor and a palette of structures (fractions, matrices, integrals, systems); multi-line equations aligned on "=", optional automatic numbering; size adapts to the handwriting around it so formulas sit naturally next to the notes; configurable style (size, colour, numbering, inline or display); edited in place on the page; can be converted to vector ink to annotate or tweak by hand. Rendered with Obsidian's maths engine. Later, handwriting recognition (M5) fills the same element: write the formula by hand and it is typeset.
+110. **P1** 🧪 Formulas and equations (advanced): an equation element with a live-preview editor and a palette of structures (fractions, matrices, integrals, systems); multi-line equations aligned on "=", optional automatic numbering; size adapts to the handwriting around it so formulas sit naturally next to the notes; configurable style (size, colour, numbering, inline or display); edited in place on the page; can be converted to vector ink to annotate or tweak by hand. Rendered with Obsidian's maths engine. Later, handwriting recognition (M5) fills the same element: write the formula by hand and it is typeset.
 111. **P2** Markdown boxes on the page: real Markdown (lists, callouts, links) rendered by Obsidian.
 112. **P2** Back of the page: each page can have a Markdown note as its back side; flip the page to type.
-113. **P1** Function graphs (advanced), designed as a full element: several functions per graph (cartesian, parametric, polar, implicit, piecewise); parameters with sliders (a, b…) updating curves live; pan and zoom inside the graph; roots, intersections, maxima and minima found numerically and marked; tangents and shaded areas under curves; table of values; configurable axes, grid, labels and units (degrees/radians); ink written on the graph stays attached to the graph's coordinates when the graph is moved or zoomed; expressions parsed by a safe math parser (never eval); exported as vectors.
+113. **P1** 🧪 Function graphs (advanced), designed as a full element: several functions per graph (cartesian, parametric, polar, implicit, piecewise); parameters with sliders (a, b…) updating curves live; pan and zoom inside the graph; roots, intersections, maxima and minima found numerically and marked; tangents and shaded areas under curves; table of values; configurable axes, grid, labels and units (degrees/radians); ink written on the graph stays attached to the graph's coordinates when the graph is moved or zoomed; expressions parsed by a safe math parser (never eval); exported as vectors.
 114. **P1** 🧪 Paste from the system clipboard: images and text become page elements.
 
 ### D. Study and planning
@@ -660,11 +660,11 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 356. **P2** Quick date and time stamp at the pen position.
 
 ### Objects and selection
-357. **P2** Layer order: bring to front, send to back.
+357. **P2** 🧪 Layer order: bring to front, send to back.
 358. **P2** Opacity slider for ink, highlighter and images.
 359. **P2** Lasso selection across page boundaries.
 360. **P3** Code text box: monospace with syntax colours.
-361. **P2** Find and replace in the text boxes of a notebook.
+361. **P2** 🧪 Find and replace in the text boxes of a notebook.
 362. **P2** Cross-device clipboard: copy on the tablet, paste on the phone, through the vault.
 
 ### Navigation and view
@@ -672,31 +672,31 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 364. **P1** 🧪 Quick switcher for pages across all notebooks.
 365. **P1** 🧪 Recently edited pages across all notebooks.
 366. **P1** 🧪 Go to page by typing its number.
-367. **P2** Night mode: dark page display without changing the stored ink colours.
+367. **P2** 🧪 Night mode: dark page display without changing the stored ink colours.
 368. **P3** Projector and high-contrast mode.
 369. **P3** One-hand mode on phones.
-370. **P2** Adjustable toolbar size and large icons.
+370. **P2** 🧪 Adjustable toolbar size and large icons.
 371. ~~**P3** Samsung DeX layout for mouse and keyboard.~~ — dropped (user decision, 2026-10-29)
-372. **P2** Page turner: volume keys, a Bluetooth clicker or a keyboard turn pages and undo.
+372. **P2** 🧪 Page turner: volume keys, a Bluetooth clicker or a keyboard turn pages and undo.
 373. ~~**P3** Phone as a remote page navigator for the tablet.~~ — dropped (user decision, 2026-10-29)
 374. **P1** 🧪 Do not disturb while writing: no notices or pop-ups while the pen is on the screen.
 375. **P2** Workspace presets, e.g. "lecture" (slides, notebook, outline) with one command.
 
 ### PDF
-376. **P2** View-only crop of a PDF's white margins, for small screens.
+376. **P2** 🧪 View-only crop of a PDF's white margins, for small screens.
 377. **P3** Reflowed reading mode for a PDF's text on phones.
 
 ### Pages and notebooks
 378. **P1** 🧪 Operations on several selected pages: move, change paper, export or delete them together.
-379. **P2** Page information: dates, devices, stroke count, size.
+379. **P2** 🧪 Page information: dates, devices, stroke count, size.
 380. **P2** 🧪 Heavy page warning, with an offer to split the page.
 
 ### Export and Obsidian
-381. **P2** Export choices: ink only, background only, or both.
-382. **P2** Export a notebook as Markdown with page images, for people without Obsidian.
+381. **P2** 🧪 Export choices: ink only, background only, or both.
+382. **P2** 🧪 Export a notebook as Markdown with page images, for people without Obsidian.
 383. **P3** Obsidian Publish support: pages published as images.
-384. **P2** Notebook commands in the Obsidian mobile toolbar.
-385. **P2** Bookmark a notebook page in Obsidian's Bookmarks pane.
+384. **P2** 🧪 Notebook commands in the Obsidian mobile toolbar.
+385. **P2** 🧪 Bookmark a notebook page in Obsidian's Bookmarks pane.
 
 ### Performance
 386. **P3** Optional WebGL renderer for very large pages.
@@ -704,7 +704,7 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 
 ### Extensions of earlier items
 388. **P1** 🧪 Stable page links (extends O4): links based on the page id, so they still work after pages are reordered (today `#p3` points at a position).
-389. **P2** Automatic page in the middle of a notebook too (extends #95): filling a page offers to insert one right after it.
+389. **P2** 🧪 Automatic page in the middle of a notebook too (extends #95): filling a page offers to insert one right after it.
 390. **P1** 🧪 Integrity check with checksums (extends #27): finds silent corruption caused by sync and offers to restore an earlier version.
 391. **P2** Stroke timestamps linked to the lecture video (extends #231): tapping ink jumps the video to the minute it was written.
 

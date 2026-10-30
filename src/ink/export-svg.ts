@@ -1,7 +1,13 @@
 import { BOX_LABEL_HEIGHT, MARKER_BADGE, markerRegion } from "../model/markers";
-import type { BoxElement, MarkerElement, Page, TextElement } from "../model/types";
+import type { BoxElement, EquationElement, MarkerElement, Page, TextElement } from "../model/types";
+import { EQUATION_NUMBER_GAP, equationNumberLabel, equationNumbers } from "../model/math-elements";
+import { graphScene, GRAPH_STYLE, type GraphScene } from "../math/graph-scene";
+import type { Polygon } from "../math/outline";
+import { equationOutline } from "./math-render";
+import { boundGraphId } from "./attach";
 import type { BBox } from "./hit-test";
 import { BOX_COLORS, badgeColor, badgeFace, badgeIsSquare, boxLabelWidth, checkPoints, defaultBoxLabel, glyphSize, starPoints, type BoxLabel } from "./marker-render";
+import { layerFlags, type ExportLayers } from "./export-layers";
 import { PAPER_COLORS, paperPattern, type PaperLineKind } from "./paper";
 import { HIGHLIGHTER_ALPHA, strokeSvgPath } from "./stroke-shape";
 
@@ -46,6 +52,12 @@ export interface SvgOptions {
 	hiddenInk?: boolean;
 	/** v8: label of a structured box (default: the English kind name and the title). */
 	boxLabel?: BoxLabel;
+	/** v9: numbers of the numbered equations (default: counted on this page). */
+	equationNumbers?: ReadonlyMap<string, number>;
+	/** v9: outline of an equation without a cached one (default: one typeset this session, else its source as text). */
+	equationOutline?: (el: EquationElement) => { polys: Polygon[]; sx: number; sy: number } | null;
+	/** wave 0.9 (381): "ink" has no white sheet (transparent), PDF/picture background or paper; "background" has no ink. Default "both". */
+	layers?: ExportLayers;
 }
 
 /** Line height of text elements as a multiple of the font size (same as the PDF export). */
@@ -67,12 +79,13 @@ export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 	out.push(
 		`<svg xmlns="http://www.w3.org/2000/svg" width="${num(width * PT_TO_MM)}mm" height="${num(height * PT_TO_MM)}mm" viewBox="0 0 ${num(width)} ${num(height)}">`,
 	);
-	out.push(`<rect width="${num(width)}" height="${num(height)}" fill="#ffffff"/>`);
+	const layers = layerFlags(options.layers);
+	if (layers.background) out.push(`<rect width="${num(width)}" height="${num(height)}" fill="#ffffff"/>`);
 
 	const images = options.images?.(page) ?? [];
-	for (const img of images) if (img.layer === "background") out.push(imageTag(img));
+	if (layers.background) for (const img of images) if (img.layer === "background") out.push(imageTag(img));
 
-	if (options.paper ?? true) {
+	if (layers.background && (options.paper ?? true)) {
 		const whole: BBox = { minX: 0, minY: 0, maxX: width, maxY: height };
 		const { lines, dots } = paperPattern(page, whole);
 		for (const kind of ["minor", "major", "margin"] as const) {
@@ -95,9 +108,25 @@ export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 		}
 	}
 
+	if (!layers.content) {
+		out.push("</svg>");
+		return out.join("\n") + "\n";
+	}
 	for (const img of images) if (img.layer !== "background") out.push(imageTag(img));
+	// v9 graphs: clip paths are numbered in page order, so the output stays deterministic.
+	let clip = 0;
+	const clipIds = new Map<string, string>();
+	for (const el of page.elements ?? []) {
+		if (el.type !== "graph") continue;
+		const id = `nb-graph-${++clip}`;
+		clipIds.set(el.id, id);
+		out.push(graphTag(graphScene(el), id));
+	}
 	const boxLabel = options.boxLabel ?? ((b: BoxElement) => defaultBoxLabel(b));
 	for (const el of page.elements ?? []) if (el.type === "box") out.push(boxTag(el, boxLabel(el)));
+	const numbers = options.equationNumbers ?? equationNumbers([page]);
+	const outlineOf = options.equationOutline ?? equationOutline;
+	for (const el of page.elements ?? []) if (el.type === "equation") out.push(equationTag(el, numbers.get(el.id), outlineOf(el)));
 	for (const el of page.elements ?? []) {
 		if (el.type === "text") {
 			const t = textTag(el);
@@ -110,10 +139,13 @@ export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 		const d = strokeSvgPath(stroke);
 		if (!d) continue;
 		const fill = escapeAttr(stroke.color);
+		// v9: ink bound to a graph is clipped to its frame (the graph's own clip path), as on screen.
+		const graph = boundGraphId(stroke);
+		const clipped = graph !== null && clipIds.has(graph) ? ` clip-path="url(#${clipIds.get(graph)!})"` : "";
 		out.push(
 			stroke.tool === "highlighter"
-				? `<path d="${d}" fill="${fill}" fill-opacity="${HIGHLIGHTER_ALPHA}" style="mix-blend-mode:multiply"/>`
-				: `<path d="${d}" fill="${fill}"/>`,
+				? `<path d="${d}" fill="${fill}" fill-opacity="${HIGHLIGHTER_ALPHA}" style="mix-blend-mode:multiply"${clipped}/>`
+				: `<path d="${d}" fill="${fill}"${clipped}/>`,
 		);
 	}
 	for (const el of page.elements ?? []) if (el.type === "marker") out.push(markerTag(el));
@@ -122,6 +154,62 @@ export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 }
 
 const pointsAttr = (pts: ReadonlyArray<readonly [number, number]>): string => pts.map(([x, y]) => `${num(x)},${num(y)}`).join(" ");
+
+const pathOf = (pts: ReadonlyArray<readonly [number, number]>, close: boolean): string =>
+	pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${num(x)} ${num(y)}`).join("") + (close ? "Z" : "");
+
+/** Baseline of an anchored scene text (the same approximation as the PDF export). */
+function sceneBaseline(y: number, size: number, baseline: "top" | "middle" | "bottom"): number {
+	return baseline === "top" ? y + size * 0.76 : baseline === "middle" ? y + size * 0.35 : y - size * 0.21;
+}
+
+/** v9 graph: the scene as vector paths and text, clipped to the frame. */
+function graphTag(s: GraphScene, clipId: string): string {
+	const S = GRAPH_STYLE;
+	const f = s.frame;
+	const rect = `x="${num(f.x)}" y="${num(f.y)}" width="${num(f.width)}" height="${num(f.height)}"`;
+	const out: string[] = [`<g>`, `<clipPath id="${clipId}"><rect ${rect}/></clipPath>`, `<rect ${rect} fill="${S.background}"/>`, `<g clip-path="url(#${clipId})" stroke-linecap="round" stroke-linejoin="round">`];
+	const lines = (list: GraphScene["grid"], color: string, width: number) => {
+		if (list.length === 0) return;
+		out.push(`<path d="${list.map((l) => `M${num(l.x1)} ${num(l.y1)}L${num(l.x2)} ${num(l.y2)}`).join("")}" fill="none" stroke="${color}" stroke-width="${num(width)}"/>`);
+	};
+	lines(s.grid, S.grid, S.gridWidth);
+	lines(s.axes, S.axis, S.axisWidth);
+	for (const a of s.areas) out.push(`<path d="${a.polygons.map((p) => pathOf(p, true)).join("")}" fill="${escapeAttr(a.color)}" fill-opacity="${S.areaAlpha}"/>`);
+	const curve = (c: GraphScene["curves"][number]) => {
+		const d = c.lines.filter((l) => l.length > 1).map((l) => pathOf(l, false)).join("");
+		if (!d) return;
+		const dash = c.dash ? ` stroke-dasharray="${c.dash.map(num).join(" ")}"` : "";
+		out.push(`<path d="${d}" fill="none" stroke="${escapeAttr(c.color)}" stroke-width="${num(c.width)}"${dash}/>`);
+	};
+	for (const c of s.curves) curve(c);
+	for (const p of s.points) out.push(`<circle cx="${num(p.x)}" cy="${num(p.y)}" r="${num(S.pointRadius)}" fill="${escapeAttr(p.color)}"/>`);
+	for (const p of s.panels) out.push(`<rect x="${num(p.x)}" y="${num(p.y)}" width="${num(p.width)}" height="${num(p.height)}" fill="${S.panel}" stroke="${S.panelBorder}" stroke-width="0.5"/>`);
+	for (const c of s.overlay) curve(c);
+	for (const t of s.texts) {
+		const anchor = t.align === "left" ? "start" : t.align === "right" ? "end" : "middle";
+		out.push(`<text x="${num(t.x)}" y="${num(sceneBaseline(t.y, t.size, t.baseline))}" font-family="Helvetica, Arial, sans-serif" font-size="${num(t.size)}" text-anchor="${anchor}" fill="${escapeAttr(t.color)}">${escapeAttr(t.text)}</text>`);
+	}
+	out.push("</g>", `<rect ${rect} fill="none" stroke="${S.border}" stroke-width="${num(S.borderWidth)}"/>`, "</g>");
+	return out.join("\n");
+}
+
+/** v9 equation: its outline filled with the even-odd rule (the LaTeX source as text when it has none), then its number. */
+function equationTag(el: EquationElement, n: number | undefined, o: { polys: Polygon[]; sx: number; sy: number } | null): string {
+	const parts: string[] = [];
+	const color = escapeAttr(el.color);
+	if (o && o.polys.length > 0) {
+		const d = o.polys.map((p) => pathOf(p.map(([x, y]): [number, number] => [el.x + x * o.sx, el.y + y * o.sy]), true)).join("");
+		parts.push(`<path d="${d}" fill="${color}" fill-rule="evenodd"/>`);
+	} else {
+		const size = Math.max(4, Math.min(el.fontSize, el.height) * 0.8);
+		parts.push(`<text x="${num(el.x + 2)}" y="${num(el.y + el.height / 2 + size * 0.35)}" font-family="monospace" font-size="${num(size)}" fill="${color}">${escapeAttr(el.latex.replace(/\s+/g, " "))}</text>`);
+	}
+	if (n !== undefined) {
+		parts.push(`<text x="${num(el.x + el.width + el.fontSize * EQUATION_NUMBER_GAP)}" y="${num(el.y + el.height / 2 + el.fontSize * 0.35)}" font-family="serif" font-size="${num(el.fontSize)}" fill="${color}">${escapeAttr(equationNumberLabel(n))}</text>`);
+	}
+	return parts.join("\n");
+}
 
 /** v8 marker: dashed region, badge and glyph, as on the canvas (marker-render.ts). Above the ink. */
 function markerTag(m: MarkerElement): string {
