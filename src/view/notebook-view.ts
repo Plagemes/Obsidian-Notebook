@@ -13,16 +13,17 @@ import { deleteInkCommand, inkOnRemoved } from "../ink/attach";
 import { captureClip, type ClipContent } from "../ink/clipboard";
 import { cleanStampFormat, formatStamp, stampElement, stampSpot } from "../ink/date-stamp";
 import {
-	captureCrossPageClip, frameOffset, pagesTouchedBy, partsBounds, planCrossPageTransform, selectAcrossPages, type PagePart,
+	captureCrossPageClip, frameOffset, inkFollowers, pagesTouchedBy, partsBounds, planCrossPageTransform, selectAcrossPages, type PagePart,
 } from "../ink/cross-page";
-import { elementsInLasso, hitElement, transformElement } from "../ink/elements";
+import { elementsInLasso, hitElement } from "../ink/elements";
 import { eraseAreaCommand } from "../ink/erase-area";
 import { filterErasable } from "../ink/erase-filter";
 import { findHitStrokes, type BBox } from "../ink/hit-test";
 import { growForInfinite } from "../ink/infinite";
 import { InputPolicy } from "../ink/input-policy";
-import { strokesInLasso, transformStroke } from "../ink/lasso";
+import { rectanglePolygon, strokesInLasso } from "../ink/lasso";
 import { lineBreakTarget } from "../ink/line-break";
+import { applyPlacement, uniformPlacement } from "../ink/selection-transform";
 import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layout, type PageBox } from "../ink/layout";
 import { HoldTracker } from "../ink/hold";
 import { LastTool } from "../ink/last-tool";
@@ -116,6 +117,7 @@ import { BLANK_THUMBNAIL, ViewResilience, type ResilienceServices, type Resilien
 import { ObjectInk } from "./object-ink";
 import { PenLinks } from "./pen-links";
 import { SelectionActions } from "./selection-actions";
+import { SelectionArrange } from "./selection-arrange";
 import { StampPalette, type StampTarget } from "./stamp-palette";
 import { TextEditor, type TextEditSession } from "./text-editor";
 import { MathTools, type MathHost } from "./math-tools";
@@ -190,6 +192,8 @@ export interface NotebookHost {
 	syncSafety?: SyncSafetyService;
 	/** wave 0.7: resilience: safe mode, storage-full warning, integrity ledger. Optional: absent in tests. */
 	resilience?: ResilienceServices;
+	/** wave 0.10 (362): the plugin's one store of the shared clipboard file (views must not each write it). Optional: absent in tests. */
+	sharedClips?(): SharedClipStore;
 }
 
 interface ActiveStroke {
@@ -227,6 +231,8 @@ interface Lasso {
 	points: Array<[number, number]>;
 	/** The eraser's Area mode: the outline erases what is inside instead of selecting it. */
 	erase?: boolean;
+	/** wave 0.10 (63): rectangle selection: the outline is the box from `anchor` to the pen, not a freehand path. */
+	anchor?: [number, number];
 }
 
 /** Insert/remove space: the line touched (page coordinates) and how far it was dragged (pt; down > 0). */
@@ -358,6 +364,7 @@ export class NotebookView extends FileView {
 		},
 	);
 	private selectionActions: SelectionActions | null = null;
+	private arrange: SelectionArrange | null = null;
 	/** Links written with the pen (O8): note links in text boxes, on ink, and the `[[` suggester. */
 	private penLinks: PenLinks | null = null;
 	/** One page at a time (#14); its gestures and animation live in page-mode.ts. */
@@ -761,6 +768,7 @@ export class NotebookView extends FileView {
 		this.stopNav = null;
 		this.selectionActions?.destroy();
 		this.selectionActions = null;
+		this.arrange = null;
 		this.penLinks?.destroy();
 		this.penLinks = null;
 		this.pageOffer?.destroy();
@@ -1723,7 +1731,7 @@ export class NotebookView extends FileView {
 		if (commands.length === 0) return;
 		this.history.execute(new Batch("Delete selection", commands));
 		this.afterHistoryChange();
-		if (owned.length > 0) this.offerDeleteInk(page, removedEls, owned);
+		if (owned.length > 0) this.offerDeleteInk([{ page, removed: removedEls, owned }]);
 	}
 
 	/**
@@ -1747,11 +1755,15 @@ export class NotebookView extends FileView {
 		this.selectItems(spot.pageIndex, [], [el]);
 	}
 
-	/** wave 0.10 (359): deletes a selection that spans several pages, one undo step (no offer about ink written on objects). */
+	/**
+	 * wave 0.10 (359): deletes a selection that spans several pages, one undo step. Like on a single page, the ink written
+	 * on (or bound to) a deleted object stays unless the user takes the offer shown afterwards (setting "Ink follows objects").
+	 */
 	private deleteAcrossPages(sel: Selection): void {
 		const doc = this.session?.doc;
 		if (!doc) return;
 		const commands: Command[] = [];
+		const offers: Array<{ page: Page; removed: PageElement[]; owned: Stroke[] }> = [];
 		for (const part of this.selectionParts(sel)) {
 			const page = doc.pages[part.pageIndex];
 			if (!page) continue;
@@ -1760,12 +1772,21 @@ export class NotebookView extends FileView {
 				.filter((it) => it.index >= 0)
 				.sort((a, b) => b.index - a.index);
 			for (const it of strokes) commands.push(new ReplaceStroke(page.id, it.stroke, [], it.index));
-			for (const el of part.elements) if (page.elements?.includes(el)) commands.push(new RemoveElement(page.id, el));
+			const removedEls = part.elements.filter((el) => page.elements?.includes(el));
+			for (const el of removedEls) commands.push(new RemoveElement(page.id, el));
+			if (this.host.settings.inkFollowsObjects && removedEls.length > 0) {
+				// v8: hidden ink is never offered (nor counted) while the solutions of the page are not shown.
+				const visible = new Set(this.inkInView(page));
+				const own = new Set(part.strokes);
+				const owned = inkFollowers(page, part, true, measureText).map((f) => f.stroke).filter((s) => visible.has(s) && !own.has(s));
+				if (owned.length > 0) offers.push({ page, removed: removedEls, owned });
+			}
 		}
 		this.clearSelection();
 		if (commands.length === 0) return;
-		this.history.execute(new Batch("Delete selection", commands));
+		if (!this.history.execute(new Batch("Delete selection", commands))) return;
 		this.afterHistoryChange();
+		if (offers.length > 0) this.offerDeleteInk(offers);
 	}
 
 	/** The selected items page by page: the primary page first, then the other pages of a cross-page selection. */
@@ -2134,7 +2155,7 @@ export class NotebookView extends FileView {
 			sidePane: pdfSideState(this),
 			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false },
 			display: { night: this.display?.night ?? false, crop: this.display?.crop ?? false },
-			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true, readOnly: this.userReadOnly },
+			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle", readOnly: this.userReadOnly },
 			canPrint: canPrint(),
 			markers: {
 				invisibleInk: !!this.markers?.invisibleInk, solutions: !!this.markers?.solutionsShown,
@@ -2161,6 +2182,16 @@ export class NotebookView extends FileView {
 			// v10: "Go to source" acts on the first excerpt of the primary page's elements.
 			excerpts: sel.elements.filter((e) => e.type === "excerpt").length,
 		};
+	}
+
+	/** wave 0.10: align, distribute, rotate, mirror, exact size and select similar / by colour or tool (contextual bar, sheet, commands). */
+	get arrangeTools(): SelectionArrange | null {
+		return this.arrange;
+	}
+
+	/** wave 0.10 (63): switches the lasso tool between the freehand outline and the rectangle (turning the lasso on). */
+	toggleSelectRectangle(): void {
+		if (this.editable()) this.toolbar.update({ tool: "lasso", selectMode: this.tools.selectMode === "rectangle" ? "lasso" : "rectangle" });
 	}
 
 	/** The selection's copy, cut, paste, duplicate and white-to-transparent (contextual bar). */
@@ -3077,7 +3108,7 @@ export class NotebookView extends FileView {
 				return true;
 			}
 			this.clearSelection();
-			this.lasso = { pageIndex, points: [local] };
+			this.lasso = this.tools.selectMode === "rectangle" ? { pageIndex, points: [local], anchor: local } : { pageIndex, points: [local] };
 			this.renderer?.setLasso(this.lasso);
 			return true;
 		}
@@ -3177,6 +3208,13 @@ export class NotebookView extends FileView {
 		}
 
 		const lasso = this.lasso;
+		if (lasso?.anchor) {
+			// Rectangle selection: the box from where the pen went down to where it is now.
+			const p = n > 0 ? this.toLocal(lasso.pageIndex, NotebookView.at(samples, n - 1)) : null;
+			if (p) lasso.points = rectanglePolygon(lasso.anchor, p);
+			this.renderer?.setLasso(lasso);
+			return;
+		}
 		if (lasso) {
 			const minStep = 2 / this.viewport.scale;
 			for (let i = 0; i < n; i++) {
@@ -3832,9 +3870,13 @@ export class NotebookView extends FileView {
 	private pushSelection(): void {
 		const sel = this.selection;
 		// Ink written on the selected objects floats with them (setting "Ink follows objects").
-		const attached = sel ? this.attachedInk(sel) : [];
+		const across = sel?.others?.length ? this.crossPageInk(sel) : null;
+		const attached = sel ? (across ? across[0] ?? [] : this.attachedInk(sel)) : [];
 		const boxes = this.layout?.boxes ?? [];
-		const parts = sel?.others?.map((o) => ({ ...o, offset: frameOffset(boxes, sel.pageIndex, o.pageIndex) }));
+		const parts = sel?.others?.map((o, i) => {
+			const extra = across?.[i + 1] ?? [];
+			return { ...o, strokes: extra.length > 0 ? [...o.strokes, ...extra] : o.strokes, offset: frameOffset(boxes, sel.pageIndex, o.pageIndex) };
+		});
 		this.renderer?.setSelection(sel ? { ...sel, parts, strokes: attached.length > 0 ? [...sel.strokes, ...attached] : sel.strokes, handle: HANDLE_PX } : null);
 		this.refreshUi();
 	}
@@ -3972,17 +4014,18 @@ export class NotebookView extends FileView {
 			this.clearSelection();
 			return;
 		}
-		const moved = present.map((s) => freezeStroke(transformStroke(s, sel.matrix)));
-		const movedEls = presentEls.map((e) => transformElement(e, sel.matrix, measureText));
 		const onPage = new Set(page.strokes);
 		const attached = this.attachedInk(sel).filter((s) => onPage.has(s));
-		const movedAttached = attached.map((s) => freezeStroke(transformStroke(s, sel.matrix)));
-		const commands: Command[] = [
-			...present.map((s, i) => new ReplaceStroke(page.id, s, [moved[i]!], page.strokes.indexOf(s))),
-			...attached.map((s, i) => new ReplaceStroke(page.id, s, [movedAttached[i]!], page.strokes.indexOf(s))),
-			...presentEls.map((e, i) => new ReplaceElement(page.id, e, movedEls[i]!)),
-		];
-		this.history.execute(new Batch("Transform selection", commands));
+		const plan = applyPlacement(page, present, presentEls, uniformPlacement(present, presentEls, attached, sel.matrix), measureText, "Transform selection");
+		if (!plan) return;
+		if (!this.history.execute(plan.command)) {
+			// Refused (the content guard, or read-only): the document is unchanged, so the floating selection is dropped.
+			this.clearSelection();
+			this.renderer?.invalidate();
+			return;
+		}
+		const moved = plan.strokes;
+		const movedEls = plan.elements;
 		sel.strokes = moved;
 		sel.elements = movedEls;
 		sel.matrix = IDENTITY;
@@ -3996,7 +4039,8 @@ export class NotebookView extends FileView {
 
 	/**
 	 * wave 0.10 (359): applies the dragged transform to a selection across pages. Every item ends up on the page under it
-	 * (items outside every page stay where they were); one undo step. Ink that follows objects is not carried across pages.
+	 * (items outside every page stay where they were); one undo step. The ink bound to a graph (and, with the setting "Ink
+	 * follows objects", the ink written on an object) goes to the page its object goes to.
 	 */
 	private commitCrossPageTransform(sel: Selection): void {
 		const doc = this.session?.doc;
@@ -4004,12 +4048,13 @@ export class NotebookView extends FileView {
 		if (!doc || !boxes) return;
 		const plan = planCrossPageTransform({
 			boxes, pages: doc.pages, primary: sel.pageIndex, parts: this.selectionParts(sel), matrix: sel.matrix, measure: measureText,
+			followInk: this.host.settings.inkFollowsObjects,
 		});
-		if (!plan) {
+		if (!plan || !this.history.execute(plan.command)) {
 			this.clearSelection();
+			this.renderer?.invalidate();
 			return;
 		}
-		this.history.execute(plan.command);
 		const [first, ...rest] = plan.parts;
 		const bounds = first ? partsBounds(boxes, plan.parts, first.pageIndex, measureText) : null;
 		if (!first || !bounds) {
@@ -4029,6 +4074,13 @@ export class NotebookView extends FileView {
 
 	// --- ink attached to objects (roadmap 149) ---
 
+	/** wave 0.10 (359): per part of a selection across pages (the primary page first), the unselected ink that floats with its objects. */
+	private crossPageInk(sel: Selection): Stroke[][] {
+		return this.objectInk.attachedAcross(
+			this.selectionParts(sel).map((part) => ({ part, page: this.pageAtIndex(part.pageIndex) ?? undefined })), this.host.settings.inkFollowsObjects,
+		);
+	}
+
 	/** Strokes that float with the selection without being selected: the ink written on the selected objects (none when the setting is off). */
 	private attachedInk(sel: Selection): Stroke[] {
 		if (!this.host.settings.inkFollowsObjects || sel.others?.length) return [];
@@ -4036,16 +4088,24 @@ export class NotebookView extends FileView {
 		return page ? this.objectInk.attachedTo(page, sel) : [];
 	}
 
-	/** After deleting objects that had ink on them: offers to delete that ink too (undone separately; ignored = the ink stays). */
-	private offerDeleteInk(page: Page, removed: readonly PageElement[], owned: Stroke[]): void {
-		this.objectInk.offerDelete(owned.length, () => {
+	/**
+	 * After deleting objects that had ink on them: offers to delete that ink too (undone separately; ignored = the ink
+	 * stays). One group per page; the offer is for all of them and skips a page whose object an undo brought back.
+	 */
+	private offerDeleteInk(groups: ReadonlyArray<{ page: Page; removed: readonly PageElement[]; owned: Stroke[] }>): void {
+		this.objectInk.offerDelete(groups.reduce((n, g) => n + g.owned.length, 0), () => {
 			const doc = this.session?.doc;
-			// Only while the objects are still deleted: an undo in between brings them back, and their ink stays where it is.
-			if (!doc || !this.editable() || !doc.pages.includes(page) || removed.some((e) => page.elements?.includes(e))) return;
-			const cmd = deleteInkCommand(page.id, page.strokes, owned);
-			if (!cmd) return;
+			if (!doc || !this.editable()) return;
+			const commands: Command[] = [];
+			for (const { page, removed, owned } of groups) {
+				// Only while the objects are still deleted: an undo in between brings them back, and their ink stays where it is.
+				if (!doc.pages.includes(page) || removed.some((e) => page.elements?.includes(e))) continue;
+				const cmd = deleteInkCommand(page.id, page.strokes, owned);
+				if (cmd) commands.push(cmd);
+			}
+			if (commands.length === 0) return;
 			this.clearSelection();
-			this.history.execute(cmd);
+			if (!this.history.execute(commands.length === 1 ? commands[0]! : new Batch("Delete ink on deleted objects", commands))) return;
 			this.afterHistoryChange();
 			this.renderer?.invalidate();
 			showNotice(t("object.inkDeleted"));
@@ -4118,16 +4178,40 @@ export class NotebookView extends FileView {
 			selection: () => this.selection,
 			select: (pageIndex, strokes, elements, others) => this.selectItems(pageIndex, strokes, elements, others),
 			execute: (cmd) => {
-				this.history.execute(cmd);
+				if (!this.history.execute(cmd)) return false;
 				this.afterHistoryChange();
 				this.renderer?.invalidate();
+				return true;
 			},
 			deleteSelection: () => this.deleteSelection(),
 			boxes: () => this.layout?.boxes ?? [],
-			sharedClips: () => (this.sharedClipStore ??= new SharedClipStore(vaultDeviceFileAdapter(this.app), () => this.host.settings.folder, sidecarDeviceId(this.app))),
+			sharedClips: () => this.host.sharedClips?.() ?? (this.sharedClipStore ??= new SharedClipStore(vaultDeviceFileAdapter(this.app), () => this.host.settings.folder, sidecarDeviceId(this.app))),
 			pasteTarget: () => this.pasteTarget(),
 			textStyle: () => ({ fontSize: this.tools.textSize, color: this.tools.penColor }),
 			stillHere: (doc) => this.session?.doc === doc && this.editable() && !this.controller?.drawing,
+		});
+		this.arrange = new SelectionArrange({
+			app: this.app,
+			doc: () => this.session?.doc ?? null,
+			editable: () => this.editable() && !this.controller?.drawing,
+			selection: () => this.selection,
+			select: (pageIndex, strokes, elements) => this.selectItems(pageIndex, strokes, elements),
+			execute: (cmd) => {
+				if (!this.history.execute(cmd)) return false;
+				this.afterHistoryChange();
+				this.renderer?.invalidate();
+				return true;
+			},
+			ink: (page) => this.inkInView(page),
+			inkFollowsObjects: () => this.host.settings.inkFollowsObjects,
+			currentPage: () => this.currentPageIndex(),
+			anchor: (id) => {
+				const el = this.ui?.contextBar.el.querySelector<HTMLElement>(`[data-action="${id}"]`);
+				const r = el?.getBoundingClientRect();
+				return r ? { x: r.left, y: r.top } : null;
+			},
+			run: (id) => this.runAction(id),
+			commitText: () => this.commitText(),
 		});
 	}
 
@@ -4268,6 +4352,11 @@ export class NotebookView extends FileView {
 			+ `ink: input→paint ${ms(paint)} · per event ${proc.length ? avg(proc).toFixed(2) + " ms" : "–"}${this.controller?.rawUpdates ? " · raw" : ""}\n`
 			+ `redraw ${st.staticMs.toFixed(1)} ms · ${st.strokesDrawn} strokes · ${st.pagesDrawn} pages`,
 		);
+	}
+
+	/** Read-only: what this view holds in memory that can name an asset file (library check, roadmap 27): the document, its undo and redo history, media not yet in the document. */
+	libraryCheckRoots(): unknown[] {
+		return [this.session?.doc ?? null, this.history.pending(), this.media?.pendingAssets() ?? []];
 	}
 }
 

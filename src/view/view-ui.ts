@@ -110,7 +110,7 @@ export class ViewUi {
 			return { id, icon: a.icon, label: actionLabel(a), enabled: isEnabled(a, c), checked: a.checked ? isChecked(a, c) : undefined };
 		}));
 		this.contextBar.render(layout.context, c);
-		this.visibleIds = new Set([...layout.quick, ...(layout.context?.actions ?? [])]);
+		this.visibleIds = new Set([...layout.quick, ...(layout.context?.actions ?? []), ...(layout.context?.second ?? [])]);
 		this.sheet.refresh();
 	}
 

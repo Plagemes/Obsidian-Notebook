@@ -137,7 +137,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 35. **P1** New pen types: fountain pen (angle-dependent width), brush, marker.
 36. **P1** 🧪 Auto-scroll while writing near the bottom of the screen.
 37. **P2** Filled shapes and dashed or dotted lines.
-38. **P2** Align and distribute the selection.
+38. **P2** 🧪 Align and distribute the selection.
 39. **P2** Group elements and lock elements (for example a background image that must not move).
 40. **P2** Layers: annotations on a layer separate from the PDF, which can be hidden or locked.
 41. **P2** Hand-drawn tables: insert a grid of cells and write inside it.
@@ -178,9 +178,9 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 ### Writing and tools
 61. ~~**P1** Pen hover preview: with the S Pen near the screen, a circle shows the nib size and colour.~~ — dropped: the S Pen and Android already show the hover pointer (user decision, 2026-10-29)
 62. **P1** 🧪 Adjustable eraser size with a visible eraser circle.
-63. **P2** Rectangle selection in addition to the lasso.
-64. **P2** Select by colour or tool (e.g. all highlighter strokes on this page).
-65. **P2** Rotate by 90°, mirror and exact size for the selection.
+63. **P2** 🧪 Rectangle selection in addition to the lasso.
+64. **P2** 🧪 Select by colour or tool (e.g. all highlighter strokes on this page).
+65. **P2** 🧪 Rotate by 90°, mirror and exact size for the selection.
 66. **P2** Smooth or straighten selected strokes.
 67. **P2** Textured pens: graphite pencil and gel.
 68. **P2** 🧪 Style eyedropper: take colour, width and tool from an existing stroke.

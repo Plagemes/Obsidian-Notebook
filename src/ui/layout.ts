@@ -78,6 +78,8 @@ export interface ContextBarPlan {
 	kind: ContextKind;
 	/** Action ids, best first. */
 	actions: string[];
+	/** wave 0.10: the second row (actions flagged `second`, e.g. align, transform and select similar of a selection); absent when empty. */
+	second?: string[];
 }
 
 /** Number of action buttons the contextual bar can show in a view `width` CSS px wide (beside its label and collapse button). */
@@ -91,8 +93,13 @@ export function contextBar(c: UiContext, width: number, usage: UsageMap, now: nu
 	if (!c.open) return null;
 	const all = ranked("context", c, usage, now, actions);
 	for (const kind of activeContexts(c)) {
-		const fit = all.filter((a) => a.contexts?.includes(kind)).slice(0, contextCapacity(width, slot));
-		if (fit.length > 0) return { kind, actions: fit.map((a) => a.id) };
+		const mine = all.filter((a) => a.contexts?.includes(kind));
+		const capacity = contextCapacity(width, slot);
+		const fit = mine.filter((a) => !a.second).slice(0, capacity);
+		const second = mine.filter((a) => a.second).slice(0, capacity);
+		if (fit.length > 0 || second.length > 0) {
+			return second.length > 0 ? { kind, actions: fit.map((a) => a.id), second: second.map((a) => a.id) } : { kind, actions: fit.map((a) => a.id) };
+		}
 	}
 	return null;
 }
@@ -106,7 +113,7 @@ export interface ToolbarLayout extends ToolbarPlan {
 export function buildLayout(c: UiContext, width: number, usage: UsageMap, now: number, actions: readonly ActionDef[] = ACTIONS, slot: number = TOOLBAR_METRICS.slot): ToolbarLayout {
 	const plan = toolbarPlan(width, slot);
 	const context = contextBar(c, width, usage, now, actions, slot);
-	const inContext = new Set(context?.actions ?? []);
+	const inContext = new Set([...(context?.actions ?? []), ...(context?.second ?? [])]);
 	// A read-only view offers no quick insert actions: they would all be disabled.
 	const quick = ranked("quick", c, usage, now, actions)
 		.filter((a) => !inContext.has(a.id) && (c.editable || a.readOnly))
@@ -193,7 +200,7 @@ export function placementsOf(id: string, c: UiContext, width: number, actions: r
 	for (const s of a.surfaces) if (fixed.includes(s)) out.add(s);
 	const layout = buildLayout(c, width, {}, 0, actions);
 	if (layout.quick.includes(id)) out.add("quick");
-	if (layout.context?.actions.includes(id)) out.add("context");
+	if (layout.context?.actions.includes(id) || layout.context?.second?.includes(id)) out.add("context");
 	const label = (x: ActionDef) => x.id;
 	if (buildSheet(c, { kind: "all", usage: {}, now: 0, label }, actions).some((s) => s.actions.includes(a))) out.add("sheet");
 	if (buildSheet(c, { kind: "page", usage: {}, now: 0, label }, actions).some((s) => s.actions.includes(a))) out.add("page");

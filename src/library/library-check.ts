@@ -9,8 +9,19 @@
  *   an asset file with no content is "waiting", never an orphan. And while any file that could hold a reference is not
  *   downloaded, **no asset is called an orphan at all** (the report says why): the missing file may be the one that uses it.
  * - It only ever considers files directly inside `<notebooks folder>/_assets/` named like an asset (`<24 hex>.<ext>`).
- * - It does not delete anything: `trashOrphans` hands the files to the caller's `trash` (the Obsidian trash), after the
- *   check has been run again, and only for files the user confirmed that are still orphans.
+ * - It does not delete anything: `moveOrphans` hands the files to the caller's `Mover`, which puts them in the recoverable
+ *   folder `<notebooks folder>/_trash/assets/` (a move inside the vault, so a sync service sees a move and not a delete),
+ *   after the check has been run again, and only for files the user confirmed that are still orphans.
+ * - **A file is offered only when it has been unused for a day on this device.** The modification time of a file is the one
+ *   of the device it came from (Google Drive and OneDrive keep it), so it says nothing about when this device first saw the
+ *   file: a picture can arrive before the notebook that uses it. Each device therefore keeps its own record of when it first
+ *   saw an asset unused (`library-check-seen.ts`, a per-device sidecar in `_meta`); an asset is offered only if an earlier
+ *   check, at least ASSET_GRACE_MS before, also found it unused and nothing has used it since.
+ * - **Open notebooks count.** What the open views hold in memory (the document, the undo and redo history, media not yet in
+ *   the document) and what the instant-save journal holds is asked from `RunOptions.live` before judging and again right
+ *   before moving. If that cannot be inspected, the report is incomplete and nothing is offered.
+ * - **Nothing is offered unless the whole answer is trusted**: a notebook that is unreadable or not downloaded, a backup that
+ *   is cut off or does not parse, an open view or journal that cannot be inspected: `complete` is false and no orphan is listed.
  *
  * An asset counts as used when its id appears in any notebook of the vault (read as text, so even a notebook that no
  * longer parses protects what it names), or, failing that, in anything that can still bring a notebook back: the plugin
@@ -22,12 +33,21 @@ import { downloadState, formatBytes, isAwaitingDownload, withoutNulTail } from "
 
 export { formatBytes };
 
-/** Asset files younger than this are not judged: a notebook that uses them may be about to be saved or synced. */
-export const ASSET_GRACE_MS = 60 * 60_000;
+/** An asset is offered only if this device saw it unused in an earlier check at least this long ago (see the header). */
+export const ASSET_GRACE_MS = 24 * 3_600_000;
+/** Asset files modified more recently than this are not judged either (a quick guard on top of the record above). */
+export const ASSET_MTIME_GRACE_MS = 60 * 60_000;
 /** The asset id is 24 hex digits (pdf/hash.ts). */
 const ASSET_FILE = /^([0-9a-f]{24})\.(?:pdf|png|jpe?g|webp|gif)$/;
 /** Files that can name an asset outside the notebooks. */
 const HOLDER_EXTENSIONS = new Set(["notebook", "json", "snapshot", "bak", "stamp"]);
+/** `_meta/library-check-<device>.json`: this check's own record of what it saw unused. It names assets but is no reference. */
+const CHECK_RECORD = /(^|\/)library-check-[0-9a-f]{8}\.json$/;
+
+/** Where the check moves unused asset files: inside the plugin trash folder, so nothing leaves the vault. */
+export function assetTrashDir(root: string): string {
+	return root ? `${root}/_trash/assets` : "_trash/assets";
+}
 
 export interface VaultFileInfo {
 	path: string;
@@ -152,18 +172,20 @@ export interface LibraryCheckReport {
 	inUse: { count: number; bytes: number };
 	/** Used only by backups, the trash, templates or stamps: kept. */
 	kept: { count: number; bytes: number };
-	/** Not used by anything, but younger than ASSET_GRACE_MS: not judged yet. */
+	/** Look unused but are not offered yet: modified in the last hour, or not seen unused by an earlier check at least ASSET_GRACE_MS ago. */
 	recent: { count: number; bytes: number };
 	/** Empty files: the sync client has not delivered them yet. */
 	waiting: { count: number; bytes: number };
 	/** Used by nothing readable, but some file that could use it is not downloaded: not judged. */
 	unjudged: { count: number; bytes: number };
-	/** Used by nothing: what the check offers to move to the trash. Empty unless `complete`. */
+	/** Used by nothing for a day: what the check offers to move to the recoverable folder. Empty unless `complete`. */
 	orphans: AssetFile[];
 	orphanBytes: number;
-	/** Files that could hold a reference but were not downloaded or could not be read (notebooks, backups, trash). */
+	/** Files that could hold a reference but were not downloaded, not complete or could not be read (notebooks, backups, trash). */
 	unavailable: number;
-	/** Every file that could use an asset was read: the orphans can be trusted. */
+	/** An open notebook or the instant-save journal could not be inspected (or no inspection was given). */
+	openIncomplete: boolean;
+	/** Every file that could use an asset was read and the open notebooks were inspected: the orphans can be trusted. */
 	complete: boolean;
 	cancelled: boolean;
 }
@@ -172,8 +194,26 @@ export interface LibraryCheckReport {
 export type ScanCacheEntry = { mtime: number; size: number; scan: NotebookScan };
 export type ScanCache = Map<string, ScanCacheEntry>;
 
+/** Asset ids held by things the vault listing cannot show: open notebooks (memory) and the instant-save journal. */
+export interface LiveReferences {
+	ids: Iterable<string>;
+	/** Something could not be inspected: the answer cannot be trusted and nothing is offered. */
+	incomplete: boolean;
+}
+
+/** This device's record of when it first saw each asset unused (`library-check-seen.ts`). */
+export interface SeenStore {
+	/** Asset id → time first seen unused; null when the record cannot be read (nothing is then offered). */
+	load(): Promise<Map<string, number> | null>;
+	save(seen: ReadonlyMap<string, number>): Promise<void>;
+}
+
 export interface RunOptions {
 	cache?: ScanCache;
+	/** What open notebooks and the journal hold. Without it the answer is incomplete: nothing is offered. */
+	live?: () => Promise<LiveReferences>;
+	/** The record of first sightings. Without it (or when it cannot be read) nothing is offered. */
+	seen?: SeenStore;
 	/** Called after each file read. */
 	progress?(done: number, total: number): void;
 	cancelled?(): boolean;
@@ -201,7 +241,7 @@ export async function runLibraryCheck(source: CheckSource, config: CheckConfig, 
 			const m = ASSET_FILE.exec(f.path.slice(dir.length + 1));
 			if (m) assets.push({ path: f.path, id: m[1]!, size: f.size, mtime: f.mtime });
 		} else if (kept.some((k) => underFolder(f.path, k))) {
-			if (HOLDER_EXTENSIONS.has(ext)) holderFiles.push(f);
+			if (HOLDER_EXTENSIONS.has(ext) && !CHECK_RECORD.test(f.path)) holderFiles.push(f);
 		} else if (ext === "notebook") {
 			notebookFiles.push(f);
 		}
@@ -212,7 +252,7 @@ export async function runLibraryCheck(source: CheckSource, config: CheckConfig, 
 		unreadable: [], futureVersion: [], notDownloaded: [],
 		assets: sum(assets), inUse: { count: 0, bytes: 0 }, kept: { count: 0, bytes: 0 }, recent: { count: 0, bytes: 0 },
 		waiting: { count: 0, bytes: 0 }, unjudged: { count: 0, bytes: 0 }, orphans: [], orphanBytes: 0,
-		unavailable: 0, complete: false, cancelled: false,
+		unavailable: 0, openIncomplete: false, complete: false, cancelled: false,
 	};
 
 	const total = notebookFiles.length;
@@ -252,8 +292,11 @@ export async function runLibraryCheck(source: CheckSource, config: CheckConfig, 
 			report.notDownloaded.push(f.path);
 			report.unavailable++;
 		} else {
-			if (scan.status === "unreadable") report.unreadable.push({ path: f.path, detail: scan.detail ?? "", size: f.size });
-			else if (scan.status === "future-version") report.futureVersion.push(f.path);
+			if (scan.status === "unreadable") {
+				// Listed, and what it names is protected, but the answer is not trusted: the damaged part may name more.
+				report.unreadable.push({ path: f.path, detail: scan.detail ?? "", size: f.size });
+				report.unavailable++;
+			} else if (scan.status === "future-version") report.futureVersion.push(f.path);
 			for (const tok of scan.tokens) referenced.add(tok);
 		}
 		await step();
@@ -283,8 +326,10 @@ export async function runLibraryCheck(source: CheckSource, config: CheckConfig, 
 					text = null;
 				}
 			}
-			if (text === null || isAwaitingDownload(text) || text.endsWith("\0")) report.unavailable++;
-			else {
+			// Everything that holds references is JSON. A text that is empty, ends in NUL bytes or does not parse (a copy only
+			// partly downloaded, cut off) may be missing the very part that names an asset: unsure, nothing is offered.
+			if (text === null || !isCompleteJson(text)) report.unavailable++;
+			if (text !== null) {
 				for (const tok of hexTokens(text)) {
 					if (ids.has(tok)) {
 						held.add(tok);
@@ -299,64 +344,154 @@ export async function runLibraryCheck(source: CheckSource, config: CheckConfig, 
 		candidates = candidates.filter((a) => !held.has(a.id));
 	}
 
+	// What open notebooks and the instant-save journal hold counts as used (asked last, so it is as fresh as it can be).
+	let liveIds = new Set<string>();
+	try {
+		const live = options.live ? await options.live() : null;
+		if (live) liveIds = new Set(live.ids);
+		report.openIncomplete = live === null || live.incomplete;
+	} catch {
+		report.openIncomplete = true;
+	}
+	if (liveIds.size > 0) {
+		const usedLive = candidates.filter((a) => liveIds.has(a.id));
+		report.inUse = sum([...inUse, ...usedLive]);
+		candidates = candidates.filter((a) => !liveIds.has(a.id));
+	}
+
+	let seen: Map<string, number> | null = null;
+	if (options.seen) {
+		try {
+			seen = await options.seen.load();
+		} catch {
+			seen = null;
+		}
+	}
+
 	const waiting = candidates.filter((a) => a.size === 0);
-	const recent = candidates.filter((a) => a.size > 0 && config.now - a.mtime < ASSET_GRACE_MS);
-	const judged = candidates.filter((a) => !waiting.includes(a) && !recent.includes(a));
+	const fresh = candidates.filter((a) => a.size > 0 && config.now - a.mtime < ASSET_MTIME_GRACE_MS);
+	const judged = candidates.filter((a) => !waiting.includes(a) && !fresh.includes(a));
+	// Offered only when an earlier check on this device, at least a day ago, also found it unused.
+	const aged = judged.filter((a) => {
+		const first = seen?.get(a.id);
+		return first !== undefined && config.now - first >= ASSET_GRACE_MS;
+	});
 	report.waiting = sum(waiting);
-	report.recent = sum(recent);
-	report.complete = report.unavailable === 0;
+	report.complete = report.unavailable === 0 && !report.openIncomplete;
 	if (report.complete) {
-		report.orphans = judged.sort((a, b) => b.size - a.size || (a.path < b.path ? -1 : 1));
-		report.orphanBytes = sum(judged).bytes;
+		report.recent = sum(candidates.filter((a) => a.size > 0 && !aged.includes(a)));
+		report.orphans = aged.sort((a, b) => b.size - a.size || (a.path < b.path ? -1 : 1));
+		report.orphanBytes = sum(aged).bytes;
+		// Remember what this complete check found unused (and forget what is used again), so a later check can tell how long.
+		if (seen && options.seen) {
+			const next = new Map<string, number>();
+			for (const a of candidates) if (a.size > 0) next.set(a.id, seen.get(a.id) ?? config.now);
+			if (!sameSeen(seen, next)) {
+				try {
+					await options.seen.save(next);
+				} catch {
+					/* the record is only a convenience: without it nothing is offered next time either */
+				}
+			}
+		}
 	} else {
+		report.recent = sum(fresh);
 		report.unjudged = sum(judged);
 	}
 	return report;
 }
 
-// ------------------------------------------------------------------ moving to the trash
-
-export interface Trasher {
-	/** Moves a file to the trash (never deletes it for good). */
-	trash(path: string): Promise<void>;
+/** Whether a text is a whole JSON value (not empty, no NUL tail, not cut off). */
+function isCompleteJson(text: string): boolean {
+	if (isAwaitingDownload(text) || text.endsWith("\0")) return false;
+	try {
+		JSON.parse(text);
+		return true;
+	} catch {
+		return false;
+	}
 }
 
-export interface TrashResult {
-	/** The check could not be trusted this time (a file that could use an asset is not downloaded): nothing was moved. */
+function sameSeen(a: ReadonlyMap<string, number>, b: ReadonlyMap<string, number>): boolean {
+	if (a.size !== b.size) return false;
+	for (const [k, v] of a) if (b.get(k) !== v) return false;
+	return true;
+}
+
+// ------------------------------------------------------------------ moving to the recoverable folder
+
+export interface Mover {
+	/** Moves a file inside the vault (a rename; the destination folder is created if needed). Never deletes anything. */
+	move(from: string, to: string): Promise<void>;
+}
+
+export interface MoveResult {
+	/** The check could not be trusted this time (an unavailable file, an open notebook or journal that cannot be inspected): nothing was moved. */
 	incomplete: boolean;
 	moved: AssetFile[];
 	/** Confirmed, but no longer unused, changed, or gone: left alone. */
 	skipped: string[];
 	failed: Array<{ path: string; error: string }>;
+	/** Where the moved files are now. */
+	folder: string;
+}
+
+/** The path a file gets in the recoverable folder: its own name, or `<id>-<n>.<ext>` when that name is taken. */
+export function assetTrashPath(root: string, file: Pick<AssetFile, "path">, taken: ReadonlySet<string>): string {
+	const dir = assetTrashDir(root);
+	const name = file.path.slice(file.path.lastIndexOf("/") + 1);
+	let to = `${dir}/${name}`;
+	const dot = name.lastIndexOf(".");
+	for (let n = 2; taken.has(to); n++) to = `${dir}/${name.slice(0, dot)}-${n}${name.slice(dot)}`;
+	return to;
 }
 
 /**
- * Moves the confirmed orphans to the trash. The check is run again first (cheap: unchanged notebooks come from the cache),
- * and a file is moved only if it is still an orphan, still the size that was listed, and still looks like an asset.
+ * Moves the confirmed orphans to `<notebooks folder>/_trash/assets/`. The check is run again first (cheap: unchanged
+ * notebooks come from the cache), the open notebooks and the journal are asked once more right before the first move, and a
+ * file is moved only if it is still an orphan, still the size that was listed, and still looks like an asset. The move is a
+ * rename inside the vault: nothing is deleted, and putting a file back is a move back into `_assets/`.
  */
-export async function trashOrphans(
-	source: CheckSource, config: CheckConfig, confirmed: readonly AssetFile[], trasher: Trasher, options: RunOptions = {},
-): Promise<TrashResult> {
+export async function moveOrphans(
+	source: CheckSource, config: CheckConfig, confirmed: readonly AssetFile[], mover: Mover, options: RunOptions = {},
+): Promise<MoveResult> {
+	const folder = assetTrashDir(config.root);
+	const result: MoveResult = { incomplete: false, moved: [], skipped: [], failed: [], folder };
 	const fresh = await runLibraryCheck(source, config, options);
-	const result: TrashResult = { incomplete: false, moved: [], skipped: [], failed: [] };
-	if (fresh.cancelled) {
+	const skipAll = () => {
 		result.skipped = confirmed.map((c) => c.path);
 		return result;
-	}
+	};
+	if (fresh.cancelled) return skipAll();
 	if (!fresh.complete) {
 		result.incomplete = true;
-		result.skipped = confirmed.map((c) => c.path);
-		return result;
+		return skipAll();
 	}
+	// Right before moving: what the open notebooks and the journal hold now.
+	let liveIds = new Set<string>();
+	try {
+		const live = options.live ? await options.live() : null;
+		if (!live || live.incomplete) {
+			result.incomplete = true;
+			return skipAll();
+		}
+		liveIds = new Set(live.ids);
+	} catch {
+		result.incomplete = true;
+		return skipAll();
+	}
+	const taken = new Set(source.files().map((f) => f.path));
 	const still = new Map(fresh.orphans.map((o) => [o.path, o]));
 	for (const file of confirmed) {
 		const now = still.get(file.path);
-		if (!now || now.size !== file.size || !isAssetFilePath(file.path, config.root)) {
+		if (!now || now.size !== file.size || liveIds.has(now.id) || !isAssetFilePath(file.path, config.root)) {
 			result.skipped.push(file.path);
 			continue;
 		}
+		const to = assetTrashPath(config.root, file, taken);
 		try {
-			await trasher.trash(file.path);
+			await mover.move(file.path, to);
+			taken.add(to);
 			result.moved.push(now);
 		} catch (e) {
 			result.failed.push({ path: file.path, error: e instanceof Error ? e.message : String(e) });

@@ -3,7 +3,7 @@ import type { DeviceFileAdapter } from "../src/storage/device-files";
 import { folderOf, LibraryIndex, nameOf, SORTS, type LibraryEntry } from "../src/library/index";
 import {
 	applyLibraryOps, arrangeEntries, emptyLibraryState, LIBRARY_STATE_FORMAT, mergeLibraryFiles, notebookKey, parseLibraryState, planMove,
-	rankOrder, RANK_STEP, serializeLibraryState, type LibraryItem, type LibraryStateFile,
+	rankOrder, RANK_STEP, serializeLibraryState, stateKeys, type LibraryItem, type LibraryStateFile,
 } from "../src/library/library-state";
 import { LibraryStateBlockedError, LibraryStateStore } from "../src/library/library-state-store";
 import { DEFAULT_COVER, metaFromDocument } from "../src/library/scan";
@@ -367,5 +367,59 @@ describe("index support", () => {
 		expect(idx.query({ scope: "archived", sort: "name", filter: (e) => e.id === "A" }).map((e) => e.name)).toEqual(["a"]);
 		expect(SORTS).toContain("manual");
 		expect(idx.query({ scope: "all", sort: "manual" }).map((e) => e.name)).toEqual(["b", "c", "a"]);
+	});
+});
+
+describe("files that share a document id (sync conflict copies)", () => {
+	it("keeps the plain id key for the original and keys the copy by id and path", () => {
+		const keys = stateKeys([
+			{ id: "d1", path: "Notebooks/Maths (1).notebook" },
+			{ id: "d1", path: "Notebooks/Maths.notebook" },
+			{ id: "d2", path: "Notebooks/Physics.notebook" },
+			{ path: "Notebooks/Unread.notebook" },
+		]);
+		expect(keys.get("Notebooks/Maths.notebook")).toBe("id:d1");
+		expect(keys.get("Notebooks/Maths (1).notebook")).toBe("copy:d1:Notebooks/Maths (1).notebook");
+		expect(keys.get("Notebooks/Physics.notebook")).toBe("id:d2");
+		expect(keys.get("Notebooks/Unread.notebook")).toBe("path:Notebooks/Unread.notebook");
+	});
+
+	it("recognises the conflict names of Google Drive, OneDrive and Syncthing", () => {
+		for (const copy of ["Maths (1)", "Maths-DESKTOP-AB12CD", "[Conflict] Maths", "Maths.sync-conflict-20261029-140500-ABCDEFG", "Maths (conflicted copy)"]) {
+			const keys = stateKeys([{ id: "d1", path: `A/${copy}.notebook` }, { id: "d1", path: "A/Maths.notebook" }]);
+			expect(keys.get("A/Maths.notebook")).toBe("id:d1");
+			expect(keys.get(`A/${copy}.notebook`)).toBe(`copy:d1:A/${copy}.notebook`);
+		}
+	});
+
+	it("two copies with ordinary names (a folder copied in the explorer): one keeps the id key, the other never shares it", () => {
+		const keys = stateKeys([{ id: "d1", path: "B/Maths.notebook" }, { id: "d1", path: "A/Maths.notebook" }]);
+		expect(keys.get("A/Maths.notebook")).toBe("id:d1");
+		expect(keys.get("B/Maths.notebook")).toBe("copy:d1:B/Maths.notebook");
+	});
+
+	it("archiving the original does not hide the conflicted copy", () => {
+		const index = new LibraryIndex();
+		index.upsert(entry("Notebooks/Maths.notebook", { id: "d1" }));
+		index.upsert(entry("Notebooks/Maths (1).notebook", { id: "d1" }));
+		const state = mergeLibraryFiles([file("0a1b2c3d", { key: index.stateKey({ id: "d1", path: "Notebooks/Maths.notebook" }), archived: { v: true, at: 5 } })]);
+		const archived = (path: string, id: string) => state.get(index.stateKey({ id, path }))?.archived === true;
+		expect(archived("Notebooks/Maths.notebook", "d1")).toBe(true);
+		expect(archived("Notebooks/Maths (1).notebook", "d1")).toBe(false);
+		// archiving the copy does not hide the original either
+		const both = mergeLibraryFiles([file("0a1b2c3d", { key: index.stateKey({ id: "d1", path: "Notebooks/Maths (1).notebook" }), archived: { v: true, at: 6 } })]);
+		expect(both.get(index.stateKey({ id: "d1", path: "Notebooks/Maths.notebook" }))?.archived).toBeUndefined();
+	});
+
+	it("the index follows changes: the copy is keyed alone again once the other file is gone", () => {
+		const index = new LibraryIndex();
+		index.upsert(entry("Notebooks/Maths.notebook", { id: "d1" }));
+		index.upsert(entry("Notebooks/Maths (1).notebook", { id: "d1" }));
+		expect(index.stateKey({ id: "d1", path: "Notebooks/Maths (1).notebook" })).toBe("copy:d1:Notebooks/Maths (1).notebook");
+		index.remove("Notebooks/Maths.notebook");
+		expect(index.stateKey({ id: "d1", path: "Notebooks/Maths (1).notebook" })).toBe("id:d1");
+		// an entry the index does not have keeps the plain key
+		expect(index.stateKey({ id: "d9", path: "Elsewhere.notebook" })).toBe("id:d9");
+		expect(index.stateKey({ path: "Elsewhere.notebook" })).toBe("path:Elsewhere.notebook");
 	});
 });

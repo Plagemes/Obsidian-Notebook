@@ -1,6 +1,6 @@
 import { Notice, type App } from "obsidian";
 import { t } from "../i18n";
-import { captureClip, clipAssetIds, duplicateOffset, instantiateClip, pasteCommand, pasteOffset, type ClipContent } from "../ink/clipboard";
+import { captureClip, clipAssetIds, duplicateOffset, instantiateClip, MIN_PASTE_SCALE, pasteCommand, pasteOffset, pasteScale, type ClipContent } from "../ink/clipboard";
 import { whiteToTransparent } from "../ink/image-alpha";
 import { measureText } from "../ink/renderer";
 import { captureCrossPageClip, type PagePart } from "../ink/cross-page";
@@ -13,7 +13,7 @@ import { isHeic } from "../scan/image-bytes";
 import { internalClip, readSystemClipboard, systemClipFromEvent, writeSystemText, type InternalClip, type SystemClip, type SystemImage } from "./clipboard";
 import { resolveAssetFile, storeAsset, type NotebookMedia } from "./media";
 import { PasteModal } from "./paste-modal";
-import { readSharedEntry, type SharedClipItem } from "../ink/shared-clip";
+import { bytesMatchAssetId, planSharedAsset, readSharedEntry, sharedAssetPath, type SharedClipItem } from "../ink/shared-clip";
 import { SharedClipBlockedError, SharedClipRefusedError, type SharedClipStore } from "../storage/shared-clip-store";
 import { SharedClipModal } from "./shared-clip-modal";
 import {
@@ -52,8 +52,8 @@ export interface SelectionHost {
 	boxes(): readonly PageBox[];
 	/** wave 0.10 (362): the clipboard files shared between devices through the vault. */
 	sharedClips(): SharedClipStore;
-	/** Runs the command as one undo step and refreshes everything that depends on the document. */
-	execute(cmd: Command): void;
+	/** Runs the command as one undo step and refreshes everything that depends on the document; false when it was refused (nothing changed). */
+	execute(cmd: Command): boolean;
 	deleteSelection(): void;
 	/** Page in view and the centre of the view in that page's coordinates. */
 	pasteTarget(): { pageIndex: number; page: Page; x: number; y: number } | null;
@@ -143,7 +143,7 @@ export class SelectionActions {
 				return one ? [{ part, plan: one }] : [];
 			});
 			if (plans.length === 0) return;
-			this.host.execute(new Batch("Restyle selection", plans.map((p) => p.plan.command)));
+			if (!this.host.execute(new Batch("Restyle selection", plans.map((p) => p.plan.command)))) return;
 			const next = (part: PagePart): PagePart => {
 				const found = plans.find((p) => p.part === part);
 				return found ? { pageIndex: part.pageIndex, strokes: found.plan.strokes, elements: found.plan.elements } : part;
@@ -154,7 +154,7 @@ export class SelectionActions {
 		}
 		const plan = planRestyle(page, sel.strokes, sel.elements, req);
 		if (!plan) return;
-		this.host.execute(plan.command);
+		if (!this.host.execute(plan.command)) return;
 		this.host.select(sel.pageIndex, plan.strokes, plan.elements);
 	}
 
@@ -234,7 +234,7 @@ export class SelectionActions {
 		}
 		const [first, ...rest] = made;
 		if (!first) return;
-		this.host.execute(new Batch("Duplicate selection", commands));
+		if (!this.host.execute(new Batch("Duplicate selection", commands))) return;
 		this.host.select(first.pageIndex, first.strokes, first.elements, rest);
 	}
 
@@ -251,7 +251,7 @@ export class SelectionActions {
 		if (!got || !doc || !page || !this.host.editable()) return;
 		const [dx, dy] = duplicateOffset(got.clip.bounds, page);
 		const made = instantiateClip(got.clip, dx, dy, undefined, measureText);
-		this.host.execute(pasteCommand(page, made.strokes, made.elements, [], "Duplicate selection"));
+		if (!this.host.execute(pasteCommand(page, made.strokes, made.elements, [], "Duplicate selection"))) return;
 		this.host.select(got.pageIndex, made.strokes, made.elements);
 	}
 
@@ -300,7 +300,7 @@ export class SelectionActions {
 		this.busy = true;
 		try {
 			// Pasted like a copy made here, but it never replaces this device's own plugin clipboard.
-			await this.pasteInternal({ content: read.clip, bytes: new Map(), pastes: 0 });
+			await this.pasteInternal({ content: read.clip, bytes: new Map(), pastes: 0 }, true);
 		} catch (e) {
 			console.error("[notebook] paste from another device", e);
 			new Notice(t("clipshare.pasteFailed", { error: e instanceof Error ? e.message : String(e) }), 8000);
@@ -360,8 +360,11 @@ export class SelectionActions {
 		new PasteModal(this.host.app, (clip) => void this.pasteClip(clip, false)).open();
 	}
 
-	/** Pastes the plugin clipboard on the page in view; images are stored again in this vault's assets folder when needed. */
-	private async pasteInternal(source?: Pick<InternalClip, "content" | "bytes" | "pastes">): Promise<void> {
+	/**
+	 * Pastes the plugin clipboard on the page in view; images are stored again in this vault's assets folder when needed.
+	 * `shared`: the clip comes from another device's file, so its picture records are not trusted (see `readSharedAsset`).
+	 */
+	private async pasteInternal(source?: Pick<InternalClip, "content" | "bytes" | "pastes">, shared = false): Promise<void> {
 		const clip = source ?? internalClip.get();
 		const target = this.host.pasteTarget();
 		const doc = this.host.doc();
@@ -371,17 +374,34 @@ export class SelectionActions {
 		const pending: string[] = [];
 		const assetMap = new Map<string, string>();
 		const missing = new Set<string>();
+		/** Pictures of a shared clip whose file is not (completely) here yet. */
+		const unsynced = new Set<string>();
 		try {
 			for (const id of clipAssetIds(clip.content)) {
 				const known = doc.assets?.[id];
 				if (known && resolveAssetFile(this.host.app, known, this.host.folder())) continue;
 				const record = clip.content.assets.find((a) => a.id === id);
-				const bytes = clip.bytes.get(id) ?? (await this.readFromSource(record));
+				let bytes: ArrayBuffer | null = clip.bytes.get(id) ?? null;
+				if (!bytes && record) {
+					if (shared) {
+						const got = await this.readSharedAsset(record);
+						if (got.ok) bytes = got.bytes;
+						else if (got.reason === "waiting" || got.reason === "missing") unsynced.add(id);
+					} else {
+						bytes = await this.readFromSource(record);
+					}
+				}
 				if (!bytes || !record) {
 					missing.add(id);
 					continue;
 				}
 				const stored = await storeAsset(this.host.app, this.host.folder(), bytes, record.name, "image");
+				// A shared picture is content-addressed: anything stored under another id is not the picture that was copied.
+				if (shared && stored.id !== id) {
+					missing.add(id);
+					unsynced.add(id);
+					continue;
+				}
 				media.addPending(stored);
 				pending.push(stored.id);
 				if (stored.id !== id) assetMap.set(id, stored.id);
@@ -400,19 +420,51 @@ export class SelectionActions {
 					}
 					return [e];
 				}) };
+			const gone = (): string => (unsynced.size > 0 ? t("clipshare.notSynced") : t("selection.assetMissing"));
 			if (content.strokes.length === 0 && content.elements.length === 0) {
-				new Notice(t("selection.assetMissing"), 8000);
+				new Notice(gone(), 8000);
 				return;
 			}
-			const [dx, dy] = pasteOffset(content.bounds, target.page, [target.x, target.y], clip.pastes % 8);
+			// A clip bigger than the page (a cross-page copy, a shared clip) would land mostly outside it: invisible,
+			// impossible to select and left out of the exports. It is scaled down to fit, or refused when that would be a speck.
+			const scale = pasteScale(content.bounds, target.page);
+			if (scale < MIN_PASTE_SCALE) {
+				new Notice(t("selection.pasteTooBig"), 8000);
+				return;
+			}
+			const [dx, dy] = pasteOffset(content.bounds, target.page, [target.x, target.y], clip.pastes % 8, scale);
 			clip.pastes++;
-			const made = instantiateClip(content, dx, dy, assetMap, measureText);
-			this.host.execute(pasteCommand(target.page, made.strokes, made.elements, newAssets));
+			const made = instantiateClip(content, dx, dy, assetMap, measureText, scale);
+			if (!this.host.execute(pasteCommand(target.page, made.strokes, made.elements, newAssets))) return;
 			this.host.select(target.pageIndex, made.strokes, made.elements);
-			if (missing.size > 0) new Notice(t("selection.assetMissing"), 8000);
+			if (scale < 1) new Notice(t("selection.pasteScaled", { percent: String(Math.round(scale * 100)) }), 8000);
+			if (missing.size > 0) new Notice(gone(), 8000);
 		} finally {
 			for (const id of pending) media.removePending(id);
 		}
+	}
+
+	/**
+	 * The bytes of a picture named by a record of another device's clipboard file. Only the shape `_assets/<id>.<ext>`
+	 * is accepted (the file read is that name in this vault's assets folder, not the path as written), of a bounded size
+	 * and complete (as big as the record says), and its content must hash to the id: a placeholder or a partly
+	 * downloaded file would otherwise be stored under another id and the picture bound to it forever.
+	 */
+	private async readSharedAsset(record: Asset): Promise<{ ok: true; bytes: ArrayBuffer } | { ok: false; reason: "invalid" | "missing" | "waiting" | "too-large" }> {
+		const folder = this.host.folder();
+		const path = sharedAssetPath(record, folder);
+		if (path === null) return { ok: false, reason: "invalid" };
+		const file = this.host.app.vault.getFileByPath(path);
+		const plan = planSharedAsset(record, folder, file ? file.stat.size : null);
+		if (!plan.ok || !file) return plan.ok ? { ok: false, reason: "missing" } : plan;
+		let bytes: ArrayBuffer;
+		try {
+			bytes = await this.host.app.vault.readBinary(file);
+		} catch {
+			return { ok: false, reason: "missing" };
+		}
+		if (!(await bytesMatchAssetId(bytes, record.id))) return { ok: false, reason: "waiting" };
+		return { ok: true, bytes };
 	}
 
 	private async readFromSource(record: Asset | undefined): Promise<ArrayBuffer | null> {
@@ -441,7 +493,7 @@ export class SelectionActions {
 			if (!this.host.stillHere(doc) || !doc.pages.includes(target.page)) return;
 			const element = pastedImageElement(asset.id, dims, target.page, target.x, target.y);
 			const index = target.page.elements?.length ?? 0;
-			this.host.execute(new Batch("Paste image", [new AddAsset(asset), new AddElement(target.page.id, element, index)]));
+			if (!this.host.execute(new Batch("Paste image", [new AddAsset(asset), new AddElement(target.page.id, element, index)]))) return;
 			this.host.select(target.pageIndex, [], [element]);
 		} finally {
 			media.removePending(asset.id);
@@ -459,7 +511,7 @@ export class SelectionActions {
 		}
 		const style = this.host.textStyle();
 		const el = pastedTextElement(text, target.page, target.x, target.y, style.fontSize, style.color);
-		this.host.execute(new AddElement(target.page.id, el, target.page.elements?.length ?? 0));
+		if (!this.host.execute(new AddElement(target.page.id, el, target.page.elements?.length ?? 0))) return;
 		this.host.select(target.pageIndex, [], [el]);
 		if (truncated) new Notice(t("selection.textTruncated", { n: String(MAX_PASTED_TEXT) }), 8000);
 	}
@@ -508,7 +560,7 @@ export class SelectionActions {
 				new Notice(t("selection.transparentNone"));
 				return;
 			}
-			this.host.execute(new Batch("Make white transparent", commands));
+			if (!this.host.execute(new Batch("Make white transparent", commands))) return;
 			this.host.select(sel.pageIndex, sel.strokes, sel.elements.map((e) => replaced.get(e) ?? e));
 		} catch (e) {
 			console.error("[notebook] white to transparent", e);

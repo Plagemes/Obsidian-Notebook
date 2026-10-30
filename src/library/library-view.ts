@@ -9,7 +9,7 @@ import { relativeTime, uniquePath } from "./format";
 import { folderOf, isInside, LibraryIndex, SORTS, type Highlight, type LibraryEntry, type LibraryScope, type LibrarySort, type SearchHit } from "./index";
 import { openTagEditor } from "../integration/tags";
 import { ConfirmModal, CoverModal, FolderSuggestModal, PromptModal } from "./library-modals";
-import { arrangeEntries, notebookKey, planMove, type LibraryMap, type LibraryOp } from "./library-state";
+import { arrangeEntries, planMove, type LibraryMap, type LibraryOp } from "./library-state";
 import { LibraryStateBlockedError, type LibraryStateStore } from "./library-state-store";
 import { entryFromFile, filesToRead, type NotebookFileInfo } from "./scan";
 import { folderContents, type LibraryTrash } from "../storage/trash";
@@ -355,9 +355,9 @@ export class LibraryView extends ItemView {
 
 	// ---------------------------------------------------------- pinned, archived, manual order (roadmap 54)
 
-	private keyOf = (e: LibraryEntry): string => notebookKey(e);
-	private isArchived = (e: LibraryEntry): boolean => this.state.get(notebookKey(e))?.archived === true;
-	private isPinned = (e: LibraryEntry): boolean => this.state.get(notebookKey(e))?.pinned === true;
+	private keyOf = (e: LibraryEntry): string => this.index.stateKey(e);
+	private isArchived = (e: LibraryEntry): boolean => this.state.get(this.keyOf(e))?.archived === true;
+	private isPinned = (e: LibraryEntry): boolean => this.state.get(this.keyOf(e))?.pinned === true;
 	private notArchived = (e: LibraryEntry): boolean => !this.isArchived(e);
 
 	private onStateFile(f: TAbstractFile): void {

@@ -1,6 +1,7 @@
 /** Library index: a disposable cache of notebook metadata and thumbnails. Pure, no 'obsidian'. */
 
 import { tagAncestors, tagIsWithin } from "../model/tags";
+import { stateKeys } from "./library-state";
 
 /** v4: entries also carry the titled bookmarks (quick switcher); v3 added the page tags. Older indexes are rebuilt. */
 export const INDEX_VERSION = 4;
@@ -224,6 +225,25 @@ export class LibraryIndex {
 		return this.map.get(path);
 	}
 
+	/** Bumped by every change of the entries; the state keys below are worked out again when it moved. */
+	private revision = 0;
+	private keyCache: { revision: number; keys: Map<string, string> } | null = null;
+
+	/**
+	 * The key of the notebook's pinned / archived / manual order state (library-state.ts `stateKeys`): its document id, except
+	 * for a copy that shares the id of another notebook (a sync conflict copy), which is keyed by id and path so that the
+	 * original's state (archived, pinned) does not hide it.
+	 */
+	stateKey(entry: { id?: string; path: string }): string {
+		if (!this.keyCache || this.keyCache.revision !== this.revision) {
+			this.keyCache = { revision: this.revision, keys: stateKeys(this.all()) };
+		}
+		// An entry that is not (or no longer) in the index, or whose id the index does not know yet: its own key.
+		const known = this.map.get(entry.path);
+		if (!known || known.id !== entry.id) return entry.id ? `id:${entry.id}` : `path:${entry.path}`;
+		return this.keyCache.keys.get(entry.path) ?? (entry.id ? `id:${entry.id}` : `path:${entry.path}`);
+	}
+
 	has(path: string): boolean {
 		return this.map.has(path);
 	}
@@ -238,6 +258,7 @@ export class LibraryIndex {
 		if (entry.bookmarks) copy.bookmarks = entry.bookmarks.map((b) => ({ ...b }));
 		if (entry.pageTags) copy.pageTags = entry.pageTags.map((p) => ({ page: p.page, tags: [...p.tags] }));
 		this.map.set(entry.path, copy);
+		this.revision++;
 	}
 
 	/** Merges fields into an existing entry; returns false if the path is unknown. */
@@ -245,10 +266,12 @@ export class LibraryIndex {
 		const e = this.map.get(path);
 		if (!e) return false;
 		this.map.set(path, { ...e, ...patch });
+		this.revision++;
 		return true;
 	}
 
 	remove(path: string): boolean {
+		this.revision++;
 		return this.map.delete(path);
 	}
 
@@ -258,6 +281,7 @@ export class LibraryIndex {
 		if (!e || oldPath === newPath) return false;
 		this.map.delete(oldPath);
 		this.map.set(newPath, { ...e, path: newPath, folder: folderOf(newPath), name: nameOf(newPath) });
+		this.revision++;
 		return true;
 	}
 
@@ -299,6 +323,7 @@ export class LibraryIndex {
 			if (!keep.has(path)) removed.push(path);
 		}
 		for (const path of removed) this.map.delete(path);
+		this.revision++;
 		return removed;
 	}
 

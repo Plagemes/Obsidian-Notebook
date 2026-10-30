@@ -444,6 +444,7 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 	await checkPageLinks(add);
 	await checkObjects(add);
 	await checkNavigation({ view, nav: harnessNav, stage, statusBarEl: harnessStatusBarEl, statusBarClicks: () => statusBarClicks, strokeCount, frames, closeAll }, add);
+	await checkSelectionTools(add);
 
 	const unexpected = errors.filter((e) => !expectedError?.test(e));
 	if (fault) add("injected fault was reported", errors.some((e) => expectedError!.test(e)), errors[0]?.split("\n")[0] ?? "no error logged");
@@ -1340,7 +1341,7 @@ async function checkToolbar(add: (name: string, ok: boolean, detail?: string) =>
 	const k2 = ctxKind();
 	const selActions = Array.from(ctx().querySelectorAll("[data-action]")).map((b) => (b as HTMLElement).dataset.action);
 	const cr = ctx().getBoundingClientRect();
-	add(`${label}: the contextual bar changes with the context`, k0 === "none" && k1 === "lasso" && lassoActions.join() === "selection-paste,selection-paste-device,excerpt-to-page,excerpt-copy" && k2 === "selection" && selActions.includes("selection-copy") && selActions.includes("delete-selection"),
+	add(`${label}: the contextual bar changes with the context`, k0 === "none" && k1 === "lasso" && /^selection-paste,select-rectangle,select-by-style,selection-paste-device(,excerpt-to-page(,excerpt-copy)?)?$/.test(lassoActions.join()) && k2 === "selection" && selActions.includes("selection-copy") && selActions.includes("delete-selection"),
 		`${k0} → ${k1} (${lassoActions.join()}) → ${k2} (${selActions.join()})`);
 	add(`${label}: the contextual bar is inside the view with 40 px targets`, inView(cr) && cr.bottom <= window.innerHeight + 0.5 && Array.from(ctx().querySelectorAll("button")).every((b) => (b as HTMLElement).offsetHeight >= 40 && (b as HTMLElement).offsetWidth >= 40),
 		`bar ${Math.round(cr.left)}–${Math.round(cr.right)}, bottom ${Math.round(cr.bottom)}`);
@@ -1691,6 +1692,160 @@ async function checkHeavy(strokes = 3500): Promise<Record<string, unknown>> {
 function applyTheme(theme = params.get("theme") ?? "light"): void {
 	document.body.classList.toggle("theme-dark", theme === "dark");
 	document.body.classList.toggle("theme-light", theme !== "dark");
+}
+
+/**
+ * wave 0.10: the selection tools through the real view. Rectangle selection by a pen drag, the second row of the selection
+ * bar and its menus, align, rotate, mirror, exact size, select similar and the colour/tool picker; each change is one undo
+ * step. Leaves the document as it found it.
+ */
+async function checkSelectionTools(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
+	const v = view as any;
+	const doc = view!.document!;
+	const page = doc.pages[0]!;
+	const start = strokeCount();
+	const tb = v.toolbar;
+	const label = `selection tools ${window.innerWidth}px`;
+	const red = createStroke("#dc2626", 2, [[40, 100, 0.3], [60, 102, 0.5], [80, 100, 0.7]], "pen");
+	const red2 = createStroke("#dc2626", 2, [[120, 140, 0.3], [160, 142, 0.5], [200, 140, 0.7]], "pen");
+	const yellow = createStroke("#facc15", 14, [[240, 190, 0.5], [250, 192, 0.5], [260, 190, 0.5]], "highlighter");
+	const mine = [red, red2, yellow];
+	view!.applyCommand(new Batch("Add test ink", mine.map((s, i) => new AddStroke(page.id, s, page.strokes.length + i))));
+	await frames(2);
+	const find = (id: string) => page.strokes.find((s) => s.id === id)!;
+	const minX = (s: any) => Math.min(...s.points.map((p: number[]) => p[0]!));
+	const maxX = (s: any) => Math.max(...s.points.map((p: number[]) => p[0]!));
+	const selectedIds = () => new Set<string>((v.selection?.strokes ?? []).map((s: any) => s.id));
+	const bar = () => document.querySelector(".notebook-context-bar") as HTMLElement;
+	const barIds = (sel: string) => Array.from(bar().querySelectorAll(`${sel} [data-action]`)).map((b) => (b as HTMLElement).dataset.action);
+	const stageBox = stage().getBoundingClientRect();
+	const frac = (px: number, py: number): [number, number] => {
+		const box = v.layout.boxes[0];
+		const { scale, offsetX, offsetY } = v.viewport;
+		return [(offsetX + (box.x + px) * scale) / stageBox.width, (offsetY + (box.y + py) * scale) / stageBox.height];
+	};
+	const visible = (() => {
+		const a = frac(20, 80), b = frac(280, 210);
+		return a[0] >= 0 && a[1] >= 0 && b[0] <= 1 && b[1] <= 1;
+	})();
+	const reselect = () => v.selectItems(0, mine.map((s) => find(s.id)), []);
+
+	// Rectangle selection (63): the toggle is on the lasso bar, and a diagonal drag picks what the box holds.
+	tb.update({ tool: "lasso" });
+	v.refreshUi();
+	v.ui.refreshNow();
+	const toggle = bar().querySelector('[data-action="select-rectangle"]') as HTMLElement | null;
+	add(`${label}: the lasso bar offers rectangle selection and select by colour or tool`, !!toggle && barIds("").includes("select-by-style") && toggle.getAttribute("aria-pressed") === "false", barIds("").join());
+	click(toggle, "rectangle toggle");
+	await frames(2);
+	v.ui.refreshNow();
+	const pressed = (bar().querySelector('[data-action="select-rectangle"]') as HTMLElement | null)?.getAttribute("aria-pressed");
+	add(`${label}: the toggle switches the lasso to a rectangle`, tb.state.selectMode === "rectangle" && pressed === "true", `${tb.state.selectMode}, pressed ${pressed}`);
+	if (visible) {
+		await penStroke([frac(20, 80), frac(280, 210)], { pointerType: "pen", steps: 10 });
+		const got = selectedIds();
+		add(`${label}: dragging a rectangle selects the ink inside it`, mine.every((s) => got.has(s.id)), `${got.size} selected`);
+	} else {
+		reselect();
+		await wait(200);
+		add(`${label}: dragging a rectangle selects the ink inside it`, true, "region not in view at this size: selected through the view");
+	}
+	v.ui.refreshNow();
+	const second = barIds(".notebook-context-second");
+	add(`${label}: the selection bar has a second row with select similar, align and transform`,
+		second.includes("selection-similar") && second.includes("selection-align-menu") && second.includes("selection-transform-menu"), second.join());
+	const cr = bar().getBoundingClientRect();
+	add(`${label}: the two-row selection bar fits the view with 40 px targets`, cr.left >= -0.5 && cr.right <= window.innerWidth + 0.5 && Array.from(bar().querySelectorAll("button")).every((b) => (b as HTMLElement).offsetHeight >= 40),
+		`bar ${Math.round(cr.left)}-${Math.round(cr.right)}`);
+	if (tb.state.selectMode === "rectangle") v.runAction("select-rectangle");
+	add(`${label}: the rectangle mode toggles back to the lasso`, tb.state.selectMode === "lasso", tb.state.selectMode);
+
+	// Align (38) from the menu of the bar: the left edges meet, in one undo step.
+	reselect();
+	await frames(2);
+	v.ui.refreshNow();
+	const first = mine.map((s) => minX(find(s.id)));
+	click(bar().querySelector('[data-action="selection-align-menu"]'), "align menu");
+	const menu = (window as any).harnessMenu as { titles: string[]; run(title: string): void } | undefined;
+	add(`${label}: the align button opens a menu with every align and distribute entry`,
+		!!menu && ["Align left", "Align centre", "Align right", "Align top", "Align middle", "Align bottom", "Distribute horizontally", "Distribute vertically"].every((x) => menu.titles.includes(x)), menu?.titles.join(", ") ?? "no menu");
+	menu?.run("Align left");
+	await frames(2);
+	const lefts = mine.map((s) => minX(find(s.id)) - s.width / 2);
+	add(`${label}: align left puts the ink on one edge`, Math.max(...lefts) - Math.min(...lefts) < 8.01, lefts.map((x) => x.toFixed(1)).join(", "));
+	v.undo();
+	await frames(2);
+	add(`${label}: one undo restores the places`, mine.every((s, i) => Math.abs(minX(find(s.id)) - first[i]!) < 0.01), "");
+
+	// Rotate, mirror and exact size (65): one undo step each, ink kept as vectors.
+	reselect();
+	// The panel measures the ink with its thickness, like the selection box does.
+	const widthOf = () => Math.max(...mine.map((s) => maxX(find(s.id)) + find(s.id).width / 2)) - Math.min(...mine.map((s) => minX(find(s.id)) - find(s.id).width / 2));
+	const before = widthOf();
+	v.runAction("selection-rotate-cw");
+	await frames(2);
+	add(`${label}: rotate 90 degrees turns the selection (width becomes its height)`, Math.abs(widthOf() - before) > 20 && selectedIds().size === 3, `${before.toFixed(1)} -> ${widthOf().toFixed(1)}`);
+	v.undo();
+	await frames(2);
+	add(`${label}: undo of the rotation is one step`, Math.abs(widthOf() - before) < 0.05, `${widthOf().toFixed(2)} vs ${before.toFixed(2)}`);
+	reselect();
+	const redLeft = minX(find(red.id));
+	v.runAction("selection-mirror-h");
+	await frames(2);
+	add(`${label}: mirror left to right swaps the sides`, minX(find(red.id)) > redLeft + 50 && Math.abs(widthOf() - before) < 0.1, `${redLeft} -> ${minX(find(red.id))}`);
+	v.undo();
+	await frames(2);
+	reselect();
+	v.runAction("selection-resize");
+	await frames(2);
+	const panel = document.querySelector(".notebook-resize-panel") as HTMLElement | null;
+	const wIn = panel?.querySelector("#notebook-resize-width") as HTMLInputElement | null;
+	const hIn = panel?.querySelector("#notebook-resize-height") as HTMLInputElement | null;
+	add(`${label}: exact size opens a panel with the current size`, !!wIn && !!hIn && Number(wIn.value) > 0 && Number(hIn.value) > 0, `${wIn?.value} x ${hIn?.value}`);
+	if (wIn && hIn && panel) {
+		const w1 = Number(wIn.value), h1 = Number(hIn.value);
+		const half = Math.round(w1 / 2);
+		wIn.value = String(half);
+		wIn.dispatchEvent(new Event("input", { bubbles: true }));
+		add(`${label}: with the lock on, the height follows the width`, Math.abs(Number(hIn.value) - (h1 * half) / w1) < 0.02, `${hIn.value}`);
+		click(panel.querySelector("button.mod-cta"), "Apply");
+		await frames(2);
+		add(`${label}: Apply gives the selection that size`, Math.abs(widthOf() - half) < 1.2, `${widthOf().toFixed(2)} vs ${half}`);
+		v.undo();
+		await frames(2);
+		add(`${label}: undo restores the size`, Math.abs(widthOf() - before) < 0.05, `${widthOf().toFixed(2)}`);
+	}
+
+	// Select similar and the picker (64).
+	v.selectItems(0, [find(red.id)], []);
+	v.runAction("select-same-colour");
+	await frames(2);
+	const same = selectedIds();
+	add(`${label}: select similar (same colour) takes the other red stroke and not the highlighter`, same.has(red.id) && same.has(red2.id) && !same.has(yellow.id), `${same.size} selected`);
+	v.selectItems(0, [find(yellow.id)], []);
+	v.runAction("select-same-tool");
+	await frames(2);
+	const byTool = selectedIds();
+	add(`${label}: select similar (same tool) takes the highlighter strokes only`, byTool.has(yellow.id) && !byTool.has(red.id) && [...byTool].every((id) => find(id)?.tool === "highlighter"), `${byTool.size} selected`);
+	v.clearSelection();
+	v.runAction("select-by-style");
+	await frames(2);
+	const picker = document.querySelector(".notebook-style-panel") as HTMLElement | null;
+	const rows = Array.from(picker?.querySelectorAll("button.notebook-style-row") ?? []) as HTMLElement[];
+	const hl = rows.find((r) => r.textContent?.startsWith("Highlighter"));
+	add(`${label}: the picker lists the tools and colours of the page`, !!picker && rows.length >= 3 && !!hl, `${rows.length} rows`);
+	click(hl, "Highlighter row");
+	await frames(2);
+	const picked = selectedIds();
+	add(`${label}: picking the highlighter selects all highlighter strokes`, picked.size > 0 && [...picked].every((id) => find(id)?.tool === "highlighter") && picked.has(yellow.id), `${picked.size} selected`);
+
+	// Leave the document as it was.
+	v.clearSelection();
+	v.undo();
+	await frames(2);
+	setTool("pen");
+	v.refreshUi();
+	add(`${label}: the test ink is gone again`, strokeCount() === start, `${start} -> ${strokeCount()}`);
 }
 
 function applySize(): void {

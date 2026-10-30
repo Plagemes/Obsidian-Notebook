@@ -17,6 +17,7 @@
  * a notebook whose id is not known (unreadable, not downloaded yet) is keyed by its path (`path:<path>`).
  */
 
+import { conflictBaseCandidates } from "../storage/conflicts";
 import { EMPTY_FILE_MESSAGE } from "../storage/device-files";
 
 export const LIBRARY_STATE_FORMAT = "obsidian-notebook-library-state";
@@ -73,6 +74,49 @@ export function emptyLibraryState(device: string): LibraryStateFile {
 /** The state key of a notebook: its document id when known, else its path. */
 export function notebookKey(entry: { id?: string; path: string }): string {
 	return entry.id ? `id:${entry.id}` : `path:${entry.path}`;
+}
+
+const stemOf = (path: string): string => {
+	const name = path.slice(path.lastIndexOf("/") + 1);
+	const dot = name.lastIndexOf(".");
+	return dot > 0 ? name.slice(0, dot) : name;
+};
+const folderPart = (path: string): string => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
+
+/**
+ * The state key of every notebook, given all of them. Files that share a document id (a sync conflict copy, an explorer copy)
+ * would share one state, so archiving a notebook would hide its copy too, and a conflicted copy hidden that way is never
+ * seen and never merged. So one file of each group keeps the plain `id:<id>` key (state set before the copy appeared stays
+ * with it) and the others are keyed by id and path (`copy:<id>:<path>`). The one that keeps it is, among the files that do
+ * not look like a conflicted copy of another in the group (same folder, a conflict-style name: storage/conflicts.ts), the
+ * first by path; when all of them look like copies, the first by path. A copy keyed this way is never hidden by the state
+ * of the original. Notebooks whose id is not known keep their path key. Returns path to key.
+ */
+export function stateKeys(entries: readonly { id?: string; path: string }[]): Map<string, string> {
+	const out = new Map<string, string>();
+	const groups = new Map<string, string[]>();
+	for (const e of entries) {
+		if (!e.id) {
+			out.set(e.path, notebookKey(e));
+			continue;
+		}
+		const g = groups.get(e.id);
+		if (g) g.push(e.path);
+		else groups.set(e.id, [e.path]);
+	}
+	for (const [id, paths] of groups) {
+		paths.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+		if (paths.length === 1) {
+			out.set(paths[0]!, `id:${id}`);
+			continue;
+		}
+		const stems = new Set(paths.map((p) => `${folderPart(p)}/${stemOf(p)}`));
+		const looksLikeCopy = (p: string): boolean =>
+			conflictBaseCandidates(stemOf(p)).some((base) => stems.has(`${folderPart(p)}/${base}`));
+		const primary = paths.find((p) => !looksLikeCopy(p)) ?? paths[0]!;
+		for (const p of paths) out.set(p, p === primary ? `id:${id}` : `copy:${id}:${p}`);
+	}
+	return out;
 }
 
 function isObject(v: unknown): v is Record<string, unknown> {

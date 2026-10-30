@@ -8,7 +8,7 @@ import { layoutPages, PAGE_GAP } from "../src/ink/layout";
 import { translate } from "../src/ink/transform";
 import { makeSharedEntry, readSharedEntry } from "../src/ink/shared-clip";
 import { captureClip } from "../src/ink/clipboard";
-import { runLibraryCheck, type CheckSource, type VaultFileInfo } from "../src/library/library-check";
+import { ASSET_GRACE_MS, runLibraryCheck, type CheckSource, type VaultFileInfo } from "../src/library/library-check";
 import { createDocument, createPage } from "../src/model/document";
 import { createExcerpt } from "../src/model/excerpts";
 import { History } from "../src/model/history";
@@ -48,7 +48,12 @@ describe("anchored excerpts and the wave 0.10 features", () => {
 			[`Notebooks/_assets/${hex(1)}.png`, ""],
 			[`Notebooks/_assets/${hex(2)}.png`, ""],
 		]));
-		const r = await runLibraryCheck(src, { root: "Notebooks", backup: "Notebooks/_backup", now: NOW });
+		// A trusted check: nothing open, and both files seen unused long ago (an earlier check).
+		const long = NOW - ASSET_GRACE_MS - 1000;
+		const r = await runLibraryCheck(src, { root: "Notebooks", backup: "Notebooks/_backup", now: NOW }, {
+			live: async () => ({ ids: [], incomplete: false }),
+			seen: { load: async () => new Map([[hex(1), long], [hex(2), long]]), save: async () => undefined },
+		});
 		expect(r.complete).toBe(true);
 		expect(r.orphans.map((o) => o.id)).toEqual([hex(2)]);
 	});

@@ -7,6 +7,8 @@ import { SHAPE_KINDS, type ShapeKind } from "./view-helpers";
 
 export type ToolName = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "space";
 export type EraserMode = "stroke" | "segment" | "area";
+/** wave 0.10 (63): how the lasso tool selects: a freehand outline, or a rectangle dragged from corner to corner. */
+export type SelectMode = "lasso" | "rectangle";
 
 export const PEN_COLORS = ["#1e1e1e", "#6b7280", "#1d4ed8", "#0891b2", "#15803d", "#ca8a04", "#ea580c", "#dc2626", "#9333ea"] as const;
 export const HIGHLIGHTER_COLORS = ["#facc15", "#4ade80", "#f472b6", "#60a5fa", "#fb923c"] as const;
@@ -33,6 +35,8 @@ export interface ToolbarState {
 	textSize: number;
 	/** The ruler is shown and pen strokes near its edge snap to it. */
 	ruler: boolean;
+	/** The shape of a selection made with the lasso tool. */
+	selectMode: SelectMode;
 }
 
 export const DEFAULT_TOOLS: ToolbarState = {
@@ -48,6 +52,7 @@ export const DEFAULT_TOOLS: ToolbarState = {
 	shapeKind: "line",
 	textSize: TEXT_SIZES[1],
 	ruler: false,
+	selectMode: "lasso",
 };
 
 export interface ToolbarActions {
@@ -102,7 +107,7 @@ const SHAPE_DEFS: Record<ShapeKind, [string, MessageKey]> = {
 
 
 /** Tools that have options (colour, width, eraser mode, …): tapping the active tool again opens them. */
-const TOOLS_WITH_OPTIONS: ReadonlySet<ToolName> = new Set<ToolName>(["pen", "highlighter", "eraser", "shape", "text"]);
+const TOOLS_WITH_OPTIONS: ReadonlySet<ToolName> = new Set<ToolName>(["pen", "highlighter", "eraser", "lasso", "shape", "text"]);
 
 type PopoverKind = "options";
 
@@ -129,6 +134,8 @@ export class Toolbar {
 	private readonly filterGroup: HTMLElement;
 	private readonly filterButtons = new Map<EraseFilterKind, HTMLButtonElement>();
 	private readonly shapeGroup: HTMLElement;
+	private readonly selectGroup: HTMLElement;
+	private readonly selectButtons = new Map<SelectMode, HTMLButtonElement>();
 	private readonly shapeButtons = new Map<ShapeKind, HTMLButtonElement>();
 	private readonly sizeGroup: HTMLElement;
 	private readonly chipButton: HTMLButtonElement;
@@ -223,6 +230,11 @@ export class Toolbar {
 		this.eraserButtons.set("stroke", this.textButton(this.eraserGroup, "tool.eraser.stroke", () => this.set({ eraserMode: "stroke" })));
 		this.eraserButtons.set("segment", this.textButton(this.eraserGroup, "tool.eraser.segment", () => this.set({ eraserMode: "segment" })));
 		this.eraserButtons.set("area", this.textButton(this.eraserGroup, "tool.eraser.area", () => this.set({ eraserMode: "area" })));
+		this.selectGroup = this.row(this.optionsEl);
+		this.selectGroup.addClass("notebook-segmented");
+		this.selectGroup.setAttribute("aria-label", t("select.mode"));
+		this.selectButtons.set("lasso", this.textButton(this.selectGroup, "select.mode.lasso", () => this.set({ selectMode: "lasso" })));
+		this.selectButtons.set("rectangle", this.textButton(this.selectGroup, "select.mode.rectangle", () => this.set({ selectMode: "rectangle" })));
 		this.eraserSizeEl = this.row(this.optionsEl);
 		this.filterGroup = this.row(this.optionsEl);
 		this.filterGroup.addClass("notebook-segmented");
@@ -423,6 +435,12 @@ export class Toolbar {
 			b.toggleClass("is-active", kind === s.eraserFilter);
 			b.disabled = !this.editable;
 		}
+		this.selectGroup.toggleClass("notebook-hidden", s.tool !== "lasso");
+		for (const [mode, b] of this.selectButtons) {
+			b.toggleClass("is-active", mode === s.selectMode);
+			b.setAttribute("aria-pressed", String(mode === s.selectMode));
+			b.disabled = !this.editable;
+		}
 		this.shapeGroup.toggleClass("notebook-hidden", s.tool !== "shape");
 		for (const [kind, b] of this.shapeButtons) {
 			b.toggleClass("is-active", kind === s.shapeKind);
@@ -495,7 +513,8 @@ export class Toolbar {
 	/** The current-pen indicator: colour and thickness of the tool in use; a ring the size of the eraser for the eraser. */
 	private renderChip(): void {
 		const s = this.state;
-		const has = TOOLS_WITH_OPTIONS.has(s.tool);
+		// The lasso has options (its shape) but no pen to show: the indicator stays for the tools that draw or erase.
+		const has = TOOLS_WITH_OPTIONS.has(s.tool) && s.tool !== "lasso";
 		this.chipButton.toggleClass("notebook-hidden", !has);
 		this.chipButton.disabled = !this.editable;
 		const dot = this.chipDot;
