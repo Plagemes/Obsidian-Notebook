@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+Not verified on Android hardware or in Obsidian. The manual steps are numbered 490 to 504 in `docs/testing.md` and will be renumbered at merge. No document format change.
+
+### Added
+- **Pinned notebooks, manual order and an archive** (roadmap 54; steps 490-497). From a notebook's menu: *Pin to the top* (pinned notebooks form a *Pinned* group at the top of every folder, tag and favourites view), *Archive* (the notebook disappears from every view, search, count and tag list; the sidebar shows an *Archived* entry, once something is archived, where *Restore from the archive* brings it back) and, in a plain list, *Move up* and *Move down*. The sort list has a new *Manual order*: drag a card onto another (mouse, pen, or long press on touch) to take its place, or use the menu entries; choosing *Move up* / *Move down* from another sort first keeps the order as shown and then moves. Notebook files are never moved or renamed to archive them, and nothing is written into a notebook. The state is kept **per device in the vault**: `<notebooks folder>/_meta/library-<device>.json`, one file per device like the Inbox and the practice copies, so two devices syncing through Google Drive or OneDrive never write the same file; reading merges them (per notebook and field the latest change wins). Notebooks are keyed by their document id, so renaming or moving them keeps their state. An unreadable or empty own file is never overwritten (a copy is kept and the change refused with a notice).
+- **Library check** (roadmap 27; steps 498-504). *Check library: unreadable notebooks and unused files* (sidebar of the library, All actions, notebook menu, command palette). It lists the notebooks that cannot be read (only listed: it never touches a notebook), those saved by a newer version, and those that are not downloaded yet or cannot be read right now (never reported as damaged). It finds the files in `_assets` that nothing uses and reports the space they take. An asset is unused only when no notebook anywhere in the vault names it and nothing that can bring a notebook back does either (version history and restore copies, the plugin trash, templates, stamps, `_meta`); those are reported as *kept*. *Review and move to the trash…* lists every file with its size and moves them, after an explicit confirmation, to the system or Obsidian trash with `vault.trash` (never a permanent delete, whatever the *Deleted files* setting says); the check runs once more first and a file that is in use again, changed, or not an asset file is left alone. While any file that could use an asset is not downloaded, no asset is called unused; empty asset files and files younger than an hour are not judged.
+
+### Changed
+- The library index entries keep the notebook's document id (`id`, optional; no index version bump: entries without it are filled in the background from the start of each file, cheaply).
+
 ## 0.9.0 — 2026-10-30
 
 Not yet verified on Android hardware, or in Obsidian with its maths engine (the browser harness uses a stand-in for MathJax). The manual steps added in this version are numbered 233 to 274 in `docs/testing.md`; the ones that belong to each area are named below.

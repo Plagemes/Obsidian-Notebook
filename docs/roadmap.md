@@ -116,7 +116,7 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 ### Data and reliability
 25. 🧪 **P1** Version history: automatic snapshots (e.g. daily per notebook) with restore.
 26. 🧪 **P1** Page trash: deleted pages stay recoverable after the session ends.
-27. **P2** Library check: find unreadable notebooks and orphaned assets, free space.
+27. **P2** 🧪 Library check: find unreadable notebooks and orphaned assets, free space.
 28. **P3** Password-protected notebooks: local encryption with Web Crypto, no cloud.
 
 ### Capture and sharing
@@ -159,7 +159,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 
 ### Library
 53. **P2** Custom covers (image or template).
-54. **P2** Pinned notebooks, manual order and an archive that hides notebooks without deleting them.
+54. **P2** 🧪 Pinned notebooks, manual order and an archive that hides notebooks without deleting them.
 55. **P3** Study statistics: writing time per notebook and per day, kept on the device.
 
 ### Study
