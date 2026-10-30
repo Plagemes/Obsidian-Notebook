@@ -29,6 +29,7 @@ import { stressDocument } from "../../src/model/stress";
 import { FAKE_PATH, installFakePdf, slidesNotebook } from "./fake-pdf";
 import { checkReading } from "./reading-check";
 import { checkPractice } from "./practice-check";
+import { checkReadOnly } from "./readonly-check";
 import { PracticeService } from "../../src/view/practice";
 import { compareLod, measureLod } from "./lod-bench";
 
@@ -125,7 +126,7 @@ async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	leaf = new WorkspaceLeaf(app, root);
 	view = new NotebookView(leaf as any, { settings: settings(), practice: doc === "practice" ? practiceService : undefined });
 	await view.onOpen();
-	const path = doc === "new" || doc === "practice" ? "Notebooks/New.notebook" : doc === "pdf" ? "Notebooks/Slides.notebook" : "Notebooks/Old v3.notebook";
+	const path = doc === "new" || doc === "practice" || doc === "readonly" ? "Notebooks/New.notebook" : doc === "pdf" ? "Notebooks/Slides.notebook" : "Notebooks/Old v3.notebook";
 	const file = app.vault.getFileByPath(path) as TFile;
 	await (view as any).loadFile(file);
 	view.onResize();
@@ -1511,7 +1512,7 @@ function applySize(): void {
 	if (h) root.style.height = `${Number(h)}px`;
 }
 
-(window as any).harness = { app, open, measureOpen, penStroke, setTool, openOptions, openMore, measureLod, compareLod, checkHeavy, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkPractice: () => checkPractice({ view, app, service: practiceService, frames, errors, notices }), checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
+(window as any).harness = { app, open, measureOpen, penStroke, setTool, openOptions, openMore, measureLod, compareLod, checkHeavy, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkReadOnly: async () => { try { return JSON.parse(JSON.stringify(await checkReadOnly({ view, app, stage, penStroke, setTool, strokeCount, frames, openMore, errors, notices }))); } catch (e) { return { ok: false, results: [], errors: [`readonly check: ${(e as Error).stack ?? e}`], notices: [], env: {} }; } }, checkPractice: () => checkPractice({ view, app, service: practiceService, frames, errors, notices }), checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
 	return view;
 } };
 
