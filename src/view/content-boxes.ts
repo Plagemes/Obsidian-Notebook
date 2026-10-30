@@ -103,9 +103,10 @@ export class ContentBoxes {
 		const size = sizes[pageNumber - 1];
 		if (!size || !(size.width > 0)) return null;
 		const canvas = await media.pdf.render(asset, pageNumber, DETECT_WIDTH_PX / size.width);
-		// Typed explicitly: the checker resolves getContext on the HTMLCanvasElement | OffscreenCanvas union differently depending on
-		// declaration order, and the generic overload has no getImageData.
-		const ctx = canvas.getContext("2d") as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+		// Narrowed by its members: getContext on the HTMLCanvasElement | OffscreenCanvas union resolves to the generic overload,
+		// which has no getImageData.
+		const raw = canvas.getContext("2d");
+		const ctx = raw && "getImageData" in raw ? raw : null;
 		if (!ctx || canvas.width < 1 || canvas.height < 1) return null;
 		const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
 		return detectContentBox({ data, width, height });

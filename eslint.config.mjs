@@ -16,9 +16,8 @@ const NODE_ONLY = [
 // the package.json block is kept as it is.
 const OBSIDIAN_TS = [
 	"src/**/*.ts",
-	// Enable at merge time, once tests/ and dev/ are clean under this config:
-	// "tests/**/*.ts",
-	// "dev/**/*.ts",
+	"tests/**/*.ts",
+	"dev/**/*.ts",
 ];
 const isJsOnly = (files) => files.flat().every((f) => typeof f === "string" && /\{js,cjs,mjs,jsx\}$/.test(f));
 const obsidianRecommended = obsidianmd.configs.recommended.flatMap((c) => {
