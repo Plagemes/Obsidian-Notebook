@@ -52,6 +52,8 @@ export interface ReadingHost {
 	beforeHide(): void;
 	/** Whether editing is possible changed (annotations hidden or shown): update the toolbar, history buttons, input. */
 	editingChanged(): void;
+	/** wave 0.7: resilience (#346): false in safe mode, where PDF text is not read ahead. */
+	prefetchAllowed?(): boolean;
 }
 
 /** Marks of the hits on the pages. */
@@ -460,6 +462,7 @@ export class PdfReading {
 	prefetch(page: Page): void {
 		const bg = page.background;
 		if (!this.host.settings().snapHighlighter || bg?.kind !== "pdf" || this.cache.peek(bg.asset, bg.page)) return;
+		if (this.host.prefetchAllowed?.() === false) return;
 		void this.cache.get(bg.asset, bg.page);
 	}
 

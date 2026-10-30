@@ -9,6 +9,7 @@ import { BenchmarkModal } from "./view/benchmark";
 import { PenTestModal } from "./view/pen-test-modal";
 import { NotebookLibraryHost } from "./library/host";
 import { registerIntegration } from "./integration";
+import type { HistoryService } from "./integration/history-service";
 import type { NotebookApi } from "./integration/api";
 import { registerReliability } from "./integration/reliability";
 import { LIBRARY_VIEW_TYPE, LibraryView } from "./library/library-view";
@@ -23,6 +24,7 @@ import { registerLectureCommands } from "./view/lecture-commands";
 import { TimetableService } from "./timetable/service";
 import { registerPdfSyncCommands } from "./view/pdf-sync";
 import { registerZettel } from "./zettel";
+import { registerResilience, type ResilienceServices } from "./view/resilience";
 
 export default class NotebookPlugin extends Plugin {
 	settings!: NotebookSettings;
@@ -32,11 +34,17 @@ export default class NotebookPlugin extends Plugin {
 	timetable!: TimetableService;
 	/** Public API for other plugins and scripts (docs/api.md). */
 	api?: NotebookApi;
+	/** wave 0.7: resilience: safe mode, storage-full warning, integrity check (view/resilience.ts). */
+	resilience?: ResilienceServices;
+	/** Version history (set by registerIntegration), for the integrity check. */
+	private history: HistoryService | null = null;
 
 	async onload(): Promise<void> {
 		this.settings = readSettings(await this.loadData());
 
 		this.journal = new AdapterJournalStore(this.app.vault.adapter, journalFolder(this.app, this.manifest.id));
+		// wave 0.7: resilience (#346 safe mode, #347 storage full, #390 integrity check); before the views exist.
+		this.resilience = registerResilience(this, () => this.history);
 		this.registerView(VIEW_TYPE, (leaf) => new NotebookView(leaf, this));
 		this.registerExtensions([...NOTEBOOK_EXTENSIONS], VIEW_TYPE);
 		this.host = new NotebookLibraryHost(this);
@@ -92,7 +100,7 @@ export default class NotebookPlugin extends Plugin {
 		registerToolCommands(this, (checking, run) => this.withView(checking, run));
 		registerReadingCommands(this, (checking, run) => this.withView(checking, run));
 
-		registerIntegration(this, {
+		this.history = registerIntegration(this, {
 			background: (doc, page, width) => this.host.thumbnailBackground(doc, page, width),
 			newNotebookIn: (folder) => this.host.createNotebook(folder),
 			annotatePdf: (pdf) => this.host.importPdf(this.settings.folder, pdf),

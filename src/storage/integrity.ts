@@ -141,8 +141,7 @@ export class IntegrityLedger {
 		const parsed = parse(text);
 		if (!parsed.ok) return;
 		const doc = parsed.doc;
-		const canonical = text.includes(ASSETS_MARK) ? text : serialize(doc);
-		this.push(path, { fp: fingerprint(text), body: bodyFingerprint(canonical), id: doc.id, modifiedAt: doc.modifiedAt, at: this.now() });
+		this.push(path, { fp: fingerprint(text), body: bodyFingerprint(serialize(doc)), id: doc.id, modifiedAt: doc.modifiedAt, at: this.now() });
 	}
 
 	rename(oldPath: string, newPath: string): void {
@@ -223,9 +222,9 @@ export function assessDisk(records: readonly WrittenRecord[], disk: DiskState, e
 		return explainedByRestore(last.at) ? { kind: "changed" } : { kind: "rolled-back", lastWrite: last, version: older };
 	}
 	if (doc.modifiedAt === last.modifiedAt) {
-		// Same edit stamp: only a metadata patch may differ. Compare the content part in canonical form.
-		const canonical = disk.text.includes(ASSETS_MARK) ? disk.text : serialize(doc);
-		if (bodyFingerprint(canonical) === last.body) return { kind: "changed" };
+		// Same edit stamp: only a metadata patch may differ. Compare the content part in our canonical form (re-serialized,
+		// so a file written by another serializer version with the same content is not reported).
+		if (bodyFingerprint(serialize(doc)) === last.body) return { kind: "changed" };
 		return explainedByRestore(last.at) ? { kind: "changed" } : { kind: "altered", lastWrite: last };
 	}
 	return { kind: "changed" };

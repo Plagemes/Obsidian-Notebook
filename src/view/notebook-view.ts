@@ -77,6 +77,7 @@ import { pickFile } from "./pick";
 import { addPdfSyncMenuItems, type PageSyncHooks } from "./pdf-sync";
 import { newPageFromTemplate, openDeletedPages, savePageAsTemplate, stashDeletedPage, type PageToolsHost } from "./page-tools";
 import { RulerGesture } from "./ruler-gesture";
+import { BLANK_THUMBNAIL, ViewResilience, type ResilienceServices, type ResilienceViewHost } from "./resilience";
 import { ObjectInk } from "./object-ink";
 import { SelectionActions } from "./selection-actions";
 import { StampPalette, type StampTarget } from "./stamp-palette";
@@ -123,6 +124,8 @@ export interface NotebookHost {
 	journal?: JournalStore;
 	/** Persists the plugin settings (favourite pens, eraser size, pen-only). Optional: absent in tests. */
 	saveSettings?(): Promise<void>;
+	/** wave 0.7: resilience: safe mode, storage-full warning, integrity ledger. Optional: absent in tests. */
+	resilience?: ResilienceServices;
 }
 
 interface ActiveStroke {
@@ -227,6 +230,9 @@ export class NotebookView extends FileView {
 	private stage!: HTMLElement;
 	private messageEl!: HTMLElement;
 	private perfEl!: HTMLElement;
+	/** wave 0.7: resilience: banners (safe mode, not saved, unexpected change on disk) and the per-file opening marker. */
+	private bannerHost!: HTMLElement;
+	private resilience: ViewResilience | null = null;
 	private renderer: Renderer | null = null;
 	private controller: PointerController | null = null;
 	private resizeObserver: ResizeObserver | null = null;
@@ -356,6 +362,8 @@ export class NotebookView extends FileView {
 			stamps: () => this.stamps?.toggle(),
 		});
 		this.toolbar.setSelection(false);
+		this.bannerHost = this.contentEl.createDiv({ cls: "notebook-resilience" });
+		if (this.host.resilience) this.resilience = new ViewResilience(this.resilienceHost(), this.host.resilience);
 		this.body = this.contentEl.createDiv({ cls: "notebook-body" });
 		this.stage = this.body.createDiv({ cls: "notebook-stage" });
 		this.perfEl = this.stage.createDiv({ cls: "notebook-perf" });
@@ -439,7 +447,9 @@ export class NotebookView extends FileView {
 
 		// Android may kill a backgrounded app without notice: save as soon as we are hidden.
 		this.registerDomEvent(document, "visibilitychange", () => {
-			if (document.visibilityState === "hidden") void this.flushNow();
+			if (document.visibilityState !== "hidden") return;
+			this.resilience?.hidden();
+			void this.flushNow();
 		});
 		this.registerDomEvent(window, "pagehide", () => void this.flushNow());
 		this.registerDomEvent(document, "keydown", (e) => {
@@ -471,6 +481,7 @@ export class NotebookView extends FileView {
 	async onClose(): Promise<void> {
 		this.location.flush();
 		await this.closeSession();
+		this.resilience?.end();
 		this.stopHold();
 		for (const timer of [this.navTimer, this.thumbTimer, this.snapFlashTimer]) if (timer !== null) window.clearTimeout(timer);
 		this.navTimer = this.thumbTimer = this.snapFlashTimer = null;
@@ -576,6 +587,8 @@ export class NotebookView extends FileView {
 		this.viewport = { scale: 1, offsetX: 0, offsetY: 0 };
 		// Callbacks of a session that is no longer the current one (file switched while loading) are ignored.
 		const current = () => this.session === session;
+		// wave 0.7: resilience (#346): the opening marker is set before the file is read.
+		this.resilience?.begin(file);
 		const session: DocumentSession = new DocumentSession(
 			new VaultDocumentIO(this.app, file, () => backupFolder(this.host.settings)),
 			{ set: (fn, ms) => window.setTimeout(fn, ms), clear: (h) => window.clearTimeout(h) },
@@ -600,12 +613,23 @@ export class NotebookView extends FileView {
 				onError: (message) => {
 					if (current()) this.showError(message);
 				},
+				// wave 0.7: resilience (#347, #390)
+				onWriteHealth: (state) => {
+					if (current()) this.resilience?.writeHealth(state);
+				},
+				onWritten: (text) => {
+					if (current()) this.resilience?.written(text);
+				},
+				onDiskContent: (info) => {
+					if (current()) this.resilience?.diskContent(info);
+				},
 			},
 			{
 				busy: () => this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null
 					|| this.textEditor?.isOpen === true,
 				journal: this.host.journal,
 				beforeSerialize: (doc) => this.storePosition(doc),
+				spaceProbe: this.host.resilience?.spaceProbe,
 			},
 		);
 		this.session = session;
@@ -618,6 +642,7 @@ export class NotebookView extends FileView {
 
 	async onUnloadFile(file: TFile): Promise<void> {
 		await this.closeSession();
+		this.resilience?.end();
 		this.history.clear();
 		this.clearSelection();
 		this.layout = null;
@@ -669,11 +694,13 @@ export class NotebookView extends FileView {
 		if (this.toolbar && this.tools.eraserSize !== settings.eraserSize) this.toolbar.update({ eraserSize: settings.eraserSize });
 		this.pens?.refresh();
 		this.filter.params = stabilizationParams(settings.stabilization);
+		// wave 0.7: resilience (#346): safe mode turns low-latency ink and prediction off for this view.
+		const fast = this.resilience?.lowLatencyAllowed() !== false;
 		if (this.controller) {
-			this.controller.predictionEnabled = settings.inkPrediction;
-			if (!this.controller.drawing) this.controller.setRawUpdates(settings.lowLatencyInk);
+			this.controller.predictionEnabled = settings.inkPrediction && fast;
+			if (!this.controller.drawing) this.controller.setRawUpdates(settings.lowLatencyInk && fast);
 		}
-		if (this.renderer && !this.active) this.renderer.setLowLatency(settings.lowLatencyInk);
+		if (this.renderer && !this.active) this.renderer.setLowLatency(settings.lowLatencyInk && fast);
 		this.perfEl?.toggleClass("notebook-hidden", !settings.perfOverlay);
 		if (this.renderer) this.renderer.onFrame = settings.perfOverlay ? (t) => this.onFrame(t) : null;
 		this.reading?.settingsChanged();
@@ -1098,6 +1125,33 @@ export class NotebookView extends FileView {
 		};
 	}
 
+	/** wave 0.7: resilience: what the safe-mode, storage and integrity banners need from the view. */
+	private resilienceHost(): ResilienceViewHost {
+		return {
+			app: this.app,
+			settings: () => this.host.settings,
+			journal: this.host.journal,
+			file: () => this.file,
+			bannerHost: this.bannerHost,
+			attachMedia: () => {
+				if (this.media) this.renderer?.setMedia(this.media);
+			},
+			modeChanged: () => {
+				this.applySettings(this.host.settings);
+				this.pageNav?.invalidate();
+			},
+			reopen: async () => {
+				const leaf = this.leaf;
+				const state = leaf.getViewState();
+				await leaf.setViewState({ type: "empty" });
+				await leaf.setViewState(state);
+			},
+			flush: () => this.flushNow(),
+			editableDocument: () => this.editableDocument(),
+			applyCommand: (cmd) => this.applyCommand(cmd),
+		};
+	}
+
 	private reliabilityDeps(): ReliabilityDeps {
 		return { app: this.app, settings: this.host.settings, journal: this.host.journal };
 	}
@@ -1151,6 +1205,7 @@ export class NotebookView extends FileView {
 				this.clearSelection();
 				this.radial?.close();
 			},
+			prefetchAllowed: () => this.resilience?.prefetchAllowed() !== false,
 			editingChanged: () => {
 				this.applyInput();
 				this.toolbar.setEditable(this.editable());
@@ -1407,7 +1462,8 @@ export class NotebookView extends FileView {
 			this.toolbar.setEditable(true);
 			if (!this.media) {
 				this.media = new NotebookMedia(this.app, () => this.session?.doc ?? null, () => this.host.settings.folder, () => this.onMediaChanged());
-				this.renderer?.setMedia(this.media);
+				// wave 0.7: resilience (#346): in safe mode the backgrounds come after the first paint.
+				if (this.resilience?.mediaAtLoad() !== false) this.renderer?.setMedia(this.media);
 			}
 			this.refreshLayout();
 			this.refit(true);
@@ -1426,6 +1482,7 @@ export class NotebookView extends FileView {
 		}
 		this.updateHistoryButtons();
 		this.selectionActions?.update();
+		this.resilience?.loaded();
 	}
 
 	private showProblem(problem = this.session?.problem ?? null): void {
@@ -1528,6 +1585,7 @@ export class NotebookView extends FileView {
 	}
 
 	private thumbnail(page: Page, width: number): string {
+		if (this.resilience?.thumbnailsAllowed() === false) return BLANK_THUMBNAIL;
 		const dpr = Math.min(2, window.devicePixelRatio || 1);
 		return renderThumbnail(page, Math.round(Math.min(width, THUMB_CSS_WIDTH) * dpr), {
 			mime: "image/jpeg",

@@ -347,3 +347,17 @@ describe("DocumentSession hooks for the ledger", () => {
 		expect(seen[2]).toMatchObject({ initial: false, doc: null, failure: "json" });
 	});
 });
+
+describe("integrity verdicts and other serializers", () => {
+	it("the same content written with another layout under the same edit stamp is not reported", () => {
+		const ledger = new IntegrityLedger(new Slot(), () => 1);
+		const ours = edit(sampleDocument(2), "2026-10-29T10:05:00.000Z");
+		ledger.recordWrite(P, ours);
+		const reformatted = JSON.stringify(JSON.parse(ours) as unknown, null, 1);
+		expect(reformatted).not.toBe(ours);
+		expect(assessDisk(ledger.records(P), disk(reformatted)).kind).toBe("changed");
+		// Accepting a reformatted text makes exactly that text the reference.
+		ledger.accept(P, reformatted);
+		expect(assessDisk(ledger.records(P), disk(reformatted)).kind).toBe("intact");
+	});
+});

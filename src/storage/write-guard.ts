@@ -40,7 +40,8 @@ const PERMISSION_RE = /EACCES|EPERM|permission denied|operation not permitted|ac
 function errorText(e: unknown): string {
 	if (e === null || e === undefined) return "";
 	if (typeof e === "string") return e;
-	if (typeof e !== "object") return String(e as number | boolean);
+	if (typeof e === "number" || typeof e === "boolean" || typeof e === "bigint") return String(e);
+	if (typeof e !== "object") return "";
 	const o = e as { message?: unknown; code?: unknown; name?: unknown };
 	return [o.name, o.code, o.message].filter((v) => typeof v === "string" || typeof v === "number").join(" ");
 }

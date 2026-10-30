@@ -2596,3 +2596,80 @@
 .setting-item.notebook-hidden {
 	display: none;
 }
+
+/* wave 0.7: resilience — safe mode, "not saved" and integrity banners (view/resilience.ts), integrity report */
+.notebook-resilience:empty {
+	display: none;
+}
+
+.notebook-resilience {
+	flex: 0 0 auto;
+	max-height: 40vh;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-1);
+	padding: var(--size-4-1) var(--size-4-2);
+}
+
+.notebook-resilience-banner {
+	border: 1px solid var(--background-modifier-border);
+	border-left-width: 4px;
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	padding: var(--size-4-2) var(--size-4-3);
+	font-size: var(--font-ui-small);
+}
+
+.notebook-resilience-banner.is-safe {
+	border-left-color: var(--color-blue);
+}
+
+.notebook-resilience-banner.is-warning {
+	border-left-color: var(--color-orange);
+}
+
+.notebook-resilience-banner.is-error {
+	border-left-color: var(--text-error);
+}
+
+.notebook-resilience-banner-title {
+	font-weight: var(--font-semibold);
+	margin-bottom: var(--size-2-1);
+}
+
+.notebook-resilience-banner-text {
+	color: var(--text-muted);
+	user-select: text;
+}
+
+.notebook-resilience-banner-actions,
+.notebook-integrity-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-2);
+	margin-top: var(--size-4-2);
+}
+
+.notebook-integrity-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-3);
+	max-height: 60vh;
+	overflow-y: auto;
+}
+
+.notebook-integrity-row {
+	border-bottom: 1px solid var(--background-modifier-border);
+	padding-bottom: var(--size-4-2);
+}
+
+.notebook-integrity-name {
+	font-weight: var(--font-semibold);
+	word-break: break-all;
+}
+
+.notebook-integrity-issue {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}

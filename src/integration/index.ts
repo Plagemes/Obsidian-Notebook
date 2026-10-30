@@ -38,7 +38,7 @@ export interface IntegrationDeps {
 }
 
 /** Registers embeds, the `obsidian://notebook` link, version history and companion notes. Called once from onload. */
-export function registerIntegration(plugin: IntegrationPlugin, deps: IntegrationDeps): void {
+export function registerIntegration(plugin: IntegrationPlugin, deps: IntegrationDeps): HistoryService {
 	const { app } = plugin;
 	const folder = () => plugin.settings.folder;
 	const open = (file: TFile, page: number | null) => void openNotebookAtPage(app, file, page);
@@ -82,4 +82,6 @@ export function registerIntegration(plugin: IntegrationPlugin, deps: Integration
 
 	// #168 Public API for other plugins.
 	plugin.api = createNotebookApi(plugin);
+	// wave 0.7: resilience: the integrity check offers the version history of a notebook.
+	return history;
 }

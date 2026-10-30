@@ -15,6 +15,7 @@ import { ensureFolder } from "../storage/vault-io";
 import { isCardFrontmatter } from "../zettel/card-content";
 import { notebookUri } from "./links";
 import { viewsOf } from "./open";
+import { isOpenInSafeMode } from "../storage/safe-mode";
 
 /**
  * Companion notes (O1): keeps a Markdown note per notebook in step with it. The content comes from the pure
@@ -159,7 +160,8 @@ export class CompanionService {
 
 	private fire(path: string): void {
 		this.timers.delete(path);
-		if (!this.enabled) return;
+		// wave 0.7: resilience (#346): no companion note while the notebook is shown in safe mode.
+		if (!this.enabled || isOpenInSafeMode(path)) return;
 		// Never while writing: the companion write (and the metadata indexing it starts) waits for a pause.
 		if (this.input.active()) {
 			this.timers.set(path, window.setTimeout(() => this.fire(path), INPUT_POLL_MS));
