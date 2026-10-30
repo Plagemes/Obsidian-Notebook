@@ -7,6 +7,7 @@ import { kindFromName } from "../pdf/assets";
 import { PhotoDecodeError, photoSize } from "../scan/decode";
 import { backupFolder, type NotebookSettings } from "../settings";
 import { isNotebookFile, readNotebookText, writeNotebookText } from "../storage/format";
+import { isHiddenNotebookPath } from "../storage/trash-paths";
 import { createNotebook, sanitizeName } from "../storage/notebooks";
 import { VaultDocumentIO } from "../storage/vault-io";
 import type { EditContext } from "../view/edit-context";
@@ -127,7 +128,13 @@ class NotebookApiImpl implements NotebookApi {
 		const file = this.app.vault.getFileByPath(path) ?? this.app.vault.getFileByPath(`${path}.notebook`);
 		if (!file) throw new NotebookApiError("not-found", `No file "${path}" in the vault.`, { path });
 		if (!isNotebookFile(file)) throw new NotebookApiError("not-a-notebook", `"${file.path}" is not a notebook.`, { path: file.path });
+		if (this.hidden(file.path)) throw new NotebookApiError("not-found", `"${file.path}" is in the trash or the templates folder, not in the library.`, { path: file.path });
 		return file;
+	}
+
+	/** Notebooks the library does not show: the plugin trash, the templates folder and the other reserved folders. */
+	private hidden(path: string): boolean {
+		return isHiddenNotebookPath(path, this.settings.folder, this.settings.templatesFolder);
 	}
 
 	/** The document as the open view has it, else as saved. */
@@ -149,7 +156,7 @@ class NotebookApiImpl implements NotebookApi {
 		const folder = known.folder === undefined ? null : checkFolder(known.folder);
 		const open = new Set(this.app.workspace.getLeavesOfType("notebook-view").map((leaf) => (leaf.getViewState().state as { file?: unknown } | undefined)?.file));
 		return this.app.vault.getFiles()
-			.filter((f) => isNotebookFile(f) && (!folder || f.path.startsWith(`${folder}/`)))
+			.filter((f) => isNotebookFile(f) && (!folder || f.path.startsWith(`${folder}/`)) && !this.hidden(f.path))
 			.sort((a, b) => a.path.localeCompare(b.path))
 			.map((f) => ({
 				path: f.path,
@@ -283,7 +290,7 @@ class NotebookApiImpl implements NotebookApi {
 				if (ctx) return ctx;
 			}
 			if (Date.now() >= deadline) {
-				throw new NotebookApiError("busy", `"${file.path}" is open but cannot be edited right now (still loading, read-only, or a pen is down). Try again in a moment.`, { path: file.path });
+				throw new NotebookApiError("busy", `"${file.path}" is open but cannot be edited right now (still loading, read-only, or a pen, finger or gesture is down). Try again in a moment.`, { path: file.path });
 			}
 			await sleep(BUSY_POLL_MS);
 		}

@@ -379,3 +379,16 @@ describe("PDF links file: a vault file in _meta, moved over from the config fold
 		expect(config.get("old.json")).toBe("{ broken");
 	});
 });
+
+describe("API: notebooks the library does not show", () => {
+	it("hides the trash, the templates folder and reserved folders, like listNotebooks", async () => {
+		const { isHiddenNotebookPath } = await import("../src/storage/trash-paths");
+		expect(isHiddenNotebookPath("Notebooks/_trash/items/abc-12345/A.notebook", ROOT, "")).toBe(true);
+		expect(isHiddenNotebookPath("Notebooks/_templates/Cornell.notebook", ROOT, "")).toBe(true);
+		expect(isHiddenNotebookPath("Templates/Mine.notebook", ROOT, "Templates")).toBe(true);
+		expect(isHiddenNotebookPath("Notebooks/_backup/A.notebook", ROOT, "")).toBe(true);
+		expect(isHiddenNotebookPath("Notebooks/Physics/A.notebook", ROOT, "")).toBe(false);
+		expect(isHiddenNotebookPath("Elsewhere/A.notebook", ROOT, "")).toBe(false);
+		expect(isHiddenNotebookPath("_templates_old/A.notebook", ROOT, "")).toBe(false);
+	});
+});

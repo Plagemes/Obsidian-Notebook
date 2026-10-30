@@ -1014,6 +1014,13 @@ export class NotebookView extends FileView {
 	}
 
 	/** True when the view still shows the same editable document (the picker and the import are asynchronous). */
+	/** Any pointer contact or gesture in progress on the canvas. */
+	private inContact(): boolean {
+		return this.active !== null || this.erasing !== null || this.lasso !== null || this.drag !== null || this.shapeDrag !== null
+			|| this.spaceDrag !== null || this.lassoTap !== null || this.textTap !== null || this.controller?.navigating === true
+			|| this.gestures?.touching === true || this.rulerGesture?.dragging === true;
+	}
+
 	private stillHere(session: DocumentSession | null): boolean {
 		return !!session && this.session === session && this.editable() && !this.controller?.drawing;
 	}
@@ -1306,7 +1313,8 @@ export class NotebookView extends FileView {
 		const session = this.session;
 		const media = this.media;
 		const doc = session?.doc;
-		if (!session || !media || !doc || !this.stillHere(session)) return null;
+		// A contact or gesture in progress (lasso drag, eraser, pan…) would lose its change to an edit from outside: busy.
+		if (!session || !media || !doc || !this.stillHere(session) || this.inContact()) return null;
 		return {
 			app: this.app,
 			folder: this.host.settings.folder,

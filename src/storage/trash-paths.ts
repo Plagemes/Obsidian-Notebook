@@ -12,6 +12,7 @@
  * notebook is never a sibling of another notebook (conflicted-copy detection finds nothing to compare)
  * and nothing is renamed on the way in: the item comes back exactly as it left.
  */
+import { isReservedPath } from "../library/folders";
 
 export const TRASH_DIRNAME = "_trash";
 export const TEMPLATES_DIRNAME = "_templates";
@@ -63,6 +64,17 @@ export function pageTrashEntriesFolder(root: string, notebookId: string): string
 /** File of one entry. */
 export function pageTrashEntryPath(root: string, notebookId: string, entryId: string): string {
 	return join(pageTrashEntriesFolder(root, notebookId), `${idFileName(entryId)}.json`);
+}
+
+/**
+ * True for a notebook path the library does not list (same rule as storage `listNotebooks`): inside a reserved folder
+ * of the notebooks folder, inside the plugin trash wherever it is, or inside the templates folder.
+ */
+export function isHiddenNotebookPath(path: string, notebooksFolder: string, templatesSetting: string): boolean {
+	if (isInTrash(path)) return true;
+	const root = notebooksFolder.replace(/^\/+|\/+$/g, "");
+	if (isReservedPath(path, root)) return true;
+	return isWithin(path, templatesFolderPath(templatesSetting, root));
 }
 
 /** Where templates are stored: the setting, or `<notebooks folder>/_templates`. */
