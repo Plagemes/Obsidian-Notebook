@@ -36,6 +36,15 @@ Every action is described once in an action registry and the interface is built 
 - **Page sheet**: the actions of one page, with paper and size as chips (see *Pages and navigation*).
 - **Radial dial** at the pen tip (S Pen side button, or a long press): undo/redo, a width bubble, a colour bubble (12 colours, a custom colour and an eyedropper), the active tool, and favourites · pen case · shapes.
 - Built on Obsidian's CSS variables, so light, dark and community themes apply; *reduced motion* is respected. Not verified on Android hardware.
+- **Toolbar size** (setting): compact, normal or large buttons and icons for the toolbar, the contextual bar, the option popovers and the radial dial. In large the row of tools wraps onto a second line on a narrow phone.
+
+#### Obsidian mobile toolbar
+
+Obsidian's mobile toolbar is set up by you (*Settings > Mobile*): a plugin cannot add buttons to it, so the plugin only makes its commands good candidates, each with a clear name and the icon of its action. Worth adding (they act on the notebook in view and are inactive elsewhere): *Notebook: Next page*, *Previous page*, *Undo (notebook)*, *Redo (notebook)*, *Add page*, *Toggle the pages panel*, *Go to page number…*, *Tool: pen*, *Tool: eraser*, *Tool: lasso selection*, *Toggle pen only*, *Fit page to width*, *Add page to Obsidian bookmarks*. *Continue last notebook* and *Open library* also work from a note.
+
+#### Page turner and Bluetooth clickers
+
+While a notebook is the active view, **PageDown, ArrowRight, ArrowDown and space** go to the next page and **PageUp, ArrowLeft, ArrowUp and Shift+space** to the previous one, unless a text field or text box is being edited, a stroke is being drawn, or a dialog or menu is open. Bluetooth presentation clickers send PageUp/PageDown or the arrow keys, so they work; turn it off with *Turn pages with the keyboard*. The Android **volume keys cannot be used**: the system handles them and web content (so Obsidian plugins) never receives them. Undo and redo keep their keys (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl+Y).
 
 ### Tools
 
@@ -77,6 +86,7 @@ Undo/redo: toolbar buttons, Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z (or Ctrl+Y) on deskt
 - More papers: Cornell, music staff, isometric, hexagonal, calligraphy, daily and weekly planner.
 - **Delete page** keeps the page in the page trash (**Deleted pages…**, at most 50 pages per notebook for 30 days). **Page templates**: *Save page as template…* and *New page from template…*, with built-in Cornell, meeting notes and to-do templates. **Exercise page here** inserts a blank page with your exercise paper after the current one.
 - **Fit to width** in the toolbar restores the default zoom.
+- **Bookmarks pane**: *Add page to Obsidian bookmarks* (page sheet, All actions, command palette) adds the page in view to Obsidian's core Bookmarks pane as `Notebook.notebook#pN&id=...`; opening the bookmark goes to that page even if pages moved. It needs the core *Bookmarks* plugin turned on and uses an internal Obsidian API, so it says so in a notice when it is not available.
 - Mouse: left button draws, wheel scrolls, Ctrl + wheel zooms, middle button pans.
 
 ### Study tools (0.8.0)
@@ -164,6 +174,8 @@ The PDF writer has no dependencies and does not compress, so a page with a lot o
 | Performance overlay | shows frame time, input-to-frame and input-to-paint times, whether raw input is in use, redraw time, and strokes and pages drawn |
 | Add a page when writing at the bottom | on by default; appends a page after the last page (not infinite or PDF/image pages) |
 | Scrolling | continuous (vertical) or one page at a time |
+| Toolbar size | compact, normal or large buttons and icons for the toolbar, the contextual bar and the radial menu (large is easier with a finger; on a narrow phone the tools wrap onto a second line) |
+| Turn pages with the keyboard | on by default; arrow keys, PageUp / PageDown and space (Shift+space back), also from a Bluetooth presentation clicker |
 | Finger taps | two fingers undo / three redo (default), swapped, or off |
 | Scribble to erase | off by default |
 | Scroll up when writing near the bottom | off by default |

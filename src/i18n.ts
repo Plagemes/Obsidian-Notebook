@@ -1567,6 +1567,19 @@ const en = {
 	"practice.timer.start.hint": "Start the timer for this attempt",
 	"practice.timer.stop.hint": "Stop the timer and keep the time with this attempt",
 	"practice.timer.stopped": "Time kept with this attempt: {time}",
+	// wave 0.9: obsidian and input
+	"bookmarks.add": "Add page to Obsidian bookmarks",
+	"bookmarks.added": "Added to the Bookmarks pane: {name}",
+	"bookmarks.already": "Already in the Bookmarks pane: {name}",
+	"bookmarks.unavailable": "Obsidian's Bookmarks core plugin is not available. Turn it on in Settings > Core plugins.",
+	"bookmarks.failed": "Could not add the bookmark: {error}",
+	"settings.toolbarSize": "Toolbar size",
+	"settings.toolbarSize.desc": "Scales the toolbar buttons and icons, the contextual bar and the radial menu. Large is easier to hit with a finger; on a narrow phone the tools wrap onto a second line.",
+	"settings.toolbarSize.compact": "Compact",
+	"settings.toolbarSize.normal": "Normal",
+	"settings.toolbarSize.large": "Large",
+	"settings.pageTurnerKeys": "Turn pages with the keyboard",
+	"settings.pageTurnerKeys.desc": "Arrow keys, PageUp, PageDown and space (Shift+space goes back) turn pages while the notebook is active and no text is being edited. Bluetooth presentation clickers send these keys. The Android volume keys cannot be used: the system keeps them.",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -3138,6 +3151,19 @@ const it: Partial<Record<MessageKey, string>> = {
 	"practice.timer.start.hint": "Avvia il cronometro per questo tentativo",
 	"practice.timer.stop.hint": "Ferma il cronometro e conserva il tempo con questo tentativo",
 	"practice.timer.stopped": "Tempo conservato con questo tentativo: {time}",
+	// wave 0.9: obsidian and input
+	"bookmarks.add": "Aggiungi la pagina ai segnalibri di Obsidian",
+	"bookmarks.added": "Aggiunta al pannello Segnalibri: {name}",
+	"bookmarks.already": "Già nel pannello Segnalibri: {name}",
+	"bookmarks.unavailable": "Il plugin di base Segnalibri di Obsidian non è disponibile. Attivalo in Impostazioni > Plugin di base.",
+	"bookmarks.failed": "Impossibile aggiungere il segnalibro: {error}",
+	"settings.toolbarSize": "Dimensione della barra",
+	"settings.toolbarSize.desc": "Ingrandisce o riduce i pulsanti e le icone della barra, la barra contestuale e il menu radiale. Grande è più facile da toccare con un dito; su un telefono stretto gli strumenti vanno su una seconda riga.",
+	"settings.toolbarSize.compact": "Compatta",
+	"settings.toolbarSize.normal": "Normale",
+	"settings.toolbarSize.large": "Grande",
+	"settings.pageTurnerKeys": "Gira le pagine con la tastiera",
+	"settings.pageTurnerKeys.desc": "Frecce, PagSu, PagGiù e spazio (Maiusc+spazio torna indietro) girano le pagine mentre il quaderno è attivo e non si modifica del testo. I telecomandi Bluetooth per presentazioni inviano questi tasti. I tasti del volume di Android non si possono usare: li gestisce il sistema.",
 };
 
 let table: Partial<Record<MessageKey, string>> | null = null;

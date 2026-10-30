@@ -4463,3 +4463,32 @@ body {
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);
 }
+
+/* wave 0.9: obsidian and input (toolbar size: view-ui.ts sets --nb-target and --nb-icon on the view; large lets the tools wrap on a narrow phone) */
+.notebook-view .notebook-tool {
+	min-width: var(--nb-target, 40px);
+	min-height: var(--nb-target, 40px);
+}
+
+.notebook-view .notebook-tool .svg-icon {
+	width: var(--nb-icon, 18px);
+	height: var(--nb-icon, 18px);
+}
+
+.notebook-view .notebook-context-label,
+.notebook-view .notebook-page-indicator {
+	min-height: var(--nb-target, 40px);
+}
+
+.notebook-view.is-tools-wrapped .notebook-toolbar-tools {
+	flex-wrap: wrap;
+	max-width: 100%;
+}
+
+.notebook-view.is-tools-wrapped .notebook-toolbar-tools > .notebook-toolbar-divider {
+	display: none;
+}
+
+.notebook-view.is-tools-wrapped .notebook-toolbar-tools .notebook-toolbar-group {
+	flex-wrap: wrap;
+}

@@ -92,7 +92,7 @@ hotkey.
 
 `buildLayout(context, width, usage, now)`:
 
-1. `toolbarPlan(width)`: one or two rows and how many quick slots fit (fixed metrics that match the CSS, so there is
+1. `toolbarPlan(width, slot)` (slot = button size + gap of the toolbar size setting, wave 0.9): one or two rows and how many quick slots fit (fixed metrics that match the CSS, so there is
    no measure → re-layout loop).
 2. `contextBar`: the most specific active context (`CONTEXT_ORDER`) that has relevant actions; its actions ranked by
    `priority + usageBoost`, cut to `contextCapacity(width)`.

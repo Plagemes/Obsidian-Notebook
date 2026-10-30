@@ -413,6 +413,8 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 
 	await checkPageMode(add);
 	await checkToolbar(add);
+	await checkToolbarSize(add);
+	await checkPageTurnerKeys(add);
 	await checkRestore(add);
 	await checkStagedLoad(add);
 	await checkPageLinks(add);
@@ -876,6 +878,109 @@ async function selectFirstStroke(): Promise<void> {
 	const page = v.document.pages[0];
 	v.selectItems(0, page.strokes.slice(0, 2), []);
 	await wait(250);
+}
+
+/**
+ * wave 0.9 (370): the toolbar sizes. In "large" and "compact" the bar, the options popover, the "All actions" sheet and
+ * the contextual bar of a selection stay inside the view without sideways overflow, the buttons have the size of the
+ * setting, and "normal" comes back unchanged.
+ */
+async function checkToolbarSize(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
+	const v = view as any;
+	const width = window.innerWidth;
+	const inView = (r: DOMRect) => r.left >= -0.5 && r.right <= width + 0.5;
+	const bar = document.querySelector(".notebook-toolbar") as HTMLElement;
+	const set = async (size: string) => {
+		v.host.settings.toolbarSize = size;
+		v.applySettings(v.host.settings);
+		await frames(3);
+		await wait(120);
+	};
+	for (const [size, target, icon] of [["large", 48, 24], ["compact", 36, 16]] as const) {
+		const label = `toolbar size ${size} ${width}px`;
+		await closeAll();
+		await set(size);
+		const doc = document.documentElement;
+		add(`${label}: no sideways overflow`, doc.scrollWidth <= width && bar.scrollWidth <= bar.clientWidth + 1,
+			`page ${doc.scrollWidth}, toolbar scroll ${bar.scrollWidth} / client ${bar.clientWidth}, view ${width}`);
+		const strays = barButtons().filter((b) => !b.closest(".notebook-favs") && !inView(b.getBoundingClientRect()));
+		add(`${label}: every control is inside the view`, strays.length === 0, strays.map((b) => b.getAttribute("aria-label")).join(", "));
+		const tools = barButtons().filter((b) => b.classList.contains("notebook-tool"));
+		const wrong = tools.filter((b) => b.offsetWidth < target - 0.5 || b.offsetHeight < target - 0.5);
+		add(`${label}: buttons are at least ${target} px`, wrong.length === 0, wrong.map((b) => `${b.getAttribute("aria-label")} ${b.offsetWidth}×${b.offsetHeight}`).join(", "));
+		const svg = tools.map((b) => b.querySelector(".svg-icon") as SVGElement | null).find((x) => x);
+		add(`${label}: icons are ${icon} px`, !!svg && Math.round(svg.getBoundingClientRect().width) === icon, `${svg ? svg.getBoundingClientRect().width : "no icon"}`);
+		const rows = Math.ceil(bar.getBoundingClientRect().height / (target + 8));
+		add(`${label}: at most three rows`, rows <= 3, `height ${Math.round(bar.getBoundingClientRect().height)} px`);
+		const favs = bar.querySelector(".notebook-favs") as HTMLElement;
+		add(`${label}: favourite pens strip is inside the view`, inView(favs.getBoundingClientRect()), `${Math.round(favs.getBoundingClientRect().left)}–${Math.round(favs.getBoundingClientRect().right)}`);
+
+		await openOptions("eraser");
+		const opts = bar.querySelector(".notebook-options") as HTMLElement;
+		const r = opts.getBoundingClientRect();
+		add(`${label}: the tool options fit the view`, inView(r) && r.bottom <= window.innerHeight, `${Math.round(r.left)}–${Math.round(r.right)}, bottom ${Math.round(r.bottom)} of ${window.innerHeight}`);
+		await closeAll();
+
+		await openMore();
+		const sheet = document.querySelector(".notebook-sheet") as HTMLElement | null;
+		const sr = sheet?.getBoundingClientRect();
+		add(`${label}: the All actions sheet fits the view`, !!sr && inView(sr) && sr.bottom <= window.innerHeight + 0.5, sr ? `${Math.round(sr.left)}–${Math.round(sr.right)}` : "no sheet");
+		await closeAll();
+
+		await selectFirstStroke();
+		await wait(200);
+		const ctx = document.querySelector(".notebook-context-bar") as HTMLElement | null;
+		const cr = ctx?.getBoundingClientRect();
+		add(`${label}: the contextual bar fits the view`, !!cr && cr.width > 0 && inView(cr), cr ? `${Math.round(cr.left)}–${Math.round(cr.right)}` : "no contextual bar");
+		await closeAll();
+	}
+	await set("normal");
+	const small = barButtons().filter((b) => b.classList.contains("notebook-tool") && (b.offsetWidth < 40 || b.offsetHeight < 40));
+	add(`toolbar size back to normal ${width}px: buttons are 40 px again`, small.length === 0, small.map((b) => b.getAttribute("aria-label")).join(", "));
+}
+
+/** wave 0.9 (372): the page turner keys reach goToRelativePage when the view is active and nothing else wants the key. */
+async function checkPageTurnerKeys(add: (name: string, ok: boolean, detail?: string) => void): Promise<void> {
+	const v = view as any;
+	await closeAll();
+	const deltas: number[] = [];
+	const original = v.goToRelativePage;
+	v.goToRelativePage = (d: number) => void deltas.push(d);
+	const press = (key: string, target: EventTarget = document.body, init: KeyboardEventInit = {}) => {
+		const e = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init });
+		target.dispatchEvent(e);
+		return e;
+	};
+	try {
+		const down = press("PageDown");
+		press("PageUp");
+		press("ArrowRight");
+		press("ArrowLeft");
+		press(" ");
+		press(" ", document.body, { shiftKey: true });
+		add("page turner: PageDown, PageUp, arrows and space turn pages", deltas.join(",") === "1,-1,1,-1,1,-1" && down.defaultPrevented, `deltas ${deltas.join(",")}`);
+		deltas.length = 0;
+		const input = document.createElement("input");
+		document.body.appendChild(input);
+		press("ArrowRight", input);
+		press("a");
+		press("PageDown", document.body, { ctrlKey: true });
+		input.remove();
+		add("page turner: keys in a text field, other keys and shortcuts do nothing", deltas.length === 0, `deltas ${deltas.join(",")}`);
+		// A tapped toolbar button keeps the focus: the arrows still turn pages, space does not.
+		const button = barButtons()[0]!;
+		press("ArrowDown", button);
+		press(" ", button);
+		add("page turner: arrows work with a toolbar button focused, space does not", deltas.join(",") === "1", `deltas ${deltas.join(",")}`);
+		deltas.length = 0;
+		v.host.settings.pageTurnerKeys = false;
+		press("PageDown");
+		v.host.settings.pageTurnerKeys = true;
+		add("page turner: the setting turns the keys off", deltas.length === 0, `deltas ${deltas.join(",")}`);
+	} finally {
+		v.goToRelativePage = original;
+		v.host.settings.pageTurnerKeys = true;
+	}
 }
 
 /**
