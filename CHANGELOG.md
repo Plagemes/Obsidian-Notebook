@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.5.2 — unreleased
+## 0.5.2 — 2026-10-30
 
 Hotfix for 0.5.1. Not verified on Android hardware (see `docs/testing.md`). What the S Pen really sends was observed by the user on a Samsung tablet with the Pen button test and Chrome's pen-tracker page; the chorded press during contact (item 3 of *Fixed*) is a hypothesis from one observation and may not hold.
 
