@@ -129,7 +129,7 @@ describe("DocumentSession", () => {
 		const io = new FakeIO("");
 		const s = new DocumentSession(io, timers);
 		await s.load();
-		expect(s.mode).toBe("broken");
+		expect(s.mode).toBe("not-downloaded"); // wave 0.7 (#344): an empty file is not damaged, it is not downloaded yet
 		await s.flush();
 		expect(io.writes).toHaveLength(0);
 		expect(io.backups).toHaveLength(0);

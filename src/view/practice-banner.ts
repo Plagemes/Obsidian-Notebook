@@ -18,7 +18,6 @@ export class PracticeBanner {
 	private peeking = false;
 	/** Bumped whenever a peek is started or ended, so a slow start does not outlive its release. */
 	private token = 0;
-	private timerEl: HTMLElement | null = null;
 	private tick: number | null = null;
 
 	constructor(private readonly service: PracticeService, private readonly host: PracticeViewHost) {
@@ -145,7 +144,6 @@ export class PracticeBanner {
 		const b = this.button("", () => this.toggleTimer());
 		b.addClass("notebook-practice-timer");
 		b.setAttr("title", t(running === null ? "practice.timer.start.hint" : "practice.timer.stop.hint"));
-		this.timerEl = b;
 		const paint = () => {
 			const total = (record.seconds ?? 0) + (running === null ? 0 : elapsedSeconds(running, Date.now()));
 			b.setText(`${t(running === null ? "practice.timer.start" : "practice.timer.stop")} ${formatDuration(total)}`);
@@ -177,7 +175,6 @@ export class PracticeBanner {
 	private stopTick(): void {
 		if (this.tick !== null) window.clearInterval(this.tick);
 		this.tick = null;
-		this.timerEl = null;
 	}
 
 	destroy(): void {
