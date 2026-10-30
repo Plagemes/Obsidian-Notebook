@@ -6,7 +6,23 @@
  * A snapshot holds the document text of the notebook exactly as `readNotebookText` returns it (for
  * `.notebook` files that is the file content byte for byte), so it is independent of the container.
  */
-import { parse } from "../model/serialize";
+import { parse, serializeChecked } from "../model/serialize";
+
+/**
+ * wave 0.7 (review): the text a version-history restore writes. The snapshot with `modifiedAt` set to `now`: a restore is
+ * a new edit for every device, so the integrity check of another device never takes it for an older version of its own
+ * coming back (a sync rollback), whatever the order of the backup files. The snapshot as it is when it cannot be
+ * re-serialized.
+ */
+export function restoredText(snapshotJson: string, now: Date): string {
+	const parsed = parse(snapshotJson);
+	if (!parsed.ok) return snapshotJson;
+	const doc = parsed.doc;
+	const stamp = now.toISOString();
+	doc.modifiedAt = Date.parse(stamp) > Date.parse(doc.modifiedAt) ? stamp : new Date(Date.parse(doc.modifiedAt) + 1).toISOString();
+	const checked = serializeChecked(doc);
+	return checked.ok ? checked.text : snapshotJson;
+}
 
 export const SNAPSHOT_EXTENSION = "snapshot";
 const HOUR_MS = 3_600_000;
