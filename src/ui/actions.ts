@@ -54,7 +54,7 @@ export interface UiContext {
 	lecture: boolean;
 	sidePane: { available: boolean; open: boolean };
 	reading: { annotationsHidden: boolean; dim: boolean };
-	toggles: { ruler: boolean; penOnly: boolean; navigator: boolean; /** One page at a time (wave 0.7). */ pageMode?: boolean };
+	toggles: { ruler: boolean; penOnly: boolean; navigator: boolean; /** One page at a time (wave 0.7). */ pageMode?: boolean; /** Pen gesture mode (wave 0.8). */ penGestures?: boolean };
 	/** wave 0.8: invisible-ink pen mode and the view-only "Show solutions" toggles (notebook, page in view). Optional. */
 	markers?: { invisibleInk: boolean; solutions: boolean; pageSolutions: boolean };
 	/** Phone-sized view (the page panel is a drawer, the toolbar has two rows). */
@@ -231,6 +231,11 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "toggle-pages-panel", label: "tool.pages", icon: "panel-left", group: "view", surfaces: ["toolbar"], priority: 100, scope: "view", command: "command.toggleNavigator", readOnly: true, checked: (c) => c.toggles.navigator },
 	{ id: "toggle-ruler", label: "tool.ruler", icon: "ruler", group: "view", surfaces: ["quick", "radial", "sheet"], priority: 50, scope: "view", command: "command.toggleRuler", checked: (c) => c.toggles.ruler },
 	{ id: "pen-only", label: "pens.penOnly", icon: "pen-tool", group: "view", surfaces: ["quick", "sheet"], priority: 42, scope: "view", command: "command.penOnly", readOnly: true, checked: (c) => c.toggles.penOnly, keywords: "finger touch palm" },
+	// wave 0.8: pen gestures. The mode toggle is a quick slot (the "move to page" gesture starts
+	// from a selection); the cheat sheet and the custom gestures live in the sheet only.
+	{ id: "pen-gesture-mode", label: "toolbar.penGestures", icon: "wand-2", group: "view", surfaces: ["quick", "sheet"], priority: 41, scope: "view", command: "command.penGestureMode", checked: (c) => !!c.toggles.penGestures, keywords: "gesture pen shortcut circle scribble" },
+	{ id: "pen-gesture-sheet", label: "gesture.cheatSheet", icon: "help-circle", group: "view", surfaces: ["sheet"], priority: 20, scope: "view", command: "command.penGestureSheet", readOnly: true, keywords: "gestures help" },
+	{ id: "pen-gesture-custom", label: "settings.penGestureCustom", icon: "wand", group: "view", surfaces: ["sheet"], priority: 15, scope: "view", command: "command.penGestureCustom", readOnly: true, keywords: "gestures record bind command" },
 	{ id: "fit-width", label: "tool.fit", icon: "move-horizontal", group: "view", surfaces: ["quick", "sheet"], priority: 38, scope: "view", command: "command.fit", readOnly: true, keywords: "zoom" },
 	{ id: "next-page", label: "command.nextPage", icon: "chevron-down", group: "view", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
 	{ id: "previous-page", label: "command.prevPage", icon: "chevron-up", group: "view", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },

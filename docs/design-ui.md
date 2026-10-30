@@ -69,6 +69,8 @@ anywhere in `src/` is in the registry and that every action is placed somewhere.
 | New lecture, exercise paper | Lecture bar during a class, Lecture section | Class-time tools |
 | Markers (`marker-gap`, `marker-question`, `marker-important`, `marker-critical`, `marker-star`, `marker-homework`), structured box (`marker-box`), End of lecture panel (`end-of-lecture`) | Lecture bar during a class, Lecture section, radial shapes ring → Markers ring (markers and box), page sheet (panel), commands | Captured while the lecture runs; the next tap or drag places one |
 | Invisible ink (`invisible-ink`), show solutions (`show-solutions`, page: `show-page-solutions`) | View section of the sheet (ink and solutions), page sheet (page solutions), commands | A pen mode and view-only toggles |
+| Pen gesture mode (`pen-gesture-mode`) | Quick slot, All actions sheet (View & input) | A toggle used in bursts |
+| Gesture cheat sheet, custom gestures (`pen-gesture-sheet`, `pen-gesture-custom`) | All actions sheet (View & input), command palette; the cheat sheet also from the mode badge | Reference and set-up, rare |
 | Ruler, pen only, fit to width | Quick slots + View & input section | Toggles used in bursts |
 | Next/previous page | Commands (hotkeys), pages panel, scrolling | Keyboard only |
 | Copy link, insert link/embed, export page PDF/SVG | Page sheet (Export & share) | Act on one page |

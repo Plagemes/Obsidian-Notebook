@@ -301,7 +301,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 136. **P3** Handout printing: several pages per sheet with space for notes.
 137. **P2** Templates with fields: title, date and topic filled by hand or keyboard become properties of the companion note.
 138. **P3** Progressive reveal in presentation mode: a page is shown piece by piece.
-139. **P1** Pen gestures, designed to be genuinely useful:
+139. **P1** 🧪 Pen gestures, designed to be genuinely useful:
     - No false positives: gestures start only while the S Pen button is held (or after a long press), never during normal writing.
     - Preview before committing: the recognised command is shown before the pen lifts; moving back along the stroke cancels it.
     - Context-aware: a circle around ink selects it; a scribble deletes (#4); "^" inserts space (#91); "#" tags the page (#119); a star bookmarks; "?" opens search; an arrow from a selection to a navigator thumbnail moves it to that page.

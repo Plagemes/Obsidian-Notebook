@@ -2,6 +2,7 @@ import type { PressureMode } from "./ink/pressure";
 import { DEFAULT_ERASER_SIZE, DEFAULT_FAVOURITES, normaliseEraserSize, normaliseFavourites, type FavouritePen } from "./view/favourites";
 import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "./ink/edge-zones";
 import { DEFAULT_GESTURE_SETTINGS, readGestureSettings, type GestureSettings } from "./ink/gesture-settings";
+import { DEFAULT_PEN_GESTURE_SETTINGS, readPenGestureSettings, type PenGestureSettings } from "./ink/gestures/settings";
 import { PEN_BUTTON_ACTIONS, type PenButtonAction } from "./ink/input-policy";
 import { isScrollMode, type ScrollMode } from "./ink/page-mode";
 import { parsePosition, type SavedPosition } from "./ink/view-position";
@@ -12,7 +13,7 @@ import { DEFAULT_ZETTEL_SETTINGS, readZettelSettings, type ZettelSettings } from
 import { DEFAULT_READING_SETTINGS, readReadingSettings, type ReadingSettings } from "./view/reading-settings";
 
 /** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
-export interface NotebookSettings extends CompanionSettings, GestureSettings, TrashSettings, ZettelSettings, ReadingSettings {
+export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings {
 	folder: string;
 	fingerDrawing: boolean;
 	palmRejectionMs: number;
@@ -145,6 +146,9 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	inkFollowsObjects: true,
 	...DEFAULT_COMPANION_SETTINGS,
 	...DEFAULT_GESTURE_SETTINGS,
+	...DEFAULT_PEN_GESTURE_SETTINGS,
+	penGesturesOff: [],
+	penGesturesCustom: [],
 	...DEFAULT_TRASH_SETTINGS,
 	...DEFAULT_ZETTEL_SETTINGS,
 	zettelSlipBoxes: [],
@@ -201,7 +205,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.timetableOffer === "boolean") s.timetableOffer = d.timetableOffer;
 	if (typeof d.timetableAutoOpen === "boolean") s.timetableAutoOpen = d.timetableAutoOpen;
 	if (typeof d.timetableLeadMinutes === "number" && Number.isInteger(d.timetableLeadMinutes) && d.timetableLeadMinutes >= 0 && d.timetableLeadMinutes <= 30) s.timetableLeadMinutes = d.timetableLeadMinutes;
-	Object.assign(s, readCompanionSettings(d), readGestureSettings(d));
+	Object.assign(s, readCompanionSettings(d), readGestureSettings(d), readPenGestureSettings(d));
 	Object.assign(s, readTrashSettings(d));
 	if (typeof d.inkFollowsObjects === "boolean") s.inkFollowsObjects = d.inkFollowsObjects;
 	Object.assign(s, readZettelSettings(d));
