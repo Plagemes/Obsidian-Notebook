@@ -5,6 +5,7 @@ import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "./ink/edge-zones";
 import { DEFAULT_GESTURE_SETTINGS, readGestureSettings, type GestureSettings } from "./ink/gesture-settings";
 import { DEFAULT_PEN_GESTURE_SETTINGS, readPenGestureSettings, type PenGestureSettings } from "./ink/gestures/settings";
 import { PEN_BUTTON_ACTIONS, type PenButtonAction } from "./ink/input-policy";
+import { BUTTON_AFTER_MAX_MS, BUTTON_BEFORE_MAX_MS, DEFAULT_BUTTON_WINDOWS, cleanPenKey, cleanWindowMs, isPenKeyAction, type PenKeyAction } from "./ink/pen-hover";
 import { isScrollMode, type ScrollMode } from "./ink/page-mode";
 import { parsePosition, type SavedPosition } from "./ink/view-position";
 import { normaliseRecentColours } from "./ink/colour";
@@ -94,6 +95,21 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	penChordButton: boolean;
 	/** A finger held still on the page opens the radial menu beside it (only while finger drawing is off). */
 	fingerLongPress: boolean;
+	/**
+	 * 0.11.2: a click of the side button while the pen hovers arms the eraser for the next pen stroke instead of opening
+	 * the radial menu ("Button click: next stroke erases"). Off by default.
+	 */
+	penButtonEraserNext: boolean;
+	/** 0.11.2: a key that stands in for the side button (S Pen mapped with Key Mapper + Shizuku): '' = off, else `KeyboardEvent.key`. */
+	penButtonKey: string;
+	/** 0.11.2: what the pen key does: the radial menu, or arm the eraser for the next stroke. */
+	penButtonKeyAction: PenKeyAction;
+	/**
+	 * 0.11.2: the side button seen only as a `contextmenu` (device finding). One at most this many ms before the pen's
+	 * pointerdown, or after it, means the button was held when the nib landed: that contact erases.
+	 */
+	penButtonContactBeforeMs: number;
+	penButtonContactAfterMs: number;
 	/** Instant start: the notebook and page (1-based) the reader was on last, for "Continue last notebook". Not shown in the settings tab. */
 	lastNotebookPath: string;
 	lastNotebookPage: number;
@@ -165,6 +181,11 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	penHoldStill: null,
 	penButtonSeen: false,
 	fingerLongPress: true,
+	penButtonEraserNext: false,
+	penButtonKey: "",
+	penButtonKeyAction: "eraser-next",
+	penButtonContactBeforeMs: DEFAULT_BUTTON_WINDOWS.beforeMs,
+	penButtonContactAfterMs: DEFAULT_BUTTON_WINDOWS.afterMs,
 	penZeroPressureButton: true,
 	penChordButton: true,
 	lastNotebookPath: "",
@@ -235,6 +256,12 @@ export function readSettings(data: unknown): NotebookSettings {
 	else if (d.penLongPress === true) s.penHoldStill = true;
 	if (typeof d.penButtonSeen === "boolean") s.penButtonSeen = d.penButtonSeen;
 	if (typeof d.fingerLongPress === "boolean") s.fingerLongPress = d.fingerLongPress;
+	if (typeof d.penButtonEraserNext === "boolean") s.penButtonEraserNext = d.penButtonEraserNext;
+	const penKey = cleanPenKey(d.penButtonKey);
+	if (penKey !== null) s.penButtonKey = penKey;
+	if (isPenKeyAction(d.penButtonKeyAction)) s.penButtonKeyAction = d.penButtonKeyAction;
+	s.penButtonContactBeforeMs = cleanWindowMs(d.penButtonContactBeforeMs, BUTTON_BEFORE_MAX_MS) ?? s.penButtonContactBeforeMs;
+	s.penButtonContactAfterMs = cleanWindowMs(d.penButtonContactAfterMs, BUTTON_AFTER_MAX_MS) ?? s.penButtonContactAfterMs;
 	if (typeof d.penZeroPressureButton === "boolean") s.penZeroPressureButton = d.penZeroPressureButton;
 	if (typeof d.penChordButton === "boolean") s.penChordButton = d.penChordButton;
 	if (typeof d.lastNotebookPath === "string") s.lastNotebookPath = d.lastNotebookPath;

@@ -293,20 +293,28 @@ describe("PointerController: every signal opens the menu once and draws nothing"
 	});
 
 	it("contextmenu from the pen opens the menu and is prevented; one from touch does not open it", () => {
+		vi.useFakeTimers();
 		const { el, log, menus } = setup();
 		fire(el, "pointermove", { buttons: 0 });
 		const pen = fire(el, "contextmenu", { pointerType: "pen", clientX: 300, clientY: 200, timeStamp: 1010 });
 		expect(pen.defaultPrevented).toBe(true);
+		// 0.11.2: with no contact it is a hover click, acted on once no pen contact follows within the before-window.
+		vi.advanceTimersByTime(200);
 		expect(menus).toEqual([[200, 150]]);
 		const touch = fire(el, "contextmenu", { pointerType: "touch", timeStamp: 5000 });
 		expect(touch.defaultPrevented).toBe(true);
+		vi.advanceTimersByTime(200);
 		expect(log).toEqual(["menu"]);
+		vi.useRealTimers();
 	});
 
 	it("a plain contextmenu (no pointerType) after pen hover opens the menu; with a finger down it does not", () => {
+		vi.useFakeTimers();
 		const a = setup();
 		fire(a.el, "pointermove", { buttons: 0 });
 		fire(a.el, "contextmenu", { pointerType: undefined, timeStamp: 1100 });
+		vi.advanceTimersByTime(200);
+		vi.useRealTimers();
 		expect(a.menus.length).toBe(1);
 		const b = setup();
 		fire(b.el, "pointermove", { buttons: 0 });

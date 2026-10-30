@@ -18,6 +18,8 @@
  * The eraser (`buttons & 32`, `button 5`) is never a barrel press.
  */
 
+import { ButtonTimeline, DEFAULT_BUTTON_WINDOWS, VERDICT_TEXT, type ButtonWindows } from "./pen-hover";
+
 /** PointerEvent.buttons bit of the pen's side (barrel) button. */
 export const BARREL_BUTTONS = 2;
 /** PointerEvent.buttons bit of the pen's eraser button / flipped pen. */
@@ -218,6 +220,18 @@ export class BarrelDetector {
 	contextMenu(pointerType: string | undefined, t: number): boolean {
 		if (this.nearZeroPress(t) || !this.fromPen(pointerType, t, true)) return false;
 		if (this.armed && t - this.armedT < 1500) return false;
+		this.armed = true;
+		this.armedT = t;
+		return true;
+	}
+
+	/**
+	 * 0.11.2: a click of the side button seen only as a bare `contextmenu` (the pen hovering, no pointer events). True when
+	 * no press was handled just before (pointer events, a pressure-0 press, a mouse-only press): it is then this press.
+	 */
+	claimClick(t: number): boolean {
+		if (this.nearZeroPress(t) || (this.armed && t - this.armedT < 1500)) return false;
+		this.lastBarrelT = t;
 		this.armed = true;
 		this.armedT = t;
 		return true;
@@ -471,6 +485,9 @@ export interface LoggedEvent extends PenEventFacts {
 	fromTouch?: boolean;
 	/** Set by the log: what the event means for a pressure-0 side-button press (see `ZeroPressureTransition`). */
 	note?: string;
+	/** Client position (pen events), to tell a resting nib from a moving one. */
+	x?: number;
+	y?: number;
 }
 
 const POINTER_KIND: Record<string, PointerKind | undefined> = {
@@ -546,7 +563,18 @@ export class EventLog {
 	readonly counts = new Map<string, number>();
 	total = 0;
 
-	constructor(private readonly max = LOG_LINES) {}
+	/** 0.11.2: the order and the gaps between pen down, contextmenu and the first move, and the verdict. */
+	private readonly timeline: ButtonTimeline;
+
+	constructor(private readonly max = LOG_LINES, windows: ButtonWindows = DEFAULT_BUTTON_WINDOWS) {
+		this.timeline = new ButtonTimeline(windows);
+	}
+
+	/** The latest verdict on a `contextmenu` ("button held at contact", ...), or null before the first one. */
+	get verdict(): string | null {
+		const v = this.timeline.verdict;
+		return v === null ? null : VERDICT_TEXT[v];
+	}
 
 	/** The plugin's own detector, so the log says exactly what the plugin would do with the events. */
 	private readonly detector = new BarrelDetector();
@@ -585,6 +613,13 @@ export class EventLog {
 				ev.note = "pointermove with button 0 during contact (possible side button)";
 			}
 		}
+		// 0.11.2: the button seen only as a contextmenu around or during a pen contact: order, gaps and verdict.
+		let timing: string | null = null;
+		if (ev.pointerType === "pen" && ev.kind === "pointerdown") timing = this.timeline.penDown(ev.t, ev.x, ev.y);
+		else if (ev.pointerType === "pen" && ev.kind === "pointermove") timing = this.timeline.penMove(ev.t, ev.x, ev.y);
+		else if (ev.pointerType === "pen" && (ev.kind === "pointerup" || ev.kind === "pointercancel")) this.timeline.penUp();
+		else if (ev.kind === "contextmenu" && ev.pointerType !== "touch" && ev.pointerType !== "mouse") timing = this.timeline.contextMenu(ev.t);
+		if (timing) ev.note = ev.note ? `${ev.note}; ${timing}` : timing;
 		const verdict = describeSideButton(ev);
 		if (zero || mouseOnly || verdict === "side-button") this.sideButtonCount++;
 		const text = formatEvent(ev);
@@ -615,6 +650,7 @@ export class EventLog {
 		this.total = 0;
 		this.detector.reset();
 		this.chord.up();
+		this.timeline.reset();
 	}
 
 	get length(): number {

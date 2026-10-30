@@ -354,22 +354,26 @@ describe("cancelling the native long-press / context menu, as pen-tracker does",
 		expect(d.blocksContextMenu("touch", 6000)).toBe(false);
 	});
 
-	it("a pen contextmenu over the toolbar is cancelled and is a button signal (the menu, once)", () => {
+	it("a pen contextmenu over the toolbar is cancelled and is a button signal (the menu, once)", async () => {
 		const s = setup();
 		s.fire(s.canvas, "pointermove", { timeStamp: 1000 });
 		const e = s.fire(s.toolbar, "contextmenu", { button: 2, buttons: 0, timeStamp: 1100 });
 		expect(e.defaultPrevented).toBe(true);
-		expect(s.log).toEqual(["menu:button"]);
+		await sleep(200); // a hover click waits for the before-window (no pen contact follows)
+		// 0.11.2: no pointer is down, so it is a click of the button while hovering (the button is already up).
+		expect(s.log).toEqual(["menu:click"]);
 		expect(s.seen()).toBe(1);
 	});
 
-	it("a plain MouseEvent contextmenu (no pointerType) is cancelled too; one from a finger with the pen away is not", () => {
+	it("a plain MouseEvent contextmenu (no pointerType) is cancelled too; one from a finger with the pen away is not", async () => {
 		const s = setup();
 		const plain = s.fire(s.toolbar, "contextmenu", { pointerType: undefined, button: 2, timeStamp: 1000 });
 		expect(plain.defaultPrevented).toBe(true);
 		const finger = s.fire(s.toolbar, "contextmenu", { pointerType: "touch", button: 2, timeStamp: 9000 });
 		expect(finger.defaultPrevented).toBe(false);
-		expect(s.log).toEqual([]);
+		await sleep(200);
+		// 0.11.2: the plain one, with no pointer down, is the side button clicked while hovering; the finger's is not.
+		expect(s.log).toEqual(["menu:click"]);
 	});
 
 	it("a text field keeps its native menu, and events outside the view are left alone", () => {
