@@ -1,5 +1,9 @@
 import { BOX_LABEL_HEIGHT, MARKER_BADGE, markerRegion } from "../model/markers";
-import { RENDER_INK, type BoxElement, type MarkerElement, type Page, type Stroke, type TextElement } from "../model/types";
+import { RENDER_INK, type BoxElement, type EquationElement, type MarkerElement, type Page, type Stroke, type TextElement } from "../model/types";
+import { EQUATION_NUMBER_GAP, equationNumberLabel, equationNumbers } from "../model/math-elements";
+import { graphScene, GRAPH_STYLE, type GraphScene, type SceneText } from "../math/graph-scene";
+import { equationOutline } from "./math-render";
+import type { Polygon } from "../math/outline";
 import type { BBox } from "./hit-test";
 import { PAPER_DOT_RADIUS, PAPER_LINE_WIDTH } from "./export-svg";
 import { PAPER_COLORS, paperPattern, type PaperLineKind } from "./paper";
@@ -39,6 +43,10 @@ export interface PdfOptions {
 	hiddenInk?: boolean | ((page: Page) => boolean);
 	/** v8: label of a structured box (default: the English kind name and the title). */
 	boxLabel?: BoxLabel;
+	/** v9: numbers of the numbered equations (default: counted over the exported pages). */
+	equationNumbers?: ReadonlyMap<string, number>;
+	/** v9: outline of an equation without a cached one (default: one typeset this session, else its source as text). */
+	equationOutline?: (el: EquationElement) => { polys: Polygon[]; sx: number; sy: number } | null;
 }
 
 /** Line height of text elements, as a multiple of the font size. */
@@ -108,15 +116,23 @@ export function pagesToPdf(pages: readonly Page[], options: PdfOptions = {}): Ui
 	};
 
 	const pageObjs: number[] = [];
+	const numbers = options.equationNumbers ?? equationNumbers(pages);
 	for (const page of pages) {
 		const pageObj = alloc();
 		const contentObj = alloc();
 		pageObjs.push(pageObj);
-		const res = { xobjects: new Map<string, number>(), font: false, highlighter: false };
+		const res: PageResources = { xobjects: new Map<string, number>(), font: false, highlighter: false, area: false };
 		const hidden = typeof options.hiddenInk === "function" ? options.hiddenInk(page) : !!options.hiddenInk;
-		const content = pageContent(page, withPaper, options.images?.(page) ?? [], getImage, res, { hidden, boxLabel: options.boxLabel ?? ((b) => defaultBoxLabel(b)) });
+		const content = pageContent(page, withPaper, options.images?.(page) ?? [], getImage, res, {
+			hidden, boxLabel: options.boxLabel ?? ((b) => defaultBoxLabel(b)),
+			numbers, outline: options.equationOutline ?? equationOutline,
+		});
 		const parts: string[] = [];
-		if (res.highlighter) parts.push(`/ExtGState << /GS1 << /Type /ExtGState /ca ${HIGHLIGHTER_ALPHA} /BM /Multiply >> >>`);
+		const states: string[] = [];
+		if (res.highlighter) states.push(`/GS1 << /Type /ExtGState /ca ${HIGHLIGHTER_ALPHA} /BM /Multiply >>`);
+		// v9: shaded areas of graphs.
+		if (res.area) states.push(`/GS2 << /Type /ExtGState /ca ${GRAPH_STYLE.areaAlpha} >>`);
+		if (states.length > 0) parts.push(`/ExtGState << ${states.join(" ")} >>`);
 		if (res.xobjects.size > 0) {
 			parts.push(`/XObject << ${[...res.xobjects].map(([name, n]) => `/${name} ${n} 0 R`).join(" ")} >>`);
 		}
@@ -227,6 +243,15 @@ interface PageResources {
 	xobjects: Map<string, number>;
 	font: boolean;
 	highlighter: boolean;
+	/** v9: a graph shades an area (ExtGState GS2). */
+	area?: boolean;
+}
+
+interface ElementOptions {
+	hidden: boolean;
+	boxLabel: BoxLabel;
+	numbers?: ReadonlyMap<string, number>;
+	outline?: (el: EquationElement) => { polys: Polygon[]; sx: number; sy: number } | null;
 }
 
 function pageContent(
@@ -235,7 +260,7 @@ function pageContent(
 	images: readonly PdfPlacedImage[],
 	imageObj: (img: PdfPlacedImage) => number,
 	res: PageResources,
-	v8: { hidden: boolean; boxLabel: BoxLabel } = { hidden: false, boxLabel: (b) => defaultBoxLabel(b) },
+	v8: ElementOptions = { hidden: false, boxLabel: (b) => defaultBoxLabel(b) },
 ): string {
 	const ops: string[] = [];
 	ops.push(`1 0 0 -1 0 ${num(page.height)} cm`);
@@ -250,9 +275,17 @@ function pageContent(
 	if (withPaper) ops.push(...paperOps(page));
 	for (const img of images) if (img.layer !== "background") draw(img);
 	for (const el of page.elements ?? []) {
+		if (el.type !== "graph") continue;
+		ops.push(graphOps(graphScene(el), res));
+	}
+	for (const el of page.elements ?? []) {
 		if (el.type !== "box") continue;
 		res.font = true;
 		ops.push(boxOps(el, v8.boxLabel(el)));
+	}
+	for (const el of page.elements ?? []) {
+		if (el.type !== "equation") continue;
+		ops.push(equationOps(el, v8.numbers?.get(el.id), (v8.outline ?? equationOutline)(el), res));
 	}
 	for (const el of page.elements ?? []) {
 		if (el.type !== "text") continue;
@@ -277,6 +310,81 @@ function pageContent(
 		ops.push(op.ops);
 	}
 	return ops.join("\n");
+}
+
+/** Baseline of a scene text from its vertical anchor (Helvetica: ascent about 0.72 em, descent about 0.21 em). */
+export function textBaselineY(t: Pick<SceneText, "y" | "size" | "baseline">): number {
+	return t.baseline === "top" ? t.y + t.size * 0.76 : t.baseline === "middle" ? t.y + t.size * 0.35 : t.y - t.size * 0.21;
+}
+
+/** One line of Helvetica text anchored like a scene text. */
+function anchoredTextOps(t: SceneText): string {
+	const codes = toWinAnsi(t.text);
+	if (codes.length === 0) return "";
+	const width = codes.reduce((a, c) => a + helveticaCodeWidth(c, t.size), 0);
+	const x = t.align === "left" ? t.x : t.align === "right" ? t.x - width : t.x - width / 2;
+	return `BT /F1 ${num(t.size)} Tf ${rgb(t.color)} rg 1 0 0 -1 ${num(x)} ${num(textBaselineY(t))} Tm ${winAnsiLiteral(codes)} Tj ET`;
+}
+
+/** v9 graph: the scene as vector paths and Helvetica text, clipped to the frame. */
+function graphOps(s: GraphScene, res: PageResources): string {
+	const S = GRAPH_STYLE;
+	const f = s.frame;
+	const out: string[] = ["q", `1 1 1 rg ${num(f.x)} ${num(f.y)} ${num(f.width)} ${num(f.height)} re f`];
+	out.push(`${num(f.x)} ${num(f.y)} ${num(f.width)} ${num(f.height)} re W n`, "1 J 1 j");
+	const lines = (list: GraphScene["grid"], color: string, width: number) => {
+		if (list.length === 0) return;
+		out.push(`${rgb(color)} RG ${num(width)} w ${list.map((l) => `${num(l.x1)} ${num(l.y1)} m ${num(l.x2)} ${num(l.y2)} l`).join(" ")} S`);
+	};
+	lines(s.grid, S.grid, S.gridWidth);
+	lines(s.axes, S.axis, S.axisWidth);
+	for (const a of s.areas) {
+		res.area = true;
+		out.push(`q /GS2 gs ${rgb(a.color)} rg ${a.polygons.map((p) => polyOps(p)).join(" ")} f Q`);
+	}
+	const curve = (c: GraphScene["curves"][number]) => {
+		const paths = c.lines.filter((l) => l.length > 1).map((l) => polyOps(l, false));
+		if (paths.length === 0) return;
+		out.push(`${rgb(c.color)} RG ${num(c.width)} w ${c.dash ? `[${c.dash.map(num).join(" ")}] 0 d` : "[] 0 d"} ${paths.join(" ")} S`);
+	};
+	for (const c of s.curves) curve(c);
+	out.push("[] 0 d");
+	for (const p of s.points) out.push(`${rgb(p.color)} rg ${circleOps(p.x, p.y, S.pointRadius)} f`);
+	for (const p of s.panels) out.push(`1 1 1 rg ${rgb(S.panelBorder)} RG 0.5 w ${num(p.x)} ${num(p.y)} ${num(p.width)} ${num(p.height)} re B`);
+	for (const c of s.overlay) curve(c);
+	for (const t of s.texts) {
+		const op = anchoredTextOps(t);
+		if (op) {
+			res.font = true;
+			out.push(op);
+		}
+	}
+	out.push("Q", `q ${rgb(S.border)} RG ${num(S.borderWidth)} w ${num(f.x)} ${num(f.y)} ${num(f.width)} ${num(f.height)} re S Q`);
+	return out.join("\n");
+}
+
+/** v9 equation: its outline filled with the even-odd rule (the LaTeX source as text when it has none), then its number. */
+function equationOps(el: EquationElement, n: number | undefined, o: { polys: Polygon[]; sx: number; sy: number } | null, res: PageResources): string {
+	const out: string[] = ["q"];
+	if (o && o.polys.length > 0) {
+		out.push(`${rgb(el.color)} rg ${o.polys.map((p) => polyOps(p.map(([x, y]): [number, number] => [el.x + x * o.sx, el.y + y * o.sy]))).join(" ")} f*`);
+	} else {
+		const size = Math.max(4, Math.min(el.fontSize, el.height) * 0.8);
+		const op = labelOps(el.latex.replace(/\s+/g, " "), el.x + 2, el.y + el.height / 2 + size * 0.35, size, Math.max(4, el.width - 4), el.color);
+		if (op) {
+			res.font = true;
+			out.push(op);
+		}
+	}
+	if (n !== undefined) {
+		const op = labelOps(equationNumberLabel(n), el.x + el.width + el.fontSize * EQUATION_NUMBER_GAP, el.y + el.height / 2 + el.fontSize * 0.35, el.fontSize, el.fontSize * 6, el.color);
+		if (op) {
+			res.font = true;
+			out.push(op);
+		}
+	}
+	out.push("Q");
+	return out.join("\n");
 }
 
 /** Polygon (or open polyline) path. */

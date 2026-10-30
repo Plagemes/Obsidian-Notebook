@@ -3,6 +3,8 @@ import { MM, RENDER_INK } from "../model/types";
 import { backgroundRect } from "../model/margins";
 import { transformElement } from "./elements";
 import { drawBox, drawMarker, type BoxLabel } from "./marker-render";
+import { drawEquation, drawGraph } from "./math-render";
+import { equationNumbers } from "../model/math-elements";
 import { drawLinkedLines, parseLinks } from "./link-text";
 import { layoutText, type MeasureText } from "./text-layout";
 import { strokeBounds, type BBox } from "./hit-test";
@@ -66,8 +68,13 @@ export const measureText: MeasureText = (s, fontSize) => {
 	return measureCtx.measureText(s).width;
 };
 
-/** Draws one element in page coordinates (images may be rotated; `img` null draws a placeholder). */
-export function drawElement(ctx: CanvasRenderingContext2D, el: PageElement, img: CanvasImageSource | null, boxLabel?: BoxLabel): void {
+/**
+ * Draws one element in page coordinates (images may be rotated; `img` null draws a placeholder). `numbers`: the
+ * automatic numbers of numbered equations (v9).
+ */
+export function drawElement(
+	ctx: CanvasRenderingContext2D, el: PageElement, img: CanvasImageSource | null, boxLabel?: BoxLabel, numbers?: ReadonlyMap<string, number>,
+): void {
 	if (el.type === "text") {
 		drawTextElement(ctx, el);
 		return;
@@ -78,6 +85,14 @@ export function drawElement(ctx: CanvasRenderingContext2D, el: PageElement, img:
 	}
 	if (el.type === "box") {
 		drawBox(ctx, el, boxLabel);
+		return;
+	}
+	if (el.type === "equation") {
+		drawEquation(ctx, el, numbers?.get(el.id));
+		return;
+	}
+	if (el.type === "graph") {
+		drawGraph(ctx, el);
 		return;
 	}
 	ctx.save();
@@ -199,6 +214,9 @@ export class Renderer {
 	/** Viewport the static bitmap was drawn with (for the CSS fast path). */
 	private drawnViewport: Viewport = this.viewport;
 	private pages: readonly Page[] = [];
+	/** v9: numbers of the numbered equations, recomputed when the numbered equations change. */
+	private numbers: ReadonlyMap<string, number> = new Map();
+	private numbersKey = "";
 	private layout: Layout | null = null;
 	private live: LiveStroke | null = null;
 	private lasso: LassoOverlay | null = null;
@@ -381,6 +399,7 @@ export class Renderer {
 
 	setDocument(pages: readonly Page[] | null, layout: Layout | null): void {
 		this.pages = pages ?? [];
+		this.numbersKey = "";
 		this.layout = layout;
 		this.retransformWet();
 		this.invalidate();
@@ -822,7 +841,18 @@ export class Renderer {
 		}
 	}
 
-	/** Images, then v8 structured boxes, then text boxes; all under the ink. */
+	/** v9: the automatic equation numbers of the document (cheap when nothing numbered changed). */
+	equationNumbers(): ReadonlyMap<string, number> {
+		let key = "";
+		for (const p of this.pages) for (const e of p.elements ?? []) if (e.type === "equation" && e.numbered) key += `${e.id}:${e.x}:${e.y};`;
+		if (key !== this.numbersKey) {
+			this.numbersKey = key;
+			this.numbers = key === "" ? new Map() : equationNumbers(this.pages);
+		}
+		return this.numbers;
+	}
+
+	/** Images, v9 graphs, v8 structured boxes, v9 equations, then text boxes; all under the ink. */
 	private drawElements(ctx: CanvasRenderingContext2D, page: Page): void {
 		const elements = page.elements ?? [];
 		const skip = (el: PageElement) => !!(this.hiddenElements?.has(el) || this.selectedElements?.has(el));
@@ -831,8 +861,17 @@ export class Renderer {
 			this.guarded(ctx, "image element", () => drawElement(ctx, el, this.media?.image(el.asset) ?? null));
 		}
 		for (const el of elements) {
+			if (el.type !== "graph" || skip(el)) continue;
+			this.guarded(ctx, "graph element", () => drawGraph(ctx, el));
+		}
+		for (const el of elements) {
 			if (el.type !== "box" || skip(el)) continue;
 			this.guarded(ctx, "box element", () => drawBox(ctx, el, this.boxLabel));
+		}
+		const numbers = this.equationNumbers();
+		for (const el of elements) {
+			if (el.type !== "equation" || skip(el)) continue;
+			this.guarded(ctx, "equation element", () => drawEquation(ctx, el, numbers.get(el.id)));
 		}
 		for (const el of elements) {
 			if (el.type !== "text" || skip(el)) continue;
@@ -928,7 +967,7 @@ export class Renderer {
 				this.beginPage(ctx, box);
 				for (const el of sel.elements) {
 					const moved = transformElement(el, sel.matrix, measureText);
-					drawElement(ctx, moved, moved.type === "image" ? this.media?.image(moved.asset) ?? null : null, this.boxLabel);
+					drawElement(ctx, moved, moved.type === "image" ? this.media?.image(moved.asset) ?? null : null, this.boxLabel, this.equationNumbers());
 				}
 				ctx.restore();
 			}
@@ -951,7 +990,7 @@ export class Renderer {
 					const m = translate(0, e.dy);
 					for (const el of e.elements) {
 						const moved = transformElement(el, m, measureText);
-						drawElement(ctx, moved, moved.type === "image" ? this.media?.image(moved.asset) ?? null : null, this.boxLabel);
+						drawElement(ctx, moved, moved.type === "image" ? this.media?.image(moved.asset) ?? null : null, this.boxLabel, this.equationNumbers());
 					}
 					ctx.restore();
 				}
