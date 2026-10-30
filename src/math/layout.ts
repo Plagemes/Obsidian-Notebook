@@ -64,3 +64,19 @@ export function insertSnippet(text: string, from: number, to: number, snippet: s
 	const out = text.slice(0, from) + clean + text.slice(to);
 	return { text: out, caret: from + (at >= 0 ? at : clean.length) };
 }
+
+/**
+ * MathJax commands an equation may not use: links (href, url), styles and attributes set on the page (style, class,
+ * cssId, html, data), loading extensions (require) and raw glyph tricks (unicode, mmlToken). Obsidian's MathJax may
+ * have its safe extension off; filtering here keeps equations to typesetting. Returns the first one found, or null.
+ */
+export const UNSAFE_LATEX_COMMANDS = ["href", "url", "style", "class", "cssId", "html", "data", "require", "unicode", "mmlToken"] as const;
+
+export function unsafeLatexCommand(latex: string): string | null {
+	const re = /\\([A-Za-z]+)/g;
+	for (let m = re.exec(latex); m; m = re.exec(latex)) {
+		const name = m[1]!;
+		if ((UNSAFE_LATEX_COMMANDS as readonly string[]).includes(name)) return `\\${name}`;
+	}
+	return null;
+}

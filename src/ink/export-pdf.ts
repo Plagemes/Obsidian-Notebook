@@ -3,6 +3,7 @@ import { RENDER_INK, type BoxElement, type EquationElement, type MarkerElement, 
 import { EQUATION_NUMBER_GAP, equationNumberLabel, equationNumbers } from "../model/math-elements";
 import { graphScene, GRAPH_STYLE, type GraphScene, type SceneText } from "../math/graph-scene";
 import { equationOutline } from "./math-render";
+import { graphClips, strokeClip } from "./attach";
 import type { Polygon } from "../math/outline";
 import type { BBox } from "./hit-test";
 import { PAPER_DOT_RADIUS, PAPER_LINE_WIDTH } from "./export-svg";
@@ -302,12 +303,15 @@ function pageContent(
 			ops.push(op);
 		}
 	}
+	const clips = graphClips(page.elements);
 	for (const stroke of page.strokes) {
 		if (stroke.hidden && !v8.hidden) continue;
 		const op = strokeOps(stroke);
 		if (op) {
 			if (stroke.tool === "highlighter") res.highlighter = true;
-			ops.push(op);
+			// v9: ink bound to a graph is clipped to its frame, as on screen.
+			const clip = strokeClip(stroke, clips);
+			ops.push(clip ? `q ${num(clip.x)} ${num(clip.y)} ${num(clip.width)} ${num(clip.height)} re W n\n${op}\nQ` : op);
 		}
 	}
 	for (const el of page.elements ?? []) {

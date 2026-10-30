@@ -563,16 +563,33 @@ export class Batch implements Command {
 	}
 }
 
+/**
+ * Checks the document after a command (`checkContent` in serialize.ts): a message refuses the command, which is undone
+ * at once, so no edit can leave the document in a state the writer rejects (every later save would stop).
+ */
+export type ContentGuard = (doc: NotebookDocument) => string | null;
+
 export class History {
 	private undoStack: Command[] = [];
 	private redoStack: Command[] = [];
 
-	constructor(private readonly doc: () => NotebookDocument, readonly limit = 500) {}
+	constructor(
+		private readonly doc: () => NotebookDocument, readonly limit = 500,
+		private readonly guard: ContentGuard | null = null, private readonly refused: ((message: string) => void) | null = null,
+	) {}
 
-	/** Runs the command and records it. */
-	execute(cmd: Command): void {
-		cmd.apply(this.doc());
+	/** Runs the command and records it. False when the guard refused it (it is undone and not recorded). */
+	execute(cmd: Command): boolean {
+		const doc = this.doc();
+		cmd.apply(doc);
+		const problem = this.guard?.(doc) ?? null;
+		if (problem !== null) {
+			cmd.revert(doc);
+			this.refused?.(problem);
+			return false;
+		}
 		this.record(cmd);
+		return true;
 	}
 
 	/** Records an already applied command (e.g. the eraser, which erases while it moves). */

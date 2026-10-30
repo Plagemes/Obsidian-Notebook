@@ -27,6 +27,8 @@ export const GRAPH_MAX_LINE_WIDTH = 20;
 /** Largest coordinate of a graph viewport and smallest span (beyond these, doubles lose the curve). */
 export const GRAPH_MAX_ABS = 1e12;
 export const GRAPH_MIN_SPAN = 1e-9;
+/** Largest side of a graph's frame, pt (about 1.4 m: far more than any page; bounds the sampling work). */
+export const GRAPH_MAX_SIDE = 4000;
 /** Longest function id, characters. */
 export const GRAPH_ID_MAX = 64;
 
@@ -165,6 +167,53 @@ export function stableStringify(v: unknown): string {
 		return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(o[k])}`).join(",")}}`;
 	}
 	return JSON.stringify(v) ?? "null";
+}
+
+/**
+ * A graph as an editor produced it, made valid for the writer: ranges and areas in order (swapped, or removed when
+ * empty), non-finite numbers and bad steps or widths removed, too many functions, pieces or parameters cut, the frame
+ * within GRAPH_MAX_SIDE, a table of a missing function or with a zero step removed. Returns a new object.
+ */
+export function normalizeGraph(g: GraphElement): GraphElement {
+	const fin = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n);
+	const out: GraphElement = JSON.parse(JSON.stringify(g)) as GraphElement;
+	out.width = Math.min(GRAPH_MAX_SIDE, Math.max(1, fin(out.width) ? out.width : 1));
+	out.height = Math.min(GRAPH_MAX_SIDE, Math.max(1, fin(out.height) ? out.height : 1));
+	const seen = new Set<string>();
+	out.functions = out.functions.filter((f) => !seen.has(f.id) && (seen.add(f.id), true)).slice(0, GRAPH_MAX_FUNCTIONS);
+	for (const f of out.functions) {
+		for (const key of ["expr", "x", "y"] as const) if (typeof f[key] === "string" && f[key].length > GRAPH_EXPR_MAX) f[key] = f[key].slice(0, GRAPH_EXPR_MAX);
+		if (f.pieces) {
+			f.pieces = f.pieces.slice(0, GRAPH_MAX_PIECES).map((p) => ({ ...p, expr: p.expr.slice(0, GRAPH_EXPR_MAX), ...(p.when !== undefined ? { when: p.when.slice(0, GRAPH_EXPR_MAX) } : {}) }));
+			if (f.pieces.length === 0) f.pieces = [{ expr: "0" }];
+		}
+		if (f.min !== undefined || f.max !== undefined) {
+			if (fin(f.min) && fin(f.max) && f.min !== f.max) {
+				if (f.min > f.max) [f.min, f.max] = [f.max, f.min];
+			} else {
+				delete f.min;
+				delete f.max;
+			}
+		}
+		if (f.area !== undefined && !(fin(f.area.from) && fin(f.area.to) && f.area.from !== f.area.to)) delete f.area;
+		if (f.tangent !== undefined && !fin(f.tangent)) delete f.tangent;
+		if (f.width !== undefined && !(fin(f.width) && f.width > 0 && f.width <= GRAPH_MAX_LINE_WIDTH)) delete f.width;
+	}
+	if (out.params) {
+		const names = new Set<string>();
+		out.params = out.params.filter((p) => isParamName(p.name) && !names.has(p.name) && (names.add(p.name), true) && fin(p.value) && fin(p.min) && fin(p.max)).slice(0, GRAPH_MAX_PARAMS);
+		for (const p of out.params) {
+			if (p.min > p.max) [p.min, p.max] = [p.max, p.min];
+			if (p.min === p.max) p.max = p.min + 1;
+			if (p.step !== undefined && !(fin(p.step) && p.step > 0)) delete p.step;
+		}
+		if (out.params.length === 0) delete out.params;
+	}
+	for (const key of ["xStep", "yStep"] as const) if (out[key] !== undefined && !(fin(out[key]) && out[key] > 0)) delete out[key];
+	const t = out.table;
+	if (t && (!out.functions.some((f) => f.id === t.fn) || !fin(t.from) || !fin(t.step) || t.step === 0 || !fin(t.rows))) delete out.table;
+	else if (t) t.rows = Math.min(GRAPH_TABLE_MAX_ROWS, Math.max(1, Math.round(t.rows)));
+	return out;
 }
 
 /** Freezes the nested data of a graph (functions, pieces, parameters, viewport, table) so a copy can share it safely. */

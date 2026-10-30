@@ -96,9 +96,10 @@ describe("toolbar size (370)", () => {
 
 describe("Obsidian bookmarks (385)", () => {
 	it("builds a file bookmark whose subpath names the page by id", () => {
-		expect(pageBookmark("Notebooks/Physics.notebook", 3, "abc_1", "Physics, p. 3")).toEqual({
-			type: "file", path: "Notebooks/Physics.notebook", subpath: "#p3&id=abc_1", title: "Physics, p. 3",
+		expect(pageBookmark("Notebooks/Physics.notebook", 3, "abc_1", "Physics, p. 3", 1700000000000)).toEqual({
+			type: "file", ctime: 1700000000000, path: "Notebooks/Physics.notebook", subpath: "#p3&id=abc_1", title: "Physics, p. 3",
 		});
+		expect(pageBookmark("a.notebook", 2, null, "x").ctime).toBeGreaterThan(0);
 		expect(pageBookmark("a.notebook", 2, null, "x").subpath).toBe("#p2");
 	});
 
@@ -128,6 +129,7 @@ describe("Obsidian bookmarks (385)", () => {
 		const app = (internalPlugins: unknown) => ({ internalPlugins }) as never;
 		expect(bookmarksInstance(app({ getPluginById: () => ({ enabled: true, instance: { addItem } }) }))?.addItem).toBe(addItem);
 		expect(bookmarksInstance(app({ getPluginById: () => ({ enabled: false, instance: { addItem } }) }))).toBeNull();
+		expect(bookmarksInstance(app({ getPluginById: () => ({ instance: { addItem } }) }))).toBeNull();
 		expect(bookmarksInstance(app({ getPluginById: () => ({ enabled: true, instance: {} }) }))).toBeNull();
 		expect(bookmarksInstance(app({ getPluginById: () => undefined }))).toBeNull();
 		expect(bookmarksInstance(app({ getPluginById: () => { throw new Error("x"); } }))).toBeNull();

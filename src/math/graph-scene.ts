@@ -8,7 +8,7 @@
 import type { GraphElement, GraphFunction } from "../model/types";
 import { compileExpr, splitEquation, stripLhs, type Compiled } from "./expr";
 import { derivative, findExtrema, findIntersections, findRoots, integrate } from "./numeric";
-import { clipPolylines, sampleFunction, sampleImplicit, sampleParametric, samplePolar, type Polyline, type Pt, type ViewRect } from "./sample";
+import { clipPolylines, createBudget, sampleFunction, sampleImplicit, sampleParametric, samplePolar, type Polyline, type Pt, type ViewRect } from "./sample";
 
 export interface SceneLine {
 	x1: number;
@@ -62,6 +62,11 @@ export interface GraphScene {
 	texts: SceneText[];
 	/** Functions that could not be drawn: id and the parser's message. */
 	errors: Array<{ fn: string; message: string }>;
+	/**
+	 * The work limits were reached: curves were finished with coarser segments or some marks (roots, extrema,
+	 * intersections, areas) were left out. A "≈" is drawn in the bottom right corner.
+	 */
+	simplified: boolean;
 }
 
 /** Colours shared by every renderer of a graph. */
@@ -175,6 +180,13 @@ export function graphMapping(g: Pick<GraphElement, "x" | "y" | "width" | "height
 	};
 }
 
+/** Function evaluations for drawing the curves of one graph (all functions together). */
+export const SCENE_SAMPLE_BUDGET = 250_000;
+/** Function evaluations for roots, extrema, intersections, tangents and areas of one graph. */
+export const SCENE_ANALYSIS_BUDGET = 150_000;
+
+class BudgetSpent extends Error {}
+
 const cache = new WeakMap<GraphElement, GraphScene>();
 
 /** The scene of a graph, cached per element object (elements never change: an edit makes a new one). */
@@ -205,7 +217,7 @@ function buildScene(g: GraphElement): GraphScene {
 	const { toPage } = graphMapping(g);
 	const scene: GraphScene = {
 		frame: { x: g.x, y: g.y, width: g.width, height: g.height },
-		grid: [], axes: [], areas: [], curves: [], points: [], overlay: [], panels: [], texts: [], errors: [],
+		grid: [], axes: [], areas: [], curves: [], points: [], overlay: [], panels: [], texts: [], errors: [], simplified: false,
 	};
 	const xStep = stepFor(view.xMax - view.xMin, g.width, g.xStep);
 	const yStep = stepFor(view.yMax - view.yMin, g.height, g.yStep);
@@ -255,7 +267,9 @@ function buildScene(g: GraphElement): GraphScene {
 
 	const params = new Map((g.params ?? []).map((p) => [p.name, p.value]));
 	const degrees = g.degrees === true;
-	const opts = { width: g.width, height: g.height };
+	// Work limits of one graph (function evaluations): drawing the curves, then the analysis.
+	const budget = createBudget(SCENE_SAMPLE_BUDGET);
+	const opts = { width: g.width, height: g.height, budget };
 	const toPageLines = (lines: Polyline[]) => lines.map((l) => l.map(([x, y]) => toPage(x, y)));
 	const ofX = new Map<string, (x: number) => number>();
 	const visible = g.functions.filter((f) => !f.hidden);
@@ -313,50 +327,66 @@ function buildScene(g: GraphElement): GraphScene {
 		if (label) T(px + 2.5, py - 2.5, label, "left", "bottom", color, S.textSize - 0.5);
 	};
 	const pairs = new Set<string>();
-	for (const fn of visible) {
-		const f = ofX.get(fn.id);
-		if (!f) continue;
-		if (fn.area) {
-			const a = Math.max(Math.min(fn.area.from, fn.area.to), view.xMin - (view.xMax - view.xMin));
-			const b = Math.min(Math.max(fn.area.from, fn.area.to), view.xMax + (view.xMax - view.xMin));
-			const parts = sampleFunction(f, { ...view, xMin: a, xMax: b }, { ...opts, width: g.width * (b - a) / (view.xMax - view.xMin) }, a, b);
-			const polygons = clipPolylines(parts, { xMin: a, xMax: b, yMin: -1e300, yMax: 1e300 })
-				.filter((l) => l.length > 1)
-				.map((l) => toPageLines([[[l[0]![0], 0], ...l, [l[l.length - 1]![0], 0]]])[0]!);
-			if (polygons.length > 0) scene.areas.push({ color: fn.color, polygons });
-			const value = integrate(f, fn.area.from, fn.area.to);
-			const mid = (fn.area.from + fn.area.to) / 2;
-			const fm = f(mid);
-			const [lx, ly] = toPage(Math.min(Math.max(mid, view.xMin), view.xMax), Number.isFinite(fm) ? Math.min(Math.max(fm / 2, view.yMin), view.yMax) : 0);
-			T(lx, ly, `∫ = ${formatValue(value)}`, "center", "middle", fn.color);
-		}
-		if (fn.tangent !== undefined && Number.isFinite(fn.tangent)) {
-			const x0 = fn.tangent;
-			const y0 = f(x0);
-			const m = derivative(f, x0);
-			if (Number.isFinite(y0) && Number.isFinite(m)) {
-				const line: Polyline = [[view.xMin, y0 + m * (view.xMin - x0)], [view.xMax, y0 + m * (view.xMax - x0)]];
-				const clipped = clipPolylines([line], { xMin: view.xMin, xMax: view.xMax, yMin: view.yMin - (view.yMax - view.yMin), yMax: view.yMax + (view.yMax - view.yMin) });
-				scene.curves.push({ color: fn.color, width: Math.max(0.6, (fn.width ?? 1.2) * 0.7), lines: toPageLines(clipped), dash: [3, 2] });
-				const q = y0 - m * x0;
-				mark(x0, y0, fn.color, `y = ${formatValue(m)}x ${q < 0 ? "−" : "+"} ${formatValue(Math.abs(q))}`);
+	let analysis = SCENE_ANALYSIS_BUDGET;
+	/** f counted against the analysis budget; throws when it is spent (the analysis stops where it is). */
+	const counted = (fn: (x: number) => number) => (x: number) => {
+		if (--analysis < 0) throw new BudgetSpent();
+		return fn(x);
+	};
+	try {
+		for (const fn of visible) {
+			const raw = ofX.get(fn.id);
+			if (!raw) continue;
+			const f = counted(raw);
+			if (fn.area) {
+				const a = Math.max(Math.min(fn.area.from, fn.area.to), view.xMin - (view.xMax - view.xMin));
+				const b = Math.min(Math.max(fn.area.from, fn.area.to), view.xMax + (view.xMax - view.xMin));
+				const parts = sampleFunction(f, { ...view, xMin: a, xMax: b }, { ...opts, width: g.width * (b - a) / (view.xMax - view.xMin) }, a, b);
+				const polygons = clipPolylines(parts, { xMin: a, xMax: b, yMin: -1e300, yMax: 1e300 })
+					.filter((l) => l.length > 1)
+					.map((l) => toPageLines([[[l[0]![0], 0], ...l, [l[l.length - 1]![0], 0]]])[0]!);
+				if (polygons.length > 0) scene.areas.push({ color: fn.color, polygons });
+				const value = integrate(f, fn.area.from, fn.area.to);
+				const mid = (fn.area.from + fn.area.to) / 2;
+				const fm = f(mid);
+				const [lx, ly] = toPage(Math.min(Math.max(mid, view.xMin), view.xMax), Number.isFinite(fm) ? Math.min(Math.max(fm / 2, view.yMin), view.yMax) : 0);
+				T(lx, ly, `∫ = ${formatValue(value)}`, "center", "middle", fn.color);
+			}
+			if (fn.tangent !== undefined && Number.isFinite(fn.tangent)) {
+				const x0 = fn.tangent;
+				const y0 = f(x0);
+				const m = derivative(f, x0);
+				if (Number.isFinite(y0) && Number.isFinite(m)) {
+					const line: Polyline = [[view.xMin, y0 + m * (view.xMin - x0)], [view.xMax, y0 + m * (view.xMax - x0)]];
+					const clipped = clipPolylines([line], { xMin: view.xMin, xMax: view.xMax, yMin: view.yMin - (view.yMax - view.yMin), yMax: view.yMax + (view.yMax - view.yMin) });
+					scene.curves.push({ color: fn.color, width: Math.max(0.6, (fn.width ?? 1.2) * 0.7), lines: toPageLines(clipped), dash: [3, 2] });
+					const q = y0 - m * x0;
+					mark(x0, y0, fn.color, `y = ${formatValue(m)}x ${q < 0 ? "−" : "+"} ${formatValue(Math.abs(q))}`);
+				}
+			}
+			if (fn.roots) for (const x of findRoots(f, view.xMin, view.xMax, 600, 20)) mark(x, 0, fn.color, formatValue(x));
+			if (fn.extrema) {
+				for (const e of findExtrema(f, view.xMin, view.xMax, 600, 20)) mark(e.x, e.y, fn.color, `(${formatValue(e.x)}, ${formatValue(e.y)})`);
+			}
+			if (fn.intersections) {
+				for (const other of visible) {
+					const rawH = ofX.get(other.id);
+					if (!rawH || other.id === fn.id) continue;
+					const h = counted(rawH);
+					const key = [fn.id, other.id].sort().join(" ");
+					if (pairs.has(key)) continue;
+					pairs.add(key);
+					for (const x of findIntersections(f, h, view.xMin, view.xMax, 600, 20)) mark(x, f(x), fn.color, `(${formatValue(x)}, ${formatValue(f(x))})`);
+				}
 			}
 		}
-		if (fn.roots) for (const x of findRoots(f, view.xMin, view.xMax, 600, 20)) mark(x, 0, fn.color, formatValue(x));
-		if (fn.extrema) {
-			for (const e of findExtrema(f, view.xMin, view.xMax, 600, 20)) mark(e.x, e.y, fn.color, `(${formatValue(e.x)}, ${formatValue(e.y)})`);
-		}
-		if (fn.intersections) {
-			for (const other of visible) {
-				const h = ofX.get(other.id);
-				if (!h || other.id === fn.id) continue;
-				const key = [fn.id, other.id].sort().join(" ");
-				if (pairs.has(key)) continue;
-				pairs.add(key);
-				for (const x of findIntersections(f, h, view.xMin, view.xMax, 600, 20)) mark(x, f(x), fn.color, `(${formatValue(x)}, ${formatValue(f(x))})`);
-			}
-		}
+
+	} catch (e) {
+		if (!(e instanceof BudgetSpent)) throw e;
+		scene.simplified = true;
 	}
+	if (budget.simplified) scene.simplified = true;
+	if (scene.simplified) T(g.x + g.width - 3, g.y + g.height - 2, "≈", "right", "bottom", S.axis, S.textSize + 2);
 
 	// Table of values, top left; legend (labels and errors), top right.
 	const rowH = S.textSize + 2;

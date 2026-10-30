@@ -15,7 +15,39 @@ export interface Typeset {
 	outline: string;
 }
 
-const typeset = new Map<string, Typeset>();
+/**
+ * A small least-recently-used map: reading an entry makes it the newest, the oldest goes when it is full. A big export
+ * typesets more equations than the cache holds; the ones in use stay, and nothing is cleared all at once.
+ */
+export class LruCache<K, V> {
+	private readonly map = new Map<K, V>();
+	constructor(readonly capacity: number) {}
+
+	get(key: K): V | undefined {
+		const v = this.map.get(key);
+		if (v === undefined) return undefined;
+		this.map.delete(key);
+		this.map.set(key, v);
+		return v;
+	}
+
+	set(key: K, value: V): void {
+		this.map.delete(key);
+		this.map.set(key, value);
+		while (this.map.size > this.capacity) {
+			const oldest = this.map.keys().next().value as K;
+			this.map.delete(oldest);
+		}
+	}
+
+	get size(): number {
+		return this.map.size;
+	}
+}
+
+/** Typeset outlines kept this session (by source, style and size). */
+export const TYPESET_CACHE_SIZE = 2000;
+const typeset = new LruCache<string, Typeset>(TYPESET_CACHE_SIZE);
 let request: ((el: EquationElement) => void) | null = null;
 
 /** Key of what a typeset outline depends on. */
@@ -25,7 +57,6 @@ export function typesetKey(el: Pick<EquationElement, "latex" | "inline" | "fontS
 
 /** Remembers an outline typeset for `key` (the view, after MathJax). */
 export function storeTypeset(key: string, value: Typeset): void {
-	if (typeset.size > 500) typeset.clear();
 	typeset.set(key, value);
 }
 
@@ -46,12 +77,11 @@ export function equationOutline(el: EquationElement): { polys: Polygon[]; sx: nu
 	return polys ? { polys, sx: el.width / t.width, sy: el.height / t.height } : null;
 }
 
-const parsed = new Map<string, Polygon[] | null>();
+const parsed = new LruCache<string, Polygon[] | null>(600);
 
 function parsedOutline(d: string): Polygon[] | null {
 	let p = parsed.get(d);
 	if (p === undefined) {
-		if (parsed.size > 300) parsed.clear();
 		p = parseOutline(d);
 		parsed.set(d, p);
 	}

@@ -5,14 +5,14 @@
  * a point of the plane from where it was drawn to where it is drawn now, so a note written next to a root stays next
  * to that root. Pure: no 'obsidian'.
  */
-import { quantizePoint } from "../model/document";
+import { createId, quantizePoint } from "../model/document";
 import { Batch, ReplaceElement, ReplaceStroke, type Command } from "../model/history";
 import { isViewport } from "../model/math-elements";
 import { freezeStroke } from "../model/serialize";
 import type { GraphElement, GraphViewport, Page, Point, Stroke } from "../model/types";
-import { attachedInk } from "./attach";
+import { attachedInk, BOUND_SEPARATOR, boundGraphId } from "./attach";
 import type { MeasureText } from "./text-layout";
-import { apply, type Matrix } from "./transform";
+import { apply, multiply, type Matrix } from "./transform";
 
 type Frame = Pick<GraphElement, "x" | "y" | "width" | "height" | "view">;
 
@@ -57,13 +57,29 @@ export function zoomView(g: Frame, factor: number, px: number, py: number, axis:
 	return isViewport(out) ? out : v;
 }
 
-/** A stroke moved by `m` (positions only: the pen width stays, so notes stay readable at any zoom). */
-export function moveStroke(s: Stroke, m: Matrix): Stroke {
-	const points: Point[] = s.points.map(([x, y, p]) => {
-		const [tx, ty] = apply(m, x, y);
+/**
+ * Where a moved stroke came from in this session: its first unmoved ancestor and the matrix from it, so a stroke moved
+ * many times is computed from the original points once (rounding to 0.01 pt does not pile up, nor get magnified by
+ * later zooms). In memory only; after a reload the saved points are the starting point.
+ */
+const lineage = new WeakMap<Stroke, { origin: Stroke; m: Matrix }>();
+
+/**
+ * A stroke moved by `m` (positions only: the pen width stays, so notes stay readable at any zoom). With `graphId`, the
+ * result is bound to that graph (see BOUND_SEPARATOR in attach.ts), so it stays its ink outside the frame too.
+ */
+export function moveStroke(s: Stroke, m: Matrix, graphId?: string): Stroke {
+	const from = lineage.get(s);
+	const origin = from?.origin ?? s;
+	const total = from ? multiply(m, from.m) : m;
+	const points: Point[] = origin.points.map(([x, y, p]) => {
+		const [tx, ty] = apply(total, x, y);
 		return quantizePoint(tx, ty, p);
 	});
-	return freezeStroke({ ...s, points });
+	const id = graphId !== undefined && boundGraphId(s) !== graphId ? `${graphId}${BOUND_SEPARATOR}${createId()}` : s.id;
+	const out = freezeStroke({ ...s, id, points });
+	lineage.set(out, { origin, m: total });
+	return out;
 }
 
 /** Strokes of `page` written on `graph` (the ink-attached-to-objects rule). */
@@ -83,7 +99,7 @@ export function graphEditCommand(page: Page, before: GraphElement, after: GraphE
 	if (!identity) {
 		for (const s of ink) {
 			const i = page.strokes.indexOf(s);
-			if (i >= 0) commands.push(new ReplaceStroke(page.id, s, [moveStroke(s, m)], i));
+			if (i >= 0) commands.push(new ReplaceStroke(page.id, s, [moveStroke(s, m, after.id)], i));
 		}
 	}
 	return new Batch(label, commands);
