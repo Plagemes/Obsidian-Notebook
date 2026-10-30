@@ -132,6 +132,7 @@ export default class NotebookPlugin extends Plugin {
 		registerQuickSwitcher(this, new QuickNavService(this.app, {
 			root: () => this.settings.folder,
 			loadIndex: () => this.host.loadIndex(),
+			saveIndex: (data) => this.host.saveIndex(data),
 			readNotebook: (file) => this.host.readNotebook(file),
 			thumbnailBackground: (doc, page, width) => this.host.thumbnailBackground(doc, page, width),
 		}, this.recentPages));
