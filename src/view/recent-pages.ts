@@ -49,6 +49,12 @@ export class RecentPagesService {
 		this.recorder.flush();
 	}
 
+	/** When this device last edited page `pageId` of notebook `nb` (ms since epoch), or null when it has no record (page information, 379). */
+	pageEditedAt(nb: string, pageId: string): number | null {
+		this.recorder.flush();
+		return this.log.list().find((i) => i.nb === nb && i.page === pageId)?.at ?? null;
+	}
+
 	/** Newest first, only notebooks that still exist. */
 	items(): RecentItem[] {
 		return this.log.list().filter((i) => this.app.vault.getFileByPath(i.path) !== null);

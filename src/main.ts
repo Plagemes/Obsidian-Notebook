@@ -184,6 +184,11 @@ export default class NotebookPlugin extends Plugin {
 		this.recentPages?.note(nb, path, pageId, num);
 	}
 
+	/** wave 0.9 (379): when this device last edited the page, if it has a record (the recent pages log). */
+	pageEditedAt(nb: string, pageId: string): number | null {
+		return this.recentPages?.pageEditedAt(nb, pageId) ?? null;
+	}
+
 	/** Instant start: remembers the page being read (called a moment after it changes). Only the plugin settings are written. */
 	remember(path: string, page: number, pos: SavedPosition | null = null): void {
 		const s = this.settings;

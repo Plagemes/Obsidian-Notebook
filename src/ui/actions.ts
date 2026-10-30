@@ -152,7 +152,15 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "selection-white-transparent", label: "selection.whiteTransparent", icon: "eraser", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 60, scope: "view", when: (c) => (c.selection?.images ?? 0) > 0 },
 	{ id: "link-selection", label: "penlinks.linkSelection", icon: "link", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 55, scope: "view", command: "command.linkSelection", when: hasSelection },
 	{ id: "selection-open-link", label: "penlinks.openLink", icon: "external-link", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 56, scope: "view", when: (c) => (c.selection?.links ?? 0) > 0 },
-	{ id: "stamps-save-selection", label: "stamps.save", icon: "stamp", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 50, scope: "view", when: hasSelection },
+	{ id: "stamps-save-selection", label: "stamps.save", icon: "stamp", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 50, scope: "view", when: hasSelection },
+	// wave 0.9 (357): layer order of the selection. Front and back are the strongest moves, so they rank higher in a narrow bar.
+	...([
+		["front", "bring-to-front", 52, "command.layerFront"], ["back", "send-to-back", 51, "command.layerBack"],
+		["forward", "move-up", 45, "command.layerForward"], ["backward", "move-down", 44, "command.layerBackward"],
+	] as const).map(([move, icon, priority, command]): ActionDef => ({
+		id: `layer-${move}`, label: `layer.${move}`, icon, group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"],
+		priority, scope: "view", command, when: hasSelection, keywords: "layer order z arrange stack front back behind above below",
+	})),
 	{ id: "delete-selection", label: "tool.deleteSelection", icon: "trash-2", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 70, scope: "view", command: "command.deleteSelection", when: hasSelection, danger: true },
 
 	// --- navigation (wave 0.7): the first section of the page sheet (the page indicator opens it) and of the sheet.
@@ -160,6 +168,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "recent-pages", label: "command.recentPages", icon: "history", group: "navigate", surfaces: ["page", "sheet", "library"], priority: 60, scope: "global", command: true, readOnly: true, keywords: "edited last" },
 	{ id: "go-to-page", label: "command.goToPage", icon: "file-search", group: "navigate", surfaces: ["sheet", "library"], priority: 55, scope: "global", command: true, readOnly: true, keywords: "switcher find notebook" },
 	{ id: "toggle-page-mode", label: "toolbar.pageMode", icon: "book-open", group: "navigate", surfaces: ["quick", "page", "sheet"], priority: 46, scope: "view", command: "command.pageMode", readOnly: true, checked: (c) => !!c.toggles.pageMode, keywords: "swipe paged continuous scroll" },
+	// wave 0.9 (361): find and replace in the text boxes of the notebook (a panel; the results jump to the page).
+	{ id: "find-replace", label: "command.findReplace", icon: "replace", group: "navigate", surfaces: ["sheet"], priority: 48, scope: "view", command: true, readOnly: true, keywords: "search text box substitute change word" },
 
 	// --- insert: quick slots (ranked) and the sheet.
 	{ id: "insert-image", label: "tool.image", icon: "image-plus", group: "insert", surfaces: ["quick", "sheet"], priority: 70, scope: "view", keywords: "picture photo" },
@@ -192,6 +202,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "page-save-template", label: "page.saveTemplate", icon: "layout-template", group: "page", surfaces: ["page"], priority: 25, scope: "view" },
 	{ id: "page-restore-version", label: "page.restoreVersion", icon: "history", group: "page", surfaces: ["page"], priority: 20, scope: "view" },
 	{ id: "page-deleted-pages", label: "page.deletedPages", icon: "archive-restore", group: "page", surfaces: ["page"], priority: 20, scope: "view", keywords: "trash restore" },
+	// wave 0.9 (379): dates, ink, objects, files, tags, bookmark and markers of one page.
+	{ id: "page-info", label: "page.info", icon: "info", group: "page", surfaces: ["page", "sheet"], priority: 42, scope: "view", command: true, readOnly: true, keywords: "properties details statistics strokes points size dates" },
 	{ id: "page-split", label: "heavy.split", icon: "split", group: "page", surfaces: ["page", "banner"], priority: 45, scope: "view", when: (c) => !!c.page?.splittable, keywords: "heavy large slow" },
 	// wave 0.9 (#303): practice copies of exercises (view/practice.ts). Only "redo" is in the page sheet: the strip over a
 	// practice page has the other buttons, the commands are in the palette.

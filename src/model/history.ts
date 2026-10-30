@@ -416,6 +416,49 @@ export class ReplaceElement implements Command {
 	}
 }
 
+/**
+ * Changes the layer order (roadmap 357): the strokes or the elements of a page in a new order, nothing else. The order
+ * is stored as the items in `before` and `after`; applying puts the items of `after` that are on the page into the slots
+ * those items occupy now, so an item that is not in the lists keeps its position, and a list that has become stale
+ * (an item erased in between) still gives a valid page. Undoing puts `before` back the same way.
+ */
+export class ReorderLayer implements Command {
+	readonly label = "Change layer order";
+	private readonly before: readonly (Stroke | PageElement)[];
+	private readonly after: readonly (Stroke | PageElement)[];
+	constructor(readonly pageId: string, readonly layer: "strokes" | "elements", before: readonly (Stroke | PageElement)[], after: readonly (Stroke | PageElement)[]) {
+		this.before = [...before];
+		this.after = [...after];
+	}
+
+	apply(doc: NotebookDocument): void {
+		this.place(doc, this.after);
+	}
+
+	revert(doc: NotebookDocument): void {
+		this.place(doc, this.before);
+	}
+
+	private place(doc: NotebookDocument, order: readonly (Stroke | PageElement)[]): void {
+		const page = pageOf(doc, this.pageId);
+		const list = (this.layer === "strokes" ? page.strokes : page.elements) as (Stroke | PageElement)[] | undefined;
+		if (!list) return;
+		const members = new Set(order);
+		const slots: number[] = [];
+		const onPage = new Set<Stroke | PageElement>();
+		list.forEach((item, i) => {
+			if (!members.has(item)) return;
+			slots.push(i);
+			onPage.add(item);
+		});
+		const present = order.filter((item) => onPage.has(item));
+		if (present.length !== slots.length) return;
+		present.forEach((item, k) => {
+			list[slots[k]!] = item;
+		});
+	}
+}
+
 /** Changes the notebook metadata (tags, favourite, cover, bookmarks). Both sides are copied. */
 export class SetMeta implements Command {
 	readonly label = "Change notebook properties";
