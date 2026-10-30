@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+Repository and documentation only: no change to the plugin or the notebook format.
+
+### Added
+- **README rebuilt as a showcase**: a banner and screenshots in dark and light, badges, *Why Notebook*, grouped feature highlights, quick start, FAQ, roadmap numbers and contributing links. The long manual moved, unchanged apart from the 0.12.0 additions, into `docs/features.md` (features, settings, file format, now format 11), `docs/install.md` (all install routes, debugging on Android) and `docs/development.md` (commands, releasing, harness, roadmap page).
+- **Public roadmap page** (`site/index.html`, GitHub Pages): counters, a progress bar, filters by status, area and priority, search, every feature with its status and release, and *Most requested* (open `feature-request` issues from the public GitHub API, sorted by 👍). No external fonts, cookies or analytics. Data from `scripts/roadmap-data.mjs` (docs/roadmap.md + CHANGELOG.md → `site/roadmap.json`), published by `.github/workflows/pages.yml`.
+- Issue forms (`feature_request.yml`, `bug_report.yml`, `config.yml` linking to Discussions → Ideas) and `CONTRIBUTING.md`.
+- Harness: `dev/harness/banner.html` renders the README banner (1280 × 400), the social preview (1280 × 640) and the roadmap page's art band with the art engine, the cover painter and a pen stroke from the real pen outline; `npm run harness:check` screenshots and checks them, and the new `npm run harness:media` copies them and downscales the curated screenshots into `docs/media/`. The settings tab is also screenshotted on a light desktop. Headless Chrome helpers moved to `dev/harness/chrome.mjs`.
+- `docs/media/repo-settings.md`: description, topics, homepage and social preview to set on GitHub.
+
 ## 0.12.0 — 2026-10-30
 
 Document format v11: notebooks saved by 0.12.0 open read-only (with a backup) in 0.11.x and older; a v10 notebook is read unchanged and becomes v11 on its first save. The library index is rebuilt once (index v5). Checked in tests and the browser harness only; not verified in Obsidian or on Android hardware. Manual steps 407-469 in `docs/testing.md`.

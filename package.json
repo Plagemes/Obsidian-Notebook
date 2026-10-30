@@ -15,6 +15,7 @@
     "bench": "vitest run --project perf --silent=false",
     "harness": "node dev/harness/build.mjs --serve",
     "harness:check": "node dev/harness/check.mjs",
+    "harness:media": "node dev/harness/media.mjs",
     "bench:open": "node dev/harness/open-bench.mjs",
     "bench:lod": "node dev/harness/lod-bench.mjs"
   },

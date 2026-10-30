@@ -1,0 +1,62 @@
+name: Feature request
+description: Suggest something Notebook should do. Requests are listed on the public roadmap, sorted by 👍.
+title: "[Feature] "
+labels: ["feature-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time! Check the [roadmap](https://plagemes.github.io/Obsidian-Notebook/) first: your idea may already be planned. To vote for an existing request, add a 👍 reaction to it instead of opening a new one.
+  - type: checkboxes
+    id: searched
+    attributes:
+      label: Existing requests
+      options:
+        - label: I searched the existing feature requests and the roadmap, and this is not there yet.
+          required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What would you like?
+      description: Describe the feature in a few sentences. What would you see or do?
+      placeholder: "For example: a lasso option that selects only the highlighter strokes."
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why? What is your use case?
+      description: What are you trying to do, and what gets in the way today? A concrete example helps most.
+    validations:
+      required: true
+  - type: dropdown
+    id: device
+    attributes:
+      label: Device
+      description: Where would you use it? Pick every one that applies.
+      multiple: true
+      options:
+        - Android tablet
+        - Android phone
+        - iPad
+        - iPhone
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+  - type: dropdown
+    id: importance
+    attributes:
+      label: How important is it to you?
+      options:
+        - Nice to have
+        - Important, I would use it often
+        - Essential, it blocks how I want to use Notebook
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Sketches, screenshots, links to apps that do it well.
