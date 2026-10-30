@@ -112,7 +112,7 @@ import {
 	centredPosition, imageElementSize, imagePageSize, mergeMeta, metaEquals, newTextBox, shapePoints, shouldGrabRuler, toggleBookmark,
 	unionBounds,
 } from "./view-helpers";
-import { showNotice, type NoticeHandle } from "./notice";
+import { showErrorNotice, showNotice, type NoticeHandle } from "./notice";
 
 export const VIEW_TYPE = "notebook-view";
 
@@ -821,7 +821,7 @@ export class NotebookView extends FileView {
 				},
 				onBackup: (path, reason) => {
 					const key = reason === "conflict" ? "notice.conflict" : reason === "journal" ? "notice.journalBackup" : "notice.backup";
-					showNotice(t(key, { path }), 8000);
+					showErrorNotice(t(key, { path }), 8000);
 					if (!current()) return;
 					this.lastBackupPath = path;
 					if (session.mode === "broken" || session.mode === "readonly") this.showProblem();
@@ -1949,7 +1949,8 @@ export class NotebookView extends FileView {
 		const now = Date.now();
 		if (now - this.lastErrorAt < 10000) return;
 		this.lastErrorAt = now;
-		showNotice(`Notebook: ${message}`, 8000);
+		// An error (a failed save) is shown at once, not after the pen is lifted.
+		showErrorNotice(`Notebook: ${message}`, 8000);
 	}
 
 	/** Every real change of the document: schedules the save and logs the page as recently edited (365). */

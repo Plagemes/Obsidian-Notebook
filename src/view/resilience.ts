@@ -29,7 +29,7 @@ import type { DiskContentInfo, ExternalNewerInfo, SessionMode } from "../storage
 import { AdapterSpaceProbe, pluginFolder, VaultDocumentIO } from "../storage/vault-io";
 import type { SpaceProbe, WriteHealthState } from "../storage/write-guard";
 import { resolveAssetFile } from "./media";
-import { showNotice } from "./notice";
+import { showErrorNotice, showNotice } from "./notice";
 
 const SAFE_MODE_KEY = "notebook-safe-mode";
 const LEDGER_KEY = "notebook-integrity-ledger";
@@ -337,7 +337,7 @@ export class ViewResilience {
 		const kept = previous !== null && previous.trim().length > 0 && parse(previous).ok ? this.keepCopy(file, previous) : Promise.resolve(null);
 		if (verdict.kind !== "rolled-back" && verdict.kind !== "altered") {
 			// The broken page with Repair is shown by the view; just say that the open version was kept.
-			void kept.then((path) => path && showNotice(t("integrity.unreadableKept", { path }), 10000));
+			void kept.then((path) => path && showErrorNotice(t("integrity.unreadableKept", { path }), 10000));
 			return;
 		}
 		void kept.then((path) => this.renderIntegrityBanner(file, verdict, info.content, previous, path));
