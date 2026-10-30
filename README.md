@@ -117,6 +117,19 @@ All of this is new in 0.9.0 and **not verified on Android hardware**; the manual
 - **Crop PDF margins** (PDF contextual bar, *All actions*): fits the content of each PDF page to the screen width, a view setting for small screens; the document and exports are untouched.
 - **Obsidian integration and input**: command icons for the mobile toolbar, *Add page to Obsidian bookmarks*, the page turner and the *Toolbar size* setting are described under *Interface*.
 
+### Navigation, selection and library (0.10.0)
+
+All of this is new in 0.10.0 and **not verified on Android hardware**; the manual steps are in [docs/testing.md](docs/testing.md) (steps 275-379). The notebook format does not change.
+
+- **Tabs of open notebooks** (setting, off by default): a strip above the toolbar lists the open notebooks; a two-finger sideways swipe on the toolbar goes to the next or previous one.
+- **Automatic line break** (setting, off by default): on ruled or grid paper, lifting the pen at the right edge scrolls to the start of the next line.
+- **Back and Forward** through the pages you jumped between; a **fast scrollbar** with a page preview; a **status bar item** ("p. 3/12 · Saved", desktop only).
+- **Date and time stamp** at the pen position; **lasso selection across pages**; **Copy to other devices** / **Paste from another device…** through the vault.
+- **Selection tools**: rectangle selection, select by colour or tool, align and distribute, rotate 90°, mirror and exact size.
+- **Library**: pin notebooks, archive them, order them by hand, and **Check library** (unreadable notebooks, unused files moved inside the vault, never deleted).
+- **Read-only mode** per notebook view; **Export…** to PNG images, page ranges for every format, and **Print** (desktop).
+- **Free colour picker** with recent colours, a page **eyedropper** and a **style eyedropper** (colour, width and tool from a stroke).
+
 ### PDFs and scans
 
 - **Import PDF as notebook** (library button or command): one notebook page per PDF page, with the PDF page as the background; you write on top of it.
