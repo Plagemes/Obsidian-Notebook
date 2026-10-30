@@ -9,6 +9,8 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Operations on several selected pages (roadmap 378, wave 0.8): multi-select in the page navigator (select button, long press on touch, Ctrl/Shift+click, range, select all) and move (start, end, position, another notebook), duplicate, bookmark, tag, paper, size, PDF export, delete through the page trash; one undo step each | ✅ | ✅ `tests/page-ops.test.ts` (order planning, ranges, every command as one step with exact undo, never deleting every page); ❌ the panel, the menus, touch long press, the dialogs | | ✅ | long press on touch both starts a selection and arms the old drag-to-reorder: to be checked on the tablet (steps 200-202) |
 | Do not disturb while writing (roadmap 374, wave 0.8): the plugin's own notices and non-urgent background work (thumbnails in the page panel and the library, library re-index, version-history snapshots, the timetable offer) wait while a pen is on the screen and for 1.5 s after | ✅ | ✅ `tests/writing-guard.test.ts` (timing, queue order, same-key replacement, lost pen, reset); ❌ real pen events, the notice wrapper in Obsidian | | ✅ | Obsidian's own notices (and other plugins') cannot be held back; `pointerType` `pen` only (a finger or mouse does not count); notices from the toolbar, stamps, selection actions and Zettelkasten are not routed yet (steps 205-206) |
 | Stable page links (roadmap 388, wave 0.8): copy/insert link and embed, page suggestions, `obsidian://` links, companion note links, PDF annotation note links and the API write `#p3&id=<page id>`; opening and embeds resolve by id first; API `getPageLink`, `openNotebook(file, pageId)` | ✅ | ✅ `tests/stable-links.test.ts` (subpaths, protocol, ephemeral state, resolve, API page refs), `tests/page-links.test.ts`; ❌ following a link in Obsidian | | | recent pages and the quick switcher (roadmap 364, 365) are not in this branch: they must use `stablePageSubpath` (steps 203-204) |
+| Tabs of open notebooks (roadmap 363, wave 0.10): optional strip (setting, off by default) listing the notebook leaves with switching; two-finger sideways swipe on the toolbar strip goes to the next / previous notebook; commands *Go to the next / previous open notebook* | ✅ | ✅ `tests/tabs-lines.test.ts` (neighbour tab, labels, swipe recogniser, registry and settings); the strip and the workspace calls are not covered by Node tests (steps TL1-TL3) | | ✅ | Order of tabs is the order Obsidian lists the leaves; a swipe stops at the first / last notebook, the commands wrap; the swipe on a real touch screen is untested |
+| Automatic line break (roadmap 353, wave 0.10): on ruled / grid paper, a stroke that ends in the right band of the view scrolls (animated, after a pause, never while a contact is down) so the next line starts under the hand; respects one-page-at-a-time mode; setting, off by default | ✅ | ✅ `tests/tabs-lines.test.ts` (target computation, paper kinds, band, page mode box, bottom band, animation controller) | | ✅ | The pause, band and animation are tuned on paper, not with a pen; feel is untested (steps TL4-TL6) |
 | Notebook commands in the Obsidian mobile toolbar (roadmap 384, wave 0.9): every registry command is registered with its action's icon; no toolbar suggestion API exists, so the README lists the commands to add | ✅ | ✅ `tests/ui-registry.test.ts` (every command id and name); ❌ the icons in Obsidian's mobile toolbar | | | step 249 |
 | Bookmark a page in Obsidian's Bookmarks pane (roadmap 385, wave 0.9): file bookmark with `#pN&id=<page id>`, duplicate detection (also in groups), feature detection of the core plugin with a notice; opening it resolves by id | ✅ | ✅ `tests/obsidian-input.test.ts` (bookmark shape, ephemeral subpath to page by id, moved and deleted page, detection that never throws); ❌ the Bookmarks plugin itself, opening a bookmark in Obsidian | | ✅ | uses an internal, unpublished API of the core Bookmarks plugin: it may change between Obsidian versions (steps 250-251) |
 | Page turner (roadmap 372, wave 0.9): arrows, PageUp / PageDown, space and Shift+space turn pages when the notebook is active and nothing else wants the key; setting to turn it off | ✅ | ✅ `tests/obsidian-input.test.ts` (key mapping, modifiers, repeat, text fields, focused buttons); harness (`npm run harness:check`: keys reach the page turn, not in a text field, setting off); ❌ a real Bluetooth clicker | | | Android volume keys cannot be used (the system keeps them); clickers that send other keys are not covered (steps 252-253) |
@@ -1007,6 +1009,26 @@ Benchmark output (step 21): paste it here.
 ```
 (paste results)
 ```
+
+### Tabs and automatic line break (wave 0.10)
+
+Not verified on a device. Setup: two or three notebooks (one with ruled paper, one with grid paper), the pen in pen-only mode.
+
+TL1. **Tab strip.** Open two notebooks in two Obsidian tabs. With *Tabs of open notebooks* off, no strip shows. Turn it on in the settings: a strip with both names appears above the toolbar in each notebook, the notebook in view marked. Tap the other name: that notebook comes to the front. Open a third one: it is added. Close one: it disappears; with one notebook left the strip hides. Two notebooks with the same name show their folders.
+TL2. **Swipe on the toolbar.** With two or more notebooks open, put two fingers on the toolbar strip and swipe left: the next notebook comes to the front; swipe right: the previous one. At the last / first notebook nothing happens. A one-finger drag, a pinch and a swipe with three fingers do nothing. Two fingers swiping on the page pan or zoom as before and never switch notebooks.
+TL3. **Commands.** In the command palette, *Go to the next open notebook* and *Go to the previous open notebook* appear only with two or more notebooks open and go round at the ends.
+TL4. **Line break off by default.** Zoom in to about 200 % on ruled paper and write to the right edge of the screen: lift the pen. The view stays where it is.
+TL5. **Line break on.** Turn on *Automatic line break*. Write along a line to the right edge of the screen and lift the pen: after a short pause the view slides left so that the left edge of the page is at the left of the screen and the next ruled line is one line height below where the pen was. It never moves while the pen touches the screen; touching the screen during the slide stops it. Repeat on grid paper. On blank and dotted paper, and with the whole page width visible (zoom out), nothing moves.
+TL6. **Limits.** Write on the last line of the page near the right edge: the view does not jump to a line outside the page. In one-page-at-a-time mode the view stays on the same page (it never turns to the next one). Near the bottom of the screen the view also moves up, as the *Scroll up when writing near the bottom* option does.
+
+| Step | Result | Notes |
+|---|---|---|
+| TL1 | | |
+| TL2 | | |
+| TL3 | | |
+| TL4 | | |
+| TL5 | | |
+| TL6 | | |
 
 ## Quick check — Windows
 

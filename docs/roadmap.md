@@ -654,7 +654,7 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 350. **P2** Pen width relative to zoom (option): the same width on screen at any zoom.
 351. **P2** Stroke taper settings: tapering at the start and end of a stroke.
 352. **P2** Write big, store small: write margin notes at a comfortable size and they are shrunk into place.
-353. **P2** Automatic line break: when writing reaches the right margin, the view jumps to the start of the next line.
+353. **P2** 🧪 Automatic line break: when writing reaches the right margin, the view jumps to the start of the next line.
 354. **P3** Right-to-left writing: automatic next page, word detection and the space tool also work for Arabic and Hebrew.
 355. **P2** Stylus profiles: S Pen, USI and other pens recognised automatically, with settings that suit them.
 356. **P2** Quick date and time stamp at the pen position.
@@ -668,7 +668,7 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 362. **P2** Cross-device clipboard: copy on the tablet, paste on the phone, through the vault.
 
 ### Navigation and view
-363. **P2** Tabs of open notebooks, with a swipe from one to the next.
+363. **P2** 🧪 Tabs of open notebooks, with a swipe from one to the next.
 364. **P1** 🧪 Quick switcher for pages across all notebooks.
 365. **P1** 🧪 Recently edited pages across all notebooks.
 366. **P1** 🧪 Go to page by typing its number.

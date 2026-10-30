@@ -119,6 +119,12 @@ designed primary action out.
 - **Mouse** clicks; right click on a favourite offers save/reset (also reachable by long press and from the radial).
   Escape closes popovers, sheets and the radial menu. Every action has a command for hotkeys.
 - A tap outside an open popover/sheet closes it and is swallowed (no stray ink), as in Samsung Notes.
+- **Tabs of open notebooks** (wave 0.10, 363): an optional strip above the toolbar (setting, off by default) lists the open
+  notebook leaves; a two-finger sideways swipe on the toolbar strip, never on the page, goes to the next / previous one.
+  The registry actions `notebook-next` and `notebook-previous` (sheet, command palette) do the same. The strip is not an
+  action surface: its buttons are the open notebooks themselves.
+- **Automatic line break** (wave 0.10, 353): a setting, not an action. After pen-up near the right margin on ruled or grid
+  paper the view eases to the start of the next line; any touch cancels it, and it never moves while a contact is down.
 
 ## 6. Radial menu
 

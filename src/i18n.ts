@@ -1781,6 +1781,14 @@ const en = {
 	"command.nightMode": "Night mode (dark page, switch on or off)",
 	"display.crop": "Crop PDF margins",
 	"command.cropMargins": "Crop the white margins of PDF pages (view only)",
+	// wave 0.10: tabs and lines
+	"tabs.label": "Open notebooks",
+	"command.notebookNext": "Go to the next open notebook",
+	"command.notebookPrevious": "Go to the previous open notebook",
+	"settings.notebookTabs": "Tabs of open notebooks",
+	"settings.notebookTabs.desc": "Shows a compact strip above the toolbar that lists the notebooks open in Obsidian and switches between them. It appears when two or more notebooks are open. Independently of this setting, swiping sideways with two fingers on the toolbar goes to the next or previous notebook; the page itself never reacts to it.",
+	"settings.autoLineBreak": "Automatic line break",
+	"settings.autoLineBreak.desc": "On ruled or grid paper, when you lift the pen near the right edge of the visible area, the view scrolls smoothly after a short pause so the start of the next line is under your hand. It never moves while the pen is down, and in one-page-at-a-time mode it stays on the page. Nothing in the notebook changes.",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -3566,6 +3574,14 @@ const it: Partial<Record<MessageKey, string>> = {
 	"command.nightMode": "Modalità notte (pagina scura, attiva o disattiva)",
 	"display.crop": "Ritaglia i margini del PDF",
 	"command.cropMargins": "Ritaglia i margini bianchi delle pagine PDF (solo visualizzazione)",
+	// wave 0.10: tabs and lines
+	"tabs.label": "Quaderni aperti",
+	"command.notebookNext": "Vai al quaderno aperto successivo",
+	"command.notebookPrevious": "Vai al quaderno aperto precedente",
+	"settings.notebookTabs": "Schede dei quaderni aperti",
+	"settings.notebookTabs.desc": "Mostra sopra la barra degli strumenti una striscia compatta con i quaderni aperti in Obsidian, per passare dall'uno all'altro. Compare quando sono aperti due o più quaderni. Indipendentemente da questa impostazione, scorrere di lato con due dita sulla barra degli strumenti porta al quaderno successivo o precedente; la pagina non reagisce mai a questo gesto.",
+	"settings.autoLineBreak": "A capo automatico",
+	"settings.autoLineBreak.desc": "Su carta a righe o a quadretti, quando alzi la penna vicino al bordo destro dell'area visibile, dopo una breve pausa la vista scorre in modo fluido così l'inizio della riga successiva è sotto la tua mano. Non si muove mai mentre la penna è appoggiata e, nella modalità una pagina alla volta, resta sulla pagina. Nel quaderno non cambia nulla.",
 };
 
 let table: Partial<Record<MessageKey, string>> | null = null;
