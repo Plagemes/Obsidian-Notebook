@@ -1,4 +1,4 @@
-import { FileView, Scope, type Menu, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
+import { FileView, getLanguage, Scope, type Menu, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 import { pageFromState, pageIdFromState } from "../integration/links";
 import { pageTargetFromEphemeralState, resolvePageTarget, type PageTarget } from "../integration/page-links";
 import { checkConflicts, openRepair, type ReliabilityDeps } from "../integration/reliability";
@@ -11,6 +11,7 @@ import { renderThumbnail } from "../library/thumbnail";
 import { needsNextPage, needsPageOffer } from "../ink/auto-page";
 import { deleteInkCommand, inkOnRemoved } from "../ink/attach";
 import { captureClip, type ClipContent } from "../ink/clipboard";
+import { cleanStampFormat, formatStamp, stampElement, stampSpot } from "../ink/date-stamp";
 import {
 	captureCrossPageClip, frameOffset, pagesTouchedBy, partsBounds, planCrossPageTransform, selectAcrossPages, type PagePart,
 } from "../ink/cross-page";
@@ -60,7 +61,8 @@ import type { JournalStore } from "../storage/journal";
 import { DocumentSession, type SaveState, type SessionMode } from "../storage/session";
 import { nextTask } from "../storage/idle";
 import { isNotebookFile } from "../storage/format";
-import { VaultDocumentIO } from "../storage/vault-io";
+import { VaultDocumentIO, sidecarDeviceId, vaultDeviceFileAdapter } from "../storage/vault-io";
+import { SharedClipStore } from "../storage/shared-clip-store";
 import { backupFolder, readSettings, type NotebookSettings } from "../settings";
 import { defaultMarkdownFolder, exportMarkdown } from "./export-markdown";
 import { ExportModal, MarkdownExportModal } from "./export-dialog";
@@ -337,6 +339,10 @@ export class NotebookView extends FileView {
 	private active: ActiveStroke | null = null;
 	private erasing: ActiveErase | null = null;
 	private lasso: Lasso | null = null;
+	/** wave 0.10 (362): the clipboard files shared between devices (made when first used). */
+	private sharedClipStore: SharedClipStore | null = null;
+	/** wave 0.10 (356): where the pen last touched a page (page coordinates), for the date and time stamp. */
+	private lastPen: { pageId: string; x: number; y: number; at: number } | null = null;
 	private spaceDrag: SpaceDrag | null = null;
 	private selection: Selection | null = null;
 	private drag: SelectionDrag | null = null;
@@ -1432,6 +1438,27 @@ export class NotebookView extends FileView {
 		this.history.execute(new Batch("Delete selection", commands));
 		this.afterHistoryChange();
 		if (owned.length > 0) this.offerDeleteInk(page, removedEls, owned);
+	}
+
+	/**
+	 * wave 0.10 (356): inserts the date and time as a text box where the pen last touched (or in the middle of the page in
+	 * view), in the format of the setting; one undo step, and the box is selected so it can be nudged.
+	 */
+	insertDateStamp(): void {
+		const doc = this.editableDocument();
+		if (!doc) return;
+		this.commitText();
+		const pen = this.lastPen;
+		const penIndex = pen ? doc.pages.findIndex((p) => p.id === pen.pageId) : -1;
+		const spot = stampSpot(pen && penIndex >= 0 ? { pageIndex: penIndex, x: pen.x, y: pen.y, at: pen.at } : null, Date.now(), doc.pages, this.currentPageIndex());
+		const page = spot ? doc.pages[spot.pageIndex] : undefined;
+		if (!spot || !page) return;
+		const text = formatStamp(new Date(), cleanStampFormat(this.host.settings.dateStampFormat), getLanguage());
+		const el = stampElement(text, page, spot.x, spot.y, this.tools.textSize, this.tools.penColor, measureText);
+		this.history.execute(new AddElement(page.id, el, page.elements?.length ?? 0));
+		this.afterHistoryChange();
+		this.renderer?.invalidate();
+		this.selectItems(spot.pageIndex, [], [el]);
 	}
 
 	/** wave 0.10 (359): deletes a selection that spans several pages, one undo step (no offer about ink written on objects). */
@@ -2592,6 +2619,7 @@ export class NotebookView extends FileView {
 		}
 		const page = this.pageAtIndex(pageIndex);
 		const local = toPageLocal(layout.boxes[pageIndex]!, dx, dy);
+		if (page) this.lastPen = { pageId: page.id, x: local[0], y: local[1], at: Date.now() };
 
 		// v8: an armed marker or box is placed, a tap on a badge toggles it (eraser and lasso keep their own taps).
 		if (page && !eraserButton && this.markers?.begin(pageIndex, page, local, sample, tool)) {
@@ -3654,6 +3682,7 @@ export class NotebookView extends FileView {
 			},
 			deleteSelection: () => this.deleteSelection(),
 			boxes: () => this.layout?.boxes ?? [],
+			sharedClips: () => (this.sharedClipStore ??= new SharedClipStore(vaultDeviceFileAdapter(this.app), () => this.host.settings.folder, sidecarDeviceId(this.app))),
 			pasteTarget: () => this.pasteTarget(),
 			textStyle: () => ({ fontSize: this.tools.textSize, color: this.tools.penColor }),
 			stillHere: (doc) => this.session?.doc === doc && this.editable() && !this.controller?.drawing,

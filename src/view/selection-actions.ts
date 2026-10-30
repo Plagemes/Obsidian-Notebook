@@ -10,9 +10,12 @@ import { AddAsset, AddElement, Batch, ReplaceElement, type Command } from "../mo
 import type { Asset, ImageElement, NotebookDocument, Page, PageElement, Stroke } from "../model/types";
 import { decodePhoto, PhotoDecodeError, photoSize } from "../scan/decode";
 import { isHeic } from "../scan/image-bytes";
-import { internalClip, readSystemClipboard, systemClipFromEvent, writeSystemText, type SystemClip, type SystemImage } from "./clipboard";
+import { internalClip, readSystemClipboard, systemClipFromEvent, writeSystemText, type InternalClip, type SystemClip, type SystemImage } from "./clipboard";
 import { resolveAssetFile, storeAsset, type NotebookMedia } from "./media";
 import { PasteModal } from "./paste-modal";
+import { readSharedEntry, type SharedClipItem } from "../ink/shared-clip";
+import { SharedClipBlockedError, SharedClipRefusedError, type SharedClipStore } from "../storage/shared-clip-store";
+import { SharedClipModal } from "./shared-clip-modal";
 import {
 	clipMarker, decidePaste, MAX_PASTED_TEXT, normalizePastedText, pastedImageElement, pastedImageName, pastedTextElement,
 } from "./paste-logic";
@@ -47,6 +50,8 @@ export interface SelectionHost {
 	select(pageIndex: number, strokes: Stroke[], elements: PageElement[], others?: PagePart[]): void;
 	/** wave 0.10 (359): the page boxes, to put the items of several pages in one frame. */
 	boxes(): readonly PageBox[];
+	/** wave 0.10 (362): the clipboard files shared between devices through the vault. */
+	sharedClips(): SharedClipStore;
 	/** Runs the command as one undo step and refreshes everything that depends on the document. */
 	execute(cmd: Command): void;
 	deleteSelection(): void;
@@ -250,6 +255,60 @@ export class SelectionActions {
 		this.host.select(got.pageIndex, made.strokes, made.elements);
 	}
 
+	// --- wave 0.10 (362): the clipboard shared with the other devices ---
+
+	/** "Copy to other devices": writes the selection (strokes, elements and picture records) to this device's clipboard file. */
+	async copyToDevices(): Promise<void> {
+		const got = this.capture();
+		if (!got) return;
+		try {
+			await this.host.sharedClips().publish(got.clip);
+			new Notice(t("clipshare.copied"));
+		} catch (e) {
+			console.error("[notebook] copy to other devices", e);
+			if (e instanceof SharedClipBlockedError) new Notice(t("clipshare.blocked", { error: e.message }), 10000);
+			else if (e instanceof SharedClipRefusedError) new Notice(e.reason === "too-large" ? t("clipshare.tooLarge") : t("clipshare.failed", { error: e.message }), 8000);
+			else new Notice(t("clipshare.failed", { error: e instanceof Error ? e.message : String(e) }), 8000);
+		}
+	}
+
+	/** "Paste from another device": lists the recent clipboards of the other devices' files and pastes the one chosen. */
+	async pasteFromDevices(): Promise<void> {
+		if (this.busy || !this.host.editable()) return;
+		let found;
+		try {
+			found = await this.host.sharedClips().listOthers();
+		} catch (e) {
+			console.error("[notebook] list shared clipboards", e);
+			new Notice(t("clipshare.failed", { error: e instanceof Error ? e.message : String(e) }), 8000);
+			return;
+		}
+		if (found.items.length === 0) {
+			new Notice(found.unreadable.length > 0 ? t("clipshare.unreadable", { n: String(found.unreadable.length) }) : t("clipshare.none"), 8000);
+			return;
+		}
+		new SharedClipModal(this.host.app, found.items, found.unreadable.length, (item) => void this.pasteShared(item)).open();
+	}
+
+	private async pasteShared(item: SharedClipItem): Promise<void> {
+		if (this.busy || !this.host.editable()) return;
+		const read = readSharedEntry(item.entry);
+		if (!read.ok) {
+			new Notice(t("clipshare.pasteFailed", { error: read.message }), 8000);
+			return;
+		}
+		this.busy = true;
+		try {
+			// Pasted like a copy made here, but it never replaces this device's own plugin clipboard.
+			await this.pasteInternal({ content: read.clip, bytes: new Map(), pastes: 0 });
+		} catch (e) {
+			console.error("[notebook] paste from another device", e);
+			new Notice(t("clipshare.pasteFailed", { error: e instanceof Error ? e.message : String(e) }), 8000);
+		} finally {
+			this.busy = false;
+		}
+	}
+
 	// --- paste ---
 
 	/** Paste button: the newest of the plugin clipboard and the system clipboard; the paste box when the system one cannot be read. */
@@ -302,8 +361,8 @@ export class SelectionActions {
 	}
 
 	/** Pastes the plugin clipboard on the page in view; images are stored again in this vault's assets folder when needed. */
-	private async pasteInternal(): Promise<void> {
-		const clip = internalClip.get();
+	private async pasteInternal(source?: Pick<InternalClip, "content" | "bytes" | "pastes">): Promise<void> {
+		const clip = source ?? internalClip.get();
 		const target = this.host.pasteTarget();
 		const doc = this.host.doc();
 		const media = this.host.media();

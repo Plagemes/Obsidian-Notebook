@@ -59,7 +59,8 @@ describe("layout engine", () => {
 		expect(sel.actions).toContain("selection-white-transparent");
 		expect(sel.actions).toContain("delete-selection");
 		const lasso = contextBar(baseContext({ tool: "lasso" }), 800, {}, NOW)!;
-		expect(lasso).toEqual({ kind: "lasso", actions: ["selection-paste"] });
+		// wave 0.10 (362): pasting from another device is offered next to the plain paste.
+		expect(lasso).toEqual({ kind: "lasso", actions: ["selection-paste", "selection-paste-device"] });
 		const noImage = contextBar(baseContext({ tool: "lasso", selection: { strokes: 3, elements: 0, images: 0 } }), 800, {}, NOW)!;
 		expect(noImage.actions).not.toContain("selection-white-transparent");
 	});

@@ -236,6 +236,12 @@ export class NotebookSettingTab extends PluginSettingTab {
 				desc: t("settings.pageTurnerKeys.desc"),
 				control: { type: "toggle", key: "pageTurnerKeys", defaultValue: DEFAULT_SETTINGS.pageTurnerKeys },
 			},
+			// wave 0.10: clipboard and stamps
+			{
+				name: t("settings.dateStamp"),
+				desc: t("settings.dateStamp.desc"),
+				control: { type: "text", key: "dateStampFormat", defaultValue: DEFAULT_SETTINGS.dateStampFormat, placeholder: DEFAULT_SETTINGS.dateStampFormat },
+			},
 			// Companion notes (O1)
 			...companionSettingDefinitions(this.companionHost()),
 			// wave 0.6: library trash, templates
@@ -422,6 +428,10 @@ export class NotebookSettingTab extends PluginSettingTab {
 			.setName(t("settings.pageTurnerKeys"))
 			.setDesc(t("settings.pageTurnerKeys.desc"))
 			.addToggle((tg) => tg.setValue(s.pageTurnerKeys).onChange((v) => this.setControlValue("pageTurnerKeys", v)));
+		new Setting(containerEl)
+			.setName(t("settings.dateStamp"))
+			.setDesc(t("settings.dateStamp.desc"))
+			.addText((text) => text.setPlaceholder(DEFAULT_SETTINGS.dateStampFormat).setValue(s.dateStampFormat).onChange((v) => this.setControlValue("dateStampFormat", v)));
 		displayGestureSettings(containerEl, this.gestureHost());
 		new Setting(containerEl)
 			.setName(t("settings.penLongPress"))

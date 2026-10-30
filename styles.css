@@ -4690,3 +4690,34 @@ body {
 	opacity: 0.45;
 	mix-blend-mode: screen;
 }
+
+/* wave 0.10: clipboard and stamps (the list of clipboards copied on other devices) */
+.notebook-clipshare-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 8px 0;
+}
+
+.notebook-clipshare-row {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 2px;
+	width: 100%;
+	min-height: var(--nb-target, 44px);
+	padding: 8px 12px;
+	height: auto;
+	text-align: left;
+	border-radius: var(--nb-radius-m);
+}
+
+.notebook-clipshare-what {
+	font-weight: var(--font-semibold);
+}
+
+.notebook-clipshare-meta,
+.notebook-clipshare-hint {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}

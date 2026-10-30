@@ -329,6 +329,11 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "textbook-remove", label: "textbook.command.remove", icon: "book-x", group: "reading", surfaces: ["sheet", "palette"], priority: 10, scope: "view", command: true, readOnly: true },
 	{ id: "textbook-insert", label: "textbook.command.insert", icon: "book-marked", group: "insert", surfaces: ["sheet", "palette"], priority: 45, scope: "view", command: true, keywords: "textbook reference page libro" },
 
+	// wave 0.10: clipboard and stamps (356 date and time stamp, 362 clipboard shared between devices)
+	{ id: "insert-date-stamp", label: "datestamp.action", icon: "calendar-clock", group: "insert", surfaces: ["sheet"], priority: 48, scope: "view", command: "datestamp.command", keywords: "date time stamp timestamp clock now data ora" },
+	{ id: "selection-copy-devices", label: "clipshare.copy", icon: "monitor-smartphone", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 48, scope: "view", command: true, when: hasSelection, keywords: "clipboard tablet phone sync share vault appunti" },
+	{ id: "selection-paste-device", label: "clipshare.paste", icon: "monitor-down", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection", "lasso"], priority: 47, scope: "view", command: true, when: (c) => c.tool === "lasso" || hasSelection(c), keywords: "clipboard tablet phone sync share vault appunti" },
+
 	// --- status banners (wave 0.7): their buttons, listed so that every visible control has a documented place.
 	banner("safe-open-normally", "safe.banner.openNormally", "shield-off", "notebook", "view/resilience.ts"),
 	banner("safe-repair", "safe.banner.repair", "wrench", "notebook", "view/resilience.ts"),

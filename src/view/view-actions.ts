@@ -39,6 +39,8 @@ export function commandApplies(view: NotebookView, id: string): boolean {
 	if (id.startsWith("pdf-side-")) return pdfSideState(view).open;
 	// wave 0.9 (357): the layer order needs something selected.
 	if (id.startsWith("layer-")) return !!view.uiContext().selection;
+	// wave 0.10 (362): copying to the other devices needs a selection (pasting does not).
+	if (id === "selection-copy-devices") return !!view.uiContext().selection;
 	return true;
 }
 
@@ -103,6 +105,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"selection-cut": (v) => void v.selectionTools?.cut(),
 	"selection-duplicate": (v) => v.selectionTools?.duplicate(),
 	"selection-paste": (v) => void v.selectionTools?.paste(),
+	"selection-copy-devices": (v) => void v.selectionTools?.copyToDevices(),
+	"selection-paste-device": (v) => void v.selectionTools?.pasteFromDevices(),
 	"selection-white-transparent": (v) => void v.selectionTools?.makeWhiteTransparent(),
 	"link-selection": (v) => v.linkSelection(),
 	"selection-open-link": (v) => v.openSelectionLink(),
@@ -120,6 +124,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 
 	// insert
 	"insert-image": (v) => void v.insertImageElement(),
+	"insert-date-stamp": (v) => v.insertDateStamp(),
 	"stamps": (v) => v.stampPalette?.toggle(),
 	"board-shot": (v) => void v.boardShot(),
 	"add-page": (v) => v.addPage(),
