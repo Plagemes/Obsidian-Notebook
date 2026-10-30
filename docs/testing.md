@@ -801,6 +801,14 @@ L10. **Notebook from template.** *New notebook* dialog → *Template* → *Choos
 | Z3 Drawn links | | | |
 | Z11 Title and transcription | | | |
 | Z12 Regions and container | | | |
+| ZP1 Inbox of loose notes | | | |
+| ZP2 Process | | | |
+| ZP3 New writing | | | |
+| ZP4 PDF highlights | | | |
+| ZP5 Two devices | | | |
+| TB1 Set up | | | |
+| TB2 Slides open | | | |
+| TB3 Insert and writing | | | |
 | R1 Search the PDF text | | | |
 | R2 Search on a big PDF | | | |
 | R3 Snapping highlighter | | | |
@@ -1050,3 +1058,5 @@ Mouse: draw, erase (both modes), undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scr
 - Library trash, page trash and templates are not verified in Obsidian or on Android (steps 82-91). Trashed items move with `vault.rename`, so notes that linked to a trashed notebook show a broken link until it is restored. Permanent deletion follows Obsidian's *Deleted files* setting. The page trash keeps the 50 most recent pages per notebook for 30 days (fixed limits); it is not synced into the notebook, only through one vault file per deleted page under `_trash/pages/<notebook id>/`, so two devices deleting pages at the same time keep both. Page trash and template thumbnails do not draw PDF or image backgrounds. A folder named `_trash`, `_templates` or `_meta` directly under the notebooks folder is hidden from the library. A trashed folder that holds files other than notebooks is never emptied automatically.
 - Level of detail and heavy pages (wave 0.7) are not verified in Obsidian or on Android (steps 156-161). The level of detail applies to committed strokes only (not to the stroke being written or to a floating selection) and switches when a redraw runs after the zoom settles, so a pinch shows the old bitmap scaled until then, as before. The heavy page limits (3,000 strokes, 120,000 points, 20 MB of images) are fixed; the split moves whole strokes, so a stroke that crosses the cut goes to the side of its middle.
 - PDF reading tools: the search and the snapping highlighter need the PDF's text layer (scanned PDFs have none), positions inside a long line of text are estimated from the font's character widths and can be a few points off, rotated and vertical text is not snapped, and the search lists at most 500 matches. Dimming and hiding annotations are view settings: exports, thumbnails and embeds are not affected.
+- Processing flow (wave 0.8): the inbox lists blocks of writing on the quick-notes sheet (split at gaps of about 1.3 cm; typed text and ink alike) and highlights and comments on PDF pages; question, placeholder and importance markers are not listed until the marker elements exist (the interface is ready). Scanning the PDF notebooks reads every notebook that has PDF pages each time the inbox is opened or refreshed (no cache). A highlight on a PDF without a text layer has no text for the card. *Link to a card* only records the link in the inbox file; the card note is not changed. The inbox state is per device (merged on reading), so two devices never write the same file; it is not verified with a real sync service.
+- Textbook references (wave 0.8): the tappable area is a DOM element over the typed text, so the pen cannot start a stroke exactly on the reference (and it is hidden while the text tool is active); references are found only in typed text boxes, not in handwriting; the position of a reference inside a long wrapped text box comes from the same layout as the drawing but is not verified on every font; a book whose printed numbers restart (roman front matter) needs its offset set for the main part.

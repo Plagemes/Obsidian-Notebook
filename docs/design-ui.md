@@ -78,6 +78,7 @@ anywhere in `src/` is in the registry and that every action is placed somewhere.
 | New/open/continue notebook, library, import PDF, lecture from slides, scan to new notebook, loose sheet, timetable, open class | Library, ribbon, command palette | Not inside a notebook |
 | Pen button test, benchmark, stress test | Command palette (diagnostics) | Developer tools |
 | Embed, restore version, tags, companion, repair, merge copies, restore page, zettel | Registered by their modules (integration, zettel); notebook menu where they add entries | Other features own them |
+| Inbox (open, process next), textbook reference (set, open at a page, remove, insert) | Registry actions (wave 0.8): Inbox ones are global (`main.ts`), textbook ones are view actions (`view/view-actions.ts` → `view/textbook-ref-ui.ts`); "All actions" sheet and palette, same command ids | Zettel and reading groups |
 
 ### Page indicator: one behaviour
 

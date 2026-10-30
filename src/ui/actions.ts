@@ -288,6 +288,13 @@ export const ACTIONS: readonly ActionDef[] = [
 	external("zettel-new-slip-box", "zettel.command.newSlipBox", "archive", "zettel", "zettel/index.ts"),
 	external("zettel-orphans", "zettel.command.orphans", "unlink", "zettel", "zettel/index.ts"),
 	external("zettel-toggle-regions", "zettel.command.toggleRegions", "scan", "zettel", "zettel/index.ts"),
+	// wave 0.8: processing flow (Z4): the Inbox view; quick textbook reference (208)
+	global("zettel-inbox", "inbox.command.open", "inbox", "zettel", ["sheet", "palette"], 30),
+	global("zettel-inbox-process", "inbox.command.process", "list-checks", "zettel", ["sheet", "palette"], 30),
+	{ id: "textbook-set", label: "textbook.command.set", icon: "book-open-check", group: "reading", surfaces: ["sheet", "palette"], priority: 25, scope: "view", command: true, readOnly: true, keywords: "textbook book pdf reference course libro" },
+	{ id: "textbook-open", label: "textbook.command.open", icon: "book-open", group: "reading", surfaces: ["sheet", "palette"], priority: 35, scope: "view", command: true, readOnly: true, keywords: "textbook book pdf page libro" },
+	{ id: "textbook-remove", label: "textbook.command.remove", icon: "book-x", group: "reading", surfaces: ["sheet", "palette"], priority: 10, scope: "view", command: true, readOnly: true },
+	{ id: "textbook-insert", label: "textbook.command.insert", icon: "book-marked", group: "insert", surfaces: ["sheet", "palette"], priority: 45, scope: "view", command: true, keywords: "textbook reference page libro" },
 
 	// --- status banners (wave 0.7): their buttons, listed so that every visible control has a documented place.
 	banner("safe-open-normally", "safe.banner.openNormally", "shield-off", "notebook", "view/resilience.ts"),

@@ -2,6 +2,7 @@ import type { Menu, Plugin } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import { isNotebookFile } from "../storage/format";
 import { NotebookView } from "../view/notebook-view";
+import { registerInbox } from "./inbox";
 import { ZettelService, type ZettelHost } from "./service";
 
 export type { ZettelHost } from "./service";
@@ -54,5 +55,7 @@ export function registerZettel(plugin: ZettelHost): ZettelService {
 		menu.addItem((i) => i.setTitle(t(service.isSlipBox(view) ? "zettel.menu.slipBoxOff" : "zettel.menu.slipBoxOn")).setIcon("archive")
 			.onClick(() => service.toggleSlipBox(view)));
 	}));
+	// wave 0.8: processing flow (Z4): the Inbox view and its commands
+	registerInbox(plugin, service);
 	return service;
 }

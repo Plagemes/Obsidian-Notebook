@@ -125,6 +125,22 @@ class PdfSyncController implements PageSyncHooks {
 		return this.pane ? this.index + 1 : null;
 	}
 
+	/** The file shown in the pane, or null. */
+	get shownFile(): TFile | null {
+		return this.source?.file ?? null;
+	}
+
+	/** Shows a page (1-based) of a PDF in the pane, opening the pane first when it shows something else. */
+	async showPage(file: TFile, page: number): Promise<void> {
+		if (this.source?.file !== file) await this.open(file);
+		const source = this.source;
+		if (!this.pane || !source) return;
+		const index = Math.min(source.pageCount(), Math.max(1, Math.floor(page))) - 1;
+		this.index = index;
+		this.pane.show(index);
+		this.updateChrome();
+	}
+
 	// --- opening and closing ---
 
 	pick(): void {
@@ -424,6 +440,12 @@ class PdfSyncController implements PageSyncHooks {
 }
 
 // --- registration, commands and menu ---
+
+/** Textbook references (roadmap 208): what the PDF pane of a notebook view shows now, and a way to show a page in it. */
+export function referencePane(view: NotebookView): { open: boolean; file: TFile | null; show(file: TFile, page: number): Promise<void> } | null {
+	const c = controllerOf(view);
+	return c ? { open: c.isOpen, file: c.shownFile, show: (file, page) => c.showPage(file, page) } : null;
+}
 
 /** Registers the commands. `activeView` is the notebook view that has focus, if any. */
 /**

@@ -2107,12 +2107,27 @@ export class NotebookView extends FileView {
 		this.placeTextEditor();
 		this.updatePageIndicator();
 		this.overlayChanged?.();
+		for (const fn of this.overlayListeners) fn();
 	}
 
 	// wave 0.6: zettelkasten — hooks for DOM overlays (card regions, src/zettel/overlay.ts)
 
 	/** Called after every viewport or layout change, so overlays can follow the pages. */
 	overlayChanged: (() => void) | null = null;
+
+	// wave 0.8: processing — more than one overlay (textbook references, src/view/textbook-ref-ui.ts)
+	private readonly overlayListeners = new Set<() => void>();
+
+	/** Like `overlayChanged`, for any number of listeners. Returns the function that removes it. */
+	addOverlayListener(fn: () => void): () => void {
+		this.overlayListeners.add(fn);
+		return () => this.overlayListeners.delete(fn);
+	}
+
+	/** The tool in use (for overlays that must not get in the way of the text tool). */
+	activeTool(): string {
+		return this.tools.tool;
+	}
 
 	/** Stage element, viewport and page boxes (document space) for DOM overlays; null without a document. */
 	overlayGeometry(): { stage: HTMLElement; viewport: Viewport; boxes: readonly PageBox[] } | null {

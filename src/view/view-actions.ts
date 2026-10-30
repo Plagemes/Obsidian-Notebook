@@ -17,6 +17,7 @@ import { editBookmark, editPageTags } from "./outline";
 import { exportPdfAnnotations, openMarginsModal, updatePdfFromNewVersion } from "./pdf-actions";
 import { pdfSideState, runPdfSideAction, type PdfSideAction } from "./pdf-sync";
 import { deletePageKeepingCopy, newPageFromTemplate, openDeletedPages, savePageAsTemplate } from "./page-tools";
+import { insertReference, openPage, removeTextbook, setTextbook } from "./textbook-ref-ui";
 import { toggleBookmark } from "./view-helpers";
 import { showNotice } from "./notice";
 
@@ -236,6 +237,11 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"export-page-pdf": onPage((v, p, i) => exportPage(v, p, i, "pdf")),
 	"export-page-svg": onPage((v, p, i) => exportPage(v, p, i, "svg")),
 	"export-pdf": (v) => void v.exportNotebookPdf(),
+	// wave 0.8: quick textbook reference (view/textbook-ref-ui.ts)
+	"textbook-set": (v) => setTextbook(v),
+	"textbook-open": (v) => openPage(v),
+	"textbook-remove": (v) => removeTextbook(v),
+	"textbook-insert": (v) => insertReference(v),
 };
 
 /** Ids of the view actions that have a runner (tests: every view action of the registry must have one). */
