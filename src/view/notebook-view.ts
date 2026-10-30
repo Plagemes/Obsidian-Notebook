@@ -220,6 +220,7 @@ export class NotebookView extends FileView {
 	private textEditor: TextEditor | null = null;
 	private rulerGesture: RulerGesture | null = null;
 	private radial: PenRadial | null = null;
+	private prevTool: ToolName = "pen";
 	private readonly location = new LocationKeeper(
 		{ set: (fn, ms) => window.setTimeout(fn, ms), clear: (h) => window.clearTimeout(h) },
 		(path, page) => {
@@ -358,7 +359,7 @@ export class NotebookView extends FileView {
 			update: (a, b) => this.moveRuler(a, b),
 		});
 		this.controller = new PointerController(this.stage, this.policy, {
-			drawStart: (s, eraser) => this.drawStart(s, eraser),
+			drawStart: (s, eraser, held) => this.drawStart(s, eraser, held),
 			drawMove: (samples, predicted) => this.drawMove(samples, predicted),
 			drawEnd: (cancelled) => this.drawEnd(cancelled),
 			pan: (dx, dy) => this.setViewport(pan(this.viewport, dx, dy), true),
@@ -366,7 +367,8 @@ export class NotebookView extends FileView {
 				this.fitMode = false;
 				this.setViewport(zoomAt(this.viewport, factor, fx, fy), true);
 			},
-			penMenu: (x, y) => this.radial?.open(x, y),
+			penMenu: (x, y, source) => this.radial?.open(x, y, source),
+			sideButtonSeen: () => this.noteSideButtonSeen(),
 		}, { rawUpdates: this.host.settings.lowLatencyInk });
 		this.radial = new PenRadial(this.stage, {
 			editable: () => this.editable() && !this.controller?.drawing,
@@ -572,6 +574,15 @@ export class NotebookView extends FileView {
 			session.dispose();
 			if (this.session === session) this.session = null;
 		}
+	}
+
+	/** A side-button signal reached the page: remember it for the device (it turns the automatic hold-still default off). */
+	private noteSideButtonSeen(): void {
+		const s = this.host.settings;
+		if (s.penButtonSeen) return;
+		s.penButtonSeen = true;
+		this.applySettings(s);
+		void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
 	}
 
 	applySettings(settings: NotebookSettings): void {
@@ -1294,9 +1305,15 @@ export class NotebookView extends FileView {
 		}
 	}
 
+	/** The tool used before the current one (the pen's side button can switch back to it while held). */
+	private previousTool(): ToolName {
+		return this.prevTool !== this.tools.tool ? this.prevTool : "pen";
+	}
+
 	private onToolsChanged(state: ToolbarState): void {
 		const before = this.tools;
 		this.tools = state;
+		if (state.tool !== before.tool) this.prevTool = before.tool;
 		this.pens?.onToolsChanged(state);
 		this.radial?.noteTools(state);
 		if (state.tool !== "lasso") this.clearSelection();
@@ -1577,13 +1594,13 @@ export class NotebookView extends FileView {
 		return { x: b.x[i]!, y: b.y[i]! };
 	}
 
-	private drawStart(sample: InkSample, eraserButton: boolean): boolean {
+	private drawStart(sample: InkSample, eraserButton: boolean, held?: "lasso" | "previous"): boolean {
 		const layout = this.layout;
 		if (!layout || !this.editable()) return false;
 		this.commitText();
 		const [dx, dy] = this.toDoc(sample);
 		if (!Number.isFinite(dx) || !Number.isFinite(dy)) return false;
-		const tool = eraserButton ? "eraser" : this.tools.tool;
+		const tool = eraserButton ? "eraser" : held === "lasso" ? "lasso" : held === "previous" ? this.previousTool() : this.tools.tool;
 
 		if (tool === "eraser" && this.tools.eraserMode !== "area") {
 			// The selection may contain strokes about to be erased (e.g. erasing with the pen button).

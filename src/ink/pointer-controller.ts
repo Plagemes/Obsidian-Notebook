@@ -1,6 +1,15 @@
-import { InputPolicy } from "./input-policy";
+import { InputPolicy, heldToolOf, opensRadial } from "./input-policy";
 import { ErrorOnce } from "./errors";
-import { BarrelDetector, HOLD_MS, StillHold, strokeIsYoung, type PointerKind } from "./pen-button";
+import {
+	BarrelDetector, ChordDetector, FINGER_HOLD_MS, FINGER_HOLD_RADIUS_PX, HOLD_MS, StillHold, fingerHoldMayStart, penHoldMayStart, strokeIsYoung,
+	type PointerKind,
+} from "./pen-button";
+
+/**
+ * How the radial menu was asked for: the pen's side button pressed (barrel bit: opens on the press), a click of
+ * the Samsung pressure-0 button (opens on the release), a still pen on the page, or a finger long-press.
+ */
+export type MenuSource = "button" | "click" | "pen-hold" | "finger";
 
 /** A pointer sample in CSS px relative to the element. */
 export interface InkSample {
@@ -72,7 +81,7 @@ export function isNewSample(lastT: number, lastX: number, lastY: number, t: numb
 
 export interface PointerHandlers {
 	/** `eraser`: the pen has its eraser button pressed or is flipped. Return false to reject the stroke. */
-	drawStart(sample: InkSample, eraser: boolean): boolean;
+	drawStart(sample: InkSample, eraser: boolean, held?: "lasso" | "previous"): boolean;
 	/**
 	 * New samples of the drawing pointer (never repeated: each sample is delivered once, whether it
 	 * came from `pointerrawupdate` or `pointermove`) and the browser's predicted samples (may be empty).
@@ -83,10 +92,13 @@ export interface PointerHandlers {
 	pan(dx: number, dy: number): void;
 	zoom(factor: number, fx: number, fy: number): void;
 	/**
-	 * The pen's side button was pressed (and its action is the radial menu): open the menu at the pen tip
-	 * (CSS px relative to the element). No stroke is started.
+	 * Open the radial menu at (x, y) (CSS px relative to the element): the pen's side button was pressed (and its
+	 * action is the radial menu), the pen was held still, or a finger was long-pressed. No stroke is started and
+	 * the contact that asked for it is no longer a stroke or a pan.
 	 */
-	penMenu?(x: number, y: number): void;
+	penMenu?(x: number, y: number, source: MenuSource): void;
+	/** A signal of the pen's side button reached the page (whatever the button is set to do). */
+	sideButtonSeen?(): void;
 }
 
 interface NavPointer {
@@ -134,6 +146,13 @@ export class PointerController {
 	private readonly hold = new StillHold();
 	private holdTimer: number | null = null;
 	private drawDownT = 0;
+	/** Finger long-press: the finger that may open the menu, its stillness and its timer. */
+	private readonly fingerHold = new StillHold(FINGER_HOLD_RADIUS_PX);
+	private fingerHoldId: number | null = null;
+	private fingerTimer: number | null = null;
+	/** Side button pressed during contact (chord event): the stroke was finished and the contact now acts as the button's tool. */
+	private readonly chord = new ChordDetector();
+	private chordHeld = false;
 
 	constructor(
 		private readonly el: HTMLElement,
@@ -195,6 +214,7 @@ export class PointerController {
 	destroy(): void {
 		this.stopInertia();
 		this.clearHoldTimer();
+		this.cancelFingerHold();
 		this.finishActiveStroke();
 		for (const d of this.disposers) d();
 		this.disposers.length = 0;
@@ -220,7 +240,18 @@ export class PointerController {
 	private onDown(e: PointerEvent): void {
 		this.rect = this.el.getBoundingClientRect();
 		this.stopInertia();
-		this.barrel.pointer("down", e.pointerType, e.button, e.buttons, e.timeStamp);
+		const pressed = this.barrelPointer("down", e);
+		if (pressed) this.handlers.sideButtonSeen?.();
+		// A pen near ends a finger long-press in the making (a second finger does too, in armFingerHold).
+		if (e.pointerType === "pen") this.cancelFingerHold();
+		// Samsung: the button pressed while hovering arrives as a pointerdown with pressure 0. It never draws, nor erases:
+		// a click opens the menu on release; touching while it is held acts as the button's tool (zpStep).
+		if (e.pointerType === "pen" && this.barrel.zeroPressureHeld) {
+			this.policy.notePen(e.timeStamp);
+			this.zpStep(e);
+			e.preventDefault();
+			return;
+		}
 		const contact = Math.max(e.width || 0, e.height || 0);
 		// A right-button "mouse" press right after pen activity is the pen's side button reported as a mouse.
 		const asPen = this.barrel.asPen(e.pointerType, e.button, e.buttons, e.timeStamp);
@@ -247,7 +278,7 @@ export class PointerController {
 				}
 			}
 			e.preventDefault();
-			this.handlers.penMenu?.(e.clientX - this.rect.left, e.clientY - this.rect.top);
+			this.handlers.penMenu?.(e.clientX - this.rect.left, e.clientY - this.rect.top, "button");
 			return;
 		}
 
@@ -264,29 +295,129 @@ export class PointerController {
 					return;
 				}
 			}
-			if (e.pointerType === "pen") this.nav.clear();
-			const eraser = e.pointerType === "pen" && this.policy.penErases(e.button, e.buttons);
-			if (!this.handlers.drawStart(this.sample(e), eraser)) return;
-			this.drawId = e.pointerId;
-			this.drawType = e.pointerType;
-			this.rawSeen = false;
-			this.lastT = e.timeStamp;
-			this.lastX = e.clientX;
-			this.lastY = e.clientY;
-			this.drawLast = { x: e.clientX, y: e.clientY };
-			this.drawDownT = e.timeStamp;
-			if (e.pointerType === "pen") this.armHold(e);
-			this.capture(e.pointerId);
-			e.preventDefault();
+			const pen = e.pointerType === "pen";
+			const eraser = pen && this.policy.penErases(e.button, e.buttons);
+			const held = (pen && this.policy.penHeld(e.button, e.buttons)) || undefined;
+			if (!this.beginDraw(e, eraser, held)) return;
+			if (pen) {
+				this.armHold(e, eraser);
+				this.chordHeld = false;
+				// A stroke started with the eraser end or the barrel bit already is the button's doing: no chord event then.
+				if (!eraser && !held) this.chord.down(e.timeStamp);
+			}
 		} else if (route === "navigate") {
 			this.addNav(e);
+			if (e.pointerType === "touch") this.armFingerHold(e);
 			e.preventDefault();
 		}
 	}
 
+	/** Starts a stroke for the contact `e`; false when the view refuses it. */
+	private beginDraw(e: PointerEvent, eraser: boolean, held?: "lasso" | "previous"): boolean {
+		if (e.pointerType === "pen") this.nav.clear();
+		if (!this.handlers.drawStart(this.sample(e), eraser, held)) return false;
+		this.drawId = e.pointerId;
+		this.drawType = e.pointerType;
+		this.rawSeen = false;
+		this.lastT = e.timeStamp;
+		this.lastX = e.clientX;
+		this.lastY = e.clientY;
+		this.drawLast = { x: e.clientX, y: e.clientY };
+		this.drawDownT = e.timeStamp;
+		this.capture(e.pointerId);
+		e.preventDefault();
+		return true;
+	}
+
 	/** The pen's button state in a pointer event (hover or contact): a new press opens the menu. */
 	private trackBarrel(e: PointerEvent, kind: PointerKind): void {
-		if (this.barrel.pointer(kind, e.pointerType, e.button, e.buttons, e.timeStamp)) this.requestMenu(e.clientX, e.clientY, e.timeStamp);
+		if (this.barrelPointer(kind, e)) {
+			this.handlers.sideButtonSeen?.();
+			// A pressure-0 press (Samsung) is judged when it ends (click) or when the nib touches (zpStep).
+			if (!this.barrel.zeroPressureHeld) this.requestMenu(e.clientX, e.clientY, e.timeStamp);
+		}
+		if (e.pointerType === "pen") this.zpStep(e);
+	}
+
+	/** What the last event did to a pressure-0 side-button press: see `BarrelDetector.transition`. */
+	private zpStep(e: PointerEvent): void {
+		switch (this.barrel.transition) {
+			case "contact-start": {
+				// The nib touches while the button is held: the button's tool (eraser, lasso, previous tool), never ink.
+				const tool = heldToolOf(this.policy.settings.penButton);
+				if (!tool) return;
+				if (this.drawId !== null) {
+					if (this.drawType === "pen") return;
+					this.cancelDraw();
+				}
+				this.rect = this.el.getBoundingClientRect();
+				this.policy.setPenDown(true, e.timeStamp);
+				if (!this.beginDraw(e, tool === "eraser", tool === "eraser" ? undefined : tool)) this.policy.setPenDown(false, e.timeStamp);
+				return;
+			}
+			case "contact-end":
+			case "release":
+				this.finishPenStroke(e.timeStamp);
+				return;
+			case "release-click":
+				if (!opensRadial(this.policy.settings.penButton)) return;
+				this.rect = this.el.getBoundingClientRect();
+				this.handlers.penMenu?.(e.clientX - this.rect.left, e.clientY - this.rect.top, "click");
+				return;
+			default:
+		}
+	}
+
+	/** Ends the pen stroke in progress, keeping it (the nib left or the button state changed). */
+	private finishPenStroke(t: number): void {
+		if (this.drawId !== null && this.drawType === "pen") {
+			this.releaseDraw();
+			this.handlers.drawEnd(false);
+			this.policy.setPenDown(false, t);
+		}
+	}
+
+	/**
+	 * Side button pressed while the nib touches (see `ChordDetector`). The stroke so far is committed as it is, never
+	 * discarded; the contact then acts as the button's tool until the next such event or the lift.
+	 */
+	private chordStep(e: PointerEvent, strict: boolean): void {
+		if (e.pointerType !== "pen" || !this.chord.move(e.button, e.buttons, e.pressure, e.timeStamp)) return;
+		const s = this.policy.settings;
+		if (s.chordButton === false || e.pointerId !== this.drawId || this.drawType !== "pen") return;
+		const tool = heldToolOf(s.penButton);
+		if (!tool && !opensRadial(s.penButton)) return;
+		this.handlers.sideButtonSeen?.();
+		// The samples this event brings still belong to the stroke that ends here.
+		this.deliver(e, strict);
+		this.finishPenStroke(e.timeStamp);
+		this.policy.setPenDown(true, e.timeStamp);
+		if (this.chordHeld) {
+			this.chordHeld = false;
+			this.beginDraw(e, false);
+		} else if (tool) {
+			this.chordHeld = true;
+			this.beginDraw(e, tool === "eraser", tool === "eraser" ? undefined : tool);
+		} else {
+			// Radial menu only: it takes over the contact (its lift is swallowed).
+			this.policy.setPenDown(false, e.timeStamp);
+			this.barrel.pointer("cancel", "pen", 0, 0, e.timeStamp);
+			if (this.el.hasPointerCapture?.(e.pointerId)) {
+				try {
+					this.el.releasePointerCapture(e.pointerId);
+				} catch {
+					// The pointer is gone: nothing to release.
+				}
+			}
+			this.rect = this.el.getBoundingClientRect();
+			this.handlers.penMenu?.(e.clientX - this.rect.left, e.clientY - this.rect.top, "button");
+		}
+	}
+
+	/** Feeds a pointer event to the side-button detector (with the pressure and the pointer id, and the zero-pressure setting). */
+	private barrelPointer(kind: PointerKind, e: PointerEvent): boolean {
+		this.barrel.zeroPressureEnabled = this.policy.settings.zeroPressureButton !== false;
+		return this.barrel.pointer(kind, e.pointerType, e.button, e.buttons, e.timeStamp, e.pressure, e.pointerId);
 	}
 
 	/**
@@ -295,44 +426,108 @@ export class PointerController {
 	 * nib touched): that stroke is discarded, so no dot remains. Never interrupts real writing.
 	 */
 	private requestMenu(clientX: number, clientY: number, t: number): boolean {
-		if (this.policy.settings.penButton !== "radial") return false;
+		if (!opensRadial(this.policy.settings.penButton)) return false;
 		if (this.drawId !== null) {
 			if (this.drawType !== "pen" || !strokeIsYoung(this.drawDownT, t, !this.hold.still)) return false;
 			this.cancelDraw();
 		}
 		this.rect = this.el.getBoundingClientRect();
-		this.handlers.penMenu?.(clientX - this.rect.left, clientY - this.rect.top);
+		this.handlers.penMenu?.(clientX - this.rect.left, clientY - this.rect.top, "button");
 		return true;
 	}
 
 	private onContextMenu(e: MouseEvent): void {
 		e.preventDefault();
-		if (this.barrel.contextMenu((e as Partial<PointerEvent>).pointerType, e.timeStamp)) this.requestMenu(e.clientX, e.clientY, e.timeStamp);
+		if (this.barrel.contextMenu((e as Partial<PointerEvent>).pointerType, e.timeStamp)) {
+			this.handlers.sideButtonSeen?.();
+			this.requestMenu(e.clientX, e.clientY, e.timeStamp);
+		}
 	}
 
 	private onAuxClick(e: MouseEvent): void {
 		e.preventDefault();
-		if (this.barrel.auxClick((e as Partial<PointerEvent>).pointerType, e.button, e.timeStamp)) this.requestMenu(e.clientX, e.clientY, e.timeStamp);
+		if (this.barrel.auxClick((e as Partial<PointerEvent>).pointerType, e.button, e.timeStamp)) {
+			this.handlers.sideButtonSeen?.();
+			this.requestMenu(e.clientX, e.clientY, e.timeStamp);
+		}
 	}
 
-	/** Starts watching a pen stroke for stillness; with the still-hold fallback on, a long still hold opens the menu. */
-	private armHold(e: PointerEvent): void {
+	/**
+	 * Starts watching a pen stroke for stillness from its very first contact. With the hold-still fallback on, a
+	 * pen that has not left a small radius for `HOLD_MS` opens the menu and the young stroke is discarded (no dot,
+	 * nothing for undo). A stroke that has moved never becomes a hold: stillness is judged from the first contact only.
+	 */
+	private armHold(e: PointerEvent, eraser: boolean): void {
 		this.hold.begin(e.clientX, e.clientY);
 		this.clearHoldTimer();
-		const s = this.policy.settings;
-		if (!s.penLongPress || s.penButton !== "radial") return;
+		if (!this.penHoldAllowed(eraser)) return;
 		const id = e.pointerId;
 		this.holdTimer = window.setTimeout(() => {
 			this.holdTimer = null;
 			this.errors.run("hold", () => {
-				if (this.drawId !== id || this.drawType !== "pen" || !this.hold.still) return;
+				if (this.drawId !== id || this.drawType !== "pen" || !this.hold.still || !this.penHoldAllowed(eraser)) return;
 				const at = this.drawLast ?? { x: e.clientX, y: e.clientY };
+				const t = Math.max(this.lastT, e.timeStamp);
 				this.hold.end();
 				this.cancelDraw();
+				// The menu swallows the lift: the pen must not stay "down" for palm rejection or the side-button detector.
+				this.policy.setPenDown(false, t);
+				this.barrel.pointer("cancel", "pen", 0, 0, t);
 				this.rect = this.el.getBoundingClientRect();
-				this.handlers.penMenu?.(at.x - this.rect.left, at.y - this.rect.top);
+				this.handlers.penMenu?.(at.x - this.rect.left, at.y - this.rect.top, "pen-hold");
 			});
 		}, HOLD_MS);
+	}
+
+	private penHoldAllowed(eraser: boolean): boolean {
+		const s = this.policy.settings;
+		return penHoldMayStart({ enabled: s.penLongPress === true, radialAction: opensRadial(s.penButton), eraser });
+	}
+
+	/** A finger that landed alone, with the pen away and finger drawing off, may become a long-press after `FINGER_HOLD_MS`. */
+	private armFingerHold(e: PointerEvent): void {
+		const s = this.policy.settings;
+		const may = fingerHoldMayStart({
+			enabled: s.fingerLongPress === true,
+			fingerDrawing: s.fingerDrawing,
+			penNear: this.policy.penRecentlyActive(e.timeStamp),
+			fingersDown: this.nav.size,
+		});
+		// A second finger (pinch, two-finger tap) ends the one in the making.
+		if (this.nav.size > 1) this.cancelFingerHold();
+		if (!may) return;
+		this.cancelFingerHold();
+		const id = e.pointerId;
+		this.fingerHoldId = id;
+		this.fingerHold.begin(e.clientX, e.clientY);
+		this.fingerTimer = window.setTimeout(() => {
+			this.fingerTimer = null;
+			this.errors.run("fingerhold", () => {
+				const p = this.nav.get(id);
+				if (this.fingerHoldId !== id || !p || this.nav.size !== 1 || !this.fingerHold.still) return;
+				this.cancelFingerHold();
+				// The finger leaves the gesture bookkeeping: its lift is swallowed by the menu, and it is not a pan.
+				this.nav.delete(id);
+				this.panTrail = [];
+				this.barrel.pointer("cancel", "touch", 0, 0, e.timeStamp);
+				if (this.el.hasPointerCapture?.(id)) {
+					try {
+						this.el.releasePointerCapture(id);
+					} catch {
+						// The pointer is gone: nothing to release.
+					}
+				}
+				this.rect = this.el.getBoundingClientRect();
+				this.handlers.penMenu?.(p.x - this.rect.left, p.y - this.rect.top, "finger");
+			});
+		}, FINGER_HOLD_MS);
+	}
+
+	private cancelFingerHold(): void {
+		if (this.fingerTimer !== null) window.clearTimeout(this.fingerTimer);
+		this.fingerTimer = null;
+		this.fingerHoldId = null;
+		this.fingerHold.end();
 	}
 
 	private clearHoldTimer(): void {
@@ -341,7 +536,10 @@ export class PointerController {
 	}
 
 	private onRawUpdate(e: PointerEvent): void {
-		if (e.pointerType === "pen") this.trackBarrel(e, "move");
+		if (e.pointerType === "pen") {
+			this.trackBarrel(e, "move");
+			this.chordStep(e, false);
+		}
 		if (e.pointerId !== this.drawId) return;
 		this.rawSeen = true;
 		this.deliver(e, false);
@@ -350,7 +548,9 @@ export class PointerController {
 	private onMove(e: PointerEvent): void {
 		if (e.pointerType === "pen") {
 			this.policy.notePen(e.timeStamp);
+			this.cancelFingerHold();
 			this.trackBarrel(e, "move");
+			this.chordStep(e, this.rawSeen);
 		}
 
 		if (e.pointerId === this.drawId) {
@@ -366,6 +566,10 @@ export class PointerController {
 
 		const p = this.nav.get(e.pointerId);
 		if (!p) return;
+		if (e.pointerId === this.fingerHoldId) {
+			this.fingerHold.move(e.clientX, e.clientY);
+			if (!this.fingerHold.still) this.cancelFingerHold();
+		}
 		if (this.nav.size === 1) {
 			const dx = e.clientX - p.x;
 			const dy = e.clientY - p.y;
@@ -429,13 +633,21 @@ export class PointerController {
 	}
 
 	private onUp(e: PointerEvent): void {
-		if (e.type !== "lostpointercapture") this.barrel.pointer(e.type === "pointercancel" ? "cancel" : "up", e.pointerType, e.button, e.buttons, e.timeStamp);
+		if (e.type !== "lostpointercapture") {
+			this.barrelPointer(e.type === "pointercancel" ? "cancel" : "up", e);
+			if (e.pointerType === "pen") {
+				this.zpStep(e);
+				this.chord.up();
+				this.chordHeld = false;
+			}
+		}
 		if (e.pointerType === "pen" && e.type !== "lostpointercapture") this.policy.setPenDown(false, e.timeStamp);
 		if (e.pointerId === this.drawId) {
 			this.releaseDraw(e.pointerId);
 			this.handlers.drawEnd(false);
 			return;
 		}
+		if (e.pointerId === this.fingerHoldId) this.cancelFingerHold();
 		const wasSingle = this.nav.size === 1 && this.nav.has(e.pointerId);
 		this.nav.delete(e.pointerId);
 		if (wasSingle && e.type === "pointerup") this.startInertia(e.timeStamp);
