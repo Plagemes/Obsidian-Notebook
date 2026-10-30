@@ -59,7 +59,9 @@ import { nextTask } from "../storage/idle";
 import { isNotebookFile } from "../storage/format";
 import { VaultDocumentIO } from "../storage/vault-io";
 import { backupFolder, readSettings, type NotebookSettings } from "../settings";
-import { defaultMarkdownFolder, exportMarkdown } from "./export-markdown";
+import { defaultMarkdownFolder, exportMarkdown, siblingFolder } from "./export-markdown";
+import { canPrint } from "./print";
+import type { ExportFormat } from "../ink/export-layers";
 import { ExportModal, MarkdownExportModal } from "./export-dialog";
 import { exportPdf, runExport, type ExportOptions } from "./export";
 import { ViewDisplay, type DisplayHost } from "./display";
@@ -270,7 +272,14 @@ export class NotebookView extends FileView {
 	private readonly history = new History(() => this.requireDoc(), 500, checkContent, (message) => {
 		console.error("[notebook] edit refused, the notebook could not be saved with it:", message);
 		showNotice(t("history.refused", { message }), 10000);
-	});
+	}, () => this.userReadOnly);
+	/**
+	 * wave 0.10 (51): the user switched this view to read-only mode. Nothing changes the document while it is on: `editable()`
+	 * is false (tools, selection, insert, page operations and every registry action that needs editing), a finger only pans
+	 * and zooms, and the history refuses to run, undo or redo anything. It is a view state only: no flag in the file, no
+	 * backup, no write; it is not kept when the notebook is closed. Independent of the sync-safety "Open read-only" flag.
+	 */
+	private userReadOnly = false;
 	private readonly policy: InputPolicy;
 	private readonly pressure: PressureModel;
 	/** Position filter (stabilization setting) and the geometry of the stroke being written. */
@@ -940,6 +949,8 @@ export class NotebookView extends FileView {
 
 	async onUnloadFile(file: TFile): Promise<void> {
 		await this.closeSession();
+		// wave 0.10 (51): read-only mode belongs to the notebook being read; the next one opens editable.
+		if (this.userReadOnly) this.setReadOnlyMode(false, false);
 		this.syncSafety?.closed();
 		this.resilience?.end();
 		this.history.clear();
@@ -1018,10 +1029,53 @@ export class NotebookView extends FileView {
 		this.display?.settingsChanged();
 	}
 
-	/** Input policy from the settings; while annotations are hidden the view is read-only and a finger only pans and zooms. */
+	/**
+	 * Input policy from the settings; while annotations are hidden, or the user switched on read-only mode, the view is
+	 * read-only and a finger only pans and zooms (a tap still opens a link).
+	 */
 	private applyInput(settings: NotebookSettings = this.host.settings): void {
 		const base = policySettings(settings);
-		this.policy.settings = this.reading ? this.reading.policy(base) : base;
+		const policy = this.reading ? this.reading.policy(base) : base;
+		this.policy.settings = this.userReadOnly ? { ...policy, fingerDrawing: false } : policy;
+	}
+
+	/** wave 0.10 (51): read-only mode of this view is on. */
+	get readOnlyMode(): boolean {
+		return this.userReadOnly;
+	}
+
+	/**
+	 * wave 0.10 (51): switches read-only mode of this view. Whatever is being written is finished first (a stroke, a text
+	 * box, an open equation or graph, a selection, a pending marker), so nothing is lost, and saved normally if there was a
+	 * change; after that nothing can change the document and nothing is written: no backup, no "write it back" flow.
+	 * Needs an open document; a notebook that cannot be loaded is already read-only.
+	 */
+	setReadOnlyMode(on: boolean, notify = true): void {
+		if (on === this.userReadOnly) return;
+		if (on) {
+			if (!this.session?.doc) return;
+			this.controller?.finishActiveStroke();
+			this.commitText();
+			this.clearSelection();
+			this.markers?.disarm();
+			this.penLinks?.hideChip();
+			this.pageOffer?.cancel();
+			this.radial?.close();
+			// What the stroke or the text box just added is saved as usual before the mode locks the document.
+			void this.flushNow();
+		}
+		this.userReadOnly = on;
+		this.body?.toggleClass("is-read-only", on);
+		this.toolbar?.setReadOnly(on);
+		this.applyInput();
+		this.toolbar?.setEditable(this.editable());
+		this.updateHistoryButtons();
+		this.refreshUi();
+		if (notify) showNotice(t(on ? "readonly.on" : "readonly.off"), 4000);
+	}
+
+	toggleReadOnlyMode(): void {
+		this.setReadOnlyMode(!this.userReadOnly);
 	}
 
 	/**
@@ -1300,7 +1354,7 @@ export class NotebookView extends FileView {
 	}
 
 	/** wave 0.9 (381): the export dialog (format, page or notebook, ink and/or background). `pageIndex`: opened from that page's sheet. */
-	openExportDialog(pageIndex?: number): void {
+	openExportDialog(pageIndex?: number, initialFormat?: ExportFormat): void {
 		const doc = this.session?.doc;
 		const file = this.file;
 		if (!doc || !file || doc.pages.length === 0) return;
@@ -1309,6 +1363,10 @@ export class NotebookView extends FileView {
 			pageCount: doc.pages.length,
 			pageIndex: Math.min(doc.pages.length - 1, Math.max(0, pageIndex ?? this.currentPageIndex())),
 			pageFirst: pageIndex !== undefined,
+			// wave 0.10 (81): PNG images go to a folder next to the notebook by default; Print only where the device can print.
+			defaultFolder: siblingFolder(file, "PNG"),
+			canPrint: canPrint(),
+			...(initialFormat ? { initialFormat } : {}),
 			run: (request) => void runExport(this.app, file, doc.pages, request, this.media, this.exportOptions()),
 		}).open();
 	}
@@ -1765,7 +1823,8 @@ export class NotebookView extends FileView {
 			sidePane: pdfSideState(this),
 			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false },
 			display: { night: this.display?.night ?? false, crop: this.display?.crop ?? false },
-			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true },
+			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true, readOnly: this.userReadOnly },
+			canPrint: canPrint(),
 			markers: {
 				invisibleInk: !!this.markers?.invisibleInk, solutions: !!this.markers?.solutionsShown,
 				pageSolutions: !!page && (this.markers?.pageSolutionsShown(page) ?? false),
@@ -2014,7 +2073,7 @@ export class NotebookView extends FileView {
 	}
 
 	private editable(): boolean {
-		return this.session?.mode === "ok" && !!this.session.doc && !this.reading?.annotationsHidden && !this.syncSafety?.readOnly;
+		return this.session?.mode === "ok" && !!this.session.doc && !this.reading?.annotationsHidden && !this.syncSafety?.readOnly && !this.userReadOnly;
 	}
 
 	private pageAtIndex(i: number): Page | null {
@@ -2190,6 +2249,8 @@ export class NotebookView extends FileView {
 
 	/** Every real change of the document: schedules the save and logs the page as recently edited (365). */
 	private markChanged(): void {
+		// wave 0.10 (51): read-only mode never schedules a save (nothing changed; a stray call must not write the file).
+		if (this.userReadOnly) return;
 		this.session?.markChanged();
 		const doc = this.session?.doc;
 		if (!doc || !this.file || this.session?.mode !== "ok") return;
