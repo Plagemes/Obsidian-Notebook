@@ -37,9 +37,9 @@ import { line } from "./helpers";
 import { buildNotebookMarkdown, equationMarkdown, pageTexts } from "../src/model/export-markdown";
 import { elementBand } from "../src/model/layers";
 import { pageInfo } from "../src/model/page-info";
+import { delAt, getAt, pushAt, setAt, type Raw } from "./raw-json";
 
 const stamp = "2026-10-30T10:00:00.000Z";
-type Raw = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 function parsed(text: string) {
 	const r = parse(text);
@@ -125,9 +125,9 @@ describe("format v9", () => {
 			for (const version of [8, 7, 4]) {
 				const raw = v8Doc();
 				raw.version = version;
-				if (version < 8) raw.pages[0].elements = [];
-				if (version < 5) delete raw.pages[0].strokes[0].render;
-				raw.pages[0].elements.push(el);
+				if (version < 8) setAt(raw, ["pages", 0, "elements"], []);
+				if (version < 5) delAt(raw, ["pages", 0, "strokes", 0, "render"]);
+				pushAt(raw, ["pages", 0, "elements"], el);
 				const r = parse(JSON.stringify(raw));
 				expect(r.ok, `v${version} ${el.type}`).toBe(false);
 				if (!r.ok) expect(r.reason).toBe("invalid");
@@ -170,17 +170,17 @@ describe("format v9", () => {
 
 	it("reads invalid details leniently: each is dropped and counted, the rest stays", () => {
 		const raw = JSON.parse(serialize(v9Doc())) as Raw;
-		const [eq1, eq2, g] = raw.pages[0].elements as Raw[];
+		const [eq1, eq2, g] = getAt<Raw[]>(raw, ["pages", 0, "elements"]);
 		eq1!.outline = "M0 0L1 1"; // not closed
 		eq1!.numbered = "yes";
 		eq2!.inline = false;
-		g!.functions[0].tangent = "one";
-		g!.functions[0].area = { from: 2, to: 2 };
-		g!.functions[2].kind = "spiral"; // a whole function
-		g!.functions[3].width = 100;
-		g!.params[0].step = -1;
+		setAt(g, ["functions", 0, "tangent"], "one");
+		setAt(g, ["functions", 0, "area"], { from: 2, to: 2 });
+		setAt(g, ["functions", 2, "kind"], "spiral"); // a whole function
+		setAt(g, ["functions", 3, "width"], 100);
+		setAt(g, ["params", 0, "step"], -1);
 		g!.grid = true;
-		g!.table.rows = 0;
+		setAt(g, ["table", "rows"], 0);
 		const r = parsed(JSON.stringify(raw));
 		expect(r.dropped).toBe(10);
 		const [e1, e2, gr] = r.doc.pages[0]!.elements! as [EquationElement, EquationElement, GraphElement];
@@ -201,26 +201,26 @@ describe("format v9", () => {
 
 	it("drops (and counts) an equation or graph whose required data is invalid; a duplicate id still fails the file", () => {
 		const raw = JSON.parse(serialize(v9Doc())) as Raw;
-		raw.pages[0].elements[0].latex = "   ";
-		raw.pages[0].elements[1].fontSize = 0;
-		raw.pages[0].elements[2].view = { xMin: 1, xMax: 1, yMin: 0, yMax: 1 };
+		setAt(raw, ["pages", 0, "elements", 0, "latex"], "   ");
+		setAt(raw, ["pages", 0, "elements", 1, "fontSize"], 0);
+		setAt(raw, ["pages", 0, "elements", 2, "view"], { xMin: 1, xMax: 1, yMin: 0, yMax: 1 });
 		const r = parsed(JSON.stringify(raw));
 		expect(r.dropped).toBe(3);
 		expect(r.doc.pages[0]!.elements).toBeUndefined();
 		const dup = JSON.parse(serialize(v9Doc())) as Raw;
-		dup.pages[0].elements[2].id = "eq1";
+		setAt(dup, ["pages", 0, "elements", 2, "id"], "eq1");
 		expect(parse(JSON.stringify(dup)).ok).toBe(false);
 		const dupStroke = JSON.parse(serialize(v9Doc())) as Raw;
-		dupStroke.pages[0].elements[2].id = "s1";
+		setAt(dupStroke, ["pages", 0, "elements", 2, "id"], "s1");
 		expect(parse(JSON.stringify(dupStroke)).ok).toBe(false);
 	});
 
 	it("drops duplicate function ids, reserved parameter names and extra functions", () => {
 		const raw = JSON.parse(serialize(v9Doc())) as Raw;
-		const g = raw.pages[0].elements[2];
-		g.functions[1].id = "f1";
-		g.params.push({ name: "sin", value: 1, min: 0, max: 2 }, { name: "x", value: 1, min: 0, max: 2 }, { name: "a", value: 1, min: 0, max: 2 });
-		for (let i = 0; i < 12; i++) g.functions.push({ id: `extra${i}`, kind: "cartesian", color: "#000000", expr: "x" });
+		const g = getAt<Raw>(raw, ["pages", 0, "elements", 2]);
+		setAt(g, ["functions", 1, "id"], "f1");
+		pushAt(g, ["params"], { name: "sin", value: 1, min: 0, max: 2 }, { name: "x", value: 1, min: 0, max: 2 }, { name: "a", value: 1, min: 0, max: 2 });
+		for (let i = 0; i < 12; i++) pushAt(g, ["functions"], { id: `extra${i}`, kind: "cartesian", color: "#000000", expr: "x" });
 		const r = parsed(JSON.stringify(raw));
 		const gr = r.doc.pages[0]!.elements![2] as GraphElement;
 		expect(gr.functions.filter((f) => f.id === "f1")).toHaveLength(1);
@@ -271,9 +271,9 @@ describe("format v9", () => {
 
 	it("staged loading drops and counts exactly what the full lenient parse does", () => {
 		const raw = JSON.parse(serialize(v9Doc())) as Raw;
-		raw.pages[0].elements[0].numbered = 1;
-		raw.pages[0].elements[2].functions[0].roots = false;
-		raw.pages[1].elements = [{ ...inlineEq, id: "eq9", inline: "no" }];
+		setAt(raw, ["pages", 0, "elements", 0, "numbered"], 1);
+		setAt(raw, ["pages", 0, "elements", 2, "functions", 0, "roots"], false);
+		setAt(raw, ["pages", 1, "elements"], [{ ...inlineEq, id: "eq9", inline: "no" }]);
 		const staged = StagedParse.create(raw, 1);
 		expect(staged).toBeInstanceOf(StagedParse);
 		const r = (staged as StagedParse).finish();
@@ -383,9 +383,9 @@ describe("paths that copy pages and elements keep the v9 data", () => {
 	});
 
 	it("margins: a left margin moves equations and graphs with the page content", () => {
-		const moved = translateElement(plot, 20) as GraphElement;
+		const moved = translateElement(plot, 20);
 		expect(moved).toMatchObject({ x: 60, y: 200, view: plot.view, functions: plot.functions });
-		expect((translateElement(euler, -10) as EquationElement).outline).toBe(euler.outline);
+		expect((translateElement(euler, -10)).outline).toBe(euler.outline);
 	});
 });
 
@@ -408,7 +408,7 @@ describe("conflicted-copy merge with v9 data", () => {
 		const other = roundTrip(v9Doc());
 		const g = other.pages[0]!.elements![2] as GraphElement;
 		other.pages[0]!.elements![2] = { ...g, functions: [{ ...g.functions[0]!, expr: "a cos(x)" }, ...g.functions.slice(1)] };
-		expect(elementContentKey(other.pages[0]!.elements![2]!)).not.toBe(elementContentKey(main.pages[0]!.elements![2]!));
+		expect(elementContentKey(other.pages[0]!.elements![2])).not.toBe(elementContentKey(main.pages[0]!.elements![2]!));
 		const plan = planMerge(main, other);
 		expect(plan.summary.elementsCopied).toBe(1);
 		plan.command!.apply(main);
@@ -416,7 +416,7 @@ describe("conflicted-copy merge with v9 data", () => {
 		const p = roundTrip(v9Doc());
 		const g2 = p.pages[0]!.elements![2] as GraphElement;
 		p.pages[0]!.elements![2] = { ...g2, params: [{ ...g2.params![0]!, value: 3 }] };
-		expect(elementContentKey(p.pages[0]!.elements![2]!)).not.toBe(elementContentKey(g2));
+		expect(elementContentKey(p.pages[0]!.elements![2])).not.toBe(elementContentKey(g2));
 	});
 
 	it("the same equation with a different cached outline is the same equation", () => {
@@ -440,10 +440,10 @@ describe("repair keeps the v9 data", () => {
 
 	it("keeps the valid parts of a damaged equation or graph", () => {
 		const raw = JSON.parse(serialize(v9Doc())) as Raw;
-		raw.pages[0].elements[0].outline = 7;
-		raw.pages[0].elements[2].functions[1].color = "green";
-		raw.pages[0].elements[2].params = "a";
-		raw.pages[0].elements.push({ id: "g-bad", type: "graph", x: 1, y: 1, width: 10, height: 10, functions: [] });
+		setAt(raw, ["pages", 0, "elements", 0, "outline"], 7);
+		setAt(raw, ["pages", 0, "elements", 2, "functions", 1, "color"], "green");
+		setAt(raw, ["pages", 0, "elements", 2, "params"], "a");
+		pushAt(raw, ["pages", 0, "elements"], { id: "g-bad", type: "graph", x: 1, y: 1, width: 10, height: 10, functions: [] });
 		const r = repairNotebookText(JSON.stringify(raw));
 		expect(r.ok).toBe(true);
 		if (!r.ok) return;

@@ -36,9 +36,9 @@ import {
 } from "../src/model/types";
 import { buildLecturePage } from "../src/view/lecture-logic";
 import { line } from "./helpers";
+import { delAt, getAt, pushAt, setAt, type Raw } from "./raw-json";
 
 const stamp = "2026-10-29T10:00:00.000Z";
-type Raw = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 function parsed(text: string) {
 	const r = parse(text);
@@ -112,7 +112,7 @@ describe("format v8", () => {
 
 	it("migrates a v7 file unchanged apart from the version, dropping a stroke `hidden` key a v7 reader ignored", () => {
 		const raw = v7Doc();
-		raw.pages[0].strokes[0].hidden = true;
+		setAt(raw, ["pages", 0, "strokes", 0, "hidden"], true);
 		const r = parsed(JSON.stringify(raw));
 		expect(r.migratedFrom).toBe(7);
 		expect(r.doc.version).toBe(CURRENT_VERSION);
@@ -124,7 +124,7 @@ describe("format v8", () => {
 	it("rejects a pre-v8 file with a marker or box (no version of the plugin wrote it)", () => {
 		for (const el of [{ id: "m", type: "marker", kind: "star", x: 1, y: 1 }, { id: "b", type: "box", kind: "proof", x: 1, y: 1, width: 5, height: 5 }]) {
 			const raw = v7Doc();
-			raw.pages[0].elements.push(el);
+			pushAt(raw, ["pages", 0, "elements"], el);
 			const r = parse(JSON.stringify(raw));
 			expect(r.ok).toBe(false);
 			if (!r.ok) expect(r.reason).toBe("invalid");
@@ -157,14 +157,14 @@ describe("format v8", () => {
 
 	it("reads invalid optional details leniently: each is dropped and counted, the rest stays", () => {
 		const raw = JSON.parse(serialize(v8Doc())) as Raw;
-		const els = raw.pages[0].elements as Raw;
-		els[0].slide = 0; // gap: bad slide
-		delete els[1].height; // question: region with a width only
-		els[2].due = "2026-02-30"; // homework: not a date
-		els[2].done = false; // only true is stored
-		els[3].text = 42; // star: label not a string
-		els[4].title = ["x"]; // box: bad title
-		raw.pages[0].strokes[1].hidden = "yes";
+		const els = getAt<Raw[]>(raw, ["pages", 0, "elements"]);
+		setAt(els, [0, "slide"], 0); // gap: bad slide
+		delAt(els, [1, "height"]); // question: region with a width only
+		setAt(els, [2, "due"], "2026-02-30"); // homework: not a date
+		setAt(els, [2, "done"], false); // only true is stored
+		setAt(els, [3, "text"], 42); // star: label not a string
+		setAt(els, [4, "title"], ["x"]); // box: bad title
+		setAt(raw, ["pages", 0, "strokes", 1, "hidden"], "yes");
 		const r = parsed(JSON.stringify(raw));
 		expect(r.dropped).toBe(7);
 		const page = r.doc.pages[0]!;
@@ -179,13 +179,13 @@ describe("format v8", () => {
 
 	it("drops (and counts) a marker or box whose kind or frame is invalid; a duplicate id still fails the file", () => {
 		const raw = JSON.parse(serialize(v8Doc())) as Raw;
-		raw.pages[0].elements[3].kind = "smiley";
-		raw.pages[0].elements[4].width = -1;
+		setAt(raw, ["pages", 0, "elements", 3, "kind"], "smiley");
+		setAt(raw, ["pages", 0, "elements", 4, "width"], -1);
 		const r = parsed(JSON.stringify(raw));
 		expect(r.dropped).toBe(2);
 		expect(r.doc.pages[0]!.elements!.map((e) => e.id)).toEqual(["m-gap", "m-q", "m-hw"]);
 		const dup = JSON.parse(serialize(v8Doc())) as Raw;
-		dup.pages[0].elements[3].id = "m-gap";
+		setAt(dup, ["pages", 0, "elements", 3, "id"], "m-gap");
 		expect(parse(JSON.stringify(dup)).ok).toBe(false);
 	});
 
@@ -226,8 +226,8 @@ describe("format v8", () => {
 
 	it("staged loading counts the details dropped on pages read later", () => {
 		const raw = JSON.parse(serialize(v8Doc())) as Raw;
-		raw.pages[0].elements[0].slide = "seven";
-		raw.pages[1].strokes[0].hidden = 1;
+		setAt(raw, ["pages", 0, "elements", 0, "slide"], "seven");
+		setAt(raw, ["pages", 1, "strokes", 0, "hidden"], 1);
 		const staged = StagedParse.create(raw, 1);
 		expect(staged).toBeInstanceOf(StagedParse);
 		const r = (staged as StagedParse).finish();
@@ -354,7 +354,7 @@ describe("conflicted-copy merge with v8 data", () => {
 		expect(mergeCovers(roundTrip(main), other)).toBe(true);
 		// A result that lost the hidden flag does not cover a copy with hidden ink.
 		const lost = roundTrip(v8Doc());
-		lost.pages[0]!.strokes = lost.pages[0]!.strokes.map((x) => ({ ...x, hidden: undefined }) as Stroke).map((x) => {
+		lost.pages[0]!.strokes = lost.pages[0]!.strokes.map((x) => ({ ...x, hidden: undefined })).map((x) => {
 			const { hidden: _x, ...rest } = x;
 			void _x;
 			return rest;
@@ -409,10 +409,10 @@ describe("repair keeps the v8 data", () => {
 
 	it("keeps the valid fields of a damaged marker and the hidden flag of a damaged stroke", () => {
 		const raw = JSON.parse(serialize(v8Doc())) as Raw;
-		raw.pages[0].elements[2].due = 20261105;
-		raw.pages[0].strokes[1].points.push([NaN]);
-		raw.pages[0].strokes[1].color = "blue";
-		raw.pages[0].elements.push({ id: "m-bad", type: "marker", kind: "nope", x: 1, y: 1 });
+		setAt(raw, ["pages", 0, "elements", 2, "due"], 20261105);
+		pushAt(raw, ["pages", 0, "strokes", 1, "points"], [NaN]);
+		setAt(raw, ["pages", 0, "strokes", 1, "color"], "blue");
+		pushAt(raw, ["pages", 0, "elements"], { id: "m-bad", type: "marker", kind: "nope", x: 1, y: 1 });
 		const r = repairNotebookText(JSON.stringify(raw).replace("[null]", "[\"x\"]"));
 		expect(r.ok).toBe(true);
 		if (!r.ok) return;
@@ -427,7 +427,7 @@ describe("repair keeps the v8 data", () => {
 describe("companion note", () => {
 	it("turns boxes into callouts with a region embed and homework into tasks; nothing else changes", () => {
 		const doc = v8Doc();
-		doc.pages[0]!.elements!.push({ ...homework, id: "m-hw2", y: 500, done: undefined, due: undefined, text: undefined } as MarkerElement);
+		doc.pages[0]!.elements!.push({ ...homework, id: "m-hw2", y: 500, done: undefined, due: undefined, text: undefined });
 		const c = companionContent(doc, { notebookPath: "Courses/Analysis.notebook", pageUri: (n) => `obsidian://x?page=${n}` });
 		expect(c.text).toBe([
 			"### p. 1",
@@ -559,7 +559,7 @@ describe("canvas drawing of markers and boxes", () => {
 	/** A 2D context that records calls; every method exists, every property can be set. */
 	function recordingContext(): { ctx: CanvasRenderingContext2D; calls: string[] } {
 		const calls: string[] = [];
-		const ctx = new Proxy({} as Record<string, unknown>, {
+		const ctx = new Proxy<Record<string, unknown>>({}, {
 			get: (target, key) => (key in target ? target[key as string] : (...args: unknown[]) => {
 				calls.push(String(key));
 				void args;

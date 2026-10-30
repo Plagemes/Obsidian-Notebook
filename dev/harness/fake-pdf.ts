@@ -36,7 +36,7 @@ export const FAKE_LINES: ReadonlyArray<ReadonlyArray<readonly [string, number, n
 type Matrix = number[];
 
 function measure(text: string): number {
-	const c = document.createElement("canvas").getContext("2d")!;
+	const c = createEl("canvas").getContext("2d")!;
 	c.font = `${FAKE_FONT}px sans-serif`;
 	return c.measureText(text).width;
 }
@@ -86,7 +86,7 @@ const fakeLib = {
 
 /** Makes the stub's `loadPdfJs()` return the fake library. */
 export function installFakePdf(): void {
-	(globalThis as { __harnessPdfJs?: unknown }).__harnessPdfJs = fakeLib;
+	(window as unknown as { __harnessPdfJs?: unknown }).__harnessPdfJs = fakeLib;
 }
 
 /** A notebook with one page per fake PDF page, the asset record included. */

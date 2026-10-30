@@ -12,6 +12,7 @@ import { cloneMeta } from "../model/document";
 import { SetMeta, type Command } from "../model/history";
 import { pageTagCounts, parsePageTagInput, SetPageTags } from "../model/page-tags";
 import { BOOKMARK_CATEGORIES, DEFAULT_META, type BookmarkInfo, type NotebookMeta, type Page } from "../model/types";
+import { setDestructive } from "../ui/destructive";
 
 export interface OutlineHost {
 	readonly app: App;
@@ -242,7 +243,7 @@ export class BookmarkModal extends Modal {
 
 		const buttons = new Setting(this.contentEl);
 		if (o.exists) {
-			buttons.addButton((b) => b.setButtonText(t("bookmark.modal.remove")).setWarning().onClick(() => {
+			buttons.addButton((b) => setDestructive(b.setButtonText(t("bookmark.modal.remove"))).onClick(() => {
 				this.close();
 				o.onRemove();
 			}));

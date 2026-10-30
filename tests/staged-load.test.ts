@@ -4,10 +4,12 @@ import { parse, parseStaged, serialize, STAGED_MIN_CHARS, StagedParse } from "..
 import { CURRENT_VERSION, type NotebookDocument } from "../src/model/types";
 import { journalKey, type JournalSlotFile, type JournalStore } from "../src/storage/journal";
 import { DocumentSession, type BackupReason, type DocumentIO, type SessionMode, type Timers } from "../src/storage/session";
+import { nodeClearTimeout, nodeSetTimeout } from "./node-env";
+import { getAt, parseRaw, setAt } from "./raw-json";
 
 const timers: Timers = {
-	set: (fn, ms) => setTimeout(fn, ms) as unknown as number,
-	clear: (h) => clearTimeout(h),
+	set: (fn, ms) => nodeSetTimeout(fn, ms),
+	clear: (h) => nodeClearTimeout(h),
 };
 
 const BIG_STROKES = 3300;
@@ -166,10 +168,10 @@ describe("parseStaged", () => {
 	});
 
 	it("invalid optional v7 details are dropped and counted exactly like the lenient full parse; everything else still fails", () => {
-		const raw = JSON.parse(text);
-		const firstId = raw.pages[0].id as string;
-		raw.meta.bookmarkInfo = { [firstId]: { title: 3, color: "red", category: "x" } };
-		raw.position = { page: firstId, y: "far", at: "2026-10-30T10:00:00.000Z" };
+		const raw = parseRaw(text);
+		const firstId = getAt<string>(raw, ["pages", 0, "id"]);
+		setAt(raw, ["meta", "bookmarkInfo"], { [firstId]: { title: 3, color: "red", category: "x" } });
+		setAt(raw, ["position"], { page: firstId, y: "far", at: "2026-10-30T10:00:00.000Z" });
 		const damaged = JSON.stringify(raw, null, 1);
 		expect(damaged.length).toBeGreaterThan(STAGED_MIN_CHARS);
 		const whole = parse(damaged);
@@ -182,7 +184,7 @@ describe("parseStaged", () => {
 		expect(result.dropped).toBe(whole.dropped);
 		expect(serialize(result.doc)).toBe(serialize(whole.doc));
 		// A damaged required field is still fatal.
-		raw.pages[2].width = -1;
+		setAt(raw, ["pages", 2, "width"], -1);
 		expect(parse(JSON.stringify(raw, null, 1)).ok).toBe(false);
 		expect((parseStaged(JSON.stringify(raw, null, 1), 3) as { ok: boolean }).ok).toBe(false);
 	});

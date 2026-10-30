@@ -4,6 +4,7 @@ import { BarrelDetector, ChordDetector, EventLog, formatEvent, type LoggedEvent 
 import { PointerController, type MenuSource, type PointerHandlers } from "../src/ink/pointer-controller";
 import { DEFAULT_SETTINGS, readSettings } from "../src/settings";
 import { policySettings } from "../src/view/input-settings";
+import { installFakeWindow, removeFakeWindow } from "./node-env";
 
 // --- BarrelDetector: the Samsung pressure-0 press ---
 
@@ -194,10 +195,10 @@ const release = (el: FakeEl, t: number, x = 400) => fire(el, "pointerup", { butt
 
 describe("Samsung button: click -> menu on release", () => {
 	beforeEach(() => {
-		(globalThis as { window?: unknown }).window = globalThis;
+		installFakeWindow();
 	});
 	afterEach(() => {
-		delete (globalThis as { window?: unknown }).window;
+		removeFakeWindow();
 	});
 
 	it("press and release while hovering: nothing on the press, the menu on the release at the pen position, no ink", () => {
@@ -281,10 +282,10 @@ describe("Samsung button: click -> menu on release", () => {
 
 describe("Samsung button held while the nib touches: erase", () => {
 	beforeEach(() => {
-		(globalThis as { window?: unknown }).window = globalThis;
+		installFakeWindow();
 	});
 	afterEach(() => {
-		delete (globalThis as { window?: unknown }).window;
+		removeFakeWindow();
 	});
 
 	it("button, then contact: the contact erases for as long as it lasts; no menu on release", () => {
@@ -387,10 +388,10 @@ describe("Samsung button held while the nib touches: erase", () => {
 
 describe("a real contact that starts at pressure 0 still draws", () => {
 	beforeEach(() => {
-		(globalThis as { window?: unknown }).window = globalThis;
+		installFakeWindow();
 	});
 	afterEach(() => {
-		delete (globalThis as { window?: unknown }).window;
+		removeFakeWindow();
 	});
 
 	it("no hover seen for the pointer before: ink", () => {
@@ -446,10 +447,10 @@ describe("barrel bit signals keep working", () => {
 
 describe("side button pressed during contact (chord event)", () => {
 	beforeEach(() => {
-		(globalThis as { window?: unknown }).window = globalThis;
+		installFakeWindow();
 	});
 	afterEach(() => {
-		delete (globalThis as { window?: unknown }).window;
+		removeFakeWindow();
 	});
 
 	const land = (el: FakeEl, t = 1000) => fire(el, "pointerdown", { button: 0, buttons: 1, pressure: 0.6, clientX: 400, timeStamp: t });
@@ -515,7 +516,7 @@ describe("side button pressed during contact (chord event)", () => {
 
 	it("pointerrawupdate and pointermove reporting the same change toggle once", () => {
 		const el = new FakeEl();
-		(globalThis as { window?: unknown }).window = { onpointerrawupdate: null };
+		installFakeWindow({ onpointerrawupdate: null });
 		const { log, controller } = (() => {
 			const l: string[] = [];
 			const handlers: PointerHandlers = {

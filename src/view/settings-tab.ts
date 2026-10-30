@@ -324,11 +324,16 @@ export class NotebookSettingTab extends PluginSettingTab {
 		// Obsidian 1.13+ re-reads getSettingDefinitions() in update(); older versions only have display().
 		const update = (this as { update?: () => void }).update;
 		if (typeof update === "function") update.call(this);
-		else this.display();
+		else this.renderLegacy();
 	}
 
-	/** Fallback for Obsidian older than 1.13, which does not read getSettingDefinitions(). */
+	/** Fallback for Obsidian older than 1.13, which does not read getSettingDefinitions() and calls display() instead. */
 	display(): void {
+		this.renderLegacy();
+	}
+
+	/** The whole tab drawn by hand, for Obsidian older than 1.13 (see `display`). */
+	private renderLegacy(): void {
 		const { containerEl } = this;
 		const s = this.host.settings;
 		containerEl.empty();

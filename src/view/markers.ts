@@ -17,6 +17,7 @@ import {
 import {
 	BOX_KINDS, type BoxElement, type BoxKind, type MarkerElement, type MarkerKind, type NotebookDocument, type Page, type PageElement,
 } from "../model/types";
+import { setDestructive } from "../ui/destructive";
 
 /** What the next tap or drag on a page places. */
 export type PlaceKind = MarkerKind | "box";
@@ -329,7 +330,7 @@ class MarkerEditModal extends Modal {
 		}
 		const buttons = new Setting(this.contentEl);
 		if (this.onDelete) {
-			buttons.addButton((b) => b.setButtonText(t("markers.edit.delete")).setWarning().onClick(() => {
+			buttons.addButton((b) => setDestructive(b.setButtonText(t("markers.edit.delete"))).onClick(() => {
 				this.close();
 				this.onDelete?.();
 			}));
@@ -373,7 +374,7 @@ class BoxEditModal extends Modal {
 			});
 		});
 		new Setting(this.contentEl)
-			.addButton((b) => b.setButtonText(t("markers.edit.delete")).setWarning().onClick(() => {
+			.addButton((b) => setDestructive(b.setButtonText(t("markers.edit.delete"))).onClick(() => {
 				this.close();
 				this.onDelete();
 			}))

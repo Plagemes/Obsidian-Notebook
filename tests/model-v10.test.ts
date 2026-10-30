@@ -30,9 +30,9 @@ import { CURRENT_VERSION, FORMAT_ID, type Asset, type ExcerptElement, type Noteb
 import { pageSignature } from "../src/view/view-helpers";
 import { regionFromState } from "../src/integration/links";
 import { line } from "./helpers";
+import { getAt, pushAt, setAt, type Raw } from "./raw-json";
 
 const stamp = "2026-10-30T10:00:00.000Z";
-type Raw = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 function parsed(text: string) {
 	const r = parse(text);
@@ -108,8 +108,8 @@ describe("format v10", () => {
 		const r = parsed(JSON.stringify(raw));
 		expect(r.migratedFrom).toBe(9);
 		expect(r.doc.version).toBe(10);
-		expect(r.doc.pages[0]!.elements).toEqual(raw.pages[0].elements);
-		expect(r.doc.pages[0]!.strokes).toEqual(raw.pages[0].strokes);
+		expect(r.doc.pages[0]!.elements).toEqual(getAt(raw, ["pages", 0, "elements"]));
+		expect(r.doc.pages[0]!.strokes).toEqual(getAt(raw, ["pages", 0, "strokes"]));
 		expect(r.dropped).toBeUndefined();
 		// Written back, it is the same content at version 10.
 		const again = parsed(serialize(r.doc));
@@ -119,7 +119,7 @@ describe("format v10", () => {
 
 	it("rejects a pre-v10 file with an excerpt (no version of the plugin wrote it)", () => {
 		const raw = v9Doc();
-		raw.pages[0].elements.push({ ...local, asset: undefined });
+		pushAt(raw, ["pages", 0, "elements"], { ...local, asset: undefined });
 		const r = parse(JSON.stringify(raw));
 		expect(r.ok).toBe(false);
 		if (!r.ok) {
@@ -141,7 +141,7 @@ describe("format v10", () => {
 
 	it("reads leniently: an invalid excerpt is dropped and counted, an invalid snapshot only loses the snapshot", () => {
 		const raw = JSON.parse(serialize(v10Doc())) as Raw;
-		raw.pages[0].elements.push(
+		pushAt(raw, ["pages", 0, "elements"],
 			{ ...remote, id: "bad1", width: -1 },
 			{ ...remote, id: "bad2", source: "nope" },
 			{ ...remote, id: "bad3", source: { ...remote.source, page: "" } },
@@ -160,7 +160,7 @@ describe("format v10", () => {
 
 	it("a duplicate excerpt id still makes the file invalid", () => {
 		const raw = JSON.parse(serialize(v10Doc())) as Raw;
-		raw.pages[0].elements.push({ ...remote });
+		pushAt(raw, ["pages", 0, "elements"], { ...remote });
 		expect(parse(JSON.stringify(raw)).ok).toBe(false);
 	});
 
@@ -215,7 +215,7 @@ describe("format v10", () => {
 
 	it("staged loading drops and counts exactly what the full lenient parse does", () => {
 		const raw = JSON.parse(serialize(v10Doc())) as Raw;
-		raw.pages[1].elements = [{ ...remote, id: "x9", asset: "missing" }, { ...remote, id: "x10", source: null }];
+		setAt(raw, ["pages", 1, "elements"], [{ ...remote, id: "x9", asset: "missing" }, { ...remote, id: "x10", source: null }]);
 		const staged = StagedParse.create(raw, 0);
 		expect(staged).toBeInstanceOf(StagedParse);
 		const r = (staged as StagedParse).finish();
@@ -401,8 +401,8 @@ describe("paths that copy pages and elements keep the excerpt and its snapshot",
 
 	it("repair keeps an excerpt, without a snapshot whose asset is gone", () => {
 		const raw = JSON.parse(serialize(v10Doc())) as Raw;
-		raw.pages[0].elements[0].asset = "lost";
-		raw.pages[0].elements.push({ id: "x-bad", type: "excerpt", x: 1, y: 1, width: 10, height: 10 });
+		setAt(raw, ["pages", 0, "elements", 0, "asset"], "lost");
+		pushAt(raw, ["pages", 0, "elements"], { id: "x-bad", type: "excerpt", x: 1, y: 1, width: 10, height: 10 });
 		const r = repairNotebookText(JSON.stringify(raw));
 		expect(r.ok).toBe(true);
 		if (!r.ok) return;

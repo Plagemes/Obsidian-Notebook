@@ -12,6 +12,7 @@ import {
 	type Asset, type ImageElement, type NotebookDocument, type NotebookMeta, type TextElement,
 } from "../src/model/types";
 import { line } from "./helpers";
+import { delAt, getAt, parseRaw, setAt, type Raw } from "./raw-json";
 
 const stamp = "2026-10-29T10:00:00.000Z";
 const PDF_ID = "ab12cd34ef56";
@@ -55,11 +56,9 @@ function fullDoc(): NotebookDocument {
 }
 
 /** Plain JSON of the serialized full doc, to be corrupted by the rejection tests. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Raw = Record<string, any>;
 
 function rawFull(): Raw {
-	return JSON.parse(serialize(fullDoc()));
+	return parseRaw(serialize(fullDoc()));
 }
 
 describe("format v4 migrations", () => {
@@ -152,12 +151,12 @@ describe("format v4 round trip", () => {
 		expect(lines.filter((l) => l.startsWith("\t\t\"")).length).toBe(2); // two assets
 		// Assets sorted by id: "0f0f0f" before "ab12cd34ef56".
 		expect(out.indexOf(`"${IMG_ID}": {`)).toBeLessThan(out.indexOf(`"${PDF_ID}": {`));
-		expect(Object.keys(JSON.parse(out))).toEqual(["format", "version", "id", "createdAt", "modifiedAt", "meta", "assets", "pages"]);
-		const pages = JSON.parse(out).pages;
-		expect(Object.keys(pages[0])).toEqual(["id", "width", "height", "paper", "infinite", "elements", "strokes"]);
-		expect(Object.keys(pages[1])).toEqual(["id", "width", "height", "paper", "background", "strokes"]);
+		expect(Object.keys(parseRaw(out))).toEqual(["format", "version", "id", "createdAt", "modifiedAt", "meta", "assets", "pages"]);
+		const pages = getAt<Raw[]>(parseRaw(out), ["pages"]);
+		expect(Object.keys(pages[0]!)).toEqual(["id", "width", "height", "paper", "infinite", "elements", "strokes"]);
+		expect(Object.keys(pages[1]!)).toEqual(["id", "width", "height", "paper", "background", "strokes"]);
 		// A plain page carries none of the new keys.
-		const plain = JSON.parse(serialize(createDocument())).pages[0];
+		const plain = getAt<Raw>(parseRaw(serialize(createDocument())), ["pages", 0]);
 		expect(Object.keys(plain)).toEqual(["id", "width", "height", "paper", "strokes"]);
 	});
 
@@ -171,8 +170,8 @@ describe("format v4 round trip", () => {
 
 	it("keeps an explicit infinite:false and drops an empty elements array", () => {
 		const raw = rawFull();
-		raw.pages[0].infinite = false;
-		raw.pages[1].elements = [];
+		setAt(raw, ["pages", 0, "infinite"], false);
+		setAt(raw, ["pages", 1, "elements"], []);
 		const r = parse(JSON.stringify(raw));
 		if (!r.ok) throw new Error(r.message);
 		expect(r.doc.pages[0]!.infinite).toBe(false);
@@ -212,9 +211,9 @@ describe("format v4 round trip", () => {
 		expect(serialize(r.doc)).toBe(out);
 		// A hand-edited file with a stale bookmark loads, minus the stale entry.
 		const raw = rawFull();
-		raw.meta.bookmarks = [raw.pages[1].id, "stale"];
+		setAt(raw, ["meta", "bookmarks"], [getAt(raw, ["pages", 1, "id"]), "stale"]);
 		const loaded = parse(JSON.stringify(raw));
-		expect(loaded.ok && loaded.doc.meta!.bookmarks).toEqual([raw.pages[1].id]);
+		expect(loaded.ok && loaded.doc.meta!.bookmarks).toEqual([getAt(raw, ["pages", 1, "id"])]);
 		// And the in-memory document is not touched by serializing it.
 		expect(doc.meta.bookmarks).toEqual([pageId, "gone", pageId]);
 	});
@@ -235,57 +234,57 @@ describe("format v4 validation", () => {
 		expect(parse(JSON.stringify(rawFull())).ok).toBe(true);
 	});
 
-	rejects("a dangling image element asset", (d) => { d.pages[0].elements[1].asset = "dead"; });
-	rejects("an image element that points to a PDF", (d) => { d.pages[0].elements[1].asset = PDF_ID; });
-	rejects("a dangling pdf background", (d) => { d.pages[1].background.asset = "dead"; });
-	rejects("a pdf background that points to an image", (d) => { d.pages[1].background.asset = IMG_ID; });
-	rejects("an image background that points to a PDF", (d) => { d.pages[3].background.asset = PDF_ID; });
-	rejects("page number 0", (d) => { d.pages[1].background.page = 0; });
-	rejects("a fractional page number", (d) => { d.pages[1].background.page = 1.5; });
-	rejects("a missing page number", (d) => { delete d.pages[1].background.page; });
-	rejects("an unknown background kind", (d) => { d.pages[1].background.kind = "svg"; });
-	rejects("a non-boolean infinite", (d) => { d.pages[0].infinite = "yes"; });
-	rejects("a duplicate id between a stroke and an element", (d) => { d.pages[0].elements[0].id = d.pages[0].strokes[0].id; });
-	rejects("a duplicate id between elements on different pages", (d) => { d.pages[3].elements = [{ ...d.pages[0].elements[0] }]; });
-	rejects("a bad text colour", (d) => { d.pages[0].elements[0].color = "red"; });
-	rejects("a text with width 0", (d) => { d.pages[0].elements[0].width = 0; });
-	rejects("a text with fontSize 0", (d) => { d.pages[0].elements[0].fontSize = 0; });
-	rejects("a text with fontSize above 400", (d) => { d.pages[0].elements[0].fontSize = 401; });
-	rejects("a non-string text", (d) => { d.pages[0].elements[0].text = 5; });
-	rejects("a null element coordinate (NaN on save)", (d) => { d.pages[0].elements[0].x = null; });
-	rejects("an image with a null rotation", (d) => { d.pages[0].elements[1].rotation = null; });
-	rejects("an image with height 0", (d) => { d.pages[0].elements[1].height = 0; });
-	rejects("an unknown element type", (d) => { d.pages[0].elements[0].type = "sticker"; });
-	rejects("elements that are not an array", (d) => { d.pages[0].elements = {}; });
-	rejects("an asset whose key differs from its id", (d) => { d.assets[IMG_ID].id = "abc"; });
+	rejects("a dangling image element asset", (d) => { setAt(d, ["pages", 0, "elements", 1, "asset"], "dead"); });
+	rejects("an image element that points to a PDF", (d) => { setAt(d, ["pages", 0, "elements", 1, "asset"], PDF_ID); });
+	rejects("a dangling pdf background", (d) => { setAt(d, ["pages", 1, "background", "asset"], "dead"); });
+	rejects("a pdf background that points to an image", (d) => { setAt(d, ["pages", 1, "background", "asset"], IMG_ID); });
+	rejects("an image background that points to a PDF", (d) => { setAt(d, ["pages", 3, "background", "asset"], PDF_ID); });
+	rejects("page number 0", (d) => { setAt(d, ["pages", 1, "background", "page"], 0); });
+	rejects("a fractional page number", (d) => { setAt(d, ["pages", 1, "background", "page"], 1.5); });
+	rejects("a missing page number", (d) => { delAt(d, ["pages", 1, "background", "page"]); });
+	rejects("an unknown background kind", (d) => { setAt(d, ["pages", 1, "background", "kind"], "svg"); });
+	rejects("a non-boolean infinite", (d) => { setAt(d, ["pages", 0, "infinite"], "yes"); });
+	rejects("a duplicate id between a stroke and an element", (d) => { setAt(d, ["pages", 0, "elements", 0, "id"], getAt(d, ["pages", 0, "strokes", 0, "id"])); });
+	rejects("a duplicate id between elements on different pages", (d) => { setAt(d, ["pages", 3, "elements"], [{ ...getAt<Raw>(d, ["pages", 0, "elements", 0]) }]); });
+	rejects("a bad text colour", (d) => { setAt(d, ["pages", 0, "elements", 0, "color"], "red"); });
+	rejects("a text with width 0", (d) => { setAt(d, ["pages", 0, "elements", 0, "width"], 0); });
+	rejects("a text with fontSize 0", (d) => { setAt(d, ["pages", 0, "elements", 0, "fontSize"], 0); });
+	rejects("a text with fontSize above 400", (d) => { setAt(d, ["pages", 0, "elements", 0, "fontSize"], 401); });
+	rejects("a non-string text", (d) => { setAt(d, ["pages", 0, "elements", 0, "text"], 5); });
+	rejects("a null element coordinate (NaN on save)", (d) => { setAt(d, ["pages", 0, "elements", 0, "x"], null); });
+	rejects("an image with a null rotation", (d) => { setAt(d, ["pages", 0, "elements", 1, "rotation"], null); });
+	rejects("an image with height 0", (d) => { setAt(d, ["pages", 0, "elements", 1, "height"], 0); });
+	rejects("an unknown element type", (d) => { setAt(d, ["pages", 0, "elements", 0, "type"], "sticker"); });
+	rejects("elements that are not an array", (d) => { setAt(d, ["pages", 0, "elements"], {}); });
+	rejects("an asset whose key differs from its id", (d) => { setAt(d, ["assets", IMG_ID, "id"], "abc"); });
 	rejects("an asset id that is not lowercase hex", (d) => {
-		d.assets.XYZ = { ...d.assets[IMG_ID], id: "XYZ" };
+		setAt(d, ["assets", "XYZ"], { ...getAt<Raw>(d, ["assets", IMG_ID]), id: "XYZ" });
 	});
 	rejects("an asset id in upper case", (d) => {
-		d.assets.ABCD = { ...d.assets[IMG_ID], id: "ABCD" };
+		setAt(d, ["assets", "ABCD"], { ...getAt<Raw>(d, ["assets", IMG_ID]), id: "ABCD" });
 	});
-	rejects("an unknown asset kind", (d) => { d.assets[IMG_ID].kind = "video"; });
-	rejects("an empty asset path", (d) => { d.assets[IMG_ID].path = ""; });
-	rejects("a non-string asset name", (d) => { d.assets[IMG_ID].name = 3; });
-	rejects("negative asset bytes", (d) => { d.assets[IMG_ID].bytes = -1; });
-	rejects("fractional asset bytes", (d) => { d.assets[IMG_ID].bytes = 1.5; });
-	rejects("assets that are not an object", (d) => { d.assets = []; });
-	rejects("an empty tag", (d) => { d.meta.tags = [""]; });
-	rejects("a non-string tag", (d) => { d.meta.tags = [1]; });
-	rejects("a non-boolean favorite", (d) => { d.meta.favorite = 1; });
-	rejects("a bad cover colour", (d) => { d.meta.cover = "#abc"; });
-	rejects("bookmarks that are not an array", (d) => { d.meta.bookmarks = "x"; });
+	rejects("an unknown asset kind", (d) => { setAt(d, ["assets", IMG_ID, "kind"], "video"); });
+	rejects("an empty asset path", (d) => { setAt(d, ["assets", IMG_ID, "path"], ""); });
+	rejects("a non-string asset name", (d) => { setAt(d, ["assets", IMG_ID, "name"], 3); });
+	rejects("negative asset bytes", (d) => { setAt(d, ["assets", IMG_ID, "bytes"], -1); });
+	rejects("fractional asset bytes", (d) => { setAt(d, ["assets", IMG_ID, "bytes"], 1.5); });
+	rejects("assets that are not an object", (d) => { setAt(d, ["assets"], []); });
+	rejects("an empty tag", (d) => { setAt(d, ["meta", "tags"], [""]); });
+	rejects("a non-string tag", (d) => { setAt(d, ["meta", "tags"], [1]); });
+	rejects("a non-boolean favorite", (d) => { setAt(d, ["meta", "favorite"], 1); });
+	rejects("a bad cover colour", (d) => { setAt(d, ["meta", "cover"], "#abc"); });
+	rejects("bookmarks that are not an array", (d) => { setAt(d, ["meta", "bookmarks"], "x"); });
 	rejects("meta that is not an object", (d) => { d.meta = []; });
 
 	it("accepts asset bytes 0 and an empty asset name", () => {
 		const raw = rawFull();
-		raw.assets[IMG_ID].name = "";
+		setAt(raw, ["assets", IMG_ID, "name"], "");
 		expect(parse(JSON.stringify(raw)).ok).toBe(true);
 	});
 
 	it("an asset id such as __proto__ cannot be used to reach inherited properties", () => {
 		const raw = rawFull();
-		raw.pages[0].elements[1].asset = "constructor";
+		setAt(raw, ["pages", 0, "elements", 1, "asset"], "constructor");
 		expect(parse(JSON.stringify(raw)).ok).toBe(false);
 	});
 
@@ -471,12 +470,12 @@ describe("v4 commands", () => {
 		const b2 = { ...b, text: "edited" };
 		h.execute(new ReplaceElement(page.id, b, b2));
 		expect(page.elements).toEqual([a, b2, c]);
-		expect(page.elements![1]).toBe(b2);
+		expect(page.elements[1]).toBe(b2);
 		expect(Object.isFrozen(b2)).toBe(true);
 		h.undo();
-		expect(page.elements![1]).toBe(b);
+		expect(page.elements[1]).toBe(b);
 		h.redo();
-		expect(page.elements![1]).toBe(b2);
+		expect(page.elements[1]).toBe(b2);
 		// A stale replacement (before is gone) is a no-op in both directions.
 		const stale = new ReplaceElement(page.id, b, { ...b, text: "again" });
 		stale.apply(doc);

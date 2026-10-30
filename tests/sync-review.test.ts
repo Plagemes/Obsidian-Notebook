@@ -14,8 +14,9 @@ import { isPartialOf } from "../src/storage/write-guard";
 import { assessDisk, IntegrityLedger } from "../src/storage/integrity";
 import { restoredText } from "../src/storage/history";
 import { HEARTBEAT_MS, STALE_AFTER_MS } from "../src/storage/presence-logic";
-import { FakeTFile, FakeVault } from "./fake-vault";
+import { FakeVault } from "./fake-vault";
 import { line, sampleDocument } from "./helpers";
+import { installFakeWindow, nodeClearTimeout, nodeSetTimeout } from "./node-env";
 
 vi.mock("obsidian", async () => {
 	const mock = (await import("./fake-vault")).obsidianMock();
@@ -35,8 +36,8 @@ const { QuickNavService } = await import("../src/view/quick-switcher");
 const { LibraryIndex, INDEX_VERSION } = await import("../src/library/index");
 
 const timers: Timers = {
-	set: (fn, ms) => setTimeout(fn, ms) as unknown as number,
-	clear: (h) => clearTimeout(h),
+	set: (fn, ms) => nodeSetTimeout(fn, ms),
+	clear: (h) => nodeClearTimeout(h),
 };
 
 const ROOT = "Notebooks";
@@ -79,7 +80,7 @@ function setup(text: string, options: SessionOptions = {}, events: SessionEvents
 	const backups = () => [...vault.files.entries()]
 		.filter(([p]) => p.startsWith(`${BACKUPS}/`))
 		.map(([p, content]) => ({ reason: / ([a-z-]+) (?:\d+ )?[0-9a-f]{8}\.bak$/.exec(p)?.[1] ?? "?", content }));
-	return { vault, file: file as unknown as FakeTFile, io, s, backups, disk: () => vault.files.get(P)! };
+	return { vault, file, io, s, backups, disk: () => vault.files.get(P)! };
 }
 
 /** The ledger's record of a write of `text` by this device a few seconds ago (strong evidence, review N3). */
@@ -673,7 +674,7 @@ describe("#4 a version restore is a new edit (review)", () => {
 
 describe("#5 presence heartbeat (review)", () => {
 	beforeEach(() => {
-		(globalThis as { window?: unknown }).window = globalThis;
+		installFakeWindow();
 	});
 
 	it("writes on open, every 5 minutes, and on resume only when the last write is that old", async () => {
@@ -730,7 +731,7 @@ describe("#9 an image that does not decode is reloaded when its file changes (re
 
 describe("#10 library index of the quick switcher (review)", () => {
 	beforeEach(() => {
-		(globalThis as { window?: unknown }).window = globalThis;
+		installFakeWindow();
 	});
 
 	async function refresh(service: { dir: { refresh(p: () => void): Promise<void> } }): Promise<void> {
@@ -758,11 +759,11 @@ describe("#10 library index of the quick switcher (review)", () => {
 	it("saves what it read through the library host, so the next session reads nothing again", async () => {
 		const vault = new FakeVault({ [P]: serialize(sampleDocument(1)), [`${ROOT}/B.notebook`]: serialize(sampleDocument(2)) });
 		const saved = { data: null as unknown, reads: 0 };
-		const first = new QuickNavService(vault.app, host(vault, saved) as never, {} as never);
+		const first = new QuickNavService(vault.app, host(vault, saved), {} as never);
 		await refresh(first);
 		expect(saved.reads).toBe(2);
 		expect((saved.data as { version: number }).version).toBe(INDEX_VERSION);
-		const second = new QuickNavService(vault.app, host(vault, saved) as never, {} as never);
+		const second = new QuickNavService(vault.app, host(vault, saved), {} as never);
 		await refresh(second);
 		expect(saved.reads).toBe(2);
 		expect(second.dir.index.size).toBe(2);
@@ -772,7 +773,7 @@ describe("#10 library index of the quick switcher (review)", () => {
 		const vault = new FakeVault({ [P]: serialize(sampleDocument(1)) });
 		const newer = { version: INDEX_VERSION + 1, entries: [{ future: true }] };
 		const saved = { data: newer as unknown, reads: 0 };
-		const service = new QuickNavService(vault.app, host(vault, saved) as never, {} as never);
+		const service = new QuickNavService(vault.app, host(vault, saved), {} as never);
 		await refresh(service);
 		expect(saved.reads).toBe(1);
 		expect(saved.data).toBe(newer);

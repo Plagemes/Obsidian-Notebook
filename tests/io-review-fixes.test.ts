@@ -15,6 +15,7 @@ import { conflictBaseOf, mayBeManualCopy, sameNotebookText } from "../src/storag
 import { quickDocId } from "../src/storage/history";
 import { DocumentSession, type DocumentIO, type Timers } from "../src/storage/session";
 import { line, sampleDocument } from "./helpers";
+import { nodeClearTimeout, nodeSetTimeout } from "./node-env";
 
 // ------------------------------------------------------------------ move pages: the destination must hold them
 
@@ -58,8 +59,8 @@ describe("quickDocId (is a notebook id unique in the vault)", () => {
 // ------------------------------------------------------------------ session: saved state and own writes
 
 const timers: Timers = {
-	set: (fn, ms) => setTimeout(fn, ms) as unknown as number,
-	clear: (h) => clearTimeout(h),
+	set: (fn, ms) => nodeSetTimeout(fn, ms),
+	clear: (h) => nodeClearTimeout(h),
 };
 
 class HookIO implements DocumentIO {

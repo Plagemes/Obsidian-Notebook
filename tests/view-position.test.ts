@@ -9,6 +9,7 @@ import { A4_HEIGHT, A4_WIDTH } from "../src/model/types";
 import { DEFAULT_SETTINGS, readSettings } from "../src/settings";
 import { LocationKeeper } from "../src/view/last-location";
 import type { Timers } from "../src/storage/session";
+import { nodeClearTimeout, nodeSetTimeout } from "./node-env";
 
 const A4 = { width: A4_WIDTH, height: A4_HEIGHT };
 const pages = Array.from({ length: 6 }, () => A4);
@@ -150,7 +151,7 @@ describe("plugin settings", () => {
 });
 
 describe("LocationKeeper carries the position", () => {
-	const timers: Timers = { set: (fn, ms) => setTimeout(fn, ms) as unknown as number, clear: (h) => clearTimeout(h) };
+	const timers: Timers = { set: (fn, ms) => nodeSetTimeout(fn, ms), clear: (h) => nodeClearTimeout(h) };
 	beforeEach(() => vi.useFakeTimers());
 	afterEach(() => vi.useRealTimers());
 

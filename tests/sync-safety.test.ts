@@ -14,10 +14,11 @@ import {
 } from "../src/storage/presence-logic";
 import { isReservedPath } from "../src/library/folders";
 import { line, sampleDocument } from "./helpers";
+import { CONFIG_DIR, nodeClearTimeout, nodeSetTimeout } from "./node-env";
 
 const timers: Timers = {
-	set: (fn, ms) => setTimeout(fn, ms) as unknown as number,
-	clear: (h) => clearTimeout(h),
+	set: (fn, ms) => nodeSetTimeout(fn, ms),
+	clear: (h) => nodeClearTimeout(h),
 };
 
 class FakeIO implements DocumentIO {
@@ -132,12 +133,12 @@ describe("#343 assets waiting for sync", () => {
 
 describe("#345 sync check", () => {
 	it("flags the notebooks folder inside the config folder or a hidden folder", () => {
-		expect(folderIssues(".obsidian/Notebooks", ".obsidian").map((i) => i.kind)).toEqual(["config-folder"]);
-		expect(folderIssues(".private/Notebooks", ".obsidian").map((i) => i.kind)).toEqual(["hidden-folder"]);
-		expect(folderIssues("School/Notes.nosync", ".obsidian").map((i) => i.kind)).toEqual(["nosync-folder"]);
-		expect(folderIssues("Notebooks", ".obsidian")).toEqual([]);
-		expect(folderIssues("", ".obsidian")).toEqual([]);
-		expect(folderIssues(".obsidianx/N", ".obsidian").map((i) => i.kind)).toEqual(["hidden-folder"]);
+		expect(folderIssues(`${CONFIG_DIR}/Notebooks`, CONFIG_DIR).map((i) => i.kind)).toEqual(["config-folder"]);
+		expect(folderIssues(".private/Notebooks", CONFIG_DIR).map((i) => i.kind)).toEqual(["hidden-folder"]);
+		expect(folderIssues("School/Notes.nosync", CONFIG_DIR).map((i) => i.kind)).toEqual(["nosync-folder"]);
+		expect(folderIssues("Notebooks", CONFIG_DIR)).toEqual([]);
+		expect(folderIssues("", CONFIG_DIR)).toEqual([]);
+		expect(folderIssues(`${CONFIG_DIR}x/N`, CONFIG_DIR).map((i) => i.kind)).toEqual(["hidden-folder"]);
 	});
 
 	it("flags names OneDrive, Windows or Android storage refuse", () => {
@@ -182,7 +183,7 @@ describe("#345 sync check", () => {
 			{ path: "N/_assets/big.pdf", size: 20 * 1024 * 1024 },
 			{ path: `N/${"deep/".repeat(40)}x.notebook`, size: 1 },
 		];
-		const issues = scanForSyncIssues("N", ".obsidian", files);
+		const issues = scanForSyncIssues("N", CONFIG_DIR, files);
 		const kinds = issues.map((i) => `${i.kind}:${i.path}`);
 		expect(kinds).toContain("bad-chars:N/Bad: folder");
 		expect(kinds.filter((k) => k.startsWith("bad-chars"))).toHaveLength(1);

@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { createPage } from "../src/model/document";
 import {
-	addEntry, emptyPageTrash, entriesToDrop, makeEntry, mergeEntries, parsePageTrashEntry, PAGE_TRASH_MAX_ENTRIES, planPageTrashRestore,
+	addEntry, type PageTrashEntry, emptyPageTrash, entriesToDrop, makeEntry, mergeEntries, parsePageTrashEntry, PAGE_TRASH_MAX_ENTRIES, planPageTrashRestore,
 	PAGE_TRASH_RETENTION_DAYS, serializePageTrash, serializePageTrashEntry,
 } from "../src/model/page-trash";
 import { pageTrashEntriesFolder, pageTrashEntryPath, pageTrashPath } from "../src/storage/trash-paths";
 import { FakeVault } from "./fake-vault";
 import { sampleDocument } from "./helpers";
+import { CONFIG_DIR } from "./node-env";
 
 vi.mock("obsidian", async () => (await import("./fake-vault")).obsidianMock());
 
@@ -62,17 +63,17 @@ describe("page trash entries (pure)", () => {
 		const doc = threePages();
 		const page = doc.pages[1]!;
 		doc.meta = { ...doc.meta!, bookmarks: [page.id], bookmarkInfo: { [page.id]: { title: "Proof", color: "#ff0000", category: "review" } } };
-		const entry = JSON.parse(JSON.stringify(makeEntry(doc, page, 1, 1000)));
+		const entry = JSON.parse(JSON.stringify(makeEntry(doc, page, 1, 1000))) as PageTrashEntry;
 		doc.pages.splice(1, 1);
 		doc.meta = { ...doc.meta, bookmarks: [], bookmarkInfo: undefined };
 		const plan = planPageTrashRestore(doc, entry)!;
 		plan.command.apply(doc);
 		expect(doc.pages[1]!.id).toBe(page.id);
-		expect(doc.meta!.bookmarks).toEqual([page.id]);
-		expect(doc.meta!.bookmarkInfo?.[page.id]).toEqual({ title: "Proof", color: "#ff0000", category: "review" });
+		expect(doc.meta.bookmarks).toEqual([page.id]);
+		expect(doc.meta.bookmarkInfo?.[page.id]).toEqual({ title: "Proof", color: "#ff0000", category: "review" });
 		plan.command.revert(doc);
 		expect(doc.pages).toHaveLength(2);
-		expect(doc.meta!.bookmarks).toEqual([]);
+		expect(doc.meta.bookmarks).toEqual([]);
 		// With an id clash the restored copy gets new ids, and the bookmark follows the new page id.
 		const clash = planPageTrashRestore(doc, entry)!;
 		clash.command.apply(doc);
@@ -80,8 +81,8 @@ describe("page trash entries (pure)", () => {
 		again.command.apply(doc);
 		const copy = doc.pages[again.pageIndex]!;
 		expect(copy.id).not.toBe(page.id);
-		expect(doc.meta!.bookmarks).toEqual([page.id, copy.id]);
-		expect(doc.meta!.bookmarkInfo?.[copy.id]?.title).toBe("Proof");
+		expect(doc.meta.bookmarks).toEqual([page.id, copy.id]);
+		expect(doc.meta.bookmarkInfo?.[copy.id]?.title).toBe("Proof");
 	});
 
 	it("does not add a bookmark for a page that had none", () => {
@@ -355,10 +356,10 @@ describe("PDF links file: a vault file in _meta, moved over from the config fold
 		const { vaultLinkFileAdapter } = await import("../src/storage/vault-io");
 		const { emptyLinks, serializeLinks } = await import("../src/pdf/sync-links");
 		const oldText = serializeLinks({ ...emptyLinks(), links: [doc] });
-		const config = new Map([[".obsidian/plugins/notebook/pdf-links.json", oldText]]);
-		const legacy = { adapter: { exists: async (p: string) => config.has(p), read: async (p: string) => config.get(p)! }, path: ".obsidian/plugins/notebook/pdf-links.json" };
+		const config = new Map([[`${CONFIG_DIR}/plugins/notebook/pdf-links.json`, oldText]]);
+		const legacy = { adapter: { exists: async (p: string) => config.has(p), read: async (p: string) => config.get(p)! }, path: `${CONFIG_DIR}/plugins/notebook/pdf-links.json` };
 		const v = new FakeVault();
-		const store = new PdfLinkStore(vaultLinkFileAdapter(v.app as never), () => linksFolder(ROOT), legacy);
+		const store = new PdfLinkStore(vaultLinkFileAdapter(v.app), () => linksFolder(ROOT), legacy);
 		expect((await store.load()).links).toEqual([doc]);
 		expect(v.files.get(`${ROOT}/_meta/pdf-links.json`)).toBe(oldText);
 		expect(config.get(legacy.path)).toBe(oldText);
@@ -373,7 +374,7 @@ describe("PDF links file: a vault file in _meta, moved over from the config fold
 		const config = new Map([["old.json", "{ broken"]]);
 		const legacy = { adapter: { exists: async (p: string) => config.has(p), read: async (p: string) => config.get(p)! }, path: "old.json" };
 		const v = new FakeVault();
-		const store = new PdfLinkStore(vaultLinkFileAdapter(v.app as never), () => linksFolder(ROOT), legacy);
+		const store = new PdfLinkStore(vaultLinkFileAdapter(v.app), () => linksFolder(ROOT), legacy);
 		expect((await store.load()).links).toEqual([]);
 		expect([...v.files.entries()].filter(([p]) => p.includes("unreadable")).map(([, t]) => t)).toEqual(["{ broken"]);
 		expect(config.get("old.json")).toBe("{ broken");

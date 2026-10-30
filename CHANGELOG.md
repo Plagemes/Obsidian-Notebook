@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.11.2 — 2026-10-30
+
+No change to the notebook format (still v10). Clean-up for Obsidian's community Scorecard (runtime code and styles); not verified in Obsidian or on a device.
+
+- `tests/` and `dev/` are now lint-clean under the same rules (about 1,800 problems fixed, no rules disabled), and `npm run lint` checks all three folders.
+- New `DESIGN.md`: the visual system (tokens, subject palette, type scale, components, surfaces) taken from the reference designs in `docs/design/reference/`, and the rule that every feature adds its settings organically.
+
+### Changed
+- `npm run lint` now also runs `eslint-plugin-obsidianmd` 0.4.2 (`recommended`, type-checked; MIT, devDependency only) on `src/**` and `package.json`; a commented block in `eslint.config.mjs` extends it to `tests/**` and `dev/**`.
+- Destructive buttons (delete marker or box, remove bookmark, library confirmations) use `setDestructive()` on Obsidian 1.13+ and the same `mod-warning` class as before on older versions (`ui/destructive.ts`).
+- The settings tab no longer calls the deprecated `display()` itself: on Obsidian older than 1.13 a language change redraws through the tab's own drawing method (same content).
+- Deleting the plugin's own bookkeeping files (presence files, page-trash entry files, library-trash meta files and empty item folders) goes through one documented helper, `deletePluginFile` (`storage/plugin-files.ts`), with exactly the previous behaviour; user content still goes only through `fileManager.trashFile`. Every call site is listed in `docs/architecture.md` ("Deleting files").
+- Styles: print rules without `!important` (higher specificity instead) and with the `page-break-*` names only; the screen-reader live region of the radial menu hidden with `opacity` instead of `clip-path`; MathJax's output matched by its `jax` attribute instead of the `mjx-container` element name.
+
+### Fixed
+- Lint findings in runtime code: `globalThis` in the Zettelkasten id suffix (now the `crypto` global, same fallback), `document.createElement` in page thumbnails (now `activeDocument.createEl`).
+
 ## 0.11.1 — 2026-10-30
 
 No change to the notebook format (still v10). S Pen side-button detection and a much more complete Pen button test log; not verified on the device. Manual steps 404-406 in `docs/testing.md`.

@@ -5,6 +5,7 @@ import {
 	parseDevice, parsePresence, parsePresenceFileName, presenceFileName, presenceFolder, readIdentity, safeKey,
 	serializeDevice, serializePresence, type DeviceIdentity, type DeviceRecord, type PresenceRecord,
 } from "./presence-logic";
+import { deletePluginFile } from "./plugin-files";
 
 interface OpenEntry {
 	notebookId: string;
@@ -178,7 +179,7 @@ export class PresenceService {
 			const keep = new Set([...this.open.values()].map((e) => e.file));
 			for (const f of [...folder.children]) {
 				if (!(f instanceof TFile) || keep.has(f.path) || parsePresenceFileName(f.name)?.device !== me) continue;
-				await this.app.vault.delete(f).catch((e) => console.error("[notebook] could not remove", f.path, e));
+				await deletePluginFile(this.app.vault, f).catch((e) => console.error("[notebook] could not remove", f.path, e));
 			}
 		});
 	}
@@ -264,7 +265,7 @@ export class PresenceService {
 	private async remove(path: string): Promise<void> {
 		const file = this.app.vault.getFileByPath(path);
 		// Our own small technical file: deleted for good, not moved to the trash.
-		if (file) await this.app.vault.delete(file);
+		if (file) await deletePluginFile(this.app.vault, file);
 	}
 
 	private enqueue(task: () => Promise<void>): Promise<void> {

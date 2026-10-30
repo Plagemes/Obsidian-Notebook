@@ -34,5 +34,5 @@ it("segments pages of 1,000 / 3,000 / 10,000 strokes quickly", () => {
 		// Generous bound (CI machines vary); the printed figures are the measurement.
 		expect(cold).toBeLessThan(250);
 	}
-	console.log(`\n${rows.join("\n")}\n`);
+	console.debug(`\n${rows.join("\n")}\n`);
 });

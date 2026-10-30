@@ -4,21 +4,22 @@
  * touch and mouse events. The system print dialog is replaced by a stub of `window.print`.
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { exportPngPages } from "../../src/view/export-png";
 import { canPrint, printPages } from "../../src/view/print";
+import type { HarnessApp, HarnessView } from "./harness-types";
 import type { CheckResult } from "./reading-check";
 
 export interface ReadOnlyCheckApi {
-	view: any;
-	app: any;
-	stage(): HTMLElement;
-	penStroke(points: Array<[number, number]>, opts?: { pointerType?: string }): Promise<void>;
-	setTool(tool: string): void;
-	strokeCount(): number;
-	frames(n: number): Promise<void>;
-	openMore(): Promise<void>;
+	/** The notebook view (a `HarnessView`). */
+	view: unknown;
+	/** The stand-in app (a `HarnessApp`). */
+	app: unknown;
+	stage: () => HTMLElement;
+	penStroke: (points: Array<[number, number]>, opts?: { pointerType?: string }) => Promise<void>;
+	setTool: (tool: string) => void;
+	strokeCount: () => number;
+	frames: (n: number) => Promise<void>;
+	openMore: () => Promise<void>;
 	errors: string[];
 	notices: string[];
 }
@@ -27,11 +28,13 @@ const SWIPE: Array<[number, number]> = [[0.3, 0.3], [0.5, 0.35], [0.7, 0.4]];
 const CROSS: Array<[number, number]> = [[0.2, 0.4], [0.5, 0.4], [0.8, 0.4]];
 
 export async function checkReadOnly(api: ReadOnlyCheckApi): Promise<{ ok: boolean; results: CheckResult[]; errors: string[]; notices: string[]; env: Record<string, unknown> }> {
-	const { view: v, app, penStroke, setTool, strokeCount, frames, openMore } = api;
+	const { penStroke, setTool, strokeCount, frames, openMore } = api;
+	const v = api.view as HarnessView;
+	const app = api.app as HarnessApp;
 	const vault = app.vault;
 	const results: CheckResult[] = [];
 	const add = (name: string, ok: unknown, detail = "") => results.push({ name, ok: !!ok, detail });
-	const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+	const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 	const content = (): string => JSON.stringify(v.document.pages);
 	const chip = (): HTMLElement | null => document.querySelector(".notebook-readonly-chip");
 	const shown = (el: Element | null): boolean => !!el && !el.classList.contains("notebook-hidden") && getComputedStyle(el).display !== "none" && (el as HTMLElement).offsetWidth > 0;
@@ -39,9 +42,10 @@ export async function checkReadOnly(api: ReadOnlyCheckApi): Promise<{ ok: boolea
 
 	// Writes done through the vault from now on (a saved change, a backup, a "write it back").
 	let writes = 0;
+	const writable = vault as unknown as Record<string, ((...args: unknown[]) => unknown) | undefined>;
 	for (const name of ["modify", "modifyBinary", "process", "create", "createBinary", "rename", "delete"]) {
-		const orig = vault[name]?.bind(vault);
-		if (orig) vault[name] = (...args: unknown[]) => (writes++, orig(...args));
+		const orig = writable[name]?.bind(vault);
+		if (orig) writable[name] = (...args: unknown[]) => (writes++, orig(...args));
 	}
 
 	// --- 51: read-only mode ---
@@ -87,7 +91,7 @@ export async function checkReadOnly(api: ReadOnlyCheckApi): Promise<{ ok: boolea
 	v.addPage();
 	add("no page can be added", v.document.pages.length === pages);
 	v.removeSelection();
-	v.applyCommand({ apply() { throw new Error("must not run"); }, revert() { /* none */ } });
+	v.applyCommand({ label: "probe", apply() { throw new Error("must not run"); }, revert() { /* none */ } });
 	add("a command from outside is refused", content() === snapshot);
 
 	// Reading still works: zoom to fit, the page panel, the sheet with the switch.
@@ -134,7 +138,7 @@ export async function checkReadOnly(api: ReadOnlyCheckApi): Promise<{ ok: boolea
 	const total = v.document.pages.length;
 	add("the notebook has three pages for the range tests", total === 3, String(total));
 	v.openExportDialog(undefined, "png");
-	const modal = document.querySelector(".modal") as HTMLElement | null;
+	const modal = document.querySelector<HTMLElement>(".modal");
 	const selects = modal ? [...modal.querySelectorAll("select")] as HTMLSelectElement[] : [];
 	const row = (name: RegExp): HTMLElement | null => [...(modal?.querySelectorAll<HTMLElement>(".setting-item") ?? [])].find((s) => name.test(s.querySelector(".setting-item-name")?.textContent ?? "")) ?? null;
 	const visible = (el: HTMLElement | null): boolean => !!el && el.style.display !== "none";
@@ -150,7 +154,7 @@ export async function checkReadOnly(api: ReadOnlyCheckApi): Promise<{ ok: boolea
 	}
 	add("choosing some pages shows the range field", visible(row(/^Pages/)));
 	const rangeInput = row(/^Pages/)?.querySelector("input") as HTMLInputElement | undefined;
-	const exportButton = [...(modal?.querySelectorAll("button") ?? [])].find((b) => b.textContent === "Export") as HTMLButtonElement | undefined;
+	const exportButton = [...(modal?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find((b) => b.textContent === "Export");
 	const filesBefore = vault.getFiles().length;
 	if (rangeInput) {
 		rangeInput.value = "9";
@@ -170,20 +174,20 @@ export async function checkReadOnly(api: ReadOnlyCheckApi): Promise<{ ok: boolea
 	}
 	exportButton?.click();
 	for (let i = 0; i < 40 && !vault.getFileByPath("Notebooks/New (PNG)/page-003.png"); i++) await sleep(100);
-	const names = vault.getFiles().map((f: { path: string }) => f.path).filter((p: string) => p.startsWith("Notebooks/New (PNG)/")).sort();
+	const names = vault.getFiles().map((f) => f.path).filter((p) => p.startsWith("Notebooks/New (PNG)/")).sort();
 	add("the range 2-3 writes page-002.png and page-003.png only", names.join("|") === "Notebooks/New (PNG)/page-002.png|Notebooks/New (PNG)/page-003.png", names.join("|"));
 	add("the dialog closed", !document.querySelector(".modal"));
 
-	const png = async (path: string) => new Uint8Array(await vault.readBinary(vault.getFileByPath(path)));
+	const png = async (path: string) => new Uint8Array(await vault.readBinary(vault.getFileByPath(path)!));
 	const first = await png("Notebooks/New (PNG)/page-002.png");
 	const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((b, i) => first[i] === b);
 	const dv = new DataView(first.buffer, first.byteOffset);
-	const page = v.document.pages[1];
+	const page = v.document.pages[1]!;
 	add("it is a PNG of the page at scale 1", signature && dv.getUint32(16) === Math.round(page.width) && dv.getUint32(20) === Math.round(page.height),
 		`${dv.getUint32(16)}x${dv.getUint32(20)} for ${page.width}x${page.height}`);
 
 	// Never overwritten; scale 2 doubles the size; ink only is transparent.
-	await exportPngPages(app, v.document.pages, { folder: "Notebooks/New (PNG)", scale: 2, pages: [1] }, v.mediaCache, { layers: "ink" });
+	await exportPngPages(app as unknown as Parameters<typeof exportPngPages>[0], v.document.pages, { folder: "Notebooks/New (PNG)", scale: 2, pages: [1] }, v.mediaCache, { layers: "ink" });
 	const second = vault.getFileByPath("Notebooks/New (PNG)/page-002 2.png");
 	add("an existing image is never replaced", !!second && vault.getFileByPath("Notebooks/New (PNG)/page-002.png"));
 	if (second) {
@@ -191,7 +195,7 @@ export async function checkReadOnly(api: ReadOnlyCheckApi): Promise<{ ok: boolea
 		const dv2 = new DataView(bytes.buffer, bytes.byteOffset);
 		add("scale 2 doubles the size", Math.abs(dv2.getUint32(16) - 2 * dv.getUint32(16)) <= 1 && Math.abs(dv2.getUint32(20) - 2 * dv.getUint32(20)) <= 1, `${dv2.getUint32(16)}x${dv2.getUint32(20)}`);
 		const bmp = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
-		const cv = document.createElement("canvas");
+		const cv = createEl("canvas");
 		cv.width = bmp.width;
 		cv.height = bmp.height;
 		const ctx = cv.getContext("2d")!;
@@ -200,7 +204,7 @@ export async function checkReadOnly(api: ReadOnlyCheckApi): Promise<{ ok: boolea
 	}
 	const whole = await png("Notebooks/New (PNG)/page-003.png");
 	const wbmp = await createImageBitmap(new Blob([whole], { type: "image/png" }));
-	const wc = document.createElement("canvas");
+	const wc = createEl("canvas");
 	wc.width = wbmp.width;
 	wc.height = wbmp.height;
 	const wctx = wc.getContext("2d")!;
@@ -210,7 +214,7 @@ export async function checkReadOnly(api: ReadOnlyCheckApi): Promise<{ ok: boolea
 	// --- 81: print ---
 	const filesPrint = vault.getFiles().length;
 	let printed: { pages: number; decoded: boolean; hiddenOnScreen: boolean; bodyClass: boolean } | null = null;
-	const realPrint = window.print;
+	const realPrint = window.print.bind(window);
 	window.print = () => {
 		const imgs = [...document.querySelectorAll<HTMLImageElement>(".notebook-print-root .notebook-print-page > img")];
 		const root = document.querySelector(".notebook-print-root");

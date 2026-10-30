@@ -201,7 +201,8 @@ describe("graph scene", () => {
 		expect(graphScene(g)).toBe(s);
 		expect(s.grid.length).toBeGreaterThan(5);
 		expect(s.axes.length).toBeGreaterThanOrEqual(2);
-		expect(s.errors).toEqual([{ fn: "f4", message: expect.stringMatching(/unexpected end/) as unknown as string }]);
+		const endMessage: unknown = expect.stringMatching(/unexpected end/);
+		expect(s.errors).toEqual([{ fn: "f4", message: endMessage }]);
 		// f1, f2, f3, f5 and the dashed tangent.
 		expect(s.curves.filter((c) => !c.dash)).toHaveLength(4);
 		expect(s.curves.filter((c) => c.dash)).toHaveLength(1);

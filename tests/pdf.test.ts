@@ -4,9 +4,10 @@ import { assetIdFromHash, sha256Hex } from "../src/pdf/hash";
 import { helveticaWidth, toWinAnsi, winAnsiCode, wrapHelvetica } from "../src/pdf/helvetica";
 import { isAbortError, MAX_BITMAP_SIDE, PdfStore, type CanvasLike } from "../src/pdf/pdf-store";
 import type { PdfDoc, PdfLib, PdfPage, PdfRenderTask } from "../src/pdf/pdfjs-types";
+import { sleep } from "./node-env";
 
-const utf8 = (s: string) => new TextEncoder().encode(s).buffer as ArrayBuffer;
-const flush = () => new Promise<void>((r) => setTimeout(r, 0));
+const utf8 = (s: string) => new TextEncoder().encode(s).buffer;
+const flush = () => sleep(0);
 
 describe("hash", () => {
 	it("matches the SHA-256 test vectors", async () => {
@@ -105,7 +106,7 @@ function makeEnv(
 	const lib: PdfLib = {
 		getDocument({ data }) {
 			log.getDocument++;
-			const id = new TextDecoder().decode(data as Uint8Array);
+			const id = new TextDecoder().decode(data);
 			const pages = docs[id]!;
 			const doc: PdfDoc = {
 				numPages: pages.length,

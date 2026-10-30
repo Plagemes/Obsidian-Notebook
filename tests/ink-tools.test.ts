@@ -316,12 +316,12 @@ describe("insert or remove space", () => {
 		p.elements = [text, img];
 		p.strokes.push(hline(100), hline(500));
 		const r = apply(doc, 0, 200, 60)!;
-		const t = p.elements!.find((e) => e.id === "t")!;
+		const t = p.elements.find((e) => e.id === "t")!;
 		expect(t.type === "text" && t.y).toBe(460);
-		expect(p.elements![1]).toBe(img);
+		expect(p.elements[1]).toBe(img);
 		r.history.undo();
-		expect(p.elements![0]).toBe(text);
-		expect(p.elements![1]).toBe(img);
+		expect(p.elements[0]).toBe(text);
+		expect(p.elements[1]).toBe(img);
 	});
 
 	it("an element pushed onto the next page leaves its page without elements; undo restores both", () => {
@@ -335,7 +335,7 @@ describe("insert or remove space", () => {
 		expect(doc.pages[1]!.elements).toHaveLength(1);
 		expect(serializeChecked(doc)).toBeTruthy();
 		r.history.undo();
-		expect(p.elements![0]).toBe(text);
+		expect(p.elements[0]).toBe(text);
 		expect(doc.pages[1]!.elements).toBeUndefined();
 	});
 

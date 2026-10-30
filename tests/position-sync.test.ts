@@ -10,10 +10,11 @@ import type { JournalSlotFile, JournalStore } from "../src/storage/journal";
 import { DocumentSession, type DocumentIO, type Timers } from "../src/storage/session";
 import { PAGE_AT_KEY, pageAtFromState, pageState, startPosition } from "../src/view/position-sync";
 import { line, sampleDocument } from "./helpers";
+import { nodeClearTimeout, nodeSetTimeout } from "./node-env";
 
 const timers: Timers = {
-	set: (fn, ms) => setTimeout(fn, ms) as unknown as number,
-	clear: (h) => clearTimeout(h),
+	set: (fn, ms) => nodeSetTimeout(fn, ms),
+	clear: (h) => nodeClearTimeout(h),
 };
 
 class FakeIO implements DocumentIO {

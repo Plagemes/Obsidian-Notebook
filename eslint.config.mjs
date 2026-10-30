@@ -1,6 +1,7 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import globals from "globals";
+import obsidianmd from "eslint-plugin-obsidianmd";
 
 // CLAUDE.md rule 1: runtime code also runs in the Android WebView.
 const NODE_ONLY = [
@@ -8,10 +9,34 @@ const NODE_ONLY = [
 	"stream", "util", "url", "buffer", "process", "worker_threads",
 ].flatMap((name) => [name, `node:${name}`]);
 
+// Obsidian's community Scorecard lints the repository with eslint-plugin-obsidianmd's `recommended` config (type-checked
+// typescript-eslint rules, eslint-comments rules, obsidianmd rules). `npm run lint` runs the same config on these files.
+// Its blocks are re-scoped here: each TypeScript block (and the ones without `files`: core rules, browser globals,
+// unused-directive reporting) applies only to OBSIDIAN_TS; the JavaScript-only blocks are left out (no runtime .js);
+// the package.json block is kept as it is.
+const OBSIDIAN_TS = [
+	"src/**/*.ts",
+	"tests/**/*.ts",
+	"dev/**/*.ts",
+];
+const isJsOnly = (files) => files.flat().every((f) => typeof f === "string" && /\{js,cjs,mjs,jsx\}$/.test(f));
+const obsidianRecommended = obsidianmd.configs.recommended.flatMap((c) => {
+	if (!c.files) return [{ ...c, files: OBSIDIAN_TS }];
+	if (c.files.length === 1 && c.files[0] === "package.json") return [c];
+	if (isJsOnly(c.files)) return [];
+	return [{ ...c, files: OBSIDIAN_TS }];
+});
+
 export default tseslint.config(
 	{ ignores: ["main.js", "node_modules/**", "coverage/**", "dev/harness/dist/**"] },
 	js.configs.recommended,
 	...tseslint.configs.recommended,
+	...obsidianRecommended,
+	{
+		// Type information for the type-checked rules of the block above.
+		files: OBSIDIAN_TS,
+		languageOptions: { parserOptions: { project: "./tsconfig.json", tsconfigRootDir: import.meta.dirname } },
+	},
 	{
 		files: ["src/**/*.ts"],
 		languageOptions: { globals: globals.browser },

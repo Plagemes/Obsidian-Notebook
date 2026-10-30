@@ -9,6 +9,7 @@ import {
 import { DocumentSession, type BackupReason, type DiskContentInfo, type DocumentIO, type Timers } from "../src/storage/session";
 import type { LocalSlot } from "../src/storage/safe-mode";
 import { line, sampleDocument } from "./helpers";
+import { nodeClearTimeout, nodeSetTimeout } from "./node-env";
 
 class Slot implements LocalSlot {
 	data: unknown = null;
@@ -305,7 +306,7 @@ describe("DocumentSession hooks for the ledger", () => {
 	beforeEach(() => vi.useFakeTimers());
 	afterEach(() => vi.useRealTimers());
 
-	const timers: Timers = { set: (fn, ms) => setTimeout(fn, ms) as unknown as number, clear: (h) => clearTimeout(h) };
+	const timers: Timers = { set: (fn, ms) => nodeSetTimeout(fn, ms), clear: (h) => nodeClearTimeout(h) };
 
 	class IO implements DocumentIO {
 		constructor(public content: string) {}
@@ -375,7 +376,7 @@ describe("integrity verdicts and other serializers", () => {
 });
 
 describe("resilience and files not downloaded yet (sync safety)", () => {
-	const timers: Timers = { set: (fn, ms) => setTimeout(fn, ms) as unknown as number, clear: (h) => clearTimeout(h) };
+	const timers: Timers = { set: (fn, ms) => nodeSetTimeout(fn, ms), clear: (h) => nodeClearTimeout(h) };
 
 	class IO implements DocumentIO {
 		backups: BackupReason[] = [];

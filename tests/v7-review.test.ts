@@ -21,6 +21,8 @@ import { MIN_PAPER_SPACING, parse, serialize, serializeChecked } from "../src/mo
 import { DocumentSession, type BackupReason, type DocumentIO, type Timers } from "../src/storage/session";
 import { PAGE_AT_KEY, PageClock, pageState, startPosition } from "../src/view/position-sync";
 import { A4_HEIGHT, A4_WIDTH, DEFAULT_META, PAPER_KINDS_V7, PAPER_SPACING, type NotebookDocument, type Page, type PaperKind } from "../src/model/types";
+import { setAt, type Raw } from "./raw-json";
+import { nodeClearTimeout, nodeSetTimeout } from "./node-env";
 
 function parsed(text: string) {
 	const r = parse(text);
@@ -82,7 +84,6 @@ describe("categories in use", () => {
 	});
 });
 
-type Raw = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 function rawOf(doc: NotebookDocument): Raw {
 	return JSON.parse(serialize(doc)) as Raw;
@@ -94,10 +95,10 @@ describe("lenient read of invalid v7 details", () => {
 		doc.meta = setBookmark(doc.meta!, "p1", { title: "Keep me", category: "review" });
 		doc.position = { page: "p2", y: 40, at: "2026-10-29T11:00:00.000Z" };
 		const raw = rawOf(doc);
-		raw.meta.bookmarkInfo.p1.color = "red";
+		setAt(raw, ["meta", "bookmarkInfo", "p1", "color"], "red");
 		// A detail entry of a page that is not bookmarked (an orphan) with a bad colour.
-		raw.meta.bookmarkInfo.orphan = { color: 12 };
-		raw.position.y = "forty";
+		setAt(raw, ["meta", "bookmarkInfo", "orphan"], { color: 12 });
+		setAt(raw, ["position", "y"], "forty");
 		return raw;
 	}
 
@@ -116,13 +117,13 @@ describe("lenient read of invalid v7 details", () => {
 	it("drops a position or a details map that is not an object, and invalid entries", () => {
 		const raw = withBadDetails();
 		raw.position = "page 2";
-		raw.meta.bookmarkInfo.p1 = "x";
+		setAt(raw, ["meta", "bookmarkInfo", "p1"], "x");
 		const r = parsed(JSON.stringify(raw));
 		// The position, the p1 entry and the orphan's colour.
 		expect(r.dropped).toBe(3);
 		expect(r.doc.position).toBeUndefined();
 		expect(r.doc.meta?.bookmarkInfo).toBeUndefined();
-		raw.meta.bookmarkInfo = [1, 2];
+		setAt(raw, ["meta", "bookmarkInfo"], [1, 2]);
 		const list = parsed(JSON.stringify(raw)).doc;
 		expect(list.meta?.bookmarks).toEqual(["p1"]);
 		expect(list.meta?.bookmarkInfo).toBeUndefined();
@@ -170,7 +171,7 @@ describe("lenient read of invalid v7 details", () => {
 				return "backup.bak";
 			},
 		};
-		const timers: Timers = { set: (fn, ms) => setTimeout(fn, ms) as unknown as number, clear: (h) => clearTimeout(h) };
+		const timers: Timers = { set: (fn, ms) => nodeSetTimeout(fn, ms), clear: (h) => nodeClearTimeout(h) };
 		const s = new DocumentSession(io, timers);
 		await s.load();
 		expect(s.mode).toBe("ok");
