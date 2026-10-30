@@ -8,7 +8,7 @@ This is the visual and interaction contract for every surface of Notebook. The r
 
 - **Premium.** A dark, deep-navy canvas. Content sits in calm, softly bordered panels. Each subject owns a colour, used with restraint: vivid on subject cards, a tint everywhere else. Typography is confident: large bold titles, quiet secondary text. It should feel like a first-class study app, not a developer tool.
 - **Minimal.** One idea per panel. Generous spacing, no visual noise, no walls of text. Each element has a single job, and secondary detail is muted rather than removed.
-- **Functional.** Every visible control works (CLAUDE.md rule 8). Every card, tile, chip and row is a real target that opens or does something. Pen, finger and mouse are all first-class.
+- **Functional.** Every visible control works (CLAUDE.md rule 8): no fake buttons, no dead menu items. Every card, tile, chip and row is a real target that opens or does something. Pen, finger and mouse are all first-class.
 - **Generative.** The interface is assembled at run time from the user's data and context. Subjects, smart collections, frequent tags, recent items, statistics and quick actions are computed locally. The procedural subject artwork is generated, not stock imagery. It is deterministic: no AI, no network, nothing leaves the device (CLAUDE.md rules 5 and 7).
 
 ## 2. Design tokens
@@ -130,12 +130,21 @@ Each component lives in the plugin as one reusable builder, for example `ui/comp
 
 | **Inbox bell** | Circular icon button in the page header, with an accent count badge (hidden at 0) | The bell is the **Zettelkasten inbox**: quick notes and fleeting items waiting to be processed. Tap: popover (sheet on phone) titled "In arrivo" with list rows (icon square, first line, source notebook pill, relative time, kebab with the inbox actions) and "Apri inbox". Hidden when the Zettelkasten is off |
 
-**Only functional items.** The reference images are a graphic example, not a feature list. The rail and headers show only things that work in the plugin:
+**Only functional controls.** The reference images are a graphic example, not a feature list. Rails, headers and menus show only controls that work in the plugin:
 - no Canvas;
 - no AI Study (CLAUDE.md rule 7);
 - no avatar.
 
-The bell is kept because it has a real job: it is the inbox. A new item appears only when it has a real function behind it.
+The bell is kept because it has a real job: it is the inbox. A new control appears only when it has a real function behind it.
+
+**Decoration is welcome.** Purely graphic elements are allowed and encouraged wherever they make a surface richer, as long as they never pose as controls, never hide content, stay quiet behind text, and switch off with *Reduce motion and effects*. Examples:
+- generated line art on cards, covers and section backgrounds;
+- soft colour glows and gradients;
+- illustrations for empty states and onboarding;
+- subtle pattern bands in headers;
+- decorative icons in icon squares.
+
+They use the same palette and art engine (§2.3, §2.6).
 
 ## 4. Surfaces mapped to the reference
 
