@@ -4,7 +4,7 @@ import { History } from "../src/model/history";
 import { elementContentKey, mergeChangeCount, mergeCovers, planMerge, strokeContentKey } from "../src/model/merge";
 import { matchingPageIndex, planPageRestore } from "../src/model/page-restore";
 import { parse, serialize, serializeChecked } from "../src/model/serialize";
-import type { NotebookDocument, Page, TextElement } from "../src/model/types";
+import type { NotebookDocument, TextElement } from "../src/model/types";
 import { conflictBaseCandidates, conflictBaseOf, conflictCopiesOf } from "../src/storage/conflicts";
 import { line } from "./helpers";
 
@@ -249,7 +249,7 @@ describe("planPageRestore", () => {
 	it("matches pages by id, then position", () => {
 		const { old, current } = versions();
 		expect(matchingPageIndex(old, current.pages[1], 0)).toBe(1);
-		expect(matchingPageIndex(old, createPage() as Page, 1)).toBe(1);
+		expect(matchingPageIndex(old, createPage(), 1)).toBe(1);
 		expect(matchingPageIndex(old, undefined, 9)).toBe(0);
 		expect(planPageRestore(current, old, 5, 0, "insert")).toBeNull();
 	});

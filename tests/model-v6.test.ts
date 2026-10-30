@@ -8,9 +8,9 @@ import { MIGRATIONS } from "../src/model/migrations";
 import { duplicatePage } from "../src/model/pages";
 import { freezeStroke, parse, serialize, serializeChecked } from "../src/model/serialize";
 import { CURRENT_VERSION, FORMAT_ID, type NotebookDocument, type Page, type TextElement } from "../src/model/types";
+import { getAt, type Raw } from "./raw-json";
 
 const stamp = "2026-10-29T10:00:00.000Z";
-type Raw = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 const ASSET = "abcdef0123456789abcdef01";
 
@@ -60,8 +60,8 @@ describe("format v6: page margins", () => {
 		expect(r.migratedFrom).toBe(5);
 		expect(r.doc.version).toBe(CURRENT_VERSION);
 		expect(r.doc.pages[0]!.margins).toBeUndefined();
-		expect(r.doc.pages[0]!.strokes[0]!.points).toEqual(raw.pages[0].strokes[0].points);
-		expect(r.doc.pages[0]!.background).toEqual(raw.pages[0].background);
+		expect(r.doc.pages[0]!.strokes[0]!.points).toEqual(getAt(raw, ["pages", 0, "strokes", 0, "points"]));
+		expect(r.doc.pages[0]!.background).toEqual(getAt(raw, ["pages", 0, "background"]));
 		const text = serialize(r.doc);
 		expect(parsed(text).migratedFrom).toBeNull();
 		expect(serialize(parsed(text).doc)).toBe(text);

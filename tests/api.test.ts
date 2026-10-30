@@ -9,6 +9,7 @@ import { createDocument, createPage } from "../src/model/document";
 import { parse, serialize } from "../src/model/serialize";
 import type { Asset, NotebookDocument } from "../src/model/types";
 import { PAGE_SIZES, PAPER_SPACING } from "../src/model/types";
+import { sleep } from "./node-env";
 
 const NOW = new Date("2026-10-29T12:00:00.000Z");
 const DEFAULTS = { pageSize: "a4", landscape: false, paper: "grid" } as const;
@@ -309,7 +310,7 @@ describe("KeyedQueue", () => {
 	it("runs jobs of one key in order and different keys independently, also after a failure", async () => {
 		const q = new KeyedQueue();
 		const log: string[] = [];
-		const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+		const wait = (ms: number) => sleep(ms);
 		const a1 = q.run("a", async () => {
 			await wait(20);
 			log.push("a1");

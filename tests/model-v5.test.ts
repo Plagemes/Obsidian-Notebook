@@ -7,10 +7,10 @@ import {
 	CURRENT_VERSION, FORMAT_ID, RENDER_FREEHAND, RENDER_INK, RENDER_VERSIONS, TOOLS,
 	type NotebookDocument, type Point, type RenderVersion,
 } from "../src/model/types";
+import { delAt, getAt, parseRaw, pushAt, setAt, type Raw } from "./raw-json";
 
 const stamp = "2026-10-29T10:00:00.000Z";
 
-type Raw = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 function rawStroke(id: string, tool = "pen"): Raw {
 	return { id, tool, color: "#112233", width: 2, points: [[1, 2, 0.5], [3, 4, 0.6]] };
@@ -62,7 +62,7 @@ describe("format v5: per-stroke render", () => {
 		const strokes = r.doc.pages.flatMap((p) => p.strokes);
 		expect(strokes).toHaveLength(3);
 		for (const s of strokes) expect(s.render).toBe(1);
-		expect(r.doc.pages[0]!.strokes[1]).toEqual({ ...v4.pages[0].strokes[1], render: 1 });
+		expect(r.doc.pages[0]!.strokes[1]).toEqual({ ...getAt<Raw>(v4, ["pages", 0, "strokes", 1]), render: 1 });
 		expect(r.doc.meta).toEqual(v4.meta);
 	});
 
@@ -84,7 +84,7 @@ describe("format v5: per-stroke render", () => {
 
 	it("tolerates pages and strokes the validator will reject", () => {
 		const v4 = oldDoc(4);
-		v4.pages[0].strokes.push(null);
+		pushAt(v4, ["pages", 0, "strokes"], null);
 		expect(parse(JSON.stringify(v4)).ok).toBe(false);
 		expect(parse(JSON.stringify({ ...oldDoc(4), pages: "x" })).ok).toBe(false);
 	});
@@ -95,7 +95,7 @@ describe("format v5: per-stroke render", () => {
 		expect(lines).toHaveLength(6);
 		expect(lines[0]).toBe('\t\t\t\t{"id":"s0","tool":"pen","color":"#112233","width":2,"render":1,"points":[[1,2,0.5],[3,4,0.6]]},');
 		expect(lines[1]).toContain('"width":2,"render":2,"points"');
-		expect(Object.keys(JSON.parse(text).pages[0].strokes[0])).toEqual(["id", "tool", "color", "width", "render", "points"]);
+		expect(Object.keys(getAt<Raw>(parseRaw(text), ["pages", 0, "strokes", 0]))).toEqual(["id", "tool", "color", "width", "render", "points"]);
 	});
 
 	it("serialize(parse(s)) === s with both render values and all tools", () => {
@@ -117,10 +117,10 @@ describe("format v5: per-stroke render", () => {
 		["null", null],
 		["1.5", 1.5],
 	])("parse rejects a v5 stroke whose render is %s", (_name, value) => {
-		const raw = JSON.parse(serialize(mixedDoc())) as Raw;
-		const stroke = raw.pages[0].strokes[2];
-		if (value === undefined) delete stroke.render;
-		else stroke.render = value;
+		const raw = parseRaw(serialize(mixedDoc()));
+		const stroke = getAt<Raw>(raw, ["pages", 0, "strokes", 2]);
+		if (value === undefined) delAt(stroke, ["render"]);
+		else setAt(stroke, ["render"], value);
 		const r = parse(JSON.stringify(raw));
 		expect(r.ok).toBe(false);
 		if (!r.ok) {

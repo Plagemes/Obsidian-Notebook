@@ -31,7 +31,7 @@ function image(id: string, y: number): ImageElement {
 describe("heavy page thresholds", () => {
 	it("counts strokes, points and the distinct image assets of a page", () => {
 		const { page } = textPage(2, 3);
-		page.elements = [image("i1", 10), image("i2", 100), { id: "t", type: "text", x: 0, y: 0, width: 50, text: "x", fontSize: 12, color: "#000000" } as TextElement];
+		page.elements = [image("i1", 10), image("i2", 100), { id: "t", type: "text", x: 0, y: 0, width: 50, text: "x", fontSize: 12, color: "#000000" }];
 		const load = pageLoad(page, { [ASSET]: { bytes: 5000 } });
 		expect(load).toEqual({ strokes: 6, points: 60, assetBytes: 5000 });
 		// A PDF background is shared by the pages of the PDF and not counted; an image background is.

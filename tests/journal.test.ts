@@ -18,10 +18,11 @@ import {
 } from "../src/storage/journal";
 import { DocumentSession, type BackupReason, type DocumentIO, type SessionEvents, type Timers } from "../src/storage/session";
 import { line, sampleDocument } from "./helpers";
+import { nodeClearTimeout, nodeSetTimeout } from "./node-env";
 
 const timers: Timers = {
-	set: (fn, ms) => setTimeout(fn, ms) as unknown as number,
-	clear: (h) => clearTimeout(h),
+	set: (fn, ms) => nodeSetTimeout(fn, ms),
+	clear: (h) => nodeClearTimeout(h),
 };
 
 class FakeIO implements DocumentIO {

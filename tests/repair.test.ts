@@ -269,7 +269,7 @@ describe("repairNotebookText", () => {
 	it("fuzz: any truncation or corruption gives a valid notebook (or a clean refusal) and never invents strokes", { timeout: 30_000 }, () => {
 		// createId() is seeded too, so a failing run can be reproduced exactly.
 		const ids = seededIds(99);
-		const spy = vi.spyOn(globalThis.crypto, "randomUUID").mockImplementation(ids);
+		const spy = vi.spyOn(crypto, "randomUUID").mockImplementation(ids);
 		onTestFinished(() => spy.mockRestore());
 		const doc = bigDocument(2, 8);
 		const text = serialize(doc);

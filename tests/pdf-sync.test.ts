@@ -5,6 +5,7 @@ import {
 } from "../src/pdf/sync-links";
 import { clampRatio, DEFAULT_RATIO, MAX_RATIO, MIN_RATIO, ratioFromPointer, splitOrientation } from "../src/pdf/sync-layout";
 import { LinksBlockedError, LINKS_FILE, PdfLinkStore, type LinkFileAdapter } from "../src/storage/pdf-links-store";
+import { CONFIG_DIR } from "./node-env";
 
 const A = "a".repeat(24);
 const B = "b".repeat(24);
@@ -117,7 +118,7 @@ describe("operations and queries", () => {
 });
 
 describe("link store", () => {
-	const folder = ".obsidian/plugins/notebook";
+	const folder = `${CONFIG_DIR}/plugins/notebook`;
 	const path = `${folder}/${LINKS_FILE}`;
 
 	it("starts empty without creating a file, then writes only on update", async () => {

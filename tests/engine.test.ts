@@ -15,6 +15,7 @@ import { RENDER_FREEHAND, RENDER_INK, type Point } from "../src/model/types";
 import { serialize } from "../src/model/serialize";
 import { DocumentSession, type DocumentIO } from "../src/storage/session";
 import { sampleDocument } from "./helpers";
+import { nodeClearTimeout, nodeSetTimeout, sleep } from "./node-env";
 
 /** Deterministic pseudo-random numbers. */
 function rng(seed: number): () => number {
@@ -324,7 +325,7 @@ describe("allocations in the writing hot path", () => {
 			return null;
 		}
 		fn();
-		await new Promise((r) => setTimeout(r, 50));
+		await sleep(50);
 		obs.disconnect();
 		return n;
 	}
@@ -474,7 +475,7 @@ describe("saving waits for the pen", () => {
 			return "backup";
 		}
 	}
-	const timers = { set: (fn: () => void, ms: number) => setTimeout(fn, ms) as unknown as number, clear: (h: number) => clearTimeout(h) };
+	const timers = { set: (fn: () => void, ms: number) => nodeSetTimeout(fn, ms), clear: (h: number) => nodeClearTimeout(h) };
 	beforeEach(() => vi.useFakeTimers());
 	afterEach(() => vi.useRealTimers());
 

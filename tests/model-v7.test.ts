@@ -22,9 +22,9 @@ import { FULL_CHECK_LIMIT, parse, serialize, serializeChecked } from "../src/mod
 import { CURRENT_VERSION, DEFAULT_META, FORMAT_ID, PAPER_KINDS, PAPER_KINDS_V7, PAPER_SPACING, type NotebookDocument } from "../src/model/types";
 import { mergeMeta as viewMergeMeta, metaEquals, toggleBookmark } from "../src/view/view-helpers";
 import { line } from "./helpers";
+import { setAt, type Raw } from "./raw-json";
 
 const stamp = "2026-10-29T10:00:00.000Z";
-type Raw = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 function parsed(text: string) {
 	const r = parse(text);
@@ -82,8 +82,8 @@ describe("format v7", () => {
 	it("drops v7 keys found in a v6 file (a v6 reader ignored them)", () => {
 		const raw = v6Doc();
 		raw.position = { page: "p1", at: stamp };
-		raw.meta.bookmarkInfo = { p1: { title: "x" } };
-		raw.pages[0].tags = ["t"];
+		setAt(raw, ["meta", "bookmarkInfo"], { p1: { title: "x" } });
+		setAt(raw, ["pages", 0, "tags"], ["t"]);
 		const r = parsed(JSON.stringify(raw));
 		expect(r.doc.position).toBeUndefined();
 		expect(r.doc.meta?.bookmarkInfo).toBeUndefined();
@@ -92,7 +92,7 @@ describe("format v7", () => {
 
 	it.each(PAPER_KINDS_V7)("rejects a v6 file that uses the v7 paper %s", (kind) => {
 		const raw = v6Doc();
-		raw.pages[1].paper = { kind, spacing: 10 };
+		setAt(raw, ["pages", 1, "paper"], { kind, spacing: 10 });
 		const r = parse(JSON.stringify(raw));
 		expect(r.ok).toBe(false);
 		if (!r.ok) expect(r.reason).toBe("invalid");
@@ -142,13 +142,13 @@ describe("format v7", () => {
 
 	it("normalises on read and write: tags, details of non-bookmarked pages, positions on missing pages", () => {
 		const raw = JSON.parse(serialize(richDoc())) as Raw;
-		raw.pages[0].tags = ["#exam", " Exam ", "x  y", ""];
-		raw.meta.bookmarkInfo.p2 = { title: "not bookmarked" };
-		raw.meta.bookmarkInfo.p1.title = "  Intro   one ";
+		setAt(raw, ["pages", 0, "tags"], ["#exam", " Exam ", "x  y", ""]);
+		setAt(raw, ["meta", "bookmarkInfo", "p2"], { title: "not bookmarked" });
+		setAt(raw, ["meta", "bookmarkInfo", "p1", "title"], "  Intro   one ");
 		const doc = parsed(JSON.stringify(raw)).doc;
 		expect(doc.pages[0]!.tags).toEqual(["exam", "x y"]);
 		expect(doc.meta?.bookmarkInfo).toEqual({ p1: { title: "Intro one", color: "#ef4444", category: "important" } });
-		raw.position.page = "gone";
+		setAt(raw, ["position", "page"], "gone");
 		expect(parsed(JSON.stringify(raw)).doc.position).toBeUndefined();
 		// In memory: a deleted page keeps neither its bookmark details nor the position in the file.
 		const d = richDoc();
@@ -175,15 +175,15 @@ describe("format v7", () => {
 			expect(r.ok).toBe(true);
 			if (r.ok) expect(r.dropped).toBe(1);
 		};
-		dropped((r) => (r.meta.bookmarkInfo.p1.color = "red"));
-		dropped((r) => (r.meta.bookmarkInfo.p1.title = 3));
-		dropped((r) => (r.meta.bookmarkInfo = []));
-		bad((r) => (r.pages[0].tags = "exam"), "pages[0].tags");
-		bad((r) => (r.pages[0].tags = ["ok", 1]), "pages[0].tags[1]");
+		dropped((r) => (setAt(r, ["meta", "bookmarkInfo", "p1", "color"], "red")));
+		dropped((r) => (setAt(r, ["meta", "bookmarkInfo", "p1", "title"], 3)));
+		dropped((r) => (setAt(r, ["meta", "bookmarkInfo"], [])));
+		bad((r) => (setAt(r, ["pages", 0, "tags"], "exam")), "pages[0].tags");
+		bad((r) => (setAt(r, ["pages", 0, "tags"], ["ok", 1])), "pages[0].tags[1]");
 		dropped((r) => (r.position = { page: "p1" }));
 		dropped((r) => (r.position = { at: stamp }));
-		dropped((r) => (r.position.y = "top"));
-		bad((r) => (r.pages[1].paper.kind = "staff"), "pages[1].paper");
+		dropped((r) => (setAt(r, ["position", "y"], "top")));
+		bad((r) => (setAt(r, ["pages", 1, "paper", "kind"], "staff")), "pages[1].paper");
 	});
 
 	it("does not let a '__proto__' key change the details object", () => {
@@ -219,7 +219,7 @@ describe("v7 metadata through the editing paths", () => {
 	it("cloneMeta, SetMeta undo/redo and the view helpers keep bookmark details", () => {
 		const doc = richDoc();
 		const copy = cloneMeta(doc.meta!);
-		copy.bookmarkInfo!.p1!.title = "changed";
+		copy.bookmarkInfo!.p1!.title = "Changed";
 		expect(doc.meta!.bookmarkInfo!.p1!.title).toBe("Intro");
 		const history = new History(() => doc);
 		const before = doc.meta!;
@@ -428,9 +428,9 @@ describe("repair of a damaged v7 notebook keeps the new fields", () => {
 
 	it("keeps the valid fields of a damaged bookmark entry and drops a bad position", () => {
 		const raw = JSON.parse(serialize(richDoc())) as Raw;
-		raw.meta.bookmarkInfo.p1.color = "red";
+		setAt(raw, ["meta", "bookmarkInfo", "p1", "color"], "red");
 		raw.position = { page: "p2", at: 5 };
-		raw.pages[0].tags = ["ok", 7];
+		setAt(raw, ["pages", 0, "tags"], ["ok", 7]);
 		const r = repairNotebookText(JSON.stringify(raw));
 		expect(r.ok).toBe(true);
 		if (!r.ok) return;

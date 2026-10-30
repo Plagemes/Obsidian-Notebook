@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { InputPolicy, type InputSettings } from "../src/ink/input-policy";
 import { BarrelDetector, ChordDetector, EventLog, PEN_TEST_EVENT_TYPES, describeSideButton, describeTarget, formatEvent, type LoggedEvent } from "../src/ink/pen-button";
 import { PointerController, type MenuSource, type PointerHandlers } from "../src/ink/pointer-controller";
+import { installFakeWindow, removeFakeWindow, sleep } from "./node-env";
 
 // 0.11.1: the S Pen button as the user read it off the pen-tracker page (Chrome, Samsung tablet), and the
 // window-level capture watch that also sees events that never reach the page element.
@@ -167,16 +168,16 @@ function setup(settings: Partial<InputSettings> = {}, accept = true) {
 		if (reachesStage && stage.contains(target)) stage.dispatchEvent(e);
 		return e;
 	};
-	const flush = () => new Promise((r) => setTimeout(r, 5));
+	const flush = () => sleep(5);
 	return { win, view, stage, canvas, toolbar, modal, log, menus, controller, fire, flush, seen: () => seen };
 }
 
 describe("PointerController: side button at window level (capture phase)", () => {
 	beforeEach(() => {
-		(globalThis as { window?: unknown }).window = globalThis;
+		installFakeWindow();
 	});
 	afterEach(() => {
-		delete (globalThis as { window?: unknown }).window;
+		removeFakeWindow();
 	});
 
 	const click = (s: ReturnType<typeof setup>, target: FakeNode, reaches = true, x = 400) => {
@@ -335,10 +336,10 @@ describe("Pen button test log: window-level events", () => {
 
 describe("cancelling the native long-press / context menu, as pen-tracker does", () => {
 	beforeEach(() => {
-		(globalThis as { window?: unknown }).window = globalThis;
+		installFakeWindow();
 	});
 	afterEach(() => {
-		delete (globalThis as { window?: unknown }).window;
+		removeFakeWindow();
 	});
 
 	it("blocksContextMenu: from the pen, with no pointerType, or with the pen near; not a finger or mouse far from the pen", () => {
