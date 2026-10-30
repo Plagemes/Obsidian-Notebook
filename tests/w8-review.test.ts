@@ -7,6 +7,7 @@ import { detectScribble, scribbleEraseCommand, scribbleEraseSteps, scribbleVicti
 import { createDocument, createStroke, quantizePoint } from "../src/model/document";
 import { History } from "../src/model/history";
 import { createBox, createMarker } from "../src/model/markers";
+import { parse, serialize } from "../src/model/serialize";
 import type { NotebookDocument, Page, Point, Stroke } from "../src/model/types";
 
 const { gestureWorld, runGesture } = await import("../src/view/pen-gesture-actions");
@@ -168,5 +169,34 @@ describe("ink ownership: markers and boxes frame the page, they hold no ink", ()
 		const s = stroke([[120, 120], [200, 150], [280, 180]]);
 		expect(inkOwner(s, [img, box])).toBe(img);
 		expect(attachedInk([s], [img, box], [img])).toEqual([s]);
+	});
+});
+
+// --- 11. normalised marker labels count as dropped ---
+
+describe("marker labels that reading normalises", () => {
+	function withLabel(text: unknown): string {
+		const doc = createDocument(new Date("2026-10-30T10:00:00.000Z"));
+		doc.pages[0]!.elements = [createMarker("question", 10, 10, { text: "placeholder" })];
+		const raw = JSON.parse(serialize(doc)) as { pages: Array<{ elements: Array<Record<string, unknown>> }> };
+		raw.pages[0]!.elements[0]!.text = text;
+		return JSON.stringify(raw);
+	}
+
+	it("a label with extra spaces is kept normalised and counted as dropped", () => {
+		const r = parse(withLabel("  why   is\nthis so?  "));
+		expect(r.ok).toBe(true);
+		if (!r.ok) return;
+		expect((r.doc.pages[0]!.elements![0] as { text?: string }).text).toBe("why is this so?");
+		expect(r.dropped).toBe(1);
+	});
+
+	it("a blank or too long label is counted; a clean one is not", () => {
+		const blank = parse(withLabel("   "));
+		expect(blank.ok && blank.dropped).toBe(1);
+		const long = parse(withLabel("x".repeat(400)));
+		expect(long.ok && long.dropped).toBe(1);
+		const clean = parse(withLabel("why is this so?"));
+		expect(clean.ok && clean.dropped).toBeUndefined();
 	});
 });

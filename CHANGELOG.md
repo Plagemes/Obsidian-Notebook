@@ -5,6 +5,7 @@
 ### Fixed
 - **Hidden ink is safe from scribble erase and pen gestures.** Scratching out visible writing (scribble erase or the delete gesture) no longer deletes the invisible-ink solutions under it, and hidden ink no longer counts for the delete or circle-select gestures, unless the solutions of that page are shown. Insert space still moves hidden ink with the rest of the page so that solutions stay next to their exercise.
 - **Deleting a box or a marker no longer offers to delete the ink it frames.** Structured boxes and region markers do not own ink (they annotate a region, the ink is not written on them), so moving or deleting one leaves that ink alone; the offer after deleting a text box or an image never counts or deletes hidden ink while the solutions are not shown.
+- **Marker labels changed on read are reported.** A marker label or box title that reading has to normalise (extra spaces, line breaks, too long, blank) now counts as a dropped detail, so the notice about repaired details appears instead of the label changing silently.
 
 ## 0.7.0 — 2026-10-30
 
