@@ -68,6 +68,13 @@ export class GestureInput {
 		this.scroller.strokeEnded(tipY);
 	}
 
+	/** The radial menu took the pointer events (its lifts never arrive): forget the contacts so no tap or scroll waits for them. */
+	releaseContacts(): void {
+		this.contacts.clear();
+		this.taps.reset();
+		this.restoreView = null;
+	}
+
 	destroy(): void {
 		this.scroller.cancel();
 		for (const d of this.disposers) d();

@@ -286,6 +286,100 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 	if (!wasOpen) v.setNavigatorOpen(false);
 	await frames(4);
 
+	// Reaching the radial menu without the side button: pen hold-still, finger long-press, and the Samsung button
+	// (a pressure-0 primary press while hovering: click = menu on release, touch while held = erase). None draws ink.
+	{
+		const v = view as any;
+		setTool("pen");
+		v.host.settings.penButtonSeen = false;
+		v.host.settings.penHoldStill = null;
+		v.applySettings(v.host.settings);
+		const r4 = st.getBoundingClientRect();
+		const px = r4.left + r4.width * 0.5, py = r4.top + r4.height * 0.4;
+		let nid = 200;
+		const mk = (type: string, id: number, x: number, y: number, extra: PointerEventInit = {}) =>
+			new PointerEvent(type, {
+				bubbles: true, cancelable: true, composed: true, pointerId: id, pointerType: "pen", isPrimary: true,
+				pressure: 0.5, width: 1, height: 1, button: 0, buttons: 1, clientX: x, clientY: y, ...extra,
+			});
+		const menuOpen = () => !!st.querySelector(".notebook-radial");
+		const closeMenu = async () => {
+			v.radial?.close();
+			await frames(2);
+		};
+		const canUndo = () => !!v.history?.canUndo?.();
+		const base = strokeCount();
+		const undoBefore = canUndo();
+
+		// Pen held still from the first contact.
+		let id = nid++;
+		st.dispatchEvent(mk("pointerdown", id, px, py));
+		await wait(950);
+		add("pen held still opens the radial menu", menuOpen(), menuOpen() ? "open" : "no menu");
+		add("the hold leaves no dot and nothing to undo", strokeCount() === base && canUndo() === undoBefore, `${base} → ${strokeCount()}, undo ${undoBefore} → ${canUndo()}`);
+		st.dispatchEvent(mk("pointerup", id, px, py, { buttons: 0, pressure: 0 }));
+		await closeMenu();
+
+		// A slow stroke that moves before the time is up never opens it.
+		id = nid++;
+		st.dispatchEvent(mk("pointerdown", id, px, py));
+		await wait(300);
+		st.dispatchEvent(mk("pointermove", id, px + 30, py));
+		await wait(900);
+		add("a pause after moving does not open the menu", !menuOpen(), menuOpen() ? "menu opened" : "closed");
+		st.dispatchEvent(mk("pointerup", id, px + 30, py, { buttons: 0, pressure: 0 }));
+		await frames(4);
+		add("the slow stroke is stored", strokeCount() === base + 1, `${base} → ${strokeCount()}`);
+		const base2 = strokeCount();
+
+		// Finger long-press (pen-only mode): the ring opens beside the finger, no ink.
+		await wait(700);
+		id = nid++;
+		const fx = r4.left + r4.width * 0.5, fy = r4.top + r4.height * 0.6;
+		st.dispatchEvent(mk("pointerdown", id, fx, fy, { pointerType: "touch", pressure: 0.5 }));
+		await wait(700);
+		const ring = st.querySelector(".notebook-radial") as HTMLElement | null;
+		const cxs = ring ? parseFloat(ring.style.getPropertyValue("--notebook-radial-x")) : NaN;
+		const cys = ring ? parseFloat(ring.style.getPropertyValue("--notebook-radial-y")) : NaN;
+		const dist = Math.hypot(fx - r4.left - cxs, fy - r4.top - cys);
+		add("finger long-press opens the radial menu beside the finger", !!ring && dist > 108, ring ? `distance ${Math.round(dist)} px` : "no menu");
+		st.dispatchEvent(mk("pointerup", id, fx, fy, { pointerType: "touch", buttons: 0, pressure: 0 }));
+		add("the long-press draws nothing", strokeCount() === base2, `${base2} → ${strokeCount()}`);
+		await closeMenu();
+
+		// Samsung: hover, button down (pressure 0), button up = click -> menu on release.
+		id = nid++;
+		st.dispatchEvent(mk("pointermove", id, px, py, { button: -1, buttons: 0, pressure: 0 }));
+		st.dispatchEvent(mk("pointerdown", id, px, py, { button: 0, buttons: 1, pressure: 0 }));
+		await frames(1);
+		add("the pressure-0 button press opens nothing yet", !menuOpen(), "");
+		st.dispatchEvent(mk("pointerup", id, px, py, { button: 0, buttons: 0, pressure: 0 }));
+		await frames(1);
+		add("releasing the pressure-0 button opens the menu", menuOpen(), menuOpen() ? "open" : "no menu");
+		add("the click draws nothing", strokeCount() === base2, `${base2} → ${strokeCount()}`);
+		await closeMenu();
+
+		// Samsung: button down while hovering, then touch = erase (no menu on release).
+		await penStroke([[0.3, 0.9], [0.7, 0.9]]);
+		const withLine = strokeCount();
+		id = nid++;
+		const ey = r4.top + r4.height * 0.9;
+		st.dispatchEvent(mk("pointermove", id, r4.left + r4.width * 0.25, ey, { button: -1, buttons: 0, pressure: 0 }));
+		st.dispatchEvent(mk("pointerdown", id, r4.left + r4.width * 0.25, ey, { button: 0, buttons: 1, pressure: 0 }));
+		for (let i = 0; i <= 12; i++) {
+			st.dispatchEvent(mk("pointermove", id, r4.left + r4.width * (0.25 + i * 0.04), ey, { button: -1, buttons: 1, pressure: 0.6 }));
+			await wait(10);
+		}
+		st.dispatchEvent(mk("pointerup", id, r4.left + r4.width * 0.73, ey, { button: 0, buttons: 0, pressure: 0 }));
+		await frames(3);
+		add("button held + touch erases", strokeCount() < withLine, `${withLine} → ${strokeCount()}`);
+		add("and opens no menu on release", !menuOpen(), "");
+		await closeMenu();
+		v.host.settings.penButtonSeen = false;
+		v.applySettings(v.host.settings);
+		setTool("pen");
+	}
+
 	// Radial menu: the pen's side button opens it without drawing; lifting on a sector chooses it.
 	{
 		setTool("pen");
