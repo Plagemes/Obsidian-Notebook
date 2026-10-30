@@ -1,5 +1,6 @@
 /** Page thumbnails for the library cards. Runs in the browser (canvas). */
-import { HIGHLIGHTER_ALPHA, strokeSvgPath } from "../ink/stroke-shape";
+import { lodLevel, lodSvgPath } from "../ink/lod";
+import { HIGHLIGHTER_ALPHA } from "../ink/stroke-shape";
 import { minorVisible, PAPER_COLORS, paperPattern } from "../ink/paper";
 import type { Page } from "../model/types";
 
@@ -74,6 +75,8 @@ export function renderThumbnail(page: Page, width: number, options: ThumbnailOpt
 		ctx.fill();
 	}
 
+	// Small thumbnails draw strokes from simplified points (ink/lod.ts); the saved points are untouched.
+	const lod = lodLevel(scale, 1);
 	const started = performance.now();
 	let drawn = 0;
 	for (const stroke of page.strokes) {
@@ -87,7 +90,7 @@ export function renderThumbnail(page: Page, width: number, options: ThumbnailOpt
 		ctx.globalCompositeOperation = highlighter ? "multiply" : "source-over";
 		const w = highlighter ? stroke.width : Math.max(stroke.width, MIN_STROKE_PX / scale);
 		// Same geometry as the notebook (old strokes: perfect-freehand, new ones: the ink engine).
-		ctx.fill(new Path2D(strokeSvgPath({ ...stroke, width: w })));
+		ctx.fill(new Path2D(lodSvgPath(stroke, w, lod)));
 	}
 	ctx.restore();
 

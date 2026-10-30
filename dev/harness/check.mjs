@@ -22,6 +22,8 @@ const DEVICES = {
 	// Small phone (360 CSS px is the common narrow Android width): the toolbar must still fit.
 	narrow: { width: 360, height: 740, deviceScaleFactor: 3, mobile: true, touch: true },
 	desktop: { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false, touch: false },
+	// The same tablet held sideways.
+	tabletLandscape: { width: 1280, height: 800, deviceScaleFactor: 2, mobile: true, touch: true },
 };
 
 const SCENARIOS = [];
@@ -33,6 +35,7 @@ for (const doc of ["v3", "new"]) {
 // Phone held sideways: little height for the toolbar popovers.
 DEVICES.landscape = { width: 740, height: 360, deviceScaleFactor: 3, mobile: true, touch: true };
 SCENARIOS.push({ doc: "new", theme: "light", device: "landscape", lowLatency: false });
+SCENARIOS.push({ doc: "pdf", theme: "light", device: "tablet", lowLatency: false });
 SCENARIOS.push({ doc: "v3", theme: "dark", device: "tablet", lowLatency: true });
 SCENARIOS.push({ doc: "new", theme: "light", device: "phone", lowLatency: true });
 // Injected faults: wet ink failing on every paint, and one stored stroke that cannot be drawn.
@@ -229,6 +232,38 @@ async function main() {
 					writeFileSync(join(shots, `${name}-more.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 				} catch (e) {
 					problems.push(`popover screenshots: ${e.message}`);
+				}
+			}
+			// ui redesign: the main states of the interface, for review (UI_SHOTS, default dist/shots/ui).
+			const uiDevices = ["narrow", "tablet", "tabletLandscape", "desktop"];
+			if (!s.fault && !s.lowLatency && uiDevices.includes(s.device) && (s.doc === "new" || s.doc === "pdf")) {
+				const uiDir = process.env.UI_SHOTS ?? join(shots, "ui");
+				mkdirSync(uiDir, { recursive: true });
+				const shotAs = async (file) => writeFileSync(join(uiDir, `${s.device}-${s.theme}-${file}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+				try {
+					await cdp.evaluate("window.harness.closeAll().then(() => true)");
+					if (s.doc === "pdf") {
+						await shotAs("pdf-context");
+						await cdp.evaluate("window.harness.openMore().then(() => true)");
+						await shotAs("pdf-sheet");
+					} else {
+						await shotAs("toolbar");
+						const states = [
+							["options-pen", "window.harness.openOptions('pen')"],
+							["sheet", "window.harness.openMore()"],
+							["page-sheet", "window.harness.openPageSheet()"],
+							["selection", "window.harness.closeAll().then(() => window.harness.selectFirstStroke())"],
+						];
+						for (const state of ["main", "color", "width", "tools", "save", "shapes"]) states.push([`radial-${state}`, `window.harness.radialState('${state}')`]);
+						for (const [file, expr] of states) {
+							if (s.theme === "dark" && !file.startsWith("radial")) continue;
+							await cdp.evaluate(`window.harness.closeAll().then(() => ${expr}).then(() => true)`);
+							await shotAs(file);
+						}
+					}
+					await cdp.evaluate("window.harness.closeAll().then(() => true)");
+				} catch (e) {
+					problems.push(`ui screenshots: ${e.message}`);
 				}
 			}
 			if (problems.length) {

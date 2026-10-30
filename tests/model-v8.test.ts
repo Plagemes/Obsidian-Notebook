@@ -233,6 +233,12 @@ describe("format v8", () => {
 		const r = (staged as StagedParse).finish();
 		expect(r.ok).toBe(true);
 		if (r.ok) expect(r.dropped).toBe(2);
+		// Exactly what the full lenient parse keeps and drops.
+		const full = parsed(JSON.stringify(raw));
+		if (r.ok) {
+			expect(r.dropped).toBe(full.dropped);
+			expect(serialize(r.doc)).toBe(serialize(full.doc));
+		}
 	});
 });
 

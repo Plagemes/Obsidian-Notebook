@@ -1,10 +1,10 @@
 /**
  * v8 markers in the notebook view (#201, #202, #203, #209), structured boxes (#204), invisible ink (#100) and the
  * "End of lecture" panel (#223). Self-contained: the view forwards pointer gestures and owns nothing of this but a
- * `MarkerTools` instance. The UI is deliberately small (commands, one page-menu entry, dialogs), so the action
- * registry of the redesigned toolbar and radial menu can call `MarkerTools.arm()` and the toggles directly.
+ * `MarkerTools` instance. Its actions are in the registry (ui/actions.ts, run by view/view-actions.ts): the lecture
+ * contextual bar, the sheets, the page sheet, the radial dial and the commands all call `arm()` and the toggles.
  */
-import { FuzzySuggestModal, Modal, Notice, Setting, type App, type Menu, type Plugin } from "obsidian";
+import { FuzzySuggestModal, Modal, Notice, Setting, type App } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import type { BoxLabel } from "../ink/marker-render";
 import { defaultBoxLabel } from "../ink/marker-render";
@@ -15,9 +15,8 @@ import {
 	openCount, rectFrom, tapMarker, type MarkerEntry, type Rect,
 } from "../model/markers";
 import {
-	BOX_KINDS, MARKER_KINDS, type BoxElement, type BoxKind, type MarkerElement, type MarkerKind, type NotebookDocument, type Page, type PageElement,
+	BOX_KINDS, type BoxElement, type BoxKind, type MarkerElement, type MarkerKind, type NotebookDocument, type Page, type PageElement,
 } from "../model/types";
-import type { NotebookView } from "./notebook-view";
 
 /** What the next tap or drag on a page places. */
 export type PlaceKind = MarkerKind | "box";
@@ -114,8 +113,14 @@ export class MarkerTools {
 		this.host.repaint();
 	}
 
-	togglePageSolutions(): void {
-		const page = this.host.doc()?.pages[this.host.currentPageIndex()];
+	/** Whether the solutions of `page` are shown by its own toggle (not the notebook's). */
+	pageSolutionsShown(page: Page): boolean {
+		return this.solutionsPages.has(page.id);
+	}
+
+	/** Shows or hides the solutions of page `index` (default: the page in view). */
+	togglePageSolutions(index?: number): void {
+		const page = this.host.doc()?.pages[index ?? this.host.currentPageIndex()];
 		if (!page) return;
 		const on = !this.solutionsPages.has(page.id);
 		if (on) this.solutionsPages.add(page.id);
@@ -266,11 +271,6 @@ export class MarkerTools {
 		if (!this.host.doc()) return;
 		new EndOfLectureModal(this.host.app, this, this.host).open();
 	}
-
-	/** One entry in the page menu: everything markers, boxes and invisible ink offer. */
-	openChooser(): void {
-		new MarkerActionModal(this.host.app, this).open();
-	}
 }
 
 // ------------------------------------------------------------------ dialogs
@@ -402,39 +402,6 @@ class BoxKindModal extends FuzzySuggestModal<BoxKind> {
 	}
 }
 
-interface MarkerAction {
-	label: string;
-	run: () => void;
-}
-
-/** The page-menu entry: place a marker or box, invisible ink, solutions, the panel. */
-class MarkerActionModal extends FuzzySuggestModal<MarkerAction> {
-	constructor(app: App, private readonly tools: MarkerTools) {
-		super(app);
-		this.setPlaceholder(t("markers.menu.placeholder"));
-	}
-
-	getItems(): MarkerAction[] {
-		const tools = this.tools;
-		return [
-			...MARKER_KINDS.map((k) => ({ label: t("markers.menu.place", { kind: markerKindName(k) }), run: () => tools.arm(k) })),
-			{ label: t("markers.menu.box"), run: () => tools.arm("box") },
-			{ label: t("markers.menu.panel"), run: () => tools.openPanel() },
-			{ label: t(tools.invisibleInk ? "markers.menu.invisibleOff" : "markers.menu.invisibleOn"), run: () => tools.toggleInvisibleInk() },
-			{ label: t(tools.solutionsShown ? "markers.menu.solutionsHide" : "markers.menu.solutionsShow"), run: () => tools.toggleSolutions() },
-			{ label: t("markers.menu.pageSolutions"), run: () => tools.togglePageSolutions() },
-		];
-	}
-
-	getItemText(a: MarkerAction): string {
-		return a.label;
-	}
-
-	onChooseItem(a: MarkerAction): void {
-		a.run();
-	}
-}
-
 function formatTime(iso: string): string {
 	const d = new Date(iso);
 	return Number.isFinite(d.getTime()) ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : iso;
@@ -534,30 +501,4 @@ class EndOfLectureModal extends Modal {
 			});
 		}
 	}
-}
-
-// ------------------------------------------------------------------ commands and menu
-
-type WithView = (checking: boolean, run: (view: NotebookView) => void) => boolean;
-
-/** Commands (no default hotkeys): place each marker kind, draw a box, the panel, invisible ink, solutions. */
-export function registerMarkerCommands(plugin: Plugin, withView: WithView): void {
-	const add = (id: string, name: string, run: (tools: MarkerTools) => void) => plugin.addCommand({
-		id, name, checkCallback: (checking) => withView(checking, (v) => {
-			const tools = v.markerTools;
-			if (tools) run(tools);
-		}),
-	});
-	for (const kind of MARKER_KINDS) add(`marker-${kind}`, t("markers.menu.place", { kind: markerKindName(kind) }), (m) => m.arm(kind));
-	add("marker-box", t("markers.menu.box"), (m) => m.arm("box"));
-	add("end-of-lecture", t("markers.menu.panel"), (m) => m.openPanel());
-	add("invisible-ink", t("markers.command.invisible"), (m) => m.toggleInvisibleInk());
-	add("show-solutions", t("markers.command.solutions"), (m) => m.toggleSolutions());
-	add("show-page-solutions", t("markers.menu.pageSolutions"), (m) => m.togglePageSolutions());
-}
-
-/** The one entry point in the page menu. */
-export function addMarkerMenuItem(menu: Menu, tools: MarkerTools | null): void {
-	if (!tools) return;
-	menu.addItem((i) => i.setTitle(t("markers.menu.title")).setIcon("flag").onClick(() => tools.openChooser()));
 }
