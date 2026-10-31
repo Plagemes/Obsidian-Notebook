@@ -16,6 +16,7 @@ import { DEFAULT_ZETTEL_SETTINGS, readZettelSettings, type ZettelSettings } from
 import { DEFAULT_TOOLBAR_SIZE, isToolbarSize, type ToolbarSize } from "./ui/toolbar-size";
 import { isUiLanguage, type UiLanguage } from "./i18n/languages";
 import { cleanUserName } from "./library/greeting";
+import { normaliseSeen, type HintId } from "./ui/hint-logic";
 import { DEFAULT_READING_SETTINGS, readReadingSettings, type ReadingSettings } from "./view/reading-settings";
 
 /** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
@@ -159,6 +160,10 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	// wave 0.13: Home
 	/** The name Home greets you with ("Good evening, Alex"); empty = the greeting has no name. */
 	userName: string;
+	/** 0.13: just-in-time tips (roadmap 425): a short tip the first time a situation occurs. */
+	hintsEnabled: boolean;
+	/** The tips already shown (ids), so each appears once. Not shown in the settings tab; "Show tips again" clears it. */
+	hintsSeen: HintId[];
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -221,6 +226,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	fastScrollbar: true,
 	appearanceStyle: "notebook",
 	userName: "",
+	hintsEnabled: true,
+	hintsSeen: [],
 	...DEFAULT_COMPANION_SETTINGS,
 	...DEFAULT_GESTURE_SETTINGS,
 	...DEFAULT_PEN_GESTURE_SETTINGS,
@@ -300,6 +307,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.fastScrollbar === "boolean") s.fastScrollbar = d.fastScrollbar;
 	if (APPEARANCE_STYLES.includes(d.appearanceStyle as AppearanceStyle)) s.appearanceStyle = d.appearanceStyle as AppearanceStyle;
 	if (typeof d.userName === "string") s.userName = cleanUserName(d.userName);
+	if (typeof d.hintsEnabled === "boolean") s.hintsEnabled = d.hintsEnabled;
+	s.hintsSeen = normaliseSeen(d.hintsSeen);
 	s.lastNotebookPos = parsePosition(d.lastNotebookPos);
 
 	if (typeof d.timetableOffer === "boolean") s.timetableOffer = d.timetableOffer;

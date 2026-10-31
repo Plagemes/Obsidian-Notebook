@@ -93,7 +93,7 @@ export const GROUPS: readonly GroupSpec[] = [
 ];
 
 /** Runs of the action rows; the tab maps each id to what it does. */
-export type SettingActionId = "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom";
+export type SettingActionId = "hints-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom";
 /** Rows drawn by the tab itself (no stored setting of their own). */
 export type SettingCustomId = "device-name" | "pen-key" | "device-info";
 
@@ -335,6 +335,9 @@ const APPEARANCE: SettingSpec[] = [
 	},
 	{ id: "userName", section: "appearance", order: 15, name: "settings.userName", desc: "settings.userName.desc", keywords: "name nome greeting saluto home", control: { type: "text", placeholder: "Alex" } },
 	{ id: "nightMode", section: "appearance", order: 40, name: "settings.nightMode", desc: "settings.nightMode.desc", control: { type: "toggle" }, keywords: "dark scuro" },
+	// 0.13: just-in-time tips.
+	{ id: "hintsEnabled", section: "appearance", order: 50, name: "settings.hints", desc: "settings.hints.desc", control: { type: "toggle" }, keywords: "tips hints suggerimenti consigli" },
+	{ id: "hintsReset", section: "appearance", order: 60, name: "settings.hintsReset", desc: "settings.hintsReset.desc", control: { type: "action", run: "hints-reset", button: "settings.hintsReset.button" }, parent: "hintsEnabled", keywords: "tips hints suggerimenti consigli" },
 ];
 
 const DIAGNOSTICS: SettingSpec[] = [
@@ -395,6 +398,7 @@ export const INTERNAL_SETTING_KEYS: Readonly<Partial<Record<SettingKey, string>>
 	lastNotebookPath: "instant start: the last notebook",
 	lastNotebookPage: "instant start: the last page",
 	lastNotebookPos: "instant start: zoom and scroll of the last page",
+	hintsSeen: "the tips already shown; Show tips again clears it",
 	zettelSlipBoxes: "edited from the notebook menu (Zettelkasten slip boxes)",
 };
 

@@ -32,6 +32,11 @@
 - New strings: `ui.modal.cancel`, `goto.title`, `quicknav.title`, `modal.open.title` (English and Italian).
 - Tests: `tests/modal-shell.test.ts` (every surface is on the shell, CSS scoped and balanced, tokens only). Harness: `dev/harness/modals-check.ts` screenshots every dialog at tablet and phone widths, light and dark (`dist/shots/design/modals-*.png`). Not verified on the device: manual steps 540-559 in `docs/testing.md`.
 
+### hints
+- **Just-in-time tips** (roadmap 425): a short tip the first time a situation occurs, shown once. Seven situations: the first notebook opened, the pen first touching a notebook, the pen first hovering with the side button set to open the radial menu, the first PDF imported, the first lasso selection, a finger touch right after the pen being ignored by palm rejection, and the first Inbox item. At most one tip every 4 minutes per session and never while the pen is writing (it waits for the pause). The bubble has a close button and *Turn off tips*.
+- Settings, *Appearance & language*: **Tips** (on by default) and **Show tips again**. The seen tips are stored in the plugin settings (`hintsSeen`), not in a notebook: no change to the notebook format.
+- Code: `src/ui/hint-logic.ts` (registry and rules, pure), `src/ui/hints.ts` (service and `hint(id)`), `src/ui/components/hint-bubble.ts`; one-line hooks in `notebook-view.ts` (opened, lasso), `library/host.ts` (PDF) and `zettel/inbox-service.ts` (Inbox). Pen and palm tips come from passive pointer listeners, with no change to the stroke pipeline.
+- Tests: `tests/hints.test.ts`; harness scenario `doc=hints` (`dev/harness/hints-check.ts`).
 
 ## 0.12.4 — 2026-10-31
 
@@ -59,6 +64,7 @@ What the device does: pressing the button with the pen in the air sends nothing 
 ### Added
 - Tests: `tests/side-button-contact.test.ts` (each signal form x tap / drag / no button / pressed in the middle of a stroke, for *Radial menu on click, erase while held*, *Radial menu on click*, *Erase while held*, *Lasso while held* and *Nothing*, plus `pointercancel` and the decision logic) with a replay rig (`tests/pen-contact-rig.ts`); older tests of the mid-stroke switch were rewritten to the new rule.
 - Harness: real-event scenarios for the tap (menu on the lift, no dot), the drag (eraser, no menu, no ink) and a press in the middle of a stroke (ink).
+
 
 ## 0.12.3 — 2026-10-30
 

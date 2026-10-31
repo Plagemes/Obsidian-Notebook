@@ -136,6 +136,7 @@ import { commandApplies, runViewAction, sizeName, type ActionArg } from "./view-
 import { ViewUi } from "./view-ui";
 import { pageKeyAction, shouldTurnPage, takesKey, type KeyScene } from "./page-keys";
 import { isTextField, penKeyMatches, penKeyMayAct } from "../ink/pen-hover";
+import { hint } from "../ui/hints";
 import { actionById, isEnabled, type UiContext } from "../ui/actions";
 import { actionLabel } from "../ui/action-sheet";
 import {
@@ -1087,6 +1088,7 @@ export class NotebookView extends FileView {
 		try {
 			// A large notebook is shown as soon as the page asked for is read; the rest follows (see StagedParse).
 			await session.load({ staged: true, page: this.pendingPage });
+			hint("notebook-opened");
 		} catch (e) {
 			this.showError((e as Error).message);
 		}
@@ -4048,6 +4050,7 @@ export class NotebookView extends FileView {
 		if (!bounds) return;
 		this.selection = { pageIndex: lasso.pageIndex, strokes, elements, bounds, matrix: IDENTITY };
 		this.pushSelection();
+		hint("lasso-selected");
 	}
 
 	/** wave 0.10 (359): the selection of a lasso over several pages. False when it encloses nothing on any of them. */
