@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### art2
+- **Space-colonization art.** A new family, `veins` (organic venation: a leaf with a midrib, a river delta, a radial rosette), grown by the space colonization algorithm; deterministic from the seed. It is used by an `ArtSpec` without a style (and by the harness); folders and notebooks still store one of seven styles, so the app does not offer it yet.
+- **OKLCH colour.** Tints, shades, glow colours, the cover gradient and the new `rampFor` palette helper are mixed in OKLCH instead of RGB: hues stay true and ramps are perceptually even.
+- **Multi-pass glow.** Glow lines get a soft wide halo pass, a tighter glow and the crisp line, built from wide strokes (no `shadowBlur` or `filter`); the halo is skipped on wide bands.
+- **Keyword motifs.** A fixed rule table maps title words (English and Italian: matematica / math, biologia / anatomy, fisica, storia, chimica, diritto, informatica...) to the art families that suit them; names without a keyword keep their old art. No AI.
+- **Growth.** New optional `ArtSpec.growth` (0..1, `growthForPages(pages)`): the art gets denser, and from half way carries faint companion layers.
+- **Faster and off the main thread.** A persistent image cache in IndexedDB (works without it) and `artImageAsync` / `coverImageAsync` / `emptyStateImageAsync` / `prewarmArt`, which render in an inline Worker on an OffscreenCanvas with a main-thread fallback. The in-memory LRU and the 0.12.3 failure guard are kept; the public API of the art engine is unchanged.
+- Art gallery harness page: every family, growth steps, keyword motifs, pipeline checks.
+
 ## 0.12.3 — 2026-10-30
 
 Fixes for what 0.12.2 showed on the tablet (Obsidian for Android, Italian, a vault with no notebooks): an empty creation dialog, a Home with only its title and search pill, an empty *Tag* page, a rail **+** sitting on the brand, and navy panels in the settings. **Not verified on the device**: checked in unit tests and in the browser harness only. Manual re-check: steps 485-492 in `docs/testing.md`. No change to the notebook format (still v11).
