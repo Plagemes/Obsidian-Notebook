@@ -205,6 +205,7 @@ the accent soft fill and an accent underline dot; groups are separated by 1 px d
 | `src/ui/action-sheet.ts` | Sheet component (All actions, page sheet) |
 | `src/ui/components/*.ts` | 0.12 design-system components: subject card, section header, chips, list row, favourite row, KPI tile, quick action, search pill, navigation rail, icon square |
 | `src/library/library-view.ts`, `home-view.ts`, `home-surface.ts`, `library-sections.ts`, `inbox-bell.ts` | 0.12 library and Home (§11) |
+| `src/zettel/inbox-view.ts`, `modals.ts`, `zk-ui.ts` | 0.13 Zettelkasten surfaces: the Inbox page, the card dialogs, the card list (§12) |
 | `src/library/dashboard.ts` | Subjects, smart collections, statistics (pure) |
 | `src/ui/context-bar.ts` | Contextual bar component |
 | `src/ui/dismiss.ts` | Tap-outside / Escape closing shared by popovers and sheets (a tap on the page draws nothing) |
@@ -355,3 +356,11 @@ events keep the badge current. The popover (a bottom sheet on a phone) lists eig
 **Decoration.** Generated art (the art module) behind the page header, on subject cards, smart collections, quick
 actions and empty states, and a soft accent glow behind section titles. It never takes input, never covers text and
 is removed under `prefers-reduced-motion: reduce`.
+
+## 12. Zettelkasten surfaces (0.13, DESIGN.md §3–§5)
+
+**Inbox.** `zettel/inbox-view.ts` is an `nb-ui nb-app` page: header (title, count, *Start processing*, refresh, a faint generated band from `zk-ui.ts`), filter chips (`ui/components/chip`) with a *Show processed* toggle, and one `nb-panel` per notebook coloured by `colorFor(name)` (subject variables). Item rows are buttons (icon square by kind, first line, page, state pills, chevron) that expand in place; the panel holds the ink preview, the text and the actions (one accent action). Under 600 px (`is-phone`, a ResizeObserver) the panel stacks. Each part (filters, list) is drawn through `drawSafely`, so a failure leaves an error card, not an empty view. The first scan shows placeholder rows; empty states use `ui/components/empty-state` with the generated illustration.
+
+**Dialogs.** `zettel/modals.ts`: `CardModal` and `ConfirmCardsModal` carry `nb-ui` on the modal element; head (icon square, title, one line), labelled fields, the card type as radio tiles (`CARD_TYPE_LOOK`: permanent blue, literature amber, fleeting violet), a tag preview, footer buttons. `CardListModal` keeps the fuzzy suggest behaviour and draws rows as id, title, location.
+
+**Card regions** over the page (`notebook-zettel-region`, `overlay.ts`) are unchanged: tokens only, no pointer events.
