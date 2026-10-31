@@ -15,6 +15,7 @@ import { DEFAULT_TRASH_SETTINGS, readTrashSettings, type TrashSettings } from ".
 import { DEFAULT_ZETTEL_SETTINGS, readZettelSettings, type ZettelSettings } from "./zettel/settings";
 import { DEFAULT_TOOLBAR_SIZE, isToolbarSize, type ToolbarSize } from "./ui/toolbar-size";
 import { isUiLanguage, type UiLanguage } from "./i18n/languages";
+import { cleanUserName } from "./library/greeting";
 import { DEFAULT_READING_SETTINGS, readReadingSettings, type ReadingSettings } from "./view/reading-settings";
 
 /** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
@@ -150,6 +151,9 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	fastScrollbar: boolean;
 	/** Look of the plugin's own surfaces (DESIGN.md §2.2): its own `--nb-*` palette, or those tokens mapped onto the Obsidian theme. */
 	appearanceStyle: AppearanceStyle;
+	// wave 0.13: Home
+	/** The name Home greets you with ("Good evening, Alex"); empty = the greeting has no name. */
+	userName: string;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -207,6 +211,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	recentColours: [],
 	fastScrollbar: true,
 	appearanceStyle: "notebook",
+	userName: "",
 	...DEFAULT_COMPANION_SETTINGS,
 	...DEFAULT_GESTURE_SETTINGS,
 	...DEFAULT_PEN_GESTURE_SETTINGS,
@@ -281,6 +286,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	s.recentColours = normaliseRecentColours(d.recentColours);
 	if (typeof d.fastScrollbar === "boolean") s.fastScrollbar = d.fastScrollbar;
 	if (APPEARANCE_STYLES.includes(d.appearanceStyle as AppearanceStyle)) s.appearanceStyle = d.appearanceStyle as AppearanceStyle;
+	if (typeof d.userName === "string") s.userName = cleanUserName(d.userName);
 	s.lastNotebookPos = parsePosition(d.lastNotebookPos);
 
 	if (typeof d.timetableOffer === "boolean") s.timetableOffer = d.timetableOffer;

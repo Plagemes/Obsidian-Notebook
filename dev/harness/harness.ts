@@ -40,7 +40,8 @@ import { NavController } from "../../src/view/nav-controller";
 import { NotebookStatusBar } from "../../src/view/status-bar";
 import { checkNavigation } from "./nav-check";
 import { compareLod, measureLod } from "./lod-bench";
-import { checkEmptyLibrary, checkLibraryLayout, emptyDialogShot, libraryInteractions, libraryState, openLibraryHarness, type LibraryHarness } from "./library-check";
+import { checkEmptyLibrary, checkLibraryLayout, emptyDialogShot, libraryInteractions, libraryState, openLibraryHarness, type HomeVariant, type LibraryHarness } from "./library-check";
+import { checkHome2, home2State } from "./home2-check";
 
 import type { Layout } from "../../src/ink/layout";
 import type { Viewport } from "../../src/ink/viewport";
@@ -2027,6 +2028,15 @@ async function runHostile(): Promise<Record<string, unknown>> {
 	return { ok: results.every((r) => r.ok) && unexpected.length === 0, results, errors: unexpected, env: { dpr: window.devicePixelRatio } };
 }
 
+/** 0.13 home2: the revised Home's structure and controls (home2-check.ts). */
+const homeVariant = (params.get("variant") ?? "lecture") as HomeVariant;
+async function checkHome(): Promise<Record<string, unknown>> {
+	const results = libraryHarness ? await checkHome2(libraryHarness, homeVariant) : [];
+	return { ok: results.every((r) => r.ok) && errors.length === 0, results, errors: [...errors] };
+}
+harnessApi.checkHome2 = checkHome;
+harnessApi.home2State = (state: string) => (libraryHarness ? home2State(libraryHarness, state) : false);
+
 async function interactLibrary(): Promise<Record<string, unknown>> {
 	const results = libraryHarness ? await libraryInteractions(libraryHarness, librarySurface) : [];
 	return { ok: results.every((r) => r.ok) && errors.length === 0, results, errors: [...errors] };
@@ -2036,7 +2046,7 @@ async function main(): Promise<void> {
 	applyTheme();
 	applySize();
 	if (params.get("doc") === "library" || params.get("doc") === "empty") {
-		libraryHarness = await openLibraryHarness(app, librarySurface, params.get("doc") === "empty");
+		libraryHarness = await openLibraryHarness(app, librarySurface, params.get("doc") === "empty", homeVariant);
 		return;
 	}
 	// 0.12.1: doc=plugin starts the whole plugin on its own stub app (plugin-check.ts); no notebook is opened.

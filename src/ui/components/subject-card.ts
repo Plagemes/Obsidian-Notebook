@@ -19,6 +19,8 @@ export interface SubjectCardOptions {
 	shape: "row" | "tile";
 	/** Draw the procedural artwork (off with reduced effects). */
 	art: boolean;
+	/** 0.13: the lower card of Home's three-column grid (a row card about 92 px tall with a smaller folder). */
+	compact?: boolean;
 	key?: string;
 	/** Opens the subject. Absent: a picture only (the creation dialog's preview): no button role, no chevron. */
 	onOpen?: () => void;
@@ -32,7 +34,7 @@ const ART_SIZE = { row: [320, 128], tile: [280, 176] } as const;
  * artwork is laid out beside the icon and text (styles.css, "subject cards"), never under them, at every width.
  */
 export function subjectCard(parent: HTMLElement, o: SubjectCardOptions): HTMLElement {
-	const card = parent.createDiv({ cls: `nb-subject-card is-${o.shape}` });
+	const card = parent.createDiv({ cls: `nb-subject-card is-${o.shape}${o.compact ? " is-compact" : ""}` });
 	subjectVars(card, o.color);
 	if (o.key) card.dataset.key = o.key;
 	const label = [o.name, ...o.lines].join(", ");

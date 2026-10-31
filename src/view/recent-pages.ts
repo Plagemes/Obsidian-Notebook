@@ -3,11 +3,15 @@ import { t } from "../i18n";
 import { openNotebookAtPage } from "../integration/open";
 import { fuzzyScore } from "../library/page-search";
 import { nameOf, normalizeText } from "../library/index";
+import { ActivityLog, type ActivityRecord } from "../library/activity-log";
 import { ago, RecentLog, RecentRecorder, type RecentItem } from "../library/recent-log";
 import type { NotebookDocument } from "../model/types";
 import { showNotice } from "./notice";
 
 const STORAGE_KEY = "notebook-recent-pages";
+/** 0.13: pages and minutes written per day, for Home's greeting and statistics (library/activity-log.ts). */
+const ACTIVITY_KEY = "notebook-activity-days";
+const ACTIVITY_SAVE_MS = 4000;
 
 /**
  * Roadmap 365. The log of recently edited pages lives in the device-local storage of Obsidian (`saveLocalStorage`):
@@ -16,6 +20,9 @@ const STORAGE_KEY = "notebook-recent-pages";
 export class RecentPagesService {
 	private readonly log: RecentLog;
 	private readonly recorder: RecentRecorder;
+	private activityLog: ActivityLog;
+	private activityTimer = 0;
+	private activityDirty = false;
 
 	constructor(private readonly app: App, private readonly readNotebook: (file: TFile) => Promise<NotebookDocument | null>) {
 		let raw: unknown = null;
@@ -25,6 +32,13 @@ export class RecentPagesService {
 			raw = null;
 		}
 		this.log = RecentLog.parse(raw);
+		let activityRaw: unknown = null;
+		try {
+			activityRaw = this.app.loadLocalStorage(ACTIVITY_KEY);
+		} catch {
+			activityRaw = null;
+		}
+		this.activityLog = ActivityLog.parse(activityRaw);
 		this.recorder = new RecentRecorder(
 			this.log,
 			{ set: (fn, ms) => window.setTimeout(fn, ms), clear: (h) => window.clearTimeout(h) },
@@ -40,13 +54,45 @@ export class RecentPagesService {
 		}
 	}
 
+	private saveActivity(): void {
+		window.clearTimeout(this.activityTimer);
+		this.activityTimer = 0;
+		if (!this.activityDirty) return;
+		this.activityDirty = false;
+		try {
+			this.app.saveLocalStorage(ACTIVITY_KEY, JSON.stringify(this.activityLog.toJSON()));
+		} catch (e) {
+			console.error("[notebook] could not save the writing activity", e);
+		}
+	}
+
 	/** A real edit on page `pageId` (the `num`-th, 1-based) of the notebook `nb` at `path`. */
 	note(nb: string, path: string, pageId: string, num: number): void {
 		this.recorder.touch(nb, path, pageId, num);
+		if (this.activityLog.touch(nb, path, pageId, Date.now())) {
+			this.activityDirty = true;
+			if (!this.activityTimer) this.activityTimer = window.setTimeout(() => this.saveActivity(), ACTIVITY_SAVE_MS);
+		}
 	}
 
 	flush(): void {
 		this.recorder.flush();
+		this.saveActivity();
+	}
+
+	/**
+	 * 0.13: writing activity for Home. Pages that the recent pages log remembers (their last edit) are folded in first, so the
+	 * days before this log existed still show; minutes (the writing-time estimate) only come from live edits.
+	 */
+	activity(): { records: ActivityRecord[]; minutes: Record<string, number> } {
+		this.recorder.flush();
+		let changed = false;
+		for (const i of this.log.list()) if (this.activityLog.touch(i.nb, i.path, i.page, i.at, false)) changed = true;
+		if (changed) {
+			this.activityDirty = true;
+			this.saveActivity();
+		}
+		return { records: this.activityLog.records(), minutes: this.activityLog.minutesByDay() };
 	}
 
 	/** When this device last edited page `pageId` of notebook `nb` (ms since epoch), or null when it has no record (page information, 379). */
@@ -65,9 +111,17 @@ export class RecentPagesService {
 		plugin.registerEvent(this.app.vault.on("rename", (f, oldPath) => {
 			this.recorder.flush();
 			if (this.log.rename(oldPath, f.path)) this.save();
+			if (this.activityLog.rename(oldPath, f.path)) {
+				this.activityDirty = true;
+				this.saveActivity();
+			}
 		}));
 		plugin.registerEvent(this.app.vault.on("delete", (f) => {
 			if (this.log.removePath(f.path)) this.save();
+			if (this.activityLog.forgetPath(f.path)) {
+				this.activityDirty = true;
+				this.saveActivity();
+			}
 		}));
 		plugin.registerDomEvent(document, "visibilitychange", () => {
 			if (document.visibilityState === "hidden") this.flush();

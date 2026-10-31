@@ -15,6 +15,9 @@ import { createPdfPages } from "../../src/model/pages";
 import { parse, serialize } from "../../src/model/serialize";
 import type { NotebookDocument, NotebookMeta } from "../../src/model/types";
 import type { FolderMeta } from "../../src/library/folder-meta";
+import { ActivityLog } from "../../src/library/activity-log";
+import { LibraryStateStore } from "../../src/library/library-state-store";
+import type { DeviceFileAdapter } from "../../src/storage/device-files";
 import { FAKE_ASSET, FAKE_PAGE, FAKE_PATH, installFakePdf } from "./fake-pdf";
 import { closeCreate, showCreate } from "./create-check";
 import { t } from "../../src/i18n";
@@ -100,11 +103,48 @@ export interface LibraryHarness {
 	host: LibraryHost;
 }
 
+/** 0.13: an in-memory device-files adapter, so the real library state store (pinned notebooks) runs in the harness. */
+class MemoryAdapter implements DeviceFileAdapter {
+	files = new Map<string, string>();
+	folders = new Set<string>();
+	async exists(p: string) { return this.files.has(p) || this.folders.has(p); }
+	async read(p: string) {
+		const v = this.files.get(p);
+		if (v === undefined) throw new Error("ENOENT");
+		return v;
+	}
+	async write(p: string, d: string) { this.files.set(p, d); }
+	async mkdir(p: string) { this.folders.add(p); }
+	async list(folder: string) { return [...this.files.keys()].filter((k) => k.startsWith(`${folder}/`) && !k.slice(folder.length + 1).includes("/")); }
+}
+
+/** 0.13: what the Continue card shows. "lecture": the class in progress with its notebook; "create": a class whose course has no notebook yet; "last": no class (the notebook left off in). */
+export type HomeVariant = "lecture" | "create" | "last";
+
+/** 0.13: a demo of 14 days of writing on this device: today 3 pages, a streak of 5 days, pages spread over the subjects. */
+function demoActivity(docs: ReadonlyMap<string, NotebookDocument>): ActivityLog {
+	const log = new ActivityLog();
+	const books = [...docs.entries()];
+	if (books.length === 0) return log;
+	const perDay = [3, 4, 2, 5, 1, 0, 6, 3, 0, 2, 4, 1, 0, 5];
+	const now = new Date();
+	perDay.forEach((n, back) => {
+		for (let k = 0; k < n; k++) {
+			const [path, doc] = books[(back * 3 + k * 2) % books.length]!;
+			const page = doc.pages[k % doc.pages.length]!;
+			const at = new Date(now.getFullYear(), now.getMonth(), now.getDate() - back, 8 + k, (k * 17 + back * 5) % 60).getTime();
+			log.touch(doc.id, path, page.id, at);
+			log.touch(doc.id, path, page.id, at + 7 * 60 * 1000);
+		}
+	});
+	return log;
+}
+
 /**
  * Seeds the demo vault and opens Home (surface=home) or the library (surface=library) in the harness leaf.
  * 0.12.2: `empty` opens them on a vault with no notebooks and no notebooks folder yet (a first start).
  */
-export async function openLibraryHarness(app: App, surface: string, empty = false): Promise<LibraryHarness> {
+export async function openLibraryHarness(app: App, surface: string, empty = false, variant: HomeVariant = "lecture"): Promise<LibraryHarness> {
 	const now = Date.now();
 	installFakePdf();
 	const docs = new Map<string, NotebookDocument>();
@@ -153,6 +193,11 @@ export async function openLibraryHarness(app: App, surface: string, empty = fals
 		processInInbox: () => calls.push("inbox-process"),
 	};
 	let index: unknown = null;
+	// 0.13: pinned folders (folder metadata) and pinned notebooks (the real library state store on an in-memory file).
+	const pinnedFolders = new Set<string>();
+	const metaListeners = new Set<() => void>();
+	const activity = demoActivity(docs);
+	const anatomia = `${ROOT}/Anatomia/Anatomia dell'arto superiore.notebook`;
 	const host: LibraryHost = {
 		root: () => ROOT,
 		readNotebook: async (file) => {
@@ -171,9 +216,31 @@ export async function openLibraryHarness(app: App, surface: string, empty = fals
 		},
 		// wave 0.12: two folders with a stored look (creation dialog), the others from their names.
 		folderMeta: {
-			getFolderMeta: (path) => FOLDER_LOOKS[path.slice(path.lastIndexOf("/") + 1)] ?? null,
-			onFolderMetaChange: () => () => undefined,
+			getFolderMeta: (path) => {
+				const look = FOLDER_LOOKS[path.slice(path.lastIndexOf("/") + 1)];
+				return look || pinnedFolders.has(path) ? { ...(look ?? {}), ...(pinnedFolders.has(path) ? { pinned: true } : {}) } : null;
+			},
+			onFolderMetaChange: (fn) => {
+				metaListeners.add(fn);
+				return () => metaListeners.delete(fn);
+			},
+			setPinned: async (path, pinned) => {
+				if (pinned) pinnedFolders.add(path);
+				else pinnedFolders.delete(path);
+				calls.push(`pin-folder:${path}:${pinned}`);
+				for (const fn of metaListeners) fn();
+			},
+			pinnedFolders: () => [...pinnedFolders].sort(),
 		},
+		state: new LibraryStateStore(new MemoryAdapter(), () => ROOT, "0a1b2c3d"),
+		userName: () => "Alex",
+		activity: () => ({ records: activity.records(), minutes: activity.minutesByDay() }),
+		lectureTarget: () => (empty || variant === "last" ? null
+			: variant === "create" ? { course: "Chimica organica", room: "A1", target: { kind: "create", folder: `${ROOT}/Matematica`, name: "Chimica organica" } }
+				: { course: "Anatomia", room: "B2", target: { kind: "open", path: anatomia } }),
+		lastNotebook: () => ({ path: `${ROOT}/Fisiologia/Fisiologia cardiovascolare.notebook`, page: 3 }),
+		openNowClass: () => void calls.push("open-now-class"),
+		newQuickPage: () => void calls.push("quick-page"),
 		importPdf: (folder) => void calls.push(`import-pdf:${folder}`),
 		scanToNotebook: (folder) => void calls.push(`scan:${folder}`),
 		lectureFromSlides: (folder) => void calls.push(`lecture:${folder}`),
@@ -280,12 +347,13 @@ export function checkLibraryLayout(surface: string): Result[] {
 	add("subject cards use the folder metadata (colour, symbol)", !!anat && anat.style.getPropertyValue("--nb-c").toLowerCase() === "#f0565e" && !!anat.querySelector(".nb-folder-badge .nb-folder-glyph svg"), anat?.dataset.key ?? "no Anatomia card");
 	add("subject cards show the generated art", count(".nb-subject-card .nb-subject-art") >= 1);
 	if (surface === "home") {
-		add("4 subject cards", count(".nb-home-subjects .nb-subject-card") === 4, String(count(".nb-home-subjects .nb-subject-card")));
-		add("recent notes (5 rows)", count(".nb-home-recent .nb-list-row") === 5, String(count(".nb-home-recent .nb-list-row")));
-		add("4 KPI tiles", count(".nb-kpi") === 4, String(count(".nb-kpi")));
+		// 0.13: the revised Home (the details are in home2-check.ts): as many subject cards as fit the width, then the dashed tile.
+		const fit = app.classList.contains("is-phone") ? 3 : 4;
+		add(`${fit} subject cards and the dashed New folder card`, count(".nb-home-subjects .nb-subject-card") === fit && count(".nb-home-subjects .nb-create-tile") === 1, String(count(".nb-home-subjects .nb-subject-card")));
+		add("recent notes are grouped by notebook", count(".nb-home-recent .nb-recent-group") >= 2, String(count(".nb-home-recent .nb-recent-group")));
+		add("the statistics have the chart and the widgets", count(".nb-stat-chart") === 1 && count(".nb-stat-tile") >= 2, `${count(".nb-stat-chart")} / ${count(".nb-stat-tile")}`);
 		add("quick actions", count(".nb-quick") === 4, String(count(".nb-quick")));
-		const created = app.querySelector('[data-key="kpi:created"] .nb-kpi-value')?.textContent;
-		add("notebooks created in 4 weeks is counted", created === "8", created ?? "");
+		add("the Continue row is there", count(".nb-continue") === 1 && count(".nb-quickpage") === 1, `${count(".nb-continue")} / ${count(".nb-quickpage")}`);
 	} else {
 		add("6 filter chips", count(".nb-chips .nb-chip") === 6, String(count(".nb-chips .nb-chip")));
 		add("4 subject cards", count(".nb-lib-subjects .nb-subject-card") === 4, String(count(".nb-lib-subjects .nb-subject-card")));
