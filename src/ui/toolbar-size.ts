@@ -2,6 +2,8 @@
 // (--nb-target, --nb-icon) on its root, the layout engine uses `slot` to count how many quick actions fit, and the radial
 // menu multiplies its dial by `dial`.
 
+import { toolbarPlan } from "./layout";
+
 export const TOOLBAR_SIZES = ["compact", "normal", "large"] as const;
 export type ToolbarSize = typeof TOOLBAR_SIZES[number];
 export const DEFAULT_TOOLBAR_SIZE: ToolbarSize = "normal";
@@ -20,6 +22,9 @@ export interface ToolbarScale {
 	/** Multiplier of the radial dial (1 = the designed size). */
 	dial: number;
 }
+
+/** The quick slots a normal toolbar should keep (Undo, tools and the most used action stay one tap away; Back is the third). */
+const MIN_QUICK = 3;
 
 const PRESETS: Record<ToolbarSize, ToolbarScale> = {
 	// 0.13: touch targets of at least 40 px even when compact, and 44 px at the normal size (DESIGN.md §7; S Pen and finger).
@@ -45,6 +50,9 @@ function rowOverflows(target: number, width: number): boolean {
 export function toolbarScaleFor(size: ToolbarSize, width: number): ToolbarScale {
 	const s = PRESETS[size];
 	if (size === "normal" && rowOverflows(s.target, width)) return { ...PRESETS.compact, dial: s.dial };
+	// 0.13 polish: a short landscape view (about 740 px) fits only two quick slots at 44 px, which leaves Back in "All actions";
+	// the 40 px targets of the compact preset (still touch-sized) bring it back to three. Wider views keep 44 px.
+	if (size === "normal" && toolbarPlan(width, s.slot).quickSlots < MIN_QUICK && toolbarPlan(width, PRESETS.compact.slot).quickSlots >= MIN_QUICK) return { ...PRESETS.compact, dial: s.dial };
 	return s;
 }
 

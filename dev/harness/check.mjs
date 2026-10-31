@@ -25,6 +25,8 @@ const DEVICES = {
 	desktop: { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false, touch: false },
 	// The same tablet held sideways.
 	tabletLandscape: { width: 1280, height: 800, deviceScaleFactor: 2, mobile: true, touch: true },
+	// 0.13 polish: a short landscape phone (740 CSS px wide): the toolbar must keep three quick slots (Back among them).
+	phoneLandscape: { width: 740, height: 360, deviceScaleFactor: 2.625, mobile: true, touch: true },
 };
 
 // The families of src/ui/art/generative-art.ts (ART_STYLES), for the art gallery pages.

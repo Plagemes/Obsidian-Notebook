@@ -1243,6 +1243,21 @@ Use a vault with a few subject folders and notebooks, the timetable with a class
 643. **Pen, finger, mouse.** Every card, row, chip, switch and menu responds to a pen tap, a finger tap and a click; targets are at least 40 px.
 644. **Nothing else changes.** Notebook files are unchanged by looking at Home; an error in one section shows an error card and the rest of Home is still drawn.
 
+### 0.13 — polish (steps 670-679)
+
+Implemented, not verified on hardware.
+
+670. **Art arrives without a stall.** Open Home on the tablet after a restart. Expected: the page is usable at once; folder cards may show their art a moment later with a short fade; scrolling and the pen are not blocked.
+671. **No flicker.** Switch Home to the library and back: cards that were shown keep their art without fading again.
+672. **Reduced motion.** With the system's reduced motion on, no art is drawn (as before); with it off, the fade is short.
+673. **Veins in the creation dialog.** New, Notebook, *Change cover*: the style picker has *Veins*; pick it, the cover preview changes. Create the notebook: its card in the library shows the veins cover.
+674. **Veins by keyword.** New folder named "Biologia" (or "Anatomy"): the card starts on veins; pick another style, then edit the name: your choice stays.
+675. **Veins folder.** Create a folder on veins: its card (Home, library) shows veins after a restart.
+676. **Older plugin.** Optional: open a veins notebook on a device with 0.12.x: it opens and shows a branches cover.
+677. **Toolbar at 740 px.** Phone sideways (about 740 px wide): the toolbar shows Back among its quick buttons (at least three). On a tablet in portrait the buttons are 44 px.
+678. **Quick page twice.** Tap Home's *Quick page* and the ribbon item at once on a vault without Quick notes: one *Quick notes* is made.
+679. **Open in new tab.** Recent notes, the menu, *Open in new tab* on a notebook that is open: the open tab is shown, no second tab appears.
+
 ### 0.12.5: pen gestures and rests (steps 660-665)
 
 Update to 0.12.5 and fully close and reopen Obsidian. Samsung tablet, S Pen, Obsidian for Android. Settings → *Pen gestures* → *Long press starts a gesture* on, *Pen side button* = *Radial menu on click, erase while held* (the default) unless a step says otherwise.

@@ -6,6 +6,7 @@ import { nameOf, normalizeText } from "../library/index";
 import { ActivityLog, type ActivityRecord } from "../library/activity-log";
 import { ago, RecentLog, RecentRecorder, type RecentItem } from "../library/recent-log";
 import type { NotebookDocument } from "../model/types";
+import { writing } from "../ink/writing-guard";
 import { showNotice } from "./notice";
 
 const STORAGE_KEY = "notebook-recent-pages";
@@ -71,7 +72,11 @@ export class RecentPagesService {
 		this.recorder.touch(nb, path, pageId, num);
 		if (this.activityLog.touch(nb, path, pageId, Date.now())) {
 			this.activityDirty = true;
-			if (!this.activityTimer) this.activityTimer = window.setTimeout(() => this.saveActivity(), ACTIVITY_SAVE_MS);
+			if (!this.activityTimer) this.activityTimer = window.setTimeout(() => {
+				// Serialising and writing local storage waits for a pause in writing: never in the middle of a stroke.
+				this.activityTimer = 0;
+				writing.whenQuiet(() => this.saveActivity(), "recent-activity");
+			}, ACTIVITY_SAVE_MS);
 		}
 	}
 

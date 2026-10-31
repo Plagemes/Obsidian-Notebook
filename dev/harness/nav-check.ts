@@ -77,8 +77,9 @@ export async function checkNavigation(api: NavCheckApi, add: (name: string, ok: 
 	add("history: the drag is one jump (Back is possible, Forward is not)", nav.canBack && !nav.canForward, `back ${nav.canBack}, forward ${nav.canForward}`);
 	const ctx = v.uiContext().nav;
 	add("history: the interface context offers Back", ctx?.back === true && ctx?.forward === false, JSON.stringify(ctx));
-	// 0.13 ds-notebook: 44 px slots leave two quick slots on a short landscape phone (740 px), where Back stays in "All actions"; from three slots on it is a quick slot.
-	if (v.toolbar.quickIds.length >= 3) add("history: Back is a quick slot of the toolbar", v.toolbar.quickIds.includes("nav-back"), v.toolbar.quickIds.join(","));
+	// 0.13 polish: at least three quick slots at every width the harness uses (the 740 px band uses 40 px targets), so Back is a quick slot.
+	add("history: the toolbar keeps at least three quick slots", v.toolbar.quickIds.length >= 3, v.toolbar.quickIds.join(","));
+	add("history: Back is a quick slot of the toolbar", v.toolbar.quickIds.includes("nav-back"), v.toolbar.quickIds.join(","));
 	v.runAction("nav-back");
 	for (let i = 0; i < 40 && v.currentPage() !== 3; i++) await wait(25);
 	add("history: Back returns to the page the reader left", v.currentPage() === 3, `page ${v.currentPage() + 1}`);

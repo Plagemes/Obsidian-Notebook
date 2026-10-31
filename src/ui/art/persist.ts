@@ -15,7 +15,12 @@ export interface ArtStore {
 /** Bumped whenever the drawing changes, so pictures stored by an older engine are never shown (it is part of every key). */
 export const ART_ENGINE_VERSION = "13.1";
 
-const DB_NAME = "notebook-art-cache";
+const DB_BASE = "notebook-art-cache";
+/** The database of a vault: IndexedDB is shared by every vault on the device, so each vault gets its own (and its own cap). */
+export function dbNameFor(scope?: string): string {
+	const s = (scope ?? "").trim();
+	return s ? `${DB_BASE}:${s}` : DB_BASE;
+}
 const STORE = "images";
 /** At most this many pictures are kept; the oldest go first. */
 export const PERSIST_MAX_ENTRIES = 160;
@@ -43,9 +48,9 @@ function done(tx: IDBTransaction): Promise<void> {
 	});
 }
 
-function openDb(factory: IDBFactory): Promise<IDBDatabase> {
+function openDb(factory: IDBFactory, name: string): Promise<IDBDatabase> {
 	return new Promise((resolve, reject) => {
-		const req = factory.open(DB_NAME, 1);
+		const req = factory.open(name, 1);
 		req.onupgradeneeded = () => {
 			const db = req.result;
 			const store = db.createObjectStore(STORE, { keyPath: "key" });
@@ -61,7 +66,7 @@ function openDb(factory: IDBFactory): Promise<IDBDatabase> {
  * The IndexedDB store, or null when IndexedDB does not exist here. Opening is lazy and happens once; if it fails or takes
  * longer than three seconds the store behaves as empty for the rest of the session.
  */
-export function createIdbStore(factory?: IDBFactory): ArtStore | null {
+export function createIdbStore(factory?: IDBFactory, scope?: string): ArtStore | null {
 	let idb: IDBFactory | undefined = factory;
 	if (!idb) {
 		try {
@@ -77,9 +82,11 @@ export function createIdbStore(factory?: IDBFactory): ArtStore | null {
 	const db = (): Promise<IDBDatabase | null> => {
 		dbPromise ??= new Promise<IDBDatabase | null>((resolve) => {
 			const timer = setTimer(() => resolve(null), OPEN_TIMEOUT_MS);
-			openDb(factoryUsed).then((d) => {
+			openDb(factoryUsed, dbNameFor(scope)).then((d) => {
 				clearTimer(timer);
 				resolve(d);
+				// The cap applies from the first moment of a session, not only after twenty writes.
+				void prune(d).catch(() => undefined);
 			}, () => {
 				clearTimer(timer);
 				resolve(null);
@@ -122,7 +129,7 @@ export function createIdbStore(factory?: IDBFactory): ArtStore | null {
 			const tx = d.transaction(STORE, "readwrite");
 			tx.objectStore(STORE).put({ key, url, t: Date.now() } satisfies Row);
 			await done(tx);
-			if (++puts % PRUNE_EVERY === 0) await prune(d);
+			if (++puts === 1 || puts % PRUNE_EVERY === 0) await prune(d);
 		}),
 		recent: (limit) => safe<Array<[string, string]>>([], (d) => new Promise((resolve) => {
 			const out: Array<[string, string]> = [];

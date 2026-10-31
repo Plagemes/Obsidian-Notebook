@@ -225,7 +225,8 @@ async function check(): Promise<{ ok: boolean; results: Result[]; errors: string
 	const pipeline = artPipelineStats();
 	add("artImageAsync delivers a PNG (worker or main thread) and the sync call then hits the cache", viaPipeline.startsWith("data:image/png") && artImage(asyncSpec, 600, 200, 2) === viaPipeline,
 		`${pipelineMs.toFixed(0)} ms, worker=${pipeline.worker} (${pipeline.workerRenders} worker renders, ${pipeline.workerFallbacks} fallbacks), persistent=${pipeline.persistent}`);
-	add("the worker was used when the browser offers one (a fallback here would mean the inline worker is broken)", !pipeline.worker || pipeline.workerRenders > 0, `worker=${pipeline.worker}, ${pipeline.workerRenders} renders, ${pipeline.workerFallbacks} fallbacks`);
+	const offscreen = typeof OffscreenCanvas !== "undefined" && typeof Worker !== "undefined";
+	add("the worker was used when the browser offers one (a fallback here would mean the inline worker is broken)", !offscreen || (pipeline.worker && pipeline.workerRenders > 0 && pipeline.workerFallbacks === 0), `worker=${pipeline.worker}, ${pipeline.workerRenders} renders, ${pipeline.workerFallbacks} fallbacks`);
 	const spec: ArtSpec = { seed: "Cache", color: "#8B5CF6" };
 	artImage(spec, 600, 200, 2);
 	const before = artCacheStats();

@@ -8,6 +8,7 @@ import { breadcrumb, buildFolderTree, flattenTree, isReservedPath, type FolderNo
 import { relativeTime, uniquePath } from "./format";
 import { folderOf, isInside, LibraryIndex, normalizeText, SORTS, type Highlight, type LibraryEntry, type LibraryScope, type LibrarySort, type SearchHit } from "./index";
 import { openTagEditor } from "../integration/tags";
+import { openNotebookAtPage } from "../integration/open";
 import { ConfirmModal, CoverModal, FolderSuggestModal, PromptModal } from "./library-modals";
 import { arrangeEntries, planMove, type LibraryMap, type LibraryOp } from "./library-state";
 import { LibraryStateBlockedError, type LibraryStateStore } from "./library-state-store";
@@ -1614,9 +1615,12 @@ export class LibraryView extends ItemView {
 		return { icon: "sticky-note", color, title: t("home.quickPage"), description: t("home.quickPage.desc"), art: this.art("quick:page", color, 280, 140), key: "quick:page", onRun: open };
 	}
 
-	/** Opens a notebook (at a page, 0-based) in a new tab, whether or not it is already open. */
+	/**
+	 * Opens a notebook (at a page, 0-based) in a new tab. One already open is revealed (and moved to the page) instead of
+	 * opened a second time: two editable views of the same file would overwrite each other.
+	 */
 	private openInNewTab(file: TFile, pageIndex?: number): void {
-		void this.app.workspace.getLeaf("tab").openFile(file, pageIndex === undefined ? undefined : { state: { page: pageIndex + 1 } });
+		void openNotebookAtPage(this.app, file, pageIndex === undefined ? null : pageIndex + 1);
 	}
 
 	/** Shows where a notebook is: its folder in the library, with the notebook's card scrolled into view and flashed. */

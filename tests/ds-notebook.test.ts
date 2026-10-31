@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import css from "../styles.css?raw";
+import { toolbarPlan } from "../src/ui/layout";
 import { TOOLBAR_SIZES, dialScale, toolbarScale, toolbarScaleFor, toolsRowWraps } from "../src/ui/toolbar-size";
 
 // 0.13 ds-notebook: the notebook's editing chrome on the design system.
@@ -61,6 +62,11 @@ describe("toolbar size presets (0.13)", () => {
 	it("falls back to 40 px targets on a view too narrow for eight 44 px ones, and only at the normal size", () => {
 		expect(toolbarScaleFor("normal", 800).target).toBe(44);
 		expect(toolbarScaleFor("normal", 360).target).toBe(40);
+		// 0.13 polish: the 740 px landscape band keeps three quick slots with 40 px targets; a tablet in portrait keeps 44 px.
+		const at740 = toolbarScaleFor("normal", 740);
+		expect(at740.target).toBe(40);
+		expect(toolbarPlan(740, at740.slot).quickSlots).toBeGreaterThanOrEqual(3);
+		expect(toolbarScaleFor("normal", 800).target).toBe(44);
 		expect(toolbarScaleFor("normal", 360).slot).toBe(toolbarScale("compact").slot);
 		expect(toolbarScaleFor("normal", 360).dial).toBe(1);
 		expect(toolbarScaleFor("large", 360)).toEqual(toolbarScale("large"));

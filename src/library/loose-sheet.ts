@@ -26,7 +26,20 @@ export function findLooseSheet(app: App, settings: NotebookSettings): TFile | nu
 	return app.vault.getFileByPath(normalizePath(looseSheetPath(settings.folder, settings.looseSheetPath)));
 }
 
-async function ensureLooseSheet(plugin: LooseSheetPlugin): Promise<TFile> {
+let ensuring: Promise<TFile> | null = null;
+
+/**
+ * One creation at a time for both entry points (the Home card, the ribbon and the command, `openLooseSheet` and
+ * `openNewQuickPage`): used at once they share the file instead of making "Quick notes 2".
+ */
+function ensureLooseSheet(plugin: LooseSheetPlugin): Promise<TFile> {
+	ensuring ??= makeLooseSheet(plugin).finally(() => {
+		ensuring = null;
+	});
+	return ensuring;
+}
+
+async function makeLooseSheet(plugin: LooseSheetPlugin): Promise<TFile> {
 	const { app, settings } = plugin;
 	const path = normalizePath(looseSheetPath(settings.folder, settings.looseSheetPath));
 	const existing = app.vault.getFileByPath(path);

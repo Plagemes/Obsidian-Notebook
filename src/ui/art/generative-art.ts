@@ -520,11 +520,20 @@ export function artPipelineStats(): Readonly<typeof stats> & { worker: boolean; 
 }
 
 let store: ArtStore | null | undefined;
+let storeScope = "";
+
+/** The vault the persistent cache belongs to (its name). Call before the first picture; a change reopens the store. */
+export function setArtCacheScope(scope: string): void {
+	if (scope === storeScope) return;
+	storeScope = scope;
+	store = undefined;
+	warmed = false;
+}
 
 function getStore(): ArtStore | null {
 	if (store === undefined) {
 		try {
-			store = createIdbStore();
+			store = createIdbStore(undefined, storeScope);
 		} catch {
 			store = null;
 		}

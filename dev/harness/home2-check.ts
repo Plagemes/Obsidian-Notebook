@@ -8,6 +8,7 @@
  */
 import type { LibraryHarness } from "./library-check";
 import { t } from "../../src/i18n";
+import { artFailures, artPipelineStats } from "../../src/ui/art/generative-art";
 
 type Result = { name: string; ok: boolean; detail: string };
 type MenuApi = { titles: string[]; run: (title: string) => void };
@@ -242,12 +243,32 @@ async function checkControls(h: LibraryHarness, variant: string): Promise<Result
 const phone = () => app().classList.contains("is-phone");
 
 /** Layout, then controls. */
+/** 0.13 polish: the folder cards get their art off the main thread (worker path really used where the browser has it). */
+async function checkAsyncArt(variant: string): Promise<Result[]> {
+	const out: Result[] = [];
+	const add = (name: string, ok: boolean, detail = "") => out.push({ name: `home2 ${window.innerWidth}px ${variant} art: ${name}`, ok, detail });
+	const cards = shown(".nb-subject-card");
+	if (cards.length === 0 || artFailures().off) return out;
+	let withArt = 0;
+	for (let i = 0; i < 40; i++) {
+		withArt = all(".nb-subject-art").filter((e) => e.style.getPropertyValue("--nb-art").startsWith("url(")).length;
+		if (withArt === all(".nb-subject-art").length) break;
+		await wait(100);
+	}
+	add("every folder card ends up with its art", withArt === all(".nb-subject-art").length, `${withArt}/${all(".nb-subject-art").length}`);
+	const st = artPipelineStats();
+	const offscreen = typeof OffscreenCanvas !== "undefined" && typeof Worker !== "undefined";
+	add("the app drew art in the worker, not on the main thread, when the browser offers one", !offscreen || st.workerRenders > 0 || st.persistHits > 0, `worker renders ${st.workerRenders}, fallbacks ${st.workerFallbacks}, persisted hits ${st.persistHits}`);
+	return out;
+}
+
 export async function checkHome2(h: LibraryHarness, variant: string): Promise<Result[]> {
 	// The scenario may have left the view in the library (the review states of the other checks): start from Home.
 	click(q('.nb-rail [data-key="nav:home"]'));
 	await frames(3);
 	await wait(300);
 	const layout = checkLayout(variant);
+	layout.push(...(await checkAsyncArt(variant)));
 	const controls = await checkControls(h, variant);
 	return [...layout, ...controls];
 }

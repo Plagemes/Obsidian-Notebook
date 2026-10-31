@@ -1,6 +1,7 @@
 import { trackWriting } from "./view/writing-quiet";
 import { registerHints } from "./ui/hints";
 import { showNotice } from "./view/notice";
+import { setArtCacheScope } from "./ui/art/generative-art";
 import { Platform, Plugin, type TFile } from "obsidian";
 import { onLanguageChanged, setUiLanguage, t } from "./i18n";
 import { readSettings, type NotebookSettings } from "./settings";
@@ -80,6 +81,8 @@ export default class NotebookPlugin extends Plugin {
 		this.settings = await this.readStoredSettings();
 		// Command names (below) are registered once, so they follow the language at startup.
 		this.step("language", () => setUiLanguage(this.settings.uiLanguage));
+		// 0.13 polish: the picture cache (IndexedDB) is per vault; IndexedDB itself is shared by every vault on the device.
+		this.step("art cache", () => setArtCacheScope(this.app.vault.getName()));
 		this.step("appearance", () => this.applyAppearanceStyle());
 		// 0.12.1: the settings tab first, so that no later step can take it away. It reads the services below lazily.
 		this.step("settings tab", () => this.addSettingTab(new NotebookSettingTab(this.app, this)));
