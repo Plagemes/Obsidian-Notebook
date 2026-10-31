@@ -40,10 +40,20 @@ export interface ButtonSignal {
 
 export type IgnoreReason = "off" | "resting" | "mid-stroke" | "after-drag" | "no-contact" | "repeat";
 
+/**
+ * What opened the menu (0.12.5, for the Pen button test): `tap` (the nib touched with the button held and lifted without
+ * moving), `late-tap` (the same, the `contextmenu` came after the lift), `hover` (a bare `contextmenu` and no pen contact
+ * within the before-window: read as a click of the button while hovering).
+ */
+export type MenuVia = "tap" | "late-tap" | "hover";
+
 /** What the contact became: waiting for the tap or the drag, the menu (tap), the eraser (drag), or nothing. */
 export interface ButtonDecision {
 	kind: "waiting" | "menu" | "eraser" | "ignored";
 	reason?: IgnoreReason;
+	via?: MenuVia;
+	/** For `hover`: the before-window that elapsed without a pen contact, ms. */
+	ms?: number;
 }
 
 /** What the caller does about a signal. */
@@ -74,7 +84,9 @@ export function describeSignal(s: ButtonSignal): string {
 export function describeDecision(d: ButtonDecision): string {
 	switch (d.kind) {
 		case "waiting": return "waiting (tap: menu, drag: eraser)";
-		case "menu": return "menu (tap)";
+		case "menu":
+			if (d.via === "hover") return `menu (hover click: no pen contact within ${Math.round(d.ms ?? 0)} ms of the contextmenu)`;
+			return d.via === "late-tap" ? "menu (tap, contextmenu after the lift)" : "menu (tap)";
 		case "eraser": return "eraser (drag)";
 		default: return `ignored: ${IGNORE_TEXT[d.reason ?? "repeat"]}`;
 	}
@@ -100,12 +112,24 @@ export class ButtonContact {
 	 * held", ...) there is nothing to wait for: a contact with the button held is the button's tool at once.
 	 */
 	menuAllowed = true;
+	/**
+	 * A rest of the nib is claimed by another feature (the hold-still radial menu, or the long-press gesture). Then a nib that
+	 * rests for a long-press time on a weak button signal is a rest, not a drag with the button (see `restedOut`). Without such
+	 * a feature the old rule stands: a slow move that leaves the radius late is still a drag.
+	 */
+	restClaimed = false;
 	state: ButtonState = "ink";
 	/** The latest signal and decision, for the Pen button test. */
 	signal: ButtonSignal | null = null;
 	decision: ButtonDecision | null = null;
 
 	private open = false;
+	/**
+	 * The button is known from the pen's own report (`pointerdown` / `pointermove` carrying the barrel bit), not only from a
+	 * `contextmenu` around the contact. A `contextmenu` alone is weak: a nib that then rests for a long-press time was a
+	 * long-press (the WebView's own `contextmenu`, or a stray one from the contact before), not the button.
+	 */
+	private strong = false;
 	private downT = 0;
 	private x0 = 0;
 	private y0 = 0;
@@ -186,7 +210,19 @@ export class ButtonContact {
 	/** The wait is over with no contact: it was a click while hovering. */
 	hoverFired(): void {
 		this.beforeT = null;
-		this.decision = { kind: "ignored", reason: "no-contact" };
+		this.decision = this.menuAllowed ? { kind: "menu", via: "hover", ms: this.linkBeforeMs() } : { kind: "ignored", reason: "no-contact" };
+	}
+
+	/** When the bare `contextmenu` that still waits for a pen contact came, or null. */
+	get hoverWaitingSince(): number | null {
+		return this.beforeT;
+	}
+
+	/** The before-window has run out at `t` with no pen contact: it was a click while hovering. True when that was just decided. */
+	settleHover(t: number): boolean {
+		if (this.beforeT === null || t - this.beforeT <= this.linkBeforeMs()) return false;
+		this.hoverFired();
+		return true;
 	}
 
 	/**
@@ -215,6 +251,7 @@ export class ButtonContact {
 		}
 		this.open = true;
 		this.upT = null;
+		this.strong = barrel !== null;
 		this.downT = t;
 		this.x0 = x;
 		this.y0 = y;
@@ -239,8 +276,18 @@ export class ButtonContact {
 		return this.state;
 	}
 
+	/**
+	 * The contact waits for tap or drag on a weak signal only, and the nib has rested still for a long-press time (the
+	 * same rule as `contactVerdict`): it was a long-press of the nib, so the contact is ink after all. True when it was just decided.
+	 */
+	private restedOut(t: number): boolean {
+		if (!this.restClaimed || this.state !== "pending" || this.strong || t - this.downT < NIB_LONG_PRESS_MS) return false;
+		this.set("ink", { kind: "ignored", reason: "resting" });
+		return true;
+	}
+
 	/** A sample of the contact. True when this move ended the wait: the button was held and the nib has left the radius (the eraser). */
-	penMove(x: number, y: number): boolean {
+	penMove(x: number, y: number, t?: number): boolean {
 		if (this.open) {
 			this.lastX = x;
 			this.lastY = y;
@@ -248,6 +295,8 @@ export class ButtonContact {
 		if (!this.open || this.moved) return false;
 		if (Math.hypot(x - this.x0, y - this.y0) <= STILL_RADIUS_PX) return false;
 		this.moved = true;
+		// A nib that rested for a long-press time before it moved is writing (or drawing a gesture), not dragging with the button.
+		if (t !== undefined && this.restedOut(t)) return false;
 		if (this.state !== "pending") return false;
 		this.set("eraser", { kind: "eraser" });
 		return true;
@@ -258,6 +307,7 @@ export class ButtonContact {
 		if (!this.open) return "none";
 		this.open = false;
 		this.upT = t;
+		if (this.restedOut(t)) return "none";
 		if (this.state !== "pending") return "none";
 		this.set("menu", { kind: "menu" });
 		return "menu";
@@ -317,6 +367,7 @@ export class ButtonContact {
 		const dt = t - this.downT;
 		this.signal = { kind, dt, buttons };
 		if (!this.open) return "unlinked";
+		if (kind === "pointermove") this.strong = true;
 		if (!this.enabled) return this.ignore("off");
 		if (this.state !== "ink") return "none";
 		if (dt > this.w().afterMs) return this.ignore("mid-stroke");
@@ -351,7 +402,7 @@ export class ButtonContact {
 		if (!this.moved) {
 			if (this.upT - this.downT >= NIB_LONG_PRESS_MS) return this.ignore("resting");
 			if (this.menuAllowed) {
-				this.set("menu", { kind: "menu" });
+				this.set("menu", { kind: "menu", via: "late-tap" });
 				return "menu-late";
 			}
 		}

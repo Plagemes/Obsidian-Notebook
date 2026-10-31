@@ -843,6 +843,7 @@ export class PointerController {
 		const a = this.policy.settings.penButton;
 		this.btn.enabled = !!a && a !== "off";
 		this.btn.menuAllowed = opensRadial(a);
+		this.btn.restClaimed = this.policy.settings.penLongPress === true || this.policy.settings.restGesture === true;
 	}
 
 	/** The first sample of the contact's trail, as the start of a stroke. */
@@ -1189,7 +1190,7 @@ export class PointerController {
 		this.hold.move(x, y);
 		// Asked before the move is judged: the sample that takes the nib out of the radius is part of the trail to replay.
 		const waiting = this.btn.pending;
-		if (this.drawType === "pen") this.btn.penMove(x, y);
+		if (this.drawType === "pen") this.btn.penMove(x, y, t);
 		if (!isNewSample(this.lastT, this.lastX, this.lastY, t, x, y, strict)) return;
 		this.lastT = t;
 		this.lastX = x;

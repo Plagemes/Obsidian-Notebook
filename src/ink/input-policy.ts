@@ -50,6 +50,11 @@ export interface InputSettings {
 	 */
 	penLongPress?: boolean;
 	/**
+	 * 0.12.5: a rest of the nib starts a pen gesture (setting *Long press starts a gesture*). The view owns that trigger; the
+	 * controller only needs to know that a resting nib is spoken for, so that a stray button signal never takes it for a drag.
+	 */
+	restGesture?: boolean;
+	/**
 	 * Samsung / Chromium report the side button, pressed while the pen hovers, as a primary press with pressure
 	 * exactly 0. On by default; off for a device that reports 0 on real contact. Undefined = on.
 	 */
