@@ -565,6 +565,35 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 			add("a press in the middle of a stroke: ink goes on, no menu", !menuOpen() && strokeCount() === midBase + 1, `${midBase} → ${strokeCount()}`);
 			await closeMenu();
 		}
+		// 0.12.5: the pen gestures. Resting the nib for 0.65 s before the stroke moves starts a gesture (setting *Long press starts
+		// a gesture*): the overlay shows, the dot is dropped, the sign leaves no ink. Real events, real timers.
+		{
+			await wait(1700);
+			const gOverlay = () => st.querySelector<SVGElement>(".notebook-gesture-overlay");
+			const gShown = () => !!gOverlay() && !gOverlay()!.classList.contains("notebook-hidden");
+			v.host.settings.penGestureLongPress = true;
+			v.applySettings(v.host.settings);
+			const gBase = strokeCount();
+			const gid = nid++;
+			const gx = r4.left + r4.width * 0.35, gy = r4.top + r4.height * 0.45;
+			st.dispatchEvent(mk("pointerdown", gid, gx, gy));
+			for (let i = 0; i < 6; i++) {
+				await wait(150);
+				st.dispatchEvent(mk("pointermove", gid, gx + (i % 2), gy, { button: -1, buttons: 1, pressure: 0.5 }));
+			}
+			add("rest then draw: the gesture starts after the rest", gShown(), gShown() ? "overlay shown" : "no gesture");
+			for (let i = 0; i <= 24; i++) {
+				const a = (i / 24) * Math.PI * 2;
+				st.dispatchEvent(mk("pointermove", gid, gx + 60 * Math.sin(a), gy + 60 - 60 * Math.cos(a), { button: -1, buttons: 1, pressure: 0.6 }));
+				await wait(12);
+			}
+			st.dispatchEvent(mk("pointerup", gid, gx, gy, { button: 0, buttons: 0, pressure: 0 }));
+			await frames(3);
+			add("rest then draw: the sign leaves no ink and the overlay is gone", !gShown() && strokeCount() === gBase, `${gBase} → ${strokeCount()}`);
+			await closeMenu();
+			v.host.settings.penGestureLongPress = false;
+			v.applySettings(v.host.settings);
+		}
 		v.host.settings.penButtonSeen = false;
 		v.applySettings(v.host.settings);
 		setTool("pen");
