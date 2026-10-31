@@ -1,5 +1,6 @@
 // 0.13: the "Continue" row of Home (DESIGN.md §3): the hero card with a large page thumbnail (the lecture in progress, else
 // the notebook you left off in) and the "Quick page" card beside it.
+import { applyArt, type ArtSource } from "../art/art-ref";
 import { pressable, setIconSafe, subjectVars } from "./dom";
 import { iconSquare } from "./icon-square";
 
@@ -25,7 +26,7 @@ export interface ContinueCardOptions {
 	/** The page picture; absent (no notebook yet): a paper placeholder with the icon. */
 	thumb: PageThumbRef | null;
 	/** Decoration: a generated artwork behind the text (omit with reduced effects). */
-	art?: string;
+	art?: ArtSource;
 	/** The one action, also what a tap anywhere on the card does. */
 	action: { icon: string; label: string; onRun: () => void };
 	key?: string;
@@ -37,7 +38,7 @@ export function continueCard(parent: HTMLElement, o: ContinueCardOptions): HTMLE
 	subjectVars(card, o.color);
 	if (o.key) card.dataset.key = o.key;
 	pressable(card, o.action.onRun, `${o.title}. ${o.action.label}`);
-	if (o.art) card.createDiv({ cls: "nb-continue-art", attr: { "aria-hidden": "true" } }).setCssProps({ "--nb-art": `url("${o.art}")` });
+	if (o.art) applyArt(card.createDiv({ cls: "nb-continue-art", attr: { "aria-hidden": "true" } }), o.art);
 	const thumb = card.createDiv({ cls: "nb-continue-thumb", attr: { "aria-hidden": "true" } });
 	if (o.thumb) {
 		thumb.addClass("nb-page-thumb");
@@ -72,7 +73,7 @@ export interface QuickPageOptions {
 	/** "A new page in Quick notes" */
 	description: string;
 	/** Decoration: a faint artwork. */
-	art?: string;
+	art?: ArtSource;
 	key?: string;
 	onRun: () => void;
 }
@@ -83,7 +84,7 @@ export function quickPageCard(parent: HTMLElement, o: QuickPageOptions): HTMLEle
 	subjectVars(card, o.color);
 	if (o.key) card.dataset.key = o.key;
 	pressable(card, o.onRun, `${o.title}. ${o.description}`);
-	if (o.art) card.createDiv({ cls: "nb-quickpage-art", attr: { "aria-hidden": "true" } }).setCssProps({ "--nb-art": `url("${o.art}")` });
+	if (o.art) applyArt(card.createDiv({ cls: "nb-quickpage-art", attr: { "aria-hidden": "true" } }), o.art);
 	iconSquare(card, o.icon, o.color);
 	const text = card.createDiv({ cls: "nb-quickpage-text" });
 	text.createDiv({ cls: "nb-quickpage-title", text: o.title });

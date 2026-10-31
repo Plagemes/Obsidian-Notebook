@@ -5,7 +5,8 @@
 // the shell only draws the chrome and a few building blocks (field, note, list row, buttons) in the `.nb-ui` scope.
 import { setIcon, type Modal } from "obsidian";
 import { t } from "../../i18n";
-import { artImage, artStyleFor } from "../art/generative-art";
+import { applyArt, artRef } from "../art/art-ref";
+import { artStyleFor } from "../art/generative-art";
 import { decorate, subjectVars } from "./dom";
 import { iconSquare } from "./icon-square";
 import { shellButtonClasses, shellClasses, shellColour, type ShellButtonKind, type ShellOptions, type ShellSize } from "./modal-shell-model";
@@ -23,7 +24,6 @@ export interface ModalShell {
 }
 
 const surface = (): "light" | "dark" => (activeDocument.body.hasClass("theme-light") ? "light" : "dark");
-const cssImage = (url: string): string => (url ? `url("${url}")` : "none");
 
 /** A button for a shell footer or body. */
 export function shellButton(
@@ -61,15 +61,12 @@ function buildHead(parent: HTMLElement, o: ShellOptions, close: () => void): { h
 		x.addEventListener("click", close);
 	}
 	if (o.art !== false) {
-		const url = decorate("", () => {
+		decorate(undefined, () => {
 			const seed = o.seed ?? o.title;
-			return artImage({ seed, color, style: artStyleFor(seed), density: 0.4, intensity: 0.35, surface: surface() }, 480, 64);
-		});
-		if (url) {
 			const band = createDiv({ cls: "nb-modal-band", attr: { "aria-hidden": "true" } });
-			band.setCssProps({ "--nb-modal-band": cssImage(url) });
 			head.prepend(band);
-		}
+			applyArt(band, artRef("art", { seed, color, style: artStyleFor(seed), density: 0.4, intensity: 0.35, surface: surface() }, 480, 64), { prop: "--nb-modal-band", onNone: () => band.remove() });
+		});
 	}
 	return { head, title };
 }

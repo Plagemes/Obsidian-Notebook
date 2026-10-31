@@ -2260,6 +2260,7 @@ export const en = {
 	"create.style.flow": "Flow",
 	"create.style.orbits": "Orbits",
 	"create.style.grid": "Grid",
+	"create.style.veins": "Veins",
 	"create.template.use": "Use a saved template…",
 	"create.template.chosen": "Template: {name}",
 	"create.template.clear": "Remove template",

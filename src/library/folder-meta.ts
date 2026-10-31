@@ -18,7 +18,7 @@
  * field of a new folder explicitly, so a new folder never inherits the look of an old one with the same name.
  */
 
-import { COVER_ART_STYLES, type CoverArtStyle } from "../model/types";
+import { COVER_FAMILIES, type CoverFamily } from "../model/cover-family";
 import { EMPTY_FILE_MESSAGE } from "../storage/device-files";
 
 export const FOLDER_META_FORMAT = "obsidian-notebook-folder-meta";
@@ -44,7 +44,7 @@ export interface FolderItem {
 	color?: Stamped<string>;
 	icon?: Stamped<string>;
 	description?: Stamped<string>;
-	art?: Stamped<CoverArtStyle>;
+	art?: Stamped<CoverFamily>;
 	/** 0.13: pinned to the sidebar's "Pinned" section. The value is "1" (a boolean field kept as text like the others). */
 	pinned?: Stamped<"1">;
 }
@@ -57,7 +57,7 @@ export interface FolderMeta {
 	icon?: string;
 	description?: string;
 	/** Line-art style of the card background (`ArtStyle` of ui/art/generative-art.ts). */
-	art?: CoverArtStyle;
+	art?: CoverFamily;
 	/** 0.13: the folder is pinned to the sidebar. */
 	pinned?: boolean;
 }
@@ -98,7 +98,7 @@ export function validFolderValue(field: FolderField, v: unknown): boolean {
 		case "color": return HEX.test(v);
 		case "icon": return v.length <= 64 && ICON.test(v);
 		case "description": return v.length > 0 && v.length <= FOLDER_DESCRIPTION_MAX;
-		case "art": return (COVER_ART_STYLES as readonly string[]).includes(v);
+		case "art": return (COVER_FAMILIES as readonly string[]).includes(v);
 		case "pinned": return v === "1";
 	}
 }

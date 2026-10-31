@@ -1,7 +1,7 @@
 // Shared chrome of the Zettelkasten surfaces (0.13, DESIGN.md §3, §5): icons per kind, the subject colour of a notebook, and the
 // decorative art. Nothing here is behaviour; every picture is guarded by `decorate()` so a failure leaves the surface without it.
 import { SUBJECT_COLORS, colorFor } from "../ui/palette";
-import { artImage, emptyStateImage } from "../ui/art/generative-art";
+import { artRef, type ArtRef } from "../ui/art/art-ref";
 import { decorate } from "../ui/components/dom";
 import type { InboxItem } from "./inbox-items";
 import type { CardType } from "./card-content";
@@ -40,11 +40,11 @@ function surface(): "light" | "dark" {
 }
 
 /** A faint line-art band for a page header, as a data URL; undefined when effects are reduced or the engine fails. */
-export function headerArt(seed: string, color = palette("Indigo")): string | undefined {
-	return decorate<string | undefined>(undefined, () => artImage({ seed, color, surface: surface(), density: 0.45, intensity: 0.5 }, 720, 120, Math.min(2, activeWindow.devicePixelRatio || 1)) || undefined);
+export function headerArt(seed: string, color = palette("Indigo")): ArtRef | undefined {
+	return decorate<ArtRef | undefined>(undefined, () => artRef("art", { seed, color, surface: surface(), density: 0.45, intensity: 0.5 }, 720, 120));
 }
 
 /** The empty-state illustration, as a data URL; undefined when effects are reduced or the engine fails. */
-export function emptyArt(seed: string, color = palette("Indigo")): string | undefined {
-	return decorate<string | undefined>(undefined, () => emptyStateImage({ seed, color, surface: surface() }, 280, 150, Math.min(2, activeWindow.devicePixelRatio || 1)) || undefined);
+export function emptyArt(seed: string, color = palette("Indigo")): ArtRef | undefined {
+	return decorate<ArtRef | undefined>(undefined, () => artRef("empty", { seed, color, surface: surface() }, 280, 150));
 }

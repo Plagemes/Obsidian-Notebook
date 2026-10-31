@@ -18,7 +18,9 @@ import { writing } from "../ink/writing-guard";
 import { renderThumbnail, type ThumbnailOptions } from "./thumbnail";
 import { showNotice } from "../view/notice";
 import { colorFor, SUBJECT_COLORS } from "../ui/palette";
-import { artImage, artStyleFor, coverImage, emptyStateImage, folderIconSvg, type ArtStyle } from "../ui/art/generative-art";
+import { applyArt, artRef, type ArtRef, type ArtSource } from "../ui/art/art-ref";
+import { artStyleFor, folderIconSvg, prewarmArt, type ArtFamily, type ArtRequest } from "../ui/art/generative-art";
+import { decodeCoverArt } from "../model/cover-family";
 import type { FolderMeta } from "./folder-meta";
 import { decorate, iconButton, svgDataUrl } from "../ui/components/dom";
 import { drawSafely } from "../ui/components/error-card";
@@ -983,7 +985,7 @@ export class LibraryView extends ItemView {
 	 * wave 0.12: what a folder's card shows: its stored look (folder metadata, set in the creation dialog), else the
 	 * colour and the art style that follow from its name.
 	 */
-	private folderLook(path: string): { color: string; icon?: string; artStyle: ArtStyle; description?: string } {
+	private folderLook(path: string): { color: string; icon?: string; artStyle: ArtFamily; description?: string } {
 		const name = path.slice(path.lastIndexOf("/") + 1);
 		const m = this.host.folderMeta?.getFolderMeta(path) ?? null;
 		return { color: m?.color ?? colorFor(name), icon: m?.icon, artStyle: m?.art ?? artStyleFor(name), description: m?.description };
@@ -1022,12 +1024,28 @@ export class LibraryView extends ItemView {
 	}
 
 	/** Decoration (DESIGN.md §2.6): a cached generated artwork, or undefined when effects are reduced. */
-	private art(seed: string, color: string, w: number, h: number): string | undefined {
+	private art(seed: string, color: string, w: number, h: number): ArtRef | undefined {
 		if (!this.artOn()) return undefined;
 		return decorate(undefined, () => {
 			const surface = activeDocument.body.hasClass("theme-light") ? "light" : "dark";
-			return artImage({ seed, color, surface }, w, h, Math.min(2, activeWindow.devicePixelRatio || 1)) || undefined;
+			return artRef("art", { seed, color, surface }, w, h);
 		});
+	}
+
+	/** Home just opened: draws the art of the visible folders in the background, in order, so the cards find it ready. */
+	private prewarmSubjects(subjects: readonly Subject[]): void {
+		if (!this.artOn()) return;
+		try {
+			const surface = activeDocument.body.hasClass("theme-light") ? "light" : "dark";
+			const dpr = Math.min(2, activeWindow.devicePixelRatio || 1);
+			const requests: ArtRequest[] = subjects.slice(0, 12).map((x) => {
+				const look = this.folderLook(x.path);
+				return { kind: "art", spec: { seed: x.path, color: look.color, style: look.artStyle, surface }, w: 320, h: 128, dpr };
+			});
+			void prewarmArt(requests).catch(() => undefined);
+		} catch {
+			// Decoration only.
+		}
 	}
 
 	private subjectCardOptions(s: Subject, shape: "row" | "tile"): SubjectCardOptions {
@@ -1287,7 +1305,7 @@ export class LibraryView extends ItemView {
 		// Decoration, drawn last so it can never keep the controls away: a faint band of generated art behind the header.
 		const headerArt = this.art(this.place === "home" ? "notebook-home" : "notebook-library", paletteColor("Indigo"), 640, 140);
 		this.headerArtEl.toggleClass("is-hidden", !headerArt);
-		if (headerArt) this.headerArtEl.setCssProps({ "--nb-art": `url("${headerArt}")` });
+		applyArt(this.headerArtEl, headerArt, { onNone: () => this.headerArtEl.addClass("is-hidden") });
 	}
 
 	private showMenu(menu: Menu, anchor: HTMLElement): void {
@@ -1359,11 +1377,11 @@ export class LibraryView extends ItemView {
 	}
 
 	/** Decoration (DESIGN.md §2.6): the art engine's empty-state illustration, or undefined when effects are reduced. */
-	private emptyArt(seed: string): string | undefined {
+	private emptyArt(seed: string): ArtRef | undefined {
 		if (!this.artOn()) return undefined;
 		return decorate(undefined, () => {
 			const surface = activeDocument.body.hasClass("theme-light") ? "light" : "dark";
-			return emptyStateImage({ seed, color: paletteColor("Indigo"), surface }, 280, 150, Math.min(2, activeWindow.devicePixelRatio || 1)) || undefined;
+			return artRef("empty", { seed, color: paletteColor("Indigo"), surface }, 280, 150);
 		});
 	}
 
@@ -1757,6 +1775,7 @@ export class LibraryView extends ItemView {
 		const now = Date.now();
 		const visible = this.visible();
 		const subjects = this.subjects(tree);
+		this.prewarmSubjects(subjects);
 		const lang = getLanguage();
 		const { edits, logged } = this.homeEdits();
 		const cont = this.continueOptions(now, edits, lang);
@@ -2010,16 +2029,18 @@ export class LibraryView extends ItemView {
 	}
 
 	/** The v11 cover of a notebook as an image URL: its generated art (cached) or its cover image; null for a plain colour. */
-	private coverUrl(entry: LibraryEntry): string | null {
+	private coverSource(entry: LibraryEntry): ArtSource | null {
 		const art = entry.coverArt;
 		if (!art) return null;
 		if (art.kind === "image") {
 			const file = this.app.vault.getFileByPath(art.path);
 			return file ? this.app.vault.getResourcePath(file) : null;
 		}
-		return decorate(null, () => {
+		return decorate<ArtSource | null>(null, () => {
 			const surface = activeDocument.body.hasClass("theme-light") ? "light" : "dark";
-			return coverImage({ seed: art.seed, color: entry.cover, style: art.style, surface }, 150, 200, Math.min(2, activeWindow.devicePixelRatio || 1)) || null;
+			// A veins cover is stored as a legacy style with a marked seed (model/cover-family.ts).
+			const { family, seed } = decodeCoverArt(art);
+			return artRef("cover", { seed, color: entry.cover, style: family, surface }, 150, 200);
 		});
 	}
 
@@ -2037,10 +2058,10 @@ export class LibraryView extends ItemView {
 		const cover = main.createDiv({ cls: "notebook-lib-cover" });
 		cover.setCssProps({ "--notebook-cover": entry.cover });
 		// wave 0.12: a notebook made with a cover (format v11) shows it instead of its first page.
-		const coverUrl = this.coverUrl(entry);
-		if (coverUrl) {
+		const coverSource = this.coverSource(entry);
+		if (coverSource) {
 			cover.addClass("has-art");
-			cover.setCssProps({ "--notebook-cover-art": `url("${coverUrl}")` });
+			applyArt(cover, coverSource, { prop: "--notebook-cover-art", onNone: () => cover.removeClass("has-art") });
 		}
 		cover.createDiv({ cls: "notebook-lib-spine" });
 		const pageEl = cover.createDiv({ cls: "notebook-lib-page", attr: { "data-thumb-path": entry.path } });

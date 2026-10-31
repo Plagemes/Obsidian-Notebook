@@ -1884,6 +1884,11 @@ body.notebook-style-obsidian {
 	animation: notebook-dial-open var(--nb-motion) var(--nb-ease);
 }
 
+/* 0.13 polish: art that arrives late fades in to the element's own opacity. */
+@keyframes nb-art-in {
+	0% { opacity: 0; }
+}
+
 @keyframes notebook-dial-open {
 	from {
 		opacity: 0;
@@ -11760,4 +11765,17 @@ body.notebook-style-obsidian {
 .nb-ui .nb-hint-close:hover {
 	background: var(--nb-hover);
 	color: var(--nb-text);
+}
+
+/* ===== 0.13 polish ===== */
+/* Art that arrives after the card was drawn fades in (keyframe nb-art-in, defined before the 0.12 section). */
+.nb-ui .nb-art-fade,
+.nb-ui .notebook-lib-cover.nb-art-fade {
+	animation: nb-art-in 0.28s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+	.nb-ui .nb-art-fade,
+	.nb-ui .notebook-lib-cover.nb-art-fade {
+		animation: none;
+	}
 }

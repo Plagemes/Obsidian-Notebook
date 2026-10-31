@@ -1,6 +1,7 @@
 // The subject card (DESIGN.md §3): ONE component for every surface that shows a folder as a subject — the library
 // grid, Home and the creation dialog's folder preview — so the preview is exactly the card the folder will get.
-import { artImage, folderIconSvg, type ArtStyle } from "../art/generative-art";
+import { applyArt, artRef } from "../art/art-ref";
+import { folderIconSvg, type ArtFamily } from "../art/generative-art";
 import { decorate, pressable, setIconSafe, subjectVars, svgDataUrl } from "./dom";
 
 export interface SubjectCardOptions {
@@ -10,7 +11,7 @@ export interface SubjectCardOptions {
 	/** Seed of the artwork (the folder path). */
 	seed: string;
 	/** Art family (folder metadata); absent: `artStyleFor(seed)`, as the engine picks it. */
-	artStyle?: ArtStyle;
+	artStyle?: ArtFamily;
 	/** Lucide symbol drawn on the folder icon (folder metadata); absent or "folder": the plain folder. */
 	icon?: string;
 	/** Meta lines under the title ("12 quaderni", "248 pagine", or the folder's description). */
@@ -43,11 +44,11 @@ export function subjectCard(parent: HTMLElement, o: SubjectCardOptions): HTMLEle
 	// 0.12.3: the art and the folder picture are decoration: if they cannot be made the card is drawn without them.
 	if (o.art) {
 		const [w, h] = ART_SIZE[o.shape];
-		const url = decorate("", () => {
+		decorate(undefined, () => {
 			const surface = activeDocument.body.hasClass("theme-light") ? "light" : "dark";
-			return artImage({ seed: o.seed, color: o.color, style: o.artStyle, surface }, w, h, Math.min(2, activeWindow.devicePixelRatio || 1));
+			const artEl = card.createDiv({ cls: "nb-subject-art", attr: { "aria-hidden": "true" } });
+			applyArt(artEl, artRef("art", { seed: o.seed, color: o.color, style: o.artStyle, surface }, w, h), { onNone: () => artEl.remove() });
 		});
-		if (url) card.createDiv({ cls: "nb-subject-art", attr: { "aria-hidden": "true" } }).setCssProps({ "--nb-art": `url("${url}")` });
 	}
 	// The folder SVG is shown as an image (never parsed into the page); the symbol sits on the folder's front.
 	const glyph = o.icon && o.icon !== "folder" ? o.icon : null;

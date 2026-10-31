@@ -2261,6 +2261,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"create.style.flow": "Flusso",
 	"create.style.orbits": "Orbite",
 	"create.style.grid": "Griglia",
+	"create.style.veins": "Venature",
 	"create.template.use": "Usa un modello salvato…",
 	"create.template.chosen": "Modello: {name}",
 	"create.template.clear": "Rimuovi modello",

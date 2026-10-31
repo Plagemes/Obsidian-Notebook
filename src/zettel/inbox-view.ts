@@ -8,6 +8,7 @@ import type { InboxItem } from "./inbox-items";
 import type { InboxService } from "./inbox-service";
 import type { CardType } from "./card-content";
 import { CardListModal, CardModal, type CardAnswer, type CardListItem } from "./modals";
+import { applyArt } from "../ui/art/art-ref";
 import { emptyArt, headerArt, itemIcon, notebookColor, sourceIcon } from "./zk-ui";
 
 export const INBOX_VIEW_TYPE = "notebook-inbox";
@@ -106,7 +107,7 @@ export class InboxView extends ItemView {
 	private paintHeaderArt(): void {
 		const art = headerArt("inbox:header");
 		this.headerArtEl.toggleClass("is-hidden", !art);
-		if (art) this.headerArtEl.setCssProps({ "--nb-art": `url("${art}")` });
+		applyArt(this.headerArtEl, art, { onNone: () => this.headerArtEl.addClass("is-hidden") });
 	}
 
 	onClose(): Promise<void> {

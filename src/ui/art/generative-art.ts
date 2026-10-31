@@ -460,6 +460,19 @@ function keyOf(kind: string, spec: ArtSpec, w: number, h: number, dpr: number): 
 }
 
 /**
+ * The picture if it is already in memory (what the synchronous functions would return without drawing), else undefined.
+ * "" when the engine is off for that kind. Never draws.
+ */
+export function peekArtImage(kind: "art" | "cover" | "empty", spec: ArtSpec, w: number, h: number, dpr?: number): string | undefined {
+	const cw = Math.round(w), ch = Math.round(h);
+	if (!(cw > 0 && ch > 0)) return "";
+	if (kind !== "cover" && !artEnabled()) return "";
+	if (failures >= MAX_FAILURES) return "";
+	const key = keyOf(kind, spec, cw, ch, pixelRatio(dpr));
+	return images.has(key) ? images.get(key) : undefined;
+}
+
+/**
  * Cached PNG data URL of the art at the given size (device-pixel aware); cheap on repeat calls. "" when
  * `artEnabled()` is false. Also makes the wide, faint header bands: e.g. 1200 × 160 with `intensity: 0.2`.
  * A miss is drawn right here, on the calling thread; `artImageAsync` does the same off the main thread.
