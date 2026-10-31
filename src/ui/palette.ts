@@ -1,5 +1,7 @@
 // The subject palette (DESIGN.md §2.3). Each subject gets a colour by a stable hash of its name; the user can change it.
 // Pure logic: no obsidian, no DOM.
+import { hex, rgbOf } from "./art/art-colour";
+import { oklchRamp } from "./art/oklch";
 import { hashString } from "./art/prng";
 
 export interface SubjectColor {
@@ -41,4 +43,13 @@ export function tintFor(base: string): string {
 	if (!m) return "rgba(109,139,255,0.16)";
 	const n = parseInt(m[1]!, 16);
 	return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},0.16)`;
+}
+
+/**
+ * A ramp of `steps` colours (`#rrggbb`) from dark to light with the hue of `base`, mixed in OKLCH (perceptually even
+ * steps that keep the hue). For tints and gradients built from a subject colour; an invalid colour gives a ramp of
+ * the accent blue.
+ */
+export function rampFor(base: string, steps: number): string[] {
+	return oklchRamp(rgbOf(base), steps).map((c) => hex(c));
 }
