@@ -2,7 +2,7 @@ import { Modal, type App } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import type { ButtonDecision, ButtonSignal, IgnoreReason } from "../ink/button-contact";
 import { opensRadial } from "../ink/input-policy";
-import { EventLog, LOG_LINES, PEN_TEST_EVENT_TYPES, describeTarget, noSignalYet, type LoggedEvent } from "../ink/pen-button";
+import { EventLog, LOG_LINES, PEN_TEST_EVENT_TYPES, describeTarget, effectivePenHold, noSignalYet, penHoldMayStart, type LoggedEvent } from "../ink/pen-button";
 import { NIB_LONG_PRESS_MS, STILL_RADIUS_PX, capacitorInventory, formatCapacitorInventory, formatDelta } from "../ink/pen-hover";
 import type { NotebookSettings } from "../settings";
 import { showNotice } from "./notice";
@@ -47,6 +47,16 @@ const IGNORE_KEY: Record<IgnoreReason, MessageKey> = {
 	repeat: "penTest.ign.repeat",
 };
 
+/** The hold-still menu as the plugin reads it: the user's choice or the automatic default, and never next to the long-press gesture. */
+function holdStillOn(s: PenButtonSettings): boolean {
+	return effectivePenHold(s.penHoldStill, s.penButtonSeen) && !s.penGestureLongPress;
+}
+
+/** Is a rest of the nib spoken for (as the controller decides it, except gesture mode and the tool, which the test cannot know)? */
+function restClaimedBy(s: PenButtonSettings): boolean {
+	return penHoldMayStart({ enabled: holdStillOn(s), radialAction: opensRadial(s.penSideButton), eraser: false }) || s.penGestureLongPress;
+}
+
 /** The button signal the plugin saw, in the user's language: contextmenu Δ=+40 ms, pointerdown buttons=3, ... */
 export function signalLabel(s: ButtonSignal): string {
 	switch (s.kind) {
@@ -66,6 +76,7 @@ export function decisionLabel(d: ButtonDecision): string {
 			if (d.via === "hover") return t("penTest.dec.menuHover", { ms: String(Math.round(d.ms ?? 0)) });
 			return d.via === "late-tap" ? t("penTest.dec.menuLate") : t("penTest.dec.menu");
 		case "eraser": return t("penTest.dec.eraser");
+		case "eraser-next": return t("penTest.dec.eraserNext", { ms: String(Math.round(d.ms ?? 0)) });
 		default: return t("penTest.dec.ignored", { reason: t(IGNORE_KEY[d.reason ?? "repeat"]) });
 	}
 }
@@ -101,7 +112,7 @@ export class PenTestModal extends Modal {
 		this.log = new EventLog(
 			LOG_LINES,
 			s ? { beforeMs: s.penButtonContactBeforeMs, afterMs: s.penButtonContactAfterMs } : undefined,
-			s ? { enabled: s.penSideButton !== "off", menuAllowed: opensRadial(s.penSideButton) } : undefined,
+			s ? { enabled: s.penSideButton !== "off", menuAllowed: opensRadial(s.penSideButton), restClaimed: restClaimedBy(s), eraserNextOnClick: s.penButtonEraserNext } : undefined,
 		);
 	}
 
@@ -231,7 +242,7 @@ export class PenTestModal extends Modal {
 	private settingsLine(): string {
 		const s = this.info.penButton?.get();
 		if (!s) return "Settings: unknown";
-		return `Settings: side button=${s.penSideButton}, before-window=${s.penButtonContactBeforeMs} ms, after-window=${s.penButtonContactAfterMs} ms, still radius=${STILL_RADIUS_PX} px, nib long-press=${NIB_LONG_PRESS_MS} ms`;
+		return `Settings: side button=${s.penSideButton}, before-window=${s.penButtonContactBeforeMs} ms, after-window=${s.penButtonContactAfterMs} ms, still radius=${STILL_RADIUS_PX} px, nib long-press=${NIB_LONG_PRESS_MS} ms, hold-still menu=${holdStillOn(s)} (choice=${String(s.penHoldStill)}, button seen=${s.penButtonSeen}), long-press gesture=${s.penGestureLongPress}, rest claimed=${restClaimedBy(s)}, click arms eraser=${s.penButtonEraserNext}`;
 	}
 
 	private refresh(): void {

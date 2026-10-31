@@ -1,4 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { REST_CLAIM_MS } from "../src/ink/button-contact";
+import { DWELL_MS } from "../src/ink/gestures/trigger";
+import { HOLD_MS } from "../src/ink/pen-button";
+import { readSettings } from "../src/settings";
+import { policySettings } from "../src/view/input-settings";
 import { installFakeWindow, removeFakeWindow } from "./node-env";
 import { calls, rig, type Rig } from "./pen-contact-rig";
 
@@ -81,8 +86,8 @@ describe("a resting nib is a long-press, not the button, whatever signal came be
 	}
 });
 
-describe("other rest-based features keep working next to the side-button decision", () => {
-	it("hold to open the radial menu: a contact with a stray contextmenu before it still opens the menu once the rest is long enough, with no ink", () => {
+describe("other rest-based features keep working next to the side-button decision (non-regression guards: they pass on 0.12.3 and 0.12.4 too)", () => {
+	it("guard: hold to open the radial menu with a stray contextmenu before the landing opens the menu once, with no ink", () => {
 		const r = rig({ settings: { penButton: "radial-eraser", penLongPress: true } });
 		r.bareMenu(L - 200);
 		r.pen("pointerdown", L, X0);
@@ -94,7 +99,7 @@ describe("other rest-based features keep working next to the side-button decisio
 		expect(calls(r)).not.toContain("end");
 	});
 
-	it("hold to open the radial menu with no signal at all (as before)", () => {
+	it("guard: hold to open the radial menu with no signal at all", () => {
 		const r = rig({ settings: { penButton: "radial-eraser", penLongPress: true } });
 		r.pen("pointerdown", L, X0);
 		for (let t = 40; t <= 900; t += 40) r.pen("pointermove", L + t, X0);
@@ -164,3 +169,93 @@ function holdFrom(r: Rig, holdMs: number): void {
 	r.pen("pointerup", L + holdMs + 21 * 16, X0 + 126);
 	r.at(L + holdMs + 3000);
 }
+
+describe("review fixes (0.12.5)", () => {
+	const settings = { penButton: "radial-eraser" as const, penLongPress: false, restGesture: true };
+
+	it("REST_CLAIM_MS is the dwell time of the long-press gesture and not longer than the hold-still menu", () => {
+		expect(REST_CLAIM_MS).toBe(DWELL_MS);
+		expect(REST_CLAIM_MS).toBeLessThanOrEqual(HOLD_MS);
+	});
+
+	it("a weak contact that rests, then is cancelled by the WebView, then lifts: no menu after a long-press (cancel applies the rest rule)", () => {
+		const r = rig({ settings });
+		r.bareMenu(L - 60);
+		r.pen("pointerdown", L, X0);
+		for (let t = 40; t <= 700; t += 40) r.pen("pointermove", L + t, X0);
+		r.bareMenu(L + 720);
+		r.pen("pointercancel", L + 722, X0);
+		r.at(L + 4000);
+		expect(r.menus).toEqual([]);
+		expect(r.starts.some((s) => s.eraser)).toBe(false);
+	});
+
+	it("a tap with a contextmenu-only button held 400-640 ms with a rest feature on still opens the menu on the lift, no ink", () => {
+		for (const hold of [400, 500, 640]) {
+			const r = rig({ settings });
+			r.bareMenu(L - 60);
+			r.pen("pointerdown", L, X0);
+			for (let t = 40; t < hold; t += 40) r.pen("pointermove", L + t, X0 + (t % 80 === 0 ? 1 : 0));
+			r.pen("pointerup", L + hold, X0);
+			r.at(L + 4000);
+			expect(r.menus.map((m) => m[2])).toEqual(["click"]);
+			expect(calls(r)).not.toContain("end");
+		}
+	});
+
+	it("a drag with the button after a 500 ms rest (before the rest was taken) is still the eraser", () => {
+		const r = rig({ settings });
+		r.bareMenu(L - 60);
+		holdThenDraw(r, 500);
+		expect(r.starts.some((s) => s.eraser)).toBe(true);
+	});
+
+	it("once the rest is taken, a later signal cannot turn the ink into the eraser (terminal state)", () => {
+		const r = rig({ settings: { ...settings } });
+		r.bareMenu(L - 60);
+		r.pen("pointerdown", L, X0);
+		for (let t = 40; t <= 700; t += 40) r.pen("pointermove", L + t, X0 + (t % 80 === 0 ? 1 : 0));
+		for (let i = 1; i <= 8; i++) r.pen("pointermove", L + 700 + i * 16, X0 + i * 6);
+		// The late signals of the old rules: a contextmenu inside a widened after-window, a barrel move, a post-lift contextmenu.
+		r.pen("pointermove", L + 840, X0 + 60, { buttons: 3 });
+		r.bareMenu(L + 850);
+		r.pen("pointerup", L + 860, X0 + 70);
+		r.bareMenu(L + 900);
+		r.at(L + 4000);
+		expect(r.starts.some((s) => s.eraser)).toBe(false);
+		expect(r.menus).toEqual([]);
+		expect(r.log).not.toContain("retract");
+	});
+
+	it("the rest is claimed only while a rest feature can start: no gesture armed (mode on, other tool) means a slow drag with the button erases", () => {
+		const r = rig({ settings: { penButton: "radial-eraser", penLongPress: false }, restGestureArmed: () => false });
+		r.bareMenu(L - 60);
+		holdThenDraw(r, 800);
+		expect(r.starts.some((s) => s.eraser)).toBe(true);
+		const r2 = rig({ settings: { penButton: "radial-eraser", penLongPress: false }, restGestureArmed: () => true });
+		r2.bareMenu(L - 60);
+		holdThenDraw(r2, 800);
+		expect(r2.starts.some((s) => s.eraser)).toBe(false);
+	});
+
+	it("using the side button never switches the long-press gesture off: a button tap first, then rest and draw, is ink for the gesture", () => {
+		const saved = readSettings({ penGestureLongPress: true });
+		const r = rig({ settings: policySettings(saved) });
+		// A tap with the button: menu; the app notes that the button was seen (the automatic hold-still default goes off).
+		r.bareMenu(L - 60);
+		r.pen("pointerdown", L, X0);
+		r.pen("pointerup", L + 90, X0);
+		r.at(L + 1500);
+		expect(r.menus).toHaveLength(1);
+		expect(r.seen()).toBeGreaterThan(0);
+		const after = policySettings(readSettings({ penGestureLongPress: true, penButtonSeen: true }));
+		expect(after.restGesture).toBe(true);
+		expect(after.penLongPress).toBe(false);
+		expect(policySettings(readSettings({ penGestureLongPress: true })).penLongPress).toBe(false);
+		// The long-press gesture is independent of penButtonSeen; and the rest of the next contact is ink for the dwell timer.
+		const r2 = rig({ settings: { ...after, palmRejectionMs: 0, fingerDrawing: false } });
+		holdThenDraw(r2, 800);
+		expect(calls(r2)).toEqual(["start", "end"]);
+		expect(r2.starts[0]!.eraser).toBe(false);
+	});
+});

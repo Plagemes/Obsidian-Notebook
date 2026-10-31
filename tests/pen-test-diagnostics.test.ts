@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { describeDecision } from "../src/ink/button-contact";
-import { EventLog, type LoggedEvent } from "../src/ink/pen-button";
+import { EventLog, formatEvent, type LoggedEvent } from "../src/ink/pen-button";
 
 // 0.12.5: the Pen button test writes what a developer needs from one pasted log: times relative to the pen's landing and lift,
 // the pointer type, button / buttons and pressure of every line, the plugin's signal and decision beside the event that caused
@@ -129,5 +129,41 @@ describe("Pen button test log: a menu from the hover-click timer is told apart f
 		expect(describeDecision({ kind: "menu", via: "tap" })).toBe("menu (tap)");
 		expect(describeDecision({ kind: "menu", via: "late-tap" })).toBe("menu (tap, contextmenu after the lift)");
 		expect(describeDecision({ kind: "menu", via: "hover", ms: 500 })).toContain("hover click");
+	});
+});
+
+describe("Pen button test log mirrors the plugin's decision (0.12.5 review)", () => {
+	const rest = (log: EventLog) => {
+		log.add(bare(1000));
+		log.add(down(1060));
+		for (let t = 100; t <= 900; t += 40) log.add(move(1000 + t, 400));
+		log.add(move(1950, 440));
+	};
+
+	it("with a rest feature on, rest-then-draw on a contextmenu alone is ink, as the plugin writes it; without one it is the eraser", () => {
+		const on = new EventLog(200, { beforeMs: 500, afterMs: 350 }, { enabled: true, menuAllowed: true, restClaimed: true });
+		rest(on);
+		expect(on.decisionText).toBe("ignored: nib resting (a long-press, not the button)");
+		const off = new EventLog(200, { beforeMs: 500, afterMs: 350 }, { enabled: true, menuAllowed: true, restClaimed: false });
+		rest(off);
+		expect(off.decisionText).toBe("eraser (drag)");
+	});
+
+	it("the barrel bit on a pointerdown keeps its SIDE BUTTON marker next to the plugin's reading", () => {
+		const log = new EventLog();
+		log.add(down(1000, { button: 2, buttons: 3 }));
+		const line = log.text();
+		expect(line).toContain("=> SIDE BUTTON; ");
+		expect(line).toContain("decision: waiting");
+		expect(formatEvent(ev({ kind: "pointerdown", t: 1, button: 2, buttons: 3, pressure: 0.5, note: "decision: waiting" }))).toContain("=> SIDE BUTTON; decision: waiting");
+		expect(formatEvent(ev({ kind: "pointerdown", t: 1, button: 0, buttons: 1, pressure: 0.5, note: "x" }))).toContain("=> x");
+	});
+
+	it("a hover click with 'Button click: next stroke erases' on says the eraser is armed, not that a menu opens", () => {
+		const log = new EventLog(80, { beforeMs: 500, afterMs: 350 }, { enabled: true, menuAllowed: true, eraserNextOnClick: true });
+		log.add(bare(1000));
+		log.tick(1600);
+		expect(log.decisionText).toContain("eraser armed for the next stroke (hover click");
+		expect(log.text()).not.toContain("menu (hover click");
 	});
 });

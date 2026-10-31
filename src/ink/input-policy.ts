@@ -50,8 +50,8 @@ export interface InputSettings {
 	 */
 	penLongPress?: boolean;
 	/**
-	 * 0.12.5: a rest of the nib starts a pen gesture (setting *Long press starts a gesture*). The view owns that trigger; the
-	 * controller only needs to know that a resting nib is spoken for, so that a stray button signal never takes it for a drag.
+	 * 0.12.5: a rest of the nib starts a pen gesture (setting *Long press starts a gesture*). The view owns that trigger and
+	 * answers more precisely through `PointerHandlers.restGestureArmed` (gesture mode, tool); this is the fallback.
 	 */
 	restGesture?: boolean;
 	/**

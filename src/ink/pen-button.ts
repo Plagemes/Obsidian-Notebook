@@ -554,7 +554,10 @@ export function formatEvent(ev: LoggedEvent): string {
 	if (ev.sinceDown !== undefined) parts.push(`dDown=${rel(ev.sinceDown)}`);
 	if (ev.sinceUp !== undefined) parts.push(`dUp=${rel(ev.sinceUp)}`);
 	const verdict = describeSideButton(ev);
-	parts.push(ev.note ? `=> ${ev.note}` : verdict === "side-button" ? "=> SIDE BUTTON" : verdict === "eraser" ? "=> eraser" : "=> -");
+	// The plugin's reading of the event never hides what the event itself is (a pointerdown with the barrel bit stays "SIDE BUTTON").
+	const label = verdict === "side-button" ? "SIDE BUTTON" : verdict === "eraser" ? "eraser" : null;
+	const note = ev.note && label && !ev.note.startsWith(label) && !ev.note.includes(`${label} (`) ? `${label}; ${ev.note}` : ev.note;
+	parts.push(note ? `=> ${note}` : label ? `=> ${label}` : "=> -");
 	return parts.join(" ");
 }
 
@@ -588,14 +591,17 @@ export class EventLog {
 	private shownDecision: string | null = null;
 
 	/**
-	 * `button`: the side-button setting as the plugin reads it: `enabled` (not "Nothing") and `menuAllowed` (a tap opens the
-	 * radial menu); the defaults are the default setting's.
+	 * `button`: the side-button setting as the plugin reads it: `enabled` (not "Nothing"), `menuAllowed` (a tap opens the
+	 * radial menu), `restClaimed` (a rest of the nib is spoken for by the hold-still menu or the long-press gesture) and
+	 * `eraserNextOnClick` (a click while hovering arms the eraser); the defaults are the default setting's.
 	 */
-	constructor(private readonly max = LOG_LINES, windows: ButtonWindows = DEFAULT_BUTTON_WINDOWS, button: { enabled: boolean; menuAllowed: boolean } = { enabled: true, menuAllowed: true }) {
+	constructor(private readonly max = LOG_LINES, windows: ButtonWindows = DEFAULT_BUTTON_WINDOWS, button: { enabled: boolean; menuAllowed: boolean; restClaimed?: boolean; eraserNextOnClick?: boolean } = { enabled: true, menuAllowed: true }) {
 		this.timeline = new ButtonTimeline(windows);
 		this.contact = new ButtonContact(() => windows);
 		this.contact.enabled = button.enabled;
 		this.contact.menuAllowed = button.menuAllowed;
+		this.contact.restClaimed = button.restClaimed === true;
+		this.contact.eraserNextOnClick = button.eraserNextOnClick === true;
 	}
 
 	/** The button signal the plugin last saw, e.g. `contextmenu Δ=+40 ms`, `pointerdown buttons=3`; null before any. */
