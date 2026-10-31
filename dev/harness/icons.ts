@@ -3,6 +3,9 @@
  * for the harness (24 × 24, 2 px strokes); not Lucide's artwork. Unknown names fall back to two letters.
  */
 const P: Record<string, string> = {
+	// 0.13 ds-notebook: the banners' icon squares
+	"alert-triangle": "M12 3L2 20h20z M12 10v4 M12 17h.01",
+	"repeat": "M17 2l4 4-4 4 M3 11V9a3 3 0 0 1 3-3h15 M7 22l-4-4 4-4 M21 13v2a3 3 0 0 1-3 3H3",
 	// Settings section headers (view/settings-schema.ts) that had no stand-in
 	"pen-line": "M12 20h9 M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z",
 	"share": "M4 12v8h16v-8 M16 6l-4-4-4 4 M12 2v13",

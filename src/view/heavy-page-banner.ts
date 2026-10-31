@@ -1,3 +1,4 @@
+import { setIcon } from "obsidian";
 import { t } from "../i18n";
 import type { HeavyReason, PageLoad } from "../ink/heavy-page";
 
@@ -53,6 +54,8 @@ export class HeavyPageBanner {
 		if (key === this.key && this.visible) return;
 		this.key = key;
 		this.el.empty();
+		// 0.13: decoration, an icon square (never a control).
+		setIcon(this.el.createSpan({ cls: "notebook-heavy-icon", attr: { "aria-hidden": "true" } }), "alert-triangle");
 		this.el.createSpan({
 			cls: "notebook-heavy-text",
 			text: t("heavy.message", { n: String(info.pageIndex + 1), why: heavyReasonText(info) }),

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### ds-notebook
+- **The notebook's editing chrome on the design system** (DESIGN.md): the toolbar's tool and history groups are quiet capsules, the pen indicator, page indicator and save dot are legible at a glance, the options popovers, the *All actions* and page sheets and the contextual bar are floating glass panels (radius, hairline, elevation, backdrop blur), sheet rows have an icon square (accent when on, danger tint for destructive ones) and wrap long labels, the radial dial is the navy disc with a hairline ring and an accent halo in both themes, notebook tabs are pills, the heavy-page and practice banners are glass cards with an icon square (decoration, never a control), the status bar item and the page-operations menu follow the tokens. Light and dark, and *Follow Obsidian theme*. Behaviour is unchanged: every control works as before.
+- **Touch targets**: the toolbar buttons are 44 px at the normal size and 40 px at the compact size (were 40 and 36); on a view too narrow for eight 44 px buttons (a 360 px phone) the normal size uses 40 px so the row of tools stays on one line (`toolbarScaleFor`); on touch the sheet's close button, tabs, banner buttons and chips are 44 px. Motion, blur and glows are off under reduced motion.
+- No change to the notebook format, the canvas, the input or the stroke pipeline.
 ## 0.12.4 — 2026-10-31
 
 The S Pen side button on the Samsung tablet (Obsidian for Android), reworked around what the device really does. **Not verified on the device**: checked in unit tests that replay recorded pen sequences and in the browser harness only. Manual re-check: steps 493-499 in `docs/testing.md`. No change to the notebook format (still v11) or to the stroke engine and renderer.

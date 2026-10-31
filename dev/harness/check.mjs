@@ -89,6 +89,9 @@ SCENARIOS.push({ doc: "settings", theme: "light", device: "desktop", lowLatency:
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "create", theme, device, lowLatency: false });
 // 0.12.1: the whole plugin's onload against the stub: what it registers, the settings tab through both of Obsidian's paths,
 // and injected failures (a failing step, failing settings definitions, an unreadable data.json).
+// 0.13 ds-notebook: the notebook's editing chrome (toolbar, options, sheets, contextual bar, dial, banner) at tablet and
+// phone widths, light and dark; screenshots in dist/shots/design/ (notebook-<state>-<theme>-<device>.png).
+for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone", "narrow"]) SCENARIOS.push({ doc: "chrome", theme, device, lowLatency: false });
 SCENARIOS.push({ doc: "plugin", theme: "dark", device: "tablet", lowLatency: false });
 SCENARIOS.push({ doc: "plugin", theme: "light", device: "desktop", lowLatency: false });
 
@@ -190,7 +193,7 @@ async function main() {
 					await sleep(100);
 				}
 				await cdp.evaluate("window.harness.ready.then(() => true)");
-				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "chrome" ? "window.harness.checkChrome()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}
@@ -221,6 +224,20 @@ async function main() {
 				} catch (e) {
 					problems.push(`folder tab screenshot: ${e.message}`);
 				}
+			}
+			// 0.13 ds-notebook: one screenshot per state of the chrome, for review.
+			if (s.doc === "chrome") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["toolbar", "options-pen", "options-eraser", "sheet", "page-sheet", "selection", "radial-main", "radial-color", "heavy"]) {
+					try {
+						await cdp.evaluate(`window.harness.chromeShot('${state}').then(() => true)`);
+						writeFileSync(join(designDir, `notebook-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`${state} screenshot: ${e.message}`);
+					}
+				}
+				await cdp.evaluate("window.harness.closeAll().then(() => true)");
 			}
 			// 0.12: review screenshots of Home and the library, then their controls (bell, rail, quick actions, search, star, list).
 			if (s.doc === "library") {

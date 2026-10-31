@@ -8467,3 +8467,724 @@ body.notebook-style-obsidian {
 		transition: none;
 	}
 }
+
+
+/* ===== 0.13 ds-notebook ===== */
+/* The notebook's editing chrome (toolbar, contextual bar, sheets and popovers, the radial dial, tabs, banners, the status
+   bar item, the page-operations menu) on the design system: DESIGN.md §2 tokens, §2.5 radii and elevation, §7 motion and
+   targets. Floating "glass" panels use the panel token at high alpha with a light blur; the blur and the glows are
+   decoration and go away with reduced motion. Behaviour and layout budgets are unchanged (ui/layout.ts counts buttons,
+   not decoration). Every rule is scoped under the view root (above Obsidian's own button rules, specificity 0,1,1), the
+   status bar item and the menu carry .nb-ui. tests/styles.test.ts keeps the scope. */
+.workspace-leaf-content .view-content.notebook-view {
+	--nb-glass: var(--nb-panel);
+	--nb-glass: color-mix(in srgb, var(--nb-panel) 88%, transparent);
+	--nb-glass-strong: var(--nb-panel);
+	--nb-glass-strong: color-mix(in srgb, var(--nb-panel) 95%, transparent);
+	--nb-glass-blur: blur(16px) saturate(1.15);
+	--nb-tint-warn: color-mix(in srgb, var(--nb-star) 18%, transparent);
+	--nb-tint-danger: color-mix(in srgb, var(--nb-danger) 16%, transparent);
+}
+
+/* Buttons that Obsidian would style as grey pills (button:not(.clickable-icon), 0,1,1): neutral inside the view. */
+.workspace-leaf-content .view-content.notebook-view :is(.notebook-tab, .notebook-page-indicator, .notebook-menu-item, .notebook-chip-choice, .notebook-heavy-actions button, .notebook-practice-button) {
+	height: auto;
+	box-shadow: none;
+	font-family: inherit;
+	line-height: 1.25;
+	white-space: nowrap;
+}
+
+/* --- primary toolbar: a quiet dock; tools and history sit in capsules --- */
+.workspace-leaf-content .view-content.notebook-view .notebook-toolbar {
+	gap: 6px 8px;
+	padding: 6px;
+	border-bottom: 1px solid var(--nb-border);
+	background: var(--nb-bg-elevated);
+	box-shadow: 0 10px 22px -16px rgba(0, 0, 0, 0.6);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-toolbar-divider {
+	display: none;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-tool-group,
+.workspace-leaf-content .view-content.notebook-view .notebook-toolbar-actions > .notebook-toolbar-group,
+.workspace-leaf-content .view-content.notebook-view .notebook-quick {
+	gap: 2px;
+	padding: 2px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-panel);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-quick {
+	margin-left: 4px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-tool {
+	border-radius: var(--nb-radius-icon);
+	transition: background-color var(--nb-motion-fast) var(--nb-ease), color var(--nb-motion-fast) var(--nb-ease), transform var(--nb-motion-fast) var(--nb-ease), box-shadow var(--nb-motion-fast) var(--nb-ease);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-tool:active {
+	transform: scale(0.95);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-tool.is-active {
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+	box-shadow: inset 0 0 0 1px var(--nb-accent-strong);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-tool-button.is-active::before {
+	bottom: 4px;
+	width: 12px;
+	height: 3px;
+	margin-left: -6px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-tool:focus-visible,
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item:focus-visible,
+.workspace-leaf-content .view-content.notebook-view .notebook-page-indicator:focus-visible,
+.workspace-leaf-content .view-content.notebook-view .notebook-chip-choice:focus-visible,
+.workspace-leaf-content .view-content.notebook-view .notebook-tab:focus-visible,
+.workspace-leaf-content .view-content.notebook-view .notebook-practice-button:focus-visible,
+.workspace-leaf-content .view-content.notebook-view .notebook-heavy-actions button:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 1px;
+}
+
+/* The pen indicator and the buttons at the right end of the bar. */
+.workspace-leaf-content .view-content.notebook-view .notebook-chip {
+	background: var(--nb-panel);
+	box-shadow: inset 0 0 0 1px var(--nb-border);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-chip.is-active {
+	background: var(--nb-accent-bg);
+	box-shadow: inset 0 0 0 1px var(--nb-accent-strong);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-chip::before {
+	border-color: var(--nb-border-strong);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-page-indicator {
+	min-height: var(--nb-target, 44px);
+	padding: 0 14px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background-color: var(--nb-panel);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-page-indicator:hover {
+	background-color: var(--nb-tile);
+	color: var(--nb-text);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-page-indicator.is-active {
+	border-color: var(--nb-accent-strong);
+	background-color: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-more-button {
+	border: 1px solid var(--nb-border);
+	background: var(--nb-panel);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-more-button.is-active {
+	border-color: var(--nb-accent-strong);
+	background: var(--nb-accent-bg);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-readonly-chip {
+	border: 1px solid var(--nb-accent-strong);
+}
+
+/* Save state: the dot is the state; a soft halo makes it readable at a glance. */
+.workspace-leaf-content .view-content.notebook-view .notebook-status {
+	font-variant-numeric: tabular-nums;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-status-dot {
+	background: var(--nb-text-faint);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-status[data-kind="ok"] .notebook-status-dot {
+	background: var(--nb-success);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--nb-success) 22%, transparent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-status[data-kind="pending"] .notebook-status-dot {
+	background: var(--nb-star);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--nb-star) 24%, transparent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-status[data-kind="error"] {
+	color: var(--nb-danger);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-status[data-kind="error"] .notebook-status-dot {
+	background: var(--nb-danger);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--nb-danger) 24%, transparent);
+}
+
+/* --- popovers under the bar (tool options) and the action sheets: floating glass panels --- */
+.workspace-leaf-content .view-content.notebook-view .notebook-popover {
+	gap: 10px;
+	padding: 12px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-panel);
+	background: var(--nb-glass-strong);
+	-webkit-backdrop-filter: var(--nb-glass-blur);
+	backdrop-filter: var(--nb-glass-blur);
+	box-shadow: var(--nb-shadow-float);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-segmented {
+	padding: 3px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-tile);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-segmented > .notebook-tool {
+	border-radius: var(--nb-radius-pill);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-segmented > .notebook-tool.is-active {
+	background: var(--nb-accent-bg);
+	box-shadow: inset 0 0 0 1px var(--nb-accent-strong);
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-sheet {
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-panel);
+	background: var(--nb-glass-strong);
+	-webkit-backdrop-filter: var(--nb-glass-blur);
+	backdrop-filter: var(--nb-glass-blur);
+	box-shadow: var(--nb-shadow-float);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-sheet.is-bottom {
+	border-radius: 20px 20px 0 0;
+	border-bottom: 0;
+	box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.3);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-sheet-grabber {
+	width: 40px;
+	background: var(--nb-border-strong);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-sheet-head {
+	padding: 10px 10px 0 18px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-sheet-title {
+	font-size: 17px;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-sheet-search {
+	min-height: var(--nb-target, 44px);
+	border: 1px solid var(--nb-border);
+	background: var(--nb-tile);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-sheet-search:focus-within {
+	border-color: var(--nb-accent);
+	box-shadow: 0 0 0 2px var(--nb-accent-bg);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-sheet-search input {
+	height: 40px;
+	color: var(--nb-text);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-sheet-section + .notebook-sheet-section {
+	margin-top: 6px;
+	padding-top: 4px;
+	border-top-color: var(--nb-border);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-sheet-section-title {
+	font-size: var(--nb-fs-label);
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	color: var(--nb-text-faint);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-sheet-empty {
+	color: var(--nb-text-muted);
+}
+
+/* Rows: an icon square (a quiet tile; accent when on, danger tint for a destructive one), the label, an optional switch. */
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item {
+	min-height: 48px;
+	gap: 12px;
+	padding: 0 10px 0 8px;
+	border-radius: var(--nb-radius-tile);
+	font-size: var(--nb-fs-row);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item.is-danger {
+	color: var(--nb-danger);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-icon {
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	border-radius: var(--nb-radius-icon);
+	background: var(--nb-tile);
+	color: var(--nb-text-muted);
+	transition: background-color var(--nb-motion-fast) var(--nb-ease), color var(--nb-motion-fast) var(--nb-ease);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-icon .svg-icon {
+	width: 18px;
+	height: 18px;
+	stroke-width: 1.75;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item:hover .notebook-menu-icon {
+	color: var(--nb-text);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item.is-active .notebook-menu-icon,
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item.is-checked .notebook-menu-icon {
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item.is-danger .notebook-menu-icon {
+	background: var(--nb-tint-danger);
+	color: var(--nb-danger);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-switch {
+	width: 40px;
+	height: 24px;
+	background: var(--nb-border-strong);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-switch::after {
+	width: 20px;
+	height: 20px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item.is-checked .notebook-switch {
+	background: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item.is-checked .notebook-switch::after {
+	transform: translateX(16px);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-chips {
+	padding-left: 46px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-chip-choice {
+	min-height: 40px;
+	padding: 0 16px;
+	border: 1px solid var(--nb-border-strong);
+	background-color: transparent;
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-chip-choice.is-active {
+	border-color: var(--nb-accent);
+	background-color: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+/* --- contextual bar: a floating glass pill; its label is an icon square and a name --- */
+.workspace-leaf-content .view-content.notebook-view .notebook-context-main,
+.workspace-leaf-content .view-content.notebook-view .notebook-context-second,
+.workspace-leaf-content .view-content.notebook-view .notebook-selection-styles > .notebook-toolbar-group {
+	gap: 2px;
+	padding: 4px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-glass);
+	-webkit-backdrop-filter: var(--nb-glass-blur);
+	backdrop-filter: var(--nb-glass-blur);
+	box-shadow: var(--nb-shadow-float);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-context-main > .notebook-tool.is-danger {
+	color: var(--nb-danger);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-context-main > .notebook-tool.is-danger:hover {
+	background: var(--nb-tint-danger);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-context-label {
+	gap: 8px;
+	padding: 0 12px 0 4px;
+	margin-right: 4px;
+	border-right: 1px solid var(--nb-border);
+	font-size: var(--nb-fs-chip);
+	font-weight: 600;
+	color: var(--nb-text);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-context-label-icon {
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: var(--nb-radius-icon);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-context-label-icon .svg-icon {
+	width: 18px;
+	height: 18px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-context-chip {
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+/* --- the radial dial: a navy disc with a hairline ring and an accent halo, the same dark in light and dark --- */
+.workspace-leaf-content .view-content.notebook-view .notebook-radial {
+	--nb-dial-bg: #0f1522;
+	--nb-dial-bg-2: #1b2539;
+	--nb-dial-ring: rgba(255, 255, 255, 0.1);
+	--nb-dial-fg: #f4f6fb;
+	--nb-dial-muted: rgba(244, 246, 251, 0.68);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-dial {
+	background: radial-gradient(circle at 50% 30%, var(--nb-dial-bg-2) 0%, var(--nb-dial-bg) 68%);
+	box-shadow: var(--nb-shadow-3), 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 40px -8px var(--nb-accent-bg), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-dial-item.is-hover {
+	background: var(--nb-accent-strong);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-dial-item.is-active {
+	box-shadow: 0 0 0 2px var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-dial-item.is-case.is-active {
+	background: var(--nb-accent-bg);
+	box-shadow: inset 0 0 0 1.5px var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-dial-item.is-raised {
+	background: var(--nb-dial-fg);
+	color: var(--nb-dial-bg);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-dial-knob {
+	stroke: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-dial-step.is-on {
+	fill: var(--nb-accent);
+}
+
+/* --- tabs of the open notebooks: pills in a quiet strip, the open one tinted --- */
+.workspace-leaf-content .view-content.notebook-view .notebook-tabs {
+	gap: 6px;
+	padding: 6px 8px;
+	background: var(--nb-bg-elevated);
+	border-bottom: 1px solid var(--nb-border);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-tab {
+	min-height: 36px;
+	padding: 0 14px;
+	border: 1px solid transparent;
+	border-radius: var(--nb-radius-pill);
+	background-color: transparent;
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+	color: var(--nb-text-muted);
+	transition: background-color var(--nb-motion-fast) var(--nb-ease), color var(--nb-motion-fast) var(--nb-ease);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-tab:hover {
+	background-color: var(--nb-hover);
+	color: var(--nb-text);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-tab.is-active {
+	border-color: var(--nb-accent-strong);
+	background-color: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+/* --- banners: the heavy-page warning and the practice strip are floating glass cards with an icon square --- */
+.workspace-leaf-content .view-content.notebook-view .notebook-heavy,
+.workspace-leaf-content .view-content.notebook-view .notebook-practice-banner {
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-panel);
+	background: var(--nb-glass-strong);
+	-webkit-backdrop-filter: var(--nb-glass-blur);
+	backdrop-filter: var(--nb-glass-blur);
+	box-shadow: var(--nb-shadow-float);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-meta);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-heavy {
+	max-width: 600px;
+	align-items: center;
+	gap: 8px 12px;
+	padding: 8px 8px 8px 10px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-heavy-text {
+	flex: 1 1 200px;
+	color: var(--nb-text-muted);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-heavy-icon,
+.workspace-leaf-content .view-content.notebook-view .notebook-practice-icon {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: var(--nb-radius-icon);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-heavy-icon {
+	background: var(--nb-tint-warn);
+	color: var(--nb-star);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-heavy-icon .svg-icon,
+.workspace-leaf-content .view-content.notebook-view .notebook-practice-icon .svg-icon {
+	width: 18px;
+	height: 18px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-practice-banner {
+	gap: 6px 8px;
+	padding: 6px 8px 6px 6px;
+	border-radius: var(--nb-radius-tile);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-practice-title {
+	padding: 0 4px;
+	font-size: var(--nb-fs-row);
+	font-weight: 600;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-practice-note {
+	color: var(--nb-text-muted);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-heavy-actions button,
+.workspace-leaf-content .view-content.notebook-view .notebook-practice-button {
+	min-height: 40px;
+	padding: 0 16px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background-color: var(--nb-tile);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+	transition: background-color var(--nb-motion-fast) var(--nb-ease), border-color var(--nb-motion-fast) var(--nb-ease);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-heavy-actions button:hover,
+.workspace-leaf-content .view-content.notebook-view .notebook-practice-button:hover {
+	background-color: var(--nb-hover);
+	border-color: var(--nb-border-strong);
+	color: var(--nb-text);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-heavy-actions button.mod-cta {
+	border-color: transparent;
+	background-color: var(--nb-accent);
+	color: #ffffff;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-heavy-actions button.mod-cta:hover {
+	background-color: var(--nb-accent);
+	filter: brightness(1.08);
+	color: #ffffff;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-practice-peek.is-held,
+.workspace-leaf-content .view-content.notebook-view .notebook-practice-timer.is-running {
+	border-color: transparent;
+	background-color: var(--nb-accent);
+	color: #ffffff;
+}
+
+/* --- Obsidian's status bar item (desktop) --- */
+.nb-ui.notebook-statusbar {
+	padding: 0 8px;
+	border-radius: 8px;
+	font-variant-numeric: tabular-nums;
+	transition: background-color var(--nb-motion-fast) var(--nb-ease);
+}
+
+.nb-ui.notebook-statusbar:hover {
+	background: var(--nb-hover);
+}
+
+.nb-ui.notebook-statusbar:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: -2px;
+}
+
+.nb-ui.notebook-statusbar .notebook-statusbar-dot {
+	background: var(--nb-text-faint);
+}
+
+.nb-ui.notebook-statusbar .notebook-statusbar-dot[data-kind="ok"] {
+	background: var(--nb-success);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--nb-success) 22%, transparent);
+}
+
+.nb-ui.notebook-statusbar .notebook-statusbar-dot[data-kind="pending"] {
+	background: var(--nb-star);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--nb-star) 24%, transparent);
+}
+
+.nb-ui.notebook-statusbar .notebook-statusbar-dot[data-kind="error"] {
+	background: var(--nb-danger);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--nb-danger) 24%, transparent);
+}
+
+/* --- the page-operations menu (Obsidian's Menu, tagged by view/page-ops-menu) --- */
+.nb-ui.nb-menu {
+	padding: 6px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-panel);
+	background: var(--nb-panel);
+	box-shadow: var(--nb-shadow-float);
+}
+
+.nb-ui.nb-menu .menu-item {
+	min-height: 40px;
+	border-radius: var(--nb-radius-s);
+}
+
+.nb-ui.nb-menu .menu-item.selected,
+.nb-ui.nb-menu .menu-item:hover {
+	background: var(--nb-hover);
+}
+
+.nb-ui.nb-menu .menu-item-icon {
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.nb-menu .menu-item.mod-warning,
+.nb-ui.nb-menu .menu-item.mod-warning .menu-item-icon {
+	color: var(--nb-danger);
+}
+
+.nb-ui.nb-menu .menu-separator {
+	margin: 4px 6px;
+	border-color: var(--nb-border);
+}
+
+/* A long label wraps inside its row instead of pushing the icon square out of it. */
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-label {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item {
+	height: auto;
+	padding-block: 4px;
+}
+
+/* Touch: every control of the chrome is at least 44 px. */
+@media (pointer: coarse) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-sheet-close {
+		min-width: 44px;
+		min-height: 44px;
+	}
+
+	.workspace-leaf-content .view-content.notebook-view .notebook-tab {
+		min-height: 44px;
+	}
+
+	.workspace-leaf-content .view-content.notebook-view .notebook-heavy-actions button,
+	.workspace-leaf-content .view-content.notebook-view .notebook-practice-button,
+	.workspace-leaf-content .view-content.notebook-view .notebook-chip-choice {
+		min-height: 44px;
+	}
+
+	.nb-ui.nb-menu .menu-item {
+		min-height: 48px;
+	}
+}
+
+/* A phone: the sheet is full width (bottom sheet); the banners lose their icon squares' left padding. */
+@media (max-width: 480px) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-page-indicator {
+		padding: 0 10px;
+	}
+
+	.workspace-leaf-content .view-content.notebook-view .notebook-heavy {
+		padding: 8px;
+	}
+
+	.workspace-leaf-content .view-content.notebook-view .notebook-context-label {
+		padding: 0 6px 0 2px;
+	}
+}
+
+/* Reduced motion and effects: no blur, no glows, no transitions or entrance animations. */
+@media (prefers-reduced-motion: reduce) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-popover,
+	.workspace-leaf-content .view-content.notebook-view .notebook-sheet,
+	.workspace-leaf-content .view-content.notebook-view .notebook-context-main,
+	.workspace-leaf-content .view-content.notebook-view .notebook-context-second,
+	.workspace-leaf-content .view-content.notebook-view .notebook-selection-styles > .notebook-toolbar-group,
+	.workspace-leaf-content .view-content.notebook-view .notebook-heavy,
+	.workspace-leaf-content .view-content.notebook-view .notebook-practice-banner {
+		-webkit-backdrop-filter: none;
+		backdrop-filter: none;
+	}
+
+	.workspace-leaf-content .view-content.notebook-view .notebook-dial {
+		box-shadow: var(--nb-shadow-3), 0 0 0 1px rgba(255, 255, 255, 0.08);
+	}
+
+	.workspace-leaf-content .view-content.notebook-view .notebook-status[data-kind] .notebook-status-dot,
+	.nb-ui.notebook-statusbar .notebook-statusbar-dot[data-kind] {
+		box-shadow: none;
+	}
+
+	.workspace-leaf-content .view-content.notebook-view .notebook-tool,
+	.workspace-leaf-content .view-content.notebook-view .notebook-tab,
+	.workspace-leaf-content .view-content.notebook-view .notebook-menu-icon,
+	.workspace-leaf-content .view-content.notebook-view .notebook-heavy-actions button,
+	.workspace-leaf-content .view-content.notebook-view .notebook-practice-button,
+	.nb-ui.notebook-statusbar {
+		transition: none;
+	}
+
+	.workspace-leaf-content .view-content.notebook-view .notebook-tool:active {
+		transform: none;
+	}
+}
