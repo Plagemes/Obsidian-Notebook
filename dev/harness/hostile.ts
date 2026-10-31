@@ -4,7 +4,7 @@
  * a single picture (its canvas factory and every canvas's toDataURL throw). Home, the library, the empty state, the quick
  * actions, + New and both tabs of the creation dialog must still be drawn, with the art simply missing and no error card.
  */
-import { setArtCanvasFactory } from "../../src/ui/art/generative-art";
+import { setArtCanvasFactory, setArtPersistence } from "../../src/ui/art/generative-art";
 import { PAPER_KINDS } from "../../src/model/types";
 import { t } from "../../src/i18n";
 import { closeCreate } from "./create-check";
@@ -51,6 +51,8 @@ export function installHostile(): void {
 	setArtCanvasFactory(() => {
 		throw new Error("harness hostile: the art canvas cannot be created");
 	});
+	// Pictures stored by the scenarios before this one must not come back from the persistent cache.
+	setArtPersistence(null);
 	HTMLCanvasElement.prototype.toDataURL = function () {
 		throw new Error("harness hostile: toDataURL");
 	};
