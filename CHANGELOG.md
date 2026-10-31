@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### outline
+- **Generated outline (roadmap #407, combines #15, #102 and #46).** The page panel's outline mode now merges four sources into one nested list ordered by page and position: **bookmarks** (title, colour, category, as before), **PDF slide changes** (each PDF file, and each slide where the PDF page under the notebook page changes), **large handwriting** as headings, and **markers** (questions, homework and the importance markers; gaps to complete are not listed). Tap a row to jump to its page; bookmarks keep their "…" menu; the category filter still filters bookmarks.
+- **Headings from handwriting size, no OCR and no AI** (`src/ink/headings.ts`, on the lines of `segmentText`, #255): a line is a heading when its letters are at least 1.7 times the page's usual letter height (weighted median of its lines; the notebook's usual height on a page with fewer than three lines), it has two or more strokes, it starts a block (nothing written just above it) and starts near the left of the text. Letters 2.4 times the usual or more make a top-level heading, the others a second level. The outline shows a picture of the ink (nothing is read, so there is no text), cached per heading.
+- **Pure builder** `src/model/outline-builder.ts` (no 'obsidian'): the text layout of a page is cached by the identity of its strokes, so an unchanged page costs a pointer comparison per stroke. Nesting follows a level stack (PDF and bookmark, slide, heading, marker). Nothing is stored: **no change to the notebook format** (still v11).
+- Settings → *Pages* → *Outline* (a group, open when a source is off): a switch for each source (bookmarks, slide changes, large handwriting, markers). Italian translation included.
+- The outline rows are restyled with the design tokens (icon squares, nesting guides, 44 px rows, "you are here" on one row) under `.nb-ui`; rows wrap to two lines in the narrow panel.
+- Tests: `tests/outline-builder.test.ts`; harness scenarios `outline-{light,dark}-{tablet,phone}` (`dev/harness/outline-check.ts`).
+
 ## 0.12.3 — 2026-10-30
 
 Fixes for what 0.12.2 showed on the tablet (Obsidian for Android, Italian, a vault with no notebooks): an empty creation dialog, a Home with only its title and search pill, an empty *Tag* page, a rail **+** sitting on the brand, and navy panels in the settings. **Not verified on the device**: checked in unit tests and in the browser harness only. Manual re-check: steps 485-492 in `docs/testing.md`. No change to the notebook format (still v11).

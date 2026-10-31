@@ -182,6 +182,7 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Format v6: page margins, v5→v6 migration, newer file read-only | ✅ | ✅ migration, validation, round trip, future version | | | |
 | Format v7: bookmark details, page tags, reading position, new paper kinds; v6→v7 migration (drops v7 keys found in a v6 file, rejects v7 papers in a pre-v7 file); newer file read-only | ✅ | ✅ migration, validation, deterministic round trip, future version, incremental save check | | | |
 | v7 fields kept by duplicate page, page restore (tags united), conflicted-copy merge (union rules, coverage), repair (line scan and salvage), library metadata patch, companion note | ✅ | ✅ model-v7 tests | | | |
+| Generated outline (#407, combines #15, #102, #46): bookmarks, PDF slide changes, large handwriting as headings (found by letter size, shown as a picture of the ink, no OCR) and markers in one nested list ordered by page and position, tap to jump, one switch per source in Settings → Pages → Outline, per-page cache, no format change | ✅ | ✅ `tests/outline-builder.test.ts` (heading detection, levels, nesting, ordering, sources, cache, settings); ✅ harness `outline-*` (rows by source, pictures, nesting, tap to jump, filter, switches; tablet and phone, dark and light); ❌ handwriting from a real S Pen (the thresholds are tuned on synthetic writing) | | ✅ | the 1.7× size threshold and the "starts a block" gap are heuristics: a title written right under the previous line, or only slightly larger, is not listed; a large single stroke is treated as a drawing (steps 600-613) |
 | Outline (#15, #85): bookmarks with title, colour and category ("important", "to review", custom) in the page panel, category filter, tap to jump, add / edit / delete, one undo step each | ✅ | ✅ bookmark helpers, SetMeta undo; ✅ harness (outline, editor, undo/redo); ❌ unit (DOM only) | | | |
 | Page tags (#119): page menu *Page tags…*, tag filter in the page panel, library search finds them and opens the page | ✅ | ✅ normalisation, SetPageTags undo, index and search; ✅ harness (editor, filter) | | | |
 | Reading position shared across devices (#125): written only with a content save, start page chosen between link, layout restore and stored position | ✅ | ✅ session hook (no write of its own, journal/save consistency), start rules; ❌ view scrolling, two real devices | | | stored only when something is saved: a notebook only read on a device does not move the other device's start page |
@@ -1088,6 +1089,25 @@ Update to 0.12.3 and fully close and reopen Obsidian. Use the same vault with **
 490. **Creation dialog, both tabs.** The dialog shows the tabs *Quaderno* / *Cartella*, the cover preview with *Cambia copertina*, name, description, folder, the page templates, page size and orientation, *Annulla* and *Crea quaderno*. Tap *Cartella*: the folder card, name, description, location, icons and colours, *Crea cartella*. Also open it from *Nuova cartella* (header menu), from the quick actions and from the dashed tile. If it shows a red-bordered card instead, take a screenshot.
 491. **Tag page.** Tap *Tag* in the rail: the header *Tag* with its subtitle and *+ Nuovo*, and below it the line saying tags appear here once notebooks have them (no blank page).
 492. **First notebook and folder.** Create a notebook and a subject folder from the dialog: the notebook opens; back on Home the empty state is gone and the folder card (glossy folder icon, generated art) replaces the dashed tile.
+
+### 0.13 — outline (steps 600-619)
+
+Generated outline (roadmap 407). Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/outline-*.png`. Open a notebook made from a PDF (lecture pack), write a few lines of normal handwriting, then a title two to three times larger above a block, and add a bookmark and a question marker.
+
+600. **Panel.** Open the page panel (grid button) and tap the outline button (list icon): the header says *Outline* (*Indice*). The list shows the PDF file name, then *Slide N* rows nested under it.
+601. **Large handwriting.** Write a line of letters clearly bigger than the rest, with some empty space above it and starting near the left margin. After about half a second the outline shows a row with a picture of that ink and its page number. Tap it: the notebook goes to that page.
+602. **Not a heading.** Write a second line of the same size as the body, a single large circle and a large word in the middle of a sentence: none of them appears in the outline.
+603. **Two sizes.** Write a title two and a half times the body and, on another block, a title about twice the body: the smaller one is indented under the larger one.
+604. **Bookmarks.** A bookmarked page shows its title (or *Page N*), colour dot and category; the "…" menu edits or deletes it, and Undo restores it. The category dropdown shows only the bookmarks of that category.
+605. **Markers.** A question, homework, very important or key-point marker is listed with its label (or its kind); a gap marker is not.
+606. **Slides.** Page turns inside the same PDF page add no row; a page with another PDF page, or another PDF file, adds a *Slide* (and *PDF*) row.
+607. **Order.** Rows follow the pages top to bottom; on one page: PDF, slide, headings and markers by their height on the page.
+608. **Where you are.** One row is highlighted: the last entry at or before the page in view. Scroll to another page and it follows.
+609. **Touch.** Rows are easy to hit with a finger and the S Pen (44 px tall); scrolling the list with a finger does not jump to a page.
+610. **Settings.** Settings → *Pages* → *Outline*: turn off *Large handwriting as headings*; the outline loses the pictures at once. Turn off each other switch in turn; with all four off the outline says where to turn one on.
+611. **Dark and light, Obsidian theme.** Check the outline in the dark and light theme and with *Appearance → Style → Follow Obsidian theme*; the white picture of a heading stays readable.
+612. **Cost.** In a notebook of 100+ pages, open the outline for the first time (note how long it takes), then close and reopen it: the second time is immediate. Writing with the outline open does not stutter.
+613. **No change to the file.** Open a notebook, view the outline, close it without editing: the file is not rewritten (no new snapshot, no sync conflict).
 
 Results table for steps 1 to 492. Fill it in as you go.
 

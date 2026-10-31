@@ -57,6 +57,11 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	autoNextPage: boolean;
 	/** The eraser's Area mode also removes the text boxes and images inside the outline. */
 	eraseAreaElements: boolean;
+	/** 0.13: what the generated outline lists (bookmarks, PDF slide changes, large handwriting, markers). */
+	outlineBookmarks: boolean;
+	outlineSlides: boolean;
+	outlineHeadings: boolean;
+	outlineMarkers: boolean;
 	/** Favourite pens (six slots: tool, colour, width). */
 	favouritePens: FavouritePen[];
 	/** Eraser radius, CSS px. */
@@ -168,6 +173,10 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	snapshotsToKeep: 10,
 	autoNextPage: true,
 	eraseAreaElements: false,
+	outlineBookmarks: true,
+	outlineSlides: true,
+	outlineHeadings: true,
+	outlineMarkers: true,
 	favouritePens: DEFAULT_FAVOURITES.map((f) => ({ ...f })),
 	eraserSize: DEFAULT_ERASER_SIZE,
 	looseSheetPath: "",
@@ -237,6 +246,10 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.snapshotsToKeep === "number" && Number.isInteger(d.snapshotsToKeep) && d.snapshotsToKeep >= 1 && d.snapshotsToKeep <= 100) s.snapshotsToKeep = d.snapshotsToKeep;
 	if (typeof d.autoNextPage === "boolean") s.autoNextPage = d.autoNextPage;
 	if (typeof d.eraseAreaElements === "boolean") s.eraseAreaElements = d.eraseAreaElements;
+	if (typeof d.outlineBookmarks === "boolean") s.outlineBookmarks = d.outlineBookmarks;
+	if (typeof d.outlineSlides === "boolean") s.outlineSlides = d.outlineSlides;
+	if (typeof d.outlineHeadings === "boolean") s.outlineHeadings = d.outlineHeadings;
+	if (typeof d.outlineMarkers === "boolean") s.outlineMarkers = d.outlineMarkers;
 	s.favouritePens = normaliseFavourites(d.favouritePens);
 	s.eraserSize = normaliseEraserSize(d.eraserSize);
 	if (typeof d.looseSheetPath === "string") s.looseSheetPath = d.looseSheetPath.trim();

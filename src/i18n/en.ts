@@ -2254,6 +2254,22 @@ export const en = {
 	"create.error.folderExists": "Something named “{name}” is already there.",
 	"create.failed": "Could not create it: {error}",
 	"create.metaFailed": "The folder was created, but its colour and icon could not be saved: {error}",
+	// 0.13 outline
+	"settings.outline": "Outline",
+	"settings.outlineBookmarks": "Bookmarks in the outline",
+	"settings.outlineBookmarks.desc": "List the bookmarked pages with their titles and colours.",
+	"settings.outlineSlides": "Slide changes in the outline",
+	"settings.outlineSlides.desc": "List each PDF, and each slide where the PDF page changes.",
+	"settings.outlineHeadings": "Large handwriting as headings",
+	"settings.outlineHeadings.desc": "List lines written much larger than the page, as a picture of the ink.",
+	"settings.outlineMarkers": "Markers in the outline",
+	"settings.outlineMarkers.desc": "List questions, homework and importance markers.",
+	"outline.pdf": "PDF",
+	"outline.slide": "Slide {n}",
+	"outline.headingAlt": "Heading on page {n}",
+	"outline.allOff": "Every outline source is off. Turn one on in Settings, Pages, Outline.",
+	"outline.emptyAll": "Nothing to list yet. Bookmark a page, write a large heading or add a PDF.",
+	"outline.markerDone": "done",
 } as const;
 
 export type MessageKey = keyof typeof en;
