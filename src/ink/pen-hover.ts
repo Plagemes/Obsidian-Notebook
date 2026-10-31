@@ -424,8 +424,14 @@ export interface ButtonWindows {
 	/** A contextmenu at most this long AFTER the pen's pointerdown: that contact is the eraser from its start, ms. */
 	afterMs: number;
 }
-export const DEFAULT_BUTTON_WINDOWS: Readonly<ButtonWindows> = { beforeMs: 150, afterMs: 350 };
+export const DEFAULT_BUTTON_WINDOWS: Readonly<ButtonWindows> = { beforeMs: 500, afterMs: 350 };
 export const BUTTON_BEFORE_MAX_MS = 500;
+/**
+ * The before-window used to be 150 ms. A bare `contextmenu` that came earlier than that was taken for a click of the
+ * button while hovering and opened the radial menu, although a pen contact followed (0.12.4): 150 is not carried over from
+ * a saved settings file, it reads as the new default.
+ */
+export const LEGACY_BEFORE_MS = 150;
 /**
  * The after-window never reaches Android's long-press timeout (about 400 to 500 ms): a longer one would let the
  * `contextmenu` of a resting nib's long-press pass for the button held at contact.

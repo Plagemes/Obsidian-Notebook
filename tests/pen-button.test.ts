@@ -8,6 +8,10 @@ import { PointerController, type PointerHandlers } from "../src/ink/pointer-cont
 import { DEFAULT_SETTINGS, readSettings } from "../src/settings";
 import { policySettings } from "../src/view/input-settings";
 import { installFakeWindow, removeFakeWindow } from "./node-env";
+import { DEFAULT_BUTTON_WINDOWS as DEFAULT_WINDOWS } from "../src/ink/pen-hover";
+
+/** A bare contextmenu waits this long for a pen contact before it counts as a click while hovering (ms). */
+const LINK_WAIT = DEFAULT_WINDOWS.beforeMs + 100;
 
 describe("signal shapes", () => {
 	it("the side button is button 2 or bit 2; the eraser is never the side button", () => {
@@ -299,11 +303,11 @@ describe("PointerController: every signal opens the menu once and draws nothing"
 		const pen = fire(el, "contextmenu", { pointerType: "pen", clientX: 300, clientY: 200, timeStamp: 1010 });
 		expect(pen.defaultPrevented).toBe(true);
 		// 0.11.2: with no contact it is a hover click, acted on once no pen contact follows within the before-window.
-		vi.advanceTimersByTime(200);
+		vi.advanceTimersByTime(LINK_WAIT);
 		expect(menus).toEqual([[200, 150]]);
 		const touch = fire(el, "contextmenu", { pointerType: "touch", timeStamp: 5000 });
 		expect(touch.defaultPrevented).toBe(true);
-		vi.advanceTimersByTime(200);
+		vi.advanceTimersByTime(LINK_WAIT);
 		expect(log).toEqual(["menu"]);
 		vi.useRealTimers();
 	});
@@ -313,7 +317,7 @@ describe("PointerController: every signal opens the menu once and draws nothing"
 		const a = setup();
 		fire(a.el, "pointermove", { buttons: 0 });
 		fire(a.el, "contextmenu", { pointerType: undefined, timeStamp: 1100 });
-		vi.advanceTimersByTime(200);
+		vi.advanceTimersByTime(LINK_WAIT);
 		vi.useRealTimers();
 		expect(a.menus.length).toBe(1);
 		const b = setup();
@@ -335,8 +339,9 @@ describe("PointerController: every signal opens the menu once and draws nothing"
 		fire(el, "contextmenu", { pointerType: "pen", timeStamp: 1005 });
 		fire(el, "pointerup", { button: 2, buttons: 0, timeStamp: 1100 });
 		fire(el, "auxclick", { pointerType: "pen", button: 2, timeStamp: 1101 });
+		// 0.12.4: the contact with the button held is a tap: no ink, the menu once, on the lift.
 		expect(menus.length).toBe(1);
-		expect(log).toEqual(["menu"]);
+		expect(log).toEqual(["start", "cancel", "menu"]);
 	});
 
 	it("the pen's button reported as a mouse right button right after pen activity opens the menu", () => {
@@ -351,11 +356,13 @@ describe("PointerController: every signal opens the menu once and draws nothing"
 		expect(b.menus.length).toBe(0);
 	});
 
-	it("a button pressed just after the nib landed discards that stroke (no dot) and opens the menu", () => {
+	it("a button seen just after the nib landed: the contact waits for tap or drag; a tap leaves no dot and opens the menu on the lift", () => {
 		const { el, log, menus } = setup();
 		fire(el, "pointerdown", { button: 0, buttons: 1, pressure: 0.4, timeStamp: 1000 });
 		fire(el, "pointermove", { button: 2, buttons: 3, pressure: 0.4, timeStamp: 1100 });
-		expect(log).toEqual(["start", "cancel", "menu"]);
+		expect(menus.length).toBe(0); // not before the lift
+		fire(el, "pointerup", { button: 0, buttons: 0, timeStamp: 1150 });
+		expect(log).toEqual(["start", "move", "cancel", "menu"]);
 		expect(menus.length).toBe(1);
 	});
 
@@ -363,7 +370,7 @@ describe("PointerController: every signal opens the menu once and draws nothing"
 		const a = setup();
 		fire(a.el, "pointerdown", { button: 0, buttons: 1, pressure: 0.4, timeStamp: 1000 });
 		fire(a.el, "pointermove", { buttons: 1, clientX: 440, timeStamp: 1050 });
-		fire(a.el, "pointermove", { buttons: 3, clientX: 441, timeStamp: 1100 });
+		fire(a.el, "pointermove", { buttons: 3, clientX: 441, timeStamp: 1500 });
 		expect(a.menus.length).toBe(0);
 		expect(a.log).not.toContain("cancel");
 		// stationary but old: also left alone

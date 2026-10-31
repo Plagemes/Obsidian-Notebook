@@ -383,6 +383,7 @@ export const INTERNAL_SETTING_KEYS: Readonly<Partial<Record<SettingKey, string>>
 	favouritePens: "edited on the toolbar (long press on a favourite, radial menu)",
 	eraserSize: "the eraser's size, edited in its tool options",
 	recentColours: "history of the colour picker",
+	penButtonWindowsMigrated: "set by the app once the old 150 ms default of the before-window was read as the new one",
 	penButtonSeen: "set by the app when the device first delivers a side-button signal",
 	lastNotebookPath: "instant start: the last notebook",
 	lastNotebookPage: "instant start: the last page",

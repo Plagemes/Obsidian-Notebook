@@ -241,22 +241,35 @@ describe("PointerController routing", () => {
 		expect(log).toEqual(["start"]);
 	});
 
-	it("with the radial action the side button opens the menu and draws nothing", () => {
+	it("with the radial action a tap with the side button held opens the menu on the lift and leaves no ink", () => {
 		const { el, log, menus } = setup({ fingerDrawing: true, palmRejectionMs: 0, penButton: "radial" });
 		const down = fire(el, "pointerdown", { pointerType: "pen", button: 2, buttons: 2, clientX: 300, clientY: 200 });
 		expect(down.defaultPrevented).toBe(true);
+		fire(el, "pointermove", { pointerType: "pen", buttons: 2, clientX: 302, clientY: 201, timeStamp: 1016 });
+		expect(menus).toEqual([]);
+		fire(el, "pointerup", { pointerType: "pen", button: 2, buttons: 0, timeStamp: 1032 });
+		expect(log).toEqual(["start", "move", "cancel", "menu"]);
+		expect(menus).toEqual([[200, 150]]);
+	});
+
+	it("with the radial action a drag with the side button held erases from its first sample: no menu, no ink", () => {
+		const { el, log, menus, starts } = setup({ fingerDrawing: true, palmRejectionMs: 0, penButton: "radial" });
+		fire(el, "pointerdown", { pointerType: "pen", button: 2, buttons: 2, clientX: 300, clientY: 200 });
 		fire(el, "pointermove", { pointerType: "pen", buttons: 2, clientX: 310, clientY: 210, timeStamp: 1016 });
 		fire(el, "pointerup", { pointerType: "pen", button: 2, buttons: 0, timeStamp: 1032 });
-		expect(log).toEqual(["menu"]);
-		expect(menus).toEqual([[200, 150]]);
+		expect(menus).toEqual([]);
+		expect(log.filter((l) => l !== "move")).toEqual(["start", "cancel", "start", "end"]);
+		expect(starts.map((s) => s.eraser)).toEqual([false, true]);
+		expect(starts[1]!.s.x).toBe(200);
 	});
 
 	it("the menu does not leave the pen down: a finger works right after, with finger drawing on", () => {
 		const { el, log, policy } = setup({ fingerDrawing: true, palmRejectionMs: 0, penButton: "radial" });
 		fire(el, "pointerdown", { pointerType: "pen", button: 0, buttons: 3, timeStamp: 2000 });
-		expect(policy.penRecentlyActive(2001)).toBe(false);
+		fire(el, "pointerup", { pointerType: "pen", button: 0, buttons: 0, timeStamp: 2090 });
+		expect(policy.penRecentlyActive(2091)).toBe(false);
 		fire(el, "pointerdown", { pointerId: 9, pointerType: "touch", clientX: 500, clientY: 300, timeStamp: 2500 });
-		expect(log).toEqual(["menu", "start"]);
+		expect(log).toEqual(["start", "cancel", "menu", "start"]);
 	});
 
 	it("pressing the side button while hovering opens the menu once per press", () => {

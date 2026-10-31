@@ -5,7 +5,7 @@ import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "./ink/edge-zones";
 import { DEFAULT_GESTURE_SETTINGS, readGestureSettings, type GestureSettings } from "./ink/gesture-settings";
 import { DEFAULT_PEN_GESTURE_SETTINGS, readPenGestureSettings, type PenGestureSettings } from "./ink/gestures/settings";
 import { PEN_BUTTON_ACTIONS, type PenButtonAction } from "./ink/input-policy";
-import { BUTTON_AFTER_MAX_MS, BUTTON_BEFORE_MAX_MS, DEFAULT_BUTTON_WINDOWS, cleanPenKey, cleanWindowMs, isPenKeyAction, type PenKeyAction } from "./ink/pen-hover";
+import { BUTTON_AFTER_MAX_MS, BUTTON_BEFORE_MAX_MS, DEFAULT_BUTTON_WINDOWS, LEGACY_BEFORE_MS, cleanPenKey, cleanWindowMs, isPenKeyAction, type PenKeyAction } from "./ink/pen-hover";
 import { isScrollMode, type ScrollMode } from "./ink/page-mode";
 import { parsePosition, type SavedPosition } from "./ink/view-position";
 import { normaliseRecentColours } from "./ink/colour";
@@ -109,6 +109,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	 * pointerdown, or after it, means the button was held when the nib landed: that contact erases.
 	 */
 	penButtonContactBeforeMs: number;
+	/** The saved 150 ms of earlier versions was read as the new default once (see `LEGACY_BEFORE_MS`). */
+	penButtonWindowsMigrated: boolean;
 	penButtonContactAfterMs: number;
 	/** Instant start: the notebook and page (1-based) the reader was on last, for "Continue last notebook". Not shown in the settings tab. */
 	lastNotebookPath: string;
@@ -185,6 +187,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	penButtonKey: "",
 	penButtonKeyAction: "eraser-next",
 	penButtonContactBeforeMs: DEFAULT_BUTTON_WINDOWS.beforeMs,
+	penButtonWindowsMigrated: false,
 	penButtonContactAfterMs: DEFAULT_BUTTON_WINDOWS.afterMs,
 	penZeroPressureButton: true,
 	penChordButton: true,
@@ -261,6 +264,9 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (penKey !== null) s.penButtonKey = penKey;
 	if (isPenKeyAction(d.penButtonKeyAction)) s.penButtonKeyAction = d.penButtonKeyAction;
 	s.penButtonContactBeforeMs = cleanWindowMs(d.penButtonContactBeforeMs, BUTTON_BEFORE_MAX_MS) ?? s.penButtonContactBeforeMs;
+	// 0.5.x-0.12.3 saved every setting: their default of 150 ms is not a choice (see LEGACY_BEFORE_MS). Once: afterwards 150 is.
+	if (d.penButtonWindowsMigrated !== true && s.penButtonContactBeforeMs === LEGACY_BEFORE_MS) s.penButtonContactBeforeMs = DEFAULT_BUTTON_WINDOWS.beforeMs;
+	s.penButtonWindowsMigrated = true;
 	s.penButtonContactAfterMs = cleanWindowMs(d.penButtonContactAfterMs, BUTTON_AFTER_MAX_MS) ?? s.penButtonContactAfterMs;
 	if (typeof d.penZeroPressureButton === "boolean") s.penZeroPressureButton = d.penZeroPressureButton;
 	if (typeof d.penChordButton === "boolean") s.penChordButton = d.penChordButton;

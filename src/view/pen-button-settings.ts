@@ -10,7 +10,7 @@ import type { NotebookSettings } from "../settings";
  */
 export type PenButtonSettings = Pick<
 	NotebookSettings,
-	"penButtonEraserNext" | "penButtonKey" | "penButtonKeyAction" | "penButtonContactBeforeMs" | "penButtonContactAfterMs"
+	"penSideButton" | "penButtonEraserNext" | "penButtonKey" | "penButtonKeyAction" | "penButtonContactBeforeMs" | "penButtonContactAfterMs"
 >;
 export type PenButtonSettingKey = keyof PenButtonSettings;
 

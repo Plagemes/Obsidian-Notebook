@@ -3,6 +3,10 @@ import { InputPolicy, type InputSettings } from "../src/ink/input-policy";
 import { BarrelDetector, ChordDetector, EventLog, PEN_TEST_EVENT_TYPES, describeSideButton, describeTarget, formatEvent, type LoggedEvent } from "../src/ink/pen-button";
 import { PointerController, type MenuSource, type PointerHandlers } from "../src/ink/pointer-controller";
 import { installFakeWindow, removeFakeWindow, sleep } from "./node-env";
+import { DEFAULT_BUTTON_WINDOWS as DEFAULT_WINDOWS } from "../src/ink/pen-hover";
+
+/** A bare contextmenu waits this long for a pen contact before it counts as a click while hovering (ms). */
+const LINK_WAIT = DEFAULT_WINDOWS.beforeMs + 100;
 
 // 0.11.1: the S Pen button as the user read it off the pen-tracker page (Chrome, Samsung tablet), and the
 // window-level capture watch that also sees events that never reach the page element.
@@ -257,12 +261,12 @@ describe("PointerController: side button at window level (capture phase)", () =>
 		expect(s.log).toEqual(["menu:click"]);
 	});
 
-	it("touching, then pressing: the stroke so far is kept and the contact erases (experimental chord)", () => {
+	it("touching, then pressing soon after the landing (experimental chord): the button was held at contact; the nib never moved, so a tap: the menu", () => {
 		const s = setup();
 		for (const [type, button, buttons, pressure, t] of TOUCH_THEN_BUTTON) {
 			s.fire(s.canvas, type, { button, buttons, pressure, timeStamp: 1000 + t });
 		}
-		expect(s.log.filter((l) => l !== "move")).toEqual(["start", "end", "start:eraser", "end"]);
+		expect(s.log.filter((l) => l !== "move")).toEqual(["start", "cancel", "menu:click"]);
 	});
 
 	it("listeners are removed on destroy", () => {
@@ -359,7 +363,7 @@ describe("cancelling the native long-press / context menu, as pen-tracker does",
 		s.fire(s.canvas, "pointermove", { timeStamp: 1000 });
 		const e = s.fire(s.toolbar, "contextmenu", { button: 2, buttons: 0, timeStamp: 1100 });
 		expect(e.defaultPrevented).toBe(true);
-		await sleep(200); // a hover click waits for the before-window (no pen contact follows)
+		await sleep(LINK_WAIT); // a hover click waits for the before-window (no pen contact follows)
 		// 0.11.2: no pointer is down, so it is a click of the button while hovering (the button is already up).
 		expect(s.log).toEqual(["menu:click"]);
 		expect(s.seen()).toBe(1);
@@ -371,7 +375,7 @@ describe("cancelling the native long-press / context menu, as pen-tracker does",
 		expect(plain.defaultPrevented).toBe(true);
 		const finger = s.fire(s.toolbar, "contextmenu", { pointerType: "touch", button: 2, timeStamp: 9000 });
 		expect(finger.defaultPrevented).toBe(false);
-		await sleep(200);
+		await sleep(LINK_WAIT);
 		// 0.11.2: the plain one, with no pointer down, is the side button clicked while hovering; the finger's is not.
 		expect(s.log).toEqual(["menu:click"]);
 	});

@@ -6,6 +6,7 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 
 | Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
 |---|---|---|---|---|---|
+| S Pen side button on Android (0.12.4): the button is seen only while the nib touches; **tap with it = radial menu on the lift (no dot), drag with it = eraser for the whole contact from its first sample (no ink, one undo step)**, whatever the form of the signal (bare `contextmenu` up to 500 ms before the pen down, during the contact within 350 ms, up to 400 ms after the pen up; `pointerdown` with `button 2` / `buttons & 2`; `buttons & 2` or the `button 0` move within 350 ms; the `pointercancel` after a `contextmenu`, the contact going on as a new pointer within 250 ms); a press in the middle of a stroke keeps writing ink; no menu during or after a drag; works with *Radial menu on click* too, and for the tools of *Lasso* / *Previous* / *Gestures while held*; *Pen button test* shows the signal and the decision | ✅ | ✅ `tests/side-button-contact.test.ts` (every form x tap / drag / no button / mid-stroke, five settings, cancel, decision logic, `EventLog`), `tests/pen-hover.test.ts`, `tests/pen-button.test.ts`, `tests/side-button.test.ts`, `tests/input-routing.test.ts`; ✅ harness (tap, drag, mid-stroke with real events) | | | which signal this tablet really sends is not known: the *Pen button test* lines *Signal seen* / *Decision* will tell (steps 493-499) |
 | Procedural subject art and palette (wave 0.12, DESIGN.md §2.3, §2.6): seven line-art families, card art, header bands, covers, empty states, folder icon, LRU image cache, reduced-motion switch; `colorFor` | ✅ | ✅ `tests/generative-art.test.ts` (determinism, seeds, geometry vs colour, density, left side clean, intensity, surfaces, empty states, switch, cache keys and eviction, palette, folder icon); harness gallery screenshots and timing (`HARNESS_DOC=art`) | | ✅ | no surface uses it yet; timing measured only in headless desktop Chrome (steps 425-429) |
 | Operations on several selected pages (roadmap 378, wave 0.8): multi-select in the page navigator (select button, long press on touch, Ctrl/Shift+click, range, select all) and move (start, end, position, another notebook), duplicate, bookmark, tag, paper, size, PDF export, delete through the page trash; one undo step each | ✅ | ✅ `tests/page-ops.test.ts` (order planning, ranges, every command as one step with exact undo, never deleting every page); ❌ the panel, the menus, touch long press, the dialogs | | ✅ | long press on touch both starts a selection and arms the old drag-to-reorder: to be checked on the tablet (steps 200-202) |
 | Do not disturb while writing (roadmap 374, wave 0.8): the plugin's own notices and non-urgent background work (thumbnails in the page panel and the library, library re-index, version-history snapshots, the timetable offer) wait while a pen is on the screen and for 1.5 s after | ✅ | ✅ `tests/writing-guard.test.ts` (timing, queue order, same-key replacement, lost pen, reset); ❌ real pen events, the notice wrapper in Obsidian | | ✅ | Obsidian's own notices (and other plugins') cannot be held back; `pointerType` `pen` only (a finger or mouse does not count); notices from the toolbar, stamps, selection actions and Zettelkasten are not routed yet (steps 205-206) |
@@ -320,7 +321,7 @@ Numbers from the final run of 0.9.0 (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 2847 tests passed |
+| `npm test` (unit project only; benchmarks are separate) | 2990 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: 0 errors; `eslint-plugin-obsidianmd` recommended rules: 0 errors |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
@@ -1089,7 +1090,19 @@ Update to 0.12.3 and fully close and reopen Obsidian. Use the same vault with **
 491. **Tag page.** Tap *Tag* in the rail: the header *Tag* with its subtitle and *+ Nuovo*, and below it the line saying tags appear here once notebooks have them (no blank page).
 492. **First notebook and folder.** Create a notebook and a subject folder from the dialog: the notebook opens; back on Home the empty state is gone and the folder card (glossy folder icon, generated art) replaces the dashed tile.
 
-Results table for steps 1 to 492. Fill it in as you go.
+### 0.12.4: the S Pen side button, tap and drag (steps 493-499)
+
+Update to 0.12.4 and fully close and reopen Obsidian. Samsung tablet, S Pen, Obsidian for Android. Setting *Pen side button* = *Radial menu on click, erase while held* (the default) unless a step says otherwise. On this device pressing the button with the pen in the air shows nothing to the app: the button counts only while the nib touches the page. Nothing here is filled in as verified; write what you see in the results table.
+
+493. **Tap with the button.** Hold the side button, touch the page quickly with the nib and lift without moving. The radial menu opens where the nib landed, after the lift (not before), and no dot of ink is left. Repeat three times, also twice in quick succession (less than a second apart): the menu opens each time.
+494. **Drag with the button.** Hold the side button, touch and drag across some ink and lift. The ink along the whole path is erased, from the first point where the nib landed (not from a little later); nothing new is written and no menu opens, during or after the drag. One undo brings the erased ink back in one step.
+495. **Without the button.** A tap leaves a dot and a drag writes a line, as always; no menu, no eraser.
+496. **Button in the middle of a stroke.** Write a long stroke (about a second) and press the button while writing. The stroke keeps writing ink to its end and nothing is erased; no menu opens.
+497. **Other settings.** *Radial menu on click*: a tap still opens the menu and a drag still erases. *Erase while held*: a tap erases what is under the nib and no menu opens, a drag erases. *Nothing*: the button does nothing, the contact is ink.
+498. **Pen button test.** Settings → *Notebook* → *Pen button test*. With the button held, tap the test area, then drag, then repeat without the button. The lines *Signal seen* and *Decision* show, for the tap, a signal such as `contextmenu Δ=+40 ms` or `pointerdown buttons=3` and `menu (tap)`; for the drag `eraser (drag)`; for a press far into a stroke `ignored: pressed in the middle of a stroke`. Tap *Copy log* and paste it into the Notes column below: the signal that this tablet really sends is what decides whether the button is fully covered.
+499. **The button in the air.** Hover the pen over the page and press and release the button without touching: nothing opens and nothing is armed (this is the Android limit, not a bug). Then touch with the button held again: step 493 still works.
+
+Results table for steps 1 to 499. Fill it in as you go.
 
 | Step | Device / Obsidian version | Result | Notes |
 |---|---|---|---|
@@ -1585,6 +1598,13 @@ Results table for steps 1 to 492. Fill it in as you go.
 | 490 Creation dialog, both tabs | | | |
 | 491 Tag page | | | |
 | 492 First notebook and folder | | | |
+| 493 Tap with the button | | | |
+| 494 Drag with the button | | | |
+| 495 Without the button | | | |
+| 496 Button in the middle of a stroke | | | |
+| 497 Other settings | | | |
+| 498 Pen button test | | | |
+| 499 The button in the air | | | |
 
 Benchmark output (step 21): paste it here.
 
@@ -1618,7 +1638,7 @@ Mouse: draw, erase (both modes), undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scr
 - Version history keeps one snapshot per interval (24 h by default), so very recent work is protected by the journal and the regular save, not by the history.
 - Repair: fields unknown to this version are not carried into the repaired notebook (they remain in the untouched original); a stroke cut off by the damage keeps only its points before the cut; text after a damaged region is recovered only where whole lines survive in the layout the plugin writes (a reformatted file is read only up to the damage). Merge: a conflicted copy is recognised only by its name plus the same notebook id, page settings of the copy are not merged (counted in the summary), and a stroke deleted on one device comes back if the other device still has it. Page restore previews do not draw PDF or image backgrounds.
 - When another writer changes the file in the instant between our read and our write, the attempt is aborted by writing back the same content; this may bump the file's modification time (no data change).
-- The S Pen side button (setting *Pen side button*, default radial menu on click + erase while held) is handled from the signals users reported on a Samsung tablet (a primary press with zero pressure while the pen hovers; nothing at all in the Pen button test with Air command off), not from hardware tests by the author; how the pen reports it has not been checked on a device (0.5.0: nothing happened; Samsung Air command takes the button while hovering; 0.5.1 accepts more signals and adds the *Pen button test*); the standard `buttons & 32` eraser keeps working as before.
+- The S Pen side button (setting *Pen side button*, default radial menu on click + erase while held) is handled from the signals users reported on a Samsung tablet (a primary press with zero pressure while the pen hovers; nothing at all in the Pen button test with Air command off), not from hardware tests by the author; how the pen reports it has not been checked on a device (0.5.0: nothing happened; Samsung Air command takes the button while hovering; 0.5.1 accepts more signals and adds the *Pen button test*); the standard `buttons & 32` eraser keeps working as before. Since 0.12.4 the button is decided per pen contact (tap = radial menu, drag = eraser, a press in the middle of a stroke = ink) and every plausible form of its signal is accepted; which form the Samsung tablet really sends is still not known (steps 493-499: the *Pen button test* lines *Signal seen* / *Decision*), and on Obsidian for Android a press with the pen in the air is invisible to the app.
 - Notebooks are invisible to Obsidian search, tags, backlinks and graph unless *Companion notes* is on (off by default); the companion note carries the text boxes, not the handwriting (no OCR yet).
 - Companion notes: a note the user moved is found by its `notebook-id`, but deleting that property makes the plugin create a new note; changing the location or name setting does not move existing notes; a companion folder inside the notebooks folder shows in the library sidebar.
 - Library trash, page trash and templates are not verified in Obsidian or on Android (steps 82-91). Trashed items move with `vault.rename`, so notes that linked to a trashed notebook show a broken link until it is restored. Permanent deletion follows Obsidian's *Deleted files* setting. The page trash keeps the 50 most recent pages per notebook for 30 days (fixed limits); it is not synced into the notebook, only through one vault file per deleted page under `_trash/pages/<notebook id>/`, so two devices deleting pages at the same time keep both. Page trash and template thumbnails do not draw PDF or image backgrounds. A folder named `_trash`, `_templates` or `_meta` directly under the notebooks folder is hidden from the library. A trashed folder that holds files other than notebooks is never emptied automatically.
