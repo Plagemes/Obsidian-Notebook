@@ -430,10 +430,12 @@ describe("barrel bit signals keep working", () => {
 		expect(log).toEqual(["menu:button"]);
 	});
 
-	it("0.11.2: a pen contact (pressure above 0) with the barrel bit erases that stroke; with pressure 0 it opens the menu on the press", () => {
+	it("0.12.4: a pen contact (pressure above 0) with the barrel bit waits for tap or drag; with pressure 0 it opens the menu on the press", () => {
 		const touching = setup();
 		fire(touching.el, "pointerdown", { button: 2, buttons: 3, pressure: 0.5, timeStamp: 1000 });
-		expect(touching.log).toEqual(["start:eraser"]);
+		expect(touching.log).toEqual(["start"]);
+		fire(touching.el, "pointerup", { button: 2, buttons: 0, pressure: 0, timeStamp: 1090 });
+		expect(touching.log).toEqual(["start", "cancel", "menu:click"]);
 		const hovering = setup();
 		fire(hovering.el, "pointerdown", { button: 2, buttons: 2, pressure: 0, timeStamp: 1000 });
 		expect(hovering.log).toEqual(["menu:button"]);
@@ -480,7 +482,7 @@ describe("side button pressed during contact (chord event)", () => {
 		expect(log.filter((x) => x !== "move")).toEqual(["start", "end"]);
 	});
 
-	it("button 0 on a move finishes the stroke (kept, not discarded) and the contact then erases", () => {
+	it("button 0 on a move soon after the landing: the button was held at contact, so the whole contact erases from its first sample (no ink)", () => {
 		const { el, log } = setup();
 		land(el);
 		ink(el, 1050, 410);
@@ -489,11 +491,11 @@ describe("side button pressed during contact (chord event)", () => {
 		ink(el, 1166, 440);
 		ink(el, 1182, 450);
 		fire(el, "pointerup", { button: 0, buttons: 0, pressure: 0, timeStamp: 1300 });
-		expect(log).toEqual(["start", "move", "move", "move", "end", "start:eraser", "move", "move", "end"]);
-		expect(log).not.toContain("cancel");
+		expect(log.filter((x) => x !== "move")).toEqual(["start", "cancel", "start:eraser", "end"]);
+		expect(log.indexOf("end")).toBe(log.length - 1);
 	});
 
-	it("the next such event goes back to ink; the lift resets", () => {
+	it("later such events change nothing; the lift resets, the next contact is ink", () => {
 		const { el, log } = setup();
 		land(el);
 		ink(el, 1050, 410);
@@ -505,7 +507,7 @@ describe("side button pressed during contact (chord event)", () => {
 		land(el, 2000);
 		ink(el, 2050, 410);
 		fire(el, "pointerup", { button: 0, buttons: 0, pressure: 0, timeStamp: 2100 });
-		expect(log.filter((x) => x.startsWith("start") || x === "end" || x === "cancel")).toEqual(["start", "end", "start:eraser", "end", "start", "end", "start", "end"]);
+		expect(log.filter((x) => x.startsWith("start") || x === "end" || x === "cancel")).toEqual(["start", "cancel", "start:eraser", "end", "start", "end"]);
 	});
 
 	it("pointerdown (button 0) and an early button 0 move never toggle", () => {
@@ -517,7 +519,7 @@ describe("side button pressed during contact (chord event)", () => {
 		expect(log.filter((x) => x === "end" || x === "cancel" || x.startsWith("start:"))).toEqual([]);
 	});
 
-	it("pointerrawupdate and pointermove reporting the same change toggle once", () => {
+	it("pointerrawupdate and pointermove reporting the same change count once", () => {
 		const el = new FakeEl();
 		installFakeWindow({ onpointerrawupdate: null });
 		const { log, controller } = (() => {
@@ -535,7 +537,7 @@ describe("side button pressed during contact (chord event)", () => {
 		fire(el, "pointerrawupdate", { button: 0, buttons: 1, pressure: 0.9, clientX: 420, timeStamp: 1150 });
 		fire(el, "pointermove", { button: 0, buttons: 1, pressure: 0.9, clientX: 420, timeStamp: 1152 });
 		fire(el, "pointerup", { button: 0, buttons: 0, pressure: 0, timeStamp: 1300 });
-		expect(log).toEqual(["start", "end", "start:eraser", "end"]);
+		expect(log).toEqual(["start", "cancel", "start:eraser", "end"]);
 		controller.setRawUpdates(false);
 	});
 
@@ -555,13 +557,19 @@ describe("side button pressed during contact (chord event)", () => {
 		expect(log.filter((x) => x.startsWith("start"))).toEqual(["start:eraser"]);
 	});
 
-	it("the radial-only action: the stroke is finished and the menu opens", () => {
+	it("the radial-only action: a moving contact is still the eraser (no menu during a drag); a still one is a tap, the menu on the lift", () => {
 		const { el, log, menus } = setup({ penButton: "radial" });
 		land(el);
 		ink(el, 1050, 410);
 		ink(el, 1150, 430, 0);
-		expect(log.filter((x) => x !== "move")).toEqual(["start", "end", "menu:button"]);
-		expect(menus.length).toBe(1);
+		expect(log.filter((x) => x !== "move")).toEqual(["start", "cancel", "start:eraser"]);
+		expect(menus.length).toBe(0);
+		const tap = setup({ penButton: "radial" });
+		land(tap.el);
+		ink(tap.el, 1030, 401);
+		ink(tap.el, 1150, 401, 0);
+		fire(tap.el, "pointerup", { button: 0, buttons: 0, pressure: 0, timeStamp: 1200 });
+		expect(tap.log.filter((x) => x !== "move")).toEqual(["start", "cancel", "menu:click"]);
 	});
 });
 
