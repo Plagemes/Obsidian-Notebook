@@ -32,13 +32,20 @@ import { searchPill } from "../ui/components/search-pill";
 import { sectionHeader } from "../ui/components/section-header";
 import { subjectCard, type SubjectCardOptions } from "../ui/components/subject-card";
 import type { FavouriteRowOptions } from "../ui/components/favourite-row";
-import type { KpiTileOptions } from "../ui/components/kpi-tile";
 import type { QuickActionOptions } from "../ui/components/quick-action";
+import type { ContinueCardOptions, QuickPageOptions } from "../ui/components/continue-card";
+import type { RecentGroupOptions } from "../ui/components/recent-group";
+import type { PagesChartOptions, StatTileOptions, SubjectSplitOptions } from "../ui/components/stat-widgets";
 import {
-	collectionsOf, deltaPercent, inCollection, stampTime, STAT_PERIODS, statsOf, subjectsOf, topFolderOf,
-	type CollectionContext, type CollectionId, type KpiId, type StatPeriod, type Subject,
+	collectionsOf, inCollection, stampTime, statsOf, subjectsOf, topFolderOf,
+	type CollectionContext, type CollectionId, type Subject,
 } from "./dashboard";
-import { renderHome } from "./home-surface";
+import type { ActivityRecord } from "./activity-log";
+import { greetingOf, greetingText, type GreetingKey } from "./greeting";
+import { buildStatsModel, filterEdits, subjectsOfEdits, todayPages, type RecentEdit } from "./home-data";
+import { CHART_DAYS, chooseContinue, groupByNotebook, pagesByFolder, splitMinutes, type ChartDays, type LectureTarget, type SubjectRef } from "./home-stats";
+import { renderHome, type RecentSection, type StatsSection } from "./home-surface";
+import { PageThumbs } from "./page-thumbs";
 import { renderLibrarySections, renderTagChips, type TagChip } from "./library-sections";
 import { InboxBell, type InboxPort } from "./inbox-bell";
 
@@ -51,6 +58,10 @@ export const LIBRARY_VIEW_TYPE = "notebook-library";
 export interface FolderMetaSource {
 	getFolderMeta(path: string): FolderMeta | null;
 	onFolderMetaChange(fn: () => void): () => void;
+	/** 0.13: pins a folder to the sidebar's "Pinned" section (or unpins it). */
+	setPinned?(path: string, pinned: boolean): Promise<unknown>;
+	/** 0.13: the pinned folders, sorted by path. */
+	pinnedFolders?(): string[];
 }
 
 /** What the library needs from the plugin. */
@@ -106,6 +117,16 @@ export interface LibraryHost {
 	recentEdits?(): Array<{ path: string; page: string; num: number; at: number }>;
 	/** 0.12: the Zettelkasten Inbox for the header bell; null when the feature is not available. */
 	inbox?(): InboxPort | null;
+	/** 0.13: the "Your name" setting (Home's greeting). */
+	userName?(): string;
+	/** 0.13: pages and minutes written per day on this device (Home's greeting and statistics; view/recent-pages.ts). */
+	activity?(): { records: ActivityRecord[]; minutes: Record<string, number> };
+	/** 0.13: the class in progress and the notebook it opens, or where one is made (Continue card). */
+	lectureTarget?(): LectureTarget | null;
+	/** 0.13: the notebook and page (1-based) the reader was on last (Continue card). */
+	lastNotebook?(): { path: string; page: number } | null;
+	/** 0.13: a new page in Quick notes (Quick page card). */
+	newQuickPage?(): void;
 }
 
 /**
@@ -129,7 +150,16 @@ const STRUCTURE_DELAY_MS = 300;
 const GRID_PAGE = 60;
 /** Dashboard sizes. */
 const DASH_SUBJECTS = 4;
+/** 0.13: subject cards on Home before the dashed "New folder" tile: three columns wide, two on a tablet in portrait, one on a phone. */
+const DASH_SUBJECTS_WIDE = 8;
+const DASH_SUBJECTS_MEDIUM = 5;
+const DASH_SUBJECTS_PHONE = 3;
+/** 0.13: Recent notes on Home: notebooks, and pages of each. */
+const DASH_GROUPS = 3;
+const DASH_GROUP_PAGES = 3;
 const DASH_ROWS = 5;
+/** 0.13: pinned items shown in the rail. */
+const PINNED_MAX = 8;
 const DASH_FAVOURITES = 4;
 const DASH_TAGS = 11;
 
@@ -178,8 +208,12 @@ export class LibraryView extends ItemView {
 	private searchWide: boolean | null = null;
 	/** 0.12: notebook grid as cards or as a list. */
 	private layoutMode: "grid" | "list" = "grid";
-	/** 0.12: the period of Home's statistics, in weeks. */
-	private weeks: StatPeriod = 4;
+	/** 0.13: the range of Home's pages chart, in days. */
+	private statDays: ChartDays = 7;
+	/** 0.13: Home's Recent notes are filtered to this subject (its folder path); null = all. */
+	private recentSubject: string | null = null;
+	/** 0.13: what the Continue card does on tap (also offered by an empty pages chart). */
+	private continueRun: (() => void) | null = null;
 	/** Wide view: the rail folded to icons by the user. */
 	private railFolded = false;
 	private mode: WidthMode = "wide";
@@ -222,6 +256,15 @@ export class LibraryView extends ItemView {
 	private arrangement: { pinned: string[]; rest: string[] } = { pinned: [], rest: [] };
 	private backfilling = false;
 
+	/** 0.13: page thumbnails of Home (Continue card, Recent notes). */
+	private readonly pageThumbs = new PageThumbs({
+		fileOf: (path) => this.app.vault.getFileByPath(path),
+		readNotebook: (file) => this.host.readNotebook(file),
+		background: (doc, page, width) => this.host.thumbnailBackground?.(doc, page, width) ?? Promise.resolve(null),
+		idle: () => writing.idle(),
+		isClosed: () => this.closed,
+	}, (path) => this.index.get(path)?.mtime ?? 0);
+
 	private readonly thumbQueue: string[] = [];
 	private readonly thumbPending = new Set<string>();
 	private readonly thumbFailed = new Set<string>();
@@ -247,16 +290,16 @@ export class LibraryView extends ItemView {
 	}
 
 	getState(): Record<string, unknown> {
-		return { ...super.getState(), scope: this.place, sort: this.sort, layout: this.layoutMode, weeks: this.weeks };
+		return { ...super.getState(), scope: this.place, sort: this.sort, layout: this.layoutMode, statDays: this.statDays };
 	}
 
 	async setState(state: unknown, result: ViewStateResult): Promise<void> {
 		if (typeof state === "object" && state !== null) {
-			const s = state as { scope?: unknown; sort?: unknown; layout?: unknown; weeks?: unknown };
+			const s = state as { scope?: unknown; sort?: unknown; layout?: unknown; statDays?: unknown };
 			this.place = parsePlace(s.scope, this.startPlace);
 			if (SORTS.includes(s.sort as LibrarySort)) this.sort = s.sort as LibrarySort;
 			if (s.layout === "grid" || s.layout === "list") this.layoutMode = s.layout;
-			if (STAT_PERIODS.includes(s.weeks as StatPeriod)) this.weeks = s.weeks as StatPeriod;
+			if (CHART_DAYS.includes(s.statDays as ChartDays)) this.statDays = s.statDays as ChartDays;
 			if (this.built) this.requestRender();
 		}
 		await super.setState(state, result);
@@ -304,7 +347,10 @@ export class LibraryView extends ItemView {
 		this.expanded.add(this.root());
 		this.render();
 		this.refreshNow();
-		this.registerInterval(window.setInterval(() => this.refreshNow(), 30_000));
+		this.registerInterval(window.setInterval(() => {
+			this.refreshNow();
+			this.refreshGreeting();
+		}, 30_000));
 		this.host.libraryOpened?.();
 
 		const vault = this.app.vault;
@@ -337,6 +383,7 @@ export class LibraryView extends ItemView {
 		this.observer?.disconnect();
 		this.resizeObserver?.disconnect();
 		this.thumbQueue.length = 0;
+		this.pageThumbs.clear();
 		try {
 			// An index written by a newer plugin version on another device is never saved over (review).
 			if (!this.index.keepsNewerVersion) await this.host.saveIndex(this.index.toJSON());
@@ -754,6 +801,10 @@ export class LibraryView extends ItemView {
 			if (!r.isIntersecting) continue;
 			const el = r.target as HTMLElement;
 			this.observer?.unobserve(el);
+			if (el.dataset.pageThumbPath) {
+				this.pageThumbs.fill(el);
+				continue;
+			}
 			const path = el.dataset.thumbPath;
 			const entry = path ? this.index.get(path) : undefined;
 			if (!path || !entry) continue;
@@ -981,7 +1032,7 @@ export class LibraryView extends ItemView {
 
 	private subjectCardOptions(s: Subject, shape: "row" | "tile"): SubjectCardOptions {
 		const lines = shape === "row"
-			? [this.plural(s.notebooks, "library.notebooks.one", "library.notebooks.many")]
+			? [`${this.plural(s.notebooks, "library.notebooks.one", "library.notebooks.many")} · ${this.plural(s.pages, "library.pages.one", "library.pages.many")}`]
 			: [this.plural(s.notebooks, "library.notebooks.one", "library.notebooks.many"), this.plural(s.pages, "library.pages.one", "library.pages.many")];
 		const look = this.folderLook(s.path);
 		return {
@@ -1082,8 +1133,11 @@ export class LibraryView extends ItemView {
 			} });
 		}
 
+		this.renderPinned(el);
+
 		railLabel(el, t("nav.vault"));
 		const counts = this.folderCounts();
+		const pageCounts = pagesByFolder(visible, this.root());
 		const treeEl = el.createDiv({ cls: "nb-rail-tree", attr: { role: "tree" } });
 		const walk = (node: FolderNode, depth: number) => {
 			const hasChildren = node.children.length > 0;
@@ -1099,6 +1153,9 @@ export class LibraryView extends ItemView {
 				color: color ?? undefined,
 				label: node.path === this.root() ? this.rootLabel() : node.name,
 				count: counts.get(node.path) ?? 0,
+				// 0.13: the pages too, not only the notebooks ("12 · 248 p").
+				pages: node.path === this.root() || (counts.get(node.path) ?? 0) === 0 ? undefined : t("library.pages.short", { n: String(pageCounts.get(node.path) ?? 0) }),
+				detail: (counts.get(node.path) ?? 0) === 0 ? undefined : `${this.plural(counts.get(node.path) ?? 0, "library.notebooks.one", "library.notebooks.many")}, ${this.plural(pageCounts.get(node.path) ?? 0, "library.pages.one", "library.pages.many")}`,
 				active: isFolderPlace(p) && p.folder === node.path,
 				onClick: () => this.navigate({ folder: node.path }),
 			});
@@ -1133,11 +1190,42 @@ export class LibraryView extends ItemView {
 		}
 	}
 
+	/**
+	 * 0.13: the "Pinned" section above the Vault: the notebooks and folders pinned from their ⋯ menus (and from Recent notes).
+	 * Every item opens on tap and has the same menu as elsewhere (which unpins it). Nothing pinned: one line that says how.
+	 */
+	private renderPinned(el: HTMLElement): void {
+		railLabel(el, t("nav.pinned"));
+		const box = el.createDiv({ cls: "nb-rail-pinned" });
+		const root = this.root();
+		const folders = (this.host.folderMeta?.pinnedFolders?.() ?? []).filter((f) => this.inLibrary(f) && !!this.app.vault.getFolderByPath(f));
+		const notebooks = this.visible().filter((e) => this.isPinned(e)).sort((a, b) => a.name.localeCompare(b.name, getLanguage(), { numeric: true }));
+		if (folders.length === 0 && notebooks.length === 0) {
+			box.createDiv({ cls: "nb-rail-hint", text: t("nav.pinned.empty") });
+			return;
+		}
+		for (const path of folders.slice(0, PINNED_MAX)) {
+			const color = this.host.folderMeta?.getFolderMeta(path)?.color ?? this.folderLook(path).color;
+			const row = box.createDiv({ cls: "nb-tree-row nb-pinned-row", attr: { [DROP_ATTR]: path } });
+			railItem(row, {
+				key: `pinned:${path}`, icon: "folder", image: decorate("", () => svgDataUrl(folderIconSvg(color, 24))) || undefined, color,
+				label: path === root ? this.rootLabel() : path.slice(path.lastIndexOf("/") + 1), onClick: () => this.navigate({ folder: path }),
+			});
+			attachPress({ el: row, onMenu: (x, y) => this.folderMenu(path, x, y) });
+		}
+		for (const e of notebooks.slice(0, Math.max(0, PINNED_MAX - folders.length))) {
+			const color = this.subjectOf(e)?.color;
+			const row = box.createDiv({ cls: "nb-tree-row nb-pinned-row" });
+			railItem(row, { key: `pinned:${e.path}`, icon: "book-open", color, label: e.name, onClick: () => { this.setRailOpen(false); this.openEntry(e.path); } });
+			attachPress({ el: row, onMenu: (x, y) => this.notebookMenu(e.path, x, y) });
+		}
+	}
+
 	// ---------------------------------------------------------------- header
 
 	private placeTitle(): { title: string; subtitle: string } {
 		const p = this.place;
-		if (p === "home") return { title: t("home.title"), subtitle: t("home.subtitle") };
+		if (p === "home") return { title: t("home.title"), subtitle: this.greeting() };
 		if (isFolderPlace(p)) {
 			const parts = breadcrumb(this.root(), p.folder);
 			const names = parts.map((x) => (x.path === this.root() ? this.rootLabel() : x.name));
@@ -1408,82 +1496,300 @@ export class LibraryView extends ItemView {
 		renderTagChips(el, this.tagChips(tags, this.subjects(tree)));
 	}
 
+	// ---------------------------------------------------------------- Home (0.13)
+
+	/** The subject (top-level folder) of a notebook path, as the statistics and the Recent filter name it. */
+	private readonly subjectRef = (path: string): SubjectRef | null => {
+		const top = topFolderOf(path, this.root());
+		if (top === null) return null;
+		return { key: top, label: top.slice(top.lastIndexOf("/") + 1), color: this.folderLook(top).color };
+	};
+
+	/** 0.13: "Good evening, Alex · 3 pages written today" (the header's line on Home). */
+	private greeting(): string {
+		const now = Date.now();
+		const records = this.host.activity?.().records ?? [];
+		const g = greetingOf({ now: new Date(now), name: this.host.userName?.() ?? "", pagesToday: todayPages(records, now) });
+		return greetingText(g, (key: GreetingKey, vars) => t(key, vars));
+	}
+
+	/** The greeting follows the clock: the time of day and the count change while Home stays open. */
+	private refreshGreeting(): void {
+		if (this.place === "home" && this.built && !this.closed && this.search.trim() === "") this.subtitleEl.setText(this.greeting());
+	}
+
+	/** Edits for Recent notes: the pages the device edited last; without a log, the notebooks changed last stand in for their first page. */
+	private homeEdits(): { edits: RecentEdit[]; logged: boolean } {
+		const out: RecentEdit[] = [];
+		for (const x of this.host.recentEdits?.() ?? []) {
+			const e = this.index.get(x.path);
+			if (!e || this.isArchived(e)) continue;
+			out.push({ path: x.path, pageId: x.page, num: x.num, at: x.at });
+		}
+		if (out.length > 0) return { edits: out, logged: true };
+		const stand = this.visible().filter((e) => e.mtime >= 0).sort((a, b) => b.modified - a.modified).slice(0, 40);
+		return { edits: stand.map((e) => ({ path: e.path, num: 1, at: e.modified })), logged: false };
+	}
+
+	/** The Continue card: the lecture in progress, else the notebook left off in; an empty vault gets the empty state that teaches the first step. */
+	private continueOptions(now: number, edits: readonly RecentEdit[], lang: string): { card: ContinueCardOptions | null; empty: EmptyStateOptions | null } {
+		const lecture = this.host.lectureTarget?.() ?? null;
+		const last = this.host.lastNotebook?.() ?? null;
+		const newest = this.visible().filter((e) => e.mtime >= 0).sort((a, b) => b.modified - a.modified)[0]?.path ?? null;
+		const usable = (p: string) => {
+			const e = this.index.get(p);
+			return !!e && !this.isArchived(e);
+		};
+		const choice = chooseContinue(lecture, last?.path ?? null, newest, usable);
+		this.continueRun = null;
+		const indigo = paletteColor("Indigo");
+		const pageOf = (path: string) => edits.find((x) => x.path === path && x.pageId)?.pageId;
+		if (choice.kind === "none") return { card: null, empty: this.firstSteps() };
+		if (choice.kind === "last") {
+			const e = this.index.get(choice.path)!;
+			const subject = this.subjectOf(e);
+			const color = subject?.color ?? indigo;
+			const page = last?.path === choice.path ? Math.max(0, last.page - 1) : undefined;
+			const run = () => this.openEntry(choice.path, page);
+			this.continueRun = run;
+			return {
+				card: {
+					eyebrow: t("home.continue.last"), eyebrowIcon: "history", title: e.name,
+					lines: [[subject?.label, this.plural(e.pages, "library.pages.one", "library.pages.many")].filter(Boolean).join(" · "), t("lib.updated", { time: stampTime(e.modified, now, lang) })],
+					color, thumb: { path: e.path, pageId: pageOf(e.path) }, art: this.art(`continue:${e.path}`, color, 640, 240),
+					action: { icon: "pencil", label: t("home.continue.action"), onRun: run }, key: "continue:last",
+				},
+				empty: null,
+			};
+		}
+		// The lecture in progress (timetable): its notebook, or the course's folder to make one in.
+		const entry = choice.path ? this.index.get(choice.path) : undefined;
+		const folderName = choice.folder === this.root() ? this.rootLabel() : choice.folder.slice(choice.folder.lastIndexOf("/") + 1);
+		const color = entry ? (this.subjectOf(entry)?.color ?? indigo) : (this.folderColor(choice.folder) ?? indigo);
+		const open = choice.path;
+		const run = () => {
+			if (this.host.openNowClass) this.host.openNowClass();
+			else if (open) this.openEntry(open);
+			else this.host.createNotebook(choice.folder);
+		};
+		this.continueRun = run;
+		return {
+			card: {
+				eyebrow: choice.room ? t("home.continue.lectureRoom", { room: choice.room }) : t("home.continue.lecture"), eyebrowIcon: "graduation-cap", title: choice.course,
+				lines: entry
+					? [`${entry.name} · ${this.plural(entry.pages, "library.pages.one", "library.pages.many")}`, t("lib.updated", { time: stampTime(entry.modified, now, lang) })]
+					: [t("home.continue.noNotebook", { folder: folderName })],
+				color, thumb: open ? { path: open, pageId: pageOf(open) } : null, art: this.art(`continue:${choice.course}`, color, 640, 240),
+				action: open
+					? { icon: "book-open", label: t("home.continue.openLecture"), onRun: run }
+					: { icon: "file-plus", label: t("home.continue.startNotebook", { course: choice.course }), onRun: run },
+				key: "continue:lecture",
+			},
+			empty: null,
+		};
+	}
+
+	private quickPageOptions(): QuickPageOptions | null {
+		const open = this.host.newQuickPage?.bind(this.host) ?? this.host.openLooseSheet?.bind(this.host);
+		if (!open) return null;
+		const color = paletteColor("Amber");
+		return { icon: "sticky-note", color, title: t("home.quickPage"), description: t("home.quickPage.desc"), art: this.art("quick:page", color, 280, 140), key: "quick:page", onRun: open };
+	}
+
+	/** Opens a notebook (at a page, 0-based) in a new tab, whether or not it is already open. */
+	private openInNewTab(file: TFile, pageIndex?: number): void {
+		void this.app.workspace.getLeaf("tab").openFile(file, pageIndex === undefined ? undefined : { state: { page: pageIndex + 1 } });
+	}
+
+	/** Shows where a notebook is: its folder in the library, with the notebook's card scrolled into view and flashed. */
+	private revealInLibrary(path: string): void {
+		const e = this.index.get(path);
+		if (!e) return;
+		this.navigate({ folder: e.folder });
+		window.requestAnimationFrame(() => {
+			const card = Array.from(this.gridEl.querySelectorAll<HTMLElement>(".notebook-lib-card")).find((c) => c.dataset.path === path);
+			if (!card) return;
+			card.scrollIntoView({ block: "center" });
+			card.addClass("is-flash");
+			window.setTimeout(() => card.removeClass("is-flash"), 1800);
+		});
+	}
+
+	/** The ⋯ menu of a page in Recent notes. */
+	private recentMenu(x: RecentEdit, logged: boolean, anchor: HTMLElement): void {
+		const e = this.index.get(x.path);
+		const file = this.app.vault.getFileByPath(x.path);
+		if (!e || !file) return;
+		const page = logged ? x.num - 1 : undefined;
+		const menu = new Menu();
+		menu.addItem((i) => i.setTitle(t("home.recent.menu.open")).setIcon("book-open").onClick(() => this.openEntry(x.path, page)));
+		menu.addItem((i) => i.setTitle(t("home.recent.menu.newTab")).setIcon("external-link").onClick(() => this.openInNewTab(file, page)));
+		menu.addItem((i) => i.setTitle(t("home.recent.menu.reveal")).setIcon("folder-open").onClick(() => this.revealInLibrary(x.path)));
+		menu.addSeparator();
+		const pinned = this.isPinned(e);
+		menu.addItem((i) => i.setTitle(pinned ? t("library.menu.unpin") : t("library.menu.pin")).setIcon(pinned ? "pin-off" : "pin").onClick(() => void this.togglePinned(x.path)));
+		menu.addItem((i) => i.setTitle(e.favorite ? t("library.favorite.remove") : t("library.favorite.add")).setIcon("star").onClick(() => void this.toggleFavorite(x.path)));
+		this.showMenu(menu, anchor);
+	}
+
+	private recentSection(all: readonly RecentEdit[], logged: boolean, now: number, lang: string): RecentSection | null {
+		if (all.length === 0) return null;
+		const refs = subjectsOfEdits(all, this.subjectRef);
+		if (this.recentSubject !== null && !refs.some((r) => r.key === this.recentSubject)) this.recentSubject = null;
+		const shown = filterEdits(all, this.recentSubject, this.subjectRef);
+		const groups = groupByNotebook(shown, DASH_GROUPS, DASH_GROUP_PAGES);
+		const options: RecentGroupOptions[] = [];
+		for (const g of groups) {
+			const e = this.index.get(g.path);
+			if (!e) continue;
+			const subject = this.subjectOf(e);
+			options.push({
+				title: e.name,
+				subject: subject ? { label: subject.label, color: subject.color } : null,
+				summary: logged ? this.plural(g.items.length, "home.recent.edited.one", "home.recent.edited.many") : t("lib.modified", { time: stampTime(e.modified, now, lang) }),
+				key: `recentgroup:${g.path}`,
+				menuLabel: t("library.menu.more"),
+				onOpen: () => this.openEntry(g.path),
+				onMenu: (anchor) => this.notebookMenu(g.path, 0, 0, anchor),
+				pages: g.items.map((x) => {
+					const bookmark = e.bookmarks?.find((b) => b.page === x.num - 1);
+					return {
+						title: bookmark ? bookmark.title : t("nav.page", { n: String(x.num) }),
+						meta: stampTime(x.at, now, lang),
+						thumb: { path: x.path, pageId: x.pageId },
+						key: `recent:${x.path}#${x.pageId ?? x.num}`,
+						menuLabel: t("library.menu.more"),
+						onOpen: () => this.openEntry(x.path, logged ? x.num - 1 : undefined),
+						onMenu: (anchor) => this.recentMenu(x, logged, anchor),
+					};
+				}),
+			});
+		}
+		const more = logged && this.host.openRecentPages ? () => this.host.openRecentPages?.() : this.visible().length > DASH_ROWS ? () => this.navigate("recent") : null;
+		return {
+			chips: refs.length > 1 ? [{ id: null, label: t("home.recent.all") }, ...refs.map((r) => ({ id: r.key, label: r.label, color: r.color }))] : [],
+			activeChip: this.recentSubject,
+			onChip: (id) => {
+				this.recentSubject = id;
+				this.requestRender();
+			},
+			groups: options,
+			none: t("home.recent.none"),
+			more,
+		};
+	}
+
+	/** "3 h 20 min", "45 min". */
+	private duration(minutes: number): string {
+		const { hours, minutes: m } = splitMinutes(minutes);
+		return hours > 0 ? t("home.stats.time.hm", { h: String(hours), m: String(m) }) : t("home.stats.time.m", { m: String(m) });
+	}
+
+	/** Statistics: the widgets that have something to show; a zero one is hidden or becomes a hint that teaches the next step. */
+	private statsSection(now: number, lang: string, visible: readonly LibraryEntry[]): StatsSection | null {
+		const act = this.host.activity?.() ?? { records: [], minutes: {} };
+		const pdf = statsOf(visible, [], now, this.statDays / 7).find((k) => k.id === "pdf")?.value ?? 0;
+		const m = buildStatsModel({ records: act.records, minutesByDay: act.minutes, now, days: this.statDays, subjectOf: this.subjectRef, pdfNotebooks: pdf, notebooks: this.index.size });
+		if (!m.visible) return null;
+		const long = new Intl.DateTimeFormat(lang, { weekday: "short", day: "numeric", month: "short" });
+		const narrow = new Intl.DateTimeFormat(lang, { weekday: "narrow" });
+		const pagesWord = (n: number) => this.plural(n, "library.pages.one", "library.pages.many");
+		const bars = m.days.map((d, i) => ({
+			label: this.statDays === 7 ? narrow.format(d.at) : String(new Date(d.at).getDate()),
+			value: d.pages,
+			tip: `${long.format(d.at)}: ${pagesWord(d.pages)}`,
+			today: i === m.days.length - 1,
+		}));
+		const write = this.continueRun ?? (() => this.newNotebook());
+		const chart: PagesChartOptions = {
+			title: t("home.stats.pages"),
+			summary: m.total > 0 ? `${pagesWord(m.total)} · ${t("home.stats.perDay", { n: m.average.toLocaleString(lang) })}` : t("home.stats.lastDays", { n: String(this.statDays) }),
+			bars,
+			description: t("home.stats.chartDesc", { days: String(this.statDays), list: bars.map((b) => b.tip).join("; ") }),
+			range: {
+				value: this.statDays,
+				options: CHART_DAYS.map((d) => ({ value: d, label: t("home.stats.days", { n: String(d) }) })),
+				label: t("home.stats.range"),
+				onChange: (v) => {
+					if (!CHART_DAYS.includes(v as ChartDays)) return;
+					this.statDays = v as ChartDays;
+					this.app.workspace.requestSaveLayout();
+					this.requestRender();
+				},
+			},
+			empty: m.chartEmpty ? { text: t("home.stats.chartEmpty"), action: { label: t("home.stats.writeNow"), onRun: write } } : undefined,
+			key: "stat:pages",
+		};
+		const tiles: StatTileOptions[] = [];
+		if (m.streak > 0) {
+			tiles.push({
+				icon: "flame", color: paletteColor("Amber"), value: m.streak.toLocaleString(lang), label: t(m.streak === 1 ? "home.stats.streak.one" : "home.stats.streak"),
+				hint: m.days[m.days.length - 1]!.pages === 0 ? t("home.stats.streak.keep") : undefined, key: "stat:streak",
+			});
+		}
+		if (m.minutes > 0) {
+			tiles.push({ icon: "timer", color: paletteColor("Teal"), value: this.duration(m.minutes), label: t("home.stats.time"), hint: t("home.stats.time.hint", { n: String(this.statDays) }), key: "stat:time" });
+		}
+		if (m.pdf > 0) {
+			tiles.push({ icon: "file-text", color: paletteColor("Pink"), value: m.pdf.toLocaleString(lang), label: t("home.stats.pdf"), key: "stat:pdf" });
+		} else if (!visible.some((e) => (e.pdfPages ?? 0) > 0)) {
+			// No PDF yet: the tile teaches the next step and does it.
+			const root = this.root();
+			tiles.push({ icon: "file-up", color: paletteColor("Pink"), label: t("home.stats.pdf.teach"), action: { label: t("home.stats.pdf.cta"), onRun: () => this.host.importPdf(root) }, key: "stat:pdf-hint" });
+		}
+		let split: SubjectSplitOptions | null = null;
+		const top = m.split[0];
+		if (top) {
+			const shown = m.split.slice(0, 5);
+			split = {
+				title: t("home.stats.subject"),
+				headline: `${top.label} · ${pagesWord(top.pages)}`,
+				headlineColor: top.color,
+				segments: shown.map((s) => ({ label: s.label, color: s.color, pages: s.pages, share: s.share })),
+				description: t("home.stats.splitDesc", { list: shown.map((s) => `${s.label} ${s.pages}`).join(", ") }),
+				key: "stat:subject",
+			};
+		}
+		return { chart, tiles, split };
+	}
+
 	private renderHomeSurface(el: HTMLElement, tree: FolderNode): void {
 		const now = Date.now();
 		const visible = this.visible();
 		const subjects = this.subjects(tree);
 		const lang = getLanguage();
-		// Recent notes: the pages this device edited last (recent pages log); without a log, the notebooks changed last.
-		const recent: ListRowOptions[] = [];
-		const edits = this.host.recentEdits?.() ?? [];
-		for (const x of edits) {
-			if (recent.length >= DASH_ROWS) break;
-			const e = this.index.get(x.path);
-			if (!e || this.isArchived(e)) continue;
-			const bookmark = e.bookmarks?.find((b) => b.page === x.num - 1);
-			const meta = t("home.recent.page", { page: String(x.num), time: stampTime(x.at, now, lang) });
-			recent.push({ ...this.notebookRow(e, now, meta, () => this.openEntry(e.path, x.num - 1)), title: bookmark ? bookmark.title : e.name, key: `recent:${x.path}#${x.page}` });
-		}
-		if (edits.length === 0) {
-			for (const e of [...visible].sort((a, b) => b.modified - a.modified).slice(0, DASH_ROWS)) recent.push(this.notebookRow(e, now, stampTime(e.modified, now, lang)));
-		}
-		// An empty vault has nothing to count: the statistics wait for the first notebook.
-		const kpis = this.index.size === 0 ? [] : statsOf(visible, edits, now, this.weeks);
-		const look: Record<KpiId, { icon: string; color: string; label: MessageKey }> = {
-			created: { icon: "file-plus", color: paletteColor("Blue"), label: "home.stats.created" },
-			edited: { icon: "pencil", color: paletteColor("Violet"), label: "home.stats.edited" },
-			pdf: { icon: "file-text", color: paletteColor("Pink"), label: "home.stats.pdf" },
-			tags: { icon: "tag", color: paletteColor("Indigo"), label: "home.stats.tags" },
-		};
-		const open: Record<KpiId, () => void> = {
-			created: () => {
-				this.setSort("created");
-				this.navigate("all");
-			},
-			edited: () => (this.host.openRecentPages ? this.host.openRecentPages() : this.navigate("recent")),
-			pdf: () => this.navigate({ collection: "pdf" }),
-			tags: () => this.navigate("tags"),
-		};
-		const stats = kpis.map((k): KpiTileOptions => {
-			const d = deltaPercent(k);
-			return {
-				icon: look[k.id].icon,
-				color: look[k.id].color,
-				value: k.value.toLocaleString(lang),
-				label: t(look[k.id].label),
-				delta: d === null ? null : { text: `${d >= 0 ? "+" : ""}${d}%`, up: d >= 0, label: t("home.stats.delta") },
-				series: k.series,
-				key: `kpi:${k.id}`,
-				onOpen: open[k.id],
-			};
-		});
+		const { edits, logged } = this.homeEdits();
+		const cont = this.continueOptions(now, edits, lang);
 		const root = this.root();
+		const compact = (color: string) => ({ color, compact: true as const });
 		const quick: QuickActionOptions[] = [
-			{ icon: "file-plus", color: paletteColor("Violet"), title: t("home.quick.newNotebook"), description: t("home.quick.newNotebook.desc"), art: this.art("quick:new-notebook", paletteColor("Violet"), 240, 96), key: "quick:new-notebook", onRun: () => this.runCreate("new-notebook") },
-			{ icon: "folder-plus", color: paletteColor("Blue"), title: t("home.quick.newFolder"), description: t("home.quick.newFolder.desc"), art: this.art("quick:new-folder", paletteColor("Blue"), 240, 96), key: "quick:new-folder", onRun: () => this.runCreate("new-folder") },
-			{ icon: "file-up", color: paletteColor("Pink"), title: t("home.quick.importPdf"), description: t("home.quick.importPdf.desc"), art: this.art("quick:import-pdf", paletteColor("Pink"), 240, 96), key: "quick:import-pdf", onRun: () => this.host.importPdf(root) },
+			{ icon: "file-plus", ...compact(paletteColor("Violet")), title: t("home.quick.newNotebook"), description: t("home.quick.newNotebook.desc"), key: "quick:new-notebook", onRun: () => this.runCreate("new-notebook") },
+			{ icon: "folder-plus", ...compact(paletteColor("Blue")), title: t("home.quick.newFolder"), description: t("home.quick.newFolder.desc"), key: "quick:new-folder", onRun: () => this.runCreate("new-folder") },
+			{ icon: "file-up", ...compact(paletteColor("Pink")), title: t("home.quick.importPdf"), description: t("home.quick.importPdf.desc"), key: "quick:import-pdf", onRun: () => this.host.importPdf(root) },
 		];
-		if (this.host.scanToNotebook) quick.push({ icon: "scan", color: paletteColor("Teal"), title: t("home.quick.scan"), description: t("home.quick.scan.desc"), art: this.art("quick:scan", paletteColor("Teal"), 240, 96), key: "quick:scan", onRun: () => this.host.scanToNotebook?.(root) });
+		if (this.host.scanToNotebook) quick.push({ icon: "scan", ...compact(paletteColor("Teal")), title: t("home.quick.scan"), description: t("home.quick.scan.desc"), key: "quick:scan", onRun: () => this.host.scanToNotebook?.(root) });
+		const fit = this.mode === "wide" ? DASH_SUBJECTS_WIDE : this.mode === "medium" ? DASH_SUBJECTS_MEDIUM : DASH_SUBJECTS_PHONE;
 		renderHome(el, {
-			empty: this.index.size === 0 ? this.firstSteps() : null,
-			createSubject: this.createSubjectTile(),
-			subjects: subjects.slice(0, DASH_SUBJECTS).map((s) => this.subjectCardOptions(s, "row")),
-			moreSubjects: subjects.length > DASH_SUBJECTS ? () => this.navigate("subjects") : null,
-			recent,
-			moreRecent: edits.length > 0 && this.host.openRecentPages ? () => this.host.openRecentPages?.() : visible.length > DASH_ROWS ? () => this.navigate("recent") : null,
-			stats,
-			weeks: this.weeks,
-			setWeeks: (w) => {
-				this.weeks = w;
-				this.app.workspace.requestSaveLayout();
-				this.render();
-			},
+			continue: cont.card,
+			empty: cont.empty,
+			quickPage: this.quickPageOptions(),
 			quick,
+			subjects: subjects.slice(0, fit).map((s) => this.subjectCardOptions(s, "row")),
+			moreSubjects: subjects.length > fit ? () => this.navigate("subjects") : null,
+			createSubject: this.createSubjectTile(),
+			recent: this.recentSection(edits, logged, now, lang),
+			stats: this.statsSection(now, lang, visible),
 		});
+		// The dashed tile fills the rest of the last row of the folder grid, so the grid has no gap at its end.
+		const columns = this.mode === "wide" ? 3 : this.mode === "medium" ? 2 : 1;
+		const cards = Math.min(subjects.length, fit);
+		const tile = el.querySelector<HTMLElement>(".nb-home-subjects .nb-create-tile");
+		if (tile) tile.setCssProps({ "--nb-span": String(columns - (cards % columns)) });
 		for (const card of Array.from(el.querySelectorAll<HTMLElement>(".nb-subject-card"))) {
 			const path = card.dataset.key?.slice("subject:".length);
 			if (path) this.wireFolderCard(card, path);
 		}
+		for (const thumb of Array.from(el.querySelectorAll<HTMLElement>(".nb-page-thumb"))) this.watchThumb(thumb);
 	}
 
 	// ---------------------------------------------------------------- search
@@ -1942,6 +2248,15 @@ export class LibraryView extends ItemView {
 		menu.addItem((i) => i.setTitle(t("library.menu.importPdfHere")).setIcon("file-up").onClick(() => this.host.importPdf(path)));
 		if (this.host.lectureFromSlides) menu.addItem((i) => i.setTitle(t("library.menu.lectureFromSlidesHere")).setIcon("graduation-cap").onClick(() => this.host.lectureFromSlides?.(path)));
 		if (this.host.scanToNotebook) menu.addItem((i) => i.setTitle(t("library.menu.scanHere")).setIcon("scan").onClick(() => this.host.scanToNotebook?.(path)));
+		const meta = this.host.folderMeta;
+		const setPinned = meta?.setPinned?.bind(meta);
+		if (!isRoot && meta && setPinned) {
+			const pinned = meta.getFolderMeta(path)?.pinned === true;
+			menu.addSeparator();
+			menu.addItem((i) => i.setTitle(pinned ? t("library.menu.unpinFolder") : t("library.menu.pinFolder")).setIcon(pinned ? "pin-off" : "pin").onClick(() => {
+				void setPinned(path, !pinned).catch((e: unknown) => this.fail(e));
+			}));
+		}
 		if (!isRoot) {
 			menu.addSeparator();
 			menu.addItem((i) => i.setTitle(t("library.menu.renameFolder")).setIcon("pencil").onClick(() => this.askRenameFolder(path)));

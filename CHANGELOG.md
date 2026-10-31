@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### home2
+- **Home, revised structure (same look).** A greeting that follows the clock ("Buonasera, Alex · 3 pagine scritte oggi"; new setting *Appearance → Your name*); a *Continue* row with a hero card showing a large page thumbnail of the lecture in progress (the timetable's class, its linked notebook or course folder; a button to start a notebook when the course has none) or, without a class, the notebook you left off in, and a *Quick page* card that opens a new blank page in Quick notes; low quick actions (icon and title, the description is the tooltip); a three-column folder grid (two on a tablet in portrait, one on a phone) ending in the dashed *New folder* card; *Recent notes* grouped by notebook with a page thumbnail on every row, a ⋯ menu (open page, open in a new tab, show in the library, pin, favourite) and a subject filter; *Statistics* rebuilt as a pages-per-day chart (7 / 14 days), days in a row, estimated writing time, PDFs annotated (a hint that starts the import when there is none) and the most active subject with a bar split by subject colour. Widgets that are zero are hidden or become a hint.
+- **Sidebar.** A *Pinned* section above *Vault* (notebooks and folders; pin from their ⋯ menus, from Recent notes and from a folder's menu; every item opens on tap); folders show their page count next to the notebook count.
+- **Writing activity** (pages and minutes written per day, per device, in the device-local storage next to the recent pages log; no change to the notebook format); folder metadata gains a `pinned` field (same sidecar file, merged per field like the colour).
+- Tests: `tests/home-greeting.test.ts`, `tests/home-stats.test.ts`, `tests/home-pins.test.ts` (greeting, activity log, pages per day, streak, subject split, writing time, grouping, pages per folder, the Continue choice, pinned folders, Quick page logic). Harness: `dev/harness/home2-check.ts`; Home scenarios for the lecture, a class without a notebook and no class; full-page shots in `dist/shots/design/home-*-full.png`.
+
 ## 0.12.3 — 2026-10-30
 
 Fixes for what 0.12.2 showed on the tablet (Obsidian for Android, Italian, a vault with no notebooks): an empty creation dialog, a Home with only its title and search pill, an empty *Tag* page, a rail **+** sitting on the brand, and navy panels in the settings. **Not verified on the device**: checked in unit tests and in the browser harness only. Manual re-check: steps 485-492 in `docs/testing.md`. No change to the notebook format (still v11).

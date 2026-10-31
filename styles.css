@@ -8467,3 +8467,752 @@ body.notebook-style-obsidian {
 		transition: none;
 	}
 }
+
+/* ===== 0.13 home2 ===== */
+/* Home, revised structure (DESIGN.md section 4, docs/design-ui.md "Home"): the Continue row, low quick actions, a three-column
+   folder grid ending in the dashed tile, Recent notes grouped by notebook and the Statistics widgets. Same tokens and look as
+   0.12; everything is scoped under .nb-ui and uses --nb-* tokens only (so "Follow Obsidian theme" and the light theme apply). */
+
+/* --- Continue row: the hero card (2/3) and the Quick page card (1/3) --- */
+.nb-ui .nb-home-continue {
+	display: grid;
+	grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+	gap: 16px;
+	align-items: stretch;
+}
+
+.nb-ui .nb-home-continue:not(.has-quickpage) {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.nb-ui .nb-continue {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 24px;
+	min-width: 0;
+	min-height: 232px;
+	padding: 20px 26px 20px 22px;
+	overflow: hidden;
+	border: 1px solid var(--nb-c-glow);
+	border-radius: var(--nb-radius-card);
+	background:
+		radial-gradient(120% 140% at 100% 50%, var(--nb-c-glow) 0%, transparent 62%),
+		linear-gradient(100deg, var(--nb-c-soft) 0%, var(--nb-c-tint) 100%),
+		var(--nb-panel);
+	box-shadow: inset 0 0 40px -12px var(--nb-c-glow);
+	color: var(--nb-text);
+	cursor: pointer;
+	isolation: isolate;
+	transition: box-shadow var(--nb-motion) ease-out;
+}
+
+.nb-ui .nb-continue:hover {
+	box-shadow: inset 0 0 50px -10px var(--nb-c-glow), var(--nb-shadow-2);
+}
+
+.theme-light .nb-ui .nb-continue {
+	background:
+		radial-gradient(120% 140% at 100% 50%, var(--nb-c-tint) 0%, transparent 65%),
+		linear-gradient(100deg, var(--nb-panel) 0%, var(--nb-c-soft) 100%);
+	box-shadow: var(--nb-shadow-1);
+}
+
+.nb-ui .nb-continue.is-empty {
+	display: block;
+	min-height: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	box-shadow: none;
+	cursor: default;
+}
+
+.nb-ui .nb-continue-art {
+	position: absolute;
+	z-index: -1;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	width: 60%;
+	background-image: var(--nb-art);
+	background-size: cover;
+	background-position: center right;
+	opacity: 0.55;
+	-webkit-mask-image: linear-gradient(to right, transparent 0%, #000 65%);
+	mask-image: linear-gradient(to right, transparent 0%, #000 65%);
+	pointer-events: none;
+}
+
+.nb-ui .nb-continue-thumb {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	width: clamp(140px, 30%, 200px);
+	aspect-ratio: 3 / 4;
+	overflow: hidden;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: 12px;
+	background: #fff;
+	box-shadow: var(--nb-shadow-2);
+	color: var(--nb-text-faint);
+}
+
+.nb-ui .nb-continue-thumb img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	object-position: top;
+}
+
+.nb-ui .nb-continue-thumb.is-blank {
+	background: var(--nb-c-soft);
+	border: 2px dashed var(--nb-c);
+	box-shadow: none;
+	color: var(--nb-c);
+}
+
+.nb-ui .nb-continue-plus svg {
+	width: 36px;
+	height: 36px;
+}
+
+.nb-ui .nb-continue-text {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.nb-ui .nb-continue-eyebrow {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--nb-c);
+	font-size: var(--nb-fs-label);
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.nb-ui .nb-continue-eyebrow svg {
+	width: 18px;
+	height: 18px;
+}
+
+.nb-ui .nb-continue-title {
+	margin: 2px 0 0;
+	font-size: 26px;
+	font-weight: 650;
+	line-height: 1.2;
+	color: var(--nb-text);
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	text-shadow: 0 1px 8px var(--nb-card-shade);
+}
+
+.nb-ui .nb-continue-meta {
+	font-size: var(--nb-fs-subtitle);
+	color: var(--nb-text-muted);
+	text-shadow: 0 1px 6px var(--nb-card-shade);
+}
+
+.nb-ui .nb-continue-go {
+	align-self: flex-start;
+	margin-top: 14px;
+}
+
+/* Quick page: one tap, a new page in Quick notes. */
+.nb-ui .nb-quickpage {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: 14px;
+	min-width: 0;
+	min-height: 232px;
+	padding: 20px;
+	overflow: hidden;
+	border: 1px solid var(--nb-c-glow);
+	border-radius: var(--nb-radius-card);
+	background: linear-gradient(150deg, var(--nb-c-tint) 0%, var(--nb-c-soft) 100%), var(--nb-panel);
+	cursor: pointer;
+	isolation: isolate;
+	transition: box-shadow var(--nb-motion) ease-out;
+}
+
+.nb-ui .nb-quickpage:hover {
+	box-shadow: var(--nb-shadow-2);
+}
+
+.nb-ui .nb-quickpage-art {
+	position: absolute;
+	z-index: -1;
+	inset: 0;
+	background-image: var(--nb-art);
+	background-size: cover;
+	background-position: center;
+	opacity: 0.4;
+	-webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 90%);
+	mask-image: linear-gradient(to bottom, transparent 0%, #000 90%);
+	pointer-events: none;
+}
+
+.nb-ui .nb-quickpage-text {
+	min-width: 0;
+}
+
+.nb-ui .nb-quickpage-title {
+	font-size: var(--nb-fs-card);
+	font-weight: 600;
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-quickpage-desc {
+	margin-top: 4px;
+	font-size: var(--nb-fs-subtitle);
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-quickpage-add {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	align-self: flex-end;
+	width: 48px;
+	height: 48px;
+	border-radius: 50%;
+	background: var(--nb-c);
+	color: #fff;
+	box-shadow: 0 6px 16px -4px var(--nb-c-glow);
+}
+
+.nb-ui .nb-quickpage-add svg {
+	width: 24px;
+	height: 24px;
+}
+
+/* --- low quick actions: icon and title only (the description is the tooltip) --- */
+.nb-ui .nb-quick-grid.is-compact {
+	gap: 12px;
+}
+
+.nb-ui .nb-quick.is-compact {
+	min-height: 70px;
+	padding: 10px 14px;
+	gap: 14px;
+}
+
+.nb-ui .nb-quick.is-compact .nb-icon-square {
+	width: 42px;
+	height: 42px;
+}
+
+.nb-ui .nb-quick.is-compact .nb-quick-title {
+	font-size: 16px;
+}
+
+/* Narrow: two columns, still icon and title side by side and about 70 px tall (no chevron: the whole tile is the target). */
+.nb-app.nb-ui.is-medium .nb-quick-grid.is-compact,
+.nb-app.nb-ui.is-phone .nb-quick-grid.is-compact {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.nb-app.nb-ui.is-medium .nb-quick.is-compact .nb-chevron,
+.nb-app.nb-ui.is-phone .nb-quick.is-compact .nb-chevron {
+	display: none;
+}
+
+.nb-app.nb-ui.is-phone .nb-quick.is-compact {
+	gap: 10px;
+	padding: 10px 12px;
+}
+
+.nb-app.nb-ui.is-phone .nb-quick.is-compact .nb-quick-title {
+	font-size: 15px;
+}
+
+/* --- subject folders: three columns of low cards, the dashed tile is the last cell --- */
+.nb-ui .nb-subject-grid.is-cols {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 14px;
+}
+
+.nb-app.nb-ui.is-medium .nb-subject-grid.is-cols {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.nb-app.nb-ui.is-phone .nb-subject-grid.is-cols {
+	grid-template-columns: minmax(0, 1fr);
+	gap: 10px;
+}
+
+.nb-ui .nb-subject-card.is-row.is-compact {
+	--nb-card-pad-r: 46px;
+	min-height: 92px;
+	padding: 0 var(--nb-card-pad-r) 0 18px;
+	gap: 14px;
+}
+
+.nb-ui .nb-subject-card.is-compact .nb-folder-icon {
+	width: 62px;
+	height: 62px;
+	margin: -2px 0;
+}
+
+.nb-ui .nb-subject-card.is-compact .nb-subject-title {
+	font-size: 18px;
+}
+
+.nb-ui .nb-subject-card.is-row.is-compact .nb-subject-meta {
+	margin-top: 4px;
+	font-size: 14px;
+}
+
+.nb-ui .nb-subject-card.is-row.is-compact .nb-chevron {
+	right: 16px;
+}
+
+.nb-ui .nb-subject-grid.is-cols > .nb-create-tile.is-compact,
+.nb-app.nb-ui.is-phone .nb-subject-grid.is-cols > .nb-create-tile.is-compact {
+	grid-column: span var(--nb-span, 1);
+	min-height: 92px;
+	padding: 12px 18px;
+}
+
+/* --- Recent notes: grouped by notebook, a page thumbnail on every row --- */
+.nb-ui .nb-home-middle {
+	align-items: start;
+}
+
+.nb-ui .nb-recent-filter {
+	padding: 0 4px;
+}
+
+.nb-ui .nb-recent-groups {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.nb-ui .nb-recent-group {
+	overflow: hidden;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+}
+
+.nb-ui .nb-recent-head,
+.nb-ui .nb-recent-page {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 6px 4px 6px 14px;
+	cursor: pointer;
+	transition: background-color var(--nb-motion-fast) ease-out;
+}
+
+.nb-ui .nb-recent-head {
+	min-height: 56px;
+}
+
+.nb-ui .nb-recent-page {
+	min-height: 64px;
+	padding-left: 12px;
+}
+
+.nb-ui .nb-recent-head:hover,
+.nb-ui .nb-recent-page:hover {
+	background: var(--nb-hover);
+}
+
+.nb-ui .nb-recent-pages {
+	display: flex;
+	flex-direction: column;
+	border-top: 1px solid var(--nb-border);
+}
+
+.nb-ui .nb-recent-page + .nb-recent-page {
+	box-shadow: 0 -1px 0 var(--nb-border);
+}
+
+.nb-ui .nb-page-thumb {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+	border: 1px solid var(--nb-border-strong);
+	background: var(--nb-panel);
+	color: var(--nb-text-faint);
+}
+
+.nb-ui .nb-page-thumb img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	object-position: top;
+	background: #fff;
+}
+
+.nb-ui .nb-recent-thumb {
+	flex: 0 0 auto;
+	width: 46px;
+	height: 58px;
+	border-radius: 8px;
+}
+
+.nb-ui .nb-recent-none {
+	padding: 16px 8px;
+}
+
+/* A notebook revealed from Recent notes: its card is flashed in the library. */
+.nb-ui .notebook-lib-card.is-flash {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 3px;
+}
+
+/* --- Statistics: pages per day, streak, writing time, subject split --- */
+.nb-ui .nb-stat-body {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.nb-ui .nb-stat-chart,
+.nb-ui .nb-stat-split {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	min-width: 0;
+	padding: 14px 16px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+}
+
+.nb-ui .nb-stat-chart-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 10px;
+}
+
+.nb-ui .nb-stat-title {
+	font-size: var(--nb-fs-row);
+	font-weight: 600;
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-stat-sub {
+	margin-top: 2px;
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.nb-ui .nb-segmented {
+	display: inline-flex;
+	gap: 2px;
+	padding: 3px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-panel);
+}
+
+.nb-ui .nb-segment {
+	min-width: 72px;
+	height: 40px;
+	padding: 0 14px;
+	border: 0;
+	border-radius: var(--nb-radius-pill);
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+	cursor: pointer;
+}
+
+.nb-ui .nb-segment.is-active {
+	background: var(--nb-accent-bg);
+	color: var(--nb-text);
+	box-shadow: inset 0 0 0 1px var(--nb-accent);
+}
+
+.nb-ui .nb-bars {
+	display: grid;
+	grid-template-columns: repeat(var(--nb-bar-count, 7), minmax(0, 1fr));
+	gap: 6px;
+	height: 156px;
+}
+
+.nb-ui .nb-bar-col {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+}
+
+.nb-ui .nb-bar-value {
+	height: 16px;
+	font-size: 12px;
+	color: var(--nb-text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.nb-ui .nb-bar-track {
+	position: relative;
+	flex: 1 1 auto;
+	width: 100%;
+}
+
+.nb-ui .nb-bar {
+	position: absolute;
+	bottom: 0;
+	left: 50%;
+	width: min(100%, 30px);
+	height: var(--nb-h, 10%);
+	border-radius: 7px 7px 3px 3px;
+	background: var(--nb-accent);
+	opacity: 0.55;
+	transform: translateX(-50%);
+}
+
+.nb-ui .nb-bar-col.is-today .nb-bar {
+	opacity: 1;
+}
+
+.nb-ui .nb-bar.is-zero {
+	background: var(--nb-border-strong);
+	opacity: 1;
+}
+
+.nb-ui .nb-bar-label {
+	font-size: 12px;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-bar-col.is-today .nb-bar-label,
+.nb-ui .nb-bar-col.is-today .nb-bar-value {
+	color: var(--nb-accent);
+	font-weight: 600;
+}
+
+.nb-ui .nb-stat-empty {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+	padding: 18px 4px 8px;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-stat-empty-text {
+	flex: 1 1 200px;
+	font-size: var(--nb-fs-subtitle);
+}
+
+.nb-ui .nb-stat-tiles {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+	gap: 12px;
+}
+
+.nb-ui .nb-stat-tile {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
+	padding: 12px 14px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+}
+
+.nb-ui .nb-stat-tile.is-hint {
+	border-style: dashed;
+	border-color: var(--nb-border-strong);
+	background: transparent;
+	cursor: pointer;
+}
+
+.nb-ui .nb-stat-tile.is-hint:hover {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui .nb-stat-tile-text {
+	min-width: 0;
+}
+
+.nb-ui .nb-stat-value {
+	font-size: 22px;
+	font-weight: 650;
+	line-height: 1.15;
+	color: var(--nb-text);
+	font-variant-numeric: tabular-nums;
+}
+
+.nb-ui .nb-stat-label {
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-stat-hint {
+	margin-top: 2px;
+	font-size: 12px;
+	color: var(--nb-text-faint);
+}
+
+.nb-ui .nb-stat-action {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 4px;
+	color: var(--nb-accent);
+	font-size: var(--nb-fs-meta);
+	font-weight: 600;
+}
+
+.nb-ui .nb-stat-action svg {
+	width: 16px;
+	height: 16px;
+}
+
+.nb-ui .nb-stat-split-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.nb-ui .nb-stat-split-name {
+	font-size: 18px;
+	font-weight: 600;
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-stat-dot {
+	flex: 0 0 auto;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: var(--nb-c, var(--nb-accent));
+}
+
+.nb-ui .nb-split-bar {
+	display: flex;
+	gap: 2px;
+	height: 14px;
+	overflow: hidden;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-border);
+}
+
+.nb-ui .nb-split-seg {
+	flex: var(--nb-w, 0.1) 1 0;
+	min-width: 6px;
+	background: var(--nb-c, var(--nb-accent));
+}
+
+.nb-ui .nb-split-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 16px;
+}
+
+.nb-ui .nb-split-item {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-split-count {
+	color: var(--nb-text);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+/* --- the sidebar: Pinned above the Vault, pages beside the notebook count --- */
+.nb-ui .nb-rail-pinned {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.nb-ui .nb-rail-pinned .nb-pinned-row .nb-rail-item {
+	min-height: 42px;
+	font-size: 15px;
+}
+
+.nb-ui .nb-rail-hint {
+	margin: 0 14px 6px;
+	font-size: var(--nb-fs-meta);
+	line-height: 1.4;
+	color: var(--nb-text-faint);
+}
+
+.nb-ui .nb-rail-pages {
+	flex: 0 0 auto;
+	margin-left: 2px;
+	font-size: var(--nb-fs-label);
+	color: var(--nb-text-faint);
+	font-variant-numeric: tabular-nums;
+}
+
+.nb-app.nb-ui.is-rail-compact :is(.nb-rail-pages, .nb-rail-hint) {
+	display: none;
+}
+
+.nb-app.nb-ui.is-rail-compact .nb-tree-row.nb-pinned-row {
+	display: flex;
+}
+
+/* --- narrow widths --- */
+.nb-app.nb-ui.is-phone .nb-home-continue {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.nb-app.nb-ui.is-phone .nb-continue {
+	min-height: 0;
+	gap: 16px;
+	padding: 16px;
+}
+
+.nb-app.nb-ui.is-phone .nb-continue-thumb {
+	width: 96px;
+}
+
+.nb-app.nb-ui.is-phone .nb-continue-title {
+	font-size: 20px;
+}
+
+.nb-app.nb-ui.is-phone .nb-quickpage {
+	flex-direction: row;
+	align-items: center;
+	min-height: 0;
+}
+
+.nb-app.nb-ui.is-phone .nb-quickpage-text {
+	flex: 1 1 auto;
+}
+
+.nb-app.nb-ui.is-phone .nb-quickpage-add {
+	align-self: center;
+}
+
+.nb-app.nb-ui.is-phone .nb-recent-group .nb-pills {
+	display: none;
+}
+
+.nb-app.nb-ui.is-phone .nb-stat-tiles {
+	grid-template-columns: minmax(0, 1fr);
+}

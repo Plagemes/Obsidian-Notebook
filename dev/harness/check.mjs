@@ -44,6 +44,14 @@ for (const surface of ["home", "library"]) {
 		for (const device of ["reference", "tablet", "phone"]) SCENARIOS.push({ doc: "library", surface, theme, device, lowLatency: false });
 	}
 }
+// 0.13 home2: Home's Continue card in its three states (lecture in progress: the default scenarios above; a class without a
+// notebook yet; no class: the notebook left off in), tablet and phone, dark and light, plus the tablet held sideways.
+for (const variant of ["create", "last"]) {
+	for (const theme of ["dark", "light"]) {
+		for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "library", surface: "home", variant, theme, device, lowLatency: false });
+	}
+}
+for (const theme of ["dark", "light"]) SCENARIOS.push({ doc: "library", surface: "home", theme, device: "tabletLandscape", lowLatency: false });
 // 0.12.2: Home and the library on an empty vault (no notebooks, no notebooks folder yet): the + New button, the quick
 // actions and the empty state are there and open the creation dialog. Screenshots in dev/harness/dist/shots/design/.
 for (const surface of ["home", "library"]) {
@@ -178,10 +186,10 @@ async function main() {
 
 		for (const s of SCENARIOS.filter((x) => !process.env.HARNESS_DOC || x.doc === process.env.HARNESS_DOC)) {
 			const d = DEVICES[s.device];
-			const name = `${s.doc}${s.surface ? `-${s.surface}` : ""}-${s.theme}-${s.device}${s.lowLatency ? "-lowlatency" : ""}${s.fault ? `-fault-${s.fault}` : ""}${s.hostile ? "-hostile" : ""}`;
+			const name = `${s.doc}${s.surface ? `-${s.surface}` : ""}${s.variant ? `-${s.variant}` : ""}-${s.theme}-${s.device}${s.lowLatency ? "-lowlatency" : ""}${s.fault ? `-fault-${s.fault}` : ""}${s.hostile ? "-hostile" : ""}`;
 			await cdp.send("Emulation.setDeviceMetricsOverride", { width: d.width, height: d.height, deviceScaleFactor: d.deviceScaleFactor, mobile: d.mobile });
 			await cdp.send("Emulation.setTouchEmulationEnabled", d.touch ? { enabled: true, maxTouchPoints: 5 } : { enabled: false });
-			const url = `http://127.0.0.1:${port}/index.html?doc=${s.doc}&theme=${s.theme}${s.lowLatency ? "&lowLatency=1" : ""}${s.fault ? `&fault=${s.fault}` : ""}${s.surface ? `&surface=${s.surface}` : ""}${s.hostile ? "&hostile=1" : ""}`;
+			const url = `http://127.0.0.1:${port}/index.html?doc=${s.doc}&theme=${s.theme}${s.lowLatency ? "&lowLatency=1" : ""}${s.fault ? `&fault=${s.fault}` : ""}${s.surface ? `&surface=${s.surface}` : ""}${s.variant ? `&variant=${s.variant}` : ""}${s.hostile ? "&hostile=1" : ""}`;
 			await cdp.send("Page.navigate", { url });
 			let report;
 			try {
@@ -226,14 +234,43 @@ async function main() {
 			if (s.doc === "library") {
 				const designDir = join(shots, "design");
 				mkdirSync(designDir, { recursive: true });
-				writeFileSync(join(designDir, `${s.surface}-${s.theme}-${s.device}.png`), png);
-				const shotAs = async (file) => writeFileSync(join(designDir, `${s.surface}-${s.theme}-${s.device}-${file}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+				const base = `${s.surface}${s.variant ? `-${s.variant}` : ""}-${s.theme}-${s.device}`;
+				writeFileSync(join(designDir, `${base}.png`), png);
+				// 0.13 home2: Home is taller than the screen: a second shot of the whole page (the viewport grown to its height).
+				if (s.surface === "home") {
+					try {
+						const full = await cdp.evaluate("(() => { const el = document.querySelector('.nb-scroll'); return el ? Math.ceil(el.scrollHeight + el.getBoundingClientRect().top) : 0; })()");
+						if (full > d.height) {
+							await cdp.send("Emulation.setDeviceMetricsOverride", { width: d.width, height: Math.min(5000, full), deviceScaleFactor: d.deviceScaleFactor, mobile: d.mobile });
+							await sleep(500);
+							writeFileSync(join(designDir, `${base}-full.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+							await cdp.send("Emulation.setDeviceMetricsOverride", { width: d.width, height: d.height, deviceScaleFactor: d.deviceScaleFactor, mobile: d.mobile });
+							await sleep(300);
+						}
+					} catch (e) {
+						problems.push(`full-page screenshot: ${e.message}`);
+					}
+				}
+				const shotAs = async (file) => writeFileSync(join(designDir, `${base}-${file}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 				try {
 					if (s.theme === "dark") {
 						for (const state of ["bell", "search", "list"]) {
 							await cdp.evaluate(`window.harness.libraryState('${state}')`);
 							await shotAs(state);
 							await cdp.evaluate("window.harness.libraryState('reset')");
+						}
+					}
+					// 0.13 home2: the revised Home's structure and controls, and review shots of its pinned and 14-day states.
+					if (s.surface === "home") {
+						const h2 = await cdp.evaluate("window.harness.checkHome2()", 60000);
+						problems.push(...h2.results.filter((x) => !x.ok).map((x) => `${x.name}: ${x.detail}`));
+						problems.push(...h2.errors.map((e) => `console error: ${e.split("\n")[0]}`));
+						if (!s.variant && s.theme === "dark") {
+							for (const state of ["pinned", "range14"]) {
+								await cdp.evaluate(`window.harness.home2State('${state}')`);
+								await shotAs(state);
+								await cdp.evaluate("window.harness.home2State('reset')");
+							}
 						}
 					}
 					const r = await cdp.evaluate("window.harness.interactLibrary()", 60000);

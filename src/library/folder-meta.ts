@@ -28,7 +28,7 @@ export const FOLDER_META_PREFIX = "folders";
 /** Longest folder description, in characters. */
 export const FOLDER_DESCRIPTION_MAX = 500;
 
-export const FOLDER_FIELDS = ["color", "icon", "description", "art"] as const;
+export const FOLDER_FIELDS = ["color", "icon", "description", "art", "pinned"] as const;
 export type FolderField = (typeof FOLDER_FIELDS)[number];
 
 export interface Stamped<T> {
@@ -45,6 +45,8 @@ export interface FolderItem {
 	icon?: Stamped<string>;
 	description?: Stamped<string>;
 	art?: Stamped<CoverArtStyle>;
+	/** 0.13: pinned to the sidebar's "Pinned" section. The value is "1" (a boolean field kept as text like the others). */
+	pinned?: Stamped<"1">;
 }
 
 /** What a folder card shows. Every field is optional: absent = the default (colour from the name, folder icon, …). */
@@ -56,9 +58,13 @@ export interface FolderMeta {
 	description?: string;
 	/** Line-art style of the card background (`ArtStyle` of ui/art/generative-art.ts). */
 	art?: CoverArtStyle;
+	/** 0.13: the folder is pinned to the sidebar. */
+	pinned?: boolean;
 }
 
-export interface ResolvedFolder extends FolderMeta {
+export interface ResolvedFolder extends Omit<FolderMeta, "pinned"> {
+	/** "1" when pinned (the stored value). */
+	pinned?: "1";
 	/** When each field was last set (0 = never): the next change takes a later time. */
 	stamps: Record<FolderField, number>;
 }
@@ -93,6 +99,7 @@ export function validFolderValue(field: FolderField, v: unknown): boolean {
 		case "icon": return v.length <= 64 && ICON.test(v);
 		case "description": return v.length > 0 && v.length <= FOLDER_DESCRIPTION_MAX;
 		case "art": return (COVER_ART_STYLES as readonly string[]).includes(v);
+		case "pinned": return v === "1";
 	}
 }
 
@@ -208,7 +215,7 @@ export function mergeFolderFiles(files: readonly FolderMetaFile[]): Map<string, 
 	}
 	const out = new Map<string, ResolvedFolder>();
 	for (const [path, slot] of best) {
-		const resolved: ResolvedFolder = { stamps: { color: 0, icon: 0, description: 0, art: 0 } };
+		const resolved: ResolvedFolder = { stamps: { color: 0, icon: 0, description: 0, art: 0, pinned: 0 } };
 		for (const field of FOLDER_FIELDS) {
 			const w = slot[field];
 			if (!w) continue;
@@ -228,6 +235,7 @@ export function folderMetaOf(resolved: ResolvedFolder | undefined): FolderMeta |
 	if (resolved.icon !== undefined) out.icon = resolved.icon;
 	if (resolved.description !== undefined) out.description = resolved.description;
 	if (resolved.art !== undefined) out.art = resolved.art;
+	if (resolved.pinned === "1") out.pinned = true;
 	return Object.keys(out).length > 0 ? out : null;
 }
 

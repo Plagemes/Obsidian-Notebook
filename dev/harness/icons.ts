@@ -7,6 +7,13 @@ const P: Record<string, string> = {
 	"pen-line": "M12 20h9 M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z",
 	"share": "M4 12v8h16v-8 M16 6l-4-4-4 4 M12 2v13",
 	"stethoscope": "M5 3v6a5 5 0 0 0 10 0V3 M10 14v2a5 5 0 0 0 10 0v-3 M20 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
+	// 0.13 home2: statistics, recent notes menu, pinned
+	"flame": "M12 3c1 3 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-9z",
+	"timer": "M10 2h4 M12 14l3-3 M12 22a8 8 0 1 0 0-16 8 8 0 0 0 0 16z",
+	"pencil-line": "M12 20h9 M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z",
+	"external-link": "M15 3h6v6 M10 14L21 3 M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6",
+	"pin": "M12 17v5 M9 3h6l-1 7 3 3v2H7v-2l3-3z",
+	"pin-off": "M12 17v5 M9 3h6l-1 7 3 3v2H7v-2l3-3z M3 3l18 18",
 	// 0.12: Home, library, rail and inbox bell
 	"home": "M3 10.5L12 3l9 7.5 M5 9v11h5v-6h4v6h5V9",
 	"folder": "M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z",

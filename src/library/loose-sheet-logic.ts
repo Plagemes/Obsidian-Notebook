@@ -1,5 +1,6 @@
 /** Pure logic of the loose sheet (no DOM, no 'obsidian'): where the quick-notes notebook lives. */
-import { FILE_EXTENSION } from "../model/types";
+import { createPage } from "../model/document";
+import { FILE_EXTENSION, type Page } from "../model/types";
 import { isReservedPath } from "./folders";
 
 export const LOOSE_SHEET_NAME = "Quick notes";
@@ -48,4 +49,14 @@ export function notebookBaseName(path: string): string {
 	const name = path.slice(path.lastIndexOf("/") + 1);
 	const dot = name.lastIndexOf(".");
 	return dot > 0 ? name.slice(0, dot) : name;
+}
+
+/** A page nothing was written or put on: no ink, no objects, no PDF or image under it. */
+export function isBlankPage(page: Page): boolean {
+	return page.strokes.length === 0 && (page.elements?.length ?? 0) === 0 && !page.background;
+}
+
+/** A new blank page of the same size and paper as `like` (pages of a finite size; an infinite page starts at its A4-ish base). */
+export function blankPageLike(like: Page): Page {
+	return createPage({ width: like.width, height: like.height }, { kind: like.paper.kind, spacing: like.paper.spacing });
 }

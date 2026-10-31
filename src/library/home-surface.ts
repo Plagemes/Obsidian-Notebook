@@ -1,43 +1,55 @@
 /**
- * 0.12: the Home surface (DESIGN.md §4, docs/design/reference/home.png): subject cards, recent notes, statistics and
- * quick actions. Rendering only: every piece of data and every action comes from the library view (HomeHost).
- * 0.12.2: creation is always reachable (DESIGN.md §5): the quick actions are always shown, an empty vault gets an empty
- * state that teaches the first step, and "Subject folders" without folders shows a dashed "Create a folder" tile. Each
- * section is drawn on its own, so one that fails is logged and never takes the others (or creation) with it.
+ * The Home surface (DESIGN.md §4, docs/design/reference/home.png), 0.13 structure, top to bottom: the Continue row (the
+ * lecture in progress or the notebook you left off in, and the Quick page card), the quick actions, the subject folders (a
+ * three-column grid ending in the dashed "New folder" tile), then Recent notes (grouped by notebook) next to Statistics.
+ * Rendering only: every piece of data and every action comes from the library view (HomeHost).
+ * 0.12.2/0.12.3 rules stay: creation is always reachable, an empty vault gets an empty state that teaches the first step, and
+ * each section is drawn on its own, so one that fails shows an error card and never takes the others (or creation) with it.
  */
-import { Menu } from "obsidian";
 import { t } from "../i18n";
-import { setIconSafe } from "../ui/components/dom";
+import { chip } from "../ui/components/chip";
+import { continueCard, quickPageCard, type ContinueCardOptions, type QuickPageOptions } from "../ui/components/continue-card";
 import { createTile, type CreateTileOptions } from "../ui/components/create-tile";
 import { drawSafely } from "../ui/components/error-card";
 import { emptyState, type EmptyStateOptions } from "../ui/components/empty-state";
-import { kpiTile, type KpiTileOptions } from "../ui/components/kpi-tile";
-import { listRow, type ListRowOptions } from "../ui/components/list-row";
 import { quickAction, type QuickActionOptions } from "../ui/components/quick-action";
+import { recentGroup, type RecentGroupOptions } from "../ui/components/recent-group";
 import { sectionHeader } from "../ui/components/section-header";
+import { pagesChart, statTile, subjectSplit, type PagesChartOptions, type StatTileOptions, type SubjectSplitOptions } from "../ui/components/stat-widgets";
 import { subjectCard, type SubjectCardOptions } from "../ui/components/subject-card";
-import { STAT_PERIODS, type StatPeriod } from "./dashboard";
 
-export interface HomeHost {
-	/** 0.12.2: the empty state of a vault with no notebooks yet; null otherwise. */
-	empty: EmptyStateOptions | null;
-	/** Subject cards (at most four); `moreSubjects` adds "Show all". */
-	subjects: SubjectCardOptions[];
-	moreSubjects: (() => void) | null;
-	/** 0.12.2: the dashed tile shown in place of the subject cards when there are none. */
-	createSubject: CreateTileOptions;
-	/** Recently edited pages or notebooks (at most five). */
-	recent: ListRowOptions[];
-	moreRecent: (() => void) | null;
-	/** Empty: the statistics panel is hidden (a vault with no notebooks has nothing to count). */
-	stats: KpiTileOptions[];
-	weeks: StatPeriod;
-	setWeeks: (weeks: StatPeriod) => void;
-	quick: QuickActionOptions[];
+export interface RecentSection {
+	/** Subject filter chips ("All" first); fewer than two means no filter row. */
+	chips: Array<{ id: string | null; label: string; color?: string }>;
+	activeChip: string | null;
+	onChip: (id: string | null) => void;
+	groups: RecentGroupOptions[];
+	/** Said when the filter leaves nothing. */
+	none: string;
+	more: (() => void) | null;
 }
 
-function periodLabel(weeks: StatPeriod): string {
-	return weeks === 1 ? t("home.stats.week") : t("home.stats.weeks", { n: String(weeks) });
+export interface StatsSection {
+	chart: PagesChartOptions;
+	tiles: StatTileOptions[];
+	split: SubjectSplitOptions | null;
+}
+
+export interface HomeHost {
+	/** The Continue card, or null with `empty` set: nothing to continue yet (an empty vault). */
+	continue: ContinueCardOptions | null;
+	/** 0.12.2: the empty state of a vault with no notebooks yet; shown in the Continue slot. */
+	empty: EmptyStateOptions | null;
+	/** The Quick page card; null when the host cannot open Quick notes. */
+	quickPage: QuickPageOptions | null;
+	quick: QuickActionOptions[];
+	/** Subject cards, already limited to what fits the width; `moreSubjects` adds "Show all". */
+	subjects: SubjectCardOptions[];
+	moreSubjects: (() => void) | null;
+	/** The dashed "New folder" card: the last cell of the grid (and the only one without folders). */
+	createSubject: CreateTileOptions;
+	recent: RecentSection | null;
+	stats: StatsSection | null;
 }
 
 /**
@@ -51,53 +63,59 @@ function part(page: HTMLElement, name: string, label: string, draw: () => void):
 export function renderHome(el: HTMLElement, h: HomeHost): void {
 	const page = el.createDiv({ cls: "nb-home" });
 
-	const empty = h.empty;
-	if (empty) part(page, "empty state", empty.title, () => emptyState(page, empty));
-
-	part(page, "subjects", t("home.subjects"), () => {
-		const sec = page.createEl("section", { cls: "nb-section nb-home-subjects" });
-		sectionHeader(sec, { icon: "folder", title: t("home.subjects"), link: h.moreSubjects ? { label: t("home.showAll"), onClick: h.moreSubjects } : undefined });
-		const grid = sec.createDiv({ cls: "nb-subject-grid is-rows" });
-		if (h.subjects.length === 0) createTile(grid, h.createSubject);
-		for (const s of h.subjects) subjectCard(grid, s);
+	part(page, "continue", t("home.continue"), () => {
+		const row = page.createDiv({ cls: "nb-home-continue" });
+		row.toggleClass("has-quickpage", !!h.quickPage);
+		if (h.continue) continueCard(row, h.continue);
+		else if (h.empty) emptyState(row.createDiv({ cls: "nb-continue is-empty" }), h.empty);
+		if (h.quickPage) quickPageCard(row, h.quickPage);
 	});
-
-	if (h.recent.length > 0 || h.stats.length > 0) {
-		const middle = page.createDiv({ cls: "nb-home-middle" });
-		if (h.recent.length > 0) {
-			part(middle, "recent notes", t("home.recent"), () => {
-				const panel = middle.createEl("section", { cls: "nb-panel nb-home-recent" });
-				sectionHeader(panel, { icon: "file-text", title: t("home.recent"), link: h.moreRecent ? { label: t("home.showAll"), onClick: h.moreRecent } : undefined });
-				const list = panel.createDiv({ cls: "nb-list" });
-				for (const r of h.recent) listRow(list, r);
-			});
-		}
-		if (h.stats.length > 0) part(middle, "statistics", t("home.stats"), () => renderStats(middle, h));
-	}
 
 	part(page, "quick actions", t("home.quick"), () => {
 		const sec = page.createEl("section", { cls: "nb-section nb-home-quick" });
 		sectionHeader(sec, { icon: "zap", title: t("home.quick") });
-		const grid = sec.createDiv({ cls: "nb-quick-grid" });
-		for (const q of h.quick) quickAction(grid, q);
+		const grid = sec.createDiv({ cls: "nb-quick-grid is-compact" });
+		for (const q of h.quick) quickAction(grid, { ...q, compact: true });
 	});
+
+	part(page, "subjects", t("home.subjects"), () => {
+		const sec = page.createEl("section", { cls: "nb-section nb-home-subjects" });
+		sectionHeader(sec, { icon: "folder", title: t("home.subjects"), link: h.moreSubjects ? { label: t("home.showAll"), onClick: h.moreSubjects } : undefined });
+		const grid = sec.createDiv({ cls: "nb-subject-grid is-cols" });
+		for (const s of h.subjects) subjectCard(grid, { ...s, compact: true });
+		// The last cell of the grid: no gap, and the way to the next folder is always there.
+		createTile(grid, { ...h.createSubject, compact: true });
+	});
+
+	if (h.recent || h.stats) {
+		const middle = page.createDiv({ cls: "nb-home-middle" });
+		const recent = h.recent;
+		if (recent) part(middle, "recent notes", t("home.recent"), () => renderRecent(middle, recent));
+		const stats = h.stats;
+		if (stats) part(middle, "statistics", t("home.stats"), () => renderStats(middle, stats));
+	}
 }
 
-function renderStats(middle: HTMLElement, h: HomeHost): void {
-	const stats = middle.createEl("section", { cls: "nb-panel nb-home-stats" });
-	const head = sectionHeader(stats, { icon: "bar-chart-3", title: t("home.stats") });
-	const tools = head.querySelector<HTMLElement>(".nb-section-tools");
-	if (tools) {
-		const period = tools.createEl("button", { cls: "nb-dropdown", attr: { type: "button", "aria-haspopup": "menu", "aria-label": t("home.stats.period") } });
-		period.createSpan({ text: periodLabel(h.weeks) });
-		setIconSafe(period.createSpan({ cls: "nb-dropdown-caret", attr: { "aria-hidden": "true" } }), "chevron-down");
-		period.addEventListener("click", () => {
-			const menu = new Menu();
-			for (const w of STAT_PERIODS) menu.addItem((i) => i.setTitle(periodLabel(w)).setChecked(w === h.weeks).onClick(() => h.setWeeks(w)));
-			const r = period.getBoundingClientRect();
-			menu.showAtPosition({ x: r.left, y: r.bottom + 4 });
-		});
+function renderRecent(middle: HTMLElement, r: RecentSection): void {
+	const panel = middle.createEl("section", { cls: "nb-panel nb-home-recent" });
+	sectionHeader(panel, { icon: "file-text", title: t("home.recent"), link: r.more ? { label: t("home.showAll"), onClick: r.more } : undefined });
+	if (r.chips.length > 1) {
+		const row = panel.createDiv({ cls: "nb-chips nb-recent-filter", attr: { role: "toolbar", "aria-label": t("home.recent.filter") } });
+		for (const c of r.chips) chip(row, { label: c.label, dot: c.color, active: c.id === r.activeChip, key: `recentchip:${c.id ?? "all"}`, onClick: () => r.onChip(c.id) });
 	}
-	const kpis = stats.createDiv({ cls: "nb-kpi-grid" });
-	for (const k of h.stats) kpiTile(kpis, k);
+	const list = panel.createDiv({ cls: "nb-recent-groups" });
+	if (r.groups.length === 0) list.createDiv({ cls: "nb-hint nb-recent-none", text: r.none });
+	for (const g of r.groups) recentGroup(list, g);
+}
+
+function renderStats(middle: HTMLElement, s: StatsSection): void {
+	const stats = middle.createEl("section", { cls: "nb-panel nb-home-stats" });
+	sectionHeader(stats, { icon: "bar-chart-3", title: t("home.stats") });
+	const body = stats.createDiv({ cls: "nb-stat-body" });
+	pagesChart(body, s.chart);
+	if (s.tiles.length > 0) {
+		const tiles = body.createDiv({ cls: "nb-stat-tiles" });
+		for (const tile of s.tiles) statTile(tiles, tile);
+	}
+	if (s.split) subjectSplit(body, s.split);
 }

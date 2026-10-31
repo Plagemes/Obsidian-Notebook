@@ -29,7 +29,8 @@ import { pickFile } from "../view/pick";
 import { libraryIndexPath, parseStoredJson, patchNotebookId, patchNotebookMeta, type MetaPatchResult } from "./host-logic";
 import { importPdfAsNotebook } from "./import-pdf";
 import { createLectureFromSlides } from "./lecture-pack";
-import { openLooseSheet } from "./loose-sheet";
+import { openLooseSheet, openNewQuickPage } from "./loose-sheet";
+import type { LectureTarget } from "./home-stats";
 import { openLibraryCheck } from "./library-check-modal";
 import { LibraryStateStore } from "./library-state-store";
 import type { LibraryHost } from "./library-view";
@@ -49,7 +50,13 @@ export interface HostPlugin {
 	settings: NotebookSettings;
 	saveSettings(): Promise<void>;
 	/** Class timetable service (optional: wave 0.6). */
-	timetable?: { nowClass(): { course: string; room?: string } | null; openNow(): void; offer(): Promise<void> };
+	timetable?: {
+		nowClass(): { course: string; room?: string } | null;
+		openNow(): void;
+		offer(): Promise<void>;
+		/** 0.13: the class in progress and the notebook it opens (or the folder a new one is made in). */
+		nowTarget?(): LectureTarget | null;
+	};
 }
 
 /** The part of NotebookView the host calls (checked at runtime so the host compiles without it). */
@@ -356,6 +363,27 @@ export class NotebookLibraryHost implements LibraryHost {
 
 	openLooseSheet(): void {
 		void openLooseSheet(this.plugin, (file) => this.openNotebook(file));
+	}
+
+	/** 0.13 (Home's Quick page card): a new page in Quick notes, created the first time. */
+	newQuickPage(): void {
+		void openNewQuickPage(this.plugin, (file) => this.openNotebook(file));
+	}
+
+	/** 0.13: the class in progress and what it opens (Home's Continue card). */
+	lectureTarget(): LectureTarget | null {
+		return this.plugin.timetable?.nowTarget?.() ?? null;
+	}
+
+	/** 0.13: the notebook and page (1-based) the reader was on last (Home's Continue card). */
+	lastNotebook(): { path: string; page: number } | null {
+		const s = this.plugin.settings;
+		return s.lastNotebookPath ? { path: s.lastNotebookPath, page: s.lastNotebookPage } : null;
+	}
+
+	/** 0.13: the "Your name" setting (Home's greeting). */
+	userName(): string {
+		return this.plugin.settings.userName;
 	}
 
 	/** Camera scan into a new notebook "Scan <date>": one page per sheet, the JPEG as the page background. */

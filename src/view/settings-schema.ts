@@ -327,6 +327,7 @@ const APPEARANCE: SettingSpec[] = [
 		id: "toolbarSize", section: "appearance", order: 30, name: "settings.toolbarSize", desc: "settings.toolbarSize.desc",
 		control: { type: "dropdown", options: options([["compact", "settings.toolbarSize.compact"], ["normal", "settings.toolbarSize.normal"], ["large", "settings.toolbarSize.large"]]) },
 	},
+	{ id: "userName", section: "appearance", order: 15, name: "settings.userName", desc: "settings.userName.desc", keywords: "name nome greeting saluto home", control: { type: "text", placeholder: "Alex" } },
 	{ id: "nightMode", section: "appearance", order: 40, name: "settings.nightMode", desc: "settings.nightMode.desc", control: { type: "toggle" }, keywords: "dark scuro" },
 ];
 

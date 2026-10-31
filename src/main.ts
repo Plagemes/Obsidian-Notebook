@@ -145,7 +145,7 @@ export default class NotebookPlugin extends Plugin {
 		this.step("recent pages", () => {
 			this.recentPages = new RecentPagesService(this.app, (file) => this.host.readNotebook(file));
 			this.recentPages.register(this);
-			Object.assign(this.host, { openRecentPages: () => openRecentPages(this.app, this.recentPages) });
+			Object.assign(this.host, { openRecentPages: () => openRecentPages(this.app, this.recentPages), activity: () => this.recentPages.activity() });
 		});
 		// wave 0.10: back/forward history of visited pages (18) and the status bar item (O15); views reach both through the host.
 		this.step("navigation", () => {
