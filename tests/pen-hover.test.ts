@@ -10,6 +10,9 @@ import { PointerController, type MenuSource, type PointerHandlers } from "../src
 import { DEFAULT_SETTINGS, readSettings } from "../src/settings";
 import { installFakeWindow, removeFakeWindow } from "./node-env";
 
+/** A bare contextmenu waits this long for a pen contact before it counts as a click while hovering (ms). */
+const LINK_WAIT = DEFAULT_BUTTON_WINDOWS.beforeMs + 100;
+
 // 0.11.2: the S Pen in Obsidian's Android app. Hover never reaches the WebView; a click of the side button while
 // hovering leaves one bare `contextmenu` (no pointerType, button -1, buttons 0, from touch, no pointer in progress).
 
@@ -316,7 +319,7 @@ function setup(settings: Partial<InputSettings> = {}) {
 	/** A hover click: the bare contextmenu, and no pen contact within the before-window. */
 	const hoverClick = (t: number, x = 0, y = 0) => {
 		const e = bareMenu(t, x, y);
-		vi.advanceTimersByTime(200);
+		vi.advanceTimersByTime(LINK_WAIT);
 		return e;
 	};
 	const stroke = (t: number, init: Record<string, unknown> = {}) => {
@@ -468,16 +471,31 @@ describe("PointerController: the button or the eraser with the nib touching", ()
 		removeFakeWindow();
 	});
 
-	it("pointerdown with buttons & 2, button 2, buttons & 32 or button 5 (pressure above 0): an eraser stroke", () => {
-		for (const [button, buttons] of [[0, 3], [2, 2], [0, 33], [5, 32]] as const) {
+	it("pointerdown with buttons & 2 or button 2 (pressure above 0): a tap opens the menu, a drag erases from the first sample", () => {
+		for (const [button, buttons] of [[0, 3], [2, 2], [2, 3]] as const) {
+			const tap = setup();
+			tap.fire(tap.canvas, "pointerdown", { button, buttons, pressure: 0.5, timeStamp: 1000 });
+			tap.fire(tap.canvas, "pointerup", { button: 0, buttons: 0, pressure: 0, timeStamp: 1090 });
+			expect(tap.log, `tap: button ${button} buttons ${buttons}`).toEqual(["start", "cancel", "menu:click"]);
+			const drag = setup();
+			drag.fire(drag.canvas, "pointerdown", { button, buttons, pressure: 0.5, clientX: 400, timeStamp: 1000 });
+			drag.fire(drag.canvas, "pointermove", { button: -1, buttons, pressure: 0.5, clientX: 440, timeStamp: 1050 });
+			drag.fire(drag.canvas, "pointerup", { button: 0, buttons: 0, pressure: 0, timeStamp: 1100 });
+			expect(drag.log, `drag: button ${button} buttons ${buttons}`).toEqual(["start", "cancel", "start:eraser", "end"]);
+			expect(drag.starts[1]).toBe(300); // the eraser starts where the nib landed
+		}
+	});
+
+	it("pointerdown with the eraser bit (buttons & 32 or button 5): an eraser stroke at once", () => {
+		for (const [button, buttons] of [[0, 33], [5, 32]] as const) {
 			const s = setup();
 			s.fire(s.canvas, "pointerdown", { button, buttons, pressure: 0.5, timeStamp: 1000 });
 			expect(s.log, `button ${button} buttons ${buttons}`).toEqual(["start:eraser"]);
 		}
 	});
 
-	it("the button pressed during a written stroke (buttons & 2 or button 2 on a move): the ink is kept, the rest erases", () => {
-		for (const [button, buttons] of [[-1, 3], [2, 3], [-1, 33], [5, 33]] as const) {
+	it("the eraser end appearing during a written stroke: the ink is kept, the rest erases; the side button in the middle of a stroke does nothing", () => {
+		for (const [button, buttons] of [[-1, 33], [5, 33]] as const) {
 			const s = setup();
 			s.fire(s.canvas, "pointerdown", { button: 0, buttons: 1, pressure: 0.6, clientX: 400, timeStamp: 1000 });
 			s.fire(s.canvas, "pointermove", { button: -1, buttons: 1, pressure: 0.6, clientX: 440, timeStamp: 1400 });
@@ -486,14 +504,28 @@ describe("PointerController: the button or the eraser with the nib touching", ()
 			s.fire(s.canvas, "pointerup", { button: 0, buttons: 0, pressure: 0, timeStamp: 1600 });
 			expect(s.log, `button ${button} buttons ${buttons}`).toEqual(["start", "end", "start:eraser", "end"]);
 		}
+		for (const [button, buttons] of [[-1, 3], [2, 3]] as const) {
+			const s = setup();
+			s.fire(s.canvas, "pointerdown", { button: 0, buttons: 1, pressure: 0.6, clientX: 400, timeStamp: 1000 });
+			s.fire(s.canvas, "pointermove", { button: -1, buttons: 1, pressure: 0.6, clientX: 440, timeStamp: 1400 });
+			s.fire(s.canvas, "pointermove", { button, buttons, pressure: 0.6, clientX: 460, timeStamp: 1500 });
+			s.fire(s.canvas, "pointermove", { button: -1, buttons, pressure: 0.6, clientX: 480, timeStamp: 1516 });
+			s.fire(s.canvas, "pointerup", { button: 0, buttons: 0, pressure: 0, timeStamp: 1600 });
+			expect(s.log, `mid-stroke button ${button} buttons ${buttons}`).toEqual(["start", "end"]);
+		}
 	});
 
-	it("with the lasso as the button's tool, the rest of the contact is the lasso", () => {
+	it("with the lasso as the button's tool, a contact with the button held at the landing is the lasso from the first sample", () => {
 		const s = setup({ penButton: "lasso" });
-		s.fire(s.canvas, "pointerdown", { button: 0, buttons: 1, pressure: 0.6, timeStamp: 1000 });
-		s.fire(s.canvas, "pointermove", { button: -1, buttons: 1, pressure: 0.6, clientX: 440, timeStamp: 1400 });
-		s.fire(s.canvas, "pointermove", { button: -1, buttons: 3, pressure: 0.6, clientX: 460, timeStamp: 1500 });
-		expect(s.log).toEqual(["start", "end", "start:lasso"]);
+		s.fire(s.canvas, "pointerdown", { button: 0, buttons: 3, pressure: 0.6, timeStamp: 1000 });
+		s.fire(s.canvas, "pointermove", { button: -1, buttons: 3, pressure: 0.6, clientX: 440, timeStamp: 1400 });
+		expect(s.log).toEqual(["start:lasso"]);
+		// Pressed in the middle of an ordinary stroke: ink goes on.
+		const m = setup({ penButton: "lasso" });
+		m.fire(m.canvas, "pointerdown", { button: 0, buttons: 1, pressure: 0.6, timeStamp: 1000 });
+		m.fire(m.canvas, "pointermove", { button: -1, buttons: 1, pressure: 0.6, clientX: 440, timeStamp: 1400 });
+		m.fire(m.canvas, "pointermove", { button: -1, buttons: 3, pressure: 0.6, clientX: 460, timeStamp: 1500 });
+		expect(m.log).toEqual(["start"]);
 	});
 
 	it("an ordinary stroke (buttons 1 only) is never split", () => {
@@ -536,9 +568,12 @@ describe("ButtonTimeline and contactVerdict (Pen button test timing)", () => {
 		tl.contextMenu(1000);
 		expect(tl.penDown(1400, 0, 0)).toBeNull();
 		expect(tl.verdict).toBe("hovering");
-		expect(heldBeforeContact(1000, 1150)).toBe(true);
-		expect(heldBeforeContact(1000, 1151)).toBe(false);
-		expect(heldBeforeContact(1000, 990)).toBe(false);
+		const narrow = { beforeMs: 150, afterMs: 350 };
+		expect(heldBeforeContact(1000, 1150, narrow)).toBe(true);
+		expect(heldBeforeContact(1000, 1151, narrow)).toBe(false);
+		expect(heldBeforeContact(1000, 990, narrow)).toBe(false);
+		expect(heldBeforeContact(1000, 1500)).toBe(true); // the default before-window is 500 ms (0.12.4)
+		expect(heldBeforeContact(1000, 1501)).toBe(false);
 		expect(contactVerdict(350, false)).toBe("held-at-contact");
 		expect(contactVerdict(351, false)).toBe("during-stroke");
 		expect(contactVerdict(351, true)).toBe("none");
@@ -560,14 +595,16 @@ describe("ButtonTimeline and contactVerdict (Pen button test timing)", () => {
 		expect(formatDelta(-30)).toBe("-30 ms");
 	});
 
-	it("window settings: defaults 150 / 350 ms, validated, the after-window clamped to 400 ms on read", () => {
-		expect(DEFAULT_BUTTON_WINDOWS).toEqual({ beforeMs: 150, afterMs: 350 });
+	it("window settings: defaults 500 / 350 ms, validated, the after-window clamped to 400 ms on read", () => {
+		expect(DEFAULT_BUTTON_WINDOWS).toEqual({ beforeMs: 500, afterMs: 350 });
 		expect(BUTTON_AFTER_MAX_MS).toBe(400);
-		expect(readSettings({})).toMatchObject({ penButtonContactBeforeMs: 150, penButtonContactAfterMs: 350 });
+		expect(readSettings({})).toMatchObject({ penButtonContactBeforeMs: 500, penButtonContactAfterMs: 350 });
+		// Saved by 0.5.x to 0.12.3 as the default of the time (150 ms): it is not a choice, it reads as the new default.
+		expect(readSettings({ penButtonContactBeforeMs: 150 })).toMatchObject({ penButtonContactBeforeMs: 500 });
 		expect(readSettings({ penButtonContactBeforeMs: 80, penButtonContactAfterMs: 300 })).toMatchObject({ penButtonContactBeforeMs: 80, penButtonContactAfterMs: 300 });
 		// A value saved by 0.11.2 (range up to 1000 ms) reads as the new maximum.
 		expect(readSettings({ penButtonContactAfterMs: 1000 })).toMatchObject({ penButtonContactAfterMs: 400 });
-		expect(readSettings({ penButtonContactBeforeMs: -1, penButtonContactAfterMs: 5000 })).toMatchObject({ penButtonContactBeforeMs: 150, penButtonContactAfterMs: 400 });
+		expect(readSettings({ penButtonContactBeforeMs: -1, penButtonContactAfterMs: 5000 })).toMatchObject({ penButtonContactBeforeMs: 500, penButtonContactAfterMs: 400 });
 		expect(cleanWindowMs(12.5, 500)).toBeNull();
 		expect(cleanWindowMs(1000, 400)).toBe(400);
 		expect(clampWindows({ beforeMs: 900, afterMs: 1000 })).toEqual({ beforeMs: 500, afterMs: 400 });
@@ -605,15 +642,16 @@ describe("PointerController: the button seen only as a contextmenu around a pen 
 	const pen = (s: ReturnType<typeof setup>, type: string, t: number, x: number, extra: Record<string, unknown> = {}) =>
 		s.fire(s.canvas, type, { pointerId: 3, button: type === "pointermove" ? -1 : 0, buttons: type === "pointerup" ? 0 : 1, pressure: type === "pointerup" ? 0 : 0.6, clientX: x, clientY: 300, timeStamp: t, ...extra });
 
-	it("case 1, contextmenu BEFORE the pen down (button held, then touch): the whole stroke erases, no menu", () => {
+	it("case 1, contextmenu BEFORE the pen down (button held, then touch): a drag erases the whole stroke, no menu", () => {
 		const s = setup();
 		const e = s.bareMenu(1000, 400, 300);
 		expect(e.defaultPrevented).toBe(true);
 		pen(s, "pointerdown", 1080, 400);
-		pen(s, "pointermove", 1096, 410);
-		pen(s, "pointerup", 1200, 410);
+		pen(s, "pointermove", 1096, 440);
+		pen(s, "pointerup", 1200, 440);
 		vi.advanceTimersByTime(500);
-		expect(s.log).toEqual(["start:eraser", "end"]);
+		expect(s.log).toEqual(["start", "cancel", "start:eraser", "end"]);
+		expect(s.starts).toEqual([300, 300]);
 		expect(s.menus).toEqual([]);
 		pen(s, "pointerdown", 3000, 400, { pointerId: 4 });
 		expect(s.log[s.log.length - 1]).toBe("start"); // the tool is back for the next stroke
@@ -635,15 +673,15 @@ describe("PointerController: the button seen only as a contextmenu around a pen 
 		expect(s.menus).toEqual([]);
 	});
 
-	it("case 2, the button pressed mid-stroke: the ink so far is kept, the rest erases, the pen up ends it", () => {
+	it("case 2, the button pressed mid-stroke: ink goes on, nothing switches", () => {
 		const s = setup();
 		pen(s, "pointerdown", 1000, 400);
 		for (let i = 1; i <= 10; i++) pen(s, "pointermove", 1000 + i * 50, 400 + i * 10);
 		s.bareMenu(1520);
 		pen(s, "pointermove", 1550, 510);
 		pen(s, "pointerup", 1600, 510);
-		expect(s.log).toEqual(["start", "end", "start:eraser", "end"]);
-		expect(s.starts).toEqual([300, 400]); // the eraser starts at the last sample
+		expect(s.log).toEqual(["start", "end"]);
+		expect(s.starts).toEqual([300]);
 		pen(s, "pointerdown", 3000, 400, { pointerId: 4 });
 		expect(s.log[s.log.length - 1]).toBe("start");
 	});
@@ -652,7 +690,7 @@ describe("PointerController: the button seen only as a contextmenu around a pen 
 		const s = setup();
 		s.bareMenu(1000, 300, 200);
 		expect(s.menus).toEqual([]); // waits for the before-window
-		vi.advanceTimersByTime(200);
+		vi.advanceTimersByTime(LINK_WAIT);
 		expect(s.menus).toEqual([[200, 150, "click"]]);
 	});
 
@@ -690,42 +728,39 @@ describe("PointerController: the button seen only as a contextmenu around a pen 
 		expect(off.log).toEqual(["start"]);
 	});
 
-	it("configurable windows: with a 0 ms after-window a contextmenu just after the landing is during the stroke", () => {
+	it("configurable windows: with a 0 ms after-window a contextmenu just after the landing is during the stroke: ink goes on", () => {
 		const s = setup({ buttonWindows: { beforeMs: 150, afterMs: 0 } });
 		pen(s, "pointerdown", 1000, 400);
 		pen(s, "pointermove", 1016, 420);
 		s.bareMenu(1040);
-		expect(s.log).toEqual(["start", "end", "start:eraser"]);
+		expect(s.log).toEqual(["start"]);
 	});
 
 	// --- review fixes (wave 0.12) ---
 
-	it("mid-stroke conversion keeps the ink it committed: the eraser that continues the contact is told so (contextmenu, buttons & 2, chord)", () => {
+	it("a button signal in the middle of a stroke (contextmenu, buttons & 2, chord) never switches it; held at contact, nothing is committed as ink", () => {
 		// contextmenu while writing (case 2)
 		const a = setup();
 		pen(a, "pointerdown", 1000, 400);
 		for (let i = 1; i <= 10; i++) pen(a, "pointermove", 1000 + i * 50, 400 + i * 10);
 		a.bareMenu(1520);
-		expect(a.log).toEqual(["start", "end", "start:eraser"]);
-		expect(a.continued).toEqual([false, true]);
+		expect(a.log).toEqual(["start"]);
 		// buttons & 2 appearing on a move
 		const b = setup();
 		b.fire(b.canvas, "pointerdown", { button: 0, buttons: 1, pressure: 0.6, clientX: 400, timeStamp: 1000 });
 		b.fire(b.canvas, "pointermove", { button: -1, buttons: 1, pressure: 0.6, clientX: 440, timeStamp: 1400 });
 		b.fire(b.canvas, "pointermove", { button: -1, buttons: 3, pressure: 0.6, clientX: 460, timeStamp: 1500 });
-		expect(b.log).toEqual(["start", "end", "start:eraser"]);
-		expect(b.continued).toEqual([false, true]);
-		// the chord event (a move with button 0 instead of -1 while touching)
+		expect(b.log).toEqual(["start"]);
+		// the chord event (a move with button 0 instead of -1 while touching), late in the stroke
 		const c = setup();
-		for (const [type, button, buttons, pressure, t] of [
-			["pointerdown", 0, 1, 0.9, 1064], ["pointermove", -1, 1, 1, 1080], ["pointermove", -1, 1, 1, 1120], ["pointermove", 0, 1, 0.92, 1200],
-		] as const) c.fire(c.canvas, type, { button, buttons, pressure, timeStamp: t });
-		expect(c.log).toEqual(["start", "end", "start:eraser"]);
-		expect(c.continued).toEqual([false, true]);
+		for (const [type, button, buttons, pressure, t, x] of [
+			["pointerdown", 0, 1, 0.9, 1064, 400], ["pointermove", -1, 1, 1, 1080, 430], ["pointermove", -1, 1, 1, 1620, 460], ["pointermove", 0, 1, 0.92, 1700, 470],
+		] as const) c.fire(c.canvas, type, { button, buttons, pressure, timeStamp: t, clientX: x });
+		expect(c.log).toEqual(["start"]);
 		// the button held at contact: nothing was committed (the live ink is dropped), so nothing is spared
 		const d = setup();
 		pen(d, "pointerdown", 1000, 400);
-		pen(d, "pointermove", 1016, 410);
+		pen(d, "pointermove", 1016, 440);
 		d.bareMenu(1042);
 		expect(d.log).toEqual(["start", "cancel", "start:eraser"]);
 		expect(d.continued).toEqual([false, false]);
@@ -753,26 +788,37 @@ describe("PointerController: the button seen only as a contextmenu around a pen 
 		const s = setup();
 		s.ctl.retractOk = false;
 		pen(s, "pointerdown", 1000, 400);
-		pen(s, "pointermove", 1016, 410);
-		pen(s, "pointerup", 1080, 410);
+		pen(s, "pointermove", 1016, 440);
+		pen(s, "pointerup", 1080, 440);
 		s.bareMenu(1150);
 		vi.advanceTimersByTime(500);
 		expect(s.log).toEqual(["start", "end", "retract"]);
 		expect(s.menus).toEqual([]);
+		// A tap whose contextmenu comes after the lift: the dot is retracted and the menu opens (the tap with the button).
 		const late = setup();
 		pen(late, "pointerdown", 1000, 400);
 		pen(late, "pointerup", 1080, 400);
-		late.bareMenu(1400); // 400 ms after the landing: past the 350 ms window
+		late.bareMenu(1400); // 320 ms after the lift
 		vi.advanceTimersByTime(500);
-		expect(late.log).toEqual(["start", "end", "menu:click"]);
+		expect(late.log).toEqual(["start", "end", "retract", "menu:click"]);
+		// A drag whose contextmenu comes after the after-window: it opens nothing and changes nothing (no menu after a drag).
+		const old = setup();
+		pen(old, "pointerdown", 1000, 400);
+		pen(old, "pointermove", 1100, 440);
+		pen(old, "pointerup", 1200, 440);
+		old.bareMenu(1450);
+		vi.advanceTimersByTime(1500);
+		expect(old.log).toEqual(["start", "end"]);
+		expect(old.menus).toEqual([]);
 		// A contact that already was the eraser (contextmenu before it): a late one changes nothing and opens nothing.
 		const held = setup();
 		held.bareMenu(1000);
 		pen(held, "pointerdown", 1080, 400);
-		pen(held, "pointerup", 1200, 400);
+		pen(held, "pointermove", 1096, 440);
+		pen(held, "pointerup", 1200, 440);
 		held.bareMenu(1300);
 		vi.advanceTimersByTime(500);
-		expect(held.log).toEqual(["start:eraser", "end"]);
+		expect(held.log).toEqual(["start", "cancel", "start:eraser", "end"]);
 		expect(held.menus).toEqual([]);
 	});
 
@@ -809,7 +855,7 @@ describe("PointerController: the button seen only as a contextmenu around a pen 
 		expect(s.menus).toEqual([]);
 	});
 
-	it(`a finger lifted less than ${TOUCH_RECENT_MS} ms before still explains it; later the button works again`, () => {
+	it(`a finger lifted less than ${TOUCH_RECENT_MS} ms before still explains it; later a mid-stroke press still never switches`, () => {
 		const s = setup();
 		pen(s, "pointerdown", 1000, 400);
 		for (let i = 1; i <= 24; i++) pen(s, "pointermove", 1000 + i * 50, 400 + i * 5);
@@ -818,8 +864,8 @@ describe("PointerController: the button seen only as a contextmenu around a pen 
 		s.bareMenu(1600);
 		expect(s.log).toEqual(["start"]);
 		s.bareMenu(1950);
-		expect(s.log).toEqual(["start", "end", "start:eraser"]);
-		expect(s.continued).toEqual([false, true]);
+		expect(s.log).toEqual(["start"]);
+		expect(s.menus).toEqual([]);
 	});
 });
 

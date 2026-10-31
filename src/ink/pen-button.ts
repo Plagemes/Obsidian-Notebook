@@ -19,6 +19,7 @@
  */
 
 import { ButtonTimeline, DEFAULT_BUTTON_WINDOWS, VERDICT_TEXT, type ButtonWindows } from "./pen-hover";
+import { ButtonContact, barrelAtContact, describeDecision, describeSignal, type ButtonDecision, type ButtonSignal } from "./button-contact";
 
 /** PointerEvent.buttons bit of the pen's side (barrel) button. */
 export const BARREL_BUTTONS = 2;
@@ -566,8 +567,60 @@ export class EventLog {
 	/** 0.11.2: the order and the gaps between pen down, contextmenu and the first move, and the verdict. */
 	private readonly timeline: ButtonTimeline;
 
-	constructor(private readonly max = LOG_LINES, windows: ButtonWindows = DEFAULT_BUTTON_WINDOWS) {
+	/** 0.12.4: the plugin's own decision for the contact (tap: menu, drag: eraser), fed with the same events. */
+	private readonly contact: ButtonContact;
+
+	/**
+	 * `button`: the side-button setting as the plugin reads it: `enabled` (not "Nothing") and `menuAllowed` (a tap opens the
+	 * radial menu); the defaults are the default setting's.
+	 */
+	constructor(private readonly max = LOG_LINES, windows: ButtonWindows = DEFAULT_BUTTON_WINDOWS, button: { enabled: boolean; menuAllowed: boolean } = { enabled: true, menuAllowed: true }) {
 		this.timeline = new ButtonTimeline(windows);
+		this.contact = new ButtonContact(() => windows);
+		this.contact.enabled = button.enabled;
+		this.contact.menuAllowed = button.menuAllowed;
+	}
+
+	/** The button signal the plugin last saw, e.g. `contextmenu Δ=+40 ms`, `pointerdown buttons=3`; null before any. */
+	get signalText(): string | null {
+		const s: ButtonSignal | null = this.contact.signal;
+		return s ? describeSignal(s) : null;
+	}
+
+	/** What the plugin made of it, e.g. `menu (tap)`, `eraser (drag)`, `ignored: nib resting`; null before any. */
+	get decisionText(): string | null {
+		const d: ButtonDecision | null = this.contact.decision;
+		return d ? describeDecision(d) : null;
+	}
+
+	/** The structured signal and decision (for a localized display). */
+	get signal(): ButtonSignal | null {
+		return this.contact.signal;
+	}
+	get decision(): ButtonDecision | null {
+		return this.contact.decision;
+	}
+
+	/** Feeds the decision tracker with a pen event of the log. */
+	private feedContact(ev: LoggedEvent): void {
+		const c = this.contact;
+		const x = ev.x ?? 0, y = ev.y ?? 0;
+		if (ev.kind === "contextmenu") {
+			if (ev.pointerType === "touch" || ev.pointerType === "mouse") return;
+			if (c.inContact) c.contextMenuDuring(ev.t);
+			else if (c.contextMenuAfter(ev.t) === "unlinked") c.contextMenuNoContact(ev.t);
+			return;
+		}
+		if (ev.pointerType !== "pen") return;
+		const buttons = ev.buttons ?? 0, button = ev.button ?? -1;
+		if (ev.kind === "pointerdown") {
+			if (ev.pressure !== 0) c.penDown(ev.t, x, y, barrelAtContact(button, buttons, ev.pressure ?? 0) ? buttons : null);
+		} else if (ev.kind === "pointermove" || ev.kind === "pointerrawupdate") {
+			if (!c.inContact) return;
+			c.penMove(x, y);
+			if (ev.kind === "pointermove" && !isEraserSignal(button, buttons) && (buttons & BARREL_BUTTONS) !== 0) c.buttonMove("pointermove", ev.t, buttons);
+		} else if (ev.kind === "pointerup") c.penUp(ev.t);
+		else if (ev.kind === "pointercancel") c.penCancel(ev.t);
 	}
 
 	/** The latest verdict on a `contextmenu` ("button held at contact", ...), or null before the first one. */
@@ -613,6 +666,7 @@ export class EventLog {
 				ev.note = "pointermove with button 0 during contact (possible side button)";
 			}
 		}
+		this.feedContact(ev);
 		// 0.11.2: the button seen only as a contextmenu around or during a pen contact: order, gaps and verdict.
 		let timing: string | null = null;
 		if (ev.pointerType === "pen" && ev.kind === "pointerdown") timing = this.timeline.penDown(ev.t, ev.x, ev.y);
@@ -651,6 +705,7 @@ export class EventLog {
 		this.detector.reset();
 		this.chord.up();
 		this.timeline.reset();
+		this.contact.reset();
 	}
 
 	get length(): number {
