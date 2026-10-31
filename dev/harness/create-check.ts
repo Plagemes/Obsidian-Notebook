@@ -74,6 +74,15 @@ export function closeCreate(): CreateTab | null {
 	return tab;
 }
 
+/** 0.13 polish: the cover arrives from the art worker a moment after the dialog is drawn. */
+const coverReady = async (): Promise<string> => {
+	for (let i = 0; i < 50; i++) {
+		const src = document.querySelector<HTMLImageElement>(".nb-create-cover-img")?.getAttribute("src") ?? "";
+		if (src.startsWith("data:image/png")) return src;
+		await new Promise<void>((r) => window.setTimeout(r, 100));
+	}
+	return "";
+};
 const frames = (n = 2) => new Promise<void>((resolve) => {
 	let left = n;
 	const step = () => (--left <= 0 ? resolve() : window.requestAnimationFrame(step));
@@ -115,7 +124,7 @@ export async function checkCreate(api: CreateCheckApi, finalTab: CreateTab): Pro
 	showCreate(api, "notebook", "Notebooks/Anatomia", created);
 	await frames();
 	add("opens on the Notebook tab with the name focused", q(".nb-create-tab.is-active")?.textContent === "Notebook" && document.activeElement === q(".nb-create-name"));
-	add("shows a cover preview", !!q<HTMLImageElement>(".nb-create-cover-img")?.src.startsWith("data:image/png"));
+	add("shows a cover preview", (await coverReady()).startsWith("data:image/png"));
 	add("starts in the folder it was opened in", q(".nb-create-select-text")?.textContent === "Anatomia", q(".nb-create-select-text")?.textContent ?? "");
 	add("offers every paper kind with a real preview", qa(".nb-create-paper img").length === 12 && qa(".nb-create-paper img").every((i) => (i as HTMLImageElement).src.startsWith("data:image")));
 	add("offers A4 · A5 · B5 · Letter · Custom", qa(".nb-create-chip").map((c) => c.textContent).join(" ") === "A4 A5 B5 Letter Custom", qa(".nb-create-chip").map((c) => c.textContent).join(" "));
@@ -147,10 +156,11 @@ export async function checkCreate(api: CreateCheckApi, finalTab: CreateTab): Pro
 	tap(q('.nb-create-paper[data-id="dotted"]'), "pen");
 	tap(q('.nb-create-chip[data-id="a5"]'), "touch");
 	tap(q('.nb-create-orient-tile[data-id="landscape"]'), "pen");
-	const coverBefore = q<HTMLImageElement>(".nb-create-cover-img")?.src ?? "";
+	const coverBefore = await coverReady();
 	tap(q(".nb-create-reseed"), "pen");
 	await frames();
-	add("the shuffle button next to Change cover draws a new variation", !!coverBefore && q<HTMLImageElement>(".nb-create-cover-img")?.src !== coverBefore);
+	const coverAfter = await coverReady();
+	add("the shuffle button next to Change cover draws a new variation", !!coverBefore && !!coverAfter && coverAfter !== coverBefore);
 	tap(q(".nb-create-change"), "touch");
 	tap(q('.nb-create-style[data-id="cells"]'), "pen");
 	tap(q('.nb-create-cover-options .nb-create-swatch[data-id="#16C2A3"]'), "touch");

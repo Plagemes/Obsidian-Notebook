@@ -60,6 +60,9 @@ const frames = async (n = 2) => {
 	for (let i = 0; i < n; i++) await new Promise<void>((r) => window.requestAnimationFrame(() => r()));
 };
 
+/** 0.13 polish: art is made off the main thread; the failures (and the pictures that do arrive) take a moment to settle. */
+const settleArt = () => new Promise<void>((r) => window.setTimeout(r, 1200));
+
 function shown(el: Element | null): el is HTMLElement {
 	if (!el) return false;
 	const r = el.getBoundingClientRect();
@@ -76,12 +79,14 @@ export async function hostileDialog(tab: "notebook" | "folder"): Promise<boolean
 		b?.click();
 		await frames(3);
 	}
+	await settleArt();
 	const modal = document.querySelector(".notebook-create-modal");
 	return !!modal && !!modal.querySelector(".nb-create-tabs") && !!modal.querySelector(".is-folder") === (tab === "folder");
 }
 
 export async function checkHostile(surface: string): Promise<Result[]> {
 	const out: Result[] = [];
+	await settleArt();
 	const add = (name: string, ok: boolean, detail = "") => out.push({ name: `hostile ${surface} ${window.innerWidth}px: ${name}`, ok, detail });
 	const app = document.querySelector<HTMLElement>(".nb-app");
 	add("the view is built", !!app, removed.join(", "));
