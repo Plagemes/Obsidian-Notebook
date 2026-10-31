@@ -270,7 +270,7 @@ export async function showModal(api: ModalsCheckApi, name: ModalName): Promise<P
 		}
 		case "goto": {
 			const m = new GotoPageModal(app, {
-				gotoContext: () => ({ total: 24, current: 3, bookmarks: [{ pageIndex: 4, title: "Cell membrane" }, { pageIndex: 11, title: "Cardiac cycle" }] as never }),
+				gotoContext: () => ({ total: 24, current: 3, bookmarks: [{ index: 4, title: "Cell membrane" }, { index: 11, title: "Cardiac cycle" }] as never }),
 				jumpToPage: (i) => probe.picked.push(i),
 			});
 			m.open();
@@ -429,7 +429,7 @@ export async function checkModals(api: ModalsCheckApi): Promise<{ ok: boolean; r
 		tap(buttonByText(root, "Export"));
 		await frames(1);
 		const req = probe.picked[0] as ExportRequest | undefined;
-		add("export: Export runs the request and closes", req?.format === "pdf" && req.scope === "page" && req.pageIndex === 1, JSON.stringify(req));
+		add("export: Export runs the request and closes", req?.format === "pdf" && req.scope === "notebook" && req.pageIndex === 1, JSON.stringify(req));
 		closeModal();
 		const png = await open("export-png");
 		checkShell(add, "export (PNG)", png.root);
@@ -543,7 +543,7 @@ export async function checkModals(api: ModalsCheckApi): Promise<{ ok: boolean; r
 	await guard("pen test, paste, clips", async () => {
 		const { root } = await open("pen-test");
 		checkShell(add, "pen-test", root);
-		add("pen-test: the test area, the log and the Copy / Clear buttons are there", !!root.querySelector(".notebook-pentest-area") && !!root.querySelector("textarea.notebook-pentest-log") && !!buttonByText(root, "Clear") && !!buttonByText(root, "Copy the log"));
+		add("pen-test: the test area, the log and the Copy / Clear buttons are there", !!root.querySelector(".notebook-pentest-area") && !!root.querySelector("textarea.notebook-pentest-log") && !!buttonByText(root, "Clear log") && !!buttonByText(root, "Copy log"));
 		closeModal();
 		const paste = await open("paste");
 		checkShell(add, "paste", paste.root);

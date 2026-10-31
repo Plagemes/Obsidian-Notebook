@@ -9426,3 +9426,25 @@ body.notebook-style-obsidian {
 		transition: none;
 	}
 }
+
+/* Obsidian's own buttons inside a dialog body (a Setting's button) get the design system's pill and a real touch target. */
+.nb-ui .nb-modal-body .setting-item-control button {
+	min-height: 44px;
+	padding: 0 16px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background-color: var(--nb-bg);
+	box-shadow: none;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+}
+
+.nb-ui .nb-modal-body .setting-item-control button:disabled {
+	opacity: 0.5;
+}
+
+/* The pen test's log keeps its height in a short sheet: the body scrolls instead. */
+.nb-ui .notebook-pentest-log {
+	flex: 0 0 auto;
+	min-height: 220px;
+}
