@@ -125,6 +125,12 @@ export async function checkCreate(api: CreateCheckApi, finalTab: CreateTab): Pro
 	await frames();
 	add("opens on the Notebook tab with the name focused", q(".nb-create-tab.is-active")?.textContent === "Notebook" && document.activeElement === q(".nb-create-name"));
 	add("shows a cover preview", (await coverReady()).startsWith("data:image/png"));
+	// 0.13.0: the cover shows its generated art (cached or faded in) and the badge names the effective family.
+	type(q<HTMLInputElement>(".nb-create-name"), "Anatomia umana");
+	const artSrc = await coverReady();
+	add("a biology title picks veins: the badge says Veins", q(".nb-create-badge")?.textContent === "Veins", q(".nb-create-badge")?.textContent ?? "");
+	add("and the cover element holds a non-empty art image", artSrc.length > 1000 && (q<HTMLImageElement>(".nb-create-cover-img")?.naturalWidth ?? 0) > 0, String(artSrc.length));
+	type(q<HTMLInputElement>(".nb-create-name"), "");
 	add("starts in the folder it was opened in", q(".nb-create-select-text")?.textContent === "Anatomia", q(".nb-create-select-text")?.textContent ?? "");
 	add("offers every paper kind with a real preview", qa(".nb-create-paper img").length === 12 && qa(".nb-create-paper img").every((i) => (i as HTMLImageElement).src.startsWith("data:image")));
 	add("offers A4 · A5 · B5 · Letter · Custom", qa(".nb-create-chip").map((c) => c.textContent).join(" ") === "A4 A5 B5 Letter Custom", qa(".nb-create-chip").map((c) => c.textContent).join(" "));
@@ -226,6 +232,7 @@ export async function prepareShot(api: CreateCheckApi, tab: CreateTab): Promise<
 	type(q<HTMLTextAreaElement>(".nb-create-description"), tab === "notebook" ? "Ossa, muscoli e articolazioni" : "Corso del primo semestre");
 	if (tab === "folder") tap(q('.nb-create-icon-tile[data-id="heart-pulse"]'), "touch");
 	await frames(3);
+	if (tab === "notebook") await coverReady();
 	q<HTMLInputElement>(".nb-create-name")?.blur();
 	window.scrollTo(0, 0);
 }

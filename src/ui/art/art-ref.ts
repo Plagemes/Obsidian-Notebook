@@ -49,6 +49,9 @@ export interface ApplyArtOptions {
 /** Marks an element whose art arrived late: styles.css fades it in (not under reduced motion). */
 export const ART_FADE_CLASS = "nb-art-fade";
 
+/** The latest request per element: a slower, older picture never replaces a newer one (a style picked twice quickly). */
+const latest = new WeakMap<HTMLElement, ArtRef>();
+
 function set(el: HTMLElement, o: ApplyArtOptions, url: string): void {
 	if (o.set) o.set(url);
 	else el.setCssProps({ [o.prop ?? "--nb-art"]: `url("${url}")` });
@@ -61,6 +64,7 @@ function set(el: HTMLElement, o: ApplyArtOptions, url: string): void {
  */
 export function applyArt(el: HTMLElement, src: ArtSource | undefined, o: ApplyArtOptions = {}): void {
 	if (!src) return;
+	latest.delete(el);
 	if (typeof src === "string") {
 		set(el, o, src);
 		return;
@@ -71,8 +75,9 @@ export function applyArt(el: HTMLElement, src: ArtSource | undefined, o: ApplyAr
 		else o.onNone?.();
 		return;
 	}
+	latest.set(el, src);
 	void resolveRef(src).then((url) => {
-		if (!el.isConnected) return;
+		if (!el.isConnected || latest.get(el) !== src) return;
 		if (!url) {
 			o.onNone?.();
 			return;
