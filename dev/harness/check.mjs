@@ -100,6 +100,8 @@ SCENARIOS.push({ doc: "settings", theme: "dark", device: "desktop", lowLatency: 
 SCENARIOS.push({ doc: "settings", theme: "light", device: "desktop", lowLatency: false });
 // wave 0.12: the creation dialog (both tabs) at tablet and phone widths, light and dark.
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "create", theme, device, lowLatency: false });
+// 0.13 ds-zettel: the Inbox, the card dialogs and the card regions at tablet and phone widths, light and dark.
+for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "zettel", theme, device, lowLatency: false });
 // 0.12.1: the whole plugin's onload against the stub: what it registers, the settings tab through both of Obsidian's paths,
 // and injected failures (a failing step, failing settings definitions, an unreadable data.json).
 SCENARIOS.push({ doc: "plugin", theme: "dark", device: "tablet", lowLatency: false });
@@ -203,7 +205,7 @@ async function main() {
 					await sleep(100);
 				}
 				await cdp.evaluate("window.harness.ready.then(() => true)");
-				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "outline" ? "window.harness.checkOutline()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "zettel" ? "window.harness.checkZettel()" : s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "outline" ? "window.harness.checkOutline()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}
@@ -225,6 +227,19 @@ async function main() {
 					if (c[0] < 100 && c[1] < 100 && c[2] < 100) dark = true;
 				}
 				if (!dark) problems.push(`composited ink missing at (${Math.round(ix)}, ${Math.round(iy)})`);
+			}
+			// 0.13 ds-zettel: review screenshots of each Zettelkasten surface.
+			if (s.doc === "zettel") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["inbox", "open", "empty", "caught-up", "scanning", "card", "card-luhmann", "list", "confirm", "overlay"]) {
+					try {
+						await cdp.evaluate(`window.harness.zettelState('${state}').then(() => true)`);
+						writeFileSync(join(designDir, `zettel-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`zettel ${state} screenshot: ${e.message}`);
+					}
+				}
 			}
 			// wave 0.12: the creation dialog's Folder tab (the Notebook tab is the screenshot above).
 			if (s.doc === "create") {

@@ -1,6 +1,8 @@
-import { FuzzySuggestModal, Modal, Setting, type App, type FuzzyMatch } from "obsidian";
-import { t } from "../i18n";
+import { FuzzySuggestModal, Modal, type App, type FuzzyMatch } from "obsidian";
+import { t, type MessageKey } from "../i18n";
+import { setIconSafe, subjectVars } from "../ui/components/dom";
 import { CARD_TYPES, parseTagInput, type CardRecord, type CardType } from "./card-content";
+import { CARD_TYPE_LOOK } from "./zk-ui";
 
 export interface CardAnswer {
 	title: string;
@@ -11,17 +13,44 @@ export interface CardAnswer {
 	parent: string;
 }
 
-const typeOptions = (): Record<CardType, string> => ({
-	permanent: t("zettel.type.permanent"),
-	literature: t("zettel.type.literature"),
-	fleeting: t("zettel.type.fleeting"),
-});
+const TYPE_LABEL: Record<CardType, MessageKey> = {
+	permanent: "zettel.type.permanent",
+	literature: "zettel.type.literature",
+	fleeting: "zettel.type.fleeting",
+};
+
+const TYPE_HINT: Record<CardType, MessageKey> = {
+	permanent: "zettel.type.permanent.hint",
+	literature: "zettel.type.literature.hint",
+	fleeting: "zettel.type.fleeting.hint",
+};
+
+let fieldCount = 0;
+
+/** A labelled field of the dialogs (DESIGN.md §3): label, optional one-line hint, then the control. */
+function field(parent: HTMLElement, label: string, hint?: string): { wrap: HTMLElement; id: string } {
+	const wrap = parent.createDiv({ cls: "nb-zk-field" });
+	const id = `nb-zk-field-${++fieldCount}`;
+	wrap.createEl("label", { cls: "nb-zk-label", text: label, attr: { for: id } });
+	if (hint) wrap.createDiv({ cls: "nb-zk-field-hint", text: hint });
+	return { wrap, id };
+}
+
+/** The icon square + title + one line that opens a dialog's body. */
+function dialogHead(parent: HTMLElement, icon: string, title: string, subtitle: string): void {
+	const head = parent.createDiv({ cls: "nb-zk-dialog-head" });
+	setIconSafe(head.createDiv({ cls: "nb-icon-square", attr: { "aria-hidden": "true" } }), icon);
+	const text = head.createDiv({ cls: "nb-zk-dialog-titles" });
+	text.createEl("h2", { cls: "nb-zk-dialog-title", text: title });
+	text.createDiv({ cls: "nb-zk-dialog-sub", text: subtitle });
+}
 
 /** "Make card": typed title (Z11), type, source, tags and, with Luhmann numbering, the card it branches from. */
 export class CardModal extends Modal {
 	private readonly answer: CardAnswer;
 	private tagText = "";
 	private done = false;
+	private tagPreview: HTMLElement | null = null;
 
 	constructor(
 		app: App,
@@ -34,61 +63,99 @@ export class CardModal extends Modal {
 	}
 
 	onOpen(): void {
-		this.setTitle(t("zettel.modal.title"));
+		// nb-ui: the scope of the design-system styles (styles.css), above Obsidian's own button and input rules.
+		this.modalEl.addClass("nb-ui", "notebook-card-modal");
+		this.modalEl.setAttribute("aria-label", t("zettel.modal.title"));
+		this.titleEl.empty();
 		const { contentEl } = this;
+		contentEl.empty();
+		const body = contentEl.createDiv({ cls: "nb-zk-dialog" });
+		dialogHead(body, "file-text", t("zettel.modal.title"), t("zettel.modal.subtitle"));
 		if (this.opts.preview) {
-			const img = contentEl.createEl("img", { cls: "notebook-zettel-preview" });
+			const frame = body.createDiv({ cls: "nb-zk-preview-frame is-modal" });
+			const img = frame.createEl("img", { cls: "nb-zk-preview notebook-zettel-preview" });
 			img.src = this.opts.preview;
 			img.alt = t("zettel.modal.preview");
 		}
+		const form = body.createDiv({ cls: "nb-zk-form" });
 		const enter = (el: HTMLInputElement) => el.addEventListener("keydown", (e) => {
 			if (e.key === "Enter" && !e.isComposing) {
 				e.preventDefault();
 				this.submit();
 			}
 		});
-		new Setting(contentEl)
-			.setName(t("zettel.modal.cardTitle"))
-			.setDesc(t("zettel.modal.cardTitle.desc"))
-			.addText((text) => {
-				text.setValue(this.answer.title);
-				text.onChange((v) => (this.answer.title = v));
-				enter(text.inputEl);
-				window.setTimeout(() => text.inputEl.focus(), 0);
-			});
-		new Setting(contentEl)
-			.setName(t("zettel.modal.type"))
-			.addDropdown((dd) => dd.addOptions(typeOptions()).setValue(this.answer.type).onChange((v) => {
-				if ((CARD_TYPES as readonly string[]).includes(v)) this.answer.type = v as CardType;
-			}));
-		new Setting(contentEl)
-			.setName(t("zettel.modal.source"))
-			.setDesc(t("zettel.modal.source.desc"))
-			.addText((text) => {
-				text.setValue(this.answer.source);
-				text.onChange((v) => (this.answer.source = v));
-				enter(text.inputEl);
-			});
-		new Setting(contentEl)
-			.setName(t("zettel.modal.tags"))
-			.setDesc(t("zettel.modal.tags.desc"))
-			.addText((text) => {
-				text.setValue(this.tagText);
-				text.onChange((v) => (this.tagText = v));
-				enter(text.inputEl);
-			});
+		const input = (f: { wrap: HTMLElement; id: string }, value: string, onChange: (v: string) => void): HTMLInputElement => {
+			const el = f.wrap.createEl("input", { cls: "nb-zk-input", attr: { id: f.id, type: "text" } });
+			el.value = value;
+			el.addEventListener("input", () => onChange(el.value));
+			enter(el);
+			return el;
+		};
+
+		const title = field(form, t("zettel.modal.cardTitle"), t("zettel.modal.cardTitle.desc"));
+		const titleInput = input(title, this.answer.title, (v) => (this.answer.title = v));
+		window.setTimeout(() => titleInput.focus(), 0);
+
+		this.renderTypes(form);
+
+		const source = field(form, t("zettel.modal.source"), t("zettel.modal.source.desc"));
+		input(source, this.answer.source, (v) => (this.answer.source = v));
+
+		const tags = field(form, t("zettel.modal.tags"), t("zettel.modal.tags.desc"));
+		input(tags, this.tagText, (v) => {
+			this.tagText = v;
+			this.paintTags();
+		});
+		this.tagPreview = tags.wrap.createDiv({ cls: "nb-zk-tag-preview" });
+		this.paintTags();
+
 		if (this.opts.luhmann) {
-			new Setting(contentEl)
-				.setName(t("zettel.modal.parent"))
-				.setDesc(t("zettel.modal.parent.desc"))
-				.addText((text) => {
-					text.onChange((v) => (this.answer.parent = v.trim()));
-					enter(text.inputEl);
-				});
+			const parent = field(form, t("zettel.modal.parent"), t("zettel.modal.parent.desc"));
+			input(parent, "", (v) => (this.answer.parent = v.trim()));
 		}
-		new Setting(contentEl)
-			.addButton((b) => b.setButtonText(t("zettel.modal.cancel")).onClick(() => this.close()))
-			.addButton((b) => b.setButtonText(t("zettel.modal.create")).setCta().onClick(() => this.submit()));
+
+		const footer = body.createDiv({ cls: "nb-zk-footer" });
+		const cancel = footer.createEl("button", { cls: "nb-pill-btn", text: t("zettel.modal.cancel"), attr: { type: "button" } });
+		cancel.addEventListener("click", () => this.close());
+		const create = footer.createEl("button", { cls: "nb-pill-btn mod-cta", attr: { type: "button" } });
+		setIconSafe(create.createSpan({ attr: { "aria-hidden": "true" } }), "check");
+		create.createSpan({ text: t("zettel.modal.create") });
+		create.addEventListener("click", () => this.submit());
+	}
+
+	/** The card type as three option tiles (a radio group): icon in the type's colour, name and one line. */
+	private renderTypes(form: HTMLElement): void {
+		const wrap = form.createDiv({ cls: "nb-zk-field" });
+		wrap.createDiv({ cls: "nb-zk-label", text: t("zettel.modal.type") });
+		const group = wrap.createDiv({ cls: "nb-zk-types", attr: { role: "radiogroup", "aria-label": t("zettel.modal.type") } });
+		const tiles = new Map<CardType, HTMLButtonElement>();
+		const select = (type: CardType) => {
+			this.answer.type = type;
+			for (const [id, tile] of tiles) {
+				tile.toggleClass("is-active", id === type);
+				tile.setAttribute("aria-checked", String(id === type));
+			}
+		};
+		for (const type of CARD_TYPES) {
+			const look = CARD_TYPE_LOOK[type];
+			const tile = group.createEl("button", { cls: "nb-zk-type", attr: { type: "button", role: "radio", "aria-checked": "false" } });
+			tile.dataset.id = type;
+			subjectVars(tile, look.color);
+			setIconSafe(tile.createSpan({ cls: "nb-icon-square is-small", attr: { "aria-hidden": "true" } }), look.icon);
+			tile.createSpan({ cls: "nb-zk-type-name", text: t(TYPE_LABEL[type]) });
+			tile.createSpan({ cls: "nb-zk-type-hint", text: t(TYPE_HINT[type]) });
+			tile.addEventListener("click", () => select(type));
+			tiles.set(type, tile);
+		}
+		select(this.answer.type);
+	}
+
+	/** The tags as they will be saved (cleaned, no #, no spaces): a preview, not a control. */
+	private paintTags(): void {
+		if (!this.tagPreview) return;
+		this.tagPreview.empty();
+		for (const tag of parseTagInput(this.tagText)) this.tagPreview.createSpan({ cls: "nb-pill nb-zk-tag", text: `#${tag}` });
+		this.tagPreview.toggleClass("is-hidden", this.tagPreview.childElementCount === 0);
 	}
 
 	private submit(): void {
@@ -119,6 +186,7 @@ export interface CardListItem {
 export class CardListModal extends FuzzySuggestModal<CardListItem> {
 	constructor(app: App, private readonly items: CardListItem[], private readonly onChoose: (item: CardListItem) => void) {
 		super(app);
+		this.modalEl.addClass("nb-ui", "notebook-card-list");
 		this.setPlaceholder(t("zettel.list.placeholder"));
 		this.emptyStateText = t("zettel.list.empty");
 	}
@@ -133,8 +201,12 @@ export class CardListModal extends FuzzySuggestModal<CardListItem> {
 
 	renderSuggestion(match: FuzzyMatch<CardListItem>, el: HTMLElement): void {
 		const { card } = match.item;
-		el.createDiv({ text: card.title ? `${card.id} · ${card.title}` : card.id });
-		el.createDiv({ text: match.item.where, cls: match.item.orphaned ? "notebook-zettel-list-orphan" : "notebook-picker-path" });
+		el.addClass("nb-zk-card-row");
+		el.toggleClass("is-orphan", match.item.orphaned);
+		el.createSpan({ cls: "nb-zk-card-id", text: card.id });
+		const text = el.createDiv({ cls: "nb-zk-card-text" });
+		text.createDiv({ cls: "nb-zk-card-title", text: card.title || card.id });
+		text.createDiv({ text: match.item.where, cls: `nb-zk-card-where ${match.item.orphaned ? "notebook-zettel-list-orphan" : "notebook-picker-path"}` });
 	}
 
 	onChooseItem(item: CardListItem): void {
@@ -149,14 +221,21 @@ export class ConfirmCardsModal extends Modal {
 	}
 
 	onOpen(): void {
-		this.setTitle(t("zettel.slipBox.confirmTitle"));
-		this.contentEl.createEl("p", { text: this.body });
-		new Setting(this.contentEl)
-			.addButton((b) => b.setButtonText(t("zettel.modal.cancel")).onClick(() => this.close()))
-			.addButton((b) => b.setButtonText(t("zettel.slipBox.confirm")).setCta().onClick(() => {
-				this.close();
-				this.onConfirm();
-			}));
+		this.modalEl.addClass("nb-ui", "notebook-card-modal");
+		this.modalEl.setAttribute("aria-label", t("zettel.slipBox.confirmTitle"));
+		this.titleEl.empty();
+		const body = this.contentEl.createDiv({ cls: "nb-zk-dialog" });
+		dialogHead(body, "layers", t("zettel.slipBox.confirmTitle"), t("zettel.slipBox.confirmSub"));
+		body.createEl("p", { text: this.body, cls: "nb-zk-confirm-body" });
+		const footer = body.createDiv({ cls: "nb-zk-footer" });
+		footer.createEl("button", { cls: "nb-pill-btn", text: t("zettel.modal.cancel"), attr: { type: "button" } }).addEventListener("click", () => this.close());
+		const ok = footer.createEl("button", { cls: "nb-pill-btn mod-cta", attr: { type: "button" } });
+		setIconSafe(ok.createSpan({ attr: { "aria-hidden": "true" } }), "check");
+		ok.createSpan({ text: t("zettel.slipBox.confirm") });
+		ok.addEventListener("click", () => {
+			this.close();
+			this.onConfirm();
+		});
 	}
 
 	onClose(): void {

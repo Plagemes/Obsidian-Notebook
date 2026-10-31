@@ -16,6 +16,11 @@
 - The outline rows are restyled with the design tokens (icon squares, nesting guides, 44 px rows, "you are here" on one row) under `.nb-ui`; rows wrap to two lines in the narrow panel.
 - Tests: `tests/outline-builder.test.ts`; harness scenarios `outline-{light,dark}-{tablet,phone}` (`dev/harness/outline-check.ts`).
 
+### ds-zettel
+- **The Zettelkasten surfaces on the design system (DESIGN.md §3, §4, §5).** The Inbox is a page of its own: header with the count, a faint generated art band, the *Start processing* pill and refresh; filter chips with counts (sources) plus a *Show processed* toggle; one panel per notebook in its subject colour with item rows (icon by kind, first line, page and PDF page, *Changed* / state pills) that expand in place into the ink on its paper, the text and the actions (icons, one accent action). Phone layout under 600 px. While the first scan runs the list shows placeholder rows; an empty inbox teaches what arrives here (quick notes, PDF highlights and comments) with the generated illustration; a cleared one says *All caught up* and offers *Show processed* / *Show all sources* / look again.
+- The card dialog (*Make card*) is a design-system dialog: icon, title and one line, the ink, labelled fields, the card type as three tiles (permanent, literature, fleeting, each with its colour and a hint), the tags previewed as they will be saved, `Cancel` / `Create card`. The card-list picker shows the id, the title and where the card is (orphans in warning colour); the slip-box confirmation is the same dialog style. Enter still creates, Escape still cancels.
+- Behaviour is unchanged: same service calls, same keys. New strings in English and Italian. Harness: `dev/harness/zettel-check.ts` (`doc=zettel`) checks the layout, the targets, every control and the empty states, with screenshots in `dev/harness/dist/shots/design/zettel-*.png`.
+
 ## 0.12.4 — 2026-10-31
 
 The S Pen side button on the Samsung tablet (Obsidian for Android), reworked around what the device really does. **Not verified on the device**: checked in unit tests that replay recorded pen sequences and in the browser harness only. Manual re-check: steps 493-499 in `docs/testing.md`. No change to the notebook format (still v11) or to the stroke engine and renderer.

@@ -2882,26 +2882,32 @@ body.notebook-style-obsidian {
 	width: var(--notebook-zettel-w, 0);
 	height: var(--notebook-zettel-h, 0);
 	box-sizing: border-box;
-	border: 1px dashed var(--color-accent);
-	border-radius: 4px;
-	opacity: 0.55;
+	border: 1.5px dashed var(--nb-accent);
+	border-radius: 10px;
+	background: var(--nb-accent-bg);
+	opacity: 0.75;
 	pointer-events: none;
 }
 
 .notebook-zettel-region.is-page {
 	border-color: transparent;
+	background: transparent;
 }
 
+/* The id of the card: a small accent pill in the corner of its region. */
 .notebook-zettel-badge {
 	position: absolute;
-	top: 2px;
-	right: 2px;
-	padding: 0 4px;
-	border-radius: 3px;
-	background: var(--color-accent);
-	color: var(--text-on-accent);
-	font-size: 10px;
-	line-height: 14px;
+	top: 6px;
+	right: 6px;
+	padding: 0 8px;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-accent);
+	box-shadow: var(--nb-shadow-1);
+	color: #fff;
+	font-size: 11px;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	line-height: 18px;
 	white-space: nowrap;
 	pointer-events: none;
 }
@@ -2910,8 +2916,7 @@ body.notebook-style-obsidian {
 	display: block;
 	max-width: 100%;
 	max-height: 30vh;
-	margin: 0 auto 12px;
-	box-shadow: 0 0 0 1px var(--background-modifier-border);
+	margin: 0 auto;
 }
 
 .notebook-zettel-list-orphan {
@@ -3854,181 +3859,7 @@ body.notebook-style-obsidian {
 	font-size: var(--font-ui-small);
 }
 
-/* wave 0.8: processing (Inbox view, textbook references over typed text) */
-.notebook-inbox {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	padding: 12px 16px 24px;
-	overflow-y: auto;
-}
-
-.notebook-inbox-bar {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-	flex-wrap: wrap;
-}
-
-.notebook-inbox-heading {
-	margin: 0;
-	flex: 0 0 auto;
-}
-
-.notebook-inbox-summary {
-	flex: 1 1 auto;
-	color: var(--text-muted);
-}
-
-.notebook-inbox-actions {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-}
-
-.notebook-inbox-toggle {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	min-height: 32px;
-}
-
-.notebook-inbox-filter {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
-}
-
-.notebook-inbox-chip {
-	min-height: 32px;
-	padding: 0 12px;
-	border-radius: 16px;
-}
-
-.notebook-inbox-chip.is-active {
-	background: var(--interactive-accent);
-	color: var(--text-on-accent);
-}
-
-.notebook-inbox-hint {
-	margin: 0;
-}
-
-.notebook-inbox-group {
-	margin: 16px 0 4px;
-	font-size: var(--font-ui-small);
-	color: var(--text-muted);
-	text-transform: none;
-}
-
-.notebook-inbox-item {
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
-	background: var(--background-primary);
-}
-
-.notebook-inbox-item.is-selected {
-	border-color: var(--interactive-accent);
-}
-
-.notebook-inbox-item.is-done .notebook-inbox-item-text {
-	color: var(--text-faint);
-}
-
-.notebook-inbox-item-head {
-	display: flex;
-	align-items: baseline;
-	gap: 10px;
-	width: 100%;
-	min-height: 44px;
-	padding: 8px 12px;
-	border: 0;
-	background: transparent;
-	box-shadow: none;
-	text-align: start;
-	cursor: pointer;
-}
-
-.notebook-inbox-item-place {
-	flex: 0 0 auto;
-	color: var(--text-muted);
-	font-variant-numeric: tabular-nums;
-}
-
-.notebook-inbox-item-text {
-	flex: 1 1 auto;
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.notebook-inbox-item-badge {
-	flex: 0 0 auto;
-	padding: 0 6px;
-	border-radius: 8px;
-	background: var(--background-modifier-hover);
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
-}
-
-.notebook-inbox-panel {
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-	padding: 0 12px 12px;
-}
-
-.notebook-inbox-preview {
-	max-width: 100%;
-	max-height: 60vh;
-	object-fit: contain;
-	align-self: flex-start;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-s);
-	background: #fff;
-}
-
-.notebook-inbox-text {
-	white-space: pre-wrap;
-	user-select: text;
-}
-
-.notebook-inbox-text.is-empty {
-	color: var(--text-faint);
-}
-
-.notebook-inbox-covered {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	padding: 8px;
-	border-radius: var(--radius-s);
-	background: var(--background-secondary);
-}
-
-.notebook-inbox-covered > div {
-	display: flex;
-	align-items: center;
-	flex-wrap: wrap;
-	gap: 8px;
-}
-
-.notebook-inbox-buttons {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 8px;
-}
-
-.notebook-inbox-buttons button {
-	min-height: 40px;
-}
-
-.notebook-inbox-empty {
-	padding: 24px 0;
-	color: var(--text-muted);
-}
-
+/* wave 0.8: textbook references over typed text. The Inbox view itself is styled in the "0.13 ds-zettel" block at the end. */
 /* Textbook references: transparent hot spots over typed "p. 134" (small; hidden while the text tool is active). */
 .notebook-textbook-overlay {
 	position: absolute;
@@ -9339,6 +9170,797 @@ body.notebook-style-obsidian {
 
 @media (prefers-reduced-motion: reduce) {
 	.nb-ui .nb-outline-row {
+		transition: none;
+	}
+}
+
+/* ===== 0.13 ds-zettel ===== */
+/* The Zettelkasten surfaces on the design system (DESIGN.md §3, §4): the Inbox view, the card dialogs and the card-list picker.
+   The card regions over the page are in the "wave 0.6: zettelkasten" block above. Scoped under .nb-ui. */
+
+.workspace-leaf-content .view-content.notebook-inbox.nb-app.nb-ui {
+	display: flex;
+	flex-direction: column;
+	padding: 0;
+	overflow: hidden;
+	background: var(--nb-bg);
+	color: var(--nb-text);
+	font-family: var(--font-interface);
+}
+
+.nb-ui .nb-zk-scroll {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	padding: 0 var(--nb-page-pad) 40px;
+}
+
+.nb-ui .nb-zk-header {
+	flex: 0 0 auto;
+	margin-bottom: 0;
+}
+
+.nb-ui .nb-zk-header .nb-header-titles {
+	flex: 1 1 auto;
+}
+
+.nb-ui .nb-zk-filters.is-hidden {
+	display: none;
+}
+
+.nb-ui .nb-zk-filters .nb-chips {
+	align-items: center;
+}
+
+.nb-ui .nb-zk-toggle {
+	margin-left: auto;
+}
+
+.nb-ui .nb-zk-hint {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	margin: 0;
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-zk-hint-icon {
+	display: inline-flex;
+	flex: 0 0 auto;
+	margin-top: 1px;
+	color: var(--nb-text-faint);
+}
+
+.nb-ui .nb-zk-hint-icon svg {
+	width: 16px;
+	height: 16px;
+	stroke-width: 1.75;
+}
+
+.nb-ui .nb-zk-list {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+/* One panel per notebook, in its subject colour (a tint, never the vivid base: DESIGN.md §2.3). */
+.nb-ui .nb-zk-group {
+	gap: 4px;
+	padding: 16px 12px 12px;
+}
+
+.nb-ui .nb-zk-group-head {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 0 4px 8px;
+}
+
+.nb-ui .nb-zk-group-text {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.nb-ui .nb-zk-group-title {
+	margin: 0;
+	font-size: 17px;
+	font-weight: 600;
+	line-height: 1.25;
+	color: var(--nb-text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-transform: none;
+}
+
+.nb-ui .nb-zk-group-meta {
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-zk-rows {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.nb-ui .nb-zk-item {
+	border: 1px solid transparent;
+	border-radius: var(--nb-radius-tile);
+	transition: background-color var(--nb-motion-fast) ease-out, border-color var(--nb-motion-fast) ease-out;
+}
+
+.nb-ui .nb-zk-item.is-selected {
+	border-color: var(--nb-accent);
+	background: var(--nb-tile);
+}
+
+.nb-ui .nb-zk-item-head,
+.nb-ui .nb-zk-item-head:hover,
+.nb-ui .nb-zk-item-head:active,
+.nb-ui .nb-zk-item-head:focus {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+	height: auto;
+	min-height: 60px;
+	padding: 8px 12px;
+	border: 0;
+	border-radius: var(--nb-radius-tile);
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text);
+	font: inherit;
+	text-align: start;
+	cursor: pointer;
+}
+
+.nb-ui .nb-zk-item:not(.is-selected) .nb-zk-item-head:hover {
+	background: var(--nb-tile);
+}
+
+.nb-ui .nb-zk-item-head:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: -2px;
+}
+
+.nb-ui .nb-zk-item-body {
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.nb-ui .nb-zk-item-text {
+	font-size: var(--nb-fs-row);
+	font-weight: 500;
+	line-height: 1.35;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui .nb-zk-item-meta {
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text-muted);
+	font-variant-numeric: tabular-nums;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui .nb-zk-item.is-done .nb-zk-item-text {
+	color: var(--nb-text-muted);
+	font-weight: 400;
+}
+
+.nb-ui .nb-zk-item.is-done .nb-zk-item-icon {
+	background: var(--nb-tile);
+	color: var(--nb-success);
+}
+
+.nb-ui .nb-zk-item-badges {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 0 0 auto;
+}
+
+.nb-ui .nb-zk-item-badges .nb-pill {
+	max-width: 200px;
+	font-size: 12px;
+}
+
+.nb-ui .nb-pill.is-accent {
+	background: var(--nb-accent-bg);
+	border-color: transparent;
+	color: var(--nb-accent);
+}
+
+.nb-ui .nb-zk-chevron {
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-zk-chevron svg {
+	width: 20px;
+	height: 20px;
+	transition: transform var(--nb-motion) var(--nb-ease);
+}
+
+.nb-ui .nb-zk-item.is-selected .nb-zk-chevron svg {
+	transform: rotate(90deg);
+}
+
+/* The open item: the ink on its paper next to the text and what can be done. */
+.nb-ui .nb-zk-panel {
+	display: grid;
+	grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+	gap: 16px;
+	padding: 4px 12px 14px;
+}
+
+.nb-ui.is-phone .nb-zk-panel {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.nb-ui .nb-zk-panel-side {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	min-width: 0;
+}
+
+/* The preview is a picture of a page: it stays paper white in every theme. */
+.nb-ui .nb-zk-preview-frame {
+	align-self: start;
+	padding: 4px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background: #fff;
+	overflow: hidden;
+}
+
+.nb-ui .nb-zk-preview {
+	display: block;
+	max-width: 100%;
+	max-height: 60vh;
+	margin: 0 auto;
+	object-fit: contain;
+	border-radius: 10px;
+}
+
+.nb-ui .nb-zk-text {
+	padding: 12px 14px;
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	font-size: var(--nb-fs-row);
+	line-height: 1.5;
+	white-space: pre-wrap;
+	user-select: text;
+	overflow-wrap: anywhere;
+}
+
+.nb-ui .nb-zk-item.is-selected .nb-zk-text {
+	background: var(--nb-panel);
+}
+
+.nb-ui .nb-zk-text.is-empty {
+	color: var(--nb-text-faint);
+}
+
+.nb-ui .nb-zk-covered {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 10px 12px;
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui .nb-zk-covered-line {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.nb-ui .nb-zk-covered-icon {
+	display: inline-flex;
+	color: var(--nb-accent);
+}
+
+.nb-ui .nb-zk-covered-icon svg {
+	width: 18px;
+	height: 18px;
+	stroke-width: 1.75;
+}
+
+.nb-ui .nb-zk-covered-text {
+	flex: 1 1 200px;
+	min-width: 0;
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-zk-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.nb-ui .nb-zk-actions .nb-pill-btn {
+	min-height: 40px;
+	padding: 0 16px;
+	font-size: var(--nb-fs-chip);
+}
+
+.nb-ui .nb-pill-btn.is-small {
+	min-height: 40px;
+	padding: 0 14px;
+	font-size: var(--nb-fs-chip);
+}
+
+/* Hover and press of the pill buttons here: Obsidian's own button:hover rule is more specific than the base pill. */
+.nb-ui .nb-zk-actions .nb-pill-btn:hover,
+.nb-ui .nb-zk-covered .nb-pill-btn:hover,
+.nb-ui .nb-zk-footer .nb-pill-btn:hover,
+.nb-ui .nb-zk-start:hover,
+.nb-ui .nb-zk-empty .nb-pill-btn:hover {
+	background: var(--nb-tile);
+	border-color: var(--nb-border-strong);
+	box-shadow: none;
+}
+
+.nb-ui .nb-zk-actions .nb-pill-btn.mod-cta:hover,
+.nb-ui .nb-zk-footer .nb-pill-btn.mod-cta:hover,
+.nb-ui .nb-zk-start.mod-cta:hover,
+.nb-ui .nb-zk-empty .nb-pill-btn.mod-cta:hover {
+	background: var(--nb-accent);
+	border-color: var(--nb-accent);
+	filter: brightness(1.08);
+}
+
+.nb-ui .nb-zk-actions .nb-pill-btn:focus-visible,
+.nb-ui .nb-zk-covered .nb-pill-btn:focus-visible,
+.nb-ui .nb-zk-footer .nb-pill-btn:focus-visible,
+.nb-ui .nb-zk-start:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+.nb-ui .nb-zk-empty {
+	margin-top: 4px;
+}
+
+/* The first scan: grey shapes where the rows will be (decoration; not controls). */
+.nb-ui .nb-zk-skeleton {
+	gap: 4px;
+}
+
+.nb-ui .nb-zk-skel-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-height: 60px;
+	padding: 8px 12px;
+}
+
+.nb-ui .nb-zk-skel-icon {
+	flex: 0 0 auto;
+	width: 40px;
+	height: 40px;
+	border-radius: var(--nb-radius-icon);
+	background: var(--nb-tile);
+}
+
+.nb-ui .nb-zk-skel-lines {
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.nb-ui .nb-zk-skel-line {
+	height: 12px;
+	width: 70%;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-tile);
+}
+
+.nb-ui .nb-zk-skel-line.is-short {
+	width: 32%;
+	height: 10px;
+}
+
+/* --- card dialogs (Make card, slip-box confirmation) --- */
+.nb-ui.notebook-card-modal {
+	width: min(560px, 94vw);
+	max-width: 94vw;
+	padding: 0;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-panel);
+	background: var(--nb-panel);
+	box-shadow: var(--nb-shadow-float);
+	color: var(--nb-text);
+	font-family: var(--font-interface);
+}
+
+.nb-ui.notebook-card-modal .modal-header {
+	display: none;
+}
+
+.nb-ui.notebook-card-modal {
+	display: flex;
+	flex-direction: column;
+	max-height: 90vh;
+}
+
+.nb-ui.notebook-card-modal .modal-content {
+	flex: 1 1 auto;
+	min-height: 0;
+	padding: 0;
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+
+.nb-ui.notebook-card-modal *,
+.nb-ui.notebook-card-list * {
+	box-sizing: border-box;
+}
+
+.nb-ui .nb-zk-dialog {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	padding: 24px;
+}
+
+.nb-ui .nb-zk-dialog-head {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding-right: 36px;
+}
+
+.nb-ui .nb-zk-dialog-titles {
+	min-width: 0;
+}
+
+.nb-ui .nb-zk-dialog-title {
+	margin: 0;
+	font-size: var(--nb-fs-section);
+	font-weight: 600;
+	line-height: 1.25;
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-zk-dialog-sub {
+	margin-top: 2px;
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-zk-confirm-body {
+	margin: 0;
+	font-size: var(--nb-fs-row);
+	line-height: 1.5;
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-zk-preview-frame.is-modal {
+	align-self: center;
+	max-width: 100%;
+}
+
+.nb-ui .nb-zk-preview-frame.is-modal .nb-zk-preview {
+	max-height: 30vh;
+}
+
+.nb-ui .nb-zk-form {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.nb-ui .nb-zk-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+}
+
+.nb-ui .nb-zk-label {
+	font-size: var(--nb-fs-chip);
+	font-weight: 600;
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-zk-field-hint {
+	font-size: var(--nb-fs-meta);
+	line-height: 1.4;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-zk-input,
+.nb-ui .nb-zk-input:hover {
+	width: 100%;
+	height: 44px;
+	padding: 0 14px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	box-shadow: none;
+	color: var(--nb-text);
+	font: inherit;
+	font-size: var(--nb-fs-row);
+}
+
+.nb-ui .nb-zk-input:focus,
+.nb-ui .nb-zk-input:focus-visible {
+	border-color: var(--nb-accent);
+	background: var(--nb-panel);
+	box-shadow: 0 0 0 2px var(--nb-accent-bg);
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 1px;
+}
+
+.nb-ui .nb-zk-types {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.nb-ui .nb-zk-type,
+.nb-ui .nb-zk-type:hover {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 6px;
+	height: auto;
+	min-height: 44px;
+	padding: 12px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	box-shadow: none;
+	color: var(--nb-text);
+	text-align: start;
+	cursor: pointer;
+	transition: background-color var(--nb-motion-fast) ease-out, border-color var(--nb-motion-fast) ease-out;
+}
+
+.nb-ui .nb-zk-type:hover {
+	border-color: var(--nb-text-faint);
+}
+
+.nb-ui .nb-zk-type.is-active,
+.nb-ui .nb-zk-type.is-active:hover {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui .nb-zk-type:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+.nb-ui .nb-zk-type-name {
+	font-size: var(--nb-fs-row);
+	font-weight: 600;
+}
+
+.nb-ui .nb-zk-type-hint {
+	font-size: var(--nb-fs-meta);
+	line-height: 1.35;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-zk-tag-preview {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.nb-ui .nb-zk-tag-preview.is-hidden {
+	display: none;
+}
+
+.nb-ui .nb-zk-tag {
+	max-width: 100%;
+	background: var(--nb-accent-bg);
+	border-color: transparent;
+	color: var(--nb-accent);
+}
+
+.nb-ui .nb-zk-footer {
+	position: sticky;
+	bottom: -24px;
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+	margin: 4px -24px -24px;
+	padding: 12px 24px 24px;
+	background: linear-gradient(to bottom, transparent, var(--nb-panel) 28%);
+}
+
+/* --- card list (a FuzzySuggestModal: Obsidian's prompt) --- */
+.nb-ui.notebook-card-list {
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-panel);
+	background: var(--nb-panel);
+	box-shadow: var(--nb-shadow-float);
+	color: var(--nb-text);
+	font-family: var(--font-interface);
+	overflow: hidden;
+}
+
+.nb-ui.notebook-card-list .prompt-input,
+.nb-ui.notebook-card-list .prompt-input:focus {
+	height: 48px;
+	padding: 0 16px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	box-shadow: none;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+}
+
+.nb-ui.notebook-card-list .prompt-input:focus {
+	border-color: var(--nb-accent);
+}
+
+.nb-ui.notebook-card-list .prompt-results {
+	padding: 8px;
+}
+
+.nb-ui.notebook-card-list .prompt-no-results {
+	padding: 16px;
+	color: var(--nb-text-muted);
+	text-align: center;
+}
+
+.nb-ui.notebook-card-list .suggestion-item.nb-zk-card-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-height: 56px;
+	padding: 8px 12px;
+	border-radius: 12px;
+	color: var(--nb-text);
+}
+
+.nb-ui.notebook-card-list .suggestion-item.nb-zk-card-row.is-selected,
+.nb-ui.notebook-card-list .suggestion-item.nb-zk-card-row:hover {
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui .nb-zk-card-id {
+	flex: 0 0 auto;
+	min-width: 44px;
+	padding: 4px 10px;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+	font-size: var(--nb-fs-chip);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+}
+
+.nb-ui .nb-zk-card-row.is-orphan .nb-zk-card-id {
+	background: var(--nb-tile);
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-zk-card-text {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.nb-ui .nb-zk-card-title {
+	font-size: var(--nb-fs-row);
+	font-weight: 500;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui .nb-zk-card-where {
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui .nb-zk-card-where.notebook-zettel-list-orphan {
+	color: var(--text-warning);
+}
+
+/* Phone: the badge of an item wraps under its text; the card types stack as rows; the dialog fills the width. */
+.nb-ui.is-phone .nb-zk-item-head {
+	display: grid;
+	grid-template-columns: 40px minmax(0, 1fr) auto;
+	column-gap: 12px;
+	row-gap: 6px;
+}
+
+.nb-ui.is-phone .nb-zk-item-icon {
+	grid-column: 1;
+	grid-row: 1;
+}
+
+.nb-ui.is-phone .nb-zk-item-body {
+	grid-column: 2;
+	grid-row: 1;
+}
+
+.nb-ui.is-phone .nb-zk-chevron {
+	grid-column: 3;
+	grid-row: 1;
+}
+
+.nb-ui.is-phone .nb-zk-item-badges {
+	grid-column: 2 / 4;
+	grid-row: 2;
+}
+
+.nb-ui .nb-zk-item-badges:empty {
+	display: none;
+}
+
+.nb-ui.is-phone .nb-zk-toggle {
+	margin-left: 0;
+}
+
+@media (max-width: 620px) {
+	.nb-ui .nb-zk-dialog {
+		padding: 20px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+	}
+
+	.nb-ui .nb-zk-type {
+		align-items: center;
+		padding: 10px 6px;
+		text-align: center;
+	}
+
+	.nb-ui .nb-zk-type-hint {
+		display: none;
+	}
+
+	.nb-ui .nb-zk-footer {
+		bottom: -16px;
+		margin: 4px -16px -16px;
+		padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+	}
+
+	.nb-ui .nb-zk-footer > button {
+		flex: 1 1 0;
+	}
+}
+
+@media (pointer: coarse) {
+	.nb-ui .nb-zk-item-head {
+		min-height: 64px;
+	}
+
+	.nb-ui .nb-zk-input {
+		height: 48px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.nb-ui .nb-zk-item,
+	.nb-ui .nb-zk-type,
+	.nb-ui .nb-zk-chevron svg {
 		transition: none;
 	}
 }
