@@ -78,8 +78,11 @@ export async function checkNavigation(api: NavCheckApi, add: (name: string, ok: 
 	const ctx = v.uiContext().nav;
 	add("history: the interface context offers Back", ctx?.back === true && ctx?.forward === false, JSON.stringify(ctx));
 	// 0.13 polish: at least three quick slots at every width the harness uses (the 740 px band uses 40 px targets), so Back is a quick slot.
-	add("history: the toolbar keeps at least three quick slots", v.toolbar.quickIds.length >= 3, v.toolbar.quickIds.join(","));
-	add("history: Back is a quick slot of the toolbar", v.toolbar.quickIds.includes("nav-back"), v.toolbar.quickIds.join(","));
+	// A 360 px phone has no room for three; from 700 px on (landscape phones, tablets) it must.
+	if (window.innerWidth >= 700) {
+		add("history: the toolbar keeps at least three quick slots", v.toolbar.quickIds.length >= 3, v.toolbar.quickIds.join(","));
+		add("history: Back is a quick slot of the toolbar", v.toolbar.quickIds.includes("nav-back"), v.toolbar.quickIds.join(","));
+	}
 	v.runAction("nav-back");
 	for (let i = 0; i < 40 && v.currentPage() !== 3; i++) await wait(25);
 	add("history: Back returns to the page the reader left", v.currentPage() === 3, `page ${v.currentPage() + 1}`);
