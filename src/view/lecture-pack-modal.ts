@@ -5,6 +5,7 @@ import { PAPER_KINDS, type PaperKind } from "../model/types";
 import { parseLayoutOptions, SLIDE_LAYOUTS, type LayoutOptions, type SlideLayout } from "../model/lecture-pack";
 import { cleanTitle, isoDate, parseIsoDate } from "./lecture-logic";
 import { showNotice } from "./notice";
+import { modalShell, shellButton } from "../ui/components/modal-shell";
 
 /** Device-local storage key (Obsidian's per-vault local storage) for the last layout chosen. */
 const STORAGE_KEY = "notebook-lecture-layout";
@@ -79,16 +80,15 @@ export function askLayoutOptions(app: App): Promise<LayoutOptions | null> {
 			settled = true;
 			resolve(value);
 		};
-		modal.setTitle(t("lecturePack.insertTitle"));
-		addLayoutSettings(modal.contentEl, state);
+		const shell = modalShell(modal, { title: t("lecturePack.insertTitle"), icon: "layout-template", size: "medium", cls: "notebook-lecture-modal" });
+		addLayoutSettings(shell.body, state);
 		const submit = () => {
 			saveLayoutOptions(app, state);
 			finish({ ...state });
 			modal.close();
 		};
-		new Setting(modal.contentEl)
-			.addButton((b) => b.setButtonText(t("lecture.cancel")).onClick(() => modal.close()))
-			.addButton((b) => b.setButtonText(t("lecturePack.apply")).setCta().onClick(submit));
+		shellButton(shell.foot, "secondary", t("lecture.cancel"), () => modal.close());
+		shellButton(shell.foot, "primary", t("lecturePack.apply"), submit);
 		modal.scope.register([], "Enter", () => {
 			submit();
 			return false;
@@ -115,26 +115,27 @@ export function askLectureSetup(app: App, defaultTitle: string): Promise<Lecture
 			settled = true;
 			resolve(value);
 		};
-		modal.setTitle(t("lecturePack.title"));
+		const shell = modalShell(modal, { title: t("lecturePack.title"), icon: "presentation", size: "medium", cls: "notebook-lecture-modal" });
+		const body = shell.body;
 		let dateEl: HTMLInputElement | null = null;
-		new Setting(modal.contentEl)
+		new Setting(body)
 			.setName(t("lecture.course"))
 			.setDesc(t("lecture.course.desc"))
 			.addText((text) => text.setValue(title).onChange((v) => (title = v)));
-		new Setting(modal.contentEl)
+		new Setting(body)
 			.setName(t("lecture.date"))
 			.addText((text) => {
 				text.inputEl.type = "date";
 				dateEl = text.inputEl;
 				text.setValue(dateText).onChange((v) => (dateText = v));
 			});
-		new Setting(modal.contentEl)
+		new Setting(body)
 			.setName(t("lecturePack.header"))
 			.addDropdown((dd) => {
 				for (const mode of HEADER_MODES) dd.addOption(mode, t(`lecturePack.header.${mode}`));
 				dd.setValue(header).onChange((v) => (header = v as HeaderMode));
 			});
-		addLayoutSettings(modal.contentEl, layout);
+		addLayoutSettings(body, layout);
 		const submit = () => {
 			const date = parseIsoDate(dateText);
 			if (!date) {
@@ -146,9 +147,8 @@ export function askLectureSetup(app: App, defaultTitle: string): Promise<Lecture
 			finish({ title: cleanTitle(title), date, header, layout: { ...layout } });
 			modal.close();
 		};
-		new Setting(modal.contentEl)
-			.addButton((b) => b.setButtonText(t("lecture.cancel")).onClick(() => modal.close()))
-			.addButton((b) => b.setButtonText(t("lecturePack.create")).setCta().onClick(submit));
+		shellButton(shell.foot, "secondary", t("lecture.cancel"), () => modal.close());
+		shellButton(shell.foot, "primary", t("lecturePack.create"), submit);
 		modal.onClose = () => {
 			finish(null);
 			modal.contentEl.empty();
@@ -173,8 +173,8 @@ export function askExercisePaper(app: App): Promise<PaperKind | null> {
 			settled = true;
 			resolve(value);
 		};
-		modal.setTitle(t("exercise.paperTitle"));
-		new Setting(modal.contentEl).setName(t("exercise.paper")).addDropdown((dd) => {
+		const shell = modalShell(modal, { title: t("exercise.paperTitle"), icon: "file-pen", size: "narrow", cls: "notebook-lecture-modal" });
+		new Setting(shell.body).setName(t("exercise.paper")).addDropdown((dd) => {
 			for (const kind of PAPER_KINDS) dd.addOption(kind, t(`paper.${kind}`));
 			dd.setValue(options.afterPaper).onChange((v) => (options.afterPaper = v as PaperKind));
 		});
@@ -183,9 +183,8 @@ export function askExercisePaper(app: App): Promise<PaperKind | null> {
 			finish(options.afterPaper);
 			modal.close();
 		};
-		new Setting(modal.contentEl)
-			.addButton((b) => b.setButtonText(t("lecture.cancel")).onClick(() => modal.close()))
-			.addButton((b) => b.setButtonText(t("lecturePack.apply")).setCta().onClick(submit));
+		shellButton(shell.foot, "secondary", t("lecture.cancel"), () => modal.close());
+		shellButton(shell.foot, "primary", t("lecturePack.apply"), submit);
 		modal.scope.register([], "Enter", () => {
 			submit();
 			return false;

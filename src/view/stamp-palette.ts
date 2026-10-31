@@ -1,4 +1,4 @@
-import { Notice, setIcon, type App, type TFile } from "obsidian";
+import { Notice, type App, type TFile } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import type { ClipContent } from "../ink/clipboard";
 import { measureText } from "../ink/renderer";
@@ -8,7 +8,9 @@ import {
 import type { Command } from "../model/history";
 import type { NotebookDocument, Page, PageElement, Stroke } from "../model/types";
 import { deleteStamp, listStampFiles, loadStamp, renameStamp, saveStamp } from "../storage/stamps";
-import { ConfirmModal, PromptModal } from "../library/library-modals";
+import { PromptModal } from "../library/library-modals";
+import { shellCard, shellIconButton } from "../ui/components/modal-shell";
+import { confirmDestructive } from "../ui/destructive";
 import { resolveAssetFile } from "./media";
 
 /** A page of the open notebook and a point on it (page coordinates). */
@@ -74,6 +76,7 @@ export class StampPalette {
 			cls: "notebook-stamp-panel notebook-hidden",
 			attr: { role: "dialog", "aria-label": t("stamps.title") },
 		});
+		shellCard(this.el, "nb-stamp-card");
 		const head = this.el.createDiv({ cls: "notebook-stamp-head" });
 		head.createSpan({ cls: "notebook-stamp-title", text: t("stamps.title") });
 		this.iconButton(head, "save", "stamps.save", () => this.saveSelection());
@@ -206,8 +209,7 @@ export class StampPalette {
 	}
 
 	private iconButton(parent: HTMLElement, icon: string, label: MessageKey, onClick: () => void, cls = ""): HTMLButtonElement {
-		const b = parent.createEl("button", { cls: `notebook-tool clickable-icon ${cls}`.trim(), attr: { "aria-label": t(label), type: "button" } });
-		setIcon(b, icon);
+		const b = shellIconButton(parent, icon, t(label), cls);
 		// A press on a control must not start a drag of the tile it sits on.
 		b.addEventListener("pointerdown", (e) => e.stopPropagation());
 		b.addEventListener("click", (e) => {
@@ -333,9 +335,9 @@ export class StampPalette {
 	}
 
 	private remove(file: TFile): void {
-		new ConfirmModal(
+		confirmDestructive(
 			this.host.app,
-			{ title: t("stamps.delete"), body: t("stamps.deleteBody", { name: file.basename }), cta: t("library.modal.deleteConfirm") },
+			{ title: t("stamps.delete"), body: t("stamps.deleteBody", { name: file.basename }), confirm: t("library.modal.deleteConfirm") },
 			() => {
 				void deleteStamp(this.host.app, file).then(
 					() => this.refresh(),
@@ -345,6 +347,6 @@ export class StampPalette {
 					},
 				);
 			},
-		).open();
+		);
 	}
 }

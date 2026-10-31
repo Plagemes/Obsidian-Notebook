@@ -2254,6 +2254,12 @@ export const en = {
 	"create.error.folderExists": "Something named “{name}” is already there.",
 	"create.failed": "Could not create it: {error}",
 	"create.metaFailed": "The folder was created, but its colour and icon could not be saved: {error}",
+
+	// 0.13 ds-modals
+	"ui.modal.cancel": "Cancel",
+	"goto.title": "Go to page",
+	"quicknav.title": "Find a page",
+	"modal.open.title": "Open a notebook",
 } as const;
 
 export type MessageKey = keyof typeof en;

@@ -87,6 +87,8 @@ SCENARIOS.push({ doc: "settings", theme: "dark", device: "desktop", lowLatency: 
 SCENARIOS.push({ doc: "settings", theme: "light", device: "desktop", lowLatency: false });
 // wave 0.12: the creation dialog (both tabs) at tablet and phone widths, light and dark.
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "create", theme, device, lowLatency: false });
+// wave 0.13 ds-modals: every dialog, prompt and card on the shared modal shell (dev/harness/modals-check.ts), tablet and phone, light and dark.
+for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "modals", theme, device, lowLatency: false });
 // 0.12.1: the whole plugin's onload against the stub: what it registers, the settings tab through both of Obsidian's paths,
 // and injected failures (a failing step, failing settings definitions, an unreadable data.json).
 SCENARIOS.push({ doc: "plugin", theme: "dark", device: "tablet", lowLatency: false });
@@ -190,7 +192,7 @@ async function main() {
 					await sleep(100);
 				}
 				await cdp.evaluate("window.harness.ready.then(() => true)");
-				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "modals" ? "window.harness.checkModals()" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}
@@ -220,6 +222,21 @@ async function main() {
 					writeFileSync(join(shots, `${name}-folder.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 				} catch (e) {
 					problems.push(`folder tab screenshot: ${e.message}`);
+				}
+			}
+			// wave 0.13 ds-modals: a screenshot of each dialog, prompt and card, in dev/harness/dist/shots/design/.
+			if (s.doc === "modals") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				try {
+					const names = await cdp.evaluate("window.harness.modalNames");
+					for (const modal of names) {
+						await cdp.evaluate(`window.harness.modalShot('${modal}').then(() => true)`);
+						writeFileSync(join(designDir, `modals-${modal}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					}
+					await cdp.evaluate("window.harness.closeModal()");
+				} catch (e) {
+					problems.push(`modal screenshots: ${e.message}`);
 				}
 			}
 			// 0.12: review screenshots of Home and the library, then their controls (bell, rail, quick actions, search, star, list).

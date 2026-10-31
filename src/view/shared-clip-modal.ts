@@ -1,6 +1,7 @@
 import { Modal, type App } from "obsidian";
 import { t } from "../i18n";
 import { clipAge, type SharedClipItem } from "../ink/shared-clip";
+import { modalShell, shellNote, shellRow } from "../ui/components/modal-shell";
 
 /** "12 strokes · 2 pictures · 1 text box". */
 export function clipSummary(item: SharedClipItem): string {
@@ -32,22 +33,19 @@ export class SharedClipModal extends Modal {
 	}
 
 	onOpen(): void {
-		this.setTitle(t("clipshare.pasteTitle"));
-		this.contentEl.createEl("p", { text: t("clipshare.pasteHint"), cls: "notebook-clipshare-hint" });
-		const list = this.contentEl.createDiv({ cls: "notebook-clipshare-list", attr: { role: "list" } });
+		const shell = modalShell(this, { title: t("clipshare.pasteTitle"), subtitle: t("clipshare.pasteHint"), icon: "clipboard-paste", size: "narrow", footer: false, cls: "notebook-clipshare-modal" });
+		const list = shell.body.createDiv({ cls: "nb-modal-list notebook-clipshare-list", attr: { role: "list" } });
 		const now = Date.now();
 		for (const item of this.items) {
-			const row = list.createEl("button", { cls: "notebook-clipshare-row", attr: { type: "button", role: "listitem" } });
-			row.createSpan({ cls: "notebook-clipshare-what", text: clipSummary(item) });
-			row.createSpan({ cls: "notebook-clipshare-meta", text: `${clipAgeText(now, item.entry.at)} · ${t("clipshare.device", { id: item.device })}` });
-			row.addEventListener("click", () => {
-				this.close();
-				this.onPick(item);
-			});
+			shellRow(list, {
+				label: clipSummary(item), detail: `${clipAgeText(now, item.entry.at)} · ${t("clipshare.device", { id: item.device })}`, cls: "notebook-clipshare-row",
+				onClick: () => {
+					this.close();
+					this.onPick(item);
+				},
+			}).setAttribute("role", "listitem");
 		}
-		if (this.unreadable > 0) {
-			this.contentEl.createEl("p", { text: t("clipshare.unreadable", { n: String(this.unreadable) }), cls: "notebook-clipshare-hint" });
-		}
+		if (this.unreadable > 0) shellNote(shell.body, t("clipshare.unreadable", { n: String(this.unreadable) })).addClass("notebook-clipshare-hint");
 	}
 
 	onClose(): void {

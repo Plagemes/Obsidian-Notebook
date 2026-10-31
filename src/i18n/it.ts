@@ -2255,4 +2255,10 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"create.error.folderExists": "Lì c'è già un elemento «{name}».",
 	"create.failed": "Impossibile crearlo: {error}",
 	"create.metaFailed": "La cartella è stata creata, ma non è stato possibile salvarne colore e icona: {error}",
+
+	// 0.13 ds-modals
+	"ui.modal.cancel": "Annulla",
+	"goto.title": "Vai a pagina",
+	"quicknav.title": "Cerca una pagina",
+	"modal.open.title": "Apri un quaderno",
 };

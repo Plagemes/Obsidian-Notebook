@@ -4,6 +4,7 @@ import { EQUATION_SNIPPETS, insertSnippet, type EquationSnippet } from "../math/
 import { EQUATION_LATEX_MAX } from "../model/math-elements";
 import { MAX_FONT_SIZE } from "../model/serialize";
 import { renderPreview } from "./math-typeset";
+import { shellButton, shellCard } from "../ui/components/modal-shell";
 
 /**
  * The in-place editor of an equation (#110): the LaTeX source, a live preview typeset by Obsidian's maths engine, a
@@ -61,6 +62,7 @@ export class EquationEditor {
 	constructor(parent: HTMLElement, initial: EquationDraft, private readonly handlers: EquationEditorHandlers) {
 		this.draft = { ...initial };
 		this.el = parent.createDiv({ cls: "notebook-math-panel notebook-eq-editor", attr: { role: "dialog", "aria-label": t("math.eq.title") } });
+		shellCard(this.el, "nb-eq-card");
 		for (const type of ISOLATED) this.el.addEventListener(type, (e) => e.stopPropagation());
 		this.el.addEventListener("keydown", (e) => {
 			if (e.key === "Escape") {
@@ -114,7 +116,7 @@ export class EquationEditor {
 		});
 		const actions = this.el.createDiv({ cls: "notebook-eq-actions" });
 		if (handlers.remove) {
-			const del = actions.createEl("button", { cls: "notebook-eq-delete mod-warning", attr: { type: "button", "aria-label": t("math.eq.delete") } });
+			const del = actions.createEl("button", { cls: "nb-modal-btn is-danger is-icon notebook-eq-delete mod-warning", attr: { type: "button", "aria-label": t("math.eq.delete"), title: t("math.eq.delete") } });
 			setIcon(del, "trash-2");
 			del.addEventListener("click", () => {
 				if (this.closed) return;
@@ -123,8 +125,8 @@ export class EquationEditor {
 				handlers.remove?.();
 			});
 		}
-		actions.createEl("button", { text: t("math.eq.cancel"), attr: { type: "button" } }).addEventListener("click", () => this.cancel());
-		actions.createEl("button", { cls: "mod-cta", text: t("math.eq.done"), attr: { type: "button" } }).addEventListener("click", () => this.done());
+		shellButton(actions, "secondary", t("math.eq.cancel"), () => this.cancel());
+		shellButton(actions, "primary", t("math.eq.done"), () => this.done());
 		this.syncToggles();
 		this.schedulePreview(0);
 	}

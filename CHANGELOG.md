@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### ds-modals
+- Every dialog, prompt and floating card now follows DESIGN.md on one shared shell (`src/ui/components/modal-shell.ts`, pure parts in `modal-shell-model.ts`): a header with an icon square, a title, an optional line under it, a close button and a faint generated art band (decoration only), a scrolling body and a footer with a secondary and a primary button, all under `.nb-ui` with `--nb-*` tokens, light and dark, and "Follow Obsidian theme". Sheets full height on phones, 44 px targets.
+- Restyled, behaviour unchanged: resize / style / open-notebook / new-notebook pickers, page arrange (move, duplicate, paper, size), export (PDF, PNG, Markdown), go to page and the page finder (prompts), paste, PDF page range, practice, attempts, lecture pack, exercise paper, pen test, shared clips, find and replace, the colour picker, the equation editor, the stamp palette and the destructive-action confirmations.
+- New strings: `ui.modal.cancel`, `goto.title`, `quicknav.title`, `modal.open.title` (English and Italian).
+- Tests: `tests/modal-shell.test.ts` (every surface is on the shell, CSS scoped and balanced, tokens only). Harness: `dev/harness/modals-check.ts` screenshots every dialog at tablet and phone widths, light and dark (`dist/shots/design/modals-*.png`). Not verified on the device: manual steps 540-559 in `docs/testing.md`.
+
 ## 0.12.3 — 2026-10-30
 
 Fixes for what 0.12.2 showed on the tablet (Obsidian for Android, Italian, a vault with no notebooks): an empty creation dialog, a Home with only its title and search pill, an empty *Tag* page, a rail **+** sitting on the brand, and navy panels in the settings. **Not verified on the device**: checked in unit tests and in the browser harness only. Manual re-check: steps 485-492 in `docs/testing.md`. No change to the notebook format (still v11).

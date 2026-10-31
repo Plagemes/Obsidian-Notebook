@@ -34,6 +34,7 @@ import { checkReadOnly } from "./readonly-check";
 import { checkSettings } from "./settings-check";
 import { checkPlugin } from "./plugin-check";
 import { checkCreate, prepareShot } from "./create-check";
+import { modalsApi } from "./modals-check";
 import { checkHostile, HOSTILE_ERROR, hostileDialog, installHostile } from "./hostile";
 import { PracticeService } from "../../src/view/practice";
 import { NavController } from "../../src/view/nav-controller";
@@ -2002,5 +2003,6 @@ async function main(): Promise<void> {
 	}
 }
 
+Object.assign(harnessApi, modalsApi({ app, errors, notices }));
 (window as unknown as { harness: Record<string, unknown> }).harness = harnessApi;
 harnessApi.ready = main();

@@ -10,6 +10,7 @@ import type { NotebookDocument, Page } from "../model/types";
 import { formatAgo, type RecentPagesService } from "./recent-pages";
 import type { RecentItem } from "../library/recent-log";
 import { showNotice } from "./notice";
+import { promptShell } from "../ui/components/modal-shell";
 
 /** What the quick switcher needs from the plugin host. */
 export interface QuickNavHost {
@@ -175,6 +176,7 @@ export class PageSwitcherModal extends SuggestModal<PageHit> {
 
 	constructor(private readonly svc: QuickNavService) {
 		super(svc.app);
+		promptShell(this, { title: t("quicknav.title"), icon: "search", cls: "notebook-quicknav-modal" });
 		this.setPlaceholder(t("quicknav.placeholder"));
 		this.emptyStateText = t("quicknav.empty");
 		this.status = this.modalEl.createDiv({ cls: "notebook-quicknav-status" });

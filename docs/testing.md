@@ -6,6 +6,7 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 
 | Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
 |---|---|---|---|---|---|
+| Dialogs, prompts and cards on the design system (wave 0.13, ds-modals, DESIGN.md §4): one shared shell (header with icon square and art band, body, footer with secondary and primary buttons) for every Modal, SuggestModal, floating card and confirmation; behaviour unchanged | ✅ | ✅ `tests/modal-shell.test.ts` (every surface on the shell, tokens, scoping, balanced CSS, strings in both languages); harness screenshots and touch-target checks of every dialog (`dev/harness/modals-check.ts`) | | ✅ | not checked on the tablet or with the pen (steps 540-559) |
 | Procedural subject art and palette (wave 0.12, DESIGN.md §2.3, §2.6): seven line-art families, card art, header bands, covers, empty states, folder icon, LRU image cache, reduced-motion switch; `colorFor` | ✅ | ✅ `tests/generative-art.test.ts` (determinism, seeds, geometry vs colour, density, left side clean, intensity, surfaces, empty states, switch, cache keys and eviction, palette, folder icon); harness gallery screenshots and timing (`HARNESS_DOC=art`) | | ✅ | no surface uses it yet; timing measured only in headless desktop Chrome (steps 425-429) |
 | Operations on several selected pages (roadmap 378, wave 0.8): multi-select in the page navigator (select button, long press on touch, Ctrl/Shift+click, range, select all) and move (start, end, position, another notebook), duplicate, bookmark, tag, paper, size, PDF export, delete through the page trash; one undo step each | ✅ | ✅ `tests/page-ops.test.ts` (order planning, ranges, every command as one step with exact undo, never deleting every page); ❌ the panel, the menus, touch long press, the dialogs | | ✅ | long press on touch both starts a selection and arms the old drag-to-reorder: to be checked on the tablet (steps 200-202) |
 | Do not disturb while writing (roadmap 374, wave 0.8): the plugin's own notices and non-urgent background work (thumbnails in the page panel and the library, library re-index, version-history snapshots, the timetable offer) wait while a pen is on the screen and for 1.5 s after | ✅ | ✅ `tests/writing-guard.test.ts` (timing, queue order, same-key replacement, lost pen, reset); ❌ real pen events, the notice wrapper in Obsidian | | ✅ | Obsidian's own notices (and other plugins') cannot be held back; `pointerType` `pen` only (a finger or mouse does not count); notices from the toolbar, stamps, selection actions and Zettelkasten are not routed yet (steps 205-206) |
@@ -1088,6 +1089,30 @@ Update to 0.12.3 and fully close and reopen Obsidian. Use the same vault with **
 490. **Creation dialog, both tabs.** The dialog shows the tabs *Quaderno* / *Cartella*, the cover preview with *Cambia copertina*, name, description, folder, the page templates, page size and orientation, *Annulla* and *Crea quaderno*. Tap *Cartella*: the folder card, name, description, location, icons and colours, *Crea cartella*. Also open it from *Nuova cartella* (header menu), from the quick actions and from the dashed tile. If it shows a red-bordered card instead, take a screenshot.
 491. **Tag page.** Tap *Tag* in the rail: the header *Tag* with its subtitle and *+ Nuovo*, and below it the line saying tags appear here once notebooks have them (no blank page).
 492. **First notebook and folder.** Create a notebook and a subject folder from the dialog: the notebook opens; back on Home the empty state is gone and the folder card (glossy folder icon, generated art) replaces the dashed tile.
+### 0.13 — ds-modals: dialogs, prompts and cards on the design system (steps 540-559)
+
+Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/design/modals-<name>-<theme>-<device>.png`. Check each in the light and the dark Obsidian theme and, once, with *Appearance → Style → Follow Obsidian theme*.
+
+540. **Header and footer.** Open any dialog (e.g. a page's *Export*): a header with an icon square, the title and a close ×, with a faint line-art band behind it; the footer has *Cancel* (quiet) and the accent primary button. The × and *Cancel* close it; Esc closes it.
+541. **Resize / Style.** Open the object's *Resize* and *Style* dialogs: the fields and buttons work as before and the values apply.
+542. **Export.** Export a page as PDF, as PNG and as Markdown: options, the progress and the file written are unchanged.
+543. **Arrange pages.** Move, duplicate, change paper and page size from the page panel: the lists are tappable rows, the chosen one applies.
+544. **Go to page.** Open *Go to page*: a slim header above the input; type a number, Enter jumps.
+545. **Page finder.** Open the quick page switcher: the same header, results as before; Enter opens the hit.
+546. **Paste.** Paste an image or text into a notebook: the paste dialog offers its choices and each one works.
+547. **PDF page range.** Import a PDF: the page-range dialog accepts "1-3, 5", shows an inline error for bad input and imports the pages.
+548. **Practice.** Open *Practice*: start a session, answer, open *Attempts*: both dialogs are styled and work.
+549. **Lecture pack.** Open the lecture pack, exercise paper and layout dialogs: every button works.
+550. **Pen test.** Settings → pen test (or the command): the dialog is styled, *Clear* empties the log, *Copy* copies it; the signal and decision lines still update while you move the pen.
+551. **Shared clips.** Open the shared clips dialog: its list and actions work.
+552. **Find and replace.** Open find and replace in a notebook: find, next, replace, replace all work; the dialog stays out of the way of the page.
+553. **Colour picker.** Open the colour picker from the pen toolbar: the card is a rounded design-system card; recent colours (32 px swatches) and the eyedropper and close buttons (40 px) work with the pen.
+554. **Equation editor.** Insert an equation: the card, the input and its buttons work.
+555. **Stamp palette.** Open the stamp palette: tapping a stamp chooses it.
+556. **Confirmations.** Delete a page (or empty the trash): the confirmation uses the shell, the destructive button is red, *Cancel* leaves everything untouched.
+557. **Phone width.** On the phone (or a narrow window) each dialog is a full-width sheet, the footer buttons stay reachable and nothing overflows horizontally.
+558. **Obsidian theme.** With *Follow Obsidian theme* the dialogs use Obsidian's surface and accent colours.
+559. **Reduced motion.** With reduced motion on, the header art band is not drawn and nothing animates.
 
 Results table for steps 1 to 492. Fill it in as you go.
 
