@@ -18,7 +18,7 @@
  * The eraser (`buttons & 32`, `button 5`) is never a barrel press.
  */
 
-import { ButtonTimeline, DEFAULT_BUTTON_WINDOWS, VERDICT_TEXT, type ButtonWindows } from "./pen-hover";
+import { ButtonTimeline, DEFAULT_BUTTON_WINDOWS, STILL_RADIUS_PX, VERDICT_TEXT, type ButtonWindows } from "./pen-hover";
 import { ButtonContact, barrelAtContact, describeDecision, describeSignal, type ButtonDecision, type ButtonSignal } from "./button-contact";
 
 /** PointerEvent.buttons bit of the pen's side (barrel) button. */
@@ -489,6 +489,10 @@ export interface LoggedEvent extends PenEventFacts {
 	/** Client position (pen events), to tell a resting nib from a moving one. */
 	x?: number;
 	y?: number;
+	/** 0.12.5: ms since the pen's last `pointerdown` with the nib touching (set by the log), or undefined before the first. */
+	sinceDown?: number;
+	/** 0.12.5: ms since the pen's last `pointerup` / `pointercancel` (set by the log); undefined before the first or while the nib touches. */
+	sinceUp?: number;
 }
 
 const POINTER_KIND: Record<string, PointerKind | undefined> = {
@@ -532,6 +536,7 @@ const FOLD_LOOKBACK = 8;
 export const LOG_LINES = 80;
 
 const fix = (n: number | undefined, d: number): string => (n === undefined || Number.isNaN(n) ? "-" : n.toFixed(d));
+const rel = (ms: number): string => `${ms >= 0 ? "+" : ""}${Math.round(ms)}ms`;
 
 /** One plain-text line for an event. */
 export function formatEvent(ev: LoggedEvent): string {
@@ -546,6 +551,8 @@ export function formatEvent(ev: LoggedEvent): string {
 	if (ev.fromTouch) parts.push("fromTouch");
 	if (ev.target) parts.push(`@${ev.target}`);
 	if (ev.timeStamp !== undefined) parts.push(`ts=${fix(ev.timeStamp, 1)}`);
+	if (ev.sinceDown !== undefined) parts.push(`dDown=${rel(ev.sinceDown)}`);
+	if (ev.sinceUp !== undefined) parts.push(`dUp=${rel(ev.sinceUp)}`);
 	const verdict = describeSideButton(ev);
 	parts.push(ev.note ? `=> ${ev.note}` : verdict === "side-button" ? "=> SIDE BUTTON" : verdict === "eraser" ? "=> eraser" : "=> -");
 	return parts.join(" ");
@@ -569,6 +576,16 @@ export class EventLog {
 
 	/** 0.12.4: the plugin's own decision for the contact (tap: menu, drag: eraser), fed with the same events. */
 	private readonly contact: ButtonContact;
+
+	/** 0.12.5: the pen contact in progress or the last one (log time, ms, and client px): for the relative times and the tap / drag summary. */
+	private downT: number | null = null;
+	private upT: number | null = null;
+	private x0 = 0;
+	private y0 = 0;
+	private farthest = 0;
+	/** The signal and decision last put in the log: a change is written next to the event that caused it. */
+	private shownSignal: string | null = null;
+	private shownDecision: string | null = null;
 
 	/**
 	 * `button`: the side-button setting as the plugin reads it: `enabled` (not "Nothing") and `menuAllowed` (a tap opens the
@@ -617,7 +634,7 @@ export class EventLog {
 			if (ev.pressure !== 0) c.penDown(ev.t, x, y, barrelAtContact(button, buttons, ev.pressure ?? 0) ? buttons : null);
 		} else if (ev.kind === "pointermove" || ev.kind === "pointerrawupdate") {
 			if (!c.inContact) return;
-			c.penMove(x, y);
+			c.penMove(x, y, ev.t);
 			if (ev.kind === "pointermove" && !isEraserSignal(button, buttons) && (buttons & BARREL_BUTTONS) !== 0) c.buttonMove("pointermove", ev.t, buttons);
 		} else if (ev.kind === "pointerup") c.penUp(ev.t);
 		else if (ev.kind === "pointercancel") c.penCancel(ev.t);
@@ -666,7 +683,9 @@ export class EventLog {
 				ev.note = "pointermove with button 0 during contact (possible side button)";
 			}
 		}
+		this.relativeTimes(ev);
 		this.feedContact(ev);
+		this.noteDecision(ev);
 		// 0.11.2: the button seen only as a contextmenu around or during a pen contact: order, gaps and verdict.
 		let timing: string | null = null;
 		if (ev.pointerType === "pen" && ev.kind === "pointerdown") timing = this.timeline.penDown(ev.t, ev.x, ev.y);
@@ -697,7 +716,76 @@ export class EventLog {
 		if (this.lines.length > this.max) this.lines.shift();
 	}
 
+	/**
+	 * 0.12.5: times relative to the pen contact (`dDown` since the last pen `pointerdown`, `dUp` since its lift), and for
+	 * the lift a summary: how long the contact lasted and how far the nib went from where it landed (a tap stays within
+	 * the still radius, a drag goes beyond it).
+	 */
+	private relativeTimes(ev: LoggedEvent): void {
+		const pen = ev.pointerType === "pen";
+		if (pen && ev.kind === "pointerdown" && ev.pressure !== 0) {
+			this.downT = ev.t;
+			this.upT = null;
+			this.x0 = ev.x ?? 0;
+			this.y0 = ev.y ?? 0;
+			this.farthest = 0;
+		} else if (pen && this.downT !== null && this.upT === null && ev.x !== undefined && ev.y !== undefined && (ev.kind === "pointermove" || ev.kind === "pointerrawupdate")) {
+			this.farthest = Math.max(this.farthest, Math.hypot(ev.x - this.x0, ev.y - this.y0));
+		}
+		if (this.downT !== null) ev.sinceDown = ev.t - this.downT;
+		if (this.upT !== null) ev.sinceUp = ev.t - this.upT;
+		if (pen && (ev.kind === "pointerup" || ev.kind === "pointercancel") && this.downT !== null && this.upT === null) {
+			this.upT = ev.t;
+			const moved = this.farthest <= STILL_RADIUS_PX ? "still (a tap)" : "moved (a drag)";
+			const summary = `contact ${Math.round(ev.t - this.downT)} ms, farthest ${Math.round(this.farthest)} px from where it landed: ${moved}`;
+			ev.note = ev.note ? `${ev.note}; ${summary}` : summary;
+		}
+	}
+
+	/** Puts the plugin's reading (signal seen, decision) next to the event that changed it, with the Pen button test's own wording. */
+	private noteDecision(ev: LoggedEvent): void {
+		const signal = this.signalText, decision = this.decisionText;
+		const parts: string[] = [];
+		if (signal !== this.shownSignal && signal !== null) parts.push(`signal: ${signal}`);
+		if (decision !== this.shownDecision && decision !== null) parts.push(`decision: ${decision}`);
+		this.shownSignal = signal;
+		this.shownDecision = decision;
+		if (parts.length > 0) ev.note = ev.note ? `${ev.note}; ${parts.join(", ")}` : parts.join(", ");
+	}
+
+	/** True while a bare `contextmenu` waits for a pen contact (the before-window is running). */
+	get hoverWaiting(): boolean {
+		return this.contact.hoverWaitingSince !== null;
+	}
+
+	/** The before-window of the settings, ms. */
+	get beforeMs(): number {
+		return this.contact.linkBeforeMs();
+	}
+
+	/**
+	 * Call as time passes (log time, ms): a bare `contextmenu` that no pen contact followed within the before-window was a
+	 * click while hovering, which opens the radial menu. The plugin does that on a timer; the log shows it as a line, so a
+	 * menu that opens "by itself" is told apart from a tap.
+	 */
+	tick(t: number): void {
+		const since = this.contact.hoverWaitingSince;
+		if (since === null || !this.contact.settleHover(t)) return;
+		const decision = this.decisionText;
+		this.shownDecision = decision;
+		this.lines.push({
+			key: "plugin-hover", count: 1, noted: true, foldable: false,
+			text: `${(t / 1000).toFixed(3)}s plugin: no pen contact within ${this.contact.linkBeforeMs()} ms of the contextmenu at ${(since / 1000).toFixed(3)}s => decision: ${decision ?? "-"}`,
+		});
+		if (this.lines.length > this.max) this.lines.shift();
+	}
+
 	clear(): void {
+		this.downT = null;
+		this.upT = null;
+		this.farthest = 0;
+		this.shownSignal = null;
+		this.shownDecision = null;
 		this.lines = [];
 		this.sideButtonCount = 0;
 		this.counts.clear();

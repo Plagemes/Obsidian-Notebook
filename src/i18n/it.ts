@@ -967,6 +967,8 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"penTest.sig.pointercancel": "pointercancel dopo il contextmenu",
 	"penTest.dec.waiting": "in attesa (tocco: menu, trascinamento: gomma)",
 	"penTest.dec.menu": "menu (tocco)",
+	"penTest.dec.menuLate": "menu (tocco, contextmenu dopo il sollevamento)",
+	"penTest.dec.menuHover": "menu (clic in hover: nessun contatto della penna entro {ms} ms dal contextmenu)",
 	"penTest.dec.eraser": "gomma (trascinamento)",
 	"penTest.dec.ignored": "ignorato: {reason}",
 	"penTest.ign.off": "pulsante laterale su Niente",

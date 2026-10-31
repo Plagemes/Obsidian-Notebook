@@ -965,6 +965,8 @@ export const en = {
 	"penTest.sig.pointercancel": "pointercancel after contextmenu",
 	"penTest.dec.waiting": "waiting (tap: menu, drag: eraser)",
 	"penTest.dec.menu": "menu (tap)",
+	"penTest.dec.menuLate": "menu (tap, contextmenu after the lift)",
+	"penTest.dec.menuHover": "menu (hover click: no pen contact within {ms} ms of the contextmenu)",
 	"penTest.dec.eraser": "eraser (drag)",
 	"penTest.dec.ignored": "ignored: {reason}",
 	"penTest.ign.off": "side button set to Nothing",
