@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-	ART_STYLES, artCacheStats, artEnabled, artImage, artStyleFor, clearArtCache, coverImage, drawArtLayer, drawCover, emptyStateImage,
+	ART_STYLES, artCacheStats, artFamilyFor, artEnabled, artImage, artStyleFor, clearArtCache, coverImage, drawArtLayer, drawCover, emptyStateImage,
 	folderIconSvg, setArtCanvasFactory, setArtEnabled, type ArtCanvas, type ArtContext, type ArtSpec, type ImageContext,
 } from "../src/ui/art/generative-art";
 import { LruCache } from "../src/ui/art/lru";
@@ -248,9 +248,9 @@ describe("drawArt", () => {
 		expect(hashOf({ seed: "Fisiologia", color: "#2F80F7", style: "cells" }).hash).not.toBe(hashOf({ seed: "Fisiologia", color: "#F0565E", style: "cells" }).hash);
 	});
 
-	it("without a style it uses artStyleFor(seed); bad input is tolerated", () => {
+	it("without a style it uses artFamilyFor(seed); bad input is tolerated", () => {
 		const seed = "Biomateriali";
-		expect(hashOf({ seed, color: "#8B5CF6" }).hash).toBe(hashOf({ seed, color: "#8B5CF6", style: artStyleFor(seed) }).hash);
+		expect(hashOf({ seed, color: "#8B5CF6" }).hash).toBe(hashOf({ seed, color: "#8B5CF6", style: artFamilyFor(seed) }).hash);
 		expect(hashOf({ seed, color: "#8B5CF6", density: Number.NaN }).hash).toBe(hashOf({ seed, color: "#8B5CF6", density: 0.6 }).hash);
 		expect(hashOf({ seed, color: "#8B5CF6", density: 5 }).hash).toBe(hashOf({ seed, color: "#8B5CF6", density: 1 }).hash);
 		expect(() => hashOf({ seed: "", color: "not a colour" })).not.toThrow();
@@ -304,8 +304,13 @@ describe("artStyleFor", () => {
 		expect(used.size).toBe(ART_STYLES.length);
 	});
 
-	it("keeps its current assignments (changing them would change every user's art)", () => {
-		expect(["Anatomia", "Fisiologia", "Biomateriali", "Matematica"].map(artStyleFor)).toEqual(["contours", "grid", "orbits", "contours"]);
+	it("keeps the hash assignments of names without a keyword (changing them would change those users' art)", () => {
+		expect(["Esami", "Recenti", "Con PDF", "Subject 1"].map(artStyleFor)).toEqual(["waves", "flow", "contours", "flow"]);
+	});
+
+	it("gives keyword names the motif of their topic (0.13)", () => {
+		expect(["Anatomia", "Fisiologia", "Biomateriali"].map(artStyleFor).every((s) => s === "cells" || s === "branches")).toBe(true);
+		expect(["waves", "grid"]).toContain(artStyleFor("Matematica"));
 	});
 });
 

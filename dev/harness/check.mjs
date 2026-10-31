@@ -25,10 +25,12 @@ const DEVICES = {
 	desktop: { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false, touch: false },
 	// The same tablet held sideways.
 	tabletLandscape: { width: 1280, height: 800, deviceScaleFactor: 2, mobile: true, touch: true },
+	// 0.13 polish: a short landscape phone (740 CSS px wide): the toolbar must keep three quick slots (Back among them).
+	phoneLandscape: { width: 740, height: 360, deviceScaleFactor: 2.625, mobile: true, touch: true },
 };
 
 // The families of src/ui/art/generative-art.ts (ART_STYLES), for the art gallery pages.
-const ART_STYLES = ["contours", "cells", "waves", "branches", "flow", "orbits", "grid"];
+const ART_STYLES = ["contours", "cells", "waves", "branches", "flow", "orbits", "grid", "veins"];
 
 const SCENARIOS = [];
 for (const doc of ["v3", "new"]) {
@@ -44,6 +46,14 @@ for (const surface of ["home", "library"]) {
 		for (const device of ["reference", "tablet", "phone"]) SCENARIOS.push({ doc: "library", surface, theme, device, lowLatency: false });
 	}
 }
+// 0.13 home2: Home's Continue card in its three states (lecture in progress: the default scenarios above; a class without a
+// notebook yet; no class: the notebook left off in), tablet and phone, dark and light, plus the tablet held sideways.
+for (const variant of ["create", "last"]) {
+	for (const theme of ["dark", "light"]) {
+		for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "library", surface: "home", variant, theme, device, lowLatency: false });
+	}
+}
+for (const theme of ["dark", "light"]) SCENARIOS.push({ doc: "library", surface: "home", theme, device: "tabletLandscape", lowLatency: false });
 // 0.12.2: Home and the library on an empty vault (no notebooks, no notebooks folder yet): the + New button, the quick
 // actions and the empty state are there and open the creation dialog. Screenshots in dev/harness/dist/shots/design/.
 for (const surface of ["home", "library"]) {
@@ -72,6 +82,11 @@ SCENARIOS.push({ doc: "pdf", theme: "dark", device: "narrow", lowLatency: false 
 // The practice strip, the peek and the timer on a notebook with a practice copy (wave 0.9).
 SCENARIOS.push({ doc: "practice", theme: "light", device: "desktop", lowLatency: false });
 SCENARIOS.push({ doc: "practice", theme: "dark", device: "narrow", lowLatency: false });
+// The generated outline (0.13): bookmarks, slides, large handwriting and markers in the page panel, tablet and phone, light and dark.
+SCENARIOS.push({ doc: "outline", theme: "light", device: "tablet", lowLatency: false });
+SCENARIOS.push({ doc: "outline", theme: "dark", device: "tablet", lowLatency: false });
+SCENARIOS.push({ doc: "outline", theme: "light", device: "phone", lowLatency: false });
+SCENARIOS.push({ doc: "outline", theme: "dark", device: "phone", lowLatency: false });
 // Anchored excerpts (v10): a region of a fake PDF page excerpted to a new page, drawn live, and the badge's jump back.
 SCENARIOS.push({ doc: "excerpt", theme: "light", device: "desktop", lowLatency: false });
 SCENARIOS.push({ doc: "excerpt", theme: "dark", device: "tablet", lowLatency: false });
@@ -87,10 +102,19 @@ SCENARIOS.push({ doc: "settings", theme: "dark", device: "desktop", lowLatency: 
 SCENARIOS.push({ doc: "settings", theme: "light", device: "desktop", lowLatency: false });
 // wave 0.12: the creation dialog (both tabs) at tablet and phone widths, light and dark.
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "create", theme, device, lowLatency: false });
+// 0.13 ds-zettel: the Inbox, the card dialogs and the card regions at tablet and phone widths, light and dark.
+for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "zettel", theme, device, lowLatency: false });
+// wave 0.13 ds-modals: every dialog, prompt and card on the shared modal shell (dev/harness/modals-check.ts), tablet and phone, light and dark.
+for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "modals", theme, device, lowLatency: false });
 // 0.12.1: the whole plugin's onload against the stub: what it registers, the settings tab through both of Obsidian's paths,
 // and injected failures (a failing step, failing settings definitions, an unreadable data.json).
+// 0.13 ds-notebook: the notebook's editing chrome (toolbar, options, sheets, contextual bar, dial, banner) at tablet and
+// phone widths, light and dark; screenshots in dist/shots/design/ (notebook-<state>-<theme>-<device>.png).
+for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone", "narrow"]) SCENARIOS.push({ doc: "chrome", theme, device, lowLatency: false });
 SCENARIOS.push({ doc: "plugin", theme: "dark", device: "tablet", lowLatency: false });
 SCENARIOS.push({ doc: "plugin", theme: "light", device: "desktop", lowLatency: false });
+// 0.13 hints: the tip bubble at tablet and phone widths, dark and light (dev/harness/dist/shots/hints-*.png).
+for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "hints", theme, device, lowLatency: false });
 
 /** RGBA pixel reader for the 8-bit, non-interlaced PNGs Chrome produces. */
 function decodePng(buf) {
@@ -178,10 +202,10 @@ async function main() {
 
 		for (const s of SCENARIOS.filter((x) => !process.env.HARNESS_DOC || x.doc === process.env.HARNESS_DOC)) {
 			const d = DEVICES[s.device];
-			const name = `${s.doc}${s.surface ? `-${s.surface}` : ""}-${s.theme}-${s.device}${s.lowLatency ? "-lowlatency" : ""}${s.fault ? `-fault-${s.fault}` : ""}${s.hostile ? "-hostile" : ""}`;
+			const name = `${s.doc}${s.surface ? `-${s.surface}` : ""}${s.variant ? `-${s.variant}` : ""}-${s.theme}-${s.device}${s.lowLatency ? "-lowlatency" : ""}${s.fault ? `-fault-${s.fault}` : ""}${s.hostile ? "-hostile" : ""}`;
 			await cdp.send("Emulation.setDeviceMetricsOverride", { width: d.width, height: d.height, deviceScaleFactor: d.deviceScaleFactor, mobile: d.mobile });
 			await cdp.send("Emulation.setTouchEmulationEnabled", d.touch ? { enabled: true, maxTouchPoints: 5 } : { enabled: false });
-			const url = `http://127.0.0.1:${port}/index.html?doc=${s.doc}&theme=${s.theme}${s.lowLatency ? "&lowLatency=1" : ""}${s.fault ? `&fault=${s.fault}` : ""}${s.surface ? `&surface=${s.surface}` : ""}${s.hostile ? "&hostile=1" : ""}`;
+			const url = `http://127.0.0.1:${port}/index.html?doc=${s.doc}&theme=${s.theme}${s.lowLatency ? "&lowLatency=1" : ""}${s.fault ? `&fault=${s.fault}` : ""}${s.surface ? `&surface=${s.surface}` : ""}${s.variant ? `&variant=${s.variant}` : ""}${s.hostile ? "&hostile=1" : ""}`;
 			await cdp.send("Page.navigate", { url });
 			let report;
 			try {
@@ -190,7 +214,7 @@ async function main() {
 					await sleep(100);
 				}
 				await cdp.evaluate("window.harness.ready.then(() => true)");
-				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "hints" ? "window.harness.checkHints()" : s.doc === "zettel" ? "window.harness.checkZettel()" : s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "outline" ? "window.harness.checkOutline()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "chrome" ? "window.harness.checkChrome()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "modals" ? "window.harness.checkModals()" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}
@@ -213,6 +237,19 @@ async function main() {
 				}
 				if (!dark) problems.push(`composited ink missing at (${Math.round(ix)}, ${Math.round(iy)})`);
 			}
+			// 0.13 ds-zettel: review screenshots of each Zettelkasten surface.
+			if (s.doc === "zettel") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["inbox", "open", "empty", "caught-up", "scanning", "card", "card-luhmann", "list", "confirm", "overlay"]) {
+					try {
+						await cdp.evaluate(`window.harness.zettelState('${state}').then(() => true)`);
+						writeFileSync(join(designDir, `zettel-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`zettel ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
 			// wave 0.12: the creation dialog's Folder tab (the Notebook tab is the screenshot above).
 			if (s.doc === "create") {
 				try {
@@ -222,18 +259,76 @@ async function main() {
 					problems.push(`folder tab screenshot: ${e.message}`);
 				}
 			}
+			// 0.13 ds-notebook: one screenshot per state of the chrome, for review.
+			if (s.doc === "chrome") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["toolbar", "options-pen", "options-eraser", "sheet", "page-sheet", "selection", "radial-main", "radial-color", "heavy"]) {
+					try {
+						await cdp.evaluate(`window.harness.chromeShot('${state}').then(() => true)`);
+						writeFileSync(join(designDir, `notebook-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`${state} screenshot: ${e.message}`);
+					}
+				}
+				await cdp.evaluate("window.harness.closeAll().then(() => true)");
+			}
+			// wave 0.13 ds-modals: a screenshot of each dialog, prompt and card, in dev/harness/dist/shots/design/.
+			if (s.doc === "modals") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				try {
+					const names = await cdp.evaluate("window.harness.modalNames");
+					for (const modal of names) {
+						await cdp.evaluate(`window.harness.modalShot('${modal}').then(() => true)`);
+						writeFileSync(join(designDir, `modals-${modal}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					}
+					await cdp.evaluate("window.harness.closeModal()");
+				} catch (e) {
+					problems.push(`modal screenshots: ${e.message}`);
+				}
+			}
 			// 0.12: review screenshots of Home and the library, then their controls (bell, rail, quick actions, search, star, list).
 			if (s.doc === "library") {
 				const designDir = join(shots, "design");
 				mkdirSync(designDir, { recursive: true });
-				writeFileSync(join(designDir, `${s.surface}-${s.theme}-${s.device}.png`), png);
-				const shotAs = async (file) => writeFileSync(join(designDir, `${s.surface}-${s.theme}-${s.device}-${file}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+				const base = `${s.surface}${s.variant ? `-${s.variant}` : ""}-${s.theme}-${s.device}`;
+				writeFileSync(join(designDir, `${base}.png`), png);
+				// 0.13 home2: Home is taller than the screen: a second shot of the whole page (the viewport grown to its height).
+				if (s.surface === "home") {
+					try {
+						const full = await cdp.evaluate("(() => { const el = document.querySelector('.nb-scroll'); return el ? Math.ceil(el.scrollHeight + el.getBoundingClientRect().top) : 0; })()");
+						if (full > d.height) {
+							await cdp.send("Emulation.setDeviceMetricsOverride", { width: d.width, height: Math.min(5000, full), deviceScaleFactor: d.deviceScaleFactor, mobile: d.mobile });
+							await sleep(500);
+							writeFileSync(join(designDir, `${base}-full.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+							await cdp.send("Emulation.setDeviceMetricsOverride", { width: d.width, height: d.height, deviceScaleFactor: d.deviceScaleFactor, mobile: d.mobile });
+							await sleep(300);
+						}
+					} catch (e) {
+						problems.push(`full-page screenshot: ${e.message}`);
+					}
+				}
+				const shotAs = async (file) => writeFileSync(join(designDir, `${base}-${file}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 				try {
 					if (s.theme === "dark") {
 						for (const state of ["bell", "search", "list"]) {
 							await cdp.evaluate(`window.harness.libraryState('${state}')`);
 							await shotAs(state);
 							await cdp.evaluate("window.harness.libraryState('reset')");
+						}
+					}
+					// 0.13 home2: the revised Home's structure and controls, and review shots of its pinned and 14-day states.
+					if (s.surface === "home") {
+						const h2 = await cdp.evaluate("window.harness.checkHome2()", 60000);
+						problems.push(...h2.results.filter((x) => !x.ok).map((x) => `${x.name}: ${x.detail}`));
+						problems.push(...h2.errors.map((e) => `console error: ${e.split("\n")[0]}`));
+						if (!s.variant && s.theme === "dark") {
+							for (const state of ["pinned", "range14"]) {
+								await cdp.evaluate(`window.harness.home2State('${state}')`);
+								await shotAs(state);
+								await cdp.evaluate("window.harness.home2State('reset')");
+							}
 						}
 					}
 					const r = await cdp.evaluate("window.harness.interactLibrary()", 60000);
@@ -325,7 +420,7 @@ async function main() {
 			mkdirSync(artDir, { recursive: true });
 			const pages = [];
 			for (const theme of ["dark", "light"]) {
-				for (const style of [...ART_STYLES, "icons"]) pages.push({ theme, style, device: "desktopHiDpi" });
+				for (const style of [...ART_STYLES, "growth", "icons"]) pages.push({ theme, style, device: "desktopHiDpi" });
 				for (const device of ["tablet", "phone"]) pages.push({ theme, style: "mix", device });
 			}
 			for (const a of pages) {

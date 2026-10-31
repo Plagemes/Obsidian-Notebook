@@ -274,3 +274,37 @@ input[type=number]:where(:not(:disabled)):hover {
 	justify-content: center;
 	background: rgba(0, 0, 0, 0.45);
 }
+
+/* 0.13 ds-zettel: the Inbox drawn like a leaf over the page, and the card-list stand-in. */
+.harness-zettel-host {
+	position: fixed;
+	inset: 0;
+	z-index: 900;
+	display: flex;
+	flex-direction: column;
+	background: var(--background-primary);
+}
+
+.harness-zettel-leaf {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.harness-modal-container.harness-zettel-backdrop {
+	z-index: 1000;
+}
+
+.harness-zettel-list-modal {
+	width: min(560px, 94vw);
+}
+/* wave 0.13 ds-modals: the parts of Obsidian the stand-in does not draw (toggle, dropdown arrow), so modal screenshots read like the app. */
+.harness-modal-container .setting-item { display: flex; align-items: center; }
+.harness-modal-container .checkbox-container { position: relative; width: 42px; height: 24px; border-radius: 12px; cursor: pointer; }
+.harness-modal-container .checkbox-container::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+.harness-modal-container .checkbox-container.is-enabled::after { left: 21px; }
+.harness-modal-container .modal { max-width: 100vw; }
+.harness-card-stage { position: fixed; inset: 0; z-index: 50; background: var(--background-secondary); }
+.harness-card-stage .notebook-stage { position: absolute; inset: 0; }
+.harness-prompt-results .suggestion-item { display: block; }

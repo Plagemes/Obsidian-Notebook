@@ -74,6 +74,15 @@ export function closeCreate(): CreateTab | null {
 	return tab;
 }
 
+/** 0.13 polish: the cover arrives from the art worker a moment after the dialog is drawn. */
+const coverReady = async (): Promise<string> => {
+	for (let i = 0; i < 50; i++) {
+		const src = document.querySelector<HTMLImageElement>(".nb-create-cover-img")?.getAttribute("src") ?? "";
+		if (src.startsWith("data:image/png")) return src;
+		await new Promise<void>((r) => window.setTimeout(r, 100));
+	}
+	return "";
+};
 const frames = (n = 2) => new Promise<void>((resolve) => {
 	let left = n;
 	const step = () => (--left <= 0 ? resolve() : window.requestAnimationFrame(step));
@@ -115,7 +124,13 @@ export async function checkCreate(api: CreateCheckApi, finalTab: CreateTab): Pro
 	showCreate(api, "notebook", "Notebooks/Anatomia", created);
 	await frames();
 	add("opens on the Notebook tab with the name focused", q(".nb-create-tab.is-active")?.textContent === "Notebook" && document.activeElement === q(".nb-create-name"));
-	add("shows a cover preview", !!q<HTMLImageElement>(".nb-create-cover-img")?.src.startsWith("data:image/png"));
+	add("shows a cover preview", (await coverReady()).startsWith("data:image/png"));
+	// 0.13.0: the cover shows its generated art (cached or faded in) and the badge names the effective family.
+	type(q<HTMLInputElement>(".nb-create-name"), "Anatomia umana");
+	const artSrc = await coverReady();
+	add("a biology title picks veins: the badge says Veins", q(".nb-create-badge")?.textContent === "Veins", q(".nb-create-badge")?.textContent ?? "");
+	add("and the cover element holds a non-empty art image", artSrc.length > 1000 && (q<HTMLImageElement>(".nb-create-cover-img")?.naturalWidth ?? 0) > 0, String(artSrc.length));
+	type(q<HTMLInputElement>(".nb-create-name"), "");
 	add("starts in the folder it was opened in", q(".nb-create-select-text")?.textContent === "Anatomia", q(".nb-create-select-text")?.textContent ?? "");
 	add("offers every paper kind with a real preview", qa(".nb-create-paper img").length === 12 && qa(".nb-create-paper img").every((i) => (i as HTMLImageElement).src.startsWith("data:image")));
 	add("offers A4 · A5 · B5 · Letter · Custom", qa(".nb-create-chip").map((c) => c.textContent).join(" ") === "A4 A5 B5 Letter Custom", qa(".nb-create-chip").map((c) => c.textContent).join(" "));
@@ -147,12 +162,14 @@ export async function checkCreate(api: CreateCheckApi, finalTab: CreateTab): Pro
 	tap(q('.nb-create-paper[data-id="dotted"]'), "pen");
 	tap(q('.nb-create-chip[data-id="a5"]'), "touch");
 	tap(q('.nb-create-orient-tile[data-id="landscape"]'), "pen");
-	const coverBefore = q<HTMLImageElement>(".nb-create-cover-img")?.src ?? "";
+	const coverBefore = await coverReady();
 	tap(q(".nb-create-reseed"), "pen");
 	await frames();
-	add("the shuffle button next to Change cover draws a new variation", !!coverBefore && q<HTMLImageElement>(".nb-create-cover-img")?.src !== coverBefore);
+	const coverAfter = await coverReady();
+	add("the shuffle button next to Change cover draws a new variation", !!coverBefore && !!coverAfter && coverAfter !== coverBefore);
 	tap(q(".nb-create-change"), "touch");
-	tap(q('.nb-create-style[data-id="cells"]'), "pen");
+	add("the style picker offers veins", !!q('.nb-create-style[data-id="veins"]'));
+	tap(q('.nb-create-style[data-id="veins"]'), "pen");
 	tap(q('.nb-create-cover-options .nb-create-swatch[data-id="#16C2A3"]'), "touch");
 	await frames();
 	add("the selected tiles are marked", q('.nb-create-paper[data-id="dotted"]')?.getAttribute("aria-checked") === "true" && q('.nb-create-chip[data-id="a5"]')?.hasClass("is-active") === true);
@@ -167,7 +184,7 @@ export async function checkCreate(api: CreateCheckApi, finalTab: CreateTab): Pro
 		const p = parsed.doc.pages[0]!;
 		add("with exactly the chosen paper, size and orientation", p.paper.kind === "dotted" && p.width === PAGE_SIZES.a5.height && p.height === PAGE_SIZES.a5.width, `${p.paper.kind} ${p.width}x${p.height}`);
 		const m = parsed.doc.meta!;
-		add("and the cover and description", m.cover === "#16C2A3" && m.coverArt?.kind === "art" && m.coverArt.style === "cells" && m.description === "Prima parte del corso", JSON.stringify(m));
+		add("and the cover and description", m.cover === "#16C2A3" && m.coverArt?.kind === "art" && m.coverArt.style === "branches" && m.coverArt.seed.startsWith("veins~") && m.description === "Prima parte del corso", JSON.stringify(m));
 	} else add("the new notebook reads back", false, parsed && !parsed.ok ? parsed.message : "missing");
 	add("the dialog closed after creating", !document.querySelector(".notebook-create-modal"));
 
@@ -215,6 +232,7 @@ export async function prepareShot(api: CreateCheckApi, tab: CreateTab): Promise<
 	type(q<HTMLTextAreaElement>(".nb-create-description"), tab === "notebook" ? "Ossa, muscoli e articolazioni" : "Corso del primo semestre");
 	if (tab === "folder") tap(q('.nb-create-icon-tile[data-id="heart-pulse"]'), "touch");
 	await frames(3);
+	if (tab === "notebook") await coverReady();
 	q<HTMLInputElement>(".nb-create-name")?.blur();
 	window.scrollTo(0, 0);
 }

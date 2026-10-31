@@ -260,7 +260,7 @@ No. Everything, including the generated art and the statistics, is computed by o
   <a href="https://plagemes.github.io/Obsidian-Notebook/"><img src="https://img.shields.io/badge/roadmap-129%20of%20437%20shipped-3DD68C" alt="Roadmap: 129 of 437 features shipped"></a>
 </p>
 
-As of 0.12.5 the roadmap has **129 features shipped**, **0 in progress** and **308 to do** (plus 5 deferred and 22 dropped). The live page is rebuilt from [docs/roadmap.md](docs/roadmap.md) on every change, with filters, search and the most requested features.
+As of 0.13.0 the roadmap has **131 features shipped**, **0 in progress** and **306 to do** (plus 5 deferred and 22 dropped). The live page is rebuilt from [docs/roadmap.md](docs/roadmap.md) on every change, with filters, search and the most requested features.
 
 <p>
   <a href="https://plagemes.github.io/Obsidian-Notebook/"><img src="https://img.shields.io/badge/Open_the_live_roadmap-6D8BFF?style=for-the-badge" alt="Open the live roadmap"></a>
@@ -274,7 +274,7 @@ As of 0.12.5 the roadmap has **129 features shipped**, **0 in progress** and **3
 - **Found a bug?** [Report it](https://github.com/Plagemes/Obsidian-Notebook/issues/new?template=bug_report.yml). Reports from Android tablets with a pen help most.
 - **Want to code?** Read [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/development.md](docs/development.md). Please follow the [Code of Conduct](CODE_OF_CONDUCT.md); security issues go through [SECURITY.md](SECURITY.md).
 
-<sub><b>Status:</b> v0.12.5 (document format 11), early development. The automated tests and the browser harness pass, but Notebook has not been verified on Android hardware yet; what is verified, and how to test it, is in <a href="docs/testing.md">docs/testing.md</a>.</sub>
+<sub><b>Status:</b> v0.13.0 (document format 11), early development. The automated tests and the browser harness pass, but Notebook has not been verified on Android hardware yet; what is verified, and how to test it, is in <a href="docs/testing.md">docs/testing.md</a>.</sub>
 
 ## Licence
 

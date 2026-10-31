@@ -7,6 +7,7 @@ import {
 } from "../model/text-search";
 import type { NotebookDocument } from "../model/types";
 import { showNotice } from "./notice";
+import { modalShell, shellButton, shellCheck, shellField } from "../ui/components/modal-shell";
 
 /** What the panel needs from the notebook view. */
 export interface FindReplaceHost {
@@ -46,14 +47,12 @@ export class FindReplaceModal extends Modal {
 	}
 
 	onOpen(): void {
-		this.modalEl.addClass("notebook-find-panel");
-		this.setTitle(t("find.title"));
-		const body = this.contentEl;
-		body.empty();
+		const shell = modalShell(this, { title: t("find.title"), icon: "replace", size: "medium", cls: "notebook-find-panel" });
+		const body = shell.body;
 
-		const findRow = body.createDiv({ cls: "notebook-find-row" });
-		findRow.createEl("label", { text: t("find.find"), attr: { for: "notebook-find-input" } });
+		const findRow = shellField(body, t("find.find"), "notebook-find-input");
 		this.findInput = findRow.createEl("input", {
+			cls: "nb-modal-input",
 			attr: { id: "notebook-find-input", type: "text", placeholder: t("find.find.placeholder"), spellcheck: "false", autocomplete: "off", enterkeyhint: "search" },
 		});
 		this.findInput.addEventListener("input", () => this.typed());
@@ -64,27 +63,24 @@ export class FindReplaceModal extends Modal {
 			this.step(e.shiftKey ? -1 : 1);
 		});
 
-		const replaceRow = body.createDiv({ cls: "notebook-find-row" });
-		replaceRow.createEl("label", { text: t("find.replace"), attr: { for: "notebook-replace-input" } });
+		const replaceRow = shellField(body, t("find.replace"), "notebook-replace-input");
 		const replaceInput = replaceRow.createEl("input", {
+			cls: "nb-modal-input",
 			attr: { id: "notebook-replace-input", type: "text", placeholder: t("find.replace.placeholder"), spellcheck: "false", autocomplete: "off" },
 		});
 		replaceInput.addEventListener("input", () => {
 			this.replacement = replaceInput.value;
 		});
 
-		const options = body.createDiv({ cls: "notebook-find-options" });
+		const options = body.createDiv({ cls: "nb-modal-checks notebook-find-options" });
 		this.checkbox(options, t("find.matchCase"), "matchCase");
 		this.checkbox(options, t("find.wholeWord"), "wholeWord");
 
-		const actions = body.createDiv({ cls: "notebook-find-actions" });
-		this.replaceOne = actions.createEl("button", { text: t("find.replaceOne"), attr: { type: "button" } });
-		this.replaceOne.addEventListener("click", () => this.doReplaceOne());
-		this.replaceAll = actions.createEl("button", { text: t("find.replaceAll"), cls: "mod-warning", attr: { type: "button" } });
-		this.replaceAll.addEventListener("click", () => this.doReplaceAll());
-
-		this.status = body.createDiv({ cls: "notebook-find-status", attr: { role: "status", "aria-live": "polite" } });
+		this.status = body.createDiv({ cls: "nb-modal-note notebook-find-status", attr: { role: "status", "aria-live": "polite" } });
 		this.list = body.createDiv({ cls: "notebook-find-results" });
+
+		this.replaceOne = shellButton(shell.foot, "secondary", t("find.replaceOne"), () => this.doReplaceOne());
+		this.replaceAll = shellButton(shell.foot, "danger", t("find.replaceAll"), () => this.doReplaceAll());
 		this.refresh(-1);
 		this.findInput.focus();
 	}
@@ -95,14 +91,11 @@ export class FindReplaceModal extends Modal {
 	}
 
 	private checkbox(parent: HTMLElement, label: string, key: keyof FindOptions): void {
-		const wrap = parent.createEl("label", { cls: "notebook-find-check" });
-		const box = wrap.createEl("input", { attr: { type: "checkbox" } });
-		wrap.createSpan({ text: label });
-		box.addEventListener("change", () => {
-			this.opts = { ...this.opts, [key]: box.checked };
+		shellCheck(parent, label, this.opts[key], (on) => {
+			this.opts = { ...this.opts, [key]: on };
 			this.flushTyping();
 			this.refresh(this.active >= 0 ? 0 : -1);
-		});
+		}).parentElement?.addClass("notebook-find-check");
 	}
 
 	// --- searching ---

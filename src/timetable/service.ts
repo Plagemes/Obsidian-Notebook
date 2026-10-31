@@ -11,7 +11,7 @@ import { addLecturePage } from "../view/lecture";
 import { setLectureCourseProvider } from "./current";
 import { findLecturePage } from "./lecture-open";
 import {
-	classesAt, courseForNotebook, emptyTimetable, occurrenceKey, pickTarget, type ClassEntry, type Timetable,
+	classesAt, courseForNotebook, emptyTimetable, occurrenceKey, pickTarget, type ClassEntry, type OpenTarget, type Timetable,
 } from "./schedule";
 import { TimetableStore } from "./store";
 import { TimetableModal } from "./timetable-modal";
@@ -99,6 +99,19 @@ export class TimetableService {
 	nowClass(): NowClass | null {
 		const c = this.current();
 		return c ? { course: c.course, room: c.room } : null;
+	}
+
+	/**
+	 * 0.13 (Home's Continue card): the class in progress and what tapping it opens: the notebook it is linked to, or the
+	 * latest one of the course's linked folder, or (when there is none yet) where a new notebook for the course will be made.
+	 * The same choice `openClass` makes, without opening or creating anything.
+	 */
+	nowTarget(now = new Date()): { course: string; room?: string; target: OpenTarget } | null {
+		const c = this.current(now);
+		if (!c) return null;
+		const folder = this.plugin.settings.folder;
+		const books = listNotebooks(this.app, folder).map((f) => ({ path: f.path, basename: f.basename, mtime: f.stat.mtime }));
+		return { course: c.course, room: c.room, target: pickTarget(c, books, folder) };
 	}
 
 	/** Opens the notebook of the class in progress at a new lecture page. */

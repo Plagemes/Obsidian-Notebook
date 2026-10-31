@@ -3,7 +3,7 @@
 // range for every format. "Export as Markdown…" (382) chooses the vault folder and the resolution of the page images.
 // Both only collect choices: the files are written by view/export.ts, view/export-png.ts, view/print.ts and
 // view/export-markdown.ts.
-import { Modal, Setting, type App, type ButtonComponent } from "obsidian";
+import { Modal, Setting, type App } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import { EXPORT_LAYERS, type ExportFormat, type ExportLayers, type ExportScope } from "../ink/export-layers";
 import { DEFAULT_MARKDOWN_DPI, MARKDOWN_DPI, isMarkdownDpi, type MarkdownDpi } from "../model/export-markdown";
@@ -12,6 +12,7 @@ import { parsePageRange } from "../model/page-range";
 import { folderProblem } from "./export-markdown";
 import type { ExportRequest } from "./export";
 import { rangeProblem } from "./range-text";
+import { modalShell, setShellButtonLabel, shellButton, shellNote } from "../ui/components/modal-shell";
 
 export interface ExportDialogHost {
 	app: App;
@@ -50,7 +51,7 @@ export class ExportModal extends Modal {
 	private rangeSetting: Setting | null = null;
 	private folderSetting: Setting | null = null;
 	private scaleSetting: Setting | null = null;
-	private submitButton: ButtonComponent | null = null;
+	private submitButton: HTMLButtonElement | null = null;
 
 	constructor(private readonly host: ExportDialogHost) {
 		super(host.app);
@@ -61,8 +62,8 @@ export class ExportModal extends Modal {
 	}
 
 	onOpen(): void {
-		const { contentEl } = this;
-		this.setTitle(t("export.dialog.title"));
+		const shell = modalShell(this, { title: t("export.dialog.title"), icon: "file-output", size: "medium", cls: "notebook-export-modal" });
+		const contentEl = shell.body;
 		new Setting(contentEl).setName(t("export.dialog.format")).addDropdown((dd) => {
 			dd.addOption("pdf", "PDF").addOption("svg", "SVG").addOption("png", t("export.format.png"));
 			if (this.host.canPrint) dd.addOption("print", t("export.format.print"));
@@ -115,15 +116,13 @@ export class ExportModal extends Modal {
 				if (isPngScale(n)) this.scale = n;
 			});
 		});
-		this.fileDesc = contentEl.createEl("p", { cls: "notebook-export-note" });
-		contentEl.createEl("p", { cls: "notebook-export-note", text: t("export.dialog.hidden") });
-		this.problem = contentEl.createEl("p", { cls: "notebook-export-problem", attr: { role: "alert" } });
-		new Setting(contentEl)
-			.addButton((b) => b.setButtonText(t("export.dialog.cancel")).onClick(() => this.close()))
-			.addButton((b) => {
-				this.submitButton = b;
-				b.setButtonText(t("export.dialog.export")).setCta().onClick(() => this.submit());
-			});
+		this.fileDesc = shellNote(contentEl, "");
+		this.fileDesc.addClass("notebook-export-note");
+		shellNote(contentEl, t("export.dialog.hidden")).addClass("notebook-export-note");
+		this.problem = shellNote(contentEl, "", "error");
+		this.problem.addClass("notebook-export-problem");
+		shellButton(shell.foot, "secondary", t("export.dialog.cancel"), () => this.close());
+		this.submitButton = shellButton(shell.foot, "primary", t("export.dialog.export"), () => this.submit());
 		this.refresh();
 	}
 
@@ -132,7 +131,7 @@ export class ExportModal extends Modal {
 		this.rangeSetting?.settingEl.toggle(this.exportScope === "range");
 		this.folderSetting?.settingEl.toggle(this.format === "png");
 		this.scaleSetting?.settingEl.toggle(this.format === "png");
-		this.submitButton?.setButtonText(t(this.format === "print" ? "export.print.button" : "export.dialog.export"));
+		if (this.submitButton) setShellButtonLabel(this.submitButton, t(this.format === "print" ? "export.print.button" : "export.dialog.export"));
 		this.problem?.setText("");
 		this.describeFiles();
 	}
@@ -206,9 +205,9 @@ export class MarkdownExportModal extends Modal {
 	}
 
 	onOpen(): void {
-		const { contentEl } = this;
-		this.setTitle(t("export.markdown.title"));
-		contentEl.createEl("p", { cls: "notebook-export-note", text: t("export.markdown.desc", { n: String(this.host.pageCount) }) });
+		const shell = modalShell(this, { title: t("export.markdown.title"), icon: "file-text", size: "medium", cls: "notebook-export-modal" });
+		const contentEl = shell.body;
+		shellNote(contentEl, t("export.markdown.desc", { n: String(this.host.pageCount) })).addClass("notebook-export-note");
 		new Setting(contentEl).setName(t("export.markdown.folder")).setDesc(t("export.markdown.folder.desc")).addText((tx) => {
 			tx.setValue(this.folder).onChange((v) => {
 				this.folder = v;
@@ -222,10 +221,10 @@ export class MarkdownExportModal extends Modal {
 				if (isMarkdownDpi(n)) this.dpi = n;
 			});
 		});
-		this.problem = contentEl.createEl("p", { cls: "notebook-export-problem", attr: { role: "alert" } });
-		new Setting(contentEl)
-			.addButton((b) => b.setButtonText(t("export.dialog.cancel")).onClick(() => this.close()))
-			.addButton((b) => b.setButtonText(t("export.dialog.export")).setCta().onClick(() => this.submit()));
+		this.problem = shellNote(contentEl, "", "error");
+		this.problem.addClass("notebook-export-problem");
+		shellButton(shell.foot, "secondary", t("export.dialog.cancel"), () => this.close());
+		shellButton(shell.foot, "primary", t("export.dialog.export"), () => this.submit());
 	}
 
 	private submit(): void {

@@ -60,9 +60,10 @@ describe("toolbar size (370)", () => {
 		expect(readSettings({ pageTurnerKeys: false }).pageTurnerKeys).toBe(false);
 	});
 
-	it("scales targets, icons and slots monotonically; normal is the designed 40 px / 44 px slot", () => {
+	it("scales targets, icons and slots monotonically; normal is the designed 44 px / 48 px slot (0.13)", () => {
 		const [c, n, l] = (["compact", "normal", "large"] as const).map(toolbarScale);
-		expect(n).toMatchObject({ target: 40, slot: TOOLBAR_METRICS.slot, dial: 1 });
+		expect(n).toMatchObject({ target: 44, slot: 48, dial: 1 });
+		expect(TOOLBAR_METRICS.slot).toBe(44);
 		expect(c!.target).toBeLessThan(n!.target);
 		expect(l!.target).toBeGreaterThan(n!.target);
 		expect(l!.icon).toBeGreaterThan(n!.icon);

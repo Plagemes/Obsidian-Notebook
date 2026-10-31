@@ -356,7 +356,7 @@ export class PageNavigator {
 	/** Highlights the current page without rebuilding the list, and brings it into view. */
 	markCurrent(index: number): void {
 		if (!this.open) return;
-		this.listEl.querySelectorAll(".notebook-navigator-item, .notebook-outline-row").forEach((el) => {
+		this.listEl.querySelectorAll(".notebook-navigator-item").forEach((el) => {
 			const item = el as HTMLElement;
 			const current = Number(item.dataset.index) === index;
 			if (current !== item.hasClass("is-current")) {
@@ -364,6 +364,20 @@ export class PageNavigator {
 				if (current && !this.drag) item.scrollIntoView({ block: "nearest" });
 			}
 		});
+		// 0.13: in the outline "here" is the last entry at or before the current page (one row, not every row of the page).
+		const rows = Array.from(this.listEl.querySelectorAll<HTMLElement>(".nb-outline-row"));
+		if (rows.length > 0) {
+			let here = -1;
+			rows.forEach((row, i) => {
+				if (Number(row.dataset.index) <= index) here = i;
+			});
+			rows.forEach((row, i) => {
+				if ((i === here) !== row.hasClass("is-current")) {
+					row.toggleClass("is-current", i === here);
+					if (i === here && !this.drag) row.scrollIntoView({ block: "nearest" });
+				}
+			});
+		}
 	}
 
 	private scrollToCurrent(): void {

@@ -115,7 +115,8 @@ describe("creation dialog rules", () => {
 
 	it("cycles through the art styles", () => {
 		expect(nextArtStyle("waves")).toBe("branches");
-		expect(nextArtStyle("grid")).toBe("contours");
+		expect(nextArtStyle("grid")).toBe("veins");
+		expect(nextArtStyle("veins")).toBe("contours");
 	});
 
 	it("builds a valid v11 document with exactly the chosen settings", () => {

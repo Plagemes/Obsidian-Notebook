@@ -16,10 +16,13 @@
 import { getIconIds, Modal, setIcon, SuggestModal, type App } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import { createId, createPage } from "../model/document";
-import { COVER_ART_STYLES, META_DESCRIPTION_MAX, PAPER_KINDS, PAPER_SPACING, type CoverArtStyle, type NotebookDocument, type PageSizeName, type PaperKind } from "../model/types";
+import { META_DESCRIPTION_MAX, PAPER_KINDS, PAPER_SPACING, type NotebookDocument, type PageSizeName, type PaperKind } from "../model/types";
 import { FOLDER_DESCRIPTION_MAX, type FolderMeta } from "../library/folder-meta";
 import { renderThumbnail } from "../library/thumbnail";
-import { artEnabled, artImage, artStyleFor, coverImage, type ArtSpec } from "../ui/art/generative-art";
+import { applyArt, artRef, type ArtSource } from "../ui/art/art-ref";
+import { artEnabled, type ArtSpec } from "../ui/art/generative-art";
+import { motifFor } from "../ui/art/keywords";
+import { COVER_FAMILIES, type CoverFamily } from "../model/cover-family";
 import { decorate } from "../ui/components/dom";
 import { drawSafely, errorCard } from "../ui/components/error-card";
 import { subjectCard } from "../ui/components/subject-card";
@@ -41,7 +44,7 @@ export interface FolderSpec {
 	parent: string;
 	icon: string;
 	color: string;
-	art: CoverArtStyle;
+	art: CoverFamily;
 }
 
 export interface CreateDialogHost {
@@ -71,8 +74,6 @@ export const FOLDER_ICONS = ["folder", "graduation-cap", "heart-pulse", "flask-c
 const dpr = () => Math.min(3, activeWindow.devicePixelRatio || 1);
 /** The surface the art sits on (the real engine draws deeper lines on light themes). */
 const surface = (): ArtSpec["surface"] => (activeDocument.body.hasClass("theme-light") ? "light" : "dark");
-/** A CSS image value for a decoration: `none` when the art is off (reduced motion: artImage returns ""). */
-const cssImage = (url: string) => (url ? `url("${url}")` : "none");
 
 /** Paper tile previews, by kind and page size (each is drawn once by the real paper renderer). */
 const paperPreviews = new Map<string, string>();
@@ -102,6 +103,8 @@ export class CreateDialog extends Modal {
 	private readonly fd: FolderSpec;
 	/** The user picked a cover colour (else it follows the folder's colour). */
 	private nbColorChosen = false;
+	/** The art style was picked by hand: the name no longer chooses it (a biology title starts on veins). */
+	private artChosen = false;
 	private coverOptionsOpen = false;
 	private image: { file: PickedFile; url: string } | null = null;
 	private template: { name: string; doc: NotebookDocument } | null = null;
@@ -125,7 +128,7 @@ export class CreateDialog extends Modal {
 		const seed = createId();
 		this.nb = {
 			name: "", description: "", folder: start, paper: d.paper, size: d.size, customMm: { width: 210, height: 297 }, landscape: d.landscape,
-			color: host.folderMeta?.(start)?.color ?? colorFor(seed), art: { style: artStyleFor(seed), seed },
+			color: host.folderMeta?.(start)?.color ?? colorFor(seed), art: { style: "contours", seed },
 		};
 		this.fd = { name: "", description: "", parent: start, icon: "folder", color: SUBJECT_COLORS[0]!.base, art: "contours" };
 	}
@@ -172,7 +175,7 @@ export class CreateDialog extends Modal {
 		const head = el.createDiv({ cls: "nb-create-head" });
 		// Decoration only: a faint band of the chosen colour's line art behind the header (off with reduced motion).
 		const band = head.createDiv({ cls: "nb-create-band", attr: { "aria-hidden": "true" } });
-		band.setCssProps({ "--nb-create-band": cssImage(decorate("", () => artImage({ seed: "create-header", color: this.color(), style: this.tab === "folder" ? this.fd.art : this.nb.art.style, density: 0.4, intensity: 0.35, surface: surface() }, 480, 64))) });
+		decorate(undefined, () => applyArt(band, artRef("art", { seed: "create-header", color: this.color(), style: this.tab === "folder" ? this.fd.art : this.nb.art.style, density: 0.4, intensity: 0.35, surface: surface() }, 480, 64), { prop: "--nb-create-band" }));
 		const tabs = head.createDiv({ cls: "nb-create-tabs", attr: { role: "tablist", "aria-label": t("create.tabs") } });
 		for (const id of ["notebook", "folder"] as const) {
 			const on = this.tab === id;
@@ -273,6 +276,7 @@ export class CreateDialog extends Modal {
 		input.addEventListener("input", () => {
 			spec.name = input.value;
 			this.nameTouched = true;
+			this.followName();
 			show();
 			this.refreshPreview();
 		});
@@ -291,6 +295,24 @@ export class CreateDialog extends Modal {
 			spec.description = area.value;
 			this.refreshPreview();
 		});
+	}
+
+	/** A keyword in the name picks the art family (veins for biology, orbits for physics…) until the user picks one. */
+	private followName(): void {
+		if (this.artChosen) return;
+		const motif = motifFor(this.tab === "notebook" ? this.nb.name : this.fd.name, COVER_FAMILIES);
+		if (!motif) return;
+		if (this.tab === "folder") {
+			this.fd.art = motif;
+			return;
+		}
+		if (motif === this.nb.art.style) return;
+		this.nb.art = { ...this.nb.art, style: motif };
+		const img = this.contentEl.querySelector<HTMLImageElement>(".nb-create-cover-img");
+		const source = this.coverSource(180, 252);
+		if (img && source) applyArt(img, source, { set: (url) => img.setAttribute("src", url) });
+		const badge = this.contentEl.querySelector(".nb-create-badge");
+		if (badge && !this.image) badge.textContent = t(`create.style.${motif}` as MessageKey);
 	}
 
 	private nameProblem(): NameProblem | null {
@@ -410,8 +432,9 @@ export class CreateDialog extends Modal {
 
 	// ---------------------------------------------------------------- notebook
 
-	private coverUrl(w: number, h: number): string {
-		return this.image ? this.image.url : decorate("", () => coverImage({ seed: this.nb.art.seed, color: this.nb.color, style: this.nb.art.style, surface: surface() }, w, h, dpr()));
+	/** The cover picture: the chosen image, or a description of the generated art (shown at once if cached, else when drawn). */
+	private coverSource(w: number, h: number): ArtSource | undefined {
+		return this.image ? this.image.url : artRef("cover", { seed: this.nb.art.seed, color: this.nb.color, style: this.nb.art.style, surface: surface() }, w, h);
 	}
 
 	private renderCover(preview: HTMLElement): void {
@@ -421,8 +444,11 @@ export class CreateDialog extends Modal {
 		const cover = frame.createEl("button", { cls: "nb-create-cover", attr: { type: "button", "aria-label": t("create.cover.next") } });
 		// Without a generated cover (it could not be drawn) the button shows the plain cover colour (styles.css).
 		cover.setCssProps({ "--nb-create-cover": this.nb.color });
-		const coverSrc = this.coverUrl(180, 252);
-		if (coverSrc) cover.createEl("img", { cls: "nb-create-cover-img", attr: { src: coverSrc, alt: "" } });
+		const coverSrc = this.coverSource(180, 252);
+		if (coverSrc) {
+			const img = cover.createEl("img", { cls: "nb-create-cover-img", attr: { alt: "" } });
+			applyArt(img, coverSrc, { set: (url) => img.setAttribute("src", url), onNone: () => img.remove() });
+		}
 		cover.createDiv({ cls: "nb-create-cover-title", text: this.nb.name.trim() || t("create.tab.notebook") });
 		cover.createDiv({
 			cls: "nb-create-badge",
@@ -430,6 +456,7 @@ export class CreateDialog extends Modal {
 		});
 		cover.addEventListener("click", () => {
 			if (this.image) return this.toggleCoverOptions();
+			this.artChosen = true;
 			this.nb.art = { ...this.nb.art, style: nextArtStyle(this.nb.art.style) };
 			this.render(false);
 		});
@@ -460,13 +487,16 @@ export class CreateDialog extends Modal {
 		if (!this.image) {
 			const styles = this.group(box, t("create.cover.style"));
 			styles.addClass("nb-create-styles");
-			this.radioTiles(styles, COVER_ART_STYLES.map((style) => ({
+			this.radioTiles(styles, COVER_FAMILIES.map((style) => ({
 				id: style, label: t(`create.style.${style}` as MessageKey), cls: "nb-create-style",
 				build: (tile: HTMLElement) => {
-					const src = decorate("", () => coverImage({ seed: this.nb.art.seed, color: this.nb.color, style, surface: surface() }, 36, 50, dpr()));
-					if (src) tile.createEl("img", { attr: { src, alt: "" } });
+					decorate(undefined, () => {
+						const img = tile.createEl("img", { attr: { alt: "" } });
+						applyArt(img, artRef("cover", { seed: this.nb.art.seed, color: this.nb.color, style, surface: surface() }, 36, 50), { set: (url) => img.setAttribute("src", url), onNone: () => img.remove() });
+					});
 				},
 			})), this.nb.art.style, (style) => {
+				this.artChosen = true;
 				this.nb.art = { ...this.nb.art, style };
 				this.render(false);
 			});
@@ -526,7 +556,7 @@ export class CreateDialog extends Modal {
 			id: kind, label: t(`paper.${kind}`), cls: "nb-create-paper",
 			build: (tile: HTMLElement) => {
 				// Decoration only: subtle line art behind the selected tile.
-				if (kind === this.nb.paper) tile.setCssProps({ "--nb-create-tile-art": cssImage(decorate("", () => artImage({ seed: kind, color: this.nb.color, style: this.nb.art.style, density: 0.3, intensity: 0.6, surface: surface() }, 96, 120))) });
+				if (kind === this.nb.paper) decorate(undefined, () => applyArt(tile, artRef("art", { seed: kind, color: this.nb.color, style: this.nb.art.style, density: 0.3, intensity: 0.6, surface: surface() }, 96, 120), { prop: "--nb-create-tile-art" }));
 				const thumb = tile.createDiv({ cls: "nb-create-paper-thumb" });
 				const src = paperPreview(kind, size);
 				if (src) thumb.createEl("img", { attr: { src, alt: "" } });
@@ -653,6 +683,7 @@ export class CreateDialog extends Modal {
 			this.contentEl.querySelector<HTMLElement>(".nb-create-change")?.focus();
 		});
 		iconButton(row, "shuffle", `${t("create.art.change")}: ${t(`create.style.${this.fd.art}` as MessageKey)}`, "nb-create-art").addEventListener("click", () => {
+			this.artChosen = true;
 			this.fd.art = nextArtStyle(this.fd.art);
 			this.render(false);
 			this.contentEl.querySelector<HTMLElement>(".nb-create-art")?.focus();

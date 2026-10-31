@@ -87,12 +87,13 @@ export const GROUPS: readonly GroupSpec[] = [
 		id: "penGestures", section: "input", title: "settings.penGestures",
 		open: (s) => s.penSideButton === "gesture" || s.penSideButton === "radial-gesture" || s.penGestureLongPress || s.penGesturesCustom.length > 0,
 	},
+	{ id: "outline", section: "pages", title: "settings.outline", open: (s) => !(s.outlineBookmarks && s.outlineSlides && s.outlineHeadings && s.outlineMarkers) },
 	{ id: "timetable", section: "study", title: "settings.timetable", open: (_s, ctx) => ctx.timetableInUse },
 	{ id: "zettel", section: "study", title: "settings.zettel", open: (s) => s.zettelSlipBoxes.length > 0 },
 ];
 
 /** Runs of the action rows; the tab maps each id to what it does. */
-export type SettingActionId = "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom";
+export type SettingActionId = "hints-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom";
 /** Rows drawn by the tab itself (no stored setting of their own). */
 export type SettingCustomId = "device-name" | "pen-key" | "device-info";
 
@@ -237,6 +238,11 @@ const PAGES: SettingSpec[] = [
 	{ id: "autoNextPage", section: "pages", order: 30, name: "settings.autoNextPage", desc: "settings.autoNextPage.desc", control: { type: "toggle" } },
 	{ id: "autoScrollWriting", section: "pages", order: 40, name: "settings.autoScroll", desc: "settings.autoScroll.desc", control: { type: "toggle" } },
 	{ id: "pageTurnerKeys", section: "pages", order: 50, name: "settings.pageTurnerKeys", desc: "settings.pageTurnerKeys.desc", control: { type: "toggle" }, keywords: "keyboard tastiera clicker" },
+	// 0.13 outline: what the generated outline in the page panel lists.
+	{ id: "outlineBookmarks", section: "pages", group: "outline", order: 10, name: "settings.outlineBookmarks", desc: "settings.outlineBookmarks.desc", control: { type: "toggle" }, keywords: "outline indice sommario table of contents" },
+	{ id: "outlineSlides", section: "pages", group: "outline", order: 20, name: "settings.outlineSlides", desc: "settings.outlineSlides.desc", control: { type: "toggle" }, keywords: "outline pdf slide diapositive" },
+	{ id: "outlineHeadings", section: "pages", group: "outline", order: 30, name: "settings.outlineHeadings", desc: "settings.outlineHeadings.desc", control: { type: "toggle" }, keywords: "outline heading titoli handwriting scrittura" },
+	{ id: "outlineMarkers", section: "pages", group: "outline", order: 40, name: "settings.outlineMarkers", desc: "settings.outlineMarkers.desc", control: { type: "toggle" }, keywords: "outline marker segnalini domande compiti" },
 ];
 
 const READING: SettingSpec[] = [
@@ -327,7 +333,11 @@ const APPEARANCE: SettingSpec[] = [
 		id: "toolbarSize", section: "appearance", order: 30, name: "settings.toolbarSize", desc: "settings.toolbarSize.desc",
 		control: { type: "dropdown", options: options([["compact", "settings.toolbarSize.compact"], ["normal", "settings.toolbarSize.normal"], ["large", "settings.toolbarSize.large"]]) },
 	},
+	{ id: "userName", section: "appearance", order: 15, name: "settings.userName", desc: "settings.userName.desc", keywords: "name nome greeting saluto home", control: { type: "text", placeholder: "Alex" } },
 	{ id: "nightMode", section: "appearance", order: 40, name: "settings.nightMode", desc: "settings.nightMode.desc", control: { type: "toggle" }, keywords: "dark scuro" },
+	// 0.13: just-in-time tips.
+	{ id: "hintsEnabled", section: "appearance", order: 50, name: "settings.hints", desc: "settings.hints.desc", control: { type: "toggle" }, keywords: "tips hints suggerimenti consigli" },
+	{ id: "hintsReset", section: "appearance", order: 60, name: "settings.hintsReset", desc: "settings.hintsReset.desc", control: { type: "action", run: "hints-reset", button: "settings.hintsReset.button" }, parent: "hintsEnabled", keywords: "tips hints suggerimenti consigli" },
 ];
 
 const DIAGNOSTICS: SettingSpec[] = [
@@ -388,6 +398,7 @@ export const INTERNAL_SETTING_KEYS: Readonly<Partial<Record<SettingKey, string>>
 	lastNotebookPath: "instant start: the last notebook",
 	lastNotebookPage: "instant start: the last page",
 	lastNotebookPos: "instant start: zoom and scroll of the last page",
+	hintsSeen: "the tips already shown; Show tips again clears it",
 	zettelSlipBoxes: "edited from the notebook menu (Zettelkasten slip boxes)",
 };
 

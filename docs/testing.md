@@ -6,9 +6,13 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 
 | Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
 |---|---|---|---|---|---|
+| Notebook editing chrome on the design system (0.13 ds-notebook, DESIGN.md): toolbar capsules, glass popovers, sheets with icon squares, contextual bar, dial, tabs, banners, status bar item, page-operations menu; touch targets 44 px (40 px on a 360 px phone and at the compact size); no blur, glow or transition under reduced motion | ✅ | ✅ `tests/ds-notebook.test.ts` (presets, narrow fallback, CSS block scoped, tokens only, balanced, reduced motion, 44 px on touch), `tests/obsidian-input.test.ts`; ✅ harness `doc=chrome` (target sizes, no overflow, no Obsidian button look, glass panels, banner) at 800 / 412 / 360 px, light and dark; screenshots in `dev/harness/dist/shots/design/notebook-*` | | | rendered in headless Chrome only, not on the tablet; tabs and the page-operations menu are not in the harness (steps 520-529) |
+| Dialogs, prompts and cards on the design system (wave 0.13, ds-modals, DESIGN.md §4): one shared shell (header with icon square and art band, body, footer with secondary and primary buttons) for every Modal, SuggestModal, floating card and confirmation; behaviour unchanged | ✅ | ✅ `tests/modal-shell.test.ts` (every surface on the shell, tokens, scoping, balanced CSS, strings in both languages); harness screenshots and touch-target checks of every dialog (`dev/harness/modals-check.ts`) | | ✅ | not checked on the tablet or with the pen (steps 540-559) |
 | S Pen side button on Android (0.12.4): the button is seen only while the nib touches; **tap with it = radial menu on the lift (no dot), drag with it = eraser for the whole contact from its first sample (no ink, one undo step)**, whatever the form of the signal (bare `contextmenu` up to 500 ms before the pen down, during the contact within 350 ms, up to 400 ms after the pen up; `pointerdown` with `button 2` / `buttons & 2`; `buttons & 2` or the `button 0` move within 350 ms; the `pointercancel` after a `contextmenu`, the contact going on as a new pointer within 250 ms); a press in the middle of a stroke keeps writing ink; no menu during or after a drag; works with *Radial menu on click* too, and for the tools of *Lasso* / *Previous* / *Gestures while held*; *Pen button test* shows the signal and the decision | ✅ | ✅ `tests/side-button-contact.test.ts` (every form x tap / drag / no button / mid-stroke, five settings, cancel, decision logic, `EventLog`), `tests/pen-hover.test.ts`, `tests/pen-button.test.ts`, `tests/side-button.test.ts`, `tests/input-routing.test.ts`; ✅ harness (tap, drag, mid-stroke with real events) | | | which signal this tablet really sends is not known: the *Pen button test* lines *Signal seen* / *Decision* will tell (steps 493-499) |
+| Just-in-time hints (roadmap 425, 0.13): seven situations (first notebook, first pen contact, pen hover with the radial menu, first PDF import, first lasso, palm-rejected touch, first Inbox item), shown once, at most one per 4 minutes, never while writing; Tips setting and Show tips again | ✅ | ✅ `tests/hints.test.ts` (registry, rate limit, seen, writing, off, reset, settings); harness `doc=hints` (the bubble, dismiss, turn off, reset); ❌ real S Pen events, the Inbox and PDF triggers | | ✅ | the pen, palm and radial tips come from pointer events, not from the stroke pipeline: palm tip is a touch within the palm window after the pen with finger drawing on (steps 580-589) |
 | Rest-based features next to the side button (0.12.5): a contact that waits on a `contextmenu` alone and rests 350 ms is a rest, not a drag with the button, when the long-press gesture or the hold-still radial menu is on; the barrel bit keeps its meaning; Pen button test log with `dDown` / `dUp`, tap / drag summary, decision next to the event, hover-click timer line, settings line | ✅ | ✅ `tests/hold-gesture-regression.test.ts` (rest then sign over every button form, hold radial, gesture while held, cancel and resume), `tests/pen-test-diagnostics.test.ts`; ✅ harness (rest then draw starts a gesture in the real view) | | | the real device sequence that broke gestures is not known; steps 660-665 |
 | Procedural subject art and palette (wave 0.12, DESIGN.md §2.3, §2.6): seven line-art families, card art, header bands, covers, empty states, folder icon, LRU image cache, reduced-motion switch; `colorFor` | ✅ | ✅ `tests/generative-art.test.ts` (determinism, seeds, geometry vs colour, density, left side clean, intensity, surfaces, empty states, switch, cache keys and eviction, palette, folder icon); harness gallery screenshots and timing (`HARNESS_DOC=art`) | | ✅ | no surface uses it yet; timing measured only in headless desktop Chrome (steps 425-429) |
+| Procedural art 2.0 (wave 0.13): space-colonization family `veins`, OKLCH colour mixing, multi-pass glow, keyword motifs (EN + IT), `growth`, persistent IndexedDB cache, Worker + OffscreenCanvas rendering with main-thread fallback | ✅ | ✅ `tests/art-wave13.test.ts` (OKLCH round-trip and gamut, keyword map, veins determinism and cost, growth, glow passes, recording and replay, worker handler, pipeline with fake worker and store, 0.12.3 guard) and `tests/generative-art.test.ts` (30 ms budget); harness `art.html` (all families, growth, keywords, pipeline) | | ✅ | the library, subject card and creation dialog still call the synchronous functions, so the Worker is not used by the app yet; timing and look only checked in desktop Chrome (steps 560-568) |
 | Operations on several selected pages (roadmap 378, wave 0.8): multi-select in the page navigator (select button, long press on touch, Ctrl/Shift+click, range, select all) and move (start, end, position, another notebook), duplicate, bookmark, tag, paper, size, PDF export, delete through the page trash; one undo step each | ✅ | ✅ `tests/page-ops.test.ts` (order planning, ranges, every command as one step with exact undo, never deleting every page); ❌ the panel, the menus, touch long press, the dialogs | | ✅ | long press on touch both starts a selection and arms the old drag-to-reorder: to be checked on the tablet (steps 200-202) |
 | Do not disturb while writing (roadmap 374, wave 0.8): the plugin's own notices and non-urgent background work (thumbnails in the page panel and the library, library re-index, version-history snapshots, the timetable offer) wait while a pen is on the screen and for 1.5 s after | ✅ | ✅ `tests/writing-guard.test.ts` (timing, queue order, same-key replacement, lost pen, reset); ❌ real pen events, the notice wrapper in Obsidian | | ✅ | Obsidian's own notices (and other plugins') cannot be held back; `pointerType` `pen` only (a finger or mouse does not count); notices from the toolbar, stamps, selection actions and Zettelkasten are not routed yet (steps 205-206) |
 | Stable page links (roadmap 388, wave 0.8): copy/insert link and embed, page suggestions, `obsidian://` links, companion note links, PDF annotation note links and the API write `#p3&id=<page id>`; opening and embeds resolve by id first; API `getPageLink`, `openNotebook(file, pageId)` | ✅ | ✅ `tests/stable-links.test.ts` (subpaths, protocol, ephemeral state, resolve, API page refs), `tests/page-links.test.ts`; ❌ following a link in Obsidian | | | recent pages and the quick switcher (roadmap 364, 365) are not in this branch: they must use `stablePageSubpath` (steps 203-204) |
@@ -184,6 +188,7 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Format v6: page margins, v5→v6 migration, newer file read-only | ✅ | ✅ migration, validation, round trip, future version | | | |
 | Format v7: bookmark details, page tags, reading position, new paper kinds; v6→v7 migration (drops v7 keys found in a v6 file, rejects v7 papers in a pre-v7 file); newer file read-only | ✅ | ✅ migration, validation, deterministic round trip, future version, incremental save check | | | |
 | v7 fields kept by duplicate page, page restore (tags united), conflicted-copy merge (union rules, coverage), repair (line scan and salvage), library metadata patch, companion note | ✅ | ✅ model-v7 tests | | | |
+| Generated outline (#407, combines #15, #102, #46): bookmarks, PDF slide changes, large handwriting as headings (found by letter size, shown as a picture of the ink, no OCR) and markers in one nested list ordered by page and position, tap to jump, one switch per source in Settings → Pages → Outline, per-page cache, no format change | ✅ | ✅ `tests/outline-builder.test.ts` (heading detection, levels, nesting, ordering, sources, cache, settings); ✅ harness `outline-*` (rows by source, pictures, nesting, tap to jump, filter, switches; tablet and phone, dark and light); ❌ handwriting from a real S Pen (the thresholds are tuned on synthetic writing) | | ✅ | the 1.7× size threshold and the "starts a block" gap are heuristics: a title written right under the previous line, or only slightly larger, is not listed; a large single stroke is treated as a drawing (steps 600-613) |
 | Outline (#15, #85): bookmarks with title, colour and category ("important", "to review", custom) in the page panel, category filter, tap to jump, add / edit / delete, one undo step each | ✅ | ✅ bookmark helpers, SetMeta undo; ✅ harness (outline, editor, undo/redo); ❌ unit (DOM only) | | | |
 | Page tags (#119): page menu *Page tags…*, tag filter in the page panel, library search finds them and opens the page | ✅ | ✅ normalisation, SetPageTags undo, index and search; ✅ harness (editor, filter) | | | |
 | Reading position shared across devices (#125): written only with a content save, start page chosen between link, layout restore and stored position | ✅ | ✅ session hook (no write of its own, journal/save consistency), start rules; ❌ view scrolling, two real devices | | | stored only when something is saved: a notebook only read on a device does not move the other device's start page |
@@ -314,7 +319,10 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Home (0.12, DESIGN.md §4): a view of its own (*Open Notebook home*, ribbon, rail) on the library's data; page header with search pill and inbox bell; *Subject folders* (one card per top-level folder under the notebooks folder: colour, glossy folder icon, generated art, notebooks count); *Recent notes* (this device's recently edited pages, else recently changed notebooks; subject and tag pills; kebab = the notebook menu); *Statistics* over 1 / 4 / 12 weeks (notebooks created with the change against the period before, pages edited on this device, PDF notebooks changed, tags used; sparkline); *Quick actions* (New notebook and New folder through the registry actions `new-notebook` / `new-folder`, Import PDF, Scan) | ✅ | ✅ `tests/dashboard.test.ts` (subjects, collections, statistics, times); ✅ harness `doc=library&surface=home` at 1448 × 1086, 800 and 412 px, dark and light: sections, 40 px targets, no sideways scroll, quick actions run the registry | | | Writing time is not counted (no counter exists): *Pages edited* stands in |
 | Library rebuilt on the design system (0.12): navigation rail (Home, Notebooks, PDF when a PDF notebook exists, Tags, Settings, the folder tree with subject-coloured folders, Archive, Trash, Check library; icons only on a tablet in portrait, a sheet on a phone); header with search, tag filter, sort, grid / list and *New*; filter chips (All, Subjects, Recent, Favourites, With PDF, Archive); subject cards; smart collections (To study, Favourites, With PDF, Recent, Exams; empty ones hidden); frequent tags; recent and favourite notebooks (page thumbnails, star); the grid of all notebooks (60 at a time, *Show more*); search grouped as folders, tags and notebooks | ✅ | ✅ `tests/dashboard.test.ts`; ✅ harness `doc=library&surface=library` (sections, chips, collections, thumbnails, star writes the file, search groups, list mode, rail) | | | Pin, archive, manual order, drag and drop, move, rename, delete keep their 0.10 code paths; not re-verified in Obsidian |
 | Inbox bell (0.12): bell in the Home and library headers with the number of Inbox items to process (badge hidden at 0); popover (sheet on a phone) with the first eight items (kind, first line, notebook, time), each with Open in notebook, Process in the inbox, Discard; *Open inbox* | ✅ | ✅ harness: badge count, popover rows, *Open inbox* | | | The count comes from the Inbox's scan, run once the library has been read and when the bell opens (at most every two minutes) |
+| Zettelkasten surfaces on the design system (0.13 ds-zettel, DESIGN.md §3-§5): Inbox page (header with count and art band, source chips with counts, *Show processed* toggle, one panel per notebook in its subject colour, expandable item rows, phone layout, skeleton while scanning, empty and *All caught up* states with *Show processed* / *Show all sources* / look again); *Make card* dialog (type tiles, tag preview, Enter / Escape); card-list picker (id, title, where, orphans); slip-box confirmation | ✅ | ✅ harness `doc=zettel` (layout, 40 px targets, every control, both themes, tablet and phone) | | | Behaviour is unchanged from 0.8 / 0.6. Not seen on the tablet: the art band and the illustration depend on the WebView's canvas. |
 | Design tokens (0.12, DESIGN.md §2): `--nb-*` palette for dark and light, *Follow Obsidian theme* on `body.notebook-style-obsidian`; components in `src/ui/components/` | ✅ | ✅ `tests/styles.test.ts` (well-formed CSS) | | | The *Appearance → Style* setting that adds the class is not part of this change |
+| 0.13 home2: Home's revised structure (greeting with the "Your name" setting; Continue row: lecture in progress from the timetable with its linked notebook or course folder, a button to start a notebook when there is none, else the last notebook; Quick page card; low quick actions with tooltips; three-column folder grid ending in the dashed New folder card; recent notes grouped by notebook with page thumbnails, a ⋯ menu and a subject filter; statistics widgets: pages per day (7 / 14), streak, estimated writing time, PDF hint, subject split) | ✅ | ✅ unit tests (`tests/home-greeting.test.ts`, `tests/home-stats.test.ts`, `tests/home-pins.test.ts`) for the greeting, activity log, pages per day, streak, subject split, writing time, grouping, the Continue choice and Quick page logic; ✅ harness (`dev/harness/home2-check.ts`, `harness:check`) at tablet portrait / landscape and phone, dark and light, with the lecture, a class without notebook and no class, the empty and the hostile vault | | ✅ | Page thumbnails are drawn from the notebook file on demand; writing time is an estimate (minutes with an edit, this device only); not run on Android hardware |
+| 0.13 home2: sidebar Pinned section (notebooks and folders, pin from ⋯ menus and Recent notes) and pages next to the notebook count | ✅ | ✅ `tests/home-pins.test.ts` (folder `pinned` field: merge, rename, store) and the harness (pin from Recent notes and a folder menu, open on tap, unpin) | | ✅ | Pinned folders are a new field of the folder metadata sidecar (`folders-<device>.json`); an older plugin version ignores it |
 
 ## Automated checks
 
@@ -322,7 +330,7 @@ Numbers from the final run of 0.9.0 (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 3040 tests passed |
+| `npm test` (unit project only; benchmarks are separate) | 3179 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: 0 errors; `eslint-plugin-obsidianmd` recommended rules: 0 errors |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
@@ -1090,7 +1098,6 @@ Update to 0.12.3 and fully close and reopen Obsidian. Use the same vault with **
 490. **Creation dialog, both tabs.** The dialog shows the tabs *Quaderno* / *Cartella*, the cover preview with *Cambia copertina*, name, description, folder, the page templates, page size and orientation, *Annulla* and *Crea quaderno*. Tap *Cartella*: the folder card, name, description, location, icons and colours, *Crea cartella*. Also open it from *Nuova cartella* (header menu), from the quick actions and from the dashed tile. If it shows a red-bordered card instead, take a screenshot.
 491. **Tag page.** Tap *Tag* in the rail: the header *Tag* with its subtitle and *+ Nuovo*, and below it the line saying tags appear here once notebooks have them (no blank page).
 492. **First notebook and folder.** Create a notebook and a subject folder from the dialog: the notebook opens; back on Home the empty state is gone and the folder card (glossy folder icon, generated art) replaces the dashed tile.
-
 ### 0.12.4: the S Pen side button, tap and drag (steps 493-499)
 
 Update to 0.12.4 and fully close and reopen Obsidian. Samsung tablet, S Pen, Obsidian for Android. Setting *Pen side button* = *Radial menu on click, erase while held* (the default) unless a step says otherwise. On this device pressing the button with the pen in the air shows nothing to the app: the button counts only while the nib touches the page. Nothing here is filled in as verified; write what you see in the results table.
@@ -1103,6 +1110,154 @@ Update to 0.12.4 and fully close and reopen Obsidian. Samsung tablet, S Pen, Obs
 498. **Pen button test.** Settings → *Notebook* → *Pen button test*. With the button held, tap the test area, then drag, then repeat without the button. The lines *Signal seen* and *Decision* show, for the tap, a signal such as `contextmenu Δ=+40 ms` or `pointerdown buttons=3` and `menu (tap)`; for the drag `eraser (drag)`; for a press far into a stroke `ignored: pressed in the middle of a stroke`. Tap *Copy log* and paste it into the Notes column below: the signal that this tablet really sends is what decides whether the button is fully covered.
 499. **The button in the air.** Hover the pen over the page and press and release the button without touching: nothing opens and nothing is armed (this is the Android limit, not a bug). Then touch with the button held again: step 493 still works.
 
+### 0.13 — ds-zettel (steps 500-509)
+
+Update to 0.13 and fully close and reopen Obsidian. Use a vault with a few notebooks, one with a PDF, and the quick-notes sheet. Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/design/zettel-*.png` (inbox, open, empty, caught-up, scanning, card, card-luhmann, list, confirm, overlay; tablet and phone, light and dark). Not verified on a device.
+
+500. **Inbox page.** Run *Open the inbox*. The header shows *Inbox*, the count (*N to process*), *Start processing* and a refresh button; below them filter chips with counts (when there is more than one source), the *Show processed* toggle, the hint line and one panel per notebook with the notebook name, its source and a count pill. No panel is the plain Obsidian grey.
+501. **Rows.** Each row has an icon for its kind (writing, highlight, comment), the first line of text, and the page (and the PDF page for a highlight). A changed item shows a *Changed* pill. Tap a row: it expands in place with the ink on its paper, the text and the actions; tap it again to close it.
+502. **Filters.** Tap a source chip: only its items stay and the chip is highlighted; *All* brings everything back. *Show processed* adds the processed rows (ticked, with their state) and the toggle looks pressed.
+503. **Actions.** In an open panel: the accent action makes a card (the dialog opens), *Link to a card…* opens the card list, *Discard* and *Skip* select the next open item, *Open in notebook* goes to the page. A row already covered by a card offers *Open card* and *Mark as covered*.
+504. **Card dialog.** From *Permanent card…*: the dialog shows the icon, title and one line, the ink, *Title*, three type tiles (Permanent, Literature, Fleeting), *Source*, *Tags* (typing `study, memory` previews #study #memory) and, with Luhmann numbering on, *Parent card*. Tap a tile: only that one is marked. Enter creates the card, Escape or *Cancel* closes it without creating.
+505. **Card list.** *Link to a card…* shows the card id, its title and where it is; a card whose notebook is missing is shown in the warning colour. Search by typing; choosing a row links the item.
+506. **Slip-box confirmation.** Creating the cards of a whole slip-box notebook asks first, in the same dialog style: *Cancel* does nothing, the confirm button creates the notes.
+507. **Empty and done.** With nothing in the inbox the page shows *Your inbox is empty*, what arrives here and a *Look again* button (the filters are hidden). After processing everything it shows *All caught up* with *Show processed* (and *Show all sources* if a source filter is on).
+508. **Phone width.** With the inbox in a narrow pane (or on a phone) the actions wrap under the preview, nothing scrolls sideways and every button is at least 40 px high.
+509. **Both looks.** Light theme, dark theme and *Appearance → Style → Follow Obsidian theme*: the inbox and the dialogs stay legible and keep their accent. The card regions over a page (dashed outline with the id badge) are unchanged and never block writing.
+
+### 0.13 — ds-notebook: the editing chrome on the design system (steps 520-529)
+
+Update and fully close and reopen Obsidian. Samsung tablet (and a phone, if you have one), S Pen and finger, Obsidian for Android; then Windows. Nothing here changes what a control does, only how it looks and how big it is.
+
+520. **Toolbar.** Open a notebook. The tools (pen, highlighter, eraser, lasso, shapes, text, move) sit in one capsule, undo/redo in another; the active tool is tinted with an accent dot. Every button is easy to hit with the S Pen and a finger (44 px at the normal size); the page indicator and the green save dot are readable. Dark and light, and with *Follow Obsidian theme*.
+521. **Narrow phone.** On a phone about 360 px wide the tools stay on one line (40 px buttons) with nothing cut off at the right edge. *Settings → Toolbar size → Large* wraps the tools to a second line instead.
+522. **Tool options.** Tap the active tool again: the options panel is a rounded glass panel under the bar, colour and width choices are easy to hit, it closes when you tap outside.
+523. **All actions and page sheets.** Open *All actions* (grid button) and the page sheet (page indicator): rows have an icon square, switches show on/off, a long label wraps instead of pushing its icon out, the close button is 44 px; a destructive row is red. Search still filters.
+524. **Selection bar.** Lasso a few strokes: the contextual bar floats at the bottom as a glass pill with the *Selection* label (not a button), its buttons are easy to hit; copy, cut, delete and the colour/width rows still act on the selection.
+525. **Radial dial.** Open the dial with the S Pen side button (steps 493-499): a navy disc with a thin ring and a soft accent halo, the same dark in light and dark themes; colour, width, tools and favourites still work. No change to when it opens.
+526. **Banners.** On a very heavy page the warning card shows an icon square, the text and *Split page* / *Dismiss* (both 44 px). On a practice copy the practice strip shows an icon square and its buttons are 44 px on touch.
+527. **Tabs and status bar.** With *Notebook tabs* on and two notebooks open, the tabs are pills and the open one is tinted; on Windows the status bar item matches the theme.
+528. **Page operations menu.** In the pages panel select pages and open the operations menu (Windows / desktop): it has rounded corners, a hairline and a soft shadow.
+529. **Reduced motion.** With the system setting *Remove animations* (Android) or *Reduce motion* (Windows) on, the panels have no blur and nothing animates.
+
+### 0.13 — ds-modals: dialogs, prompts and cards on the design system (steps 540-559)
+
+Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/design/modals-<name>-<theme>-<device>.png`. Check each in the light and the dark Obsidian theme and, once, with *Appearance → Style → Follow Obsidian theme*.
+
+540. **Header and footer.** Open any dialog (e.g. a page's *Export*): a header with an icon square, the title and a close ×, with a faint line-art band behind it; the footer has *Cancel* (quiet) and the accent primary button. The × and *Cancel* close it; Esc closes it.
+541. **Resize / Style.** Open the object's *Resize* and *Style* dialogs: the fields and buttons work as before and the values apply.
+542. **Export.** Export a page as PDF, as PNG and as Markdown: options, the progress and the file written are unchanged.
+543. **Arrange pages.** Move, duplicate, change paper and page size from the page panel: the lists are tappable rows, the chosen one applies.
+544. **Go to page.** Open *Go to page*: a slim header above the input; type a number, Enter jumps.
+545. **Page finder.** Open the quick page switcher: the same header, results as before; Enter opens the hit.
+546. **Paste.** Paste an image or text into a notebook: the paste dialog offers its choices and each one works.
+547. **PDF page range.** Import a PDF: the page-range dialog accepts "1-3, 5", shows an inline error for bad input and imports the pages.
+548. **Practice.** Open *Practice*: start a session, answer, open *Attempts*: both dialogs are styled and work.
+549. **Lecture pack.** Open the lecture pack, exercise paper and layout dialogs: every button works.
+550. **Pen test.** Settings → pen test (or the command): the dialog is styled, *Clear* empties the log, *Copy* copies it; the signal and decision lines still update while you move the pen.
+551. **Shared clips.** Open the shared clips dialog: its list and actions work.
+552. **Find and replace.** Open find and replace in a notebook: find, next, replace, replace all work; the dialog stays out of the way of the page.
+553. **Colour picker.** Open the colour picker from the pen toolbar: the card is a rounded design-system card; recent colours (32 px swatches) and the eyedropper and close buttons (40 px) work with the pen.
+554. **Equation editor.** Insert an equation: the card, the input and its buttons work.
+555. **Stamp palette.** Open the stamp palette: tapping a stamp chooses it.
+556. **Confirmations.** Delete a page (or empty the trash): the confirmation uses the shell, the destructive button is red, *Cancel* leaves everything untouched.
+557. **Phone width.** On the phone (or a narrow window) each dialog is a full-width sheet, the footer buttons stay reachable and nothing overflows horizontally.
+558. **Obsidian theme.** With *Follow Obsidian theme* the dialogs use Obsidian's surface and accent colours.
+559. **Reduced motion.** With reduced motion on, the header art band is not drawn and nothing animates.
+
+### 0.13 — art2: generative art engine (steps 560-568)
+
+Reference images after `HARNESS_DOC=art npm run harness:check`: `dev/harness/dist/shots/art/art-{dark,light}-{contours,cells,waves,branches,flow,orbits,grid,veins,growth,icons}-desktopHiDpi.png` and the `mix` page (families, covers, empty states, keyword motifs). The engine is shared, so look at Home, the library and the creation dialog.
+
+560. **Cards.** Home → *Cartelle per materia*: the subject cards show line art fading in from the right, glowing softly; lines are crisp (no blur) and the colour matches the folder colour. Light theme: the same with deeper lines.
+561. **Motifs by name.** Create folders named *Matematica*, *Biologia*, *Fisica*, *Storia*, *Chimica*, *Informatica*: matematica gets waves or a grid, biologia cells or branches, fisica orbits or flow, storia contours or flow. A name with no keyword gets some family (stable between sessions).
+562. **Veins (harness only).** The `veins` family is not reachable from the app yet: folders and notebooks store one of seven styles, and `veins` is the eighth. Look at it in the harness screenshots (`art-*-veins-*.png`, `art-*-growth-*.png`); biology names get cells or branches on the device.
+563. **Covers.** The notebook covers show the art faintly over the gradient, and the gradient looks smooth (no grey or muddy corner).
+564. **Speed.** Scroll Home and the library quickly: the cards and covers appear without the scrolling stuttering. Note the time Home takes to show its art on the first open, and again after closing and reopening Obsidian (the second should not be slower).
+565. **Reopen.** Close Obsidian completely and reopen it: the art on Home is there at once or after a moment. If it never appears, note it (IndexedDB may be blocked in the WebView; the art must still be drawn).
+566. **Reduce motion.** Turn the system's *reduce animations* on: no art is drawn and the cards stay plain, with no errors.
+567. **Device info.** Settings → *Notebook* → *Diagnostica* → *Informazioni sul dispositivo*: the *Art engine* line shows no failures. Paste it in Notes.
+568. **Existing notebooks.** Notebooks and folders you already had keep the art they had (names without a keyword), and nothing is cut off or overlapped.
+
+### 0.13 — hints (steps 580-589)
+
+Tips are off the notebook format: they are stored in the plugin settings. Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/hints-*.png`.
+
+580. **Tips setting.** Settings → *Appearance & language*: *Tips* is on, and *Show tips again* sits right below it with a *Reset* button.
+581. **First notebook.** (Press *Show tips again* first.) Open a notebook: after a moment a card *Your notebook is ready* appears at the bottom centre. It stays about 12 s or until you tap the ×.
+582. **Pen tip.** Touch the page with the S Pen: *Pen detected* appears (if not within the 4 minute gap of another tip, it waits for the next pen contact after the gap).
+583. **Radial tip.** With *Pen side button* on a radial option, hover the S Pen over the page: *Radial menu* appears. Click the side button while hovering: the radial menu opens.
+584. **Lasso tip.** Select with the lasso: *Selection* appears once, never again.
+585. **PDF tip.** Import a PDF: the notebook opens and *PDF imported* appears.
+586. **Palm tip.** Turn on *Draw with finger*, write with the pen and touch with a finger right after: *Palm ignored* appears once.
+587. **Inbox tip.** With a loose-sheet item or PDF highlight in the Inbox, open the library: *Inbox* appears once.
+588. **Never while writing.** Trigger a tip (reset first) while writing continuously: nothing appears until you pause for 1.5 s.
+589. **Turn off.** Tap *Turn off tips* on a tip: it closes, *Tips* in Settings is off, and no tip appears again. *Show tips again* turns them back on.
+
+### 0.13 — outline (steps 600-619)
+
+Generated outline (roadmap 407). Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/outline-*.png`. Open a notebook made from a PDF (lecture pack), write a few lines of normal handwriting, then a title two to three times larger above a block, and add a bookmark and a question marker.
+
+600. **Panel.** Open the page panel (grid button) and tap the outline button (list icon): the header says *Outline* (*Indice*). The list shows the PDF file name, then *Slide N* rows nested under it.
+601. **Large handwriting.** Write a line of letters clearly bigger than the rest, with some empty space above it and starting near the left margin. After about half a second the outline shows a row with a picture of that ink and its page number. Tap it: the notebook goes to that page.
+602. **Not a heading.** Write a second line of the same size as the body, a single large circle and a large word in the middle of a sentence: none of them appears in the outline.
+603. **Two sizes.** Write a title two and a half times the body and, on another block, a title about twice the body: the smaller one is indented under the larger one.
+604. **Bookmarks.** A bookmarked page shows its title (or *Page N*), colour dot and category; the "…" menu edits or deletes it, and Undo restores it. The category dropdown shows only the bookmarks of that category.
+605. **Markers.** A question, homework, very important or key-point marker is listed with its label (or its kind); a gap marker is not.
+606. **Slides.** Page turns inside the same PDF page add no row; a page with another PDF page, or another PDF file, adds a *Slide* (and *PDF*) row.
+607. **Order.** Rows follow the pages top to bottom; on one page: PDF, slide, headings and markers by their height on the page.
+608. **Where you are.** One row is highlighted: the last entry at or before the page in view. Scroll to another page and it follows.
+609. **Touch.** Rows are easy to hit with a finger and the S Pen (44 px tall); scrolling the list with a finger does not jump to a page.
+610. **Settings.** Settings → *Pages* → *Outline*: turn off *Large handwriting as headings*; the outline loses the pictures at once. Turn off each other switch in turn; with all four off the outline says where to turn one on.
+611. **Dark and light, Obsidian theme.** Check the outline in the dark and light theme and with *Appearance → Style → Follow Obsidian theme*; the white picture of a heading stays readable.
+612. **Cost.** In a notebook of 100+ pages, open the outline for the first time (note how long it takes), then close and reopen it: the second time is immediate. Writing with the outline open does not stutter.
+613. **No change to the file.** Open a notebook, view the outline, close it without editing: the file is not rewritten (no new snapshot, no sync conflict).
+
+### 0.13 — home2: Home, revised structure (steps 620-659)
+
+Use a vault with a few subject folders and notebooks, the timetable with a class running now (or one that starts in a few minutes) linked to a course folder (*Timetable* → class → *Notebook or folder*), and Italian as the language for the second pass. Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/design/home-*-full.png`.
+
+620. **Greeting.** Home's subtitle reads "Buonasera, <name> · N pagine scritte oggi" (the part of the day follows the clock: before 12 morning, 12-18 afternoon, 18-22 evening, otherwise night). With nothing written today it ends "Pronto quando vuoi". Write a page and come back: the count rises.
+621. **Your name.** Settings → *Appearance* → *Your name*: type a name, reopen Home: the greeting uses it; clear it: the greeting has no name.
+622. **Continue: lecture in progress.** With the class running, the first card shows *In class now · <room>*, the course, its notebook and a large page thumbnail (the page you edited last, else the first). Tap the card or *Open the lecture*: the notebook opens at today's lecture page (no second page for the same lecture).
+623. **Continue: course folder.** With the class linked to a folder (not a notebook), the card opens that folder's latest notebook, or the one named like the course.
+624. **Continue: no notebook yet.** Link the class to an empty folder: the thumbnail is a dashed blank and the button says *Crea un quaderno per <course>*: it creates the notebook in that folder and opens it.
+625. **Continue: no class.** Outside class hours the card says *Riprendi da dove eri rimasto* with the notebook you were reading (tap: it opens at that page).
+626. **Continue: empty vault.** With no notebooks the Continue slot shows the empty state that teaches the first step (*Create a notebook · Create a folder · Import a PDF*); the Quick page card is still there.
+627. **Quick page.** Tap *Pagina veloce*: Quick notes opens (made the first time) at a new blank page of the same size and paper as the last one. Tap it again without writing: the blank page is shown, no second blank page is added. Undo removes an added page.
+628. **Quick actions.** Four low tiles (about 70 px) with icon and title only; press and hold or hover one: its description appears as a tooltip. Each still runs its action.
+629. **Folder grid.** Subject folders are three columns on a wide view, two on a tablet in portrait, one on a phone; the last cell is the dashed *Crea una cartella* card, filling the rest of the row (no gap); tapping it opens the creation dialog on the Folder tab.
+630. **Recent notes.** Grouped by notebook (header with subject pill, then its pages with a page thumbnail on the left and ⋯ on the right). Thumbnails appear as the rows scroll into view. Tap a page: it opens on that page; tap a header: the notebook.
+631. **Page menu.** ⋯ on a page: *Open page*, *Open in a new tab*, *Show in the library* (the folder opens and the notebook's card is flashed), *Pin to the top*, *Favourite*; each does what it says.
+632. **Subject filter.** The chips under *Recent notes* (with two or more subjects): choosing one keeps only that subject's notebooks; *All* brings the rest back.
+633. **Pages chart.** *Pages written* shows a bar per day for the last 7 days (today in solid accent); *14 days* switches (the choice is remembered). With nothing written the chart says so and *Write now* opens the notebook to continue.
+634. **Streak and time.** After writing on consecutive days, *Days in a row* counts them (a day without a page yet does not break it until the day ends); *Writing time (estimated)* shows hours and minutes in which something was written. Both are hidden when zero.
+635. **PDF hint.** With no PDF notebook, the PDF tile reads *Importa il tuo primo PDF →* and starts the import; with PDFs changed in the period it shows their number.
+636. **Subject split.** *Materia più attiva* names the subject with most pages written and shows a bar split in the subjects' colours with a legend.
+637. **Sidebar pages.** In the VAULT tree each folder shows its notebook count and its page count ("3  13 pag."); press and hold a row: the tooltip says both in words.
+638. **Pinned notebook.** ⋯ → *Pin to the top* on a recent note (or a notebook menu): it appears under *Fissati* above *Vault*; tap it: it opens.
+639. **Pinned folder.** Press and hold (or right click) a subject card or a folder in the tree → *Fissa nella barra laterale*: the folder appears under *Fissati*; tap it: the folder opens. Pin on one device, wait for sync: the other device shows it too.
+640. **Unpin.** Press and hold a pinned row → *Unpin*: it leaves the section; with nothing pinned the section says how to pin.
+641. **Rotation and phone.** Rotate the tablet: the grids change columns and nothing scrolls sideways. On a phone the Continue card, Quick page, quick actions (two per row) and folders stack.
+642. **Light, dark, Obsidian theme.** All of the above is readable in light and dark and with *Follow Obsidian theme*.
+643. **Pen, finger, mouse.** Every card, row, chip, switch and menu responds to a pen tap, a finger tap and a click; targets are at least 40 px.
+644. **Nothing else changes.** Notebook files are unchanged by looking at Home; an error in one section shows an error card and the rest of Home is still drawn.
+
+### 0.13 — polish (steps 670-679)
+
+Implemented, not verified on hardware.
+
+670. **Art arrives without a stall.** Open Home on the tablet after a restart. Expected: the page is usable at once; folder cards may show their art a moment later with a short fade; scrolling and the pen are not blocked.
+671. **No flicker.** Switch Home to the library and back: cards that were shown keep their art without fading again.
+672. **Reduced motion.** With the system's reduced motion on, no art is drawn (as before); with it off, the fade is short.
+673. **Veins in the creation dialog.** New, Notebook, *Change cover*: the style picker has *Veins*; pick it, the cover preview changes. Create the notebook: its card in the library shows the veins cover.
+674. **Veins by keyword.** New folder named "Biologia" (or "Anatomy"): the card starts on veins; pick another style, then edit the name: your choice stays.
+675. **Veins folder.** Create a folder on veins: its card (Home, library) shows veins after a restart.
+676. **Older plugin.** Optional: open a veins notebook on a device with 0.12.x: it opens and shows a branches cover.
+677. **Toolbar at 740 px.** Phone sideways (about 740 px wide): the toolbar shows Back among its quick buttons (at least three). On a tablet in portrait the buttons are 44 px.
+678. **Quick page twice.** Tap Home's *Quick page* and the ribbon item at once on a vault without Quick notes: one *Quick notes* is made.
+679. **Open in new tab.** Recent notes, the menu, *Open in new tab* on a notebook that is open: the open tab is shown, no second tab appears.
+
 ### 0.12.5: pen gestures and rests (steps 660-665)
 
 Update to 0.12.5 and fully close and reopen Obsidian. Samsung tablet, S Pen, Obsidian for Android. Settings → *Pen gestures* → *Long press starts a gesture* on, *Pen side button* = *Radial menu on click, erase while held* (the default) unless a step says otherwise.
@@ -1114,7 +1269,7 @@ Update to 0.12.5 and fully close and reopen Obsidian. Samsung tablet, S Pen, Obs
 664. **Side button with the gesture action.** *Pen side button* = *Pen gestures while held*: hold the button, touch and draw a circle. Expected: a gesture, as before.
 665. **Pen button test log.** Settings → *Pen button test*. With the button held, drag across the test area; then do a tap. Press *Copy log* and paste the whole text in your report. Expected: the first line gives the settings; every event line shows `dDown` / `dUp`; the lift line says `still (a tap)` or `moved (a drag)`; *Signal seen* / *Decision* lines are in the log next to the event that changed them. If a menu opens on a drag, the log must show either `menu (tap)` or `menu (hover click ...)`: that tells which path opened it.
 
-Results table for steps 1 to 499 and 660 to 665. Fill it in as you go.
+Results table for steps 1 to 665. Fill it in as you go.
 
 | Step | Device / Obsidian version | Result | Notes |
 |---|---|---|---|

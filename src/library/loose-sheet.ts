@@ -1,11 +1,14 @@
 import { normalizePath, type App, type TFile } from "obsidian";
+import { openNotebookAtPage, viewsOf } from "../integration/open";
+import { AddPage } from "../model/history";
+import { isEditContextSource, type EditContext } from "../view/edit-context";
 import { t } from "../i18n";
 import { createDocument } from "../model/document";
 import { PAGE_SIZES, PAPER_SPACING } from "../model/types";
 import type { NotebookSettings } from "../settings";
 import { createNotebook } from "../storage/notebooks";
 import { ensureFolder } from "../storage/vault-io";
-import { looseSheetPath, notebookBaseName, parentFolder } from "./loose-sheet-logic";
+import { blankPageLike, isBlankPage, looseSheetPath, notebookBaseName, parentFolder } from "./loose-sheet-logic";
 import { showNotice } from "../view/notice";
 
 /** Cover colour of the loose sheet in the library (amber, one of the cover colours). */
@@ -23,7 +26,20 @@ export function findLooseSheet(app: App, settings: NotebookSettings): TFile | nu
 	return app.vault.getFileByPath(normalizePath(looseSheetPath(settings.folder, settings.looseSheetPath)));
 }
 
-async function ensureLooseSheet(plugin: LooseSheetPlugin): Promise<TFile> {
+let ensuring: Promise<TFile> | null = null;
+
+/**
+ * One creation at a time for both entry points (the Home card, the ribbon and the command, `openLooseSheet` and
+ * `openNewQuickPage`): used at once they share the file instead of making "Quick notes 2".
+ */
+function ensureLooseSheet(plugin: LooseSheetPlugin): Promise<TFile> {
+	ensuring ??= makeLooseSheet(plugin).finally(() => {
+		ensuring = null;
+	});
+	return ensuring;
+}
+
+async function makeLooseSheet(plugin: LooseSheetPlugin): Promise<TFile> {
 	const { app, settings } = plugin;
 	const path = normalizePath(looseSheetPath(settings.folder, settings.looseSheetPath));
 	const existing = app.vault.getFileByPath(path);
@@ -54,4 +70,52 @@ export function openLooseSheet(plugin: LooseSheetPlugin, open: (file: TFile) => 
 		}
 	})();
 	return opening;
+}
+
+const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
+/** The notebook view loads asynchronously: waits (up to 6 s) for an editable document of that file. */
+async function waitForContext(app: App, file: TFile): Promise<EditContext | null> {
+	for (let i = 0; i < 60; i++) {
+		for (const { view } of viewsOf(app, file)) {
+			if (isEditContextSource(view)) {
+				const ctx = view.editContext();
+				if (ctx) return ctx;
+			}
+		}
+		await wait(100);
+	}
+	return null;
+}
+
+let openingPage: Promise<void> | null = null;
+
+/**
+ * Home's "Quick page" (0.13): opens Quick notes (made the first time) at a new blank page, the same size and paper as the
+ * last one. A last page that is still blank is shown instead of adding another, so tapping twice never piles up empty pages.
+ * The new page is one undo step. If the sheet cannot be edited here (read-only, still loading) it is simply opened.
+ */
+export function openNewQuickPage(plugin: LooseSheetPlugin, open: (file: TFile) => Promise<void>): Promise<void> {
+	openingPage ??= (async () => {
+		try {
+			const file = await ensureLooseSheet(plugin);
+			await open(file);
+			const ctx = await waitForContext(plugin.app, file);
+			if (!ctx) return;
+			const pages = ctx.doc.pages;
+			const last = pages[pages.length - 1];
+			if (!last) return;
+			if (isBlankPage(last)) {
+				await openNotebookAtPage(plugin.app, file, pages.length);
+				return;
+			}
+			ctx.execute(new AddPage(blankPageLike(last), pages.length), pages.length);
+		} catch (e) {
+			console.error("[notebook] quick page", e);
+			showNotice(t("loose.failed", { error: e instanceof Error ? e.message : String(e) }), 8000);
+		} finally {
+			openingPage = null;
+		}
+	})();
+	return openingPage;
 }

@@ -7,7 +7,7 @@ import { actionById, isChecked, isEnabled, type ContextKind, type UiContext } fr
 import { ActionSheet, actionLabel, type SheetKind } from "../ui/action-sheet";
 import { ContextBar } from "../ui/context-bar";
 import { buildLayout, type SectionId } from "../ui/layout";
-import { toolbarScale, toolsRowWraps, type ToolbarSize } from "../ui/toolbar-size";
+import { toolbarScaleFor, toolsRowWraps, type ToolbarSize } from "../ui/toolbar-size";
 import { normaliseUsage, recordUse, USAGE_KEY, type UsageMap } from "../ui/usage";
 import type { Toolbar } from "./toolbar";
 
@@ -96,7 +96,7 @@ export class ViewUi {
 		const c = this.host.context();
 		const width = this.host.root.clientWidth || window.innerWidth;
 		const size = this.host.toolbarSize();
-		const scale = toolbarScale(size);
+		const scale = toolbarScaleFor(size, width);
 		// The size is CSS variables on the view (styles.css, wave 0.9 block): buttons, icons, the contextual bar and the sheets follow.
 		this.host.root.setCssProps({ "--nb-target": `${scale.target}px`, "--nb-icon": `${scale.icon}px` });
 		this.host.root.toggleClass("is-toolbar-compact", size === "compact");

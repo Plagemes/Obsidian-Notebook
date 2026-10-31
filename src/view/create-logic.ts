@@ -4,9 +4,10 @@
  */
 import { createDocument } from "../model/document";
 import {
-	COVER_ART_STYLES, META_DESCRIPTION_MAX, MM, PAGE_SIZES, PAPER_SPACING, type CoverArt, type CoverArtStyle, type NotebookDocument, type PageSizeName,
+	META_DESCRIPTION_MAX, MM, PAGE_SIZES, PAPER_SPACING, type CoverArt, type NotebookDocument, type PageSizeName,
 	type PaperKind,
 } from "../model/types";
+import { COVER_FAMILIES, encodeCoverArt, type CoverFamily } from "../model/cover-family";
 import { isReservedPath, RESERVED_FOLDERS } from "../library/folders";
 import { hasTrailingDotOrSpace, isDeviceName, sanitizeName } from "../storage/names";
 
@@ -131,9 +132,9 @@ export function depthBelow(root: string, path: string): number {
 }
 
 /** The next art style after `style` (the cover and folder previews cycle through them). */
-export function nextArtStyle(style: CoverArtStyle): CoverArtStyle {
-	const i = COVER_ART_STYLES.indexOf(style);
-	return COVER_ART_STYLES[(i + 1) % COVER_ART_STYLES.length]!;
+export function nextArtStyle(style: CoverFamily): CoverFamily {
+	const i = COVER_FAMILIES.indexOf(style);
+	return COVER_FAMILIES[(i + 1) % COVER_FAMILIES.length]!;
 }
 
 /** What the dialog's Notebook tab decided. */
@@ -148,7 +149,7 @@ export interface NotebookSpec {
 	/** Cover colour `#rrggbb` (meta.cover). */
 	color: string;
 	/** Generated art; an image cover is stored by the host (it needs the vault) and replaces it. */
-	art: { style: CoverArtStyle; seed: string };
+	art: { style: CoverFamily; seed: string };
 }
 
 /** The document of a new notebook made from blank pages: one page of the chosen paper and size, with its metadata. */
@@ -165,5 +166,5 @@ export function applyNotebookMeta(doc: NotebookDocument, spec: Pick<NotebookSpec
 	const description = spec.description.trim().slice(0, META_DESCRIPTION_MAX);
 	if (description) meta.description = description;
 	else delete meta.description;
-	meta.coverArt = cover ?? { kind: "art", style: spec.art.style, seed: spec.art.seed };
+	meta.coverArt = cover ?? { kind: "art", ...encodeCoverArt(spec.art.style, spec.art.seed) };
 }

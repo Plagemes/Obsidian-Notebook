@@ -35,6 +35,10 @@ export interface Painter {
 	glow: Paint;
 	/** Whether glow passes are drawn. */
 	glowOn: boolean;
+	/** Whether glow paths get the extra wide, very soft pass (small surfaces only: it is the costly part on a phone). */
+	halo: boolean;
+	/** 0..1: how grown the notebook is (quantised to quarters); families may add detail, the engine adds companion layers. */
+	growth: number;
 	/** Overall opacity multiplier. */
 	alpha: number;
 	lineRgb: Rgb;
@@ -45,12 +49,20 @@ export const SOLID: number[] = [];
 export const DASH_FINE: number[] = [1.5, 3.5];
 export const DASH_LONG: number[] = [6, 5];
 
-/** Strokes the current path: an optional soft glow pass (wider, faint, subject colour), then the fine line. */
+/**
+ * Strokes the current path. A glow path gets up to three passes: a very wide, very faint halo (the soft "blur" pass, only
+ * on small surfaces), a tighter glow, and the crisp fine line. Wide strokes with round caps stand in for a blur: no
+ * `shadowBlur` and no `filter`, which are slow on Android WebViews.
+ */
 export function strokeLine(p: Painter, width: number, alpha: number, glow = false): void {
 	const { ctx } = p;
 	if (glow && p.glowOn) {
-		// One soft pass (no shadowBlur: it is slow on Android WebViews).
 		ctx.strokeStyle = p.glow;
+		if (p.halo) {
+			ctx.globalAlpha = Math.min(1, alpha * 0.1 * p.alpha);
+			ctx.lineWidth = width * 7 + 2;
+			ctx.stroke();
+		}
 		ctx.globalAlpha = Math.min(1, alpha * 0.3 * p.alpha);
 		ctx.lineWidth = width * 2.4 + 0.8;
 		ctx.stroke();

@@ -1,3 +1,4 @@
+import { applyArt, type ArtSource } from "../art/art-ref";
 import { setIconSafe } from "./dom";
 
 export interface EmptyStateAction {
@@ -9,7 +10,7 @@ export interface EmptyStateAction {
 
 export interface EmptyStateOptions {
 	/** Decoration: a generated illustration (data URL from the art engine); omitted with reduced effects. */
-	art?: string;
+	art?: ArtSource;
 	/** Shown in an icon square when there is no illustration. */
 	icon: string;
 	title: string;
@@ -26,7 +27,10 @@ export interface EmptyStateOptions {
  */
 export function emptyState(parent: HTMLElement, o: EmptyStateOptions): HTMLElement {
 	const box = parent.createDiv({ cls: "nb-empty-state" });
-	if (o.art) box.createDiv({ cls: "nb-empty-art", attr: { "aria-hidden": "true" } }).setCssProps({ "--nb-art": `url("${o.art}")` });
+	if (o.art) {
+		const artEl = box.createDiv({ cls: "nb-empty-art", attr: { "aria-hidden": "true" } });
+		applyArt(artEl, o.art, { onNone: () => { artEl.remove(); box.prepend(createDiv({ cls: "nb-empty-icon", attr: { "aria-hidden": "true" } })); setIconSafe(box.firstElementChild as HTMLElement, o.icon); } });
+	}
 	else setIconSafe(box.createDiv({ cls: "nb-empty-icon", attr: { "aria-hidden": "true" } }), o.icon);
 	box.createEl("h2", { cls: "nb-empty-title", text: o.title });
 	if (o.body) box.createEl("p", { cls: "nb-empty-body", text: o.body });

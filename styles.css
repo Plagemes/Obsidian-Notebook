@@ -1884,6 +1884,11 @@ body.notebook-style-obsidian {
 	animation: notebook-dial-open var(--nb-motion) var(--nb-ease);
 }
 
+/* 0.13 polish: art that arrives late fades in to the element's own opacity. */
+@keyframes nb-art-in {
+	0% { opacity: 0; }
+}
+
 @keyframes notebook-dial-open {
 	from {
 		opacity: 0;
@@ -2882,26 +2887,32 @@ body.notebook-style-obsidian {
 	width: var(--notebook-zettel-w, 0);
 	height: var(--notebook-zettel-h, 0);
 	box-sizing: border-box;
-	border: 1px dashed var(--color-accent);
-	border-radius: 4px;
-	opacity: 0.55;
+	border: 1.5px dashed var(--nb-accent);
+	border-radius: 10px;
+	background: var(--nb-accent-bg);
+	opacity: 0.75;
 	pointer-events: none;
 }
 
 .notebook-zettel-region.is-page {
 	border-color: transparent;
+	background: transparent;
 }
 
+/* The id of the card: a small accent pill in the corner of its region. */
 .notebook-zettel-badge {
 	position: absolute;
-	top: 2px;
-	right: 2px;
-	padding: 0 4px;
-	border-radius: 3px;
-	background: var(--color-accent);
-	color: var(--text-on-accent);
-	font-size: 10px;
-	line-height: 14px;
+	top: 6px;
+	right: 6px;
+	padding: 0 8px;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-accent);
+	box-shadow: var(--nb-shadow-1);
+	color: #fff;
+	font-size: 11px;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	line-height: 18px;
 	white-space: nowrap;
 	pointer-events: none;
 }
@@ -2910,8 +2921,7 @@ body.notebook-style-obsidian {
 	display: block;
 	max-width: 100%;
 	max-height: 30vh;
-	margin: 0 auto 12px;
-	box-shadow: 0 0 0 1px var(--background-modifier-border);
+	margin: 0 auto;
 }
 
 .notebook-zettel-list-orphan {
@@ -3160,66 +3170,6 @@ body.notebook-style-obsidian {
 	margin-left: auto;
 	min-width: 32px;
 	min-height: 32px;
-}
-
-.notebook-outline-row {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	min-height: 40px;
-	margin-bottom: 4px;
-	padding: 4px 2px 4px 6px;
-	border-radius: var(--nb-radius-m);
-	cursor: pointer;
-	touch-action: pan-y;
-}
-
-.notebook-outline-row:hover {
-	background: var(--background-modifier-hover);
-}
-
-.notebook-outline-row.is-current {
-	background: var(--background-modifier-active-hover);
-}
-
-.notebook-outline-dot {
-	flex: 0 0 auto;
-	width: 10px;
-	height: 10px;
-	border-radius: 50%;
-	background: var(--notebook-bookmark-color, var(--interactive-accent));
-}
-
-.notebook-outline-text {
-	flex: 1 1 auto;
-	min-width: 0;
-}
-
-.notebook-outline-title {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-size: var(--font-ui-small);
-}
-
-.notebook-outline-category-label {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-size: var(--font-ui-smaller);
-	color: var(--text-muted);
-}
-
-.notebook-outline-page {
-	flex: 0 0 auto;
-	font-size: var(--font-ui-smaller);
-	color: var(--text-muted);
-}
-
-.notebook-outline-more {
-	flex: 0 0 auto;
-	min-width: 28px;
-	min-height: 28px;
 }
 
 .notebook-bookmark-swatches {
@@ -3583,10 +3533,6 @@ body.notebook-style-obsidian {
 	box-shadow: var(--nb-shadow-1);
 }
 
-.notebook-outline-row {
-	border-radius: var(--nb-radius-s);
-}
-
 /* PDF search panel. */
 .notebook-search-row {
 	border-radius: var(--nb-radius-s);
@@ -3918,181 +3864,7 @@ body.notebook-style-obsidian {
 	font-size: var(--font-ui-small);
 }
 
-/* wave 0.8: processing (Inbox view, textbook references over typed text) */
-.notebook-inbox {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	padding: 12px 16px 24px;
-	overflow-y: auto;
-}
-
-.notebook-inbox-bar {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-	flex-wrap: wrap;
-}
-
-.notebook-inbox-heading {
-	margin: 0;
-	flex: 0 0 auto;
-}
-
-.notebook-inbox-summary {
-	flex: 1 1 auto;
-	color: var(--text-muted);
-}
-
-.notebook-inbox-actions {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-}
-
-.notebook-inbox-toggle {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	min-height: 32px;
-}
-
-.notebook-inbox-filter {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
-}
-
-.notebook-inbox-chip {
-	min-height: 32px;
-	padding: 0 12px;
-	border-radius: 16px;
-}
-
-.notebook-inbox-chip.is-active {
-	background: var(--interactive-accent);
-	color: var(--text-on-accent);
-}
-
-.notebook-inbox-hint {
-	margin: 0;
-}
-
-.notebook-inbox-group {
-	margin: 16px 0 4px;
-	font-size: var(--font-ui-small);
-	color: var(--text-muted);
-	text-transform: none;
-}
-
-.notebook-inbox-item {
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
-	background: var(--background-primary);
-}
-
-.notebook-inbox-item.is-selected {
-	border-color: var(--interactive-accent);
-}
-
-.notebook-inbox-item.is-done .notebook-inbox-item-text {
-	color: var(--text-faint);
-}
-
-.notebook-inbox-item-head {
-	display: flex;
-	align-items: baseline;
-	gap: 10px;
-	width: 100%;
-	min-height: 44px;
-	padding: 8px 12px;
-	border: 0;
-	background: transparent;
-	box-shadow: none;
-	text-align: start;
-	cursor: pointer;
-}
-
-.notebook-inbox-item-place {
-	flex: 0 0 auto;
-	color: var(--text-muted);
-	font-variant-numeric: tabular-nums;
-}
-
-.notebook-inbox-item-text {
-	flex: 1 1 auto;
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.notebook-inbox-item-badge {
-	flex: 0 0 auto;
-	padding: 0 6px;
-	border-radius: 8px;
-	background: var(--background-modifier-hover);
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
-}
-
-.notebook-inbox-panel {
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-	padding: 0 12px 12px;
-}
-
-.notebook-inbox-preview {
-	max-width: 100%;
-	max-height: 60vh;
-	object-fit: contain;
-	align-self: flex-start;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-s);
-	background: #fff;
-}
-
-.notebook-inbox-text {
-	white-space: pre-wrap;
-	user-select: text;
-}
-
-.notebook-inbox-text.is-empty {
-	color: var(--text-faint);
-}
-
-.notebook-inbox-covered {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	padding: 8px;
-	border-radius: var(--radius-s);
-	background: var(--background-secondary);
-}
-
-.notebook-inbox-covered > div {
-	display: flex;
-	align-items: center;
-	flex-wrap: wrap;
-	gap: 8px;
-}
-
-.notebook-inbox-buttons {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 8px;
-}
-
-.notebook-inbox-buttons button {
-	min-height: 40px;
-}
-
-.notebook-inbox-empty {
-	padding: 24px 0;
-	color: var(--text-muted);
-}
-
+/* wave 0.8: textbook references over typed text. The Inbox view itself is styled in the "0.13 ds-zettel" block at the end. */
 /* Textbook references: transparent hot spots over typed "p. 134" (small; hidden while the text tool is active). */
 .notebook-textbook-overlay {
 	position: absolute;
@@ -8465,5 +8237,3545 @@ body.notebook-style-obsidian {
 	.notebook-create-modal.nb-ui .nb-create-tab,
 	.notebook-create-modal.nb-ui .nb-create-tile {
 		transition: none;
+	}
+}
+
+/* ===== 0.13 home2 ===== */
+/* Home, revised structure (DESIGN.md section 4, docs/design-ui.md "Home"): the Continue row, low quick actions, a three-column
+   folder grid ending in the dashed tile, Recent notes grouped by notebook and the Statistics widgets. Same tokens and look as
+   0.12; everything is scoped under .nb-ui and uses --nb-* tokens only (so "Follow Obsidian theme" and the light theme apply). */
+
+/* --- Continue row: the hero card (2/3) and the Quick page card (1/3) --- */
+.nb-ui .nb-home-continue {
+	display: grid;
+	grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+	gap: 16px;
+	align-items: stretch;
+}
+
+.nb-ui .nb-home-continue:not(.has-quickpage) {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.nb-ui .nb-continue {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 24px;
+	min-width: 0;
+	min-height: 232px;
+	padding: 20px 26px 20px 22px;
+	overflow: hidden;
+	border: 1px solid var(--nb-c-glow);
+	border-radius: var(--nb-radius-card);
+	background:
+		radial-gradient(120% 140% at 100% 50%, var(--nb-c-glow) 0%, transparent 62%),
+		linear-gradient(100deg, var(--nb-c-soft) 0%, var(--nb-c-tint) 100%),
+		var(--nb-panel);
+	box-shadow: inset 0 0 40px -12px var(--nb-c-glow);
+	color: var(--nb-text);
+	cursor: pointer;
+	isolation: isolate;
+	transition: box-shadow var(--nb-motion) ease-out;
+}
+
+.nb-ui .nb-continue:hover {
+	box-shadow: inset 0 0 50px -10px var(--nb-c-glow), var(--nb-shadow-2);
+}
+
+.theme-light .nb-ui .nb-continue {
+	background:
+		radial-gradient(120% 140% at 100% 50%, var(--nb-c-tint) 0%, transparent 65%),
+		linear-gradient(100deg, var(--nb-panel) 0%, var(--nb-c-soft) 100%);
+	box-shadow: var(--nb-shadow-1);
+}
+
+.nb-ui .nb-continue.is-empty {
+	display: block;
+	min-height: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	box-shadow: none;
+	cursor: default;
+}
+
+.nb-ui .nb-continue-art {
+	position: absolute;
+	z-index: -1;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	width: 60%;
+	background-image: var(--nb-art);
+	background-size: cover;
+	background-position: center right;
+	opacity: 0.55;
+	-webkit-mask-image: linear-gradient(to right, transparent 0%, #000 65%);
+	mask-image: linear-gradient(to right, transparent 0%, #000 65%);
+	pointer-events: none;
+}
+
+.nb-ui .nb-continue-thumb {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	width: clamp(140px, 30%, 200px);
+	aspect-ratio: 3 / 4;
+	overflow: hidden;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: 12px;
+	background: #fff;
+	box-shadow: var(--nb-shadow-2);
+	color: var(--nb-text-faint);
+}
+
+.nb-ui .nb-continue-thumb img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	object-position: top;
+}
+
+.nb-ui .nb-continue-thumb.is-blank {
+	background: var(--nb-c-soft);
+	border: 2px dashed var(--nb-c);
+	box-shadow: none;
+	color: var(--nb-c);
+}
+
+.nb-ui .nb-continue-plus svg {
+	width: 36px;
+	height: 36px;
+}
+
+.nb-ui .nb-continue-text {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.nb-ui .nb-continue-eyebrow {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--nb-c);
+	font-size: var(--nb-fs-label);
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.nb-ui .nb-continue-eyebrow svg {
+	width: 18px;
+	height: 18px;
+}
+
+.nb-ui .nb-continue-title {
+	margin: 2px 0 0;
+	font-size: 26px;
+	font-weight: 650;
+	line-height: 1.2;
+	color: var(--nb-text);
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	text-shadow: 0 1px 8px var(--nb-card-shade);
+}
+
+.nb-ui .nb-continue-meta {
+	font-size: var(--nb-fs-subtitle);
+	color: var(--nb-text-muted);
+	text-shadow: 0 1px 6px var(--nb-card-shade);
+}
+
+.nb-ui .nb-continue-go {
+	align-self: flex-start;
+	margin-top: 14px;
+}
+
+/* Quick page: one tap, a new page in Quick notes. */
+.nb-ui .nb-quickpage {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: 14px;
+	min-width: 0;
+	min-height: 232px;
+	padding: 20px;
+	overflow: hidden;
+	border: 1px solid var(--nb-c-glow);
+	border-radius: var(--nb-radius-card);
+	background: linear-gradient(150deg, var(--nb-c-tint) 0%, var(--nb-c-soft) 100%), var(--nb-panel);
+	cursor: pointer;
+	isolation: isolate;
+	transition: box-shadow var(--nb-motion) ease-out;
+}
+
+.nb-ui .nb-quickpage:hover {
+	box-shadow: var(--nb-shadow-2);
+}
+
+.nb-ui .nb-quickpage-art {
+	position: absolute;
+	z-index: -1;
+	inset: 0;
+	background-image: var(--nb-art);
+	background-size: cover;
+	background-position: center;
+	opacity: 0.4;
+	-webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 90%);
+	mask-image: linear-gradient(to bottom, transparent 0%, #000 90%);
+	pointer-events: none;
+}
+
+.nb-ui .nb-quickpage-text {
+	min-width: 0;
+}
+
+.nb-ui .nb-quickpage-title {
+	font-size: var(--nb-fs-card);
+	font-weight: 600;
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-quickpage-desc {
+	margin-top: 4px;
+	font-size: var(--nb-fs-subtitle);
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-quickpage-add {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	align-self: flex-end;
+	width: 48px;
+	height: 48px;
+	border-radius: 50%;
+	background: var(--nb-c);
+	color: #fff;
+	box-shadow: 0 6px 16px -4px var(--nb-c-glow);
+}
+
+.nb-ui .nb-quickpage-add svg {
+	width: 24px;
+	height: 24px;
+}
+
+/* --- low quick actions: icon and title only (the description is the tooltip) --- */
+.nb-ui .nb-quick-grid.is-compact {
+	gap: 12px;
+}
+
+.nb-ui .nb-quick.is-compact {
+	min-height: 70px;
+	padding: 10px 14px;
+	gap: 14px;
+}
+
+.nb-ui .nb-quick.is-compact .nb-icon-square {
+	width: 42px;
+	height: 42px;
+}
+
+.nb-ui .nb-quick.is-compact .nb-quick-title {
+	font-size: 16px;
+}
+
+/* Narrow: two columns, still icon and title side by side and about 70 px tall (no chevron: the whole tile is the target). */
+.nb-app.nb-ui.is-medium .nb-quick-grid.is-compact,
+.nb-app.nb-ui.is-phone .nb-quick-grid.is-compact {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.nb-app.nb-ui.is-medium .nb-quick.is-compact .nb-chevron,
+.nb-app.nb-ui.is-phone .nb-quick.is-compact .nb-chevron {
+	display: none;
+}
+
+.nb-app.nb-ui.is-phone .nb-quick.is-compact {
+	gap: 10px;
+	padding: 10px 12px;
+}
+
+.nb-app.nb-ui.is-phone .nb-quick.is-compact .nb-quick-title {
+	font-size: 15px;
+}
+
+/* --- subject folders: three columns of low cards, the dashed tile is the last cell --- */
+.nb-ui .nb-subject-grid.is-cols {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 14px;
+}
+
+.nb-app.nb-ui.is-medium .nb-subject-grid.is-cols {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.nb-app.nb-ui.is-phone .nb-subject-grid.is-cols {
+	grid-template-columns: minmax(0, 1fr);
+	gap: 10px;
+}
+
+.nb-ui .nb-subject-card.is-row.is-compact {
+	--nb-card-pad-r: 46px;
+	min-height: 92px;
+	padding: 0 var(--nb-card-pad-r) 0 18px;
+	gap: 14px;
+}
+
+.nb-ui .nb-subject-card.is-compact .nb-folder-icon {
+	width: 62px;
+	height: 62px;
+	margin: -2px 0;
+}
+
+.nb-ui .nb-subject-card.is-compact .nb-subject-title {
+	font-size: 18px;
+}
+
+.nb-ui .nb-subject-card.is-row.is-compact .nb-subject-meta {
+	margin-top: 4px;
+	font-size: 14px;
+}
+
+.nb-ui .nb-subject-card.is-row.is-compact .nb-chevron {
+	right: 16px;
+}
+
+.nb-ui .nb-subject-grid.is-cols > .nb-create-tile.is-compact,
+.nb-app.nb-ui.is-phone .nb-subject-grid.is-cols > .nb-create-tile.is-compact {
+	grid-column: span var(--nb-span, 1);
+	min-height: 92px;
+	padding: 12px 18px;
+}
+
+/* --- Recent notes: grouped by notebook, a page thumbnail on every row --- */
+.nb-ui .nb-home-middle {
+	align-items: start;
+}
+
+.nb-ui .nb-recent-filter {
+	padding: 0 4px;
+}
+
+.nb-ui .nb-recent-groups {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.nb-ui .nb-recent-group {
+	overflow: hidden;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+}
+
+.nb-ui .nb-recent-head,
+.nb-ui .nb-recent-page {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 6px 4px 6px 14px;
+	cursor: pointer;
+	transition: background-color var(--nb-motion-fast) ease-out;
+}
+
+.nb-ui .nb-recent-head {
+	min-height: 56px;
+}
+
+.nb-ui .nb-recent-page {
+	min-height: 64px;
+	padding-left: 12px;
+}
+
+.nb-ui .nb-recent-head:hover,
+.nb-ui .nb-recent-page:hover {
+	background: var(--nb-hover);
+}
+
+.nb-ui .nb-recent-pages {
+	display: flex;
+	flex-direction: column;
+	border-top: 1px solid var(--nb-border);
+}
+
+.nb-ui .nb-recent-page + .nb-recent-page {
+	box-shadow: 0 -1px 0 var(--nb-border);
+}
+
+.nb-ui .nb-page-thumb {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+	border: 1px solid var(--nb-border-strong);
+	background: var(--nb-panel);
+	color: var(--nb-text-faint);
+}
+
+.nb-ui .nb-page-thumb img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	object-position: top;
+	background: #fff;
+}
+
+.nb-ui .nb-recent-thumb {
+	flex: 0 0 auto;
+	width: 46px;
+	height: 58px;
+	border-radius: 8px;
+}
+
+.nb-ui .nb-recent-none {
+	padding: 16px 8px;
+}
+
+/* A notebook revealed from Recent notes: its card is flashed in the library. */
+.nb-ui .notebook-lib-card.is-flash {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 3px;
+}
+
+/* --- Statistics: pages per day, streak, writing time, subject split --- */
+.nb-ui .nb-stat-body {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.nb-ui .nb-stat-chart,
+.nb-ui .nb-stat-split {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	min-width: 0;
+	padding: 14px 16px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+}
+
+.nb-ui .nb-stat-chart-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 10px;
+}
+
+.nb-ui .nb-stat-title {
+	font-size: var(--nb-fs-row);
+	font-weight: 600;
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-stat-sub {
+	margin-top: 2px;
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.nb-ui .nb-segmented {
+	display: inline-flex;
+	gap: 2px;
+	padding: 3px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-panel);
+}
+
+.nb-ui .nb-segment {
+	min-width: 72px;
+	height: 40px;
+	padding: 0 14px;
+	border: 0;
+	border-radius: var(--nb-radius-pill);
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+	cursor: pointer;
+}
+
+.nb-ui .nb-segment.is-active {
+	background: var(--nb-accent-bg);
+	color: var(--nb-text);
+	box-shadow: inset 0 0 0 1px var(--nb-accent);
+}
+
+.nb-ui .nb-bars {
+	display: grid;
+	grid-template-columns: repeat(var(--nb-bar-count, 7), minmax(0, 1fr));
+	gap: 6px;
+	height: 156px;
+}
+
+.nb-ui .nb-bar-col {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+}
+
+.nb-ui .nb-bar-value {
+	height: 16px;
+	font-size: 12px;
+	color: var(--nb-text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.nb-ui .nb-bar-track {
+	position: relative;
+	flex: 1 1 auto;
+	width: 100%;
+}
+
+.nb-ui .nb-bar {
+	position: absolute;
+	bottom: 0;
+	left: 50%;
+	width: min(100%, 30px);
+	height: var(--nb-h, 10%);
+	border-radius: 7px 7px 3px 3px;
+	background: var(--nb-accent);
+	opacity: 0.55;
+	transform: translateX(-50%);
+}
+
+.nb-ui .nb-bar-col.is-today .nb-bar {
+	opacity: 1;
+}
+
+.nb-ui .nb-bar.is-zero {
+	background: var(--nb-border-strong);
+	opacity: 1;
+}
+
+.nb-ui .nb-bar-label {
+	font-size: 12px;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-bar-col.is-today .nb-bar-label,
+.nb-ui .nb-bar-col.is-today .nb-bar-value {
+	color: var(--nb-accent);
+	font-weight: 600;
+}
+
+.nb-ui .nb-stat-empty {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+	padding: 18px 4px 8px;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-stat-empty-text {
+	flex: 1 1 200px;
+	font-size: var(--nb-fs-subtitle);
+}
+
+.nb-ui .nb-stat-tiles {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+	gap: 12px;
+}
+
+.nb-ui .nb-stat-tile {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
+	padding: 12px 14px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+}
+
+.nb-ui .nb-stat-tile.is-hint {
+	border-style: dashed;
+	border-color: var(--nb-border-strong);
+	background: transparent;
+	cursor: pointer;
+}
+
+.nb-ui .nb-stat-tile.is-hint:hover {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui .nb-stat-tile-text {
+	min-width: 0;
+}
+
+.nb-ui .nb-stat-value {
+	font-size: 22px;
+	font-weight: 650;
+	line-height: 1.15;
+	color: var(--nb-text);
+	font-variant-numeric: tabular-nums;
+}
+
+.nb-ui .nb-stat-label {
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-stat-hint {
+	margin-top: 2px;
+	font-size: 12px;
+	color: var(--nb-text-faint);
+}
+
+.nb-ui .nb-stat-action {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 4px;
+	color: var(--nb-accent);
+	font-size: var(--nb-fs-meta);
+	font-weight: 600;
+}
+
+.nb-ui .nb-stat-action svg {
+	width: 16px;
+	height: 16px;
+}
+
+.nb-ui .nb-stat-split-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.nb-ui .nb-stat-split-name {
+	font-size: 18px;
+	font-weight: 600;
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-stat-dot {
+	flex: 0 0 auto;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: var(--nb-c, var(--nb-accent));
+}
+
+.nb-ui .nb-split-bar {
+	display: flex;
+	gap: 2px;
+	height: 14px;
+	overflow: hidden;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-border);
+}
+
+.nb-ui .nb-split-seg {
+	flex: var(--nb-w, 0.1) 1 0;
+	min-width: 6px;
+	background: var(--nb-c, var(--nb-accent));
+}
+
+.nb-ui .nb-split-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 16px;
+}
+
+.nb-ui .nb-split-item {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-split-count {
+	color: var(--nb-text);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+/* --- the sidebar: Pinned above the Vault, pages beside the notebook count --- */
+.nb-ui .nb-rail-pinned {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.nb-ui .nb-rail-pinned .nb-pinned-row .nb-rail-item {
+	min-height: 42px;
+	font-size: 15px;
+}
+
+.nb-ui .nb-rail-hint {
+	margin: 0 14px 6px;
+	font-size: var(--nb-fs-meta);
+	line-height: 1.4;
+	color: var(--nb-text-faint);
+}
+
+.nb-ui .nb-rail-pages {
+	flex: 0 0 auto;
+	margin-left: 2px;
+	font-size: var(--nb-fs-label);
+	color: var(--nb-text-faint);
+	font-variant-numeric: tabular-nums;
+}
+
+.nb-app.nb-ui.is-rail-compact :is(.nb-rail-pages, .nb-rail-hint) {
+	display: none;
+}
+
+.nb-app.nb-ui.is-rail-compact .nb-tree-row.nb-pinned-row {
+	display: flex;
+}
+
+/* --- narrow widths --- */
+.nb-app.nb-ui.is-phone .nb-home-continue {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.nb-app.nb-ui.is-phone .nb-continue {
+	min-height: 0;
+	gap: 16px;
+	padding: 16px;
+}
+
+.nb-app.nb-ui.is-phone .nb-continue-thumb {
+	width: 96px;
+}
+
+.nb-app.nb-ui.is-phone .nb-continue-title {
+	font-size: 20px;
+}
+
+.nb-app.nb-ui.is-phone .nb-quickpage {
+	flex-direction: row;
+	align-items: center;
+	min-height: 0;
+}
+
+.nb-app.nb-ui.is-phone .nb-quickpage-text {
+	flex: 1 1 auto;
+}
+
+.nb-app.nb-ui.is-phone .nb-quickpage-add {
+	align-self: center;
+}
+
+.nb-app.nb-ui.is-phone .nb-recent-group .nb-pills {
+	display: none;
+}
+
+.nb-app.nb-ui.is-phone .nb-stat-tiles {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+/* ===== 0.13 outline ===== */
+
+/* The generated outline in the page panel (DESIGN.md §3 list rows, §2.6 icon squares): bookmarks, PDF slides, large
+   handwriting (a picture of the ink) and markers, nested by level. Tap a row to jump to its page. */
+.nb-ui.nb-outline {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-outline-row {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-2);
+	min-height: 44px;
+	margin-left: calc(var(--nb-outline-depth, 0) * 10px);
+	padding: 4px 4px 4px 6px;
+	border-radius: var(--nb-radius-m);
+	color: var(--nb-text);
+	cursor: pointer;
+	touch-action: pan-y;
+	transition: background-color var(--nb-motion-fast) var(--nb-ease);
+}
+
+.nb-ui .nb-outline-row[data-depth]:not([data-depth="1"])::before {
+	content: "";
+	position: absolute;
+	top: 6px;
+	bottom: 6px;
+	left: -6px;
+	width: 1px;
+	background: var(--nb-border-strong);
+}
+
+.nb-ui .nb-outline-row:hover {
+	background: var(--nb-hover);
+}
+
+.nb-ui .nb-outline-row.is-current {
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui .nb-outline-row:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: -2px;
+}
+
+.nb-ui .nb-outline-icon {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border-radius: var(--nb-radius-s);
+	background: var(--nb-tile);
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-outline-icon svg {
+	width: 14px;
+	height: 14px;
+	stroke-width: 1.75;
+}
+
+.nb-ui .nb-outline-row[data-kind="document"] .nb-outline-icon,
+.nb-ui .nb-outline-row[data-kind="slide"] .nb-outline-icon,
+.nb-ui .nb-outline-row.is-current .nb-outline-icon {
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.nb-ui .nb-outline-row[data-kind="marker"] .nb-outline-icon {
+	color: var(--nb-star);
+}
+
+.nb-ui .nb-outline-icon.is-dot {
+	background: transparent;
+}
+
+.nb-ui .nb-outline-icon.is-dot::after {
+	content: "";
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: var(--notebook-bookmark-color, var(--nb-accent));
+}
+
+.nb-ui .nb-outline-text {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.nb-ui .nb-outline-title {
+	display: -webkit-box;
+	overflow: hidden;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	overflow-wrap: anywhere;
+	font-size: var(--nb-text-m);
+	line-height: 1.3;
+}
+
+.nb-ui .nb-outline-title.is-strong {
+	font-weight: var(--font-semibold);
+}
+
+.nb-ui .nb-outline-meta {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--nb-text-s);
+	color: var(--nb-text-muted);
+}
+
+/* The ink of a heading, on white like the page it was written on. */
+.nb-ui .nb-outline-ink {
+	display: block;
+	max-width: 100%;
+	max-height: 44px;
+	object-fit: contain;
+	object-position: left center;
+	border-radius: 6px;
+	background: #ffffff;
+	box-shadow: inset 0 0 0 1px var(--nb-border);
+}
+
+.nb-ui .nb-outline-page {
+	flex: 0 0 auto;
+	font-size: var(--nb-text-s);
+	font-variant-numeric: tabular-nums;
+	color: var(--nb-text-faint);
+}
+
+.nb-ui .nb-outline-more {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	min-width: 28px;
+	min-height: 28px;
+	border-radius: 50%;
+	color: var(--nb-text-muted);
+	cursor: pointer;
+}
+
+.nb-ui .nb-outline-more:hover {
+	background: var(--nb-hover);
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-outline-more svg {
+	width: 16px;
+	height: 16px;
+}
+
+.nb-ui .nb-outline-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--nb-space-2);
+	padding: var(--nb-space-4) var(--nb-space-2);
+	text-align: center;
+}
+
+.nb-ui .nb-outline-empty-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	border-radius: var(--nb-radius-icon);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.nb-ui .nb-outline-empty-text {
+	font-size: var(--nb-text-s);
+	line-height: 1.4;
+	color: var(--nb-text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.nb-ui .nb-outline-row {
+		transition: none;
+	}
+}
+
+/* ===== 0.13 ds-zettel ===== */
+/* The Zettelkasten surfaces on the design system (DESIGN.md §3, §4): the Inbox view, the card dialogs and the card-list picker.
+   The card regions over the page are in the "wave 0.6: zettelkasten" block above. Scoped under .nb-ui. */
+
+.workspace-leaf-content .view-content.notebook-inbox.nb-app.nb-ui {
+	display: flex;
+	flex-direction: column;
+	padding: 0;
+	overflow: hidden;
+	background: var(--nb-bg);
+	color: var(--nb-text);
+	font-family: var(--font-interface);
+}
+
+.nb-ui .nb-zk-scroll {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	padding: 0 var(--nb-page-pad) 40px;
+}
+
+.nb-ui .nb-zk-header {
+	flex: 0 0 auto;
+	margin-bottom: 0;
+}
+
+.nb-ui .nb-zk-header .nb-header-titles {
+	flex: 1 1 auto;
+}
+
+.nb-ui .nb-zk-filters.is-hidden {
+	display: none;
+}
+
+.nb-ui .nb-zk-filters .nb-chips {
+	align-items: center;
+}
+
+.nb-ui .nb-zk-toggle {
+	margin-left: auto;
+}
+
+.nb-ui .nb-zk-hint {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	margin: 0;
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-zk-hint-icon {
+	display: inline-flex;
+	flex: 0 0 auto;
+	margin-top: 1px;
+	color: var(--nb-text-faint);
+}
+
+.nb-ui .nb-zk-hint-icon svg {
+	width: 16px;
+	height: 16px;
+	stroke-width: 1.75;
+}
+
+.nb-ui .nb-zk-list {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+/* One panel per notebook, in its subject colour (a tint, never the vivid base: DESIGN.md §2.3). */
+.nb-ui .nb-zk-group {
+	gap: 4px;
+	padding: 16px 12px 12px;
+}
+
+.nb-ui .nb-zk-group-head {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 0 4px 8px;
+}
+
+.nb-ui .nb-zk-group-text {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.nb-ui .nb-zk-group-title {
+	margin: 0;
+	font-size: 17px;
+	font-weight: 600;
+	line-height: 1.25;
+	color: var(--nb-text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-transform: none;
+}
+
+.nb-ui .nb-zk-group-meta {
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-zk-rows {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.nb-ui .nb-zk-item {
+	border: 1px solid transparent;
+	border-radius: var(--nb-radius-tile);
+	transition: background-color var(--nb-motion-fast) ease-out, border-color var(--nb-motion-fast) ease-out;
+}
+
+.nb-ui .nb-zk-item.is-selected {
+	border-color: var(--nb-accent);
+	background: var(--nb-tile);
+}
+
+.nb-ui .nb-zk-item-head,
+.nb-ui .nb-zk-item-head:hover,
+.nb-ui .nb-zk-item-head:active,
+.nb-ui .nb-zk-item-head:focus {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+	height: auto;
+	min-height: 60px;
+	padding: 8px 12px;
+	border: 0;
+	border-radius: var(--nb-radius-tile);
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text);
+	font: inherit;
+	text-align: start;
+	cursor: pointer;
+}
+
+.nb-ui .nb-zk-item:not(.is-selected) .nb-zk-item-head:hover {
+	background: var(--nb-tile);
+}
+
+.nb-ui .nb-zk-item-head:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: -2px;
+}
+
+.nb-ui .nb-zk-item-body {
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.nb-ui .nb-zk-item-text {
+	font-size: var(--nb-fs-row);
+	font-weight: 500;
+	line-height: 1.35;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui .nb-zk-item-meta {
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text-muted);
+	font-variant-numeric: tabular-nums;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui .nb-zk-item.is-done .nb-zk-item-text {
+	color: var(--nb-text-muted);
+	font-weight: 400;
+}
+
+.nb-ui .nb-zk-item.is-done .nb-zk-item-icon {
+	background: var(--nb-tile);
+	color: var(--nb-success);
+}
+
+.nb-ui .nb-zk-item-badges {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 0 0 auto;
+}
+
+.nb-ui .nb-zk-item-badges .nb-pill {
+	max-width: 200px;
+	font-size: 12px;
+}
+
+.nb-ui .nb-pill.is-accent {
+	background: var(--nb-accent-bg);
+	border-color: transparent;
+	color: var(--nb-accent);
+}
+
+.nb-ui .nb-zk-chevron {
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-zk-chevron svg {
+	width: 20px;
+	height: 20px;
+	transition: transform var(--nb-motion) var(--nb-ease);
+}
+
+.nb-ui .nb-zk-item.is-selected .nb-zk-chevron svg {
+	transform: rotate(90deg);
+}
+
+/* The open item: the ink on its paper next to the text and what can be done. */
+.nb-ui .nb-zk-panel {
+	display: grid;
+	grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+	gap: 16px;
+	padding: 4px 12px 14px;
+}
+
+.nb-ui.is-phone .nb-zk-panel {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.nb-ui .nb-zk-panel-side {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	min-width: 0;
+}
+
+/* The preview is a picture of a page: it stays paper white in every theme. */
+.nb-ui .nb-zk-preview-frame {
+	align-self: start;
+	padding: 4px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background: #fff;
+	overflow: hidden;
+}
+
+.nb-ui .nb-zk-preview {
+	display: block;
+	max-width: 100%;
+	max-height: 60vh;
+	margin: 0 auto;
+	object-fit: contain;
+	border-radius: 10px;
+}
+
+.nb-ui .nb-zk-text {
+	padding: 12px 14px;
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	font-size: var(--nb-fs-row);
+	line-height: 1.5;
+	white-space: pre-wrap;
+	user-select: text;
+	overflow-wrap: anywhere;
+}
+
+.nb-ui .nb-zk-item.is-selected .nb-zk-text {
+	background: var(--nb-panel);
+}
+
+.nb-ui .nb-zk-text.is-empty {
+	color: var(--nb-text-faint);
+}
+
+.nb-ui .nb-zk-covered {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 10px 12px;
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui .nb-zk-covered-line {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.nb-ui .nb-zk-covered-icon {
+	display: inline-flex;
+	color: var(--nb-accent);
+}
+
+.nb-ui .nb-zk-covered-icon svg {
+	width: 18px;
+	height: 18px;
+	stroke-width: 1.75;
+}
+
+.nb-ui .nb-zk-covered-text {
+	flex: 1 1 200px;
+	min-width: 0;
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-zk-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.nb-ui .nb-zk-actions .nb-pill-btn {
+	min-height: 40px;
+	padding: 0 16px;
+	font-size: var(--nb-fs-chip);
+}
+
+.nb-ui .nb-pill-btn.is-small {
+	min-height: 40px;
+	padding: 0 14px;
+	font-size: var(--nb-fs-chip);
+}
+
+/* Hover and press of the pill buttons here: Obsidian's own button:hover rule is more specific than the base pill. */
+.nb-ui .nb-zk-actions .nb-pill-btn:hover,
+.nb-ui .nb-zk-covered .nb-pill-btn:hover,
+.nb-ui .nb-zk-footer .nb-pill-btn:hover,
+.nb-ui .nb-zk-start:hover,
+.nb-ui .nb-zk-empty .nb-pill-btn:hover {
+	background: var(--nb-tile);
+	border-color: var(--nb-border-strong);
+	box-shadow: none;
+}
+
+.nb-ui .nb-zk-actions .nb-pill-btn.mod-cta:hover,
+.nb-ui .nb-zk-footer .nb-pill-btn.mod-cta:hover,
+.nb-ui .nb-zk-start.mod-cta:hover,
+.nb-ui .nb-zk-empty .nb-pill-btn.mod-cta:hover {
+	background: var(--nb-accent);
+	border-color: var(--nb-accent);
+	filter: brightness(1.08);
+}
+
+.nb-ui .nb-zk-actions .nb-pill-btn:focus-visible,
+.nb-ui .nb-zk-covered .nb-pill-btn:focus-visible,
+.nb-ui .nb-zk-footer .nb-pill-btn:focus-visible,
+.nb-ui .nb-zk-start:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+.nb-ui .nb-zk-empty {
+	margin-top: 4px;
+}
+
+/* The first scan: grey shapes where the rows will be (decoration; not controls). */
+.nb-ui .nb-zk-skeleton {
+	gap: 4px;
+}
+
+.nb-ui .nb-zk-skel-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-height: 60px;
+	padding: 8px 12px;
+}
+
+.nb-ui .nb-zk-skel-icon {
+	flex: 0 0 auto;
+	width: 40px;
+	height: 40px;
+	border-radius: var(--nb-radius-icon);
+	background: var(--nb-tile);
+}
+
+.nb-ui .nb-zk-skel-lines {
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.nb-ui .nb-zk-skel-line {
+	height: 12px;
+	width: 70%;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-tile);
+}
+
+.nb-ui .nb-zk-skel-line.is-short {
+	width: 32%;
+	height: 10px;
+}
+
+/* --- card dialogs (Make card, slip-box confirmation) --- */
+.nb-ui.notebook-card-modal {
+	width: min(560px, 94vw);
+	max-width: 94vw;
+	padding: 0;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-panel);
+	background: var(--nb-panel);
+	box-shadow: var(--nb-shadow-float);
+	color: var(--nb-text);
+	font-family: var(--font-interface);
+}
+
+.nb-ui.notebook-card-modal .modal-header {
+	display: none;
+}
+
+.nb-ui.notebook-card-modal {
+	display: flex;
+	flex-direction: column;
+	max-height: 90vh;
+}
+
+.nb-ui.notebook-card-modal .modal-content {
+	flex: 1 1 auto;
+	min-height: 0;
+	padding: 0;
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+
+.nb-ui.notebook-card-modal *,
+.nb-ui.notebook-card-list * {
+	box-sizing: border-box;
+}
+
+.nb-ui .nb-zk-dialog {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	padding: 24px;
+}
+
+.nb-ui .nb-zk-dialog-head {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding-right: 36px;
+}
+
+.nb-ui .nb-zk-dialog-titles {
+	min-width: 0;
+}
+
+.nb-ui .nb-zk-dialog-title {
+	margin: 0;
+	font-size: var(--nb-fs-section);
+	font-weight: 600;
+	line-height: 1.25;
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-zk-dialog-sub {
+	margin-top: 2px;
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-zk-confirm-body {
+	margin: 0;
+	font-size: var(--nb-fs-row);
+	line-height: 1.5;
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-zk-preview-frame.is-modal {
+	align-self: center;
+	max-width: 100%;
+}
+
+.nb-ui .nb-zk-preview-frame.is-modal .nb-zk-preview {
+	max-height: 30vh;
+}
+
+.nb-ui .nb-zk-form {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.nb-ui .nb-zk-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+}
+
+.nb-ui .nb-zk-label {
+	font-size: var(--nb-fs-chip);
+	font-weight: 600;
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-zk-field-hint {
+	font-size: var(--nb-fs-meta);
+	line-height: 1.4;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-zk-input,
+.nb-ui .nb-zk-input:hover {
+	width: 100%;
+	height: 44px;
+	padding: 0 14px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	box-shadow: none;
+	color: var(--nb-text);
+	font: inherit;
+	font-size: var(--nb-fs-row);
+}
+
+.nb-ui .nb-zk-input:focus,
+.nb-ui .nb-zk-input:focus-visible {
+	border-color: var(--nb-accent);
+	background: var(--nb-panel);
+	box-shadow: 0 0 0 2px var(--nb-accent-bg);
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 1px;
+}
+
+.nb-ui .nb-zk-types {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.nb-ui .nb-zk-type,
+.nb-ui .nb-zk-type:hover {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 6px;
+	height: auto;
+	min-height: 44px;
+	padding: 12px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	box-shadow: none;
+	color: var(--nb-text);
+	text-align: start;
+	cursor: pointer;
+	transition: background-color var(--nb-motion-fast) ease-out, border-color var(--nb-motion-fast) ease-out;
+}
+
+.nb-ui .nb-zk-type:hover {
+	border-color: var(--nb-text-faint);
+}
+
+.nb-ui .nb-zk-type.is-active,
+.nb-ui .nb-zk-type.is-active:hover {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui .nb-zk-type:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+.nb-ui .nb-zk-type-name {
+	font-size: var(--nb-fs-row);
+	font-weight: 600;
+}
+
+.nb-ui .nb-zk-type-hint {
+	font-size: var(--nb-fs-meta);
+	line-height: 1.35;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-zk-tag-preview {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.nb-ui .nb-zk-tag-preview.is-hidden {
+	display: none;
+}
+
+.nb-ui .nb-zk-tag {
+	max-width: 100%;
+	background: var(--nb-accent-bg);
+	border-color: transparent;
+	color: var(--nb-accent);
+}
+
+.nb-ui .nb-zk-footer {
+	position: sticky;
+	bottom: -24px;
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+	margin: 4px -24px -24px;
+	padding: 12px 24px 24px;
+	background: linear-gradient(to bottom, transparent, var(--nb-panel) 28%);
+}
+
+/* --- card list (a FuzzySuggestModal: Obsidian's prompt) --- */
+.nb-ui.notebook-card-list {
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-panel);
+	background: var(--nb-panel);
+	box-shadow: var(--nb-shadow-float);
+	color: var(--nb-text);
+	font-family: var(--font-interface);
+	overflow: hidden;
+}
+
+.nb-ui.notebook-card-list .prompt-input,
+.nb-ui.notebook-card-list .prompt-input:focus {
+	height: 48px;
+	padding: 0 16px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	box-shadow: none;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+}
+
+.nb-ui.notebook-card-list .prompt-input:focus {
+	border-color: var(--nb-accent);
+}
+
+.nb-ui.notebook-card-list .prompt-results {
+	padding: 8px;
+}
+
+.nb-ui.notebook-card-list .prompt-no-results {
+	padding: 16px;
+	color: var(--nb-text-muted);
+	text-align: center;
+}
+
+.nb-ui.notebook-card-list .suggestion-item.nb-zk-card-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-height: 56px;
+	padding: 8px 12px;
+	border-radius: 12px;
+	color: var(--nb-text);
+}
+
+.nb-ui.notebook-card-list .suggestion-item.nb-zk-card-row.is-selected,
+.nb-ui.notebook-card-list .suggestion-item.nb-zk-card-row:hover {
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui .nb-zk-card-id {
+	flex: 0 0 auto;
+	min-width: 44px;
+	padding: 4px 10px;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+	font-size: var(--nb-fs-chip);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+}
+
+.nb-ui .nb-zk-card-row.is-orphan .nb-zk-card-id {
+	background: var(--nb-tile);
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-zk-card-text {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.nb-ui .nb-zk-card-title {
+	font-size: var(--nb-fs-row);
+	font-weight: 500;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui .nb-zk-card-where {
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui .nb-zk-card-where.notebook-zettel-list-orphan {
+	color: var(--text-warning);
+}
+
+/* Phone: the badge of an item wraps under its text; the card types stack as rows; the dialog fills the width. */
+.nb-ui.is-phone .nb-zk-item-head {
+	display: grid;
+	grid-template-columns: 40px minmax(0, 1fr) auto;
+	column-gap: 12px;
+	row-gap: 6px;
+}
+
+.nb-ui.is-phone .nb-zk-item-icon {
+	grid-column: 1;
+	grid-row: 1;
+}
+
+.nb-ui.is-phone .nb-zk-item-body {
+	grid-column: 2;
+	grid-row: 1;
+}
+
+.nb-ui.is-phone .nb-zk-chevron {
+	grid-column: 3;
+	grid-row: 1;
+}
+
+.nb-ui.is-phone .nb-zk-item-badges {
+	grid-column: 2 / 4;
+	grid-row: 2;
+}
+
+.nb-ui .nb-zk-item-badges:empty {
+	display: none;
+}
+
+.nb-ui.is-phone .nb-zk-toggle {
+	margin-left: 0;
+}
+
+@media (max-width: 620px) {
+	.nb-ui .nb-zk-dialog {
+		padding: 20px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+	}
+
+	.nb-ui .nb-zk-type {
+		align-items: center;
+		padding: 10px 6px;
+		text-align: center;
+	}
+
+	.nb-ui .nb-zk-type-hint {
+		display: none;
+	}
+
+	.nb-ui .nb-zk-footer {
+		bottom: -16px;
+		margin: 4px -16px -16px;
+		padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+	}
+
+	.nb-ui .nb-zk-footer > button {
+		flex: 1 1 0;
+	}
+}
+
+@media (pointer: coarse) {
+	.nb-ui .nb-zk-item-head {
+		min-height: 64px;
+	}
+
+	.nb-ui .nb-zk-input {
+		height: 48px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.nb-ui .nb-zk-item,
+	.nb-ui .nb-zk-type,
+	.nb-ui .nb-zk-chevron svg {
+		transition: none;
+	}
+}
+
+/* ===== 0.13 ds-notebook ===== */
+/* The notebook's editing chrome (toolbar, contextual bar, sheets and popovers, the radial dial, tabs, banners, the status
+   bar item, the page-operations menu) on the design system: DESIGN.md §2 tokens, §2.5 radii and elevation, §7 motion and
+   targets. Floating "glass" panels use the panel token at high alpha with a light blur; the blur and the glows are
+   decoration and go away with reduced motion. Behaviour and layout budgets are unchanged (ui/layout.ts counts buttons,
+   not decoration). Every rule is scoped under the view root (above Obsidian's own button rules, specificity 0,1,1), the
+   status bar item and the menu carry .nb-ui. tests/styles.test.ts keeps the scope. */
+.workspace-leaf-content .view-content.notebook-view {
+	--nb-glass: var(--nb-panel);
+	--nb-glass: color-mix(in srgb, var(--nb-panel) 88%, transparent);
+	--nb-glass-strong: var(--nb-panel);
+	--nb-glass-strong: color-mix(in srgb, var(--nb-panel) 95%, transparent);
+	--nb-glass-blur: blur(16px) saturate(1.15);
+	--nb-tint-warn: color-mix(in srgb, var(--nb-star) 18%, transparent);
+	--nb-tint-danger: color-mix(in srgb, var(--nb-danger) 16%, transparent);
+}
+
+/* Buttons that Obsidian would style as grey pills (button:not(.clickable-icon), 0,1,1): neutral inside the view. */
+.workspace-leaf-content .view-content.notebook-view :is(.notebook-tab, .notebook-page-indicator, .notebook-menu-item, .notebook-chip-choice, .notebook-heavy-actions button, .notebook-practice-button) {
+	height: auto;
+	box-shadow: none;
+	font-family: inherit;
+	line-height: 1.25;
+	white-space: nowrap;
+}
+
+/* --- primary toolbar: a quiet dock; tools and history sit in capsules --- */
+.workspace-leaf-content .view-content.notebook-view .notebook-toolbar {
+	gap: 6px 8px;
+	padding: 6px;
+	border-bottom: 1px solid var(--nb-border);
+	background: var(--nb-bg-elevated);
+	box-shadow: 0 10px 22px -16px rgba(0, 0, 0, 0.6);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-toolbar-divider {
+	display: none;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-tool-group,
+.workspace-leaf-content .view-content.notebook-view .notebook-toolbar-actions > .notebook-toolbar-group,
+.workspace-leaf-content .view-content.notebook-view .notebook-quick {
+	gap: 2px;
+	padding: 2px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-panel);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-quick {
+	margin-left: 4px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-tool {
+	border-radius: var(--nb-radius-icon);
+	transition: background-color var(--nb-motion-fast) var(--nb-ease), color var(--nb-motion-fast) var(--nb-ease), transform var(--nb-motion-fast) var(--nb-ease), box-shadow var(--nb-motion-fast) var(--nb-ease);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-tool:active {
+	transform: scale(0.95);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-tool.is-active {
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+	box-shadow: inset 0 0 0 1px var(--nb-accent-strong);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-tool-button.is-active::before {
+	bottom: 4px;
+	width: 12px;
+	height: 3px;
+	margin-left: -6px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-tool:focus-visible,
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item:focus-visible,
+.workspace-leaf-content .view-content.notebook-view .notebook-page-indicator:focus-visible,
+.workspace-leaf-content .view-content.notebook-view .notebook-chip-choice:focus-visible,
+.workspace-leaf-content .view-content.notebook-view .notebook-tab:focus-visible,
+.workspace-leaf-content .view-content.notebook-view .notebook-practice-button:focus-visible,
+.workspace-leaf-content .view-content.notebook-view .notebook-heavy-actions button:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 1px;
+}
+
+/* The pen indicator and the buttons at the right end of the bar. */
+.workspace-leaf-content .view-content.notebook-view .notebook-chip {
+	background: var(--nb-panel);
+	box-shadow: inset 0 0 0 1px var(--nb-border);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-chip.is-active {
+	background: var(--nb-accent-bg);
+	box-shadow: inset 0 0 0 1px var(--nb-accent-strong);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-chip::before {
+	border-color: var(--nb-border-strong);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-page-indicator {
+	min-height: var(--nb-target, 44px);
+	padding: 0 14px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background-color: var(--nb-panel);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-page-indicator:hover {
+	background-color: var(--nb-tile);
+	color: var(--nb-text);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-page-indicator.is-active {
+	border-color: var(--nb-accent-strong);
+	background-color: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-more-button {
+	border: 1px solid var(--nb-border);
+	background: var(--nb-panel);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-more-button.is-active {
+	border-color: var(--nb-accent-strong);
+	background: var(--nb-accent-bg);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-readonly-chip {
+	border: 1px solid var(--nb-accent-strong);
+}
+
+/* Save state: the dot is the state; a soft halo makes it readable at a glance. */
+.workspace-leaf-content .view-content.notebook-view .notebook-status {
+	font-variant-numeric: tabular-nums;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-status-dot {
+	background: var(--nb-text-faint);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-status[data-kind="ok"] .notebook-status-dot {
+	background: var(--nb-success);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--nb-success) 22%, transparent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-status[data-kind="pending"] .notebook-status-dot {
+	background: var(--nb-star);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--nb-star) 24%, transparent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-status[data-kind="error"] {
+	color: var(--nb-danger);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-status[data-kind="error"] .notebook-status-dot {
+	background: var(--nb-danger);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--nb-danger) 24%, transparent);
+}
+
+/* --- popovers under the bar (tool options) and the action sheets: floating glass panels --- */
+.workspace-leaf-content .view-content.notebook-view .notebook-popover {
+	gap: 10px;
+	padding: 12px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-panel);
+	background: var(--nb-glass-strong);
+	-webkit-backdrop-filter: var(--nb-glass-blur);
+	backdrop-filter: var(--nb-glass-blur);
+	box-shadow: var(--nb-shadow-float);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-segmented {
+	padding: 3px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-tile);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-segmented > .notebook-tool {
+	border-radius: var(--nb-radius-pill);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-segmented > .notebook-tool.is-active {
+	background: var(--nb-accent-bg);
+	box-shadow: inset 0 0 0 1px var(--nb-accent-strong);
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-sheet {
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-panel);
+	background: var(--nb-glass-strong);
+	-webkit-backdrop-filter: var(--nb-glass-blur);
+	backdrop-filter: var(--nb-glass-blur);
+	box-shadow: var(--nb-shadow-float);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-sheet.is-bottom {
+	border-radius: 20px 20px 0 0;
+	border-bottom: 0;
+	box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.3);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-sheet-grabber {
+	width: 40px;
+	background: var(--nb-border-strong);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-sheet-head {
+	padding: 10px 10px 0 18px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-sheet-title {
+	font-size: 17px;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-sheet-search {
+	min-height: var(--nb-target, 44px);
+	border: 1px solid var(--nb-border);
+	background: var(--nb-tile);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-sheet-search:focus-within {
+	border-color: var(--nb-accent);
+	box-shadow: 0 0 0 2px var(--nb-accent-bg);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-sheet-search input {
+	height: 40px;
+	color: var(--nb-text);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-sheet-section + .notebook-sheet-section {
+	margin-top: 6px;
+	padding-top: 4px;
+	border-top-color: var(--nb-border);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-sheet-section-title {
+	font-size: var(--nb-fs-label);
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	color: var(--nb-text-faint);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-sheet-empty {
+	color: var(--nb-text-muted);
+}
+
+/* Rows: an icon square (a quiet tile; accent when on, danger tint for a destructive one), the label, an optional switch. */
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item {
+	min-height: 48px;
+	gap: 12px;
+	padding: 0 10px 0 8px;
+	border-radius: var(--nb-radius-tile);
+	font-size: var(--nb-fs-row);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item.is-danger {
+	color: var(--nb-danger);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-icon {
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	border-radius: var(--nb-radius-icon);
+	background: var(--nb-tile);
+	color: var(--nb-text-muted);
+	transition: background-color var(--nb-motion-fast) var(--nb-ease), color var(--nb-motion-fast) var(--nb-ease);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-icon .svg-icon {
+	width: 18px;
+	height: 18px;
+	stroke-width: 1.75;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item:hover .notebook-menu-icon {
+	color: var(--nb-text);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item.is-active .notebook-menu-icon,
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item.is-checked .notebook-menu-icon {
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item.is-danger .notebook-menu-icon {
+	background: var(--nb-tint-danger);
+	color: var(--nb-danger);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-switch {
+	width: 40px;
+	height: 24px;
+	background: var(--nb-border-strong);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-switch::after {
+	width: 20px;
+	height: 20px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item.is-checked .notebook-switch {
+	background: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item.is-checked .notebook-switch::after {
+	transform: translateX(16px);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-chips {
+	padding-left: 46px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-chip-choice {
+	min-height: 40px;
+	padding: 0 16px;
+	border: 1px solid var(--nb-border-strong);
+	background-color: transparent;
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-chip-choice.is-active {
+	border-color: var(--nb-accent);
+	background-color: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+/* --- contextual bar: a floating glass pill; its label is an icon square and a name --- */
+.workspace-leaf-content .view-content.notebook-view .notebook-context-main,
+.workspace-leaf-content .view-content.notebook-view .notebook-context-second,
+.workspace-leaf-content .view-content.notebook-view .notebook-selection-styles > .notebook-toolbar-group {
+	gap: 2px;
+	padding: 4px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-glass);
+	-webkit-backdrop-filter: var(--nb-glass-blur);
+	backdrop-filter: var(--nb-glass-blur);
+	box-shadow: var(--nb-shadow-float);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-context-main > .notebook-tool.is-danger {
+	color: var(--nb-danger);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-context-main > .notebook-tool.is-danger:hover {
+	background: var(--nb-tint-danger);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-context-label {
+	gap: 8px;
+	padding: 0 12px 0 4px;
+	margin-right: 4px;
+	border-right: 1px solid var(--nb-border);
+	font-size: var(--nb-fs-chip);
+	font-weight: 600;
+	color: var(--nb-text);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-context-label-icon {
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: var(--nb-radius-icon);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-context-label-icon .svg-icon {
+	width: 18px;
+	height: 18px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-context-chip {
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+/* --- the radial dial: a navy disc with a hairline ring and an accent halo, the same dark in light and dark --- */
+.workspace-leaf-content .view-content.notebook-view .notebook-radial {
+	--nb-dial-bg: #0f1522;
+	--nb-dial-bg-2: #1b2539;
+	--nb-dial-ring: rgba(255, 255, 255, 0.1);
+	--nb-dial-fg: #f4f6fb;
+	--nb-dial-muted: rgba(244, 246, 251, 0.68);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-dial {
+	background: radial-gradient(circle at 50% 30%, var(--nb-dial-bg-2) 0%, var(--nb-dial-bg) 68%);
+	box-shadow: var(--nb-shadow-3), 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 40px -8px var(--nb-accent-bg), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-dial-item.is-hover {
+	background: var(--nb-accent-strong);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-dial-item.is-active {
+	box-shadow: 0 0 0 2px var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-dial-item.is-case.is-active {
+	background: var(--nb-accent-bg);
+	box-shadow: inset 0 0 0 1.5px var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-dial-item.is-raised {
+	background: var(--nb-dial-fg);
+	color: var(--nb-dial-bg);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-dial-knob {
+	stroke: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-dial-step.is-on {
+	fill: var(--nb-accent);
+}
+
+/* --- tabs of the open notebooks: pills in a quiet strip, the open one tinted --- */
+.workspace-leaf-content .view-content.notebook-view .notebook-tabs {
+	gap: 6px;
+	padding: 6px 8px;
+	background: var(--nb-bg-elevated);
+	border-bottom: 1px solid var(--nb-border);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-tab {
+	min-height: 36px;
+	padding: 0 14px;
+	border: 1px solid transparent;
+	border-radius: var(--nb-radius-pill);
+	background-color: transparent;
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+	color: var(--nb-text-muted);
+	transition: background-color var(--nb-motion-fast) var(--nb-ease), color var(--nb-motion-fast) var(--nb-ease);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-tab:hover {
+	background-color: var(--nb-hover);
+	color: var(--nb-text);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-tab.is-active {
+	border-color: var(--nb-accent-strong);
+	background-color: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+/* --- banners: the heavy-page warning and the practice strip are floating glass cards with an icon square --- */
+.workspace-leaf-content .view-content.notebook-view .notebook-heavy,
+.workspace-leaf-content .view-content.notebook-view .notebook-practice-banner {
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-panel);
+	background: var(--nb-glass-strong);
+	-webkit-backdrop-filter: var(--nb-glass-blur);
+	backdrop-filter: var(--nb-glass-blur);
+	box-shadow: var(--nb-shadow-float);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-meta);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-heavy {
+	max-width: 600px;
+	align-items: center;
+	gap: 8px 12px;
+	padding: 8px 8px 8px 10px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-heavy-text {
+	flex: 1 1 200px;
+	color: var(--nb-text-muted);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-heavy-icon,
+.workspace-leaf-content .view-content.notebook-view .notebook-practice-icon {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: var(--nb-radius-icon);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-heavy-icon {
+	background: var(--nb-tint-warn);
+	color: var(--nb-star);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-heavy-icon .svg-icon,
+.workspace-leaf-content .view-content.notebook-view .notebook-practice-icon .svg-icon {
+	width: 18px;
+	height: 18px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-practice-banner {
+	gap: 6px 8px;
+	padding: 6px 8px 6px 6px;
+	border-radius: var(--nb-radius-tile);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-practice-title {
+	padding: 0 4px;
+	font-size: var(--nb-fs-row);
+	font-weight: 600;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-practice-note {
+	color: var(--nb-text-muted);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-heavy-actions button,
+.workspace-leaf-content .view-content.notebook-view .notebook-practice-button {
+	min-height: 40px;
+	padding: 0 16px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background-color: var(--nb-tile);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+	transition: background-color var(--nb-motion-fast) var(--nb-ease), border-color var(--nb-motion-fast) var(--nb-ease);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-heavy-actions button:hover,
+.workspace-leaf-content .view-content.notebook-view .notebook-practice-button:hover {
+	background-color: var(--nb-hover);
+	border-color: var(--nb-border-strong);
+	color: var(--nb-text);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-heavy-actions button.mod-cta {
+	border-color: transparent;
+	background-color: var(--nb-accent);
+	color: #ffffff;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-heavy-actions button.mod-cta:hover {
+	background-color: var(--nb-accent);
+	filter: brightness(1.08);
+	color: #ffffff;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-practice-peek.is-held,
+.workspace-leaf-content .view-content.notebook-view .notebook-practice-timer.is-running {
+	border-color: transparent;
+	background-color: var(--nb-accent);
+	color: #ffffff;
+}
+
+/* --- Obsidian's status bar item (desktop) --- */
+.nb-ui.notebook-statusbar {
+	padding: 0 8px;
+	border-radius: 8px;
+	font-variant-numeric: tabular-nums;
+	transition: background-color var(--nb-motion-fast) var(--nb-ease);
+}
+
+.nb-ui.notebook-statusbar:hover {
+	background: var(--nb-hover);
+}
+
+.nb-ui.notebook-statusbar:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: -2px;
+}
+
+.nb-ui.notebook-statusbar .notebook-statusbar-dot {
+	background: var(--nb-text-faint);
+}
+
+.nb-ui.notebook-statusbar .notebook-statusbar-dot[data-kind="ok"] {
+	background: var(--nb-success);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--nb-success) 22%, transparent);
+}
+
+.nb-ui.notebook-statusbar .notebook-statusbar-dot[data-kind="pending"] {
+	background: var(--nb-star);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--nb-star) 24%, transparent);
+}
+
+.nb-ui.notebook-statusbar .notebook-statusbar-dot[data-kind="error"] {
+	background: var(--nb-danger);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--nb-danger) 24%, transparent);
+}
+
+/* --- the page-operations menu (Obsidian's Menu, tagged by view/page-ops-menu) --- */
+.nb-ui.nb-menu {
+	padding: 6px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-panel);
+	background: var(--nb-panel);
+	box-shadow: var(--nb-shadow-float);
+}
+
+.nb-ui.nb-menu .menu-item {
+	min-height: 40px;
+	border-radius: var(--nb-radius-s);
+}
+
+.nb-ui.nb-menu .menu-item.selected,
+.nb-ui.nb-menu .menu-item:hover {
+	background: var(--nb-hover);
+}
+
+.nb-ui.nb-menu .menu-item-icon {
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.nb-menu .menu-item.mod-warning,
+.nb-ui.nb-menu .menu-item.mod-warning .menu-item-icon {
+	color: var(--nb-danger);
+}
+
+.nb-ui.nb-menu .menu-separator {
+	margin: 4px 6px;
+	border-color: var(--nb-border);
+}
+
+/* A long label wraps inside its row instead of pushing the icon square out of it. */
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-label {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item {
+	height: auto;
+	padding-block: 4px;
+}
+
+/* Touch: every control of the chrome is at least 44 px. */
+@media (pointer: coarse) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-sheet-close {
+		min-width: 44px;
+		min-height: 44px;
+	}
+
+	.workspace-leaf-content .view-content.notebook-view .notebook-tab {
+		min-height: 44px;
+	}
+
+	.workspace-leaf-content .view-content.notebook-view .notebook-heavy-actions button,
+	.workspace-leaf-content .view-content.notebook-view .notebook-practice-button,
+	.workspace-leaf-content .view-content.notebook-view .notebook-chip-choice {
+		min-height: 44px;
+	}
+
+	.nb-ui.nb-menu .menu-item {
+		min-height: 48px;
+	}
+}
+
+/* A phone: the sheet is full width (bottom sheet); the banners lose their icon squares' left padding. */
+@media (max-width: 480px) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-page-indicator {
+		padding: 0 10px;
+	}
+
+	.workspace-leaf-content .view-content.notebook-view .notebook-heavy {
+		padding: 8px;
+	}
+
+	.workspace-leaf-content .view-content.notebook-view .notebook-context-label {
+		padding: 0 6px 0 2px;
+	}
+}
+
+/* Reduced motion and effects: no blur, no glows, no transitions or entrance animations. */
+@media (prefers-reduced-motion: reduce) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-popover,
+	.workspace-leaf-content .view-content.notebook-view .notebook-sheet,
+	.workspace-leaf-content .view-content.notebook-view .notebook-context-main,
+	.workspace-leaf-content .view-content.notebook-view .notebook-context-second,
+	.workspace-leaf-content .view-content.notebook-view .notebook-selection-styles > .notebook-toolbar-group,
+	.workspace-leaf-content .view-content.notebook-view .notebook-heavy,
+	.workspace-leaf-content .view-content.notebook-view .notebook-practice-banner {
+		-webkit-backdrop-filter: none;
+		backdrop-filter: none;
+	}
+
+	.workspace-leaf-content .view-content.notebook-view .notebook-dial {
+		box-shadow: var(--nb-shadow-3), 0 0 0 1px rgba(255, 255, 255, 0.08);
+	}
+
+	.workspace-leaf-content .view-content.notebook-view .notebook-status[data-kind] .notebook-status-dot,
+	.nb-ui.notebook-statusbar .notebook-statusbar-dot[data-kind] {
+		box-shadow: none;
+	}
+
+	.workspace-leaf-content .view-content.notebook-view .notebook-tool,
+	.workspace-leaf-content .view-content.notebook-view .notebook-tab,
+	.workspace-leaf-content .view-content.notebook-view .notebook-menu-icon,
+	.workspace-leaf-content .view-content.notebook-view .notebook-heavy-actions button,
+	.workspace-leaf-content .view-content.notebook-view .notebook-practice-button,
+	.nb-ui.notebook-statusbar {
+		transition: none;
+	}
+
+	.workspace-leaf-content .view-content.notebook-view .notebook-tool:active {
+		transform: none;
+	}
+}
+
+/* ===== 0.13 ds-modals ===== */
+/* Every dialog, prompt and floating card of the plugin on the design system (DESIGN.md §3 "Creation dialog", §4 "Every other
+   surface"). The shell is src/ui/components/modal-shell.ts: a header (icon square, title, optional line, close, a faint band of
+   generated line art), a scrolling body and a footer with a secondary and a primary button. Every rule starts with .nb-ui
+   (0,2,0 or more) or is a .modal.nb-ui rule, so it beats Obsidian's own button, input and select rules (tests/styles.test.ts). */
+
+.nb-ui .notebook-hidden {
+	display: none;
+}
+
+/* --- the dialog frame --- */
+.modal.nb-modal.nb-ui {
+	display: flex;
+	flex-direction: column;
+	max-height: calc(100vh - 48px);
+	padding: 0;
+	overflow: hidden;
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-panel);
+	box-shadow: var(--nb-shadow-float);
+	font-family: var(--font-interface);
+}
+
+.modal.nb-modal.nb-ui.is-narrow {
+	width: min(440px, calc(100vw - 32px));
+}
+
+.modal.nb-modal.nb-ui.is-medium {
+	width: min(560px, calc(100vw - 32px));
+}
+
+.modal.nb-modal.nb-ui.is-wide {
+	width: min(720px, calc(100vw - 32px));
+}
+
+/* Obsidian's own title bar and × give way to the shell's header. */
+.modal.nb-modal.nb-ui > .modal-close-button,
+.modal.nb-modal.nb-ui > .modal-header,
+.modal.nb-modal.nb-ui > .modal-title {
+	display: none;
+}
+
+.modal.nb-modal.nb-ui .modal-content,
+.modal.nb-modal.nb-ui .nb-modal-content {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+	margin: 0;
+	padding: 0;
+}
+
+.modal.nb-modal.nb-ui,
+.modal.nb-modal.nb-ui * {
+	box-sizing: border-box;
+}
+
+/* --- header --- */
+.nb-ui .nb-modal-head {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	flex: 0 0 auto;
+	padding: 16px 20px;
+	border-bottom: 1px solid var(--nb-border);
+	overflow: hidden;
+}
+
+/* Decoration: faint line art of the header's colour behind it. */
+.nb-ui .nb-modal-band {
+	position: absolute;
+	inset: 0;
+	background-image: var(--nb-modal-band);
+	background-size: cover;
+	background-position: right center;
+	opacity: 0.22;
+	pointer-events: none;
+	mask-image: linear-gradient(90deg, transparent 20%, #000 80%);
+}
+
+.nb-ui .nb-modal-head > :not(.nb-modal-band) {
+	position: relative;
+}
+
+.nb-ui .nb-modal-head .nb-modal-icon {
+	flex: 0 0 auto;
+}
+
+.nb-ui .nb-modal-headtext {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.nb-ui .nb-modal-title {
+	font-size: var(--nb-fs-section);
+	font-weight: 600;
+	line-height: 1.25;
+	color: var(--nb-text);
+	overflow-wrap: anywhere;
+}
+
+.nb-ui .nb-modal-subtitle {
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text-muted);
+	overflow-wrap: anywhere;
+}
+
+.nb-ui .nb-modal-close,
+.nb-ui .nb-card-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	width: var(--nb-target);
+	height: var(--nb-target);
+	min-width: var(--nb-target);
+	padding: 0;
+	border: 1px solid var(--nb-border);
+	border-radius: 50%;
+	background: var(--nb-tile);
+	box-shadow: none;
+	color: var(--nb-text-muted);
+	cursor: pointer;
+	transition: background-color var(--nb-motion-fast) ease-out, color var(--nb-motion-fast) ease-out;
+}
+
+.nb-ui .nb-modal-close:hover,
+.nb-ui .nb-card-btn:hover {
+	background: var(--nb-accent-bg);
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-modal-close svg,
+.nb-ui .nb-card-btn svg {
+	width: 18px;
+	height: 18px;
+	stroke-width: 1.75;
+}
+
+/* --- body and footer --- */
+.nb-ui .nb-modal-body {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 12px;
+	min-height: 0;
+	padding: 20px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+.nb-ui .nb-modal-foot {
+	display: flex;
+	flex: 0 0 auto;
+	justify-content: flex-end;
+	gap: 12px;
+	padding: 16px 20px;
+	border-top: 1px solid var(--nb-border);
+}
+
+.nb-ui .nb-modal-foot.is-empty {
+	display: none;
+}
+
+.nb-ui .nb-modal-text {
+	margin: 0;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+	line-height: 1.5;
+}
+
+/* --- buttons --- */
+.nb-ui .nb-modal-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: var(--nb-target);
+	padding: 0 18px;
+	border: 1px solid transparent;
+	border-radius: var(--nb-radius-tile);
+	box-shadow: none;
+	font-family: inherit;
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background-color var(--nb-motion-fast) ease-out, border-color var(--nb-motion-fast) ease-out, opacity var(--nb-motion-fast) ease-out;
+}
+
+.nb-ui .nb-modal-btn.is-secondary {
+	border-color: var(--nb-border-strong);
+	background: var(--nb-tile);
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-modal-btn.is-secondary:hover {
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui .nb-modal-btn.is-primary {
+	background: var(--nb-accent);
+	color: #ffffff;
+}
+
+.nb-ui .nb-modal-btn.is-primary:hover {
+	opacity: 0.9;
+}
+
+.nb-ui .nb-modal-btn.is-danger {
+	background: var(--nb-danger);
+	color: #ffffff;
+}
+
+.nb-ui .nb-modal-btn.is-danger:hover {
+	opacity: 0.9;
+}
+
+.nb-ui .nb-modal-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.nb-ui .nb-modal-btn.is-icon {
+	width: var(--nb-target);
+	padding: 0;
+}
+
+.nb-ui .nb-modal-btn svg {
+	width: 18px;
+	height: 18px;
+	stroke-width: 1.75;
+}
+
+.nb-ui .nb-modal-btn-icon {
+	display: inline-flex;
+}
+
+.nb-ui :is(button, input, select, textarea, [role="button"], [role="textbox"]):focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+/* --- Obsidian settings rows inside a dialog body --- */
+.nb-ui .nb-modal-body .setting-item {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px 16px;
+	margin: 0;
+	padding: 4px 0;
+	border: 0;
+}
+
+.nb-ui .nb-modal-body .setting-item-info {
+	flex: 1 1 200px;
+	min-width: 0;
+}
+
+.nb-ui .nb-modal-body .setting-item-name {
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+	font-weight: 500;
+}
+
+.nb-ui .nb-modal-body .setting-item-description {
+	margin-top: 2px;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui .nb-modal-body .setting-item-control {
+	display: flex;
+	flex: 0 1 auto;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+}
+
+.nb-ui .nb-modal-body .setting-item-control :is(input[type="text"], input[type="number"], input[type="date"], input[type="search"], select) {
+	min-height: 44px;
+	max-width: 100%;
+	padding: 0 14px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background-color: var(--nb-bg);
+	box-shadow: none;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+	font-family: inherit;
+}
+
+.nb-ui .nb-modal-body .setting-item-control select {
+	padding-right: 34px;
+}
+
+.nb-ui .nb-modal-body .setting-item-control :is(input[type="text"], input[type="number"], input[type="date"]):disabled,
+.nb-ui .nb-modal-body .setting-item-control select:disabled {
+	opacity: 0.5;
+}
+
+.nb-ui .nb-modal-body .checkbox-container {
+	background-color: var(--nb-border-strong);
+	box-shadow: none;
+}
+
+.nb-ui .nb-modal-body .checkbox-container.is-enabled {
+	background-color: var(--nb-accent);
+}
+
+/* --- fields, notes, rows --- */
+.nb-ui .nb-modal-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+}
+
+.nb-ui .nb-modal-label {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	font-weight: 600;
+}
+
+.nb-ui .nb-modal-input {
+	width: 100%;
+	min-height: 44px;
+	padding: 10px 14px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-bg);
+	box-shadow: none;
+	color: var(--nb-text);
+	font-family: inherit;
+	font-size: var(--nb-fs-row);
+}
+
+.nb-ui .nb-modal-inputrow {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.nb-ui .nb-modal-inputrow .nb-modal-input {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.nb-ui .nb-modal-inputrow > span {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui .nb-modal-check {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 44px;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+	cursor: pointer;
+}
+
+.nb-ui .nb-modal-check input[type="checkbox"] {
+	width: 20px;
+	height: 20px;
+	margin: 0;
+	accent-color: var(--nb-accent);
+}
+
+.nb-ui .nb-modal-checks {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0 20px;
+}
+
+.nb-ui .nb-modal-note {
+	margin: 0;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	line-height: 1.5;
+}
+
+.nb-ui .nb-modal-error {
+	margin: 0;
+	color: var(--nb-danger);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui .nb-modal-error:empty {
+	display: none;
+}
+
+.nb-ui .nb-modal-section {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.nb-ui .nb-modal-section-title {
+	color: var(--nb-text-faint);
+	font-size: var(--nb-fs-label);
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.nb-ui .nb-modal-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.nb-ui .nb-modal-row {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 12px;
+	width: 100%;
+	min-height: 52px;
+	margin: 0;
+	padding: 8px 14px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	box-shadow: none;
+	color: var(--nb-text);
+	text-align: left;
+	cursor: pointer;
+	transition: background-color var(--nb-motion-fast) ease-out, border-color var(--nb-motion-fast) ease-out;
+}
+
+.nb-ui .nb-modal-row:hover {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui .nb-modal-row-text {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.nb-ui .nb-modal-row-label {
+	font-size: var(--nb-fs-row);
+	font-weight: 500;
+	overflow-wrap: anywhere;
+}
+
+.nb-ui .nb-modal-row-detail {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui .nb-modal-row-count {
+	min-width: 28px;
+	padding: 2px 10px;
+	border-radius: 999px;
+	background: var(--nb-accent-bg);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+}
+
+.nb-ui .nb-modal-row-chevron {
+	display: inline-flex;
+	color: var(--nb-text-faint);
+}
+
+.nb-ui .nb-modal-row-chevron svg {
+	width: 18px;
+	height: 18px;
+}
+
+.nb-ui .nb-modal-dot {
+	flex: 0 0 auto;
+	width: 18px;
+	height: 18px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: 50%;
+	background: var(--nb-c, var(--nb-text-muted));
+}
+
+/* --- prompts (Go to page, Find a page, Open a notebook) --- */
+.modal.nb-prompt.nb-ui {
+	width: min(720px, calc(100vw - 32px));
+	max-height: min(640px, calc(100vh - 48px));
+	padding: 0;
+	overflow: hidden;
+}
+
+.nb-ui .nb-modal-head.is-prompt {
+	padding: 12px 16px;
+	border-bottom: 0;
+}
+
+.nb-ui .nb-modal-head.is-prompt .nb-modal-title {
+	font-size: 17px;
+}
+
+.modal.nb-prompt.nb-ui .prompt-input-container {
+	padding: 0 16px 12px;
+}
+
+.modal.nb-prompt.nb-ui .prompt-input {
+	width: 100%;
+	min-height: 48px;
+	padding: 0 16px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: 999px;
+	background: var(--nb-bg);
+	box-shadow: none;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+}
+
+.modal.nb-prompt.nb-ui .prompt-results {
+	padding: 4px 8px 8px;
+	border-top: 1px solid var(--nb-border);
+}
+
+.modal.nb-prompt.nb-ui .suggestion-item {
+	min-height: 48px;
+	padding: 8px 12px;
+	border-radius: var(--nb-radius-tile);
+	color: var(--nb-text);
+}
+
+.modal.nb-prompt.nb-ui .suggestion-item.is-selected,
+.modal.nb-prompt.nb-ui .suggestion-item:hover {
+	background: var(--nb-accent-bg);
+}
+
+.modal.nb-prompt.nb-ui .prompt-instructions {
+	padding: 8px 16px;
+	border-top: 1px solid var(--nb-border);
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui .notebook-picker-path,
+.nb-ui .notebook-quicknav-detail,
+.nb-ui .notebook-quicknav-page,
+.nb-ui .notebook-goto-num {
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .notebook-picker-new {
+	color: var(--nb-accent);
+	font-weight: 600;
+}
+
+.nb-ui .notebook-quicknav-thumb {
+	border: 1px solid var(--nb-border);
+	border-radius: 6px;
+	background: var(--nb-tile);
+}
+
+.nb-ui .notebook-quicknav-status:not(:empty) {
+	padding: 4px 16px;
+	color: var(--nb-text-muted);
+}
+
+/* --- specific dialogs --- */
+.nb-ui .notebook-paste-box {
+	min-height: 112px;
+	padding: 16px;
+	border: 2px dashed var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .notebook-pentest-area {
+	border: 2px dashed var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .notebook-pentest-note {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui .notebook-pentest-summary {
+	color: var(--nb-text);
+	font-weight: 600;
+}
+
+.nb-ui .notebook-pentest-log {
+	padding: 12px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-bg);
+	color: var(--nb-text);
+}
+
+.nb-ui .notebook-practice-filters {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.nb-ui .notebook-practice-filter-title {
+	color: var(--nb-text-faint);
+	font-size: var(--nb-fs-label);
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.nb-ui .notebook-practice-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.nb-ui .notebook-practice-chip {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-height: var(--nb-target);
+	padding: 0 14px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: 999px;
+	background: var(--nb-tile);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+	cursor: pointer;
+}
+
+.nb-ui .notebook-practice-chip.is-on {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui .notebook-practice-chip:focus-within {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+/* The chip is the checkbox: the input stays a real, focusable control, drawn invisible over the whole chip. */
+.nb-ui .notebook-practice-chip input[type="checkbox"] {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	opacity: 0;
+	cursor: pointer;
+}
+
+.nb-ui .notebook-practice-summary {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui .notebook-find-results {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	max-height: 40vh;
+	overflow-y: auto;
+}
+
+.nb-ui .notebook-find-row-result {
+	display: flex;
+	align-items: stretch;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+}
+
+.nb-ui .notebook-find-row-result.is-active {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+	box-shadow: none;
+}
+
+.nb-ui .notebook-find-hit {
+	display: flex;
+	flex: 1 1 auto;
+	align-items: baseline;
+	gap: 10px;
+	min-width: 0;
+	min-height: 44px;
+	padding: 8px 12px;
+	border: 0;
+	background: transparent;
+	color: var(--nb-text);
+	text-align: left;
+}
+
+.nb-ui .notebook-find-page {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui .notebook-find-snippet mark {
+	border-radius: 4px;
+	background: var(--nb-accent-bg);
+	color: inherit;
+	box-shadow: inset 0 -2px 0 var(--nb-accent);
+}
+
+.nb-ui .notebook-find-go {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	width: var(--nb-target);
+	min-height: var(--nb-target);
+	border: 0;
+	background: transparent;
+	color: var(--nb-text-muted);
+}
+
+/* --- floating cards (colour picker, equation editor, stamp palette) --- */
+.nb-ui.nb-card {
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-panel);
+	box-shadow: var(--nb-shadow-float);
+	font-family: var(--font-interface);
+}
+
+.nb-ui.nb-card *,
+.nb-ui.nb-card {
+	box-sizing: border-box;
+}
+
+.nb-ui.nb-card .notebook-colour-button {
+	width: var(--nb-target);
+	height: var(--nb-target);
+}
+
+.nb-ui.nb-card .notebook-colour-recent-swatch {
+	width: 32px;
+	height: 32px;
+	min-width: 32px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: 50%;
+	background-color: var(--c, transparent);
+	box-shadow: none;
+}
+
+.nb-ui.nb-card .notebook-colour-preview {
+	border: 1px solid var(--nb-border-strong);
+	box-shadow: none;
+}
+
+.nb-ui.nb-card input.notebook-colour-hex {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: var(--nb-target);
+	padding: 0 12px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-bg);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-card input.notebook-colour-hex.is-invalid {
+	border-color: var(--nb-danger);
+}
+
+.nb-ui.nb-card .notebook-colour-hint {
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.nb-eq-card .notebook-eq-snippet,
+.nb-ui.nb-eq-card .notebook-eq-toggle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: var(--nb-target);
+	min-height: var(--nb-target);
+	padding: 0 10px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-icon);
+	background: var(--nb-tile);
+	box-shadow: none;
+	color: var(--nb-text);
+	cursor: pointer;
+}
+
+.nb-ui.nb-eq-card .notebook-eq-toggle {
+	padding: 0 14px;
+	border-radius: 999px;
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+}
+
+.nb-ui.nb-eq-card .notebook-eq-toggle.is-active {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-eq-card .notebook-eq-toggle:disabled {
+	opacity: 0.5;
+}
+
+.nb-ui.nb-eq-card textarea.notebook-eq-source {
+	padding: 10px 12px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-bg);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-eq-card .notebook-eq-preview {
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-eq-card .notebook-eq-error {
+	color: var(--nb-danger);
+}
+
+.nb-ui.nb-eq-card .notebook-eq-field {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.nb-eq-card .notebook-eq-field input {
+	min-height: var(--nb-target);
+	padding: 0 8px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-icon);
+	background: var(--nb-bg);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-eq-card .notebook-eq-field input[type="color"] {
+	width: var(--nb-target);
+	padding: 2px;
+}
+
+.nb-ui.nb-eq-card .notebook-eq-actions {
+	gap: 12px;
+}
+
+.nb-ui.nb-stamp-card {
+	padding: 12px;
+	gap: 8px;
+}
+
+.nb-ui.nb-stamp-card .notebook-stamp-title {
+	padding-left: 4px;
+	font-size: var(--nb-fs-row);
+	font-weight: 600;
+}
+
+.nb-ui.nb-stamp-card .notebook-stamp-hint,
+.nb-ui.nb-stamp-card .notebook-stamp-empty {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.nb-stamp-card .notebook-stamp-section {
+	color: var(--nb-text-faint);
+	font-size: var(--nb-fs-label);
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.nb-ui.nb-stamp-card .notebook-stamp-tile {
+	padding: 6px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+}
+
+.nb-ui.nb-stamp-card .notebook-stamp-tile:hover,
+.nb-ui.nb-stamp-card .notebook-stamp-tile:focus-visible {
+	border-color: var(--nb-accent);
+}
+
+.nb-ui.nb-stamp-card .notebook-stamp-preview {
+	border-radius: var(--nb-radius-s);
+}
+
+.nb-ui.nb-stamp-card .notebook-stamp-name {
+	color: var(--nb-text);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.nb-stamp-card .notebook-stamp-action {
+	width: var(--nb-target);
+	height: var(--nb-target);
+}
+
+/* --- phone: a wider dialog, bigger targets, full-width buttons in the footer --- */
+@media (max-width: 600px) {
+	.modal.nb-modal.nb-ui {
+		width: calc(100vw - 16px);
+		max-height: calc(100vh - 32px);
+		max-height: calc(100dvh - 32px);
+	}
+
+	.nb-ui .nb-modal-head {
+		padding: 12px 16px;
+	}
+
+	.nb-ui .nb-modal-body {
+		padding: 16px;
+	}
+
+	.nb-ui .nb-modal-foot {
+		padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+	}
+
+	.nb-ui .nb-modal-foot > .nb-modal-btn {
+		flex: 1 1 0;
+		min-height: 44px;
+	}
+
+	.nb-ui .nb-modal-body .setting-item-control {
+		flex: 1 1 100%;
+		justify-content: stretch;
+	}
+
+	.nb-ui .nb-modal-body .setting-item-control :is(input[type="text"], input[type="number"], input[type="date"], select) {
+		flex: 1 1 auto;
+	}
+}
+
+/* Reduced motion and effects: no decoration, no transitions. */
+@media (prefers-reduced-motion: reduce) {
+	.nb-ui .nb-modal-band {
+		display: none;
+	}
+
+	.nb-ui .nb-modal-btn,
+	.nb-ui .nb-modal-row,
+	.nb-ui .nb-modal-close,
+	.nb-ui .nb-card-btn {
+		transition: none;
+	}
+}
+
+/* Obsidian's own buttons inside a dialog body (a Setting's button) get the design system's pill and a real touch target. */
+.nb-ui .nb-modal-body .setting-item-control button {
+	min-height: 44px;
+	padding: 0 16px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background-color: var(--nb-bg);
+	box-shadow: none;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+}
+
+.nb-ui .nb-modal-body .setting-item-control button:disabled {
+	opacity: 0.5;
+}
+
+/* The pen test's log keeps its height in a short sheet: the body scrolls instead. */
+.nb-ui .notebook-pentest-log {
+	flex: 0 0 auto;
+	min-height: 220px;
+}
+
+/* ===== 0.13 hints ===== */
+/* A just-in-time tip (src/ui/components/hint-bubble.ts): a floating card at the bottom centre, above the page, never
+   covering the toolbar's own row on a phone. Tokens only; light, dark and "Follow Obsidian theme" come from them. */
+.nb-ui.nb-hint-host {
+	position: fixed;
+	left: 50%;
+	bottom: calc(var(--nb-space-5) + env(safe-area-inset-bottom, 0px));
+	transform: translateX(-50%);
+	z-index: var(--layer-notice, 10000);
+	width: min(420px, calc(100vw - 2 * var(--nb-space-4)));
+	pointer-events: none;
+}
+
+.nb-ui .nb-hint {
+	pointer-events: auto;
+	display: flex;
+	align-items: flex-start;
+	gap: var(--nb-space-3);
+	padding: var(--nb-space-3) var(--nb-space-3) var(--nb-space-3) var(--nb-space-4);
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-card);
+	box-shadow: var(--nb-shadow-float);
+}
+
+.nb-ui .nb-hint-icon {
+	flex: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: var(--nb-radius-icon);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.nb-ui .nb-hint-text {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.nb-ui .nb-hint-title {
+	font-size: var(--nb-fs-row);
+	font-weight: 600;
+	line-height: 1.3;
+}
+
+.nb-ui .nb-hint-body {
+	margin-top: 2px;
+	font-size: var(--nb-fs-meta);
+	line-height: 1.4;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-hint-off {
+	margin-top: var(--nb-space-2);
+	padding: 0;
+	min-height: 0;
+	height: auto;
+	border: 0;
+	background: none;
+	box-shadow: none;
+	font-size: var(--nb-fs-label);
+	color: var(--nb-text-faint);
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+.nb-ui .nb-hint-off:hover {
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-hint-close {
+	flex: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--nb-target);
+	height: var(--nb-target);
+	margin: calc(-1 * var(--nb-space-2)) 0;
+	padding: 0;
+	border: 0;
+	border-radius: var(--nb-radius-pill);
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text-muted);
+	cursor: pointer;
+}
+
+.nb-ui .nb-hint-close:hover {
+	background: var(--nb-hover);
+	color: var(--nb-text);
+}
+
+/* ===== 0.13 polish ===== */
+/* Art that arrives after the card was drawn fades in (keyframe nb-art-in, defined before the 0.12 section). */
+.nb-ui .nb-art-fade,
+.nb-ui .notebook-lib-cover.nb-art-fade {
+	animation: nb-art-in 0.28s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+	.nb-ui .nb-art-fade,
+	.nb-ui .notebook-lib-cover.nb-art-fade {
+		animation: none;
 	}
 }

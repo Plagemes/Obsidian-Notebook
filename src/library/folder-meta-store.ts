@@ -95,6 +95,16 @@ export class FolderMetaStore {
 		return this.write(() => patchOps(path, patch));
 	}
 
+	/** 0.13: pins a folder to the sidebar (or unpins it). */
+	setPinned(path: string, pinned: boolean): Promise<FolderMetaMap> {
+		return this.set(path, { pinned: pinned ? "1" : null });
+	}
+
+	/** 0.13: the pinned folders (merged from every device), sorted by path. */
+	pinnedFolders(): string[] {
+		return [...this.cache].filter(([, f]) => f.pinned === "1").map(([path]) => path).sort();
+	}
+
 	/** Follows a folder rename or move: its metadata, and that of the folders inside it, moves to the new paths. */
 	rename(from: string, to: string): Promise<FolderMetaMap> {
 		// Most renames concern folders without metadata: those read and write nothing (the files are read again otherwise).
@@ -180,7 +190,7 @@ function sameMeta(a: FolderMetaMap, b: FolderMetaMap): boolean {
 	if (a.size !== b.size) return false;
 	for (const [path, x] of a) {
 		const y = b.get(path);
-		if (!y || x.color !== y.color || x.icon !== y.icon || x.description !== y.description || x.art !== y.art) return false;
+		if (!y || x.color !== y.color || x.icon !== y.icon || x.description !== y.description || x.art !== y.art || x.pinned !== y.pinned) return false;
 	}
 	return true;
 }

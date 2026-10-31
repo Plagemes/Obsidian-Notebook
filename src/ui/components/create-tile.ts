@@ -4,6 +4,8 @@ export interface CreateTileOptions {
 	icon: string;
 	title: string;
 	description?: string;
+	/** 0.13: as tall as a compact subject card, so it can be the last cell of Home's folder grid. */
+	compact?: boolean;
 	key?: string;
 	onRun: () => void;
 }
@@ -13,7 +15,7 @@ export interface CreateTileOptions {
  * be created (a subject folder, a notebook). A real target: it runs the creation it names.
  */
 export function createTile(parent: HTMLElement, o: CreateTileOptions): HTMLElement {
-	const tile = parent.createDiv({ cls: "nb-create-tile" });
+	const tile = parent.createDiv({ cls: o.compact ? "nb-create-tile is-compact" : "nb-create-tile" });
 	if (o.key) tile.dataset.key = o.key;
 	pressable(tile, o.onRun, o.title);
 	setIconSafe(tile.createSpan({ cls: "nb-create-icon", attr: { "aria-hidden": "true" } }), o.icon);

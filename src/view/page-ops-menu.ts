@@ -28,6 +28,13 @@ export interface PageOpsHost extends PageToolsHost {
 
 const MAX_TAG_ITEMS = 8;
 
+/** A menu on the design system (styles.css, 0.13 block: radius, border, elevation). Obsidian's Menu has no public element; a Menu without one is left as it is. */
+function styled(menu: Menu): Menu {
+	const dom = (menu as unknown as { dom?: unknown }).dom;
+	if (dom instanceof HTMLElement) dom.classList.add("nb-ui", "nb-menu");
+	return menu;
+}
+
 
 
 /** Runs the command the current document yields for the selection; one undo step. False when the notebook cannot be edited now or nothing would change. */
@@ -110,13 +117,13 @@ function askDelete(host: PageOpsHost, ids: readonly string[]): void {
 }
 
 function paperMenu(host: PageOpsHost, ids: readonly string[], evt: MouseEvent): void {
-	const menu = new Menu();
+	const menu = styled(new Menu());
 	for (const kind of PAPER_KINDS) menu.addItem((i) => i.setTitle(t("page.paper", { kind: t(`paper.${kind}`) })).onClick(() => run(host, (doc) => paperCommand(doc, ids, kind))));
 	menu.showAtPosition({ x: evt.clientX, y: evt.clientY });
 }
 
 function sizeMenu(host: PageOpsHost, ids: readonly string[], evt: MouseEvent): void {
-	const menu = new Menu();
+	const menu = styled(new Menu());
 	for (const name of Object.keys(PAGE_SIZES) as PageSizeName[]) {
 		menu.addItem((i) => i.setTitle(t("page.size", { size: t(`size.${name}`) })).onClick(() => run(host, (doc) => sizeCommand(doc, ids, PAGE_SIZES[name]))));
 	}
@@ -126,7 +133,7 @@ function sizeMenu(host: PageOpsHost, ids: readonly string[], evt: MouseEvent): v
 /** Menu of the actions for the selected pages (`ids`), shown at the event. Nothing happens until an item is chosen. */
 export function openPageOpsMenu(host: PageOpsHost, ids: readonly string[], evt: MouseEvent): void {
 	const doc = host.editableDocument();
-	const menu = new Menu();
+	const menu = styled(new Menu());
 	if (!doc) {
 		menu.addItem((i) => i.setTitle(t("merge.notEditable")).setDisabled(true));
 		menu.showAtMouseEvent(evt);

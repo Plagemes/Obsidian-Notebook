@@ -29,18 +29,24 @@ import { stressDocument } from "../../src/model/stress";
 import { FAKE_PATH, installFakePdf, slidesNotebook } from "./fake-pdf";
 import { checkReading } from "./reading-check";
 import { checkPractice } from "./practice-check";
+import { checkOutline, outlineNotebook } from "./outline-check";
+import { checkChrome, chromeState, type ChromeState } from "./ds-notebook-check";
 import { checkExcerpt } from "./excerpt-check";
 import { checkReadOnly } from "./readonly-check";
 import { checkSettings } from "./settings-check";
+import { checkZettel, zettelState, type ZettelState } from "./zettel-check";
 import { checkPlugin } from "./plugin-check";
+import { checkHints } from "./hints-check";
 import { checkCreate, prepareShot } from "./create-check";
+import { modalsApi } from "./modals-check";
 import { checkHostile, HOSTILE_ERROR, hostileDialog, installHostile } from "./hostile";
 import { PracticeService } from "../../src/view/practice";
 import { NavController } from "../../src/view/nav-controller";
 import { NotebookStatusBar } from "../../src/view/status-bar";
 import { checkNavigation } from "./nav-check";
 import { compareLod, measureLod } from "./lod-bench";
-import { checkEmptyLibrary, checkLibraryLayout, emptyDialogShot, libraryInteractions, libraryState, openLibraryHarness, type LibraryHarness } from "./library-check";
+import { checkEmptyLibrary, checkLibraryLayout, emptyDialogShot, libraryInteractions, libraryState, openLibraryHarness, type HomeVariant, type LibraryHarness } from "./library-check";
+import { checkHome2, home2State } from "./home2-check";
 
 import type { Layout } from "../../src/ink/layout";
 import type { Viewport } from "../../src/ink/viewport";
@@ -196,6 +202,8 @@ async function seed(): Promise<void> {
 	await app.vault.createFolder("Notebooks/_assets");
 	await app.vault.createBinary(FAKE_PATH, new Uint8Array(8).buffer);
 	await app.vault.create("Notebooks/Slides.notebook", slidesNotebook());
+	// doc=outline: slides, large handwriting, markers and bookmarks for the generated outline (0.13).
+	await app.vault.create("Notebooks/Outline.notebook", outlineNotebook());
 }
 
 /** The practice feature (doc=practice) on a stand-in plugin: the views attach to it as they do to the real one. */
@@ -232,7 +240,7 @@ async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	leaf = new WorkspaceLeaf(app, root);
 	view = new NotebookView(asLeaf(leaf), { settings: settings(), practice: doc === "practice" ? practiceService : undefined, nav: harnessNav, statusChanged: (v) => harnessStatusBar.update(v.statusSnapshot()) });
 	await view.onOpen();
-	const path = doc === "new" || doc === "practice" || doc === "readonly" ? "Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" ? "Notebooks/Slides.notebook" : "Notebooks/Old v3.notebook";
+	const path = doc === "new" || doc === "practice" || doc === "readonly" ? "Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" ? "Notebooks/Slides.notebook" : doc === "outline" ? "Notebooks/Outline.notebook" : "Notebooks/Old v3.notebook";
 	const file = app.vault.getFileByPath(path)!;
 	await (view as unknown as HarnessView).loadFile(file);
 	view.onResize();
@@ -620,7 +628,7 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 	/** Viewport CSS px where the composited page must show paper and ink (checked on a screenshot by check.mjs). */
 	const r2 = stage().getBoundingClientRect();
 	const points = {
-		paper: [r2.left + r2.width * 0.5, r2.top + r2.height * 0.3],
+		paper: [r2.left + r2.width * 0.08, r2.top + r2.height * 0.3],
 		ink: [r2.left + r2.width * 0.5, r2.top + r2.height * 0.52],
 	};
 	const env = {
@@ -966,7 +974,8 @@ async function checkPageMode(add: (name: string, ok: boolean, detail?: string) =
 	const boxes = v.layout.boxes as Array<{ x: number; y: number; width: number }>;
 	add(`${label}: pages sit side by side`, boxes.length === pages && boxes.every((b, i) => b.y === 0 && (i === 0 || b.x > boxes[i - 1]!.x)), `${boxes.length} boxes`);
 	add(`${label}: starts on the first page`, v.currentPageIndex() === 0, `page ${v.currentPageIndex() + 1}`);
-	const paper = staticPixel(0.5, 0.3);
+	// Left of the strokes: in a short landscape view the toolbar is two rows and the middle of the stage is on a stroke.
+	const paper = staticPixel(0.08, 0.3);
 	add(`${label}: the page is painted`, paper[3]! > 250 && paper[0]! > 200, `rgba(${paper.join(",")})`);
 	const x0 = v.viewport.offsetX;
 
@@ -1255,7 +1264,7 @@ async function checkToolbarSize(add: (name: string, ok: boolean, detail?: string
 		await frames(3);
 		await wait(120);
 	};
-	for (const [size, target, icon] of [["large", 48, 24], ["compact", 36, 16]] as const) {
+	for (const [size, target, icon] of [["large", 52, 24], ["compact", 40, 18]] as const) {
 		const label = `toolbar size ${size} ${width}px`;
 		await closeAll();
 		await set(size);
@@ -1269,8 +1278,9 @@ async function checkToolbarSize(add: (name: string, ok: boolean, detail?: string
 		add(`${label}: buttons are at least ${target} px`, wrong.length === 0, wrong.map((b) => `${b.getAttribute("aria-label")} ${b.offsetWidth}×${b.offsetHeight}`).join(", "));
 		const svg = tools.map((b) => b.querySelector<SVGElement>(".svg-icon")).find((x) => x);
 		add(`${label}: icons are ${icon} px`, !!svg && Math.round(svg.getBoundingClientRect().width) === icon, `${svg ? svg.getBoundingClientRect().width : "no icon"}`);
-		const rows = Math.ceil(bar.getBoundingClientRect().height / (target + 8));
-		add(`${label}: at most three rows`, rows <= 3, `height ${Math.round(bar.getBoundingClientRect().height)} px`);
+		// The bar has 12 px of padding; on a 360 px phone the large size wraps the tools onto two lines under the action row.
+		const rows = Math.ceil((bar.getBoundingClientRect().height - 12) / (target + 8));
+		add(`${label}: at most ${width <= 380 ? "four" : "three"} rows`, rows <= (width <= 380 ? 4 : 3), `height ${Math.round(bar.getBoundingClientRect().height)} px`);
 		const favs = bar.querySelector<HTMLElement>(".notebook-favs")!;
 		add(`${label}: favourite pens strip is inside the view`, inView(favs.getBoundingClientRect()), `${Math.round(favs.getBoundingClientRect().left)}–${Math.round(favs.getBoundingClientRect().right)}`);
 
@@ -1369,7 +1379,8 @@ async function checkToolbar(add: (name: string, ok: boolean, detail?: string) =>
 	add(`${label}: touch targets are at least 40 px`, small.length === 0,
 		small.map((b) => `${b.getAttribute("aria-label")} ${b.offsetWidth}×${b.offsetHeight}`).join(", "));
 	const barRect = bar.getBoundingClientRect();
-	add(`${label}: at most two rows`, barRect.height <= 100, `height ${Math.round(barRect.height)} px`);
+	// 0.13 ds-notebook: 44 px buttons (two rows of them, the gap and the bar padding).
+	add(`${label}: at most two rows`, barRect.height <= 124, `height ${Math.round(barRect.height)} px`);
 
 	// 2. Options popover of the eraser: modes, filter, colour and size, all reachable, drawing nothing.
 	const strokes = strokeCount();
@@ -2029,7 +2040,7 @@ function applySize(): void {
 	if (h) root.style.height = `${Number(h)}px`;
 }
 
-const harnessApi: Record<string, unknown> = { app, checkLibrary, checkEmpty, checkHostile: runHostile, hostileDialog, emptyDialogShot, interactLibrary, libraryState, open, measureOpen, penStroke, setTool, openOptions, openMore, measureLod, compareLod, checkHeavy, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkCreate: async (tab: "notebook" | "folder" = "notebook") => { try { return JSON.parse(JSON.stringify(await checkCreate({ app, errors, notices }, tab))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`create check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, createShot: (tab: "notebook" | "folder") => prepareShot({ app, errors, notices }, tab), checkReadOnly: async () => { try { return JSON.parse(JSON.stringify(await checkReadOnly({ view, app, stage, penStroke, setTool, strokeCount, frames, openMore, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`readonly check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPractice: () => checkPractice({ view, app, service: practiceService, frames, errors, notices }), checkSettings: async () => { try { return JSON.parse(JSON.stringify(await checkSettings({ app, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`settings check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPlugin: async () => { try { return JSON.parse(JSON.stringify(await checkPlugin({ errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`plugin check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkExcerpt: () => checkExcerpt({ view, stage, penStroke, setTool, strokeCount, staticPixel, frames, errors, notices }), checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
+const harnessApi: Record<string, unknown> = { app, checkLibrary, checkEmpty, checkHostile: runHostile, hostileDialog, emptyDialogShot, interactLibrary, libraryState, open, measureOpen, penStroke, setTool, openOptions, openMore, measureLod, compareLod, checkHeavy, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkCreate: async (tab: "notebook" | "folder" = "notebook") => { try { return JSON.parse(JSON.stringify(await checkCreate({ app, errors, notices }, tab))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`create check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, createShot: (tab: "notebook" | "folder") => prepareShot({ app, errors, notices }, tab), checkReadOnly: async () => { try { return JSON.parse(JSON.stringify(await checkReadOnly({ view, app, stage, penStroke, setTool, strokeCount, frames, openMore, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`readonly check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPractice: () => checkPractice({ view, app, service: practiceService, frames, errors, notices }), checkOutline: () => checkOutline({ view, frames, errors, notices }), checkSettings: async () => { try { return JSON.parse(JSON.stringify(await checkSettings({ app, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`settings check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkZettel: async () => { try { return JSON.parse(JSON.stringify(await checkZettel({ app, view, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`zettel check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, zettelState: (state: ZettelState) => zettelState({ app, view, errors, notices }, state), checkHints: async () => { try { return JSON.parse(JSON.stringify(await checkHints({ errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`hints check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPlugin: async () => { try { return JSON.parse(JSON.stringify(await checkPlugin({ errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`plugin check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkExcerpt: () => checkExcerpt({ view, stage, penStroke, setTool, strokeCount, staticPixel, frames, errors, notices }), checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
 	return view;
 } };
 
@@ -2056,6 +2067,15 @@ async function runHostile(): Promise<Record<string, unknown>> {
 	return { ok: results.every((r) => r.ok) && unexpected.length === 0, results, errors: unexpected, env: { dpr: window.devicePixelRatio } };
 }
 
+/** 0.13 home2: the revised Home's structure and controls (home2-check.ts). */
+const homeVariant = (params.get("variant") ?? "lecture") as HomeVariant;
+async function checkHome(): Promise<Record<string, unknown>> {
+	const results = libraryHarness ? await checkHome2(libraryHarness, homeVariant) : [];
+	return { ok: results.every((r) => r.ok) && errors.length === 0, results, errors: [...errors] };
+}
+harnessApi.checkHome2 = checkHome;
+harnessApi.home2State = (state: string) => (libraryHarness ? home2State(libraryHarness, state) : false);
+
 async function interactLibrary(): Promise<Record<string, unknown>> {
 	const results = libraryHarness ? await libraryInteractions(libraryHarness, librarySurface) : [];
 	return { ok: results.every((r) => r.ok) && errors.length === 0, results, errors: [...errors] };
@@ -2065,11 +2085,11 @@ async function main(): Promise<void> {
 	applyTheme();
 	applySize();
 	if (params.get("doc") === "library" || params.get("doc") === "empty") {
-		libraryHarness = await openLibraryHarness(app, librarySurface, params.get("doc") === "empty");
+		libraryHarness = await openLibraryHarness(app, librarySurface, params.get("doc") === "empty", homeVariant);
 		return;
 	}
 	// 0.12.1: doc=plugin starts the whole plugin on its own stub app (plugin-check.ts); no notebook is opened.
-	if (params.get("doc") === "plugin") return;
+	if (params.get("doc") === "plugin" || params.get("doc") === "hints") return;
 	await seed();
 	await open();
 	if (params.get("check") === "1") {
@@ -2086,5 +2106,13 @@ async function main(): Promise<void> {
 	}
 }
 
+// 0.13 ds-notebook: the editing chrome on the design system (doc=chrome, ds-notebook-check.ts).
+const chromeApi = () => ({ view, openOptions, openMore, openPageSheet, selectFirstStroke, radialState, closeAll, wait, errors, notices });
+Object.assign(harnessApi, {
+	checkChrome: async () => { try { return JSON.parse(JSON.stringify(await checkChrome(chromeApi()))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`chrome check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } },
+	chromeShot: (state: ChromeState) => chromeState(chromeApi(), state),
+});
+
+Object.assign(harnessApi, modalsApi({ app, errors, notices }));
 (window as unknown as { harness: Record<string, unknown> }).harness = harnessApi;
 harnessApi.ready = main();

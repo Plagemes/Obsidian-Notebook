@@ -1,6 +1,7 @@
 import { setIcon } from "obsidian";
 import { t } from "../i18n";
 import { hexToHsv, hsvToHex, normaliseHex, type Hsv } from "../ink/colour";
+import { shellCard } from "../ui/components/modal-shell";
 
 export interface ColourPickerHandlers {
 	/** The colour changed. `commit`: the choice is final (finger lifted, hex entered, recent colour tapped): remember it. */
@@ -32,6 +33,7 @@ export class ColourPicker {
 
 	constructor(parent: HTMLElement, initial: string, recent: readonly string[], private readonly handlers: ColourPickerHandlers) {
 		this.el = parent.createDiv({ cls: "notebook-colour-picker", attr: { role: "dialog", "aria-label": t("colour.picker.title") } });
+		shellCard(this.el);
 		for (const type of ISOLATED) this.el.addEventListener(type, (e) => e.stopPropagation());
 		this.el.addEventListener("keydown", (e) => {
 			e.stopPropagation();
@@ -81,14 +83,14 @@ export class ColourPicker {
 		});
 		const eyedropper = handlers.eyedropper?.bind(handlers);
 		if (eyedropper) {
-			const dropper = row.createEl("button", { cls: "notebook-colour-button", attr: { type: "button", "aria-label": t("radial.eyedropper"), title: t("radial.eyedropper") } });
+			const dropper = row.createEl("button", { cls: "notebook-colour-button nb-card-btn", attr: { type: "button", "aria-label": t("radial.eyedropper"), title: t("radial.eyedropper") } });
 			setIcon(dropper, "pipette");
 			dropper.addEventListener("click", (e) => {
 				e.preventDefault();
 				eyedropper();
 			});
 		}
-		const close = row.createEl("button", { cls: "notebook-colour-button", attr: { type: "button", "aria-label": t("colour.picker.close"), title: t("colour.picker.close") } });
+		const close = row.createEl("button", { cls: "notebook-colour-button nb-card-btn", attr: { type: "button", "aria-label": t("colour.picker.close"), title: t("colour.picker.close") } });
 		setIcon(close, "x");
 		close.addEventListener("click", (e) => {
 			e.preventDefault();

@@ -5,6 +5,7 @@ import {
 	type AttemptRecord, type HideSpec, type PracticePrefs, type PracticeTarget,
 } from "../model/practice";
 import type { Page, Tool } from "../model/types";
+import { modalShell, shellButton, shellNote, shellRow } from "../ui/components/modal-shell";
 
 const STORAGE_KEY = "notebook-practice";
 
@@ -75,8 +76,8 @@ export function askRedo(app: App, req: RedoRequest): Promise<RedoChoice | null> 
 			return spec;
 		};
 
-		modal.setTitle(t("practice.modal.title"));
-		modal.contentEl.createEl("p", { cls: "setting-item-description", text: t("practice.modal.desc", { n: String(req.attempt) }) });
+		const shell = modalShell(modal, { title: t("practice.modal.title"), subtitle: t("practice.modal.desc", { n: String(req.attempt) }), icon: "rotate-ccw", size: "medium", cls: "notebook-practice-modal" });
+		const body = shell.body;
 
 		let summary: HTMLElement | null = null;
 		let confirm: HTMLButtonElement | null = null;
@@ -93,7 +94,7 @@ export function askRedo(app: App, req: RedoRequest): Promise<RedoChoice | null> 
 			if (confirm) confirm.disabled = !spec;
 		};
 
-		new Setting(modal.contentEl).setName(t("practice.hide")).addDropdown((dd) => {
+		new Setting(body).setName(t("practice.hide")).addDropdown((dd) => {
 			dd.addOption("all", t("practice.hide.all"));
 			dd.addOption("some", t("practice.hide.some"));
 			if (req.selection && req.selection.length > 0) dd.addOption("region", t("practice.hide.region", { n: String(req.selection.length) }));
@@ -103,8 +104,8 @@ export function askRedo(app: App, req: RedoRequest): Promise<RedoChoice | null> 
 			});
 		});
 
-		filters = modal.contentEl.createDiv({ cls: "notebook-practice-filters notebook-hidden" });
-		if (strokes.length === 0) filters.createEl("p", { cls: "setting-item-description", text: t("practice.noInk") });
+		filters = body.createDiv({ cls: "notebook-practice-filters notebook-hidden" });
+		if (strokes.length === 0) shellNote(filters, t("practice.noInk"));
 		if (colours.length > 0) {
 			filters.createDiv({ cls: "notebook-practice-filter-title", text: t("practice.colours") });
 			const row = filters.createDiv({ cls: "notebook-practice-chips" });
@@ -112,12 +113,13 @@ export function askRedo(app: App, req: RedoRequest): Promise<RedoChoice | null> 
 				const label = row.createEl("label", { cls: "notebook-practice-chip" });
 				const box = label.createEl("input", { attr: { type: "checkbox" } });
 				const swatch = label.createSpan({ cls: "notebook-practice-swatch" });
-				swatch.style.setProperty("--notebook-practice-color", color);
-				label.createSpan({ text: ` ${count}` });
+				swatch.setCssProps({ "--notebook-practice-color": color });
+				label.createSpan({ text: String(count) });
 				label.setAttr("title", color);
 				box.addEventListener("change", () => {
 					if (box.checked) pickedColours.add(color);
 					else pickedColours.delete(color);
+					label.toggleClass("is-on", box.checked);
 					refresh();
 				});
 			}
@@ -128,18 +130,20 @@ export function askRedo(app: App, req: RedoRequest): Promise<RedoChoice | null> 
 			for (const { tool, count } of tools) {
 				const label = row.createEl("label", { cls: "notebook-practice-chip" });
 				const box = label.createEl("input", { attr: { type: "checkbox" } });
-				label.createSpan({ text: ` ${t(TOOL_KEYS[tool])} ${count}` });
+				label.createSpan({ text: `${t(TOOL_KEYS[tool])} ${count}` });
 				box.addEventListener("change", () => {
 					if (box.checked) pickedTools.add(tool);
 					else pickedTools.delete(tool);
+					label.toggleClass("is-on", box.checked);
 					refresh();
 				});
 			}
 		}
-		summary = modal.contentEl.createEl("p", { cls: "notebook-practice-summary" });
+		summary = shellNote(body, "");
+		summary.addClass("notebook-practice-summary");
 
 		let nameSetting: Setting | null = null;
-		new Setting(modal.contentEl).setName(t("practice.target")).addDropdown((dd) => {
+		new Setting(body).setName(t("practice.target")).addDropdown((dd) => {
 			dd.addOption("after", t("practice.target.after"));
 			if (req.canNotebook) dd.addOption("notebook", t("practice.target.notebook"));
 			dd.setValue(prefs.target).onChange((v) => {
@@ -147,7 +151,7 @@ export function askRedo(app: App, req: RedoRequest): Promise<RedoChoice | null> 
 				nameSetting?.settingEl.toggleClass("notebook-hidden", prefs.target !== "notebook");
 			});
 		});
-		nameSetting = new Setting(modal.contentEl).setName(t("practice.exercises")).setDesc(t("practice.exercises.desc")).addText((text) => {
+		nameSetting = new Setting(body).setName(t("practice.exercises")).setDesc(t("practice.exercises.desc")).addText((text) => {
 			text.setPlaceholder(exercisesName(null)).setValue(prefs.exercises).onChange((v) => (prefs.exercises = v));
 		});
 		nameSetting.settingEl.toggleClass("notebook-hidden", prefs.target !== "notebook");
@@ -160,12 +164,8 @@ export function askRedo(app: App, req: RedoRequest): Promise<RedoChoice | null> 
 			finish({ spec, target: prefs.target, exercises: prefs.exercises });
 			modal.close();
 		};
-		new Setting(modal.contentEl)
-			.addButton((b) => b.setButtonText(t("lecture.cancel")).onClick(() => modal.close()))
-			.addButton((b) => {
-				b.setButtonText(t("practice.create")).setCta().onClick(submit);
-				confirm = b.buttonEl;
-			});
+		shellButton(shell.foot, "secondary", t("lecture.cancel"), () => modal.close());
+		confirm = shellButton(shell.foot, "primary", t("practice.create"), submit);
 		modal.onClose = () => {
 			finish(null);
 			modal.contentEl.empty();
@@ -202,15 +202,15 @@ export function attemptRows(
 /** The list of attempts of an exercise. */
 export function showAttempts(app: App, title: string, rows: readonly AttemptRow[]): void {
 	const modal = new Modal(app);
-	modal.setTitle(title);
-	const list = modal.contentEl.createDiv({ cls: "notebook-practice-list" });
+	const shell = modalShell(modal, { title, icon: "history", size: "narrow", footer: false, cls: "notebook-practice-attempts" });
+	const list = shell.body.createDiv({ cls: "nb-modal-list notebook-practice-list" });
 	for (const row of rows) {
-		const button = list.createEl("button", { cls: "notebook-practice-row", attr: { type: "button" } });
-		button.createSpan({ cls: "notebook-practice-row-label", text: row.label });
-		if (row.detail) button.createSpan({ cls: "notebook-practice-row-detail", text: row.detail });
-		button.addEventListener("click", () => {
-			modal.close();
-			row.open();
+		shellRow(list, {
+			label: row.label, cls: "notebook-practice-row", ...(row.detail ? { detail: row.detail } : {}),
+			onClick: () => {
+				modal.close();
+				row.open();
+			},
 		});
 	}
 	modal.onClose = () => modal.contentEl.empty();

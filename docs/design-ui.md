@@ -35,10 +35,11 @@ AI, no network, nothing leaves the device.
 | **Status banners** | Safe mode (*Open normally*, *Repair…*, *Show images and PDFs*), storage full (*Retry now*), integrity (*Restore the newer version*, *Restore a version…*, *Keep this version*), open on another device (*Open read-only*, *Open anyway*, *Edit anyway*), heavy page (*Split page*, *Dismiss*) | Only while the situation lasts; the banner owns its recovery buttons (they are listed in the registry with the `banner` surface) |
 | **Radial menu** | Dark dial at the pen tip: undo/redo, width bubble, colour bubble, tool illustration, favourites · pen case · shapes | S Pen side button (or long press, per settings) |
 | **Notebook menu** | Obsidian's "More options" of the notebook tab | Notebook-wide actions: open library, export notebook, zettel entries |
-| **Home** | The library view on its Home surface (0.12, §11) | Subject folders, recent notes, statistics, quick actions (New notebook, New folder, Import PDF, Scan), inbox bell |
+| **Home** | The library view on its Home surface (0.12, §11) | Greeting, Continue row (lecture in progress or last notebook, Quick page), quick actions, subject folders, recent notes by notebook, statistics, inbox bell |
 | **Library** | The library view (0.12, §11): rail, filter chips, dashboard, notebook grid or list | Create, import PDF, lecture from slides, scan, loose sheet, library check, timetable |
 | **Settings** | Plugin settings tab, generated from `view/settings-schema.ts` (§10): eleven sections by task, a search, collapsed *Advanced* and feature groups | Diagnostics (pen button test, benchmark) are also commands |
 | **Creation dialog** (wave 0.12) | One modal, two tabs as a segmented control: **Notebook** (cover preview with *Change cover* (pattern, colour, image) and a shuffle button for a new variation; name, description, folder list with icons, page template tiles drawn by the paper renderer, page size A4 · A5 · B5 · Letter · Custom in mm, orientation tiles) and **Folder** (the library's own subject card as the preview, `ui/components/subject-card.ts`, above the form, with *Change colour* and *Change pattern*; name, description, location, icon row plus Lucide search, eight subject colours plus the colour picker). Inline name errors, Enter submits. A full-height sheet with the preview on top under 600 px. Decoration (header art band, glow behind the preview, faint art on the selected template tile) never acts as a control and is off with reduced motion | Registry actions `new-notebook` (Notebook tab) and `new-folder` (Folder tab), the command *New notebook* (`create`), *New folder*, the library's buttons and menus (through `host.createNotebook(folder)` / `host.createFolder(parent)`) |
+| **Other dialogs, prompts and cards** (wave 0.13) | Everything that is not the creation dialog shares one shell (`ui/components/modal-shell.ts`): header (icon square, title, optional line, close ×, faint art band), scrolling body, footer with *Cancel* (secondary) and the primary action (accent; red for destructive). Prompts (go to page, page finder) get a slim header above Obsidian's input; floating cards (colour picker, equation editor, stamp palette) get the card look. Full-width sheets on phone | Same buttons and fields as before; this wave changes only the look |
 | **Command palette** | Every command, hotkeys | All actions with `command` (ids unchanged since 0.5) |
 
 ## 3. Information architecture
@@ -63,6 +64,7 @@ anywhere in `src/` is in the registry and that every action is placed somewhere.
 | Go to page number, recently edited pages, one page at a time (`goto-page-number`, `recent-pages`, `toggle-page-mode`) | **Page sheet, first section "Go to"** (tap the page indicator); also in the All actions sheet; one page at a time is also a quick slot | Getting to a page starts where the page number is |
 | Back, forward (`nav-back`, `nav-forward`; wave 0.10) | **Quick slots** of the toolbar (rank 64 and 63, after insert image and add page) once the history of visited pages has somewhere to go; **page sheet, first section "Go to"**; All actions sheet; commands (hotkeys); the mouse's back and forward buttons on desktop | Returning to where you were is a navigation act and belongs next to getting to a page. Hidden until there is a history, so no slot is wasted; on a phone there are no quick slots, so the page sheet is the way |
 | Fast scrollbar (wave 0.10) | A thumb along the right edge of the page in continuous scroll; shown after a scroll or when a mouse nears the edge; setting *Fast scrollbar* | A control of the scroll itself, not an action: it has no command and no registry entry (page by page mode has its own swipe) |
+| Outline in the page panel (0.13, roadmap 407) | Page panel, outline mode (list button): bookmarks, PDF and slide changes, large handwriting (a picture of the ink) and markers, nested; settings *Pages → Outline* switch each source | One list for where things are in the notebook. Rows are 44 px design-token rows (icon square, title, page), nested by level with a guide line, one "you are here" row; tap navigates. Built by the pure `model/outline-builder.ts` |
 | Status bar item (wave 0.10) | Obsidian's status bar, desktop only: "p. 3/12 · Saved"; a click opens the page panel | Mobile has no status bar: the toolbar's page indicator and save state show the same |
 | Page switcher across notebooks (`go-to-page`) | All actions sheet (Go to), library, palette | Leaves the notebook |
 | Split a heavy page (`page-split`) | Heavy-page banner, page sheet (only on a heavy page) | Acts on that page |
@@ -184,6 +186,8 @@ Components: icon buttons are 40 × 40, radius `--nb-radius-s`, transparent until
 the accent soft fill and an accent underline dot; groups are separated by 1 px dividers; popovers and sheets use
 `--nb-radius-l` and `--nb-shadow-2`; the contextual bar is a pill with `--nb-shadow-2`.
 
+**0.13: the editing chrome on DESIGN.md** (block `0.13 ds-notebook` at the end of `styles.css`, scoped under `.workspace-leaf-content .view-content.notebook-view` so it beats Obsidian's button rules). Icon buttons are 44 px at the normal size (`toolbarScale`: compact 40, normal 44, large 52; a normal bar on a view too narrow for eight of them uses 40, `toolbarScaleFor`); tools and history are capsules; popovers, sheets, the contextual bar and the banners are glass panels (`--nb-panel` over a blur, `--nb-border`, `--nb-shadow-*`); sheet rows have a 34 px icon square; the dial keeps its fixed navy palette with a hairline ring and accent halo; the status bar item and the page-operations `Menu` (tagged `nb-ui nb-menu`) follow the tokens. On touch every text button is at least 44 px; under `prefers-reduced-motion` the blur, glows, transitions and entrance animations are removed. Decoration (icon squares, halos) is never a control.
+
 ## 8. Accessibility
 
 - Every icon button has an `aria-label` (and `title` on desktop); toggles use `aria-pressed`; buttons that open
@@ -205,6 +209,8 @@ the accent soft fill and an accent underline dot; groups are separated by 1 px d
 | `src/ui/action-sheet.ts` | Sheet component (All actions, page sheet) |
 | `src/ui/components/*.ts` | 0.12 design-system components: subject card, section header, chips, list row, favourite row, KPI tile, quick action, search pill, navigation rail, icon square |
 | `src/library/library-view.ts`, `home-view.ts`, `home-surface.ts`, `library-sections.ts`, `inbox-bell.ts` | 0.12 library and Home (§11) |
+| `src/library/greeting.ts`, `activity-log.ts`, `home-stats.ts`, `home-data.ts`, `page-thumbs.ts` | 0.13 Home: greeting, writing activity, pure statistics, what the widgets show, page thumbnails (all but the last are Node-testable) |
+| `src/zettel/inbox-view.ts`, `modals.ts`, `zk-ui.ts` | 0.13 Zettelkasten surfaces: the Inbox page, the card dialogs, the card list (§12) |
 | `src/library/dashboard.ts` | Subjects, smart collections, statistics (pure) |
 | `src/ui/context-bar.ts` | Contextual bar component |
 | `src/ui/dismiss.ts` | Tap-outside / Escape closing shared by popovers and sheets (a tap on the page draws nothing) |
@@ -217,6 +223,7 @@ the accent soft fill and an accent underline dot; groups are separated by 1 px d
 | `src/view/settings-schema.ts` | The settings tab described once: sections, groups, rows, visibility and search (pure) |
 | `src/view/settings-tab.ts` | Draws the settings tab from the schema (Obsidian 1.13+ definitions and the older hand-drawn tab) |
 | `src/view/create-dialog.ts`, `src/view/create-logic.ts` | Creation dialog (wave 0.12) and its pure rules (names, sizes, folder list, the new document) |
+| `src/ui/components/modal-shell.ts`, `modal-shell-model.ts` | The shared shell of every other dialog, prompt and floating card (wave 0.13) |
 | `src/ui/components/subject-card.ts` | The subject card (DESIGN.md §3) shared by the library, Home and the creation dialog's folder preview: `subjectCard(parent, { name, color, seed, artStyle?, icon?, lines, shape, art, onOpen? })`. The art is laid out beside the icon and text, never under them: in a row from the end of the text to the right edge, in a tile the column right of them (a long name narrows it) |
 | `src/library/folder-meta.ts`, `folder-meta-store.ts`, `folder-meta-events.ts` | Folder colour, icon, description and art style (per-device sidecar in `_meta`), the read API `getFolderMeta` / `onFolderMetaChange`, renames |
 
@@ -241,7 +248,7 @@ hidden in place). Both read what to show from one function, `settingsView`, so t
 | 7 | **Export** | Export settings, when there are any (the section is hidden while it is empty) |
 | 8 | **Obsidian integration** | Tabs of open notebooks, companion notes and their options |
 | 9 | **Study** | Groups *Class timetable* (edit, offer the current class, open without asking, start early) and *Zettelkasten* |
-| 10 | **Appearance & language** | Language, Style (Notebook / Follow Obsidian theme), toolbar size, night mode |
+| 10 | **Appearance & language** | Language, Style (Notebook / Follow Obsidian theme), toolbar size, night mode, tips (on/off, *Show tips again*) |
 | 11 | **Diagnostics** | Pen button test, performance benchmark, performance overlay (the first two are also commands) |
 
 ### Rules
@@ -323,12 +330,16 @@ the library also tag filter, sort and grid / list; on both, last, the primary *+
 slides, Scan, Loose sheet; inside a folder the notebook and the folder go there, elsewhere New notebook and New folder
 run the registry actions `new-notebook` and `new-folder`; all of them open the creation dialog, `view/create-dialog.ts`).
 
-**Home.** *Subject folders*: one card per top-level folder (four at most, *Show all* opens the subjects page).
-*Recent notes*: the pages edited last on this device (bookmark title or notebook name, page number, time, subject
-and tag pills, kebab = the notebook menu; without a log, the notebooks changed last). *Statistics* (period 1, 4 or 12
-weeks, kept in the view state): notebooks created (with the change against the period before, the only exact
-comparison), pages edited on this device, PDF notebooks changed, tags used; each tile opens its detail. *Quick
-actions*: New notebook, New folder, Import PDF, Scan (when available).
+**Home (0.13, structure revised; same visual style).** Top to bottom:
+1. *Header*: the title, and as subtitle a greeting that follows the clock ("Buonasera, Alex · 3 pagine scritte oggi": morning 05-11, afternoon 12-17, evening 18-21, night 22-04; the name is the setting *Appearance → Your name*, no name = no name; with no page written today the count becomes "Ready when you are"). Pages written today come from the writing activity log below. Search, the bell and *+ New* stay where they were.
+2. *Continue row*: the hero card (2/3 of the width; stacked on a phone) with a large page thumbnail of the lecture in progress: the timetable's current class, its notebook (the class's link: a notebook, or a course folder whose latest notebook opens: `pickTarget`, `TimetableService.nowTarget()`), the page last edited when known. The button (and a tap anywhere) is `openNow`, which opens it at today's lecture page. With a course whose folder has no notebook yet the thumbnail is a dashed blank and the action is *Start a notebook for <course>* (creates it in the course's folder). With no class in progress it is *Continue where you left off*: the last opened notebook (the instant-start setting), else the one changed last. With no notebook at all the slot holds the empty state that teaches the first step. Linking a course to a folder already exists: the timetable editor's *Notebook or folder* field. Beside it (1/3) the *Quick page* card: one tap opens Quick notes (made the first time) at a new blank page of the last page's size and paper; a last page still blank is shown instead, so tapping twice never piles up empty pages.
+3. *Quick actions*: low tiles (about 70 px: icon and title; the description is the tooltip and `aria-description`); two per row on a tablet in portrait and on a phone.
+4. *Subject folders*: a three-column grid of low cards (two on a tablet in portrait, one on a phone; as many cards as fit, *Show all* for the rest), ending in the dashed *New folder* card, which spans the rest of the last row so the grid has no gap.
+5. *Recent notes* next to *Statistics* (stacked below a wide view). Recent notes are grouped by notebook (three notebooks, three pages each): the notebook header (subject pill, kebab = the notebook menu) and its pages, each with its own page thumbnail on the left (drawn on demand, one at a time while the pen is quiet, cached in memory) and a ⋯ menu on the right: *Open page*, *Open in a new tab*, *Show in the library* (the folder opens and the notebook's card is scrolled into view and flashed), *Pin / Unpin*, *Favourite*. A chip row filters by subject (shown with two or more subjects). *Statistics*: *Pages written* (a bar chart of the last 7 or 14 days, switch kept in the view state, today's bar in solid accent, a text description for assistive tech), *Days in a row* (the streak; it stays alive until the day ends), *Writing time (estimated)*, *PDFs annotated* and *Most active subject* (a bar split by subject colour with a legend). Widgets that are zero are hidden; the chart turns into a hint with *Write now* when nothing was written, and *PDFs* into *Import your first PDF →* (it starts the import) when the library has no PDF notebook. Everything is CSS (no chart library), in token colours.
+
+**Writing activity (0.13).** `library/activity-log.ts`, kept in the device-local storage of Obsidian next to the recent pages log (`view/recent-pages.ts`): per day, the pages edited (short notebook/page key and the notebook's path, which follows renames) and the minutes of the day in which something was written; 90 days, 300 pages a day; never in a notebook or a synced file, no format change. Pages from the recent pages log (their last edit) are folded in when Home reads it, so the days before the log existed still show. Writing time is the number of minutes with an edit: an estimate, per device.
+
+**Sidebar (0.13).** Under the navigation: *Pinned* (notebooks pinned with the library's pin, and folders pinned from their menu; at most eight; every row opens on tap and has the same press-and-hold / right-click menu, which unpins it; with none, one line says how to pin), then *Vault*. Folder rows show the notebook count and the pages inside ("12 · 248 p"; the tooltip words both). Pinned folders are the `pinned` field of the folder metadata (`folders-<device>.json`, merged per field like the colour, followed by renames); pinned notebooks are the library state's `pinned`.
 
 **Library.** Filter chips *All · Subjects · Recent · Favourites · With PDF · Archive* (single choice). *All* shows the
 dashboard: subject cards (four in a row, two on a tablet in portrait, two compact ones on a phone), *Smart
@@ -355,3 +366,17 @@ events keep the badge current. The popover (a bottom sheet on a phone) lists eig
 **Decoration.** Generated art (the art module) behind the page header, on subject cards, smart collections, quick
 actions and empty states, and a soft accent glow behind section titles. It never takes input, never covers text and
 is removed under `prefers-reduced-motion: reduce`.
+
+## 12. Zettelkasten surfaces (0.13, DESIGN.md §3–§5)
+
+**Inbox.** `zettel/inbox-view.ts` is an `nb-ui nb-app` page: header (title, count, *Start processing*, refresh, a faint generated band from `zk-ui.ts`), filter chips (`ui/components/chip`) with a *Show processed* toggle, and one `nb-panel` per notebook coloured by `colorFor(name)` (subject variables). Item rows are buttons (icon square by kind, first line, page, state pills, chevron) that expand in place; the panel holds the ink preview, the text and the actions (one accent action). Under 600 px (`is-phone`, a ResizeObserver) the panel stacks. Each part (filters, list) is drawn through `drawSafely`, so a failure leaves an error card, not an empty view. The first scan shows placeholder rows; empty states use `ui/components/empty-state` with the generated illustration.
+
+**Dialogs.** `zettel/modals.ts`: `CardModal` and `ConfirmCardsModal` carry `nb-ui` on the modal element; head (icon square, title, one line), labelled fields, the card type as radio tiles (`CARD_TYPE_LOOK`: permanent blue, literature amber, fleeting violet), a tag preview, footer buttons. `CardListModal` keeps the fuzzy suggest behaviour and draws rows as id, title, location.
+
+**Card regions** over the page (`notebook-zettel-region`, `overlay.ts`) are unchanged: tokens only, no pointer events.
+## Hint bubble (0.13)
+
+A just-in-time tip (`src/ui/components/hint-bubble.ts`, rules in `src/ui/hint-logic.ts`): a floating card at the bottom centre
+(`--nb-panel`, `--nb-border-strong`, `--nb-radius-card`, `--nb-shadow-float`), an accent icon square, a 15 px title, one 13 px
+sentence in muted text, a *Turn off tips* link and a 40 px × button. It never takes focus, disappears after about 12 s and shows
+once per tip, at most one per 4 minutes and not while the pen is writing. Tips are switched in Settings → Appearance & language.
