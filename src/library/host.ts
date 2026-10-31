@@ -28,6 +28,7 @@ import { askLectureSetup } from "../view/lecture-pack-modal";
 import { pickFile } from "../view/pick";
 import { libraryIndexPath, parseStoredJson, patchNotebookId, patchNotebookMeta, type MetaPatchResult } from "./host-logic";
 import { importPdfAsNotebook } from "./import-pdf";
+import { hint } from "../ui/hints";
 import { createLectureFromSlides } from "./lecture-pack";
 import { openLooseSheet } from "./loose-sheet";
 import { openLibraryCheck } from "./library-check-modal";
@@ -296,7 +297,7 @@ export class NotebookLibraryHost implements LibraryHost {
 			},
 			pageSizes: (id) => this.pdf.pageSizes(id),
 			create: (dir, name, doc) => createNotebook(this.app, dir, name, doc),
-			open: (file) => this.openNotebook(file),
+			open: (file) => (hint("pdf-imported"), this.openNotebook(file)),
 			progress: (text) => {
 				const notice = showNotice(text, 0);
 				return () => notice.hide();

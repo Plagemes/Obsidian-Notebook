@@ -15,6 +15,7 @@ import { DEFAULT_TRASH_SETTINGS, readTrashSettings, type TrashSettings } from ".
 import { DEFAULT_ZETTEL_SETTINGS, readZettelSettings, type ZettelSettings } from "./zettel/settings";
 import { DEFAULT_TOOLBAR_SIZE, isToolbarSize, type ToolbarSize } from "./ui/toolbar-size";
 import { isUiLanguage, type UiLanguage } from "./i18n/languages";
+import { normaliseSeen, type HintId } from "./ui/hint-logic";
 import { DEFAULT_READING_SETTINGS, readReadingSettings, type ReadingSettings } from "./view/reading-settings";
 
 /** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
@@ -148,6 +149,10 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	fastScrollbar: boolean;
 	/** Look of the plugin's own surfaces (DESIGN.md §2.2): its own `--nb-*` palette, or those tokens mapped onto the Obsidian theme. */
 	appearanceStyle: AppearanceStyle;
+	/** 0.13: just-in-time tips (roadmap 425): a short tip the first time a situation occurs. */
+	hintsEnabled: boolean;
+	/** The tips already shown (ids), so each appears once. Not shown in the settings tab; "Show tips again" clears it. */
+	hintsSeen: HintId[];
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -204,6 +209,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	recentColours: [],
 	fastScrollbar: true,
 	appearanceStyle: "notebook",
+	hintsEnabled: true,
+	hintsSeen: [],
 	...DEFAULT_COMPANION_SETTINGS,
 	...DEFAULT_GESTURE_SETTINGS,
 	...DEFAULT_PEN_GESTURE_SETTINGS,
@@ -275,6 +282,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	s.recentColours = normaliseRecentColours(d.recentColours);
 	if (typeof d.fastScrollbar === "boolean") s.fastScrollbar = d.fastScrollbar;
 	if (APPEARANCE_STYLES.includes(d.appearanceStyle as AppearanceStyle)) s.appearanceStyle = d.appearanceStyle as AppearanceStyle;
+	if (typeof d.hintsEnabled === "boolean") s.hintsEnabled = d.hintsEnabled;
+	s.hintsSeen = normaliseSeen(d.hintsSeen);
 	s.lastNotebookPos = parsePosition(d.lastNotebookPos);
 
 	if (typeof d.timetableOffer === "boolean") s.timetableOffer = d.timetableOffer;

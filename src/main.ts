@@ -1,4 +1,5 @@
 import { trackWriting } from "./view/writing-quiet";
+import { registerHints } from "./ui/hints";
 import { showNotice } from "./view/notice";
 import { Platform, Plugin, type TFile } from "obsidian";
 import { onLanguageChanged, setUiLanguage, t } from "./i18n";
@@ -85,6 +86,7 @@ export default class NotebookPlugin extends Plugin {
 		this.step("language notice", () => this.register(onLanguageChanged(() => showNotice(t("settings.uiLanguage.changed")))));
 		// wave 0.8 (374): notices and non-urgent background work wait while the pen is on the screen.
 		this.step("writing tracker", () => trackWriting(this));
+		this.step("hints", () => registerHints(this));
 
 		this.step("practice", () => {
 			this.practice = new PracticeService(this);

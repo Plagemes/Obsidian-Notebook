@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### hints
+- **Just-in-time tips** (roadmap 425): a short tip the first time a situation occurs, shown once. Seven situations: the first notebook opened, the pen first touching a notebook, the pen first hovering with the side button set to open the radial menu, the first PDF imported, the first lasso selection, a finger touch right after the pen being ignored by palm rejection, and the first Inbox item. At most one tip every 4 minutes per session and never while the pen is writing (it waits for the pause). The bubble has a close button and *Turn off tips*.
+- Settings, *Appearance & language*: **Tips** (on by default) and **Show tips again**. The seen tips are stored in the plugin settings (`hintsSeen`), not in a notebook: no change to the notebook format.
+- Code: `src/ui/hint-logic.ts` (registry and rules, pure), `src/ui/hints.ts` (service and `hint(id)`), `src/ui/components/hint-bubble.ts`; one-line hooks in `notebook-view.ts` (opened, lasso), `library/host.ts` (PDF) and `zettel/inbox-service.ts` (Inbox). Pen and palm tips come from passive pointer listeners, with no change to the stroke pipeline.
+- Tests: `tests/hints.test.ts`; harness scenario `doc=hints` (`dev/harness/hints-check.ts`).
+
 ## 0.12.3 — 2026-10-30
 
 Fixes for what 0.12.2 showed on the tablet (Obsidian for Android, Italian, a vault with no notebooks): an empty creation dialog, a Home with only its title and search pill, an empty *Tag* page, a rail **+** sitting on the brand, and navy panels in the settings. **Not verified on the device**: checked in unit tests and in the browser harness only. Manual re-check: steps 485-492 in `docs/testing.md`. No change to the notebook format (still v11).

@@ -6,6 +6,7 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 
 | Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
 |---|---|---|---|---|---|
+| Just-in-time hints (roadmap 425, 0.13): seven situations (first notebook, first pen contact, pen hover with the radial menu, first PDF import, first lasso, palm-rejected touch, first Inbox item), shown once, at most one per 4 minutes, never while writing; Tips setting and Show tips again | ✅ | ✅ `tests/hints.test.ts` (registry, rate limit, seen, writing, off, reset, settings); harness `doc=hints` (the bubble, dismiss, turn off, reset); ❌ real S Pen events, the Inbox and PDF triggers | | ✅ | the pen, palm and radial tips come from pointer events, not from the stroke pipeline: palm tip is a touch within the palm window after the pen with finger drawing on (steps 580-589) |
 | Procedural subject art and palette (wave 0.12, DESIGN.md §2.3, §2.6): seven line-art families, card art, header bands, covers, empty states, folder icon, LRU image cache, reduced-motion switch; `colorFor` | ✅ | ✅ `tests/generative-art.test.ts` (determinism, seeds, geometry vs colour, density, left side clean, intensity, surfaces, empty states, switch, cache keys and eviction, palette, folder icon); harness gallery screenshots and timing (`HARNESS_DOC=art`) | | ✅ | no surface uses it yet; timing measured only in headless desktop Chrome (steps 425-429) |
 | Operations on several selected pages (roadmap 378, wave 0.8): multi-select in the page navigator (select button, long press on touch, Ctrl/Shift+click, range, select all) and move (start, end, position, another notebook), duplicate, bookmark, tag, paper, size, PDF export, delete through the page trash; one undo step each | ✅ | ✅ `tests/page-ops.test.ts` (order planning, ranges, every command as one step with exact undo, never deleting every page); ❌ the panel, the menus, touch long press, the dialogs | | ✅ | long press on touch both starts a selection and arms the old drag-to-reorder: to be checked on the tablet (steps 200-202) |
 | Do not disturb while writing (roadmap 374, wave 0.8): the plugin's own notices and non-urgent background work (thumbnails in the page panel and the library, library re-index, version-history snapshots, the timetable offer) wait while a pen is on the screen and for 1.5 s after | ✅ | ✅ `tests/writing-guard.test.ts` (timing, queue order, same-key replacement, lost pen, reset); ❌ real pen events, the notice wrapper in Obsidian | | ✅ | Obsidian's own notices (and other plugins') cannot be held back; `pointerType` `pen` only (a finger or mouse does not count); notices from the toolbar, stamps, selection actions and Zettelkasten are not routed yet (steps 205-206) |
@@ -1088,6 +1089,21 @@ Update to 0.12.3 and fully close and reopen Obsidian. Use the same vault with **
 490. **Creation dialog, both tabs.** The dialog shows the tabs *Quaderno* / *Cartella*, the cover preview with *Cambia copertina*, name, description, folder, the page templates, page size and orientation, *Annulla* and *Crea quaderno*. Tap *Cartella*: the folder card, name, description, location, icons and colours, *Crea cartella*. Also open it from *Nuova cartella* (header menu), from the quick actions and from the dashed tile. If it shows a red-bordered card instead, take a screenshot.
 491. **Tag page.** Tap *Tag* in the rail: the header *Tag* with its subtitle and *+ Nuovo*, and below it the line saying tags appear here once notebooks have them (no blank page).
 492. **First notebook and folder.** Create a notebook and a subject folder from the dialog: the notebook opens; back on Home the empty state is gone and the folder card (glossy folder icon, generated art) replaces the dashed tile.
+
+### 0.13 — hints (steps 580-589)
+
+Tips are off the notebook format: they are stored in the plugin settings. Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/hints-*.png`.
+
+580. **Tips setting.** Settings → *Appearance & language*: *Tips* is on, and *Show tips again* sits right below it with a *Reset* button.
+581. **First notebook.** (Press *Show tips again* first.) Open a notebook: after a moment a card *Your notebook is ready* appears at the bottom centre. It stays about 12 s or until you tap the ×.
+582. **Pen tip.** Touch the page with the S Pen: *Pen detected* appears (if not within the 4 minute gap of another tip, it waits for the next pen contact after the gap).
+583. **Radial tip.** With *Pen side button* on a radial option, hover the S Pen over the page: *Radial menu* appears. Click the side button while hovering: the radial menu opens.
+584. **Lasso tip.** Select with the lasso: *Selection* appears once, never again.
+585. **PDF tip.** Import a PDF: the notebook opens and *PDF imported* appears.
+586. **Palm tip.** Turn on *Draw with finger*, write with the pen and touch with a finger right after: *Palm ignored* appears once.
+587. **Inbox tip.** With a loose-sheet item or PDF highlight in the Inbox, open the library: *Inbox* appears once.
+588. **Never while writing.** Trigger a tip (reset first) while writing continuously: nothing appears until you pause for 1.5 s.
+589. **Turn off.** Tap *Turn off tips* on a tip: it closes, *Tips* in Settings is off, and no tip appears again. *Show tips again* turns them back on.
 
 Results table for steps 1 to 492. Fill it in as you go.
 

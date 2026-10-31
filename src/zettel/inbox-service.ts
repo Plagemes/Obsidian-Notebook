@@ -1,5 +1,6 @@
 import { Notice, type App, type Plugin, type TFile } from "obsidian";
 import { t } from "../i18n";
+import { hint } from "../ui/hints";
 import { openNotebookAtPage } from "../integration/open";
 import { findLooseSheet } from "../library/loose-sheet";
 import { renderThumbnail } from "../library/thumbnail";
@@ -128,6 +129,7 @@ export class InboxService {
 				const seen = new Set<string>();
 				this.items = sortItems(found.filter((i) => !seen.has(i.key) && !!seen.add(i.key)));
 				this.changed();
+				if (this.items.length > 0) hint("inbox-item");
 				return { items: this.items, scanned: env.notebooks().length };
 			} finally {
 				this.scanning = null;

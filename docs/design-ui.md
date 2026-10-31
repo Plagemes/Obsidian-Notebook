@@ -241,7 +241,7 @@ hidden in place). Both read what to show from one function, `settingsView`, so t
 | 7 | **Export** | Export settings, when there are any (the section is hidden while it is empty) |
 | 8 | **Obsidian integration** | Tabs of open notebooks, companion notes and their options |
 | 9 | **Study** | Groups *Class timetable* (edit, offer the current class, open without asking, start early) and *Zettelkasten* |
-| 10 | **Appearance & language** | Language, Style (Notebook / Follow Obsidian theme), toolbar size, night mode |
+| 10 | **Appearance & language** | Language, Style (Notebook / Follow Obsidian theme), toolbar size, night mode, tips (on/off, *Show tips again*) |
 | 11 | **Diagnostics** | Pen button test, performance benchmark, performance overlay (the first two are also commands) |
 
 ### Rules
@@ -355,3 +355,10 @@ events keep the badge current. The popover (a bottom sheet on a phone) lists eig
 **Decoration.** Generated art (the art module) behind the page header, on subject cards, smart collections, quick
 actions and empty states, and a soft accent glow behind section titles. It never takes input, never covers text and
 is removed under `prefers-reduced-motion: reduce`.
+
+## Hint bubble (0.13)
+
+A just-in-time tip (`src/ui/components/hint-bubble.ts`, rules in `src/ui/hint-logic.ts`): a floating card at the bottom centre
+(`--nb-panel`, `--nb-border-strong`, `--nb-radius-card`, `--nb-shadow-float`), an accent icon square, a 15 px title, one 13 px
+sentence in muted text, a *Turn off tips* link and a 40 px × button. It never takes focus, disappears after about 12 s and shows
+once per tip, at most one per 4 minutes and not while the pen is writing. Tips are switched in Settings → Appearance & language.

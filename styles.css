@@ -8467,3 +8467,99 @@ body.notebook-style-obsidian {
 		transition: none;
 	}
 }
+
+/* ===== 0.13 hints ===== */
+/* A just-in-time tip (src/ui/components/hint-bubble.ts): a floating card at the bottom centre, above the page, never
+   covering the toolbar's own row on a phone. Tokens only; light, dark and "Follow Obsidian theme" come from them. */
+.nb-ui.nb-hint-host {
+	position: fixed;
+	left: 50%;
+	bottom: calc(var(--nb-space-5) + env(safe-area-inset-bottom, 0px));
+	transform: translateX(-50%);
+	z-index: var(--layer-notice, 10000);
+	width: min(420px, calc(100vw - 2 * var(--nb-space-4)));
+	pointer-events: none;
+}
+
+.nb-ui .nb-hint {
+	pointer-events: auto;
+	display: flex;
+	align-items: flex-start;
+	gap: var(--nb-space-3);
+	padding: var(--nb-space-3) var(--nb-space-3) var(--nb-space-3) var(--nb-space-4);
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-card);
+	box-shadow: var(--nb-shadow-float);
+}
+
+.nb-ui .nb-hint-icon {
+	flex: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: var(--nb-radius-icon);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.nb-ui .nb-hint-text {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.nb-ui .nb-hint-title {
+	font-size: var(--nb-fs-row);
+	font-weight: 600;
+	line-height: 1.3;
+}
+
+.nb-ui .nb-hint-body {
+	margin-top: 2px;
+	font-size: var(--nb-fs-meta);
+	line-height: 1.4;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-hint-off {
+	margin-top: var(--nb-space-2);
+	padding: 0;
+	min-height: 0;
+	height: auto;
+	border: 0;
+	background: none;
+	box-shadow: none;
+	font-size: var(--nb-fs-label);
+	color: var(--nb-text-faint);
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+.nb-ui .nb-hint-off:hover {
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-hint-close {
+	flex: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--nb-target);
+	height: var(--nb-target);
+	margin: calc(-1 * var(--nb-space-2)) 0;
+	padding: 0;
+	border: 0;
+	border-radius: var(--nb-radius-pill);
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text-muted);
+	cursor: pointer;
+}
+
+.nb-ui .nb-hint-close:hover {
+	background: var(--nb-hover);
+	color: var(--nb-text);
+}

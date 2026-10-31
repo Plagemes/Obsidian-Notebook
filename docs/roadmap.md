@@ -758,7 +758,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 424. **P2** Command palette ordered by context (commands relevant to the open view first).
 
 ### Help and habits
-425. **P1** Just-in-time hints: a short tip the first time a situation occurs, shown once.
+425. 🧪 **P1** Just-in-time hints: a short tip the first time a situation occurs, shown once. (0.13: seven situations, rate limit, Tips setting; waiting for hardware verification)
 426. **P3** Shortcuts proposed from habits (a gesture or quick slot for what you repeat).
 427. **P3** Friction detection proposing a setting change (for example repeated accidental touches → palm rejection).
 428. **P3** Favourites suggested from the pen, colour and width combinations you really use.
