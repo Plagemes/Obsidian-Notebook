@@ -94,6 +94,14 @@ The built-in shapes (circle, "^", "#", star, line, retrace) are rule-based geome
 
 No external code was copied. The algorithms are textbook and written from scratch in `src/ui/art/`: mulberry32 (Tommy Ettinger, public domain) as the seeded generator; FNV-1a (public domain) with the 32-bit finaliser of MurmurHash3 (Austin Appleby, public domain) as the string hash; value noise with quintic smoothing; marching squares; Voronoi cells by half-plane clipping (Sutherland–Hodgman); streamlines with an occupancy grid (after Jobard and Lefer, 1997, the idea only). The reference images in `docs/design/reference/` were used for the look only; no image data is used.
 
+## Procedural art, wave 0.13
+
+No external code was copied; everything is written from scratch in `src/ui/art/`. Sources of the ideas and constants, with licences:
+- **Space colonization** (`veins.ts`): Runions, Lane and Prusinkiewicz, "Modeling Trees with a Space Colonization Algorithm" (Eurographics Workshop on Natural Phenomena, 2007), and Runions et al., "Modeling and visualization of leaf venation patterns" (SIGGRAPH 2005). Published research; an algorithm is not covered by a licence. No reference implementation was consulted or copied, and no GPL or AGPL code entered the repository.
+- **OKLab / OKLCH** (`oklch.ts`): Bjorn Ottosson, "A perceptual color space for image processing" (2020). The matrices and the maths are published in the article; his reference code is MIT-licensed (public domain for the maths). The conversion code here is written from scratch. The CSS Color 4 specification uses the same definition.
+- **Inline Worker, OffscreenCanvas, IndexedDB**: web platform APIs, no library. The recording format is our own.
+- **Keyword table** (`keywords.ts`): hand-written word stems; no dictionary or word list was imported.
+
 ## Equations and function graphs (#110, #113; wave 0.9: math)
 
 Date: 2026-10-30. No external code was copied or added as a dependency for this wave.

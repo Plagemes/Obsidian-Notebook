@@ -38,6 +38,15 @@
 - Code: `src/ui/hint-logic.ts` (registry and rules, pure), `src/ui/hints.ts` (service and `hint(id)`), `src/ui/components/hint-bubble.ts`; one-line hooks in `notebook-view.ts` (opened, lasso), `library/host.ts` (PDF) and `zettel/inbox-service.ts` (Inbox). Pen and palm tips come from passive pointer listeners, with no change to the stroke pipeline.
 - Tests: `tests/hints.test.ts`; harness scenario `doc=hints` (`dev/harness/hints-check.ts`).
 
+### art2
+- **Space-colonization art.** A new family, `veins` (organic venation: a leaf with a midrib, a river delta, a radial rosette), grown by the space colonization algorithm; deterministic from the seed. It is used by an `ArtSpec` without a style (and by the harness); folders and notebooks still store one of seven styles, so the app does not offer it yet.
+- **OKLCH colour.** Tints, shades, glow colours, the cover gradient and the new `rampFor` palette helper are mixed in OKLCH instead of RGB: hues stay true and ramps are perceptually even.
+- **Multi-pass glow.** Glow lines get a soft wide halo pass, a tighter glow and the crisp line, built from wide strokes (no `shadowBlur` or `filter`); the halo is skipped on wide bands.
+- **Keyword motifs.** A fixed rule table maps title words (English and Italian: matematica / math, biologia / anatomy, fisica, storia, chimica, diritto, informatica...) to the art families that suit them; names without a keyword keep their old art. No AI.
+- **Growth.** New optional `ArtSpec.growth` (0..1, `growthForPages(pages)`): the art gets denser, and from half way carries faint companion layers.
+- **Faster and off the main thread.** A persistent image cache in IndexedDB (works without it) and `artImageAsync` / `coverImageAsync` / `emptyStateImageAsync` / `prewarmArt`, which render in an inline Worker on an OffscreenCanvas with a main-thread fallback. The in-memory LRU and the 0.12.3 failure guard are kept; the public API of the art engine is unchanged.
+- Art gallery harness page: every family, growth steps, keyword motifs, pipeline checks.
+
 ## 0.12.4 — 2026-10-31
 
 The S Pen side button on the Samsung tablet (Obsidian for Android), reworked around what the device really does. **Not verified on the device**: checked in unit tests that replay recorded pen sequences and in the browser harness only. Manual re-check: steps 493-499 in `docs/testing.md`. No change to the notebook format (still v11) or to the stroke engine and renderer.

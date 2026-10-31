@@ -30,3 +30,8 @@ h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 16p
 .art-band-title { position: relative; font-size: 40px; font-weight: 800; letter-spacing: -0.02em; }
 .art-band-sub { position: relative; font-size: 15px; color: var(--muted); }
 .art-empty img { display: block; border-radius: 14px; background: var(--panel); }
+.art-cards-growth { grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
+.art-card-compact { height: 120px; gap: 12px; padding: 0 16px; }
+.art-card-compact .art-card-title { font-size: 15px; }
+.art-card-compact .art-card-icon svg { width: 40px; height: 40px; }
+h2 { font-size: 16px; font-weight: 700; margin: 20px 0 8px; text-transform: capitalize; }
