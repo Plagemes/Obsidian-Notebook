@@ -28,7 +28,7 @@ const DEVICES = {
 };
 
 // The families of src/ui/art/generative-art.ts (ART_STYLES), for the art gallery pages.
-const ART_STYLES = ["contours", "cells", "waves", "branches", "flow", "orbits", "grid"];
+const ART_STYLES = ["contours", "cells", "waves", "branches", "flow", "orbits", "grid", "veins"];
 
 const SCENARIOS = [];
 for (const doc of ["v3", "new"]) {
@@ -325,7 +325,7 @@ async function main() {
 			mkdirSync(artDir, { recursive: true });
 			const pages = [];
 			for (const theme of ["dark", "light"]) {
-				for (const style of [...ART_STYLES, "icons"]) pages.push({ theme, style, device: "desktopHiDpi" });
+				for (const style of [...ART_STYLES, "growth", "icons"]) pages.push({ theme, style, device: "desktopHiDpi" });
 				for (const device of ["tablet", "phone"]) pages.push({ theme, style: "mix", device });
 			}
 			for (const a of pages) {
