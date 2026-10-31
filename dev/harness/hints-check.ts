@@ -20,7 +20,6 @@ const MANIFEST = { id: "notebook", name: "Notebook", version: "0.0.0-harness", d
 export async function checkHints(api: HintsCheckApi): Promise<{ ok: boolean; results: CheckResult[]; errors: string[]; notices: string[]; env: Record<string, unknown> }> {
 	const results: CheckResult[] = [];
 	const add = (name: string, ok: unknown, detail = "") => results.push({ name, ok: !!ok, detail });
-	const tick = () => new Promise((r) => window.requestAnimationFrame(() => r(null)));
 	const until = async (cond: () => boolean, ms = 4000) => {
 		const t0 = performance.now();
 		while (!cond() && performance.now() - t0 < ms) await new Promise((r) => window.setTimeout(r, 50));
