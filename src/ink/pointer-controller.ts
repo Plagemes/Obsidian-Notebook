@@ -108,6 +108,8 @@ export interface PointerHandlers {
 	penMenu?(x: number, y: number, source: MenuSource): void;
 	/** A signal of the pen's side button reached the page (whatever the button is set to do). */
 	sideButtonSeen?(): void;
+	/** 0.12.5: a rest of the nib would start a pen gesture now (long-press gesture on, gesture mode off, an ink tool). */
+	restGestureArmed?(): boolean;
 	/** 0.11.2: "next stroke erases" was armed or disarmed (the toolbar shows it on the current-pen indicator). */
 	eraserNextChanged?(armed: boolean): void;
 	/**
@@ -843,6 +845,12 @@ export class PointerController {
 		const a = this.policy.settings.penButton;
 		this.btn.enabled = !!a && a !== "off";
 		this.btn.menuAllowed = opensRadial(a);
+		// A rest of the nib is spoken for only while a rest feature can really start: the hold-still menu (setting on, menu in the
+		// side button's action), or the long-press gesture (the view says: setting on, gesture mode off, an ink tool).
+		const s = this.policy.settings;
+		const gestureRest = this.handlers.restGestureArmed ? this.handlers.restGestureArmed() : s.restGesture === true;
+		this.btn.restClaimed = penHoldMayStart({ enabled: s.penLongPress === true, radialAction: opensRadial(a), eraser: false }) || gestureRest;
+		this.btn.eraserNextOnClick = s.eraserNextOnClick === true;
 	}
 
 	/** The first sample of the contact's trail, as the start of a stroke. */
@@ -1189,7 +1197,7 @@ export class PointerController {
 		this.hold.move(x, y);
 		// Asked before the move is judged: the sample that takes the nib out of the radius is part of the trail to replay.
 		const waiting = this.btn.pending;
-		if (this.drawType === "pen") this.btn.penMove(x, y);
+		if (this.drawType === "pen") this.btn.penMove(x, y, t);
 		if (!isNewSample(this.lastT, this.lastX, this.lastY, t, x, y, strict)) return;
 		this.lastT = t;
 		this.lastX = x;

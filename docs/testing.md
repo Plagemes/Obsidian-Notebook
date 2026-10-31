@@ -7,6 +7,7 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
 |---|---|---|---|---|---|
 | S Pen side button on Android (0.12.4): the button is seen only while the nib touches; **tap with it = radial menu on the lift (no dot), drag with it = eraser for the whole contact from its first sample (no ink, one undo step)**, whatever the form of the signal (bare `contextmenu` up to 500 ms before the pen down, during the contact within 350 ms, up to 400 ms after the pen up; `pointerdown` with `button 2` / `buttons & 2`; `buttons & 2` or the `button 0` move within 350 ms; the `pointercancel` after a `contextmenu`, the contact going on as a new pointer within 250 ms); a press in the middle of a stroke keeps writing ink; no menu during or after a drag; works with *Radial menu on click* too, and for the tools of *Lasso* / *Previous* / *Gestures while held*; *Pen button test* shows the signal and the decision | ✅ | ✅ `tests/side-button-contact.test.ts` (every form x tap / drag / no button / mid-stroke, five settings, cancel, decision logic, `EventLog`), `tests/pen-hover.test.ts`, `tests/pen-button.test.ts`, `tests/side-button.test.ts`, `tests/input-routing.test.ts`; ✅ harness (tap, drag, mid-stroke with real events) | | | which signal this tablet really sends is not known: the *Pen button test* lines *Signal seen* / *Decision* will tell (steps 493-499) |
+| Rest-based features next to the side button (0.12.5): a contact that waits on a `contextmenu` alone and rests 350 ms is a rest, not a drag with the button, when the long-press gesture or the hold-still radial menu is on; the barrel bit keeps its meaning; Pen button test log with `dDown` / `dUp`, tap / drag summary, decision next to the event, hover-click timer line, settings line | ✅ | ✅ `tests/hold-gesture-regression.test.ts` (rest then sign over every button form, hold radial, gesture while held, cancel and resume), `tests/pen-test-diagnostics.test.ts`; ✅ harness (rest then draw starts a gesture in the real view) | | | the real device sequence that broke gestures is not known; steps 660-665 |
 | Procedural subject art and palette (wave 0.12, DESIGN.md §2.3, §2.6): seven line-art families, card art, header bands, covers, empty states, folder icon, LRU image cache, reduced-motion switch; `colorFor` | ✅ | ✅ `tests/generative-art.test.ts` (determinism, seeds, geometry vs colour, density, left side clean, intensity, surfaces, empty states, switch, cache keys and eviction, palette, folder icon); harness gallery screenshots and timing (`HARNESS_DOC=art`) | | ✅ | no surface uses it yet; timing measured only in headless desktop Chrome (steps 425-429) |
 | Operations on several selected pages (roadmap 378, wave 0.8): multi-select in the page navigator (select button, long press on touch, Ctrl/Shift+click, range, select all) and move (start, end, position, another notebook), duplicate, bookmark, tag, paper, size, PDF export, delete through the page trash; one undo step each | ✅ | ✅ `tests/page-ops.test.ts` (order planning, ranges, every command as one step with exact undo, never deleting every page); ❌ the panel, the menus, touch long press, the dialogs | | ✅ | long press on touch both starts a selection and arms the old drag-to-reorder: to be checked on the tablet (steps 200-202) |
 | Do not disturb while writing (roadmap 374, wave 0.8): the plugin's own notices and non-urgent background work (thumbnails in the page panel and the library, library re-index, version-history snapshots, the timetable offer) wait while a pen is on the screen and for 1.5 s after | ✅ | ✅ `tests/writing-guard.test.ts` (timing, queue order, same-key replacement, lost pen, reset); ❌ real pen events, the notice wrapper in Obsidian | | ✅ | Obsidian's own notices (and other plugins') cannot be held back; `pointerType` `pen` only (a finger or mouse does not count); notices from the toolbar, stamps, selection actions and Zettelkasten are not routed yet (steps 205-206) |
@@ -321,7 +322,7 @@ Numbers from the final run of 0.9.0 (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 2990 tests passed |
+| `npm test` (unit project only; benchmarks are separate) | 3040 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: 0 errors; `eslint-plugin-obsidianmd` recommended rules: 0 errors |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
@@ -1102,7 +1103,18 @@ Update to 0.12.4 and fully close and reopen Obsidian. Samsung tablet, S Pen, Obs
 498. **Pen button test.** Settings → *Notebook* → *Pen button test*. With the button held, tap the test area, then drag, then repeat without the button. The lines *Signal seen* and *Decision* show, for the tap, a signal such as `contextmenu Δ=+40 ms` or `pointerdown buttons=3` and `menu (tap)`; for the drag `eraser (drag)`; for a press far into a stroke `ignored: pressed in the middle of a stroke`. Tap *Copy log* and paste it into the Notes column below: the signal that this tablet really sends is what decides whether the button is fully covered.
 499. **The button in the air.** Hover the pen over the page and press and release the button without touching: nothing opens and nothing is armed (this is the Android limit, not a bug). Then touch with the button held again: step 493 still works.
 
-Results table for steps 1 to 499. Fill it in as you go.
+### 0.12.5: pen gestures and rests (steps 660-665)
+
+Update to 0.12.5 and fully close and reopen Obsidian. Samsung tablet, S Pen, Obsidian for Android. Settings → *Pen gestures* → *Long press starts a gesture* on, *Pen side button* = *Radial menu on click, erase while held* (the default) unless a step says otherwise.
+
+660. **Rest, then draw a gesture.** Rest the nib on the page for about a second, then draw a circle around some ink without lifting. Expected: a short vibration after about 0.65 s, the dot disappears, the circle is a gesture (its label appears beside the nib) and nothing is written or erased. Repeat five times, also with a star and a question mark. Report any time the sign is written as ink or erases.
+661. **Rest, then draw, right after another stroke.** Write a word, lift, and within half a second rest the nib and draw a circle. Expected: as step 660 (a stray `contextmenu` from the earlier contact must not turn the gesture into the eraser).
+662. **Hold-still radial menu.** Turn *Long press starts a gesture* off, *Hold the pen still for the radial menu* on. Rest the nib for 0.7 s. Expected: the radial menu opens, no dot is left. Then write normally with pauses in the middle of a word: no menu.
+663. **Button tap and drag are unchanged.** Hold the side button: a quick tap opens the radial menu after the lift (no dot), a drag erases from where the nib landed. Without the button a tap leaves a dot and a drag writes. A button press in the middle of a stroke keeps writing ink.
+664. **Side button with the gesture action.** *Pen side button* = *Pen gestures while held*: hold the button, touch and draw a circle. Expected: a gesture, as before.
+665. **Pen button test log.** Settings → *Pen button test*. With the button held, drag across the test area; then do a tap. Press *Copy log* and paste the whole text in your report. Expected: the first line gives the settings; every event line shows `dDown` / `dUp`; the lift line says `still (a tap)` or `moved (a drag)`; *Signal seen* / *Decision* lines are in the log next to the event that changed them. If a menu opens on a drag, the log must show either `menu (tap)` or `menu (hover click ...)`: that tells which path opened it.
+
+Results table for steps 1 to 499 and 660 to 665. Fill it in as you go.
 
 | Step | Device / Obsidian version | Result | Notes |
 |---|---|---|---|
@@ -1605,6 +1617,12 @@ Results table for steps 1 to 499. Fill it in as you go.
 | 497 Other settings | | | |
 | 498 Pen button test | | | |
 | 499 The button in the air | | | |
+| 660 Rest, then draw a gesture | | | |
+| 661 Rest, then draw, right after another stroke | | | |
+| 662 Hold-still radial menu | | | |
+| 663 Button tap and drag are unchanged | | | |
+| 664 Side button with the gesture action | | | |
+| 665 Pen button test log | | | |
 
 Benchmark output (step 21): paste it here.
 
