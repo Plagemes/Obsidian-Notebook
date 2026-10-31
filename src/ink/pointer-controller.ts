@@ -807,12 +807,18 @@ export class PointerController {
 			return true;
 		}
 		const c = this.lastContact;
-		if (!c || this.hover.touchRecent(t)) return false;
+		// A pen-typed contextmenu is a hover click of a pen that passes hover (Windows): never the button of the last contact.
+		if (!c || (e as Partial<PointerEvent>).pointerType === "pen" || this.hover.touchRecent(t)) return false;
 		this.syncButton();
 		const action = this.btn.contextMenuAfter(t);
 		if (action === "unlinked") return false;
-		this.lastContact = null;
 		if (e.cancelable) e.preventDefault();
+		if (action === "quiet") {
+			// Too late for that contact and no click while hovering either (it follows a drag): no menu. The button may be
+			// held for the contact that lands next, so it is remembered for that.
+			this.btn.contextMenuNoContact(t);
+			return true;
+		}
 		if (action === "menu-late") {
 			this.handlers.sideButtonSeen?.();
 			this.handlers.retractStroke?.();
@@ -1181,6 +1187,8 @@ export class PointerController {
 	private addSample(buf: SampleBuffer, ce: PointerEvent, left: number, top: number, strict: boolean): void {
 		const t = ce.timeStamp, x = ce.clientX, y = ce.clientY;
 		this.hold.move(x, y);
+		// Asked before the move is judged: the sample that takes the nib out of the radius is part of the trail to replay.
+		const waiting = this.btn.pending;
 		if (this.drawType === "pen") this.btn.penMove(x, y);
 		if (!isNewSample(this.lastT, this.lastX, this.lastY, t, x, y, strict)) return;
 		this.lastT = t;
@@ -1190,7 +1198,7 @@ export class PointerController {
 		buf.push(x - left, y - top, ce.pressure, t);
 		if (this.trailOn) {
 			// While the button waits for tap or drag the whole contact is kept (it may all be replayed as the eraser).
-			if (this.btn.pending || t - this.contactDownT <= this.windows().afterMs) this.trail.push(x - left, y - top, ce.pressure, t);
+			if (waiting || t - this.contactDownT <= this.windows().afterMs) this.trail.push(x - left, y - top, ce.pressure, t);
 			else this.trailOn = false;
 		}
 	}
@@ -1221,6 +1229,7 @@ export class PointerController {
 						// as a new pointer. What was waiting for tap or drag drops its live ink; an eraser contact keeps its erasure.
 						this.releaseDraw(e.pointerId);
 						this.handlers.drawEnd(wasPending);
+						this.lastContact = { replayable: false };
 						this.armOrphanTimer();
 						return;
 					}
@@ -1228,6 +1237,8 @@ export class PointerController {
 					// Tap with the button held: no ink, the radial menu where the nib landed.
 					this.releaseDraw(e.pointerId);
 					this.handlers.drawEnd(true);
+					// Its other trace (a second contextmenu just after the lift) belongs to this contact and is a repeat.
+					this.lastContact = { replayable: false };
 					this.openClickMenu({ ...this.landing });
 					return;
 				}

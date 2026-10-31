@@ -20,6 +20,14 @@ import {
 
 /** A bare `contextmenu` this soon after a pen contact lifted still belongs to it, ms. */
 export const LATE_AFTER_LIFT_MS = 400;
+/**
+ * A bare `contextmenu` this soon after a contact that moved (or was already decided) lifted never opens the menu: past
+ * `LATE_AFTER_LIFT_MS` it is no longer linked to that contact, but it is no click while hovering either. It may still be
+ * the button held for the contact that lands next.
+ */
+export const QUIET_AFTER_LIFT_MS = 800;
+/** After a `pointercancel`, a pen landing farther than this from the last sample is a new contact, not the same one (CSS px). */
+export const RESUME_RADIUS_PX = 2 * STILL_RADIUS_PX;
 /** After a `pointercancel`, a pen landing within this long is the same contact going on, ms. */
 export const RESUME_MS = 250;
 
@@ -39,7 +47,7 @@ export interface ButtonDecision {
 }
 
 /** What the caller does about a signal. */
-export type ContactAction = "none" | "wait" | "eraser" | "menu" | "menu-late" | "eraser-late" | "ignore" | "unlinked";
+export type ContactAction = "none" | "wait" | "eraser" | "menu" | "menu-late" | "eraser-late" | "ignore" | "unlinked" | "quiet";
 
 export type ButtonState = "ink" | "pending" | "eraser" | "menu";
 
@@ -102,6 +110,9 @@ export class ButtonContact {
 	private x0 = 0;
 	private y0 = 0;
 	private moved = false;
+	/** The last sample of the contact (client px), to tell the same contact going on after a cancel from a new one. */
+	private lastX = 0;
+	private lastY = 0;
 	private upT: number | null = null;
 	/** A bare contextmenu with no contact yet, and when it came. */
 	private beforeT: number | null = null;
@@ -184,7 +195,8 @@ export class ButtonContact {
 	 * went on after a `pointercancel` and had already moved), or `ink`.
 	 */
 	penDown(t: number, x: number, y: number, barrel: number | null): ButtonState {
-		const resume = this.orphan && t >= this.orphan.t && t - this.orphan.t <= RESUME_MS ? this.orphan : null;
+		const resume = this.orphan && t >= this.orphan.t && t - this.orphan.t <= RESUME_MS
+			&& Math.hypot(x - this.lastX, y - this.lastY) <= RESUME_RADIUS_PX ? this.orphan : null;
 		this.orphan = null;
 		this.resumedFromPending = resume?.pending === true;
 		this.resumed = resume !== null;
@@ -193,6 +205,8 @@ export class ButtonContact {
 		if (resume) {
 			this.open = true;
 			this.upT = null;
+			this.lastX = x;
+			this.lastY = y;
 			if (Math.hypot(x - this.x0, y - this.y0) > STILL_RADIUS_PX) this.moved = true;
 			if (resume.pending && !this.moved) this.set("pending", { kind: "waiting" });
 			else this.set("eraser", { kind: "eraser" });
@@ -204,6 +218,8 @@ export class ButtonContact {
 		this.downT = t;
 		this.x0 = x;
 		this.y0 = y;
+		this.lastX = x;
+		this.lastY = y;
 		this.moved = false;
 		this.state = "ink";
 		this.signal = null;
@@ -225,6 +241,10 @@ export class ButtonContact {
 
 	/** A sample of the contact. True when this move ended the wait: the button was held and the nib has left the radius (the eraser). */
 	penMove(x: number, y: number): boolean {
+		if (this.open) {
+			this.lastX = x;
+			this.lastY = y;
+		}
 		if (!this.open || this.moved) return false;
 		if (Math.hypot(x - this.x0, y - this.y0) <= STILL_RADIUS_PX) return false;
 		this.moved = true;
@@ -322,7 +342,8 @@ export class ButtonContact {
 		if (this.orphan !== null) return "none";
 		if (this.open || this.upT === null) return "unlinked";
 		const gap = t - this.upT;
-		if (gap < 0 || gap > LATE_AFTER_LIFT_MS) return "unlinked";
+		if (gap < 0) return "unlinked";
+		if (gap > LATE_AFTER_LIFT_MS) return gap <= QUIET_AFTER_LIFT_MS && (this.moved || this.state !== "ink") ? "quiet" : "unlinked";
 		const dt = t - this.downT;
 		this.signal = { kind: "contextmenu", dt };
 		if (!this.enabled) return this.ignore("off");

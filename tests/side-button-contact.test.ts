@@ -111,9 +111,9 @@ const forms: Form[] = [
 			menuAt(r, a, L + 40);
 			a.push([L + 42, () => r.pen("pointercancel", L + 42, X0 + 2)]);
 			if (g === "drag") {
-				a.push([L + 70, () => r.pen("pointerdown", L + 70, X0 + 30, { pointerId: 4 })]);
-				for (let i = 5; i <= 20; i++) a.push([L + i * 16, () => r.pen("pointermove", L + i * 16, X0 + 30 + (i - 4) * 6, { pointerId: 4 })]);
-				up(r, a, L + 21 * 16, X0 + 130, 4);
+				a.push([L + 70, () => r.pen("pointerdown", L + 70, X0 + 12, { pointerId: 4 })]);
+				for (let i = 5; i <= 20; i++) a.push([L + i * 16, () => r.pen("pointermove", L + i * 16, X0 + 12 + (i - 4) * 6, { pointerId: 4 })]);
+				up(r, a, L + 21 * 16, X0 + 90, 4);
 			}
 		},
 	},
@@ -330,7 +330,7 @@ describe("pointercancel: the contact goes on, or settles", () => {
 
 	it("a new pen pointerdown within the window continues the contact (a drag: the eraser from the first sample)", () => {
 		const r = cancelled();
-		r.pen("pointerdown", L + 42 + RESUME_MS - 50, X0 + 40, { pointerId: 5 });
+		r.pen("pointerdown", L + 42 + RESUME_MS - 50, X0 + 10, { pointerId: 5 });
 		r.pen("pointermove", L + 400, X0 + 80, { pointerId: 5 });
 		r.pen("pointerup", L + 450, X0 + 90, { pointerId: 5 });
 		r.at(L + 4000);
@@ -342,7 +342,7 @@ describe("pointercancel: the contact goes on, or settles", () => {
 
 	it("later pen events of the same pointer (no new pointerdown) continue it too", () => {
 		const r = cancelled();
-		r.pen("pointermove", L + 80, X0 + 40);
+		r.pen("pointermove", L + 80, X0 + 10);
 		r.pen("pointermove", L + 100, X0 + 70);
 		r.pen("pointerup", L + 120, X0 + 70);
 		r.at(L + 4000);
@@ -465,7 +465,7 @@ describe("ButtonContact (the decision, and what the Pen button test shows)", () 
 		b.penDown(1000, 0, 0, null);
 		b.contextMenuDuring(1040);
 		expect(b.penCancel(1042)).toBe("orphan");
-		b.penDown(1070, 30, 0, null);
+		b.penDown(1070, 15, 0, null);
 		expect(describeSignal(b.signal!)).toBe("pointercancel after contextmenu");
 		expect(b.state).toBe("eraser");
 	});
@@ -500,5 +500,188 @@ describe("ButtonContact (the decision, and what the Pen button test shows)", () 
 		ev("pointermove", 2020, 430);
 		log.add({ kind: "contextmenu", t: 2900, pointerType: "", button: -1, buttons: 0 });
 		expect(log.decisionText).toBe("ignored: pressed in the middle of a stroke");
+	});
+});
+
+// --- review fixes (0.12.4) ---
+
+describe("two signals from one contact: the second never reaches the next contact", () => {
+	const ctxBefore = (r: Rig) => (r.bareMenu(L - 60), r.pen("pointerdown", L, X0));
+	const ctxAfter = (r: Rig) => (r.pen("pointerdown", L, X0), r.bareMenu(L + 40));
+	const plainDrag = (r: Rig, t: number) => {
+		r.pen("pointerdown", t, X0, { pointerId: 9 });
+		for (let i = 1; i <= 20; i++) r.pen("pointermove", t + i * 16, X0 + i * 6, { pointerId: 9 });
+		r.pen("pointerup", t + 340, X0 + 126, { pointerId: 9 });
+	};
+
+	it.each([["before", ctxBefore], ["after", ctxAfter]] as const)("a tap (contextmenu %s the landing), a stray contextmenu 20 ms after the lift, then a plain drag: the drag is ink", (_n, land) => {
+		const r = rig();
+		land(r);
+		r.pen("pointerup", L + 90, X0);
+		expect(r.menus).toHaveLength(1);
+		r.bareMenu(L + 110);
+		plainDrag(r, L + 400);
+		r.at(L + 4000);
+		expect(r.menus).toHaveLength(1);
+		expect(eraserStarts(r)).toHaveLength(0);
+		expect(inkLeft(r)).toBe(1);
+	});
+
+	it("a decided eraser drag, a stray contextmenu 20 ms after its lift, then a plain drag: the drag is ink", () => {
+		const r = rig();
+		r.bareMenu(L - 60);
+		r.pen("pointerdown", L, X0);
+		for (let i = 1; i <= 20; i++) r.pen("pointermove", L + i * 16, X0 + i * 6);
+		r.pen("pointerup", L + 340, X0 + 126);
+		r.bareMenu(L + 360);
+		plainDrag(r, L + 700);
+		r.at(L + 4000);
+		expect(eraserStarts(r)).toHaveLength(1);
+		expect(inkLeft(r)).toBe(1);
+		expect(r.menus).toEqual([]);
+	});
+
+	it("a cancelled contact that settled as a tap, then a stray contextmenu: also nothing for the next contact", () => {
+		const r = rig();
+		r.pen("pointerdown", L, X0);
+		r.bareMenu(L + 40);
+		r.pen("pointercancel", L + 42, X0);
+		r.at(L + 325); // the orphan settled: the menu
+		r.bareMenu(L + 340);
+		plainDrag(r, L + 800);
+		r.at(L + 4000);
+		expect(r.menus).toHaveLength(1);
+		expect(eraserStarts(r)).toHaveLength(0);
+		expect(inkLeft(r)).toBe(1);
+	});
+
+	it("when the stroke cannot be retracted the menu still opens for a late tap", () => {
+		const r = rig({ retractOk: false });
+		r.pen("pointerdown", L, X0);
+		r.pen("pointerup", L + 90, X0);
+		r.bareMenu(L + 200);
+		r.at(L + 3000);
+		expect(r.menus).toHaveLength(1);
+		expect(r.log).toContain("retract");
+	});
+});
+
+describe("a slow move that leaves the radius late still erases from the first sample", () => {
+	it("button held at the landing, the nib rests 600 ms, then moves: the eraser starts where it landed", () => {
+		const r = rig();
+		r.bareMenu(L - 60);
+		r.pen("pointerdown", L, X0);
+		r.pen("pointermove", L + 300, X0 + 2);
+		r.pen("pointermove", L + 620, X0 + 30);
+		r.pen("pointerup", L + 700, X0 + 40);
+		r.at(L + 3000);
+		expect(eraserStarts(r)).toHaveLength(1);
+		expect(eraserStarts(r)[0]!.x).toBe(pageX(X0));
+		expect(inkLeft(r)).toBe(0);
+	});
+});
+
+describe("a pointercancel followed by a pointerdown far away is a new contact", () => {
+	it("an eraser contact: the new landing 400 px away is ink, no eraser segment is drawn between", () => {
+		const r = rig();
+		r.pen("pointerdown", L, X0);
+		for (let i = 1; i <= 5; i++) r.pen("pointermove", L + i * 16, X0 + i * 6);
+		r.bareMenu(L + 100);
+		r.pen("pointercancel", L + 102, X0 + 30);
+		r.pen("pointerdown", L + 140, X0 + 400, { pointerId: 6 });
+		r.pen("pointermove", L + 160, X0 + 410, { pointerId: 6 });
+		r.pen("pointerup", L + 180, X0 + 410, { pointerId: 6 });
+		r.at(L + 4000);
+		expect(eraserStarts(r)).toHaveLength(1);
+		expect(eraserStarts(r)[0]!.x).toBe(pageX(X0));
+		expect(inkLeft(r)).toBe(1);
+	});
+
+	it("a still (waiting) contact: the far landing is ink, and the dropped contact opens no menu", () => {
+		const r = rig();
+		r.pen("pointerdown", L, X0);
+		r.bareMenu(L + 40);
+		r.pen("pointercancel", L + 42, X0 + 1);
+		r.pen("pointerdown", L + 100, X0 + 400, { pointerId: 6 });
+		r.pen("pointermove", L + 120, X0 + 440, { pointerId: 6 });
+		r.pen("pointerup", L + 200, X0 + 440, { pointerId: 6 });
+		r.at(L + 4000);
+		expect(eraserStarts(r)).toHaveLength(0);
+		expect(r.menus).toEqual([]);
+		expect(inkLeft(r)).toBe(1);
+	});
+
+	it("a landing close to where the contact was cancelled still continues it", () => {
+		const r = rig();
+		r.pen("pointerdown", L, X0);
+		for (let i = 1; i <= 5; i++) r.pen("pointermove", L + i * 16, X0 + i * 6);
+		r.bareMenu(L + 100);
+		r.pen("pointercancel", L + 102, X0 + 30);
+		r.pen("pointerdown", L + 140, X0 + 45, { pointerId: 6 });
+		r.pen("pointerup", L + 180, X0 + 60, { pointerId: 6 });
+		r.at(L + 4000);
+		expect(inkLeft(r)).toBe(0);
+		expect(r.menus).toEqual([]);
+	});
+});
+
+describe("no menu after a drag, however late its contextmenu comes", () => {
+	const longDrag = (r: Rig) => {
+		r.pen("pointerdown", L, X0);
+		for (let i = 1; i <= 40; i++) r.pen("pointermove", L + i * 16, X0 + i * 6);
+		r.pen("pointerup", L + 650, X0 + 240);
+	};
+
+	it("a contextmenu 450 ms after a 650 ms drag lifted opens nothing (neither at once nor later)", () => {
+		const r = rig();
+		longDrag(r);
+		r.bareMenu(L + 650 + 450);
+		r.at(L + 6000);
+		expect(r.menus).toEqual([]);
+		expect(calls(r)).toEqual(["start", "end"]);
+	});
+
+	it("but a button contact that lands right after it is still linked to it (tap: menu)", () => {
+		const r = rig();
+		longDrag(r);
+		r.bareMenu(L + 650 + 450);
+		r.pen("pointerdown", L + 650 + 520, X0);
+		r.pen("pointerup", L + 650 + 600, X0);
+		r.at(L + 6000);
+		expect(r.menus).toHaveLength(1);
+	});
+
+	it("an ordinary click while hovering long after a stroke still opens the menu (other devices)", () => {
+		const r = rig();
+		longDrag(r);
+		r.bareMenu(L + 650 + 2000);
+		r.at(L + 8000);
+		expect(r.menus).toHaveLength(1);
+	});
+});
+
+describe("a pen-typed contextmenu is a hover click, not the button of the last contact (Windows)", () => {
+	it("after a quick dash it retracts nothing and keeps the ink", () => {
+		const r = rig();
+		r.pen("pointerdown", L, X0);
+		for (let i = 1; i <= 5; i++) r.pen("pointermove", L + i * 16, X0 + i * 8);
+		r.pen("pointerup", L + 100, X0 + 40);
+		r.at(L + 200);
+		r.fire("contextmenu", { pointerType: "pen", button: 2, buttons: 0, clientX: X0 + 40, clientY: 300, timeStamp: 10_000 + L + 200 });
+		r.at(L + 3000);
+		expect(r.log).not.toContain("retract");
+		expect(inkLeft(r)).toBe(1);
+		expect(eraserStarts(r)).toHaveLength(0);
+	});
+});
+
+describe("the 150 ms to 500 ms migration of the before-window runs once", () => {
+	it("a file saved before 0.12.4 reads 150 as 500 and is marked; afterwards 150 is the user's choice", () => {
+		const first = readSettings({ penButtonContactBeforeMs: 150 });
+		expect(first.penButtonContactBeforeMs).toBe(500);
+		expect(first.penButtonWindowsMigrated).toBe(true);
+		const later = readSettings({ penButtonContactBeforeMs: 150, penButtonWindowsMigrated: true });
+		expect(later.penButtonContactBeforeMs).toBe(150);
+		expect(readSettings({}).penButtonContactBeforeMs).toBe(500);
 	});
 });
