@@ -599,7 +599,7 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 	/** Viewport CSS px where the composited page must show paper and ink (checked on a screenshot by check.mjs). */
 	const r2 = stage().getBoundingClientRect();
 	const points = {
-		paper: [r2.left + r2.width * 0.5, r2.top + r2.height * 0.3],
+		paper: [r2.left + r2.width * 0.08, r2.top + r2.height * 0.3],
 		ink: [r2.left + r2.width * 0.5, r2.top + r2.height * 0.52],
 	};
 	const env = {
@@ -945,7 +945,8 @@ async function checkPageMode(add: (name: string, ok: boolean, detail?: string) =
 	const boxes = v.layout.boxes as Array<{ x: number; y: number; width: number }>;
 	add(`${label}: pages sit side by side`, boxes.length === pages && boxes.every((b, i) => b.y === 0 && (i === 0 || b.x > boxes[i - 1]!.x)), `${boxes.length} boxes`);
 	add(`${label}: starts on the first page`, v.currentPageIndex() === 0, `page ${v.currentPageIndex() + 1}`);
-	const paper = staticPixel(0.5, 0.3);
+	// Left of the strokes: in a short landscape view the toolbar is two rows and the middle of the stage is on a stroke.
+	const paper = staticPixel(0.08, 0.3);
 	add(`${label}: the page is painted`, paper[3]! > 250 && paper[0]! > 200, `rgba(${paper.join(",")})`);
 	const x0 = v.viewport.offsetX;
 
@@ -1234,7 +1235,7 @@ async function checkToolbarSize(add: (name: string, ok: boolean, detail?: string
 		await frames(3);
 		await wait(120);
 	};
-	for (const [size, target, icon] of [["large", 48, 24], ["compact", 36, 16]] as const) {
+	for (const [size, target, icon] of [["large", 52, 24], ["compact", 40, 18]] as const) {
 		const label = `toolbar size ${size} ${width}px`;
 		await closeAll();
 		await set(size);
@@ -1248,8 +1249,9 @@ async function checkToolbarSize(add: (name: string, ok: boolean, detail?: string
 		add(`${label}: buttons are at least ${target} px`, wrong.length === 0, wrong.map((b) => `${b.getAttribute("aria-label")} ${b.offsetWidth}×${b.offsetHeight}`).join(", "));
 		const svg = tools.map((b) => b.querySelector<SVGElement>(".svg-icon")).find((x) => x);
 		add(`${label}: icons are ${icon} px`, !!svg && Math.round(svg.getBoundingClientRect().width) === icon, `${svg ? svg.getBoundingClientRect().width : "no icon"}`);
-		const rows = Math.ceil(bar.getBoundingClientRect().height / (target + 8));
-		add(`${label}: at most three rows`, rows <= 3, `height ${Math.round(bar.getBoundingClientRect().height)} px`);
+		// The bar has 12 px of padding; on a 360 px phone the large size wraps the tools onto two lines under the action row.
+		const rows = Math.ceil((bar.getBoundingClientRect().height - 12) / (target + 8));
+		add(`${label}: at most ${width <= 380 ? "four" : "three"} rows`, rows <= (width <= 380 ? 4 : 3), `height ${Math.round(bar.getBoundingClientRect().height)} px`);
 		const favs = bar.querySelector<HTMLElement>(".notebook-favs")!;
 		add(`${label}: favourite pens strip is inside the view`, inView(favs.getBoundingClientRect()), `${Math.round(favs.getBoundingClientRect().left)}–${Math.round(favs.getBoundingClientRect().right)}`);
 
@@ -1348,7 +1350,8 @@ async function checkToolbar(add: (name: string, ok: boolean, detail?: string) =>
 	add(`${label}: touch targets are at least 40 px`, small.length === 0,
 		small.map((b) => `${b.getAttribute("aria-label")} ${b.offsetWidth}×${b.offsetHeight}`).join(", "));
 	const barRect = bar.getBoundingClientRect();
-	add(`${label}: at most two rows`, barRect.height <= 100, `height ${Math.round(barRect.height)} px`);
+	// 0.13 ds-notebook: 44 px buttons (two rows of them, the gap and the bar padding).
+	add(`${label}: at most two rows`, barRect.height <= 124, `height ${Math.round(barRect.height)} px`);
 
 	// 2. Options popover of the eraser: modes, filter, colour and size, all reachable, drawing nothing.
 	const strokes = strokeCount();
