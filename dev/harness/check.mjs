@@ -268,6 +268,7 @@ async function main() {
 					}
 				}
 				await cdp.evaluate("window.harness.closeAll().then(() => true)");
+			}
 			// wave 0.13 ds-modals: a screenshot of each dialog, prompt and card, in dev/harness/dist/shots/design/.
 			if (s.doc === "modals") {
 				const designDir = join(shots, "design");
