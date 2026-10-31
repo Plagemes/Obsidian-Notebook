@@ -162,7 +162,8 @@ export async function checkCreate(api: CreateCheckApi, finalTab: CreateTab): Pro
 	const coverAfter = await coverReady();
 	add("the shuffle button next to Change cover draws a new variation", !!coverBefore && !!coverAfter && coverAfter !== coverBefore);
 	tap(q(".nb-create-change"), "touch");
-	tap(q('.nb-create-style[data-id="cells"]'), "pen");
+	add("the style picker offers veins", !!q('.nb-create-style[data-id="veins"]'));
+	tap(q('.nb-create-style[data-id="veins"]'), "pen");
 	tap(q('.nb-create-cover-options .nb-create-swatch[data-id="#16C2A3"]'), "touch");
 	await frames();
 	add("the selected tiles are marked", q('.nb-create-paper[data-id="dotted"]')?.getAttribute("aria-checked") === "true" && q('.nb-create-chip[data-id="a5"]')?.hasClass("is-active") === true);
@@ -177,7 +178,7 @@ export async function checkCreate(api: CreateCheckApi, finalTab: CreateTab): Pro
 		const p = parsed.doc.pages[0]!;
 		add("with exactly the chosen paper, size and orientation", p.paper.kind === "dotted" && p.width === PAGE_SIZES.a5.height && p.height === PAGE_SIZES.a5.width, `${p.paper.kind} ${p.width}x${p.height}`);
 		const m = parsed.doc.meta!;
-		add("and the cover and description", m.cover === "#16C2A3" && m.coverArt?.kind === "art" && m.coverArt.style === "cells" && m.description === "Prima parte del corso", JSON.stringify(m));
+		add("and the cover and description", m.cover === "#16C2A3" && m.coverArt?.kind === "art" && m.coverArt.style === "branches" && m.coverArt.seed.startsWith("veins~") && m.description === "Prima parte del corso", JSON.stringify(m));
 	} else add("the new notebook reads back", false, parsed && !parsed.ok ? parsed.message : "missing");
 	add("the dialog closed after creating", !document.querySelector(".notebook-create-modal"));
 
