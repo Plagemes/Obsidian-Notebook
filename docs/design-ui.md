@@ -185,6 +185,8 @@ Components: icon buttons are 40 × 40, radius `--nb-radius-s`, transparent until
 the accent soft fill and an accent underline dot; groups are separated by 1 px dividers; popovers and sheets use
 `--nb-radius-l` and `--nb-shadow-2`; the contextual bar is a pill with `--nb-shadow-2`.
 
+**0.13: the editing chrome on DESIGN.md** (block `0.13 ds-notebook` at the end of `styles.css`, scoped under `.workspace-leaf-content .view-content.notebook-view` so it beats Obsidian's button rules). Icon buttons are 44 px at the normal size (`toolbarScale`: compact 40, normal 44, large 52; a normal bar on a view too narrow for eight of them uses 40, `toolbarScaleFor`); tools and history are capsules; popovers, sheets, the contextual bar and the banners are glass panels (`--nb-panel` over a blur, `--nb-border`, `--nb-shadow-*`); sheet rows have a 34 px icon square; the dial keeps its fixed navy palette with a hairline ring and accent halo; the status bar item and the page-operations `Menu` (tagged `nb-ui nb-menu`) follow the tokens. On touch every text button is at least 44 px; under `prefers-reduced-motion` the blur, glows, transitions and entrance animations are removed. Decoration (icon squares, halos) is never a control.
+
 ## 8. Accessibility
 
 - Every icon button has an `aria-label` (and `title` on desktop); toggles use `aria-pressed`; buttons that open

@@ -11,7 +11,7 @@ export class NotebookStatusBar {
 	private text: HTMLElement;
 
 	constructor(readonly el: HTMLElement, private readonly open: () => void) {
-		el.addClass("notebook-statusbar", "notebook-hidden");
+		el.addClass("notebook-statusbar", "nb-ui", "notebook-hidden");
 		el.setAttribute("role", "button");
 		el.setAttribute("tabindex", "0");
 		this.dot = el.createSpan({ cls: "notebook-statusbar-dot" });

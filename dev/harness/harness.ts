@@ -30,6 +30,7 @@ import { FAKE_PATH, installFakePdf, slidesNotebook } from "./fake-pdf";
 import { checkReading } from "./reading-check";
 import { checkPractice } from "./practice-check";
 import { checkOutline, outlineNotebook } from "./outline-check";
+import { checkChrome, chromeState, type ChromeState } from "./ds-notebook-check";
 import { checkExcerpt } from "./excerpt-check";
 import { checkReadOnly } from "./readonly-check";
 import { checkSettings } from "./settings-check";
@@ -2070,6 +2071,13 @@ async function main(): Promise<void> {
 		out.dataset.done = "1";
 	}
 }
+
+// 0.13 ds-notebook: the editing chrome on the design system (doc=chrome, ds-notebook-check.ts).
+const chromeApi = () => ({ view, openOptions, openMore, openPageSheet, selectFirstStroke, radialState, closeAll, wait, errors, notices });
+Object.assign(harnessApi, {
+	checkChrome: async () => { try { return JSON.parse(JSON.stringify(await checkChrome(chromeApi()))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`chrome check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } },
+	chromeShot: (state: ChromeState) => chromeState(chromeApi(), state),
+});
 
 (window as unknown as { harness: Record<string, unknown> }).harness = harnessApi;
 harnessApi.ready = main();

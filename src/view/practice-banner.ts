@@ -3,7 +3,7 @@
  * what attempt it is, *Peek at the solution* (hold), *Original*, *Attempts* and the optional timer. Everything here is view
  * state except the timer's *Stop*, which adds the time to the attempt's record.
  */
-import { Notice } from "obsidian";
+import { Notice, setIcon } from "obsidian";
 import { t } from "../i18n";
 import { attemptFromTags, elapsedSeconds, formatDuration, hasPracticeTag, recordOf, type AttemptRecord } from "../model/practice";
 import type { Page } from "../model/types";
@@ -39,6 +39,8 @@ export class PracticeBanner {
 		}
 		this.el.removeClass("notebook-hidden");
 		const n = record?.n ?? attemptFromTags(page.tags);
+		// 0.13: decoration, an icon square (never a control).
+		setIcon(this.el.createSpan({ cls: "notebook-practice-icon", attr: { "aria-hidden": "true" } }), "repeat");
 		this.el.createSpan({ cls: "notebook-practice-title", text: n ? t("practice.banner.attempt", { n: String(n) }) : t("practice.banner.plain") });
 		if (!record) {
 			this.el.createSpan({ cls: "notebook-practice-note", text: t("practice.banner.noLink") });
