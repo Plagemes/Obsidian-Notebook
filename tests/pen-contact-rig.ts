@@ -35,6 +35,8 @@ export class FakeStage extends FakeNode {
 export interface RigOptions {
 	settings?: Partial<InputSettings>;
 	retractOk?: boolean;
+	/** The view's answer to "would a rest of the nib start a gesture now" (gesture mode, tool); absent: the setting `restGesture` decides. */
+	restGestureArmed?: () => boolean;
 }
 
 /** Page x of a client x in the rig (the stage sits at left 100). */
@@ -62,6 +64,7 @@ export function rig(opts: RigOptions = {}) {
 		zoom: () => {},
 		penMenu: (x, y, source) => (menus.push([x, y, source]), log.push(`menu:${source}`)),
 		sideButtonSeen: () => void seen++,
+		...(opts.restGestureArmed ? { restGestureArmed: opts.restGestureArmed } : {}),
 	};
 	const policy = new InputPolicy({ fingerDrawing: false, palmRejectionMs: 0, penButton: "radial-eraser", fingerLongPress: false, ...opts.settings });
 	const controller = new PointerController(stage as unknown as HTMLElement, policy, handlers, { scope: view as unknown as Node, windowTarget: win });

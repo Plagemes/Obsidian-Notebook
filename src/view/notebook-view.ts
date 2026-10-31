@@ -623,6 +623,7 @@ export class NotebookView extends FileView {
 				window.setTimeout(() => this.gestures?.releaseContacts(), 0);
 			},
 			sideButtonSeen: () => this.noteSideButtonSeen(),
+			restGestureArmed: () => this.host.settings.penGestureLongPress && !!this.penGestures && !this.penGestures.mode && (this.tools.tool === "pen" || this.tools.tool === "highlighter"),
 			// 0.11.2: "next stroke erases" (pen button click while hovering, or the pen key) shows on the current-pen indicator.
 			eraserNextChanged: (armed) => this.toolbar.setEraserNext(armed),
 			retractStroke: () => this.retractStroke(),

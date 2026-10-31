@@ -12,6 +12,7 @@ export function policySettings(s: NotebookSettings): InputSettings {
 		penButton: s.penSideButton,
 		// The long-press gesture trigger takes the resting pen: the hold-still radial menu would fight it.
 		penLongPress: effectivePenHold(s.penHoldStill, s.penButtonSeen) && !s.penGestureLongPress,
+		restGesture: s.penGestureLongPress,
 		fingerLongPress: s.fingerLongPress,
 		zeroPressureButton: s.penZeroPressureButton,
 		chordButton: s.penChordButton,
