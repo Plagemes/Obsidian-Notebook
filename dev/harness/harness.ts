@@ -510,6 +510,61 @@ async function check(): Promise<{ ok: boolean; results: CheckResult[]; errors: s
 		add("button held + touch erases", strokeCount() < withLine, `${withLine} → ${strokeCount()}`);
 		add("and opens no menu on release", !menuOpen(), "");
 		await closeMenu();
+
+		// 0.12.4: Obsidian for Android passes no hover; the button is seen only around the nib's contact, as a bare contextmenu
+		// (no pointerType) near the pen down. Tap with it: the radial menu on the lift, no ink. Drag with it: the eraser from the
+		// first sample, no ink, no menu. A press in the middle of a stroke: ink goes on. Real events, real timers.
+		{
+			const bare = () => st.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, composed: true, clientX: 0, clientY: 0 }));
+			const upAt = (pid: number, x: number, y: number) => st.dispatchEvent(mk("pointerup", pid, x, y, { button: 0, buttons: 0, pressure: 0 }));
+			await wait(1700); // the earlier presses have settled
+			const tx = r4.left + r4.width * 0.4, ty = r4.top + r4.height * 0.3;
+			const tapBase = strokeCount();
+			let pid = nid++;
+			bare();
+			await wait(150); // the contextmenu comes 150 ms before the nib lands
+			st.dispatchEvent(mk("pointerdown", pid, tx, ty));
+			await wait(90);
+			add("button held (contextmenu 150 ms before), tap: no menu before the lift", !menuOpen(), "");
+			upAt(pid, tx, ty);
+			await frames(2);
+			add("button held, tap: the radial menu opens on the lift", menuOpen(), menuOpen() ? "open" : "no menu");
+			add("button held, tap: no dot is left", strokeCount() === tapBase, `${tapBase} → ${strokeCount()}`);
+			await closeMenu();
+
+			await wait(1700);
+			await penStroke([[0.3, 0.9], [0.7, 0.9]]);
+			const beforeDrag = strokeCount();
+			const dy = r4.top + r4.height * 0.9;
+			pid = nid++;
+			st.dispatchEvent(mk("pointerdown", pid, r4.left + r4.width * 0.25, dy));
+			bare(); // right after the nib landed
+			for (let i = 0; i <= 14; i++) {
+				st.dispatchEvent(mk("pointermove", pid, r4.left + r4.width * (0.25 + i * 0.035), dy, { button: -1, buttons: 1, pressure: 0.6 }));
+				await wait(12);
+			}
+			upAt(pid, r4.left + r4.width * 0.74, dy);
+			await frames(3);
+			add("button held (contextmenu right after the landing), drag: erases the line", strokeCount() < beforeDrag, `${beforeDrag} → ${strokeCount()}`);
+			add("button held, drag: no menu, no new ink", !menuOpen() && strokeCount() === beforeDrag - 1, `${beforeDrag} → ${strokeCount()}`);
+			await closeMenu();
+
+			await wait(1700);
+			const midBase = strokeCount();
+			pid = nid++;
+			const my = r4.top + r4.height * 0.15;
+			st.dispatchEvent(mk("pointerdown", pid, r4.left + r4.width * 0.2, my));
+			for (let i = 0; i <= 30; i++) {
+				st.dispatchEvent(mk("pointermove", pid, r4.left + r4.width * (0.2 + i * 0.01), my + i, { button: -1, buttons: 1, pressure: 0.6 }));
+				await wait(25);
+			}
+			bare(); // ~750 ms into an ordinary stroke
+			st.dispatchEvent(mk("pointermove", pid, r4.left + r4.width * 0.52, my + 31, { button: -1, buttons: 1, pressure: 0.6 }));
+			upAt(pid, r4.left + r4.width * 0.52, my + 31);
+			await frames(3);
+			add("a press in the middle of a stroke: ink goes on, no menu", !menuOpen() && strokeCount() === midBase + 1, `${midBase} → ${strokeCount()}`);
+			await closeMenu();
+		}
 		v.host.settings.penButtonSeen = false;
 		v.applySettings(v.host.settings);
 		setTool("pen");

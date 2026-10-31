@@ -1,7 +1,9 @@
 import { Modal, type App } from "obsidian";
-import { t } from "../i18n";
+import { t, type MessageKey } from "../i18n";
+import type { ButtonDecision, ButtonSignal, IgnoreReason } from "../ink/button-contact";
+import { opensRadial } from "../ink/input-policy";
 import { EventLog, LOG_LINES, PEN_TEST_EVENT_TYPES, describeTarget, noSignalYet, type LoggedEvent } from "../ink/pen-button";
-import { capacitorInventory, formatCapacitorInventory } from "../ink/pen-hover";
+import { capacitorInventory, formatCapacitorInventory, formatDelta } from "../ink/pen-hover";
 import type { NotebookSettings } from "../settings";
 import { showNotice } from "./notice";
 import type { PenButtonSettings, PenButtonSettingsHost } from "./pen-button-settings";
@@ -36,6 +38,36 @@ export function penSignalInfo(host: { settings: NotebookSettings; saveSettings()
 	};
 }
 
+const IGNORE_KEY: Record<IgnoreReason, MessageKey> = {
+	off: "penTest.ign.off",
+	resting: "penTest.ign.resting",
+	"mid-stroke": "penTest.ign.midStroke",
+	"after-drag": "penTest.ign.afterDrag",
+	"no-contact": "penTest.ign.noContact",
+	repeat: "penTest.ign.repeat",
+};
+
+/** The button signal the plugin saw, in the user's language: contextmenu Δ=+40 ms, pointerdown buttons=3, ... */
+export function signalLabel(s: ButtonSignal): string {
+	switch (s.kind) {
+		case "contextmenu": return s.dt === undefined ? t("penTest.sig.contextmenuNone") : t("penTest.sig.contextmenu", { dt: formatDelta(s.dt) });
+		case "pointerdown": return t("penTest.sig.pointerdown", { buttons: String(s.buttons ?? "?") });
+		case "pointermove": return t("penTest.sig.pointermove", { buttons: String(s.buttons ?? "?"), dt: formatDelta(s.dt ?? 0) });
+		case "chord": return t("penTest.sig.chord", { dt: formatDelta(s.dt ?? 0) });
+		default: return t("penTest.sig.pointercancel");
+	}
+}
+
+/** What the plugin made of it, in the user's language: menu (tap), eraser (drag), ignored: <reason>. */
+export function decisionLabel(d: ButtonDecision): string {
+	switch (d.kind) {
+		case "waiting": return t("penTest.dec.waiting");
+		case "menu": return t("penTest.dec.menu");
+		case "eraser": return t("penTest.dec.eraser");
+		default: return t("penTest.dec.ignored", { reason: t(IGNORE_KEY[d.reason ?? "repeat"]) });
+	}
+}
+
 /**
  * "Pen button test": lists, in plain text, the last events the pen (or anything else) sends anywhere in the
  * window, and whether the plugin would treat each as the side button. Like the pen-tracker page it shows the
@@ -46,6 +78,8 @@ export function penSignalInfo(host: { settings: NotebookSettings; saveSettings()
 export class PenTestModal extends Modal {
 	private readonly log: EventLog;
 	private verdictEl!: HTMLElement;
+	private signalSeenEl!: HTMLElement;
+	private decisionEl!: HTMLElement;
 	private t0 = 0;
 	private area!: HTMLElement;
 	private output!: HTMLTextAreaElement;
@@ -61,7 +95,11 @@ export class PenTestModal extends Modal {
 	constructor(app: App, private readonly info: PenSignalInfo) {
 		super(app);
 		const s = info.penButton?.get();
-		this.log = new EventLog(LOG_LINES, s ? { beforeMs: s.penButtonContactBeforeMs, afterMs: s.penButtonContactAfterMs } : undefined);
+		this.log = new EventLog(
+			LOG_LINES,
+			s ? { beforeMs: s.penButtonContactBeforeMs, afterMs: s.penButtonContactAfterMs } : undefined,
+			s ? { enabled: s.penSideButton !== "off", menuAllowed: opensRadial(s.penSideButton) } : undefined,
+		);
 	}
 
 	onOpen(): void {
@@ -113,6 +151,9 @@ export class PenTestModal extends Modal {
 		this.summary = contentEl.createDiv({ cls: "notebook-pentest-summary" });
 		// 0.11.2: what the last contextmenu meant (button held at contact, during a stroke, while hovering).
 		this.verdictEl = contentEl.createDiv({ cls: "notebook-pentest-summary" });
+		// 0.12.4: the button signal the plugin saw around the pen contact and what it decided (menu on a tap, eraser on a drag).
+		this.signalSeenEl = contentEl.createDiv({ cls: "notebook-pentest-summary" });
+		this.decisionEl = contentEl.createDiv({ cls: "notebook-pentest-summary" });
 		this.counts = contentEl.createDiv({ cls: "notebook-pentest-note" });
 		this.output = contentEl.createEl("textarea", { cls: "notebook-pentest-log", attr: { readonly: "true", rows: "14", "aria-label": t("penTest.logLabel") } });
 		const buttons = contentEl.createDiv({ cls: "notebook-pentest-buttons" });
@@ -176,13 +217,17 @@ export class PenTestModal extends Modal {
 		this.summary.setText(t("penTest.summary", { n: String(this.log.sideButtonCount) }));
 		const verdict = this.log.verdict;
 		this.verdictEl.setText(verdict ? t("penTest.verdict", { text: verdict }) : t("penTest.verdictNone"));
+		const sig = this.log.signal;
+		const dec = this.log.decision;
+		this.signalSeenEl.setText(sig ? t("penTest.signalLine", { text: signalLabel(sig) }) : t("penTest.signalNone"));
+		this.decisionEl.setText(dec ? t("penTest.decisionLine", { text: decisionLabel(dec) }) : t("penTest.decisionNone"));
 		this.counts.setText(this.log.total > 0 ? t("penTest.counts", { list: this.log.countsText() }) : t("penTest.countsNone"));
 		if (this.log.sideButtonCount > 0) this.info.markSeen();
 		this.signal.setText(noSignalYet(this.info.seen(), this.log.sideButtonCount) ? t("penTest.noSignal") : t("penTest.signalSeen"));
 	}
 
 	private async copy(): Promise<void> {
-		const text = [this.counts.getText(), this.verdictEl.getText(), this.capacitor.getText(), this.last.getText(), this.log.text()].join("\n");
+		const text = [this.counts.getText(), this.verdictEl.getText(), this.signalSeenEl.getText(), this.decisionEl.getText(), this.capacitor.getText(), this.last.getText(), this.log.text()].join("\n");
 		try {
 			await navigator.clipboard.writeText(text);
 			showNotice(t("penTest.copied"));
