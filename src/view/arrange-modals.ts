@@ -3,6 +3,7 @@ import { t, type MessageKey } from "../i18n";
 import { lockedSize } from "../ink/selection-transform";
 import type { StyleCatalog, StyleChoice } from "../ink/select-similar";
 import type { Tool } from "../model/types";
+import { modalShell, shellButton, shellCheck, shellField, shellNote, shellRow, shellSection } from "../ui/components/modal-shell";
 
 const TOOL_LABEL: Record<Tool, MessageKey> = {
 	pen: "tool.pen",
@@ -20,21 +21,19 @@ export class StyleModal extends Modal {
 	}
 
 	onOpen(): void {
-		this.modalEl.addClass("notebook-style-panel");
-		this.setTitle(t("select.style.title"));
-		const body = this.contentEl;
-		body.empty();
+		const shell = modalShell(this, { title: t("select.style.title"), icon: "palette", size: "narrow", footer: false, cls: "notebook-style-panel" });
+		const body = shell.body;
 		const { tools, colours, combos } = this.catalog;
 		if (tools.length === 0 && colours.length === 0) {
-			body.createDiv({ cls: "notebook-style-empty", text: t("select.style.empty") });
+			shellNote(body, t("select.style.empty")).addClass("notebook-style-empty");
 			return;
 		}
-		body.createDiv({ cls: "notebook-style-hint", text: t("select.style.hint") });
-		this.section(t("select.style.tools"), tools.map((x) => ({ label: t(TOOL_LABEL[x.tool]), count: x.count, choice: { tool: x.tool } })));
-		this.section(t("select.style.colours"), colours.map((x) => ({ label: x.colour.toUpperCase(), colour: x.colour, count: x.count, choice: { colour: x.colour } })));
+		shellNote(body, t("select.style.hint")).addClass("notebook-style-hint");
+		this.section(body, t("select.style.tools"), tools.map((x) => ({ label: t(TOOL_LABEL[x.tool]), count: x.count, choice: { tool: x.tool } })));
+		this.section(body, t("select.style.colours"), colours.map((x) => ({ label: x.colour.toUpperCase(), colour: x.colour, count: x.count, choice: { colour: x.colour } })));
 		// A single pair is the same as its tool and its colour: the section only helps when the page mixes.
 		if (combos.length > 1 && (tools.length > 1 || colours.length > 1)) {
-			this.section(t("select.style.both"), combos.map((x) => ({
+			this.section(body, t("select.style.both"), combos.map((x) => ({
 				label: `${t(TOOL_LABEL[x.tool])} · ${x.colour.toUpperCase()}`, colour: x.colour, count: x.count, choice: { tool: x.tool, colour: x.colour },
 			})));
 		}
@@ -44,19 +43,16 @@ export class StyleModal extends Modal {
 		this.contentEl.empty();
 	}
 
-	private section(title: string, rows: Array<{ label: string; colour?: string; count: number; choice: StyleChoice }>): void {
+	private section(parent: HTMLElement, title: string, rows: Array<{ label: string; colour?: string; count: number; choice: StyleChoice }>): void {
 		if (rows.length === 0) return;
-		const wrap = this.contentEl.createDiv({ cls: "notebook-style-section", attr: { role: "group", "aria-label": title } });
-		wrap.createDiv({ cls: "notebook-style-title", text: title });
+		const list = shellSection(parent, title, "notebook-style-section");
 		for (const row of rows) {
-			const b = wrap.createEl("button", { cls: "notebook-style-row", attr: { type: "button" } });
-			if (row.colour) b.createSpan({ cls: "notebook-swatch-dot" }).setCssProps({ "--notebook-swatch-color": row.colour });
-			b.createSpan({ cls: "notebook-style-label", text: row.label });
-			b.createSpan({ cls: "notebook-style-count", text: String(row.count) });
-			b.addEventListener("click", (e) => {
-				e.preventDefault();
-				this.close();
-				this.onPick(row.choice);
+			shellRow(list, {
+				label: row.label, count: row.count, cls: "notebook-style-row", ...(row.colour ? { dot: row.colour } : {}),
+				onClick: () => {
+					this.close();
+					this.onPick(row.choice);
+				},
 			});
 		}
 	}
@@ -87,28 +83,22 @@ export class ResizeModal extends Modal {
 	}
 
 	onOpen(): void {
-		this.modalEl.addClass("notebook-resize-panel");
-		this.setTitle(t("resize.title"));
-		const body = this.contentEl;
-		body.empty();
-		body.createDiv({ cls: "notebook-resize-now", text: t("resize.now", { w: fmt(this.current.width), h: fmt(this.current.height) }) });
-
+		const shell = modalShell(this, { title: t("resize.title"), subtitle: t("resize.now", { w: fmt(this.current.width), h: fmt(this.current.height) }), icon: "scaling", size: "narrow", cls: "notebook-resize-panel" });
+		const body = shell.body;
 		const widthInput = this.field(body, "notebook-resize-width", t("resize.width"), this.current.width);
 		const heightInput = this.field(body, "notebook-resize-height", t("resize.height"), this.current.height);
-		const error = body.createDiv({ cls: "notebook-resize-error notebook-hidden", attr: { role: "alert" } });
+		const error = shellNote(body, "", "error");
+		error.addClass("notebook-resize-error", "notebook-hidden");
 
-		const keep = body.createEl("label", { cls: "notebook-resize-lock" });
-		const box = keep.createEl("input", { attr: { type: "checkbox" } });
-		box.checked = this.lock;
-		keep.createSpan({ text: t("resize.lock") });
-		box.addEventListener("change", () => {
-			this.lock = box.checked;
-			if (this.lock) this.follow(widthInput, heightInput, "width");
+		const box = shellCheck(body, t("resize.lock"), this.lock, (on) => {
+			this.lock = on;
+			if (on) this.follow(widthInput, heightInput, "width");
 		});
+		box.parentElement?.addClass("notebook-resize-lock");
 		widthInput.addEventListener("input", () => this.follow(widthInput, heightInput, "width"));
 		heightInput.addEventListener("input", () => this.follow(widthInput, heightInput, "height"));
 
-		body.createDiv({ cls: "notebook-resize-note", text: t("resize.note") });
+		shellNote(body, t("resize.note")).addClass("notebook-resize-note");
 
 		const apply = (): void => {
 			const width = parseLength(widthInput.value), height = parseLength(heightInput.value);
@@ -127,9 +117,8 @@ export class ResizeModal extends Modal {
 				apply();
 			});
 		}
-		const actions = body.createDiv({ cls: "notebook-resize-actions" });
-		const ok = actions.createEl("button", { cls: "mod-cta", text: t("resize.apply"), attr: { type: "button" } });
-		ok.addEventListener("click", (e) => {
+		shellButton(shell.foot, "secondary", t("ui.modal.cancel"), () => this.close());
+		shellButton(shell.foot, "primary", t("resize.apply"), (e) => {
 			e.preventDefault();
 			apply();
 		});
@@ -142,9 +131,9 @@ export class ResizeModal extends Modal {
 	}
 
 	private field(parent: HTMLElement, id: string, label: string, value: number): HTMLInputElement {
-		const row = parent.createDiv({ cls: "notebook-resize-row" });
-		row.createEl("label", { text: label, attr: { for: id } });
-		const input = row.createEl("input", { attr: { id, type: "text", inputmode: "decimal", autocomplete: "off", spellcheck: "false" } });
+		const field = shellField(parent, label, id);
+		const row = field.createDiv({ cls: "nb-modal-inputrow notebook-resize-row" });
+		const input = row.createEl("input", { cls: "nb-modal-input", attr: { id, type: "text", inputmode: "decimal", autocomplete: "off", spellcheck: "false" } });
 		input.value = fmt(value);
 		row.createSpan({ cls: "notebook-resize-unit", text: t("resize.unit") });
 		return input;

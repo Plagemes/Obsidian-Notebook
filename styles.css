@@ -10684,3 +10684,984 @@ body.notebook-style-obsidian {
 		transform: none;
 	}
 }
+
+/* ===== 0.13 ds-modals ===== */
+/* Every dialog, prompt and floating card of the plugin on the design system (DESIGN.md §3 "Creation dialog", §4 "Every other
+   surface"). The shell is src/ui/components/modal-shell.ts: a header (icon square, title, optional line, close, a faint band of
+   generated line art), a scrolling body and a footer with a secondary and a primary button. Every rule starts with .nb-ui
+   (0,2,0 or more) or is a .modal.nb-ui rule, so it beats Obsidian's own button, input and select rules (tests/styles.test.ts). */
+
+.nb-ui .notebook-hidden {
+	display: none;
+}
+
+/* --- the dialog frame --- */
+.modal.nb-modal.nb-ui {
+	display: flex;
+	flex-direction: column;
+	max-height: calc(100vh - 48px);
+	padding: 0;
+	overflow: hidden;
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-panel);
+	box-shadow: var(--nb-shadow-float);
+	font-family: var(--font-interface);
+}
+
+.modal.nb-modal.nb-ui.is-narrow {
+	width: min(440px, calc(100vw - 32px));
+}
+
+.modal.nb-modal.nb-ui.is-medium {
+	width: min(560px, calc(100vw - 32px));
+}
+
+.modal.nb-modal.nb-ui.is-wide {
+	width: min(720px, calc(100vw - 32px));
+}
+
+/* Obsidian's own title bar and × give way to the shell's header. */
+.modal.nb-modal.nb-ui > .modal-close-button,
+.modal.nb-modal.nb-ui > .modal-header,
+.modal.nb-modal.nb-ui > .modal-title {
+	display: none;
+}
+
+.modal.nb-modal.nb-ui .modal-content,
+.modal.nb-modal.nb-ui .nb-modal-content {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+	margin: 0;
+	padding: 0;
+}
+
+.modal.nb-modal.nb-ui,
+.modal.nb-modal.nb-ui * {
+	box-sizing: border-box;
+}
+
+/* --- header --- */
+.nb-ui .nb-modal-head {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	flex: 0 0 auto;
+	padding: 16px 20px;
+	border-bottom: 1px solid var(--nb-border);
+	overflow: hidden;
+}
+
+/* Decoration: faint line art of the header's colour behind it. */
+.nb-ui .nb-modal-band {
+	position: absolute;
+	inset: 0;
+	background-image: var(--nb-modal-band);
+	background-size: cover;
+	background-position: right center;
+	opacity: 0.22;
+	pointer-events: none;
+	mask-image: linear-gradient(90deg, transparent 20%, #000 80%);
+}
+
+.nb-ui .nb-modal-head > :not(.nb-modal-band) {
+	position: relative;
+}
+
+.nb-ui .nb-modal-head .nb-modal-icon {
+	flex: 0 0 auto;
+}
+
+.nb-ui .nb-modal-headtext {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.nb-ui .nb-modal-title {
+	font-size: var(--nb-fs-section);
+	font-weight: 600;
+	line-height: 1.25;
+	color: var(--nb-text);
+	overflow-wrap: anywhere;
+}
+
+.nb-ui .nb-modal-subtitle {
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text-muted);
+	overflow-wrap: anywhere;
+}
+
+.nb-ui .nb-modal-close,
+.nb-ui .nb-card-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	width: var(--nb-target);
+	height: var(--nb-target);
+	min-width: var(--nb-target);
+	padding: 0;
+	border: 1px solid var(--nb-border);
+	border-radius: 50%;
+	background: var(--nb-tile);
+	box-shadow: none;
+	color: var(--nb-text-muted);
+	cursor: pointer;
+	transition: background-color var(--nb-motion-fast) ease-out, color var(--nb-motion-fast) ease-out;
+}
+
+.nb-ui .nb-modal-close:hover,
+.nb-ui .nb-card-btn:hover {
+	background: var(--nb-accent-bg);
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-modal-close svg,
+.nb-ui .nb-card-btn svg {
+	width: 18px;
+	height: 18px;
+	stroke-width: 1.75;
+}
+
+/* --- body and footer --- */
+.nb-ui .nb-modal-body {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 12px;
+	min-height: 0;
+	padding: 20px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+.nb-ui .nb-modal-foot {
+	display: flex;
+	flex: 0 0 auto;
+	justify-content: flex-end;
+	gap: 12px;
+	padding: 16px 20px;
+	border-top: 1px solid var(--nb-border);
+}
+
+.nb-ui .nb-modal-foot.is-empty {
+	display: none;
+}
+
+.nb-ui .nb-modal-text {
+	margin: 0;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+	line-height: 1.5;
+}
+
+/* --- buttons --- */
+.nb-ui .nb-modal-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: var(--nb-target);
+	padding: 0 18px;
+	border: 1px solid transparent;
+	border-radius: var(--nb-radius-tile);
+	box-shadow: none;
+	font-family: inherit;
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background-color var(--nb-motion-fast) ease-out, border-color var(--nb-motion-fast) ease-out, opacity var(--nb-motion-fast) ease-out;
+}
+
+.nb-ui .nb-modal-btn.is-secondary {
+	border-color: var(--nb-border-strong);
+	background: var(--nb-tile);
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-modal-btn.is-secondary:hover {
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui .nb-modal-btn.is-primary {
+	background: var(--nb-accent);
+	color: #ffffff;
+}
+
+.nb-ui .nb-modal-btn.is-primary:hover {
+	opacity: 0.9;
+}
+
+.nb-ui .nb-modal-btn.is-danger {
+	background: var(--nb-danger);
+	color: #ffffff;
+}
+
+.nb-ui .nb-modal-btn.is-danger:hover {
+	opacity: 0.9;
+}
+
+.nb-ui .nb-modal-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.nb-ui .nb-modal-btn.is-icon {
+	width: var(--nb-target);
+	padding: 0;
+}
+
+.nb-ui .nb-modal-btn svg {
+	width: 18px;
+	height: 18px;
+	stroke-width: 1.75;
+}
+
+.nb-ui .nb-modal-btn-icon {
+	display: inline-flex;
+}
+
+.nb-ui :is(button, input, select, textarea, [role="button"], [role="textbox"]):focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+/* --- Obsidian settings rows inside a dialog body --- */
+.nb-ui .nb-modal-body .setting-item {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px 16px;
+	margin: 0;
+	padding: 4px 0;
+	border: 0;
+}
+
+.nb-ui .nb-modal-body .setting-item-info {
+	flex: 1 1 200px;
+	min-width: 0;
+}
+
+.nb-ui .nb-modal-body .setting-item-name {
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+	font-weight: 500;
+}
+
+.nb-ui .nb-modal-body .setting-item-description {
+	margin-top: 2px;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui .nb-modal-body .setting-item-control {
+	display: flex;
+	flex: 0 1 auto;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+}
+
+.nb-ui .nb-modal-body .setting-item-control :is(input[type="text"], input[type="number"], input[type="date"], input[type="search"], select) {
+	min-height: 44px;
+	max-width: 100%;
+	padding: 0 14px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background-color: var(--nb-bg);
+	box-shadow: none;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+	font-family: inherit;
+}
+
+.nb-ui .nb-modal-body .setting-item-control select {
+	padding-right: 34px;
+}
+
+.nb-ui .nb-modal-body .setting-item-control :is(input[type="text"], input[type="number"], input[type="date"]):disabled,
+.nb-ui .nb-modal-body .setting-item-control select:disabled {
+	opacity: 0.5;
+}
+
+.nb-ui .nb-modal-body .checkbox-container {
+	background-color: var(--nb-border-strong);
+	box-shadow: none;
+}
+
+.nb-ui .nb-modal-body .checkbox-container.is-enabled {
+	background-color: var(--nb-accent);
+}
+
+/* --- fields, notes, rows --- */
+.nb-ui .nb-modal-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+}
+
+.nb-ui .nb-modal-label {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	font-weight: 600;
+}
+
+.nb-ui .nb-modal-input {
+	width: 100%;
+	min-height: 44px;
+	padding: 10px 14px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-bg);
+	box-shadow: none;
+	color: var(--nb-text);
+	font-family: inherit;
+	font-size: var(--nb-fs-row);
+}
+
+.nb-ui .nb-modal-inputrow {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.nb-ui .nb-modal-inputrow .nb-modal-input {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.nb-ui .nb-modal-inputrow > span {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui .nb-modal-check {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 44px;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+	cursor: pointer;
+}
+
+.nb-ui .nb-modal-check input[type="checkbox"] {
+	width: 20px;
+	height: 20px;
+	margin: 0;
+	accent-color: var(--nb-accent);
+}
+
+.nb-ui .nb-modal-checks {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0 20px;
+}
+
+.nb-ui .nb-modal-note {
+	margin: 0;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	line-height: 1.5;
+}
+
+.nb-ui .nb-modal-error {
+	margin: 0;
+	color: var(--nb-danger);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui .nb-modal-error:empty {
+	display: none;
+}
+
+.nb-ui .nb-modal-section {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.nb-ui .nb-modal-section-title {
+	color: var(--nb-text-faint);
+	font-size: var(--nb-fs-label);
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.nb-ui .nb-modal-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.nb-ui .nb-modal-row {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 12px;
+	width: 100%;
+	min-height: 52px;
+	margin: 0;
+	padding: 8px 14px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	box-shadow: none;
+	color: var(--nb-text);
+	text-align: left;
+	cursor: pointer;
+	transition: background-color var(--nb-motion-fast) ease-out, border-color var(--nb-motion-fast) ease-out;
+}
+
+.nb-ui .nb-modal-row:hover {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui .nb-modal-row-text {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.nb-ui .nb-modal-row-label {
+	font-size: var(--nb-fs-row);
+	font-weight: 500;
+	overflow-wrap: anywhere;
+}
+
+.nb-ui .nb-modal-row-detail {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui .nb-modal-row-count {
+	min-width: 28px;
+	padding: 2px 10px;
+	border-radius: 999px;
+	background: var(--nb-accent-bg);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+}
+
+.nb-ui .nb-modal-row-chevron {
+	display: inline-flex;
+	color: var(--nb-text-faint);
+}
+
+.nb-ui .nb-modal-row-chevron svg {
+	width: 18px;
+	height: 18px;
+}
+
+.nb-ui .nb-modal-dot {
+	flex: 0 0 auto;
+	width: 18px;
+	height: 18px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: 50%;
+	background: var(--nb-c, var(--nb-text-muted));
+}
+
+/* --- prompts (Go to page, Find a page, Open a notebook) --- */
+.modal.nb-prompt.nb-ui {
+	width: min(720px, calc(100vw - 32px));
+	max-height: min(640px, calc(100vh - 48px));
+	padding: 0;
+	overflow: hidden;
+}
+
+.nb-ui .nb-modal-head.is-prompt {
+	padding: 12px 16px;
+	border-bottom: 0;
+}
+
+.nb-ui .nb-modal-head.is-prompt .nb-modal-title {
+	font-size: 17px;
+}
+
+.modal.nb-prompt.nb-ui .prompt-input-container {
+	padding: 0 16px 12px;
+}
+
+.modal.nb-prompt.nb-ui .prompt-input {
+	width: 100%;
+	min-height: 48px;
+	padding: 0 16px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: 999px;
+	background: var(--nb-bg);
+	box-shadow: none;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+}
+
+.modal.nb-prompt.nb-ui .prompt-results {
+	padding: 4px 8px 8px;
+	border-top: 1px solid var(--nb-border);
+}
+
+.modal.nb-prompt.nb-ui .suggestion-item {
+	min-height: 48px;
+	padding: 8px 12px;
+	border-radius: var(--nb-radius-tile);
+	color: var(--nb-text);
+}
+
+.modal.nb-prompt.nb-ui .suggestion-item.is-selected,
+.modal.nb-prompt.nb-ui .suggestion-item:hover {
+	background: var(--nb-accent-bg);
+}
+
+.modal.nb-prompt.nb-ui .prompt-instructions {
+	padding: 8px 16px;
+	border-top: 1px solid var(--nb-border);
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui .notebook-picker-path,
+.nb-ui .notebook-quicknav-detail,
+.nb-ui .notebook-quicknav-page,
+.nb-ui .notebook-goto-num {
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .notebook-picker-new {
+	color: var(--nb-accent);
+	font-weight: 600;
+}
+
+.nb-ui .notebook-quicknav-thumb {
+	border: 1px solid var(--nb-border);
+	border-radius: 6px;
+	background: var(--nb-tile);
+}
+
+.nb-ui .notebook-quicknav-status:not(:empty) {
+	padding: 4px 16px;
+	color: var(--nb-text-muted);
+}
+
+/* --- specific dialogs --- */
+.nb-ui .notebook-paste-box {
+	min-height: 112px;
+	padding: 16px;
+	border: 2px dashed var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .notebook-pentest-area {
+	border: 2px dashed var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .notebook-pentest-note {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui .notebook-pentest-summary {
+	color: var(--nb-text);
+	font-weight: 600;
+}
+
+.nb-ui .notebook-pentest-log {
+	padding: 12px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-bg);
+	color: var(--nb-text);
+}
+
+.nb-ui .notebook-practice-filters {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.nb-ui .notebook-practice-filter-title {
+	color: var(--nb-text-faint);
+	font-size: var(--nb-fs-label);
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.nb-ui .notebook-practice-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.nb-ui .notebook-practice-chip {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-height: var(--nb-target);
+	padding: 0 14px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: 999px;
+	background: var(--nb-tile);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+	cursor: pointer;
+}
+
+.nb-ui .notebook-practice-chip.is-on {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui .notebook-practice-chip:focus-within {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+/* The chip is the checkbox: the input stays a real, focusable control, drawn invisible over the whole chip. */
+.nb-ui .notebook-practice-chip input[type="checkbox"] {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	opacity: 0;
+	cursor: pointer;
+}
+
+.nb-ui .notebook-practice-summary {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui .notebook-find-results {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	max-height: 40vh;
+	overflow-y: auto;
+}
+
+.nb-ui .notebook-find-row-result {
+	display: flex;
+	align-items: stretch;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+}
+
+.nb-ui .notebook-find-row-result.is-active {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+	box-shadow: none;
+}
+
+.nb-ui .notebook-find-hit {
+	display: flex;
+	flex: 1 1 auto;
+	align-items: baseline;
+	gap: 10px;
+	min-width: 0;
+	min-height: 44px;
+	padding: 8px 12px;
+	border: 0;
+	background: transparent;
+	color: var(--nb-text);
+	text-align: left;
+}
+
+.nb-ui .notebook-find-page {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui .notebook-find-snippet mark {
+	border-radius: 4px;
+	background: var(--nb-accent-bg);
+	color: inherit;
+	box-shadow: inset 0 -2px 0 var(--nb-accent);
+}
+
+.nb-ui .notebook-find-go {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	width: var(--nb-target);
+	min-height: var(--nb-target);
+	border: 0;
+	background: transparent;
+	color: var(--nb-text-muted);
+}
+
+/* --- floating cards (colour picker, equation editor, stamp palette) --- */
+.nb-ui.nb-card {
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-panel);
+	box-shadow: var(--nb-shadow-float);
+	font-family: var(--font-interface);
+}
+
+.nb-ui.nb-card *,
+.nb-ui.nb-card {
+	box-sizing: border-box;
+}
+
+.nb-ui.nb-card .notebook-colour-button {
+	width: var(--nb-target);
+	height: var(--nb-target);
+}
+
+.nb-ui.nb-card .notebook-colour-recent-swatch {
+	width: 32px;
+	height: 32px;
+	min-width: 32px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: 50%;
+	background-color: var(--c, transparent);
+	box-shadow: none;
+}
+
+.nb-ui.nb-card .notebook-colour-preview {
+	border: 1px solid var(--nb-border-strong);
+	box-shadow: none;
+}
+
+.nb-ui.nb-card input.notebook-colour-hex {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: var(--nb-target);
+	padding: 0 12px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-bg);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-card input.notebook-colour-hex.is-invalid {
+	border-color: var(--nb-danger);
+}
+
+.nb-ui.nb-card .notebook-colour-hint {
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.nb-eq-card .notebook-eq-snippet,
+.nb-ui.nb-eq-card .notebook-eq-toggle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: var(--nb-target);
+	min-height: var(--nb-target);
+	padding: 0 10px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-icon);
+	background: var(--nb-tile);
+	box-shadow: none;
+	color: var(--nb-text);
+	cursor: pointer;
+}
+
+.nb-ui.nb-eq-card .notebook-eq-toggle {
+	padding: 0 14px;
+	border-radius: 999px;
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+}
+
+.nb-ui.nb-eq-card .notebook-eq-toggle.is-active {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-eq-card .notebook-eq-toggle:disabled {
+	opacity: 0.5;
+}
+
+.nb-ui.nb-eq-card textarea.notebook-eq-source {
+	padding: 10px 12px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-bg);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-eq-card .notebook-eq-preview {
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-eq-card .notebook-eq-error {
+	color: var(--nb-danger);
+}
+
+.nb-ui.nb-eq-card .notebook-eq-field {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.nb-eq-card .notebook-eq-field input {
+	min-height: var(--nb-target);
+	padding: 0 8px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-icon);
+	background: var(--nb-bg);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-eq-card .notebook-eq-field input[type="color"] {
+	width: var(--nb-target);
+	padding: 2px;
+}
+
+.nb-ui.nb-eq-card .notebook-eq-actions {
+	gap: 12px;
+}
+
+.nb-ui.nb-stamp-card {
+	padding: 12px;
+	gap: 8px;
+}
+
+.nb-ui.nb-stamp-card .notebook-stamp-title {
+	padding-left: 4px;
+	font-size: var(--nb-fs-row);
+	font-weight: 600;
+}
+
+.nb-ui.nb-stamp-card .notebook-stamp-hint,
+.nb-ui.nb-stamp-card .notebook-stamp-empty {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.nb-stamp-card .notebook-stamp-section {
+	color: var(--nb-text-faint);
+	font-size: var(--nb-fs-label);
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.nb-ui.nb-stamp-card .notebook-stamp-tile {
+	padding: 6px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+}
+
+.nb-ui.nb-stamp-card .notebook-stamp-tile:hover,
+.nb-ui.nb-stamp-card .notebook-stamp-tile:focus-visible {
+	border-color: var(--nb-accent);
+}
+
+.nb-ui.nb-stamp-card .notebook-stamp-preview {
+	border-radius: var(--nb-radius-s);
+}
+
+.nb-ui.nb-stamp-card .notebook-stamp-name {
+	color: var(--nb-text);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.nb-stamp-card .notebook-stamp-action {
+	width: var(--nb-target);
+	height: var(--nb-target);
+}
+
+/* --- phone: a wider dialog, bigger targets, full-width buttons in the footer --- */
+@media (max-width: 600px) {
+	.modal.nb-modal.nb-ui {
+		width: calc(100vw - 16px);
+		max-height: calc(100vh - 32px);
+		max-height: calc(100dvh - 32px);
+	}
+
+	.nb-ui .nb-modal-head {
+		padding: 12px 16px;
+	}
+
+	.nb-ui .nb-modal-body {
+		padding: 16px;
+	}
+
+	.nb-ui .nb-modal-foot {
+		padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+	}
+
+	.nb-ui .nb-modal-foot > .nb-modal-btn {
+		flex: 1 1 0;
+		min-height: 44px;
+	}
+
+	.nb-ui .nb-modal-body .setting-item-control {
+		flex: 1 1 100%;
+		justify-content: stretch;
+	}
+
+	.nb-ui .nb-modal-body .setting-item-control :is(input[type="text"], input[type="number"], input[type="date"], select) {
+		flex: 1 1 auto;
+	}
+}
+
+/* Reduced motion and effects: no decoration, no transitions. */
+@media (prefers-reduced-motion: reduce) {
+	.nb-ui .nb-modal-band {
+		display: none;
+	}
+
+	.nb-ui .nb-modal-btn,
+	.nb-ui .nb-modal-row,
+	.nb-ui .nb-modal-close,
+	.nb-ui .nb-card-btn {
+		transition: none;
+	}
+}
+
+/* Obsidian's own buttons inside a dialog body (a Setting's button) get the design system's pill and a real touch target. */
+.nb-ui .nb-modal-body .setting-item-control button {
+	min-height: 44px;
+	padding: 0 16px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background-color: var(--nb-bg);
+	box-shadow: none;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+}
+
+.nb-ui .nb-modal-body .setting-item-control button:disabled {
+	opacity: 0.5;
+}
+
+/* The pen test's log keeps its height in a short sheet: the body scrolls instead. */
+.nb-ui .notebook-pentest-log {
+	flex: 0 0 auto;
+	min-height: 220px;
+}

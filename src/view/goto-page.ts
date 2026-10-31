@@ -1,5 +1,6 @@
 import { SuggestModal, type App } from "obsidian";
 import { t } from "../i18n";
+import { promptShell } from "../ui/components/modal-shell";
 import { gotoTargets, type GotoBookmark, type GotoTarget } from "./goto-logic";
 
 /** What "Go to page number" needs from the notebook view. */
@@ -15,6 +16,7 @@ export class GotoPageModal extends SuggestModal<GotoTarget> {
 
 	constructor(app: App, private readonly view: GotoView) {
 		super(app);
+		promptShell(this, { title: t("goto.title"), icon: "hash", cls: "notebook-goto-modal" });
 		this.ctx = view.gotoContext();
 		this.setPlaceholder(t("goto.placeholder", { total: String(this.ctx.total) }));
 		this.emptyStateText = t("goto.empty");

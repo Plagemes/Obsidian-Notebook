@@ -7,6 +7,7 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
 |---|---|---|---|---|---|
 | Notebook editing chrome on the design system (0.13 ds-notebook, DESIGN.md): toolbar capsules, glass popovers, sheets with icon squares, contextual bar, dial, tabs, banners, status bar item, page-operations menu; touch targets 44 px (40 px on a 360 px phone and at the compact size); no blur, glow or transition under reduced motion | ✅ | ✅ `tests/ds-notebook.test.ts` (presets, narrow fallback, CSS block scoped, tokens only, balanced, reduced motion, 44 px on touch), `tests/obsidian-input.test.ts`; ✅ harness `doc=chrome` (target sizes, no overflow, no Obsidian button look, glass panels, banner) at 800 / 412 / 360 px, light and dark; screenshots in `dev/harness/dist/shots/design/notebook-*` | | | rendered in headless Chrome only, not on the tablet; tabs and the page-operations menu are not in the harness (steps 520-529) |
+| Dialogs, prompts and cards on the design system (wave 0.13, ds-modals, DESIGN.md §4): one shared shell (header with icon square and art band, body, footer with secondary and primary buttons) for every Modal, SuggestModal, floating card and confirmation; behaviour unchanged | ✅ | ✅ `tests/modal-shell.test.ts` (every surface on the shell, tokens, scoping, balanced CSS, strings in both languages); harness screenshots and touch-target checks of every dialog (`dev/harness/modals-check.ts`) | | ✅ | not checked on the tablet or with the pen (steps 540-559) |
 | S Pen side button on Android (0.12.4): the button is seen only while the nib touches; **tap with it = radial menu on the lift (no dot), drag with it = eraser for the whole contact from its first sample (no ink, one undo step)**, whatever the form of the signal (bare `contextmenu` up to 500 ms before the pen down, during the contact within 350 ms, up to 400 ms after the pen up; `pointerdown` with `button 2` / `buttons & 2`; `buttons & 2` or the `button 0` move within 350 ms; the `pointercancel` after a `contextmenu`, the contact going on as a new pointer within 250 ms); a press in the middle of a stroke keeps writing ink; no menu during or after a drag; works with *Radial menu on click* too, and for the tools of *Lasso* / *Previous* / *Gestures while held*; *Pen button test* shows the signal and the decision | ✅ | ✅ `tests/side-button-contact.test.ts` (every form x tap / drag / no button / mid-stroke, five settings, cancel, decision logic, `EventLog`), `tests/pen-hover.test.ts`, `tests/pen-button.test.ts`, `tests/side-button.test.ts`, `tests/input-routing.test.ts`; ✅ harness (tap, drag, mid-stroke with real events) | | | which signal this tablet really sends is not known: the *Pen button test* lines *Signal seen* / *Decision* will tell (steps 493-499) |
 | Procedural subject art and palette (wave 0.12, DESIGN.md §2.3, §2.6): seven line-art families, card art, header bands, covers, empty states, folder icon, LRU image cache, reduced-motion switch; `colorFor` | ✅ | ✅ `tests/generative-art.test.ts` (determinism, seeds, geometry vs colour, density, left side clean, intensity, surfaces, empty states, switch, cache keys and eviction, palette, folder icon); harness gallery screenshots and timing (`HARNESS_DOC=art`) | | ✅ | no surface uses it yet; timing measured only in headless desktop Chrome (steps 425-429) |
 | Operations on several selected pages (roadmap 378, wave 0.8): multi-select in the page navigator (select button, long press on touch, Ctrl/Shift+click, range, select all) and move (start, end, position, another notebook), duplicate, bookmark, tag, paper, size, PDF export, delete through the page trash; one undo step each | ✅ | ✅ `tests/page-ops.test.ts` (order planning, ranges, every command as one step with exact undo, never deleting every page); ❌ the panel, the menus, touch long press, the dialogs | | ✅ | long press on touch both starts a selection and arms the old drag-to-reorder: to be checked on the tablet (steps 200-202) |
@@ -1094,22 +1095,6 @@ Update to 0.12.3 and fully close and reopen Obsidian. Use the same vault with **
 490. **Creation dialog, both tabs.** The dialog shows the tabs *Quaderno* / *Cartella*, the cover preview with *Cambia copertina*, name, description, folder, the page templates, page size and orientation, *Annulla* and *Crea quaderno*. Tap *Cartella*: the folder card, name, description, location, icons and colours, *Crea cartella*. Also open it from *Nuova cartella* (header menu), from the quick actions and from the dashed tile. If it shows a red-bordered card instead, take a screenshot.
 491. **Tag page.** Tap *Tag* in the rail: the header *Tag* with its subtitle and *+ Nuovo*, and below it the line saying tags appear here once notebooks have them (no blank page).
 492. **First notebook and folder.** Create a notebook and a subject folder from the dialog: the notebook opens; back on Home the empty state is gone and the folder card (glossy folder icon, generated art) replaces the dashed tile.
-
-### 0.13 — ds-notebook: the editing chrome on the design system (steps 520-529)
-
-Update and fully close and reopen Obsidian. Samsung tablet (and a phone, if you have one), S Pen and finger, Obsidian for Android; then Windows. Nothing here changes what a control does, only how it looks and how big it is.
-
-520. **Toolbar.** Open a notebook. The tools (pen, highlighter, eraser, lasso, shapes, text, move) sit in one capsule, undo/redo in another; the active tool is tinted with an accent dot. Every button is easy to hit with the S Pen and a finger (44 px at the normal size); the page indicator and the green save dot are readable. Dark and light, and with *Follow Obsidian theme*.
-521. **Narrow phone.** On a phone about 360 px wide the tools stay on one line (40 px buttons) with nothing cut off at the right edge. *Settings → Toolbar size → Large* wraps the tools to a second line instead.
-522. **Tool options.** Tap the active tool again: the options panel is a rounded glass panel under the bar, colour and width choices are easy to hit, it closes when you tap outside.
-523. **All actions and page sheets.** Open *All actions* (grid button) and the page sheet (page indicator): rows have an icon square, switches show on/off, a long label wraps instead of pushing its icon out, the close button is 44 px; a destructive row is red. Search still filters.
-524. **Selection bar.** Lasso a few strokes: the contextual bar floats at the bottom as a glass pill with the *Selection* label (not a button), its buttons are easy to hit; copy, cut, delete and the colour/width rows still act on the selection.
-525. **Radial dial.** Open the dial with the S Pen side button (steps 493-499): a navy disc with a thin ring and a soft accent halo, the same dark in light and dark themes; colour, width, tools and favourites still work. No change to when it opens.
-526. **Banners.** On a very heavy page the warning card shows an icon square, the text and *Split page* / *Dismiss* (both 44 px). On a practice copy the practice strip shows an icon square and its buttons are 44 px on touch.
-527. **Tabs and status bar.** With *Notebook tabs* on and two notebooks open, the tabs are pills and the open one is tinted; on Windows the status bar item matches the theme.
-528. **Page operations menu.** In the pages panel select pages and open the operations menu (Windows / desktop): it has rounded corners, a hairline and a soft shadow.
-529. **Reduced motion.** With the system setting *Remove animations* (Android) or *Reduce motion* (Windows) on, the panels have no blur and nothing animates.
-
 ### 0.12.4: the S Pen side button, tap and drag (steps 493-499)
 
 Update to 0.12.4 and fully close and reopen Obsidian. Samsung tablet, S Pen, Obsidian for Android. Setting *Pen side button* = *Radial menu on click, erase while held* (the default) unless a step says otherwise. On this device pressing the button with the pen in the air shows nothing to the app: the button counts only while the nib touches the page. Nothing here is filled in as verified; write what you see in the results table.
@@ -1136,6 +1121,46 @@ Update to 0.13 and fully close and reopen Obsidian. Use a vault with a few noteb
 507. **Empty and done.** With nothing in the inbox the page shows *Your inbox is empty*, what arrives here and a *Look again* button (the filters are hidden). After processing everything it shows *All caught up* with *Show processed* (and *Show all sources* if a source filter is on).
 508. **Phone width.** With the inbox in a narrow pane (or on a phone) the actions wrap under the preview, nothing scrolls sideways and every button is at least 40 px high.
 509. **Both looks.** Light theme, dark theme and *Appearance → Style → Follow Obsidian theme*: the inbox and the dialogs stay legible and keep their accent. The card regions over a page (dashed outline with the id badge) are unchanged and never block writing.
+
+### 0.13 — ds-notebook: the editing chrome on the design system (steps 520-529)
+
+Update and fully close and reopen Obsidian. Samsung tablet (and a phone, if you have one), S Pen and finger, Obsidian for Android; then Windows. Nothing here changes what a control does, only how it looks and how big it is.
+
+520. **Toolbar.** Open a notebook. The tools (pen, highlighter, eraser, lasso, shapes, text, move) sit in one capsule, undo/redo in another; the active tool is tinted with an accent dot. Every button is easy to hit with the S Pen and a finger (44 px at the normal size); the page indicator and the green save dot are readable. Dark and light, and with *Follow Obsidian theme*.
+521. **Narrow phone.** On a phone about 360 px wide the tools stay on one line (40 px buttons) with nothing cut off at the right edge. *Settings → Toolbar size → Large* wraps the tools to a second line instead.
+522. **Tool options.** Tap the active tool again: the options panel is a rounded glass panel under the bar, colour and width choices are easy to hit, it closes when you tap outside.
+523. **All actions and page sheets.** Open *All actions* (grid button) and the page sheet (page indicator): rows have an icon square, switches show on/off, a long label wraps instead of pushing its icon out, the close button is 44 px; a destructive row is red. Search still filters.
+524. **Selection bar.** Lasso a few strokes: the contextual bar floats at the bottom as a glass pill with the *Selection* label (not a button), its buttons are easy to hit; copy, cut, delete and the colour/width rows still act on the selection.
+525. **Radial dial.** Open the dial with the S Pen side button (steps 493-499): a navy disc with a thin ring and a soft accent halo, the same dark in light and dark themes; colour, width, tools and favourites still work. No change to when it opens.
+526. **Banners.** On a very heavy page the warning card shows an icon square, the text and *Split page* / *Dismiss* (both 44 px). On a practice copy the practice strip shows an icon square and its buttons are 44 px on touch.
+527. **Tabs and status bar.** With *Notebook tabs* on and two notebooks open, the tabs are pills and the open one is tinted; on Windows the status bar item matches the theme.
+528. **Page operations menu.** In the pages panel select pages and open the operations menu (Windows / desktop): it has rounded corners, a hairline and a soft shadow.
+529. **Reduced motion.** With the system setting *Remove animations* (Android) or *Reduce motion* (Windows) on, the panels have no blur and nothing animates.
+
+### 0.13 — ds-modals: dialogs, prompts and cards on the design system (steps 540-559)
+
+Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/design/modals-<name>-<theme>-<device>.png`. Check each in the light and the dark Obsidian theme and, once, with *Appearance → Style → Follow Obsidian theme*.
+
+540. **Header and footer.** Open any dialog (e.g. a page's *Export*): a header with an icon square, the title and a close ×, with a faint line-art band behind it; the footer has *Cancel* (quiet) and the accent primary button. The × and *Cancel* close it; Esc closes it.
+541. **Resize / Style.** Open the object's *Resize* and *Style* dialogs: the fields and buttons work as before and the values apply.
+542. **Export.** Export a page as PDF, as PNG and as Markdown: options, the progress and the file written are unchanged.
+543. **Arrange pages.** Move, duplicate, change paper and page size from the page panel: the lists are tappable rows, the chosen one applies.
+544. **Go to page.** Open *Go to page*: a slim header above the input; type a number, Enter jumps.
+545. **Page finder.** Open the quick page switcher: the same header, results as before; Enter opens the hit.
+546. **Paste.** Paste an image or text into a notebook: the paste dialog offers its choices and each one works.
+547. **PDF page range.** Import a PDF: the page-range dialog accepts "1-3, 5", shows an inline error for bad input and imports the pages.
+548. **Practice.** Open *Practice*: start a session, answer, open *Attempts*: both dialogs are styled and work.
+549. **Lecture pack.** Open the lecture pack, exercise paper and layout dialogs: every button works.
+550. **Pen test.** Settings → pen test (or the command): the dialog is styled, *Clear* empties the log, *Copy* copies it; the signal and decision lines still update while you move the pen.
+551. **Shared clips.** Open the shared clips dialog: its list and actions work.
+552. **Find and replace.** Open find and replace in a notebook: find, next, replace, replace all work; the dialog stays out of the way of the page.
+553. **Colour picker.** Open the colour picker from the pen toolbar: the card is a rounded design-system card; recent colours (32 px swatches) and the eyedropper and close buttons (40 px) work with the pen.
+554. **Equation editor.** Insert an equation: the card, the input and its buttons work.
+555. **Stamp palette.** Open the stamp palette: tapping a stamp chooses it.
+556. **Confirmations.** Delete a page (or empty the trash): the confirmation uses the shell, the destructive button is red, *Cancel* leaves everything untouched.
+557. **Phone width.** On the phone (or a narrow window) each dialog is a full-width sheet, the footer buttons stay reachable and nothing overflows horizontally.
+558. **Obsidian theme.** With *Follow Obsidian theme* the dialogs use Obsidian's surface and accent colours.
+559. **Reduced motion.** With reduced motion on, the header art band is not drawn and nothing animates.
 
 ### 0.13 — outline (steps 600-619)
 

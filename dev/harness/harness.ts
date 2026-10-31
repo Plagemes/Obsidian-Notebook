@@ -37,6 +37,7 @@ import { checkSettings } from "./settings-check";
 import { checkZettel, zettelState, type ZettelState } from "./zettel-check";
 import { checkPlugin } from "./plugin-check";
 import { checkCreate, prepareShot } from "./create-check";
+import { modalsApi } from "./modals-check";
 import { checkHostile, HOSTILE_ERROR, hostileDialog, installHostile } from "./hostile";
 import { PracticeService } from "../../src/view/practice";
 import { NavController } from "../../src/view/nav-controller";
@@ -2079,5 +2080,6 @@ Object.assign(harnessApi, {
 	chromeShot: (state: ChromeState) => chromeState(chromeApi(), state),
 });
 
+Object.assign(harnessApi, modalsApi({ app, errors, notices }));
 (window as unknown as { harness: Record<string, unknown> }).harness = harnessApi;
 harnessApi.ready = main();

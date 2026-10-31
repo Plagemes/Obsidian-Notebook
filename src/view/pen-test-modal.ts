@@ -7,6 +7,7 @@ import { capacitorInventory, formatCapacitorInventory, formatDelta } from "../in
 import type { NotebookSettings } from "../settings";
 import { showNotice } from "./notice";
 import type { PenButtonSettings, PenButtonSettingsHost } from "./pen-button-settings";
+import { modalShell, shellButton, shellNote } from "../ui/components/modal-shell";
 
 /** What the test knows about this device's side button across sessions (a flag saved in the plugin settings). */
 export interface PenSignalInfo {
@@ -103,13 +104,12 @@ export class PenTestModal extends Modal {
 	}
 
 	onOpen(): void {
-		this.setTitle(t("penTest.title"));
+		const shell = modalShell(this, { title: t("penTest.title"), subtitle: t("penTest.intro"), icon: "pen-tool", size: "wide", cls: "notebook-pentest-modal" });
 		this.t0 = performance.now();
-		const { contentEl } = this;
-		contentEl.addClass("notebook-pentest");
-		contentEl.createEl("p", { text: t("penTest.intro") });
-		contentEl.createEl("p", { text: t("penTest.window"), cls: "notebook-pentest-note" });
-		contentEl.createEl("p", { text: t("penTest.air"), cls: "notebook-pentest-note" });
+		const contentEl = shell.body;
+		this.contentEl.addClass("notebook-pentest");
+		shellNote(contentEl, t("penTest.window")).addClass("notebook-pentest-note");
+		shellNote(contentEl, t("penTest.air")).addClass("notebook-pentest-note");
 
 		this.area = contentEl.createDiv({ cls: "notebook-pentest-area", text: t("penTest.area") });
 		this.last = contentEl.createDiv({ cls: "notebook-pentest-last" });
@@ -156,13 +156,12 @@ export class PenTestModal extends Modal {
 		this.decisionEl = contentEl.createDiv({ cls: "notebook-pentest-summary" });
 		this.counts = contentEl.createDiv({ cls: "notebook-pentest-note" });
 		this.output = contentEl.createEl("textarea", { cls: "notebook-pentest-log", attr: { readonly: "true", rows: "14", "aria-label": t("penTest.logLabel") } });
-		const buttons = contentEl.createDiv({ cls: "notebook-pentest-buttons" });
-		buttons.createEl("button", { text: t("penTest.copy"), cls: "mod-cta" }).addEventListener("click", () => void this.copy());
-		buttons.createEl("button", { text: t("penTest.clear") }).addEventListener("click", () => {
+		shellButton(shell.foot, "secondary", t("penTest.clear"), () => {
 			this.log.clear();
 			this.lastText = "";
 			this.refresh();
 		});
+		shellButton(shell.foot, "primary", t("penTest.copy"), () => void this.copy());
 		this.refresh();
 	}
 

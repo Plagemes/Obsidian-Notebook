@@ -26,6 +26,13 @@
 - **Touch targets**: the toolbar buttons are 44 px at the normal size and 40 px at the compact size (were 40 and 36); on a view too narrow for eight 44 px buttons (a 360 px phone) the normal size uses 40 px so the row of tools stays on one line (`toolbarScaleFor`); on touch the sheet's close button, tabs, banner buttons and chips are 44 px. Motion, blur and glows are off under reduced motion.
 - No change to the notebook format, the canvas, the input or the stroke pipeline.
 
+### ds-modals
+- Every dialog, prompt and floating card now follows DESIGN.md on one shared shell (`src/ui/components/modal-shell.ts`, pure parts in `modal-shell-model.ts`): a header with an icon square, a title, an optional line under it, a close button and a faint generated art band (decoration only), a scrolling body and a footer with a secondary and a primary button, all under `.nb-ui` with `--nb-*` tokens, light and dark, and "Follow Obsidian theme". Sheets full height on phones, 44 px targets.
+- Restyled, behaviour unchanged: resize / style / open-notebook / new-notebook pickers, page arrange (move, duplicate, paper, size), export (PDF, PNG, Markdown), go to page and the page finder (prompts), paste, PDF page range, practice, attempts, lecture pack, exercise paper, pen test, shared clips, find and replace, the colour picker, the equation editor, the stamp palette and the destructive-action confirmations.
+- New strings: `ui.modal.cancel`, `goto.title`, `quicknav.title`, `modal.open.title` (English and Italian).
+- Tests: `tests/modal-shell.test.ts` (every surface is on the shell, CSS scoped and balanced, tokens only). Harness: `dev/harness/modals-check.ts` screenshots every dialog at tablet and phone widths, light and dark (`dist/shots/design/modals-*.png`). Not verified on the device: manual steps 540-559 in `docs/testing.md`.
+
+
 ## 0.12.4 — 2026-10-31
 
 The S Pen side button on the Samsung tablet (Obsidian for Android), reworked around what the device really does. **Not verified on the device**: checked in unit tests that replay recorded pen sequences and in the browser harness only. Manual re-check: steps 493-499 in `docs/testing.md`. No change to the notebook format (still v11) or to the stroke engine and renderer.

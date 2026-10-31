@@ -2,6 +2,7 @@ import { FuzzySuggestModal, Modal, Setting, type App, type FuzzyMatch, type TFil
 import { t } from "../i18n";
 import { PAGE_SIZES, PAPER_KINDS, type NotebookDocument, type PageSizeName, type PaperKind } from "../model/types";
 import { defaultNotebookName, listNotebooks } from "../storage/notebooks";
+import { modalShell, promptShell, shellButton } from "../ui/components/modal-shell";
 
 export interface NewNotebookOptions {
 	name: string;
@@ -27,8 +28,8 @@ export class NewNotebookModal extends Modal {
 	}
 
 	onOpen(): void {
-		this.contentEl.empty();
-		this.setTitle(t("modal.new.title"));
+		const shell = modalShell(this, { title: t("modal.new.title"), icon: "notebook-pen", size: "narrow", cls: "notebook-new-modal" });
+		const body = shell.body;
 		let submitted = false;
 		const submit = () => {
 			if (submitted) return;
@@ -37,7 +38,7 @@ export class NewNotebookModal extends Modal {
 			this.onCreate({ ...this.options });
 		};
 		const o = this.options;
-		new Setting(this.contentEl).setName(t("modal.new.name")).addText((text) => {
+		new Setting(body).setName(t("modal.new.name")).addText((text) => {
 			text.setValue(o.name).onChange((v) => (o.name = v));
 			text.inputEl.addEventListener("keydown", (e) => {
 				if (e.key === "Enter" && !e.isComposing) {
@@ -49,7 +50,7 @@ export class NewNotebookModal extends Modal {
 		});
 		const pick = this.pickTemplate;
 		if (pick) {
-			new Setting(this.contentEl).setName(t("template.modal.row")).setDesc(o.template?.name ?? t("template.modal.none"))
+			new Setting(body).setName(t("template.modal.row")).setDesc(o.template?.name ?? t("template.modal.none"))
 				.addButton((b) => b.setButtonText(t("template.modal.choose")).onClick(() => pick((template) => {
 					o.template = template;
 					this.onOpen();
@@ -60,17 +61,17 @@ export class NewNotebookModal extends Modal {
 				}));
 		}
 		if (!o.template) {
-			new Setting(this.contentEl).setName(t("modal.new.size")).addDropdown((dd) => {
+			new Setting(body).setName(t("modal.new.size")).addDropdown((dd) => {
 				for (const size of Object.keys(PAGE_SIZES) as PageSizeName[]) dd.addOption(size, t(`size.${size}`));
 				dd.setValue(o.size).onChange((v) => (o.size = v as PageSizeName));
 			});
-			new Setting(this.contentEl).setName(t("modal.new.landscape")).addToggle((tg) => tg.setValue(o.landscape).onChange((v) => (o.landscape = v)));
-			new Setting(this.contentEl).setName(t("modal.new.paper")).addDropdown((dd) => {
+			new Setting(body).setName(t("modal.new.landscape")).addToggle((tg) => tg.setValue(o.landscape).onChange((v) => (o.landscape = v)));
+			new Setting(body).setName(t("modal.new.paper")).addDropdown((dd) => {
 				for (const kind of PAPER_KINDS) dd.addOption(kind, t(`paper.${kind}`));
 				dd.setValue(o.paper).onChange((v) => (o.paper = v as PaperKind));
 			});
 		}
-		new Setting(this.contentEl).addButton((b) => b.setButtonText(t("modal.new.create")).setCta().onClick(submit));
+		shellButton(shell.foot, "primary", t("modal.new.create"), submit);
 	}
 
 	onClose(): void {
@@ -88,6 +89,7 @@ export class OpenNotebookModal extends FuzzySuggestModal<PickerItem> {
 		private readonly onNew: () => void,
 	) {
 		super(app);
+		promptShell(this, { title: t("modal.open.title"), icon: "folder-open", cls: "notebook-open-modal" });
 		this.setPlaceholder(t("modal.open.placeholder"));
 		this.emptyStateText = t("modal.open.empty");
 	}

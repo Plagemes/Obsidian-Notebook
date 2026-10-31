@@ -1,6 +1,7 @@
 import { Modal, Setting, type App } from "obsidian";
 import { t } from "../i18n";
 import { parsePageRange } from "./view-helpers";
+import { modalShell, shellButton, shellNote } from "../ui/components/modal-shell";
 
 /**
  * Asks which pages of a PDF to insert: all of them or "from–to". Resolves null when cancelled.
@@ -18,17 +19,19 @@ export function askPdfRange(app: App, count: number): Promise<{ from: number; to
 		let all = true;
 		let from = "1";
 		let to = String(count);
-		modal.setTitle(t("pdfRange.title"));
+		const shell = modalShell(modal, { title: t("pdfRange.title"), icon: "file-input", size: "narrow", cls: "notebook-pdfrange-modal" });
+		const body = shell.body;
 		let fromInput: HTMLInputElement | null = null;
 		let toInput: HTMLInputElement | null = null;
-		const errorEl = modal.contentEl.createDiv({ cls: "notebook-modal-error notebook-hidden" });
+		const errorEl = shellNote(body, "", "error");
+		errorEl.addClass("notebook-modal-error", "notebook-hidden");
 
-		new Setting(modal.contentEl).setName(t("pdfRange.all", { n: String(count) })).addToggle((tg) => tg.setValue(true).onChange((v) => {
+		new Setting(body).setName(t("pdfRange.all", { n: String(count) })).addToggle((tg) => tg.setValue(true).onChange((v) => {
 			all = v;
 			if (fromInput) fromInput.disabled = v;
 			if (toInput) toInput.disabled = v;
 		}));
-		new Setting(modal.contentEl)
+		new Setting(body)
 			.setName(t("pdfRange.from"))
 			.addText((tx) => {
 				fromInput = tx.inputEl;
@@ -38,7 +41,7 @@ export function askPdfRange(app: App, count: number): Promise<{ from: number; to
 				tx.inputEl.disabled = true;
 				tx.setValue(from).onChange((v) => (from = v));
 			});
-		new Setting(modal.contentEl)
+		new Setting(body)
 			.setName(t("pdfRange.to"))
 			.addText((tx) => {
 				toInput = tx.inputEl;
@@ -59,9 +62,8 @@ export function askPdfRange(app: App, count: number): Promise<{ from: number; to
 			finish(range);
 			modal.close();
 		};
-		new Setting(modal.contentEl)
-			.addButton((b) => b.setButtonText(t("pdfRange.cancel")).onClick(() => modal.close()))
-			.addButton((b) => b.setButtonText(t("pdfRange.insert")).setCta().onClick(submit));
+		shellButton(shell.foot, "secondary", t("pdfRange.cancel"), () => modal.close());
+		shellButton(shell.foot, "primary", t("pdfRange.insert"), submit);
 		modal.scope.register([], "Enter", () => {
 			submit();
 			return false;

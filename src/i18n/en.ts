@@ -2360,6 +2360,12 @@ export const en = {
 	"outline.allOff": "Every outline source is off. Turn one on in Settings, Pages, Outline.",
 	"outline.emptyAll": "Nothing to list yet. Bookmark a page, write a large heading or add a PDF.",
 	"outline.markerDone": "done",
+
+	// 0.13 ds-modals
+	"ui.modal.cancel": "Cancel",
+	"goto.title": "Go to page",
+	"quicknav.title": "Find a page",
+	"modal.open.title": "Open a notebook",
 } as const;
 
 export type MessageKey = keyof typeof en;

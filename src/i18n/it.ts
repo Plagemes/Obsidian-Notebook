@@ -2361,4 +2361,10 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"outline.allOff": "Tutte le fonti dell'indice sono spente. Accendine una in Impostazioni, Pagine, Indice.",
 	"outline.emptyAll": "Niente da elencare. Metti un segnalibro, scrivi un titolo grande o aggiungi un PDF.",
 	"outline.markerDone": "fatto",
+
+	// 0.13 ds-modals
+	"ui.modal.cancel": "Annulla",
+	"goto.title": "Vai a pagina",
+	"quicknav.title": "Cerca una pagina",
+	"modal.open.title": "Apri un quaderno",
 };
