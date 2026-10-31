@@ -29,6 +29,7 @@ import { stressDocument } from "../../src/model/stress";
 import { FAKE_PATH, installFakePdf, slidesNotebook } from "./fake-pdf";
 import { checkReading } from "./reading-check";
 import { checkPractice } from "./practice-check";
+import { checkOutline, outlineNotebook } from "./outline-check";
 import { checkExcerpt } from "./excerpt-check";
 import { checkReadOnly } from "./readonly-check";
 import { checkSettings } from "./settings-check";
@@ -197,6 +198,8 @@ async function seed(): Promise<void> {
 	await app.vault.createFolder("Notebooks/_assets");
 	await app.vault.createBinary(FAKE_PATH, new Uint8Array(8).buffer);
 	await app.vault.create("Notebooks/Slides.notebook", slidesNotebook());
+	// doc=outline: slides, large handwriting, markers and bookmarks for the generated outline (0.13).
+	await app.vault.create("Notebooks/Outline.notebook", outlineNotebook());
 }
 
 /** The practice feature (doc=practice) on a stand-in plugin: the views attach to it as they do to the real one. */
@@ -233,7 +236,7 @@ async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	leaf = new WorkspaceLeaf(app, root);
 	view = new NotebookView(asLeaf(leaf), { settings: settings(), practice: doc === "practice" ? practiceService : undefined, nav: harnessNav, statusChanged: (v) => harnessStatusBar.update(v.statusSnapshot()) });
 	await view.onOpen();
-	const path = doc === "new" || doc === "practice" || doc === "readonly" ? "Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" ? "Notebooks/Slides.notebook" : "Notebooks/Old v3.notebook";
+	const path = doc === "new" || doc === "practice" || doc === "readonly" ? "Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" ? "Notebooks/Slides.notebook" : doc === "outline" ? "Notebooks/Outline.notebook" : "Notebooks/Old v3.notebook";
 	const file = app.vault.getFileByPath(path)!;
 	await (view as unknown as HarnessView).loadFile(file);
 	view.onResize();
@@ -2001,7 +2004,7 @@ function applySize(): void {
 	if (h) root.style.height = `${Number(h)}px`;
 }
 
-const harnessApi: Record<string, unknown> = { app, checkLibrary, checkEmpty, checkHostile: runHostile, hostileDialog, emptyDialogShot, interactLibrary, libraryState, open, measureOpen, penStroke, setTool, openOptions, openMore, measureLod, compareLod, checkHeavy, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkCreate: async (tab: "notebook" | "folder" = "notebook") => { try { return JSON.parse(JSON.stringify(await checkCreate({ app, errors, notices }, tab))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`create check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, createShot: (tab: "notebook" | "folder") => prepareShot({ app, errors, notices }, tab), checkReadOnly: async () => { try { return JSON.parse(JSON.stringify(await checkReadOnly({ view, app, stage, penStroke, setTool, strokeCount, frames, openMore, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`readonly check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPractice: () => checkPractice({ view, app, service: practiceService, frames, errors, notices }), checkSettings: async () => { try { return JSON.parse(JSON.stringify(await checkSettings({ app, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`settings check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPlugin: async () => { try { return JSON.parse(JSON.stringify(await checkPlugin({ errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`plugin check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkExcerpt: () => checkExcerpt({ view, stage, penStroke, setTool, strokeCount, staticPixel, frames, errors, notices }), checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
+const harnessApi: Record<string, unknown> = { app, checkLibrary, checkEmpty, checkHostile: runHostile, hostileDialog, emptyDialogShot, interactLibrary, libraryState, open, measureOpen, penStroke, setTool, openOptions, openMore, measureLod, compareLod, checkHeavy, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkCreate: async (tab: "notebook" | "folder" = "notebook") => { try { return JSON.parse(JSON.stringify(await checkCreate({ app, errors, notices }, tab))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`create check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, createShot: (tab: "notebook" | "folder") => prepareShot({ app, errors, notices }, tab), checkReadOnly: async () => { try { return JSON.parse(JSON.stringify(await checkReadOnly({ view, app, stage, penStroke, setTool, strokeCount, frames, openMore, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`readonly check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPractice: () => checkPractice({ view, app, service: practiceService, frames, errors, notices }), checkOutline: () => checkOutline({ view, frames, errors, notices }), checkSettings: async () => { try { return JSON.parse(JSON.stringify(await checkSettings({ app, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`settings check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPlugin: async () => { try { return JSON.parse(JSON.stringify(await checkPlugin({ errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`plugin check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkExcerpt: () => checkExcerpt({ view, stage, penStroke, setTool, strokeCount, staticPixel, frames, errors, notices }), checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
 	return view;
 } };
 

@@ -87,6 +87,7 @@ export const GROUPS: readonly GroupSpec[] = [
 		id: "penGestures", section: "input", title: "settings.penGestures",
 		open: (s) => s.penSideButton === "gesture" || s.penSideButton === "radial-gesture" || s.penGestureLongPress || s.penGesturesCustom.length > 0,
 	},
+	{ id: "outline", section: "pages", title: "settings.outline", open: (s) => !(s.outlineBookmarks && s.outlineSlides && s.outlineHeadings && s.outlineMarkers) },
 	{ id: "timetable", section: "study", title: "settings.timetable", open: (_s, ctx) => ctx.timetableInUse },
 	{ id: "zettel", section: "study", title: "settings.zettel", open: (s) => s.zettelSlipBoxes.length > 0 },
 ];
@@ -237,6 +238,11 @@ const PAGES: SettingSpec[] = [
 	{ id: "autoNextPage", section: "pages", order: 30, name: "settings.autoNextPage", desc: "settings.autoNextPage.desc", control: { type: "toggle" } },
 	{ id: "autoScrollWriting", section: "pages", order: 40, name: "settings.autoScroll", desc: "settings.autoScroll.desc", control: { type: "toggle" } },
 	{ id: "pageTurnerKeys", section: "pages", order: 50, name: "settings.pageTurnerKeys", desc: "settings.pageTurnerKeys.desc", control: { type: "toggle" }, keywords: "keyboard tastiera clicker" },
+	// 0.13 outline: what the generated outline in the page panel lists.
+	{ id: "outlineBookmarks", section: "pages", group: "outline", order: 10, name: "settings.outlineBookmarks", desc: "settings.outlineBookmarks.desc", control: { type: "toggle" }, keywords: "outline indice sommario table of contents" },
+	{ id: "outlineSlides", section: "pages", group: "outline", order: 20, name: "settings.outlineSlides", desc: "settings.outlineSlides.desc", control: { type: "toggle" }, keywords: "outline pdf slide diapositive" },
+	{ id: "outlineHeadings", section: "pages", group: "outline", order: 30, name: "settings.outlineHeadings", desc: "settings.outlineHeadings.desc", control: { type: "toggle" }, keywords: "outline heading titoli handwriting scrittura" },
+	{ id: "outlineMarkers", section: "pages", group: "outline", order: 40, name: "settings.outlineMarkers", desc: "settings.outlineMarkers.desc", control: { type: "toggle" }, keywords: "outline marker segnalini domande compiti" },
 ];
 
 const READING: SettingSpec[] = [

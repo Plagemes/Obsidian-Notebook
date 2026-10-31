@@ -80,6 +80,11 @@ SCENARIOS.push({ doc: "pdf", theme: "dark", device: "narrow", lowLatency: false 
 // The practice strip, the peek and the timer on a notebook with a practice copy (wave 0.9).
 SCENARIOS.push({ doc: "practice", theme: "light", device: "desktop", lowLatency: false });
 SCENARIOS.push({ doc: "practice", theme: "dark", device: "narrow", lowLatency: false });
+// The generated outline (0.13): bookmarks, slides, large handwriting and markers in the page panel, tablet and phone, light and dark.
+SCENARIOS.push({ doc: "outline", theme: "light", device: "tablet", lowLatency: false });
+SCENARIOS.push({ doc: "outline", theme: "dark", device: "tablet", lowLatency: false });
+SCENARIOS.push({ doc: "outline", theme: "light", device: "phone", lowLatency: false });
+SCENARIOS.push({ doc: "outline", theme: "dark", device: "phone", lowLatency: false });
 // Anchored excerpts (v10): a region of a fake PDF page excerpted to a new page, drawn live, and the badge's jump back.
 SCENARIOS.push({ doc: "excerpt", theme: "light", device: "desktop", lowLatency: false });
 SCENARIOS.push({ doc: "excerpt", theme: "dark", device: "tablet", lowLatency: false });
@@ -198,7 +203,7 @@ async function main() {
 					await sleep(100);
 				}
 				await cdp.evaluate("window.harness.ready.then(() => true)");
-				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "outline" ? "window.harness.checkOutline()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}

@@ -95,6 +95,8 @@ import { PenGestureLayer } from "./pen-gestures";
 import { gestureWorld, runGesture, type PenGestureView } from "./pen-gesture-actions";
 import { CustomGesturesModal, GestureCheatSheet, type PenGestureUiHost } from "./pen-gesture-ui";
 import { editPageTags } from "./outline";
+import { OutlineBuilder } from "../model/outline-builder";
+import { HeadingThumbs } from "./outline-thumbs";
 import { askPdfRange } from "./pdf-range-modal";
 import { runBoardShot } from "./board-shot";
 import type { EditContext } from "./edit-context";
@@ -336,6 +338,9 @@ export class NotebookView extends FileView {
 	/** wave 0.7: sync safety (#342–#344). */
 	private syncSafety: ViewSyncSafety | null = null;
 	private pageNav: PageNavigator | null = null;
+	/** 0.13: the generated outline and the pictures of its headings (cached per page). */
+	private readonly outlineBuilder = new OutlineBuilder();
+	private readonly headingThumbs = new HeadingThumbs();
 	/** Roadmap 50: the fast scrollbar with a page preview (view/scrollbar.ts). */
 	private scrollbar: FastScrollbar | null = null;
 	/** Roadmap 18: stops following the history's changes (the quick slots and the page sheet enable or disable Back and Forward). */
@@ -1169,6 +1174,8 @@ export class NotebookView extends FileView {
 		this.ui?.refresh();
 		this.display?.settingsChanged();
 		this.tabs?.refresh();
+		// 0.13: the outline lists what the settings say.
+		this.pageNav?.refresh();
 	}
 
 	/**
@@ -1762,6 +1769,16 @@ export class NotebookView extends FileView {
 			canEdit: () => this.editableDocument() !== null,
 			execute: (cmd) => void this.applyCommand(cmd),
 			goTo: (index) => this.goToPage(index),
+			assets: () => this.session?.doc?.assets,
+			outline: () => this.outlineBuilder,
+			sources: () => ({
+				bookmarks: this.host.settings.outlineBookmarks, slides: this.host.settings.outlineSlides,
+				headings: this.host.settings.outlineHeadings, markers: this.host.settings.outlineMarkers,
+			}),
+			headingImage: (item) => {
+				const page = this.session?.doc?.pages.find((p) => p.id === item.pageId);
+				return page ? this.headingThumbs.url(page, item) : null;
+			},
 		};
 	}
 
