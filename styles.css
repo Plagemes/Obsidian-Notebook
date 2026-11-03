@@ -12047,3 +12047,44 @@ body.notebook-style-obsidian {
 		transition: none;
 	}
 }
+
+/* ===== 0.14 smartplus ===== */
+.nb-ui.nb-smart-add {
+	position: absolute;
+	left: 50%;
+	bottom: 72px;
+	transform: translateX(-50%);
+	z-index: 8;
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 8px;
+	max-width: calc(100% - 24px);
+	padding: 8px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-l);
+	background: var(--nb-panel);
+	box-shadow: var(--nb-shadow-float);
+}
+
+.nb-ui.nb-smart-add .nb-chip {
+	min-height: 44px;
+}
+
+.nb-app.is-phone .nb-ui.nb-smart-add,
+.nb-ui.nb-smart-add.is-phone {
+	bottom: 64px;
+}
+
+@media (max-width: 480px) {
+	.nb-ui.nb-smart-add {
+		bottom: 64px;
+		flex-direction: column;
+		align-items: stretch;
+		width: calc(100% - 24px);
+	}
+
+	.nb-ui.nb-smart-add .nb-chip {
+		justify-content: flex-start;
+	}
+}

@@ -2432,6 +2432,14 @@ export const en = {
 	"lectureMode.end.hint": "Leave lecture mode",
 	"lecture.prefill": "The page will also say: {text}",
 	"timetable.lecturer": "Lecturer (optional)",
+	// 0.14 smartplus
+	"smartAdd.aria": "Add a page",
+	"smartAdd.same": "Same paper ({paper})",
+	"smartAdd.exercise": "Exercise page",
+	"smartAdd.slide": "Notes for this slide",
+	"smartAdd.paper": "{paper} page",
+	"smartAdd.blank": "Blank page",
+	"smartAdd.more": "More…",
 } as const;
 
 export type MessageKey = keyof typeof en;

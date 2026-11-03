@@ -1258,6 +1258,24 @@ Implemented, not verified on hardware.
 794. **Dialogs sideways.** Phone sideways, open *New*: the dialog fits the screen, its body scrolls, the footer buttons stay reachable.
 795. **Keyboard.** Tablet sideways with the on-screen keyboard (rename a notebook): the layout settles in short landscape and returns when the keyboard closes.
 
+### 0.14 — smartplus (steps 740-749)
+
+Implemented, not verified on hardware.
+
+740. **The strip.** Open a notebook, tap + (add page). Expected: a strip of two or three chips and *More...* appears above the bottom edge; no page is added yet. Tap + again: it closes.
+741. **One tap.** Tap the first chip (same paper). Expected: one page with this page's paper is added right after the current one and shown; Undo removes it.
+742. **Exercise.** On a PDF page, tap + : *Exercise page* is among the first chips; tapping it adds a page with the exercise paper and the size of the page.
+743. **Slide.** Open a PDF beside the notes (side by side), tap + : *Notes for this slide* is first and adds the linked notes page for the slide in view.
+744. **Learning.** In a notebook with some Cornell pages, tap + on a ruled page: *Cornell page* is offered. Take *Blank page* a few times: it climbs. Another notebook is not influenced.
+745. **More.** Tap *More...*: the page sheet opens with every way to add a page (blank, template, PDF, image, scan).
+746. **Steps aside.** Open the strip, put the pen down on the page: the strip disappears and the stroke is drawn. Also gone after ten seconds and when you scroll to another page.
+747. **Phone and tablet.** The chips are at least 44 px tall, do not overflow the screen (stacked on a phone), and are readable in light and dark.
+748. **Read-only.** In read-only mode + shows nothing and adds nothing.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Smart "+" (#410): ranked one-tap chips for the likeliest new pages, *More...* to the page sheet | yes | ranker, history, bounds; harness strip check | | | |
+
 ### 0.13 — polish (steps 670-679)
 
 Implemented, not verified on hardware.

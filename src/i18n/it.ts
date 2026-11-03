@@ -2434,4 +2434,12 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"lectureMode.end.hint": "Esci dalla modalità lezione",
 	"lecture.prefill": "La pagina riporterà anche: {text}",
 	"timetable.lecturer": "Docente (facoltativo)",
+	// 0.14 smartplus
+	"smartAdd.aria": "Aggiungi una pagina",
+	"smartAdd.same": "Stessa carta ({paper})",
+	"smartAdd.exercise": "Pagina esercizi",
+	"smartAdd.slide": "Appunti per questa slide",
+	"smartAdd.paper": "Pagina {paper}",
+	"smartAdd.blank": "Pagina bianca",
+	"smartAdd.more": "Altro…",
 };
