@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### nbmap
+- **Notebook map (roadmap #408).** A button in the page panel's header (grid icon) opens a dialog with a grid of page thumbnails for the whole notebook, each with badges for the states the page is in: open **question**, **gap** to complete, **homework** (with the earliest due date), **key point**, **unfinished practice** and **nearly empty** page. Filter chips with a count per state narrow the grid (tap the active chip to clear it); tapping a card goes to the page; the page in view is outlined and the first page of each lecture (#223) has an accent edge. Resolved items do not count.
+- Pure aggregator `src/model/notebook-map.ts` (no 'obsidian'), cached per page revision (`NotebookMapCache`: a page whose markers, text, tags or stroke count did not change is not recomputed; moving a page only refreshes its index). Thumbnails come from the page panel's cache and are drawn lazily, at the first pause in writing. Unfinished practice is judged from the page (a practice copy with nothing written yet) unless the caller passes the ids of finished attempts. Nothing is stored: **no change to the notebook format** (still v11).
+- Tests: `tests/notebook-map.test.ts`. Harness: `dev/harness/nbmap-check.ts`, scenarios `nbmap-*`.
+
 ## 0.13.0 — 2026-10-31
 
 The design system reaches every remaining surface, the Home is restructured, and two roadmap features land: the generated outline (#407) and just-in-time tips (#425). The art engine gets a new family (veins), OKLCH colour, glow, keyword motifs, growth, a persistent cache and off-main-thread rendering. **Not verified on the device**: unit tests and the browser harness only; manual steps 500–679 in `docs/testing.md`. No change to the notebook format (still v11).

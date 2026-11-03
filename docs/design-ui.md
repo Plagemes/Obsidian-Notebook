@@ -380,3 +380,7 @@ A just-in-time tip (`src/ui/components/hint-bubble.ts`, rules in `src/ui/hint-lo
 (`--nb-panel`, `--nb-border-strong`, `--nb-radius-card`, `--nb-shadow-float`), an accent icon square, a 15 px title, one 13 px
 sentence in muted text, a *Turn off tips* link and a 40 px × button. It never takes focus, disappears after about 12 s and shows
 once per tip, at most one per 4 minutes and not while the pen is writing. Tips are switched in Settings → Appearance & language.
+
+## Notebook map (0.14, roadmap #408)
+
+A dialog on the shared shell (`modalShell`, wide, no footer) opened by the grid button in the page panel's header. Body: a row of filter chips (`chip`, one per state that exists, with the page count) and an auto-fill grid of cards (`.nb-map-card`: thumbnail, state badges at its bottom right, page number and earliest due date below). Badges are small pills with the state icon (question, gap, homework, practice, empty, key point) and a number when there are several; they are decoration of a card that is itself the control. The current page has an accent border, a lecture's first page an accent top edge. Thumbnails come from the page panel's cache, drawn lazily at the first pause in writing. Logic: `src/model/notebook-map.ts`; view: `src/view/notebook-map-modal.ts`.

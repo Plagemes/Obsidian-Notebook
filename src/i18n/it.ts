@@ -2395,4 +2395,17 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.hintsReset": "Mostra di nuovo i suggerimenti",
 	"settings.hintsReset.desc": "Ogni suggerimento può ricomparire alla prossima occasione; li riattiva.",
 	"settings.hintsReset.button": "Ripristina",
+	// 0.14 nbmap
+	"map.title": "Mappa del quaderno",
+	"map.open": "Mappa del quaderno",
+	"map.subtitle": "{open} elementi aperti in {pages} pagine",
+	"map.filter.all": "Tutte le pagine",
+	"map.state.question": "Domande",
+	"map.state.gap": "Da completare",
+	"map.state.homework": "Compiti",
+	"map.state.practice": "Esercizi",
+	"map.state.empty": "Vuote",
+	"map.state.key": "Punti chiave",
+	"map.none": "Nessuna pagina in questo stato",
+	"map.allClear": "Niente di aperto: tutte le pagine sono a posto",
 };
