@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 import { createDocument, createPage, createStroke } from "../src/model/document";
 import { AddStroke, Batch, History } from "../src/model/history";
 import { planMerge } from "../src/model/merge";
+import { planPageMove } from "../src/library/page-move";
+import { addEntry, emptyPageTrash, entryDocument, makeEntry, planPageTrashRestore } from "../src/model/page-trash";
 import { MIGRATIONS } from "../src/model/migrations";
 import { copyStroke, duplicatePage } from "../src/model/pages";
 import { checkContent, freezeStroke, parse, parseStaged, serialize, serializeChecked, StagedParse, STAGED_MIN_CHARS } from "../src/model/serialize";
@@ -13,7 +15,7 @@ import {
 	AddSlideRef, findSlideRef, linkStrokes, newSlideId, sameSlide, slideInkGroups, slideMerger, slideOfStrokes, slideRefOf, slideTable,
 } from "../src/model/slide-links";
 import { stressDocument } from "../src/model/stress";
-import { CURRENT_VERSION, FORMAT_ID, type NotebookDocument, type SlideRef, type Stroke } from "../src/model/types";
+import { CURRENT_VERSION, FORMAT_ID, SLIDE_PATH_MAX, SLIDE_SOURCE_MAX, type NotebookDocument, type SlideRef, type Stroke } from "../src/model/types";
 import { getAt, setAt, type Raw } from "./raw-json";
 
 const stamp = "2026-10-31T10:00:00.000Z";
@@ -364,5 +366,125 @@ describe("copies and merge keep the link", () => {
 
 	it("keeps a page made with createPage free of slides", () => {
 		expect(createPage().strokes).toEqual([]);
+	});
+});
+
+describe("v12 table bounds (review fix)", () => {
+	it("leaves an over-long path out of the entry and keeps the link", () => {
+		const doc = createDocument(new Date(stamp));
+		const linked = linkStrokes(doc, [line(10)], { source: SRC, page: 2, path: "p".repeat(SLIDE_PATH_MAX + 1) + ".pdf" }, seeded(1));
+		linked.commands.forEach((c) => c.apply(doc));
+		doc.pages[0]!.strokes.push(...linked.strokes);
+		expect(doc.slides).toHaveLength(1);
+		expect(doc.slides![0]!.path).toBeUndefined();
+		expect(linked.strokes[0]!.slide).toBe(doc.slides![0]!.id);
+		expect(checkContent(doc)).toBeNull();
+		expect(serializeChecked(doc).ok).toBe(true);
+	});
+
+	it("does not link at all when the source is too long", () => {
+		const doc = createDocument(new Date(stamp));
+		const strokes = [line(10)];
+		const linked = linkStrokes(doc, strokes, { source: "s".repeat(SLIDE_SOURCE_MAX + 1), page: 1 }, seeded(1));
+		expect(linked.commands).toEqual([]);
+		expect(linked.strokes[0]!.slide).toBeUndefined();
+		expect(doc.slides).toBeUndefined();
+	});
+
+	it("accepts the longest path and source the format allows", () => {
+		const doc = createDocument(new Date(stamp));
+		const linked = linkStrokes(doc, [line(10)], { source: "s".repeat(SLIDE_SOURCE_MAX), page: 1, path: "p".repeat(SLIDE_PATH_MAX) }, seeded(1));
+		linked.commands.forEach((c) => c.apply(doc));
+		doc.pages[0]!.strokes.push(...linked.strokes);
+		expect(doc.slides![0]!.path).toHaveLength(SLIDE_PATH_MAX);
+		expect(serializeChecked(doc).ok).toBe(true);
+	});
+
+	it("checkContent refuses a table entry the writer could not save, and the history rolls the edit back", () => {
+		const doc = createDocument(new Date(stamp));
+		const bad = Object.freeze({ id: "bad", source: "s".repeat(SLIDE_SOURCE_MAX + 1), page: 1 });
+		const refused: string[] = [];
+		const history = new History(() => doc, 500, (d) => checkContent(d), (m) => refused.push(m));
+		expect(history.execute(new AddSlideRef(bad))).toBe(false);
+		expect(refused).toHaveLength(1);
+		expect(doc.slides).toBeUndefined();
+		expect(serializeChecked(doc).ok).toBe(true);
+	});
+});
+
+describe("v12 links in page trash and page moves (review fix)", () => {
+	function linkedPageDoc(): NotebookDocument {
+		const doc = linkedDoc();
+		const second = createPage();
+		const linked = linkStrokes(doc, [line(50)], { source: SRC, page: 5 }, seeded(2));
+		linked.commands.forEach((c) => c.apply(doc));
+		second.strokes.push(...linked.strokes);
+		doc.pages.push(second);
+		return doc;
+	}
+
+	it("the trash entry carries the slides its ink was written beside", () => {
+		const doc = linkedPageDoc();
+		const entry = makeEntry(doc, doc.pages[0]!, 0, 1000);
+		const saved = entryDocument(entry)!;
+		expect(saved.slides).toHaveLength(1);
+		expect(saved.slides![0]).toMatchObject({ source: SRC, page: 3, path: PDF });
+		expect(saved.pages[0]!.strokes.filter((s) => s.slide !== undefined)).toHaveLength(2);
+	});
+
+	it("restores the badges in the same undo step (entry kept in the table)", () => {
+		const doc = linkedPageDoc();
+		const page = doc.pages[0]!;
+		const entry = makeEntry(doc, page, 0, 1000);
+		doc.pages.splice(0, 1);
+		const before = JSON.stringify(doc.slides);
+		const plan = planPageTrashRestore(doc, entry)!;
+		const history = new History(() => doc);
+		history.execute(plan.command);
+		expect(doc.pages[0]!.strokes.filter((s) => slideRefOf(doc, s)?.page === 3)).toHaveLength(2);
+		expect(JSON.stringify(doc.slides)).toBe(before);
+		expect(serializeChecked(doc).ok).toBe(true);
+		history.undo();
+		expect(JSON.stringify(doc.slides)).toBe(before);
+	});
+
+	it("re-adds an entry the table lost meanwhile, and undo removes it again", () => {
+		const doc = linkedPageDoc();
+		const entry = makeEntry(doc, doc.pages[0]!, 0, 1000);
+		doc.pages.splice(0, 1);
+		doc.slides = doc.slides!.filter((r) => r.page !== 3); // nothing uses it any more, the table was pruned
+		const plan = planPageTrashRestore(doc, entry)!;
+		const history = new History(() => doc);
+		history.execute(plan.command);
+		const restored = doc.pages[0]!.strokes.filter((s) => s.slide !== undefined);
+		expect(restored).toHaveLength(2);
+		for (const s of restored) expect(slideRefOf(doc, s)).toMatchObject({ source: SRC, page: 3, path: PDF });
+		expect(serializeChecked(doc).ok).toBe(true);
+		history.undo();
+		expect(doc.slides.some((r) => r.page === 3)).toBe(false);
+		history.redo();
+		expect(doc.slides.some((r) => r.page === 3)).toBe(true);
+	});
+
+	it("maps to an equal entry under another id, and survives the trash file round trip", () => {
+		const doc = linkedPageDoc();
+		const file = addEntry(emptyPageTrash(doc.id), makeEntry(doc, doc.pages[0]!, 0, 1000), 1000);
+		const revived = JSON.parse(JSON.stringify(file)) as typeof file;
+		doc.pages.splice(0, 1);
+		doc.slides = [{ id: "other", source: SRC, page: 3, path: PDF }];
+		new History(() => doc).execute(planPageTrashRestore(doc, revived.entries[0]!)!.command);
+		expect(doc.slides).toHaveLength(1);
+		expect(doc.pages[0]!.strokes.filter((s) => s.slide === "other")).toHaveLength(2);
+	});
+
+	it("moving pages to another notebook leaves the ink unlinked (the target has no such entry)", () => {
+		const source = linkedPageDoc();
+		const target = createDocument(new Date(stamp));
+		const plan = planPageMove(source, [source.pages[0]!.id], target);
+		expect(plan.ok).toBe(true);
+		if (!plan.ok) return;
+		expect(plan.pages[0]!.strokes).toHaveLength(3);
+		expect(plan.pages[0]!.strokes.every((s) => s.slide === undefined)).toBe(true);
+		expect(source.pages[0]!.strokes.some((s) => s.slide !== undefined)).toBe(true);
 	});
 });
