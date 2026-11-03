@@ -13,7 +13,7 @@
 import { strokeBounds, type BBox } from "../ink/hit-test";
 import type { Command } from "./history";
 import { freezeStroke } from "./serialize";
-import type { NotebookDocument, SlideRef, Stroke } from "./types";
+import { SLIDE_PATH_MAX, SLIDE_SOURCE_MAX, type NotebookDocument, type SlideRef, type Stroke } from "./types";
 
 /** A slide without its id: what the side-by-side pane shows. */
 export interface SlideKey {
@@ -94,14 +94,19 @@ export class AddSlideRef implements Command {
 
 /**
  * Strokes about to be committed, linked to the slide `key`: copies that name its entry, and the command that adds the
- * entry when the table does not have it yet (to run in the same undo step, before or after the strokes).
+ * entry when the table does not have it yet (to run in the same undo step, before or after the strokes). Values the file
+ * format bounds are checked here: a path that is too long is left out of the entry (the slide is still told by its PDF id),
+ * and a source that is too long links nothing (the strokes come back unchanged): a longer value would make every save fail.
  */
 export function linkStrokes(doc: NotebookDocument, strokes: readonly Stroke[], key: SlideKey, random?: () => number): { strokes: Stroke[]; commands: Command[] } {
+	if (key.source.length === 0 || key.source.length > SLIDE_SOURCE_MAX || !Number.isSafeInteger(key.page) || key.page < 1) return { strokes: [...strokes], commands: [] };
+	const path = key.path !== undefined && key.path.length > 0 && key.path.length <= SLIDE_PATH_MAX ? key.path : undefined;
+	key = path === undefined ? { source: key.source, page: key.page } : { source: key.source, page: key.page, path };
 	let ref = findSlideRef(doc, key);
 	const commands: Command[] = [];
 	if (!ref) {
 		const made: SlideRef = { id: newSlideId(new Set((doc.slides ?? []).map((r) => r.id)), random), source: key.source, page: key.page };
-		if (key.path) made.path = key.path;
+		if (path !== undefined) made.path = path;
 		ref = Object.freeze(made);
 		commands.push(new AddSlideRef(ref));
 	}

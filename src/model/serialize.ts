@@ -396,7 +396,7 @@ function readStroke(v: unknown, path: string, drop: Dropped | null = null, slide
  * v12 slide references: an array of { id, source, page, path? }. Read leniently, an invalid entry (or one whose id is
  * already taken) is dropped and counted; strokes that refer to it then lose their `slide` (counted too).
  */
-function readSlides(v: unknown, drop: Dropped | null): SlideRef[] {
+export function readSlides(v: unknown, drop: Dropped | null): SlideRef[] {
 	if (v === undefined) return [];
 	const all = orDrop(drop, () => (Array.isArray(v) ? (v as unknown[]) : fail("slides", "expected an array")));
 	if (!all) return [];
@@ -1282,6 +1282,9 @@ export function parseStaged(text: string, firstPage: number | null): StagedParse
 
 export type CheckedSerialization = { ok: true; text: string } | { ok: false; message: string };
 
+/** Slide table entries that already passed `checkContent` (frozen). */
+const checkedSlideRefs = new WeakSet<SlideRef>();
+
 /** Elements that already passed `checkContent` (they are frozen, so they cannot change afterwards). */
 const checkedElements = new WeakSet<PageElement>();
 
@@ -1309,6 +1312,13 @@ export function checkElement(el: PageElement, assets: Readonly<Record<string, As
 export function checkContent(doc: NotebookDocument): string | null {
 	try {
 		const assets = doc.assets ?? {};
+		// v12: the slide table is checked as the writer would (an over-long source or path would fail every save).
+		for (const r of doc.slides ?? []) {
+			if (checkedSlideRefs.has(r)) continue;
+			const line = slideRefLine(r);
+			if (slideRefLine(readSlideRef(JSON.parse(line), `slide ${r.id}`)) !== line) return `slide ${r.id}: round-trip mismatch`;
+			if (Object.isFrozen(r)) checkedSlideRefs.add(r);
+		}
 		for (const page of doc.pages) {
 			for (const s of page.strokes) {
 				if (verifiedLines.has(s) || validatedStrokes.has(s)) continue;
