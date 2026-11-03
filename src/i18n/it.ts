@@ -10,6 +10,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"command.redo": "Ripeti (quaderno)",
 	"command.fit": "Adatta la pagina alla larghezza",
 	"command.addPage": "Aggiungi pagina",
+	"command.addPageSuggest": "Aggiungi pagina: suggerimenti",
 	"command.benchmark": "Esegui il benchmark delle prestazioni",
 	"command.stress": "Crea un quaderno di prova sotto carico",
 	"command.exportPdf": "Esporta quaderno in PDF",

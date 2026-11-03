@@ -8,6 +8,7 @@ export const en = {
 	"command.redo": "Redo (notebook)",
 	"command.fit": "Fit page to width",
 	"command.addPage": "Add page",
+	"command.addPageSuggest": "Add page: suggestions",
 	"command.benchmark": "Run performance benchmark",
 	"command.stress": "Create stress-test notebook",
 	"command.exportPdf": "Export notebook as PDF",

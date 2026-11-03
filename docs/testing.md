@@ -1289,6 +1289,7 @@ Implemented, not verified on hardware.
 746. **Steps aside.** Open the strip, put the pen down on the page: the strip disappears and the stroke is drawn. Also gone after ten seconds and when you scroll to another page.
 747. **Phone and tablet.** The chips are at least 44 px tall, do not overflow the screen (stacked on a phone), and are readable in light and dark.
 748. **Read-only.** In read-only mode + shows nothing and adds nothing.
+749. **Commands.** Command palette: *Add page* adds a page right away (same size and paper as the page in view, one undo step; a hotkey bound to it behaves the same). *Add page: suggestions* opens the strip, like tapping +. In read-only mode neither does anything.
 
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|

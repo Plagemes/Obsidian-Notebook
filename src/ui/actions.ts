@@ -252,7 +252,10 @@ export const ACTIONS: readonly ActionDef[] = [
 	// wave 0.9: math
 	{ id: "insert-equation", label: "math.insertEquation", icon: "sigma", group: "insert", surfaces: ["sheet"], priority: 52, scope: "view", command: "math.command.insertEquation", keywords: "formula latex maths math equazione formula" },
 	{ id: "insert-graph", label: "math.insertGraph", icon: "chart-spline", group: "insert", surfaces: ["sheet"], priority: 50, scope: "view", command: "math.command.insertGraph", keywords: "function plot chart curve grafico funzione" },
-	{ id: "add-page", label: "tool.addPage", icon: "file-plus", group: "insert", surfaces: ["quick", "sheet"], priority: 66, scope: "view", command: "command.addPage" },
+	// "add-page" is the Obsidian command (and its hotkey): it adds a page right away, same paper, as before 0.14. The on-screen "+" is
+	// "add-page-suggest": it opens the Smart "+" strip (0.14, 410); the command of the same name opens that strip from the keyboard.
+	{ id: "add-page", label: "tool.addPage", icon: "file-plus", group: "insert", surfaces: ["palette"], priority: 66, scope: "view", command: "command.addPage" },
+	{ id: "add-page-suggest", label: "tool.addPage", icon: "file-plus", group: "insert", surfaces: ["quick", "sheet"], priority: 66, scope: "view", command: "command.addPageSuggest" },
 	{ id: "insert-blank-page", label: "page.insertBlank", icon: "file-plus", group: "insert", surfaces: ["page"], priority: 60, scope: "view" },
 	{ id: "exercise-page", label: "page.exercise", icon: "pencil-ruler", group: "insert", surfaces: ["context", "sheet", "page"], contexts: ["lecture"], priority: 45, scope: "view", command: "command.exercisePage" },
 	{ id: "page-from-template", label: "page.newFromTemplate", icon: "file-plus-2", group: "insert", surfaces: ["sheet", "page"], priority: 40, scope: "view", keywords: "template" },

@@ -23,6 +23,17 @@ describe("commands from the action registry", () => {
 		expect(ids).not.toContain("zettel-orphans");
 	});
 
+	it("keeps Add page as a direct add and offers the Smart + strip as its own command", () => {
+		const by = (id: string) => commandActions().find((c) => c.id === id)!;
+		expect(commandName(by("add-page"))).toBe("Add page");
+		expect(commandName(by("add-page-suggest"))).toBe("Add page: suggestions");
+		expect(runnersSource).toMatch(/"add-page": \(v\) => v\.addPage\(\)/);
+		expect(runnersSource).toMatch(/"add-page-suggest": \(v\) => v\.openSmartAdd\(\)/);
+		// The on-screen "+" is the strip; the plain command is not a toolbar slot.
+		expect(ACTIONS.find((a) => a.id === "add-page-suggest")!.surfaces).toContain("quick");
+		expect(ACTIONS.find((a) => a.id === "add-page")!.surfaces).not.toContain("quick");
+	});
+
 	it("names favourites with their slot and uses the command names", () => {
 		const by = (id: string) => commandActions().find((c) => c.id === id)!;
 		expect(commandName(by("favourite-3"))).toBe("Favourite pen 3");

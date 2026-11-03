@@ -23,7 +23,7 @@ export async function checkSmartAdd(api: SmartAddCheckApi): Promise<{ ok: boolea
 	const pages = (): number => v.document.pages.length;
 
 	const n0 = pages();
-	v.runAction("add-page");
+	v.runAction("add-page-suggest");
 	await api.frames(2);
 	add("the + shows the strip and adds nothing yet", !!strip() && pages() === n0, `pages ${pages()}`);
 	const ks = keys();
@@ -42,7 +42,7 @@ export async function checkSmartAdd(api: SmartAddCheckApi): Promise<{ ok: boolea
 	add("one undo takes the page away", pages() === n0);
 
 	// The next "+" learns from the choice and still offers a way to the full chooser.
-	v.runAction("add-page");
+	v.runAction("add-page-suggest");
 	await api.frames(2);
 	add("the strip comes back", !!strip());
 	document.querySelector<HTMLElement>(".nb-smart-add .nb-chip[data-key='smart-add:more']")?.click();
@@ -51,7 +51,7 @@ export async function checkSmartAdd(api: SmartAddCheckApi): Promise<{ ok: boolea
 	v.ui.sheet && (document.querySelector<HTMLElement>("body")?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
 	await api.frames(2);
 
-	v.runAction("add-page");
+	v.runAction("add-page-suggest");
 	await api.frames(3);
 	add("the strip is open for the screenshot", !!strip());
 	return { ok: results.every((r) => r.ok), results, errors: api.errors, notices: api.notices, env: {} };
