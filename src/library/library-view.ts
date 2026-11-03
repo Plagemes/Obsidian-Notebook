@@ -44,12 +44,14 @@ import {
 	type CollectionContext, type CollectionId, type Subject,
 } from "./dashboard";
 import type { ActivityRecord } from "./activity-log";
+import { parseSeenState, markSeen, type SeenState } from "./changed-seen";
+import { computeSections, DYNAMIC_IDS, markSectionSeen, notebookSeenKey, type DynamicId, type DynamicSections, type SectionItem } from "./dynamic-sections";
 import { greetingOf, greetingText, type GreetingKey } from "./greeting";
 import { buildStatsModel, filterEdits, subjectsOfEdits, todayPages, type RecentEdit } from "./home-data";
 import { CHART_DAYS, chooseContinue, groupByNotebook, pagesByFolder, splitMinutes, type ChartDays, type LectureTarget, type SubjectRef } from "./home-stats";
 import { renderHome, type RecentSection, type StatsSection } from "./home-surface";
 import { PageThumbs } from "./page-thumbs";
-import { renderLibrarySections, renderTagChips, type TagChip } from "./library-sections";
+import { renderLibrarySections, renderTagChips, type DynamicPanel, type TagChip } from "./library-sections";
 import { InboxBell, type InboxPort } from "./inbox-bell";
 
 /** The missing-styles diagnostic (LibraryView.checkStyles) is shown once per session. */
@@ -130,6 +132,10 @@ export interface LibraryHost {
 	lastNotebook?(): { path: string; page: number } | null;
 	/** 0.13: a new page in Quick notes (Quick page card). */
 	newQuickPage?(): void;
+	/** 0.14: this device's record of what it has seen of each notebook, and the notebooks open in a tab (dynamic sections). */
+	loadSeenState?(): unknown;
+	saveSeenState?(state: unknown): void;
+	openNotebooks?(): string[];
 }
 
 /**
@@ -168,7 +174,7 @@ const DASH_TAGS = 11;
 
 const tick = (ms = 0) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
-const COLLECTION_IDS: readonly CollectionId[] = ["study", "favourites", "pdf", "recent", "exams"];
+const COLLECTION_IDS: readonly CollectionId[] = ["study", "favourites", "pdf", "recent", "exams", ...DYNAMIC_IDS];
 
 function parsePlace(v: unknown, fallback: LibraryPlace): LibraryPlace {
 	// The favourites filter of 0.11 is the Favourites smart collection now (starred or pinned).
@@ -198,7 +204,13 @@ const COLLECTION_LOOK: Record<CollectionId, { icon: string; color: string; label
 	pdf: { icon: "file-text", color: paletteColor("Pink"), label: "lib.collection.pdf" },
 	recent: { icon: "clock", color: paletteColor("Indigo"), label: "lib.collection.recent" },
 	exams: { icon: "graduation-cap", color: paletteColor("Amber"), label: "lib.collection.exams" },
+	// 0.14 dynamic sections
+	now: { icon: "zap", color: paletteColor("Teal"), label: "dyn.now" },
+	todo: { icon: "list-checks", color: paletteColor("Green"), label: "dyn.todo" },
+	changed: { icon: "refresh-cw", color: paletteColor("Blue"), label: "dyn.changed" },
 };
+
+const isDynamicId = (id: CollectionId): id is DynamicId => (DYNAMIC_IDS as readonly string[]).includes(id);
 
 type ChipId = "all" | "subjects" | "recent" | "favourites" | "pdf" | "archived";
 
@@ -215,6 +227,9 @@ export class LibraryView extends ItemView {
 	private statDays: ChartDays = 7;
 	/** 0.13: Home's Recent notes are filtered to this subject (its folder path); null = all. */
 	private recentSubject: string | null = null;
+	/** 0.14: this device's seen record, and the dynamic sections of the render in progress. */
+	private seen: SeenState | null = null;
+	private dyn: DynamicSections | null = null;
 	/** 0.13: what the Continue card does on tap (also offered by an empty pages chart). */
 	private continueRun: (() => void) | null = null;
 	/** Wide view: the rail folded to icons by the user. */
@@ -902,6 +917,7 @@ export class LibraryView extends ItemView {
 	}
 
 	private render(): void {
+		this.dyn = null;
 		this.refreshNow();
 		this.fixScope();
 		const active = this.contentEl.ownerDocument.activeElement;
@@ -1016,7 +1032,75 @@ export class LibraryView extends ItemView {
 	}
 
 	private collectionCtx(): CollectionContext {
-		return { now: Date.now(), pinned: this.isPinned };
+		const d = this.dynamicSections();
+		return { now: Date.now(), pinned: this.isPinned, dynamic: { now: new Set(d.now.map((i) => i.path)), todo: new Set(d.todo.map((i) => i.path)), changed: new Set(d.changed.map((i) => i.path)) } };
+	}
+
+	// ---------------------------------------------------------------- dynamic sections (0.14)
+
+	/** This device's record of what it has seen (local storage); made on first use, with the moment it was made as the baseline. */
+	private seenState(): SeenState {
+		if (this.seen) return this.seen;
+		const raw = this.host.loadSeenState?.();
+		this.seen = parseSeenState(raw, Date.now());
+		if ((raw as { version?: unknown } | null | undefined)?.version !== this.seen.version) this.saveSeen();
+		return this.seen;
+	}
+
+	private saveSeen(): void {
+		this.dyn = null;
+		if (this.seen) this.host.saveSeenState?.(this.seen);
+	}
+
+	/** Now, To complete, Changed on another device: decided by dynamic-sections.ts from the index, the recent log and the seen record. */
+	private dynamicSections(): DynamicSections {
+		if (this.dyn) return this.dyn;
+		const lecture = this.host.lectureTarget?.() ?? null;
+		this.dyn = computeSections({
+			entries: this.visible(),
+			now: Date.now(),
+			lecturePath: lecture?.target.kind === "open" ? lecture.target.path : null,
+			openPaths: this.host.openNotebooks?.() ?? [],
+			edits: this.host.recentEdits?.() ?? [],
+			seen: this.seenState(),
+		});
+		return this.dyn;
+	}
+
+	private dynamicLabel(id: DynamicId, short = false): string {
+		return t(id === "changed" && short ? "dyn.changed.short" : COLLECTION_LOOK[id].label);
+	}
+
+	/** The second line of a row of a dynamic section: why the notebook is there. */
+	private dynamicMeta(it: SectionItem, now: number): string {
+		const lang = getLanguage();
+		switch (it.reason) {
+			case "lecture": return t("dyn.reason.lecture");
+			case "open": return t("dyn.reason.open");
+			case "edited": return t("dyn.reason.edited", { time: stampTime(it.at, now, lang) });
+			case "changed": return t("dyn.reason.changed", { time: stampTime(it.at, now, lang) });
+			default:
+				return [
+					it.markers ? this.plural(it.markers, "dyn.todo.markers.one", "dyn.todo.markers.many") : "",
+					it.empty ? this.plural(it.empty, "dyn.todo.empty.one", "dyn.todo.empty.many") : "",
+				].filter(Boolean).join(" · ");
+		}
+	}
+
+	/** The notebook was seen on this device: what it holds now is not news any more. */
+	private noteSeen(path: string): void {
+		const e = this.index.get(path);
+		if (!e || !markSeen(this.seenState(), notebookSeenKey(e), e.mtime)) return;
+		this.saveSeen();
+		this.requestRender();
+	}
+
+	/** "Mark as seen" of the Changed on another device section. */
+	private markChangedSeen(): void {
+		if (!markSectionSeen(this.seenState(), this.visible(), this.dynamicSections().changed)) return;
+		this.saveSeen();
+		showNotice(t("dyn.markSeen.done"));
+		this.requestRender();
 	}
 
 	/** Procedural artwork is off when the system asks for reduced motion and effects (DESIGN.md §2.6, §7). */
@@ -1137,9 +1221,15 @@ export class LibraryView extends ItemView {
 		const archived = this.index.size - visible.length;
 		const nav = el.createEl("nav", { cls: "nb-rail-nav" });
 		const p = this.place;
-		const libraryActive = !(p === "home" || p === "tags" || p === "archived" || isFolderPlace(p) || isTagPlace(p) || (isCollectionPlace(p) && p.collection === "pdf"));
+		const libraryActive = !(p === "home" || p === "tags" || p === "archived" || isFolderPlace(p) || isTagPlace(p) || (isCollectionPlace(p) && (p.collection === "pdf" || isDynamicId(p.collection))));
 		railItem(nav, { key: "nav:home", icon: "home", label: t("nav.home"), active: p === "home", onClick: () => this.navigate("home") });
 		railItem(nav, { key: "nav:all", icon: "folder", label: t("nav.notebooks"), active: libraryActive, onClick: () => this.navigate("all") });
+		// 0.14: the dynamic sections with something in them, each with its count.
+		const dyn = this.dynamicSections();
+		for (const id of DYNAMIC_IDS) {
+			if (dyn[id].length === 0) continue;
+			railItem(nav, { key: `nav:dyn:${id}`, icon: COLLECTION_LOOK[id].icon, label: this.dynamicLabel(id, true), count: dyn[id].length, active: isCollectionPlace(p) && p.collection === id, onClick: () => this.navigate({ collection: id }) });
+		}
 		if (visible.some((e) => (e.pdfPages ?? 0) > 0)) {
 			railItem(nav, { key: "nav:pdf", icon: "file-text", label: t("nav.pdf"), active: isCollectionPlace(p) && p.collection === "pdf", onClick: () => this.navigate({ collection: "pdf" }) });
 		}
@@ -1253,7 +1343,7 @@ export class LibraryView extends ItemView {
 		if (isTagPlace(p)) return { title: `#${p.tag}`, subtitle: t("lib.subtitle.tag") };
 		if (p === "tags") return { title: t("nav.tags"), subtitle: t("lib.subtitle.tags") };
 		if (p === "archived") return { title: t("nav.archive"), subtitle: t("library.archived.hint") };
-		if (isCollectionPlace(p)) return { title: t(COLLECTION_LOOK[p.collection].label), subtitle: t(`lib.collection.${p.collection}.hint` as MessageKey) };
+		if (isCollectionPlace(p)) return { title: t(COLLECTION_LOOK[p.collection].label), subtitle: t(isDynamicId(p.collection) ? (`dyn.${p.collection}.hint` as MessageKey) : (`lib.collection.${p.collection}.hint` as MessageKey)) };
 		return { title: t("lib.title"), subtitle: t("lib.subtitle") };
 	}
 
@@ -1289,6 +1379,9 @@ export class LibraryView extends ItemView {
 			this.bell?.mount(tools);
 		} catch (e) {
 			console.error("[notebook] the inbox bell could not be shown", e);
+		}
+		if (isCollectionPlace(p) && p.collection === "changed" && this.dynamicSections().changed.length > 0) {
+			iconButton(tools, "check-check", t("dyn.markSeen"), () => this.markChangedSeen(), "nb-mark-seen");
 		}
 		if (p !== "home") {
 			iconButton(tools, "filter", t("lib.filter"), (b) => this.filterMenu(b), isTagPlace(p) ? "is-active" : "");
@@ -1471,6 +1564,7 @@ export class LibraryView extends ItemView {
 		const favourites = byModified.filter((e) => inCollection("favourites", e, c));
 		const tags = this.index.tags(this.notArchived);
 		renderLibrarySections(el, {
+			dynamic: this.dynamicPanels(now),
 			subjects: subjects.slice(0, DASH_SUBJECTS).map((s) => this.subjectCardOptions(s, "tile")),
 			moreSubjects: subjects.length > DASH_SUBJECTS ? () => this.navigate("subjects") : null,
 			createSubject: this.createSubjectTile(),
@@ -1495,6 +1589,27 @@ export class LibraryView extends ItemView {
 			const path = card.dataset.key?.slice("subject:".length);
 			if (path) this.wireFolderCard(card, path);
 		}
+	}
+
+	/** The dynamic sections of the library dashboard: only those with something in them, a few rows each. */
+	private dynamicPanels(now: number): DynamicPanel[] {
+		const d = this.dynamicSections();
+		const out: DynamicPanel[] = [];
+		for (const id of DYNAMIC_IDS) {
+			const items = d[id];
+			if (items.length === 0) continue;
+			const rows: ListRowOptions[] = [];
+			for (const it of items.slice(0, DASH_ROWS)) {
+				const e = this.index.get(it.path);
+				if (e) rows.push({ ...this.notebookRow(e, now, this.dynamicMeta(it, now)), key: `dyn:${id}:${e.path}` });
+			}
+			out.push({
+				id, icon: COLLECTION_LOOK[id].icon, title: this.dynamicLabel(id), count: items.length, rows,
+				more: items.length > rows.length ? () => this.navigate({ collection: id }) : null,
+				action: id === "changed" ? { label: t("dyn.markSeen"), onRun: () => this.markChangedSeen() } : null,
+			});
+		}
+		return out;
 	}
 
 	private renderSubjectsPage(el: HTMLElement, tree: FolderNode): void {
@@ -1793,6 +1908,10 @@ export class LibraryView extends ItemView {
 		if (this.host.scanToNotebook) quick.push({ icon: "scan", ...compact(paletteColor("Teal")), title: t("home.quick.scan"), description: t("home.quick.scan.desc"), key: "quick:scan", onRun: () => this.host.scanToNotebook?.(root) });
 		const fit = this.mode === "wide" ? DASH_SUBJECTS_WIDE : this.mode === "medium" ? DASH_SUBJECTS_MEDIUM : DASH_SUBJECTS_PHONE;
 		renderHome(el, {
+			dynamic: DYNAMIC_IDS.filter((id) => this.dynamicSections()[id].length > 0).map((id) => ({
+				id, icon: COLLECTION_LOOK[id].icon, label: this.dynamicLabel(id, true), count: this.dynamicSections()[id].length,
+				onClick: () => this.navigate({ collection: id }),
+			})),
 			continue: cont.card,
 			empty: cont.empty,
 			quickPage: this.quickPageOptions(),
@@ -1977,6 +2096,9 @@ export class LibraryView extends ItemView {
 		} else if (isTagPlace(s)) {
 			title = t("library.empty.tag");
 			icon = "tag";
+		} else if (isCollectionPlace(s) && isDynamicId(s.collection)) {
+			title = t(`dyn.empty.${s.collection}` as MessageKey);
+			icon = COLLECTION_LOOK[s.collection].icon;
 		} else if (isCollectionPlace(s)) {
 			title = t("lib.empty.collection");
 			icon = COLLECTION_LOOK[s.collection].icon;
@@ -2200,6 +2322,7 @@ export class LibraryView extends ItemView {
 	private openEntry(path: string, pageIndex?: number): void {
 		const file = this.app.vault.getFileByPath(path);
 		if (file) void this.host.openNotebook(file, pageIndex);
+		this.noteSeen(path);
 	}
 
 	private fail(e: unknown): void {

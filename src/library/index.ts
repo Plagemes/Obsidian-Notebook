@@ -38,6 +38,8 @@ export interface LibraryEntry {
 	pdfPages?: number;
 	/** v5: markers still open (a gap to fill, an unanswered question, homework not done); absent: none. */
 	openMarkers?: number;
+	/** 0.14: pages still to fill (skipped, unannotated PDF slides, unfinished practice); absent: none. */
+	emptyPages?: number;
 	favorite: boolean;
 	/** Cover colour #rrggbb. */
 	cover: string;
@@ -208,6 +210,7 @@ function isEntry(v: unknown): v is LibraryEntry {
 		(e.text === undefined || typeof e.text === "string") &&
 		(e.pdfPages === undefined || Number.isInteger(e.pdfPages)) &&
 		(e.openMarkers === undefined || Number.isInteger(e.openMarkers)) &&
+		(e.emptyPages === undefined || Number.isInteger(e.emptyPages)) &&
 		(e.coverArt === undefined || isIndexCoverArt(e.coverArt)) &&
 		(e.textPages === undefined || (Array.isArray(e.textPages) && e.textPages.length % 2 === 0 && e.textPages.every((n) => Number.isFinite(n)))) &&
 		(e.pageTags === undefined || (Array.isArray(e.pageTags) && e.pageTags.every((p: unknown) => {

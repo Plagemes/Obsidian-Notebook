@@ -35,7 +35,18 @@ export interface StatsSection {
 	split: SubjectSplitOptions | null;
 }
 
+/** 0.14: a shortcut to a dynamic section (Now, To complete, Changed elsewhere) that has something in it. */
+export interface DynamicChip {
+	id: string;
+	icon: string;
+	label: string;
+	count: number;
+	onClick: () => void;
+}
+
 export interface HomeHost {
+	/** 0.14: dynamic sections with something in them; none hides the row. */
+	dynamic?: DynamicChip[];
 	/** The Continue card, or null with `empty` set: nothing to continue yet (an empty vault). */
 	continue: ContinueCardOptions | null;
 	/** 0.12.2: the empty state of a vault with no notebooks yet; shown in the Continue slot. */
@@ -70,6 +81,14 @@ export function renderHome(el: HTMLElement, h: HomeHost): void {
 		else if (h.empty) emptyState(row.createDiv({ cls: "nb-continue is-empty" }), h.empty);
 		if (h.quickPage) quickPageCard(row, h.quickPage);
 	});
+
+	const dynamic = h.dynamic ?? [];
+	if (dynamic.length > 0) {
+		part(page, "dynamic sections", t("dyn.home.label"), () => {
+			const row = page.createDiv({ cls: "nb-chips nb-home-dynamic", attr: { role: "toolbar", "aria-label": t("dyn.home.label") } });
+			for (const d of dynamic) chip(row, { label: d.label, icon: d.icon, count: d.count, key: `dyn:${d.id}`, onClick: d.onClick });
+		});
+	}
 
 	part(page, "quick actions", t("home.quick"), () => {
 		const sec = page.createEl("section", { cls: "nb-section nb-home-quick" });
