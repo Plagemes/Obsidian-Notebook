@@ -51,6 +51,7 @@ import { renderHome, type RecentSection, type StatsSection } from "./home-surfac
 import { PageThumbs } from "./page-thumbs";
 import { renderLibrarySections, renderTagChips, type TagChip } from "./library-sections";
 import { InboxBell, type InboxPort } from "./inbox-bell";
+import { applyViewportClass, ViewportTracker } from "../ui/viewport-class";
 
 /** The missing-styles diagnostic (LibraryView.checkStyles) is shown once per session. */
 let stylesWarned = false;
@@ -240,6 +241,8 @@ export class LibraryView extends ItemView {
 	private searchEl!: HTMLInputElement;
 	private observer: IntersectionObserver | null = null;
 	private resizeObserver: ResizeObserver | null = null;
+	/** 0.14 layout: orientation and size class of this view (classes nb-vp-* on the root). */
+	private readonly vpClass = new ViewportTracker(() => ({ coarse: activeWindow.matchMedia("(pointer: coarse)").matches }));
 
 	private renderQueued = false;
 	/** "Now: <course>" shortcut (timetable); hidden when no class is in progress. */
@@ -489,6 +492,8 @@ export class LibraryView extends ItemView {
 
 	private applyLayout(): void {
 		const r = this.rootEl;
+		const vp = this.vpClass.update(this.contentEl.clientWidth, this.contentEl.clientHeight);
+		if (vp) applyViewportClass(r, vp);
 		r.toggleClass("is-phone", this.mode === "phone");
 		r.toggleClass("is-medium", this.mode === "medium");
 		r.toggleClass("is-wide", this.mode === "wide");

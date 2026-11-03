@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### layout
+- **Layout by orientation and size (#430).** New pure classifier `src/ui/viewport-class.ts`: a view is phone / tablet / desktop, portrait / landscape, and "short" (landscape with little height), from its width, height and aspect, with hysteresis so rotation, a dragged split or a keyboard opening does not flicker. The notebook view and Home / the library put `nb-vp-phone|tablet|desktop`, `nb-vp-portrait|landscape`, `nb-vp-short` and `data-nb-viewport` on their root; other surfaces (toolbar, context bar) can style from them.
+- Notebook view in short landscape: toolbar and context bar lose their vertical padding; the PDF side-by-side split no longer flips back and forth near its threshold and has a wider divider when held sideways. Home and the library: header and padding shrink in short landscape, the folder grid uses three columns, a tablet held sideways keeps four quick actions. Dialogs use the whole height of a short landscape window.
+- No change to the notebook format.
+
 ## 0.13.0 — 2026-10-31
 
 The design system reaches every remaining surface, the Home is restructured, and two roadmap features land: the generated outline (#407) and just-in-time tips (#425). The art engine gets a new family (veins), OKLCH colour, glow, keyword motifs, growth, a persistent cache and off-main-thread rendering. **Not verified on the device**: unit tests and the browser harness only; manual steps 500–679 in `docs/testing.md`. No change to the notebook format (still v11).

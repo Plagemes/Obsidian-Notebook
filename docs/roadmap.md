@@ -765,7 +765,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 429. **P2** Explanation on long-press of an icon.
 
 ### Layout and devices
-430. **P1** Layout by orientation and size (the layout engine today reacts to width only).
+430. 🧪 **P1** Layout by orientation and size (`src/ui/viewport-class.ts`, `nb-vp-*` classes; 0.14).
 431. **P2** Layout by input device: pen, finger or mouse and keyboard.
 432. **P3** Larger targets when you often miss.
 433. **P3** Contrast-adaptive toolbar over slides.

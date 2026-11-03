@@ -34,6 +34,7 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Obsidian status bar item (roadmap O15, wave 0.10): "p. 3/12 · Saved" for the active notebook, saved / saving / unsaved / error, click opens the page panel; desktop only (no item on mobile) | ✅ | ✅ `tests/nav-history.test.ts` (text); harness: text follows the page and save state, click opens the panel; ❌ the status bar of Obsidian itself | | ✅ | Obsidian mobile has no status bar: the toolbar keeps showing the same two facts (steps 328-332) |
 | Class timetable (roadmap 115): pure scheduling (current/next class, odd/even weeks, term dates, local time, overlaps), file parse/serialize round trip, target notebook choice | ✅ | ✅ `tests/timetable.test.ts` | | | |
 | Course page tag: a lecture page made with a course from the timetable (New lecture prefill, *Open the current class*) gets the course as a v7 page tag, in the same undo step | ✅ | ✅ `applyCourseTag` (normalisation, no duplicate, undo with `AddPage`); ❌ the two flows in Obsidian | | | |
+| Layout by orientation and size (roadmap 430): `classifyViewport` (phone / tablet / desktop × portrait / landscape × short, hysteresis), `nb-vp-*` classes on the notebook view and Home / library, landscape CSS for the toolbar, Home grid and dialogs, sticky PDF split | ✅ | ✅ `tests/viewport-class.test.ts`; ✅ harness `layout-check.ts` (phone / tablet, portrait / landscape, dark / light) | | | not measured on Android |
 | Level of detail (roadmap 387): zoom → level (`lodLevel`, tolerance within 0.5 device px at any scale and pixel ratio), Douglas–Peucker on outlines (render 1) and on ink nodes with their radius (render 2), simplified paths kept per stroke and level, thumbnails | ✅ | ✅ `tests/lod.test.ts` (worst outline difference 0.44 device px over handwriting, stress strokes, pen/highlighter/shape); ✅ `npm run bench:lod` (PC pixel comparison and frame times) | | | not measured on Android |
 | Heavy page warning (roadmap 380): thresholds (strokes, points, image bytes), split plan (cut at the widest gap near half the load, text boxes and images, one undo step, nothing lost or duplicated), banner with Split page / Dismiss | ✅ | ✅ `tests/heavy-page.test.ts`; ✅ harness check (`npm run bench:lod -- --check-heavy`: banner, split, undo, dismiss) | | | the banner's look on a phone |
 | Class timetable editor (settings, command), `_timetable.json` read/write through the Vault API, unreadable file never overwritten | ✅ | ❌ (needs Obsidian) | | | |
@@ -1242,6 +1243,17 @@ Use a vault with a few subject folders and notebooks, the timetable with a class
 642. **Light, dark, Obsidian theme.** All of the above is readable in light and dark and with *Follow Obsidian theme*.
 643. **Pen, finger, mouse.** Every card, row, chip, switch and menu responds to a pen tap, a finger tap and a click; targets are at least 40 px.
 644. **Nothing else changes.** Notebook files are unchanged by looking at Home; an error in one section shows an error card and the rest of Home is still drawn.
+
+### 0.14 — layout (steps 790-799)
+
+Implemented, not verified on hardware.
+
+790. **Rotate a notebook.** Open a notebook on the tablet, turn it sideways and back. Expected: no flicker of the toolbar or panels at the turn; the page keeps its place.
+791. **Short landscape.** Phone sideways: the toolbar and the context bar are tighter, and the page gets more of the height.
+792. **PDF split.** Notebook with a PDF reference pane: tablet sideways shows page and PDF side by side; upright, stacked. Drag the view's width around 700 px (split Obsidian panes on a desktop): the split does not flip back and forth.
+793. **Home sideways.** Home on a phone sideways: compact header, three folder columns; tablet sideways: four quick actions in a row.
+794. **Dialogs sideways.** Phone sideways, open *New*: the dialog fits the screen, its body scrolls, the footer buttons stay reachable.
+795. **Keyboard.** Tablet sideways with the on-screen keyboard (rename a notebook): the layout settles in short landscape and returns when the keyboard closes.
 
 ### 0.13 — polish (steps 670-679)
 
