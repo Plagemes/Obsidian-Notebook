@@ -32,10 +32,10 @@ import { parseLenient } from "./lenient-json";
 import { detectVersion, migrate, type RawObject } from "./migrations";
 import { normalizePageTags } from "./page-tags";
 import { normalizePosition } from "./position";
-import { parse, serializeChecked, validate, MAX_FONT_SIZE } from "./serialize";
+import { parse, readSlides, serializeChecked, validate, MAX_FONT_SIZE } from "./serialize";
 import {
 	A4_HEIGHT, A4_WIDTH, CURRENT_VERSION, DEFAULT_META, FORMAT_ID, PAPER_SPACING, RENDER_FREEHAND, RENDER_VERSIONS, TOOLS,
-	type Asset, type BookmarkInfo, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type ReadingPosition, type Stroke,
+	type Asset, type BookmarkInfo, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type ReadingPosition, type SlideRef, type Stroke,
 } from "./types";
 
 export interface Counts {
@@ -114,6 +114,8 @@ interface ScannedPage {
 interface Scanned {
 	header: RawObject;
 	assets: RawObject;
+	/** v12 slide table entries found as lines. */
+	slides: unknown[];
 	pages: ScannedPage[];
 	/** Stroke and element lines found before any page start. */
 	orphans: { strokes: unknown[]; elements: unknown[] };
@@ -131,11 +133,13 @@ function jsonOrUndefined(text: string): unknown {
 const HEADER_LINE = /^\t"(format|version|id|createdAt|modifiedAt|meta|position)": (.*)$/;
 const ASSET_LINE = /^\t\t("[0-9a-f]+"): (\{.*\}),?$/;
 const PAGE_FIELD_LINE = /^\t\t\t"(id|width|height|paper|tags|background|infinite|margins)": (.*)$/;
+/** A v12 slide table entry (two tabs, content on the line: a page starts with a bare "\t\t{" line). */
+const SLIDE_LINE = /^\t\t(\{"id":.*\}),?$/;
 const ITEM_LINE = /^\t\t\t\t(\{.*\}),?$/;
 
 /** Reads the line layout of `serialize()`; lines that are damaged are skipped. */
 function scanLines(text: string): Scanned {
-	const out: Scanned = { header: {}, assets: {}, pages: [], orphans: { strokes: [], elements: [] } };
+	const out: Scanned = { header: {}, assets: {}, slides: [], pages: [], orphans: { strokes: [], elements: [] } };
 	let page: ScannedPage | null = null;
 	for (const rawLine of text.split("\n")) {
 		const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
@@ -157,6 +161,12 @@ function scanLines(text: string): Scanned {
 		if (m && page) {
 			const v = jsonOrUndefined(m[2]!);
 			if (v !== undefined && !(m[1]! in page.raw)) page.raw[m[1]!] = v;
+			continue;
+		}
+		m = SLIDE_LINE.exec(line);
+		if (m) {
+			const v = jsonOrUndefined(m[1]!);
+			if (isObj(v) && typeof v.source === "string") out.slides.push(v);
 			continue;
 		}
 		m = ASSET_LINE.exec(line);
@@ -192,6 +202,19 @@ function combine(primary: unknown, scan: Scanned, incomplete: WeakSet<object>): 
 		if (cur === undefined || (isObj(cur) && incomplete.has(cur))) assets[k] = v;
 	}
 	doc.assets = assets;
+	// v12: the table read from the lines fills what the lenient reading did not reach (matched by id).
+	if (scan.slides.length > 0) {
+		const table: unknown[] = Array.isArray(doc.slides) ? [...(doc.slides as unknown[])] : [];
+		const have = new Set(table.map(idOf));
+		for (const e of scan.slides) {
+			const id = idOf(e);
+			if (id !== null && !have.has(id)) {
+				have.add(id);
+				table.push(e);
+			}
+		}
+		doc.slides = table;
+	}
 
 	const pages: unknown[] = Array.isArray(doc.pages) ? [...(doc.pages as unknown[])] : [];
 	const pageIndex = new Map<string, number>();
@@ -311,11 +334,11 @@ function migrateTolerant(raw: RawObject, version: number, summary: RepairSummary
 // ------------------------------------------------------------------ salvage
 
 /** Validates a one-page document; null if the validator rejects it. */
-function tryDoc(pages: unknown[], assets: Record<string, Asset> = {}, meta?: unknown): NotebookDocument | null {
+function tryDoc(pages: unknown[], assets: Record<string, Asset> = {}, meta?: unknown, slides: readonly SlideRef[] = []): NotebookDocument | null {
 	try {
 		return validate({
 			format: FORMAT_ID, version: CURRENT_VERSION, id: "repair", createdAt: "x", modifiedAt: "x",
-			...(meta !== undefined ? { meta } : {}), assets, pages,
+			...(meta !== undefined ? { meta } : {}), ...(slides.length > 0 ? { slides } : {}), assets, pages,
 		});
 	} catch {
 		return null;
@@ -347,7 +370,7 @@ function fixPoints(v: unknown): Array<[number, number, number]> {
 	return out;
 }
 
-function fixStroke(v: unknown): RawObject | null {
+function fixStroke(v: unknown, slides: ReadonlySet<string>): RawObject | null {
 	if (!isObj(v)) return null;
 	const points = fixPoints(v.points);
 	if (points.length === 0) return null;
@@ -360,6 +383,8 @@ function fixStroke(v: unknown): RawObject | null {
 	};
 	// v8 invisible ink stays invisible: a repaired solution is not revealed.
 	if (v.hidden === true) out.hidden = true;
+	// v12: the link stays when it names an entry of the salvaged table; a dangling one is dropped (the ink stays).
+	if (typeof v.slide === "string" && slides.has(v.slide)) out.slide = v.slide;
 	out.points = points;
 	return out;
 }
@@ -445,11 +470,27 @@ function elementKey(e: PageElement): string {
 interface SalvageContext {
 	summary: RepairSummary;
 	assets: Record<string, Asset>;
+	/** v12: the salvaged slide table (strokes may link to its entries). */
+	slides: readonly SlideRef[];
 	/** Ids of strokes and elements kept so far (unique across the document). */
 	ids: Map<string, string>;
 	pageIds: Set<string>;
 	/** Objects and arrays the lenient reader closed early (cut off by the damage). */
 	cut: WeakSet<object>;
+}
+
+/** v12 slide table: the valid entries (an invalid entry or a repeated id is left out and counted as a reset field). */
+function salvageSlides(raw: unknown, summary: RepairSummary): readonly SlideRef[] {
+	if (raw === undefined) return [];
+	const drop = { count: 0 };
+	let table: SlideRef[] = [];
+	try {
+		table = readSlides(raw, drop);
+	} catch {
+		summary.fieldsReset++;
+	}
+	summary.fieldsReset += drop.count;
+	return table;
 }
 
 function salvageAssets(raw: unknown, summary: RepairSummary): Record<string, Asset> {
@@ -547,7 +588,7 @@ function salvageStrokes(raw: unknown, skeleton: RawObject, ctx: SalvageContext):
 			return;
 		}
 		if (r === "taken") {
-			const copy = tryDoc([{ ...skeleton, strokes: [{ ...stroke, id: createId() }] }], ctx.assets);
+			const copy = tryDoc([{ ...skeleton, strokes: [{ ...stroke, id: createId() }] }], ctx.assets, undefined, ctx.slides);
 			const fresh = copy?.pages[0]?.strokes[0];
 			if (!fresh) {
 				s.strokes.lost++;
@@ -563,7 +604,7 @@ function salvageStrokes(raw: unknown, skeleton: RawObject, ctx: SalvageContext):
 		else s.strokes.recovered++;
 	};
 	for (const item of list) {
-		const asIs = tryDoc([{ ...skeleton, strokes: [item] }], ctx.assets)?.pages[0]?.strokes[0];
+		const asIs = tryDoc([{ ...skeleton, strokes: [item] }], ctx.assets, undefined, ctx.slides)?.pages[0]?.strokes[0];
 		if (asIs) {
 			s.unknownFields += unknownKeys(item, asIs);
 			// A stroke cut off by the damage keeps the points before it: kept, but not "as it was".
@@ -571,8 +612,8 @@ function salvageStrokes(raw: unknown, skeleton: RawObject, ctx: SalvageContext):
 			accept(asIs, cut);
 			continue;
 		}
-		const fixed = fixStroke(item);
-		const repaired = fixed ? tryDoc([{ ...skeleton, strokes: [fixed] }], ctx.assets)?.pages[0]?.strokes[0] : undefined;
+		const fixed = fixStroke(item, new Set(ctx.slides.map((r) => r.id)));
+		const repaired = fixed ? tryDoc([{ ...skeleton, strokes: [fixed] }], ctx.assets, undefined, ctx.slides)?.pages[0]?.strokes[0] : undefined;
 		if (repaired) accept(repaired, true);
 		else s.strokes.lost++;
 	}
@@ -716,7 +757,8 @@ function salvagePosition(raw: unknown, pageIds: ReadonlySet<string>, summary: Re
 
 function salvage(raw: RawObject, summary: RepairSummary, now: Date, cut: WeakSet<object>): NotebookDocument {
 	const assets = salvageAssets(raw.assets, summary);
-	const ctx: SalvageContext = { summary, assets, ids: new Map(), pageIds: new Set(), cut };
+	const slides = salvageSlides(raw.slides, summary);
+	const ctx: SalvageContext = { summary, assets, slides, ids: new Map(), pageIds: new Set(), cut };
 	const pages: Page[] = [];
 	for (const p of Array.isArray(raw.pages) ? (raw.pages as unknown[]) : []) {
 		if (!isObj(p)) {
@@ -745,13 +787,15 @@ function salvage(raw: RawObject, summary: RepairSummary, now: Date, cut: WeakSet
 	const createdAt = str(raw.createdAt, () => iso);
 	const meta = salvageMeta(raw.meta, ctx.pageIds, summary, assets);
 	const position = salvagePosition(raw.position, ctx.pageIds, summary);
-	summary.unknownFields += unknownKeys(raw, { format: 1, version: 1, id: 1, createdAt: 1, modifiedAt: 1, pages: 1, meta: 1, assets: 1, position: 1 });
+	summary.unknownFields += unknownKeys(raw, { format: 1, version: 1, id: 1, createdAt: 1, modifiedAt: 1, pages: 1, meta: 1, assets: 1, position: 1, slides: 1 });
 	if (pages.length === 0) {
 		// A notebook has at least one page.
 		pages.push({ id: createId(), width: A4_WIDTH, height: A4_HEIGHT, paper: { kind: "grid", spacing: PAPER_SPACING.grid }, strokes: [] });
 	}
 	const doc: NotebookDocument = { format: FORMAT_ID, version: CURRENT_VERSION, id, createdAt, modifiedAt: iso, pages, meta, assets };
 	if (position) doc.position = position;
+	// Entries no stroke refers to are not written, but are kept while the notebook is open (a later link finds them).
+	if (slides.length > 0) doc.slides = [...slides];
 	return doc;
 }
 
