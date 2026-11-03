@@ -25,6 +25,8 @@
  *   just enough in the same step so it stays visible: wider margins on a page with a background
  *   (`SetPageMargins`: its own ink moves with the background), a larger plain page, or more height on an
  *   infinite page (`SetPageSize`, which follows the margin rule).
+ * - v12: which slide ink was written beside (`Stroke.slide`) is not content: ink taken from the copy keeps its slide,
+ *   whose entry is matched in the main notebook's table or added to it (model/slide-links.ts `slideMerger`).
  *
  * Both documents must come from `parse()`, so whatever version the copy was written in, it has gone
  * through the regular migrations first. The result is one `Batch` (one undo step) for the main
@@ -35,6 +37,7 @@ import { growForInfinite } from "../ink/infinite";
 import { textElementBounds } from "../ink/text-layout";
 import { AddAsset, AddElement, AddPage, AddStroke, Batch, SetMeta, SetPageMargins, SetPageSize, type Command } from "./history";
 import { SetMarkerDone } from "./marker-commands";
+import { slideMerger } from "./slide-links";
 import { boxBounds, markerBounds } from "./markers";
 import { stableStringify } from "./math-elements";
 import { marginsEqual, marginsOf, normalizeMargins, translateElement, translateStroke } from "./margins";
@@ -201,8 +204,8 @@ function inFrame(page: Page, dx: number): { strokes: readonly Stroke[]; elements
 	return { strokes: page.strokes.map((s) => translateStroke(s, dx)), elements: elements.map((e) => translateElement(e, dx)) };
 }
 
-function copyStroke(s: Stroke, id: string): Stroke {
-	return copyStrokeWithId(s, id);
+function copyStroke(s: Stroke, id: string, slide?: string | null): Stroke {
+	return copyStrokeWithId(s, id, slide);
 }
 
 function copyElement(e: PageElement, id: string): PageElement {
@@ -216,6 +219,14 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 		tagsAdded: 0, bookmarksAdded: 0, bookmarkInfoAdded: 0, bookmarkInfoDiffer: 0, pageTagsAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0, markersResolved: 0,
 	};
 	const commands: Command[] = [];
+	// v12: the copy's slide ids in the main notebook's table.
+	const slides = slideMerger(main, other);
+	/** A stroke of the copy as it goes into the main notebook: id `id`, its slide id mapped (`keep`: `s` itself when nothing changes). */
+	const taken = (s: Stroke, keep: boolean, id: string): Stroke => {
+		const slide = s.slide === undefined ? undefined : slides.map(s.slide);
+		if (keep && slide === s.slide) return s;
+		return copyStroke(s, id, slide);
+	};
 
 	// Ids in use (strokes and elements share one id space) and the content of each.
 	const used = new Map<string, string>();
@@ -346,7 +357,7 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 				const key = `s${strokeContentKey(s)}`;
 				const d = decide(s.id, key, page.id, "stroke");
 				if (d.kind === "skip") continue;
-				const stroke = d.kind === "keep" ? s : copyStroke(s, d.id);
+				const stroke = d.kind === "keep" ? taken(s, true, s.id) : taken(s, false, d.id);
 				commands.push(new AddStroke(page.id, stroke, strokeAt++));
 				keys.add(key);
 			}
@@ -373,7 +384,7 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 			const key = `s${strokeContentKey(s)}`;
 			const d = decide(s.id, key, page.id, "stroke");
 			if (d.kind === "skip") continue;
-			strokes.push(d.kind === "keep" ? s : copyStroke(s, d.id));
+			strokes.push(d.kind === "keep" ? taken(s, true, s.id) : taken(s, false, d.id));
 			keys.add(key);
 		}
 		const elements: PageElement[] = [];
@@ -421,6 +432,8 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 		commands.push(new SetMeta(before, meta));
 	}
 
+	// v12: the slide entries the copied ink names, first (in the same undo step).
+	commands.unshift(...slides.commands());
 	return { summary, command: commands.length > 0 ? new Batch("Merge conflicted copy", commands) : null };
 }
 

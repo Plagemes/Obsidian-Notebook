@@ -6,11 +6,12 @@ import {
 } from "./math-elements";
 import { parseOutline } from "../math/outline";
 import { EXCERPT_ID_MAX, EXCERPT_PATH_MAX } from "./excerpts";
-import { detectVersion, migrate, MigrationError, v10OnlyElement, withoutV11Meta, type RawObject } from "./migrations";
+import { detectVersion, migrate, MigrationError, v10OnlyElement, withoutV11Meta, withoutV12Slides, type RawObject } from "./migrations";
 import { normalizePageTags } from "./page-tags";
 import { normalizePosition } from "./position";
 import {
 	COVER_ART_STYLES, CURRENT_VERSION, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, FORMAT_ID, META_DESCRIPTION_MAX, PAPER_KINDS, RENDER_VERSIONS, TOOLS,
+	SLIDE_ID_MAX, SLIDE_PATH_MAX, SLIDE_SOURCE_MAX, type SlideRef,
 	type Asset, type CoverArt, type CoverArtStyle, type AssetKind, type BookmarkInfo, type BoxElement, type EquationElement, type ExcerptElement, type ExcerptSource, type GraphElement, type GraphFunction, type GraphParam,
 	type GraphPiece, type GraphTable, type GraphViewport, type ImageElement, type MarkerElement, type NotebookDocument, type NotebookMeta, type Page,
 	type PageBackground, type PageElement, type PageMargins, type PaperKind, type Point, type ReadingPosition, type RenderVersion, type Stroke,
@@ -51,9 +52,49 @@ function fail(path: string, what: string): never {
 }
 
 function strokeLine(s: Stroke): string {
-	// v8: `hidden` only when set, between render and points.
+	// v8: `hidden` only when set, between render and points; v12: `slide` only when set, after `hidden`.
 	const hidden = s.hidden !== undefined ? `,"hidden":${j(s.hidden)}` : "";
-	return `\t\t\t\t{"id":${j(s.id)},"tool":${j(s.tool)},"color":${j(s.color)},"width":${j(s.width)},"render":${j(s.render)}${hidden},"points":${j(s.points)}}`;
+	const slide = s.slide !== undefined ? `,"slide":${j(s.slide)}` : "";
+	return `\t\t\t\t{"id":${j(s.id)},"tool":${j(s.tool)},"color":${j(s.color)},"width":${j(s.width)},"render":${j(s.render)}${hidden}${slide},"points":${j(s.points)}}`;
+}
+
+/** v12 slide reference: id, source, page, then the path when present. */
+function slideRefLine(r: SlideRef): string {
+	const path = r.path !== undefined ? `,"path":${j(r.path)}` : "";
+	return `\t\t{"id":${j(r.id)},"source":${j(r.source)},"page":${j(r.page)}${path}}`;
+}
+
+/** v12: copies of strokes written without their `slide` (it names no entry of the document's table), one per stroke. */
+const withoutSlideCopies = new WeakMap<Stroke, Stroke>();
+
+function withoutSlide(s: Stroke): Stroke {
+	let copy = withoutSlideCopies.get(s);
+	if (!copy) {
+		const c: Stroke = { ...s };
+		delete c.slide;
+		copy = Object.isFrozen(s) ? Object.freeze(c) : c;
+		withoutSlideCopies.set(s, copy);
+	}
+	return copy;
+}
+
+/**
+ * v12: the slide references that are written (those a stroke refers to, in table order, each id once) and how each stroke
+ * is written (without its `slide` when that names no entry of the table: ink pasted from another notebook).
+ */
+function slidesInUse(doc: NotebookDocument): { refs: SlideRef[]; stroke: (s: Stroke) => Stroke } {
+	const table = doc.slides ?? [];
+	if (table.length === 0) return { refs: [], stroke: (s) => (s.slide === undefined ? s : withoutSlide(s)) };
+	const known = new Set(table.map((r) => r.id));
+	const used = new Set<string>();
+	for (const page of doc.pages) for (const s of page.strokes) if (s.slide !== undefined && known.has(s.slide)) used.add(s.slide);
+	const refs: SlideRef[] = [];
+	for (const r of table) {
+		if (!used.has(r.id)) continue;
+		used.delete(r.id);
+		refs.push(r);
+	}
+	return { refs, stroke: (s) => (s.slide === undefined || known.has(s.slide) ? s : withoutSlide(s)) };
 }
 
 /** v8 marker: required fields, then the optional ones in a fixed order, each only when present (the label normalised). */
@@ -214,8 +255,9 @@ function assemble(
 	lineOf: (s: Stroke) => string,
 	elementLineOf: (e: PageElement) => string = elementLine,
 ): string {
+	const slides = slidesInUse(doc);
 	const pages = doc.pages.map((page) => {
-		const strokes = page.strokes.map(lineOf);
+		const strokes = page.strokes.map((s) => lineOf(slides.stroke(s)));
 		const elements = (page.elements ?? []).map(elementLineOf);
 		const out = [
 			"\t\t{",
@@ -253,6 +295,7 @@ function assemble(
 		`\t"modifiedAt": ${j(doc.modifiedAt)},`,
 		`\t"meta": ${metaLine(meta)},`,
 		...(position ? [`\t"position": ${positionLine(position)},`] : []),
+		...(slides.refs.length ? [`\t"slides": [\n${slides.refs.map(slideRefLine).join(",\n")}\n\t],`] : []),
 		assets.length ? `\t"assets": {\n${assets.map(assetLine).join(",\n")}\n\t},` : `\t"assets": {},`,
 		`\t"pages": [\n${pages.join(",\n")}\n\t]`,
 		"}",
@@ -311,7 +354,14 @@ function readPoint(v: unknown, path: string): Point {
 	return [x, y, p];
 }
 
-function readStroke(v: unknown, path: string, drop: Dropped | null = null): Stroke {
+/**
+ * How the v12 `slide` of a stroke is read: a set — it must name an entry of the document's table (reading a file);
+ * `"any"` — any well-formed id (checking a stroke on its own: the writer leaves out a `slide` that names no entry);
+ * `"ignore"` — not ours (a stroke of an older file read page by page): left out without counting, as the migration does.
+ */
+type SlideIds = ReadonlySet<string> | "any" | "ignore";
+
+function readStroke(v: unknown, path: string, drop: Dropped | null = null, slides: SlideIds = "any"): Stroke {
 	if (!isObject(v)) fail(path, "expected an object");
 	const id = str(v.id, `${path}.id`);
 	if (!TOOLS.includes(v.tool as Tool)) fail(`${path}.tool`, "unknown tool");
@@ -322,12 +372,58 @@ function readStroke(v: unknown, path: string, drop: Dropped | null = null): Stro
 	const points = v.points.map((pt, i) => readPoint(pt, `${path}.points[${i}]`));
 	const tool = v.tool as Tool;
 	const render = v.render as RenderVersion;
+	let hidden: true | undefined;
 	if (v.hidden !== undefined) {
 		// v8 invisible ink. Anything but `true` is invalid: dropped and counted when reading leniently (the stroke shows).
-		const hidden = orDrop(drop, () => (v.hidden === true ? true : fail(`${path}.hidden`, "expected true")));
-		if (hidden) return { id, tool, color: v.color, width, render, hidden, points };
+		hidden = orDrop(drop, () => (v.hidden === true ? true : fail(`${path}.hidden`, "expected true")));
 	}
-	return { id, tool, color: v.color, width, render, points };
+	let slide: string | undefined;
+	if (v.slide !== undefined && slides !== "ignore") {
+		// v12: an invalid slide, or one that names no entry of the table, is dropped and counted when reading leniently (the ink stays).
+		slide = orDrop(drop, () => {
+			const ref = boundedId(v.slide, `${path}.slide`, SLIDE_ID_MAX);
+			if (slides !== "any" && !slides.has(ref)) fail(`${path}.slide`, "names no entry of 'slides'");
+			return ref;
+		});
+	}
+	const stroke: Stroke = { id, tool, color: v.color, width, render, points };
+	if (hidden) stroke.hidden = hidden;
+	if (slide !== undefined) stroke.slide = slide;
+	return stroke;
+}
+
+/**
+ * v12 slide references: an array of { id, source, page, path? }. Read leniently, an invalid entry (or one whose id is
+ * already taken) is dropped and counted; strokes that refer to it then lose their `slide` (counted too).
+ */
+function readSlides(v: unknown, drop: Dropped | null): SlideRef[] {
+	if (v === undefined) return [];
+	const all = orDrop(drop, () => (Array.isArray(v) ? (v as unknown[]) : fail("slides", "expected an array")));
+	if (!all) return [];
+	const out: SlideRef[] = [];
+	const ids = new Set<string>();
+	all.forEach((r, i) => {
+		const ref = orDrop(drop, () => {
+			const at = `slides[${i}]`;
+			const read = readSlideRef(r, at);
+			if (ids.has(read.id)) fail(`${at}.id`, "duplicate id");
+			return read;
+		});
+		if (!ref) return;
+		ids.add(ref.id);
+		out.push(Object.freeze(ref));
+	});
+	return out;
+}
+
+function readSlideRef(v: unknown, path: string): SlideRef {
+	if (!isObject(v)) fail(path, "expected an object");
+	const id = boundedId(v.id, `${path}.id`, SLIDE_ID_MAX);
+	const source = boundedId(v.source, `${path}.source`, SLIDE_SOURCE_MAX);
+	if (typeof v.page !== "number" || !Number.isSafeInteger(v.page) || v.page < 1) fail(`${path}.page`, "expected an integer >= 1");
+	const ref: SlideRef = { id, source, page: v.page };
+	if (v.path !== undefined) ref.path = boundedId(v.path, `${path}.path`, SLIDE_PATH_MAX);
+	return ref;
 }
 
 type Assets = Readonly<Record<string, Asset>>;
@@ -878,7 +974,7 @@ function readAssets(v: unknown): Record<string, Asset> {
 	return assets;
 }
 
-function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null = null): Page {
+function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null = null, slides: SlideIds = new Set<string>()): Page {
 	if (!isObject(v)) fail(path, "expected an object");
 	const id = str(v.id, `${path}.id`);
 	const width = positive(v.width, `${path}.width`);
@@ -890,7 +986,7 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, dr
 	if (spacing < MIN_PAPER_SPACING) fail(`${path}.paper.spacing`, `must be at least ${MIN_PAPER_SPACING} pt`);
 	if (!Array.isArray(v.strokes)) fail(`${path}.strokes`, "expected an array");
 	const strokes = v.strokes.map((s, i) => {
-		const stroke = readStroke(s, `${path}.strokes[${i}]`, drop);
+		const stroke = readStroke(s, `${path}.strokes[${i}]`, drop, slides);
 		if (ids.has(stroke.id)) fail(`${path}.strokes[${i}].id`, "duplicate id");
 		ids.add(stroke.id);
 		freezeStroke(stroke);
@@ -950,7 +1046,7 @@ export function validate(raw: unknown, drop: Dropped | null = null): NotebookDoc
 	return validateWith(raw, readPage, new Set<string>(), drop);
 }
 
-type PageReader = (v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null) => Page;
+type PageReader = (v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null, slides: SlideIds) => Page;
 
 /** `validate` with the page reader and the set of ids injected: staged loading reads page shells first (see StagedParse). */
 function validateWith(raw: unknown, readPageAt: PageReader, ids: Set<string>, drop: Dropped | null): NotebookDocument {
@@ -962,9 +1058,11 @@ function validateWith(raw: unknown, readPageAt: PageReader, ids: Set<string>, dr
 	const modifiedAt = str(raw.modifiedAt, "modifiedAt");
 	if (!Array.isArray(raw.pages) || raw.pages.length === 0) fail("pages", "expected at least one page");
 	const assets = readAssets(raw.assets);
+	const slides = readSlides(raw.slides, drop);
+	const slideIds = new Set(slides.map((r) => r.id));
 	const pageIds = new Set<string>();
 	const pages = raw.pages.map((p, i) => {
-		const page = readPageAt(p, `pages[${i}]`, ids, assets, drop);
+		const page = readPageAt(p, `pages[${i}]`, ids, assets, drop, slideIds);
 		// Page ids key bookmarks, jumps and caches: two pages with one id would be confused with each other.
 		if (pageIds.has(page.id)) fail(`pages[${i}].id`, "duplicate id");
 		pageIds.add(page.id);
@@ -974,6 +1072,7 @@ function validateWith(raw: unknown, readPageAt: PageReader, ids: Set<string>, dr
 	const doc: NotebookDocument = { format: FORMAT_ID, version: CURRENT_VERSION, id, createdAt, modifiedAt, pages, meta, assets };
 	const position = readPosition(raw.position, pageIds, drop);
 	if (position) doc.position = position;
+	if (slides.length > 0) doc.slides = slides;
 	return doc;
 }
 
@@ -1099,7 +1198,7 @@ export class StagedParse {
 			const ids = new Set<string>();
 			// Lenient like `parse`: invalid optional v7 details are dropped and counted; everything else still fails.
 			const drop: Dropped = { count: 0 };
-			const current = from === CURRENT_VERSION ? raw : { ...withoutV11Meta(raw), version: CURRENT_VERSION };
+			const current = from === CURRENT_VERSION ? raw : { ...withoutV12Slides(from < 11 ? withoutV11Meta(raw) : raw), version: CURRENT_VERSION };
 			const doc = validateWith(current, readPageShell, ids, drop);
 			const rawPages = raw.pages as unknown[];
 			const at = Math.min(rawPages.length - 1, Math.max(0, first));
@@ -1117,7 +1216,9 @@ export class StagedParse {
 			const problem = v10OnlyElement(this.rawPages[i], i);
 			if (problem) fail(`pages[${i}]`, problem);
 		}
-		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop);
+		// v12: the strokes of an older file have no slide of ours (an odd `slide` key is ignored, as the migration drops it).
+		const slides: SlideIds = this.from < 12 ? "ignore" : new Set((this.doc.slides ?? []).map((r) => r.id));
+		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop, slides);
 	}
 
 	get pending(): number {
@@ -1173,7 +1274,8 @@ export function parseStaged(text: string, firstPage: number | null): StagedParse
 	if (!pre.ok) return pre.failure;
 	const first = firstPage === null ? 0 : firstPage - 1;
 	// The v9 → v10 migration only refuses excerpts and v10 → v11 only drops two metadata fields, so large v9 and v10 files are staged too.
-	if (pre.version === 9 || pre.version === 10) return StagedParse.create(pre.raw, first, pre.version);
+	// v11 → v12 only drops the slide table and the strokes' `slide` keys (ignored page by page), so large v11 files are staged too.
+	if (pre.version === 9 || pre.version === 10 || pre.version === 11) return StagedParse.create(pre.raw, first, pre.version);
 	if (pre.version !== CURRENT_VERSION) return parseRaw(pre.raw, pre.version, true);
 	return StagedParse.create(pre.raw, first);
 }
@@ -1294,6 +1396,11 @@ export function serializeChecked(doc: NotebookDocument, forceFull = false): Chec
 			if (!check.ok) return { ok: false, message: check.message };
 			if (serialize(check.doc) !== text) return { ok: false, message: "round-trip mismatch" };
 		} else {
+			// v12: the skeleton has no strokes, so it writes no slide references: those that are written are checked on their own.
+			for (const r of slidesInUse(doc).refs) {
+				const line = slideRefLine(r);
+				if (slideRefLine(readSlideRef(JSON.parse(line), `slide ${r.id}`)) !== line) fail(`slide ${r.id}`, "round-trip mismatch");
+			}
 			const skeleton = { ...doc, pages: doc.pages.map((p) => ({ ...p, strokes: [] })) };
 			const skeletonText = assemble(skeleton, strokeLine);
 			const check = parseText(skeletonText, false);

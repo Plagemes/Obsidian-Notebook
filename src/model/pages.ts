@@ -8,13 +8,16 @@ function copyElement(el: PageElement): PageElement {
 
 /**
  * Deep copy of a stroke with id `id` (points copied, not shared), frozen. Every field is kept, v8 `hidden`
- * included: every path that copies ink (duplicate, restore, merge, clipboard) goes through here.
+ * included: every path that copies ink (duplicate, restore, merge, clipboard) goes through here. v12 `slide` is kept too
+ * (`slide` given: replaced by it, null: left out); in another notebook it names no entry and is not written.
  */
-export function copyStroke(s: Stroke, id: string = s.id): Stroke {
+export function copyStroke(s: Stroke, id: string = s.id, slide?: string | null): Stroke {
 	const points = s.points.map((p) => [p[0], p[1], p[2]] as [number, number, number]);
-	return freezeStroke(s.hidden
-		? { id, tool: s.tool, color: s.color, width: s.width, render: s.render, hidden: true, points }
-		: { id, tool: s.tool, color: s.color, width: s.width, render: s.render, points });
+	const copy: Stroke = { id, tool: s.tool, color: s.color, width: s.width, render: s.render, points };
+	if (s.hidden) copy.hidden = true;
+	const ref = slide === undefined ? s.slide : slide ?? undefined;
+	if (ref !== undefined) copy.slide = ref;
+	return freezeStroke(copy);
 }
 
 /**
