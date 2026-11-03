@@ -95,6 +95,14 @@ describe("selection bar by content type (402)", () => {
 		expect(selectionKindOf({ strokes: 0, images: 0, texts: 0, others: 0 })).toBeNull();
 		expect(mixFromCounts({ strokes: 0, elements: 3, images: 1, texts: 1 })).toEqual({ strokes: 0, images: 1, texts: 1, others: 1 });
 	});
+	it("keeps Delete in the bar on a narrow phone, whatever the content puts first", () => {
+		for (const s2 of [{ strokes: 4 }, { elements: 1, images: 1 }, { elements: 1, texts: 1 }, { strokes: 2, elements: 1, images: 1 }]) {
+			for (const width of [360, 412]) {
+				const plan = contextBar(sel(s2), width, {}, NOW, undefined, undefined, ON)!;
+				expect(plan.actions, `${JSON.stringify(s2)} at ${width}`).toContain("delete-selection");
+			}
+		}
+	});
 	it("shows each kind's own actions first", () => {
 		const ink = contextBar(sel({ strokes: 4 }), 600, {}, NOW, undefined, undefined, ON)!;
 		const image = contextBar(sel({ elements: 1, images: 1 }), 600, {}, NOW, undefined, undefined, ON)!;

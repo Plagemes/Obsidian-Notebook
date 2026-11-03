@@ -93,11 +93,12 @@ const layers = (delta: number): Record<string, number> => Object.fromEntries(LAY
  * Extra priority per kind of selection. Ink: stamp it, find the same, link it. Picture: make white transparent, order,
  * transform. Text: link it. Mixed: align and order. Objects (maths, graphs, excerpts) keep the designed order.
  */
+const keepDelete = (n: number) => ({ "delete-selection": n });  // Delete always stays in the main row of the bar, whatever the content puts first.
 const SELECTION: Readonly<Record<SelectionKind, Readonly<Record<string, number>>>> = {
-	ink: { "stamps-save-selection": 35, "selection-similar": 20, "link-selection": 20, ...layers(-25) },
-	image: { "selection-white-transparent": 35, "layer-front": 38, "layer-back": 38, "selection-transform-menu": 25, "stamps-save-selection": -20 },
-	text: { "link-selection": 35, "selection-open-link": 20, ...layers(-25), "stamps-save-selection": -15, "selection-transform-menu": -15 },
-	mixed: { "selection-align-menu": 25, "layer-front": 32, "layer-back": 32, "stamps-save-selection": 10 },
+	ink: { ...keepDelete(12), "stamps-save-selection": 35, "selection-similar": 20, "link-selection": 20, ...layers(-25) },
+	image: { ...keepDelete(20), "selection-white-transparent": 35, "layer-front": 38, "layer-back": 38, "selection-transform-menu": 25, "stamps-save-selection": -20 },
+	text: { ...keepDelete(12), "link-selection": 35, "selection-open-link": 20, ...layers(-25), "stamps-save-selection": -15, "selection-transform-menu": -15 },
+	mixed: { ...keepDelete(12), "selection-align-menu": 25, "layer-front": 32, "layer-back": 32, "stamps-save-selection": 10 },
 	object: {},
 };
 
