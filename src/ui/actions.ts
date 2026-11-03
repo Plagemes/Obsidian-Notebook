@@ -305,6 +305,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "pdf-side-show-slide", label: "pdfSide.menu.showSlide", icon: "file-search", group: "side", surfaces: ["context", "sheet"], contexts: ["side-pane"], priority: 70, scope: "view", readOnly: true, when: sideOpen },
 	{ id: "pdf-side-add-page", label: "command.pdfSideAdd", icon: "file-plus", group: "side", surfaces: ["context", "sheet"], contexts: ["side-pane"], priority: 75, scope: "view", command: true, when: sideOpen },
 	{ id: "pdf-side-close", label: "command.pdfSideClose", icon: "panel-right-close", group: "side", surfaces: ["context", "sheet"], contexts: ["side-pane"], priority: 30, scope: "view", command: true, readOnly: true, when: sideOpen },
+	// 0.14 slides (#417): every slide with its notes pages, exercise page, linked ink and questions (view/slide-strip-modal.ts).
+	{ id: "slide-strip", label: "slides.strip.open", icon: "layout-list", group: "side", surfaces: ["sheet"], priority: 72, scope: "view", command: "command.slideStrip", readOnly: true, when: (c) => sideOpen(c) || c.notebook.pdfPages, keywords: "slides strip notes exercise questions diapositive striscia" },
 
 	// --- lecture: the contextual bar while a class of the timetable is on.
 	{ id: "new-lecture", label: "page.newLecture", icon: "graduation-cap", group: "lecture", surfaces: ["context", "sheet"], contexts: ["lecture"], priority: 70, scope: "view", command: "command.newLecture" },

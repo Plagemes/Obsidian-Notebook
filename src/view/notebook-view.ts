@@ -106,6 +106,7 @@ import { runMovePages } from "../library/move-pages";
 import type { PdfActionHost } from "./pdf-actions";
 import { pickFile } from "./pick";
 import { pdfSideState, referenceSlideOf, type PageSyncHooks } from "./pdf-sync";
+import { attachSlideBadges, linkToSlide, refreshSlideBadges } from "./slide-ink";
 import { MarkerTools, translatedBoxLabel } from "./markers";
 import { ExcerptTools } from "./excerpts";
 import { layerCommand, type LayerMove } from "../model/layers";
@@ -702,6 +703,8 @@ export class NotebookView extends FileView {
 		this.display = new ViewDisplay(this.displayHost());
 		this.display.applyNight();
 		this.practiceHooks = this.host.practice?.attach(this.practiceHost()) ?? null;
+		// 0.14 slides (#226): badges next to ink written beside a slide; a tap shows the slide again.
+		attachSlideBadges(this, () => this.host.settings);
 		this.applySettings(this.host.settings);
 
 		this.resizeObserver = new ResizeObserver(() => this.measure());
@@ -1157,6 +1160,7 @@ export class NotebookView extends FileView {
 
 	applySettings(settings: NotebookSettings): void {
 		this.applyInput(settings);
+		refreshSlideBadges(this); // 0.14 slides: the badges setting
 		this.pressure.mode = settings.pressureMode;
 		if (this.toolbar && this.tools.eraserSize !== settings.eraserSize) this.toolbar.update({ eraserSize: settings.eraserSize });
 		this.pens?.refresh();
@@ -3594,8 +3598,12 @@ export class NotebookView extends FileView {
 	}
 
 	/** Commits strokes drawn on a page as one undo step; an infinite page grows in the same step. */
-	private addStrokes(pageIndex: number, page: Page, strokes: Stroke[]): void {
-		const commands: Command[] = strokes.map((s, i) => new AddStroke(page.id, s, page.strokes.length + i));
+	private addStrokes(pageIndex: number, page: Page, drawn: Stroke[]): void {
+		// 0.14 slides (#226): ink written while a slide is beside the notes remembers it, in the same undo step. The renderer
+		// still gets the strokes it drew (`drawn`, same geometry): the wet ink hands over to exactly those objects.
+		const linked = this.session?.doc ? linkToSlide(this, this.session.doc, drawn, this.host.settings.slideInkLink) : null;
+		const strokes = linked?.strokes ?? drawn;
+		const commands: Command[] = [...(linked?.commands ?? []), ...strokes.map((s, i) => new AddStroke(page.id, s, page.strokes.length + i))];
 		let grew = false;
 		if (page.infinite && this.renderer) {
 			const maxY = Math.max(...strokes.map((s) => this.renderer!.boundsOf(s).maxY));
@@ -3626,7 +3634,7 @@ export class NotebookView extends FileView {
 			this.afterHistoryChange();
 			return;
 		}
-		for (const s of strokes) this.renderer?.appendStroke(pageIndex, s);
+		for (const s of drawn) this.renderer?.appendStroke(pageIndex, s);
 		this.markChanged();
 		this.updateHistoryButtons();
 		this.scheduleNavRefresh();

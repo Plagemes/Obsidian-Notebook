@@ -13,6 +13,8 @@ export interface PaneActions {
 	showNotes(): void;
 	toggleFollow(): void;
 	close(): void;
+	/** v12 (#417): opens the slide strip (every slide with its notes, exercise page and questions). */
+	openStrip(): void;
 }
 
 /** What the strip under the page offers. */
@@ -75,6 +77,7 @@ export class PdfSidePane {
 		this.linkBtn.addEventListener("click", () => actions.toggleLink());
 		this.followBtn = tools.createEl("button", { cls: "notebook-pdfside-text-btn", text: t("pdfSide.follow"), attr: { type: "button" } });
 		this.followBtn.addEventListener("click", () => actions.toggleFollow());
+		iconButton(tools, "layout-list", t("slides.strip.open"), () => actions.openStrip());
 		iconButton(tools, "x", t("pdfSide.close"), () => actions.close());
 
 		this.pageArea = this.el.createDiv({ cls: "notebook-pdfside-page" });
