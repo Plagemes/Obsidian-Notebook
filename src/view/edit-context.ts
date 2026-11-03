@@ -2,6 +2,7 @@ import type { App, TFile } from "obsidian";
 import type { MeasureText } from "../ink/elements";
 import type { Command } from "../model/history";
 import type { Asset, NotebookDocument } from "../model/types";
+import type { SlideRef } from "./lecture-logic";
 
 /**
  * What a flow that lives outside the notebook view (board shot, new lecture, moving pages between notebooks)
@@ -20,6 +21,8 @@ export interface EditContext {
 	/** Makes a stored asset readable before the command that adds it to the document runs. */
 	addPending(asset: Asset): void;
 	removePending(id: string): void;
+	/** 0.14 (#438): the slide or PDF beside the notes (or the page's own PDF background), for a new lecture page. Optional. */
+	slide?(): SlideRef | null;
 	/** Index of the page in view. */
 	currentPage(): number;
 	/** Visible part of a page in the page's own coordinates (pt), or null when the page is not in view. */

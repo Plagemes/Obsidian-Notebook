@@ -82,6 +82,10 @@ SCENARIOS.push({ doc: "pdf", theme: "dark", device: "narrow", lowLatency: false 
 // The practice strip, the peek and the timer on a notebook with a practice copy (wave 0.9).
 SCENARIOS.push({ doc: "practice", theme: "light", device: "desktop", lowLatency: false });
 SCENARIOS.push({ doc: "practice", theme: "dark", device: "narrow", lowLatency: false });
+// 0.14 lecture: automatic lecture mode (ask, automatic, the pen, the end of the class) and the prefilled lecture page.
+for (const theme of ["dark", "light"]) {
+	for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "lecture", theme, device, lowLatency: false });
+}
 // The generated outline (0.13): bookmarks, slides, large handwriting and markers in the page panel, tablet and phone, light and dark.
 SCENARIOS.push({ doc: "outline", theme: "light", device: "tablet", lowLatency: false });
 SCENARIOS.push({ doc: "outline", theme: "dark", device: "tablet", lowLatency: false });
@@ -214,7 +218,7 @@ async function main() {
 					await sleep(100);
 				}
 				await cdp.evaluate("window.harness.ready.then(() => true)");
-				report = await cdp.evaluate(s.doc === "hints" ? "window.harness.checkHints()" : s.doc === "zettel" ? "window.harness.checkZettel()" : s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "outline" ? "window.harness.checkOutline()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "chrome" ? "window.harness.checkChrome()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "modals" ? "window.harness.checkModals()" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "hints" ? "window.harness.checkHints()" : s.doc === "zettel" ? "window.harness.checkZettel()" : s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "lecture" ? "window.harness.checkLecture()" : s.doc === "outline" ? "window.harness.checkOutline()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "chrome" ? "window.harness.checkChrome()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "modals" ? "window.harness.checkModals()" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}
@@ -236,6 +240,19 @@ async function main() {
 					if (c[0] < 100 && c[1] < 100 && c[2] < 100) dark = true;
 				}
 				if (!dark) problems.push(`composited ink missing at (${Math.round(ix)}, ${Math.round(iy)})`);
+			}
+			// 0.14 lecture: review screenshots of the banner, the chip with the lecture page and the manual state.
+			if (s.doc === "lecture") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["ask", "on", "plain"]) {
+					try {
+						await cdp.evaluate(`window.harness.lectureShot('${state}').then(() => true)`);
+						writeFileSync(join(designDir, `lecture-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`lecture ${state} screenshot: ${e.message}`);
+					}
+				}
 			}
 			// 0.13 ds-zettel: review screenshots of each Zettelkasten surface.
 			if (s.doc === "zettel") {

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### lecture
+- **Automatic lecture mode from the timetable (#401, #115, #214).** New setting *Study → Class timetable → Lecture mode* (*Off* / *Ask me* (default) / *Automatic*). While a class of the timetable is in progress (with the existing *Start early* lead) and the notebook open in a view belongs to it (the notebook or folder it links to, or, for an unlinked class, the notebook named like the course), the view offers lecture mode with a small banner (*Start* / *Not now*) or switches to it by itself. Lecture mode puts the contextual lecture bar (board shot, markers, new lecture, end-of-lecture panel) on and shows a quiet *Course · until HH:MM* chip with an *End* button. It ends with the class and says so inside the app; nothing is sent outside it. It never starts, asks or ends while the pen is on the screen (it waits for the pause). *Not now* and *End* are remembered for that class and day. A *Lecture mode* command (also in the All actions sheet) switches it on and off by hand, with or without a class. Opening the notebook from Home's Continue card or the timetable offer goes through the same rule. The contextual lecture bar now follows lecture mode instead of "a class is on anywhere".
+- **Lecture page prefilled from context (#438, #210).** A lecture page made by lecture mode, by *Open the current class* or by *New lecture* (when the course and date are the class in progress) now carries, under the header, a second text box with the time slot, room and lecturer (`09:00–11:00 · B2 · Prof. Rossi`); when a PDF is open beside the notes (or the page is a PDF page) it also says `Slides: [[deck.pdf#page=12]]` (a link for a PDF of the vault). The *New lecture* dialog shows what will be added. New optional *Lecturer* field in the timetable editor and `lecturer` in `_timetable.json` (older files read as before). Ordinary text boxes: no change to the notebook format (still v11).
+- Tests: `tests/lecture-mode.test.ts`. Harness: `dev/harness/lecture-check.ts` (`doc=lecture`; screenshots in `dist/shots/design/lecture-*`).
+
 ## 0.13.0 — 2026-10-31
 
 The design system reaches every remaining surface, the Home is restructured, and two roadmap features land: the generated outline (#407) and just-in-time tips (#425). The art engine gets a new family (veins), OKLCH colour, glow, keyword motifs, growth, a persistent cache and off-main-thread rendering. **Not verified on the device**: unit tests and the browser harness only; manual steps 500–679 in `docs/testing.md`. No change to the notebook format (still v11).
