@@ -3,6 +3,7 @@
 // layout engine and the coverage tests run in Node. The behaviour lives elsewhere: view actions in view/view-actions.ts,
 // global ones in main.ts, external ones in the module named by `owner`.
 import type { MessageKey } from "../i18n";
+import type { PageKind } from "./page-kind";
 
 export type ToolId = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "space";
 
@@ -46,18 +47,21 @@ export interface UiContext {
 		strokes: number; elements: number; images: number; /** 1 when a selected text box holds a [[link]] */ links?: number;
 		/** v9: selected equations and graphs (optional, 0 when absent). */ equations?: number; graphs?: number;
 		/** v10: selected anchored excerpts (optional, 0 when absent). */ excerpts?: number;
+		/** 0.14 (402): selected text boxes (optional, 0 when absent). */ texts?: number;
 	} | null;
 	/** The page in view (index of the page sheet when it was opened from a thumbnail). */
 	page: {
 		index: number; count: number; background: "none" | "pdf" | "image"; infinite: boolean; bookmarked: boolean;
 		/** wave 0.7: the page is flagged as heavy and can be split. Optional (false when absent). */
 		splittable?: boolean;
+		/** 0.14 (392): the kind of page (slide, PDF, image, ruled, grid, plain), for the adaptive toolbar. Optional (no adaptation when absent). */
+		kind?: PageKind;
 	} | null;
 	notebook: { pdfPages: boolean; backgrounds: boolean };
 	/** A class of the timetable is on now. */
 	lecture: boolean;
 	sidePane: { available: boolean; open: boolean };
-	reading: { annotationsHidden: boolean; dim: boolean };
+	reading: { annotationsHidden: boolean; dim: boolean; /** 0.14 (392): the highlighter snaps to the text lines of PDF pages. Optional (off when absent). */ snap?: boolean };
 	toggles: {
 		ruler: boolean; penOnly: boolean; navigator: boolean; /** One page at a time (wave 0.7). */ pageMode?: boolean; /** Pen gesture mode (wave 0.8). */ penGestures?: boolean;
 		/** wave 0.10 (63): the lasso tool selects with a rectangle instead of a freehand outline. */ selectRectangle?: boolean;
@@ -289,6 +293,8 @@ export const ACTIONS: readonly ActionDef[] = [
 
 	// --- PDF and reading: the contextual bar of a PDF page, and the sheet.
 	{ id: "pdf-search", label: "reading.search", icon: "search", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 80, scope: "view", command: "command.pdfSearch", readOnly: true, when: (c) => c.notebook.pdfPages },
+	// 0.14 (392): the highlighter follows the text lines of PDF pages (the same switch as the highlighter options and the settings).
+	{ id: "toggle-snap-highlighter", label: "reading.snap", icon: "text-cursor", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 41, scope: "view", command: "command.snapHighlighter", readOnly: true, when: (c) => c.notebook.pdfPages, checked: (c) => !!c.reading.snap, keywords: "highlighter snap text lines evidenziatore testo righe" },
 	{ id: "pdf-search-next", label: "command.pdfSearchNext", icon: "chevron-down", group: "reading", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
 	{ id: "pdf-search-previous", label: "command.pdfSearchPrev", icon: "chevron-up", group: "reading", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
 	{ id: "toggle-annotations", label: "reading.annotations.hide", icon: "eye-off", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 60, scope: "view", command: "command.annotationsToggle", readOnly: true, when: (c) => c.notebook.pdfPages, checked: (c) => c.reading.annotationsHidden },

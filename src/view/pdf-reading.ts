@@ -139,10 +139,7 @@ export class PdfReading {
 		});
 		this.snapButton.addEventListener("click", (e) => {
 			e.preventDefault();
-			this.host.settings().snapHighlighter = !this.host.settings().snapHighlighter;
-			this.host.save();
-			this.refreshControls();
-			this.prefetchVisible();
+			this.toggleSnap();
 		});
 
 		this.refreshControls();
@@ -548,6 +545,19 @@ export class PdfReading {
 	private applyRenderer(): void {
 		const s = this.host.settings();
 		this.host.renderer()?.setReading(this.hidden, backgroundAlpha(s.dimBackground, s.dimStrength));
+	}
+
+	/** 0.14 (392): whether the highlighter follows the text lines of PDF pages. */
+	get snapping(): boolean {
+		return this.host.settings().snapHighlighter;
+	}
+
+	/** Turns the highlighter's snap-to-text on or off (the highlighter option, the contextual bar and the command). */
+	toggleSnap(): void {
+		this.host.settings().snapHighlighter = !this.host.settings().snapHighlighter;
+		this.host.save();
+		this.refreshControls();
+		this.prefetchVisible();
 	}
 
 	/** The slider, the snap toggle and the banner show the current state. */

@@ -22,7 +22,7 @@ export const MAX_BOOST = 30;
 const ID = /^[a-z0-9-]{1,64}$/;
 
 /** Whatever was stored, as a valid map: bad entries are dropped, counts are clamped, at most MAX_ENTRIES are kept. */
-export function normaliseUsage(data: unknown): UsageMap {
+export function normaliseUsage(data: unknown, maxEntries: number = MAX_ENTRIES): UsageMap {
 	if (typeof data !== "object" || data === null || Array.isArray(data)) return {};
 	const out: Record<string, UsageEntry> = {};
 	const entries = Object.entries(data as Record<string, unknown>)
@@ -35,7 +35,7 @@ export function normaliseUsage(data: unknown): UsageMap {
 		})
 		.filter(([, e]) => e.n > 0)
 		.sort((a, b) => b[1].last - a[1].last)
-		.slice(0, MAX_ENTRIES);
+		.slice(0, maxEntries);
 	for (const [id, e] of entries) out[id] = e;
 	return out;
 }

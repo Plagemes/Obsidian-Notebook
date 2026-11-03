@@ -19,6 +19,7 @@ import { SharedClipModal } from "./shared-clip-modal";
 import {
 	clipMarker, decidePaste, MAX_PASTED_TEXT, normalizePastedText, pastedImageElement, pastedImageName, pastedTextElement,
 } from "./paste-logic";
+import { selectionKindOf } from "../ui/selection-kind";
 import { HIGHLIGHTER_COLORS, HIGHLIGHTER_WIDTHS, PEN_COLORS, PEN_WIDTHS } from "./toolbar";
 
 export interface SelectionState {
@@ -86,13 +87,23 @@ export class SelectionActions {
 	update(): void {
 		const sel = this.host.selection();
 		const show = this.host.editable() && !!sel;
-		this.el.toggleClass("notebook-hidden", !show);
 		this.styleRows.empty();
-		if (!sel) return;
+		if (!sel) {
+			this.el.toggleClass("notebook-hidden", true);
+			delete this.el.dataset.kind;
+			return;
+		}
 		const all = allItems(sel);
+		// 0.14 (402): the rows follow the content: ink has colour and width (a highlighter its own row), text has colour only,
+		// a picture or another object has none (and then the strip is not shown at all).
+		const texts = all.elements.filter((e) => e.type === "text").length;
+		const images = all.elements.filter((e) => e.type === "image").length;
+		const kind = selectionKindOf({ strokes: all.strokes.length, images, texts, others: all.elements.length - images - texts });
+		if (kind) this.el.dataset.kind = kind;
 		const ability = restyleAbilities(all.strokes, all.elements);
 		if (ability.inkColor || ability.inkWidth) this.styleRow(sel, "ink", ability.inkColor, ability.inkWidth);
 		if (ability.highlighterColor) this.styleRow(sel, "highlighter", true, ability.highlighterWidth);
+		this.el.toggleClass("notebook-hidden", !show || this.styleRows.childElementCount === 0);
 	}
 
 	private styleRow(sel: SelectionState, group: StyleGroup, colour: boolean, width: boolean): void {

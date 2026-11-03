@@ -11856,3 +11856,40 @@ body.notebook-style-obsidian {
 		padding-bottom: 8px;
 	}
 }
+
+/* ===== 0.14 toolbar ===== */
+/* Generative interface (392, 393, 402). A tool the page invites (pen and text on ruled paper, shapes on grid, highlighter on a
+   slide) gets a small accent dot under its icon; it never moves and is not a control of its own. */
+.workspace-leaf-content .view-content.notebook-view .notebook-tool-button.is-suggested:not(.is-active) {
+	background-image: radial-gradient(circle at 50% calc(100% - 5px), var(--nb-accent) 0 2px, transparent 2.5px);
+	background-repeat: no-repeat;
+}
+
+/* A quick action the person pinned: a small accent dot in its corner. */
+.workspace-leaf-content .view-content.notebook-view .notebook-quick .notebook-tool.is-pinned {
+	position: relative;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-quick .notebook-tool.is-pinned::after {
+	content: "";
+	position: absolute;
+	right: 6px;
+	top: 6px;
+	width: 5px;
+	height: 5px;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-accent);
+	pointer-events: none;
+}
+
+/* A pinned action in the "All actions" sheet shows a pin at the end of its row. */
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item .notebook-menu-pin {
+	display: inline-flex;
+	margin-left: auto;
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item .notebook-menu-pin svg {
+	width: 14px;
+	height: 14px;
+}

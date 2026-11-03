@@ -1,4 +1,5 @@
 import { setIcon } from "obsidian";
+import { attachPinGesture, type PinGesture } from "../ui/pin-gesture";
 import { listenDismiss, releaseSwallowed } from "../ui/dismiss";
 import { t, type MessageKey } from "../i18n";
 import { ERASE_FILTER_KINDS, type EraseFilterKind } from "../ink/erase-filter";
@@ -62,6 +63,8 @@ export interface ToolbarActions {
 	toggleNavigator(): void;
 	/** Runs an action of the registry (quick slots). */
 	runAction(id: string): void;
+	/** 0.14 (393): pins the quick action to the toolbar, or unpins it (long press on a quick slot). Absent: slots cannot be pinned. */
+	togglePin?(id: string): void;
 	/** Opens (or closes) the "All actions" sheet under `anchor`. */
 	openSheet(anchor: HTMLElement): void;
 	/** Opens (or closes) the page sheet of the page in view under `anchor`. */
@@ -76,7 +79,10 @@ export interface QuickItem {
 	enabled: boolean;
 	/** Toggle actions: on or off; undefined for plain actions. */
 	checked?: boolean;
+	/** 0.14 (393): pinned by the person: it always stays in this place of the bar. */
+	pinned?: boolean;
 }
+
 
 const TOOL_DEFS: Array<[ToolName, string, MessageKey]> = [
 	["pen", "pencil", "tool.pen"],
@@ -295,21 +301,37 @@ export class Toolbar {
 	setQuick(items: QuickItem[]): void {
 		const same = items.length === this.quick.length && items.every((q, i) => {
 			const p = this.quick[i]!;
-			return p.id === q.id && p.enabled === q.enabled && p.checked === q.checked && p.label === q.label;
+			return p.id === q.id && p.enabled === q.enabled && p.checked === q.checked && p.label === q.label && p.pinned === q.pinned;
 		});
 		if (same) return;
 		this.quick = items;
 		this.quickEl.empty();
 		this.quickEl.toggleClass("notebook-hidden", items.length === 0);
 		for (const q of items) {
-			const b = this.button(this.quickEl, q.label, () => this.actions.runAction(q.id));
+			let press: PinGesture | null = null;
+			const b = this.button(this.quickEl, q.label, () => {
+				if (press?.justOpened()) return; // the long press already opened the pin menu
+				this.actions.runAction(q.id);
+			});
 			setIcon(b, q.icon);
 			b.dataset.action = q.id;
 			b.disabled = !q.enabled;
+			b.toggleClass("is-pinned", !!q.pinned);
+			if (this.actions.togglePin) press = attachPinGesture(b, { pinned: () => !!q.pinned, toggle: () => this.actions.togglePin?.(q.id) });
 			if (q.checked !== undefined) {
 				b.toggleClass("is-active", q.checked);
 				b.setAttribute("aria-pressed", String(q.checked));
 			}
+		}
+	}
+
+	/** 0.14 (392): the tools the page in view invites get a small mark; their order and place never change. */
+	setSuggested(tools: readonly ToolName[]): void {
+		for (const [tool, b] of this.toolButtons) {
+			const on = tools.includes(tool);
+			b.toggleClass("is-suggested", on);
+			if (on) b.dataset.suggested = "true";
+			else delete b.dataset.suggested;
 		}
 	}
 
