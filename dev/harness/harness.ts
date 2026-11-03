@@ -37,7 +37,7 @@ import { checkSettings } from "./settings-check";
 import { checkZettel, zettelState, type ZettelState } from "./zettel-check";
 import { checkPlugin } from "./plugin-check";
 import { checkHints } from "./hints-check";
-import { checkToolbar, toolbarShot, type ToolbarState } from "./toolbar-check";
+import { checkAdaptiveToolbar, adaptiveToolbarShot, type AdaptiveShotState } from "./toolbar-check";
 import { checkCreate, prepareShot } from "./create-check";
 import { modalsApi } from "./modals-check";
 import { checkHostile, HOSTILE_ERROR, hostileDialog, installHostile } from "./hostile";
@@ -2115,10 +2115,10 @@ Object.assign(harnessApi, {
 });
 
 // 0.14 toolbar: the generative interface (doc=toolbar, doc=toolbar-pdf, toolbar-check.ts).
-const toolbarApi = () => ({ view, openMore, closeAll, wait, errors, notices });
+const adaptiveApi = () => ({ view, openMore, closeAll, wait, errors, notices });
 Object.assign(harnessApi, {
-	checkToolbar: async () => { try { return JSON.parse(JSON.stringify(await checkToolbar(toolbarApi()))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`toolbar check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } },
-	toolbarShot: (state: ToolbarState) => toolbarShot(toolbarApi(), state),
+	checkAdaptiveToolbar: async () => { try { return JSON.parse(JSON.stringify(await checkAdaptiveToolbar(adaptiveApi()))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`toolbar check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } },
+	adaptiveToolbarShot: (state: AdaptiveShotState) => adaptiveToolbarShot(adaptiveApi(), state),
 });
 
 Object.assign(harnessApi, modalsApi({ app, errors, notices }));

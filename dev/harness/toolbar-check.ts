@@ -4,7 +4,7 @@
  * page invites are marked and never move, the ruler leads the quick slots on grid paper, each switch turns its behaviour off,
  * pressing and holding a quick action (or a row of "All actions") pins it and the pin survives a change of page, an ink
  * selection says so and offers its own actions, and the snapping highlighter is a working control of the PDF bar.
- * `toolbarShot` leaves one state on screen for the review screenshots (dist/shots/design/toolbar-*).
+ * `adaptiveToolbarShot` leaves one state on screen for the review screenshots (dist/shots/design/toolbar-*).
  */
 import { t } from "../../src/i18n";
 import type { Stroke } from "../../src/model/types";
@@ -23,7 +23,7 @@ interface ToolbarView {
 	readingTools: { snapping: boolean } | null;
 }
 
-export interface ToolbarCheckApi {
+export interface AdaptiveCheckApi {
 	view: unknown;
 	openMore: () => Promise<void>;
 	closeAll: () => Promise<void>;
@@ -32,8 +32,8 @@ export interface ToolbarCheckApi {
 	notices: string[];
 }
 
-export const TOOLBAR_STATES = ["page", "pinned", "selection"] as const;
-export type ToolbarState = (typeof TOOLBAR_STATES)[number];
+export const ADAPTIVE_SHOT_STATES = ["page", "pinned", "selection"] as const;
+export type AdaptiveShotState = (typeof ADAPTIVE_SHOT_STATES)[number];
 
 interface HarnessMenu {
 	titles: string[];
@@ -59,12 +59,12 @@ function openPinMenu(el: Element): HarnessMenu | null {
 	return (window as unknown as { harnessMenu?: HarnessMenu }).harnessMenu ?? null;
 }
 
-async function settle(api: ToolbarCheckApi, v: ToolbarView): Promise<void> {
+async function settle(api: AdaptiveCheckApi, v: ToolbarView): Promise<void> {
 	v.refreshUi();
 	await api.wait(200);
 }
 
-export async function toolbarShot(api: ToolbarCheckApi, state: ToolbarState): Promise<void> {
+export async function adaptiveToolbarShot(api: AdaptiveCheckApi, state: AdaptiveShotState): Promise<void> {
 	const v = api.view as ToolbarView;
 	await api.closeAll();
 	v.host.settings.pinnedQuick = state === "pinned" ? ["fit-width"] : [];
@@ -73,7 +73,7 @@ export async function toolbarShot(api: ToolbarCheckApi, state: ToolbarState): Pr
 	await settle(api, v);
 }
 
-export async function checkToolbar(api: ToolbarCheckApi): Promise<{ ok: boolean; results: CheckResult[]; errors: string[]; notices: string[]; env: Record<string, unknown> }> {
+export async function checkAdaptiveToolbar(api: AdaptiveCheckApi): Promise<{ ok: boolean; results: CheckResult[]; errors: string[]; notices: string[]; env: Record<string, unknown> }> {
 	const results: CheckResult[] = [];
 	const add = (name: string, ok: unknown, detail = "") => results.push({ name, ok: !!ok, detail });
 	const v = api.view as ToolbarView;
