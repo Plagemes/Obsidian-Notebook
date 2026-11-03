@@ -14,6 +14,7 @@ import { DEFAULT_COMPANION_SETTINGS, readCompanionSettings, type CompanionSettin
 import { DEFAULT_TRASH_SETTINGS, readTrashSettings, type TrashSettings } from "./storage/trash-settings";
 import { DEFAULT_ZETTEL_SETTINGS, readZettelSettings, type ZettelSettings } from "./zettel/settings";
 import { DEFAULT_TOOLBAR_SIZE, isToolbarSize, type ToolbarSize } from "./ui/toolbar-size";
+import { normalisePinned } from "./ui/adapt";
 import { isUiLanguage, type UiLanguage } from "./i18n/languages";
 import { cleanUserName } from "./library/greeting";
 import { normaliseSeen, type HintId } from "./ui/hint-logic";
@@ -140,6 +141,15 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	// wave 0.9: obsidian and input
 	/** Size of the toolbar, the contextual bar and the radial menu (370). */
 	toolbarSize: ToolbarSize;
+	// 0.14: generative interface (392, 393, 402). Each family of adaptive behaviour has its own switch; pinned slots never move.
+	/** The toolbar follows the kind of page: slide, ruled, grid… (392). */
+	adaptPageType: boolean;
+	/** Quick slots are ranked by what is used in the notebook in view (393). */
+	adaptLearn: boolean;
+	/** The selection bar follows what is selected: ink, picture, text, mixed (402). */
+	adaptSelection: boolean;
+	/** Quick actions the person pinned to the toolbar, in order (at most 3): the ranking never moves them. */
+	pinnedQuick: string[];
 	/** Keyboard arrows, PageUp / PageDown, space and Bluetooth clickers turn pages (372). */
 	pageTurnerKeys: boolean;
 	// wave 0.10: tabs and lines
@@ -218,6 +228,10 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	timetableLeadMinutes: 5,
 	inkFollowsObjects: true,
 	toolbarSize: DEFAULT_TOOLBAR_SIZE,
+	adaptPageType: true,
+	adaptLearn: true,
+	adaptSelection: true,
+	pinnedQuick: [],
 	pageTurnerKeys: true,
 	notebookTabs: false,
 	autoLineBreak: false,
@@ -299,6 +313,10 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.lastNotebookPage === "number" && Number.isInteger(d.lastNotebookPage) && d.lastNotebookPage >= 1) s.lastNotebookPage = d.lastNotebookPage;
 	if (isScrollMode(d.scrollMode)) s.scrollMode = d.scrollMode;
 	if (isToolbarSize(d.toolbarSize)) s.toolbarSize = d.toolbarSize;
+	if (typeof d.adaptPageType === "boolean") s.adaptPageType = d.adaptPageType;
+	if (typeof d.adaptLearn === "boolean") s.adaptLearn = d.adaptLearn;
+	if (typeof d.adaptSelection === "boolean") s.adaptSelection = d.adaptSelection;
+	s.pinnedQuick = normalisePinned(d.pinnedQuick);
 	if (typeof d.pageTurnerKeys === "boolean") s.pageTurnerKeys = d.pageTurnerKeys;
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;
 	if (typeof d.autoLineBreak === "boolean") s.autoLineBreak = d.autoLineBreak;

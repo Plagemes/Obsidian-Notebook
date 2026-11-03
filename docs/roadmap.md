@@ -713,8 +713,8 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 A deterministic, rule-based interface that adapts to context, content, habits and device (no AI: see CLAUDE.md rule 7). Built on the action registry (`src/ui/actions.ts`, `docs/design-ui.md`). Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for all.
 
 ### Toolbar and tools
-392. **P1** Toolbar by page type: PDF slide → snapping highlighter, PDF search, margins; ruled page → pen and text; grid → ruler and shapes (extends the PDF and image-page contextual bars).
-393. **P1** Toolbar that learns per notebook or course: quick slots and favourites ranked by what is used in that notebook (today use counts are per device).
+392. **P1** 🧪 Toolbar by page type: PDF slide → snapping highlighter, PDF search, margins; ruled page → pen and text; grid → ruler and shapes (extends the PDF and image-page contextual bars).
+393. **P1** 🧪 Toolbar that learns per notebook or course: quick slots and favourites ranked by what is used in that notebook (today use counts are per device).
 394. **P2** Context palette: the slide's colours plus the colours already used on the page.
 395. **P3** Suggested pen width from the paper spacing and the zoom level.
 396. **P3** Likely next tool one tap away, from the sequence of tools you usually use.
@@ -725,7 +725,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 401. **P1** Automatic lecture mode from the timetable (#115), with the compact lecture toolbar (#214) shown when a class starts.
 
 ### Selection
-402. **P1** Selection bar by content type: ink, image, text or mixed selection each show their own actions (extends the selection contextual bar).
+402. **P1** 🧪 Selection bar by content type: ink, image, text or mixed selection each show their own actions (extends the selection contextual bar).
 403. **P2** Actions suggested by the selection's geometry: a row of words → card, highlight; two regions joined by an arrow → link.
 404. **P3** Preview before applying: press and hold an action to see its result.
 405. **P3** Radial menu for the selection.

@@ -134,6 +134,7 @@ import { hasBackgrounds, hasPdfPages } from "./reading-logic";
 import { ColourTools, type PageInk } from "./colour-tools";
 import { commandApplies, runViewAction, sizeName, type ActionArg } from "./view-actions";
 import { ViewUi } from "./view-ui";
+import { pageKindOf } from "../ui/page-kind";
 import { pageKeyAction, shouldTurnPage, takesKey, type KeyScene } from "./page-keys";
 import { isTextField, penKeyMatches, penKeyMayAct } from "../ink/pen-hover";
 import { hint } from "../ui/hints";
@@ -512,6 +513,7 @@ export class NotebookView extends FileView {
 			redo: () => this.runAction("redo"),
 			toggleNavigator: () => this.runAction("toggle-pages-panel"),
 			runAction: (id) => this.runAction(id),
+			togglePin: (id) => this.ui?.togglePin(id),
 			openSheet: (anchor) => this.ui?.openSheet("all", anchor),
 			openPageSheet: (anchor) => this.ui?.openSheet("page", anchor, this.currentPageIndex()),
 		});
@@ -573,6 +575,13 @@ export class NotebookView extends FileView {
 			},
 			dimControl: () => (this.reading?.dimmed ? this.reading.dimControl : null),
 			toolbarSize: () => this.host.settings.toolbarSize,
+			adapt: () => ({ pageType: this.host.settings.adaptPageType, learn: this.host.settings.adaptLearn, selection: this.host.settings.adaptSelection }),
+			pinned: () => this.host.settings.pinnedQuick,
+			setPinned: (ids) => {
+				this.host.settings.pinnedQuick = ids;
+				void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
+			},
+			notebookId: () => this.session?.doc?.id ?? null,
 		});
 		this.mountSelectionActions();
 		this.mountStamps();
@@ -2228,11 +2237,12 @@ export class NotebookView extends FileView {
 			page: page ? {
 				index, count: pages.length, background: page.background?.kind ?? "none", infinite: !!page.infinite,
 				bookmarked: doc?.meta?.bookmarks.includes(page.id) ?? false, splittable: page.id === this.heavyPageId,
+				kind: pageKindOf({ background: page.background?.kind ?? "none", paper: page.paper.kind, width: page.width, height: page.height }),
 			} : null,
 			notebook: { pdfPages: hasPdfPages(pages), backgrounds: hasBackgrounds(pages) },
 			lecture: !!this.host.classNow?.(),
 			sidePane: pdfSideState(this),
-			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false },
+			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false, snap: this.reading?.snapping ?? false },
 			display: { night: this.display?.night ?? false, crop: this.display?.crop ?? false },
 			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle", readOnly: this.userReadOnly },
 			canPrint: canPrint(),
@@ -2254,6 +2264,7 @@ export class NotebookView extends FileView {
 			strokes: parts.reduce((n, p) => n + p.strokes.length, 0),
 			elements: elements.length,
 			images: elements.filter((e) => e.type === "image").length,
+			texts: elements.filter((e) => e.type === "text").length,
 			links: this.penLinks?.linkIn(sel.elements) ? 1 : 0,
 			// The maths actions (Edit, Convert to ink) work on the primary page's elements only (see mathTools).
 			equations: sel.elements.filter((e) => e.type === "equation").length,

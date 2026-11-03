@@ -2,7 +2,7 @@
 // (selection, lasso, PDF side pane, class now, PDF page, image page). The layout engine chooses the context and the
 // actions; this only draws them. It can be collapsed to one round button per context (remembered on this device).
 import { setIcon } from "obsidian";
-import { t } from "../i18n";
+import { t, type MessageKey } from "../i18n";
 import { actionById, isChecked, isEnabled, type ContextKind, type UiContext } from "./actions";
 import { actionLabel } from "./action-sheet";
 import type { ContextBarPlan } from "./layout";
@@ -21,6 +21,19 @@ const ICONS: Record<ContextKind, string> = {
 	pdf: "file-text",
 	image: "image",
 };
+
+/** 0.14: the label of a bar adapted to its content ("Ink selection", "Slide"); the plain label of the context otherwise. */
+const VARIANT_LABELS: Readonly<Record<string, MessageKey>> = {
+	"selection:ink": "ui.context.selection.ink",
+	"selection:image": "ui.context.selection.image",
+	"selection:text": "ui.context.selection.text",
+	"selection:mixed": "ui.context.selection.mixed",
+	"pdf:slide": "ui.context.pdf.slide",
+};
+
+export function contextLabelKey(kind: ContextKind, variant?: string): MessageKey {
+	return (variant ? VARIANT_LABELS[`${kind}:${variant}`] : undefined) ?? (`ui.context.${kind}` as MessageKey);
+}
 
 export class ContextBar {
 	readonly el: HTMLElement;
@@ -55,9 +68,11 @@ export class ContextBar {
 		this.secondEl.addClass("notebook-hidden");
 		if (!plan) return;
 		const kind = plan.kind;
-		const name = t(`ui.context.${kind}`);
+		const name = t(contextLabelKey(kind, plan.variant));
 		const collapsed = this.host.collapsed(kind);
 		this.el.dataset.context = kind;
+		if (plan.variant) this.el.dataset.variant = plan.variant;
+		else delete this.el.dataset.variant;
 		this.el.setAttribute("aria-label", name);
 		this.el.toggleClass("is-collapsed", collapsed);
 		this.extraEl.toggleClass("notebook-hidden", kind !== "selection" || collapsed);

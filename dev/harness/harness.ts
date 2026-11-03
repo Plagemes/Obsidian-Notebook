@@ -37,6 +37,7 @@ import { checkSettings } from "./settings-check";
 import { checkZettel, zettelState, type ZettelState } from "./zettel-check";
 import { checkPlugin } from "./plugin-check";
 import { checkHints } from "./hints-check";
+import { checkToolbar, toolbarShot, type ToolbarState } from "./toolbar-check";
 import { checkCreate, prepareShot } from "./create-check";
 import { modalsApi } from "./modals-check";
 import { checkHostile, HOSTILE_ERROR, hostileDialog, installHostile } from "./hostile";
@@ -240,7 +241,7 @@ async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	leaf = new WorkspaceLeaf(app, root);
 	view = new NotebookView(asLeaf(leaf), { settings: settings(), practice: doc === "practice" ? practiceService : undefined, nav: harnessNav, statusChanged: (v) => harnessStatusBar.update(v.statusSnapshot()) });
 	await view.onOpen();
-	const path = doc === "new" || doc === "practice" || doc === "readonly" ? "Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" ? "Notebooks/Slides.notebook" : doc === "outline" ? "Notebooks/Outline.notebook" : "Notebooks/Old v3.notebook";
+	const path = doc === "new" || doc === "practice" || doc === "readonly" ? "Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" ? "Notebooks/Slides.notebook" : doc === "outline" ? "Notebooks/Outline.notebook" : "Notebooks/Old v3.notebook";
 	const file = app.vault.getFileByPath(path)!;
 	await (view as unknown as HarnessView).loadFile(file);
 	view.onResize();
@@ -2111,6 +2112,13 @@ const chromeApi = () => ({ view, openOptions, openMore, openPageSheet, selectFir
 Object.assign(harnessApi, {
 	checkChrome: async () => { try { return JSON.parse(JSON.stringify(await checkChrome(chromeApi()))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`chrome check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } },
 	chromeShot: (state: ChromeState) => chromeState(chromeApi(), state),
+});
+
+// 0.14 toolbar: the generative interface (doc=toolbar, doc=toolbar-pdf, toolbar-check.ts).
+const toolbarApi = () => ({ view, openMore, closeAll, wait, errors, notices });
+Object.assign(harnessApi, {
+	checkToolbar: async () => { try { return JSON.parse(JSON.stringify(await checkToolbar(toolbarApi()))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`toolbar check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } },
+	toolbarShot: (state: ToolbarState) => toolbarShot(toolbarApi(), state),
 });
 
 Object.assign(harnessApi, modalsApi({ app, errors, notices }));

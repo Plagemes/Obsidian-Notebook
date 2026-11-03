@@ -122,9 +122,34 @@ hotkey.
 4. `buildSheet`: Recent (up to 4 used actions not visible elsewhere), then the groups in `GROUP_ORDER` in registry
    order; with a query, a single ranked result list (label, keywords, group, accents ignored).
 
-Use counts (`src/ui/usage.ts`) are stored per device with `app.saveLocalStorage("notebook-ui-usage")`: count and last
+Use counts (`src/ui/usage.ts`, per notebook since 0.14: see *Adaptive rules*) are stored per device with `app.saveLocalStorage("notebook-ui-usage")`: count and last
 use, half-life 14 days, boost at most 30 points (priorities are 0–100), so use reorders neighbours but never pushes a
 designed primary action out.
+
+### Adaptive rules (0.14, roadmap 392, 393, 402)
+
+Deterministic tables in `src/ui/adapt.ts`; no learning model, no AI. Each family has its own switch (Settings > Appearance:
+*Toolbar follows the page*, *Toolbar learns from each notebook*, *Selection bar follows what is selected*); with a switch
+off the layout is exactly the designed order. A rule never shows an action that `when` hides: it adds a fixed amount to an
+action's priority, so the same context, width and settings always give the same bar.
+
+- **Page type (392).** `pageKindOf` (`src/ui/page-kind.ts`) reads the page's background, paper and size (nothing is stored):
+  slide (PDF page at least 1.3 times wider than tall), PDF, image, ruled (ruled, Cornell, calligraphy), grid (grid, dotted,
+  millimetre, isometric, hexagonal), plain. A slide puts the snapping highlighter (new action `toggle-snap-highlighter`, the
+  same switch as the highlighter's option and the settings), PDF search and margins first and labels the bar *Slide*. The
+  tools a page invites get a small accent dot (ruled: pen and text; grid: shapes; slide and PDF: highlighter; their order
+  never changes), and on grid paper the ruler leads the quick slots.
+- **Learning per notebook (393).** Use counts are kept per notebook (the document id, which survives a rename) in the
+  device's local storage next to the device-wide counts (`src/ui/usage-store.ts`): at most 60 notebooks and 60 actions each,
+  never in the notebook file or the vault, never synced. A notebook ranks by its own counts once it has 8 recorded uses;
+  until then by the device's counts, so a new notebook is not a blank toolbar. *Reset the adaptive toolbar* forgets them.
+- **Pinned slots (393).** Press and hold a quick slot, or a row of *All actions* that can be a quick action, to pin it (at
+  most 3, plugin setting `pinnedQuick`). Pinned actions come first, in the order pinned, whatever the ranking and the page
+  say; a pin that does not apply to the page (for example Back with no history) is skipped and returns when it does.
+- **Selection by content (402).** `selectionKindOf` (`src/ui/selection-kind.ts`): ink, picture, text, mixed or object. Ink puts
+  *Save as stamp*, *Select similar* and *Link* first; a picture *White to transparent*, front/back and transform; text *Link*;
+  a mixed selection align and layer order. The bar is labelled *Ink selection*, *Picture selection*, *Text selection*,
+  *Mixed selection*; the colour and width rows already follow the content (text: colour only; a picture: none).
 
 ## 5. Interaction: pen, finger, mouse
 
