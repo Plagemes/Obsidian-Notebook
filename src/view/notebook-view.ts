@@ -144,6 +144,7 @@ import {
 	unionBounds,
 } from "./view-helpers";
 import { showErrorNotice, showNotice, type NoticeHandle } from "./notice";
+import { applyViewportClass, ViewportTracker } from "../ui/viewport-class";
 
 export const VIEW_TYPE = "notebook-view";
 
@@ -335,6 +336,8 @@ export class NotebookView extends FileView {
 	private renderer: Renderer | null = null;
 	private controller: PointerController | null = null;
 	private resizeObserver: ResizeObserver | null = null;
+	/** 0.14 layout: phone / tablet / desktop, portrait / landscape and short height of this view (classes nb-vp-* on contentEl). */
+	private readonly vpClass = new ViewportTracker(() => ({ coarse: activeWindow.matchMedia("(pointer: coarse)").matches }));
 	private media: NotebookMedia | null = null;
 	/** wave 0.7: sync safety (#342–#344). */
 	private syncSafety: ViewSyncSafety | null = null;
@@ -2887,6 +2890,8 @@ export class NotebookView extends FileView {
 		if (rect.width === 0 || rect.height === 0) return;
 		this.viewSize = { width: rect.width, height: rect.height };
 		this.body.toggleClass("is-narrow", this.contentEl.clientWidth < NARROW_PX);
+		const vp = this.vpClass.update(this.contentEl.clientWidth, this.contentEl.clientHeight);
+		if (vp) applyViewportClass(this.contentEl, vp);
 		this.ui?.refresh();
 		this.renderer?.resize(rect.width, rect.height, window.devicePixelRatio || 1);
 		this.refit(true);

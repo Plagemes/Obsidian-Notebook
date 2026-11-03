@@ -54,6 +54,10 @@ for (const variant of ["create", "last"]) {
 	}
 }
 for (const theme of ["dark", "light"]) SCENARIOS.push({ doc: "library", surface: "home", theme, device: "tabletLandscape", lowLatency: false });
+// 0.14 layout: Home and the library held sideways on a phone (short landscape), dark and light.
+for (const surface of ["home", "library"]) {
+	for (const theme of ["dark", "light"]) SCENARIOS.push({ doc: "library", surface, theme, device: "phoneLandscape", lowLatency: false });
+}
 // 0.12.2: Home and the library on an empty vault (no notebooks, no notebooks folder yet): the + New button, the quick
 // actions and the empty state are there and open the creation dialog. Screenshots in dev/harness/dist/shots/design/.
 for (const surface of ["home", "library"]) {
@@ -217,6 +221,15 @@ async function main() {
 				report = await cdp.evaluate(s.doc === "hints" ? "window.harness.checkHints()" : s.doc === "zettel" ? "window.harness.checkZettel()" : s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "outline" ? "window.harness.checkOutline()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "chrome" ? "window.harness.checkChrome()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "modals" ? "window.harness.checkModals()" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
+			}
+			// 0.14 layout: the orientation / size classes of the view (layout-check.ts).
+			if ((s.doc === "new" || s.doc === "library") && s.device !== "reference") {
+				try {
+					const lc = await cdp.evaluate("window.harness.checkLayout()");
+					report.results.push(...lc.results);
+				} catch (e) {
+					report.results.push({ name: "layout check", ok: false, detail: e.message });
+				}
 			}
 			const shot = await cdp.send("Page.captureScreenshot", { format: "png" });
 			const png = Buffer.from(shot.data, "base64");

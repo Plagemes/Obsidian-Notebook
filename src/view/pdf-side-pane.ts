@@ -213,7 +213,7 @@ export class PdfSidePane {
 	private layout(): void {
 		const rect = this.body.getBoundingClientRect();
 		if (rect.width === 0 || rect.height === 0) return;
-		this.orientation = splitOrientation(rect.width, rect.height);
+		this.orientation = splitOrientation(rect.width, rect.height, this.orientation);
 		this.body.toggleClass("is-pdfside-row", this.orientation === "row");
 		this.body.toggleClass("is-pdfside-column", this.orientation === "column");
 		this.body.setCssProps({ "--notebook-pdfside-size": `${Math.round(this.ratio * 1000) / 10}%` });

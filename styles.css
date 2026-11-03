@@ -11779,3 +11779,80 @@ body.notebook-style-obsidian {
 		animation: none;
 	}
 }
+
+/* ===== 0.14 layout ===== */
+/* Orientation and size classes (src/ui/viewport-class.ts): nb-vp-phone|tablet|desktop, nb-vp-portrait|landscape, nb-vp-short on the notebook view's root and on Home / the library root; data-nb-viewport carries the pair. */
+
+/* Notebook view, short landscape (phone held sideways, tablet with the keyboard up): the bars give back vertical space to the page. */
+.workspace-leaf-content .view-content.notebook-view.nb-vp-short .notebook-toolbar {
+	padding-top: 0;
+	padding-bottom: 0;
+	row-gap: 0;
+}
+
+.workspace-leaf-content .view-content.notebook-view.nb-vp-short .notebook-context-bar {
+	padding-top: 0;
+	padding-bottom: 0;
+}
+
+/* PDF side pane: a wider grab area for the divider on a touch screen held sideways, and a one-line header. */
+.workspace-leaf-content .view-content.notebook-view.nb-vp-landscape .notebook-body.is-pdfside-row > .notebook-pdfside-divider {
+	flex-basis: 16px;
+}
+
+.workspace-leaf-content .view-content.notebook-view.nb-vp-short .notebook-pdfside-header {
+	padding-top: 2px;
+	padding-bottom: 2px;
+}
+
+/* Home and the library. A tablet held sideways that is still "medium" wide shows the quick actions in one row of four. */
+.nb-app.nb-ui.nb-vp-landscape.is-medium .nb-quick-grid {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.nb-app.nb-ui.nb-vp-landscape.is-medium .nb-subject-grid.is-tiles {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* Short landscape: the header and the page padding shrink, grids use the width instead of the height. */
+.nb-app.nb-ui.nb-vp-short {
+	--nb-page-pad: 20px;
+	--nb-fs-title: 26px;
+}
+
+.nb-app.nb-ui.nb-vp-short .nb-page-header {
+	padding-top: 10px;
+	padding-bottom: 8px;
+	margin-bottom: 8px;
+}
+
+.nb-app.nb-ui.nb-vp-short .nb-scroll {
+	padding-bottom: 20px;
+}
+
+.nb-app.nb-ui.nb-vp-short .nb-subject-grid.is-rows {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 12px;
+}
+
+.nb-app.nb-ui.nb-vp-short .nb-quick-grid {
+	gap: 12px;
+}
+
+/* Dialogs follow the window (they live outside the view): in a short landscape window they use the whole height. */
+@media (orientation: landscape) and (max-height: 480px) {
+	.modal.nb-modal.nb-ui {
+		max-height: calc(100vh - 16px);
+		margin-top: 8px;
+	}
+
+	.modal.nb-modal.nb-ui .nb-modal-head {
+		padding-top: 10px;
+		padding-bottom: 10px;
+	}
+
+	.modal.nb-modal.nb-ui .nb-modal-foot {
+		padding-top: 8px;
+		padding-bottom: 8px;
+	}
+}

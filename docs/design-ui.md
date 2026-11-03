@@ -380,3 +380,7 @@ A just-in-time tip (`src/ui/components/hint-bubble.ts`, rules in `src/ui/hint-lo
 (`--nb-panel`, `--nb-border-strong`, `--nb-radius-card`, `--nb-shadow-float`), an accent icon square, a 15 px title, one 13 px
 sentence in muted text, a *Turn off tips* link and a 40 px × button. It never takes focus, disappears after about 12 s and shows
 once per tip, at most one per 4 minutes and not while the pen is writing. Tips are switched in Settings → Appearance & language.
+
+## Orientation and size classes (0.14, roadmap #430)
+
+`src/ui/viewport-class.ts` classifies a view (not the screen) by width, height and aspect: `nb-vp-phone|tablet|desktop`, `nb-vp-portrait|landscape`, `nb-vp-short` (landscape under about 480 px of height), plus `data-nb-viewport="tablet-landscape"` on the root of the notebook view and of Home / the library. Thresholds are sticky (hysteresis), so rotation or a dragged split does not flicker. Surfaces adapt with CSS only: short landscape tightens the toolbar, context bar and page headers and gives dialogs the whole window height. A fine pointer on a wide view is a desktop; a coarse pointer never is.
