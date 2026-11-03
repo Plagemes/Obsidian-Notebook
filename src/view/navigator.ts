@@ -23,6 +23,8 @@ export interface NavigatorHost {
 	outline: OutlineHost;
 	/** wave 0.8 (378): shows the actions for the selected pages (ids), at the event. */
 	selectionMenu(pageIds: readonly string[], evt: MouseEvent): void;
+	/** 0.14 (408): opens the notebook map (states per page). Absent: no button. */
+	openMap?(): void;
 }
 
 const THUMB_WIDTH = 120;
@@ -59,6 +61,7 @@ export class PageNavigator {
 	private shownIds: string[] = [];
 	private suppressClick = false;
 	private readonly selectButton: HTMLButtonElement;
+	private mapButton: HTMLButtonElement | null = null;
 	private readonly selectBar: HTMLElement;
 	private readonly selectCount: HTMLElement;
 	private readonly rangeButton: HTMLButtonElement;
@@ -72,6 +75,13 @@ export class PageNavigator {
 		});
 		setIcon(this.selectButton, "check-square");
 		this.selectButton.addEventListener("click", () => (this.selecting ? this.stopSelecting() : this.startSelecting(null)));
+		if (host.openMap) {
+			this.mapButton = header.createEl("button", {
+				cls: "notebook-tool clickable-icon", attr: { "aria-label": t("map.open"), type: "button" },
+			});
+			setIcon(this.mapButton, "layout-grid");
+			this.mapButton.addEventListener("click", () => host.openMap?.());
+		}
 		this.outlineButton = header.createEl("button", {
 			cls: "notebook-tool clickable-icon", attr: { "aria-label": t("nav.outline"), "aria-pressed": "false", type: "button" },
 		});
@@ -316,6 +326,7 @@ export class PageNavigator {
 		this.filterButton.toggleClass("notebook-hidden", this.outlineMode);
 		this.tagButton.toggleClass("notebook-hidden", this.outlineMode);
 		this.selectButton.toggleClass("notebook-hidden", this.outlineMode);
+		this.mapButton?.toggleClass("notebook-hidden", this.outlineMode);
 		this.syncSelection();
 	}
 

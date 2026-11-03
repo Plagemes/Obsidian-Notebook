@@ -77,6 +77,8 @@ import { NotebookMedia, storeAsset } from "./media";
 import { HeavyPageBanner } from "./heavy-page-banner";
 import { ViewSyncSafety, type SyncSafetyService } from "./sync-safety";
 import { PageNavigator } from "./navigator";
+import { NotebookMapCache } from "../model/notebook-map";
+import { NotebookMapModal } from "./notebook-map-modal";
 import type { NavController } from "./nav-controller";
 import { FastScrollbar, type ScrollbarHost } from "./scrollbar";
 import type { StatusBarInfo } from "./status-bar-logic";
@@ -554,6 +556,7 @@ export class NotebookView extends FileView {
 			pageMenu: (index) => this.openPageMenu(index),
 			outline: this.outlineHost(),
 			selectionMenu: (ids, evt) => openPageOpsMenu(this.pageOpsHost(), ids, evt),
+			openMap: () => this.openNotebookMap(),
 		});
 		// The panel sits to the left of the page (a drawer over it on narrow views).
 		this.body.insertBefore(this.pageNav.el, this.stage);
@@ -2881,6 +2884,20 @@ export class NotebookView extends FileView {
 			this.thumbPending.clear();
 			this.pageNav?.invalidate(ids);
 		}, 150);
+	}
+
+	/** 0.14 (408): the notebook map, with its per-page cache (one per open view). */
+	private readonly mapCache = new NotebookMapCache();
+
+	private openNotebookMap(): void {
+		const pages = () => this.shownDoc()?.pages ?? [];
+		new NotebookMapModal(this.app, {
+			map: () => this.mapCache.build(pages()),
+			pages,
+			current: () => this.currentPageIndex(),
+			thumbnail: (page) => this.pageNav?.thumbnailOf(page) ?? BLANK_THUMBNAIL,
+			goTo: (index) => this.goToPage(index),
+		}).open();
 	}
 
 	private thumbnail(page: Page, width: number): string {

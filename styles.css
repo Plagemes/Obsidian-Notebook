@@ -12133,3 +12133,142 @@ body.notebook-style-obsidian {
 .nb-ui .nb-home-dynamic {
 	margin-top: -6px;
 }
+
+/* ===== 0.14 nbmap ===== */
+.nb-ui.nb-map-modal .nb-map-filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--nb-space-2);
+}
+
+.nb-ui.nb-map-modal .nb-map-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+	gap: var(--nb-space-3);
+	align-items: start;
+}
+
+.nb-ui.nb-map-modal .nb-map-grid > .nb-modal-note {
+	grid-column: 1 / -1;
+}
+
+.nb-ui .nb-map-card {
+	display: flex;
+	flex-direction: column;
+	gap: var(--nb-space-1);
+	min-height: var(--nb-target);
+	height: auto;
+	padding: var(--nb-space-2);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	box-shadow: none;
+	color: var(--nb-text);
+	text-align: left;
+	cursor: pointer;
+	transition: border-color var(--nb-motion-fast) var(--nb-ease), background var(--nb-motion-fast) var(--nb-ease);
+}
+
+.nb-ui .nb-map-card:hover {
+	border-color: var(--nb-border-strong);
+	background: var(--nb-hover);
+}
+
+.nb-ui .nb-map-card.is-current {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui .nb-map-card.is-lecture {
+	border-top: 3px solid var(--nb-accent);
+}
+
+.nb-ui .nb-map-thumb {
+	position: relative;
+	overflow: hidden;
+	border-radius: var(--nb-radius-s);
+	background: var(--nb-bg-elevated);
+}
+
+.nb-ui .nb-map-thumb img {
+	display: block;
+	width: 100%;
+	height: auto;
+	aspect-ratio: 1 / var(--nb-map-ratio, 1.414);
+	object-fit: cover;
+	background: var(--nb-bg-elevated);
+}
+
+.nb-ui .nb-map-badges {
+	position: absolute;
+	right: var(--nb-space-1);
+	bottom: var(--nb-space-1);
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 3px;
+	max-width: calc(100% - 8px);
+}
+
+.nb-ui .nb-map-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	min-width: 22px;
+	height: 22px;
+	padding: 0 5px;
+	justify-content: center;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-panel);
+	border: 1px solid var(--nb-border-strong);
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-label);
+	font-weight: 600;
+	box-shadow: var(--nb-shadow-1);
+}
+
+.nb-ui .nb-map-badge-icon {
+	display: inline-flex;
+}
+
+.nb-ui .nb-map-badge-icon .svg-icon {
+	width: 13px;
+	height: 13px;
+}
+
+.nb-ui .nb-map-badge.is-question {
+	color: var(--nb-accent);
+}
+
+.nb-ui .nb-map-badge.is-homework {
+	color: var(--nb-danger);
+}
+
+.nb-ui .nb-map-badge.is-key {
+	color: var(--nb-star);
+}
+
+.nb-ui .nb-map-badge.is-practice {
+	color: var(--nb-success);
+}
+
+.nb-ui .nb-map-foot {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--nb-space-1);
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-label);
+}
+
+.nb-ui .nb-map-num {
+	color: var(--nb-text);
+	font-weight: 600;
+}
+
+@media (max-width: 600px) {
+	.nb-ui.nb-map-modal .nb-map-grid {
+		grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+		gap: var(--nb-space-2);
+	}
+}

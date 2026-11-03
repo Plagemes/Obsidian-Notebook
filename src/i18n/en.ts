@@ -2463,6 +2463,19 @@ export const en = {
 	"dyn.todo.empty.many": "{count} pages to fill",
 	"dyn.home.label": "Dynamic sections",
 	"dyn.rail.label": "For you",
+	// 0.14 nbmap
+	"map.title": "Notebook map",
+	"map.open": "Notebook map",
+	"map.subtitle": "{open} open items in {pages} pages",
+	"map.filter.all": "All pages",
+	"map.state.question": "Questions",
+	"map.state.gap": "To complete",
+	"map.state.homework": "Homework",
+	"map.state.practice": "Practice",
+	"map.state.empty": "Empty",
+	"map.state.key": "Key points",
+	"map.none": "No pages in this state",
+	"map.allClear": "Nothing is open: every page is clear",
 } as const;
 
 export type MessageKey = keyof typeof en;

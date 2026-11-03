@@ -2465,4 +2465,17 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"dyn.todo.empty.many": "{count} pagine da riempire",
 	"dyn.home.label": "Sezioni dinamiche",
 	"dyn.rail.label": "Per te",
+	// 0.14 nbmap
+	"map.title": "Mappa del quaderno",
+	"map.open": "Mappa del quaderno",
+	"map.subtitle": "{open} elementi aperti in {pages} pagine",
+	"map.filter.all": "Tutte le pagine",
+	"map.state.question": "Domande",
+	"map.state.gap": "Da completare",
+	"map.state.homework": "Compiti",
+	"map.state.practice": "Esercizi",
+	"map.state.empty": "Vuote",
+	"map.state.key": "Punti chiave",
+	"map.none": "Nessuna pagina in questo stato",
+	"map.allClear": "Niente di aperto: tutte le pagine sono a posto",
 };

@@ -412,3 +412,7 @@ once per tip, at most one per 4 minutes and not while the pen is writing. Tips a
 ## Orientation and size classes (0.14, roadmap #430)
 
 `src/ui/viewport-class.ts` classifies a view (not the screen) by width, height and aspect: `nb-vp-phone|tablet|desktop`, `nb-vp-portrait|landscape`, `nb-vp-short` (landscape under about 480 px of height), plus `data-nb-viewport="tablet-landscape"` on the root of the notebook view and of Home / the library. Thresholds are sticky (hysteresis), so rotation or a dragged split does not flicker. Surfaces adapt with CSS only: short landscape tightens the toolbar, context bar and page headers and gives dialogs the whole window height. A fine pointer on a wide view is a desktop; a coarse pointer never is.
+
+## Notebook map (0.14, roadmap #408)
+
+A dialog on the shared shell (`modalShell`, wide, no footer) opened by the grid button in the page panel's header. Body: a row of filter chips (`chip`, one per state that exists, with the page count) and an auto-fill grid of cards (`.nb-map-card`: thumbnail, state badges at its bottom right, page number and earliest due date below). Badges are small pills with the state icon (question, gap, homework, practice, empty, key point) and a number when there are several; they are decoration of a card that is itself the control. The current page has an accent border, a lecture's first page an accent top edge. Thumbnails come from the page panel's cache, drawn lazily at the first pause in writing. Logic: `src/model/notebook-map.ts`; view: `src/view/notebook-map-modal.ts`.

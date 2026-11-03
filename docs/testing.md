@@ -193,6 +193,7 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Format v7: bookmark details, page tags, reading position, new paper kinds; v6→v7 migration (drops v7 keys found in a v6 file, rejects v7 papers in a pre-v7 file); newer file read-only | ✅ | ✅ migration, validation, deterministic round trip, future version, incremental save check | | | |
 | v7 fields kept by duplicate page, page restore (tags united), conflicted-copy merge (union rules, coverage), repair (line scan and salvage), library metadata patch, companion note | ✅ | ✅ model-v7 tests | | | |
 | Generated outline (#407, combines #15, #102, #46): bookmarks, PDF slide changes, large handwriting as headings (found by letter size, shown as a picture of the ink, no OCR) and markers in one nested list ordered by page and position, tap to jump, one switch per source in Settings → Pages → Outline, per-page cache, no format change | ✅ | ✅ `tests/outline-builder.test.ts` (heading detection, levels, nesting, ordering, sources, cache, settings); ✅ harness `outline-*` (rows by source, pictures, nesting, tap to jump, filter, switches; tablet and phone, dark and light); ❌ handwriting from a real S Pen (the thresholds are tuned on synthetic writing) | | ✅ | the 1.7× size threshold and the "starts a block" gap are heuristics: a title written right under the previous line, or only slightly larger, is not listed; a large single stroke is treated as a drawing (steps 600-613) |
+| Notebook map (#408, extends #223): grid of page thumbnails for the whole notebook with a badge per state (open question, gap, homework with due date, key point, unfinished practice, nearly empty), filter chips with counts, tap to go to the page, lecture starts marked, per-page-revision cache, thumbnails from the page panel's cache; no format change | ✅ | ✅ `tests/notebook-map.test.ts` (states, resolved items, nearly empty, practice, counts, filter, lecture range, cache reuse, page moves); ✅ harness `nbmap-*` (cards, counts, filters, tap to go; tablet and phone, dark and light); ❌ on a real device | | ✅ | unfinished practice is a heuristic (a practice copy with nothing written), not the attempt timer (steps 770-780) |
 | Outline (#15, #85): bookmarks with title, colour and category ("important", "to review", custom) in the page panel, category filter, tap to jump, add / edit / delete, one undo step each | ✅ | ✅ bookmark helpers, SetMeta undo; ✅ harness (outline, editor, undo/redo); ❌ unit (DOM only) | | | |
 | Page tags (#119): page menu *Page tags…*, tag filter in the page panel, library search finds them and opens the page | ✅ | ✅ normalisation, SetPageTags undo, index and search; ✅ harness (editor, filter) | | | |
 | Reading position shared across devices (#125): written only with a content save, start page chosen between link, layout restore and stored position | ✅ | ✅ session hook (no write of its own, journal/save consistency), start rules; ❌ view scrolling, two real devices | | | stored only when something is saved: a notebook only read on a device does not move the other device's start page |
@@ -1217,6 +1218,22 @@ Generated outline (roadmap 407). Reference screenshots after `npm run harness:ch
 611. **Dark and light, Obsidian theme.** Check the outline in the dark and light theme and with *Appearance → Style → Follow Obsidian theme*; the white picture of a heading stays readable.
 612. **Cost.** In a notebook of 100+ pages, open the outline for the first time (note how long it takes), then close and reopen it: the second time is immediate. Writing with the outline open does not stutter.
 613. **No change to the file.** Open a notebook, view the outline, close it without editing: the file is not rewritten (no new snapshot, no sync conflict).
+
+### 0.14 — nbmap: notebook map (steps 770-789)
+
+Notebook map (roadmap 408). Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/nbmap-*.png`. Use a notebook of 20+ pages with a few question, gap and homework markers, an empty page and a practice copy.
+
+770. **Open.** Open the page panel and tap the grid button (*Notebook map* / *Mappa del quaderno*): a dialog shows every page as a thumbnail; the subtitle says how many items are open.
+771. **Badges.** A page with an open question, a gap, homework or a key point shows one badge per state (a number when there are several); a nearly empty page is badged *Empty*; a practice copy with nothing written is badged *Practice*.
+772. **Resolved items.** Tap a question marker on the page to resolve it, reopen the map: that badge is gone (key points never go away).
+773. **Filters.** The chips list only states that exist, with the number of pages. Tap one: only those pages stay; tap it again, or *All pages*, to see everything.
+774. **Tap to go.** Tap a card: the dialog closes and the page opens. The page you were on is outlined when you reopen the map.
+775. **Lectures.** The first page of each lecture (the one with the lecture header) has an accent edge on its card.
+776. **Homework.** A homework card shows the earliest due date of its open homework.
+777. **Cost.** In a notebook of 100+ pages the dialog opens at once, thumbnails fill in while you scroll, and writing is not interrupted. Reopening it is immediate.
+778. **Touch.** Cards and chips are easy to hit with a finger and the S Pen; scrolling with a finger does not open a page.
+779. **Dark, light, Obsidian theme, phone width.** Check the dialog in both themes, with *Follow Obsidian theme*, and on a phone (the grid narrows).
+780. **No change to the file.** Open the map and close it without editing: the file is not rewritten.
 
 ### 0.13 — home2: Home, revised structure (steps 620-659)
 
