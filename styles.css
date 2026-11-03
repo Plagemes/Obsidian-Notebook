@@ -12088,3 +12088,48 @@ body.notebook-style-obsidian {
 		justify-content: flex-start;
 	}
 }
+
+/* ===== 0.14 sections ===== */
+.nb-ui .nb-lib-dynamic {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+	gap: 20px;
+	align-items: start;
+}
+
+.nb-ui .nb-lib-dyn .nb-section-header {
+	align-items: center;
+}
+
+.nb-ui .nb-dyn-count {
+	min-width: 20px;
+	padding: 0 7px;
+	border-radius: 999px;
+	background: var(--nb-accent-soft, var(--nb-surface-2));
+	color: var(--nb-accent, var(--nb-text-muted));
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 20px;
+	text-align: center;
+}
+
+.nb-ui .nb-lib-dyn .nb-section-tools {
+	margin-left: auto;
+	display: flex;
+	gap: 12px;
+	align-items: center;
+}
+
+.nb-ui .nb-dyn-action {
+	background: transparent;
+	border: 0;
+	box-shadow: none;
+	color: var(--nb-accent);
+	cursor: pointer;
+	font-size: 13px;
+	padding: 4px 2px;
+}
+
+.nb-ui .nb-home-dynamic {
+	margin-top: -6px;
+}

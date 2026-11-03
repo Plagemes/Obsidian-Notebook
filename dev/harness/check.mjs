@@ -382,6 +382,14 @@ async function main() {
 							}
 						}
 					}
+					// 0.14 sections: Now / To complete / Changed on another device, and a review shot of the seeded state.
+					const sec = await cdp.evaluate("window.harness.checkSections()", 60000);
+					problems.push(...sec.results.filter((x) => !x.ok).map((x) => `${x.name}: ${x.detail}`));
+					if (!s.variant) {
+						await cdp.evaluate("window.harness.sectionsState('on')");
+						await shotAs("sections");
+						await cdp.evaluate("window.harness.sectionsState('reset')");
+					}
 					const r = await cdp.evaluate("window.harness.interactLibrary()", 60000);
 					problems.push(...r.results.filter((x) => !x.ok).map((x) => `${x.name}: ${x.detail}`));
 				} catch (e) {

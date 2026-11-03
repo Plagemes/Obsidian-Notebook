@@ -51,6 +51,7 @@ import { compareLod, measureLod } from "./lod-bench";
 import { checkEmptyLibrary, checkLibraryLayout, emptyDialogShot, libraryInteractions, libraryState, openLibraryHarness, type HomeVariant, type LibraryHarness } from "./library-check";
 import { checkHome2, home2State } from "./home2-check";
 import { checkLayout } from "./layout-check";
+import { checkSections, sectionsState } from "./sections-check";
 
 import type { Layout } from "../../src/ink/layout";
 import type { Viewport } from "../../src/ink/viewport";
@@ -2080,6 +2081,12 @@ async function checkHome(): Promise<Record<string, unknown>> {
 harnessApi.checkHome2 = checkHome;
 harnessApi.checkLayout = checkLayout; // 0.14 layout
 harnessApi.home2State = (state: string) => (libraryHarness ? home2State(libraryHarness, state) : false);
+// 0.14 sections: the dynamic sections (sections-check.ts).
+harnessApi.checkSections = async () => {
+	const results = libraryHarness ? await checkSections(libraryHarness, librarySurface) : [];
+	return { ok: results.every((r) => r.ok) && errors.length === 0, results, errors: [...errors] };
+};
+harnessApi.sectionsState = (state: string) => (libraryHarness ? sectionsState(libraryHarness, state) : false);
 
 async function interactLibrary(): Promise<Record<string, unknown>> {
 	const results = libraryHarness ? await libraryInteractions(libraryHarness, librarySurface) : [];

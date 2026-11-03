@@ -1,5 +1,6 @@
 /** Pure helpers to decide what to read and to turn a document into index fields. No 'obsidian'. */
 import { normalizePageTags } from "../model/page-tags";
+import { hasPracticeTag } from "../model/practice";
 import { COVER_ART_STYLES, DEFAULT_META, type NotebookDocument } from "../model/types";
 import { folderOf, nameOf, type IndexCoverArt, type LibraryEntry, type LibraryIndex } from "./index";
 
@@ -50,7 +51,7 @@ export function extractText(doc: NotebookDocument, cap = TEXT_CAP): { text: stri
 	return { text, textPages };
 }
 
-export type DocumentFields = Pick<LibraryEntry, "id" | "pages" | "tags" | "favorite" | "cover" | "created" | "modified" | "text" | "textPages" | "pageTags" | "bookmarks" | "pdfPages" | "openMarkers" | "coverArt">;
+export type DocumentFields = Pick<LibraryEntry, "id" | "pages" | "tags" | "favorite" | "cover" | "created" | "modified" | "text" | "textPages" | "pageTags" | "bookmarks" | "pdfPages" | "openMarkers" | "emptyPages" | "coverArt">;
 
 /** Markers that still ask for something: a gap to fill, a question for the lecturer, homework (not marked done). */
 const OPEN_MARKERS: ReadonlySet<string> = new Set(["gap", "question", "homework"]);
@@ -66,6 +67,28 @@ export function extractStudyCounts(doc: NotebookDocument): { pdfPages: number; o
 		}
 	}
 	return { pdfPages, openMarkers };
+}
+
+/**
+ * 0.14: pages still to fill, for the "To complete" section. Only in a notebook that has been started (a fresh blank notebook is
+ * not "to complete"): a page without ink or elements that comes before the last written page (skipped), a page with a PDF
+ * background that has no ink yet (a slide not annotated), and a practice copy with no ink yet (unfinished practice).
+ */
+export function extractEmptyPages(doc: NotebookDocument): number {
+	const pages = Array.isArray(doc.pages) ? doc.pages : [];
+	const blank = (p: NotebookDocument["pages"][number] | undefined) =>
+		!p || ((!Array.isArray(p.strokes) || p.strokes.length === 0) && (!Array.isArray(p.elements) || p.elements.length === 0));
+	let last = -1;
+	pages.forEach((p, i) => {
+		if (!blank(p)) last = i;
+	});
+	let n = 0;
+	pages.forEach((p, i) => {
+		if (!p || !blank(p)) return;
+		const practice = hasPracticeTag(p.tags) && !(Array.isArray(p.strokes) && p.strokes.length > 0);
+		if (practice || (last >= 0 && (i < last || p.background?.kind === "pdf"))) n++;
+	});
+	return n;
 }
 
 /** Titled bookmarks for the index (0-based pages, in page order). */
@@ -130,11 +153,13 @@ export function metaFromDocument(doc: NotebookDocument, fallbackTime = 0): Docum
 	const pageTags = extractPageTags(doc);
 	const bookmarks = extractBookmarks(doc);
 	const { pdfPages, openMarkers } = extractStudyCounts(doc);
+	const emptyPages = extractEmptyPages(doc);
 	const coverArt = extractCoverArt(doc);
 	return {
 		...(pdfPages > 0 ? { pdfPages } : {}),
 		...(coverArt ? { coverArt } : {}),
 		...(openMarkers > 0 ? { openMarkers } : {}),
+		...(emptyPages > 0 ? { emptyPages } : {}),
 		...(typeof doc.id === "string" && doc.id !== "" ? { id: doc.id } : {}),
 		...(bookmarks.length > 0 ? { bookmarks } : {}),
 		...(text ? { text, textPages } : {}),

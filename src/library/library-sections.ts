@@ -21,7 +21,21 @@ export interface TagChip {
 	onClick: () => void;
 }
 
+/** 0.14: a dynamic section (Now, To complete, Changed on another device): drawn only when it has rows. */
+export interface DynamicPanel {
+	id: string;
+	icon: string;
+	title: string;
+	count: number;
+	rows: ListRowOptions[];
+	more: (() => void) | null;
+	/** A real action of the section (e.g. "Mark as seen"). */
+	action: { label: string; onRun: () => void } | null;
+}
+
 export interface LibrarySectionsHost {
+	/** 0.14: dynamic sections, above the subjects; empty ones are not passed. */
+	dynamic: DynamicPanel[];
 	subjects: SubjectCardOptions[];
 	moreSubjects: (() => void) | null;
 	/** 0.12.2: the dashed "Create a folder" tile shown in place of the subject cards when there are none. */
@@ -47,6 +61,24 @@ export function renderTagChips(parent: HTMLElement, tags: readonly TagChip[]): H
 export function renderLibrarySections(el: HTMLElement, h: LibrarySectionsHost): void {
 	// 0.12.3: each section on its own: one that throws shows an error card in its place and the others are still drawn.
 	const part = (name: string, label: string, draw: () => void) => drawSafely(el, `Library: the ${name} section`, label, draw);
+	// 0.14: Now / To complete / Changed on another device come first; each hides when it has nothing.
+	if (h.dynamic.length > 0) {
+		const wrap = el.createDiv({ cls: "nb-lib-dynamic" });
+		for (const d of h.dynamic) {
+			part(`dynamic ${d.id}`, d.title, () => {
+				const panel = wrap.createEl("section", { cls: `nb-panel nb-lib-dyn nb-lib-dyn-${d.id}` });
+				const head = sectionHeader(panel, { icon: d.icon, title: d.title, link: d.more ? { label: t("lib.showAll"), onClick: d.more } : undefined });
+				head.createSpan({ cls: "nb-dyn-count", text: String(d.count) });
+				if (d.action) {
+					const run = d.action.onRun;
+					const b = head.querySelector(".nb-section-tools")?.createEl("button", { cls: "nb-link nb-dyn-action", text: d.action.label, attr: { type: "button" } });
+					b?.addEventListener("click", run);
+				}
+				const list = panel.createDiv({ cls: "nb-list" });
+				for (const r of d.rows) listRow(list, r);
+			});
+		}
+	}
 	// Subject folders can be created: with none yet, a dashed tile takes the place of the cards (DESIGN.md §5).
 	part("subjects", t("home.subjects"), () => {
 		const sec = el.createEl("section", { cls: "nb-section nb-lib-subjects" });

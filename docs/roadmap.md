@@ -751,7 +751,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 414. **P2** Adaptive navigator: large thumbnails for PDFs, a compact list for text pages.
 
 ### Library
-415. **P1** Dynamic sections: Now, To complete, Changed on another device, Recent.
+415. 🧪 **P1** Dynamic sections: Now, To complete, Changed on another device, Recent. (0.14: the first three are library dashboard panels, places, sidebar items with counts and Home chips; Recent is Home's Recent notes and the Recent filter; waiting for hardware verification)
 416. **P2** Notebooks ordered by the active term.
 
 ### PDF and lecture

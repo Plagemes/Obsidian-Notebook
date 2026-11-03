@@ -40,6 +40,8 @@ import { showNotice } from "../view/notice";
 
 /** This device's last folder of the creation dialog (local storage of the vault, not synced). */
 const LAST_FOLDER_KEY = "notebook-create-last-folder";
+/** 0.14: this device's record of the notebooks it has seen (library/changed-seen.ts). */
+const SEEN_STATE_KEY = "notebook-changed-seen";
 
 /** Longest wait for a closing notebook view's final save before a library move goes on. */
 const CLOSE_WAIT_MS = 10_000;
@@ -380,6 +382,25 @@ export class NotebookLibraryHost implements LibraryHost {
 	lastNotebook(): { path: string; page: number } | null {
 		const s = this.plugin.settings;
 		return s.lastNotebookPath ? { path: s.lastNotebookPath, page: s.lastNotebookPage } : null;
+	}
+
+	/** 0.14: this device's record of what it has seen of each notebook (local storage: per vault and device, never synced). */
+	loadSeenState(): unknown {
+		return this.app.loadLocalStorage(SEEN_STATE_KEY) as unknown;
+	}
+
+	saveSeenState(state: unknown): void {
+		this.app.saveLocalStorage(SEEN_STATE_KEY, state);
+	}
+
+	/** 0.14: paths of the notebooks open in a tab (the "Now" section). */
+	openNotebooks(): string[] {
+		const out: string[] = [];
+		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+			const path = leaf.view instanceof NotebookView ? leaf.view.file?.path : undefined;
+			if (path && !out.includes(path)) out.push(path);
+		}
+		return out;
 	}
 
 	/** 0.13: the "Your name" setting (Home's greeting). */

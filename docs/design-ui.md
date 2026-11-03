@@ -367,6 +367,8 @@ run the registry actions `new-notebook` and `new-folder`; all of them open the c
 
 **Sidebar (0.13).** Under the navigation: *Pinned* (notebooks pinned with the library's pin, and folders pinned from their menu; at most eight; every row opens on tap and has the same press-and-hold / right-click menu, which unpins it; with none, one line says how to pin), then *Vault*. Folder rows show the notebook count and the pages inside ("12 · 248 p"; the tooltip words both). Pinned folders are the `pinned` field of the folder metadata (`folders-<device>.json`, merged per field like the colour, followed by renames); pinned notebooks are the library state's `pinned`.
 
+**Dynamic sections (0.14).** *Now*, *To complete* and *Changed on another device* (rules in `library/dynamic-sections.ts`) are panels above the subject folders on the library dashboard (list rows with the reason as the second line, a count badge, *Show all*; Changed also has *Mark as seen*), places of the library (`{ collection: "now" | "todo" | "changed" }`, so the grid, list, search and empty states are the ones of the smart collections), sidebar items with counts under Notebooks and a chip row under Home's Continue row. Each is drawn only when it has something. Recent is Home's Recent notes.
+
 **Library.** Filter chips *All · Subjects · Recent · Favourites · With PDF · Archive* (single choice). *All* shows the
 dashboard: subject cards (four in a row, two on a tablet in portrait, two compact ones on a phone), *Smart
 collections* (To study: open gap, question or homework markers or a to-study tag; Favourites: starred or pinned;
