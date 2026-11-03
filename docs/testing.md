@@ -1260,7 +1260,7 @@ Implemented, not verified on hardware.
 678. **Quick page twice.** Tap Home's *Quick page* and the ribbon item at once on a vault without Quick notes: one *Quick notes* is made.
 679. **Open in new tab.** Recent notes, the menu, *Open in new tab* on a notebook that is open: the open tab is shown, no second tab appears.
 
-### 0.13 — slides (steps 720-739)
+### 0.14 — slides (steps 720-739)
 
 Notes ↔ slide link (#226) and slide strip (#417). Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/slides-*.png`. You need a lecture PDF in the vault and a notebook for notes.
 
