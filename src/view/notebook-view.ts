@@ -101,11 +101,14 @@ import { askPdfRange } from "./pdf-range-modal";
 import { runBoardShot } from "./board-shot";
 import type { EditContext } from "./edit-context";
 import { runNewLecture } from "./lecture";
+import { pickSlideRef } from "./lecture-logic";
+import { LectureModeController } from "./lecture-mode";
+import type { LectureClass } from "../timetable/lecture-mode";
 import { askExercisePaper, askLayoutOptions, loadExercisePaper } from "./lecture-pack-modal";
 import { runMovePages } from "../library/move-pages";
 import type { PdfActionHost } from "./pdf-actions";
 import { pickFile } from "./pick";
-import { pdfSideState, referenceSlideOf, type PageSyncHooks } from "./pdf-sync";
+import { pdfSideState, referencePane, referenceSlideOf, type PageSyncHooks } from "./pdf-sync";
 import { MarkerTools, translatedBoxLabel } from "./markers";
 import { ExcerptTools } from "./excerpts";
 import { layerCommand, type LayerMove } from "../model/layers";
@@ -192,6 +195,8 @@ export interface NotebookHost {
 	practice?: PracticeProvider;
 	/** ui redesign: the course of the class on now (timetable), for the lecture contextual bar. Optional. */
 	classNow?(): string | null;
+	/** 0.14 (401): the class in progress that belongs to this notebook (automatic lecture mode). Optional: absent in tests and the harness. */
+	lectureClassFor?(path: string): LectureClass | null;
 	/** ui redesign: runs a plugin-level action of the registry (notebook menu). Optional. */
 	runGlobal?(id: string): void;
 	/** wave 0.7: sync safety (presence files, sync check). Optional: absent in tests and the harness. */
@@ -394,6 +399,8 @@ export class NotebookView extends FileView {
 	private excerpts: ExcerptTools | null = null;
 	/** wave 0.9 (389): the chip that offers a page after a page in the middle of the notebook (view/page-offer.ts). */
 	private pageOffer: PageOffer | null = null;
+	/** 0.14 (401): automatic lecture mode of this view (view/lecture-mode.ts). */
+	lectureMode: LectureModeController | null = null;
 
 	private viewport: Viewport = { scale: 1, offsetX: 0, offsetY: 0 };
 	private viewSize: Size = { width: 0, height: 0 };
@@ -608,6 +615,15 @@ export class NotebookView extends FileView {
 
 		this.renderer = new Renderer(this.stage, { lowLatency: this.host.settings.lowLatencyInk });
 		this.mountMarkers();
+		this.lectureMode = new LectureModeController({
+			parent: () => this.body,
+			path: () => this.file?.path ?? null,
+			setting: () => this.host.settings.lectureMode,
+			classFor: (path) => this.host.lectureClassFor?.(path) ?? null,
+			busy: () => this.inContact(),
+			editContext: () => this.editContext(),
+			changed: () => this.refreshUi(),
+		});
 		this.mountExcerpts();
 		this.pageOffer = new PageOffer({
 			parent: () => this.body,
@@ -786,6 +802,8 @@ export class NotebookView extends FileView {
 		this.display = null;
 		this.practiceHooks?.destroy();
 		this.practiceHooks = null;
+		this.lectureMode?.destroy();
+		this.lectureMode = null;
 		this.tabs?.destroy();
 		this.tabs = null;
 		this.toolbar?.destroy();
@@ -1124,6 +1142,7 @@ export class NotebookView extends FileView {
 		this.media = null;
 		this.reading?.reset();
 		this.pageNav?.invalidate();
+		this.lectureMode?.closed();
 		await super.onUnloadFile(file);
 	}
 
@@ -1185,6 +1204,7 @@ export class NotebookView extends FileView {
 		this.perfEl?.toggleClass("notebook-hidden", !settings.perfOverlay);
 		if (this.renderer) this.renderer.onFrame = settings.perfOverlay ? (t) => this.onFrame(t) : null;
 		this.reading?.settingsChanged();
+		this.lectureMode?.settingsChanged();
 		// wave 0.9 (370): a new toolbar size changes the bar, the contextual bar and the number of quick slots.
 		this.ui?.refresh();
 		this.display?.settingsChanged();
@@ -2243,7 +2263,7 @@ export class NotebookView extends FileView {
 				kind: pageKindOf({ background: page.background?.kind ?? "none", paper: page.paper.kind, width: page.width, height: page.height }),
 			} : null,
 			notebook: { pdfPages: hasPdfPages(pages), backgrounds: hasBackgrounds(pages) },
-			lecture: !!this.host.classNow?.(),
+			lecture: this.lectureMode?.on ?? false,
 			sidePane: pdfSideState(this),
 			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false, snap: this.reading?.snapping ?? false },
 			display: { night: this.display?.night ?? false, crop: this.display?.crop ?? false },
@@ -2464,6 +2484,7 @@ export class NotebookView extends FileView {
 			alive: () => this.stillHere(session) && session.doc === doc,
 			addPending: (asset) => media.addPending(asset),
 			removePending: (id) => media.removePending(id),
+			slide: () => pickSlideRef({ pane: referencePane(this), paneSlide: referenceSlideOf(this), page: doc.pages[this.currentPageIndex()], assets: doc.assets }),
 			currentPage: () => this.currentPageIndex(),
 			visibleLocal: (i) => {
 				const box = this.layout?.boxes[i];
@@ -2648,6 +2669,7 @@ export class NotebookView extends FileView {
 			void checkConflicts(this.reliabilityDeps(), this);
 			this.syncHooks?.loaded();
 			this.practiceHooks?.loaded();
+			this.lectureMode?.opened();
 		} else {
 			this.body.hide();
 			this.toolbar.setEditable(false);

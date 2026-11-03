@@ -314,6 +314,8 @@ export const ACTIONS: readonly ActionDef[] = [
 
 	// --- lecture: the contextual bar while a class of the timetable is on.
 	{ id: "new-lecture", label: "page.newLecture", icon: "graduation-cap", group: "lecture", surfaces: ["context", "sheet"], contexts: ["lecture"], priority: 70, scope: "view", command: "command.newLecture" },
+	// 0.14 (401): switches lecture mode on or off by hand (the rule starts it from the timetable); the contextual bar follows it.
+	{ id: "lecture-mode", label: "command.lectureMode", icon: "graduation-cap", group: "lecture", surfaces: ["sheet"], priority: 72, scope: "view", command: true, readOnly: true, checked: (c) => c.lecture, keywords: "class timetable lesson classe orario" },
 	{ id: "exercise-paper", label: "page.exercisePaper", icon: "palette", group: "lecture", surfaces: ["sheet"], priority: 20, scope: "view", command: "command.exercisePaper", readOnly: true },
 	// wave 0.8: markers (#201-#203, #209) and structured boxes (#204): the next tap or drag on a page places one. Also on the radial dial (shapes ring → Markers).
 	...([

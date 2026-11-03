@@ -270,6 +270,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 
 	// lecture
 	"new-lecture": (v) => void v.newLecture(),
+	"lecture-mode": (v) => v.lectureMode?.toggle(),
 	"exercise-paper": (v) => v.chooseExercisePaper(),
 
 	// markers, boxes, invisible ink (wave 0.8)

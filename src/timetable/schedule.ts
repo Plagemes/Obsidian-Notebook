@@ -19,6 +19,8 @@ export interface ClassEntry {
 	/** `HH:MM`, local time; the class is over at this minute. */
 	end: string;
 	room?: string;
+	/** Who teaches it (0.14, #210): shown in the header of the lecture page. */
+	lecturer?: string;
 	/** Vault path of a notebook or of a course folder. */
 	notebook?: string;
 	/** `all` (every week), `odd` or `even` weeks (counted from `Timetable.weekOne`, else ISO week numbers). */
@@ -241,10 +243,12 @@ export function parseTimetable(text: string): ParseResult {
 			weeks: (r.weeks ?? "all") as WeekPattern,
 		};
 		const room = str(r.room);
+		const lecturer = str(r.lecturer);
 		const notebook = str(r.notebook);
 		const from = str(r.from);
 		const to = str(r.to);
 		if (room) entry.room = room;
+		if (lecturer) entry.lecturer = lecturer;
 		if (notebook) entry.notebook = notebook;
 		if (from) entry.from = from;
 		if (to) entry.to = to;
@@ -262,6 +266,7 @@ export function serializeTimetable(tt: Timetable): string {
 	const entries = tt.entries.map((e) => {
 		const out: Record<string, unknown> = { id: e.id, course: e.course.trim(), day: e.day, start: e.start, end: e.end };
 		if (e.room?.trim()) out.room = e.room.trim();
+		if (e.lecturer?.trim()) out.lecturer = e.lecturer.trim();
 		if (e.notebook?.trim()) out.notebook = e.notebook.trim();
 		out.weeks = e.weeks;
 		if (e.from) out.from = e.from;
@@ -298,14 +303,18 @@ export function linkCovers(link: string | undefined, notebookPath: string): bool
  * (the notebook name is used then). `all` is every class of the timetable.
  */
 export function courseForNotebook(current: readonly ClassEntry[], notebookPath: string | null | undefined, all: readonly ClassEntry[] = current): string | null {
+	return classForNotebook(current, notebookPath, all)?.course ?? null;
+}
+
+/** The class `courseForNotebook` picks (same rules), or null. */
+export function classForNotebook(current: readonly ClassEntry[], notebookPath: string | null | undefined, all: readonly ClassEntry[] = current): ClassEntry | null {
 	if (!current.length) return null;
 	if (notebookPath) {
 		const linked = current.find((e) => linkCovers(e.notebook, notebookPath));
-		if (linked) return linked.course;
+		if (linked) return linked;
 		if (all.some((e) => linkCovers(e.notebook, notebookPath))) return null;
 	}
-	const unlinked = current.find((e) => !e.notebook);
-	return unlinked ? unlinked.course : null;
+	return current.find((e) => !e.notebook) ?? null;
 }
 
 export interface NotebookRef {

@@ -12,6 +12,7 @@ import { normaliseRecentColours } from "./ink/colour";
 import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./model/types";
 import { DEFAULT_COMPANION_SETTINGS, readCompanionSettings, type CompanionSettings } from "./storage/companion-path";
 import { DEFAULT_TRASH_SETTINGS, readTrashSettings, type TrashSettings } from "./storage/trash-settings";
+import { DEFAULT_LECTURE_SETTINGS, readLectureSettings, type LectureSettings } from "./timetable/lecture-mode";
 import { DEFAULT_ZETTEL_SETTINGS, readZettelSettings, type ZettelSettings } from "./zettel/settings";
 import { DEFAULT_TOOLBAR_SIZE, isToolbarSize, type ToolbarSize } from "./ui/toolbar-size";
 import { normalisePinned } from "./ui/adapt";
@@ -25,7 +26,7 @@ import { DEFAULT_READING_SETTINGS, readReadingSettings, type ReadingSettings } f
 export const APPEARANCE_STYLES = ["notebook", "obsidian"] as const;
 export type AppearanceStyle = (typeof APPEARANCE_STYLES)[number];
 
-export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings {
+export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings, LectureSettings {
 	/** UI language: "auto" follows Obsidian. */
 	uiLanguage: UiLanguage;
 	folder: string;
@@ -249,6 +250,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	penGesturesCustom: [],
 	...DEFAULT_TRASH_SETTINGS,
 	...DEFAULT_ZETTEL_SETTINGS,
+	...DEFAULT_LECTURE_SETTINGS,
 	zettelSlipBoxes: [],
 	...DEFAULT_READING_SETTINGS,
 };
@@ -334,6 +336,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.timetableLeadMinutes === "number" && Number.isInteger(d.timetableLeadMinutes) && d.timetableLeadMinutes >= 0 && d.timetableLeadMinutes <= 30) s.timetableLeadMinutes = d.timetableLeadMinutes;
 	Object.assign(s, readCompanionSettings(d), readGestureSettings(d), readPenGestureSettings(d));
 	Object.assign(s, readTrashSettings(d));
+	Object.assign(s, readLectureSettings(d));
 	if (typeof d.inkFollowsObjects === "boolean") s.inkFollowsObjects = d.inkFollowsObjects;
 	Object.assign(s, readZettelSettings(d));
 	Object.assign(s, readReadingSettings(d));

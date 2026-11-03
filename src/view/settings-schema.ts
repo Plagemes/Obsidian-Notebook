@@ -312,6 +312,11 @@ const STUDY: SettingSpec[] = [
 		id: "timetableLeadMinutes", section: "study", group: "timetable", order: 22, name: "settings.timetable.lead",
 		control: { type: "slider", min: 0, max: 30, step: 1, format: suffix("min") }, parent: "timetableOffer", visible: timetableOn,
 	},
+	// 0.14 (401): lecture mode follows the timetable; off / ask / automatic.
+	{
+		id: "lectureMode", section: "study", group: "timetable", order: 30, name: "settings.lectureMode", desc: "settings.lectureMode.desc", keywords: "class lesson lecture classe lezione",
+		control: { type: "dropdown", options: options([["off", "settings.lectureMode.off"], ["ask", "settings.lectureMode.ask"], ["auto", "settings.lectureMode.auto"]]) },
+	},
 	{ id: "zettelFolder", section: "study", group: "zettel", order: 10, name: "settings.zettelFolder", desc: "settings.zettelFolder.desc", control: { type: "folder", placeholder: DEFAULT_SETTINGS.zettelFolder } },
 	{
 		id: "zettelIdScheme", section: "study", group: "zettel", order: 20, name: "settings.zettelIdScheme", desc: "settings.zettelIdScheme.desc",

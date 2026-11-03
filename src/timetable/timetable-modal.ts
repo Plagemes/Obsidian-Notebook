@@ -130,6 +130,11 @@ export class TimetableModal extends Modal {
 			if (room.value.trim()) e.room = room.value;
 			else delete e.room;
 		});
+		const lecturer = this.field(card, t("timetable.lecturer")).createEl("input", { type: "text", value: e.lecturer ?? "" });
+		lecturer.addEventListener("input", () => {
+			if (lecturer.value.trim()) e.lecturer = lecturer.value;
+			else delete e.lecturer;
+		});
 		const link = this.field(card, t("timetable.link"), t("timetable.link.desc")).createEl("input", { type: "text", value: e.notebook ?? "", attr: { list: "notebook-tt-choices" } });
 		link.addEventListener("input", () => {
 			if (link.value.trim()) e.notebook = link.value;

@@ -722,7 +722,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 398. **P3** Toolbar placed away from the writing hand (learned handedness and palm position).
 399. **P2** Toolbar fades while writing and returns on the first touch.
 400. **P3** The 4–5 most likely commands appear near the nib when the pen lifts.
-401. **P1** Automatic lecture mode from the timetable (#115), with the compact lecture toolbar (#214) shown when a class starts.
+401. **P1** 🧪 Automatic lecture mode from the timetable (#115), with the compact lecture toolbar (#214) shown when a class starts.
 
 ### Selection
 402. **P1** 🧪 Selection bar by content type: ink, image, text or mixed selection each show their own actions (extends the selection contextual bar).
@@ -777,7 +777,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 437. ~~**P1** Status shown only when relevant (saving, sync, read-only).~~ — already covered by the UI redesign (status banners, `docs/design-ui.md` §2)
 
 ### Structured content
-438. **P1** Lecture page prefilled from context (course, date, slide, header from #210).
+438. **P1** 🧪 Lecture page prefilled from context (course, date, slide, header from #210).
 439. **P2** Contextual insert: equation, graph or table suggested by the paper and the content.
 440. **P2** Composed exercise page: the statement cropped from the slide on top, space to solve below.
 441. **P3** Export settings proposed from the content (ink only, with PDF, margins).

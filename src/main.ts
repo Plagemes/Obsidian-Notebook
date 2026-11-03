@@ -27,6 +27,7 @@ import { openNotebookAtPage } from "./integration/open";
 import { NotebookView, VIEW_TYPE } from "./view/notebook-view";
 import { NotebookSettingTab } from "./view/settings-tab";
 import { registerLectureRibbon } from "./view/lecture-commands";
+import type { LectureClass } from "./timetable/lecture-mode";
 import { TimetableService } from "./timetable/service";
 import { initPdfSync } from "./view/pdf-sync";
 import { inboxService, registerZettel } from "./zettel";
@@ -321,6 +322,11 @@ export default class NotebookPlugin extends Plugin {
 	/** ui redesign: the course of the class on now (timetable), for the lecture contextual bar; null when none. */
 	classNow(): string | null {
 		return this.timetable?.nowClass()?.course ?? null;
+	}
+
+	/** 0.14 (401): the class in progress that belongs to the notebook at `path`, for automatic lecture mode; null when none. */
+	lectureClassFor(path: string): LectureClass | null {
+		return this.timetable?.lectureClassFor(path) ?? null;
 	}
 
 	/** wave 0.10 (O15): Obsidian's status bar item shows the page and save state of the active notebook. Desktop only: mobile has no status bar. */

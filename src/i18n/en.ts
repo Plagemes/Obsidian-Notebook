@@ -2413,6 +2413,25 @@ export const en = {
 	"settings.hintsReset": "Show tips again",
 	"settings.hintsReset.desc": "Every tip can appear again the next time it applies; turns tips on.",
 	"settings.hintsReset.button": "Reset",
+	// 0.14 lecture
+	"settings.lectureMode": "Lecture mode",
+	"settings.lectureMode.desc": "Switch to the lecture tools when its class is on and its notebook is open.",
+	"settings.lectureMode.off": "Off",
+	"settings.lectureMode.ask": "Ask me",
+	"settings.lectureMode.auto": "Automatic",
+	"command.lectureMode": "Lecture mode",
+	"lectureMode.ask": "{course} is in progress{room}. Start lecture mode?",
+	"lectureMode.ask.room": " ({room})",
+	"lectureMode.start": "Start",
+	"lectureMode.notNow": "Not now",
+	"lectureMode.on": "Lecture mode: {course}",
+	"lectureMode.over": "{course} is over. Lecture mode is off.",
+	"lectureMode.chip": "{course} · until {end}",
+	"lectureMode.chip.plain": "Lecture mode",
+	"lectureMode.end": "End",
+	"lectureMode.end.hint": "Leave lecture mode",
+	"lecture.prefill": "The page will also say: {text}",
+	"timetable.lecturer": "Lecturer (optional)",
 } as const;
 
 export type MessageKey = keyof typeof en;

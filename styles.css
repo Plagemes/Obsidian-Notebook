@@ -11893,3 +11893,157 @@ body.notebook-style-obsidian {
 	width: 14px;
 	height: 14px;
 }
+
+/* ===== 0.14 lecture ===== */
+/* Automatic lecture mode (roadmap 401): the "start lecture mode?" banner (ask mode) and the quiet chip while it is on. The banner is
+   the same floating glass card as the heavy-page warning (icon square, text, two buttons); the chip is a small pill in the top
+   left corner, clear of the contextual bar at the bottom, that ends the mode. Both are real controls; the icon squares are decoration. */
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-banner {
+	position: absolute;
+	right: 8px;
+	bottom: 8px;
+	left: 8px;
+	z-index: 5;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px 12px;
+	max-width: 600px;
+	margin: 0 auto;
+	padding: 8px 8px 8px 10px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-panel);
+	background: var(--nb-glass-strong);
+	-webkit-backdrop-filter: var(--nb-glass-blur);
+	backdrop-filter: var(--nb-glass-blur);
+	box-shadow: var(--nb-shadow-float);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-meta);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-icon,
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-chip-icon {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: var(--nb-radius-icon);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-icon .svg-icon,
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-chip-icon .svg-icon {
+	width: 18px;
+	height: 18px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-text {
+	flex: 1 1 200px;
+	min-width: 0;
+	color: var(--nb-text-muted);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-actions {
+	display: flex;
+	flex: 0 0 auto;
+	gap: 6px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-actions button,
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-chip-end {
+	min-height: 40px;
+	padding: 0 16px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background-color: var(--nb-tile);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+	box-shadow: none;
+	transition: background-color var(--nb-motion-fast) var(--nb-ease), border-color var(--nb-motion-fast) var(--nb-ease);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-actions button:hover,
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-chip-end:hover {
+	background-color: var(--nb-hover);
+	color: var(--nb-text);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-actions button.mod-cta {
+	border-color: transparent;
+	background-color: var(--nb-accent);
+	color: #ffffff;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-actions button.mod-cta:hover {
+	background-color: var(--nb-accent);
+	filter: brightness(1.08);
+	color: #ffffff;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-chip {
+	position: absolute;
+	top: 8px;
+	left: 8px;
+	z-index: 4;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	max-width: calc(100% - 16px);
+	padding: 4px 4px 4px 4px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-glass-strong);
+	-webkit-backdrop-filter: var(--nb-glass-blur);
+	backdrop-filter: var(--nb-glass-blur);
+	box-shadow: var(--nb-shadow-float);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-meta);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-chip-text {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: 600;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-chip-end {
+	min-height: 32px;
+	padding: 0 12px;
+}
+
+.nb-ui .notebook-lecture-preview {
+	margin-top: 8px;
+}
+
+@media (pointer: coarse) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-lecture-actions button,
+	.workspace-leaf-content .view-content.notebook-view .notebook-lecture-chip-end {
+		min-height: 44px;
+	}
+}
+
+@media (max-width: 480px) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-lecture-banner {
+		padding: 8px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-lecture-banner,
+	.workspace-leaf-content .view-content.notebook-view .notebook-lecture-chip {
+		-webkit-backdrop-filter: none;
+		backdrop-filter: none;
+	}
+
+	.workspace-leaf-content .view-content.notebook-view .notebook-lecture-actions button,
+	.workspace-leaf-content .view-content.notebook-view .notebook-lecture-chip-end {
+		transition: none;
+	}
+}
