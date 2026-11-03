@@ -57,7 +57,7 @@ import { checkContent, freezeStroke } from "../model/serialize";
 import {
 	DEFAULT_META, PAPER_SPACING,
 	type Asset, type ImageElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement,
-	type Point, type Stroke, type TextElement, RENDER_FREEHAND, RENDER_INK,
+	type PaperKind, type Point, type Stroke, type TextElement, RENDER_FREEHAND, RENDER_INK,
 } from "../model/types";
 import type { JournalStore } from "../storage/journal";
 import { DocumentSession, type SaveState, type SessionMode } from "../storage/session";
@@ -105,13 +105,15 @@ import { askExercisePaper, askLayoutOptions, loadExercisePaper } from "./lecture
 import { runMovePages } from "../library/move-pages";
 import type { PdfActionHost } from "./pdf-actions";
 import { pickFile } from "./pick";
-import { pdfSideState, referenceSlideOf, type PageSyncHooks } from "./pdf-sync";
+import { pdfSideState, referenceSlideOf, runPdfSideAction, type PageSyncHooks } from "./pdf-sync";
 import { MarkerTools, translatedBoxLabel } from "./markers";
 import { ExcerptTools } from "./excerpts";
 import { layerCommand, type LayerMove } from "../model/layers";
 import { FindReplaceModal } from "./find-replace";
 import { PageInfoModal } from "./page-info";
 import { PageOffer } from "./page-offer";
+import { SmartAddStrip } from "./smart-add";
+import { nearbyPapers, type SmartAddChoice, type SmartAddInput } from "../model/smart-add";
 import { visibleStrokes } from "../model/markers";
 import type { PageToolsHost } from "./page-tools";
 import { RulerGesture } from "./ruler-gesture";
@@ -390,6 +392,8 @@ export class NotebookView extends FileView {
 	private excerpts: ExcerptTools | null = null;
 	/** wave 0.9 (389): the chip that offers a page after a page in the middle of the notebook (view/page-offer.ts). */
 	private pageOffer: PageOffer | null = null;
+	/** wave 0.14 (410): the Smart "+" strip (view/smart-add.ts). */
+	private smartAdd: SmartAddStrip | null = null;
 
 	private viewport: Viewport = { scale: 1, offsetX: 0, offsetY: 0 };
 	private viewSize: Size = { width: 0, height: 0 };
@@ -601,6 +605,14 @@ export class NotebookView extends FileView {
 			parent: () => this.body,
 			insertAfter: (pageId) => this.insertPageAfterId(pageId),
 		});
+		this.smartAdd = new SmartAddStrip({
+			app: this.app,
+			parent: () => this.body,
+			notebookId: () => (this.editable() ? (this.session?.doc?.id ?? null) : null),
+			context: () => this.smartAddContext(),
+			add: (choice) => this.addSmartChoice(choice),
+			more: () => this.openPageMenu(this.currentPageIndex()),
+		});
 		// Registered before the pointer controller: the ruler gesture swallows the touches that move the ruler.
 		this.rulerGesture = new RulerGesture(this.stage, {
 			enabled: () => this.tools.ruler && !!this.ruler && this.editable(),
@@ -800,6 +812,8 @@ export class NotebookView extends FileView {
 		this.penLinks = null;
 		this.pageOffer?.destroy();
 		this.pageOffer = null;
+		this.smartAdd?.destroy();
+		this.smartAdd = null;
 		this.ui?.destroy();
 		this.ui = null;
 		this.stamps?.destroy();
@@ -1466,6 +1480,28 @@ export class NotebookView extends FileView {
 		this.addPageAfter(this.currentPageIndex());
 	}
 
+	/** wave 0.14 (410): the "+" slot: shows the likeliest new pages as one-tap chips (view/smart-add.ts); nothing is added until one is tapped. */
+	openSmartAdd(): void {
+		if (!this.editable() || this.controller?.drawing) return;
+		this.smartAdd?.toggle();
+	}
+
+	private smartAddContext(): Omit<SmartAddInput, "history"> | null {
+		const doc = this.session?.doc;
+		const page = doc?.pages[this.currentPageIndex()];
+		if (!doc || !page || !this.editable()) return null;
+		return { paper: page.paper.kind, hasBackground: !!page.background, nearbyPapers: nearbyPapers(doc.pages, this.currentPageIndex()), slide: referenceSlideOf(this), exercisePaper: loadExercisePaper(this.app) };
+	}
+
+	private addSmartChoice(choice: SmartAddChoice): boolean {
+		const index = this.currentPageIndex();
+		const before = this.session?.doc?.pages.length ?? 0;
+		if (choice.id === "slide") return runPdfSideAction(this, "pdf-side-add-page");
+		if (choice.id === "same") this.addPageAfter(index);
+		else if (choice.paper) this.addPageWithPaper(choice.paper, index);
+		return (this.session?.doc?.pages.length ?? 0) > before;
+	}
+
 	/** Inserts a blank page (size and paper of the page at `index`) after it. */
 	addPageAfter(index: number): void {
 		const doc = this.session?.doc;
@@ -1482,12 +1518,17 @@ export class NotebookView extends FileView {
 
 	/** "Exercise page here": a blank page with the exercise paper right after the page at `index` (default: the one in view), one undo step. */
 	exercisePageAfter(index: number = this.currentPageIndex()): void {
+		this.addPageWithPaper(loadExercisePaper(this.app), index);
+	}
+
+	/** A blank page with this paper, the size of the page at `index`, right after it, one undo step. */
+	addPageWithPaper(paper: PaperKind, index: number = this.currentPageIndex()): void {
 		const doc = this.session?.doc;
 		const like = doc?.pages[index];
 		if (!doc || !like || !this.editable() || this.controller?.drawing) return;
 		this.commitText();
 		this.clearSelection();
-		this.history.execute(new AddPage(exercisePage(like, loadExercisePaper(this.app)), index + 1));
+		this.history.execute(new AddPage(exercisePage(like, paper), index + 1));
 		this.afterHistoryChange();
 		this.scrollToPage(index + 1);
 	}
@@ -2763,6 +2804,7 @@ export class NotebookView extends FileView {
 			if (n && this.app.workspace.getActiveViewOfType(NotebookView) === this) this.host.nav?.seen(this.navPlace());
 			this.pageNav?.markCurrent(current);
 			this.pageOffer?.cancel(); // an offer made for the page that was in view
+			this.smartAdd?.hide();
 			this.refreshUi(); // the contextual bar follows the kind of page in view
 			if (n && this.file && this.pendingPage === null) this.location.note(this.file.path, current + 1, this.currentPosition());
 			this.syncHooks?.page(current);
@@ -3213,6 +3255,7 @@ export class NotebookView extends FileView {
 		this.clearSelection();
 		this.penLinks?.strokeStarted();
 		this.pageOffer?.penDown();
+		this.smartAdd?.hide();
 		this.strokeStart = sample.t;
 		const snap = !!page && this.rulerLatches(page, local);
 		const start = snap && this.ruler ? (projectToRuler(this.ruler.ruler, local, Infinity) ?? local) : local;

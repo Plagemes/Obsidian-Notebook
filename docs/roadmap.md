@@ -560,13 +560,16 @@ A complete Zettelkasten workflow where handwriting is first-class. Everything go
 Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for all.
 
 ### STEM tools (no AI)
-292. ~~**P2** Step checker: type the steps of a calculation one per line; each line is checked numerically for equivalence with the previous one.~~ — dropped (user decision, 2026-10-29)
+292. ~~**P2** Step checker: type the steps of a calculation one per line; each line is checked numerically for equivalence with the previous one.
+~~ — dropped (user decision, 2026-10-29)
 293. **P2** Dimensional analysis of formulas: flags inconsistent units.
 294. **P2** Balancing of typed chemical reactions.
 295. **P2** Statistics from table data: mean, deviation, regression, with the line drawn on the chart.
 296. **P3** Step-by-step linear systems and matrices shown on the page.
-297. ~~**P3** Basic vector maps as backgrounds for geography and history (public-domain data).~~ — dropped (user decision, 2026-10-29)
-298. ~~**P3** Truth tables and simulated logic circuits.~~ — dropped (user decision, 2026-10-29)
+297. ~~**P3** Basic vector maps as backgrounds for geography and history (public-domain data).
+~~ — dropped (user decision, 2026-10-29)
+298. ~~**P3** Truth tables and simulated logic circuits.
+~~ — dropped (user decision, 2026-10-29)
 299. **P2** Physics simulations on drawings with states (advanced):
     - Declare bodies and quantities on the parts of a drawing with states (#241): mass, initial velocity, forces, friction, springs, constraints (inclined plane, rope, pivot).
     - A numerical engine (own RK4 integrator) computes the motion: projectiles, inclined planes with friction, springs, pendulums, 1D/2D collisions, multi-body systems.
@@ -587,8 +590,10 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
     - "Peek at the solution": hold a button to see the original working until you let go.
     - Attempts are kept, numbered and dated, to see progress; optional timer per attempt.
     - Variants with different numbers: when the exercise uses variables or drawings with states (#182, #241), a variant is generated for more practice.
-304. ~~**P2** Overlay two pages: your working and the solution, one over the other with transparency.~~ — dropped (user decision, 2026-10-29)
-305. **P3** Correction layer for tutors or classmates, with accept and reject. Works like "track changes" for ink: a tutor, the lecturer or a classmate writes corrections on a separate layer (through a shared Drive folder or a collaboration session); you go through them and accept (merged into your notes) or reject (removed). (Confirmed by the user, 2026-10-29.)
+304. ~~**P2** Overlay two pages: your working and the solution, one over the other with transparency.
+~~ — dropped (user decision, 2026-10-29)
+305. **P3** Correction layer for tutors or classmates, with accept and reject.
+ Works like "track changes" for ink: a tutor, the lecturer or a classmate writes corrections on a separate layer (through a shared Drive folder or a collaboration session); you go through them and accept (merged into your notes) or reject (removed). (Confirmed by the user, 2026-10-29.)
 
 ### Page structure
 306. **P2** Nested detail pages: a mark opens a dedicated sub-page, like a full-page footnote.
@@ -606,10 +611,13 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 316. **P2** Editable Bézier curves with handles, for precise drawings.
 317. **P3** Freehand arrows: any drawn curve can get an arrowhead.
 318. **P3** Snap to the endpoints of existing ink.
-319. ~~**P3** Eraser that grows with pressure.~~ — dropped (user decision, 2026-10-29)
-320. ~~**P3** Column alignment of handwritten numbers.~~ — dropped (user decision, 2026-10-29)
+319. ~~**P3** Eraser that grows with pressure.
+~~ — dropped (user decision, 2026-10-29)
+320. ~~**P3** Column alignment of handwritten numbers.
+~~ — dropped (user decision, 2026-10-29)
 321. **P3** Local grid: lines or squares only in one region of the page.
-322. ~~**P3** Colour by session: ink coloured by when it was written.~~ — dropped (user decision, 2026-10-29)
+322. ~~**P3** Colour by session: ink coloured by when it was written.
+~~ — dropped (user decision, 2026-10-29)
 323. **P3** Configurable haptic confirmation: vibration enabled per event type (gestures, saves, shape recognition), where the device supports it.
 324. **P3** Precision cursor for finger writing.
 
@@ -634,7 +642,8 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 338. **P3** Private presenter notes on a second screen.
 339. **P3** Step-by-step procedures with the time recorded at each tick, for labs.
 340. **P3** Book from ISBN: scan the barcode and create the book note for the bibliography.
-341. ~~**P2** Night mode for PDFs: inverted pages with ink always readable.~~ — dropped (user decision, 2026-10-29)
+341. ~~**P2** Night mode for PDFs: inverted pages with ink always readable.
+~~ — dropped (user decision, 2026-10-29)
 
 ## M17 — More features (backlog, planned 2026-10-29)
 
@@ -735,7 +744,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 407. **P1** 🧪 Generated outline: bookmarks, large handwriting as headings and slide changes in one outline (combines #15, #102 and #46).
 408. **P1** Notebook map with states: open questions, gaps and homework per page (extends #223 from one lecture to the whole notebook).
 409. **P2** Suggested paper for a new page, from the previous pages and the course.
-410. **P1** Smart "+": the 2–3 most likely new pages (same paper, exercise page, slide page) in one tap.
+410. 🧪 **P1** Smart "+": the 2–3 most likely new pages (same paper, exercise page, slide page) in one tap.
 411. **P2** Tags suggested from context (course, content, markers).
 412. **P3** Page panel that shows only what that page has (hides empty sections and actions that do not apply).
 413. **P3** Generated cover for a notebook (title, course, colour, first page).

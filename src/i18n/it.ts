@@ -2395,4 +2395,12 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.hintsReset": "Mostra di nuovo i suggerimenti",
 	"settings.hintsReset.desc": "Ogni suggerimento può ricomparire alla prossima occasione; li riattiva.",
 	"settings.hintsReset.button": "Ripristina",
+	// 0.14 smartplus
+	"smartAdd.aria": "Aggiungi una pagina",
+	"smartAdd.same": "Stessa carta ({paper})",
+	"smartAdd.exercise": "Pagina esercizi",
+	"smartAdd.slide": "Appunti per questa slide",
+	"smartAdd.paper": "Pagina {paper}",
+	"smartAdd.blank": "Pagina bianca",
+	"smartAdd.more": "Altro…",
 };

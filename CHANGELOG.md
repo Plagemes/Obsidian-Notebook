@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### smartplus
+- **Smart "+" (#410).** The "+" (add page) button now shows a small strip with the two or three most likely new pages as one-tap chips: the same paper as this page, an exercise page, a notes page for the slide in view when a PDF is beside the notes, the paper your last added pages used (e.g. Cornell) or a blank page, plus *More...* which opens the page sheet with every way to add a page. Nothing is added until a chip is tapped; the strip goes away when the pen goes down, the page changes, after ten seconds or on Escape. The ranking is a deterministic pure module (`src/model/smart-add.ts`) fed by the page in view, the context and what you added before in that notebook (kept on this device, not in the notebook file). No format change.
+
 ## 0.13.0 — 2026-10-31
 
 The design system reaches every remaining surface, the Home is restructured, and two roadmap features land: the generated outline (#407) and just-in-time tips (#425). The art engine gets a new family (veins), OKLCH colour, glow, keyword motifs, growth, a persistent cache and off-main-thread rendering. **Not verified on the device**: unit tests and the browser harness only; manual steps 500–679 in `docs/testing.md`. No change to the notebook format (still v11).

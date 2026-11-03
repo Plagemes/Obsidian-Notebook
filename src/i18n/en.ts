@@ -2393,6 +2393,14 @@ export const en = {
 	"settings.hintsReset": "Show tips again",
 	"settings.hintsReset.desc": "Every tip can appear again the next time it applies; turns tips on.",
 	"settings.hintsReset.button": "Reset",
+	// 0.14 smartplus
+	"smartAdd.aria": "Add a page",
+	"smartAdd.same": "Same paper ({paper})",
+	"smartAdd.exercise": "Exercise page",
+	"smartAdd.slide": "Notes for this slide",
+	"smartAdd.paper": "{paper} page",
+	"smartAdd.blank": "Blank page",
+	"smartAdd.more": "More…",
 } as const;
 
 export type MessageKey = keyof typeof en;
