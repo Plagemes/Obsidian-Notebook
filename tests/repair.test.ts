@@ -3,6 +3,7 @@ import { createDocument, createPage, createStroke, quantizePoint } from "../src/
 import { parseLenient } from "../src/model/lenient-json";
 import { recoveredItems, repairNotebookText } from "../src/model/repair";
 import { parse, serialize } from "../src/model/serialize";
+import { linkStrokes, slideRefOf } from "../src/model/slide-links";
 import { CURRENT_VERSION, type NotebookDocument, type Point } from "../src/model/types";
 import { buildEntry, splitLines } from "../src/storage/journal";
 import { backupDate, combineCandidates, isBackupOf, journalTexts, rankSources, type RecoverySource } from "../src/storage/recovery";
@@ -384,5 +385,64 @@ describe("repair keeps strokes intact", () => {
 		const r = repairNotebookText(text.replace(/"modifiedAt": "[^"]*"/, '"modifiedAt": 5'));
 		expect(r.ok).toBe(true);
 		if (r.ok) expect(r.doc.pages[0]!.strokes[0]).toEqual(doc.pages[0]!.strokes[0]);
+	});
+});
+
+describe("repair keeps v12 slide links", () => {
+	const SRC = "0123456789abcdef01234567";
+
+	function linked(): NotebookDocument {
+		const doc = bigDocument(2, 12);
+		const first = doc.pages[0]!;
+		const a = linkStrokes(doc, first.strokes.slice(0, 4), { source: SRC, page: 3, path: "Courses/Slides.pdf" });
+		a.commands.forEach((c) => c.apply(doc));
+		first.strokes.splice(0, 4, ...a.strokes);
+		const second = doc.pages[1]!;
+		const b = linkStrokes(doc, second.strokes.slice(0, 3), { source: SRC, page: 9 });
+		b.commands.forEach((c) => c.apply(doc));
+		second.strokes.splice(0, 3, ...b.strokes);
+		return doc;
+	}
+
+	it("keeps the links of a truncated v12 file, with nothing reported as repaired or unknown", () => {
+		const doc = linked();
+		const text = serialize(doc);
+		const r = repairNotebookText(text.slice(0, Math.floor(text.length * 0.85)));
+		expect(r.ok).toBe(true);
+		if (!r.ok) return;
+		expect(r.summary.damaged).toBe(true);
+		expect(r.summary.unknownFields).toBe(0);
+		expect(r.summary.strokes.repaired).toBeLessThanOrEqual(1); // at most the stroke the cut ran through
+		expect(r.doc.slides).toHaveLength(2);
+		const first = r.doc.pages[0]!.strokes.slice(0, 4);
+		expect(first).toHaveLength(4);
+		for (const s of first) expect(slideRefOf(r.doc, s)).toMatchObject({ source: SRC, page: 3, path: "Courses/Slides.pdf" });
+		expect(r.text).toContain('"slides"');
+		const back = parse(r.text);
+		expect(back.ok).toBe(true);
+	});
+
+	it("keeps the links when the lines are damaged in the middle (line scan)", () => {
+		const doc = linked();
+		const lines = serialize(doc).split(String.fromCharCode(10));
+		const at = lines.findIndex((l) => l.includes(doc.pages[1]!.strokes[6]!.id));
+		lines[at] = "\u0000\u0000 garbage";
+		const r = repairNotebookText(lines.join(String.fromCharCode(10)));
+		expect(r.ok).toBe(true);
+		if (!r.ok) return;
+		expect(r.summary.unknownFields).toBe(0);
+		expect(r.doc.slides).toHaveLength(2);
+		expect(slideRefOf(r.doc, r.doc.pages[1]!.strokes[0]!)).toMatchObject({ page: 9 });
+	});
+
+	it("drops only a dangling link (the ink stays, counted as repaired)", () => {
+		const doc = linked();
+		const text = serialize(doc).replace(/"slide":"([^"]+)"/, (m, id: string) => (id ? '"slide":"nowhere"' : m));
+		const r = repairNotebookText(text.slice(0, text.length - 40));
+		expect(r.ok).toBe(true);
+		if (!r.ok) return;
+		const stroke = r.doc.pages[0]!.strokes[0]!;
+		expect(stroke.slide).toBeUndefined();
+		expect(r.doc.pages[0]!.strokes[1]!.slide).toBeDefined();
 	});
 });

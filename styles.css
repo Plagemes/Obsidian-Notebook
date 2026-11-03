@@ -12272,3 +12272,246 @@ body.notebook-style-obsidian {
 		gap: var(--nb-space-2);
 	}
 }
+
+/* ===== 0.14 slides ===== */
+/* #226: badges next to ink written beside a slide (view/slide-ink.ts). DOM over the stage: nothing is drawn on the
+   canvases. The button is the 40 px tap target; the pill inside is what shows. */
+.nb-ui.nb-slide-badges {
+	position: absolute;
+	inset: 0;
+	z-index: 3;
+	overflow: hidden;
+	pointer-events: none;
+}
+
+.nb-ui.nb-slide-badges .nb-slide-badge {
+	position: absolute;
+	left: var(--nb-slide-badge-x, 0);
+	top: var(--nb-slide-badge-y, 0);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: var(--nb-radius-pill);
+	background: transparent;
+	box-shadow: none;
+	pointer-events: auto;
+	cursor: pointer;
+	touch-action: manipulation;
+}
+
+.nb-ui.nb-slide-badges .nb-slide-badge-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	height: 22px;
+	padding: 0 7px 0 5px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-panel);
+	box-shadow: var(--nb-shadow-1);
+	color: var(--nb-text-muted);
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 1;
+	font-variant-numeric: tabular-nums;
+	transition: background-color var(--nb-motion-fast) ease-out, color var(--nb-motion-fast) ease-out, border-color var(--nb-motion-fast) ease-out;
+}
+
+.nb-ui.nb-slide-badges .nb-slide-badge-icon {
+	display: inline-flex;
+}
+
+.nb-ui.nb-slide-badges .nb-slide-badge-icon svg {
+	width: 12px;
+	height: 12px;
+	stroke-width: 2;
+}
+
+.nb-ui.nb-slide-badges .nb-slide-badge:hover .nb-slide-badge-pill {
+	color: var(--nb-text);
+	background: var(--nb-tile);
+}
+
+.nb-ui.nb-slide-badges .nb-slide-badge.is-current .nb-slide-badge-pill {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-slide-badges .nb-slide-badge:focus-visible {
+	outline: none;
+}
+
+.nb-ui.nb-slide-badges .nb-slide-badge:focus-visible .nb-slide-badge-pill {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 1px;
+}
+
+/* #417: the slide strip (view/slide-strip-modal.ts), on the shared modal shell. */
+.nb-ui.notebook-slide-strip .nb-chips {
+	margin-bottom: 12px;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-section {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 8px 0 0;
+	color: var(--nb-text-faint);
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-section-icon {
+	display: inline-flex;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-section-icon svg {
+	width: 14px;
+	height: 14px;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-section-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-section-count {
+	font-variant-numeric: tabular-nums;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	padding: 10px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-row.is-current {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-row.is-bare {
+	opacity: 0.72;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-tile {
+	flex: 0 0 auto;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+	width: 56px;
+	height: 56px;
+	margin: 0;
+	padding: 0;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-icon);
+	background: var(--nb-panel);
+	box-shadow: none;
+	color: var(--nb-text);
+	cursor: pointer;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-tile:hover {
+	border-color: var(--nb-accent);
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-tile:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-tile-icon {
+	display: inline-flex;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-tile-icon svg {
+	width: 16px;
+	height: 16px;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-tile-num {
+	font-size: 17px;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-items {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-items .nb-chip {
+	max-width: 100%;
+	padding: 0 14px;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-items .nb-chip-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-question .nb-chip-icon {
+	color: var(--nb-accent);
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-question.is-done {
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-question.is-done .nb-chip-icon {
+	color: var(--nb-success);
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-none {
+	align-self: center;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+@media (max-width: 480px) {
+	.nb-ui.notebook-slide-strip .nb-slide-strip-row {
+		gap: 10px;
+		padding: 8px;
+	}
+
+	.nb-ui.notebook-slide-strip .nb-slide-strip-tile {
+		width: 48px;
+		height: 48px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.nb-ui.nb-slide-badges .nb-slide-badge-pill {
+		transition: none;
+	}
+}

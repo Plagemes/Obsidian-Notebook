@@ -439,7 +439,7 @@ Features for following a lecture live. Exam and review features stay in the sepa
 ### Slides and board
 224. **P2** "Slide explained" ticks: see how far the lecturer has got.
 225. **P2** "Back to the current slide" after looking elsewhere.
-226. **P1** Automatic notes ↔ slide link: ink remembers which slide was visible in the side-by-side view while you wrote it; tapping it shows that slide again.
+226. **P1** 🧪 Automatic notes ↔ slide link: ink remembers which slide was visible in the side-by-side view while you wrote it; tapping it shows that slide again.
 227. **P2** Quick tabs: pages pinned during the lecture (e.g. the formula sheet), one tap away.
 228. **P2** Lecture figure gallery: all photos and crops of the section in one place.
 229. **P3** Peek at the next slide while writing.
@@ -755,7 +755,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 416. **P2** Notebooks ordered by the active term.
 
 ### PDF and lecture
-417. **P1** Slide strip: for each slide, the exercise page after it, the margin note and the question on this slide.
+417. **P1** 🧪 Slide strip: for each slide, the exercise page after it, the margin note and the question on this slide.
 418. **P2** PDF search with suggested terms (from the outline, headings and your own text).
 419. **P2** Filtered view of marked pages only (bookmarks, markers, questions).
 420. **P2** Welcome-back banner when reopening: last slide, open questions and gaps.

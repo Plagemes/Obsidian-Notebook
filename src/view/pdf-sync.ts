@@ -8,11 +8,18 @@
  *   A slide without a notes page offers "Add notes page for this slide" (one undo step, plus its link).
  * - Links live in a sidecar JSON in `<notebooks folder>/_meta/` (storage/pdf-links-store.ts), written only by explicit link
  *   actions, never by turning pages or scrolling. The notebook format is not touched.
+ * - v12 (#226): ink written while a PDF page is in the pane remembers that slide (model/slide-links.ts; the view asks
+ *   `referenceSlideKey` when it commits ink). `showSlideRef` shows such a slide again, opening its file when the pane
+ *   shows something else or is closed; the slide strip (#417, view/slide-strip-modal.ts) reads the links through
+ *   `notesLinksOf`.
  */
-import { FuzzySuggestModal, type App, type Plugin, type TFile } from "obsidian";
+import { FuzzySuggestModal, TFile, type App, type Plugin } from "obsidian";
 import { t } from "../i18n";
 import { createPage } from "../model/document";
 import { AddPage } from "../model/history";
+import { visibleStrokes } from "../model/markers";
+import { slideOfStrokes, type SlideKey } from "../model/slide-links";
+import type { StripLink } from "../model/slide-strip";
 import { ASSETS_DIRNAME } from "../pdf/assets";
 import {
 	decideFromPdf, insertionIndex, linkOf, linkState, notesPagesFor, type LinksOp, type PdfLink, type PdfRef,
@@ -24,6 +31,7 @@ import type { NotebookView } from "./notebook-view";
 import { openNotebookReference, openPdfReference, type ReferenceSource } from "./pdf-reference";
 import { PdfSidePane, type Banner } from "./pdf-side-pane";
 import { showNotice } from "./notice";
+import { SlideStripModal } from "./slide-strip-modal";
 
 /** What the notebook view tells the controller (NotebookView.syncHooks). */
 export interface PageSyncHooks {
@@ -130,6 +138,70 @@ class PdfSyncController implements PageSyncHooks {
 		return this.source?.file ?? null;
 	}
 
+	/**
+	 * v12 (#226): the slide in the pane, as ink written now links it; null when the pane is closed or its page is no PDF
+	 * page. `path` is the file shown (a plain PDF, or the notebook whose page has that PDF page as background), to open it again.
+	 */
+	get slideKey(): SlideKey | null {
+		const source = this.source;
+		const ref = this.pane && source ? source.refAt(this.index) : null;
+		if (!ref || !source) return null;
+		return { source: ref.source, page: ref.page, path: ref.path ?? source.file.path };
+	}
+
+	/** The PDF in the pane (content id and path of a plain PDF), or null. */
+	get shownSource(): { source: string; path?: string; index: number } | null {
+		const ref = this.pane && this.source ? this.source.refAt(this.index) : null;
+		return ref ? { source: ref.source, path: ref.path, index: this.index } : null;
+	}
+
+	/**
+	 * v12 (#226): shows the slide `ref` in the pane: at once when the pane shows its PDF, else after opening the file it was
+	 * written beside (`ref.path`). A slide that is a page of this notebook (its PDF background) is shown there instead.
+	 * False when it cannot be found.
+	 */
+	async showSlideRef(ref: SlideKey): Promise<boolean> {
+		if (this.showInPane(ref)) return true;
+		const file = ref.path ? this.svc.app.vault.getAbstractFileByPath(ref.path) : null;
+		if (file instanceof TFile && file !== this.view.file) {
+			await this.open(file);
+			if (this.showInPane(ref)) return true;
+		}
+		const doc = this.view.document;
+		const own = doc ? doc.pages.findIndex((p) => p.background?.kind === "pdf" && p.background.asset === ref.source && p.background.page === ref.page) : -1;
+		if (own >= 0) {
+			this.view.goToRelativePage(own - this.view.currentPage());
+			return true;
+		}
+		return false;
+	}
+
+	private showInPane(ref: SlideKey): boolean {
+		const source = this.source;
+		if (!this.pane || !source) return false;
+		const index = source.indexOf({ source: ref.source, page: ref.page, path: ref.path?.toLowerCase().endsWith(".pdf") ? ref.path : undefined });
+		if (index < 0) return false;
+		this.index = index;
+		this.pane.show(index);
+		this.updateChrome();
+		return true;
+	}
+
+	/** v12 (#417): the side-by-side links of the open notebook (read again from the file first). */
+	async notesLinks(): Promise<StripLink[]> {
+		const doc = this.view.document;
+		if (!doc) return [];
+		if (!this.pane) {
+			try {
+				await this.svc.store.load();
+			} catch {
+				return []; // unreadable or newer: no links, the strip still shows the rest
+			}
+		}
+		return this.svc.store.snapshot().links.filter((l) => l.notebook === doc.id)
+			.map((l) => (l.path ? { notesPage: l.notesPage, source: l.source, page: l.page, path: l.path } : { notesPage: l.notesPage, source: l.source, page: l.page }));
+	}
+
 	/** Shows a page (1-based) of a PDF in the pane, opening the pane first when it shows something else. */
 	async showPage(file: TFile, page: number): Promise<void> {
 		if (this.source?.file !== file) await this.open(file);
@@ -179,6 +251,7 @@ class PdfSyncController implements PageSyncHooks {
 			showNotes: () => this.showLinkedNotes(),
 			toggleFollow: () => this.setFollow(!this.follow),
 			close: () => this.close(),
+			openStrip: () => void openSlideStripOf(this.view),
 		});
 		this.pane.setFollow(this.follow);
 		this.view.syncHooks = this;
@@ -309,13 +382,31 @@ class PdfSyncController implements PageSyncHooks {
 		this.updateChrome();
 	}
 
-	/** Shows the PDF page linked to the notes page in view (also with Follow off). */
+	/**
+	 * Shows the PDF page linked to the notes page in view (also with Follow off). v12 (#226): the slide the selected ink was
+	 * written beside comes first, and a page without a link shows the slide most of its ink was written beside.
+	 */
 	showSlideOfNotes(): void {
 		const doc = this.view.document;
 		const page = doc?.pages[this.notesIndex()];
+		const selected = this.view.practiceHost().selectedStrokes();
+		const inkRef = doc && selected ? slideOfStrokes(doc, selected.strokes) : null;
+		if (inkRef) {
+			void this.showSlideRef(inkRef).then((ok) => {
+				if (!ok) showNotice(t("slides.notFound", { page: String(inkRef.page) }));
+			});
+			return;
+		}
 		const link = doc && page ? linkOf(this.svc.store.snapshot(), doc.id, page.id) : null;
 		const target = link && this.source ? this.source.indexOf(link) : -1;
 		if (target < 0 || !this.pane) {
+			const pageRef = doc && page ? slideOfStrokes(doc, page.strokes) : null;
+			if (pageRef) {
+				void this.showSlideRef(pageRef).then((ok) => {
+					if (!ok) showNotice(t("slides.notFound", { page: String(pageRef.page) }));
+				});
+				return;
+			}
 			showNotice(t("pdfSide.noSlide"));
 			return;
 		}
@@ -460,6 +551,50 @@ export function initPdfSync(plugin: Plugin, folder: () => string): void {
 	plugin.register(() => {
 		services = null;
 	});
+}
+
+// --- v12 (#226, #417): ink linked to slides, the slide strip ---
+
+/** v12 (#417): opens the slide strip of the notebook in `view` (every slide with its notes, exercise page and questions). */
+export async function openSlideStripOf(view: NotebookView): Promise<void> {
+	const doc = view.document;
+	if (!doc || !services) return;
+	const links = await notesLinksOf(view);
+	if (view.document !== doc) return;
+	const shown = controllers.get(view)?.slideKey ?? null;
+	new SlideStripModal(services.app, {
+		doc,
+		name: view.file?.basename ?? "",
+		links,
+		current: shown,
+		visible: (page) => visibleStrokes(page.strokes, view.markerTools?.isRevealed(page) ?? false),
+		goToPage: (index) => view.practiceHost().goToPage(index),
+		showSlide: (key) => void showSlideRef(view, key),
+		openSideBySide: pdfSideState(view).available ? () => runPdfSideAction(view, "pdf-side-open") : null,
+	}).open();
+}
+
+/** v12 (#226): the slide beside the notes as ink written now links it, or null (no pane, or no PDF page in it). */
+export function referenceSlideKey(view: NotebookView): SlideKey | null {
+	return controllers.get(view)?.slideKey ?? null;
+}
+
+/** v12 (#417): the PDF beside the notes and the index of the page in view, or null. */
+export function referenceSource(view: NotebookView): { source: string; path?: string; index: number } | null {
+	return controllers.get(view)?.shownSource ?? null;
+}
+
+/** v12 (#226): shows a slide ink was written beside (see PdfSyncController.showSlideRef); a notice when it is not found. */
+export async function showSlideRef(view: NotebookView, ref: SlideKey): Promise<boolean> {
+	const c = controllerOf(view);
+	const ok = c ? await c.showSlideRef(ref) : false;
+	if (!ok) showNotice(t("slides.notFound", { page: String(ref.page) }));
+	return ok;
+}
+
+/** v12 (#417): the side-by-side links of the notebook open in `view`. */
+export async function notesLinksOf(view: NotebookView): Promise<StripLink[]> {
+	return (await controllerOf(view)?.notesLinks()) ?? [];
 }
 
 /** v8 gap markers: the 1-based page of the reference beside the notes, or null when none is open. */

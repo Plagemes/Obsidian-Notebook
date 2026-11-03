@@ -42,14 +42,14 @@ function v10Raw(meta: Raw = {}): Raw {
 
 describe("format v11", () => {
 	it("is at version 11 with a v10 step", () => {
-		expect(CURRENT_VERSION).toBe(11);
+		expect(CURRENT_VERSION).toBeGreaterThanOrEqual(11);
 		expect(MIGRATIONS[10]).toBeTypeOf("function");
 	});
 
 	it("reads a v10 file unchanged apart from the version", () => {
 		const r = parsed(JSON.stringify(v10Raw()));
 		expect(r.migratedFrom).toBe(10);
-		expect(r.doc.version).toBe(11);
+		expect(r.doc.version).toBe(CURRENT_VERSION);
 		expect(r.doc.meta).toEqual({ tags: ["a"], favorite: false, cover: "#3b82f6", bookmarks: [] });
 		expect(r.dropped).toBeUndefined();
 	});
@@ -138,7 +138,7 @@ describe("format v11", () => {
 		expect(r.ok).toBe(true);
 		if (r.ok) {
 			expect(r.migratedFrom).toBe(10);
-			expect(r.doc.version).toBe(11);
+			expect(r.doc.version).toBe(CURRENT_VERSION);
 			expect(r.doc.meta?.description).toBeUndefined();
 		}
 	});

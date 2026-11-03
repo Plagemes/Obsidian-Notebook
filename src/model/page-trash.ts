@@ -17,9 +17,10 @@ import { elementAssetId } from "./excerpts";
 import { cloneMeta, createId } from "./document";
 import { copyBookmarkInfoMap } from "./bookmarks";
 import { AddAsset, AddPage, Batch, SetMeta, type Command } from "./history";
-import { duplicatePage } from "./pages";
+import { copyStroke, duplicatePage } from "./pages";
 import { parse, serialize } from "./serialize";
-import { CURRENT_VERSION, DEFAULT_META, FORMAT_ID, type Asset, type NotebookDocument, type Page } from "./types";
+import { slideMerger, slideTable } from "./slide-links";
+import { CURRENT_VERSION, DEFAULT_META, FORMAT_ID, type Asset, type NotebookDocument, type Page, type SlideRef } from "./types";
 
 export const PAGE_TRASH_FORMAT = "obsidian-notebook-page-trash";
 export const PAGE_TRASH_VERSION = 1;
@@ -156,6 +157,14 @@ function assetsNeeded(page: Page, doc: NotebookDocument): Record<string, Asset> 
 	return out;
 }
 
+/** v12: the slide entries the strokes of `page` refer to, in table order (each id once). */
+function slidesNeeded(page: Page, doc: NotebookDocument): SlideRef[] {
+	const table = slideTable(doc);
+	const used = new Set<string>();
+	for (const s of page.strokes) if (s.slide !== undefined && table.has(s.slide)) used.add(s.slide);
+	return (doc.slides ?? []).filter((r) => used.has(r.id)).map((r) => ({ ...r }));
+}
+
 /** Entry for `page`, which sits at `index` in `doc` (call it before the page is removed). */
 export function makeEntry(doc: NotebookDocument, page: Page, index: number, now: number): PageTrashEntry {
 	const iso = new Date(now).toISOString();
@@ -170,6 +179,9 @@ export function makeEntry(doc: NotebookDocument, page: Page, index: number, now:
 		format: FORMAT_ID, version: CURRENT_VERSION, id: createId(), createdAt: iso, modifiedAt: iso,
 		pages: [page], meta, assets: assetsNeeded(page, doc),
 	};
+	// v12: the slides its ink was written beside travel with it, so a restore brings the badges back.
+	const slides = slidesNeeded(page, doc);
+	if (slides.length > 0) mini.slides = slides;
 	return {
 		id: createId(),
 		deletedAt: now,
@@ -254,13 +266,21 @@ export function planPageTrashRestore(doc: NotebookDocument, entry: PageTrashEntr
 		for (const e of p.elements ?? []) used.add(e.id);
 	}
 	const clash = used.has(source.id) || source.strokes.some((s) => used.has(s.id)) || (source.elements ?? []).some((e) => used.has(e.id));
-	const page = clash ? duplicatePage(source) : source;
+	const copied = clash ? duplicatePage(source) : source;
+	// v12: the ink's slide links name entries of the entry's own table: mapped to the notebook's (an equal entry, or the
+	// entry added to its table in the same undo step).
+	const slides = slideMerger(doc, saved);
+	let page = copied;
+	if (copied.strokes.some((s) => s.slide !== undefined)) {
+		page = { ...copied, strokes: copied.strokes.map((s) => (s.slide === undefined ? s : copyStroke(s, s.id, slides.map(s.slide)))) };
+	}
 	const commands: Command[] = [];
 	for (const a of Object.values(saved.assets ?? {})) {
 		if (doc.assets && Object.prototype.hasOwnProperty.call(doc.assets, a.id)) continue;
 		commands.push(new AddAsset({ ...a }));
 	}
 	const pageIndex = restoreIndex(doc, entry);
+	commands.push(...slides.commands());
 	commands.push(new AddPage(page, pageIndex));
 	// The bookmark the page had (under its new id when the ids had to change).
 	if (saved.meta?.bookmarks.includes(source.id)) {

@@ -175,6 +175,11 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	hintsEnabled: boolean;
 	/** The tips already shown (ids), so each appears once. Not shown in the settings tab; "Show tips again" clears it. */
 	hintsSeen: HintId[];
+	// 0.14 slides
+	/** #226: ink written while a PDF page is beside the notes (side by side) remembers that slide. */
+	slideInkLink: boolean;
+	/** #226: a small badge next to ink written beside a slide; tapping it shows the slide again. */
+	slideInkBadges: boolean;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -243,6 +248,9 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	userName: "",
 	hintsEnabled: true,
 	hintsSeen: [],
+	// 0.14 slides
+	slideInkLink: true,
+	slideInkBadges: true,
 	...DEFAULT_COMPANION_SETTINGS,
 	...DEFAULT_GESTURE_SETTINGS,
 	...DEFAULT_PEN_GESTURE_SETTINGS,
@@ -329,6 +337,9 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.userName === "string") s.userName = cleanUserName(d.userName);
 	if (typeof d.hintsEnabled === "boolean") s.hintsEnabled = d.hintsEnabled;
 	s.hintsSeen = normaliseSeen(d.hintsSeen);
+	// 0.14 slides
+	if (typeof d.slideInkLink === "boolean") s.slideInkLink = d.slideInkLink;
+	if (typeof d.slideInkBadges === "boolean") s.slideInkBadges = d.slideInkBadges;
 	s.lastNotebookPos = parsePosition(d.lastNotebookPos);
 
 	if (typeof d.timetableOffer === "boolean") s.timetableOffer = d.timetableOffer;

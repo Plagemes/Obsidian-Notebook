@@ -31,6 +31,13 @@
 - Pure aggregator `src/model/notebook-map.ts` (no 'obsidian'), cached per page revision (`NotebookMapCache`: a page whose markers, text, tags or stroke count did not change is not recomputed; moving a page only refreshes its index). Thumbnails come from the page panel's cache and are drawn lazily, at the first pause in writing. Unfinished practice is judged from the page (a practice copy with nothing written yet) unless the caller passes the ids of finished attempts. Nothing is stored: **no change to the notebook format** (still v11).
 - Tests: `tests/notebook-map.test.ts`. Harness: `dev/harness/nbmap-check.ts`, scenarios `nbmap-*`.
 
+### slides
+- **Notes remember their slide (#226), format v12.** Ink written while a PDF page is open side by side remembers that slide: a small badge next to the ink shows the slide again when tapped (it opens the PDF in the pane if needed); *Show slide* prefers the slide of the selected ink. The link is part of the stroke's undo step. Settings: *PDF & reading → Link notes to slides*, *Slide badges*.
+- **Slide strip (#417).** For each slide: its page, the notes pages linked to it, the exercise page after it, the notes written beside it or in its margin, and its questions; each chip goes there. From the side pane's header, the actions sheet and the palette (*Open the slide strip*).
+- **Format v12**: an optional document table `slides` and an optional stroke field `slide`; the v11 → v12 migration only drops such keys found in a v11 file. 0.13 opens a v12 notebook read-only (newer version) and never overwrites it. See `docs/architecture.md` (*Notes ↔ slide link*).
+- **Slide links: review fixes.** Repairing a damaged v12 file keeps the slide table and the links (only a dangling link is dropped); a deleted page restored from the trash gets its slide badges back (same undo step); an over-long PDF path or source can no longer make a notebook unsavable (`linkStrokes` omits the path or does not link, `checkContent` validates the table). Moving pages to another notebook and page templates leave the ink unlinked, as documented.
+- Tests: `tests/model-v12.test.ts`, `tests/slide-strip.test.ts`, `tests/repair.test.ts`. Not verified on hardware.
+
 ## 0.13.0 — 2026-10-31
 
 The design system reaches every remaining surface, the Home is restructured, and two roadmap features land: the generated outline (#407) and just-in-time tips (#425). The art engine gets a new family (veins), OKLCH colour, glow, keyword motifs, growth, a persistent cache and off-main-thread rendering. **Not verified on the device**: unit tests and the browser harness only; manual steps 500–679 in `docs/testing.md`. No change to the notebook format (still v11).

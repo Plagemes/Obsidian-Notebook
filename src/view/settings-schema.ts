@@ -253,6 +253,9 @@ const READING: SettingSpec[] = [
 		control: { type: "slider", min: DIM_MIN, max: DIM_MAX, step: DIM_STEP, format: (v) => `${Math.round(v * 100)} %` }, parent: "dimBackground", visible: (s) => s.dimBackground,
 	},
 	{ id: "cropMargins", section: "reading", order: 30, name: "settings.cropMargins", desc: "settings.cropMargins.desc", control: { type: "toggle" } },
+	// 0.14 slides (#226): ink remembers the slide beside the notes; its badge shows the slide again.
+	{ id: "slideInkLink", section: "reading", order: 40, name: "settings.slideInkLink", desc: "settings.slideInkLink.desc", control: { type: "toggle" }, keywords: "slide side by side pdf link ink notes diapositiva affiancato" },
+	{ id: "slideInkBadges", section: "reading", order: 41, name: "settings.slideInkBadges", desc: "settings.slideInkBadges.desc", control: { type: "toggle" }, parent: "slideInkLink", keywords: "slide badge diapositiva" },
 ];
 
 const LIBRARY: SettingSpec[] = [
