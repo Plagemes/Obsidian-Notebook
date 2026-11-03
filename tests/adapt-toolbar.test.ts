@@ -128,18 +128,18 @@ describe("selection bar by content type (402)", () => {
 
 describe("pinned quick slots (393)", () => {
 	it("keeps only actions that can be quick slots, once each, at most three", () => {
-		expect(normalisePinned(["fit-width", "tool-pen", "fit-width", 4, "add-page", "insert-image", "stamps"])).toEqual(["fit-width", "add-page", "insert-image"]);
+		expect(normalisePinned(["fit-width", "tool-pen", "fit-width", 4, "add-page-suggest", "insert-image", "stamps"])).toEqual(["fit-width", "add-page-suggest", "insert-image"]);
 		expect(normalisePinned("x")).toEqual([]);
 		expect(MAX_PINNED).toBe(3);
 	});
 	it("toggles, refuses a fourth, and ignores unknown ids", () => {
 		let p: string[] = [];
 		p = togglePinned(p, "fit-width");
-		p = togglePinned(p, "add-page");
+		p = togglePinned(p, "add-page-suggest");
 		p = togglePinned(p, "stamps");
-		expect(p).toEqual(["fit-width", "add-page", "stamps"]);
+		expect(p).toEqual(["fit-width", "add-page-suggest", "stamps"]);
 		expect(togglePinned(p, "insert-image")).toEqual(p);
-		expect(togglePinned(p, "add-page")).toEqual(["fit-width", "stamps"]);
+		expect(togglePinned(p, "add-page-suggest")).toEqual(["fit-width", "stamps"]);
 		expect(togglePinned([], "tool-pen")).toEqual([]);
 	});
 	it("puts pinned actions first, in the order chosen, whatever the ranking and the page say", () => {
@@ -160,8 +160,8 @@ describe("pinned quick slots (393)", () => {
 	});
 	it("keeps editing actions out of a read-only view even when pinned", () => {
 		const ro = baseContext({ editable: false });
-		const l = buildLayout(ro, 1280, {}, NOW, undefined, undefined, { ...NO_ADAPT, pinned: ["add-page", "fit-width"] });
-		expect(l.quick).not.toContain("add-page");
+		const l = buildLayout(ro, 1280, {}, NOW, undefined, undefined, { ...NO_ADAPT, pinned: ["add-page-suggest", "fit-width"] });
+		expect(l.quick).not.toContain("add-page-suggest");
 	});
 	it("is saved in the settings, cleaned on load", () => {
 		expect(DEFAULT_SETTINGS.pinnedQuick).toEqual([]);
@@ -179,7 +179,7 @@ describe("usage per notebook (393)", () => {
 	it("counts each notebook on its own and bounds the store", () => {
 		let store: NotebookUsage = {};
 		for (let i = 0; i < 5; i++) store = recordNotebookUse(store, "nb-a", "fit-width", NOW + i);
-		store = recordNotebookUse(store, "nb-b", "add-page", NOW);
+		store = recordNotebookUse(store, "nb-b", "add-page-suggest", NOW);
 		expect(totalUses(store["nb-a"])).toBe(5);
 		expect(totalUses(store["nb-b"])).toBe(1);
 		expect(recordNotebookUse(store, "bad id/..", "x", NOW)).toBe(store);
@@ -200,9 +200,9 @@ describe("usage per notebook (393)", () => {
 	it("ranks by the notebook once it has history, by the device before, and not at all when learning is off", () => {
 		const device = recordUse({}, "fit-width", NOW);
 		let store: NotebookUsage = {};
-		for (let i = 0; i < MIN_NOTEBOOK_USES - 1; i++) store = recordNotebookUse(store, "nb-a", "add-page", NOW);
+		for (let i = 0; i < MIN_NOTEBOOK_USES - 1; i++) store = recordNotebookUse(store, "nb-a", "add-page-suggest", NOW);
 		expect(effectiveUsage(device, store, "nb-a", true)).toBe(device);
-		store = recordNotebookUse(store, "nb-a", "add-page", NOW);
+		store = recordNotebookUse(store, "nb-a", "add-page-suggest", NOW);
 		expect(effectiveUsage(device, store, "nb-a", true)).toBe(store["nb-a"]);
 		expect(effectiveUsage(device, store, "nb-other", true)).toBe(device);
 		expect(effectiveUsage(device, store, null, true)).toBe(device);
@@ -225,9 +225,9 @@ describe("usage per notebook (393)", () => {
 		const r = recordStoredUse(app, "fit-width", "nb-a", true, NOW + 1);
 		expect(r.device["fit-width"]?.n).toBe(2);
 		expect(loadNotebookUsage(app)["nb-a"]?.["fit-width"]?.n).toBe(2);
-		recordStoredUse(app, "add-page", "nb-a", false, NOW);
-		expect(loadNotebookUsage(app)["nb-a"]?.["add-page"]).toBeUndefined();
-		expect(loadDeviceUsage(app)["add-page"]?.n).toBe(1);
+		recordStoredUse(app, "add-page-suggest", "nb-a", false, NOW);
+		expect(loadNotebookUsage(app)["nb-a"]?.["add-page-suggest"]).toBeUndefined();
+		expect(loadDeviceUsage(app)["add-page-suggest"]?.n).toBe(1);
 		const gen = usageGeneration();
 		clearStoredUsage(app);
 		expect(usageGeneration()).toBe(gen + 1);
