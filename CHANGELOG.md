@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### sections
+- **Dynamic sections (roadmap 415).** *Now* (the class in progress, notebooks open in a tab, notebooks edited on this device in the last four hours), *To complete* (open gap / question / homework markers, skipped pages, PDF slides without ink, practice copies not yet written) and *Changed on another device* (a notebook file newer than what this device has last seen and not written here). They are panels at the top of the library dashboard (five rows each, *Show all*), places with the usual grid and list, sidebar items with counts and shortcut chips under Home's Continue row; each hides when empty and each row opens its notebook. *Mark as seen* clears the Changed section; opening a notebook marks it seen. Rules are pure and tested (`src/library/dynamic-sections.ts`).
+- The per-device "seen" record is kept in the device's local storage (never synced), so there is no change to the notebook format or to any synced file. The library index gets an optional `emptyPages` field (pages to fill); entries read before this version get it when their file next changes.
+
 ## 0.13.0 — 2026-10-31
 
 The design system reaches every remaining surface, the Home is restructured, and two roadmap features land: the generated outline (#407) and just-in-time tips (#425). The art engine gets a new family (veins), OKLCH colour, glow, keyword motifs, growth, a persistent cache and off-main-thread rendering. **Not verified on the device**: unit tests and the browser harness only; manual steps 500–679 in `docs/testing.md`. No change to the notebook format (still v11).
