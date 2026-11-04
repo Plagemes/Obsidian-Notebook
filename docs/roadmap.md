@@ -233,7 +233,7 @@ Goal: notebooks behave like first-class Obsidian content. Several items depend o
 - **O16 P1** 🧪 Reopen where you left off: workspace/session restore brings back the same page and zoom.
 - ~~**O17 P1** Theme integration: colours, accent and dark mode followed everywhere; documented CSS variables for snippets.~~ — dropped (user decision, 2026-10-29)
 - ~~**O18 P1** Sync conflicts: when Obsidian Sync creates a conflicted copy, a dialog compares both versions and merges their strokes.~~ — dropped: sync will go through Google Drive or OneDrive, not Obsidian Sync (user decision, 2026-10-29)
-- **O19 P2** Obsidian search: text boxes (and OCR later) appear in global search through the companion note.
+- 🧪 **O19 P2** Obsidian search: text boxes (and OCR later) appear in global search through the companion note. 0.19: text boxes were already in the companion; setting *Include typed text in search* adds sticky notes, comments, equations and marker labels with a link back per page; OCR waits for OCR.
 - **O20 P1** 🧪 Page into a note: "Copy link to this page" and "Insert this page into the active note" (link or embed).
 
 ## M11 — Original and advanced features (backlog, planned 2026-10-29)

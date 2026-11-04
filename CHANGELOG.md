@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### search
+
+- Companion notes: new setting *Include typed text in search* (off by default). The companion note also lists, per page, the text of sticky notes, margin comments and replies, equation sources and marker labels, with a wikilink back to the page, so Obsidian search finds them. Text is escaped, bounded to 4000 characters per page, and written only inside the generated block. No format change.
+
 ## 0.18.0 — 2026-11-05
 
 Review a page and move between notes more freely: margin comments anchored to a region of the page, an infinite page split into sheets of paper for export, a selection sent into a Markdown note, pages copied to another notebook with a link back, a QR code for a page, the notes that mention a page, annotating a PDF from Obsidian's PDF viewer, and quick tabs for the pages you keep going back to. The notebook format moves to version 16 (an older plugin opens a v16 file read-only).

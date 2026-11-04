@@ -512,6 +512,9 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.companionUpdateAll": "Aggiorna tutte le note compagne",
 	"settings.companionUpdateAll.desc": "Scrive solo le note non aggiornate.",
 	"settings.companionUpdateAll.button": "Aggiorna",
+	// 0.19 search
+	"settings.companionSearchText": "Includi il testo digitato nella ricerca",
+	"settings.companionSearchText.desc": "Scrive nella nota anche il testo di note adesive, commenti a margine, equazioni ed etichette dei segnalibri (fino a 4000 caratteri per pagina), con un link a ogni pagina, così la ricerca di Obsidian li trova. Vale dal prossimo aggiornamento.",
 	"notice.companionOff": "Le note compagne sono disattivate. Attivale nelle impostazioni di Notebook.",
 	"notice.companionDone": "Note compagne: {created} create, {updated} aggiornate, {unchanged} già aggiornate, {skipped} saltate.",
 	"notice.companionTaken": "Nota compagna non scritta: \"{path}\" e il nome alternativo sono note tue, lasciate come sono.",
