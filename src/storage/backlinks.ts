@@ -9,9 +9,9 @@ export type ResolvedLinks = Readonly<Record<string, Readonly<Record<string, numb
 /** The notes (paths, sorted) that link to or embed `target`. */
 export function linkingNotes(resolved: ResolvedLinks, target: string): string[] {
 	const out: string[] = [];
-	for (const [source, links] of Object.entries(resolved)) {
+	for (const [source, links] of Object.entries(resolved ?? {})) {
 		if (source === target) continue;
-		const n = links[target];
+		const n = links?.[target];
 		if (typeof n === "number" && n > 0) out.push(source);
 	}
 	return out.sort();

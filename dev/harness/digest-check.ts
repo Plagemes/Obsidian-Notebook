@@ -169,6 +169,28 @@ export async function checkDigest(api: DigestCheckApi): Promise<{ ok: boolean; r
 	add("a note with an unpaired marker is left untouched", (await noteText()) === broken && api.notices.slice(before).some((n) => /marker/.test(n)), api.notices.slice(before).join(" | "));
 	await app.vault.process(f, () => byColour);
 
+	// A note of the reader's with the digest's name and no markers is not written into without asking (review C6).
+	const mine = "MY OWN NOTE\n";
+	await app.vault.process(f, () => mine);
+	const beforeAsk = api.notices.length;
+	const dlg = await open();
+	dlg?.querySelector<HTMLButtonElement>(".nb-modal-btn-primary, .nb-modal-foot button:last-child")?.click();
+	const askButtons = async (): Promise<HTMLButtonElement[]> => {
+		for (let i = 0; i < 40; i++) {
+			const m = [...document.querySelectorAll<HTMLElement>(".notebook-digest-modal")].find((e) => /Add to an existing note/.test(e.textContent ?? ""));
+			if (m) return [...m.querySelectorAll<HTMLButtonElement>("button.nb-modal-btn")];
+			await sleep(50);
+		}
+		return [];
+	};
+	const choices = await askButtons();
+	add("a user note with no markers: the digest asks first", choices.length === 3 && (await noteText()) === mine, `${choices.length} buttons`);
+	choices.find((b) => /Use a new note/.test(b.textContent ?? ""))?.click();
+	await settle(beforeAsk);
+	const second = app.vault.getFileByPath("Notebooks/Digest — Highlights 2.md");
+	add("choosing a new note leaves the reader's note as it was", (await noteText()) === mine && !!second && (await app.vault.read(second)).includes("<!-- notebook-digest:start -->"), api.notices.slice(beforeAsk).join(" | "));
+	await app.vault.process(f, () => byColour);
+
 	// Leave the dialog open for the screenshot.
 	await open();
 	add("the dialog offers to update the existing note", /Update the digest/.test(modal()?.textContent ?? ""), "");

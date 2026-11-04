@@ -15,7 +15,7 @@ import { backgroundRect } from "../model/margins";
 import type { Page } from "../model/types";
 import { textUnderBands } from "../pdf/region-text";
 import { boxesOnPage, type PageTextContent, type TextBox, type TextMeasure } from "../pdf/text-items";
-import { linkingNotes } from "../storage/backlinks";
+import { backlinksOf } from "../storage/backlinks";
 import { recordPluginWrite } from "../storage/plugin-written";
 import { ensureFolder } from "../storage/vault-io";
 import { sanitizeName } from "../storage/names";
@@ -226,7 +226,7 @@ export async function storePicture(app: App, notePath: string, name: string, blo
 				found instanceof TFile && found.extension === "png" &&
 				canRewritePicture({
 					foundPath: found.path, name, expectedDir: wanted.includes("/") ? wanted.slice(0, wanted.lastIndexOf("/")) : "", notePath,
-					linkedFrom: linkingNotes(app.metadataCache.resolvedLinks, found.path),
+					linkedFrom: backlinksOf(app, found.path),
 				})
 			) target = found;
 		}
