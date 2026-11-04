@@ -8,6 +8,7 @@ import { boundGraphId } from "./attach";
 import type { BBox } from "./hit-test";
 import { BOX_COLORS, badgeColor, badgeFace, badgeIsSquare, boxLabelWidth, checkPoints, defaultBoxLabel, glyphSize, starPoints, type BoxLabel } from "./marker-render";
 import { layerFlags, type ExportLayers } from "./export-layers";
+import { HEADER_COLOR_DAY, type HeaderLayout } from "./page-header";
 import { PAPER_COLORS, paperPattern, type PaperLineKind } from "./paper";
 import { HIGHLIGHTER_ALPHA, strokeSvgPath } from "./stroke-shape";
 
@@ -54,6 +55,8 @@ export interface SvgOptions {
 	boxLabel?: BoxLabel;
 	/** v9: numbers of the numbered equations (default: counted on this page). */
 	equationNumbers?: ReadonlyMap<string, number>;
+	/** 0.15 (#75): the automatic page header or footer (null: none), drawn with the background layer. */
+	header?: HeaderLayout | null;
 	/** v9: outline of an equation without a cached one (default: one typeset this session, else its source as text). */
 	equationOutline?: (el: EquationElement) => { polys: Polygon[]; sx: number; sy: number } | null;
 	/** wave 0.9 (381): "ink" has no white sheet (transparent), PDF/picture background or paper; "background" has no ink. Default "both". */
@@ -73,6 +76,13 @@ const AVG_CHAR_WIDTH = 0.5;
  * Text elements are wrapped by character count (width / (0.5 * fontSize) characters per line, an
  * approximation of Helvetica: the real font metrics are only used by the PDF export).
  */
+/** 0.15 (#75): the page header line as one SVG text. */
+function headerTag(h: HeaderLayout): string {
+	const anchor = h.align === "left" ? "start" : h.align === "right" ? "end" : "middle";
+	const text = h.text.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+	return `<text x="${num(h.x)}" y="${num(h.y)}" font-family="Helvetica, Arial, sans-serif" font-size="${num(h.size)}" fill="${HEADER_COLOR_DAY}" text-anchor="${anchor}" dominant-baseline="central">${text}</text>`;
+}
+
 export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 	const { width, height } = page;
 	const out: string[] = [];
@@ -107,6 +117,8 @@ export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 			out.push(`<path d="${d}" fill="${PAPER_COLORS.dot}"/>`);
 		}
 	}
+
+	if (layers.background && options.header) out.push(headerTag(options.header));
 
 	if (!layers.content) {
 		out.push("</svg>");

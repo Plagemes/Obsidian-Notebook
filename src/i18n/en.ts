@@ -2505,6 +2505,25 @@ export const en = {
 	"settings.slideInkLink.desc": "Ink written while a PDF page is open side by side remembers that slide.",
 	"settings.slideInkBadges": "Slide badges",
 	"settings.slideInkBadges.desc": "A small badge next to ink written beside a slide; tap it to show the slide again.",
+	// 0.15 header
+	"settings.pageHeader": "Page header",
+	"settings.headerMode": "Header or footer",
+	"settings.headerMode.desc": "Page number, date and title drawn on every page; not part of your notes.",
+	"settings.headerMode.off": "Off",
+	"settings.headerMode.header": "Header (top)",
+	"settings.headerMode.footer": "Footer (bottom)",
+	"settings.headerPageNumber": "Page number",
+	"settings.headerPageTotal": "Show the total",
+	"settings.headerPageTotal.desc": "\"3 / 12\" instead of \"3\".",
+	"settings.headerDate": "Date",
+	"settings.headerDate.desc": "The day the notebook was created.",
+	"settings.headerTitle": "Notebook title",
+	"settings.headerAlign": "Position",
+	"settings.headerAlign.left": "Left",
+	"settings.headerAlign.centre": "Centre",
+	"settings.headerAlign.right": "Right",
+	"settings.headerInExport": "Include in exports",
+	"settings.headerInExport.desc": "PNG, PDF, SVG and printing show it too.",
 } as const;
 
 export type MessageKey = keyof typeof en;

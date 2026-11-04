@@ -6,6 +6,7 @@ import type { Page, PageElement, Stroke } from "../model/types";
 import { PAPER_DOT_RADIUS, PAPER_LINE_WIDTH } from "./export-svg";
 import { layerFlags, type ExportLayers } from "./export-layers";
 import { defaultBoxLabel, drawBox, drawMarker, type BoxLabel } from "./marker-render";
+import { drawHeader, type HeaderLayout } from "./page-header";
 import { PAPER_COLORS, paperPattern } from "./paper";
 import { drawElement, drawTextElement } from "./renderer";
 import { drawEquation, drawGraph } from "./math-render";
@@ -22,6 +23,8 @@ export interface RasterInputs {
 	hiddenInk?: boolean;
 	boxLabel?: BoxLabel;
 	layers?: ExportLayers;
+	/** 0.15 (#75): the automatic page header or footer of the page (null: none). */
+	header?: HeaderLayout | null;
 	/** v9: numbers of the numbered equations (default: counted on this page). */
 	equationNumbers?: ReadonlyMap<string, number>;
 	/**
@@ -57,6 +60,7 @@ export function drawPageRaster(ctx: CanvasRenderingContext2D, page: Page, scale:
 				ctx.drawImage(inputs.background, r.x, r.y, r.width, r.height);
 			}
 			drawPaperLines(ctx, page);
+			if (inputs.header) drawHeader(ctx, inputs.header);
 		}
 		if (!flags.content) return;
 		const elements = page.elements ?? [];

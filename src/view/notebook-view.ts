@@ -42,6 +42,7 @@ import { analyseSpace, planSpaceChange, spacePreview } from "../ink/space";
 import { heavyReasons, pageLoad, planPageSplit } from "../ink/heavy-page";
 import { apply, IDENTITY, invert, isIdentity, multiply, rotateAbout, scaleAbout, translate, type Matrix } from "../ink/transform";
 import { clampToPage, fitWidth, pan, PAGE_MARGIN, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
+import { drawHeader, headerLayout, type HeaderLayout, type HeaderNotebook, type HeaderSettings } from "../ink/page-header";
 import { layoutPagesHorizontal, type ScrollMode } from "../ink/page-mode";
 import { capturePosition, positionFromState, restoreViewport, type SavedPosition } from "../ink/view-position";
 import { PageMode } from "./page-mode";
@@ -347,6 +348,8 @@ export class NotebookView extends FileView {
 	private bannerHost!: HTMLElement;
 	private resilience: ViewResilience | null = null;
 	private renderer: Renderer | null = null;
+	private headerRenderer: Renderer | null = null;
+	private headerKey = "";
 	private controller: PointerController | null = null;
 	private resizeObserver: ResizeObserver | null = null;
 	/** 0.14 layout: phone / tablet / desktop, portrait / landscape and short height of this view (classes nb-vp-* on contentEl). */
@@ -1230,6 +1233,7 @@ export class NotebookView extends FileView {
 		}
 		if (this.renderer && !this.active) this.renderer.setLowLatency(settings.lowLatencyInk && fast);
 		this.setScrollMode(settings.scrollMode);
+		this.applyPageHeader(settings);
 		this.perfEl?.toggleClass("notebook-hidden", !settings.perfOverlay);
 		if (this.renderer) this.renderer.onFrame = settings.perfOverlay ? (t) => this.onFrame(t) : null;
 		this.reading?.settingsChanged();
@@ -1665,14 +1669,50 @@ export class NotebookView extends FileView {
 		return this.display;
 	}
 
+	/** 0.15 (#75): what the automatic header or footer needs from this notebook (read when drawn, so a rename or new page shows). */
+	private headerNotebook(): HeaderNotebook {
+		return { title: this.file?.basename ?? "", createdAt: this.session?.doc?.createdAt ?? "", locale: getLanguage() };
+	}
+
+	/** 0.15 (#75): hands the renderer the painter of the page header (null when off). Painted into the static layer only. */
+	private applyPageHeader(s: HeaderSettings): void {
+		const r = this.renderer;
+		if (!r) return;
+		const snap: HeaderSettings = { headerMode: s.headerMode, headerPageNumber: s.headerPageNumber, headerPageTotal: s.headerPageTotal, headerDate: s.headerDate, headerTitle: s.headerTitle, headerAlign: s.headerAlign, headerInExport: s.headerInExport };
+		const key = JSON.stringify(snap);
+		if (r === this.headerRenderer && key === this.headerKey) return;
+		this.headerRenderer = r;
+		this.headerKey = key;
+		r.setPageDecor(snap.headerMode === "off" ? null : (ctx, page, index, night) => {
+			const count = this.session?.doc?.pages.length ?? 0;
+			const h = headerLayout(page, index, count, snap, this.headerNotebook());
+			if (h) drawHeader(ctx, h, night);
+		});
+	}
+
+	/** 0.15 (#75): the header of a page for exports and printing; undefined when it is off or kept out of exports. */
+	private exportHeader(): ((page: Page) => HeaderLayout | null) | undefined {
+		const s = this.host.settings;
+		const doc = this.session?.doc;
+		if (!doc || s.headerMode === "off" || !s.headerInExport) return undefined;
+		const nb = this.headerNotebook();
+		const index = new Map(doc.pages.map((p, i) => [p, i] as const));
+		return (page) => {
+			const i = index.get(page);
+			return i === undefined ? null : headerLayout(page, i, doc.pages.length, s, nb);
+		};
+	}
+
 	/** v8: exports draw hidden ink only where the solutions are shown, and label boxes in the reader's language. */
 	exportOptions(): ExportOptions {
 		const doc = this.session?.doc;
+		const header = this.exportHeader();
 		return {
 			hiddenInk: (page) => this.markers?.isRevealed(page) ?? false, boxLabel: translatedBoxLabel,
 			// v9: equations without a cached outline are typeset first; numbers count over the whole notebook.
 			prepare: (pages) => this.math?.prepareExport(pages) ?? Promise.resolve(),
 			...(doc ? { equationNumbers: equationNumbers(doc.pages) } : {}),
+			...(header ? { header } : {}),
 		};
 	}
 

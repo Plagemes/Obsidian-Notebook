@@ -1962,3 +1962,24 @@ Mouse: draw, erase (both modes), undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scr
 - PDF reading tools: the search and the snapping highlighter need the PDF's text layer (scanned PDFs have none), positions inside a long line of text are estimated from the font's character widths and can be a few points off, rotated and vertical text is not snapped, and the search lists at most 500 matches. Dimming and hiding annotations are view settings: exports, thumbnails and embeds are not affected.
 - Processing flow (wave 0.8): the inbox lists blocks of writing on the quick-notes sheet (split at gaps of about 1.3 cm; typed text and ink alike) and highlights and comments on PDF pages; question, placeholder and importance markers are not listed until the marker elements exist (the interface is ready). Scanning the PDF notebooks reads every notebook that has PDF pages each time the inbox is opened or refreshed (no cache). A highlight on a PDF without a text layer has no text for the card. *Link to a card* only records the link in the inbox file; the card note is not changed. The inbox state is per device (merged on reading), so two devices never write the same file; it is not verified with a real sync service.
 - Textbook references (wave 0.8): the tappable area is a DOM element over the typed text, so the pen cannot start a stroke exactly on the reference (and it is hidden while the text tool is active); references are found only in typed text boxes, not in handwriting; the position of a reference inside a long wrapped text box comes from the same layout as the drawing but is not verified on every font; a book whose printed numbers restart (roman front matter) needs its offset set for the main part.
+
+### 0.15 — header: automatic page header or footer (steps 840-859)
+
+Implemented, not verified on hardware. Settings → Pages → *Page header* (closed until the feature is in use). Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/header-*.png`.
+
+840. **Off by default.** A new install shows no header or footer; Settings → Pages has a *Page header* group whose only visible row is *Header or footer* (Off). Expected: nothing is drawn on any page.
+841. **Header.** Set *Header (top)*. Expected: every page shows a small grey "1 / N", "2 / N"… centred at the top; the numbers follow adding, deleting and moving pages (after the next redraw); it is not selectable, not erasable and does not appear in the page's ink or in undo.
+842. **Footer.** Set *Footer (bottom)*. Expected: the line is at the bottom of each page; on an infinite page it is not drawn (the page grows), or goes to the top instead if the top is free.
+843. **Fields.** Turn on *Date* and *Notebook title*. Expected: "Title · 3 Jun 2026 · 2 / 12" (the date is the day the notebook was created, month in the interface language); turning *Show the total* off gives "2". With every field off nothing is drawn.
+844. **Position.** Left / Centre / Right move the line; it keeps a 28 pt margin and a long title is squeezed, never cut off the page.
+845. **Lecture page.** In lecture mode add a lecture page (*New lecture*). Expected: the header line sits above the lecture's own header text without touching it. Move the lecture header up to the very top of the page: the line moves to the bottom (or disappears when the bottom is also taken).
+846. **PDF and picture pages.** On a page that shows a PDF slide or a picture the line is not drawn (it would cover the slide) unless the page has margins around the background.
+847. **Night mode and Obsidian theme.** In night mode the line is a light grey on the dark paper; in light and dark Obsidian themes it stays quiet and readable but never louder than the writing.
+848. **Zoom and scroll.** Pinch-zoom and scroll through a long notebook: the line stays crisp at any zoom and scrolling is as smooth as without it (it is painted with the page, not per frame).
+849. **Export.** With *Include in exports* on, export a page as PNG, the notebook as PDF, a page as SVG and print: the line is on each page at the same place and number. With *Ink only* it is left out; with it off in the settings no export shows it.
+850. **Phone.** On a phone the group's rows fit the width, no control is under 44 px, and the dropdowns work in Italian.
+851. **Nothing stored.** Save and reopen a notebook with the header on, then off: the file has no new field and the notebook opens as before.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Automatic page header / footer (#75): page number, creation date, title; left / centre / right; PNG / PDF / SVG / print | yes | layout, text, skip and shift rules, SVG and PDF output, settings (`tests/page-header.test.ts`); harness check of the painted line (`header-*`) | | | |

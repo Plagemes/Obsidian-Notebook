@@ -87,6 +87,7 @@ export const GROUPS: readonly GroupSpec[] = [
 		id: "penGestures", section: "input", title: "settings.penGestures",
 		open: (s) => s.penSideButton === "gesture" || s.penSideButton === "radial-gesture" || s.penGestureLongPress || s.penGesturesCustom.length > 0,
 	},
+	{ id: "pageHeader", section: "pages", title: "settings.pageHeader", open: (s) => s.headerMode !== "off" },
 	{ id: "outline", section: "pages", title: "settings.outline", open: (s) => !(s.outlineBookmarks && s.outlineSlides && s.outlineHeadings && s.outlineMarkers) },
 	{ id: "timetable", section: "study", title: "settings.timetable", open: (_s, ctx) => ctx.timetableInUse },
 	{ id: "zettel", section: "study", title: "settings.zettel", open: (s) => s.zettelSlipBoxes.length > 0 },
@@ -243,6 +244,20 @@ const PAGES: SettingSpec[] = [
 	{ id: "outlineSlides", section: "pages", group: "outline", order: 20, name: "settings.outlineSlides", desc: "settings.outlineSlides.desc", control: { type: "toggle" }, keywords: "outline pdf slide diapositive" },
 	{ id: "outlineHeadings", section: "pages", group: "outline", order: 30, name: "settings.outlineHeadings", desc: "settings.outlineHeadings.desc", control: { type: "toggle" }, keywords: "outline heading titoli handwriting scrittura" },
 	{ id: "outlineMarkers", section: "pages", group: "outline", order: 40, name: "settings.outlineMarkers", desc: "settings.outlineMarkers.desc", control: { type: "toggle" }, keywords: "outline marker segnalini domande compiti" },
+	// 0.15 page header (#75): the page number, date and notebook title drawn on the paper, never stored on the page.
+	{
+		id: "headerMode", section: "pages", group: "pageHeader", order: 10, name: "settings.headerMode", desc: "settings.headerMode.desc",
+		control: { type: "dropdown", options: options([["off", "settings.headerMode.off"], ["header", "settings.headerMode.header"], ["footer", "settings.headerMode.footer"]]) }, keywords: "header footer page number date numero pagina intestazione piè di pagina",
+	},
+	{ id: "headerPageNumber", section: "pages", group: "pageHeader", order: 20, name: "settings.headerPageNumber", control: { type: "toggle" }, parent: "headerMode", visible: (s) => s.headerMode !== "off" },
+	{ id: "headerPageTotal", section: "pages", group: "pageHeader", order: 21, name: "settings.headerPageTotal", desc: "settings.headerPageTotal.desc", control: { type: "toggle" }, parent: "headerMode", visible: (s) => s.headerMode !== "off" && s.headerPageNumber },
+	{ id: "headerDate", section: "pages", group: "pageHeader", order: 30, name: "settings.headerDate", desc: "settings.headerDate.desc", control: { type: "toggle" }, parent: "headerMode", visible: (s) => s.headerMode !== "off" },
+	{ id: "headerTitle", section: "pages", group: "pageHeader", order: 40, name: "settings.headerTitle", control: { type: "toggle" }, parent: "headerMode", visible: (s) => s.headerMode !== "off" },
+	{
+		id: "headerAlign", section: "pages", group: "pageHeader", order: 50, name: "settings.headerAlign",
+		control: { type: "dropdown", options: options([["left", "settings.headerAlign.left"], ["centre", "settings.headerAlign.centre"], ["right", "settings.headerAlign.right"]]) }, parent: "headerMode", visible: (s) => s.headerMode !== "off",
+	},
+	{ id: "headerInExport", section: "pages", group: "pageHeader", order: 60, name: "settings.headerInExport", desc: "settings.headerInExport.desc", control: { type: "toggle" }, parent: "headerMode", visible: (s) => s.headerMode !== "off" },
 ];
 
 const READING: SettingSpec[] = [

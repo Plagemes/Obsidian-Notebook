@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### header
+- **Automatic page header or footer (#75).** Settings → Pages → *Page header*: off / header / footer, with the page number (with or without the total, "3 / 12"), the notebook's creation date and the notebook title, placed left, centre or right, and an option to include it in PNG, PDF, SVG and printed pages. It is drawn on the paper (new `src/ink/page-header.ts`, painted once per visible page in the static layer through a small `Renderer.setPageDecor` hook), never stored on the page and never part of the ink. It keeps clear of the lecture header and of anything else in its strip (it moves to the other edge or is left out) and of PDF or picture pages. No change to the notebook format.
+
 ## 0.14.0 — 2026-11-04
 
 The notebook adapts to the device and to the lecture: the layout follows phone, tablet and desktop in either orientation, the toolbar adapts to the page and to what you use, lecture mode starts from the timetable, and notes remember the slide they were written beside. **The document format is now v12** (optional slide links): a 0.13 device opens a v12 notebook read-only (newer version) and never overwrites it; a 0.13 device that saves the timetable drops the lecturer field. **Not verified on the device**: unit tests and the browser harness only.
