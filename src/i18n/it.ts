@@ -2877,4 +2877,15 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"bulk.noFiles": "Nessun PDF o immagine da importare.",
 	"library.action.importFiles": "Importa file…",
 	"library.menu.importFilesHere": "Importa file qui…",
+	// 0.16 present
+	"present.title": "Presentazione",
+	"present.exit": "Esci dalla presentazione",
+	"present.laser": "Puntatore laser",
+	"present.ink": "Scrivi durante la presentazione",
+	"command.present": "Presenta il quaderno (a schermo intero)",
+	"present.empty": "Non c'è nessuna pagina da presentare.",
+	"settings.presentSteps": "Presenta i disegni con stati passo per passo",
+	"settings.presentSteps.desc": "Avanti mostra gli stati di un disegno uno alla volta, poi gira pagina.",
+	"settings.presentLaser": "La penna è un puntatore laser in presentazione",
+	"settings.presentLaser.desc": "Un punto rosso con scia che svanisce segue penna e mouse. Non si scrive nulla.",
 };

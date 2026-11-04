@@ -132,6 +132,7 @@ import { PenLinks } from "./pen-links";
 import { SelectionActions } from "./selection-actions";
 import { statesAfterCuts } from "../model/states-erase";
 import { StatesTools } from "./states-tools";
+import { PresentationMode } from "./present-mode";
 import { SelectionArrange } from "./selection-arrange";
 import { StampPalette, type StampTarget } from "./stamp-palette";
 import { TextEditor, type TextEditSession } from "./text-editor";
@@ -401,6 +402,10 @@ export class NotebookView extends FileView {
 	private selectionActions: SelectionActions | null = null;
 	/** 0.15 (241): drawings with states: the state strip and the part editor (view/states-tools.ts). */
 	private statesTools: StatesTools | null = null;
+	/** 0.16 (#87): the presentation in progress, if any (view/present-mode.ts). */
+	private presentation: PresentationMode | null = null;
+	/** 0.16 (#87): whether the view was page-by-page before "write while presenting" put it there. */
+	private presentWasPaged = false;
 	private arrange: SelectionArrange | null = null;
 	/** Links written with the pen (O8): note links in text boxes, on ink, and the `[[` suggester. */
 	private penLinks: PenLinks | null = null;
@@ -845,6 +850,8 @@ export class NotebookView extends FileView {
 		this.display = null;
 		this.practiceHooks?.destroy();
 		this.practiceHooks = null;
+		this.presentation?.destroy();
+		this.presentation = null;
 		this.lectureMode?.destroy();
 		this.lectureMode = null;
 		this.statesTools?.destroy();
@@ -1191,6 +1198,7 @@ export class NotebookView extends FileView {
 		this.media = null;
 		this.reading?.reset();
 		this.pageNav?.invalidate();
+		this.presentation?.destroy();
 		this.lectureMode?.closed();
 		await super.onUnloadFile(file);
 	}
@@ -3040,6 +3048,70 @@ export class NotebookView extends FileView {
 		}, 150);
 	}
 
+	// --- 0.16 (#87): presentation mode (logic in view/present-logic.ts, the overlay in view/present-mode.ts) ---
+
+	/** Presents the notebook full screen from the page in view. Nothing is written to the document. */
+	startPresentation(): void {
+		if (this.presentation?.isOpen) return;
+		if ((this.shownDoc()?.pages.length ?? 0) === 0) {
+			showNotice(t("present.empty"), 3000);
+			return;
+		}
+		this.presentation ??= new PresentationMode({
+			container: () => this.contentEl,
+			pages: () => this.shownDoc()?.pages ?? [],
+			startIndex: () => this.currentPageIndex(),
+			settings: () => this.host.settings,
+			render: (page, widthPx) => this.renderPresentPage(page, widthPx),
+			inkMode: (on, pos) => this.presentInk(on, pos),
+			inkGo: (pos) => this.presentInkGo(pos.page, pos.state),
+			closed: (index) => {
+				if (index !== this.currentPageIndex()) this.goToPage(index);
+			},
+		});
+		this.presentation.open();
+	}
+
+	/** The image of a page for the presentation: PDF pages are drawn at the size shown, images that are still loading are waited for a moment. */
+	private async renderPresentPage(page: Page, widthPx: number): Promise<string> {
+		const bg = page.background;
+		let pdfCanvas: CanvasImageSource | undefined;
+		if (bg && bg.kind === "pdf" && this.media) {
+			try {
+				pdfCanvas = await this.media.pdf.render(bg.asset, bg.page, widthPx / Math.max(1, page.width));
+			} catch (e) {
+				console.error("[notebook] presentation: rendering the PDF page failed", e);
+			}
+		}
+		let url = "";
+		for (let attempt = 0; attempt < 4; attempt++) {
+			this.thumbPending.delete(page.id);
+			url = renderThumbnail(page, widthPx, { mime: "image/jpeg", quality: 0.92, drawBackground: (ctx, p) => this.drawThumbMedia(ctx, p, pdfCanvas) });
+			if (!this.thumbPending.has(page.id)) break;
+			await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+		}
+		return url;
+	}
+
+	/** "Write while presenting": the notebook's own page-by-page view shows the presented page behind the transparent overlay. */
+	private presentInk(on: boolean, pos: { page: number; state: string | null }): number | null {
+		if (on) {
+			this.presentWasPaged = this.pageMode?.enabled ?? false;
+			if (!this.presentWasPaged) this.setScrollMode("pages");
+			this.presentInkGo(pos.page, pos.state);
+			return null;
+		}
+		const index = this.currentPageIndex();
+		if (!this.presentWasPaged) this.setScrollMode(this.host.settings.scrollMode);
+		return index;
+	}
+
+	private presentInkGo(index: number, state: string | null): void {
+		this.scrollToPage(index);
+		const page = this.shownDoc()?.pages[index];
+		if (page?.states && page.states.list.length > 0) this.statesTools?.switchTo(state);
+	}
+
 	/** 0.14 (408): the notebook map, with its per-page cache (one per open view). */
 	private readonly mapCache = new NotebookMapCache();
 
@@ -3051,6 +3123,7 @@ export class NotebookView extends FileView {
 			current: () => this.currentPageIndex(),
 			thumbnail: (page) => this.pageNav?.thumbnailOf(page) ?? BLANK_THUMBNAIL,
 			goTo: (index) => this.goToPage(index),
+			present: () => this.startPresentation(),
 		}).open();
 	}
 
@@ -3065,14 +3138,15 @@ export class NotebookView extends FileView {
 	}
 
 	/** Background and elements of a thumbnail; whatever is not loaded yet is drawn as a placeholder and retried later. */
-	private drawThumbMedia(ctx: CanvasRenderingContext2D, page: Page): void {
+	private drawThumbMedia(ctx: CanvasRenderingContext2D, page: Page, pdfCanvas?: CanvasImageSource): void {
 		const media = this.media;
 		if (!media) return;
 		let incomplete = false;
 		const bg = page.background;
 		if (bg) {
 			let img: CanvasImageSource | null;
-			if (bg.kind === "image") img = media.image(bg.asset);
+			if (pdfCanvas && bg.kind !== "image") img = pdfCanvas;
+			else if (bg.kind === "image") img = media.image(bg.asset);
 			else {
 				// Never ask for another scale of a page the main view is drawing: a render in flight would be cancelled.
 				img = (media.pdf.peek(bg.asset, bg.page)?.canvas as CanvasImageSource | undefined) ?? null;

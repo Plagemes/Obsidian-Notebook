@@ -340,6 +340,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	},
 	"toggle-read-only": (v) => v.toggleReadOnlyMode(),
 	"night-mode": (v) => v.displayTools?.toggleNight(),
+	"present": (v) => v.startPresentation(),
 	"crop-margins": (v) => v.displayTools?.toggleCrop(),
 	// wave 0.10 (363): next / previous open notebook
 	"notebook-next": (v) => void v.tabTools?.step(1),

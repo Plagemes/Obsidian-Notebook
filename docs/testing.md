@@ -2155,3 +2155,33 @@ Roadmap 78. Select ink or objects with the lasso; the selection bar (overflow) a
 | Move a selection to another page (#78) | yes | `tests/selection-move.test.ts`, harness `movesel` | | | |
 | Copy a selection to another page | yes | same | | | |
 | New page in the same undo step | yes | harness `movesel` | | | |
+
+### 0.16 — present: presentation mode (steps 1030-1049)
+
+Presentation mode (#87, no format change). Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/present-*.png`. Use a notebook with a few pages, one of them a drawing with states (a block moving in two states), and if you can a lecture PDF and a Bluetooth presenter remote.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Presentation overlay: black surround, one page fitted, counter and controls that hide by themselves | yes | harness `present-check.ts` | | | |
+| Next / previous: keys, presenter remote keys, tap zones, swipe | yes | `tests/present-logic.test.ts`, harness | | | |
+| Steps through the states of a drawing before the next page (setting) | yes | `tests/present-logic.test.ts`, harness | | | |
+| Laser pointer with the pen and the mouse (fading trail) | yes | `tests/present-logic.test.ts` (trail), harness | | | |
+| Write while presenting | yes | harness | | yes | |
+| Real full screen (Fullscreen API) on Android and Windows | yes | | | yes | |
+| Command, More sheet, notebook map button | yes | action registry tests, harness | | | |
+
+1030. **Start.** From *All actions* (More) tap *Presentation*, from the command palette run *Present the notebook (full screen)*, and from the notebook map tap *Presentation*: the page in view fills the screen on black, centred and not cropped, a page counter ("3 / 12") shows for a moment and fades. On Windows the window goes full screen; on Android check whether the status bar and navigation bar go away (if not, the overlay still covers the notebook).
+1031. **Keys and remote.** Arrow right/down, Page Down, Space, Enter go on; arrow left/up, Page Up, Backspace, Shift+Space go back; Home and End jump to the first and last page; *B* or *.* blanks the screen and any move brings it back. A Bluetooth presenter remote (it sends Page Up / Page Down or arrows) turns the pages the same way, also when the notebook's own *Page turner keys* setting is off.
+1032. **Touch.** Tap the left third: back. Tap the rest: forward. Tap the top strip: only the controls appear. Swipe left: forward, swipe right: back. A long press or a slow drag does nothing.
+1033. **Pen is the laser.** Hover the S Pen over the page: a red dot follows it; touch the screen with the pen and move: the dot leaves a trail that fades in under a second. Nothing is written (close the presentation and check the page, and that the notebook was not rewritten). Pen taps do not turn the page. The pen side button has no special action while presenting.
+1034. **Laser off.** Settings, *PDF & reading*, *Pen is a laser pointer while presenting* off (or the laser button in the controls): the pen then turns pages with taps like a finger.
+1035. **States first.** On the page with a drawing with states, Next shows *as drawn*, then each state one after the other (the counter shows "2 / 5 · 2/3"), then the next page. Previous goes back through them and lands on the last state of a page it comes back to. With *Present drawings with states step by step* off, Next turns the page at once and the page shows the state the notebook opens with. After closing the presentation the notebook shows the same default state as before: nothing is saved.
+1036. **PDF and picture pages.** Present a lecture PDF notebook: the slide is sharp at the screen size (not blurred), with the ink and text boxes on it.
+1037. **Write while presenting.** Tap the pen button in the controls: the black surround goes away and the notebook shows the same page; write or draw with the pen as usual; the arrow keys and the remote still turn pages and the notebook follows. Switch it off: the black returns on the page the notebook is on. The ink you wrote stays and is saved normally. The S Pen button actions (radial menu, eraser drag) belong to the notebook and work as always while writing.
+1038. **Controls.** The three round buttons (laser, write, exit) appear on any tap or pointer move and hide after about three seconds; each is at least 44 px. Exit closes the presentation; Esc does too (on a keyboard); in real full screen the browser's own Esc leaves full screen and ends the presentation.
+1039. **Where you land.** After exiting, the notebook shows the page the presentation ended on.
+1040. **Read-only and lecture.** Present a read-only notebook and one in lecture mode: both work; nothing is written.
+1041. **Rotation and resize.** Rotate the tablet or resize the window while presenting: the page is fitted again without losing the place.
+1042. **Large pages.** Present an infinite page: its top part is shown, fitted (as in thumbnails).
+1043. **Phone and tablet, dark and light.** The controls and the counter fit a phone; check both themes (the surround is always black).
+1044. **Closing.** Close the notebook tab, or switch to another file in the tab, during a presentation: it ends without errors.

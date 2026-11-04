@@ -16,6 +16,8 @@ export interface NotebookMapHost {
 	/** Data URL of a page thumbnail (the navigator's cache). */
 	thumbnail(page: Page): string;
 	goTo(index: number): void;
+	/** 0.16 (#87): starts the presentation from the page in view (the button is not offered when absent). */
+	present?: () => void;
 }
 
 export const MAP_STATE_ICON: Readonly<Record<MapState, string>> = {
@@ -89,6 +91,16 @@ export class NotebookMapModal extends Modal {
 			// A filter with nothing in it is not offered, except the one that is on.
 			if (n === 0 && this.filter !== s) continue;
 			chip(chips, { label: t(STATE_LABEL[s]), icon: MAP_STATE_ICON[s], count: n, active: this.filter === s, key: s, onClick: () => this.setFilter(s) });
+		}
+		const present = this.mapHost.present;
+		if (present) {
+			const b = chips.createEl("button", { cls: "nb-map-present", attr: { type: "button", "aria-label": t("present.title") } });
+			setIcon(b.createSpan({ cls: "nb-map-present-icon" }), "presentation");
+			b.createSpan({ text: t("present.title") });
+			b.addEventListener("click", () => {
+				this.close();
+				present();
+			});
 		}
 		const shown = filterByState(map.pages, this.filter);
 		if (shown.length === 0) {
