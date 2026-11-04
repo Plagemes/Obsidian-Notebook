@@ -138,10 +138,14 @@ export function checklistCounts(page: Pick<Page, "elements">): { total: number; 
 
 // ---------------------------------------------------------------- the task line in a note
 
-/** The block id for a checkbox: `nb-` and the first letters and digits of its element id (a block id allows nothing else). */
-export function blockIdFor(el: Pick<CheckboxElement, "id">): string {
+/**
+ * The block id for a checkbox: `nb-` and the first letters and digits of its element id (a block id allows nothing else), then
+ * `salt` (letters and digits too): sending the same checkbox again after it was unlinked must not write a second line with the same
+ * block id, so the caller passes something new each time.
+ */
+export function blockIdFor(el: Pick<CheckboxElement, "id">, salt = ""): string {
 	const body = el.id.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12);
-	return `${CHECKBOX_BLOCK_PREFIX}${body === "" ? "x" : body}`;
+	return `${CHECKBOX_BLOCK_PREFIX}${body === "" ? "x" : body}${salt.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8)}`;
 }
 
 /** Whether `block` is a block id this plugin could have written. */

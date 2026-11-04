@@ -72,7 +72,7 @@ import { VaultDocumentIO, sidecarDeviceId, vaultDeviceFileAdapter } from "../sto
 import { SharedClipStore } from "../storage/shared-clip-store";
 import { backupFolder, readSettings, type NotebookSettings } from "../settings";
 import { defaultMarkdownFolder, exportMarkdown, siblingFolder } from "./export-markdown";
-import { MakeTaskModal, runMakeTask } from "./selection-task";
+import { MakeTaskModal, runMakeTask, type TaskRequest } from "./selection-task";
 import { runInsertIntoNote } from "./selection-insert";
 import { taskCropRect } from "../model/selection-task";
 import { Mentions } from "./mentions";
@@ -158,6 +158,7 @@ import { StampPalette, type StampTarget } from "./stamp-palette";
 import { TextEditor, type TextEditSession } from "./text-editor";
 import { MathTools, type MathHost } from "./math-tools";
 import { StickyTools, type StickyHost } from "./sticky-tools";
+import { ChecklistTools, type ChecklistHost } from "./checklist-tools";
 import { CommentTools, pdfCommentLabels, type CommentsHost } from "./comments-tools";
 import { equationNumbers } from "../model/math-elements";
 import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites";
@@ -424,6 +425,8 @@ export class NotebookView extends FileView {
 	private math: MathTools | null = null;
 	/** 0.17 (#20): sticky notes (insert, edit, collapse). */
 	private sticky: StickyTools | null = null;
+	/** 0.19 (#103): handwritten checklists (taps, the square drawn by hand, send to tasks, the task lines). */
+	private checklist: ChecklistTools | null = null;
 	/** 0.18 (#86): margin comments (markers, card, side panel). */
 	private comments: CommentTools | null = null;
 	private rulerGesture: RulerGesture | null = null;
@@ -668,6 +671,7 @@ export class NotebookView extends FileView {
 		this.textEditor = new TextEditor(this.stage);
 		this.math = new MathTools(this.mathHost());
 		this.sticky = new StickyTools(this.stickyHost());
+		this.checklist = new ChecklistTools(this.checklistHost());
 		this.comments = new CommentTools(this.commentsHost());
 		this.penGestures = new PenGestureLayer({
 			stage: this.stage,
@@ -979,6 +983,8 @@ export class NotebookView extends FileView {
 		this.selectionActions?.destroy();
 		this.selectionActions = null;
 		this.arrange = null;
+		this.checklist?.destroy();
+		this.checklist = null;
 		this.penLinks?.destroy();
 		this.penLinks = null;
 		this.pageOffer?.destroy();
@@ -2064,6 +2070,75 @@ export class NotebookView extends FileView {
 		};
 	}
 
+	/** What the checklist tools need from the view (0.19, #103). */
+	private checklistHost(): ChecklistHost {
+		return {
+			app: this.app,
+			stage: () => this.stage,
+			doc: () => this.session?.doc ?? null,
+			editable: () => !!this.editableDocument(),
+			// One undo step. Unlike `applyCommand` it keeps the selection and the text being typed: a tap on a checkbox is not an edit session.
+			execute: (cmd) => {
+				const done = this.history.execute(cmd);
+				this.afterHistoryChange();
+				this.renderer?.invalidate();
+				return done;
+			},
+			settings: () => this.host.settings,
+			tool: () => this.tools.tool,
+			scale: () => this.viewport.scale,
+			toStage: (pageIndex, x, y) => {
+				const box = this.layout?.boxes[pageIndex];
+				if (!box) return null;
+				const { scale, offsetX, offsetY } = this.viewport;
+				return [offsetX + (box.x + x) * scale, offsetY + (box.y + y) * scale];
+			},
+			pageAt: (clientX, clientY) => {
+				const layout = this.layout;
+				if (!layout) return null;
+				const rect = this.stage.getBoundingClientRect();
+				const [dx, dy] = this.toDoc({ x: clientX - rect.left, y: clientY - rect.top });
+				const pageIndex = pageAt(layout, dx, dy, 0);
+				const box = layout.boxes[pageIndex];
+				return box ? { pageIndex, local: toPageLocal(box, dx, dy) } : null;
+			},
+			fingerNavigates: (e) => this.policy.route("touch", e.timeStamp, 0, Math.max(e.width || 0, e.height || 0), e.buttons) === "navigate",
+			insertTarget: () => this.mathHost().insertTarget(),
+			selection: () => (this.selection ? { pageIndex: this.selection.pageIndex, strokes: this.selection.strokes, elements: this.selection.elements } : null),
+			select: (pageIndex, strokes, elements) => this.selectItems(pageIndex, strokes, elements),
+			penColor: () => this.tools.penColor,
+			inkOf: (page) => this.inkInView(page),
+			sendTask: (pageIndex, bounds, request) => this.sendChecklistTask(pageIndex, bounds, request),
+			refresh: () => this.refreshUi(),
+		};
+	}
+
+	/** 0.19 (#103): handwritten checklists of this view (null before the view is open). */
+	get checklistTools(): ChecklistTools | null {
+		return this.checklist;
+	}
+
+	/**
+	 * 0.19 (#103): writes the task line of a checkbox (with a picture of its handwriting and a link to the page) into the note the
+	 * request names, the way "Make task" does for a selection (the same code, view/selection-task.ts). The path of the note, or null.
+	 */
+	private sendChecklistTask(pageIndex: number, bounds: BBox, request: TaskRequest): Promise<string | null> {
+		const doc = this.session?.doc;
+		const file = this.file;
+		const page = doc?.pages[pageIndex];
+		const shown = doc ? this.renderPagesOf(doc)[pageIndex] : undefined;
+		if (!doc || !file || !page || !shown) return Promise.resolve(null);
+		const options = this.exportOptions();
+		return runMakeTask({
+			app: this.app, file, settings: this.host.settings, page: shown, pageNumber: pageIndex + 1, crop: taskCropRect(bounds, page), media: this.media,
+			render: {
+				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+			},
+			...(options.prepare ? { prepare: options.prepare } : {}),
+		}, request);
+	}
+
 	/** Colour picker and eyedroppers of this view (null before the view is open). */
 	get colourTools(): ColourTools | null {
 		return this.colour;
@@ -3001,6 +3076,9 @@ export class NotebookView extends FileView {
 			// 0.17 (#20): the sticky note actions (Edit, Collapse, Open) work on the primary page's notes (see stickyTools).
 			stickies: sel.elements.filter((e) => e.type === "sticky").length,
 			stickiesCollapsed: sel.elements.filter((e) => e.type === "sticky" && e.collapsed === true).length,
+			// 0.19 (#103): the checkbox actions (Tick, Label, Send to tasks, Unlink) work on the primary page's checkboxes (see checklistTools).
+			checkboxes: sel.elements.filter((e) => e.type === "checkbox").length,
+			checkboxesLinked: sel.elements.filter((e) => e.type === "checkbox" && e.task !== undefined).length,
 		};
 	}
 
@@ -3382,6 +3460,7 @@ export class NotebookView extends FileView {
 		this.textTap = null;
 		this.lassoTap = null;
 		this.penLinks?.reset();
+		this.checklist?.reset();
 		this.pageOffer?.reset();
 		this.multiTap.reset();
 		this.stopHold();
@@ -3524,6 +3603,8 @@ export class NotebookView extends FileView {
 		// wave 0.10 (51): read-only mode never schedules a save (nothing changed; a stray call must not write the file).
 		if (this.userReadOnly) return;
 		this.session?.markChanged();
+		// 0.19 (#103): the task lines of linked checkboxes follow the ticks a moment later.
+		this.checklist?.docChanged();
 		// v10: live pictures of excerpts of this notebook's pages follow the edit (throttled).
 		this.media?.excerptsChanged();
 		const doc = this.session?.doc;
@@ -3581,6 +3662,7 @@ export class NotebookView extends FileView {
 			}
 			this.pageNav?.markCurrent(current);
 			this.pageOffer?.cancel(); // an offer made for the page that was in view
+			this.checklist?.cancelOffer();
 			this.smartAdd?.hide();
 			this.refreshUi(); // the contextual bar follows the kind of page in view
 			if (n && this.file && this.pendingPage === null) this.location.note(this.file.path, current + 1, this.currentPosition());
@@ -3851,6 +3933,7 @@ export class NotebookView extends FileView {
 		this.viewport = layout ? (this.pageMode?.enabled ? this.pageMode.clamp(v) : clampToPage(v, this.viewSize, layout)) : v;
 		this.renderer?.setViewport(this.viewport, interactive);
 		this.penLinks?.viewChanged();
+		this.checklist?.viewChanged();
 		this.reading?.viewportChanged();
 		this.pdfText?.viewportChanged();
 		if (this.selection) this.pushSelection();
@@ -4114,6 +4197,9 @@ export class NotebookView extends FileView {
 			this.clearSelection();
 			return true;
 		}
+		// 0.19 (#103): a contact on a checkbox is only noted, like the badge of an excerpt: it goes on as ink unless it lifts soon without
+		// moving (then drawEnd drops the dot and ticks the checkbox).
+		if (page && !eraserButton) this.checklist?.begin(page, local, sample, tool);
 
 		if (tool === "eraser") {
 			// Area mode: the outline drawn like a lasso erases what is inside it when the pen lifts.
@@ -4168,6 +4254,7 @@ export class NotebookView extends FileView {
 		// A selection made with the side button's lasso is not carried into new ink.
 		this.clearSelection();
 		this.penLinks?.strokeStarted();
+		this.checklist?.strokeStarted();
 		this.pageOffer?.penDown();
 		this.smartAdd?.hide();
 		this.strokeStart = sample.t;
@@ -4215,6 +4302,7 @@ export class NotebookView extends FileView {
 		if (n > 0) this.perfInput = samples.t[n - 1]!;
 		// v10: a contact that started on an excerpt's badge and moves is ink, not a tap.
 		if (this.excerpts) for (let i = 0; i < n; i++) this.excerpts.watch(NotebookView.at(samples, i));
+		if (this.checklist) for (let i = 0; i < n; i++) this.checklist.watch(NotebookView.at(samples, i));
 		if (this.pdfText?.dragging) {
 			const textPage = this.pdfText.gesturePage;
 			const last = n > 0 ? NotebookView.at(samples, n - 1) : null;
@@ -4414,13 +4502,16 @@ export class NotebookView extends FileView {
 		this.justCommitted = null;
 		// v10: a short unmoved contact on an excerpt's badge was a tap: what it drew (a dot) is dropped, then the jump.
 		const badgeTap = this.excerpts?.takeBadgeTap(cancelled, performance.now(), () => this.contactExtentPx()) ?? null;
-		this.endGesture(cancelled || badgeTap !== null);
+		// 0.19 (#103): the same for a checkbox: a short unmoved contact on it was a tap.
+		const boxTap = this.checklist?.takeTap(cancelled, performance.now(), () => this.contactExtentPx()) ?? null;
+		this.endGesture(cancelled || badgeTap !== null || boxTap !== null);
+		if (boxTap) this.checklist?.toggle(boxTap);
 		if (badgeTap) this.excerpts?.openSource(badgeTap);
 		// An external change seen during the gesture was postponed; check it now.
 		this.session?.gestureEnded();
 		// 0.14: the first stroke written during an automatic lecture is what adds its page (view/lecture-mode.ts). Deferred past the
 		// pointer handler so the contact is over; the document is only touched through the usual edit context.
-		if (!cancelled && badgeTap === null && this.justCommitted) window.setTimeout(() => this.lectureMode?.wrote(), 0);
+		if (!cancelled && badgeTap === null && boxTap === null && this.justCommitted) window.setTimeout(() => this.lectureMode?.wrote(), 0);
 	}
 
 	private endGesture(cancelled: boolean): void {
@@ -4566,7 +4657,7 @@ export class NotebookView extends FileView {
 	}
 
 	/** Commits strokes drawn on a page as one undo step; an infinite page grows in the same step. */
-	private addStrokes(pageIndex: number, page: Page, drawn: Stroke[]): void {
+	private addStrokes(pageIndex: number, page: Page, drawn: Stroke[], offerChecklist = true): void {
 		// 0.14 slides (#226): ink written while a slide is beside the notes remembers it, in the same undo step. The renderer
 		// still gets the strokes it drew (`drawn`, same geometry): the wet ink hands over to exactly those objects.
 		const linked = this.session?.doc ? linkToSlide(this, this.session.doc, drawn, this.host.settings.slideInkLink) : null;
@@ -4593,6 +4684,7 @@ export class NotebookView extends FileView {
 		const cmd = commands.length === 1 ? commands[0]! : new Batch("Draw", commands);
 		this.justCommitted = this.history.execute(cmd) ? { ids: new Set(strokes.map((s) => s.id)), cmd } : null;
 		this.penLinks?.strokesAdded(pageIndex);
+		if (offerChecklist) this.checklist?.strokesAdded(pageIndex, strokes);
 		// Reaching the bottom of a page in the middle: offer (never add) a page right after it.
 		if (doc && this.renderer && !grew) {
 			const maxY = Math.max(...strokes.map((s) => this.renderer!.boundsOf(s).maxY));
@@ -4614,7 +4706,7 @@ export class NotebookView extends FileView {
 		const points = shapePoints(this.tools.shapeKind, shape.a, shape.b, this.tools.penWidth, this.shiftDown);
 		if (points.length < 2) return;
 		const stroke = freezeStroke(createStroke(this.tools.penColor, this.tools.penWidth, points, "shape"));
-		this.addStrokes(shape.pageIndex, page, [stroke]);
+		this.addStrokes(shape.pageIndex, page, [stroke], false);
 	}
 
 	private pushLive(): void {

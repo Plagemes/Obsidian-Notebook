@@ -16196,3 +16196,38 @@ body.notebook-style-obsidian {
 	.nb-ui.nb-qt .nb-qt-back,
 	.nb-ui.nb-qt .nb-qt-tab { transition: none; }
 }
+
+/* ===== 0.19 checklists ===== */
+/* The chip offered next to a square drawn by hand: "Make checkbox". It floats over the page, below the square, and never covers the line to its right. */
+.nb-ui.nb-chk-offer {
+	position: absolute;
+	left: var(--nb-chk-x, 0);
+	top: var(--nb-chk-y, 0);
+	z-index: 25;
+	transform: translateX(-50%);
+	display: flex;
+	padding: 4px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-l);
+	background: var(--nb-panel);
+	box-shadow: var(--nb-shadow-float);
+	animation: nb-chk-offer-in 140ms ease-out;
+}
+
+.nb-ui.nb-chk-offer .nb-chip {
+	min-height: 40px;
+}
+
+@keyframes nb-chk-offer-in {
+	from { opacity: 0; transform: translateX(-50%) translateY(-4px); }
+	to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* The "Open items" badge of the notebook map. */
+.nb-ui .nb-map-badge.is-checklist {
+	color: var(--nb-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.nb-ui.nb-chk-offer { animation: none; }
+}

@@ -253,7 +253,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 100. **P1** 🧪 Invisible ink for self-testing: write answers with a hidden pen and reveal them with "show solutions".
 101. **P2** Colours with meaning: define what each colour means (red = definition, blue = example), filter the view by it and generate a digest per colour.
 102. **P2** Headings from handwriting size (no OCR): lines written large become outline entries, shown as images of the ink.
-103. **P2** Handwritten checklists: a drawn square becomes a tappable checkbox, linked to Obsidian tasks.
+103. **P2** 🧪 Handwritten checklists: a drawn square becomes a tappable checkbox, linked to Obsidian tasks (0.19, format v17: element `checkbox`, offered or automatic from a drawn square, tap to tick, label ink, "Send to tasks" with the tick following into the note, "Open items" filter in the notebook map).
 
 ### B. PDF and study material
 104. **P1** 🧪 Expandable margins on PDFs: widen a PDF page sideways to annotate without covering the text.

@@ -2224,6 +2224,38 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 |---|---|---|---|---|---|
 | Selection into a Markdown note as PNG or SVG with optional link back; cursor insert through the editor, note picker and append fallback; width, background, link-back settings (#59) | yes | `tests/note-insert.test.ts` | | | |
 
+### 0.19 — checklists (handwritten checklists, format v17; steps 1500-1519)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`HARNESS_DOC=checklists`): `dev/harness/dist/shots/checklists-*.png` (tablet and phone, light and dark). Notebooks saved with a checkbox are format v17: 0.18 and older open them read-only.
+
+1500. **Insert.** Insert sheet or quick slot > *Checkbox*. Expected: an unticked rounded square appears at the centre of the view, selected (handles); the selection bar has *Tick / untick*, *Select with text*, *Label…*, *Send to tasks…*. One undo removes it.
+1501. **Tick with the S Pen.** With the pen tool, tap the box with the S Pen tip. Expected: a tick appears, no dot of ink is left, one undo unticks it. A stroke that starts on the box and moves is ordinary ink and ticks nothing. Tap again: it unticks.
+1502. **Tick with a finger.** With *write with finger* off, tap the box with a finger: it ticks (a tap that moves or lingers pans the page instead). With *write with finger* on, the same tap ticks it too and leaves no dot.
+1503. **A drawn square.** With the pen draw a small square (about 1 cm) in one stroke. Expected: after the pen lifts a *Make checkbox* chip appears below it; tap it: the square becomes a checkbox of the same size and place in the colour of the pen; one undo gives the square back as ink. Writing on, scrolling or waiting about 9 seconds takes the chip away.
+1504. **Not a square.** Draw a rectangle, a circle, a very small or very large square, a square with the Shape tool, a highlighter square and a hand-written *O*: none is offered a chip. A square turned about 45° is not offered either.
+1505. **The setting.** Settings > Writing > *Squares drawn as checkboxes*. *Make it a checkbox*: a drawn square becomes a checkbox by itself about half a second after the pen lifts (not if you draw a tick across it at once). *Leave it as ink*: nothing is offered. A checkbox from the Insert sheet works in every mode. Ignore the chip three times in a row: it stops appearing until you make a checkbox or reopen the notebook.
+1506. **The line.** Draw a box and write a few words on its line to the right, a second line below it with its own box. Select the first box (lasso) and tap *Select with text*: the box and its words are selected, not the line below or a box further right on the same line. Move the selection: they move together.
+1507. **Label.** With one checkbox selected tap *Label…*, type a name, *Save*. One undo step. The notebook map tooltip and the Markdown export use it.
+1508. **Send to tasks.** Select a checkbox that has handwriting beside it, *Send to tasks…*. Expected: the Make task dialog (title *Send to tasks*, the text may stay empty), the daily note as default target. *Send task*: the note ends with a line `- [ ] … ![[… task p… .png|200]] [[page link]] ^nb-…`; the selection bar now offers *Unlink task* instead of *Send to tasks…*.
+1509. **The tick follows.** Tick the linked checkbox on the page: within a second the line in the note shows `- [x]` and no other line or byte of the note changed. Untick: `- [ ]`. Undo and redo of a tick do the same.
+1510. **The line is gone.** Delete that line in the note, then tick the checkbox: a notice says the line is no longer in the note and the checkbox is no longer linked (*Unlink task* is gone). The note is not touched. Move or rename the note instead: same result.
+1511. **Unlink.** *Unlink task* on a linked checkbox: the notice says the task stays in the note; ticking the checkbox no longer touches it.
+1512. **Locked page and read-only.** On a locked page a tap on a box shows the *Page locked* notice and changes nothing; *Insert checkbox* is refused. In a read-only notebook a tap changes nothing.
+1513. **Copies.** Duplicate a page and copy-paste a ticked, linked checkbox to another page: the copies keep the tick but are not linked; ticking the copy does not touch the original's task line.
+1514. **Templates.** Save a notebook or a page with ticked boxes as a template and make a new notebook or page from it: every box is unticked and unlinked.
+1515. **Two devices.** On two devices tick and untick the same box at different times, sync so a conflicted copy appears, *Merge conflicted copies*: the checkbox is there once and shows the state of the later toggle; the summary counts it.
+1516. **Open items.** Notebook map > *Open items* (only offered when a page has an unticked box): the pages with open boxes, the number of open boxes on the badge, the label of the first as tooltip; tap goes to the page. Tick the last open box on a page: it leaves the filter.
+1517. **Exports.** Export a page with boxes as PDF, PNG and SVG: boxes and ticks are drawn above the ink, in the colour they were drawn in. A page thumbnail shows them. The Markdown export lists labelled boxes as `- [ ] label` / `- [x] label`.
+1518. **An older plugin.** Copy a notebook with a checkbox to a device with 0.18: it opens read-only with the "newer version" message and is not rewritten.
+1519. **Italian, dark, phone.** The chip, the label dialog, the task dialog, the notices and the setting read in Italian; the chip and the dialogs are readable in light, dark and with *Follow Obsidian theme*; on a phone the tap target is still comfortable and the chip stays inside the view.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Handwritten checklists (#103, format v17): element `checkbox`; v16 to v17 migration (a checkbox in a v16 file is refused, large v16 files still stage), lenient read and strict write, repair, copies (tick kept, link dropped), templates (unticked), merge (later toggle wins), lock guard, history | yes | `tests/model-v17.test.ts` | | | |
+| Checklist geometry: the drawn square detector, the label ink on a line, tap targets, exports of the box and tick (canvas, SVG, PDF), Markdown list | yes | `tests/model-v17.test.ts` | | | |
+| Task link: *Send to tasks* with a block id, ticks follow into the one line of the note (only that line, line endings kept), unlink when the line is gone | yes | `setTaskLineChecked` (`tests/model-v17.test.ts`); harness scenario `checklists` | | | |
+| Checklists UI: insert, tap to tick (pen, mouse, finger), *Make checkbox* chip and the setting, label dialog, *Select with text*, *Open items* filter of the map | yes | harness scenario `checklists` (tablet and phone, light and dark) | | | tap and offer with the S Pen on hardware |
+
 ## Quick check — Windows
 
 Mouse: draw, erase (both modes), undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scroll, Ctrl+wheel zoom, resize the window (the page refits), add a page, use every page menu action with undo, create notebooks with each paper and size, export PDF and SVG and open them, lasso select/move/resize/rotate/delete, close and reopen the notebook. Also: open the library and use every action, import a PDF and write on it, insert a PDF range and an image page, use the shape, text, image and ruler tools, scan from a photo file, use the Pages panel, run *Restore a previous version*, insert an embed in a note and open an `obsidian://notebook` link. With a pen tablet or Surface pen: pressure and eraser end (`buttons & 32`).

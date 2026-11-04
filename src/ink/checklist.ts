@@ -77,6 +77,26 @@ export function checkboxFromStroke(points: readonly Point[]): DetectedSquare | n
 	return { x: round2((cx0 + cx1) / 2 - size / 2), y: round2((cy0 + cy1) / 2 - size / 2), size };
 }
 
+// ---------------------------------------------------------------- tapping
+
+/** A checkbox can be tapped within a square of at least this many CSS px, whatever its size on the page. */
+export const TAP_TARGET_PX = 28;
+
+/**
+ * The topmost checkbox under the point (x, y) of a page, for a tap at zoom `scale` (CSS px per pt): the box itself, or a square of
+ * TAP_TARGET_PX around its centre when that is larger (a finger or a pen tip does not need to hit a 14 pt square exactly).
+ */
+export function checkboxAt(elements: readonly { type: string }[], x: number, y: number, scale: number): CheckboxElement | null {
+	const reach = TAP_TARGET_PX / 2 / Math.max(0.05, scale);
+	for (let i = elements.length - 1; i >= 0; i--) {
+		const el = elements[i] as CheckboxElement;
+		if (el.type !== "checkbox") continue;
+		const half = Math.max(el.size / 2, reach);
+		if (Math.abs(x - (el.x + el.size / 2)) <= half && Math.abs(y - (el.y + el.size / 2)) <= half) return el;
+	}
+	return null;
+}
+
 // ---------------------------------------------------------------- the label
 
 /** Strokes whose centre is within this share of the box above and below the box's own rows belong to the line. */
