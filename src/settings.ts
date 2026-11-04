@@ -83,6 +83,10 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	looseSheetPath: string;
 	/** 0.15 (O12): vault path of the daily notebook ("Today's page"); empty = `<notebooks folder>/Daily.notebook`. */
 	dailyNotebookPath: string;
+	/** 0.16 (#177): show PDFs and images shared to Obsidian from other apps (Home's shared-files card and the library rail). */
+	sharedInbox: boolean;
+	/** 0.16 (#177): folder watched for shared files; empty = Obsidian's attachments folder. */
+	sharedInboxFolder: string;
 	/** 0.15 (O12): "Today's page" also adds a link to the page in today's daily note (Daily notes or Periodic Notes). */
 	dailyLink: boolean;
 	/** 0.15 (O12): create today's daily note when it does not exist yet (only used with `dailyLink`). */
@@ -234,6 +238,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	eraserSize: DEFAULT_ERASER_SIZE,
 	looseSheetPath: "",
 	dailyNotebookPath: "",
+	sharedInbox: true,
+	sharedInboxFolder: "",
 	dailyLink: false,
 	dailyCreateNote: false,
 	edgeRejection: false,
@@ -335,6 +341,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	s.eraserSize = normaliseEraserSize(d.eraserSize);
 	if (typeof d.looseSheetPath === "string") s.looseSheetPath = d.looseSheetPath.trim();
 	if (typeof d.dailyNotebookPath === "string") s.dailyNotebookPath = d.dailyNotebookPath.trim();
+	if (typeof d.sharedInbox === "boolean") s.sharedInbox = d.sharedInbox;
+	if (typeof d.sharedInboxFolder === "string") s.sharedInboxFolder = d.sharedInboxFolder.trim();
 	if (typeof d.dailyLink === "boolean") s.dailyLink = d.dailyLink;
 	if (typeof d.dailyCreateNote === "boolean") s.dailyCreateNote = d.dailyCreateNote;
 	if (typeof d.edgeRejection === "boolean") s.edgeRejection = d.edgeRejection;

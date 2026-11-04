@@ -303,6 +303,9 @@ const LIBRARY: SettingSpec[] = [
 		id: "storageManager", section: "library", order: 41, name: "settings.storage", desc: "settings.storage.desc",
 		control: { type: "action", run: "storage-open", button: "settings.open" }, keywords: "storage space size disk cleanup duplicate unused backup spazio archiviazione pulizia",
 	},
+	// 0.16 shared files (#177): PDFs and images shared to Obsidian from other apps, offered on Home.
+	{ id: "sharedInbox", section: "library", order: 42, name: "settings.sharedInbox", desc: "settings.sharedInbox.desc", control: { type: "toggle" }, keywords: "inbox share shared received files pdf image attachments condividi ricevuti file allegati" },
+	{ id: "sharedInboxFolder", section: "library", order: 43, name: "settings.sharedInboxFolder", desc: "settings.sharedInboxFolder.desc", control: { type: "folder", placeholder: "/" }, parent: "sharedInbox", visible: (s) => s.sharedInbox },
 	{ id: "looseSheetPath", section: "library", group: ADVANCED, order: 10, name: "settings.looseSheet", desc: "settings.looseSheet.desc", control: { type: "text", placeholder: defaultLooseSheetPath(DEFAULT_SETTINGS.folder) } },
 	{ id: "templatesFolder", section: "library", group: ADVANCED, order: 20, name: "settings.templatesFolder", desc: "settings.templatesFolder.desc", control: { type: "folder", placeholder: "_templates" } },
 	// 0.15 templates (roadmap #19)

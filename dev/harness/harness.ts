@@ -44,6 +44,7 @@ import { checkSettings } from "./settings-check";
 import { checkZettel, zettelState, type ZettelState } from "./zettel-check";
 import { checkPlugin } from "./plugin-check";
 import { checkDaily } from "./daily-check";
+import { checkInbox, inboxShot } from "./inbox-check";
 import { checkHints } from "./hints-check";
 import { checkAdaptiveToolbar, adaptiveToolbarShot, type AdaptiveShotState } from "./toolbar-check";
 import { checkCreate, prepareShot } from "./create-check";
@@ -2088,6 +2089,15 @@ async function checkHome(): Promise<Record<string, unknown>> {
 	return { ok: results.every((r) => r.ok) && errors.length === 0, results, errors: [...errors] };
 }
 harnessApi.checkHome2 = checkHome;
+// 0.16 inbox: files shared from other apps (inbox-check.ts).
+harnessApi.checkInbox = async () => {
+	try {
+		return JSON.parse(JSON.stringify(await checkInbox({ errors, notices }))) as unknown;
+	} catch (e) {
+		return { ok: false, results: [], errors: [`inbox check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} };
+	}
+};
+harnessApi.inboxShot = (state: "list" | "close") => inboxShot(state);
 harnessApi.checkLayout = checkLayout; // 0.14 layout
 harnessApi.home2State = (state: string) => (libraryHarness ? home2State(libraryHarness, state) : false);
 // 0.14 sections: the dynamic sections (sections-check.ts).
@@ -2116,6 +2126,7 @@ async function main(): Promise<void> {
 		return;
 	}
 	// 0.12.1: doc=plugin starts the whole plugin on its own stub app (plugin-check.ts); no notebook is opened.
+	if (params.get("doc") === "inbox") return;
 	if (params.get("doc") === "plugin" || params.get("doc") === "hints" || params.get("doc") === "daily") return;
 	await seed();
 	await open();

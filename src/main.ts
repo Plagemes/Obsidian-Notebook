@@ -15,6 +15,7 @@ import { registerFolderMeta } from "./library/folder-meta-events";
 import { BenchmarkModal } from "./view/benchmark";
 import { PenTestModal, penSignalInfo } from "./view/pen-test-modal";
 import { NotebookLibraryHost } from "./library/host";
+import { SharedInbox } from "./library/shared-inbox";
 import { registerIntegration } from "./integration";
 import type { HistoryService } from "./integration/history-service";
 import type { NotebookApi } from "./integration/api";
@@ -50,6 +51,8 @@ import { registerResilience, type ResilienceServices } from "./view/resilience";
 export default class NotebookPlugin extends Plugin {
 	settings!: NotebookSettings;
 	private host!: NotebookLibraryHost;
+	/** 0.16 (#177): PDFs and images shared to the vault from other apps. */
+	private sharedInbox?: SharedInbox;
 	journal!: AdapterJournalStore;
 	/** Class timetable (wave 0.6). */
 	timetable!: TimetableService;
@@ -133,7 +136,17 @@ export default class NotebookPlugin extends Plugin {
 					const service = inboxService(this);
 					return service ? this.inboxPort(service) : null;
 				},
+				sharedInbox: () => this.sharedInbox ?? null,
 			});
+			// 0.16 (#177): watches the folder shared files land in.
+			this.sharedInbox = new SharedInbox({
+				app: this.app,
+				settings: () => this.settings,
+				pageSizes: (id) => this.host.pdf.pageSizes(id),
+				importPdfFrom: (folder, file) => this.host.importPdfFrom(folder, file),
+				openNotebook: (file) => this.host.openNotebook(file),
+			});
+			this.sharedInbox.start(this);
 			// wave 0.6: library trash auto-empty (setting, off by default)
 			this.app.workspace.onLayoutReady(() => void this.host.trash.purgeExpired().catch((e) => console.error("[notebook] trash auto-empty failed", e)));
 		});

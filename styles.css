@@ -13844,3 +13844,35 @@ body.notebook-style-obsidian {
 		display: none;
 	}
 }
+
+/* ===== 0.16 inbox ===== */
+.nb-ui .nb-home-shared .nb-section-header {
+	align-items: center;
+}
+
+.nb-ui .nb-home-shared .nb-section-tools {
+	margin-left: auto;
+}
+
+.nb-ui .nb-home-shared .nb-dyn-count {
+	margin-left: 4px;
+}
+
+.nb-ui .nb-panel .nb-shared-hint {
+	display: block;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text-muted);
+	padding: 0 4px 2px;
+}
+
+.nb-ui.nb-shared-modal .nb-shared-list {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.nb-ui.nb-shared-placement .nb-modal-row {
+	min-height: 56px;
+}
