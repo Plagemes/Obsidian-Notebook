@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createDocument, createPage } from "../src/model/document";
 import { expandPlaceholders, notebookFromTemplate, templateFromNotebook } from "../src/model/notebook-template";
+import { addState, makePart, withPose } from "../src/model/states";
 import { parse, serializeChecked, freezeElement } from "../src/model/serialize";
 import { isHiddenNotebookPath, notebookTemplatesFolderPath } from "../src/storage/trash-paths";
 import type { Asset, NotebookDocument } from "../src/model/types";
@@ -127,5 +128,47 @@ describe("notebook templates folder", () => {
 		expect(isHiddenNotebookPath("Notebooks/Planner.notebook", "Notebooks", "")).toBe(false);
 		expect(isHiddenNotebookPath("Other/Planners/a.notebook", "Notebooks", "", "Other/Planners")).toBe(true);
 		expect(isHiddenNotebookPath("Other/Planners/a.notebook", "Notebooks", "")).toBe(false);
+	});
+});
+
+describe("templates and drawings with states (v13)", () => {
+	/** The planner's first page with its two strokes grouped into a part and a state that moves it. */
+	function withStates(): NotebookDocument {
+		const doc = planner();
+		const page = doc.pages[0]!;
+		const part = makePart(undefined, page.strokes, "Block")!;
+		const state = addState(part.states, "Pushed")!;
+		page.states = withPose(state.states, state.stateId, part.partId, { dx: 40 });
+		return doc;
+	}
+
+	it("a template of a notebook with states carries them to the new stroke ids", () => {
+		const src = withStates();
+		const tpl = templateFromNotebook(src, NOW);
+		const page = tpl.pages[0]!;
+		expect(page.states).toBeDefined();
+		const ids = new Set(page.strokes.map((s) => s.id));
+		const items = page.states!.parts[0]!.items;
+		expect(items).toHaveLength(2);
+		for (const id of items) expect(ids.has(id)).toBe(true);
+		for (const id of items) expect(src.pages[0]!.strokes.some((s) => s.id === id)).toBe(false);
+		expect(page.states!.list[0]!.poses[0]).toMatchObject({ dx: 40 });
+		const checked = serializeChecked(tpl, true);
+		expect(checked.ok).toBe(true);
+		if (checked.ok) {
+			const back = parse(checked.text);
+			expect(back.ok && back.doc.pages[0]!.states?.parts[0]?.items).toEqual(items);
+		}
+	});
+
+	it("from a template with content the states follow the strokes again; pages only leaves none behind", () => {
+		const tpl = templateFromNotebook(withStates(), NOW);
+		const full = notebookFromTemplate(tpl, { content: true, now: NOW });
+		const strokeIds = new Set(full.pages[0]!.strokes.map((s) => s.id));
+		for (const id of full.pages[0]!.states!.parts[0]!.items) expect(strokeIds.has(id)).toBe(true);
+		const empty = notebookFromTemplate(tpl, { content: false, now: NOW });
+		expect(empty.pages[0]!.states).toBeUndefined();
+		const r = serializeChecked(empty);
+		expect(r.ok).toBe(true);
 	});
 });

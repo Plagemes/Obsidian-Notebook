@@ -42,7 +42,7 @@ import { analyseSpace, planSpaceChange, spacePreview } from "../ink/space";
 import { heavyReasons, pageLoad, planPageSplit } from "../ink/heavy-page";
 import { apply, IDENTITY, invert, isIdentity, multiply, rotateAbout, scaleAbout, translate, type Matrix } from "../ink/transform";
 import { clampToPage, fitWidth, pan, PAGE_MARGIN, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
-import { drawHeader, headerLayout, type HeaderLayout, type HeaderNotebook, type HeaderSettings } from "../ink/page-header";
+import { drawHeader, exportHeaderFor, headerLayout, type HeaderLayout, type HeaderNotebook, type HeaderSettings } from "../ink/page-header";
 import { layoutPagesHorizontal, type ScrollMode } from "../ink/page-mode";
 import { capturePosition, positionFromState, restoreViewport, type SavedPosition } from "../ink/view-position";
 import { PageMode } from "./page-mode";
@@ -1760,13 +1760,7 @@ export class NotebookView extends FileView {
 	private exportHeader(): ((page: Page) => HeaderLayout | null) | undefined {
 		const s = this.host.settings;
 		const doc = this.session?.doc;
-		if (!doc || s.headerMode === "off" || !s.headerInExport) return undefined;
-		const nb = this.headerNotebook();
-		const index = new Map(doc.pages.map((p, i) => [p, i] as const));
-		return (page) => {
-			const i = index.get(page);
-			return i === undefined ? null : headerLayout(page, i, doc.pages.length, s, nb);
-		};
+		return doc ? exportHeaderFor(doc.pages, s, this.headerNotebook()) : undefined;
 	}
 
 	/** v8: exports draw hidden ink only where the solutions are shown, and label boxes in the reader's language. */

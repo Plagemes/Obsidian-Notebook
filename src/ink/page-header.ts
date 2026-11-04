@@ -116,6 +116,20 @@ export function headerLayout(page: Page, index: number, count: number, s: Header
 	return { text, x, align: s.headerAlign, y: footer ? page.height - MIDDLE : MIDDLE, size: HEADER_TEXT_SIZE, maxWidth: Math.max(40, page.width - 2 * HEADER_SIDE), footer };
 }
 
+/**
+ * The header of a page for exports and printing (undefined: off, or kept out of exports). The page is found by its id, not by
+ * object: the exports are handed live state views of the pages (a page with states is a different object with the same id),
+ * and the number on the page is its place in the notebook, not in the exported selection.
+ */
+export function exportHeaderFor(pages: readonly Pick<Page, "id">[], s: HeaderSettings, nb: HeaderNotebook): ((page: Page) => HeaderLayout | null) | undefined {
+	if (s.headerMode === "off" || !s.headerInExport) return undefined;
+	const index = new Map(pages.map((p, i) => [p.id, i] as const));
+	return (page) => {
+		const i = index.get(page.id);
+		return i === undefined ? null : headerLayout(page, i, pages.length, s, nb);
+	};
+}
+
 /** Paints the line on a context already set to page coordinates (pt). One text draw; nothing is kept. */
 export function drawHeader(ctx: CanvasRenderingContext2D, h: HeaderLayout, night = false): void {
 	ctx.save();

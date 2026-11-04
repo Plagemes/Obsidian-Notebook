@@ -102,6 +102,7 @@ export function notebookFromTemplate(template: NotebookDocument, options: FromTe
 		if (!content) {
 			page.strokes = [];
 			delete page.elements;
+			delete page.states; // v13: the parts name strokes, and there are none left
 			return page;
 		}
 		if (page.elements) {

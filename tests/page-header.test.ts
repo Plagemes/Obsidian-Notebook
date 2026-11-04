@@ -4,7 +4,7 @@ import { buildLecturePage } from "../src/view/lecture-logic";
 import { pageToSvg } from "../src/ink/export-svg";
 import { pagesToPdf } from "../src/ink/export-pdf";
 import {
-	bandTaken, headerLayout, headerText, HEADER_BAND, HEADER_SIDE, isHeaderAlign, isHeaderMode,
+	bandTaken, exportHeaderFor, headerLayout, headerText, HEADER_BAND, HEADER_SIDE, isHeaderAlign, isHeaderMode,
 	type HeaderNotebook, type HeaderSettings,
 } from "../src/ink/page-header";
 import { DEFAULT_SETTINGS, readSettings } from "../src/settings";
@@ -119,5 +119,22 @@ describe("settings", () => {
 		expect(s.headerDate).toBe(DEFAULT_SETTINGS.headerDate);
 		expect(s.headerTitle).toBe(true);
 		expect(isHeaderMode("header") && isHeaderAlign("centre") && !isHeaderMode("x")).toBe(true);
+	});
+});
+
+describe("exportHeaderFor", () => {
+	it("is off when the header is off or kept out of exports", () => {
+		const pages = [page()];
+		expect(exportHeaderFor(pages, on({ headerMode: "off" }), nb)).toBeUndefined();
+		expect(exportHeaderFor(pages, on({ headerInExport: false }), nb)).toBeUndefined();
+	});
+	it("numbers a page by its place in the notebook, also for a live state view of it (same id, other object)", () => {
+		const pages = [page(), page(), page()];
+		const header = exportHeaderFor(pages, base, nb)!;
+		expect(header(pages[1]!)?.text).toBe("2 / 3");
+		const view = Object.create(pages[2]!, { strokes: { enumerable: true, get: () => [] } }) as typeof pages[number];
+		expect(view).not.toBe(pages[2]);
+		expect(header(view)?.text).toBe("3 / 3");
+		expect(header(page())).toBeNull();
 	});
 });

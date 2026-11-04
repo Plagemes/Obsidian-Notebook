@@ -5,6 +5,7 @@ import { createExcerpt } from "../src/model/excerpts";
 import { AddAsset, Batch, History } from "../src/model/history";
 import { parse, serialize } from "../src/model/serialize";
 import { DEFAULT_META, PAGE_SIZES, type Asset, type ImageElement, type NotebookDocument } from "../src/model/types";
+import { addState, makePart, withPose } from "../src/model/states";
 import { sampleDocument } from "./helpers";
 
 const id = (n: number) => n.toString(16).padStart(24, "0");
@@ -121,6 +122,20 @@ describe("repointing a closed notebook's text", () => {
 		expect(useCount(assetUses(back.doc, id(1)))).toBe(0);
 		expect(useCount(assetUses(back.doc, id(3)))).toBe(4);
 		expect(r.text).not.toContain(id(1));
+	});
+
+	it("keeps the parts and states of a drawing (v13) when it repoints the pictures", () => {
+		const doc = busyDocument();
+		const page = doc.pages[0]!;
+		const part = makePart(undefined, page.strokes, "Block")!;
+		const state = addState(part.states, "Pushed")!;
+		page.states = withPose(state.states, state.stateId, part.partId, { dx: 30, rot: 10 });
+		const r = repointInText(serialize(doc), id(1), image(3, "jpg"));
+		if (!r.ok || r.text === null) throw new Error("expected text");
+		const back = parse(r.text);
+		if (!back.ok) throw new Error("expected a document");
+		expect(back.doc.pages[0]!.states).toEqual(page.states);
+		expect(back.doc.pages[0]!.strokes.map((s) => s.id)).toEqual(page.strokes.map((s) => s.id));
 	});
 
 	it("text: null (leave the file alone) when the notebook does not use the picture", () => {
