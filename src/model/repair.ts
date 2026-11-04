@@ -794,7 +794,8 @@ function salvage(raw: RawObject, summary: RepairSummary, now: Date, cut: WeakSet
 	}
 	const doc: NotebookDocument = { format: FORMAT_ID, version: CURRENT_VERSION, id, createdAt, modifiedAt: iso, pages, meta, assets };
 	if (position) doc.position = position;
-	// Entries no stroke refers to are not written, but are kept while the notebook is open (a later link finds them).
+	// Entries no stroke refers to are not written: the repaired document handed back is the strict re-parse of the checked
+	// text, which has no unused slide entries (a later link to the same PDF page creates a new one).
 	if (slides.length > 0) doc.slides = [...slides];
 	return doc;
 }

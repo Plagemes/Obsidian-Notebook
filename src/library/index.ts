@@ -4,8 +4,8 @@ import { tagAncestors, tagIsWithin } from "../model/tags";
 import { stateKeys } from "./library-state";
 import { COVER_ART_STYLES, type CoverArtStyle } from "../model/types";
 
-/** v5: entries also count PDF pages and open markers (Home and smart collections) and carry the v11 cover (`coverArt`); v4 added the titled bookmarks (quick switcher); v3 the page tags. Older indexes are rebuilt. */
-export const INDEX_VERSION = 5;
+/** v6: entries also count the pages to fill (`emptyPages`, dynamic sections); v5 added the PDF page and open marker counts (Home and smart collections) and the v11 cover (`coverArt`); v4 the titled bookmarks (quick switcher); v3 the page tags. Older indexes are rebuilt. */
+export const INDEX_VERSION = 6;
 /** "Recent" shows this many notebooks. */
 export const RECENT_LIMIT = 20;
 
