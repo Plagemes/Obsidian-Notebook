@@ -433,7 +433,7 @@ Features for following a lecture live. Exam and review features stay in the sepa
 219. **P2** "Lecture" and "study" profiles: one tap switches pens, paper and stabilization for fast or careful writing.
 220. **P2** End-of-lecture summary: three guided lines (Cornell style), also saved in the companion note.
 221. **P2** Lecture log in the daily note.
-222. **P2** Automatic snapshot at the end of the lecture (version history).
+222. **P2** 🧪 Automatic snapshot at the end of the lecture (version history).
 223. **P1** 🧪 "End of lecture" panel: open questions, gaps, homework and markers at a glance.
 
 ### Slides and board

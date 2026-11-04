@@ -3452,4 +3452,14 @@ export const it: Partial<Record<MessageKey, string>> = {
 	// 0.18 review fixes (I)
 	"annotatePdf.tooLarge": "Questo PDF pesa {size} MB, oltre il limite di {max} MB per annotare da qui. Importalo dalla libreria.",
 	"annotatePdf.scanning": "Cerco questo PDF nei tuoi quaderni… {done} di {total}",
+	// 0.19 snapshot
+	"settings.lectureSnapshots": "Istantanea a fine lezione",
+	"settings.lectureSnapshots.desc": "Conserva una versione col nome del corso a fine lezione. Solo se è cambiato qualcosa.",
+	"settings.lectureSnapshotsKeep": "Istantanee di lezione da conservare",
+	"settings.lectureSnapshotsKeep.desc": "Per quaderno. Le più vecchie vanno nel cestino; le altre versioni non si toccano.",
+	"history.lectureLabel": "Lezione {course} {date} {time}",
+	"history.lectureLabel.plain": "Lezione {date} {time}",
+	"history.filter.lecture": "Istantanee di lezione",
+	"history.filter.lecture.hint": "Mostra solo le istantanee fatte a fine lezione",
+	"history.filter.none": "Ancora nessuna istantanea di lezione di questo quaderno.",
 };

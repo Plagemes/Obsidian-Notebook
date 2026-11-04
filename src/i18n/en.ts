@@ -3450,6 +3450,16 @@ export const en = {
 	// 0.18 review fixes (I)
 	"annotatePdf.tooLarge": "This PDF is {size} MB, over the {max} MB limit for annotating from here. Import it from the library instead.",
 	"annotatePdf.scanning": "Looking through your notebooks for this PDF… {done} of {total}",
+	// 0.19 snapshot
+	"settings.lectureSnapshots": "Snapshot at the end of a lecture",
+	"settings.lectureSnapshots.desc": "Keeps a named version when a class you wrote in ends. Only if something changed.",
+	"settings.lectureSnapshotsKeep": "Lecture snapshots to keep",
+	"settings.lectureSnapshotsKeep.desc": "Per notebook. Older lecture snapshots go to the trash; other versions are never touched.",
+	"history.lectureLabel": "Lecture {course} {date} {time}",
+	"history.lectureLabel.plain": "Lecture {date} {time}",
+	"history.filter.lecture": "Lecture snapshots",
+	"history.filter.lecture.hint": "Show only the snapshots taken at the end of a lecture",
+	"history.filter.none": "No lecture snapshots of this notebook yet.",
 } as const;
 
 export type MessageKey = keyof typeof en;

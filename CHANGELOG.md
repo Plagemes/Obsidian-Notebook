@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### snapshot
+- **Automatic snapshot at the end of a lecture (#222).** When a lecture ends, the notebook keeps a version of itself named after the course, shown in *Restore a previous version* as "Lecture <course> <date> <hh:mm>" with a graduation-cap mark. A lecture ends when lecture mode is left (by you or by the clock), when the notebook is closed, or when the app goes to the background, after you wrote during a timetable class; once the class is over and lecture mode is not on, the next tick counts it too. The view saves first and the snapshot is made from the file on disk, never from memory; nothing is taken if the save did not finish, if you did not write, or if the notebook holds what its newest snapshot already holds (a fingerprint that ignores the modified time). It goes through the same history folder as every snapshot (`<id>/<YYYYMMDD-HHmm>-lecture.snapshot`; the course is kept in a small lenient `lectures.json` beside them, never rewritten if unreadable). Version history has a *Lecture snapshots* filter when the notebook has any. No format change.
+- **Settings (Library).** *Snapshot at the end of a lecture* (on by default: it only does anything for a notebook linked to a timetable class, and the existing interval snapshots are on by default too) and *Lecture snapshots to keep* (default 20 per notebook). Only this feature's own `-lecture` snapshots beyond the count move to the trash (through Obsidian's trash path); ordinary snapshots and their *Versions to keep* count are never touched by it, and it never touches them. Pure logic in `src/storage/lecture-snapshot.ts`, the list pieces in `src/view/history-ui.ts`. Tests: `tests/lecture-snapshot.test.ts`. Harness: `dev/harness/snapshot-check.ts` (`doc=snapshot`).
+
 ## 0.18.0 — 2026-11-05
 
 Review a page and move between notes more freely: margin comments anchored to a region of the page, an infinite page split into sheets of paper for export, a selection sent into a Markdown note, pages copied to another notebook with a link back, a QR code for a page, the notes that mention a page, annotating a PDF from Obsidian's PDF viewer, and quick tabs for the pages you keep going back to. The notebook format moves to version 16 (an older plugin opens a v16 file read-only).

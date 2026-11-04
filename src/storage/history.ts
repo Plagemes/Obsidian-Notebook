@@ -49,7 +49,8 @@ export function snapshotFileName(d: Date): string {
 
 /** The date in a snapshot file name, or null when the name is not one of ours. */
 export function parseSnapshotName(name: string): Date | null {
-	const m = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})\.snapshot$/.exec(name);
+	// 0.19: `-lecture` marks a snapshot taken automatically at the end of a lecture (see storage/lecture-snapshot.ts).
+	const m = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(?:-lecture)?\.snapshot$/.exec(name);
 	if (!m) return null;
 	const [year, month, day, hour, minute] = m.slice(1).map(Number) as [number, number, number, number, number];
 	const d = new Date(year, month - 1, day, hour, minute);

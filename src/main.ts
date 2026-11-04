@@ -2,7 +2,7 @@ import { trackWriting } from "./view/writing-quiet";
 import { registerHints } from "./ui/hints";
 import { showNotice } from "./view/notice";
 import { setArtCacheScope } from "./ui/art/generative-art";
-import { Platform, Plugin, type TFile } from "obsidian";
+import { Platform, Plugin, TFile } from "obsidian";
 import { onLanguageChanged, setUiLanguage, t } from "./i18n";
 import { readSettings, type NotebookSettings } from "./settings";
 import { positionEquals, type SavedPosition } from "./ink/view-position";
@@ -376,6 +376,16 @@ export default class NotebookPlugin extends Plugin {
 	/** 0.14 (401): the class in progress that belongs to the notebook at `path`, for automatic lecture mode; null when none. */
 	lectureClassFor(path: string): LectureClass | null {
 		return this.timetable?.lectureClassFor(path) ?? null;
+	}
+
+	/**
+	 * 0.19 (222): a lecture ended in the notebook at `path` (lecture mode left, the notebook closed or the app hidden after
+	 * writing during the class). `saved` says the view's flush wrote everything; the snapshot is taken from the file on disk.
+	 */
+	lectureEnded(path: string, course: string, saved: boolean): void {
+		const file = this.app.vault.getAbstractFileByPath(path);
+		if (!(file instanceof TFile)) return;
+		void this.history?.lectureSnapshot(file, course, { wrote: true, saved });
 	}
 
 	/** wave 0.10 (O15): Obsidian's status bar item shows the page and save state of the active notebook. Desktop only: mobile has no status bar. */

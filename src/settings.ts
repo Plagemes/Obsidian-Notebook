@@ -65,6 +65,10 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	snapshotIntervalHours: number;
 	/** Version history: how many snapshots to keep per notebook. */
 	snapshotsToKeep: number;
+	/** 0.19: a named snapshot when a lecture ends (only if the notebook changed). */
+	lectureSnapshots: boolean;
+	/** 0.19: automatic lecture snapshots to keep per notebook (other snapshots are never pruned by this). */
+	lectureSnapshotsKeep: number;
 	/** Writing near the bottom of the last page appends a page (same size and paper). Not for infinite pages. */
 	autoNextPage: boolean;
 	/** The eraser's Area mode also removes the text boxes and images inside the outline. */
@@ -254,6 +258,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	defaultLandscape: false,
 	snapshotIntervalHours: 24,
 	snapshotsToKeep: 10,
+	lectureSnapshots: true,
+	lectureSnapshotsKeep: 20,
 	autoNextPage: true,
 	eraseAreaElements: false,
 	outlineBookmarks: true,
@@ -374,6 +380,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.defaultLandscape === "boolean") s.defaultLandscape = d.defaultLandscape;
 	if (typeof d.snapshotIntervalHours === "number" && d.snapshotIntervalHours >= 0 && d.snapshotIntervalHours <= 720) s.snapshotIntervalHours = d.snapshotIntervalHours;
 	if (typeof d.snapshotsToKeep === "number" && Number.isInteger(d.snapshotsToKeep) && d.snapshotsToKeep >= 1 && d.snapshotsToKeep <= 100) s.snapshotsToKeep = d.snapshotsToKeep;
+	if (typeof d.lectureSnapshots === "boolean") s.lectureSnapshots = d.lectureSnapshots;
+	if (typeof d.lectureSnapshotsKeep === "number" && Number.isInteger(d.lectureSnapshotsKeep) && d.lectureSnapshotsKeep >= 1 && d.lectureSnapshotsKeep <= 100) s.lectureSnapshotsKeep = d.lectureSnapshotsKeep;
 	if (typeof d.autoNextPage === "boolean") s.autoNextPage = d.autoNextPage;
 	if (typeof d.eraseAreaElements === "boolean") s.eraseAreaElements = d.eraseAreaElements;
 	if (typeof d.outlineBookmarks === "boolean") s.outlineBookmarks = d.outlineBookmarks;
