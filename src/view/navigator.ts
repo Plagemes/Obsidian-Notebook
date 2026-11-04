@@ -214,7 +214,7 @@ export class PageNavigator {
 			footer.createSpan({ text: String(index + 1), cls: "notebook-navigator-number" });
 			// 0.16 (#124): a locked page shows a lock in the footer; a tap unlocks it.
 			if (page.locked) {
-				const lock = footer.createEl("button", { cls: "notebook-tool clickable-icon notebook-navigator-lock", attr: { "aria-label": t("lock.mark.aria"), type: "button" } });
+				const lock = footer.createEl("button", { cls: "nb-ui notebook-tool clickable-icon notebook-navigator-lock", attr: { "aria-label": t("lock.mark.aria"), type: "button" } });
 				setIcon(lock, "lock");
 				lock.addEventListener("click", (e) => {
 					e.stopPropagation();

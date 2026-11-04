@@ -13898,19 +13898,19 @@ body.notebook-style-obsidian {
 	height: 15px;
 }
 
-.notebook-page-indicator .nb-lock-mark {
+.nb-ui.nb-lock-mark {
 	display: inline-flex;
 	margin-left: 6px;
 	vertical-align: middle;
 	color: var(--nb-accent);
 }
 
-.notebook-page-indicator .nb-lock-mark svg {
+.nb-ui.nb-lock-mark svg {
 	width: 13px;
 	height: 13px;
 }
 
-.notebook-navigator-item .notebook-navigator-lock {
+.nb-ui.notebook-navigator-lock {
 	color: var(--nb-accent);
 }
 

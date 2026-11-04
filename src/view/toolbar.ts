@@ -377,7 +377,7 @@ export class Toolbar {
 	setPage(current: number, total: number, locked = false): void {
 		this.pageButton.setText(total > 0 ? `${current} / ${total}` : "–");
 		this.pageButton.toggleClass("is-locked", locked && total > 0);
-		if (locked && total > 0) setIcon(this.pageButton.createSpan({ cls: "nb-lock-mark", attr: { "aria-hidden": "true" } }), "lock");
+		if (locked && total > 0) setIcon(this.pageButton.createSpan({ cls: "nb-ui nb-lock-mark", attr: { "aria-hidden": "true" } }), "lock");
 		this.pageButton.setAttribute("aria-label", total > 0 ? t("ui.pageSheet.open", { n: String(current), total: String(total) }) : t("page.menu"));
 		this.pageButton.disabled = total <= 0;
 	}

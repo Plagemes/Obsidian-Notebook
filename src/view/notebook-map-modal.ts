@@ -128,8 +128,7 @@ export class NotebookMapModal extends Modal {
 				const mark = badges.createSpan({ cls: "nb-map-badge is-locked", attr: { "aria-hidden": "true" } });
 				setIcon(mark.createSpan({ cls: "nb-map-badge-icon" }), "lock");
 			}
-			const setLocked = this.mapHost.setLocked;
-			if (setLocked) {
+			if (this.mapHost.setLocked) {
 				const enabled = this.mapHost.canLock?.() ?? true;
 				const lock = foot.createSpan({
 					cls: "nb-map-lock", attr: { role: "button", tabindex: enabled ? "0" : "-1", "aria-disabled": String(!enabled), "aria-pressed": String(!!mp.locked),
@@ -141,7 +140,7 @@ export class NotebookMapModal extends Modal {
 					e.preventDefault();
 					e.stopPropagation();
 					if (!enabled) return;
-					if (setLocked(mp.pageId, !mp.locked)) this.render();
+					if (this.mapHost.setLocked?.(mp.pageId, !mp.locked)) this.render();
 				};
 				lock.addEventListener("click", toggle);
 				lock.addEventListener("keydown", (e) => {

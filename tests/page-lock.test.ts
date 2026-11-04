@@ -120,7 +120,7 @@ describe("the guard: every kind of edit of a locked page is refused", () => {
 		["remove an element", (f) => new RemoveElement("p1", f.p1.elements![0]!)],
 		["replace an element (edit text, move, restyle)", (f) => new ReplaceElement("p1", f.p1.elements![0]!, text("t1", "changed"))],
 		["change the layer order", (f) => new ReorderLayer("p1", "strokes", f.p1.strokes, [...f.p1.strokes].reverse())],
-		["change the paper", () => new SetPaper("p1", { kind: "grid", spacing: 14.17 }, { kind: "lined", spacing: 28 })],
+		["change the paper", () => new SetPaper("p1", { kind: "grid", spacing: 14.17 }, { kind: "ruled", spacing: 28 })],
 		["change the page size", () => new SetPageSize("p1", { width: 595.28, height: 841.89 }, { width: 400, height: 600 })],
 		["change the margins", () => new SetPageMargins("p1", undefined, { left: 20, right: 0, bottom: 0 })],
 		["change the background", () => new SetPageBackground("p1", { kind: "image", asset: "a1" }, { width: 595.28, height: 841.89 })],
@@ -164,7 +164,7 @@ describe("the guard: every kind of edit of a locked page is refused", () => {
 	it("the same edits are fine on an unlocked page", () => {
 		const f = fixture(false);
 		expect(f.history.execute(new AddStroke("p1", stroke("new"), 3))).toBe(true);
-		expect(f.history.execute(new SetPaper("p1", { kind: "grid", spacing: 14.17 }, { kind: "lined", spacing: 28 }))).toBe(true);
+		expect(f.history.execute(new SetPaper("p1", { kind: "grid", spacing: 14.17 }, { kind: "ruled", spacing: 28 }))).toBe(true);
 		expect(f.history.execute(new DeletePage(f.p1, 0))).toBe(true);
 		expect(f.refused).toEqual([]);
 	});
