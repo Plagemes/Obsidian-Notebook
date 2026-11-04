@@ -7,7 +7,7 @@
  * - Strokes are drawn in array order, so they can be reordered among themselves (e.g. send a highlighter behind the
  *   pen ink, or bring a correction in front of a fill).
  * - Elements are drawn in array order inside their kind, and the kinds have a fixed stacking: images, then graphs (v9),
- *   boxes, equations (v9), then text boxes, all under the ink; marker badges above the ink. Reordering therefore works among elements of
+ *   boxes, sticky notes (v15), equations (v9), then text boxes, all under the ink; marker badges above the ink. Reordering therefore works among elements of
  *   the same kind (two overlapping images, two text boxes); an element never jumps across kinds, and ink never goes
  *   under an element.
  * - A selection that holds both reorders each group within its own layer, as one undo step.
@@ -27,6 +27,8 @@ export function elementBand(el: PageElement): number {
 		case "image": case "excerpt": return 0;
 		case "graph": return 1;
 		case "box": return 2;
+		// v15 sticky notes are drawn after the boxes and before the equations and text boxes (ink/renderer.ts drawElements); only the order of the bands matters.
+		case "sticky": return 2.5;
 		case "equation": return 3;
 		case "text": return 4;
 		case "marker": return 5;

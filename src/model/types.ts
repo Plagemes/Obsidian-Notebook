@@ -2,6 +2,7 @@
 
 export const FORMAT_ID = "obsidian-notebook";
 /**
+ * v15: sticky notes (#20): coloured notes on the page (page elements with typed text; ink written on a note belongs to it).
  * v14: a finished page can be locked (#124): `Page.locked` makes the page refuse every edit until it is unlocked.
  * v13: drawings with states (#241): `Page.states` groups strokes into parts and keeps, per state, where each part is.
  * v12: ink remembers the slide shown beside the notes while it was written (`slides`, `Stroke.slide`, #226).
@@ -11,7 +12,7 @@ export const FORMAT_ID = "obsidian-notebook";
  * around a background; v5: per-stroke render version; v4: library metadata, assets, backgrounds, elements,
  * infinite pages, "shape" tool; v3: paper kinds and page sizes).
  */
-export const CURRENT_VERSION = 14;
+export const CURRENT_VERSION = 15;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -381,13 +382,40 @@ export interface ExcerptElement {
 	asset?: string;
 }
 
-export type PageElement = TextElement | ImageElement | MarkerElement | BoxElement | EquationElement | GraphElement | ExcerptElement;
+/**
+ * v15 sticky note (#20): a coloured note on the page, the box `width` × `height` whose top-left corner is (`x`, `y`) (page
+ * coordinates, pt). `color` is its base colour (`#rrggbb`, one of the subject palette; the paper of the note is a light tint
+ * of it). `text`: what was typed on it (absent: none), `fontSize` its size (pt). Ink written on the note is ordinary ink of the
+ * page that the note owns geometrically (like ink on a picture: ink/attach.ts) and that moves and scales with it.
+ *
+ * `collapsed`: the note is shown as a small icon at its top-left corner. Its ink is hidden meanwhile and `ink` lists the ids of
+ * the strokes that were on the note when it was collapsed (written only while collapsed): the note keeps owning exactly those
+ * strokes, so ink written later over the empty place of a collapsed note is not hidden and does not move with the icon. Expanding
+ * the note shows its ink again and clears the list. Ids of strokes that are gone are ignored (and not written).
+ */
+export interface StickyElement {
+	id: string;
+	type: "sticky";
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+	color: string;
+	text?: string;
+	fontSize: number;
+	collapsed?: true;
+	ink?: string[];
+}
+
+export type PageElement = TextElement | ImageElement | MarkerElement | BoxElement | EquationElement | GraphElement | ExcerptElement | StickyElement;
 /** Element types that exist only from format v8: an older file that uses one was not written by this plugin. */
 export const ELEMENT_TYPES_V8: readonly string[] = ["marker", "box"];
 /** Element types that exist only from format v9. */
 export const ELEMENT_TYPES_V9: readonly string[] = ["equation", "graph"];
 /** Element types that exist only from format v10. */
 export const ELEMENT_TYPES_V10: readonly string[] = ["excerpt"];
+/** Element types that exist only from format v15. */
+export const ELEMENT_TYPES_V15: readonly string[] = ["sticky"];
 
 /**
  * v6: blank space added around a page's background (a PDF page or a scan), in pt. The background is

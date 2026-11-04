@@ -1,7 +1,7 @@
 import { Batch, ReplaceElement, ReplaceStroke, type Command } from "../model/history";
 import { freezeStroke } from "../model/serialize";
 import type { Page, PageElement, Stroke } from "../model/types";
-import { attachedInk, boundGraphId, inkOwner } from "./attach";
+import { attachedInk, boundGraphId, inkOwner, linkedInkIds } from "./attach";
 import { elementBounds, transformElement, type MeasureText } from "./elements";
 import { strokeBounds, type BBox } from "./hit-test";
 import { transformStroke } from "./lasso";
@@ -103,10 +103,12 @@ export function inkOwnership(
 ): InkOwnership {
 	const elements = page.elements ?? [];
 	if (selElements.length === 0 || elements.length === 0) return NO_OWNERSHIP;
-	const graphs = selElements.filter((e) => e.type === "graph");
+	// Ink pinned to an object by its id (a graph's `<graph id>~…`) or by the note's own list (a collapsed sticky note, v15) belongs
+	// to it whatever the setting says.
+	const pinned = selElements.filter((e) => e.type === "graph" || linkedInkIds(e) !== null);
 	const owned = follow
 		? attachedInk(page.strokes, elements, selElements, new Set(), measure)
-		: graphs.length > 0 ? attachedInk(page.strokes, elements, graphs, new Set(), measure).filter((s) => boundGraphId(s) !== null) : [];
+		: pinned.length > 0 ? attachedInk(page.strokes, elements, pinned, new Set(), measure).filter((s) => boundGraphId(s) !== null || pinned.some((e) => linkedInkIds(e)?.has(s.id))) : [];
 	const selected = new Set(selStrokes);
 	const owner = new Map<Stroke, PageElement>();
 	const followers: Stroke[] = [];
@@ -129,7 +131,7 @@ export function rotate90Matrix(b: BBox, clockwise: boolean): Matrix {
 
 /** Elements that have no rotated form in the format (no rotation field): a rotation moves their centre and keeps their orientation. */
 export function rotationKeepsOrientation(el: PageElement): boolean {
-	return el.type === "text" || el.type === "equation" || el.type === "graph";
+	return el.type === "text" || el.type === "equation" || el.type === "graph" || el.type === "sticky";
 }
 
 /**
@@ -168,7 +170,7 @@ export type MirrorAxis = "horizontal" | "vertical";
 
 /** The kinds of element that have no mirrored form in the format (no flip field): they are moved to the mirrored place, not flipped. */
 export function mirrorKeepsOrientation(el: PageElement): boolean {
-	return el.type === "image" || el.type === "text" || el.type === "equation" || el.type === "graph" || el.type === "excerpt";
+	return el.type === "image" || el.type === "text" || el.type === "equation" || el.type === "graph" || el.type === "excerpt" || el.type === "sticky";
 }
 
 /**

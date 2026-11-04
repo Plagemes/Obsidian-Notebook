@@ -1,5 +1,5 @@
 import { Batch, removeStrokes } from "../model/history";
-import type { ImageElement, PageElement, Stroke } from "../model/types";
+import type { ImageElement, PageElement, StickyElement, Stroke } from "../model/types";
 import { elementBounds } from "./elements";
 import { strokeBounds, type BBox } from "./hit-test";
 import { estimateMeasure, textElementBounds, type MeasureText } from "./text-layout";
@@ -36,7 +36,7 @@ function overlap(a: BBox, b: BBox): boolean {
  * its graph coordinates, ink/graph-ink.ts); v8 markers and boxes only frame the page.
  */
 export function ownsInk(el: PageElement): boolean {
-	return el.type === "text" || el.type === "image" || el.type === "equation" || el.type === "graph" || el.type === "excerpt";
+	return el.type === "text" || el.type === "image" || el.type === "equation" || el.type === "graph" || el.type === "excerpt" || el.type === "sticky";
 }
 
 /**
@@ -76,6 +76,27 @@ export function strokeClip(stroke: Stroke, clips: ReturnType<typeof graphClips>)
 	return id === null ? null : clips.get(id) ?? null;
 }
 
+/**
+ * v15: the ids of the strokes a collapsed sticky note keeps hidden (and owns beyond geometry: they lie where the open note was,
+ * not under its icon). Sets are cached per note (notes are immutable).
+ */
+const linkedSets = new WeakMap<StickyElement, ReadonlySet<string>>();
+export function linkedInkIds(el: PageElement): ReadonlySet<string> | null {
+	if (el.type !== "sticky" || !el.collapsed || !el.ink || el.ink.length === 0) return null;
+	let set = linkedSets.get(el);
+	if (!set) {
+		set = new Set(el.ink);
+		linkedSets.set(el, set);
+	}
+	return set;
+}
+
+/** v15: the strokes that the collapsed notes among `elements` keep hidden (and own), in stroke order. */
+export function pinnedInk(strokes: readonly Stroke[], elements: readonly PageElement[]): Stroke[] {
+	const sets = elements.map(linkedInkIds).filter((s): s is ReadonlySet<string> => s !== null);
+	return sets.length === 0 ? [] : strokes.filter((s) => sets.some((set) => set.has(s.id)));
+}
+
 /** Whether (x, y) is on the element: the rotated rectangle of an image, the laid-out box of a text. */
 export function pointOnElement(el: PageElement, x: number, y: number, measure: MeasureText = estimateMeasure): boolean {
 	if (el.type === "image") return inImage(el, x, y);
@@ -102,6 +123,8 @@ export function inkOwner(
 		const g = elements.find((e) => e.type === "graph" && e.id === graphId);
 		if (g) return g;
 	}
+	// v15: a collapsed note owns the ink it keeps hidden, wherever it lies.
+	for (const el of elements) if (linkedInkIds(el)?.has(stroke.id)) return el;
 	const sb = strokeBounds(stroke);
 	for (let i = elements.length - 1; i >= 0; i--) {
 		const el = elements[i]!;
@@ -137,6 +160,10 @@ export function attachedInk(
 		if (exclude.has(stroke)) continue;
 		const bound = boundGraphId(stroke);
 		if (bound !== null && owners.some((e) => e.type === "graph" && e.id === bound)) {
+			out.push(stroke);
+			continue;
+		}
+		if (owners.some((e) => linkedInkIds(e)?.has(stroke.id))) {
 			out.push(stroke);
 			continue;
 		}

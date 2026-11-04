@@ -62,15 +62,15 @@ function lockedDoc(): NotebookDocument {
 }
 
 describe("format v14: migration", () => {
-	it("is at version 14 with a v13 step", () => {
-		expect(CURRENT_VERSION).toBe(14);
+	it("has the v13 step (the current format is v15 since sticky notes)", () => {
+		expect(CURRENT_VERSION).toBeGreaterThanOrEqual(14);
 		expect(MIGRATIONS[13]).toBeTypeOf("function");
 	});
 
 	it("reads a v13 file unchanged apart from the version", () => {
 		const r = parsed(JSON.stringify(v13Raw()));
 		expect(r.migratedFrom).toBe(13);
-		expect(r.doc.version).toBe(14);
+		expect(r.doc.version).toBe(CURRENT_VERSION);
 		expect(r.doc.pages[0]!.locked).toBeUndefined();
 		expect(r.dropped).toBeUndefined();
 	});
@@ -86,7 +86,7 @@ describe("format v14: migration", () => {
 
 	it("migrates a v13 round trip: v13 text -> v14 document -> text has no lock and the same ink", () => {
 		const text = serialize(parsed(JSON.stringify(v13Raw())).doc);
-		expect(text).toContain('"version": 14');
+		expect(text).toContain(`"version": ${CURRENT_VERSION}`);
 		expect(text).not.toContain('"locked"');
 		expect(parsed(text).doc.pages[0]!.strokes).toHaveLength(2);
 	});
@@ -97,7 +97,7 @@ describe("format v14: migration", () => {
 		expect(r.ok).toBe(false);
 		if (!r.ok) expect(r.reason).toBe("future-version");
 		// What 0.15 does with a v14 file is what the current code does with the next version: the same "future-version" path.
-		expect(serialize(lockedDoc())).toContain('"version": 14');
+		expect(serialize(lockedDoc())).toContain(`"version": ${CURRENT_VERSION}`);
 	});
 });
 
@@ -364,7 +364,7 @@ describe("repair", () => {
 		expect(r.ok).toBe(true);
 		if (r.ok) {
 			expect(r.doc.pages[0]!.locked).toBeUndefined();
-			expect(getAt(JSON.parse(r.text), ["version"])).toBe(14);
+			expect(getAt(JSON.parse(r.text), ["version"])).toBe(CURRENT_VERSION);
 		}
 	});
 });
