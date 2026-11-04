@@ -3015,6 +3015,10 @@ export const en = {
 	"si.original.linked": "{file} is linked from {notes}, so it was left where it is. Nothing was moved.",
 	"si.trash.linked": "{file} is linked or embedded in {notes}. Those links would break. Move it to the trash anyway? Cancel keeps it.",
 	"si.savePending": "{file} was added to the open notebook. Saving is still pending and the notebook will save it, so the file is not added again.",
+	"digest.append.title": "Add to an existing note?",
+	"digest.append.body": "A note named “{note}” already exists and has no digest section. The digest is added at its end and nothing else in the note is changed. Or keep the note as it is and write the digest in a new one.",
+	"digest.append.add": "Add to it",
+	"digest.append.new": "Use a new note",
 } as const;
 
 export type MessageKey = keyof typeof en;

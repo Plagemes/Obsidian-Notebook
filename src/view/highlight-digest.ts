@@ -7,7 +7,7 @@ import { Modal, Setting, TFile, normalizePath, type App } from "obsidian";
 import { t } from "../i18n";
 import { withEmbedMarker, stablePageSubpath } from "../integration/page-links";
 import {
-	buildDigestSection, canRewritePicture, cropRect, digestImageName, digestSectionOf, highlightRegions, newDigestNote, replaceDigestSection, sectionImageLinks,
+	alternativeDigestName, buildDigestSection, canRewritePicture, cropRect, digestImageName, digestSectionOf, highlightRegions, newDigestNote, replaceDigestSection, sectionImageLinks, wouldAppendToUserNote,
 	type ColourFamily, type DigestItem, type HighlightRegion,
 } from "../model/highlight-digest";
 import { MARKDOWN_DPI, DEFAULT_MARKDOWN_DPI, isMarkdownDpi, type MarkdownDpi } from "../model/export-markdown";
@@ -81,8 +81,8 @@ function makeMeasure(): TextMeasure {
 export async function runHighlightsDigest(host: DigestHost, request: DigestRequest): Promise<string | null> {
 	const { app, file, pages } = host;
 	const regions = highlightRegions(pages);
-	const notePath = digestNotePath(file);
-	const existing = app.vault.getAbstractFileByPath(notePath);
+	let notePath = digestNotePath(file);
+	let existing = app.vault.getAbstractFileByPath(notePath);
 	if (existing && !(existing instanceof TFile)) {
 		showNotice(t("digest.failed", { error: notePath }), 10000);
 		return null;
@@ -91,17 +91,38 @@ export async function runHighlightsDigest(host: DigestHost, request: DigestReque
 		showNotice(t("digest.none"), 6000);
 		return null;
 	}
+	let before = "";
+	if (existing instanceof TFile) {
+		try {
+			before = await app.vault.read(existing);
+		} catch (e) {
+			showNotice(t("digest.failed", { error: (e as Error).message }), 10000);
+			return null;
+		}
+		if (replaceDigestSection(before, "x").outcome === "unsafe") {
+			showNotice(t("digest.unsafe", { path: notePath }), 12000);
+			return null;
+		}
+		// A note of the user's with this name and no digest markers: the section would be added to it with no backup. Ask first.
+		if (wouldAppendToUserNote(before)) {
+			const choice = await askAppendToNote(app, existing.name);
+			if (choice === null) return null;
+			if (choice === "new") {
+				const dir = notePath.includes("/") ? notePath.slice(0, notePath.lastIndexOf("/") + 1) : "";
+				const alt = alternativeDigestName(digestNoteName(file), (n) => app.vault.getAbstractFileByPath(normalizePath(`${dir}${n}`)) !== null);
+				notePath = normalizePath(`${dir}${alt}`);
+				existing = null;
+				before = "";
+			}
+		}
+	}
+	if (regions.length === 0 && !existing) {
+		showNotice(t("digest.none"), 6000);
+		return null;
+	}
 	const working = showNotice(t("digest.working", { done: "0", total: String(regions.length) }), 0);
 	const renderer = new PageImageRenderer(host.media, host.render);
 	try {
-		let before = "";
-		if (existing instanceof TFile) {
-			before = await app.vault.read(existing);
-			if (replaceDigestSection(before, "x").outcome === "unsafe") {
-				showNotice(t("digest.unsafe", { path: notePath }), 12000);
-				return null;
-			}
-		}
 		const known = sectionImageLinks(digestSectionOf(before));
 		const stem = sanitizeName(file.basename) || "Notebook";
 		const byPage = new Map<number, HighlightRegion[]>();
@@ -223,6 +244,41 @@ export async function storePicture(app: App, notePath: string, name: string, blo
 		console.error("[notebook] digest picture", e);
 		return null;
 	}
+}
+
+/** The three answers to "a note with this name already exists and has no digest section". */
+type AppendChoice = "append" | "new";
+
+class AppendToNoteModal extends Modal {
+	private settled = false;
+
+	constructor(app: App, private readonly noteName: string, private readonly done: (choice: AppendChoice | null) => void) {
+		super(app);
+	}
+
+	private settle(choice: AppendChoice | null, close = true): void {
+		if (this.settled) return;
+		this.settled = true;
+		this.done(choice);
+		if (close) this.close();
+	}
+
+	onOpen(): void {
+		const shell = modalShell(this, { title: t("digest.append.title"), icon: "file-plus", size: "narrow", cls: "notebook-digest-modal" });
+		shellNote(shell.body, t("digest.append.body", { note: this.noteName }));
+		shellButton(shell.foot, "secondary", t("export.dialog.cancel"), () => this.settle(null));
+		shellButton(shell.foot, "secondary", t("digest.append.new"), () => this.settle("new"));
+		shellButton(shell.foot, "primary", t("digest.append.add"), () => this.settle("append"));
+	}
+
+	onClose(): void {
+		this.settle(null, false);
+		this.contentEl.empty();
+	}
+}
+
+function askAppendToNote(app: App, noteName: string): Promise<AppendChoice | null> {
+	return new Promise((resolve) => new AppendToNoteModal(app, noteName, resolve).open());
 }
 
 export interface DigestDialogHost {

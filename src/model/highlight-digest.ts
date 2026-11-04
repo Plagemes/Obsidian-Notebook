@@ -9,6 +9,7 @@
  *   gives the same note, so running the digest twice changes nothing.
  * The document format is not touched: the digest is derived data, written to a separate note.
  */
+import { uniqueFileName } from "./export-markdown";
 import type { Page, Stroke } from "./types";
 import type { TextBand } from "../pdf/region-text";
 
@@ -298,6 +299,20 @@ export function replaceDigestSection(existing: string, section: string): { text:
 	if (start >= 0 || end >= 0) return { text: existing, outcome: "unsafe" };
 	if (existing.trim() === "") return { text: `${section}\n`, outcome: "created" };
 	return { text: `${existing.replace(/\s+$/u, "")}\n\n${section}\n`, outcome: "appended" };
+}
+
+/**
+ * Whether writing the section into `existing` would add it to a note that has none yet (the note is the user's own: same name,
+ * no digest markers, some text). That needs a confirmation. A note with a start marker but no end (or the reverse) is "unsafe"
+ * and handled elsewhere.
+ */
+export function wouldAppendToUserNote(existing: string): boolean {
+	return replaceDigestSection(existing, "x").outcome === "appended";
+}
+
+/** The name of a second digest note when the first is a user note: `<Notebook> — Highlights 2.md`, then `3`... (never an existing one). */
+export function alternativeDigestName(name: string, exists: (candidate: string) => boolean): string {
+	return uniqueFileName(name, exists);
 }
 
 /** The text of a brand-new digest note: a title line, then the section. */

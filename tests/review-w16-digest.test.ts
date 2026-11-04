@@ -1,6 +1,6 @@
 /** 0.16 review fixes on the highlights digest (C5, C6). */
 import { describe, expect, it, vi } from "vitest";
-import { canRewritePicture, sectionImageLinks, sectionImageNames } from "../src/model/highlight-digest";
+import { DIGEST_END, DIGEST_START, alternativeDigestName, canRewritePicture, sectionImageLinks, sectionImageNames, wouldAppendToUserNote } from "../src/model/highlight-digest";
 import { FakeTFile } from "./fake-vault";
 
 vi.mock("obsidian", async () => (await import("./fake-vault")).obsidianMock());
@@ -124,5 +124,23 @@ describe("C5: storePicture", () => {
 		const s = setup({});
 		await storePicture(s.app, NOTE, NAME, png(1), new Map([[NAME.toLowerCase(), NAME]]));
 		expect(s.created).toEqual([`Maths/att/${NAME}`]);
+	});
+});
+
+describe("C6: a user note with the digest's name is not written into without asking", () => {
+	it("asks only when the section would be appended to a note that has text and no markers", () => {
+		expect(wouldAppendToUserNote("My own notes about Maths\n")).toBe(true);
+		expect(wouldAppendToUserNote("")).toBe(false);
+		expect(wouldAppendToUserNote("  \n")).toBe(false);
+		// The note of an earlier digest is rebuilt in place, as before.
+		expect(wouldAppendToUserNote(`# T\n${DIGEST_START}\nold\n${DIGEST_END}\nmine`)).toBe(false);
+		// A broken marker is "unsafe", refused elsewhere, never offered as an append.
+		expect(wouldAppendToUserNote(`text ${DIGEST_START} no end`)).toBe(false);
+	});
+
+	it("offers a free second note name next to it", () => {
+		const taken = new Set(["Maths — Highlights.md", "Maths — Highlights 2.md"]);
+		expect(alternativeDigestName("Maths — Highlights.md", (n) => taken.has(n))).toBe("Maths — Highlights 3.md");
+		expect(alternativeDigestName("Maths — Highlights.md", (n) => n === "Maths — Highlights.md")).toBe("Maths — Highlights 2.md");
 	});
 });

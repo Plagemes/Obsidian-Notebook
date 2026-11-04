@@ -3017,4 +3017,8 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"si.original.linked": "{file} è collegato da {notes}, quindi è rimasto dov'è. Non è stato spostato nulla.",
 	"si.trash.linked": "{file} è collegato o incorporato in {notes}. Quei collegamenti si romperebbero. Spostarlo comunque nel cestino? Annulla lo lascia dov'è.",
 	"si.savePending": "{file} è stato aggiunto al quaderno aperto. Il salvataggio è ancora in sospeso e il quaderno lo completerà, quindi il file non viene aggiunto di nuovo.",
+	"digest.append.title": "Aggiungere a una nota esistente?",
+	"digest.append.body": "Esiste già una nota chiamata “{note}” senza sezione del riepilogo. Il riepilogo viene aggiunto in fondo e il resto della nota non cambia. Oppure lascia la nota com'è e scrivi il riepilogo in una nuova.",
+	"digest.append.add": "Aggiungi",
+	"digest.append.new": "Usa una nuova nota",
 };
