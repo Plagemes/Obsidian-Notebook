@@ -391,7 +391,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 187. **P2** Back-of-book index: mark terms or regions and an index page with references is generated.
 188. **P1** 🧪 Show/hide all annotations, to reread a clean PDF.
 189. **P2** Attachments on the page: Word files, zips and others as icons that open on tap.
-190. **P2** Page QR code: scan it with the phone and the page opens on the other device.
+190. **P2** 🧪 Page QR code: scan it with the phone and the page opens on the other device.
 
 ## M13 — During the lecture (backlog, planned 2026-10-29)
 

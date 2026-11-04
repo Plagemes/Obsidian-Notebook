@@ -3263,4 +3263,13 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"transfer.copiedNotMovedShared": "Le pagine sono state copiate in {name}, ma toglierle da {source} non è finito ({error}) e la copia ha tenuto gli id di pagina degli originali.",
 	"transfer.copiedMaybeMoved": "Le pagine sono state copiate in {name}, ma toglierle da {source} si è interrotto a metà: {error}. Controlla i due quaderni.",
 	"task.exists": "Questa attività è già in {path}. Non è stato aggiunto nulla.",
+	// 0.18 qr
+	"qr.title": "Mostra codice QR",
+	"qr.subtitle": "Pagina {page}: inquadralo con un dispositivo che ha questo vault per aprire qui la pagina.",
+	"qr.label": "Codice QR della pagina {page}",
+	"qr.hint": "Inquadralo con la fotocamera di un telefono o tablet che ha lo stesso vault aperto in Obsidian. La pagina si apre lì.",
+	"qr.copy": "Copia link",
+	"qr.done": "Fatto",
+	"qr.copied": "Link copiato.",
+	"qr.tooLong": "Il link di questa pagina è troppo lungo per un codice QR. Usa Copia link.",
 };

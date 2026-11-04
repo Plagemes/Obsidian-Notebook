@@ -3261,6 +3261,15 @@ export const en = {
 	"transfer.copiedNotMovedShared": "The pages were copied into {name}, but taking them out of {source} did not finish ({error}) and the copy kept the page ids of the originals.",
 	"transfer.copiedMaybeMoved": "The pages were copied into {name}, but taking them out of {source} failed part way: {error}. Check both notebooks.",
 	"task.exists": "That task is already in {path}. Nothing was added.",
+	// 0.18 qr
+	"qr.title": "Show QR code",
+	"qr.subtitle": "Page {page}: scan it with a device that has this vault to open this page there.",
+	"qr.label": "QR code of page {page}",
+	"qr.hint": "Scan this with the camera of a phone or tablet that has the same vault open in Obsidian. The page opens there.",
+	"qr.copy": "Copy link",
+	"qr.done": "Done",
+	"qr.copied": "Link copied.",
+	"qr.tooLong": "This page link is too long for a QR code. Use Copy link instead.",
 } as const;
 
 export type MessageKey = keyof typeof en;

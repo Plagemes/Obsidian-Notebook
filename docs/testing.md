@@ -2466,3 +2466,17 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Task from a selection (#57): crop, link, due date, daily/tasks/chosen note | yes | line building, crop, append (`tests/selection-task.test.ts`); harness `dev/harness/task-check.ts` | | | page badge on the task's region |
+
+
+### 0.18 — qr
+
+1380. **Show the code.** Page menu (page thumbnail or page sheet) > *Show QR code*. A dialog shows a large black-on-white code and *Copy link* / *Done*; the code is square and sharp on the tablet and on a phone, in light and dark.
+1381. **Scan it.** On a phone or second tablet with the same vault, scan the code with the camera: Obsidian opens, the notebook opens at that page (not another).
+1382. **Reorder.** Move the page elsewhere in the notebook, show the code again and scan the old one: it still opens the same page (the link carries the page id).
+1383. **Copy link.** *Copy link* shows "Link copied." and pasting gives an `obsidian://notebook?vault=…` link; opening it on this device focuses the notebook tab at the page.
+1384. **Long path.** A notebook with a very long path (over about 150 characters) shows a message instead of a code; *Copy link* still works.
+1385. **Different vault name.** Scanning on a device where the vault has another name opens nothing wrong: Obsidian says the vault is not found.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Page QR code (#190): dialog, copy link, own encoder (byte mode, level M, v1-10) | yes | encoder, format/version bits and a round trip through a separate decoder (`tests/qr.test.ts`); harness `dev/harness/qr-check.ts` | | | insert the code into the page as a picture |

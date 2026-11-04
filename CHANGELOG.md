@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### qr
+- **Page QR code (#190).** *Show QR code* in the page menu opens a dialog with a large QR code (black on white, crisp at any size and pixel ratio, drawn as one SVG path) of this page's `obsidian://notebook?vault=…&path=…&page=…&id=…` link. Scanning it with the camera of a phone or tablet that has the same vault opens the notebook at that page (by page id first); the existing `notebook` protocol handler is reused, so no new handler and no new parameters. *Copy link* puts the same link on the clipboard (also the way out when a very long path does not fit a code, which holds up to 213 bytes). The encoder is written for the plugin (byte mode, level M, versions 1-10) in `src/model/qr.ts`, so there is no third-party code or licence. No change to the notebook format. Tests: `tests/qr.test.ts` (Reed-Solomon vector, format/version bits, round trip through a separate decoder at every version). Harness: `dev/harness/qr-check.ts` (`doc=qr`).
+
 ## 0.17.0 — 2026-11-04
 
 Write on and around the page more freely, and keep a large library in order: sticky notes you can type or write on, magnetic snap with alignment guides, merge, split and extract notebooks, a minimap for big pages, a hover preview of page links, an optional PDF copy next to each notebook, saved collections in the library, and a task made from a selection. The notebook format moves to version 15 (an older plugin opens a v15 file read-only).

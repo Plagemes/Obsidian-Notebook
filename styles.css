@@ -15236,3 +15236,7 @@ body.notebook-style-obsidian {
 .nb-ui .nb-task-pick { display: flex; align-items: center; gap: var(--nb-space-2, 8px); margin-top: var(--nb-space-2, 8px); }
 .nb-ui .nb-task-pick.nb-task-hidden { display: none; }
 .nb-ui .nb-task-chosen { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ===== 0.18 qr ===== */
+.nb-ui.nb-qr-modal .nb-qr-box { display: flex; justify-content: center; padding: var(--nb-space-3, 12px) 0; }
+.nb-ui.nb-qr-modal .nb-qr-svg { width: min(100%, 360px); height: auto; aspect-ratio: 1; border-radius: var(--nb-radius-tile); box-shadow: 0 0 0 1px var(--nb-border); background: #fff; }
