@@ -406,6 +406,17 @@ async function main() {
 						await shotAs("sections");
 						await cdp.evaluate("window.harness.sectionsState('reset')");
 					}
+					// 0.15 views: the Board and the Calendar, and review shots of each (and of the Board's columns editor).
+					if (s.surface === "library" && !s.variant) {
+						const vw = await cdp.evaluate("window.harness.checkViews()", 90000);
+						problems.push(...vw.results.filter((x) => !x.ok).map((x) => `${x.name}: ${x.detail}`));
+						problems.push(...vw.errors.map((e) => `console error: ${e.split("\n")[0]}`));
+						for (const state of ["board", "calendar", "board-editor"]) {
+							await cdp.evaluate(`window.harness.viewsState('${state}')`);
+							await shotAs(`views-${state}`);
+							await cdp.evaluate("window.harness.viewsState('reset')");
+						}
+					}
 					const r = await cdp.evaluate("window.harness.interactLibrary()", 60000);
 					problems.push(...r.results.filter((x) => !x.ok).map((x) => `${x.name}: ${x.detail}`));
 				} catch (e) {
