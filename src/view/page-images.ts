@@ -118,6 +118,50 @@ export class PageImageRenderer {
 		}
 	}
 
+	/**
+	 * 0.16 (#90): draws parts of `page` (rectangles in pt) at `dpi`, each to its own PNG; the PDF page and the pictures are loaded
+	 * once for all of them. `skipped` counts what could not be drawn, as in `render`.
+	 */
+	async renderRegions(page: Page, dpi: number, regions: ReadonlyArray<{ x: number; y: number; width: number; height: number }>): Promise<{ blobs: Array<Blob | null>; skipped: number }> {
+		const { scale } = renderSize(page, dpi);
+		const flags = layerFlags(this.options.layers);
+		let skipped = 0;
+		const background = flags.background ? await this.background(page, scale) : null;
+		if (flags.background && page.background && !background) skipped++;
+		const failed = { n: 0 };
+		const images = flags.content ? await this.elementImages(page, failed) : new Map<string, CanvasImageSource>();
+		skipped += failed.n;
+		const blobs: Array<Blob | null> = [];
+		try {
+			for (const region of regions) {
+				const canvas = createEl("canvas");
+				canvas.width = Math.max(1, Math.round(region.width * scale));
+				canvas.height = Math.max(1, Math.round(region.height * scale));
+				try {
+					const ctx = canvas.getContext("2d");
+					if (!ctx) throw new Error("Canvas 2D is not available");
+					drawPageRaster(ctx, page, scale, {
+						background, images, region, clipElements: page.elements ?? [], hiddenInk: this.options.hiddenInk?.(page) ?? false,
+						...(this.options.boxLabel ? { boxLabel: this.options.boxLabel } : {}),
+						...(this.options.layers ? { layers: this.options.layers } : {}),
+						...(this.options.header ? { header: this.options.header(page) } : {}),
+						...(this.options.equationNumbers ? { equationNumbers: this.options.equationNumbers } : {}),
+					});
+					blobs.push(await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png")));
+				} catch (e) {
+					console.error("[notebook] page image region", e);
+					blobs.push(null);
+				} finally {
+					canvas.width = 0;
+					canvas.height = 0;
+				}
+			}
+		} finally {
+			if (background && "close" in background) (background as ImageBitmap).close();
+		}
+		return { blobs, skipped };
+	}
+
 	/** Closes the picture bitmaps kept between pages. */
 	close(): void {
 		this.bitmaps.clear();

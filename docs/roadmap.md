@@ -209,7 +209,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 87. **P2** 🧪 Presentation mode: full-screen pages, with the laser pointer (#12).
 88. **P3** Study timer (pomodoro) with a session log.
 89. ~~**P2** Scheduled review: "review this page in 3 days", with a list of pages due.~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
-90. **P2** Highlights digest: every highlighted region collected in a summary page.
+90. **P2** 🧪 Highlights digest: every highlighted region collected in a summary page.
 
 ## M10 — Native Obsidian integration (backlog, planned 2026-10-29)
 

@@ -2185,3 +2185,21 @@ Presentation mode (#87, no format change). Reference screenshots after `npm run 
 1042. **Large pages.** Present an infinite page: its top part is shown, fitted (as in thumbnails).
 1043. **Phone and tablet, dark and light.** The controls and the counter fit a phone; check both themes (the surround is always black).
 1044. **Closing.** Close the notebook tab, or switch to another file in the tab, during a presentation: it ends without errors.
+
+### 0.16 — digest: Highlights digest (steps 1050-1069)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`HARNESS_DOC=digest`): `dev/harness/dist/shots/digest-{dark,light}-{tablet,phone}.png`.
+
+1050. **Open it.** Highlight a few passages (some on PDF pages, some on handwriting, two colours). Notebook More menu (or the command palette) > *Highlights digest…*: a dialog says how many highlights and pages, with *Group by* and *Picture quality*. A notebook without highlights only shows a notice.
+1051. **First run.** *Create the digest*: a note *<Notebook> — Highlights* appears next to the notebook with a picture of every highlighted region (ink, PDF page and highlighter together) and, on PDF pages, the PDF text under the highlight quoted. Lines of one paragraph are one region; far apart or different colours are separate ones.
+1052. **Links.** Each page heading (or each highlight, when grouped by colour) links back to the notebook page; tapping it opens that page.
+1053. **Pictures.** They are in the folder Obsidian uses for attachments of that note (Settings > Files and links), named *<Notebook> highlight pN-K.png*.
+1054. **Your text is safe.** Write above and below the digest section and run it again after adding a highlight: only the part between `<!-- notebook-digest:start -->` and `end` changes; your text stays. Run it twice without changes: the note is identical and no new picture files appear.
+1055. **Group by colour.** Choose *By colour* (or set it in Settings > Reading > Highlights digest grouping): sections per colour, each highlight with its page link.
+1056. **Unpaired marker.** Delete only the end marker and run: a notice says the note was left untouched, and it is.
+1057. **States and read-only.** On a page with drawing states the picture shows the state in view. The digest also works in read-only mode (it writes the other note, never the notebook).
+1058. **Phone.** The dialog fits a phone; on a long notebook the progress notice counts the highlights.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Highlights digest (#90): regions, crops, PDF text, marked section, group by page or colour | yes | clustering, text under bands, section replacement and idempotence (`tests/highlight-digest.test.ts`); harness `dev/harness/digest-check.ts` | | | |

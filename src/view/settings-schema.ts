@@ -280,6 +280,12 @@ const READING: SettingSpec[] = [
 	// 0.16 present: presentation mode (roadmap #87).
 	{ id: "presentSteps", section: "reading", order: 50, name: "settings.presentSteps", desc: "settings.presentSteps.desc", control: { type: "toggle" }, keywords: "presentation present slides states steps presentazione" },
 	{ id: "presentLaser", section: "reading", order: 51, name: "settings.presentLaser", desc: "settings.presentLaser.desc", control: { type: "toggle" }, keywords: "presentation present laser pointer puntatore" },
+
+	// 0.16 (#90) highlights digest: how the digest note groups the highlights.
+	{
+		id: "digestGroup", section: "reading", order: 60, name: "settings.digestGroup", desc: "settings.digestGroup.desc",
+		control: { type: "dropdown", options: options([["page", "settings.digestGroup.page"], ["colour", "settings.digestGroup.colour"]]) }, keywords: "highlights digest summary evidenziazioni riepilogo colour colore",
+	},
 ];
 
 const LIBRARY: SettingSpec[] = [

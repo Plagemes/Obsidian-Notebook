@@ -68,6 +68,7 @@ import { VaultDocumentIO, sidecarDeviceId, vaultDeviceFileAdapter } from "../sto
 import { SharedClipStore } from "../storage/shared-clip-store";
 import { backupFolder, readSettings, type NotebookSettings } from "../settings";
 import { defaultMarkdownFolder, exportMarkdown, siblingFolder } from "./export-markdown";
+import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./highlight-digest";
 import { canPrint } from "./print";
 import type { ExportFormat } from "../ink/export-layers";
 import { ExportModal, MarkdownExportModal } from "./export-dialog";
@@ -1732,6 +1733,30 @@ export class NotebookView extends FileView {
 			defaultFolder: defaultMarkdownFolder(file),
 			// 0.15 (241): like the PDF, PNG and SVG exports, the pages as the states in view show them.
 			run: (folder, dpi) => void exportMarkdown(this.app, file, { ...doc, pages: [...this.renderPagesOf(doc)] }, this.media, { folder, dpi, ...this.exportOptions() }),
+		}).open();
+	}
+
+	/** 0.16 (#90): the Highlights digest dialog (grouping, picture quality); the note is written next to the notebook. */
+	openHighlightsDigest(): void {
+		const doc = this.session?.doc;
+		const file = this.file;
+		if (!doc || !file) return;
+		const pages = [...this.renderPagesOf(doc)];
+		if (digestCounts(pages).regions === 0) {
+			showNotice(t("digest.none"), 6000);
+			return;
+		}
+		const options = this.exportOptions();
+		new HighlightsDigestModal({
+			app: this.app, file, pages, group: this.host.settings.digestGroup,
+			run: (request) => void runHighlightsDigest({
+				app: this.app, file, pages, media: this.media,
+				render: {
+					...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+					...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				},
+				...(options.prepare ? { prepare: options.prepare } : {}),
+			}, request),
 		}).open();
 	}
 

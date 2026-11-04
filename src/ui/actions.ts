@@ -380,6 +380,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	// From a page's sheet the dialog starts on that page; from the sheet, the notebook menu and the palette on the notebook.
 	{ id: "export-dialog", label: "export.dialog.menu", icon: "share", group: "share", surfaces: ["page", "sheet", "notebook"], priority: 32, scope: "view", command: "command.exportDialog", readOnly: true, keywords: "pdf svg ink background layers page notebook esporta" },
 	{ id: "export-markdown", label: "export.markdown.menu", icon: "files", group: "share", surfaces: ["sheet", "notebook"], priority: 28, scope: "view", command: "command.exportMarkdown", readOnly: true, keywords: "md png images without obsidian share esporta" },
+	// 0.16 (#90): every highlighted region collected in a Markdown note next to the notebook.
+	{ id: "highlights-digest", label: "digest.menu", icon: "highlighter", group: "share", surfaces: ["sheet", "notebook"], priority: 25, scope: "view", command: "command.highlightsDigest", readOnly: true, keywords: "highlights digest summary note evidenziazioni riepilogo raccolta colours" },
 	// wave 0.10 (81): the same dialog started on PNG images (a vault folder, a scale, a page range) or on Print (desktop only).
 	{ id: "export-png", label: "export.png.menu", icon: "images", group: "share", surfaces: ["sheet", "notebook"], priority: 27, scope: "view", command: "command.exportPng", readOnly: true, keywords: "png images pictures pages folder scale range esporta immagini" },
 	{ id: "print", label: "export.print.menu", icon: "printer", group: "share", surfaces: ["sheet", "notebook"], priority: 26, scope: "view", command: "command.print", readOnly: true, when: (c) => !!c.canPrint, keywords: "paper printer stampa carta" },
