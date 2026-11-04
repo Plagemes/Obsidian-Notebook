@@ -37,9 +37,45 @@ export interface BoardDeps {
 	onEditColumns?(): void;
 }
 
-/** Pixels from the edge of the board where a drag scrolls it. */
+/** Pixels from the edge of the board (or of the tab strip) where a drag scrolls it sideways, and how far each step goes. */
 const EDGE_PX = 56;
-const EDGE_STEP = 18;
+const EDGE_STEP = 16;
+const EDGE_MS = 40;
+
+/** Scrolls the elements it is given sideways while a dragged card is held near their edge (a timer only runs during a drag). */
+export interface EdgeScroll {
+	/** The pointer moved to (x, y) in client coordinates. */
+	move(x: number, y: number): void;
+	/** The drag ended. */
+	end(): void;
+}
+
+export function edgeScroll(scrollers: ReadonlyArray<HTMLElement | null>): EdgeScroll {
+	let at: { x: number; y: number } | null = null;
+	let timer = 0;
+	const step = () => {
+		if (!at) return;
+		for (const sc of scrollers) {
+			if (!sc || sc.scrollWidth <= sc.clientWidth) continue;
+			const r = sc.getBoundingClientRect();
+			if (at.y < r.top - 24 || at.y > r.bottom + 24) continue;
+			if (at.x < r.left + EDGE_PX) sc.scrollLeft -= EDGE_STEP;
+			else if (at.x > r.right - EDGE_PX) sc.scrollLeft += EDGE_STEP;
+		}
+	};
+	return {
+		move: (x, y) => {
+			at = { x, y };
+			step();
+			if (!timer) timer = window.setInterval(step, EDGE_MS);
+		},
+		end: () => {
+			at = null;
+			window.clearInterval(timer);
+			timer = 0;
+		},
+	};
+}
 
 export function renderBoard(el: HTMLElement, d: BoardDeps): void {
 	const root = el.createDiv({ cls: "nb-board-root" });
@@ -50,16 +86,9 @@ export function renderBoard(el: HTMLElement, d: BoardDeps): void {
 		edit.dataset.key = "board:edit-columns";
 	}
 	const active = d.groups.some((g) => g.column.id === d.active) ? d.active : (d.groups[0]?.column.id ?? "");
-	let scroller: HTMLElement | null = null;
-	const autoScroll = (x: number) => {
-		if (!scroller) return;
-		const r = scroller.getBoundingClientRect();
-		if (x < r.left + EDGE_PX) scroller.scrollLeft -= EDGE_STEP;
-		else if (x > r.right - EDGE_PX) scroller.scrollLeft += EDGE_STEP;
-	};
-
+	let tabs: HTMLElement | null = null;
 	if (d.phone) {
-		const tabs = root.createDiv({ cls: "nb-board-tabs", attr: { role: "tablist", "aria-label": t("board.columns") } });
+		tabs = root.createDiv({ cls: "nb-board-tabs", attr: { role: "tablist", "aria-label": t("board.columns") } });
 		for (const g of d.groups) {
 			const tab = tabs.createEl("button", {
 				cls: "nb-board-tab",
@@ -76,14 +105,14 @@ export function renderBoard(el: HTMLElement, d: BoardDeps): void {
 
 	const board = root.createDiv({ cls: "nb-board", attr: { role: "group", "aria-label": t("board.columns") } });
 	board.toggleClass("is-single", d.phone);
-	scroller = board;
+	const edge = edgeScroll([tabs, board]);
 	for (const g of d.groups) {
 		if (d.phone && g.column.id !== active) continue;
-		column(board, g, d, autoScroll);
+		column(board, g, d, edge);
 	}
 }
 
-function column(board: HTMLElement, g: BoardGroup<LibraryEntry>, d: BoardDeps, autoScroll: (x: number) => void): void {
+function column(board: HTMLElement, g: BoardGroup<LibraryEntry>, d: BoardDeps, edge: EdgeScroll): void {
 	const col = board.createDiv({ cls: "nb-board-col", attr: { role: "group", "aria-label": d.label(g.column), [DROP_COLUMN_ATTR]: g.column.id, "data-key": `board:col:${g.column.id}` } });
 	subjectVars(col, g.column.color);
 	const head = col.createDiv({ cls: "nb-board-col-head" });
@@ -92,10 +121,10 @@ function column(board: HTMLElement, g: BoardGroup<LibraryEntry>, d: BoardDeps, a
 	head.createSpan({ cls: "nb-board-count", text: String(g.entries.length), attr: { "aria-label": t("board.count", { count: String(g.entries.length) }) } });
 	const body = col.createDiv({ cls: "nb-board-col-body", attr: { role: "list", "aria-label": d.label(g.column) } });
 	if (g.entries.length === 0) body.createDiv({ cls: "nb-board-empty", text: t("board.empty") });
-	for (const entry of g.entries) card(body, entry, g.column, d, autoScroll);
+	for (const entry of g.entries) card(body, entry, g.column, d, edge);
 }
 
-function card(body: HTMLElement, entry: LibraryEntry, column: BoardColumn, d: BoardDeps, autoScroll: (x: number) => void): void {
+function card(body: HTMLElement, entry: LibraryEntry, column: BoardColumn, d: BoardDeps, edge: EdgeScroll): void {
 	const el = body.createDiv({ cls: "nb-board-card", attr: { role: "listitem" } });
 	el.dataset.path = entry.path;
 	const main = el.createDiv({ cls: "nb-board-card-main", attr: { "data-key": `bcard:${entry.path}` } });
@@ -134,6 +163,7 @@ function card(body: HTMLElement, entry: LibraryEntry, column: BoardColumn, d: Bo
 			const folder = target.getAttribute(DROP_ATTR);
 			if (folder !== null) d.onDropFolder(entry, folder);
 		},
-		onDragMove: (x) => autoScroll(x),
+		onDragMove: (x, y) => edge.move(x, y),
+		onDragEnd: () => edge.end(),
 	});
 }

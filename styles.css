@@ -12548,11 +12548,10 @@ body.notebook-style-obsidian {
 
 .nb-ui .nb-board {
 	display: flex;
-	align-items: flex-start;
+	align-items: stretch;
 	gap: var(--nb-space-3);
 	overflow-x: auto;
 	padding-bottom: var(--nb-space-3);
-	scroll-snap-type: x proximity;
 	-webkit-overflow-scrolling: touch;
 }
 
@@ -12565,7 +12564,6 @@ body.notebook-style-obsidian {
 	border-top: 3px solid var(--nb-c, var(--nb-accent));
 	border-radius: var(--nb-radius-panel);
 	background: var(--nb-panel);
-	scroll-snap-align: start;
 	transition: background-color var(--nb-motion-fast) ease-out, outline-color var(--nb-motion-fast) ease-out;
 }
 
@@ -12621,6 +12619,7 @@ body.notebook-style-obsidian {
 
 .nb-ui .nb-board-col-body {
 	display: flex;
+	flex: 1 1 auto;
 	flex-direction: column;
 	gap: var(--nb-space-2);
 	min-height: 72px;

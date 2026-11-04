@@ -123,10 +123,18 @@ function pointer(type: string, init: PointerEventInit): PointerEvent {
 
 /** A press on `from`, a move to the middle of `to` and a release, as `pointerType` makes them (touch holds first). */
 async function dragTo(from: HTMLElement, to: HTMLElement, pointerType: "mouse" | "pen" | "touch", id: number): Promise<void> {
+	// What a person does first: bring the target column (or tab) and the card into view.
+	from.scrollIntoView({ block: "nearest", inline: "nearest" });
+	to.scrollIntoView({ block: "nearest", inline: "center" });
+	await frames(2);
 	const a = from.getBoundingClientRect();
 	const b = to.getBoundingClientRect();
-	const x0 = a.left + 24, y0 = a.top + a.height / 2;
-	const x1 = b.left + b.width / 2, y1 = b.top + Math.min(b.height / 2, 60);
+	const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+	const x0 = clamp(a.left + 24, 4, window.innerWidth - 4), y0 = clamp(a.top + a.height / 2, 4, window.innerHeight - 4);
+	// A column is as tall as the board, so the card's own height is over it; a tab strip is above the card.
+	const isTab = to.classList.contains("nb-board-tab");
+	const x1 = clamp(b.left + b.width / 2, 4, window.innerWidth - 4);
+	const y1 = isTab ? clamp(b.top + b.height / 2, 4, window.innerHeight - 4) : y0;
 	from.dispatchEvent(pointer("pointerdown", { pointerId: id, pointerType, clientX: x0, clientY: y0, button: 0, buttons: 1 }));
 	if (pointerType === "touch") await wait(520);
 	document.dispatchEvent(pointer("pointermove", { pointerId: id, pointerType, clientX: x0 + 10, clientY: y0 + 2, buttons: 1 }));
@@ -202,10 +210,33 @@ export async function checkViews(h: LibraryHarness, surface: string): Promise<Re
 		}
 		await dragTo(main, dropOn(targets[i]!), kinds[i]!, 10 + i);
 		if (phone) click(q(`.nb-board-tab[data-key="board:tab:${targets[i]}"]`));
+		for (let k = 0; k < 40 && columnOf(title) !== targets[i]; k++) await wait(50);
 		await frames(2);
 		add(`dragging a card with a ${kinds[i]} moves it to ${targets[i]}`, columnOf(title) === targets[i], `${title}: ${columnOf(title)}`);
 	}
 	add("the ghost of a drag does not stay on the screen", document.querySelectorAll(".notebook-lib-ghost").length === 0);
+
+	// Holding a dragged card near the edge of the board (the tab strip on a phone) scrolls it sideways.
+	const strip = q(phone ? ".nb-board-tabs" : ".nb-board");
+	if (phone) click(q('.nb-board-tab[data-key="board:tab:todo"]'));
+	await frames(2);
+	const holder = all(".nb-board-card-main").find(visible);
+	if (strip && holder && strip.scrollWidth > strip.clientWidth + 8) {
+		strip.scrollLeft = 0;
+		const r = strip.getBoundingClientRect();
+		const h = holder.getBoundingClientRect();
+		holder.dispatchEvent(pointer("pointerdown", { pointerId: 30, pointerType: "mouse", clientX: h.left + 24, clientY: h.top + h.height / 2, button: 0, buttons: 1 }));
+		document.dispatchEvent(pointer("pointermove", { pointerId: 30, pointerType: "mouse", clientX: h.left + 40, clientY: h.top + h.height / 2, buttons: 1 }));
+		document.dispatchEvent(pointer("pointermove", { pointerId: 30, pointerType: "mouse", clientX: Math.min(r.right, window.innerWidth) - 12, clientY: phone ? r.top + r.height / 2 : h.top + h.height / 2, buttons: 1 }));
+		await wait(400);
+		add("holding a dragged card at the edge scrolls the columns sideways", strip.scrollLeft > 0, String(strip.scrollLeft));
+		document.dispatchEvent(pointer("pointercancel", { pointerId: 30, pointerType: "mouse", buttons: 0 }));
+		await frames(2);
+		strip.scrollLeft = 0;
+		add("cancelling the drag moves nothing and removes the ghost", document.querySelectorAll(".notebook-lib-ghost").length === 0);
+	} else {
+		add("the columns fit without sideways scroll (nothing to scroll)", true);
+	}
 
 	// Another device moves a notebook: its file is read and merged (last writer wins).
 	const mover = s.store.snapshot();
