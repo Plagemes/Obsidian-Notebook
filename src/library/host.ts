@@ -47,6 +47,7 @@ import { openLibraryCheck } from "./library-check-modal";
 import { openStorageManager } from "./storage-dialog";
 import { LibraryStateStore } from "./library-state-store";
 import { BoardStateStore } from "./board-state-store";
+import { CollectionsStore } from "./collections-store";
 import type { BoardColumn } from "./board-logic";
 import { BoardColumnsModal } from "../view/board-columns-modal";
 import type { LibraryHost } from "./library-view";
@@ -98,11 +99,14 @@ export class NotebookLibraryHost implements LibraryHost {
 	readonly folderMeta: FolderMetaStore;
 	/** 0.15: the Board view's statuses, one file per device in `_meta` (library/board-state.ts). */
 	readonly board: BoardStateStore;
+	/** 0.17 (#120): the saved collections (rules over the library), one file per device in `_meta` (library/collections.ts). */
+	readonly collections: CollectionsStore;
 
 	constructor(private readonly plugin: HostPlugin) {
 		this.state = new LibraryStateStore(vaultDeviceFileAdapter(plugin.app), () => plugin.settings.folder, sidecarDeviceId(plugin.app));
 		this.folderMeta = new FolderMetaStore(vaultDeviceFileAdapter(plugin.app), () => plugin.settings.folder, sidecarDeviceId(plugin.app));
 		this.board = new BoardStateStore(vaultDeviceFileAdapter(plugin.app), () => plugin.settings.folder, sidecarDeviceId(plugin.app));
+		this.collections = new CollectionsStore(vaultDeviceFileAdapter(plugin.app), () => plugin.settings.folder, sidecarDeviceId(plugin.app));
 		this.trash = new LibraryTrash({
 			app: plugin.app,
 			root: () => plugin.settings.folder,

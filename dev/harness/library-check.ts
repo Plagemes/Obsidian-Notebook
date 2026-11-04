@@ -17,6 +17,7 @@ import type { NotebookDocument, NotebookMeta } from "../../src/model/types";
 import type { FolderMeta } from "../../src/library/folder-meta";
 import { ActivityLog } from "../../src/library/activity-log";
 import { LibraryStateStore } from "../../src/library/library-state-store";
+import { CollectionsStore } from "../../src/library/collections-store";
 import type { DeviceFileAdapter } from "../../src/storage/device-files";
 import { FAKE_ASSET, FAKE_PAGE, FAKE_PATH, installFakePdf } from "./fake-pdf";
 import { closeCreate, showCreate } from "./create-check";
@@ -233,6 +234,7 @@ export async function openLibraryHarness(app: App, surface: string, empty = fals
 			pinnedFolders: () => [...pinnedFolders].sort(),
 		},
 		state: new LibraryStateStore(new MemoryAdapter(), () => ROOT, "0a1b2c3d"),
+		collections: new CollectionsStore(new MemoryAdapter(), () => ROOT, "0a1b2c3d"), // 0.17
 		userName: () => "Alex",
 		activity: () => ({ records: activity.records(), minutes: activity.minutesByDay() }),
 		lectureTarget: () => (empty || variant === "last" ? null

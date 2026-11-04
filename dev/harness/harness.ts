@@ -59,6 +59,7 @@ import { modalsApi } from "./modals-check";
 import { templatesApi } from "./templates-check";
 import { storageApi } from "./storage-check";
 import { bulkApi } from "./bulk-check";
+import { checkCollections, collectionsState } from "./collections-check";
 import { checkHostile, HOSTILE_ERROR, hostileDialog, installHostile } from "./hostile";
 import { PracticeService } from "../../src/view/practice";
 import { NavController } from "../../src/view/nav-controller";
@@ -2128,6 +2129,12 @@ harnessApi.checkViews = async () => {
 	return { ok: results.every((r) => r.ok) && errors.length === 0, results, errors: [...errors] };
 };
 harnessApi.viewsState = (state: string) => (libraryHarness ? viewsState(libraryHarness, state) : false);
+// 0.17 collections: saved collections in the rail (collections-check.ts).
+harnessApi.checkCollections = async () => {
+	const results = libraryHarness ? await checkCollections(libraryHarness, librarySurface) : [];
+	return { ok: results.every((r) => r.ok) && errors.length === 0, results, errors: [...errors] };
+};
+harnessApi.collectionsState = (state: string) => (libraryHarness ? collectionsState(libraryHarness, state) : false);
 
 async function interactLibrary(): Promise<Record<string, unknown>> {
 	const results = libraryHarness ? await libraryInteractions(libraryHarness, librarySurface) : [];

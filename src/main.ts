@@ -12,6 +12,7 @@ import { AdapterJournalStore, journalFolder, sidecarDeviceId, vaultDeviceFileAda
 import { SharedClipStore } from "./storage/shared-clip-store";
 import { createNotebook } from "./storage/notebooks";
 import { registerFolderMeta } from "./library/folder-meta-events";
+import { registerCollections } from "./library/collections-events";
 import { BenchmarkModal } from "./view/benchmark";
 import { PenTestModal, penSignalInfo } from "./view/pen-test-modal";
 import { NotebookLibraryHost } from "./library/host";
@@ -152,6 +153,8 @@ export default class NotebookPlugin extends Plugin {
 		});
 		// wave 0.12: folder colours and icons follow renames and other devices' changes (library/folder-meta-events.ts).
 		this.step("folder metadata", () => registerFolderMeta(this, this.host.folderMeta));
+		// 0.17 (#120): saved collections are read at start and follow other devices' files.
+		this.step("collections", () => registerCollections(this, this.host.collections));
 		this.step("ribbon", () => this.addRibbonIcon("home", t("home.command"), () => void this.openLibrary("home")));
 
 		// wave p1b: repair (#140), conflicted copies (#122), page restore (#180).

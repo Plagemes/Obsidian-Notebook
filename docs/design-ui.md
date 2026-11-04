@@ -353,7 +353,7 @@ logged and does not take the rest of Home with it.
 **Shell.** Navigation rail (`ui/components/nav-rail.ts`): brand; *Home*, *Notebooks*, *PDF* (only when a notebook has
 PDF pages), *Tags*, *Settings* (opens the plugin's settings tab); *Vault*: the folder tree under the notebooks folder,
 each folder with the colour of its subject (top-level folder) and its folder menu (long press or right click), a drop
-target for dragged notebooks; at the bottom *Archive*, *Trash*, *Check library*. Width classes of the view: **wide**
+target for dragged notebooks; 0.17 (#120): above *Vault* a *Collections* section (saved rules over the library: a row per collection with its live count, a pencil that appears on hover and is always shown on touch, and a *New collection* row; the editor is a shell dialog `nb-coll-editor` with a live count); at the bottom *Archive*, *Trash*, *Check library*. Width classes of the view: **wide**
 (≥ 1100 px: rail with labels, which a fold button turns into icons), **medium** (600–1099 px, a tablet in portrait:
 icons only, subject folders only in the tree), **phone** (< 600 px: the rail is a sheet from the left, opened from the
 menu button of the header). Page header: title and subtitle (a folder shows its breadcrumb, each part a link and a

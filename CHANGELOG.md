@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### collections
+- **Saved collections (#120).** The library sidebar has a *Collections* section: a collection is a name and rules combined with AND: tags (any / all; a nested tag matches under its parent), a folder with its subfolders, modified or created in the last 7 / 30 days or in a date range, favourite (starred or pinned) or not, and has a PDF or not. The editor counts the matching notebooks as the rules change; opening a collection filters the library grid through the same place filter and search as the other places (archived notebooks stay out), and the rail shows a live count per collection. Edit with the pencil (rail or header), delete with a confirmation (a notebook is never touched). Stored in `_meta/collections-<device>.json`, **one file per device** like the library state and folder metadata (a single shared `collections.json` would be written by two devices at once): merged on read, the latest change wins per collection, a delete is a tombstone; read leniently, unknown fields and items kept, never overwritten when unreadable or empty (a copy is kept). No change to the notebook format. Not a rule yet: notebook type / template (the library index has no such field). Tests: `tests/collections.test.ts`. Harness: `dev/harness/collections-check.ts` (`doc=library`).
+
 ## 0.16.0 — 2026-11-04
 
 Finish a page, work with PDFs, and get material in and out faster: lock a finished page, copy text from a PDF with its outline and links, move a selection to another page, import many files at once, present a notebook full screen with a laser pointer, collect highlights into a note, and pick up files shared from other Android apps. **The document format is now v14** (optional page lock): a 0.15 device opens a v14 notebook read-only (newer version) and never overwrites it. **Not verified on the device**: unit tests and the browser harness only.

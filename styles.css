@@ -14552,3 +14552,81 @@ body.notebook-style-obsidian {
 		padding: 0 9px;
 	}
 }
+
+/* ===== 0.17 collections ===== */
+.nb-ui .nb-rail-collections {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.nb-ui .nb-coll-row {
+	position: relative;
+}
+
+.nb-ui .nb-coll-row .nb-coll-edit {
+	opacity: 0;
+}
+
+.nb-ui .nb-coll-row:hover .nb-coll-edit,
+.nb-ui .nb-coll-row:focus-within .nb-coll-edit {
+	opacity: 1;
+}
+
+@media (pointer: coarse) {
+	.nb-ui .nb-coll-row .nb-coll-edit {
+		opacity: 1;
+	}
+}
+
+.nb-ui.nb-coll-editor .nb-modal-body {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.nb-ui.nb-coll-editor .nb-coll-seg {
+	display: inline-flex;
+	gap: 4px;
+	padding: 3px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-bg-elevated);
+	align-self: flex-start;
+}
+
+.nb-ui.nb-coll-editor .nb-coll-seg-btn {
+	min-height: 36px;
+	padding: 6px 14px;
+	border: 0;
+	border-radius: calc(var(--nb-radius-tile) - 3px);
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.nb-ui.nb-coll-editor .nb-coll-seg-btn.is-on {
+	background: var(--nb-accent-soft, var(--nb-border));
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-coll-editor .nb-modal-inputrow {
+	flex-wrap: wrap;
+}
+
+.nb-ui.nb-coll-editor .nb-coll-range.is-hidden,
+.nb-ui.nb-coll-editor .nb-modal-error.is-hidden {
+	display: none;
+}
+
+.nb-ui.nb-coll-editor .nb-coll-count {
+	padding: 10px 14px;
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-accent-soft, var(--nb-border));
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+	font-weight: 600;
+}
