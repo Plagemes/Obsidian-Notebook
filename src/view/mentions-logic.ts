@@ -91,6 +91,26 @@ export function notebookMentions(hits: readonly MentionHit[]): MentionRow[] {
 	return rowsOf(hits, (h) => h.pageId === null);
 }
 
+/**
+ * Whether a change of the note at `changedPath` can change the notebook's mentions: the note is a source we already know, the
+ * index already has it linking to the notebook (`indexed`: its `resolvedLinks` entry), or its fresh links now reach the
+ * notebook (`linksNow`, only asked when the first two say no). Every other note's change leaves the sheet as it is.
+ */
+export function mentionsMayChange(
+	changedPath: string, notebookPath: string, known: ReadonlySet<string>, indexed: Readonly<Record<string, number>> | undefined, linksNow: () => boolean,
+): boolean {
+	if (changedPath === notebookPath) return false;
+	if (known.has(changedPath)) return true;
+	if ((indexed?.[notebookPath] ?? 0) > 0) return true;
+	return linksNow();
+}
+
+/** Whether every note of `known` still exists (a rename or delete of a source needs a fresh read of the index). */
+export function sourcesIntact(known: ReadonlySet<string>, exists: (path: string) => boolean): boolean {
+	for (const p of known) if (!exists(p)) return false;
+	return true;
+}
+
 /** How many links name this page (the badge). */
 export function pageMentionCount(hits: readonly MentionHit[], pageId: string | null | undefined): number {
 	if (!pageId) return 0;

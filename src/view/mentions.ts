@@ -5,9 +5,10 @@
 import { Modal, setIcon, type App, type EventRef, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { backlinksOf } from "../storage/backlinks";
+import { splitLinktext } from "./hover-preview-logic";
 import { modalShell, shellButton, shellNote } from "../ui/components/modal-shell";
 import {
-	contextSnippet, hitsOfNote, lineOf, notebookMentions, pageMentionCount, pageMentions, type MentionHit, type MentionRow, type RawLink,
+	contextSnippet, hitsOfNote, lineOf, mentionsMayChange, notebookMentions, pageMentionCount, pageMentions, sourcesIntact, type MentionHit, type MentionRow, type RawLink,
 } from "./mentions-logic";
 
 /** Most notes whose links are read from the index, most links kept, most rows drawn in a group, most notes read for context. */
@@ -62,6 +63,8 @@ export interface MentionsHost {
 /** Keeps the hits for the open notebook up to date (debounced, from the index) and the badge in step with the page in view. */
 export class Mentions {
 	private hits: MentionHit[] = [];
+	/** The notes the hits come from: a change of any other note that does not link here now cannot change them. */
+	private sources = new Set<string>();
 	private timer: number | null = null;
 	private lastPath = "";
 	private lastPages = -1;
@@ -79,8 +82,11 @@ export class Mentions {
 			this.open();
 		});
 		this.badge = badge;
-		host.register(host.app.metadataCache.on("resolved", () => this.schedule()));
-		host.register(host.app.metadataCache.on("changed", () => this.schedule()));
+		// Not every change of the vault: only a note that links here (or did), or the loss of one of the notes we read.
+		host.register(host.app.metadataCache.on("resolved", () => {
+			if (!sourcesIntact(this.sources, (p) => host.app.vault.getFileByPath(p) !== null)) this.schedule();
+		}));
+		host.register(host.app.metadataCache.on("changed", (note) => this.noteChanged(note)));
 	}
 
 	/** Called whenever the page in view may have changed: re-reads the index when the notebook or its page count changed, then updates the badge. */
@@ -94,6 +100,18 @@ export class Mentions {
 		const label = t("mentions.badge.aria", { n: String(n) });
 		this.badge.setAttribute("aria-label", label);
 		this.badge.setAttribute("title", label);
+	}
+
+	private noteChanged(note: TFile): void {
+		const file = this.host.file();
+		if (!file) return;
+		const app = this.host.app;
+		const may = mentionsMayChange(note.path, file.path, this.sources, app.metadataCache.resolvedLinks[note.path], () => {
+			const cache = app.metadataCache.getFileCache(note);
+			const refs = [...(cache?.links ?? []), ...(cache?.embeds ?? [])];
+			return refs.some((r) => typeof r.link === "string" && app.metadataCache.getFirstLinkpathDest(splitLinktext(r.link).path, note.path)?.path === file.path);
+		});
+		if (may) this.schedule();
 	}
 
 	private schedule(): void {
@@ -111,6 +129,7 @@ export class Mentions {
 		this.lastPath = file?.path ?? "";
 		this.lastPages = pages.length;
 		this.hits = file ? collectMentions(this.host.app, file, pages) : [];
+		this.sources = new Set(this.hits.map((h) => h.notePath));
 	}
 
 	/** The sheet, with the index read fresh. */

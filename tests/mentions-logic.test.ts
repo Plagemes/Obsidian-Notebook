@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contextSnippet, hitsOfNote, lineOf, mentionPageId, notebookMentions, pageMentionCount, pageMentions, type RawLink } from "../src/view/mentions-logic";
+import { contextSnippet, hitsOfNote, lineOf, mentionPageId, mentionsMayChange, notebookMentions, pageMentionCount, pageMentions, sourcesIntact, type RawLink } from "../src/view/mentions-logic";
 
 const pages = [{ id: "pg-aaaaaaaa" }, { id: "pg-bbbbbbbb" }, { id: "pg-cccccccc" }];
 const link = (l: string, line = 0, col = 0, embed = false): RawLink => ({ link: l, line, col, endCol: col + l.length + 4, embed });
@@ -77,5 +77,32 @@ describe("lineOf", () => {
 		expect(lineOf("a\nb\nc", 1)).toBe("b");
 		expect(lineOf("a\nb\nc", 2)).toBe("c");
 		expect(lineOf("a\nb", 5)).toBe("");
+	});
+});
+
+describe("which changes can alter the mentions", () => {
+	const known = new Set(["Notes/a.md"]);
+	const never = () => {
+		throw new Error("the fresh links must not be read");
+	};
+	it("ignores a note that neither linked here nor links here now", () => {
+		expect(mentionsMayChange("Other.md", "Physics.notebook", known, { "x.md": 1 }, () => false)).toBe(false);
+		expect(mentionsMayChange("Other.md", "Physics.notebook", known, undefined, () => false)).toBe(false);
+	});
+	it("follows a known source, even when it no longer links here", () => {
+		expect(mentionsMayChange("Notes/a.md", "Physics.notebook", known, {}, never)).toBe(true);
+	});
+	it("follows a note the index already has linking here", () => {
+		expect(mentionsMayChange("b.md", "Physics.notebook", known, { "Physics.notebook": 2 }, never)).toBe(true);
+		expect(mentionsMayChange("b.md", "Physics.notebook", known, { "Physics.notebook": 0 }, () => false)).toBe(false);
+	});
+	it("follows a note whose fresh links now reach the notebook, and never the notebook itself", () => {
+		expect(mentionsMayChange("c.md", "Physics.notebook", known, undefined, () => true)).toBe(true);
+		expect(mentionsMayChange("Physics.notebook", "Physics.notebook", new Set(["Physics.notebook"]), undefined, () => true)).toBe(false);
+	});
+	it("notices a source that is gone", () => {
+		expect(sourcesIntact(known, (p) => p === "Notes/a.md")).toBe(true);
+		expect(sourcesIntact(known, () => false)).toBe(false);
+		expect(sourcesIntact(new Set(), () => false)).toBe(true);
 	});
 });
