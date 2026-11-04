@@ -127,7 +127,7 @@ describe("recording into the device storage", () => {
 	function fakeStorage(initial: Record<string, unknown> = {}, failOn?: string) {
 		const data = new Map<string, unknown>(Object.entries(initial));
 		const io: SmartAddStorage = {
-			load: (k) => (data.has(k) ? JSON.parse(JSON.stringify(data.get(k))) : null),
+			load: (k): unknown => (data.has(k) ? (JSON.parse(JSON.stringify(data.get(k))) as unknown) : null),
 			save: (k, v) => {
 				if (failOn === k) throw new Error("quota");
 				if (v === null) data.delete(k);

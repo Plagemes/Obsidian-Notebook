@@ -105,20 +105,16 @@ function rig(shared?: { store: Map<string, unknown>; doc: NotebookDocument }): R
 
 beforeEach(() => {
 	shown.length = 0;
-	const g = globalThis as Record<string, unknown>;
-	g.window = { setInterval: () => 1, clearInterval: () => undefined, setTimeout, clearTimeout };
-	g.document = { addEventListener: () => undefined, removeEventListener: () => undefined, visibilityState: "visible" };
-	g.createFragment = (cb: (f: El) => void) => {
+	vi.stubGlobal("window", { setInterval: () => 1, clearInterval: () => undefined, setTimeout, clearTimeout });
+	vi.stubGlobal("document", { addEventListener: () => undefined, removeEventListener: () => undefined, visibilityState: "visible" });
+	vi.stubGlobal("createFragment", (cb: (f: El) => void) => {
 		const f = new El("fragment");
 		cb(f);
 		return f;
-	};
+	});
 });
 afterEach(() => {
-	const g = globalThis as Record<string, unknown>;
-	delete g.window;
-	delete g.document;
-	delete g.createFragment;
+	vi.unstubAllGlobals();
 });
 
 describe("lecture mode never adds a page by itself", () => {
