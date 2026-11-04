@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DeviceFileAdapter } from "../src/storage/device-files";
 import {
-	applyCollectionOps, countMatches, dayBounds, DAY_MS, emptyCollections, filterByRules, liveCollections, matchesRules, mergeCollectionFiles,
+	adoptCollectionWinners, applyCollectionOps, countMatches, dayBounds, DAY_MS, emptyCollections, filterByRules, liveCollections, matchesRules, mergeCollectionFiles,
 	parseCollections, pruneTombstones, readRules, serializeCollections, TOMBSTONE_DAYS, type CollectionRules, type CollectionsFile,
 } from "../src/library/collections";
 import { CollectionsBlockedError, CollectionsStore } from "../src/library/collections-store";
@@ -218,6 +218,47 @@ describe("collections store", () => {
 		expect(text).toContain('"live"');
 		expect(text).toContain("Fresh");
 		expect(store.list().map((c) => c.id)).toContain("live");
+	});
+
+	it("a deletion does not come back after the tombstone's 90 days (two devices)", async () => {
+		const OWN = "Notebooks/_meta/collections-0a000000.json";
+		const BOWN = "Notebooks/_meta/collections-0b000000.json";
+		for (const bRewrites of [false, true]) {
+			let now = 1000 * DAY_MS;
+			const adapter = new MemoryAdapter();
+			const a = new CollectionsStore(adapter, () => "Notebooks", "0a000000", () => now);
+			const b = new CollectionsStore(adapter, () => "Notebooks", "0b000000", () => now);
+			const id = await b.save({ name: "Exams", rules: {} });
+			now += DAY_MS;
+			await a.load();
+			await a.remove(id);
+			expect(adapter.files.get(BOWN)).not.toContain('"deleted"');
+			if (bRewrites) {
+				now += DAY_MS;
+				await b.save({ name: "Other", rules: {} });
+				expect(adapter.files.get(BOWN)).toContain('"deleted":true');
+			}
+			now += (TOMBSTONE_DAYS + 10) * DAY_MS;
+			await a.save({ name: "Fresh", rules: {} });
+			expect(adapter.files.get(OWN)!.includes(id)).toBe(!bRewrites);
+			const fresh = new CollectionsStore(adapter, () => "Notebooks", "0c000000", () => now);
+			await fresh.load();
+			expect(fresh.list().some((c) => c.id === id)).toBe(false);
+		}
+	});
+
+	it("a deletion made elsewhere is adopted; a tombstone is not pruned while another file holds the collection live", () => {
+		const now = 1000 * DAY_MS;
+		const old = now - (TOMBSTONE_DAYS + 1) * DAY_MS;
+		const mine = file("0a000000", [item("c1", "A", 5), item("c2", "B", 5)]);
+		const theirs = file("0b000000", [item("c1", "A", 9, { deleted: true })]);
+		const after = adoptCollectionWinners(mine, mergeCollectionFiles([mine, theirs]));
+		expect(after.items.find((i) => i.id === "c1")).toMatchObject({ at: 9, deleted: true });
+		expect(after.items.find((i) => i.id === "c2")).toBe(mine.items[1]);
+		const tomb = file("0a000000", [item("c1", "A", old, { deleted: true })]);
+		expect(pruneTombstones(tomb, now, [file("0b000000", [item("c1", "A", old - 1)])]).items).toHaveLength(1);
+		expect(pruneTombstones(tomb, now, [], false).items).toHaveLength(1);
+		expect(pruneTombstones(tomb, now, [file("0b000000", [item("c1", "A", old, { deleted: true })])]).items).toHaveLength(0);
 	});
 
 	it("F8: pruneTombstones keeps live collections and unknown items whatever their age", () => {

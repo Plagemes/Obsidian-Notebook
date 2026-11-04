@@ -168,7 +168,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 
 ### Integration and accessibility
 58. 🧪 **P1** Direct `obsidian://` links to a page, to open it from other apps, bookmarks or a QR code.
-59. **P2** Lasso selection as an image inserted at the cursor of the active Markdown note.
+59. **P2** 🧪 Lasso selection as an image inserted at the cursor of the active Markdown note.
 60. ~~**P2** Left-handed mode: toolbar on the other side and palm rejection tuned for left-handed writing.~~ — dropped (user decision, 2026-10-29)
 
 ## M9 — More features (backlog, planned 2026-10-29)
@@ -205,7 +205,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 ### Study
 84. **P2** Action history panel (jump back to a point) and undo that survives reopening.
 85. **P1** 🧪 Coloured bookmarks with categories ("important", "to review").
-86. **P2** Margin comments attached to a region of the page.
+86. **P2** 🧪 Margin comments attached to a region of the page (0.18, format v16: `Page.comments`, typed text and a small sketch, flat replies, resolve, side panel, PDF margin notes, Markdown list).
 87. **P2** 🧪 Presentation mode: full-screen pages, with the laser pointer (#12).
 88. **P3** Study timer (pomodoro) with a session log.
 89. ~~**P2** Scheduled review: "review this page in 3 days", with a list of pages due.~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
@@ -221,10 +221,10 @@ Goal: notebooks behave like first-class Obsidian content. Several items depend o
 - **O4 P1** 🧪 Page links: `[[Physics#p3]]` opens the notebook at that page, with link suggestions while typing.
 - **O5 P2** 🧪 Hover preview: hovering a notebook link shows the page thumbnail (page preview).
 - **O6 P1** 🧪 Native embed syntax: `![[Physics.notebook#p3]]` renders the page in reading view and live preview.
-- **O7 P2** Linked mentions: inside the notebook, for each page, the notes that link to it.
+- **O7 P2** 🧪 Linked mentions: inside the notebook, for each page, the notes that link to it.
 - **O8 P1** 🧪 Links written with the pen: writing `[[` by hand (two bracket strokes) — or circling ink and choosing "Link" — opens the note suggester; the chosen note becomes a link attached to that ink, tapping it opens the note. The ink stays as written. The same works in text boxes with the keyboard.
 - **O9 P1** 🧪 File explorer menu: "New notebook here" on folders, "Annotate in Notebook" on PDFs.
-- **O10 P2** From Obsidian's PDF viewer: an "Annotate in Notebook" action.
+- **O10 P2** 🧪 From Obsidian's PDF viewer: an "Annotate in Notebook" action.
 - **O11 P3** Pages on Canvas: notebook pages as cards on an Obsidian Canvas.
 - **O12 P2** 🧪 Daily notebook: "Today's page" adds a dated page and links it from the daily note.
 - **O13 P2** Obsidian templates: template notebooks and embeds in Templates/Templater.
@@ -369,7 +369,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 175. ~~**P2** Magnifier lens following the pen, to read small PDF text while writing.~~ — dropped (user decision, 2026-10-29)
 176. **P1** 🧪 Loose sheet: a quick-notes notebook opened from anywhere in Obsidian; move its content to the right notebook later.
 177. **P2** 🧪 Inbox folder: files shared from other Android apps land there and the plugin offers to put them into a notebook.
-178. **P2** Split an infinite page into A4 pages for export and printing.
+178. **P2** 🧪 Split an infinite page into A4 pages for export and printing.
 179. **P2** Two-way page references: if page 3 refers to page 7, page 7 shows "referenced on page 3".
 180. **P1** 🧪 Restore a single page from a previous version, leaving the rest untouched.
 181. **P2** Reference sheets, dynamic and integrated:
@@ -387,11 +387,11 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 183. **P3** Gentle snapping of handwriting to the lines while writing on ruled paper.
 184. **P2** Paint bucket: fill closed areas with colour (diagrams, maps).
 185. **P1** 🧪 Erase area: draw an outline and everything inside disappears, in one gesture.
-186. **P2** Copy a page into another notebook, with a link back to the source page.
+186. **P2** 🧪 Copy a page into another notebook, with a link back to the source page.
 187. **P2** Back-of-book index: mark terms or regions and an index page with references is generated.
 188. **P1** 🧪 Show/hide all annotations, to reread a clean PDF.
 189. **P2** Attachments on the page: Word files, zips and others as icons that open on tap.
-190. **P2** Page QR code: scan it with the phone and the page opens on the other device.
+190. **P2** 🧪 Page QR code: scan it with the phone and the page opens on the other device.
 
 ## M13 — During the lecture (backlog, planned 2026-10-29)
 
@@ -440,7 +440,7 @@ Features for following a lecture live. Exam and review features stay in the sepa
 224. **P2** "Slide explained" ticks: see how far the lecturer has got.
 225. **P2** "Back to the current slide" after looking elsewhere.
 226. **P1** 🧪 Automatic notes ↔ slide link: ink remembers which slide was visible in the side-by-side view while you wrote it; tapping it shows that slide again.
-227. **P2** Quick tabs: pages pinned during the lecture (e.g. the formula sheet), one tap away.
+227. **P2** 🧪 Quick tabs: pages pinned during the lecture (e.g. the formula sheet), one tap away.
 228. **P2** Lecture figure gallery: all photos and crops of the section in one place.
 229. **P3** Peek at the next slide while writing.
 230. **P3** Continuous board: a horizontally scrolling page for long blackboards.

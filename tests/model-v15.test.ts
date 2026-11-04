@@ -73,15 +73,15 @@ function v14Raw(): Raw {
 const stickyRaw = (over: Raw = {}): Raw => ({ id: "n1", type: "sticky", x: 10, y: 20, width: 150, height: 150, color: "#F59E0B", fontSize: 14, ...over });
 
 describe("format v15: migration", () => {
-	it("is at version 15 with a v14 step", () => {
-		expect(CURRENT_VERSION).toBe(15);
+	it("has the v14 step (the current format is v16 since margin comments)", () => {
+		expect(CURRENT_VERSION).toBeGreaterThanOrEqual(15);
 		expect(MIGRATIONS[14]).toBeTypeOf("function");
 	});
 
 	it("reads a v14 file unchanged apart from the version", () => {
 		const r = parsed(JSON.stringify(v14Raw()));
 		expect(r.migratedFrom).toBe(14);
-		expect(r.doc.version).toBe(15);
+		expect(r.doc.version).toBe(CURRENT_VERSION);
 		expect(r.doc.pages[0]!.elements).toBeUndefined();
 		expect(r.doc.pages[0]!.strokes).toHaveLength(2);
 		expect(r.dropped).toBeUndefined();
@@ -109,7 +109,7 @@ describe("format v15: migration", () => {
 
 	it("migrates a v14 round trip: v14 text -> v15 document -> text has no notes and the same ink", () => {
 		const text = serialize(parsed(JSON.stringify(v14Raw())).doc);
-		expect(text).toContain('"version": 15');
+		expect(text).toContain(`"version": ${CURRENT_VERSION}`);
 		expect(text).not.toContain('"sticky"');
 		expect(parsed(text).doc.pages[0]!.strokes).toHaveLength(2);
 	});
@@ -119,7 +119,7 @@ describe("format v15: migration", () => {
 		const r = parse(text);
 		expect(r.ok).toBe(false);
 		if (!r.ok) expect(r.reason).toBe("future-version");
-		expect(serialize(noteDoc())).toContain('"version": 15');
+		expect(serialize(noteDoc())).toContain(`"version": ${CURRENT_VERSION}`);
 	});
 });
 
@@ -481,7 +481,7 @@ describe("sticky notes: repair", () => {
 	it("repairs an older file: the version is current in the result", () => {
 		const r = repairNotebookText(JSON.stringify(v14Raw()));
 		expect(r.ok).toBe(true);
-		if (r.ok) expect(getAt(JSON.parse(r.text), ["version"])).toBe(15);
+		if (r.ok) expect(getAt(JSON.parse(r.text), ["version"])).toBe(CURRENT_VERSION);
 	});
 });
 

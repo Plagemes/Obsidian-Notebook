@@ -27,7 +27,7 @@ export function trackActiveNote(plugin: Plugin): void {
 }
 
 /** The note to insert into: the last one with focus if it is still open, else any open note. */
-function targetNote(app: App): MarkdownView | null {
+export function targetNote(app: App): MarkdownView | null {
 	const open = app.workspace.getLeavesOfType("markdown");
 	const leaf = lastNoteLeaf && open.includes(lastNoteLeaf) ? lastNoteLeaf : open[0];
 	return leaf && isNoteLeaf(leaf) ? (leaf.view as MarkdownView) : null;

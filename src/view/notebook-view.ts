@@ -9,7 +9,7 @@ import { isHeic } from "../scan/image-bytes";
 import { t } from "../i18n";
 import { renderThumbnail } from "../library/thumbnail";
 import { needsNextPage, needsPageOffer } from "../ink/auto-page";
-import { deleteInkCommand, deleteSelectionCommands, inkOnRemoved, pinnedInk, withPinnedInk } from "../ink/attach";
+import { deleteInkCommand, deleteSelectionCommands, inkOnRemoved, pinnedInk, withoutPinnedInk, withPinnedInk } from "../ink/attach";
 import { hiddenStickyInk } from "../model/sticky";
 import { captureClip, type ClipContent } from "../ink/clipboard";
 import { cleanStampFormat, formatStamp, stampElement, stampSpot } from "../ink/date-stamp";
@@ -73,7 +73,9 @@ import { SharedClipStore } from "../storage/shared-clip-store";
 import { backupFolder, readSettings, type NotebookSettings } from "../settings";
 import { defaultMarkdownFolder, exportMarkdown, siblingFolder } from "./export-markdown";
 import { MakeTaskModal, runMakeTask } from "./selection-task";
+import { runInsertIntoNote } from "./selection-insert";
 import { taskCropRect } from "../model/selection-task";
+import { Mentions } from "./mentions";
 import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./highlight-digest";
 import { canPrint } from "./print";
 import type { ExportFormat } from "../ink/export-layers";
@@ -84,6 +86,8 @@ import { policySettings } from "./input-settings";
 import { NotebookMedia, storeAsset } from "./media";
 import { HeavyPageBanner } from "./heavy-page-banner";
 import { ViewSyncSafety, type SyncSafetyService } from "./sync-safety";
+import { QuickTabsStrip } from "./quick-tabs";
+import type { QuickTabsService, QuickTabsViewApi } from "./quick-tabs-service";
 import { PageNavigator } from "./navigator";
 import { NotebookMapCache } from "../model/notebook-map";
 import { NotebookMapModal } from "./notebook-map-modal";
@@ -119,6 +123,7 @@ import { findLecturePage } from "../timetable/lecture-open";
 import type { LectureClass } from "../timetable/lecture-mode";
 import { askExercisePaper, askLayoutOptions, loadExercisePaper } from "./lecture-pack-modal";
 import { runMovePages } from "../library/move-pages";
+import { runCopyWithLink } from "../library/copy-with-link";
 import { TransferFlows } from "../library/transfer-flows";
 import type { StorageEnv } from "../library/storage-actions";
 import type { PdfActionHost } from "./pdf-actions";
@@ -153,6 +158,7 @@ import { StampPalette, type StampTarget } from "./stamp-palette";
 import { TextEditor, type TextEditSession } from "./text-editor";
 import { MathTools, type MathHost } from "./math-tools";
 import { StickyTools, type StickyHost } from "./sticky-tools";
+import { CommentTools, pdfCommentLabels, type CommentsHost } from "./comments-tools";
 import { equationNumbers } from "../model/math-elements";
 import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites";
 import { PenControls, type PenStore } from "./pen-controls";
@@ -217,6 +223,8 @@ export interface NotebookHost {
 	pageEditedAt?(nb: string, pageId: string): number | null;
 	/** Roadmap 18: the session's back/forward history of visited pages, across notebooks (view/nav-controller.ts). Optional: absent in tests. */
 	nav?: NavController;
+	/** 0.18 (#227): quick tabs, pages pinned in a notebook (view/quick-tabs-service.ts). Optional: absent in tests. */
+	quickTabs?: QuickTabsService;
 	/** Roadmap O15: the page in view or the save state of `view` changed (the status bar item follows the active view). Optional. */
 	statusChanged?(view: NotebookView): void;
 	/** Instant save journal shared by all views. */
@@ -399,6 +407,9 @@ export class NotebookView extends FileView {
 	private minimap: Minimap | null = null;
 	/** Roadmap 18: stops following the history's changes (the quick slots and the page sheet enable or disable Back and Forward). */
 	private stopNav: (() => void) | null = null;
+	/** 0.18 (#227): the strip of quick tabs and the subscription that keeps it current. */
+	private quickStrip: QuickTabsStrip | null = null;
+	private stopQuick: (() => void) | null = null;
 	/** Roadmap 18: the next explicit arrival is the first load of this file, so the place left is the last one seen anywhere. */
 	private navFresh = true;
 	private arrivalFresh = false;
@@ -413,6 +424,8 @@ export class NotebookView extends FileView {
 	private math: MathTools | null = null;
 	/** 0.17 (#20): sticky notes (insert, edit, collapse). */
 	private sticky: StickyTools | null = null;
+	/** 0.18 (#86): margin comments (markers, card, side panel). */
+	private comments: CommentTools | null = null;
 	private rulerGesture: RulerGesture | null = null;
 	private radial: PenRadial | null = null;
 	private colour: ColourTools | null = null;
@@ -593,6 +606,7 @@ export class NotebookView extends FileView {
 			togglePin: (id) => this.ui?.togglePin(id),
 			openSheet: (anchor) => this.ui?.openSheet("all", anchor),
 			openPageSheet: (anchor) => this.ui?.openSheet("page", anchor, this.currentPageIndex()),
+			...(this.host.quickTabs ? { quickTab: { pinned: () => this.host.quickTabs?.isPinned(this.quickApi()) ?? false, toggle: () => this.togglePageQuickTab() } } : {}),
 		});
 		this.tabs = new NotebookTabs(this.contentEl, this.toolbar.el, {
 			app: this.app,
@@ -625,6 +639,7 @@ export class NotebookView extends FileView {
 		this.scrollbar = new FastScrollbar(this.body, this.scrollbarHost());
 		this.minimap = new Minimap(this.body, this.minimapHost());
 		this.stopNav = this.host.nav?.onChange(() => this.refreshUi()) ?? null;
+		this.mountQuickTabs();
 		this.heavy = new HeavyPageBanner(this.body, {
 			split: (index) => this.splitHeavyPage(index),
 			dismiss: (index) => {
@@ -643,9 +658,17 @@ export class NotebookView extends FileView {
 			if (page) this.setPageLocked(page, false);
 		});
 		this.lockBadge = badge;
+		// 0.18 mentions (O7): a count of the notes that link to the page in view; a tap lists them.
+		this.mentions = new Mentions({
+			app: this.app, body: this.body, file: () => this.file, pages: () => this.shownDoc()?.pages ?? [],
+			currentPageId: () => this.shownDoc()?.pages[this.currentPageIndex()]?.id ?? null,
+			currentPageNumber: () => (this.shownDoc() ? this.currentPageIndex() + 1 : 0),
+			register: (ref) => this.registerEvent(ref),
+		});
 		this.textEditor = new TextEditor(this.stage);
 		this.math = new MathTools(this.mathHost());
 		this.sticky = new StickyTools(this.stickyHost());
+		this.comments = new CommentTools(this.commentsHost());
 		this.penGestures = new PenGestureLayer({
 			stage: this.stage,
 			body: this.body,
@@ -902,6 +925,8 @@ export class NotebookView extends FileView {
 		this.clearDwell();
 		this.penGestures?.destroy();
 		this.penGestures = null;
+		this.mentions?.destroy();
+		this.mentions = null;
 		for (const timer of [this.navTimer, this.thumbTimer, this.snapFlashTimer, this.heavyTimer]) if (timer !== null) window.clearTimeout(timer);
 		this.navTimer = this.thumbTimer = this.snapFlashTimer = this.heavyTimer = null;
 		this.pens?.destroy();
@@ -943,8 +968,14 @@ export class NotebookView extends FileView {
 		this.scrollbar = null;
 		this.minimap?.destroy();
 		this.minimap = null;
+		this.comments?.destroy();
+		this.comments = null;
 		this.stopNav?.();
 		this.stopNav = null;
+		this.stopQuick?.();
+		this.stopQuick = null;
+		this.quickStrip?.el.remove();
+		this.quickStrip = null;
 		this.selectionActions?.destroy();
 		this.selectionActions = null;
 		this.arrange = null;
@@ -1796,6 +1827,7 @@ export class NotebookView extends FileView {
 			defaultFolder: siblingFolder(file, "PNG"),
 			canPrint: canPrint(),
 			...(initialFormat ? { initialFormat } : {}),
+			pages: () => this.renderPagesOf(doc),
 			run: (request) => void runExport(this.app, file, this.renderPagesOf(doc), request, this.media, this.exportOptions()),
 		}).open();
 	}
@@ -1812,6 +1844,28 @@ export class NotebookView extends FileView {
 			// 0.15 (241): like the PDF, PNG and SVG exports, the pages as the states in view show them.
 			run: (folder, dpi) => void exportMarkdown(this.app, file, { ...doc, pages: [...this.renderPagesOf(doc)] }, this.media, { folder, dpi, ...this.exportOptions() }),
 		}).open();
+	}
+
+	/** 0.18 (#59): the selected region as a picture (PNG or SVG) inserted into the Markdown note the user was last in, or into a chosen note. */
+	insertSelectionIntoNote(kind: "png" | "svg"): void {
+		const sel = this.selection;
+		const doc = this.session?.doc;
+		const file = this.file;
+		if (!sel || !doc || !file || this.statesTools?.ownsSelection(sel)) return;
+		// A collapsed sticky note keeps its ink out of view: it never widens the region.
+		const bounds = itemsBounds(withoutPinnedInk(sel.strokes, sel.elements), sel.elements, measureText);
+		const page = doc.pages[sel.pageIndex];
+		const shown = this.renderPagesOf(doc)[sel.pageIndex];
+		if (!bounds || !page || !shown) return;
+		const options = this.exportOptions();
+		void runInsertIntoNote({
+			app: this.app, file, settings: this.host.settings, page: shown, pageNumber: sel.pageIndex + 1, crop: taskCropRect(bounds, page), media: this.media, kind,
+			exportOptions: options,
+			render: {
+				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+			},
+		});
 	}
 
 	/** 0.17 (#57): "Make task" from the selection: a dialog, then the task (with a picture of the region and a link to the page) is added to a note. */
@@ -1834,6 +1888,11 @@ export class NotebookView extends FileView {
 			},
 			...(options.prepare ? { prepare: options.prepare } : {}),
 		}, request)).open();
+	}
+
+	/** 0.18 (O7): the sheet of notes that link to the page in view. */
+	openMentions(): void {
+		this.mentions?.open();
 	}
 
 	/** 0.16 (#90): the Highlights digest dialog (grouping, picture quality); the note is written next to the notebook. */
@@ -1908,6 +1967,8 @@ export class NotebookView extends FileView {
 			prepare: (pages) => this.math?.prepareExport(pages) ?? Promise.resolve(),
 			...(doc ? { equationNumbers: equationNumbers(doc.pages) } : {}),
 			...(header ? { header } : {}),
+			// 0.18 (#86): the margin comments as notes in the PDF, when the setting asks for them.
+			...(this.host.settings.commentsInPdf ? { comments: pdfCommentLabels() } : {}),
 		};
 	}
 
@@ -1960,6 +2021,33 @@ export class NotebookView extends FileView {
 	/** 0.17 (#20): sticky notes of this view (null before the view is open). */
 	get stickyTools(): StickyTools | null {
 		return this.sticky;
+	}
+
+	/** 0.18 (#86): margin comments of this view (null before the view is open). */
+	get commentTools(): CommentTools | null {
+		return this.comments;
+	}
+
+	/** What the comment tools need from the view. */
+	private commentsHost(): CommentsHost {
+		return {
+			app: this.app,
+			body: this.body,
+			doc: () => this.session?.doc ?? null,
+			editable: () => !!this.editableDocument(),
+			execute: (cmd) => this.applyCommand(cmd),
+			geometry: () => this.overlayGeometry(),
+			addOverlayListener: (fn) => this.addOverlayListener(fn),
+			selection: () => this.selectionRegion(),
+			clearSelection: () => this.clearSelection(),
+			currentPage: () => this.currentPageIndex(),
+			deviceName: () => this.host.syncSafety?.presence.device().name ?? t("comments.thisDevice"),
+			reveal: (pageIndex, y) => this.scrollToPage(pageIndex, y),
+			markersOn: () => this.host.settings.commentMarkers,
+			narrow: () => this.body.hasClass("is-narrow"),
+			notify: (message) => void showNotice(message, 3500),
+			refreshUi: () => this.refreshUi(),
+		};
 	}
 
 	/** What the sticky note tools need from the view. */
@@ -2528,6 +2616,7 @@ export class NotebookView extends FileView {
 	/** The last time the "Page locked" notice was shown (it lasts 5 s: one at a time). */
 	private lockNoticeAt = 0;
 	private lockBadge: HTMLButtonElement | null = null;
+	private mentions: Mentions | null = null;
 
 	/** Locks or unlocks a page of this document (one undo step). False when it could not be done. */
 	setPageLocked(page: Page, value: boolean): boolean {
@@ -2596,6 +2685,91 @@ export class NotebookView extends FileView {
 	/** Index of the page in view (for commands). */
 	currentPage(): number {
 		return this.currentPageIndex();
+	}
+
+	// --- 0.18 (#227): quick tabs (view/quick-tabs.ts, view/quick-tabs-service.ts; the pins are in _meta, never in the notebook) ---
+
+	/** What the quick tabs service reads from this view. */
+	quickApi(): QuickTabsViewApi {
+		return {
+			docId: () => this.session?.doc?.id ?? null,
+			path: () => this.file?.path ?? null,
+			pageIds: () => (this.shownDoc()?.pages ?? []).map((p) => p.id),
+			place: () => this.navPlace(),
+			current: () => {
+				const doc = this.shownDoc();
+				const index = this.currentPageIndex();
+				const page = doc?.pages[index];
+				return doc && page ? { pageId: page.id, index, title: doc.meta?.bookmarkInfo?.[page.id]?.title ?? "" } : null;
+			},
+			jump: (index) => this.goToPage(index),
+			show: (place) => this.showPlace(place),
+		};
+	}
+
+	/** Pins the page in view as a quick tab, or unpins it (the page sheet, the command and a long press on the page number). */
+	togglePageQuickTab(): void {
+		void this.host.quickTabs?.togglePin(this.quickApi());
+	}
+
+	/** "Pin a page from another notebook…" */
+	pinQuickTabFromOther(): void {
+		this.host.quickTabs?.pinFromOther(this.quickApi());
+	}
+
+	private mountQuickTabs(): void {
+		const service = this.host.quickTabs;
+		if (!service) return;
+		const KEY = "notebook-quicktabs-collapsed";
+		const api = this.quickApi();
+		const name = (path: string): string => path.slice(path.lastIndexOf("/") + 1).replace(/\.[^.]*$/, "");
+		const strip = new QuickTabsStrip({
+			tabs: () => service.tabs(this.session?.doc?.id ?? null),
+			view: () => {
+				const pageIds = api.pageIds();
+				return { path: this.file?.path ?? null, pageIds, currentPageId: pageIds[this.currentPageIndex()] ?? null };
+			},
+			back: () => {
+				const place = service.back();
+				if (!place) return null;
+				const page = t("quicktabs.page", { n: String(place.page) });
+				return { label: place.path === this.file?.path ? page : `${name(place.path)} ${page}` };
+			},
+			notebookName: name,
+			open: (tab) => void service.open(api, tab),
+			goBack: () => void service.goBack(api),
+			unpin: (id) => service.unpin(id),
+			move: (id, to) => {
+				const scope = this.session?.doc?.id;
+				if (scope) service.move(scope, id, to);
+			},
+			collapsed: () => {
+				try {
+					return this.app.loadLocalStorage(KEY) === "1";
+				} catch {
+					return false;
+				}
+			},
+			setCollapsed: (value) => {
+				try {
+					this.app.saveLocalStorage(KEY, value ? "1" : null);
+				} catch {
+					/* a per-device convenience: it simply is not remembered */
+				}
+			},
+		});
+		this.quickStrip = strip;
+		this.contentEl.insertBefore(strip.el, this.body);
+		this.stopQuick = service.onChange(() => strip.refresh());
+	}
+
+	/** On a short landscape view the strip is a column beside the page; otherwise a row above it. */
+	private placeQuickTabs(side: boolean): void {
+		const strip = this.quickStrip;
+		if (!strip || strip.isSide === side) return;
+		if (side) this.body.insertBefore(strip.el, this.stage);
+		else this.contentEl.insertBefore(strip.el, this.body);
+		strip.setSide(side);
 	}
 
 	// --- roadmap 18: back/forward history of visited pages (model/nav-history.ts, view/nav-controller.ts) ---
@@ -2768,6 +2942,7 @@ export class NotebookView extends FileView {
 		this.selectionActions?.update();
 		this.ui?.refresh();
 		this.statesTools?.refresh();
+		this.quickStrip?.refresh();
 	}
 
 	/** What the UI needs to know, for the page in view or page `pageIndex` (page sheet of a thumbnail). */
@@ -2785,6 +2960,7 @@ export class NotebookView extends FileView {
 			page: page ? {
 				index, count: pages.length, background: page.background?.kind ?? "none", infinite: !!page.infinite, locked: page.locked === true,
 				bookmarked: doc?.meta?.bookmarks.includes(page.id) ?? false, splittable: page.id === this.heavyPageId,
+				...(this.host.quickTabs ? { quickTab: this.host.quickTabs.isPinnedAt(this.quickApi(), index) } : {}),
 				kind: pageKindOf({ background: page.background?.kind ?? "none", paper: page.paper.kind, width: page.width, height: page.height }),
 			} : null,
 			notebook: { pdfPages: hasPdfPages(pages), backgrounds: hasBackgrounds(pages) },
@@ -2793,6 +2969,7 @@ export class NotebookView extends FileView {
 			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false, snap: this.reading?.snapping ?? false, selectText: this.pdfText?.active ?? false },
 			display: { night: this.display?.night ?? false, crop: this.display?.crop ?? false },
 			states: { open: !!this.statesTools?.open },
+			comments: { panel: this.comments?.panelOpen ?? false, total: this.comments?.counts.total ?? 0, open: this.comments?.counts.open ?? 0, drawing: this.comments?.drawing ?? false },
 			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle", readOnly: this.userReadOnly,
 				snapAvailable: this.host.settings.snapMode !== "off", snap: !this.snapPaused },
 			canPrint: canPrint(),
@@ -3078,6 +3255,16 @@ export class NotebookView extends FileView {
 	async movePagesToNotebook(index = this.currentPageIndex()): Promise<void> {
 		const ctx = this.editContext();
 		if (ctx) await runMovePages(ctx, this.host.settings, [index]);
+	}
+
+	/** 0.18 (#186): copies pages to another notebook with a link chip back. `pageId` is the page ticked at first (the one in view by default). */
+	async copyPageToNotebook(pageId?: string): Promise<void> {
+		await this.copyToNotebook(pageId ? [pageId] : []);
+	}
+
+	private async copyToNotebook(ids: readonly string[]): Promise<void> {
+		const ctx = this.editContext();
+		if (ctx) await runCopyWithLink({ app: this.app, settings: () => this.host.settings, journal: this.host.transferJournal?.() }, ctx, ids);
 	}
 
 	/** Wave 0.9 (#303): what the practice flows may do with this view (view/practice*.ts). */
@@ -3381,13 +3568,17 @@ export class NotebookView extends FileView {
 		const lockedPage = n ? this.shownDoc()?.pages[current]?.locked === true : false;
 		this.toolbar.setPage(n ? current + 1 : 0, n, lockedPage);
 		this.syncLockBadge(lockedPage);
+		this.mentions?.sync();
 		this.notifyStatus();
 		if (n) this.practiceHooks?.page(current);
 		if (n && this.file) this.pageClock.note(this.file.path, current, new Date());
 		this.scheduleHeavyCheck();
 		if (current !== this.navCurrent) {
 			this.navCurrent = current;
-			if (n && this.app.workspace.getActiveViewOfType(NotebookView) === this) this.host.nav?.seen(this.navPlace());
+			if (n && this.app.workspace.getActiveViewOfType(NotebookView) === this) {
+				this.host.nav?.seen(this.navPlace());
+				this.host.quickTabs?.seen(this.navPlace());
+			}
 			this.pageNav?.markCurrent(current);
 			this.pageOffer?.cancel(); // an offer made for the page that was in view
 			this.smartAdd?.hide();
@@ -3519,6 +3710,7 @@ export class NotebookView extends FileView {
 			// 0.17 (#77): extract pages / split from the map. The dialog and the run work on the file (an open view is used through its edit context).
 			extract: (ids) => void this.extractFromMap(ids),
 			split: (pageId) => void this.splitAtPage(pageId),
+			copyTo: (ids) => void this.copyToNotebook(ids),
 		}).open();
 	}
 
@@ -3626,7 +3818,10 @@ export class NotebookView extends FileView {
 		this.viewSize = { width: rect.width, height: rect.height };
 		this.body.toggleClass("is-narrow", this.contentEl.clientWidth < NARROW_PX);
 		const vp = this.vpClass.update(this.contentEl.clientWidth, this.contentEl.clientHeight);
-		if (vp) applyViewportClass(this.contentEl, vp);
+		if (vp) {
+			applyViewportClass(this.contentEl, vp);
+			this.placeQuickTabs(vp.shortHeight);
+		}
 		this.ui?.refresh();
 		this.renderer?.resize(rect.width, rect.height, window.devicePixelRatio || 1);
 		this.refit(true);

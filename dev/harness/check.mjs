@@ -107,10 +107,16 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 
 // Magnetic snap and alignment guides (0.17, #71): a stroke dragged beside another lands on its edge; the guides are drawn during the drag.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "snap", theme, device, lowLatency: false });
+// 0.18 a4split (#178): Split into sheets in the export dialog, with the preview of the cuts (dev/harness/a4split-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "a4split", theme, device, lowLatency: false });
+// Quick tabs (0.18, #227): the strip with pinned pages, Back, a gone page, another notebook; tablet and phone, light and dark.
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "quicktabs", theme, device, lowLatency: false });
 // Locked pages (0.16, #124): the lock badge, the refused edits and the lock in the page panel, tablet and phone, light and dark.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "lock", theme, device, lowLatency: false });
 // Sticky notes (0.17, #20): an open note with text and handwriting and a collapsed one, tablet and phone, light and dark.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "sticky", theme, device, lowLatency: false });
+// Margin comments (0.18, #86): markers, card, side panel, editor and the drawn rectangle, tablet and phone, light and dark.
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "comments", theme, device, lowLatency: false });
 // Minimap (0.17, #173): the overview of an infinite page, tablet and phone, light and dark.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "minimap", theme, device, lowLatency: false });
 // The automatic page header (0.15, #75): drawn on the paper, tablet and phone, light and dark.
@@ -151,6 +157,8 @@ for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"])
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "bulk", theme, device, lowLatency: false });
 // 0.17 merge / split / extract (#77): the dialog, the run and the map's selection mode (dev/harness/pagesplit-check.ts).
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "xfer", theme, device, lowLatency: false });
+// 0.18 linkback (#186): copy to notebook with a link back: the dialog, the run and the map's button (dev/harness/linkback-check.ts).
+for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "linkback", theme, device, lowLatency: false });
 // 0.12.1: the whole plugin's onload against the stub: what it registers, the settings tab through both of Obsidian's paths,
 // and injected failures (a failing step, failing settings definitions, an unreadable data.json).
 // 0.13 ds-notebook: the notebook's editing chrome (toolbar, options, sheets, contextual bar, dial, banner) at tablet and
@@ -172,10 +180,17 @@ for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"])
 for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "inbox", theme, device, lowLatency: false });
 // 0.17 task: "Make task" from a selection (dev/harness/task-check.ts), tablet and phone, dark and light.
 for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "task", theme, device, lowLatency: false });
+// 0.18 qr: the "Show QR code" dialog (dev/harness/qr-check.ts), tablet and phone, dark and light.
+for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "qr", theme, device, lowLatency: false });
+// 0.18 pdfannot: "Annotate in Notebook" choice dialog (dev/harness/annotate-check.ts), tablet and phone, dark and light.
+for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "annotate", theme, device, lowLatency: false });
 // 0.15 states: a figure with parts and states, moved with the selection handles (dist/shots/states-*.png).
 for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "states", theme, device, lowLatency: false });
 // 0.16 digest: the Highlights digest dialog and the note it writes (dev/harness/digest-check.ts), tablet and phone, dark and light (dist/shots/digest-*.png).
 for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "digest", theme, device, lowLatency: false });
+
+// 0.18 mentions: the Mentions sheet and the count badge (dev/harness/mentions-check.ts), tablet and phone, dark and light (dist/shots/mentions-*.png).
+for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "mentions", theme, device, lowLatency: false });
 
 /** RGBA pixel reader for the 8-bit, non-interlaced PNGs Chrome produces. */
 function decodePng(buf) {
@@ -279,6 +294,7 @@ async function main() {
 				if (s.doc === "storage") report = await cdp.evaluate("window.harness.checkStorage()", 120000);
 				else if (s.doc === "bulk") report = await cdp.evaluate("window.harness.checkBulk()", 120000);
 				else if (s.doc === "xfer") report = await cdp.evaluate("window.harness.checkXfer()", 120000);
+				else if (s.doc === "linkback") report = await cdp.evaluate("window.harness.checkLinkback()", 120000);
 				else if (s.doc === "pdfcopy") report = await cdp.evaluate("window.harness.checkPdfcopy()", 90000);
 				else if (s.doc === "inbox") report = await cdp.evaluate("window.harness.checkInbox()", 60000);
 
@@ -286,8 +302,12 @@ async function main() {
 				else if (s.doc === "pdftext") report = await cdp.evaluate("window.harness.checkPdftext()", 90000);
 				// 0.17 snap: its own check.
 				else if (s.doc === "snap") report = await cdp.evaluate("window.harness.checkSnap()", 60000);
+				// 0.18 a4split: its own check.
+				else if (s.doc === "a4split") report = await cdp.evaluate("window.harness.checkA4split()", 60000);
+				// 0.18 mentions: its own check.
+				else if (s.doc === "mentions") report = await cdp.evaluate("window.harness.checkMentions()", 60000);
 				else
-				report = await cdp.evaluate(s.doc === "states" ? "window.harness.checkStates()" : s.doc === "hints" ? "window.harness.checkHints()" : s.doc === "slides" ? "window.harness.checkSlides()" : s.doc === "zettel" ? "window.harness.checkZettel()" : s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "lecture" ? "window.harness.checkLecture()" : s.doc === "outline" ? "window.harness.checkOutline()" : s.doc === "smartadd" ? "window.harness.checkSmartAdd()" : s.doc === "header" ? "window.harness.checkHeader()" : s.doc === "pensets" ? "window.harness.checkPenSets()" : s.doc === "task" ? "window.harness.checkTask()" : s.doc === "daily" ? "window.harness.checkDaily()" : s.doc === "nbmap" ? "window.harness.checkNbmap()" : s.doc === "movesel" ? "window.harness.checkMovesel()" : s.doc === "present" ? "window.harness.checkPresent()" : s.doc === "digest" ? "window.harness.checkDigest()" : s.doc === "lock" ? "window.harness.checkLock()" : s.doc === "sticky" ? "window.harness.checkSticky()" : s.doc === "minimap" ? "window.harness.checkMinimap()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "chrome" ? "window.harness.checkChrome()" : s.doc === "toolbar" || s.doc === "toolbar-pdf" ? "window.harness.checkAdaptiveToolbar()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "modals" ? "window.harness.checkModals()" : s.doc === "templates" ? "window.harness.checkTemplates()" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "states" ? "window.harness.checkStates()" : s.doc === "hints" ? "window.harness.checkHints()" : s.doc === "slides" ? "window.harness.checkSlides()" : s.doc === "zettel" ? "window.harness.checkZettel()" : s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "lecture" ? "window.harness.checkLecture()" : s.doc === "outline" ? "window.harness.checkOutline()" : s.doc === "smartadd" ? "window.harness.checkSmartAdd()" : s.doc === "header" ? "window.harness.checkHeader()" : s.doc === "pensets" ? "window.harness.checkPenSets()" : s.doc === "task" ? "window.harness.checkTask()" : s.doc === "annotate" ? "window.harness.checkAnnotate()" : s.doc === "qr" ? "window.harness.checkQr()" : s.doc === "daily" ? "window.harness.checkDaily()" : s.doc === "nbmap" ? "window.harness.checkNbmap()" : s.doc === "movesel" ? "window.harness.checkMovesel()" : s.doc === "present" ? "window.harness.checkPresent()" : s.doc === "digest" ? "window.harness.checkDigest()" : s.doc === "lock" ? "window.harness.checkLock()" : s.doc === "quicktabs" ? "window.harness.checkQuicktabs()" : s.doc === "sticky" ? "window.harness.checkSticky()" : s.doc === "comments" ? "window.harness.checkComments()" : s.doc === "minimap" ? "window.harness.checkMinimap()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "chrome" ? "window.harness.checkChrome()" : s.doc === "toolbar" || s.doc === "toolbar-pdf" ? "window.harness.checkAdaptiveToolbar()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "modals" ? "window.harness.checkModals()" : s.doc === "templates" ? "window.harness.checkTemplates()" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}
@@ -385,6 +405,20 @@ async function main() {
 						problems.push(`xfer ${state} screenshot: ${e.message}`);
 					}
 					await cdp.evaluate("window.harness.closeXfer()");
+				}
+			}
+			// 0.18 linkback: a screenshot of the dialog and of the map's selection bar.
+			if (s.doc === "linkback") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of await cdp.evaluate("window.harness.linkbackStates")) {
+					try {
+						await cdp.evaluate(`window.harness.linkbackShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `linkback-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`linkback ${state} screenshot: ${e.message}`);
+					}
+					await cdp.evaluate("window.harness.closeLinkback()");
 				}
 			}
 			// 0.13 ds-zettel: review screenshots of each Zettelkasten surface.

@@ -1,5 +1,6 @@
+import { orderedNotes, repliesOf } from "../model/comments";
 import { BOX_LABEL_HEIGHT, MARKER_BADGE, markerRegion } from "../model/markers";
-import { RENDER_INK, type BoxElement, type EquationElement, type MarkerElement, type Page, type StickyElement, type Stroke, type TextElement } from "../model/types";
+import { COMMENT_SKETCH_H, COMMENT_SKETCH_W, RENDER_INK, type BoxElement, type EquationElement, type MarkerElement, type Page, type StickyElement, type Stroke, type TextElement } from "../model/types";
 import { EQUATION_NUMBER_GAP, equationNumberLabel, equationNumbers } from "../model/math-elements";
 import { graphScene, GRAPH_STYLE, type GraphScene, type SceneText } from "../math/graph-scene";
 import { equationOutline } from "./math-render";
@@ -16,6 +17,7 @@ import { HIGHLIGHTER_ALPHA, strokeOutline } from "./stroke-shape";
 import { layerFlags, type ExportLayers, type LayerFlags } from "./export-layers";
 import { HEADER_COLOR_DAY, type HeaderLayout } from "./page-header";
 import { helveticaCodeWidth, helveticaWidth, toWinAnsi, wrapHelvetica } from "../pdf/helvetica";
+import { tileLabel, type SplitPlan } from "./export-tiles";
 
 /**
  * An image placed on a page, in page coordinates (pt, origin top-left, y down). `jpeg` is a
@@ -56,7 +58,31 @@ export interface PdfOptions {
 	layers?: ExportLayers;
 	/** 0.15 (#75): the automatic page header or footer of a page (null: none); drawn with the background layer. */
 	header?: (page: Page) => HeaderLayout | null;
+	/**
+	 * 0.18 (#86): add the margin comments as notes. A page that has comments is made wider by a strip (`PDF_NOTES_STRIP`) on its right:
+	 * each comment is outlined on the page, joined by a thin line to its note in the strip (author, time, text, replies, sketch).
+	 * Absent: the pages are exported as they are.
+	 */
+	comments?: PdfCommentLabels;
+	/**
+	 * 0.18 (#178): the sheets a page is split into (null: the page is written as one PDF page, exactly as without this option).
+	 * A split page is drawn once, as a form, and every sheet shows the part of it that its tile says, in reading order.
+	 */
+	split?: (page: Page) => SplitPlan | null;
 }
+
+/** The words of the margin notes (translated by the caller). */
+export interface PdfCommentLabels {
+	resolved: string;
+	sketch: string;
+	/** "+3 more comments", written at the end of the strip when the notes do not fit beside the page. */
+	more: (n: number) => string;
+	/** A time of a comment, as the reader's language writes it. */
+	when: (ms: number) => string;
+}
+
+/** Width (pt) of the strip of margin notes beside a page that has comments. */
+export const PDF_NOTES_STRIP = 190;
 
 /** Line height of text elements, as a multiple of the font size. */
 export const TEXT_LINE_HEIGHT = 1.25;
@@ -132,10 +158,20 @@ function* pdfSteps(pages: readonly Page[], options: PdfOptions): Generator<void,
 		pageObjs.push(pageObj);
 		const res: PageResources = { xobjects: new Map<string, number>(), font: false, highlighter: false, area: false };
 		const hidden = typeof options.hiddenInk === "function" ? options.hiddenInk(page) : !!options.hiddenInk;
-		const content = pageContent(page, withPaper, options.images?.(page) ?? [], getImage, res, {
+		let content = pageContent(page, withPaper, options.images?.(page) ?? [], getImage, res, {
 			hidden, boxLabel: options.boxLabel ?? ((b) => defaultBoxLabel(b)), layers: layerFlags(options.layers),
 			numbers, outline: options.equationOutline ?? equationOutline, header: options.header?.(page) ?? null,
 		});
+		const plan = options.split?.(page) ?? null;
+		// 0.18 (#86): the margin notes, in a strip to the right of the page (only when asked, and only for pages that have comments).
+		// A page split into sheets (#178) leaves the strip out: the sheets show the page itself, not the room beside it.
+		let stripped = false;
+		const notes = options.comments && !(plan && plan.tiles.length > 0) && layerFlags(options.layers).content ? commentNotesOps(page, options.comments) : null;
+		if (notes) {
+			stripped = true;
+			res.font = true;
+			content += `\n${notes}`;
+		}
 		const parts: string[] = [];
 		const states: string[] = [];
 		if (res.highlighter) states.push(`/GS1 << /Type /ExtGState /ca ${HIGHLIGHTER_ALPHA} /BM /Multiply >>`);
@@ -147,16 +183,53 @@ function* pdfSteps(pages: readonly Page[], options: PdfOptions): Generator<void,
 		}
 		if (res.font) parts.push(`/Font << /F1 ${getFont()} 0 R >>`);
 		const resources = `<< ${parts.join(" ")}${parts.length ? " " : ""}>>`;
+		if (plan && plan.tiles.length > 0) {
+			// 0.18 (#178): one form holds the page; each sheet places the part of it its tile says, clipped to the tile.
+			const formBody = enc.encode(content);
+			const form = alloc();
+			setObject(
+				form,
+				`<< /Type /XObject /Subtype /Form /BBox [0 0 ${num(page.width)} ${num(page.height)}] /Resources ${resources} /Length ${formBody.length} >>\nstream\n`,
+				formBody, "\nendstream",
+			);
+			const k = plan.scale;
+			plan.tiles.forEach((tile, i) => {
+				const sheetPage = i === 0 ? pageObj : alloc();
+				const sheetContent = i === 0 ? contentObj : alloc();
+				if (i > 0) pageObjs.push(sheetPage);
+				const clipY = plan.sheetHeight - tile.oy - tile.height * k;
+				const a = tile.ox - k * tile.x;
+				const b = plan.sheetHeight - tile.oy + k * tile.y - k * page.height;
+				const ops = [
+					`q ${num(tile.ox)} ${num(clipY)} ${num(tile.width * k)} ${num(tile.height * k)} re W n`,
+					`${fix(k, 5)} 0 0 ${fix(k, 5)} ${num(a)} ${num(b)} cm`, "/Pg Do", "Q",
+				];
+				let fonts = "";
+				if (plan.pageNumbers) {
+					const label = tileLabel(plan, i);
+					ops.push(`BT /F1 9 Tf 0.35 g ${num((plan.sheetWidth - helveticaWidth(label, 9)) / 2)} 10 Td ${pdfString(label)} Tj ET`);
+					fonts = ` /Font << /F1 ${getFont()} 0 R >>`;
+				}
+				setObject(
+					sheetPage,
+					`<< /Type /Page /Parent ${tree} 0 R /MediaBox [0 0 ${num(plan.sheetWidth)} ${num(plan.sheetHeight)}] /Contents ${sheetContent} 0 R /Resources << /XObject << /Pg ${form} 0 R >>${fonts} >> >>`,
+				);
+				const sheetBody = enc.encode(ops.join("\n"));
+				setObject(sheetContent, `<< /Length ${sheetBody.length} >>\nstream\n`, sheetBody, "\nendstream");
+			});
+			yield;
+			continue;
+		}
 		setObject(
 			pageObj,
-			`<< /Type /Page /Parent ${tree} 0 R /MediaBox [0 0 ${num(page.width)} ${num(page.height)}] /Contents ${contentObj} 0 R /Resources ${resources} >>`,
+			`<< /Type /Page /Parent ${tree} 0 R /MediaBox [0 0 ${num(page.width + (stripped ? PDF_NOTES_STRIP : 0))} ${num(page.height)}] /Contents ${contentObj} 0 R /Resources ${resources} >>`,
 		);
 		const body = enc.encode(content);
 		setObject(contentObj, `<< /Length ${body.length} >>\nstream\n`, body, "\nendstream");
 		yield; // 0.17 (#23): where a caller may let the interface breathe between two pages
 	}
 	setObject(catalog, `<< /Type /Catalog /Pages ${tree} 0 R >>`);
-	setObject(tree, `<< /Type /Pages /Kids [${pageObjs.map((n) => `${n} 0 R`).join(" ")}] /Count ${pages.length} >>`);
+	setObject(tree, `<< /Type /Pages /Kids [${pageObjs.map((n) => `${n} 0 R`).join(" ")}] /Count ${pageObjs.length} >>`);
 
 	const chunks: Uint8Array[] = [];
 	let length = 0;
@@ -522,6 +595,86 @@ function stickyOps(el: StickyElement): { ops: string; font: boolean } {
 	}
 	out.push("Q");
 	return { ops: out.join("\n"), font };
+}
+
+/**
+ * 0.18 (#86): the margin notes of a page, in the strip to the right of it (the page is `PDF_NOTES_STRIP` wider). In page
+ * coordinates (y down). Each comment is outlined on the page and joined by a thin line to its note, which sits level with the
+ * region where it fits and is pushed down below the note before it where it does not; what does not fit above the bottom edge
+ * is counted in one last line. Null when the page has no comments.
+ */
+function commentNotesOps(page: Page, labels: PdfCommentLabels): string | null {
+	const notes = orderedNotes(page);
+	if (notes.length === 0) return null;
+	const x0 = page.width;
+	const textX = x0 + 24;
+	const textW = PDF_NOTES_STRIP - 32;
+	const SIZE = 8;
+	const LINE = 10;
+	const out: string[] = ["q", "0.965 0.965 0.972 rg", `${num(x0)} 0 ${num(PDF_NOTES_STRIP)} ${num(page.height)} re f`, "0.8 0.8 0.85 RG 0.6 w", `${num(x0)} 0 m ${num(x0)} ${num(page.height)} l S`];
+	const lines = (text: string, size: number, width: number, max: number): number[][] => {
+		const wrapped = wrapHelvetica(text, size, width);
+		if (wrapped.length <= max) return wrapped;
+		const cut = wrapped.slice(0, max);
+		cut[max - 1] = [...cut[max - 1]!, 0x85]; // the WinAnsi ellipsis
+		return cut;
+	};
+	const textLines = (ls: number[][], x: number, y: number, size: number, color: string): string => {
+		const ops = ["BT", `/F1 ${num(size)} Tf`, `${rgb(color)} rg`];
+		ls.forEach((codes, i) => {
+			if (codes.length > 0) ops.push(`1 0 0 -1 ${num(x)} ${num(y + i * LINE)} Tm ${winAnsiLiteral(codes)} Tj`);
+		});
+		ops.push("ET");
+		return ops.join("\n");
+	};
+	let cursor = 8;
+	let shown = 0;
+	for (const n of notes) {
+		const head = `${n.author || "?"}, ${labels.when(n.created)}${n.resolved ? ` (${labels.resolved})` : ""}`;
+		const body = lines(n.text.trim() === "" ? labels.sketch : n.text, SIZE, textW, 14);
+		const sketchH = n.sketch ? 52 : 0;
+		const replies = repliesOf(page, n.id).slice(0, 5).map((r) => ({
+			head: `${r.author || "?"}, ${labels.when(r.created)}`, body: lines(r.text, SIZE, textW - 8, 6),
+		}));
+		const height = 10 + body.length * LINE + sketchH + replies.reduce((h, r) => h + 10 + r.body.length * LINE + 2, 0) + 6;
+		const wanted = n.region.y + n.region.height / 2 - 8;
+		const top = Math.max(wanted, cursor);
+		if (top + height > page.height - 4) break;
+		shown++;
+		const done = n.resolved === true;
+		const accent = done ? "0.55 0.58 0.62" : "0.15 0.45 0.9";
+		const r = n.region;
+		out.push(`${accent} RG 0.7 w [2 2] 0 d ${num(r.x)} ${num(r.y)} ${num(r.width)} ${num(r.height)} re S [] 0 d`);
+		out.push(`0.5 w ${num(r.x + r.width)} ${num(r.y + r.height / 2)} m ${num(x0 + 12)} ${num(top + 7)} l S`);
+		out.push(`${accent} rg ${circleOps(x0 + 12, top + 7, 7)} f`);
+		const label = String(notes.indexOf(n) + 1);
+		out.push(labelOps(label, x0 + 12 - helveticaWidth(label, 7.5) / 2, top + 9.6, 7.5, 14, "#ffffff"));
+		let y = top + 6;
+		out.push(textLines([toWinAnsi(head)], textX, y, 6.5, "#6b7280"));
+		y += 10 + 2;
+		out.push(textLines(body, textX, y, SIZE, "#1f2430"));
+		y += body.length * LINE;
+		if (n.sketch) {
+			out.push(`0.12 0.14 0.19 RG 0.8 w 1 J 1 j`);
+			for (const s of n.sketch.strokes) {
+				const pts: string[] = [];
+				for (let i = 0; i + 1 < s.length; i += 2) pts.push(`${num(textX + (s[i]! / COMMENT_SKETCH_W) * 100)} ${num(y + 2 + (s[i + 1]! / COMMENT_SKETCH_H) * 50)} ${i === 0 ? "m" : "l"}`);
+				out.push(`${pts.join(" ")} S`);
+			}
+			y += sketchH;
+		}
+		for (const rep of replies) {
+			out.push(textLines([toWinAnsi(rep.head)], textX + 8, y + 6, 6.5, "#6b7280"));
+			out.push(textLines(rep.body, textX + 8, y + 18, SIZE, "#1f2430"));
+			y += 10 + rep.body.length * LINE + 2;
+		}
+		cursor = top + height;
+	}
+	if (shown < notes.length) {
+		out.push(labelOps(labels.more(notes.length - shown), x0 + 8, page.height - 8, 7.5, PDF_NOTES_STRIP - 16, "#6b7280"));
+	}
+	out.push("Q");
+	return out.join("\n");
 }
 
 /** v8 structured box: frame and label tab (under the ink). */

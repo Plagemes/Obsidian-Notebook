@@ -4,6 +4,7 @@
 
 import { t } from "../i18n";
 import { addPageToObsidianBookmarks } from "../integration/obsidian-bookmarks";
+import { PageQrModal, pageQrUri } from "./qr-modal";
 import { copyPageLink, insertPageIntoNote } from "../integration/page-share";
 import { openPageRestore } from "../integration/reliability";
 import { cloneMeta } from "../model/document";
@@ -36,7 +37,7 @@ export function sizeName(page: Page): PageSizeName | null {
 }
 
 /** The commands that work on a selection (layer order; wave 0.10: align, distribute, rotate, mirror, size, select similar). */
-const SELECTION_ONLY = /^(layer-|selection-(move-page|copy-page|align|distribute|rotate|mirror|resize|transform|similar|part)|select-same-)/;
+const SELECTION_ONLY = /^(layer-|comment-selection$|selection-(move-page|copy-page|align|distribute|rotate|mirror|resize|transform|similar|part)|select-same-)/;
 
 /** Whether a command of the registry applies to this view now (the palette hides it otherwise). */
 export function commandApplies(view: NotebookView, id: string): boolean {
@@ -50,6 +51,8 @@ export function commandApplies(view: NotebookView, id: string): boolean {
 	if (id === "excerpt-open-source") return (view.uiContext().selection?.excerpts ?? 0) > 0;
 	// wave 0.10 (362): copying to the other devices needs a selection (pasting does not).
 	if (id === "selection-copy-devices") return !!view.uiContext().selection;
+	// 0.18 (#86): there has to be an open comment to go to.
+	if (id === "comment-next") return (view.uiContext().comments?.open ?? 0) > 0;
 	// wave 0.10 (81): there is no print dialog on a phone or tablet.
 	if (id === "print") return canPrint();
 	// wave 0.10 (18): back and forward need a place to go to.
@@ -129,8 +132,16 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	// 0.16 (78): move or copy the selection to another page
 	"selection-move-page": (v) => v.selectionTools?.moveToPage("move"),
 	"selection-copy-page": (v) => v.selectionTools?.moveToPage("copy"),
+	// 0.18 (#86): margin comments
+	"comment-selection": (v) => v.commentTools?.commentOnSelection(),
+	"comment-region": (v) => v.commentTools?.commentOnRegion(),
+	"comments-panel": (v) => v.commentTools?.togglePanel(),
+	"comment-next": (v) => void v.commentTools?.step(1),
 	// 0.17 (#57): a task from the selection
 	"selection-make-task": (v) => v.makeTaskFromSelection(),
+	// 0.18 (#59): the selection as a picture in a note
+	"selection-insert-note": (v) => v.insertSelectionIntoNote("png"),
+	"selection-insert-note-svg": (v) => v.insertSelectionIntoNote("svg"),
 	"selection-paste-device": (v) => void v.selectionTools?.pasteFromDevices(),
 	"selection-white-transparent": (v) => void v.selectionTools?.makeWhiteTransparent(),
 	"link-selection": (v) => v.linkSelection(),
@@ -237,6 +248,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	}),
 	"page-infinite": onPage((v, p, i) => v.applyCommand(new SetPageInfinite(p.id, !p.infinite), i)),
 	"move-pages": onPage((v, _p, i) => void v.movePagesToNotebook(i)),
+	"copy-with-link": onPage((v, p) => void v.copyPageToNotebook(p.id)),
 	"notebook-save-template": (v) => {
 		const doc = v.document;
 		if (doc) saveNotebookAsTemplate(v.app, v.pageToolsHost().settings, doc, v.file?.basename ?? "");
@@ -256,6 +268,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"page-info": onPage((v, _p, i) => v.openPageInfo(i)),
 	"page-split": onPage((v, _p, i) => v.splitHeavyPage(i)),
 	// 0.16 (#124): lock a finished page. The history refuses every edit of a locked page; these only flip the flag (one undo step).
+	"page-quick-tab": (v) => v.togglePageQuickTab(),
+	"page-quick-tab-other": (v) => v.pinQuickTabFromOther(),
 	"page-lock": onPage((v, p) => void v.setPageLocked(p, true)),
 	"page-unlock": onPage((v, p) => void v.setPageLocked(p, false)),
 	"page-lock-toggle": onPage((v, p) => void v.setPageLocked(p, !p.locked)),
@@ -335,6 +349,9 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"share-copy-link": onPage((v, p, i) => {
 		if (v.file) void copyPageLink(v.app, v.file, i + 1, p.id);
 	}),
+	"share-qr": onPage((v, p, i) => {
+		if (v.file) new PageQrModal(v.app, pageQrUri(v.app.vault.getName(), v.file, i + 1, p.id), i + 1).open();
+	}),
 	"share-insert-link": onPage((v, p, i) => {
 		if (v.file) insertPageIntoNote(v.app, v.file, i + 1, "link", p.id);
 	}),
@@ -352,6 +369,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"export-markdown": (v) => v.openMarkdownExport(),
 	// 0.16 (#90): the highlights digest note
 	"highlights-digest": (v) => v.openHighlightsDigest(),
+	// 0.18 mentions (O7): the notes that link to this page
+	"mentions": (v) => v.openMentions(),
 	// wave 0.10: PNG images (81) and Print (81) are choices of the same dialog; read-only mode (51)
 	"export-png": (v) => v.openExportDialog(undefined, "png"),
 	"print": (v) => {

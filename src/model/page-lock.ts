@@ -3,7 +3,7 @@
  *
  * `Page.locked` makes a page refuse every edit until it is unlocked. There is ONE guard: `History` takes a `LockSnapshot` of
  * the locked pages before it runs, undoes or redoes a command and compares afterwards; a command that changed the content
- * of a page that was locked (ink, elements, text, paste, states, paper, size, margins, background, deletion, a restored
+ * of a page that was locked (ink, elements, text, paste, states, comments, paper, size, margins, background, deletion, a restored
  * version...) is reverted at once and reported. Nothing has to be listed per command, so a command added later is covered
  * without anyone remembering to. The flag itself is not content: `SetPageLocked` goes through (that is how a page is
  * unlocked), and so do the tags, the bookmarks and the order of the pages (organisation, not content).
@@ -73,6 +73,8 @@ interface PageSnap {
 	strokes: readonly Stroke[];
 	elements: readonly PageElement[];
 	states: Page["states"];
+	/** v16: the comments list is replaced as a whole by every command that changes it, so identity tells. */
+	comments: Page["comments"];
 	width: number;
 	height: number;
 	paperKind: string;
@@ -99,7 +101,7 @@ export function snapshotLocked(doc: NotebookDocument): LockSnapshot | null {
 		if (page.locked !== true) continue;
 		out ??= new Map();
 		out.set(page.id, {
-			strokes: page.strokes.slice(), elements: page.elements?.slice() ?? [], states: page.states,
+			strokes: page.strokes.slice(), elements: page.elements?.slice() ?? [], states: page.states, comments: page.comments,
 			width: page.width, height: page.height, paperKind: page.paper.kind, paperSpacing: page.paper.spacing, infinite: page.infinite ?? false,
 			background: page.background, margins: page.margins,
 			backgroundJson: page.background ? JSON.stringify(page.background) : undefined,
@@ -124,7 +126,7 @@ function sameValue(now: object | undefined, ref: object | undefined, before: str
 
 function unchanged(page: Page, snap: PageSnap): boolean {
 	return (
-		page.states === snap.states && page.width === snap.width && page.height === snap.height && page.paper.kind === snap.paperKind &&
+		page.states === snap.states && page.comments === snap.comments && page.width === snap.width && page.height === snap.height && page.paper.kind === snap.paperKind &&
 		page.paper.spacing === snap.paperSpacing && (page.infinite ?? false) === snap.infinite &&
 		sameValue(page.background, snap.background, snap.backgroundJson) && sameValue(page.margins, snap.margins, snap.marginsJson) &&
 		sameItems(page.strokes, snap.strokes) && sameItems(page.elements ?? [], snap.elements)

@@ -59,6 +59,8 @@ export interface UiContext {
 		kind?: PageKind;
 		/** 0.16 (#124): the page is locked and refuses edits. Optional (false when absent). */
 		locked?: boolean;
+		/** 0.18 (#227): the page is a quick tab of this notebook. Optional (false when absent). */
+		quickTab?: boolean;
 	} | null;
 	notebook: { pdfPages: boolean; backgrounds: boolean };
 	/** A class of the timetable is on now. */
@@ -79,6 +81,8 @@ export interface UiContext {
 	display?: { night: boolean; crop: boolean };
 	/** 0.15 (241): the state strip is open. Optional (closed when absent). */
 	states?: { open: boolean };
+	/** 0.18 (#86): the comments panel is open, how many comments the notebook has (open ones apart), and a rectangle is being drawn for a new one. Optional (absent: none). */
+	comments?: { panel: boolean; total: number; open: number; drawing?: boolean };
 	/** wave 0.10: how many notebook views are open in the workspace (tabs). Optional (0 when absent). */
 	openNotebooks?: number;
 	/** wave 0.10 (18): the back/forward history of visited pages has somewhere to go. Optional (absent: nothing to go back to). */
@@ -295,11 +299,16 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "page-orientation", label: "ui.orientation", icon: "rotate-cw", group: "page", surfaces: ["page"], priority: 35, scope: "view", enabled: pageOpen, keywords: "landscape portrait" },
 	{ id: "page-infinite", label: "page.infinite", icon: "infinity", group: "page", surfaces: ["page"], priority: 35, scope: "view", enabled: pageOpen, checked: (c) => !!c.page?.infinite },
 	{ id: "move-pages", label: "page.moveToNotebook", icon: "folder-input", group: "page", surfaces: ["page"], priority: 30, scope: "view", enabled: pageOpen, command: "command.movePages" },
+	// 0.18 (#186): copy pages to another notebook with a link chip back to the original.
+	{ id: "copy-with-link", label: "page.copyToNotebook", icon: "copy-plus", group: "page", surfaces: ["page"], priority: 29, scope: "view", enabled: pageOpen, command: "command.copyToNotebook", keywords: "copy duplicate notebook link copia quaderno" },
 	// 0.16 (#124): lock a finished page: it refuses every edit until it is unlocked. Two entries so the sheet says what a tap does;
 	// the palette has one toggle for the page in view.
 	{ id: "page-lock", label: "page.lock", icon: "lock", group: "page", surfaces: ["page", "sheet"], priority: 48, scope: "view", when: (c) => !c.page?.locked, keywords: "lock finish protect freeze read only blocca proteggi" },
 	{ id: "page-unlock", label: "page.unlock", icon: "lock-open", group: "page", surfaces: ["page", "sheet"], priority: 49, scope: "view", when: (c) => !!c.page?.locked, keywords: "unlock edit sblocca" },
 	{ id: "page-lock-toggle", label: "command.lockPage", icon: "lock", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true },
+	// 0.18 (#227): quick tabs. Pinning does not edit the notebook (the pins are in _meta), so it works on a read-only or locked page too.
+	{ id: "page-quick-tab", label: "quicktabs.pin", icon: "pin", group: "page", surfaces: ["page", "sheet"], priority: 47, scope: "view", command: true, checked: (c) => !!c.page?.quickTab, keywords: "quick tab pin pinned formula sheet fissa scheda rapida" },
+	{ id: "page-quick-tab-other", label: "quicktabs.pinOther", icon: "book-open", group: "page", surfaces: ["page", "sheet"], priority: 46, scope: "view", command: true, keywords: "quick tab pin other notebook formula sheet fissa altro quaderno" },
 	{ id: "page-save-template", label: "page.saveTemplate", icon: "layout-template", group: "page", surfaces: ["page"], priority: 25, scope: "view" },
 	{ id: "page-restore-version", label: "page.restoreVersion", icon: "history", group: "page", surfaces: ["page"], priority: 20, scope: "view", enabled: pageOpen },
 	{ id: "page-deleted-pages", label: "page.deletedPages", icon: "archive-restore", group: "page", surfaces: ["page"], priority: 20, scope: "view", keywords: "trash restore" },
@@ -387,6 +396,8 @@ export const ACTIONS: readonly ActionDef[] = [
 
 	// --- export and share.
 	{ id: "share-copy-link", label: "share.copyLink", icon: "link", group: "share", surfaces: ["page"], priority: 40, scope: "view", readOnly: true },
+	// 0.18 (#190): a QR code of the page that another device with the same vault scans to open it.
+	{ id: "share-qr", label: "qr.title", icon: "qr-code", group: "share", surfaces: ["page"], priority: 34, scope: "view", readOnly: true, keywords: "qr code scan phone codice" },
 	{ id: "share-insert-link", label: "share.insertLink", icon: "file-symlink", group: "share", surfaces: ["page"], priority: 35, scope: "view", readOnly: true },
 	{ id: "share-insert-embed", label: "share.insertEmbed", icon: "picture-in-picture", group: "share", surfaces: ["page"], priority: 35, scope: "view", readOnly: true },
 	// wave 0.9 (385): Obsidian's own Bookmarks pane (core plugin, feature-detected in integration/obsidian-bookmarks.ts).
@@ -400,6 +411,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "export-markdown", label: "export.markdown.menu", icon: "files", group: "share", surfaces: ["sheet", "notebook"], priority: 28, scope: "view", command: "command.exportMarkdown", readOnly: true, keywords: "md png images without obsidian share esporta" },
 	// 0.16 (#90): every highlighted region collected in a Markdown note next to the notebook.
 	{ id: "highlights-digest", label: "digest.menu", icon: "highlighter", group: "share", surfaces: ["sheet", "notebook"], priority: 25, scope: "view", command: "command.highlightsDigest", readOnly: true, keywords: "highlights digest summary note evidenziazioni riepilogo raccolta colours" },
+	// 0.18 mentions (O7): the notes that link to the page in view (and to the notebook as a whole).
+	{ id: "mentions", label: "mentions.menu", icon: "links-coming-in", group: "share", surfaces: ["page", "sheet", "notebook"], priority: 24, scope: "view", command: "command.mentions", readOnly: true, keywords: "mentions backlinks linked notes links menzioni collegamenti note" },
 	// wave 0.10 (81): the same dialog started on PNG images (a vault folder, a scale, a page range) or on Print (desktop only).
 	{ id: "export-png", label: "export.png.menu", icon: "images", group: "share", surfaces: ["sheet", "notebook"], priority: 27, scope: "view", command: "command.exportPng", readOnly: true, keywords: "png images pictures pages folder scale range esporta immagini" },
 	{ id: "print", label: "export.print.menu", icon: "printer", group: "share", surfaces: ["sheet", "notebook"], priority: 26, scope: "view", command: "command.print", readOnly: true, when: (c) => !!c.canPrint, keywords: "paper printer stampa carta" },
@@ -441,6 +454,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	external("restore-version", "command.restore", "history", "integration", "integration/index.ts"),
 	// wave 0.8 (388): lists the old #pN links of the notes, then rewrites the ones the user accepts.
 	external("update-page-links", "command.updateLinks", "link-2", "integration", "integration/index.ts", ["notebook", "palette"]),
+	// 0.18 pdfannot (O10)
+	external("annotate-current-pdf", "command.annotatePdf", "pen-line", "integration", "library/annotate-pdf.ts"),
 	external("edit-tags", "command.editTags", "tags", "integration", "integration/tags.ts", ["notebook", "palette"]),
 	external("companion-update-all", "command.companionUpdateAll", "refresh-cw", "integration", "integration/companion.ts"),
 	external("companion-open", "command.companionOpen", "file-text", "integration", "integration/companion.ts"),
@@ -472,6 +487,14 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "selection-copy-page", label: "movePage.copy", icon: "copy", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 42, scope: "view", command: true, when: hasSelection, keywords: "copy duplicate page another copia pagina selezione" },
 	// 0.17 (#57): the selection becomes a task in a note (the daily note, a tasks note or a chosen one), linked back to the page.
 	{ id: "selection-make-task", label: "task.action", icon: "list-checks", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 41, scope: "view", command: true, when: hasSelection, keywords: "task todo checkbox daily note attivita compito" },
+	// 0.18 (#86): margin comments: a comment anchored to the selection's region, or to a rectangle drawn on the page; the side panel lists them.
+	{ id: "comment-selection", label: "comments.action", icon: "message-square-plus", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 40, scope: "view", command: "comments.command.selection", when: hasSelection, enabled: pageOpen, keywords: "comment note margin review annotation commento nota margine revisione" },
+	{ id: "comment-region", label: "comments.region", icon: "square-dashed", group: "insert", surfaces: ["sheet", "palette"], priority: 46, scope: "view", command: true, enabled: pageOpen, keywords: "comment region rectangle margin note review commento regione rettangolo margine" },
+	{ id: "comments-panel", label: "comments.panel.toggle", icon: "messages-square", group: "side", surfaces: ["sheet", "palette"], priority: 33, scope: "view", command: true, readOnly: true, checked: (c) => !!c.comments?.panel, keywords: "comments panel list review resolve thread commenti pannello elenco" },
+	{ id: "comment-next", label: "comments.next", icon: "message-square-more", group: "side", surfaces: ["palette"], priority: 20, scope: "view", command: true, readOnly: true, keywords: "comment next open review commento successivo aperto" },
+	// 0.18 (#59): the selection as a picture (and a link back) at the cursor of the Markdown note, or in a chosen note.
+	{ id: "selection-insert-note", label: "noteInsert.action", icon: "image-plus", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 40.5, scope: "view", command: true, when: hasSelection, keywords: "insert note markdown image png picture embed inserisci nota immagine" },
+	{ id: "selection-insert-note-svg", label: "noteInsert.actionSvg", icon: "file-image", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 40.4, scope: "view", command: true, when: hasSelection, keywords: "insert note markdown svg vector embed inserisci nota vettoriale" },
 	{ id: "selection-paste-device", label: "clipshare.paste", icon: "monitor-down", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection", "lasso"], priority: 47, scope: "view", command: true, when: (c) => c.tool === "lasso" || hasSelection(c), keywords: "clipboard tablet phone sync share vault appunti" },
 
 	// --- status banners (wave 0.7): their buttons, listed so that every visible control has a documented place.

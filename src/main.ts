@@ -20,6 +20,7 @@ import { PenTestModal, penSignalInfo } from "./view/pen-test-modal";
 import { NotebookLibraryHost } from "./library/host";
 import { SharedInbox } from "./library/shared-inbox";
 import { registerIntegration } from "./integration";
+import { annotatePdfFlow, registerAnnotatePdf, type AnnotatePdfHost } from "./library/annotate-pdf";
 import { registerHoverPreview } from "./view/hover-preview";
 import type { HistoryService } from "./integration/history-service";
 import type { NotebookApi } from "./integration/api";
@@ -49,6 +50,8 @@ import { openRecentPages, RecentPagesService } from "./view/recent-pages";
 import { SyncSafetyService } from "./view/sync-safety";
 import type { NavController } from "./view/nav-controller";
 import { registerNavigation } from "./view/nav-service";
+import { QuickTabsStore } from "./library/quicktabs-store";
+import { QuickTabsService } from "./view/quick-tabs-service";
 import { NotebookStatusBar } from "./view/status-bar";
 import { registerResilience, type ResilienceServices } from "./view/resilience";
 import { PdfCopyService } from "./storage/pdf-copy-service";
@@ -66,6 +69,8 @@ export default class NotebookPlugin extends Plugin {
 	recentPages!: RecentPagesService;
 	/** wave 0.10 (18): back/forward history of visited pages (view/nav-controller.ts). */
 	nav!: NavController;
+	/** 0.18 (#227): quick tabs, pages pinned in a notebook (one file per device in `_meta`, library/quicktabs-store.ts). */
+	quickTabs!: QuickTabsService;
 	private statusBar: NotebookStatusBar | null = null;
 	/** Public API for other plugins and scripts (docs/api.md). */
 	api?: NotebookApi;
@@ -187,6 +192,12 @@ export default class NotebookPlugin extends Plugin {
 		this.step("navigation", () => {
 			this.nav = registerNavigation(this, (file) => this.host.readNotebook(file));
 		});
+		// 0.18 (#227): quick tabs follow the vault and other devices' files.
+		this.step("quick tabs", () => {
+			const store = new QuickTabsStore(vaultDeviceFileAdapter(this.app), () => this.settings.folder, sidecarDeviceId(this.app));
+			this.quickTabs = new QuickTabsService({ app: this.app, store, readNotebook: (file) => this.host.readNotebook(file), notebooksFolder: () => this.settings.folder });
+			this.quickTabs.register(this);
+		});
 		this.step("status bar", () => this.registerStatusBar());
 		let quickNav: QuickNavService | null = null;
 		this.step("quick navigation", () => {
@@ -242,8 +253,9 @@ export default class NotebookPlugin extends Plugin {
 			this.history = registerIntegration(this, {
 				background: (doc, page, width) => this.host.thumbnailBackground(doc, page, width),
 				newNotebookIn: (folder) => this.host.createNotebook(folder),
-				annotatePdf: (pdf) => this.host.importPdf(this.settings.folder, pdf),
+				annotatePdf: (pdf) => void annotatePdfFlow(this.app, this.annotateHost(), pdf),
 			});
+			registerAnnotatePdf(this, this.annotateHost());
 		});
 		// 0.17 (O5): hovering a notebook page link shows the page thumbnail (Page preview core plugin)
 		this.step("hover preview", () => registerHoverPreview(this, {
@@ -418,6 +430,15 @@ export default class NotebookPlugin extends Plugin {
 		this.rememberTimer = null;
 		if (this.settingsUnreadable) return;
 		void this.saveData(this.settings).catch((e) => console.error("[notebook] could not save the last location", e));
+	}
+
+	/** 0.18 (O10): what "Annotate in Notebook" needs from the plugin. */
+	private annotateHost(): AnnotatePdfHost {
+		return {
+			folder: () => this.settings.folder,
+			readNotebook: (file) => this.host.readNotebook(file),
+			importPdfFrom: (folder, file, bytes) => this.host.importPdfFrom(folder, file, bytes),
+		};
 	}
 
 	/** Opens the notebook that was open last, on the page that was in view. */

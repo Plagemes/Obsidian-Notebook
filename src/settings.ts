@@ -5,6 +5,7 @@ import { cleanStampFormat, DEFAULT_STAMP_FORMAT } from "./ink/date-stamp";
 import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "./ink/edge-zones";
 import { DEFAULT_GESTURE_SETTINGS, readGestureSettings, type GestureSettings } from "./ink/gesture-settings";
 import { DEFAULT_PEN_GESTURE_SETTINGS, readPenGestureSettings, type PenGestureSettings } from "./ink/gestures/settings";
+import { clampInsertWidth, INSERT_WIDTH_DEFAULT, isInsertBackground } from "./model/note-insert";
 import { PEN_BUTTON_ACTIONS, type PenButtonAction } from "./ink/input-policy";
 import { BUTTON_AFTER_MAX_MS, BUTTON_BEFORE_MAX_MS, DEFAULT_BUTTON_WINDOWS, LEGACY_BEFORE_MS, cleanPenKey, cleanWindowMs, isPenKeyAction, type PenKeyAction } from "./ink/pen-hover";
 import { isHeaderAlign, isHeaderMode, type HeaderAlign, type HeaderMode } from "./ink/page-header";
@@ -103,6 +104,12 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	taskDueEmoji: boolean;
 	/** 0.17 (#57): the note "Make task" can add to besides the daily note (vault path; empty = none configured). */
 	tasksNote: string;
+	/** 0.18 (#59): "Insert into note": display width (px) of the picture, its background and whether a link back to the page follows it. */
+	noteInsertWidth: number;
+	noteInsertBackground: "transparent" | "paper";
+	noteInsertLinkBack: boolean;
+	/** 0.18 (#186): copying pages to another notebook also leaves a "Copied to" chip on the original page (the dialog starts with this). */
+	copyLinkReverse: boolean;
 	// wave p1a: input
 	/** Edge rejection: touches that start within `edgeRejectionPx` of a selected edge of the page area are ignored. */
 	edgeRejection: boolean;
@@ -193,6 +200,11 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	// 0.16 (#90): highlights digest
 	/** How the digest note of the highlights is grouped: by page or by colour. */
 	digestGroup: "page" | "colour";
+	// 0.18 (#86): margin comments
+	/** Show the numbered markers of the comments in the page margin (a comment whose card is open is always shown). */
+	commentMarkers: boolean;
+	/** Add the comments to the PDF export as margin notes (a strip beside each page that has comments). */
+	commentsInPdf: boolean;
 	headerMode: HeaderMode;
 	headerPageNumber: boolean;
 	headerPageTotal: boolean;
@@ -263,6 +275,10 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	dailyCreateNote: false,
 	taskDueEmoji: true,
 	tasksNote: "",
+	noteInsertWidth: INSERT_WIDTH_DEFAULT,
+	noteInsertBackground: "transparent",
+	noteInsertLinkBack: true,
+	copyLinkReverse: false,
 	edgeRejection: false,
 	edgeRejectionPx: 24,
 	edgeLeft: true,
@@ -298,6 +314,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	notebookTabs: false,
 	autoLineBreak: false,
 	digestGroup: "page",
+	commentMarkers: true,
+	commentsInPdf: false,
 	headerMode: "off",
 	headerPageNumber: true,
 	headerPageTotal: true,
@@ -377,6 +395,10 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.dailyCreateNote === "boolean") s.dailyCreateNote = d.dailyCreateNote;
 	if (typeof d.taskDueEmoji === "boolean") s.taskDueEmoji = d.taskDueEmoji;
 	if (typeof d.tasksNote === "string") s.tasksNote = d.tasksNote.trim();
+	if (typeof d.noteInsertWidth === "number") s.noteInsertWidth = clampInsertWidth(d.noteInsertWidth);
+	if (isInsertBackground(d.noteInsertBackground)) s.noteInsertBackground = d.noteInsertBackground;
+	if (typeof d.noteInsertLinkBack === "boolean") s.noteInsertLinkBack = d.noteInsertLinkBack;
+	if (typeof d.copyLinkReverse === "boolean") s.copyLinkReverse = d.copyLinkReverse;
 	if (typeof d.edgeRejection === "boolean") s.edgeRejection = d.edgeRejection;
 	if (typeof d.edgeRejectionPx === "number" && d.edgeRejectionPx >= EDGE_WIDTH_MIN && d.edgeRejectionPx <= EDGE_WIDTH_MAX) s.edgeRejectionPx = d.edgeRejectionPx;
 	if (typeof d.edgeLeft === "boolean") s.edgeLeft = d.edgeLeft;
@@ -416,6 +438,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;
 	if (typeof d.autoLineBreak === "boolean") s.autoLineBreak = d.autoLineBreak;
 	if (d.digestGroup === "page" || d.digestGroup === "colour") s.digestGroup = d.digestGroup;
+	if (typeof d.commentMarkers === "boolean") s.commentMarkers = d.commentMarkers;
+	if (typeof d.commentsInPdf === "boolean") s.commentsInPdf = d.commentsInPdf;
 	if (isHeaderMode(d.headerMode)) s.headerMode = d.headerMode;
 	if (isHeaderAlign(d.headerAlign)) s.headerAlign = d.headerAlign;
 	for (const k of ["headerPageNumber", "headerPageTotal", "headerDate", "headerTitle", "headerInExport"] as const) if (typeof d[k] === "boolean") s[k] = d[k];

@@ -19,7 +19,7 @@ import { t } from "../i18n";
 import { cloneMeta, createId } from "../model/document";
 import { AddAsset, AddPage, Batch, DeletePage, InsertPages, SetMeta, type Command } from "../model/history";
 import {
-	applyRemoval, planMerge, planNewNotebook, planRemoval, planSplit, textLinksToPages,
+	applyRemoval, planMerge, planNewNotebook, planRemoval, planSplit, planTransfer, textLinksToPages,
 	type TransferMode, type TransferPlan, type TransferRemoval,
 } from "../model/notebook-transfer";
 import { parse, serializeChecked } from "../model/serialize";
@@ -472,6 +472,49 @@ export async function mergeNotebooks(env: TransferEnv, req: MergeRequest): Promi
 		return summarise(plan, req.into, { trashSkipped: "failed", textLinks: links });
 	}
 	return summarise(plan, req.into, { removed: plan.pages.length, trashed: true, textLinks: links });
+}
+
+// ------------------------------------------------------------------------------------------------ copy into a notebook
+
+export interface CopyIntoRequest {
+	source: TFile;
+	pageIds: readonly string[];
+	dest: TFile;
+	/** 0-based index in the destination the copies start at; absent: at the end. */
+	at?: number;
+	/**
+	 * Called with the plan right before it is written (the copies are plain objects nobody else holds yet): lets a caller add
+	 * to the copies in the same write, so they arrive complete. `sourceDoc` is the source as planned from.
+	 */
+	decorate?: (plan: TransferPlan, sourceDoc: NotebookDocument) => void;
+}
+
+/** What `copyPagesInto` did. `pageIds` are the ids of the copies, in the order of their pages in the source. */
+export interface CopyIntoResult {
+	summary: TransferSummary;
+	pageIds: string[];
+	/** 0-based index of the first copy in the destination. */
+	at: number;
+}
+
+/**
+ * Copies pages of `source` into an existing notebook at a position (the pages stay in the source, the copies get new ids).
+ * The same planning and the same careful write as a merge: an open destination takes them as one undo step, a closed one is
+ * rewritten with a backup, a stale check and a read-back, and not while its journal holds unsaved edits.
+ */
+export async function copyPagesInto(env: TransferEnv, req: CopyIntoRequest): Promise<CopyIntoResult> {
+	const app = env.app;
+	if (req.source.path === req.dest.path) throw new Error(t("transfer.sameNotebook"));
+	const src = await loadSource(env, req.source, false);
+	const destCtx = openEditContext(app, req.dest);
+	if (destCtx === "busy") throw new Error(t("transfer.destinationBusy", { name: req.dest.basename }));
+	const destDoc = destCtx ? destCtx.doc : (await readDoc(app, req.dest)).doc;
+	if (destDoc.id === src.doc.id) throw new Error(t("transfer.sameNotebook"));
+	const plan = planTransfer(src.doc, req.pageIds, destDoc, "copy", req.at === undefined ? {} : { at: req.at });
+	if (!plan.ok) throw new Error(failureText(plan));
+	req.decorate?.(plan, src.doc);
+	await writeIntoExisting(env, req.dest, plan, env.settings().folder);
+	return { summary: summarise(plan, req.dest, {}), pageIds: plan.pages.map((p) => p.id), at: plan.at };
 }
 
 /** The notebook as it is now: what an open view holds (unsaved ink included), else the file. Null when it cannot be read. */

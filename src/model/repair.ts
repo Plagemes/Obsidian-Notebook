@@ -32,10 +32,10 @@ import { parseLenient } from "./lenient-json";
 import { detectVersion, migrate, type RawObject } from "./migrations";
 import { normalizePageTags } from "./page-tags";
 import { normalizePosition } from "./position";
-import { parse, readPageStates, readSlides, serializeChecked, validate, MAX_FONT_SIZE } from "./serialize";
+import { parse, readPageComments, readPageStates, readSlides, serializeChecked, validate, MAX_FONT_SIZE } from "./serialize";
 import {
 	A4_HEIGHT, A4_WIDTH, CURRENT_VERSION, DEFAULT_META, FORMAT_ID, PAPER_SPACING, RENDER_FREEHAND, RENDER_VERSIONS, TOOLS,
-	type Asset, type BookmarkInfo, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type PageStates, type ReadingPosition, type SlideRef, type Stroke,
+	type Asset, type BookmarkInfo, type NotebookDocument, type NotebookMeta, type Page, type PageComment, type PageElement, type PageStates, type ReadingPosition, type SlideRef, type Stroke,
 } from "./types";
 
 export interface Counts {
@@ -78,7 +78,7 @@ export type RepairResult =
 
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 /** Page fields of the current format (a field dropped by the repair is not "unknown"). */
-const PAGE_FIELDS = { id: 1, width: 1, height: 1, paper: 1, strokes: 1, elements: 1, background: 1, infinite: 1, margins: 1, tags: 1, states: 1, locked: 1 };
+const PAGE_FIELDS = { id: 1, width: 1, height: 1, paper: 1, strokes: 1, elements: 1, background: 1, infinite: 1, margins: 1, tags: 1, states: 1, locked: 1, comments: 1 };
 const HEX_RE = /^[0-9a-f]+$/;
 
 function isObj(v: unknown): v is RawObject {
@@ -109,6 +109,8 @@ interface ScannedPage {
 	raw: RawObject;
 	strokes: unknown[];
 	elements: unknown[];
+	/** v16 comment lines (an item with an author and no type or points). */
+	comments: unknown[];
 }
 
 interface Scanned {
@@ -118,7 +120,7 @@ interface Scanned {
 	slides: unknown[];
 	pages: ScannedPage[];
 	/** Stroke and element lines found before any page start. */
-	orphans: { strokes: unknown[]; elements: unknown[] };
+	orphans: { strokes: unknown[]; elements: unknown[]; comments: unknown[] };
 }
 
 function jsonOrUndefined(text: string): unknown {
@@ -139,12 +141,12 @@ const ITEM_LINE = /^\t\t\t\t(\{.*\}),?$/;
 
 /** Reads the line layout of `serialize()`; lines that are damaged are skipped. */
 function scanLines(text: string): Scanned {
-	const out: Scanned = { header: {}, assets: {}, slides: [], pages: [], orphans: { strokes: [], elements: [] } };
+	const out: Scanned = { header: {}, assets: {}, slides: [], pages: [], orphans: { strokes: [], elements: [], comments: [] } };
 	let page: ScannedPage | null = null;
 	for (const rawLine of text.split("\n")) {
 		const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
 		if (line === "\t\t{") {
-			page = { raw: {}, strokes: [], elements: [] };
+			page = { raw: {}, strokes: [], elements: [], comments: [] };
 			out.pages.push(page);
 			continue;
 		}
@@ -155,6 +157,8 @@ function scanLines(text: string): Scanned {
 			const target = page ?? out.orphans;
 			if (Array.isArray(v.points)) target.strokes.push(v);
 			else if (typeof v.type === "string") target.elements.push(v);
+			// v16: a comment line has no type; it names its author and time.
+			else if (typeof v.author === "string" && typeof v.created === "number") target.comments.push(v);
 			continue;
 		}
 		m = PAGE_FIELD_LINE.exec(line);
@@ -250,7 +254,7 @@ function combine(primary: unknown, scan: Scanned, incomplete: WeakSet<object>): 
 		if (i === undefined) {
 			// A page the lenient reading did not reach.
 			if (sp.strokes.length === 0 && sp.elements.length === 0 && id === null) continue;
-			pages.push({ ...sp.raw, strokes: sp.strokes, elements: sp.elements });
+			pages.push({ ...sp.raw, strokes: sp.strokes, elements: sp.elements, ...(sp.comments.length > 0 ? { comments: sp.comments } : {}) });
 			if (id !== null) pageIndex.set(id, pages.length - 1);
 			continue;
 		}
@@ -259,6 +263,7 @@ function combine(primary: unknown, scan: Scanned, incomplete: WeakSet<object>): 
 		for (const [k, v] of Object.entries(sp.raw)) if (!(k in base)) base[k] = v;
 		base.strokes = mergeItems(Array.isArray(base.strokes) ? (base.strokes as unknown[]) : [], sp.strokes);
 		base.elements = mergeItems(Array.isArray(base.elements) ? (base.elements as unknown[]) : [], sp.elements);
+		if (sp.comments.length > 0) base.comments = mergeItems(Array.isArray(base.comments) ? (base.comments as unknown[]) : [], sp.comments);
 		pages[i] = base;
 	}
 	if (scan.orphans.strokes.length > 0 || scan.orphans.elements.length > 0) {
@@ -492,6 +497,24 @@ function salvageStates(raw: unknown, strokes: readonly Stroke[], summary: Repair
 	}
 	summary.fieldsReset += drop.count;
 	return states;
+}
+
+/**
+ * v16 margin comments: what the lenient reader keeps of them against the size of the salvaged page (a comment whose region is
+ * outside the page is moved into it, a reply without its comment becomes a comment of its own, an invalid item is dropped);
+ * everything it had to change is counted as a reset field.
+ */
+function salvageComments(raw: unknown, page: Page, summary: RepairSummary): PageComment[] | undefined {
+	if (raw === undefined) return undefined;
+	const drop = { count: 0 };
+	let comments: PageComment[] | undefined;
+	try {
+		comments = readPageComments(raw, "comments", page, drop);
+	} catch {
+		summary.fieldsReset++;
+	}
+	summary.fieldsReset += drop.count;
+	return comments;
 }
 
 /** v12 slide table: the valid entries (an invalid entry or a repeated id is left out and counted as a reset field). */
@@ -795,6 +818,9 @@ function salvage(raw: RawObject, summary: RepairSummary, now: Date, cut: WeakSet
 		// that survived; what is invalid is left out and counted as a reset field).
 		const states = salvageStates(p.states, strokes, summary);
 		if (states) page.states = states;
+		// v16: the comments, against the salvaged page.
+		const comments = salvageComments(p.comments, page, summary);
+		if (comments) page.comments = comments;
 		summary.unknownFields += unknownKeys(p, { ...PAGE_FIELDS, ...page });
 		ctx.pageIds.add(page.id);
 		pages.push(page);

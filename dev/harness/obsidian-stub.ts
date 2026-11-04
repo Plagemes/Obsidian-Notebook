@@ -529,8 +529,11 @@ export class Scope {
 }
 
 export class MetadataCache extends Events {
-	getFileCache(): null {
-		return null;
+	/** 0.18 mentions: the link index the check fills (source note -> target path -> count) and the per-note caches. */
+	resolvedLinks: Record<string, Record<string, number>> = {};
+	caches = new Map<string, unknown>();
+	getFileCache(file?: { path: string }): unknown {
+		return (file && this.caches.get(file.path)) ?? null;
 	}
 	getFirstLinkpathDest(name?: string): TFile | null {
 		if (!name) return null;

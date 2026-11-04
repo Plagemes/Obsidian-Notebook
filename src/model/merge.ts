@@ -25,6 +25,12 @@
  *   just enough in the same step so it stays visible: wider margins on a page with a background
  *   (`SetPageMargins`: its own ink moves with the background), a larger plain page, or more height on an
  *   infinite page (`SetPageSize`, which follows the margin rule).
+ * - v16: the margin comments of a common page are united by id (`mergeComments`): two devices that added comments or replies
+ *   both keep theirs; for one comment (or reply) both have, the later edit wins (`edited`, else `created`; the main notebook on a
+ *   tie), and when both edited the text the losing version is kept beside it as a marked comment or reply (`conflictId`, counted in
+ *   `commentsAdded`, and what `mergeCovers` looks for). The copy's regions are moved with the content when the page had to be re-framed and
+ *   clamped to the size the page has after the merge's own growth. A page that only the copy has comes with its comments. Deletions are
+ *   not inferred (a comment one device deleted comes back from a copy that still has it).
  * - v14: a page locked in either copy is locked in the result; the merge is exempt from the page-lock guard (model/page-lock.ts),
  *   so ink of the copy reaches a locked page of the main notebook too. A page that only the copy has comes with its lock.
  * - v13: the parts and states of a drawing (`Page.states`) are not content either: a page that only the copy has brings its
@@ -43,6 +49,7 @@ import { growForInfinite } from "../ink/infinite";
 import { textElementBounds } from "../ink/text-layout";
 import { AddAsset, AddElement, AddPage, AddStroke, Batch, SetMeta, SetPageMargins, SetPageSize, type Command } from "./history";
 import { SetMarkerDone } from "./marker-commands";
+import { commentCovered, copyComments, mergeComments, SetPageComments, shiftComments } from "./comments";
 import { exemptFromLocks, SetPageLocked } from "./page-lock";
 import { slideMerger } from "./slide-links";
 import { remapStates, SetPageStates } from "./states";
@@ -86,6 +93,8 @@ export interface MergeSummary {
 	pagesEnlarged: number;
 	/** Items of the main notebook missing from the copy (kept: deletions are not inferred). */
 	onlyInMain: number;
+	/** v16: comments and replies of the copy added to common pages, taken from the copy because it edited them later, or kept beside the winner as a marked copy when both edited the text (comments of pages only in the copy come with the page). */
+	commentsAdded: number;
 	/** v8: markers resolved in the copy only, resolved in the main notebook too ("either", like favourite). */
 	markersResolved: number;
 }
@@ -244,7 +253,7 @@ function carriedInk(e: PageElement, strokeMap: ReadonlyMap<string, string>, adde
 export function planMerge(main: NotebookDocument, other: NotebookDocument): MergePlan {
 	const summary: MergeSummary = {
 		pagesAdded: 0, strokesAdded: 0, strokesCopied: 0, elementsAdded: 0, elementsCopied: 0, assetsAdded: 0,
-		tagsAdded: 0, bookmarksAdded: 0, bookmarkInfoAdded: 0, bookmarkInfoDiffer: 0, pageTagsAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0, markersResolved: 0,
+		tagsAdded: 0, bookmarksAdded: 0, bookmarkInfoAdded: 0, bookmarkInfoDiffer: 0, pageTagsAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0, markersResolved: 0, commentsAdded: 0,
 	};
 	const commands: Command[] = [];
 	// v12: the copy's slide ids in the main notebook's table.
@@ -353,6 +362,8 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 			}
 			const keys = contentOn.get(page.id)!;
 			let shift = frameShift(target, page);
+			/** v16: how far the main page's own content (and so its comments) moved when its margins widened. */
+			let mainMoved = 0;
 			if (!marginsEqual(normalizeMargins(target.margins), normalizeMargins(page.margins))) summary.marginsDiffer++;
 			// New ink of the copy that would fall off the main page: the page grows first, in the same step.
 			const inMain = inFrame(page, shift);
@@ -361,13 +372,19 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 				strokes: inMain.strokes.filter((s) => isNew(s.id, `s${strokeContentKey(s)}`)),
 				elements: inMain.elements.filter((e) => isNew(e.id, `e${elementContentKey(e)}`)),
 			});
+			/** v16: the size the main page has once the commands above ran (the copy's comments are kept against that, not the size it has now). */
+			let finalSize = { width: target.width, height: target.height };
 			if (fit) {
 				summary.pagesEnlarged++;
 				if (fit.margins) {
 					const before = normalizeMargins(target.margins);
 					commands.push(new SetPageMargins(target.id, before, fit.margins));
-					const w = round2(marginsOf({ margins: normalizeMargins(fit.margins) }).left - marginsOf({ margins: before }).left);
+					const mb = marginsOf({ margins: before });
+					const ma = marginsOf({ margins: normalizeMargins(fit.margins) });
+					finalSize = { width: round2(target.width + ma.left + ma.right - mb.left - mb.right), height: round2(target.height + ma.bottom - mb.bottom) };
+					const w = round2(ma.left - mb.left);
 					if (w !== 0) {
+						mainMoved = w;
 						// The main page's own ink moves with its background: its content keys move too.
 						keys.clear();
 						for (const s of target.strokes) {
@@ -383,7 +400,10 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 						shift = round2(shift + w);
 					}
 				}
-				if (fit.size) commands.push(new SetPageSize(target.id, fit.size.before, fit.size.after));
+				if (fit.size) {
+					commands.push(new SetPageSize(target.id, fit.size.before, fit.size.after));
+					finalSize = fit.size.after;
+				}
 			}
 			const content = inFrame(page, shift);
 			let strokeAt = target.strokes.length;
@@ -418,6 +438,17 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 				if (states) {
 					const moved = shift === 0 ? states : { ...states, parts: states.parts.map((p) => ({ ...p, pivot: [p.pivot[0] + shift, p.pivot[1]] as [number, number] })) };
 					commands.push(new SetPageStates(target.id, undefined, moved, "Merge states"));
+				}
+			}
+			// v16: the comments of both, united by id; the copy's are in the frame of the main page like its ink. Last, after the commands that may have moved the page.
+			if (page.comments) {
+				const mine = mainMoved === 0 || !target.comments ? target.comments : shiftComments(target.comments, mainMoved);
+				const theirs = copyComments(shift === 0 ? page.comments : shiftComments(page.comments, shift), finalSize) ?? [];
+				const merged = mergeComments(mine, theirs);
+				if (merged.list !== mine) {
+					commands.push(new SetPageComments(target.id, mine, merged.list, "Merge comments"));
+					// Edits that lost are kept beside the winner (marked), and count: the merge reports what it added.
+					summary.commentsAdded += merged.added + merged.replaced + merged.conflicts;
 				}
 			}
 			// v14: a page locked in either copy is locked in the result (the safer side: unlocking is one tap). Added last, after the ink.
@@ -458,6 +489,8 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 		const addedStates = remapStates(page.states, (id) => strokeMap.get(id));
 		if (addedStates) added.states = addedStates;
 		if (page.locked) added.locked = true;
+		const addedComments = copyComments(page.comments, page);
+		if (addedComments) added.comments = addedComments;
 		const at = anchor === null ? 0 : order.indexOf(anchor) + 1;
 		order.splice(at, 0, page.id);
 		commands.push(new AddPage(added, at));
@@ -557,7 +590,7 @@ export function mergeMeta(main: NotebookMeta, other: NotebookMeta, pageIds: Read
 /** Number of changes a summary describes (0: the copy holds nothing new). */
 export function mergeChangeCount(s: MergeSummary): number {
 	return s.pagesEnlarged + s.pagesAdded + s.strokesAdded + s.strokesCopied + s.elementsAdded + s.elementsCopied + s.assetsAdded + s.tagsAdded
-		+ s.bookmarksAdded + s.bookmarkInfoAdded + s.pageTagsAdded + s.markersResolved;
+		+ s.bookmarksAdded + s.bookmarkInfoAdded + s.pageTagsAdded + s.markersResolved + s.commentsAdded;
 }
 
 /**
@@ -619,6 +652,12 @@ export function mergeCovers(result: NotebookDocument, other: NotebookDocument): 
 		const into = resultPages.get(p.id)!;
 		const have = new Set((into.tags ?? []).map((t) => t.toLowerCase()));
 		if (!(p.tags ?? []).every((t) => have.has(t.toLowerCase()))) return false;
+	}
+	// v16: every comment and reply of the copy is in the result, edited at least as late.
+	for (const p of other.pages) {
+		const into = resultPages.get(p.id)!;
+		// (a version that lost a merge is covered by the marked copy kept beside the winner)
+		if ((p.comments ?? []).some((c) => !commentCovered(into.comments ?? [], c))) return false;
 	}
 	const marks = new Set(result.meta?.bookmarks ?? []);
 	for (const id of other.meta?.bookmarks ?? []) {

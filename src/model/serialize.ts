@@ -7,6 +7,7 @@ import {
 import { parseOutline } from "../math/outline";
 import { EXCERPT_ID_MAX, EXCERPT_PATH_MAX } from "./excerpts";
 import { detectVersion, migrate, MigrationError, v10OnlyElement, v15OnlyElement, withoutV11Meta, withoutV12Slides, type RawObject } from "./migrations";
+import { commentLine, normalizeComments, readComments } from "./comments-format";
 import { normalizePageStates, STATE_COLOR_RE, statesLine } from "./states-format";
 import { normalizePageTags } from "./page-tags";
 import { STICKY_INK_MAX, STICKY_MAX_FONT, STICKY_MAX_SIZE, STICKY_MIN_FONT, STICKY_MIN_SIZE, STICKY_TEXT_MAX } from "./sticky";
@@ -18,7 +19,7 @@ import {
 	type PageState, type PageStates, type PartPose, type StatePart,
 	type Asset, type CoverArt, type CoverArtStyle, type AssetKind, type BookmarkInfo, type BoxElement, type EquationElement, type ExcerptElement, type ExcerptSource, type GraphElement, type GraphFunction, type GraphParam,
 	type GraphPiece, type GraphTable, type GraphViewport, type ImageElement, type MarkerElement, type NotebookDocument, type NotebookMeta, type Page,
-	type PageBackground, type PageElement, type PageMargins, type PaperKind, type Point, type ReadingPosition, type RenderVersion, type StickyElement, type Stroke,
+	type PageBackground, type PageComment, type PageElement, type PageMargins, type PaperKind, type Point, type ReadingPosition, type RenderVersion, type StickyElement, type Stroke,
 	type TextElement, type Tool,
 } from "./types";
 
@@ -309,6 +310,9 @@ function assemble(
 		if (page.locked === true) out.push(`\t\t\t"locked": true,`);
 		const states = statesOf(page);
 		if (states) out.push(`\t\t\t"states": ${statesLine(states)},`);
+		// v16: the comments, one per line, as the writer keeps them (see comments-format.ts); nothing is written when none is left.
+		const comments = normalizeComments(page.comments, page);
+		if (comments) out.push(`\t\t\t"comments": [\n${comments.map(commentLine).join(",\n")}\n\t\t\t],`);
 		if (elements.length) out.push(`\t\t\t"elements": [\n${elements.join(",\n")}\n\t\t\t],`);
 		out.push(strokes.length ? `\t\t\t"strokes": [\n${strokes.join(",\n")}\n\t\t\t]` : `\t\t\t"strokes": []`);
 		out.push("\t\t}");
@@ -1165,7 +1169,7 @@ function readAssets(v: unknown): Record<string, Asset> {
 	return assets;
 }
 
-function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null = null, slides: SlideIds = new Set<string>(), withStates = true, withLocked = true): Page {
+function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null = null, slides: SlideIds = new Set<string>(), withStates = true, withLocked = true, withComments = true): Page {
 	if (!isObject(v)) fail(path, "expected an object");
 	const id = str(v.id, `${path}.id`);
 	const width = positive(v.width, `${path}.width`);
@@ -1226,7 +1230,26 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, dr
 		const states = readPageStates(v.states, `${path}.states`, new Set(strokes.map((s) => s.id)), drop);
 		if (states) page.states = states;
 	}
+	// v16: the margin comments. A file of an older format has none of ours (an odd `comments` key is ignored, as the migration drops it).
+	if (withComments && v.comments !== undefined) {
+		const comments = readPageComments(v.comments, `${path}.comments`, page, drop);
+		if (comments) page.comments = comments;
+	}
 	return page;
+}
+
+/**
+ * v16 (#86): the comments of one page, against the page's size. Lenient (`drop` set): whatever is invalid is dropped, moved
+ * into the page or promoted and counted, the rest stays (a comment is a detail, never a reason to refuse a notebook).
+ * Strict (`drop` null): any of those fails. Undefined when nothing is left. The items come back frozen.
+ */
+export function readPageComments(v: unknown, path: string, page: { width: number; height: number }, drop: Dropped | null): PageComment[] | undefined {
+	const { comments, problems } = readComments(v, page);
+	if (problems.length > 0) {
+		if (!drop) fail(path, problems[0]!);
+		drop.count += problems.length;
+	}
+	return comments.length > 0 ? comments : undefined;
 }
 
 /** v15: a collapsed note without the ids of strokes that are not on the page (a stroke erased since); the list goes when it empties. */
@@ -1264,7 +1287,7 @@ export function validate(raw: unknown, drop: Dropped | null = null): NotebookDoc
 	return validateWith(raw, readPage, new Set<string>(), drop);
 }
 
-type PageReader = (v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null, slides: SlideIds, withStates: boolean, withLocked: boolean) => Page;
+type PageReader = (v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null, slides: SlideIds, withStates: boolean, withLocked: boolean, withComments: boolean) => Page;
 
 /** `validate` with the page reader and the set of ids injected: staged loading reads page shells first (see StagedParse). */
 function validateWith(raw: unknown, readPageAt: PageReader, ids: Set<string>, drop: Dropped | null): NotebookDocument {
@@ -1280,7 +1303,7 @@ function validateWith(raw: unknown, readPageAt: PageReader, ids: Set<string>, dr
 	const slideIds = new Set(slides.map((r) => r.id));
 	const pageIds = new Set<string>();
 	const pages = raw.pages.map((p, i) => {
-		const page = readPageAt(p, `pages[${i}]`, ids, assets, drop, slideIds, true, true);
+		const page = readPageAt(p, `pages[${i}]`, ids, assets, drop, slideIds, true, true, true);
 		// Page ids key bookmarks, jumps and caches: two pages with one id would be confused with each other.
 		if (pageIds.has(page.id)) fail(`pages[${i}].id`, "duplicate id");
 		pageIds.add(page.id);
@@ -1408,7 +1431,7 @@ export class StagedParse {
 	}
 
 	/**
-	 * Prepares a staged parse of a file at the current version, or at version 9 to 13, whose migrations only refuse
+	 * Prepares a staged parse of a file at the current version, or at version 9 to 15, whose migrations only refuse
 	 * excerpts (v9: checked page by page as they are read) and drop the v11 metadata fields, with page `first` (0-based) read in full.
 	 */
 	static create(raw: RawObject, first: number, from: number = CURRENT_VERSION): StagedParse | ParseFailureResult {
@@ -1443,7 +1466,7 @@ export class StagedParse {
 		// v12: the strokes of an older file have no slide of ours (an odd `slide` key is ignored, as the migration drops it).
 		const slides: SlideIds = this.from < 12 ? "ignore" : new Set((this.doc.slides ?? []).map((r) => r.id));
 		// v13: the same for the `states` of a page of an older file.
-		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop, slides, this.from >= 13, this.from >= 14);
+		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop, slides, this.from >= 13, this.from >= 14, this.from >= 16);
 	}
 
 	get pending(): number {
@@ -1503,7 +1526,8 @@ export function parseStaged(text: string, firstPage: number | null): StagedParse
 	// v12 → v13 only drops the pages' `states` keys (ignored page by page), so large v12 files are staged too.
 	// v13 → v14 only drops the pages' `locked` keys (ignored page by page), so large v13 files are staged too.
 	// v14 → v15 only refuses sticky notes (checked page by page as they are read), so large v14 files are staged too.
-	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14) return StagedParse.create(pre.raw, first, pre.version);
+	// v15 → v16 only drops the pages' `comments` keys (ignored page by page), so large v15 files are staged too.
+	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15) return StagedParse.create(pre.raw, first, pre.version);
 	if (pre.version !== CURRENT_VERSION) return parseRaw(pre.raw, pre.version, true);
 	return StagedParse.create(pre.raw, first);
 }
@@ -1526,6 +1550,24 @@ function checkStates(page: Page, path: string): void {
 		if (!back || statesLine(back) !== line) fail(path, "round-trip mismatch");
 	}
 	if (Object.isFrozen(page.states)) checkedStates.add(page.states);
+}
+
+/** v16: comment lists that already passed `checkComments` (they are frozen once committed). */
+const checkedComments = new WeakSet<readonly PageComment[]>();
+
+/**
+ * v16: the comments of `page` as the writer would write them, read back strictly (against the size of the page) and written
+ * again: they must come back the same. Throws a ValidationError otherwise.
+ */
+function checkComments(page: Page, path: string): void {
+	if (!page.comments || checkedComments.has(page.comments)) return;
+	const written = normalizeComments(page.comments, page);
+	if (written) {
+		const lines = written.map(commentLine);
+		const back = readPageComments(JSON.parse(`[${lines.join(",")}]`), path, page, null);
+		if (!back || back.map(commentLine).join("\n") !== lines.join("\n")) fail(path, "round-trip mismatch");
+	}
+	if (Object.isFrozen(page.comments)) checkedComments.add(page.comments);
 }
 
 /** Slide table entries that already passed `checkContent` (frozen). */
@@ -1567,6 +1609,7 @@ export function checkContent(doc: NotebookDocument): string | null {
 		}
 		for (const page of doc.pages) {
 			checkStates(page, `page ${page.id} states`);
+			checkComments(page, `page ${page.id} comments`);
 			for (const s of page.strokes) {
 				if (verifiedLines.has(s) || validatedStrokes.has(s)) continue;
 				const line = strokeLine(s);
@@ -1660,6 +1703,7 @@ export function serializeChecked(doc: NotebookDocument, forceFull = false): Chec
 			}
 			// v13: nor does it have the strokes the states name: they are written and checked per page, on their own.
 			doc.pages.forEach((p, i) => checkStates(p, `pages[${i}].states`));
+			doc.pages.forEach((p, i) => checkComments(p, `pages[${i}].comments`));
 			const skeleton = { ...doc, pages: doc.pages.map((p) => ({ ...p, strokes: [] })) };
 			const noStates = () => undefined;
 			const skeletonText = assemble(skeleton, strokeLine, elementLine, noStates);

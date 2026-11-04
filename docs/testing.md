@@ -6,6 +6,7 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 
 | Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
 |---|---|---|---|---|---|
+| Split an infinite page into sheets (roadmap 178, 0.18 a4split): *Split into sheets* in the PDF and PNG export dialog for infinite pages; paper A4/Letter/A5, orientation, fit width or 100%, margin, overlap, smart cuts between lines, page numbers, skip empty sheets; preview of the cuts | yes | yes: tiling, smart cuts, split PDF structure, byte-identical non-split PDF (`tests/export-tiles.test.ts`); harness `dev/harness/a4split-check.ts` | | | |
 | Magnetic snap and alignment guides (roadmap 71, 0.17 snap): while a selection is moved or scaled it is pulled onto the paper grid (grid, dotted, millimetre every 5 mm, ruled vertically) and onto the edges and centres of the other items, the page centre and edges and the margins; thin coloured guides on the live layer only during the drag; setting *Snap and guides* (off / grid / guides / both) and *Snap strength*; a second finger held (or Alt), or the *Snap* button of the selection bar, lets the drag move freely; rotation is never snapped | ✅ | ✅ `tests/snap.test.ts` (grid per paper, targets, move and scale snapping, guides, modes), `tests/snap-glue.test.ts` (session from a page, dragged matrices, finger/Alt bookkeeping); ✅ harness `doc=snap` (snap on lands on the edge, off, paused, finger held, guides during the drag) at tablet and phone, light and dark | | | not tried with the real S Pen or a held finger on a tablet; the palm-size filter for the held finger is a guess (steps 1120-1139) |
 | Saved collections (roadmap 120, 0.17 collections): *Collections* section in the library rail with a live count per collection and a + row; a collection is a name and rules combined with AND: tags (any / all, nested tags match under their parent), a folder with its subfolders, modified or created in the last 7 / 30 days or a date range, favourite (starred or pinned) or not, has a PDF or not; the editor shows how many notebooks match as the rules change; opening one filters the library grid (same filter and search path as the other places, archived notebooks stay out); edit with the rail's pencil or the header's; delete asks first and never touches a notebook; stored in `_meta/collections-<device>.json`, one file per device merged on read (latest change wins per collection, a delete is a tombstone), read leniently with unknown fields kept, never overwritten when unreadable or empty | ✅ | ✅ `tests/collections.test.ts` (every rule, AND, ranges, lenient reading, unknown fields and items kept, merge and tombstones, later time than the merged one, own file never overwritten when unreadable or empty, other devices' bad files skipped, change events); ✅ harness `doc=library` (make through the real dialog, live count, rail count equals cards, header names it, edit, delete with confirmation, no sideways scroll) at tablet and phone, light and dark | | notebook type / template is not a rule (the library index has no such field; adding one means a new index version); a collection whose folder was renamed matches nothing until edited | not tried on the real tablet or with two synced devices (steps 1220-1239) |
 | Copy text from the PDF (roadmap 45, 0.16 pdftext): *Select text* mode on PDF pages (contextual bar, sheet, command): a drag with the pen, a finger or the mouse, or a tap on a word, selects the PDF text; nothing is ever drawn in the mode; bubble with *Copy*, *Copy as quote* (PDF name and page, link back to the notebook page) and clear; Ctrl/Cmd+C; a hyphenated word at the end of a line is joined; text read per page on demand and cached, no DOM text layer | ✅ | ✅ `tests/pdf-text-select.test.ts` (page to PDF coordinates with margins, character boundary with real glyph widths, nearest line then run, word, ranges, copied text, boxes, tap, quote); ✅ harness `doc=pdftext` (pen drag, finger drag, multi-line drag, tap, both copy buttons, no ink, leaving the mode, a page without PDF text) at tablet and phone, light and dark | | | not tried with the real S Pen or a finger on a tablet, with a real PDF (columns, rotated text, scans), or with the Android clipboard (steps 970-979) |
@@ -345,7 +346,7 @@ Numbers from the final run of 0.9.0 (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 4189 tests passed |
+| `npm test` (unit project only; benchmarks are separate) | 4376 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: 0 errors; `eslint-plugin-obsidianmd` recommended rules: 0 errors |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
@@ -1232,6 +1233,26 @@ Generated outline (roadmap 407). Reference screenshots after `npm run harness:ch
 611. **Dark and light, Obsidian theme.** Check the outline in the dark and light theme and with *Appearance → Style → Follow Obsidian theme*; the white picture of a heading stays readable.
 612. **Cost.** In a notebook of 100+ pages, open the outline for the first time (note how long it takes), then close and reopen it: the second time is immediate. Writing with the outline open does not stutter.
 613. **No change to the file.** Open a notebook, view the outline, close it without editing: the file is not rewritten (no new snapshot, no sync conflict).
+
+### 0.18 — mentions: notes that link to a page (steps 1400-1419)
+
+Mentions (roadmap O7). Make a note with `[[Physics.notebook#p3]]` (use *Copy link to page* so the link carries the page id), another with `![[Physics.notebook#p3]]`, one with a plain `[[Physics.notebook]]`.
+
+1400. **Badge.** Open the notebook and go to page 3: a small pill with a link icon and the count appears at the top left of the page area. On a page nobody links to there is no pill.
+1401. **Count.** Two links to page 3 (one by id, one `#p3`, one embed) show 3.
+1402. **Sheet.** Tap the pill, or *Mentions* in the page sheet, in the notebook menu or the command palette: the sheet lists, under *Linking to page 3*, one row per link with the note name, its folder and a line of context around the link.
+1403. **Notebook group.** The plain `[[Physics.notebook]]` link, and a link to a page that was deleted, are under *Linking to the notebook*.
+1404. **Open.** Tap a row: the note opens in a new tab at the line of the link; the notebook stays open.
+1405. **Reorder.** Move page 3 before page 1: the link by id still counts for that page; the plain `#p3` link follows the number.
+1406. **Refresh.** Add a link in a note: within about a second the badge and (when reopened) the sheet show it. Delete the link: it goes.
+1407. **Read only.** The sheet writes nothing (check the modified time of the notes and of the notebook); it also works in a read-only notebook.
+1408. **Big vault.** In a vault with many notes the sheet opens at once; the context lines fill in a moment later. A note over 1 MB shows no context line.
+1409. **Android.** The pill and the rows are easy to hit with a finger; the pen does not draw when it touches the pill.
+1410. **Look.** Light, dark, *Follow Obsidian theme*, phone width (the pill stays at the corner), Italian.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Mentions: notes that link to the page in view (O7), count badge, sheet with context and open at the line | yes | yes (`tests/mentions-logic.test.ts`: link resolution by id / number, grouping, snippets); harness `doc=mentions` with a stand-in link index | | The link index of the harness is a stand-in; not run against Obsidian's real `metadataCache` | Run on a real vault |
 
 ### 0.17 — hover: hover preview of page links (steps 1180-1199)
 
@@ -2189,6 +2210,20 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 | Drawing and export: canvas, thumbnails, PNG, PDF, SVG, Markdown | yes | `tests/model-v15.test.ts` | | | |
 | Sticky UI: insert (quick slot, sheet, command), edit dialog, collapse / open, selection bar; one undo step each, refused on a locked page | yes | harness scenario `sticky` (tablet and phone, light and dark), `tests/ui-registry.test.ts` | | | |
 
+### 0.18 — lasso2md: selection as a picture in a note (steps 1340-1359)
+
+1340. **Insert at the cursor.** Open a note in a split next to a notebook, put the cursor in the middle of a line, select handwriting with the lasso and choose *Insert into note*. Expected: a picture embed `![[… p3-hhmmss.png|400]]` and `[[Notebook#p3&id=…|↩]]` appear on their own line at the cursor; the picture file sits where Obsidian keeps attachments. Undo in the note removes the text.
+1341. **Link back.** Tap the arrow in the note (reading mode): the notebook opens at that page.
+1342. **Settings.** Integration > turn off *Link back to the page*, set the width to 250 and the background to *Paper*, insert again. Expected: only the embed, 250 px wide, with the page paper behind the ink; the first setting (transparent) gives ink with no white.
+1343. **No note open.** Close all notes and insert. Expected: a note picker; the block is appended at the end of the chosen note after a blank line; cancelling the picker writes nothing.
+1344. **SVG.** *Insert into note as SVG* (All actions): an `.svg` of the region is stored and shows in the note.
+1345. **Collapsed sticky note.** Select ink next to a collapsed note: the picture does not show the hidden ink.
+1346. **Phone and Italian.** The actions read *Inserisci nella nota*; the new settings fit at phone width.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Selection into a Markdown note as PNG or SVG with optional link back; cursor insert through the editor, note picker and append fallback; width, background, link-back settings (#59) | yes | `tests/note-insert.test.ts` | | | |
+
 ## Quick check — Windows
 
 Mouse: draw, erase (both modes), undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scroll, Ctrl+wheel zoom, resize the window (the page refits), add a page, use every page menu action with undo, create notebooks with each paper and size, export PDF and SVG and open them, lasso select/move/resize/rotate/delete, close and reopen the notebook. Also: open the library and use every action, import a PDF and write on it, insert a PDF range and an image page, use the shape, text, image and ruler tools, scan from a photo file, use the Pages panel, run *Restore a previous version*, insert an embed in a note and open an `obsidian://notebook` link. With a pen tablet or Surface pen: pressure and eraser end (`buttons & 32`).
@@ -2466,3 +2501,124 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Task from a selection (#57): crop, link, due date, daily/tasks/chosen note | yes | line building, crop, append (`tests/selection-task.test.ts`); harness `dev/harness/task-check.ts` | | | page badge on the task's region |
+
+### 0.18 — comments (margin comments, format v16; steps 1300-1319)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/comments-*.png`. Notebooks saved with a comment are format v16: 0.17 and older open them read-only.
+
+1300. **Comment on a selection.** Select some ink with the lasso, tap *Comment* on the bar. Expected: a dialog with a text box and a sketch pad; *Add comment* stays off until there is text or a stroke. Type a line, draw a small sketch with the S Pen, tap *Add comment*. A numbered marker 1 appears in the right margin of the page, joined by a thin line to an outline of the selection's box; the comment's card opens beside it. One undo removes the comment.
+1301. **Marker and card.** Tap the marker: the card closes; tap it again: it opens and the region is highlighted. The card shows the device name, the time, your text and the sketch. On a phone the card is docked at the bottom.
+1302. **Reply and resolve.** Type in the reply box and tap send: the reply appears indented; one undo removes it. Tap *Resolve*: the marker turns grey with a check and the line and outline disappear unless the card is open; *Reopen* brings it back.
+1303. **Edit and delete.** Edit the comment (pencil): the dialog has the text and sketch; *Save* marks it *edited*. Delete (bin) removes the comment with its replies; one undo brings the whole thread back.
+1304. **Comment on a region.** More sheet > *Comment on a region* (or the add button of the panel). Drag a rectangle on an empty part of the page with the S Pen: the dialog opens; Add. Cancel and Escape end the drawing without a comment. A tap that is not a drag keeps the drawing armed.
+1305. **Comments panel.** *Comments panel* in the sheet or palette. Expected: every comment with its page, text, device and reply count; *Open*, *Resolved* and *All* filter the list; a row jumps to the region and opens its card (on a phone the panel steps aside).
+1306. **Many comments.** Add five comments close together: the markers are pushed apart in the margin (never on top of each other) and still numbered top to bottom.
+1307. **Zoom and scroll.** Zoom and pan: markers, lines and outlines follow the page; pages out of view draw nothing.
+1308. **Locked page.** Lock the page: markers and cards can still be opened and read; *Comment* is refused with the *Page locked* notice; the card offers no reply, edit, delete or resolve.
+1309. **Read-only and settings.** In read-only mode the panel and cards open but nothing can be changed. *Show comment markers* off hides the markers (the open comment still shows).
+1310. **Saving and an older plugin.** Close and reopen: comments, replies, sketches, resolved state and times are kept. Copy the notebook to a device with 0.17: it opens read-only with the "newer version" message and is not rewritten.
+1311. **Two devices.** On two devices add a different comment and a different reply to the same comment, then sync so a conflicted copy appears; *Merge conflicted copies*: the summary says comments were added and both devices' comments and replies are there. Edit the same comment on both: the later edit wins.
+1312. **Pages.** Duplicate a page, copy a page to another notebook, move one: the comments go with it. Copy a selection that has a comment on it to another page: the comment does not.
+1313. **PDF export.** Turn on *Comments in the PDF export*, export: pages with comments are wider, with the region outlined and the note (author, time, text, replies, sketch) in the strip beside it. With the setting off the PDF is unchanged.
+1314. **Markdown export.** The notebook.md lists each page's comments under its text (numbered like the markers, with replies).
+1315. **Italian, dark and Obsidian theme.** The dialog, card, panel and notices read in Italian; markers, card and panel are readable in light, dark and with *Follow Obsidian theme*.
+1316. **Phone and tablet.** At phone width the card and panel are bottom sheets, markers are at least 24 px (the touch target is larger), the sketch pad takes finger and pen.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Margin comments (#86, format v16): `Page.comments`; v15 to v16 migration (a stray key is dropped, large v15 files still stage), lenient read and strict write, repair (orphan replies, regions outside the page), merge of two devices (both keep theirs, later edit wins), copies, moves, restore, templates, margins shift, lock guard | yes | `tests/model-v16.test.ts` | | | |
+| Comments UI: selection and rectangle entry points, margin markers with lines and outlines, card with flat thread, editor with sketch pad, side panel with filter, settings; one undo step each | yes | harness scenario `comments` (tablet and phone, light and dark), `tests/ui-registry.test.ts` | | | |
+| Exports: PDF margin notes (optional) and Markdown list | yes | `tests/comments-export.test.ts` | | | |
+### 0.18 — a4split: split an infinite page into sheets (steps 1320-1339)
+
+1320. **Offered only when it applies.** Open a notebook with an infinite page, Export. With a PDF or PNG export that includes the infinite page, *Split into sheets* is there; choose *This page* on a normal page, or SVG or Print: it is not.
+1321. **Preview.** Turn it on. The preview shows the page with dashed sheets numbered 1, 2, 3 in reading order; the summary says how many sheets and at what percentage. Change paper, orientation, size, margin, overlap: the preview follows.
+1322. **PDF.** Export. The PDF has one page per sheet at the paper size, in reading order, numbered "1/N" at the bottom; print it on paper and check margins and that nothing is cut off.
+1323. **Cuts between lines.** On a page with many lines of handwriting and a text box, with *Cut between lines* on, no sheet edge goes through a line of writing or the text box; with it off, some do.
+1324. **Overlap.** With an overlap, the bottom strip of a sheet is repeated at the top of the next.
+1325. **100%.** With *100%*, a wide page makes several columns; sheets read left to right, then the next row.
+1326. **Page numbers.** Off: no numbers. PNG: no page-number choice, and one image per sheet (`page-001-part-01.png`…) in the folder; existing files are not replaced.
+1327. **Other pages.** Exporting the whole notebook: ordinary pages are one PDF page each, as before.
+1328. **Empty sheets.** A page with writing at the top and the bottom and nothing between: the empty sheets in between are left out (and counted in the summary); with the switch off they are kept.
+1329. **Tablet.** The dialog scrolls, the preview fits the width, and the choices are easy to reach with the pen.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Split an infinite page into sheets (#178): paper, orientation, scale, margin, overlap, smart cuts, numbers, preview | yes | `tests/export-tiles.test.ts`; harness `a4split-check.ts` | | | split for Print and SVG |
+### 0.18 — linkback: copy a page to another notebook with a link back (steps 1360-1379)
+
+Roadmap #186. Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/design/linkback-*.png`. Use a physics notebook of about 6 pages (one locked) and a smaller revision notebook; keep a copy of the vault first.
+
+1360. **Menu.** In an open notebook the page menu (and the palette) has *Copy to notebook…*; the notebook map's *Select pages* bar has the same button (disabled until a page is ticked). In a read-only notebook it does nothing.
+1361. **Dialog.** The page in view is ticked; tick more pages. Search and pick the revision notebook: its page count shows and *Where the copies go* lists *At the start*, *After page N*… and *At the end* (the end is chosen). *Copy* stays off until a page and a notebook are chosen.
+1362. **Copy.** Copy two pages after page 1: they appear there in their original order, with their ink, backgrounds and bookmarks; the originals are unchanged. Each copy has a small grey link in the top margin: *Copied from Physics p.N*. Tap it (finger, or Ctrl/Cmd+click): the original page opens.
+1363. **Destination open.** Do 1362 with the revision notebook open in another tab: the pages arrive as one undo step there. While you are writing with the pen the operation says it cannot edit right now and nothing changes.
+1364. **Link back (setting).** Tick *Also add “Copied to …” to the original pages* (or turn on *Link on the original when copying a page* in Settings > Integration, which only sets the starting tick): the originals get *Copied to Revision p.N*; tap it and the copy opens. One undo in the physics notebook removes all of them.
+1365. **Locked.** A locked original is not changed: the notice says how many were skipped. Its copy still gets *Copied from…*, and is locked too.
+1366. **Several pages.** From the map, tick four pages: the chips on the copies and the originals show the right numbers (the copies' numbers start where they were inserted).
+1367. **Reordering.** Move a copied page in the revision notebook, then tap *Copied to…* on the original: it still opens the copy (the link carries the page id; the number in the label is the one at copy time).
+1368. **Copying a copy.** Copy a page that already has a chip: the new copy keeps the old chip and gets a second one under it.
+1369. **Failure.** Make the destination unreadable or the vault read-only: the notice says why; the source is unchanged.
+1370. **Look.** Light, dark, *Follow Obsidian theme*, tablet and phone: the dialog fits, targets are at least 40 px, the chip is readable but small and does not cover the paper's first line.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Copy to notebook with a link back (#186): dialog (pages, notebook, place), copy through the 0.17 transfer (`copyPagesInto`), a "Copied from" link chip on each copy written in the same write, an optional "Copied to" chip on the unlocked originals as one undoable edit, page menu, command, map selection bar, setting for the starting tick; no format change | yes | chip text, placement and stacking, pairs, locked skipping (`tests/copy-with-link.test.ts`); harness `doc=linkback` (dialog, run on files, undo) | | the chips are ordinary text boxes: a copy of a page keeps them | not tried on the tablet (steps 1360-1370); no "new notebook" destination (use *Extract pages*); chips are not removed when a copy is deleted |
+
+### 0.18 — qr
+
+1380. **Show the code.** Page menu (page thumbnail or page sheet) > *Show QR code*. A dialog shows a large black-on-white code and *Copy link* / *Done*; the code is square and sharp on the tablet and on a phone, in light and dark.
+1381. **Scan it.** On a phone or second tablet with the same vault, scan the code with the camera: Obsidian opens, the notebook opens at that page (not another).
+1382. **Reorder.** Move the page elsewhere in the notebook, show the code again and scan the old one: it still opens the same page (the link carries the page id).
+1383. **Copy link.** *Copy link* shows "Link copied." and pasting gives an `obsidian://notebook?vault=…` link; opening it on this device focuses the notebook tab at the page.
+1384. **Long path.** A notebook with a very long path (over about 150 characters) shows a message instead of a code; *Copy link* still works.
+1385. **Different vault name.** Scanning on a device where the vault has another name opens nothing wrong: Obsidian says the vault is not found.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Page QR code (#190): dialog, copy link, own encoder (byte mode, level M, v1-10) | yes | encoder, format/version bits and a round trip through a separate decoder (`tests/qr.test.ts`); harness `dev/harness/qr-check.ts` | | | insert the code into the page as a picture |
+### 0.18 — pdfannot
+
+1420. **Header action.** Open a PDF in Obsidian's own viewer: a pen icon (*Annotate in Notebook*) is in the view header. Tap it: a new notebook is made from the PDF and opens.
+1421. **Existing notebook.** Close the notebook, go back to the PDF and tap the icon again: a dialog offers *Open existing (page N)* (with the notebook name) and *New notebook*. *Open existing* focuses that notebook; *New notebook* makes a second one; Cancel does nothing.
+1422. **Viewer page.** Scroll the PDF to page 5 first, then use the action: the notebook (new or existing) opens at page 5 when the viewer's page can be read, otherwise at page 1 (the viewer's internals are not public API).
+1423. **Menus.** Right-click a PDF in the file explorer, and use a PDF tab's *More options* menu: both have *Annotate in Notebook* and behave as above.
+1424. **Command.** With a PDF tab active, the command *Annotate current PDF in Notebook* is available; with any other tab active it is not.
+1425. **Source untouched.** The PDF file's size and modified time do not change; the notebook uses the stored copy in the assets folder.
+1426. **Same file elsewhere.** Copy the PDF to another folder: the dialog still finds the notebook (same content). Edit the PDF in another app (different content): it is a new document and no notebook is offered.
+1427. **Italian and phone.** Switch to Italian: *Annota in Notebook*, *Apri esistente (pagina N)*, *Nuovo quaderno*. On a phone the dialog fits the screen.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Annotate in Notebook from the PDF viewer (O10): header action, menus, command, open existing vs new, viewer page | yes | search and page choice (`tests/annotate-pdf.test.ts`); harness `dev/harness/annotate-check.ts` | | viewer page and header action rely on Obsidian's PDF view internals, best effort | |
+### 0.18 — quicktabs: quick tabs, pages pinned one tap away (steps 1440-1459)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`HARNESS_DOC=quicktabs`): `dev/harness/dist/shots/` (the strip with four tabs and Back, tablet and phone, dark and light).
+
+1440. **Nothing pinned.** A notebook that has no quick tabs shows no strip. Open the page sheet (tap the page number) and *All actions*: *Pin as quick tab* is there, unchecked.
+1441. **Pin.** Tap *Pin as quick tab* on page 2: a slim strip appears under the toolbar with a tab *p. 2*, highlighted because you are on that page. Pin pages 4 and 5 the same way: the tabs are in the order you pinned them.
+1442. **Long press on the page number.** Long press (finger or S Pen) the page number in the toolbar: a one-item menu says *Pin as quick tab* (or *Unpin quick tab* on a pinned page). The sheet does not open after the long press. With a mouse, right click does the same.
+1443. **Jump and Back.** On page 1 tap the tab *p. 4*: the page shows. A *Back* button appears at the left of the strip; tap it: you are on page 1 again and *Back* is gone. Jump with a tab, then scroll by hand back to the page you left: *Back* disappears by itself.
+1444. **Bookmark title.** Give page 3 a bookmark with a title, then pin it: the tab says the title (24 characters at most).
+1445. **Reorder by dragging.** Mouse: press a tab and drag it past another one, release: the order changes and stays after closing and opening the notebook. Finger or S Pen: press and hold a tab until it lifts, drag, release. A finger that moves at once scrolls the strip instead (add 12 tabs to try). Drag never opens the tab.
+1446. **Menu on a tab.** Right click (mouse) or hold and release without moving (finger, pen) on a tab: *Move earlier*, *Move later*, *Unpin quick tab*. Each works; the first tab cannot move earlier.
+1447. **Unpin.** *Unpin quick tab* removes the tab; with no tabs left the strip disappears. The same action on the pinned page (sheet, or long press on the page number) unpins too.
+1448. **Another notebook.** In the lecture notebook run *Pin a page from another notebook…*: choose the formula-sheet notebook, then a page number (a wrong number says the valid range). A tab with a book icon and the label *<notebook> p. N* appears. Tap it: the formula-sheet notebook opens at that page; *Back* is in its strip: tap it to return to the lecture page.
+1449. **A page that is gone.** Pin page 6, then delete page 6 (or pin a page of another notebook and delete that page there). The tab is drawn dashed; tapping it says the page is no longer in the notebook and shows the nearest page by its old number. Unpin it from its menu.
+1450. **Reordered pages.** Pin page 3, then move it to the end with *Move page down* or the page panel: the tab still opens that same page, and a tab without a title now says its new number.
+1451. **Rename.** Rename the formula-sheet notebook in the library: the tab that points at it still opens it.
+1452. **Collapse.** Tap the pin button at the left of the strip: only a small button with the number of tabs (and *Back* if there is one) remains; tap again to expand. Close and reopen the notebook: the strip is as you left it on this device.
+1453. **Phone.** On a phone the strip is tighter and tabs are shorter, long labels end with an ellipsis; nothing overflows the view; the tabs scroll sideways when there are many.
+1454. **Short landscape.** Hold the phone sideways (or open the on-screen keyboard on a tablet in landscape): the strip becomes a narrow column beside the page and the page keeps its height. Back to portrait: the strip returns above the page.
+1455. **Writing is not disturbed.** With the S Pen write across the page with tabs showing: nothing in the strip reacts; the side-button rules (tap: radial menu, drag: eraser) work as before; a stroke that starts beside the strip is ink.
+1456. **Two devices.** On two devices with one vault: pin a page on one; after sync the other shows the tab in the same notebook. Unpin on the second: it disappears on the first. `_meta` holds one `quicktabs-<device>.json` per device and the notebook file was not rewritten by any of it.
+1457. **Read-only and locked.** In a read-only notebook, or on a locked page, *Pin as quick tab* still works (pins are not part of the notebook).
+1458. **Limit.** Pin 12 pages: the 13th says a notebook has at most 12 quick tabs and nothing is added.
+1459. **Italian.** In Italian: *Fissa come scheda rapida*, *Indietro*, *Sposta prima / dopo*, *Rimuovi scheda rapida*, tab *p. N*.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Quick tabs (#227): pin the page in view (page sheet, command, long press on the page number), strip with tabs, tap to jump, Back, collapse, side column on a short view | yes | pure logic (merge, order, resolve) and store: yes; strip: harness (`doc=quicktabs`) | | | |
+| Quick tabs: drag to reorder (mouse at once, touch / pen after a long press), Move earlier / later, Unpin | yes | order logic; harness drives the same store calls | | | drag by finger and S Pen on hardware |
+| Quick tabs to pages of other notebooks (picker, opens the notebook, follows a rename) | yes | store retarget; harness with a recorded opener | | | |
+| Quick tabs storage: per-device `_meta/quicktabs-<device>.json`, latest change wins, tombstones, unknown fields kept, unreadable never overwritten | yes | `tests/quicktabs.test.ts`, `tests/library-check.test.ts` | | | |

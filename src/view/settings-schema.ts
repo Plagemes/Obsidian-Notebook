@@ -20,6 +20,7 @@ import { NAME_TOKEN } from "../storage/companion-path";
 import { defaultLooseSheetPath } from "../library/loose-sheet-logic";
 import { defaultDailyPath } from "../library/daily-logic";
 import { DIM_MAX, DIM_MIN, DIM_STEP } from "./reading-settings";
+import { INSERT_WIDTH_MAX, INSERT_WIDTH_MIN, INSERT_WIDTH_STEP } from "../model/note-insert";
 import { SNAP_STRENGTH_MAX, SNAP_STRENGTH_MIN, SNAP_STRENGTH_STEP } from "../model/snap";
 import { DEFAULT_SETTINGS, type NotebookSettings } from "../settings";
 
@@ -307,6 +308,10 @@ const READING: SettingSpec[] = [
 		control: { type: "dropdown", options: options([["page", "settings.digestGroup.page"], ["colour", "settings.digestGroup.colour"]]) }, keywords: "highlights digest summary evidenziazioni riepilogo colour colore",
 	},
 
+	// 0.18 (#86): margin comments.
+	{ id: "commentMarkers", section: "reading", order: 70, name: "settings.commentMarkers", desc: "settings.commentMarkers.desc", control: { type: "toggle" }, keywords: "comments markers margin review commenti margine revisione" },
+	{ id: "commentsInPdf", section: "reading", order: 71, name: "settings.commentsInPdf", desc: "settings.commentsInPdf.desc", control: { type: "toggle" }, keywords: "comments pdf markdown export margin notes commenti esporta note a margine" },
+
 	// 0.16 (#46): links of PDF pages.
 	{ id: "pdfLinks", section: "reading", order: 45, name: "settings.pdfLinks", desc: "settings.pdfLinks.desc", control: { type: "toggle" }, keywords: "pdf link internal external collegamenti url" },
 ];
@@ -383,6 +388,15 @@ const INTEGRATION: SettingSpec[] = [
 	// 0.17 tasks (#57): "Make task" from a selection.
 	{ id: "tasksNote", section: "integration", order: 33, name: "settings.tasksNote", desc: "settings.tasksNote.desc", control: { type: "text", placeholder: "Tasks.md" }, keywords: "task todo checkbox attivita" },
 	{ id: "taskDueEmoji", section: "integration", order: 34, name: "settings.taskDueEmoji", desc: "settings.taskDueEmoji.desc", control: { type: "toggle" }, keywords: "task due date tasks plugin scadenza" },
+	// 0.18 (#59): "Insert into note" from a selection.
+	{ id: "noteInsertWidth", section: "integration", order: 35, name: "settings.noteInsertWidth", desc: "settings.noteInsertWidth.desc", control: { type: "slider", min: INSERT_WIDTH_MIN, max: INSERT_WIDTH_MAX, step: INSERT_WIDTH_STEP, format: suffix("px") }, keywords: "insert note image width larghezza immagine nota" },
+	{
+		id: "noteInsertBackground", section: "integration", order: 36, name: "settings.noteInsertBackground", desc: "settings.noteInsertBackground.desc", keywords: "insert note image transparent paper sfondo trasparente carta",
+		control: { type: "dropdown", options: options([["transparent", "settings.noteInsertBackground.transparent"], ["paper", "settings.noteInsertBackground.paper"]]) },
+	},
+	{ id: "noteInsertLinkBack", section: "integration", order: 37, name: "settings.noteInsertLinkBack", desc: "settings.noteInsertLinkBack.desc", control: { type: "toggle" }, keywords: "insert note link back page collegamento pagina" },
+	// 0.18 (#186): "Copy to notebook…" can leave a chip on the original page too.
+	{ id: "copyLinkReverse", section: "integration", order: 38, name: "settings.copyLinkReverse", desc: "settings.copyLinkReverse.desc", control: { type: "toggle" }, keywords: "copy page notebook link back chip copia pagina collegamento" },
 ];
 
 const timetableOn: Predicate = (s) => s.timetableOffer;

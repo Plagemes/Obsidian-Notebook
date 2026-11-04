@@ -305,11 +305,31 @@ export function liveCollections(map: CollectionsMap): SavedCollection[] {
 /** A deleted collection is remembered this long (days) in the file that deleted it; after that the entry is dropped when the file is rewritten. */
 export const TOMBSTONE_DAYS = 90;
 
-/** `file` without the tombstones older than `TOMBSTONE_DAYS` at `now`. Live collections and unknown items are never dropped. */
-export function pruneTombstones(file: CollectionsFile, now: number): CollectionsFile {
+/**
+ * `file` without the tombstones older than `TOMBSTONE_DAYS` at `now`. Live collections and unknown items are never dropped. A
+ * tombstone is kept while another device's file still holds a live collection with that id that it does not win over (it
+ * would come back): `others` are the other devices' files, `othersComplete` is false when one could not be read (nothing is pruned then).
+ */
+export function pruneTombstones(file: CollectionsFile, now: number, others: readonly CollectionsFile[] = [], othersComplete = true): CollectionsFile {
 	const limit = now - TOMBSTONE_DAYS * DAY_MS;
-	const items = file.items.filter((i) => !(i.deleted === true && i.at < limit));
+	const stillHeld = (i: StoredCollection): boolean => others.some((f) => f.items.some((o) => o.id === i.id && o.deleted !== true && o.at <= i.at));
+	const items = file.items.filter((i) => !(i.deleted === true && i.at < limit && othersComplete && !stillHeld(i)));
 	return items.length === file.items.length ? file : { ...file, items };
+}
+
+/**
+ * This device's file with the winning state of the ids it holds: a deletion made on another device is written into this file
+ * too (when it is rewritten), so the collection cannot come back from here once the other device forgets its tombstone.
+ */
+export function adoptCollectionWinners(own: CollectionsFile, merged: CollectionsMap): CollectionsFile {
+	let changed = false;
+	const items = own.items.map((i) => {
+		const w = merged.get(i.id);
+		if (!w || w === i || !(w.at > i.at || (w.at === i.at && itemJson(w) !== itemJson(i)))) return i;
+		changed = true;
+		return w;
+	});
+	return changed ? { ...own, items } : own;
 }
 
 export type CollectionOp =
@@ -320,7 +340,8 @@ export type CollectionOp =
  * Applies changes to this device's file. `merged` is what every device's files say now: a written collection takes a time
  * later than both the merged one and this device's own previous one; unknown fields of the merged winner are carried over.
  */
-export function applyCollectionOps(own: CollectionsFile, merged: CollectionsMap, ops: readonly CollectionOp[], now: number): CollectionsFile {
+export function applyCollectionOps(ownFile: CollectionsFile, merged: CollectionsMap, ops: readonly CollectionOp[], now: number): CollectionsFile {
+	const own = adoptCollectionWinners(ownFile, merged);
 	const items = new Map(own.items.map((i) => [i.id, i]));
 	for (const op of ops) {
 		const seen = merged.get(op.id);
