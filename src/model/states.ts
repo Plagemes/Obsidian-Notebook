@@ -193,9 +193,15 @@ export function stateView(page: Page, stateId: string | null = activeState(page)
 /** What a view shows instead of a page's saved state: page id to state id (null: as drawn). Read-only views switch states without saving. */
 export type ShownStates = ReadonlyMap<string, string | null>;
 
-/** The state a page is shown in: the view's choice for it, else the saved `active` (null: as drawn). */
+/**
+ * The state a page is shown in: the view's choice for it, else the saved `active` (null: as drawn). A choice that names a
+ * state the page no longer has (deleted, or undone away) counts as no choice: the saved default shows.
+ */
 export function shownStateId(page: Page, shown?: ShownStates): string | null {
-	if (shown?.has(page.id)) return shown.get(page.id) ?? null;
+	if (shown?.has(page.id)) {
+		const id = shown.get(page.id) ?? null;
+		if (id === null || page.states?.list.some((st) => st.id === id)) return id;
+	}
 	return page.states?.active ?? null;
 }
 
@@ -287,6 +293,28 @@ function pruneEmpty(s: PageStates): PageStates {
 		parts: s.parts.filter((p) => live.has(p.id)),
 		list: s.list.map((st) => ({ ...st, poses: st.poses.filter((p) => live.has(p.part)) })),
 		...(s.active !== undefined ? { active: s.active } : {}),
+	});
+}
+
+/**
+ * The strokes `id` was cut into (an eraser's pieces) take its place in the part that holds it, in the same order; the
+ * table is the same object when no part holds `id`. A cut that left no piece changes nothing (the id stays and is only
+ * dropped when the page is written, so undo of the erase brings the stroke back into its part).
+ */
+export function replaceItem(states: PageStates | undefined, id: string, pieces: readonly string[]): PageStates | undefined {
+	if (!states || pieces.length === 0 || !states.parts.some((p) => p.items.includes(id))) return states;
+	return freeze({
+		parts: states.parts.map((p) => (p.items.includes(id) ? { ...p, pivot: p.pivot, items: p.items.flatMap((x) => (x === id ? pieces : [x])) } : p)),
+		list: states.list, ...(states.active !== undefined ? { active: states.active } : {}),
+	});
+}
+
+/** The table with every part's pivot moved by (`dx`, `dy`): the strokes of the page were moved by the same amount (margins). */
+export function shiftPivots(states: PageStates | undefined, dx: number, dy = 0): PageStates | undefined {
+	if (!states || (dx === 0 && dy === 0) || states.parts.length === 0) return states;
+	return freeze({
+		parts: states.parts.map((p) => ({ ...p, pivot: [round(p.pivot[0] + dx, 2), round(p.pivot[1] + dy, 2)] as [number, number] })),
+		list: states.list, ...(states.active !== undefined ? { active: states.active } : {}),
 	});
 }
 
