@@ -47,8 +47,10 @@ export class SetPageLocked implements Command {
  * A command that the guard lets through on locked pages. Only for a deliberate, confirmed operation whose point is to bring
  * content in (merging a conflicted copy: the ink of the other copy must not be lost because a page was locked).
  */
-export function exemptFromLocks(cmd: Command): Command {
-	return { label: cmd.label, lockExempt: true, apply: (doc) => cmd.apply(doc), revert: (doc) => cmd.revert(doc) };
+export function exemptFromLocks(cmd: Command): Command & { readonly inner: Command } {
+	// `inner` stays a plain field on purpose: the library check and the storage dialog walk the objects of the history (not
+	// closures) for the assets an undone command still names, so an exempt merge on the redo stack must still show them.
+	return { label: cmd.label, lockExempt: true, inner: cmd, apply: (doc) => cmd.apply(doc), revert: (doc) => cmd.revert(doc) };
 }
 
 export function isLocked(page: Page | null | undefined): boolean {
@@ -67,30 +69,42 @@ export function lockedPages(doc: NotebookDocument, pageIds: Iterable<string>): s
 }
 
 interface PageSnap {
+	/** Copies: the stroke and element arrays of a page are edited in place, their items never are. */
 	strokes: readonly Stroke[];
 	elements: readonly PageElement[];
-	/** Everything of the page that is neither ink nor an element nor the lock, tags or position in the document. */
-	shape: string;
 	states: Page["states"];
+	width: number;
+	height: number;
+	paperKind: string;
+	paperSpacing: number;
+	infinite: boolean;
+	/** Replaced as a whole by every command that changes them: compared by reference, and by value only when that differs. */
+	background: Page["background"];
+	margins: Page["margins"];
+	backgroundJson: string | undefined;
+	marginsJson: string | undefined;
 }
 
 /** What the guard remembers of the locked pages before a command. */
 export type LockSnapshot = ReadonlyMap<string, PageSnap>;
 
-function shapeOf(page: Page): string {
-	return JSON.stringify([page.width, page.height, page.paper.kind, page.paper.spacing, page.background ?? null, page.margins ?? null, page.infinite ?? false]);
-}
-
 /**
- * The locked pages of `doc` as they are now, or null when none is locked (the usual case costs nothing). Strokes and
- * elements are immutable objects, so keeping the arrays' contents by reference is enough to see any change.
+ * The locked pages of `doc` as they are now, or null when none is locked (the usual case costs nothing). The item arrays are
+ * copied (they are spliced in place), the items themselves are immutable so a reference is enough; the small shape fields are
+ * kept as plain values (the background and margins also once as text, the only stringify, and only when present).
  */
 export function snapshotLocked(doc: NotebookDocument): LockSnapshot | null {
 	let out: Map<string, PageSnap> | null = null;
 	for (const page of doc.pages) {
 		if (page.locked !== true) continue;
 		out ??= new Map();
-		out.set(page.id, { strokes: [...page.strokes], elements: [...(page.elements ?? [])], shape: shapeOf(page), states: page.states });
+		out.set(page.id, {
+			strokes: page.strokes.slice(), elements: page.elements?.slice() ?? [], states: page.states,
+			width: page.width, height: page.height, paperKind: page.paper.kind, paperSpacing: page.paper.spacing, infinite: page.infinite ?? false,
+			background: page.background, margins: page.margins,
+			backgroundJson: page.background ? JSON.stringify(page.background) : undefined,
+			marginsJson: page.margins ? JSON.stringify(page.margins) : undefined,
+		});
 	}
 	return out;
 }
@@ -101,12 +115,41 @@ function sameItems(a: readonly unknown[], b: readonly unknown[]): boolean {
 	return true;
 }
 
-/** Ids of the pages in `before` whose content is not what it was (changed, or gone). Empty when the command left them alone. */
-export function lockedChanges(doc: NotebookDocument, before: LockSnapshot): string[] {
+/** Same object, or (replaced by an equal one) the same text. */
+function sameValue(now: object | undefined, ref: object | undefined, before: string | undefined): boolean {
+	if (now === ref) return true;
+	if (!now || before === undefined) return false;
+	return JSON.stringify(now) === before;
+}
+
+function unchanged(page: Page, snap: PageSnap): boolean {
+	return (
+		page.states === snap.states && page.width === snap.width && page.height === snap.height && page.paper.kind === snap.paperKind &&
+		page.paper.spacing === snap.paperSpacing && (page.infinite ?? false) === snap.infinite &&
+		sameValue(page.background, snap.background, snap.backgroundJson) && sameValue(page.margins, snap.margins, snap.marginsJson) &&
+		sameItems(page.strokes, snap.strokes) && sameItems(page.elements ?? [], snap.elements)
+	);
+}
+
+/**
+ * Ids of the pages in `before` whose content is not what it was (changed, or gone). Empty when the command left them alone.
+ * One pass over the pages of `doc`. A page that is gone counts as changed (a command that deletes a finished page is an
+ * edit), except with `removalAllowed`: undoing a command removes the pages that command had added (restoring a page from the
+ * trash keeps its lock, and undoing that restore must work), so there a missing page is judged by the command, not the lock.
+ */
+export function lockedChanges(doc: NotebookDocument, before: LockSnapshot, removalAllowed = false): string[] {
 	const hit: string[] = [];
-	for (const [id, snap] of before) {
-		const page = doc.pages.find((p) => p.id === id);
-		if (!page || page.states !== snap.states || shapeOf(page) !== snap.shape || !sameItems(page.strokes, snap.strokes) || !sameItems(page.elements ?? [], snap.elements)) hit.push(id);
+	let seen = 0;
+	for (const page of doc.pages) {
+		const snap = before.get(page.id);
+		if (!snap) continue;
+		seen++;
+		if (!unchanged(page, snap)) hit.push(page.id);
+	}
+	if (seen < before.size && !removalAllowed) {
+		const present = new Set<string>();
+		for (const page of doc.pages) present.add(page.id);
+		for (const id of before.keys()) if (!present.has(id)) hit.push(id);
 	}
 	return hit;
 }

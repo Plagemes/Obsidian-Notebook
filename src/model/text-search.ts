@@ -140,7 +140,8 @@ function replaceCommands(boxes: Array<{ page: Page; element: TextElement; text: 
 }
 
 /**
- * Replaces every match in the notebook as one undo step; null when nothing matches. A text box left with no text is kept
+ * Replaces every match in the notebook as one undo step; null when nothing matches (`boxes` 0 with `lockedBoxes` above 0: every
+ * match is on a locked page, nothing to run). A text box left with no text is kept
  * (the user may be clearing it on purpose; deleting boxes is a different action).
  */
 export function replaceAllCommand(doc: NotebookDocument, query: string, replacement: string, opts: FindOptions = DEFAULT_FIND): { command: Command; replaced: number; boxes: number; lockedBoxes: number } | null {
@@ -164,7 +165,8 @@ export function replaceAllCommand(doc: NotebookDocument, query: string, replacem
 		}
 	}
 	const commands = replaceCommands(boxes);
-	if (commands.length === 0) return null;
+	// Every match is on a locked page: an empty plan (boxes 0) so the panel can say so instead of staying silent. Not to be run.
+	if (commands.length === 0) return lockedBoxes > 0 ? { command: new Batch("Replace all", []), replaced: 0, boxes: 0, lockedBoxes } : null;
 	return { command: new Batch("Replace all", commands), replaced, boxes: commands.length, lockedBoxes };
 }
 

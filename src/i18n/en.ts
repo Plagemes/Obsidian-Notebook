@@ -2824,6 +2824,7 @@ export const en = {
 	"lock.map.lock": "Lock page {n}",
 	"lock.map.unlock": "Unlock page {n}",
 	"lock.replaceSkipped": "{n} text boxes on locked pages were left as they are.",
+	"lock.replaceAllLocked": "All matches are on locked pages.",
 } as const;
 
 export type MessageKey = keyof typeof en;

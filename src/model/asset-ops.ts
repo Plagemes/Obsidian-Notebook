@@ -87,7 +87,10 @@ export function planAssetRepoint(doc: NotebookDocument, fromId: string, to: Asse
 		commands.push(new SetMeta(doc.meta, after));
 	}
 	commands.push(new RemoveAsset(fromId));
-	return new Batch("Replace picture", commands);
+	// Maintenance, not an edit: the same picture in another file (smaller, or a duplicate merged), so a locked page keeps looking
+	// as it did. Exempt from the page-lock guard on purpose (docs/architecture.md); the batch itself carries the flag so the
+	// library check still sees the assets it names while it sits on the undo or redo stack.
+	return new Batch("Replace picture", commands, true);
 }
 
 export type RepointText = { ok: true; text: string | null; changes: number } | { ok: false; message: string };

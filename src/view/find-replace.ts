@@ -212,6 +212,10 @@ export class FindReplaceModal extends Modal {
 		if (!doc || !this.host.canEdit()) return;
 		const plan = replaceAllCommand(doc, this.query, this.replacement, this.opts);
 		if (!plan) return;
+		if (plan.boxes === 0) {
+			showNotice(t("lock.replaceAllLocked"));
+			return;
+		}
 		if (!this.host.run(plan.command)) return;
 		showNotice(t("find.replacedAll", { n: String(plan.replaced), boxes: String(plan.boxes) }) + (plan.lockedBoxes > 0 ? ` ${t("lock.replaceSkipped", { n: String(plan.lockedBoxes) })}` : ""));
 		this.refresh(-1);

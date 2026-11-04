@@ -577,7 +577,8 @@ export class SetPageInfinite implements Command {
 
 /** Several commands undone and redone as one (e.g. one eraser gesture across pages). */
 export class Batch implements Command {
-	constructor(readonly label: string, readonly commands: readonly Command[]) {}
+	/** `lockExempt`: the page-lock guard lets this batch change locked pages (maintenance that keeps what the pages show, see asset-ops). */
+	constructor(readonly label: string, readonly commands: readonly Command[], readonly lockExempt = false) {}
 
 	apply(doc: NotebookDocument): void {
 		for (const c of this.commands) c.apply(doc);
@@ -656,7 +657,8 @@ export class History {
 		if (locks) {
 			// An older edit of a page that has been locked since (a synced change, a lock set later and left on): the undo
 			// is not done and stays on the stack for when the page is unlocked.
-			const hit = lockedChanges(doc, locks);
+			// (A page the undo removes is the command's own add, e.g. a restored locked page: allowed.)
+			const hit = lockedChanges(doc, locks, true);
 			if (hit.length > 0) {
 				cmd.apply(doc);
 				this.undoStack.push(cmd);

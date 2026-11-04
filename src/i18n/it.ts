@@ -2826,4 +2826,5 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"lock.map.lock": "Blocca la pagina {n}",
 	"lock.map.unlock": "Sblocca la pagina {n}",
 	"lock.replaceSkipped": "{n} caselle di testo su pagine bloccate sono rimaste come erano.",
+	"lock.replaceAllLocked": "Tutte le corrispondenze sono su pagine bloccate.",
 };
