@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### quicktabs
+- **Quick tabs (#227).** Pin the pages you keep going back to (the formula sheet during a lecture) and reach them with one tap. *Pin as quick tab* is in the page sheet, the All actions sheet and the command palette, and a long press (touch, pen) or right click on the page number in the toolbar pins or unpins the page in view. A slim strip under the toolbar shows one tab per pin (the bookmark title if the page has one, else *p. N*); tap shows the page, *Back* returns to where you were (also after a jump into another notebook), the current page's tab is highlighted, a tab whose page was deleted is drawn dashed and lands on the nearest page. Reorder by dragging (mouse at once; finger or pen after a long press) or with *Move earlier / later*; *Unpin* removes a tab. *Pin a page from another notebook…* adds a page of, say, a formula-sheet notebook to this notebook's strip: tapping it opens that notebook. The strip collapses to one button with the count (remembered per device), is tighter on a phone and becomes a column beside the page on a short landscape view. At most 12 tabs per notebook.
+- **Where the pins live.** Not in the notebook: the document format is unchanged (still 15). One file per device, `_meta/quicktabs-<device>.json`, merged across devices like the saved collections (the latest change per pin wins, an unpin is a tombstone kept 90 days, unknown fields and entries are kept, a file that cannot be read or is empty is never overwritten and a copy of a damaged one is kept). Pins point to a page id, so they survive moving pages, and follow a renamed notebook. The Library check treats `quicktabs-*.json` like the other `_meta` sidecars. Tests: `tests/quicktabs.test.ts`, `tests/library-check.test.ts`. Harness: `dev/harness/quicktabs-check.ts` (`doc=quicktabs`).
+
 ## 0.17.0 — 2026-11-04
 
 Write on and around the page more freely, and keep a large library in order: sticky notes you can type or write on, magnetic snap with alignment guides, merge, split and extract notebooks, a minimap for big pages, a hover preview of page links, an optional PDF copy next to each notebook, saved collections in the library, and a task made from a selection. The notebook format moves to version 15 (an older plugin opens a v15 file read-only).

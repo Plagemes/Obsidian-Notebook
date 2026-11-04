@@ -256,6 +256,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"page-info": onPage((v, _p, i) => v.openPageInfo(i)),
 	"page-split": onPage((v, _p, i) => v.splitHeavyPage(i)),
 	// 0.16 (#124): lock a finished page. The history refuses every edit of a locked page; these only flip the flag (one undo step).
+	"page-quick-tab": (v) => v.togglePageQuickTab(),
+	"page-quick-tab-other": (v) => v.pinQuickTabFromOther(),
 	"page-lock": onPage((v, p) => void v.setPageLocked(p, true)),
 	"page-unlock": onPage((v, p) => void v.setPageLocked(p, false)),
 	"page-lock-toggle": onPage((v, p) => void v.setPageLocked(p, !p.locked)),

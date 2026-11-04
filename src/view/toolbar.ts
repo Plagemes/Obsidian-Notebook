@@ -5,6 +5,7 @@ import { t, type MessageKey } from "../i18n";
 import { ERASE_FILTER_KINDS, type EraseFilterKind } from "../ink/erase-filter";
 import { DEFAULT_ERASER_SIZE } from "./favourites";
 import { SHAPE_KINDS, type ShapeKind } from "./view-helpers";
+import { attachQuickTabGesture } from "./quick-tabs";
 
 export type ToolName = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "space";
 export type EraserMode = "stroke" | "segment" | "area";
@@ -69,6 +70,8 @@ export interface ToolbarActions {
 	openSheet(anchor: HTMLElement): void;
 	/** Opens (or closes) the page sheet of the page in view under `anchor`. */
 	openPageSheet(anchor: HTMLElement): void;
+	/** 0.18 (#227): long press on the page number: pins the page in view as a quick tab, or unpins it. Absent: no long press. */
+	quickTab?: { pinned(): boolean; toggle(): void };
 }
 
 /** A quick slot: an action of the registry chosen by the layout engine (ui/layout.ts). */
@@ -213,8 +216,10 @@ export class Toolbar {
 
 		const end = actionsRow.createDiv({ cls: "notebook-toolbar-end" });
 		this.pageButton = end.createEl("button", { cls: "notebook-page-indicator", attr: { type: "button", "aria-haspopup": "dialog", "aria-expanded": "false" } });
+		const quick = this.actions.quickTab ? attachQuickTabGesture(this.pageButton, this.actions.quickTab) : null;
 		this.pageButton.addEventListener("click", (e) => {
 			e.preventDefault();
+			if (quick?.justOpened()) return;
 			this.closePopover();
 			this.actions.openPageSheet(this.pageButton);
 		});
