@@ -83,7 +83,8 @@ import { ExportModal, MarkdownExportModal } from "./export-dialog";
 import { exportPdf, runExport, type ExportOptions } from "./export";
 import { ViewDisplay, type DisplayHost } from "./display";
 import { policySettings } from "./input-settings";
-import { NotebookMedia, storeAsset } from "./media";
+import { NotebookMedia, resolveAssetFile, storeAsset } from "./media";
+import { FiguresModal } from "./figures";
 import { HeavyPageBanner } from "./heavy-page-banner";
 import { ViewSyncSafety, type SyncSafetyService } from "./sync-safety";
 import { QuickTabsStrip } from "./quick-tabs";
@@ -1888,6 +1889,49 @@ export class NotebookView extends FileView {
 			},
 			...(options.prepare ? { prepare: options.prepare } : {}),
 		}, request)).open();
+	}
+
+	/** 0.19 (#228): the Figures gallery: every picture and figure cut-out of the section, the notebook or some pages (read-only). */
+	openFigures(): void {
+		const file = this.file;
+		if (!this.shownDoc() || !file) return;
+		const docPages = () => this.shownDoc()?.pages ?? [];
+		new FiguresModal({
+			app: this.app,
+			pages: docPages,
+			assetIds: () => new Set(Object.values(this.shownDoc()?.assets ?? {}).filter((a) => a.kind === "image").map((a) => a.id)),
+			current: () => this.currentPageIndex(),
+			readAsset: (id) => (this.media ? this.media.readAsset(id) : Promise.reject(new Error("no media"))),
+			goTo: (entry) => {
+				const index = docPages().findIndex((p) => p.id === entry.pageId);
+				if (index < 0) return;
+				this.recordArrival(index);
+				if (!this.excerpts?.reveal(index, { x: entry.x, y: entry.y, width: entry.width, height: entry.height })) this.scrollToPage(index);
+			},
+			insertIntoNote: (entry) => {
+				const doc = this.session?.doc;
+				const index = docPages().findIndex((p) => p.id === entry.pageId);
+				const page = doc?.pages[index];
+				const shown = doc ? this.renderPagesOf(doc)[index] : undefined;
+				if (!page || !shown) return;
+				const options = this.exportOptions();
+				void runInsertIntoNote({
+					app: this.app, file, settings: this.host.settings, page: shown, pageNumber: index + 1, media: this.media, kind: "png", exportOptions: options,
+					crop: taskCropRect({ minX: entry.x, minY: entry.y, maxX: entry.x + entry.width, maxY: entry.y + entry.height }, page),
+					render: {
+						...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+						...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+					},
+				});
+			},
+			openOriginal: (entry) => {
+				const asset = this.shownDoc()?.assets?.[entry.asset];
+				const stored = asset ? resolveAssetFile(this.app, asset, this.host.settings.folder) : null;
+				if (!stored) return false;
+				void this.app.workspace.getLeaf("tab").openFile(stored);
+				return true;
+			},
+		}).open();
 	}
 
 	/** 0.18 (O7): the sheet of notes that link to the page in view. */

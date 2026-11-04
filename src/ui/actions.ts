@@ -413,6 +413,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "highlights-digest", label: "digest.menu", icon: "highlighter", group: "share", surfaces: ["sheet", "notebook"], priority: 25, scope: "view", command: "command.highlightsDigest", readOnly: true, keywords: "highlights digest summary note evidenziazioni riepilogo raccolta colours" },
 	// 0.18 mentions (O7): the notes that link to the page in view (and to the notebook as a whole).
 	{ id: "mentions", label: "mentions.menu", icon: "links-coming-in", group: "share", surfaces: ["page", "sheet", "notebook"], priority: 24, scope: "view", command: "command.mentions", readOnly: true, keywords: "mentions backlinks linked notes links menzioni collegamenti note" },
+	// 0.19 (#228): every picture and figure cut-out of the section, the notebook or some pages, in one grid.
+	{ id: "figures", label: "figures.menu", icon: "images", group: "share", surfaces: ["sheet", "notebook"], priority: 23, scope: "view", command: "command.figures", readOnly: true, keywords: "figures photos pictures images crops gallery section immagini foto figure galleria ritagli" },
 	// wave 0.10 (81): the same dialog started on PNG images (a vault folder, a scale, a page range) or on Print (desktop only).
 	{ id: "export-png", label: "export.png.menu", icon: "images", group: "share", surfaces: ["sheet", "notebook"], priority: 27, scope: "view", command: "command.exportPng", readOnly: true, keywords: "png images pictures pages folder scale range esporta immagini" },
 	{ id: "print", label: "export.print.menu", icon: "printer", group: "share", surfaces: ["sheet", "notebook"], priority: 26, scope: "view", command: "command.print", readOnly: true, when: (c) => !!c.canPrint, keywords: "paper printer stampa carta" },
