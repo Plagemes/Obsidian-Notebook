@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-	applyDailyTemplate, dailyNotebookPath, dailyNotePath, dailyTemplatePath, defaultDailyPath, findDatedPage, parseDailyConfig, readDailyConfigFrom, withTodayLink,
+	applyDailyTemplate, dailyNotebookPath, dailyNotePath, dailyTemplatePath, defaultDailyPath, findDatedPage, loadDailyTemplate, parseDailyConfig, readDailyConfigFrom, withTodayLink,
 } from "../src/library/daily-logic";
 import { createDocument } from "../src/model/document";
 import { parse, serializeChecked } from "../src/model/serialize";
@@ -168,6 +168,29 @@ describe("the Daily notes template", () => {
 	it("finds the template file with or without .md", () => {
 		expect(dailyTemplatePath("Templates/Day")).toBe("Templates/Day.md");
 		expect(dailyTemplatePath("Templates/Day.md")).toBe("Templates/Day.md");
+	});
+
+	describe("loading the template like the core plugin", () => {
+		const files = new Map<string, string>([["Templates/Day.md", "# {{title}}"], ["Templates/Empty.md", ""], ["Templates/Pending.md", "   "]]);
+		const host = (links: Record<string, string> = {}) => ({
+			resolveLink: (link: string) => (links[link] !== undefined ? links[link]! : null),
+			byPath: (path: string) => (files.has(path) ? path : null),
+			read: async (path: string) => files.get(path) ?? "",
+			normalize: (p: string) => p,
+		});
+
+		it("resolves a link path (a name without its folder) first, else the path with .md added", async () => {
+			expect(await loadDailyTemplate(host({ Day: "Templates/Day.md" }), "Day")).toBe("# {{title}}");
+			expect(await loadDailyTemplate(host(), "Templates/Day")).toBe("# {{title}}");
+			expect(await loadDailyTemplate(host(), "Templates/Day.md")).toBe("# {{title}}");
+			expect(await loadDailyTemplate(host(), "Templates/Missing")).toBeNull();
+		});
+
+		it("treats an empty or NUL-only template (not downloaded yet) as unreadable, and a failing read too", async () => {
+			expect(await loadDailyTemplate(host(), "Templates/Empty")).toBeNull();
+			expect(await loadDailyTemplate(host(), "Templates/Pending")).toBeNull();
+			expect(await loadDailyTemplate({ ...host(), read: async () => { throw new Error("busy"); } }, "Templates/Day")).toBeNull();
+		});
 	});
 
 	it("keeps the link after the template text", () => {

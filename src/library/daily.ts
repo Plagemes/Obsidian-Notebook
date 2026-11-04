@@ -16,7 +16,7 @@ import { ensureFolder } from "../storage/vault-io";
 import { modalShell, shellButton, shellNote } from "../ui/components/modal-shell";
 import { buildLecturePage } from "../view/lecture-logic";
 import { showNotice } from "../view/notice";
-import { applyDailyTemplate, dailyNotebookPath, dailyNotePath, dailyTemplatePath, findDatedPage, readDailyConfigFrom, withTodayLink, type DailyNoteConfig } from "./daily-logic";
+import { applyDailyTemplate, dailyNotebookPath, dailyNotePath, findDatedPage, loadDailyTemplate, readDailyConfigFrom, withTodayLink, type DailyNoteConfig } from "./daily-logic";
 import { waitForContext, type LooseSheetPlugin } from "./loose-sheet";
 import { notebookBaseName, parentFolder } from "./loose-sheet-logic";
 
@@ -84,11 +84,16 @@ export const DAILY_SETTLE_MS = 1500;
  */
 async function newNoteText(app: App, cfg: DailyNoteConfig, notePath: string, date: Date): Promise<string | null> {
 	if (!cfg.template) return "";
-	const file = app.vault.getFileByPath(normalizePath(dailyTemplatePath(cfg.template)));
-	if (!file) return null;
+	const text = await loadDailyTemplate<TFile>({
+		resolveLink: (link) => app.metadataCache.getFirstLinkpathDest(link, ""),
+		byPath: (path) => app.vault.getFileByPath(path),
+		read: (file) => app.vault.read(file),
+		normalize: normalizePath,
+	}, cfg.template);
+	if (text === null) return null;
 	try {
 		const title = notePath.slice(notePath.lastIndexOf("/") + 1).replace(/\.md$/i, "");
-		return applyDailyTemplate(await app.vault.read(file), title, date, cfg.format, (d, pattern) => moment(d).format(pattern));
+		return applyDailyTemplate(text, title, date, cfg.format, (d, pattern) => moment(d).format(pattern));
 	} catch {
 		return null;
 	}

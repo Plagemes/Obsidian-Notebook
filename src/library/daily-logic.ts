@@ -98,6 +98,31 @@ export function dailyTemplatePath(template: string): string {
 	return template.toLowerCase().endsWith(".md") ? template : `${template}.md`;
 }
 
+/** The ways to reach the Daily notes template file (the vault, in the app). */
+export interface DailyTemplateHost<F> {
+	/** Resolves a link path the way a link does (`metadataCache.getFirstLinkpathDest(link, "")`). */
+	resolveLink(link: string): F | null;
+	byPath(path: string): F | null;
+	read(file: F): Promise<string>;
+	normalize(path: string): string;
+}
+
+/**
+ * The raw text of the Daily notes template, found like the core plugin does (as a link path, so a name without its folder or
+ * its `.md` works), else by path with `.md` added. Null when there is no such file, it cannot be read, or its text is empty
+ * or only NUL characters (a file a sync has not downloaded yet): then no note is made from it.
+ */
+export async function loadDailyTemplate<F>(host: DailyTemplateHost<F>, template: string): Promise<string | null> {
+	try {
+		const file = host.resolveLink(host.normalize(template)) ?? host.byPath(host.normalize(dailyTemplatePath(template))) ?? host.byPath(host.normalize(template));
+		if (!file) return null;
+		const text = await host.read(file);
+		return text.replace(/\u0000/g, "").trim() === "" ? null : text;
+	} catch {
+		return null;
+	}
+}
+
 /**
  * The template with the placeholders the core Daily notes plugin knows filled in: `{{date}}`, `{{time}}`, `{{title}}`
  * (`{{date:FORMAT}}` and `{{time:FORMAT}}` take a moment.js format). `format` turns a date and a pattern into text.
