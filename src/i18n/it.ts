@@ -3021,4 +3021,16 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"digest.append.body": "Esiste già una nota chiamata “{note}” senza sezione del riepilogo. Il riepilogo viene aggiunto in fondo e il resto della nota non cambia. Oppure lascia la nota com'è e scrivi il riepilogo in una nuova.",
 	"digest.append.add": "Aggiungi",
 	"digest.append.new": "Usa una nuova nota",
+	// 0.17 snap
+	"settings.snapMode": "Aggancio e guide",
+	"settings.snapMode.desc": "Attira la selezione su griglia e guide. Tieni un dito premuto per muoverti liberamente.",
+	"settings.snapMode.off": "Spento",
+	"settings.snapMode.grid": "Griglia del foglio",
+	"settings.snapMode.guides": "Guide",
+	"settings.snapMode.both": "Griglia e guide",
+	"settings.snapStrength": "Forza dell'aggancio",
+	"settings.snapStrength.desc": "Quanto vicino a una linea, in pixel, deve arrivare la selezione prima di esservi attirata.",
+	"snap.toggle": "Aggancio",
+	"snap.on": "Aggancio attivo",
+	"snap.paused": "Aggancio in pausa per questo quaderno",
 };

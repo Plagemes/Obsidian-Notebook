@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### snap
+- **Magnetic snap and alignment guides (#71).** While a selection (ink, a picture, a text box, a shape) is moved or scaled with the handles, it is pulled onto the paper grid (grid, dotted, millimetre paper every 5 mm, ruled paper vertically) and onto alignment lines: the edges and centres of the other items of the page (pictures, text boxes, and written words or drawings taken as one item), the page centre and edges, the margins of a PDF page and the margin line of ruled paper. Thin coloured guides (pink for items, teal for the page and margins, a faint blue for the grid) are drawn on the live layer only during the drag and run from the selection to the item it lines up with. A guide beats the grid on the same axis. Rotation is never snapped; neither is a selection that spans several pages. Settings (Writing): *Snap and guides* (Grid and guides by default, Paper grid, Guides, Off) and *Snap strength* (3-20 px, 8 by default). A temporary way out: hold a second finger on the screen while dragging (with the pen, one finger; with a finger, a second one; wide palm contacts do not count), hold Alt, or turn *Snap* off in the selection bar (it stays off for that notebook view). No change to the notebook format; the stroke engine and the input files are untouched. Pure logic in `src/model/snap.ts` (targets, grid, move and scale snapping, guides), glue in `src/view/snap-glue.ts`, the finger/Alt bookkeeping in `src/view/snap-hold.ts`. Tests: `tests/snap.test.ts`, `tests/snap-glue.test.ts`. Harness: `dev/harness/snap-check.ts` (`doc=snap`).
+
 ## 0.16.0 — 2026-11-04
 
 Finish a page, work with PDFs, and get material in and out faster: lock a finished page, copy text from a PDF with its outline and links, move a selection to another page, import many files at once, present a notebook full screen with a laser pointer, collect highlights into a note, and pick up files shared from other Android apps. **The document format is now v14** (optional page lock): a 0.15 device opens a v14 notebook read-only (newer version) and never overwrites it. **Not verified on the device**: unit tests and the browser harness only.

@@ -37,6 +37,7 @@ import { checkMovesel } from "./movesel-check";
 import { checkPresent } from "./present-check";
 
 import { checkLock } from "./lock-check";
+import { checkSnap } from "./snap-check";
 import { checkHeader } from "./header-check";
 import { checkChrome, chromeState, type ChromeState } from "./ds-notebook-check";
 import { checkExcerpt } from "./excerpt-check";
@@ -270,7 +271,7 @@ async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	leaf = new WorkspaceLeaf(app, root);
 	view = new NotebookView(asLeaf(leaf), { settings: settings(), practice: doc === "practice" ? practiceService : undefined, lectureClassFor: doc === "lecture" ? () => lectureStub.cls : undefined, nav: harnessNav, statusChanged: (v) => harnessStatusBar.update(v.statusSnapshot()) });
 	await view.onOpen();
-	const path = doc === "new" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" || doc === "lock" ? "Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "nbmap" || doc === "movesel" || doc === "present" ? "Notebooks/Outline.notebook" : doc === "digest" ? "Notebooks/Digest.notebook" : doc === "pdftext" ? "Notebooks/PdfText.notebook" : "Notebooks/Old v3.notebook";
+	const path = doc === "new" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" || doc === "lock" || doc === "snap" ? "Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "nbmap" || doc === "movesel" || doc === "present" ? "Notebooks/Outline.notebook" : doc === "digest" ? "Notebooks/Digest.notebook" : doc === "pdftext" ? "Notebooks/PdfText.notebook" : "Notebooks/Old v3.notebook";
 	const file = app.vault.getFileByPath(path)!;
 	await (view as unknown as HarnessView).loadFile(file);
 	view.onResize();
@@ -2113,6 +2114,8 @@ harnessApi.checkInbox = async () => {
 		return { ok: false, results: [], errors: [`inbox check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} };
 	}
 };
+// 0.17 snap (#71): its own check (dev/harness/snap-check.ts).
+harnessApi.checkSnap = () => checkSnap({ view, stage, penStroke, setTool, frames, errors, notices });
 harnessApi.inboxShot = (state: "list" | "close") => inboxShot(state);
 harnessApi.checkLayout = checkLayout; // 0.14 layout
 harnessApi.home2State = (state: string) => (libraryHarness ? home2State(libraryHarness, state) : false);

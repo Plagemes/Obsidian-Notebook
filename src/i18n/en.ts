@@ -3019,6 +3019,18 @@ export const en = {
 	"digest.append.body": "A note named “{note}” already exists and has no digest section. The digest is added at its end and nothing else in the note is changed. Or keep the note as it is and write the digest in a new one.",
 	"digest.append.add": "Add to it",
 	"digest.append.new": "Use a new note",
+	// 0.17 snap
+	"settings.snapMode": "Snap and guides",
+	"settings.snapMode.desc": "Moves snap to the paper grid and alignment guides. A finger held down moves freely.",
+	"settings.snapMode.off": "Off",
+	"settings.snapMode.grid": "Paper grid",
+	"settings.snapMode.guides": "Guides",
+	"settings.snapMode.both": "Grid and guides",
+	"settings.snapStrength": "Snap strength",
+	"settings.snapStrength.desc": "How close to a line, in pixels, the selection has to come before it is pulled onto it.",
+	"snap.toggle": "Snap",
+	"snap.on": "Snap is on",
+	"snap.paused": "Snap is paused for this notebook",
 } as const;
 
 export type MessageKey = keyof typeof en;
