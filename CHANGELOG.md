@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### pdfannot
+- **Annotate in Notebook from Obsidian's PDF viewer (O10).** A pen icon in the header of every PDF view, the PDF's tab / "more options" menu and file explorer menu entry, and the command *Annotate current PDF in Notebook* all do the same: if a notebook already has pages on this PDF (found by the PDF's content hash, the asset id the import stores) a dialog offers *Open existing (page N)* or *New notebook*; otherwise the single-PDF import makes a new notebook (same asset storage, same page-size reading). The notebook opens at the page the PDF viewer shows when that can be read (best effort, else page 1). The source PDF is only read. No format change. Pure search logic in `src/library/annotate-pdf-logic.ts`, glue in `src/library/annotate-pdf.ts`. Tests: `tests/annotate-pdf.test.ts`. Harness: `dev/harness/annotate-check.ts` (`doc=annotate`).
+
 ## 0.17.0 — 2026-11-04
 
 Write on and around the page more freely, and keep a large library in order: sticky notes you can type or write on, magnetic snap with alignment guides, merge, split and extract notebooks, a minimap for big pages, a hover preview of page links, an optional PDF copy next to each notebook, saved collections in the library, and a task made from a selection. The notebook format moves to version 15 (an older plugin opens a v15 file read-only).

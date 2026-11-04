@@ -441,6 +441,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	external("restore-version", "command.restore", "history", "integration", "integration/index.ts"),
 	// wave 0.8 (388): lists the old #pN links of the notes, then rewrites the ones the user accepts.
 	external("update-page-links", "command.updateLinks", "link-2", "integration", "integration/index.ts", ["notebook", "palette"]),
+	// 0.18 pdfannot (O10)
+	external("annotate-current-pdf", "command.annotatePdf", "pen-line", "integration", "library/annotate-pdf.ts"),
 	external("edit-tags", "command.editTags", "tags", "integration", "integration/tags.ts", ["notebook", "palette"]),
 	external("companion-update-all", "command.companionUpdateAll", "refresh-cw", "integration", "integration/companion.ts"),
 	external("companion-open", "command.companionOpen", "file-text", "integration", "integration/companion.ts"),

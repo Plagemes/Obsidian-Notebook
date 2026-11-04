@@ -206,6 +206,13 @@ export const it: Partial<Record<MessageKey, string>> = {
 	// --- main wave 2 ---
 	"command.library": "Apri la libreria",
 	"command.importPdf": "Importa PDF come quaderno",
+	// 0.18 pdfannot
+	"command.annotatePdf": "Annota il PDF corrente in Notebook",
+	"annotatePdf.title": "Annota in Notebook",
+	"annotatePdf.subtitle": "Un quaderno annota già questo PDF",
+	"annotatePdf.open": "Apri esistente (pagina {page})",
+	"annotatePdf.new": "Nuovo quaderno",
+	"annotatePdf.note": "Il PDF in sé non viene mai modificato.",
 	"import.working": "Importazione di “{name}”…",
 	"import.failed": "Impossibile importare il PDF: {error}",
 	"import.empty": "Il PDF non ha pagine.",

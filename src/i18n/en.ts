@@ -204,6 +204,13 @@ export const en = {
 	// --- main wave 2 ---
 	"command.library": "Open library",
 	"command.importPdf": "Import PDF as notebook",
+	// 0.18 pdfannot
+	"command.annotatePdf": "Annotate current PDF in Notebook",
+	"annotatePdf.title": "Annotate in Notebook",
+	"annotatePdf.subtitle": "A notebook already annotates this PDF",
+	"annotatePdf.open": "Open existing (page {page})",
+	"annotatePdf.new": "New notebook",
+	"annotatePdf.note": "The PDF itself is never changed.",
 	"import.working": "Importing “{name}”…",
 	"import.failed": "Could not import the PDF: {error}",
 	"import.empty": "The PDF has no pages.",
