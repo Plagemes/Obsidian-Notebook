@@ -445,6 +445,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	// wave 0.10: clipboard and stamps (356 date and time stamp, 362 clipboard shared between devices)
 	{ id: "insert-date-stamp", label: "datestamp.action", icon: "calendar-clock", group: "insert", surfaces: ["sheet"], priority: 48, scope: "view", command: "datestamp.command", keywords: "date time stamp timestamp clock now data ora" },
 	{ id: "selection-copy-devices", label: "clipshare.copy", icon: "monitor-smartphone", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 48, scope: "view", command: true, when: hasSelection, keywords: "clipboard tablet phone sync share vault appunti" },
+	// 0.16 (78): move the selection to another page (one undo step), or copy it there.
+	{ id: "selection-move-page", label: "movePage.move", icon: "arrow-right-to-line", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 43, scope: "view", command: true, when: hasSelection, keywords: "move send page another sposta pagina selezione" },
+	{ id: "selection-copy-page", label: "movePage.copy", icon: "copy", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 42, scope: "view", command: true, when: hasSelection, keywords: "copy duplicate page another copia pagina selezione" },
 	{ id: "selection-paste-device", label: "clipshare.paste", icon: "monitor-down", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection", "lasso"], priority: 47, scope: "view", command: true, when: (c) => c.tool === "lasso" || hasSelection(c), keywords: "clipboard tablet phone sync share vault appunti" },
 
 	// --- status banners (wave 0.7): their buttons, listed so that every visible control has a documented place.
