@@ -92,6 +92,8 @@ export interface LibraryHost {
 	scanToNotebook?(folder: string): void;
 	/** Opens the loose sheet (quick notes), creating it the first time. */
 	openLooseSheet?(): void;
+	/** 0.15 (O12): a dated page in the daily notebook, made the first time (Home's "Today's page"). */
+	todaysPage?(): void;
 	/** Class in progress according to the timetable (wave 0.6), for the "Now: <course>" shortcut. */
 	nowClass?(): { course: string; room?: string } | null;
 	openNowClass?(): void;
@@ -1915,6 +1917,7 @@ export class LibraryView extends ItemView {
 			{ icon: "file-up", ...compact(paletteColor("Pink")), title: t("home.quick.importPdf"), description: t("home.quick.importPdf.desc"), key: "quick:import-pdf", onRun: () => this.host.importPdf(root) },
 		];
 		if (this.host.scanToNotebook) quick.push({ icon: "scan", ...compact(paletteColor("Teal")), title: t("home.quick.scan"), description: t("home.quick.scan.desc"), key: "quick:scan", onRun: () => this.host.scanToNotebook?.(root) });
+		if (this.host.todaysPage) quick.push({ icon: "calendar-plus", ...compact(paletteColor("Green")), title: t("home.quick.today"), description: t("home.quick.today.desc"), key: "quick:todays-page", onRun: () => this.host.todaysPage?.() });
 		const fit = this.mode === "wide" ? DASH_SUBJECTS_WIDE : this.mode === "medium" ? DASH_SUBJECTS_MEDIUM : DASH_SUBJECTS_PHONE;
 		renderHome(el, {
 			dynamic: DYNAMIC_IDS.filter((id) => this.dynamicSections()[id].length > 0).map((id) => ({

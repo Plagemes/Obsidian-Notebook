@@ -18,6 +18,7 @@ import { SPACE_PT_MAX, SPACE_PT_MIN } from "../ink/gestures/settings";
 import { TRASH_RETENTION_MAX_DAYS } from "../storage/trash-settings";
 import { NAME_TOKEN } from "../storage/companion-path";
 import { defaultLooseSheetPath } from "../library/loose-sheet-logic";
+import { defaultDailyPath } from "../library/daily-logic";
 import { DIM_MAX, DIM_MIN, DIM_STEP } from "./reading-settings";
 import { DEFAULT_SETTINGS, type NotebookSettings } from "../settings";
 
@@ -323,6 +324,10 @@ const INTEGRATION: SettingSpec[] = [
 		id: "companionUpdateAll", section: "integration", order: 24, name: "settings.companionUpdateAll", desc: "settings.companionUpdateAll.desc",
 		control: { type: "action", run: "companion-update-all", button: "settings.companionUpdateAll.button" }, parent: "companionNotes", visible: companionOn,
 	},
+	// 0.15 daily (O12): "Today's page" and its link from the daily note.
+	{ id: "dailyNotebookPath", section: "integration", order: 30, name: "settings.dailyNotebook", desc: "settings.dailyNotebook.desc", control: { type: "text", placeholder: defaultDailyPath(DEFAULT_SETTINGS.folder) }, keywords: "daily journal today diario oggi" },
+	{ id: "dailyLink", section: "integration", order: 31, name: "settings.dailyLink", desc: "settings.dailyLink.desc", control: { type: "toggle" }, keywords: "daily notes periodic notes journal diario" },
+	{ id: "dailyCreateNote", section: "integration", order: 32, name: "settings.dailyCreateNote", desc: "settings.dailyCreateNote.desc", control: { type: "toggle" }, parent: "dailyLink", visible: (s) => s.dailyLink },
 ];
 
 const timetableOn: Predicate = (s) => s.timetableOffer;

@@ -80,6 +80,12 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	eraserSize: number;
 	/** Vault path of the loose sheet (quick notes) notebook; empty = `<notebooks folder>/Quick notes.notebook`. */
 	looseSheetPath: string;
+	/** 0.15 (O12): vault path of the daily notebook ("Today's page"); empty = `<notebooks folder>/Daily.notebook`. */
+	dailyNotebookPath: string;
+	/** 0.15 (O12): "Today's page" also adds a link to the page in today's daily note (Daily notes or Periodic Notes). */
+	dailyLink: boolean;
+	/** 0.15 (O12): create today's daily note when it does not exist yet (only used with `dailyLink`). */
+	dailyCreateNote: boolean;
 	// wave p1a: input
 	/** Edge rejection: touches that start within `edgeRejectionPx` of a selected edge of the page area are ignored. */
 	edgeRejection: boolean;
@@ -226,6 +232,9 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	penSetNotebooks: {},
 	eraserSize: DEFAULT_ERASER_SIZE,
 	looseSheetPath: "",
+	dailyNotebookPath: "",
+	dailyLink: false,
+	dailyCreateNote: false,
 	edgeRejection: false,
 	edgeRejectionPx: 24,
 	edgeLeft: true,
@@ -321,6 +330,9 @@ export function readSettings(data: unknown): NotebookSettings {
 	s.penSetNotebooks = normaliseAssignments(d.penSetNotebooks, MAX_NOTEBOOK_ASSIGNMENTS);
 	s.eraserSize = normaliseEraserSize(d.eraserSize);
 	if (typeof d.looseSheetPath === "string") s.looseSheetPath = d.looseSheetPath.trim();
+	if (typeof d.dailyNotebookPath === "string") s.dailyNotebookPath = d.dailyNotebookPath.trim();
+	if (typeof d.dailyLink === "boolean") s.dailyLink = d.dailyLink;
+	if (typeof d.dailyCreateNote === "boolean") s.dailyCreateNote = d.dailyCreateNote;
 	if (typeof d.edgeRejection === "boolean") s.edgeRejection = d.edgeRejection;
 	if (typeof d.edgeRejectionPx === "number" && d.edgeRejectionPx >= EDGE_WIDTH_MIN && d.edgeRejectionPx <= EDGE_WIDTH_MAX) s.edgeRejectionPx = d.edgeRejectionPx;
 	if (typeof d.edgeLeft === "boolean") s.edgeLeft = d.edgeLeft;
