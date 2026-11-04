@@ -3021,4 +3021,22 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"digest.append.body": "Esiste già una nota chiamata “{note}” senza sezione del riepilogo. Il riepilogo viene aggiunto in fondo e il resto della nota non cambia. Oppure lascia la nota com'è e scrivi il riepilogo in una nuova.",
 	"digest.append.add": "Aggiungi",
 	"digest.append.new": "Usa una nuova nota",
+
+	// 0.17 sticky
+	"sticky.insert": "Nota adesiva",
+	"sticky.command.insert": "Inserisci nota adesiva",
+	"sticky.edit": "Modifica nota",
+	"sticky.collapse": "Comprimi nota",
+	"sticky.expand": "Apri nota",
+	"sticky.title": "Nota adesiva",
+	"sticky.subtitle": "Scrivi qui, oppure scrivi a mano sulla nota con la penna.",
+	"sticky.text": "Testo",
+	"sticky.textPlaceholder": "Scrivi una nota…",
+	"sticky.colour": "Colore",
+	"sticky.size": "Dimensione del testo",
+	"sticky.size.smaller": "Testo più piccolo",
+	"sticky.size.larger": "Testo più grande",
+	"sticky.size.value": "{n} pt",
+	"sticky.done": "Fatto",
+	"sticky.cancel": "Annulla",
 };

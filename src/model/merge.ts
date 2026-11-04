@@ -116,6 +116,12 @@ export function elementContentKey(e: PageElement): string {
 		void _a;
 		return stableStringify(ex);
 	}
+	// v15: a note's list of hidden strokes names ids of one copy: the notes are the same when what they show is the same.
+	if (rest.type === "sticky") {
+		const { ink: _i, ...note } = rest;
+		void _i;
+		return stableStringify(note);
+	}
 	if (rest.type === "equation") {
 		const { outline: _o, ...eq } = rest;
 		void _o;
@@ -166,7 +172,7 @@ function fitOnPage(target: Page, copy: Page, fresh: { strokes: readonly Stroke[]
 		}
 	}
 	for (const e of fresh.elements) {
-		if (e.type === "marker" || e.type === "box" || e.type === "equation" || e.type === "graph" || e.type === "excerpt") {
+		if (e.type === "marker" || e.type === "box" || e.type === "equation" || e.type === "graph" || e.type === "excerpt" || e.type === "sticky") {
 			const b = e.type === "marker" ? markerBounds(e) : e.type === "box" ? boxBounds(e) : { minX: e.x, maxX: e.x + e.width, maxY: e.y + e.height };
 			minX = Math.min(minX, b.minX);
 			maxX = Math.max(maxX, b.maxX);
@@ -218,6 +224,16 @@ function copyStroke(s: Stroke, id: string, slide?: string | null): Stroke {
 
 function copyElement(e: PageElement, id: string): PageElement {
 	return freezeElement({ ...e, id });
+}
+
+/** v15: a collapsed note of the copy names its hidden strokes by the ids they have in the main notebook (the ones that did not come along are dropped). */
+function carriedInk(e: PageElement, strokeMap: ReadonlyMap<string, string>): PageElement {
+	if (e.type !== "sticky" || !e.ink) return e;
+	const ink = [...new Set(e.ink.map((id) => strokeMap.get(id)).filter((id): id is string => id !== undefined))];
+	const out = { ...e };
+	if (ink.length > 0) out.ink = ink;
+	else delete out.ink;
+	return freezeElement(out);
 }
 
 /** The changes that bring everything of `other` into `main`. Does not modify either document. */
@@ -385,7 +401,7 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 					resolveFrom(e, key);
 					continue;
 				}
-				const el = d.kind === "keep" ? e : copyElement(e, d.id);
+				const el = carriedInk(d.kind === "keep" ? e : copyElement(e, d.id), strokeMap);
 				commands.push(new AddElement(page.id, el, elAt++));
 				keys.add(key);
 			}
@@ -422,7 +438,7 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 			const key = `e${elementContentKey(e)}`;
 			const d = decide(e.id, key, page.id, "element");
 			if (d.kind === "skip") continue;
-			elements.push(d.kind === "keep" ? e : copyElement(e, d.id));
+			elements.push(carriedInk(d.kind === "keep" ? e : copyElement(e, d.id), strokeMap));
 			keys.add(key);
 		}
 		const added: Page = { id: page.id, width: page.width, height: page.height, paper: { ...page.paper }, strokes };

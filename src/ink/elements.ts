@@ -1,5 +1,6 @@
 import { boxBounds, markerBounds, MARKER_BADGE } from "../model/markers";
-import type { BoxElement, EquationElement, ExcerptElement, GraphElement, ImageElement, MarkerElement, PageElement, TextElement } from "../model/types";
+import type { BoxElement, EquationElement, ExcerptElement, GraphElement, ImageElement, MarkerElement, PageElement, StickyElement, TextElement } from "../model/types";
+import { STICKY_MAX_FONT, STICKY_MAX_SIZE, STICKY_MIN_FONT, STICKY_MIN_SIZE, stickyBounds } from "../model/sticky";
 import { scaleOutline } from "../math/outline";
 import { EQUATION_OUTLINE_MAX, GRAPH_MAX_SIDE } from "../model/math-elements";
 import { MAX_FONT_SIZE } from "../model/serialize";
@@ -31,6 +32,8 @@ export function elementBounds(el: PageElement, measure: MeasureText = estimateMe
 	if (el.type === "box") return boxBounds(el);
 	if (el.type === "equation") return equationBounds(el);
 	if (el.type === "graph" || el.type === "excerpt") return { minX: el.x, minY: el.y, maxX: el.x + el.width, maxY: el.y + el.height };
+	// v15: a note is its box; a collapsed one is its icon (the ink it keeps hidden is not part of what can be hit or selected).
+	if (el.type === "sticky") return stickyBounds(el);
 	const c = imageCorners(el);
 	const xs = c.map((p) => p[0]);
 	const ys = c.map((p) => p[1]);
@@ -38,7 +41,7 @@ export function elementBounds(el: PageElement, measure: MeasureText = estimateMe
 }
 
 function hits(el: PageElement, x: number, y: number, tolerance: number, measure: MeasureText): boolean {
-	if (el.type === "marker" || el.type === "box" || el.type === "equation" || el.type === "graph" || el.type === "excerpt") {
+	if (el.type === "marker" || el.type === "box" || el.type === "equation" || el.type === "graph" || el.type === "excerpt" || el.type === "sticky") {
 		const b = elementBounds(el, measure);
 		return x >= b.minX - tolerance && x <= b.maxX + tolerance && y >= b.minY - tolerance && y <= b.maxY + tolerance;
 	}
@@ -185,6 +188,19 @@ function transformExcerpt(el: ExcerptElement, m: Matrix): ExcerptElement {
 	return { ...el, x: round2(cx - width / 2), y: round2(cy - height / 2), width, height };
 }
 
+/**
+ * v15 sticky note: like a box it never rotates (its frame follows the transform), and its text size follows the scale, so what
+ * is written on it keeps its place. A note never gets smaller or larger than the format allows; ink written on it follows
+ * the same matrix (ink/attach.ts).
+ */
+function transformSticky(el: StickyElement, m: Matrix): StickyElement {
+	const r = mappedRect(el.x, el.y, el.width, el.height, m);
+	const k = scaleFactor(m);
+	const clamp = (v: number) => Math.min(STICKY_MAX_SIZE, Math.max(STICKY_MIN_SIZE, v));
+	const fontSize = Math.min(STICKY_MAX_FONT, Math.max(STICKY_MIN_FONT, round2(el.fontSize * k)));
+	return { ...el, x: r.x, y: r.y, width: clamp(r.width), height: clamp(r.height), fontSize };
+}
+
 /** New element moved/scaled/rotated by `m` (elements are immutable). Text scales font size and width uniformly. */
 export function transformElement(el: PageElement, m: Matrix, measure: MeasureText = estimateMeasure): PageElement {
 	if (el.type === "marker") return transformMarker(el, m);
@@ -192,5 +208,6 @@ export function transformElement(el: PageElement, m: Matrix, measure: MeasureTex
 	if (el.type === "equation") return transformEquation(el, m);
 	if (el.type === "graph") return transformGraph(el, m);
 	if (el.type === "excerpt") return transformExcerpt(el, m);
+	if (el.type === "sticky") return transformSticky(el, m);
 	return el.type === "text" ? transformText(el, m, measure) : transformImage(el, m);
 }

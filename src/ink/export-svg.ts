@@ -1,10 +1,12 @@
 import { BOX_LABEL_HEIGHT, MARKER_BADGE, markerRegion } from "../model/markers";
-import type { BoxElement, EquationElement, MarkerElement, Page, TextElement } from "../model/types";
+import type { BoxElement, EquationElement, MarkerElement, Page, StickyElement, TextElement } from "../model/types";
 import { EQUATION_NUMBER_GAP, equationNumberLabel, equationNumbers } from "../model/math-elements";
 import { graphScene, GRAPH_STYLE, type GraphScene } from "../math/graph-scene";
 import type { Polygon } from "../math/outline";
 import { equationOutline } from "./math-render";
 import { boundGraphId } from "./attach";
+import { hiddenStickyInk, stickyColours } from "../model/sticky";
+import { stickyShapes, stickyTextBox } from "./sticky-render";
 import type { BBox } from "./hit-test";
 import { BOX_COLORS, badgeColor, badgeFace, badgeIsSquare, boxLabelWidth, checkPoints, defaultBoxLabel, glyphSize, starPoints, type BoxLabel } from "./marker-render";
 import { layerFlags, type ExportLayers } from "./export-layers";
@@ -136,6 +138,9 @@ export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 	}
 	const boxLabel = options.boxLabel ?? ((b: BoxElement) => defaultBoxLabel(b));
 	for (const el of page.elements ?? []) if (el.type === "box") out.push(boxTag(el, boxLabel(el)));
+	// v15 sticky notes: between the boxes and the equations, as on screen. The ink a collapsed note keeps hidden is left out.
+	for (const el of page.elements ?? []) if (el.type === "sticky") out.push(stickyTag(el));
+	const noteInk = hiddenStickyInk(page.elements);
 	const numbers = options.equationNumbers ?? equationNumbers([page]);
 	const outlineOf = options.equationOutline ?? equationOutline;
 	for (const el of page.elements ?? []) if (el.type === "equation") out.push(equationTag(el, numbers.get(el.id), outlineOf(el)));
@@ -147,7 +152,7 @@ export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 	}
 
 	for (const stroke of page.strokes) {
-		if (stroke.hidden && !options.hiddenInk) continue;
+		if ((stroke.hidden && !options.hiddenInk) || noteInk?.has(stroke.id)) continue;
 		const d = strokeSvgPath(stroke);
 		if (!d) continue;
 		const fill = escapeAttr(stroke.color);
@@ -296,6 +301,28 @@ function stripInvalidXml(text: string): string {
 		if (c >= 32 || c === 9 || c === 10 || c === 13) out += ch;
 	}
 	return out;
+}
+
+/** v15 sticky note: its shapes, then the typed text (wrapped by character count, clipped to the note's text box). */
+function stickyTag(el: StickyElement): string {
+	const parts: string[] = [`<g>`];
+	for (const s of stickyShapes(el)) {
+		const opacity = s.alpha < 1 ? ` fill-opacity="${s.alpha}"` : "";
+		if (s.kind === "rect") parts.push(`<rect x="${num(s.x)}" y="${num(s.y)}" width="${num(s.width)}" height="${num(s.height)}" fill="${s.fill}"${opacity}/>`);
+		else parts.push(`<polygon points="${pointsAttr(s.points)}" fill="${s.fill}"${opacity}/>`);
+	}
+	if (!el.collapsed && el.text) {
+		const box = stickyTextBox(el);
+		const size = el.fontSize;
+		const maxChars = Math.max(1, Math.floor(box.width / (size * AVG_CHAR_WIDTH)));
+		const lines = wrapByChars(stripInvalidXml(el.text), maxChars);
+		const tspans = lines.map((line, i) => `<tspan x="${num(box.x)}" dy="${i === 0 ? 0 : num(size * TEXT_LINE_HEIGHT)}">${escapeAttr(line)}</tspan>`);
+		const id = `nb-sticky-${escapeAttr(el.id)}`;
+		parts.push(`<clipPath id="${id}"><rect x="${num(box.x)}" y="${num(box.y)}" width="${num(box.width)}" height="${num(box.height)}"/></clipPath>`);
+		parts.push(`<text clip-path="url(#${id})" x="${num(box.x)}" y="${num(box.y + size * TEXT_BASELINE)}" font-family="Helvetica, Arial, sans-serif" font-size="${num(size)}" fill="${stickyColours(el.color).text}">${tspans.join("")}</text>`);
+	}
+	parts.push(`</g>`);
+	return parts.join("");
 }
 
 function textTag(el: TextElement): string {

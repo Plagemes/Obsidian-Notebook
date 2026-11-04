@@ -4,6 +4,7 @@ import { elementAssetId, withElementAsset } from "../model/excerpts";
 import { copyStroke as copyStrokeWithId } from "../model/pages";
 import { freezeElement, freezeStroke } from "../model/serialize";
 import type { Asset, Page, PageElement, Stroke } from "../model/types";
+import { remapStickyInk } from "../model/sticky";
 import { boundGraphId, BOUND_SEPARATOR } from "./attach";
 import { elementBounds, transformElement } from "./elements";
 import { strokeBounds, type BBox } from "./hit-test";
@@ -91,12 +92,16 @@ export function instantiateClip(
 		if (e.type === "graph") newIds.set(e.id, id);
 		return freezeElement({ ...base, id });
 	});
+	const strokeIds = new Map<string, string>();
 	const strokes = clip.strokes.map((s) => {
 		const graph = boundGraphId(s);
 		const owner = graph === null ? undefined : newIds.get(graph);
-		return freezeStroke({ ...transformStroke(s, m), id: owner === undefined ? createId() : `${owner}${BOUND_SEPARATOR}${createId()}` });
+		const stroke = freezeStroke({ ...transformStroke(s, m), id: owner === undefined ? createId() : `${owner}${BOUND_SEPARATOR}${createId()}` });
+		strokeIds.set(s.id, stroke.id);
+		return stroke;
 	});
-	return { strokes, elements };
+	// v15: a collapsed note names the strokes it keeps hidden; in the copy they have new ids (the ones not in the clip are dropped).
+	return { strokes, elements: elements.map((e) => (e.type === "sticky" && e.ink ? freezeElement(remapStickyInk(e, strokeIds)) : e)) };
 }
 
 const round2 = (v: number) => Math.round(v * 100) / 100;

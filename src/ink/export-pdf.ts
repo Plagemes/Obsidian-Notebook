@@ -1,9 +1,11 @@
 import { BOX_LABEL_HEIGHT, MARKER_BADGE, markerRegion } from "../model/markers";
-import { RENDER_INK, type BoxElement, type EquationElement, type MarkerElement, type Page, type Stroke, type TextElement } from "../model/types";
+import { RENDER_INK, type BoxElement, type EquationElement, type MarkerElement, type Page, type StickyElement, type Stroke, type TextElement } from "../model/types";
 import { EQUATION_NUMBER_GAP, equationNumberLabel, equationNumbers } from "../model/math-elements";
 import { graphScene, GRAPH_STYLE, type GraphScene, type SceneText } from "../math/graph-scene";
 import { equationOutline } from "./math-render";
 import { graphClips, strokeClip } from "./attach";
+import { hiddenStickyInk, stickyColours } from "../model/sticky";
+import { stickyShapes, stickyTextBox } from "./sticky-render";
 import type { Polygon } from "../math/outline";
 import type { BBox } from "./hit-test";
 import { PAPER_DOT_RADIUS, PAPER_LINE_WIDTH } from "./export-svg";
@@ -299,6 +301,14 @@ function pageContent(
 		res.font = true;
 		ops.push(boxOps(el, v8.boxLabel(el)));
 	}
+	// v15 sticky notes: between the boxes and the equations, as on screen. The ink a collapsed note keeps hidden is left out.
+	for (const el of page.elements ?? []) {
+		if (el.type !== "sticky") continue;
+		const op = stickyOps(el);
+		if (op.font) res.font = true;
+		ops.push(op.ops);
+	}
+	const noteInk = hiddenStickyInk(page.elements);
 	for (const el of page.elements ?? []) {
 		if (el.type !== "equation") continue;
 		ops.push(equationOps(el, v8.numbers?.get(el.id), (v8.outline ?? equationOutline)(el), res));
@@ -313,7 +323,7 @@ function pageContent(
 	}
 	const clips = graphClips(page.elements);
 	for (const stroke of page.strokes) {
-		if (stroke.hidden && !v8.hidden) continue;
+		if ((stroke.hidden && !v8.hidden) || noteInk?.has(stroke.id)) continue;
 		const op = strokeOps(stroke);
 		if (op) {
 			if (stroke.tool === "highlighter") res.highlighter = true;
@@ -458,6 +468,34 @@ function markerOps(m: MarkerElement): { ops: string; font: boolean } {
 			out.push(op);
 			font = true;
 		}
+	}
+	out.push("Q");
+	return { ops: out.join("\n"), font };
+}
+
+/**
+ * v15 sticky note: its solid shapes (the translucent shadow is left out of a page on paper) and the typed text in Helvetica,
+ * wrapped to the note's text box and clipped to it.
+ */
+function stickyOps(el: StickyElement): { ops: string; font: boolean } {
+	const out: string[] = ["q"];
+	for (const s of stickyShapes(el)) {
+		if (s.alpha < 1) continue;
+		if (s.kind === "rect") out.push(`${rgb(s.fill)} rg ${num(s.x)} ${num(s.y)} ${num(s.width)} ${num(s.height)} re f`);
+		else out.push(`${rgb(s.fill)} rg ${polyOps(s.points)} f`);
+	}
+	let font = false;
+	if (!el.collapsed && el.text) {
+		const box = stickyTextBox(el);
+		const size = el.fontSize;
+		const lines = wrapHelvetica(el.text, size, box.width);
+		out.push(`q ${num(box.x)} ${num(box.y)} ${num(box.width)} ${num(box.height)} re W n`, "BT", `/F1 ${num(size)} Tf`, `${rgb(stickyColours(el.color).text)} rg`);
+		lines.forEach((codes, i) => {
+			if (codes.length === 0) return;
+			out.push(`1 0 0 -1 ${num(box.x)} ${num(box.y + size * (TEXT_BASELINE + i * TEXT_LINE_HEIGHT))} Tm ${winAnsiLiteral(codes)} Tj`);
+		});
+		out.push("ET", "Q");
+		font = true;
 	}
 	out.push("Q");
 	return { ops: out.join("\n"), font };

@@ -1,5 +1,5 @@
 import { createId, quantizePoint } from "./document";
-import { A4_HEIGHT, A4_WIDTH, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, FORMAT_ID, GRID_5MM, PAPER_KINDS_V7, RENDER_FREEHAND } from "./types";
+import { A4_HEIGHT, A4_WIDTH, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, ELEMENT_TYPES_V15, FORMAT_ID, GRID_5MM, PAPER_KINDS_V7, RENDER_FREEHAND } from "./types";
 
 export type RawObject = Record<string, unknown>;
 
@@ -323,6 +323,35 @@ function v13ToV14(raw: RawObject): RawObject {
 	return out;
 }
 
+/**
+ * v15 adds the element type "sticky" (sticky notes, #20). Every valid v14 document is a valid v15 document. A v14 reader
+ * rejected unknown element types, so a pre-v15 file with a sticky note was not written by any version of this plugin: it is
+ * rejected rather than guessed at (like excerpts before v10). Nothing else changes.
+ */
+function v14ToV15(raw: RawObject): RawObject {
+	if (Array.isArray(raw.pages)) {
+		(raw.pages as unknown[]).forEach((page, i) => {
+			const problem = v15OnlyElement(page, i);
+			if (problem) throw new MigrationError(problem);
+		});
+	}
+	return { ...raw, version: 15 };
+}
+
+/**
+ * Why page `index` (0-based) of a v14 file cannot be read as v15 (it holds an element type that exists only from v15), or
+ * null. Everything else of a v14 page is a valid v15 page, so staged loading reads large v14 files page by page with this check.
+ */
+export function v15OnlyElement(page: unknown, index: number): string | null {
+	const isObj = (v: unknown): v is RawObject => typeof v === "object" && v !== null && !Array.isArray(v);
+	if (!isObj(page) || !Array.isArray(page.elements)) return null;
+	for (const el of page.elements as unknown[]) {
+		const type = isObj(el) ? el.type : undefined;
+		if (typeof type === "string" && ELEMENT_TYPES_V15.includes(type)) return `v14: element type '${type}' (page ${index + 1}) exists only from v15`;
+	}
+	return null;
+}
+
 /** MIGRATIONS[n] takes a document from version n to n+1. */
 export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	0: v0ToV1,
@@ -339,6 +368,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	11: v11ToV12,
 	12: v12ToV13,
 	13: v13ToV14,
+	14: v14ToV15,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

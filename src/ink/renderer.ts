@@ -4,6 +4,8 @@ import { backgroundRect } from "../model/margins";
 import { transformElement } from "./elements";
 import { drawBox, drawMarker, type BoxLabel } from "./marker-render";
 import { drawExcerpt, drawExcerptBadge } from "./excerpt-render";
+import { hiddenStickyInk } from "../model/sticky";
+import { drawSticky } from "./sticky-render";
 import { drawEquation, drawGraph, type GraphPalette } from "./math-render";
 import { graphClips, strokeClip } from "./attach";
 import { equationNumbers } from "../model/math-elements";
@@ -114,6 +116,10 @@ export function drawElement(
 	}
 	if (el.type === "excerpt") {
 		drawExcerpt(ctx, el, img);
+		return;
+	}
+	if (el.type === "sticky") {
+		drawSticky(ctx, el);
 		return;
 	}
 	ctx.save();
@@ -877,8 +883,10 @@ export class Renderer {
 				if (!bare && page.elements?.length) this.drawElements(ctx, page);
 				const reveal = this.revealHidden?.(page) ?? false;
 				const clips = graphClips(page.elements);
+				// v15: the ink a collapsed sticky note keeps hidden is not drawn (it comes back when the note is opened).
+				const noteInk = bare ? null : hiddenStickyInk(page.elements);
 				for (const stroke of page.strokes) {
-					if (bare || this.hidden?.has(stroke) || (stroke.hidden && !reveal)) continue;
+					if (bare || this.hidden?.has(stroke) || (stroke.hidden && !reveal) || noteInk?.has(stroke.id)) continue;
 					try {
 						const b = this.boundsOf(stroke);
 						// Bounds are padded by half the width; pen ink reaches 0.8 × width at full pressure, and
@@ -981,6 +989,11 @@ export class Renderer {
 		for (const el of elements) {
 			if (el.type !== "box" || skip(el)) continue;
 			this.guarded(ctx, "box element", () => drawBox(ctx, el, this.boxLabel));
+		}
+		// v15 sticky notes: above the boxes, under the equations, the text boxes and all the ink (their own ink included).
+		for (const el of elements) {
+			if (el.type !== "sticky" || skip(el)) continue;
+			this.guarded(ctx, "sticky element", () => drawSticky(ctx, el, this.night));
 		}
 		const numbers = this.equationNumbers();
 		for (const el of elements) {
