@@ -6,10 +6,15 @@
 import { describe, expect, it } from "vitest";
 import { createDocument, createPage, createStroke } from "../src/model/document";
 import {
-	AddElement, AddPage, AddStroke, Batch, DeletePage, EraseStrokes, History, InsertPages, MovePage, RemoveElement, ReorderLayer, ReplaceElement, ReplaceStroke,
+	AddAsset, AddElement, AddPage, AddStroke, Batch, DeletePage, EraseStrokes, History, InsertPages, MovePage, RemoveElement, ReorderLayer, ReplaceElement, ReplaceStroke,
 	SetMeta, SetPageBackground, SetPageInfinite, SetPageMargins, SetPageSize, SetPaper, type Command,
 } from "../src/model/history";
 import { SetMarkerDone } from "../src/model/marker-commands";
+import { assetIdsIn } from "../src/library/library-check-live";
+import { NotebookApiError } from "../src/integration/api-errors";
+import { checkPageUnlocked, planClosedEdit, prepareInsertImage } from "../src/integration/api-plan";
+import { planAssetRepoint } from "../src/model/asset-ops";
+import { replaceAllCommand } from "../src/model/text-search";
 import { exemptFromLocks, isLocked, lockedChanges, lockedPageIds, lockedPages, SetPageLocked, snapshotLocked } from "../src/model/page-lock";
 import { allLocked, deleteCommand, lockCommand, ReorderPages } from "../src/model/page-ops";
 import { SetPageContent } from "../src/model/page-content";
@@ -18,7 +23,7 @@ import { SetPageTags } from "../src/model/page-tags";
 import { freezeElement, freezeStroke, serialize } from "../src/model/serialize";
 import { addState, makePart, SetPageStates, withActive, withPose } from "../src/model/states";
 import { stableStringify } from "../src/model/math-elements";
-import type { NotebookDocument, Page, Stroke, TextElement } from "../src/model/types";
+import type { Asset, NotebookDocument, Page, Stroke, TextElement } from "../src/model/types";
 import { actionById, baseContext, isEnabled, isRelevant } from "../src/ui/actions";
 
 const stamp = new Date("2026-11-04T10:00:00.000Z");
@@ -306,5 +311,124 @@ describe("helpers", () => {
 		k.p1.states = withActive(addState(undefined, "S", null, seeded(5))!.states, null);
 		expect(lockedChanges(k.doc, snapK)).toEqual(["p1"]);
 		expect(stableStringify({ a: 1 })).toBeTypeOf("string");
+	});
+});
+
+describe("review fixes: exempt batches stay visible, restored locked pages undo, lock checks at the edges", () => {
+	const hex = (n: number) => n.toString(16).padStart(24, "0");
+	const asset = (n: number): Asset => ({ id: hex(n), kind: "image", path: `Notebooks/_assets/${hex(n)}.png`, name: "pic.png", bytes: 10 });
+
+	it("the library check still finds the assets of an exempt merge on the undo and on the redo stack", () => {
+		const f = fixture(true);
+		const merge = exemptFromLocks(new Batch("Merge conflicted copy", [new AddAsset(asset(7)), new AddStroke("p1", stroke("m"), 3)]));
+		expect(f.history.execute(merge)).toBe(true);
+		expect(assetIdsIn([f.doc, f.history.pending()]).ids.has(hex(7))).toBe(true);
+		// Undone: the document no longer names it, only the redo stack does.
+		f.history.undo();
+		expect(f.doc.assets?.[hex(7)]).toBeUndefined();
+		expect(assetIdsIn([f.doc, f.history.pending()]).ids.has(hex(7))).toBe(true);
+		expect(f.history.redo()).not.toBeNull();
+		expect(f.doc.assets?.[hex(7)]).toBeDefined();
+	});
+
+	it("undoing a restore that re-adds a locked page works (back to the trash state), and redo brings it back", () => {
+		const f = fixture(false);
+		const back = createPage();
+		back.id = "p3";
+		back.locked = true;
+		back.strokes.push(stroke("restored"));
+		expect(f.history.execute(new InsertPages([back], 1))).toBe(true);
+		expect(f.doc.pages.map((p) => p.id)).toEqual(["p1", "p3", "p2"]);
+		expect(f.history.undo()).not.toBeNull();
+		expect(f.doc.pages.map((p) => p.id)).toEqual(["p1", "p2"]);
+		expect(f.history.redo()).not.toBeNull();
+		expect(f.doc.pages.map((p) => p.id)).toEqual(["p1", "p3", "p2"]);
+		expect(f.doc.pages[1]!.locked).toBe(true);
+		expect(f.refused).toEqual([]);
+	});
+
+	it("still refuses to undo a change of a page that is locked, and to delete a locked page", () => {
+		const f = fixture(false);
+		f.history.execute(new AddStroke("p1", stroke("x"), 3));
+		f.p1.locked = true;
+		expect(f.history.undo()).toBeNull();
+		expect(f.p1.strokes.map((s) => s.id)).toContain("x");
+		expect(f.history.execute(new DeletePage(f.p1, 0))).toBe(false);
+		expect(f.doc.pages).toHaveLength(2);
+	});
+
+	it("a replaced picture (storage maintenance) goes through on a locked page and is exempt on the batch itself", () => {
+		const f = fixture(true);
+		f.doc.assets = { [hex(1)]: asset(1) };
+		f.p1.elements = [freezeElement({ id: "im", type: "image", asset: hex(1), x: 0, y: 0, width: 50, height: 50, rotation: 0 } as never)];
+		const batch = planAssetRepoint(f.doc, hex(1), asset(2))!;
+		expect(batch.lockExempt).toBe(true);
+		expect(f.history.execute(batch)).toBe(true);
+		expect(f.p1.elements[0]).toMatchObject({ asset: hex(2) });
+		expect(assetIdsIn([f.doc, f.history.pending()]).ids.has(hex(1))).toBe(true);
+		f.history.undo();
+		expect(f.p1.elements[0]).toMatchObject({ asset: hex(1) });
+	});
+
+	it("many locked pages: one pass, same verdicts", () => {
+		const doc = createDocument(stamp);
+		for (let i = 0; i < 400; i++) {
+			const p = createPage();
+			p.id = `q${i}`;
+			p.strokes.push(stroke(`s${i}`));
+			p.locked = true;
+			doc.pages.push(p);
+		}
+		const history = new History(() => doc);
+		const snap = snapshotLocked(doc)!;
+		expect(snap.size).toBe(400);
+		expect(lockedChanges(doc, snap)).toEqual([]);
+		doc.pages[200]!.strokes.push(stroke("late"));
+		doc.pages[300]!.paper = { ...doc.pages[300]!.paper, spacing: doc.pages[300]!.paper.spacing + 1 };
+		doc.pages.splice(10, 1);
+		expect(lockedChanges(doc, snap).sort()).toEqual(["q199", "q299", "q9"]);
+		expect(lockedChanges(doc, snap, true).sort()).toEqual(["q199", "q299"]);
+		// An equal background replaced by a new object is not a change; a different one is.
+		const doc2 = createDocument(stamp);
+		const pg = doc2.pages[0]!;
+		pg.background = { kind: "image", asset: "a1" } as never;
+		pg.locked = true;
+		const s2 = snapshotLocked(doc2)!;
+		pg.background = { kind: "image", asset: "a1" } as never;
+		expect(lockedChanges(doc2, s2)).toEqual([]);
+		pg.background = { kind: "image", asset: "a2" } as never;
+		expect(lockedChanges(doc2, s2)).toEqual([pg.id]);
+		void history;
+	});
+
+	it("replace all with every match on locked pages says so instead of returning nothing", () => {
+		const f = fixture(true);
+		const plan = replaceAllCommand(f.doc, "hello", "bye");
+		expect(plan).toMatchObject({ boxes: 0, replaced: 0, lockedBoxes: 1 });
+		expect(replaceAllCommand(f.doc, "zzz", "bye")).toBeNull();
+		delete f.p1.locked;
+		expect(replaceAllCommand(f.doc, "hello", "bye")).toMatchObject({ boxes: 1, replaced: 1, lockedBoxes: 0 });
+	});
+
+	it("the API: a locked page refuses an image, before and after the edit is planned, and nothing is written", () => {
+		const doc = createDocument(stamp);
+		doc.id = "doc-1";
+		doc.pages.push(createPage());
+		doc.pages[1]!.locked = true;
+		const text = serialize(doc);
+		const asset1 = asset(3);
+		// The explicit check in prepareInsertImage throws (before any file is written).
+		expect(() => planClosedEdit(text, prepareInsertImage(2, asset1, { width: 100, height: 50 }, {}), stamp)).toThrow(NotebookApiError);
+		expect(() => checkPageUnlocked("page", doc.pages[1]!, 2)).toThrow(NotebookApiError);
+		try {
+			checkPageUnlocked("page", doc.pages[1]!, 2);
+		} catch (e) {
+			expect((e as NotebookApiError).code).toBe("page-locked");
+		}
+		// Page 1 is fine, and an edit that does not go through the explicit check is still caught by the generic one.
+		expect(planClosedEdit(text, prepareInsertImage(1, asset1, { width: 100, height: 50 }, {}), stamp).ok).toBe(true);
+		const sneaky = planClosedEdit(text, () => ({ commands: [new AddStroke(doc.pages[1]!.id, stroke("api"), 0)], result: null, verify: () => true }), stamp);
+		expect(sneaky.ok).toBe(false);
+		if (!sneaky.ok) expect(sneaky.error.code).toBe("page-locked");
 	});
 });

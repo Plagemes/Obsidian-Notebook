@@ -22,6 +22,11 @@ function failure(e: unknown): string {
 export async function runBoardShot(ctx: EditContext): Promise<void> {
 	const anchor = ctx.doc.pages[ctx.currentPage()];
 	if (!anchor) return;
+	// 0.16 (#124): a locked page takes no photo: said before the camera opens.
+	if (anchor.locked) {
+		showNotice(t("lock.pageIs", { n: String(ctx.currentPage() + 1) }));
+		return;
+	}
 	let asset: Awaited<ReturnType<typeof storeAsset>> | null = null;
 	let working: NoticeHandle | null = null;
 	try {
@@ -48,7 +53,8 @@ export async function runBoardShot(ctx: EditContext): Promise<void> {
 			commands.push(new SetPageSize(anchor.id, { width: anchor.width, height: anchor.height }, { width: anchor.width, height: plan.pageHeight }));
 		}
 		commands.push(new AddElement(anchor.id, image, at), new AddElement(anchor.id, label, at + 1));
-		ctx.execute(new Batch("Board shot", commands));
+		// Refused (the page got locked meanwhile): the history told the user; no "done" notice.
+		if (!ctx.execute(new Batch("Board shot", commands))) return;
 
 		if (plan.placement === "over-content") showNotice(t("boardShot.overContent"), 8000);
 		else if (!sheet.cropped) showNotice(t("boardShot.uncropped"), 6000);

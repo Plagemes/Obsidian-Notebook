@@ -162,7 +162,8 @@ export async function movePagesTo(src: EditContext, pageIds: readonly string[], 
 			const before = targetCtx.doc.meta ?? cloneMeta(DEFAULT_META);
 			commands.push(new SetMeta(before, withMovedBookmarks(before, plan.bookmarks)));
 		}
-		targetCtx.execute(new Batch("Move pages in", commands));
+		// Refused (a read-only destination, the content check): nothing was added there, so nothing may leave the source.
+		if (!targetCtx.execute(new Batch("Move pages in", commands))) throw new Error(t("move.targetNotSaved"));
 		// flush() is also false when the user kept writing in the destination after the pages were saved: the file decides.
 		const flushed = await targetCtx.flush();
 		const verdict = destinationVerdict(flushed, await storedInFile(app, target, plan.pages.map((p) => p.id)));
@@ -185,10 +186,10 @@ export async function movePagesTo(src: EditContext, pageIds: readonly string[], 
 			if (removal.replacement) commands.push(new AddPage(removal.replacement, pages.length));
 			const going = removal.remove.map((page) => ({ page, index: pages.indexOf(page) })).sort((a, b) => b.index - a.index);
 			for (const g of going) commands.push(new DeletePage(g.page, g.index));
-			src.execute(new Batch("Move pages out", commands), Math.max(0, Math.min(src.currentPage(), pages.length - 1)));
-			removed = removal.remove.length;
+			// Refused (a page locked meanwhile, read-only): the copies stay in both notebooks and are reported as kept here.
+			if (src.execute(new Batch("Move pages out", commands), Math.max(0, Math.min(src.currentPage(), pages.length - 1)))) removed = removal.remove.length;
 		}
-		stayed = removal.changed.length;
+		stayed = removal.changed.length + (removal.remove.length - removed);
 	}
 	return { moved: plan.pages.length, removed, stayed, targetName: target.basename };
 }

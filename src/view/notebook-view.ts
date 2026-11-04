@@ -2767,9 +2767,10 @@ export class NotebookView extends FileView {
 			execute: (cmd, scrollTo) => {
 				this.commitText();
 				this.clearSelection();
-				this.history.execute(cmd);
+				const done = this.history.execute(cmd);
 				this.afterHistoryChange();
-				if (scrollTo !== undefined) this.scrollToPage(scrollTo);
+				if (done && scrollTo !== undefined) this.scrollToPage(scrollTo);
+				return done;
 			},
 			flush: async () => (await this.flushNow()) && this.session === session && session.isSaved(),
 		};

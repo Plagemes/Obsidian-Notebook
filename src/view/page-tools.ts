@@ -70,7 +70,7 @@ export async function stashDeletedPage(host: PageToolsHost, doc: NotebookDocumen
  * the notebook changed meanwhile, nothing is deleted.
  */
 export async function deletePageKeepingCopy(
-	host: PageToolsHost, doc: NotebookDocument, page: Page, index: number, remove: (index: number) => void, store: PageTrash = storeFor(host),
+	host: PageToolsHost, doc: NotebookDocument, page: Page, index: number, remove: (index: number) => unknown, store: PageTrash = storeFor(host),
 ): Promise<boolean> {
 	// 0.16 (#124): the history would refuse the delete of a locked page, leaving a copy in the trash: not even started.
 	if (page.locked) return false;
@@ -78,7 +78,9 @@ export async function deletePageKeepingCopy(
 	const now = host.editableDocument();
 	const at = now === doc ? doc.pages.indexOf(page) : -1;
 	if (at < 0) return false;
-	remove(at);
+	// `remove` says false when the delete was refused (the page got locked meanwhile): then nothing was deleted, and the copy
+	// in the page trash stays hidden while the page is still in the notebook.
+	if (remove(at) === false) return false;
 	return true;
 }
 

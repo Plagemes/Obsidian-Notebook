@@ -257,7 +257,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 			return;
 		}
 		// A copy goes to the page trash first; the page is deleted only once that copy is on disk.
-		void deletePageKeepingCopy(v.pageToolsHost(), doc, p, i, (at) => void v.applyCommand(new DeletePage(p, at), Math.max(0, at - 1)));
+		void deletePageKeepingCopy(v.pageToolsHost(), doc, p, i, (at) => v.applyCommand(new DeletePage(p, at), Math.max(0, at - 1)));
 	}),
 
 	// PDF and reading
