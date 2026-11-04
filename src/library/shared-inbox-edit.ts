@@ -6,9 +6,11 @@
 import { type App, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { Batch } from "../model/history";
+import { lockedPageIds } from "../model/page-lock";
 import { parse } from "../model/serialize";
 import type { Asset } from "../model/types";
 import { KeyedQueue, planClosedEdit, type Prepare } from "../integration/api-plan";
+import { NotebookApiError } from "../integration/api-errors";
 import { backupFolder, type NotebookSettings } from "../settings";
 import { readNotebookText, writeNotebookText } from "../storage/format";
 import { VaultDocumentIO } from "../storage/vault-io";
@@ -37,8 +39,14 @@ export function editNotebook<R>(
 	return queue.run(file.path, async () => {
 		const ctx = openContext(app, file);
 		if (ctx === "busy") throw new Error(t("move.targetBusy"));
-		if (ctx) return editOpen(app, file, ctx, make(ctx.currentPage()), label, pending);
-		return editClosed(app, settings, file, make(null));
+		try {
+			if (ctx) return await editOpen(app, file, ctx, make(ctx.currentPage()), label, pending);
+			return await editClosed(app, settings, file, make(null));
+		} catch (e) {
+			// A locked page (open notebook: the history refused it; closed: the plan did) is one message, in the user's language.
+			if (e instanceof NotebookApiError && e.code === "page-locked") throw new NotebookApiError("page-locked", t("si.locked", { name: file.basename }), e.details);
+			throw e;
+		}
 	});
 }
 
@@ -46,7 +54,12 @@ async function editOpen<R>(app: App, file: TFile, ctx: EditContext, prepare: Pre
 	if (pending) ctx.addPending(pending);
 	try {
 		const plan = prepare(ctx.doc);
-		ctx.execute(new Batch(label, plan.commands));
+		if (!ctx.execute(new Batch(label, plan.commands))) {
+			// Refused by the history: a locked page keeps its content (the view has already said so), or the notebook is read-only.
+			const locked = lockedPageIds(ctx.doc);
+			if (locked.length > 0) throw new NotebookApiError("page-locked", "locked pages", { path: file.path, ids: locked });
+			throw new Error(t("move.targetBusy"));
+		}
 		const flushed = await ctx.flush();
 		const back = parse(readNotebookText(file.extension, await app.vault.read(file)));
 		if (back.ok && plan.verify(back.doc)) return plan.result;

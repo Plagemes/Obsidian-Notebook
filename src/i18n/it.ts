@@ -2952,6 +2952,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"si.added.element": "Messo {file} a pagina {page} di {name}.",
 	"si.created": "Creato {name} da {file}.",
 	"si.failed": "Impossibile usare il file: {error}",
+	"si.locked": "Una pagina di {name} è bloccata, quindi non è stato aggiunto nulla. Sblocca la pagina nel notebook e riprova.",
 	"si.heic": "Questo formato di immagine (HEIC/HEIF) non può essere mostrato qui. Convertilo prima in PNG o JPEG.",
 	"si.gone": "Quel file non c'è più.",
 	"si.dismissed": "{file} è nascosto. Resta nel tuo vault.",

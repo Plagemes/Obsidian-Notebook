@@ -28,7 +28,7 @@ interface PresentView extends HarnessView {
 const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 
 export async function checkPresent(api: PresentCheckApi): Promise<{ ok: boolean; results: CheckResult[]; errors: string[]; notices: string[]; env: Record<string, unknown> }> {
-	const { frames } = api;
+	const { frames, setTool, penStroke } = api;
 	const v = api.view as PresentView;
 	const results: CheckResult[] = [];
 	const add = (name: string, ok: unknown, detail = "") => results.push({ name, ok: !!ok, detail });
@@ -208,6 +208,34 @@ export async function checkPresent(api: PresentCheckApi): Promise<{ ok: boolean;
 	add("with stepping off, Next goes straight to the next page", v.presentation?.position.page === 1 && counter() === "2 / 5", counter());
 	await key("Escape");
 	add("the settings read back leniently", readPresentSettings({ presentSteps: 1 }).presentSteps === true);
+
+	// --- write while presenting on a locked page: the history refuses the ink and says so, nothing is drawn ---
+	{
+		v.scrollToPage(0);
+		await settle();
+		const lockedView = v as unknown as { runAction(id: string, arg?: { page?: number; value?: string }): void; lockNoticeAt: number };
+		lockedView.runAction("page-lock");
+		await settle();
+		const target = v.document.pages[0]!;
+		add("page 1 is locked for the check", target.locked === true);
+		v.runAction("present");
+		await settle();
+		await sleep(250);
+		root()?.querySelectorAll<HTMLButtonElement>(".nb-present-btn")[1]?.click();
+		await settle();
+		const strokes = target.strokes.length;
+		const notices = api.notices.length;
+		lockedView.lockNoticeAt = 0;
+		setTool("pen");
+		await penStroke([[0.3, 0.3], [0.5, 0.35], [0.7, 0.4]]);
+		await frames(2);
+		add("writing while presenting a locked page draws nothing", target.strokes.length === strokes, `${strokes} -> ${target.strokes.length}`);
+		add("and says the page is locked", api.notices.slice(notices).some((n) => /Page locked/.test(n)), api.notices.slice(notices).join(" | "));
+		await key("Escape");
+		lockedView.runAction("page-unlock");
+		await settle();
+		add("the page is unlocked again", target.locked !== true);
+	}
 
 	// --- the screenshot: presenting page 1 in its second state, the laser on it, the controls shown ---
 	v.host.settings.presentSteps = true;

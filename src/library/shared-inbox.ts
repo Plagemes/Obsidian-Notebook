@@ -12,6 +12,7 @@
 import { getLanguage, normalizePath, TFile, type App, type Plugin } from "obsidian";
 import { t } from "../i18n";
 import { MAX_IMAGE_BYTES } from "../integration/api-plan";
+import { NotebookApiError } from "../integration/api-errors";
 import { serializeChecked } from "../model/serialize";
 import { PhotoDecodeError, photoSize } from "../scan/decode";
 import type { NotebookSettings } from "../settings";
@@ -273,6 +274,7 @@ export class SharedInbox implements SharedInboxPort {
 		} catch (e) {
 			console.error("[notebook] shared files", e);
 			if (e instanceof PhotoDecodeError && e.reason === "heic") showNotice(t("si.heic"), 8000);
+			else if (e instanceof NotebookApiError && e.code === "page-locked") showNotice(e.message, 10000);
 			else showNotice(t("si.failed", { error: e instanceof Error ? e.message : String(e) }), 10000);
 		} finally {
 			this.busy.delete(item.path);

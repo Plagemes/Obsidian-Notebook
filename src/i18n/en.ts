@@ -2950,6 +2950,7 @@ export const en = {
 	"si.added.element": "Placed {file} on page {page} of {name}.",
 	"si.created": "Made {name} from {file}.",
 	"si.failed": "Could not use the file: {error}",
+	"si.locked": "A page of {name} is locked, so nothing was added. Unlock the page in the notebook and try again.",
 	"si.heic": "This image format (HEIC/HEIF) cannot be shown here. Convert it to PNG or JPEG first.",
 	"si.gone": "That file is no longer there.",
 	"si.dismissed": "{file} is hidden. It stays in your vault.",

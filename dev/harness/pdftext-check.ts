@@ -321,6 +321,29 @@ export async function checkPdftext(api: PdftextCheckApi): Promise<{ ok: boolean;
 	add("with the setting off, a tap follows nothing", v().currentPage() === 0, `page ${v().currentPage() + 1}`);
 	settings().pdfLinks = true;
 
+	// --- locked pages (0.16, #124): reading is not editing ---
+	await goTo(0);
+	v().runAction("page-lock");
+	await settle();
+	add("page 1 is locked for the check", v().document.pages[0]!.locked === true);
+	const lockedNotices = api.notices.length;
+	await afterPen();
+	await penStroke([at(0, (q0 + q1) / 2, qy)], { pointerType: "touch" });
+	await sleep(500);
+	await frames(3);
+	add("on a locked page a finger tap on a link still follows it", v().currentPage() === 4, `page ${v().currentPage() + 1}`);
+	await goTo(0);
+	v().runAction("pdf-select-text");
+	await frames(3);
+	await penStroke([at(0, x0, ly), at(0, x1, ly)]);
+	await settle();
+	add("on a locked page the Select text mode still selects", tools().copyText() === "A limit describes", String(tools().copyText()));
+	add("and no lock notice was shown for either", !api.notices.slice(lockedNotices).some((n) => /locked/i.test(n)), api.notices.slice(lockedNotices).join(" | "));
+	tools().exit();
+	v().runAction("page-unlock");
+	await settle();
+	add("the page is unlocked again", v().document.pages[0]!.locked !== true);
+
 	return { ok: results.every((r) => r.ok) && api.errors.length === 0, results, errors: api.errors, notices: api.notices, env: { dpr: window.devicePixelRatio } };
 }
 
