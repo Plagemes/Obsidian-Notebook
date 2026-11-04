@@ -1,7 +1,7 @@
 /** 0.16 review fixes on the shared-files inbox (C1 - C4). */
 import { describe, expect, it, vi } from "vitest";
 import { isInboxCandidate, isNewSince, noteNames, normaliseSince, sinceFor, type InboxContext } from "../src/library/shared-inbox-logic";
-import { NotebookApiError } from "../src/integration/api-errors";
+import { planClosedEdit } from "../src/integration/api-plan";
 import { prepareAppendImagePage, prepareImageElement } from "../src/library/shared-inbox-plan";
 import { createDocument, createPage } from "../src/model/document";
 import { serialize } from "../src/model/serialize";
@@ -117,7 +117,7 @@ describe("C3: events apply the same 'since' rule as the scan", () => {
 });
 
 describe("C4: a locked page and a pending save", () => {
-	const asset: Asset = { id: "img1", kind: "image", path: "Notebooks/_assets/img1.png", name: "a.png", bytes: 10 };
+	const asset: Asset = { id: "a".repeat(64), kind: "image", path: `Notebooks/_assets/${"a".repeat(64)}.png`, name: "a.png", bytes: 10 };
 	const docText = (lockLast: boolean): string => {
 		const doc = createDocument();
 		const a = createPage();
@@ -127,20 +127,12 @@ describe("C4: a locked page and a pending save", () => {
 		return serialize(doc);
 	};
 
-	it("prepareImageElement refuses a locked page; the plan for a new page does not care", () => {
-		const doc = createDocument();
-		const p = createPage();
-		p.locked = true;
-		doc.pages = [p];
-		let err: unknown;
-		try {
-			prepareImageElement(asset, { width: 100, height: 100 }, 0)(doc);
-		} catch (e) {
-			err = e;
-		}
-		expect(err).toBeInstanceOf(NotebookApiError);
-		expect((err as NotebookApiError).code).toBe("page-locked");
-		expect(() => prepareAppendImagePage(asset, { width: 100, height: 100 })(doc)).not.toThrow();
+	it("a closed notebook's image element on a locked page is refused by the plan; a new page is not", () => {
+		const text = docText(true);
+		const onLocked = planClosedEdit(text, prepareImageElement(asset, { width: 100, height: 100 }, 1), new Date(1));
+		expect(onLocked.ok).toBe(false);
+		if (!onLocked.ok) expect(onLocked.error.code).toBe("page-locked");
+		expect(planClosedEdit(text, prepareAppendImagePage(asset, { width: 100, height: 100 }), new Date(1)).ok).toBe(true);
 	});
 
 	const rig = (text: string, flush: () => Promise<boolean>, open: boolean, currentPage = 0) => {
