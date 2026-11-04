@@ -302,6 +302,16 @@ export function liveCollections(map: CollectionsMap): SavedCollection[] {
 	return [...map.values()].filter((c) => !c.deleted).map(({ deleted: _d, ...c }) => c).sort((a, b) => collator.compare(a.name, b.name) || (a.id < b.id ? -1 : 1));
 }
 
+/** A deleted collection is remembered this long (days) in the file that deleted it; after that the entry is dropped when the file is rewritten. */
+export const TOMBSTONE_DAYS = 90;
+
+/** `file` without the tombstones older than `TOMBSTONE_DAYS` at `now`. Live collections and unknown items are never dropped. */
+export function pruneTombstones(file: CollectionsFile, now: number): CollectionsFile {
+	const limit = now - TOMBSTONE_DAYS * DAY_MS;
+	const items = file.items.filter((i) => !(i.deleted === true && i.at < limit));
+	return items.length === file.items.length ? file : { ...file, items };
+}
+
 export type CollectionOp =
 	| { kind: "upsert"; id: string; name: string; rules: CollectionRules; color?: string | null }
 	| { kind: "delete"; id: string };

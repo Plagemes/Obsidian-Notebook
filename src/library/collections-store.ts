@@ -6,14 +6,16 @@
  * - Only this device's own file is ever written. Each write reads every file again first, applies the change, serialises,
  *   re-validates the text and writes only if it differs.
  * - A file that cannot be read, or is empty (it may not have synced yet), is never overwritten: one copy named by its
- *   content is kept next to it, and (for the device's own file) the write is refused with `CollectionsBlockedError`. The
- *   other devices' unreadable files are skipped and reported in `blocked`.
+ *   content is kept next to it (only when it is damaged: an empty or newer file is left as it is, no copy), and (for the
+ *   device's own file) the write is refused with `CollectionsBlockedError`. The other devices' unreadable files are skipped
+ *   and reported in `blocked`.
+ * - When the own file is rewritten, deletions (tombstones) older than 90 days are dropped from it.
  */
 import { deviceFileName, ensureFolderPath, keepUnreadableCopy, listDeviceFiles, type DeviceFileAdapter } from "../storage/device-files";
 import { linksFolder } from "../storage/pdf-links-store";
 import {
 	applyCollectionOps, COLLECTIONS_MAX, COLLECTIONS_PREFIX, emptyCollections, liveCollections, mergeCollectionFiles, newCollectionId,
-	parseCollections, serializeCollections, type CollectionOp, type CollectionRules, type CollectionsFile, type CollectionsMap, type SavedCollection,
+	parseCollections, pruneTombstones, serializeCollections, type CollectionOp, type CollectionRules, type CollectionsFile, type CollectionsMap, type SavedCollection,
 } from "./collections";
 
 /** This device's file cannot be read, is empty or is from a newer version: nothing is written and it is left as it is. */
@@ -105,11 +107,14 @@ export class CollectionsStore {
 		const text = serializeCollections(after);
 		if (own.exists && text === serializeCollections(own.data)) return;
 		if (!own.exists && after.items.length === 0) return;
-		const check = parseCollections(text, this.device);
+		// The file is being rewritten anyway: deletions older than 90 days are dropped from it now.
+		const pruned = pruneTombstones(after, this.now());
+		const prunedText = pruned === after ? text : serializeCollections(pruned);
+		const check = parseCollections(prunedText, this.device);
 		if (!check.ok) throw new Error(`collections did not validate: ${check.message}`);
 		await ensureFolderPath(this.adapter, this.folder);
-		await this.adapter.write(this.ownPath, text);
-		this.setCache(mergeCollectionFiles([after, ...others]));
+		await this.adapter.write(this.ownPath, prunedText);
+		this.setCache(mergeCollectionFiles([pruned, ...others]));
 	}
 
 	private enqueue<T>(fn: () => Promise<T>): Promise<T> {
@@ -137,7 +142,9 @@ export class CollectionsStore {
 		const parsed = parseCollections(text, this.device);
 		if (!parsed.ok) {
 			this.blocked = `${this.ownPath}: ${parsed.message}`;
-			await keepUnreadableCopy(this.adapter, this.folder, COLLECTIONS_PREFIX, text);
+			// A copy only of a file that is damaged (not JSON, or not a collections file). An empty file (it may not have synced
+			// yet) and a newer one are fine as they are: copying them would only pile up files.
+			if (parsed.reason === "json" || parsed.reason === "format") await keepUnreadableCopy(this.adapter, this.folder, COLLECTIONS_PREFIX, text);
 			throw new CollectionsBlockedError(parsed.message, parsed.reason);
 		}
 		return { data: { ...parsed.data, device: this.device }, exists: true };

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { DeviceFileAdapter } from "../src/storage/device-files";
 import {
 	applyCollectionOps, countMatches, dayBounds, DAY_MS, emptyCollections, filterByRules, liveCollections, matchesRules, mergeCollectionFiles,
-	parseCollections, readRules, serializeCollections, type CollectionRules, type CollectionsFile,
+	parseCollections, pruneTombstones, readRules, serializeCollections, TOMBSTONE_DAYS, type CollectionRules, type CollectionsFile,
 } from "../src/library/collections";
 import { CollectionsBlockedError, CollectionsStore } from "../src/library/collections-store";
 import type { LibraryEntry } from "../src/library/index";
@@ -181,6 +181,52 @@ describe("collections store", () => {
 		empty.files.set("Notebooks/_meta/collections-0a000000.json", "");
 		await expect(make(empty).save({ name: "X", rules: {} })).rejects.toBeInstanceOf(CollectionsBlockedError);
 		expect(empty.files.get("Notebooks/_meta/collections-0a000000.json")).toBe("");
+	});
+
+	it("F8: keeps a copy of a damaged own file only, not of an empty or newer one", async () => {
+		const unreadable = (a: MemoryAdapter) => [...a.files.keys()].filter((k) => k.includes("collections.unreadable-"));
+		const OWN = "Notebooks/_meta/collections-0a000000.json";
+		for (const [text, copies] of [["", 0], ['{"format":"obsidian-notebook-collections","version":2,"items":[]}', 0], ["{broken", 1], ['{"format":"other","version":1}', 1]] as const) {
+			const adapter = new MemoryAdapter();
+			adapter.files.set(OWN, text);
+			await expect(make(adapter).save({ name: "X", rules: {} })).rejects.toBeInstanceOf(CollectionsBlockedError);
+			await expect(make(adapter).remove("c1")).rejects.toBeInstanceOf(CollectionsBlockedError);
+			expect(adapter.files.get(OWN)).toBe(text);
+			expect(unreadable(adapter)).toHaveLength(copies);
+		}
+	});
+
+	it("F8: drops tombstones older than 90 days when the own file is rewritten, and only then", async () => {
+		const day = 24 * 60 * 60 * 1000;
+		const now = 200 * day;
+		const OWN = "Notebooks/_meta/collections-0a000000.json";
+		const adapter = new MemoryAdapter();
+		const old = item("old", "Old", now - 100 * day, { deleted: true });
+		const recent = item("recent", "Recent", now - 10 * day, { deleted: true });
+		const live = item("live", "Live", now - 150 * day);
+		adapter.files.set(OWN, serializeCollections(file("0a000000", [old, recent, live])));
+		const store = make(adapter, "0a000000", () => now);
+		// nothing to change: the file is not rewritten, the old tombstone is still there
+		await store.remove("old");
+		expect(adapter.writes).toEqual([]);
+		expect(adapter.files.get(OWN)).toContain('"old"');
+		// a real change rewrites it, without the old tombstone
+		await store.save({ name: "Fresh", rules: {} });
+		const text = adapter.files.get(OWN)!;
+		expect(text).not.toContain('"old"');
+		expect(text).toContain('"recent"');
+		expect(text).toContain('"live"');
+		expect(text).toContain("Fresh");
+		expect(store.list().map((c) => c.id)).toContain("live");
+	});
+
+	it("F8: pruneTombstones keeps live collections and unknown items whatever their age", () => {
+		const now = 1_000 * DAY_MS;
+		const data = file("0a000000", [item("a", "A", 1, { deleted: true }), item("b", "B", 1), item("c", "C", now - (TOMBSTONE_DAYS - 1) * DAY_MS, { deleted: true })], ["junk"]);
+		const out = pruneTombstones(data, now);
+		expect(out.items.map((i) => i.id)).toEqual(["b", "c"]);
+		expect(out.unknown).toEqual(["junk"]);
+		expect(pruneTombstones(out, now)).toBe(out);
 	});
 
 	it("an unreadable file of another device is skipped and reported, not touched", async () => {
