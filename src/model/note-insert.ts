@@ -74,3 +74,37 @@ export function cropSvg(svg: string, rect: { x: number; y: number; width: number
 	const root = `<svg xmlns="http://www.w3.org/2000/svg" width="${num(rect.width * PT_TO_MM)}mm" height="${num(rect.height * PT_TO_MM)}mm" viewBox="${num(rect.x)} ${num(rect.y)} ${num(rect.width)} ${num(rect.height)}">`;
 	return root + svg.slice(m[0].length);
 }
+
+export interface InsertPoint {
+	line: number;
+	ch: number;
+	/** The text on that line before the point / after it (what `insertionAtCursor` needs). */
+	before: string;
+	after: string;
+}
+
+/**
+ * Where the block goes for a cursor. A cursor inside the front matter (its closing `---` is on line `frontmatterEnd`, 0-based, or
+ * null when the note has none) would break the properties, so the block goes on the first line after it instead (at the end of the
+ * last line when the front matter is the whole note). `getLine` reads a line of the note, `lastLine` is the index of its last line.
+ */
+export function insertPoint(
+	cursor: { line: number; ch: number }, frontmatterEnd: number | null, getLine: (line: number) => string, lastLine: number,
+): InsertPoint {
+	const inside = frontmatterEnd !== null && cursor.line <= frontmatterEnd;
+	if (!inside) {
+		const text = getLine(cursor.line);
+		return { line: cursor.line, ch: cursor.ch, before: text.slice(0, cursor.ch), after: text.slice(cursor.ch) };
+	}
+	const next = (frontmatterEnd ?? 0) + 1;
+	if (next > lastLine) {
+		const text = getLine(lastLine);
+		return { line: lastLine, ch: text.length, before: text, after: "" };
+	}
+	return { line: next, ch: 0, before: "", after: getLine(next) };
+}
+
+/** Whether the editor picked before the (async) drawing still shows the note the block is for, in source mode; if not, the block is appended to the note instead. */
+export function editorStillTargets(viewPath: string | undefined, notePath: string, mode: string): boolean {
+	return viewPath === notePath && mode === "source";
+}

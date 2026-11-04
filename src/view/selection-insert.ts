@@ -2,13 +2,13 @@
 // the page SVG, stored where Obsidian puts attachments (remembered as written by the plugin), and its embed, with an optional link
 // back to the page, is inserted at the cursor of the Markdown note the user was last in (editor API, so undo in the note works).
 // With no note open a picker offers one and the block is appended with vault.process. Nothing changes the notebook.
-import { FuzzySuggestModal, TFile, normalizePath, type App, type FuzzyMatch } from "obsidian";
+import { FuzzySuggestModal, TFile, normalizePath, type App, type FuzzyMatch, type MarkdownView } from "obsidian";
 import { t } from "../i18n";
 import { targetNote } from "../integration/page-share";
 import { stablePageSubpath, withEmbedMarker } from "../integration/page-links";
 import { pageToSvg, type SvgPlacedImage } from "../ink/export-svg";
 import { DEFAULT_MARKDOWN_DPI } from "../model/export-markdown";
-import { appendInsertBlock, buildInsertLine, cropSvg, insertionAtCursor, insertPictureName, type InsertKind } from "../model/note-insert";
+import { appendInsertBlock, buildInsertLine, cropSvg, editorStillTargets, insertionAtCursor, insertPictureName, insertPoint, type InsertKind } from "../model/note-insert";
 import { taskStamp, type TaskRect } from "../model/selection-task";
 import type { Page } from "../model/types";
 import type { NotebookSettings } from "../settings";
@@ -91,17 +91,17 @@ async function drawPicture(host: InsertHost): Promise<ArrayBuffer | null> {
 	}
 }
 
-/** Where the text goes: the note and, for an open editor, the editor. */
-type Destination = { note: TFile; editor: import("obsidian").Editor | null } | null;
+/** Where the text goes: the note and, for an open editor, the view it was open in (checked again before writing: the leaf may show another note by then). */
+type Destination = { note: TFile; view: MarkdownView | null } | null;
 
 function chooseDestination(app: App): Promise<Destination> {
 	const view = targetNote(app);
-	if (view?.file) return Promise.resolve({ note: view.file, editor: view.getMode() === "source" ? view.editor : null });
+	if (view?.file) return Promise.resolve({ note: view.file, view: view.getMode() === "source" ? view : null });
 	return new Promise((resolve) => {
 		let chosen = false;
 		const picker = new NoteChooser(app, (file) => {
 			chosen = true;
-			resolve({ note: file, editor: null });
+			resolve({ note: file, view: null });
 		});
 		const close = picker.onClose.bind(picker);
 		picker.onClose = () => {
@@ -138,11 +138,13 @@ export async function runInsertIntoNote(host: InsertHost, now: Date = new Date()
 			? app.fileManager.generateMarkdownLink(file, notePath, stablePageSubpath(host.pageNumber, host.page.id), "↩")
 			: null;
 		const line = buildInsertLine({ embed: withEmbedMarker(app.fileManager.generateMarkdownLink(stored, notePath), true), width: host.settings.noteInsertWidth, pageLink });
-		const { editor } = destination;
+		const { view } = destination;
+		// The drawing was async: the leaf may have switched to another note meanwhile, and the embed must not go there.
+		const editor = view && editorStillTargets(view.file?.path, destination.note.path, view.getMode()) ? view.editor : null;
 		if (editor) {
-			const cursor = editor.getCursor();
-			const text = editor.getLine(cursor.line);
-			editor.replaceRange(insertionAtCursor(line, text.slice(0, cursor.ch), text.slice(cursor.ch)), cursor);
+			const fmEnd = app.metadataCache.getFileCache(destination.note)?.frontmatterPosition?.end.line ?? null;
+			const at = insertPoint(editor.getCursor(), fmEnd, (n) => editor.getLine(n), editor.lastLine());
+			editor.replaceRange(insertionAtCursor(line, at.before, at.after), { line: at.line, ch: at.ch });
 		} else {
 			await app.vault.process(destination.note, (current) => appendInsertBlock(current, line));
 		}

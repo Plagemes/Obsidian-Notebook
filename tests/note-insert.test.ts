@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendInsertBlock, buildInsertLine, clampInsertWidth, cropSvg, insertionAtCursor, insertPictureName } from "../src/model/note-insert";
+import { appendInsertBlock, buildInsertLine, clampInsertWidth, cropSvg, editorStillTargets, insertionAtCursor, insertPictureName, insertPoint } from "../src/model/note-insert";
 
 describe("note insert text", () => {
 	it("clamps the width", () => {
@@ -37,5 +37,36 @@ describe("note insert text", () => {
 		expect(out).toContain('<rect width="595" height="842"/></svg>');
 		expect(out?.match(/<svg/g)?.length).toBe(1);
 		expect(cropSvg("<p>", { x: 0, y: 0, width: 1, height: 1 })).toBeNull();
+	});
+});
+
+describe("insertion point", () => {
+	const lines = ["---", "title: x", "---", "first", "second"];
+	const get = (n: number) => lines[n] ?? "";
+	it("keeps a cursor in the body where it is", () => {
+		expect(insertPoint({ line: 3, ch: 2 }, 2, get, 4)).toEqual({ line: 3, ch: 2, before: "fi", after: "rst" });
+		expect(insertPoint({ line: 0, ch: 0 }, null, get, 4)).toEqual({ line: 0, ch: 0, before: "", after: "---" });
+	});
+	it("moves a cursor inside the front matter to just after it", () => {
+		for (const line of [0, 1, 2]) {
+			const p = insertPoint({ line, ch: 1 }, 2, get, 4);
+			expect(p).toEqual({ line: 3, ch: 0, before: "", after: "first" });
+		}
+		expect(insertionAtCursor("X", "", "first")).toBe("X\n");
+	});
+	it("goes to the end when the front matter is the whole note", () => {
+		const fm = ["---", "a: 1", "---"];
+		const p = insertPoint({ line: 0, ch: 0 }, 2, (n) => fm[n] ?? "", 2);
+		expect(p).toEqual({ line: 2, ch: 3, before: "---", after: "" });
+		expect(insertionAtCursor("X", p.before, p.after)).toBe("\nX");
+	});
+});
+
+describe("the editor chosen before drawing", () => {
+	it("is used only while it still shows the same note in source mode", () => {
+		expect(editorStillTargets("a.md", "a.md", "source")).toBe(true);
+		expect(editorStillTargets("b.md", "a.md", "source")).toBe(false);
+		expect(editorStillTargets(undefined, "a.md", "source")).toBe(false);
+		expect(editorStillTargets("a.md", "a.md", "preview")).toBe(false);
 	});
 });
