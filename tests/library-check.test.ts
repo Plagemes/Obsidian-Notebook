@@ -372,6 +372,8 @@ describe("the library check", () => {
 	it("every other file that can name an asset stays a holder, in _meta too", async () => {
 		expect(isNonHolderSidecar("Notebooks/_meta/folders-0a1b2c3d.json", "Notebooks")).toBe(true);
 		expect(isNonHolderSidecar("_meta/library-0a1b2c3d.json", "")).toBe(true);
+		expect(isNonHolderSidecar("Notebooks/_meta/board-0a1b2c3d.json", "Notebooks")).toBe(true);
+		expect(isNonHolderSidecar("Notebooks/_meta/board.unreadable-deadbeef.json", "Notebooks")).toBe(true);
 		for (const p of [
 			"Notebooks/_meta/pdf-links-0a1b2c3d.json", "Notebooks/_meta/practice-0a1b2c3d.json", "Notebooks/_meta/page-moves-0a1b2c3d.json",
 			"Notebooks/_meta/sub/folders-0a1b2c3d.json", "Notebooks/_trash/folders-0a1b2c3d.json", "Notebooks/_meta/folders-xyz.json",

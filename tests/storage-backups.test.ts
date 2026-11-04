@@ -65,6 +65,32 @@ describe("which backups are old enough to offer", () => {
 		expect(plan.old.find((o) => o.reason === "before-restore")!.recovery).toBe(false);
 	});
 
+	it("the newest ORDINARY backup stays: a newer recovery copy does not stand in for it", () => {
+		const plan = planBackups(
+			[bak("Physics", "20250101-100000"), bak("Physics", "20250601-100000"), bak("Physics", "20260101-100000", "unreadable", "1a1b2c3d")],
+			FOLDER, notebooks, NOW,
+		);
+		// The 2025-06 backup is the newest good one and stays; the older good one and the (newest overall) recovery copy are offered.
+		expect(plan.old.map((o) => [o.at > 0, o.reason, o.recovery]).sort()).toEqual([[true, "before-move", false], [true, "unreadable", true]]);
+		expect(plan.old.some((o) => o.path.includes("20250601"))).toBe(false);
+		// Only recovery copies: the newest of them stays.
+		const only = planBackups([bak("Physics", "20250101-100000", "unreadable"), bak("Physics", "20250601-100000", "unreadable", "1a1b2c3d")], FOLDER, notebooks, NOW);
+		expect(only.old.map((o) => o.path)).toEqual([`${FOLDER}/Physics 20250101-100000 unreadable 0a1b2c3d.bak`]);
+	});
+
+	it("nothing is offered for a notebook that cannot be read now, but its sizes still count", () => {
+		const broken = [notebookRef("Notebooks/Physics.notebook", "doc-physics", false, false)];
+		const plan = planBackups(
+			[bak("Physics", "20240101-100000"), bak("Physics", "20250101-100000"), bak("Physics", "20260101-100000"), snap("doc-physics", "20200101-1000"), snap("doc-physics", "20200201-1000"), snap("doc-physics", "20200301-1000"), snap("doc-physics", "20200401-1000"), snap("doc-physics", "20200501-1000")],
+			FOLDER, broken, NOW,
+		);
+		expect(plan.old).toEqual([]);
+		expect(plan.countByNotebook.get("Notebooks/Physics.notebook")).toBe(8);
+		// The same notebook readable: offered.
+		const ok = planBackups([bak("Physics", "20240101-100000"), bak("Physics", "20260101-100000")], FOLDER, [notebookRef("Notebooks/Physics.notebook", "doc-physics")], NOW);
+		expect(ok.old).toHaveLength(1);
+	});
+
 	it("version history: old snapshots beyond the newest few of a notebook that exists", () => {
 		const names = ["20240101-1000", "20240201-1000", "20240301-1000", "20240401-1000", "20260101-1000", "20261020-1000"];
 		const plan = planBackups(names.map((n) => snap("doc-physics", n)), FOLDER, notebooks, NOW, { keepSnapshots: 2 });

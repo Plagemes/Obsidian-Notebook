@@ -150,7 +150,8 @@ async function seed(app: App): Promise<Seeded> {
 
 	// Old backups and version history of Physics.
 	const sample = serialize(chemistry);
-	const bak = (stamp: string, reason: string, hash: string) => app.vault.create(`${ROOT}/_backup/Physics ${stamp} ${reason} ${hash}.bak`, sample);
+	// A backup holds its own notebook (a backup of another document under the same name is not offered).
+	const bak = (stamp: string, reason: string, hash: string) => app.vault.create(`${ROOT}/_backup/Physics ${stamp} ${reason} ${hash}.bak`, serialize(physics));
 	await bak("20240101-100000", "before-move", "0a1b2c3d");
 	await bak("20240201-100000", "unreadable", "1a1b2c3d");
 	await bak("20240301-100000", "before-restore", "2a1b2c3d");

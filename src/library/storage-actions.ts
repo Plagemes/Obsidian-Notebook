@@ -3,15 +3,17 @@
  * is about to touch, because minutes can pass between the scan and the tap.
  *
  * The rules, in one place:
- * - **Nothing is deleted.** Unused and duplicate asset files are renamed into `<notebooks folder>/_trash/assets/` (a move
+ * - **Nothing is deleted by this code.** Unused and duplicate asset files are renamed into `<notebooks folder>/_trash/assets/` (a move
  *   inside the vault, as the library check does it: a sync service sees a move, and putting a file back is a move back).
- *   Backups go through `app.fileManager.trashFile` (the same call that prunes version history), a conflicted copy through the
- *   library trash (`_trash/items/`, restorable from the Trash).
+ *   Backups go through `app.fileManager.trashFile` (the same call that prunes version history), which follows the user's
+ *   "Deleted files" setting of Obsidian: the system trash, Obsidian's `.trash`, or a **permanent delete** (the confirmation says
+ *   so). A conflicted copy goes through the library trash (`_trash/items/`, restorable from the Trash).
  * - **No notebook is edited that cannot be edited safely.** An open notebook is changed only through its view's `EditContext`
  *   (one undo step, saved by its own session, so what is not saved yet is part of the change, not overwritten by it); one that
  *   is open but gives no context (read-only, loading, a stroke in progress) is skipped. A closed notebook is rewritten only
  *   after a backup copy, from text that passed the save check, only if the file still holds what was read, and the result is
- *   read back. A notebook that does not parse is never written.
+ *   read back. A notebook that does not parse is never written, and neither is one with edits waiting in the instant-save
+ *   journal (they were never saved to its file; rewriting it would orphan them).
  * - **Pointing at another picture never removes the old one.** The old file stays in `_assets/` (undo, backups and other
  *   notebooks may still name it); once nothing names it, the library check offers it as an unused file.
  */
@@ -30,6 +32,7 @@ import { sameNotebookText } from "../storage/conflicts";
 import { ensureFolder, VaultDocumentIO } from "../storage/vault-io";
 import { isEditContextSource, type EditContext } from "../view/edit-context";
 import { assetTrashPath, isAssetFilePath, type AssetFile } from "./library-check";
+import type { JournalReader } from "./library-check-live";
 import type { ConflictCopy, OldBackup } from "../storage/storage-backups";
 import type { DuplicateGroup, HeavyImage } from "./storage-scan";
 import { downscaleImage } from "./storage-image";
@@ -42,6 +45,32 @@ export interface StorageEnv {
 	settings: () => NotebookSettings;
 	/** Moves a notebook to the library trash (restorable). */
 	trashNotebook(file: TFile): Promise<unknown>;
+	/**
+	 * The instant-save journal (where its files are). A closed notebook with an entry there still has edits that were never
+	 * saved: rewriting its file would make the entry's base not match any more, and on the next open those edits would go to
+	 * a backup and be dropped from the notebook. Without it, no journal is looked at.
+	 */
+	journal?: { reader: Pick<JournalReader, "exists" | "list">; folder: string };
+}
+
+/**
+ * Whether the closed notebook with document id `docId` has a journal entry waiting. Anything that cannot be listed counts as
+ * "yes": better to leave a notebook alone than to take its unsaved edits away.
+ */
+export async function hasPendingJournal(env: StorageEnv, docId: string | null): Promise<boolean> {
+	const journal = env.journal;
+	if (!journal) return false;
+	try {
+		if (!(await journal.reader.exists(journal.folder))) return false;
+		if (docId === null) return true;
+		const key = docId.replace(/[^A-Za-z0-9_-]/g, "_");
+		return (await journal.reader.list(journal.folder)).some((p) => {
+			const name = p.slice(p.lastIndexOf("/") + 1);
+			return name.endsWith(".journal") && name.split(".")[0] === key;
+		});
+	} catch {
+		return true;
+	}
 }
 
 /** Open, editable view of `file`; "busy" when a view shows it but hands out no context; null when it is not open. */
@@ -69,6 +98,8 @@ export interface RepointOutcome {
 	updated: string[];
 	/** Open notebooks among them (one undo step each). */
 	openUpdated: string[];
+	/** Open notebooks among those whose change is applied but could not be saved yet: their own session saves it later. */
+	unsaved: string[];
 	/** Notebooks that did not use the old picture any more. */
 	unchanged: string[];
 	/** Left alone, and why. */
@@ -81,7 +112,7 @@ export interface RepointOutcome {
  * ends up either on the new picture or untouched, and the old file is still there for the ones left behind.
  */
 export async function repointAsset(env: StorageEnv, fromId: string, to: Asset, paths: readonly string[]): Promise<RepointOutcome> {
-	const out: RepointOutcome = { updated: [], openUpdated: [], unchanged: [], skipped: [], failed: [] };
+	const out: RepointOutcome = { updated: [], openUpdated: [], unsaved: [], unchanged: [], skipped: [], failed: [] };
 	for (const path of paths) {
 		const file = env.app.vault.getFileByPath(path);
 		if (!file) {
@@ -109,14 +140,18 @@ async function repointOpen(ctx: EditContext, fromId: string, to: Asset, path: st
 	}
 	// Readable before the command that registers it runs (the view draws as soon as the command is applied).
 	ctx.addPending(to);
+	let saved = false;
 	try {
 		ctx.execute(batch);
-		if (!(await ctx.flush())) throw new Error(t("storage.error.notSaved"));
+		saved = await ctx.flush();
 	} finally {
+		// Applied, so the document itself names the new picture now; if the save did not go through, the view's session
+		// saves it later (and the journal holds it meanwhile).
 		ctx.removePending(to.id);
 	}
 	out.updated.push(path);
 	out.openUpdated.push(path);
+	if (!saved) out.unsaved.push(path);
 }
 
 async function repointClosed(env: StorageEnv, file: TFile, fromId: string, to: Asset, out: RepointOutcome): Promise<void> {
@@ -134,6 +169,11 @@ async function repointClosed(env: StorageEnv, file: TFile, fromId: string, to: A
 	}
 	// A view may have opened it while the file was read: then it is the view's to change, not ours.
 	if (isOpen(app, file.path)) {
+		out.skipped.push({ path: file.path, reason: "busy" });
+		return;
+	}
+	// Edits waiting in the instant-save journal were never saved to this file: rewriting it would orphan them.
+	if (await hasPendingJournal(env, quickDocId(before))) {
 		out.skipped.push({ path: file.path, reason: "busy" });
 		return;
 	}
@@ -225,7 +265,7 @@ async function moveAside(app: App, root: string, file: TFile): Promise<string> {
  */
 export async function mergeDuplicates(env: StorageEnv, group: DuplicateGroup, root: string): Promise<MergeOutcome> {
 	const app = env.app;
-	const out: MergeOutcome = { moved: [], repoint: { updated: [], openUpdated: [], unchanged: [], skipped: [], failed: [] }, skipped: [], failed: [] };
+	const out: MergeOutcome = { moved: [], repoint: { updated: [], openUpdated: [], unsaved: [], unchanged: [], skipped: [], failed: [] }, skipped: [], failed: [] };
 	const keep = app.vault.getFileByPath(group.keep.path);
 	if (!keep || keep.stat.size !== group.keep.size) {
 		out.skipped.push(...group.extras.map((e) => e.file.path));
@@ -240,6 +280,12 @@ export async function mergeDuplicates(env: StorageEnv, group: DuplicateGroup, ro
 				continue;
 			}
 			if (extra.kind === "same-id") {
+				// Readers other than this version find the picture by the record's path (library covers, shared clips, devices
+				// on 0.14 or older): while any notebook's record names this very file, moving it would leave them without it.
+				if (await recordsNameFile(env, [...extra.users, ...extra.blocked], file.path)) {
+					out.skipped.push(extra.file.path);
+					continue;
+				}
 				await moveAside(app, root, file);
 				out.moved.push(extra.file);
 			} else {
@@ -253,9 +299,38 @@ export async function mergeDuplicates(env: StorageEnv, group: DuplicateGroup, ro
 	return out;
 }
 
+/**
+ * Whether the asset record of any of the notebooks `paths` names `filePath`. What cannot be told (open but busy, does not
+ * parse, cannot be read, or a journal entry may hold a newer record) counts as "yes".
+ */
+export async function recordsNameFile(env: StorageEnv, paths: readonly string[], filePath: string): Promise<boolean> {
+	const names = (assets: Record<string, Asset> | undefined): boolean => Object.values(assets ?? {}).some((a) => a.path === filePath || normalizePath(a.path) === filePath);
+	for (const path of paths) {
+		const nb = env.app.vault.getFileByPath(path);
+		if (!nb) continue;
+		try {
+			const ctx = openContext(env.app, nb);
+			if (ctx === "busy") return true;
+			if (ctx) {
+				if (names(ctx.doc.assets)) return true;
+				continue;
+			}
+			const text = readNotebookText(nb.extension, await env.app.vault.read(nb));
+			if (await hasPendingJournal(env, quickDocId(text))) return true;
+			const parsed = parse(text);
+			if (!parsed.ok) return true;
+			if (names(parsed.doc.assets)) return true;
+		} catch {
+			return true;
+		}
+	}
+	return false;
+}
+
 function mergeOutcome(into: RepointOutcome, from: RepointOutcome): void {
 	into.updated.push(...from.updated);
 	into.openUpdated.push(...from.openUpdated);
+	into.unsaved.push(...from.unsaved);
 	into.unchanged.push(...from.unchanged);
 	into.skipped.push(...from.skipped);
 	into.failed.push(...from.failed);

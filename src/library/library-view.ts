@@ -306,6 +306,7 @@ export class LibraryView extends ItemView {
 	/** The notebooks of the grid as shown (paths), per group, so a move up / down / drop knows its neighbours. */
 	private arrangement: { pinned: string[]; rest: string[] } = { pinned: [], rest: [] };
 	private backfilling = false;
+	private boardPruned = false;
 
 	/** 0.13: page thumbnails of Home (Continue card, Recent notes). */
 	private readonly pageThumbs = new PageThumbs({
@@ -639,8 +640,48 @@ export class LibraryView extends ItemView {
 				}
 			}
 			if (n > 0) this.afterIndexChange();
+			void this.pruneBoardStatuses();
 		} finally {
 			this.backfilling = false;
+		}
+	}
+
+	/**
+	 * Every state key of the library, or null while that cannot be known for sure: only when no scan is running, every
+	 * notebook file of the notebooks folder (hidden ones included) has an entry, and each entry was read and has its id.
+	 */
+	private liveBoardKeys(): Set<string> | null {
+		if (this.reconciling) return null;
+		const files = this.notebookFiles();
+		const entries = this.index.all();
+		if (files.length !== entries.length || entries.some((e) => e.id === undefined || e.mtime < 0)) return null;
+		const root = this.root();
+		const folder = root === "" ? this.app.vault.getRoot() : this.app.vault.getFolderByPath(root);
+		let hidden = false;
+		if (folder) Vault.recurseChildren(folder, (f) => {
+			if (f instanceof TFile && isNotebookFile(f) && !isReservedPath(f.path, root) && this.host.isHiddenPath?.(f.path)) hidden = true;
+		});
+		if (hidden) return null;
+		const keys = new Set<string>();
+		for (const e of entries) {
+			keys.add(this.index.stateKey(e));
+			keys.add(`id:${e.id}`);
+			keys.add(`path:${e.path}`);
+		}
+		return keys;
+	}
+
+	/** Once per view, when the library is complete: the board file of this device loses the statuses of notebooks that are gone. */
+	private async pruneBoardStatuses(): Promise<void> {
+		const store = this.host.board;
+		if (this.closed || this.boardPruned || !store) return;
+		const live = this.liveBoardKeys();
+		if (!live) return;
+		this.boardPruned = true;
+		try {
+			await store.prune(live);
+		} catch (e) {
+			console.error("[notebook] could not tidy the board statuses", e);
 		}
 	}
 

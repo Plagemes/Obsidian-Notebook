@@ -493,3 +493,34 @@ describe("a scan is cheap and can be stopped", () => {
 		expect(r.cancelled).toBe(false);
 	});
 });
+
+describe("old backups: whose they are", () => {
+	const bakPath = (base: string, stamp: string, reason = "before-move") => `Notebooks/_backup/${base} ${stamp} ${reason} 0a1b2c3d.bak`;
+
+	it("a backup is offered only if it is the notebook's own: one of a deleted notebook with the same name is not", async () => {
+		const mine = sampleDocument(1);
+		const other = sampleDocument(1);
+		other.id = "another-notebook-id";
+		const src = new FakeVault()
+			.put("Notebooks/A.notebook", { text: serialize(mine) })
+			.put(bakPath("A", "19990101-100000"), { text: serialize(other) })
+			.put(bakPath("A", "19990201-100000"), { text: serialize(mine) })
+			.put(bakPath("A", "19990301-100000"), { size: 40 })
+			.put(bakPath("A", "20010901-100000"), { text: serialize(mine) });
+		const r = await run(src, { seen: aged() });
+		const offered = r.oldBackups.map((b) => b.path);
+		expect(offered).not.toContain(bakPath("A", "19990101-100000"));
+		expect(offered).toContain(bakPath("A", "19990201-100000"));
+		// Its id cannot be read: the name decides, as before.
+		expect(offered).toContain(bakPath("A", "19990301-100000"));
+	});
+
+	it("nothing is offered for a notebook that cannot be read now", async () => {
+		const src = new FakeVault()
+			.put("Notebooks/A.notebook", { unreadable: true })
+			.put(bakPath("A", "19990101-100000"), { size: 40 })
+			.put(bakPath("A", "19990201-100000"), { size: 40 });
+		const r = await run(src, { seen: aged() });
+		expect(r.oldBackups).toEqual([]);
+	});
+});

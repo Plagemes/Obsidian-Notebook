@@ -13,7 +13,7 @@
 import { deviceFileName, ensureFolderPath, keepUnreadableCopy, listDeviceFiles, type DeviceFileAdapter } from "../storage/device-files";
 import { linksFolder } from "../storage/pdf-links-store";
 import {
-	applyBoardOps, BOARD_PREFIX, emptyBoard, mergeBoardFiles, parseBoard, serializeBoard,
+	applyBoardOps, BOARD_PREFIX, emptyBoard, mergeBoardFiles, parseBoard, pruneBoardFile, serializeBoard,
 	type BoardFile, type BoardMap, type BoardOp,
 } from "./board-state";
 
@@ -76,7 +76,8 @@ export class BoardStateStore {
 		return this.enqueue(async () => {
 			const own = await this.readOwn();
 			const { merged, others } = await this.readAll();
-			const after = applyBoardOps(own.data, merged, list, this.now());
+			// The own file is rewritten anyway: cleared statuses nobody contradicts are dropped with it.
+			const after = pruneBoardFile(applyBoardOps(own.data, merged, list, this.now()), others, null, this.now());
 			const text = serializeBoard(after);
 			if (own.exists ? text === serializeBoard(own.data) : after.items.length === 0) return merged;
 			const check = parseBoard(text, this.device);
@@ -85,6 +86,27 @@ export class BoardStateStore {
 			await this.adapter.write(this.ownPath, text);
 			this.setCache(mergeBoardFiles([after, ...others]));
 			return this.cache;
+		});
+	}
+
+	/**
+	 * Drops from this device's file the statuses of notebooks that no longer exist (`live`: every state key of the library,
+	 * given only when the library has read all its notebooks) and cleared statuses nobody contradicts. Writes only when
+	 * something goes, only the own file, after the same re-validation as a status change. Returns whether it wrote.
+	 */
+	prune(live: ReadonlySet<string> | null): Promise<boolean> {
+		return this.enqueue(async () => {
+			if (!(await this.adapter.exists(this.ownPath))) return false;
+			const own = await this.readOwn();
+			const { others } = await this.readAll();
+			const after = pruneBoardFile(own.data, others, live, this.now());
+			if (after === own.data) return false;
+			const text = serializeBoard(after);
+			const check = parseBoard(text, this.device);
+			if (!check.ok) throw new Error(`board file did not validate: ${check.message}`);
+			await this.adapter.write(this.ownPath, text);
+			await this.readAll();
+			return true;
 		});
 	}
 

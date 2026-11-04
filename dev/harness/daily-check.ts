@@ -38,7 +38,11 @@ export async function checkDaily(api: DailyCheckApi): Promise<{ ok: boolean; res
 	const notebook = await vault.create("Notebooks/Daily.notebook", "{}");
 	const settings = plugin.settings;
 	const notePath = `Daily/${iso}.md`;
-	const core = (folder: string, format: string) => ({ getEnabledPluginById: (id: string) => (id === "daily-notes" ? { instance: { options: { folder, format } } } : null) });
+	// The real shape: getPluginById gives { enabled, instance }; (getEnabledPluginById gives the instance itself).
+	const core = (folder: string, format: string, template?: string) => ({
+		getPluginById: (id: string) => (id === "daily-notes" ? { enabled: true, instance: { options: { folder, format, template } } } : undefined),
+		getEnabledPluginById: (id: string) => (id === "daily-notes" ? { options: { folder, format, template } } : null),
+	});
 	const text = async (path: string): Promise<string | null> => {
 		const f = vault.getFileByPath(path);
 		return f ? vault.read(f) : null;
@@ -50,7 +54,7 @@ export async function checkDaily(api: DailyCheckApi): Promise<{ ok: boolean; res
 	let before = noticeCount();
 	await linkFromDailyNote(app as never, settings, notebook as never, 2, "p-day1", now);
 	add("no Daily notes plugin: a notice and no note", noticeCount() === before + 1 && lastNotice() === t("daily.unavailable") && (await text(notePath)) === null, lastNotice());
-	(app as unknown as { internalPlugins: unknown }).internalPlugins = { getEnabledPluginById: () => { throw new Error("harness: internals changed"); } };
+	(app as unknown as { internalPlugins: unknown }).internalPlugins = { getPluginById: () => { throw new Error("harness: internals changed"); } };
 	await linkFromDailyNote(app as never, settings, notebook as never, 2, "p-day1", now);
 	add("unexpected internals do not throw", (await text(notePath)) === null);
 	api.errors.splice(0, api.errors.length); // the failure above logs on purpose
@@ -80,6 +84,29 @@ export async function checkDaily(api: DailyCheckApi): Promise<{ ok: boolean; res
 	await linkFromDailyNote(app as never, settings, notebook as never, 1, "p-day2", now);
 	const made = await text(`Journal/${iso}.md`);
 	add("Periodic Notes' folder wins, and the missing note is created with the link", !!made && made.includes("p-day2") && (await text(`Daily/${iso}.md`)) === once, String(made));
+	settings.dailyCreateNote = false;
+
+	// 4b. A new daily note starts from the Daily notes template; an unreadable template makes no note.
+	(app as unknown as { plugins: unknown }).plugins = undefined;
+	settings.dailyCreateNote = true;
+	(app as unknown as { internalPlugins: unknown }).internalPlugins = core("Daily", "YYYY-MM-DD", "Templates/Daily");
+	const tomorrow = new Date(2026, 10, 5, 9, 30);
+	const tomorrowIso = isoDate(tomorrow);
+	before = noticeCount();
+	await linkFromDailyNote(app as never, settings, notebook as never, 1, "p-day3", tomorrow, 0);
+	add("a template that is set but missing: no note, a notice", (await text(`Daily/${tomorrowIso}.md`)) === null && lastNotice() === t("daily.templateMissing", { path: `Daily/${tomorrowIso}.md` }) && noticeCount() === before + 1, lastNotice());
+	await vault.create("Templates/Daily.md", "# {{title}}\n\nDate: {{date}} {{date:DD/MM}}\n\n## Notes\n");
+	await linkFromDailyNote(app as never, settings, notebook as never, 1, "p-day3", tomorrow, 0);
+	const fromTemplate = (await text(`Daily/${tomorrowIso}.md`)) ?? "";
+	add("the new note starts from the template, with its placeholders filled", fromTemplate.startsWith(`# ${tomorrowIso}\n\nDate: ${tomorrowIso} 05/11\n\n## Notes\n`) && fromTemplate.includes("p-day3"), JSON.stringify(fromTemplate));
+	// A note that arrives while we wait (a sync) is used instead of making a second one.
+	const syncIso = isoDate(new Date(2026, 10, 6));
+	const arriving = linkFromDailyNote(app as never, settings, notebook as never, 1, "p-day4", new Date(2026, 10, 6, 9, 0), 150);
+	await sleep(40);
+	await vault.create(`Daily/${syncIso}.md`, "synced from another device\n");
+	await arriving;
+	const synced = (await text(`Daily/${syncIso}.md`)) ?? "";
+	add("a note that arrives during the short wait is kept and linked, not replaced", synced.startsWith("synced from another device\n") && synced.includes("p-day4"), JSON.stringify(synced));
 	settings.dailyCreateNote = false;
 
 	// 5. The settings rows.

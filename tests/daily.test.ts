@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-	dailyNotebookPath, dailyNotePath, defaultDailyPath, findDatedPage, parseDailyConfig, withTodayLink,
+	applyDailyTemplate, dailyNotebookPath, dailyNotePath, dailyTemplatePath, defaultDailyPath, findDatedPage, parseDailyConfig, readDailyConfigFrom, withTodayLink,
 } from "../src/library/daily-logic";
 import { createDocument } from "../src/model/document";
 import { parse, serializeChecked } from "../src/model/serialize";
@@ -124,5 +124,54 @@ describe("settings", () => {
 		expect(s.dailyLink).toBe(true);
 		expect(s.dailyCreateNote).toBe(false);
 		expect(s.dailyNotebookPath).toBe("Journal/Days");
+	});
+});
+
+describe("reading the Daily notes settings (the real shape of the internals)", () => {
+	const core = (enabled: boolean | undefined, options: unknown) => ({ internalPlugins: { getPluginById: (id: string) => (id === "daily-notes" ? { enabled, instance: { options } } : undefined) } });
+
+	it("reads the core plugin as { enabled, instance }", () => {
+		expect(readDailyConfigFrom(core(true, { folder: "Daily", format: "YYYY-MM-DD" }))).toEqual({ folder: "Daily", format: "YYYY-MM-DD" });
+		expect(readDailyConfigFrom(core(true, { folder: "D", format: "YYYY", template: "Templates/Day" }))).toEqual({ folder: "D", format: "YYYY", template: "Templates/Day" });
+	});
+
+	it("is not fooled by getEnabledPluginById (it returns the instance, which has no .instance)", () => {
+		const app = { internalPlugins: { getEnabledPluginById: () => ({ options: { folder: "Daily", format: "YYYY-MM-DD" } }) } };
+		expect(readDailyConfigFrom(app)).toBeNull();
+	});
+
+	it("treats a plugin that is not on as off, and anything unexpected as unavailable", () => {
+		expect(readDailyConfigFrom(core(false, { folder: "Daily" }))).toBeNull();
+		expect(readDailyConfigFrom(core(undefined, { folder: "Daily" }))).toBeNull();
+		expect(readDailyConfigFrom(core(true, undefined))).toBeNull();
+		expect(readDailyConfigFrom({})).toBeNull();
+		expect(readDailyConfigFrom(null)).toBeNull();
+	});
+
+	it("lets Periodic Notes win when its daily notes are on", () => {
+		const app = { ...core(true, { folder: "Core" }), plugins: { getPlugin: (id: string) => (id === "periodic-notes" ? { settings: { daily: { enabled: true, folder: "Journal/", format: "YYYY-MM-DD" } } } : null) } };
+		expect(readDailyConfigFrom(app)).toEqual({ folder: "Journal", format: "YYYY-MM-DD" });
+		const off = { ...core(true, { folder: "Core" }), plugins: { getPlugin: () => ({ settings: { daily: { enabled: false, folder: "Journal" } } }) } };
+		expect(readDailyConfigFrom(off)?.folder).toBe("Core");
+	});
+});
+
+describe("the Daily notes template", () => {
+	const fmt2 = (d: Date, pattern: string): string => (pattern === "YYYY-MM-DD" ? isoDate(d) : pattern === "HH:mm" ? "09:30" : pattern === "DD/MM" ? "04/11" : pattern);
+
+	it("fills {{date}}, {{date:FORMAT}}, {{time}} and {{title}}", () => {
+		const out = applyDailyTemplate("# {{title}}\n{{date}} | {{ date : DD/MM }} | {{time}} | {{Title}}", "2026-11-04", today, "YYYY-MM-DD", fmt2);
+		expect(out).toBe("# 2026-11-04\n2026-11-04 | 04/11 | 09:30 | 2026-11-04");
+		expect(applyDailyTemplate("plain text", "t", today, "YYYY-MM-DD", fmt2)).toBe("plain text");
+	});
+
+	it("finds the template file with or without .md", () => {
+		expect(dailyTemplatePath("Templates/Day")).toBe("Templates/Day.md");
+		expect(dailyTemplatePath("Templates/Day.md")).toBe("Templates/Day.md");
+	});
+
+	it("keeps the link after the template text", () => {
+		const text = applyDailyTemplate("# {{title}}\n", "x", today, "YYYY-MM-DD", fmt2);
+		expect(withTodayLink(text, "[[N#p1]]", "p1")).toBe("# x\n[[N#p1]]\n");
 	});
 });

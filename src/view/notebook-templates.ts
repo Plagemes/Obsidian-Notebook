@@ -11,6 +11,7 @@ import { templateFileName } from "../model/templates";
 import type { NotebookDocument } from "../model/types";
 import type { NotebookSettings } from "../settings";
 import { listStoredTemplates, saveStoredTemplate, type StoredTemplate } from "../storage/templates-store";
+import { LibraryTrash } from "../storage/trash";
 import { notebookTemplatesFolderPath } from "../storage/trash-paths";
 import { applyArt, artRef } from "../ui/art/art-ref";
 import { decorate } from "../ui/components/dom";
@@ -200,8 +201,10 @@ class NotebookTemplateManager extends Modal {
 	}
 
 	private askDelete(tpl: StoredTemplate): void {
-		confirmDestructive(this.app, { title: t("template.delete.title"), body: t("template.delete.body", { name: tpl.name }), confirm: t("template.delete") }, () => {
-			void this.app.fileManager.trashFile(tpl.file).then(() => this.reload()).catch((e: Error) => showNotice(t("template.loadFailed", { error: e.message })));
+		confirmDestructive(this.app, { title: t("template.delete.title"), body: t("nbtemplate.delete.body", { name: tpl.name }), confirm: t("template.delete") }, () => {
+			// The library trash, like a notebook: restorable from the Trash, never a permanent delete by Obsidian's setting.
+			const trash = new LibraryTrash({ app: this.app, root: () => this.settings().folder, retentionDays: () => 0 });
+			void trash.trash(tpl.file).then(() => { showNotice(t("trash.notice.moved", { name: tpl.name })); return this.reload(); }).catch((e: Error) => showNotice(t("template.loadFailed", { error: e.message })));
 		});
 	}
 

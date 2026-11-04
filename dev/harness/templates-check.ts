@@ -237,6 +237,7 @@ export async function checkTemplates(api: TemplatesCheckApi): Promise<{ ok: bool
 	add("Delete asks for a confirmation first", !!confirm && !!app.vault.getFileByPath(`${folder}/Saved by prompt.notebook`));
 	if (confirm) tap(confirm.querySelector(".nb-modal-btn.is-danger"), "mouse");
 	add("and then moves the template to the trash", await until(() => app.vault.getFileByPath(`${folder}/Saved by prompt.notebook`) === null));
+	add("…the library Trash (restorable), not Obsidian's trash", app.vault.getFiles().some((f) => f.path.includes("/_trash/items/") && f.name === "Saved by prompt.notebook"));
 	closeAll();
 
 	return { ok: results.every((r) => r.ok) && api.errors.length === 0, results, errors: [...api.errors], notices: [...api.notices], env: { dpr: window.devicePixelRatio } };
