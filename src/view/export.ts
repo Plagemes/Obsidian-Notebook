@@ -2,6 +2,7 @@ import { normalizePath, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { layerFlags, planExport, type ExportFormat, type ExportLayers, type ExportScope } from "../ink/export-layers";
 import { pagesToPdf, pagesToPdfYielding, type PdfCommentLabels, type PdfOptions, type PdfPlacedImage } from "../ink/export-pdf";
+import { planSplit, type SplitSettings } from "../ink/export-tiles";
 import { pageToSvg, type SvgPlacedImage } from "../ink/export-svg";
 import type { BoxLabel } from "../ink/marker-render";
 import type { HeaderLayout } from "../ink/page-header";
@@ -112,6 +113,8 @@ export interface ExportOptions {
 	header?: (page: Page) => HeaderLayout | null;
 	/** 0.18 (#86): the margin comments as notes in a strip beside the pages that have them (PDF only); absent when the setting is off. */
 	comments?: PdfCommentLabels;
+	/** 0.18 (#178): split the infinite pages into sheets of paper (PDF and PNG); the other pages are exported as they are. */
+	split?: SplitSettings;
 }
 
 /**
@@ -130,6 +133,7 @@ export async function buildPdfBytes(
 		...(options.header ? { header: options.header } : {}),
 		...(options.comments ? { comments: options.comments } : {}),
 		...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}),
+		...(options.split ? { split: (p: Page) => planSplit(p, options.split!) } : {}),
 	};
 	return { bytes: pause ? await pagesToPdfYielding(pages, pdfOptions, pause) : pagesToPdf(pages, pdfOptions), skipped };
 }
@@ -197,6 +201,8 @@ export interface ExportRequest {
 	/** wave 0.10 (81), PNG images: the vault folder (created when missing) and the pixels per pt. */
 	folder?: string;
 	scale?: number;
+	/** 0.18 (#178), PDF and PNG: split the infinite pages into sheets of paper. */
+	split?: SplitSettings;
 }
 
 /**
@@ -206,7 +212,8 @@ export interface ExportRequest {
  */
 export async function runExport(app: App, notebook: TFile, pages: readonly Page[], request: ExportRequest, media: NotebookMedia | null, options: ExportOptions = {}): Promise<void> {
 	const jobs = planExport(request.format, request.scope, request.pageIndex, pages.length, request.layers, request.range);
-	const opts: ExportOptions = { ...options, layers: request.layers };
+	const splits = (request.format === "pdf" || request.format === "png") && request.split;
+	const opts: ExportOptions = { ...options, layers: request.layers, ...(splits ? { split: request.split! } : {}) };
 	if (jobs.length === 0) return;
 	if (request.format === "png") {
 		await exportPngPages(app, pages, { folder: request.folder ?? "", scale: request.scale ?? DEFAULT_PNG_SCALE, pages: jobs[0]!.pages }, media, opts);

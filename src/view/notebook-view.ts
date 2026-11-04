@@ -1802,6 +1802,7 @@ export class NotebookView extends FileView {
 			defaultFolder: siblingFolder(file, "PNG"),
 			canPrint: canPrint(),
 			...(initialFormat ? { initialFormat } : {}),
+			pages: () => this.renderPagesOf(doc),
 			run: (request) => void runExport(this.app, file, this.renderPagesOf(doc), request, this.media, this.exportOptions()),
 		}).open();
 	}
