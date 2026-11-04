@@ -90,3 +90,100 @@ export function viewerPageNumber(view: unknown): number | null {
 	}
 	return null;
 }
+
+// ------------------------------------------------------------------ cost control
+
+/** PDFs larger than this are not read and hashed for "Annotate in Notebook" (the whole file is held in memory, also on Android). */
+export const ANNOTATE_PDF_MAX_BYTES = 200 * 1024 * 1024;
+/** More notebooks than this to read: a progress window with a cancel button is shown. */
+export const SCAN_PROGRESS_FROM = 25;
+const MAX_HASHES = 64;
+const MAX_NOTEBOOKS = 4000;
+
+/** The asset ids a notebook's text names (quoted hex strings): a superset of the PDFs it annotates, found without parsing it. */
+export function assetIdsInText(text: string): Set<string> {
+	const ids = new Set<string>();
+	for (const m of text.matchAll(/"([0-9a-f]{24,64})"/g)) {
+		const id = m[1]!;
+		ids.add(id);
+		ids.add(id.slice(0, 24));
+	}
+	return ids;
+}
+
+/** What identifies a file's content cheaply: its modification time and size. */
+export function fileKey(stat: { mtime: number; size: number }): string {
+	return `${stat.mtime}:${stat.size}`;
+}
+
+/**
+ * Remembers, for this session only, the asset id of a PDF (by path + mtime + size, so it is not read and hashed again) and
+ * the asset ids each notebook names (by path + mtime + size, so only a changed notebook is read again). Both are bounded;
+ * the oldest entries go first. Nothing is written anywhere.
+ */
+export class AnnotateCache {
+	private readonly hashes = new Map<string, { key: string; id: string }>();
+	private readonly notebooks = new Map<string, { key: string; ids: ReadonlySet<string> }>();
+
+	pdfId(path: string, key: string): string | null {
+		const e = this.hashes.get(path);
+		return e && e.key === key ? e.id : null;
+	}
+
+	setPdfId(path: string, key: string, id: string): void {
+		this.hashes.delete(path);
+		this.hashes.set(path, { key, id });
+		while (this.hashes.size > MAX_HASHES) this.hashes.delete(this.hashes.keys().next().value as string);
+	}
+
+	notebookIds(path: string, key: string): ReadonlySet<string> | null {
+		const e = this.notebooks.get(path);
+		return e && e.key === key ? e.ids : null;
+	}
+
+	setNotebookIds(path: string, key: string, ids: ReadonlySet<string>): void {
+		this.notebooks.delete(path);
+		this.notebooks.set(path, { key, ids });
+		while (this.notebooks.size > MAX_NOTEBOOKS) this.notebooks.delete(this.notebooks.keys().next().value as string);
+	}
+
+	get size(): { pdfs: number; notebooks: number } {
+		return { pdfs: this.hashes.size, notebooks: this.notebooks.size };
+	}
+}
+
+export interface ScanDeps<F> {
+	path(f: F): string;
+	key(f: F): string;
+	/** The text of the notebook file (only called for a notebook the cache does not know). */
+	read(f: F): Promise<string>;
+	cache: AnnotateCache;
+	/** Called with (done, total) before the first read and after each one; `total` counts only the notebooks that must be read. */
+	progress?(done: number, total: number): void;
+	cancelled?(): boolean;
+	/** Lets the UI breathe now and then. */
+	yieldNow?(): Promise<void>;
+	/** A notebook that cannot be read is skipped (and reported here). */
+	failed?(f: F, error: unknown): void;
+}
+
+/** The files whose text names `assetId`, using the cache so only new or changed notebooks are read; `cancelled` is true when stopped. */
+export async function notebooksNaming<F>(files: readonly F[], assetId: string, deps: ScanDeps<F>): Promise<{ matches: F[]; cancelled: boolean }> {
+	const { cache } = deps;
+	const todo = files.filter((f) => cache.notebookIds(deps.path(f), deps.key(f)) === null);
+	let done = 0;
+	deps.progress?.(0, todo.length);
+	for (const f of todo) {
+		if (deps.cancelled?.()) return { matches: [], cancelled: true };
+		try {
+			cache.setNotebookIds(deps.path(f), deps.key(f), assetIdsInText(await deps.read(f)));
+		} catch (e) {
+			deps.failed?.(f, e);
+		}
+		done++;
+		deps.progress?.(done, todo.length);
+		if (done % 8 === 0) await deps.yieldNow?.();
+	}
+	if (deps.cancelled?.()) return { matches: [], cancelled: true };
+	return { matches: files.filter((f) => assetId.length > 0 && cache.notebookIds(deps.path(f), deps.key(f))?.has(assetId) === true), cancelled: false };
+}

@@ -46,14 +46,14 @@ export async function checkAnnotate(api: AnnotateCheckApi): Promise<{ ok: boolea
 	};
 	const folder = plugin.settings.folder;
 	const prefix = folder && folder !== "/" ? `${folder}/` : "";
-	const none = await notebooksAnnotating(app as never, host, id, 2);
+	const none = (await notebooksAnnotating(app as never, host, id, 2)) ?? [];
 	add("a PDF nobody annotates finds no notebook", none.length === 0);
 	await vault.create(`${prefix}Book notes.notebook`, serialize(make(id, "Book.pdf")));
 	await vault.create(`${prefix}Other.notebook`, serialize(make(otherId, "Other.pdf")));
-	const found = await notebooksAnnotating(app as never, host, id, 2);
+	const found = (await notebooksAnnotating(app as never, host, id, 2)) ?? [];
 	add("only the notebook on this PDF is found", found.length === 1 && found[0]!.name === "Book notes", JSON.stringify(found));
 	add("it opens the notebook page that shows the viewer page", found[0]?.openPage === 2 && found[0]?.pdfPages === 3);
-	const unknown = await notebooksAnnotating(app as never, host, id, null);
+	const unknown = (await notebooksAnnotating(app as never, host, id, null)) ?? [];
 	add("without a known viewer page it opens page 1", unknown[0]?.openPage === 1);
 	void pdf;
 	api.errors.splice(0, api.errors.length);

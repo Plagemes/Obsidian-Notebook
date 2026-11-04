@@ -432,16 +432,16 @@ export default class NotebookPlugin extends Plugin {
 		void this.saveData(this.settings).catch((e) => console.error("[notebook] could not save the last location", e));
 	}
 
-	/** Opens the notebook that was open last, on the page that was in view. */
 	/** 0.18 (O10): what "Annotate in Notebook" needs from the plugin. */
 	private annotateHost(): AnnotatePdfHost {
 		return {
 			folder: () => this.settings.folder,
 			readNotebook: (file) => this.host.readNotebook(file),
-			importPdfFrom: (folder, file) => this.host.importPdfFrom(folder, file),
+			importPdfFrom: (folder, file, bytes) => this.host.importPdfFrom(folder, file, bytes),
 		};
 	}
 
+	/** Opens the notebook that was open last, on the page that was in view. */
 	private async continueLast(): Promise<void> {
 		const { lastNotebookPath: path, lastNotebookPage: page, lastNotebookPos: pos } = this.settings;
 		if (!path) {

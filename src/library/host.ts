@@ -387,10 +387,10 @@ export class NotebookLibraryHost implements LibraryHost {
 	}
 
 	/** `importPdf`, resolving to whether a notebook was made (0.16: the shared-files inbox goes on from there). */
-	importPdfFrom(folder: string, source?: TFile): Promise<boolean> {
+	importPdfFrom(folder: string, source?: TFile, bytes?: ArrayBuffer): Promise<boolean> {
 		return importPdfAsNotebook<TFile>({
 			pick: source
-				? async () => ({ name: source.name, bytes: await this.app.vault.readBinary(source) })
+				? async () => ({ name: source.name, bytes: bytes ?? (await this.app.vault.readBinary(source)) })
 				: () => pickFile(this.app, "pdf"),
 			store: async (bytes, name) => {
 				const asset = await storeAsset(this.app, this.root(), bytes, name, "pdf");
