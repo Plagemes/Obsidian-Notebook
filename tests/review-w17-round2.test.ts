@@ -25,6 +25,7 @@ vi.mock("obsidian", () => {
 vi.mock("../src/library/library-modals", () => ({ PromptModal: class {} }));
 vi.mock("../src/view/toolbar", () => ({ PEN_COLORS: ["#111111"], PEN_WIDTHS: [1], HIGHLIGHTER_COLORS: ["#ffee00"], HIGHLIGHTER_WIDTHS: [10] }));
 
+import { buildTaskLine, escapeTaskText } from "../src/model/selection-task";
 import { movePlan } from "../src/ink/gestures/move";
 import { layoutPages } from "../src/ink/layout";
 import { planCrossPageTransform } from "../src/ink/cross-page";
@@ -246,5 +247,32 @@ describe("H2: a collapsed note changes page with its hidden ink", () => {
 		const s1 = doc.pages[0]!.strokes.find((s) => s.id === "s1")!;
 		expect(s1.points[0]![0]).toBeCloseTo(120, 1);
 		expect(s1.points[0]![1]).toBeCloseTo(183, 1);
+	});
+});
+
+// --- H3: a typed web address is a link, not escaped text ---
+
+describe("H3: task text keeps bare URLs working and still neutralises what is around them", () => {
+	it("a URL with _ % * $ ... is written as typed", () => {
+		const url = "https://example.com/a_b/c%20d?x=1&y=*z";
+		expect(escapeTaskText(`read ${url} soon`)).toBe(`read ${url} soon`);
+		expect(buildTaskLine({ text: `see ${url}`, due: "", emoji: true, image: null, pageLink: "" })).toBe(`- [ ] see ${url}`);
+	});
+
+	it("text around the URL is still escaped, and a URL ends where a bracket, tag or math starts", () => {
+		expect(escapeTaskText("a_b http://x.io/p_q $5 %% <b>")).toBe(String.raw`a\_b http://x.io/p_q \$5 \%\% \<b>`);
+		expect(escapeTaskText("http://x.io/a[[Secret]]")).toBe(String.raw`http://x.io/a\[\[Secret\]\]`);
+		expect(escapeTaskText("http://x.io/$$m$$")).toBe(String.raw`http://x.io/\$\$m\$\$`);
+		expect(escapeTaskText("http://x.io/<!-- c")).toBe(String.raw`http://x.io/\<!-- c`);
+	});
+
+	it("a %% inside a URL cannot open a comment", () => {
+		const out = escapeTaskText("http://x.io/%%hide");
+		expect(out).not.toContain("%%");
+		expect(out.startsWith("http://x.io/")).toBe(true);
+	});
+
+	it("two URLs and a heading-looking start", () => {
+		expect(escapeTaskText("# http://a.io/x_y and https://b.io/_z_")).toBe(String.raw`\# http://a.io/x_y and https://b.io/_z_`);
 	});
 });

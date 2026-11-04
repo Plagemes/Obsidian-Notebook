@@ -67,6 +67,9 @@ export function cleanTaskText(text: string): string {
 	return text.replace(/\s+/g, " ").trim();
 }
 
+/** A bare web address inside typed text (the split keeps each one as an odd piece). */
+const URL_TOKEN = /(https?:\/\/[^\s<>[\]$`\\]+)/g;
+
 /**
  * The text of a task made safe to sit in a Markdown line: what typed text could open or swallow (a `%%` comment, an HTML
  * comment or tag, a `$` math span, a link or embed, emphasis or code that runs on into the picture and the link after it) is
@@ -74,7 +77,13 @@ export function cleanTaskText(text: string): string {
  * once, when the line is built: the text the dialog holds stays what the user typed.
  */
 export function escapeTaskText(text: string): string {
-	const out = text.replace(/[\\`*_[\]<$%]/g, (c) => `\\${c}`);
+	// A bare URL stays as typed (escaping `_`, `%`, `*` or `$` inside it would break the link). The token stops at what could
+	// still open a tag, a link or a math span (`<`, `[`, `]`, `$`, backtick, backslash), which is then escaped as usual,
+	// and a `%%` inside it is split so it cannot open a comment.
+	const out = text
+		.split(URL_TOKEN)
+		.map((piece, i) => (i % 2 === 1 ? piece.replace(/%%/g, "%\\%") : piece.replace(/[\\`*_[\]<$%]/g, (c) => `\\${c}`)))
+		.join("");
 	return out
 		.replace(/^#{1,6}(?=\s|$)/, (m) => `\\${m}`)
 		.replace(/^(?:[+-](?=\s|$)|>)/, (m) => `\\${m}`)
