@@ -279,6 +279,8 @@ export class Renderer {
 	private media: MediaSource | null = null;
 	/** v8 invisible ink: whether the hidden strokes of a page are shown ("Show solutions", view-only). Null: never. */
 	private revealHidden: ((page: Page) => boolean) | null = null;
+	/** 0.15 (#75): paints the automatic page header or footer, in page coordinates, right after the paper (null: none). */
+	private pageDecor: ((ctx: CanvasRenderingContext2D, page: Page, index: number, night: boolean) => void) | null = null;
 	/** v8: the label of a structured box (translated by the view). */
 	private boxLabel: BoxLabel | undefined = undefined;
 
@@ -434,6 +436,12 @@ export class Renderer {
 	/** Bitmaps for PDF/scan backgrounds and image elements. */
 	setMedia(media: MediaSource | null): void {
 		this.media = media;
+		this.invalidate();
+	}
+
+	/** 0.15 (#75): a painter called once per visible page in the static layer, after the paper; the view owns what it draws. */
+	setPageDecor(decor: ((ctx: CanvasRenderingContext2D, page: Page, index: number, night: boolean) => void) | null): void {
+		this.pageDecor = decor;
 		this.invalidate();
 	}
 
@@ -863,6 +871,8 @@ export class Renderer {
 				};
 				if (page.background) this.guarded(ctx, "background", () => this.drawBackground(ctx, page));
 				this.guarded(ctx, "paper", () => this.drawPaper(ctx, page, visible));
+				const decor = this.pageDecor;
+				if (decor) this.guarded(ctx, "header", () => decor(ctx, page, i, this.night));
 				const bare = this.hideAnnotations && page.background?.kind === "pdf";
 				if (!bare && page.elements?.length) this.drawElements(ctx, page);
 				const reveal = this.revealHidden?.(page) ?? false;

@@ -6,6 +6,7 @@ import { DEFAULT_GESTURE_SETTINGS, readGestureSettings, type GestureSettings } f
 import { DEFAULT_PEN_GESTURE_SETTINGS, readPenGestureSettings, type PenGestureSettings } from "./ink/gestures/settings";
 import { PEN_BUTTON_ACTIONS, type PenButtonAction } from "./ink/input-policy";
 import { BUTTON_AFTER_MAX_MS, BUTTON_BEFORE_MAX_MS, DEFAULT_BUTTON_WINDOWS, LEGACY_BEFORE_MS, cleanPenKey, cleanWindowMs, isPenKeyAction, type PenKeyAction } from "./ink/pen-hover";
+import { isHeaderAlign, isHeaderMode, type HeaderAlign, type HeaderMode } from "./ink/page-header";
 import { isScrollMode, type ScrollMode } from "./ink/page-mode";
 import { parsePosition, type SavedPosition } from "./ink/view-position";
 import { normaliseRecentColours } from "./ink/colour";
@@ -158,6 +159,14 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	notebookTabs: boolean;
 	/** After the pen lifts near the right margin of ruled or grid paper, the view moves to the start of the next line (353). Off by default. */
 	autoLineBreak: boolean;
+	// 0.15 (#75): automatic page header / footer
+	headerMode: HeaderMode;
+	headerPageNumber: boolean;
+	headerPageTotal: boolean;
+	headerDate: boolean;
+	headerTitle: boolean;
+	headerAlign: HeaderAlign;
+	headerInExport: boolean;
 	// wave 0.10: clipboard and stamps
 	/** Format of the quick date and time stamp (356): tokens YYYY MM DD HH mm ss and so on, text in [brackets]. */
 	dateStampFormat: string;
@@ -241,6 +250,13 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	pageTurnerKeys: true,
 	notebookTabs: false,
 	autoLineBreak: false,
+	headerMode: "off",
+	headerPageNumber: true,
+	headerPageTotal: true,
+	headerDate: true,
+	headerTitle: false,
+	headerAlign: "centre",
+	headerInExport: true,
 	dateStampFormat: DEFAULT_STAMP_FORMAT,
 	recentColours: [],
 	fastScrollbar: true,
@@ -330,6 +346,9 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.pageTurnerKeys === "boolean") s.pageTurnerKeys = d.pageTurnerKeys;
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;
 	if (typeof d.autoLineBreak === "boolean") s.autoLineBreak = d.autoLineBreak;
+	if (isHeaderMode(d.headerMode)) s.headerMode = d.headerMode;
+	if (isHeaderAlign(d.headerAlign)) s.headerAlign = d.headerAlign;
+	for (const k of ["headerPageNumber", "headerPageTotal", "headerDate", "headerTitle", "headerInExport"] as const) if (typeof d[k] === "boolean") s[k] = d[k];
 	if (typeof d.dateStampFormat === "string") s.dateStampFormat = cleanStampFormat(d.dateStampFormat);
 	s.recentColours = normaliseRecentColours(d.recentColours);
 	if (typeof d.fastScrollbar === "boolean") s.fastScrollbar = d.fastScrollbar;

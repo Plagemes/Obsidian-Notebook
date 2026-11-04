@@ -4,6 +4,7 @@ import { layerFlags, planExport, type ExportFormat, type ExportLayers, type Expo
 import { pagesToPdf, type PdfPlacedImage } from "../ink/export-pdf";
 import { pageToSvg, type SvgPlacedImage } from "../ink/export-svg";
 import type { BoxLabel } from "../ink/marker-render";
+import type { HeaderLayout } from "../ink/page-header";
 import { DEFAULT_PNG_SCALE } from "../model/export-pages";
 import { backgroundRect } from "../model/margins";
 import type { Page } from "../model/types";
@@ -106,6 +107,8 @@ export interface ExportOptions {
 	equationNumbers?: ReadonlyMap<string, number>;
 	/** wave 0.9 (381): ink only, background only or both (default). */
 	layers?: ExportLayers;
+	/** 0.15 (#75): the automatic page header or footer of a page (null: none); absent when the reader turned it off for exports. */
+	header?: (page: Page) => HeaderLayout | null;
 }
 
 /** Writes a PDF of `pages` next to the notebook; `suffix` distinguishes single-page exports. */
@@ -120,6 +123,7 @@ export async function exportPdf(
 			paper: true, title: notebook.basename, images: (p) => images.get(p) ?? [],
 			...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 			...(options.layers ? { layers: options.layers } : {}),
+			...(options.header ? { header: options.header } : {}),
 			...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}),
 		});
 		const path = freePath(app, notebook, suffix, "pdf");
@@ -145,6 +149,7 @@ async function buildSvg(app: App, notebook: TFile, page: Page, suffix: string, m
 	const path = freePath(app, notebook, suffix, "svg");
 	await app.vault.create(path, pageToSvg(page, {
 		paper: true, images: svgImages, hiddenInk: options.hiddenInk?.(page) ?? false, ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+		...(options.header ? { header: options.header(page) } : {}),
 		...(options.layers ? { layers: options.layers } : {}),
 		...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}),
 	}));
