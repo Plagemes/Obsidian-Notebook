@@ -46,6 +46,8 @@ export function findDatedPage(pages: ReadonlyArray<Pick<Page, "elements">>, date
 export interface DailyNoteConfig {
 	folder: string;
 	format: string;
+	/** Vault path of the configured template (as the plugins keep it, usually without `.md`); absent when there is none. */
+	template?: string;
 }
 
 export const DEFAULT_DAILY_FORMAT = "YYYY-MM-DD";
@@ -59,7 +61,58 @@ export function parseDailyConfig(raw: unknown): DailyNoteConfig | null {
 	const o = raw as Record<string, unknown>;
 	const folder = typeof o.folder === "string" ? o.folder.replace(/[\\]/g, "/").replace(/^\/+|\/+$/g, "").trim() : "";
 	const format = typeof o.format === "string" && o.format.trim() !== "" ? o.format.trim() : DEFAULT_DAILY_FORMAT;
-	return { folder, format };
+	const template = typeof o.template === "string" ? o.template.replace(/[\\]/g, "/").replace(/^\/+/, "").trim() : "";
+	return template ? { folder, format, template } : { folder, format };
+}
+
+type Bag = Record<string, unknown>;
+const asBag = (v: unknown): Bag | null => (typeof v === "object" && v !== null ? (v as Bag) : null);
+
+/**
+ * Folder, format and template of the daily notes. Periodic Notes (when its daily notes are on) wins over the core plugin.
+ * Both are read through Obsidian's internals (`app.plugins`, `app.internalPlugins`), leniently: anything unexpected gives null.
+ * The core plugin is read as `getPluginById(id)` (`{ enabled, instance }`, the shape the Bookmarks integration relies on):
+ * `getEnabledPluginById` returns the instance itself, which has no `.instance`.
+ */
+export function readDailyConfigFrom(app: unknown): DailyNoteConfig | null {
+	const bag = asBag(app);
+	const community = asBag(bag?.plugins);
+	const getPlugin = community?.getPlugin;
+	if (typeof getPlugin === "function") {
+		const periodic = asBag((getPlugin as (id: string) => unknown).call(community, "periodic-notes"));
+		const daily = asBag(asBag(periodic?.settings)?.daily);
+		if (daily?.enabled === true) return parseDailyConfig(daily);
+	}
+	const internal = asBag(bag?.internalPlugins);
+	const getById = internal?.getPluginById;
+	if (typeof getById === "function") {
+		const core = asBag((getById as (id: string) => unknown).call(internal, "daily-notes"));
+		// Only a plugin that says it is on.
+		if (core?.enabled === true) return parseDailyConfig(asBag(core.instance)?.options);
+	}
+	return null;
+}
+
+/** Vault path of the template file: the configured path with `.md` added when missing. */
+export function dailyTemplatePath(template: string): string {
+	return template.toLowerCase().endsWith(".md") ? template : `${template}.md`;
+}
+
+/**
+ * The template with the placeholders the core Daily notes plugin knows filled in: `{{date}}`, `{{time}}`, `{{title}}`
+ * (`{{date:FORMAT}}` and `{{time:FORMAT}}` take a moment.js format). `format` turns a date and a pattern into text.
+ */
+export function applyDailyTemplate(
+	template: string,
+	title: string,
+	date: Date,
+	dateFormat: string,
+	format: (date: Date, pattern: string) => string,
+): string {
+	return template
+		.replace(/{{\s*date\s*(?::([^}]*?))?\s*}}/gi, (_m, f: string | undefined) => format(date, f?.trim() ? f.trim() : dateFormat))
+		.replace(/{{\s*time\s*(?::([^}]*?))?\s*}}/gi, (_m, f: string | undefined) => format(date, f?.trim() ? f.trim() : "HH:mm"))
+		.replace(/{{\s*title\s*}}/gi, title);
 }
 
 /** Vault path of the daily note of `date`; `format` turns a date and a moment.js format into text. */

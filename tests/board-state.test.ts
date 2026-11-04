@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DeviceFileAdapter } from "../src/storage/device-files";
 import {
-	applyBoardOps, BOARD_FORMAT, emptyBoard, mergeBoardFiles, parseBoard, serializeBoard, statusOf, validStatusId,
+	applyBoardOps, BOARD_FORMAT, BOARD_PRUNE_GRACE_MS, emptyBoard, mergeBoardFiles, parseBoard, pruneBoardFile, serializeBoard, statusOf, validStatusId,
 	type BoardFile, type BoardItem,
 } from "../src/library/board-state";
 import { BoardBlockedError, BoardStateStore } from "../src/library/board-state-store";
@@ -213,5 +213,71 @@ describe("board store", () => {
 		expect(store.watches("Notebooks/_meta/board-0b000000.json")).toBe(true);
 		expect(store.watches("Notebooks/_meta/library-0b000000.json")).toBe(false);
 		expect(store.watches("Notebooks/_meta/board-0b.json")).toBe(false);
+	});
+});
+
+describe("board pruning", () => {
+	const NOW = 100 * 86_400_000;
+	const OLD = NOW - BOARD_PRUNE_GRACE_MS - 1;
+	const ids = (f: BoardFile): string[] => f.items.map((i) => i.key);
+
+	it("drops the statuses of notebooks that are gone, once they are older than the grace period", () => {
+		const own = file("0a000000", item("id:alive", "done", OLD), item("id:gone", "done", OLD), item("id:recent", "done", NOW - 1000));
+		const after = pruneBoardFile(own, [], new Set(["id:alive"]), NOW);
+		expect(ids(after)).toEqual(["id:alive", "id:recent"]);
+	});
+
+	it("keeps everything when the library is not complete (no live set)", () => {
+		const own = file("0a000000", item("id:gone", "done", OLD));
+		expect(pruneBoardFile(own, [], null, NOW)).toBe(own);
+	});
+
+	it("drops a cleared status nobody contradicts, but keeps one that hides another device's status", () => {
+		const own = file("0a000000", item("id:a", null, 5), item("id:b", null, 9), item("id:c", "done", 5));
+		const other = file("0b000000", item("id:b", "doing", 3));
+		expect(ids(pruneBoardFile(own, [other], null, NOW))).toEqual(["id:b", "id:c"]);
+		// …and one that hides a status stored under the path key.
+		const hiding = pruneBoardFile(file("0a000000", item("id:a", null, 9)), [file("0b000000", item("path:A.notebook", "doing", 3))], null, NOW);
+		expect(ids(hiding)).toEqual(["id:a"]);
+	});
+
+	it("never touches the other devices' files and keeps unknown fields", () => {
+		const own: BoardFile = { ...file("0a000000", item("id:gone", "x", OLD), item("id:keep", "y", OLD, { note: 1 })), extra: { future: true }, unknown: [{ odd: 1 }] };
+		const other = file("0b000000", item("id:gone", "x", OLD));
+		const after = pruneBoardFile(own, [other], new Set(["id:keep"]), NOW);
+		expect(after.extra).toEqual({ future: true });
+		expect(after.unknown).toEqual([{ odd: 1 }]);
+		expect(after.items[0]?.extra).toEqual({ note: 1 });
+		expect(other.items).toHaveLength(1);
+	});
+
+	it("the store prunes only its own file, only when something goes, and a clear is dropped on rewrite", async () => {
+		const adapter = new MemoryAdapter();
+		const other = serializeBoard(file("0b000000", item("id:gone", "doing", OLD)));
+		adapter.files.set("Notebooks/_meta/board-0b000000.json", other);
+		const store = new BoardStateStore(adapter, () => "Notebooks", "0a000000", () => NOW);
+		expect(await store.prune(new Set())).toBe(false); // no own file yet: nothing to do
+		await store.setStatus([{ key: "id:x", status: "done" }, { key: "id:gone", status: "done" }]);
+		adapter.writes.length = 0;
+		expect(await store.prune(null)).toBe(false);
+		expect(adapter.writes).toHaveLength(0);
+		const own = "Notebooks/_meta/board-0a000000.json";
+		adapter.files.set(own, serializeBoard(file("0a000000", item("id:x", "done", OLD), item("id:gone", "done", OLD))));
+		expect(await store.prune(new Set(["id:x"]))).toBe(true);
+		expect(adapter.writes).toEqual([own]);
+		expect(adapter.files.get(own)).toContain('"id:x"');
+		expect(adapter.files.get(own)).not.toContain('"id:gone"');
+		expect(adapter.files.get("Notebooks/_meta/board-0b000000.json")).toBe(other);
+		// Clearing the only status of a notebook rewrites the file without the cleared line.
+		await store.setStatus({ key: "id:x", status: null });
+		expect(adapter.files.get(own)).not.toContain('"id:x"');
+	});
+
+	it("an unreadable own file is never pruned", async () => {
+		const adapter = new MemoryAdapter();
+		adapter.files.set("Notebooks/_meta/board-0a000000.json", "{ broken");
+		const store = new BoardStateStore(adapter, () => "Notebooks", "0a000000", () => NOW);
+		await expect(store.prune(new Set())).rejects.toBeInstanceOf(BoardBlockedError);
+		expect(adapter.files.get("Notebooks/_meta/board-0a000000.json")).toBe("{ broken");
 	});
 });

@@ -191,3 +191,27 @@ export function applyBoardOps(own: BoardFile, merged: BoardMap, ops: readonly Bo
 	}
 	return { ...own, items: [...items.values()] };
 }
+
+// ------------------------------------------------------------------ pruning
+
+/** A status of a notebook that is not in the library is kept at least this long (a sync that is late, a restore from the Trash). */
+export const BOARD_PRUNE_GRACE_MS = 30 * 86_400_000;
+
+/**
+ * This device's file without what no longer says anything (only its own items are ever touched; other devices' files are
+ * read to decide, never changed):
+ * - a **cleared** status (`v: null`) that no other device's file contradicts with a status of its own (it would come back
+ *   if the clear were dropped) and that does not hide a status stored under the path key (`statusOf` falls back to it);
+ * - when `live` is given (the library has read every notebook, so it is the complete set of state keys), a status of a notebook that is not in it and
+ *   was set more than BOARD_PRUNE_GRACE_MS ago. A notebook deleted for good no longer keeps a line in the file.
+ * Returns `own` itself when nothing is dropped.
+ */
+export function pruneBoardFile(own: BoardFile, others: readonly BoardFile[], live: ReadonlySet<string> | null, now: number): BoardFile {
+	const named = (key: string): boolean => others.some((f) => f.items.some((i) => i.key === key && i.status.v !== null));
+	const pathStatuses = [own, ...others].some((f) => f.items.some((i) => i.key.startsWith("path:") && i.status.v !== null));
+	const keep = own.items.filter((i) => {
+		if (i.status.v === null) return named(i.key) || (pathStatuses && !i.key.startsWith("path:"));
+		return live === null || live.has(i.key) || now - i.status.at <= BOARD_PRUNE_GRACE_MS;
+	});
+	return keep.length === own.items.length ? own : { ...own, items: keep };
+}
