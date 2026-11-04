@@ -4,6 +4,7 @@
 
 import { t } from "../i18n";
 import { addPageToObsidianBookmarks } from "../integration/obsidian-bookmarks";
+import { PageQrModal, pageQrUri } from "./qr-modal";
 import { copyPageLink, insertPageIntoNote } from "../integration/page-share";
 import { openPageRestore } from "../integration/reliability";
 import { cloneMeta } from "../model/document";
@@ -345,6 +346,9 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	// export and share
 	"share-copy-link": onPage((v, p, i) => {
 		if (v.file) void copyPageLink(v.app, v.file, i + 1, p.id);
+	}),
+	"share-qr": onPage((v, p, i) => {
+		if (v.file) new PageQrModal(v.app, pageQrUri(v.app.vault.getName(), v.file, i + 1, p.id), i + 1).open();
 	}),
 	"share-insert-link": onPage((v, p, i) => {
 		if (v.file) insertPageIntoNote(v.app, v.file, i + 1, "link", p.id);

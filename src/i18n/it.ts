@@ -3394,4 +3394,13 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"copylink.failed": "Impossibile copiare le pagine: {error}",
 	"settings.copyLinkReverse": "Collegamento sull’originale alla copia",
 	"settings.copyLinkReverse.desc": "“Copia in un quaderno…” lascia un “Copiata in …” sulla pagina originale.",
+	// 0.18 qr
+	"qr.title": "Mostra codice QR",
+	"qr.subtitle": "Pagina {page}: inquadralo con un dispositivo che ha questo vault per aprire qui la pagina.",
+	"qr.label": "Codice QR della pagina {page}",
+	"qr.hint": "Inquadralo con la fotocamera di un telefono o tablet che ha lo stesso vault aperto in Obsidian. La pagina si apre lì.",
+	"qr.copy": "Copia link",
+	"qr.done": "Fatto",
+	"qr.copied": "Link copiato.",
+	"qr.tooLong": "Il link di questa pagina è troppo lungo per un codice QR. Usa Copia link.",
 };

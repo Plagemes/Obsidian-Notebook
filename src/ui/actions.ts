@@ -391,6 +391,8 @@ export const ACTIONS: readonly ActionDef[] = [
 
 	// --- export and share.
 	{ id: "share-copy-link", label: "share.copyLink", icon: "link", group: "share", surfaces: ["page"], priority: 40, scope: "view", readOnly: true },
+	// 0.18 (#190): a QR code of the page that another device with the same vault scans to open it.
+	{ id: "share-qr", label: "qr.title", icon: "qr-code", group: "share", surfaces: ["page"], priority: 34, scope: "view", readOnly: true, keywords: "qr code scan phone codice" },
 	{ id: "share-insert-link", label: "share.insertLink", icon: "file-symlink", group: "share", surfaces: ["page"], priority: 35, scope: "view", readOnly: true },
 	{ id: "share-insert-embed", label: "share.insertEmbed", icon: "picture-in-picture", group: "share", surfaces: ["page"], priority: 35, scope: "view", readOnly: true },
 	// wave 0.9 (385): Obsidian's own Bookmarks pane (core plugin, feature-detected in integration/obsidian-bookmarks.ts).

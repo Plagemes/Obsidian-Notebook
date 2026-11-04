@@ -15898,3 +15898,6 @@ body.notebook-style-obsidian {
 	position: absolute; right: 2px; bottom: 2px; min-width: 16px; padding: 0 4px; border-radius: 8px; text-align: center;
 	font-size: 10px; line-height: 16px; font-weight: 600; color: #fff; background: var(--nb-accent);
 }
+/* ===== 0.18 qr ===== */
+.nb-ui.nb-qr-modal .nb-qr-box { display: flex; justify-content: center; padding: var(--nb-space-3, 12px) 0; }
+.nb-ui.nb-qr-modal .nb-qr-svg { width: min(100%, 360px); height: auto; aspect-ratio: 1; border-radius: var(--nb-radius-tile); box-shadow: 0 0 0 1px var(--nb-border); background: #fff; }

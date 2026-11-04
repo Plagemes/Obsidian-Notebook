@@ -3392,6 +3392,15 @@ export const en = {
 	"copylink.failed": "Could not copy the pages: {error}",
 	"settings.copyLinkReverse": "Link on the original when copying a page",
 	"settings.copyLinkReverse.desc": "“Copy to notebook…” also leaves a “Copied to …” link on the original.",
+	// 0.18 qr
+	"qr.title": "Show QR code",
+	"qr.subtitle": "Page {page}: scan it with a device that has this vault to open this page there.",
+	"qr.label": "QR code of page {page}",
+	"qr.hint": "Scan this with the camera of a phone or tablet that has the same vault open in Obsidian. The page opens there.",
+	"qr.copy": "Copy link",
+	"qr.done": "Done",
+	"qr.copied": "Link copied.",
+	"qr.tooLong": "This page link is too long for a QR code. Use Copy link instead.",
 } as const;
 
 export type MessageKey = keyof typeof en;

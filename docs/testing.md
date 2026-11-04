@@ -2544,3 +2544,16 @@ Roadmap #186. Reference screenshots after `npm run harness:check`: `dev/harness/
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Copy to notebook with a link back (#186): dialog (pages, notebook, place), copy through the 0.17 transfer (`copyPagesInto`), a "Copied from" link chip on each copy written in the same write, an optional "Copied to" chip on the unlocked originals as one undoable edit, page menu, command, map selection bar, setting for the starting tick; no format change | yes | chip text, placement and stacking, pairs, locked skipping (`tests/copy-with-link.test.ts`); harness `doc=linkback` (dialog, run on files, undo) | | the chips are ordinary text boxes: a copy of a page keeps them | not tried on the tablet (steps 1360-1370); no "new notebook" destination (use *Extract pages*); chips are not removed when a copy is deleted |
+
+### 0.18 — qr
+
+1380. **Show the code.** Page menu (page thumbnail or page sheet) > *Show QR code*. A dialog shows a large black-on-white code and *Copy link* / *Done*; the code is square and sharp on the tablet and on a phone, in light and dark.
+1381. **Scan it.** On a phone or second tablet with the same vault, scan the code with the camera: Obsidian opens, the notebook opens at that page (not another).
+1382. **Reorder.** Move the page elsewhere in the notebook, show the code again and scan the old one: it still opens the same page (the link carries the page id).
+1383. **Copy link.** *Copy link* shows "Link copied." and pasting gives an `obsidian://notebook?vault=…` link; opening it on this device focuses the notebook tab at the page.
+1384. **Long path.** A notebook with a very long path (over about 150 characters) shows a message instead of a code; *Copy link* still works.
+1385. **Different vault name.** Scanning on a device where the vault has another name opens nothing wrong: Obsidian says the vault is not found.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Page QR code (#190): dialog, copy link, own encoder (byte mode, level M, v1-10) | yes | encoder, format/version bits and a round trip through a separate decoder (`tests/qr.test.ts`); harness `dev/harness/qr-check.ts` | | | insert the code into the page as a picture |
