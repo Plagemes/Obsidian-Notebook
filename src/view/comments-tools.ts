@@ -4,7 +4,7 @@ import type { BBox } from "../ink/hit-test";
 import type { PageBox } from "../ink/layout";
 import type { Viewport } from "../ink/viewport";
 import {
-	addCommentCommand, addReplyCommand, commentCounts, createComment, createReply, deleteCommentCommand, editedComment, editedReply, findComment, isNote,
+	addCommentCommand, addReplyCommand, cleanCommentText, commentCounts, createComment, createReply, deleteCommentCommand, editedComment, editedReply, findComment, isNote,
 	regionFromBounds, repliesOf, replaceCommentCommand, resolvedComment, threadsOf, orderedNotes, type CommentFilter,
 } from "../model/comments";
 import type { PdfCommentLabels } from "../ink/export-pdf";
@@ -161,11 +161,14 @@ export class CommentTools {
 	}
 
 	private add(pageId: string, region: CommentRegion, draft: CommentDraft): void {
-		const page = this.page(pageId);
+		// The page can be gone while the editor was open (deleted, or removed by a sync): what was typed goes to the page in view.
+		const page = this.page(pageId) ?? this.host.doc()?.pages[this.host.currentPage()];
 		if (!page) return;
 		const note = createComment(page, { region, text: draft.text, ...(draft.sketch ? { sketch: draft.sketch } : {}), author: this.host.deviceName(), now: Date.now() });
-		const cmd = note ? addCommentCommand(page, note) : null;
-		if (!note || !cmd) {
+		// Nothing typed and nothing drawn is no comment, not a full page: there is nothing to say.
+		if (!note) return;
+		const cmd = addCommentCommand(page, note);
+		if (!cmd) {
 			this.host.notify(t("comments.full"));
 			return;
 		}
@@ -173,7 +176,14 @@ export class CommentTools {
 			this.host.notify(t("comments.locked"));
 			return;
 		}
-		this.select(pageId, note.id);
+		this.select(page.id, note.id);
+	}
+
+	/** The comment (or its page) went while the editor was open: the typed text is kept as a new comment, on its page if it is still there. */
+	private keepAsNew(pageId: string, region: CommentRegion, draft: CommentDraft): void {
+		if (cleanCommentText(draft.text) === "" && !draft.sketch) return;
+		this.host.notify(t("comments.keptAsNew"));
+		this.add(pageId, region, draft);
 	}
 
 	// --- one comment ------------------------------------------------------------------------------------------------
@@ -192,10 +202,16 @@ export class CommentTools {
 		if (!page || !c || !this.host.editable()) return;
 		const reply = !isNote(c);
 		const start = isNote(c) ? c.sketch : undefined;
+		// Where the text goes if its comment disappears meanwhile: the comment's place (a reply's: its comment's).
+		const home = isNote(c) ? c : findComment(page, c.parent);
+		const region = home && isNote(home) ? home.region : { x: 20, y: 20, width: 120, height: 60 };
 		new CommentModal(this.host.app, { kind: reply ? "reply" : "comment", editing: true, text: c.text, sketch: start, page: this.pageIndex(pageId) + 1 }, (draft) => {
 			const now = this.page(pageId);
 			const current = now ? findComment(now, id) : undefined;
-			if (!now || !current) return;
+			if (!now || !current) {
+				this.keepAsNew(pageId, region, draft);
+				return;
+			}
 			const next = isNote(current) ? editedComment(current, { text: draft.text, sketch: draft.sketch }, Date.now()) : editedReply(current, draft.text, Date.now());
 			const cmd = next ? replaceCommentCommand(now, id, next, reply ? "Edit reply" : "Edit comment") : null;
 			if (cmd && !this.host.execute(cmd)) this.host.notify(t("comments.locked"));

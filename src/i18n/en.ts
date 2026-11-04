@@ -3320,6 +3320,7 @@ export const en = {
 	"comments.row.replies": "{n} replies",
 	"comments.locked": "This page is locked. Unlock it to change its comments.",
 	"comments.full": "This page cannot hold more comments.",
+	"comments.keptAsNew": "That comment was removed while you were editing it. Your text is kept as a new one.",
 	"comments.deleted": "Comment deleted. Undo brings it back.",
 	"comments.replyDeleted": "Reply deleted. Undo brings it back.",
 	"comments.markdown.heading": "Comments",
@@ -3327,8 +3328,8 @@ export const en = {
 	"comments.pdf.more": "+{n} more comments",
 	"settings.commentMarkers": "Show comment markers",
 	"settings.commentMarkers.desc": "A numbered marker in the page margin for each comment. The open one is always shown.",
-	"settings.commentsInPdf": "Comments in the PDF export",
-	"settings.commentsInPdf.desc": "Adds a strip of margin notes beside each page that has comments.",
+	"settings.commentsInPdf": "Include comments in exports",
+	"settings.commentsInPdf.desc": "Margin notes in the PDF and a comments list in the Markdown export.",
 	"merge.summary.comments": "{count} comments or replies added or updated",
 	// 0.18 a4split
 	"export.split": "Split into sheets",

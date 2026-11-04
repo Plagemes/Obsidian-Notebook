@@ -2,8 +2,9 @@
 // the PNGs and notebook.md into a vault folder through the vault API. Nothing is ever overwritten: a name that exists gets
 // " 2", " 3"… The notebook.md is written last, so it only exists when every image does. The format of the notebook is not
 // touched. The page drawing is shared with the PNG export and printing (view/page-images.ts).
-import { getLanguage, normalizePath, TFile, TFolder, type App } from "obsidian";
+import { normalizePath, TFile, TFolder, type App } from "obsidian";
 import { t } from "../i18n";
+import type { PdfCommentLabels } from "../ink/export-pdf";
 import type { BoxLabel } from "../ink/marker-render";
 import { buildNotebookMarkdown, planMarkdownFiles, type MarkdownDpi } from "../model/export-markdown";
 import type { NotebookDocument, Page } from "../model/types";
@@ -23,6 +24,8 @@ export interface MarkdownExportOptions {
 	prepare?: (pages: readonly Page[]) => Promise<void>;
 	/** v9: numbers of the numbered equations over the whole notebook. */
 	equationNumbers?: ReadonlyMap<string, number>;
+	/** v16: when given (the setting *Include comments in exports* is on), the margin comments are listed below each page's text. */
+	comments?: PdfCommentLabels;
 }
 
 /** The folder suggested for the export of `notebook`: next to it, named after it. */
@@ -90,16 +93,8 @@ export async function exportMarkdown(app: App, notebook: TFile, doc: NotebookDoc
 		const text = buildNotebookMarkdown({
 			title: notebook.basename, pages: doc.pages, meta: doc.meta, images: names.images,
 			pageLabel: (n) => t("export.markdown.pageHeading", { n: String(n) }),
-			comments: {
-				heading: t("comments.markdown.heading"), resolved: t("comments.resolved").toLowerCase(), sketch: t("comments.markdown.sketch"),
-				when: (ms) => {
-					try {
-						return new Date(ms).toLocaleString(getLanguage(), { dateStyle: "medium", timeStyle: "short" });
-					} catch {
-						return new Date(ms).toISOString();
-					}
-				},
-			},
+			// 0.18 review (J6): comments, with the names of the devices that wrote them, leave the vault only when the setting asks for them.
+			...(options.comments ? { comments: { heading: t("comments.markdown.heading"), resolved: options.comments.resolved, sketch: options.comments.sketch, when: options.comments.when } } : {}),
 		});
 		const path = normalizePath(`${prefix}${names.markdown}`);
 		await app.vault.create(path, text);

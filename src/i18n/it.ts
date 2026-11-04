@@ -3322,6 +3322,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"comments.row.replies": "{n} risposte",
 	"comments.locked": "Questa pagina è bloccata. Sbloccala per cambiare i suoi commenti.",
 	"comments.full": "Questa pagina non può contenere altri commenti.",
+	"comments.keptAsNew": "Quel commento è stato rimosso mentre lo modificavi. Il tuo testo è stato conservato come nuovo commento.",
 	"comments.deleted": "Commento eliminato. Annulla lo ripristina.",
 	"comments.replyDeleted": "Risposta eliminata. Annulla la ripristina.",
 	"comments.markdown.heading": "Commenti",
@@ -3329,8 +3330,8 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"comments.pdf.more": "+{n} altri commenti",
 	"settings.commentMarkers": "Mostra i segnalini dei commenti",
 	"settings.commentMarkers.desc": "Un segnalino numerato nel margine per ogni commento. Quello aperto si vede sempre.",
-	"settings.commentsInPdf": "Commenti nell'esportazione PDF",
-	"settings.commentsInPdf.desc": "Aggiunge una striscia di note a margine accanto a ogni pagina con commenti.",
+	"settings.commentsInPdf": "Includi i commenti nelle esportazioni",
+	"settings.commentsInPdf.desc": "Note a margine nel PDF e un elenco dei commenti nell'esportazione Markdown.",
 	"merge.summary.comments": "{count} commenti o risposte aggiunti o aggiornati",
 	// 0.18 a4split
 	"export.split": "Dividi in fogli",
