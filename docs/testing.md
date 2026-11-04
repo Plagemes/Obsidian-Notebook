@@ -2285,3 +2285,24 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Highlights digest (#90): regions, crops, PDF text, marked section, group by page or colour | yes | clustering, text under bands, section replacement and idempotence (`tests/highlight-digest.test.ts`); harness `dev/harness/digest-check.ts` | | | |
+
+### 0.17 — minimap: overview of the page in view (steps 1160-1179)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/minimap-*.png`. A small floating map of the page in view with the rectangle the view shows (roadmap #173). It needs no document format change: the picture is the page rendered once through the library's thumbnail renderer and cached; the corner and the collapsed state are kept per device in local storage.
+
+1160. **Automatic on an infinite page.** Make a page infinite (page sheet, *Infinite page*) and write until it is taller than the screen. Expected: a small map appears in the bottom right corner (above the fast scrollbar) with a title bar, the page picture and a coloured rectangle where you are. On a normal A4 page at fit width it does not appear.
+1161. **Automatic at high zoom.** On a normal page pinch-zoom in about twice. Expected: the map appears; pinch back to fit and it goes away. With the whole page in view it never shows in automatic mode.
+1162. **Tap to pan.** Tap a spot on the map. Expected: the view centres on it at the same zoom and the rectangle moves there.
+1163. **Drag to pan.** Drag a finger or the S Pen on the map. Expected: the rectangle and the page follow smoothly; nothing is written on the page and no stroke is created (check undo).
+1164. **Keyboard.** With a keyboard, focus the map (Tab) and press the arrow keys. Expected: the view moves by a tenth of the screen.
+1165. **Follows the page.** Scroll and zoom the page normally. Expected: the rectangle follows. Write a few strokes, lift the pen, wait about a second. Expected: the picture of the map shows the new ink; nothing redraws while the pen is writing.
+1166. **Move to another corner.** Drag the handle (the move icon on the title bar) towards another corner and release. Expected: the map settles in the nearest corner, avoiding the top right badge and the scrollbar; close and reopen the notebook: it is still there.
+1167. **Collapse.** Tap the collapse button. Expected: only a round map button remains; tapping it brings the map back. The choice is remembered after reopening.
+1168. **Setting.** Settings, *Pages*, *Page overview (minimap)*: *Never* hides it everywhere; *Always* shows it on every page; *Automatic* is the default.
+1169. **Palm and pen.** Rest the palm near the map while writing. Expected: the S Pen still writes on the page; the map never reacts to the pen while it draws elsewhere. The side-button gestures are unchanged.
+1170. **Look.** Light and dark, and with *Follow Obsidian theme*: the map matches the other floating panels; on a phone the title text is hidden and the map stays inside the page area; the controls are at least 32 px.
+1171. **Page panel and presentation.** Open the page panel and the presentation mode. Expected: the map does not cover the panel's controls; in presentation mode (a full-screen layer above it) it is covered.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Minimap (#173): floating overview of the page in view (cached low-resolution render, redrawn at most once every 1.2 s and never while the pen writes), view rectangle, tap / drag / arrow keys to pan, collapse, four corners, setting automatic / always / never; no format change | yes | `tests/minimap-geometry.test.ts` (geometry, show rules, corner, throttle, stored prefs); harness `dev/harness/minimap-check.ts` (`doc=minimap`, tablet and phone, light and dark) | | | Presentation mode covers it with its own layer (step 1171) |

@@ -3021,4 +3021,15 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"digest.append.body": "Esiste già una nota chiamata “{note}” senza sezione del riepilogo. Il riepilogo viene aggiunto in fondo e il resto della nota non cambia. Oppure lascia la nota com'è e scrivi il riepilogo in una nuova.",
 	"digest.append.add": "Aggiungi",
 	"digest.append.new": "Usa una nuova nota",
+	// 0.17 minimap
+	"minimap.label": "Panoramica della pagina",
+	"minimap.map": "Panoramica della pagina. Tocca o trascina per spostare la vista",
+	"minimap.collapse": "Comprimi la panoramica",
+	"minimap.expand": "Mostra la panoramica della pagina",
+	"minimap.move": "Trascina in un altro angolo",
+	"settings.minimap": "Panoramica della pagina (minimappa)",
+	"settings.minimap.desc": "Una piccola mappa della pagina: toccala o trascinala per spostarti.",
+	"settings.minimap.auto": "Automatica",
+	"settings.minimap.always": "Sempre",
+	"settings.minimap.never": "Mai",
 };

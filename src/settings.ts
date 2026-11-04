@@ -9,6 +9,7 @@ import { PEN_BUTTON_ACTIONS, type PenButtonAction } from "./ink/input-policy";
 import { BUTTON_AFTER_MAX_MS, BUTTON_BEFORE_MAX_MS, DEFAULT_BUTTON_WINDOWS, LEGACY_BEFORE_MS, cleanPenKey, cleanWindowMs, isPenKeyAction, type PenKeyAction } from "./ink/pen-hover";
 import { isHeaderAlign, isHeaderMode, type HeaderAlign, type HeaderMode } from "./ink/page-header";
 import { isScrollMode, type ScrollMode } from "./ink/page-mode";
+import { isMinimapMode, type MinimapMode } from "./model/minimap-geometry";
 import { parsePosition, type SavedPosition } from "./ink/view-position";
 import { normaliseRecentColours } from "./ink/colour";
 import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./model/types";
@@ -201,6 +202,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	recentColours: string[];
 	/** wave 0.10 (50): the draggable thumb with a page preview along the right edge in continuous scroll. */
 	fastScrollbar: boolean;
+	/** 0.17 (#173): the minimap of the page in view: automatic (infinite pages, high zoom), always, or never. */
+	minimapMode: MinimapMode;
 	/** Look of the plugin's own surfaces (DESIGN.md §2.2): its own `--nb-*` palette, or those tokens mapped onto the Obsidian theme. */
 	appearanceStyle: AppearanceStyle;
 	// wave 0.13: Home
@@ -297,6 +300,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	dateStampFormat: DEFAULT_STAMP_FORMAT,
 	recentColours: [],
 	fastScrollbar: true,
+	minimapMode: "auto",
 	appearanceStyle: "notebook",
 	userName: "",
 	hintsEnabled: true,
@@ -404,6 +408,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.dateStampFormat === "string") s.dateStampFormat = cleanStampFormat(d.dateStampFormat);
 	s.recentColours = normaliseRecentColours(d.recentColours);
 	if (typeof d.fastScrollbar === "boolean") s.fastScrollbar = d.fastScrollbar;
+	if (isMinimapMode(d.minimapMode)) s.minimapMode = d.minimapMode;
 	if (APPEARANCE_STYLES.includes(d.appearanceStyle as AppearanceStyle)) s.appearanceStyle = d.appearanceStyle as AppearanceStyle;
 	if (typeof d.userName === "string") s.userName = cleanUserName(d.userName);
 	if (typeof d.hintsEnabled === "boolean") s.hintsEnabled = d.hintsEnabled;

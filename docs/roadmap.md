@@ -362,7 +362,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 ### F. Images and view
 171. **P2** Image editing: crop, rotate, brightness and contrast.
 172. **P1** 🧪 White background made transparent: pasted images and screenshots blend with the paper.
-173. **P2** Minimap for infinite pages and high zoom.
+173. **P2** 🧪 Minimap for infinite pages and high zoom.
 
 ### G. More original ideas
 174. ~~**P2** Draft and fair copy: write a draft, then the draft dims and you rewrite cleanly on top; the draft can be hidden.~~ — dropped (user decision, 2026-10-29)

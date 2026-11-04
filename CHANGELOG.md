@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### minimap
+- **Minimap (#173).** A small floating overview of the page in view with the rectangle the view shows. Tap or drag on it (or use the arrow keys) to pan; collapse it to a button; drag its handle to any of the four corners (kept per device). It appears by itself on infinite pages and when zoomed in about twice beyond fitting the page width, and not while the whole page is in view. New setting *Pages > Page overview (minimap)*: Automatic / Always / Never. The picture is the page rendered through the library thumbnail renderer, cached, redrawn at most once every 1.2 s after a change and never while the pen writes. No change to the notebook format or to the ink pipeline. Tests: `tests/minimap-geometry.test.ts`. Harness: `dev/harness/minimap-check.ts` (`doc=minimap`).
+
 ## 0.16.0 — 2026-11-04
 
 Finish a page, work with PDFs, and get material in and out faster: lock a finished page, copy text from a PDF with its outline and links, move a selection to another page, import many files at once, present a notebook full screen with a laser pointer, collect highlights into a note, and pick up files shared from other Android apps. **The document format is now v14** (optional page lock): a 0.15 device opens a v14 notebook read-only (newer version) and never overwrites it. **Not verified on the device**: unit tests and the browser harness only.
