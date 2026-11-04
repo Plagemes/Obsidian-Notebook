@@ -7,7 +7,7 @@ import { Modal, Setting, TFile, normalizePath, type App } from "obsidian";
 import { t } from "../i18n";
 import { withEmbedMarker, stablePageSubpath } from "../integration/page-links";
 import {
-	alternativeDigestName, buildDigestSection, canRewritePicture, cropRect, digestImageName, digestSectionOf, highlightRegions, newDigestNote, replaceDigestSection, sectionImageLinks, wouldAppendToUserNote,
+	alternativeDigestName, buildDigestSection, canRewritePicture, cropRect, digestImageName, digestSectionOf, highlightRegions, newDigestNote, replaceDigestSection, sectionImageLinks, stableDigestPictureName, wouldAppendToUserNote,
 	type ColourFamily, type DigestItem, type HighlightRegion,
 } from "../model/highlight-digest";
 import { MARKDOWN_DPI, DEFAULT_MARKDOWN_DPI, isMarkdownDpi, type MarkdownDpi } from "../model/export-markdown";
@@ -105,14 +105,22 @@ export async function runHighlightsDigest(host: DigestHost, request: DigestReque
 		}
 		// A note of the user's with this name and no digest markers: the section would be added to it with no backup. Ask first.
 		if (wouldAppendToUserNote(before)) {
-			const choice = await askAppendToNote(app, existing.name);
-			if (choice === null) return null;
-			if (choice === "new") {
-				const dir = notePath.includes("/") ? notePath.slice(0, notePath.lastIndexOf("/") + 1) : "";
-				const alt = alternativeDigestName(digestNoteName(file), (n) => app.vault.getAbstractFileByPath(normalizePath(`${dir}${n}`)) !== null);
-				notePath = normalizePath(`${dir}${alt}`);
-				existing = null;
-				before = "";
+			// "Use a new note" is remembered: a "<Notebook> — Highlights N" an earlier run made is updated, never asked about again.
+			const own = await findOwnDigestCopy(app, notePath);
+			if (own) {
+				notePath = own.file.path;
+				existing = own.file;
+				before = own.text;
+			} else {
+				const choice = await askAppendToNote(app, existing.name);
+				if (choice === null) return null;
+				if (choice === "new") {
+					const dir = notePath.includes("/") ? notePath.slice(0, notePath.lastIndexOf("/") + 1) : "";
+					const alt = alternativeDigestName(digestNoteName(file), (n) => app.vault.getAbstractFileByPath(normalizePath(`${dir}${n}`)) !== null);
+					notePath = normalizePath(`${dir}${alt}`);
+					existing = null;
+					before = "";
+				}
 			}
 		}
 	}
@@ -219,7 +227,17 @@ export async function storePicture(app: App, notePath: string, name: string, blo
 		const data = await blob.arrayBuffer();
 		const wanted = normalizePath(await app.fileManager.getAvailablePathForAttachment(name, notePath));
 		let target: TFile | null = null;
-		const link = known.get(name.toLowerCase());
+		let link = known.get(name.toLowerCase());
+		if (link === undefined) {
+			// An earlier run may have written a suffixed copy ("X 1.png") because the plain name was held: find it by the stable name.
+			const stable = stableDigestPictureName(name);
+			for (const [key, value] of known) {
+				if (stableDigestPictureName(key) === stable) {
+					link = value;
+					break;
+				}
+			}
+		}
 		if (link !== undefined) {
 			const found = app.metadataCache.getFirstLinkpathDest(link, notePath);
 			if (
@@ -244,6 +262,30 @@ export async function storePicture(app: App, notePath: string, name: string, blo
 		console.error("[notebook] digest picture", e);
 		return null;
 	}
+}
+
+/** How far past "Highlights 2" the search for a digest note of an earlier "Use a new note" goes. */
+const MAX_OWN_COPIES = 50;
+
+/**
+ * An earlier "Use a new note" answer: the note `<Notebook> — Highlights N.md` (N = 2, 3...) next to `notePath` that already holds
+ * the digest section (both markers, in order). The first such note wins; a copy with an unpaired marker or no section is not ours.
+ */
+export async function findOwnDigestCopy(app: App, notePath: string): Promise<{ file: TFile; text: string } | null> {
+	const slash = notePath.lastIndexOf("/");
+	const dir = slash < 0 ? "" : notePath.slice(0, slash + 1);
+	const stem = notePath.slice(slash + 1).replace(/\.md$/iu, "");
+	for (let n = 2; n < 2 + MAX_OWN_COPIES; n++) {
+		const f = app.vault.getAbstractFileByPath(normalizePath(`${dir}${stem} ${n}.md`));
+		if (!(f instanceof TFile)) continue;
+		try {
+			const text = await app.vault.read(f);
+			if (digestSectionOf(text) !== "" && replaceDigestSection(text, "x").outcome === "replaced") return { file: f, text };
+		} catch {
+			/* unreadable: not ours to use */
+		}
+	}
+	return null;
 }
 
 /** The three answers to "a note with this name already exists and has no digest section". */

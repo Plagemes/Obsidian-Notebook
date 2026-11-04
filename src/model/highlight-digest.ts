@@ -363,6 +363,15 @@ function dirOf(path: string): string {
 	return i < 0 ? "" : path.slice(0, i);
 }
 
+/**
+ * The digest picture name without Obsidian's numeric suffix (`X highlight p1-1 2.png` -> `X highlight p1-1.png`), lower case. A
+ * run whose plain name was held by a file it could not rewrite writes the suffixed copy; the next run must find that copy again
+ * under the stable name instead of making yet another one.
+ */
+export function stableDigestPictureName(name: string): string {
+	return name.replace(/^(.* highlight p\d+-\d+) \d+(\.png)$/iu, "$1$2").toLowerCase();
+}
+
 /** What `canRewritePicture` needs to know about the file an old digest embed resolves to. */
 export interface PictureRewriteCheck {
 	/** Vault path of the file the old embed resolves to from the digest note. */
@@ -383,7 +392,7 @@ export interface PictureRewriteCheck {
  */
 export function canRewritePicture(c: PictureRewriteCheck): boolean {
 	const base = c.foundPath.slice(c.foundPath.lastIndexOf("/") + 1);
-	if (base.toLowerCase() !== c.name.toLowerCase()) return false;
+	if (stableDigestPictureName(base) !== stableDigestPictureName(c.name)) return false;
 	if (dirOf(c.foundPath).toLowerCase() !== c.expectedDir.toLowerCase()) return false;
 	return c.linkedFrom.every((p) => p === c.notePath);
 }
