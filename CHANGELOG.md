@@ -45,6 +45,11 @@ Write on and around the page more freely, and keep a large library in order: sti
 - Collections: an empty or newer-version file no longer gets an "unreadable" copy, and deletions older than 90 days are dropped when the file is rewritten.
 - Merge, split and extract started from an open notebook (its map) now also refuse to rewrite or trash a closed notebook whose latest ink only lives in the instant-save journal, like the library's flows.
 - The library check never counts the saved collections file or the PDF copy record files as notebook content.
+- Pasting or duplicating a collapsed sticky note selects the note only; its hidden ink is no longer drawn live, boxed or recoloured by restyle.
+- Moving a collapsed sticky note with the pen "move to page" gesture or the cross-page drag now always takes its hidden ink, whatever "Ink follows objects" is set to.
+- Task from a selection keeps typed web addresses as working links while still escaping comment, tag, link and math openers.
+- Extract and split with move re-check the source's journal before creating the new notebook; if the move still fails after the copy, the notice says the pages were copied, the copy gets new page ids, and the source is left as it was.
+- The PDF copy no longer treats a copy that failed read-back as its own: it stops for that notebook, tells once, and resumes when the copy is turned off and on.
 
 ## 0.16.0 — 2026-11-04
 
