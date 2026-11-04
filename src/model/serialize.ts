@@ -285,7 +285,8 @@ function assemble(
 	const slides = slidesInUse(doc);
 	const pages = doc.pages.map((page) => {
 		const strokes = page.strokes.map((s) => lineOf(slides.stroke(s)));
-		const elements = (page.elements ?? []).map(elementLineOf);
+		// v15: a collapsed note names only strokes that are on its page (ids of strokes that are gone are not written).
+		const elements = (page.elements ?? []).map((e) => elementLineOf(e.type === "sticky" && e.ink ? withLiveInk(e, page.strokes) : e));
 		const out = [
 			"\t\t{",
 			`\t\t\t"id": ${j(page.id)},`,

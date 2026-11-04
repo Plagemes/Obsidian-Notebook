@@ -1,6 +1,7 @@
 import { createId, quantizePoint } from "../model/document";
 import { Batch, RemoveElement, ReplaceStroke, type Command } from "../model/history";
 import { freezeStroke } from "../model/serialize";
+import { hiddenStickyInk } from "../model/sticky";
 import type { Page, Point, Stroke } from "../model/types";
 import { elementsInLasso, type MeasureText } from "./elements";
 import { filterErasable, type EraseFilter } from "./erase-filter";
@@ -105,9 +106,11 @@ export function eraseAreaCommand(page: Pick<Page, "id" | "strokes" | "elements">
 	if (poly.length < 3) return null;
 	const newId = options.newId ?? createId;
 	const erasable = new Set(filterErasable(page.strokes, options.filter));
+	// 0.17 (E3): the ink a collapsed sticky note keeps hidden is out of view: an area over the note's empty place leaves it alone.
+	const noteInk = hiddenStickyInk(page.elements);
 	const edits: Array<{ stroke: Stroke; index: number; after: Stroke[] }> = [];
 	page.strokes.forEach((stroke, index) => {
-		if (!erasable.has(stroke) || options.skip?.(stroke)) return;
+		if (!erasable.has(stroke) || options.skip?.(stroke) || noteInk?.has(stroke.id)) return;
 		const runs = cutOutsidePolygon(stroke, poly);
 		if (runs === null) return;
 		edits.push({ stroke, index, after: runs.map((points) => freezeStroke({ ...stroke, id: newId(), points })) });
