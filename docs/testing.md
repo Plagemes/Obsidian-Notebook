@@ -2079,6 +2079,30 @@ Mouse: draw, erase (both modes), undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scr
 827. Change *Notebook templates folder* to another folder: new templates are saved there and are still not in the library.
 828. Phone and tablet: picker and manager targets are easy to hit; light and dark.
 
+### 0.16 — inbox: shared files (steps 1070-1089)
+
+Implemented, not verified on hardware. Needs an Android device with another app to share from (Files, Gallery, a browser). Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/inbox-*`.
+
+1070. **Where shared files land.** In Settings → Library check *Shared files* is on and *Shared files folder* is empty. In Obsidian's *Files and links* note the attachments folder. From another app, share a PDF to Obsidian ("Save to vault" or the app's own share flow). Expected: the file is saved in that folder; within a moment Home shows a *Shared files* card with the file, its kind, size and age, and the library rail shows *Shared files* with a count.
+1071. **Images.** Share a photo or screenshot (PNG or JPEG). Expected: it is listed as *Image*. A HEIC/HEIF photo is not listed.
+1072. **Not listed.** Files that were already in the folder when you first opened the plugin with the feature on, subfolders, a `.txt` or Word file, notebooks' `_assets`, and the PDF exported next to a notebook are not listed.
+1073. **Attachments next to the note.** In *Files and links* choose *Same folder as current file*, clear the setting and open Home. Expected: no card; opening the full list (if any file is waiting) or the settings explains that a folder must be chosen. Choose a folder in the setting: it works.
+1074. **New notebook from a PDF.** Tap the file → *New notebook from it*. Expected: the usual PDF import (progress for a large file), the notebook opens with one page per PDF page; then a dialog offers to move the original to the trash. Cancel: the original stays in its folder and disappears from the list.
+1075. **New notebook from an image.** Same with an image. Expected: a notebook named like the file with one page, the image as its background (landscape or portrait by the image).
+1076. **Add a PDF to a notebook.** *Add to notebook...* → search and choose a notebook (closed). Expected: the PDF's pages are added at the end as PDF pages, a notice says how many, the notebook opens with them. Repeat with the notebook open in a tab: one undo step removes them again.
+1077. **Add an image.** *Add to notebook...* → choose a notebook → *As a new page*: a last page with the image. Again with *On a page*: the image is placed in the middle of the page in view (the last page when the notebook is closed) as an element you can move and resize.
+1078. **Move the original.** After 1074-1077 the confirmation says the file is now stored with the notebooks. *Move to trash*: the file leaves the folder (Obsidian's or the system trash, per your *Deleted files* setting) and the list. Check the notebook still shows the PDF or image.
+1079. **Dismiss.** *Dismiss* on a file: it disappears from the card, the count and the rail, the file stays in the vault. Restart Obsidian: still hidden. Delete the file and share a new one with the same name: the new one is listed.
+1080. **Move to trash without using it.** *Move to trash* asks first and names the file; Cancel leaves it; confirming trashes it.
+1081. **Full list.** With more than three files, *Show all* opens the full list with the same actions. The list follows new shares while it is open.
+1082. **Phone.** On a phone the card and the list fit the width, rows are at least 44 px, the menu is reachable with the finger and the pen.
+1083. **Setting off.** Turn *Shared files* off: card, rail item and the folder setting's row disappear (the folder row is hidden while off). Turn it back on: files that arrived meanwhile are not listed (only files that arrive while it is on).
+1084. **Sync.** With two devices on Sync, share on the phone: the file appears on the tablet's Home after it syncs (a file that arrives by sync counts as new there). Dismissing on one device does not hide it on the other.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Shared files inbox (#177): watch the attachments folder, Home card, rail badge, new notebook from it, add to notebook (PDF pages, image page / element), dismiss, move to trash | yes | folder resolution, filter, dismissals, queue, edits on closed notebooks, settings (`tests/shared-inbox.test.ts`); browser harness `doc=inbox` (real Home, real vault events, every action) | | edits of an open notebook (same code as the Move pages path) not run in the harness | |
+
 ## Known limitations (v0.4)
 
 - Nothing has been verified on Android hardware yet.

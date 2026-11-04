@@ -62,6 +62,8 @@ import { renderHome, type RecentSection, type StatsSection } from "./home-surfac
 import { PageThumbs } from "./page-thumbs";
 import { renderLibrarySections, renderTagChips, type DynamicPanel, type TagChip } from "./library-sections";
 import { InboxBell, type InboxPort } from "./inbox-bell";
+import type { SharedInboxPort } from "./shared-inbox";
+import { renderSharedInboxCard, SharedInboxModal } from "./shared-inbox-ui";
 import { applyViewportClass, ViewportTracker } from "../ui/viewport-class";
 
 /** The missing-styles diagnostic (LibraryView.checkStyles) is shown once per session. */
@@ -142,6 +144,8 @@ export interface LibraryHost {
 	recentEdits?(): Array<{ path: string; page: string; num: number; at: number }>;
 	/** 0.12: the Zettelkasten Inbox for the header bell; null when the feature is not available. */
 	inbox?(): InboxPort | null;
+	/** 0.16 (#177): PDFs and images shared to Obsidian from other apps, waiting to become notebooks (Home's card, the rail). */
+	sharedInbox?(): SharedInboxPort | null;
 	/** 0.13: the "Your name" setting (Home's greeting). */
 	userName?(): string;
 	/** 0.13: pages and minutes written per day on this device (Home's greeting and statistics; view/recent-pages.ts). */
@@ -426,6 +430,9 @@ export class LibraryView extends ItemView {
 		// wave 0.12: a folder's colour, icon or art changed (creation dialog, another device): redraw the cards.
 		const offMeta = this.host.folderMeta?.onFolderMetaChange(() => this.requestRender());
 		if (offMeta) this.register(offMeta);
+		// 0.16 (#177): a file was shared to the vault, or one was dealt with.
+		const offShared = this.host.sharedInbox?.()?.onChange(() => this.requestRender());
+		if (offShared) this.register(offShared);
 		// 0.15 views: the Board's columns were edited (its dialog, the settings).
 		this.register(onBoardColumnsChanged(() => this.requestRender()));
 
@@ -1352,6 +1359,15 @@ export class LibraryView extends ItemView {
 			if (dyn[id].length === 0) continue;
 			railItem(nav, { key: `nav:dyn:${id}`, icon: COLLECTION_LOOK[id].icon, label: this.dynamicLabel(id, true), count: dyn[id].length, active: isCollectionPlace(p) && p.collection === id, onClick: () => this.navigate({ collection: id }) });
 		}
+		// 0.16 (#177): files shared from other apps, with how many wait.
+		const shared = this.host.sharedInbox?.() ?? null;
+		const waiting = shared?.items().length ?? 0;
+		if (shared && waiting > 0) {
+			railItem(nav, { key: "nav:shared", icon: "inbox", label: t("si.nav"), count: waiting, onClick: () => {
+				this.setRailOpen(false);
+				this.openSharedInbox();
+			} });
+		}
 		if (visible.some((e) => (e.pdfPages ?? 0) > 0)) {
 			railItem(nav, { key: "nav:pdf", icon: "file-text", label: t("nav.pdf"), active: isCollectionPlace(p) && p.collection === "pdf", onClick: () => this.navigate({ collection: "pdf" }) });
 		}
@@ -2036,6 +2052,12 @@ export class LibraryView extends ItemView {
 		return { chart, tiles, split };
 	}
 
+	/** 0.16 (#177): the full list of shared files. */
+	private openSharedInbox(): void {
+		const port = this.host.sharedInbox?.();
+		if (port) new SharedInboxModal(this.app, port).open();
+	}
+
 	private renderHomeSurface(el: HTMLElement, tree: FolderNode): void {
 		const now = Date.now();
 		const visible = this.visible();
@@ -2054,11 +2076,13 @@ export class LibraryView extends ItemView {
 		if (this.host.scanToNotebook) quick.push({ icon: "scan", ...compact(paletteColor("Teal")), title: t("home.quick.scan"), description: t("home.quick.scan.desc"), key: "quick:scan", onRun: () => this.host.scanToNotebook?.(root) });
 		if (this.host.todaysPage) quick.push({ icon: "calendar-plus", ...compact(paletteColor("Green")), title: t("home.quick.today"), description: t("home.quick.today.desc"), key: "quick:todays-page", onRun: () => this.host.todaysPage?.() });
 		const fit = this.mode === "wide" ? DASH_SUBJECTS_WIDE : this.mode === "medium" ? DASH_SUBJECTS_MEDIUM : DASH_SUBJECTS_PHONE;
+		const sharedPort = this.host.sharedInbox?.() ?? null;
 		renderHome(el, {
 			dynamic: DYNAMIC_IDS.filter((id) => this.dynamicSections()[id].length > 0).map((id) => ({
 				id, icon: COLLECTION_LOOK[id].icon, label: this.dynamicLabel(id, true), count: this.dynamicSections()[id].length,
 				onClick: () => this.navigate({ collection: id }),
 			})),
+			shared: sharedPort ? (page) => renderSharedInboxCard(page, sharedPort, () => this.openSharedInbox()) : undefined,
 			continue: cont.card,
 			empty: cont.empty,
 			quickPage: this.quickPageOptions(),

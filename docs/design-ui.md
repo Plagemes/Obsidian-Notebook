@@ -426,6 +426,10 @@ A dialog on the shared shell (`modalShell`, wide, no footer) opened by the grid 
 
 A wide dialog on the modal shell, with the notebook map's classes (`nb-map-modal nb-move-modal`): the same auto-fill grid of cards (`.nb-map-card`, thumbnail from the page panel's cache, page number). The first card is dashed with a plus (*New page after N*), the source page is not offered, and one chip (*Keep exact position*) sits above the grid. Tapping a card is the whole interaction: the dialog closes and the toast offers *Go to page*. View: `src/view/page-picker-modal.ts`; logic: `src/model/selection-move.ts`.
 
+## Shared files (0.16, roadmap #177)
+
+PDFs and images shared to Obsidian from other apps (they land in the attachments folder) are offered where the user starts: a *Shared files* panel on Home between the dynamic-section chips and the quick actions (library list rows, the newest three, a count badge, *Show all*; drawn only when something waits, by `library/shared-inbox-ui.ts`), a *Shared files* rail item with a count under Notebooks, and a full list in a shell dialog (`SharedInboxModal`, wide). A row's tap and its kebab open the same menu: *New notebook from it*, *Add to notebook...*, *Dismiss*, *Move to trash*. The notebook picker is the search list of *Move to notebook*; an image adds a two-row choice dialog (*As a new page* / *On a page*) on the modal shell. Dialogs that delete (*Move to trash*, the offer to move the original after use) are confirmations with the destructive button.
+
 ## Library views: Board and Calendar (0.15, roadmap #161 #162)
 
 The library header has a **Views** button (board icon; calendar icon while the Calendar is on) next to the grid / list toggle, opening a menu of *Cards*, *Board*, *Calendar*. The mode is part of the view state (`layout`). Not offered on Home, Subjects, Tags and the archive. Both modes show the notebooks of the current place (`placeQuery`), keep the chips row, and use only `--nb-*` tokens under `.nb-ui`.
