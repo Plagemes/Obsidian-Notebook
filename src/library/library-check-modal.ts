@@ -10,7 +10,7 @@ import { backupFolder, type NotebookSettings } from "../settings";
 import { ensureFolder, sidecarDeviceId, vaultDeviceFileAdapter } from "../storage/vault-io";
 import { showErrorNotice, showNotice } from "../view/notice";
 import {
-	assetsDir, assetTrashDir, formatBytes, moveOrphans, runLibraryCheck, type AssetFile, type CheckConfig, type CheckSource,
+	assetsDir, assetTrashDir, templateFolders, formatBytes, moveOrphans, runLibraryCheck, type AssetFile, type CheckConfig, type CheckSource,
 	type LibraryCheckReport, type LiveReferences, type Mover, type RunOptions, type ScanCache,
 } from "./library-check";
 import { liveAssetIds, type JournalReader } from "./library-check-live";
@@ -67,7 +67,8 @@ export function journalReader(app: App): JournalReader {
 
 export function configFor(settings: NotebookSettings): CheckConfig {
 	const root = normalizePath(settings.folder || "/");
-	return { root: root === "/" ? "" : root, backup: normalizePath(backupFolder(settings)), now: Date.now() };
+	const base = root === "/" ? "" : root;
+	return { root: base, backup: normalizePath(backupFolder(settings)), kept: templateFolders(settings, base), now: Date.now() };
 }
 
 const breathe = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));

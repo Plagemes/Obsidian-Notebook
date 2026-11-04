@@ -29,6 +29,7 @@
  * Those are reported apart ("kept by backups and the trash") and never offered for removal.
  */
 import { parse } from "../model/serialize";
+import { notebookTemplatesFolderPath, templatesFolderPath } from "../storage/trash-paths";
 import { downloadState, formatBytes, isAwaitingDownload, withoutNulTail } from "../storage/sync-state";
 import { FOLDER_META_PREFIX } from "./folder-meta";
 import { SEEN_PREFIX } from "./library-check-seen";
@@ -85,6 +86,8 @@ export interface CheckConfig {
 	root: string;
 	/** The backup folder (version history and restore copies). */
 	backup: string;
+	/** Extra folders that keep copies (the notebook or page templates when the settings put them outside `_templates`): their notebooks hold assets like the other kept ones. */
+	kept?: readonly string[];
 	now: number;
 }
 
@@ -104,10 +107,24 @@ function extensionOf(path: string): string {
 }
 
 /** Folders that keep copies and records that can bring a notebook (and so its assets) back. */
-export function keptFolders(config: Pick<CheckConfig, "root" | "backup">): string[] {
+export function keptFolders(config: Pick<CheckConfig, "root" | "backup" | "kept">): string[] {
 	const r = config.root;
 	const at = (name: string) => (r ? `${r}/${name}` : name);
-	return [at("_trash"), config.backup, at("_templates"), at("_stamps"), at("_meta")];
+	return [at("_trash"), config.backup, at("_templates"), at("_stamps"), at("_meta"), ...(config.kept ?? [])];
+}
+
+/**
+ * The page and notebook template folders when they lie outside the default `_templates` (a custom path in the settings): kept
+ * like it, so a notebook template holds the pictures it names and is not counted as a notebook. A folder that is, or contains,
+ * the notebooks folder is left out (it would hide every notebook).
+ */
+export function templateFolders(settings: { templatesFolder: string; notebookTemplatesFolder: string }, root: string): string[] {
+	const out: string[] = [];
+	for (const p of [templatesFolderPath(settings.templatesFolder, root), notebookTemplatesFolderPath(settings.notebookTemplatesFolder, settings.templatesFolder, root)]) {
+		if (!p || p === root || root.startsWith(`${p}/`) || out.includes(p)) continue;
+		out.push(p);
+	}
+	return out;
 }
 
 /** Whether `path` is a file the check may ever offer to move: directly in the assets folder and named like an asset. */

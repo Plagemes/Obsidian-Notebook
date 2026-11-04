@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	assetsDir, assetTrashDir, assetTrashPath, ASSET_GRACE_MS, hexTokens, isAssetFilePath, isNonHolderSidecar, keptFolders, moveOrphans, runLibraryCheck,
-	scanNotebookText, type AssetFile, type CheckConfig, type CheckSource, type LiveReferences, type Mover, type RunOptions,
+	scanNotebookText, templateFolders, type AssetFile, type CheckConfig, type CheckSource, type LiveReferences, type Mover, type RunOptions,
 	type ScanCache, type SeenStore, type VaultFileInfo,
 } from "../src/library/library-check";
 import { serialize } from "../src/model/serialize";
@@ -626,5 +626,35 @@ describe("moving unused files aside", () => {
 	it("has no way to delete: the mover only moves", () => {
 		const bin: Mover = { move: async () => undefined };
 		expect(Object.keys(bin)).toEqual(["move"]);
+	});
+});
+
+describe("template folders outside _templates (0.15 templates + storage)", () => {
+	const pageTpl = (folder: string) => ({ templatesFolder: folder, notebookTemplatesFolder: "" });
+
+	it("defaults add nothing beyond the default templates folder", () => {
+		expect(templateFolders({ templatesFolder: "", notebookTemplatesFolder: "" }, "Notebooks")).toEqual(["Notebooks/_templates", "Notebooks/_templates/notebooks"]);
+		expect(keptFolders({ root: "Notebooks", backup: "Notebooks/_backup" })).toContain("Notebooks/_templates");
+	});
+
+	it("a custom templates folder is kept, and its notebooks hold their assets without being counted", async () => {
+		const kept = templateFolders(pageTpl("Templates"), "Notebooks");
+		expect(kept).toEqual(["Templates", "Templates/notebooks"]);
+		const source = new FakeSource(new Map([
+			assetFile(1),
+			["Templates/notebooks/Planner.notebook", { text: notebookText(asset(1)) }],
+			["Notebooks/Real.notebook", { text: notebookText() }],
+		]));
+		const report = await runLibraryCheck(source, { ...config, kept }, opts(agedSeen(1)));
+		expect(report.notebooks).toBe(1);
+		expect(report.orphans).toEqual([]);
+		// without the extra folder the template would be read as an ordinary notebook (still safe, but counted)
+		const plain = await runLibraryCheck(source, config, opts(agedSeen(1)));
+		expect(plain.notebooks).toBe(2);
+	});
+
+	it("a templates folder that is or contains the notebooks folder is ignored", () => {
+		expect(templateFolders({ templatesFolder: "Notebooks", notebookTemplatesFolder: "" }, "Notebooks")).toEqual(["Notebooks/notebooks"]);
+		expect(templateFolders({ templatesFolder: "Vault", notebookTemplatesFolder: "Vault/nb" }, "Vault/Notebooks")).toEqual(["Vault/nb"]);
 	});
 });
