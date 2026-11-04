@@ -7,6 +7,7 @@ import { pageToSvg, type SvgPlacedImage } from "../ink/export-svg";
 import type { BoxLabel } from "../ink/marker-render";
 import type { HeaderLayout } from "../ink/page-header";
 import { DEFAULT_PNG_SCALE } from "../model/export-pages";
+import { cleanPagesForExport, resolveCleanOptions, type CleanExportOptions } from "../model/clean-export";
 import { backgroundRect } from "../model/margins";
 import { recordPluginWrite } from "../storage/plugin-written";
 import type { Page } from "../model/types";
@@ -203,6 +204,8 @@ export interface ExportRequest {
 	scale?: number;
 	/** 0.18 (#178), PDF and PNG: split the infinite pages into sheets of paper. */
 	split?: SplitSettings;
+	/** 0.19 (#239), every format: a clean copy, without the study and working layers (absent: the export as it always was). */
+	clean?: CleanExportOptions;
 }
 
 /**
@@ -210,10 +213,15 @@ export interface ExportRequest {
  * range; PNG images go to a vault folder; Print writes nothing and opens the system print dialog (wave 0.10, 81).
  * Existing files are never overwritten (the name gets " 2", " 3"…).
  */
-export async function runExport(app: App, notebook: TFile, pages: readonly Page[], request: ExportRequest, media: NotebookMedia | null, options: ExportOptions = {}): Promise<void> {
+export async function runExport(app: App, notebook: TFile, allPages: readonly Page[], request: ExportRequest, media: NotebookMedia | null, options: ExportOptions = {}): Promise<void> {
+	// 0.19 (#239): a clean copy draws filtered copies of the pages (same ids and order; the document is untouched) and no comment notes.
+	const clean = request.clean;
+	const pages = clean ? cleanPagesForExport(allPages, clean) : allPages;
 	const jobs = planExport(request.format, request.scope, request.pageIndex, pages.length, request.layers, request.range);
 	const splits = (request.format === "pdf" || request.format === "png") && request.split;
-	const opts: ExportOptions = { ...options, layers: request.layers, ...(splits ? { split: request.split! } : {}) };
+	const base: ExportOptions = { ...options };
+	if (clean && resolveCleanOptions(clean).comments) delete base.comments;
+	const opts: ExportOptions = { ...base, layers: request.layers, ...(splits ? { split: request.split! } : {}) };
 	if (jobs.length === 0) return;
 	if (request.format === "png") {
 		await exportPngPages(app, pages, { folder: request.folder ?? "", scale: request.scale ?? DEFAULT_PNG_SCALE, pages: jobs[0]!.pages }, media, opts);

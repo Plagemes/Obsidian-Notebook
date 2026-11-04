@@ -36,8 +36,8 @@ export interface ExportDialogHost {
 }
 
 /** The choices of the last export in this session (not saved). */
-const last: { format: ExportFormat; layers: ExportLayers; dpi: MarkdownDpi; scale: PngScale; split: SplitSettings; splitOn: boolean } = {
-	format: "pdf", layers: "both", dpi: DEFAULT_MARKDOWN_DPI, scale: DEFAULT_PNG_SCALE, split: { ...DEFAULT_SPLIT }, splitOn: false,
+const last: { format: ExportFormat; layers: ExportLayers; dpi: MarkdownDpi; scale: PngScale; split: SplitSettings; splitOn: boolean; clean: boolean; cleanOpenStickies: boolean } = {
+	format: "pdf", layers: "both", dpi: DEFAULT_MARKDOWN_DPI, scale: DEFAULT_PNG_SCALE, split: { ...DEFAULT_SPLIT }, splitOn: false, clean: false, cleanOpenStickies: false,
 };
 /** Width of the cut preview, CSS px (drawn twice as large). */
 const PREVIEW_W = 300;
@@ -53,6 +53,10 @@ export class ExportModal extends Modal {
 	private scale: PngScale = last.scale;
 	private folder: string;
 	private rangeText = "";
+	// 0.19 (#239): clean copy.
+	private cleanOn = last.clean;
+	private cleanOpenStickies = last.cleanOpenStickies;
+	private cleanStickiesSetting: Setting | null = null;
 	private layersDesc: HTMLElement | null = null;
 	private fileDesc: HTMLElement | null = null;
 	private problem: HTMLElement | null = null;
@@ -122,6 +126,16 @@ export class ExportModal extends Modal {
 			});
 		});
 		this.layersDesc = layers.descEl.createSpan({ text: t(LAYER_DESC[this.layers]) });
+		// 0.19 (#239): a clean copy, without the study and working layers.
+		new Setting(contentEl).setName(t("export.clean")).setDesc(t("export.clean.desc")).addToggle((tg) => tg.setValue(this.cleanOn).onChange((v) => {
+			this.cleanOn = v;
+			this.cleanStickiesSetting?.settingEl.toggle(v);
+		}));
+		this.cleanStickiesSetting = new Setting(contentEl).setName(t("export.clean.stickies")).setDesc(t("export.clean.stickies.desc"));
+		this.cleanStickiesSetting.addToggle((tg) => tg.setValue(this.cleanOpenStickies).onChange((v) => {
+			this.cleanOpenStickies = v;
+		}));
+		this.cleanStickiesSetting.settingEl.toggle(this.cleanOn);
 		this.folderSetting = new Setting(contentEl).setName(t("export.markdown.folder")).setDesc(t("export.markdown.folder.desc"));
 		this.folderSetting.addText((tx) => {
 			tx.setValue(this.folder).onChange((v) => {
@@ -199,6 +213,8 @@ export class ExportModal extends Modal {
 		last.scale = this.scale;
 		last.split = { ...this.split };
 		last.splitOn = this.splitOn;
+		last.clean = this.cleanOn;
+		last.cleanOpenStickies = this.cleanOpenStickies;
 		const split = this.splitActive();
 		this.close();
 		this.host.run({
@@ -206,6 +222,7 @@ export class ExportModal extends Modal {
 			...(range ? { range } : {}),
 			...(this.format === "png" ? { folder: this.folder, scale: this.scale } : {}),
 			...(split ? { split: { ...this.split } } : {}),
+			...(this.cleanOn ? { clean: { openStickies: this.cleanOpenStickies } } : {}),
 		});
 	}
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### cleanexport
+- **Clean copy for exports (#239).** The export dialog has a *Clean copy* switch: the PDF, SVG, PNG and Print leave out the study and working layers — placeholders and the other markers (questions, importance, homework), margin comments (and the PDF comment notes) and collapsed sticky notes together with the ink they hide — so the lecture is ready to share; *Also leave out open sticky notes* is an option. Boxes, text, pictures, equations, the page header and invisible ink (still governed by *Show solutions*) are kept. The page model is filtered by the pure `cleanPageForExport` before drawing; the notebook is never changed, the format is unchanged and an export without the switch is byte-identical to before. Choosing the pages of "this lecture" is still done with *Some pages*.
+
 ## 0.18.0 — 2026-11-05
 
 Review a page and move between notes more freely: margin comments anchored to a region of the page, an infinite page split into sheets of paper for export, a selection sent into a Markdown note, pages copied to another notebook with a link back, a QR code for a page, the notes that mention a page, annotating a PDF from Obsidian's PDF viewer, and quick tabs for the pages you keep going back to. The notebook format moves to version 16 (an older plugin opens a v16 file read-only).

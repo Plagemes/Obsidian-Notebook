@@ -3450,6 +3450,11 @@ export const en = {
 	// 0.18 review fixes (I)
 	"annotatePdf.tooLarge": "This PDF is {size} MB, over the {max} MB limit for annotating from here. Import it from the library instead.",
 	"annotatePdf.scanning": "Looking through your notebooks for this PDF… {done} of {total}",
+	// 0.19 cleanexport
+	"export.clean": "Clean copy",
+	"export.clean.desc": "Leaves out placeholders and other markers, margin comments and collapsed sticky notes (with the ink they hide), ready to share. Your notebook is not changed.",
+	"export.clean.stickies": "Also leave out open sticky notes",
+	"export.clean.stickies.desc": "The ink written over a note stays on the page.",
 } as const;
 
 export type MessageKey = keyof typeof en;

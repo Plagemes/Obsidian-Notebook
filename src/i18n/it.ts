@@ -3452,4 +3452,9 @@ export const it: Partial<Record<MessageKey, string>> = {
 	// 0.18 review fixes (I)
 	"annotatePdf.tooLarge": "Questo PDF pesa {size} MB, oltre il limite di {max} MB per annotare da qui. Importalo dalla libreria.",
 	"annotatePdf.scanning": "Cerco questo PDF nei tuoi quaderni… {done} di {total}",
+	// 0.19 cleanexport
+	"export.clean": "Copia pulita",
+	"export.clean.desc": "Lascia fuori segnaposto e altri segnalibri di studio, commenti a margine e note adesive chiuse (con l'inchiostro che nascondono), pronta da condividere. Il quaderno non cambia.",
+	"export.clean.stickies": "Escludi anche le note adesive aperte",
+	"export.clean.stickies.desc": "L'inchiostro scritto sopra una nota resta sulla pagina.",
 };
