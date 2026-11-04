@@ -68,5 +68,8 @@ describe("the editor chosen before drawing", () => {
 		expect(editorStillTargets("b.md", "a.md", "source")).toBe(false);
 		expect(editorStillTargets(undefined, "a.md", "source")).toBe(false);
 		expect(editorStillTargets("a.md", "a.md", "preview")).toBe(false);
+		// a view closed while the picture was drawn is not written to, even if it still reports the note
+		expect(editorStillTargets("a.md", "a.md", "source", false)).toBe(false);
+		expect(editorStillTargets("a.md", "a.md", "source", true)).toBe(true);
 	});
 });

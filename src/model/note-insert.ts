@@ -104,7 +104,10 @@ export function insertPoint(
 	return { line: next, ch: 0, before: "", after: getLine(next) };
 }
 
-/** Whether the editor picked before the (async) drawing still shows the note the block is for, in source mode; if not, the block is appended to the note instead. */
-export function editorStillTargets(viewPath: string | undefined, notePath: string, mode: string): boolean {
-	return viewPath === notePath && mode === "source";
+/**
+ * Whether the editor picked before the (async) drawing still shows the note the block is for, in source mode, and is still on
+ * screen (`attached`: its view was not closed meanwhile); if not, the block is appended to the note instead.
+ */
+export function editorStillTargets(viewPath: string | undefined, notePath: string, mode: string, attached = true): boolean {
+	return attached && viewPath === notePath && mode === "source";
 }

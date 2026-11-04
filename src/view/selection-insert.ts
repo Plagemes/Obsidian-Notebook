@@ -140,7 +140,7 @@ export async function runInsertIntoNote(host: InsertHost, now: Date = new Date()
 		const line = buildInsertLine({ embed: withEmbedMarker(app.fileManager.generateMarkdownLink(stored, notePath), true), width: host.settings.noteInsertWidth, pageLink });
 		const { view } = destination;
 		// The drawing was async: the leaf may have switched to another note meanwhile, and the embed must not go there.
-		const editor = view && editorStillTargets(view.file?.path, destination.note.path, view.getMode()) ? view.editor : null;
+		const editor = view && editorStillTargets(view.file?.path, destination.note.path, view.getMode(), view.containerEl.isConnected) ? view.editor : null;
 		if (editor) {
 			const fmEnd = app.metadataCache.getFileCache(destination.note)?.frontmatterPosition?.end.line ?? null;
 			const at = insertPoint(editor.getCursor(), fmEnd, (n) => editor.getLine(n), editor.lastLine());
