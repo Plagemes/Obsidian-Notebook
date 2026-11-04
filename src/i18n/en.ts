@@ -3134,6 +3134,17 @@ export const en = {
 	"map.select.extract": "Extract…",
 	"map.select.split": "Split before this page…",
 	"map.select.card": "Select page {n}",
+	// 0.17 minimap
+	"minimap.label": "Overview of the page",
+	"minimap.map": "Page overview. Tap or drag to move the view",
+	"minimap.collapse": "Collapse the overview",
+	"minimap.expand": "Show the page overview",
+	"minimap.move": "Drag to another corner",
+	"settings.minimap": "Page overview (minimap)",
+	"settings.minimap.desc": "A small map of the page: tap or drag it to move around.",
+	"settings.minimap.auto": "Automatic",
+	"settings.minimap.always": "Always",
+	"settings.minimap.never": "Never",
 } as const;
 
 export type MessageKey = keyof typeof en;

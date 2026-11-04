@@ -87,6 +87,7 @@ import { NotebookMapCache } from "../model/notebook-map";
 import { NotebookMapModal } from "./notebook-map-modal";
 import type { NavController } from "./nav-controller";
 import { FastScrollbar, type ScrollbarHost } from "./scrollbar";
+import { Minimap, type MinimapHost } from "./minimap";
 import type { StatusBarInfo } from "./status-bar-logic";
 import type { NavPlace } from "../model/nav-history";
 import { openPageOpsMenu, type PageOpsHost } from "./page-ops-menu";
@@ -385,6 +386,8 @@ export class NotebookView extends FileView {
 	private readonly headingThumbs = new HeadingThumbs();
 	/** Roadmap 50: the fast scrollbar with a page preview (view/scrollbar.ts). */
 	private scrollbar: FastScrollbar | null = null;
+	/** 0.17 (#173): the floating overview of the page in view (view/minimap.ts). */
+	private minimap: Minimap | null = null;
 	/** Roadmap 18: stops following the history's changes (the quick slots and the page sheet enable or disable Back and Forward). */
 	private stopNav: (() => void) | null = null;
 	/** Roadmap 18: the next explicit arrival is the first load of this file, so the place left is the last one seen anywhere. */
@@ -609,6 +612,7 @@ export class NotebookView extends FileView {
 		// The panel sits to the left of the page (a drawer over it on narrow views).
 		this.body.insertBefore(this.pageNav.el, this.stage);
 		this.scrollbar = new FastScrollbar(this.body, this.scrollbarHost());
+		this.minimap = new Minimap(this.body, this.minimapHost());
 		this.stopNav = this.host.nav?.onChange(() => this.refreshUi()) ?? null;
 		this.heavy = new HeavyPageBanner(this.body, {
 			split: (index) => this.splitHeavyPage(index),
@@ -924,6 +928,8 @@ export class NotebookView extends FileView {
 		this.pageMode = null;
 		this.scrollbar?.destroy();
 		this.scrollbar = null;
+		this.minimap?.destroy();
+		this.minimap = null;
 		this.stopNav?.();
 		this.stopNav = null;
 		this.selectionActions?.destroy();
@@ -1302,6 +1308,7 @@ export class NotebookView extends FileView {
 		if (this.toolbar && this.tools.eraserSize !== settings.eraserSize) this.toolbar.update({ eraserSize: settings.eraserSize });
 		this.pens?.refresh();
 		this.scrollbar?.update();
+		this.minimap?.update();
 		this.filter.params = stabilizationParams(settings.stabilization);
 		// wave 0.7: resilience (#346): safe mode turns low-latency ink and prediction off for this view.
 		const fast = this.resilience?.lowLatencyAllowed() !== false;
@@ -2618,6 +2625,36 @@ export class NotebookView extends FileView {
 		this.setNavigatorOpen(true);
 	}
 
+	/** 0.17 (#173): what the minimap reads from the page in view and how it moves the view. Nothing here writes the document. */
+	private minimapHost(): MinimapHost {
+		const KEY = "notebook-minimap";
+		return {
+			state: () => {
+				const layout = this.layout, doc = this.shownDoc();
+				if (!layout || !doc || this.viewSize.width <= 0) return null;
+				const index = this.currentPageIndex();
+				const page = doc.pages[index], box = layout.boxes[index];
+				if (!page || !box) return null;
+				return { pageId: page.id, page: { width: page.width, height: page.height, infinite: page.infinite === true }, box, viewport: this.viewport, view: this.viewSize };
+			},
+			mode: () => this.host.settings.minimapMode,
+			busy: () => !!this.controller?.drawing || this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null,
+			panTo: (v) => this.setViewport(v, true),
+			render: (pageId, width) => {
+				const page = this.shownDoc()?.pages.find((p) => p.id === pageId);
+				if (!page || this.resilience?.thumbnailsAllowed() === false) return "";
+				return renderThumbnail(this.statesTools?.viewPages([page])[0] ?? page, width, {
+					mime: "image/jpeg",
+					quality: 0.7,
+					region: { x: 0, y: 0, width: page.width, height: page.height },
+					drawBackground: (ctx, p) => this.drawThumbMedia(ctx, p),
+				});
+			},
+			loadPrefs: () => this.app.loadLocalStorage(KEY) as unknown,
+			savePrefs: (prefs) => this.app.saveLocalStorage(KEY, prefs),
+		};
+	}
+
 	private scrollbarHost(): ScrollbarHost {
 		const pageAtIndex = (i: number): Page | null => this.shownDoc()?.pages[i] ?? null;
 		return {
@@ -3086,6 +3123,7 @@ export class NotebookView extends FileView {
 		this.reading?.docChanged();
 		this.pdfText?.docChanged();
 		this.display?.docChanged();
+		this.minimap?.invalidate();
 	}
 
 	/** wave 0.9 (376): the windows of the cropped view changed (or the toggle did): lay the pages out again and fit. */
@@ -3245,6 +3283,7 @@ export class NotebookView extends FileView {
 
 	private afterHistoryChange(): void {
 		this.refreshLayout();
+		this.minimap?.invalidate();
 		// The document may be shorter now (page deleted or made smaller): keep the view inside it.
 		this.setViewport(this.viewport);
 		this.markChanged();
@@ -3257,6 +3296,7 @@ export class NotebookView extends FileView {
 	/** The page panel shows thumbnails of what was just drawn, a moment after the pen lifts. */
 	private scheduleNavRefresh(): void {
 		this.scheduleHeavyCheck();
+		this.minimap?.invalidate();
 		if (!this.pageNav?.open || this.navTimer !== null) return;
 		this.navTimer = window.setTimeout(() => {
 			this.navTimer = null;
@@ -3558,6 +3598,7 @@ export class NotebookView extends FileView {
 		this.math?.place();
 		this.updatePageIndicator();
 		this.scrollbar?.update();
+		this.minimap?.update();
 		this.overlayChanged?.();
 		for (const fn of this.overlayListeners) fn();
 	}

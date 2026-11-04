@@ -3136,4 +3136,15 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"map.select.extract": "Estrai…",
 	"map.select.split": "Dividi prima di questa pagina…",
 	"map.select.card": "Seleziona la pagina {n}",
+	// 0.17 minimap
+	"minimap.label": "Panoramica della pagina",
+	"minimap.map": "Panoramica della pagina. Tocca o trascina per spostare la vista",
+	"minimap.collapse": "Comprimi la panoramica",
+	"minimap.expand": "Mostra la panoramica della pagina",
+	"minimap.move": "Trascina in un altro angolo",
+	"settings.minimap": "Panoramica della pagina (minimappa)",
+	"settings.minimap.desc": "Una piccola mappa della pagina: toccala o trascinala per spostarti.",
+	"settings.minimap.auto": "Automatica",
+	"settings.minimap.always": "Sempre",
+	"settings.minimap.never": "Mai",
 };
