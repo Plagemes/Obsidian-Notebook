@@ -10,6 +10,10 @@ const P: Record<string, string> = {
 	// 0.16 pdftext: the Select text mode and its quote button
 	"quote": "M3 21c3 0 7-1 7-8V5H4v6h4 M14 21c3 0 7-1 7-8V5h-6v6h4",
 	"text-cursor-input": "M5 4h1a3 3 0 0 1 3 3 3 3 0 0 1 3-3h1 M13 20h-1a3 3 0 0 1-3-3 3 3 0 0 1-3 3H5 M5 16H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h1 M13 8h7a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-7 M9 7v10",
+
+	// 0.16 lock
+	"lock": "M5 11h14v10H5z M8 11V7a4 4 0 0 1 8 0v4",
+	"lock-open": "M5 11h14v10H5z M8 11V7a4 4 0 0 1 7-2.6",
 	// 0.13 ds-notebook: the banners' icon squares
 	"alert-triangle": "M12 3L2 20h20z M12 10v4 M12 17h.01",
 	"repeat": "M17 2l4 4-4 4 M3 11V9a3 3 0 0 1 3-3h15 M7 22l-4-4 4-4 M21 13v2a3 3 0 0 1-3 3H3",

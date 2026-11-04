@@ -82,6 +82,7 @@ Returns, synchronously, `{ path, name, folder, mtime, size, open }` for every no
 | `not-a-notebook` | The file exists but is not a notebook. |
 | `unreadable` | The notebook cannot be read (damaged, or written by a newer version). It is not changed. |
 | `unsupported-image` | The image is not a PNG, JPEG, GIF or WebP, or cannot be decoded (HEIC must be converted first). |
+| `page-locked` | The edit would change a locked page (a finished page: unlock it in the notebook first). Nothing was written, not even the image file. |
 | `busy` | The notebook is open but cannot be edited right now (loading, read-only, a pen is down). Retry. |
 | `changed-elsewhere` | The file changed while the call was writing it (sync, another app). Nothing was written. Retry. |
 | `write-failed` | The change could not be written, saved or verified. For a closed notebook the file was not replaced by a partial result; for an open one the message says whether the change is in the open notebook but not yet saved. |
@@ -123,7 +124,7 @@ interface NotebookApi {
 }
 
 type NotebookApiErrorCode =
-  | "invalid-argument" | "not-found" | "not-a-notebook" | "unreadable" | "unsupported-image" | "busy"
+  | "invalid-argument" | "not-found" | "not-a-notebook" | "unreadable" | "unsupported-image" | "page-locked" | "busy"
   | "changed-elsewhere" | "write-failed" | "open-failed" | "export-failed" | "export-incomplete";
 
 interface NotebookApiError extends Error {

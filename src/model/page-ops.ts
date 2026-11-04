@@ -8,6 +8,7 @@ import { removeBookmark, setBookmark } from "./bookmarks";
 import { cloneMeta } from "./document";
 import { Batch, DeletePage, InsertPages, SetMeta, SetPageSize, SetPaper, type Command } from "./history";
 import { duplicatePage } from "./pages";
+import { SetPageLocked } from "./page-lock";
 import { normalizePageTag, sameTags, SetPageTags, unionPageTags } from "./page-tags";
 import { DEFAULT_META, PAPER_SPACING, type NotebookDocument, type Page, type PaperKind } from "./types";
 
@@ -195,4 +196,20 @@ export function deleteCommand(doc: NotebookDocument, ids: Iterable<string>): Com
 	// Highest index first: undo puts them back in the opposite order, each at the index it had.
 	const going = pages.map((page) => ({ page, index: doc.pages.indexOf(page) })).sort((a, b) => b.index - a.index);
 	return new Batch("Delete pages", going.map((g) => new DeletePage(g.page, g.index)));
+}
+
+/**
+ * 0.16 (#124): locks (`value` true) or unlocks the selected pages as one undo step, or null when every selected page is
+ * already in that state.
+ */
+export function lockCommand(doc: NotebookDocument, ids: Iterable<string>, value: boolean): Command | null {
+	const change = selectedPages(doc, ids).filter((p) => (p.locked === true) !== value);
+	if (change.length === 0) return null;
+	return new Batch(value ? "Lock pages" : "Unlock pages", change.map((p) => new SetPageLocked(p.id, value)));
+}
+
+/** True when every selected page is locked (the multi-selection menu then offers "Unlock"). */
+export function allLocked(doc: NotebookDocument, ids: Iterable<string>): boolean {
+	const pages = selectedPages(doc, ids);
+	return pages.length > 0 && pages.every((p) => p.locked === true);
 }

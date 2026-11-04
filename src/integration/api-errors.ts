@@ -16,6 +16,8 @@ export const API_ERROR_CODES = [
 	"unreadable",
 	/** The image is not a PNG, JPEG, GIF or WebP, or cannot be decoded. */
 	"unsupported-image",
+	/** The edit would change a locked page (a finished page; unlock it in the notebook first). Nothing was written, not even the image file. */
+	"page-locked",
 	/** The notebook is open but cannot be edited right now (still loading, read-only, a pen is down). Retry later. */
 	"busy",
 	/** The notebook file changed while the call was writing it; nothing was written. Retry. */

@@ -247,11 +247,20 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"practice-timer": (v) => v.practiceHooks?.toggleTimer(),
 	"page-info": onPage((v, _p, i) => v.openPageInfo(i)),
 	"page-split": onPage((v, _p, i) => v.splitHeavyPage(i)),
+	// 0.16 (#124): lock a finished page. The history refuses every edit of a locked page; these only flip the flag (one undo step).
+	"page-lock": onPage((v, p) => void v.setPageLocked(p, true)),
+	"page-unlock": onPage((v, p) => void v.setPageLocked(p, false)),
+	"page-lock-toggle": onPage((v, p) => void v.setPageLocked(p, !p.locked)),
 	"page-delete": onPage((v, p, i) => {
 		const doc = v.editableDocument();
 		if (!doc || doc.pages.length <= 1) return;
+		// 0.16 (#124): a locked page is unlocked first (deleting it would be an edit; the copy in the page trash would be left over).
+		if (p.locked) {
+			showNotice(t("lock.needsUnlock", { n: String(i + 1) }));
+			return;
+		}
 		// A copy goes to the page trash first; the page is deleted only once that copy is on disk.
-		void deletePageKeepingCopy(v.pageToolsHost(), doc, p, i, (at) => void v.applyCommand(new DeletePage(p, at), Math.max(0, at - 1)));
+		void deletePageKeepingCopy(v.pageToolsHost(), doc, p, i, (at) => v.applyCommand(new DeletePage(p, at), Math.max(0, at - 1)));
 	}),
 
 	// PDF and reading

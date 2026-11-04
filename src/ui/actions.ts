@@ -56,6 +56,8 @@ export interface UiContext {
 		splittable?: boolean;
 		/** 0.14 (392): the kind of page (slide, PDF, image, ruled, grid, plain), for the adaptive toolbar. Optional (no adaptation when absent). */
 		kind?: PageKind;
+		/** 0.16 (#124): the page is locked and refuses edits. Optional (false when absent). */
+		locked?: boolean;
 	} | null;
 	notebook: { pdfPages: boolean; backgrounds: boolean };
 	/** A class of the timetable is on now. */
@@ -119,6 +121,8 @@ export interface ActionDef {
 
 /** Back and Forward only show once the history has somewhere to go. */
 const hasNav = (c: UiContext) => !!c.nav && (c.nav.back || c.nav.forward);
+/** 0.16 (#124): the page in view can be changed (the notebook is editable and the page is not locked). */
+const pageOpen = (c: UiContext) => c.editable && !c.page?.locked;
 const pdfPage = (c: UiContext) => c.page?.background === "pdf";
 const backgroundPage = (c: UiContext) => !!c.page && c.page.background !== "none";
 const hasSelection = (c: UiContext) => !!c.selection && c.selection.strokes + c.selection.elements > 0;
@@ -278,17 +282,22 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "page-bookmark", label: "page.bookmark", icon: "bookmark", group: "page", surfaces: ["page"], priority: 55, scope: "view", checked: (c) => !!c.page?.bookmarked },
 	{ id: "page-edit-bookmark", label: "page.editBookmark", icon: "bookmark-plus", group: "page", surfaces: ["page"], priority: 40, scope: "view", when: (c) => !!c.page?.bookmarked },
 	{ id: "page-tags", label: "page.tags", icon: "tag", group: "page", surfaces: ["page"], priority: 40, scope: "view" },
-	{ id: "page-paper", label: "ui.paper", icon: "grid-3x3", group: "page", surfaces: ["page"], priority: 45, scope: "view", choices: "paper", keywords: "ruled grid dotted lined" },
-	{ id: "page-size", label: "ui.size", icon: "ratio", group: "page", surfaces: ["page"], priority: 40, scope: "view", choices: "size", keywords: "a4 a5 letter" },
-	{ id: "page-orientation", label: "ui.orientation", icon: "rotate-cw", group: "page", surfaces: ["page"], priority: 35, scope: "view", keywords: "landscape portrait" },
-	{ id: "page-infinite", label: "page.infinite", icon: "infinity", group: "page", surfaces: ["page"], priority: 35, scope: "view", checked: (c) => !!c.page?.infinite },
-	{ id: "move-pages", label: "page.moveToNotebook", icon: "folder-input", group: "page", surfaces: ["page"], priority: 30, scope: "view", command: "command.movePages" },
+	{ id: "page-paper", label: "ui.paper", icon: "grid-3x3", group: "page", surfaces: ["page"], priority: 45, scope: "view", enabled: pageOpen, choices: "paper", keywords: "ruled grid dotted lined" },
+	{ id: "page-size", label: "ui.size", icon: "ratio", group: "page", surfaces: ["page"], priority: 40, scope: "view", enabled: pageOpen, choices: "size", keywords: "a4 a5 letter" },
+	{ id: "page-orientation", label: "ui.orientation", icon: "rotate-cw", group: "page", surfaces: ["page"], priority: 35, scope: "view", enabled: pageOpen, keywords: "landscape portrait" },
+	{ id: "page-infinite", label: "page.infinite", icon: "infinity", group: "page", surfaces: ["page"], priority: 35, scope: "view", enabled: pageOpen, checked: (c) => !!c.page?.infinite },
+	{ id: "move-pages", label: "page.moveToNotebook", icon: "folder-input", group: "page", surfaces: ["page"], priority: 30, scope: "view", enabled: pageOpen, command: "command.movePages" },
+	// 0.16 (#124): lock a finished page: it refuses every edit until it is unlocked. Two entries so the sheet says what a tap does;
+	// the palette has one toggle for the page in view.
+	{ id: "page-lock", label: "page.lock", icon: "lock", group: "page", surfaces: ["page", "sheet"], priority: 48, scope: "view", when: (c) => !c.page?.locked, keywords: "lock finish protect freeze read only blocca proteggi" },
+	{ id: "page-unlock", label: "page.unlock", icon: "lock-open", group: "page", surfaces: ["page", "sheet"], priority: 49, scope: "view", when: (c) => !!c.page?.locked, keywords: "unlock edit sblocca" },
+	{ id: "page-lock-toggle", label: "command.lockPage", icon: "lock", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true },
 	{ id: "page-save-template", label: "page.saveTemplate", icon: "layout-template", group: "page", surfaces: ["page"], priority: 25, scope: "view" },
-	{ id: "page-restore-version", label: "page.restoreVersion", icon: "history", group: "page", surfaces: ["page"], priority: 20, scope: "view" },
+	{ id: "page-restore-version", label: "page.restoreVersion", icon: "history", group: "page", surfaces: ["page"], priority: 20, scope: "view", enabled: pageOpen },
 	{ id: "page-deleted-pages", label: "page.deletedPages", icon: "archive-restore", group: "page", surfaces: ["page"], priority: 20, scope: "view", keywords: "trash restore" },
 	// wave 0.9 (379): dates, ink, objects, files, tags, bookmark and markers of one page.
 	{ id: "page-info", label: "page.info", icon: "info", group: "page", surfaces: ["page", "sheet"], priority: 42, scope: "view", command: true, readOnly: true, keywords: "properties details statistics strokes points size dates" },
-	{ id: "page-split", label: "heavy.split", icon: "split", group: "page", surfaces: ["page", "banner"], priority: 45, scope: "view", when: (c) => !!c.page?.splittable, keywords: "heavy large slow" },
+	{ id: "page-split", label: "heavy.split", icon: "split", group: "page", surfaces: ["page", "banner"], priority: 45, scope: "view", enabled: pageOpen, when: (c) => !!c.page?.splittable, keywords: "heavy large slow" },
 	// wave 0.9 (#303): practice copies of exercises (view/practice.ts). Only "redo" is in the page sheet: the strip over a
 	// practice page has the other buttons, the commands are in the palette.
 	{ id: "practice-redo", label: "page.redoExercise", icon: "rotate-ccw", group: "page", surfaces: ["page"], priority: 28, scope: "view", command: "command.practiceRedo", keywords: "practice attempt repeat hide solution exam" },
@@ -296,7 +305,7 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "practice-original", label: "command.practiceOriginal", icon: "corner-up-left", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
 	{ id: "practice-attempts", label: "command.practiceAttempts", icon: "list-ordered", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
 	{ id: "practice-timer", label: "command.practiceTimer", icon: "timer", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
-	{ id: "page-delete", label: "page.delete", icon: "trash-2", group: "page", surfaces: ["page"], priority: 10, scope: "view", danger: true, enabled: (c) => c.editable && (c.page?.count ?? 0) > 1 },
+	{ id: "page-delete", label: "page.delete", icon: "trash-2", group: "page", surfaces: ["page"], priority: 10, scope: "view", danger: true, enabled: (c) => c.editable && !c.page?.locked && (c.page?.count ?? 0) > 1 },
 
 	// --- PDF and reading: the contextual bar of a PDF page, and the sheet.
 	{ id: "pdf-search", label: "reading.search", icon: "search", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 80, scope: "view", command: "command.pdfSearch", readOnly: true, when: (c) => c.notebook.pdfPages },
@@ -307,10 +316,10 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "pdf-search-previous", label: "command.pdfSearchPrev", icon: "chevron-up", group: "reading", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
 	{ id: "toggle-annotations", label: "reading.annotations.hide", icon: "eye-off", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 60, scope: "view", command: "command.annotationsToggle", readOnly: true, when: (c) => c.notebook.pdfPages, checked: (c) => c.reading.annotationsHidden },
 	{ id: "toggle-dim-background", label: "reading.dim", icon: "sun-dim", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf", "image"], priority: 50, scope: "view", command: "command.dimToggle", readOnly: true, when: (c) => c.notebook.backgrounds, checked: (c) => c.reading.dim },
-	{ id: "pdf-margins", label: "pdf.margins.menu", icon: "move-horizontal", group: "reading", surfaces: ["context", "page"], contexts: ["pdf", "image"], priority: 40, scope: "view", command: "command.pdfMargins", when: backgroundPage },
+	{ id: "pdf-margins", label: "pdf.margins.menu", icon: "move-horizontal", group: "reading", surfaces: ["context", "page"], contexts: ["pdf", "image"], priority: 40, scope: "view", enabled: pageOpen, command: "command.pdfMargins", when: backgroundPage },
 	// wave 0.9 (376): the white margins of PDF pages fall off screen (view-only; the notebook, the ink and the exports are unchanged).
 	{ id: "crop-margins", label: "display.crop", icon: "crop", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 42, scope: "view", command: "command.cropMargins", readOnly: true, when: (c) => c.notebook.pdfPages, checked: (c) => !!c.display?.crop, keywords: "margins zoom small screen phone content ritaglia margini" },
-	{ id: "pdf-update", label: "pdf.update.menu", icon: "refresh-cw", group: "reading", surfaces: ["page", "sheet"], priority: 20, scope: "view", command: "command.pdfUpdate", when: pdfPage },
+	{ id: "pdf-update", label: "pdf.update.menu", icon: "refresh-cw", group: "reading", surfaces: ["page", "sheet"], priority: 20, scope: "view", enabled: pageOpen, command: "command.pdfUpdate", when: pdfPage },
 	{ id: "pdf-annotations", label: "pdf.annotations.menu", icon: "file-text", group: "reading", surfaces: ["sheet", "page"], priority: 20, scope: "view", command: "command.pdfAnnotations", readOnly: true, when: (c) => c.notebook.pdfPages },
 
 	// --- PDF side by side: the contextual bar while the pane is open.

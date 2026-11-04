@@ -2991,4 +2991,23 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"pdfLinks.cancel": "Annulla",
 	"pdfLinks.blocked": "Questo tipo di collegamento non si apre da un PDF.",
 	"pdfLinks.notInNotebook": "La pagina {n} del PDF non è nel quaderno.",
+
+	// 0.16 lock
+	"page.lock": "Blocca pagina",
+	"page.unlock": "Sblocca pagina",
+	"command.lockPage": "Blocca o sblocca la pagina in vista",
+	"lock.toast": "Pagina bloccata",
+	"lock.toast.unlock": "Sblocca",
+	"lock.unlocked": "Pagina sbloccata",
+	"lock.badge": "Bloccata",
+	"lock.badge.aria": "Pagina bloccata. Tocca per sbloccare.",
+	"lock.mark.aria": "Pagina bloccata. Tocca per sbloccare.",
+	"lock.needsUnlock": "La pagina {n} è bloccata. Sbloccala prima.",
+	"lock.needsUnlockMany": "{count} di queste pagine sono bloccate. Sbloccale prima.",
+	"lock.pageIs": "La pagina {n} è bloccata",
+	"lock.readOnly": "Per bloccare serve un quaderno modificabile.",
+	"lock.map.lock": "Blocca la pagina {n}",
+	"lock.map.unlock": "Sblocca la pagina {n}",
+	"lock.replaceSkipped": "{n} caselle di testo su pagine bloccate sono rimaste come erano.",
+	"lock.replaceAllLocked": "Tutte le corrispondenze sono su pagine bloccate.",
 };

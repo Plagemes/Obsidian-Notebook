@@ -1,6 +1,7 @@
 import { cloneMeta, findPage } from "./document";
 import { freezeElement } from "./serialize";
 import { marginsAfterResize, marginsOf, normalizeMargins, translateElement, translateStroke } from "./margins";
+import { lockedChanges, snapshotLocked } from "./page-lock";
 import { shiftPivots } from "./states";
 import type { Asset, NotebookDocument, NotebookMeta, Page, PageBackground, PageElement, PageMargins, PageStates, Paper, Stroke } from "./types";
 
@@ -9,6 +10,8 @@ export interface Command {
 	readonly label: string;
 	apply(doc: NotebookDocument): void;
 	revert(doc: NotebookDocument): void;
+	/** v14: the page-lock guard of `History` lets this command change locked pages (see `exemptFromLocks`). Normal commands never set it. */
+	readonly lockExempt?: boolean;
 }
 
 function pageOf(doc: NotebookDocument, pageId: string) {
@@ -574,7 +577,8 @@ export class SetPageInfinite implements Command {
 
 /** Several commands undone and redone as one (e.g. one eraser gesture across pages). */
 export class Batch implements Command {
-	constructor(readonly label: string, readonly commands: readonly Command[]) {}
+	/** `lockExempt`: the page-lock guard lets this batch change locked pages (maintenance that keeps what the pages show, see asset-ops). */
+	constructor(readonly label: string, readonly commands: readonly Command[], readonly lockExempt = false) {}
 
 	apply(doc: NotebookDocument): void {
 		for (const c of this.commands) c.apply(doc);
@@ -600,6 +604,11 @@ export class History {
 		private readonly guard: ContentGuard | null = null, private readonly refused: ((message: string) => void) | null = null,
 		/** wave 0.10 (51): true while the document must not change (read-only mode): nothing is run, undone or redone. */
 		private readonly locked: (() => boolean) | null = null,
+		/**
+		 * v14 (#124): called with the ids of the locked pages a command, an undo or a redo tried to change. The change was
+		 * not kept: the command is reverted (or re-applied) and, for execute, not recorded. See model/page-lock.ts.
+		 */
+		private readonly pagesLocked: ((pageIds: readonly string[]) => void) | null = null,
 	) {}
 
 	/**
@@ -609,7 +618,18 @@ export class History {
 	execute(cmd: Command): boolean {
 		if (this.locked?.()) return false;
 		const doc = this.doc();
+		// v14: ONE guard for every edit that goes through the history: a locked page keeps its content. Nothing is snapshotted
+		// when no page is locked.
+		const locks = cmd.lockExempt ? null : snapshotLocked(doc);
 		cmd.apply(doc);
+		if (locks) {
+			const hit = lockedChanges(doc, locks);
+			if (hit.length > 0) {
+				cmd.revert(doc);
+				this.pagesLocked?.(hit);
+				return false;
+			}
+		}
 		const problem = this.guard?.(doc) ?? null;
 		if (problem !== null) {
 			cmd.revert(doc);
@@ -631,7 +651,21 @@ export class History {
 		if (this.locked?.()) return null;
 		const cmd = this.undoStack.pop();
 		if (!cmd) return null;
-		cmd.revert(this.doc());
+		const doc = this.doc();
+		const locks = cmd.lockExempt ? null : snapshotLocked(doc);
+		cmd.revert(doc);
+		if (locks) {
+			// An older edit of a page that has been locked since (a synced change, a lock set later and left on): the undo
+			// is not done and stays on the stack for when the page is unlocked.
+			// (A page the undo removes is the command's own add, e.g. a restored locked page: allowed.)
+			const hit = lockedChanges(doc, locks, true);
+			if (hit.length > 0) {
+				cmd.apply(doc);
+				this.undoStack.push(cmd);
+				this.pagesLocked?.(hit);
+				return null;
+			}
+		}
 		this.redoStack.push(cmd);
 		return cmd;
 	}
@@ -640,7 +674,18 @@ export class History {
 		if (this.locked?.()) return null;
 		const cmd = this.redoStack.pop();
 		if (!cmd) return null;
-		cmd.apply(this.doc());
+		const doc = this.doc();
+		const locks = cmd.lockExempt ? null : snapshotLocked(doc);
+		cmd.apply(doc);
+		if (locks) {
+			const hit = lockedChanges(doc, locks);
+			if (hit.length > 0) {
+				cmd.revert(doc);
+				this.redoStack.push(cmd);
+				this.pagesLocked?.(hit);
+				return null;
+			}
+		}
 		this.undoStack.push(cmd);
 		return cmd;
 	}

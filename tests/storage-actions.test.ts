@@ -162,7 +162,7 @@ describe("A4: an open notebook whose save did not go through yet", () => {
 		const pending = new Set<string>();
 		const ctx = {
 			doc, addPending: (a: Asset) => void pending.add(a.id), removePending: (i: string) => void pending.delete(i),
-			execute: (cmd: { apply(d: NotebookDocument): void }) => cmd.apply(ctx.doc),
+			execute: (cmd: { apply(d: NotebookDocument): void }) => (cmd.apply(ctx.doc), true),
 			flush: async () => false,
 		};
 		r.leaves.push({ view: { file: { path: "Notebooks/A.notebook" }, editContext: () => ctx } });
@@ -179,5 +179,24 @@ describe("A4: an open notebook whose save did not go through yet", () => {
 		const again = await repointAsset(r.env, from.id, to, ["Notebooks/A.notebook"]);
 		expect(again.unsaved).toEqual([]);
 		expect(again.updated).toEqual(["Notebooks/A.notebook"]);
+	});
+});
+
+describe("an open notebook that does not take the change", () => {
+	it("is listed as skipped, not as updated", async () => {
+		const from = asset(1, "png");
+		const to = asset(2, "png");
+		const r = rig();
+		const doc = docUsing(from);
+		put(r, "Notebooks/A.notebook", serialize(doc));
+		const pending = new Set<string>();
+		const ctx = { doc, addPending: (a: Asset) => void pending.add(a.id), removePending: (i: string) => void pending.delete(i), execute: () => false, flush: async () => true };
+		r.leaves.push({ view: { file: { path: "Notebooks/A.notebook" }, editContext: () => ctx } });
+		const out = await repointAsset(r.env, from.id, to, ["Notebooks/A.notebook"]);
+		expect(out.updated).toEqual([]);
+		expect(out.openUpdated).toEqual([]);
+		expect(out.skipped).toEqual([{ path: "Notebooks/A.notebook", reason: "refused" }]);
+		expect(doc.assets?.[to.id]).toBeUndefined();
+		expect(pending.size).toBe(0);
 	});
 });

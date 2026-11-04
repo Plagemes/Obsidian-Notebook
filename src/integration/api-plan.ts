@@ -9,6 +9,7 @@
 import { createDocument, createId, createPage } from "../model/document";
 import { AddAsset, AddElement, InsertPages, type Command } from "../model/history";
 import { parse, serializeChecked } from "../model/serialize";
+import { lockedChanges, snapshotLocked } from "../model/page-lock";
 import { normalizeTagList } from "../model/tags";
 import {
 	PAGE_SIZES, PAPER_KINDS, PAPER_SPACING,
@@ -103,6 +104,13 @@ export function checkPageNumber(argument: string, v: unknown, pageCount: number)
 		throw invalid(argument, `expected a page number from 1 to ${pageCount}`, { value: v, pageCount });
 	}
 	return v;
+}
+
+/** Refuses an edit of a locked page (roadmap #124) before anything is written. */
+export function checkPageUnlocked(argument: string, page: { id: string; locked?: true }, number: number): void {
+	if (page.locked === true) {
+		throw new NotebookApiError("page-locked", `${argument}: page ${number} is locked (a finished page). Unlock it in the notebook first; nothing was written.`, { argument, page: number, id: page.id });
+	}
 }
 
 /**
@@ -392,6 +400,7 @@ export function prepareInsertImage(
 	return (doc) => {
 		const number = checkPageNumber("page", pageNumber, doc.pages.length);
 		const page = doc.pages[number - 1]!;
+		checkPageUnlocked("page", page, number);
 		const element = buildImageElement(page, dims, asset.id, opts);
 		return {
 			commands: [new AddAsset(asset), new AddElement(page.id, element, page.elements?.length ?? 0)],
@@ -505,7 +514,13 @@ export function planClosedEdit<R>(before: string, prepare: Prepare<R>, now: Date
 	}
 	const doc = parsed.doc;
 	const plan = prepare(doc);
+	// The same rule as the open notebook's history, for any edit a method may plan: a locked page keeps its content.
+	const locks = snapshotLocked(doc);
 	for (const command of plan.commands) command.apply(doc);
+	const hit = locks ? lockedChanges(doc, locks) : [];
+	if (hit.length > 0) {
+		return { ok: false, error: new NotebookApiError("page-locked", "The edit would change a locked page. Unlock it in the notebook first; nothing was written.", { ids: hit }) };
+	}
 	doc.modifiedAt = now.toISOString();
 	const checked = serializeChecked(doc, true);
 	if (!checked.ok) return { ok: false, error: new NotebookApiError("write-failed", `The result did not pass validation, so nothing was written: ${checked.message}`) };

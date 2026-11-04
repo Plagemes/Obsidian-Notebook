@@ -2,6 +2,7 @@ import { normalizePath, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { cloneMeta } from "../model/document";
 import { AddAsset, AddPage, Batch, DeletePage, InsertPages, SetMeta, type Command } from "../model/history";
+import { lockedPages } from "../model/page-lock";
 import { parse, serializeChecked } from "../model/serialize";
 import { DEFAULT_META, type Asset, type NotebookDocument } from "../model/types";
 import { assetExtension, assetPath, assetsFolder } from "../pdf/assets";
@@ -132,6 +133,9 @@ export interface MoveOutcome {
  */
 export async function movePagesTo(src: EditContext, pageIds: readonly string[], target: TFile, settings: NotebookSettings): Promise<MoveOutcome> {
 	const app = src.app;
+	// 0.16 (#124): a locked page cannot leave its notebook (removing it is an edit, and the copy would stay behind): unlock it first.
+	const locked = lockedPages(src.doc, pageIds);
+	if (locked.length > 0) throw new Error(t("lock.needsUnlockMany", { count: String(locked.length) }));
 	const targetCtx = openEditContext(app, target);
 	if (targetCtx === "busy") throw new Error(t("move.targetBusy"));
 
@@ -158,7 +162,8 @@ export async function movePagesTo(src: EditContext, pageIds: readonly string[], 
 			const before = targetCtx.doc.meta ?? cloneMeta(DEFAULT_META);
 			commands.push(new SetMeta(before, withMovedBookmarks(before, plan.bookmarks)));
 		}
-		targetCtx.execute(new Batch("Move pages in", commands));
+		// Refused (a read-only destination, the content check): nothing was added there, so nothing may leave the source.
+		if (!targetCtx.execute(new Batch("Move pages in", commands))) throw new Error(t("move.targetNotSaved"));
 		// flush() is also false when the user kept writing in the destination after the pages were saved: the file decides.
 		const flushed = await targetCtx.flush();
 		const verdict = destinationVerdict(flushed, await storedInFile(app, target, plan.pages.map((p) => p.id)));
@@ -181,10 +186,10 @@ export async function movePagesTo(src: EditContext, pageIds: readonly string[], 
 			if (removal.replacement) commands.push(new AddPage(removal.replacement, pages.length));
 			const going = removal.remove.map((page) => ({ page, index: pages.indexOf(page) })).sort((a, b) => b.index - a.index);
 			for (const g of going) commands.push(new DeletePage(g.page, g.index));
-			src.execute(new Batch("Move pages out", commands), Math.max(0, Math.min(src.currentPage(), pages.length - 1)));
-			removed = removal.remove.length;
+			// Refused (a page locked meanwhile, read-only): the copies stay in both notebooks and are reported as kept here.
+			if (src.execute(new Batch("Move pages out", commands), Math.max(0, Math.min(src.currentPage(), pages.length - 1)))) removed = removal.remove.length;
 		}
-		stayed = removal.changed.length;
+		stayed = removal.changed.length + (removal.remove.length - removed);
 	}
 	return { moved: plan.pages.length, removed, stayed, targetName: target.basename };
 }

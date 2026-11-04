@@ -27,8 +27,11 @@ export interface EditContext {
 	currentPage(): number;
 	/** Visible part of a page in the page's own coordinates (pt), or null when the page is not in view. */
 	visibleLocal(pageIndex: number): { minY: number; maxY: number } | null;
-	/** Runs a command as one undo step (ends text editing, clears the selection), optionally scrolling to a page. */
-	execute(cmd: Command, scrollToPage?: number): void;
+	/**
+	 * Runs a command as one undo step (ends text editing, clears the selection), optionally scrolling to a page. False when it
+	 * was not recorded: refused by the history (a locked page, the content check) or the document is read-only.
+	 */
+	execute(cmd: Command, scrollToPage?: number): boolean;
 	/**
 	 * Saves now. True only when the document is still editable here (not deleted, read-only or closed meanwhile) and
 	 * everything in it is written to disk. Stricter than the view's `flushNow()`, which is also true when there is

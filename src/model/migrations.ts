@@ -304,6 +304,25 @@ function v12ToV13(raw: RawObject): RawObject {
 	return out;
 }
 
+/**
+ * v14 adds the optional page field `locked` (a finished page that refuses edits, #124). Every valid v13 document is a valid
+ * v14 document without it. A v13 reader ignored unknown page fields, so a `locked` key in a v13 file was never ours and never
+ * locked anything: it is dropped, not interpreted (like `states` in v12 -> v13). Nothing else changes, so a large v13 file can
+ * still be read page by page (StagedParse), which ignores the `locked` key of each page.
+ */
+function v13ToV14(raw: RawObject): RawObject {
+	const isObj = (v: unknown): v is RawObject => typeof v === "object" && v !== null && !Array.isArray(v);
+	const out: RawObject = { ...raw, version: 14 };
+	if (!Array.isArray(raw.pages)) return out;
+	out.pages = (raw.pages as unknown[]).map((page) => {
+		if (!isObj(page) || !("locked" in page)) return page;
+		const copy = { ...page };
+		delete copy.locked;
+		return copy;
+	});
+	return out;
+}
+
 /** MIGRATIONS[n] takes a document from version n to n+1. */
 export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	0: v0ToV1,
@@ -319,6 +338,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	10: v10ToV11,
 	11: v11ToV12,
 	12: v12ToV13,
+	13: v13ToV14,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

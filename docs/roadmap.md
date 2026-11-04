@@ -282,7 +282,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 121. **P2** Visual version diff: additions in green, removals in red, between the current version and a snapshot.
 122. **P1** 🧪 Merge conflicted copies created by Google Drive or OneDrive: compare both copies and merge the strokes (by id) without losing anything.
 123. **P3** Stroke authors in notebooks shared through a common folder: filter and colour by person or device.
-124. **P2** Lock a finished page.
+124. **P2** 🧪 Lock a finished page (0.16, format v14: `Page.locked`, one guard in the history, lock badge, page sheet / pages panel / notebook map / command).
 125. **P1** 🧪 Last position shared across devices: reopen on the phone at the page you were on with the tablet (stored in the notebook, so it travels with the sync).
 
 ### F. Sync and storage

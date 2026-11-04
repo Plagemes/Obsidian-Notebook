@@ -9,7 +9,7 @@ import { t } from "../i18n";
 import { ConfirmModal, PromptModal } from "../library/library-modals";
 import type { Command } from "../model/history";
 import {
-	addTagsCommand, allBookmarked, bookmarkCommand, deleteCommand, duplicateCommand, exportSuffix, moveCommand, paperCommand, removeTagCommand,
+	addTagsCommand, allBookmarked, allLocked, bookmarkCommand, deleteCommand, duplicateCommand, exportSuffix, lockCommand, moveCommand, paperCommand, removeTagCommand,
 	selectedPages, selectionTags, sizeCommand, stashSnapshot, unstashedPages, type MoveTarget, type StashedPage,
 } from "../model/page-ops";
 import { parsePageTagInput } from "../model/page-tags";
@@ -85,6 +85,12 @@ function askDelete(host: PageOpsHost, ids: readonly string[]): void {
 	const doc = host.editableDocument();
 	if (!doc) return;
 	const pages = selectedPages(doc, ids);
+	// 0.16 (#124): locked pages are not deleted (their copy would be left in the page trash): unlock them first.
+	const locked = pages.filter((p) => p.locked);
+	if (locked.length > 0) {
+		showNotice(t("lock.needsUnlockMany", { count: String(locked.length) }));
+		return;
+	}
 	if (!deleteCommand(doc, ids)) {
 		showNotice(t("pageOps.deleteAll"));
 		return;
@@ -144,6 +150,8 @@ export function openPageOpsMenu(host: PageOpsHost, ids: readonly string[], evt: 
 	menu.addItem((i) => i.setTitle(t("pageOps.moveStart")).setIcon("arrow-up-to-line").onClick(() => moveTo(host, ids, "start")));
 	menu.addItem((i) => i.setTitle(t("pageOps.moveEnd")).setIcon("arrow-down-to-line").onClick(() => moveTo(host, ids, "end")));
 	menu.addItem((i) => i.setTitle(t("pageOps.movePosition")).setIcon("move-vertical").onClick(() => askPosition(host, ids)));
+	const unlock = allLocked(doc, ids);
+	menu.addItem((i) => i.setTitle(t(unlock ? "page.unlock" : "page.lock")).setIcon(unlock ? "lock-open" : "lock").onClick(() => run(host, (d) => lockCommand(d, ids, !unlock))));
 	menu.addItem((i) => i.setTitle(t("pageOps.moveNotebook")).setIcon("folder-input").onClick(() => void host.moveToNotebook(ids)));
 	menu.addItem((i) => i.setTitle(t("pageOps.duplicate")).setIcon("copy").onClick(() => {
 		// Built once: the copies get new ids each time.

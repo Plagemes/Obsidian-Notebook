@@ -103,7 +103,7 @@ export interface RepointOutcome {
 	/** Notebooks that did not use the old picture any more. */
 	unchanged: string[];
 	/** Left alone, and why. */
-	skipped: Array<{ path: string; reason: "busy" | "missing" | "unreadable" | "changed" }>;
+	skipped: Array<{ path: string; reason: "busy" | "missing" | "unreadable" | "changed" | "refused" }>;
 	failed: Array<{ path: string; error: string }>;
 }
 
@@ -142,7 +142,11 @@ async function repointOpen(ctx: EditContext, fromId: string, to: Asset, path: st
 	ctx.addPending(to);
 	let saved = false;
 	try {
-		ctx.execute(batch);
+		// Not recorded (the content check, a read-only view): the notebook is untouched and must not be listed as updated.
+		if (!ctx.execute(batch)) {
+			out.skipped.push({ path, reason: "refused" });
+			return;
+		}
 		saved = await ctx.flush();
 	} finally {
 		// Applied, so the document itself names the new picture now; if the save did not go through, the view's session
