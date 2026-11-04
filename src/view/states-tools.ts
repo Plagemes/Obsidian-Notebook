@@ -129,6 +129,11 @@ export class StatesTools {
 
 	/** Called when the document, the page in view or the selection changed. */
 	refresh(): void {
+		// A view that could not save chose its states itself; once it can edit again the saved ones rule.
+		if (this.shown.size > 0 && this.host.editable() && !this.playingNow) {
+			this.shown.clear();
+			this.host.repaint();
+		}
 		if (!this.opened) return;
 		const page = this.page();
 		if (this.editing && this.editing.pageId !== page?.id) this.editing = null;
