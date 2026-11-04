@@ -7,7 +7,7 @@ import { DEFAULT_META, type Asset, type MarkerElement, type NotebookMeta, type P
 import { DEFAULT_SETTINGS, readSettings } from "../src/settings";
 import { reseed, writeLine } from "./words-gen";
 
-const none: OutlineSources = { bookmarks: false, slides: false, headings: false, markers: false };
+const none: OutlineSources = { bookmarks: false, slides: false, headings: false, markers: false, pdf: false };
 const only = (k: keyof OutlineSources): OutlineSources => ({ ...none, [k]: true });
 
 /** A page with a big title and a few lines of small text under it. */

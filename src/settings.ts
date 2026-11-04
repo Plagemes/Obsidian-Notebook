@@ -70,6 +70,10 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	outlineSlides: boolean;
 	outlineHeadings: boolean;
 	outlineMarkers: boolean;
+	/** 0.16 (#46): the outline of a PDF in the notebook outline: mixed into the list (merged), its own section, or not listed. */
+	outlinePdf: "merged" | "section" | "off";
+	/** 0.16 (#46): a tap on a link of a PDF page follows it (another page of the notebook, or a web address after a question). */
+	pdfLinks: boolean;
 	/** Favourite pens (six slots: tool, colour, width). */
 	favouritePens: FavouritePen[];
 	/** 0.15 pen sets: named lists of pens per subject (starter sets Maths, Languages, Science; all editable). */
@@ -235,6 +239,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	outlineSlides: true,
 	outlineHeadings: true,
 	outlineMarkers: true,
+	outlinePdf: "merged",
+	pdfLinks: true,
 	favouritePens: DEFAULT_FAVOURITES.map((f) => ({ ...f })),
 	penSets: defaultPenSets(),
 	penSetFolders: {},
@@ -340,6 +346,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.outlineSlides === "boolean") s.outlineSlides = d.outlineSlides;
 	if (typeof d.outlineHeadings === "boolean") s.outlineHeadings = d.outlineHeadings;
 	if (typeof d.outlineMarkers === "boolean") s.outlineMarkers = d.outlineMarkers;
+	if (d.outlinePdf === "merged" || d.outlinePdf === "section" || d.outlinePdf === "off") s.outlinePdf = d.outlinePdf;
+	if (typeof d.pdfLinks === "boolean") s.pdfLinks = d.pdfLinks;
 	s.favouritePens = normaliseFavourites(d.favouritePens);
 	s.penSets = normalisePenSets(d.penSets);
 	s.penSetFolders = normaliseAssignments(d.penSetFolders, MAX_FOLDER_ASSIGNMENTS);

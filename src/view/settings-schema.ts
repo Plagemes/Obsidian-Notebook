@@ -89,7 +89,7 @@ export const GROUPS: readonly GroupSpec[] = [
 		open: (s) => s.penSideButton === "gesture" || s.penSideButton === "radial-gesture" || s.penGestureLongPress || s.penGesturesCustom.length > 0,
 	},
 	{ id: "pageHeader", section: "pages", title: "settings.pageHeader", open: (s) => s.headerMode !== "off" },
-	{ id: "outline", section: "pages", title: "settings.outline", open: (s) => !(s.outlineBookmarks && s.outlineSlides && s.outlineHeadings && s.outlineMarkers) },
+	{ id: "outline", section: "pages", title: "settings.outline", open: (s) => !(s.outlineBookmarks && s.outlineSlides && s.outlineHeadings && s.outlineMarkers) || s.outlinePdf === "off" },
 	{ id: "timetable", section: "study", title: "settings.timetable", open: (_s, ctx) => ctx.timetableInUse },
 	{ id: "zettel", section: "study", title: "settings.zettel", open: (s) => s.zettelSlipBoxes.length > 0 },
 ];
@@ -250,6 +250,11 @@ const PAGES: SettingSpec[] = [
 	{ id: "outlineSlides", section: "pages", group: "outline", order: 20, name: "settings.outlineSlides", desc: "settings.outlineSlides.desc", control: { type: "toggle" }, keywords: "outline pdf slide diapositive" },
 	{ id: "outlineHeadings", section: "pages", group: "outline", order: 30, name: "settings.outlineHeadings", desc: "settings.outlineHeadings.desc", control: { type: "toggle" }, keywords: "outline heading titoli handwriting scrittura" },
 	{ id: "outlineMarkers", section: "pages", group: "outline", order: 40, name: "settings.outlineMarkers", desc: "settings.outlineMarkers.desc", control: { type: "toggle" }, keywords: "outline marker segnalini domande compiti" },
+	// 0.16 (#46): the outline of a PDF in the notebook outline.
+	{
+		id: "outlinePdf", section: "pages", group: "outline", order: 50, name: "settings.outlinePdf", desc: "settings.outlinePdf.desc",
+		control: { type: "dropdown", options: options([["merged", "settings.outlinePdf.merged"], ["section", "settings.outlinePdf.section"], ["off", "settings.outlinePdf.off"]]) }, keywords: "outline pdf bookmarks table of contents indice segnalibri sommario",
+	},
 	// 0.15 page header (#75): the page number, date and notebook title drawn on the paper, never stored on the page.
 	{
 		id: "headerMode", section: "pages", group: "pageHeader", order: 10, name: "settings.headerMode", desc: "settings.headerMode.desc",
@@ -286,6 +291,9 @@ const READING: SettingSpec[] = [
 		id: "digestGroup", section: "reading", order: 60, name: "settings.digestGroup", desc: "settings.digestGroup.desc",
 		control: { type: "dropdown", options: options([["page", "settings.digestGroup.page"], ["colour", "settings.digestGroup.colour"]]) }, keywords: "highlights digest summary evidenziazioni riepilogo colour colore",
 	},
+
+	// 0.16 (#46): links of PDF pages.
+	{ id: "pdfLinks", section: "reading", order: 45, name: "settings.pdfLinks", desc: "settings.pdfLinks.desc", control: { type: "toggle" }, keywords: "pdf link internal external collegamenti url" },
 ];
 
 const LIBRARY: SettingSpec[] = [

@@ -146,8 +146,8 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 ### PDF
 43. **P1** 🧪 Highlighter that snaps to the PDF's text lines (pdf.js text content).
 44. **P1** 🧪 Search the PDF text, with hits highlighted on the pages.
-45. **P2** Copy text from the PDF.
-46. **P2** PDF outline and internal links: the PDF outline becomes the notebook outline, internal links work.
+45. **P2** 🧪 Copy text from the PDF.
+46. **P2** 🧪 PDF outline and internal links: the PDF outline becomes the notebook outline, internal links work.
 47. **P3** Export keeping the original vector PDF pages instead of images (needs an MIT library such as pdf-lib).
 
 ### Navigation and view
