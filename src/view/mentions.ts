@@ -8,7 +8,7 @@ import { backlinksOf } from "../storage/backlinks";
 import { splitLinktext } from "./hover-preview-logic";
 import { modalShell, shellButton, shellNote } from "../ui/components/modal-shell";
 import {
-	contextSnippet, hitsOfNote, lineOf, mentionsMayChange, notebookMentions, pageMentionCount, pageMentions, sourcesIntact, type MentionHit, type MentionRow, type RawLink,
+	contextSnippet, hitsOfNote, lineOf, mentionsMayChange, notebookMentions, noteLinksReach, pageMentionCount, pageMentions, sourcesIntact, type MentionHit, type MentionRow, type RawLink,
 } from "./mentions-logic";
 
 /** Most notes whose links are read from the index, most links kept, most rows drawn in a group, most notes read for context. */
@@ -106,11 +106,8 @@ export class Mentions {
 		const file = this.host.file();
 		if (!file) return;
 		const app = this.host.app;
-		const may = mentionsMayChange(note.path, file.path, this.sources, app.metadataCache.resolvedLinks[note.path], () => {
-			const cache = app.metadataCache.getFileCache(note);
-			const refs = [...(cache?.links ?? []), ...(cache?.embeds ?? [])];
-			return refs.some((r) => typeof r.link === "string" && app.metadataCache.getFirstLinkpathDest(splitLinktext(r.link).path, note.path)?.path === file.path);
-		});
+		const may = mentionsMayChange(note.path, file.path, this.sources, app.metadataCache.resolvedLinks[note.path], () =>
+			noteLinksReach(app.metadataCache.getFileCache(note), (link) => app.metadataCache.getFirstLinkpathDest(splitLinktext(link).path, note.path)?.path === file.path));
 		if (may) this.schedule();
 	}
 

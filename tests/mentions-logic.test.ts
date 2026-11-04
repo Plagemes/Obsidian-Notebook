@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contextSnippet, hitsOfNote, lineOf, mentionPageId, mentionsMayChange, notebookMentions, pageMentionCount, pageMentions, sourcesIntact, type RawLink } from "../src/view/mentions-logic";
+import { contextSnippet, hitsOfNote, lineOf, mentionPageId, mentionsMayChange, noteLinksReach, notebookMentions, pageMentionCount, pageMentions, sourcesIntact, type RawLink } from "../src/view/mentions-logic";
 
 const pages = [{ id: "pg-aaaaaaaa" }, { id: "pg-bbbbbbbb" }, { id: "pg-cccccccc" }];
 const link = (l: string, line = 0, col = 0, embed = false): RawLink => ({ link: l, line, col, endCol: col + l.length + 4, embed });
@@ -99,6 +99,15 @@ describe("which changes can alter the mentions", () => {
 	it("follows a note whose fresh links now reach the notebook, and never the notebook itself", () => {
 		expect(mentionsMayChange("c.md", "Physics.notebook", known, undefined, () => true)).toBe(true);
 		expect(mentionsMayChange("Physics.notebook", "Physics.notebook", new Set(["Physics.notebook"]), undefined, () => true)).toBe(false);
+	});
+	it("reads the links of the body, the embeds and the properties of a note", () => {
+		const reaches = (link: string) => link === "Physics";
+		expect(noteLinksReach({ links: [{ link: "Physics" }] }, reaches)).toBe(true);
+		expect(noteLinksReach({ embeds: [{ link: "Physics" }] }, reaches)).toBe(true);
+		expect(noteLinksReach({ links: [{ link: "Other" }], frontmatterLinks: [{ link: "Physics" }] }, reaches)).toBe(true);
+		expect(noteLinksReach({ links: [{ link: "Other" }], frontmatterLinks: [{ link: "Elsewhere" }] }, reaches)).toBe(false);
+		expect(noteLinksReach(null, reaches)).toBe(false);
+		expect(noteLinksReach({}, reaches)).toBe(false);
 	});
 	it("notices a source that is gone", () => {
 		expect(sourcesIntact(known, (p) => p === "Notes/a.md")).toBe(true);

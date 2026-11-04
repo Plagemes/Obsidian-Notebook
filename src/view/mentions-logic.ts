@@ -91,6 +91,19 @@ export function notebookMentions(hits: readonly MentionHit[]): MentionRow[] {
 	return rowsOf(hits, (h) => h.pageId === null);
 }
 
+/** What a note's cache says it links to: body links, embeds and the links in its properties (front matter). */
+export interface NoteLinkCache {
+	links?: ReadonlyArray<{ link: string }>;
+	embeds?: ReadonlyArray<{ link: string }>;
+	frontmatterLinks?: ReadonlyArray<{ link: string }>;
+}
+
+/** Whether any link of the note (body, embed or property) is one `reaches` says points at the notebook. */
+export function noteLinksReach(cache: NoteLinkCache | null | undefined, reaches: (link: string) => boolean): boolean {
+	const refs = [...(cache?.links ?? []), ...(cache?.embeds ?? []), ...(cache?.frontmatterLinks ?? [])];
+	return refs.some((r) => typeof r.link === "string" && reaches(r.link));
+}
+
 /**
  * Whether a change of the note at `changedPath` can change the notebook's mentions: the note is a source we already know, the
  * index already has it linking to the notebook (`indexed`: its `resolvedLinks` entry), or its fresh links now reach the
