@@ -2,6 +2,7 @@
 
 export const FORMAT_ID = "obsidian-notebook";
 /**
+ * v13: drawings with states (#241): `Page.states` groups strokes into parts and keeps, per state, where each part is.
  * v12: ink remembers the slide shown beside the notes while it was written (`slides`, `Stroke.slide`, #226).
  * v11: notebook description and generated or image cover (`meta.description`, `meta.coverArt`). v10: anchored excerpts (page elements that show a region of a page and jump back to it). v9: equations (LaTeX,
  * typeset with Obsidian's MathJax) and function graphs (page elements). v8: markers and structured boxes (page elements), hidden ("invisible ink") strokes. v7: bookmark details
@@ -9,7 +10,7 @@ export const FORMAT_ID = "obsidian-notebook";
  * around a background; v5: per-stroke render version; v4: library metadata, assets, backgrounds, elements,
  * infinite pages, "shape" tool; v3: paper kinds and page sizes).
  */
-export const CURRENT_VERSION = 12;
+export const CURRENT_VERSION = 13;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -415,7 +416,65 @@ export interface Page {
 	margins?: PageMargins;
 	/** v7: tags of this page (#119): non-empty, without duplicates, in the order they were added. Written only when not empty. */
 	tags?: string[];
+	/** v13 (#241): parts of the drawing and the states they move between. Written only when there is a live part. */
+	states?: PageStates;
 }
+
+/**
+ * v13 (#241): a part of a drawing with states: a group of strokes of the page (a block, a force arrow, a spring) that the
+ * states of the page move together. `items` are stroke ids of this page (a stroke belongs to one part); `pivot` is the
+ * point (page coordinates, fixed when the part was made) that rotation and scale turn around. The strokes keep their
+ * own points: a state is a transform applied when the page is drawn or exported, never to the ink itself.
+ */
+export interface StatePart {
+	id: string;
+	name?: string;
+	pivot: [number, number];
+	items: string[];
+}
+
+/**
+ * v13: where one part is in one state, relative to how it was drawn. Every field but `part` is written only when it
+ * differs from the drawn part: `dx`/`dy` move it (pt), `rot` turns it (degrees, clockwise on the page), `scale` scales it
+ * (and its line width), `hidden` does not draw it, `color` draws it in that colour (`#rrggbb`).
+ */
+export interface PartPose {
+	part: string;
+	dx?: number;
+	dy?: number;
+	rot?: number;
+	scale?: number;
+	hidden?: true;
+	color?: string;
+}
+
+/** v13: a named arrangement of the parts. A part without a pose in a state is where it was drawn. */
+export interface PageState {
+	id: string;
+	name: string;
+	poses: PartPose[];
+}
+
+/**
+ * v13: the states of one page. The drawing itself (the strokes as written) is always available as "Drawn" and is not an
+ * entry of `list`; `active` is the state the page shows (and exports); absent = Drawn.
+ */
+export interface PageStates {
+	parts: StatePart[];
+	list: PageState[];
+	active?: string;
+}
+
+/** v13 limits (the strict writer and the readers share them). */
+export const STATES_MAX_PARTS = 64;
+export const STATES_MAX_STATES = 32;
+export const STATES_MAX_ITEMS = 5000;
+export const STATES_NAME_MAX = 60;
+export const STATES_ID_MAX = 16;
+export const STATES_MAX_SHIFT = 100000;
+export const STATES_MAX_ROT = 3600;
+export const STATES_MIN_SCALE = 0.01;
+export const STATES_MAX_SCALE = 100;
 
 /** Built-in bookmark categories (#85); any other non-empty string is a custom category, shown as is. */
 export const BOOKMARK_CATEGORIES = ["important", "review"] as const;

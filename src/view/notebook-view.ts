@@ -130,6 +130,7 @@ import { BLANK_THUMBNAIL, ViewResilience, type ResilienceServices, type Resilien
 import { ObjectInk } from "./object-ink";
 import { PenLinks } from "./pen-links";
 import { SelectionActions } from "./selection-actions";
+import { StatesTools } from "./states-tools";
 import { SelectionArrange } from "./selection-arrange";
 import { StampPalette, type StampTarget } from "./stamp-palette";
 import { TextEditor, type TextEditSession } from "./text-editor";
@@ -397,6 +398,8 @@ export class NotebookView extends FileView {
 		},
 	);
 	private selectionActions: SelectionActions | null = null;
+	/** 0.15 (241): drawings with states: the state strip and the part editor (view/states-tools.ts). */
+	private statesTools: StatesTools | null = null;
 	private arrange: SelectionArrange | null = null;
 	/** Links written with the pen (O8): note links in text boxes, on ink, and the `[[` suggester. */
 	private penLinks: PenLinks | null = null;
@@ -636,6 +639,7 @@ export class NotebookView extends FileView {
 
 		this.renderer = new Renderer(this.stage, { lowLatency: this.host.settings.lowLatencyInk });
 		this.mountMarkers();
+		this.mountStates();
 		this.lectureMode = new LectureModeController({
 			parent: () => this.body,
 			path: () => this.file?.path ?? null,
@@ -842,6 +846,8 @@ export class NotebookView extends FileView {
 		this.practiceHooks = null;
 		this.lectureMode?.destroy();
 		this.lectureMode = null;
+		this.statesTools?.destroy();
+		this.statesTools = null;
 		this.tabs?.destroy();
 		this.tabs = null;
 		this.toolbar?.destroy();
@@ -1685,7 +1691,7 @@ export class NotebookView extends FileView {
 
 	async exportNotebookPdf(): Promise<void> {
 		const doc = this.session?.doc;
-		if (doc && this.file) await exportPdf(this.app, this.file, doc.pages, "", this.media, this.exportOptions());
+		if (doc && this.file) await exportPdf(this.app, this.file, this.renderPagesOf(doc), "", this.media, this.exportOptions());
 	}
 
 	/** wave 0.9 (381): the export dialog (format, page or notebook, ink and/or background). `pageIndex`: opened from that page's sheet. */
@@ -1702,7 +1708,7 @@ export class NotebookView extends FileView {
 			defaultFolder: siblingFolder(file, "PNG"),
 			canPrint: canPrint(),
 			...(initialFormat ? { initialFormat } : {}),
-			run: (request) => void runExport(this.app, file, doc.pages, request, this.media, this.exportOptions()),
+			run: (request) => void runExport(this.app, file, this.renderPagesOf(doc), request, this.media, this.exportOptions()),
 		}).open();
 	}
 
@@ -1842,13 +1848,48 @@ export class NotebookView extends FileView {
 	}
 
 	/** Markers, boxes and invisible ink of this view (null before the view is open). */
+	get stateTools(): StatesTools | null {
+		return this.statesTools;
+	}
+
+	/** The pages the renderer and the exports draw: with the state each page is shown in (live views of pages that have states). */
+	private renderPagesOf(doc: NotebookDocument): readonly Page[] {
+		return this.statesTools ? this.statesTools.viewPages(doc.pages) : doc.pages;
+	}
+
+	/** The renderer draws the pages again with the states as they are now (a state was switched, no command ran). */
+	private syncRenderPages(): void {
+		const doc = this.shownDoc();
+		this.renderer?.setDocument(doc ? this.renderPagesOf(doc) : null, this.layout);
+	}
+
+	private mountStates(): void {
+		this.statesTools = new StatesTools({
+			app: this.app,
+			parent: () => this.body,
+			doc: () => this.session?.doc ?? null,
+			editable: () => this.editable(),
+			pageIndex: () => this.currentPageIndex(),
+			execute: (cmd) => this.applyCommand(cmd),
+			repaint: () => this.syncRenderPages(),
+			changed: () => this.markChanged(),
+			selection: () => (this.selection ? { pageIndex: this.selection.pageIndex, strokes: this.selection.strokes } : null),
+			select: (pageIndex, strokes) => this.selectItems(pageIndex, strokes, []),
+			deselect: () => this.clearSelection(),
+			refreshUi: () => this.refreshUi(),
+		});
+	}
+
 	get markerTools(): MarkerTools | null {
 		return this.markers;
 	}
 
 	/** The strokes of `page` the reader can see (v8: hidden ink only while the solutions are shown). */
 	private inkInView(page: Page): readonly Stroke[] {
-		return visibleStrokes(page.strokes, this.markers?.isRevealed(page) ?? false);
+		const ink = visibleStrokes(page.strokes, this.markers?.isRevealed(page) ?? false);
+		// 0.15 (241): a shown state moved some strokes away from where they were drawn: the ink tools leave them alone.
+		const moved = this.statesTools?.displaced(page);
+		return moved ? ink.filter((s) => !moved.has(s.id)) : ink;
 	}
 
 	/** v10: anchored excerpts of this view (null before the view is open). */
@@ -1976,7 +2017,7 @@ export class NotebookView extends FileView {
 	deleteSelection(): void {
 		const sel = this.selection;
 		const page = sel && this.session?.doc?.pages[sel.pageIndex];
-		if (!sel || !page || !this.editable()) return;
+		if (!sel || !page || !this.editable() || this.statesTools?.ownsSelection(sel)) return;
 		if (sel.others?.length) {
 			this.deleteAcrossPages(sel);
 			return;
@@ -2399,6 +2440,7 @@ export class NotebookView extends FileView {
 	refreshUi(): void {
 		this.selectionActions?.update();
 		this.ui?.refresh();
+		this.statesTools?.refresh();
 	}
 
 	/** What the UI needs to know, for the page in view or page `pageIndex` (page sheet of a thumbnail). */
@@ -2412,7 +2454,7 @@ export class NotebookView extends FileView {
 			editable: !!doc && this.editable() && !this.controller?.drawing,
 			open: !!doc,
 			tool: this.tools.tool,
-			selection: sel ? this.selectionCounts(sel) : null,
+			selection: sel && !this.statesTools?.ownsSelection(sel) ? this.selectionCounts(sel) : null,
 			page: page ? {
 				index, count: pages.length, background: page.background?.kind ?? "none", infinite: !!page.infinite,
 				bookmarked: doc?.meta?.bookmarks.includes(page.id) ?? false, splittable: page.id === this.heavyPageId,
@@ -2423,6 +2465,7 @@ export class NotebookView extends FileView {
 			sidePane: pdfSideState(this),
 			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false, snap: this.reading?.snapping ?? false },
 			display: { night: this.display?.night ?? false, crop: this.display?.crop ?? false },
+			states: { open: !!this.statesTools?.open },
 			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle", readOnly: this.userReadOnly },
 			canPrint: canPrint(),
 			markers: {
@@ -2759,7 +2802,7 @@ export class NotebookView extends FileView {
 		const plain = doc ? (this.pageMode?.enabled ? layoutPagesHorizontal(doc.pages) : layoutPages(doc.pages)) : null;
 		// wave 0.9 (376): with the margins cropped, the PDF pages carry the window the view fits (nothing else changes).
 		this.layout = plain && doc && this.display ? this.display.shape(plain, doc.pages) : plain;
-		this.renderer?.setDocument(doc?.pages ?? null, this.layout);
+		this.renderer?.setDocument(doc ? this.renderPagesOf(doc) : null, this.layout);
 		this.pushRuler();
 		this.reading?.docChanged();
 		this.display?.docChanged();
@@ -2927,6 +2970,7 @@ export class NotebookView extends FileView {
 		this.updateHistoryButtons();
 		this.updatePageIndicator();
 		this.pageNav?.refresh();
+		this.statesTools?.refresh();
 	}
 
 	/** The page panel shows thumbnails of what was just drawn, a moment after the pen lifts. */
@@ -3018,7 +3062,7 @@ export class NotebookView extends FileView {
 	private thumbnail(page: Page, width: number): string {
 		if (this.resilience?.thumbnailsAllowed() === false) return BLANK_THUMBNAIL;
 		const dpr = Math.min(2, window.devicePixelRatio || 1);
-		return renderThumbnail(page, Math.round(Math.min(width, THUMB_CSS_WIDTH) * dpr), {
+		return renderThumbnail(this.statesTools?.viewPages([page])[0] ?? page, Math.round(Math.min(width, THUMB_CSS_WIDTH) * dpr), {
 			mime: "image/jpeg",
 			quality: 0.8,
 			drawBackground: (ctx, p) => this.drawThumbMedia(ctx, p),
@@ -4340,6 +4384,8 @@ export class NotebookView extends FileView {
 		const sel = this.selection;
 		const page = sel && this.pageAtIndex(sel.pageIndex);
 		if (!sel || !page || isIdentity(sel.matrix)) return;
+		// 0.15 (241): the handles of a part in a state change the part's pose in that state, not the strokes.
+		if (this.statesTools?.commitTransform(sel)) return;
 		if (sel.others?.length) {
 			this.commitCrossPageTransform(sel);
 			return;

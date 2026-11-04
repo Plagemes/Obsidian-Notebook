@@ -13627,3 +13627,207 @@ body.notebook-style-obsidian {
 	}
 }
 
+/* ===== 0.15 states ===== */
+/* The strip of the drawing states (view/states-tools.ts): states, parts, and the editor of the part in view. It floats at
+   the bottom of the notebook body, above the pages and below the contextual bar. */
+.nb-ui.nb-states {
+	position: absolute;
+	left: 8px;
+	right: 8px;
+	bottom: 8px;
+	z-index: 8;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	max-width: 720px;
+	margin: 0 auto;
+	padding: 8px;
+	box-sizing: border-box;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-l);
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	box-shadow: var(--nb-shadow-float);
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+.nb-ui.nb-states .nb-states-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.nb-ui.nb-states .nb-states-chips {
+	display: flex;
+	flex: 1 1 auto;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+
+.nb-ui.nb-states .nb-states-chips::-webkit-scrollbar {
+	display: none;
+}
+
+.nb-ui.nb-states .nb-states-chip {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	min-height: 40px;
+	max-width: 180px;
+	padding: 0 14px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-tile);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-body, 14px);
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.nb-ui.nb-states .nb-states-chip.is-active {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-states .nb-states-chip-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-states .nb-states-button {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--nb-radius-pill);
+	background: transparent;
+	color: var(--nb-text-muted);
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.nb-ui.nb-states .nb-states-button:hover:not(:disabled),
+.nb-ui.nb-states .nb-states-button.is-on {
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-states .nb-states-button:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.nb-ui.nb-states .nb-states-button.is-dim {
+	opacity: 0.6;
+}
+
+.nb-ui.nb-states .nb-states-transport {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+}
+
+.nb-ui.nb-states .nb-states-label,
+.nb-ui.nb-states .nb-states-hint {
+	flex: 0 0 auto;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta, 12px);
+}
+
+.nb-ui.nb-states .nb-states-hint {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.nb-ui.nb-states .nb-states-make,
+.nb-ui.nb-states .nb-states-name {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 36px;
+	padding: 0 14px;
+	border: 1px solid var(--nb-accent);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.nb-ui.nb-states .nb-states-name {
+	border-color: var(--nb-border);
+	background: var(--nb-tile);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-states .nb-states-icon {
+	display: inline-flex;
+}
+
+.nb-ui.nb-states .nb-states-edit {
+	flex-wrap: wrap;
+	padding-top: 6px;
+	border-top: 1px solid var(--nb-border);
+}
+
+.nb-ui.nb-states .nb-states-colours {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px;
+}
+
+.nb-ui.nb-states .nb-states-swatch {
+	width: 28px;
+	height: 28px;
+	min-height: 0;
+	padding: 0;
+	border: 2px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-states-swatch, transparent);
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.nb-ui.nb-states .nb-states-swatch.is-original {
+	background: linear-gradient(135deg, var(--nb-tile) 45%, var(--nb-text-faint) 45% 55%, var(--nb-tile) 55%);
+}
+
+.nb-ui.nb-states .nb-states-swatch.is-active {
+	border-color: var(--nb-accent);
+	box-shadow: 0 0 0 2px var(--nb-accent-bg);
+}
+
+.nb-ui.nb-states button:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+@media (max-width: 520px) {
+	.nb-ui.nb-states .nb-states-row {
+		flex-wrap: wrap;
+	}
+
+	.nb-ui.nb-states .nb-states-chips {
+		order: 3;
+		flex-basis: 100%;
+	}
+
+	.nb-ui.nb-states .nb-states-label,
+	.nb-ui.nb-states .nb-states-edit .nb-states-hint {
+		display: none;
+	}
+}

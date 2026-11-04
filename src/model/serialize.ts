@@ -7,11 +7,14 @@ import {
 import { parseOutline } from "../math/outline";
 import { EXCERPT_ID_MAX, EXCERPT_PATH_MAX } from "./excerpts";
 import { detectVersion, migrate, MigrationError, v10OnlyElement, withoutV11Meta, withoutV12Slides, type RawObject } from "./migrations";
+import { normalizePageStates, STATE_COLOR_RE, statesLine } from "./states-format";
 import { normalizePageTags } from "./page-tags";
 import { normalizePosition } from "./position";
 import {
 	COVER_ART_STYLES, CURRENT_VERSION, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, FORMAT_ID, META_DESCRIPTION_MAX, PAPER_KINDS, RENDER_VERSIONS, TOOLS,
 	SLIDE_ID_MAX, SLIDE_PATH_MAX, SLIDE_SOURCE_MAX, type SlideRef,
+	STATES_ID_MAX, STATES_MAX_ITEMS, STATES_MAX_PARTS, STATES_MAX_ROT, STATES_MAX_SCALE, STATES_MAX_SHIFT, STATES_MAX_STATES, STATES_MIN_SCALE, STATES_NAME_MAX,
+	type PageState, type PageStates, type PartPose, type StatePart,
 	type Asset, type CoverArt, type CoverArtStyle, type AssetKind, type BookmarkInfo, type BoxElement, type EquationElement, type ExcerptElement, type ExcerptSource, type GraphElement, type GraphFunction, type GraphParam,
 	type GraphPiece, type GraphTable, type GraphViewport, type ImageElement, type MarkerElement, type NotebookDocument, type NotebookMeta, type Page,
 	type PageBackground, type PageElement, type PageMargins, type PaperKind, type Point, type ReadingPosition, type RenderVersion, type Stroke,
@@ -95,6 +98,12 @@ function slidesInUse(doc: NotebookDocument): { refs: SlideRef[]; stroke: (s: Str
 		refs.push(r);
 	}
 	return { refs, stroke: (s) => (s.slide === undefined || known.has(s.slide) ? s : withoutSlide(s)) };
+}
+
+/** v13: the states of `page` as the writer keeps them (only parts whose strokes are on the page, no identity poses, ...). */
+function statesToWrite(page: Page): PageStates | undefined {
+	if (!page.states) return undefined;
+	return normalizePageStates(page.states, new Set(page.strokes.map((s) => s.id)));
 }
 
 /** v8 marker: required fields, then the optional ones in a fixed order, each only when present (the label normalised). */
@@ -254,6 +263,8 @@ function assemble(
 	doc: NotebookDocument,
 	lineOf: (s: Stroke) => string,
 	elementLineOf: (e: PageElement) => string = elementLine,
+	/** v13: the states a page is written with (default: the live ones, see `statesToWrite`). */
+	statesOf: (page: Page) => PageStates | undefined = statesToWrite,
 ): string {
 	const slides = slidesInUse(doc);
 	const pages = doc.pages.map((page) => {
@@ -277,6 +288,8 @@ function assemble(
 		const m = page.margins;
 		if (m) out.push(`\t\t\t"margins": {"left":${j(m.left)},"right":${j(m.right)},"bottom":${j(m.bottom)}},`);
 		if (page.infinite !== undefined) out.push(`\t\t\t"infinite": ${j(page.infinite)},`);
+		const states = statesOf(page);
+		if (states) out.push(`\t\t\t"states": ${statesLine(states)},`);
 		if (elements.length) out.push(`\t\t\t"elements": [\n${elements.join(",\n")}\n\t\t\t],`);
 		out.push(strokes.length ? `\t\t\t"strokes": [\n${strokes.join(",\n")}\n\t\t\t]` : `\t\t\t"strokes": []`);
 		out.push("\t\t}");
@@ -424,6 +437,121 @@ function readSlideRef(v: unknown, path: string): SlideRef {
 	const ref: SlideRef = { id, source, page: v.page };
 	if (v.path !== undefined) ref.path = boundedId(v.path, `${path}.path`, SLIDE_PATH_MAX);
 	return ref;
+}
+
+/** v13: a number of a pose, finite and within `[lo, hi]`. */
+function poseNumber(v: unknown, path: string, lo: number, hi: number): number {
+	const n = finite(v, path);
+	if (n < lo || n > hi) fail(path, `expected a number from ${lo} to ${hi}`);
+	return n;
+}
+
+/**
+ * v13 states of one page (#241): { parts: [{ id, name?, pivot, items }], list: [{ id, name, poses }], active? }. `strokeIds`:
+ * the ids of the strokes read on the page, which the items must name. Read leniently (`drop` set), whatever is invalid is
+ * dropped and counted on its own: an item that names no stroke of the page or one already in another part, a part
+ * left without items, a pose of an unknown part or with a bad number, an invalid state, an `active` that names no
+ * state; the drawing and the rest of the states stay. Strict (`drop` null): any of those fails. Undefined when nothing is left.
+ */
+export function readPageStates(v: unknown, path: string, strokeIds: ReadonlySet<string>, drop: Dropped | null): PageStates | undefined {
+	if (v === undefined) return undefined;
+	const root = orDrop(drop, () => (isObject(v) ? v : fail(path, "expected an object")));
+	if (!root) return undefined;
+	const listOf = (x: unknown, at: string): unknown[] => orDrop(drop, () => (Array.isArray(x) ? (x as unknown[]) : fail(at, "expected an array"))) ?? [];
+	const parts: StatePart[] = [];
+	const partIds = new Set<string>();
+	const claimed = new Set<string>();
+	listOf(root.parts, `${path}.parts`).forEach((raw, i) => {
+		const at = `${path}.parts[${i}]`;
+		const part = orDrop(drop, () => {
+			if (!isObject(raw)) fail(at, "expected an object");
+			if (parts.length >= STATES_MAX_PARTS) fail(at, `more than ${STATES_MAX_PARTS} parts`);
+			const id = boundedId(raw.id, `${at}.id`, STATES_ID_MAX);
+			if (partIds.has(id)) fail(`${at}.id`, "duplicate id");
+			const out: StatePart = { id, pivot: [0, 0], items: [] };
+			if (raw.name !== undefined) {
+				if (typeof raw.name !== "string" || raw.name.length === 0 || raw.name.length > STATES_NAME_MAX) fail(`${at}.name`, `expected 1 to ${STATES_NAME_MAX} characters`);
+				out.name = raw.name;
+			}
+			const pivot = raw.pivot;
+			if (!Array.isArray(pivot) || pivot.length !== 2) fail(`${at}.pivot`, "expected [x, y]");
+			out.pivot = [poseNumber(pivot[0], `${at}.pivot[0]`, -1e6, 1e6), poseNumber(pivot[1], `${at}.pivot[1]`, -1e6, 1e6)];
+			if (!Array.isArray(raw.items)) fail(`${at}.items`, "expected an array");
+			raw.items.forEach((item, k) => {
+				const kept = orDrop(drop, () => {
+					const sid = str(item, `${at}.items[${k}]`);
+					if (!strokeIds.has(sid)) fail(`${at}.items[${k}]`, "names no stroke of the page");
+					if (claimed.has(sid)) fail(`${at}.items[${k}]`, "already in a part");
+					if (out.items.length >= STATES_MAX_ITEMS) fail(`${at}.items[${k}]`, `more than ${STATES_MAX_ITEMS} items`);
+					return sid;
+				});
+				if (kept === undefined) return;
+				claimed.add(kept);
+				out.items.push(kept);
+			});
+			if (out.items.length === 0) fail(`${at}.items`, "a part needs at least one stroke");
+			return out;
+		});
+		if (!part) return;
+		partIds.add(part.id);
+		parts.push(part);
+	});
+	const list: PageState[] = [];
+	const stateIds = new Set<string>();
+	listOf(root.list, `${path}.list`).forEach((raw, i) => {
+		const at = `${path}.list[${i}]`;
+		const state = orDrop(drop, () => {
+			if (!isObject(raw)) fail(at, "expected an object");
+			if (list.length >= STATES_MAX_STATES) fail(at, `more than ${STATES_MAX_STATES} states`);
+			const id = boundedId(raw.id, `${at}.id`, STATES_ID_MAX);
+			if (stateIds.has(id)) fail(`${at}.id`, "duplicate id");
+			if (typeof raw.name !== "string" || raw.name.length === 0 || raw.name.length > STATES_NAME_MAX) fail(`${at}.name`, `expected 1 to ${STATES_NAME_MAX} characters`);
+			const poses: PartPose[] = [];
+			const seen = new Set<string>();
+			listOf(raw.poses, `${at}.poses`).forEach((p, k) => {
+				const pose = orDrop(drop, () => {
+					const pat = `${at}.poses[${k}]`;
+					if (!isObject(p)) fail(pat, "expected an object");
+					const part = str(p.part, `${pat}.part`);
+					if (!partIds.has(part)) fail(`${pat}.part`, "names no part");
+					if (seen.has(part)) fail(`${pat}.part`, "two poses for one part");
+					const out: PartPose = { part };
+					if (p.dx !== undefined) out.dx = poseNumber(p.dx, `${pat}.dx`, -STATES_MAX_SHIFT, STATES_MAX_SHIFT);
+					if (p.dy !== undefined) out.dy = poseNumber(p.dy, `${pat}.dy`, -STATES_MAX_SHIFT, STATES_MAX_SHIFT);
+					if (p.rot !== undefined) out.rot = poseNumber(p.rot, `${pat}.rot`, -STATES_MAX_ROT, STATES_MAX_ROT);
+					if (p.scale !== undefined) out.scale = poseNumber(p.scale, `${pat}.scale`, STATES_MIN_SCALE, STATES_MAX_SCALE);
+					if (p.hidden !== undefined) {
+						if (p.hidden !== true) fail(`${pat}.hidden`, "expected true");
+						out.hidden = true;
+					}
+					if (p.color !== undefined) {
+						if (typeof p.color !== "string" || !STATE_COLOR_RE.test(p.color)) fail(`${pat}.color`, "expected a #rrggbb colour");
+						out.color = p.color;
+					}
+					return out;
+				});
+				if (!pose) return;
+				seen.add(pose.part);
+				poses.push(Object.freeze(pose));
+			});
+			return { id, name: raw.name, poses: Object.freeze(poses) as PartPose[] };
+		});
+		if (!state) return;
+		stateIds.add(state.id);
+		list.push(Object.freeze(state));
+	});
+	let active: string | undefined;
+	if (root.active !== undefined) {
+		active = orDrop(drop, () => {
+			const id = str(root.active, `${path}.active`);
+			if (!stateIds.has(id)) fail(`${path}.active`, "names no state");
+			return id;
+		});
+	}
+	if (parts.length === 0 && list.length === 0) return undefined;
+	const states: PageStates = { parts: parts.map((p) => Object.freeze({ ...p, pivot: Object.freeze([...p.pivot]) as [number, number], items: Object.freeze([...p.items]) as string[] })), list: Object.freeze(list) as PageState[] };
+	if (active !== undefined) states.active = active;
+	return Object.freeze(states);
 }
 
 type Assets = Readonly<Record<string, Asset>>;
@@ -974,7 +1102,7 @@ function readAssets(v: unknown): Record<string, Asset> {
 	return assets;
 }
 
-function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null = null, slides: SlideIds = new Set<string>()): Page {
+function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null = null, slides: SlideIds = new Set<string>(), withStates = true): Page {
 	if (!isObject(v)) fail(path, "expected an object");
 	const id = str(v.id, `${path}.id`);
 	const width = positive(v.width, `${path}.width`);
@@ -1021,6 +1149,11 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, dr
 		});
 		if (elements.length > 0) page.elements = elements;
 	}
+	// v13: the states name strokes of this page, so they are read after the ink. A file of an older format has none of ours.
+	if (withStates && v.states !== undefined) {
+		const states = readPageStates(v.states, `${path}.states`, new Set(strokes.map((s) => s.id)), drop);
+		if (states) page.states = states;
+	}
 	return page;
 }
 
@@ -1046,7 +1179,7 @@ export function validate(raw: unknown, drop: Dropped | null = null): NotebookDoc
 	return validateWith(raw, readPage, new Set<string>(), drop);
 }
 
-type PageReader = (v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null, slides: SlideIds) => Page;
+type PageReader = (v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null, slides: SlideIds, withStates: boolean) => Page;
 
 /** `validate` with the page reader and the set of ids injected: staged loading reads page shells first (see StagedParse). */
 function validateWith(raw: unknown, readPageAt: PageReader, ids: Set<string>, drop: Dropped | null): NotebookDocument {
@@ -1062,7 +1195,7 @@ function validateWith(raw: unknown, readPageAt: PageReader, ids: Set<string>, dr
 	const slideIds = new Set(slides.map((r) => r.id));
 	const pageIds = new Set<string>();
 	const pages = raw.pages.map((p, i) => {
-		const page = readPageAt(p, `pages[${i}]`, ids, assets, drop, slideIds);
+		const page = readPageAt(p, `pages[${i}]`, ids, assets, drop, slideIds, true);
 		// Page ids key bookmarks, jumps and caches: two pages with one id would be confused with each other.
 		if (pageIds.has(page.id)) fail(`pages[${i}].id`, "duplicate id");
 		pageIds.add(page.id);
@@ -1190,7 +1323,7 @@ export class StagedParse {
 	}
 
 	/**
-	 * Prepares a staged parse of a file at the current version, or at version 9 or 10, whose migrations only refuse
+	 * Prepares a staged parse of a file at the current version, or at version 9 to 12, whose migrations only refuse
 	 * excerpts (v9: checked page by page as they are read) and drop the v11 metadata fields, with page `first` (0-based) read in full.
 	 */
 	static create(raw: RawObject, first: number, from: number = CURRENT_VERSION): StagedParse | ParseFailureResult {
@@ -1198,7 +1331,8 @@ export class StagedParse {
 			const ids = new Set<string>();
 			// Lenient like `parse`: invalid optional v7 details are dropped and counted; everything else still fails.
 			const drop: Dropped = { count: 0 };
-			const current = from === CURRENT_VERSION ? raw : { ...withoutV12Slides(from < 11 ? withoutV11Meta(raw) : raw), version: CURRENT_VERSION };
+			// v12 -> v13 only drops the `states` keys of pages, which `read` ignores page by page; the document-level drops are older.
+			const current = from === CURRENT_VERSION ? raw : { ...(from < 12 ? withoutV12Slides(from < 11 ? withoutV11Meta(raw) : raw) : raw), version: CURRENT_VERSION };
 			const doc = validateWith(current, readPageShell, ids, drop);
 			const rawPages = raw.pages as unknown[];
 			const at = Math.min(rawPages.length - 1, Math.max(0, first));
@@ -1218,7 +1352,8 @@ export class StagedParse {
 		}
 		// v12: the strokes of an older file have no slide of ours (an odd `slide` key is ignored, as the migration drops it).
 		const slides: SlideIds = this.from < 12 ? "ignore" : new Set((this.doc.slides ?? []).map((r) => r.id));
-		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop, slides);
+		// v13: the same for the `states` of a page of an older file.
+		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop, slides, this.from >= 13);
 	}
 
 	get pending(): number {
@@ -1275,12 +1410,31 @@ export function parseStaged(text: string, firstPage: number | null): StagedParse
 	const first = firstPage === null ? 0 : firstPage - 1;
 	// The v9 → v10 migration only refuses excerpts and v10 → v11 only drops two metadata fields, so large v9 and v10 files are staged too.
 	// v11 → v12 only drops the slide table and the strokes' `slide` keys (ignored page by page), so large v11 files are staged too.
-	if (pre.version === 9 || pre.version === 10 || pre.version === 11) return StagedParse.create(pre.raw, first, pre.version);
+	// v12 → v13 only drops the pages' `states` keys (ignored page by page), so large v12 files are staged too.
+	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12) return StagedParse.create(pre.raw, first, pre.version);
 	if (pre.version !== CURRENT_VERSION) return parseRaw(pre.raw, pre.version, true);
 	return StagedParse.create(pre.raw, first);
 }
 
 export type CheckedSerialization = { ok: true; text: string } | { ok: false; message: string };
+
+/** v13: states objects that already passed `checkStates` (they are frozen once committed). */
+const checkedStates = new WeakSet<PageStates>();
+
+/**
+ * v13: the states of `page` as the writer would write them, read back strictly (against the strokes of the page) and
+ * written again: they must come back the same. Throws a ValidationError otherwise.
+ */
+function checkStates(page: Page, path: string): void {
+	if (!page.states || checkedStates.has(page.states)) return;
+	const states = statesToWrite(page);
+	if (states) {
+		const line = statesLine(states);
+		const back = readPageStates(JSON.parse(line), path, new Set(page.strokes.map((s) => s.id)), null);
+		if (!back || statesLine(back) !== line) fail(path, "round-trip mismatch");
+	}
+	if (Object.isFrozen(page.states)) checkedStates.add(page.states);
+}
 
 /** Slide table entries that already passed `checkContent` (frozen). */
 const checkedSlideRefs = new WeakSet<SlideRef>();
@@ -1320,6 +1474,7 @@ export function checkContent(doc: NotebookDocument): string | null {
 			if (Object.isFrozen(r)) checkedSlideRefs.add(r);
 		}
 		for (const page of doc.pages) {
+			checkStates(page, `page ${page.id} states`);
 			for (const s of page.strokes) {
 				if (verifiedLines.has(s) || validatedStrokes.has(s)) continue;
 				const line = strokeLine(s);
@@ -1411,11 +1566,14 @@ export function serializeChecked(doc: NotebookDocument, forceFull = false): Chec
 				const line = slideRefLine(r);
 				if (slideRefLine(readSlideRef(JSON.parse(line), `slide ${r.id}`)) !== line) fail(`slide ${r.id}`, "round-trip mismatch");
 			}
+			// v13: nor does it have the strokes the states name: they are written and checked per page, on their own.
+			doc.pages.forEach((p, i) => checkStates(p, `pages[${i}].states`));
 			const skeleton = { ...doc, pages: doc.pages.map((p) => ({ ...p, strokes: [] })) };
-			const skeletonText = assemble(skeleton, strokeLine);
+			const noStates = () => undefined;
+			const skeletonText = assemble(skeleton, strokeLine, elementLine, noStates);
 			const check = parseText(skeletonText, false);
 			if (!check.ok) return { ok: false, message: check.message };
-			if (assemble(check.doc, strokeLine) !== skeletonText) return { ok: false, message: "round-trip mismatch" };
+			if (assemble(check.doc, strokeLine, elementLine, noStates) !== skeletonText) return { ok: false, message: "round-trip mismatch" };
 		}
 		return { ok: true, text };
 	} catch (e) {

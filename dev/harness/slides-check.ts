@@ -108,7 +108,7 @@ export async function checkSlides(api: SlidesCheckApi): Promise<{ ok: boolean; r
 	await v.flushNow();
 	const file = app.vault.getFileByPath("Notebooks/New.notebook") as unknown as TFile | null;
 	const text = file ? await (app.vault as unknown as { read(f: TFile): Promise<string> }).read(file) : "";
-	add("the saved file is format v12 with the slide table", /"version":\s*12/.test(text) && /"slides":/.test(text) && (text.match(/"slide":/g)?.length ?? 0) === 3, `${text.length} chars`);
+	add("the saved file is current format (v13) with the slide table", /"version":\s*13/.test(text) && /"slides":/.test(text) && (text.match(/"slide":/g)?.length ?? 0) === 3, `${text.length} chars`);
 
 	// Badges follow the setting.
 	// The settings tab changes the plugin's settings object in place, then the views apply it.

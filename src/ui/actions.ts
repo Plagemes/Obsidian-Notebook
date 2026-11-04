@@ -73,6 +73,8 @@ export interface UiContext {
 	markers?: { invisibleInk: boolean; solutions: boolean; pageSolutions: boolean };
 	/** wave 0.9: view-only night mode (367) and cropped PDF margins (376). Optional (both off when absent). */
 	display?: { night: boolean; crop: boolean };
+	/** 0.15 (241): the state strip is open. Optional (closed when absent). */
+	states?: { open: boolean };
 	/** wave 0.10: how many notebook views are open in the workspace (tabs). Optional (0 when absent). */
 	openNotebooks?: number;
 	/** wave 0.10 (18): the back/forward history of visited pages has somewhere to go. Optional (absent: nothing to go back to). */
@@ -211,6 +213,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "select-rectangle", label: "select.rectangle", icon: "box-select", group: "selection", surfaces: ["context", "sheet"], contexts: ["lasso"], priority: 66, scope: "view", command: "command.selectRectangle", when: lassoOrSelection, checked: (c) => !!c.toggles.selectRectangle, keywords: "lasso freehand box marquee mode" },
 	{ id: "select-by-style", label: "select.byStyle", icon: "palette", group: "selection", surfaces: ["context", "sheet"], contexts: ["lasso"], priority: 64, scope: "view", command: "command.selectByStyle", when: lassoOrSelection, keywords: "colour color tool pen highlighter same similar all page" },
 	{ id: "selection-similar", label: "select.similar", icon: "check-check", group: "selection", surfaces: ["context"], contexts: ["selection"], second: true, priority: 62, scope: "view", when: hasInk },
+	// 0.15 states (#241): the selected ink becomes a part of the drawing, which the states of the page move together (view/states-tools.ts).
+	{ id: "selection-part", label: "states.makePart", icon: "group", group: "selection", surfaces: ["sheet"], priority: 38, scope: "view", command: "command.makePart", when: hasInk, keywords: "states part group figure physics stati parte gruppo" },
 	{ id: "select-same-colour", label: "select.sameColour", icon: "palette", group: "selection", surfaces: ["sheet"], priority: 48, scope: "view", command: "command.selectSameColour", when: hasInk, keywords: "similar color all" },
 	{ id: "select-same-tool", label: "select.sameTool", icon: "highlighter", group: "selection", surfaces: ["sheet"], priority: 47, scope: "view", command: "command.selectSameTool", when: hasInk, keywords: "similar pen highlighter all" },
 	{ id: "selection-align-menu", label: "arrange.align", icon: "align-horizontal-distribute-center", group: "selection", surfaces: ["context"], contexts: ["selection"], second: true, priority: 60, scope: "view", when: (c) => itemCount(c) >= 2 },
@@ -314,6 +318,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "pdf-side-show-slide", label: "pdfSide.menu.showSlide", icon: "file-search", group: "side", surfaces: ["context", "sheet"], contexts: ["side-pane"], priority: 70, scope: "view", readOnly: true, when: sideOpen },
 	{ id: "pdf-side-add-page", label: "command.pdfSideAdd", icon: "file-plus", group: "side", surfaces: ["context", "sheet"], contexts: ["side-pane"], priority: 75, scope: "view", command: true, when: sideOpen },
 	{ id: "pdf-side-close", label: "command.pdfSideClose", icon: "panel-right-close", group: "side", surfaces: ["context", "sheet"], contexts: ["side-pane"], priority: 30, scope: "view", command: true, readOnly: true, when: sideOpen },
+	// 0.15 states (#241): the strip of the states of the page in view: switch, play, add, move the parts of a figure from state to state.
+	{ id: "states-toggle", label: "states.open", icon: "layers", group: "page", surfaces: ["sheet", "page"], priority: 30, scope: "view", command: "command.states", readOnly: true, checked: (c) => !!c.states?.open, keywords: "states drawing figure physics animation parts stati disegno figura animazione parti" },
 	// 0.14 slides (#417): every slide with its notes pages, exercise page, linked ink and questions (view/slide-strip-modal.ts).
 	{ id: "slide-strip", label: "slides.strip.open", icon: "layout-list", group: "side", surfaces: ["sheet"], priority: 72, scope: "view", command: "command.slideStrip", readOnly: true, when: (c) => sideOpen(c) || c.notebook.pdfPages, keywords: "slides strip notes exercise questions diapositive striscia" },
 

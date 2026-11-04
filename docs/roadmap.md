@@ -464,7 +464,7 @@ Features for following a lecture live. Exam and review features stay in the sepa
 240. **P2** Lecture shared with the study group: at the end, a rule exports the clean notes to a shared (Drive) folder.
 
 ### Dynamic drawings
-241. **P1** Drawings with states (e.g. physics exercises): draw a figure once, then mark the parts that change (a block, a force arrow, a spring) and define for each state where they are, their rotation or scale, visibility and colour.
+241. **P1** 🧪 Drawings with states (e.g. physics exercises): draw a figure once, then mark the parts that change (a block, a force arrow, a spring) and define for each state where they are, their rotation or scale, visibility and colour.
     - States can be named ("A", "B", "impact") or follow a continuous parameter (time t, angle θ); a part's position can follow a formula (e.g. x(t) = v·t), shared with the calculator (#182) and graphs (#113).
     - Several instances of the same drawing on the page, each showing a different state (e.g. "state A" above, "state B" below in the exercise): nothing is redrawn, and editing the original updates every instance.
     - Switch states with tabs or a slider on the figure; optional animation to watch the evolution over time.
