@@ -78,11 +78,17 @@ export async function checkPresent(api: PresentCheckApi): Promise<{ ok: boolean;
 	const before = JSON.stringify(v.document);
 
 	// --- start: the action, full screen overlay on black, the page fitted ---
+	// The PDF Select text mode is left when the presentation starts, and cannot be entered while it runs.
+	const pdfTools = (v as unknown as { pdfTextTools: { enter(): void; active: boolean } | null }).pdfTextTools;
+	pdfTools?.enter();
 	v.runAction("present");
 	await settle();
 	await sleep(250);
 	const r0 = root();
 	add("Present opens the overlay", !!r0 && v.presentation?.isOpen === true);
+	add("Presenting leaves the Select text mode", !!pdfTools && !pdfTools.active);
+	v.runAction("pdf-select-text");
+	add("the Select text command does nothing while presenting", !pdfTools?.active);
 	const img = (): HTMLImageElement | null => root()?.querySelector<HTMLImageElement>(".nb-present-page") ?? null;
 	for (let i = 0; i < 30 && !(img()?.getAttribute("src") ?? "").startsWith("data:"); i++) await sleep(50);
 	add("the page is drawn as an image", (img()?.getAttribute("src") ?? "").startsWith("data:"));
