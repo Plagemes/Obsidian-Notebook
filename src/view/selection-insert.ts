@@ -78,7 +78,7 @@ async function drawPicture(host: InsertHost): Promise<ArrayBuffer | null> {
 			...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}),
 		});
 		const cropped = cropSvg(svg, host.crop);
-		return cropped ? new TextEncoder().encode(cropped).buffer as ArrayBuffer : null;
+		return cropped ? new TextEncoder().encode(cropped).buffer : null;
 	}
 	const renderer = new PageImageRenderer(host.media, { ...host.render, ...(transparent ? { layers: "ink" as const } : {}) });
 	try {
