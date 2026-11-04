@@ -22,6 +22,7 @@ import { isUiLanguage, type UiLanguage } from "./i18n/languages";
 import { cleanUserName } from "./library/greeting";
 import { normaliseSeen, type HintId } from "./ui/hint-logic";
 import { DEFAULT_READING_SETTINGS, readReadingSettings, type ReadingSettings } from "./view/reading-settings";
+import { DEFAULT_PRESENT_SETTINGS, readPresentSettings, type PresentSettings } from "./view/present-logic";
 import { DEFAULT_BOARD_SETTINGS, readBoardSettings, type BoardSettings } from "./library/board-logic";
 
 /** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
@@ -29,7 +30,7 @@ import { DEFAULT_BOARD_SETTINGS, readBoardSettings, type BoardSettings } from ".
 export const APPEARANCE_STYLES = ["notebook", "obsidian"] as const;
 export type AppearanceStyle = (typeof APPEARANCE_STYLES)[number];
 
-export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings, LectureSettings, BoardSettings {
+export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings, LectureSettings, BoardSettings, PresentSettings {
 	/** UI language: "auto" follows Obsidian. */
 	uiLanguage: UiLanguage;
 	folder: string;
@@ -297,6 +298,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	...DEFAULT_LECTURE_SETTINGS,
 	zettelSlipBoxes: [],
 	...DEFAULT_READING_SETTINGS,
+	...DEFAULT_PRESENT_SETTINGS,
 	// 0.15 views
 	...DEFAULT_BOARD_SETTINGS,
 	boardColumns: DEFAULT_BOARD_SETTINGS.boardColumns.map((c) => ({ ...c })),
@@ -399,6 +401,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.inkFollowsObjects === "boolean") s.inkFollowsObjects = d.inkFollowsObjects;
 	Object.assign(s, readZettelSettings(d));
 	Object.assign(s, readReadingSettings(d));
+	Object.assign(s, readPresentSettings(d));
 	Object.assign(s, readBoardSettings(d));
 	return s;
 }

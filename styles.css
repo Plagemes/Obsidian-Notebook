@@ -13844,3 +13844,158 @@ body.notebook-style-obsidian {
 		display: none;
 	}
 }
+
+/* ===== 0.16 present ===== */
+/* Presentation mode (view/present-mode.ts): a black overlay on the notebook view with one page fitted to the screen, a laser
+   canvas, a page counter and a few controls, both of which fade out by themselves. */
+.nb-ui.nb-present {
+	position: fixed;
+	inset: 0;
+	z-index: 90;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: #000;
+	color: #fff;
+	overflow: hidden;
+	touch-action: none;
+	user-select: none;
+	-webkit-user-select: none;
+	outline: none;
+}
+
+.nb-ui.nb-present .nb-present-page {
+	display: block;
+	width: var(--nb-present-w, 100%);
+	height: var(--nb-present-h, auto);
+	max-width: 100%;
+	max-height: 100%;
+	object-fit: contain;
+	background: #fff;
+	pointer-events: none;
+	-webkit-user-drag: none;
+}
+
+.nb-ui.nb-present.is-blank .nb-present-page,
+.nb-ui.nb-present.is-blank .nb-present-laser {
+	visibility: hidden;
+}
+
+.nb-ui.nb-present .nb-present-laser {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+}
+
+.nb-ui.nb-present .nb-present-counter {
+	position: absolute;
+	left: 50%;
+	bottom: max(16px, env(safe-area-inset-bottom));
+	transform: translateX(-50%);
+	padding: 6px 14px;
+	border-radius: 999px;
+	background: rgba(0, 0, 0, 0.62);
+	border: 1px solid rgba(255, 255, 255, 0.18);
+	color: #fff;
+	font-size: var(--nb-text-s, 13px);
+	font-variant-numeric: tabular-nums;
+	opacity: 0;
+	transition: opacity 0.2s ease;
+	pointer-events: none;
+}
+
+.nb-ui.nb-present .nb-present-counter.is-shown {
+	opacity: 1;
+}
+
+.nb-ui.nb-present .nb-present-bar {
+	position: absolute;
+	top: max(10px, env(safe-area-inset-top));
+	right: max(10px, env(safe-area-inset-right));
+	display: flex;
+	gap: 8px;
+	opacity: 0;
+	transition: opacity 0.2s ease;
+	pointer-events: none;
+}
+
+.nb-ui.nb-present .nb-present-bar.is-shown {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.nb-ui.nb-present .nb-present-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	border-radius: 999px;
+	border: 1px solid rgba(255, 255, 255, 0.22);
+	background: rgba(24, 24, 27, 0.78);
+	color: #fff;
+	cursor: pointer;
+}
+
+.nb-ui.nb-present .nb-present-btn .svg-icon {
+	width: 20px;
+	height: 20px;
+}
+
+.nb-ui.nb-present .nb-present-btn.is-on {
+	background: var(--nb-accent);
+	border-color: transparent;
+}
+
+.nb-ui.nb-present .nb-present-btn:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+/* Write while presenting: the notebook's own canvas shows through and takes the pen; only the controls stay. */
+.nb-ui.nb-present.is-ink {
+	background: transparent;
+	pointer-events: none;
+}
+
+.nb-ui.nb-present.is-ink .nb-present-page,
+.nb-ui.nb-present.is-ink .nb-present-laser {
+	display: none;
+}
+
+.nb-ui.nb-present.is-ink .nb-present-bar {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.nb-ui .nb-map-present {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-left: auto;
+	min-height: 36px;
+	padding: 0 14px;
+	border-radius: 999px;
+	border: 1px solid var(--nb-border-strong);
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	cursor: pointer;
+}
+
+.nb-ui .nb-map-present:hover {
+	background: var(--nb-hover);
+}
+
+.nb-ui .nb-map-present .svg-icon {
+	width: 16px;
+	height: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.nb-ui.nb-present .nb-present-counter,
+	.nb-ui.nb-present .nb-present-bar {
+		transition: none;
+	}
+}

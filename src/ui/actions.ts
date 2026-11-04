@@ -361,6 +361,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "pen-gesture-custom", label: "settings.penGestureCustom", icon: "wand", group: "view", surfaces: ["sheet"], priority: 15, scope: "view", command: "command.penGestureCustom", readOnly: true, keywords: "gestures record bind command" },
 	// wave 0.9 (367): night mode, a view setting (dark page, stored colours unchanged, exports unaffected).
 	{ id: "night-mode", label: "display.night", icon: "moon", group: "view", surfaces: ["sheet"], priority: 36, scope: "view", command: "command.nightMode", readOnly: true, checked: (c) => !!c.display?.night, keywords: "dark black theme notte scuro" },
+	// 0.16 (#87): presentation mode: full screen, one page at a time, laser pointer (sheet, command, notebook map button).
+	{ id: "present", label: "present.title", icon: "presentation", group: "view", surfaces: ["sheet"], priority: 47, scope: "view", command: "command.present", readOnly: true, keywords: "slideshow full screen laser pointer present presentazione schermo intero" },
 	{ id: "fit-width", label: "tool.fit", icon: "move-horizontal", group: "view", surfaces: ["quick", "sheet"], priority: 38, scope: "view", command: "command.fit", readOnly: true, keywords: "zoom" },
 	{ id: "next-page", label: "command.nextPage", icon: "chevron-down", group: "view", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
 	{ id: "previous-page", label: "command.prevPage", icon: "chevron-up", group: "view", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },

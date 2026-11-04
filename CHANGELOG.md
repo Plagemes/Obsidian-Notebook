@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### present
+- **Presentation mode (#87).** Command *Present the notebook (full screen)*, *Presentation* in the More sheet and a button in the notebook map: the pages one at a time, full screen (Fullscreen API on the view where available, else an overlay over the window), fitted on a black surround. Next / previous by tap zones (left third back), swipe, the arrow keys, Page Up / Down, Space and Enter (presenter remotes), Home / End, *B* or *.* to blank; Esc or a small auto-hiding exit button leaves; a page counter fades by itself. The pen and the mouse are a laser pointer (red dot, trail that fades in under a second; nothing is written; setting *Pen is a laser pointer while presenting*). A drawing with states is stepped through first (*as drawn*, then each state) before the next page (setting *Present drawings with states step by step*). *Write while presenting* hands the screen back to the notebook for normal writing. Nothing is ever written by presenting: the state shown is the overlay's own choice. No change to the notebook format; the pen button, hover and input policy files are untouched. Tests: `tests/present-logic.test.ts`. Harness: `dev/harness/present-check.ts` (`doc=present`).
+
 ## 0.15.0 — 2026-11-04
 
 Notebooks start from templates and stay organised: notebook templates, an automatic page header or footer, pen sets per subject, a daily "Today's page", Board and Calendar views of the library, a storage manager, and drawings with states for physics-style figures. **The document format is now v13** (optional drawing states): a 0.14 device opens a v13 notebook read-only (newer version) and never overwrites it. The state shown is your device's own choice; only *Set as default state* saves it in the notebook. **Not verified on the device**: unit tests and the browser harness only.

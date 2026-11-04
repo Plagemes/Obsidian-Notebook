@@ -2807,6 +2807,17 @@ export const en = {
 	"states.isDefault": "Default state (the notebook opens with it)",
 	"states.defaultSet": "{state} is now the state the notebook opens with.",
 	"states.defaultAlready": "This is already the state the notebook opens with.",
+	// 0.16 present
+	"present.title": "Presentation",
+	"present.exit": "Exit presentation",
+	"present.laser": "Laser pointer",
+	"present.ink": "Write while presenting",
+	"command.present": "Present the notebook (full screen)",
+	"present.empty": "There is no page to present.",
+	"settings.presentSteps": "Present drawings with states step by step",
+	"settings.presentSteps.desc": "Next shows the states of a drawing one by one, then turns the page.",
+	"settings.presentLaser": "Pen is a laser pointer while presenting",
+	"settings.presentLaser.desc": "A red dot with a fading trail follows the pen and the mouse. Nothing is written.",
 } as const;
 
 export type MessageKey = keyof typeof en;

@@ -277,6 +277,9 @@ const READING: SettingSpec[] = [
 	// 0.14 slides (#226): ink remembers the slide beside the notes; its badge shows the slide again.
 	{ id: "slideInkLink", section: "reading", order: 40, name: "settings.slideInkLink", desc: "settings.slideInkLink.desc", control: { type: "toggle" }, keywords: "slide side by side pdf link ink notes diapositiva affiancato" },
 	{ id: "slideInkBadges", section: "reading", order: 41, name: "settings.slideInkBadges", desc: "settings.slideInkBadges.desc", control: { type: "toggle" }, parent: "slideInkLink", keywords: "slide badge diapositiva" },
+	// 0.16 present: presentation mode (roadmap #87).
+	{ id: "presentSteps", section: "reading", order: 50, name: "settings.presentSteps", desc: "settings.presentSteps.desc", control: { type: "toggle" }, keywords: "presentation present slides states steps presentazione" },
+	{ id: "presentLaser", section: "reading", order: 51, name: "settings.presentLaser", desc: "settings.presentLaser.desc", control: { type: "toggle" }, keywords: "presentation present laser pointer puntatore" },
 ];
 
 const LIBRARY: SettingSpec[] = [

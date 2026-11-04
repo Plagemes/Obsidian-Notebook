@@ -47,6 +47,7 @@ const P: Record<string, string> = {
 	"flag": "M4 22V4 M4 4h13l-2 4 2 4H4",
 	"list-checks": "M3 7l2 2 4-4 M3 17l2 2 4-4 M13 6h8 M13 12h8 M13 18h8",
 	"presentation": "M2 3h20 M3 3v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V3 M7 21l5-5 5 5",
+	"locate-fixed": "M2 12h3 M19 12h3 M12 2v3 M12 19v3 M12 8a4 4 0 1 0 0 8a4 4 0 0 0 0-8z",
 	"search-x": "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z M21 21l-4.3-4.3 M8.5 8.5l5 5 M13.5 8.5l-5 5",
 	"layout-list": "M3 4h7v7H3z M3 13h7v7H3z M14 5h7 M14 9h7 M14 15h7 M14 19h7",
 	"panel-left": "M4 4h16v16H4z M9 4v16",

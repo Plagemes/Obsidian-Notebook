@@ -95,7 +95,7 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 9. **P2** Tilt-aware pencil (tiltX/tiltY widen and lighten the stroke).
 10. **P2** Study tape: opaque strips that hide parts of a page and reveal on tap.
 11. **P2** Zoom window for writing small on a large page.
-12. **P3** Laser pointer (fading temporary ink) for presentations.
+12. **P3** 🧪 Laser pointer (fading temporary ink) for presentations. (Delivered inside presentation mode, #87.)
 13. **P3** Protractor and compass alongside the ruler.
 
 ### Organisation and navigation
@@ -206,7 +206,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 84. **P2** Action history panel (jump back to a point) and undo that survives reopening.
 85. **P1** 🧪 Coloured bookmarks with categories ("important", "to review").
 86. **P2** Margin comments attached to a region of the page.
-87. **P2** Presentation mode: full-screen pages, with the laser pointer (#12).
+87. **P2** 🧪 Presentation mode: full-screen pages, with the laser pointer (#12).
 88. **P3** Study timer (pomodoro) with a session log.
 89. ~~**P2** Scheduled review: "review this page in 3 days", with a list of pages due.~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
 90. **P2** Highlights digest: every highlighted region collected in a summary page.
