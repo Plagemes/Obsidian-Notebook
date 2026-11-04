@@ -3011,4 +3011,9 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"lock.map.unlock": "Sblocca la pagina {n}",
 	"lock.replaceSkipped": "{n} caselle di testo su pagine bloccate sono rimaste come erano.",
 	"lock.replaceAllLocked": "Tutte le corrispondenze sono su pagine bloccate.",
+
+	// 0.16 review
+	"si.notes.more": "{notes} e altre {n}",
+	"si.original.linked": "{file} è collegato da {notes}, quindi è rimasto dov'è. Non è stato spostato nulla.",
+	"si.trash.linked": "{file} è collegato o incorporato in {notes}. Quei collegamenti si romperebbero. Spostarlo comunque nel cestino? Annulla lo lascia dov'è.",
 };

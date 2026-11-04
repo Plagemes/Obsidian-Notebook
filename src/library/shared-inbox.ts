@@ -17,6 +17,7 @@ import { serializeChecked } from "../model/serialize";
 import { PhotoDecodeError, photoSize } from "../scan/decode";
 import type { NotebookSettings } from "../settings";
 import { isNotebookFile } from "../storage/format";
+import { backlinksOf } from "../storage/backlinks";
 import { createNotebook } from "../storage/notebooks";
 import { loadWritten, writtenSet } from "../storage/plugin-written";
 import { storeAsset } from "../view/media";
@@ -25,7 +26,7 @@ import { ConfirmModal } from "./library-modals";
 import { moveTargets } from "./move-pages";
 import { editNotebook } from "./shared-inbox-edit";
 import {
-	DISMISSED_KEY, InboxQueue, SINCE_KEY, inboxKind, isInboxCandidate, normaliseDismissed, normaliseSince, notebookNameFor, resolveInboxFolder, sinceFor,
+	DISMISSED_KEY, InboxQueue, SINCE_KEY, inboxKind, isInboxCandidate, normaliseDismissed, normaliseSince, noteNames, notebookNameFor, resolveInboxFolder, sinceFor,
 	type InboxContext, type InboxItem,
 } from "./shared-inbox-logic";
 import { buildImageDocument, prepareAppendImagePage, prepareAppendPdf, prepareImageElement, type ImagePlacement, type PageSizePt } from "./shared-inbox-plan";
@@ -352,9 +353,24 @@ export class SharedInbox implements SharedInboxPort {
 		return bytes;
 	}
 
-	/** The file now lives with the notebooks: hide it here and offer to move the original to the trash. */
+	/** "A, B and 2 more" for a message. */
+	private noteList(paths: readonly string[]): string {
+		const { names, more } = noteNames(paths);
+		const list = names.join(", ");
+		return more > 0 ? t("si.notes.more", { notes: list, n: String(more) }) : list;
+	}
+
+	/**
+	 * The file now lives with the notebooks: hide it here and offer to move the original to the trash, unless a note links to or
+	 * embeds it (the trash would break those links): then it stays and a notice says why.
+	 */
 	private afterUse(item: InboxItem, file: TFile): void {
 		this.hide(item);
+		const linked = backlinksOf(this.app, file.path);
+		if (linked.length > 0) {
+			showNotice(t("si.original.linked", { file: file.name, notes: this.noteList(linked) }), 10000);
+			return;
+		}
 		const parent = file.parent?.path && file.parent.path !== "/" ? file.parent.path : t("si.root");
 		new ConfirmModal(
 			this.app,
@@ -376,11 +392,10 @@ export class SharedInbox implements SharedInboxPort {
 	moveToTrash(item: InboxItem): void {
 		const file = this.file(item);
 		if (!file) return;
-		new ConfirmModal(
-			this.app,
-			{ title: t("si.trash.title"), body: t("si.trash.body", { file: file.name }), cta: t("si.action.trash") },
-			() => this.trashFile(file),
-		).open();
+		// A note that links to or embeds the file is named, and the dialog starts on Cancel.
+		const linked = backlinksOf(this.app, file.path);
+		const body = linked.length > 0 ? t("si.trash.linked", { file: file.name, notes: this.noteList(linked) }) : t("si.trash.body", { file: file.name });
+		new ConfirmModal(this.app, { title: t("si.trash.title"), body, cta: t("si.action.trash"), safe: linked.length > 0 }, () => this.trashFile(file)).open();
 	}
 
 	private trashFile(file: TFile): void {

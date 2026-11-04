@@ -1,6 +1,7 @@
 /** 0.16 review fixes on the shared-files inbox (C1 - C4). */
 import { describe, expect, it } from "vitest";
-import { isInboxCandidate, type InboxContext } from "../src/library/shared-inbox-logic";
+import { isInboxCandidate, noteNames, type InboxContext } from "../src/library/shared-inbox-logic";
+import { backlinksOf, linkingNotes } from "../src/storage/backlinks";
 import {
 	MAX_WRITTEN, WRITTEN_TTL_MS, WRITTEN_KEY, addWritten, isPluginPictureName, loadWritten, normaliseWritten, recordPluginWrite, writtenSet,
 } from "../src/storage/plugin-written";
@@ -58,5 +59,36 @@ describe("C1: the inbox never offers the plugin's own files", () => {
 		const broken = { loadLocalStorage: () => { throw new Error("no"); }, saveLocalStorage: () => { throw new Error("no"); } };
 		expect(loadWritten(broken, NOW)).toEqual({});
 		expect(() => recordPluginWrite(broken, ["x.pdf"], NOW)).not.toThrow();
+	});
+});
+
+describe("C2: a file that notes link to is not offered for the trash", () => {
+	const resolved = {
+		"Notes/Exam.md": { "Attachments/scan.pdf": 2, "Notes/Other.md": 1 },
+		"Notes/Other.md": { "Attachments/pic.png": 1 },
+		"Daily/2026-11-04.md": { "Attachments/scan.pdf": 1, "Attachments/zero.png": 0 },
+		"Attachments/scan.pdf": { "Attachments/scan.pdf": 1 },
+	};
+
+	it("finds the notes that link or embed a file (sorted, never the file itself, zero counts ignored)", () => {
+		expect(linkingNotes(resolved, "Attachments/scan.pdf")).toEqual(["Daily/2026-11-04.md", "Notes/Exam.md"]);
+		expect(linkingNotes(resolved, "Attachments/pic.png")).toEqual(["Notes/Other.md"]);
+		expect(linkingNotes(resolved, "Attachments/zero.png")).toEqual([]);
+		expect(linkingNotes(resolved, "Attachments/none.pdf")).toEqual([]);
+		expect(linkingNotes({}, "x")).toEqual([]);
+	});
+
+	it("reads Obsidian's link index and treats a missing one as no links", () => {
+		const app = { metadataCache: { resolvedLinks: resolved } } as unknown as Parameters<typeof backlinksOf>[0];
+		expect(backlinksOf(app, "Attachments/pic.png")).toEqual(["Notes/Other.md"]);
+		const broken = { metadataCache: {} } as unknown as Parameters<typeof backlinksOf>[0];
+		expect(backlinksOf(broken, "Attachments/pic.png")).toEqual([]);
+	});
+
+	it("lists a few note names and counts the rest", () => {
+		expect(noteNames(["A/One.md", "Two.md"])).toEqual({ names: ["One", "Two"], more: 0 });
+		const six = ["a.md", "b.md", "c.md", "d.md", "e.md", "f.md"];
+		expect(noteNames(six)).toEqual({ names: ["a", "b", "c", "d"], more: 2 });
+		expect(noteNames([])).toEqual({ names: [], more: 0 });
 	});
 });

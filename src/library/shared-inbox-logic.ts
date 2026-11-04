@@ -252,6 +252,12 @@ export function notebookNameFor(fileName: string): string {
 	return base || "Shared file";
 }
 
+/** Names of notes for a message: at most `max` file names (no folder, no `.md`), then the number left out. */
+export function noteNames(paths: readonly string[], max = 4): { names: string[]; more: number } {
+	const names = paths.slice(0, max).map((p) => baseName(p).replace(/\.md$/iu, ""));
+	return { names, more: Math.max(0, paths.length - names.length) };
+}
+
 /** "1.4 MB", "320 KB". */
 export function sizeLabel(bytes: number): string {
 	if (!(bytes > 0)) return "";

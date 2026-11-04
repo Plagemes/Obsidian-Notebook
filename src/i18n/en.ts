@@ -3009,6 +3009,11 @@ export const en = {
 	"lock.map.unlock": "Unlock page {n}",
 	"lock.replaceSkipped": "{n} text boxes on locked pages were left as they are.",
 	"lock.replaceAllLocked": "All matches are on locked pages.",
+
+	// 0.16 review
+	"si.notes.more": "{notes} and {n} more",
+	"si.original.linked": "{file} is linked from {notes}, so it was left where it is. Nothing was moved.",
+	"si.trash.linked": "{file} is linked or embedded in {notes}. Those links would break. Move it to the trash anyway? Cancel keeps it.",
 } as const;
 
 export type MessageKey = keyof typeof en;
