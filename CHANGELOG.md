@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### lecturelog
+- **Lecture log in the daily note (#221).** With the new setting *Lecture log in the daily note* on (off by default), when a lecture you wrote in ends (lecture mode left or its class over, or the notebook closed during the class's time slot) one line goes into the daily note of that day: `- 10:15–11:45 **Analysis I** — [[Analysis I#p12&id=…|pp. 12–15]] · 3 pages · 2 open questions ^nb-lec-…`. The pages run from the lecture page to the one before the next dated page; open questions are the unresolved question markers on them. The line goes under a configurable heading (*Lecture log heading*, default "## Lectures", added at the end of the note when missing). One line per notebook and class occurrence: it carries a block id the plugin added, and a session that goes on later rewrites exactly that line through `vault.process` (every other byte of the note stays). It follows the daily-note settings: a missing daily note is made only with *Create the daily note if missing*; otherwise the line waits in this device's local storage (bounded: 30 lines, 21 days) and is written once the note exists. No format change. Pure logic in `src/library/lecture-log-logic.ts`, writer in `src/library/lecture-log.ts`. Tests: `tests/lecture-log.test.ts`.
+
 ## 0.18.0 — 2026-11-05
 
 Review a page and move between notes more freely: margin comments anchored to a region of the page, an infinite page split into sheets of paper for export, a selection sent into a Markdown note, pages copied to another notebook with a link back, a QR code for a page, the notes that mention a page, annotating a PDF from Obsidian's PDF viewer, and quick tabs for the pages you keep going back to. The notebook format moves to version 16 (an older plugin opens a v16 file read-only).

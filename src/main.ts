@@ -35,6 +35,8 @@ import { NotebookView, VIEW_TYPE } from "./view/notebook-view";
 import { NotebookSettingTab } from "./view/settings-tab";
 import { registerLectureRibbon } from "./view/lecture-commands";
 import type { LectureClass } from "./timetable/lecture-mode";
+import { LectureLogService } from "./library/lecture-log";
+import type { LectureSnapshot } from "./library/lecture-log-logic";
 import { TimetableService } from "./timetable/service";
 import { initPdfSync } from "./view/pdf-sync";
 import { inboxService, registerZettel } from "./zettel";
@@ -65,6 +67,8 @@ export default class NotebookPlugin extends Plugin {
 	journal!: AdapterJournalStore;
 	/** Class timetable (wave 0.6). */
 	timetable!: TimetableService;
+	/** 0.19 (#221): one line per lecture in the daily note. */
+	private lectureLog: LectureLogService | null = null;
 	/** wave 0.7: quick navigation (364-366). */
 	recentPages!: RecentPagesService;
 	/** wave 0.10 (18): back/forward history of visited pages (view/nav-controller.ts). */
@@ -276,6 +280,15 @@ export default class NotebookPlugin extends Plugin {
 			this.timetable.start();
 		});
 
+		// 0.19 (#221): lecture log lines that waited for a daily note are written once it exists.
+		this.step("lecture log", () => {
+			const log = (this.lectureLog = new LectureLogService(this));
+			this.app.workspace.onLayoutReady(() => void log.flushPending());
+			this.registerEvent(this.app.vault.on("create", (f) => {
+				if (this.settings.lectureLog && log.waitingPaths().includes(f.path)) void log.flushPending();
+			}));
+		});
+
 		// Best effort only (not guaranteed, unreliable on mobile): views also flush on visibilitychange/pagehide.
 		this.step("quit flush", () => this.registerEvent(this.app.workspace.on("quit", () => void this.flushAll())));
 
@@ -376,6 +389,11 @@ export default class NotebookPlugin extends Plugin {
 	/** 0.14 (401): the class in progress that belongs to the notebook at `path`, for automatic lecture mode; null when none. */
 	lectureClassFor(path: string): LectureClass | null {
 		return this.timetable?.lectureClassFor(path) ?? null;
+	}
+
+	/** 0.19 (#221): a lecture the user wrote in ended; its line is written to (or updated in) the daily note when the setting is on. */
+	logLecture(file: TFile, cls: LectureClass, snap: LectureSnapshot): void {
+		if (this.settings.lectureLog) void this.lectureLog?.log(file, cls, snap);
 	}
 
 	/** wave 0.10 (O15): Obsidian's status bar item shows the page and save state of the active notebook. Desktop only: mobile has no status bar. */

@@ -32,6 +32,8 @@ import { showNotice, type NoticeHandle } from "./notice";
 
 /** How often the clock is looked at while a notebook is open, ms. Cheap: no rendering, no file access. */
 export const LECTURE_TICK_MS = 30_000;
+/** Writing up to this long after a class's end still belongs to it for the lecture log (the user finishes the last line). */
+const LECTURE_LOG_GRACE_MS = 10 * 60_000;
 
 /** What the controller needs of the notebook view and the plugin. */
 export interface LectureModeHost {
@@ -54,6 +56,8 @@ export interface LectureModeHost {
 	changed(): void;
 	/** The device's local storage (what was turned down or paged today); without it nothing is remembered across openings. */
 	memory?: { load(): unknown; save(value: unknown): void };
+	/** 0.19 (#221): a lecture the user wrote in ended or was left; the host writes its line to the daily note. Optional. */
+	log?(cls: LectureClass, now: Date): void;
 	now?(): Date;
 }
 
@@ -66,6 +70,8 @@ export class LectureModeController {
 	/** Occurrences whose lecture page was added (or found), same scope. */
 	private readonly paged = new Set<string>();
 	private path: string | null = null;
+	/** When the user last wrote in this notebook in this view (epoch ms): the lecture log only follows lectures they wrote in. */
+	private wroteAt: number | null = null;
 	private banner: HTMLElement | null = null;
 	private chip: HTMLElement | null = null;
 	private timer: number | null = null;
@@ -103,6 +109,16 @@ export class LectureModeController {
 		this.evaluate();
 	}
 
+	/**
+	 * The notebook is about to close (its document is still there): a lecture the user wrote in, still on or in its time slot,
+	 * is written to the lecture log (0.19, #221).
+	 */
+	closing(): void {
+		const now = this.now();
+		const cls = this.activeClass ?? (this.path && this.wroteAt !== null ? this.host.classFor(this.path, now) : null);
+		if (cls) this.logLecture(cls, now);
+	}
+
 	/** The notebook was closed or unloaded: nothing of its lecture state survives. */
 	closed(): void {
 		this.reset();
@@ -138,6 +154,7 @@ export class LectureModeController {
 	 * first user action: it adds today's lecture page, once (not when it was added before, even if it was deleted since).
 	 */
 	wrote(): void {
+		this.wroteAt = this.now().getTime();
 		const cls = this.activeClass;
 		if (!this.active?.key || !cls || this.paged.has(cls.key)) return;
 		this.ensurePage(cls, this.now(), false);
@@ -200,6 +217,18 @@ export class LectureModeController {
 		this.host.parent().removeClass("nb-lecture-mode");
 		this.host.changed();
 		if (ended && was && now.getTime() >= was.endsAt) showNotice(t("lectureMode.over", { course: was.course }));
+		if (was) this.logLecture(was, now);
+	}
+
+	/** Hands a lecture the user wrote in during its slot to the lecture log; the view builds the line's facts from the open document. */
+	private logLecture(cls: LectureClass, now: Date): void {
+		const at = this.wroteAt;
+		if (at === null || at < cls.startsAt || at > cls.endsAt + LECTURE_LOG_GRACE_MS) return;
+		try {
+			this.host.log?.(cls, now);
+		} catch (e) {
+			console.error("[notebook] lecture log", e);
+		}
 	}
 
 	/**
@@ -277,6 +306,7 @@ export class LectureModeController {
 		this.asking = null;
 		this.declined.clear();
 		this.paged.clear();
+		this.wroteAt = null;
 		if (wasOn) this.host.changed();
 	}
 

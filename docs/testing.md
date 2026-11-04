@@ -1234,6 +1234,29 @@ Generated outline (roadmap 407). Reference screenshots after `npm run harness:ch
 612. **Cost.** In a notebook of 100+ pages, open the outline for the first time (note how long it takes), then close and reopen it: the second time is immediate. Writing with the outline open does not stutter.
 613. **No change to the file.** Open a notebook, view the outline, close it without editing: the file is not rewritten (no new snapshot, no sync conflict).
 
+### 0.19 — lecturelog: lecture log in the daily note (steps 1560-1579)
+
+Lecture log (roadmap #221). Needs Daily notes (or Periodic Notes) on, and a timetable class running now that belongs to a notebook (set the class a few minutes around the current time).
+
+1560. **Off by default.** Settings, Integrations: *Lecture log in the daily note* is off; *Lecture log heading* appears only when it is on. With it off, ending a lecture writes nothing to the daily note.
+1561. **First line.** Turn it on, enter lecture mode in the class's notebook, write a few lines, leave lecture mode (End). Today's daily note ends with `## Lectures` and one line: time slot, bold course, a link `pp. a–b`, the page count and (only if there are any) the open questions.
+1562. **Link.** Tap the link in the daily note (reading view): the notebook opens at the first lecture page. Reorder pages: the link still opens the same page (it carries the page id).
+1563. **Open questions.** Add two question markers on the lecture pages, resolve one, end the lecture again: the same line (not a second one) now says "1 open question".
+1564. **Session goes on.** Re-enter lecture mode within the same class, add a page, end: still one line, now with the new range and count. The rest of the note (text before and after, other headings) is unchanged.
+1565. **Closing the notebook.** Write during the class without lecture mode on, close the notebook before the class ends: the line is written or updated.
+1566. **Custom heading.** Change the heading to `Classes`: the next line goes under a `## Classes` heading (created at the end if missing); an existing heading of that text collects the line at the end of its section, before the next heading of the same level.
+1567. **Edited line.** Move the line elsewhere in the note, or edit its text but keep `^nb-lec-…`: the next update rewrites it where it stands.
+1568. **Note missing, create off.** Delete today's daily note and turn *Create the daily note if missing* off: ending a lecture creates nothing. Create the note (or open today's note with the Daily notes command): within a moment the line appears in it. Restart Obsidian before creating the note: the line is still written afterwards.
+1569. **Note missing, create on.** With *Create the daily note if missing* on, a missing note is made (with your Daily notes template) and holds the line.
+1570. **Nothing written without writing.** Enter lecture mode and end it without writing anything: no line. A class you did not write in leaves no line.
+1571. **Two classes.** Two classes in the same notebook on one day each get their own line.
+1572. **Android.** All of the above on the tablet; no notice or delay while closing the notebook.
+1573. **Look.** The two settings in light, dark, *Follow Obsidian theme*, phone width, Italian.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Lecture log: one line per lecture in the daily note under a configurable heading, rewritten in place by its block id, pending on this device while the note is missing and may not be made | yes | yes (`tests/lecture-log.test.ts`: snapshot, line, merge, pending list, writer on an in-memory vault) | | Never run against the real Daily notes / Periodic Notes plugins; the leave-on-close path depends on Obsidian's view unload order | Run on a real vault and on Android |
+
 ### 0.18 — mentions: notes that link to a page (steps 1400-1419)
 
 Mentions (roadmap O7). Make a note with `[[Physics.notebook#p3]]` (use *Copy link to page* so the link carries the page id), another with `![[Physics.notebook#p3]]`, one with a plain `[[Physics.notebook]]`.

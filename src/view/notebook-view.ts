@@ -118,6 +118,7 @@ import type { EditContext } from "./edit-context";
 import { runNewLecture } from "./lecture";
 import { pickSlideRef } from "./lecture-logic";
 import { LectureModeController } from "./lecture-mode";
+import { lectureSnapshot, type LectureSnapshot } from "../library/lecture-log-logic";
 import { LECTURE_MEMORY_KEY } from "../timetable/lecture-memory";
 import { findLecturePage } from "../timetable/lecture-open";
 import type { LectureClass } from "../timetable/lecture-mode";
@@ -239,6 +240,8 @@ export interface NotebookHost {
 	classNow?(): string | null;
 	/** 0.14 (401): the class in progress that belongs to this notebook (automatic lecture mode). Optional: absent in tests and the harness. */
 	lectureClassFor?(path: string): LectureClass | null;
+	/** 0.19 (#221): a lecture the user wrote in ended: its line goes into the daily note (library/lecture-log.ts). Optional: absent in tests and the harness. */
+	logLecture?(file: TFile, cls: LectureClass, snap: LectureSnapshot): void;
 	/** ui redesign: runs a plugin-level action of the registry (notebook menu). Optional. */
 	runGlobal?(id: string): void;
 	/** wave 0.7: sync safety (presence files, sync check). Optional: absent in tests and the harness. */
@@ -736,6 +739,7 @@ export class NotebookView extends FileView {
 				if (i >= 0) this.scrollToPage(i);
 			},
 			changed: () => this.refreshUi(),
+			log: (cls, now) => this.logLecture(cls, now),
 			memory: { load: (): unknown => this.app.loadLocalStorage(LECTURE_MEMORY_KEY), save: (v) => this.app.saveLocalStorage(LECTURE_MEMORY_KEY, v) },
 		});
 		this.mountExcerpts();
@@ -1283,7 +1287,17 @@ export class NotebookView extends FileView {
 		}
 	}
 
+	/** 0.19 (#221): the facts of the lecture in the open document, handed to the lecture log (a no-op without the lecture page or the log). */
+	private logLecture(cls: LectureClass, _now: Date): void {
+		const file = this.file;
+		const doc = this.session?.doc;
+		if (!file || !doc || !this.host.logLecture) return;
+		const snap = lectureSnapshot(doc.pages, cls.course, new Date(cls.startsAt));
+		if (snap) this.host.logLecture(file, cls, snap);
+	}
+
 	async onUnloadFile(file: TFile): Promise<void> {
+		this.lectureMode?.closing();
 		await this.closeSession();
 		this.activePenSetId = null;
 		// wave 0.10 (51): read-only mode belongs to the notebook being read; the next one opens editable.

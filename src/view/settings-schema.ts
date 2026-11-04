@@ -378,6 +378,9 @@ const INTEGRATION: SettingSpec[] = [
 	{ id: "dailyNotebookPath", section: "integration", order: 30, name: "settings.dailyNotebook", desc: "settings.dailyNotebook.desc", control: { type: "text", placeholder: defaultDailyPath(DEFAULT_SETTINGS.folder) }, keywords: "daily journal today diario oggi" },
 	{ id: "dailyLink", section: "integration", order: 31, name: "settings.dailyLink", desc: "settings.dailyLink.desc", control: { type: "toggle" }, keywords: "daily notes periodic notes journal diario" },
 	{ id: "dailyCreateNote", section: "integration", order: 32, name: "settings.dailyCreateNote", desc: "settings.dailyCreateNote.desc", control: { type: "toggle" }, parent: "dailyLink", visible: (s) => s.dailyLink },
+	// 0.19 (#221): lecture log in the daily note.
+	{ id: "lectureLog", section: "integration", order: 35, name: "settings.lectureLog", desc: "settings.lectureLog.desc", control: { type: "toggle" }, keywords: "lecture log daily note timetable class registro lezione diario" },
+	{ id: "lectureLogHeading", section: "integration", order: 36, name: "settings.lectureLogHeading", desc: "settings.lectureLogHeading.desc", control: { type: "text", placeholder: DEFAULT_SETTINGS.lectureLogHeading }, parent: "lectureLog", visible: (s) => s.lectureLog },
 	// 0.17 (#23): the optional PDF copy next to each notebook; a notebook can override the switch from its menu.
 	{ id: "pdfCopy", section: "integration", order: 40, name: "settings.pdfCopy", desc: "settings.pdfCopy.desc", control: { type: "toggle" }, keywords: "pdf copy share notebooklm export automatic copia condividere" },
 	{

@@ -3450,6 +3450,17 @@ export const en = {
 	// 0.18 review fixes (I)
 	"annotatePdf.tooLarge": "This PDF is {size} MB, over the {max} MB limit for annotating from here. Import it from the library instead.",
 	"annotatePdf.scanning": "Looking through your notebooks for this PDF… {done} of {total}",
+	// 0.19 lecturelog
+	"settings.lectureLog": "Lecture log in the daily note",
+	"settings.lectureLog.desc": "When a lecture ends, add one line to the daily note: time, course, pages, open questions.",
+	"settings.lectureLogHeading": "Lecture log heading",
+	"settings.lectureLogHeading.desc": "The heading the lines go under; added at the end of the note if missing.",
+	"lectureLog.page": "p. {n}",
+	"lectureLog.pages": "pp. {from}–{to}",
+	"lectureLog.count.page": "1 page",
+	"lectureLog.count.pages": "{n} pages",
+	"lectureLog.count.question": "1 open question",
+	"lectureLog.count.questions": "{n} open questions",
 } as const;
 
 export type MessageKey = keyof typeof en;

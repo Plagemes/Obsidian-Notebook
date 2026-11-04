@@ -3452,4 +3452,15 @@ export const it: Partial<Record<MessageKey, string>> = {
 	// 0.18 review fixes (I)
 	"annotatePdf.tooLarge": "Questo PDF pesa {size} MB, oltre il limite di {max} MB per annotare da qui. Importalo dalla libreria.",
 	"annotatePdf.scanning": "Cerco questo PDF nei tuoi quaderni… {done} di {total}",
+	// 0.19 lecturelog
+	"settings.lectureLog": "Registro delle lezioni nella nota giornaliera",
+	"settings.lectureLog.desc": "A fine lezione aggiunge una riga alla nota giornaliera: orario, corso, pagine.",
+	"settings.lectureLogHeading": "Titolo del registro lezioni",
+	"settings.lectureLogHeading.desc": "Il titolo sotto cui vanno le righe. Se manca, viene aggiunto in fondo alla nota.",
+	"lectureLog.page": "p. {n}",
+	"lectureLog.pages": "pp. {from}–{to}",
+	"lectureLog.count.page": "1 pagina",
+	"lectureLog.count.pages": "{n} pagine",
+	"lectureLog.count.question": "1 domanda aperta",
+	"lectureLog.count.questions": "{n} domande aperte",
 };
