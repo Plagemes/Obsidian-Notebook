@@ -3,7 +3,7 @@
  * 'obsidian'. The edits are `Prepare` functions of the plugin API (integration/api-plan.ts), so they run on an open
  * notebook as one undo step or on a closed one with the same checks (parse, apply, re-validate, write, read back).
  */
-import { createDocument, createPage } from "../model/document";
+import { createPage } from "../model/document";
 import { AddAsset, AddElement, InsertPages } from "../model/history";
 import { createPdfPages } from "../model/pages";
 import { PAPER_SPACING, type Asset, type NotebookDocument, type Page } from "../model/types";
