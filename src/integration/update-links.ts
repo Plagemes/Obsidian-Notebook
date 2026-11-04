@@ -111,7 +111,7 @@ class VaultNotebooks implements NotebookLookup {
 /** Plans the update for every note that could hold a page link. Reads notes, writes nothing. */
 export async function planVaultLinks(app: App, settings: NotebookSettings): Promise<LinkPlan> {
 	const moves = new PageMoveStore(vaultDeviceFileAdapter(app), () => settings.folder, sidecarDeviceId(app));
-	const lookup = new VaultNotebooks(app, (path) => isHiddenNotebookPath(path, settings.folder, settings.templatesFolder), moves);
+	const lookup = new VaultNotebooks(app, (path) => isHiddenNotebookPath(path, settings.folder, settings.templatesFolder, settings.notebookTemplatesFolder), moves);
 	const all: LinkPlan = { changes: [], skipped: [] };
 	for (const note of app.vault.getMarkdownFiles()) {
 		const cache = app.metadataCache.getFileCache(note);

@@ -125,8 +125,8 @@ describe("retention", () => {
 	});
 
 	it("reads the settings and ignores bad values", () => {
-		expect(readTrashSettings({})).toEqual({ trashRetentionDays: 0, templatesFolder: "" });
-		expect(readTrashSettings({ trashRetentionDays: 14, templatesFolder: " T " })).toEqual({ trashRetentionDays: 14, templatesFolder: "T" });
+		expect(readTrashSettings({})).toEqual({ trashRetentionDays: 0, templatesFolder: "", notebookTemplatesFolder: "" });
+		expect(readTrashSettings({ trashRetentionDays: 14, templatesFolder: " T " })).toEqual({ trashRetentionDays: 14, templatesFolder: "T", notebookTemplatesFolder: "" });
 		expect(readTrashSettings({ trashRetentionDays: -1 }).trashRetentionDays).toBe(0);
 		expect(readTrashSettings({ trashRetentionDays: 1.5 }).trashRetentionDays).toBe(0);
 		expect(readTrashSettings({ trashRetentionDays: 9999 }).trashRetentionDays).toBe(0);

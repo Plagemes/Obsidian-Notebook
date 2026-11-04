@@ -93,7 +93,7 @@ export const GROUPS: readonly GroupSpec[] = [
 ];
 
 /** Runs of the action rows; the tab maps each id to what it does. */
-export type SettingActionId = "hints-reset" | "toolbar-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom";
+export type SettingActionId = "hints-reset" | "toolbar-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom" | "notebook-templates-manage";
 /** Rows drawn by the tab itself (no stored setting of their own). */
 export type SettingCustomId = "device-name" | "pen-key" | "device-info";
 
@@ -274,6 +274,9 @@ const LIBRARY: SettingSpec[] = [
 	},
 	{ id: "looseSheetPath", section: "library", group: ADVANCED, order: 10, name: "settings.looseSheet", desc: "settings.looseSheet.desc", control: { type: "text", placeholder: defaultLooseSheetPath(DEFAULT_SETTINGS.folder) } },
 	{ id: "templatesFolder", section: "library", group: ADVANCED, order: 20, name: "settings.templatesFolder", desc: "settings.templatesFolder.desc", control: { type: "folder", placeholder: "_templates" } },
+	// 0.15 templates (roadmap #19)
+	{ id: "notebookTemplatesFolder", section: "library", group: ADVANCED, order: 21, name: "settings.notebookTemplatesFolder", desc: "settings.notebookTemplatesFolder.desc", control: { type: "folder", placeholder: "_templates/notebooks" } },
+	{ id: "notebookTemplates", section: "library", group: ADVANCED, order: 22, name: "settings.notebookTemplates", desc: "settings.notebookTemplates.desc", control: { type: "action", run: "notebook-templates-manage", button: "settings.notebookTemplates.button" }, keywords: "template notebooks planner modelli quaderni" },
 ];
 
 const SYNC: SettingSpec[] = [

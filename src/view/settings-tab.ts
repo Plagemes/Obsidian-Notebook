@@ -3,6 +3,7 @@ import { setUiLanguage, t } from "../i18n";
 import { DEFAULT_SETTINGS, readSettings, type NotebookSettings } from "../settings";
 import type { TimetableService } from "../timetable/service";
 import { effectivePenHold } from "../ink/pen-button";
+import { openNotebookTemplateManager } from "./notebook-templates";
 import { PenTestModal, penSignalInfo } from "./pen-test-modal";
 import { renderPenKeySetting } from "./pen-button-settings";
 import { companionService } from "../integration/companion";
@@ -190,6 +191,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 			case "timetable-edit": void this.host.timetable?.edit(); break;
 			case "gesture-sheet": new GestureCheatSheet(this.penGestureHost()).open(); break;
 			case "gesture-custom": new CustomGesturesModal(this.penGestureHost()).open(); break;
+			case "notebook-templates-manage": openNotebookTemplateManager(this.app, () => this.host.settings); break;
 		}
 	}
 

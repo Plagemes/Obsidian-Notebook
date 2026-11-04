@@ -104,7 +104,7 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 16. 🧪 **P1** Global search in the library: titles, tags, text boxes (OCR later).
 17. **P2** Links on the page: a region or element opens another page, notebook, Obsidian note or URL.
 18. **P2** 🧪 Back/forward history of visited pages.
-19. **P2** Notebook templates: create a notebook from a saved notebook (planner, lab book).
+19. **P2** 🧪 Notebook templates: create a notebook from a saved notebook (planner, lab book).
 20. **P2** Sticky notes: movable coloured notes on the page.
 21. **P3** Paper colours (cream, dark, chalkboard) with ink adapted for contrast.
 

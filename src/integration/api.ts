@@ -141,7 +141,7 @@ class NotebookApiImpl implements NotebookApi {
 
 	/** Notebooks the library does not show: the plugin trash, the templates folder and the other reserved folders. */
 	private hidden(path: string): boolean {
-		return isHiddenNotebookPath(path, this.settings.folder, this.settings.templatesFolder);
+		return isHiddenNotebookPath(path, this.settings.folder, this.settings.templatesFolder, this.settings.notebookTemplatesFolder);
 	}
 
 	/** The document as the open view has it, else as saved. */

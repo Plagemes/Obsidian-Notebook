@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### templates
+- **Notebook templates (#19).** *Save as notebook template…* (library card menu, notebook More sheet and command) stores a copy of a notebook (new document, page, stroke and element ids; the assets and slide links its pages use; its cover) in the notebook templates folder (*Settings > Library > Advanced*, default `<templates folder>/notebooks`, i.e. `_templates/notebooks`). Templates are not listed in the library, its search or statistics, nor offered as page templates. The creation dialog has *From a notebook template…*: cards with the cover art, a choice *Pages only* (paper, size and background, no ink) or *With content*, and `{{date}}` (also `{{time}}`, `{{year}}`, `{{month}}`, `{{day}}`) filled in title, description and text boxes. *Settings > Library > Advanced > Notebook templates* renames and deletes templates (deleting asks first and moves the file to Obsidian’s trash). No format change. Tests: `tests/notebook-template.test.ts`. Harness: `dev/harness/templates-check.ts` (`doc=templates`). Custom folder outside the notebooks folder: hidden from the library, but other notebook lists (quick switcher, timetable) may still show it.
+
+
 ## 0.14.0 — 2026-11-04
 
 The notebook adapts to the device and to the lecture: the layout follows phone, tablet and desktop in either orientation, the toolbar adapts to the page and to what you use, lecture mode starts from the timetable, and notes remember the slide they were written beside. **The document format is now v12** (optional slide links): a 0.13 device opens a v12 notebook read-only (newer version) and never overwrites it; a 0.13 device that saves the timetable drops the lecturer field. **Not verified on the device**: unit tests and the browser harness only.
