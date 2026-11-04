@@ -3263,4 +3263,15 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"transfer.copiedNotMovedShared": "Le pagine sono state copiate in {name}, ma toglierle da {source} non è finito ({error}) e la copia ha tenuto gli id di pagina degli originali.",
 	"transfer.copiedMaybeMoved": "Le pagine sono state copiate in {name}, ma toglierle da {source} si è interrotto a metà: {error}. Controlla i due quaderni.",
 	"task.exists": "Questa attività è già in {path}. Non è stato aggiunto nulla.",
+
+	// 0.18 mentions
+	"mentions.menu": "Menzioni…",
+	"command.mentions": "Menzioni: note che collegano questa pagina…",
+	"mentions.title": "Menzioni",
+	"mentions.page": "Collegamenti alla pagina {n}",
+	"mentions.page.none": "Nessuna nota collega questa pagina.",
+	"mentions.notebook": "Collegamenti al quaderno",
+	"mentions.none": "Nessuna nota collega ancora questo quaderno. Un collegamento come [[Quaderno#p3]] (Copia collegamento alla pagina) comparirà qui.",
+	"mentions.more": "E altre {n}.",
+	"mentions.badge.aria": "{n} note collegano questa pagina. Tocca per elencarle.",
 };

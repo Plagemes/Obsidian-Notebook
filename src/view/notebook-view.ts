@@ -74,6 +74,7 @@ import { backupFolder, readSettings, type NotebookSettings } from "../settings";
 import { defaultMarkdownFolder, exportMarkdown, siblingFolder } from "./export-markdown";
 import { MakeTaskModal, runMakeTask } from "./selection-task";
 import { taskCropRect } from "../model/selection-task";
+import { Mentions } from "./mentions";
 import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./highlight-digest";
 import { canPrint } from "./print";
 import type { ExportFormat } from "../ink/export-layers";
@@ -643,6 +644,13 @@ export class NotebookView extends FileView {
 			if (page) this.setPageLocked(page, false);
 		});
 		this.lockBadge = badge;
+		// 0.18 mentions (O7): a count of the notes that link to the page in view; a tap lists them.
+		this.mentions = new Mentions({
+			app: this.app, body: this.body, file: () => this.file, pages: () => this.shownDoc()?.pages ?? [],
+			currentPageId: () => this.shownDoc()?.pages[this.currentPageIndex()]?.id ?? null,
+			currentPageNumber: () => (this.shownDoc() ? this.currentPageIndex() + 1 : 0),
+			register: (ref) => this.registerEvent(ref),
+		});
 		this.textEditor = new TextEditor(this.stage);
 		this.math = new MathTools(this.mathHost());
 		this.sticky = new StickyTools(this.stickyHost());
@@ -902,6 +910,8 @@ export class NotebookView extends FileView {
 		this.clearDwell();
 		this.penGestures?.destroy();
 		this.penGestures = null;
+		this.mentions?.destroy();
+		this.mentions = null;
 		for (const timer of [this.navTimer, this.thumbTimer, this.snapFlashTimer, this.heavyTimer]) if (timer !== null) window.clearTimeout(timer);
 		this.navTimer = this.thumbTimer = this.snapFlashTimer = this.heavyTimer = null;
 		this.pens?.destroy();
@@ -1836,6 +1846,11 @@ export class NotebookView extends FileView {
 		}, request)).open();
 	}
 
+	/** 0.18 (O7): the sheet of notes that link to the page in view. */
+	openMentions(): void {
+		this.mentions?.open();
+	}
+
 	/** 0.16 (#90): the Highlights digest dialog (grouping, picture quality); the note is written next to the notebook. */
 	openHighlightsDigest(): void {
 		const doc = this.session?.doc;
@@ -2528,6 +2543,7 @@ export class NotebookView extends FileView {
 	/** The last time the "Page locked" notice was shown (it lasts 5 s: one at a time). */
 	private lockNoticeAt = 0;
 	private lockBadge: HTMLButtonElement | null = null;
+	private mentions: Mentions | null = null;
 
 	/** Locks or unlocks a page of this document (one undo step). False when it could not be done. */
 	setPageLocked(page: Page, value: boolean): boolean {
@@ -3381,6 +3397,7 @@ export class NotebookView extends FileView {
 		const lockedPage = n ? this.shownDoc()?.pages[current]?.locked === true : false;
 		this.toolbar.setPage(n ? current + 1 : 0, n, lockedPage);
 		this.syncLockBadge(lockedPage);
+		this.mentions?.sync();
 		this.notifyStatus();
 		if (n) this.practiceHooks?.page(current);
 		if (n && this.file) this.pageClock.note(this.file.path, current, new Date());

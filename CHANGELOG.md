@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### mentions
+- **Mentions (O7).** *Mentions* (page sheet, notebook menu, command palette) lists the notes that link to the page in view, and in a second group the notes that link to the notebook without a page (or to a page that no longer exists). Each row shows the note name, its folder and one line of context around the link; a tap opens the note at that line in a new tab. A small count badge at the top left of the page area (a button that opens the same sheet) shows how many links name the page in view. Links are found by page id first (`#p3&id=...`), then by number (`#p3`), with the same parser as the hover preview; embeds count too. The list is read from Obsidian's link index (`metadataCache.resolvedLinks` and each note's links and embeds) and refreshed, debounced, when the index changes; a note's text is read only to show the context line (cached read, notes over 1 MB skipped, 60 rows per group). Read-only: it never writes, no change to the notebook format. Pure logic in `src/view/mentions-logic.ts` (tests: `tests/mentions-logic.test.ts`), glue and sheet in `src/view/mentions.ts`. Harness: `dev/harness/mentions-check.ts` (`doc=mentions`).
+
 ## 0.17.0 — 2026-11-04
 
 Write on and around the page more freely, and keep a large library in order: sticky notes you can type or write on, magnetic snap with alignment guides, merge, split and extract notebooks, a minimap for big pages, a hover preview of page links, an optional PDF copy next to each notebook, saved collections in the library, and a task made from a selection. The notebook format moves to version 15 (an older plugin opens a v15 file read-only).
