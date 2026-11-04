@@ -8,7 +8,7 @@ import { cleanCommentAuthor, cleanCommentText, clampRegion, normalizeSketch, rea
 import { createId } from "./document";
 import type { Command } from "./history";
 import type { CommentRegion, CommentReply, CommentSketch, NotebookDocument, Page, PageComment, PageCommentNote } from "./types";
-import { COMMENTS_MAX, COMMENT_MIN_SIDE } from "./types";
+import { COMMENTS_MAX, COMMENT_ID_MAX, COMMENT_MIN_SIDE, COMMENT_TEXT_MAX } from "./types";
 
 export { cleanCommentAuthor, cleanCommentText };
 
@@ -252,16 +252,24 @@ export function deleteCommentCommand(page: Page, id: string): Command | null {
  * The comments of two copies of one page, joined (merge of a conflicted copy, restoring a page version). Items are matched by
  * id: an item only one side has is kept; an item both have comes from the side that touched it last (`edited`, else `created`;
  * the main side on a tie). So two devices adding comments or replies both keep theirs, and for one comment edited on both the
- * later edit wins. Nothing is deleted here: a comment one device deleted comes back from a copy that still has it.
+ * later edit wins and, when both edited the text (or sketch), the losing version is kept beside it as a marked item (`conflictOf`, with a
+ * stable id so merging again adds nothing; `options.conflicts: false` drops it, as a deliberate restore does). Nothing is deleted here: a
+ * comment one device deleted comes back from a copy that still has it.
  * `added` counts the items the main side did not have. Pure: the result is a new list, or `main` itself when nothing changes.
  */
-export function mergeComments(main: readonly PageComment[] | undefined, other: readonly PageComment[] | undefined): { list: readonly PageComment[] | undefined; added: number; replaced: number } {
-	if (!other || other.length === 0) return { list: main, added: 0, replaced: 0 };
+export function mergeComments(
+	main: readonly PageComment[] | undefined,
+	other: readonly PageComment[] | undefined,
+	options: { conflicts?: boolean } = {},
+): { list: readonly PageComment[] | undefined; added: number; replaced: number; conflicts: number } {
+	if (!other || other.length === 0) return { list: main, added: 0, replaced: 0, conflicts: 0 };
+	const keepConflicts = options.conflicts !== false;
 	const mine = main ?? [];
 	const at = new Map(mine.map((c, i) => [c.id, i]));
 	const out = [...mine];
 	let added = 0;
 	let replaced = 0;
+	let conflicts = 0;
 	for (const c of other) {
 		const i = at.get(c.id);
 		if (i === undefined) {
@@ -269,12 +277,67 @@ export function mergeComments(main: readonly PageComment[] | undefined, other: r
 			at.set(c.id, out.length);
 			out.push(c);
 			added++;
-		} else if (touched(c) > touched(out[i]!) && JSON.stringify(c) !== JSON.stringify(out[i])) {
+			continue;
+		}
+		const m = out[i]!;
+		if (JSON.stringify(c) === JSON.stringify(m)) continue;
+		const copyWins = touched(c) > touched(m);
+		if (copyWins) {
 			out[i] = c;
 			replaced++;
 		}
+		// Both edited the text (or sketch) differently: the later edit stays the comment, the other is kept beside it, marked.
+		if (keepConflicts && isEditConflict(m, c)) {
+			const lost = conflictOf(copyWins ? m : c);
+			if (!at.has(lost.id) && out.length < COMMENTS_MAX) {
+				at.set(lost.id, out.length);
+				out.push(lost);
+				conflicts++;
+			}
+		}
 	}
-	return added + replaced === 0 ? { list: main, added, replaced } : { list: out, added, replaced };
+	return added + replaced + conflicts === 0 ? { list: main, added, replaced, conflicts } : { list: out, added, replaced, conflicts };
+}
+
+/** The mark that opens the text of a comment (or reply) kept from an edit that lost a merge: no word, so it reads in any language. */
+export const CONFLICT_MARK = "⚠ ";
+
+const CONFLICT_ID_SEP = "~";
+
+/** Whether two versions of one comment (same id) differ in what was written: text, or the sketch of a comment. */
+function contentDiffers(a: PageComment, b: PageComment): boolean {
+	if (a.text !== b.text) return true;
+	return isNote(a) && isNote(b) && JSON.stringify(a.sketch ?? null) !== JSON.stringify(b.sketch ?? null);
+}
+
+/**
+ * Two versions of one comment (same id) that differ in what was written, and that were both edited (or both never edited): a real
+ * conflict. When only one side has an edit, the other is the text it started from (a stale copy), and the edited one is just newer.
+ */
+export function isEditConflict(a: PageComment, b: PageComment): boolean {
+	return (a.edited !== undefined) === (b.edited !== undefined) && contentDiffers(a, b);
+}
+
+/** The id the losing version of `c` is kept under: the same on every device, so merging the same copy again adds nothing. */
+export function conflictId(c: PageComment): string {
+	const suffix = `${CONFLICT_ID_SEP}${touched(c).toString(36)}`;
+	return c.id.slice(0, Math.max(1, COMMENT_ID_MAX - suffix.length)) + suffix;
+}
+
+/** The losing version of `c`, kept as an item of its own (a comment with the same region and sketch, or a reply in the same thread), marked. */
+function conflictOf(c: PageComment): PageComment {
+	const marked = c.text.startsWith(CONFLICT_MARK.trim()) ? c.text : (CONFLICT_MARK + c.text).trimEnd();
+	const text = marked.length <= COMMENT_TEXT_MAX ? marked : c.text;
+	if (isReply(c)) return freezeComment({ id: conflictId(c), parent: c.parent, text, author: c.author, created: c.created });
+	return freezeComment({ id: conflictId(c), region: c.region, text, ...(c.sketch ? { sketch: c.sketch } : {}), author: c.author, created: c.created });
+}
+
+/** Whether `result` holds the version `c` of a comment: as it is, as a newer version of it, or as a marked copy kept beside the winner. */
+export function commentCovered(result: readonly PageComment[], c: PageComment): boolean {
+	const r = result.find((x) => x.id === c.id);
+	if (!r || touched(r) < touched(c)) return false;
+	if (!isEditConflict(r, c)) return true;
+	return result.some((x) => x.id === conflictId(c));
 }
 
 /**

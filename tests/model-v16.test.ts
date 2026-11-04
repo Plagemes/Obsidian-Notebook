@@ -18,6 +18,8 @@ import { SetPageLocked } from "../src/model/page-lock";
 import { planPageRestore } from "../src/model/page-restore";
 import { addEntry, emptyPageTrash, makeEntry, planPageTrashRestore } from "../src/model/page-trash";
 import { duplicatePage } from "../src/model/pages";
+import { buildPracticePage } from "../src/model/practice";
+import { documentFromTemplate, pageFromTemplate, templateDocument } from "../src/model/templates";
 import { planTransfer } from "../src/model/notebook-transfer";
 import { repairNotebookText } from "../src/model/repair";
 import { freezeStroke, parse, parseStaged, serialize, serializeChecked, StagedParse, STAGED_MIN_CHARS, validate } from "../src/model/serialize";
@@ -560,7 +562,9 @@ describe("comments: merging a conflicted copy", () => {
 		expect(mergeComments([x, y], [x]).list).toEqual([x, y]);
 		expect(mergeComments([x], undefined).list).toEqual([x]);
 		const tie = { ...x, text: "other" };
-		expect(mergeComments([x], [tie]).list).toEqual([x]);
+		// the main side stays the comment on a tie; the other text is kept beside it, marked
+		expect(mergeComments([x], [tie]).list).toEqual([x, expect.objectContaining({ text: "⚠ other" })]);
+		expect(mergeComments([x], [tie], { conflicts: false }).list).toEqual([x]);
 		expect(mergeComments(undefined, [x]).added).toBe(1);
 	});
 
@@ -569,5 +573,146 @@ describe("comments: merging a conflicted copy", () => {
 		const many = Array.from({ length: 1000 }, (_, i) => createComment(page, { region: { x: 1, y: 1, width: 40, height: 40 }, text: `n${i}`, author: "a", now: 1000 + i })!);
 		const extra = createComment(page, { region: { x: 1, y: 1, width: 40, height: 40 }, text: "one more", author: "a", now: 99_999 })!;
 		expect(mergeComments(many, [extra]).list).toHaveLength(1000);
+	});
+});
+
+describe("comments: edits that lose a merge are kept, templates and practice carry no threads, restore and merge frames", () => {
+	function twoDevices() {
+		const base = commentedDoc();
+		return { a: parsed(serialize(base)).doc, b: parsed(serialize(base)).doc };
+	}
+	const firstOf = (doc: NotebookDocument) => notesOf(doc.pages[0]!).find((n) => n.region.x === 20 && n.region.y === 40)!;
+	const editNote = (doc: NotebookDocument, text: string, at: number) => {
+		const first = firstOf(doc);
+		doc.pages[0]!.comments = doc.pages[0]!.comments!.map((c) => (c.id === first.id ? editedComment(first, { text }, at)! : c));
+	};
+
+	it("the same comment edited on both devices: the later text stays, the other is kept as a marked comment, counted, covered, and not added twice", () => {
+		const { a, b } = twoDevices();
+		editNote(a, "A edit", T0 + 80_000);
+		editNote(b, "B edit (later)", T0 + 90_000);
+		const a2 = parsed(serialize(a)).doc;
+		const b2 = parsed(serialize(b)).doc;
+		const plan = planMerge(a, b);
+		expect(plan.summary.commentsAdded).toBe(2); // the later edit taken + the losing one kept
+		plan.command!.apply(a);
+		const notes = notesOf(a.pages[0]!);
+		const first = notes.find((n) => n.id === firstOf(b).id)!;
+		expect(first.text).toBe("B edit (later)");
+		const lost = notes.find((n) => n.text.endsWith("A edit"))!;
+		expect(lost.text.startsWith("⚠")).toBe(true);
+		expect(lost.region).toEqual(first.region);
+		expect(lost.author).toBe(first.author);
+		expect(lost.resolved).toBeUndefined();
+		expect(mergeCovers(a, b2)).toBe(true);
+		expect(mergeCovers(a, a2)).toBe(true);
+		// the same copy again: nothing new
+		expect(planMerge(a, b2).command).toBeNull();
+		expect(planMerge(a, a2).command).toBeNull();
+		// the other way round: the winner is already there, the losing edit is kept, and a merge of the result into either device converges
+		const back = planMerge(b2, a2);
+		back.command!.apply(b2);
+		expect(notesOf(b2.pages[0]!).map((n) => n.text).sort()).toEqual(notesOf(a.pages[0]!).map((n) => n.text).sort());
+	});
+
+	it("a result that lacks the losing version is not reported as covering the copy", () => {
+		const { a, b } = twoDevices();
+		editNote(a, "A edit", T0 + 80_000);
+		editNote(b, "B edit (later)", T0 + 90_000);
+		const a2 = parsed(serialize(a)).doc;
+		expect(mergeCovers(b, a2)).toBe(false);
+	});
+
+	it("a reply edited on both devices keeps the losing text as a marked reply of the same thread", () => {
+		const { a, b } = twoDevices();
+		const reply = repliesOf(a.pages[0]!, firstOf(a).id)[0]!;
+		a.pages[0]!.comments = a.pages[0]!.comments!.map((c) => (c.id === reply.id ? editedReply(reply, "A reply edit", T0 + 80_000)! : c));
+		b.pages[0]!.comments = b.pages[0]!.comments!.map((c) => (c.id === reply.id ? editedReply(reply, "B reply edit", T0 + 85_000)! : c));
+		const b2 = parsed(serialize(b)).doc;
+		planMerge(a, b).command!.apply(a);
+		const replies = repliesOf(a.pages[0]!, firstOf(a).id);
+		expect(replies.map((r) => r.text)).toContain("B reply edit");
+		expect(replies.some((r) => r.text.startsWith("⚠") && r.text.endsWith("A reply edit"))).toBe(true);
+		expect(mergeCovers(a, b2)).toBe(true);
+	});
+
+	it("a stale copy (the other device never edited it) is not a conflict: the edit simply wins", () => {
+		const { a, b } = twoDevices();
+		editNote(a, "A edit", T0 + 80_000);
+		planMerge(a, b).command?.apply(a);
+		expect(notesOf(a.pages[0]!).filter((n) => n.text.startsWith("⚠"))).toHaveLength(0);
+		expect(firstOf(a).text).toBe("A edit");
+		expect(mergeCovers(a, b)).toBe(true);
+		// and the copy that edited it replaces the unedited text of the main notebook, again with no marked copy
+		const { a: a3, b: b3 } = twoDevices();
+		editNote(b3, "B edit", T0 + 80_000);
+		planMerge(a3, b3).command!.apply(a3);
+		expect(notesOf(a3.pages[0]!).filter((n) => n.text.startsWith("⚠"))).toHaveLength(0);
+		expect(firstOf(a3).text).toBe("B edit");
+	});
+
+	it("mergeComments: a conflict keeps the sketch of the losing comment, and a restore (conflicts: false) does not", () => {
+		const page = createPage();
+		const sk = { strokes: [[10, 10, 100, 60]] };
+		const x = createComment(page, { region: { x: 1, y: 1, width: 40, height: 40 }, text: "", sketch: sk, author: "a", now: 100 })!;
+		const mine = editedComment(x, { text: "mine", sketch: sk }, 200)!;
+		const theirs = editedComment(x, { text: "", sketch: { strokes: [[20, 20, 90, 90]] } }, 300)!;
+		const merged = mergeComments([mine], [theirs]);
+		expect(merged.conflicts).toBe(1);
+		const kept = merged.list!.find((c) => c.id !== x.id)!;
+		expect(kept.text).toBe("⚠ mine");
+		expect(mergeComments([mine], [theirs], { conflicts: false }).list!.map((c) => c.id)).toEqual([x.id]);
+		const tie = { ...x, text: "other" };
+		expect(mergeComments([x], [tie]).list).toHaveLength(2);
+	});
+
+	it("save page as template, a page from a template and a notebook from a template carry no comments; duplicating the page keeps them", () => {
+		const doc = commentedDoc();
+		const page = doc.pages[0]!;
+		const template = templateDocument(doc, page);
+		expect(template.pages[0]!.comments).toBeUndefined();
+		const withThreads = { ...template, pages: [{ ...template.pages[0]!, comments: page.comments }] };
+		expect(pageFromTemplate(withThreads)!.page.comments).toBeUndefined();
+		expect(documentFromTemplate(withThreads).pages.every((p) => p.comments === undefined)).toBe(true);
+		expect(duplicatePage(page).comments).toHaveLength(4);
+		// the original is untouched
+		expect(page.comments).toHaveLength(4);
+	});
+
+	it("a practice attempt does not repeat the review threads of the original", () => {
+		const page = commentedDoc().pages[0]!;
+		const { page: attempt } = buildPracticePage(page, {}, 1);
+		expect(attempt.comments).toBeUndefined();
+		expect(page.comments).toHaveLength(4);
+	});
+
+	it("restoring a version with other margins moves the page's comments with its background", () => {
+		const doc = commentedDoc();
+		const old = parsed(serialize(doc)).doc;
+		const op = old.pages[0]!;
+		op.margins = { left: 100, right: 0, bottom: 0 };
+		op.width += 100;
+		delete op.comments;
+		const before = notesOf(doc.pages[0]!).map((n) => n.region.x);
+		const plan = planPageRestore(doc, old, 0, 0, "replace")!;
+		plan.command.apply(doc);
+		expect(notesOf(doc.pages[0]!).map((n) => n.region.x)).toEqual(before.map((x) => x + 100));
+		plan.command.revert(doc);
+		expect(notesOf(doc.pages[0]!).map((n) => n.region.x)).toEqual(before);
+	});
+
+	it("a merge that enlarges the page keeps the copy's comments that lie in the new part, even if the copy's page is wider", () => {
+		const { a, b } = twoDevices();
+		const pb = b.pages[0]!;
+		pb.width = 900;
+		pb.strokes = [...pb.strokes, stroke("far", 800, 100)];
+		const far = createComment(pb, { region: { x: 780, y: 100, width: 40, height: 40 }, text: "out on the right", author: "B", now: T0 + 5000 })!;
+		pb.comments = [...pb.comments!, far];
+		const plan = planMerge(a, b);
+		plan.command!.apply(a);
+		expect(a.pages[0]!.width).toBeGreaterThanOrEqual(840);
+		const placed = notesOf(a.pages[0]!).find((n) => n.text === "out on the right")!;
+		expect(placed.region.x).toBe(780);
+		expect(mergeCovers(a, b)).toBe(true);
 	});
 });

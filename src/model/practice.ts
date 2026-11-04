@@ -145,6 +145,8 @@ export interface PracticeCopy {
  */
 export function buildPracticePage(original: Page, spec: HideSpec, attempt: number): PracticeCopy {
 	const copy = duplicatePage(original);
+	// v16: the review threads of the original are not part of the exercise.
+	delete copy.comments;
 	const ids = spec.strokes?.length ? new Set(spec.strokes) : null;
 	// duplicatePage keeps the order, so the i-th stroke of the copy is the i-th of the original.
 	const keep = original.strokes.map((s) => !strokeMatches(s, spec, ids));

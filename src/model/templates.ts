@@ -38,6 +38,13 @@ export function assetsOfPage(page: Page, doc: NotebookDocument): Asset[] {
 	return out;
 }
 
+/** A duplicate of the page without its review threads: the margin comments (v16) are about this page of this notebook, not part of a template. */
+function plainCopy(page: Page): Page {
+	const copy = duplicatePage(page);
+	delete copy.comments;
+	return copy;
+}
+
 /** One-page document holding a copy of `page` (content, paper, size, background) for the templates folder. */
 export function templateDocument(doc: NotebookDocument, page: Page, now: Date = new Date()): NotebookDocument {
 	const iso = now.toISOString();
@@ -45,7 +52,7 @@ export function templateDocument(doc: NotebookDocument, page: Page, now: Date = 
 	for (const a of assetsOfPage(page, doc)) assets[a.id] = a;
 	return {
 		format: FORMAT_ID, version: CURRENT_VERSION, id: createId(), createdAt: iso, modifiedAt: iso,
-		pages: [duplicatePage(page)], meta: cloneMeta(DEFAULT_META), assets,
+		pages: [plainCopy(page)], meta: cloneMeta(DEFAULT_META), assets,
 	};
 }
 
@@ -53,13 +60,13 @@ export function templateDocument(doc: NotebookDocument, page: Page, now: Date = 
 export function pageFromTemplate(template: NotebookDocument): { page: Page; assets: Asset[] } | null {
 	const source = template.pages[0];
 	if (!source) return null;
-	return { page: duplicatePage(source), assets: assetsOfPage(source, template) };
+	return { page: plainCopy(source), assets: assetsOfPage(source, template) };
 }
 
 /** A new notebook document whose pages are copies of the template's pages (new notebook id, empty metadata). */
 export function documentFromTemplate(template: NotebookDocument, now: Date = new Date()): NotebookDocument {
 	const doc = createDocument(now);
-	doc.pages = template.pages.map((p) => duplicatePage(p));
+	doc.pages = template.pages.map((p) => plainCopy(p));
 	const assets: Record<string, Asset> = {};
 	for (const p of template.pages) for (const a of assetsOfPage(p, template)) assets[a.id] = a;
 	doc.assets = assets;
