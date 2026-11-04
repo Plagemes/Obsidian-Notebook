@@ -3445,4 +3445,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"quicktabs.otherInvalid": "Inserisci un numero di pagina da 1 a {total}.",
 	"quicktabs.limit": "Un quaderno ha al massimo {n} schede rapide. Rimuovine una prima.",
 	"quicktabs.saveFailed": "Non è stato possibile salvare le schede rapide: {error}",
+	// 0.18 review fixes (I)
+	"annotatePdf.tooLarge": "Questo PDF pesa {size} MB, oltre il limite di {max} MB per annotare da qui. Importalo dalla libreria.",
+	"annotatePdf.scanning": "Cerco questo PDF nei tuoi quaderni… {done} di {total}",
 };

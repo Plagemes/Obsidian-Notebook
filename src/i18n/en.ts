@@ -3443,6 +3443,9 @@ export const en = {
 	"quicktabs.otherInvalid": "Enter a page number from 1 to {total}.",
 	"quicktabs.limit": "A notebook has at most {n} quick tabs. Unpin one first.",
 	"quicktabs.saveFailed": "The quick tabs could not be saved: {error}",
+	// 0.18 review fixes (I)
+	"annotatePdf.tooLarge": "This PDF is {size} MB, over the {max} MB limit for annotating from here. Import it from the library instead.",
+	"annotatePdf.scanning": "Looking through your notebooks for this PDF… {done} of {total}",
 } as const;
 
 export type MessageKey = keyof typeof en;
