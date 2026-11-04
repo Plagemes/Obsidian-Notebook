@@ -7,11 +7,12 @@ import { PAGE_SIZES, PAPER_SPACING } from "../model/types";
 import type { NotebookSettings } from "../settings";
 import { createNotebook, listNotebooks } from "../storage/notebooks";
 import { isEditContextSource, type EditContext } from "../view/edit-context";
-import { addLecturePage } from "../view/lecture";
-import { setLectureCourseProvider } from "./current";
+import { addLecturePage, classContext } from "../view/lecture";
+import { setLectureClassProvider, setLectureCourseProvider } from "./current";
+import { lectureClassFor, lectureClassOf, type LectureClass } from "./lecture-mode";
 import { findLecturePage } from "./lecture-open";
 import {
-	classesAt, courseForNotebook, emptyTimetable, occurrenceKey, pickTarget, type ClassEntry, type OpenTarget, type Timetable,
+	classesAt, classForNotebook, courseForNotebook, emptyTimetable, occurrenceKey, pickTarget, type ClassEntry, type OpenTarget, type Timetable,
 } from "./schedule";
 import { TimetableStore } from "./store";
 import { TimetableModal } from "./timetable-modal";
@@ -66,12 +67,18 @@ export class TimetableService {
 			const now = new Date();
 			return courseForNotebook(classesAt(this.timetable, now, this.lead()), path, this.timetable.entries);
 		});
+		setLectureClassProvider((path) => {
+			const now = new Date();
+			const entry = classForNotebook(classesAt(this.timetable, now, this.lead()), path, this.timetable.entries);
+			return entry ? lectureClassOf(entry, now) : null;
+		});
 		void this.reload();
 		this.app.workspace.onLayoutReady(() => void this.reload().then(() => this.offer()));
 	}
 
 	stop(): void {
 		setLectureCourseProvider(null);
+		setLectureClassProvider(null);
 	}
 
 	private lead(): number {
@@ -112,6 +119,17 @@ export class TimetableService {
 		const folder = this.plugin.settings.folder;
 		const books = listNotebooks(this.app, folder).map((f) => ({ path: f.path, basename: f.basename, mtime: f.stat.mtime }));
 		return { course: c.course, room: c.room, target: pickTarget(c, books, folder) };
+	}
+
+	/**
+	 * 0.14 (401): the class in progress (or about to start) that belongs to the notebook at `path`: the one it links to, or an
+	 * unlinked one whose course resolves to that notebook. Null when none; this is what switches lecture mode on in a view.
+	 */
+	lectureClassFor(path: string, now = new Date()): LectureClass | null {
+		if (!this.timetable.entries.length) return null;
+		const folder = this.plugin.settings.folder;
+		const books = listNotebooks(this.app, folder).map((f) => ({ path: f.path, basename: f.basename, mtime: f.stat.mtime }));
+		return lectureClassFor(this.timetable, path, books, folder, now, this.lead());
 	}
 
 	/** Opens the notebook of the class in progress at a new lecture page. */
@@ -175,7 +193,7 @@ export class TimetableService {
 				new Notice(t("timetable.alreadyThere", { course: entry.course }));
 				return;
 			}
-			addLecturePage(ctx, entry.course, now, entry.course);
+			addLecturePage(ctx, entry.course, now, entry.course, classContext(lectureClassOf(entry, now), ctx.slide?.() ?? null));
 			new Notice(t("timetable.opened", { course: entry.course }));
 		} catch (e) {
 			console.error("[notebook] open class", e);

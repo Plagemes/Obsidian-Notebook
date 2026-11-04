@@ -1,7 +1,8 @@
 // ui redesign: the layout engine. From the action registry, the current context, the width of the view and the use
 // counts, it decides what the primary toolbar shows in its quick slots, what the contextual bar offers, and how the
 // "All actions" and page sheets are organised. Deterministic and pure (no DOM, no 'obsidian'): unit-tested.
-import { ACTIONS, activeContexts, GROUP_ORDER, isRelevant, type ActionDef, type ActionGroup, type ContextKind, type Surface, type UiContext } from "./actions";
+import { ACTIONS, activeContexts, GROUP_ORDER, isRelevant, type ActionDef, type ActionGroup, type ContextKind, type Surface, type ToolId, type UiContext } from "./actions";
+import { adaptBoost, NO_ADAPT, pageVariant, selectionVariant, suggestedTools, type LayoutAdapt } from "./adapt";
 import { usageBoost, type UsageMap } from "./usage";
 
 /** Sizes (CSS px) the toolbar is laid out with. They match styles.css (40 px buttons, 4 px gaps) at the normal toolbar size. */
@@ -66,11 +67,13 @@ export function score(a: ActionDef, usage: UsageMap, now: number): number {
 }
 
 /** Relevant actions placed on `surface`, best first (ties keep the registry order). */
-export function ranked(surface: Surface, c: UiContext, usage: UsageMap, now: number, actions: readonly ActionDef[] = ACTIONS): ActionDef[] {
+export function ranked(surface: Surface, c: UiContext, usage: UsageMap, now: number, actions: readonly ActionDef[] = ACTIONS, adapt: LayoutAdapt = NO_ADAPT): ActionDef[] {
+	// 0.14: the page-type and selection rules add a fixed amount to the designed priority (ui/adapt.ts).
+	const total = (a: ActionDef) => score(a, usage, now) + adaptBoost(a, c, adapt);
 	return actions
 		.map((a, i) => ({ a, i }))
 		.filter(({ a }) => a.surfaces.includes(surface) && isRelevant(a, c))
-		.sort((x, y) => score(y.a, usage, now) - score(x.a, usage, now) || x.i - y.i)
+		.sort((x, y) => total(y.a) - total(x.a) || x.i - y.i)
 		.map(({ a }) => a);
 }
 
@@ -80,6 +83,8 @@ export interface ContextBarPlan {
 	actions: string[];
 	/** wave 0.10: the second row (actions flagged `second`, e.g. align, transform and select similar of a selection); absent when empty. */
 	second?: string[];
+	/** 0.14: the content this bar was adapted to (a selection of "ink", "image", "text", "mixed" or "object"; a "slide"), for its label. */
+	variant?: string;
 }
 
 /** Number of action buttons the contextual bar can show in a view `width` CSS px wide (beside its label and collapse button). */
@@ -89,16 +94,20 @@ export function contextCapacity(width: number, slot: number = TOOLBAR_METRICS.sl
 }
 
 /** The contextual bar: the most specific context that has something to offer, with its best actions. */
-export function contextBar(c: UiContext, width: number, usage: UsageMap, now: number, actions: readonly ActionDef[] = ACTIONS, slot: number = TOOLBAR_METRICS.slot): ContextBarPlan | null {
+export function contextBar(c: UiContext, width: number, usage: UsageMap, now: number, actions: readonly ActionDef[] = ACTIONS, slot: number = TOOLBAR_METRICS.slot, adapt: LayoutAdapt = NO_ADAPT): ContextBarPlan | null {
 	if (!c.open) return null;
-	const all = ranked("context", c, usage, now, actions);
+	const all = ranked("context", c, usage, now, actions, adapt);
 	for (const kind of activeContexts(c)) {
 		const mine = all.filter((a) => a.contexts?.includes(kind));
 		const capacity = contextCapacity(width, slot);
 		const fit = mine.filter((a) => !a.second).slice(0, capacity);
 		const second = mine.filter((a) => a.second).slice(0, capacity);
 		if (fit.length > 0 || second.length > 0) {
-			return second.length > 0 ? { kind, actions: fit.map((a) => a.id), second: second.map((a) => a.id) } : { kind, actions: fit.map((a) => a.id) };
+			const variant = kind === "selection" ? selectionVariant(c, adapt) : kind === "pdf" ? pageVariant(c, adapt) : null;
+			const plan: ContextBarPlan = { kind, actions: fit.map((a) => a.id) };
+			if (second.length > 0) plan.second = second.map((a) => a.id);
+			if (variant) plan.variant = variant;
+			return plan;
 		}
 	}
 	return null;
@@ -107,19 +116,34 @@ export function contextBar(c: UiContext, width: number, usage: UsageMap, now: nu
 export interface ToolbarLayout extends ToolbarPlan {
 	quick: string[];
 	context: ContextBarPlan | null;
+	/** 0.14 (392): the tools the page in view invites (marked on the toolbar; their place never changes). */
+	suggested: ToolId[];
 }
 
 /** Everything the primary toolbar and the contextual bar show right now. */
-export function buildLayout(c: UiContext, width: number, usage: UsageMap, now: number, actions: readonly ActionDef[] = ACTIONS, slot: number = TOOLBAR_METRICS.slot): ToolbarLayout {
+export function buildLayout(c: UiContext, width: number, usage: UsageMap, now: number, actions: readonly ActionDef[] = ACTIONS, slot: number = TOOLBAR_METRICS.slot, adapt: LayoutAdapt = NO_ADAPT): ToolbarLayout {
 	const plan = toolbarPlan(width, slot);
-	const context = contextBar(c, width, usage, now, actions, slot);
+	const context = contextBar(c, width, usage, now, actions, slot, adapt);
 	const inContext = new Set([...(context?.actions ?? []), ...(context?.second ?? [])]);
 	// A read-only view offers no quick insert actions: they would all be disabled.
-	const quick = ranked("quick", c, usage, now, actions)
-		.filter((a) => !inContext.has(a.id) && (c.editable || a.readOnly))
-		.slice(0, plan.quickSlots)
-		.map((a) => a.id);
-	return { ...plan, quick, context };
+	const usable = (a: ActionDef) => !inContext.has(a.id) && (c.editable || a.readOnly);
+	// 0.14: pinned slots come first, in the order the person chose, whatever the ranking says; the ranked actions fill the rest.
+	const pinned = adapt.pinned.flatMap((id) => {
+		const a = actions.find((x) => x.id === id);
+		return a && a.surfaces.includes("quick") && isRelevant(a, c) && usable(a) ? [a] : [];
+	});
+	const rest = ranked("quick", c, usage, now, actions, adapt).filter((a) => usable(a) && !pinned.includes(a));
+	const order = [...pinned, ...rest];
+	let chosen = order.slice(0, plan.quickSlots);
+	// Back (0.13): with room for three slots it stays among them while there is somewhere to go back to, whatever a page-type or
+	// learned boost ranks above it; it takes the place of the lowest-ranked unpinned slot.
+	const back = rest.find((a) => a.id === "nav-back");
+	if (back && plan.quickSlots >= 3 && !chosen.includes(back)) {
+		const drop = [...chosen].reverse().find((a) => !pinned.includes(a));
+		if (drop) chosen = order.filter((a) => a === back || (chosen.includes(a) && a !== drop));
+	}
+	const quick = chosen.map((a) => a.id);
+	return { ...plan, quick, context, suggested: [...suggestedTools(c, adapt)] };
 }
 
 export type SectionId = ActionGroup | "recent" | "results";

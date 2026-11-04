@@ -82,7 +82,10 @@ anywhere in `src/` is in the registry and that every action is placed somewhere.
 | PDF search, hide annotations, dim backgrounds | PDF contextual bar + PDF & reading section; search next/previous in the search panel and commands | Relevant only with PDF pages |
 | PDF margins, update PDF, export annotations | PDF bar (margins), page sheet, PDF & reading section | Page-level PDF work |
 | PDF side by side: open, link, show slide, add notes page, close | PDF bar (open), side-pane bar (the rest), Side by side section | Appear only when they apply |
-| New lecture, exercise paper | Lecture bar during a class, Lecture section | Class-time tools |
+| New lecture, exercise paper | Lecture bar during lecture mode, Lecture section | Class-time tools |
+| Lecture mode (`lecture-mode`, 0.14) | All actions sheet (Lecture), command; automatic from the timetable (setting *Study → Lecture mode*: off / ask / automatic) | While it is on the contextual bar shows the lecture tools; a glass banner (icon square, text, *Start* / *Not now*) offers it in ask mode and a pill chip (top left, *Course · until HH:MM*, *End*) shows it; neither starts, asks or ends under the pen |
+| Slide strip (0.14, #417) | Side-pane header button, actions sheet (Side by side group), palette | A modal on the shared shell: one row per slide (slide tile, chips for its page, notes, exercise page, linked ink, questions); filter chips *With notes* / *All slides*; empty state with *Open PDF side by side* |
+| Slide badges (0.14, #226) | Over the page, to the right of each block of ink written beside a slide | A 22 px pill (slide icon and number) in a 40 px transparent tap target; accent when that slide is in the pane; hidden with the text tool and by the setting *Slide badges* |
 | Markers (`marker-gap`, `marker-question`, `marker-important`, `marker-critical`, `marker-star`, `marker-homework`), structured box (`marker-box`), End of lecture panel (`end-of-lecture`) | Lecture bar during a class, Lecture section, radial shapes ring → Markers ring (markers and box), page sheet (panel), commands | Captured while the lecture runs; the next tap or drag places one |
 | Insert equation, insert graph (`insert-equation`, `insert-graph`; wave 0.9: math) | All actions sheet (Insert), commands | Inserted now and then; not quick slots, so the designed slots stay |
 | Edit equation or graph, convert to ink (`math-edit`, `math-convert-ink`) | Contextual bar of a selection holding exactly one equation or graph (*Edit*) or equations (*Convert to ink*), commands | Act on what is selected; the graph panel and the equation editor float over the page while open |
@@ -122,9 +125,34 @@ hotkey.
 4. `buildSheet`: Recent (up to 4 used actions not visible elsewhere), then the groups in `GROUP_ORDER` in registry
    order; with a query, a single ranked result list (label, keywords, group, accents ignored).
 
-Use counts (`src/ui/usage.ts`) are stored per device with `app.saveLocalStorage("notebook-ui-usage")`: count and last
+Use counts (`src/ui/usage.ts`, per notebook since 0.14: see *Adaptive rules*) are stored per device with `app.saveLocalStorage("notebook-ui-usage")`: count and last
 use, half-life 14 days, boost at most 30 points (priorities are 0–100), so use reorders neighbours but never pushes a
 designed primary action out.
+
+### Adaptive rules (0.14, roadmap 392, 393, 402)
+
+Deterministic tables in `src/ui/adapt.ts`; no learning model, no AI. Each family has its own switch (Settings > Appearance:
+*Toolbar follows the page*, *Toolbar learns from each notebook*, *Selection bar follows what is selected*); with a switch
+off the layout is exactly the designed order. A rule never shows an action that `when` hides: it adds a fixed amount to an
+action's priority, so the same context, width and settings always give the same bar.
+
+- **Page type (392).** `pageKindOf` (`src/ui/page-kind.ts`) reads the page's background, paper and size (nothing is stored):
+  slide (PDF page at least 1.3 times wider than tall), PDF, image, ruled (ruled, Cornell, calligraphy), grid (grid, dotted,
+  millimetre, isometric, hexagonal), plain. A slide puts the snapping highlighter (new action `toggle-snap-highlighter`, the
+  same switch as the highlighter's option and the settings), PDF search and margins first and labels the bar *Slide*. The
+  tools a page invites get a small accent dot (ruled: pen and text; grid: shapes; slide and PDF: highlighter; their order
+  never changes), and on grid paper the ruler leads the quick slots.
+- **Learning per notebook (393).** Use counts are kept per notebook (the document id, which survives a rename) in the
+  device's local storage next to the device-wide counts (`src/ui/usage-store.ts`): at most 60 notebooks and 60 actions each,
+  never in the notebook file or the vault, never synced. A notebook ranks by its own counts once it has 8 recorded uses;
+  until then by the device's counts, so a new notebook is not a blank toolbar. *Reset the adaptive toolbar* forgets them.
+- **Pinned slots (393).** Press and hold a quick slot, or a row of *All actions* that can be a quick action, to pin it (at
+  most 3, plugin setting `pinnedQuick`). Pinned actions come first, in the order pinned, whatever the ranking and the page
+  say; a pin that does not apply to the page (for example Back with no history) is skipped and returns when it does.
+- **Selection by content (402).** `selectionKindOf` (`src/ui/selection-kind.ts`): ink, picture, text, mixed or object. Ink puts
+  *Save as stamp*, *Select similar* and *Link* first; a picture *White to transparent*, front/back and transform; text *Link*;
+  a mixed selection align and layer order. The bar is labelled *Ink selection*, *Picture selection*, *Text selection*,
+  *Mixed selection*; the colour and width rows already follow the content (text: colour only; a picture: none).
 
 ## 5. Interaction: pen, finger, mouse
 
@@ -341,6 +369,8 @@ run the registry actions `new-notebook` and `new-folder`; all of them open the c
 
 **Sidebar (0.13).** Under the navigation: *Pinned* (notebooks pinned with the library's pin, and folders pinned from their menu; at most eight; every row opens on tap and has the same press-and-hold / right-click menu, which unpins it; with none, one line says how to pin), then *Vault*. Folder rows show the notebook count and the pages inside ("12 · 248 p"; the tooltip words both). Pinned folders are the `pinned` field of the folder metadata (`folders-<device>.json`, merged per field like the colour, followed by renames); pinned notebooks are the library state's `pinned`.
 
+**Dynamic sections (0.14).** *Now*, *To complete* and *Changed on another device* (rules in `library/dynamic-sections.ts`) are panels above the subject folders on the library dashboard (list rows with the reason as the second line, a count badge, *Show all*; Changed also has *Mark as seen*), places of the library (`{ collection: "now" | "todo" | "changed" }`, so the grid, list, search and empty states are the ones of the smart collections), sidebar items with counts under Notebooks and a chip row under Home's Continue row. Each is drawn only when it has something. Recent is Home's Recent notes.
+
 **Library.** Filter chips *All · Subjects · Recent · Favourites · With PDF · Archive* (single choice). *All* shows the
 dashboard: subject cards (four in a row, two on a tablet in portrait, two compact ones on a phone), *Smart
 collections* (To study: open gap, question or homework markers or a to-study tag; Favourites: starred or pinned;
@@ -380,3 +410,11 @@ A just-in-time tip (`src/ui/components/hint-bubble.ts`, rules in `src/ui/hint-lo
 (`--nb-panel`, `--nb-border-strong`, `--nb-radius-card`, `--nb-shadow-float`), an accent icon square, a 15 px title, one 13 px
 sentence in muted text, a *Turn off tips* link and a 40 px × button. It never takes focus, disappears after about 12 s and shows
 once per tip, at most one per 4 minutes and not while the pen is writing. Tips are switched in Settings → Appearance & language.
+
+## Orientation and size classes (0.14, roadmap #430)
+
+`src/ui/viewport-class.ts` classifies a view (not the screen) by width, height and aspect: `nb-vp-phone|tablet|desktop`, `nb-vp-portrait|landscape`, `nb-vp-short` (landscape under about 480 px of height), plus `data-nb-viewport="tablet-landscape"` on the root of the notebook view and of Home / the library. Thresholds are sticky (hysteresis), so rotation or a dragged split does not flicker. Surfaces adapt with CSS only: short landscape tightens the toolbar, context bar and page headers and gives dialogs the whole window height. A fine pointer on a wide view is a desktop; a coarse pointer never is.
+
+## Notebook map (0.14, roadmap #408)
+
+A dialog on the shared shell (`modalShell`, wide, no footer) opened by the grid button in the page panel's header. Body: a row of filter chips (`chip`, one per state that exists, with the page count) and an auto-fill grid of cards (`.nb-map-card`: thumbnail, state badges at its bottom right, page number and earliest due date below). Badges are small pills with the state icon (question, gap, homework, practice, empty, key point) and a number when there are several; they are decoration of a card that is itself the control. The current page has an accent border, a lecture's first page an accent top edge. Thumbnails come from the page panel's cache, drawn lazily at the first pause in writing. Logic: `src/model/notebook-map.ts`; view: `src/view/notebook-map-modal.ts`.

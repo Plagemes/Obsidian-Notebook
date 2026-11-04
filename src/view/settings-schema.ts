@@ -93,7 +93,7 @@ export const GROUPS: readonly GroupSpec[] = [
 ];
 
 /** Runs of the action rows; the tab maps each id to what it does. */
-export type SettingActionId = "hints-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom";
+export type SettingActionId = "hints-reset" | "toolbar-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom";
 /** Rows drawn by the tab itself (no stored setting of their own). */
 export type SettingCustomId = "device-name" | "pen-key" | "device-info";
 
@@ -253,6 +253,9 @@ const READING: SettingSpec[] = [
 		control: { type: "slider", min: DIM_MIN, max: DIM_MAX, step: DIM_STEP, format: (v) => `${Math.round(v * 100)} %` }, parent: "dimBackground", visible: (s) => s.dimBackground,
 	},
 	{ id: "cropMargins", section: "reading", order: 30, name: "settings.cropMargins", desc: "settings.cropMargins.desc", control: { type: "toggle" } },
+	// 0.14 slides (#226): ink remembers the slide beside the notes; its badge shows the slide again.
+	{ id: "slideInkLink", section: "reading", order: 40, name: "settings.slideInkLink", desc: "settings.slideInkLink.desc", control: { type: "toggle" }, keywords: "slide side by side pdf link ink notes diapositiva affiancato" },
+	{ id: "slideInkBadges", section: "reading", order: 41, name: "settings.slideInkBadges", desc: "settings.slideInkBadges.desc", control: { type: "toggle" }, parent: "slideInkLink", keywords: "slide badge diapositiva" },
 ];
 
 const LIBRARY: SettingSpec[] = [
@@ -312,6 +315,11 @@ const STUDY: SettingSpec[] = [
 		id: "timetableLeadMinutes", section: "study", group: "timetable", order: 22, name: "settings.timetable.lead",
 		control: { type: "slider", min: 0, max: 30, step: 1, format: suffix("min") }, parent: "timetableOffer", visible: timetableOn,
 	},
+	// 0.14 (401): lecture mode follows the timetable; off / ask / automatic.
+	{
+		id: "lectureMode", section: "study", group: "timetable", order: 30, name: "settings.lectureMode", desc: "settings.lectureMode.desc", keywords: "class lesson lecture classe lezione",
+		control: { type: "dropdown", options: options([["off", "settings.lectureMode.off"], ["ask", "settings.lectureMode.ask"], ["auto", "settings.lectureMode.auto"]]) },
+	},
 	{ id: "zettelFolder", section: "study", group: "zettel", order: 10, name: "settings.zettelFolder", desc: "settings.zettelFolder.desc", control: { type: "folder", placeholder: DEFAULT_SETTINGS.zettelFolder } },
 	{
 		id: "zettelIdScheme", section: "study", group: "zettel", order: 20, name: "settings.zettelIdScheme", desc: "settings.zettelIdScheme.desc",
@@ -333,6 +341,11 @@ const APPEARANCE: SettingSpec[] = [
 		id: "toolbarSize", section: "appearance", order: 30, name: "settings.toolbarSize", desc: "settings.toolbarSize.desc",
 		control: { type: "dropdown", options: options([["compact", "settings.toolbarSize.compact"], ["normal", "settings.toolbarSize.normal"], ["large", "settings.toolbarSize.large"]]) },
 	},
+	// 0.14: generative interface. One switch per family; the pinned slots and the reset are always available.
+	{ id: "adaptPageType", section: "appearance", order: 31, name: "settings.adaptPageType", desc: "settings.adaptPageType.desc", control: { type: "toggle" }, keywords: "adaptive toolbar page slide ruled grid adattiva barra pagina" },
+	{ id: "adaptLearn", section: "appearance", order: 32, name: "settings.adaptLearn", desc: "settings.adaptLearn.desc", control: { type: "toggle" }, keywords: "adaptive toolbar learn notebook course usage frequent adattiva impara quaderno corso" },
+	{ id: "adaptSelection", section: "appearance", order: 33, name: "settings.adaptSelection", desc: "settings.adaptSelection.desc", control: { type: "toggle" }, keywords: "adaptive selection bar ink image text lasso adattiva selezione" },
+	{ id: "toolbarReset", section: "appearance", order: 34, name: "settings.toolbarReset", desc: "settings.toolbarReset.desc", control: { type: "action", run: "toolbar-reset", button: "settings.toolbarReset.button" }, keywords: "adaptive toolbar pinned pin reset forget learned fissate azzera dimentica" },
 	{ id: "userName", section: "appearance", order: 15, name: "settings.userName", desc: "settings.userName.desc", keywords: "name nome greeting saluto home", control: { type: "text", placeholder: "Alex" } },
 	{ id: "nightMode", section: "appearance", order: 40, name: "settings.nightMode", desc: "settings.nightMode.desc", control: { type: "toggle" }, keywords: "dark scuro" },
 	// 0.13: just-in-time tips.
@@ -400,6 +413,7 @@ export const INTERNAL_SETTING_KEYS: Readonly<Partial<Record<SettingKey, string>>
 	lastNotebookPos: "instant start: zoom and scroll of the last page",
 	hintsSeen: "the tips already shown; Show tips again clears it",
 	zettelSlipBoxes: "edited from the notebook menu (Zettelkasten slip boxes)",
+	pinnedQuick: "edited on the toolbar (press and hold a quick action, or a row of All actions); Reset the adaptive toolbar clears it",
 };
 
 const ALL: SettingSpec[] = [...WRITING, ...INPUT, ...PAGES, ...READING, ...LIBRARY, ...SYNC, ...INTEGRATION, ...STUDY, ...APPEARANCE, ...DIAGNOSTICS];

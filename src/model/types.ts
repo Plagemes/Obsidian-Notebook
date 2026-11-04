@@ -2,13 +2,14 @@
 
 export const FORMAT_ID = "obsidian-notebook";
 /**
+ * v12: ink remembers the slide shown beside the notes while it was written (`slides`, `Stroke.slide`, #226).
  * v11: notebook description and generated or image cover (`meta.description`, `meta.coverArt`). v10: anchored excerpts (page elements that show a region of a page and jump back to it). v9: equations (LaTeX,
  * typeset with Obsidian's MathJax) and function graphs (page elements). v8: markers and structured boxes (page elements), hidden ("invisible ink") strokes. v7: bookmark details
  * (title, colour, category), page tags, the shared reading position and more paper kinds (v6: page margins
  * around a background; v5: per-stroke render version; v4: library metadata, assets, backgrounds, elements,
  * infinite pages, "shape" tool; v3: paper kinds and page sizes).
  */
-export const CURRENT_VERSION = 11;
+export const CURRENT_VERSION = 12;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -61,8 +62,33 @@ export interface Stroke {
 	 * (a view-only toggle). Written only when true.
 	 */
 	hidden?: true;
+	/**
+	 * v12 (#226): id of the entry of `NotebookDocument.slides` (the slide shown beside the notes) in view when the stroke
+	 * was written. Written only when present and only while that entry exists (ink pasted from another notebook loses it).
+	 */
+	slide?: string;
 	points: Point[];
 }
+
+/**
+ * v12 (#226): one page of one PDF that was shown beside the notes (side by side) while ink was written. `source` is the
+ * content-addressed id of the PDF (like `PdfRef.source` of the side-by-side links and the ids of PDF assets), `page` is
+ * 1-based, `path` the vault path of a plain PDF (a hint to open it again, and to recognise it after it was replaced in
+ * place). `id` is short and unique within the document; strokes refer to it (`Stroke.slide`). Entries no stroke refers
+ * to are not written.
+ */
+export interface SlideRef {
+	id: string;
+	source: string;
+	page: number;
+	path?: string;
+}
+
+/** v12: longest slide reference id, characters (new ids have 8 base-36 characters). */
+export const SLIDE_ID_MAX = 16;
+/** v12: longest PDF source id and longest vault path of a slide reference, characters. */
+export const SLIDE_SOURCE_MAX = 200;
+export const SLIDE_PATH_MAX = 1024;
 
 /**
  * Paper backgrounds. v3 adds "blank" to "millimetre" (v2 had only "grid"); v7 adds "cornell" to "planner-week".
@@ -473,6 +499,8 @@ export interface NotebookDocument {
 	meta?: NotebookMeta;
 	/** v7: last reading position. Written only when present. */
 	position?: ReadingPosition;
+	/** v12 (#226): the slides strokes refer to (`Stroke.slide`). Written only when a stroke refers to one. */
+	slides?: SlideRef[];
 	/** v4: assets referenced by pages, keyed by Asset.id. */
 	assets?: Record<string, Asset>;
 }

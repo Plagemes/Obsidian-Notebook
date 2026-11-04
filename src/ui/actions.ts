@@ -3,6 +3,7 @@
 // layout engine and the coverage tests run in Node. The behaviour lives elsewhere: view actions in view/view-actions.ts,
 // global ones in main.ts, external ones in the module named by `owner`.
 import type { MessageKey } from "../i18n";
+import type { PageKind } from "./page-kind";
 
 export type ToolId = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "space";
 
@@ -46,18 +47,21 @@ export interface UiContext {
 		strokes: number; elements: number; images: number; /** 1 when a selected text box holds a [[link]] */ links?: number;
 		/** v9: selected equations and graphs (optional, 0 when absent). */ equations?: number; graphs?: number;
 		/** v10: selected anchored excerpts (optional, 0 when absent). */ excerpts?: number;
+		/** 0.14 (402): selected text boxes (optional, 0 when absent). */ texts?: number;
 	} | null;
 	/** The page in view (index of the page sheet when it was opened from a thumbnail). */
 	page: {
 		index: number; count: number; background: "none" | "pdf" | "image"; infinite: boolean; bookmarked: boolean;
 		/** wave 0.7: the page is flagged as heavy and can be split. Optional (false when absent). */
 		splittable?: boolean;
+		/** 0.14 (392): the kind of page (slide, PDF, image, ruled, grid, plain), for the adaptive toolbar. Optional (no adaptation when absent). */
+		kind?: PageKind;
 	} | null;
 	notebook: { pdfPages: boolean; backgrounds: boolean };
 	/** A class of the timetable is on now. */
 	lecture: boolean;
 	sidePane: { available: boolean; open: boolean };
-	reading: { annotationsHidden: boolean; dim: boolean };
+	reading: { annotationsHidden: boolean; dim: boolean; /** 0.14 (392): the highlighter snaps to the text lines of PDF pages. Optional (off when absent). */ snap?: boolean };
 	toggles: {
 		ruler: boolean; penOnly: boolean; navigator: boolean; /** One page at a time (wave 0.7). */ pageMode?: boolean; /** Pen gesture mode (wave 0.8). */ penGestures?: boolean;
 		/** wave 0.10 (63): the lasso tool selects with a rectangle instead of a freehand outline. */ selectRectangle?: boolean;
@@ -248,7 +252,10 @@ export const ACTIONS: readonly ActionDef[] = [
 	// wave 0.9: math
 	{ id: "insert-equation", label: "math.insertEquation", icon: "sigma", group: "insert", surfaces: ["sheet"], priority: 52, scope: "view", command: "math.command.insertEquation", keywords: "formula latex maths math equazione formula" },
 	{ id: "insert-graph", label: "math.insertGraph", icon: "chart-spline", group: "insert", surfaces: ["sheet"], priority: 50, scope: "view", command: "math.command.insertGraph", keywords: "function plot chart curve grafico funzione" },
-	{ id: "add-page", label: "tool.addPage", icon: "file-plus", group: "insert", surfaces: ["quick", "sheet"], priority: 66, scope: "view", command: "command.addPage" },
+	// "add-page" is the Obsidian command (and its hotkey): it adds a page right away, same paper, as before 0.14. The on-screen "+" is
+	// "add-page-suggest": it opens the Smart "+" strip (0.14, 410); the command of the same name opens that strip from the keyboard.
+	{ id: "add-page", label: "tool.addPage", icon: "file-plus", group: "insert", surfaces: ["palette"], priority: 66, scope: "view", command: "command.addPage" },
+	{ id: "add-page-suggest", label: "tool.addPage", icon: "file-plus", group: "insert", surfaces: ["quick", "sheet"], priority: 66, scope: "view", command: "command.addPageSuggest" },
 	{ id: "insert-blank-page", label: "page.insertBlank", icon: "file-plus", group: "insert", surfaces: ["page"], priority: 60, scope: "view" },
 	{ id: "exercise-page", label: "page.exercise", icon: "pencil-ruler", group: "insert", surfaces: ["context", "sheet", "page"], contexts: ["lecture"], priority: 45, scope: "view", command: "command.exercisePage" },
 	{ id: "page-from-template", label: "page.newFromTemplate", icon: "file-plus-2", group: "insert", surfaces: ["sheet", "page"], priority: 40, scope: "view", keywords: "template" },
@@ -289,6 +296,8 @@ export const ACTIONS: readonly ActionDef[] = [
 
 	// --- PDF and reading: the contextual bar of a PDF page, and the sheet.
 	{ id: "pdf-search", label: "reading.search", icon: "search", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 80, scope: "view", command: "command.pdfSearch", readOnly: true, when: (c) => c.notebook.pdfPages },
+	// 0.14 (392): the highlighter follows the text lines of PDF pages (the same switch as the highlighter options and the settings).
+	{ id: "toggle-snap-highlighter", label: "reading.snap", icon: "text-cursor", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 41, scope: "view", command: "command.snapHighlighter", readOnly: true, when: (c) => c.notebook.pdfPages, checked: (c) => !!c.reading.snap, keywords: "highlighter snap text lines evidenziatore testo righe" },
 	{ id: "pdf-search-next", label: "command.pdfSearchNext", icon: "chevron-down", group: "reading", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
 	{ id: "pdf-search-previous", label: "command.pdfSearchPrev", icon: "chevron-up", group: "reading", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
 	{ id: "toggle-annotations", label: "reading.annotations.hide", icon: "eye-off", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 60, scope: "view", command: "command.annotationsToggle", readOnly: true, when: (c) => c.notebook.pdfPages, checked: (c) => c.reading.annotationsHidden },
@@ -305,9 +314,13 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "pdf-side-show-slide", label: "pdfSide.menu.showSlide", icon: "file-search", group: "side", surfaces: ["context", "sheet"], contexts: ["side-pane"], priority: 70, scope: "view", readOnly: true, when: sideOpen },
 	{ id: "pdf-side-add-page", label: "command.pdfSideAdd", icon: "file-plus", group: "side", surfaces: ["context", "sheet"], contexts: ["side-pane"], priority: 75, scope: "view", command: true, when: sideOpen },
 	{ id: "pdf-side-close", label: "command.pdfSideClose", icon: "panel-right-close", group: "side", surfaces: ["context", "sheet"], contexts: ["side-pane"], priority: 30, scope: "view", command: true, readOnly: true, when: sideOpen },
+	// 0.14 slides (#417): every slide with its notes pages, exercise page, linked ink and questions (view/slide-strip-modal.ts).
+	{ id: "slide-strip", label: "slides.strip.open", icon: "layout-list", group: "side", surfaces: ["sheet"], priority: 72, scope: "view", command: "command.slideStrip", readOnly: true, when: (c) => sideOpen(c) || c.notebook.pdfPages, keywords: "slides strip notes exercise questions diapositive striscia" },
 
 	// --- lecture: the contextual bar while a class of the timetable is on.
 	{ id: "new-lecture", label: "page.newLecture", icon: "graduation-cap", group: "lecture", surfaces: ["context", "sheet"], contexts: ["lecture"], priority: 70, scope: "view", command: "command.newLecture" },
+	// 0.14 (401): switches lecture mode on or off by hand (the rule starts it from the timetable); the contextual bar follows it.
+	{ id: "lecture-mode", label: "command.lectureMode", icon: "graduation-cap", group: "lecture", surfaces: ["sheet"], priority: 72, scope: "view", command: true, readOnly: true, checked: (c) => c.lecture, keywords: "class timetable lesson classe orario" },
 	{ id: "exercise-paper", label: "page.exercisePaper", icon: "palette", group: "lecture", surfaces: ["sheet"], priority: 20, scope: "view", command: "command.exercisePaper", readOnly: true },
 	// wave 0.8: markers (#201-#203, #209) and structured boxes (#204): the next tap or drag on a page places one. Also on the radial dial (shapes ring → Markers).
 	...([

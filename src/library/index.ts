@@ -4,8 +4,8 @@ import { tagAncestors, tagIsWithin } from "../model/tags";
 import { stateKeys } from "./library-state";
 import { COVER_ART_STYLES, type CoverArtStyle } from "../model/types";
 
-/** v5: entries also count PDF pages and open markers (Home and smart collections) and carry the v11 cover (`coverArt`); v4 added the titled bookmarks (quick switcher); v3 the page tags. Older indexes are rebuilt. */
-export const INDEX_VERSION = 5;
+/** v6: entries also count the pages to fill (`emptyPages`, dynamic sections); v5 added the PDF page and open marker counts (Home and smart collections) and the v11 cover (`coverArt`); v4 the titled bookmarks (quick switcher); v3 the page tags. Older indexes are rebuilt. */
+export const INDEX_VERSION = 6;
 /** "Recent" shows this many notebooks. */
 export const RECENT_LIMIT = 20;
 
@@ -38,6 +38,8 @@ export interface LibraryEntry {
 	pdfPages?: number;
 	/** v5: markers still open (a gap to fill, an unanswered question, homework not done); absent: none. */
 	openMarkers?: number;
+	/** 0.14: pages still to fill (skipped, unannotated PDF slides, unfinished practice); absent: none. */
+	emptyPages?: number;
 	favorite: boolean;
 	/** Cover colour #rrggbb. */
 	cover: string;
@@ -208,6 +210,7 @@ function isEntry(v: unknown): v is LibraryEntry {
 		(e.text === undefined || typeof e.text === "string") &&
 		(e.pdfPages === undefined || Number.isInteger(e.pdfPages)) &&
 		(e.openMarkers === undefined || Number.isInteger(e.openMarkers)) &&
+		(e.emptyPages === undefined || Number.isInteger(e.emptyPages)) &&
 		(e.coverArt === undefined || isIndexCoverArt(e.coverArt)) &&
 		(e.textPages === undefined || (Array.isArray(e.textPages) && e.textPages.length % 2 === 0 && e.textPages.every((n) => Number.isFinite(n)))) &&
 		(e.pageTags === undefined || (Array.isArray(e.pageTags) && e.pageTags.every((p: unknown) => {

@@ -38,7 +38,7 @@ describe("toolbar plan", () => {
 describe("layout engine", () => {
 	it("fills the quick slots by priority on a plain page", () => {
 		const l = buildLayout(baseContext(), 1280, {}, NOW);
-		expect(l.quick).toEqual(["insert-image", "add-page", "stamps", "board-shot", "toggle-ruler", "toggle-page-mode"]);
+		expect(l.quick).toEqual(["insert-image", "add-page-suggest", "stamps", "board-shot", "toggle-ruler", "toggle-page-mode"]);
 		expect(l.context).toBeNull();
 	});
 
@@ -68,7 +68,7 @@ describe("layout engine", () => {
 
 	it("changes the contextual bar with the page and the situation", () => {
 		const pdf = baseContext({ page: { index: 0, count: 2, background: "pdf", infinite: false, bookmarked: false }, notebook: { pdfPages: true, backgrounds: true } });
-		expect(contextBar(pdf, 800, {}, NOW)).toEqual({ kind: "pdf", actions: ["pdf-search", "toggle-annotations", "toggle-dim-background", "pdf-side-open", "crop-margins", "pdf-margins"] });
+		expect(contextBar(pdf, 800, {}, NOW)).toEqual({ kind: "pdf", actions: ["pdf-search", "toggle-annotations", "toggle-dim-background", "pdf-side-open", "crop-margins", "toggle-snap-highlighter", "pdf-margins"] });
 		const side = contextBar({ ...pdf, sidePane: { available: true, open: true } }, 800, {}, NOW)!;
 		expect(side.kind).toBe("side-pane");
 		expect(side.actions).toEqual(["pdf-side-link", "pdf-side-add-page", "pdf-side-show-slide", "pdf-side-close"]);

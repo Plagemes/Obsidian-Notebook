@@ -439,7 +439,7 @@ Features for following a lecture live. Exam and review features stay in the sepa
 ### Slides and board
 224. **P2** "Slide explained" ticks: see how far the lecturer has got.
 225. **P2** "Back to the current slide" after looking elsewhere.
-226. **P1** Automatic notes ↔ slide link: ink remembers which slide was visible in the side-by-side view while you wrote it; tapping it shows that slide again.
+226. **P1** 🧪 Automatic notes ↔ slide link: ink remembers which slide was visible in the side-by-side view while you wrote it; tapping it shows that slide again.
 227. **P2** Quick tabs: pages pinned during the lecture (e.g. the formula sheet), one tap away.
 228. **P2** Lecture figure gallery: all photos and crops of the section in one place.
 229. **P3** Peek at the next slide while writing.
@@ -560,13 +560,13 @@ A complete Zettelkasten workflow where handwriting is first-class. Everything go
 Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for all.
 
 ### STEM tools (no AI)
-292. ~~**P2** Step checker: type the steps of a calculation one per line; each line is checked numerically for equivalence with the previous one.~~ — dropped (user decision, 2026-10-29)
+292. ~~**P2** Step checker: type the steps of a calculation one per line; each line is checked numerically for equivalence with the previous one.~~ — dropped (user decision, 2026-10-29)
 293. **P2** Dimensional analysis of formulas: flags inconsistent units.
 294. **P2** Balancing of typed chemical reactions.
 295. **P2** Statistics from table data: mean, deviation, regression, with the line drawn on the chart.
 296. **P3** Step-by-step linear systems and matrices shown on the page.
-297. ~~**P3** Basic vector maps as backgrounds for geography and history (public-domain data).~~ — dropped (user decision, 2026-10-29)
-298. ~~**P3** Truth tables and simulated logic circuits.~~ — dropped (user decision, 2026-10-29)
+297. ~~**P3** Basic vector maps as backgrounds for geography and history (public-domain data).~~ — dropped (user decision, 2026-10-29)
+298. ~~**P3** Truth tables and simulated logic circuits.~~ — dropped (user decision, 2026-10-29)
 299. **P2** Physics simulations on drawings with states (advanced):
     - Declare bodies and quantities on the parts of a drawing with states (#241): mass, initial velocity, forces, friction, springs, constraints (inclined plane, rope, pivot).
     - A numerical engine (own RK4 integrator) computes the motion: projectiles, inclined planes with friction, springs, pendulums, 1D/2D collisions, multi-body systems.
@@ -587,8 +587,8 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
     - "Peek at the solution": hold a button to see the original working until you let go.
     - Attempts are kept, numbered and dated, to see progress; optional timer per attempt.
     - Variants with different numbers: when the exercise uses variables or drawings with states (#182, #241), a variant is generated for more practice.
-304. ~~**P2** Overlay two pages: your working and the solution, one over the other with transparency.~~ — dropped (user decision, 2026-10-29)
-305. **P3** Correction layer for tutors or classmates, with accept and reject. Works like "track changes" for ink: a tutor, the lecturer or a classmate writes corrections on a separate layer (through a shared Drive folder or a collaboration session); you go through them and accept (merged into your notes) or reject (removed). (Confirmed by the user, 2026-10-29.)
+304. ~~**P2** Overlay two pages: your working and the solution, one over the other with transparency.~~ — dropped (user decision, 2026-10-29)
+305. **P3** Correction layer for tutors or classmates, with accept and reject. Works like "track changes" for ink: a tutor, the lecturer or a classmate writes corrections on a separate layer (through a shared Drive folder or a collaboration session); you go through them and accept (merged into your notes) or reject (removed). (Confirmed by the user, 2026-10-29.)
 
 ### Page structure
 306. **P2** Nested detail pages: a mark opens a dedicated sub-page, like a full-page footnote.
@@ -606,10 +606,10 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 316. **P2** Editable Bézier curves with handles, for precise drawings.
 317. **P3** Freehand arrows: any drawn curve can get an arrowhead.
 318. **P3** Snap to the endpoints of existing ink.
-319. ~~**P3** Eraser that grows with pressure.~~ — dropped (user decision, 2026-10-29)
-320. ~~**P3** Column alignment of handwritten numbers.~~ — dropped (user decision, 2026-10-29)
+319. ~~**P3** Eraser that grows with pressure.~~ — dropped (user decision, 2026-10-29)
+320. ~~**P3** Column alignment of handwritten numbers.~~ — dropped (user decision, 2026-10-29)
 321. **P3** Local grid: lines or squares only in one region of the page.
-322. ~~**P3** Colour by session: ink coloured by when it was written.~~ — dropped (user decision, 2026-10-29)
+322. ~~**P3** Colour by session: ink coloured by when it was written.~~ — dropped (user decision, 2026-10-29)
 323. **P3** Configurable haptic confirmation: vibration enabled per event type (gestures, saves, shape recognition), where the device supports it.
 324. **P3** Precision cursor for finger writing.
 
@@ -634,7 +634,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 338. **P3** Private presenter notes on a second screen.
 339. **P3** Step-by-step procedures with the time recorded at each tick, for labs.
 340. **P3** Book from ISBN: scan the barcode and create the book note for the bibliography.
-341. ~~**P2** Night mode for PDFs: inverted pages with ink always readable.~~ — dropped (user decision, 2026-10-29)
+341. ~~**P2** Night mode for PDFs: inverted pages with ink always readable.~~ — dropped (user decision, 2026-10-29)
 
 ## M17 — More features (backlog, planned 2026-10-29)
 
@@ -713,8 +713,8 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 A deterministic, rule-based interface that adapts to context, content, habits and device (no AI: see CLAUDE.md rule 7). Built on the action registry (`src/ui/actions.ts`, `docs/design-ui.md`). Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for all.
 
 ### Toolbar and tools
-392. **P1** Toolbar by page type: PDF slide → snapping highlighter, PDF search, margins; ruled page → pen and text; grid → ruler and shapes (extends the PDF and image-page contextual bars).
-393. **P1** Toolbar that learns per notebook or course: quick slots and favourites ranked by what is used in that notebook (today use counts are per device).
+392. **P1** 🧪 Toolbar by page type: PDF slide → snapping highlighter, PDF search, margins; ruled page → pen and text; grid → ruler and shapes (extends the PDF and image-page contextual bars).
+393. **P1** 🧪 Toolbar that learns per notebook or course: quick slots and favourites ranked by what is used in that notebook (today use counts are per device).
 394. **P2** Context palette: the slide's colours plus the colours already used on the page.
 395. **P3** Suggested pen width from the paper spacing and the zoom level.
 396. **P3** Likely next tool one tap away, from the sequence of tools you usually use.
@@ -722,10 +722,10 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 398. **P3** Toolbar placed away from the writing hand (learned handedness and palm position).
 399. **P2** Toolbar fades while writing and returns on the first touch.
 400. **P3** The 4–5 most likely commands appear near the nib when the pen lifts.
-401. **P1** Automatic lecture mode from the timetable (#115), with the compact lecture toolbar (#214) shown when a class starts.
+401. **P1** 🧪 Automatic lecture mode from the timetable (#115), with the compact lecture toolbar (#214) shown when a class starts.
 
 ### Selection
-402. **P1** Selection bar by content type: ink, image, text or mixed selection each show their own actions (extends the selection contextual bar).
+402. **P1** 🧪 Selection bar by content type: ink, image, text or mixed selection each show their own actions (extends the selection contextual bar).
 403. **P2** Actions suggested by the selection's geometry: a row of words → card, highlight; two regions joined by an arrow → link.
 404. **P3** Preview before applying: press and hold an action to see its result.
 405. **P3** Radial menu for the selection.
@@ -733,20 +733,20 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 
 ### Pages and notebook
 407. **P1** 🧪 Generated outline: bookmarks, large handwriting as headings and slide changes in one outline (combines #15, #102 and #46).
-408. **P1** Notebook map with states: open questions, gaps and homework per page (extends #223 from one lecture to the whole notebook).
+408. **P1** 🧪 Notebook map with states: open questions, gaps and homework per page (extends #223 from one lecture to the whole notebook).
 409. **P2** Suggested paper for a new page, from the previous pages and the course.
-410. **P1** Smart "+": the 2–3 most likely new pages (same paper, exercise page, slide page) in one tap.
+410. **P1** 🧪 Smart "+": the 2–3 most likely new pages (same paper, exercise page, slide page) in one tap.
 411. **P2** Tags suggested from context (course, content, markers).
 412. **P3** Page panel that shows only what that page has (hides empty sections and actions that do not apply).
 413. **P3** Generated cover for a notebook (title, course, colour, first page).
 414. **P2** Adaptive navigator: large thumbnails for PDFs, a compact list for text pages.
 
 ### Library
-415. **P1** Dynamic sections: Now, To complete, Changed on another device, Recent.
+415. **P1** 🧪 Dynamic sections: Now, To complete, Changed on another device, Recent. (0.14: the first three are library dashboard panels, places, sidebar items with counts and Home chips; Recent is Home's Recent notes and the Recent filter; waiting for hardware verification)
 416. **P2** Notebooks ordered by the active term.
 
 ### PDF and lecture
-417. **P1** Slide strip: for each slide, the exercise page after it, the margin note and the question on this slide.
+417. **P1** 🧪 Slide strip: for each slide, the exercise page after it, the margin note and the question on this slide.
 418. **P2** PDF search with suggested terms (from the outline, headings and your own text).
 419. **P2** Filtered view of marked pages only (bookmarks, markers, questions).
 420. **P2** Welcome-back banner when reopening: last slide, open questions and gaps.
@@ -765,7 +765,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 429. **P2** Explanation on long-press of an icon.
 
 ### Layout and devices
-430. **P1** Layout by orientation and size (the layout engine today reacts to width only).
+430. **P1** 🧪 Layout by orientation and size (`src/ui/viewport-class.ts`, `nb-vp-*` classes; 0.14).
 431. **P2** Layout by input device: pen, finger or mouse and keyboard.
 432. **P3** Larger targets when you often miss.
 433. **P3** Contrast-adaptive toolbar over slides.
@@ -777,7 +777,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 437. ~~**P1** Status shown only when relevant (saving, sync, read-only).~~ — already covered by the UI redesign (status banners, `docs/design-ui.md` §2)
 
 ### Structured content
-438. **P1** Lecture page prefilled from context (course, date, slide, header from #210).
+438. **P1** 🧪 Lecture page prefilled from context (course, date, slide, header from #210).
 439. **P2** Contextual insert: equation, graph or table suggested by the paper and the content.
 440. **P2** Composed exercise page: the statement cropped from the slide on top, space to solve below.
 441. **P3** Export settings proposed from the content (ink only, with PDF, margins).

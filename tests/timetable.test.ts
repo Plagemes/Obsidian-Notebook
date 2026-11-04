@@ -263,3 +263,61 @@ describe("lecture page, tag hook, provider, settings", () => {
 		expect(readSettings({ timetableLeadMinutes: 999 }).timetableLeadMinutes).toBe(5);
 	});
 });
+
+describe("fields this version does not know", () => {
+	const file = JSON.stringify({
+		version: 1,
+		weekOne: "2026-10-05",
+		futureTop: { theme: "blue", n: [1, 2] },
+		entries: [
+			{ id: "a", course: "Chem", day: 2, start: "08:00", end: "09:00", weeks: "all", credits: 6, tags: ["lab"], room: "B2" },
+			{ id: "b", course: "Math", day: 3, start: "10:00", end: "11:00", weeks: "odd" },
+		],
+	});
+
+	it("survive reading, an edit and writing back unchanged", () => {
+		const r = parseTimetable(file);
+		expect(r.ok).toBe(true);
+		if (!r.ok) return;
+		const edited: Timetable = { ...r.timetable, entries: r.timetable.entries.map((e) => (e.id === "a" ? { ...e, course: "Chemistry", room: "C1" } : e)) };
+		const back = JSON.parse(serializeChecked(edited)) as Record<string, unknown>;
+		expect(back.futureTop).toEqual({ theme: "blue", n: [1, 2] });
+		const entries = back.entries as Array<Record<string, unknown>>;
+		expect(entries[0]).toMatchObject({ course: "Chemistry", room: "C1", credits: 6, tags: ["lab"] });
+		expect(entries[1]).not.toHaveProperty("credits");
+		// The known fields keep their order, the unknown ones follow.
+		expect(Object.keys(entries[0]!)).toEqual(["id", "course", "day", "start", "end", "room", "weeks", "credits", "tags"]);
+		expect(Object.keys(back)).toEqual(["version", "weekOne", "entries", "futureTop"]);
+	});
+
+	it("do not change a file that was already understood completely", () => {
+		const r = parseTimetable(file);
+		if (!r.ok) throw new Error("unreadable");
+		const once = serializeTimetable(r.timetable);
+		const again = parseTimetable(once);
+		expect(again.ok && serializeTimetable(again.timetable)).toBe(once);
+	});
+
+	it("never override a known field, and are absent when there are none", () => {
+		const e = entry({ id: "k", course: "Real", extra: { course: "Fake", id: "zz", extra: 1, shiny: true } });
+		const out = JSON.parse(serializeTimetable({ version: 1, entries: [e], extra: { version: 99, entries: [], later: 1 } })) as Record<string, unknown>;
+		const written = (out.entries as Array<Record<string, unknown>>)[0]!;
+		expect(written.course).toBe("Real");
+		expect(written.id).toBe("k");
+		expect(written.shiny).toBe(true);
+		expect(out.version).toBe(1);
+		expect(out.later).toBe(1);
+		const plain = parseTimetable(serializeTimetable(tt([entry()])));
+		expect(plain.ok && "extra" in plain.timetable).toBe(false);
+		expect(plain.ok && "extra" in plain.timetable.entries[0]!).toBe(false);
+	});
+
+	it("do not let a __proto__ key reach the prototype", () => {
+		const r = parseTimetable('{"version":1,"__proto__":{"x":1},"entries":[{"id":"a","course":"C","day":1,"start":"08:00","end":"09:00","__proto__":{"y":1}}]}');
+		expect(r.ok).toBe(true);
+		if (!r.ok) return;
+		expect(r.timetable.extra).toBeUndefined();
+		expect(({} as Record<string, unknown>).x).toBeUndefined();
+		expect(serializeTimetable(r.timetable)).not.toContain("__proto__");
+	});
+});

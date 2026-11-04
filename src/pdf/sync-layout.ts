@@ -16,7 +16,9 @@ export const MAX_RATIO = 0.8;
 export const MIN_ROW_WIDTH = 700;
 
 /** Side by side on a wide, landscape view (tablet held sideways, desktop); stacked otherwise (phone, tablet upright). */
-export function splitOrientation(width: number, height: number): SplitOrientation {
+export function splitOrientation(width: number, height: number, prev?: SplitOrientation): SplitOrientation {
+	// 0.14: sticky when the previous answer is known, so a view hovering around the threshold does not flip back and forth.
+	if (prev === "row") return width >= MIN_ROW_WIDTH - 40 && width >= height * 1.0 ? "row" : "column";
 	return width >= MIN_ROW_WIDTH && width >= height * 1.1 ? "row" : "column";
 }
 

@@ -16,7 +16,7 @@ import { GotoPageModal } from "./goto-page";
 import type { NotebookView } from "./notebook-view";
 import { editBookmark, editPageTags } from "./outline";
 import { exportPdfAnnotations, openMarginsModal, updatePdfFromNewVersion } from "./pdf-actions";
-import { pdfSideState, runPdfSideAction, type PdfSideAction } from "./pdf-sync";
+import { openSlideStripOf, pdfSideState, runPdfSideAction, type PdfSideAction } from "./pdf-sync";
 import { deletePageKeepingCopy, newPageFromTemplate, openDeletedPages, savePageAsTemplate } from "./page-tools";
 import { insertReference, openPage, removeTextbook, setTextbook } from "./textbook-ref-ui";
 import { toggleBookmark } from "./view-helpers";
@@ -177,6 +177,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"stamps": (v) => v.stampPalette?.toggle(),
 	"board-shot": (v) => void v.boardShot(),
 	"add-page": (v) => v.addPage(),
+	"add-page-suggest": (v) => v.openSmartAdd(),
 	"insert-blank-page": onPage((v, _p, i) => v.addPageAfter(i)),
 	"exercise-page": onPage((v, _p, i) => v.exercisePageAfter(i)),
 	"page-from-template": onPage((v, _p, i) => newPageFromTemplate(v.pageToolsHost(), i)),
@@ -245,6 +246,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"pdf-search-next": (v) => v.readingTools?.step(1),
 	"pdf-search-previous": (v) => v.readingTools?.step(-1),
 	"toggle-annotations": (v) => v.readingTools?.toggleAnnotations(),
+	"toggle-snap-highlighter": (v) => v.readingTools?.toggleSnap(),
 	"toggle-dim-background": (v) => v.readingTools?.toggleDim(),
 	"pdf-margins": onPage((v, p) => {
 		const host = v.pdfActionHost();
@@ -266,9 +268,12 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"pdf-side-show-slide": side("pdf-side-show-slide"),
 	"pdf-side-add-page": side("pdf-side-add-page"),
 	"pdf-side-close": side("pdf-side-close"),
+	// 0.14 slides (#417)
+	"slide-strip": (v) => void openSlideStripOf(v),
 
 	// lecture
 	"new-lecture": (v) => void v.newLecture(),
+	"lecture-mode": (v) => v.lectureMode?.toggle(),
 	"exercise-paper": (v) => v.chooseExercisePaper(),
 
 	// markers, boxes, invisible ink (wave 0.8)

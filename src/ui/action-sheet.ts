@@ -6,6 +6,7 @@ import { t } from "../i18n";
 import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "../model/types";
 import { isChecked, isEnabled, type ActionDef, type ActionGroup, type UiContext } from "./actions";
 import { listenDismiss } from "./dismiss";
+import { attachPinGesture, type PinGesture } from "./pin-gesture";
 import { buildSheet, type SectionId } from "./layout";
 import type { UsageMap } from "./usage";
 
@@ -24,6 +25,8 @@ export interface SheetHost {
 	extra?(section: SectionId): HTMLElement | null;
 	/** True when the sheet should be a bottom sheet (phone-sized view). */
 	narrow(): boolean;
+	/** 0.14 (393): pinning of quick-capable actions (press and hold a row). Absent: rows cannot be pinned. */
+	pin?: { has(id: string): boolean; toggle(id: string): void };
 }
 
 export function actionLabel(a: ActionDef): string {
@@ -186,8 +189,15 @@ export class ActionSheet {
 			b.createSpan({ cls: "notebook-switch", attr: { "aria-hidden": "true" } });
 		}
 		b.disabled = !isEnabled(a, c);
+		const pin = this.host.pin;
+		let press: PinGesture | null = null;
+		if (pin && a.surfaces.includes("quick")) {
+			press = attachPinGesture(b, { pinned: () => pin.has(a.id), toggle: () => { pin.toggle(a.id); if (this.isOpen) this.render(); } });
+			if (pin.has(a.id)) setIcon(b.createSpan({ cls: "notebook-menu-pin", attr: { "aria-hidden": "true" } }), "pin");
+		}
 		b.addEventListener("click", (e) => {
 			e.preventDefault();
+			if (press?.justOpened()) return; // the long press already opened the pin menu
 			const pageIndex = this.pageIndex ?? c.page?.index;
 			if (!STAYS_OPEN(a)) this.close();
 			this.host.run(a.id, { page: pageIndex });

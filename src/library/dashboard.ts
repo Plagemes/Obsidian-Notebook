@@ -3,6 +3,7 @@
  * Subjects, smart collections, frequent tags and statistics. Pure, no 'obsidian'.
  */
 import { tagAncestors } from "../model/tags";
+import type { DynamicId } from "./dynamic-sections";
 import { isInside, normalizeText, type LibraryEntry } from "./index";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -47,7 +48,8 @@ export function subjectsOf(entries: readonly LibraryEntry[], root: string, folde
 
 /** Smart collections, in display order. */
 export const COLLECTIONS = ["study", "favourites", "pdf", "recent", "exams"] as const;
-export type CollectionId = typeof COLLECTIONS[number];
+/** 0.14: the dynamic sections (dynamic-sections.ts) are places of the library too; they are not in the dashboard's smart collections list. */
+export type CollectionId = typeof COLLECTIONS[number] | DynamicId;
 
 /** Tags that mark a notebook to study (any level of a nested tag, accent and case insensitive). */
 const STUDY_TAGS = /^(da[-_ ]?studiare|studiare|ripasso|ripassare|to[-_ ]?study|study|review|todo)$/;
@@ -65,6 +67,8 @@ export interface CollectionContext {
 	now: number;
 	/** Pinned in the library (roadmap 54): pinned notebooks count as favourites too. */
 	pinned: (e: LibraryEntry) => boolean;
+	/** 0.14: the paths in each dynamic section (computed by the view from the index, the recent log and the seen record). */
+	dynamic?: Readonly<Partial<Record<DynamicId, ReadonlySet<string>>>>;
 }
 
 /** Whether a notebook belongs to a smart collection. */
@@ -80,6 +84,10 @@ export function inCollection(id: CollectionId, e: LibraryEntry, c: CollectionCon
 			return e.modified >= c.now - RECENT_DAYS * DAY;
 		case "exams":
 			return hasTag(e, EXAM_TAGS);
+		case "now":
+		case "todo":
+		case "changed":
+			return c.dynamic?.[id]?.has(e.path) ?? false;
 	}
 }
 

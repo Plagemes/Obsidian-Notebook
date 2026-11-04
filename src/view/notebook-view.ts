@@ -57,7 +57,7 @@ import { checkContent, freezeStroke } from "../model/serialize";
 import {
 	DEFAULT_META, PAPER_SPACING,
 	type Asset, type ImageElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement,
-	type Point, type Stroke, type TextElement, RENDER_FREEHAND, RENDER_INK,
+	type PaperKind, type Point, type Stroke, type TextElement, RENDER_FREEHAND, RENDER_INK,
 } from "../model/types";
 import type { JournalStore } from "../storage/journal";
 import { DocumentSession, type SaveState, type SessionMode } from "../storage/session";
@@ -77,6 +77,8 @@ import { NotebookMedia, storeAsset } from "./media";
 import { HeavyPageBanner } from "./heavy-page-banner";
 import { ViewSyncSafety, type SyncSafetyService } from "./sync-safety";
 import { PageNavigator } from "./navigator";
+import { NotebookMapCache } from "../model/notebook-map";
+import { NotebookMapModal } from "./notebook-map-modal";
 import type { NavController } from "./nav-controller";
 import { FastScrollbar, type ScrollbarHost } from "./scrollbar";
 import type { StatusBarInfo } from "./status-bar-logic";
@@ -101,17 +103,25 @@ import { askPdfRange } from "./pdf-range-modal";
 import { runBoardShot } from "./board-shot";
 import type { EditContext } from "./edit-context";
 import { runNewLecture } from "./lecture";
+import { pickSlideRef } from "./lecture-logic";
+import { LectureModeController } from "./lecture-mode";
+import { LECTURE_MEMORY_KEY } from "../timetable/lecture-memory";
+import { findLecturePage } from "../timetable/lecture-open";
+import type { LectureClass } from "../timetable/lecture-mode";
 import { askExercisePaper, askLayoutOptions, loadExercisePaper } from "./lecture-pack-modal";
 import { runMovePages } from "../library/move-pages";
 import type { PdfActionHost } from "./pdf-actions";
 import { pickFile } from "./pick";
-import { pdfSideState, referenceSlideOf, type PageSyncHooks } from "./pdf-sync";
+import { pdfSideState, referencePane, referenceSlideOf, runPdfSideAction, type PageSyncHooks } from "./pdf-sync";
+import { attachSlideBadges, linkToSlide, refreshSlideBadges } from "./slide-ink";
 import { MarkerTools, translatedBoxLabel } from "./markers";
 import { ExcerptTools } from "./excerpts";
 import { layerCommand, type LayerMove } from "../model/layers";
 import { FindReplaceModal } from "./find-replace";
 import { PageInfoModal } from "./page-info";
 import { PageOffer } from "./page-offer";
+import { SmartAddStrip } from "./smart-add";
+import { nearbyPapers, type SmartAddChoice, type SmartAddInput } from "../model/smart-add";
 import { visibleStrokes } from "../model/markers";
 import type { PageToolsHost } from "./page-tools";
 import { RulerGesture } from "./ruler-gesture";
@@ -134,6 +144,7 @@ import { hasBackgrounds, hasPdfPages } from "./reading-logic";
 import { ColourTools, type PageInk } from "./colour-tools";
 import { commandApplies, runViewAction, sizeName, type ActionArg } from "./view-actions";
 import { ViewUi } from "./view-ui";
+import { pageKindOf } from "../ui/page-kind";
 import { pageKeyAction, shouldTurnPage, takesKey, type KeyScene } from "./page-keys";
 import { isTextField, penKeyMatches, penKeyMayAct } from "../ink/pen-hover";
 import { hint } from "../ui/hints";
@@ -144,6 +155,7 @@ import {
 	unionBounds,
 } from "./view-helpers";
 import { showErrorNotice, showNotice, type NoticeHandle } from "./notice";
+import { applyViewportClass, ViewportTracker } from "../ui/viewport-class";
 
 export const VIEW_TYPE = "notebook-view";
 
@@ -190,6 +202,8 @@ export interface NotebookHost {
 	practice?: PracticeProvider;
 	/** ui redesign: the course of the class on now (timetable), for the lecture contextual bar. Optional. */
 	classNow?(): string | null;
+	/** 0.14 (401): the class in progress that belongs to this notebook (automatic lecture mode). Optional: absent in tests and the harness. */
+	lectureClassFor?(path: string): LectureClass | null;
 	/** ui redesign: runs a plugin-level action of the registry (notebook menu). Optional. */
 	runGlobal?(id: string): void;
 	/** wave 0.7: sync safety (presence files, sync check). Optional: absent in tests and the harness. */
@@ -335,6 +349,8 @@ export class NotebookView extends FileView {
 	private renderer: Renderer | null = null;
 	private controller: PointerController | null = null;
 	private resizeObserver: ResizeObserver | null = null;
+	/** 0.14 layout: phone / tablet / desktop, portrait / landscape and short height of this view (classes nb-vp-* on contentEl). */
+	private readonly vpClass = new ViewportTracker(() => ({ coarse: activeWindow.matchMedia("(pointer: coarse)").matches }));
 	private media: NotebookMedia | null = null;
 	/** wave 0.7: sync safety (#342–#344). */
 	private syncSafety: ViewSyncSafety | null = null;
@@ -390,6 +406,10 @@ export class NotebookView extends FileView {
 	private excerpts: ExcerptTools | null = null;
 	/** wave 0.9 (389): the chip that offers a page after a page in the middle of the notebook (view/page-offer.ts). */
 	private pageOffer: PageOffer | null = null;
+	/** 0.14 (401): automatic lecture mode of this view (view/lecture-mode.ts). */
+	lectureMode: LectureModeController | null = null;
+	/** wave 0.14 (410): the Smart "+" strip (view/smart-add.ts). */
+	private smartAdd: SmartAddStrip | null = null;
 
 	private viewport: Viewport = { scale: 1, offsetX: 0, offsetY: 0 };
 	private viewSize: Size = { width: 0, height: 0 };
@@ -512,6 +532,7 @@ export class NotebookView extends FileView {
 			redo: () => this.runAction("redo"),
 			toggleNavigator: () => this.runAction("toggle-pages-panel"),
 			runAction: (id) => this.runAction(id),
+			togglePin: (id) => this.ui?.togglePin(id),
 			openSheet: (anchor) => this.ui?.openSheet("all", anchor),
 			openPageSheet: (anchor) => this.ui?.openSheet("page", anchor, this.currentPageIndex()),
 		});
@@ -538,6 +559,7 @@ export class NotebookView extends FileView {
 			pageMenu: (index) => this.openPageMenu(index),
 			outline: this.outlineHost(),
 			selectionMenu: (ids, evt) => openPageOpsMenu(this.pageOpsHost(), ids, evt),
+			openMap: () => this.openNotebookMap(),
 		});
 		// The panel sits to the left of the page (a drawer over it on narrow views).
 		this.body.insertBefore(this.pageNav.el, this.stage);
@@ -573,6 +595,13 @@ export class NotebookView extends FileView {
 			},
 			dimControl: () => (this.reading?.dimmed ? this.reading.dimControl : null),
 			toolbarSize: () => this.host.settings.toolbarSize,
+			adapt: () => ({ pageType: this.host.settings.adaptPageType, learn: this.host.settings.adaptLearn, selection: this.host.settings.adaptSelection }),
+			pinned: () => this.host.settings.pinnedQuick,
+			setPinned: (ids) => {
+				this.host.settings.pinnedQuick = ids;
+				void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
+			},
+			notebookId: () => this.session?.doc?.id ?? null,
 		});
 		this.mountSelectionActions();
 		this.mountStamps();
@@ -596,10 +625,33 @@ export class NotebookView extends FileView {
 
 		this.renderer = new Renderer(this.stage, { lowLatency: this.host.settings.lowLatencyInk });
 		this.mountMarkers();
+		this.lectureMode = new LectureModeController({
+			parent: () => this.body,
+			path: () => this.file?.path ?? null,
+			setting: () => this.host.settings.lectureMode,
+			classFor: (path) => this.host.lectureClassFor?.(path) ?? null,
+			busy: () => this.inContact(),
+			editContext: () => this.editContext(),
+			editable: () => this.editable(),
+			goToLecturePage: (course, date) => {
+				const i = findLecturePage(this.session?.doc?.pages ?? [], course, date);
+				if (i >= 0) this.scrollToPage(i);
+			},
+			changed: () => this.refreshUi(),
+			memory: { load: (): unknown => this.app.loadLocalStorage(LECTURE_MEMORY_KEY), save: (v) => this.app.saveLocalStorage(LECTURE_MEMORY_KEY, v) },
+		});
 		this.mountExcerpts();
 		this.pageOffer = new PageOffer({
 			parent: () => this.body,
 			insertAfter: (pageId) => this.insertPageAfterId(pageId),
+		});
+		this.smartAdd = new SmartAddStrip({
+			app: this.app,
+			parent: () => this.body,
+			notebookId: () => (this.editable() ? (this.session?.doc?.id ?? null) : null),
+			context: () => this.smartAddContext(),
+			add: (choice) => this.addSmartChoice(choice),
+			more: () => this.openPageMenu(this.currentPageIndex()),
 		});
 		// Registered before the pointer controller: the ruler gesture swallows the touches that move the ruler.
 		this.rulerGesture = new RulerGesture(this.stage, {
@@ -702,6 +754,8 @@ export class NotebookView extends FileView {
 		this.display = new ViewDisplay(this.displayHost());
 		this.display.applyNight();
 		this.practiceHooks = this.host.practice?.attach(this.practiceHost()) ?? null;
+		// 0.14 slides (#226): badges next to ink written beside a slide; a tap shows the slide again.
+		attachSlideBadges(this, () => this.host.settings);
 		this.applySettings(this.host.settings);
 
 		this.resizeObserver = new ResizeObserver(() => this.measure());
@@ -774,6 +828,8 @@ export class NotebookView extends FileView {
 		this.display = null;
 		this.practiceHooks?.destroy();
 		this.practiceHooks = null;
+		this.lectureMode?.destroy();
+		this.lectureMode = null;
 		this.tabs?.destroy();
 		this.tabs = null;
 		this.toolbar?.destroy();
@@ -800,6 +856,8 @@ export class NotebookView extends FileView {
 		this.penLinks = null;
 		this.pageOffer?.destroy();
 		this.pageOffer = null;
+		this.smartAdd?.destroy();
+		this.smartAdd = null;
 		this.ui?.destroy();
 		this.ui = null;
 		this.stamps?.destroy();
@@ -1112,6 +1170,7 @@ export class NotebookView extends FileView {
 		this.media = null;
 		this.reading?.reset();
 		this.pageNav?.invalidate();
+		this.lectureMode?.closed();
 		await super.onUnloadFile(file);
 	}
 
@@ -1157,6 +1216,7 @@ export class NotebookView extends FileView {
 
 	applySettings(settings: NotebookSettings): void {
 		this.applyInput(settings);
+		refreshSlideBadges(this); // 0.14 slides: the badges setting
 		this.pressure.mode = settings.pressureMode;
 		if (this.toolbar && this.tools.eraserSize !== settings.eraserSize) this.toolbar.update({ eraserSize: settings.eraserSize });
 		this.pens?.refresh();
@@ -1173,6 +1233,7 @@ export class NotebookView extends FileView {
 		this.perfEl?.toggleClass("notebook-hidden", !settings.perfOverlay);
 		if (this.renderer) this.renderer.onFrame = settings.perfOverlay ? (t) => this.onFrame(t) : null;
 		this.reading?.settingsChanged();
+		this.lectureMode?.settingsChanged();
 		// wave 0.9 (370): a new toolbar size changes the bar, the contextual bar and the number of quick slots.
 		this.ui?.refresh();
 		this.display?.settingsChanged();
@@ -1466,6 +1527,28 @@ export class NotebookView extends FileView {
 		this.addPageAfter(this.currentPageIndex());
 	}
 
+	/** wave 0.14 (410): the "+" slot: shows the likeliest new pages as one-tap chips (view/smart-add.ts); nothing is added until one is tapped. */
+	openSmartAdd(): void {
+		if (!this.editable() || this.controller?.drawing) return;
+		this.smartAdd?.toggle();
+	}
+
+	private smartAddContext(): Omit<SmartAddInput, "history"> | null {
+		const doc = this.session?.doc;
+		const page = doc?.pages[this.currentPageIndex()];
+		if (!doc || !page || !this.editable()) return null;
+		return { paper: page.paper.kind, hasBackground: !!page.background, nearbyPapers: nearbyPapers(doc.pages, this.currentPageIndex()), slide: referenceSlideOf(this), exercisePaper: loadExercisePaper(this.app) };
+	}
+
+	private addSmartChoice(choice: SmartAddChoice): boolean {
+		const index = this.currentPageIndex();
+		const before = this.session?.doc?.pages.length ?? 0;
+		if (choice.id === "slide") return runPdfSideAction(this, "pdf-side-add-page");
+		if (choice.id === "same") this.addPageAfter(index);
+		else if (choice.paper) this.addPageWithPaper(choice.paper, index);
+		return (this.session?.doc?.pages.length ?? 0) > before;
+	}
+
 	/** Inserts a blank page (size and paper of the page at `index`) after it. */
 	addPageAfter(index: number): void {
 		const doc = this.session?.doc;
@@ -1482,12 +1565,17 @@ export class NotebookView extends FileView {
 
 	/** "Exercise page here": a blank page with the exercise paper right after the page at `index` (default: the one in view), one undo step. */
 	exercisePageAfter(index: number = this.currentPageIndex()): void {
+		this.addPageWithPaper(loadExercisePaper(this.app), index);
+	}
+
+	/** A blank page with this paper, the size of the page at `index`, right after it, one undo step. */
+	addPageWithPaper(paper: PaperKind, index: number = this.currentPageIndex()): void {
 		const doc = this.session?.doc;
 		const like = doc?.pages[index];
 		if (!doc || !like || !this.editable() || this.controller?.drawing) return;
 		this.commitText();
 		this.clearSelection();
-		this.history.execute(new AddPage(exercisePage(like, loadExercisePaper(this.app)), index + 1));
+		this.history.execute(new AddPage(exercisePage(like, paper), index + 1));
 		this.afterHistoryChange();
 		this.scrollToPage(index + 1);
 	}
@@ -2228,11 +2316,12 @@ export class NotebookView extends FileView {
 			page: page ? {
 				index, count: pages.length, background: page.background?.kind ?? "none", infinite: !!page.infinite,
 				bookmarked: doc?.meta?.bookmarks.includes(page.id) ?? false, splittable: page.id === this.heavyPageId,
+				kind: pageKindOf({ background: page.background?.kind ?? "none", paper: page.paper.kind, width: page.width, height: page.height }),
 			} : null,
 			notebook: { pdfPages: hasPdfPages(pages), backgrounds: hasBackgrounds(pages) },
-			lecture: !!this.host.classNow?.(),
+			lecture: this.lectureMode?.on ?? false,
 			sidePane: pdfSideState(this),
-			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false },
+			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false, snap: this.reading?.snapping ?? false },
 			display: { night: this.display?.night ?? false, crop: this.display?.crop ?? false },
 			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle", readOnly: this.userReadOnly },
 			canPrint: canPrint(),
@@ -2254,6 +2343,7 @@ export class NotebookView extends FileView {
 			strokes: parts.reduce((n, p) => n + p.strokes.length, 0),
 			elements: elements.length,
 			images: elements.filter((e) => e.type === "image").length,
+			texts: elements.filter((e) => e.type === "text").length,
 			links: this.penLinks?.linkIn(sel.elements) ? 1 : 0,
 			// The maths actions (Edit, Convert to ink) work on the primary page's elements only (see mathTools).
 			equations: sel.elements.filter((e) => e.type === "equation").length,
@@ -2436,6 +2526,9 @@ export class NotebookView extends FileView {
 
 	/** What the flows of those modules may do to this document; null unless it is open, editable and not being written on. */
 	editContext(): EditContext | null {
+		// Every flow that takes this context edits the document, so a read-only view (the user's, sync safety's, a newer
+		// format, hidden annotations) hands out none: `stillHere` below includes `editable()`.
+		if (!this.editable()) return null;
 		const session = this.session;
 		const media = this.media;
 		const doc = session?.doc;
@@ -2450,6 +2543,7 @@ export class NotebookView extends FileView {
 			alive: () => this.stillHere(session) && session.doc === doc,
 			addPending: (asset) => media.addPending(asset),
 			removePending: (id) => media.removePending(id),
+			slide: () => pickSlideRef({ pane: referencePane(this), paneSlide: referenceSlideOf(this), page: doc.pages[this.currentPageIndex()], assets: doc.assets }),
 			currentPage: () => this.currentPageIndex(),
 			visibleLocal: (i) => {
 				const box = this.layout?.boxes[i];
@@ -2634,6 +2728,7 @@ export class NotebookView extends FileView {
 			void checkConflicts(this.reliabilityDeps(), this);
 			this.syncHooks?.loaded();
 			this.practiceHooks?.loaded();
+			this.lectureMode?.opened();
 		} else {
 			this.body.hide();
 			this.toolbar.setEditable(false);
@@ -2763,6 +2858,7 @@ export class NotebookView extends FileView {
 			if (n && this.app.workspace.getActiveViewOfType(NotebookView) === this) this.host.nav?.seen(this.navPlace());
 			this.pageNav?.markCurrent(current);
 			this.pageOffer?.cancel(); // an offer made for the page that was in view
+			this.smartAdd?.hide();
 			this.refreshUi(); // the contextual bar follows the kind of page in view
 			if (n && this.file && this.pendingPage === null) this.location.note(this.file.path, current + 1, this.currentPosition());
 			this.syncHooks?.page(current);
@@ -2803,6 +2899,20 @@ export class NotebookView extends FileView {
 			this.thumbPending.clear();
 			this.pageNav?.invalidate(ids);
 		}, 150);
+	}
+
+	/** 0.14 (408): the notebook map, with its per-page cache (one per open view). */
+	private readonly mapCache = new NotebookMapCache();
+
+	private openNotebookMap(): void {
+		const pages = () => this.shownDoc()?.pages ?? [];
+		new NotebookMapModal(this.app, {
+			map: () => this.mapCache.build(pages()),
+			pages,
+			current: () => this.currentPageIndex(),
+			thumbnail: (page) => this.pageNav?.thumbnailOf(page) ?? BLANK_THUMBNAIL,
+			goTo: (index) => this.goToPage(index),
+		}).open();
 	}
 
 	private thumbnail(page: Page, width: number): string {
@@ -2887,6 +2997,8 @@ export class NotebookView extends FileView {
 		if (rect.width === 0 || rect.height === 0) return;
 		this.viewSize = { width: rect.width, height: rect.height };
 		this.body.toggleClass("is-narrow", this.contentEl.clientWidth < NARROW_PX);
+		const vp = this.vpClass.update(this.contentEl.clientWidth, this.contentEl.clientHeight);
+		if (vp) applyViewportClass(this.contentEl, vp);
 		this.ui?.refresh();
 		this.renderer?.resize(rect.width, rect.height, window.devicePixelRatio || 1);
 		this.refit(true);
@@ -3213,6 +3325,7 @@ export class NotebookView extends FileView {
 		this.clearSelection();
 		this.penLinks?.strokeStarted();
 		this.pageOffer?.penDown();
+		this.smartAdd?.hide();
 		this.strokeStart = sample.t;
 		const snap = !!page && this.rulerLatches(page, local);
 		const start = snap && this.ruler ? (projectToRuler(this.ruler.ruler, local, Infinity) ?? local) : local;
@@ -3455,6 +3568,9 @@ export class NotebookView extends FileView {
 		if (badgeTap) this.excerpts?.openSource(badgeTap);
 		// An external change seen during the gesture was postponed; check it now.
 		this.session?.gestureEnded();
+		// 0.14: the first stroke written during an automatic lecture is what adds its page (view/lecture-mode.ts). Deferred past the
+		// pointer handler so the contact is over; the document is only touched through the usual edit context.
+		if (!cancelled && badgeTap === null && this.justCommitted) window.setTimeout(() => this.lectureMode?.wrote(), 0);
 	}
 
 	private endGesture(cancelled: boolean): void {
@@ -3594,8 +3710,12 @@ export class NotebookView extends FileView {
 	}
 
 	/** Commits strokes drawn on a page as one undo step; an infinite page grows in the same step. */
-	private addStrokes(pageIndex: number, page: Page, strokes: Stroke[]): void {
-		const commands: Command[] = strokes.map((s, i) => new AddStroke(page.id, s, page.strokes.length + i));
+	private addStrokes(pageIndex: number, page: Page, drawn: Stroke[]): void {
+		// 0.14 slides (#226): ink written while a slide is beside the notes remembers it, in the same undo step. The renderer
+		// still gets the strokes it drew (`drawn`, same geometry): the wet ink hands over to exactly those objects.
+		const linked = this.session?.doc ? linkToSlide(this, this.session.doc, drawn, this.host.settings.slideInkLink) : null;
+		const strokes = linked?.strokes ?? drawn;
+		const commands: Command[] = [...(linked?.commands ?? []), ...strokes.map((s, i) => new AddStroke(page.id, s, page.strokes.length + i))];
 		let grew = false;
 		if (page.infinite && this.renderer) {
 			const maxY = Math.max(...strokes.map((s) => this.renderer!.boundsOf(s).maxY));
@@ -3626,7 +3746,7 @@ export class NotebookView extends FileView {
 			this.afterHistoryChange();
 			return;
 		}
-		for (const s of strokes) this.renderer?.appendStroke(pageIndex, s);
+		for (const s of drawn) this.renderer?.appendStroke(pageIndex, s);
 		this.markChanged();
 		this.updateHistoryButtons();
 		this.scheduleNavRefresh();

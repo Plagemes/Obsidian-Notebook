@@ -4,11 +4,15 @@
 import type { App } from "obsidian";
 import type { PageSizeName, PaperKind } from "../model/types";
 import { actionById, isChecked, isEnabled, type ContextKind, type UiContext } from "../ui/actions";
+import { MAX_PINNED, togglePinned, type AdaptSwitches } from "../ui/adapt";
+import { t } from "../i18n";
+import { showNotice } from "./notice";
 import { ActionSheet, actionLabel, type SheetKind } from "../ui/action-sheet";
 import { ContextBar } from "../ui/context-bar";
 import { buildLayout, type SectionId } from "../ui/layout";
 import { toolbarScaleFor, toolsRowWraps, type ToolbarSize } from "../ui/toolbar-size";
-import { normaliseUsage, recordUse, USAGE_KEY, type UsageMap } from "../ui/usage";
+import type { UsageMap } from "../ui/usage";
+import { effectiveUsage, loadDeviceUsage, loadNotebookUsage, recordStoredUse, usageGeneration, type NotebookUsage } from "../ui/usage-store";
 import type { Toolbar } from "./toolbar";
 
 /** Local storage key of the collapsed contextual bars. */
@@ -30,18 +34,30 @@ export interface ViewUiHost {
 	dimControl(): HTMLElement | null;
 	/** wave 0.9 (370): the toolbar size setting. */
 	toolbarSize(): ToolbarSize;
+	/** 0.14 (392, 393, 402): which adaptive behaviours are on (settings). */
+	adapt(): AdaptSwitches;
+	/** 0.14 (393): the quick actions the person pinned, and a way to change them (saved with the settings). */
+	pinned(): readonly string[];
+	setPinned(ids: string[]): void;
+	/** 0.14 (393): the id of the open notebook (it survives renames), or null while none is open. */
+	notebookId(): string | null;
 }
 
 export class ViewUi {
 	readonly contextBar: ContextBar;
 	readonly sheet: ActionSheet;
+	/** Use counts of the whole device, and (0.14) of each notebook. */
 	private usage: UsageMap;
+	private notebookUsage: NotebookUsage;
+	private usageGen: number;
 	private collapsed: Set<ContextKind>;
 	private frame = 0;
 	private visibleIds = new Set<string>();
 
 	constructor(private readonly host: ViewUiHost) {
-		this.usage = normaliseUsage(this.load(USAGE_KEY));
+		this.usage = loadDeviceUsage(host.app);
+		this.notebookUsage = loadNotebookUsage(host.app);
+		this.usageGen = usageGeneration();
 		const stored: unknown = this.load(COLLAPSED_KEY);
 		this.collapsed = new Set(Array.isArray(stored) ? stored.filter((k): k is ContextKind => typeof k === "string") : []);
 		this.contextBar = new ContextBar(host.body, {
@@ -58,6 +74,7 @@ export class ViewUi {
 			context: (pageIndex) => host.context(pageIndex),
 			usage: () => this.usage,
 			visible: () => this.visibleIds,
+			pin: { has: (id) => host.pinned().includes(id), toggle: (id) => this.togglePin(id) },
 			run: (id, arg) => host.run(id, arg),
 			pageValues: (i) => host.pageValues(i),
 			extra: (section: SectionId) => (section === "reading" ? host.dimControl() : null),
@@ -75,8 +92,22 @@ export class ViewUi {
 
 	/** One use of an action (any surface or the palette): ranks it higher next time. */
 	record(id: string): void {
-		this.usage = recordUse(this.usage, id, Date.now());
-		this.save(USAGE_KEY, this.usage);
+		// Read again from storage first: another notebook view may have counted since (and "Reset" may have emptied it).
+		const stored = recordStoredUse(this.host.app, id, this.host.notebookId(), this.host.adapt().learn, Date.now());
+		this.usage = stored.device;
+		this.notebookUsage = stored.notebooks;
+		this.usageGen = usageGeneration();
+	}
+
+	/** 0.14 (393): pins the quick action in the next free pinned place, or unpins it. */
+	togglePin(id: string): void {
+		const pinned = this.host.pinned();
+		if (!pinned.includes(id) && pinned.length >= MAX_PINNED) {
+			showNotice(t("ui.pin.full", { n: String(MAX_PINNED) }));
+			return;
+		}
+		this.host.setPinned(togglePinned(pinned, id));
+		this.refreshNow();
 	}
 
 	openSheet(kind: SheetKind, anchor: HTMLElement | null, pageIndex?: number): void {
@@ -102,12 +133,22 @@ export class ViewUi {
 		this.host.root.toggleClass("is-toolbar-compact", size === "compact");
 		this.host.root.toggleClass("is-toolbar-large", size === "large");
 		this.host.root.toggleClass("is-tools-wrapped", toolsRowWraps(size, width));
-		const layout = buildLayout(c, width, this.usage, Date.now(), undefined, scale.slot);
+		if (this.usageGen !== usageGeneration()) {
+			// The learned counts were erased (settings: Reset the adaptive toolbar).
+			this.usage = loadDeviceUsage(this.host.app);
+			this.notebookUsage = loadNotebookUsage(this.host.app);
+			this.usageGen = usageGeneration();
+		}
+		const switches = this.host.adapt();
+		const pinned = this.host.pinned();
+		const ranking = effectiveUsage(this.usage, this.notebookUsage, this.host.notebookId(), switches.learn);
+		const layout = buildLayout(c, width, ranking, Date.now(), undefined, scale.slot, { pageType: switches.pageType, selection: switches.selection, pinned });
 		const tb = this.host.toolbar;
 		tb.setSingleRow(layout.singleRow);
+		tb.setSuggested(layout.suggested);
 		tb.setQuick(layout.quick.map((id) => {
 			const a = actionById(id)!;
-			return { id, icon: a.icon, label: actionLabel(a), enabled: isEnabled(a, c), checked: a.checked ? isChecked(a, c) : undefined };
+			return { id, icon: a.icon, label: actionLabel(a), enabled: isEnabled(a, c), checked: a.checked ? isChecked(a, c) : undefined, pinned: pinned.includes(id) };
 		}));
 		this.contextBar.render(layout.context, c);
 		this.visibleIds = new Set([...layout.quick, ...(layout.context?.actions ?? []), ...(layout.context?.second ?? [])]);

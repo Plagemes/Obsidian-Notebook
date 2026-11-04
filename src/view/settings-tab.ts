@@ -12,6 +12,7 @@ import { CustomGesturesModal, GestureCheatSheet, setGestureEnabled, type PenGest
 import { deviceNameRow, type SyncSafetyService } from "./sync-safety";
 import { renderDeviceInfo } from "./device-info";
 import { resetHints } from "../ui/hints";
+import { resetToolbarAdaptation } from "../ui/toolbar-reset";
 import {
 	ADVANCED, groupKey, groupSpec, SECTIONS, sectionGroups, settingSpecs, settingsView, translations,
 	type SectionSpec, type SettingActionId, type SettingCustomId, type SettingsContext, type SettingSpec, type SettingsView,
@@ -181,6 +182,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 	private runAction(id: SettingActionId): void {
 		switch (id) {
 			case "hints-reset": resetHints(this.host); this.schemaChanged(); break;
+			case "toolbar-reset": resetToolbarAdaptation(this.app, this.host); this.schemaChanged(); break;
 			case "pen-test": new PenTestModal(this.app, penSignalInfo(this.host)).open(); break;
 			case "benchmark": this.host.runGlobal("benchmark"); break;
 			case "companion-update-all": void companionService(this.host)?.updateAll(); break;

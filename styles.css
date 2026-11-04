@@ -11779,3 +11779,739 @@ body.notebook-style-obsidian {
 		animation: none;
 	}
 }
+
+/* ===== 0.14 layout ===== */
+/* Orientation and size classes (src/ui/viewport-class.ts): nb-vp-phone|tablet|desktop, nb-vp-portrait|landscape, nb-vp-short on the notebook view's root and on Home / the library root; data-nb-viewport carries the pair. */
+
+/* Notebook view, short landscape (phone held sideways, tablet with the keyboard up): the bars give back vertical space to the page. */
+.workspace-leaf-content .view-content.notebook-view.nb-vp-short .notebook-toolbar {
+	padding-top: 0;
+	padding-bottom: 0;
+	row-gap: 0;
+}
+
+.workspace-leaf-content .view-content.notebook-view.nb-vp-short .notebook-context-bar {
+	padding-top: 0;
+	padding-bottom: 0;
+}
+
+/* PDF side pane: a wider grab area for the divider on a touch screen held sideways, and a one-line header. */
+.workspace-leaf-content .view-content.notebook-view.nb-vp-landscape .notebook-body.is-pdfside-row > .notebook-pdfside-divider {
+	flex-basis: 16px;
+}
+
+.workspace-leaf-content .view-content.notebook-view.nb-vp-short .notebook-pdfside-header {
+	padding-top: 2px;
+	padding-bottom: 2px;
+}
+
+/* Home and the library. A tablet held sideways that is still "medium" wide shows the quick actions in one row of four. */
+.nb-app.nb-ui.nb-vp-landscape.is-medium .nb-quick-grid {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.nb-app.nb-ui.nb-vp-landscape.is-medium .nb-subject-grid.is-tiles {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* Short landscape: the header and the page padding shrink, grids use the width instead of the height. */
+.nb-app.nb-ui.nb-vp-short {
+	--nb-page-pad: 20px;
+	--nb-fs-title: 26px;
+}
+
+.nb-app.nb-ui.nb-vp-short .nb-page-header {
+	padding-top: 10px;
+	padding-bottom: 8px;
+	margin-bottom: 8px;
+}
+
+.nb-app.nb-ui.nb-vp-short .nb-scroll {
+	padding-bottom: 20px;
+}
+
+.nb-app.nb-ui.nb-vp-short .nb-subject-grid.is-rows {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 12px;
+}
+
+.nb-app.nb-ui.nb-vp-short .nb-quick-grid {
+	gap: 12px;
+}
+
+/* Dialogs follow the window (they live outside the view): in a short landscape window they use the whole height. */
+@media (orientation: landscape) and (max-height: 480px) {
+	.modal.nb-modal.nb-ui {
+		max-height: calc(100vh - 16px);
+		margin-top: 8px;
+	}
+
+	.modal.nb-modal.nb-ui .nb-modal-head {
+		padding-top: 10px;
+		padding-bottom: 10px;
+	}
+
+	.modal.nb-modal.nb-ui .nb-modal-foot {
+		padding-top: 8px;
+		padding-bottom: 8px;
+	}
+}
+
+/* ===== 0.14 toolbar ===== */
+/* Generative interface (392, 393, 402). A tool the page invites (pen and text on ruled paper, shapes on grid, highlighter on a
+   slide) gets a small accent dot under its icon; it never moves and is not a control of its own. */
+.workspace-leaf-content .view-content.notebook-view .notebook-tool-button.is-suggested:not(.is-active) {
+	background-image: radial-gradient(circle at 50% calc(100% - 5px), var(--nb-accent) 0 2px, transparent 2.5px);
+	background-repeat: no-repeat;
+}
+
+/* A quick action the person pinned: a small accent dot in its corner. */
+.workspace-leaf-content .view-content.notebook-view .notebook-quick .notebook-tool.is-pinned {
+	position: relative;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-quick .notebook-tool.is-pinned::after {
+	content: "";
+	position: absolute;
+	right: 6px;
+	top: 6px;
+	width: 5px;
+	height: 5px;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-accent);
+	pointer-events: none;
+}
+
+/* A pinned action in the "All actions" sheet shows a pin at the end of its row. */
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item .notebook-menu-pin {
+	display: inline-flex;
+	margin-left: auto;
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-menu-item .notebook-menu-pin svg {
+	width: 14px;
+	height: 14px;
+}
+
+/* ===== 0.14 lecture ===== */
+/* Automatic lecture mode (roadmap 401): the "start lecture mode?" banner (ask mode) and the quiet chip while it is on. The banner is
+   the same floating glass card as the heavy-page warning (icon square, text, two buttons); the chip is a small pill in the top
+   left corner, clear of the contextual bar at the bottom, that ends the mode. Both are real controls; the icon squares are decoration. */
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-banner {
+	position: absolute;
+	right: 8px;
+	bottom: 8px;
+	left: 8px;
+	z-index: 5;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px 12px;
+	max-width: 600px;
+	margin: 0 auto;
+	padding: 8px 8px 8px 10px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-panel);
+	background: var(--nb-glass-strong);
+	-webkit-backdrop-filter: var(--nb-glass-blur);
+	backdrop-filter: var(--nb-glass-blur);
+	box-shadow: var(--nb-shadow-float);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-meta);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-icon,
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-chip-icon {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: var(--nb-radius-icon);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-icon .svg-icon,
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-chip-icon .svg-icon {
+	width: 18px;
+	height: 18px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-text {
+	flex: 1 1 200px;
+	min-width: 0;
+	color: var(--nb-text-muted);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-actions {
+	display: flex;
+	flex: 0 0 auto;
+	gap: 6px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-actions button,
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-chip-end {
+	min-height: 40px;
+	padding: 0 16px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background-color: var(--nb-tile);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+	box-shadow: none;
+	transition: background-color var(--nb-motion-fast) var(--nb-ease), border-color var(--nb-motion-fast) var(--nb-ease);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-actions button:hover,
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-chip-end:hover {
+	background-color: var(--nb-hover);
+	color: var(--nb-text);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-actions button.mod-cta {
+	border-color: transparent;
+	background-color: var(--nb-accent);
+	color: #ffffff;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-actions button.mod-cta:hover {
+	background-color: var(--nb-accent);
+	filter: brightness(1.08);
+	color: #ffffff;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-chip {
+	position: absolute;
+	top: 8px;
+	left: 8px;
+	z-index: 4;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	max-width: calc(100% - 16px);
+	padding: 4px 4px 4px 4px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-glass-strong);
+	-webkit-backdrop-filter: var(--nb-glass-blur);
+	backdrop-filter: var(--nb-glass-blur);
+	box-shadow: var(--nb-shadow-float);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-meta);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-chip-text {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: 600;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-chip-end {
+	min-height: 32px;
+	padding: 0 12px;
+}
+
+.nb-ui .notebook-lecture-preview {
+	margin-top: 8px;
+}
+
+@media (pointer: coarse) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-lecture-actions button,
+	.workspace-leaf-content .view-content.notebook-view .notebook-lecture-chip-end {
+		min-height: 44px;
+	}
+}
+
+@media (max-width: 480px) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-lecture-banner {
+		padding: 8px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-lecture-banner,
+	.workspace-leaf-content .view-content.notebook-view .notebook-lecture-chip {
+		-webkit-backdrop-filter: none;
+		backdrop-filter: none;
+	}
+
+	.workspace-leaf-content .view-content.notebook-view .notebook-lecture-actions button,
+	.workspace-leaf-content .view-content.notebook-view .notebook-lecture-chip-end {
+		transition: none;
+	}
+}
+
+/* ===== 0.14 smartplus ===== */
+.nb-ui.nb-smart-add {
+	position: absolute;
+	left: 50%;
+	bottom: 72px;
+	transform: translateX(-50%);
+	z-index: 8;
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 8px;
+	max-width: calc(100% - 24px);
+	padding: 8px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-l);
+	background: var(--nb-panel);
+	box-shadow: var(--nb-shadow-float);
+}
+
+.nb-ui.nb-smart-add .nb-chip {
+	min-height: 44px;
+}
+
+.nb-app.is-phone .nb-ui.nb-smart-add,
+.nb-ui.nb-smart-add.is-phone {
+	bottom: 64px;
+}
+
+@media (max-width: 480px) {
+	.nb-ui.nb-smart-add {
+		bottom: 64px;
+		flex-direction: column;
+		align-items: stretch;
+		width: calc(100% - 24px);
+	}
+
+	.nb-ui.nb-smart-add .nb-chip {
+		justify-content: flex-start;
+	}
+}
+
+/* ===== 0.14 sections ===== */
+.nb-ui .nb-lib-dynamic {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+	gap: 20px;
+	align-items: start;
+}
+
+.nb-ui .nb-lib-dyn .nb-section-header {
+	align-items: center;
+}
+
+.nb-ui .nb-dyn-count {
+	min-width: 20px;
+	padding: 0 7px;
+	border-radius: 999px;
+	background: var(--nb-accent-soft, var(--nb-surface-2));
+	color: var(--nb-accent, var(--nb-text-muted));
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 20px;
+	text-align: center;
+}
+
+.nb-ui .nb-lib-dyn .nb-section-tools {
+	margin-left: auto;
+	display: flex;
+	gap: 12px;
+	align-items: center;
+}
+
+.nb-ui .nb-dyn-action {
+	background: transparent;
+	border: 0;
+	box-shadow: none;
+	color: var(--nb-accent);
+	cursor: pointer;
+	font-size: 13px;
+	padding: 4px 2px;
+}
+
+.nb-ui .nb-home-dynamic {
+	margin-top: -6px;
+}
+
+/* ===== 0.14 nbmap ===== */
+.nb-ui.nb-map-modal .nb-map-filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--nb-space-2);
+}
+
+.nb-ui.nb-map-modal .nb-map-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+	gap: var(--nb-space-3);
+	align-items: start;
+}
+
+.nb-ui.nb-map-modal .nb-map-grid > .nb-modal-note {
+	grid-column: 1 / -1;
+}
+
+.nb-ui .nb-map-card {
+	display: flex;
+	flex-direction: column;
+	gap: var(--nb-space-1);
+	min-height: var(--nb-target);
+	height: auto;
+	padding: var(--nb-space-2);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	box-shadow: none;
+	color: var(--nb-text);
+	text-align: left;
+	cursor: pointer;
+	transition: border-color var(--nb-motion-fast) var(--nb-ease), background var(--nb-motion-fast) var(--nb-ease);
+}
+
+.nb-ui .nb-map-card:hover {
+	border-color: var(--nb-border-strong);
+	background: var(--nb-hover);
+}
+
+.nb-ui .nb-map-card.is-current {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui .nb-map-card.is-lecture {
+	border-top: 3px solid var(--nb-accent);
+}
+
+.nb-ui .nb-map-thumb {
+	position: relative;
+	overflow: hidden;
+	border-radius: var(--nb-radius-s);
+	background: var(--nb-bg-elevated);
+}
+
+.nb-ui .nb-map-thumb img {
+	display: block;
+	width: 100%;
+	height: auto;
+	aspect-ratio: 1 / var(--nb-map-ratio, 1.414);
+	object-fit: cover;
+	background: var(--nb-bg-elevated);
+}
+
+.nb-ui .nb-map-badges {
+	position: absolute;
+	right: var(--nb-space-1);
+	bottom: var(--nb-space-1);
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 3px;
+	max-width: calc(100% - 8px);
+}
+
+.nb-ui .nb-map-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	min-width: 22px;
+	height: 22px;
+	padding: 0 5px;
+	justify-content: center;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-panel);
+	border: 1px solid var(--nb-border-strong);
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-label);
+	font-weight: 600;
+	box-shadow: var(--nb-shadow-1);
+}
+
+.nb-ui .nb-map-badge-icon {
+	display: inline-flex;
+}
+
+.nb-ui .nb-map-badge-icon .svg-icon {
+	width: 13px;
+	height: 13px;
+}
+
+.nb-ui .nb-map-badge.is-question {
+	color: var(--nb-accent);
+}
+
+.nb-ui .nb-map-badge.is-homework {
+	color: var(--nb-danger);
+}
+
+.nb-ui .nb-map-badge.is-key {
+	color: var(--nb-star);
+}
+
+.nb-ui .nb-map-badge.is-practice {
+	color: var(--nb-success);
+}
+
+.nb-ui .nb-map-foot {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--nb-space-1);
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-label);
+}
+
+.nb-ui .nb-map-num {
+	color: var(--nb-text);
+	font-weight: 600;
+}
+
+@media (max-width: 600px) {
+	.nb-ui.nb-map-modal .nb-map-grid {
+		grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+		gap: var(--nb-space-2);
+	}
+}
+
+/* ===== 0.14 slides ===== */
+/* #226: badges next to ink written beside a slide (view/slide-ink.ts). DOM over the stage: nothing is drawn on the
+   canvases. The button is the 40 px tap target; the pill inside is what shows. */
+.nb-ui.nb-slide-badges {
+	position: absolute;
+	inset: 0;
+	z-index: 3;
+	overflow: hidden;
+	pointer-events: none;
+}
+
+.nb-ui.nb-slide-badges .nb-slide-badge {
+	position: absolute;
+	left: var(--nb-slide-badge-x, 0);
+	top: var(--nb-slide-badge-y, 0);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: var(--nb-radius-pill);
+	background: transparent;
+	box-shadow: none;
+	pointer-events: auto;
+	cursor: pointer;
+	touch-action: manipulation;
+}
+
+.nb-ui.nb-slide-badges .nb-slide-badge-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	height: 22px;
+	padding: 0 7px 0 5px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-panel);
+	box-shadow: var(--nb-shadow-1);
+	color: var(--nb-text-muted);
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 1;
+	font-variant-numeric: tabular-nums;
+	transition: background-color var(--nb-motion-fast) ease-out, color var(--nb-motion-fast) ease-out, border-color var(--nb-motion-fast) ease-out;
+}
+
+.nb-ui.nb-slide-badges .nb-slide-badge-icon {
+	display: inline-flex;
+}
+
+.nb-ui.nb-slide-badges .nb-slide-badge-icon svg {
+	width: 12px;
+	height: 12px;
+	stroke-width: 2;
+}
+
+.nb-ui.nb-slide-badges .nb-slide-badge:hover .nb-slide-badge-pill {
+	color: var(--nb-text);
+	background: var(--nb-tile);
+}
+
+.nb-ui.nb-slide-badges .nb-slide-badge.is-current .nb-slide-badge-pill {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-slide-badges .nb-slide-badge:focus-visible {
+	outline: none;
+}
+
+.nb-ui.nb-slide-badges .nb-slide-badge:focus-visible .nb-slide-badge-pill {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 1px;
+}
+
+/* #417: the slide strip (view/slide-strip-modal.ts), on the shared modal shell. */
+.nb-ui.notebook-slide-strip .nb-chips {
+	margin-bottom: 12px;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-section {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 8px 0 0;
+	color: var(--nb-text-faint);
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-section-icon {
+	display: inline-flex;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-section-icon svg {
+	width: 14px;
+	height: 14px;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-section-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-section-count {
+	font-variant-numeric: tabular-nums;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	padding: 10px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-row.is-current {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-row.is-bare {
+	opacity: 0.72;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-tile {
+	flex: 0 0 auto;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+	width: 56px;
+	height: 56px;
+	margin: 0;
+	padding: 0;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-icon);
+	background: var(--nb-panel);
+	box-shadow: none;
+	color: var(--nb-text);
+	cursor: pointer;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-tile:hover {
+	border-color: var(--nb-accent);
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-tile:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-tile-icon {
+	display: inline-flex;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-tile-icon svg {
+	width: 16px;
+	height: 16px;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-tile-num {
+	font-size: 17px;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-items {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-items .nb-chip {
+	max-width: 100%;
+	padding: 0 14px;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-items .nb-chip-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-question .nb-chip-icon {
+	color: var(--nb-accent);
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-question.is-done {
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-question.is-done .nb-chip-icon {
+	color: var(--nb-success);
+}
+
+.nb-ui.notebook-slide-strip .nb-slide-strip-none {
+	align-self: center;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+@media (max-width: 480px) {
+	.nb-ui.notebook-slide-strip .nb-slide-strip-row {
+		gap: 10px;
+		padding: 8px;
+	}
+
+	.nb-ui.notebook-slide-strip .nb-slide-strip-tile {
+		width: 48px;
+		height: 48px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.nb-ui.nb-slide-badges .nb-slide-badge-pill {
+		transition: none;
+	}
+}

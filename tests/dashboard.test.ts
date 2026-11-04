@@ -132,6 +132,7 @@ describe("index v5: PDF pages and open markers", () => {
 		const back = LibraryIndex.fromJSON(JSON.parse(JSON.stringify(idx.toJSON())));
 		expect(back.get("N/a.notebook")).toMatchObject({ pdfPages: 2, openMarkers: 1 });
 		expect(LibraryIndex.fromJSON({ version: 4, entries: idx.toJSON().entries }).size).toBe(0);
-		expect(INDEX_VERSION).toBe(5);
+		expect(LibraryIndex.fromJSON({ version: 5, entries: idx.toJSON().entries }).size).toBe(0);
+		expect(INDEX_VERSION).toBe(6);
 	});
 });

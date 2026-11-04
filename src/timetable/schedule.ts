@@ -19,6 +19,8 @@ export interface ClassEntry {
 	/** `HH:MM`, local time; the class is over at this minute. */
 	end: string;
 	room?: string;
+	/** Who teaches it (0.14, #210): shown in the header of the lecture page. */
+	lecturer?: string;
 	/** Vault path of a notebook or of a course folder. */
 	notebook?: string;
 	/** `all` (every week), `odd` or `even` weeks (counted from `Timetable.weekOne`, else ISO week numbers). */
@@ -26,6 +28,8 @@ export interface ClassEntry {
 	/** First and last day of the term (inclusive), optional. */
 	from?: string;
 	to?: string;
+	/** Fields of this entry that this version does not know (written by a newer one): kept and written back unchanged. */
+	extra?: Record<string, unknown>;
 }
 
 export interface Timetable {
@@ -33,6 +37,8 @@ export interface Timetable {
 	/** A date in the week that counts as week 1 (for alternating weeks); optional. */
 	weekOne?: string;
 	entries: ClassEntry[];
+	/** Top-level fields this version does not know: kept and written back unchanged. */
+	extra?: Record<string, unknown>;
 }
 
 export function emptyTimetable(): Timetable {
@@ -204,6 +210,29 @@ export type ParseResult = { ok: true; timetable: Timetable } | { ok: false; erro
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim() ? v.trim() : undefined);
 
+const KNOWN_TOP = new Set(["version", "weekOne", "entries"]);
+const KNOWN_ENTRY = new Set(["id", "course", "day", "start", "end", "room", "lecturer", "notebook", "weeks", "from", "to"]);
+
+/** The fields of `o` this version does not know, in file order; undefined when there are none. */
+function unknownFields(o: Record<string, unknown>, known: ReadonlySet<string>): Record<string, unknown> | undefined {
+	let out: Record<string, unknown> | undefined;
+	for (const [k, v] of Object.entries(o)) {
+		if (known.has(k) || k === "__proto__") continue;
+		(out ??= {})[k] = v;
+	}
+	return out;
+}
+
+/** Appends the kept unknown fields after the known ones; a known field always wins on a name clash. */
+function withExtra(out: Record<string, unknown>, extra: Record<string, unknown> | undefined, known: ReadonlySet<string>): Record<string, unknown> {
+	if (!extra) return out;
+	for (const [k, v] of Object.entries(extra)) {
+		if (known.has(k) || k === "__proto__" || v === undefined) continue;
+		out[k] = v;
+	}
+	return out;
+}
+
 /**
  * Reads the timetable file. Strict on purpose: anything that cannot be understood is an error (never silently
  * dropped), so the caller leaves the file alone instead of overwriting what the user wrote by hand.
@@ -241,19 +270,25 @@ export function parseTimetable(text: string): ParseResult {
 			weeks: (r.weeks ?? "all") as WeekPattern,
 		};
 		const room = str(r.room);
+		const lecturer = str(r.lecturer);
 		const notebook = str(r.notebook);
 		const from = str(r.from);
 		const to = str(r.to);
 		if (room) entry.room = room;
+		if (lecturer) entry.lecturer = lecturer;
 		if (notebook) entry.notebook = notebook;
 		if (from) entry.from = from;
 		if (to) entry.to = to;
+		const extra = unknownFields(r, KNOWN_ENTRY);
+		if (extra) entry.extra = extra;
 		const problem = entryProblem(entry);
 		if (problem) return { ok: false, error: `entry ${i + 1} ("${entry.course}") has a bad ${problem}` };
 		entries.push(entry);
 	}
 	const timetable: Timetable = { version: TIMETABLE_VERSION, entries };
 	if (weekOne) timetable.weekOne = weekOne;
+	const topExtra = unknownFields(o, KNOWN_TOP);
+	if (topExtra) timetable.extra = topExtra;
 	return { ok: true, timetable };
 }
 
@@ -262,15 +297,16 @@ export function serializeTimetable(tt: Timetable): string {
 	const entries = tt.entries.map((e) => {
 		const out: Record<string, unknown> = { id: e.id, course: e.course.trim(), day: e.day, start: e.start, end: e.end };
 		if (e.room?.trim()) out.room = e.room.trim();
+		if (e.lecturer?.trim()) out.lecturer = e.lecturer.trim();
 		if (e.notebook?.trim()) out.notebook = e.notebook.trim();
 		out.weeks = e.weeks;
 		if (e.from) out.from = e.from;
 		if (e.to) out.to = e.to;
-		return out;
+		return withExtra(out, e.extra, KNOWN_ENTRY);
 	});
 	const head: Record<string, unknown> = { version: TIMETABLE_VERSION };
 	if (tt.weekOne) head.weekOne = tt.weekOne;
-	return `${JSON.stringify({ ...head, entries }, null, 2)}\n`;
+	return `${JSON.stringify(withExtra({ ...head, entries }, tt.extra, KNOWN_TOP), null, 2)}\n`;
 }
 
 /** Writes are checked: the text must read back as the same timetable. */
@@ -298,14 +334,18 @@ export function linkCovers(link: string | undefined, notebookPath: string): bool
  * (the notebook name is used then). `all` is every class of the timetable.
  */
 export function courseForNotebook(current: readonly ClassEntry[], notebookPath: string | null | undefined, all: readonly ClassEntry[] = current): string | null {
+	return classForNotebook(current, notebookPath, all)?.course ?? null;
+}
+
+/** The class `courseForNotebook` picks (same rules), or null. */
+export function classForNotebook(current: readonly ClassEntry[], notebookPath: string | null | undefined, all: readonly ClassEntry[] = current): ClassEntry | null {
 	if (!current.length) return null;
 	if (notebookPath) {
 		const linked = current.find((e) => linkCovers(e.notebook, notebookPath));
-		if (linked) return linked.course;
+		if (linked) return linked;
 		if (all.some((e) => linkCovers(e.notebook, notebookPath))) return null;
 	}
-	const unlinked = current.find((e) => !e.notebook);
-	return unlinked ? unlinked.course : null;
+	return current.find((e) => !e.notebook) ?? null;
 }
 
 export interface NotebookRef {

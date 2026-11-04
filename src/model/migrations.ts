@@ -253,6 +253,38 @@ export function withoutV11Meta(raw: RawObject): RawObject {
 	return { ...raw, meta: copy };
 }
 
+/**
+ * v12 adds the optional document table `slides` and the optional stroke field `slide` (ink remembers the slide shown
+ * beside the notes while it was written, #226). Every valid v11 document is a valid v12 document without them. A v11
+ * reader ignored unknown document and stroke fields, so these keys in a v11 file were never ours and never had an effect:
+ * they are dropped, not interpreted (like `hidden` in v7 -> v8). Nothing else changes, so a large v11 file can still be
+ * read page by page (StagedParse) after `withoutV12Slides`, with the `slide` keys of its strokes ignored.
+ */
+function v11ToV12(raw: RawObject): RawObject {
+	const isObj = (v: unknown): v is RawObject => typeof v === "object" && v !== null && !Array.isArray(v);
+	const out: RawObject = { ...withoutV12Slides(raw), version: 12 };
+	if (!Array.isArray(raw.pages)) return out;
+	out.pages = (raw.pages as unknown[]).map((page) => {
+		if (!isObj(page) || !Array.isArray(page.strokes) || !(page.strokes as unknown[]).some((s) => isObj(s) && "slide" in s)) return page;
+		const strokes = (page.strokes as unknown[]).map((s) => {
+			if (!isObj(s) || !("slide" in s)) return s;
+			const copy = { ...s };
+			delete copy.slide;
+			return copy;
+		});
+		return { ...page, strokes };
+	});
+	return out;
+}
+
+/** `raw` without the v12 document table `slides` (a copy when there is one; `raw` itself otherwise). */
+export function withoutV12Slides(raw: RawObject): RawObject {
+	if (!("slides" in raw)) return raw;
+	const copy = { ...raw };
+	delete copy.slides;
+	return copy;
+}
+
 /** MIGRATIONS[n] takes a document from version n to n+1. */
 export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	0: v0ToV1,
@@ -266,6 +298,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	8: v8ToV9,
 	9: v9ToV10,
 	10: v10ToV11,
+	11: v11ToV12,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */
