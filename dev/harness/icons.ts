@@ -11,6 +11,11 @@ const P: Record<string, string> = {
 	"quote": "M3 21c3 0 7-1 7-8V5H4v6h4 M14 21c3 0 7-1 7-8V5h-6v6h4",
 	"text-cursor-input": "M5 4h1a3 3 0 0 1 3 3 3 3 0 0 1 3-3h1 M13 20h-1a3 3 0 0 1-3-3 3 3 0 0 1-3 3H5 M5 16H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h1 M13 8h7a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-7 M9 7v10",
 
+	// 0.18 quicktabs
+	"chevrons-left": "M11 17l-5-5 5-5 M18 17l-5-5 5-5",
+	"chevrons-up": "M17 11l-5-5-5 5 M17 18l-5-5-5 5",
+	"corner-up-left": "M9 14L4 9l5-5 M20 20v-7a4 4 0 0 0-4-4H4",
+	"pin-off": "M2 2l20 20 M12 17v5 M9 3h6l-1 7 M17 13v2H7v-2l3-3",
 	// 0.16 lock
 	"lock": "M5 11h14v10H5z M8 11V7a4 4 0 0 1 8 0v4",
 	"lock-open": "M5 11h14v10H5z M8 11V7a4 4 0 0 1 7-2.6",

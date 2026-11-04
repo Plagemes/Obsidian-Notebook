@@ -136,7 +136,7 @@ export async function checkQuicktabs(api: QuickTabsCheckApi): Promise<{ ok: bool
 	await goTo(2);
 	gone?.click();
 	await settle();
-	add("tapping it says the page is gone and shows the nearest page", api.notices.length > noticesBefore && /no longer/.test(api.notices.at(-1) ?? "") && v.currentPage() === 1, `${api.notices.at(-1)} / page ${v.currentPage() + 1}`);
+	add("tapping it says the page is gone and shows the nearest page", api.notices.length > noticesBefore && /no longer/.test(api.notices[api.notices.length - 1] ?? "") && v.currentPage() === 1, `${api.notices[api.notices.length - 1]} / page ${v.currentPage() + 1}`);
 	other?.click();
 	await settle();
 	add("tapping a tab of another notebook opens that notebook at the page", opened.length === 1 && opened[0]!.path === "Notebooks/New.notebook" && opened[0]!.pageId === "formulas-1", JSON.stringify(opened));
