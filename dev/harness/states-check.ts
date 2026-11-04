@@ -135,7 +135,7 @@ export async function checkStates(api: StatesCheckApi): Promise<{ ok: boolean; r
 
 	// --- the file ---
 	await v.flushNow();
-	const file = app.vault.getFileByPath("Notebooks/New.notebook") as HarnessFile | null;
+	const file = app.vault.getFileByPath("Notebooks/New.notebook");
 	const text = file ? await (app.vault as unknown as { read(f: HarnessFile): Promise<string> }).read(file) : "";
 	add("the saved file is format v13 with the states", /"version":\s*13/.test(text) && /"states":\s*\{"parts"/.test(text), `${text.length} chars`);
 	const back = parse(text);

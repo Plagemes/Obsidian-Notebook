@@ -12519,7 +12519,7 @@ body.notebook-style-obsidian {
 /* ===== 0.15 states ===== */
 /* The strip of the drawing states (view/states-tools.ts): states, parts, and the editor of the part in view. It floats at
    the bottom of the notebook body, above the pages and below the contextual bar. */
-.notebook-view .nb-states {
+.nb-ui.nb-states {
 	position: absolute;
 	left: 8px;
 	right: 8px;
@@ -12541,14 +12541,14 @@ body.notebook-style-obsidian {
 	-webkit-user-select: none;
 }
 
-.notebook-view .nb-states .nb-states-row {
+.nb-ui.nb-states .nb-states-row {
 	display: flex;
 	align-items: center;
 	gap: 6px;
 	min-width: 0;
 }
 
-.notebook-view .nb-states .nb-states-chips {
+.nb-ui.nb-states .nb-states-chips {
 	display: flex;
 	flex: 1 1 auto;
 	align-items: center;
@@ -12558,11 +12558,11 @@ body.notebook-style-obsidian {
 	scrollbar-width: none;
 }
 
-.notebook-view .nb-states .nb-states-chips::-webkit-scrollbar {
+.nb-ui.nb-states .nb-states-chips::-webkit-scrollbar {
 	display: none;
 }
 
-.notebook-view .nb-states .nb-states-chip {
+.nb-ui.nb-states .nb-states-chip {
 	flex: 0 0 auto;
 	display: inline-flex;
 	align-items: center;
@@ -12578,20 +12578,20 @@ body.notebook-style-obsidian {
 	cursor: pointer;
 }
 
-.notebook-view .nb-states .nb-states-chip.is-active {
+.nb-ui.nb-states .nb-states-chip.is-active {
 	border-color: var(--nb-accent);
 	background: var(--nb-accent-bg);
 	color: var(--nb-accent);
 }
 
-.notebook-view .nb-states .nb-states-chip-label {
+.nb-ui.nb-states .nb-states-chip-label {
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.notebook-view .nb-states .nb-states-button {
+.nb-ui.nb-states .nb-states-button {
 	flex: 0 0 auto;
 	display: inline-flex;
 	align-items: center;
@@ -12607,41 +12607,41 @@ body.notebook-style-obsidian {
 	cursor: pointer;
 }
 
-.notebook-view .nb-states .nb-states-button:hover:not(:disabled),
-.notebook-view .nb-states .nb-states-button.is-on {
+.nb-ui.nb-states .nb-states-button:hover:not(:disabled),
+.nb-ui.nb-states .nb-states-button.is-on {
 	background: var(--nb-accent-bg);
 	color: var(--nb-accent);
 }
 
-.notebook-view .nb-states .nb-states-button:disabled {
+.nb-ui.nb-states .nb-states-button:disabled {
 	opacity: 0.4;
 	cursor: default;
 }
 
-.notebook-view .nb-states .nb-states-button.is-dim {
+.nb-ui.nb-states .nb-states-button.is-dim {
 	opacity: 0.6;
 }
 
-.notebook-view .nb-states .nb-states-transport {
+.nb-ui.nb-states .nb-states-transport {
 	display: flex;
 	flex: 0 0 auto;
 	align-items: center;
 }
 
-.notebook-view .nb-states .nb-states-label,
-.notebook-view .nb-states .nb-states-hint {
+.nb-ui.nb-states .nb-states-label,
+.nb-ui.nb-states .nb-states-hint {
 	flex: 0 0 auto;
 	color: var(--nb-text-muted);
 	font-size: var(--nb-fs-meta, 12px);
 }
 
-.notebook-view .nb-states .nb-states-hint {
+.nb-ui.nb-states .nb-states-hint {
 	flex: 1 1 auto;
 	min-width: 0;
 }
 
-.notebook-view .nb-states .nb-states-make,
-.notebook-view .nb-states .nb-states-name {
+.nb-ui.nb-states .nb-states-make,
+.nb-ui.nb-states .nb-states-name {
 	flex: 0 0 auto;
 	display: inline-flex;
 	align-items: center;
@@ -12656,30 +12656,30 @@ body.notebook-style-obsidian {
 	cursor: pointer;
 }
 
-.notebook-view .nb-states .nb-states-name {
+.nb-ui.nb-states .nb-states-name {
 	border-color: var(--nb-border);
 	background: var(--nb-tile);
 	color: var(--nb-text);
 }
 
-.notebook-view .nb-states .nb-states-icon {
+.nb-ui.nb-states .nb-states-icon {
 	display: inline-flex;
 }
 
-.notebook-view .nb-states .nb-states-edit {
+.nb-ui.nb-states .nb-states-edit {
 	flex-wrap: wrap;
 	padding-top: 6px;
 	border-top: 1px solid var(--nb-border);
 }
 
-.notebook-view .nb-states .nb-states-colours {
+.nb-ui.nb-states .nb-states-colours {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: 4px;
 }
 
-.notebook-view .nb-states .nb-states-swatch {
+.nb-ui.nb-states .nb-states-swatch {
 	width: 28px;
 	height: 28px;
 	min-height: 0;
@@ -12691,32 +12691,32 @@ body.notebook-style-obsidian {
 	cursor: pointer;
 }
 
-.notebook-view .nb-states .nb-states-swatch.is-original {
+.nb-ui.nb-states .nb-states-swatch.is-original {
 	background: linear-gradient(135deg, var(--nb-tile) 45%, var(--nb-text-faint) 45% 55%, var(--nb-tile) 55%);
 }
 
-.notebook-view .nb-states .nb-states-swatch.is-active {
+.nb-ui.nb-states .nb-states-swatch.is-active {
 	border-color: var(--nb-accent);
 	box-shadow: 0 0 0 2px var(--nb-accent-bg);
 }
 
-.notebook-view .nb-states button:focus-visible {
+.nb-ui.nb-states button:focus-visible {
 	outline: 2px solid var(--nb-accent);
 	outline-offset: 2px;
 }
 
 @media (max-width: 520px) {
-	.notebook-view .nb-states .nb-states-row {
+	.nb-ui.nb-states .nb-states-row {
 		flex-wrap: wrap;
 	}
 
-	.notebook-view .nb-states .nb-states-chips {
+	.nb-ui.nb-states .nb-states-chips {
 		order: 3;
 		flex-basis: 100%;
 	}
 
-	.notebook-view .nb-states .nb-states-label,
-	.notebook-view .nb-states .nb-states-edit .nb-states-hint {
+	.nb-ui.nb-states .nb-states-label,
+	.nb-ui.nb-states .nb-states-edit .nb-states-hint {
 		display: none;
 	}
 }

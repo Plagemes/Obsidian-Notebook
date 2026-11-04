@@ -21,7 +21,8 @@ import {
 import { normalizePageStates, statesLine } from "../src/model/states-format";
 import { stressDocument } from "../src/model/stress";
 import { CURRENT_VERSION, FORMAT_ID, type NotebookDocument, type PageStates, type Stroke } from "../src/model/types";
-import { apply as applyMatrix } from "../src/ink/transform";
+import { pageToSvg } from "../src/ink/export-svg";
+import { apply as applyMatrix, multiply, rotateAbout, scaleAbout, translate } from "../src/ink/transform";
 import { transformStroke } from "../src/ink/lasso";
 import { getAt, setAt, type Raw } from "./raw-json";
 
@@ -424,6 +425,35 @@ describe("states at draw time", () => {
 		const [x, y] = applyMatrix(poseMatrix(pose, pivot), pivot[0], pivot[1]);
 		expect(x).toBeCloseTo(pivot[0] + pose.dx, 6);
 		expect(y).toBeCloseTo(pivot[1] + pose.dy, 6);
+	});
+});
+
+describe("part editor and export", () => {
+	it("a dragged matrix composed with the shown pose becomes the pose that draws the same thing", () => {
+		const pivot: [number, number] = [150, 120];
+		const current = { dx: 40, rot: 20, scale: 1.2 };
+		const drag = multiply(translate(15, -8), multiply(rotateAbout(0.3, 190, 90), scaleAbout(1.5, 1.5, 170, 100)));
+		const total = multiply(drag, poseMatrix(current, pivot));
+		const next = poseFromMatrix(total, pivot);
+		const shownBefore = applyMatrix(poseMatrix(current, pivot), 130, 80);
+		const want = applyMatrix(drag, shownBefore[0], shownBefore[1]);
+		const got = applyMatrix(poseMatrix(next, pivot), 130, 80);
+		expect(got[0]).toBeCloseTo(want[0], 1);
+		expect(got[1]).toBeCloseTo(want[1], 1);
+	});
+
+	it("the SVG export of a page shows the state in view", () => {
+		const { doc, end } = physicsDoc();
+		const page = doc.pages[0]!;
+		const drawn = pageToSvg(page);
+		page.states = withActive(page.states!, end);
+		const [live] = viewPages(doc.pages);
+		const shown = pageToSvg(live!);
+		expect(shown).not.toBe(drawn);
+		expect(shown).toContain("#ff0000");
+		expect(drawn).not.toContain("#ff0000");
+		page.states = withActive(page.states, null);
+		expect(pageToSvg(live!)).toBe(drawn);
 	});
 });
 

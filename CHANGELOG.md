@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### states
+- **Drawings with states (#241).** Draw a figure once, mark the parts that change and give each state its own arrangement. Open *Drawing states* (All actions, page sheet, palette) for the strip under the page, select ink with the lasso and tap *Make part* in it (a block, a force arrow, a spring; also in All actions): *As drawn*, the states you add, previous / next, play. In a state, tap a part and move, turn or scale it with the ordinary selection handles; the editor row also hides the part or colours it in that state and puts it back where it was drawn. A state never rewrites the strokes: it is applied when the page is drawn, exported (PNG / PDF / SVG use the state in view) or shown as a thumbnail. Every edit is one undo step; a read-only notebook can still switch and play the states. The ink tools skip a part a state has moved (switch to *As drawn* to edit the drawing). Elements (text, images, equations, graphs) are not parts: only ink is.
+- **Document format v13.** New optional page field `states` (parts of stroke ids with a pivot, named states with per-part poses, the state shown), written on one line of the page, pruned on write, read leniently (invalid entries are dropped and counted, never the ink), with the v12 to v13 migration (a stray `states` key in a v12 file is dropped; large v12 files still load in stages). Page duplicate, move to another notebook, page trash and restore, page version restore, conflicted-copy merge and repair all carry the states. A 0.14 device opens a v13 notebook read-only (newer version) and never overwrites it. Details in `docs/architecture.md`.
+- Not verified on the device: unit tests and the browser harness only.
+
 ## 0.14.0 — 2026-11-04
 
 The notebook adapts to the device and to the lecture: the layout follows phone, tablet and desktop in either orientation, the toolbar adapts to the page and to what you use, lecture mode starts from the timetable, and notes remember the slide they were written beside. **The document format is now v12** (optional slide links): a 0.13 device opens a v12 notebook read-only (newer version) and never overwrites it; a 0.13 device that saves the timetable drops the lecturer field. **Not verified on the device**: unit tests and the browser harness only.

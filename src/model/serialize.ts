@@ -1323,7 +1323,7 @@ export class StagedParse {
 	}
 
 	/**
-	 * Prepares a staged parse of a file at the current version, or at version 9 or 10, whose migrations only refuse
+	 * Prepares a staged parse of a file at the current version, or at version 9 to 12, whose migrations only refuse
 	 * excerpts (v9: checked page by page as they are read) and drop the v11 metadata fields, with page `first` (0-based) read in full.
 	 */
 	static create(raw: RawObject, first: number, from: number = CURRENT_VERSION): StagedParse | ParseFailureResult {

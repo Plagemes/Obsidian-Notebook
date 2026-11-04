@@ -150,7 +150,7 @@ export class StatesTools {
 			this.el?.hide();
 			return;
 		}
-		const el = this.el ?? (this.el = this.host.parent().createDiv({ cls: "nb-states", attr: { role: "group", "aria-label": t("states.title") } }));
+		const el = this.el ?? (this.el = this.host.parent().createDiv({ cls: "nb-ui nb-states", attr: { role: "group", "aria-label": t("states.title") } }));
 		el.show();
 		el.empty();
 		const states = page.states;
