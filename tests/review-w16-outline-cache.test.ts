@@ -64,6 +64,6 @@ describe("C7: outline cache size", () => {
 		expect(source.get(id(1))).toBe(big);
 		expect(reads).toBe(1);
 		expect(changes).toBe(1);
-		expect(Object.keys((data[OUTLINE_CACHE_KEY] ?? {}) as object)).toEqual([]);
+		expect(Object.keys(data[OUTLINE_CACHE_KEY] ?? {})).toEqual([]);
 	});
 });

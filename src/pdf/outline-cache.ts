@@ -71,8 +71,7 @@ export function storeOutline(cache: OutlineCacheData, assetId: string, entries: 
 	// A single huge outline is not cached (it would crowd out the rest); an older copy of it goes too, being out of date.
 	if (outlineChars({ at: now, entries: [...entries] }) > MAX_OUTLINE_CHARS) {
 		if (!(assetId in cache)) return cache;
-		const { [assetId]: _dropped, ...rest } = cache;
-		return rest;
+		return Object.fromEntries(Object.entries(cache).filter(([key]) => key !== assetId));
 	}
 	return normaliseOutlineCache({ ...cache, [assetId]: { at: now, entries } });
 }
