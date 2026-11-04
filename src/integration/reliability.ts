@@ -555,6 +555,11 @@ class PageRestoreModal extends Modal {
 	private restore(mode: RestoreMode): void {
 		const doc = this.view.editableDocument();
 		const target = doc ? doc.pages.findIndex((p) => p.id === this.targetId) : -1;
+		// 0.16 (#124): a locked page keeps its content until it is unlocked (a "replace" would be an edit; an "insert" is fine).
+		if (doc && target >= 0 && mode === "replace" && doc.pages[target]?.locked) {
+			showNotice(t("lock.needsUnlock", { n: String(target + 1) }));
+			return;
+		}
 		const plan = doc && target >= 0 ? planPageRestore(doc, this.version, this.selected, target, mode) : null;
 		if (!plan || !this.view.applyCommand(plan.command, plan.pageIndex)) {
 			showNotice(t("merge.notEditable"));

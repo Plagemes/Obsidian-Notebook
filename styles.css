@@ -13844,3 +13844,125 @@ body.notebook-style-obsidian {
 		display: none;
 	}
 }
+
+/* ===== 0.16 lock ===== */
+/* A locked page (#124): the badge over the page area (a button: a tap unlocks), the lock beside the page number, the lock of a
+   thumbnail in the page panel and in the notebook map. */
+.nb-ui.nb-lock-badge {
+	position: absolute;
+	top: 10px;
+	right: 18px;
+	z-index: 6;
+	display: none;
+	align-items: center;
+	gap: 6px;
+	min-height: 32px;
+	padding: 0 12px 0 10px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	font-weight: 600;
+	box-shadow: var(--nb-shadow-1);
+	cursor: pointer;
+	opacity: 0.92;
+}
+
+.nb-ui.nb-lock-badge.is-visible {
+	display: inline-flex;
+}
+
+.nb-ui.nb-lock-badge:disabled {
+	cursor: default;
+	opacity: 0.7;
+}
+
+.nb-ui.nb-lock-badge:not(:disabled):hover {
+	border-color: var(--nb-accent);
+	opacity: 1;
+}
+
+.nb-ui.nb-lock-badge:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+.nb-ui.nb-lock-badge .nb-lock-badge-icon {
+	display: inline-flex;
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-lock-badge .nb-lock-badge-icon svg {
+	width: 15px;
+	height: 15px;
+}
+
+.notebook-page-indicator .nb-lock-mark {
+	display: inline-flex;
+	margin-left: 6px;
+	vertical-align: middle;
+	color: var(--nb-accent);
+}
+
+.notebook-page-indicator .nb-lock-mark svg {
+	width: 13px;
+	height: 13px;
+}
+
+.notebook-navigator-item .notebook-navigator-lock {
+	color: var(--nb-accent);
+}
+
+.nb-ui .nb-map-badge.is-locked {
+	color: var(--nb-accent);
+}
+
+.nb-ui .nb-map-lock {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	margin-left: auto;
+	border-radius: var(--nb-radius-pill);
+	color: var(--nb-text-muted);
+	cursor: pointer;
+}
+
+.nb-ui .nb-map-lock svg {
+	width: 15px;
+	height: 15px;
+}
+
+.nb-ui .nb-map-lock.is-on {
+	color: var(--nb-accent);
+}
+
+.nb-ui .nb-map-lock:hover {
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui .nb-map-lock[aria-disabled="true"] {
+	cursor: default;
+	opacity: 0.5;
+}
+
+.nb-ui .nb-map-lock:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 1px;
+}
+
+@media (max-width: 520px) {
+	.nb-ui.nb-lock-badge {
+		right: 12px;
+	}
+
+	.nb-ui.nb-lock-badge .nb-lock-badge-text {
+		display: none;
+	}
+
+	.nb-ui.nb-lock-badge {
+		padding: 0 9px;
+	}
+}

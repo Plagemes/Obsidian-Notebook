@@ -72,6 +72,8 @@ export async function stashDeletedPage(host: PageToolsHost, doc: NotebookDocumen
 export async function deletePageKeepingCopy(
 	host: PageToolsHost, doc: NotebookDocument, page: Page, index: number, remove: (index: number) => void, store: PageTrash = storeFor(host),
 ): Promise<boolean> {
+	// 0.16 (#124): the history would refuse the delete of a locked page, leaving a copy in the trash: not even started.
+	if (page.locked) return false;
 	if (!(await stashDeletedPage(host, doc, page, index, store))) return false;
 	const now = host.editableDocument();
 	const at = now === doc ? doc.pages.indexOf(page) : -1;

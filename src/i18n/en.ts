@@ -2807,6 +2807,23 @@ export const en = {
 	"states.isDefault": "Default state (the notebook opens with it)",
 	"states.defaultSet": "{state} is now the state the notebook opens with.",
 	"states.defaultAlready": "This is already the state the notebook opens with.",
+	// 0.16 lock
+	"page.lock": "Lock page",
+	"page.unlock": "Unlock page",
+	"command.lockPage": "Lock or unlock the page in view",
+	"lock.toast": "Page locked",
+	"lock.toast.unlock": "Unlock",
+	"lock.unlocked": "Page unlocked",
+	"lock.badge": "Locked",
+	"lock.badge.aria": "Page locked. Tap to unlock.",
+	"lock.mark.aria": "Locked page. Tap to unlock.",
+	"lock.needsUnlock": "Page {n} is locked. Unlock it first.",
+	"lock.needsUnlockMany": "{count} of these pages are locked. Unlock them first.",
+	"lock.pageIs": "Page {n} is locked",
+	"lock.readOnly": "Locking needs an editable notebook.",
+	"lock.map.lock": "Lock page {n}",
+	"lock.map.unlock": "Unlock page {n}",
+	"lock.replaceSkipped": "{n} text boxes on locked pages were left as they are.",
 } as const;
 
 export type MessageKey = keyof typeof en;

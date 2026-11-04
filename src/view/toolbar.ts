@@ -373,8 +373,11 @@ export class Toolbar {
 		this.renderChip();
 	}
 
-	setPage(current: number, total: number): void {
+	/** `locked` (0.16, #124): the page in view is locked; a small lock shows beside the number. */
+	setPage(current: number, total: number, locked = false): void {
 		this.pageButton.setText(total > 0 ? `${current} / ${total}` : "–");
+		this.pageButton.toggleClass("is-locked", locked && total > 0);
+		if (locked && total > 0) setIcon(this.pageButton.createSpan({ cls: "nb-lock-mark", attr: { "aria-hidden": "true" } }), "lock");
 		this.pageButton.setAttribute("aria-label", total > 0 ? t("ui.pageSheet.open", { n: String(current), total: String(total) }) : t("page.menu"));
 		this.pageButton.disabled = total <= 0;
 	}

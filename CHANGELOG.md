@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### lock
+- **Lock a finished page (#124).** *Lock page* / *Unlock page* in the page sheet, the multi-selection menu of the pages panel, the notebook map (a lock button on each card) and the command *Lock or unlock the page in view*. A locked page refuses every edit: pen, highlighter, shapes, text, eraser, insert space, moving or restyling a selection, paste, elements, states, paper, size, margins, background, a version restore over it and deletion. The refusal is one guard where commands run (the history), so nothing slips through; the gestures that would write are stopped before they start. A notice says *Page locked · Unlock*. The lock shows beside the page number, as a badge over the page (a tap unlocks), on the thumbnail in the pages panel and on the notebook map. Locking and unlocking are one undo step each. Reading, PDF and slide navigation, export, copy-out, search, tags, bookmarks, moving pages and adding pages still work; the lasso still selects, to copy out. Find and replace leaves text on locked pages as it is and says so. Moving pages to another notebook and the page trash refuse a locked page (unlock it first).
+- **Document format v14.** The optional page field `locked: true` (never written as `false`). The v13 to v14 migration only drops a stray `locked` key; large v13 files still stage page by page. 0.15 and older open a v14 file read-only as a newer format and never overwrite it. A page locked in either side of a conflicted copy is locked in the merge, and the merge still brings the copy's ink to a locked page. A duplicate, a notebook made from a notebook or template, and a restore under an id clash start unlocked. See [architecture.md](docs/architecture.md) section 2.
+
 ## 0.15.0 — 2026-11-04
 
 Notebooks start from templates and stay organised: notebook templates, an automatic page header or footer, pen sets per subject, a daily "Today's page", Board and Calendar views of the library, a storage manager, and drawings with states for physics-style figures. **The document format is now v13** (optional drawing states): a 0.14 device opens a v13 notebook read-only (newer version) and never overwrites it. The state shown is your device's own choice; only *Set as default state* saves it in the notebook. **Not verified on the device**: unit tests and the browser harness only.

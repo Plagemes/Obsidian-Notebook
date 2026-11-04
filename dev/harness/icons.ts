@@ -3,6 +3,9 @@
  * for the harness (24 × 24, 2 px strokes); not Lucide's artwork. Unknown names fall back to two letters.
  */
 const P: Record<string, string> = {
+	// 0.16 lock
+	"lock": "M5 11h14v10H5z M8 11V7a4 4 0 0 1 8 0v4",
+	"lock-open": "M5 11h14v10H5z M8 11V7a4 4 0 0 1 7-2.6",
 	// 0.13 ds-notebook: the banners' icon squares
 	"alert-triangle": "M12 3L2 20h20z M12 10v4 M12 17h.01",
 	"repeat": "M17 2l4 4-4 4 M3 11V9a3 3 0 0 1 3-3h15 M7 22l-4-4 4-4 M21 13v2a3 3 0 0 1-3 3H3",

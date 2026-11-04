@@ -25,6 +25,8 @@ export interface NavigatorHost {
 	selectionMenu(pageIds: readonly string[], evt: MouseEvent): void;
 	/** 0.14 (408): opens the notebook map (states per page). Absent: no button. */
 	openMap?(): void;
+	/** 0.16 (#124): locks or unlocks a page (the lock mark of a locked page unlocks it). Absent: the mark is not a button. */
+	setLocked?(pageId: string, value: boolean): void;
 }
 
 const THUMB_WIDTH = 120;
@@ -210,6 +212,15 @@ export class PageNavigator {
 			}
 			const footer = item.createDiv({ cls: "notebook-navigator-footer" });
 			footer.createSpan({ text: String(index + 1), cls: "notebook-navigator-number" });
+			// 0.16 (#124): a locked page shows a lock in the footer; a tap unlocks it.
+			if (page.locked) {
+				const lock = footer.createEl("button", { cls: "notebook-tool clickable-icon notebook-navigator-lock", attr: { "aria-label": t("lock.mark.aria"), type: "button" } });
+				setIcon(lock, "lock");
+				lock.addEventListener("click", (e) => {
+					e.stopPropagation();
+					this.host.setLocked?.(page.id, false);
+				});
+			}
 			const menu = footer.createEl("button", {
 				cls: "notebook-tool clickable-icon notebook-navigator-star", attr: { "aria-label": t("page.menu"), type: "button" },
 			});

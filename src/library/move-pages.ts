@@ -2,6 +2,7 @@ import { normalizePath, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { cloneMeta } from "../model/document";
 import { AddAsset, AddPage, Batch, DeletePage, InsertPages, SetMeta, type Command } from "../model/history";
+import { lockedPages } from "../model/page-lock";
 import { parse, serializeChecked } from "../model/serialize";
 import { DEFAULT_META, type Asset, type NotebookDocument } from "../model/types";
 import { assetExtension, assetPath, assetsFolder } from "../pdf/assets";
@@ -132,6 +133,9 @@ export interface MoveOutcome {
  */
 export async function movePagesTo(src: EditContext, pageIds: readonly string[], target: TFile, settings: NotebookSettings): Promise<MoveOutcome> {
 	const app = src.app;
+	// 0.16 (#124): a locked page cannot leave its notebook (removing it is an edit, and the copy would stay behind): unlock it first.
+	const locked = lockedPages(src.doc, pageIds);
+	if (locked.length > 0) throw new Error(t("lock.needsUnlockMany", { count: String(locked.length) }));
 	const targetCtx = openEditContext(app, target);
 	if (targetCtx === "busy") throw new Error(t("move.targetBusy"));
 

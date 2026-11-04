@@ -1,4 +1,4 @@
-import { FileView, getLanguage, Scope, type Menu, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
+import { FileView, getLanguage, Scope, setIcon, type Menu, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 import { pageFromState, pageIdFromState, regionFromState } from "../integration/links";
 import { pageTargetFromEphemeralState, resolvePageTarget, type PageTarget } from "../integration/page-links";
 import { checkConflicts, openRepair, type ReliabilityDeps } from "../integration/reliability";
@@ -118,6 +118,7 @@ import { attachSlideBadges, linkToSlide, refreshSlideBadges } from "./slide-ink"
 import { MarkerTools, translatedBoxLabel } from "./markers";
 import { ExcerptTools } from "./excerpts";
 import { layerCommand, type LayerMove } from "../model/layers";
+import { SetPageLocked } from "../model/page-lock";
 import { FindReplaceModal } from "./find-replace";
 import { PageInfoModal } from "./page-info";
 import { PageOffer } from "./page-offer";
@@ -328,7 +329,7 @@ export class NotebookView extends FileView {
 	private readonly history = new History(() => this.requireDoc(), 500, checkContent, (message) => {
 		console.error("[notebook] edit refused, the notebook could not be saved with it:", message);
 		showNotice(t("history.refused", { message }), 10000);
-	}, () => this.userReadOnly);
+	}, () => this.userReadOnly, (ids) => this.pagesLocked(ids));
 	/**
 	 * wave 0.10 (51): the user switched this view to read-only mode. Nothing changes the document while it is on: `editable()`
 	 * is false (tools, selection, insert, page operations and every registry action that needs editing), a finger only pans
@@ -573,6 +574,7 @@ export class NotebookView extends FileView {
 			outline: this.outlineHost(),
 			selectionMenu: (ids, evt) => openPageOpsMenu(this.pageOpsHost(), ids, evt),
 			openMap: () => this.openNotebookMap(),
+			setLocked: (pageId, value) => this.setLockedById(pageId, value),
 		});
 		// The panel sits to the left of the page (a drawer over it on narrow views).
 		this.body.insertBefore(this.pageNav.el, this.stage);
@@ -585,6 +587,17 @@ export class NotebookView extends FileView {
 				if (id) this.heavyDismissed.add(id);
 			},
 		});
+		// 0.16 (#124): a locked page shows a small badge over the page area; a tap on it unlocks the page.
+		const badge = this.body.createEl("button", { cls: "nb-ui nb-lock-badge", attr: { type: "button", "aria-label": t("lock.badge.aria") } });
+		setIcon(badge.createSpan({ cls: "nb-lock-badge-icon", attr: { "aria-hidden": "true" } }), "lock");
+		badge.createSpan({ cls: "nb-lock-badge-text", text: t("lock.badge") });
+		for (const type of ["pointerdown", "pointerup", "touchstart", "wheel", "contextmenu", "mousedown"] as const) badge.addEventListener(type, (e) => e.stopPropagation());
+		badge.addEventListener("click", (e) => {
+			e.preventDefault();
+			const page = this.session?.doc?.pages[this.currentPageIndex()];
+			if (page) this.setPageLocked(page, false);
+		});
+		this.lockBadge = badge;
 		this.textEditor = new TextEditor(this.stage);
 		this.math = new MathTools(this.mathHost());
 		this.penGestures = new PenGestureLayer({
@@ -2273,10 +2286,69 @@ export class NotebookView extends FileView {
 		if (!this.editableDocument()) return false;
 		this.commitText();
 		this.clearSelection();
-		this.history.execute(cmd);
+		// False when the history refused it (a locked page, or a change the writer would reject): the callers say so.
+		const done = this.history.execute(cmd);
 		this.afterHistoryChange();
-		if (scrollTo !== undefined) this.scrollToPage(scrollTo);
-		return true;
+		if (done && scrollTo !== undefined) this.scrollToPage(scrollTo);
+		return done;
+	}
+
+	// --- page lock (0.16, #124; the guard itself is in model/history.ts + model/page-lock.ts) ---
+
+	/** The last time the "Page locked" notice was shown (it lasts 5 s: one at a time). */
+	private lockNoticeAt = 0;
+	private lockBadge: HTMLButtonElement | null = null;
+
+	/** Locks or unlocks a page of this document (one undo step). False when it could not be done. */
+	setPageLocked(page: Page, value: boolean): boolean {
+		if (!this.editableDocument()) {
+			showNotice(t("lock.readOnly"));
+			return false;
+		}
+		if ((page.locked === true) === value) return true;
+		const done = this.applyCommand(new SetPageLocked(page.id, value));
+		if (done && !value) showNotice(t("lock.unlocked"), 2500);
+		return done;
+	}
+
+	/** A locked page refused an edit (the history's guard, or a gate before one): says so once, with a button that unlocks the page. */
+	private pagesLocked(pageIds: readonly string[]): void {
+		const now = Date.now();
+		if (now - this.lockNoticeAt < 5000) return;
+		this.lockNoticeAt = now;
+		const id = pageIds[0];
+		let handle: NoticeHandle | null = null;
+		const fragment = createFragment((f) => {
+			f.createSpan({ text: t("lock.toast") });
+			f.createSpan({ text: " · " });
+			f.createEl("button", { text: t("lock.toast.unlock"), cls: "mod-cta", attr: { type: "button" } }).addEventListener("click", (e) => {
+				e.preventDefault();
+				handle?.hide();
+				this.lockNoticeAt = 0;
+				const page = this.session?.doc?.pages.find((p) => p.id === id);
+				if (page) this.setPageLocked(page, false);
+			});
+		});
+		handle = showErrorNotice(fragment, 5000);
+	}
+
+	/** The lock badge over the page area follows the page in view; a tap unlocks it. */
+	private syncLockBadge(locked: boolean): void {
+		const badge = this.lockBadge;
+		if (!badge) return;
+		badge.toggleClass("is-visible", locked);
+		badge.disabled = !locked || !this.editable();
+	}
+
+	/** Whether any page of the selection is locked (a locked page can be selected to copy from, not to change). */
+	private lockedSelectionPage(sel: Selection): Page | null {
+		const doc = this.session?.doc;
+		if (!doc) return null;
+		for (const part of this.selectionParts(sel)) {
+			const page = doc.pages[part.pageIndex];
+			if (page?.locked) return page;
+		}
+		return null;
 	}
 
 	/** wave 0.7 (366): what "Go to page number" needs. */
@@ -2451,7 +2523,7 @@ export class NotebookView extends FileView {
 			tool: this.tools.tool,
 			selection: sel && !this.statesTools?.ownsSelection(sel) ? this.selectionCounts(sel) : null,
 			page: page ? {
-				index, count: pages.length, background: page.background?.kind ?? "none", infinite: !!page.infinite,
+				index, count: pages.length, background: page.background?.kind ?? "none", infinite: !!page.infinite, locked: page.locked === true,
 				bookmarked: doc?.meta?.bookmarks.includes(page.id) ?? false, splittable: page.id === this.heavyPageId,
 				kind: pageKindOf({ background: page.background?.kind ?? "none", paper: page.paper.kind, width: page.width, height: page.height }),
 			} : null,
@@ -2987,7 +3059,9 @@ export class NotebookView extends FileView {
 	private updatePageIndicator(): void {
 		const n = this.shownDoc()?.pages.length ?? 0;
 		const current = n ? this.currentPageIndex() : -1;
-		this.toolbar.setPage(n ? current + 1 : 0, n);
+		const lockedPage = n ? this.shownDoc()?.pages[current]?.locked === true : false;
+		this.toolbar.setPage(n ? current + 1 : 0, n, lockedPage);
+		this.syncLockBadge(lockedPage);
 		this.notifyStatus();
 		if (n) this.practiceHooks?.page(current);
 		if (n && this.file) this.pageClock.note(this.file.path, current, new Date());
@@ -3051,7 +3125,15 @@ export class NotebookView extends FileView {
 			current: () => this.currentPageIndex(),
 			thumbnail: (page) => this.pageNav?.thumbnailOf(page) ?? BLANK_THUMBNAIL,
 			goTo: (index) => this.goToPage(index),
+			setLocked: (pageId, value) => this.setLockedById(pageId, value),
+			canLock: () => !!this.editableDocument(),
 		}).open();
+	}
+
+	/** Locks or unlocks the page with this id (the page strip and the notebook map). */
+	private setLockedById(pageId: string, value: boolean): boolean {
+		const page = this.session?.doc?.pages.find((p) => p.id === pageId);
+		return page ? this.setPageLocked(page, value) : false;
 	}
 
 	private thumbnail(page: Page, width: number): string {
@@ -3229,6 +3311,10 @@ export class NotebookView extends FileView {
 		const page = this.pageAtIndex(pageIndex);
 		const editor = this.textEditor;
 		if (!page || !editor) return;
+		if (page.locked) {
+			this.pagesLocked([page.id]);
+			return;
+		}
 		this.clearSelection();
 		const texts = (page.elements ?? []).filter((e): e is TextElement => e.type === "text");
 		const hit = hitElement(texts, local[0], local[1], 4 / this.viewport.scale, measureText) as TextElement | null;
@@ -3403,6 +3489,12 @@ export class NotebookView extends FileView {
 		}
 		const page = this.pageAtIndex(pageIndex);
 		const local = toPageLocal(layout.boxes[pageIndex]!, dx, dy);
+		// 0.16 (#124): a locked page takes no ink, text, shape, space or eraser: only the lasso, to select and copy from it.
+		if (page?.locked && tool !== "lasso") {
+			this.clearSelection();
+			this.pagesLocked([page.id]);
+			return false;
+		}
 		if (page) this.lastPen = { pageId: page.id, x: local[0], y: local[1], at: Date.now() };
 
 		// v8: an armed marker or box is placed, a tap on a badge toggles it (eraser and lasso keep their own taps).
@@ -3439,6 +3531,12 @@ export class NotebookView extends FileView {
 			const grab = sel?.others?.length ? this.toLocal(sel.pageIndex, sample) ?? local : local;
 			const hit = sel && (sel.pageIndex === pageIndex || sel.others?.length) ? this.selectionHit(grab) : null;
 			if (sel && hit) {
+				// 0.16 (#124): a selection on a locked page can be copied, not moved, scaled or turned.
+				const lockedPage = this.lockedSelectionPage(sel);
+				if (lockedPage) {
+					this.pagesLocked([lockedPage.id]);
+					return false;
+				}
 				this.drag = { kind: hit, start: grab, startMatrix: sel.matrix };
 				return true;
 			}
@@ -3984,6 +4082,11 @@ export class NotebookView extends FileView {
 		const page = doc.pages[pageIndex];
 		const box = layout.boxes[pageIndex];
 		if (!page || !box) return;
+		// 0.16 (#124): the eraser leaves a locked page alone.
+		if (page.locked) {
+			this.pagesLocked([page.id]);
+			return;
+		}
 		const [ax, ay] = toPageLocal(box, px, py);
 		const [bx, by] = toPageLocal(box, x, y);
 		const hits = findHitStrokes(filterErasable(this.inkInView(page), this.eraseFilter()), ax, ay, bx, by, radius, this.renderer.boundsOf);
