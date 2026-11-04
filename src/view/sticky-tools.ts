@@ -1,4 +1,3 @@
-import { t } from "../i18n";
 import { attachedInk } from "../ink/attach";
 import { measureText } from "../ink/renderer";
 import { AddElement, Batch, ReplaceElement, type Command } from "../model/history";
