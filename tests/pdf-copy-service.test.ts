@@ -249,6 +249,78 @@ describe("the PDF copy service", () => {
 		expect(service.status(NB).kind).toBe("off");
 	});
 
+	// ---------------------------------------------------------------------------------------- 0.17 review fixes (data)
+
+	const SIDECAR = "Notebooks/_meta/pdfcopy-0000000a.json";
+	const shown = async (): Promise<string[]> => (await import("obsidian") as unknown as { Notice: { shown: string[] } }).Notice.shown;
+
+	it("F4: a record file that cannot be written (empty, newer, unreadable) stops the copy before any PDF is written, and tells once", async () => {
+		for (const blocked of ["", JSON.stringify({ version: 99, copies: {} }), "{not json"]) {
+			sidecar[SIDECAR] = blocked;
+			const before = (await shown()).length;
+			const src = source(world);
+			for (let n = 0; n < 3; n++) {
+				src.doc.pages[0]!.strokes.push(line(5, 5 + n, 50, 50, 6, 2));
+				service.closing(NB, src);
+				await settle();
+			}
+			expect(world.writes).toEqual([]);
+			expect(service.status(NB).kind).toBe("failed");
+			expect((await shown()).length - before).toBe(1);
+			(service as unknown as { told: Set<string> }).told.clear();
+		}
+		expect(sidecar[SIDECAR]).toBe("{not json");
+	});
+
+	it("F4: a record that cannot be saved after the PDF was written does not make a new copy at every build", async () => {
+		const store = new PdfCopyStore({ ...memoryAdapter(sidecar), write: async (p, d) => { if (d.includes(NB)) throw new Error("disk full"); sidecar[p] = d; } }, () => "Notebooks", "0000000a");
+		service = new PdfCopyService({ app: world.app, settings: () => settings, saveSettings: async () => void saved++, store, mobile: false });
+		service.register({ registerEvent: () => undefined, register: () => undefined } as never);
+		const src = source(world);
+		service.closing(NB, src);
+		await settle();
+		expect(world.writes).toEqual(["create Notebooks/Maths.pdf"]);
+		expect(service.status(NB).kind).toBe("failed");
+		for (let n = 0; n < 3; n++) {
+			src.doc.pages[0]!.strokes.push(line(5, 5 + n, 50, 50, 6, 2));
+			service.closing(NB, src);
+			await settle();
+		}
+		expect(world.writes.filter((w) => w.startsWith("create"))).toEqual(["create Notebooks/Maths.pdf"]);
+		expect(world.writes.filter((w) => w === "modify Notebooks/Maths.pdf")).toHaveLength(3);
+		expect([...world.bin.keys()]).toEqual(["Notebooks/Maths.pdf"]);
+	});
+
+	it("F5: unloading while a build runs stops it before it writes", async () => {
+		const src = { ...source(world), options: { header: () => { service.stop(); return null; } } };
+		service.closing(NB, src);
+		await new Promise((r) => window.setTimeout(r, 300));
+		expect(world.writes).toEqual([]);
+		expect(world.bin.size).toBe(0);
+	});
+
+	it("F5: a copy the user changed during the build is looked at again right before the replacement and left alone", async () => {
+		const src = source(world);
+		service.closing(NB, src);
+		await vi.waitFor(() => expect(world.writes).toHaveLength(1), { timeout: 20_000 });
+		await settle();
+		const ours = world.bin.get("Notebooks/Maths.pdf")!;
+		const theirs = new Uint8Array(ours);
+		theirs[theirs.length - 10] = theirs[theirs.length - 10]! ^ 0xff;
+		let reads = 0;
+		const read0 = world.vault.readBinary;
+		world.vault.readBinary = async (f: { path: string }) => {
+			const r = await read0(f);
+			if (f.path === "Notebooks/Maths.pdf" && ++reads === 1) world.bin.set(f.path, theirs); // after the first look
+			return r;
+		};
+		src.doc.pages[0]!.strokes.push(line(5, 5, 50, 50, 6, 2));
+		service.closing(NB, src);
+		await settle();
+		expect(world.writes).toEqual(["create Notebooks/Maths.pdf"]);
+		expect(world.bin.get("Notebooks/Maths.pdf")).toBe(theirs);
+	});
+
 	it("reports a failure in the status line and keeps the notebook untouched", async () => {
 		const bad = { ...source(world), options: { header: () => { throw new Error("boom"); } } };
 		service.closing(NB, bad);

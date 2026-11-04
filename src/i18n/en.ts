@@ -3159,7 +3159,7 @@ export const en = {
 	"settings.pdfCopyWhen.idle": "After a quiet moment",
 	"settings.pdfCopyWhen.close": "When I close the notebook",
 	"settings.pdfCopyFolder": "PDF copy folder",
-	"settings.pdfCopyFolder.desc": "Leave empty to keep each copy next to its notebook.",
+	"settings.pdfCopyFolder.desc": "Leave empty to keep each copy next to its notebook. Copies already written stay where they are; only new copies go to the new folder.",
 	"pdfCopy.menu": "Keep a PDF copy",
 	"pdfCopy.status.updated": "PDF copy updated {time}",
 	"pdfCopy.status.stopped": "PDF copy no longer updated (last {time})",

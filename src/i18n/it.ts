@@ -3161,7 +3161,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.pdfCopyWhen.idle": "Dopo un momento di quiete",
 	"settings.pdfCopyWhen.close": "Quando chiudo il quaderno",
 	"settings.pdfCopyFolder": "Cartella delle copie PDF",
-	"settings.pdfCopyFolder.desc": "Lascia vuoto per tenere ogni copia accanto al suo quaderno.",
+	"settings.pdfCopyFolder.desc": "Lascia vuoto per tenere ogni copia accanto al suo quaderno. Le copie già scritte restano dove sono; solo le nuove vanno nella nuova cartella.",
 	"pdfCopy.menu": "Mantieni una copia PDF",
 	"pdfCopy.status.updated": "Copia PDF aggiornata alle {time}",
 	"pdfCopy.status.stopped": "Copia PDF non più aggiornata (ultima alle {time})",

@@ -49,6 +49,22 @@ export class PdfCopyStore {
 		return this.enqueue(() => this.readAll());
 	}
 
+	/**
+	 * Throws a PdfCopyBlockedError when this device's file cannot be written to: it cannot be read, is empty or is newer (never
+	 * touched), and creates it (empty, valid) when there is none, which proves the folder takes a write. The service calls it
+	 * before it writes a PDF: a copy whose record cannot be kept would be written again at every build.
+	 */
+	ensureWritable(): Promise<void> {
+		return this.enqueue(async () => {
+			await this.readAll();
+			const own = await this.readOwn();
+			if (await this.adapter.exists(this.ownPath)) return;
+			await ensureFolderPath(this.adapter, this.folder);
+			await this.adapter.write(this.ownPath, serializeCopies(own));
+			await this.readAll();
+		});
+	}
+
 	/** Applies `change` to this device's file. Returns the new merged records. */
 	update(change: (own: CopiesFile, merged: Readonly<Record<string, CopyRecord>>) => CopiesFile): Promise<Record<string, CopyRecord>> {
 		return this.enqueue(async () => {

@@ -8,6 +8,11 @@
  *  - Skipped when the content fingerprint did not change. The build yields to the interface between pages.
  *  - Only a PDF the plugin itself wrote, and that is still byte for byte what it wrote, is ever replaced.
  *  - A renamed or moved notebook takes its copy along; a deleted one leaves the copy where it is and it is no longer updated.
+ *  - A copy the user deleted is not made again until the notebook is edited (an unchanged fingerprint builds nothing).
+ *  - Changing the copy folder only decides where the next new copy goes; copies already written stay where they are.
+ *  - The record file is checked before a PDF is written (a copy whose record cannot be kept would be written again at every
+ *    build); if the record cannot be written after the PDF was, the copy is remembered for this session, so it is replaced
+ *    and not duplicated. Unloading stops a running build before it writes.
  */
 import { TFile, TFolder, normalizePath, type App, type Plugin } from "obsidian";
 import { t } from "../i18n";
@@ -82,6 +87,8 @@ export class PdfCopyService implements PdfCopyPort {
 	private readonly told = new Set<string>();
 	/** Copies the service itself is renaming (their rename events are not someone else moving the file). */
 	private readonly moving = new Set<string>();
+	/** Copies written this session whose record is not in the store (yet): still ours, per notebook. */
+	private readonly remembered = new Map<string, CopyRecord>();
 	private loaded: Promise<unknown> | null = null;
 	private stopped = false;
 
@@ -163,6 +170,7 @@ export class PdfCopyService implements PdfCopyPort {
 	private async fingerprint(src: PdfCopySource, pages: readonly Page[]): Promise<string> {
 		const hashes: string[] = [];
 		for (const page of pages) {
+			if (this.stopped) throw new Error("stopped");
 			hashes.push((await sha256Hex(exactBuffer(enc.encode(pageText(page))))).slice(0, 32));
 			await pause();
 		}
@@ -181,6 +189,7 @@ export class PdfCopyService implements PdfCopyPort {
 			await this.ensureLoaded();
 			await this.build(path, source);
 		} catch (e) {
+			if (this.stopped) return; // unloaded while it ran: nothing to report
 			const message = e instanceof Error ? e.message : String(e);
 			console.error("[notebook] PDF copy failed", path, e);
 			this.failures.set(path, message);
@@ -201,7 +210,7 @@ export class PdfCopyService implements PdfCopyPort {
 
 	private async build(path: string, source: PdfCopySourceFn): Promise<void> {
 		const src = source();
-		if (!src || src.file.path !== path) return;
+		if (this.stopped || !src || src.file.path !== path) return;
 		if (src.unsaved()) {
 			this.saved(path, source); // not at rest yet: wait for the save
 			return;
@@ -212,6 +221,8 @@ export class PdfCopyService implements PdfCopyPort {
 		const before = this.d.store.records()[path];
 		if (before && !before.stopped && before.fingerprint === fingerprint) return; // unchanged
 		if (before?.stopped) this.failures.delete(path);
+		// The record file first: if it cannot take the record, no PDF is written (it would be written again at every build).
+		await this.d.store.ensureWritable();
 
 		const media = new NotebookMedia(this.d.app, () => src.doc, () => this.d.settings().folder, () => undefined);
 		let bytes: Uint8Array;
@@ -221,21 +232,27 @@ export class PdfCopyService implements PdfCopyPort {
 			media.destroy();
 		}
 		if (!looksLikePdf(bytes)) throw new Error("the PDF was not complete");
+		if (this.stopped) return;
 		if (src.stamp() !== stamp || src.unsaved()) {
 			// Edited while it was being built: this copy would not match the saved notebook. The next save builds it again.
 			return;
 		}
 
 		const hash = await sha256Hex(exactBuffer(bytes));
-		const records = this.d.store.allRecords().filter((r) => r.notebook === path);
-		const recorded = this.d.store.records()[path]?.pdf ?? null;
+		const lastWritten = this.remembered.get(path);
+		const records = [...this.d.store.allRecords().filter((r) => r.notebook === path), ...(lastWritten ? [lastWritten] : [])];
+		const recorded = lastWritten?.pdf ?? this.d.store.records()[path]?.pdf ?? null;
 		const base = copyBasePath(path, this.d.settings().pdfCopyFolder);
 		const target = await chooseTarget(base, recorded, (p) => this.occupant(p, records));
 		if (!target) throw new Error(t("pdfCopy.noFreeName"));
 
-		await this.write(target.path, target.overwrite, bytes, hash);
+		if (this.stopped) return;
+		if (!(await this.write(path, target.path, target.overwrite, bytes, hash, records))) return;
 		const record: CopyRecord = { notebook: path, pdf: target.path, hash, size: bytes.length, fingerprint, at: Date.now() };
+		// Written: if its record cannot be kept, it is still ours for the rest of the session.
+		this.remembered.set(path, record);
 		await this.d.store.update((own) => ({ ...own, copies: { ...own.copies, [path]: record } }));
+		this.remembered.delete(path);
 		this.failures.delete(path);
 		this.told.delete(path);
 		if (target.diverted && !this.told.has(`diverted:${target.path}`)) {
@@ -253,21 +270,32 @@ export class PdfCopyService implements PdfCopyPort {
 		return isOurs(records, path, at.stat.size, hash) ? "ours" : "foreign";
 	}
 
-	private async write(path: string, overwrite: boolean, bytes: Uint8Array, hash: string): Promise<void> {
+	/** Writes the copy. False: nothing was written because the file at `path` is not ours any more (the next build diverts). */
+	private async write(notebook: string, path: string, overwrite: boolean, bytes: Uint8Array, hash: string, records: readonly CopyRecord[]): Promise<boolean> {
 		const { vault } = this.d.app;
 		const p = normalizePath(path);
 		const dir = p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "";
 		if (dir !== "") await ensureFolder(this.d.app, dir);
+		if (this.stopped) return false;
 		recordPluginWrite(this.d.app, [p]); // before the write: the shared-files inbox must not offer a file the plugin is writing
 		if (overwrite) {
 			const file = vault.getFileByPath(p);
 			if (!file) throw new Error("the copy disappeared while it was being replaced");
+			// Looked at again right before the replacement (the build took a while): a file the user changed meanwhile is theirs.
+			if ((await this.occupant(path, records)) !== "ours" || this.stopped) return false;
 			await vault.modifyBinary(file, exactBuffer(bytes));
 		} else {
 			await vault.createBinary(p, exactBuffer(bytes));
 		}
 		const back = vault.getFileByPath(p);
-		if (!back || (await sha256Hex(await vault.readBinary(back))) !== hash) throw new Error("the copy was written but did not read back the same");
+		const seen = back ? await sha256Hex(await vault.readBinary(back)) : null;
+		if (!back || seen !== hash) {
+			// The plugin just wrote there: what is there now is the plugin's botched copy, replaced next time, not a "foreign" file
+			// that would make every build write another "(copy N)".
+			if (back && seen !== null) this.remembered.set(notebook, { notebook, pdf: path, hash: seen, size: back.stat.size, fingerprint: "", at: Date.now() });
+			throw new Error("the copy was written but did not read back the same");
+		}
+		return true;
 	}
 
 	// ----------------------------------------------------------------------------------------------- follows the notebook
