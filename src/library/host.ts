@@ -43,7 +43,7 @@ import { openLooseSheet, openNewQuickPage } from "./loose-sheet";
 import { openTodaysPage } from "./daily";
 import type { LectureTarget } from "./home-stats";
 import { mayDiscardAsset } from "./bulk-discard";
-import { openLibraryCheck } from "./library-check-modal";
+import { journalReader, openLibraryCheck } from "./library-check-modal";
 import { openStorageManager } from "./storage-dialog";
 import { LibraryStateStore } from "./library-state-store";
 import { BoardStateStore } from "./board-state-store";
@@ -114,7 +114,11 @@ export class NotebookLibraryHost implements LibraryHost {
 			retentionDays: () => plugin.settings.trashRetentionDays,
 			beforeMove: (path) => this.closeViewsOf(path),
 		});
-		this.transfers = new TransferFlows({ app: plugin.app, settings: () => plugin.settings, trash: this.trash });
+		this.transfers = new TransferFlows({
+			app: plugin.app, settings: () => plugin.settings, trash: this.trash,
+			// A closed notebook with edits waiting in the instant-save journal is not rewritten or trashed by a merge or a split.
+			journal: { reader: journalReader(plugin.app), folder: journalFolder(plugin.app, plugin.manifest.id) },
+		});
 		this.pdf = new PdfStore({
 			loadPdfJs: () => loadPdfJs() as Promise<PdfLib>,
 			readAsset: (id) => this.readAsset(id),

@@ -57,7 +57,7 @@ export interface StorageEnv {
  * Whether the closed notebook with document id `docId` has a journal entry waiting. Anything that cannot be listed counts as
  * "yes": better to leave a notebook alone than to take its unsaved edits away.
  */
-export async function hasPendingJournal(env: StorageEnv, docId: string | null): Promise<boolean> {
+export async function hasPendingJournal(env: Pick<StorageEnv, "journal">, docId: string | null): Promise<boolean> {
 	const journal = env.journal;
 	if (!journal) return false;
 	try {

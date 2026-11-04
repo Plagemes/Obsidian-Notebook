@@ -3253,6 +3253,8 @@ export const en = {
 	"settings.tasksNote.desc": "Another note “Make task” can add to (it must exist).",
 	"settings.taskDueEmoji": "Tasks plugin date for due dates",
 	"settings.taskDueEmoji.desc": "On: 📅 date. Off: a Dataview field, [due:: date].",
+	// 0.17 review fixes (data)
+	"transfer.journalPending": "{name} has edits that are not saved to its file yet. Open the notebook once, then try again. Nothing was changed.",
 } as const;
 
 export type MessageKey = keyof typeof en;

@@ -27,12 +27,14 @@ import { AddSlideRef } from "../model/slide-links";
 import { DEFAULT_META, type NotebookDocument } from "../model/types";
 import { backupFolder, type NotebookSettings } from "../settings";
 import { readNotebookText, writeNotebookText } from "../storage/format";
+import { quickDocId } from "../storage/history";
 import { createNotebook } from "../storage/notebooks";
 import { VaultDocumentIO } from "../storage/vault-io";
 import type { LibraryTrash } from "../storage/trash";
 import type { EditContext } from "../view/edit-context";
 import { holdsPages, withMovedBookmarks, type PageMoveFailure } from "./page-move";
 import { openEditContext, recordRenamed, relocateAssets, storedInFile } from "./move-pages";
+import { hasPendingJournal, type StorageEnv } from "./storage-actions";
 
 const NOTEBOOK_VIEW_TYPE = "notebook-view";
 
@@ -41,6 +43,20 @@ export interface TransferEnv {
 	settings(): NotebookSettings;
 	/** The library trash; absent: a merged notebook cannot be moved to the trash (the option is not offered). */
 	trash?: LibraryTrash;
+	/**
+	 * The instant-save journal (where it is). A closed notebook with an entry there has ink that was never saved to its file:
+	 * rewriting the file, or trashing it, would take that ink away. Without it no journal is looked at (the caller then only
+	 * works on notebooks that are open or new).
+	 */
+	journal?: StorageEnv["journal"];
+}
+
+/**
+ * Throws when the closed notebook whose text is `raw` has edits waiting in the journal: they are in no file yet, so a rewrite
+ * would make them miss their base (on the next open they would go to a backup), and the trash would lose them.
+ */
+async function assertNoPendingJournal(env: TransferEnv, file: TFile, raw: string): Promise<void> {
+	if (await hasPendingJournal(env, quickDocId(raw))) throw new Error(t("transfer.journalPending", { name: file.basename }));
 }
 
 /** What an operation did, for the notice and the tests of the harness. */
@@ -95,7 +111,8 @@ function openDocument(app: App, file: TFile): NotebookDocument | null {
  * The source: what the open view holds when there is one (an unsaved stroke is part of the notebook), else the file. A source
  * whose pages will be taken out must be editable here; one that is only read can be any open view.
  */
-async function loadSource(app: App, file: TFile, willEdit: boolean): Promise<Loaded> {
+async function loadSource(env: TransferEnv, file: TFile, willEdit: boolean): Promise<Loaded> {
+	const app = env.app;
 	const ctx = openEditContext(app, file);
 	if (ctx === "busy") {
 		const doc = willEdit ? null : openDocument(app, file);
@@ -103,7 +120,10 @@ async function loadSource(app: App, file: TFile, willEdit: boolean): Promise<Loa
 		return { file, doc, ctx: null };
 	}
 	if (ctx) return { file, doc: ctx.doc, ctx };
-	return { file, doc: (await readDoc(app, file)).doc, ctx: null };
+	const { raw, doc } = await readDoc(app, file);
+	// Pages will leave it, so the file will be rewritten (or trashed): not while edits wait in the journal.
+	if (willEdit) await assertNoPendingJournal(env, file, raw);
+	return { file, doc, ctx: null };
 }
 
 /** Folder part of a vault path ("" at the top). */
@@ -123,7 +143,10 @@ function failureText(f: PageMoveFailure | { ok: false; reason: string }): string
  * the file still holds what was read, then read it back and check the pages are in it. Throws on any doubt; the file is then
  * unchanged (or, if the read-back fails, a backup of the original exists).
  */
-async function insertIntoFile(app: App, file: TFile, doc: NotebookDocument, before: string, plan: TransferPlan, settings: NotebookSettings): Promise<void> {
+async function insertIntoFile(env: TransferEnv, file: TFile, doc: NotebookDocument, before: string, plan: TransferPlan): Promise<void> {
+	const app = env.app;
+	const settings = env.settings();
+	await assertNoPendingJournal(env, file, before);
 	for (const asset of plan.assets) (doc.assets ??= {})[asset.id] = asset;
 	if (plan.slides.length > 0) doc.slides = [...(doc.slides ?? []), ...plan.slides];
 	doc.pages.splice(plan.at, 0, ...plan.pages);
@@ -146,10 +169,14 @@ async function insertIntoFile(app: App, file: TFile, doc: NotebookDocument, befo
 }
 
 /** Takes the pages out of a notebook that is not open: the same careful write as above, then a read-back of what stays. */
-async function removeFromFile(app: App, file: TFile, removal: (doc: NotebookDocument) => TransferRemoval, settings: NotebookSettings): Promise<{ removal: TransferRemoval; removed: number }> {
+async function removeFromFile(env: TransferEnv, file: TFile, removal: (doc: NotebookDocument) => TransferRemoval): Promise<{ removal: TransferRemoval; removed: number }> {
+	const app = env.app;
+	const settings = env.settings();
 	const { raw, doc } = await readDoc(app, file);
 	const r = removal(doc);
 	if (r.remove.length === 0) return { removal: r, removed: 0 };
+	// Checked again here, right before the rewrite: the journal may have got an entry since the source was loaded.
+	await assertNoPendingJournal(env, file, raw);
 	const staying = doc.pages.filter((p) => !r.remove.includes(p)).map((p) => p.id);
 	applyRemoval(doc, r);
 	doc.modifiedAt = new Date().toISOString();
@@ -194,8 +221,9 @@ async function writeIntoExisting(env: TransferEnv, dest: TFile, plan: TransferPl
 		return;
 	}
 	const { raw, doc } = await readDoc(app, dest);
+	await assertNoPendingJournal(env, dest, raw);
 	const assets = await relocateAssets(app, sourceFolder, plan.assets);
-	await insertIntoFile(app, dest, doc, raw, { ...plan, assets }, env.settings());
+	await insertIntoFile(env, dest, doc, raw, { ...plan, assets });
 }
 
 interface RemovalRequest {
@@ -205,7 +233,13 @@ interface RemovalRequest {
 
 /** Takes the copied pages out of the source (open: one undo step; closed: a file write). Never throws for "some stayed". */
 async function removeFromSource(env: TransferEnv, src: Loaded, moved: TransferPlan["moved"], req: RemovalRequest): Promise<{ removal: TransferRemoval; removed: number }> {
-	const ctx = src.ctx;
+	let ctx = src.ctx;
+	if (!ctx) {
+		// A view may have opened the file since it was read: then it is the view's to change (one undo step), not ours.
+		const now = openEditContext(env.app, src.file);
+		if (now === "busy") throw new Error(t("transfer.busy", { name: src.file.basename }));
+		ctx = now;
+	}
 	if (ctx) {
 		if (!ctx.alive()) throw new Error(t("transfer.sourceGone", { name: src.file.basename }));
 		const removal = planRemoval(ctx.doc, moved, req.allowLocked);
@@ -221,7 +255,7 @@ async function removeFromSource(env: TransferEnv, src: Loaded, moved: TransferPl
 		const done = ctx.execute(batch, Math.max(0, Math.min(ctx.currentPage(), pages.length - 1)));
 		return { removal, removed: done ? removal.remove.length : 0 };
 	}
-	return removeFromFile(env.app, src.file, (doc) => planRemoval(doc, moved, req.allowLocked), env.settings());
+	return removeFromFile(env, src.file, (doc) => planRemoval(doc, moved, req.allowLocked));
 }
 
 function summarise(p: TransferPlan, destination: TFile, extra: Partial<TransferSummary>): TransferSummary {
@@ -254,7 +288,7 @@ export interface ExtractRequest {
 /** Makes a new notebook from pages of `source` and, for `move`, takes them out of the source afterwards. */
 export async function extractPages(env: TransferEnv, req: ExtractRequest): Promise<TransferSummary> {
 	const app = env.app;
-	const src = await loadSource(app, req.source, req.mode === "move");
+	const src = await loadSource(env, req.source, req.mode === "move");
 	const made = planNewNotebook(src.doc, req.pageIds, req.mode);
 	if (!made.ok) throw new Error(failureText(made));
 	const { plan, doc } = made;
@@ -285,7 +319,7 @@ export interface SplitRequest {
 
 /** Splits a notebook before a page: the pages from there to the end become a new notebook next to it. */
 export async function splitNotebook(env: TransferEnv, req: SplitRequest): Promise<TransferSummary> {
-	const src = await loadSource(env.app, req.source, true);
+	const src = await loadSource(env, req.source, true);
 	const split = planSplit(src.doc, req.at);
 	if (!split.ok) throw new Error(failureText(split));
 	return extractPages(env, { source: req.source, pageIds: split.tail, mode: "move", name: req.name, folder: dirOf(req.source.path), allowLocked: req.allowLocked });
@@ -305,36 +339,55 @@ export interface MergeRequest {
 	allowLocked: boolean;
 }
 
+/** Every page of `doc` is in the removal and none stays behind (changed, gone or locked): the notebook may go to the trash. */
+function wholeRemoval(removal: TransferRemoval, doc: NotebookDocument): boolean {
+	return removal.remove.length === doc.pages.length && removal.changed.length === 0 && removal.gone.length === 0 && removal.keptLocked.length === 0;
+}
+
 /** Merges B into A: B's pages are added to A and, if asked, B goes to the library trash. B is changed only by that. */
 export async function mergeNotebooks(env: TransferEnv, req: MergeRequest): Promise<TransferSummary> {
 	const app = env.app;
 	if (req.into.path === req.from.path) throw new Error(t("transfer.sameNotebook"));
 	if (req.trashFrom && !env.trash) throw new Error(t("transfer.noTrash"));
-	const from = await loadSource(app, req.from, req.trashFrom);
+	const from = await loadSource(env, req.from, req.trashFrom);
 	// A's document as it is now, to plan against (an open view's in-memory document, else the file).
 	const intoCtx = openEditContext(app, req.into);
 	if (intoCtx === "busy") throw new Error(t("transfer.destinationBusy", { name: req.into.basename }));
 	const intoDoc = intoCtx ? intoCtx.doc : (await readDoc(app, req.into)).doc;
-	// B goes to the trash afterwards: its pages move (the ids follow, links keep working); otherwise they are copies.
-	const mode: TransferMode = req.trashFrom ? "move" : "copy";
-	const plan = planMerge(intoDoc, from.doc, mode, req.after);
+	// B goes to the trash afterwards: its pages move (the ids follow, links keep working); otherwise they are copies. The ids
+	// may follow only when the trash is certain: if B has pages that would stay (changed, or locked and not confirmed), A gets
+	// copies with new ids instead, so A and B never share a page id.
+	let plan = planMerge(intoDoc, from.doc, req.trashFrom ? "move" : "copy", req.after);
 	if (!plan.ok) throw new Error(failureText(plan));
+	let keptBack: TransferRemoval | null = null;
+	if (req.trashFrom) {
+		const pre = planRemoval(from.doc, plan.moved, req.allowLocked);
+		if (!wholeRemoval(pre, from.doc)) {
+			const copies = planMerge(intoDoc, from.doc, "copy", req.after);
+			if (copies.ok) {
+				plan = copies;
+				keptBack = pre;
+			}
+		}
+	}
 	// 3. A first.
 	await writeIntoExisting(env, req.into, plan, env.settings().folder);
 	if (plan.renamed.length > 0) await recordRenamed(app, env.settings(), plan.renamed, intoDoc.id);
 	const links = textLinksToPages([...plan.pages], new Set(plan.moved.map((m) => m.pageId))).length;
 	if (!req.trashFrom) return summarise(plan, req.into, { textLinks: links });
+	if (keptBack) {
+		return summarise(plan, req.into, { trashSkipped: "changed", changed: keptBack.changed.length, keptLocked: keptBack.keptLocked.length, textLinks: links });
+	}
 	// 5. B goes to the trash only if all of it is in A and nothing was written to it meanwhile.
 	let now: Loaded;
 	try {
-		now = await loadSource(app, req.from, true);
+		now = await loadSource(env, req.from, true);
 	} catch (e) {
 		console.error("[notebook] merge: the merged notebook cannot be checked before the trash", e);
 		return summarise(plan, req.into, { trashSkipped: "changed", textLinks: links });
 	}
 	const removal = planRemoval(now.doc, plan.moved, req.allowLocked);
-	const whole = removal.remove.length === now.doc.pages.length && removal.changed.length === 0 && removal.gone.length === 0 && removal.keptLocked.length === 0;
-	if (!whole) {
+	if (!wholeRemoval(removal, now.doc)) {
 		return summarise(plan, req.into, { trashSkipped: "changed", changed: removal.changed.length, keptLocked: removal.keptLocked.length, textLinks: links });
 	}
 	try {

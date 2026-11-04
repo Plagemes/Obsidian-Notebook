@@ -3255,4 +3255,6 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.tasksNote.desc": "Un'altra nota a cui “Crea attività” può aggiungere (deve esistere).",
 	"settings.taskDueEmoji": "Data del plugin Tasks per le scadenze",
 	"settings.taskDueEmoji.desc": "Attivo: 📅 data. Spento: un campo Dataview, [due:: data].",
+	// 0.17 review fixes (data)
+	"transfer.journalPending": "{name} ha modifiche non ancora salvate nel suo file. Apri il quaderno una volta, poi riprova. Non è stato cambiato nulla.",
 };

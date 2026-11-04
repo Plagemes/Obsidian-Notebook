@@ -395,3 +395,146 @@ describe("open notebooks", () => {
 		expect(w.trashed).toEqual([]);
 	});
 });
+
+// ------------------------------------------------------------------------------------------------ 0.17 review fixes (data)
+
+/** The journal entry of a notebook (the file name starts with its document id, as the instant save writes it). */
+function withJournal(w: World, entries: string[]): void {
+	const folder = "cfg/journal";
+	w.env.journal = {
+		reader: { exists: async () => entries.length > 0, list: async () => entries.map((id) => `${folder}/${id.replace(/[^A-Za-z0-9_-]/g, "_")}.12345678.owner.0.journal`) },
+		folder,
+	};
+}
+
+describe("F1: a closed notebook with edits waiting in the journal is not rewritten or trashed", () => {
+	it("merging into it is refused before anything is written", async () => {
+		const a = notebook(2);
+		const b = notebook(1);
+		const w = world({ [`${FOLDER}/A.notebook`]: a, [`${FOLDER}/B.notebook`]: b });
+		withJournal(w, [a.id]);
+		const before = w.vault.files.get(`${FOLDER}/A.notebook`);
+		await expect(mergeNotebooks(w.env, { into: fileOf(w, `${FOLDER}/A.notebook`), from: fileOf(w, `${FOLDER}/B.notebook`), trashFrom: false, allowLocked: false })).rejects.toThrow(/once/);
+		expect(w.vault.files.get(`${FOLDER}/A.notebook`)).toBe(before);
+		expect(w.vault.log).toEqual([]);
+		expect(backups(w)).toEqual([]);
+	});
+
+	it("moving pages out of it is refused before the new notebook is made", async () => {
+		const src = notebook(3);
+		const w = world({ [`${FOLDER}/A.notebook`]: src });
+		withJournal(w, [src.id]);
+		const before = w.vault.files.get(`${FOLDER}/A.notebook`);
+		await expect(extractPages(w.env, { source: fileOf(w, `${FOLDER}/A.notebook`), pageIds: [src.pages[0]!.id], mode: "move", name: "Part", folder: FOLDER, allowLocked: false })).rejects.toThrow(/once/);
+		await expect(splitNotebook(w.env, { source: fileOf(w, `${FOLDER}/A.notebook`), at: 1, name: "Part", allowLocked: false })).rejects.toThrow(/once/);
+		expect(w.vault.files.get(`${FOLDER}/A.notebook`)).toBe(before);
+		expect(w.vault.log).toEqual([]);
+	});
+
+	it("copying pages out of it writes nothing to it, so it is allowed", async () => {
+		const src = notebook(2);
+		const w = world({ [`${FOLDER}/A.notebook`]: src });
+		withJournal(w, [src.id]);
+		const s = await extractPages(w.env, { source: fileOf(w, `${FOLDER}/A.notebook`), pageIds: [src.pages[0]!.id], mode: "copy", name: "Copy", folder: FOLDER, allowLocked: false });
+		expect(s.added).toBe(1);
+	});
+
+	it("merging B away to the trash is refused when B has journal-only ink, and nothing is written", async () => {
+		const a = notebook(1);
+		const b = notebook(2);
+		const w = world({ [`${FOLDER}/A.notebook`]: a, [`${FOLDER}/B.notebook`]: b });
+		withJournal(w, [b.id]);
+		await expect(mergeNotebooks(w.env, { into: fileOf(w, `${FOLDER}/A.notebook`), from: fileOf(w, `${FOLDER}/B.notebook`), trashFrom: true, allowLocked: false })).rejects.toThrow(/once/);
+		expect(w.trashed).toEqual([]);
+		expect(w.vault.log).toEqual([]);
+	});
+
+	it("an entry that appears after A was written keeps B out of the trash", async () => {
+		const a = notebook(1);
+		const b = notebook(2);
+		const w = world({ [`${FOLDER}/A.notebook`]: a, [`${FOLDER}/B.notebook`]: b });
+		withJournal(w, []);
+		const process0 = w.vault.vault.process;
+		w.vault.vault.process = async (f: { path: string }, fn: (data: string) => string) => {
+			const r = await process0(f, fn);
+			if (f.path === `${FOLDER}/A.notebook`) withJournal(w, [b.id]);
+			return r;
+		};
+		const s = await mergeNotebooks(w.env, { into: fileOf(w, `${FOLDER}/A.notebook`), from: fileOf(w, `${FOLDER}/B.notebook`), trashFrom: true, allowLocked: false });
+		expect(s).toMatchObject({ added: 2, trashed: false, trashSkipped: "changed" });
+		expect(w.trashed).toEqual([]);
+		expect(w.vault.files.has(`${FOLDER}/B.notebook`)).toBe(true);
+	});
+
+	it("a journal that holds only other notebooks changes nothing", async () => {
+		const a = notebook(1);
+		const b = notebook(1);
+		const w = world({ [`${FOLDER}/A.notebook`]: a, [`${FOLDER}/B.notebook`]: b });
+		withJournal(w, ["someone-else"]);
+		const s = await mergeNotebooks(w.env, { into: fileOf(w, `${FOLDER}/A.notebook`), from: fileOf(w, `${FOLDER}/B.notebook`), trashFrom: true, allowLocked: false });
+		expect(s.trashed).toBe(true);
+	});
+});
+
+describe("F2: a source that got opened while the destination was written", () => {
+	it("is changed through its view (one undo step), not by a file write", async () => {
+		const src = notebook(3);
+		const original = ids(src);
+		const w = world({ [`${FOLDER}/A.notebook`]: src });
+		const open = parse(serialize(src));
+		if (!open.ok) throw new Error("parse");
+		let view: ReturnType<typeof openView> | null = null;
+		const create0 = w.vault.vault.create;
+		w.vault.vault.create = async (path: string, text: string) => {
+			const r = await create0(path, text);
+			if (path.endsWith("Part.notebook")) view = openView(w, `${FOLDER}/A.notebook`, open.doc);
+			return r;
+		};
+		const fileBefore = w.vault.files.get(`${FOLDER}/A.notebook`);
+		const s = await extractPages(w.env, { source: fileOf(w, `${FOLDER}/A.notebook`), pageIds: [original[1]!], mode: "move", name: "Part", folder: FOLDER, allowLocked: false });
+		expect(s).toMatchObject({ added: 1, removed: 1 });
+		expect(ids(view!.doc)).toEqual([original[0]!, original[2]!]);
+		expect(w.vault.files.get(`${FOLDER}/A.notebook`)).toBe(fileBefore);
+		view!.history.undo();
+		expect(view!.doc.pages).toHaveLength(3);
+	});
+
+	it("a view that cannot be edited stops the removal", async () => {
+		const src = notebook(2);
+		const w = world({ [`${FOLDER}/A.notebook`]: src });
+		const create0 = w.vault.vault.create;
+		w.vault.vault.create = async (path: string, text: string) => {
+			const r = await create0(path, text);
+			const file = w.vault.vault.getFileByPath(`${FOLDER}/A.notebook`);
+			(w.env.app as unknown as { workspace: { getLeavesOfType: () => unknown[] } }).workspace.getLeavesOfType = () => [{ view: { file, editContext: () => null } }];
+			return r;
+		};
+		const before = w.vault.files.get(`${FOLDER}/A.notebook`);
+		await expect(extractPages(w.env, { source: fileOf(w, `${FOLDER}/A.notebook`), pageIds: [src.pages[0]!.id], mode: "move", name: "Part", folder: FOLDER, allowLocked: false })).rejects.toThrow();
+		expect(w.vault.files.get(`${FOLDER}/A.notebook`)).toBe(before);
+	});
+});
+
+describe("F3: A and B never share a page id", () => {
+	it("when B is not trashed (locked pages kept), the pages in A are copies with new ids", async () => {
+		const a = notebook(1);
+		const b = notebook(2);
+		b.pages[0]!.locked = true;
+		const w = world({ [`${FOLDER}/A.notebook`]: a, [`${FOLDER}/B.notebook`]: b });
+		const s = await mergeNotebooks(w.env, { into: fileOf(w, `${FOLDER}/A.notebook`), from: fileOf(w, `${FOLDER}/B.notebook`), trashFrom: true, allowLocked: false });
+		expect(s).toMatchObject({ added: 2, trashed: false, trashSkipped: "changed", keptLocked: 1 });
+		const merged = read(w, `${FOLDER}/A.notebook`);
+		expect(merged.pages).toHaveLength(3);
+		expect(merged.pages.some((p) => ids(b).includes(p.id))).toBe(false);
+		expect(read(w, `${FOLDER}/B.notebook`).pages.map((p) => p.id)).toEqual(ids(b));
+	});
+
+	it("when the trash is certain the ids follow the pages", async () => {
+		const a = notebook(1);
+		const b = notebook(2);
+		const w = world({ [`${FOLDER}/A.notebook`]: a, [`${FOLDER}/B.notebook`]: b });
+		const s = await mergeNotebooks(w.env, { into: fileOf(w, `${FOLDER}/A.notebook`), from: fileOf(w, `${FOLDER}/B.notebook`), trashFrom: true, allowLocked: false });
+		expect(s.trashed).toBe(true);
+		expect(ids(read(w, `${FOLDER}/A.notebook`))).toEqual([a.pages[0]!.id, ...ids(b)]);
+	});
+});
