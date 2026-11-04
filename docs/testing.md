@@ -1232,6 +1232,25 @@ Generated outline (roadmap 407). Reference screenshots after `npm run harness:ch
 612. **Cost.** In a notebook of 100+ pages, open the outline for the first time (note how long it takes), then close and reopen it: the second time is immediate. Writing with the outline open does not stutter.
 613. **No change to the file.** Open a notebook, view the outline, close it without editing: the file is not rewritten (no new snapshot, no sync conflict).
 
+### 0.17 — hover: hover preview of page links (steps 1180-1199)
+
+Hover preview (roadmap O5). In a Markdown note write `[[Physics.notebook#p3]]` and one made by the plugin (*Copy link to page*). Page preview must be on in *Settings > Core plugins*.
+
+1180. **Source.** *Settings > Page preview* lists a *Notebook* source; its Ctrl/Cmd switch starts on.
+1181. **Hover.** Hold Ctrl (Cmd on Mac) and hover the link in reading view and in Live Preview: after a moment a card shows the page thumbnail, the notebook name and *Page 3 of 12*. Without the key nothing shows (with the switch on).
+1182. **Setting.** Switch *Notebook* in Page preview off for the key: hovering alone shows the card. Turn the Page preview core plugin off: no card.
+1183. **Page.** A `#p3&id=...` link shows that page even after pages were reordered; a plain `[[Physics.notebook]]` shows page 1; a link whose page was deleted says the page no longer exists.
+1184. **Open.** Click the card: the notebook opens at that page (an already open tab is reused).
+1185. **Pen.** Write with the pen in another notebook and hover a link: the thumbnail waits for the pen to be quiet, writing is not slowed.
+1186. **Read only.** The notebook file is not modified by hovering (check the modified time).
+1187. **Android.** Long press on a link: Obsidian's own behaviour is unchanged; if its preview appears, the card shows too.
+1188. **Look.** Light, dark, *Follow Obsidian theme*.
+1189. **Other previews.** Check that Obsidian's own popover for the notebook file does not appear beside ours (two popovers).
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Hover preview of notebook page links (O5) | yes | partly (`tests/hover-preview.test.ts`: logic only) |  | The `hover-link` event and the core plugin's `overrides` are not in Obsidian's typings; the popover has not been run in Obsidian | Harness screenshots |
+
 ### 0.16 — bulk: bulk import (steps 1010-1029)
 
 Bulk import (roadmap #80). Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/design/bulk-*.png`. Use a folder with 3 PDFs (one big, 100+ pages), 5 photos (one HEIC), a text file and an existing notebook with the name of one PDF.

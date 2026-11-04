@@ -3147,4 +3147,9 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.minimap.auto": "Automatica",
 	"settings.minimap.always": "Sempre",
 	"settings.minimap.never": "Mai",
+	// 0.17 hover
+	"hover.open": "Apri questa pagina",
+	"hover.pageOf": "Pagina {n} di {total}",
+	"hover.deleted": "Questa pagina non esiste più nel quaderno.",
+	"hover.unreadable": "Anteprima non disponibile.",
 };

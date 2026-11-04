@@ -3145,6 +3145,11 @@ export const en = {
 	"settings.minimap.auto": "Automatic",
 	"settings.minimap.always": "Always",
 	"settings.minimap.never": "Never",
+	// 0.17 hover
+	"hover.open": "Open this page",
+	"hover.pageOf": "Page {n} of {total}",
+	"hover.deleted": "This page no longer exists in the notebook.",
+	"hover.unreadable": "Preview not available.",
 } as const;
 
 export type MessageKey = keyof typeof en;
