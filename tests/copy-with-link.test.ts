@@ -5,7 +5,7 @@ import type { PageElement, TextElement } from "../src/model/types";
 vi.mock("obsidian", async () => ({ ...(await import("./fake-vault")).obsidianMock(), getLanguage: () => "en" }));
 
 const {
-	CHIP_BAND, CHIP_FONT_SIZE, CHIP_LEFT, CHIP_TOP, chipLabel, chipText, copyBlocker, hasChip, planChip, planPairs, positionChoices, positionLabel, reversible,
+	CHIP_BAND, CHIP_FONT_SIZE, CHIP_LEFT, CHIP_TOP, chipLabel, chipText, copyBlocker, hasChip, planChip, planPairs, positionChoices, positionLabel, reversible, withoutChips,
 } = await import("../src/library/copy-with-link-logic");
 
 const fixed = (s: string, size: number) => Array.from(s).length * size * 0.5;
@@ -29,6 +29,17 @@ describe("chip text", () => {
 		const text = chipText("to", "A|B#C[[x]]", "A|B", 1, "pg1");
 		expect(soleLink(text)).not.toBeNull();
 		expect(text.match(/\|/g)).toHaveLength(1);
+	});
+});
+
+describe("chips a copied page brought along", () => {
+	it("drops the source's older chips and keeps everything else", () => {
+		const old = planChip("c1", chipText("to", "Old.notebook", "Old", 4, "o4"), "Copied to Old p.4", { width: 595 }, fixed)!;
+		const body: TextElement = { id: "b", type: "text", x: 40, y: 20, width: 200, text: "hello", fontSize: 12, color: "#000" };
+		const link: TextElement = { ...body, id: "l", y: 300, text: chipText("to", "X.notebook", "X", 1, "x1"), fontSize: CHIP_FONT_SIZE };
+		const kept = withoutChips([old, body, link]);
+		expect(kept.map((e) => e.id)).toEqual(["b", "l"]);
+		expect(withoutChips(undefined)).toEqual([]);
 	});
 });
 

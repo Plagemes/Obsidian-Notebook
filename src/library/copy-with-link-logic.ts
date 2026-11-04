@@ -41,6 +41,12 @@ function chipsOf(elements: readonly PageElement[]): TextElement[] {
 	return elements.filter((e): e is TextElement => e.type === "text" && e.fontSize === CHIP_FONT_SIZE && e.y < CHIP_BAND && soleLink(e.text) !== null);
 }
 
+/** The elements without the link chips a page already carries (a copy must not keep the original's older chips: they would be misleading). */
+export function withoutChips(elements: readonly PageElement[] | undefined): PageElement[] {
+	const chips = new Set<PageElement>(chipsOf(elements ?? []));
+	return (elements ?? []).filter((e) => !chips.has(e));
+}
+
 /** Whether the page already has a chip with exactly this text (copying twice must not stack the same chip). */
 export function hasChip(elements: readonly PageElement[] | undefined, text: string): boolean {
 	return (elements ?? []).some((e) => e.type === "text" && e.text === text);

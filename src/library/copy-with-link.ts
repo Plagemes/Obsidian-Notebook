@@ -11,7 +11,7 @@ import { createId } from "../model/document";
 import type { EditContext } from "../view/edit-context";
 import { showNotice } from "../view/notice";
 import { askCopyLink } from "./copy-with-link-dialog";
-import { planChip, planPairs, reversible, type PagePair } from "./copy-with-link-logic";
+import { planChip, planPairs, reversible, withoutChips, type PagePair } from "./copy-with-link-logic";
 import { moveTargets } from "./move-pages";
 import { pageExcerpt } from "./page-move";
 import { copyPagesInto, dirOf, inspectNotebook, type TransferEnv } from "./page-transfer";
@@ -77,6 +77,8 @@ export async function copyWithLink(
 				// A link is written as seen from the notebook it sits in.
 				sourceLinktext: linktext(app, file, req.dest.path), destLinktext: linktext(app, req.dest, file.path),
 			});
+			// The copy starts without the chips the original carries; only its new "Copied from" chip is put on it.
+			for (const copy of plan.pages) if (copy.elements) copy.elements = withoutChips(copy.elements);
 			pairs.forEach((pair, i) => {
 				const copy = plan.pages[i];
 				const chip = copy ? planChip(createId(), pair.fromText, pair.fromAlias, copy, src.measure) : null;
