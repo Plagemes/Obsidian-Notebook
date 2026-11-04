@@ -512,7 +512,7 @@ export const en = {
 	"settings.companionUpdateAll.button": "Update",
 	// 0.19 search
 	"settings.companionSearchText": "Include typed text in search",
-	"settings.companionSearchText.desc": "Also writes the text of sticky notes, margin comments, equations and marker labels (up to 4000 characters per page) into the note, with a link back to each page, so Obsidian search finds them. Applies at the next update.",
+	"settings.companionSearchText.desc": "Adds sticky, comment, equation and marker text, linked to its page, to search.",
 	"notice.companionOff": "Companion notes are off. Turn them on in the Notebook settings.",
 	"notice.companionDone": "Companion notes: {created} created, {updated} updated, {unchanged} already up to date, {skipped} skipped.",
 	"notice.companionTaken": "Companion note not written: \"{path}\" and its alternative name are notes of yours, left as they are.",
