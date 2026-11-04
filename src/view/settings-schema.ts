@@ -307,6 +307,10 @@ const READING: SettingSpec[] = [
 		control: { type: "dropdown", options: options([["page", "settings.digestGroup.page"], ["colour", "settings.digestGroup.colour"]]) }, keywords: "highlights digest summary evidenziazioni riepilogo colour colore",
 	},
 
+	// 0.18 (#86): margin comments.
+	{ id: "commentMarkers", section: "reading", order: 70, name: "settings.commentMarkers", desc: "settings.commentMarkers.desc", control: { type: "toggle" }, keywords: "comments markers margin review commenti margine revisione" },
+	{ id: "commentsInPdf", section: "reading", order: 71, name: "settings.commentsInPdf", desc: "settings.commentsInPdf.desc", control: { type: "toggle" }, keywords: "comments pdf export margin notes commenti esporta note a margine" },
+
 	// 0.16 (#46): links of PDF pages.
 	{ id: "pdfLinks", section: "reading", order: 45, name: "settings.pdfLinks", desc: "settings.pdfLinks.desc", control: { type: "toggle" }, keywords: "pdf link internal external collegamenti url" },
 ];

@@ -2466,3 +2466,31 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Task from a selection (#57): crop, link, due date, daily/tasks/chosen note | yes | line building, crop, append (`tests/selection-task.test.ts`); harness `dev/harness/task-check.ts` | | | page badge on the task's region |
+
+### 0.18 — comments (margin comments, format v16; steps 1300-1319)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/comments-*.png`. Notebooks saved with a comment are format v16: 0.17 and older open them read-only.
+
+1300. **Comment on a selection.** Select some ink with the lasso, tap *Comment* on the bar. Expected: a dialog with a text box and a sketch pad; *Add comment* stays off until there is text or a stroke. Type a line, draw a small sketch with the S Pen, tap *Add comment*. A numbered marker 1 appears in the right margin of the page, joined by a thin line to an outline of the selection's box; the comment's card opens beside it. One undo removes the comment.
+1301. **Marker and card.** Tap the marker: the card closes; tap it again: it opens and the region is highlighted. The card shows the device name, the time, your text and the sketch. On a phone the card is docked at the bottom.
+1302. **Reply and resolve.** Type in the reply box and tap send: the reply appears indented; one undo removes it. Tap *Resolve*: the marker turns grey with a check and the line and outline disappear unless the card is open; *Reopen* brings it back.
+1303. **Edit and delete.** Edit the comment (pencil): the dialog has the text and sketch; *Save* marks it *edited*. Delete (bin) removes the comment with its replies; one undo brings the whole thread back.
+1304. **Comment on a region.** More sheet > *Comment on a region* (or the add button of the panel). Drag a rectangle on an empty part of the page with the S Pen: the dialog opens; Add. Cancel and Escape end the drawing without a comment. A tap that is not a drag keeps the drawing armed.
+1305. **Comments panel.** *Comments panel* in the sheet or palette. Expected: every comment with its page, text, device and reply count; *Open*, *Resolved* and *All* filter the list; a row jumps to the region and opens its card (on a phone the panel steps aside).
+1306. **Many comments.** Add five comments close together: the markers are pushed apart in the margin (never on top of each other) and still numbered top to bottom.
+1307. **Zoom and scroll.** Zoom and pan: markers, lines and outlines follow the page; pages out of view draw nothing.
+1308. **Locked page.** Lock the page: markers and cards can still be opened and read; *Comment* is refused with the *Page locked* notice; the card offers no reply, edit, delete or resolve.
+1309. **Read-only and settings.** In read-only mode the panel and cards open but nothing can be changed. *Show comment markers* off hides the markers (the open comment still shows).
+1310. **Saving and an older plugin.** Close and reopen: comments, replies, sketches, resolved state and times are kept. Copy the notebook to a device with 0.17: it opens read-only with the "newer version" message and is not rewritten.
+1311. **Two devices.** On two devices add a different comment and a different reply to the same comment, then sync so a conflicted copy appears; *Merge conflicted copies*: the summary says comments were added and both devices' comments and replies are there. Edit the same comment on both: the later edit wins.
+1312. **Pages.** Duplicate a page, copy a page to another notebook, move one: the comments go with it. Copy a selection that has a comment on it to another page: the comment does not.
+1313. **PDF export.** Turn on *Comments in the PDF export*, export: pages with comments are wider, with the region outlined and the note (author, time, text, replies, sketch) in the strip beside it. With the setting off the PDF is unchanged.
+1314. **Markdown export.** The notebook.md lists each page's comments under its text (numbered like the markers, with replies).
+1315. **Italian, dark and Obsidian theme.** The dialog, card, panel and notices read in Italian; markers, card and panel are readable in light, dark and with *Follow Obsidian theme*.
+1316. **Phone and tablet.** At phone width the card and panel are bottom sheets, markers are at least 24 px (the touch target is larger), the sketch pad takes finger and pen.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Margin comments (#86, format v16): `Page.comments`; v15 to v16 migration (a stray key is dropped, large v15 files still stage), lenient read and strict write, repair (orphan replies, regions outside the page), merge of two devices (both keep theirs, later edit wins), copies, moves, restore, templates, margins shift, lock guard | yes | `tests/model-v16.test.ts` | | | |
+| Comments UI: selection and rectangle entry points, margin markers with lines and outlines, card with flat thread, editor with sketch pad, side panel with filter, settings; one undo step each | yes | harness scenario `comments` (tablet and phone, light and dark), `tests/ui-registry.test.ts` | | | |
+| Exports: PDF margin notes (optional) and Markdown list | yes | `tests/comments-export.test.ts` | | | |

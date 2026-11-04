@@ -2,8 +2,9 @@ import { cloneMeta, findPage } from "./document";
 import { freezeElement } from "./serialize";
 import { marginsAfterResize, marginsOf, normalizeMargins, translateElement, translateStroke } from "./margins";
 import { lockedChanges, snapshotLocked } from "./page-lock";
+import { shiftComments } from "./comments";
 import { shiftPivots } from "./states";
-import type { Asset, NotebookDocument, NotebookMeta, Page, PageBackground, PageElement, PageMargins, PageStates, Paper, Stroke } from "./types";
+import type { Asset, NotebookDocument, NotebookMeta, Page, PageBackground, PageComment, PageElement, PageMargins, PageStates, Paper, Stroke } from "./types";
 
 /** A command knows how to apply and revert itself on a document: no snapshots. */
 export interface Command {
@@ -248,6 +249,8 @@ export class SetPageMargins implements Command {
 	private previous: { width: number; height: number; margins: PageMargins | undefined } | null = null;
 	/** v13: the page's states table before and after the pivots moved with the ink (the same objects are put back by undo). */
 	private states: { before: PageStates | undefined; after: PageStates | undefined } | null = null;
+	/** v16: the same for the page's comments (their regions are page coordinates too: they stay on the part of the background they annotate). */
+	private comments: { before: PageComment[] | undefined; after: PageComment[] | undefined } | null = null;
 	readonly before: PageMargins | undefined;
 	readonly after: PageMargins | undefined;
 
@@ -273,6 +276,11 @@ export class SetPageMargins implements Command {
 			const moved = shiftPivots(page.states, dx);
 			this.states = { before: page.states, after: moved };
 			if (moved) page.states = moved;
+		}
+		if (page.comments) {
+			const moved = shiftComments(page.comments, dx);
+			this.comments = { before: page.comments, after: moved };
+			page.comments = moved;
 		}
 		const move = <T extends Stroke | PageElement>(item: T, make: (x: T) => T): T => {
 			let m = this.moved.get(item) as T | undefined;
@@ -308,6 +316,16 @@ export class SetPageMargins implements Command {
 			} else if (page.states) {
 				const back = shiftPivots(page.states, -Math.round((marginsOf({ margins: this.after }).left - marginsOf({ margins: this.before }).left) * 100) / 100);
 				if (back) page.states = back;
+			}
+		}
+		const shifted = this.comments;
+		this.comments = null;
+		if (shifted) {
+			if (page.comments === shifted.after) {
+				if (shifted.before) page.comments = shifted.before;
+				else delete page.comments;
+			} else if (page.comments) {
+				page.comments = shiftComments(page.comments, -Math.round((marginsOf({ margins: this.after }).left - marginsOf({ margins: this.before }).left) * 100) / 100);
 			}
 		}
 		const strokes = page.strokes;

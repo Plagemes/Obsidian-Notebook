@@ -7,6 +7,7 @@
  * bookmarks and links to it stay valid. The rest of the notebook is untouched, and the change is one
  * undo step. Assets the restored page needs and the notebook no longer lists are added back.
  */
+import { copyComments, mergeComments } from "./comments";
 import { elementAssetId } from "./excerpts";
 import { createId } from "./document";
 import { AddAsset, AddPage, Batch, type Command } from "./history";
@@ -128,6 +129,10 @@ export function planPageRestore(
 	const tags = unionPageTags(target.tags, source.tags);
 	if (tags) page.tags = tags;
 	if (source.margins) page.margins = { ...source.margins };
+	// v16: like the tags, the comments of the page in view and of the restored version are joined (same id: the later edit wins), so
+	// restoring never drops a comment written since.
+	const comments = copyComments(mergeComments(target.comments, source.comments).list, source);
+	if (comments) page.comments = comments;
 	if (source.elements && source.elements.length > 0) page.elements = source.elements.map((e) => freezeElement({ ...e, id: idFor(e.id) }));
 	commands.push(new ReplacePage(target, page));
 	return { command: new Batch("Restore page", commands), pageIndex: targetIndex, assetsAdded };

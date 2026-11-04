@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### comments
+- **Margin comments (#86), document format 16.** *Comment* on a selection, or *Comment on a region* (a rectangle drawn on the page), anchors a comment to a region of the page: typed text, optionally a small handwritten sketch, the name of the device that wrote it, created and edited times, a resolved flag and a flat thread of replies. Each comment is a numbered marker in the page margin joined to its region; a tap highlights the region and opens its card (reply, resolve or reopen, edit, delete). The *Comments panel* lists them with an Open / Resolved / All filter and jumps to the region. Every change is one undo step through the history and is refused on a locked page.
+- **Document format v16.** A new optional page field `comments`, one comment or reply per line. The v15 to v16 migration only drops a stray `comments` key (large v15 files still stage); 0.17 and older open a v16 file read-only and never overwrite it. Read leniently (an invalid comment is dropped and counted, a region outside the page is moved into it, a reply whose comment is gone becomes a comment of its own), written strictly, repaired from the line scan. Merging a conflicted copy keeps comments and replies from both devices; for one comment edited on both the later edit wins. Comments travel with a duplicated, moved or copied page and are joined when a page version is restored; they do not travel with a copied selection, and templates carry none.
+- **Exports.** The PDF export can add the comments as margin notes (setting *Comments in the PDF export*, off by default): a strip beside each page that has comments, with the region outlined and joined to its note. The Markdown export lists each page's comments (numbered, author, time, resolved, replies).
+- **Settings.** *Show comment markers* (on by default) and *Comments in the PDF export*.
+
 ## 0.17.0 — 2026-11-04
 
 Write on and around the page more freely, and keep a large library in order: sticky notes you can type or write on, magnetic snap with alignment guides, merge, split and extract notebooks, a minimap for big pages, a hover preview of page links, an optional PDF copy next to each notebook, saved collections in the library, and a task made from a selection. The notebook format moves to version 15 (an older plugin opens a v15 file read-only).

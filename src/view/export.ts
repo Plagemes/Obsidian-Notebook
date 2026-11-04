@@ -1,7 +1,7 @@
 import { normalizePath, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { layerFlags, planExport, type ExportFormat, type ExportLayers, type ExportScope } from "../ink/export-layers";
-import { pagesToPdf, pagesToPdfYielding, type PdfOptions, type PdfPlacedImage } from "../ink/export-pdf";
+import { pagesToPdf, pagesToPdfYielding, type PdfCommentLabels, type PdfOptions, type PdfPlacedImage } from "../ink/export-pdf";
 import { pageToSvg, type SvgPlacedImage } from "../ink/export-svg";
 import type { BoxLabel } from "../ink/marker-render";
 import type { HeaderLayout } from "../ink/page-header";
@@ -110,6 +110,8 @@ export interface ExportOptions {
 	layers?: ExportLayers;
 	/** 0.15 (#75): the automatic page header or footer of a page (null: none); absent when the reader turned it off for exports. */
 	header?: (page: Page) => HeaderLayout | null;
+	/** 0.18 (#86): the margin comments as notes in a strip beside the pages that have them (PDF only); absent when the setting is off. */
+	comments?: PdfCommentLabels;
 }
 
 /**
@@ -126,6 +128,7 @@ export async function buildPdfBytes(
 		...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 		...(options.layers ? { layers: options.layers } : {}),
 		...(options.header ? { header: options.header } : {}),
+		...(options.comments ? { comments: options.comments } : {}),
 		...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}),
 	};
 	return { bytes: pause ? await pagesToPdfYielding(pages, pdfOptions, pause) : pagesToPdf(pages, pdfOptions), skipped };

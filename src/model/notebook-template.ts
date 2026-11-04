@@ -71,7 +71,11 @@ function documentOf(source: NotebookDocument, pages: Page[], now: Date): Noteboo
 export function templateFromNotebook(source: NotebookDocument, now: Date = new Date()): NotebookDocument {
 	const pages = source.pages.map((p) => duplicatePage(p));
 	const doc = documentOf(source, pages, now);
-	for (const p of pages) delete p.tags;
+	// Tags and comments belong to the notebook that was written in, not to a template made from it.
+	for (const p of pages) {
+		delete p.tags;
+		delete p.comments;
+	}
 	const meta = source.meta;
 	if (meta) {
 		doc.meta!.cover = meta.cover;
@@ -99,6 +103,7 @@ export function notebookFromTemplate(template: NotebookDocument, options: FromTe
 	const pages = template.pages.map((src) => {
 		const page = duplicatePage(src);
 		delete page.tags;
+		delete page.comments; // v16: review comments are not template content
 		if (!content) {
 			page.strokes = [];
 			delete page.elements;

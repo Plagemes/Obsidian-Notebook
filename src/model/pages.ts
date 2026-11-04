@@ -1,5 +1,6 @@
 import { createId, createPage } from "./document";
 import { freezeElement, freezeStroke } from "./serialize";
+import { copyComments } from "./comments";
 import { remapStates } from "./states";
 import { PAPER_SPACING, type Asset, type Page, type PageElement, type Stroke } from "./types";
 
@@ -49,6 +50,9 @@ export function duplicatePage(page: Page): Page {
 	// v7: the copy keeps the page's tags (its bookmark is not copied: bookmarks belong to the original page id).
 	if (page.tags && page.tags.length > 0) copy.tags = [...page.tags];
 	if (page.elements && page.elements.length > 0) copy.elements = page.elements.map(copyElement);
+	// v16: the comments are about the page, so a copy of the page keeps them (same ids: they are scoped to the page).
+	const comments = copyComments(page.comments, page);
+	if (comments) copy.comments = comments;
 	return copy;
 }
 

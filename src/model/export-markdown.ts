@@ -2,6 +2,7 @@
 // the file names (never an existing one) and the size of the page renders. The view side (view/export-markdown.ts)
 // draws the pages and writes the files through the vault API. No 'obsidian' import.
 import { outlineEntries } from "./bookmarks";
+import { orderedNotes, repliesOf } from "./comments";
 import { equationNumbers } from "./math-elements";
 import type { EquationElement, NotebookMeta, Page, StickyElement, TextElement } from "./types";
 
@@ -120,6 +121,38 @@ export function pageTexts(page: Pick<Page, "elements">, numbers: ReadonlyMap<str
 	});
 }
 
+/** The words and the date format of the comments list (translated and localised by the view). */
+export interface CommentLabels {
+	/** The line above the list, e.g. "Comments". */
+	heading: string;
+	/** After the author of a resolved comment, e.g. "resolved". */
+	resolved: string;
+	/** In place of the text of a comment that is only a sketch, e.g. "(sketch)". */
+	sketch: string;
+	/** A time of a comment, as the reader's language writes it. */
+	when: (ms: number) => string;
+}
+
+/**
+ * v16 (#86): the margin comments of a page as a list, for the Markdown export: a bold line, then a numbered list (the number is
+ * the one on the page's marker) with the author and time, "resolved" when it is, and the text; replies are a nested list.
+ * Empty when the page has no comments. Text is escaped like text boxes, so it always shows as written.
+ */
+export function commentsMarkdown(page: Pick<Page, "comments">, labels: CommentLabels): string[] {
+	const notes = orderedNotes(page as Page);
+	if (notes.length === 0) return [];
+	const body = (text: string, indent: string): string =>
+		text.replace(/\r\n?/g, "\n").trim().split("\n").map((l, i) => (i === 0 ? escapeMarkdownLine(l) : `${indent}${escapeMarkdownLine(l)}`)).join("\n");
+	const who = (c: { author: string; created: number }, tail = "") => `${escapeMarkdownLine(c.author || "?")}, ${escapeMarkdownLine(labels.when(c.created))}${tail}`;
+	const lines: string[] = [`**${escapeMarkdownLine(labels.heading)}**`, ""];
+	notes.forEach((n, k) => {
+		const text = n.text.trim() === "" ? escapeMarkdownLine(labels.sketch) : body(n.text, "   ");
+		lines.push(`${k + 1}. ${who(n, n.resolved ? ` (${escapeMarkdownLine(labels.resolved)})` : "")}: ${text}`);
+		for (const r of repliesOf(page as Page, n.id)) lines.push(`   - ${who(r)}: ${body(r.text, "     ")}`);
+	});
+	return [lines.join("\n")];
+}
+
 export interface NotebookMarkdownInput {
 	/** The notebook's title (its file name). */
 	title: string;
@@ -129,6 +162,8 @@ export interface NotebookMarkdownInput {
 	images: readonly string[];
 	/** Heading of a bookmark that has no title, e.g. "Page 3". */
 	pageLabel: (pageNumber: number) => string;
+	/** v16: when given, the margin comments of every page are listed below its text. */
+	comments?: CommentLabels;
 }
 
 /**
@@ -149,6 +184,7 @@ export function buildNotebookMarkdown(input: NotebookMarkdownInput): string {
 		const image = input.images[i];
 		if (image !== undefined) out.push(`![](${linkTarget(image)})`);
 		out.push(...pageTexts(page, numbers));
+		if (input.comments) out.push(...commentsMarkdown(page, input.comments));
 	});
 	return out.join("\n\n") + "\n";
 }

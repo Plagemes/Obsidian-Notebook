@@ -153,6 +153,7 @@ import { StampPalette, type StampTarget } from "./stamp-palette";
 import { TextEditor, type TextEditSession } from "./text-editor";
 import { MathTools, type MathHost } from "./math-tools";
 import { StickyTools, type StickyHost } from "./sticky-tools";
+import { CommentTools, pdfCommentLabels, type CommentsHost } from "./comments-tools";
 import { equationNumbers } from "../model/math-elements";
 import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites";
 import { PenControls, type PenStore } from "./pen-controls";
@@ -413,6 +414,8 @@ export class NotebookView extends FileView {
 	private math: MathTools | null = null;
 	/** 0.17 (#20): sticky notes (insert, edit, collapse). */
 	private sticky: StickyTools | null = null;
+	/** 0.18 (#86): margin comments (markers, card, side panel). */
+	private comments: CommentTools | null = null;
 	private rulerGesture: RulerGesture | null = null;
 	private radial: PenRadial | null = null;
 	private colour: ColourTools | null = null;
@@ -646,6 +649,7 @@ export class NotebookView extends FileView {
 		this.textEditor = new TextEditor(this.stage);
 		this.math = new MathTools(this.mathHost());
 		this.sticky = new StickyTools(this.stickyHost());
+		this.comments = new CommentTools(this.commentsHost());
 		this.penGestures = new PenGestureLayer({
 			stage: this.stage,
 			body: this.body,
@@ -943,6 +947,8 @@ export class NotebookView extends FileView {
 		this.scrollbar = null;
 		this.minimap?.destroy();
 		this.minimap = null;
+		this.comments?.destroy();
+		this.comments = null;
 		this.stopNav?.();
 		this.stopNav = null;
 		this.selectionActions?.destroy();
@@ -1908,6 +1914,8 @@ export class NotebookView extends FileView {
 			prepare: (pages) => this.math?.prepareExport(pages) ?? Promise.resolve(),
 			...(doc ? { equationNumbers: equationNumbers(doc.pages) } : {}),
 			...(header ? { header } : {}),
+			// 0.18 (#86): the margin comments as notes in the PDF, when the setting asks for them.
+			...(this.host.settings.commentsInPdf ? { comments: pdfCommentLabels() } : {}),
 		};
 	}
 
@@ -1960,6 +1968,33 @@ export class NotebookView extends FileView {
 	/** 0.17 (#20): sticky notes of this view (null before the view is open). */
 	get stickyTools(): StickyTools | null {
 		return this.sticky;
+	}
+
+	/** 0.18 (#86): margin comments of this view (null before the view is open). */
+	get commentTools(): CommentTools | null {
+		return this.comments;
+	}
+
+	/** What the comment tools need from the view. */
+	private commentsHost(): CommentsHost {
+		return {
+			app: this.app,
+			body: this.body,
+			doc: () => this.session?.doc ?? null,
+			editable: () => !!this.editableDocument(),
+			execute: (cmd) => this.applyCommand(cmd),
+			geometry: () => this.overlayGeometry(),
+			addOverlayListener: (fn) => this.addOverlayListener(fn),
+			selection: () => this.selectionRegion(),
+			clearSelection: () => this.clearSelection(),
+			currentPage: () => this.currentPageIndex(),
+			deviceName: () => this.host.syncSafety?.presence.device().name ?? t("comments.thisDevice"),
+			reveal: (pageIndex, y) => this.scrollToPage(pageIndex, y),
+			markersOn: () => this.host.settings.commentMarkers,
+			narrow: () => this.body.hasClass("is-narrow"),
+			notify: (message) => void showNotice(message, 3500),
+			refreshUi: () => this.refreshUi(),
+		};
 	}
 
 	/** What the sticky note tools need from the view. */
@@ -2793,6 +2828,7 @@ export class NotebookView extends FileView {
 			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false, snap: this.reading?.snapping ?? false, selectText: this.pdfText?.active ?? false },
 			display: { night: this.display?.night ?? false, crop: this.display?.crop ?? false },
 			states: { open: !!this.statesTools?.open },
+			comments: { panel: this.comments?.panelOpen ?? false, total: this.comments?.counts.total ?? 0, open: this.comments?.counts.open ?? 0, drawing: this.comments?.drawing ?? false },
 			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle", readOnly: this.userReadOnly,
 				snapAvailable: this.host.settings.snapMode !== "off", snap: !this.snapPaused },
 			canPrint: canPrint(),
