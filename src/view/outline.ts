@@ -159,7 +159,7 @@ export function renderOutline(
 	if (all.length === 0 && section.length === 0) {
 		const empty = box.createDiv({ cls: "nb-outline-empty" });
 		setIcon(empty.createDiv({ cls: "nb-outline-empty-icon", attr: { "aria-hidden": "true" } }), "list-tree");
-		const anyOn = sources.bookmarks || sources.slides || sources.headings || sources.markers || sources.pdf || pdfMode === "section";
+		const anyOn = sources.bookmarks || sources.slides || sources.headings || sources.markers || ((sources.pdf || pdfMode === "section") && Object.values(pdfOutlines ?? {}).some((list) => list.length > 0));
 		empty.createDiv({ cls: "nb-outline-empty-text", text: t(!anyOn ? "outline.allOff" : category !== null ? "outline.emptyCategory" : "outline.emptyAll") });
 		return;
 	}
