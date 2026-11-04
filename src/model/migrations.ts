@@ -285,6 +285,25 @@ export function withoutV12Slides(raw: RawObject): RawObject {
 	return copy;
 }
 
+/**
+ * v13 adds the optional page field `states` (drawings with states, #241). Every valid v12 document is a valid v13 document
+ * without it. A v12 reader ignored unknown page fields, so a `states` key in a v12 file was never ours and never had an
+ * effect: it is dropped, not interpreted (like `slides` in v11 -> v12). Nothing else changes, so a large v12 file can still
+ * be read page by page (StagedParse), which ignores the `states` key of each page.
+ */
+function v12ToV13(raw: RawObject): RawObject {
+	const isObj = (v: unknown): v is RawObject => typeof v === "object" && v !== null && !Array.isArray(v);
+	const out: RawObject = { ...raw, version: 13 };
+	if (!Array.isArray(raw.pages)) return out;
+	out.pages = (raw.pages as unknown[]).map((page) => {
+		if (!isObj(page) || !("states" in page)) return page;
+		const copy = { ...page };
+		delete copy.states;
+		return copy;
+	});
+	return out;
+}
+
 /** MIGRATIONS[n] takes a document from version n to n+1. */
 export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	0: v0ToV1,
@@ -299,6 +318,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	9: v9ToV10,
 	10: v10ToV11,
 	11: v11ToV12,
+	12: v12ToV13,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

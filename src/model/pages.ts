@@ -1,5 +1,6 @@
 import { createId, createPage } from "./document";
 import { freezeElement, freezeStroke } from "./serialize";
+import { remapStates } from "./states";
 import { PAPER_SPACING, type Asset, type Page, type PageElement, type Stroke } from "./types";
 
 function copyElement(el: PageElement): PageElement {
@@ -27,13 +28,21 @@ export function copyStroke(s: Stroke, id: string = s.id, slide?: string | null):
  * serialize.ts -> migrations.ts -> document.ts would cycle.
  */
 export function duplicatePage(page: Page): Page {
+	const ids = new Map<string, string>();
 	const copy: Page = {
 		id: createId(),
 		width: page.width,
 		height: page.height,
 		paper: { kind: page.paper.kind, spacing: page.paper.spacing },
-		strokes: page.strokes.map((s) => copyStroke(s, createId())),
+		strokes: page.strokes.map((s) => {
+			const id = createId();
+			ids.set(s.id, id);
+			return copyStroke(s, id);
+		}),
 	};
+	// v13: the parts and states follow the strokes to their new ids (a copy of a drawing with states is a drawing with states).
+	const states = remapStates(page.states, (id) => ids.get(id));
+	if (states) copy.states = states;
 	if (page.background) copy.background = { ...page.background };
 	if (page.infinite !== undefined) copy.infinite = page.infinite;
 	if (page.margins) copy.margins = { ...page.margins };

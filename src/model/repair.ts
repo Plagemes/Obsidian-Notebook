@@ -32,10 +32,10 @@ import { parseLenient } from "./lenient-json";
 import { detectVersion, migrate, type RawObject } from "./migrations";
 import { normalizePageTags } from "./page-tags";
 import { normalizePosition } from "./position";
-import { parse, readSlides, serializeChecked, validate, MAX_FONT_SIZE } from "./serialize";
+import { parse, readPageStates, readSlides, serializeChecked, validate, MAX_FONT_SIZE } from "./serialize";
 import {
 	A4_HEIGHT, A4_WIDTH, CURRENT_VERSION, DEFAULT_META, FORMAT_ID, PAPER_SPACING, RENDER_FREEHAND, RENDER_VERSIONS, TOOLS,
-	type Asset, type BookmarkInfo, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type ReadingPosition, type SlideRef, type Stroke,
+	type Asset, type BookmarkInfo, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type PageStates, type ReadingPosition, type SlideRef, type Stroke,
 } from "./types";
 
 export interface Counts {
@@ -78,7 +78,7 @@ export type RepairResult =
 
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 /** Page fields of the current format (a field dropped by the repair is not "unknown"). */
-const PAGE_FIELDS = { id: 1, width: 1, height: 1, paper: 1, strokes: 1, elements: 1, background: 1, infinite: 1, margins: 1, tags: 1 };
+const PAGE_FIELDS = { id: 1, width: 1, height: 1, paper: 1, strokes: 1, elements: 1, background: 1, infinite: 1, margins: 1, tags: 1, states: 1 };
 const HEX_RE = /^[0-9a-f]+$/;
 
 function isObj(v: unknown): v is RawObject {
@@ -132,7 +132,7 @@ function jsonOrUndefined(text: string): unknown {
 
 const HEADER_LINE = /^\t"(format|version|id|createdAt|modifiedAt|meta|position)": (.*)$/;
 const ASSET_LINE = /^\t\t("[0-9a-f]+"): (\{.*\}),?$/;
-const PAGE_FIELD_LINE = /^\t\t\t"(id|width|height|paper|tags|background|infinite|margins)": (.*)$/;
+const PAGE_FIELD_LINE = /^\t\t\t"(id|width|height|paper|tags|background|infinite|margins|states)": (.*)$/;
 /** A v12 slide table entry (two tabs, content on the line: a page starts with a bare "\t\t{" line). */
 const SLIDE_LINE = /^\t\t(\{"id":.*\}),?$/;
 const ITEM_LINE = /^\t\t\t\t(\{.*\}),?$/;
@@ -479,6 +479,20 @@ interface SalvageContext {
 	cut: WeakSet<object>;
 }
 
+/** v13 page states: what the lenient reader keeps of them, given the strokes that were salvaged. */
+function salvageStates(raw: unknown, strokes: readonly Stroke[], summary: RepairSummary): PageStates | undefined {
+	if (raw === undefined) return undefined;
+	const drop = { count: 0 };
+	let states: PageStates | undefined;
+	try {
+		states = readPageStates(raw, "states", new Set(strokes.map((s) => s.id)), drop);
+	} catch {
+		summary.fieldsReset++;
+	}
+	summary.fieldsReset += drop.count;
+	return states;
+}
+
 /** v12 slide table: the valid entries (an invalid entry or a repeated id is left out and counted as a reset field). */
 function salvageSlides(raw: unknown, summary: RepairSummary): readonly SlideRef[] {
 	if (raw === undefined) return [];
@@ -771,6 +785,10 @@ function salvage(raw: RawObject, summary: RepairSummary, now: Date, cut: WeakSet
 		const page = tryDoc([skeleton], assets)!.pages[0]!;
 		page.strokes = strokes;
 		if (elements.length > 0) page.elements = elements;
+		// v13: the states are kept with the lenient reader against the strokes that were salvaged (a part keeps the strokes
+		// that survived; what is invalid is left out and counted as a reset field).
+		const states = salvageStates(p.states, strokes, summary);
+		if (states) page.states = states;
 		summary.unknownFields += unknownKeys(p, { ...PAGE_FIELDS, ...page });
 		ctx.pageIds.add(page.id);
 		pages.push(page);

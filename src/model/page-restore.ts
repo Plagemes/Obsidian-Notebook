@@ -13,6 +13,7 @@ import { AddAsset, AddPage, Batch, type Command } from "./history";
 import { unionPageTags } from "./page-tags";
 import { copyStroke, duplicatePage } from "./pages";
 import { freezeElement } from "./serialize";
+import { remapStates } from "./states";
 import type { Asset, NotebookDocument, Page } from "./types";
 
 /** Replaces one page object with another at the same position. A missing page is a no-op both ways. */
@@ -104,14 +105,22 @@ export function planPageRestore(
 		elsewhere.add(fresh);
 		return fresh;
 	};
+	const strokeIds = new Map<string, string>();
 	const page: Page = {
 		id: target.id,
 		width: source.width,
 		height: source.height,
 		paper: { kind: source.paper.kind, spacing: source.paper.spacing },
 		// v8: copyStroke keeps every field (hidden ink stays hidden); elements are copied whole (markers, boxes).
-		strokes: source.strokes.map((s) => copyStroke(s, idFor(s.id))),
+		strokes: source.strokes.map((s) => {
+			const id = idFor(s.id);
+			strokeIds.set(s.id, id);
+			return copyStroke(s, id);
+		}),
 	};
+	// v13: the version's parts and states come with its strokes.
+	const states = remapStates(source.states, (id) => strokeIds.get(id));
+	if (states) page.states = states;
 	if (source.background) page.background = { ...source.background };
 	if (source.infinite !== undefined) page.infinite = source.infinite;
 	// v7 page tags: the tags of the page in view and of the restored version, so restoring never drops a tag.
