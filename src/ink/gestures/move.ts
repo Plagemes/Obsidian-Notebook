@@ -1,3 +1,4 @@
+import { withPinnedInk } from "../attach";
 import { elementBounds, transformElement, type MeasureText } from "../elements";
 import { transformStroke } from "../lasso";
 import { estimateMeasure } from "../text-layout";
@@ -15,9 +16,12 @@ export function movePlan(
 ): PageContentPlan | null {
 	const from = doc.pages[sel.pageIndex], to = doc.pages[target];
 	if (!from || !to || from === to) return null;
-	const strokeSet = new Set(sel.strokes), elementSet = new Set(sel.elements);
-	const strokes = from.strokes.filter((s) => strokeSet.has(s));
+	const elementSet = new Set(sel.elements);
 	const elements = (from.elements ?? []).filter((e) => elementSet.has(e));
+	// 0.17 (H2): a collapsed sticky note takes the ink it keeps hidden (never selected: it is out of view) to the other page.
+	const strokeSet = new Set(sel.strokes);
+	const strokes = withPinnedInk(from.strokes, from.strokes.filter((s) => strokeSet.has(s)), elements);
+	for (const s of strokes) strokeSet.add(s);
 	if (strokes.length === 0 && elements.length === 0) return null;
 	let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 	for (const s of strokes) for (const [x, y] of s.points) {

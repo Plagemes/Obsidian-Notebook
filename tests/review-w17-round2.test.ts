@@ -25,9 +25,14 @@ vi.mock("obsidian", () => {
 vi.mock("../src/library/library-modals", () => ({ PromptModal: class {} }));
 vi.mock("../src/view/toolbar", () => ({ PEN_COLORS: ["#111111"], PEN_WIDTHS: [1], HIGHLIGHTER_COLORS: ["#ffee00"], HIGHLIGHTER_WIDTHS: [10] }));
 
+import { movePlan } from "../src/ink/gestures/move";
+import { layoutPages } from "../src/ink/layout";
+import { planCrossPageTransform } from "../src/ink/cross-page";
+import { translate } from "../src/ink/transform";
 import { createDocument, createPage, createStroke } from "../src/model/document";
 import { History, type Command } from "../src/model/history";
-import { freezeElement, freezeStroke } from "../src/model/serialize";
+import { pageContentCommand } from "../src/model/page-content";
+import { freezeElement, freezeStroke, serializeChecked } from "../src/model/serialize";
 import { hiddenStickyInk } from "../src/model/sticky";
 import type { NotebookDocument, Page, StickyElement, Stroke } from "../src/model/types";
 import { internalClip } from "../src/view/clipboard";
@@ -160,7 +165,7 @@ describe("H1: paste and duplicate of a collapsed note select the note, not its h
 		doc.pages.push(p2);
 		const r = rig(doc, {
 			pageIndex: 0, strokes: [], elements: [doc.pages[0]!.elements![0]!],
-			others: [{ pageIndex: 1, strokes: [], elements: [p2.elements![0]!] }],
+			others: [{ pageIndex: 1, strokes: [], elements: [p2.elements[0]!] }],
 		});
 		r.actions.duplicate();
 		const sel = r.current()!;
@@ -168,5 +173,78 @@ describe("H1: paste and duplicate of a collapsed note select the note, not its h
 		expect(doc.pages[1]!.strokes).toHaveLength(2);
 		expect(sel.strokes).toEqual([]);
 		expect(sel.others!.every((part) => part.strokes.length === 0 && part.elements.length === 1)).toBe(true);
+	});
+});
+
+// --- H2: the pen-gesture move and the cross-page drag take a collapsed note's ink ---
+
+describe("H2: a collapsed note changes page with its hidden ink", () => {
+	function twoPages(): NotebookDocument {
+		const doc = collapsedDoc();
+		doc.pages.push(createPage({ width: 400, height: 600 }));
+		return doc;
+	}
+
+	it("pen-gesture 'move to page': the note arrives with its ink, the source keeps only what is not the note's, undo restores", () => {
+		const doc = twoPages();
+		const plan = movePlan(doc, { pageIndex: 0, strokes: [], elements: [doc.pages[0]!.elements![0]!] }, 1)!;
+		expect(plan).not.toBeNull();
+		const history = new History(() => doc);
+		expect(history.execute(pageContentCommand(doc, plan, "Move to page"))).toBe(true);
+		expect(doc.pages[0]!.strokes.map((s) => s.id)).toEqual(["s3"]);
+		expect(doc.pages[1]!.strokes.map((s) => s.id)).toEqual(["s1", "s2"]);
+		expect(liveHidden(doc.pages[1]!)).toEqual(["s1", "s2"]);
+		expect(serializeChecked(doc).ok).toBe(true);
+		history.undo();
+		expect(doc.pages[0]!.strokes.map((s) => s.id).sort()).toEqual(["s1", "s2", "s3"]);
+		expect(doc.pages[1]!.strokes).toEqual([]);
+	});
+
+	it("pen-gesture move of a note selected together with visible ink moves each stroke once", () => {
+		const doc = twoPages();
+		const s3 = doc.pages[0]!.strokes[2]!;
+		const plan = movePlan(doc, { pageIndex: 0, strokes: [s3], elements: [doc.pages[0]!.elements![0]!] }, 1)!;
+		new History(() => doc).execute(pageContentCommand(doc, plan, "Move to page"));
+		expect(doc.pages[0]!.strokes).toEqual([]);
+		expect(doc.pages[1]!.strokes.map((s) => s.id).sort()).toEqual(["s1", "s2", "s3"]);
+	});
+
+	for (const followInk of [false, true, undefined]) {
+		it(`cross-page drag with "Ink follows objects" ${followInk === undefined ? "unset" : followInk ? "on" : "off"}: the ink goes where the note goes`, () => {
+			const doc = twoPages();
+			const { boxes } = layoutPages(doc.pages);
+			const note1 = doc.pages[0]!.elements![0]!;
+			// Down by one page: the note's centre ends on page 1.
+			const dy = boxes[1]!.y - boxes[0]!.y;
+			const plan = planCrossPageTransform({
+				boxes, pages: doc.pages, primary: 0, parts: [{ pageIndex: 0, strokes: [], elements: [note1] }],
+				matrix: translate(0, dy), ...(followInk === undefined ? {} : { followInk }),
+			})!;
+			expect(plan).not.toBeNull();
+			const history = new History(() => doc);
+			expect(history.execute(plan.command)).toBe(true);
+			expect(doc.pages[0]!.elements).toEqual([]);
+			expect(doc.pages[0]!.strokes.map((s) => s.id)).toEqual(["s3"]);
+			expect(doc.pages[1]!.strokes.map((s) => s.id).sort()).toEqual(["s1", "s2"]);
+			expect(liveHidden(doc.pages[1]!)).toEqual(expect.arrayContaining(["s1", "s2"]));
+			// The hidden ink is not handed back as selected.
+			expect(plan.parts.every((part) => part.strokes.length === 0)).toBe(true);
+			history.undo();
+			expect(doc.pages[0]!.strokes).toHaveLength(3);
+			expect(doc.pages[1]!.strokes).toEqual([]);
+		});
+	}
+
+	it("cross-page drag that stays on the page: the hidden ink moves with the note by the same distance", () => {
+		const doc = twoPages();
+		const { boxes } = layoutPages(doc.pages);
+		const plan = planCrossPageTransform({
+			boxes, pages: doc.pages, primary: 0, parts: [{ pageIndex: 0, strokes: [], elements: [doc.pages[0]!.elements![0]!] }],
+			matrix: translate(10, 5),
+		})!;
+		new History(() => doc).execute(plan.command);
+		const s1 = doc.pages[0]!.strokes.find((s) => s.id === "s1")!;
+		expect(s1.points[0]![0]).toBeCloseTo(120, 1);
+		expect(s1.points[0]![1]).toBeCloseTo(183, 1);
 	});
 });
