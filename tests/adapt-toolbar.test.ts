@@ -267,3 +267,18 @@ describe("texts of the generative interface", () => {
 		expect(adaptBoost(a, baseContext(), ON)).toBe(0);
 	});
 });
+
+describe("Back stays a quick slot (0.13 polish) next to the page-type boosts", () => {
+	it("keeps Back on grid paper when there is history and room for three slots", () => {
+		const c = baseContext({ nav: { back: true, forward: false }, page: { index: 3, count: 12, background: "none", infinite: false, bookmarked: false, kind: "grid" } });
+		for (const w of [700, 768, 1024]) {
+			const l = buildLayout(c, w, {}, NOW, undefined, undefined, ON);
+			expect(l.quick, `at ${w}`).toContain("nav-back");
+			expect(l.quick, `at ${w}`).toContain("toggle-ruler");
+			expect(l.quick.length).toBe(l.quickSlots);
+		}
+		// Without history there is nothing to go back to: the ruler keeps the slot.
+		const none = buildLayout(baseContext({ page: { index: 0, count: 12, background: "none", infinite: false, bookmarked: false, kind: "grid" } }), 700, {}, NOW, undefined, undefined, ON);
+		expect(none.quick).not.toContain("nav-back");
+	});
+});

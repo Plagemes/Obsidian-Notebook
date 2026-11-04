@@ -133,7 +133,16 @@ export function buildLayout(c: UiContext, width: number, usage: UsageMap, now: n
 		return a && a.surfaces.includes("quick") && isRelevant(a, c) && usable(a) ? [a] : [];
 	});
 	const rest = ranked("quick", c, usage, now, actions, adapt).filter((a) => usable(a) && !pinned.includes(a));
-	const quick = [...pinned, ...rest].slice(0, plan.quickSlots).map((a) => a.id);
+	const order = [...pinned, ...rest];
+	let chosen = order.slice(0, plan.quickSlots);
+	// Back (0.13): with room for three slots it stays among them while there is somewhere to go back to, whatever a page-type or
+	// learned boost ranks above it; it takes the place of the lowest-ranked unpinned slot.
+	const back = rest.find((a) => a.id === "nav-back");
+	if (back && plan.quickSlots >= 3 && !chosen.includes(back)) {
+		const drop = [...chosen].reverse().find((a) => !pinned.includes(a));
+		if (drop) chosen = order.filter((a) => a === back || (chosen.includes(a) && a !== drop));
+	}
+	const quick = chosen.map((a) => a.id);
 	return { ...plan, quick, context, suggested: [...suggestedTools(c, adapt)] };
 }
 
