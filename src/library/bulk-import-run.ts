@@ -53,6 +53,11 @@ export interface BulkRunDeps<F> {
 	/** Pixel size of an image; throws `BulkSkipError("heic")` for a photo the WebView cannot decode, anything else for a broken one. */
 	imageSize(bytes: ArrayBuffer, name: string, type: string): Promise<{ width: number; height: number }>;
 	create(folder: string, name: string, doc: NotebookDocument): Promise<{ file: F; path: string }>;
+	/**
+	 * Whether a notebook file exists at the place `create` writes to. Asked after `create` threw: a file there may already hold the
+	 * copies (the write got as far as the vault), so they are not discarded. Without it the copies are discarded as before.
+	 */
+	notebookExists?(folder: string, name: string): boolean | Promise<boolean>;
 	/** The art style the generated cover of a notebook with this name gets. */
 	artStyle(name: string): CoverFamily;
 	/** Gives the UI thread back (a timer tick, not a microtask). */
@@ -208,7 +213,9 @@ export async function runBulkImport<F>(
 			for (const a of stored) kept.add(a.id);
 		} catch (e) {
 			out.failed = messageOf(e);
-			for (const a of stored) await drop(a); // no notebook holds these copies
+			// No notebook holds these copies, unless the failed create left a file behind that may.
+			const left = deps.notebookExists ? await Promise.resolve(deps.notebookExists(folder, job.name)).catch(() => true) : false;
+			if (!left) for (const a of stored) await drop(a);
 		}
 		await deps.yieldToUi();
 		if (cancelled) break;

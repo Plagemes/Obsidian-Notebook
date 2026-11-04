@@ -42,6 +42,7 @@ import { createLectureFromSlides } from "./lecture-pack";
 import { openLooseSheet, openNewQuickPage } from "./loose-sheet";
 import { openTodaysPage } from "./daily";
 import type { LectureTarget } from "./home-stats";
+import { mayDiscardAsset } from "./bulk-discard";
 import { openLibraryCheck } from "./library-check-modal";
 import { openStorageManager } from "./storage-dialog";
 import { LibraryStateStore } from "./library-state-store";
@@ -416,6 +417,10 @@ export class NotebookLibraryHost implements LibraryHost {
 					discard: async (asset) => {
 						if (!createdAssets.has(asset.path)) return; // it was already in the vault: another notebook may use it
 						const copy = app.vault.getFileByPath(normalizePath(asset.path));
+						// A notebook of the library may already name it (a synced notebook whose asset file was still on its way when
+						// this run looked): never discard then, nor while any notebook is still being downloaded.
+						const notebooks = app.vault.getFiles().filter((f) => f.extension === NEW_NOTEBOOK_EXTENSION);
+						if (!(await mayDiscardAsset(asset.id, notebooks.map((f) => ({ read: () => app.vault.read(f) }))))) return;
 						createdAssets.delete(asset.path);
 						this.assets.delete(asset.id);
 						if (copy) await app.fileManager.trashFile(copy);
@@ -428,6 +433,7 @@ export class NotebookLibraryHost implements LibraryHost {
 						const file = await createNotebook(app, dir2, name, doc);
 						return { file, path: file.path };
 					},
+					notebookExists: (dir2, name) => existsInsensitive(app.vault, normalizePath(joinPath(dir2, `${name}.${NEW_NOTEBOOK_EXTENSION}`))),
 					artStyle: (name) => artStyleFor(name),
 					yieldToUi: () => new Promise<void>((resolve) => window.setTimeout(resolve, 0)),
 				}, ctl),
