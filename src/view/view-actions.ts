@@ -329,6 +329,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	// wave 0.9: export dialog (381, from a page's sheet it starts on that page), Markdown export (382), night mode (367), cropped margins (376)
 	"export-dialog": (v, arg) => v.openExportDialog(arg.page),
 	"export-markdown": (v) => v.openMarkdownExport(),
+	// 0.16 (#90): the highlights digest note
+	"highlights-digest": (v) => v.openHighlightsDigest(),
 	// wave 0.10: PNG images (81) and Print (81) are choices of the same dialog; read-only mode (51)
 	"export-png": (v) => v.openExportDialog(undefined, "png"),
 	"print": (v) => {

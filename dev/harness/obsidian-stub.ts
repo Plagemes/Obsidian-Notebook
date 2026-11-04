@@ -469,6 +469,16 @@ export class FileManager {
 	generateMarkdownLink(f: TFile, _source: string, subpath?: string, alias?: string): string {
 		return `[[${f.path}${subpath ?? ""}${alias ? `|${alias}` : ""}]]`;
 	}
+	/** 0.16 digest: where Obsidian would put an attachment of `source` (the harness has one attachments folder), a free name. */
+	async getAvailablePathForAttachment(name: string, _source?: string): Promise<string> {
+		const dot = name.lastIndexOf(".");
+		const stem = dot > 0 ? name.slice(0, dot) : name;
+		const ext = dot > 0 ? name.slice(dot) : "";
+		for (let i = 0; ; i++) {
+			const path = `Attachments/${stem}${i === 0 ? "" : ` ${i}`}${ext}`;
+			if (!this.app.vault.getAbstractFileByPath(path)) return path;
+		}
+	}
 	async processFrontMatter(): Promise<void> {
 		/* not used by the harness */
 	}
@@ -522,9 +532,13 @@ export class MetadataCache extends Events {
 	getFileCache(): null {
 		return null;
 	}
-	getFirstLinkpathDest(): null {
-		return null;
+	getFirstLinkpathDest(name?: string): TFile | null {
+		if (!name) return null;
+		const base = name.slice(name.lastIndexOf("/") + 1).toLowerCase();
+		return this.vaultRef?.getFiles().find((f) => f.name.toLowerCase() === base) ?? null;
 	}
+	/** 0.16 digest: lets the stand-in resolve a link by file name (set by App). */
+	vaultRef: Vault | null = null;
 	fileToLinktext(file: { path: string }): string {
 		return file.path.replace(/.md$/, "");
 	}
@@ -535,6 +549,9 @@ export class App {
 	readonly workspace = new Workspace();
 	readonly fileManager = new FileManager(this);
 	readonly metadataCache = new MetadataCache();
+	constructor() {
+		this.metadataCache.vaultRef = this.vault;
+	}
 	readonly scope = new Scope();
 	/** Per-device local storage, as Obsidian's (kept in memory in the harness). */
 	private readonly local = new Map<string, unknown>();

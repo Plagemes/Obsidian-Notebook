@@ -277,6 +277,11 @@ const READING: SettingSpec[] = [
 	// 0.14 slides (#226): ink remembers the slide beside the notes; its badge shows the slide again.
 	{ id: "slideInkLink", section: "reading", order: 40, name: "settings.slideInkLink", desc: "settings.slideInkLink.desc", control: { type: "toggle" }, keywords: "slide side by side pdf link ink notes diapositiva affiancato" },
 	{ id: "slideInkBadges", section: "reading", order: 41, name: "settings.slideInkBadges", desc: "settings.slideInkBadges.desc", control: { type: "toggle" }, parent: "slideInkLink", keywords: "slide badge diapositiva" },
+	// 0.16 (#90) highlights digest: how the digest note groups the highlights.
+	{
+		id: "digestGroup", section: "reading", order: 50, name: "settings.digestGroup", desc: "settings.digestGroup.desc",
+		control: { type: "dropdown", options: options([["page", "settings.digestGroup.page"], ["colour", "settings.digestGroup.colour"]]) }, keywords: "highlights digest summary evidenziazioni riepilogo colour colore",
+	},
 ];
 
 const LIBRARY: SettingSpec[] = [

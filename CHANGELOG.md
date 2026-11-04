@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### digest
+- **Highlights digest (#90).** Notebook More menu and command *Highlights digest…* collect every highlighter region (strokes of one colour that are close together, per page) in the note *<Notebook> — Highlights* next to the notebook: a picture of each region (ink, PDF page and states as shown), the PDF text under it on PDF pages (pdf.js text intersected with the highlight, whole words), a link back to the page and the colour, grouped by page or by colour (Settings > Reading). Only the section between `<!-- notebook-digest:start -->` and `end` is rewritten (through `vault.process`); text outside is never touched, a note with an unpaired marker is left alone, pictures are reused on re-runs and stored per Obsidian's attachment settings. No change to the notebook format. Tests: `tests/highlight-digest.test.ts`. Harness: `dev/harness/digest-check.ts` (`doc=digest`).
+
 ## 0.15.0 — 2026-11-04
 
 Notebooks start from templates and stay organised: notebook templates, an automatic page header or footer, pen sets per subject, a daily "Today's page", Board and Calendar views of the library, a storage manager, and drawings with states for physics-style figures. **The document format is now v13** (optional drawing states): a 0.14 device opens a v13 notebook read-only (newer version) and never overwrites it. The state shown is your device's own choice; only *Set as default state* saves it in the notebook. **Not verified on the device**: unit tests and the browser harness only.

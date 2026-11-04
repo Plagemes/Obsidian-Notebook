@@ -174,6 +174,9 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	/** After the pen lifts near the right margin of ruled or grid paper, the view moves to the start of the next line (353). Off by default. */
 	autoLineBreak: boolean;
 	// 0.15 (#75): automatic page header / footer
+	// 0.16 (#90): highlights digest
+	/** How the digest note of the highlights is grouped: by page or by colour. */
+	digestGroup: "page" | "colour";
 	headerMode: HeaderMode;
 	headerPageNumber: boolean;
 	headerPageTotal: boolean;
@@ -270,6 +273,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	pageTurnerKeys: true,
 	notebookTabs: false,
 	autoLineBreak: false,
+	digestGroup: "page",
 	headerMode: "off",
 	headerPageNumber: true,
 	headerPageTotal: true,
@@ -375,6 +379,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.pageTurnerKeys === "boolean") s.pageTurnerKeys = d.pageTurnerKeys;
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;
 	if (typeof d.autoLineBreak === "boolean") s.autoLineBreak = d.autoLineBreak;
+	if (d.digestGroup === "page" || d.digestGroup === "colour") s.digestGroup = d.digestGroup;
 	if (isHeaderMode(d.headerMode)) s.headerMode = d.headerMode;
 	if (isHeaderAlign(d.headerAlign)) s.headerAlign = d.headerAlign;
 	for (const k of ["headerPageNumber", "headerPageTotal", "headerDate", "headerTitle", "headerInExport"] as const) if (typeof d[k] === "boolean") s[k] = d[k];
