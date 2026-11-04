@@ -91,7 +91,7 @@ export async function pensetsShot(api: PensetsCheckApi & { app: unknown }, state
 		const modal = document.querySelector<HTMLElement>("body > .modal");
 		if (modal) {
 			const layer = document.body.createDiv({ cls: "harness-modal-layer" });
-			layer.setAttribute("style", "position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.4)");
+			layer.setCssStyles({ position: "fixed", inset: "0", zIndex: "1000", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,.4)" });
 			layer.appendChild(modal);
 		}
 	}
