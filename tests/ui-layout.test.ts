@@ -38,7 +38,7 @@ describe("toolbar plan", () => {
 describe("layout engine", () => {
 	it("fills the quick slots by priority on a plain page", () => {
 		const l = buildLayout(baseContext(), 1280, {}, NOW);
-		expect(l.quick).toEqual(["insert-image", "add-page-suggest", "stamps", "board-shot", "toggle-ruler", "toggle-page-mode"]);
+		expect(l.quick).toEqual(["insert-image", "add-page-suggest", "stamps", "insert-sticky", "board-shot", "toggle-ruler"]);
 		expect(l.context).toBeNull();
 	});
 
