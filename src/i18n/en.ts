@@ -3255,6 +3255,7 @@ export const en = {
 	"settings.taskDueEmoji.desc": "On: 📅 date. Off: a Dataview field, [due:: date].",
 	// 0.17 review fixes (data)
 	"transfer.journalPending": "{name} has edits that are not saved to its file yet. Open the notebook once, then try again. Nothing was changed.",
+	"task.exists": "That task is already in {path}. Nothing was added.",
 } as const;
 
 export type MessageKey = keyof typeof en;

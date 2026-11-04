@@ -3257,4 +3257,5 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.taskDueEmoji.desc": "Attivo: 📅 data. Spento: un campo Dataview, [due:: data].",
 	// 0.17 review fixes (data)
 	"transfer.journalPending": "{name} ha modifiche non ancora salvate nel suo file. Apri il quaderno una volta, poi riprova. Non è stato cambiato nulla.",
+	"task.exists": "Questa attività è già in {path}. Non è stato aggiunto nulla.",
 };

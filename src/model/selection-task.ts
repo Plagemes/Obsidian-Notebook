@@ -67,6 +67,25 @@ export function cleanTaskText(text: string): string {
 	return text.replace(/\s+/g, " ").trim();
 }
 
+/**
+ * The text of a task made safe to sit in a Markdown line: what typed text could open or swallow (a `%%` comment, an HTML
+ * comment or tag, a `$` math span, a link or embed, emphasis or code that runs on into the picture and the link after it) is
+ * escaped with a backslash, and so is a start that would turn the task line into a heading, a quote or a nested list. Applied
+ * once, when the line is built: the text the dialog holds stays what the user typed.
+ */
+export function escapeTaskText(text: string): string {
+	const out = text.replace(/[\\`*_[\]<$%]/g, (c) => `\\${c}`);
+	return out
+		.replace(/^#{1,6}(?=\s|$)/, (m) => `\\${m}`)
+		.replace(/^(?:[+-](?=\s|$)|>)/, (m) => `\\${m}`)
+		.replace(/^(\d+)([.)])(?=\s|$)/, "$1\\$2");
+}
+
+/** Whether a key press in the text field adds the task: Enter, but not the Enter that confirms an IME composition. */
+export function isSubmitKey(e: { key: string; isComposing?: boolean; keyCode?: number }): boolean {
+	return e.key === "Enter" && e.isComposing !== true && e.keyCode !== 229;
+}
+
 /** The due date as text: the Tasks plugin's `📅 date`, or the Dataview field `[due:: date]` when the emoji is off. Empty for no date. */
 export function dueText(iso: string, emoji: boolean): string {
 	if (!isIsoDate(iso)) return "";
@@ -102,7 +121,7 @@ export interface TaskLineParts {
  * the line; the picture and the link stay in the description.
  */
 export function buildTaskLine(p: TaskLineParts): string {
-	const parts = ["- [ ]", cleanTaskText(p.text)];
+	const parts = ["- [ ]", escapeTaskText(cleanTaskText(p.text))];
 	if (p.image) parts.push(p.image);
 	if (p.pageLink) parts.push(p.pageLink);
 	const due = dueText(p.due, p.emoji);

@@ -9,7 +9,7 @@ import { t } from "../i18n";
 import { appendToDailyNote } from "../library/daily";
 import { stablePageSubpath, withEmbedMarker } from "../integration/page-links";
 import { DEFAULT_MARKDOWN_DPI } from "../model/export-markdown";
-import { appendTaskLine, buildTaskLine, cleanTaskText, embedWithWidth, isIsoDate, taskPictureName, taskStamp, TASK_IMAGE_WIDTH, type TaskRect } from "../model/selection-task";
+import { appendTaskLine, buildTaskLine, cleanTaskText, embedWithWidth, isIsoDate, isSubmitKey, taskPictureName, taskStamp, TASK_IMAGE_WIDTH, type TaskRect } from "../model/selection-task";
 import type { Page } from "../model/types";
 import type { NotebookSettings } from "../settings";
 import { recordPluginWrite } from "../storage/plugin-written";
@@ -123,7 +123,8 @@ export class MakeTaskModal extends Modal {
 			refresh();
 		});
 		input.addEventListener("keydown", (e) => {
-			if (e.key === "Enter" && !make.disabled) this.submit(tasksNote);
+			// The Enter that confirms an IME composition (Japanese, Chinese, Korean keyboards) is not "add the task".
+			if (isSubmitKey(e) && !make.disabled) this.submit(tasksNote);
 		});
 		date.addEventListener("input", () => {
 			this.due = date.value;
@@ -153,7 +154,7 @@ export class MakeTaskModal extends Modal {
 }
 
 /** Saves the crop where Obsidian keeps attachments of the note and returns its embed with a display width; null when it fails. */
-async function storeCrop(app: App, notePath: string, name: string, blob: Blob): Promise<string | null> {
+async function storeCrop(app: App, notePath: string, name: string, blob: Blob): Promise<{ embed: string; file: TFile } | null> {
 	try {
 		const data = await blob.arrayBuffer();
 		const path = normalizePath(await app.fileManager.getAvailablePathForAttachment(name, notePath));
@@ -161,7 +162,7 @@ async function storeCrop(app: App, notePath: string, name: string, blob: Blob): 
 		const slash = path.lastIndexOf("/");
 		if (slash > 0) await ensureFolder(app, path.slice(0, slash));
 		const target = await app.vault.createBinary(path, data);
-		return embedWithWidth(withEmbedMarker(app.fileManager.generateMarkdownLink(target, notePath), true), TASK_IMAGE_WIDTH);
+		return { embed: embedWithWidth(withEmbedMarker(app.fileManager.generateMarkdownLink(target, notePath), true), TASK_IMAGE_WIDTH), file: target };
 	} catch (e) {
 		console.error("[notebook] task picture", e);
 		return null;
@@ -183,6 +184,16 @@ async function drawCrop(host: TaskHost): Promise<Blob | null> {
 	}
 }
 
+/** Moves the picture this run stored to the trash (the line it was for did not get into a note). */
+async function discardCrop(app: App, file: TFile | null): Promise<void> {
+	if (!file) return;
+	try {
+		await app.fileManager.trashFile(file);
+	} catch (e) {
+		console.error("[notebook] task picture could not be removed", e);
+	}
+}
+
 /** Adds the task; returns the path of the note or null (nothing written, the reason is shown). Never throws. */
 export async function runMakeTask(host: TaskHost, request: TaskRequest, now: Date = new Date()): Promise<string | null> {
 	const { app, file } = host;
@@ -190,21 +201,38 @@ export async function runMakeTask(host: TaskHost, request: TaskRequest, now: Dat
 		const blob = await drawCrop(host);
 		if (!blob) showNotice(t("task.noPicture"), 6000);
 		const name = taskPictureName(sanitizeName(file.basename) || "Notebook", host.pageNumber, taskStamp(now));
+		// The picture is stored when the note is certain to be written; if the line then does not get in, the picture goes to the trash.
+		let stored: TFile | null = null;
 		const line = async (notePath: string): Promise<string> => {
-			const image = blob ? await storeCrop(app, notePath, name, blob) : null;
+			const crop = blob ? await storeCrop(app, notePath, name, blob) : null;
+			stored = crop?.file ?? null;
+			const image = crop?.embed ?? null;
 			const pageLink = app.fileManager.generateMarkdownLink(file, notePath, stablePageSubpath(host.pageNumber, host.page.id), t("task.pageAlias", { notebook: file.basename, n: String(host.pageNumber) }));
 			return buildTaskLine({ text: request.text, due: request.due, emoji: host.settings.taskDueEmoji, image, pageLink });
 		};
-		let written: string | null;
-		if (request.target.kind === "daily") {
-			written = await appendToDailyNote(app, host.settings, now, line);
-		} else {
-			const note = request.target.file;
-			const text = await line(note.path);
-			await app.vault.process(note, (current) => appendTaskLine(current, text) ?? current);
-			written = note.path;
+		let written: string | null = null;
+		let added = false;
+		try {
+			if (request.target.kind === "daily") {
+				const done = await appendToDailyNote(app, host.settings, now, line);
+				written = done?.path ?? null;
+				added = done?.added ?? false;
+			} else {
+				const note = request.target.file;
+				const text = await line(note.path);
+				await app.vault.process(note, (current) => {
+					const next = appendTaskLine(current, text);
+					added = next !== null;
+					return next ?? current;
+				});
+				written = note.path;
+			}
+		} catch (e) {
+			await discardCrop(app, stored);
+			throw e;
 		}
-		if (written) showNotice(t("task.done", { path: written }), 7000);
+		if (!added) await discardCrop(app, stored);
+		if (written) showNotice(t(added ? "task.done" : "task.exists", { path: written }), 7000);
 		return written;
 	} catch (e) {
 		console.error("[notebook] make task", e);
