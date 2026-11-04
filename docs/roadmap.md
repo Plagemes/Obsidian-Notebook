@@ -219,7 +219,7 @@ Goal: notebooks behave like first-class Obsidian content. Several items depend o
 - **O2 P1** 🧪 Shared tags: notebook tags are real Obsidian tags, visible in the Tags pane (through the companion note's `tags`; tag editor with the vault's tag suggestions, Obsidian-style normalisation, library filter by tag including nested tags; a tag the person added to the note by hand is never removed).
 - **O3 P2** Native properties: course, teacher, exam date and similar edited from Obsidian's Properties panel.
 - **O4 P1** 🧪 Page links: `[[Physics#p3]]` opens the notebook at that page, with link suggestions while typing.
-- **O5 P2** Hover preview: hovering a notebook link shows the page thumbnail (page preview).
+- 🧪 **O5 P2** Hover preview: hovering a notebook link shows the page thumbnail (page preview).
 - **O6 P1** 🧪 Native embed syntax: `![[Physics.notebook#p3]]` renders the page in reading view and live preview.
 - **O7 P2** Linked mentions: inside the notebook, for each page, the notes that link to it.
 - **O8 P1** 🧪 Links written with the pen: writing `[[` by hand (two bracket strokes) — or circling ink and choosing "Link" — opens the note suggester; the chosen note becomes a link attached to that ink, tapping it opens the note. The ink stays as written. The same works in text boxes with the keyboard.

@@ -3021,4 +3021,9 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"digest.append.body": "Esiste già una nota chiamata “{note}” senza sezione del riepilogo. Il riepilogo viene aggiunto in fondo e il resto della nota non cambia. Oppure lascia la nota com'è e scrivi il riepilogo in una nuova.",
 	"digest.append.add": "Aggiungi",
 	"digest.append.new": "Usa una nuova nota",
+	// 0.17 hover
+	"hover.open": "Apri questa pagina",
+	"hover.pageOf": "Pagina {n} di {total}",
+	"hover.deleted": "Questa pagina non esiste più nel quaderno.",
+	"hover.unreadable": "Anteprima non disponibile.",
 };

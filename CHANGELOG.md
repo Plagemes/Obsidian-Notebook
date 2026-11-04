@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### hover
+- **Hover preview of notebook page links (O5).** Hovering a link such as `[[Physics.notebook#p3&id=...]]` in a note shows Obsidian's page popover with the page thumbnail, the notebook name and "Page 3 of 12"; clicking the card opens that page. The plugin registers a *Notebook* hover source with the Page preview core plugin and answers its `hover-link` event, so it follows that plugin's on/off switch and its Ctrl/Cmd setting (default: hold Ctrl/Cmd). A link whose page id no longer exists says so instead of showing another page. The thumbnail is drawn once per file version, only when the pen is quiet, and cached; the notebook is only read. No format change. Android has no hover: Obsidian's own long press is left as it is. Tests: `tests/hover-preview.test.ts`.
+
 ## 0.16.0 — 2026-11-04
 
 Finish a page, work with PDFs, and get material in and out faster: lock a finished page, copy text from a PDF with its outline and links, move a selection to another page, import many files at once, present a notebook full screen with a laser pointer, collect highlights into a note, and pick up files shared from other Android apps. **The document format is now v14** (optional page lock): a 0.15 device opens a v14 notebook read-only (newer version) and never overwrites it. **Not verified on the device**: unit tests and the browser harness only.

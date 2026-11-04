@@ -17,6 +17,7 @@ import { PenTestModal, penSignalInfo } from "./view/pen-test-modal";
 import { NotebookLibraryHost } from "./library/host";
 import { SharedInbox } from "./library/shared-inbox";
 import { registerIntegration } from "./integration";
+import { registerHoverPreview } from "./view/hover-preview";
 import type { HistoryService } from "./integration/history-service";
 import type { NotebookApi } from "./integration/api";
 import { registerReliability } from "./integration/reliability";
@@ -229,6 +230,11 @@ export default class NotebookPlugin extends Plugin {
 				annotatePdf: (pdf) => this.host.importPdf(this.settings.folder, pdf),
 			});
 		});
+		// 0.17 (O5): hovering a notebook page link shows the page thumbnail (Page preview core plugin)
+		this.step("hover preview", () => registerHoverPreview(this, {
+			readNotebook: (file) => this.host.readNotebook(file),
+			background: (doc, page, width) => this.host.thumbnailBackground(doc, page, width),
+		}));
 		// wave 0.6: zettelkasten (M15 Z1–Z3, Z11, Z12)
 		this.step("zettelkasten", () => registerZettel(this));
 		// wave 0.8: quick textbook reference (roadmap 208): "p. 134" in a text box opens the textbook at that page
