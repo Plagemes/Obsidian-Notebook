@@ -2285,3 +2285,18 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Highlights digest (#90): regions, crops, PDF text, marked section, group by page or colour | yes | clustering, text under bands, section replacement and idempotence (`tests/highlight-digest.test.ts`); harness `dev/harness/digest-check.ts` | | | |
+
+### 0.17 — task
+
+1240. **Make a task.** Select a handwritten line with the lasso, then *Make task…* (selection bar overflow or All actions). A dialog asks for the task text, an optional due date and the target. Add it to today's daily note: the last line of the note is `- [ ] text ![[… task pN-hhmmss.png|200]] [[Notebook, page N]] 📅 date`.
+1241. **Picture.** The picture is a crop of the page around the selection (with PDF page, pictures and ink), in the folder Obsidian uses for attachments, and it does not show up in the shared-files inbox.
+1242. **Link.** Tapping the page link in the daily note opens that page of the notebook.
+1243. **Daily note rules.** With *Create the daily note if missing* off and no note for today, a notice names the note and nothing is written; with it on the note is created (from your Daily notes template). A second task goes below the first; the rest of the note stays as it was.
+1244. **Other targets.** Set a Tasks note in Settings > Integration: it appears in the dialog (only if the note exists). *Another note…* needs a note chosen before *Add task* is enabled.
+1245. **Tasks plugin.** With the Tasks plugin installed the line shows as a task with its due date; turn *Tasks plugin date for due dates* off and the date is written as `[due:: date]`.
+1246. **Guards.** Add task is disabled until there is a text; the selection of a drawing's part (states) and a read-only notebook do not offer the action.
+1247. **Phone.** The dialog fits a phone and the date field opens the system date picker.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Task from a selection (#57): crop, link, due date, daily/tasks/chosen note | yes | line building, crop, append (`tests/selection-task.test.ts`); harness `dev/harness/task-check.ts` | | | page badge on the task's region |

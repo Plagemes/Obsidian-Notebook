@@ -164,7 +164,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 
 ### Study
 56. **P2** Replay handwriting like a video (strokes redrawn in writing order); needs a timestamp per stroke, which also prepares audio sync (M5).
-57. **P2** Task from a selection: a region of the page becomes a task in the daily note, linked back to the page.
+57. **P2** 🧪 Task from a selection: a region of the page becomes a task in the daily note, linked back to the page.
 
 ### Integration and accessibility
 58. 🧪 **P1** Direct `obsidian://` links to a page, to open it from other apps, bookmarks or a QR code.

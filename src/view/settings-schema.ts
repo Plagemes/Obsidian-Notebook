@@ -358,6 +358,9 @@ const INTEGRATION: SettingSpec[] = [
 	{ id: "dailyNotebookPath", section: "integration", order: 30, name: "settings.dailyNotebook", desc: "settings.dailyNotebook.desc", control: { type: "text", placeholder: defaultDailyPath(DEFAULT_SETTINGS.folder) }, keywords: "daily journal today diario oggi" },
 	{ id: "dailyLink", section: "integration", order: 31, name: "settings.dailyLink", desc: "settings.dailyLink.desc", control: { type: "toggle" }, keywords: "daily notes periodic notes journal diario" },
 	{ id: "dailyCreateNote", section: "integration", order: 32, name: "settings.dailyCreateNote", desc: "settings.dailyCreateNote.desc", control: { type: "toggle" }, parent: "dailyLink", visible: (s) => s.dailyLink },
+	// 0.17 tasks (#57): "Make task" from a selection.
+	{ id: "tasksNote", section: "integration", order: 33, name: "settings.tasksNote", desc: "settings.tasksNote.desc", control: { type: "text", placeholder: "Tasks.md" }, keywords: "task todo checkbox attivita" },
+	{ id: "taskDueEmoji", section: "integration", order: 34, name: "settings.taskDueEmoji", desc: "settings.taskDueEmoji.desc", control: { type: "toggle" }, keywords: "task due date tasks plugin scadenza" },
 ];
 
 const timetableOn: Predicate = (s) => s.timetableOffer;

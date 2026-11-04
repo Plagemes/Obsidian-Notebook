@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### task
+- **Task from a selection (#57).** *Make task…* in the selection bar (overflow) and the All actions sheet opens a small dialog: the task's text (typed, no OCR), an optional due date, and where it goes: today's daily note (Daily notes or Periodic Notes options; the note is created only when *Create the daily note if missing* is on, from its template), the Tasks note set in Settings > Integration, or any note you choose. The line `- [ ] text ![[crop|200]] [[Notebook, page N]] 📅 date` is added at the end of the note with `vault.process` (the rest of the note is untouched; a line already there is not written twice). The picture is a crop of the page around the selection (ink, PDF page, pictures, drawing state in view), saved where Obsidian keeps attachments and remembered as written by the plugin, so the shared-files inbox never offers it. The date goes last because the Tasks plugin reads its signifiers from the end of the line; with *Tasks plugin date for due dates* off it is written as a Dataview field `[due:: date]`. No change to the notebook format. Tests: `tests/selection-task.test.ts`. Harness: `dev/harness/task-check.ts` (`doc=task`).
+
 ## 0.16.0 — 2026-11-04
 
 Finish a page, work with PDFs, and get material in and out faster: lock a finished page, copy text from a PDF with its outline and links, move a selection to another page, import many files at once, present a notebook full screen with a laser pointer, collect highlights into a note, and pick up files shared from other Android apps. **The document format is now v14** (optional page lock): a 0.15 device opens a v14 notebook read-only (newer version) and never overwrites it. **Not verified on the device**: unit tests and the browser harness only.

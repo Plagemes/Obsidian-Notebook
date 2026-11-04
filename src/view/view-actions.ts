@@ -129,6 +129,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	// 0.16 (78): move or copy the selection to another page
 	"selection-move-page": (v) => v.selectionTools?.moveToPage("move"),
 	"selection-copy-page": (v) => v.selectionTools?.moveToPage("copy"),
+	// 0.17 (#57): a task from the selection
+	"selection-make-task": (v) => v.makeTaskFromSelection(),
 	"selection-paste-device": (v) => void v.selectionTools?.pasteFromDevices(),
 	"selection-white-transparent": (v) => void v.selectionTools?.makeWhiteTransparent(),
 	"link-selection": (v) => v.linkSelection(),

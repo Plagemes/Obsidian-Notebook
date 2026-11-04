@@ -16,6 +16,7 @@ import { ensureFolder } from "../storage/vault-io";
 import { modalShell, shellButton, shellNote } from "../ui/components/modal-shell";
 import { buildLecturePage } from "../view/lecture-logic";
 import { showNotice } from "../view/notice";
+import { appendTaskLine } from "../model/selection-task";
 import { applyDailyTemplate, dailyNotebookPath, dailyNotePath, findDatedPage, loadDailyTemplate, readDailyConfigFrom, withTodayLink, type DailyNoteConfig } from "./daily-logic";
 import { waitForContext, type LooseSheetPlugin } from "./loose-sheet";
 import { notebookBaseName, parentFolder } from "./loose-sheet-logic";
@@ -192,4 +193,57 @@ export function openTodaysPage(plugin: DailyPlugin, open: (file: TFile) => Promi
 		}
 	})();
 	return running;
+}
+
+// ------------------------------------------------------------------------ 0.17 (#57): a task in the daily note
+
+/**
+ * Adds a task line to the end of the daily note of `date` and returns the note's path; null when nothing was written (the
+ * reason is shown). Same rules as the page link: the note is changed with `vault.process` (the rest is untouched), and a missing
+ * note is made only with `dailyCreateNote`, from the Daily notes template, after a moment's wait for a sync to deliver it.
+ * `prepare` runs once the note is certain to be written (it stores the task's picture, which must not be left behind when
+ * the note cannot be written) and returns the final line, or null to stop.
+ */
+export async function appendToDailyNote(
+	app: App, settings: NotebookSettings, date: Date, prepare: (notePath: string) => Promise<string | null>, settleMs: number = DAILY_SETTLE_MS,
+): Promise<string | null> {
+	const cfg = readDailyConfig(app);
+	if (!cfg) {
+		showNotice(t("daily.unavailable"), 7000);
+		return null;
+	}
+	const notePath = normalizePath(dailyNotePath(cfg, date, (d, pattern) => moment(d).format(pattern)));
+	let note = app.vault.getFileByPath(notePath);
+	if (!note) {
+		if (!settings.dailyCreateNote) {
+			showNotice(t("daily.noteMissing", { path: notePath }), 7000);
+			return null;
+		}
+		if (settleMs > 0) await new Promise<void>((r) => window.setTimeout(r, settleMs));
+		note = app.vault.getFileByPath(notePath);
+	}
+	let start = "";
+	if (!note) {
+		const text = await newNoteText(app, cfg, notePath, date);
+		if (text === null) {
+			showNotice(t("daily.templateMissing", { path: notePath }), 7000);
+			return null;
+		}
+		start = text;
+	}
+	const line = await prepare(notePath);
+	if (line === null) return null;
+	if (!note) {
+		const dir = parentFolder(notePath);
+		if (dir) await ensureFolder(app, dir);
+		try {
+			await app.vault.create(notePath, appendTaskLine(start, line) ?? start);
+			return notePath;
+		} catch {
+			note = app.vault.getFileByPath(notePath); // made meanwhile (a sync, the Daily notes plugin): add to that one
+			if (!note) throw new Error(notePath);
+		}
+	}
+	await app.vault.process(note, (text) => appendTaskLine(text, line) ?? text);
+	return notePath;
 }
