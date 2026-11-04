@@ -2577,3 +2577,17 @@ Roadmap #186. Reference screenshots after `npm run harness:check`: `dev/harness/
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Page QR code (#190): dialog, copy link, own encoder (byte mode, level M, v1-10) | yes | encoder, format/version bits and a round trip through a separate decoder (`tests/qr.test.ts`); harness `dev/harness/qr-check.ts` | | | insert the code into the page as a picture |
+### 0.18 — pdfannot
+
+1420. **Header action.** Open a PDF in Obsidian's own viewer: a pen icon (*Annotate in Notebook*) is in the view header. Tap it: a new notebook is made from the PDF and opens.
+1421. **Existing notebook.** Close the notebook, go back to the PDF and tap the icon again: a dialog offers *Open existing (page N)* (with the notebook name) and *New notebook*. *Open existing* focuses that notebook; *New notebook* makes a second one; Cancel does nothing.
+1422. **Viewer page.** Scroll the PDF to page 5 first, then use the action: the notebook (new or existing) opens at page 5 when the viewer's page can be read, otherwise at page 1 (the viewer's internals are not public API).
+1423. **Menus.** Right-click a PDF in the file explorer, and use a PDF tab's *More options* menu: both have *Annotate in Notebook* and behave as above.
+1424. **Command.** With a PDF tab active, the command *Annotate current PDF in Notebook* is available; with any other tab active it is not.
+1425. **Source untouched.** The PDF file's size and modified time do not change; the notebook uses the stored copy in the assets folder.
+1426. **Same file elsewhere.** Copy the PDF to another folder: the dialog still finds the notebook (same content). Edit the PDF in another app (different content): it is a new document and no notebook is offered.
+1427. **Italian and phone.** Switch to Italian: *Annota in Notebook*, *Apri esistente (pagina N)*, *Nuovo quaderno*. On a phone the dialog fits the screen.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Annotate in Notebook from the PDF viewer (O10): header action, menus, command, open existing vs new, viewer page | yes | search and page choice (`tests/annotate-pdf.test.ts`); harness `dev/harness/annotate-check.ts` | | viewer page and header action rely on Obsidian's PDF view internals, best effort | |

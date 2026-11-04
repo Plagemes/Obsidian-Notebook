@@ -20,6 +20,7 @@ import { PenTestModal, penSignalInfo } from "./view/pen-test-modal";
 import { NotebookLibraryHost } from "./library/host";
 import { SharedInbox } from "./library/shared-inbox";
 import { registerIntegration } from "./integration";
+import { annotatePdfFlow, registerAnnotatePdf, type AnnotatePdfHost } from "./library/annotate-pdf";
 import { registerHoverPreview } from "./view/hover-preview";
 import type { HistoryService } from "./integration/history-service";
 import type { NotebookApi } from "./integration/api";
@@ -242,8 +243,9 @@ export default class NotebookPlugin extends Plugin {
 			this.history = registerIntegration(this, {
 				background: (doc, page, width) => this.host.thumbnailBackground(doc, page, width),
 				newNotebookIn: (folder) => this.host.createNotebook(folder),
-				annotatePdf: (pdf) => this.host.importPdf(this.settings.folder, pdf),
+				annotatePdf: (pdf) => void annotatePdfFlow(this.app, this.annotateHost(), pdf),
 			});
+			registerAnnotatePdf(this, this.annotateHost());
 		});
 		// 0.17 (O5): hovering a notebook page link shows the page thumbnail (Page preview core plugin)
 		this.step("hover preview", () => registerHoverPreview(this, {
@@ -421,6 +423,15 @@ export default class NotebookPlugin extends Plugin {
 	}
 
 	/** Opens the notebook that was open last, on the page that was in view. */
+	/** 0.18 (O10): what "Annotate in Notebook" needs from the plugin. */
+	private annotateHost(): AnnotatePdfHost {
+		return {
+			folder: () => this.settings.folder,
+			readNotebook: (file) => this.host.readNotebook(file),
+			importPdfFrom: (folder, file) => this.host.importPdfFrom(folder, file),
+		};
+	}
+
 	private async continueLast(): Promise<void> {
 		const { lastNotebookPath: path, lastNotebookPage: page, lastNotebookPos: pos } = this.settings;
 		if (!path) {

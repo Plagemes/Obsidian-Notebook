@@ -224,7 +224,7 @@ Goal: notebooks behave like first-class Obsidian content. Several items depend o
 - **O7 P2** 🧪 Linked mentions: inside the notebook, for each page, the notes that link to it.
 - **O8 P1** 🧪 Links written with the pen: writing `[[` by hand (two bracket strokes) — or circling ink and choosing "Link" — opens the note suggester; the chosen note becomes a link attached to that ink, tapping it opens the note. The ink stays as written. The same works in text boxes with the keyboard.
 - **O9 P1** 🧪 File explorer menu: "New notebook here" on folders, "Annotate in Notebook" on PDFs.
-- **O10 P2** From Obsidian's PDF viewer: an "Annotate in Notebook" action.
+- **O10 P2** 🧪 From Obsidian's PDF viewer: an "Annotate in Notebook" action.
 - **O11 P3** Pages on Canvas: notebook pages as cards on an Obsidian Canvas.
 - **O12 P2** 🧪 Daily notebook: "Today's page" adds a dated page and links it from the daily note.
 - **O13 P2** Obsidian templates: template notebooks and embeds in Templates/Templater.
