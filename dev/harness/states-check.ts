@@ -82,7 +82,7 @@ export async function checkStates(api: StatesCheckApi): Promise<{ ok: boolean; r
 
 	// --- a state, and the part moved in it with the handles ---
 	await click(shownEl(".nb-states-add"));
-	add("Add a state creates and shows it", states()?.list.length === 1 && states()?.active === states()?.list[0]?.id, JSON.stringify(states()));
+	add("Add a state creates and shows it (the saved default is not changed by it)", states()?.list.length === 1 && states()?.active === undefined && !!chip("State 1")?.classList.contains("is-active"), JSON.stringify(states()));
 	add("the state has a chip", !!chip("State 1"));
 	add("the page still shows the block where it was drawn (no pose yet)", inkNear(0.2, 0.24));
 	await click(shownEl(".nb-states-part"));
@@ -101,9 +101,10 @@ export async function checkStates(api: StatesCheckApi): Promise<{ ok: boolean; r
 	// --- back to as drawn ---
 	await click(chip("As drawn"));
 	add("As drawn shows the block where it was drawn", inkNear(0.2, 0.24) && !inkNear(0.4, 0.34), `${inkNear(0.2, 0.24)} ${inkNear(0.4, 0.34)}`);
-	add("the choice is saved with the page", states()?.active === undefined);
+	add("switching writes nothing: the notebook is not changed by it", states()?.active === undefined);
 	await click(chip("State 1"));
 	add("State 1 shows the moved block again", inkNear(0.4, 0.34));
+	add("and still writes nothing", states()?.active === undefined);
 
 	// --- undo and redo cover the pose in one step ---
 	v.undo();
@@ -151,7 +152,17 @@ export async function checkStates(api: StatesCheckApi): Promise<{ ok: boolean; r
 	add("playing shows Stop", shownEl(".nb-states-play")?.classList.contains("is-on") ?? false);
 	await sleep(PLAY_STEP_MS * 3.6);
 	await settle();
-	add("the states play to the last one and stop there", !(shownEl(".nb-states-play")?.classList.contains("is-on") ?? true) && states()?.active === states()?.list[1]?.id, `${states()?.active}`);
+	add("the states play to the last one and stop there (this view keeps showing it)", !(shownEl(".nb-states-play")?.classList.contains("is-on") ?? true) && !!chip("State 2")?.classList.contains("is-active"), `${states()?.active}`);
+	add("playing writes nothing", states()?.active === undefined && v.session.isSaved());
+
+	// --- the default state is the one explicit write ---
+	add("the options button is there for the default state", !!shownEl(".nb-states-more"));
+	nv.stateTools?.setDefault();
+	await settle();
+	add("Set as default state saves the state in view", states()?.active === states()?.list[1]?.id && !!chip("State 2")?.classList.contains("is-default"), `${states()?.active}`);
+	v.undo();
+	await settle();
+	add("and is one undo step", states()?.active === undefined && !chip("State 2")?.classList.contains("is-default"), `${states()?.active}`);
 
 	// --- sizes and layout ---
 	const bar = shownEl(".nb-states");
@@ -165,7 +176,7 @@ export async function checkStates(api: StatesCheckApi): Promise<{ ok: boolean; r
 	v.setReadOnlyMode(true, false);
 	await settle();
 	await click(chip("State 1"));
-	add("a read-only view still switches states", inkNear(0.4, 0.34) && states()?.active === states()?.list[1]?.id, JSON.stringify(states()?.active));
+	add("a read-only view still switches states", inkNear(0.4, 0.34) && !!chip("State 1")?.classList.contains("is-active"), JSON.stringify(states()?.active));
 	add("and saves nothing for it", v.session.isSaved());
 	v.setReadOnlyMode(false, false);
 	await settle();

@@ -113,6 +113,8 @@ export class NotebookMedia implements MediaSource {
 		private readonly doc: () => NotebookDocument | null,
 		private readonly folder: () => string,
 		private readonly changed: () => void,
+		/** 0.15 (241): a page of the document as the view shows it (in the state it has chosen); the page itself when absent. */
+		private readonly pageView: (page: Page) => Page = (page) => page,
 	) {
 		this.pdf = new PdfStore({
 			loadPdfJs: () => loadPdfJs() as Promise<PdfLib>,
@@ -266,7 +268,7 @@ export class NotebookMedia implements MediaSource {
 			const page = doc.pages.find((p) => p.id === entry.source.page);
 			if (!page) return true;
 			numbers ??= equationNumbers(doc.pages);
-			if (liveContentKey(page, regionContent(page, entry.source.region, this.tokens, this.bounds), numbers) !== entry.fingerprint) return true;
+			if (liveContentKey(page, regionContent(this.pageView(page), entry.source.region, this.tokens, this.bounds), numbers) !== entry.fingerprint) return true;
 		}
 		return false;
 	}
@@ -297,7 +299,9 @@ export class NotebookMedia implements MediaSource {
 			background = (peek?.canvas as CanvasImageSource | undefined) ?? this.background(page, scale);
 			if (!background) return have?.picture ?? null;
 		}
-		const content = regionContent(page, region, this.tokens, this.bounds);
+		// 0.15 (241): an excerpt of a page with states shows the ink as the state this view shows the page in puts it (only the
+		// strokes differ: size, background and elements are the page's own, so the page itself is what the picture is drawn from).
+		const content = regionContent(this.pageView(page), region, this.tokens, this.bounds);
 		const images = new Map<string, CanvasImageSource>();
 		for (const e of content.elements) {
 			const id = elementAssetId(e);

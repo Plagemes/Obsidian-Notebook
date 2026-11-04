@@ -2800,6 +2800,10 @@ export const en = {
 	"states.readOnly": "This notebook is read-only: you can switch and play the states, not change them.",
 	"states.limitStates": "A page can have at most 32 states.",
 	"states.limitParts": "A page can have at most 64 parts.",
+	"states.setDefault": "Set as default state",
+	"states.isDefault": "Default state (the notebook opens with it)",
+	"states.defaultSet": "{state} is now the state the notebook opens with.",
+	"states.defaultAlready": "This is already the state the notebook opens with.",
 } as const;
 
 export type MessageKey = keyof typeof en;
