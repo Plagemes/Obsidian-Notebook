@@ -9,7 +9,7 @@ import { isHeic } from "../scan/image-bytes";
 import { t } from "../i18n";
 import { renderThumbnail } from "../library/thumbnail";
 import { needsNextPage, needsPageOffer } from "../ink/auto-page";
-import { deleteInkCommand, inkOnRemoved, pinnedInk } from "../ink/attach";
+import { deleteInkCommand, deleteSelectionCommands, inkOnRemoved, pinnedInk, withPinnedInk } from "../ink/attach";
 import { hiddenStickyInk } from "../model/sticky";
 import { captureClip, type ClipContent } from "../ink/clipboard";
 import { cleanStampFormat, formatStamp, stampElement, stampSpot } from "../ink/date-stamp";
@@ -55,7 +55,7 @@ import { buildLecturePackPages, exercisePage } from "../model/lecture-pack";
 import { backgroundRect } from "../model/margins";
 import {
 	AddAsset, AddElement, AddPage, AddStroke, Batch, History, InsertPages, MovePage, RemoveElement, ReplaceElement,
-	removeStrokes, ReplaceStroke, SetMeta, SetPageSize, type Command,
+	ReplaceStroke, SetMeta, SetPageSize, type Command,
 } from "../model/history";
 import { pageContentCommand } from "../model/page-content";
 import { checkContent, freezeStroke } from "../model/serialize";
@@ -2267,19 +2267,8 @@ export class NotebookView extends FileView {
 			this.deleteAcrossPages(sel);
 			return;
 		}
-		const commands: Command[] = [];
-		const strokes = [...sel.strokes]
-			.map((stroke) => ({ stroke, index: page.strokes.indexOf(stroke) }))
-			.filter((it) => it.index >= 0)
-			.sort((a, b) => b.index - a.index);
-		for (const it of strokes) commands.push(new ReplaceStroke(page.id, it.stroke, [], it.index));
-		const removedEls = sel.elements.filter((el) => page.elements?.includes(el));
-		for (const el of removedEls) commands.push(new RemoveElement(page.id, el));
 		// 0.17 (#20): deleting a collapsed sticky note deletes the ink it keeps hidden (the same undo step), so none comes back alone.
-		const own = new Set(sel.strokes);
-		const hiddenOwned = pinnedInk(page.strokes, removedEls).filter((s) => !own.has(s));
-		const gone = removeStrokes(page.id, page.strokes, hiddenOwned, "Delete note ink");
-		if (gone) commands.push(gone);
+		const { commands, removed: removedEls } = deleteSelectionCommands(page, sel.strokes, sel.elements);
 		// Ink written on a deleted object stays unless the user takes the offer shown afterwards (setting "Ink follows objects").
 		// v8: hidden ink is never offered (nor counted) while the solutions of the page are not shown.
 		const owned = this.host.settings.inkFollowsObjects && removedEls.length > 0
@@ -2325,13 +2314,9 @@ export class NotebookView extends FileView {
 		for (const part of this.selectionParts(sel)) {
 			const page = doc.pages[part.pageIndex];
 			if (!page) continue;
-			const strokes = part.strokes
-				.map((stroke) => ({ stroke, index: page.strokes.indexOf(stroke) }))
-				.filter((it) => it.index >= 0)
-				.sort((a, b) => b.index - a.index);
-			for (const it of strokes) commands.push(new ReplaceStroke(page.id, it.stroke, [], it.index));
-			const removedEls = part.elements.filter((el) => page.elements?.includes(el));
-			for (const el of removedEls) commands.push(new RemoveElement(page.id, el));
+			const planned = deleteSelectionCommands(page, part.strokes, part.elements);
+			commands.push(...planned.commands);
+			const removedEls = planned.removed;
 			if (this.host.settings.inkFollowsObjects && removedEls.length > 0) {
 				// v8: hidden ink is never offered (nor counted) while the solutions of the page are not shown.
 				const visible = new Set(this.inkInView(page));
@@ -5113,11 +5098,8 @@ export class NotebookView extends FileView {
 		if (sel.others?.length && this.layout) {
 			return captureCrossPageClip(this.layout.boxes, doc.pages, this.selectionParts(sel), sel.pageIndex, doc.assets, measureText);
 		}
-		return captureClip(
-			sel.strokes.filter((s) => page.strokes.includes(s)),
-			sel.elements.filter((e) => page.elements?.includes(e)),
-			doc.assets, measureText,
-		);
+		const elements = sel.elements.filter((e) => page.elements?.includes(e));
+		return captureClip(withPinnedInk(page.strokes, sel.strokes.filter((s) => page.strokes.includes(s)), elements), elements, doc.assets, measureText);
 	}
 
 	/** The page under a screen point (CSS px of the window) and the point on it; null outside the page area. */

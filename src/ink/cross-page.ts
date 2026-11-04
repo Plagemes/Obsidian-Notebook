@@ -2,7 +2,7 @@ import type { Command } from "../model/history";
 import { AddElement, AddStroke, Batch, RemoveElement, ReplaceElement, ReplaceStroke } from "../model/history";
 import { freezeElement, freezeStroke } from "../model/serialize";
 import type { Asset, Page, PageElement, Stroke } from "../model/types";
-import { attachedInk, boundGraphId, inkOwner } from "./attach";
+import { attachedInk, boundGraphId, inkOwner, withPinnedInk } from "./attach";
 import { captureClip, type ClipContent } from "./clipboard";
 import { elementBounds, elementsInLasso, transformElement } from "./elements";
 import { strokeBounds, type BBox } from "./hit-test";
@@ -276,8 +276,10 @@ export function captureCrossPageClip(
 		if (!page) continue;
 		const [ox, oy] = frameOffset(boxes, primary, part.pageIndex);
 		const m = translate(ox, oy);
-		for (const s of part.strokes) if (page.strokes.includes(s)) strokes.push(ox === 0 && oy === 0 ? s : transformStroke(s, m));
-		for (const e of part.elements) if (page.elements?.includes(e)) elements.push(ox === 0 && oy === 0 ? e : transformElement(e, m, measure));
+		const here = part.elements.filter((e) => page.elements?.includes(e));
+		// 0.17: the ink a collapsed note keeps hidden goes with the note.
+		for (const s of withPinnedInk(page.strokes, part.strokes.filter((s) => page.strokes.includes(s)), here)) strokes.push(ox === 0 && oy === 0 ? s : transformStroke(s, m));
+		for (const e of here) elements.push(ox === 0 && oy === 0 ? e : transformElement(e, m, measure));
 	}
 	return captureClip(strokes, elements, assets, measure);
 }

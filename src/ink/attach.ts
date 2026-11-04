@@ -1,5 +1,5 @@
-import { Batch, removeStrokes } from "../model/history";
-import type { ImageElement, PageElement, StickyElement, Stroke } from "../model/types";
+import { Batch, RemoveElement, removeStrokes, ReplaceStroke, type Command } from "../model/history";
+import type { ImageElement, Page, PageElement, StickyElement, Stroke } from "../model/types";
 import { elementBounds } from "./elements";
 import { strokeBounds, type BBox } from "./hit-test";
 import { estimateMeasure, textElementBounds, type MeasureText } from "./text-layout";
@@ -97,6 +97,17 @@ export function pinnedInk(strokes: readonly Stroke[], elements: readonly PageEle
 	return sets.length === 0 ? [] : strokes.filter((s) => sets.some((set) => set.has(s.id)));
 }
 
+/**
+ * 0.17 (E1): `strokes` plus, after them, the ink the collapsed notes among `elements` keep hidden (not already in `strokes`).
+ * A collapsed note's ink is never selected (it is out of view), so everything that copies, cuts, duplicates or moves a
+ * selection to somewhere else adds it here: the note must arrive with the ink its `ink` list names.
+ */
+export function withPinnedInk(pageStrokes: readonly Stroke[], strokes: readonly Stroke[], elements: readonly PageElement[]): Stroke[] {
+	const have = new Set(strokes);
+	const extra = pinnedInk(pageStrokes, elements).filter((s) => !have.has(s));
+	return extra.length === 0 ? [...strokes] : [...strokes, ...extra];
+}
+
 /** Whether (x, y) is on the element: the rotated rectangle of an image, the laid-out box of a text. */
 export function pointOnElement(el: PageElement, x: number, y: number, measure: MeasureText = estimateMeasure): boolean {
 	if (el.type === "image") return inImage(el, x, y);
@@ -186,4 +197,26 @@ export function inkOnRemoved(
 /** One undo step that deletes `strokes` from the page; null when none of them is on it any more. */
 export function deleteInkCommand(pageId: string, pageStrokes: readonly Stroke[], strokes: readonly Stroke[]): Batch | null {
 	return removeStrokes(pageId, pageStrokes, strokes, "Delete ink on deleted object");
+}
+
+/**
+ * The commands that delete a selection's items from one page: the selected strokes (last first, so indices hold), the
+ * elements, and (0.17) the ink the deleted collapsed sticky notes keep hidden, so none of it comes back alone. `removed`
+ * are the elements actually deleted. Used by deleting on one page and across pages alike.
+ */
+export function deleteSelectionCommands(
+	page: Pick<Page, "id" | "strokes" | "elements">, selected: readonly Stroke[], elements: readonly PageElement[],
+): { commands: Command[]; removed: PageElement[] } {
+	const commands: Command[] = [];
+	const strokes = selected
+		.map((stroke) => ({ stroke, index: page.strokes.indexOf(stroke) }))
+		.filter((it) => it.index >= 0)
+		.sort((a, b) => b.index - a.index);
+	for (const it of strokes) commands.push(new ReplaceStroke(page.id, it.stroke, [], it.index));
+	const removed = elements.filter((el) => page.elements?.includes(el));
+	for (const el of removed) commands.push(new RemoveElement(page.id, el));
+	const own = new Set(selected);
+	const gone = removeStrokes(page.id, page.strokes, pinnedInk(page.strokes, removed).filter((s) => !own.has(s)), "Delete note ink");
+	if (gone) commands.push(gone);
+	return { commands, removed };
 }

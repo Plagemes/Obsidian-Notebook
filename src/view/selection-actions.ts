@@ -3,6 +3,7 @@ import { t } from "../i18n";
 import { captureClip, clipAssetIds, duplicateOffset, instantiateClip, MIN_PASTE_SCALE, pasteCommand, pasteOffset, pasteScale, type ClipContent } from "../ink/clipboard";
 import { whiteToTransparent } from "../ink/image-alpha";
 import { measureText } from "../ink/renderer";
+import { withPinnedInk } from "../ink/attach";
 import { captureCrossPageClip, type PagePart } from "../ink/cross-page";
 import type { PageBox } from "../ink/layout";
 import { commonStyle, planRestyle, restyleAbilities, type StyleGroup } from "../ink/restyle";
@@ -194,7 +195,8 @@ export class SelectionActions {
 		}
 		const strokes = sel.strokes.filter((s) => page.strokes.includes(s));
 		const elements = sel.elements.filter((e) => page.elements?.includes(e));
-		const clip = captureClip(strokes, elements, doc.assets, measureText);
+		// 0.17: a collapsed sticky note takes the ink it keeps hidden with it.
+		const clip = captureClip(withPinnedInk(page.strokes, strokes, elements), elements, doc.assets, measureText);
 		return clip ? { clip, pageIndex: sel.pageIndex } : null;
 	}
 
@@ -245,8 +247,9 @@ export class SelectionActions {
 		for (const part of parts) {
 			const page = doc.pages[part.pageIndex];
 			if (!page) continue;
+			const elements = part.elements.filter((e) => page.elements?.includes(e));
 			const clip = captureClip(
-				part.strokes.filter((s) => page.strokes.includes(s)), part.elements.filter((e) => page.elements?.includes(e)), doc.assets, measureText,
+				withPinnedInk(page.strokes, part.strokes.filter((s) => page.strokes.includes(s)), elements), elements, doc.assets, measureText,
 			);
 			if (!clip) continue;
 			const [dx, dy] = duplicateOffset(clip.bounds, page);
