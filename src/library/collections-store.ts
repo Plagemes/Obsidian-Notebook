@@ -9,7 +9,8 @@
  *   content is kept next to it (only when it is damaged: an empty or newer file is left as it is, no copy), and (for the
  *   device's own file) the write is refused with `CollectionsBlockedError`. The other devices' unreadable files are skipped
  *   and reported in `blocked`.
- * - When the own file is rewritten, deletions (tombstones) older than 90 days are dropped from it.
+ * - When the own file is rewritten, it adopts the winning state of the ids it holds (a deletion made elsewhere), and deletions
+ *   (tombstones) older than 90 days are dropped from it unless another device's file still holds that collection live.
  */
 import { deviceFileName, ensureFolderPath, keepUnreadableCopy, listDeviceFiles, type DeviceFileAdapter } from "../storage/device-files";
 import { linksFolder } from "../storage/pdf-links-store";
@@ -108,7 +109,7 @@ export class CollectionsStore {
 		if (own.exists && text === serializeCollections(own.data)) return;
 		if (!own.exists && after.items.length === 0) return;
 		// The file is being rewritten anyway: deletions older than 90 days are dropped from it now.
-		const pruned = pruneTombstones(after, this.now());
+		const pruned = pruneTombstones(after, this.now(), others, this.blocked === null);
 		const prunedText = pruned === after ? text : serializeCollections(pruned);
 		const check = parseCollections(prunedText, this.device);
 		if (!check.ok) throw new Error(`collections did not validate: ${check.message}`);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DeviceFileAdapter } from "../src/storage/device-files";
 import {
-	applyQuickTabOps, emptyQuickTabs, findPin, mergeQuickTabFiles, orderAtEnd, parseQuickTabs, planMove, pruneQuickTabTombstones, QUICKTABS_MAX,
+	adoptQuickTabWinners, applyQuickTabOps, emptyQuickTabs, findPin, mergeQuickTabFiles, orderAtEnd, parseQuickTabs, planMove, pruneQuickTabTombstones, QUICKTABS_MAX,
 	resolveTab, serializeQuickTabs, tabsFor, tabText, DAY_MS, TOMBSTONE_DAYS, type QuickTab, type QuickTabsFile, type StoredQuickTab,
 } from "../src/library/quicktabs";
 import { QuickTabsBlockedError, QuickTabsStore } from "../src/library/quicktabs-store";
@@ -178,6 +178,51 @@ describe("quick tabs store", () => {
 		await expect(store.pin(pin(99))).rejects.toMatchObject({ reason: "limit" });
 		await store.pin({ ...pin(99), scope: "nb2" });
 		expect(store.list("nb2")).toHaveLength(1);
+	});
+
+	it("an unpin does not come back after the tombstone's 90 days (two devices)", async () => {
+		const BOWN = "Notebooks/_meta/quicktabs-0b000000.json";
+		for (const bRewrites of [false, true]) {
+			let now = 1000 * DAY_MS;
+			const adapter = new MemoryAdapter();
+			const a = new QuickTabsStore(adapter, () => "Notebooks", "0a000000", () => now);
+			const b = new QuickTabsStore(adapter, () => "Notebooks", "0b000000", () => now);
+			const id = await b.pin(pin(1));
+			now += DAY_MS;
+			await a.load();
+			await a.unpin(id); // A's file holds the tombstone; B's file still holds the live pin
+			expect(adapter.files.get(BOWN)).not.toContain('"deleted"');
+			if (bRewrites) {
+				now += DAY_MS;
+				await b.pin(pin(2)); // B adopts the unpin into its own file
+				expect(adapter.files.get(BOWN)).toContain('"deleted":true');
+			}
+			now += (TOMBSTONE_DAYS + 10) * DAY_MS;
+			await a.pin(pin(3)); // A rewrites its file past the horizon
+			expect(adapter.files.get(OWN)!.includes(id)).toBe(!bRewrites); // kept only while B still holds the pin live
+			const fresh = new QuickTabsStore(adapter, () => "Notebooks", "0c000000", () => now);
+			await fresh.load();
+			expect(fresh.list("nb1").some((t) => t.id === id)).toBe(false);
+		}
+	});
+
+	it("an unpin made elsewhere is adopted by a file that holds the pin; nothing else changes", () => {
+		const mine = file("0a000000", [tab("q1", 0, { at: 5 }), tab("q2", 1, { at: 5 })]);
+		const merged = mergeQuickTabFiles([mine, file("0b000000", [tab("q1", 0, { at: 9, deleted: true })])]);
+		const after = adoptQuickTabWinners(mine, merged);
+		expect(after.items.find((i) => i.id === "q1")).toMatchObject({ at: 9, deleted: true });
+		expect(after.items.find((i) => i.id === "q2")).toBe(mine.items[1]);
+		expect(adoptQuickTabWinners(after, mergeQuickTabFiles([after, file("0b000000", [tab("q1", 0, { at: 9, deleted: true })])]))).toBe(after);
+	});
+
+	it("a tombstone is not pruned while another file holds the pin live, or when a file could not be read", () => {
+		const now = 1000 * DAY_MS;
+		const old = now - (TOMBSTONE_DAYS + 1) * DAY_MS;
+		const mine = file("0a000000", [tab("q1", 0, { deleted: true, at: old })]);
+		expect(pruneQuickTabTombstones(mine, now, [file("0b000000", [tab("q1", 0, { at: old - 5 })])]).items).toHaveLength(1);
+		expect(pruneQuickTabTombstones(mine, now, [file("0b000000", [tab("q1", 0, { at: old, deleted: true })])]).items).toHaveLength(0);
+		expect(pruneQuickTabTombstones(mine, now, [], false).items).toHaveLength(1);
+		expect(pruneQuickTabTombstones(mine, now, [file("0b000000", [tab("q9", 0)])]).items).toHaveLength(0);
 	});
 
 	it("follows a renamed notebook", async () => {

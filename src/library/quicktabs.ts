@@ -174,11 +174,32 @@ export function findPin(map: QuickTabsMap, scope: string, path: string, pageId: 
 	return tabsFor(map, scope).find((t) => t.path === path && t.pageId === pageId) ?? null;
 }
 
-/** `file` without the tombstones older than `TOMBSTONE_DAYS` at `now`. Live pins and unknown entries are never dropped. */
-export function pruneQuickTabTombstones(file: QuickTabsFile, now: number): QuickTabsFile {
+/**
+ * `file` without the tombstones older than `TOMBSTONE_DAYS` at `now`. Live pins and unknown entries are never dropped. A
+ * tombstone is kept while another device's file still holds a live pin with that id that it does not win over (that pin
+ * would come back): `others` are the other devices' files, and `othersComplete` is false when one of them could not be read
+ * (then nothing is pruned, because what it holds is not known).
+ */
+export function pruneQuickTabTombstones(file: QuickTabsFile, now: number, others: readonly QuickTabsFile[] = [], othersComplete = true): QuickTabsFile {
 	const limit = now - TOMBSTONE_DAYS * DAY_MS;
-	const items = file.items.filter((i) => !(i.deleted === true && i.at < limit));
+	const stillHeld = (i: StoredQuickTab): boolean => others.some((f) => f.items.some((o) => o.id === i.id && o.deleted !== true && o.at <= i.at));
+	const items = file.items.filter((i) => !(i.deleted === true && i.at < limit && othersComplete && !stillHeld(i)));
 	return items.length === file.items.length ? file : { ...file, items };
+}
+
+/**
+ * This device's file with the winning state of the ids it holds: an unpin made on another device is written into this file
+ * too (when it is rewritten), so the pin cannot come back from here once the other device forgets its tombstone.
+ */
+export function adoptQuickTabWinners(own: QuickTabsFile, merged: QuickTabsMap): QuickTabsFile {
+	let changed = false;
+	const items = own.items.map((i) => {
+		const w = merged.get(i.id);
+		if (!w || w === i || !(w.at > i.at || (w.at === i.at && itemJson(w) !== itemJson(i)))) return i;
+		changed = true;
+		return w;
+	});
+	return changed ? { ...own, items } : own;
 }
 
 // ------------------------------------------------------------------ ordering
@@ -250,7 +271,8 @@ export type QuickTabOp =
  * Applies changes to this device's file. `merged` is what every device's files say now: a written pin takes a time later
  * than both the merged one and this device's own previous one; unknown fields of the merged winner are carried over.
  */
-export function applyQuickTabOps(own: QuickTabsFile, merged: QuickTabsMap, ops: readonly QuickTabOp[], now: number): QuickTabsFile {
+export function applyQuickTabOps(ownFile: QuickTabsFile, merged: QuickTabsMap, ops: readonly QuickTabOp[], now: number): QuickTabsFile {
+	const own = adoptQuickTabWinners(ownFile, merged);
 	const items = new Map(own.items.map((i) => [i.id, i]));
 	const current = (id: string): StoredQuickTab | undefined => {
 		const seen = merged.get(id);

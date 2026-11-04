@@ -9,7 +9,8 @@
  * - A file that cannot be read, or is empty (it may not have synced yet), is never overwritten: one copy named by its
  *   content is kept next to it (only when it is damaged), and (for the device's own file) the write is refused with
  *   `QuickTabsBlockedError`. The other devices' unreadable files are skipped and reported in `blocked`.
- * - When the own file is rewritten, unpins older than 90 days are dropped from it.
+ * - When the own file is rewritten, it adopts the winning state of the ids it holds (an unpin made elsewhere), and unpins older than
+ *   90 days are dropped from it unless another device's file still holds that pin live.
  */
 import { deviceFileName, ensureFolderPath, keepUnreadableCopy, listDeviceFiles, type DeviceFileAdapter } from "../storage/device-files";
 import { linksFolder } from "../storage/pdf-links-store";
@@ -132,7 +133,7 @@ export class QuickTabsStore {
 		const text = serializeQuickTabs(after);
 		if (own.exists && text === serializeQuickTabs(own.data)) return;
 		if (!own.exists && after.items.length === 0) return;
-		const pruned = pruneQuickTabTombstones(after, this.now());
+		const pruned = pruneQuickTabTombstones(after, this.now(), others, this.blocked === null);
 		const prunedText = pruned === after ? text : serializeQuickTabs(pruned);
 		const check = parseQuickTabs(prunedText, this.device);
 		if (!check.ok) throw new Error(`quick tabs did not validate: ${check.message}`);
