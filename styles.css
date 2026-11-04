@@ -13844,3 +13844,208 @@ body.notebook-style-obsidian {
 		display: none;
 	}
 }
+
+/* ===== 0.16 bulk ===== */
+/* Files dragged in from outside the app: a dashed frame over the library and the name of the target (decoration, no control). */
+.nb-ui.notebook-lib-root.is-file-drop {
+	position: relative;
+}
+
+.nb-ui.notebook-lib-root.is-file-drop::before {
+	content: "";
+	position: absolute;
+	inset: 6px;
+	z-index: 20;
+	border: 2px dashed var(--nb-accent);
+	border-radius: var(--nb-radius-panel);
+	background: var(--nb-accent-bg);
+	pointer-events: none;
+}
+
+.nb-ui.notebook-lib-root.is-file-drop::after {
+	content: attr(data-drop-label);
+	position: absolute;
+	bottom: 24px;
+	left: 50%;
+	z-index: 21;
+	max-width: calc(100% - 48px);
+	padding: 10px 18px;
+	transform: translateX(-50%);
+	overflow: hidden;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-accent);
+	color: var(--nb-surface);
+	font-size: var(--nb-fs-chip);
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	pointer-events: none;
+}
+
+.nb-ui.nb-bulk .nb-bulk-select {
+	appearance: none;
+	background-image: none;
+	cursor: pointer;
+}
+
+.nb-ui.nb-bulk .nb-bulk-covers {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.nb-ui.nb-bulk .nb-bulk-auto {
+	height: 40px;
+	padding: 0 16px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-panel);
+	box-shadow: none;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	cursor: pointer;
+}
+
+.nb-ui.nb-bulk .nb-bulk-auto.is-on {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-bulk .nb-bulk-swatch {
+	width: 32px;
+	height: 32px;
+	min-width: 32px;
+	padding: 0;
+	border: 2px solid transparent;
+	border-radius: 50%;
+	background: var(--nb-sw);
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.nb-ui.nb-bulk .nb-bulk-swatch.is-on {
+	border-color: var(--nb-text);
+	box-shadow: 0 0 0 2px var(--nb-panel) inset;
+}
+
+.nb-ui.nb-bulk .nb-bulk-section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.nb-ui.nb-bulk .nb-bulk-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	padding: 12px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+}
+
+.nb-ui.nb-bulk .nb-bulk-row.is-skipped {
+	background: var(--nb-tint-warn);
+}
+
+.nb-ui.nb-bulk .nb-bulk-icon {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.nb-bulk .nb-bulk-icon svg {
+	width: 20px;
+	height: 20px;
+}
+
+.nb-ui.nb-bulk .nb-bulk-main {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.nb-ui.nb-bulk .nb-bulk-name {
+	min-height: 40px;
+}
+
+.nb-ui.nb-bulk .nb-bulk-detail {
+	overflow: hidden;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	text-overflow: ellipsis;
+}
+
+.nb-ui.nb-bulk .nb-bulk-hint {
+	color: var(--nb-accent);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.nb-bulk .nb-bulk-hint.is-empty {
+	display: none;
+}
+
+.nb-ui.nb-bulk .nb-bulk-skipname {
+	overflow: hidden;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-bulk .nb-bulk-remove {
+	flex: 0 0 auto;
+	width: 40px;
+	height: 40px;
+}
+
+.nb-ui.nb-bulk .nb-bulk-progress,
+.nb-ui.nb-bulk .nb-bulk-summary {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 8px 0;
+}
+
+.nb-ui.nb-bulk .nb-bulk-progress-title {
+	color: var(--nb-text);
+	font-size: var(--nb-fs-subtitle);
+	font-weight: 600;
+}
+
+.nb-ui.nb-bulk .nb-bulk-bar {
+	--nb-bulk-pct: 0%;
+	height: 10px;
+	overflow: hidden;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-tile);
+}
+
+.nb-ui.nb-bulk .nb-bulk-bar-fill {
+	display: block;
+	width: var(--nb-bulk-pct);
+	height: 100%;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-accent);
+	transition: width var(--nb-motion) ease-out;
+}
+
+@media (max-width: 520px) {
+	.nb-ui.nb-bulk .nb-bulk-row {
+		padding: 10px;
+		gap: 8px;
+	}
+
+	.nb-ui.nb-bulk .nb-bulk-icon {
+		display: none;
+	}
+}

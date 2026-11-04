@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### bulk
+- **Bulk import (#80).** Drop several PDFs or images on the library (the view, a folder in the tree, a folder card, a breadcrumb or a Board column) or choose *New > Import files…* / a folder's *Import files here…* (a multiple-file picker, which also works on Android) and a dialog lists them: the notebook name of each (editable, never clashing with an existing notebook or with each other), the folder, *One notebook per file* or *All images into one notebook* (pages in natural file-name order, shaped like the pictures), the paper and the cover for all. The import runs one file at a time with progress and *Stop after this file*, hands the UI thread back between steps, leaves out unsupported, empty, damaged, HEIC or oversized files with a reason, and ends with a summary and *Open*. A drop on a Board column also sets that status. Dropped folders are searched a few levels deep. No format change. Tests: `tests/bulk-import.test.ts`. Harness: `dev/harness/bulk-check.ts` (`doc=bulk`).
+
 ## 0.15.0 — 2026-11-04
 
 Notebooks start from templates and stay organised: notebook templates, an automatic page header or footer, pen sets per subject, a daily "Today's page", Board and Calendar views of the library, a storage manager, and drawings with states for physics-style figures. **The document format is now v13** (optional drawing states): a 0.14 device opens a v13 notebook read-only (newer version) and never overwrites it. The state shown is your device's own choice; only *Set as default state* saves it in the notebook. **Not verified on the device**: unit tests and the browser harness only.

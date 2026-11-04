@@ -1229,6 +1229,26 @@ Generated outline (roadmap 407). Reference screenshots after `npm run harness:ch
 612. **Cost.** In a notebook of 100+ pages, open the outline for the first time (note how long it takes), then close and reopen it: the second time is immediate. Writing with the outline open does not stutter.
 613. **No change to the file.** Open a notebook, view the outline, close it without editing: the file is not rewritten (no new snapshot, no sync conflict).
 
+### 0.16 — bulk: bulk import (steps 1010-1029)
+
+Bulk import (roadmap #80). Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/design/bulk-*.png`. Use a folder with 3 PDFs (one big, 100+ pages), 5 photos (one HEIC), a text file and an existing notebook with the name of one PDF.
+
+1010. **Menu.** Library *+ New* → *Import files…* and a folder's menu → *Import files here…* open the system picker; choosing several PDFs and images opens the dialog.
+1011. **Drop.** Drag the same files from the system file manager (Windows) onto the library: a dashed frame and *Drop PDFs or images to import them* show; over a folder row or card the label names the folder and the row is highlighted; dropping opens the dialog with that folder chosen. Dragging a note from Obsidian's own explorer does nothing here.
+1012. **Board.** Drop files on a Board column: after the import the new notebooks are in that column.
+1013. **List.** One row per notebook with its name editable; a name that exists shows *Will be saved as “… 2”*; unsupported, empty, damaged, HEIC and duplicate files are under *Left out* with a reason; × leaves a file out.
+1014. **Grouping.** With two or more images *All images into one notebook* appears: one row, pages in file-name order (scan 2 before scan 10), each page the shape of its photo. PDFs stay separate.
+1015. **Look.** Paper and cover chosen once apply to every notebook made.
+1016. **Run.** *Import n notebooks* shows progress with the current file; a 100+ page PDF does not freeze the window (scroll the dialog while it works). Existing notebooks are never changed.
+1017. **Stop.** *Stop after this file* ends the run after the file in progress; the summary says *Import stopped* and how many were not started. Closing the dialog during the run does the same and shows a notice.
+1018. **Summary.** Counts, the reasons for each file left out, *Open* opens the first notebook made.
+1019. **Android.** The picker allows several files; the dialog fits a phone (buttons at least 40 px, no sideways scroll); a photo from the gallery is accepted.
+1020. **Look.** Light, dark, *Follow Obsidian theme*, tablet and phone width.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Bulk import dialog, runner, drop and picker (#80) | yes | yes (`tests/bulk-import.test.ts`, harness `doc=bulk`) |  | PDF page measuring is pdf.js's; yielding is between files and steps | Drop of a vault file from Obsidian's explorer |
+
 ### 0.15 — storage: Storage manager (steps 860-879)
 
 Storage manager (roadmap 128). Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/design/storage-*.png`. Use a library with a few notebooks, one with a big photo (several MB) also used by a second notebook, a copy of a notebook made by sync, and some days of backups.

@@ -197,7 +197,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 77. **P2** Merge notebooks, split a notebook, extract pages into a new notebook.
 78. **P2** Move a selection to another page.
 79. **P2** Drag files (images, PDFs) straight onto a page.
-80. **P2** Bulk import in the library: drop many PDFs or images and they become notebooks.
+80. **P2** 🧪 Bulk import in the library: drop many PDFs or images and they become notebooks.
 81. **P2** 🧪 Export all pages as PNG images, and print.
 82. **P3** Portable package: a .zip with the notebook and its assets, to move it to another vault.
 83. **P3** Import from Xournal++ and from SVG.

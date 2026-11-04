@@ -14,7 +14,7 @@ import { scannedPage } from "../scan/pages";
 import { PdfStore } from "../pdf/pdf-store";
 import type { PdfLib } from "../pdf/pdfjs-types";
 import { backupFolder, readSettings, type NotebookSettings } from "../settings";
-import { readNotebookText, writeNotebookText } from "../storage/format";
+import { NEW_NOTEBOOK_EXTENSION, readNotebookText, writeNotebookText } from "../storage/format";
 import { createNotebook } from "../storage/notebooks";
 import { existsInsensitive } from "../storage/names";
 import { LibraryTrash } from "../storage/trash";
@@ -31,6 +31,11 @@ import { askLectureSetup } from "../view/lecture-pack-modal";
 import { pickFile } from "../view/pick";
 import { libraryIndexPath, parseStoredJson, patchNotebookId, patchNotebookMeta, type MetaPatchResult } from "./host-logic";
 import { importPdfAsNotebook } from "./import-pdf";
+import { BulkImportDialog } from "./bulk-import-dialog";
+import { pickManyFiles, fileSource } from "./bulk-drop";
+import { BulkSkipError, runBulkImport } from "./bulk-import-run";
+import { PhotoDecodeError, photoSize } from "../scan/decode";
+import { artStyleFor } from "../ui/art/generative-art";
 import { hint } from "../ui/hints";
 import { createLectureFromSlides } from "./lecture-pack";
 import { openLooseSheet, openNewQuickPage } from "./loose-sheet";
@@ -374,6 +379,52 @@ export class NotebookLibraryHost implements LibraryHost {
 				empty: () => t("import.empty"),
 			},
 		}, folder);
+	}
+
+	/**
+	 * 0.16 (#80): bulk import. `files` are the ones dropped on the library (absent: the device's file picker opens first); the
+	 * bulk-import dialog lists them and makes one notebook per PDF or image, or one for all the images. `after` gets the vault
+	 * paths of the notebooks made (a drop on a Board column sets their status).
+	 */
+	importFiles(folder: string, files?: File[], after?: (paths: string[]) => void): void {
+		void (async () => {
+			const picked = files ?? (await pickManyFiles());
+			if (picked.length === 0) return;
+			const app = this.app;
+			const root = () => this.root();
+			new BulkImportDialog(app, {
+				root,
+				allFolders: () => app.vault.getAllLoadedFiles().filter((f): f is TFolder => f instanceof TFolder).map((f) => f.path),
+				taken: (dir, clean) => existsInsensitive(app.vault, normalizePath(joinPath(dir, `${clean}.${NEW_NOTEBOOK_EXTENSION}`))),
+				run: (jobs, dir, look, ctl) => runBulkImport<TFile>(jobs, dir, look, {
+					store: async (bytes, name, kind) => {
+						const asset = await storeAsset(app, root(), bytes, name, kind);
+						this.assets.set(asset.id, asset);
+						return asset;
+					},
+					pdfSizes: (id) => this.pdf.pageSizes(id),
+					imageSize: (bytes, name, type) => photoSize(bytes, name, type).catch((e: unknown) => {
+						throw e instanceof PhotoDecodeError && e.reason === "heic" ? new BulkSkipError("heic") : e;
+					}),
+					create: async (dir2, name, doc) => {
+						const file = await createNotebook(app, dir2, name, doc);
+						return { file, path: file.path };
+					},
+					artStyle: (name) => artStyleFor(name),
+					yieldToUi: () => new Promise<void>((resolve) => window.setTimeout(resolve, 0)),
+				}, ctl),
+				open: (path) => {
+					const file = app.vault.getFileByPath(path);
+					if (file) void this.openNotebook(file);
+				},
+				finished: (outcomes) => {
+					const made = outcomes.flatMap((o) => (o.path !== null ? [o.path] : []));
+					if (made.length > 0) after?.(made);
+				},
+				notify: (text) => void showNotice(text),
+				today: () => new Date().toISOString().slice(0, 10),
+			}, picked.map(fileSource), folder).open();
+		})();
 	}
 
 	nowClass(): { course: string; room?: string } | null {
