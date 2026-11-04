@@ -120,6 +120,7 @@ import type { LectureClass } from "../timetable/lecture-mode";
 import { askExercisePaper, askLayoutOptions, loadExercisePaper } from "./lecture-pack-modal";
 import { runMovePages } from "../library/move-pages";
 import { TransferFlows } from "../library/transfer-flows";
+import type { StorageEnv } from "../library/storage-actions";
 import type { PdfActionHost } from "./pdf-actions";
 import { pickFile } from "./pick";
 import { pdfSideState, referencePane, referenceSlideOf, runPdfSideAction, type PageSyncHooks } from "./pdf-sync";
@@ -220,6 +221,8 @@ export interface NotebookHost {
 	statusChanged?(view: NotebookView): void;
 	/** Instant save journal shared by all views. */
 	journal?: JournalStore;
+	/** 0.17: where the instant-save journal is, so merge / split / extract in a view refuse to rewrite or trash a closed notebook with journal-only ink. Optional: absent in tests. */
+	transferJournal?(): StorageEnv["journal"];
 	/** Persists the plugin settings (favourite pens, eraser size, pen-only). Optional: absent in tests. */
 	saveSettings?(): Promise<void>;
 	/** Wave 0.9: practice copies of exercises (view/practice.ts). Optional: absent in tests and the harness. */
@@ -3521,7 +3524,7 @@ export class NotebookView extends FileView {
 
 	/** 0.17 (#77): the flows for this view's notebook (merge, split, extract). */
 	private transferFlows(): TransferFlows | null {
-		return this.file ? new TransferFlows({ app: this.app, settings: () => this.host.settings }) : null;
+		return this.file ? new TransferFlows({ app: this.app, settings: () => this.host.settings, journal: this.host.transferJournal?.() }) : null;
 	}
 
 	private async extractFromMap(ids: string[]): Promise<void> {

@@ -8,6 +8,8 @@ import { readSettings, type NotebookSettings } from "./settings";
 import { positionEquals, type SavedPosition } from "./ink/view-position";
 import { stressDocument } from "./model/stress";
 import { NOTEBOOK_EXTENSIONS } from "./storage/format";
+import { journalReader } from "./library/library-check-modal";
+import type { StorageEnv } from "./library/storage-actions";
 import { AdapterJournalStore, journalFolder, sidecarDeviceId, vaultDeviceFileAdapter } from "./storage/vault-io";
 import { SharedClipStore } from "./storage/shared-clip-store";
 import { createNotebook } from "./storage/notebooks";
@@ -385,6 +387,11 @@ export default class NotebookPlugin extends Plugin {
 	}
 
 	/** wave 0.9 (379): when this device last edited the page, if it has a record (the recent pages log). */
+	/** 0.17: the journal location for the in-view merge / split / extract (same as the library's flows). */
+	transferJournal(): StorageEnv["journal"] {
+		return { reader: journalReader(this.app), folder: journalFolder(this.app, this.manifest.id) };
+	}
+
 	pageEditedAt(nb: string, pageId: string): number | null {
 		return this.recentPages?.pageEditedAt(nb, pageId) ?? null;
 	}
