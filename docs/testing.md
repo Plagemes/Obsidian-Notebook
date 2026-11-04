@@ -2121,6 +2121,31 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 | One guard in the history: every command (and undo / redo) that changes the content of a locked page is reverted and not recorded; tags, bookmarks, page order and inserted pages are allowed; lock and unlock are one undo step | yes | `tests/page-lock.test.ts` (each kind of edit) | | | |
 | Lock UI: page sheet, multi-selection menu, command, lock beside the page number, badge over the page, pages panel lock, notebook map lock button, *Page locked · Unlock* notice; gestures stopped before they start (pen, eraser, text, shapes, space, selection drag); delete, move to notebook, restore and find and replace check first | yes | harness scenario `lock` (tablet and phone, light and dark), `tests/ui-registry.test.ts`; model parts in `tests/model-v14.test.ts` | | | |
 
+### 0.17 — sticky (sticky notes, format v15; steps 1100-1119)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/sticky-*.png`. Notebooks saved with a sticky note are format v15: 0.16 and older open them read-only.
+
+1100. **Insert.** More sheet or the quick slot > *Sticky note*. Expected: a yellow square note appears at the centre of the view, selected (the bar shows *Edit note*, *Collapse note* and the usual selection actions). One undo removes it.
+1101. **Edit.** With the note selected tap *Edit note*. Type two lines, pick another colour, make the text larger, tap *Done*. Expected: the note shows the text and the new colour in one undo step; *Cancel* leaves it as it was. In Italian the dialog reads *Nota adesiva*.
+1102. **Write on it.** With the S Pen write on the note. Expected: the ink is black vector ink over the note; erasing it works like any ink.
+1103. **Move.** With the lasso tap the note, then drag it. Expected: the note and the handwriting on it move together; one undo puts both back.
+1104. **Resize.** Drag a corner handle of the selected note. Expected: the note, its text and the handwriting scale together; the note never becomes smaller than a thumb nail or larger than the page allows.
+1105. **Collapse.** Select the note, tap *Collapse note*. Expected: a small icon with the note's colour remains at its top-left corner; the handwriting disappears with it; nothing is deleted. Write on the empty place where the note was: that ink stays visible. Drag the icon: the hidden ink goes with it. Tap *Open note*: the note and its ink are back.
+1106. **Delete.** Delete an open note: the note goes; the notice offers to delete the ink written on it (the setting "Ink follows objects"). Delete a collapsed note: its hidden ink is deleted with it and one undo brings both back.
+1107. **Copy and paste.** Copy a note with its ink to another page and to another notebook. Expected: the copy has the text, colour and ink; a collapsed note pastes collapsed.
+1108. **Locked page.** Lock the page: *Sticky note* is disabled, *Edit*, *Collapse* and moving a note do nothing and show the *Page locked* notice.
+1109. **Export.** Export the page as PNG, PDF and SVG: the note, its text and the handwriting are there; a collapsed note is its icon without the ink. The Markdown export has the typed text as a quote.
+1110. **Saving and older plugin.** Close and reopen: notes, text, colour and collapsed state are kept. Copy the notebook to a device with 0.16: it opens read-only with the "newer version" message and is not rewritten.
+1111. **Night mode and Obsidian theme.** In night mode and in the dark theme the note keeps a readable paper and text.
+1112. **Phone and tablet.** At phone width the dialog fits, its swatches are at least 36 px and the bar shows the note actions; in dark and light.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Sticky notes (#20, format v15): element `sticky`; v14 → v15 migration (a note in a v14 file is refused, large v14 files still stage), lenient read and strict write, repair, merge (hidden-ink ids remapped), copy | yes | `tests/model-v15.test.ts` | | | |
+| Ink belongs to the note (geometric ownership), moves and scales with it; collapsed note hides and carries exactly its own list of strokes; eraser and lasso skip hidden ink; delete takes it along | yes | `tests/model-v15.test.ts` | | | |
+| Drawing and export: canvas, thumbnails, PNG, PDF, SVG, Markdown | yes | `tests/model-v15.test.ts` | | | |
+| Sticky UI: insert (quick slot, sheet, command), edit dialog, collapse / open, selection bar; one undo step each, refused on a locked page | yes | harness scenario `sticky` (tablet and phone, light and dark), `tests/ui-registry.test.ts` | | | |
+
 ## Quick check — Windows
 
 Mouse: draw, erase (both modes), undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scroll, Ctrl+wheel zoom, resize the window (the page refits), add a page, use every page menu action with undo, create notebooks with each paper and size, export PDF and SVG and open them, lasso select/move/resize/rotate/delete, close and reopen the notebook. Also: open the library and use every action, import a PDF and write on it, insert a PDF range and an image page, use the shape, text, image and ruler tools, scan from a photo file, use the Pages panel, run *Restore a previous version*, insert an embed in a note and open an `obsidian://notebook` link. With a pen tablet or Surface pen: pressure and eraser end (`buttons & 32`).

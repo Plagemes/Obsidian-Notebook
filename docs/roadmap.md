@@ -105,7 +105,7 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 17. **P2** Links on the page: a region or element opens another page, notebook, Obsidian note or URL.
 18. **P2** 🧪 Back/forward history of visited pages.
 19. **P2** 🧪 Notebook templates: create a notebook from a saved notebook (planner, lab book).
-20. **P2** Sticky notes: movable coloured notes on the page.
+20. **P2** 🧪 Sticky notes: movable coloured notes on the page (0.17, format v15: element `sticky`, typed text and ink that belongs to the note, collapse to an icon, insert menu / selection bar).
 21. **P3** Paper colours (cream, dark, chalkboard) with ink adapted for contrast.
 
 ### Obsidian integration

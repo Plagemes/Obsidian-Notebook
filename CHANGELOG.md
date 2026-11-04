@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### sticky
+- **Sticky notes (#20), document format 15.** *Sticky note* (quick slot, sheet, command) adds a coloured square note to the page. Type on it (*Edit note*: text, one of the eight palette colours, text size) and/or write on it by hand: ink written on a note belongs to it and moves and scales with it. Move, resize, copy and delete it with the usual selection tools; *Collapse note* turns it into a small icon (its ink is hidden with it and follows the icon) and *Open note* brings it back. Every change is one undo step and is refused on a locked page. Notes are drawn in the page view, thumbnails, PNG, PDF and SVG; the Markdown export has their typed text as quotes.
+- **Document format v15.** A new element type `sticky` (a collapsed note also lists the ids of the strokes it hides). The v14 to v15 migration only refuses a note in a v14 file; large v14 files still stage page by page. 0.16 and older open a v15 file read-only as a newer format and never overwrite it. See [architecture.md](docs/architecture.md) section 2.
+
 ## 0.16.0 — 2026-11-04
 
 Finish a page, work with PDFs, and get material in and out faster: lock a finished page, copy text from a PDF with its outline and links, move a selection to another page, import many files at once, present a notebook full screen with a laser pointer, collect highlights into a note, and pick up files shared from other Android apps. **The document format is now v14** (optional page lock): a 0.15 device opens a v14 notebook read-only (newer version) and never overwrites it. **Not verified on the device**: unit tests and the browser harness only.

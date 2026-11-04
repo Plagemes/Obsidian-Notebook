@@ -3019,6 +3019,24 @@ export const en = {
 	"digest.append.body": "A note named “{note}” already exists and has no digest section. The digest is added at its end and nothing else in the note is changed. Or keep the note as it is and write the digest in a new one.",
 	"digest.append.add": "Add to it",
 	"digest.append.new": "Use a new note",
+
+	// 0.17 sticky
+	"sticky.insert": "Sticky note",
+	"sticky.command.insert": "Insert sticky note",
+	"sticky.edit": "Edit note",
+	"sticky.collapse": "Collapse note",
+	"sticky.expand": "Open note",
+	"sticky.title": "Sticky note",
+	"sticky.subtitle": "Type on it here, or write on it by hand with the pen.",
+	"sticky.text": "Text",
+	"sticky.textPlaceholder": "Type a note…",
+	"sticky.colour": "Colour",
+	"sticky.size": "Text size",
+	"sticky.size.smaller": "Smaller text",
+	"sticky.size.larger": "Larger text",
+	"sticky.size.value": "{n} pt",
+	"sticky.done": "Done",
+	"sticky.cancel": "Cancel",
 } as const;
 
 export type MessageKey = keyof typeof en;

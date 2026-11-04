@@ -9,7 +9,8 @@ import { isHeic } from "../scan/image-bytes";
 import { t } from "../i18n";
 import { renderThumbnail } from "../library/thumbnail";
 import { needsNextPage, needsPageOffer } from "../ink/auto-page";
-import { deleteInkCommand, inkOnRemoved } from "../ink/attach";
+import { deleteInkCommand, inkOnRemoved, pinnedInk } from "../ink/attach";
+import { hiddenStickyInk } from "../model/sticky";
 import { captureClip, type ClipContent } from "../ink/clipboard";
 import { cleanStampFormat, formatStamp, stampElement, stampSpot } from "../ink/date-stamp";
 import {
@@ -51,7 +52,7 @@ import { buildLecturePackPages, exercisePage } from "../model/lecture-pack";
 import { backgroundRect } from "../model/margins";
 import {
 	AddAsset, AddElement, AddPage, AddStroke, Batch, History, InsertPages, MovePage, RemoveElement, ReplaceElement,
-	ReplaceStroke, SetMeta, SetPageSize, type Command,
+	removeStrokes, ReplaceStroke, SetMeta, SetPageSize, type Command,
 } from "../model/history";
 import { pageContentCommand } from "../model/page-content";
 import { checkContent, freezeStroke } from "../model/serialize";
@@ -143,6 +144,7 @@ import { SelectionArrange } from "./selection-arrange";
 import { StampPalette, type StampTarget } from "./stamp-palette";
 import { TextEditor, type TextEditSession } from "./text-editor";
 import { MathTools, type MathHost } from "./math-tools";
+import { StickyTools, type StickyHost } from "./sticky-tools";
 import { equationNumbers } from "../model/math-elements";
 import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites";
 import { PenControls, type PenStore } from "./pen-controls";
@@ -387,6 +389,8 @@ export class NotebookView extends FileView {
 	private textEditor: TextEditor | null = null;
 	/** v9: equations and graphs (editor, panel, typesetting, convert to ink). */
 	private math: MathTools | null = null;
+	/** 0.17 (#20): sticky notes (insert, edit, collapse). */
+	private sticky: StickyTools | null = null;
 	private rulerGesture: RulerGesture | null = null;
 	private radial: PenRadial | null = null;
 	private colour: ColourTools | null = null;
@@ -614,6 +618,7 @@ export class NotebookView extends FileView {
 		this.lockBadge = badge;
 		this.textEditor = new TextEditor(this.stage);
 		this.math = new MathTools(this.mathHost());
+		this.sticky = new StickyTools(this.stickyHost());
 		this.penGestures = new PenGestureLayer({
 			stage: this.stage,
 			body: this.body,
@@ -1886,6 +1891,25 @@ export class NotebookView extends FileView {
 		};
 	}
 
+	/** 0.17 (#20): sticky notes of this view (null before the view is open). */
+	get stickyTools(): StickyTools | null {
+		return this.sticky;
+	}
+
+	/** What the sticky note tools need from the view. */
+	private stickyHost(): StickyHost {
+		return {
+			app: this.app,
+			doc: () => this.session?.doc ?? null,
+			editable: () => !!this.editableDocument(),
+			execute: (cmd) => this.applyCommand(cmd),
+			insertTarget: () => this.mathHost().insertTarget(),
+			selection: () => (this.selection ? { pageIndex: this.selection.pageIndex, elements: this.selection.elements } : null),
+			select: (pageIndex, elements) => this.selectItems(pageIndex, [], elements),
+			refresh: () => this.refreshUi(),
+		};
+	}
+
 	/** Colour picker and eyedroppers of this view (null before the view is open). */
 	get colourTools(): ColourTools | null {
 		return this.colour;
@@ -1943,7 +1967,10 @@ export class NotebookView extends FileView {
 
 	/** The strokes of `page` the reader can see (v8: hidden ink only while the solutions are shown). */
 	private inkInView(page: Page): readonly Stroke[] {
-		const ink = visibleStrokes(page.strokes, this.markers?.isRevealed(page) ?? false);
+		const shown = visibleStrokes(page.strokes, this.markers?.isRevealed(page) ?? false);
+		// 0.17 (#20): the ink a collapsed sticky note keeps hidden is not there to erase, select or offer.
+		const noteInk = hiddenStickyInk(page.elements);
+		const ink = noteInk ? shown.filter((s) => !noteInk.has(s.id)) : shown;
 		// 0.15 (241): a shown state moved some strokes away from where they were drawn: the ink tools leave them alone.
 		const moved = this.statesTools?.displaced(page);
 		return moved ? ink.filter((s) => !moved.has(s.id)) : ink;
@@ -2185,6 +2212,11 @@ export class NotebookView extends FileView {
 		for (const it of strokes) commands.push(new ReplaceStroke(page.id, it.stroke, [], it.index));
 		const removedEls = sel.elements.filter((el) => page.elements?.includes(el));
 		for (const el of removedEls) commands.push(new RemoveElement(page.id, el));
+		// 0.17 (#20): deleting a collapsed sticky note deletes the ink it keeps hidden (the same undo step), so none comes back alone.
+		const own = new Set(sel.strokes);
+		const hiddenOwned = pinnedInk(page.strokes, removedEls).filter((s) => !own.has(s));
+		const gone = removeStrokes(page.id, page.strokes, hiddenOwned, "Delete note ink");
+		if (gone) commands.push(gone);
 		// Ink written on a deleted object stays unless the user takes the offer shown afterwards (setting "Ink follows objects").
 		// v8: hidden ink is never offered (nor counted) while the solutions of the page are not shown.
 		const owned = this.host.settings.inkFollowsObjects && removedEls.length > 0
@@ -2707,6 +2739,9 @@ export class NotebookView extends FileView {
 			graphs: sel.elements.filter((e) => e.type === "graph").length,
 			// v10: "Go to source" acts on the first excerpt of the primary page's elements.
 			excerpts: sel.elements.filter((e) => e.type === "excerpt").length,
+			// 0.17 (#20): the sticky note actions (Edit, Collapse, Open) work on the primary page's notes (see stickyTools).
+			stickies: sel.elements.filter((e) => e.type === "sticky").length,
+			stickiesCollapsed: sel.elements.filter((e) => e.type === "sticky" && e.collapsed === true).length,
 		};
 	}
 
@@ -4596,7 +4631,10 @@ export class NotebookView extends FileView {
 		const sel = this.selection;
 		// Ink written on the selected objects floats with them (setting "Ink follows objects").
 		const across = sel?.others?.length ? this.crossPageInk(sel) : null;
-		const attached = sel ? (across ? across[0] ?? [] : this.attachedInk(sel)) : [];
+		const pinnedHidden = sel ? hiddenStickyInk(this.pageAtIndex(sel.pageIndex)?.elements) : null;
+		const floating = sel ? (across ? across[0] ?? [] : this.attachedInk(sel)) : [];
+		// 0.17 (#20): the ink a collapsed note keeps hidden moves with it but is not drawn while it floats.
+		const attached = pinnedHidden ? floating.filter((s) => !pinnedHidden.has(s.id)) : floating;
 		const boxes = this.layout?.boxes ?? [];
 		const parts = sel?.others?.map((o, i) => {
 			const extra = across?.[i + 1] ?? [];
@@ -4811,9 +4849,12 @@ export class NotebookView extends FileView {
 
 	/** Strokes that float with the selection without being selected: the ink written on the selected objects (none when the setting is off). */
 	private attachedInk(sel: Selection): Stroke[] {
-		if (!this.host.settings.inkFollowsObjects || sel.others?.length) return [];
+		if (sel.others?.length) return [];
 		const page = this.pageAtIndex(sel.pageIndex);
-		return page ? this.objectInk.attachedTo(page, sel) : [];
+		if (!page) return [];
+		// 0.17 (#20): the ink a collapsed sticky note keeps hidden is bound to it by the note's own list, whatever the setting says.
+		if (!this.host.settings.inkFollowsObjects) return pinnedInk(page.strokes, sel.elements);
+		return this.objectInk.attachedTo(page, sel);
 	}
 
 	/**

@@ -182,6 +182,11 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"insert-graph": (v) => v.mathTools?.insertGraph(),
 	"math-edit": (v) => v.mathTools?.editSelected(),
 	"math-convert-ink": (v) => void v.mathTools?.convertSelectedToInk(),
+	// 0.17 (#20): sticky notes
+	"insert-sticky": (v) => v.stickyTools?.insert(),
+	"sticky-edit": (v) => v.stickyTools?.editSelected(),
+	"sticky-collapse": (v) => v.stickyTools?.setCollapsed(true),
+	"sticky-expand": (v) => v.stickyTools?.setCollapsed(false),
 	"insert-date-stamp": (v) => v.insertDateStamp(),
 	"stamps": (v) => v.stampPalette?.toggle(),
 	"board-shot": (v) => void v.boardShot(),

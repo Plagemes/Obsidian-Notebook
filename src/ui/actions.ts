@@ -48,6 +48,7 @@ export interface UiContext {
 		/** v9: selected equations and graphs (optional, 0 when absent). */ equations?: number; graphs?: number;
 		/** v10: selected anchored excerpts (optional, 0 when absent). */ excerpts?: number;
 		/** 0.14 (402): selected text boxes (optional, 0 when absent). */ texts?: number;
+		/** 0.17 (#20): selected sticky notes, and how many of them are collapsed (optional, 0 when absent). */ stickies?: number; stickiesCollapsed?: number;
 	} | null;
 	/** The page in view (index of the page sheet when it was opened from a thumbnail). */
 	page: {
@@ -259,6 +260,11 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "board-shot", label: "tool.boardShot", icon: "camera", group: "insert", surfaces: ["quick", "context", "sheet"], contexts: ["lecture"], priority: 55, scope: "view", command: "command.boardShot", keywords: "photo camera blackboard" },
 	// wave 0.9: math
 	{ id: "insert-equation", label: "math.insertEquation", icon: "sigma", group: "insert", surfaces: ["sheet"], priority: 52, scope: "view", command: "math.command.insertEquation", keywords: "formula latex maths math equazione formula" },
+	// 0.17 (#20): sticky notes. Insert from the quick slots and the sheet; Edit / Collapse / Open on the selection bar.
+	{ id: "insert-sticky", label: "sticky.insert", icon: "sticky-note", group: "insert", surfaces: ["quick", "sheet"], priority: 58, scope: "view", command: "sticky.command.insert", enabled: pageOpen, keywords: "sticky note post-it memo reminder nota adesiva promemoria foglietto" },
+	{ id: "sticky-edit", label: "sticky.edit", icon: "square-pen", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 91, scope: "view", when: (c) => (c.selection?.stickies ?? 0) === 1, enabled: pageOpen, keywords: "sticky note text colour nota adesiva testo colore" },
+	{ id: "sticky-collapse", label: "sticky.collapse", icon: "minimize-2", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 90, scope: "view", when: (c) => (c.selection?.stickies ?? 0) > (c.selection?.stickiesCollapsed ?? 0), enabled: pageOpen, keywords: "sticky note collapse fold icon nota adesiva comprimi" },
+	{ id: "sticky-expand", label: "sticky.expand", icon: "maximize-2", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 90, scope: "view", when: (c) => (c.selection?.stickiesCollapsed ?? 0) > 0, enabled: pageOpen, keywords: "sticky note open expand nota adesiva apri espandi" },
 	{ id: "insert-graph", label: "math.insertGraph", icon: "chart-spline", group: "insert", surfaces: ["sheet"], priority: 50, scope: "view", command: "math.command.insertGraph", keywords: "function plot chart curve grafico funzione" },
 	// "add-page" is the Obsidian command (and its hotkey): it adds a page right away, same paper, as before 0.14. The on-screen "+" is
 	// "add-page-suggest": it opens the Smart "+" strip (0.14, 410); the command of the same name opens that strip from the keyboard.
