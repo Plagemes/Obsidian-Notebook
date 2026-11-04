@@ -8,7 +8,7 @@ const api = app.plugins.plugins["notebook"]?.api;
 
 `api` is `undefined` when the Notebook plugin is not installed or not enabled yet, so check before using it. In a Templater script it is `tp.app.plugins.plugins["notebook"].api`; in QuickAdd, `this.app...` or `params.app...`.
 
-API version: **1.1.0** (`api.version`). It is the version of this interface, not of the plugin. A new method or option raises the minor number; a change that breaks existing calls raises the major number, so a script can check `api.version.startsWith("1.")`.
+API version: **1.2.0** (`api.version`). It is the version of this interface, not of the plugin. A new method or option raises the minor number; a change that breaks existing calls raises the major number, so a script can check `api.version.startsWith("1.")`.
 
 ## Rules every call follows
 
@@ -28,7 +28,7 @@ API version: **1.1.0** (`api.version`). It is the version of this interface, not
 
 Creates `<folder>/<name>.notebook` (creating the folder if needed) and returns `{ path, name, id, file }`. If the name is taken, ` 2`, ` 3`… is appended; `name` in the result is the real one. `folder` is a vault path, `""` or `"/"` is the vault root.
 
-Options (all optional): `pageSize` (`"a4"`, `"a5"`, `"letter"`, `"b5"` since 0.12), `landscape`, `paper` (`"blank"`, `"ruled"`, `"grid"`, `"dotted"`, `"millimetre"`), `pages` (1 to 500), `tags` (written like Obsidian tags: `#exam` becomes `exam`, spaces become `-`, `a/b` is a nested tag; a tag that is only digits throws), `favorite`, `cover` (`"#rrggbb"`), `open` (open it in a tab). What is left out follows the defaults of the *New notebook* dialog.
+Options (all optional): `pageSize` (`"a4"`, `"a5"`, `"letter"`, `"b5"` since 0.12), `landscape`, `paper` (`"blank"`, `"ruled"`, `"grid"`, `"dotted"`, `"millimetre"`), `pages` (1 to 500), `tags` (written like Obsidian tags: `#exam` becomes `exam`, spaces become `-`, `a/b` is a nested tag; a tag that is only digits throws), `favorite`, `cover` (`"#rrggbb"`), `open` (open it in a tab), `template` and `templateContent` (since 1.2: start from a notebook template, see below). What is left out follows the defaults of the *New notebook* dialog.
 
 ```js
 const nb = await api.createNotebook("Notebooks/Physics", "Lecture 12", { paper: "ruled", tags: ["physics", "lecture"], open: true });
@@ -70,6 +70,19 @@ Opens the notebook in a tab (focusing the tab that already shows it), at `page` 
 ### `api.listNotebooks(options?)`
 
 Returns, synchronously, `{ path, name, folder, mtime, size, open }` for every notebook in the vault, sorted by path. `options.folder` limits it to a folder and its subfolders.
+
+### `api.newNotebook(spec)`
+
+Since 1.2. Creates a notebook from one object, which is what a Templater script wants, and returns what `createNotebook` returns plus ready-to-paste Markdown: `link` (`[[Lecture 12.notebook]]`) and `embed` (`![[Lecture 12.notebook]]`).
+
+Fields: `name` (required), `folder` (default: the plugin's notebooks folder), `template` (the name, or vault path, of a notebook template; case does not matter, `.notebook` may be left out), `content` (with a template: `false` keeps only its pages, default `true` keeps ink and elements too; `{{date}}`-style placeholders in its text boxes are filled in) and `open`. An unknown template throws `not-found` and names the templates it knows; nothing is created. The template's cover is kept. `createNotebook(folder, name, { template, templateContent })` does the same and accepts `tags`, `favorite` and `cover` to override the template's; `pageSize`, `landscape`, `paper` and `pages` cannot be combined with a template (`invalid-argument`).
+
+```js
+const nb = await api.newNotebook({ name: "Lecture 12", folder: "Notebooks/Physics", template: "Lecture" });
+new Notice(nb.embed);
+```
+
+Templates for core Templates and Templater, including the `notebook-new` button, are in [templates.md](templates.md).
 
 ## Errors
 
@@ -121,6 +134,7 @@ interface NotebookApi {
   getPageLink(file: NotebookFileRef, page: number | string): Promise<PageLinkInfo>;
   openNotebook(file: NotebookFileRef, page?: number | string): Promise<void>;
   listNotebooks(options?: { folder?: string }): NotebookSummary[];
+  newNotebook(spec: { name: string; folder?: string; template?: string; content?: boolean; open?: boolean }): Promise<NotebookRef & { link: string; embed: string }>;
 }
 
 type NotebookApiErrorCode =

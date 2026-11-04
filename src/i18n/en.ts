@@ -3450,6 +3450,22 @@ export const en = {
 	// 0.18 review fixes (I)
 	"annotatePdf.tooLarge": "This PDF is {size} MB, over the {max} MB limit for annotating from here. Import it from the library instead.",
 	"annotatePdf.scanning": "Looking through your notebooks for this PDF… {done} of {total}",
+	// 0.19 templates
+	"newblock.title": "New notebook",
+	"newblock.create": "Create notebook",
+	"newblock.plain": "A new notebook for this note",
+	"newblock.fromTemplate": "From the template “{template}”",
+	"newblock.error.empty": "This notebook-new block is empty. Add a line like: name=\"My sketches\"",
+	"newblock.error.syntax": "Cannot read this line: {detail}. Use key=\"value\" (keys: name, template, folder, content, open).",
+	"newblock.error.unknownKey": "Unknown key “{detail}”. Keys: name, template, folder, content, open.",
+	"newblock.error.noName": "Add a name: name=\"My sketches\"",
+	"newblock.error.unexpanded": "This still has template syntax in it (“{detail}”). Insert the template with Templater or Obsidian Templates first.",
+	"newblock.error.badValue": "Expected true or false: {detail}",
+	"newblock.noApi": "The Notebook API is not ready yet. Try again in a moment.",
+	"newblock.notFound": "This block is no longer in the note, or it appears more than once. Nothing was created.",
+	"newblock.created": "Created “{name}” and embedded it in the note.",
+	"newblock.createdNotReplaced": "Created “{name}”, but the block changed meanwhile and was left alone. Add {link} yourself.",
+	"newblock.failed": "Could not create the notebook: {error}",
 } as const;
 
 export type MessageKey = keyof typeof en;

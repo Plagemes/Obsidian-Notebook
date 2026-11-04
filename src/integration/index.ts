@@ -12,6 +12,7 @@ import { registerFileMenu } from "./file-menu";
 import { HistoryService } from "./history-service";
 import { embedInsertText } from "./links";
 import { registerNativeEmbed } from "./native-embed";
+import { registerNewBlock } from "./new-block-render";
 import { openNotebookAtPage } from "./open";
 import { PageLinkSuggest } from "./page-link-suggest";
 import { trackActiveNote } from "./page-share";
@@ -46,6 +47,8 @@ export function registerIntegration(plugin: IntegrationPlugin, deps: Integration
 
 	// #22 Embed a page in a Markdown note.
 	registerEmbed(plugin, { app, folder, background: deps.background, open: (file, page, pageId) => open(file, page, pageId ?? null) });
+	// 0.19 O13: the `notebook-new` placeholder for core Templates and Templater (docs/templates.md).
+	registerNewBlock(plugin, { app, api: () => plugin.api });
 	plugin.addCommand({
 		id: "insert-embed",
 		name: t("command.embedInsert"),

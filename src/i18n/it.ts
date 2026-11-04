@@ -3452,4 +3452,20 @@ export const it: Partial<Record<MessageKey, string>> = {
 	// 0.18 review fixes (I)
 	"annotatePdf.tooLarge": "Questo PDF pesa {size} MB, oltre il limite di {max} MB per annotare da qui. Importalo dalla libreria.",
 	"annotatePdf.scanning": "Cerco questo PDF nei tuoi quaderni… {done} di {total}",
+	// 0.19 templates
+	"newblock.title": "Nuovo quaderno",
+	"newblock.create": "Crea quaderno",
+	"newblock.plain": "Un nuovo quaderno per questa nota",
+	"newblock.fromTemplate": "Dal modello “{template}”",
+	"newblock.error.empty": "Questo blocco notebook-new è vuoto. Aggiungi una riga come: name=\"I miei schizzi\"",
+	"newblock.error.syntax": "Non riesco a leggere questa riga: {detail}. Usa chiave=\"valore\" (chiavi: name, template, folder, content, open).",
+	"newblock.error.unknownKey": "Chiave sconosciuta “{detail}”. Chiavi: name, template, folder, content, open.",
+	"newblock.error.noName": "Aggiungi un nome: name=\"I miei schizzi\"",
+	"newblock.error.unexpanded": "Qui c'è ancora la sintassi del modello (“{detail}”). Inserisci prima il modello con Templater o con i Modelli di Obsidian.",
+	"newblock.error.badValue": "Atteso true o false: {detail}",
+	"newblock.noApi": "L'API di Notebook non è ancora pronta. Riprova tra un momento.",
+	"newblock.notFound": "Questo blocco non è più nella nota, oppure compare più volte. Non è stato creato nulla.",
+	"newblock.created": "Creato “{name}” e incorporato nella nota.",
+	"newblock.createdNotReplaced": "Creato “{name}”, ma il blocco è cambiato nel frattempo e non è stato toccato. Aggiungi {link} a mano.",
+	"newblock.failed": "Impossibile creare il quaderno: {error}",
 };

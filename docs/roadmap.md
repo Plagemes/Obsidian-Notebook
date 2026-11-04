@@ -227,7 +227,7 @@ Goal: notebooks behave like first-class Obsidian content. Several items depend o
 - **O10 P2** 🧪 From Obsidian's PDF viewer: an "Annotate in Notebook" action.
 - **O11 P3** Pages on Canvas: notebook pages as cards on an Obsidian Canvas.
 - **O12 P2** 🧪 Daily notebook: "Today's page" adds a dated page and links it from the daily note.
-- **O13 P2** Obsidian templates: template notebooks and embeds in Templates/Templater.
+- **O13 P2** 🧪 Obsidian templates: `api.newNotebook` with a notebook template and a `notebook-new` button for core Templates and Templater ([docs/templates.md](templates.md)).
 - **O14 P1** 🧪 Commands and hotkeys for every tool (pen, eraser, lasso…), assignable in Hotkeys.
 - **O15 P2** 🧪 Status bar: "p. 3/12" and save state; tap opens the navigator.
 - **O16 P1** 🧪 Reopen where you left off: workspace/session restore brings back the same page and zoom.
