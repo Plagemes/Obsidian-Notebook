@@ -108,6 +108,16 @@ export function withPinnedInk(pageStrokes: readonly Stroke[], strokes: readonly 
 	return extra.length === 0 ? [...strokes] : [...strokes, ...extra];
 }
 
+/**
+ * 0.17 (H1): `strokes` without the ink the collapsed notes among `elements` keep hidden. What a paste or a duplicate hands
+ * back as the new selection: the hidden ink is part of what was made, never part of what is selected (it is out of view,
+ * so it would be drawn on the live layer, boxed and restyled).
+ */
+export function withoutPinnedInk(strokes: readonly Stroke[], elements: readonly PageElement[]): Stroke[] {
+	const hidden = new Set(pinnedInk(strokes, elements));
+	return hidden.size === 0 ? [...strokes] : strokes.filter((s) => !hidden.has(s));
+}
+
 /** Whether (x, y) is on the element: the rotated rectangle of an image, the laid-out box of a text. */
 export function pointOnElement(el: PageElement, x: number, y: number, measure: MeasureText = estimateMeasure): boolean {
 	if (el.type === "image") return inImage(el, x, y);

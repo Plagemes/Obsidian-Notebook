@@ -3,7 +3,7 @@ import { t } from "../i18n";
 import { captureClip, clipAssetIds, duplicateOffset, instantiateClip, MIN_PASTE_SCALE, pasteCommand, pasteOffset, pasteScale, type ClipContent } from "../ink/clipboard";
 import { whiteToTransparent } from "../ink/image-alpha";
 import { measureText } from "../ink/renderer";
-import { withPinnedInk } from "../ink/attach";
+import { withoutPinnedInk, withPinnedInk } from "../ink/attach";
 import { captureCrossPageClip, type PagePart } from "../ink/cross-page";
 import type { PageBox } from "../ink/layout";
 import { commonStyle, planRestyle, restyleAbilities, type StyleGroup } from "../ink/restyle";
@@ -255,7 +255,7 @@ export class SelectionActions {
 			const [dx, dy] = duplicateOffset(clip.bounds, page);
 			const copy = instantiateClip(clip, dx, dy, undefined, measureText);
 			commands.push(pasteCommand(page, copy.strokes, copy.elements, [], "Duplicate selection"));
-			made.push({ pageIndex: part.pageIndex, strokes: copy.strokes, elements: copy.elements });
+			made.push({ pageIndex: part.pageIndex, strokes: withoutPinnedInk(copy.strokes, copy.elements), elements: copy.elements });
 		}
 		const [first, ...rest] = made;
 		if (!first) return;
@@ -277,7 +277,7 @@ export class SelectionActions {
 		const [dx, dy] = duplicateOffset(got.clip.bounds, page);
 		const made = instantiateClip(got.clip, dx, dy, undefined, measureText);
 		if (!this.host.execute(pasteCommand(page, made.strokes, made.elements, [], "Duplicate selection"))) return;
-		this.host.select(got.pageIndex, made.strokes, made.elements);
+		this.host.select(got.pageIndex, withoutPinnedInk(made.strokes, made.elements), made.elements);
 	}
 
 	// --- 0.16 (78): move or copy the selection to another page ---
@@ -505,7 +505,7 @@ export class SelectionActions {
 			clip.pastes++;
 			const made = instantiateClip(content, dx, dy, assetMap, measureText, scale);
 			if (!this.host.execute(pasteCommand(target.page, made.strokes, made.elements, newAssets))) return;
-			this.host.select(target.pageIndex, made.strokes, made.elements);
+			this.host.select(target.pageIndex, withoutPinnedInk(made.strokes, made.elements), made.elements);
 			if (scale < 1) new Notice(t("selection.pasteScaled", { percent: String(Math.round(scale * 100)) }), 8000);
 			if (missing.size > 0) new Notice(gone(), 8000);
 		} finally {
