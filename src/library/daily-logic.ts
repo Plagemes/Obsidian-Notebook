@@ -117,7 +117,7 @@ export async function loadDailyTemplate<F>(host: DailyTemplateHost<F>, template:
 		const file = host.resolveLink(host.normalize(template)) ?? host.byPath(host.normalize(dailyTemplatePath(template))) ?? host.byPath(host.normalize(template));
 		if (!file) return null;
 		const text = await host.read(file);
-		return text.replace(/\u0000/g, "").trim() === "" ? null : text;
+		return text.split(String.fromCharCode(0)).join("").trim() === "" ? null : text;
 	} catch {
 		return null;
 	}

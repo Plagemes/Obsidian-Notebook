@@ -240,7 +240,8 @@ export function pruneBoardFile(own: BoardFile, others: readonly BoardFile[], liv
 		const present = live.has(i.key) || ctx.trashed.has(i.key) || (i.key.startsWith("copy:") && ctx.trashed.has(`id:${i.key.split(":")[1] ?? ""}`)) || (ctx.trashHoldsNotebooks === true && i.key.startsWith("path:"));
 		if (present) {
 			if (since !== undefined) {
-				const { missingSince: _gone, ...rest } = i.extra;
+				const rest = { ...i.extra };
+				delete rest.missingSince;
 				keep.push({ ...i, extra: rest });
 				changed = true;
 			} else keep.push(i);
