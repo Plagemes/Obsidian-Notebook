@@ -1,4 +1,5 @@
 import type { PressureMode } from "./ink/pressure";
+import { defaultPenSets, MAX_FOLDER_ASSIGNMENTS, MAX_NOTEBOOK_ASSIGNMENTS, normaliseAssignments, normalisePenSets, type PenSet } from "./view/pen-sets";
 import { DEFAULT_ERASER_SIZE, DEFAULT_FAVOURITES, normaliseEraserSize, normaliseFavourites, type FavouritePen } from "./view/favourites";
 import { cleanStampFormat, DEFAULT_STAMP_FORMAT } from "./ink/date-stamp";
 import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "./ink/edge-zones";
@@ -68,6 +69,12 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	outlineMarkers: boolean;
 	/** Favourite pens (six slots: tool, colour, width). */
 	favouritePens: FavouritePen[];
+	/** 0.15 pen sets: named lists of pens per subject (starter sets Maths, Languages, Science; all editable). */
+	penSets: PenSet[];
+	/** 0.15 pen sets: folder path -> set id (a notebook uses its nearest folder's set). Bounded. */
+	penSetFolders: Record<string, string>;
+	/** 0.15 pen sets: notebook document id -> set id (wins over the folder). Bounded. */
+	penSetNotebooks: Record<string, string>;
 	/** Eraser radius, CSS px. */
 	eraserSize: number;
 	/** Vault path of the loose sheet (quick notes) notebook; empty = `<notebooks folder>/Quick notes.notebook`. */
@@ -205,6 +212,9 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	outlineHeadings: true,
 	outlineMarkers: true,
 	favouritePens: DEFAULT_FAVOURITES.map((f) => ({ ...f })),
+	penSets: defaultPenSets(),
+	penSetFolders: {},
+	penSetNotebooks: {},
 	eraserSize: DEFAULT_ERASER_SIZE,
 	looseSheetPath: "",
 	edgeRejection: false,
@@ -290,6 +300,9 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.outlineHeadings === "boolean") s.outlineHeadings = d.outlineHeadings;
 	if (typeof d.outlineMarkers === "boolean") s.outlineMarkers = d.outlineMarkers;
 	s.favouritePens = normaliseFavourites(d.favouritePens);
+	s.penSets = normalisePenSets(d.penSets);
+	s.penSetFolders = normaliseAssignments(d.penSetFolders, MAX_FOLDER_ASSIGNMENTS);
+	s.penSetNotebooks = normaliseAssignments(d.penSetNotebooks, MAX_NOTEBOOK_ASSIGNMENTS);
 	s.eraserSize = normaliseEraserSize(d.eraserSize);
 	if (typeof d.looseSheetPath === "string") s.looseSheetPath = d.looseSheetPath.trim();
 	if (typeof d.edgeRejection === "boolean") s.edgeRejection = d.edgeRejection;

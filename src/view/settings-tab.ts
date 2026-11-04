@@ -3,6 +3,7 @@ import { setUiLanguage, t } from "../i18n";
 import { DEFAULT_SETTINGS, readSettings, type NotebookSettings } from "../settings";
 import type { TimetableService } from "../timetable/service";
 import { effectivePenHold } from "../ink/pen-button";
+import { PenSetsModal } from "./pen-sets-modal";
 import { PenTestModal, penSignalInfo } from "./pen-test-modal";
 import { renderPenKeySetting } from "./pen-button-settings";
 import { companionService } from "../integration/companion";
@@ -190,7 +191,21 @@ export class NotebookSettingTab extends PluginSettingTab {
 			case "timetable-edit": void this.host.timetable?.edit(); break;
 			case "gesture-sheet": new GestureCheatSheet(this.penGestureHost()).open(); break;
 			case "gesture-custom": new CustomGesturesModal(this.penGestureHost()).open(); break;
+			case "pen-sets": this.openPenSets(); break;
 		}
+	}
+
+	/** 0.15 pen sets: the manager. It saves the sets and their assignments together, through the same lenient reader as the load. */
+	private openPenSets(): void {
+		const settings = (): NotebookSettings => this.host.settings;
+		new PenSetsModal(this.app, {
+			get: () => ({ sets: settings().penSets, folders: settings().penSetFolders, notebooks: settings().penSetNotebooks }),
+			update: (next) => {
+				this.host.settings = readSettings({ ...settings(), penSets: next.sets, penSetFolders: next.folders, penSetNotebooks: next.notebooks });
+				void this.host.saveSettings().catch((e) => console.error("[notebook] saving settings failed", e));
+			},
+			currentPens: () => null,
+		}).open();
 	}
 
 	private renderCustom(id: SettingCustomId, setting: Setting): void {

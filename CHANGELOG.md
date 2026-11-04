@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### pensets
+- **Pen sets per subject (#134).** Named lists of pens (tool, colour, width; highlighters included) saved in the plugin settings, with three starter sets (Maths, Languages, Science) you can edit, rename or delete. Assign a set to a folder (its notebooks and subfolders) or to one notebook: opening a notebook puts its set on the favourite pens strip (the notebook's own set, then the nearest folder's, then your favourite pens); your favourite pens are never overwritten by a set.
+- A *Pen set* chip at the top of the pen and highlighter options opens the switcher: pick a set for this session, *Save current pens as a set...*, use the set for this notebook or folder, *Manage pen sets...* (rename, replace its pens with the current ones, delete with confirmation, folders, restore starter sets). Also in Settings → Writing → Pen sets. While a set is on the strip, saving a slot saves it into that set.
+- Assignments live in the plugin settings (`penSetFolders`, `penSetNotebooks`, at most 200 entries each) and are read leniently; an assignment to a deleted set is skipped. No change to the notebook format; no change to the stroke engine or the input files.
+
 ## 0.14.0 — 2026-11-04
 
 The notebook adapts to the device and to the lecture: the layout follows phone, tablet and desktop in either orientation, the toolbar adapts to the page and to what you use, lecture mode starts from the timetable, and notes remember the slide they were written beside. **The document format is now v12** (optional slide links): a 0.13 device opens a v12 notebook read-only (newer version) and never overwrites it; a 0.13 device that saves the timetable drops the lecturer field. **Not verified on the device**: unit tests and the browser harness only.
