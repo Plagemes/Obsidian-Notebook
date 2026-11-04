@@ -8,7 +8,7 @@ import { backlinksOf } from "../storage/backlinks";
 import { splitLinktext } from "./hover-preview-logic";
 import { modalShell, shellButton, shellNote } from "../ui/components/modal-shell";
 import {
-	contextSnippet, hitsOfNote, lineOf, mentionsMayChange, notebookMentions, noteLinksReach, pageMentionCount, pageMentions, sourcesIntact, type MentionHit, type MentionRow, type RawLink,
+	contextSnippet, hitsOfNote, lineOf, linkersOf, mentionsMayChange, notebookMentions, noteLinksReach, pageMentionCount, pageMentions, sameLinkers, sourcesIntact, type MentionHit, type MentionRow, type RawLink,
 } from "./mentions-logic";
 
 /** Most notes whose links are read from the index, most links kept, most rows drawn in a group, most notes read for context. */
@@ -65,6 +65,8 @@ export class Mentions {
 	private hits: MentionHit[] = [];
 	/** The notes the hits come from: a change of any other note that does not link here now cannot change them. */
 	private sources = new Set<string>();
+	/** The notes the link index had linking here when the hits were read. */
+	private linkers = new Set<string>();
 	private timer: number | null = null;
 	private lastPath = "";
 	private lastPages = -1;
@@ -82,9 +84,12 @@ export class Mentions {
 			this.open();
 		});
 		this.badge = badge;
-		// Not every change of the vault: only a note that links here (or did), or the loss of one of the notes we read.
+		// Not every change of the vault: only when the set of notes that link here changed (the index may be ready only after the
+		// notebook opened), or one of the notes we read is gone.
 		host.register(host.app.metadataCache.on("resolved", () => {
-			if (!sourcesIntact(this.sources, (p) => host.app.vault.getFileByPath(p) !== null)) this.schedule();
+			const file = host.file();
+			const linkers = file ? linkersOf(host.app.metadataCache.resolvedLinks, file.path) : this.linkers;
+			if (!sourcesIntact(this.sources, (p) => host.app.vault.getFileByPath(p) !== null) || !sameLinkers(this.linkers, linkers)) this.schedule();
 		}));
 		host.register(host.app.metadataCache.on("changed", (note) => this.noteChanged(note)));
 	}
@@ -127,6 +132,7 @@ export class Mentions {
 		this.lastPages = pages.length;
 		this.hits = file ? collectMentions(this.host.app, file, pages) : [];
 		this.sources = new Set(this.hits.map((h) => h.notePath));
+		this.linkers = file ? linkersOf(this.host.app.metadataCache.resolvedLinks, file.path) : new Set();
 	}
 
 	/** The sheet, with the index read fresh. */

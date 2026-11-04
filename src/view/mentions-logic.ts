@@ -91,6 +91,20 @@ export function notebookMentions(hits: readonly MentionHit[]): MentionRow[] {
 	return rowsOf(hits, (h) => h.pageId === null);
 }
 
+/** The notes the link index says link to the notebook (a cheap pass over `resolvedLinks`; no note is read). */
+export function linkersOf(resolved: Readonly<Record<string, Readonly<Record<string, number>>>>, notebookPath: string): Set<string> {
+	const out = new Set<string>();
+	for (const [note, targets] of Object.entries(resolved)) if (note !== notebookPath && (targets[notebookPath] ?? 0) > 0) out.add(note);
+	return out;
+}
+
+/** Whether the two sets hold the same paths. */
+export function sameLinkers(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+	if (a.size !== b.size) return false;
+	for (const p of a) if (!b.has(p)) return false;
+	return true;
+}
+
 /** What a note's cache says it links to: body links, embeds and the links in its properties (front matter). */
 export interface NoteLinkCache {
 	links?: ReadonlyArray<{ link: string }>;

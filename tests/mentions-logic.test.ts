@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contextSnippet, hitsOfNote, lineOf, mentionPageId, mentionsMayChange, noteLinksReach, notebookMentions, pageMentionCount, pageMentions, sourcesIntact, type RawLink } from "../src/view/mentions-logic";
+import { contextSnippet, hitsOfNote, lineOf, linkersOf, sameLinkers, mentionPageId, mentionsMayChange, noteLinksReach, notebookMentions, pageMentionCount, pageMentions, sourcesIntact, type RawLink } from "../src/view/mentions-logic";
 
 const pages = [{ id: "pg-aaaaaaaa" }, { id: "pg-bbbbbbbb" }, { id: "pg-cccccccc" }];
 const link = (l: string, line = 0, col = 0, embed = false): RawLink => ({ link: l, line, col, endCol: col + l.length + 4, embed });
@@ -108,6 +108,17 @@ describe("which changes can alter the mentions", () => {
 		expect(noteLinksReach({ links: [{ link: "Other" }], frontmatterLinks: [{ link: "Elsewhere" }] }, reaches)).toBe(false);
 		expect(noteLinksReach(null, reaches)).toBe(false);
 		expect(noteLinksReach({}, reaches)).toBe(false);
+	});
+	it("sees the notes that link to the notebook in the index, and when that set changes", () => {
+		const index = { "a.md": { "Physics.notebook": 2 }, "b.md": { "Other.md": 1 }, "c.md": { "Physics.notebook": 0 }, "Physics.notebook": { "Physics.notebook": 1 } };
+		const now = linkersOf(index, "Physics.notebook");
+		expect([...now]).toEqual(["a.md"]);
+		expect(sameLinkers(now, new Set(["a.md"]))).toBe(true);
+		expect(sameLinkers(now, new Set())).toBe(false);
+		expect(sameLinkers(now, new Set(["b.md"]))).toBe(false);
+		// the index that becomes ready after the notebook opened shows up as a change
+		expect(sameLinkers(new Set(), linkersOf(index, "Physics.notebook"))).toBe(false);
+		expect(sameLinkers(linkersOf({}, "Physics.notebook"), new Set())).toBe(true);
 	});
 	it("notices a source that is gone", () => {
 		expect(sourcesIntact(known, (p) => p === "Notes/a.md")).toBe(true);
