@@ -64,6 +64,7 @@ import { templatesApi } from "./templates-check";
 import { storageApi } from "./storage-check";
 import { bulkApi } from "./bulk-check";
 import { xferApi } from "./pagesplit-check";
+import { linkbackApi } from "./linkback-check";
 import { pdfcopyApi } from "./pdfcopy-check";
 import { checkCollections, collectionsState } from "./collections-check";
 import { checkHostile, HOSTILE_ERROR, hostileDialog, installHostile } from "./hostile";
@@ -2197,6 +2198,8 @@ Object.assign(harnessApi, storageApi({ app, errors, notices }));
 Object.assign(harnessApi, bulkApi({ app, errors, notices }));
 // 0.17 merge / split / extract (doc=xfer, pagesplit-check.ts).
 Object.assign(harnessApi, xferApi({ app, errors, notices }));
+// 0.18 linkback: copy to notebook with a link back (doc=linkback, linkback-check.ts).
+Object.assign(harnessApi, linkbackApi({ app, errors, notices }));
 // 0.17 pdfcopy: the optional PDF copy (doc=pdfcopy, pdfcopy-check.ts).
 Object.assign(harnessApi, pdfcopyApi({ get view() { return view; }, app, frames, penStroke, errors, notices }));
 (window as unknown as { harness: Record<string, unknown> }).harness = harnessApi;

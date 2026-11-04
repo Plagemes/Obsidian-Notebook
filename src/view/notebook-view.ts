@@ -119,6 +119,7 @@ import { findLecturePage } from "../timetable/lecture-open";
 import type { LectureClass } from "../timetable/lecture-mode";
 import { askExercisePaper, askLayoutOptions, loadExercisePaper } from "./lecture-pack-modal";
 import { runMovePages } from "../library/move-pages";
+import { runCopyWithLink } from "../library/copy-with-link";
 import { TransferFlows } from "../library/transfer-flows";
 import type { StorageEnv } from "../library/storage-actions";
 import type { PdfActionHost } from "./pdf-actions";
@@ -3080,6 +3081,16 @@ export class NotebookView extends FileView {
 		if (ctx) await runMovePages(ctx, this.host.settings, [index]);
 	}
 
+	/** 0.18 (#186): copies pages to another notebook with a link chip back. `pageId` is the page ticked at first (the one in view by default). */
+	async copyPageToNotebook(pageId?: string): Promise<void> {
+		await this.copyToNotebook(pageId ? [pageId] : []);
+	}
+
+	private async copyToNotebook(ids: readonly string[]): Promise<void> {
+		const ctx = this.editContext();
+		if (ctx) await runCopyWithLink({ app: this.app, settings: () => this.host.settings, journal: this.host.transferJournal?.() }, ctx, ids);
+	}
+
 	/** Wave 0.9 (#303): what the practice flows may do with this view (view/practice*.ts). */
 	practiceHost(): PracticeViewHost {
 		return {
@@ -3519,6 +3530,7 @@ export class NotebookView extends FileView {
 			// 0.17 (#77): extract pages / split from the map. The dialog and the run work on the file (an open view is used through its edit context).
 			extract: (ids) => void this.extractFromMap(ids),
 			split: (pageId) => void this.splitAtPage(pageId),
+			copyTo: (ids) => void this.copyToNotebook(ids),
 		}).open();
 	}
 

@@ -237,6 +237,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	}),
 	"page-infinite": onPage((v, p, i) => v.applyCommand(new SetPageInfinite(p.id, !p.infinite), i)),
 	"move-pages": onPage((v, _p, i) => void v.movePagesToNotebook(i)),
+	"copy-with-link": onPage((v, p) => void v.copyPageToNotebook(p.id)),
 	"notebook-save-template": (v) => {
 		const doc = v.document;
 		if (doc) saveNotebookAsTemplate(v.app, v.pageToolsHost().settings, doc, v.file?.basename ?? "");

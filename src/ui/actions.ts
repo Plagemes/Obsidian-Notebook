@@ -295,6 +295,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "page-orientation", label: "ui.orientation", icon: "rotate-cw", group: "page", surfaces: ["page"], priority: 35, scope: "view", enabled: pageOpen, keywords: "landscape portrait" },
 	{ id: "page-infinite", label: "page.infinite", icon: "infinity", group: "page", surfaces: ["page"], priority: 35, scope: "view", enabled: pageOpen, checked: (c) => !!c.page?.infinite },
 	{ id: "move-pages", label: "page.moveToNotebook", icon: "folder-input", group: "page", surfaces: ["page"], priority: 30, scope: "view", enabled: pageOpen, command: "command.movePages" },
+	// 0.18 (#186): copy pages to another notebook with a link chip back to the original.
+	{ id: "copy-with-link", label: "page.copyToNotebook", icon: "copy-plus", group: "page", surfaces: ["page"], priority: 29, scope: "view", enabled: pageOpen, command: "command.copyToNotebook", keywords: "copy duplicate notebook link copia quaderno" },
 	// 0.16 (#124): lock a finished page: it refuses every edit until it is unlocked. Two entries so the sheet says what a tap does;
 	// the palette has one toggle for the page in view.
 	{ id: "page-lock", label: "page.lock", icon: "lock", group: "page", surfaces: ["page", "sheet"], priority: 48, scope: "view", when: (c) => !c.page?.locked, keywords: "lock finish protect freeze read only blocca proteggi" },

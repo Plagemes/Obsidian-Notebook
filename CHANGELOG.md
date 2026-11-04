@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### linkback
+- **Copy to notebook with a link back (#186).** *Copy to notebook…* (page menu, command palette, and the notebook map's *Select pages* bar) copies the ticked pages into another notebook, at the start, after a page or at the end, through the same careful transfer as merge and extract (new page ids, pictures, PDFs, slide links, bookmarks and states travel; an open destination takes the pages as one undo step). Every copy gets a small grey link in its top margin, *Copied from <notebook> p.N*, that opens the original page; with *Also add “Copied to …”* ticked (its starting state is the new setting *Link on the original when copying a page*) the unlocked originals get *Copied to <notebook> p.N* in one undoable edit. Locked originals are left alone and counted in the notice. The chips are ordinary text boxes holding one page link, so there is no format change. Pure planning in `src/library/copy-with-link-logic.ts`, the run in `src/library/copy-with-link.ts`, the dialog in `src/library/copy-with-link-dialog.ts`; `copyPagesInto` is the one new export of `src/library/page-transfer.ts`. Tests: `tests/copy-with-link.test.ts`. Harness: `dev/harness/linkback-check.ts` (`doc=linkback`).
+
 ## 0.17.0 — 2026-11-04
 
 Write on and around the page more freely, and keep a large library in order: sticky notes you can type or write on, magnetic snap with alignment guides, merge, split and extract notebooks, a minimap for big pages, a hover preview of page links, an optional PDF copy next to each notebook, saved collections in the library, and a task made from a selection. The notebook format moves to version 15 (an older plugin opens a v15 file read-only).

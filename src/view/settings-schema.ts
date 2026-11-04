@@ -383,6 +383,8 @@ const INTEGRATION: SettingSpec[] = [
 	// 0.17 tasks (#57): "Make task" from a selection.
 	{ id: "tasksNote", section: "integration", order: 33, name: "settings.tasksNote", desc: "settings.tasksNote.desc", control: { type: "text", placeholder: "Tasks.md" }, keywords: "task todo checkbox attivita" },
 	{ id: "taskDueEmoji", section: "integration", order: 34, name: "settings.taskDueEmoji", desc: "settings.taskDueEmoji.desc", control: { type: "toggle" }, keywords: "task due date tasks plugin scadenza" },
+	// 0.18 (#186): "Copy to notebook…" can leave a chip on the original page too.
+	{ id: "copyLinkReverse", section: "integration", order: 35, name: "settings.copyLinkReverse", desc: "settings.copyLinkReverse.desc", control: { type: "toggle" }, keywords: "copy page notebook link back chip copia pagina collegamento" },
 ];
 
 const timetableOn: Predicate = (s) => s.timetableOffer;
