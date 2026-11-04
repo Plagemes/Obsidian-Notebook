@@ -116,7 +116,7 @@ class StorageDialog extends Modal {
 	}
 
 	private get env(): StorageEnv {
-		return { app: this.host.app, settings: () => this.host.settings(), trashNotebook: (f) => this.host.trashNotebook(f) };
+		return { app: this.host.app, settings: () => this.host.settings(), trashNotebook: (f) => this.host.trashNotebook(f), journal: { reader: journalReader(this.host.app), folder: this.host.journalFolder } };
 	}
 
 	onOpen(): void {
@@ -482,6 +482,7 @@ class StorageDialog extends Modal {
 			showNotice(t("storage.dup.done", { moved: String(out.moved.length), notebooks: String(out.repoint.updated.length) }));
 			const left = out.repoint.skipped.length + out.skipped.length;
 			if (left > 0) showNotice(t("storage.left", { n: String(left) }));
+			if (out.repoint.unsaved.length > 0) showNotice(t("storage.unsaved", { n: String(out.repoint.unsaved.length) }));
 			const failed = out.failed.length + out.repoint.failed.length;
 			if (failed > 0) showErrorNotice(t("storage.errors", { n: String(failed), error: (out.failed[0] ?? out.repoint.failed[0])!.error }));
 		});
@@ -505,6 +506,7 @@ class StorageDialog extends Modal {
 			showNotice(t("storage.heavy.done", { from: formatBytes(out.from), to: formatBytes(out.to), n: String(out.repoint.updated.length) }), 8000);
 			const left = out.repoint.skipped.length;
 			if (left > 0) showNotice(t("storage.left", { n: String(left) }));
+			if (out.repoint.unsaved.length > 0) showNotice(t("storage.unsaved", { n: String(out.repoint.unsaved.length) }));
 			if (out.repoint.failed.length > 0) showErrorNotice(t("storage.errors", { n: String(out.repoint.failed.length), error: out.repoint.failed[0]!.error }));
 		});
 	}

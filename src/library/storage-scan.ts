@@ -231,7 +231,7 @@ export async function scanStorage(source: StorageSource, config: CheckConfig, op
 		const fresh = scan && scan.mtime === f.mtime && scan.size === f.size ? scan.scan : null;
 		const noted = cache.docIds.get(f.path);
 		const docId = noted && noted.mtime === f.mtime && noted.size === f.size ? noted.docId : null;
-		refs.push(notebookRef(f.path, docId, copies.has(f.path)));
+		refs.push(notebookRef(f.path, docId, copies.has(f.path), fresh !== null && fresh.status === "ok"));
 		statusOf.set(f.path, fresh ? fresh.status : "unknown");
 		if (fresh) for (const tok of fresh.tokens) namedBy.set(tok, [...(namedBy.get(tok) ?? []), f.path]);
 		rows.set(f.path, {
@@ -256,6 +256,25 @@ export async function scanStorage(source: StorageSource, config: CheckConfig, op
 
 	// ---------------------------------------------------------- backups, version history
 	const plan = planBackups(all, config.backup, refs, config.now, { days: options.days ?? OLD_BACKUP_DAYS, keepSnapshots: options.keepSnapshots });
+	// A backup is named by its notebook's file name, but a new notebook can reuse the name of a deleted one: where the backup's own
+	// document id can be read and is another notebook's, it is not offered. (Only what would be offered is read.)
+	const owned: OldBackup[] = [];
+	for (const b of plan.old) {
+		if (stop()) return emptyReport(check, true);
+		if (b.kind === "backup") {
+			const ownerId = rows.get(b.notebook)?.docId ?? null;
+			let ownId: string | null = null;
+			try {
+				ownId = quickDocId(await source.read(b.path));
+			} catch {
+				ownId = null;
+			}
+			await breathe();
+			if (ownerId !== null && ownId !== null && ownId !== ownerId) continue;
+		}
+		owned.push(b);
+	}
+	plan.old = owned;
 	for (const [path, bytes] of plan.bytesByNotebook) {
 		const row = rows.get(path);
 		if (row) {

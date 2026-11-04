@@ -4,10 +4,14 @@
  * What it recognises, and what it will and will not offer to move to the trash:
  *
  * - `<backup folder>/<name> <YYYYMMDD-HHmmss> <reason> [n ]<hash>.bak` (VaultDocumentIO.backup). Offered when older than the
- *   threshold, EXCEPT the newest backup of each notebook (a notebook is never left without its latest copy) and any backup
- *   of a notebook that is not in the vault any more (that may be the only copy there is). Backups made to keep something
- *   that could not be saved or read (`unreadable`, `future-version`, `unsaved`, `journal`, `conflict`, `integrity`) are
- *   offered too, but marked `recovery` so the dialog does not tick them.
+ *   threshold, EXCEPT the newest ordinary backup of each notebook (a notebook is never left without its latest good copy: a
+ *   newer recovery copy does not stand in for it), any backup of a notebook that is not in the vault any more or that cannot
+ *   be read now (`readable: false`: the backups may be the only copy there is), and any backup whose own document id is not
+ *   the notebook's (a new notebook reusing a deleted one's name does not inherit its backups: the caller checks the id from
+ *   the file, `ownedBy`). Backups made to keep something that could not be saved or read (`unreadable`, `future-version`,
+ *   `unsaved`, `journal`, `conflict`, `integrity`) are offered too, but marked `recovery` so the dialog does not tick them.
+ *   What is offered goes through Obsidian's `trashFile`, so the user's "Deleted files" setting decides whether it is
+ *   recoverable (it may be a permanent delete): the confirmation says so.
  * - `<backup folder>/history/<document id>/<YYYYMMDD-HHmm>.snapshot` (version history). Offered when older than the threshold
  *   and beyond the newest `keep` snapshots of that notebook; those of a document no notebook has are kept.
  * - A conflicted copy of a notebook (`Notes (1).notebook`, `Notes-DESKTOP-AB12.notebook`…, see storage/conflicts.ts) is
@@ -80,6 +84,8 @@ export interface NotebookRef {
 	docId: string | null;
 	/** Named like a conflicted copy of another notebook: it shares that notebook's document id, and does not own its backups. */
 	copy?: boolean;
+	/** False when the notebook cannot be read now (unreadable, not downloaded, a newer version): its backups are never offered. */
+	readable?: boolean;
 }
 
 const baseName = (path: string): string => {
@@ -88,8 +94,11 @@ const baseName = (path: string): string => {
 	return dot > 0 ? name.slice(0, dot) : name;
 };
 
-export function notebookRef(path: string, docId: string | null, copy = false): NotebookRef {
-	return copy ? { path, base: baseName(path), docId, copy } : { path, base: baseName(path), docId };
+export function notebookRef(path: string, docId: string | null, copy = false, readable = true): NotebookRef {
+	const ref: NotebookRef = { path, base: baseName(path), docId };
+	if (copy) ref.copy = true;
+	if (!readable) ref.readable = false;
+	return ref;
 }
 
 export interface BackupPlan {
@@ -165,14 +174,20 @@ export function planBackups(
 		}
 	}
 
+	const unreadable = new Set(notebooks.filter((n) => n.readable === false).map((n) => n.path));
 	for (const [notebook, list] of baks) {
-		const newest = list.reduce((a, b) => (b.name.at > a.name.at ? b : a));
+		if (unreadable.has(notebook)) continue;
+		// The newest ordinary backup stays; a newer recovery copy (unreadable, unsaved…) does not replace it. When every copy is a
+		// recovery copy, the newest of them stays.
+		const ordinary = list.filter((b) => !RECOVERY_REASONS.includes(b.name.reason));
+		const newest = (ordinary.length > 0 ? ordinary : list).reduce((a, b) => (b.name.at > a.name.at ? b : a));
 		for (const { file, name } of list) {
 			if (file === newest.file || name.at >= cutoff) continue;
 			plan.old.push({ kind: "backup", path: file.path, size: file.size, at: name.at, notebook, reason: name.reason, recovery: RECOVERY_REASONS.includes(name.reason) });
 		}
 	}
 	for (const [notebook, list] of snaps) {
+		if (unreadable.has(notebook)) continue;
 		const ordered = [...list].sort((a, b) => b.at - a.at || (a.file.path < b.file.path ? 1 : -1));
 		for (const { file, at } of ordered.slice(keep)) {
 			if (at >= cutoff) continue;
