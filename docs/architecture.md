@@ -288,6 +288,9 @@ src/
     host.ts               Vault adapter: reads notebooks, keeps the index, create/rename/move/duplicate/delete, thumbnails, PDF import and scan entry points
     library-view.ts       the library screen (sidebar, cards, menus, search, drag and drop)
     library-state.ts      wave 0.10 (54): pinned, archived and manual order per notebook: file format, per-device files, merge (last writer wins per field), changes, order and move planning (pure)
+    collections.ts        0.17 (120): saved collections: rules (tags any / all, folder, period, favourite, PDF) and their evaluation, the `_meta/collections-<device>.json` format (one file per device, latest change wins per collection, tombstones, unknown fields kept) (pure)
+    collections-store.ts  its files: save / remove / load, never overwrites an unreadable or empty own file
+    collections-ui.ts     the editor dialog (live count) and the words that describe the rules
     library-state-store.ts the state files over a `DeviceFileAdapter`: `_meta/library-<device>.json`, writes only its own file, never overwrites an unreadable or empty one
     library-check.ts      wave 0.10 (27): finds unreadable notebooks and unused asset files, reports the space, plans the move to the trash (pure, over a `CheckSource`)
     library-check-modal.ts the vault as a `CheckSource`, the report dialog and the confirmation that lists the files

@@ -276,7 +276,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 117. ~~**P2** Review coverage map: thumbnails coloured from "never reviewed" to "reviewed often".~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
 118. **P2** Planner generator: a planner notebook with dated month, week and day pages linked to each other.
 119. **P1** 🧪 Page tags: tags on single pages, filterable in the navigator and in search.
-120. **P2** Smart collections in the library: saved rules (tag + folder + period + favourite).
+120. **P2** 🧪 Smart collections in the library: saved rules (tag + folder + period + favourite). Notebook type / template is not a rule yet.
 
 ### E. Versions, review, collaboration
 121. **P2** Visual version diff: additions in green, removals in red, between the current version and a snapshot.

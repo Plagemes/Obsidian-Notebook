@@ -557,6 +557,17 @@ async function main() {
 							await cdp.evaluate("window.harness.viewsState('reset')");
 						}
 					}
+					// 0.17 collections: saved collections in the rail, and review shots of the list and of the editor.
+					if (s.surface === "library" && !s.variant) {
+						const co = await cdp.evaluate("window.harness.checkCollections()", 90000);
+						problems.push(...co.results.filter((x) => !x.ok).map((x) => `${x.name}: ${x.detail}`));
+						problems.push(...co.errors.map((e) => `console error: ${e.split("\n")[0]}`));
+						for (const state of ["list", "editor"]) {
+							await cdp.evaluate(`window.harness.collectionsState('${state}')`);
+							await shotAs(`collections-${state}`);
+							await cdp.evaluate("window.harness.collectionsState('reset')");
+						}
+					}
 					const r = await cdp.evaluate("window.harness.interactLibrary()", 60000);
 					problems.push(...r.results.filter((x) => !x.ok).map((x) => `${x.name}: ${x.detail}`));
 				} catch (e) {
