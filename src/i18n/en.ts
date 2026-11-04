@@ -3037,6 +3037,18 @@ export const en = {
 	"sticky.size.value": "{n} pt",
 	"sticky.done": "Done",
 	"sticky.cancel": "Cancel",
+	// 0.17 snap
+	"settings.snapMode": "Snap and guides",
+	"settings.snapMode.desc": "Moves snap to the paper grid and alignment guides. A finger held down moves freely.",
+	"settings.snapMode.off": "Off",
+	"settings.snapMode.grid": "Paper grid",
+	"settings.snapMode.guides": "Guides",
+	"settings.snapMode.both": "Grid and guides",
+	"settings.snapStrength": "Snap strength",
+	"settings.snapStrength.desc": "How close to a line, in pixels, the selection has to come before it is pulled onto it.",
+	"snap.toggle": "Snap",
+	"snap.on": "Snap is on",
+	"snap.paused": "Snap is paused for this notebook",
 } as const;
 
 export type MessageKey = keyof typeof en;

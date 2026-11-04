@@ -69,6 +69,7 @@ export interface UiContext {
 		ruler: boolean; penOnly: boolean; navigator: boolean; /** One page at a time (wave 0.7). */ pageMode?: boolean; /** Pen gesture mode (wave 0.8). */ penGestures?: boolean;
 		/** wave 0.10 (63): the lasso tool selects with a rectangle instead of a freehand outline. */ selectRectangle?: boolean;
 		/** wave 0.10 (51): the user switched this view to read-only mode. */ readOnly?: boolean;
+		/** 0.17 (#71): snap is available (the setting is not "off") and whether it is on now (not paused in this view). Optional (absent: available, on). */ snapAvailable?: boolean; snap?: boolean;
 	};
 	/** wave 0.10 (81): the device can print (desktop with a print dialog); false or absent on a phone or tablet. */
 	canPrint?: boolean;
@@ -234,6 +235,7 @@ export const ACTIONS: readonly ActionDef[] = [
 		id: `selection-distribute-${axis === "horizontal" ? "h" : "v"}`, label: `arrange.distribute.${axis}`, icon, group: "selection", surfaces: ["sheet"], priority: 39, scope: "view",
 		command: `command.distribute.${axis}`, when: (c) => itemCount(c) >= 3, keywords: "distribute spread space evenly arrange",
 	})),
+	{ id: "snap-toggle", label: "snap.toggle", icon: "magnet", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 30, scope: "view", when: (c) => hasSelection(c) && c.toggles.snapAvailable !== false, checked: (c) => c.toggles.snap !== false, keywords: "snap magnet grid guides align pause free move aggancio guide griglia" },
 	{ id: "selection-transform-menu", label: "transform.menu", icon: "rotate-3d", group: "selection", surfaces: ["context"], contexts: ["selection"], second: true, priority: 58, scope: "view", when: hasSelection },
 	{ id: "selection-rotate-cw", label: "transform.rotateCw", icon: "rotate-cw", group: "selection", surfaces: ["sheet"], priority: 38, scope: "view", command: "command.rotateCw", when: hasSelection, keywords: "turn quarter 90 clockwise" },
 	{ id: "selection-rotate-ccw", label: "transform.rotateCcw", icon: "rotate-ccw", group: "selection", surfaces: ["sheet"], priority: 37, scope: "view", command: "command.rotateCcw", when: hasSelection, keywords: "turn quarter 90 anticlockwise counterclockwise" },

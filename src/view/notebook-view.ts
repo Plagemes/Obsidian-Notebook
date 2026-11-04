@@ -25,6 +25,9 @@ import { InputPolicy } from "../ink/input-policy";
 import { rectanglePolygon, strokesInLasso } from "../ink/lasso";
 import { lineBreakTarget } from "../ink/line-break";
 import { applyPlacement, uniformPlacement } from "../ink/selection-transform";
+import type { SnapGuide } from "../model/snap";
+import { buildSnapSession, snapDragged, type SnapSession } from "./snap-glue";
+import { SnapHold } from "./snap-hold";
 import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layout, type PageBox } from "../ink/layout";
 import { HoldTracker } from "../ink/hold";
 import { LastTool } from "../ink/last-tool";
@@ -318,12 +321,16 @@ interface Selection {
 	 * single-page selection). `pageIndex` is then the primary page: `bounds` and `matrix` are in its frame.
 	 */
 	others?: PagePart[];
+	/** 0.17 (#71): the snap guides shown while the selection is dragged (passed on to the renderer). */
+	guides?: SnapGuide[];
 }
 
 interface SelectionDrag {
 	kind: "move" | "scale" | "rotate";
 	start: [number, number];
 	startMatrix: Matrix;
+	/** 0.17 (#71): the lines this drag snaps to (absent: snap is off, the page has none, or the drag is a rotation) and the pointer that drags. */
+	snap?: { session: SnapSession; pointerType: string };
 }
 
 export class NotebookView extends FileView {
@@ -470,6 +477,10 @@ export class NotebookView extends FileView {
 	private spaceDrag: SpaceDrag | null = null;
 	private selection: Selection | null = null;
 	private drag: SelectionDrag | null = null;
+	/** 0.17 (#71): a finger held on the screen, or Alt, lets a drag move freely. */
+	private readonly snapHold = new SnapHold();
+	/** 0.17 (#71): the Snap button of the selection bar paused the snap in this view. */
+	private snapPaused = false;
 	private shapeDrag: ShapeDrag | null = null;
 	private textTap: TextTap | null = null;
 	private lassoTap: LassoTap | null = null;
@@ -817,6 +828,12 @@ export class NotebookView extends FileView {
 			if ((e.target as HTMLElement | null)?.closest?.(".notebook-text-editor, .notebook-math-panel") || this.math?.ownsPointer(e)) return;
 			this.commitText();
 		}, true);
+
+		// 0.17 (#71): a finger held on the screen (or Alt) is the temporary way out of the snap. Capture phase: nothing hides it.
+		for (const type of ["pointerdown", "pointerup", "pointercancel"] as const) this.registerDomEvent(this.stage, type, (e) => this.snapHold.pointer(e), true);
+		this.registerDomEvent(document, "keydown", (e) => this.snapHold.key(e));
+		this.registerDomEvent(document, "keyup", (e) => this.snapHold.key(e));
+		this.registerDomEvent(window, "blur", () => this.snapHold.reset());
 
 		// Android may kill a backgrounded app without notice: save as soon as we are hidden.
 		this.registerDomEvent(document, "visibilitychange", () => {
@@ -2712,7 +2729,8 @@ export class NotebookView extends FileView {
 			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false, snap: this.reading?.snapping ?? false, selectText: this.pdfText?.active ?? false },
 			display: { night: this.display?.night ?? false, crop: this.display?.crop ?? false },
 			states: { open: !!this.statesTools?.open },
-			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle", readOnly: this.userReadOnly },
+			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle", readOnly: this.userReadOnly,
+				snapAvailable: this.host.settings.snapMode !== "off", snap: !this.snapPaused },
 			canPrint: canPrint(),
 			markers: {
 				invisibleInk: !!this.markers?.invisibleInk, solutions: !!this.markers?.solutionsShown,
@@ -3807,6 +3825,7 @@ export class NotebookView extends FileView {
 					return false;
 				}
 				this.drag = { kind: hit, start: grab, startMatrix: sel.matrix };
+				this.beginSnap(this.drag, sel, sample.pointerType);
 				return true;
 			}
 			this.clearSelection();
@@ -4135,6 +4154,7 @@ export class NotebookView extends FileView {
 
 		if (this.drag) {
 			this.drag = null;
+			this.endSnap();
 			if (this.selectByTaps(cancelled)) return;
 			this.commitSelectionTransform();
 			return;
@@ -4760,7 +4780,54 @@ export class NotebookView extends FileView {
 			const angle = Math.atan2(p[1] - cy, p[0] - cx) - Math.atan2(drag.start[1] - cy, drag.start[0] - cx);
 			sel.matrix = multiply(rotateAbout(angle, cx, cy), m0);
 		}
+		this.snapDrag(sel, drag, b);
 		this.pushSelection();
+	}
+
+	// --- snap (0.17, #71) ---
+
+	/** Builds the lines a drag snaps to when it starts: the grid of the paper and the edges and centres of the other items. */
+	private beginSnap(drag: SelectionDrag, sel: Selection, pointerType: string): void {
+		const mode = this.host.settings.snapMode;
+		const page = this.pageAtIndex(sel.pageIndex);
+		// A rotation, a selection across pages and a switched-off snap have nothing to snap to.
+		if (mode === "off" || drag.kind === "rotate" || sel.others?.length || !page) return;
+		const strokes = new Set<Stroke>(sel.strokes);
+		for (const s of this.attachedInk(sel)) strokes.add(s);
+		const session = buildSnapSession(page, mode, strokes, new Set(sel.elements), measureText);
+		if (session) drag.snap = { session, pointerType };
+	}
+
+	/** Pulls the dragged matrix onto the grid and the alignment lines, and sets the guides to draw. */
+	private snapDrag(sel: Selection, drag: SelectionDrag, bounds: BBox): void {
+		const snap = drag.snap;
+		if (!snap || drag.kind === "rotate") return;
+		if (this.snapPaused || this.snapHold.held(snap.pointerType)) {
+			sel.guides = undefined;
+			return;
+		}
+		const strength = this.host.settings.snapStrength;
+		const r = snapDragged({
+			kind: drag.kind, bounds, startMatrix: drag.startMatrix, matrix: sel.matrix, session: snap.session, mode: this.host.settings.snapMode,
+			thr: strength / this.viewport.scale,
+		});
+		sel.matrix = r.matrix;
+		sel.guides = r.guides.length > 0 ? r.guides : undefined;
+	}
+
+	/** The drag is over: the guides go (before the move is committed). */
+	private endSnap(): void {
+		const sel = this.selection;
+		if (!sel?.guides) return;
+		sel.guides = undefined;
+		this.pushSelection();
+	}
+
+	/** The Snap button of the selection bar: snap on or paused for this view (the setting stays as it is). */
+	toggleSnap(): void {
+		this.snapPaused = !this.snapPaused;
+		showNotice(t(this.snapPaused ? "snap.paused" : "snap.on"), 1800);
+		this.refreshUi();
 	}
 
 	/** Applies the dragged transform to the document as one undoable step; the selection stays on the new strokes and elements. */

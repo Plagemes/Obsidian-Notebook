@@ -186,7 +186,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 68. **P2** 🧪 Style eyedropper: take colour, width and tool from an existing stroke.
 69. **P2** Smart connectors between shapes (diagrams).
 70. **P3** Mind maps: linked text nodes that move together.
-71. **P2** Magnetic snap to the grid and alignment guides.
+71. **P2** 🧪 Magnetic snap to the grid and alignment guides.
 72. **P3** Measuring tool: real distances in cm on the page.
 
 ### Pages and documents

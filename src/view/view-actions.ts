@@ -145,6 +145,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"delete-selection": (v) => v.removeSelection(),
 	// wave 0.10: rectangle selection (63), select by colour or tool (64), align and distribute (38), rotate, mirror, size (65)
 	"select-rectangle": (v) => v.toggleSelectRectangle(),
+	"snap-toggle": (v) => v.toggleSnap(),
 	"select-by-style": (v) => v.arrangeTools?.pickStyle(),
 	"selection-similar": (v) => v.arrangeTools?.menu("similar"),
 	// 0.15 (241): drawings with states

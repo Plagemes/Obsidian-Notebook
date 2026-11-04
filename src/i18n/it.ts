@@ -3039,4 +3039,16 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"sticky.size.value": "{n} pt",
 	"sticky.done": "Fatto",
 	"sticky.cancel": "Annulla",
+	// 0.17 snap
+	"settings.snapMode": "Aggancio e guide",
+	"settings.snapMode.desc": "Attira la selezione su griglia e guide. Tieni un dito premuto per muoverti liberamente.",
+	"settings.snapMode.off": "Spento",
+	"settings.snapMode.grid": "Griglia del foglio",
+	"settings.snapMode.guides": "Guide",
+	"settings.snapMode.both": "Griglia e guide",
+	"settings.snapStrength": "Forza dell'aggancio",
+	"settings.snapStrength.desc": "Quanto vicino a una linea, in pixel, deve arrivare la selezione prima di esservi attirata.",
+	"snap.toggle": "Aggancio",
+	"snap.on": "Aggancio attivo",
+	"snap.paused": "Aggancio in pausa per questo quaderno",
 };
