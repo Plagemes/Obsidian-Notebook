@@ -35,7 +35,7 @@ export function sizeName(page: Page): PageSizeName | null {
 }
 
 /** The commands that work on a selection (layer order; wave 0.10: align, distribute, rotate, mirror, size, select similar). */
-const SELECTION_ONLY = /^(layer-|selection-(align|distribute|rotate|mirror|resize|transform|similar)|select-same-)/;
+const SELECTION_ONLY = /^(layer-|selection-(align|distribute|rotate|mirror|resize|transform|similar|part)|select-same-)/;
 
 /** Whether a command of the registry applies to this view now (the palette hides it otherwise). */
 export function commandApplies(view: NotebookView, id: string): boolean {
@@ -80,8 +80,10 @@ function exportPage(view: NotebookView, page: Page, index: number, kind: "pdf" |
 	const file = view.file;
 	if (!file) return;
 	// v8: hidden ink only where the solutions are shown; boxes labelled in the reader's language.
-	if (kind === "pdf") void exportPdf(view.app, file, [page], ` p${index + 1}`, view.mediaCache, view.exportOptions());
-	else void exportSvg(view.app, file, page, ` p${index + 1}`, view.mediaCache, view.exportOptions());
+	// 0.15 (241): a page with states is exported in the state it shows.
+	const shown = view.stateTools?.viewPages([page])[0] ?? page;
+	if (kind === "pdf") void exportPdf(view.app, file, [shown], ` p${index + 1}`, view.mediaCache, view.exportOptions());
+	else void exportSvg(view.app, file, shown, ` p${index + 1}`, view.mediaCache, view.exportOptions());
 }
 
 const side = (id: PdfSideAction): Runner => (view) => void runPdfSideAction(view, id);
@@ -141,6 +143,9 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"select-rectangle": (v) => v.toggleSelectRectangle(),
 	"select-by-style": (v) => v.arrangeTools?.pickStyle(),
 	"selection-similar": (v) => v.arrangeTools?.menu("similar"),
+	// 0.15 (241): drawings with states
+	"selection-part": (v) => v.stateTools?.makePartFromSelection(),
+	"states-toggle": (v) => v.stateTools?.toggle(),
 	"select-same-colour": (v) => v.arrangeTools?.similar("colour"),
 	"select-same-tool": (v) => v.arrangeTools?.similar("tool"),
 	"selection-align-menu": (v) => v.arrangeTools?.menu("align"),

@@ -328,7 +328,9 @@ describe("states at draw time", () => {
 		const page = doc.pages[0]!;
 		expect(showsState(page)).toBe(false); // "Start" has no poses
 		expect(stateView(page)).toBe(page);
-		expect(viewPages(doc.pages)).toBe(doc.pages);
+		expect(viewPages([createPage()])).toHaveLength(1);
+		const plain = [createPage()];
+		expect(viewPages(plain)).toBe(plain); // no page has states: nothing is wrapped
 		page.states = withActive(page.states!, null);
 		expect(stateView(page, start)).toBe(page);
 	});
@@ -360,6 +362,34 @@ describe("states at draw time", () => {
 		// The document itself is untouched.
 		expect(page.strokes[0]!.points[0]).toEqual([100, 100, 0.5]);
 		expect(viewPages(doc.pages)[0]!.strokes[0]).toBe(view.strokes[0]);
+	});
+
+	it("the live view follows the page: ink added or erased, a state switched, a shown-state override", () => {
+		const { doc, end, start } = physicsDoc();
+		const page = doc.pages[0]!;
+		const [live] = viewPages(doc.pages);
+		expect(live!.strokes).toBe(page.strokes); // Start moves nothing: the page's own strokes
+		expect(live!.width).toBe(page.width);
+		page.states = withActive(page.states!, end);
+		expect(live!.strokes).not.toBe(page.strokes);
+		expect(live!.strokes).toHaveLength(4);
+		const fresh = stroke("fresh", 5, 5);
+		page.strokes.push(fresh);
+		expect(live!.strokes).toHaveLength(5);
+		expect(live!.strokes[4]).toBe(fresh);
+		page.strokes.splice(0, 1); // an erased member leaves the view too
+		expect(live!.strokes.map((s) => s.id)).toEqual(["b2", "sp", "lab", "fresh"]);
+		page.height = 2000;
+		expect(live!.height).toBe(2000);
+		page.states = withActive(page.states, start);
+		expect(live!.strokes).toBe(page.strokes);
+		// A view that cannot save picks the state itself, whatever the saved one says.
+		const shown = new Map<string, string | null>([[page.id, end]]);
+		const [read] = viewPages(doc.pages, shown);
+		expect(read!.strokes).not.toBe(page.strokes);
+		expect(showsState(page, shown)).toBe(true);
+		shown.set(page.id, null);
+		expect(read!.strokes).toBe(page.strokes);
 	});
 
 	it("keeps the same copy for an unchanged part (the renderer caches by object)", () => {

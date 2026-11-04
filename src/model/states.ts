@@ -190,26 +190,84 @@ export function stateView(page: Page, stateId: string | null = activeState(page)
 	return { ...page, strokes };
 }
 
+/** What a view shows instead of a page's saved state: page id to state id (null: as drawn). Read-only views switch states without saving. */
+export type ShownStates = ReadonlyMap<string, string | null>;
+
+/** The state a page is shown in: the view's choice for it, else the saved `active` (null: as drawn). */
+export function shownStateId(page: Page, shown?: ShownStates): string | null {
+	if (shown?.has(page.id)) return shown.get(page.id) ?? null;
+	return page.states?.active ?? null;
+}
+
 /** Whether the page shows a state that moves, hides or recolours something. */
-export function showsState(page: Page): boolean {
+export function showsState(page: Page, shown?: ShownStates): boolean {
 	const states = page.states;
-	const state = activeState(page);
+	const state = stateById(states, shownStateId(page, shown));
 	return !!states && !!state && posedStrokes(states, state).size > 0;
 }
 
-/** The pages as their states show them: `pages` itself when no page shows a state (the common case costs nothing). */
-export function viewPages(pages: readonly Page[]): readonly Page[] {
-	if (!pages.some(showsState)) return pages;
-	return pages.map((p) => (showsState(p) ? stateView(p) : p));
+interface LiveCache {
+	id: string;
+	states: PageStates;
+	source: readonly Stroke[];
+	/** Null: the state moves nothing, the page's own strokes are shown. */
+	strokes: Stroke[] | null;
+}
+
+const liveViews = new WeakMap<Page, { shown: ShownStates | undefined; view: Page }>();
+
+function sameStrokes(a: readonly Stroke[], b: readonly Stroke[]): boolean {
+	if (a.length !== b.length) return false;
+	for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+	return true;
+}
+
+/**
+ * A page that shows `page` in the state the view has chosen for it, and follows `page` as it changes: everything but
+ * `strokes` (size, background, margins, elements, ...) is the page's own, and `strokes` is the page's strokes when it
+ * shows the drawing as drawn, else the transformed copies (recomputed only when the state, the table or the page's ink
+ * changed, so ink added or erased meanwhile is always right). The renderer and the exports get these instead of the page.
+ */
+export function liveStateView(page: Page, shown?: ShownStates): Page {
+	const hit = liveViews.get(page);
+	if (hit && hit.shown === shown) return hit.view;
+	let cache: LiveCache | null = null;
+	const view = Object.create(page, {
+		strokes: {
+			enumerable: true,
+			get(): Stroke[] {
+				const id = shownStateId(page, shown);
+				const states = page.states;
+				if (id === null || !states) return page.strokes;
+				const source = page.strokes;
+				if (!cache || cache.id !== id || cache.states !== states || !sameStrokes(cache.source, source)) {
+					const shownPage = stateView(page, id);
+					cache = { id, states, source: [...source], strokes: shownPage === page ? null : shownPage.strokes };
+				}
+				return cache.strokes ?? source;
+			},
+		},
+	}) as Page;
+	liveViews.set(page, { shown, view });
+	return view;
+}
+
+/**
+ * The pages as their states show them: `pages` itself when no page has states (the common case costs nothing); a page
+ * with states is replaced by its live view (`liveStateView`).
+ */
+export function viewPages(pages: readonly Page[], shown?: ShownStates): readonly Page[] {
+	if (!pages.some((p) => p.states)) return pages;
+	return pages.map((p) => (p.states ? liveStateView(p, shown) : p));
 }
 
 /**
  * The strokes of `page` that a shown state has moved away from where they were drawn: ink tools skip them (a hit at the
  * drawn spot would hit nothing the reader sees). Null when the page shows no such state.
  */
-export function displacedStrokeIds(page: Page): ReadonlySet<string> | null {
+export function displacedStrokeIds(page: Page, shown?: ShownStates): ReadonlySet<string> | null {
 	const states = page.states;
-	const state = activeState(page);
+	const state = stateById(states, shownStateId(page, shown));
 	if (!states || !state) return null;
 	const posed = posedStrokes(states, state);
 	return posed.size > 0 ? new Set(posed.keys()) : null;
@@ -336,10 +394,10 @@ export function withPose(states: PageStates, stateId: string, partId: string, po
 }
 
 /** The id that comes `step` places after the shown state in the order "as drawn", then the states (wrapping); null is "as drawn". */
-export function steppedState(states: PageStates | undefined, step: 1 | -1): string | null {
+export function steppedState(states: PageStates | undefined, step: 1 | -1, current: string | null = states?.active ?? null): string | null {
 	if (!states || states.list.length === 0) return null;
 	const order: Array<string | null> = [null, ...states.list.map((s) => s.id)];
-	const at = Math.max(0, order.indexOf(states.active ?? null));
+	const at = Math.max(0, order.indexOf(current));
 	return order[(at + step + order.length) % order.length] ?? null;
 }
 
