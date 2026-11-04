@@ -321,6 +321,35 @@ describe("the PDF copy service", () => {
 		expect(world.bin.get("Notebooks/Maths.pdf")).toBe(theirs);
 	});
 
+	it("H5: a copy that does not read back the same is not remembered as ours: one notice, no new copy at any later build, until turned off and on", async () => {
+		const create0 = world.vault.createBinary;
+		let corrupt = true;
+		world.vault.createBinary = async (p: string, data: ArrayBuffer) => {
+			const bad = corrupt ? data.slice(0) : data;
+			if (corrupt) new Uint8Array(bad)[20] = new Uint8Array(bad)[20]! ^ 0xff; // lands on the disk other than it was written
+			return create0(p, bad);
+		};
+		const before = (await shown()).length;
+		const src = source(world);
+		for (let n = 0; n < 4; n++) {
+			src.doc.pages[0]!.strokes.push(line(5, 5 + n, 50, 50, 6, 2));
+			service.closing(NB, src);
+			await settle();
+		}
+		// One botched file, no "(copy N)", nothing replaced, nothing remembered as ours.
+		expect(world.writes).toEqual(["create Notebooks/Maths.pdf"]);
+		expect([...world.bin.keys()]).toEqual(["Notebooks/Maths.pdf"]);
+		expect((service as unknown as { remembered: Map<string, unknown> }).remembered.size).toBe(0);
+		expect(service.status(NB).kind).toBe("failed");
+		expect((await shown()).length - before).toBe(1);
+		// Turned off and on again: it tries again (the botched file is not ours, so the copy goes to a new name).
+		corrupt = false;
+		await service.setEnabled(NB, false, () => src);
+		await service.setEnabled(NB, true, () => src);
+		await settle();
+		expect(world.writes).toEqual(["create Notebooks/Maths.pdf", "create Notebooks/Maths (copy 2).pdf"]);
+	});
+
 	it("reports a failure in the status line and keeps the notebook untouched", async () => {
 		const bad = { ...source(world), options: { header: () => { throw new Error("boom"); } } };
 		service.closing(NB, bad);

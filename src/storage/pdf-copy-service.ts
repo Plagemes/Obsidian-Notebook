@@ -89,6 +89,8 @@ export class PdfCopyService implements PdfCopyPort {
 	private readonly moving = new Set<string>();
 	/** Copies written this session whose record is not in the store (yet): still ours, per notebook. */
 	private readonly remembered = new Map<string, CopyRecord>();
+	/** Notebooks whose last copy did not read back the same: no more copies this session (each build would make another "(copy N)"). */
+	private readonly halted = new Set<string>();
 	private loaded: Promise<unknown> | null = null;
 	private stopped = false;
 
@@ -154,6 +156,7 @@ export class PdfCopyService implements PdfCopyPort {
 		s.pdfCopyNotebooks = withNotebookChoice(s, path, on);
 		await this.d.saveSettings();
 		this.failures.delete(path);
+		this.halted.delete(path);
 		if (on) void this.run(path, source);
 		else this.timers.cancel(path);
 	}
@@ -179,7 +182,7 @@ export class PdfCopyService implements PdfCopyPort {
 	}
 
 	private async run(path: string, source: PdfCopySourceFn): Promise<void> {
-		if (this.stopped || !this.enabled(path)) return;
+		if (this.stopped || !this.enabled(path) || this.halted.has(path)) return;
 		if (this.running.has(path)) {
 			this.again.set(path, source);
 			return;
@@ -290,10 +293,13 @@ export class PdfCopyService implements PdfCopyPort {
 		const back = vault.getFileByPath(p);
 		const seen = back ? await sha256Hex(await vault.readBinary(back)) : null;
 		if (!back || seen !== hash) {
-			// The plugin just wrote there: what is there now is the plugin's botched copy, replaced next time, not a "foreign" file
-			// that would make every build write another "(copy N)".
-			if (back && seen !== null) this.remembered.set(notebook, { notebook, pdf: path, hash: seen, size: back.stat.size, fingerprint: "", at: Date.now() });
-			throw new Error("the copy was written but did not read back the same");
+			// What is there is not what was written: it is not remembered as ours (a file that cannot be vouched for is not replaced),
+			// and no more copies are made for this notebook until the user turns the copy off and on: one notice, not a new
+			// "(copy N)" at every build. The failure shows in the notebook's status line.
+			this.halted.add(notebook);
+			this.timers.cancel(notebook);
+			this.again.delete(notebook);
+			throw new Error("the copy was written but did not read back the same; no more copies are made for this notebook until the copy is turned off and on");
 		}
 		return true;
 	}
