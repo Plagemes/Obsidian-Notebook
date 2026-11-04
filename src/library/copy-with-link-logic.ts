@@ -7,8 +7,10 @@
 import { linkMarkup, soleLink } from "../ink/link-text";
 import { estimateMeasure, LINE_HEIGHT, textElementBounds, type MeasureText } from "../ink/text-layout";
 import { t } from "../i18n";
+import { en } from "../i18n/en";
+import { LANGUAGES } from "../i18n/languages";
 import type { PageElement, TextElement } from "../model/types";
-import { stablePageSubpath } from "../integration/page-links";
+import { pageFromSubpath, stablePageSubpath } from "../integration/page-links";
 
 /** Chip text size (pt): small, it is a margin note and not content. */
 export const CHIP_FONT_SIZE = 9;
@@ -41,10 +43,34 @@ function chipsOf(elements: readonly PageElement[]): TextElement[] {
 	return elements.filter((e): e is TextElement => e.type === "text" && e.fontSize === CHIP_FONT_SIZE && e.y < CHIP_BAND && soleLink(e.text) !== null);
 }
 
+/** A regular expression for the label of a chip in one language: the message with its `{name}` and `{n}` left open. */
+function labelPattern(message: string): RegExp {
+	const escaped = message.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	return new RegExp(`^${escaped.replace("\\{name\\}", ".+").replace("\\{n\\}", "\\d+")}$`);
+}
+
+let labels: RegExp[] | null = null;
+
+/** The patterns the plugin's own chips read, "Copied from …" / "Copied to …" in every language (a chip keeps the language it was made in). */
+function chipLabels(): RegExp[] {
+	labels ??= Object.values(LANGUAGES).flatMap((l) => (["copylink.from", "copylink.to"] as const).map((key) => labelPattern((l.messages as Partial<Record<string, string>>)[key] ?? en[key])));
+	return labels;
+}
+
+/**
+ * Whether the element is a chip this feature wrote: a small whole-text link at the top whose label is one of the plugin's own
+ * "Copied from / to" sentences and that points at a page of a notebook. A text box that only looks like one is the page's own.
+ */
+export function isOwnChip(e: PageElement): boolean {
+	if (e.type !== "text" || e.fontSize !== CHIP_FONT_SIZE || e.y >= CHIP_BAND) return false;
+	const link = soleLink(e.text);
+	if (!link || pageFromSubpath(link.subpath) === null) return false;
+	return chipLabels().some((re) => re.test(link.display));
+}
+
 /** The elements without the link chips a page already carries (a copy must not keep the original's older chips: they would be misleading). */
 export function withoutChips(elements: readonly PageElement[] | undefined): PageElement[] {
-	const chips = new Set<PageElement>(chipsOf(elements ?? []));
-	return (elements ?? []).filter((e) => !chips.has(e));
+	return (elements ?? []).filter((e) => !isOwnChip(e));
 }
 
 /** Whether the page already has a chip with exactly this text (copying twice must not stack the same chip). */

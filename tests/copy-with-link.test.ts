@@ -5,7 +5,7 @@ import type { PageElement, TextElement } from "../src/model/types";
 vi.mock("obsidian", async () => ({ ...(await import("./fake-vault")).obsidianMock(), getLanguage: () => "en" }));
 
 const {
-	CHIP_BAND, CHIP_FONT_SIZE, CHIP_LEFT, CHIP_TOP, chipLabel, chipText, copyBlocker, hasChip, planChip, planPairs, positionChoices, positionLabel, reversible, withoutChips,
+	CHIP_BAND, CHIP_FONT_SIZE, CHIP_LEFT, CHIP_TOP, chipLabel, chipText, copyBlocker, hasChip, isOwnChip, planChip, planPairs, positionChoices, positionLabel, reversible, withoutChips,
 } = await import("../src/library/copy-with-link-logic");
 
 const fixed = (s: string, size: number) => Array.from(s).length * size * 0.5;
@@ -40,6 +40,20 @@ describe("chips a copied page brought along", () => {
 		const kept = withoutChips([old, body, link]);
 		expect(kept.map((e) => e.id)).toEqual(["b", "l"]);
 		expect(withoutChips(undefined)).toEqual([]);
+	});
+
+	it("drops only the plugin's own chips, in either language, and keeps a small link of the page's own", () => {
+		const base: TextElement = { id: "x", type: "text", x: CHIP_LEFT, y: CHIP_TOP, width: 200, text: "", fontSize: CHIP_FONT_SIZE, color: "#000" };
+		const english = { ...base, id: "en", text: "[[Physics.notebook#p3&id=pg_abc123|Copied from Physics p.3]]" };
+		const italian = { ...base, id: "it", text: "[[Fisica.notebook#p7|Copiata in Fisica p.7]]" };
+		const ownLink = { ...base, id: "own", text: "[[Physics.notebook#p3&id=pg_abc123|See the proof]]" };
+		const ownHeading = { ...base, id: "head", text: "[[Notes#Copied from the book|Copied from Notes p.2]]" };
+		const plainNote = { ...base, id: "plain", text: "[[Reading list]]" };
+		const otherSize = { ...english, id: "big", fontSize: 14 };
+		const kept = withoutChips([english, italian, ownLink, ownHeading, plainNote, otherSize]);
+		expect(kept.map((e) => e.id)).toEqual(["own", "head", "plain", "big"]);
+		expect(isOwnChip(english)).toBe(true);
+		expect(isOwnChip(italian)).toBe(true);
 	});
 });
 
