@@ -168,6 +168,14 @@ export function sinceFor(map: SinceMap, folder: string, now: number): { since: n
 	return { since: now, map: normaliseSince({ ...map, [folder]: now }) };
 }
 
+/**
+ * Whether a file belongs to what the inbox offers given the time it started watching its folder: a file created before that was
+ * already there (or arrived with a sync of old files) and is not offered. Used by the scan and by the `create` events alike.
+ */
+export function isNewSince(item: Pick<InboxItem, "at">, since: number): boolean {
+	return item.at >= since;
+}
+
 // ------------------------------------------------------------------------------------------------------ the queue
 
 /**

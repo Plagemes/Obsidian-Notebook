@@ -6,7 +6,7 @@
 import { type App, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { Batch } from "../model/history";
-import { lockedPageIds } from "../model/page-lock";
+import { isLocked, lockedPageIds } from "../model/page-lock";
 import { parse } from "../model/serialize";
 import type { Asset } from "../model/types";
 import { KeyedQueue, planClosedEdit, type Prepare } from "../integration/api-plan";
@@ -15,6 +15,17 @@ import { backupFolder, type NotebookSettings } from "../settings";
 import { readNotebookText, writeNotebookText } from "../storage/format";
 import { VaultDocumentIO } from "../storage/vault-io";
 import { isEditContextSource, type EditContext } from "../view/edit-context";
+
+/**
+ * The edit was applied to the open notebook (undo reverts it) but could not be confirmed as saved yet. Doing the same again would
+ * add the file twice, so the caller treats the file as used and tells the user that saving is pending.
+ */
+export class EditPendingSaveError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "EditPendingSaveError";
+	}
+}
 
 const NOTEBOOK_VIEW_TYPE = "notebook-view";
 const queue = new KeyedQueue();
@@ -50,6 +61,21 @@ export function editNotebook<R>(
 	});
 }
 
+/**
+ * Whether the page an image element would go on is locked: the page in view when the notebook is open, else its last page.
+ * Asked before the image is stored, so a refused edit leaves no unused file in the assets folder. False when it cannot tell.
+ */
+export async function elementPageLocked(app: App, file: TFile): Promise<boolean> {
+	const ctx = openContext(app, file);
+	if (ctx === "busy") throw new Error(t("move.targetBusy"));
+	if (ctx) {
+		const page = ctx.doc.pages[ctx.currentPage()] ?? ctx.doc.pages[ctx.doc.pages.length - 1];
+		return isLocked(page);
+	}
+	const back = parse(readNotebookText(file.extension, await app.vault.read(file)));
+	return back.ok ? isLocked(back.doc.pages[back.doc.pages.length - 1]) : false;
+}
+
 async function editOpen<R>(app: App, file: TFile, ctx: EditContext, prepare: Prepare<R>, label: string, pending?: Asset): Promise<R> {
 	if (pending) ctx.addPending(pending);
 	try {
@@ -63,7 +89,7 @@ async function editOpen<R>(app: App, file: TFile, ctx: EditContext, prepare: Pre
 		const flushed = await ctx.flush();
 		const back = parse(readNotebookText(file.extension, await app.vault.read(file)));
 		if (back.ok && plan.verify(back.doc)) return plan.result;
-		throw new Error(flushed
+		throw new EditPendingSaveError(flushed
 			? `The change is in the open notebook but was not found in the saved file "${file.path}".`
 			: `The change is in the open notebook (undo reverts it) but could not be saved yet; "${file.path}" will be saved when possible.`);
 	} finally {

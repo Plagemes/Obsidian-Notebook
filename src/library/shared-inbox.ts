@@ -24,9 +24,9 @@ import { storeAsset } from "../view/media";
 import { showNotice } from "../view/notice";
 import { ConfirmModal } from "./library-modals";
 import { moveTargets } from "./move-pages";
-import { editNotebook } from "./shared-inbox-edit";
+import { EditPendingSaveError, editNotebook, elementPageLocked } from "./shared-inbox-edit";
 import {
-	DISMISSED_KEY, InboxQueue, SINCE_KEY, inboxKind, isInboxCandidate, normaliseDismissed, normaliseSince, noteNames, notebookNameFor, resolveInboxFolder, sinceFor,
+	DISMISSED_KEY, InboxQueue, SINCE_KEY, inboxKind, isInboxCandidate, isNewSince, normaliseDismissed, normaliseSince, noteNames, notebookNameFor, resolveInboxFolder, sinceFor,
 	type InboxContext, type InboxItem,
 } from "./shared-inbox-logic";
 import { buildImageDocument, prepareAppendImagePage, prepareAppendPdf, prepareImageElement, type ImagePlacement, type PageSizePt } from "./shared-inbox-plan";
@@ -197,6 +197,14 @@ export class SharedInbox implements SharedInboxPort {
 		return this.toItem(file);
 	}
 
+	/** The time from which `folder` offers files on this device (stored the first time the folder is watched). */
+	private sinceOf(folder: string): number {
+		const stored = normaliseSince(load(this.app, SINCE_KEY));
+		const record = sinceFor(stored, folder, Date.now());
+		if (record.map !== stored) save(this.app, SINCE_KEY, record.map);
+		return record.since;
+	}
+
 	/** Reads the watched folder again (the library opened, the setting changed). */
 	async scan(): Promise<void> {
 		const folder = this.folder();
@@ -211,15 +219,13 @@ export class SharedInbox implements SharedInboxPort {
 			const dir = folder === "" ? this.app.vault.getRoot() : this.app.vault.getFolderByPath(normalizePath(folder));
 			const found: InboxItem[] = [];
 			if (dir) {
-				const stored = normaliseSince(load(this.app, SINCE_KEY));
-				const record = sinceFor(stored, folder, Date.now());
-				if (record.map !== stored) save(this.app, SINCE_KEY, record.map);
+				const since = this.sinceOf(folder);
 				const ctx = this.context(folder, dir);
 				for (const child of dir.children) {
 					if (!(child instanceof TFile) || !isInboxCandidate(child.path, ctx)) continue;
 					const item = this.toItem(child);
 					// Files that were already there when the folder was first watched on this device are not offered.
-					if (item && item.at >= record.since) found.push(item);
+					if (item && isNewSince(item, since)) found.push(item);
 				}
 			}
 			this.scanned = folder;
@@ -239,7 +245,11 @@ export class SharedInbox implements SharedInboxPort {
 	private onCreate(f: unknown): void {
 		if (!(f instanceof TFile)) return;
 		const item = this.candidate(f);
-		if (item) this.emitIf(this.queue.add(item));
+		if (!item) return;
+		// The same rule as the scan: a burst of old files (a sync, a restored folder) is not "received".
+		const folder = this.folder();
+		if (folder !== null && !isNewSince(item, this.sinceOf(folder))) return;
+		this.emitIf(this.queue.add(item));
 	}
 
 	private onModify(f: unknown): void {
@@ -275,7 +285,11 @@ export class SharedInbox implements SharedInboxPort {
 			await job(file);
 		} catch (e) {
 			console.error("[notebook] shared files", e);
-			if (e instanceof PhotoDecodeError && e.reason === "heic") showNotice(t("si.heic"), 8000);
+			if (e instanceof EditPendingSaveError) {
+				// The edit is in the open notebook (undo reverts it): the file counts as used, so a retry cannot add it twice.
+				this.hide(item);
+				showNotice(t("si.savePending", { file: item.name }), 10000);
+			} else if (e instanceof PhotoDecodeError && e.reason === "heic") showNotice(t("si.heic"), 8000);
 			else if (e instanceof NotebookApiError && e.code === "page-locked") showNotice(e.message, 10000);
 			else showNotice(t("si.failed", { error: e instanceof Error ? e.message : String(e) }), 10000);
 		} finally {
@@ -331,6 +345,10 @@ export class SharedInbox implements SharedInboxPort {
 				const out = await editNotebook(this.app, settings, target, () => prepareAppendPdf(asset, sizes), "Insert PDF", asset);
 				showNotice(t("si.added.pdf", { ...vars, n: String(out.added) }));
 			} else {
+				// Before the image is stored: a locked page refuses the edit and the stored copy would stay unused.
+				if (placement === "element" && (await elementPageLocked(this.app, target))) {
+					throw new NotebookApiError("page-locked", t("si.locked", { name: target.basename }), { path: target.path });
+				}
 				const bytes = await this.readImage(file);
 				const dims = await photoSize(bytes, file.name);
 				const asset = await storeAsset(this.app, settings.folder, bytes, file.name, "image");

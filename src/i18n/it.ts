@@ -3016,4 +3016,5 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"si.notes.more": "{notes} e altre {n}",
 	"si.original.linked": "{file} è collegato da {notes}, quindi è rimasto dov'è. Non è stato spostato nulla.",
 	"si.trash.linked": "{file} è collegato o incorporato in {notes}. Quei collegamenti si romperebbero. Spostarlo comunque nel cestino? Annulla lo lascia dov'è.",
+	"si.savePending": "{file} è stato aggiunto al quaderno aperto. Il salvataggio è ancora in sospeso e il quaderno lo completerà, quindi il file non viene aggiunto di nuovo.",
 };

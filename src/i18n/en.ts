@@ -3014,6 +3014,7 @@ export const en = {
 	"si.notes.more": "{notes} and {n} more",
 	"si.original.linked": "{file} is linked from {notes}, so it was left where it is. Nothing was moved.",
 	"si.trash.linked": "{file} is linked or embedded in {notes}. Those links would break. Move it to the trash anyway? Cancel keeps it.",
+	"si.savePending": "{file} was added to the open notebook. Saving is still pending and the notebook will save it, so the file is not added again.",
 } as const;
 
 export type MessageKey = keyof typeof en;

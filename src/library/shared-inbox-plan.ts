@@ -7,7 +7,7 @@ import { createPage } from "../model/document";
 import { AddAsset, AddElement, InsertPages } from "../model/history";
 import { createPdfPages } from "../model/pages";
 import { PAPER_SPACING, type Asset, type NotebookDocument, type Page } from "../model/types";
-import { buildImageElement, parseImageOptions, type EditPlan, type Prepare } from "../integration/api-plan";
+import { buildImageElement, checkPageUnlocked, parseImageOptions, type EditPlan, type Prepare } from "../integration/api-plan";
 import { imagePageSize } from "../view/view-helpers";
 import { scannedPage } from "../scan/pages";
 import { buildImagesDocument } from "./bulk-import-run";
@@ -73,6 +73,7 @@ export function prepareImageElement(asset: Asset, dims: ImageDims, pageIndex: nu
 		if (doc.pages.length === 0) throw new Error("the notebook has no pages");
 		const index = pageIndex !== null && pageIndex >= 0 && pageIndex < doc.pages.length ? pageIndex : doc.pages.length - 1;
 		const page = doc.pages[index]!;
+		checkPageUnlocked("page", page, index + 1);
 		const element = buildImageElement(page, dims, asset.id, parseImageOptions(undefined));
 		const plan: EditPlan<AppendResult> = {
 			commands: [new AddAsset(asset), new AddElement(page.id, element, page.elements?.length ?? 0)],
