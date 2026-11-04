@@ -5,11 +5,14 @@ export interface TrashSettings {
 	trashRetentionDays: number;
 	/** Folder of the page templates; empty = `<notebooks folder>/_templates`. */
 	templatesFolder: string;
+	/** Folder of the notebook templates (roadmap #19); empty = `notebooks` inside the templates folder. */
+	notebookTemplatesFolder: string;
 }
 
 export const DEFAULT_TRASH_SETTINGS: Readonly<TrashSettings> = {
 	trashRetentionDays: 0,
 	templatesFolder: "",
+	notebookTemplatesFolder: "",
 };
 
 export const TRASH_RETENTION_MAX_DAYS = 365;
@@ -20,5 +23,6 @@ export function readTrashSettings(d: Record<string, unknown>): TrashSettings {
 	const days = d.trashRetentionDays;
 	if (typeof days === "number" && Number.isInteger(days) && days >= 0 && days <= TRASH_RETENTION_MAX_DAYS) s.trashRetentionDays = days;
 	if (typeof d.templatesFolder === "string") s.templatesFolder = d.templatesFolder.trim();
+	if (typeof d.notebookTemplatesFolder === "string") s.notebookTemplatesFolder = d.notebookTemplatesFolder.trim();
 	return s;
 }

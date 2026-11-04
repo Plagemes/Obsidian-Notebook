@@ -19,7 +19,7 @@ import type { NotebookDocument, Page } from "../model/types";
 import type { NotebookSettings } from "../settings";
 import { PageTrashStore } from "../storage/page-trash-store";
 import { listStoredTemplates, saveStoredTemplate } from "../storage/templates-store";
-import { templatesFolderPath } from "../storage/trash-paths";
+import { notebookTemplatesFolderPath, templatesFolderPath } from "../storage/trash-paths";
 import { showNotice } from "./notice";
 
 /** What the page tools need from the notebook view. */
@@ -216,7 +216,7 @@ const builtinName = (id: BuiltinId) => t(`template.builtin.${id}`);
 export async function loadTemplateChoices(app: App, settings: NotebookSettings): Promise<{ builtin: TemplateChoice[]; mine: TemplateChoice[] }> {
 	const labels = builtinLabels();
 	const builtin = BUILTIN_IDS.map((id): TemplateChoice => ({ name: builtinName(id), doc: builtinTemplate(id, labels), stored: null }));
-	const stored = await listStoredTemplates(app, templatesFolderPath(settings.templatesFolder, settings.folder));
+	const stored = await listStoredTemplates(app, templatesFolderPath(settings.templatesFolder, settings.folder), notebookTemplatesFolderPath(settings.notebookTemplatesFolder, settings.templatesFolder, settings.folder));
 	const mine = stored.map((s): TemplateChoice => ({ name: s.name, doc: s.doc, stored: { path: s.file.path } }));
 	return { builtin, mine };
 }

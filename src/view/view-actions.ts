@@ -17,6 +17,7 @@ import type { NotebookView } from "./notebook-view";
 import { editBookmark, editPageTags } from "./outline";
 import { exportPdfAnnotations, openMarginsModal, updatePdfFromNewVersion } from "./pdf-actions";
 import { openSlideStripOf, pdfSideState, runPdfSideAction, type PdfSideAction } from "./pdf-sync";
+import { saveNotebookAsTemplate } from "./notebook-templates";
 import { deletePageKeepingCopy, newPageFromTemplate, openDeletedPages, savePageAsTemplate } from "./page-tools";
 import { insertReference, openPage, removeTextbook, setTextbook } from "./textbook-ref-ui";
 import { toggleBookmark } from "./view-helpers";
@@ -220,6 +221,10 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	}),
 	"page-infinite": onPage((v, p, i) => v.applyCommand(new SetPageInfinite(p.id, !p.infinite), i)),
 	"move-pages": onPage((v, _p, i) => void v.movePagesToNotebook(i)),
+	"notebook-save-template": (v) => {
+		const doc = v.document;
+		if (doc) saveNotebookAsTemplate(v.app, v.pageToolsHost().settings, doc, v.file?.basename ?? "");
+	},
 	"page-save-template": onPage((v, p) => {
 		const doc = v.document;
 		if (doc) savePageAsTemplate(v.pageToolsHost(), doc, p, v.file?.basename ?? "");

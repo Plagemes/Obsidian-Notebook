@@ -4,7 +4,7 @@ import { createDocument, createId } from "../model/document";
 import { backgroundRect } from "../model/margins";
 import { parse, serializeChecked } from "../model/serialize";
 import { PAGE_SIZES, PAPER_SPACING, type Asset, type NotebookDocument, type NotebookMeta, type Page } from "../model/types";
-import { CreateDialog, type CreateTab, type FolderSpec } from "../view/create-dialog";
+import { CreateDialog, type ChosenTemplate, type CreateTab, type FolderSpec } from "../view/create-dialog";
 import { applyNotebookMeta, joinPath, notebookDocument, type NotebookSpec } from "../view/create-logic";
 import type { PickedFile } from "../view/pick";
 import { FolderMetaStore } from "./folder-meta-store";
@@ -18,7 +18,10 @@ import { readNotebookText, writeNotebookText } from "../storage/format";
 import { createNotebook } from "../storage/notebooks";
 import { existsInsensitive } from "../storage/names";
 import { LibraryTrash } from "../storage/trash";
+import { expandPlaceholders } from "../model/notebook-template";
 import { documentFromTemplate } from "../model/templates";
+import { isWithin } from "../storage/trash-paths";
+import { notebookTemplatesFolder, openNotebookTemplatePicker, saveNotebookAsTemplate } from "../view/notebook-templates";
 import { openTemplateGallery } from "../view/page-tools";
 import { headerField } from "../storage/integrity";
 import { journalFolder, sidecarDeviceId, VaultDocumentIO, vaultDeviceFileAdapter } from "../storage/vault-io";
@@ -144,6 +147,19 @@ export class NotebookLibraryHost implements LibraryHost {
 		}
 	}
 
+	/** Roadmap #19: the notebook templates folder is not part of the library, wherever the setting puts it. */
+	isHiddenPath(path: string): boolean {
+		const s = this.plugin.settings;
+		return isWithin(path, notebookTemplatesFolder(s));
+	}
+
+	/** Roadmap #19: "Save as notebook template" for a library card (what an open view holds, else the file). */
+	async saveAsTemplate(file: TFile): Promise<void> {
+		const doc = this.openView(file)?.document ?? (await this.readNotebook(file));
+		if (!doc) return void showNotice(t("nbtemplate.unreadable", { name: file.basename }));
+		saveNotebookAsTemplate(this.app, this.plugin.settings, doc, file.basename);
+	}
+
 	/** The id at the start of the file, without parsing it; the whole parse when the file is laid out differently. */
 	async readNotebookId(file: TFile): Promise<string | null> {
 		try {
@@ -213,6 +229,7 @@ export class NotebookLibraryHost implements LibraryHost {
 				return typeof v === "string" ? v : null;
 			},
 			pickTemplate: (done) => void openTemplateGallery(app, this.plugin.settings, (c) => done({ name: c.name, doc: c.doc })),
+			pickNotebookTemplate: (done) => openNotebookTemplatePicker(app, this.plugin.settings, done),
 			pickImage: () => pickFile(app, "image"),
 			createNotebook: (spec, extras) => this.createFromDialog(spec, extras),
 			createFolder: (spec) => this.createFolderFromDialog(spec),
@@ -244,7 +261,7 @@ export class NotebookLibraryHost implements LibraryHost {
 	 * Creates the notebook the dialog describes and opens it: a blank first page of the chosen paper and size (or the
 	 * template's pages), the cover colour, description and cover art. The document is validated before the file exists.
 	 */
-	private async createFromDialog(spec: NotebookSpec, extras: { image?: PickedFile; template?: { name: string; doc: NotebookDocument } }): Promise<boolean> {
+	private async createFromDialog(spec: NotebookSpec, extras: { image?: PickedFile; template?: ChosenTemplate }): Promise<boolean> {
 		try {
 			const s = this.plugin.settings;
 			// Remember the choice for the next notebook (a custom size is not a default).
@@ -252,7 +269,9 @@ export class NotebookLibraryHost implements LibraryHost {
 				this.plugin.settings = { ...s, defaultPageSize: spec.size, defaultLandscape: spec.landscape, defaultPaper: spec.paper };
 				await this.plugin.saveSettings();
 			}
-			const doc = extras.template ? documentFromTemplate(extras.template.doc) : notebookDocument(spec);
+			// Roadmap #19: {{date}} in the title and description is filled in for any template.
+			if (extras.template) spec = { ...spec, name: expandPlaceholders(spec.name), description: expandPlaceholders(spec.description) };
+			const doc = extras.template ? (extras.template.ready ? extras.template.doc : documentFromTemplate(extras.template.doc)) : notebookDocument(spec);
 			if (extras.template) applyNotebookMeta(doc, spec);
 			if (extras.image) {
 				const asset = await storeAsset(this.app, this.root(), extras.image.bytes, extras.image.name, "image");

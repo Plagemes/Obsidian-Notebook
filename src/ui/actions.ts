@@ -337,6 +337,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "show-page-solutions", label: "markers.menu.pageSolutions", icon: "eye", group: "page", surfaces: ["page"], priority: 30, scope: "view", command: true, readOnly: true, checked: (c) => !!c.markers?.pageSolutions, keywords: "invisible ink hidden" },
 
 	// --- wave 0.10 (363): tabs of the open notebooks (the strip and the toolbar swipe call the same step).
+	// Roadmap #19: a copy of this notebook in the templates folder (works on a read-only notebook too: it only reads).
+	{ id: "notebook-save-template", label: "nbtemplate.save.action", icon: "book-copy", group: "app", surfaces: ["sheet", "notebook", "palette"], priority: 18, scope: "view", command: true, readOnly: true, keywords: "template save copy planner lab book notebook modello salva quaderno" },
 	{ id: "notebook-next", label: "command.notebookNext", icon: "chevron-right", group: "navigate", surfaces: ["sheet"], priority: 22, scope: "view", command: true, readOnly: true, when: otherNotebooks, keywords: "tab switch next notebook quaderno successivo scheda" },
 	{ id: "notebook-previous", label: "command.notebookPrevious", icon: "chevron-left", group: "navigate", surfaces: ["sheet"], priority: 21, scope: "view", command: true, readOnly: true, when: otherNotebooks, keywords: "tab switch previous notebook quaderno precedente scheda" },
 

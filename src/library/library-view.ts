@@ -103,6 +103,10 @@ export interface LibraryHost {
 	thumbnailBackground?(doc: NotebookDocument, page: Page, width: number): Promise<ThumbnailOptions["drawBackground"] | null>;
 	/** Called after the library copied a notebook, so the copy can get its own identity. */
 	afterDuplicate?(file: TFile): Promise<void>;
+	/** Roadmap #19: saves a copy of the notebook in the notebook templates folder (asks for a name). */
+	saveAsTemplate?(file: TFile): Promise<void>;
+	/** Roadmap #19: true for a path the library must not list (the notebook templates folder, wherever it is). */
+	isHiddenPath?(path: string): boolean;
 	/** Library trash (#160): deleting moves to the plugin trash instead of deleting. */
 	trash?: LibraryTrash;
 	/** wave 0.7: opens the list of recently edited pages (roadmap 365). */
@@ -662,7 +666,7 @@ export class LibraryView extends ItemView {
 		if (!folder) return [];
 		const out: TFile[] = [];
 		Vault.recurseChildren(folder, (f) => {
-			if (f instanceof TFile && isNotebookFile(f) && !isReservedPath(f.path, root)) out.push(f);
+			if (f instanceof TFile && isNotebookFile(f) && !isReservedPath(f.path, root) && !this.host.isHiddenPath?.(f.path)) out.push(f);
 		});
 		return out;
 	}
@@ -673,7 +677,7 @@ export class LibraryView extends ItemView {
 		if (!folder) return [];
 		const out: string[] = [];
 		Vault.recurseChildren(folder, (f) => {
-			if (f instanceof TFolder && !f.isRoot() && !isReservedPath(f.path, root)) out.push(f.path);
+			if (f instanceof TFolder && !f.isRoot() && !isReservedPath(f.path, root) && !this.host.isHiddenPath?.(f.path)) out.push(f.path);
 		});
 		return out;
 	}
@@ -684,7 +688,7 @@ export class LibraryView extends ItemView {
 
 	private inLibrary(path: string): boolean {
 		const root = this.root();
-		return isInside(path, root) && path !== root && !isReservedPath(path, root);
+		return isInside(path, root) && path !== root && !isReservedPath(path, root) && !this.host.isHiddenPath?.(path);
 	}
 
 	private onVaultChange(f: TAbstractFile, delay = STRUCTURE_DELAY_MS): void {
@@ -2381,6 +2385,8 @@ export class LibraryView extends ItemView {
 		menu.addItem((i) => i.setTitle(t("library.menu.rename")).setIcon("pencil").onClick(() => this.askRename(file)));
 		menu.addItem((i) => i.setTitle(t("library.menu.move")).setIcon("folder-input").onClick(() => this.askMove(file)));
 		menu.addItem((i) => i.setTitle(t("library.menu.duplicate")).setIcon("copy").onClick(() => void this.duplicate(file)));
+		const saveTemplate = this.host.saveAsTemplate?.bind(this.host);
+		if (saveTemplate) menu.addItem((i) => i.setTitle(t("library.menu.saveTemplate")).setIcon("book-copy").onClick(() => void saveTemplate(file).catch((e) => this.fail(e))));
 		menu.addItem((i) => i.setTitle(t("library.menu.tags")).setIcon("tag").onClick(() => this.askTags(path)));
 		menu.addItem((i) => i.setTitle(t("library.menu.cover")).setIcon("palette").onClick(() => this.askCover(path)));
 		menu.addSeparator();
