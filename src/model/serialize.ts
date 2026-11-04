@@ -6,18 +6,19 @@ import {
 } from "./math-elements";
 import { parseOutline } from "../math/outline";
 import { EXCERPT_ID_MAX, EXCERPT_PATH_MAX } from "./excerpts";
-import { detectVersion, migrate, MigrationError, v10OnlyElement, withoutV11Meta, withoutV12Slides, type RawObject } from "./migrations";
+import { detectVersion, migrate, MigrationError, v10OnlyElement, v15OnlyElement, withoutV11Meta, withoutV12Slides, type RawObject } from "./migrations";
 import { normalizePageStates, STATE_COLOR_RE, statesLine } from "./states-format";
 import { normalizePageTags } from "./page-tags";
+import { STICKY_INK_MAX, STICKY_MAX_FONT, STICKY_MAX_SIZE, STICKY_MIN_FONT, STICKY_MIN_SIZE, STICKY_TEXT_MAX } from "./sticky";
 import { normalizePosition } from "./position";
 import {
-	COVER_ART_STYLES, CURRENT_VERSION, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, FORMAT_ID, META_DESCRIPTION_MAX, PAPER_KINDS, RENDER_VERSIONS, TOOLS,
+	COVER_ART_STYLES, CURRENT_VERSION, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, ELEMENT_TYPES_V15, FORMAT_ID, META_DESCRIPTION_MAX, PAPER_KINDS, RENDER_VERSIONS, TOOLS,
 	SLIDE_ID_MAX, SLIDE_PATH_MAX, SLIDE_SOURCE_MAX, type SlideRef,
 	STATES_ID_MAX, STATES_MAX_ITEMS, STATES_MAX_PARTS, STATES_MAX_ROT, STATES_MAX_SCALE, STATES_MAX_SHIFT, STATES_MAX_STATES, STATES_MIN_SCALE, STATES_NAME_MAX,
 	type PageState, type PageStates, type PartPose, type StatePart,
 	type Asset, type CoverArt, type CoverArtStyle, type AssetKind, type BookmarkInfo, type BoxElement, type EquationElement, type ExcerptElement, type ExcerptSource, type GraphElement, type GraphFunction, type GraphParam,
 	type GraphPiece, type GraphTable, type GraphViewport, type ImageElement, type MarkerElement, type NotebookDocument, type NotebookMeta, type Page,
-	type PageBackground, type PageElement, type PageMargins, type PaperKind, type Point, type ReadingPosition, type RenderVersion, type Stroke,
+	type PageBackground, type PageElement, type PageMargins, type PaperKind, type Point, type ReadingPosition, type RenderVersion, type StickyElement, type Stroke,
 	type TextElement, type Tool,
 } from "./types";
 
@@ -193,6 +194,20 @@ function excerptLine(e: ExcerptElement): string {
 	return `				{"id":${j(e.id)},"type":"excerpt","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"source":${source}${asset}}`;
 }
 
+/**
+ * v15 sticky note: frame, colour and size, then the optional text, the collapsed flag and (collapsed only) the ids of the
+ * strokes it keeps hidden, in that order (one line).
+ */
+function stickyLine(e: StickyElement): string {
+	let line = `				{"id":${j(e.id)},"type":"sticky","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"color":${j(e.color)},"fontSize":${j(e.fontSize)}`;
+	if (e.text !== undefined && e.text !== "") line += `,"text":${j(e.text)}`;
+	if (e.collapsed === true) {
+		line += `,"collapsed":true`;
+		if (e.ink !== undefined && e.ink.length > 0) line += `,"ink":${j(e.ink)}`;
+	}
+	return line + "}";
+}
+
 function elementLine(e: PageElement): string {
 	if (e.type === "text") {
 		return `\t\t\t\t{"id":${j(e.id)},"type":"text","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"text":${j(e.text)},"fontSize":${j(e.fontSize)},"color":${j(e.color)}}`;
@@ -205,6 +220,7 @@ function elementLine(e: PageElement): string {
 	if (e.type === "equation") return equationLine(e);
 	if (e.type === "graph") return graphLine(e);
 	if (e.type === "excerpt") return excerptLine(e);
+	if (e.type === "sticky") return stickyLine(e);
 	return fail("element", "unknown element type");
 }
 
@@ -269,7 +285,8 @@ function assemble(
 	const slides = slidesInUse(doc);
 	const pages = doc.pages.map((page) => {
 		const strokes = page.strokes.map((s) => lineOf(slides.stroke(s)));
-		const elements = (page.elements ?? []).map(elementLineOf);
+		// v15: a collapsed note names only strokes that are on its page (ids of strokes that are gone are not written).
+		const elements = (page.elements ?? []).map((e) => elementLineOf(e.type === "sticky" && e.ink ? withLiveInk(e, page.strokes) : e));
 		const out = [
 			"\t\t{",
 			`\t\t\t"id": ${j(page.id)},`,
@@ -642,6 +659,7 @@ function readElement(v: unknown, path: string, assets: Assets, drop: Dropped | n
 	if (v.type === "equation") return readEquation(v, id, path, drop);
 	if (v.type === "graph") return readGraph(v, id, path, drop);
 	if (v.type === "excerpt") return readExcerpt(v, id, path, assets, drop);
+	if (v.type === "sticky") return readSticky(v, id, path, drop);
 	return fail(`${path}.type`, "unknown element type");
 }
 
@@ -790,6 +808,49 @@ function readExcerpt(v: RawObject, id: string, path: string, assets: Assets, dro
 		return a;
 	});
 	if (asset !== undefined) el.asset = asset;
+	return el;
+}
+
+/**
+ * v15 sticky note. Frame (within STICKY_MIN_SIZE..STICKY_MAX_SIZE), colour and size are required (an invalid one fails the
+ * note); the text, the collapsed flag and the hidden-ink list are details, each dropped and counted on its own when invalid and
+ * reading leniently (the note then has no text, is open, or keeps no ink hidden). The ink list only means something while collapsed.
+ */
+function readSticky(v: RawObject, id: string, path: string, drop: Dropped | null): StickyElement {
+	const side = (x: unknown, name: string): number => {
+		const n = positive(x, `${path}.${name}`);
+		if (n < STICKY_MIN_SIZE || n > STICKY_MAX_SIZE) fail(`${path}.${name}`, `expected ${STICKY_MIN_SIZE} to ${STICKY_MAX_SIZE} pt`);
+		return n;
+	};
+	const fontSize = positive(v.fontSize, `${path}.fontSize`);
+	if (fontSize < STICKY_MIN_FONT || fontSize > STICKY_MAX_FONT) fail(`${path}.fontSize`, `expected ${STICKY_MIN_FONT} to ${STICKY_MAX_FONT} pt`);
+	const el: StickyElement = {
+		id, type: "sticky",
+		x: finite(v.x, `${path}.x`), y: finite(v.y, `${path}.y`),
+		width: side(v.width, "width"), height: side(v.height, "height"),
+		color: colour(v.color, `${path}.color`), fontSize,
+	};
+	const text = orDrop(drop, () => {
+		if (v.text === undefined) return undefined;
+		const s = boundedString(v.text, `${path}.text`, STICKY_TEXT_MAX * 2);
+		if (Array.from(s).length > STICKY_TEXT_MAX) fail(`${path}.text`, `longer than ${STICKY_TEXT_MAX} characters`);
+		return s;
+	});
+	if (text !== undefined && text !== "") el.text = text;
+	const collapsed = readTrue(v.collapsed, `${path}.collapsed`, drop);
+	if (collapsed) {
+		el.collapsed = true;
+		const ink = orDrop(drop, () => {
+			if (v.ink === undefined) return undefined;
+			if (!Array.isArray(v.ink) || v.ink.length > STICKY_INK_MAX) fail(`${path}.ink`, `expected a list of at most ${STICKY_INK_MAX} stroke ids`);
+			return v.ink.map((s, i) => str(s, `${path}.ink[${i}]`));
+		});
+		if (ink !== undefined && ink.length > 0) el.ink = [...new Set(ink)];
+	} else if (v.ink !== undefined) {
+		// An open note keeps no list (a stray one is ignored; leniently it is counted so the notice says something changed).
+		if (!drop) fail(`${path}.ink`, "only a collapsed note has an ink list");
+		drop.count++;
+	}
 	return el;
 }
 
@@ -1142,12 +1203,12 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, dr
 			// v8 markers and boxes, v9 equations and graphs, v10 excerpts are details: an invalid one is dropped and counted when
 			// reading leniently.
 			const v8 = isObject(e) && typeof e.type === "string"
-				&& (ELEMENT_TYPES_V8.includes(e.type) || ELEMENT_TYPES_V9.includes(e.type) || ELEMENT_TYPES_V10.includes(e.type));
+				&& (ELEMENT_TYPES_V8.includes(e.type) || ELEMENT_TYPES_V9.includes(e.type) || ELEMENT_TYPES_V10.includes(e.type) || ELEMENT_TYPES_V15.includes(e.type));
 			const el = v8 ? orDrop(drop, () => readElement(e, at, assets, drop)) : readElement(e, at, assets, drop);
 			if (!el) return;
 			if (ids.has(el.id)) fail(`${at}.id`, "duplicate id");
 			ids.add(el.id);
-			elements.push(freezeElement(el));
+			elements.push(freezeElement(el.type === "sticky" ? withLiveInk(el, strokes) : el));
 		});
 		if (elements.length > 0) page.elements = elements;
 	}
@@ -1168,6 +1229,18 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, dr
 	return page;
 }
 
+/** v15: a collapsed note without the ids of strokes that are not on the page (a stroke erased since); the list goes when it empties. */
+function withLiveInk(el: StickyElement, strokes: readonly Stroke[]): StickyElement {
+	if (!el.ink) return el;
+	const alive = new Set(strokes.map((s) => s.id));
+	const ink = el.ink.filter((id) => alive.has(id));
+	if (ink.length === el.ink.length) return el;
+	const out: StickyElement = { ...el };
+	if (ink.length > 0) out.ink = ink;
+	else delete out.ink;
+	return out;
+}
+
 /** Committed strokes are immutable: edits create new strokes. This makes per-stroke caches safe. */
 export function freezeStroke(stroke: Stroke): Stroke {
 	for (const p of stroke.points) Object.freeze(p);
@@ -1179,6 +1252,7 @@ export function freezeStroke(stroke: Stroke): Stroke {
 export function freezeElement<T extends PageElement>(element: T): T {
 	if (element.type === "graph" && !Object.isFrozen(element)) deepFreezeGraph(element);
 	if (element.type === "excerpt") Object.freeze(element.source);
+	if (element.type === "sticky" && element.ink) Object.freeze(element.ink);
 	return Object.freeze(element);
 }
 
@@ -1361,6 +1435,11 @@ export class StagedParse {
 			const problem = v10OnlyElement(this.rawPages[i], i);
 			if (problem) fail(`pages[${i}]`, problem);
 		}
+		// v15: a sticky note in a file of an older format was not written by any version of this plugin (the migration refuses it).
+		if (this.from < 15) {
+			const problem = v15OnlyElement(this.rawPages[i], i);
+			if (problem) fail(`pages[${i}]`, problem);
+		}
 		// v12: the strokes of an older file have no slide of ours (an odd `slide` key is ignored, as the migration drops it).
 		const slides: SlideIds = this.from < 12 ? "ignore" : new Set((this.doc.slides ?? []).map((r) => r.id));
 		// v13: the same for the `states` of a page of an older file.
@@ -1423,7 +1502,8 @@ export function parseStaged(text: string, firstPage: number | null): StagedParse
 	// v11 → v12 only drops the slide table and the strokes' `slide` keys (ignored page by page), so large v11 files are staged too.
 	// v12 → v13 only drops the pages' `states` keys (ignored page by page), so large v12 files are staged too.
 	// v13 → v14 only drops the pages' `locked` keys (ignored page by page), so large v13 files are staged too.
-	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12 || pre.version === 13) return StagedParse.create(pre.raw, first, pre.version);
+	// v14 → v15 only refuses sticky notes (checked page by page as they are read), so large v14 files are staged too.
+	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14) return StagedParse.create(pre.raw, first, pre.version);
 	if (pre.version !== CURRENT_VERSION) return parseRaw(pre.raw, pre.version, true);
 	return StagedParse.create(pre.raw, first);
 }

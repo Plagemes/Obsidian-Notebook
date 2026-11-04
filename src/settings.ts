@@ -9,6 +9,7 @@ import { PEN_BUTTON_ACTIONS, type PenButtonAction } from "./ink/input-policy";
 import { BUTTON_AFTER_MAX_MS, BUTTON_BEFORE_MAX_MS, DEFAULT_BUTTON_WINDOWS, LEGACY_BEFORE_MS, cleanPenKey, cleanWindowMs, isPenKeyAction, type PenKeyAction } from "./ink/pen-hover";
 import { isHeaderAlign, isHeaderMode, type HeaderAlign, type HeaderMode } from "./ink/page-header";
 import { isScrollMode, type ScrollMode } from "./ink/page-mode";
+import { isMinimapMode, type MinimapMode } from "./model/minimap-geometry";
 import { parsePosition, type SavedPosition } from "./ink/view-position";
 import { normaliseRecentColours } from "./ink/colour";
 import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./model/types";
@@ -24,13 +25,15 @@ import { normaliseSeen, type HintId } from "./ui/hint-logic";
 import { DEFAULT_READING_SETTINGS, readReadingSettings, type ReadingSettings } from "./view/reading-settings";
 import { DEFAULT_PRESENT_SETTINGS, readPresentSettings, type PresentSettings } from "./view/present-logic";
 import { DEFAULT_BOARD_SETTINGS, readBoardSettings, type BoardSettings } from "./library/board-logic";
+import { DEFAULT_SNAP_SETTINGS, readSnapSettings, type SnapSettings } from "./view/snap-settings";
+import { DEFAULT_PDF_COPY_SETTINGS, readPdfCopySettings, type PdfCopySettings } from "./storage/pdf-copy-logic";
 
 /** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
 /** DESIGN.md §2.2: *Notebook* (its own tokens, the default) or *Follow Obsidian theme*. */
 export const APPEARANCE_STYLES = ["notebook", "obsidian"] as const;
 export type AppearanceStyle = (typeof APPEARANCE_STYLES)[number];
 
-export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings, LectureSettings, BoardSettings, PresentSettings {
+export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings, LectureSettings, BoardSettings, PresentSettings, SnapSettings, PdfCopySettings {
 	/** UI language: "auto" follows Obsidian. */
 	uiLanguage: UiLanguage;
 	folder: string;
@@ -96,6 +99,10 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	dailyLink: boolean;
 	/** 0.15 (O12): create today's daily note when it does not exist yet (only used with `dailyLink`). */
 	dailyCreateNote: boolean;
+	/** 0.17 (#57): a task made from a selection gets its due date as the Tasks plugin's date emoji (else a Dataview field). */
+	taskDueEmoji: boolean;
+	/** 0.17 (#57): the note "Make task" can add to besides the daily note (vault path; empty = none configured). */
+	tasksNote: string;
 	// wave p1a: input
 	/** Edge rejection: touches that start within `edgeRejectionPx` of a selected edge of the page area are ignored. */
 	edgeRejection: boolean;
@@ -201,6 +208,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	recentColours: string[];
 	/** wave 0.10 (50): the draggable thumb with a page preview along the right edge in continuous scroll. */
 	fastScrollbar: boolean;
+	/** 0.17 (#173): the minimap of the page in view: automatic (infinite pages, high zoom), always, or never. */
+	minimapMode: MinimapMode;
 	/** Look of the plugin's own surfaces (DESIGN.md §2.2): its own `--nb-*` palette, or those tokens mapped onto the Obsidian theme. */
 	appearanceStyle: AppearanceStyle;
 	// wave 0.13: Home
@@ -252,6 +261,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	sharedInboxFolder: "",
 	dailyLink: false,
 	dailyCreateNote: false,
+	taskDueEmoji: true,
+	tasksNote: "",
 	edgeRejection: false,
 	edgeRejectionPx: 24,
 	edgeLeft: true,
@@ -297,6 +308,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	dateStampFormat: DEFAULT_STAMP_FORMAT,
 	recentColours: [],
 	fastScrollbar: true,
+	minimapMode: "auto",
 	appearanceStyle: "notebook",
 	userName: "",
 	hintsEnabled: true,
@@ -315,9 +327,13 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	zettelSlipBoxes: [],
 	...DEFAULT_READING_SETTINGS,
 	...DEFAULT_PRESENT_SETTINGS,
+	...DEFAULT_SNAP_SETTINGS,
 	// 0.15 views
 	...DEFAULT_BOARD_SETTINGS,
 	boardColumns: DEFAULT_BOARD_SETTINGS.boardColumns.map((c) => ({ ...c })),
+	// 0.17 pdfcopy
+	...DEFAULT_PDF_COPY_SETTINGS,
+	pdfCopyNotebooks: {},
 };
 
 /** Merges saved data over the defaults, ignoring values of the wrong type. */
@@ -359,6 +375,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.sharedInboxFolder === "string") s.sharedInboxFolder = d.sharedInboxFolder.trim();
 	if (typeof d.dailyLink === "boolean") s.dailyLink = d.dailyLink;
 	if (typeof d.dailyCreateNote === "boolean") s.dailyCreateNote = d.dailyCreateNote;
+	if (typeof d.taskDueEmoji === "boolean") s.taskDueEmoji = d.taskDueEmoji;
+	if (typeof d.tasksNote === "string") s.tasksNote = d.tasksNote.trim();
 	if (typeof d.edgeRejection === "boolean") s.edgeRejection = d.edgeRejection;
 	if (typeof d.edgeRejectionPx === "number" && d.edgeRejectionPx >= EDGE_WIDTH_MIN && d.edgeRejectionPx <= EDGE_WIDTH_MAX) s.edgeRejectionPx = d.edgeRejectionPx;
 	if (typeof d.edgeLeft === "boolean") s.edgeLeft = d.edgeLeft;
@@ -404,6 +422,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.dateStampFormat === "string") s.dateStampFormat = cleanStampFormat(d.dateStampFormat);
 	s.recentColours = normaliseRecentColours(d.recentColours);
 	if (typeof d.fastScrollbar === "boolean") s.fastScrollbar = d.fastScrollbar;
+	if (isMinimapMode(d.minimapMode)) s.minimapMode = d.minimapMode;
 	if (APPEARANCE_STYLES.includes(d.appearanceStyle as AppearanceStyle)) s.appearanceStyle = d.appearanceStyle as AppearanceStyle;
 	if (typeof d.userName === "string") s.userName = cleanUserName(d.userName);
 	if (typeof d.hintsEnabled === "boolean") s.hintsEnabled = d.hintsEnabled;
@@ -423,7 +442,9 @@ export function readSettings(data: unknown): NotebookSettings {
 	Object.assign(s, readZettelSettings(d));
 	Object.assign(s, readReadingSettings(d));
 	Object.assign(s, readPresentSettings(d));
+	Object.assign(s, readSnapSettings(d));
 	Object.assign(s, readBoardSettings(d));
+	Object.assign(s, readPdfCopySettings(d));
 	return s;
 }
 

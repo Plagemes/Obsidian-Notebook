@@ -8,15 +8,19 @@ import { readSettings, type NotebookSettings } from "./settings";
 import { positionEquals, type SavedPosition } from "./ink/view-position";
 import { stressDocument } from "./model/stress";
 import { NOTEBOOK_EXTENSIONS } from "./storage/format";
+import { journalReader } from "./library/library-check-modal";
+import type { StorageEnv } from "./library/storage-actions";
 import { AdapterJournalStore, journalFolder, sidecarDeviceId, vaultDeviceFileAdapter } from "./storage/vault-io";
 import { SharedClipStore } from "./storage/shared-clip-store";
 import { createNotebook } from "./storage/notebooks";
 import { registerFolderMeta } from "./library/folder-meta-events";
+import { registerCollections } from "./library/collections-events";
 import { BenchmarkModal } from "./view/benchmark";
 import { PenTestModal, penSignalInfo } from "./view/pen-test-modal";
 import { NotebookLibraryHost } from "./library/host";
 import { SharedInbox } from "./library/shared-inbox";
 import { registerIntegration } from "./integration";
+import { registerHoverPreview } from "./view/hover-preview";
 import type { HistoryService } from "./integration/history-service";
 import type { NotebookApi } from "./integration/api";
 import { registerReliability } from "./integration/reliability";
@@ -47,6 +51,8 @@ import type { NavController } from "./view/nav-controller";
 import { registerNavigation } from "./view/nav-service";
 import { NotebookStatusBar } from "./view/status-bar";
 import { registerResilience, type ResilienceServices } from "./view/resilience";
+import { PdfCopyService } from "./storage/pdf-copy-service";
+import { PdfCopyStore } from "./storage/pdf-copy-store";
 
 export default class NotebookPlugin extends Plugin {
 	settings!: NotebookSettings;
@@ -73,6 +79,8 @@ export default class NotebookPlugin extends Plugin {
 	resilience?: ResilienceServices;
 	/** Version history (set by registerIntegration), for the integrity check. */
 	private history: HistoryService | null = null;
+	/** 0.17 (#23): the optional PDF copy next to each notebook (storage/pdf-copy-service.ts). */
+	pdfCopy?: PdfCopyService;
 	/** wave 0.10 (362): the clipboard shared between devices; one store (one write queue) for every view. */
 	private sharedClipStore: SharedClipStore | null = null;
 
@@ -152,6 +160,14 @@ export default class NotebookPlugin extends Plugin {
 		});
 		// wave 0.12: folder colours and icons follow renames and other devices' changes (library/folder-meta-events.ts).
 		this.step("folder metadata", () => registerFolderMeta(this, this.host.folderMeta));
+		// 0.17 (#23): the PDF copy of a notebook, kept up to date in the background when the reader asks for it.
+		this.step("pdf copy", () => {
+			const store = new PdfCopyStore(vaultDeviceFileAdapter(this.app), () => this.settings.folder, sidecarDeviceId(this.app));
+			this.pdfCopy = new PdfCopyService({ app: this.app, settings: () => this.settings, saveSettings: () => this.saveSettings(), store, mobile: Platform.isMobile });
+			this.pdfCopy.register(this);
+		});
+		// 0.17 (#120): saved collections are read at start and follow other devices' files.
+		this.step("collections", () => registerCollections(this, this.host.collections));
 		this.step("ribbon", () => this.addRibbonIcon("home", t("home.command"), () => void this.openLibrary("home")));
 
 		// wave p1b: repair (#140), conflicted copies (#122), page restore (#180).
@@ -229,6 +245,11 @@ export default class NotebookPlugin extends Plugin {
 				annotatePdf: (pdf) => this.host.importPdf(this.settings.folder, pdf),
 			});
 		});
+		// 0.17 (O5): hovering a notebook page link shows the page thumbnail (Page preview core plugin)
+		this.step("hover preview", () => registerHoverPreview(this, {
+			readNotebook: (file) => this.host.readNotebook(file),
+			background: (doc, page, width) => this.host.thumbnailBackground(doc, page, width),
+		}));
 		// wave 0.6: zettelkasten (M15 Z1–Z3, Z11, Z12)
 		this.step("zettelkasten", () => registerZettel(this));
 		// wave 0.8: quick textbook reference (roadmap 208): "p. 134" in a text box opens the textbook at that page
@@ -366,6 +387,11 @@ export default class NotebookPlugin extends Plugin {
 	}
 
 	/** wave 0.9 (379): when this device last edited the page, if it has a record (the recent pages log). */
+	/** 0.17: the journal location for the in-view merge / split / extract (same as the library's flows). */
+	transferJournal(): StorageEnv["journal"] {
+		return { reader: journalReader(this.app), folder: journalFolder(this.app, this.manifest.id) };
+	}
+
 	pageEditedAt(nb: string, pageId: string): number | null {
 		return this.recentPages?.pageEditedAt(nb, pageId) ?? null;
 	}

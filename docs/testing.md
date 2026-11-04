@@ -6,6 +6,8 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 
 | Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
 |---|---|---|---|---|---|
+| Magnetic snap and alignment guides (roadmap 71, 0.17 snap): while a selection is moved or scaled it is pulled onto the paper grid (grid, dotted, millimetre every 5 mm, ruled vertically) and onto the edges and centres of the other items, the page centre and edges and the margins; thin coloured guides on the live layer only during the drag; setting *Snap and guides* (off / grid / guides / both) and *Snap strength*; a second finger held (or Alt), or the *Snap* button of the selection bar, lets the drag move freely; rotation is never snapped | ✅ | ✅ `tests/snap.test.ts` (grid per paper, targets, move and scale snapping, guides, modes), `tests/snap-glue.test.ts` (session from a page, dragged matrices, finger/Alt bookkeeping); ✅ harness `doc=snap` (snap on lands on the edge, off, paused, finger held, guides during the drag) at tablet and phone, light and dark | | | not tried with the real S Pen or a held finger on a tablet; the palm-size filter for the held finger is a guess (steps 1120-1139) |
+| Saved collections (roadmap 120, 0.17 collections): *Collections* section in the library rail with a live count per collection and a + row; a collection is a name and rules combined with AND: tags (any / all, nested tags match under their parent), a folder with its subfolders, modified or created in the last 7 / 30 days or a date range, favourite (starred or pinned) or not, has a PDF or not; the editor shows how many notebooks match as the rules change; opening one filters the library grid (same filter and search path as the other places, archived notebooks stay out); edit with the rail's pencil or the header's; delete asks first and never touches a notebook; stored in `_meta/collections-<device>.json`, one file per device merged on read (latest change wins per collection, a delete is a tombstone), read leniently with unknown fields kept, never overwritten when unreadable or empty | ✅ | ✅ `tests/collections.test.ts` (every rule, AND, ranges, lenient reading, unknown fields and items kept, merge and tombstones, later time than the merged one, own file never overwritten when unreadable or empty, other devices' bad files skipped, change events); ✅ harness `doc=library` (make through the real dialog, live count, rail count equals cards, header names it, edit, delete with confirmation, no sideways scroll) at tablet and phone, light and dark | | notebook type / template is not a rule (the library index has no such field; adding one means a new index version); a collection whose folder was renamed matches nothing until edited | not tried on the real tablet or with two synced devices (steps 1220-1239) |
 | Copy text from the PDF (roadmap 45, 0.16 pdftext): *Select text* mode on PDF pages (contextual bar, sheet, command): a drag with the pen, a finger or the mouse, or a tap on a word, selects the PDF text; nothing is ever drawn in the mode; bubble with *Copy*, *Copy as quote* (PDF name and page, link back to the notebook page) and clear; Ctrl/Cmd+C; a hyphenated word at the end of a line is joined; text read per page on demand and cached, no DOM text layer | ✅ | ✅ `tests/pdf-text-select.test.ts` (page to PDF coordinates with margins, character boundary with real glyph widths, nearest line then run, word, ranges, copied text, boxes, tap, quote); ✅ harness `doc=pdftext` (pen drag, finger drag, multi-line drag, tap, both copy buttons, no ink, leaving the mode, a page without PDF text) at tablet and phone, light and dark | | | not tried with the real S Pen or a finger on a tablet, with a real PDF (columns, rotated text, scans), or with the Android clipboard (steps 970-979) |
 | PDF outline and links (roadmap 46, 0.16 pdftext): the PDF's own outline listed in the notebook outline (mixed in, its own section, or off; setting), mapped to notebook pages by source page (a range, reordered pages, a page twice), cached per PDF on this device; a tap on a link of a PDF page goes to the notebook page that shows the target page, a web address asks first, other kinds are refused, a link to a page that is not in the notebook says so; *Follow links in PDF pages* setting | ✅ | ✅ `tests/pdf-outline.test.ts` (outline flattening with names, references and indices, hostile outlines, link boxes with the page transform, smallest link under a point, safe addresses, mapping by source page, builder nesting and keys, cache bounds and lenient reading, one read per PDF, retry after a failure); ✅ harness `doc=pdftext` (outline rows, order, nesting, jump, read once across a reopen, cache entry, section and off modes, finger tap on a link, pen tap stays ink, web link dialog with Cancel and Open, missing page notice, setting off) | | | pdf.js of the real Obsidian (outline of real PDFs, named destinations, link annotations) and the finger tap on the tablet are not tried (steps 980-989) |
 | Board view with statuses (roadmap 161, 0.15 views): library view mode with a column per status (To do, In progress, Done, To print; names, colours, order, add / remove in *Settings › Library › Board columns*); move by dragging (mouse, pen, touch long press; phone: drop on a column tab) or ⋯ › Move to…; statuses in `_meta/board-<device>.json`, one file per device, merged by last writer per notebook, unknown fields kept, unreadable file never overwritten | ✅ | ✅ `tests/board-state.test.ts`, `tests/board-logic.test.ts`; ✅ harness `dev/harness/views-check.ts` (columns, ⋯ move, mouse / pen / touch drag with synthetic pointer events, another device's file, columns editor) at tablet, phone and 1448 px, light and dark | | | not tried with the real S Pen, a finger long press, or two devices syncing (steps 900-915) |
@@ -343,7 +345,7 @@ Numbers from the final run of 0.9.0 (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 3903 tests passed |
+| `npm test` (unit project only; benchmarks are separate) | 4189 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: 0 errors; `eslint-plugin-obsidianmd` recommended rules: 0 errors |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
@@ -1230,6 +1232,47 @@ Generated outline (roadmap 407). Reference screenshots after `npm run harness:ch
 611. **Dark and light, Obsidian theme.** Check the outline in the dark and light theme and with *Appearance → Style → Follow Obsidian theme*; the white picture of a heading stays readable.
 612. **Cost.** In a notebook of 100+ pages, open the outline for the first time (note how long it takes), then close and reopen it: the second time is immediate. Writing with the outline open does not stutter.
 613. **No change to the file.** Open a notebook, view the outline, close it without editing: the file is not rewritten (no new snapshot, no sync conflict).
+
+### 0.17 — hover: hover preview of page links (steps 1180-1199)
+
+Hover preview (roadmap O5). In a Markdown note write `[[Physics.notebook#p3]]` and one made by the plugin (*Copy link to page*). Page preview must be on in *Settings > Core plugins*.
+
+1180. **Source.** *Settings > Page preview* lists a *Notebook* source; its Ctrl/Cmd switch starts on.
+1181. **Hover.** Hold Ctrl (Cmd on Mac) and hover the link in reading view and in Live Preview: after a moment a card shows the page thumbnail, the notebook name and *Page 3 of 12*. Without the key nothing shows (with the switch on).
+1182. **Setting.** Switch *Notebook* in Page preview off for the key: hovering alone shows the card. Turn the Page preview core plugin off: no card.
+1183. **Page.** A `#p3&id=...` link shows that page even after pages were reordered; a plain `[[Physics.notebook]]` shows page 1; a link whose page was deleted says the page no longer exists.
+1184. **Open.** Click the card: the notebook opens at that page (an already open tab is reused).
+1185. **Pen.** Write with the pen in another notebook and hover a link: the thumbnail waits for the pen to be quiet, writing is not slowed.
+1186. **Read only.** The notebook file is not modified by hovering (check the modified time).
+1187. **Android.** Long press on a link: Obsidian's own behaviour is unchanged; if its preview appears, the card shows too.
+1188. **Look.** Light, dark, *Follow Obsidian theme*.
+1189. **Other previews.** Check that Obsidian's own popover for the notebook file does not appear beside ours (two popovers).
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Hover preview of notebook page links (O5) | yes | partly (`tests/hover-preview.test.ts`: logic only) |  | The `hover-link` event and the core plugin's `overrides` are not in Obsidian's typings; the popover has not been run in Obsidian | Harness screenshots |
+### 0.17 — collections: saved collections (steps 1220-1239)
+
+Saved collections (roadmap #120). Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/design/collections-*.png`. Use a library with tagged notebooks in several folders, a few favourites, one with a PDF, and a notebook not changed for over a month.
+
+1220. **Rail.** Library sidebar: a *Collections* section above *Vault*. With none saved it says how to make one; the *New collection* row opens the editor.
+1221. **Make one.** Name it, add tags separated by commas (the field suggests your tags), pick *Any of them* or *All of them*, a folder, a period and favourites; the line under the rules says how many notebooks match and changes as you type. *Save* stays off until there is a name. Saving opens the collection.
+1222. **Filter.** The grid shows exactly the notebooks that meet every rule; the rail count is the same number; the header names the collection and its subtitle lists the rules. Archived notebooks are never in it.
+1223. **Tags.** A rule tag `math` also finds a notebook tagged `math/algebra`; case does not matter; a tag only on one page counts.
+1224. **Folder.** A folder rule includes its subfolders; a sibling folder with the same prefix is not included.
+1225. **Period.** *Last 7 days*, *Last 30 days* and a date range on *Modified* or *Created*; a range with only *From* or only *To* works; a range with no date cannot be saved.
+1226. **Favourites and PDF.** *Only favourites* includes starred and pinned notebooks; *Not favourites* the rest; *Has a PDF* / *Has no PDF* split the library by PDF pages.
+1227. **Edit.** The pencil on a rail row (always visible on a touch screen) or in the header opens the editor with the rules filled in; saving updates the grid at once. A long press on the row offers *Edit collection*.
+1228. **Search.** With a collection open, searching with *this view* only finds notebooks inside it.
+1229. **Delete.** *Delete collection* in the editor asks first; cancelling changes nothing; confirming removes the row and returns to the library; your notebooks are untouched.
+1230. **Two devices.** Make a collection on the tablet; after sync it appears on the phone (open the library again if it does not show at once). Change it on the phone and the tablet shows the change. Delete on one device: it disappears on the other. Look in `Notebooks/_meta/`: each device only writes its own `collections-<device>.json`.
+1231. **Damaged file.** Make `collections-<your device>.json` unreadable (not valid JSON): saving or deleting a collection says the file cannot be read and leaves it as it is (a copy named `collections.unreadable-….json` is kept next to it); the collections from other devices still show.
+1232. **Limits.** A name over 40 characters is cut; more than 50 collections is refused with a message.
+1233. **Look.** Light, dark, *Follow Obsidian theme*, tablet and phone width; the editor's controls are at least 36 px tall; no sideways scroll.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Saved collections: rules, live count, rail section, editor, per-device sidecar (#120) | yes | yes (`tests/collections.test.ts`, harness `doc=library`) |  | the date inputs use the platform's date picker | Notebook type / template rule |
 
 ### 0.16 — bulk: bulk import (steps 1010-1029)
 
@@ -2121,6 +2164,31 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 | One guard in the history: every command (and undo / redo) that changes the content of a locked page is reverted and not recorded; tags, bookmarks, page order and inserted pages are allowed; lock and unlock are one undo step | yes | `tests/page-lock.test.ts` (each kind of edit) | | | |
 | Lock UI: page sheet, multi-selection menu, command, lock beside the page number, badge over the page, pages panel lock, notebook map lock button, *Page locked · Unlock* notice; gestures stopped before they start (pen, eraser, text, shapes, space, selection drag); delete, move to notebook, restore and find and replace check first | yes | harness scenario `lock` (tablet and phone, light and dark), `tests/ui-registry.test.ts`; model parts in `tests/model-v14.test.ts` | | | |
 
+### 0.17 — sticky (sticky notes, format v15; steps 1100-1119)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/sticky-*.png`. Notebooks saved with a sticky note are format v15: 0.16 and older open them read-only.
+
+1100. **Insert.** More sheet or the quick slot > *Sticky note*. Expected: a yellow square note appears at the centre of the view, selected (the bar shows *Edit note*, *Collapse note* and the usual selection actions). One undo removes it.
+1101. **Edit.** With the note selected tap *Edit note*. Type two lines, pick another colour, make the text larger, tap *Done*. Expected: the note shows the text and the new colour in one undo step; *Cancel* leaves it as it was. In Italian the dialog reads *Nota adesiva*.
+1102. **Write on it.** With the S Pen write on the note. Expected: the ink is black vector ink over the note; erasing it works like any ink.
+1103. **Move.** With the lasso tap the note, then drag it. Expected: the note and the handwriting on it move together; one undo puts both back.
+1104. **Resize.** Drag a corner handle of the selected note. Expected: the note, its text and the handwriting scale together; the note never becomes smaller than a thumb nail or larger than the page allows.
+1105. **Collapse.** Select the note, tap *Collapse note*. Expected: a small icon with the note's colour remains at its top-left corner; the handwriting disappears with it; nothing is deleted. Write on the empty place where the note was: that ink stays visible. Drag the icon: the hidden ink goes with it. Tap *Open note*: the note and its ink are back.
+1106. **Delete.** Delete an open note: the note goes; the notice offers to delete the ink written on it (the setting "Ink follows objects"). Delete a collapsed note: its hidden ink is deleted with it and one undo brings both back.
+1107. **Copy and paste.** Copy a note with its ink to another page and to another notebook. Expected: the copy has the text, colour and ink; a collapsed note pastes collapsed.
+1108. **Locked page.** Lock the page: *Sticky note* is disabled, *Edit*, *Collapse* and moving a note do nothing and show the *Page locked* notice.
+1109. **Export.** Export the page as PNG, PDF and SVG: the note, its text and the handwriting are there; a collapsed note is its icon without the ink. The Markdown export has the typed text as a quote.
+1110. **Saving and older plugin.** Close and reopen: notes, text, colour and collapsed state are kept. Copy the notebook to a device with 0.16: it opens read-only with the "newer version" message and is not rewritten.
+1111. **Night mode and Obsidian theme.** In night mode and in the dark theme the note keeps a readable paper and text.
+1112. **Phone and tablet.** At phone width the dialog fits, its swatches are at least 36 px and the bar shows the note actions; in dark and light.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Sticky notes (#20, format v15): element `sticky`; v14 → v15 migration (a note in a v14 file is refused, large v14 files still stage), lenient read and strict write, repair, merge (hidden-ink ids remapped), copy | yes | `tests/model-v15.test.ts` | | | |
+| Ink belongs to the note (geometric ownership), moves and scales with it; collapsed note hides and carries exactly its own list of strokes; eraser and lasso skip hidden ink; delete takes it along | yes | `tests/model-v15.test.ts` | | | |
+| Drawing and export: canvas, thumbnails, PNG, PDF, SVG, Markdown | yes | `tests/model-v15.test.ts` | | | |
+| Sticky UI: insert (quick slot, sheet, command), edit dialog, collapse / open, selection bar; one undo step each, refused on a locked page | yes | harness scenario `sticky` (tablet and phone, light and dark), `tests/ui-registry.test.ts` | | | |
+
 ## Quick check — Windows
 
 Mouse: draw, erase (both modes), undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scroll, Ctrl+wheel zoom, resize the window (the page refits), add a page, use every page menu action with undo, create notebooks with each paper and size, export PDF and SVG and open them, lasso select/move/resize/rotate/delete, close and reopen the notebook. Also: open the library and use every action, import a PDF and write on it, insert a PDF range and an image page, use the shape, text, image and ruler tools, scan from a photo file, use the Pages panel, run *Restore a previous version*, insert an embed in a note and open an `obsidian://notebook` link. With a pen tablet or Surface pen: pressure and eraser end (`buttons & 32`).
@@ -2285,3 +2353,116 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Highlights digest (#90): regions, crops, PDF text, marked section, group by page or colour | yes | clustering, text under bands, section replacement and idempotence (`tests/highlight-digest.test.ts`); harness `dev/harness/digest-check.ts` | | | |
+
+### 0.17 — snap: magnetic snap and alignment guides (steps 1120-1139)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`HARNESS_DOC=snap`): `dev/harness/dist/shots/snap-*.png`. Settings > Writing > *Snap and guides* and *Snap strength*. No change to the notebook format.
+
+1120. **Defaults.** Settings > Writing shows *Snap and guides: Grid and guides* and *Snap strength: 8 px*. Switch the first to *Off*: the strength row disappears.
+1121. **Grid.** On a grid page, write a word, lasso it and drag it slowly with the S Pen. Expected: it jumps onto the nearest grid line by its left, right, top or bottom edge when within a few millimetres, and a faint blue line shows which one. Lift: it stays exactly there. Repeat on dotted and millimetre paper (every 5 mm) and on ruled paper (only up and down; the margin line is a guide).
+1122. **Blank paper.** On blank paper, *Paper grid* alone does nothing; *Guides* still works.
+1123. **Alignment with another item.** Put a picture and a text box on a page; drag the text box so that its left edge nears the picture's left edge. Expected: it is pulled onto it and a pink line runs from one to the other. Do the same with the centres and with the top and bottom edges.
+1124. **Written words are items.** Write two words apart and drag one beside the other: it aligns with the whole word (not with a single stroke of it); the selection itself, and the ink that floats with a selected picture, are never targets.
+1125. **Page centre and margins.** Drag a picture towards the middle of the page: a teal line shows the page centre; on a PDF page with margins the margin edges, and on ruled paper the margin line, are teal lines too.
+1126. **Scaling.** Drag the scale handle of a picture so that its right or bottom edge nears another item or a grid line: the size is pulled so that the edge lands on it (the proportions are kept) and the guide shows.
+1127. **Rotation.** The rotate handle never snaps.
+1128. **Strength.** At 3 px the pull is barely noticeable, at 20 px it grabs from far; changing it applies to the next drag. Zoomed in, the pull is the same number of screen pixels.
+1129. **Second finger.** Hold one finger on the screen (not the palm) and drag a selection with the S Pen: it moves freely, no guides; lift the finger mid-drag and the snap resumes. With a finger drag, a second finger does the same. A resting palm must not switch the snap off.
+1130. **Snap button.** With a selection, the bar has *Snap* (a magnet): tap it to turn the snap off for this notebook view (a notice says so), tap again to turn it on. It is not shown when the setting is *Off*.
+1131. **Keyboard.** With a mouse, hold Alt while dragging: free.
+1132. **Guides only while dragging.** The guides appear during the drag and are gone when you lift; nothing is saved; undo takes the whole move back in one step.
+1133. **Many items.** On a page with a lot of ink, dragging stays smooth (the targets are made when the drag starts); on a page with more than 3000 strokes only pictures, text boxes and the page lines are targets.
+1134. **Locked page.** On a locked page a selection cannot be dragged (the lock notice), so nothing snaps.
+1135. **Across pages.** A selection that spans several pages moves freely.
+1136. **Drawing with states.** A part in a state moves with the snap too (its handles are the same).
+1137. **Phone.** The Snap button fits the bar (it is the first to go on a narrow bar and is always in the All actions sheet, Selection).
+1138. **Dark and Italian.** Guides are visible on the dark paper; the settings and the button read *Aggancio e guide*, *Forza dell'aggancio*, *Aggancio*.
+1139. **Older notebooks.** A notebook saved before this version opens and saves as usual; nothing in the file mentions the snap.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Snap and alignment guides (#71): paper grid, item/page/margin lines, move and scale, guides on the live layer, finger/Alt and button bypass, settings | yes | `tests/snap.test.ts`, `tests/snap-glue.test.ts`, harness `doc=snap` | | held-finger detection (palm size) | |
+
+### 0.17 — pagesplit: merge, split, extract pages (steps 1140-1159)
+
+Merge notebooks, split a notebook, extract pages into a new notebook (roadmap #77). Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/design/xfer-*.png`. Use a physics notebook of about 8 pages (one locked, one with a PDF or photo background, one written beside a slide, one with a bookmark), a smaller chemistry notebook, and a note of yours that links to a physics page (`[[Physics.notebook#p3&id=…]]`). Keep a copy of the vault first: these steps remove pages from notebooks (the app keeps a backup of each file it rewrites in `_backup/`).
+
+1140. **Menu.** In the library, the ⋯ menu of a notebook has *Merge another notebook into this one…*, *Split at a page…* and *Extract pages to a new notebook…*.
+1141. **Extract, copy.** *Extract pages…*: tick two pages, *Keep them here*, give a name, *Copy to new notebook*. A new notebook appears beside the first with those pages, their ink, backgrounds and bookmarks; the original is unchanged (open it: nothing missing; its file date does not change).
+1142. **Extract, move.** The same with *Remove them from here*: the button turns red and says *Move*; the pages are in the new notebook and gone from the original. Undo in the original (if it was open) brings them back; the new notebook keeps its copy.
+1143. **Locked page.** Tick a locked page in *Move* mode: the button stays off until you tick *Yes, locked pages may be removed*. In *Copy* mode no confirmation is asked, and the copy is locked too. If a move runs without that tick (a page locked while the dialog was open), the locked page stays in the original and the notice says so.
+1144. **Split.** *Split at a page…* on a notebook: choose the page the new notebook starts at (the first page is not offered); the sentence says what stays and what goes; the new notebook is called *“name” (part 2)* and sits next to the first. Open both: together they hold every page, in order.
+1145. **Merge, copy.** *Merge another notebook…* on physics: search and choose chemistry (its page count shows), choose *After page 2*: the chemistry pages are inserted there, as one undo step if physics is open. Chemistry is unchanged.
+1146. **Merge, trash.** The same with *Move the merged notebook to the trash afterwards*: the button turns red (*Merge and move to trash*); chemistry is in the library Trash only after physics has its pages; restoring it from Trash works and it still has all its pages.
+1147. **Open notebooks.** Do 1141 to 1146 while the source or the destination is open in a tab: it is edited through the open tab (undo works) and never saved twice. While you are writing with the pen the operation says it cannot edit right now; nothing is changed.
+1148. **Map.** In a notebook, open the notebook map and tap *Select pages*: cards toggle on tap; the bar shows the count, *Extract…* and *Split before this page…* (only for one page that is not the first). *Extract…* opens the dialog with those pages ticked; *Split…* with that page chosen.
+1149. **Pictures and slides.** Extract a page with a PDF or photo background and a page with ink written beside a slide: the new notebook shows the background (no second copy of the file in `_assets`) and, tapping the ink, the slide link.
+1150. **Links.** After a move or a split, if a note of yours links to a page that moved, the app offers *Review links*; nothing is rewritten until you accept in the list. A text box in a notebook that links to a moved page is counted in the notice (it is not rewritten).
+1151. **Failure.** Make the destination fail (a full disk, or turn the vault read-only) while moving: the notice says why, the pages are still in the original.
+1152. **Sync.** On a vault synced between two devices, change the source on the other device while the dialog is open, then confirm: a page that changed stays in the original (the notice says how many) and is in both notebooks.
+1153. **Look.** Light, dark, *Follow Obsidian theme*, tablet and phone width: the dialog fits, targets are at least 40 px, no sideways scroll.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Merge notebooks, split a notebook, extract pages into a new notebook (roadmap #77, 0.17 pagesplit): library menu items and the map's selection mode; copy keeps the originals (new page ids), move keeps the ids; the destination is written and read back first, the source loses only pages still as they were copied; locked pages need a confirmation to leave; a merged notebook goes to the library trash only when all its pages are in the destination and unchanged; assets, slide links, bookmarks and drawing states travel; no format change | yes | yes (`tests/notebook-transfer.test.ts` planning, ids, assets, slides, locks, removal; `tests/page-transfer-run.test.ts` the runner on an in-memory vault, open and closed notebooks; `tests/transfer-logic.test.ts`; harness `doc=xfer`) |  | the order of writes with a sync client; the Review links offer scans the notes once | not tried with the real tablet or a synced vault (steps 1140-1153); text links written inside notebooks are counted, not rewritten |
+### 0.17 — minimap: overview of the page in view (steps 1160-1179)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/minimap-*.png`. A small floating map of the page in view with the rectangle the view shows (roadmap #173). It needs no document format change: the picture is the page rendered once through the library's thumbnail renderer and cached; the corner and the collapsed state are kept per device in local storage.
+
+1160. **Automatic on an infinite page.** Make a page infinite (page sheet, *Infinite page*) and write until it is taller than the screen. Expected: a small map appears in the bottom right corner (above the fast scrollbar) with a title bar, the page picture and a coloured rectangle where you are. On a normal A4 page at fit width it does not appear.
+1161. **Automatic at high zoom.** On a normal page pinch-zoom in about twice. Expected: the map appears; pinch back to fit and it goes away. With the whole page in view it never shows in automatic mode.
+1162. **Tap to pan.** Tap a spot on the map. Expected: the view centres on it at the same zoom and the rectangle moves there.
+1163. **Drag to pan.** Drag a finger or the S Pen on the map. Expected: the rectangle and the page follow smoothly; nothing is written on the page and no stroke is created (check undo).
+1164. **Keyboard.** With a keyboard, focus the map (Tab) and press the arrow keys. Expected: the view moves by a tenth of the screen.
+1165. **Follows the page.** Scroll and zoom the page normally. Expected: the rectangle follows. Write a few strokes, lift the pen, wait about a second. Expected: the picture of the map shows the new ink; nothing redraws while the pen is writing.
+1166. **Move to another corner.** Drag the handle (the move icon on the title bar) towards another corner and release. Expected: the map settles in the nearest corner, avoiding the top right badge and the scrollbar; close and reopen the notebook: it is still there.
+1167. **Collapse.** Tap the collapse button. Expected: only a round map button remains; tapping it brings the map back. The choice is remembered after reopening.
+1168. **Setting.** Settings, *Pages*, *Page overview (minimap)*: *Never* hides it everywhere; *Always* shows it on every page; *Automatic* is the default.
+1169. **Palm and pen.** Rest the palm near the map while writing. Expected: the S Pen still writes on the page; the map never reacts to the pen while it draws elsewhere. The side-button gestures are unchanged.
+1170. **Look.** Light and dark, and with *Follow Obsidian theme*: the map matches the other floating panels; on a phone the title text is hidden and the map stays inside the page area; the controls are at least 32 px.
+1171. **Page panel and presentation.** Open the page panel and the presentation mode. Expected: the map does not cover the panel's controls; in presentation mode (a full-screen layer above it) it is covered.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Minimap (#173): floating overview of the page in view (cached low-resolution render, redrawn at most once every 1.2 s and never while the pen writes), view rectangle, tap / drag / arrow keys to pan, collapse, four corners, setting automatic / always / never; no format change | yes | `tests/minimap-geometry.test.ts` (geometry, show rules, corner, throttle, stored prefs); harness `dev/harness/minimap-check.ts` (`doc=minimap`, tablet and phone, light and dark) | | | Presentation mode covers it with its own layer (step 1171) |
+### 0.17 — pdfcopy: optional PDF copy next to each notebook (steps 1200-1219)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`HARNESS_DOC=pdfcopy`): `dev/harness/dist/shots/` (the settings rows at tablet and phone widths, dark and light).
+
+1200. **Off by default.** Fresh install: Settings > Obsidian integration > *Keep a PDF copy of each notebook* is off. Write in a notebook for a minute: no `.pdf` appears next to it. The tab's More options menu has *Keep a PDF copy* unchecked and the line *PDF copy is off*.
+1201. **Turn it on for one notebook.** Menu > *Keep a PDF copy*: a PDF named like the notebook appears next to it within a few seconds and the menu line reads *PDF copy updated hh:mm*. Open the PDF in another app: all pages, ink, paper and PDF backgrounds are there.
+1202. **Idle update (desktop).** Write something, then stop and wait about 30 seconds (do not touch the pen): the PDF changes (its time in the file manager) and the status time moves. While the pen is on the screen nothing is rebuilt.
+1203. **Unchanged is skipped.** Open and close the notebook without writing: the PDF file's modified time does not change.
+1204. **On close.** Write a stroke and close the notebook tab at once (before 30 s): shortly after, the PDF contains the stroke.
+1205. **Phone or tablet is cheap.** On Android with *Update the PDF copy* = *Automatic*: while writing nothing is rebuilt; closing the notebook, or switching to another app, updates the copy. With *After a quiet moment* it also updates while the notebook stays open.
+1206. **No stutter.** A notebook with many pages and PDF backgrounds: closing it never freezes the screen; the copy appears a little later.
+1207. **Your own file is never replaced.** Put a PDF of yours named *<notebook name>.pdf* next to a notebook first, then turn the copy on: your file is untouched, the copy is *<name> (copy 2).pdf* and a notice says why.
+1208. **A copy you edited is yours.** Annotate or replace the plugin's copy with another app (or overwrite it with any other file), then write in the notebook: the next update goes to *(copy 2)*, the edited file stays as it is.
+1209. **Global switch.** Turn *Keep a PDF copy of each notebook* on in Settings: every notebook you open and save gets a copy. Turn *Keep a PDF copy* off in one notebook's menu: that one stops (its old PDF stays); other notebooks keep theirs.
+1210. **Folder.** Set *PDF copy folder* to e.g. *Shared/PDF*: the copies go there (the folder is created). Two notebooks with the same name never replace each other's copy (the second one is *(copy 2)*).
+1211. **Rename.** Rename a notebook: its copy is renamed with it (same folder, or the new folder when it is next to the notebook); move the notebook to another folder: the copy follows. A copy you had edited is left where it is.
+1212. **Delete.** Move a notebook to the trash (library or Obsidian): the PDF stays, nothing is updated any more. Restore the notebook and write: the copy resumes.
+1213. **Italian.** Switch the plugin language to Italian: the settings rows and the menu read *Mantieni una copia PDF*, *Copia PDF aggiornata alle hh:mm*.
+1214. **Sync.** With two devices on one vault: both can keep the copy; neither duplicates it (no *(copy 2)* for a copy the other device wrote), and `_meta` holds one `pdfcopy-<device>.json` per device.
+1215. **Failure.** Make the folder unwritable or full (or name a file where the folder should be): the menu line says *PDF copy failed: …*, one notice appears, the notebook itself is unaffected.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Optional PDF copy next to the notebook (#23): global and per-notebook switch, idle / on close / background update, fingerprint skip, page-by-page build | yes | settings, targets, record store, fingerprint, timers and the service on an in-memory vault (`tests/pdf-copy-logic.test.ts`, `tests/pdf-copy-service.test.ts`); harness `dev/harness/pdfcopy-check.ts` | | | |
+| PDF copy data safety: only a file the plugin wrote (path + size + SHA-256) is replaced; renames follow, deletes stop | yes | same tests | | | |
+
+
+### 0.17 — task
+
+1240. **Make a task.** Select a handwritten line with the lasso, then *Make task…* (selection bar overflow or All actions). A dialog asks for the task text, an optional due date and the target. Add it to today's daily note: the last line of the note is `- [ ] text ![[… task pN-hhmmss.png|200]] [[Notebook, page N]] 📅 date`.
+1241. **Picture.** The picture is a crop of the page around the selection (with PDF page, pictures and ink), in the folder Obsidian uses for attachments, and it does not show up in the shared-files inbox.
+1242. **Link.** Tapping the page link in the daily note opens that page of the notebook.
+1243. **Daily note rules.** With *Create the daily note if missing* off and no note for today, a notice names the note and nothing is written; with it on the note is created (from your Daily notes template). A second task goes below the first; the rest of the note stays as it was.
+1244. **Other targets.** Set a Tasks note in Settings > Integration: it appears in the dialog (only if the note exists). *Another note…* needs a note chosen before *Add task* is enabled.
+1245. **Tasks plugin.** With the Tasks plugin installed the line shows as a task with its due date; turn *Tasks plugin date for due dates* off and the date is written as `[due:: date]`.
+1246. **Guards.** Add task is disabled until there is a text; the selection of a drawing's part (states) and a read-only notebook do not offer the action.
+1247. **Phone.** The dialog fits a phone and the date field opens the system date picker.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Task from a selection (#57): crop, link, due date, daily/tasks/chosen note | yes | line building, crop, append (`tests/selection-task.test.ts`); harness `dev/harness/task-check.ts` | | | page badge on the task's region |

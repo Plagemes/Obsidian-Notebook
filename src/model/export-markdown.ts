@@ -3,7 +3,7 @@
 // draws the pages and writes the files through the vault API. No 'obsidian' import.
 import { outlineEntries } from "./bookmarks";
 import { equationNumbers } from "./math-elements";
-import type { EquationElement, NotebookMeta, Page, TextElement } from "./types";
+import type { EquationElement, NotebookMeta, Page, StickyElement, TextElement } from "./types";
 
 /** Resolutions offered for the page images (dots per inch of the page at its real size). */
 export const MARKDOWN_DPI = [100, 150, 200] as const;
@@ -105,16 +105,19 @@ export function equationMarkdown(e: EquationElement, number?: number): string {
 }
 
 /**
- * The text boxes and (v9) the equations of a page as paragraphs, in reading order (top to bottom, then left to
- * right). Graphs are in the page image.
+ * The text boxes, (v9) the equations and (v15) the typed text of the sticky notes of a page as paragraphs, in reading order
+ * (top to bottom, then left to right); a note is a block quote. Graphs and handwriting are in the page image.
  */
 export function pageTexts(page: Pick<Page, "elements">, numbers: ReadonlyMap<string, number> = new Map()): string[] {
-	const items = (page.elements ?? []).filter((e): e is TextElement | EquationElement =>
-		(e.type === "text" && e.text.trim() !== "") || (e.type === "equation" && e.latex.trim() !== ""));
+	const items = (page.elements ?? []).filter((e): e is TextElement | EquationElement | StickyElement =>
+		(e.type === "text" && e.text.trim() !== "") || (e.type === "equation" && e.latex.trim() !== "") || (e.type === "sticky" && (e.text ?? "").trim() !== ""));
 	items.sort((a, b) => a.y - b.y || a.x - b.x);
-	return items.map((e) => (e.type === "equation"
-		? equationMarkdown(e, numbers.get(e.id))
-		: e.text.replace(/\r\n?/g, "\n").trim().split("\n").map(escapeMarkdownLine).join("  \n")));
+	const lines = (text: string) => text.replace(/\r\n?/g, "\n").trim().split("\n");
+	return items.map((e) => {
+		if (e.type === "equation") return equationMarkdown(e, numbers.get(e.id));
+		if (e.type === "sticky") return lines(e.text ?? "").map((l) => `> ${escapeMarkdownLine(l)}`).join("\n");
+		return lines(e.text).map(escapeMarkdownLine).join("  \n");
+	});
 }
 
 export interface NotebookMarkdownInput {

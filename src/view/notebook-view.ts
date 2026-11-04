@@ -9,7 +9,8 @@ import { isHeic } from "../scan/image-bytes";
 import { t } from "../i18n";
 import { renderThumbnail } from "../library/thumbnail";
 import { needsNextPage, needsPageOffer } from "../ink/auto-page";
-import { deleteInkCommand, inkOnRemoved } from "../ink/attach";
+import { deleteInkCommand, deleteSelectionCommands, inkOnRemoved, pinnedInk, withPinnedInk } from "../ink/attach";
+import { hiddenStickyInk } from "../model/sticky";
 import { captureClip, type ClipContent } from "../ink/clipboard";
 import { cleanStampFormat, formatStamp, stampElement, stampSpot } from "../ink/date-stamp";
 import {
@@ -23,7 +24,10 @@ import { growForInfinite } from "../ink/infinite";
 import { InputPolicy } from "../ink/input-policy";
 import { rectanglePolygon, strokesInLasso } from "../ink/lasso";
 import { lineBreakTarget } from "../ink/line-break";
-import { applyPlacement, uniformPlacement } from "../ink/selection-transform";
+import type { SnapGuide } from "../model/snap";
+import { dragSnapSession, snapDragged, type SnapSession } from "./snap-glue";
+import { SnapHold } from "./snap-hold";
+import { applyPlacement, itemsBounds, uniformPlacement } from "../ink/selection-transform";
 import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layout, type PageBox } from "../ink/layout";
 import { HoldTracker } from "../ink/hold";
 import { LastTool } from "../ink/last-tool";
@@ -68,6 +72,8 @@ import { VaultDocumentIO, sidecarDeviceId, vaultDeviceFileAdapter } from "../sto
 import { SharedClipStore } from "../storage/shared-clip-store";
 import { backupFolder, readSettings, type NotebookSettings } from "../settings";
 import { defaultMarkdownFolder, exportMarkdown, siblingFolder } from "./export-markdown";
+import { MakeTaskModal, runMakeTask } from "./selection-task";
+import { taskCropRect } from "../model/selection-task";
 import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./highlight-digest";
 import { canPrint } from "./print";
 import type { ExportFormat } from "../ink/export-layers";
@@ -83,6 +89,7 @@ import { NotebookMapCache } from "../model/notebook-map";
 import { NotebookMapModal } from "./notebook-map-modal";
 import type { NavController } from "./nav-controller";
 import { FastScrollbar, type ScrollbarHost } from "./scrollbar";
+import { Minimap, type MinimapHost } from "./minimap";
 import type { StatusBarInfo } from "./status-bar-logic";
 import type { NavPlace } from "../model/nav-history";
 import { openPageOpsMenu, type PageOpsHost } from "./page-ops-menu";
@@ -112,6 +119,8 @@ import { findLecturePage } from "../timetable/lecture-open";
 import type { LectureClass } from "../timetable/lecture-mode";
 import { askExercisePaper, askLayoutOptions, loadExercisePaper } from "./lecture-pack-modal";
 import { runMovePages } from "../library/move-pages";
+import { TransferFlows } from "../library/transfer-flows";
+import type { StorageEnv } from "../library/storage-actions";
 import type { PdfActionHost } from "./pdf-actions";
 import { pickFile } from "./pick";
 import { pdfSideState, referencePane, referenceSlideOf, runPdfSideAction, type PageSyncHooks } from "./pdf-sync";
@@ -143,6 +152,7 @@ import { SelectionArrange } from "./selection-arrange";
 import { StampPalette, type StampTarget } from "./stamp-palette";
 import { TextEditor, type TextEditSession } from "./text-editor";
 import { MathTools, type MathHost } from "./math-tools";
+import { StickyTools, type StickyHost } from "./sticky-tools";
 import { equationNumbers } from "../model/math-elements";
 import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites";
 import { PenControls, type PenStore } from "./pen-controls";
@@ -168,6 +178,8 @@ import {
 	unionBounds,
 } from "./view-helpers";
 import { showErrorNotice, showNotice, type NoticeHandle } from "./notice";
+import type { PdfCopyPort, PdfCopySource } from "../storage/pdf-copy-service";
+import { isInTrash } from "../storage/trash-paths";
 import { applyViewportClass, ViewportTracker } from "../ui/viewport-class";
 
 export const VIEW_TYPE = "notebook-view";
@@ -209,6 +221,8 @@ export interface NotebookHost {
 	statusChanged?(view: NotebookView): void;
 	/** Instant save journal shared by all views. */
 	journal?: JournalStore;
+	/** 0.17: where the instant-save journal is, so merge / split / extract in a view refuse to rewrite or trash a closed notebook with journal-only ink. Optional: absent in tests. */
+	transferJournal?(): StorageEnv["journal"];
 	/** Persists the plugin settings (favourite pens, eraser size, pen-only). Optional: absent in tests. */
 	saveSettings?(): Promise<void>;
 	/** Wave 0.9: practice copies of exercises (view/practice.ts). Optional: absent in tests and the harness. */
@@ -225,6 +239,8 @@ export interface NotebookHost {
 	resilience?: ResilienceServices;
 	/** wave 0.10 (362): the plugin's one store of the shared clipboard file (views must not each write it). Optional: absent in tests. */
 	sharedClips?(): SharedClipStore;
+	/** 0.17 (#23): the optional PDF copy next to each notebook. Optional: absent in tests and the harness. */
+	pdfCopy?: PdfCopyPort;
 }
 
 interface ActiveStroke {
@@ -316,12 +332,16 @@ interface Selection {
 	 * single-page selection). `pageIndex` is then the primary page: `bounds` and `matrix` are in its frame.
 	 */
 	others?: PagePart[];
+	/** 0.17 (#71): the snap guides shown while the selection is dragged (passed on to the renderer). */
+	guides?: SnapGuide[];
 }
 
 interface SelectionDrag {
 	kind: "move" | "scale" | "rotate";
 	start: [number, number];
 	startMatrix: Matrix;
+	/** 0.17 (#71): the lines this drag snaps to (absent: snap is off, the page has none, or the drag is a rotation) and the pointer that drags. */
+	snap?: { session: SnapSession; pointerType: string };
 }
 
 export class NotebookView extends FileView {
@@ -375,6 +395,8 @@ export class NotebookView extends FileView {
 	private readonly headingThumbs = new HeadingThumbs();
 	/** Roadmap 50: the fast scrollbar with a page preview (view/scrollbar.ts). */
 	private scrollbar: FastScrollbar | null = null;
+	/** 0.17 (#173): the floating overview of the page in view (view/minimap.ts). */
+	private minimap: Minimap | null = null;
 	/** Roadmap 18: stops following the history's changes (the quick slots and the page sheet enable or disable Back and Forward). */
 	private stopNav: (() => void) | null = null;
 	/** Roadmap 18: the next explicit arrival is the first load of this file, so the place left is the last one seen anywhere. */
@@ -384,9 +406,13 @@ export class NotebookView extends FileView {
 	private saveText = "";
 	private saveKind: StatusBarInfo["kind"] = "pending";
 	private statusKey = "";
+	/** 0.17 (#23): counts the moments the notebook stopped being saved (an edit): a PDF copy built across one is thrown away. */
+	private editTick = 0;
 	private textEditor: TextEditor | null = null;
 	/** v9: equations and graphs (editor, panel, typesetting, convert to ink). */
 	private math: MathTools | null = null;
+	/** 0.17 (#20): sticky notes (insert, edit, collapse). */
+	private sticky: StickyTools | null = null;
 	private rulerGesture: RulerGesture | null = null;
 	private radial: PenRadial | null = null;
 	private colour: ColourTools | null = null;
@@ -466,6 +492,10 @@ export class NotebookView extends FileView {
 	private spaceDrag: SpaceDrag | null = null;
 	private selection: Selection | null = null;
 	private drag: SelectionDrag | null = null;
+	/** 0.17 (#71): a finger held on the screen, or Alt, lets a drag move freely. */
+	private readonly snapHold = new SnapHold();
+	/** 0.17 (#71): the Snap button of the selection bar paused the snap in this view. */
+	private snapPaused = false;
 	private shapeDrag: ShapeDrag | null = null;
 	private textTap: TextTap | null = null;
 	private lassoTap: LassoTap | null = null;
@@ -593,6 +623,7 @@ export class NotebookView extends FileView {
 		// The panel sits to the left of the page (a drawer over it on narrow views).
 		this.body.insertBefore(this.pageNav.el, this.stage);
 		this.scrollbar = new FastScrollbar(this.body, this.scrollbarHost());
+		this.minimap = new Minimap(this.body, this.minimapHost());
 		this.stopNav = this.host.nav?.onChange(() => this.refreshUi()) ?? null;
 		this.heavy = new HeavyPageBanner(this.body, {
 			split: (index) => this.splitHeavyPage(index),
@@ -614,6 +645,7 @@ export class NotebookView extends FileView {
 		this.lockBadge = badge;
 		this.textEditor = new TextEditor(this.stage);
 		this.math = new MathTools(this.mathHost());
+		this.sticky = new StickyTools(this.stickyHost());
 		this.penGestures = new PenGestureLayer({
 			stage: this.stage,
 			body: this.body,
@@ -813,11 +845,19 @@ export class NotebookView extends FileView {
 			this.commitText();
 		}, true);
 
+		// 0.17 (#71): a finger held on the screen (or Alt) is the temporary way out of the snap. Capture phase: nothing hides it.
+		for (const type of ["pointerdown", "pointerup", "pointercancel"] as const) this.registerDomEvent(this.stage, type, (e) => this.snapHold.pointer(e), true);
+		this.registerDomEvent(document, "keydown", (e) => this.snapHold.key(e));
+		this.registerDomEvent(document, "keyup", (e) => this.snapHold.key(e));
+		this.registerDomEvent(window, "blur", () => this.snapHold.reset());
+
 		// Android may kill a backgrounded app without notice: save as soon as we are hidden.
 		this.registerDomEvent(document, "visibilitychange", () => {
 			if (document.visibilityState !== "hidden") return;
 			this.resilience?.hidden();
-			void this.flushNow();
+			void this.flushNow().then((saved) => {
+				if (saved && this.file) this.host.pdfCopy?.hidden(this.file.path, () => this.pdfCopySource());
+			});
 		});
 		this.registerDomEvent(window, "pagehide", () => void this.flushNow());
 		this.registerDomEvent(document, "keydown", (e) => {
@@ -901,6 +941,8 @@ export class NotebookView extends FileView {
 		this.pageMode = null;
 		this.scrollbar?.destroy();
 		this.scrollbar = null;
+		this.minimap?.destroy();
+		this.minimap = null;
 		this.stopNav?.();
 		this.stopNav = null;
 		this.selectionActions?.destroy();
@@ -1142,7 +1184,9 @@ export class NotebookView extends FileView {
 					if (current()) this.onPagesRead(pages);
 				},
 				onSaveState: (state) => {
-					if (current()) this.showSaveState(state);
+					if (!current()) return;
+					this.showSaveState(state);
+					this.notePdfCopy(state);
 				},
 				onRecovered: ({ savedAt }) => {
 					const when = new Date(savedAt);
@@ -1256,7 +1300,11 @@ export class NotebookView extends FileView {
 			// Obsidian may close the view for a deleted file before our 'delete' handler runs.
 			const file = this.file;
 			if (file && !this.app.vault.getAbstractFileByPath(file.path)) await session.markDeleted();
-			else await session.flushForClose();
+			else {
+				await session.flushForClose();
+				// 0.17 (#23): the copy follows the saved notebook (it is built in the background, after the view is gone).
+				if (file && session.mode === "ok" && !session.dirty) this.host.pdfCopy?.closing(file.path, this.pdfCopySource(session));
+			}
 		} finally {
 			session.dispose();
 			if (this.session === session) this.session = null;
@@ -1279,6 +1327,7 @@ export class NotebookView extends FileView {
 		if (this.toolbar && this.tools.eraserSize !== settings.eraserSize) this.toolbar.update({ eraserSize: settings.eraserSize });
 		this.pens?.refresh();
 		this.scrollbar?.update();
+		this.minimap?.update();
 		this.filter.params = stabilizationParams(settings.stabilization);
 		// wave 0.7: resilience (#346): safe mode turns low-latency ink and prediction off for this view.
 		const fast = this.resilience?.lowLatencyAllowed() !== false;
@@ -1765,6 +1814,28 @@ export class NotebookView extends FileView {
 		}).open();
 	}
 
+	/** 0.17 (#57): "Make task" from the selection: a dialog, then the task (with a picture of the region and a link to the page) is added to a note. */
+	makeTaskFromSelection(): void {
+		const sel = this.selection;
+		const doc = this.session?.doc;
+		const file = this.file;
+		if (!sel || !doc || !file || !this.editable() || this.statesTools?.ownsSelection(sel)) return;
+		const bounds = itemsBounds(sel.strokes, sel.elements, measureText);
+		const page = doc.pages[sel.pageIndex];
+		const shown = this.renderPagesOf(doc)[sel.pageIndex];
+		if (!bounds || !page || !shown) return;
+		const crop = taskCropRect(bounds, page);
+		const options = this.exportOptions();
+		new MakeTaskModal(this.app, this.host.settings, sel.pageIndex + 1, (request) => void runMakeTask({
+			app: this.app, file, settings: this.host.settings, page: shown, pageNumber: sel.pageIndex + 1, crop, media: this.media,
+			render: {
+				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+			},
+			...(options.prepare ? { prepare: options.prepare } : {}),
+		}, request)).open();
+	}
+
 	/** 0.16 (#90): the Highlights digest dialog (grouping, picture quality); the note is written next to the notebook. */
 	openHighlightsDigest(): void {
 		const doc = this.session?.doc;
@@ -1886,6 +1957,25 @@ export class NotebookView extends FileView {
 		};
 	}
 
+	/** 0.17 (#20): sticky notes of this view (null before the view is open). */
+	get stickyTools(): StickyTools | null {
+		return this.sticky;
+	}
+
+	/** What the sticky note tools need from the view. */
+	private stickyHost(): StickyHost {
+		return {
+			app: this.app,
+			doc: () => this.session?.doc ?? null,
+			editable: () => !!this.editableDocument(),
+			execute: (cmd) => this.applyCommand(cmd),
+			insertTarget: () => this.mathHost().insertTarget(),
+			selection: () => (this.selection ? { pageIndex: this.selection.pageIndex, elements: this.selection.elements } : null),
+			select: (pageIndex, elements) => this.selectItems(pageIndex, [], elements),
+			refresh: () => this.refreshUi(),
+		};
+	}
+
 	/** Colour picker and eyedroppers of this view (null before the view is open). */
 	get colourTools(): ColourTools | null {
 		return this.colour;
@@ -1943,7 +2033,10 @@ export class NotebookView extends FileView {
 
 	/** The strokes of `page` the reader can see (v8: hidden ink only while the solutions are shown). */
 	private inkInView(page: Page): readonly Stroke[] {
-		const ink = visibleStrokes(page.strokes, this.markers?.isRevealed(page) ?? false);
+		const shown = visibleStrokes(page.strokes, this.markers?.isRevealed(page) ?? false);
+		// 0.17 (#20): the ink a collapsed sticky note keeps hidden is not there to erase, select or offer.
+		const noteInk = hiddenStickyInk(page.elements);
+		const ink = noteInk ? shown.filter((s) => !noteInk.has(s.id)) : shown;
 		// 0.15 (241): a shown state moved some strokes away from where they were drawn: the ink tools leave them alone.
 		const moved = this.statesTools?.displaced(page);
 		return moved ? ink.filter((s) => !moved.has(s.id)) : ink;
@@ -2177,14 +2270,8 @@ export class NotebookView extends FileView {
 			this.deleteAcrossPages(sel);
 			return;
 		}
-		const commands: Command[] = [];
-		const strokes = [...sel.strokes]
-			.map((stroke) => ({ stroke, index: page.strokes.indexOf(stroke) }))
-			.filter((it) => it.index >= 0)
-			.sort((a, b) => b.index - a.index);
-		for (const it of strokes) commands.push(new ReplaceStroke(page.id, it.stroke, [], it.index));
-		const removedEls = sel.elements.filter((el) => page.elements?.includes(el));
-		for (const el of removedEls) commands.push(new RemoveElement(page.id, el));
+		// 0.17 (#20): deleting a collapsed sticky note deletes the ink it keeps hidden (the same undo step), so none comes back alone.
+		const { commands, removed: removedEls } = deleteSelectionCommands(page, sel.strokes, sel.elements);
 		// Ink written on a deleted object stays unless the user takes the offer shown afterwards (setting "Ink follows objects").
 		// v8: hidden ink is never offered (nor counted) while the solutions of the page are not shown.
 		const owned = this.host.settings.inkFollowsObjects && removedEls.length > 0
@@ -2230,13 +2317,9 @@ export class NotebookView extends FileView {
 		for (const part of this.selectionParts(sel)) {
 			const page = doc.pages[part.pageIndex];
 			if (!page) continue;
-			const strokes = part.strokes
-				.map((stroke) => ({ stroke, index: page.strokes.indexOf(stroke) }))
-				.filter((it) => it.index >= 0)
-				.sort((a, b) => b.index - a.index);
-			for (const it of strokes) commands.push(new ReplaceStroke(page.id, it.stroke, [], it.index));
-			const removedEls = part.elements.filter((el) => page.elements?.includes(el));
-			for (const el of removedEls) commands.push(new RemoveElement(page.id, el));
+			const planned = deleteSelectionCommands(page, part.strokes, part.elements);
+			commands.push(...planned.commands);
+			const removedEls = planned.removed;
 			if (this.host.settings.inkFollowsObjects && removedEls.length > 0) {
 				// v8: hidden ink is never offered (nor counted) while the solutions of the page are not shown.
 				const visible = new Set(this.inkInView(page));
@@ -2568,6 +2651,36 @@ export class NotebookView extends FileView {
 		this.setNavigatorOpen(true);
 	}
 
+	/** 0.17 (#173): what the minimap reads from the page in view and how it moves the view. Nothing here writes the document. */
+	private minimapHost(): MinimapHost {
+		const KEY = "notebook-minimap";
+		return {
+			state: () => {
+				const layout = this.layout, doc = this.shownDoc();
+				if (!layout || !doc || this.viewSize.width <= 0) return null;
+				const index = this.currentPageIndex();
+				const page = doc.pages[index], box = layout.boxes[index];
+				if (!page || !box) return null;
+				return { pageId: page.id, page: { width: page.width, height: page.height, infinite: page.infinite === true }, box, viewport: this.viewport, view: this.viewSize };
+			},
+			mode: () => this.host.settings.minimapMode,
+			busy: () => !!this.controller?.drawing || this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null,
+			panTo: (v) => this.setViewport(v, true),
+			render: (pageId, width) => {
+				const page = this.shownDoc()?.pages.find((p) => p.id === pageId);
+				if (!page || this.resilience?.thumbnailsAllowed() === false) return "";
+				return renderThumbnail(this.statesTools?.viewPages([page])[0] ?? page, width, {
+					mime: "image/jpeg",
+					quality: 0.7,
+					region: { x: 0, y: 0, width: page.width, height: page.height },
+					drawBackground: (ctx, p) => this.drawThumbMedia(ctx, p),
+				});
+			},
+			loadPrefs: () => this.app.loadLocalStorage(KEY) as unknown,
+			savePrefs: (prefs) => this.app.saveLocalStorage(KEY, prefs),
+		};
+	}
+
 	private scrollbarHost(): ScrollbarHost {
 		const pageAtIndex = (i: number): Page | null => this.shownDoc()?.pages[i] ?? null;
 		return {
@@ -2680,7 +2793,8 @@ export class NotebookView extends FileView {
 			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false, snap: this.reading?.snapping ?? false, selectText: this.pdfText?.active ?? false },
 			display: { night: this.display?.night ?? false, crop: this.display?.crop ?? false },
 			states: { open: !!this.statesTools?.open },
-			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle", readOnly: this.userReadOnly },
+			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle", readOnly: this.userReadOnly,
+				snapAvailable: this.host.settings.snapMode !== "off", snap: !this.snapPaused },
 			canPrint: canPrint(),
 			markers: {
 				invisibleInk: !!this.markers?.invisibleInk, solutions: !!this.markers?.solutionsShown,
@@ -2707,6 +2821,9 @@ export class NotebookView extends FileView {
 			graphs: sel.elements.filter((e) => e.type === "graph").length,
 			// v10: "Go to source" acts on the first excerpt of the primary page's elements.
 			excerpts: sel.elements.filter((e) => e.type === "excerpt").length,
+			// 0.17 (#20): the sticky note actions (Edit, Collapse, Open) work on the primary page's notes (see stickyTools).
+			stickies: sel.elements.filter((e) => e.type === "sticky").length,
+			stickiesCollapsed: sel.elements.filter((e) => e.type === "sticky" && e.collapsed === true).length,
 		};
 	}
 
@@ -2744,6 +2861,18 @@ export class NotebookView extends FileView {
 			menu.addItem((i) => i.setTitle(actionLabel(a)).setIcon(a.icon).setSection("action").setDisabled(!isEnabled(a, c))
 				.onClick(() => (a.scope === "global" ? this.host.runGlobal?.(id) : this.runAction(id))));
 		}
+		this.addPdfCopyItems(menu);
+	}
+
+	/** 0.17 (#23): "Keep a PDF copy" (this notebook's own choice) and, under it, when the copy was last updated. */
+	private addPdfCopyItems(menu: Menu): void {
+		const copy = this.host.pdfCopy;
+		const file = this.file;
+		if (!copy || !file || isInTrash(file.path)) return;
+		const on = copy.enabled(file.path);
+		menu.addItem((i) => i.setTitle(t("pdfCopy.menu")).setIcon("file-check").setSection("action").setChecked(on)
+			.onClick(() => void copy.setEnabled(file.path, !on, () => this.pdfCopySource()).catch((e) => console.error("[notebook] PDF copy setting", e))));
+		if (on || copy.status(file.path).kind !== "off") menu.addItem((i) => i.setTitle(copy.statusText(file.path)).setIcon("clock").setSection("action").setDisabled(true));
 	}
 
 	/** 0.16 (#87): true while the presentation is on (the Select text mode and PDF link taps stay off then). */
@@ -3032,6 +3161,7 @@ export class NotebookView extends FileView {
 		this.reading?.docChanged();
 		this.pdfText?.docChanged();
 		this.display?.docChanged();
+		this.minimap?.invalidate();
 	}
 
 	/** wave 0.9 (376): the windows of the cropped view changed (or the toggle did): lay the pages out again and fit. */
@@ -3156,6 +3286,33 @@ export class NotebookView extends FileView {
 		this.host.statusChanged?.(this);
 	}
 
+	/** 0.17 (#23): a save finished (the copy is brought up to date after a quiet moment) or an edit began (a build in progress is stale). */
+	private notePdfCopy(state: SaveState): void {
+		if (state !== "saved") {
+			this.editTick++;
+			return;
+		}
+		const path = this.file?.path;
+		if (path && this.session?.mode === "ok") this.host.pdfCopy?.saved(path, () => this.pdfCopySource());
+	}
+
+	/**
+	 * 0.17 (#23): the notebook as the PDF copy needs it: the pages as an export draws them, without hidden ink and without
+	 * equation typesetting (the view may be gone when the copy is built). Null while the notebook is not open for editing.
+	 */
+	private pdfCopySource(from: DocumentSession | null = this.session): PdfCopySource | null {
+		const doc = from?.doc;
+		const file = this.file;
+		if (!from || !doc || !file || from.mode !== "ok") return null;
+		const header = this.exportHeader();
+		return {
+			file, doc, pages: [...this.renderPagesOf(doc)],
+			options: { boxLabel: translatedBoxLabel, equationNumbers: equationNumbers(doc.pages), ...(header ? { header } : {}) },
+			stamp: () => this.editTick,
+			unsaved: () => from.dirty,
+		};
+	}
+
 	private showSaveState(state: SaveState): void {
 		if (this.session && this.session.mode !== "ok") {
 			if (this.session.mode === "not-downloaded") return this.setStatus(t("sync.status.notDownloaded"), "pending");
@@ -3191,6 +3348,7 @@ export class NotebookView extends FileView {
 
 	private afterHistoryChange(): void {
 		this.refreshLayout();
+		this.minimap?.invalidate();
 		// The document may be shorter now (page deleted or made smaller): keep the view inside it.
 		this.setViewport(this.viewport);
 		this.markChanged();
@@ -3203,6 +3361,7 @@ export class NotebookView extends FileView {
 	/** The page panel shows thumbnails of what was just drawn, a moment after the pen lifts. */
 	private scheduleNavRefresh(): void {
 		this.scheduleHeavyCheck();
+		this.minimap?.invalidate();
 		if (!this.pageNav?.open || this.navTimer !== null) return;
 		this.navTimer = window.setTimeout(() => {
 			this.navTimer = null;
@@ -3357,7 +3516,24 @@ export class NotebookView extends FileView {
 
 			setLocked: (pageId, value) => this.setLockedById(pageId, value),
 			canLock: () => !!this.editableDocument(),
+			// 0.17 (#77): extract pages / split from the map. The dialog and the run work on the file (an open view is used through its edit context).
+			extract: (ids) => void this.extractFromMap(ids),
+			split: (pageId) => void this.splitAtPage(pageId),
 		}).open();
+	}
+
+	/** 0.17 (#77): the flows for this view's notebook (merge, split, extract). */
+	private transferFlows(): TransferFlows | null {
+		return this.file ? new TransferFlows({ app: this.app, settings: () => this.host.settings, journal: this.host.transferJournal?.() }) : null;
+	}
+
+	private async extractFromMap(ids: string[]): Promise<void> {
+		if (this.file && ids.length > 0) await this.transferFlows()?.extract(this.file, ids);
+	}
+
+	private async splitAtPage(pageId: string): Promise<void> {
+		const index = this.session?.doc?.pages.findIndex((p) => p.id === pageId) ?? -1;
+		if (this.file && index > 0) await this.transferFlows()?.split(this.file, index);
 	}
 
 	/** Locks or unlocks the page with this id (the page strip and the notebook map). */
@@ -3487,6 +3663,7 @@ export class NotebookView extends FileView {
 		this.math?.place();
 		this.updatePageIndicator();
 		this.scrollbar?.update();
+		this.minimap?.update();
 		this.overlayChanged?.();
 		for (const fn of this.overlayListeners) fn();
 	}
@@ -3772,6 +3949,7 @@ export class NotebookView extends FileView {
 					return false;
 				}
 				this.drag = { kind: hit, start: grab, startMatrix: sel.matrix };
+				this.beginSnap(this.drag, sel, sample.pointerType);
 				return true;
 			}
 			this.clearSelection();
@@ -4100,6 +4278,7 @@ export class NotebookView extends FileView {
 
 		if (this.drag) {
 			this.drag = null;
+			this.endSnap();
 			if (this.selectByTaps(cancelled)) return;
 			this.commitSelectionTransform();
 			return;
@@ -4596,7 +4775,10 @@ export class NotebookView extends FileView {
 		const sel = this.selection;
 		// Ink written on the selected objects floats with them (setting "Ink follows objects").
 		const across = sel?.others?.length ? this.crossPageInk(sel) : null;
-		const attached = sel ? (across ? across[0] ?? [] : this.attachedInk(sel)) : [];
+		const pinnedHidden = sel ? hiddenStickyInk(this.pageAtIndex(sel.pageIndex)?.elements) : null;
+		const floating = sel ? (across ? across[0] ?? [] : this.attachedInk(sel)) : [];
+		// 0.17 (#20): the ink a collapsed note keeps hidden moves with it but is not drawn while it floats.
+		const attached = pinnedHidden ? floating.filter((s) => !pinnedHidden.has(s.id)) : floating;
 		const boxes = this.layout?.boxes ?? [];
 		const parts = sel?.others?.map((o, i) => {
 			const extra = across?.[i + 1] ?? [];
@@ -4722,7 +4904,54 @@ export class NotebookView extends FileView {
 			const angle = Math.atan2(p[1] - cy, p[0] - cx) - Math.atan2(drag.start[1] - cy, drag.start[0] - cx);
 			sel.matrix = multiply(rotateAbout(angle, cx, cy), m0);
 		}
+		this.snapDrag(sel, drag, b);
 		this.pushSelection();
+	}
+
+	// --- snap (0.17, #71) ---
+
+	/** Builds the lines a drag snaps to when it starts: the grid of the paper and the edges and centres of the other items. */
+	private beginSnap(drag: SelectionDrag, sel: Selection, pointerType: string): void {
+		const strokes = new Set<Stroke>(sel.strokes);
+		for (const s of this.attachedInk(sel)) strokes.add(s);
+		// A rotation, a selection across pages, a switched-off snap and the states' part editor (pose drags) have nothing to snap to.
+		const session = dragSnapSession({
+			mode: this.host.settings.snapMode, kind: drag.kind, crossPage: !!sel.others?.length, ownedByStates: !!this.statesTools?.ownsSelection(sel),
+			page: this.pageAtIndex(sel.pageIndex) ?? null, strokes, elements: new Set(sel.elements), measure: measureText,
+		});
+		if (session) drag.snap = { session, pointerType };
+	}
+
+	/** Pulls the dragged matrix onto the grid and the alignment lines, and sets the guides to draw. */
+	private snapDrag(sel: Selection, drag: SelectionDrag, bounds: BBox): void {
+		const snap = drag.snap;
+		if (!snap || drag.kind === "rotate") return;
+		if (this.snapPaused || this.snapHold.held(snap.pointerType)) {
+			sel.guides = undefined;
+			return;
+		}
+		const strength = this.host.settings.snapStrength;
+		const r = snapDragged({
+			kind: drag.kind, bounds, startMatrix: drag.startMatrix, matrix: sel.matrix, session: snap.session, mode: this.host.settings.snapMode,
+			thr: strength / this.viewport.scale,
+		});
+		sel.matrix = r.matrix;
+		sel.guides = r.guides.length > 0 ? r.guides : undefined;
+	}
+
+	/** The drag is over: the guides go (before the move is committed). */
+	private endSnap(): void {
+		const sel = this.selection;
+		if (!sel?.guides) return;
+		sel.guides = undefined;
+		this.pushSelection();
+	}
+
+	/** The Snap button of the selection bar: snap on or paused for this view (the setting stays as it is). */
+	toggleSnap(): void {
+		this.snapPaused = !this.snapPaused;
+		showNotice(t(this.snapPaused ? "snap.paused" : "snap.on"), 1800);
+		this.refreshUi();
 	}
 
 	/** Applies the dragged transform to the document as one undoable step; the selection stays on the new strokes and elements. */
@@ -4811,9 +5040,12 @@ export class NotebookView extends FileView {
 
 	/** Strokes that float with the selection without being selected: the ink written on the selected objects (none when the setting is off). */
 	private attachedInk(sel: Selection): Stroke[] {
-		if (!this.host.settings.inkFollowsObjects || sel.others?.length) return [];
+		if (sel.others?.length) return [];
 		const page = this.pageAtIndex(sel.pageIndex);
-		return page ? this.objectInk.attachedTo(page, sel) : [];
+		if (!page) return [];
+		// 0.17 (#20): the ink a collapsed sticky note keeps hidden is bound to it by the note's own list, whatever the setting says.
+		if (!this.host.settings.inkFollowsObjects) return pinnedInk(page.strokes, sel.elements);
+		return this.objectInk.attachedTo(page, sel);
 	}
 
 	/**
@@ -4869,11 +5101,8 @@ export class NotebookView extends FileView {
 		if (sel.others?.length && this.layout) {
 			return captureCrossPageClip(this.layout.boxes, doc.pages, this.selectionParts(sel), sel.pageIndex, doc.assets, measureText);
 		}
-		return captureClip(
-			sel.strokes.filter((s) => page.strokes.includes(s)),
-			sel.elements.filter((e) => page.elements?.includes(e)),
-			doc.assets, measureText,
-		);
+		const elements = sel.elements.filter((e) => page.elements?.includes(e));
+		return captureClip(withPinnedInk(page.strokes, sel.strokes.filter((s) => page.strokes.includes(s)), elements), elements, doc.assets, measureText);
 	}
 
 	/** The page under a screen point (CSS px of the window) and the point on it; null outside the page area. */

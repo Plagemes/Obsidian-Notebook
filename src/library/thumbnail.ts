@@ -2,7 +2,9 @@
 import { lodLevel, lodSvgPath } from "../ink/lod";
 import { HIGHLIGHTER_ALPHA } from "../ink/stroke-shape";
 import { minorVisible, PAPER_COLORS, paperPattern } from "../ink/paper";
+import { hiddenStickyInk } from "../model/sticky";
 import type { Page } from "../model/types";
+import { drawSticky } from "../ink/sticky-render";
 
 export interface ThumbnailOptions {
 	/** Draws under the paper pattern and the ink (e.g. a PDF page). `scale` is canvas px per pt. */
@@ -75,13 +77,16 @@ export function renderThumbnail(page: Page, width: number, options: ThumbnailOpt
 		ctx.fill();
 	}
 
+	// v15 sticky notes (under the ink written on them); the ink a collapsed note keeps hidden is left out.
+	for (const el of page.elements ?? []) if (el.type === "sticky") drawSticky(ctx, el);
+	const noteInk = hiddenStickyInk(page.elements);
 	// Small thumbnails draw strokes from simplified points (ink/lod.ts); the saved points are untouched.
 	const lod = lodLevel(scale, 1);
 	const started = performance.now();
 	let drawn = 0;
 	for (const stroke of page.strokes) {
 		// v8 invisible ink is never in a thumbnail (library cards, navigator, embeds, cards): it is the solutions.
-		if (stroke.points.length === 0 || stroke.hidden) continue;
+		if (stroke.points.length === 0 || stroke.hidden || noteInk?.has(stroke.id)) continue;
 		if (region && !strokeNear(stroke.points, visible, stroke.width)) continue;
 		if (++drawn % 64 === 0 && performance.now() - started > TIME_BUDGET_MS) break;
 		const highlighter = stroke.tool === "highlighter";

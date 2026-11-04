@@ -2,7 +2,7 @@ import type { Command } from "../model/history";
 import { AddElement, AddStroke, Batch, RemoveElement, ReplaceElement, ReplaceStroke } from "../model/history";
 import { freezeElement, freezeStroke } from "../model/serialize";
 import type { Asset, Page, PageElement, Stroke } from "../model/types";
-import { attachedInk, boundGraphId, inkOwner } from "./attach";
+import { attachedInk, boundGraphId, inkOwner, pinnedInk, withPinnedInk } from "./attach";
 import { captureClip, type ClipContent } from "./clipboard";
 import { elementBounds, elementsInLasso, transformElement } from "./elements";
 import { strokeBounds, type BBox } from "./hit-test";
@@ -124,17 +124,19 @@ export interface InkFollower {
 
 /**
  * The ink that goes where an object of `part` goes (pure): the ink bound to a selected graph (always: it is clipped to its
- * graph and meaningless without it) and, with `geometric`, the ink written on a selected object (setting "Ink follows
- * objects", ink/attach.ts). A selected stroke that is bound to a selected graph is a follower too, so it cannot be left on
+ * graph and meaningless without it), the ink a selected collapsed note keeps hidden (always) and, with `geometric`, the
+ * ink written on a selected object (setting "Ink follows objects", ink/attach.ts). A selected stroke that is bound to a selected graph is a follower too, so it cannot be left on
  * another page than its graph; any other selected stroke moves on its own.
  */
 export function inkFollowers(page: Page, part: PagePart, geometric: boolean, measure: MeasureText = estimateMeasure): InkFollower[] {
 	const elements = page.elements ?? [];
 	if (part.elements.length === 0 || elements.length === 0) return [];
 	const selected = new Set(part.strokes);
+	// 0.17 (H2): the ink a selected collapsed note keeps hidden follows it whatever the setting says (it is not written on the note).
+	const pinned = new Set(pinnedInk(page.strokes, part.elements));
 	const out: InkFollower[] = [];
 	for (const stroke of attachedInk(page.strokes, elements, part.elements, new Set(), measure)) {
-		if (boundGraphId(stroke) === null && (!geometric || selected.has(stroke))) continue;
+		if (boundGraphId(stroke) === null && !pinned.has(stroke) && (!geometric || selected.has(stroke))) continue;
 		const owner = inkOwner(stroke, elements, measure);
 		if (owner && part.elements.includes(owner)) out.push({ stroke, owner });
 	}
@@ -276,8 +278,10 @@ export function captureCrossPageClip(
 		if (!page) continue;
 		const [ox, oy] = frameOffset(boxes, primary, part.pageIndex);
 		const m = translate(ox, oy);
-		for (const s of part.strokes) if (page.strokes.includes(s)) strokes.push(ox === 0 && oy === 0 ? s : transformStroke(s, m));
-		for (const e of part.elements) if (page.elements?.includes(e)) elements.push(ox === 0 && oy === 0 ? e : transformElement(e, m, measure));
+		const here = part.elements.filter((e) => page.elements?.includes(e));
+		// 0.17: the ink a collapsed note keeps hidden goes with the note.
+		for (const s of withPinnedInk(page.strokes, part.strokes.filter((s) => page.strokes.includes(s)), here)) strokes.push(ox === 0 && oy === 0 ? s : transformStroke(s, m));
+		for (const e of here) elements.push(ox === 0 && oy === 0 ? e : transformElement(e, m, measure));
 	}
 	return captureClip(strokes, elements, assets, measure);
 }

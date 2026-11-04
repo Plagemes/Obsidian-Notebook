@@ -435,7 +435,8 @@ function fixElement(v: unknown, assets: Record<string, Asset>): RawObject | null
 	}
 	if (v.type === "marker" || v.type === "box") return fixMarkerOrBox(v, v.id);
 	// v10 excerpts go through the same lenient reader: a bad snapshot reference is left out, the anchor is kept.
-	if (v.type === "equation" || v.type === "graph" || v.type === "excerpt") return fixMathElement(v, assets);
+	// v15 sticky notes too: an invalid text or list of hidden strokes is left out, the note is kept.
+	if (v.type === "equation" || v.type === "graph" || v.type === "excerpt" || v.type === "sticky") return fixMathElement(v, assets);
 	return null;
 }
 

@@ -357,6 +357,8 @@ describe("the library check", () => {
 			"Notebooks/_meta/folders-0a1b2c3d.json", "Notebooks/_meta/library-0a1b2c3d.json", "Notebooks/_meta/library-check-0a1b2c3d.json",
 			"Notebooks/_meta/folders.unreadable-deadbeef.json", "Notebooks/_meta/library.unreadable-deadbeef.json",
 			"Notebooks/_meta/library-check.unreadable-deadbeef.json",
+			"Notebooks/_meta/collections-0a1b2c3d.json", "Notebooks/_meta/pdfcopy-0a1b2c3d.json",
+			"Notebooks/_meta/collections.unreadable-deadbeef.json", "Notebooks/_meta/pdfcopy.unreadable-deadbeef.json",
 		];
 		for (const state of [{ text: "", size: 0 }, { text: "{\"cut", size: 5 }, { unreadable: true, size: 50 }] as FakeFile[]) {
 			const src = vault().put("Notebooks/Good.notebook", { text: notebookText() }).put(...assetFile(1));
@@ -374,6 +376,11 @@ describe("the library check", () => {
 		expect(isNonHolderSidecar("_meta/library-0a1b2c3d.json", "")).toBe(true);
 		expect(isNonHolderSidecar("Notebooks/_meta/board-0a1b2c3d.json", "Notebooks")).toBe(true);
 		expect(isNonHolderSidecar("Notebooks/_meta/board.unreadable-deadbeef.json", "Notebooks")).toBe(true);
+		for (const prefix of ["collections", "pdfcopy"]) {
+			expect(isNonHolderSidecar(`Notebooks/_meta/${prefix}-0a1b2c3d.json`, "Notebooks"), prefix).toBe(true);
+			expect(isNonHolderSidecar(`Notebooks/_meta/${prefix}.unreadable-deadbeef.json`, "Notebooks"), prefix).toBe(true);
+			expect(isNonHolderSidecar(`Notebooks/_meta/sub/${prefix}-0a1b2c3d.json`, "Notebooks"), prefix).toBe(false);
+		}
 		for (const p of [
 			"Notebooks/_meta/pdf-links-0a1b2c3d.json", "Notebooks/_meta/practice-0a1b2c3d.json", "Notebooks/_meta/page-moves-0a1b2c3d.json",
 			"Notebooks/_meta/sub/folders-0a1b2c3d.json", "Notebooks/_trash/folders-0a1b2c3d.json", "Notebooks/_meta/folders-xyz.json",

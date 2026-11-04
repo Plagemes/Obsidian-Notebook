@@ -48,6 +48,7 @@ export interface UiContext {
 		/** v9: selected equations and graphs (optional, 0 when absent). */ equations?: number; graphs?: number;
 		/** v10: selected anchored excerpts (optional, 0 when absent). */ excerpts?: number;
 		/** 0.14 (402): selected text boxes (optional, 0 when absent). */ texts?: number;
+		/** 0.17 (#20): selected sticky notes, and how many of them are collapsed (optional, 0 when absent). */ stickies?: number; stickiesCollapsed?: number;
 	} | null;
 	/** The page in view (index of the page sheet when it was opened from a thumbnail). */
 	page: {
@@ -68,6 +69,7 @@ export interface UiContext {
 		ruler: boolean; penOnly: boolean; navigator: boolean; /** One page at a time (wave 0.7). */ pageMode?: boolean; /** Pen gesture mode (wave 0.8). */ penGestures?: boolean;
 		/** wave 0.10 (63): the lasso tool selects with a rectangle instead of a freehand outline. */ selectRectangle?: boolean;
 		/** wave 0.10 (51): the user switched this view to read-only mode. */ readOnly?: boolean;
+		/** 0.17 (#71): snap is available (the setting is not "off") and whether it is on now (not paused in this view). Optional (absent: available, on). */ snapAvailable?: boolean; snap?: boolean;
 	};
 	/** wave 0.10 (81): the device can print (desktop with a print dialog); false or absent on a phone or tablet. */
 	canPrint?: boolean;
@@ -233,6 +235,7 @@ export const ACTIONS: readonly ActionDef[] = [
 		id: `selection-distribute-${axis === "horizontal" ? "h" : "v"}`, label: `arrange.distribute.${axis}`, icon, group: "selection", surfaces: ["sheet"], priority: 39, scope: "view",
 		command: `command.distribute.${axis}`, when: (c) => itemCount(c) >= 3, keywords: "distribute spread space evenly arrange",
 	})),
+	{ id: "snap-toggle", label: "snap.toggle", icon: "magnet", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 30, scope: "view", when: (c) => hasSelection(c) && c.toggles.snapAvailable !== false, checked: (c) => c.toggles.snap !== false, keywords: "snap magnet grid guides align pause free move aggancio guide griglia" },
 	{ id: "selection-transform-menu", label: "transform.menu", icon: "rotate-3d", group: "selection", surfaces: ["context"], contexts: ["selection"], second: true, priority: 58, scope: "view", when: hasSelection },
 	{ id: "selection-rotate-cw", label: "transform.rotateCw", icon: "rotate-cw", group: "selection", surfaces: ["sheet"], priority: 38, scope: "view", command: "command.rotateCw", when: hasSelection, keywords: "turn quarter 90 clockwise" },
 	{ id: "selection-rotate-ccw", label: "transform.rotateCcw", icon: "rotate-ccw", group: "selection", surfaces: ["sheet"], priority: 37, scope: "view", command: "command.rotateCcw", when: hasSelection, keywords: "turn quarter 90 anticlockwise counterclockwise" },
@@ -259,6 +262,11 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "board-shot", label: "tool.boardShot", icon: "camera", group: "insert", surfaces: ["quick", "context", "sheet"], contexts: ["lecture"], priority: 55, scope: "view", command: "command.boardShot", keywords: "photo camera blackboard" },
 	// wave 0.9: math
 	{ id: "insert-equation", label: "math.insertEquation", icon: "sigma", group: "insert", surfaces: ["sheet"], priority: 52, scope: "view", command: "math.command.insertEquation", keywords: "formula latex maths math equazione formula" },
+	// 0.17 (#20): sticky notes. Insert from the quick slots and the sheet; Edit / Collapse / Open on the selection bar.
+	{ id: "insert-sticky", label: "sticky.insert", icon: "sticky-note", group: "insert", surfaces: ["quick", "sheet"], priority: 58, scope: "view", command: "sticky.command.insert", enabled: pageOpen, keywords: "sticky note post-it memo reminder nota adesiva promemoria foglietto" },
+	{ id: "sticky-edit", label: "sticky.edit", icon: "square-pen", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 91, scope: "view", when: (c) => (c.selection?.stickies ?? 0) === 1, enabled: pageOpen, keywords: "sticky note text colour nota adesiva testo colore" },
+	{ id: "sticky-collapse", label: "sticky.collapse", icon: "minimize-2", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 90, scope: "view", when: (c) => (c.selection?.stickies ?? 0) > (c.selection?.stickiesCollapsed ?? 0), enabled: pageOpen, keywords: "sticky note collapse fold icon nota adesiva comprimi" },
+	{ id: "sticky-expand", label: "sticky.expand", icon: "maximize-2", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 90, scope: "view", when: (c) => (c.selection?.stickiesCollapsed ?? 0) > 0, enabled: pageOpen, keywords: "sticky note open expand nota adesiva apri espandi" },
 	{ id: "insert-graph", label: "math.insertGraph", icon: "chart-spline", group: "insert", surfaces: ["sheet"], priority: 50, scope: "view", command: "math.command.insertGraph", keywords: "function plot chart curve grafico funzione" },
 	// "add-page" is the Obsidian command (and its hotkey): it adds a page right away, same paper, as before 0.14. The on-screen "+" is
 	// "add-page-suggest": it opens the Smart "+" strip (0.14, 410); the command of the same name opens that strip from the keyboard.
@@ -462,6 +470,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	// 0.16 (78): move the selection to another page (one undo step), or copy it there.
 	{ id: "selection-move-page", label: "movePage.move", icon: "arrow-right-to-line", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 43, scope: "view", command: true, when: hasSelection, keywords: "move send page another sposta pagina selezione" },
 	{ id: "selection-copy-page", label: "movePage.copy", icon: "copy", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 42, scope: "view", command: true, when: hasSelection, keywords: "copy duplicate page another copia pagina selezione" },
+	// 0.17 (#57): the selection becomes a task in a note (the daily note, a tasks note or a chosen one), linked back to the page.
+	{ id: "selection-make-task", label: "task.action", icon: "list-checks", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 41, scope: "view", command: true, when: hasSelection, keywords: "task todo checkbox daily note attivita compito" },
 	{ id: "selection-paste-device", label: "clipshare.paste", icon: "monitor-down", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection", "lasso"], priority: 47, scope: "view", command: true, when: (c) => c.tool === "lasso" || hasSelection(c), keywords: "clipboard tablet phone sync share vault appunti" },
 
 	// --- status banners (wave 0.7): their buttons, listed so that every visible control has a documented place.

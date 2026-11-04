@@ -4,6 +4,8 @@ import { backgroundRect } from "../model/margins";
 import { transformElement } from "./elements";
 import { drawBox, drawMarker, type BoxLabel } from "./marker-render";
 import { drawExcerpt, drawExcerptBadge } from "./excerpt-render";
+import { hiddenStickyInk } from "../model/sticky";
+import { drawSticky } from "./sticky-render";
 import { drawEquation, drawGraph, type GraphPalette } from "./math-render";
 import { graphClips, strokeClip } from "./attach";
 import { equationNumbers } from "../model/math-elements";
@@ -20,12 +22,17 @@ import { addLodNodesPath, lodLevel, lodNodes, lodPolygon } from "./lod";
 import { WetInk, type PageTransform } from "./wet-ink";
 import { ErrorOnce } from "./errors";
 import type { SpacePreviewEntry } from "./space";
+import type { SnapGuide } from "../model/snap";
 import { partMatrix, translate, type Matrix } from "./transform";
 import type { Viewport } from "./viewport";
 
 const PAPER = "#ffffff";
 const SHADOW = "rgba(0, 0, 0, 0.18)";
 const SELECTION = "#2563eb";
+/** Snap guides (roadmap #71): alignment with an item, with the page or a margin, and the paper grid. */
+const SNAP_GUIDE_ITEM = "#e11d74";
+const SNAP_GUIDE_PAGE = "#0d9488";
+const SNAP_GUIDE_GRID = "rgba(37, 99, 235, 0.45)";
 const PLACEHOLDER = "#f1f5f9";
 const PLACEHOLDER_TEXT = "#64748b";
 
@@ -116,6 +123,10 @@ export function drawElement(
 		drawExcerpt(ctx, el, img);
 		return;
 	}
+	if (el.type === "sticky") {
+		drawSticky(ctx, el);
+		return;
+	}
 	ctx.save();
 	try {
 		ctx.translate(el.x + el.width / 2, el.y + el.height / 2);
@@ -172,6 +183,8 @@ export interface SelectionOverlay {
 	 * that page adds up to in the frame of `pageIndex` (the primary page, the one `matrix` and `bounds` are in).
 	 */
 	parts?: ReadonlyArray<{ pageIndex: number; strokes: readonly Stroke[]; elements: readonly PageElement[]; offset: readonly [number, number] }>;
+	/** 0.17 (#71): the snap guides to show while the selection is dragged (page coordinates of `pageIndex`). Absent: none. */
+	guides?: readonly SnapGuide[];
 }
 
 /**
@@ -877,8 +890,10 @@ export class Renderer {
 				if (!bare && page.elements?.length) this.drawElements(ctx, page);
 				const reveal = this.revealHidden?.(page) ?? false;
 				const clips = graphClips(page.elements);
+				// v15: the ink a collapsed sticky note keeps hidden is not drawn (it comes back when the note is opened).
+				const noteInk = bare ? null : hiddenStickyInk(page.elements);
 				for (const stroke of page.strokes) {
-					if (bare || this.hidden?.has(stroke) || (stroke.hidden && !reveal)) continue;
+					if (bare || this.hidden?.has(stroke) || (stroke.hidden && !reveal) || noteInk?.has(stroke.id)) continue;
 					try {
 						const b = this.boundsOf(stroke);
 						// Bounds are padded by half the width; pen ink reaches 0.8 × width at full pressure, and
@@ -981,6 +996,11 @@ export class Renderer {
 		for (const el of elements) {
 			if (el.type !== "box" || skip(el)) continue;
 			this.guarded(ctx, "box element", () => drawBox(ctx, el, this.boxLabel));
+		}
+		// v15 sticky notes: above the boxes, under the equations, the text boxes and all the ink (their own ink included).
+		for (const el of elements) {
+			if (el.type !== "sticky" || skip(el)) continue;
+			this.guarded(ctx, "sticky element", () => drawSticky(ctx, el, this.night));
 		}
 		const numbers = this.equationNumbers();
 		for (const el of elements) {
@@ -1240,6 +1260,7 @@ export class Renderer {
 
 	/** Dashed box with a scale handle (bottom-right) and a rotate handle (above the top edge), in screen space. */
 	private drawSelectionFrame(ctx: CanvasRenderingContext2D, box: PageBox, sel: SelectionOverlay): void {
+		if (sel.guides && sel.guides.length > 0) this.drawSnapGuides(ctx, box, sel.guides);
 		const corners = selectionCorners(sel.bounds, sel.matrix).map(([x, y]) => this.pageToScreen(box, x, y));
 		const d = this.dpr;
 		ctx.save();
@@ -1260,6 +1281,26 @@ export class Renderer {
 			ctx.beginPath();
 			ctx.arc(sx, sy, h / 2, 0, Math.PI * 2);
 			ctx.fill();
+			ctx.stroke();
+		}
+		ctx.restore();
+	}
+
+	/** Thin lines on the live layer while a drag is snapping (screen space, so they stay one pixel wide at any zoom). */
+	private drawSnapGuides(ctx: CanvasRenderingContext2D, box: PageBox, guides: readonly SnapGuide[]): void {
+		const d = this.dpr;
+		ctx.save();
+		ctx.setTransform(d, 0, 0, d, 0, 0);
+		ctx.lineWidth = 1;
+		ctx.setLineDash([]);
+		for (const g of guides) {
+			ctx.strokeStyle = g.kind === "grid" ? SNAP_GUIDE_GRID : g.kind === "page" || g.kind === "margin" ? SNAP_GUIDE_PAGE : SNAP_GUIDE_ITEM;
+			const [x1, y1] = g.axis === "x" ? this.pageToScreen(box, g.pos, g.from) : this.pageToScreen(box, g.from, g.pos);
+			const [x2, y2] = g.axis === "x" ? this.pageToScreen(box, g.pos, g.to) : this.pageToScreen(box, g.to, g.pos);
+			// Half a pixel off, so a one pixel line is not smeared over two.
+			ctx.beginPath();
+			if (g.axis === "x") { const x = Math.round(x1) + 0.5; ctx.moveTo(x, y1); ctx.lineTo(x, y2); }
+			else { const y = Math.round(y1) + 0.5; ctx.moveTo(x1, y); ctx.lineTo(x2, y); }
 			ctx.stroke();
 		}
 		ctx.restore();

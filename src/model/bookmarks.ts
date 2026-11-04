@@ -83,6 +83,9 @@ function edit(meta: NotebookMeta, fn: (m: NotebookMeta) => void): NotebookMeta {
 	const next: NotebookMeta = { tags: [...meta.tags], favorite: meta.favorite, cover: meta.cover, bookmarks: [...meta.bookmarks] };
 	const info = copyBookmarkInfoMap(meta.bookmarkInfo);
 	if (info) next.bookmarkInfo = info;
+	// The description and the cover art are not bookmark data, but they are part of the metadata that is written back.
+	if (meta.description !== undefined) next.description = meta.description;
+	if (meta.coverArt) next.coverArt = { ...meta.coverArt };
 	fn(next);
 	const normalized = normalizeBookmarkInfoMap(next.bookmarkInfo, next.bookmarks);
 	if (normalized) next.bookmarkInfo = normalized;

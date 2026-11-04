@@ -1,0 +1,360 @@
+// 0.17 (#23): the PDF copy service on a small in-memory vault: what it writes, what it refuses to overwrite, how it follows renames and deletes.
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { FakeTFile, FakeTFolder } from "./fake-vault";
+
+vi.mock("obsidian", async () => (await import("./fake-vault")).obsidianMock());
+vi.stubGlobal("window", { setTimeout, clearTimeout });
+
+const { PdfCopyService } = await import("../src/storage/pdf-copy-service");
+const { PdfCopyStore } = await import("../src/storage/pdf-copy-store");
+const { DEFAULT_SETTINGS } = await import("../src/settings");
+const { createDocument } = await import("../src/model/document");
+const { line } = await import("./helpers");
+const { parseCopies } = await import("../src/storage/pdf-copy-logic");
+const { sha256Hex } = await import("../src/pdf/hash");
+import type { PdfCopySource } from "../src/storage/pdf-copy-service";
+import type { DeviceFileAdapter } from "../src/storage/device-files";
+import type { NotebookSettings } from "../src/settings";
+
+/** A vault of text and binary files, with the calls the service makes. */
+class World {
+	readonly bin = new Map<string, Uint8Array>();
+	readonly text = new Map<string, string>();
+	readonly folders = new Set<string>();
+	readonly handlers: Record<string, Array<(...a: unknown[]) => void>> = {};
+	readonly writes: string[] = [];
+	private readonly objects = new Map<string, FakeTFile>();
+
+	private file(path: string): FakeTFile {
+		let f = this.objects.get(path);
+		if (!f) this.objects.set(path, (f = new FakeTFile(path)));
+		f.stat.size = this.bin.get(path)?.length ?? this.text.get(path)?.length ?? 0;
+		return f;
+	}
+
+	readonly vault = {
+		getFileByPath: (p: string) => (this.bin.has(p) || this.text.has(p) ? this.file(p) : null),
+		getAbstractFileByPath: (p: string) => (this.bin.has(p) || this.text.has(p) ? this.file(p) : this.folders.has(p) ? new FakeTFolder(p, null as never) : null),
+		getFolderByPath: (p: string) => (this.folders.has(p) ? new FakeTFolder(p, null as never) : null),
+		readBinary: async (f: { path: string }) => {
+			const b = this.bin.get(f.path);
+			if (!b) throw new Error("ENOENT");
+			return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
+		},
+		createBinary: async (p: string, data: ArrayBuffer) => {
+			if (this.bin.has(p) || this.text.has(p)) throw new Error("exists");
+			this.writes.push(`create ${p}`);
+			this.bin.set(p, new Uint8Array(data.slice(0)));
+			return this.file(p);
+		},
+		modifyBinary: async (f: { path: string }, data: ArrayBuffer) => {
+			this.writes.push(`modify ${f.path}`);
+			this.bin.set(f.path, new Uint8Array(data.slice(0)));
+		},
+		createFolder: async (p: string) => void this.folders.add(p),
+		on: (name: string, fn: (...a: unknown[]) => void) => {
+			(this.handlers[name] ??= []).push(fn);
+			return { name };
+		},
+	};
+
+	readonly app = {
+		vault: this.vault,
+		workspace: { onLayoutReady: (fn: () => void) => fn() },
+		fileManager: {
+			renameFile: async (f: { path: string }, to: string) => {
+				const from = f.path;
+				this.writes.push(`rename ${from} -> ${to}`);
+				const b = this.bin.get(from);
+				if (b) {
+					this.bin.delete(from);
+					this.bin.set(to, b);
+				}
+				f.path = to;
+			},
+		},
+		loadLocalStorage: () => null,
+		saveLocalStorage: () => undefined,
+	} as never;
+
+	emit(name: string, ...args: unknown[]): void {
+		for (const fn of this.handlers[name] ?? []) fn(...args);
+	}
+}
+
+function memoryAdapter(files: Record<string, string>): DeviceFileAdapter {
+	return {
+		exists: async (p) => p in files || Object.keys(files).some((f) => f.startsWith(`${p}/`)),
+		read: async (p) => files[p]!,
+		write: async (p, d) => void (files[p] = d),
+		mkdir: async () => undefined,
+		list: async (folder) => Object.keys(files).filter((f) => f.startsWith(`${folder}/`)),
+	};
+}
+
+const NB = "Notebooks/Maths.notebook";
+
+function source(world: World, path = NB, strokes = 1): PdfCopySource {
+	const doc = createDocument(new Date(2026, 0, 1));
+	for (let i = 0; i < strokes; i++) doc.pages[0]!.strokes.push(line(10, 10 + i, 100, 90, 6, 2));
+	void world;
+	return {
+		file: new FakeTFile(path) as never, doc, pages: doc.pages, options: {},
+		stamp: () => 0, unsaved: () => false,
+	};
+}
+
+describe("the PDF copy service", () => {
+	let world: World;
+	let sidecar: Record<string, string>;
+	let settings: NotebookSettings;
+	let service: InstanceType<typeof PdfCopyService>;
+	let saved: number;
+
+	beforeEach(() => {
+		world = new World();
+		sidecar = {};
+		saved = 0;
+		settings = { ...DEFAULT_SETTINGS, pdfCopyNotebooks: {}, pdfCopy: true };
+		const store = new PdfCopyStore(memoryAdapter(sidecar), () => "Notebooks", "0000000a");
+		service = new PdfCopyService({ app: world.app, settings: () => settings, saveSettings: async () => void saved++, store, mobile: false });
+		service.register({ registerEvent: () => undefined, register: () => undefined } as never);
+	});
+
+	const settle = async (): Promise<void> => {
+		await vi.waitFor(() => expect((service as unknown as { running: Set<string> }).running.size).toBe(0), { timeout: 20_000 });
+		await new Promise((r) => window.setTimeout(r, 20));
+		await vi.waitFor(() => expect((service as unknown as { running: Set<string> }).running.size).toBe(0));
+	};
+
+	it("writes the copy next to the notebook, records it, and shows when", async () => {
+		service.closing(NB, source(world));
+		await vi.waitFor(() => expect(world.bin.has("Notebooks/Maths.pdf")).toBe(true), { timeout: 20_000 });
+		await settle();
+		const bytes = world.bin.get("Notebooks/Maths.pdf")!;
+		expect(String.fromCharCode(...bytes.subarray(0, 5))).toBe("%PDF-");
+		const own = parseCopies(sidecar["Notebooks/_meta/pdfcopy-0000000a.json"]!);
+		expect(own.ok && own.data.copies[NB]).toMatchObject({ pdf: "Notebooks/Maths.pdf", size: bytes.length, hash: await sha256Hex(bytes.buffer.slice(0) as ArrayBuffer) });
+		expect(service.status(NB).kind).toBe("updated");
+		expect(service.statusText(NB)).toMatch(/^PDF copy updated \d\d:\d\d$/);
+	});
+
+	it("does nothing when the copy is off, for a notebook without a choice", async () => {
+		settings.pdfCopy = false;
+		service.closing(NB, source(world));
+		await new Promise((r) => window.setTimeout(r, 50));
+		expect(world.writes).toEqual([]);
+		expect(service.status(NB).kind).toBe("off");
+	});
+
+	it("skips an unchanged notebook, and replaces its own copy when the notebook changed", async () => {
+		const same = source(world);
+		service.closing(NB, same);
+		await vi.waitFor(() => expect(world.writes).toHaveLength(1), { timeout: 20_000 });
+		await settle();
+		service.closing(NB, same);
+		await new Promise((r) => window.setTimeout(r, 300));
+		await settle();
+		expect(world.writes).toEqual(["create Notebooks/Maths.pdf"]);
+		same.doc.pages[0]!.strokes.push(line(5, 5, 50, 50, 6, 2));
+		service.closing(NB, same);
+		await vi.waitFor(() => expect(world.writes).toHaveLength(2), { timeout: 20_000 });
+		expect(world.writes[1]).toBe("modify Notebooks/Maths.pdf");
+	});
+
+	it("never overwrites a PDF of the user's: the copy goes to a new name", async () => {
+		const mine = new Uint8Array([1, 2, 3, 4]);
+		world.bin.set("Notebooks/Maths.pdf", mine);
+		service.closing(NB, source(world));
+		await vi.waitFor(() => expect(world.bin.has("Notebooks/Maths (copy 2).pdf")).toBe(true), { timeout: 20_000 });
+		await settle();
+		expect(world.bin.get("Notebooks/Maths.pdf")).toBe(mine);
+		expect(world.writes).toEqual(["create Notebooks/Maths (copy 2).pdf"]);
+	});
+
+	it("treats a copy the user changed as theirs", async () => {
+		service.closing(NB, source(world));
+		await vi.waitFor(() => expect(world.writes).toHaveLength(1), { timeout: 20_000 });
+		await settle();
+		const edited = new Uint8Array(world.bin.get("Notebooks/Maths.pdf")!);
+		edited[edited.length - 10] = edited[edited.length - 10]! ^ 0xff; // same size, other bytes
+		world.bin.set("Notebooks/Maths.pdf", edited);
+		service.closing(NB, source(world, NB, 3));
+		await vi.waitFor(() => expect(world.bin.has("Notebooks/Maths (copy 2).pdf")).toBe(true), { timeout: 20_000 });
+		expect(world.bin.get("Notebooks/Maths.pdf")).toBe(edited);
+		expect(world.writes).not.toContain("modify Notebooks/Maths.pdf");
+	});
+
+	it("does not write a copy of a notebook that is edited while it is built", async () => {
+		let tick = 0;
+		const src = { ...source(world), stamp: () => tick, unsaved: () => false };
+		const original = src.pages;
+		Object.defineProperty(src, "pages", { get: () => (tick++, original) });
+		service.closing(NB, src);
+		await new Promise((r) => window.setTimeout(r, 400));
+		await settle();
+		expect(world.writes).toEqual([]);
+	});
+
+	it("follows a renamed notebook, and leaves the copy when the notebook is deleted", async () => {
+		service.closing(NB, source(world));
+		await vi.waitFor(() => expect(world.writes).toHaveLength(1), { timeout: 20_000 });
+		await settle();
+		settings.pdfCopyNotebooks = { [NB]: true };
+		// The service registers through the Plugin API; call its handlers directly.
+		const priv = service as unknown as { onRename(n: string, o: string, f: boolean): Promise<void>; onDelete(p: string, f: boolean): Promise<void> };
+		await priv.onRename("Notebooks/Algebra.notebook", NB, false);
+		expect(world.bin.has("Notebooks/Algebra.pdf")).toBe(true);
+		expect(world.bin.has("Notebooks/Maths.pdf")).toBe(false);
+		expect(settings.pdfCopyNotebooks).toEqual({ "Notebooks/Algebra.notebook": true });
+		expect(service.status("Notebooks/Algebra.notebook").kind).toBe("updated");
+		await priv.onDelete("Notebooks/Algebra.notebook", false);
+		expect(world.bin.has("Notebooks/Algebra.pdf")).toBe(true);
+		expect(service.status("Notebooks/Algebra.notebook").kind).toBe("stopped");
+	});
+
+	it("does not rename a copy the user changed", async () => {
+		service.closing(NB, source(world));
+		await vi.waitFor(() => expect(world.writes).toHaveLength(1), { timeout: 20_000 });
+		await settle();
+		const edited = new Uint8Array(world.bin.get("Notebooks/Maths.pdf")!);
+		edited[edited.length - 10] = edited[edited.length - 10]! ^ 0xff;
+		world.bin.set("Notebooks/Maths.pdf", edited);
+		const priv = service as unknown as { onRename(n: string, o: string, f: boolean): Promise<void> };
+		await priv.onRename("Notebooks/Algebra.notebook", NB, false);
+		expect(world.bin.get("Notebooks/Maths.pdf")).toBe(edited);
+		expect(world.writes.filter((w) => w.startsWith("rename"))).toEqual([]);
+	});
+
+	it("stops updating a notebook that went into the library trash", async () => {
+		service.closing(NB, source(world));
+		await vi.waitFor(() => expect(world.writes).toHaveLength(1), { timeout: 20_000 });
+		await settle();
+		const priv = service as unknown as { onRename(n: string, o: string, f: boolean): Promise<void> };
+		await priv.onRename("Notebooks/_trash/items/abc/Maths.notebook", NB, false);
+		expect(world.bin.has("Notebooks/Maths.pdf")).toBe(true);
+		expect(service.status(NB).kind).toBe("stopped");
+		expect(service.enabled("Notebooks/_trash/items/abc/Maths.notebook")).toBe(false);
+	});
+
+	it("turns the copy on from the notebook menu and builds it", async () => {
+		settings.pdfCopy = false;
+		await service.setEnabled(NB, true, () => source(world));
+		expect(settings.pdfCopyNotebooks).toEqual({ [NB]: true });
+		expect(saved).toBe(1);
+		await vi.waitFor(() => expect(world.bin.has("Notebooks/Maths.pdf")).toBe(true), { timeout: 20_000 });
+		await settle();
+		await service.setEnabled(NB, false, () => source(world));
+		expect(settings.pdfCopyNotebooks).toEqual({});
+		expect(service.status(NB).kind).toBe("off");
+	});
+
+	// ---------------------------------------------------------------------------------------- 0.17 review fixes (data)
+
+	const SIDECAR = "Notebooks/_meta/pdfcopy-0000000a.json";
+	const shown = async (): Promise<string[]> => (await import("obsidian") as unknown as { Notice: { shown: string[] } }).Notice.shown;
+
+	it("F4: a record file that cannot be written (empty, newer, unreadable) stops the copy before any PDF is written, and tells once", async () => {
+		for (const blocked of ["", JSON.stringify({ version: 99, copies: {} }), "{not json"]) {
+			sidecar[SIDECAR] = blocked;
+			const before = (await shown()).length;
+			const src = source(world);
+			for (let n = 0; n < 3; n++) {
+				src.doc.pages[0]!.strokes.push(line(5, 5 + n, 50, 50, 6, 2));
+				service.closing(NB, src);
+				await settle();
+			}
+			expect(world.writes).toEqual([]);
+			expect(service.status(NB).kind).toBe("failed");
+			expect((await shown()).length - before).toBe(1);
+			(service as unknown as { told: Set<string> }).told.clear();
+		}
+		expect(sidecar[SIDECAR]).toBe("{not json");
+	});
+
+	it("F4: a record that cannot be saved after the PDF was written does not make a new copy at every build", async () => {
+		const store = new PdfCopyStore({ ...memoryAdapter(sidecar), write: async (p, d) => { if (d.includes(NB)) throw new Error("disk full"); sidecar[p] = d; } }, () => "Notebooks", "0000000a");
+		service = new PdfCopyService({ app: world.app, settings: () => settings, saveSettings: async () => void saved++, store, mobile: false });
+		service.register({ registerEvent: () => undefined, register: () => undefined } as never);
+		const src = source(world);
+		service.closing(NB, src);
+		await settle();
+		expect(world.writes).toEqual(["create Notebooks/Maths.pdf"]);
+		expect(service.status(NB).kind).toBe("failed");
+		for (let n = 0; n < 3; n++) {
+			src.doc.pages[0]!.strokes.push(line(5, 5 + n, 50, 50, 6, 2));
+			service.closing(NB, src);
+			await settle();
+		}
+		expect(world.writes.filter((w) => w.startsWith("create"))).toEqual(["create Notebooks/Maths.pdf"]);
+		expect(world.writes.filter((w) => w === "modify Notebooks/Maths.pdf")).toHaveLength(3);
+		expect([...world.bin.keys()]).toEqual(["Notebooks/Maths.pdf"]);
+	});
+
+	it("F5: unloading while a build runs stops it before it writes", async () => {
+		const src = { ...source(world), options: { header: () => { service.stop(); return null; } } };
+		service.closing(NB, src);
+		await new Promise((r) => window.setTimeout(r, 300));
+		expect(world.writes).toEqual([]);
+		expect(world.bin.size).toBe(0);
+	});
+
+	it("F5: a copy the user changed during the build is looked at again right before the replacement and left alone", async () => {
+		const src = source(world);
+		service.closing(NB, src);
+		await vi.waitFor(() => expect(world.writes).toHaveLength(1), { timeout: 20_000 });
+		await settle();
+		const ours = world.bin.get("Notebooks/Maths.pdf")!;
+		const theirs = new Uint8Array(ours);
+		theirs[theirs.length - 10] = theirs[theirs.length - 10]! ^ 0xff;
+		let reads = 0;
+		const read0 = world.vault.readBinary;
+		world.vault.readBinary = async (f: { path: string }) => {
+			const r = await read0(f);
+			if (f.path === "Notebooks/Maths.pdf" && ++reads === 1) world.bin.set(f.path, theirs); // after the first look
+			return r;
+		};
+		src.doc.pages[0]!.strokes.push(line(5, 5, 50, 50, 6, 2));
+		service.closing(NB, src);
+		await settle();
+		expect(world.writes).toEqual(["create Notebooks/Maths.pdf"]);
+		expect(world.bin.get("Notebooks/Maths.pdf")).toBe(theirs);
+	});
+
+	it("H5: a copy that does not read back the same is not remembered as ours: one notice, no new copy at any later build, until turned off and on", async () => {
+		const create0 = world.vault.createBinary;
+		let corrupt = true;
+		world.vault.createBinary = async (p: string, data: ArrayBuffer) => {
+			const bad = corrupt ? data.slice(0) : data;
+			if (corrupt) new Uint8Array(bad)[20] = new Uint8Array(bad)[20]! ^ 0xff; // lands on the disk other than it was written
+			return create0(p, bad);
+		};
+		const before = (await shown()).length;
+		const src = source(world);
+		for (let n = 0; n < 4; n++) {
+			src.doc.pages[0]!.strokes.push(line(5, 5 + n, 50, 50, 6, 2));
+			service.closing(NB, src);
+			await settle();
+		}
+		// One botched file, no "(copy N)", nothing replaced, nothing remembered as ours.
+		expect(world.writes).toEqual(["create Notebooks/Maths.pdf"]);
+		expect([...world.bin.keys()]).toEqual(["Notebooks/Maths.pdf"]);
+		expect((service as unknown as { remembered: Map<string, unknown> }).remembered.size).toBe(0);
+		expect(service.status(NB).kind).toBe("failed");
+		expect((await shown()).length - before).toBe(1);
+		// Turned off and on again: it tries again (the botched file is not ours, so the copy goes to a new name).
+		corrupt = false;
+		await service.setEnabled(NB, false, () => src);
+		await service.setEnabled(NB, true, () => src);
+		await settle();
+		expect(world.writes).toEqual(["create Notebooks/Maths.pdf", "create Notebooks/Maths (copy 2).pdf"]);
+	});
+
+	it("reports a failure in the status line and keeps the notebook untouched", async () => {
+		const bad = { ...source(world), options: { header: () => { throw new Error("boom"); } } };
+		service.closing(NB, bad);
+		await vi.waitFor(() => expect(service.status(NB).kind).toBe("failed"), { timeout: 20_000 });
+		expect(service.statusText(NB)).toContain("boom");
+		expect(world.writes).toEqual([]);
+	});
+});

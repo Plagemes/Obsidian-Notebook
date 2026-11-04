@@ -1324,3 +1324,15 @@ export class EditorSuggest<T> {
 		/* nothing */
 	}
 }
+
+// 0.17 hover: the page preview popover is not drawn in the harness.
+export const Keymap = {
+	isModEvent: (e: MouseEvent): boolean => e.ctrlKey || e.metaKey,
+};
+export class HoverPopover extends Component {
+	hoverEl: HTMLElement = createDiv();
+	state = 0;
+	constructor(_parent: unknown, _target: HTMLElement | null, _wait?: number) {
+		super();
+	}
+}

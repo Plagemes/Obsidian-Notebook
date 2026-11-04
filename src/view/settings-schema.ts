@@ -20,6 +20,7 @@ import { NAME_TOKEN } from "../storage/companion-path";
 import { defaultLooseSheetPath } from "../library/loose-sheet-logic";
 import { defaultDailyPath } from "../library/daily-logic";
 import { DIM_MAX, DIM_MIN, DIM_STEP } from "./reading-settings";
+import { SNAP_STRENGTH_MAX, SNAP_STRENGTH_MIN, SNAP_STRENGTH_STEP } from "../model/snap";
 import { DEFAULT_SETTINGS, type NotebookSettings } from "../settings";
 
 export type SettingKey = keyof NotebookSettings;
@@ -158,6 +159,15 @@ const WRITING: SettingSpec[] = [
 	{ id: "defaultLandscape", section: "writing", order: 30, name: "settings.defaultLandscape", control: { type: "toggle" } },
 	{ id: "stabilization", section: "writing", order: 40, name: "settings.stabilization", desc: "settings.stabilization.filter.desc", control: { type: "slider", min: 0, max: 10, step: 1 } },
 	{ id: "inkFollowsObjects", section: "writing", order: 50, name: "settings.inkFollows", desc: "settings.inkFollows.desc", control: { type: "toggle" } },
+	// 0.17 snap (#71): magnetic snap to the paper grid and alignment guides while a selection moves or scales
+	{
+		id: "snapMode", section: "writing", order: 55, name: "settings.snapMode", desc: "settings.snapMode.desc", keywords: "snap magnetic align alignment guides grid aggancio allinea griglia guide",
+		control: { type: "dropdown", options: options([["both", "settings.snapMode.both"], ["grid", "settings.snapMode.grid"], ["guides", "settings.snapMode.guides"], ["off", "settings.snapMode.off"]]) },
+	},
+	{
+		id: "snapStrength", section: "writing", order: 56, name: "settings.snapStrength", desc: "settings.snapStrength.desc",
+		control: { type: "slider", min: SNAP_STRENGTH_MIN, max: SNAP_STRENGTH_MAX, step: SNAP_STRENGTH_STEP, format: suffix("px") }, parent: "snapMode", visible: (s) => s.snapMode !== "off",
+	},
 	{ id: "autoLineBreak", section: "writing", order: 60, name: "settings.autoLineBreak", desc: "settings.autoLineBreak.desc", control: { type: "toggle" } },
 	// 0.15 pen sets: named pens per subject, loaded with the notebook (view/pen-sets.ts)
 	{
@@ -242,6 +252,11 @@ const PAGES: SettingSpec[] = [
 		control: { type: "dropdown", options: options([["continuous", "settings.scrollMode.continuous"], ["pages", "settings.scrollMode.pages"]]) },
 	},
 	{ id: "fastScrollbar", section: "pages", order: 20, name: "settings.fastScrollbar", desc: "settings.fastScrollbar.desc", control: { type: "toggle" }, parent: "scrollMode", visible: (s) => s.scrollMode === "continuous" },
+	// 0.17 minimap (#173)
+	{
+		id: "minimapMode", section: "pages", order: 25, name: "settings.minimap", desc: "settings.minimap.desc",
+		control: { type: "dropdown", options: options([["auto", "settings.minimap.auto"], ["always", "settings.minimap.always"], ["never", "settings.minimap.never"]]) }, keywords: "overview map panoramica mappa",
+	},
 	{ id: "autoNextPage", section: "pages", order: 30, name: "settings.autoNextPage", desc: "settings.autoNextPage.desc", control: { type: "toggle" } },
 	{ id: "autoScrollWriting", section: "pages", order: 40, name: "settings.autoScroll", desc: "settings.autoScroll.desc", control: { type: "toggle" } },
 	{ id: "pageTurnerKeys", section: "pages", order: 50, name: "settings.pageTurnerKeys", desc: "settings.pageTurnerKeys.desc", control: { type: "toggle" }, keywords: "keyboard tastiera clicker" },
@@ -358,6 +373,16 @@ const INTEGRATION: SettingSpec[] = [
 	{ id: "dailyNotebookPath", section: "integration", order: 30, name: "settings.dailyNotebook", desc: "settings.dailyNotebook.desc", control: { type: "text", placeholder: defaultDailyPath(DEFAULT_SETTINGS.folder) }, keywords: "daily journal today diario oggi" },
 	{ id: "dailyLink", section: "integration", order: 31, name: "settings.dailyLink", desc: "settings.dailyLink.desc", control: { type: "toggle" }, keywords: "daily notes periodic notes journal diario" },
 	{ id: "dailyCreateNote", section: "integration", order: 32, name: "settings.dailyCreateNote", desc: "settings.dailyCreateNote.desc", control: { type: "toggle" }, parent: "dailyLink", visible: (s) => s.dailyLink },
+	// 0.17 (#23): the optional PDF copy next to each notebook; a notebook can override the switch from its menu.
+	{ id: "pdfCopy", section: "integration", order: 40, name: "settings.pdfCopy", desc: "settings.pdfCopy.desc", control: { type: "toggle" }, keywords: "pdf copy share notebooklm export automatic copia condividere" },
+	{
+		id: "pdfCopyWhen", section: "integration", order: 41, name: "settings.pdfCopyWhen", desc: "settings.pdfCopyWhen.desc", keywords: "pdf copy battery android close idle chiusura",
+		control: { type: "dropdown", options: options([["auto", "settings.pdfCopyWhen.auto"], ["idle", "settings.pdfCopyWhen.idle"], ["close", "settings.pdfCopyWhen.close"]]) },
+	},
+	{ id: "pdfCopyFolder", section: "integration", order: 42, name: "settings.pdfCopyFolder", desc: "settings.pdfCopyFolder.desc", control: { type: "folder", placeholder: "" }, keywords: "pdf copy folder cartella" },
+	// 0.17 tasks (#57): "Make task" from a selection.
+	{ id: "tasksNote", section: "integration", order: 33, name: "settings.tasksNote", desc: "settings.tasksNote.desc", control: { type: "text", placeholder: "Tasks.md" }, keywords: "task todo checkbox attivita" },
+	{ id: "taskDueEmoji", section: "integration", order: 34, name: "settings.taskDueEmoji", desc: "settings.taskDueEmoji.desc", control: { type: "toggle" }, keywords: "task due date tasks plugin scadenza" },
 ];
 
 const timetableOn: Predicate = (s) => s.timetableOffer;
@@ -471,6 +496,7 @@ export const INTERNAL_SETTING_KEYS: Readonly<Partial<Record<SettingKey, string>>
 	lastNotebookPos: "instant start: zoom and scroll of the last page",
 	hintsSeen: "the tips already shown; Show tips again clears it",
 	zettelSlipBoxes: "edited from the notebook menu (Zettelkasten slip boxes)",
+	pdfCopyNotebooks: "edited from the notebook menu (Keep a PDF copy of this notebook)",
 	pinnedQuick: "edited on the toolbar (press and hold a quick action, or a row of All actions); Reset the adaptive toolbar clears it",
 };
 

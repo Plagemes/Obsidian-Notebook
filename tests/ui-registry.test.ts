@@ -27,6 +27,8 @@ const CONTEXTS: Array<[string, UiContext]> = [
 	["selection with a link", baseContext({ tool: "lasso", selection: { strokes: 0, elements: 1, images: 0, links: 1 } })],
 	["selection with an equation (wave 0.9: math)", baseContext({ tool: "lasso", selection: { strokes: 0, elements: 1, images: 0, equations: 1, graphs: 0 } })],
 	["selection with an excerpt (v10)", baseContext({ tool: "lasso", selection: { strokes: 0, elements: 1, images: 0, excerpts: 1 } })],
+	["selection with a sticky note (0.17, #20)", baseContext({ tool: "lasso", selection: { strokes: 0, elements: 1, images: 0, stickies: 1, stickiesCollapsed: 0 } })],
+	["selection with a collapsed sticky note (0.17, #20)", baseContext({ tool: "lasso", selection: { strokes: 0, elements: 1, images: 0, stickies: 1, stickiesCollapsed: 1 } })],
 	["lasso, nothing selected", baseContext({ tool: "lasso" })],
 	["PDF page", baseContext({ page: { index: 1, count: 3, background: "pdf", infinite: false, bookmarked: false }, notebook: { pdfPages: true, backgrounds: true } })],
 	["image page", baseContext({ page: { index: 1, count: 3, background: "image", infinite: false, bookmarked: false }, notebook: { pdfPages: false, backgrounds: true } })],
@@ -124,5 +126,31 @@ describe("action registry", () => {
 		expect(activeContexts(baseContext())).toEqual([]);
 		expect(activeContexts(baseContext({ tool: "lasso", selection: { strokes: 1, elements: 0, images: 0 }, lecture: true }))).toEqual(["selection", "lasso", "lecture"]);
 		expect(activeContexts(baseContext({ open: false, lecture: true }))).toEqual([]);
+	});
+});
+
+describe("sticky notes (0.17, #20)", () => {
+	const by = (id: string) => ACTIONS.find((a) => a.id === id)!;
+	const open = baseContext({ tool: "lasso", selection: { strokes: 0, elements: 1, images: 0, stickies: 1, stickiesCollapsed: 0 } });
+	const closed = baseContext({ tool: "lasso", selection: { strokes: 0, elements: 1, images: 0, stickies: 1, stickiesCollapsed: 1 } });
+	const two = baseContext({ tool: "lasso", selection: { strokes: 0, elements: 2, images: 0, stickies: 2, stickiesCollapsed: 1 } });
+
+	it("offers Edit for exactly one note, Collapse for an open one and Open for a collapsed one", () => {
+		expect(isRelevant(by("sticky-edit"), open)).toBe(true);
+		expect(isRelevant(by("sticky-collapse"), open)).toBe(true);
+		expect(isRelevant(by("sticky-expand"), open)).toBe(false);
+		expect(isRelevant(by("sticky-collapse"), closed)).toBe(false);
+		expect(isRelevant(by("sticky-expand"), closed)).toBe(true);
+		expect(isRelevant(by("sticky-edit"), two)).toBe(false);
+		expect(isRelevant(by("sticky-collapse"), two)).toBe(true);
+		expect(isRelevant(by("sticky-expand"), two)).toBe(true);
+		expect(isRelevant(by("sticky-edit"), baseContext())).toBe(false);
+	});
+
+	it("inserts only on an editable, unlocked page", () => {
+		expect(isEnabled(by("insert-sticky"), baseContext())).toBe(true);
+		expect(isEnabled(by("insert-sticky"), baseContext({ editable: false }))).toBe(false);
+		expect(isEnabled(by("insert-sticky"), baseContext({ page: { index: 0, count: 1, background: "none", infinite: false, bookmarked: false, locked: true } }))).toBe(false);
+		expect(isEnabled(by("sticky-edit"), baseContext({ ...open, page: { index: 0, count: 1, background: "none", infinite: false, bookmarked: false, locked: true } }))).toBe(false);
 	});
 });

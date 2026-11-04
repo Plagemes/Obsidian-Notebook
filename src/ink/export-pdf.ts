@@ -1,9 +1,11 @@
 import { BOX_LABEL_HEIGHT, MARKER_BADGE, markerRegion } from "../model/markers";
-import { RENDER_INK, type BoxElement, type EquationElement, type MarkerElement, type Page, type Stroke, type TextElement } from "../model/types";
+import { RENDER_INK, type BoxElement, type EquationElement, type MarkerElement, type Page, type StickyElement, type Stroke, type TextElement } from "../model/types";
 import { EQUATION_NUMBER_GAP, equationNumberLabel, equationNumbers } from "../model/math-elements";
 import { graphScene, GRAPH_STYLE, type GraphScene, type SceneText } from "../math/graph-scene";
 import { equationOutline } from "./math-render";
 import { graphClips, strokeClip } from "./attach";
+import { hiddenStickyInk, stickyColours } from "../model/sticky";
+import { stickyShapes, stickyTextBox } from "./sticky-render";
 import type { Polygon } from "../math/outline";
 import type { BBox } from "./hit-test";
 import { PAPER_DOT_RADIUS, PAPER_LINE_WIDTH } from "./export-svg";
@@ -76,7 +78,7 @@ const enc = new TextEncoder();
  * Draw order: white page, background images, paper, image elements, text elements, ink. Text uses the
  * standard Helvetica font (not embedded), WinAnsi-encoded; characters outside WinAnsi become "?".
  */
-export function pagesToPdf(pages: readonly Page[], options: PdfOptions = {}): Uint8Array {
+function* pdfSteps(pages: readonly Page[], options: PdfOptions): Generator<void, Uint8Array, void> {
 	const withPaper = options.paper ?? true;
 	// Objects are numbered in allocation order; 1 catalog, 2 page tree, 3 info.
 	const objects: Uint8Array[][] = [];
@@ -151,6 +153,7 @@ export function pagesToPdf(pages: readonly Page[], options: PdfOptions = {}): Ui
 		);
 		const body = enc.encode(content);
 		setObject(contentObj, `<< /Length ${body.length} >>\nstream\n`, body, "\nendstream");
+		yield; // 0.17 (#23): where a caller may let the interface breathe between two pages
 	}
 	setObject(catalog, `<< /Type /Catalog /Pages ${tree} 0 R >>`);
 	setObject(tree, `<< /Type /Pages /Kids [${pageObjs.map((n) => `${n} 0 R`).join(" ")}] /Count ${pages.length} >>`);
@@ -185,6 +188,28 @@ export function pagesToPdf(pages: readonly Page[], options: PdfOptions = {}): Ui
 		at += c.length;
 	}
 	return out;
+}
+
+/** The PDF of `pages` (see `pdfSteps` above for the layout). Synchronous. */
+export function pagesToPdf(pages: readonly Page[], options: PdfOptions = {}): Uint8Array {
+	const steps = pdfSteps(pages, options);
+	let step = steps.next();
+	while (!step.done) step = steps.next();
+	return step.value;
+}
+
+/**
+ * The same bytes as `pagesToPdf`, built page by page with `pause()` awaited between two pages, so a long notebook does
+ * not hold the interface for the whole build (0.17 #23: the automatic PDF copy).
+ */
+export async function pagesToPdfYielding(pages: readonly Page[], options: PdfOptions, pause: () => Promise<void>): Promise<Uint8Array> {
+	const steps = pdfSteps(pages, options);
+	let step = steps.next();
+	while (!step.done) {
+		await pause();
+		step = steps.next();
+	}
+	return step.value;
 }
 
 /** Number of colour components declared by the first SOF marker of a JPEG (3 if it cannot be found). */
@@ -299,6 +324,14 @@ function pageContent(
 		res.font = true;
 		ops.push(boxOps(el, v8.boxLabel(el)));
 	}
+	// v15 sticky notes: between the boxes and the equations, as on screen. The ink a collapsed note keeps hidden is left out.
+	for (const el of page.elements ?? []) {
+		if (el.type !== "sticky") continue;
+		const op = stickyOps(el);
+		if (op.font) res.font = true;
+		ops.push(op.ops);
+	}
+	const noteInk = hiddenStickyInk(page.elements);
 	for (const el of page.elements ?? []) {
 		if (el.type !== "equation") continue;
 		ops.push(equationOps(el, v8.numbers?.get(el.id), (v8.outline ?? equationOutline)(el), res));
@@ -313,7 +346,7 @@ function pageContent(
 	}
 	const clips = graphClips(page.elements);
 	for (const stroke of page.strokes) {
-		if (stroke.hidden && !v8.hidden) continue;
+		if ((stroke.hidden && !v8.hidden) || noteInk?.has(stroke.id)) continue;
 		const op = strokeOps(stroke);
 		if (op) {
 			if (stroke.tool === "highlighter") res.highlighter = true;
@@ -458,6 +491,34 @@ function markerOps(m: MarkerElement): { ops: string; font: boolean } {
 			out.push(op);
 			font = true;
 		}
+	}
+	out.push("Q");
+	return { ops: out.join("\n"), font };
+}
+
+/**
+ * v15 sticky note: its solid shapes (the translucent shadow is left out of a page on paper) and the typed text in Helvetica,
+ * wrapped to the note's text box and clipped to it.
+ */
+function stickyOps(el: StickyElement): { ops: string; font: boolean } {
+	const out: string[] = ["q"];
+	for (const s of stickyShapes(el)) {
+		if (s.alpha < 1) continue;
+		if (s.kind === "rect") out.push(`${rgb(s.fill)} rg ${num(s.x)} ${num(s.y)} ${num(s.width)} ${num(s.height)} re f`);
+		else out.push(`${rgb(s.fill)} rg ${polyOps(s.points)} f`);
+	}
+	let font = false;
+	if (!el.collapsed && el.text) {
+		const box = stickyTextBox(el);
+		const size = el.fontSize;
+		const lines = wrapHelvetica(el.text, size, box.width);
+		out.push(`q ${num(box.x)} ${num(box.y)} ${num(box.width)} ${num(box.height)} re W n`, "BT", `/F1 ${num(size)} Tf`, `${rgb(stickyColours(el.color).text)} rg`);
+		lines.forEach((codes, i) => {
+			if (codes.length === 0) return;
+			out.push(`1 0 0 -1 ${num(box.x)} ${num(box.y + size * (TEXT_BASELINE + i * TEXT_LINE_HEIGHT))} Tm ${winAnsiLiteral(codes)} Tj`);
+		});
+		out.push("ET", "Q");
+		font = true;
 	}
 	out.push("Q");
 	return { ops: out.join("\n"), font };

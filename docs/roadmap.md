@@ -105,12 +105,12 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 17. **P2** Links on the page: a region or element opens another page, notebook, Obsidian note or URL.
 18. **P2** 🧪 Back/forward history of visited pages.
 19. **P2** 🧪 Notebook templates: create a notebook from a saved notebook (planner, lab book).
-20. **P2** Sticky notes: movable coloured notes on the page.
+20. **P2** 🧪 Sticky notes: movable coloured notes on the page (0.17, format v15: element `sticky`, typed text and ink that belongs to the note, collapse to an icon, insert menu / selection bar).
 21. **P3** Paper colours (cream, dark, chalkboard) with ink adapted for contrast.
 
 ### Obsidian integration
 22. 🧪 **P1** Embed a page in a Markdown note: a `notebook` code block renders a page preview.
-23. **P2** Optional always-updated PDF copy next to each notebook (sharing, NotebookLM).
+23. **P2** 🧪 Optional always-updated PDF copy next to each notebook (sharing, NotebookLM).
 24. ~~**P2** Flashcards from the lasso: question and answer regions become a Markdown flashcard compatible with spaced-repetition plugins.~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
 
 ### Data and reliability
@@ -164,7 +164,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 
 ### Study
 56. **P2** Replay handwriting like a video (strokes redrawn in writing order); needs a timestamp per stroke, which also prepares audio sync (M5).
-57. **P2** Task from a selection: a region of the page becomes a task in the daily note, linked back to the page.
+57. **P2** 🧪 Task from a selection: a region of the page becomes a task in the daily note, linked back to the page.
 
 ### Integration and accessibility
 58. 🧪 **P1** Direct `obsidian://` links to a page, to open it from other apps, bookmarks or a QR code.
@@ -186,7 +186,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 68. **P2** 🧪 Style eyedropper: take colour, width and tool from an existing stroke.
 69. **P2** Smart connectors between shapes (diagrams).
 70. **P3** Mind maps: linked text nodes that move together.
-71. **P2** Magnetic snap to the grid and alignment guides.
+71. **P2** 🧪 Magnetic snap to the grid and alignment guides.
 72. **P3** Measuring tool: real distances in cm on the page.
 
 ### Pages and documents
@@ -194,7 +194,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 74. 🧪 **P1** Save a page as a template, with a template gallery.
 75. **P2** 🧪 Automatic header with date and page number.
 76. **P2** Rotate and crop imported PDF pages.
-77. **P2** Merge notebooks, split a notebook, extract pages into a new notebook.
+77. **P2** 🧪 Merge notebooks, split a notebook, extract pages into a new notebook.
 78. **P2** 🧪 Move a selection to another page.
 79. **P2** Drag files (images, PDFs) straight onto a page.
 80. **P2** 🧪 Bulk import in the library: drop many PDFs or images and they become notebooks.
@@ -219,7 +219,7 @@ Goal: notebooks behave like first-class Obsidian content. Several items depend o
 - **O2 P1** 🧪 Shared tags: notebook tags are real Obsidian tags, visible in the Tags pane (through the companion note's `tags`; tag editor with the vault's tag suggestions, Obsidian-style normalisation, library filter by tag including nested tags; a tag the person added to the note by hand is never removed).
 - **O3 P2** Native properties: course, teacher, exam date and similar edited from Obsidian's Properties panel.
 - **O4 P1** 🧪 Page links: `[[Physics#p3]]` opens the notebook at that page, with link suggestions while typing.
-- **O5 P2** Hover preview: hovering a notebook link shows the page thumbnail (page preview).
+- **O5 P2** 🧪 Hover preview: hovering a notebook link shows the page thumbnail (page preview).
 - **O6 P1** 🧪 Native embed syntax: `![[Physics.notebook#p3]]` renders the page in reading view and live preview.
 - **O7 P2** Linked mentions: inside the notebook, for each page, the notes that link to it.
 - **O8 P1** 🧪 Links written with the pen: writing `[[` by hand (two bracket strokes) — or circling ink and choosing "Link" — opens the note suggester; the chosen note becomes a link attached to that ink, tapping it opens the note. The ink stays as written. The same works in text boxes with the keyboard.
@@ -276,7 +276,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 117. ~~**P2** Review coverage map: thumbnails coloured from "never reviewed" to "reviewed often".~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
 118. **P2** Planner generator: a planner notebook with dated month, week and day pages linked to each other.
 119. **P1** 🧪 Page tags: tags on single pages, filterable in the navigator and in search.
-120. **P2** Smart collections in the library: saved rules (tag + folder + period + favourite).
+120. **P2** 🧪 Smart collections in the library: saved rules (tag + folder + period + favourite). Notebook type / template is not a rule yet.
 
 ### E. Versions, review, collaboration
 121. **P2** Visual version diff: additions in green, removals in red, between the current version and a snapshot.
@@ -362,7 +362,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 ### F. Images and view
 171. **P2** Image editing: crop, rotate, brightness and contrast.
 172. **P1** 🧪 White background made transparent: pasted images and screenshots blend with the paper.
-173. **P2** Minimap for infinite pages and high zoom.
+173. **P2** 🧪 Minimap for infinite pages and high zoom.
 
 ### G. More original ideas
 174. ~~**P2** Draft and fair copy: write a draft, then the draft dims and you rewrite cleanly on top; the draft can be hidden.~~ — dropped (user decision, 2026-10-29)

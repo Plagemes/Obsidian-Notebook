@@ -7,7 +7,7 @@ import { boundsOf as boxOf } from "../ink/gestures/geometry";
 import type { GestureWorld, Recognition } from "../ink/gestures/resolve";
 import { strokesInLasso } from "../ink/lasso";
 import { measureText } from "../ink/renderer";
-import { detectScribble, scribbleEraseSteps, scribbleVictims } from "../ink/scribble";
+import { detectScribble, erasableStrokes, scribbleEraseSteps, scribbleVictims } from "../ink/scribble";
 import { movePlan } from "../ink/gestures/move";
 import { planSpaceChange } from "../ink/space";
 import { cloneMeta, createStroke } from "../model/document";
@@ -85,7 +85,7 @@ export function gestureWorld(v: PenGestureView): GestureWorld {
 			}
 			const duration = trail[trail.length - 1]!.t - trail[0]!.t;
 			const scribble = detectScribble(pts, duration);
-			return scribble ? scribbleVictims(scribble, page.strokes, v.penStyle().width, v.boundsOf(), v.revealed(page)).length : 0;
+			return scribble ? scribbleVictims(scribble, erasableStrokes(page), v.penStyle().width, v.boundsOf(), v.revealed(page)).length : 0;
 		},
 		onPage: (p) => v.pageIndexAt(p) >= 0,
 		onSelection(p) {

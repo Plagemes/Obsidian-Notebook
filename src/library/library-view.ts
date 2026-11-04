@@ -25,6 +25,9 @@ import { applyArt, artRef, type ArtRef, type ArtSource } from "../ui/art/art-ref
 import { artStyleFor, folderIconSvg, prewarmArt, type ArtFamily, type ArtRequest } from "../ui/art/generative-art";
 import { decodeCoverArt } from "../model/cover-family";
 import type { FolderMeta } from "./folder-meta";
+import { matchesRules, type SavedCollection } from "./collections";
+import type { CollectionsStore } from "./collections-store";
+import { CollectionEditor, describeRules } from "./collections-ui";
 import { decorate, iconButton, svgDataUrl } from "../ui/components/dom";
 import { drawSafely } from "../ui/components/error-card";
 import { filterChips, type FilterChip } from "../ui/components/chip";
@@ -120,6 +123,10 @@ export interface LibraryHost {
 	afterDuplicate?(file: TFile): Promise<void>;
 	/** Roadmap #19: saves a copy of the notebook in the notebook templates folder (asks for a name). */
 	saveAsTemplate?(file: TFile): Promise<void>;
+	/** 0.17 (#77): merge another notebook into this one, split it at a page, extract pages into a new notebook (library/transfer-flows.ts). */
+	mergeNotebook?(file: TFile): Promise<void>;
+	splitNotebook?(file: TFile): Promise<void>;
+	extractPages?(file: TFile): Promise<void>;
 	/** Roadmap #19: true for a path the library must not list (the notebook templates folder, wherever it is). */
 	isHiddenPath?(path: string): boolean;
 	/** Library trash (#160): deleting moves to the plugin trash instead of deleting. */
@@ -166,13 +173,15 @@ export interface LibraryHost {
 	boardColumns?(): BoardColumn[];
 	/** 0.15: opens the dialog that edits the Board's columns. */
 	editBoardColumns?(): void;
+	/** 0.17 (#120): the saved collections, one file per device in `_meta` (library/collections.ts). */
+	collections?: CollectionsStore;
 }
 
 /**
  * 0.12: where the view is. The library's scopes, plus Home, the subjects page, the tags page and a smart collection.
  * Home and the library are two surfaces of one view, so they share one index, one reading pass and one thumbnail queue.
  */
-export type LibraryPlace = LibraryScope | "home" | "subjects" | "tags" | { collection: CollectionId };
+export type LibraryPlace = LibraryScope | "home" | "subjects" | "tags" | { collection: CollectionId } | { saved: string };
 
 /** Width classes (DESIGN.md §5): phone (rail as a sheet), tablet portrait (icon rail), wide tablet and desktop (full rail). */
 type WidthMode = "phone" | "medium" | "wide";
@@ -215,12 +224,14 @@ function parsePlace(v: unknown, fallback: LibraryPlace): LibraryPlace {
 		if (typeof o.folder === "string") return { folder: o.folder };
 		if (typeof o.tag === "string") return { tag: o.tag };
 		if (COLLECTION_IDS.includes(o.collection as CollectionId)) return { collection: o.collection as CollectionId };
+		if (typeof (o as { saved?: unknown }).saved === "string") return { saved: (o as { saved: string }).saved };
 	}
 	return fallback;
 }
 
 const isFolderPlace = (p: LibraryPlace): p is { folder: string; recursive?: boolean } => typeof p === "object" && "folder" in p;
 const isTagPlace = (p: LibraryPlace): p is { tag: string } => typeof p === "object" && "tag" in p;
+const isSavedPlace = (p: LibraryPlace): p is { saved: string } => typeof p === "object" && "saved" in p;
 const isCollectionPlace = (p: LibraryPlace): p is { collection: CollectionId } => typeof p === "object" && "collection" in p;
 
 /** The base colour of a palette entry by name (the smart collections and quick actions use fixed ones). */
@@ -430,6 +441,9 @@ export class LibraryView extends ItemView {
 		// wave 0.12: a folder's colour, icon or art changed (creation dialog, another device): redraw the cards.
 		const offMeta = this.host.folderMeta?.onFolderMetaChange(() => this.requestRender());
 		if (offMeta) this.register(offMeta);
+		// 0.17 (#120): a saved collection was made, changed or deleted here or on another device.
+		const offColl = this.host.collections?.onChange(() => this.requestRender());
+		if (offColl) this.register(offColl);
 		// 0.16 (#177): a file was shared to the vault, or one was dealt with.
 		const offShared = this.host.sharedInbox?.()?.onChange(() => this.requestRender());
 		if (offShared) this.register(offShared);
@@ -1039,6 +1053,10 @@ export class LibraryView extends ItemView {
 		if (isFolderPlace(s)) {
 			const known = s.folder === this.root() || this.app.vault.getFolderByPath(s.folder);
 			if (!known) this.place = "all";
+		} else if (isSavedPlace(s)) {
+			// Only once the files were read: before that an unknown id may just not have been loaded yet.
+			const store = this.host.collections;
+			if (store?.loaded && !store.get(s.saved)) this.place = "all";
 		} else if (isTagPlace(s)) {
 			const tag = s.tag.toLowerCase();
 			if (!this.index.tags(this.notArchived).some((x) => x.tag.toLowerCase() === tag)) this.place = "all";
@@ -1350,7 +1368,7 @@ export class LibraryView extends ItemView {
 		const archived = this.index.size - visible.length;
 		const nav = el.createEl("nav", { cls: "nb-rail-nav" });
 		const p = this.place;
-		const libraryActive = !(p === "home" || p === "tags" || p === "archived" || isFolderPlace(p) || isTagPlace(p) || (isCollectionPlace(p) && (p.collection === "pdf" || isDynamicId(p.collection))));
+		const libraryActive = !(p === "home" || p === "tags" || p === "archived" || isFolderPlace(p) || isTagPlace(p) || isSavedPlace(p) || (isCollectionPlace(p) && (p.collection === "pdf" || isDynamicId(p.collection))));
 		railItem(nav, { key: "nav:home", icon: "home", label: t("nav.home"), active: p === "home", onClick: () => this.navigate("home") });
 		railItem(nav, { key: "nav:all", icon: "folder", label: t("nav.notebooks"), active: libraryActive, onClick: () => this.navigate("all") });
 		// 0.14: the dynamic sections with something in them, each with its count.
@@ -1381,6 +1399,7 @@ export class LibraryView extends ItemView {
 		}
 
 		this.renderPinned(el);
+		this.renderCollectionsRail(el);
 
 		railLabel(el, t("nav.vault"));
 		const counts = this.folderCounts();
@@ -1477,6 +1496,67 @@ export class LibraryView extends ItemView {
 
 	// ---------------------------------------------------------------- header
 
+	// ---------------------------------------------------------------- saved collections (0.17, #120)
+
+	private savedQuery(id: string): { scope: LibraryScope; filter: (e: LibraryEntry) => boolean } {
+		const c = this.host.collections?.get(id);
+		if (!c) return { scope: "all", filter: () => false };
+		const ctx = { now: Date.now(), pinned: this.isPinned };
+		return { scope: "all", filter: (e) => this.notArchived(e) && matchesRules(c.rules, e, ctx) };
+	}
+
+	private folderLabelOf(path: string): string {
+		return path === this.root() ? this.rootLabel() : path.slice(path.lastIndexOf("/") + 1);
+	}
+
+	private openCollectionEditor(existing: SavedCollection | null): void {
+		const store = this.host.collections;
+		if (!store) return;
+		const ctx = () => ({ now: Date.now(), pinned: this.isPinned });
+		new CollectionEditor({
+			app: this.app, store, entries: () => this.visible(), context: ctx, tree: () => this.tree(), rootPath: this.root(), rootLabel: this.rootLabel(),
+			tags: () => this.index.tags(this.notArchived).map((x) => x.tag),
+			saved: (id) => this.navigate({ saved: id }),
+			deleted: (id) => {
+				if (isSavedPlace(this.place) && this.place.saved === id) this.navigate("all");
+			},
+		}, existing).open();
+	}
+
+	private editCollection(c: SavedCollection): void {
+		this.openCollectionEditor(c);
+	}
+
+	/** The "Collections" section of the rail: each saved collection with its live count, and the + that makes a new one. */
+	private renderCollectionsRail(el: HTMLElement): void {
+		const store = this.host.collections;
+		if (!store) return;
+		railLabel(el, t("nav.collections"));
+		const box = el.createDiv({ cls: "nb-rail-collections" });
+		const list = store.list();
+		const ctx = { now: Date.now(), pinned: this.isPinned };
+		const visible = this.visible();
+		const p = this.place;
+		for (const c of list) {
+			const row = box.createDiv({ cls: "nb-tree-row nb-coll-row" });
+			railItem(row, {
+				key: `coll:${c.id}`, icon: "filter", color: c.color, label: c.name, count: visible.filter((e) => matchesRules(c.rules, e, ctx)).length,
+				active: isSavedPlace(p) && p.saved === c.id, onClick: () => this.navigate({ saved: c.id }),
+			});
+			const edit = iconButton(row, "pencil", t("coll.editMenu"), () => this.editCollection(c), "nb-tree-toggle nb-coll-edit");
+			edit.dataset.key = `coll-edit:${c.id}`;
+			attachPress({ el: row, onMenu: (x, y) => this.collectionMenu(c, x, y) });
+		}
+		if (list.length === 0) box.createDiv({ cls: "nb-rail-hint", text: t("nav.collections.empty") });
+		railItem(box, { key: "coll:add", icon: "plus", label: t("coll.add"), onClick: () => this.openCollectionEditor(null) });
+	}
+
+	private collectionMenu(c: SavedCollection, x: number, y: number): void {
+		const menu = new Menu();
+		menu.addItem((i) => i.setTitle(t("coll.editMenu")).setIcon("pencil").onClick(() => this.editCollection(c)));
+		menu.showAtPosition({ x, y });
+	}
+
 	private placeTitle(): { title: string; subtitle: string } {
 		const p = this.place;
 		if (p === "home") return { title: t("home.title"), subtitle: this.greeting() };
@@ -1484,6 +1564,11 @@ export class LibraryView extends ItemView {
 			const parts = breadcrumb(this.root(), p.folder);
 			const names = parts.map((x) => (x.path === this.root() ? this.rootLabel() : x.name));
 			return { title: names[names.length - 1] ?? this.rootLabel(), subtitle: names.slice(0, -1).join(" › ") };
+		}
+		if (isSavedPlace(p)) {
+			const c = this.host.collections?.get(p.saved);
+			const words = c ? describeRules(c.rules, (path) => this.folderLabelOf(path), getLanguage()) : [];
+			return { title: c?.name ?? t("nav.collections"), subtitle: words.length > 0 ? t("coll.sub", { rules: words.join(" · ") }) : t("coll.sub.all") };
 		}
 		if (isTagPlace(p)) return { title: `#${p.tag}`, subtitle: t("lib.subtitle.tag") };
 		if (p === "tags") return { title: t("nav.tags"), subtitle: t("lib.subtitle.tags") };
@@ -1527,6 +1612,10 @@ export class LibraryView extends ItemView {
 		}
 		if (isCollectionPlace(p) && p.collection === "changed" && this.dynamicSections().changed.length > 0) {
 			iconButton(tools, "check-check", t("dyn.markSeen"), () => this.markChangedSeen(), "nb-mark-seen");
+		}
+		if (isSavedPlace(p)) {
+			const c = this.host.collections?.get(p.saved);
+			if (c) iconButton(tools, "pencil", t("coll.editMenu"), () => this.editCollection(c), "nb-coll-edit");
 		}
 		if (p !== "home") {
 			iconButton(tools, "filter", t("lib.filter"), (b) => this.filterMenu(b), isTagPlace(p) ? "is-active" : "");
@@ -2121,6 +2210,7 @@ export class LibraryView extends ItemView {
 			const c = this.collectionCtx();
 			return { scope: "all", filter: (e) => this.notArchived(e) && inCollection(id, e, c) };
 		}
+		if (isSavedPlace(p)) return this.savedQuery(p.saved);
 		if (p === "home" || p === "subjects" || p === "tags") return { scope: "all", filter: this.notArchived };
 		if (isFolderPlace(p)) return { scope: { folder: p.folder, recursive }, filter: this.notArchived };
 		return { scope: p, filter: this.notArchived };
@@ -2469,6 +2559,9 @@ export class LibraryView extends ItemView {
 		} else if (s === "all") {
 			title = t("library.empty.allArchived");
 			icon = "archive";
+		} else if (isSavedPlace(s)) {
+			title = t("coll.empty");
+			icon = "filter";
 		} else if (isCollectionPlace(s) && s.collection === "favourites") {
 			title = t("library.empty.favorites");
 			icon = "star";
@@ -2489,7 +2582,10 @@ export class LibraryView extends ItemView {
 			icon = "folder-open";
 			creatable = isFolderPlace(s);
 		}
-		const primary: EmptyStateAction | undefined = creatable
+		const saved = isSavedPlace(s) && !searching ? this.host.collections?.get(s.saved) : null;
+		const primary: EmptyStateAction | undefined = saved
+			? { icon: "pencil", label: t("coll.empty.edit"), key: "empty:edit-collection", onClick: () => this.editCollection(saved) }
+			: creatable
 			? { icon: "file-plus", label: t("empty.createNotebook"), key: "empty:new-notebook", onClick: () => this.newNotebook() }
 			: undefined;
 		const secondary: EmptyStateAction[] = creatable
@@ -2761,6 +2857,11 @@ export class LibraryView extends ItemView {
 		menu.addItem((i) => i.setTitle(t("library.menu.duplicate")).setIcon("copy").onClick(() => void this.duplicate(file)));
 		const saveTemplate = this.host.saveAsTemplate?.bind(this.host);
 		if (saveTemplate) menu.addItem((i) => i.setTitle(t("library.menu.saveTemplate")).setIcon("book-copy").onClick(() => void saveTemplate(file).catch((e) => this.fail(e))));
+		// 0.17 (#77): merge, split and extract pages. Each reports for itself; a failure that escapes is shown by fail().
+		const host = this.host;
+		if (host.mergeNotebook) menu.addItem((i) => i.setTitle(t("library.menu.merge")).setIcon("git-merge").onClick(() => void host.mergeNotebook?.(file).catch((e: unknown) => this.fail(e))));
+		if (host.splitNotebook) menu.addItem((i) => i.setTitle(t("library.menu.split")).setIcon("scissors").onClick(() => void host.splitNotebook?.(file).catch((e: unknown) => this.fail(e))));
+		if (host.extractPages) menu.addItem((i) => i.setTitle(t("library.menu.extract")).setIcon("file-output").onClick(() => void host.extractPages?.(file).catch((e: unknown) => this.fail(e))));
 		menu.addItem((i) => i.setTitle(t("library.menu.tags")).setIcon("tag").onClick(() => this.askTags(path)));
 		menu.addItem((i) => i.setTitle(t("library.menu.cover")).setIcon("palette").onClick(() => this.askCover(path)));
 		menu.addSeparator();

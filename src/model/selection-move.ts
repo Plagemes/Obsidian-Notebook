@@ -1,4 +1,4 @@
-import { boundGraphId } from "../ink/attach";
+import { boundGraphId, withPinnedInk } from "../ink/attach";
 import { captureClip, instantiateClip } from "../ink/clipboard";
 import { elementBounds, transformElement } from "../ink/elements";
 import { strokeBounds, type BBox } from "../ink/hit-test";
@@ -79,6 +79,9 @@ export function planMoveToPage(req: MoveRequest): MovePlan | { refused: MoveRefu
 		strokes = [...strokes, ...source.strokes.filter((s) => !have.has(s) && graphs.has(boundGraphId(s) ?? ""))];
 	}
 	if (strokes.length + elements.length === 0) return { refused: "nothing" };
+	// 0.17: a collapsed sticky note takes the ink it keeps hidden to the other page (never selected: it is out of view).
+	const selectedCount = strokes.length;
+	strokes = withPinnedInk(source.strokes, strokes, elements);
 	if (strokes.some((s) => {
 		const g = boundGraphId(s);
 		return g !== null && !graphs.has(g) && (source.elements ?? []).some((e) => e.type === "graph" && e.id === g);
@@ -94,7 +97,9 @@ export function planMoveToPage(req: MoveRequest): MovePlan | { refused: MoveRefu
 		const commands: Command[] = [];
 		made.strokes.forEach((s, i) => commands.push(new AddStroke(target.id, s, target.strokes.length + i)));
 		made.elements.forEach((e, i) => commands.push(new AddElement(target.id, e, (target.elements?.length ?? 0) + i)));
-		return { command: new Batch("Copy selection to page", commands), strokes: made.strokes, elements: made.elements, dx, dy, leftParts: 0, count: made.strokes.length + made.elements.length };
+		// The copied note's hidden ink (after the selected strokes) is not part of the selection that is handed back.
+		const shown = made.strokes.slice(0, selectedCount);
+		return { command: new Batch("Copy selection to page", commands), strokes: shown, elements: made.elements, dx, dy, leftParts: 0, count: shown.length + made.elements.length };
 	}
 
 	const m = translate(dx, dy);
@@ -110,7 +115,8 @@ export function planMoveToPage(req: MoveRequest): MovePlan | { refused: MoveRefu
 	const ids = new Set(strokes.map((s) => s.id));
 	const leftParts = source.states ? source.states.parts.reduce((n, p) => n + p.items.filter((id) => ids.has(id)).length, 0) : 0;
 	if (leftParts > 0) commands.push(new SetPageStates(source.id, source.states, withoutItems(source.states, ids), "Move selection to page"));
-	return { command: new Batch("Move selection to page", commands), strokes: newStrokes, elements: newElements, dx, dy, leftParts, count: newStrokes.length + newElements.length };
+	const shown = newStrokes.slice(0, selectedCount);
+	return { command: new Batch("Move selection to page", commands), strokes: shown, elements: newElements, dx, dy, leftParts, count: shown.length + newElements.length };
 }
 
 function boundsOf(strokes: readonly Stroke[], elements: readonly PageElement[], measure: MeasureText): BBox | null {

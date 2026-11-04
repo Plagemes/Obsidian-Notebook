@@ -43,15 +43,17 @@ import { openLooseSheet, openNewQuickPage } from "./loose-sheet";
 import { openTodaysPage } from "./daily";
 import type { LectureTarget } from "./home-stats";
 import { mayDiscardAsset } from "./bulk-discard";
-import { openLibraryCheck } from "./library-check-modal";
+import { journalReader, openLibraryCheck } from "./library-check-modal";
 import { openStorageManager } from "./storage-dialog";
 import { LibraryStateStore } from "./library-state-store";
 import { BoardStateStore } from "./board-state-store";
+import { CollectionsStore } from "./collections-store";
 import type { BoardColumn } from "./board-logic";
 import { BoardColumnsModal } from "../view/board-columns-modal";
 import type { LibraryHost } from "./library-view";
 import type { ThumbnailOptions } from "./thumbnail";
 import { showNotice } from "../view/notice";
+import { TransferFlows } from "./transfer-flows";
 
 /** This device's last folder of the creation dialog (local storage of the vault, not synced). */
 const LAST_FOLDER_KEY = "notebook-create-last-folder";
@@ -98,16 +100,24 @@ export class NotebookLibraryHost implements LibraryHost {
 	readonly folderMeta: FolderMetaStore;
 	/** 0.15: the Board view's statuses, one file per device in `_meta` (library/board-state.ts). */
 	readonly board: BoardStateStore;
+	/** 0.17 (#120): the saved collections (rules over the library), one file per device in `_meta` (library/collections.ts). */
+	readonly collections: CollectionsStore;
 
 	constructor(private readonly plugin: HostPlugin) {
 		this.state = new LibraryStateStore(vaultDeviceFileAdapter(plugin.app), () => plugin.settings.folder, sidecarDeviceId(plugin.app));
 		this.folderMeta = new FolderMetaStore(vaultDeviceFileAdapter(plugin.app), () => plugin.settings.folder, sidecarDeviceId(plugin.app));
 		this.board = new BoardStateStore(vaultDeviceFileAdapter(plugin.app), () => plugin.settings.folder, sidecarDeviceId(plugin.app));
+		this.collections = new CollectionsStore(vaultDeviceFileAdapter(plugin.app), () => plugin.settings.folder, sidecarDeviceId(plugin.app));
 		this.trash = new LibraryTrash({
 			app: plugin.app,
 			root: () => plugin.settings.folder,
 			retentionDays: () => plugin.settings.trashRetentionDays,
 			beforeMove: (path) => this.closeViewsOf(path),
+		});
+		this.transfers = new TransferFlows({
+			app: plugin.app, settings: () => plugin.settings, trash: this.trash,
+			// A closed notebook with edits waiting in the instant-save journal is not rewritten or trashed by a merge or a split.
+			journal: { reader: journalReader(plugin.app), folder: journalFolder(plugin.app, plugin.manifest.id) },
 		});
 		this.pdf = new PdfStore({
 			loadPdfJs: () => loadPdfJs() as Promise<PdfLib>,
@@ -190,6 +200,21 @@ export class NotebookLibraryHost implements LibraryHost {
 		const doc = this.openView(file)?.document ?? (await this.readNotebook(file));
 		if (!doc) return void showNotice(t("nbtemplate.unreadable", { name: file.basename }));
 		saveNotebookAsTemplate(this.app, this.plugin.settings, doc, file.basename);
+	}
+
+	/** 0.17 (#77): merge, split and extract pages from the library's notebook menu. */
+	private readonly transfers: TransferFlows;
+
+	mergeNotebook(file: TFile): Promise<void> {
+		return this.transfers.merge(file);
+	}
+
+	splitNotebook(file: TFile): Promise<void> {
+		return this.transfers.split(file);
+	}
+
+	extractPages(file: TFile): Promise<void> {
+		return this.transfers.extract(file);
 	}
 
 	/** The id at the start of the file, without parsing it; the whole parse when the file is laid out differently. */

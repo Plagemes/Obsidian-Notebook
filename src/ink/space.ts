@@ -1,6 +1,7 @@
 import type { NewPageContent, PageContentChange, PageContentPlan } from "../model/page-content";
 import { freezeStroke } from "../model/serialize";
 import type { PageElement, Stroke } from "../model/types";
+import { linkedInkIds } from "./attach";
 import { elementBounds, transformElement, type MeasureText } from "./elements";
 import { strokeBounds, type BBox } from "./hit-test";
 import { growForInfinite } from "./infinite";
@@ -130,8 +131,16 @@ export function analyseSpace(
 	};
 	for (let i = pageIndex; i <= endIdx; i++) {
 		const base = offset.get(i)!;
+		// 0.17: the ink a collapsed sticky note keeps hidden moves (or stays) with its note, wherever it lies: it takes the note's extent.
+		const noteOf = new Map<string, BBox>();
+		for (const el of pages[i]!.elements ?? []) {
+			const linked = linkedInkIds(el);
+			if (!linked) continue;
+			const nb = elementBounds(el, measure);
+			for (const id of linked) if (!noteOf.has(id)) noteOf.set(id, nb);
+		}
 		pages[i]!.strokes.forEach((stroke, index) => {
-			const b = boundsOf(stroke);
+			const b = noteOf.get(stroke.id) ?? boundsOf(stroke);
 			take({ stroke, page: i, index, minY: base + b.minY, maxY: base + b.maxY });
 		});
 		pages[i]!.elements?.forEach((element, index) => {

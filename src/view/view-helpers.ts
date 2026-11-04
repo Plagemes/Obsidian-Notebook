@@ -74,6 +74,7 @@ export function pageSignature(page: Page): string {
 		else if (el.type === "equation") parts.push(el.id, el.x, el.y, el.width, el.height, el.latex, el.fontSize, el.color, el.inline ? 1 : 0, el.numbered ? 1 : 0, el.outline?.length ?? 0);
 		else if (el.type === "graph") parts.push(el.id, stableStringify(el));
 		else if (el.type === "excerpt") parts.push(el.id, el.x, el.y, el.width, el.height, el.asset ?? "", stableStringify(el.source));
+		else if (el.type === "sticky") parts.push(el.id, el.x, el.y, el.width, el.height, el.color, el.fontSize, el.text ?? "", el.collapsed ? 1 : 0, el.ink?.length ?? 0);
 		else parts.push(el.id, el.x, el.y, el.kind, el.done ? 1 : 0);
 	}
 	const bg = page.background;
