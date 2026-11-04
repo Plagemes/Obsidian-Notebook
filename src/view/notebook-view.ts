@@ -137,6 +137,9 @@ import { MathTools, type MathHost } from "./math-tools";
 import { equationNumbers } from "../model/math-elements";
 import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites";
 import { PenControls, type PenStore } from "./pen-controls";
+import { PenSetControls, setForOpen, type PenSetHost } from "./pen-set-controls";
+import { favouritePatch } from "./favourites";
+import { MAX_FOLDER_ASSIGNMENTS, MAX_NOTEBOOK_ASSIGNMENTS, normaliseAssignments, normalisePenSets, slotsOf, withSetPens, type PenSet } from "./pen-sets";
 import { PdfReading, type ReadingHost } from "./pdf-reading";
 import type { PracticeHooks, PracticeProvider, PracticeViewHost } from "./practice-types";
 import { NotebookTabs } from "./notebook-tabs";
@@ -420,6 +423,9 @@ export class NotebookView extends FileView {
 	private fitMode = true;
 	private tools: ToolbarState = { ...DEFAULT_TOOLS };
 	private pens: PenControls | null = null;
+	/** 0.15 pen sets: the switcher in the pen options and the set the strip shows now (null: the favourite pens); not saved. */
+	private penSetUi: PenSetControls | null = null;
+	private activePenSetId: string | null = null;
 	/** Wave 0.6: PDF search, snapping highlighter, hide annotations, dimmed backgrounds (pdf-reading.ts). */
 	private reading: PdfReading | null = null;
 	/** wave 0.9: night mode (367) and the cropped view of PDF pages (376). */
@@ -588,6 +594,8 @@ export class NotebookView extends FileView {
 		});
 		this.mountPenLinks(this.textEditor);
 		this.pens = new PenControls(this.toolbar, this.stage, this.penStore());
+		this.penSetUi = new PenSetControls(this.toolbar.penSetsEl, this.penSetHost());
+		this.pens.onRefresh = () => this.penSetUi?.refresh();
 		this.ui = new ViewUi({
 			app: this.app, root: this.contentEl, body: this.body, toolbar: this.toolbar,
 			context: (pageIndex) => this.uiContext(pageIndex),
@@ -704,7 +712,7 @@ export class NotebookView extends FileView {
 			// ui redesign: the dial's redo, favourites, save-as-favourite, ruler and eyedropper hint.
 			canRedo: () => this.history.canRedo(),
 			redo: () => this.runAction("redo"),
-			favourites: () => this.host.settings.favouritePens,
+			favourites: () => this.penStore().favourites(),
 			applyFavourite: (i) => this.runAction(`favourite-${i + 1}`),
 			saveFavourite: (i) => this.pens?.saveCurrentTo(i),
 			toggleRuler: () => this.runAction("toggle-ruler"),
@@ -825,6 +833,7 @@ export class NotebookView extends FileView {
 		this.navTimer = this.thumbTimer = this.snapFlashTimer = this.heavyTimer = null;
 		this.pens?.destroy();
 		this.pens = null;
+		this.penSetUi = null;
 		this.reading?.destroy();
 		this.reading = null;
 		this.display?.destroy();
@@ -1150,6 +1159,7 @@ export class NotebookView extends FileView {
 		try {
 			// A large notebook is shown as soon as the page asked for is read; the rest follows (see StagedParse).
 			await session.load({ staged: true, page: this.pendingPage });
+			this.loadPenSetForNotebook(file);
 			hint("notebook-opened");
 		} catch (e) {
 			this.showError((e as Error).message);
@@ -1158,6 +1168,7 @@ export class NotebookView extends FileView {
 
 	async onUnloadFile(file: TFile): Promise<void> {
 		await this.closeSession();
+		this.activePenSetId = null;
 		// wave 0.10 (51): read-only mode belongs to the notebook being read; the next one opens editable.
 		if (this.userReadOnly) this.setReadOnlyMode(false, false);
 		this.syncSafety?.closed();
@@ -1476,9 +1487,16 @@ export class NotebookView extends FileView {
 		const s = (): NotebookSettings => this.host.settings;
 		const save = (): void => void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
 		return {
-			favourites: () => s().favouritePens,
+			// 0.15 pen sets: while a set is active the strip shows it and a saved slot is written into that set; the
+			// user's own favourite pens are only touched when no set is active.
+			favourites: () => {
+				const set = this.activePenSet();
+				return set ? slotsOf(set, s().favouritePens) : s().favouritePens;
+			},
 			saveFavourites: (favs: FavouritePen[]) => {
-				s().favouritePens = favs;
+				const set = this.activePenSet();
+				if (set) s().penSets = withSetPens(s().penSets, set.id, favs);
+				else s().favouritePens = favs;
 				save();
 			},
 			penOnly: () => !s().fingerDrawing,
@@ -1493,6 +1511,48 @@ export class NotebookView extends FileView {
 				save();
 			},
 		};
+	}
+
+	// --- pen sets (0.15) ---
+
+	private activePenSet(): PenSet | null {
+		const id = this.activePenSetId;
+		return id ? this.host.settings.penSets.find((x) => x.id === id) ?? null : null;
+	}
+
+	private penSetHost(): PenSetHost {
+		const s = (): NotebookSettings => this.host.settings;
+		return {
+			app: this.app,
+			data: () => ({ sets: s().penSets, folders: s().penSetFolders, notebooks: s().penSetNotebooks }),
+			update: (next) => {
+				s().penSets = normalisePenSets(next.sets);
+				s().penSetFolders = normaliseAssignments(next.folders, MAX_FOLDER_ASSIGNMENTS);
+				s().penSetNotebooks = normaliseAssignments(next.notebooks, MAX_NOTEBOOK_ASSIGNMENTS);
+				if (this.activePenSetId && !this.activePenSet()) this.activePenSetId = null; // the set was deleted
+				this.pens?.refresh();
+				void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
+			},
+			activeId: () => this.activePenSetId,
+			choose: (id) => {
+				this.activePenSetId = id;
+				this.pens?.refresh();
+			},
+			notebook: () => (this.file ? { id: this.session?.doc?.id ?? null, path: this.file.path } : null),
+			strip: () => this.penStore().favourites().map((f) => ({ ...f })),
+			editable: () => this.editable(),
+		};
+	}
+
+	/** A notebook was opened: use the set of the notebook, else of its nearest folder, else the favourite pens. */
+	private loadPenSetForNotebook(file: TFile): void {
+		const s = this.host.settings;
+		const set = setForOpen({ sets: s.penSets, folders: s.penSetFolders, notebooks: s.penSetNotebooks }, this.session?.doc?.id ?? null, file.path);
+		this.activePenSetId = set?.id ?? null;
+		// The first pen of the set is taken only when a pen or the highlighter is in use (an eraser or lasso stays).
+		const first = set ? slotsOf(set, s.favouritePens)[0] : undefined;
+		if (first && (this.tools.tool === "pen" || this.tools.tool === "highlighter")) this.toolbar.update(favouritePatch(first) as Partial<ToolbarState>);
+		this.pens?.refresh();
 	}
 
 	/** Switches between continuous scrolling and one page at a time, staying on the page in view. */

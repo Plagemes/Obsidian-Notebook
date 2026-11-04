@@ -35,6 +35,8 @@ export class PenControls {
 	private cursorShown = false;
 	private lastLongPress = -Infinity;
 	private lastActive = -1;
+	/** 0.15 pen sets: called at the end of every refresh (the pen set switcher follows the strip). */
+	onRefresh: (() => void) | null = null;
 
 	constructor(private readonly toolbar: Toolbar, stage: HTMLElement, private readonly store: PenStore) {
 		for (let i = 0; i < FAVOURITE_SLOTS; i++) this.slotButtons.push(this.buildSlot(i));
@@ -104,6 +106,7 @@ export class PenControls {
 		}
 
 		this.cursor.setCssProps({ "--notebook-eraser-d": `${s.eraserSize * 2}px` });
+		this.onRefresh?.();
 	}
 
 	/** The toolbar state changed (called by the view). Persists a changed eraser size. */

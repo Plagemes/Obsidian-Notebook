@@ -141,6 +141,8 @@ for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"])
 for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) for (const doc of ["toolbar", "toolbar-pdf"]) SCENARIOS.push({ doc, theme, device, lowLatency: false });
 // 0.14 slides: ink linked to the slide beside it (badges) and the slide strip, tablet and phone, dark and light (dist/shots/slides-*.png).
 for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "slides", theme, device, lowLatency: false });
+// 0.15 pensets: pen sets per subject on the strip, the switcher chip and the manager, tablet and phone, dark and light (dist/shots/pensets-*.png).
+for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "pensets", theme, device, lowLatency: false });
 
 /** RGBA pixel reader for the 8-bit, non-interlaced PNGs Chrome produces. */
 function decodePng(buf) {
@@ -240,7 +242,7 @@ async function main() {
 					await sleep(100);
 				}
 				await cdp.evaluate("window.harness.ready.then(() => true)");
-				report = await cdp.evaluate(s.doc === "hints" ? "window.harness.checkHints()" : s.doc === "slides" ? "window.harness.checkSlides()" : s.doc === "zettel" ? "window.harness.checkZettel()" : s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "lecture" ? "window.harness.checkLecture()" : s.doc === "outline" ? "window.harness.checkOutline()" : s.doc === "smartadd" ? "window.harness.checkSmartAdd()" : s.doc === "header" ? "window.harness.checkHeader()" : s.doc === "nbmap" ? "window.harness.checkNbmap()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "chrome" ? "window.harness.checkChrome()" : s.doc === "toolbar" || s.doc === "toolbar-pdf" ? "window.harness.checkAdaptiveToolbar()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "modals" ? "window.harness.checkModals()" : s.doc === "templates" ? "window.harness.checkTemplates()" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "hints" ? "window.harness.checkHints()" : s.doc === "slides" ? "window.harness.checkSlides()" : s.doc === "zettel" ? "window.harness.checkZettel()" : s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "lecture" ? "window.harness.checkLecture()" : s.doc === "outline" ? "window.harness.checkOutline()" : s.doc === "smartadd" ? "window.harness.checkSmartAdd()" : s.doc === "header" ? "window.harness.checkHeader()" : s.doc === "pensets" ? "window.harness.checkPenSets()" : s.doc === "nbmap" ? "window.harness.checkNbmap()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "chrome" ? "window.harness.checkChrome()" : s.doc === "toolbar" || s.doc === "toolbar-pdf" ? "window.harness.checkAdaptiveToolbar()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "modals" ? "window.harness.checkModals()" : s.doc === "templates" ? "window.harness.checkTemplates()" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}
@@ -297,6 +299,18 @@ async function main() {
 						problems.push(`zettel ${state} screenshot: ${e.message}`);
 					}
 				}
+			}
+			// 0.15 pensets: the pen options with the switcher chip, then the manager.
+			if (s.doc === "pensets") {
+				for (const state of ["options", "manager"]) {
+					try {
+						await cdp.evaluate(`window.harness.pensetsShot('${state}').then(() => true)`);
+						writeFileSync(join(shots, `${name}-${state}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`pensets ${state} screenshot: ${e.message}`);
+					}
+				}
+				await cdp.evaluate("window.harness.pensetsShot('close').then(() => true)");
 			}
 			// 0.14 slides: the notes with their badges, after the strip (the screenshot above).
 			if (s.doc === "slides") {

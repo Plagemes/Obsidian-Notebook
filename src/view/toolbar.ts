@@ -164,6 +164,8 @@ export class Toolbar {
 	/** Slots filled by pen-controls.ts: favourite pens and eraser size. */
 	readonly favouritesEl: HTMLElement;
 	readonly eraserSizeEl: HTMLElement;
+	/** 0.15 pen sets: slot filled by pen-set-controls.ts (the pen set switcher; shown for the pen and the highlighter). */
+	readonly penSetsEl: HTMLElement;
 	/** Slot filled by pdf-reading.ts: the highlighter's snap-to-text option. */
 	readonly highlighterOptionsEl: HTMLElement;
 	onEditableChange: ((editable: boolean) => void) | null = null;
@@ -252,6 +254,7 @@ export class Toolbar {
 				// "Colour" starts from the pen colour in use; the swatches then change it.
 				this.set(kind === "color" ? { eraserFilter: kind, eraserColor: this.state.penColor } : { eraserFilter: kind })));
 		}
+		this.penSetsEl = this.row(this.optionsEl);
 		this.colorGroup = this.row(this.optionsEl);
 		this.widthGroup = this.row(this.optionsEl);
 		this.sizeGroup = this.row(this.optionsEl);
@@ -482,6 +485,7 @@ export class Toolbar {
 		const inking = s.tool === "pen" || s.tool === "highlighter" || s.tool === "shape";
 		const erasingColor = s.tool === "eraser" && s.eraserFilter === "color";
 		const colouring = inking || s.tool === "text" || erasingColor;
+		this.penSetsEl.toggleClass("notebook-hidden", s.tool !== "pen" && s.tool !== "highlighter");
 		this.colorGroup.toggleClass("notebook-hidden", !colouring);
 		this.widthGroup.toggleClass("notebook-hidden", !inking);
 		this.sizeGroup.toggleClass("notebook-hidden", s.tool !== "text");

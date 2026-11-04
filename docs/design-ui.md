@@ -55,6 +55,7 @@ anywhere in `src/` is in the registry and that every action is placed somewhere.
 | Colour, width, text size, eraser filter, snap to text | Tool options popover; colour and width also on the radial | Same |
 | Colour picker, eyedropper, style eyedropper (`colour-picker`, `colour-eyedropper`, `style-eyedropper`; wave 0.10) | Last buttons of the colour row of the tool options (the style eyedropper only for ink tools); picker and eyedropper also on the radial colour ring; commands | A free colour belongs with the other colours; they act on the pen in use. The picker is a floating panel over the page, the eyedroppers take the next contact on the page |
 | Favourite pens 1–6 (`favourite-*`) | Toolbar strip, radial favourites ring, commands | One tap to a saved pen; long press / radial "+" saves |
+| Pen sets (0.15, `view/pen-set-controls.ts`, manager `view/pen-sets-modal.ts`) | *Pen set* chip, first row of the pen and highlighter options; menu from the chip; manager dialog; Settings → Writing → Pen sets | A set replaces the six favourite slots for the notebook it is assigned to; the chip says which set is on; the user's own favourites are never overwritten by a set |
 | Undo, redo | Toolbar, radial, two/three-finger taps, commands | Always needed |
 | Pages panel (`toggle-pages-panel`) | Toolbar row 1 (first button) | Navigation is primary |
 | Copy, cut, duplicate, paste, white → transparent, save as stamp, delete selection | Contextual bar (selection / lasso) | Act on what is selected, next to it |

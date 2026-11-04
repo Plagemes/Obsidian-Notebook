@@ -12656,3 +12656,124 @@ body.notebook-style-obsidian {
 		flex-wrap: wrap;
 	}
 }
+/* ===== 0.15 pensets ===== */
+.nb-ui.notebook-penset-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 40px;
+	max-width: 100%;
+	padding: 4px 12px;
+	border: 1px solid var(--nb-border);
+	border-radius: 999px;
+	background: var(--nb-tile);
+	box-shadow: none;
+	color: var(--nb-text);
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.nb-ui.notebook-penset-chip:hover:not(:disabled) {
+	border-color: var(--nb-border-strong);
+}
+
+.nb-ui.notebook-penset-chip:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.nb-ui .notebook-penset-icon,
+.nb-ui .notebook-penset-chevron {
+	display: inline-flex;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.notebook-penset-chip .svg-icon {
+	width: 16px;
+	height: 16px;
+}
+
+.nb-ui .notebook-penset-label {
+	overflow: hidden;
+	max-width: 160px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui .notebook-penset-dots-slot:empty {
+	display: none;
+}
+
+.nb-ui .nb-penset-dots {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+}
+
+.nb-ui .nb-penset-dot {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background-color: var(--nb-penset-color, var(--nb-text-muted));
+	border: 1px solid var(--nb-border-strong);
+}
+
+.nb-ui .nb-penset-dot.is-highlighter {
+	border-radius: 3px;
+}
+
+.nb-ui.nb-penset-modal .nb-modal-section-title {
+	margin: 14px 0 8px;
+}
+
+.nb-ui.nb-penset-modal .nb-modal-section-title:first-child {
+	margin-top: 0;
+}
+
+.nb-ui.nb-penset-modal .nb-penset-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.nb-ui.nb-penset-modal .nb-penset-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-height: 52px;
+	padding: 8px 14px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-penset-modal .nb-penset-name {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-penset-modal .nb-penset-for {
+	color: var(--nb-text-muted);
+	font-size: 13px;
+}
+
+.nb-ui.nb-penset-modal .nb-penset-tools {
+	display: flex;
+	flex: 0 0 auto;
+	gap: 2px;
+}
+
+@media (max-width: 480px) {
+	.nb-ui .notebook-penset-label {
+		max-width: 110px;
+	}
+
+	.nb-ui.nb-penset-modal .nb-penset-row {
+		padding: 8px 10px;
+		gap: 8px;
+	}
+}
