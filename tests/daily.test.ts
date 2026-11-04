@@ -171,7 +171,7 @@ describe("the Daily notes template", () => {
 	});
 
 	describe("loading the template like the core plugin", () => {
-		const files = new Map<string, string>([["Templates/Day.md", "# {{title}}"], ["Templates/Empty.md", ""], ["Templates/Pending.md", "   "]]);
+		const files = new Map<string, string>([["Templates/Day.md", "# {{title}}"], ["Templates/Empty.md", ""], ["Templates/Pending.md", "\u0000\u0000\u0000"]]);
 		const host = (links: Record<string, string> = {}) => ({
 			resolveLink: (link: string) => (links[link] !== undefined ? links[link]! : null),
 			byPath: (path: string) => (files.has(path) ? path : null),
