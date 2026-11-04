@@ -10,6 +10,7 @@ import {
 	BOOKMARK_COLORS, bookmarkColor, categoriesInUse, isBuiltInCategory, removeBookmark, setBookmark,
 } from "../model/bookmarks";
 import { filterByCategory, type OutlineBuilder, type OutlineItem, type OutlineSources } from "../model/outline-builder";
+import type { OutlineEntryLike } from "../model/pdf-outline-map";
 import { cloneMeta } from "../model/document";
 import { SetMeta, type Command } from "../model/history";
 import { pageTagCounts, parsePageTagInput, SetPageTags } from "../model/page-tags";
@@ -33,6 +34,10 @@ export interface OutlineHost {
 	sources(): OutlineSources;
 	/** 0.13: picture (data URL) of the ink of a heading entry; null when it cannot be drawn. */
 	headingImage(item: OutlineItem): string | null;
+	/** 0.16 (#46): the outline of each PDF of the notebook, as far as it is known (the rest is read in the background and the panel refreshed). */
+	pdfOutlines?(): Readonly<Record<string, readonly OutlineEntryLike[]>>;
+	/** 0.16 (#46): where the PDF outline shows: mixed into the list, in its own section, or not at all. Default: merged. */
+	pdfOutlineMode?(): "merged" | "section" | "off";
 }
 
 /** Label of a category: the built-in ones are translated, custom ones are shown as typed. */
@@ -88,6 +93,7 @@ const MARKER_ICONS: Readonly<Record<string, string>> = { question: "help-circle"
 function rowIcon(item: OutlineItem): string | null {
 	switch (item.kind) {
 		case "document": return "file-text";
+		case "pdf": return "book-open";
 		case "slide": return "presentation";
 		case "heading": return "heading";
 		case "marker": return MARKER_ICONS[item.marker?.kind ?? ""] ?? "circle";
@@ -104,6 +110,7 @@ export function outlineLabel(item: OutlineItem): string {
 	switch (item.kind) {
 		case "bookmark": return item.title || t("outline.untitled", { n: String(item.index + 1) });
 		case "document": return item.title || t("outline.pdf");
+		case "pdf": return item.title;
 		case "slide": return t("outline.slide", { n: String(item.slide?.page ?? item.index + 1) });
 		case "heading": return t("outline.headingAlt", { n: String(item.index + 1) });
 		default: return item.title || markerKindLabel(item);
@@ -142,19 +149,34 @@ export function renderOutline(
 			if (page) editBookmark(host, page.id);
 		});
 	}
-	const all = filterByCategory(host.outline().build({ pages: host.pages(), meta, assets: host.assets() }, sources), category);
+	const pdfMode = host.pdfOutlineMode?.() ?? "merged";
+	const pdfOutlines = host.pdfOutlines?.();
+	const input = { pages: host.pages(), meta, assets: host.assets(), pdfOutlines };
+	const all = filterByCategory(host.outline().build(input, sources), category);
+	// 0.16 (#46): the PDF outline in its own section above the rest.
+	const section = pdfMode === "section" && category === null && pdfOutlines ? host.outline().buildPdf(input) : [];
 	const box = list.createDiv({ cls: "nb-ui nb-outline" });
-	if (all.length === 0) {
+	if (all.length === 0 && section.length === 0) {
 		const empty = box.createDiv({ cls: "nb-outline-empty" });
 		setIcon(empty.createDiv({ cls: "nb-outline-empty-icon", attr: { "aria-hidden": "true" } }), "list-tree");
-		const anyOn = sources.bookmarks || sources.slides || sources.headings || sources.markers;
+		const anyOn = sources.bookmarks || sources.slides || sources.headings || sources.markers || sources.pdf || pdfMode === "section";
 		empty.createDiv({ cls: "nb-outline-empty-text", text: t(!anyOn ? "outline.allOff" : category !== null ? "outline.emptyCategory" : "outline.emptyAll") });
 		return;
 	}
-	// Where you are: the last entry at or before the current page.
+	if (section.length > 0) {
+		const head = box.createDiv({ cls: "nb-outline-section" });
+		setIcon(head.createSpan({ cls: "nb-outline-section-icon", attr: { "aria-hidden": "true" } }), "book-open");
+		head.createSpan({ cls: "nb-outline-section-title", text: t("outline.pdfSection") });
+		appendRows(box, host, section, state.current, editable);
+	}
+	appendRows(box, host, all, state.current, editable);
+}
+
+/** The rows of a list of outline entries; the one where you are (the last entry at or before the current page) is marked. */
+function appendRows(box: HTMLElement, host: OutlineHost, all: readonly OutlineItem[], current: number, editable: boolean): void {
 	let here = -1;
 	all.forEach((e, i) => {
-		if (e.index <= state.current) here = i;
+		if (e.index <= current) here = i;
 	});
 	all.forEach((e, i) => {
 		const label = outlineLabel(e);
@@ -182,6 +204,7 @@ export function renderOutline(
 		} else {
 			text.createDiv({ cls: `nb-outline-title${e.kind === "document" || e.kind === "bookmark" ? " is-strong" : ""}`, text: label });
 			if (e.kind === "bookmark" && e.category) text.createDiv({ cls: "nb-outline-meta", text: categoryLabel(e.category) });
+			if (e.kind === "pdf" && e.pdf && !e.pdf.exact) text.createDiv({ cls: "nb-outline-meta", text: t("outline.pdfNearest") });
 			if (e.kind === "marker" && e.title) text.createDiv({ cls: "nb-outline-meta", text: markerKindLabel(e) });
 			if (e.kind === "marker" && e.marker?.done) text.createDiv({ cls: "nb-outline-meta", text: t("outline.markerDone") });
 		}

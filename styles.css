@@ -13844,3 +13844,179 @@ body.notebook-style-obsidian {
 		display: none;
 	}
 }
+
+/* ===== 0.16 pdftext ===== */
+/* Select text mode (roadmap #45): a slim bar names the mode and ends it; a bubble beside the selection copies it. */
+.nb-ui.notebook-pdftext-bar {
+	position: absolute;
+	bottom: 12px;
+	left: 8px;
+	right: 8px;
+	z-index: 7;
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-2);
+	width: fit-content;
+	max-width: calc(100% - 16px);
+	margin: 0 auto;
+	padding: 6px 6px 6px 12px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-surface-raised);
+	color: var(--nb-text);
+	box-shadow: var(--nb-shadow-2);
+	font-size: var(--nb-text-s);
+	animation: notebook-pop-in var(--nb-motion) var(--nb-ease);
+}
+
+.notebook-reading-banner:not(.notebook-hidden) ~ .nb-ui.notebook-pdftext-bar {
+	bottom: 64px;
+}
+
+.nb-ui.notebook-pdftext-bar .notebook-pdftext-bar-icon {
+	display: inline-flex;
+	flex: 0 0 auto;
+	color: var(--nb-accent);
+}
+
+.nb-ui.notebook-pdftext-bar .notebook-pdftext-bar-icon svg {
+	width: 18px;
+	height: 18px;
+}
+
+.nb-ui.notebook-pdftext-bar .notebook-pdftext-bar-text {
+	min-width: 0;
+	line-height: 1.3;
+}
+
+.nb-ui.notebook-pdftext-bar .notebook-pdftext-done {
+	flex: 0 0 auto;
+	min-height: var(--nb-target);
+	padding: 0 var(--nb-space-4);
+	border: 0;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-accent);
+	color: var(--text-on-accent);
+	font-weight: var(--font-semibold);
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.nb-ui.notebook-pdftext-bar .notebook-pdftext-done:focus-visible,
+.nb-ui.notebook-pdftext-bubble .notebook-pdftext-btn:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+.nb-ui.notebook-pdftext-bubble {
+	position: absolute;
+	left: var(--nb-pdftext-x, 0);
+	top: var(--nb-pdftext-y, 0);
+	transform: translateX(-50%);
+	z-index: 26;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 3px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-surface-raised);
+	color: var(--nb-text);
+	box-shadow: var(--nb-shadow-float);
+}
+
+.nb-ui.notebook-pdftext-bubble .notebook-pdftext-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-width: var(--nb-target);
+	min-height: var(--nb-target);
+	padding: 0 var(--nb-space-3);
+	border: 0;
+	border-radius: var(--nb-radius-pill);
+	background: transparent;
+	color: inherit;
+	font-size: var(--nb-text-s);
+	font-weight: var(--font-medium);
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.nb-ui.notebook-pdftext-bubble .notebook-pdftext-btn:hover {
+	background: var(--nb-hover);
+}
+
+.nb-ui.notebook-pdftext-bubble .notebook-pdftext-btn:first-child {
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.nb-ui.notebook-pdftext-bubble .notebook-pdftext-btn.is-icon {
+	padding: 0;
+	justify-content: center;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.notebook-pdftext-bubble .notebook-pdftext-btn-icon {
+	display: inline-flex;
+}
+
+.nb-ui.notebook-pdftext-bubble .notebook-pdftext-btn-icon svg {
+	width: 18px;
+	height: 18px;
+}
+
+/* Links of PDF pages (roadmap #46): the web address a link asks about. */
+.nb-ui .nb-pdflink-address {
+	padding: var(--nb-space-3);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-m);
+	background: var(--nb-tile);
+	font-family: var(--font-monospace);
+	font-size: var(--nb-text-s);
+	overflow-wrap: anywhere;
+	user-select: text;
+	-webkit-user-select: text;
+}
+
+/* The PDF outline as its own section of the notebook outline. */
+.nb-ui .nb-outline-section {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-2);
+	padding: var(--nb-space-2) 6px 2px;
+	font-size: var(--nb-text-s);
+	font-weight: var(--font-semibold);
+	letter-spacing: 0.02em;
+	color: var(--nb-text-muted);
+	text-transform: uppercase;
+}
+
+.nb-ui .nb-outline-section-icon {
+	display: inline-flex;
+	color: var(--nb-accent);
+}
+
+.nb-ui .nb-outline-section-icon svg {
+	width: 14px;
+	height: 14px;
+}
+
+.nb-ui .nb-outline-row[data-kind="pdf"] .nb-outline-icon {
+	color: var(--nb-accent);
+}
+
+@media (max-width: 420px) {
+	.nb-ui.notebook-pdftext-bar .notebook-pdftext-bar-text {
+		font-size: var(--nb-text-s);
+	}
+
+	.nb-ui.notebook-pdftext-bubble .notebook-pdftext-btn-label {
+		display: none;
+	}
+
+	.nb-ui.notebook-pdftext-bubble .notebook-pdftext-btn {
+		padding: 0;
+		justify-content: center;
+	}
+}

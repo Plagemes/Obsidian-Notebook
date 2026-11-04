@@ -102,6 +102,8 @@ SCENARIOS.push({ doc: "nbmap", theme: "light", device: "phone", lowLatency: fals
 SCENARIOS.push({ doc: "nbmap", theme: "dark", device: "phone", lowLatency: false });
 // The automatic page header (0.15, #75): drawn on the paper, tablet and phone, light and dark.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "header", theme, device, lowLatency: false });
+// 0.16 pdftext: copying text from a PDF page and the PDF outline and links (dev/harness/pdftext-check.ts), tablet and phone, light and dark.
+for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "pdftext", theme, device, lowLatency: false });
 // Anchored excerpts (v10): a region of a fake PDF page excerpted to a new page, drawn live, and the badge's jump back.
 SCENARIOS.push({ doc: "excerpt", theme: "light", device: "desktop", lowLatency: false });
 SCENARIOS.push({ doc: "excerpt", theme: "dark", device: "tablet", lowLatency: false });
@@ -250,6 +252,8 @@ async function main() {
 				await cdp.evaluate("window.harness.ready.then(() => true)");
 				// 0.15 storage: its own check (the list below is one line per document).
 				if (s.doc === "storage") report = await cdp.evaluate("window.harness.checkStorage()", 120000);
+				// 0.16 pdftext: its own check.
+				else if (s.doc === "pdftext") report = await cdp.evaluate("window.harness.checkPdftext()", 90000);
 				else
 				report = await cdp.evaluate(s.doc === "states" ? "window.harness.checkStates()" : s.doc === "hints" ? "window.harness.checkHints()" : s.doc === "slides" ? "window.harness.checkSlides()" : s.doc === "zettel" ? "window.harness.checkZettel()" : s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "lecture" ? "window.harness.checkLecture()" : s.doc === "outline" ? "window.harness.checkOutline()" : s.doc === "smartadd" ? "window.harness.checkSmartAdd()" : s.doc === "header" ? "window.harness.checkHeader()" : s.doc === "pensets" ? "window.harness.checkPenSets()" : s.doc === "daily" ? "window.harness.checkDaily()" : s.doc === "nbmap" ? "window.harness.checkNbmap()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "chrome" ? "window.harness.checkChrome()" : s.doc === "toolbar" || s.doc === "toolbar-pdf" ? "window.harness.checkAdaptiveToolbar()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "modals" ? "window.harness.checkModals()" : s.doc === "templates" ? "window.harness.checkTemplates()" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
 			} catch (e) {
@@ -293,6 +297,19 @@ async function main() {
 						writeFileSync(join(designDir, `lecture-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 					} catch (e) {
 						problems.push(`lecture ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.16 pdftext: a selection with its bubble, the PDF outline merged into the outline and as its own section.
+			if (s.doc === "pdftext") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["select", "outline", "section"]) {
+					try {
+						await cdp.evaluate(`window.harness.pdftextShot('${state}').then(() => true)`, 30000);
+						writeFileSync(join(designDir, `pdftext-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`pdftext ${state} screenshot: ${e.message}`);
 					}
 				}
 			}

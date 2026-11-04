@@ -6,7 +6,9 @@
  *  - bookmarks: the titled bookmarks of the notebook (`meta.bookmarks`), top level;
  *  - slides: a PDF document when the background's file changes, a slide when the background's PDF page changes;
  *  - headings: lines of large handwriting found geometrically (`ink/headings.ts`, no OCR, no recognised text);
- *  - markers: questions, homework and the importance markers (gaps are placeholders, not outline material).
+ *  - markers: questions, homework and the importance markers (gaps are placeholders, not outline material);
+ *  - pdf (0.16, #46): the outline of each PDF the notebook shows, mapped to the notebook pages by source page
+ *    (model/pdf-outline-map.ts). Nested under the PDF's document row, between it and the slides.
  *
  * Order: by page, then by position on the page (bookmarks, documents and slides belong to the top of their page).
  * Nesting: each entry has a `level` (smaller is higher); `depth` follows from a stack of the entries above, so a
@@ -17,13 +19,14 @@
  */
 import { detectHeadings, lineSizes, pageLayout, referenceHeight, type LineSize, type PageHeading } from "../ink/headings";
 import { bookmarkColor } from "./bookmarks";
+import { mapPdfOutline, type OutlineEntryLike } from "./pdf-outline-map";
 import type { Asset, MarkerElement, MarkerKind, NotebookMeta, Page, Stroke } from "./types";
 
-export const OUTLINE_SOURCES = ["bookmarks", "slides", "headings", "markers"] as const;
+export const OUTLINE_SOURCES = ["bookmarks", "slides", "headings", "markers", "pdf"] as const;
 export type OutlineSource = (typeof OUTLINE_SOURCES)[number];
 export type OutlineSources = Readonly<Record<OutlineSource, boolean>>;
 
-export const DEFAULT_OUTLINE_SOURCES: OutlineSources = Object.freeze({ bookmarks: true, slides: true, headings: true, markers: true });
+export const DEFAULT_OUTLINE_SOURCES: OutlineSources = Object.freeze({ bookmarks: true, slides: true, headings: true, markers: true, pdf: true });
 
 /** Marker kinds that appear in the outline. */
 export const OUTLINE_MARKER_KINDS: readonly MarkerKind[] = ["question", "homework", "critical", "star", "important"];
@@ -34,7 +37,10 @@ const LEVEL = { bookmark: 1, document: 1, slide: 2, heading1: 3, heading2: 4, ma
 /** Pages with more strokes than this are not searched for headings (the outline must stay cheap on a heavy page). */
 export const MAX_HEADING_STROKES = 4000;
 
-export type OutlineKind = "bookmark" | "document" | "slide" | "heading" | "marker";
+export type OutlineKind = "bookmark" | "document" | "slide" | "heading" | "marker" | "pdf";
+
+/** Level of an entry of a PDF's outline of depth `depth` (1 = top): below the document row (1), above the slides (2). */
+const pdfLevel = (depth: number): number => 1 + Math.min(depth, 8) / 10;
 
 export interface OutlineItem {
 	/** Stable between builds of the same document: used as the key of the row. */
@@ -58,12 +64,16 @@ export interface OutlineItem {
 	/** Heading: the ink to show as a thumbnail (`rect` in page pt) and how much larger than usual it is. */
 	heading?: { rect: PageHeading["rect"]; strokeIds: string[]; ratio: number; level: 1 | 2 };
 	marker?: { kind: MarkerKind; done: boolean };
+	/** 0.16 PDF outline entry: the PDF asset, the 1-based page of the PDF it points at, and whether the notebook shows that very page. */
+	pdf?: { asset: string; page: number; exact: boolean };
 }
 
 export interface OutlineInput {
 	pages: readonly Page[];
 	meta?: NotebookMeta | undefined;
 	assets?: Readonly<Record<string, Asset>> | undefined;
+	/** 0.16: the outline of each PDF asset (read from the PDF, cached by the view); assets without an entry list nothing. */
+	pdfOutlines?: Readonly<Record<string, readonly OutlineEntryLike[]>> | undefined;
 }
 
 interface PageCache {
@@ -123,6 +133,23 @@ export class OutlineBuilder {
 			});
 		}
 
+		if (sources.pdf && input.pdfOutlines) {
+			const seen = new Set<string>();
+			for (const page of pages) {
+				const bg = page.background;
+				if (bg?.kind !== "pdf" || seen.has(bg.asset)) continue;
+				seen.add(bg.asset);
+				for (const m of mapPdfOutline(pages, bg.asset, input.pdfOutlines[bg.asset] ?? [])) {
+					const target = pages[m.index];
+					if (!target) continue;
+					push({
+						key: `o:${bg.asset}:${m.n}`, kind: "pdf", source: "pdf", pageId: target.id, index: m.index, y: -1.5, depth: 1,
+						title: m.title, color: null, category: null, pdf: { asset: bg.asset, page: m.sourcePage, exact: m.exact },
+					}, pdfLevel(m.level), 1.5);
+				}
+			}
+		}
+
 		if (sources.headings) this.addHeadings(pages, push);
 
 		if (sources.markers) {
@@ -147,6 +174,11 @@ export class OutlineBuilder {
 		}
 		this.forget(pages);
 		return out;
+	}
+
+	/** Only the PDF outline entries (the "PDF outline" section), nested by their own levels. */
+	buildPdf(input: OutlineInput): OutlineItem[] {
+		return this.build(input, { bookmarks: false, slides: false, headings: false, markers: false, pdf: true });
 	}
 
 	private addHeadings(pages: readonly Page[], push: (item: OutlineItem, level: number, rank: number) => void): void {
