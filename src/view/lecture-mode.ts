@@ -6,12 +6,23 @@
  * app: no system notification is ever sent.
  *
  * "Lecture mode on" means `uiContext().lecture`: the contextual bar then shows the lecture tools (board shot, markers,
- * new lecture, end-of-lecture panel). Nothing is stored: the mode follows the clock and the timetable.
+ * new lecture, end-of-lecture panel). The mode itself follows the clock and the timetable and is not stored.
+ *
+ * The lecture page is only ever added by a user action: Start, the command, or (automatic mode) the first stroke the user
+ * writes during the lecture (`wrote()`, called by the view when a stroke was committed). The clock, the 30 s timer and
+ * coming back to the app never touch the document: on resume the device may still hold a stale copy of a notebook that sync
+ * is about to replace, and a page added by nobody would turn that copy into a local change that wins over the other device.
+ * What the user turned down and the pages added are remembered for today in the device's local storage (lecture-memory.ts),
+ * so reopening the notebook does not ask again and does not add a page the user deleted.
  */
 import { setIcon } from "obsidian";
 import { writing } from "../ink/writing-guard";
 import { t } from "../i18n";
 import { findLecturePage } from "../timetable/lecture-open";
+import {
+	lectureMemoryOf, normaliseLectureMemory, rememberLecture, type LectureMemoryKind,
+} from "../timetable/lecture-memory";
+import { isoDay } from "../timetable/schedule";
 import {
 	stepLectureMode, type ActiveLecture, type LectureClass, type LectureModeSetting, type ModeStep,
 } from "../timetable/lecture-mode";
@@ -37,6 +48,8 @@ export interface LectureModeHost {
 	editContext(): EditContext | null;
 	/** The lecture state changed: the UI (contextual bar) is drawn again. */
 	changed(): void;
+	/** The device's local storage (what was turned down or paged today); without it nothing is remembered across openings. */
+	memory?: { load(): unknown; save(value: unknown): void };
 	now?(): Date;
 }
 
@@ -44,9 +57,9 @@ export class LectureModeController {
 	private active: ActiveLecture | null = null;
 	private activeClass: LectureClass | null = null;
 	private asking: LectureClass | null = null;
-	/** Occurrences turned down or left by the user in this view. */
+	/** Occurrences turned down or left by the user (today, in this view and, from local storage, in earlier openings). */
 	private readonly declined = new Set<string>();
-	/** Occurrences whose lecture page was added (or found) in this view. */
+	/** Occurrences whose lecture page was added (or found), same scope. */
 	private readonly paged = new Set<string>();
 	private path: string | null = null;
 	private banner: HTMLElement | null = null;
@@ -78,6 +91,7 @@ export class LectureModeController {
 		const path = this.host.path();
 		if (path !== this.path) this.reset();
 		this.path = path;
+		this.recall();
 		if (this.timer === null) {
 			this.timer = window.setInterval(() => this.evaluate(), LECTURE_TICK_MS);
 			document.addEventListener("visibilitychange", this.onVisible);
@@ -115,6 +129,16 @@ export class LectureModeController {
 		if (match) this.ensurePage(match, now);
 	}
 
+	/**
+	 * The user wrote in the notebook (a stroke was committed). In a lecture mode the rule started on its own, this is the
+	 * first user action: it adds today's lecture page, once (not when it was added before, even if it was deleted since).
+	 */
+	wrote(): void {
+		const cls = this.activeClass;
+		if (!this.active?.key || !cls || this.paged.has(cls.key)) return;
+		this.ensurePage(cls, this.now(), false);
+	}
+
 	/** Looks at the clock and the timetable and does what the rules say. */
 	evaluate(): void {
 		if (!this.path) return;
@@ -129,10 +153,7 @@ export class LectureModeController {
 			this.apply(step, now);
 			if (step.kind !== "leave" && step.kind !== "unask") break;
 		}
-		if (this.active?.key) {
-			const cls = this.activeClass;
-			if (cls && !busy && !this.paged.has(cls.key)) this.ensurePage(cls, now);
-		}
+		// No page is added here: the clock never edits the notebook (see the top of this file).
 	}
 
 	private apply(step: ModeStep, now: Date): void {
@@ -168,7 +189,7 @@ export class LectureModeController {
 
 	private leave(ended: boolean, now: Date = this.now()): void {
 		const was = this.activeClass;
-		if (this.active?.key) this.declined.add(this.active.key);
+		if (this.active?.key) this.remember("declined", this.active.key);
 		this.active = null;
 		this.activeClass = null;
 		this.hideChip();
@@ -177,12 +198,44 @@ export class LectureModeController {
 		if (ended && was && now.getTime() >= was.endsAt) showNotice(t("lectureMode.over", { course: was.course }));
 	}
 
-	/** Adds today's lecture page (header, time slot, room, lecturer, slides) once, unless the notebook already has it. */
-	private ensurePage(cls: LectureClass, now: Date): void {
+	/**
+	 * Adds today's lecture page (header, time slot, room, lecturer, slides) unless the notebook already has it, and notes
+	 * that it was dealt with. Only called for a user action. `scroll`: go to the new page (Start, command), or stay where the
+	 * user is writing.
+	 */
+	private ensurePage(cls: LectureClass, now: Date, scroll = true): void {
 		const ctx = this.host.editContext();
 		if (!ctx) return;
-		if (findLecturePage(ctx.doc.pages, cls.course, now) < 0) addLecturePage(ctx, cls.course, now, cls.course, classContext(cls, ctx.slide?.() ?? null));
-		this.paged.add(cls.key);
+		if (findLecturePage(ctx.doc.pages, cls.course, now) < 0) addLecturePage(ctx, cls.course, now, cls.course, classContext(cls, ctx.slide?.() ?? null), scroll);
+		this.remember("paged", cls.key);
+	}
+
+	/** Notes an occurrence as turned down or paged, here and in local storage. */
+	private remember(kind: LectureMemoryKind, key: string): void {
+		(kind === "declined" ? this.declined : this.paged).add(key);
+		const mem = this.host.memory;
+		const path = this.path;
+		if (!mem || !path) return;
+		try {
+			const today = isoDay(this.now());
+			mem.save(rememberLecture(normaliseLectureMemory(mem.load(), today), path, kind, key, today));
+		} catch {
+			// A convenience: without it the notebook may ask again after a reopening.
+		}
+	}
+
+	/** Takes what earlier openings of this notebook noted today. */
+	private recall(): void {
+		const mem = this.host.memory;
+		const path = this.path;
+		if (!mem || !path) return;
+		try {
+			const known = lectureMemoryOf(normaliseLectureMemory(mem.load(), isoDay(this.now())), path);
+			for (const k of known.declined) this.declined.add(k);
+			for (const k of known.paged) this.paged.add(k);
+		} catch {
+			// Unreadable storage reads as nothing remembered.
+		}
 	}
 
 	private reset(): void {
@@ -224,7 +277,7 @@ export class LectureModeController {
 			this.ensurePage(cls, now);
 		});
 		actions.createEl("button", { text: t("lectureMode.notNow"), attr: { type: "button" } }).addEventListener("click", () => {
-			this.declined.add(cls.key);
+			this.remember("declined", cls.key);
 			this.asking = null;
 			this.hideBanner();
 		});

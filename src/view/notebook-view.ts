@@ -105,6 +105,7 @@ import type { EditContext } from "./edit-context";
 import { runNewLecture } from "./lecture";
 import { pickSlideRef } from "./lecture-logic";
 import { LectureModeController } from "./lecture-mode";
+import { LECTURE_MEMORY_KEY } from "../timetable/lecture-memory";
 import type { LectureClass } from "../timetable/lecture-mode";
 import { askExercisePaper, askLayoutOptions, loadExercisePaper } from "./lecture-pack-modal";
 import { runMovePages } from "../library/move-pages";
@@ -631,6 +632,7 @@ export class NotebookView extends FileView {
 			busy: () => this.inContact(),
 			editContext: () => this.editContext(),
 			changed: () => this.refreshUi(),
+			memory: { load: (): unknown => this.app.loadLocalStorage(LECTURE_MEMORY_KEY), save: (v) => this.app.saveLocalStorage(LECTURE_MEMORY_KEY, v) },
 		});
 		this.mountExcerpts();
 		this.pageOffer = new PageOffer({
@@ -3557,6 +3559,9 @@ export class NotebookView extends FileView {
 		if (badgeTap) this.excerpts?.openSource(badgeTap);
 		// An external change seen during the gesture was postponed; check it now.
 		this.session?.gestureEnded();
+		// 0.14: the first stroke written during an automatic lecture is what adds its page (view/lecture-mode.ts). Deferred past the
+		// pointer handler so the contact is over; the document is only touched through the usual edit context.
+		if (!cancelled && badgeTap === null && this.justCommitted) window.setTimeout(() => this.lectureMode?.wrote(), 0);
 	}
 
 	private endGesture(cancelled: boolean): void {

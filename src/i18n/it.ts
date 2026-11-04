@@ -2418,7 +2418,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.hintsReset.button": "Ripristina",
 	// 0.14 lecture
 	"settings.lectureMode": "Modalità lezione",
-	"settings.lectureMode.desc": "Passa agli strumenti della lezione quando la sua lezione è in corso.",
+	"settings.lectureMode.desc": "Strumenti lezione mentre è in corso. Automatica aggiunge la pagina alla prima scrittura.",
 	"settings.lectureMode.off": "Disattivata",
 	"settings.lectureMode.ask": "Chiedimelo",
 	"settings.lectureMode.auto": "Automatica",

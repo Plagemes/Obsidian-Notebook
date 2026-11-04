@@ -127,13 +127,14 @@ export function classContext(cls: LectureClass | null, slide: SlideRef | null): 
 
 /**
  * Adds a lecture page (header: course and date, then the details of `context`: slot, room, lecturer, slides) at the end of
- * the notebook as one undo step. The course also tags the page when it is known from the timetable.
+ * the notebook as one undo step. The course also tags the page when it is known from the timetable. The view goes to the new
+ * page unless `scroll` is false (a page added while the user is writing elsewhere must not move the page under the pen).
  */
-export function addLecturePage(ctx: EditContext, title: string, date: Date, course?: string, context?: LectureContext): void {
+export function addLecturePage(ctx: EditContext, title: string, date: Date, course?: string, context?: LectureContext, scroll = true): void {
 	const pages = ctx.doc.pages;
 	let page = buildLecturePage(pages[pages.length - 1], title, date, context);
 	if (course) page = applyCourseTag(page, course);
-	ctx.execute(new AddPage(page, pages.length), pages.length);
+	ctx.execute(new AddPage(page, pages.length), scroll ? pages.length : undefined);
 }
 
 /**

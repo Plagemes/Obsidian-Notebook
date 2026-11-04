@@ -2416,7 +2416,7 @@ export const en = {
 	"settings.hintsReset.button": "Reset",
 	// 0.14 lecture
 	"settings.lectureMode": "Lecture mode",
-	"settings.lectureMode.desc": "Switch to the lecture tools when its class is on and its notebook is open.",
+	"settings.lectureMode.desc": "Lecture tools while its class is on. Automatic adds the page when you first write.",
 	"settings.lectureMode.off": "Off",
 	"settings.lectureMode.ask": "Ask me",
 	"settings.lectureMode.auto": "Automatic",
