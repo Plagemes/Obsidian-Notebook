@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### a4split
+- **Split an infinite page into sheets of paper (#178).** The export dialog (PDF and PNG) has *Split into sheets* when the pages to export include an infinite page: paper (A4, Letter, A5), portrait or landscape, size on paper (fit the width of the content, or 100%), margin, overlap, *Cut between lines*, page numbers (PDF) and *Leave out empty sheets*. A preview shows the page picture with the sheets drawn over it, redrawn on every change (the picture is drawn once per dialog). One PDF page per sheet in reading order (left to right, then down), numbered "1/6" when asked; PNG writes one image per sheet (`page-001-part-01.png`…). Smart cuts move each horizontal cut into the white space between lines of ink, using stroke and element bounding boxes, and avoid text boxes, pictures, boxes, equations and notes when a gap is near. The PDF writer draws the page once as a form and each sheet clips and places it, so the file does not grow with the number of sheets. Other pages of the export are written as before; output without the option is byte-identical (tested). No format change. Pure logic in `src/ink/export-tiles.ts`. Tests: `tests/export-tiles.test.ts`. Harness: `dev/harness/a4split-check.ts` (`doc=a4split`).
+
 ## 0.17.0 — 2026-11-04
 
 Write on and around the page more freely, and keep a large library in order: sticky notes you can type or write on, magnetic snap with alignment guides, merge, split and extract notebooks, a minimap for big pages, a hover preview of page links, an optional PDF copy next to each notebook, saved collections in the library, and a task made from a selection. The notebook format moves to version 15 (an older plugin opens a v15 file read-only).

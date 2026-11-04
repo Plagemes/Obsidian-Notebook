@@ -15236,3 +15236,24 @@ body.notebook-style-obsidian {
 .nb-ui .nb-task-pick { display: flex; align-items: center; gap: var(--nb-space-2, 8px); margin-top: var(--nb-space-2, 8px); }
 .nb-ui .nb-task-pick.nb-task-hidden { display: none; }
 .nb-ui .nb-task-chosen { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ===== 0.18 a4split ===== */
+.nb-ui .nb-split-body { margin: var(--nb-space-2, 8px) 0; padding-left: var(--nb-space-3, 12px); border-left: 2px solid var(--nb-border); }
+.nb-ui .nb-split-preview-wrap { display: flex; flex-direction: column; align-items: center; gap: var(--nb-space-2, 8px); margin-top: var(--nb-space-2, 8px); }
+.nb-ui .nb-split-caption { font-size: var(--font-ui-smaller); color: var(--nb-text-muted); }
+.nb-ui .nb-split-preview {
+	position: relative; width: var(--nb-split-w, 300px); height: var(--nb-split-h, 200px); max-width: 100%;
+	background: #fff; border-radius: var(--nb-radius-sm, 6px); overflow: hidden;
+	box-shadow: 0 0 0 1px var(--nb-border);
+}
+.nb-ui .nb-split-img { display: block; width: 100%; height: 100%; object-fit: fill; pointer-events: none; }
+.nb-ui .nb-split-failed { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: var(--nb-space-2, 8px); text-align: center; font-size: var(--font-ui-smaller); color: #6b6b6b; }
+.nb-ui .nb-split-tile {
+	position: absolute; box-sizing: border-box; pointer-events: none;
+	left: var(--nb-split-l, 0); top: var(--nb-split-t, 0); width: var(--nb-split-tw, 100%); height: var(--nb-split-th, 100%);
+	border: 1.5px dashed var(--nb-accent); background: var(--nb-accent-soft);
+}
+.nb-ui .nb-split-n {
+	position: absolute; right: 2px; bottom: 2px; min-width: 16px; padding: 0 4px; border-radius: 8px; text-align: center;
+	font-size: 10px; line-height: 16px; font-weight: 600; color: #fff; background: var(--nb-accent);
+}

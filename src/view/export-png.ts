@@ -3,6 +3,8 @@
 // images written so far stay and the notice says how many. The document is only read.
 import { normalizePath, type App } from "obsidian";
 import { t } from "../i18n";
+import { planSplit } from "../ink/export-tiles";
+import { uniqueFileName } from "../model/export-markdown";
 import { planPageImages, scaleDpi } from "../model/export-pages";
 import type { Page } from "../model/types";
 import type { ExportOptions } from "./export";
@@ -37,11 +39,37 @@ export async function exportPngPages(app: App, pages: readonly Page[], request: 
 		if (chosen.length === 0) return null;
 		const { dir, prefix, exists } = await prepareExportFolder(app, request.folder);
 		const names = planPageImages(dir, chosen, pages.length, exists);
-		recordPluginWrite(app, names.map((n) => normalizePath(`${prefix}${n}`)));
+		// 0.18 (#178): an infinite page may be split; its images are the parts of the page, in reading order, named after it.
+		const plans = chosen.map((i) => (options.split ? planSplit(pages[i]!, options.split) : null));
+		const taken = new Set(names.map((n) => n.toLowerCase()));
+		const files = chosen.map((_, k) => {
+			const plan = plans[k];
+			if (!plan) return [names[k]!];
+			const stem = names[k]!.replace(/.png$/i, "");
+			const digits = Math.max(2, String(plan.tiles.length).length);
+			return plan.tiles.map((tile) => {
+				const name = uniqueFileName(`${stem}-part-${String(tile.index + 1).padStart(digits, "0")}.png`, (n) => taken.has(n.toLowerCase()) || exists(`${prefix}${n}`));
+				taken.add(name.toLowerCase());
+				return name;
+			});
+		});
+		recordPluginWrite(app, files.flat().map((n) => normalizePath(`${prefix}${n}`)));
 		await options.prepare?.(chosen.map((i) => pages[i]!));
 		let skipped = 0;
 		for (let k = 0; k < chosen.length; k++) {
 			working.setMessage(t("export.progress", { done: String(k), total: String(chosen.length) }));
+			const plan = plans[k];
+			if (plan) {
+				const parts = await renderer.renderRegions(pages[chosen[k]!]!, scaleDpi(request.scale), plan.tiles);
+				skipped += parts.skipped;
+				for (let i = 0; i < plan.tiles.length; i++) {
+					const blob = parts.blobs[i];
+					if (!blob) throw new Error("could not encode PNG");
+					await app.vault.createBinary(normalizePath(`${prefix}${files[k]![i]!}`), await blob.arrayBuffer());
+					written++;
+				}
+				continue;
+			}
 			const image = await renderer.render(pages[chosen[k]!]!, scaleDpi(request.scale));
 			skipped += image.skipped;
 			await app.vault.createBinary(normalizePath(`${prefix}${names[k]!}`), await image.blob.arrayBuffer());

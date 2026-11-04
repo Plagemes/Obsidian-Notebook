@@ -369,7 +369,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 175. ~~**P2** Magnifier lens following the pen, to read small PDF text while writing.~~ — dropped (user decision, 2026-10-29)
 176. **P1** 🧪 Loose sheet: a quick-notes notebook opened from anywhere in Obsidian; move its content to the right notebook later.
 177. **P2** 🧪 Inbox folder: files shared from other Android apps land there and the plugin offers to put them into a notebook.
-178. **P2** Split an infinite page into A4 pages for export and printing.
+178. **P2** 🧪 Split an infinite page into A4 pages for export and printing.
 179. **P2** Two-way page references: if page 3 refers to page 7, page 7 shows "referenced on page 3".
 180. **P1** 🧪 Restore a single page from a previous version, leaving the rest untouched.
 181. **P2** Reference sheets, dynamic and integrated:

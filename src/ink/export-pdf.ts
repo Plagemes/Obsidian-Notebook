@@ -16,6 +16,7 @@ import { HIGHLIGHTER_ALPHA, strokeOutline } from "./stroke-shape";
 import { layerFlags, type ExportLayers, type LayerFlags } from "./export-layers";
 import { HEADER_COLOR_DAY, type HeaderLayout } from "./page-header";
 import { helveticaCodeWidth, helveticaWidth, toWinAnsi, wrapHelvetica } from "../pdf/helvetica";
+import { tileLabel, type SplitPlan } from "./export-tiles";
 
 /**
  * An image placed on a page, in page coordinates (pt, origin top-left, y down). `jpeg` is a
@@ -56,6 +57,11 @@ export interface PdfOptions {
 	layers?: ExportLayers;
 	/** 0.15 (#75): the automatic page header or footer of a page (null: none); drawn with the background layer. */
 	header?: (page: Page) => HeaderLayout | null;
+	/**
+	 * 0.18 (#178): the sheets a page is split into (null: the page is written as one PDF page, exactly as without this option).
+	 * A split page is drawn once, as a form, and every sheet shows the part of it that its tile says, in reading order.
+	 */
+	split?: (page: Page) => SplitPlan | null;
 }
 
 /** Line height of text elements, as a multiple of the font size. */
@@ -147,6 +153,44 @@ function* pdfSteps(pages: readonly Page[], options: PdfOptions): Generator<void,
 		}
 		if (res.font) parts.push(`/Font << /F1 ${getFont()} 0 R >>`);
 		const resources = `<< ${parts.join(" ")}${parts.length ? " " : ""}>>`;
+		const plan = options.split?.(page) ?? null;
+		if (plan && plan.tiles.length > 0) {
+			// 0.18 (#178): one form holds the page; each sheet places the part of it its tile says, clipped to the tile.
+			const formBody = enc.encode(content);
+			const form = alloc();
+			setObject(
+				form,
+				`<< /Type /XObject /Subtype /Form /BBox [0 0 ${num(page.width)} ${num(page.height)}] /Resources ${resources} /Length ${formBody.length} >>\nstream\n`,
+				formBody, "\nendstream",
+			);
+			const k = plan.scale;
+			plan.tiles.forEach((tile, i) => {
+				const sheetPage = i === 0 ? pageObj : alloc();
+				const sheetContent = i === 0 ? contentObj : alloc();
+				if (i > 0) pageObjs.push(sheetPage);
+				const clipY = plan.sheetHeight - tile.oy - tile.height * k;
+				const a = tile.ox - k * tile.x;
+				const b = plan.sheetHeight - tile.oy + k * tile.y - k * page.height;
+				const ops = [
+					`q ${num(tile.ox)} ${num(clipY)} ${num(tile.width * k)} ${num(tile.height * k)} re W n`,
+					`${fix(k, 5)} 0 0 ${fix(k, 5)} ${num(a)} ${num(b)} cm`, "/Pg Do", "Q",
+				];
+				let fonts = "";
+				if (plan.pageNumbers) {
+					const label = tileLabel(plan, i);
+					ops.push(`BT /F1 9 Tf 0.35 g ${num((plan.sheetWidth - helveticaWidth(label, 9)) / 2)} 10 Td ${pdfString(label)} Tj ET`);
+					fonts = ` /Font << /F1 ${getFont()} 0 R >>`;
+				}
+				setObject(
+					sheetPage,
+					`<< /Type /Page /Parent ${tree} 0 R /MediaBox [0 0 ${num(plan.sheetWidth)} ${num(plan.sheetHeight)}] /Contents ${sheetContent} 0 R /Resources << /XObject << /Pg ${form} 0 R >>${fonts} >> >>`,
+				);
+				const sheetBody = enc.encode(ops.join("\n"));
+				setObject(sheetContent, `<< /Length ${sheetBody.length} >>\nstream\n`, sheetBody, "\nendstream");
+			});
+			yield;
+			continue;
+		}
 		setObject(
 			pageObj,
 			`<< /Type /Page /Parent ${tree} 0 R /MediaBox [0 0 ${num(page.width)} ${num(page.height)}] /Contents ${contentObj} 0 R /Resources ${resources} >>`,
@@ -156,7 +200,7 @@ function* pdfSteps(pages: readonly Page[], options: PdfOptions): Generator<void,
 		yield; // 0.17 (#23): where a caller may let the interface breathe between two pages
 	}
 	setObject(catalog, `<< /Type /Catalog /Pages ${tree} 0 R >>`);
-	setObject(tree, `<< /Type /Pages /Kids [${pageObjs.map((n) => `${n} 0 R`).join(" ")}] /Count ${pages.length} >>`);
+	setObject(tree, `<< /Type /Pages /Kids [${pageObjs.map((n) => `${n} 0 R`).join(" ")}] /Count ${pageObjs.length} >>`);
 
 	const chunks: Uint8Array[] = [];
 	let length = 0;
