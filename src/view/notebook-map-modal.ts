@@ -6,7 +6,7 @@ import { writing } from "../ink/writing-guard";
 import { filterByState, MAP_STATES, openItems, type MapPage, type MapState, type NotebookMap } from "../model/notebook-map";
 import type { Page } from "../model/types";
 import { chip } from "../ui/components/chip";
-import { modalShell, shellNote } from "../ui/components/modal-shell";
+import { modalShell, shellButton, shellNote } from "../ui/components/modal-shell";
 
 export interface NotebookMapHost {
 	/** The map of the open notebook (cached per page revision by the caller). */
@@ -23,6 +23,13 @@ export interface NotebookMapHost {
 	setLocked?(pageId: string, value: boolean): boolean;
 	/** The notebook can be edited now (the lock buttons are enabled). */
 	canLock?(): boolean;
+
+	/**
+	 * 0.17 (#77): the pages ticked in the map's selection mode go to a new notebook (the dialog opens); and a split before one
+	 * page. Absent: no selection mode. Both close the map first.
+	 */
+	extract?: (pageIds: string[]) => void;
+	split?: (pageId: string) => void;
 }
 
 export const MAP_STATE_ICON: Readonly<Record<MapState, string>> = {
@@ -50,6 +57,10 @@ export class NotebookMapModal extends Modal {
 	private grid: HTMLElement | null = null;
 	private chips: HTMLElement | null = null;
 	private observer: IntersectionObserver | null = null;
+	/** 0.17 (#77): selection mode, to extract pages or split the notebook from the map. */
+	private selecting = false;
+	private readonly picked = new Set<string>();
+	private bar: HTMLElement | null = null;
 
 	constructor(app: App, private readonly mapHost: NotebookMapHost) {
 		super(app);
@@ -64,6 +75,7 @@ export class NotebookMapModal extends Modal {
 		});
 		this.chips = shell.body.createDiv({ cls: "nb-map-filters" });
 		this.grid = shell.body.createDiv({ cls: "nb-map-grid" });
+		if (this.canSelect()) this.bar = shell.body.createDiv({ cls: "nb-map-selbar", attr: { role: "toolbar", "aria-label": t("map.select") } });
 		this.observer = new IntersectionObserver((entries) => {
 			for (const e of entries) {
 				if (!e.isIntersecting) continue;
@@ -97,8 +109,19 @@ export class NotebookMapModal extends Modal {
 			if (n === 0 && this.filter !== s) continue;
 			chip(chips, { label: t(STATE_LABEL[s]), icon: MAP_STATE_ICON[s], count: n, active: this.filter === s, key: s, onClick: () => this.setFilter(s) });
 		}
+		if (this.canSelect()) {
+			const pick = chips.createEl("button", { cls: "nb-map-select", attr: { type: "button", "aria-pressed": String(this.selecting) } });
+			pick.toggleClass("is-on", this.selecting);
+			setIcon(pick.createSpan({ cls: "nb-map-present-icon" }), this.selecting ? "check-square" : "square-check");
+			pick.createSpan({ text: t(this.selecting ? "map.select.done" : "map.select") });
+			pick.addEventListener("click", () => {
+				this.selecting = !this.selecting;
+				this.picked.clear();
+				this.render();
+			});
+		}
 		const present = this.mapHost.present;
-		if (present) {
+		if (present && !this.selecting) {
 			const b = chips.createEl("button", { cls: "nb-map-present", attr: { type: "button", "aria-label": t("present.title") } });
 			setIcon(b.createSpan({ cls: "nb-map-present-icon" }), "presentation");
 			b.createSpan({ text: t("present.title") });
@@ -161,13 +184,60 @@ export class NotebookMapModal extends Modal {
 				});
 			}
 			if (mp.due) foot.createSpan({ cls: "nb-map-due", text: mp.due });
+			if (this.selecting) {
+				card.setAttribute("aria-pressed", String(this.picked.has(mp.pageId)));
+				card.toggleClass("is-picked", this.picked.has(mp.pageId));
+				card.setAttribute("aria-label", `${t("map.select.card", { n: String(mp.index + 1) })}, ${label}`);
+			}
 			card.addEventListener("click", () => {
+				if (this.selecting) {
+					if (!this.picked.delete(mp.pageId)) this.picked.add(mp.pageId);
+					card.toggleClass("is-picked", this.picked.has(mp.pageId));
+					card.setAttribute("aria-pressed", String(this.picked.has(mp.pageId)));
+					this.updateBar();
+					return;
+				}
 				this.close();
 				this.mapHost.goTo(mp.index);
 			});
 			this.observer?.observe(card);
 		}
 		grid.querySelector<HTMLElement>(".is-current")?.scrollIntoView({ block: "nearest" });
+		grid.toggleClass("is-selecting", this.selecting);
+		this.updateBar();
+	}
+
+	private canSelect(): boolean {
+		return !!(this.mapHost.extract || this.mapHost.split);
+	}
+
+	/** The action bar of the selection mode: how many are ticked, Extract and Split. Hidden outside the mode. */
+	private updateBar(): void {
+		const bar = this.bar;
+		if (!bar) return;
+		bar.empty();
+		bar.toggleClass("is-on", this.selecting);
+		if (!this.selecting) return;
+		const ids = this.mapHost.pages().filter((p) => this.picked.has(p.id)).map((p) => p.id);
+		bar.createSpan({ cls: "nb-map-selcount", text: t("map.select.count", { n: String(ids.length) }) });
+		const extract = this.mapHost.extract;
+		if (extract) {
+			const b = shellButton(bar, "primary", t("map.select.extract"), () => {
+				this.close();
+				extract(ids);
+			}, { icon: "file-output", disabled: ids.length === 0 });
+			b.addClass("nb-map-extract");
+		}
+		const split = this.mapHost.split;
+		if (split) {
+			// A split needs a page that is not the first one (both halves keep a page).
+			const first = ids.length === 1 ? this.mapHost.pages().findIndex((p) => p.id === ids[0]) : -1;
+			const b = shellButton(bar, "secondary", t("map.select.split"), () => {
+				this.close();
+				split(ids[0]!);
+			}, { icon: "scissors", disabled: ids.length !== 1 || first < 1 });
+			b.addClass("nb-map-split");
+		}
 	}
 
 	private setFilter(s: MapState | null): void {

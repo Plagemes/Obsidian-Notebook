@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### pagesplit
+- **Merge notebooks, split a notebook, extract pages into a new notebook (#77).** The library's notebook menu has *Merge another notebook into this one…* (the pages of the notebook you search for are added at the end or after a chosen page, with an option to move that notebook to the library trash afterwards), *Split at a page…* (the pages from a chosen page to the end become a new notebook beside the first) and *Extract pages to a new notebook…* (tick pages, keep them in the original or move them). In an open notebook the notebook map has *Select pages*: tick cards, then *Extract…* or *Split before this page…*. Copies get new page ids; moved pages keep theirs, so stable links follow them (the plugin offers *Review links* when notes link to pages that moved, and counts text boxes inside notebooks that do, which it does not rewrite). Pictures, PDFs, slide links, bookmarks and drawing states travel with the pages; a locked page keeps its lock in the copy.
+- **Safe order.** The destination is written and read back first (a new notebook is validated before it exists, an existing closed one is backed up, re-validated and written only if it still holds what was read; an open one is edited through its tab as one undo step); only then do the pages leave the source, and only those still exactly as they were copied. Locked pages leave their notebook only after an explicit tick; a merged notebook goes to the library trash (never deleted) only when every page of it is in the destination and nothing was written to it meanwhile. No format change. Tests: `tests/notebook-transfer.test.ts`, `tests/page-transfer-run.test.ts`, `tests/transfer-logic.test.ts`. Harness: `dev/harness/pagesplit-check.ts` (`doc=xfer`).
+- **Fix.** Adding or removing a bookmark no longer drops the notebook's description and generated cover from the metadata it returns (it affected "Move to notebook…" with bookmarked pages into a notebook that had a description).
+
 ## 0.16.0 — 2026-11-04
 
 Finish a page, work with PDFs, and get material in and out faster: lock a finished page, copy text from a PDF with its outline and links, move a selection to another page, import many files at once, present a notebook full screen with a laser pointer, collect highlights into a note, and pick up files shared from other Android apps. **The document format is now v14** (optional page lock): a 0.15 device opens a v14 notebook read-only (newer version) and never overwrites it. **Not verified on the device**: unit tests and the browser harness only.
