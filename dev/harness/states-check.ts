@@ -41,6 +41,8 @@ export async function checkStates(api: StatesCheckApi): Promise<{ ok: boolean; r
 	const nv = api.view as NotebookView;
 	const app = api.app as HarnessApp;
 	const results: CheckResult[] = [];
+	// 0.17: this check is about states, not about snap: the drag of a part must land exactly where the pen put it.
+	(nv as unknown as { host: { settings: { snapMode: string } } }).host.settings.snapMode = "off";
 	const add = (name: string, ok: unknown, detail = "") => results.push({ name, ok: !!ok, detail });
 	const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 	const settle = async () => {
