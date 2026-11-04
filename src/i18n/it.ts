@@ -3403,4 +3403,15 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"qr.done": "Fatto",
 	"qr.copied": "Link copiato.",
 	"qr.tooLong": "Il link di questa pagina è troppo lungo per un codice QR. Usa Copia link.",
+
+	// 0.18 mentions
+	"mentions.menu": "Menzioni…",
+	"command.mentions": "Menzioni: note che collegano questa pagina…",
+	"mentions.title": "Menzioni",
+	"mentions.page": "Collegamenti alla pagina {n}",
+	"mentions.page.none": "Nessuna nota collega questa pagina.",
+	"mentions.notebook": "Collegamenti al quaderno",
+	"mentions.none": "Nessuna nota collega ancora questo quaderno. Un collegamento come [[Quaderno#p3]] (Copia collegamento alla pagina) comparirà qui.",
+	"mentions.more": "E altre {n}.",
+	"mentions.badge.aria": "{n} note collegano questa pagina. Tocca per elencarle.",
 };

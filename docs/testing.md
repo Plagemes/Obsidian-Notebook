@@ -1234,6 +1234,26 @@ Generated outline (roadmap 407). Reference screenshots after `npm run harness:ch
 612. **Cost.** In a notebook of 100+ pages, open the outline for the first time (note how long it takes), then close and reopen it: the second time is immediate. Writing with the outline open does not stutter.
 613. **No change to the file.** Open a notebook, view the outline, close it without editing: the file is not rewritten (no new snapshot, no sync conflict).
 
+### 0.18 — mentions: notes that link to a page (steps 1400-1419)
+
+Mentions (roadmap O7). Make a note with `[[Physics.notebook#p3]]` (use *Copy link to page* so the link carries the page id), another with `![[Physics.notebook#p3]]`, one with a plain `[[Physics.notebook]]`.
+
+1400. **Badge.** Open the notebook and go to page 3: a small pill with a link icon and the count appears at the top left of the page area. On a page nobody links to there is no pill.
+1401. **Count.** Two links to page 3 (one by id, one `#p3`, one embed) show 3.
+1402. **Sheet.** Tap the pill, or *Mentions* in the page sheet, in the notebook menu or the command palette: the sheet lists, under *Linking to page 3*, one row per link with the note name, its folder and a line of context around the link.
+1403. **Notebook group.** The plain `[[Physics.notebook]]` link, and a link to a page that was deleted, are under *Linking to the notebook*.
+1404. **Open.** Tap a row: the note opens in a new tab at the line of the link; the notebook stays open.
+1405. **Reorder.** Move page 3 before page 1: the link by id still counts for that page; the plain `#p3` link follows the number.
+1406. **Refresh.** Add a link in a note: within about a second the badge and (when reopened) the sheet show it. Delete the link: it goes.
+1407. **Read only.** The sheet writes nothing (check the modified time of the notes and of the notebook); it also works in a read-only notebook.
+1408. **Big vault.** In a vault with many notes the sheet opens at once; the context lines fill in a moment later. A note over 1 MB shows no context line.
+1409. **Android.** The pill and the rows are easy to hit with a finger; the pen does not draw when it touches the pill.
+1410. **Look.** Light, dark, *Follow Obsidian theme*, phone width (the pill stays at the corner), Italian.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Mentions: notes that link to the page in view (O7), count badge, sheet with context and open at the line | yes | yes (`tests/mentions-logic.test.ts`: link resolution by id / number, grouping, snippets); harness `doc=mentions` with a stand-in link index | | The link index of the harness is a stand-in; not run against Obsidian's real `metadataCache` | Run on a real vault |
+
 ### 0.17 — hover: hover preview of page links (steps 1180-1199)
 
 Hover preview (roadmap O5). In a Markdown note write `[[Physics.notebook#p3]]` and one made by the plugin (*Copy link to page*). Page preview must be on in *Settings > Core plugins*.

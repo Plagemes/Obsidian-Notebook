@@ -3401,6 +3401,17 @@ export const en = {
 	"qr.done": "Done",
 	"qr.copied": "Link copied.",
 	"qr.tooLong": "This page link is too long for a QR code. Use Copy link instead.",
+
+	// 0.18 mentions
+	"mentions.menu": "Mentions…",
+	"command.mentions": "Mentions: notes that link to this page…",
+	"mentions.title": "Mentions",
+	"mentions.page": "Linking to page {n}",
+	"mentions.page.none": "No note links to this page.",
+	"mentions.notebook": "Linking to the notebook",
+	"mentions.none": "No note links to this notebook yet. A link such as [[Notebook#p3]] (Copy link to page) shows up here.",
+	"mentions.more": "And {n} more.",
+	"mentions.badge.aria": "{n} notes link to this page. Tap to list them.",
 } as const;
 
 export type MessageKey = keyof typeof en;

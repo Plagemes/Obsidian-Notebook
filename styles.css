@@ -15901,3 +15901,133 @@ body.notebook-style-obsidian {
 /* ===== 0.18 qr ===== */
 .nb-ui.nb-qr-modal .nb-qr-box { display: flex; justify-content: center; padding: var(--nb-space-3, 12px) 0; }
 .nb-ui.nb-qr-modal .nb-qr-svg { width: min(100%, 360px); height: auto; aspect-ratio: 1; border-radius: var(--nb-radius-tile); box-shadow: 0 0 0 1px var(--nb-border); background: #fff; }
+
+/* ===== 0.18 mentions ===== */
+/* The count of notes that link to the page in view (a button: a tap lists them), top left of the page area; the sheet rows. */
+.nb-ui.nb-mentions-badge {
+	position: absolute;
+	top: 10px;
+	left: 18px;
+	z-index: 6;
+	display: none;
+	align-items: center;
+	gap: 6px;
+	min-height: 32px;
+	padding: 0 12px 0 10px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	font-weight: 600;
+	box-shadow: var(--nb-shadow-1);
+	cursor: pointer;
+	opacity: 0.92;
+}
+
+.nb-ui.nb-mentions-badge.is-visible {
+	display: inline-flex;
+}
+
+.nb-ui.nb-mentions-badge:hover {
+	border-color: var(--nb-accent);
+	opacity: 1;
+}
+
+.nb-ui.nb-mentions-badge:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+.nb-ui.nb-mentions-badge .nb-mentions-badge-icon {
+	display: inline-flex;
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-mentions-badge .nb-mentions-badge-icon svg {
+	width: 15px;
+	height: 15px;
+}
+
+.nb-ui.notebook-mentions-modal .nb-mentions-row {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 4px;
+	width: 100%;
+	min-height: 48px;
+	padding: 10px 12px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-card);
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	text-align: left;
+	cursor: pointer;
+	box-shadow: none;
+	height: auto;
+}
+
+.nb-ui.notebook-mentions-modal .nb-mentions-row:hover {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui.notebook-mentions-modal .nb-mentions-row:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+.nb-ui.notebook-mentions-modal .nb-mentions-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.nb-ui.notebook-mentions-modal .nb-mentions-icon {
+	display: inline-flex;
+	flex: none;
+	color: var(--nb-accent);
+}
+
+.nb-ui.notebook-mentions-modal .nb-mentions-icon svg {
+	width: 16px;
+	height: 16px;
+}
+
+.nb-ui.notebook-mentions-modal .nb-mentions-name {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.notebook-mentions-modal .nb-mentions-folder {
+	flex: 1 1 0;
+	min-width: 0;
+	overflow: hidden;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-chip);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.notebook-mentions-modal .nb-mentions-snippet {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-chip);
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+}
+
+.nb-ui.notebook-mentions-modal .nb-mentions-snippet.is-empty {
+	display: none;
+}
+
+@media (max-width: 520px) {
+	.nb-ui.nb-mentions-badge {
+		left: 12px;
+		padding: 0 9px;
+	}
+}
