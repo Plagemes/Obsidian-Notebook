@@ -227,6 +227,17 @@ export function addCommentCommand(page: Page, note: PageCommentNote): Command | 
 	return new SetPageComments(page.id, page.comments, [...current(page), note], "Add comment");
 }
 
+/** What adding a new comment to a page comes to: the comment and its command, or why there is none (nothing typed or drawn; the page is full). */
+export type AddCommentPlan = { ok: true; note: PageCommentNote; command: Command } | { ok: false; reason: "empty" | "full" };
+
+export function planAddComment(page: Page, c: NewComment): AddCommentPlan {
+	const note = createComment(page, c);
+	// Nothing typed and nothing drawn is no comment, not a full page: there is nothing to say.
+	if (!note) return { ok: false, reason: "empty" };
+	const command = addCommentCommand(page, note);
+	return command ? { ok: true, note, command } : { ok: false, reason: "full" };
+}
+
 export function addReplyCommand(page: Page, reply: CommentReply): Command | null {
 	if (current(page).length >= COMMENTS_MAX) return null;
 	return new SetPageComments(page.id, page.comments, [...current(page), reply], "Reply to comment");

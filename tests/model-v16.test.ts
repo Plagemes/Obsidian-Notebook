@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { planPageMove } from "../src/library/page-move";
 import {
 	addCommentCommand, addReplyCommand, commentCounts, createComment, createReply, deleteCommentCommand, editedComment, editedReply, mergeComments,
-	conflictId, notesOf, orderedNotes, regionFromBounds, regionFromDrag, repliesOf, replaceCommentCommand, resolvedComment, SetPageComments, shiftComments, threadsOf,
+	conflictId, notesOf, orderedNotes, planAddComment, regionFromBounds, regionFromDrag, repliesOf, replaceCommentCommand, resolvedComment, SetPageComments, shiftComments, threadsOf,
 } from "../src/model/comments";
 import { clampRegion, commentLine, normalizeComments, readComments } from "../src/model/comments-format";
 import { createDocument, createPage, createStroke } from "../src/model/document";
@@ -788,6 +788,21 @@ describe("comments: marked copies of lost edits keep ids that fit and do not col
 		expect(merged.list).toHaveLength(1);
 		// the later action wins as a whole
 		expect(merged.list![0]!.edited).toBe(300);
-		expect(merged.list![0]!.resolved).toBeUndefined();
+		expect(notesOf({ ...createPage(), comments: [...merged.list!] })[0]!.resolved).toBeUndefined();
+	});
+});
+
+describe("comments: planning a new comment", () => {
+	it("gives the comment and its command, or says why not: nothing typed, or a full page", () => {
+		const page = createPage();
+		const region = { x: 1, y: 1, width: 40, height: 40 };
+		const ok = planAddComment(page, { region, text: "hello", author: "a", now: 10 });
+		expect(ok.ok).toBe(true);
+		expect(planAddComment(page, { region, text: "  ", author: "a", now: 10 })).toEqual({ ok: false, reason: "empty" });
+		const many = Array.from({ length: 1000 }, (_, i) => createComment(page, { region, text: `n${i}`, author: "a", now: 1000 + i })!);
+		const full = { ...page, comments: many };
+		expect(planAddComment(full, { region, text: "one more", author: "a", now: 99_999 })).toEqual({ ok: false, reason: "full" });
+		// a full page is "full" only when something was typed
+		expect(planAddComment(full, { region, text: "", author: "a", now: 99_999 })).toEqual({ ok: false, reason: "empty" });
 	});
 });

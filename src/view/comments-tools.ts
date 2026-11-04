@@ -4,12 +4,13 @@ import type { BBox } from "../ink/hit-test";
 import type { PageBox } from "../ink/layout";
 import type { Viewport } from "../ink/viewport";
 import {
-	addCommentCommand, addReplyCommand, cleanCommentText, commentCounts, createComment, createReply, deleteCommentCommand, editedComment, editedReply, findComment, isNote,
+	addReplyCommand, cleanCommentText, commentCounts, createReply, planAddComment, deleteCommentCommand, editedComment, editedReply, findComment, isNote,
 	regionFromBounds, repliesOf, replaceCommentCommand, resolvedComment, threadsOf, orderedNotes, type CommentFilter,
 } from "../model/comments";
 import type { PdfCommentLabels } from "../ink/export-pdf";
 import type { Command } from "../model/history";
 import type { CommentRegion, NotebookDocument, Page, PageCommentNote } from "../model/types";
+import { writeSystemText } from "./clipboard";
 import { CommentCard, type CardView } from "./comments-card";
 import { CommentLayer } from "./comments-layer";
 import { CommentModal, type CommentDraft } from "./comments-modal";
@@ -157,33 +158,40 @@ export class CommentTools {
 			this.host.notify(t("comments.locked"));
 			return;
 		}
-		new CommentModal(this.host.app, { kind: "comment", editing: false, text: "", page: pageIndex + 1 }, (draft) => this.add(page.id, region, draft)).open();
+		new CommentModal(this.host.app, { kind: "comment", editing: false, text: "", page: pageIndex + 1 }, (draft) => {
+			const outcome = this.add(page.id, region, draft);
+			if (outcome === "full") this.host.notify(t("comments.full"));
+			else if (outcome === "locked") this.host.notify(t("comments.locked"));
+		}).open();
 	}
 
-	private add(pageId: string, region: CommentRegion, draft: CommentDraft): void {
+	/** Adds the comment to its page; the outcome says why not (the caller tells the user, once). */
+	private add(pageId: string, region: CommentRegion, draft: CommentDraft): "ok" | "empty" | "none" | "full" | "locked" {
 		// The page can be gone while the editor was open (deleted, or removed by a sync): what was typed goes to the page in view.
 		const page = this.page(pageId) ?? this.host.doc()?.pages[this.host.currentPage()];
-		if (!page) return;
-		const note = createComment(page, { region, text: draft.text, ...(draft.sketch ? { sketch: draft.sketch } : {}), author: this.host.deviceName(), now: Date.now() });
-		// Nothing typed and nothing drawn is no comment, not a full page: there is nothing to say.
-		if (!note) return;
-		const cmd = addCommentCommand(page, note);
-		if (!cmd) {
-			this.host.notify(t("comments.full"));
-			return;
-		}
-		if (!this.host.execute(cmd)) {
-			this.host.notify(t("comments.locked"));
-			return;
-		}
-		this.select(page.id, note.id);
+		if (!page) return "none";
+		const plan = planAddComment(page, { region, text: draft.text, ...(draft.sketch ? { sketch: draft.sketch } : {}), author: this.host.deviceName(), now: Date.now() });
+		if (!plan.ok) return plan.reason;
+		if (!this.host.execute(plan.command)) return "locked";
+		this.select(page.id, plan.note.id);
+		return "ok";
 	}
 
-	/** The comment (or its page) went while the editor was open: the typed text is kept as a new comment, on its page if it is still there. */
+	/**
+	 * The comment (or its page) went while the editor was open: the typed text is kept as a new comment, on its page if it is still
+	 * there. The notice says so only once that worked; if the page is locked or full (or gone), the text goes to the clipboard.
+	 */
 	private keepAsNew(pageId: string, region: CommentRegion, draft: CommentDraft): void {
-		if (cleanCommentText(draft.text) === "" && !draft.sketch) return;
-		this.host.notify(t("comments.keptAsNew"));
-		this.add(pageId, region, draft);
+		const text = cleanCommentText(draft.text);
+		if (text === "" && !draft.sketch) return;
+		const outcome = this.add(pageId, region, draft);
+		if (outcome === "ok") {
+			this.host.notify(t("comments.keptAsNew"));
+		} else if (outcome !== "empty" && text !== "") {
+			void writeSystemText(text).then((copied) => this.host.notify(t(copied ? "comments.keptCopied" : "comments.keptLost", { text })));
+		} else if (outcome !== "empty") {
+			this.host.notify(t("comments.keptLostSketch"));
+		}
 	}
 
 	// --- one comment ------------------------------------------------------------------------------------------------
