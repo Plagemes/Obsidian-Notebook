@@ -44,10 +44,17 @@ describe("annotate PDF cost control", () => {
 	const text = (...ids: string[]) => `{"assets":{${ids.map((i) => `"${i}":{}`).join(",")}}}`;
 
 	it("finds the quoted asset ids of a notebook, also the 24-char start of a longer id", () => {
-		const ids = assetIdsInText(`{"x":"${ID}","y":"${"c".repeat(64)}","z":"short","w":"not hex ${OTHER}"}`);
+		const ids = assetIdsInText(`{"background":{"kind":"pdf","asset":"${ID}","page":1},"assets":{"${"c".repeat(64)}":{"id":"x"}},"z":"short","w":"not hex ${OTHER}"}`);
 		expect(ids.has(ID)).toBe(true);
 		expect(ids.has("c".repeat(24))).toBe(true);
+		expect(ids.has("c".repeat(64))).toBe(true);
 		expect(ids.has(OTHER)).toBe(false);
+	});
+
+	it("keeps only asset values and asset-map keys, not any other quoted hex string", () => {
+		const OTH = "d".repeat(32);
+		const ids = assetIdsInText(`{"assets":{"${ID}":{"id":"${OTH}","kind":"pdf"}},"pages":[{"id":"${"e".repeat(30)}","note":"${"f".repeat(40)}","background":{"asset" : "${"1".repeat(64)}"}}]}`);
+		expect([...ids].sort()).toEqual([ID, "1".repeat(64), "1".repeat(24)].sort());
 	});
 
 	it("keeps a bounded cache keyed by path and content stamp", () => {

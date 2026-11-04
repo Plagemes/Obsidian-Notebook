@@ -100,11 +100,14 @@ export const SCAN_PROGRESS_FROM = 25;
 const MAX_HASHES = 64;
 const MAX_NOTEBOOKS = 4000;
 
-/** The asset ids a notebook's text names (quoted hex strings): a superset of the PDFs it annotates, found without parsing it. */
+/**
+ * The asset ids a notebook's text names where asset ids live: the value of an `"asset"` field (a page background) and the keys
+ * of the `assets` map. A superset of the PDFs it annotates, found without parsing it; other quoted hex strings are not kept.
+ */
 export function assetIdsInText(text: string): Set<string> {
 	const ids = new Set<string>();
-	for (const m of text.matchAll(/"([0-9a-f]{24,64})"/g)) {
-		const id = m[1]!;
+	for (const m of text.matchAll(/"asset"\s*:\s*"([0-9a-f]{24,64})"|"([0-9a-f]{24,64})"\s*:/g)) {
+		const id = (m[1] ?? m[2])!;
 		ids.add(id);
 		ids.add(id.slice(0, 24));
 	}
