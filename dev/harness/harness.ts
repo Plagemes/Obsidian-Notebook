@@ -48,6 +48,7 @@ import { checkAdaptiveToolbar, adaptiveToolbarShot, type AdaptiveShotState } fro
 import { checkCreate, prepareShot } from "./create-check";
 import { modalsApi } from "./modals-check";
 import { templatesApi } from "./templates-check";
+import { storageApi } from "./storage-check";
 import { checkHostile, HOSTILE_ERROR, hostileDialog, installHostile } from "./hostile";
 import { PracticeService } from "../../src/view/practice";
 import { NavController } from "../../src/view/nav-controller";
@@ -2147,5 +2148,7 @@ Object.assign(harnessApi, {
 
 Object.assign(harnessApi, modalsApi({ app, errors, notices }));
 Object.assign(harnessApi, templatesApi({ app, errors, notices }));
+// 0.15 storage: the Storage manager (doc=storage, storage-check.ts).
+Object.assign(harnessApi, storageApi({ app, errors, notices }));
 (window as unknown as { harness: Record<string, unknown> }).harness = harnessApi;
 harnessApi.ready = main();

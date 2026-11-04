@@ -37,6 +37,7 @@ import { openLooseSheet, openNewQuickPage } from "./loose-sheet";
 import { openTodaysPage } from "./daily";
 import type { LectureTarget } from "./home-stats";
 import { openLibraryCheck } from "./library-check-modal";
+import { openStorageManager } from "./storage-dialog";
 import { LibraryStateStore } from "./library-state-store";
 import { BoardStateStore } from "./board-state-store";
 import type { BoardColumn } from "./board-logic";
@@ -202,6 +203,18 @@ export class NotebookLibraryHost implements LibraryHost {
 			journalFolder: journalFolder(this.app, this.plugin.manifest.id),
 			// What every open notebook holds in memory: a view that cannot be inspected makes the check incomplete (it throws).
 			openRoots: () => this.app.workspace.getLeavesOfType(VIEW_TYPE).flatMap((leaf) => (leaf.view instanceof NotebookView ? leaf.view.libraryCheckRoots() : [])),
+		});
+	}
+
+	/** 0.15 (128): the Storage manager (sizes, unused / duplicate / heavy files, old backups). */
+	openStorage(): void {
+		openStorageManager({
+			app: this.app,
+			settings: () => this.plugin.settings,
+			journalFolder: journalFolder(this.app, this.plugin.manifest.id),
+			openRoots: () => this.app.workspace.getLeavesOfType(VIEW_TYPE).flatMap((leaf) => (leaf.view instanceof NotebookView ? leaf.view.libraryCheckRoots() : [])),
+			trashNotebook: (file) => this.trash.trash(file),
+			openNotebook: (file) => void this.openNotebook(file),
 		});
 	}
 

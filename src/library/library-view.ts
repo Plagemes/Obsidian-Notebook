@@ -126,6 +126,8 @@ export interface LibraryHost {
 	readNotebookId?(file: TFile): Promise<string | null>;
 	/** Roadmap 27: opens the library check (unreadable notebooks, unused files). */
 	checkLibrary?(): void;
+	/** 0.15 (128): the Storage manager. */
+	openStorage?(): void;
 	loadIndex(): Promise<unknown>;
 	saveIndex(data: unknown): Promise<void>;
 	/** 0.12: runs a plugin-level action of the registry (ui/actions.ts) by id; false when it has no handler. */
@@ -1342,6 +1344,13 @@ export class LibraryView extends ItemView {
 			railItem(bottom, { key: "nav:check", icon: "hard-drive", label: t("libcheck.nav"), onClick: () => {
 				this.setRailOpen(false);
 				check();
+			} });
+		}
+		const storage = this.host.openStorage?.bind(this.host); // 0.15 (128)
+		if (storage) {
+			railItem(bottom, { key: "nav:storage", icon: "database", label: t("storage.nav"), onClick: () => {
+				this.setRailOpen(false);
+				storage();
 			} });
 		}
 	}

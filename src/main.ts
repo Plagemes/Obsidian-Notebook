@@ -195,6 +195,7 @@ export default class NotebookPlugin extends Plugin {
 			"sync-check": () => void this.syncSafety.openCheck(),
 			"check-integrity": () => void this.resilience?.check(),
 			"library-check": () => this.host.checkLibrary(),
+			"storage-manager": () => this.host.openStorage(),
 			"zettel-inbox": () => void openInbox(this.app),
 			"zettel-inbox-process": () => void processNextInbox(this.app),
 			"benchmark": () => this.openBenchmark(),
