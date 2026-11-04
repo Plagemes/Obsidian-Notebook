@@ -8,6 +8,10 @@
  * ends `commitTransform` turns the selection's matrix into the part's pose in that state (one `SetPageStates`, one undo
  * step) instead of rewriting the strokes. The ink tools skip the strokes a state has moved (`displaced`), because a hit at
  * the drawn spot would hit nothing the reader sees: switch to "As drawn" to edit the drawing itself.
+ *
+ * Which state is shown is the view's own choice (per page, per device): tapping a chip, stepping and playing change what
+ * this view shows and never write the notebook (two devices that only look must not make conflicted copies). The saved
+ * `active` is the state a view starts with; only the explicit "Set as default state" writes it (one undo step).
  */
 import { Menu, setIcon, type App } from "obsidian";
 import { isIdentity, multiply, type Matrix } from "../ink/transform";
@@ -35,8 +39,6 @@ export interface StatesHost {
 	execute(cmd: Command): boolean;
 	/** The renderer shows the pages again (a state was switched without a command). */
 	repaint(): void;
-	/** A change that is not an undo step (the state in view) has to be saved. */
-	changed(): void;
 	/** The ink in the selection that is on a page of the document. */
 	selection(): { pageIndex: number; strokes: readonly Stroke[] } | null;
 	select(pageIndex: number, strokes: Stroke[]): void;
@@ -58,7 +60,7 @@ export class StatesTools {
 	private el: HTMLElement | null = null;
 	private opened = false;
 	private editing: PartEdit | null = null;
-	/** The state each page is shown in when the view has chosen one (a read-only view, or while the states play). */
+	/** The state each page is shown in when this view has chosen one (never saved); a page not in it shows the saved default. */
 	private readonly shown = new Map<string, string | null>();
 	private timer: number | null = null;
 	/** The states still to show while playing (null: the drawing as drawn). */
@@ -109,7 +111,7 @@ export class StatesTools {
 	}
 
 	close(): void {
-		this.stopPlaying(false);
+		this.stopPlaying();
 		this.opened = false;
 		this.editing = null;
 		this.el?.remove();
@@ -118,7 +120,7 @@ export class StatesTools {
 	}
 
 	destroy(): void {
-		this.stopPlaying(false);
+		this.stopPlaying();
 		this.el?.remove();
 		this.el = null;
 	}
@@ -129,11 +131,6 @@ export class StatesTools {
 
 	/** Called when the document, the page in view or the selection changed. */
 	refresh(): void {
-		// A view that could not save chose its states itself; once it can edit again the saved ones rule.
-		if (this.shown.size > 0 && this.host.editable() && !this.playingNow) {
-			this.shown.clear();
-			this.host.repaint();
-		}
 		if (!this.opened) return;
 		const page = this.page();
 		if (this.editing && this.editing.pageId !== page?.id) this.editing = null;
@@ -162,13 +159,15 @@ export class StatesTools {
 		const top = el.createDiv({ cls: "nb-states-row" });
 		this.iconButton(top, "x", t("states.close"), () => this.close(), "nb-states-close");
 		const chips = top.createDiv({ cls: "nb-states-chips", attr: { role: "toolbar", "aria-label": t("states.title") } });
-		this.chip(chips, t("states.drawn"), current === null, () => this.switchTo(null));
-		for (const st of states?.list ?? []) this.chip(chips, st.name, st.id === current, () => this.switchTo(st.id));
+		const saved = states?.active ?? null;
+		const hasList = (states?.list.length ?? 0) > 0;
+		this.markDefault(this.chip(chips, t("states.drawn"), current === null, () => this.switchTo(null)), hasList && saved === null);
+		for (const st of states?.list ?? []) this.markDefault(this.chip(chips, st.name, st.id === current, () => this.switchTo(st.id)), st.id === saved);
 		const add = this.iconButton(chips, "plus", parts.length === 0 ? t("states.addNeedPart") : t("states.add"), () => this.addNewState(), "nb-states-add");
 		add.disabled = !editable;
 		add.toggleClass("is-dim", parts.length === 0);
-		const hasStates = (states?.list.length ?? 0) > 0;
-		if (current !== null && editable) this.iconButton(top, "more-horizontal", t("states.more"), (e) => this.stateMenu(e), "nb-states-more");
+		const hasStates = hasList;
+		if (hasStates && editable) this.iconButton(top, "more-horizontal", t("states.more"), (e) => this.stateMenu(e), "nb-states-more");
 		const transport = top.createDiv({ cls: "nb-states-transport" });
 		const prev = this.iconButton(transport, "skip-back", t("states.prev"), () => this.step(-1));
 		const play = this.iconButton(transport, this.playingNow ? "square" : "play", this.playingNow ? t("states.stop") : t("states.play"), () => this.togglePlay(), "nb-states-play");
@@ -236,6 +235,12 @@ export class StatesTools {
 		this.iconButton(row, "check", t("states.done"), () => this.finishEdit(), "nb-states-done");
 	}
 
+	/** A small dot on the chip of the state the notebook opens with (the saved default). */
+	private markDefault(chip: HTMLButtonElement, isDefault: boolean): void {
+		chip.toggleClass("is-default", isDefault);
+		if (isDefault) chip.title = t("states.isDefault");
+	}
+
 	private chip(parent: HTMLElement, label: string, active: boolean, onClick: () => void): HTMLButtonElement {
 		const b = parent.createEl("button", { cls: "nb-states-chip", attr: { type: "button", "aria-pressed": String(active) } });
 		b.toggleClass("is-active", active);
@@ -253,30 +258,38 @@ export class StatesTools {
 
 	// --- switching and playing ---
 
-	/** Shows state `id` (null: the drawing as drawn). Saved with the notebook when it can be edited, else only for this view. */
+	/** Shows state `id` (null: the drawing as drawn) in this view. Nothing is saved: see `setDefault`. */
 	switchTo(id: string | null): void {
 		const page = this.page();
 		if (!page) return;
-		this.stopPlaying(false);
+		this.stopPlaying();
 		this.editing = null;
 		this.host.deselect();
-		this.show1(page, id, true);
+		this.show1(page, id);
 	}
 
-	private show1(page: Page, id: string | null, persist: boolean): void {
-		const doc = this.host.doc();
-		const states = page.states;
-		if (persist && this.host.editable() && doc && states) {
-			this.shown.delete(page.id);
-			if ((states.active ?? null) !== id) {
-				new SetPageStates(page.id, states, withActive(states, id)).apply(doc);
-				this.host.changed();
-			}
-		} else {
-			this.shown.set(page.id, id);
-		}
+	private show1(page: Page, id: string | null): void {
+		this.shown.set(page.id, id);
 		this.host.repaint();
 		this.render();
+	}
+
+	/**
+	 * "Set as default state": the state in view becomes the one the notebook opens with on every device (null: as drawn). The
+	 * only way a state choice is written, and one undo step.
+	 */
+	setDefault(): void {
+		const page = this.page();
+		const states = page?.states;
+		if (!page || !states || !this.host.editable()) return;
+		const current = this.shownId(page);
+		if ((states.active ?? null) === current) {
+			showNotice(t("states.defaultAlready"), 3000);
+			return;
+		}
+		if (this.run(page, withActive(states, current), "Set default state")) {
+			showNotice(t("states.defaultSet", { state: stateById(states, current)?.name ?? t("states.drawn") }), 3000);
+		}
 	}
 
 	private step(dir: 1 | -1): void {
@@ -284,9 +297,10 @@ export class StatesTools {
 		if (page?.states) this.switchTo(steppedState(page.states, dir, this.shownId(page)));
 	}
 
-	private togglePlay(): void {
+	/** Plays the states from the one in view (or stops the playback). */
+	togglePlay(): void {
 		if (this.playingNow) {
-			this.stopPlaying(true);
+			this.stopPlaying();
 			this.render();
 			return;
 		}
@@ -308,25 +322,23 @@ export class StatesTools {
 		const page = this.page();
 		const queue = this.queue;
 		if (!page || page.id !== pageId || !queue) {
-			this.stopPlaying(false);
+			this.stopPlaying();
 			return;
 		}
 		if (queue.length === 0) {
-			// The last state has had its time: the playback ends where it stopped, and that state is saved.
-			this.stopPlaying(true);
+			// The last state has had its time: the playback ends where it stopped (this view keeps showing it, nothing is saved).
+			this.stopPlaying();
 			this.render();
 			return;
 		}
-		this.show1(page, queue.shift() ?? null, false);
+		this.show1(page, queue.shift() ?? null);
 	}
 
-	/** Ends the playback. `save`: the state it stopped on becomes the saved one (when the notebook can be edited). */
-	private stopPlaying(save: boolean): void {
+	/** Ends the playback; the view keeps showing the state it stopped on. */
+	private stopPlaying(): void {
 		if (this.timer !== null) window.clearInterval(this.timer);
 		this.timer = null;
 		this.queue = null;
-		const page = this.page();
-		if (save && page) this.show1(page, this.shownId(page), true);
 	}
 
 	// --- editing ---
@@ -338,15 +350,21 @@ export class StatesTools {
 			showNotice(t("states.addNeedPart"), 5000);
 			return;
 		}
-		this.stopPlaying(false);
+		this.stopPlaying();
 		const name = freshStateName(page.states, t("states.stateDefault"));
 		const added = addState(page.states, name, this.shownId(page));
 		if (!added) {
 			showNotice(t("states.limitStates"), 5000);
 			return;
 		}
-		this.shown.delete(page.id);
-		this.run(page, added.states, "Add state");
+		this.addAndShow(page, added.states, added.stateId, "Add state");
+	}
+
+	/** Runs an edit that adds state `stateId`: this view shows it, the saved default stays what it was. */
+	private addAndShow(page: Page, next: PageStates, stateId: string, label: string): void {
+		const keepDefault = withActive(next, page.states?.active ?? null);
+		this.shown.set(page.id, stateId);
+		if (!this.run(page, keepDefault, label)) this.shown.delete(page.id);
 	}
 
 	/** Groups the selected ink into a part (the strokes leave the parts they were in). */
@@ -393,7 +411,7 @@ export class StatesTools {
 			showNotice(t("states.pickState"), 5000);
 			return;
 		}
-		this.stopPlaying(false);
+		this.stopPlaying();
 		const part = partById(page.states, partId);
 		if (!part) return;
 		const items = new Set(part.items);
@@ -487,8 +505,15 @@ export class StatesTools {
 		const page = this.page();
 		const current = page ? this.shownId(page) : null;
 		const state = stateById(page?.states, current);
-		if (!page?.states || !state) return;
+		if (!page?.states) return;
 		const menu = new Menu();
+		// The only item that saves which state the notebook opens with (also for "As drawn").
+		const isDefault = (page.states.active ?? null) === current;
+		menu.addItem((i) => i.setTitle(isDefault ? t("states.isDefault") : t("states.setDefault")).setIcon("pin").setChecked(isDefault).onClick(() => this.setDefault()));
+		if (!state) {
+			menu.showAtMouseEvent(e);
+			return;
+		}
 		menu.addItem((i) => i.setTitle(t("states.rename")).setIcon("pencil").onClick(() => {
 			new PromptModal(this.host.app, { title: t("states.renameState"), label: t("states.name"), value: state.name, cta: t("states.save") }, (value) => {
 				const now = this.page();
@@ -498,12 +523,15 @@ export class StatesTools {
 		menu.addItem((i) => i.setTitle(t("states.duplicate")).setIcon("copy").onClick(() => {
 			const now = this.page();
 			const added = now ? addState(now.states, freshStateName(now.states, t("states.stateDefault")), state.id) : null;
-			if (now && added) this.run(now, added.states, "Duplicate state");
+			if (now && added) this.addAndShow(now, added.states, added.stateId, "Duplicate state");
 			else showNotice(t("states.limitStates"), 5000);
 		}));
 		menu.addItem((i) => i.setTitle(t("states.delete")).setIcon("trash-2").onClick(() => {
 			const now = this.page();
-			if (now?.states) this.run(now, deleteState(now.states, state.id), "Delete state");
+			if (!now?.states) return;
+			// The deleted state was the one in view: this view shows the drawing as drawn.
+			this.shown.set(now.id, null);
+			if (!this.run(now, deleteState(now.states, state.id), "Delete state")) this.shown.set(now.id, state.id);
 		}));
 		menu.showAtMouseEvent(e);
 	}

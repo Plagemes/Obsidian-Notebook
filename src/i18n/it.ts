@@ -2802,4 +2802,8 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"states.readOnly": "Questo quaderno è in sola lettura: puoi cambiare e riprodurre gli stati, non modificarli.",
 	"states.limitStates": "Una pagina può avere al massimo 32 stati.",
 	"states.limitParts": "Una pagina può avere al massimo 64 parti.",
+	"states.setDefault": "Imposta come stato predefinito",
+	"states.isDefault": "Stato predefinito (il quaderno si apre con questo)",
+	"states.defaultSet": "{state} è ora lo stato con cui si apre il quaderno.",
+	"states.defaultAlready": "Questo è già lo stato con cui si apre il quaderno.",
 };

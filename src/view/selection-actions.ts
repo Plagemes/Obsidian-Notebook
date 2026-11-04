@@ -47,6 +47,8 @@ export interface SelectionHost {
 	doc(): NotebookDocument | null;
 	editable(): boolean;
 	selection(): SelectionState | null;
+	/** 0.15 (241): the selection belongs to the states' part editor: its handles set the part's pose, so no colour or width rows. */
+	ownedByStates?(sel: SelectionState): boolean;
 	/** Selects exactly these items of the page (switching to the lasso) so they can be moved right away. */
 	select(pageIndex: number, strokes: Stroke[], elements: PageElement[], others?: PagePart[]): void;
 	/** wave 0.10 (359): the page boxes, to put the items of several pages in one frame. */
@@ -86,9 +88,8 @@ export class SelectionActions {
 	/** Rebuilds the restyle rows (colour, width) for the current selection; hidden without one. */
 	update(): void {
 		const sel = this.host.selection();
-		const show = this.host.editable() && !!sel;
 		this.styleRows.empty();
-		if (!sel) {
+		if (!sel || this.host.ownedByStates?.(sel)) {
 			this.el.toggleClass("notebook-hidden", true);
 			delete this.el.dataset.kind;
 			return;
@@ -103,7 +104,7 @@ export class SelectionActions {
 		const ability = restyleAbilities(all.strokes, all.elements);
 		if (ability.inkColor || ability.inkWidth) this.styleRow(sel, "ink", ability.inkColor, ability.inkWidth);
 		if (ability.highlighterColor) this.styleRow(sel, "highlighter", true, ability.highlighterWidth);
-		this.el.toggleClass("notebook-hidden", !show || this.styleRows.childElementCount === 0);
+		this.el.toggleClass("notebook-hidden", !this.host.editable() || this.styleRows.childElementCount === 0);
 	}
 
 	private styleRow(sel: SelectionState, group: StyleGroup, colour: boolean, width: boolean): void {

@@ -130,6 +130,7 @@ import { BLANK_THUMBNAIL, ViewResilience, type ResilienceServices, type Resilien
 import { ObjectInk } from "./object-ink";
 import { PenLinks } from "./pen-links";
 import { SelectionActions } from "./selection-actions";
+import { statesAfterCuts } from "../model/states-erase";
 import { StatesTools } from "./states-tools";
 import { SelectionArrange } from "./selection-arrange";
 import { StampPalette, type StampTarget } from "./stamp-palette";
@@ -1721,7 +1722,8 @@ export class NotebookView extends FileView {
 			app: this.app,
 			pageCount: doc.pages.length,
 			defaultFolder: defaultMarkdownFolder(file),
-			run: (folder, dpi) => void exportMarkdown(this.app, file, doc, this.media, { folder, dpi, ...this.exportOptions() }),
+			// 0.15 (241): like the PDF, PNG and SVG exports, the pages as the states in view show them.
+			run: (folder, dpi) => void exportMarkdown(this.app, file, { ...doc, pages: [...this.renderPagesOf(doc)] }, this.media, { folder, dpi, ...this.exportOptions() }),
 		}).open();
 	}
 
@@ -1866,7 +1868,6 @@ export class NotebookView extends FileView {
 			pageIndex: () => this.currentPageIndex(),
 			execute: (cmd) => this.applyCommand(cmd),
 			repaint: () => this.syncRenderPages(),
-			changed: () => this.markChanged(),
 			selection: () => (this.selection ? { pageIndex: this.selection.pageIndex, strokes: this.selection.strokes } : null),
 			select: (pageIndex, strokes) => this.selectItems(pageIndex, strokes, []),
 			deselect: () => this.clearSelection(),
@@ -2774,7 +2775,7 @@ export class NotebookView extends FileView {
 		this.toolbar.setEditable(false);
 		this.setStatus(t("status.loading"), "pending");
 		if (!this.media) {
-			this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged());
+			this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged(), (page) => this.statesTools?.viewPages([page])[0] ?? page);
 			if (this.resilience?.mediaAtLoad() !== false) this.renderer?.setMedia(this.media); // wave 0.7: resilience (#346)
 		}
 		this.refreshLayout();
@@ -2852,7 +2853,7 @@ export class NotebookView extends FileView {
 			this.body.show();
 			this.toolbar.setEditable(true);
 			if (!this.media) {
-				this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged());
+				this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged(), (page) => this.statesTools?.viewPages([page])[0] ?? page);
 				// wave 0.7: resilience (#346): in safe mode the backgrounds come after the first paint.
 				if (this.resilience?.mediaAtLoad() !== false) this.renderer?.setMedia(this.media);
 			}
@@ -3723,7 +3724,11 @@ export class NotebookView extends FileView {
 		if (erasing) {
 			this.erasing = null;
 			if (erasing.commands.length > 0) {
-				this.history.record(new Batch("Erase", erasing.commands));
+				// 0.15 (241): the pieces a cut stroke left stay in its part, in the same undo step.
+				const doc = this.session?.doc;
+				const kept = doc ? statesAfterCuts(doc, erasing.commands) : [];
+				if (doc) for (const c of kept) c.apply(doc);
+				this.history.record(new Batch("Erase", [...erasing.commands, ...kept]));
 				this.markChanged();
 				this.updateHistoryButtons();
 				this.scheduleNavRefresh();
@@ -4017,7 +4022,10 @@ export class NotebookView extends FileView {
 			measure: measureText,
 		});
 		if (!cmd) return;
-		this.history.execute(cmd);
+		// 0.15 (241): the pieces a cut stroke left stay in its part, in the same undo step.
+		const doc = this.session?.doc;
+		const kept = doc ? statesAfterCuts(doc, [cmd]) : [];
+		this.history.execute(kept.length > 0 ? new Batch("Erase area", [cmd, ...kept]) : cmd);
 		this.renderer?.invalidate();
 		this.markChanged();
 		this.updateHistoryButtons();
@@ -4552,6 +4560,8 @@ export class NotebookView extends FileView {
 			doc: () => this.session?.doc ?? null,
 			editable: () => this.editable(),
 			selection: () => this.selection,
+			// 0.15 (241): the part editor's selection has no colour or width of its own (its handles set the pose).
+			ownedByStates: (sel) => !!this.statesTools?.ownsSelection(sel),
 			select: (pageIndex, strokes, elements, others) => this.selectItems(pageIndex, strokes, elements, others),
 			execute: (cmd) => {
 				if (!this.history.execute(cmd)) return false;

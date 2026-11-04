@@ -13702,6 +13702,19 @@ body.notebook-style-obsidian {
 	white-space: nowrap;
 }
 
+/* The state the notebook opens with: a small dot after its name (decoration; the options menu sets it). */
+.nb-ui.nb-states .nb-states-chip.is-default .nb-states-chip-label::after {
+	content: "";
+	display: inline-block;
+	width: 6px;
+	height: 6px;
+	margin-left: 8px;
+	border-radius: 50%;
+	background: currentcolor;
+	opacity: 0.6;
+	vertical-align: middle;
+}
+
 .nb-ui.nb-states .nb-states-button {
 	flex: 0 0 auto;
 	display: inline-flex;
