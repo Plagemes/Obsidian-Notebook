@@ -155,6 +155,8 @@ for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"])
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "bulk", theme, device, lowLatency: false });
 // 0.17 merge / split / extract (#77): the dialog, the run and the map's selection mode (dev/harness/pagesplit-check.ts).
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "xfer", theme, device, lowLatency: false });
+// 0.18 linkback (#186): copy to notebook with a link back: the dialog, the run and the map's button (dev/harness/linkback-check.ts).
+for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "linkback", theme, device, lowLatency: false });
 // 0.12.1: the whole plugin's onload against the stub: what it registers, the settings tab through both of Obsidian's paths,
 // and injected failures (a failing step, failing settings definitions, an unreadable data.json).
 // 0.13 ds-notebook: the notebook's editing chrome (toolbar, options, sheets, contextual bar, dial, banner) at tablet and
@@ -283,6 +285,7 @@ async function main() {
 				if (s.doc === "storage") report = await cdp.evaluate("window.harness.checkStorage()", 120000);
 				else if (s.doc === "bulk") report = await cdp.evaluate("window.harness.checkBulk()", 120000);
 				else if (s.doc === "xfer") report = await cdp.evaluate("window.harness.checkXfer()", 120000);
+				else if (s.doc === "linkback") report = await cdp.evaluate("window.harness.checkLinkback()", 120000);
 				else if (s.doc === "pdfcopy") report = await cdp.evaluate("window.harness.checkPdfcopy()", 90000);
 				else if (s.doc === "inbox") report = await cdp.evaluate("window.harness.checkInbox()", 60000);
 
@@ -391,6 +394,20 @@ async function main() {
 						problems.push(`xfer ${state} screenshot: ${e.message}`);
 					}
 					await cdp.evaluate("window.harness.closeXfer()");
+				}
+			}
+			// 0.18 linkback: a screenshot of the dialog and of the map's selection bar.
+			if (s.doc === "linkback") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of await cdp.evaluate("window.harness.linkbackStates")) {
+					try {
+						await cdp.evaluate(`window.harness.linkbackShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `linkback-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`linkback ${state} screenshot: ${e.message}`);
+					}
+					await cdp.evaluate("window.harness.closeLinkback()");
 				}
 			}
 			// 0.13 ds-zettel: review screenshots of each Zettelkasten surface.

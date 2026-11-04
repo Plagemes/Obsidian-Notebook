@@ -30,6 +30,8 @@ export interface NotebookMapHost {
 	 */
 	extract?: (pageIds: string[]) => void;
 	split?: (pageId: string) => void;
+	/** 0.18 (#186): the ticked pages are copied to another notebook, each with a link chip back (the dialog opens). Absent: no such button. */
+	copyTo?: (pageIds: string[]) => void;
 }
 
 export const MAP_STATE_ICON: Readonly<Record<MapState, string>> = {
@@ -208,7 +210,7 @@ export class NotebookMapModal extends Modal {
 	}
 
 	private canSelect(): boolean {
-		return !!(this.mapHost.extract || this.mapHost.split);
+		return !!(this.mapHost.extract || this.mapHost.split || this.mapHost.copyTo);
 	}
 
 	/** The action bar of the selection mode: how many are ticked, Extract and Split. Hidden outside the mode. */
@@ -227,6 +229,14 @@ export class NotebookMapModal extends Modal {
 				extract(ids);
 			}, { icon: "file-output", disabled: ids.length === 0 });
 			b.addClass("nb-map-extract");
+		}
+		const copyTo = this.mapHost.copyTo;
+		if (copyTo) {
+			const b = shellButton(bar, "secondary", t("map.select.copyTo"), () => {
+				this.close();
+				copyTo(ids);
+			}, { icon: "copy-plus", disabled: ids.length === 0 });
+			b.addClass("nb-map-copyto");
 		}
 		const split = this.mapHost.split;
 		if (split) {

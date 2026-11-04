@@ -395,6 +395,8 @@ const INTEGRATION: SettingSpec[] = [
 		control: { type: "dropdown", options: options([["transparent", "settings.noteInsertBackground.transparent"], ["paper", "settings.noteInsertBackground.paper"]]) },
 	},
 	{ id: "noteInsertLinkBack", section: "integration", order: 37, name: "settings.noteInsertLinkBack", desc: "settings.noteInsertLinkBack.desc", control: { type: "toggle" }, keywords: "insert note link back page collegamento pagina" },
+	// 0.18 (#186): "Copy to notebook…" can leave a chip on the original page too.
+	{ id: "copyLinkReverse", section: "integration", order: 38, name: "settings.copyLinkReverse", desc: "settings.copyLinkReverse.desc", control: { type: "toggle" }, keywords: "copy page notebook link back chip copia pagina collegamento" },
 ];
 
 const timetableOn: Predicate = (s) => s.timetableOffer;

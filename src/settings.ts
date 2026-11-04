@@ -108,6 +108,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	noteInsertWidth: number;
 	noteInsertBackground: "transparent" | "paper";
 	noteInsertLinkBack: boolean;
+	/** 0.18 (#186): copying pages to another notebook also leaves a "Copied to" chip on the original page (the dialog starts with this). */
+	copyLinkReverse: boolean;
 	// wave p1a: input
 	/** Edge rejection: touches that start within `edgeRejectionPx` of a selected edge of the page area are ignored. */
 	edgeRejection: boolean;
@@ -276,6 +278,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	noteInsertWidth: INSERT_WIDTH_DEFAULT,
 	noteInsertBackground: "transparent",
 	noteInsertLinkBack: true,
+	copyLinkReverse: false,
 	edgeRejection: false,
 	edgeRejectionPx: 24,
 	edgeLeft: true,
@@ -395,6 +398,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.noteInsertWidth === "number") s.noteInsertWidth = clampInsertWidth(d.noteInsertWidth);
 	if (isInsertBackground(d.noteInsertBackground)) s.noteInsertBackground = d.noteInsertBackground;
 	if (typeof d.noteInsertLinkBack === "boolean") s.noteInsertLinkBack = d.noteInsertLinkBack;
+	if (typeof d.copyLinkReverse === "boolean") s.copyLinkReverse = d.copyLinkReverse;
 	if (typeof d.edgeRejection === "boolean") s.edgeRejection = d.edgeRejection;
 	if (typeof d.edgeRejectionPx === "number" && d.edgeRejectionPx >= EDGE_WIDTH_MIN && d.edgeRejectionPx <= EDGE_WIDTH_MAX) s.edgeRejectionPx = d.edgeRejectionPx;
 	if (typeof d.edgeLeft === "boolean") s.edgeLeft = d.edgeLeft;

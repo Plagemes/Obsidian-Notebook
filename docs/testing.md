@@ -2525,3 +2525,22 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Split an infinite page into sheets (#178): paper, orientation, scale, margin, overlap, smart cuts, numbers, preview | yes | `tests/export-tiles.test.ts`; harness `a4split-check.ts` | | | split for Print and SVG |
+### 0.18 — linkback: copy a page to another notebook with a link back (steps 1360-1379)
+
+Roadmap #186. Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/design/linkback-*.png`. Use a physics notebook of about 6 pages (one locked) and a smaller revision notebook; keep a copy of the vault first.
+
+1360. **Menu.** In an open notebook the page menu (and the palette) has *Copy to notebook…*; the notebook map's *Select pages* bar has the same button (disabled until a page is ticked). In a read-only notebook it does nothing.
+1361. **Dialog.** The page in view is ticked; tick more pages. Search and pick the revision notebook: its page count shows and *Where the copies go* lists *At the start*, *After page N*… and *At the end* (the end is chosen). *Copy* stays off until a page and a notebook are chosen.
+1362. **Copy.** Copy two pages after page 1: they appear there in their original order, with their ink, backgrounds and bookmarks; the originals are unchanged. Each copy has a small grey link in the top margin: *Copied from Physics p.N*. Tap it (finger, or Ctrl/Cmd+click): the original page opens.
+1363. **Destination open.** Do 1362 with the revision notebook open in another tab: the pages arrive as one undo step there. While you are writing with the pen the operation says it cannot edit right now and nothing changes.
+1364. **Link back (setting).** Tick *Also add “Copied to …” to the original pages* (or turn on *Link on the original when copying a page* in Settings > Integration, which only sets the starting tick): the originals get *Copied to Revision p.N*; tap it and the copy opens. One undo in the physics notebook removes all of them.
+1365. **Locked.** A locked original is not changed: the notice says how many were skipped. Its copy still gets *Copied from…*, and is locked too.
+1366. **Several pages.** From the map, tick four pages: the chips on the copies and the originals show the right numbers (the copies' numbers start where they were inserted).
+1367. **Reordering.** Move a copied page in the revision notebook, then tap *Copied to…* on the original: it still opens the copy (the link carries the page id; the number in the label is the one at copy time).
+1368. **Copying a copy.** Copy a page that already has a chip: the new copy keeps the old chip and gets a second one under it.
+1369. **Failure.** Make the destination unreadable or the vault read-only: the notice says why; the source is unchanged.
+1370. **Look.** Light, dark, *Follow Obsidian theme*, tablet and phone: the dialog fits, targets are at least 40 px, the chip is readable but small and does not cover the paper's first line.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Copy to notebook with a link back (#186): dialog (pages, notebook, place), copy through the 0.17 transfer (`copyPagesInto`), a "Copied from" link chip on each copy written in the same write, an optional "Copied to" chip on the unlocked originals as one undoable edit, page menu, command, map selection bar, setting for the starting tick; no format change | yes | chip text, placement and stacking, pairs, locked skipping (`tests/copy-with-link.test.ts`); harness `doc=linkback` (dialog, run on files, undo) | | the chips are ordinary text boxes: a copy of a page keeps them | not tried on the tablet (steps 1360-1370); no "new notebook" destination (use *Extract pages*); chips are not removed when a copy is deleted |
