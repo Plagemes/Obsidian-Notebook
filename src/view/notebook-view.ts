@@ -4574,6 +4574,9 @@ export class NotebookView extends FileView {
 			sharedClips: () => this.host.sharedClips?.() ?? (this.sharedClipStore ??= new SharedClipStore(vaultDeviceFileAdapter(this.app), () => this.host.settings.folder, sidecarDeviceId(this.app))),
 			pasteTarget: () => this.pasteTarget(),
 			textStyle: () => ({ fontSize: this.tools.textSize, color: this.tools.penColor }),
+			thumbnail: (page) => this.pageNav?.thumbnailOf(page) ?? BLANK_THUMBNAIL,
+			goToPage: (index) => this.goToPage(index),
+			clearSelection: () => this.clearSelection(),
 			stillHere: (doc) => this.session?.doc === doc && this.editable() && !this.controller?.drawing,
 		});
 		this.arrange = new SelectionArrange({

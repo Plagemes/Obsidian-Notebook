@@ -13844,3 +13844,21 @@ body.notebook-style-obsidian {
 		display: none;
 	}
 }
+
+/* ===== 0.16 movesel ===== */
+.nb-ui.nb-move-modal .nb-move-new {
+	border-style: dashed;
+}
+
+.nb-ui.nb-move-modal .nb-move-new-thumb {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	aspect-ratio: 1 / 1.414;
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-move-modal .nb-move-new-icon .svg-icon {
+	width: 28px;
+	height: 28px;
+}

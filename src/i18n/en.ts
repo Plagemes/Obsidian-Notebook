@@ -2807,6 +2807,22 @@ export const en = {
 	"states.isDefault": "Default state (the notebook opens with it)",
 	"states.defaultSet": "{state} is now the state the notebook opens with.",
 	"states.defaultAlready": "This is already the state the notebook opens with.",
+	// 0.16 movesel
+	"movePage.move": "Move to page…",
+	"movePage.copy": "Copy to page…",
+	"movePage.titleMove": "Move to page",
+	"movePage.titleCopy": "Copy to page",
+	"movePage.subtitle": "From page {page}. One undo step puts it back.",
+	"movePage.newAfter": "New page after {page}",
+	"movePage.exact": "Keep exact position",
+	"movePage.exactHint": "Off: the selection is pulled inside a smaller page. On: same coordinates, even if they fall outside.",
+	"movePage.moved": "Moved {n} to page {page}.",
+	"movePage.copied": "Copied {n} to page {page}.",
+	"movePage.leftParts": "Strokes that belonged to a drawing with states left that part.",
+	"movePage.goTo": "Go to page",
+	"movePage.crossPage": "A selection that spans several pages cannot be moved to a page. Select on one page.",
+	"movePage.boundInk": "Ink written on a graph stays with the graph: select the graph too.",
+	"movePage.nothing": "Nothing to move: the selection is no longer on its page.",
 } as const;
 
 export type MessageKey = keyof typeof en;

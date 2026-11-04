@@ -2110,3 +2110,28 @@ Implemented, not verified on hardware. Settings → Pages → *Page header* (clo
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Automatic page header / footer (#75): page number, creation date, title; left / centre / right; PNG / PDF / SVG / print | yes | layout, text, skip and shift rules, SVG and PDF output, settings (`tests/page-header.test.ts`); harness check of the painted line (`header-*`) | | | |
+
+### 0.16 — movesel: move a selection to another page (steps 990-1009)
+
+Roadmap 78. Select ink or objects with the lasso; the selection bar (overflow) and *All actions* have *Move to page…* and *Copy to page…*. No change to the notebook format. Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/movesel-*.png`.
+
+990. **Offered.** Lasso a few strokes: *Move to page…* and *Copy to page…* are in the selection bar overflow and in *All actions* (search "move"). With nothing selected they are not offered; in read-only mode they are disabled.
+991. **Picker.** Tap *Move to page…*: a grid of page thumbnails (not the page you are on), a dashed *New page after N* card first, a *Keep exact position* chip. On a phone the grid fits without sideways scroll, every card is at least 40 px.
+992. **Move.** Tap page 4: the ink leaves page 1 and is on page 4 at the same place; a toast says how many items moved and has *Go to page*. The toast button scrolls to page 4.
+993. **One undo.** Undo once: everything is back on page 1, exactly where it was. Redo moves it again.
+994. **New page.** Pick *New page after N*: a blank page (same size and paper) appears after the current one holding the selection. One undo removes the page and brings the ink back.
+995. **Smaller page.** Move a wide selection to a smaller page (e.g. A5): it is pulled inside the page. With *Keep exact position* on, it keeps its coordinates and may fall outside.
+996. **Objects.** Select a text box, a picture and a graph with its ink: all move; the picture still shows; the ink written on the graph stays on it.
+997. **Ink bound to a graph.** Select only the ink written on a graph: a message asks you to select the graph too, nothing moves.
+998. **Slide links.** Select ink written beside a slide and move it: the slide badge is still there on the new page and opens the same slide.
+999. **Drawings with states.** Move a stroke that belongs to a part of a drawing with states: the toast adds that it left the part; the rest of the part is unchanged. Undo restores the part.
+1000. **Copy.** *Copy to page…*: the original stays, the copy is on the chosen page; one undo removes the copy. Copies of a graph keep their ink.
+1001. **Several pages.** A lasso that spans two pages, then *Move to page…*: a message says it cannot, nothing moves.
+1002. **S Pen.** Using the pen to tap the cards works; palm touches do not choose a page.
+1003. **Italian, dark and light.** All texts translated; both themes and *Follow Obsidian theme*.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Move a selection to another page (#78) | yes | `tests/selection-move.test.ts`, harness `movesel` | | | |
+| Copy a selection to another page | yes | same | | | |
+| New page in the same undo step | yes | harness `movesel` | | | |

@@ -421,6 +421,10 @@ once per tip, at most one per 4 minutes and not while the pen is writing. Tips a
 
 A dialog on the shared shell (`modalShell`, wide, no footer) opened by the grid button in the page panel's header. Body: a row of filter chips (`chip`, one per state that exists, with the page count) and an auto-fill grid of cards (`.nb-map-card`: thumbnail, state badges at its bottom right, page number and earliest due date below). Badges are small pills with the state icon (question, gap, homework, practice, empty, key point) and a number when there are several; they are decoration of a card that is itself the control. The current page has an accent border, a lecture's first page an accent top edge. Thumbnails come from the page panel's cache, drawn lazily at the first pause in writing. Logic: `src/model/notebook-map.ts`; view: `src/view/notebook-map-modal.ts`.
 
+## Move a selection to a page (0.16, roadmap #78)
+
+A wide dialog on the modal shell, with the notebook map's classes (`nb-map-modal nb-move-modal`): the same auto-fill grid of cards (`.nb-map-card`, thumbnail from the page panel's cache, page number). The first card is dashed with a plus (*New page after N*), the source page is not offered, and one chip (*Keep exact position*) sits above the grid. Tapping a card is the whole interaction: the dialog closes and the toast offers *Go to page*. View: `src/view/page-picker-modal.ts`; logic: `src/model/selection-move.ts`.
+
 ## Library views: Board and Calendar (0.15, roadmap #161 #162)
 
 The library header has a **Views** button (board icon; calendar icon while the Calendar is on) next to the grid / list toggle, opening a menu of *Cards*, *Board*, *Calendar*. The mode is part of the view state (`layout`). Not offered on Home, Subjects, Tags and the archive. Both modes show the notebooks of the current place (`placeQuery`), keep the chips row, and use only `--nb-*` tokens under `.nb-ui`.

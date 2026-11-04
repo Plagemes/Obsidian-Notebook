@@ -36,7 +36,7 @@ export function sizeName(page: Page): PageSizeName | null {
 }
 
 /** The commands that work on a selection (layer order; wave 0.10: align, distribute, rotate, mirror, size, select similar). */
-const SELECTION_ONLY = /^(layer-|selection-(align|distribute|rotate|mirror|resize|transform|similar|part)|select-same-)/;
+const SELECTION_ONLY = /^(layer-|selection-(move-page|copy-page|align|distribute|rotate|mirror|resize|transform|similar|part)|select-same-)/;
 
 /** Whether a command of the registry applies to this view now (the palette hides it otherwise). */
 export function commandApplies(view: NotebookView, id: string): boolean {
@@ -126,6 +126,9 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"selection-duplicate": (v) => v.selectionTools?.duplicate(),
 	"selection-paste": (v) => void v.selectionTools?.paste(),
 	"selection-copy-devices": (v) => void v.selectionTools?.copyToDevices(),
+	// 0.16 (78): move or copy the selection to another page
+	"selection-move-page": (v) => v.selectionTools?.moveToPage("move"),
+	"selection-copy-page": (v) => v.selectionTools?.moveToPage("copy"),
 	"selection-paste-device": (v) => void v.selectionTools?.pasteFromDevices(),
 	"selection-white-transparent": (v) => void v.selectionTools?.makeWhiteTransparent(),
 	"link-selection": (v) => v.linkSelection(),
