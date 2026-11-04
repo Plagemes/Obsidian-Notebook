@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { planPageMove } from "../src/library/page-move";
 import {
 	addCommentCommand, addReplyCommand, commentCounts, createComment, createReply, deleteCommentCommand, editedComment, editedReply, mergeComments,
-	notesOf, orderedNotes, regionFromBounds, regionFromDrag, repliesOf, replaceCommentCommand, resolvedComment, SetPageComments, shiftComments, threadsOf,
+	conflictId, notesOf, orderedNotes, regionFromBounds, regionFromDrag, repliesOf, replaceCommentCommand, resolvedComment, SetPageComments, shiftComments, threadsOf,
 } from "../src/model/comments";
 import { clampRegion, commentLine, normalizeComments, readComments } from "../src/model/comments-format";
 import { createDocument, createPage, createStroke } from "../src/model/document";
@@ -24,7 +24,7 @@ import { planTransfer } from "../src/model/notebook-transfer";
 import { repairNotebookText } from "../src/model/repair";
 import { freezeStroke, parse, parseStaged, serialize, serializeChecked, StagedParse, STAGED_MIN_CHARS, validate } from "../src/model/serialize";
 import { stressDocument } from "../src/model/stress";
-import { COMMENT_SKETCH_H, COMMENT_SKETCH_W, COMMENT_TEXT_MAX, CURRENT_VERSION, FORMAT_ID, type NotebookDocument, type PageComment, type Stroke } from "../src/model/types";
+import { COMMENT_ID_MAX, COMMENT_SKETCH_H, COMMENT_SKETCH_W, COMMENT_TEXT_MAX, CURRENT_VERSION, FORMAT_ID, type NotebookDocument, type PageComment, type Stroke } from "../src/model/types";
 import { getAt, setAt, type Raw } from "./raw-json";
 
 const stamp = "2026-11-04T10:00:00.000Z";
@@ -714,5 +714,80 @@ describe("comments: edits that lose a merge are kept, templates and practice car
 		const placed = notesOf(a.pages[0]!).find((n) => n.text === "out on the right")!;
 		expect(placed.region.x).toBe(780);
 		expect(mergeCovers(a, b)).toBe(true);
+	});
+});
+
+describe("comments: marked copies of lost edits keep ids that fit and do not collide", () => {
+	const uuid = (tail: string) => `0f3c9a52-77d1-4c0b-9b1e-2a6d${tail}`;
+	function note(id: string, text: string, created: number, edited?: number): PageComment {
+		return { id, region: { x: 1, y: 1, width: 40, height: 40 }, text, author: "a", created, ...(edited === undefined ? {} : { edited }) };
+	}
+
+	it("the id of a marked copy fits the id cap, never cuts the original and differs for ids that only differ at the end", () => {
+		const a = note(uuid("00001"), "x", 100, 200);
+		const b = note(uuid("00002"), "x", 100, 200);
+		expect(conflictId(a).length).toBeLessThanOrEqual(COMMENT_ID_MAX);
+		expect(conflictId(a)).not.toBe(conflictId(b));
+		expect(conflictId(a)).toBe(conflictId({ ...a }));
+		expect(conflictId(note("short", "x", 1))).not.toBe(conflictId(note("short", "x", 2)));
+		// the marked copy of a marked copy (same time) is a third id
+		const first = conflictId(a);
+		expect(conflictId({ ...a, id: first })).not.toBe(first);
+		expect(conflictId({ ...a, id: first }).length).toBeLessThanOrEqual(COMMENT_ID_MAX);
+	});
+
+	it("two comments whose ids only differ in the last characters each keep their own lost version", () => {
+		const a1 = note(uuid("00001"), "mine 1", 100, 200);
+		const a2 = note(uuid("00002"), "mine 2", 100, 200);
+		const b1 = note(uuid("00001"), "theirs 1", 100, 300);
+		const b2 = note(uuid("00002"), "theirs 2", 100, 300);
+		const merged = mergeComments([a1, a2], [b1, b2]);
+		expect(merged.conflicts).toBe(2);
+		expect(merged.list).toHaveLength(4);
+		expect(merged.list!.map((c) => c.text).sort()).toEqual(["theirs 1", "theirs 2", "⚠ mine 1", "⚠ mine 2"]);
+		for (const c of merged.list!) expect(c.id.length).toBeLessThanOrEqual(COMMENT_ID_MAX);
+		// and the whole list survives a write and a read (ids over the cap would be refused or cut)
+		const doc = createDocument(new Date(stamp));
+		doc.pages[0]!.comments = [...merged.list!];
+		expect(notesOf(parsed(serialize(doc)).doc.pages[0]!).map((n) => n.id).sort()).toEqual(merged.list!.map((c) => c.id).sort());
+	});
+
+	it("A and B edit, merge into each other both ways, then merge again: the same lists and nothing new", () => {
+		const base = note(uuid("00007"), "base", 100);
+		const a = [note(base.id, "A text", 100, 200)];
+		const b = [note(base.id, "B text", 100, 300)];
+		const intoA = mergeComments(a, b).list!;
+		const intoB = mergeComments(b, a).list!;
+		expect(intoA.map((c) => c.text).sort()).toEqual(intoB.map((c) => c.text).sort());
+		expect(intoA.map((c) => c.id).sort()).toEqual(intoB.map((c) => c.id).sort());
+		// exchanging the results changes nothing more
+		expect(mergeComments(intoA, intoB).conflicts).toBe(0);
+		expect(mergeComments(intoA, intoB).added).toBe(0);
+		expect(mergeComments(intoB, intoA).list).toBe(intoB);
+	});
+
+	it("three devices that edit one comment end up with the same texts whatever the order of the merges", () => {
+		const id = uuid("00009");
+		const a = [note(id, "A", 100, 200)];
+		const b = [note(id, "B", 100, 300)];
+		const c = [note(id, "C", 100, 400)];
+		const orders = [[a, b, c], [a, c, b], [b, a, c], [c, b, a]];
+		const results = orders.map(([x, y, z]) => {
+			const first = mergeComments(x, y).list!;
+			return mergeComments(first, z).list!.map((i) => i.text).sort();
+		});
+		for (const r of results) expect(r).toEqual(["C", "⚠ A", "⚠ B"]);
+	});
+
+	it("a comment that one device only resolved and the other edited the text of is not copied when the texts are the same", () => {
+		const base = note(uuid("00011"), "same text", 100);
+		const resolvedOnA = { ...base, resolved: true as const, edited: 250 };
+		const editedOnB = { ...base, edited: 300 };
+		const merged = mergeComments([resolvedOnA], [editedOnB]);
+		expect(merged.conflicts).toBe(0);
+		expect(merged.list).toHaveLength(1);
+		// the later action wins as a whole
+		expect(merged.list![0]!.edited).toBe(300);
+		expect(merged.list![0]!.resolved).toBeUndefined();
 	});
 });

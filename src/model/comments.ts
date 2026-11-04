@@ -318,10 +318,27 @@ export function isEditConflict(a: PageComment, b: PageComment): boolean {
 	return (a.edited !== undefined) === (b.edited !== undefined) && contentDiffers(a, b);
 }
 
-/** The id the losing version of `c` is kept under: the same on every device, so merging the same copy again adds nothing. */
+/** A short stable fingerprint of a string (two FNV-1a runs with different offsets, base 36): fixed length, the same on every device. */
+function fingerprint(s: string): string {
+	let a = 0x811c9dc5;
+	let b = 0x2f0b4a27;
+	for (let i = 0; i < s.length; i++) {
+		const ch = s.charCodeAt(i);
+		a = Math.imul(a ^ ch, 0x01000193) >>> 0;
+		b = Math.imul(b ^ ch, 0x01000193) >>> 0;
+		b = (b ^ (b >>> 15)) >>> 0;
+	}
+	return a.toString(36).padStart(7, "0") + b.toString(36).padStart(7, "0");
+}
+
+/**
+ * The id the losing version of `c` is kept under: the same on every device, so merging the same copy again adds nothing. It is built
+ * from a fingerprint of the whole original id plus the version's time, so it always fits `COMMENT_ID_MAX` without cutting anything
+ * (cutting made ids that differ only at the end collide), and the marked copy of a marked copy gets an id of its own.
+ */
 export function conflictId(c: PageComment): string {
-	const suffix = `${CONFLICT_ID_SEP}${touched(c).toString(36)}`;
-	return c.id.slice(0, Math.max(1, COMMENT_ID_MAX - suffix.length)) + suffix;
+	const id = `${fingerprint(c.id)}${CONFLICT_ID_SEP}${touched(c).toString(36)}`;
+	return id.length <= COMMENT_ID_MAX ? id : id.slice(0, COMMENT_ID_MAX);
 }
 
 /** The losing version of `c`, kept as an item of its own (a comment with the same region and sketch, or a reply in the same thread), marked. */
