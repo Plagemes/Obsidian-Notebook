@@ -470,6 +470,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	// 0.16 (78): move the selection to another page (one undo step), or copy it there.
 	{ id: "selection-move-page", label: "movePage.move", icon: "arrow-right-to-line", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 43, scope: "view", command: true, when: hasSelection, keywords: "move send page another sposta pagina selezione" },
 	{ id: "selection-copy-page", label: "movePage.copy", icon: "copy", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 42, scope: "view", command: true, when: hasSelection, keywords: "copy duplicate page another copia pagina selezione" },
+	// 0.17 (#57): the selection becomes a task in a note (the daily note, a tasks note or a chosen one), linked back to the page.
+	{ id: "selection-make-task", label: "task.action", icon: "list-checks", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 41, scope: "view", command: true, when: hasSelection, keywords: "task todo checkbox daily note attivita compito" },
 	{ id: "selection-paste-device", label: "clipshare.paste", icon: "monitor-down", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection", "lasso"], priority: 47, scope: "view", command: true, when: (c) => c.tool === "lasso" || hasSelection(c), keywords: "clipboard tablet phone sync share vault appunti" },
 
 	// --- status banners (wave 0.7): their buttons, listed so that every visible control has a documented place.

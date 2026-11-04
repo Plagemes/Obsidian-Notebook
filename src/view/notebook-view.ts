@@ -24,10 +24,10 @@ import { growForInfinite } from "../ink/infinite";
 import { InputPolicy } from "../ink/input-policy";
 import { rectanglePolygon, strokesInLasso } from "../ink/lasso";
 import { lineBreakTarget } from "../ink/line-break";
-import { applyPlacement, uniformPlacement } from "../ink/selection-transform";
 import type { SnapGuide } from "../model/snap";
 import { buildSnapSession, snapDragged, type SnapSession } from "./snap-glue";
 import { SnapHold } from "./snap-hold";
+import { applyPlacement, itemsBounds, uniformPlacement } from "../ink/selection-transform";
 import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layout, type PageBox } from "../ink/layout";
 import { HoldTracker } from "../ink/hold";
 import { LastTool } from "../ink/last-tool";
@@ -72,6 +72,8 @@ import { VaultDocumentIO, sidecarDeviceId, vaultDeviceFileAdapter } from "../sto
 import { SharedClipStore } from "../storage/shared-clip-store";
 import { backupFolder, readSettings, type NotebookSettings } from "../settings";
 import { defaultMarkdownFolder, exportMarkdown, siblingFolder } from "./export-markdown";
+import { MakeTaskModal, runMakeTask } from "./selection-task";
+import { taskCropRect } from "../model/selection-task";
 import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./highlight-digest";
 import { canPrint } from "./print";
 import type { ExportFormat } from "../ink/export-layers";
@@ -1807,6 +1809,28 @@ export class NotebookView extends FileView {
 			// 0.15 (241): like the PDF, PNG and SVG exports, the pages as the states in view show them.
 			run: (folder, dpi) => void exportMarkdown(this.app, file, { ...doc, pages: [...this.renderPagesOf(doc)] }, this.media, { folder, dpi, ...this.exportOptions() }),
 		}).open();
+	}
+
+	/** 0.17 (#57): "Make task" from the selection: a dialog, then the task (with a picture of the region and a link to the page) is added to a note. */
+	makeTaskFromSelection(): void {
+		const sel = this.selection;
+		const doc = this.session?.doc;
+		const file = this.file;
+		if (!sel || !doc || !file || !this.editable() || this.statesTools?.ownsSelection(sel)) return;
+		const bounds = itemsBounds(sel.strokes, sel.elements, measureText);
+		const page = doc.pages[sel.pageIndex];
+		const shown = this.renderPagesOf(doc)[sel.pageIndex];
+		if (!bounds || !page || !shown) return;
+		const crop = taskCropRect(bounds, page);
+		const options = this.exportOptions();
+		new MakeTaskModal(this.app, this.host.settings, sel.pageIndex + 1, (request) => void runMakeTask({
+			app: this.app, file, settings: this.host.settings, page: shown, pageNumber: sel.pageIndex + 1, crop, media: this.media,
+			render: {
+				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+			},
+			...(options.prepare ? { prepare: options.prepare } : {}),
+		}, request)).open();
 	}
 
 	/** 0.16 (#90): the Highlights digest dialog (grouping, picture quality); the note is written next to the notebook. */

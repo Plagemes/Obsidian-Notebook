@@ -99,6 +99,10 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	dailyLink: boolean;
 	/** 0.15 (O12): create today's daily note when it does not exist yet (only used with `dailyLink`). */
 	dailyCreateNote: boolean;
+	/** 0.17 (#57): a task made from a selection gets its due date as the Tasks plugin's date emoji (else a Dataview field). */
+	taskDueEmoji: boolean;
+	/** 0.17 (#57): the note "Make task" can add to besides the daily note (vault path; empty = none configured). */
+	tasksNote: string;
 	// wave p1a: input
 	/** Edge rejection: touches that start within `edgeRejectionPx` of a selected edge of the page area are ignored. */
 	edgeRejection: boolean;
@@ -257,6 +261,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	sharedInboxFolder: "",
 	dailyLink: false,
 	dailyCreateNote: false,
+	taskDueEmoji: true,
+	tasksNote: "",
 	edgeRejection: false,
 	edgeRejectionPx: 24,
 	edgeLeft: true,
@@ -369,6 +375,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.sharedInboxFolder === "string") s.sharedInboxFolder = d.sharedInboxFolder.trim();
 	if (typeof d.dailyLink === "boolean") s.dailyLink = d.dailyLink;
 	if (typeof d.dailyCreateNote === "boolean") s.dailyCreateNote = d.dailyCreateNote;
+	if (typeof d.taskDueEmoji === "boolean") s.taskDueEmoji = d.taskDueEmoji;
+	if (typeof d.tasksNote === "string") s.tasksNote = d.tasksNote.trim();
 	if (typeof d.edgeRejection === "boolean") s.edgeRejection = d.edgeRejection;
 	if (typeof d.edgeRejectionPx === "number" && d.edgeRejectionPx >= EDGE_WIDTH_MIN && d.edgeRejectionPx <= EDGE_WIDTH_MAX) s.edgeRejectionPx = d.edgeRejectionPx;
 	if (typeof d.edgeLeft === "boolean") s.edgeLeft = d.edgeLeft;

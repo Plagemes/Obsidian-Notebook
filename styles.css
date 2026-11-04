@@ -15231,3 +15231,8 @@ body.notebook-style-obsidian {
 	font-size: var(--nb-fs-row);
 	font-weight: 600;
 }
+
+/* ===== 0.17 task ===== */
+.nb-ui .nb-task-pick { display: flex; align-items: center; gap: var(--nb-space-2, 8px); margin-top: var(--nb-space-2, 8px); }
+.nb-ui .nb-task-pick.nb-task-hidden { display: none; }
+.nb-ui .nb-task-chosen { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -380,6 +380,9 @@ const INTEGRATION: SettingSpec[] = [
 		control: { type: "dropdown", options: options([["auto", "settings.pdfCopyWhen.auto"], ["idle", "settings.pdfCopyWhen.idle"], ["close", "settings.pdfCopyWhen.close"]]) },
 	},
 	{ id: "pdfCopyFolder", section: "integration", order: 42, name: "settings.pdfCopyFolder", desc: "settings.pdfCopyFolder.desc", control: { type: "folder", placeholder: "" }, keywords: "pdf copy folder cartella" },
+	// 0.17 tasks (#57): "Make task" from a selection.
+	{ id: "tasksNote", section: "integration", order: 33, name: "settings.tasksNote", desc: "settings.tasksNote.desc", control: { type: "text", placeholder: "Tasks.md" }, keywords: "task todo checkbox attivita" },
+	{ id: "taskDueEmoji", section: "integration", order: 34, name: "settings.taskDueEmoji", desc: "settings.taskDueEmoji.desc", control: { type: "toggle" }, keywords: "task due date tasks plugin scadenza" },
 ];
 
 const timetableOn: Predicate = (s) => s.timetableOffer;
