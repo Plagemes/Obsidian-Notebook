@@ -3161,7 +3161,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.pdfCopyWhen.idle": "Dopo un momento di quiete",
 	"settings.pdfCopyWhen.close": "Quando chiudo il quaderno",
 	"settings.pdfCopyFolder": "Cartella delle copie PDF",
-	"settings.pdfCopyFolder.desc": "Lascia vuoto per tenere ogni copia accanto al suo quaderno. Le copie già scritte restano dove sono; solo le nuove vanno nella nuova cartella.",
+	"settings.pdfCopyFolder.desc": "Vuoto: la copia sta accanto al quaderno. Solo le nuove copie usano la nuova cartella.",
 	"pdfCopy.menu": "Mantieni una copia PDF",
 	"pdfCopy.status.updated": "Copia PDF aggiornata alle {time}",
 	"pdfCopy.status.stopped": "Copia PDF non più aggiornata (ultima alle {time})",
@@ -3257,5 +3257,10 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.taskDueEmoji.desc": "Attivo: 📅 data. Spento: un campo Dataview, [due:: data].",
 	// 0.17 review fixes (data)
 	"transfer.journalPending": "{name} ha modifiche non ancora salvate nel suo file. Apri il quaderno una volta, poi riprova. Non è stato cambiato nulla.",
+	"transfer.copiedJournal": "{source} ha modifiche non ancora salvate nel suo file, quindi le pagine non sono state tolte. Sono state copiate in {name} (con nuovi id di pagina) e {source} è invariato. Apri {source} una volta, poi togli tu le pagine.",
+	"transfer.copiedJournalShared": "{source} ha modifiche non ancora salvate nel suo file, quindi le pagine non sono state tolte. Sono state copiate in {name}, ma la copia non ha potuto avere nuovi id di pagina: i due quaderni li condividono. {source} è invariato.",
+	"transfer.copiedNotMoved": "Le pagine sono state copiate in {name} (con nuovi id di pagina), ma toglierle da {source} non è finito: {error}",
+	"transfer.copiedNotMovedShared": "Le pagine sono state copiate in {name}, ma toglierle da {source} non è finito ({error}) e la copia ha tenuto gli id di pagina degli originali.",
+	"transfer.copiedMaybeMoved": "Le pagine sono state copiate in {name}, ma toglierle da {source} si è interrotto a metà: {error}. Controlla i due quaderni.",
 	"task.exists": "Questa attività è già in {path}. Non è stato aggiunto nulla.",
 };

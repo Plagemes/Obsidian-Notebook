@@ -16,7 +16,7 @@
  */
 import type { App, TFile } from "obsidian";
 import { t } from "../i18n";
-import { cloneMeta } from "../model/document";
+import { cloneMeta, createId } from "../model/document";
 import { AddAsset, AddPage, Batch, DeletePage, InsertPages, SetMeta, type Command } from "../model/history";
 import {
 	applyRemoval, planMerge, planNewNotebook, planRemoval, planSplit, textLinksToPages,
@@ -56,8 +56,11 @@ export interface TransferEnv {
  * would make them miss their base (on the next open they would go to a backup), and the trash would lose them.
  */
 async function assertNoPendingJournal(env: TransferEnv, file: TFile, raw: string): Promise<void> {
-	if (await hasPendingJournal(env, quickDocId(raw))) throw new Error(t("transfer.journalPending", { name: file.basename }));
+	if (await hasPendingJournal(env, quickDocId(raw))) throw new JournalPendingError(t("transfer.journalPending", { name: file.basename }));
 }
+
+/** The refusal of a rewrite because of the journal; told apart so a move that already made its copy can say what is true. */
+class JournalPendingError extends Error {}
 
 /** What an operation did, for the notice and the tests of the harness. */
 export interface TransferSummary {
@@ -285,6 +288,70 @@ export interface ExtractRequest {
 	allowLocked: boolean;
 }
 
+/** The source of a move is looked at again before anything is created: still closed with edits in its journal means stop. */
+async function assertSourceClosedAndSaved(env: TransferEnv, src: Loaded): Promise<void> {
+	if (openEditContext(env.app, src.file) !== null) return; // open (or busy): its view owns the edits, nothing is rewritten by file
+	const { raw } = await readDoc(env.app, src.file);
+	await assertNoPendingJournal(env, src.file, raw);
+}
+
+/**
+ * The new notebook exists but the pages could not be taken out of the source. Said truthfully: the pages are in both. When the
+ * source still holds every page that was copied, the copy gets new page ids, so the two notebooks never share one; if even
+ * that fails, the error says the ids are shared. Returns the error to throw.
+ */
+async function copiedButNotMoved(env: TransferEnv, src: Loaded, made: TFile, plan: TransferPlan, cause: unknown): Promise<Error> {
+	const args = { name: made.basename, source: src.file.basename };
+	const now = await currentDocument(env.app, src.file);
+	const ids = plan.moved.map((m) => m.pageId);
+	const stillThere = now !== null && ids.every((id) => now.pages.some((p) => p.id === id));
+	let renewed = false;
+	if (stillThere) {
+		try {
+			await renewPageIds(env, made, ids);
+			renewed = true;
+		} catch (e) {
+			console.error("[notebook] transfer: could not give the copied pages new ids", e);
+		}
+	}
+	const reason = cause instanceof JournalPendingError ? "journal" : "other";
+	const key = reason === "journal"
+		? (renewed ? "transfer.copiedJournal" : "transfer.copiedJournalShared")
+		: (!stillThere ? "transfer.copiedMaybeMoved" : renewed ? "transfer.copiedNotMoved" : "transfer.copiedNotMovedShared");
+	return new Error(t(key, { ...args, error: cause instanceof Error ? cause.message : String(cause) }));
+}
+
+/** Gives the pages `ids` of a notebook this run just created new ids (and moves their bookmarks along): a careful, stale-checked write. */
+async function renewPageIds(env: TransferEnv, file: TFile, ids: readonly string[]): Promise<void> {
+	const app = env.app;
+	const { raw, doc } = await readDoc(app, file);
+	const fresh = new Map<string, string>();
+	for (const p of doc.pages) {
+		if (!ids.includes(p.id)) continue;
+		const id = createId();
+		fresh.set(p.id, id);
+		p.id = id;
+	}
+	if (fresh.size === 0) return;
+	if (doc.meta) {
+		doc.meta.bookmarks = doc.meta.bookmarks.map((b) => fresh.get(b) ?? b);
+		if (doc.meta.bookmarkInfo) doc.meta.bookmarkInfo = Object.fromEntries(Object.entries(doc.meta.bookmarkInfo).map(([k, v]) => [fresh.get(k) ?? k, v]));
+	}
+	doc.modifiedAt = new Date().toISOString();
+	const checked = serializeChecked(doc, true);
+	if (!checked.ok) throw new Error(checked.message);
+	let stale = false;
+	await app.vault.process(file, (current) => {
+		if (readNotebookText(file.extension, current) !== raw) {
+			stale = true;
+			return current;
+		}
+		return writeNotebookText(file.extension, checked.text, current);
+	});
+	if (stale) throw new Error(t("host.changedElsewhere"));
+	if (!holdsPages(readNotebookText(file.extension, await app.vault.read(file)), [...fresh.values()])) throw new Error(t("move.verifyFailed"));
+}
+
 /** Makes a new notebook from pages of `source` and, for `move`, takes them out of the source afterwards. */
 export async function extractPages(env: TransferEnv, req: ExtractRequest): Promise<TransferSummary> {
 	const app = env.app;
@@ -292,6 +359,9 @@ export async function extractPages(env: TransferEnv, req: ExtractRequest): Promi
 	const made = planNewNotebook(src.doc, req.pageIds, req.mode);
 	if (!made.ok) throw new Error(failureText(made));
 	const { plan, doc } = made;
+	// Pages leave a closed source, so its file will be rewritten: looked at again right before the new notebook is made (not
+	// only when the source was loaded), so a failure is a refusal with nothing created, not a half-done move.
+	if (req.mode === "move") await assertSourceClosedAndSaved(env, src);
 	doc.assets = Object.fromEntries((await relocateAssets(app, env.settings().folder, plan.assets)).map((a) => [a.id, a]));
 	const checked = serializeChecked(doc, true);
 	if (!checked.ok) throw new Error(checked.message);
@@ -302,7 +372,12 @@ export async function extractPages(env: TransferEnv, req: ExtractRequest): Promi
 	}
 	if (req.mode === "copy") return summarise(plan, file, {});
 	const moved = new Set(plan.moved.map((m) => m.pageId));
-	const out = await removeFromSource(env, src, plan.moved, { allowLocked: req.allowLocked });
+	let out: { removal: TransferRemoval; removed: number };
+	try {
+		out = await removeFromSource(env, src, plan.moved, { allowLocked: req.allowLocked });
+	} catch (e) {
+		throw await copiedButNotMoved(env, src, file, plan, e);
+	}
 	return summarise(plan, file, {
 		removed: out.removed, changed: out.removal.changed.length + (out.removal.remove.length - out.removed),
 		keptLocked: out.removal.keptLocked.length, textLinks: linksAfter(src.doc, plan, moved),

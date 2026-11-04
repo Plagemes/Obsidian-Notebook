@@ -538,3 +538,84 @@ describe("F3: A and B never share a page id", () => {
 		expect(ids(read(w, `${FOLDER}/A.notebook`))).toEqual([a.pages[0]!.id, ...ids(b)]);
 	});
 });
+
+describe("H4: a move whose source gets journal-only ink while it runs says what is true", () => {
+	const spec = (w: World, src: NotebookDocument) => ({
+		source: fileOf(w, `${FOLDER}/A.notebook`), pageIds: [src.pages[0]!.id], mode: "move" as const, name: "Part", folder: FOLDER, allowLocked: false,
+	});
+
+	it("the source is looked at again right before the new notebook is made: nothing is created", async () => {
+		const src = notebook(3);
+		const w = world({ [`${FOLDER}/A.notebook`]: src });
+		withJournal(w, []);
+		const read0 = w.vault.vault.read;
+		let reads = 0;
+		w.vault.vault.read = async (f: { path: string }) => {
+			const r = await read0(f);
+			// The second read of the source is the re-check; the entry shows up in the journal just before it looks.
+			if (f.path === `${FOLDER}/A.notebook` && ++reads === 2) withJournal(w, [src.id]);
+			return r;
+		};
+		const before = w.vault.files.get(`${FOLDER}/A.notebook`);
+		await expect(extractPages(w.env, spec(w, src))).rejects.toThrow(/Nothing was changed/);
+		expect(w.vault.files.has(`${FOLDER}/Part.notebook`)).toBe(false);
+		expect(w.vault.log.filter((l) => l.startsWith("create"))).toEqual([]);
+		expect(w.vault.files.get(`${FOLDER}/A.notebook`)).toBe(before);
+	});
+
+	it("an entry that appears after the new notebook was made: the error says the pages were copied, the copy has new ids, the source is as it was", async () => {
+		const src = notebook(3);
+		const w = world({ [`${FOLDER}/A.notebook`]: src });
+		withJournal(w, []);
+		const create0 = w.vault.vault.create;
+		w.vault.vault.create = async (path: string, text: string) => {
+			const r = await create0(path, text);
+			if (path.endsWith("Part.notebook")) withJournal(w, [src.id]);
+			return r;
+		};
+		const before = w.vault.files.get(`${FOLDER}/A.notebook`);
+		const err = await extractPages(w.env, spec(w, src)).then(() => null, (e: unknown) => e as Error);
+		expect(err).not.toBeNull();
+		expect(err!.message).toMatch(/copied into Part/);
+		expect(err!.message).toMatch(/is unchanged/);
+		expect(err!.message).not.toMatch(/Nothing was changed/);
+		expect(w.vault.files.get(`${FOLDER}/A.notebook`)).toBe(before);
+		const made = read(w, `${FOLDER}/Part.notebook`);
+		expect(made.pages).toHaveLength(1);
+		expect(ids(made).some((id) => ids(src).includes(id))).toBe(false);
+		expect(made.pages[0]!.strokes).toHaveLength(2);
+	});
+
+	it("a split reports the same way, and a bookmark on a copied page follows its new id", async () => {
+		const src = notebook(3);
+		src.meta = { ...(src.meta ?? { tags: [], favorite: false, cover: "#888888", bookmarks: [] }), bookmarks: [src.pages[2]!.id] };
+		const w = world({ [`${FOLDER}/A.notebook`]: src });
+		withJournal(w, []);
+		const create0 = w.vault.vault.create;
+		w.vault.vault.create = async (path: string, text: string) => {
+			const r = await create0(path, text);
+			if (path.endsWith("Tail.notebook")) withJournal(w, [src.id]);
+			return r;
+		};
+		await expect(splitNotebook(w.env, { source: fileOf(w, `${FOLDER}/A.notebook`), at: 2, name: "Tail", allowLocked: false })).rejects.toThrow(/copied into Tail/);
+		const made = read(w, `${FOLDER}/Tail.notebook`);
+		expect(made.pages).toHaveLength(1);
+		expect(made.pages[0]!.id).not.toBe(src.pages[2]!.id);
+		expect(made.meta?.bookmarks).toEqual([made.pages[0]!.id]);
+	});
+
+	it("another failure of the removal after the copy also says the pages were copied", async () => {
+		const src = notebook(2);
+		const w = world({ [`${FOLDER}/A.notebook`]: src });
+		const create0 = w.vault.vault.create;
+		w.vault.vault.create = async (path: string, text: string) => {
+			const r = await create0(path, text);
+			const file = w.vault.vault.getFileByPath(`${FOLDER}/A.notebook`);
+			(w.env.app as unknown as { workspace: { getLeavesOfType: () => unknown[] } }).workspace.getLeavesOfType = () => [{ view: { file, editContext: () => null } }];
+			return r;
+		};
+		const err = await extractPages(w.env, spec(w, src)).then(() => null, (e: unknown) => e as Error);
+		expect(err!.message).toMatch(/copied into Part/);
+		expect(ids(read(w, `${FOLDER}/Part.notebook`)).some((id) => ids(src).includes(id))).toBe(false);
+	});
+});

@@ -3159,7 +3159,7 @@ export const en = {
 	"settings.pdfCopyWhen.idle": "After a quiet moment",
 	"settings.pdfCopyWhen.close": "When I close the notebook",
 	"settings.pdfCopyFolder": "PDF copy folder",
-	"settings.pdfCopyFolder.desc": "Leave empty to keep each copy next to its notebook. Copies already written stay where they are; only new copies go to the new folder.",
+	"settings.pdfCopyFolder.desc": "Empty keeps each copy next to its notebook. Only new copies use a new folder.",
 	"pdfCopy.menu": "Keep a PDF copy",
 	"pdfCopy.status.updated": "PDF copy updated {time}",
 	"pdfCopy.status.stopped": "PDF copy no longer updated (last {time})",
@@ -3255,6 +3255,11 @@ export const en = {
 	"settings.taskDueEmoji.desc": "On: 📅 date. Off: a Dataview field, [due:: date].",
 	// 0.17 review fixes (data)
 	"transfer.journalPending": "{name} has edits that are not saved to its file yet. Open the notebook once, then try again. Nothing was changed.",
+	"transfer.copiedJournal": "{source} has edits that are not saved to its file yet, so its pages were not taken out. They were copied into {name} (with new page ids) and {source} is unchanged. Open {source} once, then remove the pages from it yourself.",
+	"transfer.copiedJournalShared": "{source} has edits that are not saved to its file yet, so its pages were not taken out. They were copied into {name}, but the copy could not get new page ids, so both notebooks share them. {source} is unchanged.",
+	"transfer.copiedNotMoved": "The pages were copied into {name} (with new page ids), but taking them out of {source} did not finish: {error}",
+	"transfer.copiedNotMovedShared": "The pages were copied into {name}, but taking them out of {source} did not finish ({error}) and the copy kept the page ids of the originals.",
+	"transfer.copiedMaybeMoved": "The pages were copied into {name}, but taking them out of {source} failed part way: {error}. Check both notebooks.",
 	"task.exists": "That task is already in {path}. Nothing was added.",
 } as const;
 
