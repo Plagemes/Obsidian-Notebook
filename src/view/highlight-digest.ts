@@ -7,7 +7,7 @@ import { Modal, Setting, TFile, normalizePath, type App } from "obsidian";
 import { t } from "../i18n";
 import { withEmbedMarker, stablePageSubpath } from "../integration/page-links";
 import {
-	buildDigestSection, cropRect, digestImageName, digestSectionOf, highlightRegions, newDigestNote, replaceDigestSection, sectionImageNames,
+	buildDigestSection, canRewritePicture, cropRect, digestImageName, digestSectionOf, highlightRegions, newDigestNote, replaceDigestSection, sectionImageLinks,
 	type ColourFamily, type DigestItem, type HighlightRegion,
 } from "../model/highlight-digest";
 import { MARKDOWN_DPI, DEFAULT_MARKDOWN_DPI, isMarkdownDpi, type MarkdownDpi } from "../model/export-markdown";
@@ -15,11 +15,12 @@ import { backgroundRect } from "../model/margins";
 import type { Page } from "../model/types";
 import { textUnderBands } from "../pdf/region-text";
 import { boxesOnPage, type PageTextContent, type TextBox, type TextMeasure } from "../pdf/text-items";
+import { linkingNotes } from "../storage/backlinks";
 import { recordPluginWrite } from "../storage/plugin-written";
 import { ensureFolder } from "../storage/vault-io";
 import { sanitizeName } from "../storage/names";
 import { modalShell, shellButton, shellNote } from "../ui/components/modal-shell";
-import type { NotebookMedia } from "./media";
+import { sameBytes, type NotebookMedia } from "./media";
 import { showNotice } from "./notice";
 import { PageImageRenderer, type PageImageOptions } from "./page-images";
 
@@ -101,7 +102,7 @@ export async function runHighlightsDigest(host: DigestHost, request: DigestReque
 				return null;
 			}
 		}
-		const known = sectionImageNames(digestSectionOf(before));
+		const known = sectionImageLinks(digestSectionOf(before));
 		const stem = sanitizeName(file.basename) || "Notebook";
 		const byPage = new Map<number, HighlightRegion[]>();
 		for (const r of regions) {
@@ -186,26 +187,36 @@ export async function runHighlightsDigest(host: DigestHost, request: DigestReque
 }
 
 /**
- * Saves one picture and returns the Markdown embed of it. A picture an earlier digest embedded (`known`: its name appears in the
- * old section) is written again in place; any other goes where Obsidian wants attachments of the note, under a name nobody uses.
+ * Saves one picture and returns the Markdown embed of it. A picture an earlier digest embedded (`known`: its name -> the link as
+ * written in the old section) is written again in place only when the link, resolved from the digest note, is the file with this
+ * picture's name in the folder where Obsidian keeps attachments of the note and no other note links to it; and not at all when
+ * the bytes are the same (no sync churn). Any other picture goes to a new file under a name nobody uses, so another notebook's
+ * or note's picture is never overwritten.
  */
-async function storePicture(app: App, notePath: string, name: string, blob: Blob, known: ReadonlySet<string>): Promise<string | null> {
+export async function storePicture(app: App, notePath: string, name: string, blob: Blob, known: ReadonlyMap<string, string>): Promise<string | null> {
 	try {
 		const data = await blob.arrayBuffer();
+		const wanted = normalizePath(await app.fileManager.getAvailablePathForAttachment(name, notePath));
 		let target: TFile | null = null;
-		if (known.has(name.toLowerCase())) {
-			const found = app.metadataCache.getFirstLinkpathDest(name, notePath);
-			if (found instanceof TFile && found.extension === "png") target = found;
+		const link = known.get(name.toLowerCase());
+		if (link !== undefined) {
+			const found = app.metadataCache.getFirstLinkpathDest(link, notePath);
+			if (
+				found instanceof TFile && found.extension === "png" &&
+				canRewritePicture({
+					foundPath: found.path, name, expectedDir: wanted.includes("/") ? wanted.slice(0, wanted.lastIndexOf("/")) : "", notePath,
+					linkedFrom: linkingNotes(app.metadataCache.resolvedLinks, found.path),
+				})
+			) target = found;
 		}
 		if (target) {
 			recordPluginWrite(app, [target.path]);
-			await app.vault.modifyBinary(target, data);
+			if (!(await sameBytes(app, target, data))) await app.vault.modifyBinary(target, data);
 		} else {
-			const path = normalizePath(await app.fileManager.getAvailablePathForAttachment(name, notePath));
-			recordPluginWrite(app, [path]); // before the write: the inbox must not offer this picture
-			const slash = path.lastIndexOf("/");
-			if (slash > 0) await ensureFolder(app, path.slice(0, slash));
-			target = await app.vault.createBinary(path, data);
+			recordPluginWrite(app, [wanted]); // before the write: the inbox must not offer this picture
+			const slash = wanted.lastIndexOf("/");
+			if (slash > 0) await ensureFolder(app, wanted.slice(0, slash));
+			target = await app.vault.createBinary(wanted, data);
 		}
 		return withEmbedMarker(app.fileManager.generateMarkdownLink(target, notePath), true);
 	} catch (e) {

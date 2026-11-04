@@ -314,11 +314,11 @@ export function digestSectionOf(text: string): string {
 }
 
 /**
- * File names (lower case, folders and `#`/`|` parts dropped) of the pictures an earlier digest embedded, from `![[name]]` and
- * `![alt](path)`: the pictures this plugin made, which a new run may write again instead of making new copies.
+ * The pictures an earlier digest embedded, from `![[link]]` and `![alt](path)`: file name (lower case, folders dropped) -> the
+ * link target as written (decoded, without `#` and `|` parts), so the exact file can be resolved from the digest note.
  */
-export function sectionImageNames(section: string): Set<string> {
-	const out = new Set<string>();
+export function sectionImageLinks(section: string): Map<string, string> {
+	const out = new Map<string, string>();
 	const add = (raw: string) => {
 		let name = raw.split("|")[0]!.split("#")[0]!.trim();
 		try {
@@ -327,11 +327,50 @@ export function sectionImageNames(section: string): Set<string> {
 			/* keep the raw text */
 		}
 		const base = name.slice(name.lastIndexOf("/") + 1).toLowerCase();
-		if (base) out.add(base);
+		if (base && !out.has(base)) out.set(base, name);
 	};
 	for (const m of section.matchAll(/!\[\[([^\]]+)\]\]/gu)) add(m[1]!);
 	for (const m of section.matchAll(/!\[[^\]]*\]\(<?([^)>]+)>?\)/gu)) add(m[1]!);
 	return out;
+}
+
+/**
+ * File names (lower case, folders and `#`/`|` parts dropped) of the pictures an earlier digest embedded: the pictures this
+ * plugin made, which a new run may write again instead of making new copies.
+ */
+export function sectionImageNames(section: string): Set<string> {
+	return new Set(sectionImageLinks(section).keys());
+}
+
+/** Folder part of a vault path ("" at the root). */
+function dirOf(path: string): string {
+	const i = path.lastIndexOf("/");
+	return i < 0 ? "" : path.slice(0, i);
+}
+
+/** What `canRewritePicture` needs to know about the file an old digest embed resolves to. */
+export interface PictureRewriteCheck {
+	/** Vault path of the file the old embed resolves to from the digest note. */
+	foundPath: string;
+	/** Name the new picture would have. */
+	name: string;
+	/** Folder where Obsidian keeps attachments of the digest note (the parent of `getAvailablePathForAttachment`). */
+	expectedDir: string;
+	notePath: string;
+	/** Paths of the notes that link to or embed `foundPath` (the digest note itself may be among them). */
+	linkedFrom: readonly string[];
+}
+
+/**
+ * Whether an earlier digest picture may be written again in place: it has the digest's own file name, sits where attachments of
+ * the digest note go, and nothing but the digest note uses it. Anything else (another notebook's picture of the same name, a file
+ * a user note embeds) is left alone and the picture goes to a new file.
+ */
+export function canRewritePicture(c: PictureRewriteCheck): boolean {
+	const base = c.foundPath.slice(c.foundPath.lastIndexOf("/") + 1);
+	if (base.toLowerCase() !== c.name.toLowerCase()) return false;
+	if (dirOf(c.foundPath).toLowerCase() !== c.expectedDir.toLowerCase()) return false;
+	return c.linkedFrom.every((p) => p === c.notePath);
 }
 
 /** The file name of the picture of the `n`-th (1-based) region of a page: stable, so a new run writes the same names. */

@@ -35,7 +35,7 @@ export function resolveAssetFile(app: App, asset: Asset, notebooksFolder: string
 }
 
 /** True if `file` holds exactly `bytes` (size first, then a hash of the content). */
-async function sameBytes(app: App, file: TFile, bytes: ArrayBuffer): Promise<boolean> {
+export async function sameBytes(app: App, file: TFile, bytes: ArrayBuffer): Promise<boolean> {
 	try {
 		const current = await app.vault.readBinary(file);
 		if (current.byteLength !== bytes.byteLength) return false;
