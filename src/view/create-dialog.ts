@@ -22,7 +22,7 @@ import { renderThumbnail } from "../library/thumbnail";
 import { applyArt, artRef, type ArtSource } from "../ui/art/art-ref";
 import { artEnabled, type ArtSpec } from "../ui/art/generative-art";
 import { motifFor } from "../ui/art/keywords";
-import { COVER_FAMILIES, type CoverFamily } from "../model/cover-family";
+import { COVER_FAMILIES, decodeCoverArt, type CoverFamily } from "../model/cover-family";
 import { decorate } from "../ui/components/dom";
 import { drawSafely, errorCard } from "../ui/components/error-card";
 import { subjectCard } from "../ui/components/subject-card";
@@ -36,6 +36,13 @@ import { sanitizeName } from "../storage/names";
 import type { PickedFile } from "./pick";
 
 export type CreateTab = "notebook" | "folder";
+
+/** A template the dialog will make the notebook from. `ready`: a notebook template already turned into the new document (new ids, placeholders filled). */
+export interface ChosenTemplate {
+	name: string;
+	doc: NotebookDocument;
+	ready?: true;
+}
 
 /** What the Folder tab decided. */
 export interface FolderSpec {
@@ -60,11 +67,13 @@ export interface CreateDialogHost {
 	/** The folder the last notebook or folder was created in, on this device. */
 	lastFolder(): string | null;
 	/** Opens the template gallery (absent: no template button). */
-	pickTemplate?(done: (template: { name: string; doc: NotebookDocument }) => void): void;
+	pickTemplate?(done: (template: ChosenTemplate) => void): void;
+	/** Roadmap #19: opens the picker of saved notebook templates (absent: no button). */
+	pickNotebookTemplate?(done: (template: ChosenTemplate) => void): void;
 	/** Lets the user pick an image (vault or device) for the cover. */
 	pickImage(): Promise<PickedFile | null>;
 	/** Creates and opens the notebook. Resolves false (the dialog stays open) when it failed; the host told the user why. */
-	createNotebook(spec: NotebookSpec, extras: { image?: PickedFile; template?: { name: string; doc: NotebookDocument } }): Promise<boolean>;
+	createNotebook(spec: NotebookSpec, extras: { image?: PickedFile; template?: ChosenTemplate }): Promise<boolean>;
 	createFolder(spec: FolderSpec): Promise<boolean>;
 }
 
@@ -107,7 +116,7 @@ export class CreateDialog extends Modal {
 	private artChosen = false;
 	private coverOptionsOpen = false;
 	private image: { file: PickedFile; url: string } | null = null;
-	private template: { name: string; doc: NotebookDocument } | null = null;
+	private template: ChosenTemplate | null = null;
 	private customIcon: string | null = null;
 	private customWidth = "210";
 	private customHeight = "297";
@@ -254,6 +263,24 @@ export class CreateDialog extends Modal {
 	}
 
 	// --------------------------------------------------------------- name etc.
+
+	/** A notebook template suggests the title, description and cover it was saved with (what the user already typed stays). */
+	private followTemplate(template: ChosenTemplate): void {
+		if (!template.ready) return;
+		if (!this.nb.name.trim()) this.nb.name = template.name;
+		const meta = template.doc.meta;
+		if (!meta) return;
+		if (!this.nb.description.trim() && meta.description) this.nb.description = meta.description;
+		if (!this.nbColorChosen) {
+			this.nb.color = meta.cover;
+			this.nbColorChosen = true;
+		}
+		if (!this.artChosen && meta.coverArt?.kind === "art") {
+			const { family, seed } = decodeCoverArt(meta.coverArt);
+			this.nb.art = { style: family, seed };
+			this.artChosen = true;
+		}
+	}
 
 	private nameField(form: HTMLElement): void {
 		const spec = this.tab === "notebook" ? this.nb : this.fd;
@@ -573,6 +600,17 @@ export class CreateDialog extends Modal {
 			b.createSpan({ text: t("create.template.use") });
 			b.addEventListener("click", () => pick((template) => {
 				this.template = template;
+				this.render(false);
+			}));
+		}
+		const pickNb = this.host.pickNotebookTemplate?.bind(this.host);
+		if (pickNb) {
+			const b = form.createEl("button", { cls: "nb-create-link nb-create-nbtemplate", attr: { type: "button" } });
+			setIcon(b.createSpan({ cls: "nb-create-button-icon" }), "book-copy");
+			b.createSpan({ text: t("create.nbtemplate.use") });
+			b.addEventListener("click", () => pickNb((template) => {
+				this.template = template;
+				this.followTemplate(template);
 				this.render(false);
 			}));
 		}

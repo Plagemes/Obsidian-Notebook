@@ -12,7 +12,7 @@ import type { NotebookSettings } from "../settings";
 import { companionCandidates, companionPath } from "../storage/companion-path";
 import { isNotebookFile, readNotebookText } from "../storage/format";
 import { quickDocId } from "../storage/history";
-import { isInTrash, isWithin, templatesFolderPath } from "../storage/trash-paths";
+import { isInTrash, isWithin, notebookTemplatesFolderPath, templatesFolderPath } from "../storage/trash-paths";
 import { ensureFolder } from "../storage/vault-io";
 import { isCardFrontmatter } from "../zettel/card-content";
 import { notebookUri } from "./links";
@@ -307,7 +307,7 @@ export class CompanionService {
 	/** Trashed notebooks and templates (roadmap #160, #74) get no companion note, and never claim one. */
 	private isInternal(path: string): boolean {
 		const s = this.plugin.settings;
-		return isInTrash(path) || isWithin(path, templatesFolderPath(s.templatesFolder, s.folder));
+		return isInTrash(path) || isWithin(path, templatesFolderPath(s.templatesFolder, s.folder)) || isWithin(path, notebookTemplatesFolderPath(s.notebookTemplatesFolder, s.templatesFolder, s.folder));
 	}
 
 	/** Brings the companion of `file` up to date. Writes nothing when the note already matches. */

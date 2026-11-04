@@ -1,6 +1,6 @@
 /**
  * Pointer-based press handling for library cards: context menu (right click, keyboard, touch long-press) and
- * drag-and-drop onto elements carrying `data-drop-folder` (move to a folder) or `data-drop-card` (take that card's place). Works with mouse, pen and touch.
+ * drag-and-drop onto elements carrying `data-drop-folder` (move to a folder), `data-drop-card` (take that card's place) or `data-drop-column` (set a status on the Board). Works with mouse, pen and touch.
  *
  * Mouse and pen start dragging after a few pixels. Touch needs a long press first (the card lifts); lifting the
  * finger without moving then opens the menu, moving starts the drag. A touch that moves before the long press
@@ -10,6 +10,8 @@
 export const DROP_ATTR = "data-drop-folder";
 /** A notebook card that another card can be dropped on to take its place in the manual order (the value is the notebook path). */
 export const DROP_CARD_ATTR = "data-drop-card";
+/** 0.15: a column of the Board view (or its tab on a phone) that a notebook card can be dropped on to change its status (the value is the column id). */
+export const DROP_COLUMN_ATTR = "data-drop-column";
 const LONG_PRESS_MS = 420;
 const DRAG_SLOP = 6;
 const SCROLL_SLOP = 10;
@@ -24,10 +26,12 @@ export interface PressOptions {
 	canDrop?(target: HTMLElement): boolean;
 	onDrop?(target: HTMLElement): void;
 	onDragEnd?(): void;
+	/** 0.15: the pointer moved while dragging (client coordinates), e.g. to scroll a board sideways near its edge. */
+	onDragMove?(x: number, y: number): void;
 }
 
 export function dropTargetAt(doc: Document, x: number, y: number): HTMLElement | null {
-	return doc.elementFromPoint(x, y)?.closest<HTMLElement>(`[${DROP_ATTR}], [${DROP_CARD_ATTR}]`) ?? null;
+	return doc.elementFromPoint(x, y)?.closest<HTMLElement>(`[${DROP_ATTR}], [${DROP_CARD_ATTR}], [${DROP_COLUMN_ATTR}]`) ?? null;
 }
 
 export function attachPress(o: PressOptions): void {
@@ -107,6 +111,7 @@ export function attachPress(o: PressOptions): void {
 		} else if (state === "dragging") {
 			e.preventDefault();
 			moveGhost();
+			o.onDragMove?.(x, y);
 			const target = dropTargetAt(doc, x, y);
 			setHover(target && (o.canDrop?.(target) ?? true) ? target : null);
 		}

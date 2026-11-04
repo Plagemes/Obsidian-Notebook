@@ -12,13 +12,13 @@ export interface StoredTemplate {
 	doc: NotebookDocument;
 }
 
-/** Templates in `folder`, by name. */
-export async function listStoredTemplates(app: App, folder: string): Promise<StoredTemplate[]> {
+/** Templates in `folder`, by name; files inside `skip` (the notebook templates, kept in a subfolder) are not listed. */
+export async function listStoredTemplates(app: App, folder: string, skip = ""): Promise<StoredTemplate[]> {
 	const root = app.vault.getFolderByPath(normalizePath(folder));
 	if (!root) return [];
 	const files: TFile[] = [];
 	Vault.recurseChildren(root, (f) => {
-		if (f instanceof TFile && isNotebookFile(f)) files.push(f);
+		if (f instanceof TFile && isNotebookFile(f) && !(skip && (f.path === skip || f.path.startsWith(`${skip}/`)))) files.push(f);
 	});
 	const out: StoredTemplate[] = [];
 	for (const file of files) {

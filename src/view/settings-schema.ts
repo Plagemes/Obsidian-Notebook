@@ -18,6 +18,7 @@ import { SPACE_PT_MAX, SPACE_PT_MIN } from "../ink/gestures/settings";
 import { TRASH_RETENTION_MAX_DAYS } from "../storage/trash-settings";
 import { NAME_TOKEN } from "../storage/companion-path";
 import { defaultLooseSheetPath } from "../library/loose-sheet-logic";
+import { defaultDailyPath } from "../library/daily-logic";
 import { DIM_MAX, DIM_MIN, DIM_STEP } from "./reading-settings";
 import { DEFAULT_SETTINGS, type NotebookSettings } from "../settings";
 
@@ -87,13 +88,14 @@ export const GROUPS: readonly GroupSpec[] = [
 		id: "penGestures", section: "input", title: "settings.penGestures",
 		open: (s) => s.penSideButton === "gesture" || s.penSideButton === "radial-gesture" || s.penGestureLongPress || s.penGesturesCustom.length > 0,
 	},
+	{ id: "pageHeader", section: "pages", title: "settings.pageHeader", open: (s) => s.headerMode !== "off" },
 	{ id: "outline", section: "pages", title: "settings.outline", open: (s) => !(s.outlineBookmarks && s.outlineSlides && s.outlineHeadings && s.outlineMarkers) },
 	{ id: "timetable", section: "study", title: "settings.timetable", open: (_s, ctx) => ctx.timetableInUse },
 	{ id: "zettel", section: "study", title: "settings.zettel", open: (s) => s.zettelSlipBoxes.length > 0 },
 ];
 
 /** Runs of the action rows; the tab maps each id to what it does. */
-export type SettingActionId = "hints-reset" | "toolbar-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom";
+export type SettingActionId = "hints-reset" | "toolbar-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom" | "notebook-templates-manage" | "pen-sets" | "board-columns" | "storage-open";
 /** Rows drawn by the tab itself (no stored setting of their own). */
 export type SettingCustomId = "device-name" | "pen-key" | "device-info";
 
@@ -157,6 +159,11 @@ const WRITING: SettingSpec[] = [
 	{ id: "stabilization", section: "writing", order: 40, name: "settings.stabilization", desc: "settings.stabilization.filter.desc", control: { type: "slider", min: 0, max: 10, step: 1 } },
 	{ id: "inkFollowsObjects", section: "writing", order: 50, name: "settings.inkFollows", desc: "settings.inkFollows.desc", control: { type: "toggle" } },
 	{ id: "autoLineBreak", section: "writing", order: 60, name: "settings.autoLineBreak", desc: "settings.autoLineBreak.desc", control: { type: "toggle" } },
+	// 0.15 pen sets: named pens per subject, loaded with the notebook (view/pen-sets.ts)
+	{
+		id: "penSets", section: "writing", order: 70, name: "settings.penSets", desc: "settings.penSets.desc", keywords: "pens subject maths languages science favourites penne materia",
+		control: { type: "action", run: "pen-sets", button: "settings.open" }, edits: ["penSets", "penSetFolders", "penSetNotebooks"],
+	},
 	{ id: "eraseAreaElements", section: "writing", group: ADVANCED, order: 10, name: "settings.eraseAreaElements", desc: "settings.eraseAreaElements.desc", control: { type: "toggle" } },
 	{ id: "dateStampFormat", section: "writing", group: ADVANCED, order: 20, name: "settings.dateStamp", desc: "settings.dateStamp.desc", control: { type: "text", placeholder: DEFAULT_SETTINGS.dateStampFormat } },
 	{ id: "inkPrediction", section: "writing", group: ADVANCED, order: 30, name: "settings.inkPrediction", desc: "settings.inkPrediction.desc", control: { type: "toggle" }, keywords: "latency latenza" },
@@ -243,6 +250,20 @@ const PAGES: SettingSpec[] = [
 	{ id: "outlineSlides", section: "pages", group: "outline", order: 20, name: "settings.outlineSlides", desc: "settings.outlineSlides.desc", control: { type: "toggle" }, keywords: "outline pdf slide diapositive" },
 	{ id: "outlineHeadings", section: "pages", group: "outline", order: 30, name: "settings.outlineHeadings", desc: "settings.outlineHeadings.desc", control: { type: "toggle" }, keywords: "outline heading titoli handwriting scrittura" },
 	{ id: "outlineMarkers", section: "pages", group: "outline", order: 40, name: "settings.outlineMarkers", desc: "settings.outlineMarkers.desc", control: { type: "toggle" }, keywords: "outline marker segnalini domande compiti" },
+	// 0.15 page header (#75): the page number, date and notebook title drawn on the paper, never stored on the page.
+	{
+		id: "headerMode", section: "pages", group: "pageHeader", order: 10, name: "settings.headerMode", desc: "settings.headerMode.desc",
+		control: { type: "dropdown", options: options([["off", "settings.headerMode.off"], ["header", "settings.headerMode.header"], ["footer", "settings.headerMode.footer"]]) }, keywords: "header footer page number date numero pagina intestazione piè di pagina",
+	},
+	{ id: "headerPageNumber", section: "pages", group: "pageHeader", order: 20, name: "settings.headerPageNumber", control: { type: "toggle" }, parent: "headerMode", visible: (s) => s.headerMode !== "off" },
+	{ id: "headerPageTotal", section: "pages", group: "pageHeader", order: 21, name: "settings.headerPageTotal", desc: "settings.headerPageTotal.desc", control: { type: "toggle" }, parent: "headerMode", visible: (s) => s.headerMode !== "off" && s.headerPageNumber },
+	{ id: "headerDate", section: "pages", group: "pageHeader", order: 30, name: "settings.headerDate", desc: "settings.headerDate.desc", control: { type: "toggle" }, parent: "headerMode", visible: (s) => s.headerMode !== "off" },
+	{ id: "headerTitle", section: "pages", group: "pageHeader", order: 40, name: "settings.headerTitle", control: { type: "toggle" }, parent: "headerMode", visible: (s) => s.headerMode !== "off" },
+	{
+		id: "headerAlign", section: "pages", group: "pageHeader", order: 50, name: "settings.headerAlign",
+		control: { type: "dropdown", options: options([["left", "settings.headerAlign.left"], ["centre", "settings.headerAlign.centre"], ["right", "settings.headerAlign.right"]]) }, parent: "headerMode", visible: (s) => s.headerMode !== "off",
+	},
+	{ id: "headerInExport", section: "pages", group: "pageHeader", order: 60, name: "settings.headerInExport", desc: "settings.headerInExport.desc", control: { type: "toggle" }, parent: "headerMode", visible: (s) => s.headerMode !== "off" },
 ];
 
 const READING: SettingSpec[] = [
@@ -272,8 +293,21 @@ const LIBRARY: SettingSpec[] = [
 		id: "snapshotsToKeep", section: "library", order: 31, name: "settings.snapshotKeep", desc: "settings.snapshotKeep.desc",
 		control: { type: "slider", min: 1, max: 50, step: 1 }, parent: "snapshotIntervalHours", visible: (s) => s.snapshotIntervalHours > 0,
 	},
+	// 0.15 views: the Board's columns (names, colours, add, remove) are edited in a dialog; the statuses themselves are synced notebook data.
+	{
+		id: "boardColumns", section: "library", order: 40, name: "settings.boardColumns", desc: "settings.boardColumns.desc",
+		control: { type: "action", run: "board-columns", button: "settings.open" }, edits: ["boardColumns"], keywords: "board kanban status columns lavagna colonne stato da fare in corso fatto stampare",
+	},
+	// 0.15 storage (128): the Storage manager (sizes, unused / duplicate / heavy files, old backups).
+	{
+		id: "storageManager", section: "library", order: 41, name: "settings.storage", desc: "settings.storage.desc",
+		control: { type: "action", run: "storage-open", button: "settings.open" }, keywords: "storage space size disk cleanup duplicate unused backup spazio archiviazione pulizia",
+	},
 	{ id: "looseSheetPath", section: "library", group: ADVANCED, order: 10, name: "settings.looseSheet", desc: "settings.looseSheet.desc", control: { type: "text", placeholder: defaultLooseSheetPath(DEFAULT_SETTINGS.folder) } },
 	{ id: "templatesFolder", section: "library", group: ADVANCED, order: 20, name: "settings.templatesFolder", desc: "settings.templatesFolder.desc", control: { type: "folder", placeholder: "_templates" } },
+	// 0.15 templates (roadmap #19)
+	{ id: "notebookTemplatesFolder", section: "library", group: ADVANCED, order: 21, name: "settings.notebookTemplatesFolder", desc: "settings.notebookTemplatesFolder.desc", control: { type: "folder", placeholder: "_templates/notebooks" } },
+	{ id: "notebookTemplates", section: "library", group: ADVANCED, order: 22, name: "settings.notebookTemplates", desc: "settings.notebookTemplates.desc", control: { type: "action", run: "notebook-templates-manage", button: "settings.notebookTemplates.button" }, keywords: "template notebooks planner modelli quaderni" },
 ];
 
 const SYNC: SettingSpec[] = [
@@ -300,6 +334,10 @@ const INTEGRATION: SettingSpec[] = [
 		id: "companionUpdateAll", section: "integration", order: 24, name: "settings.companionUpdateAll", desc: "settings.companionUpdateAll.desc",
 		control: { type: "action", run: "companion-update-all", button: "settings.companionUpdateAll.button" }, parent: "companionNotes", visible: companionOn,
 	},
+	// 0.15 daily (O12): "Today's page" and its link from the daily note.
+	{ id: "dailyNotebookPath", section: "integration", order: 30, name: "settings.dailyNotebook", desc: "settings.dailyNotebook.desc", control: { type: "text", placeholder: defaultDailyPath(DEFAULT_SETTINGS.folder) }, keywords: "daily journal today diario oggi" },
+	{ id: "dailyLink", section: "integration", order: 31, name: "settings.dailyLink", desc: "settings.dailyLink.desc", control: { type: "toggle" }, keywords: "daily notes periodic notes journal diario" },
+	{ id: "dailyCreateNote", section: "integration", order: 32, name: "settings.dailyCreateNote", desc: "settings.dailyCreateNote.desc", control: { type: "toggle" }, parent: "dailyLink", visible: (s) => s.dailyLink },
 ];
 
 const timetableOn: Predicate = (s) => s.timetableOffer;

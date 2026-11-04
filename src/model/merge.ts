@@ -25,6 +25,10 @@
  *   just enough in the same step so it stays visible: wider margins on a page with a background
  *   (`SetPageMargins`: its own ink moves with the background), a larger plain page, or more height on an
  *   infinite page (`SetPageSize`, which follows the margin rule).
+ * - v13: the parts and states of a drawing (`Page.states`) are not content either: a page that only the copy has brings its
+ *   table along (its strokes under their new ids); a page of the main notebook that has none takes the copy's, mapped to the
+ *   strokes that are in the main notebook (shifted with them when the page had to be re-framed). When both have a table the
+ *   main notebook's stays: two arrangements of one drawing are not merged.
  * - v12: which slide ink was written beside (`Stroke.slide`) is not content: ink taken from the copy keeps its slide,
  *   whose entry is matched in the main notebook's table or added to it (model/slide-links.ts `slideMerger`).
  *
@@ -38,6 +42,7 @@ import { textElementBounds } from "../ink/text-layout";
 import { AddAsset, AddElement, AddPage, AddStroke, Batch, SetMeta, SetPageMargins, SetPageSize, type Command } from "./history";
 import { SetMarkerDone } from "./marker-commands";
 import { slideMerger } from "./slide-links";
+import { remapStates, SetPageStates } from "./states";
 import { boxBounds, markerBounds } from "./markers";
 import { stableStringify } from "./math-elements";
 import { marginsEqual, marginsOf, normalizeMargins, translateElement, translateStroke } from "./margins";
@@ -277,6 +282,10 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 		summary.assetsAdded++;
 	}
 
+	/** v13: where each stroke of the copy ended up in the result (the same id, a fresh id) for the copy's state tables. */
+	const strokeMap = new Map<string, string>();
+	const mainStrokeIds = new Set<string>();
+	for (const p of main.pages) for (const s of p.strokes) mainStrokeIds.add(s.id);
 	type Decision = { kind: "skip" } | { kind: "keep" } | { kind: "copy"; id: string };
 	/** What to do with an item of the copy that goes on page `pageId` of the result. */
 	const decide = (id: string, key: string, pageId: string, kind: "stroke" | "element"): Decision => {
@@ -356,7 +365,11 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 			for (const s of content.strokes) {
 				const key = `s${strokeContentKey(s)}`;
 				const d = decide(s.id, key, page.id, "stroke");
-				if (d.kind === "skip") continue;
+				if (d.kind === "skip") {
+					if (mainStrokeIds.has(s.id)) strokeMap.set(s.id, s.id);
+					continue;
+				}
+				strokeMap.set(s.id, d.kind === "keep" ? s.id : d.id);
 				const stroke = d.kind === "keep" ? taken(s, true, s.id) : taken(s, false, d.id);
 				commands.push(new AddStroke(page.id, stroke, strokeAt++));
 				keys.add(key);
@@ -373,6 +386,14 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 				commands.push(new AddElement(page.id, el, elAt++));
 				keys.add(key);
 			}
+			// v13: the copy's parts and states for a page that has none (the strokes are in the frame of the main page).
+			if (page.states && !target.states) {
+				const states = remapStates(page.states, (id) => strokeMap.get(id));
+				if (states) {
+					const moved = shift === 0 ? states : { ...states, parts: states.parts.map((p) => ({ ...p, pivot: [p.pivot[0] + shift, p.pivot[1]] as [number, number] })) };
+					commands.push(new SetPageStates(target.id, undefined, moved, "Merge states"));
+				}
+			}
 			anchor = page.id;
 			continue;
 		}
@@ -383,7 +404,11 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 		for (const s of page.strokes) {
 			const key = `s${strokeContentKey(s)}`;
 			const d = decide(s.id, key, page.id, "stroke");
-			if (d.kind === "skip") continue;
+			if (d.kind === "skip") {
+				if (mainStrokeIds.has(s.id)) strokeMap.set(s.id, s.id);
+				continue;
+			}
+			strokeMap.set(s.id, d.kind === "keep" ? s.id : d.id);
 			strokes.push(d.kind === "keep" ? taken(s, true, s.id) : taken(s, false, d.id));
 			keys.add(key);
 		}
@@ -401,6 +426,8 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 		if (page.margins) added.margins = { ...page.margins };
 		if (page.tags && page.tags.length > 0) added.tags = [...page.tags];
 		if (elements.length > 0) added.elements = elements;
+		const addedStates = remapStates(page.states, (id) => strokeMap.get(id));
+		if (addedStates) added.states = addedStates;
 		const at = anchor === null ? 0 : order.indexOf(anchor) + 1;
 		order.splice(at, 0, page.id);
 		commands.push(new AddPage(added, at));

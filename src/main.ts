@@ -22,6 +22,7 @@ import { registerReliability } from "./integration/reliability";
 import { LIBRARY_VIEW_TYPE, LibraryView } from "./library/library-view";
 import { registerActionCommands } from "./view/commands";
 import { openLooseSheet } from "./library/loose-sheet";
+import { openTodaysPage } from "./library/daily";
 import { OpenNotebookModal } from "./view/modals";
 import { openNotebookAtPage } from "./integration/open";
 import { NotebookView, VIEW_TYPE } from "./view/notebook-view";
@@ -183,6 +184,7 @@ export default class NotebookPlugin extends Plugin {
 			"lecture-from-slides": () => this.host.lectureFromSlides(),
 			"scan-new": () => this.host.scanToNotebook(this.settings.folder),
 			"loose-sheet": () => void openLooseSheet(this, (file) => this.host.openNotebook(file)),
+			"todays-page": () => void openTodaysPage(this, (file) => this.host.openNotebook(file)),
 			"timetable": () => void this.timetable.edit(),
 			"open-class": () => this.timetable.openNow(),
 			"pen-button-test": () => new PenTestModal(this.app, penSignalInfo(this)).open(),
@@ -193,6 +195,7 @@ export default class NotebookPlugin extends Plugin {
 			"sync-check": () => void this.syncSafety.openCheck(),
 			"check-integrity": () => void this.resilience?.check(),
 			"library-check": () => this.host.checkLibrary(),
+			"storage-manager": () => this.host.openStorage(),
 			"zettel-inbox": () => void openInbox(this.app),
 			"zettel-inbox-process": () => void processNextInbox(this.app),
 			"benchmark": () => this.openBenchmark(),

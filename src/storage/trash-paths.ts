@@ -16,6 +16,7 @@ import { isReservedPath } from "../library/folders";
 
 export const TRASH_DIRNAME = "_trash";
 export const TEMPLATES_DIRNAME = "_templates";
+export const NOTEBOOK_TEMPLATES_DIRNAME = "notebooks";
 const ITEMS = "items";
 const PAGES = "pages";
 
@@ -70,17 +71,25 @@ export function pageTrashEntryPath(root: string, notebookId: string, entryId: st
  * True for a notebook path the library does not list (same rule as storage `listNotebooks`): inside a reserved folder
  * of the notebooks folder, inside the plugin trash wherever it is, or inside the templates folder.
  */
-export function isHiddenNotebookPath(path: string, notebooksFolder: string, templatesSetting: string): boolean {
+export function isHiddenNotebookPath(path: string, notebooksFolder: string, templatesSetting: string, notebookTemplatesSetting = ""): boolean {
 	if (isInTrash(path)) return true;
 	const root = notebooksFolder.replace(/^\/+|\/+$/g, "");
 	if (isReservedPath(path, root)) return true;
-	return isWithin(path, templatesFolderPath(templatesSetting, root));
+	return isWithin(path, templatesFolderPath(templatesSetting, root)) || isWithin(path, notebookTemplatesFolderPath(notebookTemplatesSetting, templatesSetting, root));
+}
+
+function cleanFolder(setting: string): string {
+	return setting.replace(/\\/g, "/").split("/").map((p) => p.trim()).filter((p) => p.length > 0 && p !== "." && p !== "..").join("/");
 }
 
 /** Where templates are stored: the setting, or `<notebooks folder>/_templates`. */
 export function templatesFolderPath(setting: string, root: string): string {
-	const s = setting.replace(/\\/g, "/").split("/").map((p) => p.trim()).filter((p) => p.length > 0 && p !== "." && p !== "..").join("/");
-	return s || join(root, TEMPLATES_DIRNAME);
+	return cleanFolder(setting) || join(root, TEMPLATES_DIRNAME);
+}
+
+/** Where notebook templates are stored: the setting, or `notebooks` inside the templates folder. */
+export function notebookTemplatesFolderPath(setting: string, templatesSetting: string, root: string): string {
+	return cleanFolder(setting) || join(templatesFolderPath(templatesSetting, root), NOTEBOOK_TEMPLATES_DIRNAME);
 }
 
 // ---------------------------------------------------------------- items

@@ -3,6 +3,8 @@ import { setUiLanguage, t } from "../i18n";
 import { DEFAULT_SETTINGS, readSettings, type NotebookSettings } from "../settings";
 import type { TimetableService } from "../timetable/service";
 import { effectivePenHold } from "../ink/pen-button";
+import { openNotebookTemplateManager } from "./notebook-templates";
+import { PenSetsModal } from "./pen-sets-modal";
 import { PenTestModal, penSignalInfo } from "./pen-test-modal";
 import { renderPenKeySetting } from "./pen-button-settings";
 import { companionService } from "../integration/companion";
@@ -11,6 +13,7 @@ import { gestureKeyId } from "./pen-gesture-settings";
 import { CustomGesturesModal, GestureCheatSheet, setGestureEnabled, type PenGestureUiHost } from "./pen-gesture-ui";
 import { deviceNameRow, type SyncSafetyService } from "./sync-safety";
 import { renderDeviceInfo } from "./device-info";
+import { BoardColumnsModal } from "./board-columns-modal";
 import { resetHints } from "../ui/hints";
 import { resetToolbarAdaptation } from "../ui/toolbar-reset";
 import {
@@ -185,12 +188,29 @@ export class NotebookSettingTab extends PluginSettingTab {
 			case "toolbar-reset": resetToolbarAdaptation(this.app, this.host); this.schemaChanged(); break;
 			case "pen-test": new PenTestModal(this.app, penSignalInfo(this.host)).open(); break;
 			case "benchmark": this.host.runGlobal("benchmark"); break;
+			case "storage-open": this.host.runGlobal("storage-manager"); break;
 			case "companion-update-all": void companionService(this.host)?.updateAll(); break;
 			case "sync-check": void this.host.syncSafety?.openCheck(); break;
 			case "timetable-edit": void this.host.timetable?.edit(); break;
 			case "gesture-sheet": new GestureCheatSheet(this.penGestureHost()).open(); break;
 			case "gesture-custom": new CustomGesturesModal(this.penGestureHost()).open(); break;
+			case "notebook-templates-manage": openNotebookTemplateManager(this.app, () => this.host.settings); break;
+			case "pen-sets": this.openPenSets(); break;
+			case "board-columns": new BoardColumnsModal({ app: this.app, get: () => this.host.settings.boardColumns, set: (cols) => this.setControlValue("boardColumns", cols) }).open(); break;
 		}
+	}
+
+	/** 0.15 pen sets: the manager. It saves the sets and their assignments together, through the same lenient reader as the load. */
+	private openPenSets(): void {
+		const settings = (): NotebookSettings => this.host.settings;
+		new PenSetsModal(this.app, {
+			get: () => ({ sets: settings().penSets, folders: settings().penSetFolders, notebooks: settings().penSetNotebooks }),
+			update: (next) => {
+				this.host.settings = readSettings({ ...settings(), penSets: next.sets, penSetFolders: next.folders, penSetNotebooks: next.notebooks });
+				void this.host.saveSettings().catch((e) => console.error("[notebook] saving settings failed", e));
+			},
+			currentPens: () => null,
+		}).open();
 	}
 
 	private renderCustom(id: SettingCustomId, setting: Setting): void {

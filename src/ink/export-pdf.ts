@@ -12,7 +12,8 @@ import { inkPath, type PathSink } from "./ink-geometry";
 import { BOX_COLORS, badgeColor, badgeFace, badgeIsSquare, boxLabelWidth, checkPoints, defaultBoxLabel, glyphSize, starPoints, type BoxLabel } from "./marker-render";
 import { HIGHLIGHTER_ALPHA, strokeOutline } from "./stroke-shape";
 import { layerFlags, type ExportLayers, type LayerFlags } from "./export-layers";
-import { helveticaCodeWidth, toWinAnsi, wrapHelvetica } from "../pdf/helvetica";
+import { HEADER_COLOR_DAY, type HeaderLayout } from "./page-header";
+import { helveticaCodeWidth, helveticaWidth, toWinAnsi, wrapHelvetica } from "../pdf/helvetica";
 
 /**
  * An image placed on a page, in page coordinates (pt, origin top-left, y down). `jpeg` is a
@@ -51,6 +52,8 @@ export interface PdfOptions {
 	equationOutline?: (el: EquationElement) => { polys: Polygon[]; sx: number; sy: number } | null;
 	/** wave 0.9 (381): "ink" leaves out the sheet, the PDF/picture background and the paper; "background" leaves out the ink. Default "both". */
 	layers?: ExportLayers;
+	/** 0.15 (#75): the automatic page header or footer of a page (null: none); drawn with the background layer. */
+	header?: (page: Page) => HeaderLayout | null;
 }
 
 /** Line height of text elements, as a multiple of the font size. */
@@ -129,7 +132,7 @@ export function pagesToPdf(pages: readonly Page[], options: PdfOptions = {}): Ui
 		const hidden = typeof options.hiddenInk === "function" ? options.hiddenInk(page) : !!options.hiddenInk;
 		const content = pageContent(page, withPaper, options.images?.(page) ?? [], getImage, res, {
 			hidden, boxLabel: options.boxLabel ?? ((b) => defaultBoxLabel(b)), layers: layerFlags(options.layers),
-			numbers, outline: options.equationOutline ?? equationOutline,
+			numbers, outline: options.equationOutline ?? equationOutline, header: options.header?.(page) ?? null,
 		});
 		const parts: string[] = [];
 		const states: string[] = [];
@@ -256,6 +259,7 @@ interface ElementOptions {
 	boxLabel: BoxLabel;
 	/** wave 0.9 (381): which layers are drawn. Equations and graphs are content (drawn with the ink, never with the background). */
 	layers?: LayerFlags;
+	header?: HeaderLayout | null;
 	numbers?: ReadonlyMap<string, number>;
 	outline?: (el: EquationElement) => { polys: Polygon[]; sx: number; sy: number } | null;
 }
@@ -280,6 +284,10 @@ function pageContent(
 	};
 	if (layers.background) for (const img of images) if (img.layer === "background") draw(img);
 	if (layers.background && withPaper) ops.push(...paperOps(page));
+	if (layers.background && v8.header) {
+		res.font = true;
+		ops.push(headerOps(v8.header));
+	}
 	if (!layers.content) return ops.join("\n");
 	for (const img of images) if (img.layer !== "background") draw(img);
 	for (const el of page.elements ?? []) {
@@ -534,6 +542,16 @@ function paperOps(page: Page): string[] {
 		ops.push(dots.map(([x, y]) => `${num(x - side / 2)} ${num(y - side / 2)} ${side} ${side} re`).join(" ") + " f");
 	}
 	return ops;
+}
+
+/** 0.15 (#75): the page header line (Helvetica), aligned like on screen. */
+function headerOps(h: HeaderLayout): string {
+	const width = helveticaWidth(h.text, h.size);
+	const fit = Math.min(1, h.maxWidth / Math.max(width, 1));
+	const size = h.size * fit;
+	const w = width * fit;
+	const left = h.align === "left" ? h.x : h.align === "right" ? h.x - w : h.x - w / 2;
+	return labelOps(h.text, left, h.y + size * 0.35, size, w + 1, HEADER_COLOR_DAY);
 }
 
 /** PDF path operators; full circles as four cubic Béziers in the positive-angle direction (like canvas arc). */

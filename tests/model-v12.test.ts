@@ -64,15 +64,15 @@ function v11Raw(): Raw {
 }
 
 describe("format v12: slide links", () => {
-	it("is at version 12 with a v11 step", () => {
-		expect(CURRENT_VERSION).toBe(12);
+	it("has the v11 step (the current format is v13 since states)", () => {
+		expect(CURRENT_VERSION).toBeGreaterThanOrEqual(12);
 		expect(MIGRATIONS[11]).toBeTypeOf("function");
 	});
 
 	it("reads a v11 file unchanged apart from the version", () => {
 		const r = parsed(JSON.stringify(v11Raw()));
 		expect(r.migratedFrom).toBe(11);
-		expect(r.doc.version).toBe(12);
+		expect(r.doc.version).toBe(CURRENT_VERSION);
 		expect(r.doc.slides).toBeUndefined();
 		expect(r.doc.pages[0]!.strokes[0]!.slide).toBeUndefined();
 		expect(r.dropped).toBeUndefined();

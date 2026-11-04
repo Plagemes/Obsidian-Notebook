@@ -104,7 +104,7 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 16. 🧪 **P1** Global search in the library: titles, tags, text boxes (OCR later).
 17. **P2** Links on the page: a region or element opens another page, notebook, Obsidian note or URL.
 18. **P2** 🧪 Back/forward history of visited pages.
-19. **P2** Notebook templates: create a notebook from a saved notebook (planner, lab book).
+19. **P2** 🧪 Notebook templates: create a notebook from a saved notebook (planner, lab book).
 20. **P2** Sticky notes: movable coloured notes on the page.
 21. **P3** Paper colours (cream, dark, chalkboard) with ink adapted for contrast.
 
@@ -192,7 +192,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 ### Pages and documents
 73. **P1** 🧪 More papers: Cornell, music staff, isometric, hexagonal, calligraphy, planner.
 74. 🧪 **P1** Save a page as a template, with a template gallery.
-75. **P2** Automatic header with date and page number.
+75. **P2** 🧪 Automatic header with date and page number.
 76. **P2** Rotate and crop imported PDF pages.
 77. **P2** Merge notebooks, split a notebook, extract pages into a new notebook.
 78. **P2** Move a selection to another page.
@@ -226,7 +226,7 @@ Goal: notebooks behave like first-class Obsidian content. Several items depend o
 - **O9 P1** 🧪 File explorer menu: "New notebook here" on folders, "Annotate in Notebook" on PDFs.
 - **O10 P2** From Obsidian's PDF viewer: an "Annotate in Notebook" action.
 - **O11 P3** Pages on Canvas: notebook pages as cards on an Obsidian Canvas.
-- **O12 P2** Daily notebook: "Today's page" adds a dated page and links it from the daily note.
+- **O12 P2** 🧪 Daily notebook: "Today's page" adds a dated page and links it from the daily note.
 - **O13 P2** Obsidian templates: template notebooks and embeds in Templates/Templater.
 - **O14 P1** 🧪 Commands and hotkeys for every tool (pen, eraser, lasso…), assignable in Hotkeys.
 - **O15 P2** 🧪 Status bar: "p. 3/12" and save state; tap opens the navigator.
@@ -288,7 +288,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 ### F. Sync and storage
 126. **P1** Optional Google Drive / OneDrive connector inside the plugin (opt-in only), configurable scope: the whole vault, only selected folders, or include/exclude rules (patterns, file types, size limits). When to sync: on open, on close, on an interval or manually; "Wi-Fi only" option; rules for large files. Conflicts merged with #122; never a mandatory cloud.
 127. **P2** Scheduled backups to an external folder or to Drive (e.g. a weekly zip).
-128. **P2** Storage manager: size of each notebook, duplicate or unused assets, downscaling of heavy images.
+128. **P2** 🧪 Storage manager: size of each notebook, duplicate or unused assets, downscaling of heavy images.
 
 ### G. Navigation and workflow
 129. **P3** Search by drawing: sketch a shape and find pages with similar drawings (geometric descriptors, no AI).
@@ -296,7 +296,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 131. **P3** Arrows linking regions of different pages, visible in the side-by-side view.
 132. **P2** Live lecture mode: a timer and quick buttons ("new page", "important moment"); each mark becomes a timestamped bookmark.
 133. ~~**P2** Course dashboard page that updates itself: next exam, pages due for review, recent notebooks.~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
-134. **P2** Pen sets per subject, loaded automatically with the notebook (e.g. maths or languages).
+134. **P2** 🧪 Pen sets per subject, loaded automatically with the notebook (e.g. maths or languages).
 135. **P2** Mirror page: a page that always shows the current content of a page in another notebook (transclusion).
 136. **P3** Handout printing: several pages per sheet with space for notes.
 137. **P2** Templates with fields: title, date and topic filled by hand or keyboard become properties of the companion note.
@@ -339,8 +339,8 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 
 ### C. Library
 160. 🧪 **P1** Library trash with restore.
-161. **P2** Board view with statuses (in progress, done, to print).
-162. **P2** Calendar view: what you wrote on a given day.
+161. **P2** 🧪 Board view with statuses (in progress, done, to print).
+162. **P2** 🧪 Calendar view: what you wrote on a given day.
 163. **P2** Per-notebook settings: stabilization, palm rejection, default paper, sync.
 
 ### D. Sharing and open formats
@@ -464,7 +464,7 @@ Features for following a lecture live. Exam and review features stay in the sepa
 240. **P2** Lecture shared with the study group: at the end, a rule exports the clean notes to a shared (Drive) folder.
 
 ### Dynamic drawings
-241. **P1** Drawings with states (e.g. physics exercises): draw a figure once, then mark the parts that change (a block, a force arrow, a spring) and define for each state where they are, their rotation or scale, visibility and colour.
+241. **P1** 🧪 Drawings with states (e.g. physics exercises): draw a figure once, then mark the parts that change (a block, a force arrow, a spring) and define for each state where they are, their rotation or scale, visibility and colour.
     - States can be named ("A", "B", "impact") or follow a continuous parameter (time t, angle θ); a part's position can follow a formula (e.g. x(t) = v·t), shared with the calculator (#182) and graphs (#113).
     - Several instances of the same drawing on the page, each showing a different state (e.g. "state A" above, "state B" below in the exercise): nothing is redrawn, and editing the original updates every instance.
     - Switch states with tabs or a slider on the figure; optional animation to watch the evolution over time.

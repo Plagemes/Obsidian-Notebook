@@ -32,18 +32,24 @@ import { checkPractice } from "./practice-check";
 import { checkLecture, lectureShot, lectureStub } from "./lecture-check";
 import { checkOutline, outlineNotebook } from "./outline-check";
 import { checkNbmap } from "./nbmap-check";
+import { checkHeader } from "./header-check";
 import { checkChrome, chromeState, type ChromeState } from "./ds-notebook-check";
 import { checkExcerpt } from "./excerpt-check";
 import { checkReadOnly } from "./readonly-check";
 import { checkSmartAdd } from "./smartplus-check";
 import { checkSlides, slidesState } from "./slides-check";
+import { checkPenSets, pensetsOverride, pensetsShot } from "./pensets-check";
+import { checkStates } from "./states-check";
 import { checkSettings } from "./settings-check";
 import { checkZettel, zettelState, type ZettelState } from "./zettel-check";
 import { checkPlugin } from "./plugin-check";
+import { checkDaily } from "./daily-check";
 import { checkHints } from "./hints-check";
 import { checkAdaptiveToolbar, adaptiveToolbarShot, type AdaptiveShotState } from "./toolbar-check";
 import { checkCreate, prepareShot } from "./create-check";
 import { modalsApi } from "./modals-check";
+import { templatesApi } from "./templates-check";
+import { storageApi } from "./storage-check";
 import { checkHostile, HOSTILE_ERROR, hostileDialog, installHostile } from "./hostile";
 import { PracticeService } from "../../src/view/practice";
 import { NavController } from "../../src/view/nav-controller";
@@ -54,6 +60,7 @@ import { checkEmptyLibrary, checkLibraryLayout, emptyDialogShot, libraryInteract
 import { checkHome2, home2State } from "./home2-check";
 import { checkLayout } from "./layout-check";
 import { checkSections, sectionsState } from "./sections-check";
+import { checkViews, viewsState } from "./views-check";
 
 import type { Layout } from "../../src/ink/layout";
 import type { Viewport } from "../../src/ink/viewport";
@@ -235,7 +242,7 @@ const harnessStatusBar = new NotebookStatusBar(harnessStatusBarEl, () => {
 });
 
 function settings(): NotebookSettings {
-	const s: NotebookSettings = { ...DEFAULT_SETTINGS };
+	const s: NotebookSettings = { ...DEFAULT_SETTINGS, ...pensetsOverride };
 	if (params.get("lowLatency") === "1") s.lowLatencyInk = true;
 	return s;
 }
@@ -247,7 +254,7 @@ async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	leaf = new WorkspaceLeaf(app, root);
 	view = new NotebookView(asLeaf(leaf), { settings: settings(), practice: doc === "practice" ? practiceService : undefined, lectureClassFor: doc === "lecture" ? () => lectureStub.cls : undefined, nav: harnessNav, statusChanged: (v) => harnessStatusBar.update(v.statusSnapshot()) });
 	await view.onOpen();
-	const path = doc === "new" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" ? "Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "nbmap" ? "Notebooks/Outline.notebook" : "Notebooks/Old v3.notebook";
+	const path = doc === "new" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" ? "Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "nbmap" ? "Notebooks/Outline.notebook" : "Notebooks/Old v3.notebook";
 	const file = app.vault.getFileByPath(path)!;
 	await (view as unknown as HarnessView).loadFile(file);
 	view.onResize();
@@ -2047,7 +2054,7 @@ function applySize(): void {
 	if (h) root.style.height = `${Number(h)}px`;
 }
 
-const harnessApi: Record<string, unknown> = { app, checkLibrary, checkEmpty, checkHostile: runHostile, hostileDialog, emptyDialogShot, interactLibrary, libraryState, open, measureOpen, penStroke, setTool, openOptions, openMore, measureLod, compareLod, checkHeavy, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkCreate: async (tab: "notebook" | "folder" = "notebook") => { try { return JSON.parse(JSON.stringify(await checkCreate({ app, errors, notices }, tab))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`create check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, createShot: (tab: "notebook" | "folder") => prepareShot({ app, errors, notices }, tab), checkSlides: async () => { try { return JSON.parse(JSON.stringify(await checkSlides({ view, app, penStroke, strokeCount, frames, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`slides check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, slidesState: (state: "badges") => slidesState(frames, state), checkReadOnly: async () => { try { return JSON.parse(JSON.stringify(await checkReadOnly({ view, app, stage, penStroke, setTool, strokeCount, frames, openMore, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`readonly check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkSmartAdd: async () => { try { return JSON.parse(JSON.stringify(await checkSmartAdd({ view, frames, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`smart add check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPractice: () => checkPractice({ view, app, service: practiceService, frames, errors, notices }), checkLecture: () => checkLecture({ get view() { return view; }, open, frames, penStroke, errors, notices }), lectureShot: (state: "ask" | "on" | "plain") => lectureShot({ get view() { return view; }, open, frames, penStroke, errors, notices }, state), checkNbmap: () => checkNbmap({ view, frames, errors, notices }), checkOutline: () => checkOutline({ view, frames, errors, notices }), checkSettings: async () => { try { return JSON.parse(JSON.stringify(await checkSettings({ app, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`settings check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkZettel: async () => { try { return JSON.parse(JSON.stringify(await checkZettel({ app, view, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`zettel check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, zettelState: (state: ZettelState) => zettelState({ app, view, errors, notices }, state), checkHints: async () => { try { return JSON.parse(JSON.stringify(await checkHints({ errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`hints check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPlugin: async () => { try { return JSON.parse(JSON.stringify(await checkPlugin({ errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`plugin check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkExcerpt: () => checkExcerpt({ view, stage, penStroke, setTool, strokeCount, staticPixel, frames, errors, notices }), checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
+const harnessApi: Record<string, unknown> = { app, checkStates: async () => { try { return JSON.parse(JSON.stringify(await checkStates({ view, app, penStroke, setTool, inkNear, strokeCount, frames, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`states check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPenSets: async () => { try { return JSON.parse(JSON.stringify(await checkPenSets({ get view() { return view; }, open, openOptions, frames, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`pensets check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, pensetsShot: (state: "options" | "manager" | "close") => pensetsShot({ get view() { return view; }, open, openOptions, frames, errors, notices, app }, state),checkLibrary, checkEmpty, checkHostile: runHostile, hostileDialog, emptyDialogShot, interactLibrary, libraryState, open, measureOpen, penStroke, setTool, openOptions, openMore, measureLod, compareLod, checkHeavy, openPageSheet, selectFirstStroke, radialState, closeAll, check, checkCreate: async (tab: "notebook" | "folder" = "notebook") => { try { return JSON.parse(JSON.stringify(await checkCreate({ app, errors, notices }, tab))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`create check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, createShot: (tab: "notebook" | "folder") => prepareShot({ app, errors, notices }, tab), checkSlides: async () => { try { return JSON.parse(JSON.stringify(await checkSlides({ view, app, penStroke, strokeCount, frames, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`slides check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, slidesState: (state: "badges") => slidesState(frames, state), checkReadOnly: async () => { try { return JSON.parse(JSON.stringify(await checkReadOnly({ view, app, stage, penStroke, setTool, strokeCount, frames, openMore, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`readonly check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkSmartAdd: async () => { try { return JSON.parse(JSON.stringify(await checkSmartAdd({ view, frames, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`smart add check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPractice: () => checkPractice({ view, app, service: practiceService, frames, errors, notices }), checkLecture: () => checkLecture({ get view() { return view; }, open, frames, penStroke, errors, notices }), lectureShot: (state: "ask" | "on" | "plain") => lectureShot({ get view() { return view; }, open, frames, penStroke, errors, notices }, state), checkNbmap: () => checkNbmap({ view, frames, errors, notices }), checkHeader: () => checkHeader({ view, frames, errors, notices }), checkOutline: () => checkOutline({ view, frames, errors, notices }), checkSettings: async () => { try { return JSON.parse(JSON.stringify(await checkSettings({ app, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`settings check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkZettel: async () => { try { return JSON.parse(JSON.stringify(await checkZettel({ app, view, errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`zettel check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, zettelState: (state: ZettelState) => zettelState({ app, view, errors, notices }, state), checkHints: async () => { try { return JSON.parse(JSON.stringify(await checkHints({ errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`hints check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkPlugin: async () => { try { return JSON.parse(JSON.stringify(await checkPlugin({ errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`plugin check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkDaily: async () => { try { return JSON.parse(JSON.stringify(await checkDaily({ errors, notices }))) as unknown; } catch (e) { return { ok: false, results: [], errors: [`daily check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} }; } }, checkExcerpt: () => checkExcerpt({ view, stage, penStroke, setTool, strokeCount, staticPixel, frames, errors, notices }), checkReading: () => checkReading({ view, stage, penStroke, setTool, strokeCount, staticPixel, inkNear, frames, openMore, errors, notices }), staticPixel, strokeCount, errors, notices, applyTheme, get view() {
 	return view;
 } };
 
@@ -2089,6 +2096,12 @@ harnessApi.checkSections = async () => {
 	return { ok: results.every((r) => r.ok) && errors.length === 0, results, errors: [...errors] };
 };
 harnessApi.sectionsState = (state: string) => (libraryHarness ? sectionsState(libraryHarness, state) : false);
+// 0.15 views: the Board and the Calendar (views-check.ts).
+harnessApi.checkViews = async () => {
+	const results = libraryHarness ? await checkViews(libraryHarness, librarySurface) : [];
+	return { ok: results.every((r) => r.ok) && errors.length === 0, results, errors: [...errors] };
+};
+harnessApi.viewsState = (state: string) => (libraryHarness ? viewsState(libraryHarness, state) : false);
 
 async function interactLibrary(): Promise<Record<string, unknown>> {
 	const results = libraryHarness ? await libraryInteractions(libraryHarness, librarySurface) : [];
@@ -2103,7 +2116,7 @@ async function main(): Promise<void> {
 		return;
 	}
 	// 0.12.1: doc=plugin starts the whole plugin on its own stub app (plugin-check.ts); no notebook is opened.
-	if (params.get("doc") === "plugin" || params.get("doc") === "hints") return;
+	if (params.get("doc") === "plugin" || params.get("doc") === "hints" || params.get("doc") === "daily") return;
 	await seed();
 	await open();
 	if (params.get("check") === "1") {
@@ -2135,5 +2148,8 @@ Object.assign(harnessApi, {
 });
 
 Object.assign(harnessApi, modalsApi({ app, errors, notices }));
+Object.assign(harnessApi, templatesApi({ app, errors, notices }));
+// 0.15 storage: the Storage manager (doc=storage, storage-check.ts).
+Object.assign(harnessApi, storageApi({ app, errors, notices }));
 (window as unknown as { harness: Record<string, unknown> }).harness = harnessApi;
 harnessApi.ready = main();

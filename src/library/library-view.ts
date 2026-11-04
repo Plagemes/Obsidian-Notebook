@@ -1,7 +1,8 @@
 import { getLanguage, ItemView, Menu, normalizePath, Platform, Scope, setIcon, TFile, TFolder, Vault, type TAbstractFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import type { NotebookDocument, NotebookMeta, Page } from "../model/types";
-import { isNotebookFile } from "../storage/format";
+import { isNotebookFile, readNotebookText } from "../storage/format";
+import { quickDocId } from "../storage/history";
 import { sanitizeName } from "../storage/notebooks";
 import { attachPress, DROP_ATTR, DROP_CARD_ATTR } from "./drag";
 import { breadcrumb, buildFolderTree, flattenTree, isReservedPath, type FolderNode } from "./folders";
@@ -43,7 +44,14 @@ import {
 	collectionsOf, inCollection, stampTime, statsOf, subjectsOf, topFolderOf,
 	type CollectionContext, type CollectionId, type Subject,
 } from "./dashboard";
-import type { ActivityRecord } from "./activity-log";
+import { dayKeyOf, type ActivityRecord } from "./activity-log";
+import { renderBoard } from "./board-view";
+import { renderCalendar } from "./calendar-view";
+import { columnLabel, groupByStatus, type BoardColumn } from "./board-logic";
+import { statusOf as boardStatusOf, type BoardMap } from "./board-state";
+import { BoardBlockedError, type BoardStateStore } from "./board-state-store";
+import { onBoardColumnsChanged } from "./board-events";
+import { aggregateCalendar, weekStartFor, type DayItem } from "./calendar-logic";
 import { parseSeenState, markSeen, type SeenState } from "./changed-seen";
 import { computeSections, DYNAMIC_IDS, markSectionSeen, notebookSeenKey, type DynamicId, type DynamicSections, type SectionItem } from "./dynamic-sections";
 import { greetingOf, greetingText, type GreetingKey } from "./greeting";
@@ -92,6 +100,8 @@ export interface LibraryHost {
 	scanToNotebook?(folder: string): void;
 	/** Opens the loose sheet (quick notes), creating it the first time. */
 	openLooseSheet?(): void;
+	/** 0.15 (O12): a dated page in the daily notebook, made the first time (Home's "Today's page"). */
+	todaysPage?(): void;
 	/** Class in progress according to the timetable (wave 0.6), for the "Now: <course>" shortcut. */
 	nowClass?(): { course: string; room?: string } | null;
 	openNowClass?(): void;
@@ -103,6 +113,10 @@ export interface LibraryHost {
 	thumbnailBackground?(doc: NotebookDocument, page: Page, width: number): Promise<ThumbnailOptions["drawBackground"] | null>;
 	/** Called after the library copied a notebook, so the copy can get its own identity. */
 	afterDuplicate?(file: TFile): Promise<void>;
+	/** Roadmap #19: saves a copy of the notebook in the notebook templates folder (asks for a name). */
+	saveAsTemplate?(file: TFile): Promise<void>;
+	/** Roadmap #19: true for a path the library must not list (the notebook templates folder, wherever it is). */
+	isHiddenPath?(path: string): boolean;
 	/** Library trash (#160): deleting moves to the plugin trash instead of deleting. */
 	trash?: LibraryTrash;
 	/** wave 0.7: opens the list of recently edited pages (roadmap 365). */
@@ -113,6 +127,8 @@ export interface LibraryHost {
 	readNotebookId?(file: TFile): Promise<string | null>;
 	/** Roadmap 27: opens the library check (unreadable notebooks, unused files). */
 	checkLibrary?(): void;
+	/** 0.15 (128): the Storage manager. */
+	openStorage?(): void;
 	loadIndex(): Promise<unknown>;
 	saveIndex(data: unknown): Promise<void>;
 	/** 0.12: runs a plugin-level action of the registry (ui/actions.ts) by id; false when it has no handler. */
@@ -137,6 +153,12 @@ export interface LibraryHost {
 	loadSeenState?(): unknown;
 	saveSeenState?(state: unknown): void;
 	openNotebooks?(): string[];
+	/** 0.15: the Board view's statuses, one file per device in `_meta` (library/board-state.ts). */
+	board?: BoardStateStore;
+	/** 0.15: the Board's columns (the `boardColumns` setting). */
+	boardColumns?(): BoardColumn[];
+	/** 0.15: opens the dialog that edits the Board's columns. */
+	editBoardColumns?(): void;
 }
 
 /**
@@ -223,7 +245,16 @@ export class LibraryView extends ItemView {
 	/** Search the whole library (true) or only the current view (false); null = automatic. */
 	private searchWide: boolean | null = null;
 	/** 0.12: notebook grid as cards or as a list. */
-	private layoutMode: "grid" | "list" = "grid";
+	private layoutMode: "grid" | "list" | "board" | "calendar" = "grid";
+	/** 0.15: the cards layout (grid or list) to come back to from the Board or the Calendar. */
+	private cardsLayout: "grid" | "list" = "grid";
+	/** 0.15 views: the merged board statuses (library/board-state.ts), the store they came from, and the column shown on a phone. */
+	private board: BoardMap = new Map();
+	private boardSub: { store: BoardStateStore; off: () => void } | null = null;
+	private boardActive = "";
+	/** 0.15 views: the day the Calendar shows (any day of its month or week) and the day selected; null = not chosen yet. */
+	private calCursor: string | null = null;
+	private calSelected: string | null = null;
 	/** 0.13: the range of Home's pages chart, in days. */
 	private statDays: ChartDays = 7;
 	/** 0.13: Home's Recent notes are filtered to this subject (its folder path); null = all. */
@@ -276,6 +307,7 @@ export class LibraryView extends ItemView {
 	/** The notebooks of the grid as shown (paths), per group, so a move up / down / drop knows its neighbours. */
 	private arrangement: { pinned: string[]; rest: string[] } = { pinned: [], rest: [] };
 	private backfilling = false;
+	private boardPruned = false;
 
 	/** 0.13: page thumbnails of Home (Continue card, Recent notes). */
 	private readonly pageThumbs = new PageThumbs({
@@ -319,7 +351,10 @@ export class LibraryView extends ItemView {
 			const s = state as { scope?: unknown; sort?: unknown; layout?: unknown; statDays?: unknown };
 			this.place = parsePlace(s.scope, this.startPlace);
 			if (SORTS.includes(s.sort as LibrarySort)) this.sort = s.sort as LibrarySort;
-			if (s.layout === "grid" || s.layout === "list") this.layoutMode = s.layout;
+			if (s.layout === "grid" || s.layout === "list") {
+				this.layoutMode = s.layout;
+				this.cardsLayout = s.layout;
+			} else if (s.layout === "board" || s.layout === "calendar") this.layoutMode = s.layout;
 			if (CHART_DAYS.includes(s.statDays as ChartDays)) this.statDays = s.statDays as ChartDays;
 			if (this.built) this.requestRender();
 		}
@@ -387,6 +422,8 @@ export class LibraryView extends ItemView {
 		// wave 0.12: a folder's colour, icon or art changed (creation dialog, another device): redraw the cards.
 		const offMeta = this.host.folderMeta?.onFolderMetaChange(() => this.requestRender());
 		if (offMeta) this.register(offMeta);
+		// 0.15 views: the Board's columns were edited (its dialog, the settings).
+		this.register(onBoardColumnsChanged(() => this.requestRender()));
 
 		// The bell's first look through the notebooks waits for the library's own reading and for a pause in writing.
 		void this.reconcile(true).then(() => writing.idle()).then(() => {
@@ -397,6 +434,8 @@ export class LibraryView extends ItemView {
 	async onClose(): Promise<void> {
 		this.closed = true;
 		this.bell?.dispose();
+		this.boardSub?.off();
+		this.boardSub = null;
 		window.clearTimeout(this.saveTimer);
 		window.clearTimeout(this.reconcileTimer);
 		window.clearTimeout(this.searchTimer);
@@ -516,6 +555,8 @@ export class LibraryView extends ItemView {
 		r.toggleClass("is-rail-compact", this.mode === "medium" || (this.mode === "wide" && this.railFolded));
 		r.toggleClass("is-rail-open", this.mode === "phone" && this.railOpen);
 		r.toggleClass("is-list", this.layoutMode === "list");
+		r.toggleClass("is-board", this.layoutMode === "board");
+		r.toggleClass("is-calendar", this.layoutMode === "calendar");
 	}
 
 	private setRailOpen(open: boolean): void {
@@ -537,9 +578,14 @@ export class LibraryView extends ItemView {
 	private notArchived = (e: LibraryEntry): boolean => !this.isArchived(e);
 
 	private onStateFile(f: TAbstractFile): void {
-		if (!(f instanceof TFile) || !this.host.state?.watches(f.path)) return;
+		if (!(f instanceof TFile)) return;
+		const board = this.host.board?.watches(f.path) === true;
+		if (!board && !this.host.state?.watches(f.path)) return;
 		window.clearTimeout(this.stateTimer);
 		this.stateTimer = window.setTimeout(() => {
+			// 0.15: another device's board file is read again (the store tells this view when the statuses changed).
+			if (board) void this.host.board?.load().catch((e) => console.error("[notebook] board statuses unreadable", e));
+			if (board) return;
 			void this.host.state?.load().then((state) => {
 				if (this.closed) return;
 				this.state = state;
@@ -595,8 +641,75 @@ export class LibraryView extends ItemView {
 				}
 			}
 			if (n > 0) this.afterIndexChange();
+			void this.pruneBoardStatuses();
 		} finally {
 			this.backfilling = false;
+		}
+	}
+
+	/**
+	 * Every state key of the library, or null while that cannot be known for sure: only when no scan is running, every
+	 * notebook file of the notebooks folder (hidden ones included) has an entry, and each entry was read and has its id.
+	 */
+	private liveBoardKeys(): Set<string> | null {
+		if (this.reconciling) return null;
+		const files = this.notebookFiles();
+		const entries = this.index.all();
+		if (files.length !== entries.length || entries.some((e) => e.id === undefined || e.mtime < 0)) return null;
+		const known = new Set(entries.map((e) => e.path));
+		if (files.some((f) => !known.has(f.path))) return null;
+		const root = this.root();
+		const folder = root === "" ? this.app.vault.getRoot() : this.app.vault.getFolderByPath(root);
+		let hidden = false;
+		if (folder) Vault.recurseChildren(folder, (f) => {
+			if (f instanceof TFile && isNotebookFile(f) && !isReservedPath(f.path, root) && this.host.isHiddenPath?.(f.path)) hidden = true;
+		});
+		if (hidden) return null;
+		const keys = new Set<string>();
+		for (const e of entries) {
+			keys.add(this.index.stateKey(e));
+			keys.add(`id:${e.id}`);
+			keys.add(`path:${e.path}`);
+		}
+		return keys;
+	}
+
+	/** The state keys of the notebooks in the library trash (`any`: there are some), or null when one cannot be read: then nothing is pruned. */
+	private async trashedBoardKeys(): Promise<{ keys: Set<string>; any: boolean } | null> {
+		const root = this.root();
+		const folder = this.app.vault.getFolderByPath(root === "" ? "_trash" : `${root}/_trash`);
+		const keys = new Set<string>();
+		let any = false;
+		if (!folder) return { keys, any };
+		const files: TFile[] = [];
+		Vault.recurseChildren(folder, (f) => {
+			if (f instanceof TFile && isNotebookFile(f)) files.push(f);
+		});
+		for (const f of files) {
+			any = true;
+			try {
+				const id = quickDocId(readNotebookText(f.extension, await this.app.vault.cachedRead(f)));
+				if (id === null) return null;
+				keys.add(`id:${id}`);
+			} catch {
+				return null;
+			}
+		}
+		return { keys, any };
+	}
+
+	/** Once per view, when the library is complete: the board file of this device loses the statuses of notebooks that are gone. */
+	private async pruneBoardStatuses(): Promise<void> {
+		const store = this.host.board;
+		if (this.closed || this.boardPruned || !store) return;
+		const live = this.liveBoardKeys();
+		if (!live) return;
+		const trashed = await this.trashedBoardKeys();
+		this.boardPruned = true;
+		try {
+			await store.prune(live, trashed ? { trashed: trashed.keys, trashHoldsNotebooks: trashed.any } : {});
+		} catch (e) {
+			console.error("[notebook] could not tidy the board statuses", e);
 		}
 	}
 
@@ -662,7 +775,7 @@ export class LibraryView extends ItemView {
 		if (!folder) return [];
 		const out: TFile[] = [];
 		Vault.recurseChildren(folder, (f) => {
-			if (f instanceof TFile && isNotebookFile(f) && !isReservedPath(f.path, root)) out.push(f);
+			if (f instanceof TFile && isNotebookFile(f) && !isReservedPath(f.path, root) && !this.host.isHiddenPath?.(f.path)) out.push(f);
 		});
 		return out;
 	}
@@ -673,7 +786,7 @@ export class LibraryView extends ItemView {
 		if (!folder) return [];
 		const out: string[] = [];
 		Vault.recurseChildren(folder, (f) => {
-			if (f instanceof TFolder && !f.isRoot() && !isReservedPath(f.path, root)) out.push(f.path);
+			if (f instanceof TFolder && !f.isRoot() && !isReservedPath(f.path, root) && !this.host.isHiddenPath?.(f.path)) out.push(f.path);
 		});
 		return out;
 	}
@@ -684,7 +797,7 @@ export class LibraryView extends ItemView {
 
 	private inLibrary(path: string): boolean {
 		const root = this.root();
-		return isInside(path, root) && path !== root && !isReservedPath(path, root);
+		return isInside(path, root) && path !== root && !isReservedPath(path, root) && !this.host.isHiddenPath?.(path);
 	}
 
 	private onVaultChange(f: TAbstractFile, delay = STRUCTURE_DELAY_MS): void {
@@ -1302,6 +1415,13 @@ export class LibraryView extends ItemView {
 				check();
 			} });
 		}
+		const storage = this.host.openStorage?.bind(this.host); // 0.15 (128)
+		if (storage) {
+			railItem(bottom, { key: "nav:storage", icon: "database", label: t("storage.nav"), onClick: () => {
+				this.setRailOpen(false);
+				storage();
+			} });
+		}
 	}
 
 	/**
@@ -1391,13 +1511,22 @@ export class LibraryView extends ItemView {
 		if (p !== "home") {
 			iconButton(tools, "filter", t("lib.filter"), (b) => this.filterMenu(b), isTagPlace(p) ? "is-active" : "");
 			iconButton(tools, "arrow-up-down", t("library.sort.label"), (b) => this.sortMenu(b));
-			const list = this.layoutMode === "list";
-			const view = iconButton(tools, list ? "list" : "layout-grid", list ? t("lib.view.grid") : t("lib.view.list"), () => {
-				this.layoutMode = list ? "grid" : "list";
-				this.app.workspace.requestSaveLayout();
-				this.render();
-			}, "is-active");
-			view.setAttribute("aria-pressed", String(list));
+			const cards = this.layoutMode === "grid" || this.layoutMode === "list";
+			if (cards) {
+				const list = this.layoutMode === "list";
+				const view = iconButton(tools, list ? "list" : "layout-grid", list ? t("lib.view.grid") : t("lib.view.list"), () => {
+					this.layoutMode = list ? "grid" : "list";
+					this.cardsLayout = this.layoutMode;
+					this.app.workspace.requestSaveLayout();
+					this.render();
+				}, "is-active");
+				view.setAttribute("aria-pressed", String(list));
+			}
+			// 0.15 views: the Board (statuses) and the Calendar (what was written on each day) are other ways to see the library.
+			if (this.viewsAvailable()) {
+				const views = iconButton(tools, this.layoutMode === "calendar" ? "calendar" : "kanban", t("views.menu"), (b) => this.viewsMenu(b), cards ? "nb-views-btn" : "nb-views-btn is-active");
+				views.setAttribute("aria-haspopup", "menu");
+			}
 		}
 		// 0.12.2: the primary + New, on Home and in the library alike (DESIGN.md §5: creation is always reachable).
 		newButton(tools, { label: t("lib.new"), tip: t("lib.new.tip"), key: "header:new", onOpen: (b) => this.newMenu(b) });
@@ -1521,6 +1650,12 @@ export class LibraryView extends ItemView {
 		}
 		this.renderChips(el);
 		const p = this.place;
+		if (this.viewsActive()) {
+			if (this.index.size === 0) emptyState(el, this.firstSteps());
+			else if (this.layoutMode === "board") this.renderBoardPlace(el);
+			else this.renderCalendarPlace(el);
+			return;
+		}
 		if (p === "all") {
 			// 0.12.2: an empty vault teaches the first step; the subject section keeps its "Create a folder" tile.
 			if (this.index.size === 0) {
@@ -1911,6 +2046,7 @@ export class LibraryView extends ItemView {
 			{ icon: "file-up", ...compact(paletteColor("Pink")), title: t("home.quick.importPdf"), description: t("home.quick.importPdf.desc"), key: "quick:import-pdf", onRun: () => this.host.importPdf(root) },
 		];
 		if (this.host.scanToNotebook) quick.push({ icon: "scan", ...compact(paletteColor("Teal")), title: t("home.quick.scan"), description: t("home.quick.scan.desc"), key: "quick:scan", onRun: () => this.host.scanToNotebook?.(root) });
+		if (this.host.todaysPage) quick.push({ icon: "calendar-plus", ...compact(paletteColor("Green")), title: t("home.quick.today"), description: t("home.quick.today.desc"), key: "quick:todays-page", onRun: () => this.host.todaysPage?.() });
 		const fit = this.mode === "wide" ? DASH_SUBJECTS_WIDE : this.mode === "medium" ? DASH_SUBJECTS_MEDIUM : DASH_SUBJECTS_PHONE;
 		renderHome(el, {
 			dynamic: DYNAMIC_IDS.filter((id) => this.dynamicSections()[id].length > 0).map((id) => ({
@@ -2034,6 +2170,181 @@ export class LibraryView extends ItemView {
 			this.gridLimit += GRID_PAGE;
 			this.render();
 		});
+	}
+
+	// ---------------------------------------------------------------- 0.15 views: Board and Calendar
+
+	/** The Board and the Calendar list notebooks: not on the subjects and tags pages, nor in the archive. */
+	private viewsAvailable(): boolean {
+		const p = this.place;
+		return p !== "home" && p !== "subjects" && p !== "tags" && p !== "archived";
+	}
+
+	private viewsActive(): boolean {
+		return (this.layoutMode === "board" || this.layoutMode === "calendar") && this.viewsAvailable();
+	}
+
+	private viewsMenu(anchor: HTMLElement): void {
+		const menu = new Menu();
+		menu.addItem((i) => i.setTitle(t("views.cards")).setIcon(this.cardsLayout === "list" ? "list" : "layout-grid").setChecked(this.layoutMode === "grid" || this.layoutMode === "list").onClick(() => this.setLayout(this.cardsLayout)));
+		menu.addItem((i) => i.setTitle(t("views.board")).setIcon("kanban").setChecked(this.layoutMode === "board").onClick(() => this.setLayout("board")));
+		menu.addItem((i) => i.setTitle(t("views.calendar")).setIcon("calendar").setChecked(this.layoutMode === "calendar").onClick(() => this.setLayout("calendar")));
+		this.showMenu(menu, anchor);
+	}
+
+	private setLayout(mode: "grid" | "list" | "board" | "calendar"): void {
+		this.layoutMode = mode;
+		if (mode === "grid" || mode === "list") this.cardsLayout = mode;
+		this.app.workspace.requestSaveLayout();
+		this.render();
+	}
+
+	/** The board statuses store, read once for this view; its changes (here or another device) redraw the board. */
+	private boardStore(): BoardStateStore | undefined {
+		const store = this.host.board;
+		if (store && store !== this.boardSub?.store) {
+			this.boardSub?.off();
+			this.boardSub = { store, off: store.onChange(() => {
+				this.board = store.snapshot();
+				this.requestRender();
+			}) };
+			this.board = store.snapshot();
+			void store.load().catch((e) => console.error("[notebook] board statuses unreadable", e));
+		}
+		return store;
+	}
+
+	private boardColumns(): BoardColumn[] {
+		const columns = this.host.boardColumns?.() ?? [];
+		return columns.length > 0 ? columns : [{ id: "todo", name: "", color: "#6366F1" }];
+	}
+
+	private statusOfEntry = (e: LibraryEntry): string | null => boardStatusOf(this.board, this.keyOf(e), e.path);
+
+	/** The notebooks of the current place, in the order of the sort. */
+	private placeEntries(): LibraryEntry[] {
+		const { scope, filter } = this.placeQuery(true);
+		const found = this.index.query({ scope, sort: this.sort, filter });
+		return arrangeEntries(found, this.keyOf, this.state, { manual: this.sort === "manual", pinnedFirst: false }).rest;
+	}
+
+	private renderBoardPlace(el: HTMLElement): void {
+		const store = this.boardStore();
+		if (!store) {
+			this.renderGrid(el, this.tree());
+			return;
+		}
+		const columns = this.boardColumns();
+		const entries = this.placeEntries();
+		if (entries.length === 0) {
+			this.renderEmpty(el, false);
+			return;
+		}
+		const groups = groupByStatus(entries, columns, this.statusOfEntry);
+		if (!columns.some((c) => c.id === this.boardActive)) this.boardActive = columns[0]!.id;
+		const now = Date.now();
+		renderBoard(el, {
+			columns,
+			groups,
+			phone: this.mode === "phone",
+			active: this.boardActive,
+			setActive: (id) => {
+				this.boardActive = id;
+				this.render();
+			},
+			label: (col) => columnLabel(col, t),
+			statusOf: this.statusOfEntry,
+			meta: (e) => (e.mtime < 0 || e.pages === 0 ? "" : `${this.plural(e.pages, "library.pages.one", "library.pages.many")} · ${relativeTime(e.modified, now, getLanguage())}`),
+			onOpen: (e) => this.openEntry(e.path),
+			onMenu: (e, x, y) => this.notebookMenu(e.path, x, y),
+			onMoveMenu: (e, anchor) => this.statusMenu(e.path, anchor, 0, 0),
+			onMove: (e, id) => void this.moveToColumn(e.path, id),
+			onDropFolder: (e, folder) => {
+				const file = this.app.vault.getFileByPath(e.path);
+				if (file) void this.moveFile(file, folder);
+			},
+			onEditColumns: this.host.editBoardColumns ? () => this.host.editBoardColumns?.() : undefined,
+		});
+	}
+
+	/** The menu that moves a notebook to a column ("Move to…"): the way to change a status without dragging. */
+	private statusMenu(path: string, anchor: HTMLElement | null, x: number, y: number): void {
+		const entry = this.index.get(path);
+		if (!entry || !this.boardStore()) return;
+		const columns = this.boardColumns();
+		const current = columns[Math.max(0, columns.findIndex((c) => c.id === this.statusOfEntry(entry)))]?.id;
+		const menu = new Menu();
+		for (const col of columns) {
+			menu.addItem((i) => i.setTitle(columnLabel(col, t)).setIcon("circle").setChecked(col.id === current).onClick(() => void this.moveToColumn(path, col.id)));
+		}
+		if (anchor) this.showMenu(menu, anchor);
+		else menu.showAtPosition({ x, y });
+	}
+
+	/** Moves a notebook to a column: written to this device's board file; the board redraws when the store tells it so. */
+	private async moveToColumn(path: string, columnId: string): Promise<void> {
+		const store = this.boardStore();
+		if (!store) return;
+		await this.ensureIds([path]);
+		const e = this.index.get(path);
+		if (!e) return;
+		try {
+			await store.setStatus({ key: this.keyOf(e), status: columnId, path: e.path });
+			const col = this.boardColumns().find((c) => c.id === columnId);
+			showNotice(t("board.notice.moved", { name: e.name, column: col ? columnLabel(col, t) : columnId }));
+			this.requestRender();
+		} catch (err) {
+			if (err instanceof BoardBlockedError) showNotice(t("board.notice.blocked", { error: err.message }));
+			else this.fail(err);
+		}
+	}
+
+	private renderCalendarPlace(el: HTMLElement): void {
+		const entries = this.placeEntries();
+		const today = dayKeyOf(Date.now());
+		const cursor = this.calCursor ?? today;
+		const data = aggregateCalendar(entries.map((e) => ({ path: e.path, name: e.name, created: e.created, modified: e.modified })), this.host.activity?.().records ?? []);
+		const edits = this.host.recentEdits?.() ?? [];
+		renderCalendar(el, {
+			phone: this.mode === "phone",
+			cursor,
+			selected: this.calSelected ?? today,
+			today,
+			data,
+			weekStart: weekStartFor(typeof navigator === "undefined" ? "en-GB" : navigator.language),
+			locale: getLanguage(),
+			colorOf: (path) => this.index.get(path)?.cover ?? "#6D8BFF",
+			pageNumber: (path, key) => edits.find((x) => x.path === path && x.page.startsWith(key))?.num ?? null,
+			setCursor: (day) => {
+				this.calCursor = day;
+				this.render();
+			},
+			select: (day) => {
+				this.calSelected = day;
+				if (this.mode === "phone") this.calCursor = day;
+				this.render();
+			},
+			open: (item, key) => this.openCalendarItem(item, key),
+		});
+	}
+
+	/** Opens a notebook of the Calendar at the page written that day: from the recent edits when known, else by reading that one notebook. */
+	private openCalendarItem(item: DayItem, pageKey: string | null): void {
+		if (!pageKey) {
+			this.openEntry(item.path);
+			return;
+		}
+		const hit = (this.host.recentEdits?.() ?? []).find((x) => x.path === item.path && x.page.startsWith(pageKey));
+		if (hit) {
+			this.openEntry(item.path, hit.num - 1);
+			return;
+		}
+		const file = this.app.vault.getFileByPath(item.path);
+		if (!file) return;
+		void this.host.readNotebook(file).then((doc) => {
+			const at = doc ? doc.pages.findIndex((p) => p.id.startsWith(pageKey)) : -1;
+			this.openEntry(item.path, at >= 0 ? at : undefined);
+		}).catch(() => this.openEntry(item.path));
 	}
 
 	// ---------------------------------------------------------------- notebook grid
@@ -2367,6 +2678,7 @@ export class LibraryView extends ItemView {
 		menu.addItem((i) =>
 			i.setTitle(entry.favorite ? t("library.favorite.remove") : t("library.favorite.add")).setIcon("star").onClick(() => void this.toggleFavorite(path)),
 		);
+		if (this.boardStore()) menu.addItem((i) => i.setTitle(t("board.moveTo")).setIcon("kanban").onClick(() => this.statusMenu(path, anchor ?? null, x, y)));
 		// Roadmap 54: pin, manual order (also on touch, where dragging is a long press) and the archive.
 		const archived = this.isArchived(entry);
 		if (!archived) menu.addItem((i) => i.setTitle(this.isPinned(entry) ? t("library.menu.unpin") : t("library.menu.pin")).setIcon(this.isPinned(entry) ? "pin-off" : "pin").onClick(() => void this.togglePinned(path)));
@@ -2381,6 +2693,8 @@ export class LibraryView extends ItemView {
 		menu.addItem((i) => i.setTitle(t("library.menu.rename")).setIcon("pencil").onClick(() => this.askRename(file)));
 		menu.addItem((i) => i.setTitle(t("library.menu.move")).setIcon("folder-input").onClick(() => this.askMove(file)));
 		menu.addItem((i) => i.setTitle(t("library.menu.duplicate")).setIcon("copy").onClick(() => void this.duplicate(file)));
+		const saveTemplate = this.host.saveAsTemplate?.bind(this.host);
+		if (saveTemplate) menu.addItem((i) => i.setTitle(t("library.menu.saveTemplate")).setIcon("book-copy").onClick(() => void saveTemplate(file).catch((e) => this.fail(e))));
 		menu.addItem((i) => i.setTitle(t("library.menu.tags")).setIcon("tag").onClick(() => this.askTags(path)));
 		menu.addItem((i) => i.setTitle(t("library.menu.cover")).setIcon("palette").onClick(() => this.askCover(path)));
 		menu.addSeparator();

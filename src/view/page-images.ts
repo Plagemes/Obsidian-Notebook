@@ -6,6 +6,7 @@
 import { layerFlags, type ExportLayers } from "../ink/export-layers";
 import type { BoxLabel } from "../ink/marker-render";
 import { BitmapCache, MAX_CACHED_BITMAP_BYTES, MAX_CACHED_BITMAPS } from "../ink/bitmap-cache";
+import type { HeaderLayout } from "../ink/page-header";
 import { drawPageRaster } from "../ink/page-raster";
 import { elementAssetId } from "../model/excerpts";
 import { renderSize } from "../model/export-markdown";
@@ -19,6 +20,8 @@ export interface PageImageOptions {
 	equationNumbers?: ReadonlyMap<string, number>;
 	/** wave 0.9 (381): ink only, background only or both (default). What is left out is not loaded either. */
 	layers?: ExportLayers;
+	/** 0.15 (#75): the automatic page header or footer of a page (null: none). */
+	header?: (page: Page) => HeaderLayout | null;
 }
 
 export interface PageImage {
@@ -101,6 +104,7 @@ export class PageImageRenderer {
 				background, images, hiddenInk: this.options.hiddenInk?.(page) ?? false,
 				...(this.options.boxLabel ? { boxLabel: this.options.boxLabel } : {}),
 				...(this.options.layers ? { layers: this.options.layers } : {}),
+				...(this.options.header ? { header: this.options.header(page) } : {}),
 				...(this.options.equationNumbers ? { equationNumbers: this.options.equationNumbers } : {}),
 			});
 			if (background && "close" in background) (background as ImageBitmap).close();

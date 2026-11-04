@@ -1,7 +1,8 @@
 import { cloneMeta, findPage } from "./document";
 import { freezeElement } from "./serialize";
 import { marginsAfterResize, marginsOf, normalizeMargins, translateElement, translateStroke } from "./margins";
-import type { Asset, NotebookDocument, NotebookMeta, Page, PageBackground, PageElement, PageMargins, Paper, Stroke } from "./types";
+import { shiftPivots } from "./states";
+import type { Asset, NotebookDocument, NotebookMeta, Page, PageBackground, PageElement, PageMargins, PageStates, Paper, Stroke } from "./types";
 
 /** A command knows how to apply and revert itself on a document: no snapshots. */
 export interface Command {
@@ -242,6 +243,8 @@ export class SetPageMargins implements Command {
 	private readonly moved = new Map<Stroke | PageElement, Stroke | PageElement>();
 	private readonly original = new Map<Stroke | PageElement, Stroke | PageElement>();
 	private previous: { width: number; height: number; margins: PageMargins | undefined } | null = null;
+	/** v13: the page's states table before and after the pivots moved with the ink (the same objects are put back by undo). */
+	private states: { before: PageStates | undefined; after: PageStates | undefined } | null = null;
 	readonly before: PageMargins | undefined;
 	readonly after: PageMargins | undefined;
 
@@ -261,6 +264,13 @@ export class SetPageMargins implements Command {
 		if (this.after) page.margins = { ...this.after };
 		else delete page.margins;
 		if (dx === 0) return;
+		// v13: the parts' pivots are page coordinates like the ink: they move with it, or a rotated or scaled part would turn about
+		// a point that is no longer where its strokes are.
+		if (page.states) {
+			const moved = shiftPivots(page.states, dx);
+			this.states = { before: page.states, after: moved };
+			if (moved) page.states = moved;
+		}
 		const move = <T extends Stroke | PageElement>(item: T, make: (x: T) => T): T => {
 			let m = this.moved.get(item) as T | undefined;
 			if (!m) {
@@ -285,6 +295,18 @@ export class SetPageMargins implements Command {
 		page.height = prev.height;
 		if (prev.margins) page.margins = prev.margins;
 		else delete page.margins;
+		const kept = this.states;
+		this.states = null;
+		if (kept) {
+			// The table this apply left, put back as it was; one another command changed since (never in a stack) is moved back instead.
+			if (page.states === kept.after) {
+				if (kept.before) page.states = kept.before;
+				else delete page.states;
+			} else if (page.states) {
+				const back = shiftPivots(page.states, -Math.round((marginsOf({ margins: this.after }).left - marginsOf({ margins: this.before }).left) * 100) / 100);
+				if (back) page.states = back;
+			}
+		}
 		const strokes = page.strokes;
 		for (let i = 0; i < strokes.length; i++) {
 			const o = this.original.get(strokes[i]!);

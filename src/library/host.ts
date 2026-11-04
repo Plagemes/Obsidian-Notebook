@@ -4,7 +4,7 @@ import { createDocument, createId } from "../model/document";
 import { backgroundRect } from "../model/margins";
 import { parse, serializeChecked } from "../model/serialize";
 import { PAGE_SIZES, PAPER_SPACING, type Asset, type NotebookDocument, type NotebookMeta, type Page } from "../model/types";
-import { CreateDialog, type CreateTab, type FolderSpec } from "../view/create-dialog";
+import { CreateDialog, type ChosenTemplate, type CreateTab, type FolderSpec } from "../view/create-dialog";
 import { applyNotebookMeta, joinPath, notebookDocument, type NotebookSpec } from "../view/create-logic";
 import type { PickedFile } from "../view/pick";
 import { FolderMetaStore } from "./folder-meta-store";
@@ -13,12 +13,15 @@ import { scanFromCamera } from "../scan/scan-modal";
 import { scannedPage } from "../scan/pages";
 import { PdfStore } from "../pdf/pdf-store";
 import type { PdfLib } from "../pdf/pdfjs-types";
-import { backupFolder, type NotebookSettings } from "../settings";
+import { backupFolder, readSettings, type NotebookSettings } from "../settings";
 import { readNotebookText, writeNotebookText } from "../storage/format";
 import { createNotebook } from "../storage/notebooks";
 import { existsInsensitive } from "../storage/names";
 import { LibraryTrash } from "../storage/trash";
+import { expandPlaceholders } from "../model/notebook-template";
 import { documentFromTemplate } from "../model/templates";
+import { isWithin } from "../storage/trash-paths";
+import { notebookTemplatesFolder, openNotebookTemplatePicker, saveNotebookAsTemplate } from "../view/notebook-templates";
 import { openTemplateGallery } from "../view/page-tools";
 import { headerField } from "../storage/integrity";
 import { journalFolder, sidecarDeviceId, VaultDocumentIO, vaultDeviceFileAdapter } from "../storage/vault-io";
@@ -31,9 +34,14 @@ import { importPdfAsNotebook } from "./import-pdf";
 import { hint } from "../ui/hints";
 import { createLectureFromSlides } from "./lecture-pack";
 import { openLooseSheet, openNewQuickPage } from "./loose-sheet";
+import { openTodaysPage } from "./daily";
 import type { LectureTarget } from "./home-stats";
 import { openLibraryCheck } from "./library-check-modal";
+import { openStorageManager } from "./storage-dialog";
 import { LibraryStateStore } from "./library-state-store";
+import { BoardStateStore } from "./board-state-store";
+import type { BoardColumn } from "./board-logic";
+import { BoardColumnsModal } from "../view/board-columns-modal";
 import type { LibraryHost } from "./library-view";
 import type { ThumbnailOptions } from "./thumbnail";
 import { showNotice } from "../view/notice";
@@ -81,10 +89,13 @@ export class NotebookLibraryHost implements LibraryHost {
 	 * (library/folder-meta.ts). Read API for the cards: `folderMeta.getFolderMeta(path)` and `folderMeta.onFolderMetaChange(fn)`.
 	 */
 	readonly folderMeta: FolderMetaStore;
+	/** 0.15: the Board view's statuses, one file per device in `_meta` (library/board-state.ts). */
+	readonly board: BoardStateStore;
 
 	constructor(private readonly plugin: HostPlugin) {
 		this.state = new LibraryStateStore(vaultDeviceFileAdapter(plugin.app), () => plugin.settings.folder, sidecarDeviceId(plugin.app));
 		this.folderMeta = new FolderMetaStore(vaultDeviceFileAdapter(plugin.app), () => plugin.settings.folder, sidecarDeviceId(plugin.app));
+		this.board = new BoardStateStore(vaultDeviceFileAdapter(plugin.app), () => plugin.settings.folder, sidecarDeviceId(plugin.app));
 		this.trash = new LibraryTrash({
 			app: plugin.app,
 			root: () => plugin.settings.folder,
@@ -103,6 +114,23 @@ export class NotebookLibraryHost implements LibraryHost {
 			// Thumbnails are small; keep the budget well under the notebook view's.
 			memoryBudgetBytes: (Platform.isMobile ? 32 : 64) * 1024 * 1024,
 		});
+	}
+
+	/** 0.15: the Board's columns (the `boardColumns` setting). */
+	boardColumns(): BoardColumn[] {
+		return this.plugin.settings.boardColumns;
+	}
+
+	/** 0.15: opens the dialog that renames, recolours, adds and removes the Board's columns. */
+	editBoardColumns(): void {
+		new BoardColumnsModal({
+			app: this.app,
+			get: () => this.plugin.settings.boardColumns,
+			set: async (columns) => {
+				this.plugin.settings = readSettings({ ...this.plugin.settings, boardColumns: columns });
+				await this.plugin.saveSettings();
+			},
+		}).open();
 	}
 
 	dispose(): void {
@@ -144,6 +172,19 @@ export class NotebookLibraryHost implements LibraryHost {
 		}
 	}
 
+	/** Roadmap #19: the notebook templates folder is not part of the library, wherever the setting puts it. */
+	isHiddenPath(path: string): boolean {
+		const s = this.plugin.settings;
+		return isWithin(path, notebookTemplatesFolder(s));
+	}
+
+	/** Roadmap #19: "Save as notebook template" for a library card (what an open view holds, else the file). */
+	async saveAsTemplate(file: TFile): Promise<void> {
+		const doc = this.openView(file)?.document ?? (await this.readNotebook(file));
+		if (!doc) return void showNotice(t("nbtemplate.unreadable", { name: file.basename }));
+		saveNotebookAsTemplate(this.app, this.plugin.settings, doc, file.basename);
+	}
+
 	/** The id at the start of the file, without parsing it; the whole parse when the file is laid out differently. */
 	async readNotebookId(file: TFile): Promise<string | null> {
 		try {
@@ -162,6 +203,18 @@ export class NotebookLibraryHost implements LibraryHost {
 			journalFolder: journalFolder(this.app, this.plugin.manifest.id),
 			// What every open notebook holds in memory: a view that cannot be inspected makes the check incomplete (it throws).
 			openRoots: () => this.app.workspace.getLeavesOfType(VIEW_TYPE).flatMap((leaf) => (leaf.view instanceof NotebookView ? leaf.view.libraryCheckRoots() : [])),
+		});
+	}
+
+	/** 0.15 (128): the Storage manager (sizes, unused / duplicate / heavy files, old backups). */
+	openStorage(): void {
+		openStorageManager({
+			app: this.app,
+			settings: () => this.plugin.settings,
+			journalFolder: journalFolder(this.app, this.plugin.manifest.id),
+			openRoots: () => this.app.workspace.getLeavesOfType(VIEW_TYPE).flatMap((leaf) => (leaf.view instanceof NotebookView ? leaf.view.libraryCheckRoots() : [])),
+			trashNotebook: (file) => this.trash.trash(file),
+			openNotebook: (file) => void this.openNotebook(file),
 		});
 	}
 
@@ -213,6 +266,7 @@ export class NotebookLibraryHost implements LibraryHost {
 				return typeof v === "string" ? v : null;
 			},
 			pickTemplate: (done) => void openTemplateGallery(app, this.plugin.settings, (c) => done({ name: c.name, doc: c.doc })),
+			pickNotebookTemplate: (done) => openNotebookTemplatePicker(app, this.plugin.settings, done),
 			pickImage: () => pickFile(app, "image"),
 			createNotebook: (spec, extras) => this.createFromDialog(spec, extras),
 			createFolder: (spec) => this.createFolderFromDialog(spec),
@@ -244,7 +298,7 @@ export class NotebookLibraryHost implements LibraryHost {
 	 * Creates the notebook the dialog describes and opens it: a blank first page of the chosen paper and size (or the
 	 * template's pages), the cover colour, description and cover art. The document is validated before the file exists.
 	 */
-	private async createFromDialog(spec: NotebookSpec, extras: { image?: PickedFile; template?: { name: string; doc: NotebookDocument } }): Promise<boolean> {
+	private async createFromDialog(spec: NotebookSpec, extras: { image?: PickedFile; template?: ChosenTemplate }): Promise<boolean> {
 		try {
 			const s = this.plugin.settings;
 			// Remember the choice for the next notebook (a custom size is not a default).
@@ -252,7 +306,9 @@ export class NotebookLibraryHost implements LibraryHost {
 				this.plugin.settings = { ...s, defaultPageSize: spec.size, defaultLandscape: spec.landscape, defaultPaper: spec.paper };
 				await this.plugin.saveSettings();
 			}
-			const doc = extras.template ? documentFromTemplate(extras.template.doc) : notebookDocument(spec);
+			// Roadmap #19: {{date}} in the title and description is filled in for any template.
+			if (extras.template) spec = { ...spec, name: expandPlaceholders(spec.name), description: expandPlaceholders(spec.description) };
+			const doc = extras.template ? (extras.template.ready ? extras.template.doc : documentFromTemplate(extras.template.doc)) : notebookDocument(spec);
 			if (extras.template) applyNotebookMeta(doc, spec);
 			if (extras.image) {
 				const asset = await storeAsset(this.app, this.root(), extras.image.bytes, extras.image.name, "image");
@@ -366,6 +422,11 @@ export class NotebookLibraryHost implements LibraryHost {
 
 	openLooseSheet(): void {
 		void openLooseSheet(this.plugin, (file) => this.openNotebook(file));
+	}
+
+	/** 0.15 (O12): Home's "Today's page" quick action: a dated page in the daily notebook. */
+	todaysPage(): void {
+		void openTodaysPage(this.plugin, (file) => this.openNotebook(file));
 	}
 
 	/** 0.13 (Home's Quick page card): a new page in Quick notes, created the first time. */

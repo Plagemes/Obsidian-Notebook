@@ -42,6 +42,7 @@ import { analyseSpace, planSpaceChange, spacePreview } from "../ink/space";
 import { heavyReasons, pageLoad, planPageSplit } from "../ink/heavy-page";
 import { apply, IDENTITY, invert, isIdentity, multiply, rotateAbout, scaleAbout, translate, type Matrix } from "../ink/transform";
 import { clampToPage, fitWidth, pan, PAGE_MARGIN, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
+import { drawHeader, exportHeaderFor, headerLayout, type HeaderLayout, type HeaderNotebook, type HeaderSettings } from "../ink/page-header";
 import { layoutPagesHorizontal, type ScrollMode } from "../ink/page-mode";
 import { capturePosition, positionFromState, restoreViewport, type SavedPosition } from "../ink/view-position";
 import { PageMode } from "./page-mode";
@@ -129,6 +130,8 @@ import { BLANK_THUMBNAIL, ViewResilience, type ResilienceServices, type Resilien
 import { ObjectInk } from "./object-ink";
 import { PenLinks } from "./pen-links";
 import { SelectionActions } from "./selection-actions";
+import { statesAfterCuts } from "../model/states-erase";
+import { StatesTools } from "./states-tools";
 import { SelectionArrange } from "./selection-arrange";
 import { StampPalette, type StampTarget } from "./stamp-palette";
 import { TextEditor, type TextEditSession } from "./text-editor";
@@ -136,6 +139,9 @@ import { MathTools, type MathHost } from "./math-tools";
 import { equationNumbers } from "../model/math-elements";
 import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites";
 import { PenControls, type PenStore } from "./pen-controls";
+import { PenSetControls, setForOpen, type PenSetHost } from "./pen-set-controls";
+import { favouritePatch } from "./favourites";
+import { MAX_FOLDER_ASSIGNMENTS, MAX_NOTEBOOK_ASSIGNMENTS, normaliseAssignments, normalisePenSets, slotsOf, withSetPens, type PenSet } from "./pen-sets";
 import { PdfReading, type ReadingHost } from "./pdf-reading";
 import type { PracticeHooks, PracticeProvider, PracticeViewHost } from "./practice-types";
 import { NotebookTabs } from "./notebook-tabs";
@@ -347,6 +353,8 @@ export class NotebookView extends FileView {
 	private bannerHost!: HTMLElement;
 	private resilience: ViewResilience | null = null;
 	private renderer: Renderer | null = null;
+	private headerRenderer: Renderer | null = null;
+	private headerKey = "";
 	private controller: PointerController | null = null;
 	private resizeObserver: ResizeObserver | null = null;
 	/** 0.14 layout: phone / tablet / desktop, portrait / landscape and short height of this view (classes nb-vp-* on contentEl). */
@@ -391,6 +399,8 @@ export class NotebookView extends FileView {
 		},
 	);
 	private selectionActions: SelectionActions | null = null;
+	/** 0.15 (241): drawings with states: the state strip and the part editor (view/states-tools.ts). */
+	private statesTools: StatesTools | null = null;
 	private arrange: SelectionArrange | null = null;
 	/** Links written with the pen (O8): note links in text boxes, on ink, and the `[[` suggester. */
 	private penLinks: PenLinks | null = null;
@@ -417,6 +427,9 @@ export class NotebookView extends FileView {
 	private fitMode = true;
 	private tools: ToolbarState = { ...DEFAULT_TOOLS };
 	private pens: PenControls | null = null;
+	/** 0.15 pen sets: the switcher in the pen options and the set the strip shows now (null: the favourite pens); not saved. */
+	private penSetUi: PenSetControls | null = null;
+	private activePenSetId: string | null = null;
 	/** Wave 0.6: PDF search, snapping highlighter, hide annotations, dimmed backgrounds (pdf-reading.ts). */
 	private reading: PdfReading | null = null;
 	/** wave 0.9: night mode (367) and the cropped view of PDF pages (376). */
@@ -585,6 +598,8 @@ export class NotebookView extends FileView {
 		});
 		this.mountPenLinks(this.textEditor);
 		this.pens = new PenControls(this.toolbar, this.stage, this.penStore());
+		this.penSetUi = new PenSetControls(this.toolbar.penSetsEl, this.penSetHost());
+		this.pens.onRefresh = () => this.penSetUi?.refresh();
 		this.ui = new ViewUi({
 			app: this.app, root: this.contentEl, body: this.body, toolbar: this.toolbar,
 			context: (pageIndex) => this.uiContext(pageIndex),
@@ -625,6 +640,7 @@ export class NotebookView extends FileView {
 
 		this.renderer = new Renderer(this.stage, { lowLatency: this.host.settings.lowLatencyInk });
 		this.mountMarkers();
+		this.mountStates();
 		this.lectureMode = new LectureModeController({
 			parent: () => this.body,
 			path: () => this.file?.path ?? null,
@@ -701,7 +717,7 @@ export class NotebookView extends FileView {
 			// ui redesign: the dial's redo, favourites, save-as-favourite, ruler and eyedropper hint.
 			canRedo: () => this.history.canRedo(),
 			redo: () => this.runAction("redo"),
-			favourites: () => this.host.settings.favouritePens,
+			favourites: () => this.penStore().favourites(),
 			applyFavourite: (i) => this.runAction(`favourite-${i + 1}`),
 			saveFavourite: (i) => this.pens?.saveCurrentTo(i),
 			toggleRuler: () => this.runAction("toggle-ruler"),
@@ -822,6 +838,7 @@ export class NotebookView extends FileView {
 		this.navTimer = this.thumbTimer = this.snapFlashTimer = this.heavyTimer = null;
 		this.pens?.destroy();
 		this.pens = null;
+		this.penSetUi = null;
 		this.reading?.destroy();
 		this.reading = null;
 		this.display?.destroy();
@@ -830,6 +847,8 @@ export class NotebookView extends FileView {
 		this.practiceHooks = null;
 		this.lectureMode?.destroy();
 		this.lectureMode = null;
+		this.statesTools?.destroy();
+		this.statesTools = null;
 		this.tabs?.destroy();
 		this.tabs = null;
 		this.toolbar?.destroy();
@@ -1147,6 +1166,7 @@ export class NotebookView extends FileView {
 		try {
 			// A large notebook is shown as soon as the page asked for is read; the rest follows (see StagedParse).
 			await session.load({ staged: true, page: this.pendingPage });
+			this.loadPenSetForNotebook(file);
 			hint("notebook-opened");
 		} catch (e) {
 			this.showError((e as Error).message);
@@ -1155,6 +1175,7 @@ export class NotebookView extends FileView {
 
 	async onUnloadFile(file: TFile): Promise<void> {
 		await this.closeSession();
+		this.activePenSetId = null;
 		// wave 0.10 (51): read-only mode belongs to the notebook being read; the next one opens editable.
 		if (this.userReadOnly) this.setReadOnlyMode(false, false);
 		this.syncSafety?.closed();
@@ -1230,6 +1251,7 @@ export class NotebookView extends FileView {
 		}
 		if (this.renderer && !this.active) this.renderer.setLowLatency(settings.lowLatencyInk && fast);
 		this.setScrollMode(settings.scrollMode);
+		this.applyPageHeader(settings);
 		this.perfEl?.toggleClass("notebook-hidden", !settings.perfOverlay);
 		if (this.renderer) this.renderer.onFrame = settings.perfOverlay ? (t) => this.onFrame(t) : null;
 		this.reading?.settingsChanged();
@@ -1472,9 +1494,16 @@ export class NotebookView extends FileView {
 		const s = (): NotebookSettings => this.host.settings;
 		const save = (): void => void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
 		return {
-			favourites: () => s().favouritePens,
+			// 0.15 pen sets: while a set is active the strip shows it and a saved slot is written into that set; the
+			// user's own favourite pens are only touched when no set is active.
+			favourites: () => {
+				const set = this.activePenSet();
+				return set ? slotsOf(set, s().favouritePens) : s().favouritePens;
+			},
 			saveFavourites: (favs: FavouritePen[]) => {
-				s().favouritePens = favs;
+				const set = this.activePenSet();
+				if (set) s().penSets = withSetPens(s().penSets, set.id, favs);
+				else s().favouritePens = favs;
 				save();
 			},
 			penOnly: () => !s().fingerDrawing,
@@ -1489,6 +1518,48 @@ export class NotebookView extends FileView {
 				save();
 			},
 		};
+	}
+
+	// --- pen sets (0.15) ---
+
+	private activePenSet(): PenSet | null {
+		const id = this.activePenSetId;
+		return id ? this.host.settings.penSets.find((x) => x.id === id) ?? null : null;
+	}
+
+	private penSetHost(): PenSetHost {
+		const s = (): NotebookSettings => this.host.settings;
+		return {
+			app: this.app,
+			data: () => ({ sets: s().penSets, folders: s().penSetFolders, notebooks: s().penSetNotebooks }),
+			update: (next) => {
+				s().penSets = normalisePenSets(next.sets);
+				s().penSetFolders = normaliseAssignments(next.folders, MAX_FOLDER_ASSIGNMENTS);
+				s().penSetNotebooks = normaliseAssignments(next.notebooks, MAX_NOTEBOOK_ASSIGNMENTS);
+				if (this.activePenSetId && !this.activePenSet()) this.activePenSetId = null; // the set was deleted
+				this.pens?.refresh();
+				void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
+			},
+			activeId: () => this.activePenSetId,
+			choose: (id) => {
+				this.activePenSetId = id;
+				this.pens?.refresh();
+			},
+			notebook: () => (this.file ? { id: this.session?.doc?.id ?? null, path: this.file.path } : null),
+			strip: () => this.penStore().favourites().map((f) => ({ ...f })),
+			editable: () => this.editable(),
+		};
+	}
+
+	/** A notebook was opened: use the set of the notebook, else of its nearest folder, else the favourite pens. */
+	private loadPenSetForNotebook(file: TFile): void {
+		const s = this.host.settings;
+		const set = setForOpen({ sets: s.penSets, folders: s.penSetFolders, notebooks: s.penSetNotebooks }, this.session?.doc?.id ?? null, file.path);
+		this.activePenSetId = set?.id ?? null;
+		// The first pen of the set is taken only when a pen or the highlighter is in use (an eraser or lasso stays).
+		const first = set ? slotsOf(set, s.favouritePens)[0] : undefined;
+		if (first && (this.tools.tool === "pen" || this.tools.tool === "highlighter")) this.toolbar.update(favouritePatch(first) as Partial<ToolbarState>);
+		this.pens?.refresh();
 	}
 
 	/** Switches between continuous scrolling and one page at a time, staying on the page in view. */
@@ -1621,7 +1692,7 @@ export class NotebookView extends FileView {
 
 	async exportNotebookPdf(): Promise<void> {
 		const doc = this.session?.doc;
-		if (doc && this.file) await exportPdf(this.app, this.file, doc.pages, "", this.media, this.exportOptions());
+		if (doc && this.file) await exportPdf(this.app, this.file, this.renderPagesOf(doc), "", this.media, this.exportOptions());
 	}
 
 	/** wave 0.9 (381): the export dialog (format, page or notebook, ink and/or background). `pageIndex`: opened from that page's sheet. */
@@ -1638,7 +1709,7 @@ export class NotebookView extends FileView {
 			defaultFolder: siblingFolder(file, "PNG"),
 			canPrint: canPrint(),
 			...(initialFormat ? { initialFormat } : {}),
-			run: (request) => void runExport(this.app, file, doc.pages, request, this.media, this.exportOptions()),
+			run: (request) => void runExport(this.app, file, this.renderPagesOf(doc), request, this.media, this.exportOptions()),
 		}).open();
 	}
 
@@ -1651,7 +1722,8 @@ export class NotebookView extends FileView {
 			app: this.app,
 			pageCount: doc.pages.length,
 			defaultFolder: defaultMarkdownFolder(file),
-			run: (folder, dpi) => void exportMarkdown(this.app, file, doc, this.media, { folder, dpi, ...this.exportOptions() }),
+			// 0.15 (241): like the PDF, PNG and SVG exports, the pages as the states in view show them.
+			run: (folder, dpi) => void exportMarkdown(this.app, file, { ...doc, pages: [...this.renderPagesOf(doc)] }, this.media, { folder, dpi, ...this.exportOptions() }),
 		}).open();
 	}
 
@@ -1665,14 +1737,44 @@ export class NotebookView extends FileView {
 		return this.display;
 	}
 
+	/** 0.15 (#75): what the automatic header or footer needs from this notebook (read when drawn, so a rename or new page shows). */
+	private headerNotebook(): HeaderNotebook {
+		return { title: this.file?.basename ?? "", createdAt: this.session?.doc?.createdAt ?? "", locale: getLanguage() };
+	}
+
+	/** 0.15 (#75): hands the renderer the painter of the page header (null when off). Painted into the static layer only. */
+	private applyPageHeader(s: HeaderSettings): void {
+		const r = this.renderer;
+		if (!r) return;
+		const snap: HeaderSettings = { headerMode: s.headerMode, headerPageNumber: s.headerPageNumber, headerPageTotal: s.headerPageTotal, headerDate: s.headerDate, headerTitle: s.headerTitle, headerAlign: s.headerAlign, headerInExport: s.headerInExport };
+		const key = JSON.stringify(snap);
+		if (r === this.headerRenderer && key === this.headerKey) return;
+		this.headerRenderer = r;
+		this.headerKey = key;
+		r.setPageDecor(snap.headerMode === "off" ? null : (ctx, page, index, night) => {
+			const count = this.session?.doc?.pages.length ?? 0;
+			const h = headerLayout(page, index, count, snap, this.headerNotebook());
+			if (h) drawHeader(ctx, h, night);
+		});
+	}
+
+	/** 0.15 (#75): the header of a page for exports and printing; undefined when it is off or kept out of exports. */
+	private exportHeader(): ((page: Page) => HeaderLayout | null) | undefined {
+		const s = this.host.settings;
+		const doc = this.session?.doc;
+		return doc ? exportHeaderFor(doc.pages, s, this.headerNotebook()) : undefined;
+	}
+
 	/** v8: exports draw hidden ink only where the solutions are shown, and label boxes in the reader's language. */
 	exportOptions(): ExportOptions {
 		const doc = this.session?.doc;
+		const header = this.exportHeader();
 		return {
 			hiddenInk: (page) => this.markers?.isRevealed(page) ?? false, boxLabel: translatedBoxLabel,
 			// v9: equations without a cached outline are typeset first; numbers count over the whole notebook.
 			prepare: (pages) => this.math?.prepareExport(pages) ?? Promise.resolve(),
 			...(doc ? { equationNumbers: equationNumbers(doc.pages) } : {}),
+			...(header ? { header } : {}),
 		};
 	}
 
@@ -1742,13 +1844,47 @@ export class NotebookView extends FileView {
 	}
 
 	/** Markers, boxes and invisible ink of this view (null before the view is open). */
+	get stateTools(): StatesTools | null {
+		return this.statesTools;
+	}
+
+	/** The pages the renderer and the exports draw: with the state each page is shown in (live views of pages that have states). */
+	private renderPagesOf(doc: NotebookDocument): readonly Page[] {
+		return this.statesTools ? this.statesTools.viewPages(doc.pages) : doc.pages;
+	}
+
+	/** The renderer draws the pages again with the states as they are now (a state was switched, no command ran). */
+	private syncRenderPages(): void {
+		const doc = this.shownDoc();
+		this.renderer?.setDocument(doc ? this.renderPagesOf(doc) : null, this.layout);
+	}
+
+	private mountStates(): void {
+		this.statesTools = new StatesTools({
+			app: this.app,
+			parent: () => this.body,
+			doc: () => this.session?.doc ?? null,
+			editable: () => this.editable(),
+			pageIndex: () => this.currentPageIndex(),
+			execute: (cmd) => this.applyCommand(cmd),
+			repaint: () => this.syncRenderPages(),
+			selection: () => (this.selection ? { pageIndex: this.selection.pageIndex, strokes: this.selection.strokes } : null),
+			select: (pageIndex, strokes) => this.selectItems(pageIndex, strokes, []),
+			deselect: () => this.clearSelection(),
+			refreshUi: () => this.refreshUi(),
+		});
+	}
+
 	get markerTools(): MarkerTools | null {
 		return this.markers;
 	}
 
 	/** The strokes of `page` the reader can see (v8: hidden ink only while the solutions are shown). */
 	private inkInView(page: Page): readonly Stroke[] {
-		return visibleStrokes(page.strokes, this.markers?.isRevealed(page) ?? false);
+		const ink = visibleStrokes(page.strokes, this.markers?.isRevealed(page) ?? false);
+		// 0.15 (241): a shown state moved some strokes away from where they were drawn: the ink tools leave them alone.
+		const moved = this.statesTools?.displaced(page);
+		return moved ? ink.filter((s) => !moved.has(s.id)) : ink;
 	}
 
 	/** v10: anchored excerpts of this view (null before the view is open). */
@@ -1876,7 +2012,7 @@ export class NotebookView extends FileView {
 	deleteSelection(): void {
 		const sel = this.selection;
 		const page = sel && this.session?.doc?.pages[sel.pageIndex];
-		if (!sel || !page || !this.editable()) return;
+		if (!sel || !page || !this.editable() || this.statesTools?.ownsSelection(sel)) return;
 		if (sel.others?.length) {
 			this.deleteAcrossPages(sel);
 			return;
@@ -2299,6 +2435,7 @@ export class NotebookView extends FileView {
 	refreshUi(): void {
 		this.selectionActions?.update();
 		this.ui?.refresh();
+		this.statesTools?.refresh();
 	}
 
 	/** What the UI needs to know, for the page in view or page `pageIndex` (page sheet of a thumbnail). */
@@ -2312,7 +2449,7 @@ export class NotebookView extends FileView {
 			editable: !!doc && this.editable() && !this.controller?.drawing,
 			open: !!doc,
 			tool: this.tools.tool,
-			selection: sel ? this.selectionCounts(sel) : null,
+			selection: sel && !this.statesTools?.ownsSelection(sel) ? this.selectionCounts(sel) : null,
 			page: page ? {
 				index, count: pages.length, background: page.background?.kind ?? "none", infinite: !!page.infinite,
 				bookmarked: doc?.meta?.bookmarks.includes(page.id) ?? false, splittable: page.id === this.heavyPageId,
@@ -2323,6 +2460,7 @@ export class NotebookView extends FileView {
 			sidePane: pdfSideState(this),
 			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false, snap: this.reading?.snapping ?? false },
 			display: { night: this.display?.night ?? false, crop: this.display?.crop ?? false },
+			states: { open: !!this.statesTools?.open },
 			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle", readOnly: this.userReadOnly },
 			canPrint: canPrint(),
 			markers: {
@@ -2637,7 +2775,7 @@ export class NotebookView extends FileView {
 		this.toolbar.setEditable(false);
 		this.setStatus(t("status.loading"), "pending");
 		if (!this.media) {
-			this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged());
+			this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged(), (page) => this.statesTools?.viewPages([page])[0] ?? page);
 			if (this.resilience?.mediaAtLoad() !== false) this.renderer?.setMedia(this.media); // wave 0.7: resilience (#346)
 		}
 		this.refreshLayout();
@@ -2659,7 +2797,7 @@ export class NotebookView extends FileView {
 		const plain = doc ? (this.pageMode?.enabled ? layoutPagesHorizontal(doc.pages) : layoutPages(doc.pages)) : null;
 		// wave 0.9 (376): with the margins cropped, the PDF pages carry the window the view fits (nothing else changes).
 		this.layout = plain && doc && this.display ? this.display.shape(plain, doc.pages) : plain;
-		this.renderer?.setDocument(doc?.pages ?? null, this.layout);
+		this.renderer?.setDocument(doc ? this.renderPagesOf(doc) : null, this.layout);
 		this.pushRuler();
 		this.reading?.docChanged();
 		this.display?.docChanged();
@@ -2715,7 +2853,7 @@ export class NotebookView extends FileView {
 			this.body.show();
 			this.toolbar.setEditable(true);
 			if (!this.media) {
-				this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged());
+				this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged(), (page) => this.statesTools?.viewPages([page])[0] ?? page);
 				// wave 0.7: resilience (#346): in safe mode the backgrounds come after the first paint.
 				if (this.resilience?.mediaAtLoad() !== false) this.renderer?.setMedia(this.media);
 			}
@@ -2827,6 +2965,7 @@ export class NotebookView extends FileView {
 		this.updateHistoryButtons();
 		this.updatePageIndicator();
 		this.pageNav?.refresh();
+		this.statesTools?.refresh();
 	}
 
 	/** The page panel shows thumbnails of what was just drawn, a moment after the pen lifts. */
@@ -2918,7 +3057,7 @@ export class NotebookView extends FileView {
 	private thumbnail(page: Page, width: number): string {
 		if (this.resilience?.thumbnailsAllowed() === false) return BLANK_THUMBNAIL;
 		const dpr = Math.min(2, window.devicePixelRatio || 1);
-		return renderThumbnail(page, Math.round(Math.min(width, THUMB_CSS_WIDTH) * dpr), {
+		return renderThumbnail(this.statesTools?.viewPages([page])[0] ?? page, Math.round(Math.min(width, THUMB_CSS_WIDTH) * dpr), {
 			mime: "image/jpeg",
 			quality: 0.8,
 			drawBackground: (ctx, p) => this.drawThumbMedia(ctx, p),
@@ -3585,7 +3724,11 @@ export class NotebookView extends FileView {
 		if (erasing) {
 			this.erasing = null;
 			if (erasing.commands.length > 0) {
-				this.history.record(new Batch("Erase", erasing.commands));
+				// 0.15 (241): the pieces a cut stroke left stay in its part, in the same undo step.
+				const doc = this.session?.doc;
+				const kept = doc ? statesAfterCuts(doc, erasing.commands) : [];
+				if (doc) for (const c of kept) c.apply(doc);
+				this.history.record(new Batch("Erase", [...erasing.commands, ...kept]));
 				this.markChanged();
 				this.updateHistoryButtons();
 				this.scheduleNavRefresh();
@@ -3879,7 +4022,10 @@ export class NotebookView extends FileView {
 			measure: measureText,
 		});
 		if (!cmd) return;
-		this.history.execute(cmd);
+		// 0.15 (241): the pieces a cut stroke left stay in its part, in the same undo step.
+		const doc = this.session?.doc;
+		const kept = doc ? statesAfterCuts(doc, [cmd]) : [];
+		this.history.execute(kept.length > 0 ? new Batch("Erase area", [cmd, ...kept]) : cmd);
 		this.renderer?.invalidate();
 		this.markChanged();
 		this.updateHistoryButtons();
@@ -4240,6 +4386,8 @@ export class NotebookView extends FileView {
 		const sel = this.selection;
 		const page = sel && this.pageAtIndex(sel.pageIndex);
 		if (!sel || !page || isIdentity(sel.matrix)) return;
+		// 0.15 (241): the handles of a part in a state change the part's pose in that state, not the strokes.
+		if (this.statesTools?.commitTransform(sel)) return;
 		if (sel.others?.length) {
 			this.commitCrossPageTransform(sel);
 			return;
@@ -4412,6 +4560,8 @@ export class NotebookView extends FileView {
 			doc: () => this.session?.doc ?? null,
 			editable: () => this.editable(),
 			selection: () => this.selection,
+			// 0.15 (241): the part editor's selection has no colour or width of its own (its handles set the pose).
+			ownedByStates: (sel) => !!this.statesTools?.ownsSelection(sel),
 			select: (pageIndex, strokes, elements, others) => this.selectItems(pageIndex, strokes, elements, others),
 			execute: (cmd) => {
 				if (!this.history.execute(cmd)) return false;
