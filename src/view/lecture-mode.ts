@@ -28,7 +28,7 @@ import {
 } from "../timetable/lecture-mode";
 import type { EditContext } from "./edit-context";
 import { addLecturePage, classContext } from "./lecture";
-import { showNotice } from "./notice";
+import { showNotice, type NoticeHandle } from "./notice";
 
 /** How often the clock is looked at while a notebook is open, ms. Cheap: no rendering, no file access. */
 export const LECTURE_TICK_MS = 30_000;
@@ -46,6 +46,10 @@ export interface LectureModeHost {
 	busy(): boolean;
 	/** The open document for the lecture page; null when read-only, not loaded or in contact. */
 	editContext(): EditContext | null;
+	/** The notebook can take changes (not read-only by the user, by sync safety or by a newer format). */
+	editable(): boolean;
+	/** Scrolls to the lecture page of that course and day, if the notebook still has it. */
+	goToLecturePage(course: string, date: Date): void;
 	/** The lecture state changed: the UI (contextual bar) is drawn again. */
 	changed(): void;
 	/** The device's local storage (what was turned down or paged today); without it nothing is remembered across openings. */
@@ -204,10 +208,35 @@ export class LectureModeController {
 	 * user is writing.
 	 */
 	private ensurePage(cls: LectureClass, now: Date, scroll = true): void {
+		// Read-only (the user's, sync safety's or a newer format's): nothing is added, so nothing is saved either.
+		if (!this.host.editable()) {
+			showNotice(t("lectureMode.readOnly"));
+			return;
+		}
 		const ctx = this.host.editContext();
 		if (!ctx) return;
-		if (findLecturePage(ctx.doc.pages, cls.course, now) < 0) addLecturePage(ctx, cls.course, now, cls.course, classContext(cls, ctx.slide?.() ?? null), scroll);
+		let added = false;
+		if (findLecturePage(ctx.doc.pages, cls.course, now) < 0) {
+			addLecturePage(ctx, cls.course, now, cls.course, classContext(cls, ctx.slide?.() ?? null), scroll);
+			added = true;
+		}
 		this.remember("paged", cls.key);
+		// Added behind the user's back (the view stayed where they write): say so, with a way to go there.
+		if (added && !scroll) this.offerGo(cls, now);
+	}
+
+	/** A notice "Lecture page added" with a Go button that scrolls to the page. */
+	private offerGo(cls: LectureClass, now: Date): void {
+		let handle: NoticeHandle | null = null;
+		const fragment = createFragment((f) => {
+			f.createDiv({ text: t("lectureMode.pageAdded") });
+			f.createEl("button", { text: t("lectureMode.pageAdded.go"), cls: "mod-cta", attr: { type: "button" } }).addEventListener("click", (e) => {
+				e.preventDefault();
+				handle?.hide();
+				this.host.goToLecturePage(cls.course, now);
+			});
+		});
+		handle = showNotice(fragment, 8000);
 	}
 
 	/** Notes an occurrence as turned down or paged, here and in local storage. */

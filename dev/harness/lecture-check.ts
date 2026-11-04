@@ -10,6 +10,7 @@ import type { LectureClass } from "../../src/timetable/lecture-mode";
 import type { TextElement } from "../../src/model/types";
 import { isoDay } from "../../src/timetable/schedule";
 import type { HarnessUiContext, HarnessView } from "./harness-types";
+import { noticeEls } from "./obsidian-stub";
 import type { CheckResult } from "./reading-check";
 
 /** What the harness view's host answers to "which class is on for this notebook". */
@@ -42,6 +43,7 @@ interface LectureView extends HarnessView {
 	};
 	host: HarnessView["host"] & { settings: HarnessView["host"]["settings"] & { lectureMode: Mode } };
 	uiContext(): HarnessUiContext & { lecture: boolean };
+	currentPageIndex(): number;
 }
 
 const MIN = 60_000;
@@ -203,6 +205,14 @@ export async function checkLecture(api: LectureCheckApi): Promise<{ ok: boolean;
 	await api.frames(3);
 	add("auto: the first stroke is kept", v.document.pages.reduce((n, p) => n + p.strokes.length, 0) === strokesBefore + 1);
 	add("auto: and adds the lecture page, once", v.document.pages.length === pagesAtOpen + 1 && /^Chemistry — /.test(lastPageTexts(v)[0] ?? ""), `${pagesAtOpen} -> ${v.document.pages.length}`);
+	// The page is behind the user's back: a notice says so and Go leads there.
+	await sleep(1700);
+	add("auto: a notice says the lecture page was added", noticeCount(/Lecture page added/) >= 1, api.notices.slice(-3).join(" | "));
+	const goNotice = [...noticeEls].reverse().find((el) => /Lecture page added/.test(el.textContent ?? ""));
+	add("auto: the first stroke stayed on its own page (the view did not jump)", v.currentPageIndex() < v.document.pages.length - 1, String(v.currentPageIndex()));
+	goNotice?.querySelector("button")?.click();
+	await api.frames(10);
+	add("auto: Go in the notice scrolls to the lecture page", v.currentPageIndex() === v.document.pages.length - 1, `${v.currentPageIndex()} of ${v.document.pages.length}`);
 	await api.penStroke([[0.3, 0.4], [0.6, 0.44]]);
 	await sleep(80);
 	v.lectureMode.evaluate();
@@ -265,6 +275,24 @@ export async function checkLecture(api: LectureCheckApi): Promise<{ ok: boolean;
 	await sleep(80);
 	await api.frames(3);
 	add("reopen: a lecture page that was added once is not added again", v.document.pages.length === reopened && !hasBio(v), `${reopened} -> ${v.document.pages.length}`);
+
+	// --- read-only: Start and the command do not add the page ---
+	v = await fresh(api, "ask", classNow("Physics 2"));
+	v.lectureMode.opened();
+	await api.frames(3);
+	const roPages = v.document.pages.length;
+	v.runAction("toggle-read-only");
+	await api.frames(3);
+	add("read-only: the view is not editable and hands out no edit context", v.uiContext().editable === false && v.editContext() === null);
+	buttons(banner())[0]?.click();
+	await api.frames(3);
+	add("read-only: Start does not add the page and says so", v.document.pages.length === roPages && !v.history.canUndo() && noticeCount(/read-only: the lecture page was not added/) >= 1, api.notices.slice(-2).join(" | "));
+	v.lectureMode.toggle();
+	v.lectureMode.toggle();
+	await api.frames(2);
+	add("read-only: nor does the command", v.document.pages.length === roPages && !v.history.canUndo());
+	v.runAction("toggle-read-only");
+	await api.frames(2);
 
 	// --- off: the rule never acts; the command still works with no class ---
 	v = await fresh(api, "off", classNow());

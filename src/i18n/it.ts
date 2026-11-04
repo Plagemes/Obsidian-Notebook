@@ -2433,6 +2433,9 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"lectureMode.chip.plain": "Modalità lezione",
 	"lectureMode.end": "Termina",
 	"lectureMode.end.hint": "Esci dalla modalità lezione",
+	"lectureMode.pageAdded": "Pagina della lezione aggiunta",
+	"lectureMode.pageAdded.go": "Vai",
+	"lectureMode.readOnly": "Questo quaderno è in sola lettura: la pagina della lezione non è stata aggiunta.",
 	"lecture.prefill": "La pagina riporterà anche: {text}",
 	"timetable.lecturer": "Docente (facoltativo)",
 	// 0.14 smartplus

@@ -106,6 +106,7 @@ import { runNewLecture } from "./lecture";
 import { pickSlideRef } from "./lecture-logic";
 import { LectureModeController } from "./lecture-mode";
 import { LECTURE_MEMORY_KEY } from "../timetable/lecture-memory";
+import { findLecturePage } from "../timetable/lecture-open";
 import type { LectureClass } from "../timetable/lecture-mode";
 import { askExercisePaper, askLayoutOptions, loadExercisePaper } from "./lecture-pack-modal";
 import { runMovePages } from "../library/move-pages";
@@ -631,6 +632,11 @@ export class NotebookView extends FileView {
 			classFor: (path) => this.host.lectureClassFor?.(path) ?? null,
 			busy: () => this.inContact(),
 			editContext: () => this.editContext(),
+			editable: () => this.editable(),
+			goToLecturePage: (course, date) => {
+				const i = findLecturePage(this.session?.doc?.pages ?? [], course, date);
+				if (i >= 0) this.scrollToPage(i);
+			},
 			changed: () => this.refreshUi(),
 			memory: { load: (): unknown => this.app.loadLocalStorage(LECTURE_MEMORY_KEY), save: (v) => this.app.saveLocalStorage(LECTURE_MEMORY_KEY, v) },
 		});
@@ -2520,6 +2526,9 @@ export class NotebookView extends FileView {
 
 	/** What the flows of those modules may do to this document; null unless it is open, editable and not being written on. */
 	editContext(): EditContext | null {
+		// Every flow that takes this context edits the document, so a read-only view (the user's, sync safety's, a newer
+		// format, hidden annotations) hands out none: `stillHere` below includes `editable()`.
+		if (!this.editable()) return null;
 		const session = this.session;
 		const media = this.media;
 		const doc = session?.doc;

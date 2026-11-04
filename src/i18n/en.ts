@@ -2431,6 +2431,9 @@ export const en = {
 	"lectureMode.chip.plain": "Lecture mode",
 	"lectureMode.end": "End",
 	"lectureMode.end.hint": "Leave lecture mode",
+	"lectureMode.pageAdded": "Lecture page added",
+	"lectureMode.pageAdded.go": "Go",
+	"lectureMode.readOnly": "This notebook is read-only: the lecture page was not added.",
 	"lecture.prefill": "The page will also say: {text}",
 	"timetable.lecturer": "Lecturer (optional)",
 	// 0.14 smartplus
