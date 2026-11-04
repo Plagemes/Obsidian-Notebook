@@ -47,6 +47,8 @@ export interface DynamicChip {
 export interface HomeHost {
 	/** 0.14: dynamic sections with something in them; none hides the row. */
 	dynamic?: DynamicChip[];
+	/** 0.16 (#177): draws the card of files shared from other apps (nothing when there are none). */
+	shared?: (page: HTMLElement) => void;
 	/** The Continue card, or null with `empty` set: nothing to continue yet (an empty vault). */
 	continue: ContinueCardOptions | null;
 	/** 0.12.2: the empty state of a vault with no notebooks yet; shown in the Continue slot. */
@@ -89,6 +91,9 @@ export function renderHome(el: HTMLElement, h: HomeHost): void {
 			for (const d of dynamic) chip(row, { label: d.label, icon: d.icon, count: d.count, key: `dyn:${d.id}`, onClick: d.onClick });
 		});
 	}
+
+	const shared = h.shared;
+	if (shared) part(page, "shared files", t("si.title"), () => shared(page));
 
 	part(page, "quick actions", t("home.quick"), () => {
 		const sec = page.createEl("section", { cls: "nb-section nb-home-quick" });

@@ -211,6 +211,16 @@ describe("page tools: delete and restore", () => {
 		expect((await store.read(doc.id)).entries).toHaveLength(1);
 	});
 
+	it("reports false, and keeps the page, when the delete is refused (the page got locked meanwhile)", async () => {
+		const doc = threePages();
+		const { host: h } = host(doc);
+		const v = new FakeVault();
+		const store = new PageTrashStore(v.app, () => ROOT);
+		expect(await deletePageKeepingCopy(h, doc, doc.pages[1]!, 1, () => false, store)).toBe(false);
+		doc.pages[2]!.locked = true;
+		expect(await deletePageKeepingCopy(h, doc, doc.pages[2]!, 2, () => true, store)).toBe(false);
+	});
+
 	it("discards an entry after the restored page is saved, so it cannot be restored twice", async () => {
 		const doc = threePages();
 		const v = new FakeVault();

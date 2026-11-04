@@ -5,6 +5,7 @@ import { isNotebookFile, readNotebookText } from "../storage/format";
 import { quickDocId } from "../storage/history";
 import { sanitizeName } from "../storage/notebooks";
 import { attachPress, DROP_ATTR, DROP_CARD_ATTR } from "./drag";
+import { attachFileDrop } from "./bulk-drop";
 import { breadcrumb, buildFolderTree, flattenTree, isReservedPath, type FolderNode } from "./folders";
 import { relativeTime, uniquePath } from "./format";
 import { folderOf, isInside, LibraryIndex, normalizeText, SORTS, type Highlight, type LibraryEntry, type LibraryScope, type LibrarySort, type SearchHit } from "./index";
@@ -61,6 +62,8 @@ import { renderHome, type RecentSection, type StatsSection } from "./home-surfac
 import { PageThumbs } from "./page-thumbs";
 import { renderLibrarySections, renderTagChips, type DynamicPanel, type TagChip } from "./library-sections";
 import { InboxBell, type InboxPort } from "./inbox-bell";
+import type { SharedInboxPort } from "./shared-inbox";
+import { renderSharedInboxCard, SharedInboxModal } from "./shared-inbox-ui";
 import { applyViewportClass, ViewportTracker } from "../ui/viewport-class";
 
 /** The missing-styles diagnostic (LibraryView.checkStyles) is shown once per session. */
@@ -94,6 +97,8 @@ export interface LibraryHost {
 	folderMeta?: FolderMetaSource;
 	/** Opens the PDF import flow for that folder. */
 	importPdf(folder: string): void;
+	/** 0.16 (#80): bulk import of PDFs and images into that folder: the files dropped (absent: the file picker); `after` gets the paths made. */
+	importFiles?(folder: string, files?: File[], after?: (paths: string[]) => void): void;
 	/** Opens "New lecture from slides…" (course PDF, layout, header) for that folder. */
 	lectureFromSlides?(folder: string): void;
 	/** Scans pages with the camera into a new notebook in that folder. */
@@ -139,6 +144,8 @@ export interface LibraryHost {
 	recentEdits?(): Array<{ path: string; page: string; num: number; at: number }>;
 	/** 0.12: the Zettelkasten Inbox for the header bell; null when the feature is not available. */
 	inbox?(): InboxPort | null;
+	/** 0.16 (#177): PDFs and images shared to Obsidian from other apps, waiting to become notebooks (Home's card, the rail). */
+	sharedInbox?(): SharedInboxPort | null;
 	/** 0.13: the "Your name" setting (Home's greeting). */
 	userName?(): string;
 	/** 0.13: pages and minutes written per day on this device (Home's greeting and statistics; view/recent-pages.ts). */
@@ -383,6 +390,7 @@ export class LibraryView extends ItemView {
 			console.error("[notebook] library state unreadable", e);
 		}
 		this.buildShell();
+		this.attachBulkDrop();
 		window.requestAnimationFrame(() => this.checkStyles());
 		const inbox = this.host.inbox?.() ?? null;
 		if (inbox) {
@@ -422,6 +430,9 @@ export class LibraryView extends ItemView {
 		// wave 0.12: a folder's colour, icon or art changed (creation dialog, another device): redraw the cards.
 		const offMeta = this.host.folderMeta?.onFolderMetaChange(() => this.requestRender());
 		if (offMeta) this.register(offMeta);
+		// 0.16 (#177): a file was shared to the vault, or one was dealt with.
+		const offShared = this.host.sharedInbox?.()?.onChange(() => this.requestRender());
+		if (offShared) this.register(offShared);
 		// 0.15 views: the Board's columns were edited (its dialog, the settings).
 		this.register(onBoardColumnsChanged(() => this.requestRender()));
 
@@ -1348,6 +1359,15 @@ export class LibraryView extends ItemView {
 			if (dyn[id].length === 0) continue;
 			railItem(nav, { key: `nav:dyn:${id}`, icon: COLLECTION_LOOK[id].icon, label: this.dynamicLabel(id, true), count: dyn[id].length, active: isCollectionPlace(p) && p.collection === id, onClick: () => this.navigate({ collection: id }) });
 		}
+		// 0.16 (#177): files shared from other apps, with how many wait.
+		const shared = this.host.sharedInbox?.() ?? null;
+		const waiting = shared?.items().length ?? 0;
+		if (shared && waiting > 0) {
+			railItem(nav, { key: "nav:shared", icon: "inbox", label: t("si.nav"), count: waiting, onClick: () => {
+				this.setRailOpen(false);
+				this.openSharedInbox();
+			} });
+		}
 		if (visible.some((e) => (e.pdfPages ?? 0) > 0)) {
 			railItem(nav, { key: "nav:pdf", icon: "file-text", label: t("nav.pdf"), active: isCollectionPlace(p) && p.collection === "pdf", onClick: () => this.navigate({ collection: "pdf" }) });
 		}
@@ -1595,6 +1615,8 @@ export class LibraryView extends ItemView {
 		item(t("library.action.newNotebook"), "file-plus", () => this.newNotebook());
 		item(t("library.action.newFolder"), "folder-plus", () => this.newFolder());
 		item(t("library.action.importPdf"), "file-up", () => this.host.importPdf(folder));
+		const importFiles = this.host.importFiles?.bind(this.host);
+		if (importFiles) item(t("library.action.importFiles"), "files", () => importFiles(folder));
 		const lecture = this.host.lectureFromSlides?.bind(this.host);
 		if (lecture) item(t("library.action.lectureFromSlides"), "presentation", () => lecture(folder));
 		const scan = this.host.scanToNotebook?.bind(this.host);
@@ -2030,6 +2052,12 @@ export class LibraryView extends ItemView {
 		return { chart, tiles, split };
 	}
 
+	/** 0.16 (#177): the full list of shared files. */
+	private openSharedInbox(): void {
+		const port = this.host.sharedInbox?.();
+		if (port) new SharedInboxModal(this.app, port).open();
+	}
+
 	private renderHomeSurface(el: HTMLElement, tree: FolderNode): void {
 		const now = Date.now();
 		const visible = this.visible();
@@ -2048,11 +2076,13 @@ export class LibraryView extends ItemView {
 		if (this.host.scanToNotebook) quick.push({ icon: "scan", ...compact(paletteColor("Teal")), title: t("home.quick.scan"), description: t("home.quick.scan.desc"), key: "quick:scan", onRun: () => this.host.scanToNotebook?.(root) });
 		if (this.host.todaysPage) quick.push({ icon: "calendar-plus", ...compact(paletteColor("Green")), title: t("home.quick.today"), description: t("home.quick.today.desc"), key: "quick:todays-page", onRun: () => this.host.todaysPage?.() });
 		const fit = this.mode === "wide" ? DASH_SUBJECTS_WIDE : this.mode === "medium" ? DASH_SUBJECTS_MEDIUM : DASH_SUBJECTS_PHONE;
+		const sharedPort = this.host.sharedInbox?.() ?? null;
 		renderHome(el, {
 			dynamic: DYNAMIC_IDS.filter((id) => this.dynamicSections()[id].length > 0).map((id) => ({
 				id, icon: COLLECTION_LOOK[id].icon, label: this.dynamicLabel(id, true), count: this.dynamicSections()[id].length,
 				onClick: () => this.navigate({ collection: id }),
 			})),
+			shared: sharedPort ? (page) => renderSharedInboxCard(page, sharedPort, () => this.openSharedInbox()) : undefined,
 			continue: cont.card,
 			empty: cont.empty,
 			quickPage: this.quickPageOptions(),
@@ -2279,6 +2309,42 @@ export class LibraryView extends ItemView {
 		}
 		if (anchor) this.showMenu(menu, anchor);
 		else menu.showAtPosition({ x, y });
+	}
+
+	/** 0.16 (#80): PDFs and images dropped from outside the app (on the view, a folder or a Board column) open the bulk-import dialog. */
+	private attachBulkDrop(): void {
+		const importFiles = this.host.importFiles?.bind(this.host);
+		if (!importFiles) return;
+		attachFileDrop(this.contentEl, {
+			mark: this.rootEl,
+			label: (target) => (target.folder !== null ? t("bulk.drop.into", { folder: target.folder === this.root() ? this.rootLabel() : target.folder.slice(target.folder.lastIndexOf("/") + 1) }) : t("bulk.drop")),
+			onFiles: (files, target) => {
+				const column = target.column;
+				importFiles(target.folder ?? this.currentFolder(), files, column ? (paths) => void this.statusAfterImport(paths, column) : undefined);
+			},
+		});
+	}
+
+	/** The notebooks just imported into a Board column get its status. They reach the index a moment after they are written. */
+	private async statusAfterImport(paths: readonly string[], columnId: string): Promise<void> {
+		const store = this.boardStore();
+		if (!store) return;
+		for (let i = 0; i < 20 && paths.some((p) => !this.index.get(p)); i++) await tick(300);
+		if (this.closed) return;
+		const found = paths.filter((p) => this.index.get(p));
+		await this.ensureIds(found);
+		const ops = found.flatMap((p) => {
+			const e = this.index.get(p);
+			return e ? [{ key: this.keyOf(e), status: columnId, path: e.path }] : [];
+		});
+		if (ops.length === 0) return;
+		try {
+			await store.setStatus(ops);
+			this.requestRender();
+		} catch (err) {
+			if (err instanceof BoardBlockedError) showNotice(t("board.notice.blocked", { error: err.message }));
+			else this.fail(err);
+		}
 	}
 
 	/** Moves a notebook to a column: written to this device's board file; the board redraws when the store tells it so. */
@@ -2713,6 +2779,7 @@ export class LibraryView extends ItemView {
 		menu.addItem((i) => i.setTitle(t("library.menu.newNotebookHere")).setIcon("file-plus").onClick(() => this.host.createNotebook(path)));
 		menu.addItem((i) => i.setTitle(t("library.menu.newFolderHere")).setIcon("folder-plus").onClick(() => this.host.createFolder(path)));
 		menu.addItem((i) => i.setTitle(t("library.menu.importPdfHere")).setIcon("file-up").onClick(() => this.host.importPdf(path)));
+		if (this.host.importFiles) menu.addItem((i) => i.setTitle(t("library.menu.importFilesHere")).setIcon("files").onClick(() => this.host.importFiles?.(path)));
 		if (this.host.lectureFromSlides) menu.addItem((i) => i.setTitle(t("library.menu.lectureFromSlidesHere")).setIcon("graduation-cap").onClick(() => this.host.lectureFromSlides?.(path)));
 		if (this.host.scanToNotebook) menu.addItem((i) => i.setTitle(t("library.menu.scanHere")).setIcon("scan").onClick(() => this.host.scanToNotebook?.(path)));
 		const meta = this.host.folderMeta;

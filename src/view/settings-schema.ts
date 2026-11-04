@@ -89,7 +89,7 @@ export const GROUPS: readonly GroupSpec[] = [
 		open: (s) => s.penSideButton === "gesture" || s.penSideButton === "radial-gesture" || s.penGestureLongPress || s.penGesturesCustom.length > 0,
 	},
 	{ id: "pageHeader", section: "pages", title: "settings.pageHeader", open: (s) => s.headerMode !== "off" },
-	{ id: "outline", section: "pages", title: "settings.outline", open: (s) => !(s.outlineBookmarks && s.outlineSlides && s.outlineHeadings && s.outlineMarkers) },
+	{ id: "outline", section: "pages", title: "settings.outline", open: (s) => !(s.outlineBookmarks && s.outlineSlides && s.outlineHeadings && s.outlineMarkers) || s.outlinePdf === "off" },
 	{ id: "timetable", section: "study", title: "settings.timetable", open: (_s, ctx) => ctx.timetableInUse },
 	{ id: "zettel", section: "study", title: "settings.zettel", open: (s) => s.zettelSlipBoxes.length > 0 },
 ];
@@ -250,6 +250,11 @@ const PAGES: SettingSpec[] = [
 	{ id: "outlineSlides", section: "pages", group: "outline", order: 20, name: "settings.outlineSlides", desc: "settings.outlineSlides.desc", control: { type: "toggle" }, keywords: "outline pdf slide diapositive" },
 	{ id: "outlineHeadings", section: "pages", group: "outline", order: 30, name: "settings.outlineHeadings", desc: "settings.outlineHeadings.desc", control: { type: "toggle" }, keywords: "outline heading titoli handwriting scrittura" },
 	{ id: "outlineMarkers", section: "pages", group: "outline", order: 40, name: "settings.outlineMarkers", desc: "settings.outlineMarkers.desc", control: { type: "toggle" }, keywords: "outline marker segnalini domande compiti" },
+	// 0.16 (#46): the outline of a PDF in the notebook outline.
+	{
+		id: "outlinePdf", section: "pages", group: "outline", order: 50, name: "settings.outlinePdf", desc: "settings.outlinePdf.desc",
+		control: { type: "dropdown", options: options([["merged", "settings.outlinePdf.merged"], ["section", "settings.outlinePdf.section"], ["off", "settings.outlinePdf.off"]]) }, keywords: "outline pdf bookmarks table of contents indice segnalibri sommario",
+	},
 	// 0.15 page header (#75): the page number, date and notebook title drawn on the paper, never stored on the page.
 	{
 		id: "headerMode", section: "pages", group: "pageHeader", order: 10, name: "settings.headerMode", desc: "settings.headerMode.desc",
@@ -277,6 +282,18 @@ const READING: SettingSpec[] = [
 	// 0.14 slides (#226): ink remembers the slide beside the notes; its badge shows the slide again.
 	{ id: "slideInkLink", section: "reading", order: 40, name: "settings.slideInkLink", desc: "settings.slideInkLink.desc", control: { type: "toggle" }, keywords: "slide side by side pdf link ink notes diapositiva affiancato" },
 	{ id: "slideInkBadges", section: "reading", order: 41, name: "settings.slideInkBadges", desc: "settings.slideInkBadges.desc", control: { type: "toggle" }, parent: "slideInkLink", keywords: "slide badge diapositiva" },
+	// 0.16 present: presentation mode (roadmap #87).
+	{ id: "presentSteps", section: "reading", order: 50, name: "settings.presentSteps", desc: "settings.presentSteps.desc", control: { type: "toggle" }, keywords: "presentation present slides states steps presentazione" },
+	{ id: "presentLaser", section: "reading", order: 51, name: "settings.presentLaser", desc: "settings.presentLaser.desc", control: { type: "toggle" }, keywords: "presentation present laser pointer puntatore" },
+
+	// 0.16 (#90) highlights digest: how the digest note groups the highlights.
+	{
+		id: "digestGroup", section: "reading", order: 60, name: "settings.digestGroup", desc: "settings.digestGroup.desc",
+		control: { type: "dropdown", options: options([["page", "settings.digestGroup.page"], ["colour", "settings.digestGroup.colour"]]) }, keywords: "highlights digest summary evidenziazioni riepilogo colour colore",
+	},
+
+	// 0.16 (#46): links of PDF pages.
+	{ id: "pdfLinks", section: "reading", order: 45, name: "settings.pdfLinks", desc: "settings.pdfLinks.desc", control: { type: "toggle" }, keywords: "pdf link internal external collegamenti url" },
 ];
 
 const LIBRARY: SettingSpec[] = [
@@ -303,6 +320,9 @@ const LIBRARY: SettingSpec[] = [
 		id: "storageManager", section: "library", order: 41, name: "settings.storage", desc: "settings.storage.desc",
 		control: { type: "action", run: "storage-open", button: "settings.open" }, keywords: "storage space size disk cleanup duplicate unused backup spazio archiviazione pulizia",
 	},
+	// 0.16 shared files (#177): PDFs and images shared to Obsidian from other apps, offered on Home.
+	{ id: "sharedInbox", section: "library", order: 42, name: "settings.sharedInbox", desc: "settings.sharedInbox.desc", control: { type: "toggle" }, keywords: "inbox share shared received files pdf image attachments condividi ricevuti file allegati" },
+	{ id: "sharedInboxFolder", section: "library", order: 43, name: "settings.sharedInboxFolder", desc: "settings.sharedInboxFolder.desc", control: { type: "folder", placeholder: "/" }, parent: "sharedInbox", visible: (s) => s.sharedInbox },
 	{ id: "looseSheetPath", section: "library", group: ADVANCED, order: 10, name: "settings.looseSheet", desc: "settings.looseSheet.desc", control: { type: "text", placeholder: defaultLooseSheetPath(DEFAULT_SETTINGS.folder) } },
 	{ id: "templatesFolder", section: "library", group: ADVANCED, order: 20, name: "settings.templatesFolder", desc: "settings.templatesFolder.desc", control: { type: "folder", placeholder: "_templates" } },
 	// 0.15 templates (roadmap #19)

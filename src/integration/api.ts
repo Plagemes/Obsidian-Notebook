@@ -1,6 +1,7 @@
 import { normalizePath, type App, type Plugin, type TFile } from "obsidian";
 import { pagesToPdf } from "../ink/export-pdf";
 import { Batch } from "../model/history";
+import { lockedPageIds } from "../model/page-lock";
 import { parse, serializeChecked } from "../model/serialize";
 import type { Asset, NotebookDocument } from "../model/types";
 import { kindFromName } from "../pdf/assets";
@@ -10,6 +11,7 @@ import { isNotebookFile, readNotebookText, writeNotebookText } from "../storage/
 import { isHiddenNotebookPath } from "../storage/trash-paths";
 import { createNotebook, sanitizeName } from "../storage/notebooks";
 import { VaultDocumentIO } from "../storage/vault-io";
+import { recordPluginWrite } from "../storage/plugin-written";
 import type { EditContext } from "../view/edit-context";
 import { collectPageImages, freePath } from "../view/export";
 import { NotebookMedia, storeAsset } from "../view/media";
@@ -17,7 +19,7 @@ import { t } from "../i18n";
 import { validPageId } from "../zettel/subpath";
 import { NotebookApiError, invalid } from "./api-errors";
 import {
-	API_METHODS, API_VERSION, KeyedQueue, MAX_IMAGE_BYTES, buildNewDocument, checkFolder, checkName, checkPageNumber, checkPageRef, describeNotebook, imageExtension,
+	API_METHODS, API_VERSION, KeyedQueue, MAX_IMAGE_BYTES, buildNewDocument, checkFolder, checkName, checkPageNumber, checkPageUnlocked, checkPageRef, describeNotebook, imageExtension,
 	parseCreateOptions, parseImageOptions, parsePageSpec, planClosedEdit, prepareAddPages, prepareInsertImage,
 	type AddPagesResult, type CreateNotebookOptions, type InsertImageOptions, type InsertImageResult, type NotebookInfo, type PageLinkInfo, type PageTemplate, type Prepare,
 } from "./api-plan";
@@ -245,7 +247,10 @@ class NotebookApiImpl implements NotebookApi {
 	async insertImage(file: NotebookFileRef, page: number, image: Uint8Array | ArrayBuffer | string, options?: InsertImageOptions): Promise<InsertImageResult> {
 		const opts = parseImageOptions(options);
 		const f = this.resolve(file);
-		checkPageNumber("page", page, (await this.document(f)).pages.length);
+		const current = await this.document(f);
+		const target = current.pages[checkPageNumber("page", page, current.pages.length) - 1]!;
+		// Before the image file is stored: a locked page refuses the edit, and the file would be left unused in the vault.
+		checkPageUnlocked("page", target, page);
 		const { bytes, name } = await this.imageBytes(image);
 		let dims: { width: number; height: number };
 		try {
@@ -320,7 +325,14 @@ class NotebookApiImpl implements NotebookApi {
 	/** Through the open notebook's own history: one undo step, saved by its session. The file read back decides success. */
 	private async editOpen<R>(file: TFile, ctx: EditContext, prepare: Prepare<R>, label: string): Promise<R> {
 		const plan = prepare(ctx.doc);
-		ctx.execute(new Batch(label, plan.commands));
+		if (!ctx.execute(new Batch(label, plan.commands))) {
+			// Not recorded: the history refused it and the notebook is as it was (the view told the user about a locked page).
+			const locked = lockedPageIds(ctx.doc);
+			if (locked.length > 0) {
+				throw new NotebookApiError("page-locked", `The open notebook "${file.path}" has locked pages and did not take the change. Unlock the page in the notebook first; nothing was written.`, { path: file.path, ids: locked });
+			}
+			throw new NotebookApiError("write-failed", `The open notebook "${file.path}" did not take the change (it is read-only or the result did not pass the content check). Nothing was written.`, { path: file.path });
+		}
 		const flushed = await ctx.flush();
 		const back = parse(readNotebookText(file.extension, await this.app.vault.read(file)));
 		if (back.ok && plan.verify(back.doc)) return plan.result;
@@ -379,6 +391,7 @@ class NotebookApiImpl implements NotebookApi {
 			}
 			const bytes = pagesToPdf(doc.pages, { paper: true, title: f.basename, images: (p) => images.get(p) ?? [] });
 			const path = freePath(this.app, f, "", "pdf");
+			recordPluginWrite(this.app, [path]);
 			await this.app.vault.createBinary(path, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
 			return { path, pages: doc.pages.length, skippedImages: skipped };
 		} catch (e) {

@@ -7,6 +7,7 @@ import type { BoxLabel } from "../ink/marker-render";
 import type { HeaderLayout } from "../ink/page-header";
 import { DEFAULT_PNG_SCALE } from "../model/export-pages";
 import { backgroundRect } from "../model/margins";
+import { recordPluginWrite } from "../storage/plugin-written";
 import type { Page } from "../model/types";
 import { exportPngPages } from "./export-png";
 import type { NotebookMedia } from "./media";
@@ -127,6 +128,7 @@ export async function exportPdf(
 			...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}),
 		});
 		const path = freePath(app, notebook, suffix, "pdf");
+		recordPluginWrite(app, [path]); // before the write: the inbox must not offer the file the plugin is creating
 		await app.vault.createBinary(path, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
 		showNotice(t("export.done", { path }));
 		reportSkipped(skipped);

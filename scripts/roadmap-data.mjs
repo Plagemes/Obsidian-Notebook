@@ -24,6 +24,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 // 0.12.x shipped the design system and the creation dialog, which are not numbered roadmap items; a future release
 // that closes numbered items is picked up from the CHANGELOG ("roadmap N") without a change here.
 export const RELEASE_SETS = [
+	["0.16.0", "12 45 46 78 80 87 90 124 177"],
 	["0.15.0", "19 75 128 134 161 162 241 O12"],
 	["0.14.0", "226 392 393 401 402 408 410 415 417 430 438"],
 	["0.13.0", "407 425"],

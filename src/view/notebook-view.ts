@@ -1,4 +1,4 @@
-import { FileView, getLanguage, Scope, type Menu, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
+import { FileView, getLanguage, Scope, setIcon, type Menu, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 import { pageFromState, pageIdFromState, regionFromState } from "../integration/links";
 import { pageTargetFromEphemeralState, resolvePageTarget, type PageTarget } from "../integration/page-links";
 import { checkConflicts, openRepair, type ReliabilityDeps } from "../integration/reliability";
@@ -68,6 +68,7 @@ import { VaultDocumentIO, sidecarDeviceId, vaultDeviceFileAdapter } from "../sto
 import { SharedClipStore } from "../storage/shared-clip-store";
 import { backupFolder, readSettings, type NotebookSettings } from "../settings";
 import { defaultMarkdownFolder, exportMarkdown, siblingFolder } from "./export-markdown";
+import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./highlight-digest";
 import { canPrint } from "./print";
 import type { ExportFormat } from "../ink/export-layers";
 import { ExportModal, MarkdownExportModal } from "./export-dialog";
@@ -117,7 +118,12 @@ import { pdfSideState, referencePane, referenceSlideOf, runPdfSideAction, type P
 import { attachSlideBadges, linkToSlide, refreshSlideBadges } from "./slide-ink";
 import { MarkerTools, translatedBoxLabel } from "./markers";
 import { ExcerptTools } from "./excerpts";
+import { PdfTextTools } from "./pdf-text";
+import { PdfLinks } from "./pdf-links";
+import { PdfOutlineSource } from "../pdf/outline-source";
+import { pageLinkText } from "../integration/page-share";
 import { layerCommand, type LayerMove } from "../model/layers";
+import { SetPageLocked } from "../model/page-lock";
 import { FindReplaceModal } from "./find-replace";
 import { PageInfoModal } from "./page-info";
 import { PageOffer } from "./page-offer";
@@ -132,6 +138,7 @@ import { PenLinks } from "./pen-links";
 import { SelectionActions } from "./selection-actions";
 import { statesAfterCuts } from "../model/states-erase";
 import { StatesTools } from "./states-tools";
+import { PresentationMode } from "./present-mode";
 import { SelectionArrange } from "./selection-arrange";
 import { StampPalette, type StampTarget } from "./stamp-palette";
 import { TextEditor, type TextEditSession } from "./text-editor";
@@ -328,7 +335,7 @@ export class NotebookView extends FileView {
 	private readonly history = new History(() => this.requireDoc(), 500, checkContent, (message) => {
 		console.error("[notebook] edit refused, the notebook could not be saved with it:", message);
 		showNotice(t("history.refused", { message }), 10000);
-	}, () => this.userReadOnly);
+	}, () => this.userReadOnly, (ids) => this.pagesLocked(ids));
 	/**
 	 * wave 0.10 (51): the user switched this view to read-only mode. Nothing changes the document while it is on: `editable()`
 	 * is false (tools, selection, insert, page operations and every registry action that needs editing), a finger only pans
@@ -401,6 +408,10 @@ export class NotebookView extends FileView {
 	private selectionActions: SelectionActions | null = null;
 	/** 0.15 (241): drawings with states: the state strip and the part editor (view/states-tools.ts). */
 	private statesTools: StatesTools | null = null;
+	/** 0.16 (#87): the presentation in progress, if any (view/present-mode.ts). */
+	private presentation: PresentationMode | null = null;
+	/** 0.16 (#87): whether the view was page-by-page before "write while presenting" put it there. */
+	private presentWasPaged = false;
 	private arrange: SelectionArrange | null = null;
 	/** Links written with the pen (O8): note links in text boxes, on ink, and the `[[` suggester. */
 	private penLinks: PenLinks | null = null;
@@ -432,6 +443,10 @@ export class NotebookView extends FileView {
 	private activePenSetId: string | null = null;
 	/** Wave 0.6: PDF search, snapping highlighter, hide annotations, dimmed backgrounds (pdf-reading.ts). */
 	private reading: PdfReading | null = null;
+	/** 0.16: select and copy the text of a PDF page (#45), follow the links of PDF pages and list the PDF outline (#46). */
+	private pdfText: PdfTextTools | null = null;
+	private pdfLinks: PdfLinks | null = null;
+	private pdfOutline: PdfOutlineSource | null = null;
 	/** wave 0.9: night mode (367) and the cropped view of PDF pages (376). */
 	private display: ViewDisplay | null = null;
 
@@ -573,6 +588,7 @@ export class NotebookView extends FileView {
 			outline: this.outlineHost(),
 			selectionMenu: (ids, evt) => openPageOpsMenu(this.pageOpsHost(), ids, evt),
 			openMap: () => this.openNotebookMap(),
+			setLocked: (pageId, value) => this.setLockedById(pageId, value),
 		});
 		// The panel sits to the left of the page (a drawer over it on narrow views).
 		this.body.insertBefore(this.pageNav.el, this.stage);
@@ -585,6 +601,17 @@ export class NotebookView extends FileView {
 				if (id) this.heavyDismissed.add(id);
 			},
 		});
+		// 0.16 (#124): a locked page shows a small badge over the page area; a tap on it unlocks the page.
+		const badge = this.body.createEl("button", { cls: "nb-ui nb-lock-badge", attr: { type: "button", "aria-label": t("lock.badge.aria") } });
+		setIcon(badge.createSpan({ cls: "nb-lock-badge-icon", attr: { "aria-hidden": "true" } }), "lock");
+		badge.createSpan({ cls: "nb-lock-badge-text", text: t("lock.badge") });
+		for (const type of ["pointerdown", "pointerup", "touchstart", "wheel", "contextmenu", "mousedown"] as const) badge.addEventListener(type, (e) => e.stopPropagation());
+		badge.addEventListener("click", (e) => {
+			e.preventDefault();
+			const page = this.session?.doc?.pages[this.currentPageIndex()];
+			if (page) this.setPageLocked(page, false);
+		});
+		this.lockBadge = badge;
 		this.textEditor = new TextEditor(this.stage);
 		this.math = new MathTools(this.mathHost());
 		this.penGestures = new PenGestureLayer({
@@ -767,6 +794,7 @@ export class NotebookView extends FileView {
 			},
 		});
 		this.reading = new PdfReading(this.readingHost());
+		this.mountPdfText();
 		this.display = new ViewDisplay(this.displayHost());
 		this.display.applyNight();
 		this.practiceHooks = this.host.practice?.attach(this.practiceHost()) ?? null;
@@ -819,7 +847,7 @@ export class NotebookView extends FileView {
 		this.scope.register(["Mod"], "y", () => (this.redo(), false));
 		this.scope.register([], "Delete", () => (this.deleteSelection(), false));
 		this.scope.register([], "Backspace", () => (this.deleteSelection(), false));
-		this.scope.register([], "Escape", () => (this.excerpts?.disarm(), this.controller?.disarmEraserNext(), this.clearSelection(), false));
+		this.scope.register([], "Escape", () => (this.pdfText?.exit(), this.excerpts?.disarm(), this.controller?.disarmEraserNext(), this.clearSelection(), false));
 	}
 
 	async onClose(): Promise<void> {
@@ -839,12 +867,19 @@ export class NotebookView extends FileView {
 		this.pens?.destroy();
 		this.pens = null;
 		this.penSetUi = null;
+		this.pdfText?.destroy();
+		this.pdfText = null;
+		this.pdfLinks?.destroy();
+		this.pdfLinks = null;
+		this.pdfOutline = null;
 		this.reading?.destroy();
 		this.reading = null;
 		this.display?.destroy();
 		this.display = null;
 		this.practiceHooks?.destroy();
 		this.practiceHooks = null;
+		this.presentation?.destroy();
+		this.presentation = null;
 		this.lectureMode?.destroy();
 		this.lectureMode = null;
 		this.statesTools?.destroy();
@@ -1190,7 +1225,9 @@ export class NotebookView extends FileView {
 		this.media?.destroy();
 		this.media = null;
 		this.reading?.reset();
+		this.pdfText?.reset();
 		this.pageNav?.invalidate();
+		this.presentation?.destroy();
 		this.lectureMode?.closed();
 		await super.onUnloadFile(file);
 	}
@@ -1271,7 +1308,8 @@ export class NotebookView extends FileView {
 	private applyInput(settings: NotebookSettings = this.host.settings): void {
 		const base = policySettings(settings);
 		const policy = this.reading ? this.reading.policy(base) : base;
-		this.policy.settings = this.userReadOnly ? { ...policy, fingerDrawing: false } : policy;
+		// 0.16: in the Select text mode a finger selects (it never writes there), also while the notebook is read-only.
+		this.policy.settings = this.pdfText?.active ? { ...policy, fingerDrawing: true } : this.userReadOnly ? { ...policy, fingerDrawing: false } : policy;
 	}
 
 	/** wave 0.10 (51): read-only mode of this view is on. */
@@ -1727,6 +1765,30 @@ export class NotebookView extends FileView {
 		}).open();
 	}
 
+	/** 0.16 (#90): the Highlights digest dialog (grouping, picture quality); the note is written next to the notebook. */
+	openHighlightsDigest(): void {
+		const doc = this.session?.doc;
+		const file = this.file;
+		if (!doc || !file) return;
+		const pages = [...this.renderPagesOf(doc)];
+		if (digestCounts(pages).regions === 0) {
+			showNotice(t("digest.none"), 6000);
+			return;
+		}
+		const options = this.exportOptions();
+		new HighlightsDigestModal({
+			app: this.app, file, pages, group: this.host.settings.digestGroup,
+			run: (request) => void runHighlightsDigest({
+				app: this.app, file, pages, media: this.media,
+				render: {
+					...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+					...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				},
+				...(options.prepare ? { prepare: options.prepare } : {}),
+			}, request),
+		}).open();
+	}
+
 	/** wave 0.9: view-only night mode and cropped margins (null before the view is open). */
 	/** wave 0.10 (363): the open notebooks (view actions). */
 	get tabTools(): NotebookTabs | null {
@@ -1937,6 +1999,97 @@ export class NotebookView extends FileView {
 		this.excerpts.attachReadOnlyTaps(this.stage);
 	}
 
+	/** 0.16: the page and the page point under a position of the window, or null (between pages, nothing laid out). */
+	private pageUnderClient(clientX: number, clientY: number): { pageIndex: number; local: [number, number] } | null {
+		const layout = this.layout;
+		if (!layout) return null;
+		const r = this.stage.getBoundingClientRect();
+		const [dx, dy] = screenToPage(this.viewport, clientX - r.left, clientY - r.top);
+		const pageIndex = pageAt(layout, dx, dy, 0);
+		return pageIndex < 0 ? null : { pageIndex, local: toPageLocal(layout.boxes[pageIndex]!, dx, dy) };
+	}
+
+	/** 0.16 (#45): a contact began in the Select text mode. */
+	private pdfTextStart(sample: InkSample): boolean {
+		const layout = this.layout;
+		const text = this.pdfText;
+		if (!layout || !text) return true;
+		const [dx, dy] = this.toDoc(sample);
+		const pageIndex = Number.isFinite(dx) && Number.isFinite(dy) ? pageAt(layout, dx, dy, PAGE_TOLERANCE) : -1;
+		const box = pageIndex >= 0 ? layout.boxes[pageIndex] : undefined;
+		return text.begin(pageIndex, box ? toPageLocal(box, dx, dy) : null, sample);
+	}
+
+	/** 0.16: the Select text mode (#45), the links of PDF pages and the PDF outline (#46). */
+	private mountPdfText(): void {
+		const pdf = () => {
+			const media = this.media;
+			if (!media) throw new Error("no media");
+			return media.pdf;
+		};
+		this.pdfOutline = new PdfOutlineSource({
+			storage: this.app,
+			read: (asset) => pdf().outline(asset),
+			changed: () => this.pageNav?.refresh(),
+		});
+		const links = new PdfLinks({
+			app: this.app,
+			stage: this.stage,
+			enabled: () => this.host.settings.pdfLinks && !this.presentation?.isOpen,
+			doc: () => this.shownDoc(),
+			layout: () => this.layout,
+			pageLinks: (asset, page) => pdf().pageLinks(asset, page),
+			pageAtClient: (x, y) => this.pageUnderClient(x, y),
+			fingerWrites: () => this.policy.settings.fingerDrawing,
+			readOnly: () => !this.editable(),
+			selecting: () => this.pdfText?.active === true,
+			scale: () => this.viewport.scale,
+			goTo: (index) => this.goToPage(index),
+		});
+		this.pdfLinks = links;
+		this.pdfText = new PdfTextTools({
+			stage: this.stage,
+			body: this.body,
+			doc: () => this.shownDoc(),
+			layout: () => this.layout,
+			viewport: () => this.viewport,
+			viewSize: () => this.viewSize,
+			visibleRect: () => this.visibleRect(),
+			pageText: (asset, page) => pdf().pageText(asset, page),
+			links,
+			quoteLink: (pageIndex) => {
+				const page = this.shownDoc()?.pages[pageIndex];
+				return this.file && page ? pageLinkText(this.app, this.file, pageIndex + 1, "link", page.id) : "";
+			},
+			pdfName: (asset) => this.shownDoc()?.assets?.[asset]?.name ?? "",
+			modeChanged: (on) => {
+				if (on) {
+					// Whatever was being written is finished first; a selection of ink or a pending placement would be in the way.
+					this.controller?.finishActiveStroke();
+					this.commitText();
+					this.clearSelection();
+					this.markers?.disarm();
+					this.excerpts?.disarm();
+					this.radial?.close();
+					this.penLinks?.hideChip();
+				}
+				this.applyInput();
+				this.refreshUi();
+			},
+			isNarrow: () => this.body.hasClass("is-narrow"),
+		});
+		// Ctrl/Cmd+C copies the selected PDF text.
+		this.registerDomEvent(document, "copy", (e) => {
+			if (!this.pdfText?.hasSelection || this.app.workspace.getActiveViewOfType(NotebookView) !== this) return;
+			const target = e.target instanceof HTMLElement ? e.target : null;
+			if (target?.closest("input, textarea, [contenteditable='true'], .modal")) return;
+			const text = this.pdfText.copyText();
+			if (text === null) return;
+			e.clipboardData?.setData("text/plain", text);
+			e.preventDefault();
+		});
+	}
+
 	private mountMarkers(): void {
 		this.markers = new MarkerTools({
 			app: this.app,
@@ -2000,8 +2153,15 @@ export class NotebookView extends FileView {
 			outline: () => this.outlineBuilder,
 			sources: () => ({
 				bookmarks: this.host.settings.outlineBookmarks, slides: this.host.settings.outlineSlides,
-				headings: this.host.settings.outlineHeadings, markers: this.host.settings.outlineMarkers,
+				headings: this.host.settings.outlineHeadings, markers: this.host.settings.outlineMarkers, pdf: this.host.settings.outlinePdf === "merged",
 			}),
+			pdfOutlineMode: () => this.host.settings.outlinePdf,
+			// 0.16 (#46): the outlines already known; the others are read in the background and the panel refreshed.
+			pdfOutlines: () => {
+				const assets = this.session?.doc?.assets;
+				if (!assets || this.host.settings.outlinePdf === "off") return {};
+				return this.pdfOutline?.known(Object.values(assets).filter((a) => a.kind === "pdf").map((a) => a.id)) ?? {};
+			},
 			headingImage: (item) => {
 				const page = this.session?.doc?.pages.find((p) => p.id === item.pageId);
 				return page ? this.headingThumbs.url(page, item) : null;
@@ -2273,10 +2433,69 @@ export class NotebookView extends FileView {
 		if (!this.editableDocument()) return false;
 		this.commitText();
 		this.clearSelection();
-		this.history.execute(cmd);
+		// False when the history refused it (a locked page, or a change the writer would reject): the callers say so.
+		const done = this.history.execute(cmd);
 		this.afterHistoryChange();
-		if (scrollTo !== undefined) this.scrollToPage(scrollTo);
-		return true;
+		if (done && scrollTo !== undefined) this.scrollToPage(scrollTo);
+		return done;
+	}
+
+	// --- page lock (0.16, #124; the guard itself is in model/history.ts + model/page-lock.ts) ---
+
+	/** The last time the "Page locked" notice was shown (it lasts 5 s: one at a time). */
+	private lockNoticeAt = 0;
+	private lockBadge: HTMLButtonElement | null = null;
+
+	/** Locks or unlocks a page of this document (one undo step). False when it could not be done. */
+	setPageLocked(page: Page, value: boolean): boolean {
+		if (!this.editableDocument()) {
+			showNotice(t("lock.readOnly"));
+			return false;
+		}
+		if ((page.locked === true) === value) return true;
+		const done = this.applyCommand(new SetPageLocked(page.id, value));
+		if (done && !value) showNotice(t("lock.unlocked"), 2500);
+		return done;
+	}
+
+	/** A locked page refused an edit (the history's guard, or a gate before one): says so once, with a button that unlocks the page. */
+	private pagesLocked(pageIds: readonly string[]): void {
+		const now = Date.now();
+		if (now - this.lockNoticeAt < 5000) return;
+		this.lockNoticeAt = now;
+		const id = pageIds[0];
+		let handle: NoticeHandle | null = null;
+		const fragment = createFragment((f) => {
+			f.createSpan({ text: t("lock.toast") });
+			f.createSpan({ text: " · " });
+			f.createEl("button", { text: t("lock.toast.unlock"), cls: "mod-cta", attr: { type: "button" } }).addEventListener("click", (e) => {
+				e.preventDefault();
+				handle?.hide();
+				this.lockNoticeAt = 0;
+				const page = this.session?.doc?.pages.find((p) => p.id === id);
+				if (page) this.setPageLocked(page, false);
+			});
+		});
+		handle = showErrorNotice(fragment, 5000);
+	}
+
+	/** The lock badge over the page area follows the page in view; a tap unlocks it. */
+	private syncLockBadge(locked: boolean): void {
+		const badge = this.lockBadge;
+		if (!badge) return;
+		badge.toggleClass("is-visible", locked);
+		badge.disabled = !locked || !this.editable();
+	}
+
+	/** Whether any page of the selection is locked (a locked page can be selected to copy from, not to change). */
+	private lockedSelectionPage(sel: Selection): Page | null {
+		const doc = this.session?.doc;
+		if (!doc) return null;
+		for (const part of this.selectionParts(sel)) {
+			const page = doc.pages[part.pageIndex];
+			if (page?.locked) return page;
+		}
+		return null;
 	}
 
 	/** wave 0.7 (366): what "Go to page number" needs. */
@@ -2451,14 +2670,14 @@ export class NotebookView extends FileView {
 			tool: this.tools.tool,
 			selection: sel && !this.statesTools?.ownsSelection(sel) ? this.selectionCounts(sel) : null,
 			page: page ? {
-				index, count: pages.length, background: page.background?.kind ?? "none", infinite: !!page.infinite,
+				index, count: pages.length, background: page.background?.kind ?? "none", infinite: !!page.infinite, locked: page.locked === true,
 				bookmarked: doc?.meta?.bookmarks.includes(page.id) ?? false, splittable: page.id === this.heavyPageId,
 				kind: pageKindOf({ background: page.background?.kind ?? "none", paper: page.paper.kind, width: page.width, height: page.height }),
 			} : null,
 			notebook: { pdfPages: hasPdfPages(pages), backgrounds: hasBackgrounds(pages) },
 			lecture: this.lectureMode?.on ?? false,
 			sidePane: pdfSideState(this),
-			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false, snap: this.reading?.snapping ?? false },
+			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false, snap: this.reading?.snapping ?? false, selectText: this.pdfText?.active ?? false },
 			display: { night: this.display?.night ?? false, crop: this.display?.crop ?? false },
 			states: { open: !!this.statesTools?.open },
 			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle", readOnly: this.userReadOnly },
@@ -2525,6 +2744,16 @@ export class NotebookView extends FileView {
 			menu.addItem((i) => i.setTitle(actionLabel(a)).setIcon(a.icon).setSection("action").setDisabled(!isEnabled(a, c))
 				.onClick(() => (a.scope === "global" ? this.host.runGlobal?.(id) : this.runAction(id))));
 		}
+	}
+
+	/** 0.16 (#87): true while the presentation is on (the Select text mode and PDF link taps stay off then). */
+	get presenting(): boolean {
+		return this.presentation?.isOpen === true;
+	}
+
+	/** 0.16 (#45): the Select text mode for the commands; null before the view is open. */
+	get pdfTextTools(): PdfTextTools | null {
+		return this.pdfText;
 	}
 
 	/** The PDF reading tools (search, hide annotations, dimming) for the commands; null before the view is open. */
@@ -2695,9 +2924,10 @@ export class NotebookView extends FileView {
 			execute: (cmd, scrollTo) => {
 				this.commitText();
 				this.clearSelection();
-				this.history.execute(cmd);
+				const done = this.history.execute(cmd);
 				this.afterHistoryChange();
-				if (scrollTo !== undefined) this.scrollToPage(scrollTo);
+				if (done && scrollTo !== undefined) this.scrollToPage(scrollTo);
+				return done;
 			},
 			flush: async () => (await this.flushNow()) && this.session === session && session.isSaved(),
 		};
@@ -2800,6 +3030,7 @@ export class NotebookView extends FileView {
 		this.renderer?.setDocument(doc ? this.renderPagesOf(doc) : null, this.layout);
 		this.pushRuler();
 		this.reading?.docChanged();
+		this.pdfText?.docChanged();
 		this.display?.docChanged();
 	}
 
@@ -2848,6 +3079,7 @@ export class NotebookView extends FileView {
 		this.radial?.close();
 		this.ruler = null;
 		this.reading?.reset();
+		this.pdfText?.reset();
 		if (doc && mode === "ok") {
 			this.messageEl.hide();
 			this.body.show();
@@ -2987,7 +3219,9 @@ export class NotebookView extends FileView {
 	private updatePageIndicator(): void {
 		const n = this.shownDoc()?.pages.length ?? 0;
 		const current = n ? this.currentPageIndex() : -1;
-		this.toolbar.setPage(n ? current + 1 : 0, n);
+		const lockedPage = n ? this.shownDoc()?.pages[current]?.locked === true : false;
+		this.toolbar.setPage(n ? current + 1 : 0, n, lockedPage);
+		this.syncLockBadge(lockedPage);
 		this.notifyStatus();
 		if (n) this.practiceHooks?.page(current);
 		if (n && this.file) this.pageClock.note(this.file.path, current, new Date());
@@ -3016,6 +3250,8 @@ export class NotebookView extends FileView {
 		this.lastTool.note(state.tool);
 		// v10: an armed excerpt region is for the tool it was armed with.
 		if (state.tool !== before.tool) this.excerpts?.disarm();
+		// 0.16: choosing a tool leaves the Select text mode (the pen writes again).
+		if (state.tool !== before.tool) this.pdfText?.exit();
 		// 0.11.2: so is "next stroke erases".
 		if (state.tool !== before.tool) this.controller?.disarmEraserNext();
 		if (state.tool !== "lasso") this.clearSelection();
@@ -3040,6 +3276,72 @@ export class NotebookView extends FileView {
 		}, 150);
 	}
 
+	// --- 0.16 (#87): presentation mode (logic in view/present-logic.ts, the overlay in view/present-mode.ts) ---
+
+	/** Presents the notebook full screen from the page in view. Nothing is written to the document. */
+	startPresentation(): void {
+		if (this.presentation?.isOpen) return;
+		if ((this.shownDoc()?.pages.length ?? 0) === 0) {
+			showNotice(t("present.empty"), 3000);
+			return;
+		}
+		// The Select text mode (#45) and the presentation both take every contact: leave the mode first.
+		this.pdfText?.exit();
+		this.presentation ??= new PresentationMode({
+			container: () => this.contentEl,
+			pages: () => this.shownDoc()?.pages ?? [],
+			startIndex: () => this.currentPageIndex(),
+			settings: () => this.host.settings,
+			render: (page, widthPx) => this.renderPresentPage(page, widthPx),
+			inkMode: (on, pos) => this.presentInk(on, pos),
+			inkGo: (pos) => this.presentInkGo(pos.page, pos.state),
+			closed: (index) => {
+				if (index !== this.currentPageIndex()) this.goToPage(index);
+			},
+		});
+		this.presentation.open();
+	}
+
+	/** The image of a page for the presentation: PDF pages are drawn at the size shown, images that are still loading are waited for a moment. */
+	private async renderPresentPage(page: Page, widthPx: number): Promise<string> {
+		const bg = page.background;
+		let pdfCanvas: CanvasImageSource | undefined;
+		if (bg && bg.kind === "pdf" && this.media) {
+			try {
+				pdfCanvas = await this.media.pdf.render(bg.asset, bg.page, widthPx / Math.max(1, page.width));
+			} catch (e) {
+				console.error("[notebook] presentation: rendering the PDF page failed", e);
+			}
+		}
+		let url = "";
+		for (let attempt = 0; attempt < 4; attempt++) {
+			this.thumbPending.delete(page.id);
+			url = renderThumbnail(page, widthPx, { mime: "image/jpeg", quality: 0.92, drawBackground: (ctx, p) => this.drawThumbMedia(ctx, p, pdfCanvas) });
+			if (!this.thumbPending.has(page.id)) break;
+			await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+		}
+		return url;
+	}
+
+	/** "Write while presenting": the notebook's own page-by-page view shows the presented page behind the transparent overlay. */
+	private presentInk(on: boolean, pos: { page: number; state: string | null }): number | null {
+		if (on) {
+			this.presentWasPaged = this.pageMode?.enabled ?? false;
+			if (!this.presentWasPaged) this.setScrollMode("pages");
+			this.presentInkGo(pos.page, pos.state);
+			return null;
+		}
+		const index = this.currentPageIndex();
+		if (!this.presentWasPaged) this.setScrollMode(this.host.settings.scrollMode);
+		return index;
+	}
+
+	private presentInkGo(index: number, state: string | null): void {
+		this.scrollToPage(index);
+		const page = this.shownDoc()?.pages[index];
+		if (page?.states && page.states.list.length > 0) this.statesTools?.switchTo(state);
+	}
+
 	/** 0.14 (408): the notebook map, with its per-page cache (one per open view). */
 	private readonly mapCache = new NotebookMapCache();
 
@@ -3051,7 +3353,17 @@ export class NotebookView extends FileView {
 			current: () => this.currentPageIndex(),
 			thumbnail: (page) => this.pageNav?.thumbnailOf(page) ?? BLANK_THUMBNAIL,
 			goTo: (index) => this.goToPage(index),
+			present: () => this.startPresentation(),
+
+			setLocked: (pageId, value) => this.setLockedById(pageId, value),
+			canLock: () => !!this.editableDocument(),
 		}).open();
+	}
+
+	/** Locks or unlocks the page with this id (the page strip and the notebook map). */
+	private setLockedById(pageId: string, value: boolean): boolean {
+		const page = this.session?.doc?.pages.find((p) => p.id === pageId);
+		return page ? this.setPageLocked(page, value) : false;
 	}
 
 	private thumbnail(page: Page, width: number): string {
@@ -3065,14 +3377,15 @@ export class NotebookView extends FileView {
 	}
 
 	/** Background and elements of a thumbnail; whatever is not loaded yet is drawn as a placeholder and retried later. */
-	private drawThumbMedia(ctx: CanvasRenderingContext2D, page: Page): void {
+	private drawThumbMedia(ctx: CanvasRenderingContext2D, page: Page, pdfCanvas?: CanvasImageSource): void {
 		const media = this.media;
 		if (!media) return;
 		let incomplete = false;
 		const bg = page.background;
 		if (bg) {
 			let img: CanvasImageSource | null;
-			if (bg.kind === "image") img = media.image(bg.asset);
+			if (pdfCanvas && bg.kind !== "image") img = pdfCanvas;
+			else if (bg.kind === "image") img = media.image(bg.asset);
 			else {
 				// Never ask for another scale of a page the main view is drawing: a render in flight would be cancelled.
 				img = (media.pdf.peek(bg.asset, bg.page)?.canvas as CanvasImageSource | undefined) ?? null;
@@ -3168,6 +3481,7 @@ export class NotebookView extends FileView {
 		this.renderer?.setViewport(this.viewport, interactive);
 		this.penLinks?.viewChanged();
 		this.reading?.viewportChanged();
+		this.pdfText?.viewportChanged();
 		if (this.selection) this.pushSelection();
 		this.placeTextEditor();
 		this.math?.place();
@@ -3229,6 +3543,10 @@ export class NotebookView extends FileView {
 		const page = this.pageAtIndex(pageIndex);
 		const editor = this.textEditor;
 		if (!page || !editor) return;
+		if (page.locked) {
+			this.pagesLocked([page.id]);
+			return;
+		}
 		this.clearSelection();
 		const texts = (page.elements ?? []).filter((e): e is TextElement => e.type === "text");
 		const hit = hitElement(texts, local[0], local[1], 4 / this.viewport.scale, measureText) as TextElement | null;
@@ -3375,6 +3693,8 @@ export class NotebookView extends FileView {
 		const spare = continued ? this.justCommitted?.ids : undefined;
 		this.justCommitted = null;
 		const layout = this.layout;
+		// 0.16 (#45): in the Select text mode every contact selects text; nothing is drawn.
+		if (layout && this.pdfText?.active) return this.pdfTextStart(sample);
 		if (!layout || !this.editable()) return false;
 		this.commitText();
 		const [dx, dy] = this.toDoc(sample);
@@ -3403,6 +3723,12 @@ export class NotebookView extends FileView {
 		}
 		const page = this.pageAtIndex(pageIndex);
 		const local = toPageLocal(layout.boxes[pageIndex]!, dx, dy);
+		// 0.16 (#124): a locked page takes no ink, text, shape, space or eraser: only the lasso, to select and copy from it.
+		if (page?.locked && tool !== "lasso") {
+			this.clearSelection();
+			this.pagesLocked([page.id]);
+			return false;
+		}
 		if (page) this.lastPen = { pageId: page.id, x: local[0], y: local[1], at: Date.now() };
 
 		// v8: an armed marker or box is placed, a tap on a badge toggles it (eraser and lasso keep their own taps).
@@ -3439,6 +3765,12 @@ export class NotebookView extends FileView {
 			const grab = sel?.others?.length ? this.toLocal(sel.pageIndex, sample) ?? local : local;
 			const hit = sel && (sel.pageIndex === pageIndex || sel.others?.length) ? this.selectionHit(grab) : null;
 			if (sel && hit) {
+				// 0.16 (#124): a selection on a locked page can be copied, not moved, scaled or turned.
+				const lockedPage = this.lockedSelectionPage(sel);
+				if (lockedPage) {
+					this.pagesLocked([lockedPage.id]);
+					return false;
+				}
 				this.drag = { kind: hit, start: grab, startMatrix: sel.matrix };
 				return true;
 			}
@@ -3510,6 +3842,12 @@ export class NotebookView extends FileView {
 		if (n > 0) this.perfInput = samples.t[n - 1]!;
 		// v10: a contact that started on an excerpt's badge and moves is ink, not a tap.
 		if (this.excerpts) for (let i = 0; i < n; i++) this.excerpts.watch(NotebookView.at(samples, i));
+		if (this.pdfText?.dragging) {
+			const textPage = this.pdfText.gesturePage;
+			const last = n > 0 ? NotebookView.at(samples, n - 1) : null;
+			if (textPage !== null && last) this.pdfText.move(this.toLocal(textPage, last), last);
+			return;
+		}
 
 		if (this.penGestures?.active) {
 			this.penGestures.move(samples);
@@ -3713,6 +4051,7 @@ export class NotebookView extends FileView {
 	}
 
 	private endGesture(cancelled: boolean): void {
+		if (this.pdfText?.end(cancelled)) return;
 		if (this.markers?.end(cancelled)) return;
 		if (this.excerpts?.end(cancelled)) return;
 		if (this.penGestures?.active) {
@@ -3984,6 +4323,11 @@ export class NotebookView extends FileView {
 		const page = doc.pages[pageIndex];
 		const box = layout.boxes[pageIndex];
 		if (!page || !box) return;
+		// 0.16 (#124): the eraser leaves a locked page alone.
+		if (page.locked) {
+			this.pagesLocked([page.id]);
+			return;
+		}
 		const [ax, ay] = toPageLocal(box, px, py);
 		const [bx, by] = toPageLocal(box, x, y);
 		const hits = findHitStrokes(filterErasable(this.inkInView(page), this.eraseFilter()), ax, ay, bx, by, radius, this.renderer.boundsOf);
@@ -4574,6 +4918,9 @@ export class NotebookView extends FileView {
 			sharedClips: () => this.host.sharedClips?.() ?? (this.sharedClipStore ??= new SharedClipStore(vaultDeviceFileAdapter(this.app), () => this.host.settings.folder, sidecarDeviceId(this.app))),
 			pasteTarget: () => this.pasteTarget(),
 			textStyle: () => ({ fontSize: this.tools.textSize, color: this.tools.penColor }),
+			thumbnail: (page) => this.pageNav?.thumbnailOf(page) ?? BLANK_THUMBNAIL,
+			goToPage: (index) => this.goToPage(index),
+			clearSelection: () => this.clearSelection(),
 			stillHere: (doc) => this.session?.doc === doc && this.editable() && !this.controller?.drawing,
 		});
 		this.arrange = new SelectionArrange({

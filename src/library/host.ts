@@ -9,12 +9,13 @@ import { applyNotebookMeta, joinPath, notebookDocument, type NotebookSpec } from
 import type { PickedFile } from "../view/pick";
 import { FolderMetaStore } from "./folder-meta-store";
 import { assetExtension, assetPath, assetsFolder } from "../pdf/assets";
+import { assetIdFromHash, sha256Hex } from "../pdf/hash";
 import { scanFromCamera } from "../scan/scan-modal";
 import { scannedPage } from "../scan/pages";
 import { PdfStore } from "../pdf/pdf-store";
 import type { PdfLib } from "../pdf/pdfjs-types";
 import { backupFolder, readSettings, type NotebookSettings } from "../settings";
-import { readNotebookText, writeNotebookText } from "../storage/format";
+import { NEW_NOTEBOOK_EXTENSION, readNotebookText, writeNotebookText } from "../storage/format";
 import { createNotebook } from "../storage/notebooks";
 import { existsInsensitive } from "../storage/names";
 import { LibraryTrash } from "../storage/trash";
@@ -31,11 +32,17 @@ import { askLectureSetup } from "../view/lecture-pack-modal";
 import { pickFile } from "../view/pick";
 import { libraryIndexPath, parseStoredJson, patchNotebookId, patchNotebookMeta, type MetaPatchResult } from "./host-logic";
 import { importPdfAsNotebook } from "./import-pdf";
+import { BulkImportDialog } from "./bulk-import-dialog";
+import { pickManyFiles, fileSource } from "./bulk-drop";
+import { BulkSkipError, runBulkImport } from "./bulk-import-run";
+import { PhotoDecodeError, photoSize } from "../scan/decode";
+import { artStyleFor } from "../ui/art/generative-art";
 import { hint } from "../ui/hints";
 import { createLectureFromSlides } from "./lecture-pack";
 import { openLooseSheet, openNewQuickPage } from "./loose-sheet";
 import { openTodaysPage } from "./daily";
 import type { LectureTarget } from "./home-stats";
+import { mayDiscardAsset } from "./bulk-discard";
 import { openLibraryCheck } from "./library-check-modal";
 import { openStorageManager } from "./storage-dialog";
 import { LibraryStateStore } from "./library-state-store";
@@ -351,7 +358,12 @@ export class NotebookLibraryHost implements LibraryHost {
 
 	/** Imports a PDF as a new notebook in `folder`: the one chosen in a picker, or `source` when it is already in the vault. */
 	importPdf(folder: string, source?: TFile): void {
-		void importPdfAsNotebook<TFile>({
+		void this.importPdfFrom(folder, source);
+	}
+
+	/** `importPdf`, resolving to whether a notebook was made (0.16: the shared-files inbox goes on from there). */
+	importPdfFrom(folder: string, source?: TFile): Promise<boolean> {
+		return importPdfAsNotebook<TFile>({
 			pick: source
 				? async () => ({ name: source.name, bytes: await this.app.vault.readBinary(source) })
 				: () => pickFile(this.app, "pdf"),
@@ -374,6 +386,69 @@ export class NotebookLibraryHost implements LibraryHost {
 				empty: () => t("import.empty"),
 			},
 		}, folder);
+	}
+
+	/**
+	 * 0.16 (#80): bulk import. `files` are the ones dropped on the library (absent: the device's file picker opens first); the
+	 * bulk-import dialog lists them and makes one notebook per PDF or image, or one for all the images. `after` gets the vault
+	 * paths of the notebooks made (a drop on a Board column sets their status).
+	 */
+	importFiles(folder: string, files?: File[], after?: (paths: string[]) => void): void {
+		void (async () => {
+			const picked = files ?? (await pickManyFiles());
+			if (picked.length === 0) return;
+			const app = this.app;
+			const root = () => this.root();
+			const createdAssets = new Set<string>(); // asset paths this import created (not the ones already in the vault)
+			new BulkImportDialog(app, {
+				root,
+				allFolders: () => app.vault.getAllLoadedFiles().filter((f): f is TFolder => f instanceof TFolder).map((f) => f.path),
+				taken: (dir, clean) => existsInsensitive(app.vault, normalizePath(joinPath(dir, `${clean}.${NEW_NOTEBOOK_EXTENSION}`))),
+				run: (jobs, dir, look, ctl) => runBulkImport<TFile>(jobs, dir, look, {
+					store: async (bytes, name, kind) => {
+						// Remember the copies this run creates: only those may be removed again if their file turns out unusable.
+						const path = normalizePath(assetPath(assetsFolder(root()), assetIdFromHash(await sha256Hex(bytes)), assetExtension(kind, name)));
+						const existed = app.vault.getFileByPath(path) !== null;
+						const asset = await storeAsset(app, root(), bytes, name, kind);
+						this.assets.set(asset.id, asset);
+						if (!existed) createdAssets.add(asset.path);
+						return asset;
+					},
+					discard: async (asset) => {
+						if (!createdAssets.has(asset.path)) return; // it was already in the vault: another notebook may use it
+						const copy = app.vault.getFileByPath(normalizePath(asset.path));
+						// A notebook of the library may already name it (a synced notebook whose asset file was still on its way when
+						// this run looked): never discard then, nor while any notebook is still being downloaded.
+						const notebooks = app.vault.getFiles().filter((f) => f.extension === NEW_NOTEBOOK_EXTENSION);
+						if (!(await mayDiscardAsset(asset.id, notebooks.map((f) => ({ read: () => app.vault.read(f) }))))) return;
+						createdAssets.delete(asset.path);
+						this.assets.delete(asset.id);
+						if (copy) await app.fileManager.trashFile(copy);
+					},
+					pdfSizes: (id) => this.pdf.pageSizes(id),
+					imageSize: (bytes, name, type) => photoSize(bytes, name, type).catch((e: unknown) => {
+						throw e instanceof PhotoDecodeError && e.reason === "heic" ? new BulkSkipError("heic") : e;
+					}),
+					create: async (dir2, name, doc) => {
+						const file = await createNotebook(app, dir2, name, doc);
+						return { file, path: file.path };
+					},
+					notebookExists: (dir2, name) => existsInsensitive(app.vault, normalizePath(joinPath(dir2, `${name}.${NEW_NOTEBOOK_EXTENSION}`))),
+					artStyle: (name) => artStyleFor(name),
+					yieldToUi: () => new Promise<void>((resolve) => window.setTimeout(resolve, 0)),
+				}, ctl),
+				open: (path) => {
+					const file = app.vault.getFileByPath(path);
+					if (file) void this.openNotebook(file);
+				},
+				finished: (outcomes) => {
+					const made = outcomes.flatMap((o) => (o.path !== null ? [o.path] : []));
+					if (made.length > 0) after?.(made);
+				},
+				notify: (text) => void showNotice(text),
+				today: () => new Date().toISOString().slice(0, 10),
+			}, picked.map(fileSource), folder).open();
+		})();
 	}
 
 	nowClass(): { course: string; room?: string } | null {

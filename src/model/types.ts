@@ -2,6 +2,7 @@
 
 export const FORMAT_ID = "obsidian-notebook";
 /**
+ * v14: a finished page can be locked (#124): `Page.locked` makes the page refuse every edit until it is unlocked.
  * v13: drawings with states (#241): `Page.states` groups strokes into parts and keeps, per state, where each part is.
  * v12: ink remembers the slide shown beside the notes while it was written (`slides`, `Stroke.slide`, #226).
  * v11: notebook description and generated or image cover (`meta.description`, `meta.coverArt`). v10: anchored excerpts (page elements that show a region of a page and jump back to it). v9: equations (LaTeX,
@@ -10,7 +11,7 @@ export const FORMAT_ID = "obsidian-notebook";
  * around a background; v5: per-stroke render version; v4: library metadata, assets, backgrounds, elements,
  * infinite pages, "shape" tool; v3: paper kinds and page sizes).
  */
-export const CURRENT_VERSION = 13;
+export const CURRENT_VERSION = 14;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -418,6 +419,12 @@ export interface Page {
 	tags?: string[];
 	/** v13 (#241): parts of the drawing and the states they move between. Written only when there is a live part. */
 	states?: PageStates;
+	/**
+	 * v14 (#124): the page is locked, a finished page that refuses every edit (ink, eraser, selection changes, text, elements,
+	 * paste, states, paper, size, margins, background, deletion) until it is unlocked. Written only when true; locking and
+	 * unlocking are ordinary undoable commands (`SetPageLocked`). Reading, navigation, export, copy-out and search work.
+	 */
+	locked?: true;
 }
 
 /**

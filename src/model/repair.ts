@@ -78,7 +78,7 @@ export type RepairResult =
 
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 /** Page fields of the current format (a field dropped by the repair is not "unknown"). */
-const PAGE_FIELDS = { id: 1, width: 1, height: 1, paper: 1, strokes: 1, elements: 1, background: 1, infinite: 1, margins: 1, tags: 1, states: 1 };
+const PAGE_FIELDS = { id: 1, width: 1, height: 1, paper: 1, strokes: 1, elements: 1, background: 1, infinite: 1, margins: 1, tags: 1, states: 1, locked: 1 };
 const HEX_RE = /^[0-9a-f]+$/;
 
 function isObj(v: unknown): v is RawObject {
@@ -132,7 +132,7 @@ function jsonOrUndefined(text: string): unknown {
 
 const HEADER_LINE = /^\t"(format|version|id|createdAt|modifiedAt|meta|position)": (.*)$/;
 const ASSET_LINE = /^\t\t("[0-9a-f]+"): (\{.*\}),?$/;
-const PAGE_FIELD_LINE = /^\t\t\t"(id|width|height|paper|tags|background|infinite|margins|states)": (.*)$/;
+const PAGE_FIELD_LINE = /^\t\t\t"(id|width|height|paper|tags|background|infinite|margins|states|locked)": (.*)$/;
 /** A v12 slide table entry (two tabs, content on the line: a page starts with a bare "\t\t{" line). */
 const SLIDE_LINE = /^\t\t(\{"id":.*\}),?$/;
 const ITEM_LINE = /^\t\t\t\t(\{.*\}),?$/;
@@ -549,6 +549,11 @@ function salvageSkeleton(p: RawObject, ctx: SalvageContext): { page: RawObject; 
 	if (p.infinite !== undefined) {
 		if (typeof p.infinite === "boolean") page.infinite = p.infinite;
 		else ctx.summary.fieldsReset++;
+	}
+	if (p.locked !== undefined) {
+		// v14: a locked page stays locked; `false` is the same as absent; anything else is reset (the page is then unlocked).
+		if (p.locked === true) page.locked = true;
+		else if (p.locked !== false) ctx.summary.fieldsReset++;
 	}
 	if (p.tags !== undefined) {
 		// v7 page tags: the strings are kept (normalised); anything else in the list is dropped.

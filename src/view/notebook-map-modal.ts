@@ -16,6 +16,13 @@ export interface NotebookMapHost {
 	/** Data URL of a page thumbnail (the navigator's cache). */
 	thumbnail(page: Page): string;
 	goTo(index: number): void;
+	/** 0.16 (#87): starts the presentation from the page in view (the button is not offered when absent). */
+	present?: () => void;
+
+	/** 0.16 (#124): locks or unlocks a page; true when it was done. Absent: no lock buttons. */
+	setLocked?(pageId: string, value: boolean): boolean;
+	/** The notebook can be edited now (the lock buttons are enabled). */
+	canLock?(): boolean;
 }
 
 export const MAP_STATE_ICON: Readonly<Record<MapState, string>> = {
@@ -90,6 +97,16 @@ export class NotebookMapModal extends Modal {
 			if (n === 0 && this.filter !== s) continue;
 			chip(chips, { label: t(STATE_LABEL[s]), icon: MAP_STATE_ICON[s], count: n, active: this.filter === s, key: s, onClick: () => this.setFilter(s) });
 		}
+		const present = this.mapHost.present;
+		if (present) {
+			const b = chips.createEl("button", { cls: "nb-map-present", attr: { type: "button", "aria-label": t("present.title") } });
+			setIcon(b.createSpan({ cls: "nb-map-present-icon" }), "presentation");
+			b.createSpan({ text: t("present.title") });
+			b.addEventListener("click", () => {
+				this.close();
+				present();
+			});
+		}
 		const shown = filterByState(map.pages, this.filter);
 		if (shown.length === 0) {
 			shellNote(grid, t(map.counts.total > 0 && map.counts.clear === map.counts.total ? "map.allClear" : "map.none"));
@@ -118,6 +135,31 @@ export class NotebookMapModal extends Modal {
 			}
 			const foot = card.createDiv({ cls: "nb-map-foot" });
 			foot.createSpan({ cls: "nb-map-num", text: String(mp.index + 1) });
+			// 0.16 (#124): a lock on the thumbnail of a locked page, and a lock button (a span: the card itself is a button) to
+			// lock or unlock any page without leaving the map.
+			if (mp.locked) {
+				const mark = badges.createSpan({ cls: "nb-map-badge is-locked", attr: { "aria-hidden": "true" } });
+				setIcon(mark.createSpan({ cls: "nb-map-badge-icon" }), "lock");
+			}
+			if (this.mapHost.setLocked) {
+				const enabled = this.mapHost.canLock?.() ?? true;
+				const lock = foot.createSpan({
+					cls: "nb-map-lock", attr: { role: "button", tabindex: enabled ? "0" : "-1", "aria-disabled": String(!enabled), "aria-pressed": String(!!mp.locked),
+						"aria-label": t(mp.locked ? "lock.map.unlock" : "lock.map.lock", { n: String(mp.index + 1) }) },
+				});
+				lock.toggleClass("is-on", !!mp.locked);
+				setIcon(lock, mp.locked ? "lock" : "lock-open");
+				const toggle = (e: Event) => {
+					e.preventDefault();
+					e.stopPropagation();
+					if (!enabled) return;
+					if (this.mapHost.setLocked?.(mp.pageId, !mp.locked)) this.render();
+				};
+				lock.addEventListener("click", toggle);
+				lock.addEventListener("keydown", (e) => {
+					if (e.key === "Enter" || e.key === " ") toggle(e);
+				});
+			}
 			if (mp.due) foot.createSpan({ cls: "nb-map-due", text: mp.due });
 			card.addEventListener("click", () => {
 				this.close();

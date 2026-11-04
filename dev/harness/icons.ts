@@ -3,6 +3,17 @@
  * for the harness (24 × 24, 2 px strokes); not Lucide's artwork. Unknown names fall back to two letters.
  */
 const P: Record<string, string> = {
+	// 0.16 merge: move to page, exact position, add to notebook (inbox menu)
+	"arrow-right-to-line": "M17 12H3 M11 6l6 6-6 6 M21 3v18",
+	"crosshair": "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z M22 12h-4 M6 12H2 M12 6V2 M12 22v-4",
+	"book-plus": "M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14 M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5 M12 7v6 M9 10h6",
+	// 0.16 pdftext: the Select text mode and its quote button
+	"quote": "M3 21c3 0 7-1 7-8V5H4v6h4 M14 21c3 0 7-1 7-8V5h-6v6h4",
+	"text-cursor-input": "M5 4h1a3 3 0 0 1 3 3 3 3 0 0 1 3-3h1 M13 20h-1a3 3 0 0 1-3-3 3 3 0 0 1-3 3H5 M5 16H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h1 M13 8h7a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-7 M9 7v10",
+
+	// 0.16 lock
+	"lock": "M5 11h14v10H5z M8 11V7a4 4 0 0 1 8 0v4",
+	"lock-open": "M5 11h14v10H5z M8 11V7a4 4 0 0 1 7-2.6",
 	// 0.13 ds-notebook: the banners' icon squares
 	"alert-triangle": "M12 3L2 20h20z M12 10v4 M12 17h.01",
 	"repeat": "M17 2l4 4-4 4 M3 11V9a3 3 0 0 1 3-3h15 M7 22l-4-4 4-4 M21 13v2a3 3 0 0 1-3 3H3",
@@ -47,6 +58,7 @@ const P: Record<string, string> = {
 	"flag": "M4 22V4 M4 4h13l-2 4 2 4H4",
 	"list-checks": "M3 7l2 2 4-4 M3 17l2 2 4-4 M13 6h8 M13 12h8 M13 18h8",
 	"presentation": "M2 3h20 M3 3v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V3 M7 21l5-5 5 5",
+	"locate-fixed": "M2 12h3 M19 12h3 M12 2v3 M12 19v3 M12 8a4 4 0 1 0 0 8a4 4 0 0 0 0-8z",
 	"search-x": "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z M21 21l-4.3-4.3 M8.5 8.5l5 5 M13.5 8.5l-5 5",
 	"layout-list": "M3 4h7v7H3z M3 13h7v7H3z M14 5h7 M14 9h7 M14 15h7 M14 19h7",
 	"panel-left": "M4 4h16v16H4z M9 4v16",
@@ -111,6 +123,9 @@ const P: Record<string, string> = {
 	"arrow-up-right": "M7 17L17 7 M8 7h9v9",
 	"arrow-up": "M12 19V5 M5 12l7-7 7 7",
 	"arrow-down": "M12 5v14 M5 12l7 7 7-7",
+	"files": "M15 2H8v16h12V7z M15 2v5h5 M4 6v16h12",
+	"images": "M7 4h14v12H7z M7 13l4-4 5 5 M3 8v12h14 M13 8h.01",
+	"download": "M12 4v12 M7 11l5 5 5-5 M4 20h16",
 	"square": "M4 4h16v16H4z",
 	"square-dashed": "M4 4h3 M10 4h4 M17 4h3v3 M20 10v4 M20 17v3h-3 M14 20h-4 M7 20H4v-3 M4 14v-4",
 	"circle": "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z",

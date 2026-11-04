@@ -6,7 +6,7 @@ import { measureText } from "../ink/renderer";
 import { captureCrossPageClip, type PagePart } from "../ink/cross-page";
 import type { PageBox } from "../ink/layout";
 import { commonStyle, planRestyle, restyleAbilities, type StyleGroup } from "../ink/restyle";
-import { AddAsset, AddElement, Batch, ReplaceElement, type Command } from "../model/history";
+import { AddAsset, AddElement, AddPage, Batch, ReplaceElement, type Command } from "../model/history";
 import type { Asset, ImageElement, NotebookDocument, Page, PageElement, Stroke } from "../model/types";
 import { decodePhoto, PhotoDecodeError, photoSize } from "../scan/decode";
 import { isHeic } from "../scan/image-bytes";
@@ -19,6 +19,10 @@ import { SharedClipModal } from "./shared-clip-modal";
 import {
 	clipMarker, decidePaste, MAX_PASTED_TEXT, normalizePastedText, pastedImageElement, pastedImageName, pastedTextElement,
 } from "./paste-logic";
+import { createPage } from "../model/document";
+import { planMoveToPage, type MoveMode } from "../model/selection-move";
+import { PagePickerModal } from "./page-picker-modal";
+import { showNotice } from "./notice";
 import { selectionKindOf } from "../ui/selection-kind";
 import { HIGHLIGHTER_COLORS, HIGHLIGHTER_WIDTHS, PEN_COLORS, PEN_WIDTHS } from "./toolbar";
 
@@ -61,6 +65,12 @@ export interface SelectionHost {
 	/** Page in view and the centre of the view in that page's coordinates. */
 	pasteTarget(): { pageIndex: number; page: Page; x: number; y: number } | null;
 	textStyle(): { fontSize: number; color: string };
+	/** 0.16 (78): data URL of a page thumbnail for the page picker. */
+	thumbnail(page: Page): string;
+	/** 0.16 (78): scrolls to the page (the toast after moving a selection). */
+	goToPage(index: number): void;
+	/** 0.16 (78): drops the selection (its items left the page). */
+	clearSelection(): void;
 	/** True while the same document is still open and editable (everything here is asynchronous). */
 	stillHere(doc: NotebookDocument): boolean;
 }
@@ -265,6 +275,50 @@ export class SelectionActions {
 		const made = instantiateClip(got.clip, dx, dy, undefined, measureText);
 		if (!this.host.execute(pasteCommand(page, made.strokes, made.elements, [], "Duplicate selection"))) return;
 		this.host.select(got.pageIndex, made.strokes, made.elements);
+	}
+
+	// --- 0.16 (78): move or copy the selection to another page ---
+
+	/** Opens the page picker; the chosen page receives the selection (one undo step, a new page included). */
+	moveToPage(mode: MoveMode = "move"): void {
+		const sel = this.host.selection();
+		const doc = this.host.doc();
+		if (!sel || !doc || !this.host.editable() || this.host.ownedByStates?.(sel)) return;
+		if (sel.others?.length) {
+			showNotice(t("movePage.crossPage"));
+			return;
+		}
+		new PagePickerModal(this.host.app, {
+			pages: () => doc.pages, from: sel.pageIndex, mode, thumbnail: (page) => this.host.thumbnail(page),
+			choose: (target, exact) => this.performMove(doc, sel, mode, target, exact),
+		}).open();
+	}
+
+	private performMove(doc: NotebookDocument, sel: SelectionState, mode: MoveMode, target: number | "new", exact: boolean): void {
+		if (!this.host.stillHere(doc) || this.host.selection() !== sel) return;
+		const fresh = target === "new" ? createPage({ width: doc.pages[sel.pageIndex]?.width ?? 595, height: doc.pages[sel.pageIndex]?.height ?? 842 }, { ...(doc.pages[sel.pageIndex]?.paper ?? { kind: "grid" as const, spacing: 20 }) }) : null;
+		const to = fresh ? sel.pageIndex + 1 : (target as number);
+		// A new page is planned against a copy of the page list with it in place, so one Batch adds it and moves the items.
+		const shadow: NotebookDocument = fresh ? { ...doc, pages: [...doc.pages.slice(0, to), fresh, ...doc.pages.slice(to)] } : doc;
+		const plan = planMoveToPage({ doc: shadow, from: sel.pageIndex, to, strokes: sel.strokes, elements: sel.elements, mode, exact, measure: measureText });
+		if ("refused" in plan) {
+			showNotice(t(plan.refused === "bound-ink" ? "movePage.boundInk" : "movePage.nothing"));
+			return;
+		}
+		const command = fresh ? new Batch(plan.command.label, [new AddPage(fresh, to), plan.command]) : plan.command;
+		this.host.clearSelection();
+		if (!this.host.execute(command)) return;
+		const key = mode === "move" ? "movePage.moved" : "movePage.copied";
+		const message = t(key, { n: String(plan.count), page: String(to + 1) }) + (plan.leftParts > 0 ? ` ${t("movePage.leftParts")}` : "");
+		const fragment = createFragment((f) => {
+			f.createDiv({ text: message });
+			const button = f.createEl("button", { text: t("movePage.goTo"), cls: "mod-cta", attr: { type: "button" } });
+			button.addEventListener("click", (e) => {
+				e.preventDefault();
+				this.host.goToPage(to);
+			});
+		});
+		showNotice(fragment, 8000);
 	}
 
 	// --- wave 0.10 (362): the clipboard shared with the other devices ---

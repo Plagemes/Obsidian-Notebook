@@ -22,6 +22,7 @@ import { isUiLanguage, type UiLanguage } from "./i18n/languages";
 import { cleanUserName } from "./library/greeting";
 import { normaliseSeen, type HintId } from "./ui/hint-logic";
 import { DEFAULT_READING_SETTINGS, readReadingSettings, type ReadingSettings } from "./view/reading-settings";
+import { DEFAULT_PRESENT_SETTINGS, readPresentSettings, type PresentSettings } from "./view/present-logic";
 import { DEFAULT_BOARD_SETTINGS, readBoardSettings, type BoardSettings } from "./library/board-logic";
 
 /** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
@@ -29,7 +30,7 @@ import { DEFAULT_BOARD_SETTINGS, readBoardSettings, type BoardSettings } from ".
 export const APPEARANCE_STYLES = ["notebook", "obsidian"] as const;
 export type AppearanceStyle = (typeof APPEARANCE_STYLES)[number];
 
-export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings, LectureSettings, BoardSettings {
+export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings, LectureSettings, BoardSettings, PresentSettings {
 	/** UI language: "auto" follows Obsidian. */
 	uiLanguage: UiLanguage;
 	folder: string;
@@ -69,6 +70,10 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	outlineSlides: boolean;
 	outlineHeadings: boolean;
 	outlineMarkers: boolean;
+	/** 0.16 (#46): the outline of a PDF in the notebook outline: mixed into the list (merged), its own section, or not listed. */
+	outlinePdf: "merged" | "section" | "off";
+	/** 0.16 (#46): a tap on a link of a PDF page follows it (another page of the notebook, or a web address after a question). */
+	pdfLinks: boolean;
 	/** Favourite pens (six slots: tool, colour, width). */
 	favouritePens: FavouritePen[];
 	/** 0.15 pen sets: named lists of pens per subject (starter sets Maths, Languages, Science; all editable). */
@@ -83,6 +88,10 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	looseSheetPath: string;
 	/** 0.15 (O12): vault path of the daily notebook ("Today's page"); empty = `<notebooks folder>/Daily.notebook`. */
 	dailyNotebookPath: string;
+	/** 0.16 (#177): show PDFs and images shared to Obsidian from other apps (Home's shared-files card and the library rail). */
+	sharedInbox: boolean;
+	/** 0.16 (#177): folder watched for shared files; empty = Obsidian's attachments folder. */
+	sharedInboxFolder: string;
 	/** 0.15 (O12): "Today's page" also adds a link to the page in today's daily note (Daily notes or Periodic Notes). */
 	dailyLink: boolean;
 	/** 0.15 (O12): create today's daily note when it does not exist yet (only used with `dailyLink`). */
@@ -174,6 +183,9 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	/** After the pen lifts near the right margin of ruled or grid paper, the view moves to the start of the next line (353). Off by default. */
 	autoLineBreak: boolean;
 	// 0.15 (#75): automatic page header / footer
+	// 0.16 (#90): highlights digest
+	/** How the digest note of the highlights is grouped: by page or by colour. */
+	digestGroup: "page" | "colour";
 	headerMode: HeaderMode;
 	headerPageNumber: boolean;
 	headerPageTotal: boolean;
@@ -227,6 +239,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	outlineSlides: true,
 	outlineHeadings: true,
 	outlineMarkers: true,
+	outlinePdf: "merged",
+	pdfLinks: true,
 	favouritePens: DEFAULT_FAVOURITES.map((f) => ({ ...f })),
 	penSets: defaultPenSets(),
 	penSetFolders: {},
@@ -234,6 +248,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	eraserSize: DEFAULT_ERASER_SIZE,
 	looseSheetPath: "",
 	dailyNotebookPath: "",
+	sharedInbox: true,
+	sharedInboxFolder: "",
 	dailyLink: false,
 	dailyCreateNote: false,
 	edgeRejection: false,
@@ -270,6 +286,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	pageTurnerKeys: true,
 	notebookTabs: false,
 	autoLineBreak: false,
+	digestGroup: "page",
 	headerMode: "off",
 	headerPageNumber: true,
 	headerPageTotal: true,
@@ -297,6 +314,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	...DEFAULT_LECTURE_SETTINGS,
 	zettelSlipBoxes: [],
 	...DEFAULT_READING_SETTINGS,
+	...DEFAULT_PRESENT_SETTINGS,
 	// 0.15 views
 	...DEFAULT_BOARD_SETTINGS,
 	boardColumns: DEFAULT_BOARD_SETTINGS.boardColumns.map((c) => ({ ...c })),
@@ -328,6 +346,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.outlineSlides === "boolean") s.outlineSlides = d.outlineSlides;
 	if (typeof d.outlineHeadings === "boolean") s.outlineHeadings = d.outlineHeadings;
 	if (typeof d.outlineMarkers === "boolean") s.outlineMarkers = d.outlineMarkers;
+	if (d.outlinePdf === "merged" || d.outlinePdf === "section" || d.outlinePdf === "off") s.outlinePdf = d.outlinePdf;
+	if (typeof d.pdfLinks === "boolean") s.pdfLinks = d.pdfLinks;
 	s.favouritePens = normaliseFavourites(d.favouritePens);
 	s.penSets = normalisePenSets(d.penSets);
 	s.penSetFolders = normaliseAssignments(d.penSetFolders, MAX_FOLDER_ASSIGNMENTS);
@@ -335,6 +355,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	s.eraserSize = normaliseEraserSize(d.eraserSize);
 	if (typeof d.looseSheetPath === "string") s.looseSheetPath = d.looseSheetPath.trim();
 	if (typeof d.dailyNotebookPath === "string") s.dailyNotebookPath = d.dailyNotebookPath.trim();
+	if (typeof d.sharedInbox === "boolean") s.sharedInbox = d.sharedInbox;
+	if (typeof d.sharedInboxFolder === "string") s.sharedInboxFolder = d.sharedInboxFolder.trim();
 	if (typeof d.dailyLink === "boolean") s.dailyLink = d.dailyLink;
 	if (typeof d.dailyCreateNote === "boolean") s.dailyCreateNote = d.dailyCreateNote;
 	if (typeof d.edgeRejection === "boolean") s.edgeRejection = d.edgeRejection;
@@ -375,6 +397,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.pageTurnerKeys === "boolean") s.pageTurnerKeys = d.pageTurnerKeys;
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;
 	if (typeof d.autoLineBreak === "boolean") s.autoLineBreak = d.autoLineBreak;
+	if (d.digestGroup === "page" || d.digestGroup === "colour") s.digestGroup = d.digestGroup;
 	if (isHeaderMode(d.headerMode)) s.headerMode = d.headerMode;
 	if (isHeaderAlign(d.headerAlign)) s.headerAlign = d.headerAlign;
 	for (const k of ["headerPageNumber", "headerPageTotal", "headerDate", "headerTitle", "headerInExport"] as const) if (typeof d[k] === "boolean") s[k] = d[k];
@@ -399,6 +422,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.inkFollowsObjects === "boolean") s.inkFollowsObjects = d.inkFollowsObjects;
 	Object.assign(s, readZettelSettings(d));
 	Object.assign(s, readReadingSettings(d));
+	Object.assign(s, readPresentSettings(d));
 	Object.assign(s, readBoardSettings(d));
 	return s;
 }

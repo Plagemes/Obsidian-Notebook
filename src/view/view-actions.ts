@@ -36,7 +36,7 @@ export function sizeName(page: Page): PageSizeName | null {
 }
 
 /** The commands that work on a selection (layer order; wave 0.10: align, distribute, rotate, mirror, size, select similar). */
-const SELECTION_ONLY = /^(layer-|selection-(align|distribute|rotate|mirror|resize|transform|similar|part)|select-same-)/;
+const SELECTION_ONLY = /^(layer-|selection-(move-page|copy-page|align|distribute|rotate|mirror|resize|transform|similar|part)|select-same-)/;
 
 /** Whether a command of the registry applies to this view now (the palette hides it otherwise). */
 export function commandApplies(view: NotebookView, id: string): boolean {
@@ -126,6 +126,9 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"selection-duplicate": (v) => v.selectionTools?.duplicate(),
 	"selection-paste": (v) => void v.selectionTools?.paste(),
 	"selection-copy-devices": (v) => void v.selectionTools?.copyToDevices(),
+	// 0.16 (78): move or copy the selection to another page
+	"selection-move-page": (v) => v.selectionTools?.moveToPage("move"),
+	"selection-copy-page": (v) => v.selectionTools?.moveToPage("copy"),
 	"selection-paste-device": (v) => void v.selectionTools?.pasteFromDevices(),
 	"selection-white-transparent": (v) => void v.selectionTools?.makeWhiteTransparent(),
 	"link-selection": (v) => v.linkSelection(),
@@ -244,11 +247,20 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"practice-timer": (v) => v.practiceHooks?.toggleTimer(),
 	"page-info": onPage((v, _p, i) => v.openPageInfo(i)),
 	"page-split": onPage((v, _p, i) => v.splitHeavyPage(i)),
+	// 0.16 (#124): lock a finished page. The history refuses every edit of a locked page; these only flip the flag (one undo step).
+	"page-lock": onPage((v, p) => void v.setPageLocked(p, true)),
+	"page-unlock": onPage((v, p) => void v.setPageLocked(p, false)),
+	"page-lock-toggle": onPage((v, p) => void v.setPageLocked(p, !p.locked)),
 	"page-delete": onPage((v, p, i) => {
 		const doc = v.editableDocument();
 		if (!doc || doc.pages.length <= 1) return;
+		// 0.16 (#124): a locked page is unlocked first (deleting it would be an edit; the copy in the page trash would be left over).
+		if (p.locked) {
+			showNotice(t("lock.needsUnlock", { n: String(i + 1) }));
+			return;
+		}
 		// A copy goes to the page trash first; the page is deleted only once that copy is on disk.
-		void deletePageKeepingCopy(v.pageToolsHost(), doc, p, i, (at) => void v.applyCommand(new DeletePage(p, at), Math.max(0, at - 1)));
+		void deletePageKeepingCopy(v.pageToolsHost(), doc, p, i, (at) => v.applyCommand(new DeletePage(p, at), Math.max(0, at - 1)));
 	}),
 
 	// PDF and reading
@@ -257,6 +269,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"pdf-search-previous": (v) => v.readingTools?.step(-1),
 	"toggle-annotations": (v) => v.readingTools?.toggleAnnotations(),
 	"toggle-snap-highlighter": (v) => v.readingTools?.toggleSnap(),
+	"pdf-select-text": (v) => { if (!v.presenting) v.pdfTextTools?.toggle(); },
 	"toggle-dim-background": (v) => v.readingTools?.toggleDim(),
 	"pdf-margins": onPage((v, p) => {
 		const host = v.pdfActionHost();
@@ -329,6 +342,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	// wave 0.9: export dialog (381, from a page's sheet it starts on that page), Markdown export (382), night mode (367), cropped margins (376)
 	"export-dialog": (v, arg) => v.openExportDialog(arg.page),
 	"export-markdown": (v) => v.openMarkdownExport(),
+	// 0.16 (#90): the highlights digest note
+	"highlights-digest": (v) => v.openHighlightsDigest(),
 	// wave 0.10: PNG images (81) and Print (81) are choices of the same dialog; read-only mode (51)
 	"export-png": (v) => v.openExportDialog(undefined, "png"),
 	"print": (v) => {
@@ -337,6 +352,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	},
 	"toggle-read-only": (v) => v.toggleReadOnlyMode(),
 	"night-mode": (v) => v.displayTools?.toggleNight(),
+	"present": (v) => v.startPresentation(),
 	"crop-margins": (v) => v.displayTools?.toggleCrop(),
 	// wave 0.10 (363): next / previous open notebook
 	"notebook-next": (v) => void v.tabTools?.step(1),

@@ -1,4 +1,5 @@
 import type { PdfDoc, PdfLib, PdfPage, PdfRenderTask } from "./pdfjs-types";
+import { readPageLinks, readPdfOutline, type PdfOutlineEntry, type PdfPageLinks } from "./pdf-outline";
 import { textBoxes, type PageTextContent } from "./text-items";
 
 export type CanvasLike = HTMLCanvasElement | OffscreenCanvas;
@@ -79,6 +80,8 @@ export class PdfStore {
 	private readonly docs = new Map<string, Promise<PdfDoc>>();
 	private readonly sizes = new Map<string, Promise<PageSize[]>>();
 	private readonly counts = new Map<string, Promise<number>>();
+	/** 0.16: the links of each page (asset + page), read once. */
+	private readonly links = new Map<string, Promise<PdfPageLinks>>();
 	private readonly jobs = new Map<string, Job>();
 	private readonly jobByPage = new Map<string, Job>();
 	/** Operations in progress per asset; a busy document is not closed by the LRU. */
@@ -142,6 +145,32 @@ export class PdfStore {
 		});
 	}
 
+	/**
+	 * 0.16 (#46): the outline of the PDF, flattened (empty when it has none). Throws when the PDF cannot be read, so the caller does
+	 * not remember "no outline" for a file it could not parse. Not cached here: the view keeps it per PDF (pdf/outline-cache.ts).
+	 */
+	outline(assetId: string): Promise<PdfOutlineEntry[]> {
+		return this.withBusy(assetId, async () => readPdfOutline(await this.openDoc(assetId)));
+	}
+
+	/** 0.16 (#46): the links of `page` (1-based), cached. A page whose annotations cannot be read has none (and is tried again next time). */
+	pageLinks(assetId: string, page: number): Promise<PdfPageLinks> {
+		const key = `${assetId}|${page}`;
+		let p = this.links.get(key);
+		if (!p) {
+			p = this.withBusy(assetId, async () => {
+				const doc = await this.openDoc(assetId);
+				if (!Number.isInteger(page) || page < 1 || page > doc.numPages) throw new RangeError(`page ${page} out of range (1..${doc.numPages})`);
+				const pg = await doc.getPage(page);
+				const vp = pg.getViewport({ scale: 1 });
+				return { width: vp.width, height: vp.height, links: await readPageLinks(doc, pg, page, vp.transform) };
+			});
+			this.links.set(key, p);
+			p.catch(() => this.links.delete(key));
+		}
+		return p;
+	}
+
 	/** Renders `page` (1-based) at `scale` device px per pt. */
 	async render(assetId: string, page: number, scale: number): Promise<CanvasLike> {
 		const size = await this.pageSize(assetId, page);
@@ -198,6 +227,7 @@ export class PdfStore {
 		for (const job of [...this.jobs.values()]) if (job.assetId === assetId) this.cancel(job);
 		this.sizes.delete(assetId);
 		this.counts.delete(assetId);
+		for (const key of [...this.links.keys()]) if (key.startsWith(`${assetId}|`)) this.links.delete(key);
 		this.closeDoc(assetId);
 	}
 
@@ -207,6 +237,7 @@ export class PdfStore {
 		this.cacheBytes = 0;
 		this.sizes.clear();
 		this.counts.clear();
+		this.links.clear();
 		for (const id of [...this.docs.keys()]) this.closeDoc(id);
 	}
 

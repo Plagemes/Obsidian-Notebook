@@ -288,6 +288,8 @@ function assemble(
 		const m = page.margins;
 		if (m) out.push(`\t\t\t"margins": {"left":${j(m.left)},"right":${j(m.right)},"bottom":${j(m.bottom)}},`);
 		if (page.infinite !== undefined) out.push(`\t\t\t"infinite": ${j(page.infinite)},`);
+		// v14: a locked page (false is never written: absent = unlocked).
+		if (page.locked === true) out.push(`\t\t\t"locked": true,`);
 		const states = statesOf(page);
 		if (states) out.push(`\t\t\t"states": ${statesLine(states)},`);
 		if (elements.length) out.push(`\t\t\t"elements": [\n${elements.join(",\n")}\n\t\t\t],`);
@@ -1102,7 +1104,7 @@ function readAssets(v: unknown): Record<string, Asset> {
 	return assets;
 }
 
-function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null = null, slides: SlideIds = new Set<string>(), withStates = true): Page {
+function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null = null, slides: SlideIds = new Set<string>(), withStates = true, withLocked = true): Page {
 	if (!isObject(v)) fail(path, "expected an object");
 	const id = str(v.id, `${path}.id`);
 	const width = positive(v.width, `${path}.width`);
@@ -1149,6 +1151,15 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, dr
 		});
 		if (elements.length > 0) page.elements = elements;
 	}
+	// v14: the lock. A file of an older format has none of ours (an odd `locked` key is ignored, as the migration drops it). It is a
+	// detail: read leniently, an invalid value is dropped and counted (the page is then simply unlocked); `false` is the same as absent.
+	if (withLocked && v.locked !== undefined) {
+		const locked = orDrop(drop, () => {
+			if (typeof v.locked !== "boolean") fail(`${path}.locked`, "expected a boolean");
+			return v.locked;
+		});
+		if (locked === true) page.locked = true;
+	}
 	// v13: the states name strokes of this page, so they are read after the ink. A file of an older format has none of ours.
 	if (withStates && v.states !== undefined) {
 		const states = readPageStates(v.states, `${path}.states`, new Set(strokes.map((s) => s.id)), drop);
@@ -1179,7 +1190,7 @@ export function validate(raw: unknown, drop: Dropped | null = null): NotebookDoc
 	return validateWith(raw, readPage, new Set<string>(), drop);
 }
 
-type PageReader = (v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null, slides: SlideIds, withStates: boolean) => Page;
+type PageReader = (v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null, slides: SlideIds, withStates: boolean, withLocked: boolean) => Page;
 
 /** `validate` with the page reader and the set of ids injected: staged loading reads page shells first (see StagedParse). */
 function validateWith(raw: unknown, readPageAt: PageReader, ids: Set<string>, drop: Dropped | null): NotebookDocument {
@@ -1195,7 +1206,7 @@ function validateWith(raw: unknown, readPageAt: PageReader, ids: Set<string>, dr
 	const slideIds = new Set(slides.map((r) => r.id));
 	const pageIds = new Set<string>();
 	const pages = raw.pages.map((p, i) => {
-		const page = readPageAt(p, `pages[${i}]`, ids, assets, drop, slideIds, true);
+		const page = readPageAt(p, `pages[${i}]`, ids, assets, drop, slideIds, true, true);
 		// Page ids key bookmarks, jumps and caches: two pages with one id would be confused with each other.
 		if (pageIds.has(page.id)) fail(`pages[${i}].id`, "duplicate id");
 		pageIds.add(page.id);
@@ -1323,7 +1334,7 @@ export class StagedParse {
 	}
 
 	/**
-	 * Prepares a staged parse of a file at the current version, or at version 9 to 12, whose migrations only refuse
+	 * Prepares a staged parse of a file at the current version, or at version 9 to 13, whose migrations only refuse
 	 * excerpts (v9: checked page by page as they are read) and drop the v11 metadata fields, with page `first` (0-based) read in full.
 	 */
 	static create(raw: RawObject, first: number, from: number = CURRENT_VERSION): StagedParse | ParseFailureResult {
@@ -1353,7 +1364,7 @@ export class StagedParse {
 		// v12: the strokes of an older file have no slide of ours (an odd `slide` key is ignored, as the migration drops it).
 		const slides: SlideIds = this.from < 12 ? "ignore" : new Set((this.doc.slides ?? []).map((r) => r.id));
 		// v13: the same for the `states` of a page of an older file.
-		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop, slides, this.from >= 13);
+		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop, slides, this.from >= 13, this.from >= 14);
 	}
 
 	get pending(): number {
@@ -1411,7 +1422,8 @@ export function parseStaged(text: string, firstPage: number | null): StagedParse
 	// The v9 → v10 migration only refuses excerpts and v10 → v11 only drops two metadata fields, so large v9 and v10 files are staged too.
 	// v11 → v12 only drops the slide table and the strokes' `slide` keys (ignored page by page), so large v11 files are staged too.
 	// v12 → v13 only drops the pages' `states` keys (ignored page by page), so large v12 files are staged too.
-	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12) return StagedParse.create(pre.raw, first, pre.version);
+	// v13 → v14 only drops the pages' `locked` keys (ignored page by page), so large v13 files are staged too.
+	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12 || pre.version === 13) return StagedParse.create(pre.raw, first, pre.version);
 	if (pre.version !== CURRENT_VERSION) return parseRaw(pre.raw, pre.version, true);
 	return StagedParse.create(pre.raw, first);
 }

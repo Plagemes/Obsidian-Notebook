@@ -35,6 +35,7 @@ const CONTEXTS: Array<[string, UiContext]> = [
 	["history to go back and forward (wave 0.10)", baseContext({ nav: { back: true, forward: true } })],
 	["heavy page", baseContext({ page: { index: 0, count: 3, background: "none", infinite: false, bookmarked: false, splittable: true } })],
 	["two notebooks open", baseContext({ openNotebooks: 2 })],
+	["locked page (0.16, #124)", baseContext({ page: { index: 1, count: 3, background: "none", infinite: false, bookmarked: false, locked: true } })],
 ];
 const WIDTHS = [360, 800, 1280];
 

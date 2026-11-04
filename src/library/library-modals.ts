@@ -50,7 +50,7 @@ export class PromptModal extends Modal {
 export class ConfirmModal extends Modal {
 	constructor(
 		app: App,
-		private readonly opts: { title: string; body: string; cta: string },
+		private readonly opts: { title: string; body: string; cta: string; /** Starts with Cancel focused (a risky confirmation). */ safe?: boolean },
 		private readonly onConfirm: () => void,
 	) {
 		super(app);
@@ -60,7 +60,10 @@ export class ConfirmModal extends Modal {
 		this.setTitle(this.opts.title);
 		this.contentEl.createEl("p", { text: this.opts.body });
 		new Setting(this.contentEl)
-			.addButton((b) => b.setButtonText(t("library.modal.cancel")).onClick(() => this.close()))
+			.addButton((b) => {
+				b.setButtonText(t("library.modal.cancel")).onClick(() => this.close());
+				if (this.opts.safe) window.setTimeout(() => b.buttonEl.focus(), 0);
+			})
 			.addButton((b) =>
 				setDestructive(b.setButtonText(this.opts.cta)).onClick(() => {
 					this.close();

@@ -100,8 +100,17 @@ SCENARIOS.push({ doc: "nbmap", theme: "light", device: "tablet", lowLatency: fal
 SCENARIOS.push({ doc: "nbmap", theme: "dark", device: "tablet", lowLatency: false });
 SCENARIOS.push({ doc: "nbmap", theme: "light", device: "phone", lowLatency: false });
 SCENARIOS.push({ doc: "nbmap", theme: "dark", device: "phone", lowLatency: false });
+// Move a selection to another page (0.16, #78): the page picker, tablet and phone, light and dark.
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "movesel", theme, device, lowLatency: false });
+// Presentation mode (0.16, #87): full screen page with the laser pointer, tablet and phone, light and dark.
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "present", theme, device, lowLatency: false });
+
+// Locked pages (0.16, #124): the lock badge, the refused edits and the lock in the page panel, tablet and phone, light and dark.
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "lock", theme, device, lowLatency: false });
 // The automatic page header (0.15, #75): drawn on the paper, tablet and phone, light and dark.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "header", theme, device, lowLatency: false });
+// 0.16 pdftext: copying text from a PDF page and the PDF outline and links (dev/harness/pdftext-check.ts), tablet and phone, light and dark.
+for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "pdftext", theme, device, lowLatency: false });
 // Anchored excerpts (v10): a region of a fake PDF page excerpted to a new page, drawn live, and the badge's jump back.
 SCENARIOS.push({ doc: "excerpt", theme: "light", device: "desktop", lowLatency: false });
 SCENARIOS.push({ doc: "excerpt", theme: "dark", device: "tablet", lowLatency: false });
@@ -130,6 +139,8 @@ for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"])
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "templates", theme, device, lowLatency: false });
 // 0.15 storage (128): the Storage manager at tablet and phone widths, light and dark (dev/harness/storage-check.ts).
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "storage", theme, device, lowLatency: false });
+// 0.16 bulk import (#80): the dialog, its run and the drop at tablet and phone widths, light and dark (dev/harness/bulk-check.ts).
+for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "bulk", theme, device, lowLatency: false });
 // 0.12.1: the whole plugin's onload against the stub: what it registers, the settings tab through both of Obsidian's paths,
 // and injected failures (a failing step, failing settings definitions, an unreadable data.json).
 // 0.13 ds-notebook: the notebook's editing chrome (toolbar, options, sheets, contextual bar, dial, banner) at tablet and
@@ -147,8 +158,12 @@ for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"])
 for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "slides", theme, device, lowLatency: false });
 // 0.15 pensets: pen sets per subject on the strip, the switcher chip and the manager, tablet and phone, dark and light (dist/shots/pensets-*.png).
 for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "pensets", theme, device, lowLatency: false });
+// 0.16 inbox: files shared from other apps, as Home's card, the rail badge and the full list (dev/harness/inbox-check.ts), tablet and phone, dark and light.
+for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "inbox", theme, device, lowLatency: false });
 // 0.15 states: a figure with parts and states, moved with the selection handles (dist/shots/states-*.png).
 for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "states", theme, device, lowLatency: false });
+// 0.16 digest: the Highlights digest dialog and the note it writes (dev/harness/digest-check.ts), tablet and phone, dark and light (dist/shots/digest-*.png).
+for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "digest", theme, device, lowLatency: false });
 
 /** RGBA pixel reader for the 8-bit, non-interlaced PNGs Chrome produces. */
 function decodePng(buf) {
@@ -250,8 +265,13 @@ async function main() {
 				await cdp.evaluate("window.harness.ready.then(() => true)");
 				// 0.15 storage: its own check (the list below is one line per document).
 				if (s.doc === "storage") report = await cdp.evaluate("window.harness.checkStorage()", 120000);
+				else if (s.doc === "bulk") report = await cdp.evaluate("window.harness.checkBulk()", 120000);
+				else if (s.doc === "inbox") report = await cdp.evaluate("window.harness.checkInbox()", 60000);
+
+				// 0.16 pdftext: its own check.
+				else if (s.doc === "pdftext") report = await cdp.evaluate("window.harness.checkPdftext()", 90000);
 				else
-				report = await cdp.evaluate(s.doc === "states" ? "window.harness.checkStates()" : s.doc === "hints" ? "window.harness.checkHints()" : s.doc === "slides" ? "window.harness.checkSlides()" : s.doc === "zettel" ? "window.harness.checkZettel()" : s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "lecture" ? "window.harness.checkLecture()" : s.doc === "outline" ? "window.harness.checkOutline()" : s.doc === "smartadd" ? "window.harness.checkSmartAdd()" : s.doc === "header" ? "window.harness.checkHeader()" : s.doc === "pensets" ? "window.harness.checkPenSets()" : s.doc === "daily" ? "window.harness.checkDaily()" : s.doc === "nbmap" ? "window.harness.checkNbmap()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "chrome" ? "window.harness.checkChrome()" : s.doc === "toolbar" || s.doc === "toolbar-pdf" ? "window.harness.checkAdaptiveToolbar()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "modals" ? "window.harness.checkModals()" : s.doc === "templates" ? "window.harness.checkTemplates()" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "states" ? "window.harness.checkStates()" : s.doc === "hints" ? "window.harness.checkHints()" : s.doc === "slides" ? "window.harness.checkSlides()" : s.doc === "zettel" ? "window.harness.checkZettel()" : s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "lecture" ? "window.harness.checkLecture()" : s.doc === "outline" ? "window.harness.checkOutline()" : s.doc === "smartadd" ? "window.harness.checkSmartAdd()" : s.doc === "header" ? "window.harness.checkHeader()" : s.doc === "pensets" ? "window.harness.checkPenSets()" : s.doc === "daily" ? "window.harness.checkDaily()" : s.doc === "nbmap" ? "window.harness.checkNbmap()" : s.doc === "movesel" ? "window.harness.checkMovesel()" : s.doc === "present" ? "window.harness.checkPresent()" : s.doc === "digest" ? "window.harness.checkDigest()" : s.doc === "lock" ? "window.harness.checkLock()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "chrome" ? "window.harness.checkChrome()" : s.doc === "toolbar" || s.doc === "toolbar-pdf" ? "window.harness.checkAdaptiveToolbar()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "modals" ? "window.harness.checkModals()" : s.doc === "templates" ? "window.harness.checkTemplates()" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}
@@ -296,6 +316,19 @@ async function main() {
 					}
 				}
 			}
+			// 0.16 pdftext: a selection with its bubble, the PDF outline merged into the outline and as its own section.
+			if (s.doc === "pdftext") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["select", "outline", "section"]) {
+					try {
+						await cdp.evaluate(`window.harness.pdftextShot('${state}').then(() => true)`, 30000);
+						writeFileSync(join(designDir, `pdftext-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`pdftext ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
 			// 0.15 storage: a screenshot of each state of the Storage manager.
 			if (s.doc === "storage") {
 				const designDir = join(shots, "design");
@@ -310,6 +343,20 @@ async function main() {
 				}
 				await cdp.evaluate("window.harness.closeStorage()");
 			}
+			// 0.16 bulk import: a screenshot of each state of the dialog and of the drop frame.
+			if (s.doc === "bulk") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of await cdp.evaluate("window.harness.bulkStates")) {
+					try {
+						await cdp.evaluate(`window.harness.bulkShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `bulk-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`bulk ${state} screenshot: ${e.message}`);
+					}
+					await cdp.evaluate("window.harness.closeBulk()");
+				}
+			}
 			// 0.13 ds-zettel: review screenshots of each Zettelkasten surface.
 			if (s.doc === "zettel") {
 				const designDir = join(shots, "design");
@@ -321,6 +368,16 @@ async function main() {
 					} catch (e) {
 						problems.push(`zettel ${state} screenshot: ${e.message}`);
 					}
+				}
+			}
+			// 0.16 inbox: the full list over Home (Home itself is the screenshot above).
+			if (s.doc === "inbox") {
+				try {
+					await cdp.evaluate("window.harness.inboxShot('list').then(() => true)");
+					writeFileSync(join(shots, `${name}-list.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					await cdp.evaluate("window.harness.inboxShot('close').then(() => true)");
+				} catch (e) {
+					problems.push(`inbox list screenshot: ${e.message}`);
 				}
 			}
 			// 0.15 pensets: the pen options with the switcher chip, then the manager.

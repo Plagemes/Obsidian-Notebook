@@ -25,6 +25,8 @@
  *   just enough in the same step so it stays visible: wider margins on a page with a background
  *   (`SetPageMargins`: its own ink moves with the background), a larger plain page, or more height on an
  *   infinite page (`SetPageSize`, which follows the margin rule).
+ * - v14: a page locked in either copy is locked in the result; the merge is exempt from the page-lock guard (model/page-lock.ts),
+ *   so ink of the copy reaches a locked page of the main notebook too. A page that only the copy has comes with its lock.
  * - v13: the parts and states of a drawing (`Page.states`) are not content either: a page that only the copy has brings its
  *   table along (its strokes under their new ids); a page of the main notebook that has none takes the copy's, mapped to the
  *   strokes that are in the main notebook (shifted with them when the page had to be re-framed). When both have a table the
@@ -41,6 +43,7 @@ import { growForInfinite } from "../ink/infinite";
 import { textElementBounds } from "../ink/text-layout";
 import { AddAsset, AddElement, AddPage, AddStroke, Batch, SetMeta, SetPageMargins, SetPageSize, type Command } from "./history";
 import { SetMarkerDone } from "./marker-commands";
+import { exemptFromLocks, SetPageLocked } from "./page-lock";
 import { slideMerger } from "./slide-links";
 import { remapStates, SetPageStates } from "./states";
 import { boxBounds, markerBounds } from "./markers";
@@ -394,6 +397,8 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 					commands.push(new SetPageStates(target.id, undefined, moved, "Merge states"));
 				}
 			}
+			// v14: a page locked in either copy is locked in the result (the safer side: unlocking is one tap). Added last, after the ink.
+			if (page.locked && !target.locked) commands.push(new SetPageLocked(target.id, true));
 			anchor = page.id;
 			continue;
 		}
@@ -428,6 +433,7 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 		if (elements.length > 0) added.elements = elements;
 		const addedStates = remapStates(page.states, (id) => strokeMap.get(id));
 		if (addedStates) added.states = addedStates;
+		if (page.locked) added.locked = true;
 		const at = anchor === null ? 0 : order.indexOf(anchor) + 1;
 		order.splice(at, 0, page.id);
 		commands.push(new AddPage(added, at));
@@ -461,7 +467,9 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 
 	// v12: the slide entries the copied ink names, first (in the same undo step).
 	commands.unshift(...slides.commands());
-	return { summary, command: commands.length > 0 ? new Batch("Merge conflicted copy", commands) : null };
+	// v14: exempt from the page-lock guard: the merge exists to bring in what the other copy has, and a locked page of the main
+	// notebook must receive it too (nothing is lost because a page was locked on one device).
+	return { summary, command: commands.length > 0 ? exemptFromLocks(new Batch("Merge conflicted copy", commands)) : null };
 }
 
 const BOOKMARK_FIELDS = ["title", "color", "category"] as const;

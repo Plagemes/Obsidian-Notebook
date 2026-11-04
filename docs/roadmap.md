@@ -95,7 +95,7 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 9. **P2** Tilt-aware pencil (tiltX/tiltY widen and lighten the stroke).
 10. **P2** Study tape: opaque strips that hide parts of a page and reveal on tap.
 11. **P2** Zoom window for writing small on a large page.
-12. **P3** Laser pointer (fading temporary ink) for presentations.
+12. **P3** 🧪 Laser pointer (fading temporary ink) for presentations. (Delivered inside presentation mode, #87.)
 13. **P3** Protractor and compass alongside the ruler.
 
 ### Organisation and navigation
@@ -146,8 +146,8 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 ### PDF
 43. **P1** 🧪 Highlighter that snaps to the PDF's text lines (pdf.js text content).
 44. **P1** 🧪 Search the PDF text, with hits highlighted on the pages.
-45. **P2** Copy text from the PDF.
-46. **P2** PDF outline and internal links: the PDF outline becomes the notebook outline, internal links work.
+45. **P2** 🧪 Copy text from the PDF.
+46. **P2** 🧪 PDF outline and internal links: the PDF outline becomes the notebook outline, internal links work.
 47. **P3** Export keeping the original vector PDF pages instead of images (needs an MIT library such as pdf-lib).
 
 ### Navigation and view
@@ -195,9 +195,9 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 75. **P2** 🧪 Automatic header with date and page number.
 76. **P2** Rotate and crop imported PDF pages.
 77. **P2** Merge notebooks, split a notebook, extract pages into a new notebook.
-78. **P2** Move a selection to another page.
+78. **P2** 🧪 Move a selection to another page.
 79. **P2** Drag files (images, PDFs) straight onto a page.
-80. **P2** Bulk import in the library: drop many PDFs or images and they become notebooks.
+80. **P2** 🧪 Bulk import in the library: drop many PDFs or images and they become notebooks.
 81. **P2** 🧪 Export all pages as PNG images, and print.
 82. **P3** Portable package: a .zip with the notebook and its assets, to move it to another vault.
 83. **P3** Import from Xournal++ and from SVG.
@@ -206,10 +206,10 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 84. **P2** Action history panel (jump back to a point) and undo that survives reopening.
 85. **P1** 🧪 Coloured bookmarks with categories ("important", "to review").
 86. **P2** Margin comments attached to a region of the page.
-87. **P2** Presentation mode: full-screen pages, with the laser pointer (#12).
+87. **P2** 🧪 Presentation mode: full-screen pages, with the laser pointer (#12).
 88. **P3** Study timer (pomodoro) with a session log.
 89. ~~**P2** Scheduled review: "review this page in 3 days", with a list of pages due.~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
-90. **P2** Highlights digest: every highlighted region collected in a summary page.
+90. **P2** 🧪 Highlights digest: every highlighted region collected in a summary page.
 
 ## M10 — Native Obsidian integration (backlog, planned 2026-10-29)
 
@@ -282,7 +282,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 121. **P2** Visual version diff: additions in green, removals in red, between the current version and a snapshot.
 122. **P1** 🧪 Merge conflicted copies created by Google Drive or OneDrive: compare both copies and merge the strokes (by id) without losing anything.
 123. **P3** Stroke authors in notebooks shared through a common folder: filter and colour by person or device.
-124. **P2** Lock a finished page.
+124. **P2** 🧪 Lock a finished page (0.16, format v14: `Page.locked`, one guard in the history, lock badge, page sheet / pages panel / notebook map / command).
 125. **P1** 🧪 Last position shared across devices: reopen on the phone at the page you were on with the tablet (stored in the notebook, so it travels with the sync).
 
 ### F. Sync and storage
@@ -368,7 +368,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 174. ~~**P2** Draft and fair copy: write a draft, then the draft dims and you rewrite cleanly on top; the draft can be hidden.~~ — dropped (user decision, 2026-10-29)
 175. ~~**P2** Magnifier lens following the pen, to read small PDF text while writing.~~ — dropped (user decision, 2026-10-29)
 176. **P1** 🧪 Loose sheet: a quick-notes notebook opened from anywhere in Obsidian; move its content to the right notebook later.
-177. **P2** Inbox folder: files shared from other Android apps land there and the plugin offers to put them into a notebook.
+177. **P2** 🧪 Inbox folder: files shared from other Android apps land there and the plugin offers to put them into a notebook.
 178. **P2** Split an infinite page into A4 pages for export and printing.
 179. **P2** Two-way page references: if page 3 refers to page 7, page 7 shows "referenced on page 3".
 180. **P1** 🧪 Restore a single page from a previous version, leaving the rest untouched.

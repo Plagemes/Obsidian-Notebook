@@ -13844,3 +13844,711 @@ body.notebook-style-obsidian {
 		display: none;
 	}
 }
+
+/* ===== 0.16 movesel ===== */
+.nb-ui.nb-move-modal .nb-move-new {
+	border-style: dashed;
+}
+
+.nb-ui.nb-move-modal .nb-move-new-thumb {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	aspect-ratio: 1 / 1.414;
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-move-modal .nb-move-new-icon .svg-icon {
+	width: 28px;
+	height: 28px;
+}
+
+/* ===== 0.16 bulk ===== */
+/* Files dragged in from outside the app: a dashed frame over the library and the name of the target (decoration, no control). */
+.nb-ui.notebook-lib-root.is-file-drop {
+	position: relative;
+}
+
+.nb-ui.notebook-lib-root.is-file-drop::before {
+	content: "";
+	position: absolute;
+	inset: 6px;
+	z-index: 20;
+	border: 2px dashed var(--nb-accent);
+	border-radius: var(--nb-radius-panel);
+	background: var(--nb-accent-bg);
+	pointer-events: none;
+}
+
+.nb-ui.notebook-lib-root.is-file-drop::after {
+	content: attr(data-drop-label);
+	position: absolute;
+	bottom: 24px;
+	left: 50%;
+	z-index: 21;
+	max-width: calc(100% - 48px);
+	padding: 10px 18px;
+	transform: translateX(-50%);
+	overflow: hidden;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-accent);
+	color: var(--nb-surface);
+	font-size: var(--nb-fs-chip);
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	pointer-events: none;
+}
+
+.nb-ui.nb-bulk .nb-bulk-select {
+	appearance: none;
+	background-image: none;
+	cursor: pointer;
+}
+
+.nb-ui.nb-bulk .nb-bulk-covers {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.nb-ui.nb-bulk .nb-bulk-auto {
+	height: 40px;
+	padding: 0 16px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-panel);
+	box-shadow: none;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	cursor: pointer;
+}
+
+.nb-ui.nb-bulk .nb-bulk-auto.is-on {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-bulk .nb-bulk-swatch {
+	width: 32px;
+	height: 32px;
+	min-width: 32px;
+	padding: 0;
+	border: 2px solid transparent;
+	border-radius: 50%;
+	background: var(--nb-sw);
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.nb-ui.nb-bulk .nb-bulk-swatch.is-on {
+	border-color: var(--nb-text);
+	box-shadow: 0 0 0 2px var(--nb-panel) inset;
+}
+
+.nb-ui.nb-bulk .nb-bulk-section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.nb-ui.nb-bulk .nb-bulk-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	padding: 12px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+}
+
+.nb-ui.nb-bulk .nb-bulk-row.is-skipped {
+	background: var(--nb-tint-warn);
+}
+
+.nb-ui.nb-bulk .nb-bulk-icon {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.nb-bulk .nb-bulk-icon svg {
+	width: 20px;
+	height: 20px;
+}
+
+.nb-ui.nb-bulk .nb-bulk-main {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.nb-ui.nb-bulk .nb-bulk-name {
+	min-height: 40px;
+}
+
+.nb-ui.nb-bulk .nb-bulk-detail {
+	overflow: hidden;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	text-overflow: ellipsis;
+}
+
+.nb-ui.nb-bulk .nb-bulk-hint {
+	color: var(--nb-accent);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.nb-bulk .nb-bulk-hint.is-empty {
+	display: none;
+}
+
+.nb-ui.nb-bulk .nb-bulk-skipname {
+	overflow: hidden;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-bulk .nb-bulk-remove {
+	flex: 0 0 auto;
+	width: 40px;
+	height: 40px;
+}
+
+.nb-ui.nb-bulk .nb-bulk-progress,
+.nb-ui.nb-bulk .nb-bulk-summary {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 8px 0;
+}
+
+.nb-ui.nb-bulk .nb-bulk-progress-title {
+	color: var(--nb-text);
+	font-size: var(--nb-fs-subtitle);
+	font-weight: 600;
+}
+
+.nb-ui.nb-bulk .nb-bulk-bar {
+	--nb-bulk-pct: 0%;
+	height: 10px;
+	overflow: hidden;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-tile);
+}
+
+.nb-ui.nb-bulk .nb-bulk-bar-fill {
+	display: block;
+	width: var(--nb-bulk-pct);
+	height: 100%;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-accent);
+	transition: width var(--nb-motion) ease-out;
+}
+
+@media (max-width: 520px) {
+	.nb-ui.nb-bulk .nb-bulk-row {
+		padding: 10px;
+		gap: 8px;
+	}
+
+	.nb-ui.nb-bulk .nb-bulk-icon {
+		display: none;
+	}
+}
+
+/* ===== 0.16 present ===== */
+/* Presentation mode (view/present-mode.ts): a black overlay on the notebook view with one page fitted to the screen, a laser
+   canvas, a page counter and a few controls, both of which fade out by themselves. */
+.nb-ui.nb-present {
+	position: fixed;
+	inset: 0;
+	z-index: 90;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: #000;
+	color: #fff;
+	overflow: hidden;
+	touch-action: none;
+	user-select: none;
+	-webkit-user-select: none;
+	outline: none;
+}
+
+.nb-ui.nb-present .nb-present-page {
+	display: block;
+	width: var(--nb-present-w, 100%);
+	height: var(--nb-present-h, auto);
+	max-width: 100%;
+	max-height: 100%;
+	object-fit: contain;
+	background: #fff;
+	pointer-events: none;
+	-webkit-user-drag: none;
+}
+
+.nb-ui.nb-present.is-blank .nb-present-page,
+.nb-ui.nb-present.is-blank .nb-present-laser {
+	visibility: hidden;
+}
+
+.nb-ui.nb-present .nb-present-laser {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+}
+
+.nb-ui.nb-present .nb-present-counter {
+	position: absolute;
+	left: 50%;
+	bottom: max(16px, env(safe-area-inset-bottom));
+	transform: translateX(-50%);
+	padding: 6px 14px;
+	border-radius: 999px;
+	background: rgba(0, 0, 0, 0.62);
+	border: 1px solid rgba(255, 255, 255, 0.18);
+	color: #fff;
+	font-size: var(--nb-text-s, 13px);
+	font-variant-numeric: tabular-nums;
+	opacity: 0;
+	transition: opacity 0.2s ease;
+	pointer-events: none;
+}
+
+.nb-ui.nb-present .nb-present-counter.is-shown {
+	opacity: 1;
+}
+
+.nb-ui.nb-present .nb-present-bar {
+	position: absolute;
+	top: max(10px, env(safe-area-inset-top));
+	right: max(10px, env(safe-area-inset-right));
+	display: flex;
+	gap: 8px;
+	opacity: 0;
+	transition: opacity 0.2s ease;
+	pointer-events: none;
+}
+
+.nb-ui.nb-present .nb-present-bar.is-shown {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.nb-ui.nb-present .nb-present-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	border-radius: 999px;
+	border: 1px solid rgba(255, 255, 255, 0.22);
+	background: rgba(24, 24, 27, 0.78);
+	color: #fff;
+	cursor: pointer;
+}
+
+.nb-ui.nb-present .nb-present-btn .svg-icon {
+	width: 20px;
+	height: 20px;
+}
+
+.nb-ui.nb-present .nb-present-btn.is-on {
+	background: var(--nb-accent);
+	border-color: transparent;
+}
+
+.nb-ui.nb-present .nb-present-btn:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+/* Write while presenting: the notebook's own canvas shows through and takes the pen; only the controls stay. */
+.nb-ui.nb-present.is-ink {
+	background: transparent;
+	pointer-events: none;
+}
+
+.nb-ui.nb-present.is-ink .nb-present-page,
+.nb-ui.nb-present.is-ink .nb-present-laser {
+	display: none;
+}
+
+.nb-ui.nb-present.is-ink .nb-present-bar {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.nb-ui .nb-map-present {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-left: auto;
+	min-height: 36px;
+	padding: 0 14px;
+	border-radius: 999px;
+	border: 1px solid var(--nb-border-strong);
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	cursor: pointer;
+}
+
+.nb-ui .nb-map-present:hover {
+	background: var(--nb-hover);
+}
+
+.nb-ui .nb-map-present .svg-icon {
+	width: 16px;
+	height: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.nb-ui.nb-present .nb-present-counter,
+	.nb-ui.nb-present .nb-present-bar {
+		transition: none;
+	}
+}
+
+/* ===== 0.16 inbox ===== */
+.nb-ui .nb-home-shared .nb-section-header {
+	align-items: center;
+}
+
+.nb-ui .nb-home-shared .nb-section-tools {
+	margin-left: auto;
+}
+
+.nb-ui .nb-home-shared .nb-dyn-count {
+	margin-left: 4px;
+}
+
+.nb-ui .nb-panel .nb-shared-hint {
+	display: block;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text-muted);
+	padding: 0 4px 2px;
+}
+
+.nb-ui.nb-shared-modal .nb-shared-list {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.nb-ui.nb-shared-placement .nb-modal-row {
+	min-height: 56px;
+}
+
+/* ===== 0.16 pdftext ===== */
+/* Select text mode (roadmap #45): a slim bar names the mode and ends it; a bubble beside the selection copies it. */
+.nb-ui.notebook-pdftext-bar {
+	position: absolute;
+	bottom: 12px;
+	left: 8px;
+	right: 8px;
+	z-index: 7;
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-2);
+	width: fit-content;
+	max-width: calc(100% - 16px);
+	margin: 0 auto;
+	padding: 6px 6px 6px 12px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-surface-raised);
+	color: var(--nb-text);
+	box-shadow: var(--nb-shadow-2);
+	font-size: var(--nb-text-s);
+	animation: notebook-pop-in var(--nb-motion) var(--nb-ease);
+}
+
+.notebook-reading-banner:not(.notebook-hidden) ~ .nb-ui.notebook-pdftext-bar {
+	bottom: 64px;
+}
+
+.nb-ui.notebook-pdftext-bar .notebook-pdftext-bar-icon {
+	display: inline-flex;
+	flex: 0 0 auto;
+	color: var(--nb-accent);
+}
+
+.nb-ui.notebook-pdftext-bar .notebook-pdftext-bar-icon svg {
+	width: 18px;
+	height: 18px;
+}
+
+.nb-ui.notebook-pdftext-bar .notebook-pdftext-bar-text {
+	min-width: 0;
+	line-height: 1.3;
+}
+
+.nb-ui.notebook-pdftext-bar .notebook-pdftext-done {
+	flex: 0 0 auto;
+	min-height: var(--nb-target);
+	padding: 0 var(--nb-space-4);
+	border: 0;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-accent);
+	color: var(--text-on-accent);
+	font-weight: var(--font-semibold);
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.nb-ui.notebook-pdftext-bar .notebook-pdftext-done:focus-visible,
+.nb-ui.notebook-pdftext-bubble .notebook-pdftext-btn:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+.nb-ui.notebook-pdftext-bubble {
+	position: absolute;
+	left: var(--nb-pdftext-x, 0);
+	top: var(--nb-pdftext-y, 0);
+	transform: translateX(-50%);
+	z-index: 26;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 3px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-surface-raised);
+	color: var(--nb-text);
+	box-shadow: var(--nb-shadow-float);
+}
+
+.nb-ui.notebook-pdftext-bubble .notebook-pdftext-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-width: var(--nb-target);
+	min-height: var(--nb-target);
+	padding: 0 var(--nb-space-3);
+	border: 0;
+	border-radius: var(--nb-radius-pill);
+	background: transparent;
+	color: inherit;
+	font-size: var(--nb-text-s);
+	font-weight: var(--font-medium);
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.nb-ui.notebook-pdftext-bubble .notebook-pdftext-btn:hover {
+	background: var(--nb-hover);
+}
+
+.nb-ui.notebook-pdftext-bubble .notebook-pdftext-btn:first-child {
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.nb-ui.notebook-pdftext-bubble .notebook-pdftext-btn.is-icon {
+	padding: 0;
+	justify-content: center;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.notebook-pdftext-bubble .notebook-pdftext-btn-icon {
+	display: inline-flex;
+}
+
+.nb-ui.notebook-pdftext-bubble .notebook-pdftext-btn-icon svg {
+	width: 18px;
+	height: 18px;
+}
+
+/* Links of PDF pages (roadmap #46): the web address a link asks about. */
+.nb-ui .nb-pdflink-address {
+	padding: var(--nb-space-3);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-m);
+	background: var(--nb-tile);
+	font-family: var(--font-monospace);
+	font-size: var(--nb-text-s);
+	overflow-wrap: anywhere;
+	user-select: text;
+	-webkit-user-select: text;
+}
+
+/* The PDF outline as its own section of the notebook outline. */
+.nb-ui .nb-outline-section {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-2);
+	padding: var(--nb-space-2) 6px 2px;
+	font-size: var(--nb-text-s);
+	font-weight: var(--font-semibold);
+	letter-spacing: 0.02em;
+	color: var(--nb-text-muted);
+	text-transform: uppercase;
+}
+
+.nb-ui .nb-outline-section-icon {
+	display: inline-flex;
+	color: var(--nb-accent);
+}
+
+.nb-ui .nb-outline-section-icon svg {
+	width: 14px;
+	height: 14px;
+}
+
+.nb-ui .nb-outline-row[data-kind="pdf"] .nb-outline-icon {
+	color: var(--nb-accent);
+}
+
+@media (max-width: 420px) {
+	.nb-ui.notebook-pdftext-bar .notebook-pdftext-bar-text {
+		font-size: var(--nb-text-s);
+	}
+
+	.nb-ui.notebook-pdftext-bubble .notebook-pdftext-btn-label {
+		display: none;
+	}
+
+	.nb-ui.notebook-pdftext-bubble .notebook-pdftext-btn {
+		padding: 0;
+		justify-content: center;
+	}
+}
+
+/* ===== 0.16 lock ===== */
+/* A locked page (#124): the badge over the page area (a button: a tap unlocks), the lock beside the page number, the lock of a
+   thumbnail in the page panel and in the notebook map. */
+.nb-ui.nb-lock-badge {
+	position: absolute;
+	top: 10px;
+	right: 18px;
+	z-index: 6;
+	display: none;
+	align-items: center;
+	gap: 6px;
+	min-height: 32px;
+	padding: 0 12px 0 10px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	font-weight: 600;
+	box-shadow: var(--nb-shadow-1);
+	cursor: pointer;
+	opacity: 0.92;
+}
+
+.nb-ui.nb-lock-badge.is-visible {
+	display: inline-flex;
+}
+
+.nb-ui.nb-lock-badge:disabled {
+	cursor: default;
+	opacity: 0.7;
+}
+
+.nb-ui.nb-lock-badge:not(:disabled):hover {
+	border-color: var(--nb-accent);
+	opacity: 1;
+}
+
+.nb-ui.nb-lock-badge:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+.nb-ui.nb-lock-badge .nb-lock-badge-icon {
+	display: inline-flex;
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-lock-badge .nb-lock-badge-icon svg {
+	width: 15px;
+	height: 15px;
+}
+
+.nb-ui.nb-lock-mark {
+	display: inline-flex;
+	margin-left: 6px;
+	vertical-align: middle;
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-lock-mark svg {
+	width: 13px;
+	height: 13px;
+}
+
+.nb-ui.notebook-navigator-lock {
+	color: var(--nb-accent);
+}
+
+.nb-ui .nb-map-badge.is-locked {
+	color: var(--nb-accent);
+}
+
+.nb-ui .nb-map-lock {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	margin-left: auto;
+	border-radius: var(--nb-radius-pill);
+	color: var(--nb-text-muted);
+	cursor: pointer;
+}
+
+.nb-ui .nb-map-lock svg {
+	width: 15px;
+	height: 15px;
+}
+
+.nb-ui .nb-map-lock.is-on {
+	color: var(--nb-accent);
+}
+
+.nb-ui .nb-map-lock:hover {
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui .nb-map-lock[aria-disabled="true"] {
+	cursor: default;
+	opacity: 0.5;
+}
+
+.nb-ui .nb-map-lock:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 1px;
+}
+
+@media (max-width: 520px) {
+	.nb-ui.nb-lock-badge {
+		right: 12px;
+	}
+
+	.nb-ui.nb-lock-badge .nb-lock-badge-text {
+		display: none;
+	}
+
+	.nb-ui.nb-lock-badge {
+		padding: 0 9px;
+	}
+}

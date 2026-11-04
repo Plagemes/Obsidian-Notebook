@@ -181,6 +181,11 @@ export class FindReplaceModal extends Modal {
 		this.flushTyping();
 		const hit = this.result.hits[this.active];
 		if (!hit || !this.host.canEdit()) return;
+		// 0.16 (#124): a locked page keeps its text.
+		if (hit.page.locked) {
+			showNotice(t("lock.pageIs", { n: String(hit.pageIndex + 1) }));
+			return;
+		}
 		const doc = this.host.doc();
 		const cmd = doc ? replaceHitCommand(doc, hit, this.replacement, this.query, this.opts) : null;
 		if (!cmd) {
@@ -207,8 +212,12 @@ export class FindReplaceModal extends Modal {
 		if (!doc || !this.host.canEdit()) return;
 		const plan = replaceAllCommand(doc, this.query, this.replacement, this.opts);
 		if (!plan) return;
+		if (plan.boxes === 0) {
+			showNotice(t("lock.replaceAllLocked"));
+			return;
+		}
 		if (!this.host.run(plan.command)) return;
-		showNotice(t("find.replacedAll", { n: String(plan.replaced), boxes: String(plan.boxes) }));
+		showNotice(t("find.replacedAll", { n: String(plan.replaced), boxes: String(plan.boxes) }) + (plan.lockedBoxes > 0 ? ` ${t("lock.replaceSkipped", { n: String(plan.lockedBoxes) })}` : ""));
 		this.refresh(-1);
 	}
 }
