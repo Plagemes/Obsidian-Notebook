@@ -2022,7 +2022,7 @@ export class NotebookView extends FileView {
 		const links = new PdfLinks({
 			app: this.app,
 			stage: this.stage,
-			enabled: () => this.host.settings.pdfLinks,
+			enabled: () => this.host.settings.pdfLinks && !this.presentation?.isOpen,
 			doc: () => this.shownDoc(),
 			layout: () => this.layout,
 			pageLinks: (asset, page) => pdf().pageLinks(asset, page),
@@ -2674,6 +2674,11 @@ export class NotebookView extends FileView {
 		}
 	}
 
+	/** 0.16 (#87): true while the presentation is on (the Select text mode and PDF link taps stay off then). */
+	get presenting(): boolean {
+		return this.presentation?.isOpen === true;
+	}
+
 	/** 0.16 (#45): the Select text mode for the commands; null before the view is open. */
 	get pdfTextTools(): PdfTextTools | null {
 		return this.pdfText;
@@ -3205,6 +3210,8 @@ export class NotebookView extends FileView {
 			showNotice(t("present.empty"), 3000);
 			return;
 		}
+		// The Select text mode (#45) and the presentation both take every contact: leave the mode first.
+		this.pdfText?.exit();
 		this.presentation ??= new PresentationMode({
 			container: () => this.contentEl,
 			pages: () => this.shownDoc()?.pages ?? [],

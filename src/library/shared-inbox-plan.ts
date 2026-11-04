@@ -9,6 +9,8 @@ import { createPdfPages } from "../model/pages";
 import { PAPER_SPACING, type Asset, type NotebookDocument, type Page } from "../model/types";
 import { buildImageElement, parseImageOptions, type EditPlan, type Prepare } from "../integration/api-plan";
 import { imagePageSize } from "../view/view-helpers";
+import { scannedPage } from "../scan/pages";
+import { buildImagesDocument } from "./bulk-import-run";
 
 export interface PageSizePt {
 	width: number;
@@ -83,9 +85,6 @@ export function prepareImageElement(asset: Asset, dims: ImageDims, pageIndex: nu
 
 /** A new notebook with the image as its single page. */
 export function buildImageDocument(asset: Asset, dims: ImageDims, now: Date = new Date()): NotebookDocument {
-	const page = imagePage(asset, dims);
-	const doc = createDocument(now, { width: page.width, height: page.height }, { kind: "blank", spacing: PAPER_SPACING.blank });
-	doc.pages = [page];
-	doc.assets = { [asset.id]: asset };
-	return doc;
+	// The same notebook the bulk import makes from one image (library/bulk-import-run.ts), so both paths agree on the page.
+	return buildImagesDocument([scannedPage(asset, dims.width, dims.height)], [asset], now);
 }

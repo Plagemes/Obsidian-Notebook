@@ -4,6 +4,8 @@ import {
 	resolveInboxFolder, sinceFor, sizeLabel, type InboxContext, type InboxItem,
 } from "../src/library/shared-inbox-logic";
 import { buildImageDocument, imagePage, prepareAppendImagePage, prepareAppendPdf, prepareImageElement } from "../src/library/shared-inbox-plan";
+import { buildImagesDocument } from "../src/library/bulk-import-run";
+import { scannedPage } from "../src/scan/pages";
 import { planClosedEdit } from "../src/integration/api-plan";
 import { createDocument, createPage } from "../src/model/document";
 import { serialize, serializeChecked } from "../src/model/serialize";
@@ -301,5 +303,16 @@ describe("settings", () => {
 		expect(folder?.section).toBe("library");
 		expect(folder?.visible?.({ ...DEFAULT_SETTINGS, sharedInbox: false }, { sync: false, timetable: false, timetableInUse: false })).toBe(false);
 		expect(folder?.visible?.({ ...DEFAULT_SETTINGS, sharedInbox: true }, { sync: false, timetable: false, timetableInUse: false })).toBe(true);
+	});
+});
+
+describe("one import path with the bulk import", () => {
+	const img: Asset = { id: "c".repeat(24), kind: "image", path: "Notebooks/_assets/c.png", name: "shared.png", bytes: 10 };
+	it("a new notebook from a shared image is the notebook the bulk import makes from that image", () => {
+		const dims = { width: 1200, height: 800 };
+		const shared = buildImageDocument(img, dims, new Date(5));
+		const bulk = buildImagesDocument([scannedPage(img, dims.width, dims.height)], [img], new Date(5));
+		expect(shared.pages.map((p) => [p.width, p.height, p.background])).toEqual(bulk.pages.map((p) => [p.width, p.height, p.background]));
+		expect(shared.assets).toEqual(bulk.assets);
 	});
 });

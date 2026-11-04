@@ -3,6 +3,10 @@
  * for the harness (24 × 24, 2 px strokes); not Lucide's artwork. Unknown names fall back to two letters.
  */
 const P: Record<string, string> = {
+	// 0.16 merge: move to page, exact position, add to notebook (inbox menu)
+	"arrow-right-to-line": "M17 12H3 M11 6l6 6-6 6 M21 3v18",
+	"crosshair": "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z M22 12h-4 M6 12H2 M12 6V2 M12 22v-4",
+	"book-plus": "M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14 M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5 M12 7v6 M9 10h6",
 	// 0.16 pdftext: the Select text mode and its quote button
 	"quote": "M3 21c3 0 7-1 7-8V5H4v6h4 M14 21c3 0 7-1 7-8V5h-6v6h4",
 	"text-cursor-input": "M5 4h1a3 3 0 0 1 3 3 3 3 0 0 1 3-3h1 M13 20h-1a3 3 0 0 1-3-3 3 3 0 0 1-3 3H5 M5 16H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h1 M13 8h7a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-7 M9 7v10",
