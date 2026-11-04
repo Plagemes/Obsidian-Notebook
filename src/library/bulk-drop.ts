@@ -4,7 +4,7 @@
  * so the two do not meet: this listens only to drags that carry files.
  */
 import { DROP_ATTR, DROP_COLUMN_ATTR } from "./drag";
-import type { BulkSource } from "./bulk-import-logic";
+import { FINGERPRINT_BYTES, fingerprintOf, type BulkSource } from "./bulk-import-logic";
 
 /** Most files taken from one drop (a dropped folder tree can be huge). */
 export const MAX_DROPPED_FILES = 500;
@@ -20,6 +20,15 @@ export function fileSource(file: File): BulkSource {
 		head: async () => {
 			try {
 				return new Uint8Array(await file.slice(0, 1024).arrayBuffer());
+			} catch {
+				return null;
+			}
+		},
+		fingerprint: async () => {
+			try {
+				const head = new Uint8Array(await file.slice(0, FINGERPRINT_BYTES).arrayBuffer());
+				const tail = new Uint8Array(await file.slice(Math.max(0, file.size - FINGERPRINT_BYTES)).arrayBuffer());
+				return fingerprintOf(head, tail, file.size);
 			} catch {
 				return null;
 			}

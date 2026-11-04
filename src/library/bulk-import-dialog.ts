@@ -12,11 +12,18 @@ import { modalShell, shellButton, shellField, shellNote, type ModalShell } from 
 import { SUBJECT_COLORS } from "../ui/palette";
 import type { PaperKind } from "../model/types";
 import {
-	buildEntries, formatSize, planNotebooks, summarize,
-	type BulkEntry, type BulkMode, type BulkOutcome, type BulkSource, type BulkSummary, type PlanItem,
+	buildEntries, bulkLimitMb, formatSize, planNotebooks, summarize,
+	type BulkEntry, type BulkKind, type BulkMode, type BulkOutcome, type BulkSource, type BulkSummary, type PlanItem, type SkipReason,
 } from "./bulk-import-logic";
 import type { BulkControl, BulkJob, BulkLook, BulkRunResult } from "./bulk-import-run";
 import { fileSource, pickManyFiles } from "./bulk-drop";
+
+/** The sentence for a reason a file is left out; "too big" names the limit of its kind (or the size the run found). */
+function skipText(reason: SkipReason | null, kind: BulkKind | null, detail?: string): string {
+	const r = reason ?? "unsupported";
+	if (r === "tooBig") return t("bulk.skip.tooBig", { mb: detail && /^\d+$/.test(detail) ? detail : String(bulkLimitMb(kind ?? "pdf")) });
+	return t(`bulk.skip.${r}` as MessageKey);
+}
 
 /** What the dialog needs from the plugin. */
 export interface BulkImportHost {
@@ -90,7 +97,18 @@ export class BulkImportDialog extends Modal {
 	/** Reads the first bytes of every file not yet checked and builds the list. */
 	private async checkFiles(): Promise<void> {
 		for (let i = this.heads.length; i < this.sources.length; i++) this.heads[i] = await this.sources[i]!.head();
-		this.entries = buildEntries(this.sources.map((s, i) => ({ name: s.name, size: s.size, type: s.type, head: this.heads[i] ?? null })));
+		// Files that share a name and a size are told apart (or confirmed as copies) by a quick fingerprint of their ends.
+		const groups = new Map<string, number[]>();
+		this.sources.forEach((s, i) => {
+			const key = `${s.name.toLowerCase()}|${s.size}`;
+			groups.set(key, [...(groups.get(key) ?? []), i]);
+		});
+		const prints = new Map<number, string | null>();
+		for (const ids of groups.values()) {
+			if (ids.length < 2) continue;
+			for (const i of ids) prints.set(i, (await this.sources[i]!.fingerprint?.()) ?? null);
+		}
+		this.entries = buildEntries(this.sources.map((s, i) => ({ name: s.name, size: s.size, type: s.type, head: this.heads[i] ?? null, fingerprint: prints.get(i) ?? null })));
 	}
 
 	private live(): BulkEntry[] {
@@ -243,7 +261,7 @@ export class BulkImportDialog extends Modal {
 		setIcon(row.createSpan({ cls: "nb-bulk-icon", attr: { "aria-hidden": "true" } }), "alert-triangle");
 		const main = row.createDiv({ cls: "nb-bulk-main" });
 		main.createDiv({ cls: "nb-bulk-skipname", text: e.fileName });
-		main.createDiv({ cls: "nb-bulk-detail", text: t(`bulk.skip.${e.skip ?? "unsupported"}` as MessageKey) });
+		main.createDiv({ cls: "nb-bulk-detail", text: skipText(e.skip, e.kind) });
 	}
 
 	private async addFiles(): Promise<void> {
@@ -340,7 +358,7 @@ export class BulkImportDialog extends Modal {
 			setIcon(row.createSpan({ cls: "nb-bulk-icon", attr: { "aria-hidden": "true" } }), "alert-triangle");
 			const main = row.createDiv({ cls: "nb-bulk-main" });
 			main.createDiv({ cls: "nb-bulk-skipname", text: e.fileName });
-			main.createDiv({ cls: "nb-bulk-detail", text: t(`bulk.skip.${e.skip ?? "unsupported"}` as MessageKey) });
+			main.createDiv({ cls: "nb-bulk-detail", text: skipText(e.skip, e.kind) });
 		}
 		for (const o of r.outcomes) {
 			if (o.partial) {
@@ -357,7 +375,7 @@ export class BulkImportDialog extends Modal {
 				setIcon(row.createSpan({ cls: "nb-bulk-icon", attr: { "aria-hidden": "true" } }), "alert-triangle");
 				const main = row.createDiv({ cls: "nb-bulk-main" });
 				main.createDiv({ cls: "nb-bulk-skipname", text: k.file });
-				main.createDiv({ cls: "nb-bulk-detail", text: t(`bulk.skip.${k.reason}` as MessageKey) });
+				main.createDiv({ cls: "nb-bulk-detail", text: skipText(k.reason, null, k.detail) });
 			}
 		}
 		if (!any) problems.remove();

@@ -2867,7 +2867,7 @@ export const en = {
 	"bulk.skip.empty": "The file is empty or has no pages",
 	"bulk.skip.heic": "HEIC photos cannot be read here; export them as JPEG",
 	"bulk.skip.corrupt": "Damaged, or not what its name says",
-	"bulk.skip.tooBig": "Larger than 250 MB",
+	"bulk.skip.tooBig": "Larger than {mb} MB",
 	"bulk.skip.duplicate": "The same file is listed twice",
 	"bulk.skip.unreadable": "The file could not be read",
 	"bulk.drop": "Drop PDFs or images to import them",

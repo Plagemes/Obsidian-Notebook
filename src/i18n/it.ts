@@ -2869,7 +2869,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"bulk.skip.empty": "Il file è vuoto o senza pagine",
 	"bulk.skip.heic": "Le foto HEIC qui non si leggono: esportale in JPEG",
 	"bulk.skip.corrupt": "Danneggiato, o diverso da ciò che dice il nome",
-	"bulk.skip.tooBig": "Più grande di 250 MB",
+	"bulk.skip.tooBig": "Più grande di {mb} MB",
 	"bulk.skip.duplicate": "Lo stesso file è nell’elenco due volte",
 	"bulk.skip.unreadable": "Impossibile leggere il file",
 	"bulk.drop": "Rilascia PDF o immagini per importarli",

@@ -9,6 +9,7 @@ import { applyNotebookMeta, joinPath, notebookDocument, type NotebookSpec } from
 import type { PickedFile } from "../view/pick";
 import { FolderMetaStore } from "./folder-meta-store";
 import { assetExtension, assetPath, assetsFolder } from "../pdf/assets";
+import { assetIdFromHash, sha256Hex } from "../pdf/hash";
 import { scanFromCamera } from "../scan/scan-modal";
 import { scannedPage } from "../scan/pages";
 import { PdfStore } from "../pdf/pdf-store";
@@ -397,15 +398,27 @@ export class NotebookLibraryHost implements LibraryHost {
 			if (picked.length === 0) return;
 			const app = this.app;
 			const root = () => this.root();
+			const createdAssets = new Set<string>(); // asset paths this import created (not the ones already in the vault)
 			new BulkImportDialog(app, {
 				root,
 				allFolders: () => app.vault.getAllLoadedFiles().filter((f): f is TFolder => f instanceof TFolder).map((f) => f.path),
 				taken: (dir, clean) => existsInsensitive(app.vault, normalizePath(joinPath(dir, `${clean}.${NEW_NOTEBOOK_EXTENSION}`))),
 				run: (jobs, dir, look, ctl) => runBulkImport<TFile>(jobs, dir, look, {
 					store: async (bytes, name, kind) => {
+						// Remember the copies this run creates: only those may be removed again if their file turns out unusable.
+						const path = normalizePath(assetPath(assetsFolder(root()), assetIdFromHash(await sha256Hex(bytes)), assetExtension(kind, name)));
+						const existed = app.vault.getFileByPath(path) !== null;
 						const asset = await storeAsset(app, root(), bytes, name, kind);
 						this.assets.set(asset.id, asset);
+						if (!existed) createdAssets.add(asset.path);
 						return asset;
+					},
+					discard: async (asset) => {
+						if (!createdAssets.has(asset.path)) return; // it was already in the vault: another notebook may use it
+						const copy = app.vault.getFileByPath(normalizePath(asset.path));
+						createdAssets.delete(asset.path);
+						this.assets.delete(asset.id);
+						if (copy) await app.fileManager.trashFile(copy);
 					},
 					pdfSizes: (id) => this.pdf.pageSizes(id),
 					imageSize: (bytes, name, type) => photoSize(bytes, name, type).catch((e: unknown) => {

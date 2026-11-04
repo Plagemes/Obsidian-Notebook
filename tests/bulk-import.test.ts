@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-	buildEntries, classifyFile, extensionOf, formatSize, MAX_BULK_BYTES, naturalCompare, planNotebooks, safeNotebookName, skipCounts, stemOf,
+	buildEntries, classifyFile, extensionOf, formatSize, MAX_BULK_PDF_BYTES, naturalCompare, planNotebooks, safeNotebookName, skipCounts, stemOf,
 	summarize, uniqueName, type BulkEntry, type BulkOutcome, type BulkSource, type PlanOptions,
 } from "../src/library/bulk-import-logic";
 import { BulkSkipError, applyLook, runBulkImport, type BulkControl, type BulkJob, type BulkRunDeps } from "../src/library/bulk-import-run";
@@ -55,7 +55,7 @@ describe("classifyFile", () => {
 		expect(classifyFile("photo.heic", 10, "", null).skip).toBe("heic");
 		expect(classifyFile("photo.png", 10, "", bytes(0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63, 0, 0, 0, 0)).skip).toBe("heic");
 		expect(classifyFile("a.pdf", 0, "", null).skip).toBe("empty");
-		expect(classifyFile("a.pdf", MAX_BULK_BYTES + 1, "", null).skip).toBe("tooBig");
+		expect(classifyFile("a.pdf", MAX_BULK_PDF_BYTES + 1, "", null).skip).toBe("tooBig");
 		expect(classifyFile("a.pdf", 10, "", new TextEncoder().encode("<html>not a pdf</html>")).skip).toBe("corrupt");
 		expect(classifyFile("a.png", 10, "", new TextEncoder().encode("this is text, renamed")).skip).toBe("corrupt");
 	});

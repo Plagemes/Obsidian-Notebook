@@ -14,7 +14,7 @@ import type { CoverFamily } from "../model/cover-family";
 import { scannedPage } from "../scan/pages";
 import { applyNotebookMeta } from "../view/create-logic";
 import { buildPdfDocument, type PageSizePt } from "./import-pdf";
-import type { BulkKind, BulkOutcome, BulkSource, SkipReason } from "./bulk-import-logic";
+import { bulkLimit, bulkLimitMb, type BulkKind, type BulkOutcome, type BulkSource, type SkipReason } from "./bulk-import-logic";
 
 /** What every notebook of the run looks like. */
 export interface BulkLook {
@@ -44,6 +44,11 @@ export interface BulkJob {
 
 export interface BulkRunDeps<F> {
 	store(bytes: ArrayBuffer, name: string, kind: BulkKind): Promise<Asset>;
+	/**
+	 * Removes the stored copy of a file that turned out unusable (a damaged PDF) or whose notebook could not be made. Called only
+	 * for assets no notebook of this run uses; the host removes it only if this run created it (never a file that was already there).
+	 */
+	discard?(asset: Asset): Promise<void>;
 	pdfSizes(assetId: string): Promise<PageSizePt[]>;
 	/** Pixel size of an image; throws `BulkSkipError("heic")` for a photo the WebView cannot decode, anything else for a broken one. */
 	imageSize(bytes: ArrayBuffer, name: string, type: string): Promise<{ width: number; height: number }>;
@@ -109,6 +114,16 @@ export async function runBulkImport<F>(
 	let done = 0;
 	let started = 0;
 	let cancelled = false;
+	// Assets that a notebook of this run (made, or being made) holds; a copy no notebook holds can be dropped again.
+	const kept = new Set<string>();
+	const drop = async (asset: Asset): Promise<void> => {
+		if (kept.has(asset.id) || !deps.discard) return;
+		try {
+			await deps.discard(asset);
+		} catch (e) {
+			console.error("[notebook] bulk import: could not remove an unused copy", e);
+		}
+	};
 
 	for (const [index, job] of jobs.entries()) {
 		if (ctl.cancelled()) {
@@ -120,6 +135,7 @@ export async function runBulkImport<F>(
 		outcomes.push(out);
 		const pages: Page[] = [];
 		const assets: Asset[] = [];
+		const stored: Asset[] = []; // every copy this job stored and still holds
 		let pdfDoc: NotebookDocument | null = null;
 
 		for (const item of job.files) {
@@ -134,19 +150,30 @@ export async function runBulkImport<F>(
 					throw new BulkSkipError("unreadable");
 				});
 				if (bytes.byteLength === 0) throw new BulkSkipError("empty");
+				// The size is checked again on the bytes: the list only knew what the platform reported.
+				if (bytes.byteLength > bulkLimit(job.kind)) throw new BulkSkipError("tooBig", String(bulkLimitMb(job.kind)));
 				if (job.kind === "pdf") {
 					const asset = await deps.store(bytes, item.fileName, "pdf");
-					const sizes = await deps.pdfSizes(asset.id).catch((e: unknown) => {
+					let sizes: PageSizePt[];
+					try {
+						sizes = await deps.pdfSizes(asset.id);
+					} catch (e) {
+						await drop(asset); // the copy just stored is of no use: do not leave it in the assets folder
 						throw new BulkSkipError("corrupt", messageOf(e));
-					});
-					if (sizes.length === 0) throw new BulkSkipError("empty");
+					}
+					if (sizes.length === 0) {
+						await drop(asset);
+						throw new BulkSkipError("empty");
+					}
 					pdfDoc = buildPdfDocument(asset, sizes, now);
+					stored.push(asset);
 				} else {
 					const size = await deps.imageSize(bytes, item.fileName, item.source.type).catch((e: unknown) => {
 						throw e instanceof BulkSkipError ? e : new BulkSkipError("corrupt", messageOf(e));
 					});
 					const asset = await deps.store(bytes, item.fileName, "image");
 					assets.push(asset);
+					stored.push(asset);
 					pages.push(scannedPage(asset, size.width, size.height));
 				}
 			} catch (e) {
@@ -178,8 +205,10 @@ export async function runBulkImport<F>(
 			out.path = made.path;
 			out.pages = doc.pages.length;
 			files.set(job.key, made.file);
+			for (const a of stored) kept.add(a.id);
 		} catch (e) {
 			out.failed = messageOf(e);
+			for (const a of stored) await drop(a); // no notebook holds these copies
 		}
 		await deps.yieldToUi();
 		if (cancelled) break;

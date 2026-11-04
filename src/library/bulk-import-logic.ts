@@ -4,6 +4,7 @@
  * clashing with an existing notebook or with each other), and how images are grouped ("one notebook per file" or "all
  * images into one notebook"). The dialog (bulk-import-dialog.ts) shows this plan; the runner (bulk-import-run.ts) does it.
  */
+import { MAX_IMAGE_BYTES } from "../integration/api-plan";
 import { sniffImage } from "../scan/image-bytes";
 import { hasTrailingDotOrSpace, isDeviceName, sanitizeName } from "../storage/names";
 
@@ -22,6 +23,8 @@ export interface BulkSource {
 	head(): Promise<Uint8Array | null>;
 	/** The whole file. */
 	read(): Promise<ArrayBuffer>;
+	/** A quick fingerprint of the first and last 64 KB (see `fingerprintOf`), or null when they cannot be read. Optional. */
+	fingerprint?(): Promise<string | null>;
 }
 
 /** One file of the dialog's list: what it is and, if it cannot be imported, why. */
@@ -33,8 +36,20 @@ export interface BulkEntry {
 	skip: SkipReason | null;
 }
 
-/** Largest file taken in one go: a bigger one risks the Android WebView running out of memory. */
-export const MAX_BULK_BYTES = 250 * 1024 * 1024;
+/** Largest PDF taken: a bigger one risks the Android WebView running out of memory (it is read whole, then hashed). */
+export const MAX_BULK_PDF_BYTES = 100 * 1024 * 1024;
+/** Largest image taken: the limit of the plugin API and of the shared-files inbox (one decode on a canvas). */
+export const MAX_BULK_IMAGE_BYTES = MAX_IMAGE_BYTES;
+
+/** The size limit of a kind of file, in bytes. */
+export function bulkLimit(kind: BulkKind): number {
+	return kind === "pdf" ? MAX_BULK_PDF_BYTES : MAX_BULK_IMAGE_BYTES;
+}
+
+/** The size limit of a kind of file, in whole MB, for the message ("Larger than 100 MB"). */
+export function bulkLimitMb(kind: BulkKind): number {
+	return Math.round(bulkLimit(kind) / (1024 * 1024));
+}
 /** Longest notebook name, in characters (as the creation dialog). */
 export const MAX_BULK_NAME = 120;
 
@@ -86,7 +101,7 @@ export function classifyFile(fileName: string, size: number, type: string, head:
 	if (claimed === null) return { kind: null, skip: "unsupported" };
 	if (claimed === "heic") return { kind: null, skip: "heic" };
 	if (size <= 0) return { kind: claimed, skip: "empty" };
-	if (size > MAX_BULK_BYTES) return { kind: claimed, skip: "tooBig" };
+	if (size > bulkLimit(claimed)) return { kind: claimed, skip: "tooBig" };
 	if (head === null || head.length === 0) return { kind: claimed, skip: null };
 	if (claimed === "pdf") return hasPdfMarker(head) ? { kind: "pdf", skip: null } : { kind: "pdf", skip: "corrupt" };
 	const sniffed = sniffImage(head);
@@ -95,12 +110,36 @@ export function classifyFile(fileName: string, size: number, type: string, head:
 	return { kind: "image", skip: "corrupt" };
 }
 
-/** Builds the list entries for dropped files. Two files with the same name and size count once (a double drop). */
-export function buildEntries(files: ReadonlyArray<{ name: string; size: number; type: string; head: Uint8Array | null }>): BulkEntry[] {
+/** Bytes read from each end of a file for its quick fingerprint. */
+export const FINGERPRINT_BYTES = 64 * 1024;
+
+/**
+ * A quick fingerprint of a file from its first and last 64 KB (FNV-1a over both, two independent 32-bit lanes): two files with
+ * the same name and size but different content do not get the same one. Not a security hash; it only tells copies apart.
+ */
+export function fingerprintOf(head: Uint8Array, tail: Uint8Array, size: number): string {
+	let a = 0x811c9dc5;
+	let b = 0x01000193 ^ size;
+	for (const part of [head, tail]) {
+		for (let i = 0; i < part.length; i++) {
+			a = Math.imul(a ^ part[i]!, 0x01000193) >>> 0;
+			b = Math.imul(b + part[i]! + 1, 0x85ebca6b) >>> 0;
+			b ^= b >>> 13;
+		}
+		a = Math.imul(a ^ 0xff, 0x01000193) >>> 0; // a boundary between the two parts
+	}
+	return `${size}-${a.toString(16)}-${(b >>> 0).toString(16)}`;
+}
+
+/**
+ * Builds the list entries for dropped files. Two files with the same name and size count once (a double drop) unless their
+ * fingerprints (`fingerprint`, read only for such pairs) differ: then they are two different files that share a name.
+ */
+export function buildEntries(files: ReadonlyArray<{ name: string; size: number; type: string; head: Uint8Array | null; fingerprint?: string | null }>): BulkEntry[] {
 	const seen = new Set<string>();
 	return files.map((f, id) => {
 		const verdict = classifyFile(f.name, f.size, f.type, f.head);
-		const key = `${f.name.toLowerCase()}|${f.size}`;
+		const key = `${f.name.toLowerCase()}|${f.size}|${f.fingerprint ?? ""}`;
 		const duplicate = verdict.skip === null && seen.has(key);
 		if (verdict.skip === null) seen.add(key);
 		return { id, fileName: f.name, size: f.size, kind: verdict.kind, skip: duplicate ? "duplicate" : verdict.skip };
