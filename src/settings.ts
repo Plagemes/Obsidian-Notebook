@@ -6,6 +6,7 @@ import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "./ink/edge-zones";
 import { DEFAULT_GESTURE_SETTINGS, readGestureSettings, type GestureSettings } from "./ink/gesture-settings";
 import { DEFAULT_PEN_GESTURE_SETTINGS, readPenGestureSettings, type PenGestureSettings } from "./ink/gestures/settings";
 import { clampInsertWidth, INSERT_WIDTH_DEFAULT, isInsertBackground } from "./model/note-insert";
+import { clampLookUpWidth, LOOKUP_WIDTH_DEFAULT } from "./model/look-up";
 import { PEN_BUTTON_ACTIONS, type PenButtonAction } from "./ink/input-policy";
 import { BUTTON_AFTER_MAX_MS, BUTTON_BEFORE_MAX_MS, DEFAULT_BUTTON_WINDOWS, LEGACY_BEFORE_MS, cleanPenKey, cleanWindowMs, isPenKeyAction, type PenKeyAction } from "./ink/pen-hover";
 import { isHeaderAlign, isHeaderMode, type HeaderAlign, type HeaderMode } from "./ink/page-header";
@@ -108,6 +109,9 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	noteInsertWidth: number;
 	noteInsertBackground: "transparent" | "paper";
 	noteInsertLinkBack: boolean;
+	/** 0.19 (#213): the "Look up later" note (vault path; empty = `<notebooks folder>/Look up later.md`) and the width (px) of the crop shown in it. */
+	lookUpNote: string;
+	lookUpWidth: number;
 	/** 0.18 (#186): copying pages to another notebook also leaves a "Copied to" chip on the original page (the dialog starts with this). */
 	copyLinkReverse: boolean;
 	// wave p1a: input
@@ -278,6 +282,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	noteInsertWidth: INSERT_WIDTH_DEFAULT,
 	noteInsertBackground: "transparent",
 	noteInsertLinkBack: true,
+	lookUpNote: "",
+	lookUpWidth: LOOKUP_WIDTH_DEFAULT,
 	copyLinkReverse: false,
 	edgeRejection: false,
 	edgeRejectionPx: 24,
@@ -398,6 +404,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.noteInsertWidth === "number") s.noteInsertWidth = clampInsertWidth(d.noteInsertWidth);
 	if (isInsertBackground(d.noteInsertBackground)) s.noteInsertBackground = d.noteInsertBackground;
 	if (typeof d.noteInsertLinkBack === "boolean") s.noteInsertLinkBack = d.noteInsertLinkBack;
+	if (typeof d.lookUpNote === "string") s.lookUpNote = d.lookUpNote.trim();
+	if (typeof d.lookUpWidth === "number") s.lookUpWidth = clampLookUpWidth(d.lookUpWidth);
 	if (typeof d.copyLinkReverse === "boolean") s.copyLinkReverse = d.copyLinkReverse;
 	if (typeof d.edgeRejection === "boolean") s.edgeRejection = d.edgeRejection;
 	if (typeof d.edgeRejectionPx === "number" && d.edgeRejectionPx >= EDGE_WIDTH_MIN && d.edgeRejectionPx <= EDGE_WIDTH_MAX) s.edgeRejectionPx = d.edgeRejectionPx;

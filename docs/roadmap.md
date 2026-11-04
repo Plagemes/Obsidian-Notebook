@@ -422,7 +422,7 @@ Features for following a lecture live. Exam and review features stay in the sepa
 210. **P2** Automatic lecture header: course, lecturer, room, date and time from the timetable.
 211. **P1** 🧪 "Pen only" toggle at hand: instantly ignores fingers when you rest your hand.
 212. **P2** Recent symbols: the symbols you draw most often (∀, ∫, →) become buttons to insert them quickly.
-213. **P2** "Look up later" list: circle a word and it goes to a list, with its image.
+213. **P2** 🧪 "Look up later" list: circle a word and it goes to a list, with its image.
 214. **P2** Compact lecture toolbar: only 4–5 large tools.
 215. **P2** Board photo: keep or trace. Keep the photo as it is, or switch to tracing mode: the photo becomes semi-transparent (removable) and the drawing in it is automatically vectorised into ink — dark lines detected, thinned to centre lines, simplified into smooth curves, each stroke taking the photo's colour; a slider sets the sensitivity. The result is normal ink you can edit, erase or move. Own implementation (potrace is GPL and cannot be used).
 

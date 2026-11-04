@@ -76,6 +76,7 @@ import { MakeTaskModal, runMakeTask } from "./selection-task";
 import { runInsertIntoNote } from "./selection-insert";
 import { taskCropRect } from "../model/selection-task";
 import { Mentions } from "./mentions";
+import { LookUpSheet, LookUpWordModal, runLookUp } from "./look-up";
 import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./highlight-digest";
 import { canPrint } from "./print";
 import type { ExportFormat } from "../ink/export-layers";
@@ -1888,6 +1889,37 @@ export class NotebookView extends FileView {
 			},
 			...(options.prepare ? { prepare: options.prepare } : {}),
 		}, request)).open();
+	}
+
+	/** 0.19 (#213): "Look up later" from the selection: an optional typed word, then a picture of the region and a link to the page are appended to the list note. */
+	lookUpFromSelection(): void {
+		const sel = this.selection;
+		const doc = this.session?.doc;
+		const file = this.file;
+		if (!sel || !doc || !file || this.statesTools?.ownsSelection(sel)) return;
+		// A collapsed sticky note keeps its ink out of view: it never widens the region.
+		const bounds = itemsBounds(withoutPinnedInk(sel.strokes, sel.elements), sel.elements, measureText);
+		const page = doc.pages[sel.pageIndex];
+		const shown = this.renderPagesOf(doc)[sel.pageIndex];
+		if (!bounds || !page || !shown) return;
+		const crop = taskCropRect(bounds, page);
+		const options = this.exportOptions();
+		new LookUpWordModal(this.app, sel.pageIndex + 1, (word) => void runLookUp({
+			app: this.app, file, settings: this.host.settings, page: shown, pageNumber: sel.pageIndex + 1, crop, media: this.media,
+			render: {
+				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+			},
+			...(options.prepare ? { prepare: options.prepare } : {}),
+		}, word)).open();
+	}
+
+	/** 0.19 (#213): the read-only sheet of this notebook's "Look up later" entries, each with a jump to its page. */
+	openLookUpList(): void {
+		const file = this.file;
+		const doc = this.shownDoc();
+		if (!file || !doc) return;
+		new LookUpSheet({ app: this.app, file, settings: this.host.settings, pages: () => this.shownDoc()?.pages ?? [], goTo: (index) => this.goToPage(index) }).open();
 	}
 
 	/** 0.18 (O7): the sheet of notes that link to the page in view. */
