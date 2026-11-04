@@ -95,7 +95,7 @@ export const GROUPS: readonly GroupSpec[] = [
 ];
 
 /** Runs of the action rows; the tab maps each id to what it does. */
-export type SettingActionId = "hints-reset" | "toolbar-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom" | "notebook-templates-manage" | "pen-sets";
+export type SettingActionId = "hints-reset" | "toolbar-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom" | "notebook-templates-manage" | "pen-sets" | "board-columns";
 /** Rows drawn by the tab itself (no stored setting of their own). */
 export type SettingCustomId = "device-name" | "pen-key" | "device-info";
 
@@ -292,6 +292,11 @@ const LIBRARY: SettingSpec[] = [
 	{
 		id: "snapshotsToKeep", section: "library", order: 31, name: "settings.snapshotKeep", desc: "settings.snapshotKeep.desc",
 		control: { type: "slider", min: 1, max: 50, step: 1 }, parent: "snapshotIntervalHours", visible: (s) => s.snapshotIntervalHours > 0,
+	},
+	// 0.15 views: the Board's columns (names, colours, add, remove) are edited in a dialog; the statuses themselves are synced notebook data.
+	{
+		id: "boardColumns", section: "library", order: 40, name: "settings.boardColumns", desc: "settings.boardColumns.desc",
+		control: { type: "action", run: "board-columns", button: "settings.open" }, edits: ["boardColumns"], keywords: "board kanban status columns lavagna colonne stato da fare in corso fatto stampare",
 	},
 	{ id: "looseSheetPath", section: "library", group: ADVANCED, order: 10, name: "settings.looseSheet", desc: "settings.looseSheet.desc", control: { type: "text", placeholder: defaultLooseSheetPath(DEFAULT_SETTINGS.folder) } },
 	{ id: "templatesFolder", section: "library", group: ADVANCED, order: 20, name: "settings.templatesFolder", desc: "settings.templatesFolder.desc", control: { type: "folder", placeholder: "_templates" } },

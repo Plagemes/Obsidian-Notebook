@@ -13,6 +13,7 @@ import { gestureKeyId } from "./pen-gesture-settings";
 import { CustomGesturesModal, GestureCheatSheet, setGestureEnabled, type PenGestureUiHost } from "./pen-gesture-ui";
 import { deviceNameRow, type SyncSafetyService } from "./sync-safety";
 import { renderDeviceInfo } from "./device-info";
+import { BoardColumnsModal } from "./board-columns-modal";
 import { resetHints } from "../ui/hints";
 import { resetToolbarAdaptation } from "../ui/toolbar-reset";
 import {
@@ -194,6 +195,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 			case "gesture-custom": new CustomGesturesModal(this.penGestureHost()).open(); break;
 			case "notebook-templates-manage": openNotebookTemplateManager(this.app, () => this.host.settings); break;
 			case "pen-sets": this.openPenSets(); break;
+			case "board-columns": new BoardColumnsModal({ app: this.app, get: () => this.host.settings.boardColumns, set: (cols) => this.setControlValue("boardColumns", cols) }).open(); break;
 		}
 	}
 

@@ -339,8 +339,8 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 
 ### C. Library
 160. 🧪 **P1** Library trash with restore.
-161. **P2** Board view with statuses (in progress, done, to print).
-162. **P2** Calendar view: what you wrote on a given day.
+161. **P2** 🧪 Board view with statuses (in progress, done, to print).
+162. **P2** 🧪 Calendar view: what you wrote on a given day.
 163. **P2** Per-notebook settings: stabilization, palm rejection, default paper, sync.
 
 ### D. Sharing and open formats

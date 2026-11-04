@@ -13,7 +13,7 @@ import { scanFromCamera } from "../scan/scan-modal";
 import { scannedPage } from "../scan/pages";
 import { PdfStore } from "../pdf/pdf-store";
 import type { PdfLib } from "../pdf/pdfjs-types";
-import { backupFolder, type NotebookSettings } from "../settings";
+import { backupFolder, readSettings, type NotebookSettings } from "../settings";
 import { readNotebookText, writeNotebookText } from "../storage/format";
 import { createNotebook } from "../storage/notebooks";
 import { existsInsensitive } from "../storage/names";
@@ -38,6 +38,9 @@ import { openTodaysPage } from "./daily";
 import type { LectureTarget } from "./home-stats";
 import { openLibraryCheck } from "./library-check-modal";
 import { LibraryStateStore } from "./library-state-store";
+import { BoardStateStore } from "./board-state-store";
+import type { BoardColumn } from "./board-logic";
+import { BoardColumnsModal } from "../view/board-columns-modal";
 import type { LibraryHost } from "./library-view";
 import type { ThumbnailOptions } from "./thumbnail";
 import { showNotice } from "../view/notice";
@@ -85,10 +88,13 @@ export class NotebookLibraryHost implements LibraryHost {
 	 * (library/folder-meta.ts). Read API for the cards: `folderMeta.getFolderMeta(path)` and `folderMeta.onFolderMetaChange(fn)`.
 	 */
 	readonly folderMeta: FolderMetaStore;
+	/** 0.15: the Board view's statuses, one file per device in `_meta` (library/board-state.ts). */
+	readonly board: BoardStateStore;
 
 	constructor(private readonly plugin: HostPlugin) {
 		this.state = new LibraryStateStore(vaultDeviceFileAdapter(plugin.app), () => plugin.settings.folder, sidecarDeviceId(plugin.app));
 		this.folderMeta = new FolderMetaStore(vaultDeviceFileAdapter(plugin.app), () => plugin.settings.folder, sidecarDeviceId(plugin.app));
+		this.board = new BoardStateStore(vaultDeviceFileAdapter(plugin.app), () => plugin.settings.folder, sidecarDeviceId(plugin.app));
 		this.trash = new LibraryTrash({
 			app: plugin.app,
 			root: () => plugin.settings.folder,
@@ -107,6 +113,23 @@ export class NotebookLibraryHost implements LibraryHost {
 			// Thumbnails are small; keep the budget well under the notebook view's.
 			memoryBudgetBytes: (Platform.isMobile ? 32 : 64) * 1024 * 1024,
 		});
+	}
+
+	/** 0.15: the Board's columns (the `boardColumns` setting). */
+	boardColumns(): BoardColumn[] {
+		return this.plugin.settings.boardColumns;
+	}
+
+	/** 0.15: opens the dialog that renames, recolours, adds and removes the Board's columns. */
+	editBoardColumns(): void {
+		new BoardColumnsModal({
+			app: this.app,
+			get: () => this.plugin.settings.boardColumns,
+			set: async (columns) => {
+				this.plugin.settings = readSettings({ ...this.plugin.settings, boardColumns: columns });
+				await this.plugin.saveSettings();
+			},
+		}).open();
 	}
 
 	dispose(): void {

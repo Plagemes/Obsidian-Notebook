@@ -58,6 +58,7 @@ import { checkEmptyLibrary, checkLibraryLayout, emptyDialogShot, libraryInteract
 import { checkHome2, home2State } from "./home2-check";
 import { checkLayout } from "./layout-check";
 import { checkSections, sectionsState } from "./sections-check";
+import { checkViews, viewsState } from "./views-check";
 
 import type { Layout } from "../../src/ink/layout";
 import type { Viewport } from "../../src/ink/viewport";
@@ -2093,6 +2094,12 @@ harnessApi.checkSections = async () => {
 	return { ok: results.every((r) => r.ok) && errors.length === 0, results, errors: [...errors] };
 };
 harnessApi.sectionsState = (state: string) => (libraryHarness ? sectionsState(libraryHarness, state) : false);
+// 0.15 views: the Board and the Calendar (views-check.ts).
+harnessApi.checkViews = async () => {
+	const results = libraryHarness ? await checkViews(libraryHarness, librarySurface) : [];
+	return { ok: results.every((r) => r.ok) && errors.length === 0, results, errors: [...errors] };
+};
+harnessApi.viewsState = (state: string) => (libraryHarness ? viewsState(libraryHarness, state) : false);
 
 async function interactLibrary(): Promise<Record<string, unknown>> {
 	const results = libraryHarness ? await libraryInteractions(libraryHarness, librarySurface) : [];

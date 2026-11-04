@@ -157,6 +157,10 @@ const P: Record<string, string> = {
 	"rectangle-horizontal": "M2 6h20v12H2z",
 	"more-horizontal": "M5 12h.01 M12 12h.01 M19 12h.01",
 	"image-off": "M2 2l20 20 M10.4 5H19a2 2 0 0 1 2 2v8.6 M3 7v12a2 2 0 0 0 2 2h14",
+	// 0.15 views: Board and Calendar
+	"kanban": "M5 3v14 M12 3v8 M19 3v18 M3 3h4v14H3z M10 3h4v8h-4z M17 3h4v18h-4z",
+	"calendar": "M8 2v4 M16 2v4 M3 10h18 M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
+	"settings-2": "M20 7h-9 M14 17H5 M17 20a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M7 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
 };
 
 const SVG_NS = "http://www.w3.org/2000/svg";
