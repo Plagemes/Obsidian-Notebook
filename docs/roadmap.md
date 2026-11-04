@@ -194,7 +194,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 74. 🧪 **P1** Save a page as a template, with a template gallery.
 75. **P2** 🧪 Automatic header with date and page number.
 76. **P2** Rotate and crop imported PDF pages.
-77. **P2** Merge notebooks, split a notebook, extract pages into a new notebook.
+77. **P2** 🧪 Merge notebooks, split a notebook, extract pages into a new notebook.
 78. **P2** 🧪 Move a selection to another page.
 79. **P2** Drag files (images, PDFs) straight onto a page.
 80. **P2** 🧪 Bulk import in the library: drop many PDFs or images and they become notebooks.

@@ -52,6 +52,7 @@ import { BoardColumnsModal } from "../view/board-columns-modal";
 import type { LibraryHost } from "./library-view";
 import type { ThumbnailOptions } from "./thumbnail";
 import { showNotice } from "../view/notice";
+import { TransferFlows } from "./transfer-flows";
 
 /** This device's last folder of the creation dialog (local storage of the vault, not synced). */
 const LAST_FOLDER_KEY = "notebook-create-last-folder";
@@ -109,6 +110,7 @@ export class NotebookLibraryHost implements LibraryHost {
 			retentionDays: () => plugin.settings.trashRetentionDays,
 			beforeMove: (path) => this.closeViewsOf(path),
 		});
+		this.transfers = new TransferFlows({ app: plugin.app, settings: () => plugin.settings, trash: this.trash });
 		this.pdf = new PdfStore({
 			loadPdfJs: () => loadPdfJs() as Promise<PdfLib>,
 			readAsset: (id) => this.readAsset(id),
@@ -190,6 +192,21 @@ export class NotebookLibraryHost implements LibraryHost {
 		const doc = this.openView(file)?.document ?? (await this.readNotebook(file));
 		if (!doc) return void showNotice(t("nbtemplate.unreadable", { name: file.basename }));
 		saveNotebookAsTemplate(this.app, this.plugin.settings, doc, file.basename);
+	}
+
+	/** 0.17 (#77): merge, split and extract pages from the library's notebook menu. */
+	private readonly transfers: TransferFlows;
+
+	mergeNotebook(file: TFile): Promise<void> {
+		return this.transfers.merge(file);
+	}
+
+	splitNotebook(file: TFile): Promise<void> {
+		return this.transfers.split(file);
+	}
+
+	extractPages(file: TFile): Promise<void> {
+		return this.transfers.extract(file);
 	}
 
 	/** The id at the start of the file, without parsing it; the whole parse when the file is laid out differently. */

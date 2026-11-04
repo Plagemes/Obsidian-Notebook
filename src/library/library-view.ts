@@ -120,6 +120,10 @@ export interface LibraryHost {
 	afterDuplicate?(file: TFile): Promise<void>;
 	/** Roadmap #19: saves a copy of the notebook in the notebook templates folder (asks for a name). */
 	saveAsTemplate?(file: TFile): Promise<void>;
+	/** 0.17 (#77): merge another notebook into this one, split it at a page, extract pages into a new notebook (library/transfer-flows.ts). */
+	mergeNotebook?(file: TFile): Promise<void>;
+	splitNotebook?(file: TFile): Promise<void>;
+	extractPages?(file: TFile): Promise<void>;
 	/** Roadmap #19: true for a path the library must not list (the notebook templates folder, wherever it is). */
 	isHiddenPath?(path: string): boolean;
 	/** Library trash (#160): deleting moves to the plugin trash instead of deleting. */
@@ -2761,6 +2765,11 @@ export class LibraryView extends ItemView {
 		menu.addItem((i) => i.setTitle(t("library.menu.duplicate")).setIcon("copy").onClick(() => void this.duplicate(file)));
 		const saveTemplate = this.host.saveAsTemplate?.bind(this.host);
 		if (saveTemplate) menu.addItem((i) => i.setTitle(t("library.menu.saveTemplate")).setIcon("book-copy").onClick(() => void saveTemplate(file).catch((e) => this.fail(e))));
+		// 0.17 (#77): merge, split and extract pages. Each reports for itself; a failure that escapes is shown by fail().
+		const host = this.host;
+		if (host.mergeNotebook) menu.addItem((i) => i.setTitle(t("library.menu.merge")).setIcon("git-merge").onClick(() => void host.mergeNotebook?.(file).catch((e: unknown) => this.fail(e))));
+		if (host.splitNotebook) menu.addItem((i) => i.setTitle(t("library.menu.split")).setIcon("scissors").onClick(() => void host.splitNotebook?.(file).catch((e: unknown) => this.fail(e))));
+		if (host.extractPages) menu.addItem((i) => i.setTitle(t("library.menu.extract")).setIcon("file-output").onClick(() => void host.extractPages?.(file).catch((e: unknown) => this.fail(e))));
 		menu.addItem((i) => i.setTitle(t("library.menu.tags")).setIcon("tag").onClick(() => this.askTags(path)));
 		menu.addItem((i) => i.setTitle(t("library.menu.cover")).setIcon("palette").onClick(() => this.askCover(path)));
 		menu.addSeparator();

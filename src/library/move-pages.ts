@@ -23,7 +23,7 @@ import { showNotice } from "../view/notice";
 const NOTEBOOK_VIEW_TYPE = "notebook-view";
 
 /** Open, editable view of `file`. A tab that is not loaded yet counts as not open: the file is then edited on disk. */
-function openEditContext(app: App, file: TFile): EditContext | "busy" | null {
+export function openEditContext(app: App, file: TFile): EditContext | "busy" | null {
 	for (const leaf of app.workspace.getLeavesOfType(NOTEBOOK_VIEW_TYPE)) {
 		const view: unknown = leaf.view;
 		if (!isEditContextSource(view) || view.file?.path !== file.path) continue;
@@ -44,7 +44,7 @@ export function moveTargets(app: App, settings: NotebookSettings, exclude: TFile
  * Asset files live in `<notebooks folder>/_assets`, named by their content, and every notebook shares them: the target
  * only needs the records. A file that sits elsewhere (the notebooks folder setting changed) is copied there first.
  */
-async function relocateAssets(app: App, folder: string, assets: readonly Asset[]): Promise<Asset[]> {
+export async function relocateAssets(app: App, folder: string, assets: readonly Asset[]): Promise<Asset[]> {
 	const out: Asset[] = [];
 	for (const record of assets) {
 		const file = resolveAssetFile(app, record, folder);
@@ -91,7 +91,7 @@ async function appendToFile(
  * After the open destination's flush: its file must still be there and hold the pages. The view may have closed, the
  * file may have been deleted or reloaded meanwhile (see destinationVerdict).
  */
-async function storedInFile(app: App, file: TFile, pageIds: readonly string[]): Promise<boolean> {
+export async function storedInFile(app: App, file: TFile, pageIds: readonly string[]): Promise<boolean> {
 	const current = app.vault.getFileByPath(file.path);
 	if (!current || current !== file) return false;
 	try {
@@ -103,7 +103,7 @@ async function storedInFile(app: App, file: TFile, pageIds: readonly string[]): 
 }
 
 /** Records the pages that got a new id in the target. A failure is reported and does not undo the move. */
-async function recordRenamed(app: App, settings: NotebookSettings, renamed: PageMovePlan["renamed"], doc: string): Promise<void> {
+export async function recordRenamed(app: App, settings: NotebookSettings, renamed: PageMovePlan["renamed"], doc: string): Promise<void> {
 	const at = new Date().toISOString();
 	try {
 		await new PageMoveStore(vaultDeviceFileAdapter(app), () => settings.folder, sidecarDeviceId(app)).record(renamed.map((r) => ({ ...r, doc, at })));

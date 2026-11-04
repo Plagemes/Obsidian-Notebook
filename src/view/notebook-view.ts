@@ -116,6 +116,7 @@ import { findLecturePage } from "../timetable/lecture-open";
 import type { LectureClass } from "../timetable/lecture-mode";
 import { askExercisePaper, askLayoutOptions, loadExercisePaper } from "./lecture-pack-modal";
 import { runMovePages } from "../library/move-pages";
+import { TransferFlows } from "../library/transfer-flows";
 import type { PdfActionHost } from "./pdf-actions";
 import { pickFile } from "./pick";
 import { pdfSideState, referencePane, referenceSlideOf, runPdfSideAction, type PageSyncHooks } from "./pdf-sync";
@@ -3410,7 +3411,24 @@ export class NotebookView extends FileView {
 
 			setLocked: (pageId, value) => this.setLockedById(pageId, value),
 			canLock: () => !!this.editableDocument(),
+			// 0.17 (#77): extract pages / split from the map. The dialog and the run work on the file (an open view is used through its edit context).
+			extract: (ids) => void this.extractFromMap(ids),
+			split: (pageId) => void this.splitAtPage(pageId),
 		}).open();
+	}
+
+	/** 0.17 (#77): the flows for this view's notebook (merge, split, extract). */
+	private transferFlows(): TransferFlows | null {
+		return this.file ? new TransferFlows({ app: this.app, settings: () => this.host.settings }) : null;
+	}
+
+	private async extractFromMap(ids: string[]): Promise<void> {
+		if (this.file && ids.length > 0) await this.transferFlows()?.extract(this.file, ids);
+	}
+
+	private async splitAtPage(pageId: string): Promise<void> {
+		const index = this.session?.doc?.pages.findIndex((p) => p.id === pageId) ?? -1;
+		if (this.file && index > 0) await this.transferFlows()?.split(this.file, index);
 	}
 
 	/** Locks or unlocks the page with this id (the page strip and the notebook map). */
