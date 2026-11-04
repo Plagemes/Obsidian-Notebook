@@ -255,23 +255,42 @@ export async function scanStorage(source: StorageSource, config: CheckConfig, op
 	}
 
 	// ---------------------------------------------------------- backups, version history
-	const plan = planBackups(all, config.backup, refs, config.now, { days: options.days ?? OLD_BACKUP_DAYS, keepSnapshots: options.keepSnapshots });
+	const ownerOf = async (b: { path: string; notebook: string }): Promise<"mine" | "foreign"> => {
+		const ownerId = rows.get(b.notebook)?.docId ?? null;
+		let ownId: string | null = null;
+		try {
+			ownId = quickDocId(await source.read(b.path));
+		} catch {
+			ownId = null;
+		}
+		await breathe();
+		return ownerId !== null && ownId !== null && ownId !== ownerId ? "foreign" : "mine";
+	};
+	// The newest ordinary backup is spared among the backups this notebook owns: where the one chosen turns out to be another
+	// notebook's, the plan is made again without it.
+	const foreign = new Set<string>();
+	const checked = new Set<string>();
+	let plan = planBackups(all, config.backup, refs, config.now, { days: options.days ?? OLD_BACKUP_DAYS, keepSnapshots: options.keepSnapshots, foreign });
+	for (;;) {
+		let again = false;
+		for (const [notebook, path] of plan.spared) {
+			if (checked.has(path)) continue;
+			if (stop()) return emptyReport(check, true);
+			checked.add(path);
+			if ((await ownerOf({ path, notebook })) === "foreign") {
+				foreign.add(path);
+				again = true;
+			}
+		}
+		if (!again) break;
+		plan = planBackups(all, config.backup, refs, config.now, { days: options.days ?? OLD_BACKUP_DAYS, keepSnapshots: options.keepSnapshots, foreign });
+	}
 	// A backup is named by its notebook's file name, but a new notebook can reuse the name of a deleted one: where the backup's own
 	// document id can be read and is another notebook's, it is not offered. (Only what would be offered is read.)
 	const owned: OldBackup[] = [];
 	for (const b of plan.old) {
 		if (stop()) return emptyReport(check, true);
-		if (b.kind === "backup") {
-			const ownerId = rows.get(b.notebook)?.docId ?? null;
-			let ownId: string | null = null;
-			try {
-				ownId = quickDocId(await source.read(b.path));
-			} catch {
-				ownId = null;
-			}
-			await breathe();
-			if (ownerId !== null && ownId !== null && ownId !== ownerId) continue;
-		}
+		if (b.kind === "backup" && !checked.has(b.path) && (await ownerOf(b)) === "foreign") continue;
 		owned.push(b);
 	}
 	plan.old = owned;

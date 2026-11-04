@@ -515,6 +515,20 @@ describe("old backups: whose they are", () => {
 		expect(offered).toContain(bakPath("A", "19990301-100000"));
 	});
 
+	it("the newest backup spared is the notebook's own: a newer one of a deleted notebook with the same name does not take its place", async () => {
+		const mine = sampleDocument(1);
+		const other = sampleDocument(1);
+		other.id = "another-notebook-id";
+		const src = new FakeVault()
+			.put("Notebooks/A.notebook", { text: serialize(mine) })
+			.put(bakPath("A", "19990101-100000"), { text: serialize(mine) })
+			.put(bakPath("A", "19990201-100000"), { text: serialize(mine) })
+			.put(bakPath("A", "19990301-100000"), { text: serialize(other) });
+		const r = await run(src, { seen: aged() });
+		const offered = r.oldBackups.map((b) => b.path);
+		expect(offered).toEqual([bakPath("A", "19990101-100000")]);
+	});
+
 	it("nothing is offered for a notebook that cannot be read now", async () => {
 		const src = new FakeVault()
 			.put("Notebooks/A.notebook", { unreadable: true })

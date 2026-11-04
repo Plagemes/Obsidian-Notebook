@@ -112,6 +112,8 @@ export interface BackupPlan {
 	unattributedBytes: number;
 	/** Count of backup and snapshot files seen. */
 	files: number;
+	/** The backup spared as the newest ordinary one, by notebook path (so its owner can be checked). */
+	spared: Map<string, string>;
 }
 
 /**
@@ -120,7 +122,7 @@ export interface BackupPlan {
  */
 export function planBackups(
 	files: readonly FileInfo[], backupFolder: string, notebooks: readonly NotebookRef[], now: number,
-	options: { days?: number; keepSnapshots?: number } = {},
+	options: { days?: number; keepSnapshots?: number; foreign?: ReadonlySet<string> } = {},
 ): BackupPlan {
 	const days = options.days ?? OLD_BACKUP_DAYS;
 	const keep = Math.max(SNAPSHOTS_KEPT_MIN, Math.floor(options.keepSnapshots ?? 0));
@@ -137,7 +139,7 @@ export function planBackups(
 	for (const n of notebooks) if (n.docId && !n.copy) byDoc.set(safeDocId(n.docId), [...(byDoc.get(safeDocId(n.docId)) ?? []), n]);
 	for (const n of notebooks) if (n.docId && n.copy && !byDoc.has(safeDocId(n.docId))) byDoc.set(safeDocId(n.docId), [n]);
 
-	const plan: BackupPlan = { old: [], bytesByNotebook: new Map(), countByNotebook: new Map(), unattributedBytes: 0, files: 0 };
+	const plan: BackupPlan = { old: [], bytesByNotebook: new Map(), countByNotebook: new Map(), unattributedBytes: 0, files: 0, spared: new Map() };
 	const add = (path: string, bytes: number) => {
 		plan.bytesByNotebook.set(path, (plan.bytesByNotebook.get(path) ?? 0) + bytes);
 		plan.countByNotebook.set(path, (plan.countByNotebook.get(path) ?? 0) + 1);
@@ -175,12 +177,16 @@ export function planBackups(
 	}
 
 	const unreadable = new Set(notebooks.filter((n) => n.readable === false).map((n) => n.path));
-	for (const [notebook, list] of baks) {
+	for (const [notebook, all] of baks) {
 		if (unreadable.has(notebook)) continue;
+		// Backups known to belong to another notebook (a reused name) do not count when choosing the newest one to spare.
+		const list = options.foreign ? all.filter((b) => !options.foreign!.has(b.file.path)) : all;
+		if (list.length === 0) continue;
 		// The newest ordinary backup stays; a newer recovery copy (unreadable, unsaved…) does not replace it. When every copy is a
 		// recovery copy, the newest of them stays.
 		const ordinary = list.filter((b) => !RECOVERY_REASONS.includes(b.name.reason));
 		const newest = (ordinary.length > 0 ? ordinary : list).reduce((a, b) => (b.name.at > a.name.at ? b : a));
+		plan.spared.set(notebook, newest.file.path);
 		for (const { file, name } of list) {
 			if (file === newest.file || name.at >= cutoff) continue;
 			plan.old.push({ kind: "backup", path: file.path, size: file.size, at: name.at, notebook, reason: name.reason, recovery: RECOVERY_REASONS.includes(name.reason) });
