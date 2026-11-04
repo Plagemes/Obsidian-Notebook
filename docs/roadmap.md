@@ -288,7 +288,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 ### F. Sync and storage
 126. **P1** Optional Google Drive / OneDrive connector inside the plugin (opt-in only), configurable scope: the whole vault, only selected folders, or include/exclude rules (patterns, file types, size limits). When to sync: on open, on close, on an interval or manually; "Wi-Fi only" option; rules for large files. Conflicts merged with #122; never a mandatory cloud.
 127. **P2** Scheduled backups to an external folder or to Drive (e.g. a weekly zip).
-128. **P2** Storage manager: size of each notebook, duplicate or unused assets, downscaling of heavy images.
+128. **P2** 🧪 Storage manager: size of each notebook, duplicate or unused assets, downscaling of heavy images.
 
 ### G. Navigation and workflow
 129. **P3** Search by drawing: sketch a shape and find pages with similar drawings (geometric descriptors, no AI).

@@ -22,8 +22,16 @@ function quantizeScale(s: number): number {
 export function resolveAssetFile(app: App, asset: Asset, notebooksFolder: string): TFile | null {
 	const byPath = app.vault.getFileByPath(asset.path);
 	if (byPath) return byPath;
-	const fallback = app.vault.getFileByPath(normalizePath(assetPath(assetsFolder(notebooksFolder), asset.id, assetExtension(asset.kind, asset.name))));
-	return fallback;
+	const folder = assetsFolder(notebooksFolder);
+	const fallback = app.vault.getFileByPath(normalizePath(assetPath(folder, asset.id, assetExtension(asset.kind, asset.name))));
+	if (fallback) return fallback;
+	// The same picture can sit under another extension (the Storage manager removes the extra copy of a duplicate): the id is
+	// the content, so any file of the folder named by it is the asset.
+	for (const ext of asset.kind === "pdf" ? [] : ["png", "jpg", "jpeg", "webp", "gif"]) {
+		const other = app.vault.getFileByPath(normalizePath(assetPath(folder, asset.id, ext)));
+		if (other) return other;
+	}
+	return null;
 }
 
 /** True if `file` holds exactly `bytes` (size first, then a hash of the content). */

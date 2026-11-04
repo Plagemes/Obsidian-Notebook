@@ -185,6 +185,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 			case "toolbar-reset": resetToolbarAdaptation(this.app, this.host); this.schemaChanged(); break;
 			case "pen-test": new PenTestModal(this.app, penSignalInfo(this.host)).open(); break;
 			case "benchmark": this.host.runGlobal("benchmark"); break;
+			case "storage-open": this.host.runGlobal("storage-manager"); break;
 			case "companion-update-all": void companionService(this.host)?.updateAll(); break;
 			case "sync-check": void this.host.syncSafety?.openCheck(); break;
 			case "timetable-edit": void this.host.timetable?.edit(); break;

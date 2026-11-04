@@ -443,8 +443,11 @@ export class Vault extends Events {
 
 	async rename(f: TAbstractFile, p: string): Promise<void> {
 		const data = f instanceof TFile ? this.text.get(f.path) : undefined;
+		// 0.15 storage: a binary file keeps its bytes when it is renamed (an asset moved to the trash folder).
+		const bytes = f instanceof TFile ? this.binary.get(f.path) : undefined;
 		await this.removeEntry(f);
 		if (data !== undefined) await this.create(p, data);
+		else if (bytes !== undefined) await this.createBinary(p, bytes);
 	}
 }
 

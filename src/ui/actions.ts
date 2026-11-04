@@ -396,6 +396,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	global("check-integrity", "command.checkIntegrity", "shield-check", "app", ["sheet", "notebook", "palette"], 15),
 	// wave 0.10 (27): unreadable notebooks and unused attachment files; the library sidebar has the same entry.
 	global("library-check", "command.libraryCheck", "hard-drive", "app", ["sheet", "notebook", "library", "palette"], 15),
+	// 0.15 storage (128): size of each notebook, unused / duplicate / heavy files, old backups.
+	global("storage-manager", "command.storage", "database", "app", ["notebook", "library", "palette"], 15),
 
 	// --- diagnostics: settings tab and palette.
 	global("pen-button-test", "command.penTest", "pen-tool", "dev", ["palette"], 5),

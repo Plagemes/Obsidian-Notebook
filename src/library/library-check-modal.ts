@@ -37,7 +37,7 @@ export function vaultCheckSource(app: App): CheckSource {
  * `fileManager.trashFile`: both are deletions as far as the vault (and so the other devices) is concerned, and the second
  * follows the *Deleted files* setting, which can be "permanently delete". A plain rename rewrites no links.
  */
-function vaultMover(app: App): Mover {
+export function vaultMover(app: App): Mover {
 	return {
 		move: async (from, to) => {
 			const file = app.vault.getFileByPath(from);
@@ -56,7 +56,7 @@ export interface LibraryCheckLive {
 	openRoots(): readonly unknown[];
 }
 
-function journalReader(app: App): JournalReader {
+export function journalReader(app: App): JournalReader {
 	const adapter = app.vault.adapter;
 	return {
 		exists: (path) => adapter.exists(path),
@@ -65,7 +65,7 @@ function journalReader(app: App): JournalReader {
 	};
 }
 
-function configFor(settings: NotebookSettings): CheckConfig {
+export function configFor(settings: NotebookSettings): CheckConfig {
 	const root = normalizePath(settings.folder || "/");
 	return { root: root === "/" ? "" : root, backup: normalizePath(backupFolder(settings)), now: Date.now() };
 }
