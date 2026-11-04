@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { nearbyPapers, parseSmartAddHistory, pushSmartAdd, rankSmartAdd, SMART_ADD_HISTORY_MAX, type SmartAddInput } from "../src/model/smart-add";
+import {
+	nearbyPapers, normaliseSmartAddStore, parseSmartAddHistory, pushSmartAdd, rankSmartAdd, rememberSmartAdd, SMART_ADD_HISTORY_MAX,
+	SMART_ADD_MAX_NOTEBOOKS, type SmartAddInput, type SmartAddStore,
+} from "../src/model/smart-add";
 
 const base: SmartAddInput = { paper: "ruled", hasBackground: false, slide: null, exercisePaper: "grid", history: [] };
 const ids = (i: SmartAddInput) => rankSmartAdd(i).map((c) => c.id);
@@ -78,5 +81,44 @@ describe("history", () => {
 		expect(parseSmartAddHistory("x")).toEqual([]);
 		expect(parseSmartAddHistory([null, 3, { id: "nope" }, { id: "same", paper: "bogus" }, { id: "exercise", paper: "grid" }]))
 			.toEqual([{ id: "same" }, { id: "exercise", paper: "grid" }]);
+	});
+});
+
+describe("the per-device store", () => {
+	it("keeps a history per notebook, newest first", () => {
+		let s = rememberSmartAdd({}, "nb1", { id: "same", paper: "ruled" }, 10);
+		s = rememberSmartAdd(s, "nb1", { id: "exercise" }, 20);
+		s = rememberSmartAdd(s, "nb2", { id: "blank" }, 30);
+		expect(s.nb1!.history).toEqual([{ id: "exercise" }, { id: "same", paper: "ruled" }]);
+		expect(s.nb2!.history).toEqual([{ id: "blank" }]);
+	});
+
+	it("is capped: the least recently used notebooks are forgotten, each history stays bounded", () => {
+		let s: SmartAddStore = {};
+		for (let i = 0; i < SMART_ADD_MAX_NOTEBOOKS + 25; i++) s = rememberSmartAdd(s, `nb${i}`, { id: "blank" }, i + 1);
+		expect(Object.keys(s)).toHaveLength(SMART_ADD_MAX_NOTEBOOKS);
+		expect(s.nb0).toBeUndefined();
+		expect(s[`nb${SMART_ADD_MAX_NOTEBOOKS + 24}`]).toBeDefined();
+		for (let i = 0; i < SMART_ADD_HISTORY_MAX + 5; i++) s = rememberSmartAdd(s, "busy", { id: i % 2 ? "same" : "blank" }, 1000 + i);
+		expect(s.busy!.history).toHaveLength(SMART_ADD_HISTORY_MAX);
+		expect(Object.keys(s)).toHaveLength(SMART_ADD_MAX_NOTEBOOKS);
+	});
+
+	it("starts from the history an older version kept in its own key", () => {
+		const s = rememberSmartAdd({}, "old", { id: "slide" }, 5, [{ id: "exercise" }, { id: "same", paper: "grid" }]);
+		expect(s.old!.history).toEqual([{ id: "slide" }, { id: "exercise" }, { id: "same", paper: "grid" }]);
+		// Once the notebook is in the store the legacy value is not used again.
+		expect(rememberSmartAdd(s, "old", { id: "blank" }, 6, [{ id: "exercise" }]).old!.history[1]).toEqual({ id: "slide" });
+	});
+
+	it("reads damaged data as empty or drops the bad parts, never throws", () => {
+		for (const junk of [null, undefined, 3, "x", [], { a: 1 }]) expect(normaliseSmartAddStore(junk)).toEqual({});
+		const s = normaliseSmartAddStore({
+			"bad id!": { at: 1, history: [{ id: "same" }] }, ok: { at: 2, history: [{ id: "nope" }, { id: "same" }] },
+			empty: { at: 3, history: [] }, str: "x", noAt: { history: [{ id: "blank" }] },
+		});
+		expect(Object.keys(s).sort()).toEqual(["noAt", "ok"]);
+		expect(s.ok!.history).toEqual([{ id: "same" }]);
+		expect(rememberSmartAdd({}, "bad id!", { id: "same" }, 1)).toEqual({});
 	});
 });

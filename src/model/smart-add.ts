@@ -122,3 +122,42 @@ export function nearbyPapers(pages: ReadonlyArray<{ paper: { kind: PaperKind } }
 	}
 	return out;
 }
+
+// ------------------------------------------------------------------------------------------------ the per-device store
+
+/** Notebooks whose additions are remembered on this device (the least recently used are forgotten first). */
+export const SMART_ADD_MAX_NOTEBOOKS = 60;
+const NOTEBOOK_ID = /^[A-Za-z0-9_.-]{1,80}$/;
+
+/** One notebook's history and when it last changed (ms), so the oldest notebook is the first to go. */
+export interface SmartAddNotebook {
+	at: number;
+	history: SmartAddHistoryEntry[];
+}
+
+/** What the device keeps (one value, bounded): the additions taken in each notebook. */
+export type SmartAddStore = Readonly<Record<string, SmartAddNotebook>>;
+
+/** Whatever was stored, as a valid, bounded store: bad ids and histories are dropped, the oldest notebooks are forgotten. */
+export function normaliseSmartAddStore(data: unknown): SmartAddStore {
+	if (typeof data !== "object" || data === null || Array.isArray(data)) return {};
+	const rows: Array<[string, SmartAddNotebook]> = [];
+	for (const [id, v] of Object.entries(data as Record<string, unknown>)) {
+		if (!NOTEBOOK_ID.test(id) || typeof v !== "object" || v === null) continue;
+		const { at, history } = v as { at?: unknown; history?: unknown };
+		const entries = parseSmartAddHistory(history);
+		if (entries.length === 0) continue;
+		rows.push([id, { at: typeof at === "number" && Number.isFinite(at) ? at : 0, history: entries }]);
+	}
+	rows.sort((a, b) => b[1].at - a[1].at);
+	return Object.fromEntries(rows.slice(0, SMART_ADD_MAX_NOTEBOOKS));
+}
+
+/** The store after `entry` was taken in `notebookId` (a new object). `legacy` is the history an older version kept in its own key. */
+export function rememberSmartAdd(
+	store: SmartAddStore, notebookId: string, entry: SmartAddHistoryEntry, now: number, legacy: readonly SmartAddHistoryEntry[] = [],
+): SmartAddStore {
+	if (!NOTEBOOK_ID.test(notebookId)) return store;
+	const before = store[notebookId]?.history ?? legacy;
+	return normaliseSmartAddStore({ ...store, [notebookId]: { at: now, history: pushSmartAdd(before, entry) } });
+}
