@@ -2190,6 +2190,20 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 | Drawing and export: canvas, thumbnails, PNG, PDF, SVG, Markdown | yes | `tests/model-v15.test.ts` | | | |
 | Sticky UI: insert (quick slot, sheet, command), edit dialog, collapse / open, selection bar; one undo step each, refused on a locked page | yes | harness scenario `sticky` (tablet and phone, light and dark), `tests/ui-registry.test.ts` | | | |
 
+### 0.18 — lasso2md: selection as a picture in a note (steps 1340-1359)
+
+1340. **Insert at the cursor.** Open a note in a split next to a notebook, put the cursor in the middle of a line, select handwriting with the lasso and choose *Insert into note*. Expected: a picture embed `![[… p3-hhmmss.png|400]]` and `[[Notebook#p3&id=…|↩]]` appear on their own line at the cursor; the picture file sits where Obsidian keeps attachments. Undo in the note removes the text.
+1341. **Link back.** Tap the arrow in the note (reading mode): the notebook opens at that page.
+1342. **Settings.** Integration > turn off *Link back to the page*, set the width to 250 and the background to *Paper*, insert again. Expected: only the embed, 250 px wide, with the page paper behind the ink; the first setting (transparent) gives ink with no white.
+1343. **No note open.** Close all notes and insert. Expected: a note picker; the block is appended at the end of the chosen note after a blank line; cancelling the picker writes nothing.
+1344. **SVG.** *Insert into note as SVG* (All actions): an `.svg` of the region is stored and shows in the note.
+1345. **Collapsed sticky note.** Select ink next to a collapsed note: the picture does not show the hidden ink.
+1346. **Phone and Italian.** The actions read *Inserisci nella nota*; the new settings fit at phone width.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Selection into a Markdown note as PNG or SVG with optional link back; cursor insert through the editor, note picker and append fallback; width, background, link-back settings (#59) | yes | `tests/note-insert.test.ts` | | | |
+
 ## Quick check — Windows
 
 Mouse: draw, erase (both modes), undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scroll, Ctrl+wheel zoom, resize the window (the page refits), add a page, use every page menu action with undo, create notebooks with each paper and size, export PDF and SVG and open them, lasso select/move/resize/rotate/delete, close and reopen the notebook. Also: open the library and use every action, import a PDF and write on it, insert a PDF range and an image page, use the shape, text, image and ruler tools, scan from a photo file, use the Pages panel, run *Restore a previous version*, insert an embed in a note and open an `obsidian://notebook` link. With a pen tablet or Surface pen: pressure and eraser end (`buttons & 32`).

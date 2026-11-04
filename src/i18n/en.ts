@@ -3351,6 +3351,21 @@ export const en = {
 	"export.split.skipped": "{n} empty left out.",
 	"export.split.truncated": "Only the first {max} sheets are made. Choose a larger paper or a smaller size.",
 	"export.split.png": "Each sheet is an image of its part of the page (page-001-part-01.png…). Margins and page numbers apply to PDF.",
+	// 0.18 lasso2md
+	"noteInsert.action": "Insert into note",
+	"noteInsert.actionSvg": "Insert into note as SVG",
+	"noteInsert.pick.placeholder": "Choose a note to insert the picture into",
+	"noteInsert.noPicture": "The picture of the selection could not be made. Nothing was inserted.",
+	"noteInsert.done": "Inserted into {name}.",
+	"noteInsert.failed": "Could not insert the selection: {error}",
+	"settings.noteInsertWidth": "Inserted picture width",
+	"settings.noteInsertWidth.desc": "Width of a selection inserted into a note, in pixels.",
+	"settings.noteInsertBackground": "Inserted picture background",
+	"settings.noteInsertBackground.desc": "Transparent keeps only the ink; paper adds the page paper and PDF.",
+	"settings.noteInsertBackground.transparent": "Transparent",
+	"settings.noteInsertBackground.paper": "Paper",
+	"settings.noteInsertLinkBack": "Link back to the page",
+	"settings.noteInsertLinkBack.desc": "Add a small arrow after the inserted picture that opens the page it came from.",
 } as const;
 
 export type MessageKey = keyof typeof en;

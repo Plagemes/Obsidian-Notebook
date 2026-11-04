@@ -138,6 +138,9 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"comment-next": (v) => void v.commentTools?.step(1),
 	// 0.17 (#57): a task from the selection
 	"selection-make-task": (v) => v.makeTaskFromSelection(),
+	// 0.18 (#59): the selection as a picture in a note
+	"selection-insert-note": (v) => v.insertSelectionIntoNote("png"),
+	"selection-insert-note-svg": (v) => v.insertSelectionIntoNote("svg"),
 	"selection-paste-device": (v) => void v.selectionTools?.pasteFromDevices(),
 	"selection-white-transparent": (v) => void v.selectionTools?.makeWhiteTransparent(),
 	"link-selection": (v) => v.linkSelection(),

@@ -168,7 +168,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 
 ### Integration and accessibility
 58. 🧪 **P1** Direct `obsidian://` links to a page, to open it from other apps, bookmarks or a QR code.
-59. **P2** Lasso selection as an image inserted at the cursor of the active Markdown note.
+59. **P2** 🧪 Lasso selection as an image inserted at the cursor of the active Markdown note.
 60. ~~**P2** Left-handed mode: toolbar on the other side and palm rejection tuned for left-handed writing.~~ — dropped (user decision, 2026-10-29)
 
 ## M9 — More features (backlog, planned 2026-10-29)
