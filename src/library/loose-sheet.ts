@@ -75,7 +75,7 @@ export function openLooseSheet(plugin: LooseSheetPlugin, open: (file: TFile) => 
 const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
 /** The notebook view loads asynchronously: waits (up to 6 s) for an editable document of that file. */
-async function waitForContext(app: App, file: TFile): Promise<EditContext | null> {
+export async function waitForContext(app: App, file: TFile): Promise<EditContext | null> {
 	for (let i = 0; i < 60; i++) {
 		for (const { view } of viewsOf(app, file)) {
 			if (isEditContextSource(view)) {

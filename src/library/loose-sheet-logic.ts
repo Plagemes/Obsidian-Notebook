@@ -22,8 +22,7 @@ export function defaultLooseSheetPath(folder: string): string {
  * `.notebook` added when missing) or the default one. A path inside the library's `_assets` or `_backup` folders
  * is not accepted, because the library does not list them.
  */
-export function looseSheetPath(folder: string, custom: string): string {
-	const fallback = defaultLooseSheetPath(folder);
+export function looseSheetPath(folder: string, custom: string, fallback: string = defaultLooseSheetPath(folder)): string {
 	const parts = trimSlashes(custom.trim())
 		.split("/")
 		.map((p) => p.replace(FORBIDDEN, " ").replace(/\s+/g, " ").trim())

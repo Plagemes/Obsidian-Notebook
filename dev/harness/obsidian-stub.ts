@@ -448,6 +448,12 @@ export class Vault extends Events {
 	}
 }
 
+/** 0.15 daily: moment().format() for the tokens the daily-notes formats use here (YYYY, MM, DD). */
+export function moment(d: Date = new Date()): { format(pattern: string): string } {
+	const p = (n: number) => String(n).padStart(2, "0");
+	return { format: (pattern) => pattern.replace(/YYYY/g, String(d.getFullYear())).replace(/MM/g, p(d.getMonth() + 1)).replace(/DD/g, p(d.getDate())) };
+}
+
 export class FileManager {
 	constructor(private readonly app: App) {}
 	async renameFile(f: TAbstractFile, p: string): Promise<void> {
@@ -455,6 +461,10 @@ export class FileManager {
 	}
 	async trashFile(f: TAbstractFile): Promise<void> {
 		await this.app.vault.removeEntry(f);
+	}
+	/** 0.15 daily: a wikilink with the page subpath and an alias, as Obsidian writes it. */
+	generateMarkdownLink(f: TFile, _source: string, subpath?: string, alias?: string): string {
+		return `[[${f.path}${subpath ?? ""}${alias ? `|${alias}` : ""}]]`;
 	}
 	async processFrontMatter(): Promise<void> {
 		/* not used by the harness */

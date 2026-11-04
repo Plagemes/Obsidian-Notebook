@@ -2505,6 +2505,25 @@ export const en = {
 	"settings.slideInkLink.desc": "Ink written while a PDF page is open side by side remembers that slide.",
 	"settings.slideInkBadges": "Slide badges",
 	"settings.slideInkBadges.desc": "A small badge next to ink written beside a slide; tap it to show the slide again.",
+	// 0.15 daily
+	"command.todaysPage": "Today's page",
+	"home.quick.today": "Today's page",
+	"home.quick.today.desc": "A dated page in your daily notebook",
+	"daily.create.title": "Create your daily notebook?",
+	"daily.create.body": "There is no daily notebook yet. Create \"{path}\" with today's page as its first page?",
+	"daily.create.button": "Create",
+	"daily.pathTaken": "\"{path}\" exists but is not a notebook. Choose another daily notebook in the settings.",
+	"daily.failed": "Could not open today's page: {error}",
+	"daily.linkAlias": "Handwritten page {date}",
+	"daily.linked": "Linked from {path}",
+	"daily.unavailable": "Turn on the Daily notes core plugin (or Periodic Notes) to link from the daily note.",
+	"daily.noteMissing": "Today's daily note ({path}) does not exist yet, so the page was not linked.",
+	"settings.dailyNotebook": "Daily notebook",
+	"settings.dailyNotebook.desc": "Where \"Today's page\" adds a dated page. Made the first time, after you confirm.",
+	"settings.dailyLink": "Link from the daily note",
+	"settings.dailyLink.desc": "Add a link to the page at the end of today's daily note, once.",
+	"settings.dailyCreateNote": "Create the daily note if missing",
+	"settings.dailyCreateNote.desc": "Without it, a missing daily note is left alone and the page is not linked.",
 } as const;
 
 export type MessageKey = keyof typeof en;

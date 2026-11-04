@@ -389,6 +389,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	global("lecture-from-slides", "command.lectureFromSlides", "presentation", "app", ["library", "palette"]),
 	global("scan-new", "command.scanNew", "scan", "app", ["library", "palette"]),
 	global("loose-sheet", "command.looseSheet", "sticky-note", "app", ["palette"]),
+	// 0.15 (O12): a dated page in the daily notebook, optionally linked from the daily note.
+	global("todays-page", "command.todaysPage", "calendar-plus", "app", ["library", "palette"]),
 	global("timetable", "command.timetable", "calendar-clock", "app", ["library", "palette"]),
 	global("open-class", "command.openClass", "calendar-check", "app", ["library", "palette"]),
 	// wave 0.7: safety checks of the whole notebooks folder (also from the settings tab).

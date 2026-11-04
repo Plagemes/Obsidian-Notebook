@@ -31,6 +31,7 @@ import { importPdfAsNotebook } from "./import-pdf";
 import { hint } from "../ui/hints";
 import { createLectureFromSlides } from "./lecture-pack";
 import { openLooseSheet, openNewQuickPage } from "./loose-sheet";
+import { openTodaysPage } from "./daily";
 import type { LectureTarget } from "./home-stats";
 import { openLibraryCheck } from "./library-check-modal";
 import { LibraryStateStore } from "./library-state-store";
@@ -366,6 +367,11 @@ export class NotebookLibraryHost implements LibraryHost {
 
 	openLooseSheet(): void {
 		void openLooseSheet(this.plugin, (file) => this.openNotebook(file));
+	}
+
+	/** 0.15 (O12): Home's "Today's page" quick action: a dated page in the daily notebook. */
+	todaysPage(): void {
+		void openTodaysPage(this.plugin, (file) => this.openNotebook(file));
 	}
 
 	/** 0.13 (Home's Quick page card): a new page in Quick notes, created the first time. */
