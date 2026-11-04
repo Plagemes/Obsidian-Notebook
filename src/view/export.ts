@@ -1,7 +1,7 @@
 import { normalizePath, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { layerFlags, planExport, type ExportFormat, type ExportLayers, type ExportScope } from "../ink/export-layers";
-import { pagesToPdf, type PdfPlacedImage } from "../ink/export-pdf";
+import { pagesToPdf, pagesToPdfYielding, type PdfOptions, type PdfPlacedImage } from "../ink/export-pdf";
 import { pageToSvg, type SvgPlacedImage } from "../ink/export-svg";
 import type { BoxLabel } from "../ink/marker-render";
 import type { HeaderLayout } from "../ink/page-header";
@@ -112,21 +112,32 @@ export interface ExportOptions {
 	header?: (page: Page) => HeaderLayout | null;
 }
 
+/**
+ * The bytes of a PDF of `pages` (images collected first, equations prepared). With `pause` the build lets the interface breathe between
+ * two pages (0.17 #23: the automatic PDF copy); without it the build is synchronous, as it always was.
+ */
+export async function buildPdfBytes(
+	title: string, pages: readonly Page[], media: NotebookMedia | null, options: ExportOptions = {}, pause?: () => Promise<void>,
+): Promise<{ bytes: Uint8Array; skipped: number }> {
+	const { images, skipped } = await collectPageImages(media, pages, options.layers);
+	await options.prepare?.(pages);
+	const pdfOptions: PdfOptions = {
+		paper: true, title, images: (p) => images.get(p) ?? [],
+		...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+		...(options.layers ? { layers: options.layers } : {}),
+		...(options.header ? { header: options.header } : {}),
+		...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}),
+	};
+	return { bytes: pause ? await pagesToPdfYielding(pages, pdfOptions, pause) : pagesToPdf(pages, pdfOptions), skipped };
+}
+
 /** Writes a PDF of `pages` next to the notebook; `suffix` distinguishes single-page exports. */
 export async function exportPdf(
 	app: App, notebook: TFile, pages: readonly Page[], suffix = "", media: NotebookMedia | null = null, options: ExportOptions = {},
 ): Promise<void> {
 	const working = showNotice(t("export.working"), 0);
 	try {
-		const { images, skipped } = await collectPageImages(media, pages, options.layers);
-		await options.prepare?.(pages);
-		const bytes = pagesToPdf(pages, {
-			paper: true, title: notebook.basename, images: (p) => images.get(p) ?? [],
-			...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
-			...(options.layers ? { layers: options.layers } : {}),
-			...(options.header ? { header: options.header } : {}),
-			...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}),
-		});
+		const { bytes, skipped } = await buildPdfBytes(notebook.basename, pages, media, options);
 		const path = freePath(app, notebook, suffix, "pdf");
 		recordPluginWrite(app, [path]); // before the write: the inbox must not offer the file the plugin is creating
 		await app.vault.createBinary(path, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);

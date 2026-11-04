@@ -3150,6 +3150,25 @@ export const en = {
 	"hover.pageOf": "Page {n} of {total}",
 	"hover.deleted": "This page no longer exists in the notebook.",
 	"hover.unreadable": "Preview not available.",
+	// 0.17 pdfcopy
+	"settings.pdfCopy": "Keep a PDF copy of each notebook",
+	"settings.pdfCopy.desc": "A PDF next to each notebook, kept up to date. Only PDFs the plugin made are replaced.",
+	"settings.pdfCopyWhen": "Update the PDF copy",
+	"settings.pdfCopyWhen.desc": "Automatic: after a pause on a computer; on close or leaving the app on a phone.",
+	"settings.pdfCopyWhen.auto": "Automatic",
+	"settings.pdfCopyWhen.idle": "After a quiet moment",
+	"settings.pdfCopyWhen.close": "When I close the notebook",
+	"settings.pdfCopyFolder": "PDF copy folder",
+	"settings.pdfCopyFolder.desc": "Leave empty to keep each copy next to its notebook.",
+	"pdfCopy.menu": "Keep a PDF copy",
+	"pdfCopy.status.updated": "PDF copy updated {time}",
+	"pdfCopy.status.stopped": "PDF copy no longer updated (last {time})",
+	"pdfCopy.status.waiting": "PDF copy not created yet",
+	"pdfCopy.status.failed": "PDF copy failed: {error}",
+	"pdfCopy.status.off": "PDF copy is off",
+	"pdfCopy.failed": "The PDF copy of {name} could not be updated: {error}",
+	"pdfCopy.noFreeName": "no free file name for the copy",
+	"pdfCopy.diverted": "A file named {name} that the plugin did not create is already there, so the copy was written to {path}. Your file was not touched.",
 } as const;
 
 export type MessageKey = keyof typeof en;

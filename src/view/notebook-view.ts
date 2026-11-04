@@ -175,6 +175,8 @@ import {
 	unionBounds,
 } from "./view-helpers";
 import { showErrorNotice, showNotice, type NoticeHandle } from "./notice";
+import type { PdfCopyPort, PdfCopySource } from "../storage/pdf-copy-service";
+import { isInTrash } from "../storage/trash-paths";
 import { applyViewportClass, ViewportTracker } from "../ui/viewport-class";
 
 export const VIEW_TYPE = "notebook-view";
@@ -232,6 +234,8 @@ export interface NotebookHost {
 	resilience?: ResilienceServices;
 	/** wave 0.10 (362): the plugin's one store of the shared clipboard file (views must not each write it). Optional: absent in tests. */
 	sharedClips?(): SharedClipStore;
+	/** 0.17 (#23): the optional PDF copy next to each notebook. Optional: absent in tests and the harness. */
+	pdfCopy?: PdfCopyPort;
 }
 
 interface ActiveStroke {
@@ -397,6 +401,8 @@ export class NotebookView extends FileView {
 	private saveText = "";
 	private saveKind: StatusBarInfo["kind"] = "pending";
 	private statusKey = "";
+	/** 0.17 (#23): counts the moments the notebook stopped being saved (an edit): a PDF copy built across one is thrown away. */
+	private editTick = 0;
 	private textEditor: TextEditor | null = null;
 	/** v9: equations and graphs (editor, panel, typesetting, convert to ink). */
 	private math: MathTools | null = null;
@@ -844,7 +850,9 @@ export class NotebookView extends FileView {
 		this.registerDomEvent(document, "visibilitychange", () => {
 			if (document.visibilityState !== "hidden") return;
 			this.resilience?.hidden();
-			void this.flushNow();
+			void this.flushNow().then((saved) => {
+				if (saved && this.file) this.host.pdfCopy?.hidden(this.file.path, () => this.pdfCopySource());
+			});
 		});
 		this.registerDomEvent(window, "pagehide", () => void this.flushNow());
 		this.registerDomEvent(document, "keydown", (e) => {
@@ -1171,7 +1179,9 @@ export class NotebookView extends FileView {
 					if (current()) this.onPagesRead(pages);
 				},
 				onSaveState: (state) => {
-					if (current()) this.showSaveState(state);
+					if (!current()) return;
+					this.showSaveState(state);
+					this.notePdfCopy(state);
 				},
 				onRecovered: ({ savedAt }) => {
 					const when = new Date(savedAt);
@@ -1285,7 +1295,11 @@ export class NotebookView extends FileView {
 			// Obsidian may close the view for a deleted file before our 'delete' handler runs.
 			const file = this.file;
 			if (file && !this.app.vault.getAbstractFileByPath(file.path)) await session.markDeleted();
-			else await session.flushForClose();
+			else {
+				await session.flushForClose();
+				// 0.17 (#23): the copy follows the saved notebook (it is built in the background, after the view is gone).
+				if (file && session.mode === "ok" && !session.dirty) this.host.pdfCopy?.closing(file.path, this.pdfCopySource(session));
+			}
 		} finally {
 			session.dispose();
 			if (this.session === session) this.session = null;
@@ -2835,6 +2849,18 @@ export class NotebookView extends FileView {
 			menu.addItem((i) => i.setTitle(actionLabel(a)).setIcon(a.icon).setSection("action").setDisabled(!isEnabled(a, c))
 				.onClick(() => (a.scope === "global" ? this.host.runGlobal?.(id) : this.runAction(id))));
 		}
+		this.addPdfCopyItems(menu);
+	}
+
+	/** 0.17 (#23): "Keep a PDF copy" (this notebook's own choice) and, under it, when the copy was last updated. */
+	private addPdfCopyItems(menu: Menu): void {
+		const copy = this.host.pdfCopy;
+		const file = this.file;
+		if (!copy || !file || isInTrash(file.path)) return;
+		const on = copy.enabled(file.path);
+		menu.addItem((i) => i.setTitle(t("pdfCopy.menu")).setIcon("file-check").setSection("action").setChecked(on)
+			.onClick(() => void copy.setEnabled(file.path, !on, () => this.pdfCopySource()).catch((e) => console.error("[notebook] PDF copy setting", e))));
+		if (on || copy.status(file.path).kind !== "off") menu.addItem((i) => i.setTitle(copy.statusText(file.path)).setIcon("clock").setSection("action").setDisabled(true));
 	}
 
 	/** 0.16 (#87): true while the presentation is on (the Select text mode and PDF link taps stay off then). */
@@ -3246,6 +3272,33 @@ export class NotebookView extends FileView {
 		if (key === this.statusKey) return;
 		this.statusKey = key;
 		this.host.statusChanged?.(this);
+	}
+
+	/** 0.17 (#23): a save finished (the copy is brought up to date after a quiet moment) or an edit began (a build in progress is stale). */
+	private notePdfCopy(state: SaveState): void {
+		if (state !== "saved") {
+			this.editTick++;
+			return;
+		}
+		const path = this.file?.path;
+		if (path && this.session?.mode === "ok") this.host.pdfCopy?.saved(path, () => this.pdfCopySource());
+	}
+
+	/**
+	 * 0.17 (#23): the notebook as the PDF copy needs it: the pages as an export draws them, without hidden ink and without
+	 * equation typesetting (the view may be gone when the copy is built). Null while the notebook is not open for editing.
+	 */
+	private pdfCopySource(from: DocumentSession | null = this.session): PdfCopySource | null {
+		const doc = from?.doc;
+		const file = this.file;
+		if (!from || !doc || !file || from.mode !== "ok") return null;
+		const header = this.exportHeader();
+		return {
+			file, doc, pages: [...this.renderPagesOf(doc)],
+			options: { boxLabel: translatedBoxLabel, equationNumbers: equationNumbers(doc.pages), ...(header ? { header } : {}) },
+			stamp: () => this.editTick,
+			unsaved: () => from.dirty,
+		};
 	}
 
 	private showSaveState(state: SaveState): void {

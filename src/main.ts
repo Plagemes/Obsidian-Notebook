@@ -48,6 +48,8 @@ import type { NavController } from "./view/nav-controller";
 import { registerNavigation } from "./view/nav-service";
 import { NotebookStatusBar } from "./view/status-bar";
 import { registerResilience, type ResilienceServices } from "./view/resilience";
+import { PdfCopyService } from "./storage/pdf-copy-service";
+import { PdfCopyStore } from "./storage/pdf-copy-store";
 
 export default class NotebookPlugin extends Plugin {
 	settings!: NotebookSettings;
@@ -74,6 +76,8 @@ export default class NotebookPlugin extends Plugin {
 	resilience?: ResilienceServices;
 	/** Version history (set by registerIntegration), for the integrity check. */
 	private history: HistoryService | null = null;
+	/** 0.17 (#23): the optional PDF copy next to each notebook (storage/pdf-copy-service.ts). */
+	pdfCopy?: PdfCopyService;
 	/** wave 0.10 (362): the clipboard shared between devices; one store (one write queue) for every view. */
 	private sharedClipStore: SharedClipStore | null = null;
 
@@ -153,6 +157,12 @@ export default class NotebookPlugin extends Plugin {
 		});
 		// wave 0.12: folder colours and icons follow renames and other devices' changes (library/folder-meta-events.ts).
 		this.step("folder metadata", () => registerFolderMeta(this, this.host.folderMeta));
+		// 0.17 (#23): the PDF copy of a notebook, kept up to date in the background when the reader asks for it.
+		this.step("pdf copy", () => {
+			const store = new PdfCopyStore(vaultDeviceFileAdapter(this.app), () => this.settings.folder, sidecarDeviceId(this.app));
+			this.pdfCopy = new PdfCopyService({ app: this.app, settings: () => this.settings, saveSettings: () => this.saveSettings(), store, mobile: Platform.isMobile });
+			this.pdfCopy.register(this);
+		});
 		this.step("ribbon", () => this.addRibbonIcon("home", t("home.command"), () => void this.openLibrary("home")));
 
 		// wave p1b: repair (#140), conflicted copies (#122), page restore (#180).

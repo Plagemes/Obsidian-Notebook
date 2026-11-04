@@ -145,6 +145,8 @@ for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"])
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "templates", theme, device, lowLatency: false });
 // 0.15 storage (128): the Storage manager at tablet and phone widths, light and dark (dev/harness/storage-check.ts).
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "storage", theme, device, lowLatency: false });
+// 0.17 pdfcopy (#23): the notebook menu entry, the save hook and the three settings rows (dev/harness/pdfcopy-check.ts), tablet and phone, light and dark.
+for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "pdfcopy", theme, device, lowLatency: false });
 // 0.16 bulk import (#80): the dialog, its run and the drop at tablet and phone widths, light and dark (dev/harness/bulk-check.ts).
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "bulk", theme, device, lowLatency: false });
 // 0.17 merge / split / extract (#77): the dialog, the run and the map's selection mode (dev/harness/pagesplit-check.ts).
@@ -275,6 +277,7 @@ async function main() {
 				if (s.doc === "storage") report = await cdp.evaluate("window.harness.checkStorage()", 120000);
 				else if (s.doc === "bulk") report = await cdp.evaluate("window.harness.checkBulk()", 120000);
 				else if (s.doc === "xfer") report = await cdp.evaluate("window.harness.checkXfer()", 120000);
+				else if (s.doc === "pdfcopy") report = await cdp.evaluate("window.harness.checkPdfcopy()", 90000);
 				else if (s.doc === "inbox") report = await cdp.evaluate("window.harness.checkInbox()", 60000);
 
 				// 0.16 pdftext: its own check.
