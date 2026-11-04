@@ -18,6 +18,7 @@ import { PhotoDecodeError, photoSize } from "../scan/decode";
 import type { NotebookSettings } from "../settings";
 import { isNotebookFile } from "../storage/format";
 import { createNotebook } from "../storage/notebooks";
+import { loadWritten, writtenSet } from "../storage/plugin-written";
 import { storeAsset } from "../view/media";
 import { showNotice } from "../view/notice";
 import { ConfirmModal } from "./library-modals";
@@ -179,7 +180,7 @@ export class SharedInbox implements SharedInboxPort {
 		for (const child of parent?.children ?? []) {
 			if (child instanceof TFile && isNotebookFile(child)) siblings.add(child.basename.toLowerCase());
 		}
-		return { folder, notebooksFolder: s.folder, templatesFolder: s.templatesFolder, notebookTemplatesFolder: s.notebookTemplatesFolder, siblingNotebooks: siblings };
+		return { folder, notebooksFolder: s.folder, templatesFolder: s.templatesFolder, notebookTemplatesFolder: s.notebookTemplatesFolder, siblingNotebooks: siblings, pluginWritten: writtenSet(loadWritten(this.app)) };
 	}
 
 	private toItem(file: TFile): InboxItem | null {

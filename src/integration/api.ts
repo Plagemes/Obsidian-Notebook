@@ -11,6 +11,7 @@ import { isNotebookFile, readNotebookText, writeNotebookText } from "../storage/
 import { isHiddenNotebookPath } from "../storage/trash-paths";
 import { createNotebook, sanitizeName } from "../storage/notebooks";
 import { VaultDocumentIO } from "../storage/vault-io";
+import { recordPluginWrite } from "../storage/plugin-written";
 import type { EditContext } from "../view/edit-context";
 import { collectPageImages, freePath } from "../view/export";
 import { NotebookMedia, storeAsset } from "../view/media";
@@ -390,6 +391,7 @@ class NotebookApiImpl implements NotebookApi {
 			}
 			const bytes = pagesToPdf(doc.pages, { paper: true, title: f.basename, images: (p) => images.get(p) ?? [] });
 			const path = freePath(this.app, f, "", "pdf");
+			recordPluginWrite(this.app, [path]);
 			await this.app.vault.createBinary(path, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
 			return { path, pages: doc.pages.length, skippedImages: skipped };
 		} catch (e) {

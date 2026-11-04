@@ -15,6 +15,7 @@ import { backgroundRect } from "../model/margins";
 import type { Page } from "../model/types";
 import { textUnderBands } from "../pdf/region-text";
 import { boxesOnPage, type PageTextContent, type TextBox, type TextMeasure } from "../pdf/text-items";
+import { recordPluginWrite } from "../storage/plugin-written";
 import { ensureFolder } from "../storage/vault-io";
 import { sanitizeName } from "../storage/names";
 import { modalShell, shellButton, shellNote } from "../ui/components/modal-shell";
@@ -196,9 +197,12 @@ async function storePicture(app: App, notePath: string, name: string, blob: Blob
 			const found = app.metadataCache.getFirstLinkpathDest(name, notePath);
 			if (found instanceof TFile && found.extension === "png") target = found;
 		}
-		if (target) await app.vault.modifyBinary(target, data);
-		else {
+		if (target) {
+			recordPluginWrite(app, [target.path]);
+			await app.vault.modifyBinary(target, data);
+		} else {
 			const path = normalizePath(await app.fileManager.getAvailablePathForAttachment(name, notePath));
+			recordPluginWrite(app, [path]); // before the write: the inbox must not offer this picture
 			const slash = path.lastIndexOf("/");
 			if (slash > 0) await ensureFolder(app, path.slice(0, slash));
 			target = await app.vault.createBinary(path, data);

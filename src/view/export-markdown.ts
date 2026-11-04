@@ -8,6 +8,7 @@ import type { BoxLabel } from "../ink/marker-render";
 import { buildNotebookMarkdown, planMarkdownFiles, type MarkdownDpi } from "../model/export-markdown";
 import type { NotebookDocument, Page } from "../model/types";
 import { ensureFolder } from "../storage/vault-io";
+import { recordPluginWrite } from "../storage/plugin-written";
 import type { NotebookMedia } from "./media";
 import { showNotice } from "./notice";
 import { PageImageRenderer } from "./page-images";
@@ -75,6 +76,7 @@ export async function exportMarkdown(app: App, notebook: TFile, doc: NotebookDoc
 	try {
 		const { dir, prefix, exists } = await prepareExportFolder(app, options.folder);
 		const names = planMarkdownFiles(dir, doc.pages.length, exists);
+		recordPluginWrite(app, [...names.images.map((n) => normalizePath(`${prefix}${n}`)), normalizePath(`${prefix}${names.markdown}`)]);
 		let skipped = 0;
 		await options.prepare?.(doc.pages);
 		for (let i = 0; i < doc.pages.length; i++) {

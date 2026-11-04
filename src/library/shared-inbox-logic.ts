@@ -7,6 +7,7 @@
  * and were not dismissed. The queue is kept in memory from `create` / `delete` / `rename` events and a scan of the folder.
  */
 import { kindFromName } from "../pdf/assets";
+import { isPluginPictureName } from "../storage/plugin-written";
 import { isHiddenNotebookPath } from "../storage/trash-paths";
 
 /** Most dismissals remembered on this device (the oldest are forgotten first). */
@@ -42,6 +43,8 @@ export interface InboxContext {
 	notebookTemplatesFolder: string;
 	/** Lowercase base names of the notebooks sitting in the same folder (a PDF with the name of a notebook is its export). */
 	siblingNotebooks?: ReadonlySet<string>;
+	/** Lowercase paths the plugin wrote recently outside `_assets` (digest pictures, exports): never offered (storage/plugin-written.ts). */
+	pluginWritten?: ReadonlySet<string>;
 }
 
 /** Forward slashes, no leading or trailing slash. */
@@ -96,6 +99,8 @@ export function isInboxCandidate(path: string, ctx: InboxContext): boolean {
 	if (name.startsWith(".") || !inboxKind(name)) return false;
 	// Reserved folders of the library (assets, _meta, _trash, backups) and the templates folders.
 	if (isHiddenNotebookPath(path, ctx.notebooksFolder, ctx.templatesFolder, ctx.notebookTemplatesFolder)) return false;
+	// What the plugin itself wrote in this folder (a digest crop, an exported page picture or PDF): by its record and by its name.
+	if (isPluginPictureName(name) || ctx.pluginWritten?.has(path.toLowerCase())) return false;
 	// A `_` folder is the plugin's (or the user's) own storage, never a drop place.
 	if (ctx.folder.split("/").some((s) => s.startsWith("_"))) return false;
 	// An exported PDF is named after its notebook ("Maths.pdf", "Maths 2.pdf") and sits next to it.

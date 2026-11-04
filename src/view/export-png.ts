@@ -6,6 +6,7 @@ import { t } from "../i18n";
 import { planPageImages, scaleDpi } from "../model/export-pages";
 import type { Page } from "../model/types";
 import type { ExportOptions } from "./export";
+import { recordPluginWrite } from "../storage/plugin-written";
 import { prepareExportFolder } from "./export-markdown";
 import type { NotebookMedia } from "./media";
 import { showNotice } from "./notice";
@@ -36,6 +37,7 @@ export async function exportPngPages(app: App, pages: readonly Page[], request: 
 		if (chosen.length === 0) return null;
 		const { dir, prefix, exists } = await prepareExportFolder(app, request.folder);
 		const names = planPageImages(dir, chosen, pages.length, exists);
+		recordPluginWrite(app, names.map((n) => normalizePath(`${prefix}${n}`)));
 		await options.prepare?.(chosen.map((i) => pages[i]!));
 		let skipped = 0;
 		for (let k = 0; k < chosen.length; k++) {
