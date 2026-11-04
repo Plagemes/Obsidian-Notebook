@@ -32,6 +32,8 @@ export interface MapPage {
 	hint?: string;
 	/** Start of a lecture (the page carries a lecture header): the map marks the lecture boundaries. */
 	lectureStart: boolean;
+	/** 0.16 (#124): the page is locked. Not a state (a locked page can still be clear); the map only marks it. */
+	locked?: true;
 }
 
 export interface MapCounts {
@@ -100,12 +102,13 @@ export function mapPage(page: Page, index: number, opts: MapOptions = {}): MapPa
 	};
 	if (due !== undefined) out.due = due;
 	if (hint !== undefined) out.hint = hint;
+	if (page.locked === true) out.locked = true;
 	return out;
 }
 
 /** The revision key of a page: changes whenever anything the map reads changes. */
 export function mapKey(page: Page, opts: MapOptions = {}): string {
-	const parts: Array<string | number> = [page.strokes.length, page.background ? 1 : 0, page.tags?.join(",") ?? ""];
+	const parts: Array<string | number> = [page.strokes.length, page.background ? 1 : 0, page.tags?.join(",") ?? "", page.locked ? "L" : ""];
 	let hidden = 0;
 	for (const s of page.strokes) if (s.hidden) hidden++;
 	parts.push(hidden);

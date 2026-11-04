@@ -81,15 +81,15 @@ function v12Raw(): Raw {
 const OK_STATES = { parts: [{ id: "pa", name: "Block", pivot: [10, 20], items: ["s1"] }], list: [{ id: "st", name: "End", poses: [{ part: "pa", dx: 5 }] }], active: "st" };
 
 describe("format v13: migration", () => {
-	it("is at version 13 with a v12 step", () => {
-		expect(CURRENT_VERSION).toBe(13);
+	it("has the v12 step (the current format is v14 since page locks)", () => {
+		expect(CURRENT_VERSION).toBeGreaterThanOrEqual(13);
 		expect(MIGRATIONS[12]).toBeTypeOf("function");
 	});
 
 	it("reads a v12 file unchanged apart from the version", () => {
 		const r = parsed(JSON.stringify(v12Raw()));
 		expect(r.migratedFrom).toBe(12);
-		expect(r.doc.version).toBe(13);
+		expect(r.doc.version).toBe(CURRENT_VERSION);
 		expect(r.doc.pages[0]!.states).toBeUndefined();
 		expect(r.dropped).toBeUndefined();
 	});
@@ -105,7 +105,7 @@ describe("format v13: migration", () => {
 	it("migrates a v12 round trip: v12 text -> v13 document -> text has no states and the same ink", () => {
 		const doc = parsed(JSON.stringify(v12Raw())).doc;
 		const text = serialize(doc);
-		expect(text).toContain(`"version": 13`);
+		expect(text).toContain(`"version": ${CURRENT_VERSION}`);
 		expect(text).not.toContain('"states"');
 		expect(parsed(text).doc.pages[0]!.strokes).toHaveLength(2);
 	});
@@ -116,7 +116,7 @@ describe("format v13: migration", () => {
 		expect(r.ok).toBe(false);
 		if (!r.ok) expect(r.reason).toBe("future-version");
 		// What 0.14 does with a v13 file is what the current code does with the next version: the same "future-version" path.
-		expect(serialize(physicsDoc().doc)).toContain(`"version": 13`);
+		expect(serialize(physicsDoc().doc)).toContain(`"version": ${CURRENT_VERSION}`);
 	});
 });
 

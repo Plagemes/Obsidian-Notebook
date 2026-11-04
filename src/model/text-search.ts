@@ -143,23 +143,29 @@ function replaceCommands(boxes: Array<{ page: Page; element: TextElement; text: 
  * Replaces every match in the notebook as one undo step; null when nothing matches. A text box left with no text is kept
  * (the user may be clearing it on purpose; deleting boxes is a different action).
  */
-export function replaceAllCommand(doc: NotebookDocument, query: string, replacement: string, opts: FindOptions = DEFAULT_FIND): { command: Command; replaced: number; boxes: number } | null {
+export function replaceAllCommand(doc: NotebookDocument, query: string, replacement: string, opts: FindOptions = DEFAULT_FIND): { command: Command; replaced: number; boxes: number; lockedBoxes: number } | null {
 	const re = queryRegExp(query, opts);
 	if (!re) return null;
 	const boxes: Array<{ page: Page; element: TextElement; text: string }> = [];
 	let replaced = 0;
+	// 0.16 (#124): text on a locked page is found but not replaced (the history would refuse the whole batch): counted instead.
+	let lockedBoxes = 0;
 	for (const page of doc.pages) {
 		for (const el of page.elements ?? []) {
 			if (el.type !== "text") continue;
 			const matches = findInText(el.text, query, opts);
 			if (matches.length === 0) continue;
+			if (page.locked) {
+				lockedBoxes++;
+				continue;
+			}
 			replaced += matches.length;
 			boxes.push({ page, element: el, text: replaceMatches(el.text, matches, replacement) });
 		}
 	}
 	const commands = replaceCommands(boxes);
 	if (commands.length === 0) return null;
-	return { command: new Batch("Replace all", commands), replaced, boxes: commands.length };
+	return { command: new Batch("Replace all", commands), replaced, boxes: commands.length, lockedBoxes };
 }
 
 /**
