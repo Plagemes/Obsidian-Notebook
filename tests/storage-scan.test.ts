@@ -316,6 +316,25 @@ describe("duplicate pictures", () => {
 		expect(g.extraBytes).toBe(bytes.length);
 	});
 
+	it("a same-id extra is not offered while the library check is incomplete, and lists the trash and template notebooks that may name it", async () => {
+		const bytes = "PICTURE-D";
+		const real = assetIdFromHash(await sha256Hex(new TextEncoder().encode(bytes).buffer));
+		const a: Asset = { id: real, kind: "image", path: `Notebooks/_assets/${real}.jpg`, name: "a.jpg", bytes: bytes.length };
+		const base = () => new FakeVault()
+			.put("Notebooks/A.notebook", { text: textUsing({ ...a, path: `Notebooks/_assets/${real}.png` }) })
+			.put(`Notebooks/_assets/${real}.png`, { bytes })
+			.put(`Notebooks/_assets/${real}.jpg`, { bytes });
+		const withHolders = base()
+			.put("Notebooks/_trash/Old.notebook", { text: textUsing(a) })
+			.put("Notebooks/_templates/Tpl.notebook", { text: textUsing(a) });
+		const g = (await run(withHolders, { seen: aged() })).duplicates[0]!;
+		expect(g.extras[0]!.holders).toEqual(["Notebooks/_trash/Old.notebook", "Notebooks/_templates/Tpl.notebook"]);
+		const unavailable = base().put("Notebooks/Later.notebook", { unreadable: true });
+		const r = await run(unavailable, { seen: aged() });
+		expect(r.check.complete).toBe(false);
+		expect(r.duplicates).toEqual([]);
+	});
+
 	it("a copy under another id that a notebook uses is offered with the notebooks to repoint; the one named by its own content stays", async () => {
 		const bytes = "PICTURE-B";
 		const real = assetIdFromHash(await sha256Hex(new TextEncoder().encode(bytes).buffer));

@@ -127,6 +127,11 @@ export interface DuplicateExtra {
 	users: string[];
 	/** Notebooks that name this id but cannot be edited now (unreadable, not downloaded, a newer version). */
 	blocked: string[];
+	/**
+	 * `same-id` only: notebooks in the kept folders (library trash, templates) that may name this id and so may hold a record
+	 * pointing at the file. They are read again before the file is moved.
+	 */
+	holders?: string[];
 }
 
 export interface DuplicateGroup {
@@ -344,6 +349,12 @@ export async function scanStorage(source: StorageSource, config: CheckConfig, op
 		const all = [...new Set(namedBy.get(id) ?? [])].filter((p) => rows.has(p));
 		return { users: all.filter((p) => statusOf.get(p) === "ok"), blocked: all.filter((p) => statusOf.get(p) !== "ok") };
 	};
+	// Notebooks in the kept folders (library trash, templates) are no rows, but hold records too.
+	const keptNotebooks = all.filter((f) => isNotebookPath(f.path) && !under(f.path, dir) && kept.some((k) => under(f.path, k)));
+	const holdersOf = (id: string): string[] => keptNotebooks.filter((f) => {
+		const scan = cache.scans.get(f.path);
+		return !(scan && scan.mtime === f.mtime && scan.size === f.size && scan.scan.status === "ok" && !scan.scan.tokens.has(id));
+	}).map((f) => f.path);
 	const images = assetFiles.filter((a) => IMAGE_EXT.test(a.path) && a.size > 0);
 	report.heavy = images
 		.filter((a) => a.size >= HEAVY_LIST_MIN)
@@ -376,7 +387,7 @@ export async function scanStorage(source: StorageSource, config: CheckConfig, op
 	}
 	for (const [h, members] of hashed) {
 		if (members.length < 2) continue;
-		const group = duplicateGroup(h, members, usable);
+		const group = duplicateGroup(h, members, usable, check.complete ? holdersOf : null);
 		if (group) report.duplicates.push(group);
 	}
 	report.duplicates.sort((a, b) => b.extraBytes - a.extraBytes || (a.keep.path < b.keep.path ? -1 : 1));
@@ -405,7 +416,12 @@ export async function scanStorage(source: StorageSource, config: CheckConfig, op
 }
 
 /** The group of identical images that remain after leaving out copies nothing could use. Null when nothing is left to do. */
-function duplicateGroup(hash: string, members: readonly AssetFile[], usable: (id: string) => { users: string[]; blocked: string[] }): DuplicateGroup | null {
+function duplicateGroup(
+	hash: string, members: readonly AssetFile[], usable: (id: string) => { users: string[]; blocked: string[] },
+	// Null: the library check is incomplete (an unavailable file, an open notebook that cannot be inspected), so nobody can say
+	// who names the file: no copy is offered for moving aside.
+	holdersOf: ((id: string) => string[]) | null,
+): DuplicateGroup | null {
 	// The file that stays: one named by its own content (its id is the start of the hash), else the first by path. Of several
 	// extensions of one id, the commonest wins (png, jpg, jpeg, webp, gif), so the choice does not depend on file names.
 	const rank = (p: string) => Math.max(0, EXTENSION_RANK.indexOf(p.slice(p.lastIndexOf(".") + 1).toLowerCase()));
@@ -415,7 +431,9 @@ function duplicateGroup(hash: string, members: readonly AssetFile[], usable: (id
 	for (const file of sorted) {
 		if (file === keep) continue;
 		const { users, blocked } = usable(file.id);
-		if (file.id === keep.id) extras.push({ file, kind: "same-id", users, blocked });
+		if (file.id === keep.id) {
+			if (holdersOf) extras.push({ file, kind: "same-id", users, blocked, holders: holdersOf(file.id) });
+		}
 		else if (users.length > 0) extras.push({ file, kind: "other-id", users, blocked });
 	}
 	if (extras.length === 0) return null;

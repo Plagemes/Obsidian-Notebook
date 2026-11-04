@@ -85,6 +85,20 @@ describe("A1: merging the same picture stored twice (same id, two extensions)", 
 		expect(r.v.log.filter((l) => l.startsWith("rename"))).toEqual([]);
 	});
 
+	it("also checks the kept-folder notebooks (library trash, templates) the group lists as holders", async () => {
+		const r = rig();
+		put(r, "Notebooks/A.notebook", serialize(docUsing(keep)));
+		put(r, "Notebooks/_trash/Old.notebook", serialize(docUsing(extraAsset)));
+		put(r, keep.path, "PIXEL");
+		put(r, extraAsset.path, "PIXEL");
+		const g = group(["Notebooks/A.notebook"]) as unknown as { extras: Array<{ holders?: string[] }> };
+		g.extras[0]!.holders = ["Notebooks/_trash/Old.notebook"];
+		const out = await mergeDuplicates(r.env, g as never, "Notebooks");
+		expect(out.moved).toEqual([]);
+		expect(out.skipped).toEqual([extraAsset.path]);
+		expect(r.v.files.has(extraAsset.path)).toBe(true);
+	});
+
 	it("also when the notebook that names it cannot be read, has edits waiting in the journal, or is open and busy", async () => {
 		const r = rig();
 		put(r, "Notebooks/Broken.notebook", "{ not a notebook");

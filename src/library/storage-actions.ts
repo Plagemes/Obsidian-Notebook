@@ -282,7 +282,7 @@ export async function mergeDuplicates(env: StorageEnv, group: DuplicateGroup, ro
 			if (extra.kind === "same-id") {
 				// Readers other than this version find the picture by the record's path (library covers, shared clips, devices
 				// on 0.14 or older): while any notebook's record names this very file, moving it would leave them without it.
-				if (await recordsNameFile(env, [...extra.users, ...extra.blocked], file.path)) {
+				if (await recordsNameFile(env, [...extra.users, ...extra.blocked, ...(extra.holders ?? [])], file.path)) {
 					out.skipped.push(extra.file.path);
 					continue;
 				}
