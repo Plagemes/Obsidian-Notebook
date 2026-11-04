@@ -27,6 +27,8 @@ export const RETRY_MS = 60_000;
 
 export class PdfOutlineSource {
 	private cache: OutlineCacheData | null = null;
+	/** Outlines read by this instance: kept in memory whatever the stored cache keeps (it is bounded by size), so none is read twice. */
+	private readonly session = new Map<string, readonly PdfOutlineEntry[]>();
 	private readonly pending = new Set<string>();
 	private readonly failed = new Map<string, number>();
 	/** How many PDFs were read from the file (not from the cache) by this instance: for tests and the status of the cache. */
@@ -55,6 +57,8 @@ export class PdfOutlineSource {
 	get(assetId: string): readonly PdfOutlineEntry[] | undefined {
 		const have = this.load()[assetId];
 		if (have) return have.entries;
+		const mine = this.session.get(assetId);
+		if (mine) return mine;
 		this.fetch(assetId);
 		return undefined;
 	}
@@ -79,6 +83,7 @@ export class PdfOutlineSource {
 				this.pending.delete(assetId);
 				this.failed.delete(assetId);
 				this.reads++;
+				this.session.set(assetId, entries);
 				this.cache = storeOutline(this.load(), assetId, entries, this.now());
 				try {
 					this.deps.storage.saveLocalStorage(OUTLINE_CACHE_KEY, this.cache);

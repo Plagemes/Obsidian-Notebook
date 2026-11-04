@@ -11,6 +11,10 @@ import { MAX_OUTLINE_ENTRIES, MAX_OUTLINE_LEVEL, type PdfOutlineEntry } from "./
 export const OUTLINE_CACHE_KEY = "notebook-pdf-outlines";
 /** PDFs remembered; the least recently stored go first. */
 export const MAX_CACHED_PDFS = 40;
+/** The whole cache, serialised, stays under this many characters (the least recently stored PDFs go first). */
+export const MAX_CACHE_CHARS = 512 * 1024;
+/** One PDF whose serialised outline is larger than this is not cached at all (it is read again when needed). */
+export const MAX_OUTLINE_CHARS = 128 * 1024;
 
 export interface CachedOutline {
 	/** When it was read, ms since the epoch (the oldest are forgotten first). */
@@ -43,11 +47,32 @@ export function normaliseOutlineCache(data: unknown): OutlineCacheData {
 		rows.push([id, { at: typeof row.at === "number" && Number.isFinite(row.at) ? row.at : 0, entries }]);
 	}
 	rows.sort((a, b) => b[1].at - a[1].at);
-	return Object.fromEntries(rows.slice(0, MAX_CACHED_PDFS));
+	// Newest first: keep rows while the count and the serialised size allow, so the oldest are evicted.
+	const kept: Array<[string, CachedOutline]> = [];
+	let chars = 0;
+	for (const row of rows) {
+		if (kept.length >= MAX_CACHED_PDFS) break;
+		const size = outlineChars(row[1]);
+		if (size > MAX_OUTLINE_CHARS || chars + size > MAX_CACHE_CHARS) continue;
+		kept.push(row);
+		chars += size;
+	}
+	return Object.fromEntries(kept);
+}
+
+/** Serialised size of one cached outline, in characters (what local storage holds, plus the id and punctuation). */
+export function outlineChars(row: CachedOutline): number {
+	return JSON.stringify(row).length + 90;
 }
 
 /** The cache after storing the outline of one PDF (a new object). */
 export function storeOutline(cache: OutlineCacheData, assetId: string, entries: readonly PdfOutlineEntry[], now: number): OutlineCacheData {
 	if (!ASSET_ID.test(assetId)) return cache;
+	// A single huge outline is not cached (it would crowd out the rest); an older copy of it goes too, being out of date.
+	if (outlineChars({ at: now, entries: [...entries] }) > MAX_OUTLINE_CHARS) {
+		if (!(assetId in cache)) return cache;
+		const { [assetId]: _dropped, ...rest } = cache;
+		return rest;
+	}
 	return normaliseOutlineCache({ ...cache, [assetId]: { at: now, entries } });
 }
