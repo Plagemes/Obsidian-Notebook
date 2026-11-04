@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	nearbyPapers, normaliseSmartAddStore, parseSmartAddHistory, pushSmartAdd, rankSmartAdd, rememberSmartAdd, SMART_ADD_HISTORY_MAX,
-	SMART_ADD_MAX_NOTEBOOKS, type SmartAddInput, type SmartAddStore,
+	SMART_ADD_MAX_NOTEBOOKS, SMART_ADD_LEGACY_PREFIX, SMART_ADD_STORE_KEY, recordSmartAdd, type SmartAddInput, type SmartAddStorage, type SmartAddStore,
 } from "../src/model/smart-add";
 
 const base: SmartAddInput = { paper: "ruled", hasBackground: false, slide: null, exercisePaper: "grid", history: [] };
@@ -120,5 +120,49 @@ describe("the per-device store", () => {
 		expect(Object.keys(s).sort()).toEqual(["noAt", "ok"]);
 		expect(s.ok!.history).toEqual([{ id: "same" }]);
 		expect(rememberSmartAdd({}, "bad id!", { id: "same" }, 1)).toEqual({});
+	});
+});
+
+describe("recording into the device storage", () => {
+	function fakeStorage(initial: Record<string, unknown> = {}, failOn?: string) {
+		const data = new Map<string, unknown>(Object.entries(initial));
+		const io: SmartAddStorage = {
+			load: (k) => (data.has(k) ? JSON.parse(JSON.stringify(data.get(k))) : null),
+			save: (k, v) => {
+				if (failOn === k) throw new Error("quota");
+				if (v === null) data.delete(k);
+				else data.set(k, JSON.parse(JSON.stringify(v)));
+			},
+		};
+		return { io, data };
+	}
+
+	it("moves the older per-notebook history into the store and removes the old key", () => {
+		const { io, data } = fakeStorage({ [`${SMART_ADD_LEGACY_PREFIX}nb1`]: [{ id: "exercise" }] });
+		expect(recordSmartAdd(io, "nb1", { id: "slide" }, 5)).toBe(true);
+		expect(data.has(`${SMART_ADD_LEGACY_PREFIX}nb1`)).toBe(false);
+		expect(normaliseSmartAddStore(data.get(SMART_ADD_STORE_KEY)).nb1!.history).toEqual([{ id: "slide" }, { id: "exercise" }]);
+	});
+
+	it("leaves the old key alone for an id the store refuses", () => {
+		const { io, data } = fakeStorage({ [`${SMART_ADD_LEGACY_PREFIX}bad id!`]: [{ id: "exercise" }] });
+		expect(recordSmartAdd(io, "bad id!", { id: "slide" }, 5)).toBe(false);
+		expect(data.has(`${SMART_ADD_LEGACY_PREFIX}bad id!`)).toBe(true);
+		expect(data.has(SMART_ADD_STORE_KEY)).toBe(false);
+	});
+
+	it("keeps the old key when saving the store fails", () => {
+		const { io, data } = fakeStorage({ [`${SMART_ADD_LEGACY_PREFIX}nb1`]: [{ id: "exercise" }] }, SMART_ADD_STORE_KEY);
+		expect(() => recordSmartAdd(io, "nb1", { id: "slide" }, 5)).toThrow();
+		expect(data.has(`${SMART_ADD_LEGACY_PREFIX}nb1`)).toBe(true);
+	});
+
+	it("does not mistake an inherited name for a notebook already in the store", () => {
+		for (const id of ["constructor", "toString", "hasOwnProperty"]) {
+			const { io, data } = fakeStorage({ [`${SMART_ADD_LEGACY_PREFIX}${id}`]: [{ id: "exercise" }] });
+			expect(recordSmartAdd(io, id, { id: "slide" }, 5)).toBe(true);
+			expect(normaliseSmartAddStore(data.get(SMART_ADD_STORE_KEY))[id]!.history).toEqual([{ id: "slide" }, { id: "exercise" }]);
+			expect(data.has(`${SMART_ADD_LEGACY_PREFIX}${id}`)).toBe(false);
+		}
 	});
 });

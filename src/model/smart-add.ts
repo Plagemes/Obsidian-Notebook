@@ -161,3 +161,31 @@ export function rememberSmartAdd(
 	const before = store[notebookId]?.history ?? legacy;
 	return normaliseSmartAddStore({ ...store, [notebookId]: { at: now, history: pushSmartAdd(before, entry) } });
 }
+
+/** Local storage key of the store (one value for the whole device). */
+export const SMART_ADD_STORE_KEY = "notebook-smart-add-by-notebook";
+/** The per-notebook keys of earlier 0.14 builds: read once as a fallback, then removed. */
+export const SMART_ADD_LEGACY_PREFIX = "notebook-smart-add:";
+
+/** The part of the device storage the store needs (Obsidian's `loadLocalStorage` / `saveLocalStorage`). */
+export interface SmartAddStorage {
+	load(key: string): unknown;
+	save(key: string, value: unknown): void;
+}
+
+/**
+ * Notes that `entry` was taken in `notebookId`, in the device storage. The older per-notebook key is only removed once the
+ * entry is in the store (never for an id the store refuses, never when saving failed). True when it was saved; storage errors
+ * are thrown to the caller.
+ */
+export function recordSmartAdd(io: SmartAddStorage, notebookId: string, entry: SmartAddHistoryEntry, now: number): boolean {
+	if (!NOTEBOOK_ID.test(notebookId)) return false;
+	const store = normaliseSmartAddStore(io.load(SMART_ADD_STORE_KEY));
+	const had = Object.prototype.hasOwnProperty.call(store, notebookId);
+	const legacy = had ? [] : parseSmartAddHistory(io.load(SMART_ADD_LEGACY_PREFIX + notebookId));
+	const next = rememberSmartAdd(store, notebookId, entry, now, legacy);
+	if (!Object.prototype.hasOwnProperty.call(next, notebookId)) return false;
+	io.save(SMART_ADD_STORE_KEY, next);
+	if (!had) io.save(SMART_ADD_LEGACY_PREFIX + notebookId, null);
+	return true;
+}

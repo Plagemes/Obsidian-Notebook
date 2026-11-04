@@ -1,7 +1,7 @@
 import type { App } from "obsidian";
 import { t } from "../i18n";
 import {
-	normaliseSmartAddStore, parseSmartAddHistory, rankSmartAdd, rememberSmartAdd,
+	normaliseSmartAddStore, parseSmartAddHistory, rankSmartAdd, recordSmartAdd, SMART_ADD_LEGACY_PREFIX, SMART_ADD_STORE_KEY,
 	type SmartAddChoice, type SmartAddHistoryEntry, type SmartAddInput, type SmartAddStore,
 } from "../model/smart-add";
 import type { PaperKind } from "../model/types";
@@ -11,10 +11,6 @@ import { chip } from "../ui/components/chip";
 const STRIP_MS = 10000;
 /** Events that must not reach the page or the view's shortcuts. */
 const ISOLATED = ["pointerdown", "pointerup", "touchstart", "wheel", "contextmenu", "mousedown", "click", "keydown", "keyup"] as const;
-/** One value for the whole device, bounded (`SMART_ADD_MAX_NOTEBOOKS` notebooks, `SMART_ADD_HISTORY_MAX` additions each). */
-const STORAGE_KEY = "notebook-smart-add-by-notebook";
-/** The per-notebook keys of 0.14 pre-releases: read once as a fallback, then removed. */
-const LEGACY_PREFIX = "notebook-smart-add:";
 
 export interface SmartAddHost {
 	readonly app: App;
@@ -118,7 +114,7 @@ export class SmartAddStrip {
 	/** The device's store, read again every time (another notebook view may have written since); damaged data reads as empty. */
 	private store(): SmartAddStore {
 		try {
-			return normaliseSmartAddStore(this.host.app.loadLocalStorage(STORAGE_KEY));
+			return normaliseSmartAddStore(this.host.app.loadLocalStorage(SMART_ADD_STORE_KEY));
 		} catch {
 			return {};
 		}
@@ -127,7 +123,7 @@ export class SmartAddStrip {
 	/** Before 0.14.0 each notebook had its own key; it is read only until the notebook is in the store, then removed. */
 	private legacy(id: string): SmartAddHistoryEntry[] {
 		try {
-			return parseSmartAddHistory(this.host.app.loadLocalStorage(LEGACY_PREFIX + id));
+			return parseSmartAddHistory(this.host.app.loadLocalStorage(SMART_ADD_LEGACY_PREFIX + id));
 		} catch {
 			return [];
 		}
@@ -136,10 +132,8 @@ export class SmartAddStrip {
 	private remember(id: string, choice: SmartAddChoice): void {
 		try {
 			const entry: SmartAddHistoryEntry = choice.paper ? { id: choice.id, paper: choice.paper } : { id: choice.id };
-			const store = this.store();
-			const had = id in store;
-			this.host.app.saveLocalStorage(STORAGE_KEY, rememberSmartAdd(store, id, entry, Date.now(), had ? [] : this.legacy(id)));
-			if (!had) this.host.app.saveLocalStorage(LEGACY_PREFIX + id, null);
+			const app = this.host.app;
+			recordSmartAdd({ load: (k) => app.loadLocalStorage(k) as unknown, save: (k, v) => app.saveLocalStorage(k, v) }, id, entry, Date.now());
 		} catch {
 			// The history is a convenience; losing it changes the ranking, nothing else.
 		}
