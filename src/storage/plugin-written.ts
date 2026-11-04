@@ -39,12 +39,13 @@ export function writtenSet(map: WrittenMap): Set<string> {
 }
 
 /**
- * File names the plugin gives its own pictures: a digest crop (`<Notebook> highlight p3-2.png`, with Obsidian's ` 2` suffix when
- * the name was taken) and a page image of a PNG or Markdown export (`page-001.png`). Recognised by name, so they are never
- * offered even when the record is gone (another device, cleared data, older than the window).
+ * The file name the plugin gives a digest crop (`<Notebook> highlight p3-2.png`, with Obsidian's ` 2` suffix when the name was
+ * taken). Recognised by name, so it is never offered even when the record is gone (another device, cleared data, older than the
+ * window). Exported page pictures (`page-001.png`) are NOT recognised by name: a user may own a file called that, so they are
+ * kept out of the inbox by the record of what the plugin wrote alone.
  */
 export function isPluginPictureName(name: string): boolean {
-	return /^.* highlight p\d+-\d+(?: \d+)?\.png$/iu.test(name) || /^page-\d{3,}(?: \d+)?\.png$/iu.test(name);
+	return /^.* highlight p\d+-\d+(?: \d+)?\.png$/iu.test(name);
 }
 
 /** The part of Obsidian's App that holds per-device values. */

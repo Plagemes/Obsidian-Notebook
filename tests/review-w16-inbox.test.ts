@@ -27,8 +27,9 @@ describe("C1: the inbox never offers the plugin's own files", () => {
 		expect(isPluginPictureName("Maths highlight p3-2.png")).toBe(true);
 		expect(isPluginPictureName("Maths highlight p12-10 2.png")).toBe(true);
 		expect(isPluginPictureName("My notes — Chapter 2 highlight p1-1.PNG")).toBe(true);
-		expect(isPluginPictureName("page-001.png")).toBe(true);
-		expect(isPluginPictureName("page-1200 3.png")).toBe(true);
+		// D5: a user file may be called page-001.png; only the record keeps exported pictures out.
+		expect(isPluginPictureName("page-001.png")).toBe(false);
+		expect(isPluginPictureName("page-1200 3.png")).toBe(false);
 		expect(isPluginPictureName("photo.png")).toBe(false);
 		expect(isPluginPictureName("page-1.png")).toBe(false);
 		expect(isPluginPictureName("highlight p1-1.jpg")).toBe(false);
@@ -40,7 +41,8 @@ describe("C1: the inbox never offers the plugin's own files", () => {
 		expect(isInboxCandidate("Attachments/exam.PDF", ctx({ pluginWritten: written }))).toBe(false);
 		expect(isInboxCandidate("Attachments/Exam.pdf", ctx())).toBe(true);
 		expect(isInboxCandidate("Attachments/Maths highlight p4-1.png", ctx())).toBe(false);
-		expect(isInboxCandidate("Attachments/page-002.png", ctx())).toBe(false);
+		expect(isInboxCandidate("Attachments/page-002.png", ctx())).toBe(true); // D5: not hidden by its name
+		expect(isInboxCandidate("Attachments/page-002.png", ctx({ pluginWritten: writtenSet(addWritten({}, ["Attachments/page-002.png"], NOW)) }))).toBe(false);
 		expect(isInboxCandidate("Attachments/Other.pdf", ctx({ pluginWritten: written }))).toBe(true);
 	});
 
