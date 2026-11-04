@@ -3261,6 +3261,21 @@ export const en = {
 	"transfer.copiedNotMovedShared": "The pages were copied into {name}, but taking them out of {source} did not finish ({error}) and the copy kept the page ids of the originals.",
 	"transfer.copiedMaybeMoved": "The pages were copied into {name}, but taking them out of {source} failed part way: {error}. Check both notebooks.",
 	"task.exists": "That task is already in {path}. Nothing was added.",
+	// 0.18 lasso2md
+	"noteInsert.action": "Insert into note",
+	"noteInsert.actionSvg": "Insert into note as SVG",
+	"noteInsert.pick.placeholder": "Choose a note to insert the picture into",
+	"noteInsert.noPicture": "The picture of the selection could not be made. Nothing was inserted.",
+	"noteInsert.done": "Inserted into {name}.",
+	"noteInsert.failed": "Could not insert the selection: {error}",
+	"settings.noteInsertWidth": "Inserted picture width",
+	"settings.noteInsertWidth.desc": "Width of a selection inserted into a note, in pixels.",
+	"settings.noteInsertBackground": "Inserted picture background",
+	"settings.noteInsertBackground.desc": "Transparent keeps only the ink; paper adds the page paper and PDF.",
+	"settings.noteInsertBackground.transparent": "Transparent",
+	"settings.noteInsertBackground.paper": "Paper",
+	"settings.noteInsertLinkBack": "Link back to the page",
+	"settings.noteInsertLinkBack.desc": "Add a small arrow after the inserted picture that opens the page it came from.",
 } as const;
 
 export type MessageKey = keyof typeof en;

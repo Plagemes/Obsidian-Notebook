@@ -20,6 +20,7 @@ import { NAME_TOKEN } from "../storage/companion-path";
 import { defaultLooseSheetPath } from "../library/loose-sheet-logic";
 import { defaultDailyPath } from "../library/daily-logic";
 import { DIM_MAX, DIM_MIN, DIM_STEP } from "./reading-settings";
+import { INSERT_WIDTH_MAX, INSERT_WIDTH_MIN, INSERT_WIDTH_STEP } from "../model/note-insert";
 import { SNAP_STRENGTH_MAX, SNAP_STRENGTH_MIN, SNAP_STRENGTH_STEP } from "../model/snap";
 import { DEFAULT_SETTINGS, type NotebookSettings } from "../settings";
 
@@ -383,6 +384,13 @@ const INTEGRATION: SettingSpec[] = [
 	// 0.17 tasks (#57): "Make task" from a selection.
 	{ id: "tasksNote", section: "integration", order: 33, name: "settings.tasksNote", desc: "settings.tasksNote.desc", control: { type: "text", placeholder: "Tasks.md" }, keywords: "task todo checkbox attivita" },
 	{ id: "taskDueEmoji", section: "integration", order: 34, name: "settings.taskDueEmoji", desc: "settings.taskDueEmoji.desc", control: { type: "toggle" }, keywords: "task due date tasks plugin scadenza" },
+	// 0.18 (#59): "Insert into note" from a selection.
+	{ id: "noteInsertWidth", section: "integration", order: 35, name: "settings.noteInsertWidth", desc: "settings.noteInsertWidth.desc", control: { type: "slider", min: INSERT_WIDTH_MIN, max: INSERT_WIDTH_MAX, step: INSERT_WIDTH_STEP, format: suffix("px") }, keywords: "insert note image width larghezza immagine nota" },
+	{
+		id: "noteInsertBackground", section: "integration", order: 36, name: "settings.noteInsertBackground", desc: "settings.noteInsertBackground.desc", keywords: "insert note image transparent paper sfondo trasparente carta",
+		control: { type: "dropdown", options: options([["transparent", "settings.noteInsertBackground.transparent"], ["paper", "settings.noteInsertBackground.paper"]]) },
+	},
+	{ id: "noteInsertLinkBack", section: "integration", order: 37, name: "settings.noteInsertLinkBack", desc: "settings.noteInsertLinkBack.desc", control: { type: "toggle" }, keywords: "insert note link back page collegamento pagina" },
 ];
 
 const timetableOn: Predicate = (s) => s.timetableOffer;

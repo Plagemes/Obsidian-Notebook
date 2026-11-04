@@ -472,6 +472,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "selection-copy-page", label: "movePage.copy", icon: "copy", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 42, scope: "view", command: true, when: hasSelection, keywords: "copy duplicate page another copia pagina selezione" },
 	// 0.17 (#57): the selection becomes a task in a note (the daily note, a tasks note or a chosen one), linked back to the page.
 	{ id: "selection-make-task", label: "task.action", icon: "list-checks", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 41, scope: "view", command: true, when: hasSelection, keywords: "task todo checkbox daily note attivita compito" },
+	// 0.18 (#59): the selection as a picture (and a link back) at the cursor of the Markdown note, or in a chosen note.
+	{ id: "selection-insert-note", label: "noteInsert.action", icon: "image-plus", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 40.5, scope: "view", command: true, when: hasSelection, keywords: "insert note markdown image png picture embed inserisci nota immagine" },
+	{ id: "selection-insert-note-svg", label: "noteInsert.actionSvg", icon: "file-image", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 40.4, scope: "view", command: true, when: hasSelection, keywords: "insert note markdown svg vector embed inserisci nota vettoriale" },
 	{ id: "selection-paste-device", label: "clipshare.paste", icon: "monitor-down", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection", "lasso"], priority: 47, scope: "view", command: true, when: (c) => c.tool === "lasso" || hasSelection(c), keywords: "clipboard tablet phone sync share vault appunti" },
 
 	// --- status banners (wave 0.7): their buttons, listed so that every visible control has a documented place.

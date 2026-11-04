@@ -1,0 +1,41 @@
+import { describe, expect, it } from "vitest";
+import { appendInsertBlock, buildInsertLine, clampInsertWidth, cropSvg, insertionAtCursor, insertPictureName } from "../src/model/note-insert";
+
+describe("note insert text", () => {
+	it("clamps the width", () => {
+		expect(clampInsertWidth(10)).toBe(100);
+		expect(clampInsertWidth(99999)).toBe(1600);
+		expect(clampInsertWidth(412.4)).toBe(412);
+		expect(clampInsertWidth("x")).toBe(400);
+		expect(clampInsertWidth(NaN)).toBe(400);
+	});
+	it("names the picture", () => {
+		expect(insertPictureName("Physics", 3, "101500", "png")).toBe("Physics p3-101500.png");
+		expect(insertPictureName("Physics", 3, "101500", "svg")).toBe("Physics p3-101500.svg");
+	});
+	it("builds the line with and without the link back", () => {
+		expect(buildInsertLine({ embed: "![[a.png]]", width: 400, pageLink: null })).toBe("![[a.png|400]]");
+		expect(buildInsertLine({ embed: "![[a.png]]", width: 300, pageLink: "[[Phys#p3&id=x|↩]]" })).toBe("![[a.png|300]] [[Phys#p3&id=x|↩]]");
+		expect(buildInsertLine({ embed: "![](a.png)", width: 300, pageLink: null })).toBe("![|300](a.png)");
+	});
+	it("puts the block on its own lines at a cursor", () => {
+		expect(insertionAtCursor("X", "", "")).toBe("X");
+		expect(insertionAtCursor("X", "abc", "")).toBe("\nX");
+		expect(insertionAtCursor("X", "", "abc")).toBe("X\n");
+		expect(insertionAtCursor("X", "a", "b")).toBe("\nX\n");
+	});
+	it("appends at the end of a note", () => {
+		expect(appendInsertBlock("", "X")).toBe("X\n");
+		expect(appendInsertBlock("a", "X")).toBe("a\n\nX\n");
+		expect(appendInsertBlock("a\n", "X")).toBe("a\n\nX\n");
+		expect(appendInsertBlock("a\n\n", "X")).toBe("a\n\nX\n");
+	});
+	it("crops an svg by its root only", () => {
+		const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm" viewBox="0 0 595 842"><rect width="595" height="842"/></svg>';
+		const out = cropSvg(svg, { x: 10, y: 20, width: 100, height: 50 });
+		expect(out).toContain('viewBox="10 20 100 50"');
+		expect(out).toContain('<rect width="595" height="842"/></svg>');
+		expect(out?.match(/<svg/g)?.length).toBe(1);
+		expect(cropSvg("<p>", { x: 0, y: 0, width: 1, height: 1 })).toBeNull();
+	});
+});

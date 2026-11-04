@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### lasso2md
+- **Selection into a note (#59).** The selection bar (and All actions) has *Insert into note* and *Insert into note as SVG*. The selected region is drawn like the task picture (PNG, or the page SVG cropped to the region), stored where Obsidian keeps attachments of the note, and `![[picture|400]] [[Notebook#pN&id=…|↩]]` is inserted at the cursor of the Markdown note you were last in, through the editor so undo in the note works. With no note open a picker offers one and the block is appended at the end. Settings (Integration): picture width, background (transparent or paper) and the link back. No format change. Pure text in `src/model/note-insert.ts`; tests: `tests/note-insert.test.ts`.
+
 ## 0.17.0 — 2026-11-04
 
 Write on and around the page more freely, and keep a large library in order: sticky notes you can type or write on, magnetic snap with alignment guides, merge, split and extract notebooks, a minimap for big pages, a hover preview of page links, an optional PDF copy next to each notebook, saved collections in the library, and a task made from a selection. The notebook format moves to version 15 (an older plugin opens a v15 file read-only).

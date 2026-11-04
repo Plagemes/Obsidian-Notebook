@@ -9,7 +9,7 @@ import { isHeic } from "../scan/image-bytes";
 import { t } from "../i18n";
 import { renderThumbnail } from "../library/thumbnail";
 import { needsNextPage, needsPageOffer } from "../ink/auto-page";
-import { deleteInkCommand, deleteSelectionCommands, inkOnRemoved, pinnedInk, withPinnedInk } from "../ink/attach";
+import { deleteInkCommand, deleteSelectionCommands, inkOnRemoved, pinnedInk, withoutPinnedInk, withPinnedInk } from "../ink/attach";
 import { hiddenStickyInk } from "../model/sticky";
 import { captureClip, type ClipContent } from "../ink/clipboard";
 import { cleanStampFormat, formatStamp, stampElement, stampSpot } from "../ink/date-stamp";
@@ -73,6 +73,7 @@ import { SharedClipStore } from "../storage/shared-clip-store";
 import { backupFolder, readSettings, type NotebookSettings } from "../settings";
 import { defaultMarkdownFolder, exportMarkdown, siblingFolder } from "./export-markdown";
 import { MakeTaskModal, runMakeTask } from "./selection-task";
+import { runInsertIntoNote } from "./selection-insert";
 import { taskCropRect } from "../model/selection-task";
 import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./highlight-digest";
 import { canPrint } from "./print";
@@ -1812,6 +1813,28 @@ export class NotebookView extends FileView {
 			// 0.15 (241): like the PDF, PNG and SVG exports, the pages as the states in view show them.
 			run: (folder, dpi) => void exportMarkdown(this.app, file, { ...doc, pages: [...this.renderPagesOf(doc)] }, this.media, { folder, dpi, ...this.exportOptions() }),
 		}).open();
+	}
+
+	/** 0.18 (#59): the selected region as a picture (PNG or SVG) inserted into the Markdown note the user was last in, or into a chosen note. */
+	insertSelectionIntoNote(kind: "png" | "svg"): void {
+		const sel = this.selection;
+		const doc = this.session?.doc;
+		const file = this.file;
+		if (!sel || !doc || !file || this.statesTools?.ownsSelection(sel)) return;
+		// A collapsed sticky note keeps its ink out of view: it never widens the region.
+		const bounds = itemsBounds(withoutPinnedInk(sel.strokes, sel.elements), sel.elements, measureText);
+		const page = doc.pages[sel.pageIndex];
+		const shown = this.renderPagesOf(doc)[sel.pageIndex];
+		if (!bounds || !page || !shown) return;
+		const options = this.exportOptions();
+		void runInsertIntoNote({
+			app: this.app, file, settings: this.host.settings, page: shown, pageNumber: sel.pageIndex + 1, crop: taskCropRect(bounds, page), media: this.media, kind,
+			exportOptions: options,
+			render: {
+				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+			},
+		});
 	}
 
 	/** 0.17 (#57): "Make task" from the selection: a dialog, then the task (with a picture of the region and a link to the page) is added to a note. */
