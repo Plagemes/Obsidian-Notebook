@@ -169,6 +169,11 @@ const WRITING: SettingSpec[] = [
 		id: "snapStrength", section: "writing", order: 56, name: "settings.snapStrength", desc: "settings.snapStrength.desc",
 		control: { type: "slider", min: SNAP_STRENGTH_MIN, max: SNAP_STRENGTH_MAX, step: SNAP_STRENGTH_STEP, format: suffix("px") }, parent: "snapMode", visible: (s) => s.snapMode !== "off",
 	},
+	// 0.19 checklists (#103): a small square drawn with the pen
+	{
+		id: "checklistDraw", section: "writing", order: 58, name: "settings.checklistDraw", desc: "settings.checklistDraw.desc", keywords: "checklist checkbox square draw tick todo task lista casella quadrato spunta",
+		control: { type: "dropdown", options: options([["offer", "settings.checklistDraw.offer"], ["auto", "settings.checklistDraw.auto"], ["off", "settings.checklistDraw.off"]]) },
+	},
 	{ id: "autoLineBreak", section: "writing", order: 60, name: "settings.autoLineBreak", desc: "settings.autoLineBreak.desc", control: { type: "toggle" } },
 	// 0.15 pen sets: named pens per subject, loaded with the notebook (view/pen-sets.ts)
 	{

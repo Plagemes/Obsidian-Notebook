@@ -9,6 +9,7 @@
  */
 import { elementAssetId } from "./excerpts";
 import { cloneMeta, createId, createPage } from "./document";
+import { clearChecklist } from "./checklist";
 import { duplicatePage } from "./pages";
 import { freezeElement } from "./serialize";
 import { CURRENT_VERSION, DEFAULT_META, FORMAT_ID, type Asset, type NotebookDocument, type Page, type SlideRef } from "./types";
@@ -69,7 +70,8 @@ function documentOf(source: NotebookDocument, pages: Page[], now: Date): Noteboo
  * Bookmarks, tags, favourite and reading position are not copied (they belong to the original).
  */
 export function templateFromNotebook(source: NotebookDocument, now: Date = new Date()): NotebookDocument {
-	const pages = source.pages.map((p) => duplicatePage(p));
+	// v17: checkboxes are unticked and linked to no task in a template (a form to fill in again).
+	const pages = source.pages.map((p) => clearChecklist(duplicatePage(p)));
 	const doc = documentOf(source, pages, now);
 	// Tags and comments belong to the notebook that was written in, not to a template made from it.
 	for (const p of pages) {
@@ -101,7 +103,7 @@ export function notebookFromTemplate(template: NotebookDocument, options: FromTe
 	const now = options.now ?? new Date();
 	const content = options.content !== false;
 	const pages = template.pages.map((src) => {
-		const page = duplicatePage(src);
+		const page = clearChecklist(duplicatePage(src));
 		delete page.tags;
 		delete page.comments; // v16: review comments are not template content
 		if (!content) {

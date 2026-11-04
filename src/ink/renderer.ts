@@ -6,6 +6,7 @@ import { drawBox, drawMarker, type BoxLabel } from "./marker-render";
 import { drawExcerpt, drawExcerptBadge } from "./excerpt-render";
 import { hiddenStickyInk } from "../model/sticky";
 import { drawSticky } from "./sticky-render";
+import { drawCheckbox } from "./checkbox-render";
 import { drawEquation, drawGraph, type GraphPalette } from "./math-render";
 import { graphClips, strokeClip } from "./attach";
 import { equationNumbers } from "../model/math-elements";
@@ -125,6 +126,10 @@ export function drawElement(
 	}
 	if (el.type === "sticky") {
 		drawSticky(ctx, el);
+		return;
+	}
+	if (el.type === "checkbox") {
+		drawCheckbox(ctx, el);
 		return;
 	}
 	ctx.save();
@@ -1013,11 +1018,12 @@ export class Renderer {
 		}
 	}
 
-	/** v8 marker badges and v10 excerpt badges, above the ink. */
+	/** v8 marker badges, v10 excerpt badges and v17 checkboxes, above the ink. */
 	private drawMarkers(ctx: CanvasRenderingContext2D, page: Page): void {
 		for (const el of page.elements ?? []) {
 			if (this.hiddenElements?.has(el) || this.selectedElements?.has(el)) continue;
 			if (el.type === "marker") this.guarded(ctx, "marker element", () => drawMarker(ctx, el));
+			else if (el.type === "checkbox") this.guarded(ctx, "checkbox element", () => drawCheckbox(ctx, el, this.night ? this.nightInkColor(el.color) : el.color));
 			else if (el.type === "excerpt") this.guarded(ctx, "excerpt badge", () => drawExcerptBadge(ctx, el, this.media?.excerptMissing?.(el) ?? false));
 		}
 	}

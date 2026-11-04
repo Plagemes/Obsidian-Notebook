@@ -1,12 +1,13 @@
 import { orderedNotes, repliesOf } from "../model/comments";
 import { BOX_LABEL_HEIGHT, MARKER_BADGE, markerRegion } from "../model/markers";
-import { COMMENT_SKETCH_H, COMMENT_SKETCH_W, RENDER_INK, type BoxElement, type EquationElement, type MarkerElement, type Page, type StickyElement, type Stroke, type TextElement } from "../model/types";
+import { COMMENT_SKETCH_H, COMMENT_SKETCH_W, RENDER_INK, type BoxElement, type CheckboxElement, type EquationElement, type MarkerElement, type Page, type StickyElement, type Stroke, type TextElement } from "../model/types";
 import { EQUATION_NUMBER_GAP, equationNumberLabel, equationNumbers } from "../model/math-elements";
 import { graphScene, GRAPH_STYLE, type GraphScene, type SceneText } from "../math/graph-scene";
 import { equationOutline } from "./math-render";
 import { graphClips, strokeClip } from "./attach";
 import { hiddenStickyInk, stickyColours } from "../model/sticky";
 import { stickyShapes, stickyTextBox } from "./sticky-render";
+import { checkboxPaths } from "./checkbox-render";
 import type { Polygon } from "../math/outline";
 import type { BBox } from "./hit-test";
 import { PAPER_DOT_RADIUS, PAPER_LINE_WIDTH } from "./export-svg";
@@ -434,6 +435,8 @@ function pageContent(
 		if (op.font) res.font = true;
 		ops.push(op.ops);
 	}
+	// v17 checkboxes above the ink, like marker badges.
+	for (const el of page.elements ?? []) if (el.type === "checkbox") ops.push(checkboxOps(el));
 	return ops.join("\n");
 }
 
@@ -825,4 +828,12 @@ Q` : body;
 	parts.push("h f");
 	const body = `${rgb(stroke.color)} rg\n${parts.join(" ")}`;
 	return stroke.tool === "highlighter" ? `q\n/GS1 gs\n${body}\nQ` : body;
+}
+
+/** v17 checkbox: its outline and, when ticked, its tick, stroked in the checkbox's colour (the shapes are the canvas's, ink/checkbox-render.ts). */
+function checkboxOps(el: CheckboxElement): string {
+	const out: string[] = ["q", `${rgb(el.color)} RG 1 J 1 j`];
+	for (const p of checkboxPaths(el)) out.push(`${num(p.width)} w ${polyOps(p.points, p.closed)} S`);
+	out.push("Q");
+	return out.join("\n");
 }

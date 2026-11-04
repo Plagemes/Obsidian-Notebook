@@ -49,6 +49,7 @@ export interface UiContext {
 		/** v10: selected anchored excerpts (optional, 0 when absent). */ excerpts?: number;
 		/** 0.14 (402): selected text boxes (optional, 0 when absent). */ texts?: number;
 		/** 0.17 (#20): selected sticky notes, and how many of them are collapsed (optional, 0 when absent). */ stickies?: number; stickiesCollapsed?: number;
+		/** 0.19 (#103): selected checkboxes, and how many of them are linked to a task (optional, 0 when absent). */ checkboxes?: number; checkboxesLinked?: number;
 	} | null;
 	/** The page in view (index of the page sheet when it was opened from a thumbnail). */
 	page: {
@@ -271,6 +272,14 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "sticky-edit", label: "sticky.edit", icon: "square-pen", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 91, scope: "view", when: (c) => (c.selection?.stickies ?? 0) === 1, enabled: pageOpen, keywords: "sticky note text colour nota adesiva testo colore" },
 	{ id: "sticky-collapse", label: "sticky.collapse", icon: "minimize-2", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 90, scope: "view", when: (c) => (c.selection?.stickies ?? 0) > (c.selection?.stickiesCollapsed ?? 0), enabled: pageOpen, keywords: "sticky note collapse fold icon nota adesiva comprimi" },
 	{ id: "sticky-expand", label: "sticky.expand", icon: "maximize-2", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 90, scope: "view", when: (c) => (c.selection?.stickiesCollapsed ?? 0) > 0, enabled: pageOpen, keywords: "sticky note open expand nota adesiva apri espandi" },
+	// 0.19 (#103): handwritten checklists. A drawn square becomes a checkbox (view/checklist-tools.ts); insert one from the sheet, tick / label /
+	// send to tasks from the selection bar. Tapping a checkbox with the pen or a finger ticks it without selecting it.
+	{ id: "insert-checkbox", label: "checklist.insert", icon: "square-check", group: "insert", surfaces: ["quick", "sheet"], priority: 57, scope: "view", command: "checklist.command.insert", enabled: pageOpen, keywords: "checkbox checklist todo tick task list casella spunta elenco attivita lista" },
+	{ id: "checkbox-toggle", label: "checklist.toggle", icon: "square-check", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 93, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) > 0, enabled: pageOpen, keywords: "checkbox tick untick casella spunta" },
+	{ id: "checkbox-select-label", label: "checklist.selectLabel", icon: "text-select", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 92, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) === 1, keywords: "checkbox label text select casella testo seleziona" },
+	{ id: "checkbox-label", label: "checklist.editLabel", icon: "square-pen", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 89, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) === 1, enabled: pageOpen, keywords: "checkbox label name casella etichetta nome" },
+	{ id: "checkbox-task", label: "checklist.sendTask", icon: "list-checks", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 88, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) === 1 && (c.selection?.checkboxesLinked ?? 0) === 0, enabled: pageOpen, keywords: "checkbox task todo tasks daily note casella attivita nota giornaliera" },
+	{ id: "checkbox-unlink", label: "checklist.unlink", icon: "unlink", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 87, scope: "view", when: (c) => (c.selection?.checkboxesLinked ?? 0) > 0, enabled: pageOpen, keywords: "checkbox task unlink casella attivita scollega" },
 	{ id: "insert-graph", label: "math.insertGraph", icon: "chart-spline", group: "insert", surfaces: ["sheet"], priority: 50, scope: "view", command: "math.command.insertGraph", keywords: "function plot chart curve grafico funzione" },
 	// "add-page" is the Obsidian command (and its hotkey): it adds a page right away, same paper, as before 0.14. The on-screen "+" is
 	// "add-page-suggest": it opens the Smart "+" strip (0.14, 410); the command of the same name opens that strip from the keyboard.

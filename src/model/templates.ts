@@ -8,6 +8,7 @@
  */
 import { elementAssetId } from "./excerpts";
 import { cloneMeta, createDocument, createId, createPage, createStroke, quantizePoint } from "./document";
+import { clearChecklist } from "./checklist";
 import { duplicatePage } from "./pages";
 import { freezeElement, freezeStroke } from "./serialize";
 import {
@@ -40,7 +41,8 @@ export function assetsOfPage(page: Page, doc: NotebookDocument): Asset[] {
 
 /** A duplicate of the page without its review threads: the margin comments (v16) are about this page of this notebook, not part of a template. */
 function plainCopy(page: Page): Page {
-	const copy = duplicatePage(page);
+	// v17: a template is a form to fill in again: its checkboxes are unticked and linked to no task.
+	const copy = clearChecklist(duplicatePage(page));
 	delete copy.comments;
 	return copy;
 }

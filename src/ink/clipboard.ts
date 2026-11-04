@@ -1,3 +1,4 @@
+import { copiedCheckbox } from "../model/checklist";
 import { createId } from "../model/document";
 import { AddAsset, AddElement, AddStroke, Batch, type Command } from "../model/history";
 import { elementAssetId, withElementAsset } from "../model/excerpts";
@@ -90,6 +91,8 @@ export function instantiateClip(
 		const base = old !== null ? withElementAsset(moved, assetMap?.get(old) ?? old) : moved;
 		const id = createId();
 		if (e.type === "graph") newIds.set(e.id, id);
+		// v17: a pasted checkbox keeps its tick but never the link to the task line of the original.
+		if (base.type === "checkbox") return freezeElement(copiedCheckbox(base, id));
 		return freezeElement({ ...base, id });
 	});
 	const strokeIds = new Map<string, string>();

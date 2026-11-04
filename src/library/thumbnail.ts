@@ -5,6 +5,7 @@ import { minorVisible, PAPER_COLORS, paperPattern } from "../ink/paper";
 import { hiddenStickyInk } from "../model/sticky";
 import type { Page } from "../model/types";
 import { drawSticky } from "../ink/sticky-render";
+import { drawCheckbox } from "../ink/checkbox-render";
 
 export interface ThumbnailOptions {
 	/** Draws under the paper pattern and the ink (e.g. a PDF page). `scale` is canvas px per pt. */
@@ -97,6 +98,10 @@ export function renderThumbnail(page: Page, width: number, options: ThumbnailOpt
 		// Same geometry as the notebook (old strokes: perfect-freehand, new ones: the ink engine).
 		ctx.fill(new Path2D(lodSvgPath(stroke, w, lod)));
 	}
+	// v17 checkboxes above the ink (small on a card, but a ticked list reads at a glance).
+	ctx.globalAlpha = 1;
+	ctx.globalCompositeOperation = "source-over";
+	for (const el of page.elements ?? []) if (el.type === "checkbox") drawCheckbox(ctx, el);
 	ctx.restore();
 
 	return canvas.toDataURL(options.mime ?? "image/png", options.quality);

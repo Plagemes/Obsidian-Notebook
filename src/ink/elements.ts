@@ -1,5 +1,6 @@
 import { boxBounds, markerBounds, MARKER_BADGE } from "../model/markers";
-import type { BoxElement, EquationElement, ExcerptElement, GraphElement, ImageElement, MarkerElement, PageElement, StickyElement, TextElement } from "../model/types";
+import type { BoxElement, CheckboxElement, EquationElement, ExcerptElement, GraphElement, ImageElement, MarkerElement, PageElement, StickyElement, TextElement } from "../model/types";
+import { checkboxBounds, CHECKBOX_MAX_SIZE, CHECKBOX_MIN_SIZE } from "../model/checklist";
 import { STICKY_MAX_FONT, STICKY_MAX_SIZE, STICKY_MIN_FONT, STICKY_MIN_SIZE, stickyBounds } from "../model/sticky";
 import { scaleOutline } from "../math/outline";
 import { EQUATION_OUTLINE_MAX, GRAPH_MAX_SIDE } from "../model/math-elements";
@@ -34,6 +35,8 @@ export function elementBounds(el: PageElement, measure: MeasureText = estimateMe
 	if (el.type === "graph" || el.type === "excerpt") return { minX: el.x, minY: el.y, maxX: el.x + el.width, maxY: el.y + el.height };
 	// v15: a note is its box; a collapsed one is its icon (the ink it keeps hidden is not part of what can be hit or selected).
 	if (el.type === "sticky") return stickyBounds(el);
+	// v17: a checkbox is its square.
+	if (el.type === "checkbox") return checkboxBounds(el);
 	const c = imageCorners(el);
 	const xs = c.map((p) => p[0]);
 	const ys = c.map((p) => p[1]);
@@ -41,7 +44,7 @@ export function elementBounds(el: PageElement, measure: MeasureText = estimateMe
 }
 
 function hits(el: PageElement, x: number, y: number, tolerance: number, measure: MeasureText): boolean {
-	if (el.type === "marker" || el.type === "box" || el.type === "equation" || el.type === "graph" || el.type === "excerpt" || el.type === "sticky") {
+	if (el.type === "marker" || el.type === "box" || el.type === "equation" || el.type === "graph" || el.type === "excerpt" || el.type === "sticky" || el.type === "checkbox") {
 		const b = elementBounds(el, measure);
 		return x >= b.minX - tolerance && x <= b.maxX + tolerance && y >= b.minY - tolerance && y <= b.maxY + tolerance;
 	}
@@ -201,8 +204,19 @@ function transformSticky(el: StickyElement, m: Matrix): StickyElement {
 	return { ...el, x: r.x, y: r.y, width: clamp(r.width), height: clamp(r.height), fontSize };
 }
 
+/**
+ * v17 checkbox: always a square that never rotates; its centre follows the transform and its side the scale (within the format's
+ * limits), so the line of handwriting it belongs to keeps its place when the selection is scaled.
+ */
+function transformCheckbox(el: CheckboxElement, m: Matrix): CheckboxElement {
+	const [cx, cy] = apply(m, el.x + el.size / 2, el.y + el.size / 2);
+	const size = Math.min(CHECKBOX_MAX_SIZE, Math.max(CHECKBOX_MIN_SIZE, round2(el.size * scaleFactor(m))));
+	return { ...el, x: round2(cx - size / 2), y: round2(cy - size / 2), size };
+}
+
 /** New element moved/scaled/rotated by `m` (elements are immutable). Text scales font size and width uniformly. */
 export function transformElement(el: PageElement, m: Matrix, measure: MeasureText = estimateMeasure): PageElement {
+	if (el.type === "checkbox") return transformCheckbox(el, m);
 	if (el.type === "marker") return transformMarker(el, m);
 	if (el.type === "box") return transformBox(el, m);
 	if (el.type === "equation") return transformEquation(el, m);
