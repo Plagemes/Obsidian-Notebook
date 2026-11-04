@@ -14,7 +14,7 @@ import { deviceFileName, ensureFolderPath, keepUnreadableCopy, listDeviceFiles, 
 import { linksFolder } from "../storage/pdf-links-store";
 import {
 	applyBoardOps, BOARD_PREFIX, emptyBoard, mergeBoardFiles, parseBoard, pruneBoardFile, serializeBoard,
-	type BoardFile, type BoardMap, type BoardOp,
+	type BoardFile, type BoardMap, type BoardOp, type BoardPruneContext,
 } from "./board-state";
 
 /** This device's file cannot be read, is empty or is from a newer version: nothing is written and it is left as it is. */
@@ -77,7 +77,7 @@ export class BoardStateStore {
 			const own = await this.readOwn();
 			const { merged, others } = await this.readAll();
 			// The own file is rewritten anyway: cleared statuses nobody contradicts are dropped with it.
-			const after = pruneBoardFile(applyBoardOps(own.data, merged, list, this.now()), others, null, this.now());
+			const after = pruneBoardFile(applyBoardOps(own.data, merged, list, this.now()), others, null, this.now(), { othersComplete: this.blocked === null });
 			const text = serializeBoard(after);
 			if (own.exists ? text === serializeBoard(own.data) : after.items.length === 0) return merged;
 			const check = parseBoard(text, this.device);
@@ -94,12 +94,12 @@ export class BoardStateStore {
 	 * given only when the library has read all its notebooks) and cleared statuses nobody contradicts. Writes only when
 	 * something goes, only the own file, after the same re-validation as a status change. Returns whether it wrote.
 	 */
-	prune(live: ReadonlySet<string> | null): Promise<boolean> {
+	prune(live: ReadonlySet<string> | null, ctx: Omit<BoardPruneContext, "othersComplete"> = {}): Promise<boolean> {
 		return this.enqueue(async () => {
 			if (!(await this.adapter.exists(this.ownPath))) return false;
 			const own = await this.readOwn();
 			const { others } = await this.readAll();
-			const after = pruneBoardFile(own.data, others, live, this.now());
+			const after = pruneBoardFile(own.data, others, live, this.now(), { ...ctx, othersComplete: this.blocked === null });
 			if (after === own.data) return false;
 			const text = serializeBoard(after);
 			const check = parseBoard(text, this.device);

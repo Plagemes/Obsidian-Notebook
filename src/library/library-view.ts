@@ -1,7 +1,8 @@
 import { getLanguage, ItemView, Menu, normalizePath, Platform, Scope, setIcon, TFile, TFolder, Vault, type TAbstractFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import type { NotebookDocument, NotebookMeta, Page } from "../model/types";
-import { isNotebookFile } from "../storage/format";
+import { isNotebookFile, readNotebookText } from "../storage/format";
+import { quickDocId } from "../storage/history";
 import { sanitizeName } from "../storage/notebooks";
 import { attachPress, DROP_ATTR, DROP_CARD_ATTR } from "./drag";
 import { breadcrumb, buildFolderTree, flattenTree, isReservedPath, type FolderNode } from "./folders";
@@ -655,6 +656,8 @@ export class LibraryView extends ItemView {
 		const files = this.notebookFiles();
 		const entries = this.index.all();
 		if (files.length !== entries.length || entries.some((e) => e.id === undefined || e.mtime < 0)) return null;
+		const known = new Set(entries.map((e) => e.path));
+		if (files.some((f) => !known.has(f.path))) return null;
 		const root = this.root();
 		const folder = root === "" ? this.app.vault.getRoot() : this.app.vault.getFolderByPath(root);
 		let hidden = false;
@@ -671,15 +674,40 @@ export class LibraryView extends ItemView {
 		return keys;
 	}
 
+	/** The state keys of the notebooks in the library trash (`any`: there are some), or null when one cannot be read: then nothing is pruned. */
+	private async trashedBoardKeys(): Promise<{ keys: Set<string>; any: boolean } | null> {
+		const root = this.root();
+		const folder = this.app.vault.getFolderByPath(root === "" ? "_trash" : `${root}/_trash`);
+		const keys = new Set<string>();
+		let any = false;
+		if (!folder) return { keys, any };
+		const files: TFile[] = [];
+		Vault.recurseChildren(folder, (f) => {
+			if (f instanceof TFile && isNotebookFile(f)) files.push(f);
+		});
+		for (const f of files) {
+			any = true;
+			try {
+				const id = quickDocId(readNotebookText(f.extension, await this.app.vault.cachedRead(f)));
+				if (id === null) return null;
+				keys.add(`id:${id}`);
+			} catch {
+				return null;
+			}
+		}
+		return { keys, any };
+	}
+
 	/** Once per view, when the library is complete: the board file of this device loses the statuses of notebooks that are gone. */
 	private async pruneBoardStatuses(): Promise<void> {
 		const store = this.host.board;
 		if (this.closed || this.boardPruned || !store) return;
 		const live = this.liveBoardKeys();
 		if (!live) return;
+		const trashed = await this.trashedBoardKeys();
 		this.boardPruned = true;
 		try {
-			await store.prune(live);
+			await store.prune(live, trashed ? { trashed: trashed.keys, trashHoldsNotebooks: trashed.any } : {});
 		} catch (e) {
 			console.error("[notebook] could not tidy the board statuses", e);
 		}

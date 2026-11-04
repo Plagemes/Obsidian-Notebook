@@ -221,10 +221,37 @@ describe("board pruning", () => {
 	const OLD = NOW - BOARD_PRUNE_GRACE_MS - 1;
 	const ids = (f: BoardFile): string[] => f.items.map((i) => i.key);
 
-	it("drops the statuses of notebooks that are gone, once they are older than the grace period", () => {
-		const own = file("0a000000", item("id:alive", "done", OLD), item("id:gone", "done", OLD), item("id:recent", "done", NOW - 1000));
-		const after = pruneBoardFile(own, [], new Set(["id:alive"]), NOW);
+	const none = { trashed: new Set<string>() };
+
+	it("drops the statuses of notebooks that have been missing for longer than the grace period, counted from when they were first seen missing", () => {
+		const own = file("0a000000",
+			item("id:alive", "done", OLD), item("id:gone", "done", OLD, { missingSince: OLD }), item("id:recent", "done", OLD, { missingSince: NOW - 1000 }));
+		const after = pruneBoardFile(own, [], new Set(["id:alive"]), NOW, none);
 		expect(ids(after)).toEqual(["id:alive", "id:recent"]);
+	});
+
+	it("an old status is not dropped the first time its notebook is missing: that only notes the time; coming back clears it", () => {
+		const own = file("0a000000", item("id:gone", "done", OLD));
+		const first = pruneBoardFile(own, [], new Set(), NOW, none);
+		expect(first.items[0]?.extra).toEqual({ missingSince: NOW });
+		const back = pruneBoardFile(first, [], new Set(["id:gone"]), NOW + 1000, none);
+		expect(back.items[0]?.extra).toEqual({});
+		expect(pruneBoardFile(back, [], new Set(["id:gone"]), NOW + 2000, none)).toBe(back);
+	});
+
+	it("never drops the status of a notebook in the library trash (its restore brings the notebook back)", () => {
+		const own = file("0a000000", item("id:trashed", "done", OLD, { missingSince: OLD }), item("copy:abc:A.notebook", "done", OLD, { missingSince: OLD }), item("path:A.notebook", "done", OLD, { missingSince: OLD }));
+		const kept = pruneBoardFile(own, [], new Set(), NOW, { trashed: new Set(["id:trashed", "id:abc"]), trashHoldsNotebooks: true });
+		expect(ids(kept)).toEqual(["id:trashed", "copy:abc:A.notebook", "path:A.notebook"]);
+		expect(kept.items.every((i) => i.extra.missingSince === undefined)).toBe(true);
+		// The trash could not be read: nothing is pruned for being missing.
+		expect(pruneBoardFile(own, [], new Set(), NOW)).toBe(own);
+	});
+
+	it("does not drop a clear while another device's file could not be read", () => {
+		const own = file("0a000000", item("id:a", null, 5));
+		expect(pruneBoardFile(own, [], null, NOW, { othersComplete: false })).toBe(own);
+		expect(ids(pruneBoardFile(own, [], null, NOW, { othersComplete: true }))).toEqual([]);
 	});
 
 	it("keeps everything when the library is not complete (no live set)", () => {
@@ -242,9 +269,9 @@ describe("board pruning", () => {
 	});
 
 	it("never touches the other devices' files and keeps unknown fields", () => {
-		const own: BoardFile = { ...file("0a000000", item("id:gone", "x", OLD), item("id:keep", "y", OLD, { note: 1 })), extra: { future: true }, unknown: [{ odd: 1 }] };
+		const own: BoardFile = { ...file("0a000000", item("id:gone", "x", OLD, { missingSince: OLD }), item("id:keep", "y", OLD, { note: 1 })), extra: { future: true }, unknown: [{ odd: 1 }] };
 		const other = file("0b000000", item("id:gone", "x", OLD));
-		const after = pruneBoardFile(own, [other], new Set(["id:keep"]), NOW);
+		const after = pruneBoardFile(own, [other], new Set(["id:keep"]), NOW + BOARD_PRUNE_GRACE_MS * 2, none);
 		expect(after.extra).toEqual({ future: true });
 		expect(after.unknown).toEqual([{ odd: 1 }]);
 		expect(after.items[0]?.extra).toEqual({ note: 1 });
@@ -262,8 +289,8 @@ describe("board pruning", () => {
 		expect(await store.prune(null)).toBe(false);
 		expect(adapter.writes).toHaveLength(0);
 		const own = "Notebooks/_meta/board-0a000000.json";
-		adapter.files.set(own, serializeBoard(file("0a000000", item("id:x", "done", OLD), item("id:gone", "done", OLD))));
-		expect(await store.prune(new Set(["id:x"]))).toBe(true);
+		adapter.files.set(own, serializeBoard(file("0a000000", item("id:x", "done", OLD), item("id:gone", "done", OLD, { missingSince: OLD }))));
+		expect(await store.prune(new Set(["id:x"]), none)).toBe(true);
 		expect(adapter.writes).toEqual([own]);
 		expect(adapter.files.get(own)).toContain('"id:x"');
 		expect(adapter.files.get(own)).not.toContain('"id:gone"');

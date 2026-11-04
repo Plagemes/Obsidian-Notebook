@@ -194,24 +194,63 @@ export function applyBoardOps(own: BoardFile, merged: BoardMap, ops: readonly Bo
 
 // ------------------------------------------------------------------ pruning
 
-/** A status of a notebook that is not in the library is kept at least this long (a sync that is late, a restore from the Trash). */
+/** A status of a notebook that is not in the library is kept at least this long after it was first seen missing (a sync that is late, a restore from the Trash). */
 export const BOARD_PRUNE_GRACE_MS = 30 * 86_400_000;
+
+/** What the library knows besides the notebooks in it. */
+export interface BoardPruneContext {
+	/** State keys of the notebooks in the library trash. A status of one of them is never pruned. Null: not known, so nothing is pruned for being missing. */
+	trashed?: ReadonlySet<string> | null;
+	/** The library trash holds notebooks whose original path is not known: no status under a path key is pruned for being missing. */
+	trashHoldsNotebooks?: boolean;
+	/** Every other device's board file was read. When one is unreadable or missing, no clear is dropped (it may still hide a status there). */
+	othersComplete?: boolean;
+}
 
 /**
  * This device's file without what no longer says anything (only its own items are ever touched; other devices' files are
  * read to decide, never changed):
  * - a **cleared** status (`v: null`) that no other device's file contradicts with a status of its own (it would come back
- *   if the clear were dropped) and that does not hide a status stored under the path key (`statusOf` falls back to it);
- * - when `live` is given (the library has read every notebook, so it is the complete set of state keys), a status of a notebook that is not in it and
- *   was set more than BOARD_PRUNE_GRACE_MS ago. A notebook deleted for good no longer keeps a line in the file.
- * Returns `own` itself when nothing is dropped.
+ *   if the clear were dropped) and that does not hide a status stored under the path key (`statusOf` falls back to it). Not
+ *   while another device's file could not be read;
+ * - when `live` is given (the library has read every notebook, so it is the complete set of state keys), a status of a notebook
+ *   that is in neither the library nor its trash and has been missing for more than BOARD_PRUNE_GRACE_MS. The time is counted
+ *   from when it was first seen missing (`missingSince` on the item, in this device's file; cleared when it is back), not from
+ *   when the status was set. A notebook deleted for good no longer keeps a line in the file.
+ * Returns `own` itself when nothing changes.
  */
-export function pruneBoardFile(own: BoardFile, others: readonly BoardFile[], live: ReadonlySet<string> | null, now: number): BoardFile {
+export function pruneBoardFile(own: BoardFile, others: readonly BoardFile[], live: ReadonlySet<string> | null, now: number, ctx: BoardPruneContext = {}): BoardFile {
 	const named = (key: string): boolean => others.some((f) => f.items.some((i) => i.key === key && i.status.v !== null));
 	const pathStatuses = [own, ...others].some((f) => f.items.some((i) => i.key.startsWith("path:") && i.status.v !== null));
-	const keep = own.items.filter((i) => {
-		if (i.status.v === null) return named(i.key) || (pathStatuses && !i.key.startsWith("path:"));
-		return live === null || live.has(i.key) || now - i.status.at <= BOARD_PRUNE_GRACE_MS;
-	});
-	return keep.length === own.items.length ? own : { ...own, items: keep };
+	const complete = ctx.othersComplete !== false;
+	let changed = false;
+	const keep: BoardItem[] = [];
+	for (const i of own.items) {
+		if (i.status.v === null) {
+			if (!complete || named(i.key) || (pathStatuses && !i.key.startsWith("path:"))) keep.push(i);
+			else changed = true;
+			continue;
+		}
+		const since = i.extra.missingSince;
+		// Not known whether it is missing: left as it is.
+		if (live === null || !ctx.trashed) {
+			keep.push(i);
+			continue;
+		}
+		const present = live.has(i.key) || ctx.trashed.has(i.key) || (i.key.startsWith("copy:") && ctx.trashed.has(`id:${i.key.split(":")[1] ?? ""}`)) || (ctx.trashHoldsNotebooks === true && i.key.startsWith("path:"));
+		if (present) {
+			if (since !== undefined) {
+				const { missingSince: _gone, ...rest } = i.extra;
+				keep.push({ ...i, extra: rest });
+				changed = true;
+			} else keep.push(i);
+			continue;
+		}
+		if (typeof since !== "number" || !Number.isFinite(since) || since > now) {
+			keep.push({ ...i, extra: { ...i.extra, missingSince: now } });
+			changed = true;
+		} else if (now - since <= BOARD_PRUNE_GRACE_MS) keep.push(i);
+		else changed = true;
+	}
+	return changed ? { ...own, items: keep } : own;
 }
