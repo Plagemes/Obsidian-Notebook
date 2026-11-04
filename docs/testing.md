@@ -2285,3 +2285,31 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Highlights digest (#90): regions, crops, PDF text, marked section, group by page or colour | yes | clustering, text under bands, section replacement and idempotence (`tests/highlight-digest.test.ts`); harness `dev/harness/digest-check.ts` | | | |
+
+### 0.17 — pdfcopy: optional PDF copy next to each notebook (steps 1200-1219)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`HARNESS_DOC=pdfcopy`): `dev/harness/dist/shots/` (the settings rows at tablet and phone widths, dark and light).
+
+1200. **Off by default.** Fresh install: Settings > Obsidian integration > *Keep a PDF copy of each notebook* is off. Write in a notebook for a minute: no `.pdf` appears next to it. The tab's More options menu has *Keep a PDF copy* unchecked and the line *PDF copy is off*.
+1201. **Turn it on for one notebook.** Menu > *Keep a PDF copy*: a PDF named like the notebook appears next to it within a few seconds and the menu line reads *PDF copy updated hh:mm*. Open the PDF in another app: all pages, ink, paper and PDF backgrounds are there.
+1202. **Idle update (desktop).** Write something, then stop and wait about 30 seconds (do not touch the pen): the PDF changes (its time in the file manager) and the status time moves. While the pen is on the screen nothing is rebuilt.
+1203. **Unchanged is skipped.** Open and close the notebook without writing: the PDF file's modified time does not change.
+1204. **On close.** Write a stroke and close the notebook tab at once (before 30 s): shortly after, the PDF contains the stroke.
+1205. **Phone or tablet is cheap.** On Android with *Update the PDF copy* = *Automatic*: while writing nothing is rebuilt; closing the notebook, or switching to another app, updates the copy. With *After a quiet moment* it also updates while the notebook stays open.
+1206. **No stutter.** A notebook with many pages and PDF backgrounds: closing it never freezes the screen; the copy appears a little later.
+1207. **Your own file is never replaced.** Put a PDF of yours named *<notebook name>.pdf* next to a notebook first, then turn the copy on: your file is untouched, the copy is *<name> (copy 2).pdf* and a notice says why.
+1208. **A copy you edited is yours.** Annotate or replace the plugin's copy with another app (or overwrite it with any other file), then write in the notebook: the next update goes to *(copy 2)*, the edited file stays as it is.
+1209. **Global switch.** Turn *Keep a PDF copy of each notebook* on in Settings: every notebook you open and save gets a copy. Turn *Keep a PDF copy* off in one notebook's menu: that one stops (its old PDF stays); other notebooks keep theirs.
+1210. **Folder.** Set *PDF copy folder* to e.g. *Shared/PDF*: the copies go there (the folder is created). Two notebooks with the same name never replace each other's copy (the second one is *(copy 2)*).
+1211. **Rename.** Rename a notebook: its copy is renamed with it (same folder, or the new folder when it is next to the notebook); move the notebook to another folder: the copy follows. A copy you had edited is left where it is.
+1212. **Delete.** Move a notebook to the trash (library or Obsidian): the PDF stays, nothing is updated any more. Restore the notebook and write: the copy resumes.
+1213. **Italian.** Switch the plugin language to Italian: the settings rows and the menu read *Mantieni una copia PDF*, *Copia PDF aggiornata alle hh:mm*.
+1214. **Sync.** With two devices on one vault: both can keep the copy; neither duplicates it (no *(copy 2)* for a copy the other device wrote), and `_meta` holds one `pdfcopy-<device>.json` per device.
+1215. **Failure.** Make the folder unwritable or full (or name a file where the folder should be): the menu line says *PDF copy failed: …*, one notice appears, the notebook itself is unaffected.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Optional PDF copy next to the notebook (#23): global and per-notebook switch, idle / on close / background update, fingerprint skip, page-by-page build | yes | settings, targets, record store, fingerprint, timers and the service on an in-memory vault (`tests/pdf-copy-logic.test.ts`, `tests/pdf-copy-service.test.ts`); harness `dev/harness/pdfcopy-check.ts` | | | |
+| PDF copy data safety: only a file the plugin wrote (path + size + SHA-256) is replaced; renames follow, deletes stop | yes | same tests | | | |
+
+

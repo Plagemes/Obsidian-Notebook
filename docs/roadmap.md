@@ -110,7 +110,7 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 
 ### Obsidian integration
 22. 🧪 **P1** Embed a page in a Markdown note: a `notebook` code block renders a page preview.
-23. **P2** Optional always-updated PDF copy next to each notebook (sharing, NotebookLM).
+23. 🧪 **P2** Optional always-updated PDF copy next to each notebook (sharing, NotebookLM).
 24. ~~**P2** Flashcards from the lasso: question and answer regions become a Markdown flashcard compatible with spaced-repetition plugins.~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
 
 ### Data and reliability

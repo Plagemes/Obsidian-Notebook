@@ -358,6 +358,13 @@ const INTEGRATION: SettingSpec[] = [
 	{ id: "dailyNotebookPath", section: "integration", order: 30, name: "settings.dailyNotebook", desc: "settings.dailyNotebook.desc", control: { type: "text", placeholder: defaultDailyPath(DEFAULT_SETTINGS.folder) }, keywords: "daily journal today diario oggi" },
 	{ id: "dailyLink", section: "integration", order: 31, name: "settings.dailyLink", desc: "settings.dailyLink.desc", control: { type: "toggle" }, keywords: "daily notes periodic notes journal diario" },
 	{ id: "dailyCreateNote", section: "integration", order: 32, name: "settings.dailyCreateNote", desc: "settings.dailyCreateNote.desc", control: { type: "toggle" }, parent: "dailyLink", visible: (s) => s.dailyLink },
+	// 0.17 (#23): the optional PDF copy next to each notebook; a notebook can override the switch from its menu.
+	{ id: "pdfCopy", section: "integration", order: 40, name: "settings.pdfCopy", desc: "settings.pdfCopy.desc", control: { type: "toggle" }, keywords: "pdf copy share notebooklm export automatic copia condividere" },
+	{
+		id: "pdfCopyWhen", section: "integration", order: 41, name: "settings.pdfCopyWhen", desc: "settings.pdfCopyWhen.desc", keywords: "pdf copy battery android close idle chiusura",
+		control: { type: "dropdown", options: options([["auto", "settings.pdfCopyWhen.auto"], ["idle", "settings.pdfCopyWhen.idle"], ["close", "settings.pdfCopyWhen.close"]]) },
+	},
+	{ id: "pdfCopyFolder", section: "integration", order: 42, name: "settings.pdfCopyFolder", desc: "settings.pdfCopyFolder.desc", control: { type: "folder", placeholder: "" }, keywords: "pdf copy folder cartella" },
 ];
 
 const timetableOn: Predicate = (s) => s.timetableOffer;
@@ -471,6 +478,7 @@ export const INTERNAL_SETTING_KEYS: Readonly<Partial<Record<SettingKey, string>>
 	lastNotebookPos: "instant start: zoom and scroll of the last page",
 	hintsSeen: "the tips already shown; Show tips again clears it",
 	zettelSlipBoxes: "edited from the notebook menu (Zettelkasten slip boxes)",
+	pdfCopyNotebooks: "edited from the notebook menu (Keep a PDF copy of this notebook)",
 	pinnedQuick: "edited on the toolbar (press and hold a quick action, or a row of All actions); Reset the adaptive toolbar clears it",
 };
 

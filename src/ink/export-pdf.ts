@@ -76,7 +76,7 @@ const enc = new TextEncoder();
  * Draw order: white page, background images, paper, image elements, text elements, ink. Text uses the
  * standard Helvetica font (not embedded), WinAnsi-encoded; characters outside WinAnsi become "?".
  */
-export function pagesToPdf(pages: readonly Page[], options: PdfOptions = {}): Uint8Array {
+function* pdfSteps(pages: readonly Page[], options: PdfOptions): Generator<void, Uint8Array, void> {
 	const withPaper = options.paper ?? true;
 	// Objects are numbered in allocation order; 1 catalog, 2 page tree, 3 info.
 	const objects: Uint8Array[][] = [];
@@ -151,6 +151,7 @@ export function pagesToPdf(pages: readonly Page[], options: PdfOptions = {}): Ui
 		);
 		const body = enc.encode(content);
 		setObject(contentObj, `<< /Length ${body.length} >>\nstream\n`, body, "\nendstream");
+		yield; // 0.17 (#23): where a caller may let the interface breathe between two pages
 	}
 	setObject(catalog, `<< /Type /Catalog /Pages ${tree} 0 R >>`);
 	setObject(tree, `<< /Type /Pages /Kids [${pageObjs.map((n) => `${n} 0 R`).join(" ")}] /Count ${pages.length} >>`);
@@ -185,6 +186,28 @@ export function pagesToPdf(pages: readonly Page[], options: PdfOptions = {}): Ui
 		at += c.length;
 	}
 	return out;
+}
+
+/** The PDF of `pages` (see `pdfSteps` above for the layout). Synchronous. */
+export function pagesToPdf(pages: readonly Page[], options: PdfOptions = {}): Uint8Array {
+	const steps = pdfSteps(pages, options);
+	let step = steps.next();
+	while (!step.done) step = steps.next();
+	return step.value;
+}
+
+/**
+ * The same bytes as `pagesToPdf`, built page by page with `pause()` awaited between two pages, so a long notebook does
+ * not hold the interface for the whole build (0.17 #23: the automatic PDF copy).
+ */
+export async function pagesToPdfYielding(pages: readonly Page[], options: PdfOptions, pause: () => Promise<void>): Promise<Uint8Array> {
+	const steps = pdfSteps(pages, options);
+	let step = steps.next();
+	while (!step.done) {
+		await pause();
+		step = steps.next();
+	}
+	return step.value;
 }
 
 /** Number of colour components declared by the first SOF marker of a JPEG (3 if it cannot be found). */

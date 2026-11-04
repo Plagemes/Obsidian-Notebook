@@ -24,13 +24,14 @@ import { normaliseSeen, type HintId } from "./ui/hint-logic";
 import { DEFAULT_READING_SETTINGS, readReadingSettings, type ReadingSettings } from "./view/reading-settings";
 import { DEFAULT_PRESENT_SETTINGS, readPresentSettings, type PresentSettings } from "./view/present-logic";
 import { DEFAULT_BOARD_SETTINGS, readBoardSettings, type BoardSettings } from "./library/board-logic";
+import { DEFAULT_PDF_COPY_SETTINGS, readPdfCopySettings, type PdfCopySettings } from "./storage/pdf-copy-logic";
 
 /** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
 /** DESIGN.md §2.2: *Notebook* (its own tokens, the default) or *Follow Obsidian theme*. */
 export const APPEARANCE_STYLES = ["notebook", "obsidian"] as const;
 export type AppearanceStyle = (typeof APPEARANCE_STYLES)[number];
 
-export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings, LectureSettings, BoardSettings, PresentSettings {
+export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings, LectureSettings, BoardSettings, PresentSettings, PdfCopySettings {
 	/** UI language: "auto" follows Obsidian. */
 	uiLanguage: UiLanguage;
 	folder: string;
@@ -318,6 +319,9 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	// 0.15 views
 	...DEFAULT_BOARD_SETTINGS,
 	boardColumns: DEFAULT_BOARD_SETTINGS.boardColumns.map((c) => ({ ...c })),
+	// 0.17 pdfcopy
+	...DEFAULT_PDF_COPY_SETTINGS,
+	pdfCopyNotebooks: {},
 };
 
 /** Merges saved data over the defaults, ignoring values of the wrong type. */
@@ -424,6 +428,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	Object.assign(s, readReadingSettings(d));
 	Object.assign(s, readPresentSettings(d));
 	Object.assign(s, readBoardSettings(d));
+	Object.assign(s, readPdfCopySettings(d));
 	return s;
 }
 
