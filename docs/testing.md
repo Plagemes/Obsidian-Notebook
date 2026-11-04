@@ -2591,3 +2591,34 @@ Roadmap #186. Reference screenshots after `npm run harness:check`: `dev/harness/
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Annotate in Notebook from the PDF viewer (O10): header action, menus, command, open existing vs new, viewer page | yes | search and page choice (`tests/annotate-pdf.test.ts`); harness `dev/harness/annotate-check.ts` | | viewer page and header action rely on Obsidian's PDF view internals, best effort | |
+### 0.18 — quicktabs: quick tabs, pages pinned one tap away (steps 1440-1459)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`HARNESS_DOC=quicktabs`): `dev/harness/dist/shots/` (the strip with four tabs and Back, tablet and phone, dark and light).
+
+1440. **Nothing pinned.** A notebook that has no quick tabs shows no strip. Open the page sheet (tap the page number) and *All actions*: *Pin as quick tab* is there, unchecked.
+1441. **Pin.** Tap *Pin as quick tab* on page 2: a slim strip appears under the toolbar with a tab *p. 2*, highlighted because you are on that page. Pin pages 4 and 5 the same way: the tabs are in the order you pinned them.
+1442. **Long press on the page number.** Long press (finger or S Pen) the page number in the toolbar: a one-item menu says *Pin as quick tab* (or *Unpin quick tab* on a pinned page). The sheet does not open after the long press. With a mouse, right click does the same.
+1443. **Jump and Back.** On page 1 tap the tab *p. 4*: the page shows. A *Back* button appears at the left of the strip; tap it: you are on page 1 again and *Back* is gone. Jump with a tab, then scroll by hand back to the page you left: *Back* disappears by itself.
+1444. **Bookmark title.** Give page 3 a bookmark with a title, then pin it: the tab says the title (24 characters at most).
+1445. **Reorder by dragging.** Mouse: press a tab and drag it past another one, release: the order changes and stays after closing and opening the notebook. Finger or S Pen: press and hold a tab until it lifts, drag, release. A finger that moves at once scrolls the strip instead (add 12 tabs to try). Drag never opens the tab.
+1446. **Menu on a tab.** Right click (mouse) or hold and release without moving (finger, pen) on a tab: *Move earlier*, *Move later*, *Unpin quick tab*. Each works; the first tab cannot move earlier.
+1447. **Unpin.** *Unpin quick tab* removes the tab; with no tabs left the strip disappears. The same action on the pinned page (sheet, or long press on the page number) unpins too.
+1448. **Another notebook.** In the lecture notebook run *Pin a page from another notebook…*: choose the formula-sheet notebook, then a page number (a wrong number says the valid range). A tab with a book icon and the label *<notebook> p. N* appears. Tap it: the formula-sheet notebook opens at that page; *Back* is in its strip: tap it to return to the lecture page.
+1449. **A page that is gone.** Pin page 6, then delete page 6 (or pin a page of another notebook and delete that page there). The tab is drawn dashed; tapping it says the page is no longer in the notebook and shows the nearest page by its old number. Unpin it from its menu.
+1450. **Reordered pages.** Pin page 3, then move it to the end with *Move page down* or the page panel: the tab still opens that same page, and a tab without a title now says its new number.
+1451. **Rename.** Rename the formula-sheet notebook in the library: the tab that points at it still opens it.
+1452. **Collapse.** Tap the pin button at the left of the strip: only a small button with the number of tabs (and *Back* if there is one) remains; tap again to expand. Close and reopen the notebook: the strip is as you left it on this device.
+1453. **Phone.** On a phone the strip is tighter and tabs are shorter, long labels end with an ellipsis; nothing overflows the view; the tabs scroll sideways when there are many.
+1454. **Short landscape.** Hold the phone sideways (or open the on-screen keyboard on a tablet in landscape): the strip becomes a narrow column beside the page and the page keeps its height. Back to portrait: the strip returns above the page.
+1455. **Writing is not disturbed.** With the S Pen write across the page with tabs showing: nothing in the strip reacts; the side-button rules (tap: radial menu, drag: eraser) work as before; a stroke that starts beside the strip is ink.
+1456. **Two devices.** On two devices with one vault: pin a page on one; after sync the other shows the tab in the same notebook. Unpin on the second: it disappears on the first. `_meta` holds one `quicktabs-<device>.json` per device and the notebook file was not rewritten by any of it.
+1457. **Read-only and locked.** In a read-only notebook, or on a locked page, *Pin as quick tab* still works (pins are not part of the notebook).
+1458. **Limit.** Pin 12 pages: the 13th says a notebook has at most 12 quick tabs and nothing is added.
+1459. **Italian.** In Italian: *Fissa come scheda rapida*, *Indietro*, *Sposta prima / dopo*, *Rimuovi scheda rapida*, tab *p. N*.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Quick tabs (#227): pin the page in view (page sheet, command, long press on the page number), strip with tabs, tap to jump, Back, collapse, side column on a short view | yes | pure logic (merge, order, resolve) and store: yes; strip: harness (`doc=quicktabs`) | | | |
+| Quick tabs: drag to reorder (mouse at once, touch / pen after a long press), Move earlier / later, Unpin | yes | order logic; harness drives the same store calls | | | drag by finger and S Pen on hardware |
+| Quick tabs to pages of other notebooks (picker, opens the notebook, follows a rename) | yes | store retarget; harness with a recorded opener | | | |
+| Quick tabs storage: per-device `_meta/quicktabs-<device>.json`, latest change wins, tombstones, unknown fields kept, unreadable never overwritten | yes | `tests/quicktabs.test.ts`, `tests/library-check.test.ts` | | | |

@@ -13,6 +13,10 @@ const P: Record<string, string> = {
 
 	// 0.18 qr
 	"qr-code": "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h3v3h-3z M20 14v3 M14 20h3 M20 20h1",
+	// 0.18 quicktabs
+	"chevrons-left": "M11 17l-5-5 5-5 M18 17l-5-5 5-5",
+	"chevrons-up": "M17 11l-5-5-5 5 M17 18l-5-5-5 5",
+	"corner-up-left": "M9 14L4 9l5-5 M20 20v-7a4 4 0 0 0-4-4H4",
 	// 0.16 lock
 	"lock": "M5 11h14v10H5z M8 11V7a4 4 0 0 1 8 0v4",
 	"lock-open": "M5 11h14v10H5z M8 11V7a4 4 0 0 1 7-2.6",

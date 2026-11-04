@@ -50,6 +50,8 @@ import { openRecentPages, RecentPagesService } from "./view/recent-pages";
 import { SyncSafetyService } from "./view/sync-safety";
 import type { NavController } from "./view/nav-controller";
 import { registerNavigation } from "./view/nav-service";
+import { QuickTabsStore } from "./library/quicktabs-store";
+import { QuickTabsService } from "./view/quick-tabs-service";
 import { NotebookStatusBar } from "./view/status-bar";
 import { registerResilience, type ResilienceServices } from "./view/resilience";
 import { PdfCopyService } from "./storage/pdf-copy-service";
@@ -67,6 +69,8 @@ export default class NotebookPlugin extends Plugin {
 	recentPages!: RecentPagesService;
 	/** wave 0.10 (18): back/forward history of visited pages (view/nav-controller.ts). */
 	nav!: NavController;
+	/** 0.18 (#227): quick tabs, pages pinned in a notebook (one file per device in `_meta`, library/quicktabs-store.ts). */
+	quickTabs!: QuickTabsService;
 	private statusBar: NotebookStatusBar | null = null;
 	/** Public API for other plugins and scripts (docs/api.md). */
 	api?: NotebookApi;
@@ -187,6 +191,12 @@ export default class NotebookPlugin extends Plugin {
 		// wave 0.10: back/forward history of visited pages (18) and the status bar item (O15); views reach both through the host.
 		this.step("navigation", () => {
 			this.nav = registerNavigation(this, (file) => this.host.readNotebook(file));
+		});
+		// 0.18 (#227): quick tabs follow the vault and other devices' files.
+		this.step("quick tabs", () => {
+			const store = new QuickTabsStore(vaultDeviceFileAdapter(this.app), () => this.settings.folder, sidecarDeviceId(this.app));
+			this.quickTabs = new QuickTabsService({ app: this.app, store, readNotebook: (file) => this.host.readNotebook(file), notebooksFolder: () => this.settings.folder });
+			this.quickTabs.register(this);
 		});
 		this.step("status bar", () => this.registerStatusBar());
 		let quickNav: QuickNavService | null = null;

@@ -86,6 +86,8 @@ import { policySettings } from "./input-settings";
 import { NotebookMedia, storeAsset } from "./media";
 import { HeavyPageBanner } from "./heavy-page-banner";
 import { ViewSyncSafety, type SyncSafetyService } from "./sync-safety";
+import { QuickTabsStrip } from "./quick-tabs";
+import type { QuickTabsService, QuickTabsViewApi } from "./quick-tabs-service";
 import { PageNavigator } from "./navigator";
 import { NotebookMapCache } from "../model/notebook-map";
 import { NotebookMapModal } from "./notebook-map-modal";
@@ -221,6 +223,8 @@ export interface NotebookHost {
 	pageEditedAt?(nb: string, pageId: string): number | null;
 	/** Roadmap 18: the session's back/forward history of visited pages, across notebooks (view/nav-controller.ts). Optional: absent in tests. */
 	nav?: NavController;
+	/** 0.18 (#227): quick tabs, pages pinned in a notebook (view/quick-tabs-service.ts). Optional: absent in tests. */
+	quickTabs?: QuickTabsService;
 	/** Roadmap O15: the page in view or the save state of `view` changed (the status bar item follows the active view). Optional. */
 	statusChanged?(view: NotebookView): void;
 	/** Instant save journal shared by all views. */
@@ -403,6 +407,9 @@ export class NotebookView extends FileView {
 	private minimap: Minimap | null = null;
 	/** Roadmap 18: stops following the history's changes (the quick slots and the page sheet enable or disable Back and Forward). */
 	private stopNav: (() => void) | null = null;
+	/** 0.18 (#227): the strip of quick tabs and the subscription that keeps it current. */
+	private quickStrip: QuickTabsStrip | null = null;
+	private stopQuick: (() => void) | null = null;
 	/** Roadmap 18: the next explicit arrival is the first load of this file, so the place left is the last one seen anywhere. */
 	private navFresh = true;
 	private arrivalFresh = false;
@@ -599,6 +606,7 @@ export class NotebookView extends FileView {
 			togglePin: (id) => this.ui?.togglePin(id),
 			openSheet: (anchor) => this.ui?.openSheet("all", anchor),
 			openPageSheet: (anchor) => this.ui?.openSheet("page", anchor, this.currentPageIndex()),
+			...(this.host.quickTabs ? { quickTab: { pinned: () => this.host.quickTabs?.isPinned(this.quickApi()) ?? false, toggle: () => this.togglePageQuickTab() } } : {}),
 		});
 		this.tabs = new NotebookTabs(this.contentEl, this.toolbar.el, {
 			app: this.app,
@@ -631,6 +639,7 @@ export class NotebookView extends FileView {
 		this.scrollbar = new FastScrollbar(this.body, this.scrollbarHost());
 		this.minimap = new Minimap(this.body, this.minimapHost());
 		this.stopNav = this.host.nav?.onChange(() => this.refreshUi()) ?? null;
+		this.mountQuickTabs();
 		this.heavy = new HeavyPageBanner(this.body, {
 			split: (index) => this.splitHeavyPage(index),
 			dismiss: (index) => {
@@ -963,6 +972,10 @@ export class NotebookView extends FileView {
 		this.comments = null;
 		this.stopNav?.();
 		this.stopNav = null;
+		this.stopQuick?.();
+		this.stopQuick = null;
+		this.quickStrip?.el.remove();
+		this.quickStrip = null;
 		this.selectionActions?.destroy();
 		this.selectionActions = null;
 		this.arrange = null;
@@ -2674,6 +2687,91 @@ export class NotebookView extends FileView {
 		return this.currentPageIndex();
 	}
 
+	// --- 0.18 (#227): quick tabs (view/quick-tabs.ts, view/quick-tabs-service.ts; the pins are in _meta, never in the notebook) ---
+
+	/** What the quick tabs service reads from this view. */
+	quickApi(): QuickTabsViewApi {
+		return {
+			docId: () => this.session?.doc?.id ?? null,
+			path: () => this.file?.path ?? null,
+			pageIds: () => (this.shownDoc()?.pages ?? []).map((p) => p.id),
+			place: () => this.navPlace(),
+			current: () => {
+				const doc = this.shownDoc();
+				const index = this.currentPageIndex();
+				const page = doc?.pages[index];
+				return doc && page ? { pageId: page.id, index, title: doc.meta?.bookmarkInfo?.[page.id]?.title ?? "" } : null;
+			},
+			jump: (index) => this.goToPage(index),
+			show: (place) => this.showPlace(place),
+		};
+	}
+
+	/** Pins the page in view as a quick tab, or unpins it (the page sheet, the command and a long press on the page number). */
+	togglePageQuickTab(): void {
+		void this.host.quickTabs?.togglePin(this.quickApi());
+	}
+
+	/** "Pin a page from another notebook…" */
+	pinQuickTabFromOther(): void {
+		this.host.quickTabs?.pinFromOther(this.quickApi());
+	}
+
+	private mountQuickTabs(): void {
+		const service = this.host.quickTabs;
+		if (!service) return;
+		const KEY = "notebook-quicktabs-collapsed";
+		const api = this.quickApi();
+		const name = (path: string): string => path.slice(path.lastIndexOf("/") + 1).replace(/\.[^.]*$/, "");
+		const strip = new QuickTabsStrip({
+			tabs: () => service.tabs(this.session?.doc?.id ?? null),
+			view: () => {
+				const pageIds = api.pageIds();
+				return { path: this.file?.path ?? null, pageIds, currentPageId: pageIds[this.currentPageIndex()] ?? null };
+			},
+			back: () => {
+				const place = service.back();
+				if (!place) return null;
+				const page = t("quicktabs.page", { n: String(place.page) });
+				return { label: place.path === this.file?.path ? page : `${name(place.path)} ${page}` };
+			},
+			notebookName: name,
+			open: (tab) => void service.open(api, tab),
+			goBack: () => void service.goBack(api),
+			unpin: (id) => service.unpin(id),
+			move: (id, to) => {
+				const scope = this.session?.doc?.id;
+				if (scope) service.move(scope, id, to);
+			},
+			collapsed: () => {
+				try {
+					return this.app.loadLocalStorage(KEY) === "1";
+				} catch {
+					return false;
+				}
+			},
+			setCollapsed: (value) => {
+				try {
+					this.app.saveLocalStorage(KEY, value ? "1" : null);
+				} catch {
+					/* a per-device convenience: it simply is not remembered */
+				}
+			},
+		});
+		this.quickStrip = strip;
+		this.contentEl.insertBefore(strip.el, this.body);
+		this.stopQuick = service.onChange(() => strip.refresh());
+	}
+
+	/** On a short landscape view the strip is a column beside the page; otherwise a row above it. */
+	private placeQuickTabs(side: boolean): void {
+		const strip = this.quickStrip;
+		if (!strip || strip.isSide === side) return;
+		if (side) this.body.insertBefore(strip.el, this.stage);
+		else this.contentEl.insertBefore(strip.el, this.body);
+		strip.setSide(side);
+	}
+
 	// --- roadmap 18: back/forward history of visited pages (model/nav-history.ts, view/nav-controller.ts) ---
 
 	/** Page `index` (0-based) of this notebook as a place of the history, or null without a document. */
@@ -2844,6 +2942,7 @@ export class NotebookView extends FileView {
 		this.selectionActions?.update();
 		this.ui?.refresh();
 		this.statesTools?.refresh();
+		this.quickStrip?.refresh();
 	}
 
 	/** What the UI needs to know, for the page in view or page `pageIndex` (page sheet of a thumbnail). */
@@ -2861,6 +2960,7 @@ export class NotebookView extends FileView {
 			page: page ? {
 				index, count: pages.length, background: page.background?.kind ?? "none", infinite: !!page.infinite, locked: page.locked === true,
 				bookmarked: doc?.meta?.bookmarks.includes(page.id) ?? false, splittable: page.id === this.heavyPageId,
+				...(this.host.quickTabs ? { quickTab: this.host.quickTabs.isPinnedAt(this.quickApi(), index) } : {}),
 				kind: pageKindOf({ background: page.background?.kind ?? "none", paper: page.paper.kind, width: page.width, height: page.height }),
 			} : null,
 			notebook: { pdfPages: hasPdfPages(pages), backgrounds: hasBackgrounds(pages) },
@@ -3475,7 +3575,10 @@ export class NotebookView extends FileView {
 		this.scheduleHeavyCheck();
 		if (current !== this.navCurrent) {
 			this.navCurrent = current;
-			if (n && this.app.workspace.getActiveViewOfType(NotebookView) === this) this.host.nav?.seen(this.navPlace());
+			if (n && this.app.workspace.getActiveViewOfType(NotebookView) === this) {
+				this.host.nav?.seen(this.navPlace());
+				this.host.quickTabs?.seen(this.navPlace());
+			}
 			this.pageNav?.markCurrent(current);
 			this.pageOffer?.cancel(); // an offer made for the page that was in view
 			this.smartAdd?.hide();
@@ -3715,7 +3818,10 @@ export class NotebookView extends FileView {
 		this.viewSize = { width: rect.width, height: rect.height };
 		this.body.toggleClass("is-narrow", this.contentEl.clientWidth < NARROW_PX);
 		const vp = this.vpClass.update(this.contentEl.clientWidth, this.contentEl.clientHeight);
-		if (vp) applyViewportClass(this.contentEl, vp);
+		if (vp) {
+			applyViewportClass(this.contentEl, vp);
+			this.placeQuickTabs(vp.shortHeight);
+		}
 		this.ui?.refresh();
 		this.renderer?.resize(rect.width, rect.height, window.devicePixelRatio || 1);
 		this.refit(true);

@@ -359,6 +359,7 @@ describe("the library check", () => {
 			"Notebooks/_meta/library-check.unreadable-deadbeef.json",
 			"Notebooks/_meta/collections-0a1b2c3d.json", "Notebooks/_meta/pdfcopy-0a1b2c3d.json",
 			"Notebooks/_meta/collections.unreadable-deadbeef.json", "Notebooks/_meta/pdfcopy.unreadable-deadbeef.json",
+			"Notebooks/_meta/quicktabs-0a1b2c3d.json", "Notebooks/_meta/quicktabs.unreadable-deadbeef.json",
 		];
 		for (const state of [{ text: "", size: 0 }, { text: "{\"cut", size: 5 }, { unreadable: true, size: 50 }] as FakeFile[]) {
 			const src = vault().put("Notebooks/Good.notebook", { text: notebookText() }).put(...assetFile(1));
@@ -376,7 +377,7 @@ describe("the library check", () => {
 		expect(isNonHolderSidecar("_meta/library-0a1b2c3d.json", "")).toBe(true);
 		expect(isNonHolderSidecar("Notebooks/_meta/board-0a1b2c3d.json", "Notebooks")).toBe(true);
 		expect(isNonHolderSidecar("Notebooks/_meta/board.unreadable-deadbeef.json", "Notebooks")).toBe(true);
-		for (const prefix of ["collections", "pdfcopy"]) {
+		for (const prefix of ["collections", "pdfcopy", "quicktabs"]) {
 			expect(isNonHolderSidecar(`Notebooks/_meta/${prefix}-0a1b2c3d.json`, "Notebooks"), prefix).toBe(true);
 			expect(isNonHolderSidecar(`Notebooks/_meta/${prefix}.unreadable-deadbeef.json`, "Notebooks"), prefix).toBe(true);
 			expect(isNonHolderSidecar(`Notebooks/_meta/sub/${prefix}-0a1b2c3d.json`, "Notebooks"), prefix).toBe(false);

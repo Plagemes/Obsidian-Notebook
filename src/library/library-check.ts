@@ -36,6 +36,7 @@ import { BOARD_PREFIX } from "./board-state";
 import { COLLECTIONS_PREFIX } from "./collections";
 import { FOLDER_META_PREFIX } from "./folder-meta";
 import { SEEN_PREFIX } from "./library-check-seen";
+import { QUICKTABS_PREFIX } from "./quicktabs";
 import { LIBRARY_STATE_PREFIX } from "./library-state";
 
 export { formatBytes };
@@ -51,11 +52,11 @@ const HOLDER_EXTENSIONS = new Set(["notebook", "json", "snapshot", "bak", "stamp
 /**
  * Device sidecars of `_meta` that are not holders: the folder metadata (`folders-<device>.json`) and the library state
  * (`library-<device>.json`) the board statuses (`board-<device>.json`), the saved collections (`collections-<device>.json`) and the PDF copy records
- * (`pdfcopy-<device>.json`) never name an asset, and this check's own record (`library-check-<device>.json`) names assets
+ * (`pdfcopy-<device>.json`) and the quick tabs (`quicktabs-<device>.json`, 0.18) never name an asset, and this check's own record (`library-check-<device>.json`) names assets
  * but is no reference; nor are the copies kept of them when unreadable (`<prefix>.unreadable-<hash>.json`). Left out, an
  * unsynced or empty one no longer makes the check incomplete. Every other file of the kept folders stays a holder.
  */
-const NOT_HOLDERS: readonly string[] = [FOLDER_META_PREFIX, LIBRARY_STATE_PREFIX, SEEN_PREFIX, BOARD_PREFIX, COLLECTIONS_PREFIX, PDF_COPY_PREFIX];
+const NOT_HOLDERS: readonly string[] = [FOLDER_META_PREFIX, LIBRARY_STATE_PREFIX, SEEN_PREFIX, BOARD_PREFIX, COLLECTIONS_PREFIX, PDF_COPY_PREFIX, QUICKTABS_PREFIX];
 const SIDECAR_NAME = /^([a-z-]+?)(?:-[0-9a-f]{8}|\.unreadable-[0-9a-f]{8})\.json$/;
 
 /** Whether `path` is one of the `_meta` device sidecars that cannot name an asset (see NOT_HOLDERS). */

@@ -16031,3 +16031,168 @@ body.notebook-style-obsidian {
 		padding: 0 9px;
 	}
 }
+
+/* ===== 0.18 quicktabs ===== */
+.nb-ui.nb-qt {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	gap: var(--nb-space-2, 8px);
+	min-width: 0;
+	padding: var(--nb-space-1, 4px) var(--nb-space-2, 8px);
+	border-bottom: 1px solid var(--nb-border);
+	background: var(--nb-panel);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-qt .nb-qt-list {
+	display: flex;
+	flex: 1 1 auto;
+	align-items: center;
+	gap: var(--nb-space-1, 4px);
+	min-width: 0;
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+
+.nb-ui.nb-qt .nb-qt-list::-webkit-scrollbar { display: none; }
+
+.nb-ui.nb-qt .nb-qt-toggle,
+.nb-ui.nb-qt .nb-qt-back,
+.nb-ui.nb-qt .nb-qt-tab {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	gap: var(--nb-space-1, 4px);
+	min-height: 30px;
+	margin: 0;
+	padding: 0 var(--nb-space-2, 8px);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-tile);
+	box-shadow: none;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-chip);
+	font-weight: 600;
+	line-height: 1;
+	cursor: pointer;
+	transition: background var(--nb-motion-fast) var(--nb-ease), color var(--nb-motion-fast) var(--nb-ease), border-color var(--nb-motion-fast) var(--nb-ease);
+}
+
+.nb-ui.nb-qt .nb-qt-tab {
+	max-width: 160px;
+	touch-action: none;
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+.nb-ui.nb-qt .nb-qt-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-qt .nb-qt-toggle:hover,
+.nb-ui.nb-qt .nb-qt-back:hover,
+.nb-ui.nb-qt .nb-qt-tab:hover {
+	background: var(--nb-hover);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-qt .nb-qt-tab.is-current {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-qt .nb-qt-back {
+	border-color: var(--nb-accent);
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-qt .nb-qt-tab.is-gone {
+	border-style: dashed;
+	color: var(--nb-text-faint);
+}
+
+.nb-ui.nb-qt .nb-qt-tab.is-dragging {
+	z-index: 2;
+	box-shadow: var(--nb-shadow-2);
+	opacity: 0.9;
+	transition: none;
+}
+
+.nb-ui.nb-qt .nb-qt-tab.is-drop-before { box-shadow: inset 3px 0 0 var(--nb-accent); }
+.nb-ui.nb-qt .nb-qt-tab.is-drop-after { box-shadow: inset -3px 0 0 var(--nb-accent); }
+
+.nb-ui.nb-qt .nb-qt-toggle .svg-icon,
+.nb-ui.nb-qt .nb-qt-back .svg-icon,
+.nb-ui.nb-qt .nb-qt-tab .svg-icon {
+	width: 14px;
+	height: 14px;
+}
+
+.nb-ui.nb-qt .nb-qt-count {
+	min-width: 16px;
+	padding: 0 4px;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+	font-size: var(--nb-fs-meta);
+	text-align: center;
+}
+
+.nb-ui.nb-qt .nb-qt-toggle:focus-visible,
+.nb-ui.nb-qt .nb-qt-back:focus-visible,
+.nb-ui.nb-qt .nb-qt-tab:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 1px;
+}
+
+/* A finger or pen: a larger target. */
+@media (pointer: coarse) {
+	.nb-ui.nb-qt .nb-qt-toggle,
+	.nb-ui.nb-qt .nb-qt-back,
+	.nb-ui.nb-qt .nb-qt-tab { min-height: 36px; }
+}
+
+/* A phone: a tighter strip with shorter tabs. */
+.nb-vp-phone .nb-ui.nb-qt { padding: 2px var(--nb-space-1, 4px); gap: var(--nb-space-1, 4px); }
+.nb-vp-phone .nb-ui.nb-qt .nb-qt-tab { max-width: 104px; padding: 0 var(--nb-space-2, 8px); }
+
+/* A short landscape view: a column beside the page, so the page keeps its height. */
+.nb-ui.nb-qt.is-side {
+	flex-direction: column;
+	align-items: stretch;
+	width: 76px;
+	padding: var(--nb-space-1, 4px);
+	border-right: 1px solid var(--nb-border);
+	border-bottom: 0;
+	overflow: hidden;
+}
+
+.nb-ui.nb-qt.is-side .nb-qt-list {
+	flex-direction: column;
+	align-items: stretch;
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+
+.nb-ui.nb-qt.is-side .nb-qt-tab,
+.nb-ui.nb-qt.is-side .nb-qt-toggle,
+.nb-ui.nb-qt.is-side .nb-qt-back {
+	justify-content: center;
+	max-width: none;
+	padding: 0 var(--nb-space-1, 4px);
+}
+
+.nb-ui.nb-qt.is-side .nb-qt-tab.is-drop-before { box-shadow: inset 0 3px 0 var(--nb-accent); }
+.nb-ui.nb-qt.is-side .nb-qt-tab.is-drop-after { box-shadow: inset 0 -3px 0 var(--nb-accent); }
+.nb-ui.nb-qt.is-side.is-collapsed { width: 48px; }
+
+@media (prefers-reduced-motion: reduce) {
+	.nb-ui.nb-qt .nb-qt-toggle,
+	.nb-ui.nb-qt .nb-qt-back,
+	.nb-ui.nb-qt .nb-qt-tab { transition: none; }
+}
