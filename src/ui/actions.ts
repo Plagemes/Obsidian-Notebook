@@ -79,6 +79,8 @@ export interface UiContext {
 	display?: { night: boolean; crop: boolean };
 	/** 0.15 (241): the state strip is open. Optional (closed when absent). */
 	states?: { open: boolean };
+	/** 0.18 (#86): the comments panel is open, how many comments the notebook has (open ones apart), and a rectangle is being drawn for a new one. Optional (absent: none). */
+	comments?: { panel: boolean; total: number; open: number; drawing?: boolean };
 	/** wave 0.10: how many notebook views are open in the workspace (tabs). Optional (0 when absent). */
 	openNotebooks?: number;
 	/** wave 0.10 (18): the back/forward history of visited pages has somewhere to go. Optional (absent: nothing to go back to). */
@@ -472,6 +474,11 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "selection-copy-page", label: "movePage.copy", icon: "copy", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 42, scope: "view", command: true, when: hasSelection, keywords: "copy duplicate page another copia pagina selezione" },
 	// 0.17 (#57): the selection becomes a task in a note (the daily note, a tasks note or a chosen one), linked back to the page.
 	{ id: "selection-make-task", label: "task.action", icon: "list-checks", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 41, scope: "view", command: true, when: hasSelection, keywords: "task todo checkbox daily note attivita compito" },
+	// 0.18 (#86): margin comments: a comment anchored to the selection's region, or to a rectangle drawn on the page; the side panel lists them.
+	{ id: "comment-selection", label: "comments.action", icon: "message-square-plus", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 40, scope: "view", command: "comments.command.selection", when: hasSelection, enabled: pageOpen, keywords: "comment note margin review annotation commento nota margine revisione" },
+	{ id: "comment-region", label: "comments.region", icon: "square-dashed", group: "insert", surfaces: ["sheet", "palette"], priority: 46, scope: "view", command: true, enabled: pageOpen, keywords: "comment region rectangle margin note review commento regione rettangolo margine" },
+	{ id: "comments-panel", label: "comments.panel.toggle", icon: "messages-square", group: "side", surfaces: ["sheet", "palette"], priority: 33, scope: "view", command: true, readOnly: true, checked: (c) => !!c.comments?.panel, keywords: "comments panel list review resolve thread commenti pannello elenco" },
+	{ id: "comment-next", label: "comments.next", icon: "message-square-more", group: "side", surfaces: ["palette"], priority: 20, scope: "view", command: true, readOnly: true, keywords: "comment next open review commento successivo aperto" },
 	{ id: "selection-paste-device", label: "clipshare.paste", icon: "monitor-down", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection", "lasso"], priority: 47, scope: "view", command: true, when: (c) => c.tool === "lasso" || hasSelection(c), keywords: "clipboard tablet phone sync share vault appunti" },
 
 	// --- status banners (wave 0.7): their buttons, listed so that every visible control has a documented place.

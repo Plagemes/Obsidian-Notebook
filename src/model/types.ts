@@ -2,6 +2,7 @@
 
 export const FORMAT_ID = "obsidian-notebook";
 /**
+ * v16: margin comments (#86): `Page.comments` anchors comments, with their replies, to regions of a page.
  * v15: sticky notes (#20): coloured notes on the page (page elements with typed text; ink written on a note belongs to it).
  * v14: a finished page can be locked (#124): `Page.locked` makes the page refuse every edit until it is unlocked.
  * v13: drawings with states (#241): `Page.states` groups strokes into parts and keeps, per state, where each part is.
@@ -12,7 +13,7 @@ export const FORMAT_ID = "obsidian-notebook";
  * around a background; v5: per-stroke render version; v4: library metadata, assets, backgrounds, elements,
  * infinite pages, "shape" tool; v3: paper kinds and page sizes).
  */
-export const CURRENT_VERSION = 15;
+export const CURRENT_VERSION = 16;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -453,7 +454,70 @@ export interface Page {
 	 * unlocking are ordinary undoable commands (`SetPageLocked`). Reading, navigation, export, copy-out and search work.
 	 */
 	locked?: true;
+	/**
+	 * v16 (#86): margin comments: a flat list of comments anchored to regions of this page, each followed anywhere in the list by
+	 * its replies (a reply names its comment in `parent`). Written only when not empty. Ordinary undoable commands change it
+	 * (`SetPageComments`), so a locked page refuses comment edits like every other edit.
+	 */
+	comments?: PageComment[];
 }
+
+/** A region of a page, in page coordinates (pt): the box whose top-left corner is (`x`, `y`). */
+export interface CommentRegion {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
+/**
+ * v16: a small handwritten sketch kept inside a comment (not page ink): strokes as flat `[x0, y0, x1, y1, …]` integer lists
+ * in the fixed frame `COMMENT_SKETCH_W` × `COMMENT_SKETCH_H`, drawn in the colour of the comment text.
+ */
+export interface CommentSketch {
+	strokes: number[][];
+}
+
+/**
+ * v16 (#86): a comment anchored to a region of the page. `text` is typed (may be empty when there is a `sketch`). `author` is
+ * the name of the device that wrote it, `created` / `edited` are times (ms since 1970); the latest edit wins when two copies of
+ * a notebook are merged (`edited`, else `created`). `resolved` is a flag of the thread. Replies are separate list items
+ * (`CommentReply`) that name this comment.
+ */
+export interface PageCommentNote {
+	id: string;
+	region: CommentRegion;
+	text: string;
+	sketch?: CommentSketch;
+	author: string;
+	created: number;
+	edited?: number;
+	resolved?: true;
+}
+
+/** v16: a reply in the flat thread of a comment (`parent` is that comment's id; a reply never has replies of its own). */
+export interface CommentReply {
+	id: string;
+	parent: string;
+	text: string;
+	author: string;
+	created: number;
+	edited?: number;
+}
+
+export type PageComment = PageCommentNote | CommentReply;
+
+/** v16 limits (the strict writer and the readers share them). */
+export const COMMENTS_MAX = 1000;
+export const COMMENT_TEXT_MAX = 4000;
+export const COMMENT_AUTHOR_MAX = 60;
+export const COMMENT_ID_MAX = 40;
+export const COMMENT_MIN_SIDE = 4;
+export const COMMENT_SKETCH_W = 400;
+export const COMMENT_SKETCH_H = 200;
+export const COMMENT_SKETCH_STROKES = 40;
+export const COMMENT_SKETCH_POINTS = 400;
+export const COMMENT_SKETCH_TOTAL = 3000;
 
 /**
  * v13 (#241): a part of a drawing with states: a group of strokes of the page (a block, a force arrow, a spring) that the

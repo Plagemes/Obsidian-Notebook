@@ -297,6 +297,7 @@ export function describeMerge(s: MergeSummary): string[] {
 	add(s.marginsDiffer, "merge.summary.margins");
 	add(s.bookmarkInfoDiffer, "merge.summary.bookmarkInfo");
 	add(s.pagesEnlarged, "merge.summary.enlarged");
+	add(s.commentsAdded, "merge.summary.comments");
 	add(s.onlyInMain, "merge.summary.onlyMain");
 	return lines;
 }

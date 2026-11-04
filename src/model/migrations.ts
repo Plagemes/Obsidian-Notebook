@@ -352,6 +352,25 @@ export function v15OnlyElement(page: unknown, index: number): string | null {
 	return null;
 }
 
+/**
+ * v16 adds the optional page field `comments` (margin comments, #86). Every valid v15 document is a valid v16 document
+ * without it. A v15 reader ignored unknown page fields, so a `comments` key in a v15 file was never ours and never meant
+ * anything: it is dropped, not interpreted (like `states` in v12 -> v13 and `locked` in v13 -> v14). Nothing else changes, so a
+ * large v15 file can still be read page by page (StagedParse), which ignores the `comments` key of each page.
+ */
+function v15ToV16(raw: RawObject): RawObject {
+	const isObj = (v: unknown): v is RawObject => typeof v === "object" && v !== null && !Array.isArray(v);
+	const out: RawObject = { ...raw, version: 16 };
+	if (!Array.isArray(raw.pages)) return out;
+	out.pages = (raw.pages as unknown[]).map((page) => {
+		if (!isObj(page) || !("comments" in page)) return page;
+		const copy = { ...page };
+		delete copy.comments;
+		return copy;
+	});
+	return out;
+}
+
 /** MIGRATIONS[n] takes a document from version n to n+1. */
 export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	0: v0ToV1,
@@ -369,6 +388,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	12: v12ToV13,
 	13: v13ToV14,
 	14: v14ToV15,
+	15: v15ToV16,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

@@ -193,6 +193,11 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	// 0.16 (#90): highlights digest
 	/** How the digest note of the highlights is grouped: by page or by colour. */
 	digestGroup: "page" | "colour";
+	// 0.18 (#86): margin comments
+	/** Show the numbered markers of the comments in the page margin (a comment whose card is open is always shown). */
+	commentMarkers: boolean;
+	/** Add the comments to the PDF export as margin notes (a strip beside each page that has comments). */
+	commentsInPdf: boolean;
 	headerMode: HeaderMode;
 	headerPageNumber: boolean;
 	headerPageTotal: boolean;
@@ -298,6 +303,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	notebookTabs: false,
 	autoLineBreak: false,
 	digestGroup: "page",
+	commentMarkers: true,
+	commentsInPdf: false,
 	headerMode: "off",
 	headerPageNumber: true,
 	headerPageTotal: true,
@@ -416,6 +423,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;
 	if (typeof d.autoLineBreak === "boolean") s.autoLineBreak = d.autoLineBreak;
 	if (d.digestGroup === "page" || d.digestGroup === "colour") s.digestGroup = d.digestGroup;
+	if (typeof d.commentMarkers === "boolean") s.commentMarkers = d.commentMarkers;
+	if (typeof d.commentsInPdf === "boolean") s.commentsInPdf = d.commentsInPdf;
 	if (isHeaderMode(d.headerMode)) s.headerMode = d.headerMode;
 	if (isHeaderAlign(d.headerAlign)) s.headerAlign = d.headerAlign;
 	for (const k of ["headerPageNumber", "headerPageTotal", "headerDate", "headerTitle", "headerInExport"] as const) if (typeof d[k] === "boolean") s[k] = d[k];

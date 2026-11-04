@@ -36,7 +36,7 @@ export function sizeName(page: Page): PageSizeName | null {
 }
 
 /** The commands that work on a selection (layer order; wave 0.10: align, distribute, rotate, mirror, size, select similar). */
-const SELECTION_ONLY = /^(layer-|selection-(move-page|copy-page|align|distribute|rotate|mirror|resize|transform|similar|part)|select-same-)/;
+const SELECTION_ONLY = /^(layer-|comment-selection$|selection-(move-page|copy-page|align|distribute|rotate|mirror|resize|transform|similar|part)|select-same-)/;
 
 /** Whether a command of the registry applies to this view now (the palette hides it otherwise). */
 export function commandApplies(view: NotebookView, id: string): boolean {
@@ -50,6 +50,8 @@ export function commandApplies(view: NotebookView, id: string): boolean {
 	if (id === "excerpt-open-source") return (view.uiContext().selection?.excerpts ?? 0) > 0;
 	// wave 0.10 (362): copying to the other devices needs a selection (pasting does not).
 	if (id === "selection-copy-devices") return !!view.uiContext().selection;
+	// 0.18 (#86): there has to be an open comment to go to.
+	if (id === "comment-next") return (view.uiContext().comments?.open ?? 0) > 0;
 	// wave 0.10 (81): there is no print dialog on a phone or tablet.
 	if (id === "print") return canPrint();
 	// wave 0.10 (18): back and forward need a place to go to.
@@ -129,6 +131,11 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	// 0.16 (78): move or copy the selection to another page
 	"selection-move-page": (v) => v.selectionTools?.moveToPage("move"),
 	"selection-copy-page": (v) => v.selectionTools?.moveToPage("copy"),
+	// 0.18 (#86): margin comments
+	"comment-selection": (v) => v.commentTools?.commentOnSelection(),
+	"comment-region": (v) => v.commentTools?.commentOnRegion(),
+	"comments-panel": (v) => v.commentTools?.togglePanel(),
+	"comment-next": (v) => void v.commentTools?.step(1),
 	// 0.17 (#57): a task from the selection
 	"selection-make-task": (v) => v.makeTaskFromSelection(),
 	"selection-paste-device": (v) => void v.selectionTools?.pasteFromDevices(),
