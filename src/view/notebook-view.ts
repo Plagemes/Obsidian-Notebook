@@ -25,7 +25,7 @@ import { InputPolicy } from "../ink/input-policy";
 import { rectanglePolygon, strokesInLasso } from "../ink/lasso";
 import { lineBreakTarget } from "../ink/line-break";
 import type { SnapGuide } from "../model/snap";
-import { buildSnapSession, snapDragged, type SnapSession } from "./snap-glue";
+import { dragSnapSession, snapDragged, type SnapSession } from "./snap-glue";
 import { SnapHold } from "./snap-hold";
 import { applyPlacement, itemsBounds, uniformPlacement } from "../ink/selection-transform";
 import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layout, type PageBox } from "../ink/layout";
@@ -4909,13 +4909,13 @@ export class NotebookView extends FileView {
 
 	/** Builds the lines a drag snaps to when it starts: the grid of the paper and the edges and centres of the other items. */
 	private beginSnap(drag: SelectionDrag, sel: Selection, pointerType: string): void {
-		const mode = this.host.settings.snapMode;
-		const page = this.pageAtIndex(sel.pageIndex);
-		// A rotation, a selection across pages and a switched-off snap have nothing to snap to.
-		if (mode === "off" || drag.kind === "rotate" || sel.others?.length || !page) return;
 		const strokes = new Set<Stroke>(sel.strokes);
 		for (const s of this.attachedInk(sel)) strokes.add(s);
-		const session = buildSnapSession(page, mode, strokes, new Set(sel.elements), measureText);
+		// A rotation, a selection across pages, a switched-off snap and the states' part editor (pose drags) have nothing to snap to.
+		const session = dragSnapSession({
+			mode: this.host.settings.snapMode, kind: drag.kind, crossPage: !!sel.others?.length, ownedByStates: !!this.statesTools?.ownsSelection(sel),
+			page: this.pageAtIndex(sel.pageIndex) ?? null, strokes, elements: new Set(sel.elements), measure: measureText,
+		});
 		if (session) drag.snap = { session, pointerType };
 	}
 

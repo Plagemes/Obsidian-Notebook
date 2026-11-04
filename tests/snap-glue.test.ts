@@ -6,7 +6,7 @@ import { createId, createPage } from "../src/model/document";
 import { transformedBox } from "../src/model/snap";
 import type { ImageElement, Page } from "../src/model/types";
 import { FINGER_MAX_PX, SnapHold } from "../src/view/snap-hold";
-import { buildSnapSession, MAX_SNAP_STROKES, snapDragged } from "../src/view/snap-glue";
+import { buildSnapSession, dragSnapSession, MAX_SNAP_STROKES, snapDragged } from "../src/view/snap-glue";
 import { line } from "./helpers";
 
 const image = (x: number, y: number, w = 80, h = 60): ImageElement => ({ id: createId(), type: "image", asset: "a1", x, y, width: w, height: h, rotation: 0 });
@@ -157,5 +157,28 @@ describe("SnapHold", () => {
 		h.key({ type: "keydown", key: "Alt" });
 		h.reset();
 		expect(h.held("pen")).toBe(false);
+	});
+});
+
+describe("dragSnapSession (0.17 review G1)", () => {
+	const base = (over: Partial<Parameters<typeof dragSnapSession>[0]> = {}): Parameters<typeof dragSnapSession>[0] => ({
+		mode: "grid", kind: "move", crossPage: false, ownedByStates: false, page: gridPage(), strokes: new Set(), elements: new Set(), ...over,
+	});
+
+	it("a drag on a gridded page snaps", () => {
+		expect(dragSnapSession(base())).not.toBeNull();
+	});
+
+	it("the states' part editor's drag (the pose) is never pulled toward the grid or the guides", () => {
+		expect(dragSnapSession(base({ ownedByStates: true }))).toBeNull();
+		expect(dragSnapSession(base({ ownedByStates: true, mode: "both" }))).toBeNull();
+		expect(dragSnapSession(base({ ownedByStates: true, kind: "scale" }))).toBeNull();
+	});
+
+	it("a rotation, a selection across pages, a switched-off snap and a missing page have nothing to snap to", () => {
+		expect(dragSnapSession(base({ kind: "rotate" }))).toBeNull();
+		expect(dragSnapSession(base({ crossPage: true }))).toBeNull();
+		expect(dragSnapSession(base({ mode: "off" }))).toBeNull();
+		expect(dragSnapSession(base({ page: null }))).toBeNull();
 	});
 });

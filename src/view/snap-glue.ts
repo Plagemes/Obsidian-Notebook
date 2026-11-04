@@ -48,6 +48,19 @@ export function buildSnapSession(
 	return grid || targets ? { targets, grid } : null;
 }
 
+/**
+ * The session for a selection drag that is starting, or null when it has nothing to snap to: a switched-off snap, a rotation, a
+ * selection across pages, no page, or (0.17) the states' part editor's selection: its handles set the part's pose and the
+ * pose must land where the pen put it, not be pulled toward the grid or the guides.
+ */
+export function dragSnapSession(i: {
+	mode: SnapMode | "off"; kind: "move" | "scale" | "rotate"; crossPage: boolean; ownedByStates: boolean; page: Page | null;
+	strokes: ReadonlySet<Stroke>; elements: ReadonlySet<PageElement>; measure?: MeasureText;
+}): SnapSession | null {
+	if (i.mode === "off" || i.kind === "rotate" || i.crossPage || i.ownedByStates || !i.page) return null;
+	return buildSnapSession(i.page, i.mode, i.strokes, i.elements, i.measure);
+}
+
 export interface SnapDragInput {
 	kind: "move" | "scale";
 	/** Bounds of the selection before any matrix, page units. */
