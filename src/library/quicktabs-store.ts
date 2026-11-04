@@ -121,10 +121,16 @@ export class QuickTabsStore {
 
 	/** The notebook at `from` was renamed or moved to `to`: the tabs that point at it follow. */
 	retarget(from: string, to: string): Promise<void> {
+		return this.retargetMany([{ from, to }]);
+	}
+
+	/** Several renames, in order, in one read and one write (a renamed folder moves many notebooks at once). */
+	retargetMany(renames: ReadonlyArray<{ from: string; to: string }>): Promise<void> {
 		return this.enqueue(async () => {
+			if (renames.length === 0) return;
 			const own = await this.readOwn();
 			const { merged, others } = await this.readAll();
-			await this.writeOps(own, merged, others, [{ kind: "retarget", from, to }]);
+			await this.writeOps(own, merged, others, renames.map((r) => ({ kind: "retarget" as const, from: r.from, to: r.to })));
 		});
 	}
 

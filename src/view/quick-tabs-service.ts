@@ -7,7 +7,7 @@ import { TFile, type App, type Plugin } from "obsidian";
 import { t } from "../i18n";
 import { openNotebookAtPage } from "../integration/open";
 import { NotebookPickerModal } from "../integration/picker";
-import { QUICKTABS_MAX, resolveTab, type QuickTab } from "../library/quicktabs";
+import { QUICKTABS_MAX, RenameBatcher, resolveTab, type QuickTab } from "../library/quicktabs";
 import { QuickTabsBlockedError, type QuickTabsStore } from "../library/quicktabs-store";
 import { PromptModal } from "../library/library-modals";
 import type { NavPlace } from "../model/nav-history";
@@ -60,10 +60,17 @@ export class QuickTabsService {
 		plugin.registerEvent(vault.on("create", changed));
 		plugin.registerEvent(vault.on("modify", changed));
 		plugin.registerEvent(vault.on("delete", changed));
+		// A renamed folder fires one event per notebook in it: they are followed in one pass, not one read and write each.
+		const renames = new RenameBatcher(
+			(list) => void this.deps.store.retargetMany(list).catch((e) => console.error("[notebook] quick tabs could not follow a rename", e)),
+			(fn, ms) => {
+				const id = window.setTimeout(fn, ms);
+				return () => window.clearTimeout(id);
+			},
+		);
+		plugin.register(() => renames.flush());
 		plugin.registerEvent(vault.on("rename", (file, oldPath) => {
-			if (file instanceof TFile && isNotebookFile(file)) {
-				void this.deps.store.retarget(oldPath, file.path).catch((e) => console.error("[notebook] quick tabs could not follow a rename", e));
-			}
+			if (file instanceof TFile && isNotebookFile(file)) renames.add(oldPath, file.path);
 		}));
 	}
 

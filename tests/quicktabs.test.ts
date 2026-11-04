@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DeviceFileAdapter } from "../src/storage/device-files";
 import {
-	adoptQuickTabWinners, applyQuickTabOps, emptyQuickTabs, findPin, mergeQuickTabFiles, orderAtEnd, parseQuickTabs, planMove, pruneQuickTabTombstones, QUICKTABS_MAX,
+	adoptQuickTabWinners, applyQuickTabOps, emptyQuickTabs, findPin, mergeQuickTabFiles, orderAtEnd, parseQuickTabs, planMove, pruneQuickTabTombstones, QUICKTABS_MAX, RenameBatcher,
 	resolveTab, serializeQuickTabs, tabsFor, tabText, DAY_MS, TOMBSTONE_DAYS, type QuickTab, type QuickTabsFile, type StoredQuickTab,
 } from "../src/library/quicktabs";
 import { QuickTabsBlockedError, QuickTabsStore } from "../src/library/quicktabs-store";
@@ -223,6 +223,28 @@ describe("quick tabs store", () => {
 		expect(pruneQuickTabTombstones(mine, now, [file("0b000000", [tab("q1", 0, { at: old, deleted: true })])]).items).toHaveLength(0);
 		expect(pruneQuickTabTombstones(mine, now, [], false).items).toHaveLength(1);
 		expect(pruneQuickTabTombstones(mine, now, [file("0b000000", [tab("q9", 0)])]).items).toHaveLength(0);
+	});
+
+	it("a burst of renames is followed in one write, in order", async () => {
+		const adapter = new MemoryAdapter();
+		const store = make(adapter);
+		await store.pin(pin(1));
+		await store.pin({ ...pin(2), path: "N/b.notebook" });
+		adapter.writes.length = 0;
+		let fire: (() => void) | null = null;
+		const calls: Array<Array<{ from: string; to: string }>> = [];
+		const batcher = new RenameBatcher((l) => { calls.push(l); void store.retargetMany(l); }, (fn) => { fire = fn; return () => { fire = null; }; });
+		batcher.add("N/a.notebook", "M/a.notebook");
+		batcher.add("N/b.notebook", "M/b.notebook");
+		batcher.add("M/b.notebook", "M/c.notebook"); // renamed again in the same burst
+		expect(calls).toHaveLength(0);
+		fire!();
+		expect(calls).toHaveLength(1);
+		await store.load();
+		expect(adapter.writes).toHaveLength(1);
+		expect(store.list("nb1").map((t) => t.path)).toEqual(["M/a.notebook", "M/c.notebook"]);
+		batcher.flush(); // nothing waiting: nothing handed over
+		expect(calls).toHaveLength(1);
 	});
 
 	it("follows a renamed notebook", async () => {

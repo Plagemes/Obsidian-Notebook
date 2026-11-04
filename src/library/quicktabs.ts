@@ -258,6 +258,40 @@ export function tabText(tab: QuickTab, index: number | null, page: (n: number) =
 	return tab.label ? tab.label : page(index !== null ? index + 1 : tab.num);
 }
 
+// ------------------------------------------------------------------ renames
+
+/**
+ * Collects the renames of a burst (a folder renamed with N notebooks in it fires N events) and hands them over together, once
+ * `delay` ms after the last one, in the order they happened, so the store reads and writes its files once for all of them.
+ * `schedule` starts a timer and returns what cancels it (tests give a fake one).
+ */
+export class RenameBatcher {
+	private pending: Array<{ from: string; to: string }> = [];
+	private cancel: (() => void) | null = null;
+
+	constructor(
+		private readonly flushTo: (renames: Array<{ from: string; to: string }>) => void,
+		private readonly schedule: (fn: () => void, ms: number) => () => void,
+		private readonly delay = 400,
+	) {}
+
+	add(from: string, to: string): void {
+		if (from === to) return;
+		this.pending.push({ from, to });
+		this.cancel?.();
+		this.cancel = this.schedule(() => this.flush(), this.delay);
+	}
+
+	/** Hands over what is waiting now (also used when the plugin unloads). */
+	flush(): void {
+		this.cancel?.();
+		this.cancel = null;
+		const renames = this.pending;
+		this.pending = [];
+		if (renames.length > 0) this.flushTo(renames);
+	}
+}
+
 // ------------------------------------------------------------------ changes
 
 export type QuickTabOp =
