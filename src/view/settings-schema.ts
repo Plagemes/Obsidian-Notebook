@@ -8,6 +8,7 @@
  *
  * Pure: no 'obsidian' import (tested in Node). Texts are i18n keys; the tab translates them.
  */
+import { GHOST_SPACINGS_MM } from "../model/ghost-lines";
 import type { MessageKey } from "../i18n/en";
 import { LANGUAGES, LANGUAGE_CODES } from "../i18n/languages";
 import { PAGE_SIZES, PAPER_KINDS } from "../model/types";
@@ -169,6 +170,15 @@ const WRITING: SettingSpec[] = [
 	{
 		id: "snapStrength", section: "writing", order: 56, name: "settings.snapStrength", desc: "settings.snapStrength.desc",
 		control: { type: "slider", min: SNAP_STRENGTH_MIN, max: SNAP_STRENGTH_MAX, step: SNAP_STRENGTH_STEP, format: suffix("px") }, parent: "snapMode", visible: (s) => s.snapMode !== "off",
+	},
+	// 0.20 ghost lines (#94): faint temporary guide lines on blank paper
+	{
+		id: "ghostLines", section: "writing", order: 57, name: "settings.ghostLines", desc: "settings.ghostLines.desc", keywords: "ghost guide lines baseline straight blank paper handwriting righe guida linee scrittura dritta",
+		control: { type: "dropdown", options: options([["off", "settings.ghostLines.off"], ["writing", "settings.ghostLines.writing"], ["always", "settings.ghostLines.always"]]) },
+	},
+	{
+		id: "ghostSpacing", section: "writing", order: 57.5, name: "settings.ghostSpacing", desc: "settings.ghostSpacing.desc",
+		control: { type: "dropdown", options: (tr) => ({ auto: tr("settings.ghostSpacing.auto"), ...Object.fromEntries(GHOST_SPACINGS_MM.map((mm) => [String(mm), `${mm} mm`])) }) }, parent: "ghostLines", visible: (s) => s.ghostLines !== "off",
 	},
 	// 0.19 checklists (#103): a small square drawn with the pen
 	{

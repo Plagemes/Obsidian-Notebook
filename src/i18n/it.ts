@@ -3596,4 +3596,13 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"lectureLog.count.pages": "{n} pagine",
 	"lectureLog.count.question": "1 domanda aperta",
 	"lectureLog.count.questions": "{n} domande aperte",
+	// 0.20 ghostlines
+	"settings.ghostLines": "Righe guida fantasma",
+	"settings.ghostLines.desc": "Righe tratteggiate leggere sulla carta bianca. Mai salvate né esportate.",
+	"settings.ghostLines.off": "No",
+	"settings.ghostLines.writing": "Mentre scrivi",
+	"settings.ghostLines.always": "Sempre sulla carta bianca",
+	"settings.ghostSpacing": "Distanza delle righe guida",
+	"settings.ghostSpacing.desc": "Segui la tua scrittura oppure una spaziatura fissa.",
+	"settings.ghostSpacing.auto": "Auto (dalla tua scrittura)",
 };

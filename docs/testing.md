@@ -2818,3 +2818,23 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 |---|---|---|---|---|---|
 | Automatic snapshot at the end of a lecture (#222): lecture mode left, class over or notebook closed after writing in a class (one shared end with the lecture log; the app going to the background does not end it); from the saved file after the flush; only if changed | yes | pure decision, names, retention, fingerprint, label file: yes; vault and view wiring: no (needs a real vault and timetable) | | | |
 | Lecture snapshots: own retention count, label, "Lecture snapshots" filter in version history | yes | pure logic: yes; list pieces: harness (`doc=snapshot`) | | | |
+
+### 0.20 — ghostlines: ghost guide lines on blank paper (steps 1760-1779)
+
+Ghost guide lines (roadmap #94). Settings, Writing: *Ghost guide lines* (off / while writing / always on blank paper) and *Guide spacing* (auto, or 6-10 mm). Use a notebook with a blank page. Implemented, not verified on hardware.
+
+1760. **Off by default.** Write a line of text on a blank page: no guides appear. The *Guide spacing* row is hidden while the setting is off.
+1761. **While writing.** Choose *While writing*. Write a first line of at least four or five letters/words: after the stroke ends, two faint dashed lines appear, the baseline of what you wrote and the next one below it (the next one a little stronger). A single stroke or a drawing does not show them.
+1762. **Fade.** Stop writing: after about a second and a half the guides fade out over a moment. Start another stroke before that: they stay and the wait starts again.
+1763. **Next line.** Write a second line: the guides follow your last complete line; the spacing between them matches the distance between your two lines (auto).
+1764. **Tilt.** Write a line that slopes slightly upward: the guides slope with it. A line sloping more than about 12 degrees is treated as flat.
+1765. **Drawing.** Draw a big shape (a circle, a diagram) among the text: it does not move the guides.
+1766. **Fixed spacing.** Set *Guide spacing* to 8 mm: the distance between the two guides is 8 mm whatever your writing size.
+1767. **Always.** Choose *Always on blank paper*: the guides stay after a pause (they update with each stroke). They are not there before you have written a first line.
+1768. **Other paper.** On ruled, grid or dotted paper no guides are drawn. Switching a page to blank paper and writing shows them.
+1769. **Overlay only.** Undo/redo removes the guides; they are not in the saved notebook, a PDF/PNG/SVG export or Print, and the file is unchanged by them.
+1770. **Night and zoom.** In night mode they are light grey; zoomed in or out they stay one pixel wide; writing stays smooth (no extra lag).
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Ghost guide lines on blank paper (#94): baseline and next line inferred from the newest strokes, faint dashed overlay on the live layer, off / while writing / always, auto or fixed spacing, never saved or exported | yes | inference (baseline, line height, tilt tolerance, descenders, drawings as outliers, fallback to the last complete line, fixed spacing), segments, fade, settings: `tests/ghost-lines.test.ts`; harness `doc=ghostlines` | | | not tried with a real hand on a tablet; the thresholds (tilt 12 degrees, spacing from stroke height) are a guess |

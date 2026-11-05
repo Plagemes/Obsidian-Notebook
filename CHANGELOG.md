@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### ghostlines
+- **Ghost guide lines on blank paper (#94).** After a first line of handwriting on blank paper, two faint dashed guides (the baseline of the line you wrote and the next one) appear near the pen and fade after a short pause. The baseline and line height are inferred from the newest strokes when a stroke ends (drawings and descenders are ignored, a slightly tilted line is followed); nothing runs per frame. Settings: *Ghost guide lines* (off / while writing / always on blank paper) and *Guide spacing* (auto or 6-10 mm). Overlay only on the live layer: never saved, exported or printed. No format change. Pure logic in `src/model/ghost-lines.ts` (tests: `tests/ghost-lines.test.ts`). Harness: `dev/harness/ghostlines-check.ts` (`doc=ghostlines`).
+
+
 ## 0.19.0 — 2026-11-05
 
 Handwritten tasks and a lecture you can follow up from your notes: checkboxes drawn with the pen that tick the tasks in your Markdown notes, a lecture log line in the daily note and an automatic snapshot at the end of each lecture, a gallery of the figures of a lecture, a clean copy of the notes to share, a list of things to look up later, typed text that Obsidian's search can find, and notebooks made from note templates. The notebook format moves to version 17: 0.18 and older open a v17 file read-only and never overwrite it.
