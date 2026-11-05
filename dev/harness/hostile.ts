@@ -119,7 +119,7 @@ export async function checkHostile(surface: string): Promise<Result[]> {
 	const dlg = () => document.querySelector<HTMLElement>(".notebook-create-modal");
 	await hostileDialog("notebook");
 	const nb = dlg();
-	add("the dialog opens with two tabs", !!nb && nb.querySelectorAll(".nb-create-tab").length === 2);
+	add("the dialog opens with three tabs (Notebook, Folder, Planner)", !!nb && nb.querySelectorAll(".nb-create-tab").length === 3);
 	add("Notebook tab: name, description, folder, paper tiles, sizes, orientation, footer", !!nb && !!nb.querySelector(".nb-create-name") && !!nb.querySelector(".nb-create-description")
 		&& !!nb.querySelector("#nb-create-folder") && nb.querySelectorAll(".nb-create-paper").length === PAPER_KINDS.length && nb.querySelectorAll(".nb-create-chip").length >= 5
 		&& nb.querySelectorAll(".nb-create-orient-tile").length === 2 && !!nb.querySelector(".nb-create-primary") && !!nb.querySelector(".nb-create-secondary"));

@@ -193,7 +193,8 @@ export async function checkCreate(api: CreateCheckApi, finalTab: CreateTab): Pro
 	await frames();
 	type(q<HTMLInputElement>(".nb-create-name"), "Fisiologia");
 	q(".nb-create-tab.is-active")!.focus();
-	key(q(".nb-create-tab.is-active"), "ArrowRight");
+	// Tabs are Notebook, Planner, Folder (0.20): ArrowLeft from the first wraps to Folder.
+	key(q(".nb-create-tab.is-active"), "ArrowLeft");
 	await frames();
 	add("the arrow keys switch to the Folder tab and keep the name", q(".nb-create-tab.is-active")?.textContent === "Folder" && q<HTMLInputElement>(".nb-create-name")?.value === "Fisiologia");
 	add("the folder preview is the library's subject card", !!q(".nb-create-card-frame .nb-subject-card.is-tile img.nb-folder-icon") && q(".nb-create-card-frame .nb-subject-title")?.textContent === "Fisiologia");
