@@ -68,6 +68,15 @@ export function lineRuns(text: string, lines: readonly string[], links: readonly
 	});
 }
 
+/**
+ * 0.20 review (N5): `links` with `start` and `end` counted in code points instead of UTF-16 units, for text that is cut per code
+ * point (the PDF export writes one WinAnsi code per code point). An emoji before a link is two units but one code point.
+ */
+export function linksInCodePoints(text: string, links: readonly TextLink[]): TextLink[] {
+	const count = (upto: number): number => Array.from(text.slice(0, upto)).length;
+	return links.map((l) => ({ ...l, start: count(l.start), end: count(l.end) }));
+}
+
 export interface LinkRect {
 	link: TextLink;
 	x: number;

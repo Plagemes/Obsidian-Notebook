@@ -18,7 +18,7 @@ import { HIGHLIGHTER_ALPHA, strokeOutline } from "./stroke-shape";
 import { layerFlags, type ExportLayers, type LayerFlags } from "./export-layers";
 import { HEADER_COLOR_DAY, type HeaderLayout } from "./page-header";
 import { helveticaCodeWidth, helveticaWidth, toWinAnsi, wrapHelvetica } from "../pdf/helvetica";
-import { LINK_COLOR, lineRuns, shownText } from "./link-text";
+import { LINK_COLOR, lineRuns, linksInCodePoints, shownText } from "./link-text";
 import { tileLabel, type SplitPlan } from "./export-tiles";
 
 /**
@@ -737,9 +737,9 @@ function textOps(el: TextElement): string {
 	const shown = shownText(el.text);
 	const lines = wrapHelvetica(shown.text, size, Math.max(el.width, 1));
 	const out = ["BT", `/F1 ${num(size)} Tf`, `${rgb(el.color)} rg`];
-	// The lines as strings of WinAnsi codes, to cut them into plain and linked runs.
+	// The lines as strings of WinAnsi codes (one per code point), to cut them into plain and linked runs; the link offsets follow.
 	const asCodes = (s: string) => String.fromCharCode(...toWinAnsi(s));
-	const runs = shown.links.length > 0 ? lineRuns(shown.text.split("\n").map(asCodes).join("\n"), lines.map((codes) => String.fromCharCode(...codes)), shown.links) : null;
+	const runs = shown.links.length > 0 ? lineRuns(shown.text.split("\n").map(asCodes).join("\n"), lines.map((codes) => String.fromCharCode(...codes)), linksInCodePoints(shown.text, shown.links)) : null;
 	const underlines: string[] = [];
 	lines.forEach((codes, i) => {
 		if (codes.length === 0) return;
