@@ -108,7 +108,9 @@ export async function checkVdiff(api: VdiffCheckApi): Promise<{ ok: boolean; res
 	const restore = root?.querySelector<HTMLButtonElement>(".nb-vdiff-restore") ?? null;
 	add("the restore button names the version", restore?.textContent?.includes("2026-11-03") === true, restore?.textContent ?? "");
 	add("the restore button is a 40 px target", !!restore && restore.getBoundingClientRect().height >= 40);
-	// The next changed page after "work" is "added": no earlier version, so it cannot be restored.
+	// The next changed page after "work" is the removed one, then "added" (the unchanged page between is skipped): no earlier version, so it cannot be restored.
+	root?.querySelectorAll<HTMLElement>(".nb-vdiff-nav")[1]?.click();
+	await sleep(40);
 	root?.querySelectorAll<HTMLElement>(".nb-vdiff-nav")[1]?.click();
 	await sleep(40);
 	add("next goes to the added page", rows().find((r) => r.classList.contains("is-selected"))?.dataset.page === "added");
