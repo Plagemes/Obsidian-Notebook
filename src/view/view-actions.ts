@@ -37,7 +37,7 @@ export function sizeName(page: Page): PageSizeName | null {
 }
 
 /** The commands that work on a selection (layer order; wave 0.10: align, distribute, rotate, mirror, size, select similar). */
-const SELECTION_ONLY = /^(layer-|comment-selection$|selection-(move-page|copy-page|align|distribute|rotate|mirror|resize|transform|similar|part)|select-same-)/;
+const SELECTION_ONLY = /^(layer-|comment-selection$|selection-(move-page|copy-page|align|distribute|rotate|mirror|resize|transform|similar|part|group|ungroup|lock)|select-same-)/;
 
 /** Whether a command of the registry applies to this view now (the palette hides it otherwise). */
 export function commandApplies(view: NotebookView, id: string): boolean {
@@ -51,6 +51,8 @@ export function commandApplies(view: NotebookView, id: string): boolean {
 	if (id === "excerpt-open-source") return (view.uiContext().selection?.excerpts ?? 0) > 0;
 	// wave 0.10 (362): copying to the other devices needs a selection (pasting does not).
 	if (id === "selection-copy-devices") return !!view.uiContext().selection;
+	// 0.20 (#39): there has to be a locked element on the page in view.
+	if (id === "locked-elements") return (view.uiContext().page?.lockedElements ?? 0) > 0;
 	// 0.18 (#86): there has to be an open comment to go to.
 	if (id === "comment-next") return (view.uiContext().comments?.open ?? 0) > 0;
 	// wave 0.10 (81): there is no print dialog on a phone or tablet.
@@ -211,6 +213,11 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"checkbox-label": (v) => v.checklistTools?.editLabel(),
 	"checkbox-task": (v) => v.checklistTools?.sendTask(),
 	"checkbox-unlink": (v) => v.checklistTools?.unlinkSelected(),
+	// 0.20 (#39): groups and locked elements
+	"selection-group": (v) => v.groupTools?.group(),
+	"selection-ungroup": (v) => v.groupTools?.ungroup(),
+	"selection-lock": (v) => v.groupTools?.lockSelected(),
+	"locked-elements": onPage((v, _p, index) => v.groupTools?.openList(index)),
 	"insert-date-stamp": (v) => v.insertDateStamp(),
 	"stamps": (v) => v.stampPalette?.toggle(),
 	"board-shot": (v) => void v.boardShot(),

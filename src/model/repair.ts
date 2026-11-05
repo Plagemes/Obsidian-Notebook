@@ -32,9 +32,9 @@ import { parseLenient } from "./lenient-json";
 import { detectVersion, migrate, type RawObject } from "./migrations";
 import { normalizePageTags } from "./page-tags";
 import { normalizePosition } from "./position";
-import { parse, readPageComments, readPageStates, readSlides, serializeChecked, validate, MAX_FONT_SIZE } from "./serialize";
+import { freezeElement, freezeStroke, liveGroups, parse, readPageComments, readPageStates, readSlides, serializeChecked, validate, MAX_FONT_SIZE } from "./serialize";
 import {
-	A4_HEIGHT, A4_WIDTH, CURRENT_VERSION, DEFAULT_META, FORMAT_ID, PAPER_SPACING, RENDER_FREEHAND, RENDER_VERSIONS, TOOLS,
+	A4_HEIGHT, A4_WIDTH, CURRENT_VERSION, DEFAULT_META, FORMAT_ID, GROUP_ID_MAX, PAPER_SPACING, RENDER_FREEHAND, RENDER_VERSIONS, TOOLS,
 	type Asset, type BookmarkInfo, type NotebookDocument, type NotebookMeta, type Page, type PageComment, type PageElement, type PageStates, type ReadingPosition, type SlideRef, type Stroke,
 } from "./types";
 
@@ -632,8 +632,8 @@ function salvageStrokes(raw: unknown, skeleton: RawObject, ctx: SalvageContext):
 			return;
 		}
 		if (r === "taken") {
-			const copy = tryDoc([{ ...skeleton, strokes: [{ ...stroke, id: createId() }] }], ctx.assets, undefined, ctx.slides);
-			const fresh = copy?.pages[0]?.strokes[0];
+			const copy = tryDoc([{ ...skeleton, strokes: [{ ...splitGroup(stroke).bare as object, id: createId() }] }], ctx.assets, undefined, ctx.slides);
+			const fresh = withGroup(copy?.pages[0]?.strokes[0], stroke.group);
 			if (!fresh) {
 				s.strokes.lost++;
 				return;
@@ -648,7 +648,10 @@ function salvageStrokes(raw: unknown, skeleton: RawObject, ctx: SalvageContext):
 		else s.strokes.recovered++;
 	};
 	for (const item of list) {
-		const asIs = tryDoc([{ ...skeleton, strokes: [item] }], ctx.assets, undefined, ctx.slides)?.pages[0]?.strokes[0];
+		// v18: the group needs the other members of its page, which a one-item page does not have: it is read apart and put back.
+		const { bare, group, invalid } = splitGroup(item);
+		if (invalid) s.fieldsReset++;
+		const asIs = withGroup(tryDoc([{ ...skeleton, strokes: [bare] }], ctx.assets, undefined, ctx.slides)?.pages[0]?.strokes[0], group);
 		if (asIs) {
 			s.unknownFields += unknownKeys(item, asIs);
 			// A stroke cut off by the damage keeps the points before it: kept, but not "as it was".
@@ -656,11 +659,38 @@ function salvageStrokes(raw: unknown, skeleton: RawObject, ctx: SalvageContext):
 			accept(asIs, cut);
 			continue;
 		}
-		const fixed = fixStroke(item, new Set(ctx.slides.map((r) => r.id)));
-		const repaired = fixed ? tryDoc([{ ...skeleton, strokes: [fixed] }], ctx.assets, undefined, ctx.slides)?.pages[0]?.strokes[0] : undefined;
+		const fixed = fixStroke(bare, new Set(ctx.slides.map((r) => r.id)));
+		const repaired = withGroup(fixed ? tryDoc([{ ...skeleton, strokes: [fixed] }], ctx.assets, undefined, ctx.slides)?.pages[0]?.strokes[0] : undefined, group);
 		if (repaired) accept(repaired, true);
 		else s.strokes.lost++;
 	}
+	return out;
+}
+
+/**
+ * v18: `item` without its `group` and that group id when it is a valid one (`invalid`: it had one that is not). The group needs the
+ * other members of the page, so it is read apart from the one-item pages the items are checked on, and put back with `withGroup`.
+ */
+function splitGroup(item: unknown): { bare: unknown; group: string | undefined; invalid: boolean } {
+	if (!isObj(item) || !("group" in item)) return { bare: item, group: undefined, invalid: false };
+	const { group, ...bare } = item;
+	const ok = typeof group === "string" && group.length > 0 && group.length <= GROUP_ID_MAX;
+	return { bare, group: ok ? group : undefined, invalid: !ok };
+}
+
+/** `item` in group `group` (a frozen copy); `item` itself without one. */
+function withGroup<T extends Stroke | PageElement>(item: T | undefined, group: string | undefined): T | undefined {
+	if (item === undefined || group === undefined) return item;
+	const copy = { ...item, group };
+	return ("type" in copy ? freezeElement(copy) : freezeStroke(copy)) as unknown as T;
+}
+
+/** v18: the lock flags of `item` carried onto `fixed` (the builders of a repaired element know no flags). */
+function withLockOf(fixed: RawObject, item: unknown): RawObject {
+	if (!isObj(item)) return fixed;
+	const out = { ...fixed };
+	if (item.locked === true) out.locked = true;
+	if (typeof item.lockAt === "number" && Number.isSafeInteger(item.lockAt) && item.lockAt >= 0) out.lockAt = item.lockAt;
 	return out;
 }
 
@@ -669,13 +699,15 @@ function salvageElements(raw: unknown, skeleton: RawObject, ctx: SalvageContext)
 	const s = ctx.summary;
 	const out: PageElement[] = [];
 	for (const item of list) {
-		let el = tryDoc([{ ...skeleton, elements: [item] }], ctx.assets)?.pages[0]?.elements?.[0];
+		const { bare, group, invalid } = splitGroup(item);
+		if (invalid) s.fieldsReset++;
+		let el = withGroup(tryDoc([{ ...skeleton, elements: [bare] }], ctx.assets)?.pages[0]?.elements?.[0], group);
 		let repaired = false;
 		if (el) {
 			s.unknownFields += unknownKeys(item, el);
 		} else {
-			const fixed = fixElement(item, ctx.assets);
-			el = fixed ? tryDoc([{ ...skeleton, elements: [fixed] }], ctx.assets)?.pages[0]?.elements?.[0] : undefined;
+			const fixed = fixElement(bare, ctx.assets);
+			el = withGroup(fixed ? tryDoc([{ ...skeleton, elements: [withLockOf(fixed, bare)] }], ctx.assets)?.pages[0]?.elements?.[0] : undefined, group);
 			repaired = true;
 		}
 		if (!el) {
@@ -689,7 +721,7 @@ function salvageElements(raw: unknown, skeleton: RawObject, ctx: SalvageContext)
 			continue;
 		}
 		if (r === "taken") {
-			const fresh = tryDoc([{ ...skeleton, elements: [{ ...el, id: createId() }] }], ctx.assets)?.pages[0]?.elements?.[0];
+			const fresh = withGroup(tryDoc([{ ...skeleton, elements: [{ ...(splitGroup(el).bare as object), id: createId() }] }], ctx.assets)?.pages[0]?.elements?.[0], el.group);
 			if (!fresh) {
 				s.elements.lost++;
 				continue;
@@ -815,6 +847,14 @@ function salvage(raw: RawObject, summary: RepairSummary, now: Date, cut: WeakSet
 		const page = tryDoc([skeleton], assets)!.pages[0]!;
 		page.strokes = strokes;
 		if (elements.length > 0) page.elements = elements;
+		// v18: a group with fewer than two members left on the page (the others were lost) is released, and counted once; the writer
+		// leaves out the group of a lone member, so only the count is made here.
+		const live = liveGroups(page);
+		if (live !== null) {
+			const lone = new Set<string>();
+			for (const item of [...strokes, ...elements]) if (item.group !== undefined && !live.has(item.group)) lone.add(item.group);
+			summary.fieldsReset += lone.size;
+		}
 		// v13: the states are kept with the lenient reader against the strokes that were salvaged (a part keeps the strokes
 		// that survived; what is invalid is left out and counted as a reset field).
 		const states = salvageStates(p.states, strokes, summary);

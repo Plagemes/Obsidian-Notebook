@@ -14,11 +14,11 @@ import { normalizePageTags } from "./page-tags";
 import { STICKY_INK_MAX, STICKY_MAX_FONT, STICKY_MAX_SIZE, STICKY_MIN_FONT, STICKY_MIN_SIZE, STICKY_TEXT_MAX } from "./sticky";
 import { normalizePosition } from "./position";
 import {
-	COVER_ART_STYLES, CURRENT_VERSION, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, ELEMENT_TYPES_V15, ELEMENT_TYPES_V17, FORMAT_ID, META_DESCRIPTION_MAX, PAPER_KINDS, RENDER_VERSIONS, TOOLS,
+	COVER_ART_STYLES, CURRENT_VERSION, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, ELEMENT_TYPES_V15, ELEMENT_TYPES_V17, FORMAT_ID, GROUP_ID_MAX, META_DESCRIPTION_MAX, PAPER_KINDS, RENDER_VERSIONS, TOOLS,
 	SLIDE_ID_MAX, SLIDE_PATH_MAX, SLIDE_SOURCE_MAX, type SlideRef,
 	STATES_ID_MAX, STATES_MAX_ITEMS, STATES_MAX_PARTS, STATES_MAX_ROT, STATES_MAX_SCALE, STATES_MAX_SHIFT, STATES_MAX_STATES, STATES_MIN_SCALE, STATES_NAME_MAX,
 	type PageState, type PageStates, type PartPose, type StatePart,
-	type Asset, type CheckboxElement, type CoverArt, type CoverArtStyle, type AssetKind, type BookmarkInfo, type BoxElement, type EquationElement, type ExcerptElement, type ExcerptSource, type GraphElement, type GraphFunction, type GraphParam,
+	type Asset, type CheckboxElement, type ElementFlags, type CoverArt, type CoverArtStyle, type AssetKind, type BookmarkInfo, type BoxElement, type EquationElement, type ExcerptElement, type ExcerptSource, type GraphElement, type GraphFunction, type GraphParam,
 	type GraphPiece, type GraphTable, type GraphViewport, type ImageElement, type MarkerElement, type NotebookDocument, type NotebookMeta, type Page,
 	type PageBackground, type PageComment, type PageElement, type PageMargins, type PaperKind, type Point, type ReadingPosition, type RenderVersion, type StickyElement, type Stroke,
 	type TextElement, type Tool,
@@ -58,10 +58,51 @@ function fail(path: string, what: string): never {
 }
 
 function strokeLine(s: Stroke): string {
-	// v8: `hidden` only when set, between render and points; v12: `slide` only when set, after `hidden`.
+	// v8: `hidden` only when set, between render and points; v12: `slide` only when set, after `hidden`; v18: `group` only when set, after `slide`.
 	const hidden = s.hidden !== undefined ? `,"hidden":${j(s.hidden)}` : "";
 	const slide = s.slide !== undefined ? `,"slide":${j(s.slide)}` : "";
-	return `\t\t\t\t{"id":${j(s.id)},"tool":${j(s.tool)},"color":${j(s.color)},"width":${j(s.width)},"render":${j(s.render)}${hidden}${slide},"points":${j(s.points)}}`;
+	const group = s.group !== undefined ? `,"group":${j(s.group)}` : "";
+	return `\t\t\t\t{"id":${j(s.id)},"tool":${j(s.tool)},"color":${j(s.color)},"width":${j(s.width)},"render":${j(s.render)}${hidden}${slide}${group},"points":${j(s.points)}}`;
+}
+
+/**
+ * v18: the optional flags every element carries (`ElementFlags`) written at the end of the element's line: the group, the lock
+ * and the time of the last lock decision, in that order. `line` is the element's line without them (it ends with `}`).
+ */
+function withFlags(line: string, e: ElementFlags): string {
+	let extra = "";
+	if (e.group !== undefined) extra += `,"group":${j(e.group)}`;
+	if (e.locked === true) extra += `,"locked":true`;
+	if (e.lockAt !== undefined) extra += `,"lockAt":${j(e.lockAt)}`;
+	return extra === "" ? line : `${line.slice(0, -1)}${extra}}`;
+}
+
+/** v18: a copy of `item` without its group (the same object when it has none). */
+function withoutGroup<T extends Stroke | PageElement>(item: T): T {
+	if (item.group === undefined) return item;
+	const copy = { ...item };
+	delete copy.group;
+	return copy;
+}
+
+/**
+ * v18: the ids of the groups of `page` that have at least two members (strokes and elements together). The writer leaves out the
+ * group of a member of any other group (a group of one is nothing), so an erased member never makes a notebook unsavable.
+ * Null when the page has no group at all (the usual case costs one pass).
+ */
+export function liveGroups(page: Pick<Page, "strokes" | "elements">): ReadonlySet<string> | null {
+	let counts: Map<string, number> | null = null;
+	const count = (g: string | undefined) => {
+		if (g === undefined) return;
+		counts ??= new Map();
+		counts.set(g, (counts.get(g) ?? 0) + 1);
+	};
+	for (const s of page.strokes) count(s.group);
+	for (const e of page.elements ?? []) count(e.group);
+	if (counts === null) return null;
+	const live = new Set<string>();
+	for (const [g, n] of counts as Map<string, number>) if (n >= 2) live.add(g);
+	return live;
 }
 
 /** v12 slide reference: id, source, page, then the path when present. */
@@ -225,6 +266,10 @@ function checkboxLine(e: CheckboxElement): string {
 }
 
 function elementLine(e: PageElement): string {
+	return withFlags(typedElementLine(e), e);
+}
+
+function typedElementLine(e: PageElement): string {
 	if (e.type === "text") {
 		return `\t\t\t\t{"id":${j(e.id)},"type":"text","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"text":${j(e.text)},"fontSize":${j(e.fontSize)},"color":${j(e.color)}}`;
 	}
@@ -301,9 +346,14 @@ function assemble(
 ): string {
 	const slides = slidesInUse(doc);
 	const pages = doc.pages.map((page) => {
-		const strokes = page.strokes.map((s) => lineOf(slides.stroke(s)));
+		// v18: a group of fewer than two members is not written (it is a nothing: the member is written without it).
+		const live = liveGroups(page);
+		const strokes = page.strokes.map((s) => lineOf(live !== null && s.group !== undefined && !live.has(s.group) ? withoutGroup(slides.stroke(s)) : slides.stroke(s)));
 		// v15: a collapsed note names only strokes that are on its page (ids of strokes that are gone are not written).
-		const elements = (page.elements ?? []).map((e) => elementLineOf(e.type === "sticky" && e.ink ? withLiveInk(e, page.strokes) : e));
+		const elements = (page.elements ?? []).map((e) => {
+			const shown = live !== null && e.group !== undefined && !live.has(e.group) ? withoutGroup(e) : e;
+			return elementLineOf(shown.type === "sticky" && shown.ink ? withLiveInk(shown, page.strokes) : shown);
+		});
 		const out = [
 			"\t\t{",
 			`\t\t\t"id": ${j(page.id)},`,
@@ -413,7 +463,7 @@ function readPoint(v: unknown, path: string): Point {
  */
 type SlideIds = ReadonlySet<string> | "any" | "ignore";
 
-function readStroke(v: unknown, path: string, drop: Dropped | null = null, slides: SlideIds = "any"): Stroke {
+function readStroke(v: unknown, path: string, drop: Dropped | null = null, slides: SlideIds = "any", groups = true): Stroke {
 	if (!isObject(v)) fail(path, "expected an object");
 	const id = str(v.id, `${path}.id`);
 	if (!TOOLS.includes(v.tool as Tool)) fail(`${path}.tool`, "unknown tool");
@@ -441,7 +491,34 @@ function readStroke(v: unknown, path: string, drop: Dropped | null = null, slide
 	const stroke: Stroke = { id, tool, color: v.color, width, render, points };
 	if (hidden) stroke.hidden = hidden;
 	if (slide !== undefined) stroke.slide = slide;
+	// v18: the group (a file of an older format has none of ours: an odd `group` key is ignored, as the migration drops it). A detail:
+	// an invalid id is dropped and counted when reading leniently (the stroke is then simply not grouped).
+	if (groups && v.group !== undefined) {
+		const group = orDrop(drop, () => boundedId(v.group, `${path}.group`, GROUP_ID_MAX));
+		if (group !== undefined) stroke.group = group;
+	}
 	return stroke;
+}
+
+/**
+ * v18: the flags of an element (`ElementFlags`): the group, the lock and the time of the last lock decision. Details: an invalid one
+ * is dropped and counted when reading leniently (the element is then not grouped, not locked, or has no time). A file of an older
+ * format has none of ours (the migration drops odd keys), which `groups` false stands for when a page is read on its own.
+ */
+function readFlags(v: RawObject, el: PageElement, path: string, drop: Dropped | null, groups: boolean): PageElement {
+	if (!groups) return el;
+	if (v.group !== undefined) {
+		const group = orDrop(drop, () => boundedId(v.group, `${path}.group`, GROUP_ID_MAX));
+		if (group !== undefined) el.group = group;
+	}
+	if (readTrue(v.locked, `${path}.locked`, drop)) el.locked = true;
+	const lockAt = orDrop(drop, () => {
+		if (v.lockAt === undefined) return undefined;
+		if (typeof v.lockAt !== "number" || !Number.isSafeInteger(v.lockAt) || v.lockAt < 0) fail(`${path}.lockAt`, "expected a time in ms");
+		return v.lockAt;
+	});
+	if (lockAt !== undefined) el.lockAt = lockAt;
+	return el;
 }
 
 /**
@@ -648,7 +725,12 @@ function readMargins(v: unknown, path: string, width: number, height: number): P
 	return { left, right, bottom };
 }
 
-function readElement(v: unknown, path: string, assets: Assets, drop: Dropped | null = null): PageElement {
+function readElement(v: unknown, path: string, assets: Assets, drop: Dropped | null = null, groups = true): PageElement {
+	const el = readTypedElement(v, path, assets, drop);
+	return isObject(v) ? readFlags(v, el, path, drop, groups) : el;
+}
+
+function readTypedElement(v: unknown, path: string, assets: Assets, drop: Dropped | null): PageElement {
 	if (!isObject(v)) fail(path, "expected an object");
 	const id = str(v.id, `${path}.id`);
 	if (v.type === "text") {
@@ -1233,7 +1315,29 @@ function readAssets(v: unknown): Record<string, Asset> {
 	return assets;
 }
 
-function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null = null, slides: SlideIds = new Set<string>(), withStates = true, withLocked = true, withComments = true): Page {
+/**
+ * v18: releases the members of every group of `page` that has fewer than two (strokes and elements together), counting each such
+ * group once in `drop`; with no `drop` (strict) it fails instead. The page is edited in place (its lists are the reader's own).
+ */
+function dissolveSmallGroups(page: Page, path: string, drop: Dropped | null): void {
+	const live = liveGroups(page);
+	if (live === null) return;
+	const dead = new Set<string>();
+	for (const s of page.strokes) if (s.group !== undefined && !live.has(s.group)) dead.add(s.group);
+	for (const e of page.elements ?? []) if (e.group !== undefined && !live.has(e.group)) dead.add(e.group);
+	if (dead.size === 0) return;
+	if (!drop) fail(path, "a group has fewer than two members");
+	drop.count += dead.size;
+	page.strokes.forEach((s, i) => {
+		if (s.group !== undefined && dead.has(s.group)) page.strokes[i] = freezeStroke(withoutGroup(s));
+	});
+	const els = page.elements;
+	els?.forEach((e, i) => {
+		if (e.group !== undefined && dead.has(e.group)) els[i] = freezeElement(withoutGroup(e));
+	});
+}
+
+function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null = null, slides: SlideIds = new Set<string>(), withStates = true, withLocked = true, withComments = true, withGroups = true): Page {
 	if (!isObject(v)) fail(path, "expected an object");
 	const id = str(v.id, `${path}.id`);
 	const width = positive(v.width, `${path}.width`);
@@ -1245,7 +1349,7 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, dr
 	if (spacing < MIN_PAPER_SPACING) fail(`${path}.paper.spacing`, `must be at least ${MIN_PAPER_SPACING} pt`);
 	if (!Array.isArray(v.strokes)) fail(`${path}.strokes`, "expected an array");
 	const strokes = v.strokes.map((s, i) => {
-		const stroke = readStroke(s, `${path}.strokes[${i}]`, drop, slides);
+		const stroke = readStroke(s, `${path}.strokes[${i}]`, drop, slides, withGroups);
 		if (ids.has(stroke.id)) fail(`${path}.strokes[${i}].id`, "duplicate id");
 		ids.add(stroke.id);
 		freezeStroke(stroke);
@@ -1272,7 +1376,7 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, dr
 			// reading leniently.
 			const v8 = isObject(e) && typeof e.type === "string"
 				&& (ELEMENT_TYPES_V8.includes(e.type) || ELEMENT_TYPES_V9.includes(e.type) || ELEMENT_TYPES_V10.includes(e.type) || ELEMENT_TYPES_V15.includes(e.type) || ELEMENT_TYPES_V17.includes(e.type));
-			const el = v8 ? orDrop(drop, () => readElement(e, at, assets, drop)) : readElement(e, at, assets, drop);
+			const el = v8 ? orDrop(drop, () => readElement(e, at, assets, drop, withGroups)) : readElement(e, at, assets, drop, withGroups);
 			if (!el) return;
 			if (ids.has(el.id)) fail(`${at}.id`, "duplicate id");
 			ids.add(el.id);
@@ -1280,6 +1384,9 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, dr
 		});
 		if (elements.length > 0) page.elements = elements;
 	}
+	// v18: a group needs at least two members on the page (strokes and elements together). Leniently a lone member is released and
+	// counted (a merge, or a hand edit, can leave one); strictly it fails (the writer never writes one).
+	if (withGroups) dissolveSmallGroups(page, path, drop);
 	// v14: the lock. A file of an older format has none of ours (an odd `locked` key is ignored, as the migration drops it). It is a
 	// detail: read leniently, an invalid value is dropped and counted (the page is then simply unlocked); `false` is the same as absent.
 	if (withLocked && v.locked !== undefined) {
@@ -1352,7 +1459,7 @@ export function validate(raw: unknown, drop: Dropped | null = null): NotebookDoc
 	return validateWith(raw, readPage, new Set<string>(), drop);
 }
 
-type PageReader = (v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null, slides: SlideIds, withStates: boolean, withLocked: boolean, withComments: boolean) => Page;
+type PageReader = (v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null, slides: SlideIds, withStates: boolean, withLocked: boolean, withComments: boolean, withGroups: boolean) => Page;
 
 /** `validate` with the page reader and the set of ids injected: staged loading reads page shells first (see StagedParse). */
 function validateWith(raw: unknown, readPageAt: PageReader, ids: Set<string>, drop: Dropped | null): NotebookDocument {
@@ -1368,7 +1475,7 @@ function validateWith(raw: unknown, readPageAt: PageReader, ids: Set<string>, dr
 	const slideIds = new Set(slides.map((r) => r.id));
 	const pageIds = new Set<string>();
 	const pages = raw.pages.map((p, i) => {
-		const page = readPageAt(p, `pages[${i}]`, ids, assets, drop, slideIds, true, true, true);
+		const page = readPageAt(p, `pages[${i}]`, ids, assets, drop, slideIds, true, true, true, true);
 		// Page ids key bookmarks, jumps and caches: two pages with one id would be confused with each other.
 		if (pageIds.has(page.id)) fail(`pages[${i}].id`, "duplicate id");
 		pageIds.add(page.id);
@@ -1496,7 +1603,7 @@ export class StagedParse {
 	}
 
 	/**
-	 * Prepares a staged parse of a file at the current version, or at version 9 to 16, whose migrations only refuse
+	 * Prepares a staged parse of a file at the current version, or at version 9 to 17, whose migrations only refuse
 	 * excerpts (v9: checked page by page as they are read) and drop the v11 metadata fields, with page `first` (0-based) read in full.
 	 */
 	static create(raw: RawObject, first: number, from: number = CURRENT_VERSION): StagedParse | ParseFailureResult {
@@ -1536,7 +1643,7 @@ export class StagedParse {
 		// v12: the strokes of an older file have no slide of ours (an odd `slide` key is ignored, as the migration drops it).
 		const slides: SlideIds = this.from < 12 ? "ignore" : new Set((this.doc.slides ?? []).map((r) => r.id));
 		// v13: the same for the `states` of a page of an older file.
-		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop, slides, this.from >= 13, this.from >= 14, this.from >= 16);
+		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop, slides, this.from >= 13, this.from >= 14, this.from >= 16, this.from >= 18);
 	}
 
 	get pending(): number {
@@ -1598,7 +1705,8 @@ export function parseStaged(text: string, firstPage: number | null): StagedParse
 	// v14 → v15 only refuses sticky notes (checked page by page as they are read), so large v14 files are staged too.
 	// v15 → v16 only drops the pages' `comments` keys (ignored page by page), so large v15 files are staged too.
 	// v16 → v17 only refuses checkboxes (checked page by page as they are read), so large v16 files are staged too.
-	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15 || pre.version === 16) return StagedParse.create(pre.raw, first, pre.version);
+	// v17 → v18 only drops the `group`, `locked` and `lockAt` keys of strokes and elements (ignored page by page), so large v17 files are staged too.
+	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15 || pre.version === 16 || pre.version === 17) return StagedParse.create(pre.raw, first, pre.version);
 	if (pre.version !== CURRENT_VERSION) return parseRaw(pre.raw, pre.version, true);
 	return StagedParse.create(pre.raw, first);
 }

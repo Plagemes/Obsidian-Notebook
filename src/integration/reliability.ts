@@ -300,6 +300,7 @@ export function describeMerge(s: MergeSummary): string[] {
 	add(s.commentsAdded, "merge.summary.comments");
 	add(s.markersResolved, "merge.summary.markers");
 	add(s.checkboxesUpdated, "merge.summary.checkboxes");
+	add(s.flagsUpdated, "merge.summary.flags");
 	add(s.onlyInMain, "merge.summary.onlyMain");
 	return lines;
 }

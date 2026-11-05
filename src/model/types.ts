@@ -2,6 +2,7 @@
 
 export const FORMAT_ID = "obsidian-notebook";
 /**
+ * v18: groups and locked elements (#39): the optional `group` of strokes and elements, and the `locked` flag (with `lockAt`) of elements.
  * v17: handwritten checklists (#103): the page element "checkbox" (a drawn square that is tapped to tick it; optional link to an Obsidian task).
  * v16: margin comments (#86): `Page.comments` anchors comments, with their replies, to regions of a page.
  * v15: sticky notes (#20): coloured notes on the page (page elements with typed text; ink written on a note belongs to it).
@@ -14,7 +15,7 @@ export const FORMAT_ID = "obsidian-notebook";
  * around a background; v5: per-stroke render version; v4: library metadata, assets, backgrounds, elements,
  * infinite pages, "shape" tool; v3: paper kinds and page sizes).
  */
-export const CURRENT_VERSION = 17;
+export const CURRENT_VERSION = 18;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -72,6 +73,11 @@ export interface Stroke {
 	 * was written. Written only when present and only while that entry exists (ink pasted from another notebook loses it).
 	 */
 	slide?: string;
+	/**
+	 * v18 (#39): the id of the group of the page the stroke belongs to (see `ElementFlags.group`). Written only when the group has
+	 * at least two members on the page; a group with fewer is dissolved on read and on write.
+	 */
+	group?: string;
 	points: Point[];
 }
 
@@ -150,8 +156,25 @@ export type PageBackground =
 	| { kind: "pdf"; asset: string; /** 1-based page number in the PDF */ page: number }
 	| { kind: "image"; asset: string };
 
+/**
+ * v18 (#39): the flags every page element can carry. `group`: the id of the group the element belongs to (absent: none). A
+ * group is a set of at least two strokes and elements of ONE page that carry the same id there (the id is scoped to the page:
+ * the same id on two pages is two groups); selecting one member selects all of them, so they move, resize, copy and delete as one.
+ * `locked`: the element is fixed in place (written only when true): the lasso, a tap and the area eraser skip it, so it cannot be
+ * moved, resized, restyled, erased or deleted until it is unlocked (ink over it is unaffected). `lockAt`: when it was last locked
+ * or unlocked (ms since 1970; written only once it was): the later decision wins when two copies of a notebook are merged.
+ */
+export interface ElementFlags {
+	group?: string;
+	locked?: true;
+	lockAt?: number;
+}
+
+/** v18: longest group id, characters (new ids are UUIDs, 36 characters). */
+export const GROUP_ID_MAX = 64;
+
 /** v4 text box: `x`, `y` top-left, `width` wraps the text; height follows the content. */
-export interface TextElement {
+export interface TextElement extends ElementFlags {
 	id: string;
 	type: "text";
 	x: number;
@@ -163,7 +186,7 @@ export interface TextElement {
 }
 
 /** v4 image placed on the page, rotation in radians around its centre. */
-export interface ImageElement {
+export interface ImageElement extends ElementFlags {
 	id: string;
 	type: "image";
 	asset: string;
@@ -185,7 +208,7 @@ export type MarkerKind = (typeof MARKER_KINDS)[number];
  * v8 marker: a small badge whose top-left corner is (`x`, `y`), optionally about a region of the page
  * (`width` × `height` from the same corner; both or neither). Optional fields are written only when present.
  */
-export interface MarkerElement {
+export interface MarkerElement extends ElementFlags {
 	id: string;
 	type: "marker";
 	kind: MarkerKind;
@@ -210,7 +233,7 @@ export const BOX_KINDS = ["definition", "theorem", "example", "proof", "remark"]
 export type BoxKind = (typeof BOX_KINDS)[number];
 
 /** v8 structured box: a labelled frame around a region of the page (drawn under the ink). */
-export interface BoxElement {
+export interface BoxElement extends ElementFlags {
 	id: string;
 	type: "box";
 	kind: BoxKind;
@@ -229,7 +252,7 @@ export const MARKER_TEXT_MAX = 300;
  * v9 equation (#110): LaTeX source typeset with Obsidian's maths engine (MathJax) into the box `width` × `height`
  * whose top-left corner is (`x`, `y`). Optional fields are written only when present.
  */
-export interface EquationElement {
+export interface EquationElement extends ElementFlags {
 	id: string;
 	type: "equation";
 	x: number;
@@ -328,7 +351,7 @@ export interface GraphTable {
  * v9 function graph (#113): a frame `width` × `height` with its top-left corner at (`x`, `y`) showing `view` of the
  * plane. Ink written on it follows its coordinates when it is moved, scaled, panned or zoomed (see ink/graph-ink.ts).
  */
-export interface GraphElement {
+export interface GraphElement extends ElementFlags {
 	id: string;
 	type: "graph";
 	x: number;
@@ -373,7 +396,7 @@ export interface ExcerptSource {
  * (`x`, `y`); tapping its badge jumps back to the source. `asset`: the image asset holding a snapshot of the region
  * taken when it was made (drawn when the source cannot be drawn live, and in exports). Written only when present.
  */
-export interface ExcerptElement {
+export interface ExcerptElement extends ElementFlags {
 	id: string;
 	type: "excerpt";
 	x: number;
@@ -395,7 +418,7 @@ export interface ExcerptElement {
  * strokes, so ink written later over the empty place of a collapsed note is not hidden and does not move with the icon. Expanding
  * the note shows its ink again and clears the list. Ids of strokes that are gone are ignored (and not written).
  */
-export interface StickyElement {
+export interface StickyElement extends ElementFlags {
 	id: string;
 	type: "sticky";
 	x: number;
@@ -427,7 +450,7 @@ export interface CheckboxTask {
  * `taskAt`: when the link was last set or removed (ms since 1970; written only once it was): the later
  * decision wins when two copies are merged, so an unlinked checkbox is not linked again by an older copy.
  */
-export interface CheckboxElement {
+export interface CheckboxElement extends ElementFlags {
 	id: string;
 	type: "checkbox";
 	x: number;

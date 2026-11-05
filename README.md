@@ -274,7 +274,7 @@ As of 0.19.0 the roadmap has **183 features shipped**, **0 in progress** and **2
 - **Found a bug?** [Report it](https://github.com/Plagemes/Obsidian-Notebook/issues/new?template=bug_report.yml). Reports from Android tablets with a pen help most.
 - **Want to code?** Read [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/development.md](docs/development.md). Please follow the [Code of Conduct](CODE_OF_CONDUCT.md); security issues go through [SECURITY.md](SECURITY.md).
 
-<sub><b>Status:</b> v0.19.0 (document format 17), early development. The automated tests and the browser harness pass, but Notebook has not been verified on Android hardware yet; what is verified, and how to test it, is in <a href="docs/testing.md">docs/testing.md</a>.</sub>
+<sub><b>Status:</b> v0.19.0 (document format 18), early development. The automated tests and the browser harness pass, but Notebook has not been verified on Android hardware yet; what is verified, and how to test it, is in <a href="docs/testing.md">docs/testing.md</a>.</sub>
 
 ## Licence
 

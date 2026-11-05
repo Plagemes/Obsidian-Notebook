@@ -2,13 +2,16 @@ import { copiedCheckbox } from "./checklist";
 import { createId, createPage } from "./document";
 import { freezeElement, freezeStroke } from "./serialize";
 import { copyComments } from "./comments";
+import { groupRenamer } from "./groups";
 import { remapStates } from "./states";
 import { PAPER_SPACING, type Asset, type Page, type PageElement, type Stroke } from "./types";
 
-function copyElement(el: PageElement, keepTasks: boolean): PageElement {
+function copyElement(el: PageElement, keepTasks: boolean, regroup: (group: string) => string): PageElement {
 	// v17: a copy of a checkbox keeps its tick but never the link to the task line of the original (unless the page is moved).
-	if (el.type === "checkbox") return freezeElement(copiedCheckbox(el, createId(), keepTasks));
-	return freezeElement({ ...el, id: createId() });
+	const copy = el.type === "checkbox" ? copiedCheckbox(el, createId(), keepTasks) : { ...el, id: createId() };
+	// v18: a copy of a page belongs to groups of its own (new ids); its locks are kept.
+	if (copy.group !== undefined) copy.group = regroup(copy.group);
+	return freezeElement(copy);
 }
 
 export interface DuplicateOptions {
@@ -22,14 +25,17 @@ export interface DuplicateOptions {
 /**
  * Deep copy of a stroke with id `id` (points copied, not shared), frozen. Every field is kept, v8 `hidden`
  * included: every path that copies ink (duplicate, restore, merge, clipboard) goes through here. v12 `slide` is kept too
- * (`slide` given: replaced by it, null: left out); in another notebook it names no entry and is not written.
+ * (`slide` given: replaced by it, null: left out); in another notebook it names no entry and is not written. v18 `group` is kept
+ * the same way (`group` given: replaced by it, null: left out).
  */
-export function copyStroke(s: Stroke, id: string = s.id, slide?: string | null): Stroke {
+export function copyStroke(s: Stroke, id: string = s.id, slide?: string | null, group?: string | null): Stroke {
 	const points = s.points.map((p) => [p[0], p[1], p[2]] as [number, number, number]);
 	const copy: Stroke = { id, tool: s.tool, color: s.color, width: s.width, render: s.render, points };
 	if (s.hidden) copy.hidden = true;
 	const ref = slide === undefined ? s.slide : slide ?? undefined;
 	if (ref !== undefined) copy.slide = ref;
+	const g = group === undefined ? s.group : group ?? undefined;
+	if (g !== undefined) copy.group = g;
 	return freezeStroke(copy);
 }
 
@@ -41,6 +47,7 @@ export function copyStroke(s: Stroke, id: string = s.id, slide?: string | null):
  */
 export function duplicatePage(page: Page, opts: DuplicateOptions = {}): Page {
 	const ids = new Map<string, string>();
+	const regroup = groupRenamer();
 	const copy: Page = {
 		id: createId(),
 		width: page.width,
@@ -49,7 +56,7 @@ export function duplicatePage(page: Page, opts: DuplicateOptions = {}): Page {
 		strokes: page.strokes.map((s) => {
 			const id = createId();
 			ids.set(s.id, id);
-			return copyStroke(s, id);
+			return copyStroke(s, id, undefined, s.group === undefined ? undefined : regroup(s.group));
 		}),
 	};
 	// v13: the parts and states follow the strokes to their new ids (a copy of a drawing with states is a drawing with states).
@@ -60,7 +67,7 @@ export function duplicatePage(page: Page, opts: DuplicateOptions = {}): Page {
 	if (page.margins) copy.margins = { ...page.margins };
 	// v7: the copy keeps the page's tags (its bookmark is not copied: bookmarks belong to the original page id).
 	if (page.tags && page.tags.length > 0) copy.tags = [...page.tags];
-	if (page.elements && page.elements.length > 0) copy.elements = page.elements.map((e) => copyElement(e, opts.keepTasks === true));
+	if (page.elements && page.elements.length > 0) copy.elements = page.elements.map((e) => copyElement(e, opts.keepTasks === true, regroup));
 	// v16: the comments are about the page, so a copy of the page keeps them (same ids: they are scoped to the page).
 	const comments = copyComments(page.comments, page);
 	if (comments) copy.comments = comments;

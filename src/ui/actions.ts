@@ -50,6 +50,7 @@ export interface UiContext {
 		/** 0.14 (402): selected text boxes (optional, 0 when absent). */ texts?: number;
 		/** 0.17 (#20): selected sticky notes, and how many of them are collapsed (optional, 0 when absent). */ stickies?: number; stickiesCollapsed?: number;
 		/** 0.19 (#103): selected checkboxes, and how many of them are linked to a task (optional, 0 when absent). */ checkboxes?: number; checkboxesLinked?: number;
+		/** 0.20 (#39): the selected items can be made one group (two or more, not already exactly one group), and how many of them are in a group now (optional, false and 0 when absent). */ canGroup?: boolean; grouped?: number;
 	} | null;
 	/** The page in view (index of the page sheet when it was opened from a thumbnail). */
 	page: {
@@ -62,6 +63,8 @@ export interface UiContext {
 		locked?: boolean;
 		/** 0.18 (#227): the page is a quick tab of this notebook. Optional (false when absent). */
 		quickTab?: boolean;
+		/** 0.20 (#39): how many locked elements the page has. Optional (0 when absent). */
+		lockedElements?: number;
 	} | null;
 	notebook: { pdfPages: boolean; backgrounds: boolean };
 	/** A class of the timetable is on now. */
@@ -280,6 +283,11 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "checkbox-label", label: "checklist.editLabel", icon: "square-pen", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 89, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) === 1, enabled: pageOpen, keywords: "checkbox label name casella etichetta nome" },
 	{ id: "checkbox-task", label: "checklist.sendTask", icon: "list-checks", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 88, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) === 1 && (c.selection?.checkboxesLinked ?? 0) === 0, enabled: pageOpen, keywords: "checkbox task todo tasks daily note casella attivita nota giornaliera" },
 	{ id: "checkbox-unlink", label: "checklist.unlink", icon: "unlink", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 87, scope: "view", when: (c) => (c.selection?.checkboxesLinked ?? 0) > 0, enabled: pageOpen, keywords: "checkbox task unlink casella attivita scollega" },
+	// 0.20 (#39): groups and locked elements. A group selects, moves, resizes and copies as one; a locked element is skipped by the lasso, a tap and the
+	// eraser (a locked one is unlocked from the chip that a tap with the lasso offers, or from "Locked elements…" of the page menu).
+	{ id: "selection-group", label: "groups.group", icon: "group", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 52, scope: "view", command: "groups.command.group", when: (c) => c.selection?.canGroup === true, enabled: pageOpen, keywords: "group together combine join one raggruppa unisci" },
+	{ id: "selection-ungroup", label: "groups.ungroup", icon: "ungroup", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 51, scope: "view", command: "groups.command.ungroup", when: (c) => (c.selection?.grouped ?? 0) > 0, enabled: pageOpen, keywords: "ungroup split separate break group dividi separa gruppo" },
+	{ id: "selection-lock", label: "groups.lock", icon: "lock", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 49, scope: "view", command: "groups.command.lock", when: (c) => (c.selection?.elements ?? 0) > 0, enabled: pageOpen, keywords: "lock fix pin freeze background anchor blocca fissa sfondo" },
 	{ id: "insert-graph", label: "math.insertGraph", icon: "chart-spline", group: "insert", surfaces: ["sheet"], priority: 50, scope: "view", command: "math.command.insertGraph", keywords: "function plot chart curve grafico funzione" },
 	// "add-page" is the Obsidian command (and its hotkey): it adds a page right away, same paper, as before 0.14. The on-screen "+" is
 	// "add-page-suggest": it opens the Smart "+" strip (0.14, 410); the command of the same name opens that strip from the keyboard.
@@ -315,6 +323,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "page-lock", label: "page.lock", icon: "lock", group: "page", surfaces: ["page", "sheet"], priority: 48, scope: "view", when: (c) => !c.page?.locked, keywords: "lock finish protect freeze read only blocca proteggi" },
 	{ id: "page-unlock", label: "page.unlock", icon: "lock-open", group: "page", surfaces: ["page", "sheet"], priority: 49, scope: "view", when: (c) => !!c.page?.locked, keywords: "unlock edit sblocca" },
 	{ id: "page-lock-toggle", label: "command.lockPage", icon: "lock", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true },
+	// 0.20 (#39): the elements locked on the page (a background picture that must not move): listed, shown and unlocked from here.
+	{ id: "locked-elements", label: "groups.lockedElements", icon: "lock", group: "page", surfaces: ["page", "sheet"], priority: 47, scope: "view", command: "groups.command.lockedElements", when: (c) => (c.page?.lockedElements ?? 0) > 0, keywords: "locked lock fixed background element unlock bloccati sblocca sfondo" },
 	// 0.18 (#227): quick tabs. Pinning does not edit the notebook (the pins are in _meta), so it works on a read-only or locked page too.
 	{ id: "page-quick-tab", label: "quicktabs.pin", icon: "pin", group: "page", surfaces: ["page", "sheet"], priority: 47, scope: "view", command: true, checked: (c) => !!c.page?.quickTab, keywords: "quick tab pin pinned formula sheet fissa scheda rapida" },
 	{ id: "page-quick-tab-other", label: "quicktabs.pinOther", icon: "book-open", group: "page", surfaces: ["page", "sheet"], priority: 46, scope: "view", command: true, keywords: "quick tab pin other notebook formula sheet fissa altro quaderno" },
