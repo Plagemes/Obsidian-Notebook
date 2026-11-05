@@ -2,10 +2,10 @@
  * 0.19 (#221): the lecture log. Pure line-building and merge, then the service on an in-memory vault: one line per lecture,
  * rewritten in place, nothing else in the note touched, no note made unless allowed.
  */
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDocument } from "../src/model/document";
 import {
-	addPending, buildLectureLine, lectureLogId, lectureSnapshot, mergeLectureLine, normaliseLogHeading, normalisePending, removePending,
+	addPending, buildLectureLine, lectureLogId, lectureSnapshot, mergeLectureLine, normaliseLogHeading, normalisePending, ownLineState, removePending,
 } from "../src/library/lecture-log-logic";
 import { buildLecturePage } from "../src/view/lecture-logic";
 import { FakeVault } from "./fake-vault";
@@ -42,8 +42,20 @@ describe("id and line", () => {
 
 	it("builds the line with the block id last", () => {
 		const line = buildLectureLine({ start: "10:15", end: "11:45", course: "Analysis I", link: "[[A#p12|pp. 12–15]]", counts: ["3 pages", "2 open questions"] }, ID);
-		expect(line).toBe(`- 10:15–11:45 **Analysis I** — [[A#p12|pp. 12–15]] · 3 pages · 2 open questions ^${ID}`);
-		expect(buildLectureLine({ start: "9:00", end: "10:00", course: "A *b*\n[c]", link: "x", counts: [""] }, ID)).toBe(`- 9:00–10:00 **A b c** — x ^${ID}`);
+		expect(line).toBe(`- 10:15–11:45 **Analysis I** · 3 pages · 2 open questions — [[A#p12|pp. 12–15]] ^${ID}`);
+		expect(buildLectureLine({ start: "9:00", end: "10:00", course: "A *b*\n[c]", link: "[[x]]", counts: [""] }, ID)).toBe(`- 9:00–10:00 **A b c** — [[x]] ^${ID}`);
+	});
+
+	it("a course name cannot comment out, tag, highlight or end the line (M10)", () => {
+		const line = buildLectureLine({ start: "9:00", end: "10:00", course: "Intro %% #tag $x$ ==hi== <!-- end\\", link: "[[x]]", counts: [""] }, ID);
+		const course = /\*\*(.*)\*\* — /.exec(line)![1]!;
+		expect(course).not.toMatch(/(^|[^\\])(%%|#|\$|==|<)/);
+		expect(course.endsWith("\\\\")).toBe(true);
+	});
+
+	it("the id follows the notebook's document id, not its path (M11)", () => {
+		expect(lectureLogId("doc-1", "c1@2026-11-04")).toBe(lectureLogId("doc-1", "c1@2026-11-04"));
+		expect(lectureLogId("doc-1", "c1@2026-11-04")).not.toBe(lectureLogId("doc-2", "c1@2026-11-04"));
 	});
 });
 
@@ -70,7 +82,8 @@ describe("snapshot", () => {
 });
 
 describe("merge", () => {
-	const line = `- 10:15–11:45 **A** — x · 1 page ^${ID}`;
+	const gen = (n: string): string => `10:15–11:45 **A** · ${n} — [[N#p1|p. 1]]`;
+	const line = `- ${gen("1 page")} ^${ID}`;
 
 	it("creates the heading at the end of a note that lacks it", () => {
 		expect(mergeLectureLine("# Day\ntext\n", H, line, ID)).toBe(`# Day\ntext\n\n${H}\n${line}\n`);
@@ -92,16 +105,51 @@ describe("merge", () => {
 	it("rewrites only its own line, in place, and is idempotent", () => {
 		const first = mergeLectureLine(`x\n${H}\n- other\n`, H, line, ID) as string;
 		expect(mergeLectureLine(first, H, line, ID)).toBeNull();
-		const later = `- 10:15–11:45 **A** — x · 4 pages ^${ID}`;
+		const later = `- ${gen("4 pages")} ^${ID}`;
 		const second = `${first}\ntail 4\n`;
 		expect(mergeLectureLine(second, H, later, ID)).toBe(`x\n${H}\n- other\n${later}\n\ntail 4\n`);
 	});
 
 	it("leaves another occurrence's line alone and keeps a moved line where the user put it", () => {
-		const other = `- 8:00–9:00 **B** — y ^${lectureLogId("n", "k")}`;
-		const text = `intro\n${other}\n## Elsewhere\n  ${line.replace("1 page", "old")}\r\nend`;
+		const other = `- 8:00–9:00 **B** — [[y]] ^${lectureLogId("n", "k")}`;
+		const text = `intro\n${other}\n## Elsewhere\n  - ${gen("old")} ^${ID}\r\nend`;
 		const out = mergeLectureLine(text, H, line, ID) as string;
 		expect(out).toBe(`intro\n${other}\n## Elsewhere\n  ${line}\r\nend`);
+	});
+
+	it("keeps what the user put in front of the line and after its link (M1)", () => {
+		const later = `- ${gen("4 pages")} ^${ID}`;
+		// moved into a callout, turned into a task, a note added after the link, all together
+		expect(mergeLectureLine(`> [!note]\n> - ${gen("1 page")} ^${ID}\n`, H, later, ID)).toBe(`> [!note]\n> - ${gen("4 pages")} ^${ID}\n`);
+		expect(mergeLectureLine(`- [ ] ${gen("1 page")} ^${ID}\n`, H, later, ID)).toBe(`- [ ] ${gen("4 pages")} ^${ID}\n`);
+		expect(mergeLectureLine(`- [x] ${gen("1 page")} ^${ID}\n`, H, later, ID)).toBe(`- [x] ${gen("4 pages")} ^${ID}\n`);
+		expect(mergeLectureLine(`* ${gen("1 page")} - revise ch. 3 ^${ID}\n`, H, later, ID)).toBe(`* ${gen("4 pages")} - revise ch. 3 ^${ID}\n`);
+		expect(mergeLectureLine(`> > - [ ] ${gen("1 page")} my words ^${ID}`, H, later, ID)).toBe(`> > - [ ] ${gen("4 pages")} my words ^${ID}`);
+		// idempotent with the user's additions
+		expect(mergeLectureLine(`- [ ] ${gen("4 pages")} my words ^${ID}\n`, H, later, ID)).toBeNull();
+		// a markdown link with parentheses in its address ends where it should
+		const md = (u: string): string => `10:15–11:45 **A** · 1 page — [p. 1](${u})`;
+		expect(mergeLectureLine(`- ${md("N%20(1).notebook")} mine ^${ID}\n`, H, `- ${md("N%20(2).notebook")} ^${ID}`, ID)).toBe(`- ${md("N%20(2).notebook")} mine ^${ID}\n`);
+	});
+
+	it("leaves a line the user turned into something else alone, and adds nothing (M1)", () => {
+		const later = `- ${gen("4 pages")} ^${ID}`;
+		const text = `${H}\n- my own rewrite of the lecture ^${ID}\n`;
+		expect(mergeLectureLine(text, H, later, ID)).toBeNull();
+		expect(ownLineState(text, ID)).toBe("altered");
+		expect(ownLineState(`- ${gen("1 page")} ^${ID}`, ID)).toBe("ours");
+		expect(ownLineState("nothing here", ID)).toBe("none");
+	});
+
+	it("never rewrites a copy inside a code fence (M1)", () => {
+		const later = `- ${gen("4 pages")} ^${ID}`;
+		const fenced = `\`\`\`\n- ${gen("1 page")} ^${ID}\n\`\`\`\n`;
+		expect(ownLineState(fenced, ID)).toBe("none");
+		// no line of ours outside the fence: a fresh one is added, the fenced copy stays as it was
+		expect(mergeLectureLine(fenced, H, later, ID)).toBe(`${fenced}\n${H}\n${later}\n`);
+		// the real line outside the fence is the one rewritten
+		const both = `\`\`\`\n- ${gen("1 page")} ^${ID}\n\`\`\`\n- ${gen("2 pages")} ^${ID}\n`;
+		expect(mergeLectureLine(both, H, later, ID)).toBe(`\`\`\`\n- ${gen("1 page")} ^${ID}\n\`\`\`\n${later}\n`);
 	});
 
 	it("does not mistake text that merely contains the id for its line", () => {
@@ -156,17 +204,26 @@ function rig(notes: Record<string, string>, settings: Record<string, unknown>) {
 describe("service", () => {
 	const NOTE = "Daily/2026-11-04.md";
 
+	// The pending list drops rows older than 21 days against today's date: the clock is the class day.
+	beforeEach(() => {
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date(2026, 10, 4, 12, 0));
+	});
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("adds the line under a new heading, then updates it in place when the session goes on", async () => {
 		const r = rig({ [NOTE]: "# Today\n- a thing\n" }, {});
 		await r.service.log(r.file, cls, snap);
 		const first = r.vault.files.get(NOTE) as string;
-		expect(first).toMatch(/^# Today\n- a thing\n\n## Lectures\n- 10:15–11:45 \*\*Analysis I\*\* — \[\[Notebooks\/Analysis I\.notebook#p12&id=pgabcdef12\|pp\. 12–15\]\] · 4 pages · 2 open questions \^nb-lec-[0-9a-z]+\n$/);
+		expect(first).toMatch(/^# Today\n- a thing\n\n## Lectures\n- 10:15–11:45 \*\*Analysis I\*\* · 4 pages · 2 open questions — \[\[Notebooks\/Analysis I\.notebook#p12&id=pgabcdef12\|pp\. 12–15\]\] \^nb-lec-[0-9a-z]+\n$/);
 		await r.service.log(r.file, cls, snap);
 		expect(r.vault.files.get(NOTE)).toBe(first);
 		await r.service.log(r.file, cls, { ...snap, last: 17, pages: 6, openQuestions: 0 });
 		const third = r.vault.files.get(NOTE) as string;
 		expect(third.split("\n").filter((l) => l.includes("Analysis I"))).toHaveLength(1);
-		expect(third).toContain("pp. 12–17]] · 6 pages ^nb-lec-");
+		expect(third).toContain("· 6 pages — [[Notebooks/Analysis I.notebook#p12&id=pgabcdef12|pp. 12–17]] ^nb-lec-");
 		expect(third.startsWith("# Today\n- a thing\n\n## Lectures\n")).toBe(true);
 	});
 
@@ -186,6 +243,9 @@ describe("service", () => {
 		r.vault.put(NOTE, "# Day\n");
 		await r.service.flushPending();
 		expect(r.vault.files.get(NOTE)).toMatch(/^# Day\n\n## Lectures\n- 10:15–11:45 /);
+		// written, but kept until a later read of the note shows the line
+		expect(r.service.waitingPaths()).toEqual([NOTE]);
+		await r.service.flushPending();
 		expect(r.service.waitingPaths()).toEqual([]);
 	});
 
@@ -193,7 +253,101 @@ describe("service", () => {
 		const r = rig({}, { dailyCreateNote: true, lectureLogHeading: "Classes" });
 		await r.service.log(r.file, cls, snap);
 		expect(r.vault.files.get(NOTE)).toMatch(/^## Classes\n- 10:15–11:45 \*\*Analysis I\*\*/);
+		await r.service.flushPending();
 		expect(r.service.waitingPaths()).toEqual([]);
+	});
+
+	it("a template that overwrites the new daily note afterwards does not lose the line (M2)", async () => {
+		const r = rig({}, { dailyCreateNote: true });
+		await r.service.log(r.file, cls, snap);
+		expect(r.vault.files.get(NOTE)).toContain("## Lectures");
+		// Templater writes its template over the note a moment later: the line is gone, the entry is still there.
+		r.vault.put(NOTE, "# 2026-11-04\n\nTemplate text\n");
+		expect(r.service.waitingPaths()).toEqual([NOTE]);
+		await r.service.flushPending();
+		expect(r.vault.files.get(NOTE)).toMatch(/^# 2026-11-04\n\nTemplate text\n\n## Lectures\n- 10:15–11:45 \*\*Analysis I\*\*/);
+		// seen on the next look: settled for good
+		await r.service.flushPending();
+		expect(r.service.waitingPaths()).toEqual([]);
+		// and a line the user removes afterwards is not written back
+		r.vault.put(NOTE, "# 2026-11-04\n");
+		await r.service.flushPending();
+		expect(r.vault.files.get(NOTE)).toBe("# 2026-11-04\n");
+	});
+
+	it("a line that keeps vanishing is given up after a few tries", async () => {
+		const r = rig({ [NOTE]: "x\n" }, {});
+		await r.service.log(r.file, cls, snap);
+		for (let i = 0; i < 6; i++) {
+			r.vault.put(NOTE, "x\n");
+			await r.service.flushPending();
+		}
+		expect(r.service.waitingPaths()).toEqual([]);
+		expect(r.vault.files.get(NOTE)).toBe("x\n");
+	});
+
+	it("keeps what the user put around the line when the session goes on (M1)", async () => {
+		const r = rig({ [NOTE]: "# Today\n" }, {});
+		await r.service.log(r.file, cls, snap);
+		await r.service.flushPending();
+		const own = (r.vault.files.get(NOTE) as string).split("\n").find((l) => l.includes("Analysis I"))!;
+		// the user moves the line into a callout, ticks it as a task and adds a word
+		const edited = `> [!tip] Today\n> - [ ] ${own.slice(2).replace(/ \^(nb-lec-\w+)$/, " fine ^$1")}\n`;
+		r.vault.put(NOTE, edited);
+		await r.service.log(r.file, cls, { ...snap, last: 17, pages: 6, openQuestions: 0 });
+		const out = r.vault.files.get(NOTE) as string;
+		expect(out).toMatch(/^> \[!tip\] Today\n> - \[ \] 10:15–11:45 \*\*Analysis I\*\* · 6 pages — \[\[[^\]]*pp\. 12–17\]\] fine \^nb-lec-\w+\n$/);
+	});
+
+	it("leaves a line the user rewrote alone: nothing changed, nothing added (M1)", async () => {
+		const r = rig({ [NOTE]: "# Today\n" }, {});
+		await r.service.log(r.file, cls, snap);
+		await r.service.flushPending();
+		const id = /\^(nb-lec-\w+)/.exec(r.vault.files.get(NOTE) as string)![1];
+		const mine = `# Today\n- I wrote this myself ^${id}\n`;
+		r.vault.put(NOTE, mine);
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+		await r.service.log(r.file, cls, { ...snap, pages: 9 });
+		expect(r.vault.files.get(NOTE)).toBe(mine);
+		expect(warn).toHaveBeenCalled();
+		warn.mockRestore();
+	});
+
+	it("does not create the notes of past days when the setting is turned on later (M9)", async () => {
+		const r = rig({}, {});
+		await r.service.log(r.file, cls, snap);
+		expect(r.service.waitingPaths()).toEqual([NOTE]);
+		(r.plugin.settings as { dailyCreateNote: boolean }).dailyCreateNote = true;
+		vi.setSystemTime(new Date(2026, 10, 7, 9, 0));
+		await r.service.flushPending();
+		expect(r.vault.files.has(NOTE)).toBe(false);
+		expect(r.service.waitingPaths()).toEqual([NOTE]);
+		// on the class day itself the note may be made
+		vi.setSystemTime(new Date(2026, 10, 4, 23, 0));
+		await r.service.flushPending();
+		expect(r.vault.files.has(NOTE)).toBe(true);
+	});
+
+	it("renaming or moving the notebook between two ends of the class does not duplicate the line (M11)", async () => {
+		const r = rig({ [NOTE]: "# Today\n", "Moved/Analysis.notebook": "{}" }, {});
+		await r.service.log(r.file, cls, snap, "doc-1");
+		const moved = r.vault.vault.getFileByPath("Moved/Analysis.notebook") as never;
+		await r.service.log(moved, cls, { ...snap, pages: 5 }, "doc-1");
+		const lines = (r.vault.files.get(NOTE) as string).split("\n").filter((l) => l.includes("Analysis I"));
+		expect(lines).toHaveLength(1);
+		expect(lines[0]).toContain("· 5 pages");
+		expect(lines[0]).toContain("Moved/Analysis.notebook");
+	});
+
+	it("the vault events do not parse the waiting list again and again (M8)", async () => {
+		const r = rig({}, {});
+		await r.service.log(r.file, cls, snap);
+		const app = r.plugin.app as { loadLocalStorage: (k: string) => unknown };
+		const load = vi.fn(app.loadLocalStorage);
+		app.loadLocalStorage = load;
+		for (let i = 0; i < 50; i++) r.service.noteChanged(`Other/${i}.md`);
+		expect(r.service.waitingPaths()).toEqual([NOTE]);
+		expect(load).not.toHaveBeenCalled();
 	});
 
 	it("keeps waiting lines unwritten while the setting is off", async () => {

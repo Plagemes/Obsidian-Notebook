@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { notebookUri } from "../src/integration/links";
 import { companionContent, renderRegion, regionStatus } from "../src/model/companion-content";
 import {
-	equationCode, escapeSearchText, SEARCH_CUT_NOTE, SEARCH_ITEM_MAX, SEARCH_PAGE_MAX, searchLines,
+	equationCode, escapeSearchText, fitSearchBudget, SEARCH_CUT_NOTE, SEARCH_ITEM_MAX, SEARCH_NOTE_CUT_NOTE, SEARCH_NOTE_MAX, SEARCH_PAGE_MAX, searchLines,
 } from "../src/model/companion-search";
 import { createDocument, createPage } from "../src/model/document";
 import type { NotebookDocument, Page, PageElement } from "../src/model/types";
@@ -33,6 +33,14 @@ describe("escapeSearchText", () => {
 		// Every special character is preceded by a backslash.
 		expect(out).not.toMatch(/(^|[^\\])[[\]#%$<>`=!]/);
 		expect(out).toContain("\\[\\[Link\\]\\]");
+	});
+	it("a bare address cannot become a link (M14)", () => {
+		const out = escapeSearchText("see https://example.com/a?b=1 and www.example.org or ftp://x.y");
+		expect(out).not.toContain("://");
+		expect(out).not.toMatch(/www\./i);
+		expect(out).toContain("https:\\/\\/example.com");
+		expect(out).toContain("www\\.example.org");
+		expect(escapeSearchText("a.b and awww.c")).toBe("a.b and awww.c");
 	});
 	it("one line, list and number starts escaped", () => {
 		expect(escapeSearchText("a\n\n  b")).toBe("a b");
@@ -109,6 +117,27 @@ describe("companionContent with searchText", () => {
 		expect(regionStatus(`x\n${renderRegion(c)}\ny`)).toBe("ok");
 		// Deterministic: a second generation is byte-identical (no write when unchanged).
 		expect(companionContent(d, { ...base, searchText: true }).text).toBe(c.text);
+	});
+});
+
+describe("search text of a very large notebook (M14)", () => {
+	it("is bounded for the whole note: pages after the cap have none, and the cut is said once", () => {
+		const pages: Page[] = [];
+		for (let i = 0; i < 200; i++) pages.push(pageWith([sticky("y".repeat(SEARCH_ITEM_MAX - 5), 1), sticky("z".repeat(SEARCH_ITEM_MAX - 5), 2), sticky("w".repeat(SEARCH_ITEM_MAX - 5), 3), sticky("v".repeat(SEARCH_ITEM_MAX - 5), 4)]));
+		const d = createDocument(new Date("2026-10-29T14:30:00Z"));
+		d.id = "doc-big";
+		d.pages = pages;
+		const c = companionContent(d, { ...base, searchText: true });
+		expect(c.text.length).toBeLessThan(SEARCH_NOTE_MAX + 100_000);
+		expect(c.text.split(SEARCH_NOTE_CUT_NOTE)).toHaveLength(2);
+		// pages up to the cap are listed, later ones are not
+		expect(c.text).toContain("### p. 1\n");
+		expect(c.text).not.toContain("### p. 200\n");
+	});
+	it("a notebook within the budget is unchanged", () => {
+		const budget = { left: SEARCH_NOTE_MAX, cut: false };
+		expect(fitSearchBudget(["- a", "- b"], budget)).toEqual(["- a", "- b"]);
+		expect(budget.cut).toBe(false);
 	});
 });
 

@@ -3,7 +3,7 @@ import { t } from "../i18n";
 import { shellButton } from "../ui/components/modal-shell";
 import { showNotice } from "../view/notice";
 import type { NotebookApi } from "./api";
-import { parseNewBlock, NEW_BLOCK_LANG, replaceNewBlock, type NewBlockSpec } from "./new-block";
+import { isTemplateNote, newBlockSlot, parseNewBlock, NEW_BLOCK_LANG, replaceNewBlock, templateFoldersFrom, type NewBlockSpec } from "./new-block";
 
 export interface NewBlockDeps {
 	app: App;
@@ -37,6 +37,12 @@ class NewBlockCard extends MarkdownRenderChild {
 		const parsed = parseNewBlock(this.source);
 		const card = createDiv({ cls: "nb-ui nb-newblock" });
 		this.containerEl.replaceChildren(card);
+		// In a note template the block is the template's own text: a button there would rewrite the template file.
+		if (isTemplateNote(this.ctx.sourcePath, templateFoldersFrom(this.deps.app))) {
+			card.createDiv({ cls: "nb-newblock-title", text: t("newblock.title") });
+			card.createDiv({ cls: "nb-newblock-detail", text: t("newblock.inTemplate") });
+			return;
+		}
 		if (!parsed.ok) {
 			card.addClass("is-error");
 			card.createDiv({ cls: "nb-newblock-title", text: t("newblock.title") });
@@ -63,21 +69,32 @@ class NewBlockCard extends MarkdownRenderChild {
 		const note = this.noteFile();
 		const hint = this.ctx.getSectionInfo(this.containerEl)?.lineStart;
 		// Check the block can be replaced before making anything: a notebook with nowhere to go would be an orphan.
-		if (!note || replaceNewBlock(await app.vault.read(note), this.source, "", hint) === null) return void showNotice(t("newblock.notFound"));
+		// Which of several identical blocks this is stays fixed from here on, even if lines are typed above it meanwhile.
+		const slot = note ? newBlockSlot(await app.vault.read(note), this.source, hint) : null;
+		if (!note || !slot) return void showNotice(t("newblock.notFound"));
 		this.busy = true;
 		button.disabled = true;
+		let made: Awaited<ReturnType<NotebookApi["newNotebook"]>>;
 		try {
-			const made = await api.newNotebook({ name: spec.name, ...(spec.folder ? { folder: spec.folder } : {}), ...(spec.template ? { template: spec.template } : {}), ...(spec.content !== undefined ? { content: spec.content } : {}), ...(spec.open !== undefined ? { open: spec.open } : {}) });
+			made = await api.newNotebook({ name: spec.name, ...(spec.folder ? { folder: spec.folder } : {}), ...(spec.template ? { template: spec.template } : {}), ...(spec.content !== undefined ? { content: spec.content } : {}), ...(spec.open !== undefined ? { open: spec.open } : {}) });
+		} catch (e) {
+			showNotice(t("newblock.failed", { error: e instanceof Error ? e.message : String(e) }));
+			button.disabled = false;
+			this.busy = false;
+			return;
+		}
+		// From here on the notebook exists: the button stays off whatever happens, so a second click cannot make a second notebook.
+		try {
 			let replaced = false;
 			await app.vault.process(note, (data) => {
-				const next = replaceNewBlock(data, this.source, made.embed, hint);
+				const next = replaceNewBlock(data, this.source, made.embed, hint, slot);
 				replaced = next !== null;
 				return next ?? data;
 			});
 			showNotice(replaced ? t("newblock.created", { name: made.name }) : t("newblock.createdNotReplaced", { name: made.name, link: made.embed }));
 		} catch (e) {
-			showNotice(t("newblock.failed", { error: e instanceof Error ? e.message : String(e) }));
-			button.disabled = false;
+			console.error("[notebook] the new notebook's block could not be replaced", e);
+			showNotice(t("newblock.createdNotReplaced", { name: made.name, link: made.embed }), 12000);
 		} finally {
 			this.busy = false;
 		}

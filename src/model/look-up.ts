@@ -180,15 +180,19 @@ export function parseLookUpLine(text: string, lineNo = 0): LookUpEntry | null {
 	return { line: lineNo, done: m[1] !== " ", word: unescapeText(word.trim()), imagePath, linkPath: link.path, subpath: link.sub, page, pageId, date };
 }
 
-/** Every entry of the note, in order (bounded). */
-export function parseLookUpNote(text: string): LookUpEntry[] {
+/**
+ * The entries of the whole note, in order. `keep` picks the entries wanted (the ones of one notebook) before the cap, so the
+ * list note shared by all notebooks cannot crowd one notebook out. The cap keeps the newest `LOOKUP_MAX_ENTRIES` (lines are
+ * appended, so the last ones are the newest).
+ */
+export function parseLookUpNote(text: string, keep?: (entry: LookUpEntry) => boolean): LookUpEntry[] {
 	const out: LookUpEntry[] = [];
 	const lines = text.split(/\r?\n/);
-	for (let i = 0; i < lines.length && out.length < LOOKUP_MAX_ENTRIES; i++) {
+	for (let i = 0; i < lines.length; i++) {
 		const e = parseLookUpLine(lines[i] ?? "", i);
-		if (e) out.push(e);
+		if (e && (!keep || keep(e))) out.push(e);
 	}
-	return out;
+	return out.length > LOOKUP_MAX_ENTRIES ? out.slice(out.length - LOOKUP_MAX_ENTRIES) : out;
 }
 
 /** The entries that point at the notebook (`pointsAtNotebook` resolves a link path the way Obsidian does); open ones are counted by `openCount`. */

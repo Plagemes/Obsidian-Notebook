@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatNewBlock, findNewBlocks, parseNewBlock, replaceNewBlock } from "../src/integration/new-block";
+import { findNewBlocks, formatNewBlock, isTemplateNote, newBlockSlot, parseNewBlock, replaceNewBlock, templateFoldersFrom } from "../src/integration/new-block";
 import { linkMarkup, parseCreateOptions, pickTemplate } from "../src/integration/api-plan";
 
 describe("parseNewBlock", () => {
@@ -45,6 +45,38 @@ describe("replaceNewBlock", () => {
 		expect(replaceNewBlock(text, 'name="A"', "X")).toBeNull();
 		expect(replaceNewBlock(text, 'name="A"', "X", 4)).toBe(`${b1}\n\nX\n`);
 		expect(replaceNewBlock(text, 'name="A"', "X", 0)).toBe(`X\n\n${b1}\n`);
+	});
+	it("keeps the block it was made for when lines are typed above while the notebook is being made (M12)", () => {
+		const text = `${b1}\n\n${b1}\n`;
+		// The button of the second identical block: its slot is fixed before anything is made.
+		const slot = newBlockSlot(text, 'name="A"', 4);
+		expect(slot).toEqual({ index: 1, count: 2 });
+		expect(newBlockSlot(text, 'name="A"')).toBeNull(); // two identical blocks and no hint: no guess
+		// Three lines typed above meanwhile: the old hint (4) would now point at the first block's line + 1; the slot still finds the second one.
+		const typed = `a\nb\nc\n${text}`;
+		expect(replaceNewBlock(typed, 'name="A"', "X", 4, slot!)).toBe(`a\nb\nc\n${b1}\n\nX\n`);
+		// Without the slot the stale hint would have replaced the wrong block or none.
+		expect(replaceNewBlock(typed, 'name="A"', "X", 4)).toBeNull();
+		// A block was added or removed meanwhile (the count changed): only a unique block is replaced, never a guess.
+		expect(replaceNewBlock(`${b1}\n\n${b1}\n\n${b1}\n`, 'name="A"', "X", 4, slot!)).toBeNull();
+		expect(replaceNewBlock(`${b1}\n`, 'name="A"', "X", 4, slot!)).toBe("X\n");
+	});
+	it("finds the template folders of core Templates and Templater, and tells a template note from a normal one (M13)", () => {
+		const app = {
+			internalPlugins: { getPluginById: (id: string) => (id === "templates" ? { enabled: true, instance: { options: { folder: "Templates/" } } } : null) },
+			plugins: { plugins: { "templater-obsidian": { settings: { templates_folder: "/Tpl/Notebooks" } } } },
+		};
+		const folders = templateFoldersFrom(app);
+		expect(folders).toEqual(["Templates", "Tpl/Notebooks"]);
+		expect(isTemplateNote("Templates/Class note.md", folders)).toBe(true);
+		expect(isTemplateNote("Tpl/Notebooks/sub/Lab.md", folders)).toBe(true);
+		expect(isTemplateNote("Templates2/Note.md", folders)).toBe(false);
+		expect(isTemplateNote("Daily/2026-11-04.md", folders)).toBe(false);
+		// A disabled core plugin, missing plugins or odd internals read as no folder.
+		expect(templateFoldersFrom({ internalPlugins: { getPluginById: () => ({ enabled: false, instance: { options: { folder: "T" } } }) } })).toEqual([]);
+		expect(templateFoldersFrom(undefined)).toEqual([]);
+		expect(templateFoldersFrom({ internalPlugins: { getPluginById: () => { throw new Error("x"); } } })).toEqual([]);
+		expect(isTemplateNote("Anything.md", [])).toBe(false);
 	});
 	it("ignores an example inside a longer fence and other languages", () => {
 		const example = `\`\`\`\`md\n${b1}\n\`\`\`\`\n`;

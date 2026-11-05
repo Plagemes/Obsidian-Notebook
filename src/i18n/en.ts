@@ -3565,6 +3565,7 @@ export const en = {
 	"newblock.error.noName": "Add a name: name=\"My sketches\"",
 	"newblock.error.unexpanded": "This still has template syntax in it (“{detail}”). Insert the template with Templater or Obsidian Templates first.",
 	"newblock.error.badValue": "Expected true or false: {detail}",
+	"newblock.inTemplate": "This is a placeholder inside a note template. The notes made from the template show a Create notebook button here.",
 	"newblock.noApi": "The Notebook API is not ready yet. Try again in a moment.",
 	"newblock.notFound": "This block is no longer in the note, or it appears more than once. Nothing was created.",
 	"newblock.created": "Created “{name}” and embedded it in the note.",

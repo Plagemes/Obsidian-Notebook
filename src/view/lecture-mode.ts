@@ -33,6 +33,9 @@ import { showNotice, type NoticeHandle } from "./notice";
 /** How often the clock is looked at while a notebook is open, ms. Cheap: no rendering, no file access. */
 export const LECTURE_TICK_MS = 30_000;
 
+/** Writing up to this long after a class's slot still counts for that class (the lecture log and the snapshot), ms. */
+export const LECTURE_GRACE_MS = 10 * 60_000;
+
 /** Why a lecture ended: the mode was left by hand, the class slot ran out, or the notebook is closing. Never the app going to the background. */
 export type LectureEndReason = "left" | "over" | "closing";
 
@@ -108,6 +111,8 @@ export class LectureModeController {
 	private timer: number | null = null;
 	private slotCheckedAt = 0;
 	private slotClass: LectureClass | null = null;
+	/** The last class seen for this notebook: writing within LECTURE_GRACE_MS after its slot still counts for it. */
+	private lastClass: LectureClass | null = null;
 	// The app going to the background is not the end of a lecture (the view only saves then); the clock is looked at again on return.
 	private readonly onVisible = (): void => {
 		if (document.visibilityState === "visible") this.evaluate();
@@ -203,6 +208,9 @@ export class LectureModeController {
 			}
 			cls = this.slotClass;
 		}
+		if (cls) this.lastClass = cls;
+		// Just after the slot (the user is finishing the page): still that class, so the log and the snapshot are brought up to date.
+		else if (this.lastClass && now.getTime() > this.lastClass.endsAt && now.getTime() <= this.lastClass.endsAt + LECTURE_GRACE_MS) cls = this.lastClass;
 		if (cls) this.wroteIn = cls;
 	}
 
@@ -211,6 +219,7 @@ export class LectureModeController {
 		if (!this.path) return;
 		const now = this.now();
 		const match = this.host.classFor(this.path, now);
+		if (match) this.lastClass = match;
 		const busy = writing.writing() || this.host.busy();
 		// A banner withdrawn or a mode left may be followed at once by the next step (auto after ask, the next class back to back).
 		for (let round = 0; round < 3; round++) {
@@ -361,6 +370,7 @@ export class LectureModeController {
 		this.asking = null;
 		this.wroteIn = null;
 		this.slotClass = null;
+		this.lastClass = null;
 		this.slotCheckedAt = 0;
 		this.declined.clear();
 		this.paged.clear();

@@ -125,18 +125,75 @@ export function findNewBlocks(text: string): FoundBlock[] {
 
 const norm = (s: string) => s.replace(/\r\n?/g, "\n").trim();
 
+/** Which of several identical blocks a button belongs to: its place among them, and how many there were. Survives lines typed above it. */
+export interface BlockSlot {
+	index: number;
+	count: number;
+}
+
+function pickBlock(matches: readonly FoundBlock[], lineHint?: number, slot?: BlockSlot): FoundBlock | undefined {
+	if (slot && matches.length === slot.count) return matches[slot.index];
+	if (!slot && lineHint !== undefined) {
+		const at = matches.find((b) => b.line === lineHint);
+		if (at) return at;
+	}
+	return matches.length === 1 ? matches[0] : undefined;
+}
+
+/** The slot of the block with content `source` at `lineHint` (see `replaceNewBlock`); null when no block can be picked. */
+export function newBlockSlot(text: string, source: string, lineHint?: number): BlockSlot | null {
+	const wanted = norm(source);
+	const matches = findNewBlocks(text).filter((b) => norm(b.source) === wanted);
+	const pick = pickBlock(matches, lineHint);
+	return pick ? { index: matches.indexOf(pick), count: matches.length } : null;
+}
+
 /**
  * Replaces the one block whose content is `source` with `replacement`. `lineHint` (the section's first line from Obsidian)
- * picks between identical blocks; without it the block must be unique. Returns null (nothing to change) when no block
- * matches, or when several match and none can be told apart: never a guess.
+ * picks between identical blocks; without it the block must be unique. `slot` (taken before anything was made, see
+ * `newBlockSlot`) wins over the hint: lines typed above the block meanwhile do not move it onto another identical block, and if
+ * the number of identical blocks changed the block must be unique. Returns null (nothing to change) when no block matches, or
+ * when several match and none can be told apart: never a guess.
  */
-export function replaceNewBlock(text: string, source: string, replacement: string, lineHint?: number): string | null {
+export function replaceNewBlock(text: string, source: string, replacement: string, lineHint?: number, slot?: BlockSlot): string | null {
 	const wanted = norm(source);
 	const matches = findNewBlocks(text).filter((b) => norm(b.source) === wanted);
 	if (matches.length === 0) return null;
-	let pick: FoundBlock | undefined;
-	if (lineHint !== undefined) pick = matches.find((b) => b.line === lineHint);
-	if (!pick) pick = matches.length === 1 ? matches[0] : undefined;
+	const pick = pickBlock(matches, lineHint, slot);
 	if (!pick) return null;
 	return text.slice(0, pick.start) + replacement + text.slice(pick.end);
+}
+
+function bag(v: unknown): Record<string, unknown> | null {
+	return typeof v === "object" && v !== null ? (v as Record<string, unknown>) : null;
+}
+
+/** The folders of the core Templates plugin and of Templater, as configured (read leniently from Obsidian's internals; empty when none). */
+export function templateFoldersFrom(app: unknown): string[] {
+	const out: string[] = [];
+	const add = (v: unknown): void => {
+		if (typeof v !== "string") return;
+		const folder = v.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+		if (folder !== "") out.push(folder);
+	};
+	try {
+		const root = bag(app);
+		const internal = bag(root?.internalPlugins);
+		const getById = internal?.getPluginById;
+		if (typeof getById === "function") {
+			const core = bag((getById as (id: string) => unknown).call(internal, "templates"));
+			if (core?.enabled === true) add(bag(bag(core.instance)?.options)?.folder);
+		}
+		const community = bag(bag(root?.plugins)?.plugins);
+		add(bag(bag(community?.["templater-obsidian"])?.settings)?.templates_folder);
+	} catch {
+		// Unknown internals read as no template folder.
+	}
+	return out;
+}
+
+/** Is the note at `path` inside one of the template folders? There a `notebook-new` block is the template's own text, not a button. */
+export function isTemplateNote(path: string, folders: readonly string[]): boolean {
+	const p = path.replace(/\\/g, "/");
+	return folders.some((f) => p === f || p.startsWith(`${f}/`));
 }

@@ -17,7 +17,7 @@
  * name), so two synced devices generate byte-identical notes and never rewrite each other's copy.
  */
 import { cardSubpath, clampRegion, validPageId } from "../zettel/subpath";
-import { searchLines } from "./companion-search";
+import { fitSearchBudget, SEARCH_NOTE_MAX, searchLines } from "./companion-search";
 import { cleanMarkerText, isBoxKind, isIsoDate } from "./markers";
 import { computeSharedTags, normalizeTag, uniqueTags } from "./tags";
 import type { BoxElement, MarkerElement, NotebookDocument, Page, TextElement } from "./types";
@@ -286,9 +286,11 @@ export function companionContent(doc: NotebookDocument, ctx: CompanionContext, h
 	const sections: string[] = [];
 	const homeworkDone: string[] = [];
 	const anchors = new Set<string>();
+	// The search text of all pages together is bounded, so a notebook of hundreds of pages cannot make a huge note.
+	const budget = { left: SEARCH_NOTE_MAX, cut: false };
 	pages.forEach((page, i) => {
 		// v8: structured boxes become callouts with a live embed of their region, homework becomes Obsidian tasks.
-		const extra = ctx.searchText ? searchLines(page) : [];
+		const extra = ctx.searchText ? fitSearchBudget(searchLines(page), budget) : [];
 		const blocks = [
 			...textBlocks(page?.elements), ...boxCallouts(page, i + 1, ctx.notebookPath), ...homeworkTasks(page?.elements, homework, homeworkDone, anchors),
 			...(extra.length > 0 ? [extra.join("\n")] : []),

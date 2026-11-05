@@ -246,7 +246,7 @@ export interface NotebookHost {
 	/** 0.19 (222): a lecture ended in that notebook; the plugin takes the lecture snapshot from the saved file. Optional: absent in tests and the harness. */
 	lectureEnded?(path: string, course: string, saved: boolean): void;
 	/** 0.19 (#221): a lecture the user wrote in ended: its line goes into the daily note (library/lecture-log.ts). Optional: absent in tests and the harness. */
-	logLecture?(file: TFile, cls: LectureClass, snap: LectureSnapshot): void;
+	logLecture?(file: TFile, cls: LectureClass, snap: LectureSnapshot, docId?: string): void;
 	/** ui redesign: runs a plugin-level action of the registry (notebook menu). Optional. */
 	runGlobal?(id: string): void;
 	/** wave 0.7: sync safety (presence files, sync check). Optional: absent in tests and the harness. */
@@ -1321,7 +1321,7 @@ export class NotebookView extends FileView {
 		const doc = this.session?.doc;
 		if (!file || !doc || !this.host.logLecture) return;
 		const snap = lectureSnapshot(doc.pages, cls.course, new Date(cls.startsAt));
-		if (snap) this.host.logLecture(file, cls, snap);
+		if (snap) this.host.logLecture(file, cls, snap, doc.id);
 	}
 
 	async onUnloadFile(file: TFile): Promise<void> {

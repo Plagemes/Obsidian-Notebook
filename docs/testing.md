@@ -1267,7 +1267,7 @@ Figures gallery (roadmap #228). Use a notebook with two or three lectures (pages
 Lecture log (roadmap #221). Needs Daily notes (or Periodic Notes) on, and a timetable class running now that belongs to a notebook (set the class a few minutes around the current time).
 
 1560. **Off by default.** Settings, Integrations: *Lecture log in the daily note* is off; *Lecture log heading* appears only when it is on. With it off, ending a lecture writes nothing to the daily note.
-1561. **First line.** Turn it on, enter lecture mode in the class's notebook, write a few lines, leave lecture mode (End). Today's daily note ends with `## Lectures` and one line: time slot, bold course, a link `pp. a–b`, the page count and (only if there are any) the open questions.
+1561. **First line.** Turn it on, enter lecture mode in the class's notebook, write a few lines, leave lecture mode (End). Today's daily note ends with `## Lectures` and one line: time slot, bold course, the page count and (only if there are any) the open questions, then the link `pp. a–b`.
 1562. **Link.** Tap the link in the daily note (reading view): the notebook opens at the first lecture page. Reorder pages: the link still opens the same page (it carries the page id).
 1563. **Open questions.** Add two question markers on the lecture pages, resolve one, end the lecture again: the same line (not a second one) now says "1 open question".
 1564. **Session goes on.** Re-enter lecture mode within the same class, add a page, end: still one line, now with the new range and count. The rest of the note (text before and after, other headings) is unchanged.
@@ -1280,6 +1280,11 @@ Lecture log (roadmap #221). Needs Daily notes (or Periodic Notes) on, and a time
 1571. **Two classes.** Two classes in the same notebook on one day each get their own line.
 1572. **Android.** All of the above on the tablet; no notice or delay while closing the notebook.
 1573. **Look.** The two settings in light, dark, *Follow Obsidian theme*, phone width, Italian.
+1574. **Your edits to the line survive.** After the first line is written, put it in a callout (`> `), turn it into a task (`- [ ]`) and type a few words after the link. Write more in the class and end the lecture again: the line is updated (new range and counts) and the callout mark, the task box and your words are still there. A copy of the line inside a code block is not touched. Rewrite the line completely by hand (keeping `^nb-lec-…`): the next end changes nothing and adds no second line.
+1575. **Templater on a new daily note.** With *Create the daily note if missing* on and Templater filling new daily notes (folder template or "trigger on new file creation"), end a lecture on a day without a note: after a few seconds the note holds the template text and the lecture line. Delete the line afterwards: it does not come back.
+1576. **Ten minutes after the class.** Write on the lecture page up to ten minutes after the class's time slot has ended: the line and (if on) the snapshot are updated with it. Write eleven minutes after: nothing changes.
+1577. **Rename the notebook.** End a lecture, rename or move the notebook, write again in the same class and end it: still one line (with the new link), not two.
+1578. **Switching apps.** Switch to another app and back several times during a class: no line is written and no snapshot is taken until the lecture ends.
 
 | Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
 |---|---|---|---|---|---|
@@ -2744,6 +2749,7 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 1550. **Sync.** On two devices with one vault: add an entry on each; after sync the note has both lines and each sheet lists them.
 1551. **Italian.** In Italian: *Cerca dopo…*, *Elenco Cerca dopo…*, *Parola (facoltativa)*, *Aggiungi all'elenco*.
 1552. **Shared-files inbox.** The pictures are not offered by the shared-files inbox.
+1553. **A busy shared list.** Add several hundred lines for other notebooks to the list note (for example by copy and paste of a line with a link to another notebook), then add one more entry from this notebook: the sheet still shows the new entry (this notebook's entries are picked across the whole note, the newest 500 are kept).
 
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
@@ -2764,6 +2770,7 @@ Needs *Companion notes* on. Not verified on hardware.
 1526. Update again without changing anything: the companion file is not modified (check the modified time); editing a sticky note and waiting a few seconds updates it once.
 1527. Switch the setting off and update: the extra lines and wikilinks go back to the previous form; user text outside the block is untouched.
 1528. Give a checkbox a label (*Label…*), tick another labelled one, update the companion note with the setting on: the page lists `checkbox: ☐ label` and `checkbox: ☑ label`; a box without a typed label adds nothing.
+1529. Type `https://example.com` and `www.example.org` in a sticky note: after the update the companion note shows them as plain text with backslashes in the source, not as clickable links. On a notebook of several hundred pages with long sticky notes on each, the companion note stays at a reasonable size and ends the listing with "(the search text of the following pages is not listed)".
 
 ### 0.19 — templates: notebooks from note templates (steps 1640-1659)
 
@@ -2779,6 +2786,8 @@ Roadmap O13. Needs Templater and the core Templates plugin, and a notebook templ
 1647. **Templater script.** The `new-notebook.js` user script of `docs/templates.md` inserts `![[….notebook]]`, and the notebook exists, opens, and keeps the template's cover. With a wrong template name the note gets the error text, not a crash.
 1648. **Phone.** On Android the card fits the width, the button is a comfortable target, and creating works.
 1649. **Look.** Light, dark and *Follow Obsidian theme*: the card reads well beside the note text.
+1650. **In the template itself.** Open the template file (the one in the Templates or Templater folder) in reading view: the block shows the card with a note that the button appears in the notes made from the template, and no button. The template file is never changed.
+1651. **No second notebook.** Press the button, then make the note read-only or remove it from the vault while it is working (hard to time; or make the notebook open fail): the button does not come back, and if the block could not be replaced a notice shows the `![[….notebook]]` link to paste. Pressing again is not possible.
 
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
@@ -2801,6 +2810,9 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 1589. **Restore.** Restore a lecture snapshot: the usual confirmation, a backup of the current content, the notebook goes back.
 1590. **Italian.** In Italian: *Istantanea a fine lezione*, *Istantanee di lezione*, the row reads "Lezione <corso> <data> <ora>".
 1591. **Unreadable label file.** Make `lectures.json` invalid on a PC: new lecture snapshots still work (the row shows "Lecture <date> <hh:mm>" without the course) and the file is left as it is.
+1592. **Storage cleanup spares the ordinary snapshots.** With more than *Versions to keep* lecture snapshots and a few old ordinary ones in a notebook's history, open *Storage* → backups: the old ordinary snapshots beyond the newest few are offered; the lecture snapshots are never listed (they only follow *Lecture snapshots to keep*).
+1593. **Large notebook, version list.** On a notebook with many pages and a dozen or more versions, *Restore a previous version* opens at once; rows show the date and size (no page count). Choosing a copy that is damaged says it cannot be read instead of restoring it.
+1594. **Interval snapshot running.** Open a notebook at the end of a class right after the interval snapshot is due: both the ordinary and the lecture snapshot are taken (the lecture one a moment later).
 
 | Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
 |---|---|---|---|---|---|
