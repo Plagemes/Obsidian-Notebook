@@ -25,6 +25,10 @@
  *   just enough in the same step so it stays visible: wider margins on a page with a background
  *   (`SetPageMargins`: its own ink moves with the background), a larger plain page, or more height on an
  *   infinite page (`SetPageSize`, which follows the margin rule).
+ * - v18: the group of a stroke or an element and the lock of an element are state, not content (`mergedFlags`, model/groups.ts):
+ *   membership of a group is united by id (an item in no group in the main notebook joins the copy's group; groups only grow, deletions
+ *   are not inferred), and the later lock decision (`lockAt`) wins, a tie that disagrees keeping the lock (counted in `flagsUpdated`).
+ *   Items only the copy has come with their group and lock; a group left with one member is released by the reader and the writer.
  * - v17: a checkbox is its place, size and colour; whether it is ticked, when it was last toggled (`at`), its typed label and its
  *   task link are its state, not content. The same checkbox (same id) on both sides is kept once; when both toggled it the later
  *   toggle wins (`mergedCheckbox`: ticked or unticked as the later one left it, a tie that disagrees keeps the tick) and a label or
@@ -68,6 +72,7 @@ import { copyStroke as copyStrokeWithId } from "./pages";
 import { freezeElement } from "./serialize";
 import { UpdateCheckbox } from "./checklist-commands";
 import { copiedCheckbox, withChecked, withCheckboxLabel, withCheckboxTask } from "./checklist";
+import { mergedFlags, UpdateItems, type PageItem } from "./groups";
 import { DEFAULT_META, type BookmarkInfo, type CheckboxElement, type MarkerElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type PageMargins, type Stroke } from "./types";
 
 export interface MergeSummary {
@@ -107,6 +112,8 @@ export interface MergeSummary {
 	markersResolved: number;
 	/** v17: checkboxes both have whose state is taken from the copy because it was toggled later (or it has a label or task link the main one lacks). */
 	checkboxesUpdated: number;
+	/** v18: items both have whose group or lock is taken from the copy (a group they were not in, a later lock or unlock). */
+	flagsUpdated: number;
 }
 
 export interface MergePlan {
@@ -123,6 +130,11 @@ export function strokeContentKey(s: Stroke): string {
 export function elementContentKey(e: PageElement): string {
 	const { id: _id, ...rest } = e;
 	void _id;
+	// v18: the group and the lock of an element are its state, not its content (merged by `mergedFlags`; an element locked on one
+	// device only is still the same element, never a second copy).
+	delete rest.group;
+	delete rest.locked;
+	delete rest.lockAt;
 	// v8: whether a marker is resolved is its state, not its content (see planMerge).
 	if (rest.type === "marker") delete (rest as Partial<MarkerElement>).done;
 	// v9: graphs nest objects (viewport, functions): keys sorted at every level, none dropped. The cached outline of an
@@ -307,7 +319,7 @@ function carriedInk(e: PageElement, strokeMap: ReadonlyMap<string, string>, adde
 export function planMerge(main: NotebookDocument, other: NotebookDocument): MergePlan {
 	const summary: MergeSummary = {
 		pagesAdded: 0, strokesAdded: 0, strokesCopied: 0, elementsAdded: 0, elementsCopied: 0, assetsAdded: 0,
-		tagsAdded: 0, bookmarksAdded: 0, bookmarkInfoAdded: 0, bookmarkInfoDiffer: 0, pageTagsAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0, markersResolved: 0, commentsAdded: 0, checkboxesUpdated: 0,
+		tagsAdded: 0, bookmarksAdded: 0, bookmarkInfoAdded: 0, bookmarkInfoDiffer: 0, pageTagsAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0, markersResolved: 0, commentsAdded: 0, checkboxesUpdated: 0, flagsUpdated: 0,
 	};
 	const commands: Command[] = [];
 	// v12: the copy's slide ids in the main notebook's table.
@@ -326,6 +338,8 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 	const mainMarkers = new Map<string, { pageId: string; done: boolean }>();
 	/** v17: checkboxes of the main notebook by id (see `checkFrom`). */
 	const mainCheckboxes = new Map<string, { pageId: string; el: CheckboxElement }>();
+	/** v18: strokes and elements of the main notebook by id, as the merge leaves them (see `flagsFrom`). */
+	const mainItems = new Map<string, { pageId: string; item: PageItem }>();
 	/** Content keys present on each page of the result, for the idempotence of copies. */
 	const contentOn = new Map<string, Set<string>>();
 	for (const page of main.pages) {
@@ -335,11 +349,13 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 			const k = `s${strokeContentKey(s)}`;
 			used.set(s.id, k);
 			keys.add(k);
+			mainItems.set(s.id, { pageId: page.id, item: s });
 		}
 		for (const e of page.elements ?? []) {
 			const k = `e${elementContentKey(e)}`;
 			used.set(e.id, k);
 			keys.add(k);
+			mainItems.set(e.id, { pageId: page.id, item: e });
 			if (e.type === "marker") mainMarkers.set(e.id, { pageId: page.id, done: !!e.done });
 			if (e.type === "checkbox") mainCheckboxes.set(e.id, { pageId: page.id, el: e });
 		}
@@ -371,6 +387,21 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 		commands.push(new UpdateCheckbox(have.pageId, e.id, (current) => mergedCheckbox(current, e) ?? current, "Merge checkbox"));
 		mainCheckboxes.set(e.id, { pageId: have.pageId, el: next });
 		summary.checkboxesUpdated++;
+	};
+	/**
+	 * v18: a stroke or an element of the copy that is the same item as one of the main notebook (same id, same content: `key`): it
+	 * joins the group of the copy when the main notebook's is in none, and its lock follows the later decision (`mergedFlags`).
+	 * Found by id when applied, so a margin change in the same step does not matter.
+	 */
+	const flagsFrom = (item: PageItem, key: string): void => {
+		if (used.get(item.id) !== key) return;
+		const have = mainItems.get(item.id);
+		if (!have) return;
+		const next = mergedFlags(have.item, item);
+		if (!next) return;
+		commands.push(new UpdateItems(have.pageId, new Set([item.id]), (current) => mergedFlags(current, item) ?? current, "Merge groups and locks"));
+		mainItems.set(item.id, { pageId: have.pageId, item: next });
+		summary.flagsUpdated++;
 	};
 	const freshId = () => {
 		let id = createId();
@@ -484,6 +515,7 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 				const d = decide(s.id, key, page.id, "stroke");
 				if (d.kind === "skip") {
 					if (mainStrokeIds.has(s.id)) strokeMap.set(s.id, s.id);
+					flagsFrom(s, key);
 					continue;
 				}
 				strokeMap.set(s.id, d.kind === "keep" ? s.id : d.id);
@@ -499,6 +531,7 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 				if (d.kind === "skip") {
 					resolveFrom(e, key);
 					checkFrom(e, key);
+					flagsFrom(e, key);
 					continue;
 				}
 				const el = carriedInk(d.kind === "keep" ? e : copyElement(e, d.id), strokeMap, addedStrokes);

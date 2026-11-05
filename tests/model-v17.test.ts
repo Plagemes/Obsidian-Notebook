@@ -83,7 +83,7 @@ const boxRaw = (over: Raw = {}): Raw => ({ id: "c1", type: "checkbox", x: 10, y:
 
 describe("format v17: migration", () => {
 	it("has the v16 step (the current format is v17 since handwritten checklists)", () => {
-		expect(CURRENT_VERSION).toBe(17);
+		expect(CURRENT_VERSION).toBeGreaterThanOrEqual(17);
 		expect(typeof MIGRATIONS[16]).toBe("function");
 	});
 
