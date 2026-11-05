@@ -1,6 +1,6 @@
 import { FileView, getLanguage, Scope, setIcon, type Menu, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 import { pageFromState, pageIdFromState, regionFromState } from "../integration/links";
-import { pageTargetFromEphemeralState, resolvePageTarget, type PageTarget } from "../integration/page-links";
+import { pageTargetFromEphemeralState, pageTargetFromSubpath, resolvePageTarget, type PageTarget } from "../integration/page-links";
 import { checkConflicts, openRepair, type ReliabilityDeps } from "../integration/reliability";
 import { scanFromCamera } from "../scan/scan-modal";
 import { scannedPage } from "../scan/pages";
@@ -152,6 +152,8 @@ import { RulerGesture } from "./ruler-gesture";
 import { BLANK_THUMBNAIL, ViewResilience, type ResilienceServices, type ResilienceViewHost } from "./resilience";
 import { ObjectInk } from "./object-ink";
 import { PenLinks } from "./pen-links";
+import { RefWindow } from "./ref-window";
+import type { ReferenceRequest } from "./ref-window-logic";
 import { SelectionActions } from "./selection-actions";
 import { statesAfterCuts } from "../model/states-erase";
 import { StatesTools } from "./states-tools";
@@ -405,6 +407,8 @@ export class NotebookView extends FileView {
 	/** 0.14 layout: phone / tablet / desktop, portrait / landscape and short height of this view (classes nb-vp-* on contentEl). */
 	private readonly vpClass = new ViewportTracker(() => ({ coarse: activeWindow.matchMedia("(pointer: coarse)").matches }));
 	private media: NotebookMedia | null = null;
+	/** 0.20 (#107): the floating reference window over the page (null until the view is open). */
+	private refWindow: RefWindow | null = null;
 	/** wave 0.7: sync safety (#342–#344). */
 	private syncSafety: ViewSyncSafety | null = null;
 	private pageNav: PageNavigator | null = null;
@@ -910,6 +914,20 @@ export class NotebookView extends FileView {
 		this.registerDomEvent(window, "keydown", (e) => this.onPenKey(e), { capture: true });
 		this.registerClipboardEvents();
 
+		// 0.20 (#107): the floating reference window. Created with the view; its DOM exists only while a reference is shown.
+		this.refWindow = new RefWindow({
+			app: this.app,
+			container: () => this.body,
+			snap: () => this.host.settings.refWindowSnap,
+			deps: {
+				app: this.app,
+				folder: () => this.host.settings.folder,
+				live: (file) => (file === this.file && this.session ? { doc: () => this.shownDoc(), media: () => this.media } : null),
+			},
+		});
+		this.registerEvent(this.app.vault.on("modify", (f) => this.refWindow?.fileChanged(f.path)));
+		this.registerEvent(this.app.vault.on("delete", (f) => this.refWindow?.fileGone(f.path)));
+
 		this.registerEvent(this.app.vault.on("modify", (f) => {
 			if (f === this.file && this.session) void this.session.handleExternalChange();
 		}));
@@ -946,6 +964,8 @@ export class NotebookView extends FileView {
 		this.pens?.destroy();
 		this.pens = null;
 		this.penSetUi = null;
+		this.refWindow?.destroy();
+		this.refWindow = null;
 		this.pdfText?.destroy();
 		this.pdfText = null;
 		this.pdfLinks?.destroy();
@@ -1327,6 +1347,8 @@ export class NotebookView extends FileView {
 	}
 
 	async onUnloadFile(file: TFile): Promise<void> {
+		// 0.20 (#107): a reference that shows this very notebook reads its open document: it goes with it.
+		if (this.refWindow?.file === file) this.refWindow.close();
 		this.lectureMode?.closing();
 		await this.closeSession();
 		const pending = this.snapshotAfterClose;
@@ -3155,6 +3177,27 @@ export class NotebookView extends FileView {
 		} else if (!runViewAction(this, id, arg)) return;
 		this.ui?.record(id);
 		this.refreshUi();
+	}
+
+	// --- 0.20 (#107): the floating reference window ---
+
+	/** Shows `file` (a notebook page, a PDF, a picture or a note) in the floating reference window. */
+	openReference(file: TFile, request: Pick<ReferenceRequest, "page" | "pageId"> = { page: null, pageId: null }): Promise<void> {
+		return this.refWindow?.open(file, request) ?? Promise.resolve();
+	}
+
+	/** Shows page `index` of this notebook in the reference window. */
+	openPageAsReference(index: number): void {
+		const file = this.file, page = this.shownDoc()?.pages[index];
+		if (file && page) void this.openReference(file, { page: index + 1, pageId: page.id });
+	}
+
+	closeReference(): void {
+		this.refWindow?.close();
+	}
+
+	get referenceOpen(): boolean {
+		return this.refWindow?.isOpen === true;
 	}
 
 	/** Whether a command of the registry applies now (the palette hides it otherwise). */
@@ -5650,6 +5693,18 @@ export class NotebookView extends FileView {
 			register: (ref) => this.registerEvent(ref),
 		});
 		this.penLinks.bindEditor(editor);
+	}
+
+	/** 0.20 (#107): "Open as reference" for the link in the selected text box: the note, notebook page, PDF or picture it names, in the floating window. */
+	openSelectionReference(): void {
+		const link = this.selection && this.penLinks?.linkIn(this.selection.elements);
+		const file = link ? this.penLinks?.resolveFile(link) : null;
+		if (!link || !file) {
+			showNotice(t("refwin.linkMissing"));
+			return;
+		}
+		const target = pageTargetFromSubpath(link.subpath);
+		void this.openReference(file, { page: target?.page ?? null, pageId: target?.pageId ?? null });
 	}
 
 	/** Opens the link in the selected text box (the contextual bar's "Open link"). */

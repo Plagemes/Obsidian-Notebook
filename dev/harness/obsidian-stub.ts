@@ -1345,3 +1345,14 @@ export class HoverPopover extends Component {
 		super();
 	}
 }
+
+/** 0.20 refwindow: Markdown is shown as plain paragraphs (headings kept as headings) in the harness. */
+export class MarkdownRenderer {
+	static async render(_app: unknown, markdown: string, el: HTMLElement, _sourcePath: string, _component: unknown): Promise<void> {
+		for (const line of markdown.split("\n")) {
+			if (line.startsWith("# ")) el.createEl("h1", { text: line.slice(2) });
+			else if (line.trim()) el.createEl("p", { text: line });
+		}
+		await Promise.resolve();
+	}
+}

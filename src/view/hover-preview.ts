@@ -13,6 +13,8 @@ import { t } from "../i18n";
 import type { NotebookDocument, Page } from "../model/types";
 import { NOTEBOOK_EXTENSIONS, isNotebookFile } from "../storage/format";
 import { renderThumbnail, type ThumbnailOptions } from "../library/thumbnail";
+import { showNotice } from "./notice";
+import { referenceHost } from "./ref-window-open";
 import {
 	HOVER_SOURCE_ID, asHoverLinkEvent, hoverPage, hoverTarget, mayBeNotebookLink, readPagePreviewConfig, shouldShowPreview, splitLinktext,
 } from "./hover-preview-logic";
@@ -127,6 +129,18 @@ function showCard(
 		void openNotebookAtPage(app, file, opened.page, null, opened.pageId);
 		(popover as unknown as { hide?: () => void }).hide?.();
 	};
+	// 0.20 (#107): the same page in the floating reference window over the notebook being written in.
+	const asRef = meta.createEl("button", { cls: "nb-card-btn nb-hover-ref", attr: { type: "button", "aria-label": t("refwin.openFile"), title: t("refwin.openFile") } });
+	setIcon(asRef, "picture-in-picture-2");
+	asRef.addEventListener("keydown", (ev) => ev.stopPropagation());
+	asRef.addEventListener("click", (ev) => {
+		ev.preventDefault();
+		ev.stopPropagation();
+		const host = referenceHost(app);
+		if (!host) showNotice(t("refwin.noNotebook"));
+		else void host.openReference(file, { page: opened.page, pageId: opened.pageId });
+		(popover as unknown as { hide?: () => void }).hide?.();
+	});
 	card.addEventListener("click", open);
 	card.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") open(ev); });
 

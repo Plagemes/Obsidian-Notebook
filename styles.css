@@ -16585,3 +16585,275 @@ body.notebook-style-obsidian {
 	width: 16px;
 	height: 16px;
 }
+
+/* ===== 0.20 refwindow ===== */
+/* The floating reference window (#107). A small element over the notebook body, never a layer over the canvas. */
+.nb-ui.nb-refwin {
+	position: absolute;
+	z-index: 25;
+	top: var(--nb-rw-y, 0);
+	left: var(--nb-rw-x, 0);
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+	width: var(--nb-rw-w, 320px);
+	height: var(--nb-rw-h, 260px);
+	overflow: hidden;
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-panel);
+	box-shadow: var(--nb-shadow-float);
+	opacity: var(--nb-rw-opacity, 1);
+	font-family: var(--font-interface);
+}
+
+.nb-ui.nb-refwin .is-hidden.is-hidden {
+	display: none;
+}
+
+.nb-ui.nb-refwin .nb-refwin-head {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 8px 6px 10px;
+	border-bottom: 1px solid var(--nb-border);
+	cursor: grab;
+	touch-action: none;
+	user-select: none;
+}
+
+.nb-ui.nb-refwin .nb-refwin-head:active {
+	cursor: grabbing;
+}
+
+.nb-ui.nb-refwin .nb-refwin-icon {
+	width: 28px;
+	height: 28px;
+	border-radius: var(--nb-radius-s);
+}
+
+.nb-ui.nb-refwin .nb-refwin-icon svg {
+	width: 16px;
+	height: 16px;
+}
+
+.nb-ui.nb-refwin .nb-refwin-title {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	font-size: var(--nb-fs-label);
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-refwin .nb-refwin-btn {
+	width: 32px;
+	height: 32px;
+	min-width: 32px;
+}
+
+.nb-ui.nb-refwin .nb-refwin-btn svg {
+	width: 16px;
+	height: 16px;
+}
+
+.nb-ui.nb-refwin .nb-refwin-btn:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+@media (pointer: coarse) {
+	.nb-ui.nb-refwin .nb-refwin-btn {
+		width: var(--nb-target);
+		height: var(--nb-target);
+		min-width: var(--nb-target);
+	}
+}
+
+.nb-ui.nb-refwin .nb-refwin-frame {
+	position: relative;
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: hidden;
+	background: var(--nb-surface-2);
+	touch-action: none;
+}
+
+.nb-ui.nb-refwin.is-flow .nb-refwin-frame {
+	overflow: auto;
+	touch-action: pan-y pinch-zoom;
+	overscroll-behavior: contain;
+}
+
+.nb-ui.nb-refwin .nb-refwin-layer {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: var(--nb-rw-lw, 100%);
+	height: var(--nb-rw-lh, 100%);
+	transform: translate(var(--nb-rw-tx, 0), var(--nb-rw-ty, 0)) scale(var(--nb-rw-ts, 1));
+	transform-origin: 0 0;
+	will-change: transform;
+	transition: opacity var(--nb-motion-fast) ease-out;
+}
+
+.nb-ui.nb-refwin.is-flow .nb-refwin-layer {
+	position: static;
+	width: auto;
+	height: auto;
+	transform: none;
+	will-change: auto;
+}
+
+.nb-ui.nb-refwin.is-busy .nb-refwin-layer {
+	opacity: 0.6;
+}
+
+.nb-ui.nb-refwin .nb-refwin-img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	background: #fff;
+	pointer-events: none;
+	user-select: none;
+}
+
+.nb-ui.nb-refwin .nb-refwin-md {
+	padding: 12px 14px;
+	font-size: var(--nb-fs-row);
+	user-select: text;
+}
+
+.nb-ui.nb-refwin .nb-refwin-empty {
+	padding: 24px 16px;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	text-align: center;
+}
+
+.nb-ui.nb-refwin .nb-refwin-foot {
+	position: relative;
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	gap: 6px;
+	min-height: 40px;
+	padding: 3px 44px 3px 8px;
+	border-top: 1px solid var(--nb-border);
+}
+
+.nb-ui.nb-refwin .nb-refwin-stepper {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.nb-ui.nb-refwin .nb-refwin-steplabel {
+	min-width: 48px;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+}
+
+.nb-ui.nb-refwin .nb-refwin-opacity {
+	display: flex;
+	flex: 1 1 auto;
+	align-items: center;
+	gap: 6px;
+	min-width: 60px;
+	max-width: 160px;
+	margin-left: auto;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.nb-refwin .nb-refwin-opacity-icon svg {
+	width: 14px;
+	height: 14px;
+}
+
+.nb-ui.nb-refwin .nb-refwin-slider {
+	flex: 1 1 auto;
+	min-width: 0;
+	height: 24px;
+	margin: 0;
+	accent-color: var(--nb-accent);
+}
+
+.nb-ui.nb-refwin .nb-refwin-grip {
+	position: absolute;
+	right: 0;
+	bottom: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 100%;
+	min-height: 40px;
+	color: var(--nb-text-muted);
+	cursor: nwse-resize;
+	touch-action: none;
+}
+
+.nb-ui.nb-refwin .nb-refwin-grip svg {
+	width: 16px;
+	height: 16px;
+}
+
+.nb-ui.nb-refwin-chip {
+	position: absolute;
+	z-index: 25;
+	top: var(--nb-rw-y, 0);
+	left: var(--nb-rw-x, 0);
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	box-sizing: border-box;
+	width: var(--nb-rw-w, 184px);
+	height: var(--nb-rw-h, 40px);
+	padding: 0 14px;
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	box-shadow: var(--nb-shadow-2);
+	font-family: var(--font-interface);
+	font-size: var(--nb-fs-chip);
+	cursor: pointer;
+	touch-action: none;
+	user-select: none;
+}
+
+.nb-ui.nb-refwin-chip:hover,
+.nb-ui.nb-refwin-chip:focus-visible {
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui.nb-refwin-chip .nb-refwin-chip-icon {
+	display: inline-flex;
+	flex: none;
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-refwin-chip .nb-refwin-chip-icon svg {
+	width: 16px;
+	height: 16px;
+}
+
+.nb-ui.nb-refwin-chip .nb-refwin-chip-title {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* The page preview card of a link: the same page as a reference. */
+.nb-ui.nb-hover-card .nb-hover-ref {
+	width: 32px;
+	height: 32px;
+	min-width: 32px;
+	margin-left: auto;
+}

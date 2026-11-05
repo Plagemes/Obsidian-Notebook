@@ -374,6 +374,11 @@ export class PenLinks {
 
 	// --- opening links ---
 
+	/** 0.20 (#107): the file a link points to (a note or a notebook), or null when it does not exist. */
+	resolveFile(link: TextLink): TFile | null {
+		return this.index.resolve(link.target);
+	}
+
 	/** Opens the note a link points to in a new tab; a note that does not exist is offered for creation. */
 	open(link: TextLink): void {
 		const file = this.index.resolve(link.target);

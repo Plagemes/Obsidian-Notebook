@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### refwindow
+- **Floating reference window (#107).** A small window floats over the page while you write and shows a reference, read only: a page of this or another notebook (drawn like a thumbnail: ink, PDF background, pictures, text), a PDF page, a picture of the vault or a Markdown note. Open it from the page sheet (*Show in reference window*), the command palette (*Open a reference window…*), the selection bar of a text box that holds a link (*Open as reference*), the preview card of a page link and the file menu (*Open as reference*). Drag it by its header, resize it from the corner, fade it with the slider, minimise it to a chip or close it; fingers pan and pinch-zoom the reference, the S Pen does nothing inside it and writes normally outside it. Its place, size and opacity are kept on the device (one place per orientation) and it stays inside the page area after a rotation. The picture is drawn at the window's size and again only after a resize or a zoom has ended. New setting *Reference window snaps to the edges* (Reading). No document format change.
+
 ## 0.19.0 — 2026-11-05
 
 Handwritten tasks and a lecture you can follow up from your notes: checkboxes drawn with the pen that tick the tasks in your Markdown notes, a lecture log line in the daily note and an automatic snapshot at the end of each lecture, a gallery of the figures of a lecture, a clean copy of the notes to share, a list of things to look up later, typed text that Obsidian's search can find, and notebooks made from note templates. The notebook format moves to version 17: 0.18 and older open a v17 file read-only and never overwrite it.
