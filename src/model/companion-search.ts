@@ -17,11 +17,36 @@ export const SEARCH_PAGE_MAX = 4000;
 export const SEARCH_ITEM_MAX = 800;
 /** Written as the last line of a page whose search text was cut. */
 export const SEARCH_CUT_NOTE = "- … (more text on this page is not listed)";
+/** Most characters of search text written in one companion note, all pages together (a very large notebook must not make a huge note to index). */
+export const SEARCH_NOTE_MAX = 200_000;
+/** Written once, where the search text of the whole note was cut; the pages after it have none. */
+export const SEARCH_NOTE_CUT_NOTE = "- … (the search text of the following pages is not listed)";
+
+/** The search lines of a page that still fit in what is left of the note's budget; `left` is updated. A line that does not fit ends the list with the cut note (once per note). */
+export function fitSearchBudget(lines: readonly string[], budget: { left: number; cut: boolean }): string[] {
+	const out: string[] = [];
+	for (const line of lines) {
+		if (budget.left - line.length - 1 < 0) {
+			if (!budget.cut) out.push(SEARCH_NOTE_CUT_NOTE);
+			budget.cut = true;
+			budget.left = 0;
+			break;
+		}
+		out.push(line);
+		budget.left -= line.length + 1;
+	}
+	return out;
+}
 
 /** Plain-text escape for one run of text: nothing in it can become a link, tag, comment, math, HTML, emphasis or block. */
 export function escapeSearchText(raw: string): string {
 	const oneLine = raw.replace(/\s+/g, " ").trim();
-	return oneLine.replace(/[\\`*_[\]<>#$%|~^=!{}]/g, "\\$&").replace(/^([-+]|\d+[.)])(?=\s|$)/, "\\$1");
+	return oneLine
+		.replace(/[\\`*_[\]<>#$%|~^=!{}]/g, "\\$&")
+		.replace(/^([-+]|\d+[.)])(?=\s|$)/, "\\$1")
+		// A bare address would still be turned into a link by Obsidian (`https://…`, `www.…`): break both.
+		.replace(/:\/\//g, ":\\/\\/")
+		.replace(/\bwww\./gi, (m) => `${m.slice(0, -1)}\\.`);
 }
 
 /** An equation source as inline code: one line, no backtick or comment marker inside, so it cannot end the span or the region. */
