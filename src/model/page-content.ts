@@ -1,5 +1,5 @@
 import { createPage, findPage } from "./document";
-import { Batch, InsertPages, type Command } from "./history";
+import { Batch, InsertPages, type Command, type ElementSwap } from "./history";
 import { marginsAfterResize } from "./margins";
 import { freezeElement } from "./serialize";
 import type { NotebookDocument, PageElement, PageMargins, Stroke } from "./types";
@@ -39,7 +39,11 @@ export class SetPageContent implements Command {
 	readonly label = "Move content";
 	private before: { strokes: Stroke[]; elements: PageElement[] | undefined; height: number; margins: PageMargins | undefined } | null = null;
 
-	constructor(readonly change: PageContentChange) {
+	/** Not readonly: an upkeep change maps its elements (`remap`). */
+	change: PageContentChange;
+
+	constructor(change: PageContentChange) {
+		this.change = change;
 		for (const el of change.elements ?? []) freezeElement(el);
 	}
 
@@ -80,6 +84,13 @@ export class SetPageContent implements Command {
 		if (this.change.height === undefined) return;
 		if (before.margins) page.margins = before.margins;
 		else delete page.margins;
+	}
+
+	remap(swap: ElementSwap): void {
+		const els = this.change.elements;
+		if (els) this.change = { ...this.change, elements: els.map(swap) };
+		const kept = this.before?.elements;
+		if (this.before && kept) this.before = { ...this.before, elements: kept.map(swap) };
 	}
 }
 

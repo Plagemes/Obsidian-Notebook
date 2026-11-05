@@ -11,7 +11,7 @@ import { copyComments, mergeComments, shiftComments } from "./comments";
 import { marginsOf } from "./margins";
 import { elementAssetId } from "./excerpts";
 import { createId } from "./document";
-import { AddAsset, AddPage, Batch, type Command } from "./history";
+import { AddAsset, AddPage, Batch, remapPage, type Command, type ElementSwap } from "./history";
 import { unionPageTags } from "./page-tags";
 import { copyStroke, duplicatePage } from "./pages";
 import { freezeElement } from "./serialize";
@@ -35,6 +35,11 @@ export class ReplacePage implements Command {
 		this.applied = false;
 		const i = doc.pages.indexOf(this.after);
 		if (i >= 0) doc.pages.splice(i, 1, this.before);
+	}
+
+	remap(swap: ElementSwap): void {
+		remapPage(this.before, swap);
+		remapPage(this.after, swap);
 	}
 }
 

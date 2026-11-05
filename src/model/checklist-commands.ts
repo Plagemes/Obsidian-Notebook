@@ -2,7 +2,7 @@
  * v17 undoable commands on checkboxes that find their target by id when they are applied, so they still work after another
  * command of the same step replaced the element object (a margin change moves every element). Pure.
  */
-import type { Command } from "./history";
+import type { Command, ElementSwap } from "./history";
 import { toggledCheckbox, withChecked, withCheckboxLabel, withCheckboxTask } from "./checklist";
 import { freezeElement } from "./serialize";
 import type { CheckboxElement, CheckboxTask, NotebookDocument } from "./types";
@@ -13,6 +13,8 @@ import type { CheckboxElement, CheckboxTask, NotebookDocument } from "./types";
  */
 export class UpdateCheckbox implements Command {
 	private replaced: { before: CheckboxElement; after: CheckboxElement } | null = null;
+	/** 0.19: what the last undo put back exactly: a redo on that same object puts the same `after` back, so the steps above find it. */
+	private undone: { before: CheckboxElement; after: CheckboxElement } | null = null;
 
 	constructor(
 		readonly pageId: string, readonly checkboxId: string, private readonly change: (before: CheckboxElement) => CheckboxElement, readonly label = "Edit checkbox",
@@ -20,11 +22,18 @@ export class UpdateCheckbox implements Command {
 
 	apply(doc: NotebookDocument): void {
 		this.replaced = null;
+		const again = this.undone;
+		this.undone = null;
 		const els = doc.pages.find((p) => p.id === this.pageId)?.elements;
 		if (!els) return;
 		const i = els.findIndex((e) => e.id === this.checkboxId && e.type === "checkbox");
 		const before = els[i] as CheckboxElement | undefined;
 		if (!before) return;
+		if (again && again.before === before) {
+			els[i] = again.after;
+			this.replaced = again;
+			return;
+		}
 		const after = this.change(before);
 		if (JSON.stringify(after) === JSON.stringify(before)) return;
 		freezeElement(after);
@@ -41,6 +50,7 @@ export class UpdateCheckbox implements Command {
 		const i = els.indexOf(r.after);
 		if (i >= 0) {
 			els[i] = r.before;
+			this.undone = r;
 			return;
 		}
 		// The object was replaced since by a change that is no undo step (the link followed a renamed note, or was dropped because its
@@ -51,6 +61,12 @@ export class UpdateCheckbox implements Command {
 		if (!current) return;
 		const ownsLink = JSON.stringify(r.before.task) !== JSON.stringify(r.after.task);
 		els[j] = freezeElement(ownsLink ? r.before : keepingLink(r.before, current));
+	}
+
+	remap(swap: ElementSwap): void {
+		const pair = (r: { before: CheckboxElement; after: CheckboxElement } | null) => (r ? { before: swap(r.before) as CheckboxElement, after: swap(r.after) as CheckboxElement } : null);
+		this.replaced = pair(this.replaced);
+		this.undone = pair(this.undone);
 	}
 }
 

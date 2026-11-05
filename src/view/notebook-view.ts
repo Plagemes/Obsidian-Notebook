@@ -368,10 +368,12 @@ export class NotebookView extends FileView {
 	 * Every edit is checked strictly before it is kept (`checkContent`): an edit that the writer would refuse is undone
 	 * with a notice, so a bad element can never stop every later save.
 	 */
-	private readonly history = new History(() => this.requireDoc(), 500, checkContent, (message) => {
-		console.error("[notebook] edit refused, the notebook could not be saved with it:", message);
-		showNotice(t("history.refused", { message }), 10000);
-	}, () => this.userReadOnly, (ids) => this.pagesLocked(ids));
+	private readonly history = new History(() => this.requireDoc(), 500, checkContent, (message, step) => {
+		console.error(`[notebook] ${step ?? "edit"} refused, the notebook could not be saved with it:`, message);
+		// 0.19: an undo or a redo that would leave a notebook the writer refuses is not done and leaves the history (the document is as before).
+		showNotice(step ? t("history.stepRefused", { message }) : t("history.refused", { message }), 10000);
+		if (step) this.updateHistoryButtons();
+	},() => this.userReadOnly, (ids) => this.pagesLocked(ids));
 	/**
 	 * wave 0.10 (51): the user switched this view to read-only mode. Nothing changes the document while it is on: `editable()`
 	 * is false (tools, selection, insert, page operations and every registry action that needs editing), a finger only pans

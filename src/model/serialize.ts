@@ -1678,9 +1678,19 @@ export function checkContent(doc: NotebookDocument): string | null {
 			if (slideRefLine(readSlideRef(JSON.parse(line), `slide ${r.id}`)) !== line) return `slide ${r.id}: round-trip mismatch`;
 			if (Object.isFrozen(r)) checkedSlideRefs.add(r);
 		}
+		// 0.19: ids are unique across strokes and elements, as `serializeChecked` requires (two copies of one element would fail every save).
+		const ids = new Set<string>();
 		for (const page of doc.pages) {
 			checkStates(page, `page ${page.id} states`);
 			checkComments(page, `page ${page.id} comments`);
+			for (const s of page.strokes) {
+				if (ids.has(s.id)) return `stroke ${s.id}: duplicate id`;
+				ids.add(s.id);
+			}
+			for (const el of page.elements ?? []) {
+				if (ids.has(el.id)) return `element ${el.id}: duplicate id`;
+				ids.add(el.id);
+			}
 			for (const s of page.strokes) {
 				if (verifiedLines.has(s) || validatedStrokes.has(s)) continue;
 				const line = strokeLine(s);

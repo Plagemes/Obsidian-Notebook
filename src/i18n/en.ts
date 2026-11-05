@@ -3484,6 +3484,7 @@ export const en = {
 	"checklist.task.pathTooLong": "The task was added, but the path of its note is too long to link this checkbox to it.",
 	"checklist.task.renameTooLong": "A note with a task linked to a checkbox was renamed, but its new path is too long to follow. The checkbox still points to the old path.",
 	"checklist.unlinked": "Unlinked. The task stays in your note as it is.",
+	"history.stepRefused": "This step could not be undone or redone: the notebook could not be saved with it ({message}). The notebook is as it was, and the step was taken out of the undo history.",
 	"settings.checklistDraw": "Squares drawn as checkboxes",
 	"settings.checklistDraw.desc": "A small square drawn with the pen: offer a checkbox, make one, or keep ink.",
 	"settings.checklistDraw.offer": "Offer a checkbox",
