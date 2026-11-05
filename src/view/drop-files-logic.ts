@@ -143,3 +143,35 @@ export function imagePageRange(range: { from: number; to: number }): { from: num
 	const to = Math.min(range.to, range.from + MAX_PDF_IMAGES - 1);
 	return { from: range.from, to, cut: to < range.to };
 }
+
+/**
+ * 0.20 review (D6): writes the files a drop needs (`write` says whether it created one) only now, then applies the change
+ * (`apply`, the History command; false when it refused). When it refuses, or a write or the change throws, the files this drop
+ * created are discarded (`discard`, best effort), so a refused drop leaves nothing behind. A file that was already there is
+ * never in the list: it is shared with other notebooks.
+ */
+export async function commitWithFiles<T>(
+	items: readonly T[], write: (item: T) => Promise<boolean>, discard: (item: T) => Promise<void>, apply: () => boolean,
+): Promise<boolean> {
+	const created: T[] = [];
+	const undo = async (): Promise<void> => {
+		for (const item of created.reverse()) {
+			try {
+				await discard(item);
+			} catch {
+				// Nothing more can be done for a file that cannot be removed; the others are still tried.
+			}
+		}
+	};
+	try {
+		for (const item of items) {
+			if (await write(item)) created.push(item);
+		}
+		if (apply()) return true;
+	} catch (e) {
+		await undo();
+		throw e;
+	}
+	await undo();
+	return false;
+}

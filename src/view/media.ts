@@ -50,21 +50,65 @@ export async function sameBytes(app: App, file: TFile, bytes: ArrayBuffer): Prom
  * stored once. Returns the asset record to put in the document.
  */
 export async function storeAsset(app: App, notebooksFolder: string, bytes: ArrayBuffer, name: string, kind?: AssetKind): Promise<Asset> {
+	return (await storeAssetTracked(app, notebooksFolder, bytes, name, kind)).asset;
+}
+
+/**
+ * `storeAsset`, also saying whether this call created the file (`created`): a file that was already there is shared with
+ * other notebooks and must never be thrown away by whoever stored it again. 0.20 review (D6): the drop of files writes its
+ * assets only once the History accepts the change and removes the ones it created when it does not.
+ */
+export async function storeAssetTracked(app: App, notebooksFolder: string, bytes: ArrayBuffer, name: string, kind?: AssetKind): Promise<{ asset: Asset; created: boolean }> {
 	const k = kind ?? kindFromName(name);
 	if (!k) throw new Error(`unsupported file type: ${name}`);
 	const id = assetIdFromHash(await sha256Hex(bytes));
 	const folder = assetsFolder(notebooksFolder);
 	const path = normalizePath(assetPath(folder, id, assetExtension(k, name)));
 	const existing = app.vault.getFileByPath(path);
+	let created = false;
 	if (!existing) {
 		await ensureFolder(app, folder);
 		await app.vault.createBinary(path, bytes);
+		created = true;
 	} else if (!(await sameBytes(app, existing, bytes))) {
 		// The file is named by the hash of the bytes but holds something else (truncated by a failed sync, or
 		// edited): reusing it would make every notebook that references it show a broken asset. Rewrite it.
 		await app.vault.modifyBinary(existing, bytes);
 	}
-	return { id, kind: k, path, name, bytes: bytes.byteLength };
+	return { asset: { id, kind: k, path, name, bytes: bytes.byteLength }, created };
+}
+
+/**
+ * 0.20 review (K-dropfiles): a PDF held in memory only (nothing is written to the vault), to take pictures of its pages from.
+ * The pages are drawn by their own small PDF store, which `destroy` empties.
+ */
+export interface MemoryPdf {
+	pageCount(): Promise<number>;
+	/** JPEG of the 1-based page at `dpi`. */
+	jpeg(page: number, dpi: number): Promise<{ jpeg: Uint8Array; pixelWidth: number; pixelHeight: number }>;
+	destroy(): void;
+}
+
+export function openMemoryPdf(bytes: ArrayBuffer): MemoryPdf {
+	const id = "memory-pdf";
+	const store = new PdfStore({
+		loadPdfJs: () => loadPdfJs() as Promise<PdfLib>,
+		// A fresh copy at every read: the PDF library may take ownership of the buffer it is given.
+		readAsset: () => Promise.resolve(bytes.slice(0)),
+		createCanvas: (w, h) => {
+			const c = createEl("canvas");
+			c.width = w;
+			c.height = h;
+			return c;
+		},
+		memoryBudgetBytes: (Platform.isMobile ? 64 : 128) * 1024 * 1024,
+		maxOpenDocs: 1,
+	});
+	return {
+		pageCount: () => store.pageCount(id),
+		jpeg: async (page, dpi) => canvasToJpeg(await store.render(id, page, dpi / 72)),
+		destroy: () => store.clear(),
+	};
 }
 
 /** v10: a live excerpt picture is drawn again at most this often while its notebook is being edited, ms. */

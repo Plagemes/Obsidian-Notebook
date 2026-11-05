@@ -16,12 +16,12 @@ import { PhotoDecodeError, photoSize } from "../scan/decode";
 import { isHeic } from "../scan/image-bytes";
 import { modalShell, shellButton, shellRow } from "../ui/components/modal-shell";
 import {
-	cascadeCentres, classifyDrop, imagePageRange, locateDrop, planDrop, skipEntries,
+	cascadeCentres, classifyDrop, commitWithFiles, imagePageRange, locateDrop, planDrop, skipEntries,
 	type DropMeta, type DropPoint, type DropReason,
 } from "./drop-files-logic";
 import type { EditContext } from "./edit-context";
 import type { NotebookMedia } from "./media";
-import { storeAsset } from "./media";
+import { assetRecord, openMemoryPdf, storeAssetTracked, type MemoryPdf } from "./media";
 import { showNotice } from "./notice";
 import { askPdfRange } from "./pdf-range-modal";
 import { pastedImageElement, pastedTextElement } from "./paste-logic";
@@ -290,7 +290,8 @@ function findPage(host: DropFilesHost, pageId: string): { ctx: EditContext; page
 async function placeFlat(
 	host: DropFilesHost, ctx: EditContext, page: Page, centre: { x: number; y: number }, sources: DropSource[], skipped: Record<DropReason, number>,
 ): Promise<void> {
-	const assets: Asset[] = [];
+	// Read, decoded and described here; written to the vault only once the History is about to take them (see `commitAssets`).
+	const files: AssetFile[] = [];
 	const elements: PageElement[] = [];
 	const centres = cascadeCentres(sources.length, centre.x, centre.y, page);
 	try {
@@ -310,9 +311,8 @@ async function placeFlat(
 					continue;
 				}
 				const dims = await photoSize(bytes, source.meta.name, source.meta.type);
-				const asset = await storeAsset(host.app, ctx.folder, bytes, source.meta.name, "image");
-				ctx.addPending(asset);
-				assets.push(asset);
+				const asset = await assetRecord(ctx.folder, bytes, source.meta.name, "image");
+				files.push({ asset, bytes });
 				elements.push(pastedImageElement(asset.id, dims, page, cx, cy));
 			} catch (e) {
 				console.error("[notebook] dropped file", source.meta.name, e);
@@ -321,17 +321,60 @@ async function placeFlat(
 			}
 		}
 		if (elements.length === 0) return;
-		const here = findPage(host, page.id);
-		if (!here || here.ctx.doc !== ctx.doc || !here.ctx.alive()) return;
-		const base = here.page.elements?.length ?? 0;
-		const commands: Command[] = [...assets.map((a) => new AddAsset(a)), ...elements.map((el, i) => new AddElement(here.page.id, el, base + i))];
-		// Refused (the page was locked meanwhile): the history said so.
-		if (!here.ctx.execute(new Batch("Drop files", commands))) return;
-		host.select(here.index, elements);
-		showNotice(t(elements.length === 1 ? "drop.done.one" : "drop.done.many", { n: String(elements.length) }));
+		if (!stillOpenAndEditable(host, ctx, page.id)) return;
+		const done = await commitAssets(host, ctx, files, () => {
+			const here = stillOpenAndEditable(host, ctx, page.id);
+			if (!here) return false;
+			const base = here.page.elements?.length ?? 0;
+			const commands: Command[] = [...uniqueAssets(files).map((f) => new AddAsset(f.asset)), ...elements.map((el, i) => new AddElement(here.page.id, el, base + i))];
+			// Refused (the page was locked meanwhile): the history said so.
+			if (!here.ctx.execute(new Batch("Drop files", commands))) return false;
+			host.select(here.index, elements);
+			return true;
+		});
+		if (done) showNotice(t(elements.length === 1 ? "drop.done.one" : "drop.done.many", { n: String(elements.length) }));
 	} finally {
-		for (const a of assets) ctx.removePending(a.id);
+		for (const f of files) ctx.removePending(f.asset.id);
 	}
+}
+
+/** A picture to store: the record that goes into the document and its bytes. */
+interface AssetFile {
+	asset: Asset;
+	bytes: ArrayBuffer;
+}
+
+/** The same picture dropped twice is one asset. */
+function uniqueAssets(files: readonly AssetFile[]): AssetFile[] {
+	const seen = new Set<string>();
+	return files.filter((f) => !seen.has(f.asset.id) && !!seen.add(f.asset.id));
+}
+
+/** The page's place in the document that is still open, editable and not locked; null when the drop can no longer go there. */
+function stillOpenAndEditable(host: DropFilesHost, ctx: EditContext, pageId: string): { ctx: EditContext; page: Page; index: number } | null {
+	const here = findPage(host, pageId);
+	if (!here || here.ctx.doc !== ctx.doc || !here.ctx.alive() || isLocked(here.page)) return null;
+	return here;
+}
+
+/**
+ * Stores the pictures, then runs `apply` (the History command). A file this drop created is moved to the trash again when the
+ * History refuses the change or something fails midway, so a refused drop leaves nothing in the assets folder; a file that was
+ * already there (shared with other notebooks) is never touched.
+ */
+function commitAssets(host: DropFilesHost, ctx: EditContext, files: readonly AssetFile[], apply: () => boolean): Promise<boolean> {
+	return commitWithFiles(
+		uniqueAssets(files),
+		async (f) => {
+			ctx.addPending(f.asset);
+			return (await storeAssetTracked(host.app, ctx.folder, f.bytes, f.asset.name, f.asset.kind)).created;
+		},
+		async (f) => {
+			const file = host.app.vault.getFileByPath(f.asset.path);
+			if (file) await host.app.fileManager.trashFile(file);
+		},
+		apply,
+	);
 }
 
 /** PDFs: one question for all of them, then the existing import paths. */
@@ -364,24 +407,24 @@ async function handlePdfs(host: DropFilesHost, pageId: string, centre: { x: numb
 
 /** The first pages of a PDF as pictures on the page the file was dropped on. True when they were placed. */
 async function pdfAsImages(host: DropFilesHost, pageId: string, centre: { x: number; y: number }, pdf: DropSource): Promise<boolean> {
-	const media = host.media();
 	const first = findPage(host, pageId);
-	if (!media || !first) return false;
+	if (!first) return false;
 	const { ctx } = first;
-	const assets: Asset[] = [];
+	const files: AssetFile[] = [];
 	const elements: PageElement[] = [];
 	let working: ReturnType<typeof showNotice> | null = null;
+	let memory: MemoryPdf | null = null;
 	try {
+		// The PDF itself is never stored (only the pictures of its pages are): it is read from memory, and nothing at all is
+		// written until the range is chosen and the History is about to take the pictures.
 		const bytes = await pdf.read();
-		const pdfAsset = await storeAsset(host.app, ctx.folder, bytes, pdf.meta.name, "pdf");
-		ctx.addPending(pdfAsset);
-		assets.push(pdfAsset);
-		const sizes = await media.pdf.pageSizes(pdfAsset.id);
-		if (sizes.length === 0) {
+		memory = openMemoryPdf(bytes);
+		const pageCount = await memory.pageCount();
+		if (pageCount === 0) {
 			showNotice(t("import.empty"));
 			return false;
 		}
-		const chosen = sizes.length === 1 ? { from: 1, to: 1 } : await askPdfRange(host.app, sizes.length);
+		const chosen = pageCount === 1 ? { from: 1, to: 1 } : await askPdfRange(host.app, pageCount);
 		if (!chosen) return false;
 		const range = imagePageRange(chosen);
 		if (range.cut) showNotice(t("drop.pdf.cut", { n: String(range.to - range.from + 1) }), 7000);
@@ -392,30 +435,32 @@ async function pdfAsImages(host: DropFilesHost, pageId: string, centre: { x: num
 		if (!here0) return false;
 		const centres = cascadeCentres(count, centre.x, centre.y, here0.page);
 		for (let n = range.from; n <= range.to; n++) {
-			const shot = await media.pdfPageJpeg(pdfAsset.id, n, 150);
+			const shot = await memory.jpeg(n, 150);
 			const jpeg = shot.jpeg.buffer.slice(shot.jpeg.byteOffset, shot.jpeg.byteOffset + shot.jpeg.byteLength) as ArrayBuffer;
-			const asset = await storeAsset(host.app, ctx.folder, jpeg, `${stem}-p${n}.jpg`, "image");
-			ctx.addPending(asset);
-			assets.push(asset);
+			const asset = await assetRecord(ctx.folder, jpeg, `${stem}-p${n}.jpg`, "image");
+			files.push({ asset, bytes: jpeg });
 			const [cx, cy] = centres[n - range.from] ?? [centre.x, centre.y];
 			elements.push(pastedImageElement(asset.id, { width: shot.pixelWidth, height: shot.pixelHeight }, here0.page, cx, cy));
 		}
-		const here = findPage(host, pageId);
-		if (!here || here.ctx.doc !== ctx.doc || !here.ctx.alive()) return false;
-		const base = here.page.elements?.length ?? 0;
-		// The PDF file itself is not added to the notebook: only the pictures are. The file stays in the assets folder.
-		const keep = assets.filter((a) => a.id !== pdfAsset.id);
-		const commands: Command[] = [...keep.map((a) => new AddAsset(a)), ...elements.map((el, i) => new AddElement(here.page.id, el, base + i))];
-		if (!here.ctx.execute(new Batch("Drop PDF as images", commands))) return false;
-		host.select(here.index, elements);
-		showNotice(t(elements.length === 1 ? "drop.done.one" : "drop.done.many", { n: String(elements.length) }));
-		return true;
+		if (!stillOpenAndEditable(host, ctx, pageId)) return false;
+		const done = await commitAssets(host, ctx, files, () => {
+			const here = stillOpenAndEditable(host, ctx, pageId);
+			if (!here) return false;
+			const base = here.page.elements?.length ?? 0;
+			const commands: Command[] = [...uniqueAssets(files).map((f) => new AddAsset(f.asset)), ...elements.map((el, i) => new AddElement(here.page.id, el, base + i))];
+			if (!here.ctx.execute(new Batch("Drop PDF as images", commands))) return false;
+			host.select(here.index, elements);
+			return true;
+		});
+		if (done) showNotice(t(elements.length === 1 ? "drop.done.one" : "drop.done.many", { n: String(elements.length) }));
+		return done;
 	} catch (e) {
 		console.error("[notebook] drop PDF as images", e);
 		showNotice(t("insert.failed", { error: e instanceof Error ? e.message : String(e) }), 8000);
 		return false;
 	} finally {
 		working?.hide();
-		for (const a of assets) ctx.removePending(a.id);
+		memory?.destroy();
+		for (const f of files) ctx.removePending(f.asset.id);
 	}
 }
