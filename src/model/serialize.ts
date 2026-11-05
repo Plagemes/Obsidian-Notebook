@@ -906,7 +906,7 @@ function readCheckbox(v: RawObject, id: string, path: string, drop: Dropped | nu
 		if (v.task === undefined) return undefined;
 		if (!isObject(v.task)) fail(`${path}.task`, "expected an object");
 		const taskPath = boundedString(v.task.path, `${path}.task.path`, CHECKBOX_PATH_MAX);
-		if (taskPath === "" || /[\u0000-\u001f]/.test(taskPath)) fail(`${path}.task.path`, "expected a note path");
+		if (taskPath === "" || Array.from(taskPath).some((ch) => ch.charCodeAt(0) < 32)) fail(`${path}.task.path`, "expected a note path");
 		const block = boundedString(v.task.block, `${path}.task.block`, CHECKBOX_BLOCK_MAX);
 		if (!isOurBlockId(block)) fail(`${path}.task.block`, "expected a block id written by this plugin (nb-…)");
 		return { path: taskPath, block };

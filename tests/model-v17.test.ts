@@ -23,8 +23,10 @@ import { AddElement, History, RemoveElement } from "../src/model/history";
 import { elementBand } from "../src/model/layers";
 import { mergeChangeCount, mergeCovers, mergedCheckbox, planMerge } from "../src/model/merge";
 import { MIGRATIONS } from "../src/model/migrations";
+import { filterByState, mapPage, NotebookMapCache } from "../src/model/notebook-map";
 import { notebookFromTemplate, templateFromNotebook } from "../src/model/notebook-template";
 import { SetPageLocked } from "../src/model/page-lock";
+import { appendTaskLine, buildTaskLine } from "../src/model/selection-task";
 import { duplicatePage } from "../src/model/pages";
 import { pageInfo } from "../src/model/page-info";
 import { repairNotebookText } from "../src/model/repair";
@@ -32,7 +34,7 @@ import { freezeElement, freezeStroke, parse, parseStaged, serialize, serializeCh
 import { stressDocument } from "../src/model/stress";
 import { documentFromTemplate, pageFromTemplate, templateDocument } from "../src/model/templates";
 import { CURRENT_VERSION, FORMAT_ID, type CheckboxElement, type NotebookDocument, type Page, type Stroke } from "../src/model/types";
-import { getAt, setAt, type Raw } from "./raw-json";
+import { setAt, type Raw } from "./raw-json";
 
 const stamp = "2026-11-05T10:00:00.000Z";
 const T0 = 1_760_000_000_000;
@@ -477,12 +479,12 @@ describe("checklist: merge", () => {
 		expect(plan.summary.checkboxesUpdated).toBe(1);
 		expect(mergeChangeCount(plan.summary)).toBe(1);
 		expect(history.execute(plan.command!)).toBe(true);
-		const got = main.pages[0]!.elements![1] as CheckboxElement;
+		const got = main.pages[0]!.elements![1];
 		expect(got.checked).toBeUndefined();
 		expect(got.at).toBe(T0 + 20);
 		expect(mergeCovers(main, other)).toBe(true);
 		history.undo();
-		expect((main.pages[0]!.elements![1] as CheckboxElement).checked).toBe(true);
+		expect((main.pages[0]!.elements![1]).checked).toBe(true);
 	});
 
 	it("keeps the main notebook's state when it toggled later, and on a tie", () => {
@@ -658,7 +660,7 @@ describe("checklist: the drawn square", () => {
 		const points = [[50, 50 - d], [50 + d, 50], [50, 50 + d], [50 - d, 50], [50, 50 - d]].flatMap((p, i, a) => {
 			const q = a[i + 1];
 			if (!q) return [] as Array<[number, number, number]>;
-			return [0, 0.25, 0.5, 0.75].map((k): [number, number, number] => [p![0]! + (q[0]! - p![0]!) * k, p![1]! + (q[1]! - p![1]!) * k, 0.5]);
+			return [0, 0.25, 0.5, 0.75].map((k): [number, number, number] => [p[0]! + (q[0]! - p[0]!) * k, p[1]! + (q[1]! - p[1]!) * k, 0.5]);
 		});
 		expect(checkboxFromStroke(points)).toBeNull();
 	});
@@ -704,5 +706,54 @@ describe("the task line of a note", () => {
 	it("handles indented and numbered tasks", () => {
 		expect(setTaskLineChecked("  - [ ] sub ^nb-i", "nb-i", true).text).toBe("  - [x] sub ^nb-i");
 		expect(setTaskLineChecked("1. [ ] one ^nb-n", "nb-n", true).text).toBe("1. [x] one ^nb-n");
+	});
+});
+
+describe("the notebook map: Open items", () => {
+	const withBoxes = (...boxes: CheckboxElement[]): Page => ({ ...createPage(), elements: boxes });
+
+	it("a page with an unticked checkbox is in the checklist state, with the count and the first label", () => {
+		const p = withBoxes(box({ id: "a", label: "Buy milk" }), box({ id: "b", checked: true }), box({ id: "c" }));
+		const m = mapPage(p, 0);
+		expect(m.states).toEqual(["checklist"]);
+		expect(m.open.checklist).toBe(2);
+		expect(m.hint).toBe("Buy milk");
+	});
+
+	it("a page whose boxes are all ticked, or that has none, is not", () => {
+		expect(mapPage(withBoxes(box({ checked: true })), 0).states).toEqual([]);
+		expect(mapPage(createPage(), 0).open.checklist).toBe(0);
+	});
+
+	it("a checkbox is content: the page is not nearly empty", () => {
+		expect(mapPage(withBoxes(box({ checked: true })), 0).states).not.toContain("empty");
+	});
+
+	it("ticking the last open box takes the page out of the filter (the cache follows the tick)", () => {
+		const cache = new NotebookMapCache();
+		const open = withBoxes(box({ id: "a" }));
+		expect(filterByState(cache.build([open]).pages, "checklist")).toHaveLength(1);
+		const done: Page = { ...open, elements: [box({ id: "a", checked: true })] };
+		expect(filterByState(cache.build([done]).pages, "checklist")).toHaveLength(0);
+	});
+});
+
+describe("the task line that Send to tasks writes", () => {
+	it("ends with the block id, after the picture, the page link and the date", () => {
+		const line = buildTaskLine({ text: "Buy milk", due: "2026-11-07", emoji: true, image: "![[a task p1-090000.png|200]]", pageLink: "[[Maths#p1|Maths, page 1]]", block: "nb-abc123" });
+		expect(line).toBe("- [ ] Buy milk ![[a task p1-090000.png|200]] [[Maths#p1|Maths, page 1]] \u{1F4C5} 2026-11-07 ^nb-abc123");
+		expect(setTaskLineChecked(line, "nb-abc123", true).text).toBe(line.replace("- [ ]", "- [x]"));
+	});
+
+	it("without a typed label the picture is the task, and without a block id the line is the old one", () => {
+		expect(buildTaskLine({ text: "", due: "", emoji: true, image: "![[p.png|200]]", pageLink: "[[N]]", block: "nb-x" })).toBe("- [ ] ![[p.png|200]] [[N]] ^nb-x");
+		expect(buildTaskLine({ text: "Call", due: "", emoji: true, image: null, pageLink: "" })).toBe("- [ ] Call");
+	});
+
+	it("is appended to the end of the note and found again by its block id", () => {
+		const line = buildTaskLine({ text: "Call", due: "", emoji: true, image: null, pageLink: "", block: "nb-q1" });
+		const next = appendTaskLine("# Today\n- [ ] other", line)!;
+		expect(next).toBe("# Today\n- [ ] other\n- [ ] Call ^nb-q1\n");
+		expect(setTaskLineChecked(next, "nb-q1", true).text).toBe("# Today\n- [ ] other\n- [x] Call ^nb-q1\n");
 	});
 });

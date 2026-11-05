@@ -16211,23 +16211,13 @@ body.notebook-style-obsidian {
 	border-radius: var(--nb-radius-l);
 	background: var(--nb-panel);
 	box-shadow: var(--nb-shadow-float);
-	animation: nb-chk-offer-in 140ms ease-out;
 }
 
 .nb-ui.nb-chk-offer .nb-chip {
 	min-height: 40px;
 }
 
-@keyframes nb-chk-offer-in {
-	from { opacity: 0; transform: translateX(-50%) translateY(-4px); }
-	to { opacity: 1; transform: translateX(-50%) translateY(0); }
-}
-
 /* The "Open items" badge of the notebook map. */
 .nb-ui .nb-map-badge.is-checklist {
 	color: var(--nb-accent);
-}
-
-@media (prefers-reduced-motion: reduce) {
-	.nb-ui.nb-chk-offer { animation: none; }
 }

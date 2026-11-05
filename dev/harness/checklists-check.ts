@@ -165,6 +165,8 @@ export async function checkChecklists(api: ChecklistsCheckApi): Promise<{ ok: bo
 	const note = "intro\n- [ ] Buy milk ^nb-harness1\n- [ ] Other ^nb-harness2\nend\n";
 	await vault.create("Tasks/Today.md", note);
 	v.applyCommand(setCheckboxTask(page().id, row.id, { path: "Tasks/Today.md", block: "nb-harness1" }));
+	// the link is taken in as "already written" at the first sync a moment later, so a tick made before that would not be written: wait for it
+	await sleep(1200);
 	await frames(3);
 	setTool("pen");
 	await penStroke([centre(boxes()[0]!)]);
@@ -192,12 +194,19 @@ export async function checkChecklists(api: ChecklistsCheckApi): Promise<{ ok: bo
 	setTool("lasso");
 	await penStroke([frac(row.x - 6, row.y - 6), frac(row.x + row.size + 6, row.y - 6), frac(row.x + row.size + 6, row.y + row.size + 6), frac(row.x - 6, row.y + row.size + 6), frac(row.x - 6, row.y - 4)]);
 	await frames(3);
+	add("a linked checkbox offers Unlink, not Send to tasks", v.uiContext().selection?.checkboxesLinked === 1);
+	v.runAction("checkbox-task");
+	await frames(2);
+	add("and Send to tasks on it only says it is linked", taskDialog() === null && api.notices.some((n) => /already linked|già collegata/i.test(n)));
+	v.runAction("checkbox-unlink");
+	await frames(3);
+	add("Unlink task unlinks it in one step", boxes()[0]!.task === undefined && v.uiContext().selection?.checkboxesLinked === 0);
 	v.runAction("checkbox-task");
 	await frames(3);
 	const dlg = taskDialog();
 	const primary = dlg?.querySelector<HTMLButtonElement>(".is-primary");
 	add("Send to tasks opens the task dialog with the label, and can be sent without typing", !!dlg && primary?.disabled === false && (dlg.querySelector<HTMLInputElement>("input")?.value ?? "") === "Buy milk");
-	(dlg?.querySelector<HTMLButtonElement>(".nb-modal-btn:not(.is-primary)"))?.click();
+	dlg?.querySelector<HTMLButtonElement>(".nb-modal-foot button:not(.is-primary)")?.click();
 	await frames(2);
 	v.clearSelection();
 

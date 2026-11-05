@@ -2228,7 +2228,7 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 
 Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`HARNESS_DOC=checklists`): `dev/harness/dist/shots/checklists-*.png` (tablet and phone, light and dark). Notebooks saved with a checkbox are format v17: 0.18 and older open them read-only.
 
-1500. **Insert.** Insert sheet or quick slot > *Checkbox*. Expected: an unticked rounded square appears at the centre of the view, selected (handles); the selection bar has *Tick / untick*, *Select with text*, *Label…*, *Send to tasks…*. One undo removes it.
+1500. **Insert.** Insert sheet (More) > *Checkbox*. Expected: an unticked rounded square appears at the centre of the view, selected (handles); the selection bar has *Tick / untick*, *Select with text*, *Label…*, *Send to tasks…*. One undo removes it.
 1501. **Tick with the S Pen.** With the pen tool, tap the box with the S Pen tip. Expected: a tick appears, no dot of ink is left, one undo unticks it. A stroke that starts on the box and moves is ordinary ink and ticks nothing. Tap again: it unticks.
 1502. **Tick with a finger.** With *write with finger* off, tap the box with a finger: it ticks (a tap that moves or lingers pans the page instead). With *write with finger* on, the same tap ticks it too and leaves no dot.
 1503. **A drawn square.** With the pen draw a small square (about 1 cm) in one stroke. Expected: after the pen lifts a *Make checkbox* chip appears below it; tap it: the square becomes a checkbox of the same size and place in the colour of the pen; one undo gives the square back as ink. Writing on, scrolling or waiting about 9 seconds takes the chip away.
