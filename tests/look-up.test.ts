@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-	appendLookUpLine, buildLookUpLine, clampLookUpWidth, entriesOfNotebook, LOOKUP_WIDTH_DEFAULT, LOOKUP_WIDTH_MAX, LOOKUP_WIDTH_MIN, lookUpDate, lookUpNotePath, lookUpPictureName,
+	appendLookUpLine, buildLookUpLine, clampLookUpWidth, entriesOfNotebook, LOOKUP_MAX_ENTRIES, LOOKUP_WIDTH_DEFAULT, LOOKUP_WIDTH_MAX, LOOKUP_WIDTH_MIN, lookUpDate, lookUpNotePath, lookUpPictureName,
 	lookUpSubpath, lookUpWord, openCount, parseLookUpLine, parseLookUpNote,
 } from "../src/model/look-up";
 
@@ -103,5 +103,21 @@ describe("look up later: parsing", () => {
 		const mine = entriesOfNotebook(all, (p) => p === "Notebooks/Maths.notebook");
 		expect(mine.map((e) => e.word)).toEqual(["one", ""]);
 		expect(openCount(mine)).toBe(1);
+	});
+	it("one notebook's entries are picked across the whole shared note before the cap, and the newest are kept (M6)", () => {
+		const other = "[[Notebooks/Physics.notebook#p1|Physics p. 1]]";
+		const rows: string[] = [];
+		for (let i = 0; i < LOOKUP_MAX_ENTRIES + 200; i++) rows.push(`- [ ] other ${i} — ${other} (2026-11-04)`);
+		for (let i = 0; i < 3; i++) rows.push(`- [ ] mine ${i} — ${link} (2026-11-05)`);
+		const text = rows.join("\n");
+		// Without the filter the three newest lines of the Maths notebook are the only ones that matter, yet they are inside the cap.
+		const mine = parseLookUpNote(text, (e) => e.linkPath === "Notebooks/Maths.notebook");
+		expect(mine.map((e) => e.word)).toEqual(["mine 0", "mine 1", "mine 2"]);
+		// More entries than the cap for one notebook: the newest ones stay, in order.
+		const many = Array.from({ length: LOOKUP_MAX_ENTRIES + 5 }, (_, i) => `- [ ] w${i} — ${link} (2026-11-04)`).join("\n");
+		const kept = parseLookUpNote(many, () => true);
+		expect(kept).toHaveLength(LOOKUP_MAX_ENTRIES);
+		expect(kept[0]!.word).toBe("w5");
+		expect(kept[kept.length - 1]!.word).toBe(`w${LOOKUP_MAX_ENTRIES + 4}`);
 	});
 });

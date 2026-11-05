@@ -6,7 +6,7 @@ import { Modal, TFile, normalizePath, setIcon, type App } from "obsidian";
 import { t } from "../i18n";
 import { stablePageSubpath, pageTargetFromSubpath, resolvePageTarget, withEmbedMarker } from "../integration/page-links";
 import {
-	appendLookUpLine, buildLookUpLine, clampLookUpWidth, entriesOfNotebook, lookUpDate, lookUpNotePath, lookUpPictureName, openCount, parseLookUpNote, type LookUpEntry,
+	appendLookUpLine, buildLookUpLine, clampLookUpWidth, lookUpDate, lookUpNotePath, lookUpPictureName, openCount, parseLookUpNote, type LookUpEntry,
 } from "../model/look-up";
 import { DEFAULT_MARKDOWN_DPI } from "../model/export-markdown";
 import { embedWithWidth, isSubmitKey, taskStamp, type TaskRect } from "../model/selection-task";
@@ -132,8 +132,17 @@ export async function readLookUps(app: App, file: TFile, settings: NotebookSetti
 	if (!note) return { note: null, entries: [] };
 	try {
 		const text = await app.vault.cachedRead(note);
-		const mine = entriesOfNotebook(parseLookUpNote(text), (linkPath) => app.metadataCache.getFirstLinkpathDest(linkPath, note.path)?.path === file.path);
-		return { note, entries: mine };
+		// This notebook's entries across the whole note, then the cap (a list shared by all notebooks): resolving a link once per name.
+		const known = new Map<string, boolean>();
+		const pointsHere = (linkPath: string): boolean => {
+			let yes = known.get(linkPath);
+			if (yes === undefined) {
+				yes = app.metadataCache.getFirstLinkpathDest(linkPath, note.path)?.path === file.path;
+				known.set(linkPath, yes);
+			}
+			return yes;
+		};
+		return { note, entries: parseLookUpNote(text, (e) => pointsHere(e.linkPath)) };
 	} catch (e) {
 		console.error("[notebook] look up list", e);
 		return { note, entries: [] };
