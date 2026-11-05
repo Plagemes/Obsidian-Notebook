@@ -3819,4 +3819,11 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.ghostSpacing": "Distanza delle righe guida",
 	"settings.ghostSpacing.desc": "Segui la tua scrittura oppure una spaziatura fissa.",
 	"settings.ghostSpacing.auto": "Auto (dalla tua scrittura)",
+	// 0.21 slideback
+	"settings.slideBack": "Torna alla diapositiva corrente",
+	"settings.slideBack.desc": "Durante una lezione, un piccolo pulsante ti riporta alla pagina dove hai scritto per ultimo dopo che ti sei spostato.",
+	"command.slideBack": "Torna alla diapositiva o pagina corrente",
+	"slideBack.slide": "Torna alla diapositiva {n}",
+	"slideBack.page": "Torna alla pagina corrente",
+	"slideBack.dismiss": "Chiudi",
 };

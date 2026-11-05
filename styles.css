@@ -17485,3 +17485,82 @@ body.notebook-style-obsidian {
 	background: var(--nb-accent);
 	color: var(--nb-on-accent, #fff);
 }
+
+/* ===== 0.21 slideback ===== */
+/* "Back to slide N" (roadmap #225): a small glass pill at the top centre (the lecture chip is at the left, the contextual bar at the
+   bottom) while the view is scrolled away from where you last wrote during a lecture. A real button plus a close button. */
+.workspace-leaf-content .view-content.notebook-view .notebook-slide-back {
+	position: absolute;
+	top: 10px;
+	left: 50%;
+	z-index: 6;
+	display: flex;
+	align-items: center;
+	max-width: calc(100% - 16px);
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-glass-strong);
+	-webkit-backdrop-filter: var(--nb-glass-blur);
+	backdrop-filter: var(--nb-glass-blur);
+	box-shadow: var(--nb-shadow-float);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	transform: translateX(-50%);
+	animation: notebook-slide-back-in var(--nb-motion) var(--nb-ease);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-slide-back-go {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 40px;
+	padding: 0 6px 0 14px;
+	border: 0;
+	border-radius: var(--nb-radius-pill);
+	background: transparent;
+	box-shadow: none;
+	color: inherit;
+	font-size: inherit;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-slide-back-icon {
+	display: inline-flex;
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-slide-back-icon .svg-icon {
+	width: 16px;
+	height: 16px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-slide-back-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-slide-back-close {
+	width: 36px;
+	min-height: 40px;
+	color: var(--nb-text-muted);
+}
+
+@keyframes notebook-slide-back-in {
+	from {
+		opacity: 0;
+		transform: translate(-50%, -6px);
+	}
+
+	to {
+		opacity: 1;
+		transform: translate(-50%, 0);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-slide-back {
+		animation: none;
+	}
+}

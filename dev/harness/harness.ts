@@ -85,6 +85,7 @@ import { storageApi } from "./storage-check";
 import { bulkApi } from "./bulk-check";
 import { xferApi } from "./pagesplit-check";
 import { linkbackApi } from "./linkback-check";
+import { checkSlideback, slidebackShot } from "./slideback-check";
 import { pdfcopyApi } from "./pdfcopy-check";
 import { checkCollections, collectionsState } from "./collections-check";
 import { checkHostile, HOSTILE_ERROR, hostileDialog, installHostile } from "./hostile";
@@ -301,7 +302,7 @@ async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	leaf = new WorkspaceLeaf(app, root);
 	view = new NotebookView(asLeaf(leaf), { settings: settings(), practice: doc === "practice" ? practiceService : undefined, lectureClassFor: doc === "lecture" ? () => lectureStub.cls : undefined, nav: harnessNav, quickTabs: doc === "quicktabs" ? harnessQuickTabs(app) : undefined, statusChanged: (v) => harnessStatusBar.update(v.statusSnapshot()) });
 	await view.onOpen();
-	const path = doc === "new" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" || doc === "lock" || doc === "sticky" || doc === "comments" || doc === "checklists" || doc === "groups" || doc === "dropfiles" || doc === "ghostlines" || doc === "snap" || doc === "minimap" ? "Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "mentions" || doc === "nbmap" || doc === "movesel" || doc === "present" || doc === "quicktabs" || doc === "refwindow" ? "Notebooks/Outline.notebook" : doc === "digest" ? "Notebooks/Digest.notebook" : doc === "figures" ? "Notebooks/Figures.notebook" :doc === "pdftext" ? "Notebooks/PdfText.notebook" : "Notebooks/Old v3.notebook";
+	const path = doc === "new" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" || doc === "lock" || doc === "sticky" || doc === "comments" || doc === "checklists" || doc === "groups" || doc === "dropfiles" || doc === "ghostlines" || doc === "snap" || doc === "minimap" || doc === "slideback" ? "Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "mentions" || doc === "nbmap" || doc === "movesel" || doc === "present" || doc === "quicktabs" || doc === "refwindow" ? "Notebooks/Outline.notebook" : doc === "digest" ? "Notebooks/Digest.notebook" : doc === "figures" ? "Notebooks/Figures.notebook" :doc === "pdftext" ? "Notebooks/PdfText.notebook" : "Notebooks/Old v3.notebook";
 	const file = app.vault.getFileByPath(path)!;
 	await (view as unknown as HarnessView).loadFile(file);
 	view.onResize();
@@ -2231,6 +2232,8 @@ Object.assign(harnessApi, bulkApi({ app, errors, notices }));
 Object.assign(harnessApi, xferApi({ app, errors, notices }));
 // 0.18 linkback: copy to notebook with a link back (doc=linkback, linkback-check.ts).
 Object.assign(harnessApi, linkbackApi({ app, errors, notices }));
+// 0.21 slideback: the pill back to the current slide (doc=slideback, slideback-check.ts).
+Object.assign(harnessApi, { checkSlideback: () => checkSlideback({ get view() { return view; }, open, frames, penStroke, errors, notices }), slidebackShot: (state: "away") => slidebackShot({ get view() { return view; }, open, frames, penStroke, errors, notices }, state) });
 // 0.17 pdfcopy: the optional PDF copy (doc=pdfcopy, pdfcopy-check.ts).
 Object.assign(harnessApi, pdfcopyApi({ get view() { return view; }, app, frames, penStroke, errors, notices }));
 // 0.20 dropfiles: files dropped on a page (doc=dropfiles, dropfiles-check.ts).

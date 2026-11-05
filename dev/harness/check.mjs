@@ -137,6 +137,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "groups", theme, device, lowLatency: false });
 // Minimap (0.17, #173): the overview of an infinite page, tablet and phone, light and dark.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "minimap", theme, device, lowLatency: false });
+// 0.21 slideback (#225): the pill back to the current slide (dev/harness/slideback-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "slideback", theme, device, lowLatency: false });
 // The automatic page header (0.15, #75): drawn on the paper, tablet and phone, light and dark.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "header", theme, device, lowLatency: false });
 // 0.16 pdftext: copying text from a PDF page and the PDF outline and links (dev/harness/pdftext-check.ts), tablet and phone, light and dark.
@@ -323,6 +325,7 @@ async function main() {
 				else if (s.doc === "bulk") report = await cdp.evaluate("window.harness.checkBulk()", 120000);
 				else if (s.doc === "xfer") report = await cdp.evaluate("window.harness.checkXfer()", 120000);
 				else if (s.doc === "linkback") report = await cdp.evaluate("window.harness.checkLinkback()", 120000);
+				else if (s.doc === "slideback") report = await cdp.evaluate("window.harness.checkSlideback()", 60000);
 				else if (s.doc === "pdfcopy") report = await cdp.evaluate("window.harness.checkPdfcopy()", 90000);
 				else if (s.doc === "inbox") report = await cdp.evaluate("window.harness.checkInbox()", 60000);
 
@@ -466,6 +469,17 @@ async function main() {
 						problems.push(`linkback ${state} screenshot: ${e.message}`);
 					}
 					await cdp.evaluate("window.harness.closeLinkback()");
+				}
+			}
+			// 0.21 slideback: a screenshot of the pill while scrolled away from the written page.
+			if (s.doc === "slideback") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				try {
+					await cdp.evaluate("window.harness.slidebackShot('away').then(() => true)", 60000);
+					writeFileSync(join(designDir, `slideback-away-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+				} catch (e) {
+					problems.push(`slideback screenshot: ${e.message}`);
 				}
 			}
 			// 0.13 ds-zettel: review screenshots of each Zettelkasten surface.

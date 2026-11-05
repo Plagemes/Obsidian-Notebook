@@ -3817,6 +3817,13 @@ export const en = {
 	"settings.ghostSpacing": "Guide spacing",
 	"settings.ghostSpacing.desc": "Follow your handwriting, or use a fixed ruled spacing.",
 	"settings.ghostSpacing.auto": "Auto (from your writing)",
+	// 0.21 slideback
+	"settings.slideBack": "Back to the current slide",
+	"settings.slideBack.desc": "While you are in a lecture, a small button takes you back to the page where you last wrote after you scroll away.",
+	"command.slideBack": "Back to the current slide or page",
+	"slideBack.slide": "Back to slide {n}",
+	"slideBack.page": "Back to current page",
+	"slideBack.dismiss": "Dismiss",
 } as const;
 
 export type MessageKey = keyof typeof en;

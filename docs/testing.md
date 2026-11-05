@@ -3022,3 +3022,24 @@ Ghost guide lines (roadmap #94). Settings, Writing: *Ghost guide lines* (off / w
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Ghost guide lines on blank paper (#94): baseline and next line inferred from the newest strokes, faint dashed overlay on the live layer, off / while writing / always, auto or fixed spacing, never saved or exported | yes | inference (baseline, line height, tilt tolerance, descenders, drawings as outliers, fallback to the last complete line, fixed spacing), segments, fade, settings: `tests/ghost-lines.test.ts`; harness `doc=ghostlines` | | | not tried with a real hand on a tablet; the thresholds (tilt 12 degrees, spacing from stroke height) are a guess |
+
+### 0.21 — slideback: back to the current slide (steps 1940-1959)
+
+"Back to the current slide" (roadmap #225). Settings, Study, Timetable: *Back to the current slide* (on by default). Use a notebook with several pages and either a running lecture (lecture mode on) or a PDF shown beside the notes. Implemented, not verified on hardware.
+
+1940. **Nothing before you write.** Switch lecture mode on (the chip appears) and scroll around a notebook with no new ink: no button appears.
+1941. **Leaving the page.** Write a few words on a page, then scroll three or four pages down with a finger. A small pill at the top centre of the view reads *Back to current page* (or *Back to slide N* on a PDF page or beside a linked slide), with an up or down arrow towards the place you wrote. It appears when the scroll has stopped, not while you drag.
+1942. **Small scrolls.** Scroll less than half a screen away from where you wrote: no pill.
+1943. **Going back.** Tap the pill: the view returns to the place you wrote (the written line near the middle of the view) and the pill disappears. *Back* in the navigation history returns to where you were.
+1944. **Closing it.** Scroll away again and tap the *x*: the pill goes and stays away while you look elsewhere. Return to the written place and leave again: it comes back.
+1945. **Pen.** With the pen, write right below the pill's place: the pill never takes the pen and never blocks the writing area; drawing a stroke under it works.
+1946. **New place.** Write on another page: the pill now leads to that page.
+1947. **Slide beside notes.** Show a PDF beside the notes, write beside slide 5, scroll away: *Back to slide 5*.
+1948. **Command.** Command palette, *Back to the current slide or page*: it goes back (assign a hotkey in Obsidian's hotkey settings; there is no default). It is not offered before anything was written.
+1949. **Setting.** Turn *Back to the current slide* off: no pill, and the command is not offered.
+1950. **Lecture over.** Leaving lecture mode keeps the last place until you write elsewhere; ink written outside a lecture and not beside a slide does not move it.
+1951. **Light, dark, phone.** The pill reads in light and dark and fits a phone's width.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Back to the current slide (#225): the place last written during a lecture or beside a linked slide; a pill (and a command) appears when the view is half a screen or more away after the scroll settles, returns there like the notebook map's jump, can be closed, setting to turn it off; nothing is written to the notebook | yes | when to show (threshold, hysteresis, dismissal), return position, which ink counts, slide number from the link or the PDF page: `tests/slide-back.test.ts`; harness `doc=slideback` | | | not tried with a real hand on a tablet; the half-screen threshold is a guess |
