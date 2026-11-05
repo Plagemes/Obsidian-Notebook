@@ -2924,7 +2924,7 @@ Implemented, not verified on hardware. The thresholds are tuned on synthetic wri
 |---|---|---|---|---|---|
 | Headings from the size of the handwriting (roadmap #102, 0.20 headings): lines written clearly larger than the page's usual letters (1.7x level 2, 2.4x level 1), or only 1.25x when underlined by a straight stroke under them (slanted lines too), listed in the outline and in the notebook map (Titles filter and picture strips, jump to the line); no OCR, no format change | yes | pure analysis: yes (`tests/headings-w20.test.ts`, `tests/outline-builder.test.ts`: sizes, levels, underlines, tilted writing, drawings, highlighter, invisible ink); view: harness (`doc=headings`) | | yes (thresholds tuned on synthetic writing) | colour is not used |
 | Heading analysis cache and idle work: per page, keyed by a fingerprint of the page's content (rebuilt strokes with the same content are not analysed again), analysed in 8 ms slices at idle moments and not while the pen is down | yes | yes (`tests/headings-w20.test.ts`: fingerprint, caching, slices, heavy pages) | | | |
-| Headings as pictures in the companion note (#102, setting *Headings as pictures*, off by default): `- heading: ![[…]]` under the page heading, pictures in `<Notebook> (Headings)` named by page and position, written only when their bytes change, recorded as plugin writes, never deleted; up to 4 per page and 60 per notebook | yes | text: yes (`tests/headings-companion-w20.test.ts`); pictures and vault writes: not tested (need Obsidian) | | | |
+| Headings as pictures in the companion note (#102, setting *Headings as pictures*, off by default): `- heading: ![[…]]` under the page heading, pictures in `<Notebook> (Headings)` named by page and position, marked with the ink they show (a PNG text chunk: same mark left alone, another mark redrawn, no mark = the user's file, never overwritten, next free name), never deleted; up to 4 per page and 60 per notebook | yes | text: yes (`tests/headings-companion-w20.test.ts`); marks, name choice, per-notebook cache: `tests/review-w20-data.test.ts`; vault writes: not tested (need Obsidian) | | | |
 
 ### 0.20 — planner: planner generator (steps 1820-1839)
 
@@ -2951,7 +2951,7 @@ Roadmap #118. Implemented, not verified on hardware. Reference screenshots after
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Calendar math: leap years, month lengths, day numbers, weekday, ISO week and Sunday-start week numbers, week lists, month rows, calendar and academic ranges, week start from the locale | yes | `tests/calendar.test.ts` (checked against `Date` over a leap year and sampled over 1900-2200) | | | |
-| Planner generator: year, month, week, day and notes pages on existing papers and text boxes, page links by id up and down, outline bookmarks, English and Italian, Monday or Sunday weeks, page counts, bounds on every size and orientation, document write and read back | yes | `tests/planner.test.ts` | | | link text shows its markup on the page; not tried inside Obsidian (steps 1820-1836) |
+| Planner generator: year, month, week, day and notes pages on existing papers and text boxes, page links by id up and down, outline bookmarks, English and Italian, Monday or Sunday weeks, page counts, bounds on every size and orientation, document write and read back | yes | `tests/planner.test.ts`; link labels on the page and in exports: `tests/review-w20-data.test.ts` | | | links show only their label (alias or short name), as links; not tried inside Obsidian (steps 1820-1836) |
 | Planner tab of the creation dialog (year, span, start month, language, week start, size, section chips, page count and large warning) and the setting *Planner week starts on* | yes | harness `doc=planner` (tab, chips, counts, creating and reading back) | | | not tried on a phone (step 1834) |
 
 ### 0.20 — dropfiles
@@ -2965,14 +2965,14 @@ Manual steps (hardware / real Obsidian; nothing here is verified on Android).
 1744. **Locked page, read-only.** On a locked page the frame is grey with the lock and the drop adds nothing ("Page N is locked"). In a read-only notebook (newer format, hidden annotations) the frame says it is read-only.
 1745. **PDF choices.** Drop a PDF: the dialog offers *Insert pages after this one*, *Insert as images on this page* and *Annotate in a new notebook*. Pages: the usual range and layout questions, then the pages appear after the page you dropped on. Images: the first pages (at most 8) are placed as pictures in a cascade, one undo step. Annotate: the import dialog (file from the desktop) opens.
 1746. **Explorer drag.** Drag a PNG and a PDF from Obsidian's file explorer onto a page (side by side layout): the picture is placed; the PDF asks as above. The vault file is unchanged.
-1747. **Note as link.** Drag a Markdown note from the explorer onto a page: a text box `[[Note]]` appears at the drop point; tapping it opens the note.
+1747. **Note as link.** Drag a Markdown note from the explorer onto a page: a text box showing the note's name as a link appears at the drop point (the raw `[[Note]]` shows only while editing the box); tapping it opens the note. Also: drop a PDF, choose *Insert as images*, cancel the page range: the assets folder has no new file (a PDF is never stored by this choice).
 1748. **Between pages and zoom.** Zoom in, pan, drop between two pages and on the second page: the picture lands on the nearest/the right page at the pointer, not offset by the zoom.
 1749. **Pen unaffected.** Writing and S Pen button gestures behave exactly as before; a drag of text (from a browser) over the page shows no frame.
 1750. **Italian.** In Italian: "Rilascia per aggiungere alla pagina N", the PDF dialog and the notice are translated.
 
 | Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
 |---|---|---|---|---|---|
-| Drag files onto a page (#79): pictures at the drop point (cascade), PDF choice (pages / images / annotate), explorer files, note links, frame, one notice for what is left out | yes | type routing, caps, cascade, page-coordinate mapping: yes; view wiring: harness (`doc=dropfiles`) with synthetic DragEvents; explorer drag (`app.dragManager`, not public API) and Android: no | | yes (explorer drag relies on an internal Obsidian field) | |
+| Drag files onto a page (#79): pictures at the drop point (cascade), PDF choice (pages / images / annotate), explorer files, note links, frame, one notice for what is left out | yes | type routing, caps, cascade, page-coordinate mapping: yes; write-after-commit and rollback of created files: `tests/review-w20-data.test.ts`; view wiring: harness (`doc=dropfiles`) with synthetic DragEvents; explorer drag (`app.dragManager`, not public API) and Android: no | | yes (explorer drag relies on an internal Obsidian field) | |
 
 ### 0.20 — share: Share page… (steps 1720-1739)
 
