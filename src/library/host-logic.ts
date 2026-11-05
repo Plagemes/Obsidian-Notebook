@@ -1,4 +1,5 @@
 import { copyBookmarkInfoMap } from "../model/bookmarks";
+import { unlinkChecklist } from "../model/checklist";
 import { cloneMeta } from "../model/document";
 import { parse, serializeChecked } from "../model/serialize";
 import { DEFAULT_META, type NotebookMeta } from "../model/types";
@@ -67,12 +68,21 @@ export function patchNotebookMeta(json: string, patch: Partial<NotebookMeta>): M
 	return { ok: true, text: out.text, changed: migrated || out.text !== json, migrated };
 }
 
-/** Same as `patchNotebookMeta`, but gives the notebook the document id `id` (for a duplicated file). */
+/**
+ * Same as `patchNotebookMeta`, but gives the notebook the document id `id` (for a duplicated file). A duplicate is a new notebook, so
+ * its checkboxes (v17) keep their ticks but lose the link to the task lines of the original: ticking the copy must not rewrite them.
+ */
 export function patchNotebookId(json: string, id: string): MetaPatchResult {
 	const parsed = parse(json);
 	if (!parsed.ok) return { ok: false, message: parsed.message };
 	if (id.length === 0) return { ok: false, message: "empty id" };
-	const out = serializeChecked({ ...parsed.doc, id });
+	let unlinked = false;
+	const pages = parsed.doc.pages.map((page) => {
+		const next = unlinkChecklist(page);
+		if (next !== page) unlinked = true;
+		return next;
+	});
+	const out = serializeChecked({ ...parsed.doc, id, pages });
 	if (!out.ok) return { ok: false, message: out.message };
-	return { ok: true, text: out.text, changed: parsed.doc.id !== id, migrated: parsed.migratedFrom !== null || (parsed.dropped ?? 0) > 0 };
+	return { ok: true, text: out.text, changed: parsed.doc.id !== id || unlinked, migrated: parsed.migratedFrom !== null || (parsed.dropped ?? 0) > 0 };
 }

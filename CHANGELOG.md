@@ -31,6 +31,24 @@
 ### lecturelog
 - **Lecture log in the daily note (#221).** With the new setting *Lecture log in the daily note* on (off by default), when a lecture you wrote in ends (lecture mode left or its class over, or the notebook closed during the class's time slot) one line goes into the daily note of that day: `- 10:15–11:45 **Analysis I** — [[Analysis I#p12&id=…|pp. 12–15]] · 3 pages · 2 open questions ^nb-lec-…`. The pages run from the lecture page to the one before the next dated page; open questions are the unresolved question markers on them. The line goes under a configurable heading (*Lecture log heading*, default "## Lectures", added at the end of the note when missing). One line per notebook and class occurrence: it carries a block id the plugin added, and a session that goes on later rewrites exactly that line through `vault.process` (every other byte of the note stays). It follows the daily-note settings: a missing daily note is made only with *Create the daily note if missing*; otherwise the line waits in this device's local storage (bounded: 30 lines, 21 days) and is written once the note exists. No format change. Pure logic in `src/library/lecture-log-logic.ts`, writer in `src/library/lecture-log.ts`. Tests: `tests/lecture-log.test.ts`.
 
+### Review fixes
+- Checklists: a long label no longer blocks saving. Sending a checkbox to the tasks with a text of 201 to 300 characters whose 200th character was a space left a label ending in a space, which the writer refused on every save; the label is now trimmed again after it is cut to 200 characters.
+- Checklists: a tick waiting to be written into its task line is no longer lost when you switch app, close the tab or the notebook reloads within the first second: it is noted at once, written when the app is hidden or the notebook closes, kept across a reload, and tried again (4 s, 15 s, 1 min, 5 min) when the write fails.
+- Checklists: a task note that is not in the vault yet (the notebook synced before the note did) or was renamed no longer unlinks the checkbox. The link stays and the tick is retried; a renamed or moved note, or a renamed folder, is followed. Only a note that exists and no longer has the line unlinks the checkbox.
+- Checklists: *Duplicate* in the Library gives the copy checkboxes without links to the original's task lines (the ticks stay), so ticking the copy no longer rewrites the original's note.
+- Checklists: moving pages to another notebook (move, split, merge into the trash, restore from the page trash) keeps the links of their checkboxes; only real copies drop them.
+- Checklists: merging an older copy no longer links again a checkbox you unlinked: linking and unlinking are stamped (`taskAt`, optional, still format 17) and the later decision wins.
+- Checklists: a finger tap on a checkbox is ignored while the pen is down or was just used, so a palm resting on the page between strokes no longer ticks it.
+- Checklists: the pen ticks a checkbox only on the box itself and 3 pt around it (a finger keeps its larger target), so a dot or a colon written right beside the box stays ink.
+- Checklists: the task line is found more safely: copies inside fenced code blocks and the frontmatter are skipped, a task in a callout or quote works, and when two lines carry the same id nothing is changed and a notice says so.
+- Checklists: when two copies disagree about a tick at the same time (or both lack a time), the tick wins, and a copy is not reported as covered while its tick is missing, so *Move only* no longer sends a tick to the backups.
+- Checklists: the merge summary lists ticked and relinked checkboxes (and resolved markers).
+- Checklists: a task line that is gone is reported only when the checkbox was really unlinked; a refused unlink (locked page, read-only notebook) tells nothing and is tried again.
+- Checklists: the *Send to tasks* text no longer says ticking the task in the note ticks the checkbox (ticks go from the notebook to the note only).
+- Checklists: in the setting *Make it a checkbox*, a square is no longer converted while you are still drawing a tick across it; it waits for the stroke and checks again.
+- Checklists: a note path too long to store is refused with a notice when sending a checkbox to the tasks, instead of blocking saves.
+- Checklists: the *Open items* tooltip follows a changed label.
+
 ## 0.18.0 — 2026-11-05
 
 Review a page and move between notes more freely: margin comments anchored to a region of the page, an infinite page split into sheets of paper for export, a selection sent into a Markdown note, pages copied to another notebook with a link back, a QR code for a page, the notes that mention a page, annotating a PDF from Obsidian's PDF viewer, and quick tabs for the pages you keep going back to. The notebook format moves to version 16 (an older plugin opens a v16 file read-only).

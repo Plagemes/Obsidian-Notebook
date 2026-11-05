@@ -1360,6 +1360,8 @@ export class NotebookView extends FileView {
 	async flushNow(): Promise<boolean> {
 		this.controller?.finishActiveStroke();
 		this.commitText();
+		// 0.19 (#103): the ticks of linked checkboxes that still wait for their task line are written now (the app may be killed).
+		this.checklist?.flush();
 		const session = this.session;
 		if (!session) return true;
 		const written = await session.flush();
@@ -2238,6 +2240,8 @@ export class NotebookView extends FileView {
 				return box ? { pageIndex, local: toPageLocal(box, dx, dy) } : null;
 			},
 			fingerNavigates: (e) => this.policy.route("touch", e.timeStamp, 0, Math.max(e.width || 0, e.height || 0), e.buttons) === "navigate",
+			penBusy: (t) => this.policy.penRecentlyActive(t),
+			register: (ref) => this.registerEvent(ref),
 			insertTarget: () => this.mathHost().insertTarget(),
 			selection: () => (this.selection ? { pageIndex: this.selection.pageIndex, strokes: this.selection.strokes, elements: this.selection.elements } : null),
 			select: (pageIndex, strokes, elements) => this.selectItems(pageIndex, strokes, elements),

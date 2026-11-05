@@ -51,7 +51,8 @@ export interface TransferOptions {
 export function planTransfer(
 	source: NotebookDocument, pageIds: readonly string[], target: NotebookDocument, mode: TransferMode, opts: TransferOptions = {},
 ): TransferPlan | PageMoveFailure {
-	const base = planPageMove(source, pageIds, target);
+	// v17: a moved page is the same page (the originals are removed), so its checkboxes keep the link to their task lines; a copy never does.
+	const base = planPageMove(source, pageIds, target, mode === "move");
 	if (!base.ok) return base;
 	const wanted = new Set(pageIds);
 	const chosen = source.pages.filter((p) => wanted.has(p.id));

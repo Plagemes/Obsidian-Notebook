@@ -7,7 +7,7 @@ import {
 import { parseOutline } from "../math/outline";
 import { EXCERPT_ID_MAX, EXCERPT_PATH_MAX } from "./excerpts";
 import { detectVersion, migrate, MigrationError, v10OnlyElement, v15OnlyElement, v17OnlyElement, withoutV11Meta, withoutV12Slides, type RawObject } from "./migrations";
-import { CHECKBOX_BLOCK_MAX, CHECKBOX_LABEL_MAX, CHECKBOX_MAX_SIZE, CHECKBOX_MIN_SIZE, CHECKBOX_PATH_MAX, isOurBlockId } from "./checklist";
+import { CHECKBOX_BLOCK_MAX, CHECKBOX_LABEL_MAX, CHECKBOX_MAX_SIZE, CHECKBOX_MIN_SIZE, CHECKBOX_PATH_MAX, cleanCheckboxLabel, isOurBlockId } from "./checklist";
 import { commentLine, normalizeComments, readComments } from "./comments-format";
 import { normalizePageStates, STATE_COLOR_RE, statesLine } from "./states-format";
 import { normalizePageTags } from "./page-tags";
@@ -211,13 +211,14 @@ function stickyLine(e: StickyElement): string {
 }
 
 /**
- * v17 checkbox: frame and colour, then the optional tick (`checked`), the time of the last toggle (`at`), the typed label and the
- * task link, in that order (one line).
+ * v17 checkbox: frame and colour, then the optional tick (`checked`), the time of the last toggle (`at`), the time of the last
+ * change of the link (`taskAt`), the typed label and the task link, in that order (one line).
  */
 function checkboxLine(e: CheckboxElement): string {
 	let line = `				{"id":${j(e.id)},"type":"checkbox","x":${j(e.x)},"y":${j(e.y)},"size":${j(e.size)},"color":${j(e.color)}`;
 	if (e.checked === true) line += `,"checked":true`;
 	if (e.at !== undefined) line += `,"at":${j(e.at)}`;
+	if (e.taskAt !== undefined) line += `,"taskAt":${j(e.taskAt)}`;
 	if (e.label !== undefined && e.label !== "") line += `,"label":${j(e.label)}`;
 	if (e.task !== undefined) line += `,"task":{"path":${j(e.task.path)},"block":${j(e.task.block)}}`;
 	return line + "}";
@@ -891,10 +892,16 @@ function readCheckbox(v: RawObject, id: string, path: string, drop: Dropped | nu
 		return v.at;
 	});
 	if (at !== undefined) el.at = at;
+	const taskAt = orDrop(drop, () => {
+		if (v.taskAt === undefined) return undefined;
+		if (typeof v.taskAt !== "number" || !Number.isSafeInteger(v.taskAt) || v.taskAt < 0) fail(`${path}.taskAt`, "expected a time in ms");
+		return v.taskAt;
+	});
+	if (taskAt !== undefined) el.taskAt = taskAt;
 	const label = orDrop(drop, () => {
 		if (v.label === undefined) return undefined;
 		const s = boundedString(v.label, `${path}.label`, CHECKBOX_LABEL_MAX * 4);
-		const clean = Array.from(s.replace(/\s+/g, " ").trim()).slice(0, CHECKBOX_LABEL_MAX).join("");
+		const clean = cleanCheckboxLabel(s);
 		if (clean !== s) {
 			if (!drop) fail(`${path}.label`, "not a normalised label");
 			drop.count++;

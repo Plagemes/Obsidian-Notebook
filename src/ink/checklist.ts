@@ -79,12 +79,17 @@ export function checkboxFromStroke(points: readonly Point[]): DetectedSquare | n
 
 // ---------------------------------------------------------------- tapping
 
-/** A checkbox can be tapped within a square of at least this many CSS px, whatever its size on the page. */
+/** A checkbox can be tapped by a finger within a square of at least this many CSS px, whatever its size on the page. */
 export const TAP_TARGET_PX = 28;
+/**
+ * A pen (or a mouse) taps the box itself plus this margin, in page units (pt): a dot or a colon written next to the box, where the
+ * label starts, is ink and must not tick it. The pen tip is precise; only a finger needs the larger target.
+ */
+export const PEN_TAP_MARGIN = 3;
 
 /**
- * The topmost checkbox under the point (x, y) of a page, for a tap at zoom `scale` (CSS px per pt): the box itself, or a square of
- * TAP_TARGET_PX around its centre when that is larger (a finger or a pen tip does not need to hit a 14 pt square exactly).
+ * The topmost checkbox under the point (x, y) of a page, for a finger tap at zoom `scale` (CSS px per pt): the box itself, or a
+ * square of TAP_TARGET_PX around its centre when that is larger (a finger does not need to hit a 14 pt square exactly).
  */
 export function checkboxAt(elements: readonly { type: string }[], x: number, y: number, scale: number): CheckboxElement | null {
 	const reach = TAP_TARGET_PX / 2 / Math.max(0.05, scale);
@@ -93,6 +98,16 @@ export function checkboxAt(elements: readonly { type: string }[], x: number, y: 
 		if (el.type !== "checkbox") continue;
 		const half = Math.max(el.size / 2, reach);
 		if (Math.abs(x - (el.x + el.size / 2)) <= half && Math.abs(y - (el.y + el.size / 2)) <= half) return el;
+	}
+	return null;
+}
+
+/** The topmost checkbox under the point (x, y) of a page for a pen or mouse contact: the box and PEN_TAP_MARGIN pt around it. */
+export function checkboxAtPen(elements: readonly { type: string }[], x: number, y: number): CheckboxElement | null {
+	for (let i = elements.length - 1; i >= 0; i--) {
+		const el = elements[i] as CheckboxElement;
+		if (el.type !== "checkbox") continue;
+		if (x >= el.x - PEN_TAP_MARGIN && x <= el.x + el.size + PEN_TAP_MARGIN && y >= el.y - PEN_TAP_MARGIN && y <= el.y + el.size + PEN_TAP_MARGIN) return el;
 	}
 	return null;
 }

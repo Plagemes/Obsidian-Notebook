@@ -1,11 +1,12 @@
-import { normalizePath, type App } from "obsidian";
+import { normalizePath, type App, type EventRef } from "obsidian";
 import { t } from "../i18n";
-import { checkboxAt, checkboxFromStroke, checkboxLabelBounds, checkboxLabelInk, type DetectedSquare } from "../ink/checklist";
+import { checkboxAt, checkboxAtPen, checkboxFromStroke, checkboxLabelBounds, checkboxLabelInk, type DetectedSquare } from "../ink/checklist";
 import type { BBox } from "../ink/hit-test";
 import {
-	blockIdFor, CHECKBOX_DEFAULT_COLOR, checkboxesOf, createCheckbox, setTaskLineChecked,
+	blockIdFor, CHECKBOX_DEFAULT_COLOR, checkboxesOf, cleanCheckboxLabel, createCheckbox, isLinkablePath, renamedPath, setTaskLineChecked,
 } from "../model/checklist";
 import { setCheckboxLabel, setCheckboxTask, toggleCheckbox } from "../model/checklist-commands";
+import { ChecklistSync, type SyncEntry, type SyncNotice, type SyncResult, type SyncSnapshot } from "../model/checklist-sync";
 import { createId } from "../model/document";
 import { AddElement, Batch, ReplaceStroke, type Command } from "../model/history";
 import type { CheckboxElement, CheckboxTask, NotebookDocument, Page, PageElement, Stroke } from "../model/types";
@@ -23,9 +24,11 @@ import { MakeTaskModal, type TaskRequest } from "./selection-task";
  * itself as a ChecklistHost.
  *
  * The link to a task: a ticked or unticked checkbox with a `task` link is written into the one line of that note that ends with the
- * block id the plugin added (`setTaskLineChecked`, through `vault.process`); no other line is ever touched, and when the line is
- * gone the checkbox is unlinked. The line follows the checkbox whatever changed it (a tap, undo, redo, a merge): `reconcile` compares
- * each linked checkbox with what was last written.
+ * block id the plugin added (`setTaskLineChecked`, through `vault.process`); no other line is ever touched. The line follows the
+ * checkbox whatever changed it (a tap, undo, redo, a merge), from the notebook to the note only: every change notes the ticks that
+ * still have to be written at once (model/checklist-sync.ts), the write follows a moment later, when the app is hidden and when the
+ * view closes, and a note that is not there yet or cannot be written is tried again a few times. The checkbox is unlinked only when
+ * the note exists, was read, and no longer has the line; a renamed note is followed.
  */
 export interface ChecklistHost {
 	readonly app: App;
@@ -46,6 +49,10 @@ export interface ChecklistHost {
 	pageAt(clientX: number, clientY: number): { pageIndex: number; local: [number, number] } | null;
 	/** A finger tap would pan, not draw (so it can tick a checkbox). */
 	fingerNavigates(e: PointerEvent): boolean;
+	/** The pen is down, or was active within the palm rejection time at `t` (an event time stamp): a finger contact then is a palm. */
+	penBusy(t: number): boolean;
+	/** Keeps an event registration until the view closes. */
+	register(ref: EventRef): void;
 	/** Page in view and the page point at the centre of the view. */
 	insertTarget(): { pageIndex: number; x: number; y: number } | null;
 	selection(): { pageIndex: number; strokes: readonly Stroke[]; elements: readonly PageElement[] } | null;
@@ -70,6 +77,8 @@ const FINGER_MS = 450;
 const OFFER_MS = 9000;
 /** A square drawn with "make it a checkbox" waits this long, so a side-button retraction or the next stroke can come first, ms. */
 const AUTO_DELAY_MS = 450;
+/** While the next stroke is being drawn the square keeps waiting this long at most (the stroke's end re-arms the shorter wait), ms. */
+const AUTO_STROKE_MS = 6000;
 /** After this many offers in a row that nobody took, none is made until a checkbox is made or the notebook is opened again. */
 const MAX_IGNORED = 3;
 /** The task lines are brought up to date this long after the last change, ms. */
@@ -93,29 +102,37 @@ interface Offer {
 	square: DetectedSquare;
 }
 
-export type SyncResult = "ok" | "missing" | "error";
-
 export class ChecklistTools {
 	private contact: Contact | null = null;
 	private offer: Offer | null = null;
 	private chipEl: HTMLElement | null = null;
 	private chipTimer: number | null = null;
 	private autoTimer: number | null = null;
+	/** The square waiting for `autoTimer`, and one whose wait was interrupted by the next stroke (checked again when that is in). */
+	private autoOffer: Offer | null = null;
 	private ignored = 0;
-	/** The tick last written to the task line of each linked checkbox (by element id). */
-	private readonly synced = new Map<string, boolean>();
+	/** What was written to the task lines and what still has to be (model/checklist-sync.ts). */
+	private readonly sync: ChecklistSync;
 	private syncTimer: number | null = null;
-	private syncing = false;
-	private syncAgain = false;
+	private retryTimer: number | null = null;
+	private destroyed = false;
 	private fingerTap: { id: number; x: number; y: number; t: number } | null = null;
 	private readonly off: Array<() => void> = [];
 
 	constructor(private readonly host: ChecklistHost) {
 		const stage = host.stage();
+		this.sync = new ChecklistSync({
+			snapshot: () => this.snapshot(),
+			write: (task, checked) => this.writeLine(task, checked),
+			unlink: (entry) => this.unlinkGone(entry),
+			notify: (kind, entry, detail) => this.noticeFor(kind, entry, detail),
+		});
 		this.listen(stage, "pointerdown", (e) => this.onFingerDown(e as PointerEvent), true);
 		this.listen(stage, "pointerup", (e) => this.onFingerUp(e as PointerEvent));
 		this.listen(stage, "pointercancel", () => (this.fingerTap = null));
-		this.baseline();
+		// A note renamed or moved in the vault: the links follow it (the stored path is what the next tick is written to).
+		host.register(host.app.vault.on("rename", (file, oldPath) => this.onRename(file.path, oldPath)));
+		this.sync.baseline(this.snapshot());
 	}
 
 	private listen(el: HTMLElement, type: string, fn: (e: Event) => void, capture = false): void {
@@ -123,15 +140,22 @@ export class ChecklistTools {
 		this.off.push(() => el.removeEventListener(type, fn, capture));
 	}
 
+	/**
+	 * The view is closing. The ticks that wait for their note are written now, best effort (the note is written after the view is
+	 * gone; the app may not live to finish it, but this is the last chance there is).
+	 */
 	destroy(): void {
+		this.sync.collect();
 		for (const o of this.off.splice(0)) o();
 		this.hideOffer();
-		if (this.autoTimer !== null) window.clearTimeout(this.autoTimer);
-		if (this.syncTimer !== null) window.clearTimeout(this.syncTimer);
+		for (const timer of [this.autoTimer, this.syncTimer, this.retryTimer]) if (timer !== null) window.clearTimeout(timer);
 		this.autoTimer = null;
+		this.autoOffer = null;
 		this.syncTimer = null;
+		this.retryTimer = null;
 		this.contact = null;
-		this.synced.clear();
+		this.destroyed = true;
+		if (this.sync.hasWork()) void this.sync.run();
 	}
 
 	/** Another document was loaded: forget what belonged to the previous one, and take the ticks of this one as already written. */
@@ -139,14 +163,30 @@ export class ChecklistTools {
 		this.hideOffer();
 		if (this.autoTimer !== null) window.clearTimeout(this.autoTimer);
 		this.autoTimer = null;
+		this.autoOffer = null;
 		this.contact = null;
 		this.ignored = 0;
-		this.baseline();
+		// (a tick that was noted but not written yet is not forgotten: it is written, or tried again, as before)
+		this.sync.baseline(this.snapshot());
+		this.scheduleRetry();
+		if (this.sync.hasWork()) this.docChanged();
 	}
 
-	private baseline(): void {
-		this.synced.clear();
-		for (const page of this.host.doc()?.pages ?? []) for (const c of checkboxesOf(page)) if (c.task) this.synced.set(c.id, c.checked === true);
+	/** The app is hidden or the page is closing: the ticks noted so far are written now, not after the usual moment. */
+	flush(): void {
+		if (this.destroyed) return;
+		this.sync.collect();
+		if (this.syncTimer !== null) window.clearTimeout(this.syncTimer);
+		this.syncTimer = null;
+		if (this.sync.hasWork()) void this.runSync();
+	}
+
+	private snapshot(): SyncSnapshot | null {
+		const doc = this.host.doc();
+		if (!doc) return null;
+		const boxes: SyncSnapshot["boxes"][number][] = [];
+		for (const page of doc.pages) for (const c of checkboxesOf(page)) if (c.task) boxes.push({ id: c.id, checked: c.checked === true, task: c.task });
+		return { docId: doc.id, boxes };
 	}
 
 	// ------------------------------------------------------------------ taps
@@ -159,7 +199,8 @@ export class ChecklistTools {
 	begin(page: Page, local: [number, number], screen: { x: number; y: number; t: number }, tool: string): boolean {
 		this.contact = null;
 		if ((tool !== "pen" && tool !== "highlighter") || !this.host.editable()) return false;
-		const hit = checkboxAt(page.elements ?? [], local[0], local[1], this.host.scale());
+		// The box and a few pt around it, not the larger target of a finger: a dot or a colon written next to the box is ink.
+		const hit = checkboxAtPen(page.elements ?? [], local[0], local[1]);
 		if (hit) this.contact = { pageId: page.id, target: hit, sx: screen.x, sy: screen.y, t: screen.t };
 		return false;
 	}
@@ -201,6 +242,8 @@ export class ChecklistTools {
 		if (e.pointerType !== "touch" || !e.isPrimary || !this.host.editable()) return;
 		const tool = this.host.tool();
 		if ((tool !== "pen" && tool !== "highlighter") || !this.host.fingerNavigates(e)) return;
+		// While the pen is down or was just used, a touch is a palm resting on the page: it ticks nothing.
+		if (this.host.penBusy(e.timeStamp)) return;
 		this.fingerTap = { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp };
 	}
 
@@ -208,6 +251,7 @@ export class ChecklistTools {
 		const tap = this.fingerTap;
 		this.fingerTap = null;
 		if (!tap || tap.id !== e.pointerId || e.timeStamp - tap.t > FINGER_MS) return;
+		if (this.host.penBusy(e.timeStamp)) return;
 		if (Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > FINGER_SLOP) return;
 		const at = this.host.pageAt(e.clientX, e.clientY);
 		const page = at ? this.host.doc()?.pages[at.pageIndex] : undefined;
@@ -222,6 +266,32 @@ export class ChecklistTools {
 	strokeStarted(): void {
 		if (this.offer) this.noteIgnored();
 		this.hideOffer();
+		// A square waiting to become a checkbox (the setting "make it a checkbox"): the next stroke may be a tick across it, which is
+		// not a checkbox, or the label, which is. The wait is extended while that stroke is drawn; `strokesAdded` checks again after it.
+		if (this.autoOffer) this.startAuto(this.autoOffer, AUTO_STROKE_MS);
+	}
+
+	/** After `delay` ms turns the square of `offer` into a checkbox, unless ink was drawn inside it since (`convert`). */
+	private startAuto(offer: Offer, delay: number): void {
+		if (this.autoTimer !== null) window.clearTimeout(this.autoTimer);
+		this.autoOffer = offer;
+		this.autoTimer = window.setTimeout(() => {
+			this.autoTimer = null;
+			this.autoOffer = null;
+			this.convert(offer, false);
+		}, delay);
+	}
+
+	/** A new square starts waiting; a square that was still waiting is turned into a checkbox first (it is not replaced and lost). */
+	private armAuto(offer: Offer): void {
+		const waiting = this.autoOffer;
+		if (waiting && this.autoTimer !== null) {
+			window.clearTimeout(this.autoTimer);
+			this.autoTimer = null;
+			this.autoOffer = null;
+			this.convert(waiting, false);
+		}
+		this.startAuto(offer, AUTO_DELAY_MS);
 	}
 
 	/** The view moved or zoomed: the chip would point at the wrong place. */
@@ -240,6 +310,8 @@ export class ChecklistTools {
 	 * tool and invisible ink are left alone: they are drawn on purpose.
 	 */
 	strokesAdded(pageIndex: number, strokes: readonly Stroke[]): void {
+		// The stroke a waiting square was held for is in: the usual wait starts again, and the square is checked against the new ink.
+		if (this.autoOffer && this.autoTimer !== null) this.startAuto(this.autoOffer, AUTO_DELAY_MS);
 		const mode = this.host.settings().checklistDraw;
 		if (mode === "off" || strokes.length !== 1 || !this.host.editable()) return;
 		const stroke = strokes[0]!;
@@ -251,11 +323,7 @@ export class ChecklistTools {
 		const offer: Offer = { pageIndex, pageId: page.id, strokeId: stroke.id, square };
 		if (mode === "auto") {
 			this.hideOffer();
-			if (this.autoTimer !== null) window.clearTimeout(this.autoTimer);
-			this.autoTimer = window.setTimeout(() => {
-				this.autoTimer = null;
-				this.convert(offer, false);
-			}, AUTO_DELAY_MS);
+			this.armAuto(offer);
 			return;
 		}
 		this.offer = offer;
@@ -390,7 +458,7 @@ export class ChecklistTools {
 		}).open();
 	}
 
-	/** "Send to tasks…": the one selected checkbox becomes a task line in a note; ticking either one ticks the other. */
+	/** "Send to tasks…": the one selected checkbox becomes a task line in a note; ticking the checkbox ticks the task (not the other way round). */
 	sendTask(): void {
 		const s = this.selected();
 		if (!s || s.boxes.length !== 1) {
@@ -415,16 +483,22 @@ export class ChecklistTools {
 	private async finishSend(pageIndex: number, pageId: string, id: string, bounds: BBox, request: TaskRequest, block: string): Promise<void> {
 		const path = await this.host.sendTask(pageIndex, bounds, request);
 		if (!path) return;
+		// A path the format cannot hold would make every later save fail: the task is in the note, but it is not linked.
+		if (!isLinkablePath(path)) {
+			showNotice(t("checklist.task.pathTooLong"), 8000);
+			return;
+		}
 		const page = this.host.doc()?.pages.find((p) => p.id === pageId);
 		const box = page ? checkboxesOf(page).find((c) => c.id === id) : undefined;
 		if (!page || !box || !this.host.editable()) return;
 		const link: CheckboxTask = { path, block };
 		const steps: Command[] = [setCheckboxTask(page.id, id, link)];
-		if (request.text !== "" && box.label === undefined) steps.push(setCheckboxLabel(page.id, id, request.text));
+		// (the label is cut to the stored limit, so a long typed text can never be one the writer refuses)
+		if (request.text !== "" && box.label === undefined) steps.push(setCheckboxLabel(page.id, id, cleanCheckboxLabel(request.text)));
 		// The line was written unticked: a checkbox that is ticked already brings it up to date at the next sync.
-		this.synced.set(id, false);
+		this.sync.linked(id, false);
 		if (!this.host.execute(steps.length === 1 ? steps[0]! : new Batch("Link checkbox to task", steps))) {
-			this.synced.delete(id);
+			this.sync.linked(id, null);
 			return;
 		}
 		this.host.refresh();
@@ -438,7 +512,7 @@ export class ChecklistTools {
 		if (linked.length === 0) return;
 		const steps = linked.map((b) => setCheckboxTask(s.page.id, b.id, null));
 		if (!this.host.execute(steps.length === 1 ? steps[0]! : new Batch("Unlink checkboxes", steps))) return;
-		for (const b of linked) this.synced.delete(b.id);
+		for (const b of linked) this.sync.linked(b.id, null);
 		this.reselect(s.pageIndex, s.page, s.boxes.map((b) => b.id));
 		this.host.refresh();
 		showNotice(t("checklist.unlinked"), 3500);
@@ -446,81 +520,111 @@ export class ChecklistTools {
 
 	// ------------------------------------------------------------------ the task lines
 
-	/** The document changed (a tap, undo, redo, a merge, a reload): the task lines are brought up to date a moment later. */
+	/**
+	 * The document changed (a tap, undo, redo, a merge, a reload): the ticks that differ from the task lines are noted now (so none
+	 * is lost to what happens in the next moment) and written a moment later.
+	 */
 	docChanged(): void {
-		if (this.syncTimer !== null) return;
+		if (this.destroyed) return;
+		this.sync.collect();
+		if (!this.sync.hasWork() || this.syncTimer !== null) return;
 		this.syncTimer = window.setTimeout(() => {
 			this.syncTimer = null;
-			void this.reconcile();
+			void this.runSync();
 		}, SYNC_MS);
 	}
 
-	/**
-	 * Writes the tick of every linked checkbox that differs from what was last written into its task line. A line that is gone
-	 * unlinks the checkbox (one undo step, and a notice); a note that cannot be written is retried at the next change. Never throws.
-	 */
+	/** Writes what waits, then makes sure a failed try is tried again (`RETRY_DELAYS`). Never throws. */
+	private async runSync(): Promise<void> {
+		await this.sync.run();
+		this.scheduleRetry();
+	}
+
+	/** Brings the task lines up to date now (what `docChanged` does after a moment). */
 	async reconcile(): Promise<void> {
-		if (this.syncing) {
-			this.syncAgain = true;
-			return;
-		}
-		this.syncing = true;
-		try {
-			do {
-				this.syncAgain = false;
-				const doc = this.host.doc();
-				if (!doc) break;
-				for (const page of doc.pages) {
-					for (const box of checkboxesOf(page)) {
-						if (!box.task) continue;
-						const want = box.checked === true;
-						const had = this.synced.get(box.id);
-						if (had === undefined) {
-							// Linked after the document was opened (a merge, an undo): what the line says is not known, so it is left alone.
-							this.synced.set(box.id, want);
-							continue;
-						}
-						if (had === want) continue;
-						const result = await this.writeLine(box.task, want);
-						if (result === "ok") this.synced.set(box.id, want);
-						else if (result === "missing") this.lineGone(page.id, box);
-					}
-				}
-			} while (this.syncAgain);
-		} catch (e) {
-			console.error("[notebook] checklist sync", e);
-		} finally {
-			this.syncing = false;
-		}
+		await this.runSync();
 	}
 
-	private lineGone(pageId: string, box: CheckboxElement): void {
-		this.synced.delete(box.id);
-		const path = box.task?.path ?? "";
-		if (this.host.editable() && this.host.execute(setCheckboxTask(pageId, box.id, null))) this.host.refresh();
-		showNotice(t("checklist.task.lineGone", { path }), 7000);
+	private scheduleRetry(): void {
+		if (this.destroyed) return;
+		if (this.retryTimer !== null) window.clearTimeout(this.retryTimer);
+		this.retryTimer = null;
+		const wait = this.sync.nextRetryIn();
+		if (wait === null) return;
+		this.retryTimer = window.setTimeout(() => {
+			this.retryTimer = null;
+			void this.runSync();
+		}, wait + 50);
 	}
 
-	/** Sets the tick of the one task line of the note that ends with the block id; the rest of the note is never touched. */
+	/** A note was renamed or moved: the links to it, and the ticks waiting for it, follow (one undo step). */
+	private onRename(newPath: string, oldPath: string): void {
+		if (this.destroyed) return;
+		this.sync.renamed(oldPath, newPath);
+		const doc = this.host.doc();
+		if (!doc || !this.host.editable()) return;
+		const steps: Command[] = [];
+		for (const page of doc.pages) {
+			for (const box of checkboxesOf(page)) {
+				const next = box.task ? renamedPath(box.task.path, oldPath, newPath) : null;
+				if (box.task && next !== null) steps.push(setCheckboxTask(page.id, box.id, { path: next, block: box.task.block }));
+			}
+		}
+		if (steps.length === 0) return;
+		if (this.host.execute(steps.length === 1 ? steps[0]! : new Batch("Follow renamed note", steps))) this.host.refresh();
+	}
+
+	/**
+	 * The line is gone from a note that exists: the checkbox stops following it (one undo step, in the document it belongs to). False
+	 * when that cannot be done now (a locked page, a read-only notebook, another document): the entry is tried again later.
+	 */
+	private unlinkGone(entry: SyncEntry): boolean {
+		if (this.destroyed) return false;
+		const doc = this.host.doc();
+		if (!doc || doc.id !== entry.docId || !this.host.editable()) return false;
+		const page = doc.pages.find((p) => checkboxesOf(p).some((c) => c.id === entry.id && c.task?.block === entry.task.block));
+		// (the checkbox is gone or was linked to something else meanwhile: nothing to unlink)
+		if (!page) return true;
+		if (!this.host.execute(setCheckboxTask(page.id, entry.id, null))) return false;
+		this.host.refresh();
+		return true;
+	}
+
+	private noticeFor(kind: SyncNotice, entry: SyncEntry, detail?: string): void {
+		if (this.destroyed) return;
+		const path = entry.task.path;
+		if (kind === "gone") showNotice(t("checklist.task.lineGone", { path }), 7000);
+		else if (kind === "ambiguous") showNotice(t("checklist.task.ambiguous", { path }), 8000);
+		else if (kind === "missing") showNotice(t("checklist.task.syncFailed", { path, error: t("checklist.task.noteMissing") }), 8000);
+		else showNotice(t("checklist.task.syncFailed", { path, error: detail ?? "" }), 6000);
+	}
+
+	/**
+	 * Sets the tick of the one task line of the note that ends with the block id; the rest of the note is never touched. "missing": the
+	 * note is not in the vault (or is still empty: the notebook can sync before the note does), so the link stays. "gone": the note was
+	 * read and the line is not in it. Rejects when the note cannot be read or written.
+	 */
 	private async writeLine(task: CheckboxTask, checked: boolean): Promise<SyncResult> {
 		const { app } = this.host;
 		try {
 			const file = app.vault.getFileByPath(normalizePath(task.path));
 			if (!file) return "missing";
-			const probe = setTaskLineChecked(await app.vault.read(file), task.block, checked);
-			if (!probe.found) return "missing";
+			const text = await app.vault.read(file);
+			if (text.trim() === "") return "missing";
+			const probe = setTaskLineChecked(text, task.block, checked);
+			if (probe.ambiguous) return "ambiguous";
+			if (!probe.found) return "gone";
 			if (!probe.changed) return "ok";
-			let found = true;
+			let outcome: SyncResult = "ok";
 			await app.vault.process(file, (current) => {
 				const r = setTaskLineChecked(current, task.block, checked);
-				found = r.found;
+				outcome = r.ambiguous ? "ambiguous" : r.found ? "ok" : "gone";
 				return r.text;
 			});
-			return found ? "ok" : "missing";
+			return outcome;
 		} catch (e) {
 			console.error("[notebook] checklist task line", e);
-			showNotice(t("checklist.task.syncFailed", { path: task.path, error: e instanceof Error ? e.message : String(e) }), 6000);
-			return "error";
+			throw e;
 		}
 	}
 }

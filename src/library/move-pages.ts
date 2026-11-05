@@ -149,7 +149,8 @@ export async function movePagesTo(src: EditContext, pageIds: readonly string[], 
 		targetDoc = parsed.doc;
 	}
 
-	const plan = planPageMove(src.doc, pageIds, targetDoc);
+	// (the pages leave the source: the same checkboxes, so they keep the link to their task lines)
+	const plan = planPageMove(src.doc, pageIds, targetDoc, true);
 	if (!plan.ok) throw new Error(failureText(plan));
 	const assets = await relocateAssets(app, src.folder, plan.assets);
 	const ready: PageMovePlan = { ...plan, assets };
