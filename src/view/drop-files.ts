@@ -322,6 +322,7 @@ async function placeFlat(
 		}
 		if (elements.length === 0) return;
 		if (!stillOpenAndEditable(host, ctx, page.id)) return;
+		let placed: number | null = null;
 		const done = await commitAssets(host, ctx, files, () => {
 			const here = stillOpenAndEditable(host, ctx, page.id);
 			if (!here) return false;
@@ -329,8 +330,11 @@ async function placeFlat(
 			const commands: Command[] = [...uniqueAssets(files).map((f) => new AddAsset(f.asset)), ...elements.map((el, i) => new AddElement(here.page.id, el, base + i))];
 			// Refused (the page was locked meanwhile): the history said so.
 			if (!here.ctx.execute(new Batch("Drop files", commands))) return false;
-			host.select(here.index, elements);
+			placed = here.index;
 			return true;
+		}, () => {
+			// After the commit: a selection that throws must never trash pictures the notebook now references.
+			if (placed !== null) host.select(placed, elements);
 		});
 		if (done) showNotice(t(elements.length === 1 ? "drop.done.one" : "drop.done.many", { n: String(elements.length) }));
 	} finally {
@@ -362,7 +366,7 @@ function stillOpenAndEditable(host: DropFilesHost, ctx: EditContext, pageId: str
  * History refuses the change or something fails midway, so a refused drop leaves nothing in the assets folder; a file that was
  * already there (shared with other notebooks) is never touched.
  */
-function commitAssets(host: DropFilesHost, ctx: EditContext, files: readonly AssetFile[], apply: () => boolean): Promise<boolean> {
+function commitAssets(host: DropFilesHost, ctx: EditContext, files: readonly AssetFile[], apply: () => boolean, after: () => void): Promise<boolean> {
 	return commitWithFiles(
 		uniqueAssets(files),
 		async (f) => {
@@ -374,6 +378,7 @@ function commitAssets(host: DropFilesHost, ctx: EditContext, files: readonly Ass
 			if (file) await host.app.fileManager.trashFile(file);
 		},
 		apply,
+		after,
 	);
 }
 
@@ -443,14 +448,18 @@ async function pdfAsImages(host: DropFilesHost, pageId: string, centre: { x: num
 			elements.push(pastedImageElement(asset.id, { width: shot.pixelWidth, height: shot.pixelHeight }, here0.page, cx, cy));
 		}
 		if (!stillOpenAndEditable(host, ctx, pageId)) return false;
+		let placed: number | null = null;
 		const done = await commitAssets(host, ctx, files, () => {
 			const here = stillOpenAndEditable(host, ctx, pageId);
 			if (!here) return false;
 			const base = here.page.elements?.length ?? 0;
 			const commands: Command[] = [...uniqueAssets(files).map((f) => new AddAsset(f.asset)), ...elements.map((el, i) => new AddElement(here.page.id, el, base + i))];
 			if (!here.ctx.execute(new Batch("Drop PDF as images", commands))) return false;
-			host.select(here.index, elements);
+			placed = here.index;
 			return true;
+		}, () => {
+			// After the commit: a selection that throws must never trash pictures the notebook now references.
+			if (placed !== null) host.select(placed, elements);
 		});
 		if (done) showNotice(t(elements.length === 1 ? "drop.done.one" : "drop.done.many", { n: String(elements.length) }));
 		return done;

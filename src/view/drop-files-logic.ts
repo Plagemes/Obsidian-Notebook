@@ -149,9 +149,11 @@ export function imagePageRange(range: { from: number; to: number }): { from: num
  * (`apply`, the History command; false when it refused). When it refuses, or a write or the change throws, the files this drop
  * created are discarded (`discard`, best effort), so a refused drop leaves nothing behind. A file that was already there is
  * never in the list: it is shared with other notebooks.
+ * `after` runs once the change has been taken (for example selecting the new elements). It can never undo the drop: the History
+ * already holds the change and the next save writes it, so a throw there is reported to the console and the files stay.
  */
 export async function commitWithFiles<T>(
-	items: readonly T[], write: (item: T) => Promise<boolean>, discard: (item: T) => Promise<void>, apply: () => boolean,
+	items: readonly T[], write: (item: T) => Promise<boolean>, discard: (item: T) => Promise<void>, apply: () => boolean, after?: () => void,
 ): Promise<boolean> {
 	const created: T[] = [];
 	const undo = async (): Promise<void> => {
@@ -167,11 +169,18 @@ export async function commitWithFiles<T>(
 		for (const item of items) {
 			if (await write(item)) created.push(item);
 		}
-		if (apply()) return true;
+		if (!apply()) {
+			await undo();
+			return false;
+		}
 	} catch (e) {
 		await undo();
 		throw e;
 	}
-	await undo();
-	return false;
+	try {
+		after?.();
+	} catch (e) {
+		console.error("[notebook] drop files: after-commit step failed", e);
+	}
+	return true;
 }
