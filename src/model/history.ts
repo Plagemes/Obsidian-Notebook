@@ -889,13 +889,32 @@ export class History {
 	 * is not, the document is put back exactly as it was before the step (`snapshot`), the step is dropped from the history (doing it
 	 * again would do the same) and it is said. True when the step was refused.
 	 */
-	private refusedStep(doc: NotebookDocument, snapshot: Shot[] | null, step: "undo" | "redo"): boolean {
-		if (!snapshot || !this.guard) return false;
+	private refusedStep(doc: NotebookDocument, snapshot: Shot[] | null, step: "undo" | "redo", wasBad: boolean): boolean {
+		// A document that already failed the guard before the step (a change outside the history) is not the step's doing: it is kept.
+		if (!snapshot || !this.guard || wasBad) return false;
 		const problem = this.guard(doc);
 		if (problem === null) return false;
-		for (const s of snapshot) restoreShot(s);
-		this.refused?.(problem, step);
+		this.dropStep(snapshot, problem, step);
 		return true;
+	}
+
+	/** The document back exactly as before the step, the rest of the redo steps (made on top of a redo that is dropped) gone, and it is said. */
+	private dropStep(snapshot: Shot[], problem: string, step: "undo" | "redo"): void {
+		for (const s of snapshot) restoreShot(s);
+		if (step === "redo") this.redoStack = [];
+		this.refused?.(problem, step);
+	}
+
+	/** Runs the step; an exception leaves the document as it was, drops the step and says so. True when it ran. */
+	private ran(run: () => void, snapshot: Shot[] | null, step: "undo" | "redo"): boolean {
+		try {
+			run();
+			return true;
+		} catch (e) {
+			if (!snapshot) throw e;
+			this.dropStep(snapshot, e instanceof Error ? e.message : String(e), step);
+			return false;
+		}
 	}
 
 	/** Records an already applied command (e.g. the eraser, which erases while it moves). */
@@ -912,7 +931,8 @@ export class History {
 		const doc = this.doc();
 		const locks = cmd.lockExempt ? null : snapshotLocked(doc);
 		const snapshot = this.guard ? snapshotDocument(doc) : null;
-		cmd.revert(doc);
+		const wasBad = snapshot !== null && (this.guard?.(doc) ?? null) !== null;
+		if (!this.ran(() => cmd.revert(doc), snapshot, "undo")) return null;
 		if (locks) {
 			// An older edit of a page that has been locked since (a synced change, a lock set later and left on): the undo
 			// is not done and stays on the stack for when the page is unlocked.
@@ -925,7 +945,7 @@ export class History {
 				return null;
 			}
 		}
-		if (this.refusedStep(doc, snapshot, "undo")) return null;
+		if (this.refusedStep(doc, snapshot, "undo", wasBad)) return null;
 		this.redoStack.push(cmd);
 		return cmd;
 	}
@@ -937,7 +957,8 @@ export class History {
 		const doc = this.doc();
 		const locks = cmd.lockExempt ? null : snapshotLocked(doc);
 		const snapshot = this.guard ? snapshotDocument(doc) : null;
-		cmd.apply(doc);
+		const wasBad = snapshot !== null && (this.guard?.(doc) ?? null) !== null;
+		if (!this.ran(() => cmd.apply(doc), snapshot, "redo")) return null;
 		if (locks) {
 			const hit = lockedChanges(doc, locks);
 			if (hit.length > 0) {
@@ -947,7 +968,7 @@ export class History {
 				return null;
 			}
 		}
-		if (this.refusedStep(doc, snapshot, "redo")) return null;
+		if (this.refusedStep(doc, snapshot, "redo", wasBad)) return null;
 		this.undoStack.push(cmd);
 		return cmd;
 	}

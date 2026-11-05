@@ -267,6 +267,75 @@ describe("H1 backstop: an undo or a redo the writer would refuse", () => {
 		expect(history.canRedo()).toBe(false);
 	});
 
+	it("L1: a refused redo also clears the redo steps made on top of it", () => {
+		const doc = docWith(linkedBox());
+		const refused: Array<{ message: string; step?: string }> = [];
+		const history = guarded(doc, refused);
+		let applied = 0;
+		const bad: Command = {
+			label: "bad redo",
+			apply: (d) => {
+				if (applied++ > 0) d.pages[0]!.elements!.push(linkedBox({ x: 77 }));
+			},
+			revert: () => {},
+		};
+		const next = new ReplaceElement("p1", doc.pages[0]!.elements![0]!, linkedBox({ x: 60 }));
+		expect(history.execute(bad)).toBe(true);
+		expect(history.execute(next)).toBe(true);
+		history.undo();
+		history.undo();
+		expect(history.canRedo()).toBe(true);
+		expect(history.redo()).toBeNull();
+		expect(refused.map((r) => r.step)).toEqual(["redo"]);
+		expect(history.canRedo()).toBe(false);
+	});
+
+	it("L2: a step that throws leaves the document as it was, is dropped, is said, and never throws into the view", () => {
+		const doc = docWith(linkedBox());
+		const refused: Array<{ message: string; step?: string }> = [];
+		const history = guarded(doc, refused);
+		const throwing: Command = {
+			label: "throws",
+			apply: () => {
+				throw new Error("page gone");
+			},
+			revert: (d) => {
+				d.pages[0]!.width = 1;
+				throw new Error("page not found");
+			},
+		};
+		history.record(throwing);
+		const before = JSON.stringify(doc);
+		expect(history.undo()).toBeNull();
+		expect(JSON.stringify(doc)).toBe(before);
+		expect(refused).toEqual([{ message: "page not found", step: "undo" }]);
+		expect(history.canUndo()).toBe(false);
+		expect(history.canRedo()).toBe(false);
+		// redo: a step whose apply throws
+		const stale: Command = { label: "r", apply: () => { throw new Error("no page"); }, revert: () => {} };
+		const h2 = guarded(doc, refused);
+		h2.record(stale);
+		h2.undo();
+		expect(h2.redo()).toBeNull();
+		expect(refused[refused.length - 1]).toEqual({ message: "no page", step: "redo" });
+		expect(h2.canRedo()).toBe(false);
+		expect(JSON.stringify(doc)).toBe(before);
+	});
+
+	it("L3: a document that already fails the guard is not refused because of it; a step that breaks a passing one still is", () => {
+		const doc = docWith(linkedBox());
+		const refused: Array<{ message: string; step?: string }> = [];
+		const history = guarded(doc, refused);
+		const move = new ReplaceElement("p1", doc.pages[0]!.elements![0]!, linkedBox({ x: 50 }));
+		expect(history.execute(move)).toBe(true);
+		doc.pages[0]!.elements!.push(linkedBox({ x: 99 })); // a change outside the history leaves a duplicate id
+		expect(checkContent(doc)).toMatch(/duplicate id/);
+		expect(history.undo()).toBe(move);
+		expect(history.redo()).toBe(move);
+		expect(refused).toEqual([]);
+		expect(history.canUndo()).toBe(true);
+	});
+
 	it("a step that is fine is undone and redone as before", () => {
 		const doc = docWith(linkedBox());
 		const refused: Array<{ message: string; step?: string }> = [];
