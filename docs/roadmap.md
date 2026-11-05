@@ -121,7 +121,7 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 
 ### Capture and sharing
 29. 🧪 **P1** Scan into the notebook: the camera scan goes straight into the notebook as a page whose background is the cropped, perspective-corrected and enhanced photo (like a PDF page), so you write on it, reorder it in the navigator and export it like any other page. A multi-sheet session adds consecutive pages after the current one; alternatively a scan can be placed as an image on the current page. Enhancement filters: original, document (high-contrast black and white), whiteboard.
-30. **P2** Quick share of a page as PNG or PDF through the Android share sheet.
+30. 🧪 **P2** Quick share of a page as PNG or PDF through the Android share sheet. *(0.20: "Share page…" in the page menu, the sheet and the palette, and "Share selection…" in the selection menu: PNG or PDF of the page, the selection or some pages through `navigator.share({ files })`; where file sharing is not available a copy is saved in the vault. Needs hardware verification of the share sheet.)*
 
 ## M8 — More features (backlog, planned 2026-10-29)
 

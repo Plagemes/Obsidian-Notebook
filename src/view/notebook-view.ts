@@ -81,6 +81,7 @@ import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./high
 import { canPrint } from "./print";
 import type { ExportFormat } from "../ink/export-layers";
 import { ExportModal, MarkdownExportModal } from "./export-dialog";
+import { SharePageModal, type ShareHost } from "./share-page"; // 0.20 (#30)
 import { exportPdf, runExport, type ExportOptions } from "./export";
 import { ViewDisplay, type DisplayHost } from "./display";
 import { policySettings } from "./input-settings";
@@ -1916,6 +1917,35 @@ export class NotebookView extends FileView {
 			// 0.15 (241): like the PDF, PNG and SVG exports, the pages as the states in view show them.
 			run: (folder, dpi) => void exportMarkdown(this.app, file, { ...doc, pages: [...this.renderPagesOf(doc)] }, this.media, { folder, dpi, ...this.exportOptions() }),
 		}).open();
+	}
+
+	/**
+	 * 0.20 (#30): "Share page…" / "Share selection…": the page (or the selection, or some pages) as a PNG or PDF through the system share sheet;
+	 * where that is not available a copy is saved in the vault. `pageIndex`: opened from that page's sheet; `fromSelection`: open on the selection.
+	 */
+	openSharePage(pageIndex?: number, fromSelection = false): void {
+		const doc = this.session?.doc;
+		const file = this.file;
+		if (!doc || !file || doc.pages.length === 0) return;
+		let index = Math.min(doc.pages.length - 1, Math.max(0, pageIndex ?? this.currentPageIndex()));
+		let crop: ShareHost["selection"] = null;
+		const sel = this.selection;
+		if (sel && !this.statesTools?.ownsSelection(sel) && (fromSelection || sel.pageIndex === index)) {
+			// A collapsed sticky note keeps its ink out of view: it never widens the region.
+			const bounds = itemsBounds(withoutPinnedInk(sel.strokes, sel.elements), sel.elements, measureText);
+			const page = doc.pages[sel.pageIndex];
+			if (bounds && page) {
+				crop = taskCropRect(bounds, page);
+				index = sel.pageIndex;
+			}
+		}
+		if (fromSelection && !crop) return;
+		const modal = new SharePageModal({
+			app: this.app, file, pageCount: doc.pages.length, pageIndex: index, selection: crop,
+			pages: () => this.renderPagesOf(doc), media: this.media, options: () => this.exportOptions(),
+		});
+		if (fromSelection) modal.startOnSelection();
+		modal.open();
 	}
 
 	/** 0.18 (#59): the selected region as a picture (PNG or SVG) inserted into the Markdown note the user was last in, or into a chosen note. */
