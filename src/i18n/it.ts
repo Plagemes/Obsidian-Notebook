@@ -3596,4 +3596,9 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"lectureLog.count.pages": "{n} pagine",
 	"lectureLog.count.question": "1 domanda aperta",
 	"lectureLog.count.questions": "{n} domande aperte",
+	// 0.20 headings
+	"map.filter.titles": "Titoli",
+	"map.titles.go": "Vai al titolo a pagina {n}",
+	"settings.companionHeadings": "Titoli come immagini",
+	"settings.companionHeadings.desc": "Aggiunge la scrittura grande o sottolineata, come immagini.",
 };

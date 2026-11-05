@@ -109,6 +109,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 
 // Magnetic snap and alignment guides (0.17, #71): a stroke dragged beside another lands on its edge; the guides are drawn during the drag.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "snap", theme, device, lowLatency: false });
+// 0.20 headings (#102): the Titles filter and title strips of the notebook map (dev/harness/headings-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "headings", theme, device, lowLatency: false });
 // 0.18 a4split (#178): Split into sheets in the export dialog, with the preview of the cuts (dev/harness/a4split-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "a4split", theme, device, lowLatency: false });
 // 0.19 cleanexport (#239): the Clean copy switch in the export dialog (dev/harness/cleanexport-check.ts).
@@ -314,6 +316,8 @@ async function main() {
 				else if (s.doc === "pdftext") report = await cdp.evaluate("window.harness.checkPdftext()", 90000);
 				// 0.17 snap: its own check.
 				else if (s.doc === "snap") report = await cdp.evaluate("window.harness.checkSnap()", 60000);
+				// 0.20 headings: its own check.
+				else if (s.doc === "headings") report = await cdp.evaluate("window.harness.checkHeadings()", 60000);
 				// 0.18 a4split: its own check.
 				else if (s.doc === "a4split") report = await cdp.evaluate("window.harness.checkA4split()", 60000);
 				else if (s.doc === "cleanexport") report = await cdp.evaluate("window.harness.checkCleanExport()", 60000);

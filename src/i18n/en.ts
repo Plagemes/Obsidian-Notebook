@@ -3594,6 +3594,11 @@ export const en = {
 	"lectureLog.count.pages": "{n} pages",
 	"lectureLog.count.question": "1 open question",
 	"lectureLog.count.questions": "{n} open questions",
+	// 0.20 headings
+	"map.filter.titles": "Titles",
+	"map.titles.go": "Go to the title on page {n}",
+	"settings.companionHeadings": "Headings as pictures",
+	"settings.companionHeadings.desc": "Adds large or underlined handwriting, as pictures, to each page.",
 } as const;
 
 export type MessageKey = keyof typeof en;

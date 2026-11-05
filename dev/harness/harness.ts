@@ -71,6 +71,7 @@ import { checkAdaptiveToolbar, adaptiveToolbarShot, type AdaptiveShotState } fro
 import { checkCreate, prepareShot } from "./create-check";
 import { modalsApi } from "./modals-check";
 import { a4splitApi } from "./a4split-check";
+import { headingsApi } from "./headings-check";
 import { cleanExportApi } from "./cleanexport-check";
 import { templatesApi } from "./templates-check";
 import { storageApi } from "./storage-check";
@@ -2207,6 +2208,7 @@ Object.assign(harnessApi, {
 
 Object.assign(harnessApi, modalsApi({ app, errors, notices }));
 Object.assign(harnessApi, a4splitApi({ app, errors, notices }));
+Object.assign(harnessApi, headingsApi({ app, errors, notices }));
 Object.assign(harnessApi, cleanExportApi({ app, errors, notices }));
 Object.assign(harnessApi, templatesApi({ app, errors, notices }));
 // 0.15 storage: the Storage manager (doc=storage, storage-check.ts).

@@ -26,6 +26,8 @@ export interface OutlineHost {
 	/** Runs an undoable command on the open notebook. */
 	execute(cmd: Command): void;
 	goTo(index: number): void;
+	/** 0.20 (#102): to a line of a page (a heading entry); absent: the page is shown from its top. */
+	goToAt?(index: number, y: number): void;
 	/** 0.13: the assets of the notebook (names of the PDFs in the outline). */
 	assets(): Readonly<Record<string, Asset>> | undefined;
 	/** 0.13: the generated outline with its per-page cache (one per open notebook). */
@@ -221,11 +223,12 @@ function appendRows(box: HTMLElement, host: OutlineHost, all: readonly OutlineIt
 				menu.showAtMouseEvent(ev);
 			});
 		}
-		row.addEventListener("click", () => host.goTo(e.index));
+		const open = () => (e.kind === "heading" && host.goToAt ? host.goToAt(e.index, e.y) : host.goTo(e.index));
+		row.addEventListener("click", open);
 		row.addEventListener("keydown", (ev) => {
 			if (ev.target === row && (ev.key === "Enter" || ev.key === " ")) {
 				ev.preventDefault();
-				host.goTo(e.index);
+				open();
 			}
 		});
 	});
