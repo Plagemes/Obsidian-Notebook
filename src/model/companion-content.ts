@@ -17,6 +17,7 @@
  * name), so two synced devices generate byte-identical notes and never rewrite each other's copy.
  */
 import { cardSubpath, clampRegion, validPageId } from "../zettel/subpath";
+import { headingLines } from "./companion-headings";
 import { fitSearchBudget, SEARCH_NOTE_MAX, searchLines } from "./companion-search";
 import { cleanMarkerText, isBoxKind, isIsoDate } from "./markers";
 import { computeSharedTags, normalizeTag, uniqueTags } from "./tags";
@@ -47,6 +48,8 @@ export interface CompanionContext {
 	pageUri(page: number, pageId?: string): string;
 	/** O19: also write the typed text of sticky notes, comments, equations and marker labels, and link each page with a wikilink. */
 	searchText?: boolean;
+	/** 0.20 (#102): per page id, the embeds of the pictures of its handwritten headings (null: a picture that could not be made). */
+	headingEmbeds?: ReadonlyMap<string, readonly (string | null)[]>;
 }
 
 export interface CompanionContent {
@@ -291,9 +294,11 @@ export function companionContent(doc: NotebookDocument, ctx: CompanionContext, h
 	pages.forEach((page, i) => {
 		// v8: structured boxes become callouts with a live embed of their region, homework becomes Obsidian tasks.
 		const extra = ctx.searchText ? fitSearchBudget(searchLines(page), budget) : [];
+		const heads = headingLines(ctx.headingEmbeds?.get(page?.id) ?? []);
 		const blocks = [
 			...textBlocks(page?.elements), ...boxCallouts(page, i + 1, ctx.notebookPath), ...homeworkTasks(page?.elements, homework, homeworkDone, anchors),
 			...(extra.length > 0 ? [extra.join("\n")] : []),
+			...(heads.length > 0 ? [heads.join("\n")] : []),
 		];
 		if (blocks.length === 0) return;
 		// Parentheses would end the Markdown link early.

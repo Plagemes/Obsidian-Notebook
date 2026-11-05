@@ -387,6 +387,7 @@ const INTEGRATION: SettingSpec[] = [
 	{ id: "companionName", section: "integration", order: 23, name: "settings.companionName", desc: "settings.companionName.desc", control: { type: "text", placeholder: NAME_TOKEN }, parent: "companionNotes", visible: companionOn },
 	// 0.19 search (O19)
 	{ id: "companionSearchText", section: "integration", order: 23.5, name: "settings.companionSearchText", desc: "settings.companionSearchText.desc", control: { type: "toggle" }, parent: "companionNotes", visible: companionOn, keywords: "search find sticky comments equations ricerca" },
+	{ id: "companionHeadings", section: "integration", order: 23.6, name: "settings.companionHeadings", desc: "settings.companionHeadings.desc", control: { type: "toggle" }, parent: "companionNotes", visible: companionOn, keywords: "headings titles titoli handwriting scrittura pictures immagini" },
 	{
 		id: "companionUpdateAll", section: "integration", order: 24, name: "settings.companionUpdateAll", desc: "settings.companionUpdateAll.desc",
 		control: { type: "action", run: "companion-update-all", button: "settings.companionUpdateAll.button" }, parent: "companionNotes", visible: companionOn,

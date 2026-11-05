@@ -3692,4 +3692,9 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"vdiff.restore.confirmReplace": "La pagina {n} sarà sostituita dalla pagina com'era il {date}. Annulla la rimette a posto.",
 	"vdiff.restore.confirmInsert": "La pagina com'era il {date} sarà aggiunta dopo la pagina {n}, come pagina nuova. Annulla la toglie.",
 	"vdiff.restore.confirm": "Ripristina",
+	// 0.20 headings
+	"map.filter.titles": "Titoli",
+	"map.titles.go": "Vai al titolo a pagina {n}",
+	"settings.companionHeadings": "Titoli come immagini",
+	"settings.companionHeadings.desc": "Aggiunge la scrittura grande o sottolineata, come immagini.",
 };

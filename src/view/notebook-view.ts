@@ -112,8 +112,9 @@ import { PenGestureLayer } from "./pen-gestures";
 import { gestureWorld, runGesture, type PenGestureView } from "./pen-gesture-actions";
 import { CustomGesturesModal, GestureCheatSheet, type PenGestureUiHost } from "./pen-gesture-ui";
 import { editPageTags } from "./outline";
-import { OutlineBuilder } from "../model/outline-builder";
+import { OutlineBuilder, type OutlineSources } from "../model/outline-builder";
 import { HeadingThumbs } from "./outline-thumbs";
+import { HeadingWarmer } from "./heading-warm";
 import { askPdfRange } from "./pdf-range-modal";
 import { runBoardShot } from "./board-shot";
 import type { EditContext } from "./edit-context";
@@ -197,6 +198,8 @@ import { applyViewportClass, ViewportTracker } from "../ui/viewport-class";
 export const VIEW_TYPE = "notebook-view";
 
 /** Selection handle diameter in CSS px. */
+/** The outline sources of a build that lists only the headings found in the handwriting (the notebook map). */
+const HEADINGS_ONLY: OutlineSources = { bookmarks: false, slides: false, headings: true, markers: false, pdf: false };
 const HANDLE_PX = 22;
 /** A stroke may start this far outside the page (pt). */
 const PAGE_TOLERANCE = 8;
@@ -413,6 +416,8 @@ export class NotebookView extends FileView {
 	/** 0.13: the generated outline and the pictures of its headings (cached per page). */
 	private readonly outlineBuilder = new OutlineBuilder();
 	private readonly headingThumbs = new HeadingThumbs();
+	/** 0.20 (#102): headings are looked for in the background (idle), not when the outline or the map opens. */
+	private readonly headingWarm = new HeadingWarmer(this.outlineBuilder, () => this.session?.doc?.pages ?? [], () => this.host.settings.outlineHeadings);
 	/** Roadmap 50: the fast scrollbar with a page preview (view/scrollbar.ts). */
 	private scrollbar: FastScrollbar | null = null;
 	/** 0.17 (#173): the floating overview of the page in view (view/minimap.ts). */
@@ -946,6 +951,7 @@ export class NotebookView extends FileView {
 		this.penGestures = null;
 		this.mentions?.destroy();
 		this.mentions = null;
+		this.headingWarm.dispose();
 		for (const timer of [this.navTimer, this.thumbTimer, this.snapFlashTimer, this.heavyTimer]) if (timer !== null) window.clearTimeout(timer);
 		this.navTimer = this.thumbTimer = this.snapFlashTimer = this.heavyTimer = null;
 		this.pens?.destroy();
@@ -1870,6 +1876,13 @@ export class NotebookView extends FileView {
 		this.setViewport({ ...this.viewport, offsetY });
 	}
 
+	/** 0.20 (#102): to a line of a page (a heading of the outline or the map), a little above it so the line is not at the very edge. */
+	private goToPageAt(index: number, y: number): void {
+		this.recordJump(index);
+		this.scrollToPage(index, Math.max(1, y - 24));
+		if (this.body.hasClass("is-narrow")) this.setNavigatorOpen(false);
+	}
+
 	private goToPage(index: number): void {
 		this.recordJump(index);
 		this.scrollToPage(index);
@@ -2589,6 +2602,7 @@ export class NotebookView extends FileView {
 			canEdit: () => this.editableDocument() !== null,
 			execute: (cmd) => void this.applyCommand(cmd),
 			goTo: (index) => this.goToPage(index),
+			goToAt: (index, y) => this.goToPageAt(index, y),
 			assets: () => this.session?.doc?.assets,
 			outline: () => this.outlineBuilder,
 			sources: () => ({
@@ -3639,6 +3653,7 @@ export class NotebookView extends FileView {
 	}
 
 	private onDocumentLoaded(doc: NotebookDocument | null, mode: SessionMode, problem: string | null): void {
+		this.headingWarm.touch(8000);
 		this.active = null;
 		this.erasing = null;
 		this.lasso = null;
@@ -3791,6 +3806,7 @@ export class NotebookView extends FileView {
 		// wave 0.10 (51): read-only mode never schedules a save (nothing changed; a stray call must not write the file).
 		if (this.userReadOnly) return;
 		this.session?.markChanged();
+		this.headingWarm.touch();
 		// 0.19 (#103): the task lines of linked checkboxes follow the ticks a moment later.
 		this.checklist?.docChanged();
 		// v10: live pictures of excerpts of this notebook's pages follow the edit (throttled).
@@ -3973,6 +3989,13 @@ export class NotebookView extends FileView {
 			current: () => this.currentPageIndex(),
 			thumbnail: (page) => this.pageNav?.thumbnailOf(page) ?? BLANK_THUMBNAIL,
 			goTo: (index) => this.goToPage(index),
+			// 0.20 (#102): the headings found in the handwriting, with their pictures, and a jump to the line.
+			headings: this.host.settings.outlineHeadings ? () => this.outlineBuilder.build({ pages: pages() }, HEADINGS_ONLY).filter((i) => i.kind === "heading") : undefined,
+			headingImage: (item) => {
+				const page = pages().find((p) => p.id === item.pageId);
+				return page ? this.headingThumbs.url(page, item) : null;
+			},
+			goToAt: (index, y) => this.goToPageAt(index, y),
 			present: () => this.startPresentation(),
 
 			setLocked: (pageId, value) => this.setLockedById(pageId, value),

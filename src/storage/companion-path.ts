@@ -18,6 +18,8 @@ export interface CompanionSettings {
 	companionName: string;
 	/** O19: the companion also holds the text of sticky notes, comments, equations and marker labels, so global search finds it. */
 	companionSearchText: boolean;
+	/** 0.20 (#102): the companion also shows large or underlined handwriting (headings) as pictures under their page. */
+	companionHeadings: boolean;
 }
 
 export const NAME_TOKEN = "{name}";
@@ -28,6 +30,7 @@ export const DEFAULT_COMPANION_SETTINGS: Readonly<CompanionSettings> = {
 	companionFolder: "Notebook notes",
 	companionName: NAME_TOKEN,
 	companionSearchText: false,
+	companionHeadings: false,
 };
 
 /** Characters Obsidian (or one of the platforms it syncs to) does not accept in a file name, plus link syntax. */
@@ -53,6 +56,7 @@ export function readCompanionSettings(d: Record<string, unknown>): CompanionSett
 	if (typeof d.companionFolder === "string" && cleanFolder(d.companionFolder)) s.companionFolder = cleanFolder(d.companionFolder);
 	if (typeof d.companionName === "string" && validCompanionName(d.companionName)) s.companionName = d.companionName.trim();
 	if (typeof d.companionSearchText === "boolean") s.companionSearchText = d.companionSearchText;
+	if (typeof d.companionHeadings === "boolean") s.companionHeadings = d.companionHeadings;
 	return s;
 }
 

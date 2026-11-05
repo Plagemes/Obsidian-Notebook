@@ -3690,6 +3690,11 @@ export const en = {
 	"vdiff.restore.confirmReplace": "Page {n} will be replaced by the page as it was on {date}. Undo puts it back.",
 	"vdiff.restore.confirmInsert": "The page as it was on {date} will be added after page {n}, as a new page. Undo removes it.",
 	"vdiff.restore.confirm": "Restore",
+	// 0.20 headings
+	"map.filter.titles": "Titles",
+	"map.titles.go": "Go to the title on page {n}",
+	"settings.companionHeadings": "Headings as pictures",
+	"settings.companionHeadings.desc": "Adds large or underlined handwriting, as pictures, to each page.",
 } as const;
 
 export type MessageKey = keyof typeof en;

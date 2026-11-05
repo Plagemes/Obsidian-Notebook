@@ -4,6 +4,7 @@ import type { MessageKey } from "../i18n/en";
 import { MAX_ASPECT } from "../library/thumbnail";
 import { writing } from "../ink/writing-guard";
 import { filterByState, MAP_STATES, openItems, type MapPage, type MapState, type NotebookMap } from "../model/notebook-map";
+import type { OutlineItem } from "../model/outline-builder";
 import type { Page } from "../model/types";
 import { chip } from "../ui/components/chip";
 import { modalShell, shellButton, shellNote } from "../ui/components/modal-shell";
@@ -16,6 +17,12 @@ export interface NotebookMapHost {
 	/** Data URL of a page thumbnail (the navigator's cache). */
 	thumbnail(page: Page): string;
 	goTo(index: number): void;
+	/** 0.20 (#102): the headings found in the handwriting (outline entries of kind heading); absent: no title strips and no Titles filter. */
+	headings?: () => OutlineItem[];
+	/** Picture (data URL) of the ink of a heading; null when it cannot be drawn. */
+	headingImage?(item: OutlineItem): string | null;
+	/** To a line of a page. */
+	goToAt?(index: number, y: number): void;
 	/** 0.16 (#87): starts the presentation from the page in view (the button is not offered when absent). */
 	present?: () => void;
 
@@ -33,6 +40,9 @@ export interface NotebookMapHost {
 	/** 0.18 (#186): the ticked pages are copied to another notebook, each with a link chip back (the dialog opens). Absent: no such button. */
 	copyTo?: (pageIds: string[]) => void;
 }
+
+/** Most heading pictures on one card of the map. */
+const MAP_TITLES_PER_CARD = 2;
 
 export const MAP_STATE_ICON: Readonly<Record<MapState, string>> = {
 	question: "help-circle", gap: "ellipsis", homework: "book-open-check", practice: "dumbbell", empty: "file", key: "star", checklist: "square-check",
@@ -57,6 +67,9 @@ function badgeCount(p: MapPage, s: MapState): number | null {
  */
 export class NotebookMapModal extends Modal {
 	private filter: MapState | null = null;
+	/** 0.20 (#102): only the pages that have a heading in their handwriting. */
+	private titlesOnly = false;
+	private readonly headingItems = new Map<string, OutlineItem>();
 	private grid: HTMLElement | null = null;
 	private chips: HTMLElement | null = null;
 	private observer: IntersectionObserver | null = null;
@@ -106,6 +119,18 @@ export class NotebookMapModal extends Modal {
 		chips.empty();
 		grid.empty();
 		chip(chips, { label: t("map.filter.all"), count: map.counts.total, active: this.filter === null, key: "all", onClick: () => this.setFilter(null) });
+		// 0.20 (#102): the headings of the handwriting, per page. The Titles filter is offered when there are some (or while it is on).
+		const byPage = new Map<string, OutlineItem[]>();
+		this.headingItems.clear();
+		for (const h of this.mapHost.headings?.() ?? []) {
+			const list = byPage.get(h.pageId);
+			if (list) list.push(h);
+			else byPage.set(h.pageId, [h]);
+			this.headingItems.set(h.key, h);
+		}
+		if (byPage.size > 0 || this.titlesOnly) {
+			chip(chips, { label: t("map.filter.titles"), icon: "heading", count: byPage.size, active: this.titlesOnly, key: "titles", onClick: () => this.toggleTitles() });
+		}
 		for (const s of MAP_STATES) {
 			const n = map.counts.pages[s];
 			// A filter with nothing in it is not offered, except the one that is on.
@@ -133,7 +158,7 @@ export class NotebookMapModal extends Modal {
 				present();
 			});
 		}
-		const shown = filterByState(map.pages, this.filter);
+		const shown = filterByState(map.pages, this.filter).filter((mp) => !this.titlesOnly || byPage.has(mp.pageId));
 		if (shown.length === 0) {
 			shellNote(grid, t(map.counts.total > 0 && map.counts.clear === map.counts.total ? "map.allClear" : "map.none"));
 			return;
@@ -158,6 +183,29 @@ export class NotebookMapModal extends Modal {
 				setIcon(b.createSpan({ cls: "nb-map-badge-icon" }), MAP_STATE_ICON[s]);
 				const n = badgeCount(mp, s);
 				if (n !== null && n > 1) b.createSpan({ cls: "nb-map-badge-n", text: String(n) });
+			}
+			// 0.20 (#102): the first headings of the page as pictures of the ink (drawn when the card comes into view); a tap goes to the line.
+			const heads = byPage.get(mp.pageId);
+			if (heads && this.mapHost.headingImage) {
+				const strip = card.createSpan({ cls: "nb-map-titles" });
+				for (const h of heads.slice(0, MAP_TITLES_PER_CARD)) {
+					const one = strip.createSpan({
+						cls: "nb-map-title", attr: { role: "button", tabindex: "0", "data-heading": h.key, "aria-label": t("map.titles.go", { n: String(mp.index + 1) }) },
+					});
+					one.createEl("img", { attr: { alt: "", draggable: "false" } });
+					const go = (e: Event) => {
+						e.preventDefault();
+						e.stopPropagation();
+						if (this.selecting) return;
+						this.close();
+						if (this.mapHost.goToAt) this.mapHost.goToAt(h.index, h.y);
+						else this.mapHost.goTo(h.index);
+					};
+					one.addEventListener("click", go);
+					one.addEventListener("keydown", (e) => {
+						if (e.key === "Enter" || e.key === " ") go(e);
+					});
+				}
 			}
 			const foot = card.createDiv({ cls: "nb-map-foot" });
 			foot.createSpan({ cls: "nb-map-num", text: String(mp.index + 1) });
@@ -251,6 +299,11 @@ export class NotebookMapModal extends Modal {
 		}
 	}
 
+	private toggleTitles(): void {
+		this.titlesOnly = !this.titlesOnly;
+		this.render();
+	}
+
 	private setFilter(s: MapState | null): void {
 		this.filter = this.filter === s ? null : s;
 		this.render();
@@ -260,5 +313,13 @@ export class NotebookMapModal extends Modal {
 		const page = this.mapHost.pages()[Number(card.dataset.index)];
 		const img = card.querySelector("img");
 		if (page && img) img.src = this.mapHost.thumbnail(page);
+		if (!this.mapHost.headingImage) return;
+		for (const one of Array.from(card.querySelectorAll<HTMLElement>("[data-heading]"))) {
+			const item = this.headingItems.get(one.dataset.heading ?? "");
+			const pic = one.querySelector("img");
+			const url = item ? (this.mapHost.headingImage?.(item) ?? null) : null;
+			if (pic && url) pic.src = url;
+			else one.addClass("is-empty");
+		}
 	}
 }
