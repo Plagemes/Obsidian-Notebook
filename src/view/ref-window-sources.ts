@@ -42,6 +42,8 @@ export interface RefSource {
 export interface LiveNotebook {
 	doc(): NotebookDocument | null;
 	media(): NotebookMedia | null;
+	/** The document belongs to another pane: a save of the file is a change to show, drawn from the live document without reading the file. */
+	redrawOnSave?: boolean;
 }
 
 export interface SourceDeps {
@@ -94,8 +96,13 @@ async function openNotebook(deps: SourceDeps, file: TFile): Promise<RefSource> {
 		if (!doc) throw new Error("The notebook is not available");
 		return doc;
 	};
+	/** The pane that lent its document may close: then the file is read once, like for a notebook nobody has open. */
+	const ensureDocument = async (): Promise<void> => {
+		if (!live?.doc() && !stored) stored = await read();
+	};
+	const pagesNow = (): NotebookDocument["pages"] => (live?.doc() ?? stored)?.pages ?? [];
 	const ownMedia = live?.media() ?? null;
-	const media = ownMedia ?? new NotebookMedia(app, () => stored, () => deps.folder(), () => deps.changed());
+	const media = ownMedia ?? new NotebookMedia(app, () => live?.doc() ?? stored, () => deps.folder(), () => deps.changed());
 
 	/** Background (PDF page or picture) and pictures and texts of a page, drawn from what is already loaded. */
 	const drawMedia = (ctx: CanvasRenderingContext2D, page: Page): void => {
@@ -118,9 +125,10 @@ async function openNotebook(deps: SourceDeps, file: TFile): Promise<RefSource> {
 		kind: "notebook",
 		file,
 		layout: "pages",
-		pageCount: () => current().pages.length,
-		indexFor: (request) => requestedIndex(current().pages.length, current().pages.map((p) => p.id), request),
+		pageCount: () => pagesNow().length,
+		indexFor: (request) => requestedIndex(pagesNow().length, pagesNow().map((p) => p.id), request),
 		async render(index, pixelWidth, parent) {
+			await ensureDocument();
 			const page = current().pages[index];
 			if (!page) throw new RangeError(`page ${index + 1} out of range`);
 			const bg = page.background;
@@ -132,7 +140,9 @@ async function openNotebook(deps: SourceDeps, file: TFile): Promise<RefSource> {
 			return { el: img, aspect: size.height / size.width };
 		},
 		async reload() {
-			if (live) return false; // the open document is read as it is, at every drawing: a save does not redraw it
+			// The open document is read as it is, at every drawing, so there is nothing to read. The view's own notebook is not
+			// redrawn by a save; another pane's notebook is (its saves are the changes this window should show).
+			if (live?.doc()) return live.redrawOnSave === true;
 			try {
 				stored = await read();
 				return true;

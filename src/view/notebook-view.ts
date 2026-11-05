@@ -115,6 +115,7 @@ import { gestureWorld, runGesture, type PenGestureView } from "./pen-gesture-act
 import { CustomGesturesModal, GestureCheatSheet, type PenGestureUiHost } from "./pen-gesture-ui";
 import { editPageTags } from "./outline";
 import { OutlineBuilder, type OutlineSources } from "../model/outline-builder";
+import type { HeadingIndex } from "../model/heading-index";
 import { HeadingThumbs } from "./outline-thumbs";
 import { HeadingWarmer } from "./heading-warm";
 import { askPdfRange } from "./pdf-range-modal";
@@ -953,7 +954,18 @@ export class NotebookView extends FileView {
 			deps: {
 				app: this.app,
 				folder: () => this.host.settings.folder,
-				live: (file) => (file === this.file && this.session ? { doc: () => this.shownDoc(), media: () => this.media } : null),
+				live: (file) => {
+					if (file === this.file && this.session) return { doc: () => this.shownDoc(), media: () => this.media };
+					// 0.20 review (D9): a notebook shown as a reference that another pane has open is read from that pane's
+					// document, so every save there does not make this pane read and parse the file again.
+					for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+						const other = leaf.view;
+						if (other instanceof NotebookView && other !== this && other.file?.path === file.path && other.session?.doc) {
+							return { doc: () => other.session?.doc ?? null, media: () => null, redrawOnSave: true };
+						}
+					}
+					return null;
+				},
 			},
 		});
 		this.registerEvent(this.app.vault.on("modify", (f) => this.refWindow?.fileChanged(f.path)));
@@ -5991,6 +6003,11 @@ export class NotebookView extends FileView {
 			+ `ink: input→paint ${ms(paint)} · per event ${proc.length ? avg(proc).toFixed(2) + " ms" : "–"}${this.controller?.rawUpdates ? " · raw" : ""}\n`
 			+ `redraw ${st.staticMs.toFixed(1)} ms · ${st.strokesDrawn} strokes · ${st.pagesDrawn} pages`,
 		);
+	}
+
+	/** 0.20 review (D1): the heading analysis this view keeps warm (the companion headings reuse it instead of analysing again). */
+	headingIndex(): HeadingIndex {
+		return this.outlineBuilder.headingIndex();
 	}
 
 	/** Read-only: what this view holds in memory that can name an asset file (library check, roadmap 27): the document, its undo and redo history, media not yet in the document. */

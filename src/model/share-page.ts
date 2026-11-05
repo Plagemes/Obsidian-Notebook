@@ -123,10 +123,18 @@ export function shareFileNames(base: string, format: ShareFormat, scope: ShareSc
 	return pages.map((i) => `${stem} p${i + 1}.png`);
 }
 
-/** The part of a one-file name after the notebook name: ` p3`, ` p2-5+8`, ` p3 selection`. */
+/** Longest spelled-out page range kept in a file name (a scattered range of a big notebook would pass the 255-byte limit). */
+export const MAX_SHARE_RANGE_CHARS = 40;
+
+/**
+ * The part of a one-file name after the notebook name: ` p3`, ` p2-5+8`, ` p3 selection`. A range too long to spell out
+ * (every other page of a long notebook) becomes ` p1-199 (100 pages)`.
+ */
 export function shareSuffix(scope: ShareScope, pages: readonly number[]): string {
 	if (scope === "selection") return ` p${(pages[0] ?? 0) + 1} selection`;
-	return ` p${formatPageRange(pages).replace(/, /g, "+")}`;
+	const spelled = formatPageRange(pages).replace(/, /g, "+");
+	if (spelled.length <= MAX_SHARE_RANGE_CHARS || pages.length === 0) return ` p${spelled}`;
+	return ` p${pages[0]! + 1}-${pages[pages.length - 1]! + 1} (${pages.length} pages)`;
 }
 
 export function shareMime(format: ShareFormat): string {

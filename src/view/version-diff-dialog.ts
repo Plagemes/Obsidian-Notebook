@@ -7,7 +7,7 @@
 import { Modal, type App } from "obsidian";
 import { t } from "../i18n";
 import { DIFF_MODES, renderDiffCanvas, type DiffMode } from "../ink/diff-render";
-import { planDiffRestore } from "../model/diff-restore";
+import { planDiffRestoreInto } from "../model/diff-restore";
 import type { Command } from "../model/history";
 import type { NotebookDocument, Page } from "../model/types";
 import {
@@ -346,9 +346,9 @@ export class VersionDiffModal extends Modal {
 		const pd = this.diff.pages[this.current];
 		if (!target || !pd) return;
 		const side = this.restoreSide();
-		const plan = (): ReturnType<typeof planDiffRestore> | null => {
+		const plan = (): ReturnType<typeof planDiffRestoreInto> | null => {
 			const doc = target.editableDocument();
-			return doc ? planDiffRestore(doc, side.doc, pd.id, this.diff.pages, this.o.fallbackIndex ?? 0) : null;
+			return doc ? planDiffRestoreInto(doc, side.doc, pd.id, this.diff.pages, this.o.fallbackIndex ?? 0) : null;
 		};
 		const first = plan();
 		if (!first) {
@@ -360,7 +360,7 @@ export class VersionDiffModal extends Modal {
 			return;
 		}
 		if (first.kind !== "ok") {
-			showNotice(first.kind === "not-in-version" ? t("vdiff.restore.notThere") : t("merge.notEditable"));
+			showNotice(first.kind === "not-in-version" ? t("vdiff.restore.notThere") : first.kind === "other-notebook" ? t("vdiff.restore.otherNotebook") : t("merge.notEditable"));
 			return;
 		}
 		const date = side.date ? formatSnapshotDate(side.date) : side.label;
@@ -371,7 +371,7 @@ export class VersionDiffModal extends Modal {
 		// The notebook may have changed while the question was open: plan again from what is there now.
 		const now = plan();
 		if (!now || now.kind !== "ok") {
-			showNotice(now?.kind === "locked" ? t("lock.needsUnlock", { n: String(now.n) }) : t("merge.notEditable"));
+			showNotice(now?.kind === "locked" ? t("lock.needsUnlock", { n: String(now.n) }) : now?.kind === "other-notebook" ? t("vdiff.restore.otherNotebook") : t("merge.notEditable"));
 			return;
 		}
 		if (!target.applyCommand(now.plan.command, now.plan.pageIndex)) {

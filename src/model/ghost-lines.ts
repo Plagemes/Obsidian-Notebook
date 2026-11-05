@@ -221,6 +221,14 @@ export function ghostAlpha(mode: GhostMode, elapsed: number): number {
 	return t >= 1 ? 0 : 1 - t;
 }
 
+/**
+ * 0.20 review (D4): whether a new stroke has to redraw the guides. Only when they had started to fade ("writing" mode, past the
+ * idle time): otherwise the alpha is 1 before and after, and the redraw would land on the first frame of the stroke for nothing.
+ */
+export function ghostTouchRedraws(mode: GhostMode, elapsed: number): boolean {
+	return mode === "writing" && elapsed > GHOST_IDLE_MS;
+}
+
 /** Whether the guides apply to this page (blank paper only). */
 export const ghostApplies = (mode: GhostMode, paperKind: string): boolean => mode !== "off" && paperKind === "blank";
 

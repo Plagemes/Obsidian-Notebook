@@ -34,7 +34,7 @@ import {
 	CUSTOM_MAX_MM, CUSTOM_MIN_MM, customOrientation, customSide, depthBelow, folderChoices, isRootFolder, joinPath, MAX_NAME, nameProblem,
 	nextArtStyle, orientCustom, pageSize, SIZE_CHOICES, startFolder, type NameProblem, type NotebookSpec, type SizeChoice,
 } from "./create-logic";
-import { sanitizeName } from "../storage/names";
+import { createdNotebookName, sanitizeName } from "../storage/names";
 import { NEW_NOTEBOOK_EXTENSION } from "../storage/format";
 import type { PickedFile } from "./pick";
 
@@ -719,7 +719,8 @@ export class CreateDialog extends Modal {
 
 	/** The file name the links name: the notebook that will be created from the name typed. */
 	private plannerLinkTarget(): string {
-		const path = joinPath(this.nb.folder, `${sanitizeName(this.nb.name.trim())}.${NEW_NOTEBOOK_EXTENSION}`);
+		// 0.20 review (D8): the creation fills {{year}} and the like in the name, so the links must name the filled-in file.
+		const path = joinPath(this.nb.folder, `${createdNotebookName(this.nb.name)}.${NEW_NOTEBOOK_EXTENSION}`);
 		return this.host.linkTarget?.(path) ?? path;
 	}
 

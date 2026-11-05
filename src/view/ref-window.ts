@@ -16,6 +16,7 @@ import {
 	snapRect, type Rect, type Size, type WindowMemory,
 } from "../ui/ref-window-geometry";
 import { FIT, panView, pinchFactor, rasterWidth, refit, shouldRedraw, zoomView, type ContentView } from "../ui/ref-window-pan";
+import { whenIdle } from "../storage/idle";
 import { showNotice } from "./notice";
 import { movesContent, pageLabel, stepIndex, type ReferenceKind, type ReferenceRequest } from "./ref-window-logic";
 import { openSource, type RefSource, type SourceDeps } from "./ref-window-sources";
@@ -79,6 +80,8 @@ export class RefWindow {
 	private openSeq = 0;
 	private redrawTimer: number | null = null;
 	private reloadTimer: number | null = null;
+	/** The file changed while the window was minimised: it is read when the window comes back (nobody is looking at it before). */
+	private reloadWhenShown = false;
 	private observer: ResizeObserver | null = null;
 	private readonly pointers = new Map<number, Pt>();
 	private pinchDistance = 0;
@@ -144,6 +147,7 @@ export class RefWindow {
 		}
 		this.source?.destroy();
 		this.source = source;
+		this.reloadWhenShown = false;
 		this.index = source.indexFor(request);
 		this.content = FIT;
 		this.setTitle(file.basename, source.kind);
@@ -177,10 +181,28 @@ export class RefWindow {
 		if (this.reloadTimer !== null) window.clearTimeout(this.reloadTimer);
 		this.reloadTimer = window.setTimeout(() => {
 			this.reloadTimer = null;
-			void this.source?.reload().then((changed) => {
-				if (changed) this.scheduleRedraw(true);
-			});
+			void this.reloadNow();
 		}, 600);
+	}
+
+	/**
+	 * 0.20 review (D9): reads the shown file again without getting in the way of writing. Not while the window is minimised
+	 * (it is read when it comes back), and not while a pen is on the screen (the read and parse of a big notebook waits for the
+	 * quiet moment `whenIdle` finds).
+	 */
+	private async reloadNow(): Promise<void> {
+		const source = this.source;
+		if (!source) return;
+		if (this.minimised) {
+			this.reloadWhenShown = true;
+			return;
+		}
+		await whenIdle(0, 2000);
+		if (this.source !== source || this.minimised) {
+			if (this.source === source) this.reloadWhenShown = true;
+			return;
+		}
+		if (await source.reload() && this.source === source) this.scheduleRedraw(true);
 	}
 
 	/** The shown file was deleted or renamed away: the window closes (a rename is followed by opening the new name). */
@@ -368,7 +390,12 @@ export class RefWindow {
 		}
 		this.applyRect();
 		this.saveMemory();
-		if (!value) this.scheduleRedraw(false);
+		if (value) return;
+		if (this.reloadWhenShown) {
+			this.reloadWhenShown = false;
+			void this.reloadNow();
+		}
+		this.scheduleRedraw(false);
 	}
 
 	private dropped(): void {

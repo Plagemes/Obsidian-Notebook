@@ -95,7 +95,8 @@ describe("links in a laid-out text box", () => {
 	it("puts the rectangle of a link where it is drawn", () => {
 		const el = box("ab [[Note]] cd");
 		const [r] = linkRects(el, mono);
-		expect(r).toMatchObject({ x: 50 + 3 * 10, y: 100, width: 8 * 10 });
+		// Drawn as "ab Note cd": the label, not the markup (K-planner).
+		expect(r).toMatchObject({ x: 50 + 3 * 10, y: 100, width: 4 * 10 });
 	});
 
 	it("follows explicit newlines and empty lines", () => {
