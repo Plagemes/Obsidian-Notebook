@@ -13,8 +13,8 @@
  */
 import { createId } from "./document";
 import type { Command, ElementSwap } from "./history";
-import { freezeElement } from "./serialize";
-import type { NotebookDocument, Page, PageElement, Stroke } from "./types";
+import { freezeElement, freezeStroke } from "./serialize";
+import type { NotebookDocument, Page, PageElement, Point, Stroke } from "./types";
 
 /** A stroke or an element of a page. */
 export type PageItem = Stroke | PageElement;
@@ -77,6 +77,33 @@ export function expandToGroups(page: Pick<Page, "strokes" | "elements">, sel: Pa
 	return { strokes: [...sel.strokes, ...strokes], elements: [...sel.elements, ...elements] };
 }
 
+/**
+ * What a selection asked for by a tool (find, select similar, the states tools, ...) becomes on page `page`: the locked elements are
+ * dropped (they cannot be moved, resized or erased) and every group it touches is completed, as the lasso does.
+ */
+export function selectableItems(page: Pick<Page, "strokes" | "elements">, sel: PageSelection, ink: readonly Stroke[] = page.strokes): PageSelection {
+	return expandToGroups(page, { strokes: sel.strokes, elements: [...unlockedElements(sel.elements)] }, ink);
+}
+
+/**
+ * Whether another stroke or element of the page is in `item`'s group. A group of one is nothing (the writer releases it), but it
+ * stays on the item in memory until the page is read again: whatever copies the item's flags (the pieces of a cut stroke) asks
+ * this first, so a group that is already gone does not come back.
+ */
+export function hasGroupMate(page: Pick<Page, "strokes" | "elements">, item: PageItem): boolean {
+	const group = item.group;
+	if (group === undefined) return false;
+	for (const s of page.strokes) if (s.group === group && s !== item) return true;
+	for (const e of page.elements ?? []) if (e.group === group && e !== item) return true;
+	return false;
+}
+
+/** The pieces a cut leaves of `stroke` (one per run of points, fresh ids, frozen): they stay in its group only while the page has another member of it. */
+export function strokePieces(page: Pick<Page, "strokes" | "elements">, stroke: Stroke, runs: readonly Point[][], newId: () => string = createId): Stroke[] {
+	const base = stroke.group === undefined || hasGroupMate(page, stroke) ? stroke : ungroupedItem(stroke);
+	return runs.map((points) => freezeStroke({ ...base, id: newId(), points }));
+}
+
 /** What a selection says about groups: how many different groups its items belong to and how many items are in one. */
 export function groupStats(sel: PageSelection): { groups: number; grouped: number; total: number } {
 	const ids = new Set<string>();
@@ -128,11 +155,11 @@ export function unlockedElement<T extends PageElement>(el: T, at: number): T {
  * notebook's stays. Membership of a group is united: an item that is in no group in the main notebook takes the copy's group (a
  * group only grows in a merge; deletions are not inferred). A lock follows the later decision (`lockAt`; none counts as 0): the
  * copy's lock, or its absence, replaces the main notebook's when the copy decided later; on a tie that disagrees the lock wins, so
- * a lock is never lost.
+ * a lock is never lost. `joinGroup` false leaves the group alone (see `groupJoins`).
  */
-export function mergedFlags<T extends PageItem>(main: T, copy: T): T | null {
+export function mergedFlags<T extends PageItem>(main: T, copy: T, joinGroup = true): T | null {
 	let out: PageItem = main;
-	if (main.group === undefined && copy.group !== undefined) out = groupedItem(out, copy.group);
+	if (joinGroup && main.group === undefined && copy.group !== undefined) out = groupedItem(out, copy.group);
 	if (isElement(main) && isElement(copy)) {
 		const mainAt = main.lockAt ?? 0;
 		const copyAt = copy.lockAt ?? 0;
@@ -146,6 +173,41 @@ export function mergedFlags<T extends PageItem>(main: T, copy: T): T | null {
 		}
 	}
 	return out === main ? null : (out as T);
+}
+
+/**
+ * Which of the items of one page that take the copy's group in a merge really may: those whose group would still have two members
+ * or more in the result. `page` is the main page as it is, `added` the groups of the items the merge adds to it, `copies` the
+ * copy's version of each item that is on both sides (by id). An item that would join a group of one (its group mates are in another
+ * group here, or not on this page) stays free: the writer would drop the lone group anyway, and the copy would be offered again on
+ * every open.
+ */
+export function groupJoins(page: Pick<Page, "strokes" | "elements">, added: readonly string[], copies: ReadonlyMap<string, PageItem>): Set<string> {
+	const count = new Map<string, number>();
+	const bump = (group: string | undefined, by: number): void => {
+		if (group !== undefined) count.set(group, (count.get(group) ?? 0) + by);
+	};
+	for (const g of added) bump(g, 1);
+	const joins = new Map<string, string>();
+	for (const item of [...page.strokes, ...(page.elements ?? [])]) {
+		bump(item.group, 1);
+		const copy = copies.get(item.id);
+		if (item.group === undefined && copy?.group !== undefined) {
+			joins.set(item.id, copy.group);
+			bump(copy.group, 1);
+		}
+	}
+	// Dropping a lone join can leave another group of one: repeat until it is stable.
+	for (let changed = true; changed;) {
+		changed = false;
+		for (const [id, group] of joins) {
+			if ((count.get(group) ?? 0) >= 2) continue;
+			joins.delete(id);
+			bump(group, -1);
+			changed = true;
+		}
+	}
+	return new Set(joins.keys());
 }
 
 function isElement(item: PageItem): item is PageElement {
