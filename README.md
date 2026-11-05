@@ -193,6 +193,7 @@ Notebooks behave like part of your vault.
 - Link or embed a single page: `[[Physics.notebook#p3]]`, `![[Physics.notebook#p3]]` or a `notebook` code block; `obsidian://notebook` links for other apps.
 - Optional companion notes so Obsidian search, the graph, tags and Dataview see your notebooks.
 - Obsidian tags, Obsidian bookmarks to a page, commands for the mobile toolbar, a [public API](docs/api.md) for Templater, QuickAdd and Dataview.
+- A documented file format with a [JSON Schema](docs/format.md), so other tools can read notebooks.
 - Interface in English and Italian.
 
 ### Privacy & safety

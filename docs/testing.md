@@ -3022,3 +3022,16 @@ Ghost guide lines (roadmap #94). Settings, Writing: *Ghost guide lines* (off / w
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Ghost guide lines on blank paper (#94): baseline and next line inferred from the newest strokes, faint dashed overlay on the live layer, off / while writing / always, auto or fixed spacing, never saved or exported | yes | inference (baseline, line height, tilt tolerance, descenders, drawings as outliers, fallback to the last complete line, fixed spacing), segments, fade, settings: `tests/ghost-lines.test.ts`; harness `doc=ghostlines` | | | not tried with a real hand on a tablet; the thresholds (tilt 12 degrees, spacing from stroke height) are a guess |
+
+### 0.21 — schema: documented format with a JSON Schema (steps 1860-1879)
+
+Documented format (roadmap #167). There is no new screen: `docs/schema/notebook-v18.schema.json` and `docs/format.md` describe the `.notebook` file for other tools. Implemented, not verified on hardware.
+
+1860. **Schema agrees with a real notebook.** Copy a notebook written on the tablet (with ink, a picture, a text box and a comment) to a PC and validate it with any draft 2020-12 validator (see the end of `docs/format.md`): no errors.
+1861. **Old file.** Open a notebook that was last saved by an older plugin version and edit it once, then validate it: it validates after that save (the file is rewritten as version 18 on the first edit).
+1862. **Guide.** Read `docs/format.md`: the file layout, the units, the list of elements and the folders `_assets` and `_meta` match what you see in the vault.
+1863. **Example.** Save the minimal example of `docs/format.md` as `Example.notebook` in the notebooks folder and open it: it opens, shows the text box and one pen stroke, and does not report a problem.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| JSON Schema of the document format v18 (#167) and the guide `docs/format.md` for third-party tools | yes | serializer output (new notebook, generated ink, a document with all nine element types and every optional field, a read and write round trip) validates against the schema; about 90 invalid documents (one broken rule each) are refused; the example of the guide validates and is read by the plugin: `tests/format-schema.test.ts` | | | rules a schema cannot express (unique ids, references, groups of two) are only described in the guide; the schema must be updated by hand when the format changes (the test fails until it is) |
