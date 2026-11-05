@@ -2,6 +2,7 @@ import type { PressureMode } from "./ink/pressure";
 import { defaultPenSets, MAX_FOLDER_ASSIGNMENTS, MAX_NOTEBOOK_ASSIGNMENTS, normaliseAssignments, normalisePenSets, type PenSet } from "./view/pen-sets";
 import { DEFAULT_ERASER_SIZE, DEFAULT_FAVOURITES, normaliseEraserSize, normaliseFavourites, type FavouritePen } from "./view/favourites";
 import { cleanStampFormat, DEFAULT_STAMP_FORMAT } from "./ink/date-stamp";
+import { cleanSignDateCustom, DEFAULT_SIGN_DATE_CUSTOM, DEFAULT_SIGN_DATE_MODE, isSignDateMode, type SignDateMode } from "./ink/signature";
 import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "./ink/edge-zones";
 import { DEFAULT_GESTURE_SETTINGS, readGestureSettings, type GestureSettings } from "./ink/gesture-settings";
 import { DEFAULT_PEN_GESTURE_SETTINGS, readPenGestureSettings, type PenGestureSettings } from "./ink/gestures/settings";
@@ -235,6 +236,10 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	// wave 0.10: clipboard and stamps
 	/** Format of the quick date and time stamp (356): tokens YYYY MM DD HH mm ss and so on, text in [brackets]. */
 	dateStampFormat: string;
+	// 0.21 signstamp
+	/** How the date of a "sign and date" stamp is written (154): the language's own form, ISO, or the custom pattern. */
+	signDateMode: SignDateMode;
+	signDateCustom: string;
 	// wave 0.10: colours
 	/** The last custom colours chosen with the colour picker or the eyedropper (newest first, `#rrggbb`). */
 	recentColours: string[];
@@ -353,6 +358,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	headerAlign: "centre",
 	headerInExport: true,
 	dateStampFormat: DEFAULT_STAMP_FORMAT,
+	signDateMode: DEFAULT_SIGN_DATE_MODE,
+	signDateCustom: DEFAULT_SIGN_DATE_CUSTOM,
 	recentColours: [],
 	fastScrollbar: true,
 	minimapMode: "auto",
@@ -483,6 +490,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (isHeaderAlign(d.headerAlign)) s.headerAlign = d.headerAlign;
 	for (const k of ["headerPageNumber", "headerPageTotal", "headerDate", "headerTitle", "headerInExport"] as const) if (typeof d[k] === "boolean") s[k] = d[k];
 	if (typeof d.dateStampFormat === "string") s.dateStampFormat = cleanStampFormat(d.dateStampFormat);
+	if (isSignDateMode(d.signDateMode)) s.signDateMode = d.signDateMode;
+	if (typeof d.signDateCustom === "string") s.signDateCustom = cleanSignDateCustom(d.signDateCustom);
 	s.recentColours = normaliseRecentColours(d.recentColours);
 	if (typeof d.fastScrollbar === "boolean") s.fastScrollbar = d.fastScrollbar;
 	if (isMinimapMode(d.minimapMode)) s.minimapMode = d.minimapMode;

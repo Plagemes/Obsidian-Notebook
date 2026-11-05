@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### signstamp
+- **Reusable signature and date stamp (#154).** *Sign and date* (page sheet, Insert; command palette) opens a dialog with your saved signature. *Draw signature* opens a pad (finger, S Pen or mouse; undo, clear) and saves it as the personal stamp "My signature", so it syncs with the vault and shows in the stamp palette; no format change. *Place* puts the signature, scaled to a standard width, and today's date under it where the pen last touched (or the middle of the page in view) as one undo step; the items share one fresh group so they move together, a locked page refuses it. The date follows two new settings (Writing, Advanced): *Signature date format* (your language, ISO, custom) and *Custom signature date pattern*. Pure logic in `src/ink/signature.ts`, storage in `src/storage/signature.ts`, dialogs in `src/view/sign-dialog.ts`. Tests: `tests/signature.test.ts`. Harness: `dev/harness/signstamp-check.ts` (`doc=signstamp`).
+
 ## 0.20.0 — 2026-11-05
 
 Eight features: groups and locked elements, a quick share of a page or a selection, files dragged straight onto a page, ghost guide lines on blank paper, headings found from the size of the handwriting, a floating reference window, a planner generator and a visual version diff. The notebook format moves to version 18 (groups and locks): the migration from version 17 is automatic, and 0.19 and older open a v18 file read-only and never overwrite it.

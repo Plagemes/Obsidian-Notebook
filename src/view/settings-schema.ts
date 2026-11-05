@@ -198,6 +198,8 @@ const WRITING: SettingSpec[] = [
 	},
 	{ id: "eraseAreaElements", section: "writing", group: ADVANCED, order: 10, name: "settings.eraseAreaElements", desc: "settings.eraseAreaElements.desc", control: { type: "toggle" } },
 	{ id: "dateStampFormat", section: "writing", group: ADVANCED, order: 20, name: "settings.dateStamp", desc: "settings.dateStamp.desc", control: { type: "text", placeholder: DEFAULT_SETTINGS.dateStampFormat } },
+	{ id: "signDateMode", section: "writing", group: ADVANCED, order: 21, name: "settings.signDateMode", desc: "settings.signDateMode.desc", control: { type: "dropdown", options: (tr) => ({ locale: tr("settings.signDateMode.locale"), iso: tr("settings.signDateMode.iso"), custom: tr("settings.signDateMode.custom") }) }, keywords: "signature date sign firma data" },
+	{ id: "signDateCustom", section: "writing", group: ADVANCED, order: 22, name: "settings.signDateCustom", desc: "settings.signDateCustom.desc", control: { type: "text", placeholder: DEFAULT_SETTINGS.signDateCustom }, keywords: "signature date sign firma data" },
 	{ id: "inkPrediction", section: "writing", group: ADVANCED, order: 30, name: "settings.inkPrediction", desc: "settings.inkPrediction.desc", control: { type: "toggle" }, keywords: "latency latenza" },
 	{ id: "lowLatencyInk", section: "writing", group: ADVANCED, order: 40, name: "settings.lowLatencyInk", desc: "settings.lowLatencyInk.desc", control: { type: "toggle" } },
 ];

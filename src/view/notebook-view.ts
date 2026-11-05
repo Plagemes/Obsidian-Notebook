@@ -165,6 +165,8 @@ import { StatesTools } from "./states-tools";
 import { PresentationMode } from "./present-mode";
 import { SelectionArrange } from "./selection-arrange";
 import { StampPalette, type StampTarget } from "./stamp-palette";
+import { SignDialog } from "./sign-dialog";
+import { planSignature, signDateText } from "../ink/signature";
 import { TextEditor, type TextEditSession } from "./text-editor";
 import { MathTools, type MathHost } from "./math-tools";
 import { StickyTools, type StickyHost } from "./sticky-tools";
@@ -2752,6 +2754,49 @@ export class NotebookView extends FileView {
 		this.afterHistoryChange();
 		this.renderer?.invalidate();
 		this.selectItems(spot.pageIndex, [], [el]);
+	}
+
+	/**
+	 * 0.21 (154): "Sign and date" opens the dialog with the saved signature; its Place puts the signature (and today's date
+	 * under it) where the pen last touched, or in the middle of the page in view, as one undo step. The result is selected so it
+	 * can be moved at once.
+	 */
+	openSignDialog(): void {
+		if (!this.editableDocument()) return;
+		this.commitText();
+		new SignDialog(this.app, {
+			app: this.app,
+			folder: () => this.host.settings.folder,
+			dateText: () => this.signDateNow(),
+			place: (signature, withDate) => this.placeSignature(signature, withDate),
+		}).open();
+	}
+
+	private signDateNow(): string {
+		return signDateText(new Date(), this.host.settings.signDateMode, this.host.settings.signDateCustom, getLanguage());
+	}
+
+	private placeSignature(signature: ClipContent | null, withDate: boolean): void {
+		const doc = this.editableDocument();
+		if (!doc) return;
+		const pen = this.lastPen;
+		const penIndex = pen ? doc.pages.findIndex((p) => p.id === pen.pageId) : -1;
+		const spot = stampSpot(pen && penIndex >= 0 ? { pageIndex: penIndex, x: pen.x, y: pen.y, at: pen.at } : null, Date.now(), doc.pages, this.currentPageIndex());
+		const page = spot ? doc.pages[spot.pageIndex] : undefined;
+		if (!spot || !page) return;
+		const plan = planSignature(signature, doc, page, [spot.x, spot.y], {
+			dateText: withDate ? this.signDateNow() : null, fontSize: this.tools.textSize, color: this.tools.penColor, measure: measureText,
+		});
+		if (!plan) return;
+		// History refuses the step on a locked page (and says why).
+		if (page.locked) {
+			this.pagesLocked([page.id]);
+			return;
+		}
+		this.history.execute(plan.command);
+		this.afterHistoryChange();
+		this.renderer?.invalidate();
+		this.selectItems(spot.pageIndex, plan.strokes, plan.elements);
 	}
 
 	/**
