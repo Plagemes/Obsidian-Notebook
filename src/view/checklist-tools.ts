@@ -155,7 +155,7 @@ export class ChecklistTools {
 		this.retryTimer = null;
 		this.contact = null;
 		this.destroyed = true;
-		if (this.sync.pendingCount() > 0) void this.sync.run();
+		if (this.sync.hasWork()) void this.sync.run();
 	}
 
 	/** Another document was loaded: forget what belonged to the previous one, and take the ticks of this one as already written. */
@@ -169,7 +169,7 @@ export class ChecklistTools {
 		// (a tick that was noted but not written yet is not forgotten: it is written, or tried again, as before)
 		this.sync.baseline(this.snapshot());
 		this.scheduleRetry();
-		if (this.sync.pendingCount() > 0) this.docChanged();
+		if (this.sync.hasWork()) this.docChanged();
 	}
 
 	/** The app is hidden or the page is closing: the ticks noted so far are written now, not after the usual moment. */
@@ -178,7 +178,7 @@ export class ChecklistTools {
 		this.sync.collect();
 		if (this.syncTimer !== null) window.clearTimeout(this.syncTimer);
 		this.syncTimer = null;
-		if (this.sync.pendingCount() > 0) void this.runSync();
+		if (this.sync.hasWork()) void this.runSync();
 	}
 
 	private snapshot(): SyncSnapshot | null {
@@ -527,7 +527,7 @@ export class ChecklistTools {
 	docChanged(): void {
 		if (this.destroyed) return;
 		this.sync.collect();
-		if (this.sync.pendingCount() === 0 || this.syncTimer !== null) return;
+		if (!this.sync.hasWork() || this.syncTimer !== null) return;
 		this.syncTimer = window.setTimeout(() => {
 			this.syncTimer = null;
 			void this.runSync();

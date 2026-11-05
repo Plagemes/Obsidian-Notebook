@@ -304,6 +304,20 @@ describe("the sync bookkeeping", () => {
 		expect(f.writes).toHaveLength(0);
 	});
 
+	it("a quick run of changes to a checkbox that was just relinked (undo of an unlink, then undo of its tick) is one change", async () => {
+		const f = fake();
+		f.sync.linked("c1", null);
+		f.state.boxes[0]!.checked = true;
+		f.sync.collect(); // undo of the unlink: linked again, ticked, state of its line unknown
+		expect(f.sync.hasWork()).toBe(true); // (the write that follows takes it in)
+		f.state.boxes[0]!.checked = false;
+		f.sync.collect(); // undo of the tick
+		expect(f.sync.pendingCount()).toBe(0);
+		await f.sync.run();
+		expect(f.writes).toHaveLength(0);
+		expect(f.sync.pendingCount()).toBe(0);
+	});
+
 	it("a checkbox just linked to a line written unticked writes its tick at the next change", async () => {
 		const f = fake();
 		f.state.boxes.push({ id: "c9", checked: true, task: { path: "x.md", block: "nb-x" } });

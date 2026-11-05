@@ -70,6 +70,8 @@ export class ChecklistSync {
 	/** The tick last written to (or found in) the task line of each linked checkbox, by element id. */
 	private readonly synced = new Map<string, boolean>();
 	private readonly pending = new Map<string, SyncEntry>();
+	/** Linked checkboxes whose line was not written by this view (relinked by an undo or a merge): taken in at the next `run`. */
+	private readonly unknown = new Set<string>();
 	private running = false;
 	private again = false;
 
@@ -87,6 +89,7 @@ export class ChecklistSync {
 		const old = new Map(this.pending);
 		this.synced.clear();
 		this.pending.clear();
+		this.unknown.clear();
 		for (const box of snap?.boxes ?? []) {
 			const prev = old.get(box.id);
 			if (prev && prev.docId === snap!.docId && prev.want === box.checked && prev.task.block === box.task.block) {
@@ -97,8 +100,12 @@ export class ChecklistSync {
 		for (const [id, entry] of old) if (entry.docId !== snap?.docId && !this.pending.has(id)) this.pending.set(id, entry);
 	}
 
-	/** The document changed: notes every tick that differs from what was written. Cheap and synchronous. */
-	collect(): void {
+	/**
+	 * The document changed: notes every tick that differs from what was written. Cheap and synchronous. A checkbox linked after the
+	 * document was opened (a merge, an undo of an unlink) is of unknown state: what its line says is not known, so it is left alone;
+	 * it is taken as written when `settle` (the write that follows a moment later, so a quick run of undos and redos is one change).
+	 */
+	collect(settle = false): void {
 		const snap = this.deps.snapshot();
 		if (!snap) return;
 		const seen = new Set<string>();
@@ -106,11 +113,14 @@ export class ChecklistSync {
 			seen.add(box.id);
 			const had = this.synced.get(box.id);
 			if (had === undefined) {
-				// Linked after the document was opened (a merge, an undo): what the line says is not known, so it is left alone.
-				this.synced.set(box.id, box.checked);
 				this.pending.delete(box.id);
+				if (settle) {
+					this.synced.set(box.id, box.checked);
+					this.unknown.delete(box.id);
+				} else this.unknown.add(box.id);
 				continue;
 			}
+			this.unknown.delete(box.id);
 			if (had === box.checked) {
 				this.pending.delete(box.id);
 				continue;
@@ -121,6 +131,7 @@ export class ChecklistSync {
 		}
 		// A checkbox that is gone from this document (deleted, unlinked) has nothing to write.
 		for (const [id, entry] of this.pending) if (entry.docId === snap.docId && !seen.has(id)) this.pending.delete(id);
+		for (const id of this.unknown) if (!seen.has(id)) this.unknown.delete(id);
 	}
 
 	/** The checkbox was just linked to a task line written unticked (`checked` false), or its link was removed (null). */
@@ -141,6 +152,11 @@ export class ChecklistSync {
 	/** Ticks waiting to be written. */
 	pendingCount(): number {
 		return this.pending.size;
+	}
+
+	/** Something for `run` to do: a tick to write, or a checkbox of unknown state to take in. */
+	hasWork(): boolean {
+		return this.pending.size > 0 || this.unknown.size > 0;
 	}
 
 	/** The entries still waiting (a copy). */
@@ -177,7 +193,7 @@ export class ChecklistSync {
 		try {
 			do {
 				this.again = false;
-				this.collect();
+				this.collect(true);
 				for (const entry of [...this.pending.values()]) {
 					if (this.pending.get(entry.id) !== entry || entry.tries >= RETRY_DELAYS.length || entry.notBefore > this.now()) continue;
 					await this.attempt(entry);
