@@ -8,6 +8,7 @@ import { readSettings, type NotebookSettings } from "./settings";
 import { positionEquals, type SavedPosition } from "./ink/view-position";
 import { stressDocument } from "./model/stress";
 import { NOTEBOOK_EXTENSIONS } from "./storage/format";
+import { recordRename } from "./storage/renamed-notes";
 import { journalReader } from "./library/library-check-modal";
 import type { StorageEnv } from "./library/storage-actions";
 import { AdapterJournalStore, journalFolder, sidecarDeviceId, vaultDeviceFileAdapter } from "./storage/vault-io";
@@ -292,6 +293,17 @@ export default class NotebookPlugin extends Plugin {
 				};
 				this.registerEvent(this.app.vault.on("create", changed));
 				this.registerEvent(this.app.vault.on("modify", changed));
+			});
+		});
+
+		// 0.19 (#103): notes renamed or moved are remembered on this device for a while, so a checkbox linked to a task in a note that was
+		// renamed while its notebook was closed finds the note again (model/rename-map.ts). Registered once the layout is ready.
+		this.step("renamed notes", () => {
+			this.app.workspace.onLayoutReady(() => {
+				this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
+					// (a note, or a folder with notes in it)
+					if (!("extension" in file) || file.extension === "md") recordRename(this.app, oldPath, file.path);
+				}));
 			});
 		});
 

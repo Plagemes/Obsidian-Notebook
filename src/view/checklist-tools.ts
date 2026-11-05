@@ -4,13 +4,16 @@ import { checkboxAt, checkboxAtPen, checkboxFromStroke, checkboxLabelBounds, che
 import type { BBox } from "../ink/hit-test";
 import {
 	blockIdFor, CHECKBOX_DEFAULT_COLOR, checkboxesOf, cleanCheckboxLabel, createCheckbox, isLinkablePath, renamedPath, setTaskLineChecked,
+	type TaskLineEdit,
 } from "../model/checklist";
 import { setCheckboxLabel, setCheckboxTask, toggleCheckbox } from "../model/checklist-commands";
 import { ChecklistSync, type SyncEntry, type SyncNotice, type SyncResult, type SyncSnapshot } from "../model/checklist-sync";
 import { createId } from "../model/document";
 import { AddElement, Batch, ReplaceStroke, type Command } from "../model/history";
+import { resolveRenamed } from "../model/rename-map";
 import type { CheckboxElement, CheckboxTask, NotebookDocument, Page, PageElement, Stroke } from "../model/types";
 import type { NotebookSettings } from "../settings";
+import { loadRenames } from "../storage/renamed-notes";
 import { chip } from "../ui/components/chip";
 import { ChecklistLabelModal } from "./checklist-modal";
 import { showNotice } from "./notice";
@@ -20,15 +23,17 @@ import { MakeTaskModal, type TaskRequest } from "./selection-task";
  * View side of handwritten checklists (0.19, roadmap #103): a tap on a checkbox ticks it, a small square drawn with the pen is offered
  * (or turned) into a checkbox, a checkbox can be inserted from the sheet, labelled, sent to the tasks of a note and unlinked, and the
  * ticks of linked checkboxes follow into the task lines of their notes. The rules are in model/checklist.ts and ink/checklist.ts
- * (pure); every change here is one undo step through the view's history, which also refuses it on a locked page. The view passes
- * itself as a ChecklistHost.
+ * (pure); every change the user makes here is one undo step through the view's history, which also refuses it on a locked page; the
+ * upkeep (a link that follows a renamed note, a link dropped because its line is gone) is saved but is no undo step. The view
+ * passes itself as a ChecklistHost.
  *
  * The link to a task: a ticked or unticked checkbox with a `task` link is written into the one line of that note that ends with the
  * block id the plugin added (`setTaskLineChecked`, through `vault.process`); no other line is ever touched. The line follows the
  * checkbox whatever changed it (a tap, undo, redo, a merge), from the notebook to the note only: every change notes the ticks that
  * still have to be written at once (model/checklist-sync.ts), the write follows a moment later, when the app is hidden and when the
  * view closes, and a note that is not there yet or cannot be written is tried again a few times. The checkbox is unlinked only when
- * the note exists, was read, and no longer has the line; a renamed note is followed.
+ * the note exists, was edited after the link was made, and was read twice, a minute or more apart, without the line; a renamed
+ * note is followed (also one renamed while the notebook was closed: the renames are remembered on this device for a while).
  */
 export interface ChecklistHost {
 	readonly app: App;
@@ -38,6 +43,11 @@ export interface ChecklistHost {
 	editable(): boolean;
 	/** Runs a command as one undo step (false when it was refused: a locked page, a read-only notebook). */
 	execute(cmd: Command): boolean;
+	/**
+	 * Runs a command that is upkeep, not the user's edit (a link that follows a renamed note, or is dropped): not an undo step, but the
+	 * notebook is saved. False when it cannot be done now (a locked page, a read-only notebook); nothing is said then.
+	 */
+	maintain(cmd: Command): boolean;
 	settings(): NotebookSettings;
 	/** The active tool name. */
 	tool(): string;
@@ -64,6 +74,15 @@ export interface ChecklistHost {
 	/** Writes the task line (with a picture of `bounds` and a link to the page) and returns the note's path; null when nothing was written. */
 	sendTask(pageIndex: number, bounds: BBox, request: TaskRequest): Promise<string | null>;
 	refresh(): void;
+}
+
+/**
+ * What a note read without the task line comes to: "gone" only for a note edited after the link was made (`mtime` later than
+ * `taskAt`: an older copy that has not received the line yet reads the same) and without a code block that never closes (the line
+ * may be inside it); anything else is "missing", which keeps the link and tries again.
+ */
+function vanished(probe: TaskLineEdit, mtime: number, taskAt: number): SyncResult {
+	return probe.unclosedFence || !(mtime > taskAt) ? "missing" : "gone";
 }
 
 /** Contact moved further than this (CSS px): a drag, not a tap. */
@@ -123,7 +142,7 @@ export class ChecklistTools {
 		const stage = host.stage();
 		this.sync = new ChecklistSync({
 			snapshot: () => this.snapshot(),
-			write: (task, checked) => this.writeLine(task, checked),
+			write: (task, checked, taskAt) => this.writeLine(task, checked, taskAt),
 			unlink: (entry) => this.unlinkGone(entry),
 			notify: (kind, entry, detail) => this.noticeFor(kind, entry, detail),
 		});
@@ -131,7 +150,7 @@ export class ChecklistTools {
 		this.listen(stage, "pointerup", (e) => this.onFingerUp(e as PointerEvent));
 		this.listen(stage, "pointercancel", () => (this.fingerTap = null));
 		// A note renamed or moved in the vault: the links follow it (the stored path is what the next tick is written to).
-		host.register(host.app.vault.on("rename", (file, oldPath) => this.onRename(file.path, oldPath)));
+		host.register(host.app.vault.on("rename", (file, oldPath) => this.follow(oldPath, file.path)));
 		this.sync.baseline(this.snapshot());
 	}
 
@@ -166,6 +185,8 @@ export class ChecklistTools {
 		this.autoOffer = null;
 		this.contact = null;
 		this.ignored = 0;
+		// Notes renamed while this notebook was closed: the links find them again.
+		this.followRecorded();
 		// (a tick that was noted but not written yet is not forgotten: it is written, or tried again, as before)
 		this.sync.baseline(this.snapshot());
 		this.scheduleRetry();
@@ -185,7 +206,7 @@ export class ChecklistTools {
 		const doc = this.host.doc();
 		if (!doc) return null;
 		const boxes: SyncSnapshot["boxes"][number][] = [];
-		for (const page of doc.pages) for (const c of checkboxesOf(page)) if (c.task) boxes.push({ id: c.id, checked: c.checked === true, task: c.task });
+		for (const page of doc.pages) for (const c of checkboxesOf(page)) if (c.task) boxes.push({ id: c.id, checked: c.checked === true, task: c.task, ...(c.taskAt !== undefined ? { taskAt: c.taskAt } : {}) });
 		return { docId: doc.id, boxes };
 	}
 
@@ -557,26 +578,59 @@ export class ChecklistTools {
 		}, wait + 50);
 	}
 
-	/** A note was renamed or moved: the links to it, and the ticks waiting for it, follow (one undo step). */
-	private onRename(newPath: string, oldPath: string): void {
-		if (this.destroyed) return;
-		this.sync.renamed(oldPath, newPath);
+	/**
+	 * A note was renamed or moved (`oldPath` became `newPath`): the links to it, and the ticks waiting for it, follow. Not an undo step
+	 * (the user did not make it), but saved. A new path the format cannot store is not followed: the old link stays and it is said once.
+	 */
+	private follow(oldPath: string, newPath: string): boolean {
+		if (this.destroyed) return false;
+		this.sync.renamed(oldPath, newPath, isLinkablePath);
 		const doc = this.host.doc();
-		if (!doc || !this.host.editable()) return;
+		if (!doc || !this.host.editable()) return false;
 		const steps: Command[] = [];
+		let tooLong = false;
 		for (const page of doc.pages) {
 			for (const box of checkboxesOf(page)) {
 				const next = box.task ? renamedPath(box.task.path, oldPath, newPath) : null;
-				if (box.task && next !== null) steps.push(setCheckboxTask(page.id, box.id, { path: next, block: box.task.block }));
+				if (!box.task || next === null) continue;
+				if (isLinkablePath(next)) steps.push(setCheckboxTask(page.id, box.id, { path: next, block: box.task.block }));
+				else tooLong = true;
 			}
 		}
-		if (steps.length === 0) return;
-		if (this.host.execute(steps.length === 1 ? steps[0]! : new Batch("Follow renamed note", steps))) this.host.refresh();
+		if (tooLong) showNotice(t("checklist.task.renameTooLong"), 8000);
+		if (steps.length === 0) return false;
+		if (!this.host.maintain(steps.length === 1 ? steps[0]! : new Batch("Follow renamed note", steps))) return false;
+		this.host.refresh();
+		return true;
+	}
+
+	/** Where `task` is now according to the renames this device saw (also while the notebook was closed): the same path when none applies. */
+	private movedTo(task: CheckboxTask, taskAt: number): string {
+		return resolveRenamed(loadRenames(this.host.app), task.path, taskAt);
+	}
+
+	/** The notebook was opened: links to notes that were renamed meanwhile (the old path is gone, the new one is there) follow them. */
+	private followRecorded(): void {
+		const doc = this.host.doc();
+		if (!doc || this.destroyed) return;
+		const { vault } = this.host.app;
+		const seen = new Set<string>();
+		for (const page of doc.pages) {
+			for (const box of checkboxesOf(page)) {
+				const task = box.task;
+				if (!task || seen.has(task.path)) continue;
+				seen.add(task.path);
+				if (vault.getFileByPath(normalizePath(task.path))) continue;
+				const now = this.movedTo(task, box.taskAt ?? 0);
+				if (now !== task.path && vault.getFileByPath(normalizePath(now))) this.follow(task.path, now);
+			}
+		}
 	}
 
 	/**
-	 * The line is gone from a note that exists: the checkbox stops following it (one undo step, in the document it belongs to). False
-	 * when that cannot be done now (a locked page, a read-only notebook, another document): the entry is tried again later.
+	 * The line is gone from a note that exists: the checkbox stops following it. Upkeep, not an undo step (Undo after the tick that led
+	 * here un-ticks), saved in the document it belongs to. False when that cannot be done now (a locked page, a read-only notebook,
+	 * another document): the entry is tried again later.
 	 */
 	private unlinkGone(entry: SyncEntry): boolean {
 		if (this.destroyed) return false;
@@ -585,7 +639,7 @@ export class ChecklistTools {
 		const page = doc.pages.find((p) => checkboxesOf(p).some((c) => c.id === entry.id && c.task?.block === entry.task.block));
 		// (the checkbox is gone or was linked to something else meanwhile: nothing to unlink)
 		if (!page) return true;
-		if (!this.host.execute(setCheckboxTask(page.id, entry.id, null))) return false;
+		if (!this.host.maintain(setCheckboxTask(page.id, entry.id, null))) return false;
 		this.host.refresh();
 		return true;
 	}
@@ -601,24 +655,32 @@ export class ChecklistTools {
 
 	/**
 	 * Sets the tick of the one task line of the note that ends with the block id; the rest of the note is never touched. "missing": the
-	 * note is not in the vault (or is still empty: the notebook can sync before the note does), so the link stays. "gone": the note was
-	 * read and the line is not in it. Rejects when the note cannot be read or written.
+	 * note is not in the vault (or is still empty: the notebook can sync before the note does), or it was not edited since the link was
+	 * made (`taskAt`: it may be an older copy that has not received the line yet), or a code block in it never closes (the line may be
+	 * inside), so the link stays. "gone": the note was read, was edited since, and the line is not in it (the sync asks twice, a
+	 * minute apart, before it unlinks). Rejects when the note cannot be read or written.
 	 */
-	private async writeLine(task: CheckboxTask, checked: boolean): Promise<SyncResult> {
+	private async writeLine(task: CheckboxTask, checked: boolean, taskAt: number): Promise<SyncResult> {
 		const { app } = this.host;
 		try {
-			const file = app.vault.getFileByPath(normalizePath(task.path));
-			if (!file) return "missing";
+			let file = app.vault.getFileByPath(normalizePath(task.path));
+			if (!file) {
+				// A note renamed while the notebook was closed (or before this view heard of it): the record of renames knows where it went.
+				const now = this.movedTo(task, taskAt);
+				file = now !== task.path ? app.vault.getFileByPath(normalizePath(now)) : null;
+				if (!file) return "missing";
+				this.follow(task.path, now);
+			}
 			const text = await app.vault.read(file);
 			if (text.trim() === "") return "missing";
 			const probe = setTaskLineChecked(text, task.block, checked);
 			if (probe.ambiguous) return "ambiguous";
-			if (!probe.found) return "gone";
+			if (!probe.found) return vanished(probe, file.stat.mtime, taskAt);
 			if (!probe.changed) return "ok";
 			let outcome: SyncResult = "ok";
 			await app.vault.process(file, (current) => {
 				const r = setTaskLineChecked(current, task.block, checked);
-				outcome = r.ambiguous ? "ambiguous" : r.found ? "ok" : "gone";
+				outcome = r.ambiguous ? "ambiguous" : r.found ? "ok" : vanished(r, Date.now(), taskAt);
 				return r.text;
 			});
 			return outcome;

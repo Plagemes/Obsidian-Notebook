@@ -9,7 +9,9 @@ import type { CheckboxTask } from "./types";
  * A tick is noted the moment the document changes (`collect`), not when the delayed write runs, so it is never lost on the way: a
  * view that closes, a document that is reloaded or a note that is not there yet (the notebook synced before the note did) leaves the
  * entry in place and the write is retried, a few times, later. A note that is missing keeps the link; only a note that exists and
- * was read without the block id unlinks the checkbox.
+ * was read without the block id, twice, a minute apart or more, unlinks the checkbox (an older copy of the note, which has not
+ * received the line yet, reads the same as a note the line was deleted from once; the view decides the first from the note's
+ * time, this decides the second).
  */
 
 /** What a try to write a task line came to. */
@@ -26,11 +28,16 @@ export type SyncResult =
 /** Milliseconds to wait after the 1st, 2nd, ... failed try before the next one; its length is how many failed tries there are before giving up. */
 export const RETRY_DELAYS = [4000, 15000, 60000, 300000] as const;
 
+/** A line seen "gone" must be seen "gone" again at least this long (ms) after the first time before the checkbox is unlinked. */
+export const GONE_CONFIRM_MS = 60000;
+
 /** A linked checkbox as the sync sees it. */
 export interface LinkedBox {
 	id: string;
 	checked: boolean;
 	task: CheckboxTask;
+	/** When the link was made (the checkbox's `taskAt`, ms); a note not edited since cannot have lost the line. */
+	taskAt?: number;
 }
 
 export interface SyncSnapshot {
@@ -49,6 +56,10 @@ export interface SyncEntry {
 	tries: number;
 	/** Not before this time (ms), after a failed try. */
 	notBefore: number;
+	/** When the link was made (ms; 0 when unknown). */
+	taskAt: number;
+	/** When the line was first seen "gone" (ms), if it has been and nothing else came of a try since. */
+	goneAt?: number;
 }
 
 export type SyncNotice = "gone" | "ambiguous" | "missing" | "failed";
@@ -56,8 +67,11 @@ export type SyncNotice = "gone" | "ambiguous" | "missing" | "failed";
 export interface SyncDeps {
 	/** The linked checkboxes of the open document, or null when none is open. */
 	snapshot(): SyncSnapshot | null;
-	/** Sets the tick of the task line. Resolves with what came of it; rejects when the note could not be read or written. */
-	write(task: CheckboxTask, checked: boolean): Promise<SyncResult>;
+	/**
+	 * Sets the tick of the task line. Resolves with what came of it; rejects when the note could not be read or written. `taskAt`:
+	 * when the link was made (ms): "gone" only counts for a note edited after that.
+	 */
+	write(task: CheckboxTask, checked: boolean, taskAt: number): Promise<SyncResult>;
 	/** The line is gone: unlinks the checkbox. False when that is not possible now (a locked page, a read-only notebook, another document). */
 	unlink(entry: SyncEntry): boolean;
 	/** Tells the user. `detail`: the error message for "failed". */
@@ -127,7 +141,7 @@ export class ChecklistSync {
 			}
 			const prev = this.pending.get(box.id);
 			if (prev && prev.want === box.checked && prev.task.block === box.task.block) continue;
-			this.pending.set(box.id, { id: box.id, docId: snap.docId, task: { path: box.task.path, block: box.task.block }, want: box.checked, tries: 0, notBefore: 0 });
+			this.pending.set(box.id, { id: box.id, docId: snap.docId, task: { path: box.task.path, block: box.task.block }, want: box.checked, tries: 0, notBefore: 0, taskAt: box.taskAt ?? 0 });
 		}
 		// A checkbox that is gone from this document (deleted, unlinked) has nothing to write.
 		for (const [id, entry] of this.pending) if (entry.docId === snap.docId && !seen.has(id)) this.pending.delete(id);
@@ -141,11 +155,16 @@ export class ChecklistSync {
 		else this.synced.set(id, checked);
 	}
 
-	/** A note was renamed: the entries that name it (or a note inside a renamed folder) follow. */
-	renamed(oldPath: string, newPath: string): void {
+	/**
+	 * A note was renamed: the entries that name it (or a note inside a renamed folder) follow. `accept`: a new path that is not
+	 * accepted (one the format cannot store) is not followed, the entry keeps the old one.
+	 */
+	renamed(oldPath: string, newPath: string, accept: (path: string) => boolean = () => true): void {
 		for (const entry of this.pending.values()) {
 			const next = renamedPath(entry.task.path, oldPath, newPath);
-			if (next !== null) entry.task = { path: next, block: entry.task.block };
+			if (next === null || !accept(next)) continue;
+			entry.task = { path: next, block: entry.task.block };
+			delete entry.goneAt;
 		}
 	}
 
@@ -209,7 +228,7 @@ export class ChecklistSync {
 	private async attempt(entry: SyncEntry): Promise<void> {
 		let result: SyncResult;
 		try {
-			result = await this.deps.write(entry.task, entry.want);
+			result = await this.deps.write(entry.task, entry.want, entry.taskAt);
 		} catch (e) {
 			const first = entry.tries === 0;
 			this.fail(entry);
@@ -220,7 +239,15 @@ export class ChecklistSync {
 			this.synced.set(entry.id, entry.want);
 			if (this.pending.get(entry.id) === entry) this.pending.delete(entry.id);
 		} else if (result === "gone") {
-			if (this.deps.unlink(entry)) {
+			const now = this.now();
+			if (entry.goneAt === undefined) {
+				// The first sight: the link stays and the note is read again no sooner than GONE_CONFIRM_MS later.
+				entry.goneAt = now;
+				if (entry.tries === 0) entry.tries = 1;
+				entry.notBefore = now + GONE_CONFIRM_MS;
+			} else if (now - entry.goneAt < GONE_CONFIRM_MS) {
+				entry.notBefore = entry.goneAt + GONE_CONFIRM_MS;
+			} else if (this.deps.unlink(entry)) {
 				this.synced.delete(entry.id);
 				if (this.pending.get(entry.id) === entry) this.pending.delete(entry.id);
 				this.deps.notify("gone", entry);
@@ -229,6 +256,8 @@ export class ChecklistSync {
 			entry.tries = RETRY_DELAYS.length;
 			this.deps.notify("ambiguous", entry);
 		} else {
+			// (a note that was there and is not now, or has no line yet: whatever was seen before no longer counts)
+			delete entry.goneAt;
 			this.fail(entry);
 			if (entry.tries >= RETRY_DELAYS.length) this.deps.notify("missing", entry);
 		}

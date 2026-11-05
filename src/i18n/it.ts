@@ -3484,6 +3484,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"checklist.task.noteMissing": "la nota non è stata trovata nel vault",
 	"checklist.task.ambiguous": "Più di una riga in {path} termina con l'id di questa attività, quindi nessuna è stata modificata. Elimina la copia in più della riga.",
 	"checklist.task.pathTooLong": "L'attività è stata aggiunta, ma il percorso della sua nota è troppo lungo per collegarla a questa casella.",
+	"checklist.task.renameTooLong": "Una nota con un'attività collegata a una casella è stata rinominata, ma il suo nuovo percorso è troppo lungo per seguirla. La casella punta ancora al vecchio percorso.",
 	"checklist.unlinked": "Scollegata. L'attività resta nella nota com'è.",
 	"settings.checklistDraw": "Quadrati disegnati come caselle",
 	"settings.checklistDraw.desc": "Un piccolo quadrato disegnato con la penna: proponi, crea o lascia inchiostro.",

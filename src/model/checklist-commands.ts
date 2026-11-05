@@ -39,8 +39,29 @@ export class UpdateCheckbox implements Command {
 		const els = doc.pages.find((p) => p.id === this.pageId)?.elements;
 		if (!els) return;
 		const i = els.indexOf(r.after);
-		if (i >= 0) els[i] = r.before;
+		if (i >= 0) {
+			els[i] = r.before;
+			return;
+		}
+		// The object was replaced since by a change that is no undo step (the link followed a renamed note, or was dropped because its
+		// line is gone: `History.applyQuietly`). This step is undone on what is there now, and that change stays unless this step is
+		// the link's own change.
+		const j = els.findIndex((e) => e.id === this.checkboxId && e.type === "checkbox");
+		const current = els[j] as CheckboxElement | undefined;
+		if (!current) return;
+		const ownsLink = JSON.stringify(r.before.task) !== JSON.stringify(r.after.task);
+		els[j] = freezeElement(ownsLink ? r.before : keepingLink(r.before, current));
 	}
+}
+
+/** `base` with the task link (and its time) of `from`. */
+function keepingLink(base: CheckboxElement, from: CheckboxElement): CheckboxElement {
+	const out: CheckboxElement = { ...base };
+	delete out.task;
+	delete out.taskAt;
+	if (from.taskAt !== undefined) out.taskAt = from.taskAt;
+	if (from.task) out.task = from.task;
+	return out;
 }
 
 /** Ticks or unticks a checkbox (one undo step): `checked` set at time `at` (ms). */

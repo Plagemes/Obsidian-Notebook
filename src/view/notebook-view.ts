@@ -2221,6 +2221,15 @@ export class NotebookView extends FileView {
 				this.renderer?.invalidate();
 				return done;
 			},
+			// Upkeep (a link that follows a renamed note, or is dropped): no undo step, but the document changed, so it is saved.
+			maintain: (cmd) => {
+				const done = this.history.applyQuietly(cmd);
+				if (done) {
+					this.afterHistoryChange();
+					this.renderer?.invalidate();
+				}
+				return done;
+			},
 			settings: () => this.host.settings,
 			tool: () => this.tools.tool,
 			scale: () => this.viewport.scale,

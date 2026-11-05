@@ -13,7 +13,7 @@ import {
 } from "../src/model/checklist";
 import { setCheckboxLabel, setCheckboxTask } from "../src/model/checklist-commands";
 import {
-	ChecklistSync, RETRY_DELAYS, type SyncDeps, type SyncEntry, type SyncNotice, type SyncResult, type SyncSnapshot,
+	ChecklistSync, GONE_CONFIRM_MS, RETRY_DELAYS, type SyncDeps, type SyncEntry, type SyncNotice, type SyncResult, type SyncSnapshot,
 } from "../src/model/checklist-sync";
 import { createDocument, createPage } from "../src/model/document";
 import { History } from "../src/model/history";
@@ -238,7 +238,10 @@ describe("L3: a note that is not there keeps the link", () => {
 	it("only a line that is really gone unlinks, with a notice", async () => {
 		const f = fake();
 		f.state.boxes[0]!.checked = true;
-		f.results.push("gone");
+		f.results.push("gone", "gone");
+		await f.sync.run();
+		expect(f.unlinked).toEqual([]); // (N1: seen once is not enough)
+		f.state.now += GONE_CONFIRM_MS + 1;
 		await f.sync.run();
 		expect(f.unlinked).toEqual(["c1"]);
 		expect(f.notices.map((n) => n[0])).toEqual(["gone"]);
@@ -265,13 +268,15 @@ describe("L12: the unlink of a gone line is told only when it happened", () => {
 		const f = fake();
 		f.state.boxes[0]!.checked = true;
 		f.canUnlink.current = false;
-		f.results.push("gone");
+		f.results.push("gone", "gone");
 		await f.sync.run();
+		f.state.now += GONE_CONFIRM_MS + 1;
+		await f.sync.run(); // seen twice: the unlink is refused
 		expect(f.notices).toEqual([]);
 		expect(f.sync.pendingCount()).toBe(1);
 		f.canUnlink.current = true;
 		f.results.push("gone");
-		f.state.now += RETRY_DELAYS[0] + 1;
+		f.state.now += RETRY_DELAYS[1] + 1;
 		await f.sync.run();
 		expect(f.unlinked).toEqual(["c1"]);
 		expect(f.notices.map((n) => n[0])).toEqual(["gone"]);

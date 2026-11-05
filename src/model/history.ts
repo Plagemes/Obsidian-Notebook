@@ -658,6 +658,24 @@ export class History {
 		return true;
 	}
 
+	/**
+	 * Runs a command that is upkeep, not an edit by the user (a task link that follows a renamed note, or is dropped because its
+	 * line is gone): it is not recorded, so Undo goes on undoing the user's own steps, and the redo steps are kept. The document
+	 * has changed all the same, so the caller saves it. False, with nothing changed and nothing said, when the history is locked, a
+	 * locked page would change or the guard refused it: the caller tries again later.
+	 */
+	applyQuietly(cmd: Command): boolean {
+		if (this.locked?.()) return false;
+		const doc = this.doc();
+		const locks = cmd.lockExempt ? null : snapshotLocked(doc);
+		cmd.apply(doc);
+		if ((locks && lockedChanges(doc, locks).length > 0) || (this.guard?.(doc) ?? null) !== null) {
+			cmd.revert(doc);
+			return false;
+		}
+		return true;
+	}
+
 	/** Records an already applied command (e.g. the eraser, which erases while it moves). */
 	record(cmd: Command): void {
 		this.undoStack.push(cmd);

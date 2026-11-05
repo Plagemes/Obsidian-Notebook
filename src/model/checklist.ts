@@ -203,6 +203,11 @@ export interface TaskLineEdit {
 	changed: boolean;
 	/** More than one task line carries the block id: nothing was changed, the right one cannot be told (only present when true). */
 	ambiguous?: true;
+	/**
+	 * No task line was found, but a fenced code block never closes (only present when true): everything after its opening reads as
+	 * code, so the line may be there all the same (a block being typed on another device and synced half-written). Not "gone".
+	 */
+	unclosedFence?: true;
 }
 
 /** A task line, also inside a callout or a quote (`> - [ ] …`, `> > 1. [ ] …`). */
@@ -214,7 +219,7 @@ const BYTE_ORDER_MARK = String.fromCharCode(0xfeff);
  * The lines of `lines` that are real note text: not the frontmatter (a `---` block at the very top) and not inside a fenced code
  * block (``` or ~~~, also inside a quote), where a copy of a task line is an example, not a task.
  */
-function liveLines(lines: readonly string[]): boolean[] {
+function liveLines(lines: readonly string[]): { live: boolean[]; unclosed: boolean } {
 	const live = new Array<boolean>(lines.length).fill(true);
 	let start = 0;
 	const first = lines[0]!.startsWith(BYTE_ORDER_MARK) ? lines[0]!.slice(1) : lines[0]!;
@@ -243,7 +248,7 @@ function liveLines(lines: readonly string[]): boolean[] {
 			live[i] = false;
 		}
 	}
-	return live;
+	return { live, unclosed: fence !== null };
 }
 
 /** Whether `line` ends with the block id `^block` (preceded by a space, followed by nothing but spaces). */
@@ -262,7 +267,7 @@ function endsWithBlock(line: string, block: string): boolean {
 export function setTaskLineChecked(text: string, block: string, checked: boolean): TaskLineEdit {
 	if (!isOurBlockId(block)) return { text, found: false, changed: false };
 	const lines = text.split("\n");
-	const live = liveLines(lines);
+	const { live, unclosed } = liveLines(lines);
 	let at = -1;
 	let match: RegExpExecArray | null = null;
 	let cr = "";
@@ -279,7 +284,7 @@ export function setTaskLineChecked(text: string, block: string, checked: boolean
 		match = m;
 		cr = eol;
 	}
-	if (at < 0 || !match) return { text, found: false, changed: false };
+	if (at < 0 || !match) return unclosed ? { text, found: false, changed: false, unclosedFence: true } : { text, found: false, changed: false };
 	const status = match[2]!;
 	let next = status;
 	if (checked && status === " ") next = "x";

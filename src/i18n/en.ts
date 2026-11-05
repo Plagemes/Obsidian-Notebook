@@ -3482,6 +3482,7 @@ export const en = {
 	"checklist.task.noteMissing": "the note was not found in the vault",
 	"checklist.task.ambiguous": "More than one line in {path} ends with this task's id, so none was changed. Delete the extra copy of the line.",
 	"checklist.task.pathTooLong": "The task was added, but the path of its note is too long to link this checkbox to it.",
+	"checklist.task.renameTooLong": "A note with a task linked to a checkbox was renamed, but its new path is too long to follow. The checkbox still points to the old path.",
 	"checklist.unlinked": "Unlinked. The task stays in your note as it is.",
 	"settings.checklistDraw": "Squares drawn as checkboxes",
 	"settings.checklistDraw.desc": "A small square drawn with the pen: offer a checkbox, make one, or keep ink.",
