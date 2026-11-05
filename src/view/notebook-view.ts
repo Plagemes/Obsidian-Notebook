@@ -961,7 +961,9 @@ export class NotebookView extends FileView {
 					for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
 						const other = leaf.view;
 						if (other instanceof NotebookView && other !== this && other.file?.path === file.path && other.session?.doc) {
-							return { doc: () => other.session?.doc ?? null, media: () => null, redrawOnSave: true };
+							// Obsidian reuses a view when its pane opens another notebook: serve this document only while that pane still shows it.
+							// Otherwise the window falls back to reading the file from disk instead of drawing a different notebook.
+							return { doc: () => (other.file?.path === file.path ? other.session?.doc ?? null : null), media: () => null, redrawOnSave: true };
 						}
 					}
 					return null;
