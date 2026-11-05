@@ -3686,6 +3686,7 @@ export const en = {
 	"vdiff.note.preview": "PDF and image backgrounds and pictures are not drawn in this preview; a changed picture is outlined.",
 	"vdiff.restore": "Restore this page from {date}",
 	"vdiff.restore.notThere": "This page is not in the version shown.",
+	"vdiff.restore.otherNotebook": "The notebook on screen is not the one these versions belong to. Nothing was restored.",
 	"vdiff.restore.confirmTitle": "Restore this page?",
 	"vdiff.restore.confirmReplace": "Page {n} will be replaced by the page as it was on {date}. Undo puts it back.",
 	"vdiff.restore.confirmInsert": "The page as it was on {date} will be added after page {n}, as a new page. Undo removes it.",

@@ -3688,6 +3688,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"vdiff.note.preview": "Gli sfondi PDF e immagine e le immagini non sono disegnati in questa anteprima; un'immagine cambiata ha il contorno.",
 	"vdiff.restore": "Ripristina questa pagina del {date}",
 	"vdiff.restore.notThere": "Questa pagina non è nella versione mostrata.",
+	"vdiff.restore.otherNotebook": "Il quaderno aperto non è quello a cui appartengono queste versioni. Non è stato ripristinato nulla.",
 	"vdiff.restore.confirmTitle": "Ripristinare questa pagina?",
 	"vdiff.restore.confirmReplace": "La pagina {n} sarà sostituita dalla pagina com'era il {date}. Annulla la rimette a posto.",
 	"vdiff.restore.confirmInsert": "La pagina com'era il {date} sarà aggiunta dopo la pagina {n}, come pagina nuova. Annulla la toglie.",

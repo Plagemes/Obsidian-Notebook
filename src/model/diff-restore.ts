@@ -13,7 +13,20 @@ export type DiffRestore =
 	| { kind: "not-in-version" }
 	/** The page in the notebook is locked (1-based page number). */
 	| { kind: "locked"; n: number }
+	/** 0.20 review (D5): the notebook now on screen is not the one the versions belong to. */
+	| { kind: "other-notebook" }
 	| { kind: "nothing" };
+
+/**
+ * `planDiffRestore`, but only into the notebook the versions were read from: the dialog can outlive the notebook in its leaf
+ * (a link opened in the same leaf, a back gesture), and a page id missing there would otherwise copy a page across notebooks.
+ */
+export function planDiffRestoreInto(
+	current: NotebookDocument, source: NotebookDocument, pageId: string, order: readonly PageDiff[], fallback: number,
+): DiffRestore {
+	if (current.id !== source.id) return { kind: "other-notebook" };
+	return planDiffRestore(current, source, pageId, order, fallback);
+}
 
 /**
  * Plans restoring the page `pageId` of `source` (an earlier version of the notebook) into `current`. `order` is the page list
