@@ -16,6 +16,11 @@
 
 ### lookup
 - **Look up later (#213).** *Look up later…* in the selection menu (and the palette) takes a picture of the selection, asks for an optional typed word and appends one line to a Markdown note: `- [ ] ![[crop|150]] word — [[Notebook#p3&id=…|Notebook p. 3]] (date)`. The note is *Look up later.md* in the notebooks folder by default (setting *Look up later note*, made on the first entry), the picture width is a setting, and only a line is ever appended: the rest of the note is untouched, typed text is escaped, and the same line is not added twice. The *Look up later list…* sheet (page sheet, notebook menu, palette) lists this notebook's entries read from the note, with their picture, count and a jump to the page; it is read-only (tick entries off in the note). No format change. Not added as a pen gesture: the gesture system lives in the input files this wave does not touch.
+
+### search
+
+- Companion notes: new setting *Include typed text in search* (off by default). The companion note also lists, per page, the text of sticky notes, margin comments and replies, equation sources and marker labels, with a wikilink back to the page, so Obsidian search finds them. Text is escaped, bounded to 4000 characters per page, and written only inside the generated block. No format change.
+
 ## 0.18.0 — 2026-11-05
 
 Review a page and move between notes more freely: margin comments anchored to a region of the page, an infinite page split into sheets of paper for export, a selection sent into a Markdown note, pages copied to another notebook with a link back, a QR code for a page, the notes that mention a page, annotating a PDF from Obsidian's PDF viewer, and quick tabs for the pages you keep going back to. The notebook format moves to version 16 (an older plugin opens a v16 file read-only).
