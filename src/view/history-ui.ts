@@ -15,8 +15,8 @@ export interface SnapshotLabelInput {
 	course: string | null;
 	/** File size in bytes. */
 	size: number;
-	/** Page count, or null when the snapshot does not parse. */
-	pages: number | null;
+	/** Page count, null when the snapshot does not parse, undefined when it was not read (the list does not parse every copy). */
+	pages?: number | null;
 }
 
 /** The date, or for a lecture snapshot "Lecture <course> <date> <hh:mm>". */
@@ -27,8 +27,10 @@ export function snapshotTitle(item: SnapshotLabelInput): string {
 }
 
 export function snapshotLabel(item: SnapshotLabelInput): string {
+	const base = `${snapshotTitle(item)} · ${formatBytes(item.size)}`;
+	if (item.pages === undefined) return base;
 	const pages = item.pages === null ? t("history.unreadable") : item.pages === 1 ? t("history.pages.one") : t("history.pages.other", { count: String(item.pages) });
-	return `${snapshotTitle(item)} · ${formatBytes(item.size)} · ${pages}`;
+	return `${base} · ${pages}`;
 }
 
 /** One row of the list; a lecture snapshot gets the graduation-cap mark. */

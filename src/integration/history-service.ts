@@ -4,13 +4,14 @@ import { parse } from "../model/serialize";
 import { backupFolder, type NotebookSettings } from "../settings";
 import { isNotebookFile, readNotebookText, writeNotebookText } from "../storage/format";
 import {
-	checkRestoreTarget, extractDocId, formatSnapshotDate, shouldSnapshot, snapshotFileName, snapshotFolder, snapshotPageCount,
+	checkRestoreTarget, extractDocId, formatSnapshotDate, shouldSnapshot, snapshotFileName, snapshotFolder,
 	restoredText, snapshotsToPrune, sortSnapshots,
 } from "../storage/history";
 import {
 	contentFingerprint, courseOf, decideLectureSnapshot, isLectureSnapshotName, lectureSnapshotFileName, lectureSnapshotsToPrune,
 	LECTURE_LABELS_FILE, ordinarySnapshotNames, readLectureLabels, withLectureLabel, type LectureLabels,
 } from "../storage/lecture-snapshot";
+import { PathLock } from "../storage/path-lock";
 import { ensureFolder, VaultDocumentIO } from "../storage/vault-io";
 import { viewsOf } from "./open";
 import { NotebookPickerModal } from "./picker";
@@ -26,7 +27,6 @@ export interface HistoryHost {
 interface SnapshotItem {
 	file: TFile;
 	date: Date;
-	pages: number | null;
 	/** 0.19: taken automatically at the end of a lecture. */
 	lecture: boolean;
 	/** Course recorded for a lecture snapshot, or null. */
@@ -37,7 +37,7 @@ interface SnapshotItem {
 export class HistoryService {
 	/** When each notebook was last found up to date (ms), so a save does not re-read the file every time. */
 	private readonly checked = new Map<string, number>();
-	private readonly busy = new Set<string>();
+	private readonly busy = new PathLock();
 
 	constructor(private readonly host: HistoryHost) {}
 
@@ -77,7 +77,7 @@ export class HistoryService {
 		if (!(hours > 0) || !isNotebookFile(file) || this.busy.has(file.path)) return null;
 		const known = this.checked.get(file.path);
 		if (known !== undefined && !shouldSnapshot(new Date(known), now, hours)) return null;
-		this.busy.add(file.path);
+		const release = this.busy.acquire(file.path);
 		try {
 			const text = await this.app.vault.read(file);
 			if (settle) await settle();
@@ -111,7 +111,7 @@ export class HistoryService {
 			console.error("[notebook] snapshot failed", file.path, e);
 			return null;
 		} finally {
-			this.busy.delete(file.path);
+			release();
 		}
 	}
 
@@ -134,8 +134,9 @@ export class HistoryService {
 	 * file manager). Never throws; returns the path or null.
 	 */
 	async lectureSnapshot(file: TFile, course: string, opts: { wrote: boolean; saved: boolean }, now = new Date()): Promise<string | null> {
-		if (!this.host.settings.lectureSnapshots || !isNotebookFile(file) || this.busy.has(file.path)) return null;
-		this.busy.add(file.path);
+		if (!this.host.settings.lectureSnapshots || !isNotebookFile(file)) return null;
+		// A snapshot of the interval or another lecture end may be running on this file: wait for it, never drop the lecture one.
+		const release = await this.busy.acquireWhenFree(file.path);
 		try {
 			const json = readNotebookText(file.extension, await this.app.vault.read(file));
 			const parsed = parse(json);
@@ -160,7 +161,7 @@ export class HistoryService {
 			console.error("[notebook] lecture snapshot failed", file.path, e);
 			return null;
 		} finally {
-			this.busy.delete(file.path);
+			release();
 		}
 	}
 
@@ -227,10 +228,8 @@ export class HistoryService {
 			const labels = found.some((s) => isLectureSnapshotName(s.file.name)) ? await this.lectureLabels(docId) : {};
 			const items: SnapshotItem[] = [];
 			for (const { file: snap, date } of found) {
-				items.push({
-					file: snap, date, pages: snapshotPageCount(await this.app.vault.read(snap)),
-					lecture: isLectureSnapshotName(snap.name), course: courseOf(labels, snap.name),
-				});
+				// Names and sizes only: reading and parsing every copy would freeze a large notebook's list (the chosen one is checked on restore).
+				items.push({ file: snap, date, lecture: isLectureSnapshotName(snap.name), course: courseOf(labels, snap.name) });
 			}
 			new SnapshotModal(this.app, items, (item) => {
 				new ConfirmRestoreModal(this.app, item.date, () => void this.restore(file, item)).open();

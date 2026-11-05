@@ -21,6 +21,7 @@
 import { backupDate } from "./recovery";
 import { conflictBaseOf, mayBeManualCopy, sameNotebookText } from "./conflicts";
 import { parseSnapshotName, safeDocId } from "./history";
+import { isLectureSnapshotName } from "./lecture-snapshot";
 
 export const DAY_MS = 86_400_000;
 /** Backups and snapshots younger than this are never offered. */
@@ -161,6 +162,9 @@ export function planBackups(
 				continue;
 			}
 			add(owners[0]!.path, f.size);
+			// 0.19 (review): lecture snapshots are governed by their own retention only (lectureSnapshotsKeep); they neither count
+			// in the "newest N" window of the ordinary ones nor are offered here.
+			if (isLectureSnapshotName(parts[1]!)) continue;
 			snaps.set(owners[0]!.path, [...(snaps.get(owners[0]!.path) ?? []), { file: f, at }]);
 		} else if (!rest.includes("/")) {
 			const name = parseBackupName(rest);
