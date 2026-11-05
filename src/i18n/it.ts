@@ -3844,5 +3844,5 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.signDateMode.iso": "ISO (2026-11-05)",
 	"settings.signDateMode.custom": "Formato personalizzato",
 	"settings.signDateCustom": "Formato personalizzato della data",
-	"settings.signDateCustom.desc": "Usato quando il formato è Personalizzato. Segnaposto YYYY MM DD MMMM dddd; [testo] resta com'è.",
+	"settings.signDateCustom.desc": "Per il formato Personalizzato: YYYY MM DD MMMM dddd, [testo] invariato.",
 };

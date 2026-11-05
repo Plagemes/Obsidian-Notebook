@@ -3842,7 +3842,7 @@ export const en = {
 	"settings.signDateMode.iso": "ISO (2026-11-05)",
 	"settings.signDateMode.custom": "Custom pattern",
 	"settings.signDateCustom": "Custom signature date pattern",
-	"settings.signDateCustom.desc": "Used when the format is Custom. Tokens YYYY MM DD MMMM dddd; [text] stays as written.",
+	"settings.signDateCustom.desc": "Used when the format is Custom: YYYY MM DD MMMM dddd, [text] as written.",
 } as const;
 
 export type MessageKey = keyof typeof en;
