@@ -2760,3 +2760,25 @@ Roadmap O13. Needs Templater and the core Templates plugin, and a notebook templ
 |---|---|---|---|---|---|
 | `api.newNotebook` (API 1.2) and `template` / `templateContent` options of `createNotebook`: a notebook from a stored notebook template, returning ready `link` and `embed` markup; no format change | yes | option parsing, template picking, link markup (`tests/new-block.test.ts`) | | | the template reading is only covered through the existing template code |
 | `notebook-new` code block for core Templates and Templater: parsing, card with a *Create notebook* button (never on render), replacement of exactly that block through `vault.process` | yes | parsing, exact replacement, duplicates, fences (`tests/new-block.test.ts`); harness `doc=tplnote` (card, error card) | | | not tried inside Obsidian (steps 1640-1649) |
+
+### 0.19 — snapshot: automatic snapshot at the end of a lecture (steps 1580-1599)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`HARNESS_DOC=snapshot`): `dev/harness/dist/shots/` (the history list with the filter chip, tablet and phone, dark and light). Needs a timetable class linked to a notebook (Timetable dialog).
+
+1580. **Lecture ends by the clock.** With lecture mode on during a class, write a few strokes, then wait until the class ends (or use *End lecture* on the chip). Within a moment: *Restore a previous version* lists "Lecture <course> <date> <hh:mm>" with a graduation-cap mark. The file `Notebooks/_backup/history/<id>/<stamp>-lecture.snapshot` exists.
+1581. **Nothing written, nothing taken.** Open the notebook during a class, start lecture mode and end it without writing: no new lecture snapshot.
+1582. **Closed after writing.** Write during a class, close the notebook tab: a lecture snapshot appears. With lecture mode off in settings (*Automatic lecture mode*), the same happens (the class comes from the timetable).
+1583. **Backgrounded.** Write during a class and switch to another app (S Pen tablet): back in Obsidian the list has the snapshot. Switch away again without writing: no second one.
+1584. **Unchanged is skipped.** Immediately after 1580, write nothing, close and reopen, close again: still one snapshot. Erase a stroke then redo it so the notebook is identical to the snapshot: no new one.
+1585. **Filter.** In *Restore a previous version* the chip *Lecture snapshots* appears only when the notebook has one; tap it: only lecture snapshots remain, tap again: all. Ordinary snapshots show just the date.
+1586. **Retention.** Set *Lecture snapshots to keep* to 2 and end three lectures with changes between them (move the file-name dates back on a PC to get several): the oldest lecture snapshot goes to the trash; ordinary snapshots stay, whatever *Versions to keep* says.
+1587. **Does not touch others.** Put your own `….snapshot` (no `-lecture`) in the folder, and lower the lecture count: it is not trashed. Lowering *Versions to keep* does not trash lecture snapshots.
+1588. **Setting off.** Turn off *Snapshot at the end of a lecture*: none is taken; the count setting is hidden.
+1589. **Restore.** Restore a lecture snapshot: the usual confirmation, a backup of the current content, the notebook goes back.
+1590. **Italian.** In Italian: *Istantanea a fine lezione*, *Istantanee di lezione*, the row reads "Lezione <corso> <data> <ora>".
+1591. **Unreadable label file.** Make `lectures.json` invalid on a PC: new lecture snapshots still work (the row shows "Lecture <date> <hh:mm>" without the course) and the file is left as it is.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Automatic snapshot at the end of a lecture (#222): lecture mode left, notebook closed or app hidden after writing in a class; from the saved file after the flush; only if changed | yes | pure decision, names, retention, fingerprint, label file: yes; vault and view wiring: no (needs a real vault and timetable) | | | |
+| Lecture snapshots: own retention count, label, "Lecture snapshots" filter in version history | yes | pure logic: yes; list pieces: harness (`doc=snapshot`) | | | |

@@ -16543,3 +16543,45 @@ body.notebook-style-obsidian {
 	align-items: flex-start;
 	gap: var(--nb-space-1);
 }
+
+/* ===== 0.19 snapshot ===== */
+.nb-ui.nb-history-filter {
+	display: flex;
+	gap: var(--nb-space-2, 8px);
+	padding: var(--nb-space-1, 4px) var(--nb-space-2, 8px);
+}
+
+.nb-ui.nb-history-filter .nb-history-chip {
+	min-height: 32px;
+	padding: 0 var(--nb-space-3, 12px);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill, 999px);
+	background: var(--nb-bg-elevated);
+	color: var(--nb-text-muted);
+	font-size: var(--font-ui-small, 13px);
+	cursor: pointer;
+	box-shadow: none;
+}
+
+.nb-ui.nb-history-filter .nb-history-chip.is-active {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-history-row {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-2, 8px);
+}
+
+.nb-ui.nb-history-row .nb-history-icon {
+	display: inline-flex;
+	flex: none;
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-history-row .nb-history-icon svg {
+	width: 16px;
+	height: 16px;
+}

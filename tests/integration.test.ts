@@ -215,6 +215,10 @@ describe("snapshot settings", () => {
 	it("has defaults of 24 hours and 10 snapshots", () => {
 		expect(DEFAULT_SETTINGS.snapshotIntervalHours).toBe(24);
 		expect(DEFAULT_SETTINGS.snapshotsToKeep).toBe(10);
+		expect(DEFAULT_SETTINGS.lectureSnapshots).toBe(true);
+		expect(DEFAULT_SETTINGS.lectureSnapshotsKeep).toBe(20);
+		expect(readSettings({ lectureSnapshotsKeep: 0 }).lectureSnapshotsKeep).toBe(20);
+		expect(readSettings({ lectureSnapshots: false, lectureSnapshotsKeep: 5 })).toMatchObject({ lectureSnapshots: false, lectureSnapshotsKeep: 5 });
 	});
 
 	it("accepts valid values and ignores the rest", () => {

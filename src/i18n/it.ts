@@ -3567,4 +3567,14 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"newblock.created": "Creato “{name}” e incorporato nella nota.",
 	"newblock.createdNotReplaced": "Creato “{name}”, ma il blocco è cambiato nel frattempo e non è stato toccato. Aggiungi {link} a mano.",
 	"newblock.failed": "Impossibile creare il quaderno: {error}",
+	// 0.19 snapshot
+	"settings.lectureSnapshots": "Istantanea a fine lezione",
+	"settings.lectureSnapshots.desc": "Conserva una versione col nome del corso a fine lezione. Solo se è cambiato qualcosa.",
+	"settings.lectureSnapshotsKeep": "Istantanee di lezione da conservare",
+	"settings.lectureSnapshotsKeep.desc": "Per quaderno. Le più vecchie vanno nel cestino; le altre versioni non si toccano.",
+	"history.lectureLabel": "Lezione {course} {date} {time}",
+	"history.lectureLabel.plain": "Lezione {date} {time}",
+	"history.filter.lecture": "Istantanee di lezione",
+	"history.filter.lecture.hint": "Mostra solo le istantanee fatte a fine lezione",
+	"history.filter.none": "Ancora nessuna istantanea di lezione di questo quaderno.",
 };

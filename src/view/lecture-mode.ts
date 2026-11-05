@@ -52,6 +52,8 @@ export interface LectureModeHost {
 	goToLecturePage(course: string, date: Date): void;
 	/** The lecture state changed: the UI (contextual bar) is drawn again. */
 	changed(): void;
+	/** 0.19 (222): a lecture session ended after the user wrote in it (mode left, notebook closed, app hidden). The view saves, then asks for the snapshot. */
+	ended?(path: string, course: string): void;
 	/** The device's local storage (what was turned down or paged today); without it nothing is remembered across openings. */
 	memory?: { load(): unknown; save(value: unknown): void };
 	now?(): Date;
@@ -69,8 +71,13 @@ export class LectureModeController {
 	private banner: HTMLElement | null = null;
 	private chip: HTMLElement | null = null;
 	private timer: number | null = null;
+	/** The user wrote (or added the lecture page) during a class since the last snapshot request: the course. */
+	private wroteDuring: string | null = null;
+	private slotCheckedAt = 0;
+	private slotClass: LectureClass | null = null;
 	private readonly onVisible = (): void => {
 		if (document.visibilityState === "visible") this.evaluate();
+		else this.finishSession();
 	};
 
 	constructor(private readonly host: LectureModeHost) {}
@@ -105,6 +112,7 @@ export class LectureModeController {
 
 	/** The notebook was closed or unloaded: nothing of its lecture state survives. */
 	closed(): void {
+		this.finishSession();
 		this.reset();
 		this.stopTimer();
 		this.path = null;
@@ -138,9 +146,24 @@ export class LectureModeController {
 	 * first user action: it adds today's lecture page, once (not when it was added before, even if it was deleted since).
 	 */
 	wrote(): void {
+		this.noteWritten();
 		const cls = this.activeClass;
 		if (!this.active?.key || !cls || this.paged.has(cls.key)) return;
 		this.ensurePage(cls, this.now(), false);
+	}
+
+	/** Notes that the user wrote during a class (the one in progress, or from the timetable, looked up at most every tick). */
+	private noteWritten(): void {
+		const now = this.now();
+		let cls = this.activeClass;
+		if (!cls && this.path) {
+			if (now.getTime() - this.slotCheckedAt >= LECTURE_TICK_MS) {
+				this.slotCheckedAt = now.getTime();
+				this.slotClass = this.host.classFor(this.path, now);
+			}
+			cls = this.slotClass;
+		}
+		if (cls) this.wroteDuring = cls.course;
 	}
 
 	/** Looks at the clock and the timetable and does what the rules say. */
@@ -157,6 +180,8 @@ export class LectureModeController {
 			this.apply(step, now);
 			if (step.kind !== "leave" && step.kind !== "unask") break;
 		}
+		// The class is over and the lecture mode is not on (it is off, or was left earlier): the writing of the class is done.
+		if (this.wroteDuring && !match && !this.active && !busy) this.finishSession();
 		// No page is added here: the clock never edits the notebook (see the top of this file).
 	}
 
@@ -192,6 +217,7 @@ export class LectureModeController {
 	}
 
 	private leave(ended: boolean, now: Date = this.now()): void {
+		this.finishSession();
 		const was = this.activeClass;
 		if (this.active?.key) this.remember("declined", this.active.key);
 		this.active = null;
@@ -220,6 +246,7 @@ export class LectureModeController {
 			addLecturePage(ctx, cls.course, now, cls.course, classContext(cls, ctx.slide?.() ?? null), scroll);
 			added = true;
 		}
+		if (added) this.wroteDuring = cls.course;
 		this.remember("paged", cls.key);
 		// Added behind the user's back (the view stayed where they write): say so, with a way to go there.
 		if (added && !scroll) this.offerGo(cls, now);
@@ -267,6 +294,19 @@ export class LectureModeController {
 		}
 	}
 
+	/** Asks for the end-of-lecture snapshot, once per stretch of writing. The view saves first; nothing is read from memory here. */
+	private finishSession(): void {
+		const course = this.wroteDuring;
+		this.wroteDuring = null;
+		const path = this.path;
+		if (!course || !path) return;
+		try {
+			this.host.ended?.(path, course);
+		} catch (e) {
+			console.error("[notebook] end of lecture", e);
+		}
+	}
+
 	private reset(): void {
 		this.hideBanner();
 		this.hideChip();
@@ -275,6 +315,9 @@ export class LectureModeController {
 		this.active = null;
 		this.activeClass = null;
 		this.asking = null;
+		this.wroteDuring = null;
+		this.slotClass = null;
+		this.slotCheckedAt = 0;
 		this.declined.clear();
 		this.paged.clear();
 		if (wasOn) this.host.changed();

@@ -242,6 +242,8 @@ export interface NotebookHost {
 	classNow?(): string | null;
 	/** 0.14 (401): the class in progress that belongs to this notebook (automatic lecture mode). Optional: absent in tests and the harness. */
 	lectureClassFor?(path: string): LectureClass | null;
+	/** 0.19 (222): a lecture ended in that notebook; the plugin takes the lecture snapshot from the saved file. Optional: absent in tests and the harness. */
+	lectureEnded?(path: string, course: string, saved: boolean): void;
 	/** ui redesign: runs a plugin-level action of the registry (notebook menu). Optional. */
 	runGlobal?(id: string): void;
 	/** wave 0.7: sync safety (presence files, sync check). Optional: absent in tests and the harness. */
@@ -742,6 +744,7 @@ export class NotebookView extends FileView {
 				if (i >= 0) this.scrollToPage(i);
 			},
 			changed: () => this.refreshUi(),
+			ended: (path, course) => void this.lectureEnded(path, course),
 			memory: { load: (): unknown => this.app.loadLocalStorage(LECTURE_MEMORY_KEY), save: (v) => this.app.saveLocalStorage(LECTURE_MEMORY_KEY, v) },
 		});
 		this.mountExcerpts();
@@ -1329,6 +1332,27 @@ export class NotebookView extends FileView {
 		return written && (session.mode !== "ok" || !session.dirty);
 	}
 
+	/** Saved state of the session closeSession last detached (what a lecture snapshot at close may rely on). */
+	private closedSaved = false;
+
+	/**
+	 * 0.19 (222): a lecture ended here. Writes everything first and tells the plugin whether it all reached the file; the
+	 * snapshot itself is made from the file on disk, never from this view's memory.
+	 */
+	private async lectureEnded(path: string, course: string): Promise<void> {
+		let saved = this.closedSaved;
+		const session = this.session;
+		if (session) {
+			try {
+				saved = (await this.flushNow()) && session.isSaved();
+			} catch (e) {
+				console.error("[notebook] flush at the end of a lecture failed", e);
+				saved = false;
+			}
+		}
+		this.host.lectureEnded?.(path, course, saved);
+	}
+
 	/** Final flush (with retries and an "unsaved" backup as last resort), then detaches the session. */
 	private async closeSession(): Promise<void> {
 		this.controller?.finishActiveStroke();
@@ -1345,6 +1369,7 @@ export class NotebookView extends FileView {
 				if (file && session.mode === "ok" && !session.dirty) this.host.pdfCopy?.closing(file.path, this.pdfCopySource(session));
 			}
 		} finally {
+			this.closedSaved = session.isSaved();
 			session.dispose();
 			if (this.session === session) this.session = null;
 		}

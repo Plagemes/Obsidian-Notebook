@@ -336,6 +336,15 @@ const LIBRARY: SettingSpec[] = [
 		id: "snapshotsToKeep", section: "library", order: 31, name: "settings.snapshotKeep", desc: "settings.snapshotKeep.desc",
 		control: { type: "slider", min: 1, max: 50, step: 1 }, parent: "snapshotIntervalHours", visible: (s) => s.snapshotIntervalHours > 0,
 	},
+	// 0.19 snapshot: a snapshot at the end of a lecture, kept apart from the interval ones
+	{
+		id: "lectureSnapshots", section: "library", order: 32, name: "settings.lectureSnapshots", desc: "settings.lectureSnapshots.desc",
+		control: { type: "toggle" }, keywords: "backup snapshot lecture lesson class lezione",
+	},
+	{
+		id: "lectureSnapshotsKeep", section: "library", order: 33, name: "settings.lectureSnapshotsKeep", desc: "settings.lectureSnapshotsKeep.desc",
+		control: { type: "slider", min: 1, max: 100, step: 1 }, parent: "lectureSnapshots", visible: (s) => s.lectureSnapshots,
+	},
 	// 0.15 views: the Board's columns (names, colours, add, remove) are edited in a dialog; the statuses themselves are synced notebook data.
 	{
 		id: "boardColumns", section: "library", order: 40, name: "settings.boardColumns", desc: "settings.boardColumns.desc",
