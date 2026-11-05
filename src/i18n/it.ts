@@ -3483,4 +3483,9 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.checklistDraw.auto": "Fanne una casella",
 	"settings.checklistDraw.off": "Lascia inchiostro",
 	"map.state.checklist": "Voci aperte",
+	// 0.19 cleanexport
+	"export.clean": "Copia pulita",
+	"export.clean.desc": "Lascia fuori segnaposto e altri segnalibri di studio, commenti a margine e note adesive chiuse (con l'inchiostro che nascondono), pronta da condividere. Il quaderno non cambia.",
+	"export.clean.stickies": "Escludi anche le note adesive aperte",
+	"export.clean.stickies.desc": "L'inchiostro scritto sopra una nota resta sulla pagina.",
 };

@@ -2256,6 +2256,27 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 | Task link: *Send to tasks* with a block id, ticks follow into the one line of the note (only that line, line endings kept), unlink when the line is gone | yes | `setTaskLineChecked` (`tests/model-v17.test.ts`); harness scenario `checklists` | | | |
 | Checklists UI: insert, tap to tick (pen, mouse, finger), *Make checkbox* chip and the setting, label dialog, *Select with text*, *Open items* filter of the map | yes | harness scenario `checklists` (tablet and phone, light and dark) | | | tap and offer with the S Pen on hardware |
 
+### 0.19 — cleanexport
+
+Clean copy (#239). Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`HARNESS_DOC=cleanexport`): `dev/harness/dist/shots/` (the export dialog with the switch on, tablet and phone, dark and light).
+
+1620. **The switch.** Open *Export…* on a notebook: *Clean copy* is off. Turn it on: *Also leave out open sticky notes* appears under it. Close and open the dialog again in the same session: the choices are remembered.
+1621. **Markers.** On a page with a placeholder (gap), a question, an importance badge and a homework marker, export a PDF with *Clean copy* on: the PDF has none of the badges or outlined regions; the same page exported with it off still shows them.
+1622. **Other formats.** Repeat with SVG, PNG images and Print: the markers are missing in each when *Clean copy* is on.
+1623. **Comments.** With *Include comments in exports* on in the settings and a page that has margin comments, a clean PDF has no notes strip; a normal PDF still has it.
+1624. **Collapsed sticky notes.** Collapse a sticky note that has ink written on it: the clean PDF shows neither the icon nor that ink; strokes written elsewhere are there. Expand the note again in the notebook: the ink is back (the notebook was not changed).
+1625. **Open sticky notes.** An open note is in the clean PDF. With *Also leave out open sticky notes* on it is not; the ink written over it stays.
+1626. **What stays.** Boxes (definition, theorem…), text, pictures, equations, graphs, excerpts, the page header and the paper are in the clean PDF. Invisible ink follows *Show solutions* as in every export.
+1627. **Scope and layers.** Clean copy works with *This page*, *Whole notebook* and *Some pages*, and with *Ink only* / *Background only*.
+1628. **Nothing changes in the notebook.** After a clean export the markers, comments and sticky notes are all still in the notebook; undo history is untouched.
+1629. **Plain export.** With *Clean copy* off the exported file is the same as in 0.18.
+1630. **Italian.** In Italian: *Copia pulita*, *Escludi anche le note adesive aperte*.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Clean copy (#239): export dialog switch that leaves out markers (gaps, questions, importance, homework), margin comments and collapsed sticky notes with their hidden ink, optionally open notes; PDF, SVG, PNG, Print | yes | `tests/clean-export.test.ts` (filter, no mutation, byte-identical plain output); dialog: harness (`doc=cleanexport`) | | | |
+| Clean copy: "this lecture" page range by lecture date | no | | | | to do (the pages carry no creation time; use *Some pages* meanwhile) |
+
 ## Quick check — Windows
 
 Mouse: draw, erase (both modes), undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scroll, Ctrl+wheel zoom, resize the window (the page refits), add a page, use every page menu action with undo, create notebooks with each paper and size, export PDF and SVG and open them, lasso select/move/resize/rotate/delete, close and reopen the notebook. Also: open the library and use every action, import a PDF and write on it, insert a PDF range and an image page, use the shape, text, image and ruler tools, scan from a photo file, use the Pages panel, run *Restore a previous version*, insert an embed in a note and open an `obsidian://notebook` link. With a pen tablet or Surface pen: pressure and eraser end (`buttons & 32`).
