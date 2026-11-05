@@ -1,6 +1,7 @@
 import { elementAssetId } from "../model/excerpts";
 import type { NewPageContent, PageContentChange, PageContentPlan } from "../model/page-content";
-import { freezeStroke } from "../model/serialize";
+import { groupedItem, groupRenamer, isLockedElement, ungroupedItem, type PageItem } from "../model/groups";
+import { freezeElement, freezeStroke } from "../model/serialize";
 import type { Asset, PageElement, Stroke } from "../model/types";
 import { elementBounds, transformElement, type MeasureText } from "./elements";
 import { strokeBounds, type BBox } from "./hit-test";
@@ -114,7 +115,9 @@ interface Item {
  * gap between the two parts when there is one. Every stroke and element goes whole to the side its middle is on.
  * The moved content keeps its x positions and its distances to each other; it is only moved up so that it
  * starts `SPLIT_TOP_MARGIN` from the top of the new page, which has the size and paper of this page.
- * Null when there is nothing to split (fewer than two items) or the page has a background.
+ * v18: a locked element never moves (it stays on this page) and a group never straddles the cut: its movable members go to
+ * the side of their common middle, and a group split only by a locked member stays behind with a new id for the moved part.
+ * Null when there is nothing to split (fewer than two items, nothing movable) or the page has a background.
  */
 export function planPageSplit(
 	page: SplitPage, pageIndex: number, assets?: Readonly<Record<string, Pick<Asset, "bytes">>>,
@@ -172,22 +175,66 @@ export function planPageSplit(
 	const splitY = clean ? (belowMin[cut]! + aboveMax[cut]!) / 2 : sorted[cut]!.centre;
 
 	const moving = new Set<Item>(sorted.slice(cut));
-	const movedMinY = Math.min(...sorted.slice(cut).map((it) => it.minY));
+	// v18: a locked element does not move, so it stays on this page; a group does not straddle the cut (its movable members go
+	// together, to the side of their middle), so the new page never holds half of a group that is still whole here.
+	const groups = new Map<string, Item[]>();
+	for (const it of items) {
+		if (it.element && isLockedElement(it.element)) moving.delete(it);
+		const group = (it.stroke ?? it.element)?.group;
+		if (group === undefined) continue;
+		const list = groups.get(group);
+		if (list) list.push(it);
+		else groups.set(group, [it]);
+	}
+	for (const members of groups.values()) {
+		const free = members.filter((it) => !(it.element && isLockedElement(it.element)));
+		const onGo = free.filter((it) => moving.has(it)).length;
+		if (onGo === 0 || onGo === free.length) continue;
+		const centre = (free.reduce((v, it) => Math.min(v, it.minY), Infinity) + free.reduce((v, it) => Math.max(v, it.maxY), -Infinity)) / 2;
+		for (const it of free) {
+			if (centre >= splitY) moving.add(it);
+			else moving.delete(it);
+		}
+	}
+	// Nothing left to move (everything below the cut is locked), or nothing left to stay.
+	if (moving.size === 0 || moving.size === n) return null;
+	let movedMinY = Infinity;
+	for (const it of moving) movedMinY = Math.min(movedMinY, it.minY);
 	const dy = Math.min(0, SPLIT_TOP_MARGIN - movedMinY);
 	const m = translate(0, dy);
 
+	// Members of a group on each side; a side with fewer than two members releases them (the writer would, but not in memory).
+	const stays = new Map<string, number>();
+	const goes = new Map<string, number>();
+	for (const [group, members] of groups) {
+		const away = members.filter((it) => moving.has(it)).length;
+		goes.set(group, away);
+		stays.set(group, members.length - away);
+	}
+	const rename = groupRenamer();
+	const settled = <T extends PageItem>(item: T, moves: boolean): T => {
+		const group = item.group;
+		if (group === undefined) return item;
+		if ((moves ? goes : stays).get(group)! < 2) return ungroupedItem(item);
+		// Some members (locked ones) stay: the moved ones form a new group on the new page.
+		return moves && stays.get(group)! > 0 ? groupedItem(item, rename(group)) : item;
+	};
 	const stayStrokes: Stroke[] = [];
 	const stayElements: PageElement[] = [];
 	const goStrokes: Stroke[] = [];
 	const goElements: PageElement[] = [];
 	for (const it of items) {
+		const moves = moving.has(it);
 		if (it.stroke) {
-			if (!moving.has(it)) stayStrokes.push(it.stroke);
-			else goStrokes.push(dy === 0 ? it.stroke : freezeStroke(transformStroke(it.stroke, m)));
-		} else if (!moving.has(it)) {
-			stayElements.push(it.element!);
+			const s = settled(it.stroke, moves);
+			const kept = s === it.stroke ? s : freezeStroke(s);
+			if (!moves) stayStrokes.push(kept);
+			else goStrokes.push(dy === 0 ? kept : freezeStroke(transformStroke(kept, m)));
 		} else {
-			goElements.push(dy === 0 ? it.element! : transformElement(it.element!, m, measure));
+			const e = settled(it.element!, moves);
+			const kept = e === it.element ? e : freezeElement(e);
+			if (!moves) stayElements.push(kept);
+			else goElements.push(dy === 0 ? kept : transformElement(kept, m, measure));
 		}
 	}
 	const change: PageContentChange = {

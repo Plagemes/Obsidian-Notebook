@@ -3611,6 +3611,7 @@ export const en = {
 	"groups.chip.locked": "Locked",
 	"groups.chip.aria": "This element is locked",
 	"groups.chip.unlockAria": "Unlock this element",
+	"groups.lockedEdit": "This element is locked. Unlock it to edit or delete it.",
 	"groups.list.title": "Locked elements",
 	"groups.list.page": "Page {n}",
 	"groups.list.desc": "These stay where they are: the lasso, a tap and the eraser skip them. Ink over them is not affected.",

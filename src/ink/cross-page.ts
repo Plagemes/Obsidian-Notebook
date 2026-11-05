@@ -1,4 +1,6 @@
 import type { Command } from "../model/history";
+import { createId } from "../model/document";
+import { groupedItem, ungroupedItem, type PageItem } from "../model/groups";
 import { AddElement, AddStroke, Batch, RemoveElement, ReplaceElement, ReplaceStroke } from "../model/history";
 import { freezeElement, freezeStroke } from "../model/serialize";
 import type { Asset, Page, PageElement, Stroke } from "../model/types";
@@ -153,6 +155,8 @@ export interface CrossPageTransformInput {
 	measure?: MeasureText;
 	/** Setting "Ink follows objects": ink written on a moved object goes to the page the object goes to. Bound graph ink always does. */
 	followInk?: boolean;
+	/** Makes the id of a group that is formed again on another page (tests pass a counter). */
+	newGroupId?: () => string;
 }
 
 export interface CrossPageTransformPlan {
@@ -169,6 +173,9 @@ export interface CrossPageTransformPlan {
  * another page is moved there (removed from the page it was on and added, at the end, to the page under it, in that
  * page's coordinates); one that ends outside every page stays on its own page. Strokes and elements that are no longer on
  * their page are skipped. Null when there is nothing to move.
+ *
+ * v18: items that leave a group behind do not keep its id (see "a group never stays whole" below): members that arrive together
+ * on another page form a new group there, a lone one is released.
  *
  * Order of the commands: in-place replacements, additions (appended, so no index shifts), removals by descending index
  * (so that undo puts everything back where it was).
@@ -196,6 +203,24 @@ export function planCrossPageTransform(input: CrossPageTransformInput): CrossPag
 		return p;
 	};
 
+	// First pass: where every item ends up (so the groups can be settled before anything is built).
+	interface Prepared {
+		part: PagePart;
+		page: Page;
+		m: Matrix;
+		placed: Map<PageElement, { inPlace: PageElement; to: number }>;
+		strokes: Array<{ stroke: Stroke; selected: boolean; index: number; inPlace: Stroke; to: number }>;
+	}
+	const prepared: Prepared[] = [];
+	/** v18: per source page and group, how many members leave the page, and how many of them go to the same page. */
+	const away = new Map<string, number>();
+	const together = new Map<string, number>();
+	const tally = (item: PageItem, from: number, to: number): void => {
+		if (item.group === undefined || to === from) return;
+		const k = `${from}\u0000${item.group}`;
+		away.set(k, (away.get(k) ?? 0) + 1);
+		together.set(`${k}\u0000${to}`, (together.get(`${k}\u0000${to}`) ?? 0) + 1);
+	};
 	for (const part of input.parts) {
 		const page = pages[part.pageIndex];
 		if (!page || !boxes[part.pageIndex]) continue;
@@ -206,24 +231,72 @@ export function planCrossPageTransform(input: CrossPageTransformInput): CrossPag
 		for (const el of part.elements) {
 			if (!page.elements?.includes(el)) continue;
 			const inPlace = transformElement(el, m, measure);
-			placed.set(el, { inPlace, to: target(part.pageIndex, elementBounds(inPlace, measure)) });
+			const to = target(part.pageIndex, elementBounds(inPlace, measure));
+			placed.set(el, { inPlace, to });
+			tally(el, part.pageIndex, to);
 		}
 		const followers = inkFollowers(page, part, input.followInk === true, measure);
 		const followerOwner = new Map<Stroke, PageElement>(followers.map((f) => [f.stroke, f.owner]));
-		const moveStroke = (stroke: Stroke, selected: boolean): void => {
+		const own = new Set(part.strokes);
+		const strokes: Prepared["strokes"] = [];
+		const list = [...part.strokes.map((stroke) => ({ stroke, selected: true })), ...followers.filter((f) => !own.has(f.stroke)).map((f) => ({ stroke: f.stroke, selected: false }))];
+		for (const { stroke, selected } of list) {
 			const index = page.strokes.indexOf(stroke);
-			if (index < 0) return;
-			count++;
+			if (index < 0) continue;
 			const inPlace = freezeStroke(transformStroke(stroke, m));
 			const owner = followerOwner.get(stroke);
 			const to = owner ? (placed.get(owner)?.to ?? part.pageIndex) : target(part.pageIndex, strokeBounds(inPlace));
+			strokes.push({ stroke, selected, index, inPlace, to });
+			tally(stroke, part.pageIndex, to);
+		}
+		prepared.push({ part, page, m, placed, strokes });
+	}
+
+	/**
+	 * v18: a group never stays whole across pages. Members that go to the same other page together (two or more) form a new group
+	 * there (a fresh id: ids are scoped to a page); a member that goes alone leaves its group; members left behind keep the group
+	 * only while two remain. Items of a group that is not selected whole are treated the same way.
+	 */
+	const newGroupId = input.newGroupId ?? createId;
+	const fresh = new Map<string, string>();
+	const sizes = new Map<number, Map<string, number>>();
+	const groupSize = (pageIndex: number, group: string): number => {
+		let counts = sizes.get(pageIndex);
+		if (!counts) {
+			counts = new Map();
+			for (const item of [...pages[pageIndex]!.strokes, ...(pages[pageIndex]!.elements ?? [])]) {
+				if (item.group !== undefined) counts.set(item.group, (counts.get(item.group) ?? 0) + 1);
+			}
+			sizes.set(pageIndex, counts);
+		}
+		return counts.get(group) ?? 0;
+	};
+	const arrived = <T extends PageItem>(item: T, from: number, to: number): T => {
+		if (item.group === undefined) return item;
+		const k = `${from}\u0000${item.group}\u0000${to}`;
+		if ((together.get(k) ?? 0) < 2) return ungroupedItem(item);
+		let id = fresh.get(k);
+		if (id === undefined) fresh.set(k, (id = newGroupId()));
+		return groupedItem(item, id);
+	};
+	const remained = <T extends PageItem>(item: T, from: number): T => {
+		if (item.group === undefined) return item;
+		const left = groupSize(from, item.group) - (away.get(`${from}\u0000${item.group}`) ?? 0);
+		return left < 2 ? ungroupedItem(item) : item;
+	};
+
+	for (const { part, page, m, placed, strokes } of prepared) {
+		for (const { stroke, selected, index, inPlace, to } of strokes) {
+			count++;
 			if (to === part.pageIndex) {
-				replace.push(new ReplaceStroke(page.id, stroke, [inPlace], index));
-				if (selected) partFor(to).strokes.push(inPlace);
-				return;
+				const kept = remained(inPlace, to);
+				const final = kept === inPlace ? inPlace : freezeStroke(kept);
+				replace.push(new ReplaceStroke(page.id, stroke, [final], index));
+				if (selected) partFor(to).strokes.push(final);
+				continue;
 			}
 			const [tx, ty] = frameOffset(boxes, to, part.pageIndex);
-			const moved = freezeStroke(transformStroke(stroke, multiply(translate(tx, ty), m)));
+			const moved = freezeStroke(arrived(transformStroke(stroke, multiply(translate(tx, ty), m)), part.pageIndex, to));
 			const dest = pages[to]!;
 			const at = lengthOf.get(to) ?? dest.strokes.length;
 			lengthOf.set(to, at + 1);
@@ -231,22 +304,20 @@ export function planCrossPageTransform(input: CrossPageTransformInput): CrossPag
 			removals.push({ page: part.pageIndex, index, command: new ReplaceStroke(page.id, stroke, [], index) });
 			if (selected) partFor(to).strokes.push(moved);
 			reparented++;
-		};
-		for (const stroke of part.strokes) moveStroke(stroke, true);
-		const own = new Set(part.strokes);
-		for (const f of followers) if (!own.has(f.stroke)) moveStroke(f.stroke, false);
+		}
 		for (const el of part.elements) {
 			const done = placed.get(el);
 			if (!done) continue;
 			count++;
 			const { inPlace, to } = done;
 			if (to === part.pageIndex) {
-				replace.push(new ReplaceElement(page.id, el, inPlace));
-				partFor(to).elements.push(inPlace);
+				const final = remained(inPlace, to);
+				replace.push(new ReplaceElement(page.id, el, final));
+				partFor(to).elements.push(final);
 				continue;
 			}
 			const [tx, ty] = frameOffset(boxes, to, part.pageIndex);
-			const moved = freezeElement(transformElement(el, multiply(translate(tx, ty), m), measure));
+			const moved = freezeElement(arrived(transformElement(el, multiply(translate(tx, ty), m), measure), part.pageIndex, to));
 			const dest = pages[to]!;
 			const at = elementLengthOf.get(to) ?? dest.elements?.length ?? 0;
 			elementLengthOf.set(to, at + 1);

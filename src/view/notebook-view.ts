@@ -169,7 +169,7 @@ import { MathTools, type MathHost } from "./math-tools";
 import { StickyTools, type StickyHost } from "./sticky-tools";
 import { ChecklistTools, type ChecklistHost } from "./checklist-tools";
 import { GroupTools, type GroupHost } from "./group-tools";
-import { canGroup, expandToGroups, lockedElementsOf, unlockedElements } from "../model/groups";
+import { canGroup, expandToGroups, lockedElementsOf, selectableItems, strokePieces, unlockedElements } from "../model/groups";
 import { CommentTools, pdfCommentLabels, type CommentsHost } from "./comments-tools";
 import { equationNumbers } from "../model/math-elements";
 import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites";
@@ -5157,7 +5157,7 @@ export class NotebookView extends FileView {
 			if (this.tools.eraserMode === "segment") {
 				const runs = eraseSegment(stroke, ax, ay, bx, by, radius, this.renderer.boundsOf(stroke));
 				if (runs === null) continue;
-				after = runs.map((points) => freezeStroke({ ...stroke, id: createId(), points }));
+				after = strokePieces(page, stroke, runs);
 			}
 			const cmd = new ReplaceStroke(page.id, stroke, after, index);
 			cmd.apply(doc);
@@ -5906,8 +5906,13 @@ export class NotebookView extends FileView {
 		this.commitText();
 		this.toolbar.setTool("lasso");
 		// 0.20 (#39): a locked element is never part of a selection, whoever asks (it cannot be moved, resized or erased).
-		elements = [...unlockedElements(elements)];
-		others = others?.map((o) => ({ ...o, elements: [...unlockedElements(o.elements)] }));
+		// A group it touches is completed (as the lasso does), so a move, cut or delete never splits one.
+		const settle = (index: number, sel: { strokes: Stroke[]; elements: PageElement[] }): { strokes: Stroke[]; elements: PageElement[] } => {
+			const page = this.pageAtIndex(index);
+			return page ? selectableItems(page, sel, this.inkInView(page)) : { strokes: sel.strokes, elements: [...unlockedElements(sel.elements)] };
+		};
+		({ strokes, elements } = settle(pageIndex, { strokes, elements }));
+		others = others?.map((o) => ({ ...o, ...settle(o.pageIndex, o) }));
 		const boxes = this.layout?.boxes ?? [];
 		const extra = others?.filter((o) => o.strokes.length + o.elements.length > 0);
 		const bounds = extra?.length

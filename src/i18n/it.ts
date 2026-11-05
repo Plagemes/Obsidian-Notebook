@@ -3613,6 +3613,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"groups.chip.locked": "Bloccato",
 	"groups.chip.aria": "Questo elemento è bloccato",
 	"groups.chip.unlockAria": "Sblocca questo elemento",
+	"groups.lockedEdit": "Questo elemento è bloccato. Sbloccalo per modificarlo o eliminarlo.",
 	"groups.list.title": "Elementi bloccati",
 	"groups.list.page": "Pagina {n}",
 	"groups.list.desc": "Restano dove sono: il lazo, un tocco e la gomma li saltano. L’inchiostro sopra di loro non ne risente.",

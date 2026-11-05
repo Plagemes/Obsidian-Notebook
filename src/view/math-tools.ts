@@ -177,6 +177,11 @@ export class MathTools {
 	private editEquation(pageIndex: number, el: EquationElement): void {
 		const page = this.host.doc()?.pages[pageIndex];
 		if (!page) return;
+		// 0.20 (#39): a locked equation is not edited or deleted until it is unlocked.
+		if (el.locked === true) {
+			showNotice(t("groups.lockedEdit"));
+			return;
+		}
 		this.openEquation(page, pageIndex, el, { latex: el.latex, inline: !!el.inline, numbered: !!el.numbered, fontSize: el.fontSize, color: el.color }, el.x, el.y);
 	}
 

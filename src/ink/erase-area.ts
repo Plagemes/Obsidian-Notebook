@@ -1,6 +1,6 @@
 import { createId, quantizePoint } from "../model/document";
 import { Batch, RemoveElement, ReplaceStroke, type Command } from "../model/history";
-import { freezeStroke } from "../model/serialize";
+import { strokePieces } from "../model/groups";
 import { hiddenStickyInk } from "../model/sticky";
 import type { Page, Point, Stroke } from "../model/types";
 import { elementsInLasso, type MeasureText } from "./elements";
@@ -113,7 +113,7 @@ export function eraseAreaCommand(page: Pick<Page, "id" | "strokes" | "elements">
 		if (!erasable.has(stroke) || options.skip?.(stroke) || noteInk?.has(stroke.id)) return;
 		const runs = cutOutsidePolygon(stroke, poly);
 		if (runs === null) return;
-		edits.push({ stroke, index, after: runs.map((points) => freezeStroke({ ...stroke, id: newId(), points })) });
+		edits.push({ stroke, index, after: strokePieces(page, stroke, runs, newId) });
 	});
 	edits.sort((a, b) => b.index - a.index);
 	const commands: Command[] = edits.map((e) => new ReplaceStroke(page.id, e.stroke, e.after, e.index));

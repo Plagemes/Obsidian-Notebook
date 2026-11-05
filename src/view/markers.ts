@@ -243,6 +243,11 @@ export class MarkerTools {
 	// --- editing ---
 
 	editMarkerDialog(page: Page, marker: MarkerElement, after?: () => void): void {
+		// 0.20 (#39): a locked marker is not edited or deleted until it is unlocked.
+		if (marker.locked === true) {
+			new Notice(t("groups.lockedEdit"));
+			return;
+		}
 		new MarkerEditModal(this.host.app, marker, (edit) => {
 			if (!page.elements?.includes(marker) || !this.host.editable()) return;
 			this.host.execute(new ReplaceElement(page.id, marker, editMarker(marker, edit)));
@@ -255,6 +260,10 @@ export class MarkerTools {
 	}
 
 	editBoxDialog(page: Page, box: BoxElement, after?: () => void): void {
+		if (box.locked === true) {
+			new Notice(t("groups.lockedEdit"));
+			return;
+		}
 		new BoxEditModal(this.host.app, box, (kind, title) => {
 			if (!page.elements?.includes(box) || !this.host.editable()) return;
 			this.host.execute(new ReplaceElement(page.id, box, editBox(box, kind, title)));
