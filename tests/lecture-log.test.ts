@@ -16,7 +16,7 @@ vi.mock("obsidian", async () => {
 	return { ...base, moment: (d: Date) => ({ format: () => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` }) };
 });
 
-const { LectureLogService } = await import("../src/library/lecture-log");
+const { LectureLogService, CONFIRM_WINDOW_MS } = await import("../src/library/lecture-log");
 
 const DAY = new Date(2026, 10, 4, 10, 15);
 const ID = lectureLogId("Notebooks/Analysis I.notebook", "c1@2026-11-04");
@@ -358,5 +358,39 @@ describe("service", () => {
 		await r.service.flushPending();
 		expect(r.vault.files.get(NOTE)).toBe("n\n");
 		expect(r.service.waitingPaths()).toEqual([NOTE]);
+	});
+
+	it("N2: a line the user removed hours later (or after a restart) is not written back", async () => {
+		const r = rig({ [NOTE]: "# Today\n" }, {});
+		await r.service.log(r.file, cls, snap);
+		expect(r.vault.files.get(NOTE)).toContain("## Lectures");
+		// the app was suspended or restarted: the next flush comes long after the write
+		vi.setSystemTime(new Date(2026, 10, 4, 15, 0));
+		r.vault.put(NOTE, "# Today\n");
+		await r.service.flushPending();
+		expect(r.vault.files.get(NOTE)).toBe("# Today\n");
+		expect(r.service.waitingPaths()).toEqual([]); // settled, dropped from the list
+	});
+
+	it("N2: a confirm within two minutes still writes the line back (a template overwrote the note)", async () => {
+		const r = rig({ [NOTE]: "# Today\n" }, {});
+		await r.service.log(r.file, cls, snap);
+		vi.setSystemTime(new Date(2026, 10, 4, 12, 1));
+		r.vault.put(NOTE, "# Today\n");
+		await r.service.flushPending();
+		expect(r.vault.files.get(NOTE)).toContain("## Lectures");
+		expect(CONFIRM_WINDOW_MS).toBe(120_000);
+	});
+
+	it("N2: a confirm never makes a note: a note that went away drops the entry", async () => {
+		const r = rig({ [NOTE]: "# Today\n" }, { dailyCreateNote: true });
+		await r.service.log(r.file, cls, snap);
+		// a daily-notes archiver moved today's note away
+		r.vault.files.delete(NOTE);
+		vi.setSystemTime(new Date(2026, 10, 4, 12, 1));
+		await r.service.flushPending();
+		expect(r.vault.files.has(NOTE)).toBe(false);
+		expect(r.vault.log.filter((l) => l.startsWith("create"))).toEqual([]);
+		expect(r.service.waitingPaths()).toEqual([]);
 	});
 });

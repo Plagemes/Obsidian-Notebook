@@ -7,7 +7,9 @@
  *
  * A written line is not forgotten at once: its entry stays in the waiting list until a later read of the note, a few seconds
  * on, shows the line. A template engine that fills a brand new daily note a moment after it was made would otherwise overwrite
- * the line unseen; then the line is written again. Quiet by design: it never shows a notice, a failure is only logged.
+ * the line unseen; then the line is written again, but only within two minutes of the write (a line the user deleted or moved
+ * hours later, or after a restart, is not put back) and never into a note that is gone. Quiet by design: it never shows a
+ * notice, a failure is only logged.
  */
 import { moment, normalizePath, type App, type TFile } from "obsidian";
 import { stablePageSubpath } from "../integration/page-links";
@@ -34,6 +36,11 @@ type Outcome = "written" | "waiting";
 
 /** How long a written line waits before a read of the note may confirm it, when the settle time is on (ms). */
 const CONFIRM_MS = 5000;
+/**
+ * A line is confirmed only this soon after it was written (ms). Later (after a restart, an app suspended for hours) it counts as
+ * settled: a line the user deleted or moved since is not written back, and no note is made for it.
+ */
+export const CONFIRM_WINDOW_MS = 2 * 60 * 1000;
 
 export class LectureLogService {
 	private queue: Promise<unknown> = Promise.resolve();
@@ -170,18 +177,27 @@ export class LectureLogService {
 
 	/**
 	 * A line written earlier: once it has had time to settle, a read of the note must show it. Removed from the list then; written
-	 * again when the note lost it (a template overwrote the note). True while it still has to be looked at again.
+	 * again when the note lost it (a template overwrote the note) within CONFIRM_WINDOW_MS of the write, never later, and never into
+	 * a note that is not there (a confirm makes no note). True while it still has to be looked at again.
 	 */
 	private async confirm(p: PendingLectureLine, today: string): Promise<boolean> {
-		if (Date.now() - (p.wrote ?? 0) < this.confirmMs) return true;
+		const age = Date.now() - (p.wrote ?? 0);
+		if (age < this.confirmMs) return true;
+		if (age > CONFIRM_WINDOW_MS) {
+			// Too long ago to tell a template that overwrote the note from a line the user removed: settled, left as it is.
+			this.setPending((list) => removePending(list, p.id));
+			return false;
+		}
 		const note = this.plugin.app.vault.getFileByPath(p.notePath);
+		if (!note) {
+			this.setPending((list) => removePending(list, p.id));
+			return false;
+		}
 		let seen = false;
-		if (note) {
-			try {
-				seen = ownLineState(await this.plugin.app.vault.read(note), p.id) !== "none";
-			} catch {
-				return true; // unreadable now: look again later
-			}
+		try {
+			seen = ownLineState(await this.plugin.app.vault.read(note), p.id) !== "none";
+		} catch {
+			return true; // unreadable now: look again later
 		}
 		if (seen) {
 			this.setPending((list) => removePending(list, p.id));
@@ -193,10 +209,14 @@ export class LectureLogService {
 			this.setPending((list) => removePending(list, p.id));
 			return false;
 		}
-		const outcome = await this.write(p, today);
-		const next: PendingLectureLine = { id: p.id, day: p.day, notePath: p.notePath, line: p.line, tries, ...(outcome === "written" ? { wrote: Date.now() } : {}) };
+		const outcome = await this.write(p, today, false);
+		if (outcome !== "written") {
+			this.setPending((list) => removePending(list, p.id)); // the note went away meanwhile: nothing to write into, nothing is made
+			return false;
+		}
+		const next: PendingLectureLine = { id: p.id, day: p.day, notePath: p.notePath, line: p.line, tries, wrote: Date.now() };
 		this.setPending((list, now) => addPending(list, next, now));
-		return outcome === "written";
+		return true;
 	}
 
 	/**
@@ -204,12 +224,13 @@ export class LectureLogService {
 	 * template). `onlyDay`: a missing note is made only for that day (waiting lines of past days do not create notes the user
 	 * never opened); null: any day.
 	 */
-	private async write(entry: PendingLectureLine, onlyDay: string | null): Promise<Outcome> {
+	private async write(entry: PendingLectureLine, onlyDay: string | null, create = true): Promise<Outcome> {
 		const { app, settings } = this.plugin;
 		const heading = normaliseLogHeading(settings.lectureLogHeading);
 		let note = app.vault.getFileByPath(entry.notePath);
 		if (!note) {
-			if (!settings.dailyCreateNote || (onlyDay !== null && entry.day !== onlyDay)) return "waiting";
+			// (`create` false, for a line written again by a confirm: a missing note is never made)
+			if (!create || !settings.dailyCreateNote || (onlyDay !== null && entry.day !== onlyDay)) return "waiting";
 			// The note may be on its way from another device: wait a moment and look again before making a second one.
 			if (this.settleMs > 0) await new Promise<void>((r) => window.setTimeout(r, this.settleMs));
 			note = app.vault.getFileByPath(entry.notePath);
