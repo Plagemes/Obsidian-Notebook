@@ -70,7 +70,7 @@ interface Rig {
 	doc: NotebookDocument;
 	executed: Array<{ cmd: Command; scroll: number | undefined }>;
 	store: Map<string, unknown>;
-	state: { editable: boolean; cls: LectureClass | null; setting: "off" | "ask" | "auto" };
+	state: { editable: boolean; cls: LectureClass | null; setting: "off" | "ask" | "auto"; now: Date };
 	went: Array<[string, Date]>;
 	/** Every lecture end the controller reported. */
 	ends: LectureEnd[];
@@ -85,7 +85,7 @@ function rig(shared?: { store: Map<string, unknown>; doc: NotebookDocument }): R
 	const went: Rig["went"] = [];
 	const ends: LectureEnd[] = [];
 	const calls: string[] = [];
-	const state: Rig["state"] = { editable: true, cls, setting: "auto" };
+	const state: Rig["state"] = { editable: true, cls, setting: "auto", now: NOW };
 	const body = new El();
 	const ctx = (): EditContext => ({
 		doc, execute: (cmd: Command, scroll?: number) => {
@@ -111,7 +111,7 @@ function rig(shared?: { store: Map<string, unknown>; doc: NotebookDocument }): R
 				snapshotAfterClose: (path, course) => calls.push(`snapshot-after-close:${path}:${course}`),
 			});
 		},
-		now: () => NOW,
+		now: () => state.now,
 		memory: { load: () => store.get(LECTURE_MEMORY_KEY) ?? null, save: (v) => store.set(LECTURE_MEMORY_KEY, JSON.parse(JSON.stringify(v))) },
 	};
 	return { ctl: new LectureModeController(host), doc, executed, store, state, went, ends, calls };
@@ -273,6 +273,53 @@ describe("one lecture end feeds the log and the snapshot", () => {
 		quiet.ctl.opened();
 		quiet.ctl.closing();
 		expect(quiet.ends).toHaveLength(0);
+	});
+
+	it("many app switches during a class make no snapshot or log call at all (M3); the one end comes when the class is over", () => {
+		const listeners: Array<() => void> = [];
+		vi.stubGlobal("document", {
+			addEventListener: (_t: string, fn: () => void) => listeners.push(fn), removeEventListener: () => undefined, visibilityState: "hidden",
+		});
+		const r = rig();
+		r.ctl.opened();
+		r.ctl.wrote();
+		for (let i = 0; i < 15; i++) for (const fn of listeners) fn();
+		expect(r.calls).toEqual([]);
+		r.state.cls = null;
+		r.state.now = new Date(cls.endsAt + 60_000);
+		r.ctl.evaluate();
+		expect(r.calls).toEqual(["log:Analysis 1", `snapshot-after-flush:${P}:Analysis 1`]);
+	});
+
+	it("writing up to 10 minutes after the slot still counts for that class; later does not", () => {
+		const r = rig();
+		r.ctl.opened();
+		r.ctl.wrote();
+		// The class is over: the first end is reported by the clock.
+		r.state.cls = null;
+		r.state.now = new Date(cls.endsAt + 60_000);
+		r.ctl.evaluate();
+		expect(r.ends.map((e) => e.reason)).toEqual(["over"]);
+		// The user finishes the page five minutes after the slot: that stretch belongs to the class and ends once more.
+		r.state.now = new Date(cls.endsAt + 5 * 60_000);
+		r.ctl.wrote();
+		r.ctl.evaluate();
+		expect(r.ends).toHaveLength(2);
+		expect(r.ends[1]!.cls.key).toBe(cls.key);
+		// Eleven minutes after the slot is too late.
+		r.state.now = new Date(cls.endsAt + 11 * 60_000);
+		r.ctl.wrote();
+		r.ctl.evaluate();
+		expect(r.ends).toHaveLength(2);
+	});
+
+	it("a notebook that was never in a class has no grace", () => {
+		const r = rig();
+		r.state.cls = null;
+		r.ctl.opened();
+		r.ctl.wrote();
+		r.ctl.closing();
+		expect(r.ends).toHaveLength(0);
 	});
 
 	it("writing again after an end starts a new stretch: the next end reports again (the snapshot then skips unchanged content)", () => {
