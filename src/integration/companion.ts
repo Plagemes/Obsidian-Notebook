@@ -202,7 +202,7 @@ export class CompanionService {
 	}
 
 	private content(file: TFile, doc: NotebookDocument, homework?: HomeworkNote): CompanionContent {
-		return companionContent(doc, { notebookPath: file.path, pageUri: (page, pageId) => notebookUri("", file.path, page, pageId) }, homework);
+		return companionContent(doc, { notebookPath: file.path, pageUri: (page, pageId) => notebookUri("", file.path, page, pageId), searchText: this.plugin.settings.companionSearchText }, homework);
 	}
 
 	/**

@@ -13,6 +13,7 @@ import { drawEquation, drawGraph } from "./math-render";
 import { drawExcerpt } from "./excerpt-render";
 import { hiddenStickyInk } from "../model/sticky";
 import { drawSticky } from "./sticky-render";
+import { drawCheckbox } from "./checkbox-render";
 import { graphClips, strokeClip } from "./attach";
 import { equationNumbers } from "../model/math-elements";
 import { HIGHLIGHTER_ALPHA, strokeSvgPath } from "./stroke-shape";
@@ -108,6 +109,8 @@ export function drawPageRaster(ctx: CanvasRenderingContext2D, page: Page, scale:
 		ctx.globalAlpha = 1;
 		ctx.globalCompositeOperation = "source-over";
 		for (const el of elements) if (el.type === "marker") drawMarker(ctx, el);
+		// v17: checkboxes above the ink, like marker badges.
+		for (const el of elements) if (el.type === "checkbox") drawCheckbox(ctx, el);
 	} finally {
 		ctx.restore();
 	}

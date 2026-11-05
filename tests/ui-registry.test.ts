@@ -29,6 +29,8 @@ const CONTEXTS: Array<[string, UiContext]> = [
 	["selection with an excerpt (v10)", baseContext({ tool: "lasso", selection: { strokes: 0, elements: 1, images: 0, excerpts: 1 } })],
 	["selection with a sticky note (0.17, #20)", baseContext({ tool: "lasso", selection: { strokes: 0, elements: 1, images: 0, stickies: 1, stickiesCollapsed: 0 } })],
 	["selection with a collapsed sticky note (0.17, #20)", baseContext({ tool: "lasso", selection: { strokes: 0, elements: 1, images: 0, stickies: 1, stickiesCollapsed: 1 } })],
+	["selection with a checkbox (0.19, #103)", baseContext({ tool: "lasso", selection: { strokes: 0, elements: 1, images: 0, checkboxes: 1, checkboxesLinked: 0 } })],
+	["selection with a linked checkbox (0.19, #103)", baseContext({ tool: "lasso", selection: { strokes: 0, elements: 1, images: 0, checkboxes: 1, checkboxesLinked: 1 } })],
 	["lasso, nothing selected", baseContext({ tool: "lasso" })],
 	["PDF page", baseContext({ page: { index: 1, count: 3, background: "pdf", infinite: false, bookmarked: false }, notebook: { pdfPages: true, backgrounds: true } })],
 	["image page", baseContext({ page: { index: 1, count: 3, background: "image", infinite: false, bookmarked: false }, notebook: { pdfPages: false, backgrounds: true } })],

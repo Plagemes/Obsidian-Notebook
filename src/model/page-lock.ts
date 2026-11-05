@@ -50,7 +50,7 @@ export class SetPageLocked implements Command {
 export function exemptFromLocks(cmd: Command): Command & { readonly inner: Command } {
 	// `inner` stays a plain field on purpose: the library check and the storage dialog walk the objects of the history (not
 	// closures) for the assets an undone command still names, so an exempt merge on the redo stack must still show them.
-	return { label: cmd.label, lockExempt: true, inner: cmd, apply: (doc) => cmd.apply(doc), revert: (doc) => cmd.revert(doc) };
+	return { label: cmd.label, lockExempt: true, inner: cmd, apply: (doc) => cmd.apply(doc), revert: (doc) => cmd.revert(doc), remap: (swap) => cmd.remap?.(swap) };
 }
 
 export function isLocked(page: Page | null | undefined): boolean {

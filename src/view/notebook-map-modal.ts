@@ -35,18 +35,19 @@ export interface NotebookMapHost {
 }
 
 export const MAP_STATE_ICON: Readonly<Record<MapState, string>> = {
-	question: "help-circle", gap: "ellipsis", homework: "book-open-check", practice: "dumbbell", empty: "file", key: "star",
+	question: "help-circle", gap: "ellipsis", homework: "book-open-check", practice: "dumbbell", empty: "file", key: "star", checklist: "square-check",
 };
 
 const STATE_LABEL: Readonly<Record<MapState, MessageKey>> = {
 	question: "map.state.question", gap: "map.state.gap", homework: "map.state.homework",
-	practice: "map.state.practice", empty: "map.state.empty", key: "map.state.key",
+	practice: "map.state.practice", empty: "map.state.empty", key: "map.state.key", checklist: "map.state.checklist",
 };
 
 /** The count shown on a badge: the number of open items for markers, nothing for page states. */
 function badgeCount(p: MapPage, s: MapState): number | null {
 	if (s === "question" || s === "gap" || s === "homework") return p.open[s];
 	if (s === "key") return p.open.key;
+	if (s === "checklist") return p.open.checklist;
 	return null;
 }
 

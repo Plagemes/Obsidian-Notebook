@@ -6,6 +6,7 @@ import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "./ink/edge-zones";
 import { DEFAULT_GESTURE_SETTINGS, readGestureSettings, type GestureSettings } from "./ink/gesture-settings";
 import { DEFAULT_PEN_GESTURE_SETTINGS, readPenGestureSettings, type PenGestureSettings } from "./ink/gestures/settings";
 import { clampInsertWidth, INSERT_WIDTH_DEFAULT, isInsertBackground } from "./model/note-insert";
+import { clampLookUpWidth, LOOKUP_WIDTH_DEFAULT } from "./model/look-up";
 import { PEN_BUTTON_ACTIONS, type PenButtonAction } from "./ink/input-policy";
 import { BUTTON_AFTER_MAX_MS, BUTTON_BEFORE_MAX_MS, DEFAULT_BUTTON_WINDOWS, LEGACY_BEFORE_MS, cleanPenKey, cleanWindowMs, isPenKeyAction, type PenKeyAction } from "./ink/pen-hover";
 import { isHeaderAlign, isHeaderMode, type HeaderAlign, type HeaderMode } from "./ink/page-header";
@@ -65,6 +66,10 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	snapshotIntervalHours: number;
 	/** Version history: how many snapshots to keep per notebook. */
 	snapshotsToKeep: number;
+	/** 0.19: a named snapshot when a lecture ends (only if the notebook changed). */
+	lectureSnapshots: boolean;
+	/** 0.19: automatic lecture snapshots to keep per notebook (other snapshots are never pruned by this). */
+	lectureSnapshotsKeep: number;
 	/** Writing near the bottom of the last page appends a page (same size and paper). Not for infinite pages. */
 	autoNextPage: boolean;
 	/** The eraser's Area mode also removes the text boxes and images inside the outline. */
@@ -100,14 +105,23 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	dailyLink: boolean;
 	/** 0.15 (O12): create today's daily note when it does not exist yet (only used with `dailyLink`). */
 	dailyCreateNote: boolean;
+	/** 0.19 (#221): when a lecture session ends, one line about it goes into the daily note (off by default). */
+	lectureLog: boolean;
+	/** 0.19 (#221): the heading that line goes under (created at the end of the note when missing). */
+	lectureLogHeading: string;
 	/** 0.17 (#57): a task made from a selection gets its due date as the Tasks plugin's date emoji (else a Dataview field). */
 	taskDueEmoji: boolean;
 	/** 0.17 (#57): the note "Make task" can add to besides the daily note (vault path; empty = none configured). */
 	tasksNote: string;
+	/** 0.19 (#103): a small square drawn with the pen: "offer" a checkbox (a chip near it), turn it into one at once ("auto"), or leave it as ink ("off"). */
+	checklistDraw: "off" | "offer" | "auto";
 	/** 0.18 (#59): "Insert into note": display width (px) of the picture, its background and whether a link back to the page follows it. */
 	noteInsertWidth: number;
 	noteInsertBackground: "transparent" | "paper";
 	noteInsertLinkBack: boolean;
+	/** 0.19 (#213): the "Look up later" note (vault path; empty = `<notebooks folder>/Look up later.md`) and the width (px) of the crop shown in it. */
+	lookUpNote: string;
+	lookUpWidth: number;
 	/** 0.18 (#186): copying pages to another notebook also leaves a "Copied to" chip on the original page (the dialog starts with this). */
 	copyLinkReverse: boolean;
 	// wave p1a: input
@@ -254,6 +268,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	defaultLandscape: false,
 	snapshotIntervalHours: 24,
 	snapshotsToKeep: 10,
+	lectureSnapshots: true,
+	lectureSnapshotsKeep: 20,
 	autoNextPage: true,
 	eraseAreaElements: false,
 	outlineBookmarks: true,
@@ -273,11 +289,16 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	sharedInboxFolder: "",
 	dailyLink: false,
 	dailyCreateNote: false,
+	lectureLog: false,
+	lectureLogHeading: "## Lectures",
 	taskDueEmoji: true,
 	tasksNote: "",
+	checklistDraw: "offer",
 	noteInsertWidth: INSERT_WIDTH_DEFAULT,
 	noteInsertBackground: "transparent",
 	noteInsertLinkBack: true,
+	lookUpNote: "",
+	lookUpWidth: LOOKUP_WIDTH_DEFAULT,
 	copyLinkReverse: false,
 	edgeRejection: false,
 	edgeRejectionPx: 24,
@@ -374,6 +395,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.defaultLandscape === "boolean") s.defaultLandscape = d.defaultLandscape;
 	if (typeof d.snapshotIntervalHours === "number" && d.snapshotIntervalHours >= 0 && d.snapshotIntervalHours <= 720) s.snapshotIntervalHours = d.snapshotIntervalHours;
 	if (typeof d.snapshotsToKeep === "number" && Number.isInteger(d.snapshotsToKeep) && d.snapshotsToKeep >= 1 && d.snapshotsToKeep <= 100) s.snapshotsToKeep = d.snapshotsToKeep;
+	if (typeof d.lectureSnapshots === "boolean") s.lectureSnapshots = d.lectureSnapshots;
+	if (typeof d.lectureSnapshotsKeep === "number" && Number.isInteger(d.lectureSnapshotsKeep) && d.lectureSnapshotsKeep >= 1 && d.lectureSnapshotsKeep <= 100) s.lectureSnapshotsKeep = d.lectureSnapshotsKeep;
 	if (typeof d.autoNextPage === "boolean") s.autoNextPage = d.autoNextPage;
 	if (typeof d.eraseAreaElements === "boolean") s.eraseAreaElements = d.eraseAreaElements;
 	if (typeof d.outlineBookmarks === "boolean") s.outlineBookmarks = d.outlineBookmarks;
@@ -393,11 +416,16 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.sharedInboxFolder === "string") s.sharedInboxFolder = d.sharedInboxFolder.trim();
 	if (typeof d.dailyLink === "boolean") s.dailyLink = d.dailyLink;
 	if (typeof d.dailyCreateNote === "boolean") s.dailyCreateNote = d.dailyCreateNote;
+	if (typeof d.lectureLog === "boolean") s.lectureLog = d.lectureLog;
+	if (typeof d.lectureLogHeading === "string") s.lectureLogHeading = d.lectureLogHeading.trim().slice(0, 80); // normalised where it is used (an empty one means the default)
 	if (typeof d.taskDueEmoji === "boolean") s.taskDueEmoji = d.taskDueEmoji;
 	if (typeof d.tasksNote === "string") s.tasksNote = d.tasksNote.trim();
+	if (d.checklistDraw === "off" || d.checklistDraw === "offer" || d.checklistDraw === "auto") s.checklistDraw = d.checklistDraw;
 	if (typeof d.noteInsertWidth === "number") s.noteInsertWidth = clampInsertWidth(d.noteInsertWidth);
 	if (isInsertBackground(d.noteInsertBackground)) s.noteInsertBackground = d.noteInsertBackground;
 	if (typeof d.noteInsertLinkBack === "boolean") s.noteInsertLinkBack = d.noteInsertLinkBack;
+	if (typeof d.lookUpNote === "string") s.lookUpNote = d.lookUpNote.trim();
+	if (typeof d.lookUpWidth === "number") s.lookUpWidth = clampLookUpWidth(d.lookUpWidth);
 	if (typeof d.copyLinkReverse === "boolean") s.copyLinkReverse = d.copyLinkReverse;
 	if (typeof d.edgeRejection === "boolean") s.edgeRejection = d.edgeRejection;
 	if (typeof d.edgeRejectionPx === "number" && d.edgeRejectionPx >= EDGE_WIDTH_MIN && d.edgeRejectionPx <= EDGE_WIDTH_MAX) s.edgeRejectionPx = d.edgeRejectionPx;

@@ -49,6 +49,7 @@ export interface UiContext {
 		/** v10: selected anchored excerpts (optional, 0 when absent). */ excerpts?: number;
 		/** 0.14 (402): selected text boxes (optional, 0 when absent). */ texts?: number;
 		/** 0.17 (#20): selected sticky notes, and how many of them are collapsed (optional, 0 when absent). */ stickies?: number; stickiesCollapsed?: number;
+		/** 0.19 (#103): selected checkboxes, and how many of them are linked to a task (optional, 0 when absent). */ checkboxes?: number; checkboxesLinked?: number;
 	} | null;
 	/** The page in view (index of the page sheet when it was opened from a thumbnail). */
 	page: {
@@ -271,6 +272,14 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "sticky-edit", label: "sticky.edit", icon: "square-pen", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 91, scope: "view", when: (c) => (c.selection?.stickies ?? 0) === 1, enabled: pageOpen, keywords: "sticky note text colour nota adesiva testo colore" },
 	{ id: "sticky-collapse", label: "sticky.collapse", icon: "minimize-2", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 90, scope: "view", when: (c) => (c.selection?.stickies ?? 0) > (c.selection?.stickiesCollapsed ?? 0), enabled: pageOpen, keywords: "sticky note collapse fold icon nota adesiva comprimi" },
 	{ id: "sticky-expand", label: "sticky.expand", icon: "maximize-2", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 90, scope: "view", when: (c) => (c.selection?.stickiesCollapsed ?? 0) > 0, enabled: pageOpen, keywords: "sticky note open expand nota adesiva apri espandi" },
+	// 0.19 (#103): handwritten checklists. A drawn square becomes a checkbox (view/checklist-tools.ts); insert one from the sheet, tick / label /
+	// send to tasks from the selection bar. Tapping a checkbox with the pen or a finger ticks it without selecting it.
+	{ id: "insert-checkbox", label: "checklist.insert", icon: "square-check", group: "insert", surfaces: ["sheet"], priority: 57, scope: "view", command: "checklist.command.insert", enabled: pageOpen, keywords: "checkbox checklist todo tick task list casella spunta elenco attivita lista" },
+	{ id: "checkbox-toggle", label: "checklist.toggle", icon: "square-check", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 93, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) > 0, enabled: pageOpen, keywords: "checkbox tick untick casella spunta" },
+	{ id: "checkbox-select-label", label: "checklist.selectLabel", icon: "text-select", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 92, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) === 1, keywords: "checkbox label text select casella testo seleziona" },
+	{ id: "checkbox-label", label: "checklist.editLabel", icon: "square-pen", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 89, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) === 1, enabled: pageOpen, keywords: "checkbox label name casella etichetta nome" },
+	{ id: "checkbox-task", label: "checklist.sendTask", icon: "list-checks", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 88, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) === 1 && (c.selection?.checkboxesLinked ?? 0) === 0, enabled: pageOpen, keywords: "checkbox task todo tasks daily note casella attivita nota giornaliera" },
+	{ id: "checkbox-unlink", label: "checklist.unlink", icon: "unlink", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 87, scope: "view", when: (c) => (c.selection?.checkboxesLinked ?? 0) > 0, enabled: pageOpen, keywords: "checkbox task unlink casella attivita scollega" },
 	{ id: "insert-graph", label: "math.insertGraph", icon: "chart-spline", group: "insert", surfaces: ["sheet"], priority: 50, scope: "view", command: "math.command.insertGraph", keywords: "function plot chart curve grafico funzione" },
 	// "add-page" is the Obsidian command (and its hotkey): it adds a page right away, same paper, as before 0.14. The on-screen "+" is
 	// "add-page-suggest": it opens the Smart "+" strip (0.14, 410); the command of the same name opens that strip from the keyboard.
@@ -413,6 +422,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "highlights-digest", label: "digest.menu", icon: "highlighter", group: "share", surfaces: ["sheet", "notebook"], priority: 25, scope: "view", command: "command.highlightsDigest", readOnly: true, keywords: "highlights digest summary note evidenziazioni riepilogo raccolta colours" },
 	// 0.18 mentions (O7): the notes that link to the page in view (and to the notebook as a whole).
 	{ id: "mentions", label: "mentions.menu", icon: "links-coming-in", group: "share", surfaces: ["page", "sheet", "notebook"], priority: 24, scope: "view", command: "command.mentions", readOnly: true, keywords: "mentions backlinks linked notes links menzioni collegamenti note" },
+	// 0.19 (#228): every picture and figure cut-out of the section, the notebook or some pages, in one grid.
+	{ id: "figures", label: "figures.menu", icon: "images", group: "share", surfaces: ["sheet", "notebook"], priority: 23, scope: "view", command: "command.figures", readOnly: true, keywords: "figures photos pictures images crops gallery section immagini foto figure galleria ritagli" },
 	// wave 0.10 (81): the same dialog started on PNG images (a vault folder, a scale, a page range) or on Print (desktop only).
 	{ id: "export-png", label: "export.png.menu", icon: "images", group: "share", surfaces: ["sheet", "notebook"], priority: 27, scope: "view", command: "command.exportPng", readOnly: true, keywords: "png images pictures pages folder scale range esporta immagini" },
 	{ id: "print", label: "export.print.menu", icon: "printer", group: "share", surfaces: ["sheet", "notebook"], priority: 26, scope: "view", command: "command.print", readOnly: true, when: (c) => !!c.canPrint, keywords: "paper printer stampa carta" },
@@ -487,6 +498,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "selection-copy-page", label: "movePage.copy", icon: "copy", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 42, scope: "view", command: true, when: hasSelection, keywords: "copy duplicate page another copia pagina selezione" },
 	// 0.17 (#57): the selection becomes a task in a note (the daily note, a tasks note or a chosen one), linked back to the page.
 	{ id: "selection-make-task", label: "task.action", icon: "list-checks", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 41, scope: "view", command: true, when: hasSelection, keywords: "task todo checkbox daily note attivita compito" },
+	// 0.19 (#213): the circled word goes to the "Look up later" list, with its picture; the sheet lists this notebook's entries.
+	{ id: "selection-look-up", label: "lookup.action", icon: "book-search", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 39, scope: "view", command: true, when: hasSelection, keywords: "look up later word dictionary list circle cerca dopo parola elenco" },
+	{ id: "look-up-list", label: "lookup.sheet.menu", icon: "book-search", group: "share", surfaces: ["page", "sheet", "notebook"], priority: 23, scope: "view", command: "command.lookUpList", readOnly: true, keywords: "look up later list words dictionary cerca dopo elenco parole" },
 	// 0.18 (#86): margin comments: a comment anchored to the selection's region, or to a rectangle drawn on the page; the side panel lists them.
 	{ id: "comment-selection", label: "comments.action", icon: "message-square-plus", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 40, scope: "view", command: "comments.command.selection", when: hasSelection, enabled: pageOpen, keywords: "comment note margin review annotation commento nota margine revisione" },
 	{ id: "comment-region", label: "comments.region", icon: "square-dashed", group: "insert", surfaces: ["sheet", "palette"], priority: 46, scope: "view", command: true, enabled: pageOpen, keywords: "comment region rectangle margin note review commento regione rettangolo margine" },

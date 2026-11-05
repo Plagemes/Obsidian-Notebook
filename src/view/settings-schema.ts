@@ -21,6 +21,7 @@ import { defaultLooseSheetPath } from "../library/loose-sheet-logic";
 import { defaultDailyPath } from "../library/daily-logic";
 import { DIM_MAX, DIM_MIN, DIM_STEP } from "./reading-settings";
 import { INSERT_WIDTH_MAX, INSERT_WIDTH_MIN, INSERT_WIDTH_STEP } from "../model/note-insert";
+import { LOOKUP_WIDTH_MAX, LOOKUP_WIDTH_MIN, LOOKUP_WIDTH_STEP } from "../model/look-up";
 import { SNAP_STRENGTH_MAX, SNAP_STRENGTH_MIN, SNAP_STRENGTH_STEP } from "../model/snap";
 import { DEFAULT_SETTINGS, type NotebookSettings } from "../settings";
 
@@ -168,6 +169,11 @@ const WRITING: SettingSpec[] = [
 	{
 		id: "snapStrength", section: "writing", order: 56, name: "settings.snapStrength", desc: "settings.snapStrength.desc",
 		control: { type: "slider", min: SNAP_STRENGTH_MIN, max: SNAP_STRENGTH_MAX, step: SNAP_STRENGTH_STEP, format: suffix("px") }, parent: "snapMode", visible: (s) => s.snapMode !== "off",
+	},
+	// 0.19 checklists (#103): a small square drawn with the pen
+	{
+		id: "checklistDraw", section: "writing", order: 58, name: "settings.checklistDraw", desc: "settings.checklistDraw.desc", keywords: "checklist checkbox square draw tick todo task lista casella quadrato spunta",
+		control: { type: "dropdown", options: options([["offer", "settings.checklistDraw.offer"], ["auto", "settings.checklistDraw.auto"], ["off", "settings.checklistDraw.off"]]) },
 	},
 	{ id: "autoLineBreak", section: "writing", order: 60, name: "settings.autoLineBreak", desc: "settings.autoLineBreak.desc", control: { type: "toggle" } },
 	// 0.15 pen sets: named pens per subject, loaded with the notebook (view/pen-sets.ts)
@@ -330,6 +336,15 @@ const LIBRARY: SettingSpec[] = [
 		id: "snapshotsToKeep", section: "library", order: 31, name: "settings.snapshotKeep", desc: "settings.snapshotKeep.desc",
 		control: { type: "slider", min: 1, max: 50, step: 1 }, parent: "snapshotIntervalHours", visible: (s) => s.snapshotIntervalHours > 0,
 	},
+	// 0.19 snapshot: a snapshot at the end of a lecture, kept apart from the interval ones
+	{
+		id: "lectureSnapshots", section: "library", order: 32, name: "settings.lectureSnapshots", desc: "settings.lectureSnapshots.desc",
+		control: { type: "toggle" }, keywords: "backup snapshot lecture lesson class lezione",
+	},
+	{
+		id: "lectureSnapshotsKeep", section: "library", order: 33, name: "settings.lectureSnapshotsKeep", desc: "settings.lectureSnapshotsKeep.desc",
+		control: { type: "slider", min: 1, max: 100, step: 1 }, parent: "lectureSnapshots", visible: (s) => s.lectureSnapshots,
+	},
 	// 0.15 views: the Board's columns (names, colours, add, remove) are edited in a dialog; the statuses themselves are synced notebook data.
 	{
 		id: "boardColumns", section: "library", order: 40, name: "settings.boardColumns", desc: "settings.boardColumns.desc",
@@ -370,6 +385,8 @@ const INTEGRATION: SettingSpec[] = [
 		control: { type: "folder", placeholder: DEFAULT_SETTINGS.companionFolder }, parent: "companionLocation", visible: (s) => s.companionLocation === "folder",
 	},
 	{ id: "companionName", section: "integration", order: 23, name: "settings.companionName", desc: "settings.companionName.desc", control: { type: "text", placeholder: NAME_TOKEN }, parent: "companionNotes", visible: companionOn },
+	// 0.19 search (O19)
+	{ id: "companionSearchText", section: "integration", order: 23.5, name: "settings.companionSearchText", desc: "settings.companionSearchText.desc", control: { type: "toggle" }, parent: "companionNotes", visible: companionOn, keywords: "search find sticky comments equations ricerca" },
 	{
 		id: "companionUpdateAll", section: "integration", order: 24, name: "settings.companionUpdateAll", desc: "settings.companionUpdateAll.desc",
 		control: { type: "action", run: "companion-update-all", button: "settings.companionUpdateAll.button" }, parent: "companionNotes", visible: companionOn,
@@ -378,6 +395,9 @@ const INTEGRATION: SettingSpec[] = [
 	{ id: "dailyNotebookPath", section: "integration", order: 30, name: "settings.dailyNotebook", desc: "settings.dailyNotebook.desc", control: { type: "text", placeholder: defaultDailyPath(DEFAULT_SETTINGS.folder) }, keywords: "daily journal today diario oggi" },
 	{ id: "dailyLink", section: "integration", order: 31, name: "settings.dailyLink", desc: "settings.dailyLink.desc", control: { type: "toggle" }, keywords: "daily notes periodic notes journal diario" },
 	{ id: "dailyCreateNote", section: "integration", order: 32, name: "settings.dailyCreateNote", desc: "settings.dailyCreateNote.desc", control: { type: "toggle" }, parent: "dailyLink", visible: (s) => s.dailyLink },
+	// 0.19 (#221): lecture log in the daily note.
+	{ id: "lectureLog", section: "integration", order: 35, name: "settings.lectureLog", desc: "settings.lectureLog.desc", control: { type: "toggle" }, keywords: "lecture log daily note timetable class registro lezione diario" },
+	{ id: "lectureLogHeading", section: "integration", order: 36, name: "settings.lectureLogHeading", desc: "settings.lectureLogHeading.desc", control: { type: "text", placeholder: DEFAULT_SETTINGS.lectureLogHeading }, parent: "lectureLog", visible: (s) => s.lectureLog },
 	// 0.17 (#23): the optional PDF copy next to each notebook; a notebook can override the switch from its menu.
 	{ id: "pdfCopy", section: "integration", order: 40, name: "settings.pdfCopy", desc: "settings.pdfCopy.desc", control: { type: "toggle" }, keywords: "pdf copy share notebooklm export automatic copia condividere" },
 	{
@@ -397,6 +417,9 @@ const INTEGRATION: SettingSpec[] = [
 	{ id: "noteInsertLinkBack", section: "integration", order: 37, name: "settings.noteInsertLinkBack", desc: "settings.noteInsertLinkBack.desc", control: { type: "toggle" }, keywords: "insert note link back page collegamento pagina" },
 	// 0.18 (#186): "Copy to notebook…" can leave a chip on the original page too.
 	{ id: "copyLinkReverse", section: "integration", order: 38, name: "settings.copyLinkReverse", desc: "settings.copyLinkReverse.desc", control: { type: "toggle" }, keywords: "copy page notebook link back chip copia pagina collegamento" },
+	// 0.19 (#213): "Look up later" from a selection.
+	{ id: "lookUpNote", section: "integration", order: 43, name: "settings.lookUpNote", desc: "settings.lookUpNote.desc", control: { type: "text", placeholder: "Look up later.md" }, keywords: "look up later words list dictionary cerca dopo parole elenco" },
+	{ id: "lookUpWidth", section: "integration", order: 44, name: "settings.lookUpWidth", desc: "settings.lookUpWidth.desc", control: { type: "slider", min: LOOKUP_WIDTH_MIN, max: LOOKUP_WIDTH_MAX, step: LOOKUP_WIDTH_STEP, format: suffix("px") }, keywords: "look up later picture crop width larghezza immagine" },
 ];
 
 const timetableOn: Predicate = (s) => s.timetableOffer;

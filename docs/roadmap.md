@@ -227,13 +227,13 @@ Goal: notebooks behave like first-class Obsidian content. Several items depend o
 - **O10 P2** 🧪 From Obsidian's PDF viewer: an "Annotate in Notebook" action.
 - **O11 P3** Pages on Canvas: notebook pages as cards on an Obsidian Canvas.
 - **O12 P2** 🧪 Daily notebook: "Today's page" adds a dated page and links it from the daily note.
-- **O13 P2** Obsidian templates: template notebooks and embeds in Templates/Templater.
+- **O13 P2** 🧪 Obsidian templates: `api.newNotebook` with a notebook template and a `notebook-new` button for core Templates and Templater ([docs/templates.md](templates.md)).
 - **O14 P1** 🧪 Commands and hotkeys for every tool (pen, eraser, lasso…), assignable in Hotkeys.
 - **O15 P2** 🧪 Status bar: "p. 3/12" and save state; tap opens the navigator.
 - **O16 P1** 🧪 Reopen where you left off: workspace/session restore brings back the same page and zoom.
 - ~~**O17 P1** Theme integration: colours, accent and dark mode followed everywhere; documented CSS variables for snippets.~~ — dropped (user decision, 2026-10-29)
 - ~~**O18 P1** Sync conflicts: when Obsidian Sync creates a conflicted copy, a dialog compares both versions and merges their strokes.~~ — dropped: sync will go through Google Drive or OneDrive, not Obsidian Sync (user decision, 2026-10-29)
-- **O19 P2** Obsidian search: text boxes (and OCR later) appear in global search through the companion note.
+- **O19 P2** 🧪 Obsidian search: text boxes (and OCR later) appear in global search through the companion note. 0.19: text boxes were already in the companion; setting *Include typed text in search* adds sticky notes, comments, equations and marker labels with a link back per page; OCR waits for OCR.
 - **O20 P1** 🧪 Page into a note: "Copy link to this page" and "Insert this page into the active note" (link or embed).
 
 ## M11 — Original and advanced features (backlog, planned 2026-10-29)
@@ -253,7 +253,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 100. **P1** 🧪 Invisible ink for self-testing: write answers with a hidden pen and reveal them with "show solutions".
 101. **P2** Colours with meaning: define what each colour means (red = definition, blue = example), filter the view by it and generate a digest per colour.
 102. **P2** Headings from handwriting size (no OCR): lines written large become outline entries, shown as images of the ink.
-103. **P2** Handwritten checklists: a drawn square becomes a tappable checkbox, linked to Obsidian tasks.
+103. **P2** 🧪 Handwritten checklists: a drawn square becomes a tappable checkbox, linked to Obsidian tasks (0.19, format v17: element `checkbox`, offered or automatic from a drawn square, tap to tick, label ink, "Send to tasks" with the tick following into the note, "Open items" filter in the notebook map).
 
 ### B. PDF and study material
 104. **P1** 🧪 Expandable margins on PDFs: widen a PDF page sideways to annotate without covering the text.
@@ -422,7 +422,7 @@ Features for following a lecture live. Exam and review features stay in the sepa
 210. **P2** Automatic lecture header: course, lecturer, room, date and time from the timetable.
 211. **P1** 🧪 "Pen only" toggle at hand: instantly ignores fingers when you rest your hand.
 212. **P2** Recent symbols: the symbols you draw most often (∀, ∫, →) become buttons to insert them quickly.
-213. **P2** "Look up later" list: circle a word and it goes to a list, with its image.
+213. **P2** 🧪 "Look up later" list: circle a word and it goes to a list, with its image.
 214. **P2** Compact lecture toolbar: only 4–5 large tools.
 215. **P2** Board photo: keep or trace. Keep the photo as it is, or switch to tracing mode: the photo becomes semi-transparent (removable) and the drawing in it is automatically vectorised into ink — dark lines detected, thinned to centre lines, simplified into smooth curves, each stroke taking the photo's colour; a slider sets the sensitivity. The result is normal ink you can edit, erase or move. Own implementation (potrace is GPL and cannot be used).
 
@@ -432,8 +432,8 @@ Features for following a lecture live. Exam and review features stay in the sepa
 218. ~~**P2** Automatic new-lecture suggestion after a long pause since the last writing.~~ — dropped (user decision, 2026-10-29)
 219. **P2** "Lecture" and "study" profiles: one tap switches pens, paper and stabilization for fast or careful writing.
 220. **P2** End-of-lecture summary: three guided lines (Cornell style), also saved in the companion note.
-221. **P2** Lecture log in the daily note.
-222. **P2** Automatic snapshot at the end of the lecture (version history).
+221. **P2** 🧪 Lecture log in the daily note.
+222. **P2** 🧪 Automatic snapshot at the end of the lecture (version history).
 223. **P1** 🧪 "End of lecture" panel: open questions, gaps, homework and markers at a glance.
 
 ### Slides and board
@@ -441,7 +441,7 @@ Features for following a lecture live. Exam and review features stay in the sepa
 225. **P2** "Back to the current slide" after looking elsewhere.
 226. **P1** 🧪 Automatic notes ↔ slide link: ink remembers which slide was visible in the side-by-side view while you wrote it; tapping it shows that slide again.
 227. **P2** 🧪 Quick tabs: pages pinned during the lecture (e.g. the formula sheet), one tap away.
-228. **P2** Lecture figure gallery: all photos and crops of the section in one place.
+228. **P2** 🧪 Lecture figure gallery: all photos and crops of the section in one place.
 229. **P3** Peek at the next slide while writing.
 230. **P3** Continuous board: a horizontally scrolling page for long blackboards.
 
@@ -460,7 +460,7 @@ Features for following a lecture live. Exam and review features stay in the sepa
 236. **P2** Completion walkthrough: a guided tour of the gaps and open questions.
 237. **P2** A classmate's notes side by side with yours for the same lecture (PDF or photos).
 238. **P2** One-step page tidy-up: align, straighten and compact spacing.
-239. **P2** Clean notes export: the lecture as a PDF without placeholders or markers, ready to share.
+239. **P2** 🧪 Clean notes export: the lecture as a PDF without placeholders or markers, ready to share.
 240. **P2** Lecture shared with the study group: at the end, a rule exports the clean notes to a shared (Drive) folder.
 
 ### Dynamic drawings

@@ -13,6 +13,71 @@ export interface Command {
 	revert(doc: NotebookDocument): void;
 	/** v14: the page-lock guard of `History` lets this command change locked pages (see `exemptFromLocks`). Normal commands never set it. */
 	readonly lockExempt?: boolean;
+	/**
+	 * 0.19: a command that holds element objects puts `swap(el)` in place of each of them (and of the page elements it keeps). Called by
+	 * `History.applyQuietly` on every command of both stacks after an upkeep change replaced element objects without an undo step, so
+	 * that the commands that find their elements by identity still find them (see `quietSwap`).
+	 */
+	remap?(swap: ElementSwap): void;
+}
+
+/**
+ * 0.19: what an upkeep change (`History.applyQuietly`) did to the elements, for the commands still in the stacks. The very object it
+ * replaced becomes the new one; any other copy of that element a command holds (the same id: what it was before a move, after a
+ * margin change…) takes the changed fields where it agreed with the replaced object, and keeps its own value where it did not. So an
+ * Undo of an unrelated change (a move, a margin) keeps the link that followed a renamed note, and an Undo past the step that made the
+ * link still takes it away. Anything else comes back unchanged. The same object always gives the same answer.
+ */
+export type ElementSwap = (el: PageElement) => PageElement;
+
+/** Deep equality of two stored field values (plain JSON data, or undefined). */
+function sameValue(a: unknown, b: unknown): boolean {
+	return a === b || JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** The `ElementSwap` for the replacements `pairs` (old object → new object, same id). */
+export function quietSwap(pairs: ReadonlyMap<PageElement, PageElement>): ElementSwap {
+	const byId = new Map<string, { old: PageElement; next: PageElement }>();
+	for (const [old, next] of pairs) byId.set(old.id, { old, next });
+	const memo = new Map<PageElement, PageElement>(pairs);
+	return (el) => {
+		const known = memo.get(el);
+		if (known) return known;
+		const pair = byId.get(el.id);
+		const out = pair && pair.old.type === el.type ? carried(el, pair.old, pair.next) : el;
+		memo.set(el, out);
+		return out;
+	};
+}
+
+/** `el` with the fields that changed from `old` to `next`, where `el` had what `old` had; `el` itself when that is nothing. */
+function carried(el: PageElement, old: PageElement, next: PageElement): PageElement {
+	const from = old as unknown as Record<string, unknown>;
+	const to = next as unknown as Record<string, unknown>;
+	const own = el as unknown as Record<string, unknown>;
+	let out: Record<string, unknown> | null = null;
+	for (const key of new Set([...Object.keys(from), ...Object.keys(to)])) {
+		if (key === "id" || key === "type" || sameValue(from[key], to[key]) || !sameValue(own[key], from[key])) continue;
+		out ??= { ...own };
+		if (to[key] === undefined) delete out[key];
+		else out[key] = to[key];
+	}
+	return out ? freezeElement(out as unknown as PageElement) : el;
+}
+
+/** Maps the elements of a page a command keeps (one that is not in the document now: a deleted or replaced page) in place. */
+export function remapPage(page: Page, swap: ElementSwap): void {
+	const els = page.elements;
+	if (!els) return;
+	for (let i = 0; i < els.length; i++) {
+		const next = swap(els[i]!);
+		if (next !== els[i]) els[i] = next;
+	}
+}
+
+/** A stroke or an element of a page: elements are mapped, strokes stay (a quiet change never replaces a stroke). */
+function swapItem<T extends Stroke | PageElement>(item: T, swap: ElementSwap): T {
+	return ("type" in item ? swap(item) : item) as T;
 }
 
 function pageOf(doc: NotebookDocument, pageId: string) {
@@ -127,6 +192,10 @@ export class AddPage implements Command {
 		// Never leave a document without pages.
 		if (i >= 0 && doc.pages.length > 1) doc.pages.splice(i, 1);
 	}
+
+	remap(swap: ElementSwap): void {
+		remapPage(this.page, swap);
+	}
 }
 
 /**
@@ -149,6 +218,10 @@ export class DeletePage implements Command {
 		this.applied = false;
 		if (doc.pages.includes(this.page)) return;
 		doc.pages.splice(Math.max(0, Math.min(this.index, doc.pages.length)), 0, this.page);
+	}
+
+	remap(swap: ElementSwap): void {
+		remapPage(this.page, swap);
 	}
 }
 
@@ -341,6 +414,18 @@ export class SetPageMargins implements Command {
 			}
 		}
 	}
+
+	remap(swap: ElementSwap): void {
+		const pairs = [...this.moved];
+		this.moved.clear();
+		this.original.clear();
+		for (const [o, m] of pairs) {
+			const from = swapItem(o, swap);
+			const to = swapItem(m, swap);
+			this.moved.set(from, to);
+			this.original.set(to, from);
+		}
+	}
 }
 
 /**
@@ -388,8 +473,10 @@ function elementsOf(doc: NotebookDocument, pageId: string): PageElement[] {
  */
 export class AddElement implements Command {
 	readonly label = "Add element";
-	constructor(readonly pageId: string, readonly element: PageElement, readonly index: number) {
-		freezeElement(element);
+	/** Not readonly: an upkeep change maps it (`remap`). */
+	element: PageElement;
+	constructor(readonly pageId: string, element: PageElement, readonly index: number) {
+		this.element = freezeElement(element);
 	}
 
 	apply(doc: NotebookDocument): void {
@@ -403,6 +490,10 @@ export class AddElement implements Command {
 		const i = els.indexOf(this.element);
 		if (i >= 0) els.splice(i, 1);
 	}
+
+	remap(swap: ElementSwap): void {
+		this.element = swap(this.element);
+	}
 }
 
 /** Removes an element; undo puts the same object back where it was. A missing element is a no-op both ways. */
@@ -410,7 +501,11 @@ export class RemoveElement implements Command {
 	readonly label = "Remove element";
 	private applied = false;
 	private at = 0;
-	constructor(readonly pageId: string, readonly element: PageElement) {}
+	/** Not readonly: an upkeep change maps it (`remap`). */
+	element: PageElement;
+	constructor(readonly pageId: string, element: PageElement) {
+		this.element = element;
+	}
 
 	apply(doc: NotebookDocument): void {
 		const els = elementsOf(doc, this.pageId);
@@ -428,6 +523,10 @@ export class RemoveElement implements Command {
 		if (els.includes(this.element)) return;
 		els.splice(Math.max(0, Math.min(this.at, els.length)), 0, this.element);
 	}
+
+	remap(swap: ElementSwap): void {
+		this.element = swap(this.element);
+	}
 }
 
 /** Replaces an element with an edited copy at the same position (elements are immutable). */
@@ -435,8 +534,12 @@ export class ReplaceElement implements Command {
 	readonly label = "Edit element";
 	private applied = false;
 	private at = 0;
-	constructor(readonly pageId: string, readonly before: PageElement, readonly after: PageElement) {
-		freezeElement(after);
+	/** Not readonly: an upkeep change maps them (`remap`). */
+	before: PageElement;
+	after: PageElement;
+	constructor(readonly pageId: string, before: PageElement, after: PageElement) {
+		this.before = before;
+		this.after = freezeElement(after);
 	}
 
 	apply(doc: NotebookDocument): void {
@@ -454,8 +557,19 @@ export class ReplaceElement implements Command {
 		const els = elementsOf(doc, this.pageId);
 		if (els.includes(this.before)) return;
 		const i = els.indexOf(this.after);
-		if (i >= 0) els.splice(i, 1, this.before);
+		if (i >= 0) {
+			els.splice(i, 1, this.before);
+			return;
+		}
+		// The edited copy was replaced since (it should not be: see `remap`). The element it became is put back, never a second copy of it.
+		const same = els.findIndex((e) => e.id === this.before.id);
+		if (same >= 0) els.splice(same, 1, this.before);
 		else els.splice(Math.max(0, Math.min(this.at, els.length)), 0, this.before);
+	}
+
+	remap(swap: ElementSwap): void {
+		this.before = swap(this.before);
+		this.after = swap(this.after);
 	}
 }
 
@@ -467,8 +581,8 @@ export class ReplaceElement implements Command {
  */
 export class ReorderLayer implements Command {
 	readonly label = "Change layer order";
-	private readonly before: readonly (Stroke | PageElement)[];
-	private readonly after: readonly (Stroke | PageElement)[];
+	private before: readonly (Stroke | PageElement)[];
+	private after: readonly (Stroke | PageElement)[];
 	constructor(readonly pageId: string, readonly layer: "strokes" | "elements", before: readonly (Stroke | PageElement)[], after: readonly (Stroke | PageElement)[]) {
 		this.before = [...before];
 		this.after = [...after];
@@ -480,6 +594,12 @@ export class ReorderLayer implements Command {
 
 	revert(doc: NotebookDocument): void {
 		this.place(doc, this.before);
+	}
+
+	remap(swap: ElementSwap): void {
+		if (this.layer !== "elements") return;
+		this.before = this.before.map((x) => swapItem(x, swap));
+		this.after = this.after.map((x) => swapItem(x, swap));
 	}
 
 	private place(doc: NotebookDocument, order: readonly (Stroke | PageElement)[]): void {
@@ -567,6 +687,10 @@ export class InsertPages implements Command {
 		if (keep.length === 0) return; // never leave a document without pages
 		doc.pages.splice(0, doc.pages.length, ...keep);
 	}
+
+	remap(swap: ElementSwap): void {
+		for (const p of this.pages) remapPage(p, swap);
+	}
 }
 
 /** Turns the infinite-page option on or off. Off is stored as the absence of the flag. */
@@ -605,6 +729,10 @@ export class Batch implements Command {
 	revert(doc: NotebookDocument): void {
 		for (let i = this.commands.length - 1; i >= 0; i--) this.commands[i]!.revert(doc);
 	}
+
+	remap(swap: ElementSwap): void {
+		for (const c of this.commands) c.remap?.(swap);
+	}
 }
 
 /**
@@ -613,13 +741,81 @@ export class Batch implements Command {
  */
 export type ContentGuard = (doc: NotebookDocument) => string | null;
 
+/** What an object of the document held before an undo or a redo: its own fields, and the contents of its lists and tables that can change in place. */
+interface Shot {
+	target: Record<string, unknown>;
+	fields: Record<string, unknown>;
+	lists: Array<[unknown[], unknown[]]>;
+	tables: Array<[Record<string, unknown>, Record<string, unknown>]>;
+}
+
+function shoot(target: object): Shot {
+	const t = target as Record<string, unknown>;
+	const fields = { ...t };
+	const lists: Shot["lists"] = [];
+	const tables: Shot["tables"] = [];
+	for (const v of Object.values(fields)) {
+		if (!v || typeof v !== "object" || Object.isFrozen(v)) continue;
+		if (Array.isArray(v)) lists.push([v as unknown[], [...(v as unknown[])]]);
+		else tables.push([v as Record<string, unknown>, { ...(v as Record<string, unknown>) }]);
+	}
+	return { target: t, fields, lists, tables };
+}
+
+function putBack(target: Record<string, unknown>, fields: Record<string, unknown>): void {
+	for (const k of Object.keys(target)) if (!Object.prototype.hasOwnProperty.call(fields, k)) delete target[k];
+	Object.assign(target, fields);
+}
+
+function restoreShot(s: Shot): void {
+	putBack(s.target, s.fields);
+	for (const [list, items] of s.lists) {
+		list.length = items.length;
+		for (let i = 0; i < items.length; i++) list[i] = items[i];
+	}
+	for (const [table, fields] of s.tables) putBack(table, fields);
+}
+
+/**
+ * 0.19: the document as it is (its fields, its pages and theirs: shallow, no stroke or element is copied), so that an undo or a redo
+ * the guard refuses can be taken back exactly, whatever the command did.
+ */
+function snapshotDocument(doc: NotebookDocument): Shot[] {
+	return [shoot(doc), ...doc.pages.map((p) => shoot(p))];
+}
+
+/**
+ * 0.19: the element objects an upkeep command replaced, old → new, when that is all it did: the same pages, the same strokes, and
+ * each changed element slot holds an element with the same id. Null when it did anything else (that cannot be told to the stacks).
+ */
+function swapsSince(doc: NotebookDocument, before: ReadonlyArray<{ page: Page; strokes: readonly Stroke[]; elements: readonly PageElement[] }>): Map<PageElement, PageElement> | null {
+	if (doc.pages.length !== before.length) return null;
+	const pairs = new Map<PageElement, PageElement>();
+	for (let p = 0; p < before.length; p++) {
+		const was = before[p]!;
+		const page = doc.pages[p]!;
+		if (page !== was.page || page.strokes.length !== was.strokes.length || page.strokes.some((s, i) => s !== was.strokes[i])) return null;
+		const els = page.elements ?? [];
+		if (els.length !== was.elements.length) return null;
+		for (let i = 0; i < els.length; i++) {
+			const old = was.elements[i]!;
+			const next = els[i]!;
+			if (old === next) continue;
+			if (old.id !== next.id || old.type !== next.type) return null;
+			pairs.set(old, next);
+		}
+	}
+	return pairs;
+}
+
 export class History {
 	private undoStack: Command[] = [];
 	private redoStack: Command[] = [];
 
 	constructor(
 		private readonly doc: () => NotebookDocument, readonly limit = 500,
-		private readonly guard: ContentGuard | null = null, private readonly refused: ((message: string) => void) | null = null,
+		/** `step`: set when an undo or a redo was refused (and dropped from the history), absent for a new edit. */
+		private readonly guard: ContentGuard | null = null, private readonly refused: ((message: string, step?: "undo" | "redo") => void) | null = null,
 		/** wave 0.10 (51): true while the document must not change (read-only mode): nothing is run, undone or redone. */
 		private readonly locked: (() => boolean) | null = null,
 		/**
@@ -658,6 +854,69 @@ export class History {
 		return true;
 	}
 
+	/**
+	 * Runs a command that is upkeep, not an edit by the user (a task link that follows a renamed note, or is dropped because its
+	 * line is gone): it is not recorded, so Undo goes on undoing the user's own steps, and the redo steps are kept. The document
+	 * has changed all the same, so the caller saves it. False, with nothing changed and nothing said, when the history is locked, a
+	 * locked page would change or the guard refused it: the caller tries again later.
+	 *
+	 * 0.19: the steps in both stacks find their elements by identity, so an upkeep change may only replace element objects (same
+	 * pages, same strokes, an element with the same id in each changed slot; anything else is refused like a locked page), and every
+	 * step is told what replaced what (`Command.remap`, `quietSwap`): an Undo or a Redo then works on what is there now and never
+	 * makes a second copy of an element.
+	 */
+	applyQuietly(cmd: Command): boolean {
+		if (this.locked?.()) return false;
+		const doc = this.doc();
+		const locks = cmd.lockExempt ? null : snapshotLocked(doc);
+		const before = doc.pages.map((page) => ({ page, strokes: [...page.strokes], elements: [...(page.elements ?? [])] }));
+		cmd.apply(doc);
+		const pairs = swapsSince(doc, before);
+		if (pairs === null || (locks && lockedChanges(doc, locks).length > 0) || (this.guard?.(doc) ?? null) !== null) {
+			cmd.revert(doc);
+			return false;
+		}
+		if (pairs.size > 0) {
+			const swap = quietSwap(pairs);
+			for (const c of this.undoStack) c.remap?.(swap);
+			for (const c of this.redoStack) c.remap?.(swap);
+		}
+		return true;
+	}
+
+	/**
+	 * 0.19 backstop: after an undo or a redo the document must still be one the writer saves (the guard, as for every edit). When it
+	 * is not, the document is put back exactly as it was before the step (`snapshot`), the step is dropped from the history (doing it
+	 * again would do the same) and it is said. True when the step was refused.
+	 */
+	private refusedStep(doc: NotebookDocument, snapshot: Shot[] | null, step: "undo" | "redo", wasBad: boolean): boolean {
+		// A document that already failed the guard before the step (a change outside the history) is not the step's doing: it is kept.
+		if (!snapshot || !this.guard || wasBad) return false;
+		const problem = this.guard(doc);
+		if (problem === null) return false;
+		this.dropStep(snapshot, problem, step);
+		return true;
+	}
+
+	/** The document back exactly as before the step, the rest of the redo steps (made on top of a redo that is dropped) gone, and it is said. */
+	private dropStep(snapshot: Shot[], problem: string, step: "undo" | "redo"): void {
+		for (const s of snapshot) restoreShot(s);
+		if (step === "redo") this.redoStack = [];
+		this.refused?.(problem, step);
+	}
+
+	/** Runs the step; an exception leaves the document as it was, drops the step and says so. True when it ran. */
+	private ran(run: () => void, snapshot: Shot[] | null, step: "undo" | "redo"): boolean {
+		try {
+			run();
+			return true;
+		} catch (e) {
+			if (!snapshot) throw e;
+			this.dropStep(snapshot, e instanceof Error ? e.message : String(e), step);
+			return false;
+		}
+	}
+
 	/** Records an already applied command (e.g. the eraser, which erases while it moves). */
 	record(cmd: Command): void {
 		this.undoStack.push(cmd);
@@ -671,7 +930,9 @@ export class History {
 		if (!cmd) return null;
 		const doc = this.doc();
 		const locks = cmd.lockExempt ? null : snapshotLocked(doc);
-		cmd.revert(doc);
+		const snapshot = this.guard ? snapshotDocument(doc) : null;
+		const wasBad = snapshot !== null && (this.guard?.(doc) ?? null) !== null;
+		if (!this.ran(() => cmd.revert(doc), snapshot, "undo")) return null;
 		if (locks) {
 			// An older edit of a page that has been locked since (a synced change, a lock set later and left on): the undo
 			// is not done and stays on the stack for when the page is unlocked.
@@ -684,6 +945,7 @@ export class History {
 				return null;
 			}
 		}
+		if (this.refusedStep(doc, snapshot, "undo", wasBad)) return null;
 		this.redoStack.push(cmd);
 		return cmd;
 	}
@@ -694,7 +956,9 @@ export class History {
 		if (!cmd) return null;
 		const doc = this.doc();
 		const locks = cmd.lockExempt ? null : snapshotLocked(doc);
-		cmd.apply(doc);
+		const snapshot = this.guard ? snapshotDocument(doc) : null;
+		const wasBad = snapshot !== null && (this.guard?.(doc) ?? null) !== null;
+		if (!this.ran(() => cmd.apply(doc), snapshot, "redo")) return null;
 		if (locks) {
 			const hit = lockedChanges(doc, locks);
 			if (hit.length > 0) {
@@ -704,6 +968,7 @@ export class History {
 				return null;
 			}
 		}
+		if (this.refusedStep(doc, snapshot, "redo", wasBad)) return null;
 		this.undoStack.push(cmd);
 		return cmd;
 	}

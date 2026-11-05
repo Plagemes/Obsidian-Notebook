@@ -1,5 +1,5 @@
 import { createId, quantizePoint } from "./document";
-import { A4_HEIGHT, A4_WIDTH, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, ELEMENT_TYPES_V15, FORMAT_ID, GRID_5MM, PAPER_KINDS_V7, RENDER_FREEHAND } from "./types";
+import { A4_HEIGHT, A4_WIDTH, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, ELEMENT_TYPES_V15, ELEMENT_TYPES_V17, FORMAT_ID, GRID_5MM, PAPER_KINDS_V7, RENDER_FREEHAND } from "./types";
 
 export type RawObject = Record<string, unknown>;
 
@@ -371,6 +371,35 @@ function v15ToV16(raw: RawObject): RawObject {
 	return out;
 }
 
+/**
+ * v17 adds the element type "checkbox" (handwritten checklists, #103). Every valid v16 document is a valid v17 document. A v16
+ * reader rejected unknown element types, so a pre-v17 file with a checkbox was not written by any version of this plugin: it is
+ * rejected rather than guessed at (like sticky notes before v15). Nothing else changes.
+ */
+function v16ToV17(raw: RawObject): RawObject {
+	if (Array.isArray(raw.pages)) {
+		(raw.pages as unknown[]).forEach((page, i) => {
+			const problem = v17OnlyElement(page, i);
+			if (problem) throw new MigrationError(problem);
+		});
+	}
+	return { ...raw, version: 17 };
+}
+
+/**
+ * Why page `index` (0-based) of a v16 (or older) file cannot be read as v17 (it holds an element type that exists only from v17),
+ * or null. Everything else of a v16 page is a valid v17 page, so staged loading reads large v16 files page by page with this check.
+ */
+export function v17OnlyElement(page: unknown, index: number): string | null {
+	const isObj = (v: unknown): v is RawObject => typeof v === "object" && v !== null && !Array.isArray(v);
+	if (!isObj(page) || !Array.isArray(page.elements)) return null;
+	for (const el of page.elements as unknown[]) {
+		const type = isObj(el) ? el.type : undefined;
+		if (typeof type === "string" && ELEMENT_TYPES_V17.includes(type)) return `v16: element type '${type}' (page ${index + 1}) exists only from v17`;
+	}
+	return null;
+}
+
 /** MIGRATIONS[n] takes a document from version n to n+1. */
 export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	0: v0ToV1,
@@ -389,6 +418,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	13: v13ToV14,
 	14: v14ToV15,
 	15: v15ToV16,
+	16: v16ToV17,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

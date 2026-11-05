@@ -396,6 +396,12 @@ export class Vault extends Events {
 		return this.read(f);
 	}
 
+	/** 0.19 lookup: a URL the sheet's thumbnails can load (a blob of the stored bytes; empty when there are none). */
+	getResourcePath(f: TFile): string {
+		const v = this.binary.get(f.path);
+		return v ? URL.createObjectURL(new Blob([v], { type: "image/png" })) : "";
+	}
+
 	async readBinary(f: TFile): Promise<ArrayBuffer> {
 		const v = this.binary.get(f.path);
 		if (v) return v;

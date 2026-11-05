@@ -12,7 +12,7 @@ import { isResolvable, lectureRange, startsLecture } from "./markers";
 import type { MarkerElement, Page } from "./types";
 
 /** The states a page can be in. A page can be in several; a page in none is "clear". */
-export const MAP_STATES = ["question", "gap", "homework", "practice", "empty", "key"] as const;
+export const MAP_STATES = ["question", "gap", "homework", "practice", "empty", "key", "checklist"] as const;
 export type MapState = (typeof MAP_STATES)[number];
 
 /** A page with no more visible strokes than this, and nothing else on it, is nearly empty. */
@@ -25,7 +25,7 @@ export interface MapPage {
 	/** In the order of MAP_STATES. */
 	states: MapState[];
 	/** Open (unresolved) question, gap and homework markers, and importance markers (never resolved). */
-	open: { question: number; gap: number; homework: number; key: number };
+	open: { question: number; gap: number; homework: number; key: number; /** v17: checkboxes not ticked. */ checklist: number };
 	/** Earliest due date among the open homework markers of the page. */
 	due?: string;
 	/** The label of the first open question or homework (one line), for the tooltip. */
@@ -67,10 +67,18 @@ const isKey = (m: MarkerElement): boolean => !isResolvable(m.kind);
 
 /** Computes the entry of one page (no cache). */
 export function mapPage(page: Page, index: number, opts: MapOptions = {}): MapPage {
-	const open = { question: 0, gap: 0, homework: 0, key: 0 };
+	const open = { question: 0, gap: 0, homework: 0, key: 0, checklist: 0 };
 	let due: string | undefined;
 	let hint: string | undefined;
 	for (const el of page.elements ?? []) {
+		// v17: an unticked checkbox is an open item of the page (the "Open items" filter of the map).
+		if (el.type === "checkbox") {
+			if (el.checked !== true) {
+				open.checklist++;
+				if (hint === undefined && el.label) hint = el.label;
+			}
+			continue;
+		}
 		if (el.type !== "marker") continue;
 		if (isKey(el)) {
 			open.key++;
@@ -96,6 +104,7 @@ export function mapPage(page: Page, index: number, opts: MapOptions = {}): MapPa
 		// A practice page waiting for its answer is shown as practice, not as an empty page.
 		empty: nearlyEmpty && !practice,
 		key: open.key > 0,
+		checklist: open.checklist > 0,
 	};
 	const out: MapPage = {
 		index, pageId: page.id, states: MAP_STATES.filter((s) => has[s]), open, lectureStart: startsLecture(page),
@@ -114,6 +123,7 @@ export function mapKey(page: Page, opts: MapOptions = {}): string {
 	parts.push(hidden);
 	for (const el of page.elements ?? []) {
 		if (el.type === "marker") parts.push(el.id, el.kind, el.done ? 1 : 0, el.due ?? "", el.text ?? "");
+		else if (el.type === "checkbox") parts.push(el.id, el.checked ? "c1" : "c0", el.label ?? "");
 		else if (el.type === "text") parts.push("t", el.text);
 		else parts.push(el.type);
 	}
@@ -123,7 +133,7 @@ export function mapKey(page: Page, opts: MapOptions = {}): string {
 
 /** Counts per state over `pages`. */
 export function countStates(pages: readonly MapPage[]): MapCounts {
-	const counts: MapCounts = { pages: { question: 0, gap: 0, homework: 0, practice: 0, empty: 0, key: 0 }, clear: 0, total: pages.length };
+	const counts: MapCounts = { pages: { question: 0, gap: 0, homework: 0, practice: 0, empty: 0, key: 0, checklist: 0 }, clear: 0, total: pages.length };
 	for (const p of pages) {
 		if (p.states.length === 0) counts.clear++;
 		for (const s of p.states) counts.pages[s]++;

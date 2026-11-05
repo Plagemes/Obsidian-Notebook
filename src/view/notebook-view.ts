@@ -72,10 +72,11 @@ import { VaultDocumentIO, sidecarDeviceId, vaultDeviceFileAdapter } from "../sto
 import { SharedClipStore } from "../storage/shared-clip-store";
 import { backupFolder, readSettings, type NotebookSettings } from "../settings";
 import { defaultMarkdownFolder, exportMarkdown, siblingFolder } from "./export-markdown";
-import { MakeTaskModal, runMakeTask } from "./selection-task";
+import { MakeTaskModal, runMakeTask, type TaskRequest } from "./selection-task";
 import { runInsertIntoNote } from "./selection-insert";
 import { taskCropRect } from "../model/selection-task";
 import { Mentions } from "./mentions";
+import { LookUpSheet, LookUpWordModal, runLookUp } from "./look-up";
 import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./highlight-digest";
 import { canPrint } from "./print";
 import type { ExportFormat } from "../ink/export-layers";
@@ -83,7 +84,8 @@ import { ExportModal, MarkdownExportModal } from "./export-dialog";
 import { exportPdf, runExport, type ExportOptions } from "./export";
 import { ViewDisplay, type DisplayHost } from "./display";
 import { policySettings } from "./input-settings";
-import { NotebookMedia, storeAsset } from "./media";
+import { NotebookMedia, resolveAssetFile, storeAsset } from "./media";
+import { FiguresModal } from "./figures";
 import { HeavyPageBanner } from "./heavy-page-banner";
 import { ViewSyncSafety, type SyncSafetyService } from "./sync-safety";
 import { QuickTabsStrip } from "./quick-tabs";
@@ -117,7 +119,8 @@ import { runBoardShot } from "./board-shot";
 import type { EditContext } from "./edit-context";
 import { runNewLecture } from "./lecture";
 import { pickSlideRef } from "./lecture-logic";
-import { LectureModeController } from "./lecture-mode";
+import { LectureModeController, routeLectureEnd, type LectureEnd } from "./lecture-mode";
+import { lectureSnapshot, type LectureSnapshot } from "../library/lecture-log-logic";
 import { LECTURE_MEMORY_KEY } from "../timetable/lecture-memory";
 import { findLecturePage } from "../timetable/lecture-open";
 import type { LectureClass } from "../timetable/lecture-mode";
@@ -158,6 +161,7 @@ import { StampPalette, type StampTarget } from "./stamp-palette";
 import { TextEditor, type TextEditSession } from "./text-editor";
 import { MathTools, type MathHost } from "./math-tools";
 import { StickyTools, type StickyHost } from "./sticky-tools";
+import { ChecklistTools, type ChecklistHost } from "./checklist-tools";
 import { CommentTools, pdfCommentLabels, type CommentsHost } from "./comments-tools";
 import { equationNumbers } from "../model/math-elements";
 import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites";
@@ -239,6 +243,10 @@ export interface NotebookHost {
 	classNow?(): string | null;
 	/** 0.14 (401): the class in progress that belongs to this notebook (automatic lecture mode). Optional: absent in tests and the harness. */
 	lectureClassFor?(path: string): LectureClass | null;
+	/** 0.19 (222): a lecture ended in that notebook; the plugin takes the lecture snapshot from the saved file. Optional: absent in tests and the harness. */
+	lectureEnded?(path: string, course: string, saved: boolean): void;
+	/** 0.19 (#221): a lecture the user wrote in ended: its line goes into the daily note (library/lecture-log.ts). Optional: absent in tests and the harness. */
+	logLecture?(file: TFile, cls: LectureClass, snap: LectureSnapshot, docId?: string): void;
 	/** ui redesign: runs a plugin-level action of the registry (notebook menu). Optional. */
 	runGlobal?(id: string): void;
 	/** wave 0.7: sync safety (presence files, sync check). Optional: absent in tests and the harness. */
@@ -360,10 +368,12 @@ export class NotebookView extends FileView {
 	 * Every edit is checked strictly before it is kept (`checkContent`): an edit that the writer would refuse is undone
 	 * with a notice, so a bad element can never stop every later save.
 	 */
-	private readonly history = new History(() => this.requireDoc(), 500, checkContent, (message) => {
-		console.error("[notebook] edit refused, the notebook could not be saved with it:", message);
-		showNotice(t("history.refused", { message }), 10000);
-	}, () => this.userReadOnly, (ids) => this.pagesLocked(ids));
+	private readonly history = new History(() => this.requireDoc(), 500, checkContent, (message, step) => {
+		console.error(`[notebook] ${step ?? "edit"} refused, the notebook could not be saved with it:`, message);
+		// 0.19: an undo or a redo that would leave a notebook the writer refuses is not done and leaves the history (the document is as before).
+		showNotice(step ? t("history.stepRefused", { message }) : t("history.refused", { message }), 10000);
+		if (step) this.updateHistoryButtons();
+	},() => this.userReadOnly, (ids) => this.pagesLocked(ids));
 	/**
 	 * wave 0.10 (51): the user switched this view to read-only mode. Nothing changes the document while it is on: `editable()`
 	 * is false (tools, selection, insert, page operations and every registry action that needs editing), a finger only pans
@@ -424,6 +434,8 @@ export class NotebookView extends FileView {
 	private math: MathTools | null = null;
 	/** 0.17 (#20): sticky notes (insert, edit, collapse). */
 	private sticky: StickyTools | null = null;
+	/** 0.19 (#103): handwritten checklists (taps, the square drawn by hand, send to tasks, the task lines). */
+	private checklist: ChecklistTools | null = null;
 	/** 0.18 (#86): margin comments (markers, card, side panel). */
 	private comments: CommentTools | null = null;
 	private rulerGesture: RulerGesture | null = null;
@@ -668,6 +680,7 @@ export class NotebookView extends FileView {
 		this.textEditor = new TextEditor(this.stage);
 		this.math = new MathTools(this.mathHost());
 		this.sticky = new StickyTools(this.stickyHost());
+		this.checklist = new ChecklistTools(this.checklistHost());
 		this.comments = new CommentTools(this.commentsHost());
 		this.penGestures = new PenGestureLayer({
 			stage: this.stage,
@@ -736,6 +749,7 @@ export class NotebookView extends FileView {
 				if (i >= 0) this.scrollToPage(i);
 			},
 			changed: () => this.refreshUi(),
+			ended: (end) => this.onLectureEnd(end),
 			memory: { load: (): unknown => this.app.loadLocalStorage(LECTURE_MEMORY_KEY), save: (v) => this.app.saveLocalStorage(LECTURE_MEMORY_KEY, v) },
 		});
 		this.mountExcerpts();
@@ -979,6 +993,8 @@ export class NotebookView extends FileView {
 		this.selectionActions?.destroy();
 		this.selectionActions = null;
 		this.arrange = null;
+		this.checklist?.destroy();
+		this.checklist = null;
 		this.penLinks?.destroy();
 		this.penLinks = null;
 		this.pageOffer?.destroy();
@@ -1283,8 +1299,39 @@ export class NotebookView extends FileView {
 		}
 	}
 
+	/** The snapshot a closing notebook asked for: made once closeSession has written the file (see onLectureEnd). */
+	private snapshotAfterClose: { path: string; course: string } | null = null;
+
+	/**
+	 * 0.19 (#221, 222): the one lecture end. The log line comes first, from the open document in memory. The snapshot reads the
+	 * saved file, so it waits for the flush: for a lecture left or over the view flushes here; for a closing notebook closeSession
+	 * is the flush and onUnloadFile asks for the snapshot once it resolved.
+	 */
+	private onLectureEnd(end: LectureEnd): void {
+		routeLectureEnd(end, {
+			log: (cls) => this.logLecture(cls),
+			snapshotAfterFlush: (path, course) => void this.snapshotAfterFlush(path, course),
+			snapshotAfterClose: (path, course) => {
+				this.snapshotAfterClose = { path, course };
+			},
+		});
+	}
+
+	/** The facts of the lecture in the open document, handed to the lecture log (a no-op without the lecture page or the log). */
+	private logLecture(cls: LectureClass): void {
+		const file = this.file;
+		const doc = this.session?.doc;
+		if (!file || !doc || !this.host.logLecture) return;
+		const snap = lectureSnapshot(doc.pages, cls.course, new Date(cls.startsAt));
+		if (snap) this.host.logLecture(file, cls, snap, doc.id);
+	}
+
 	async onUnloadFile(file: TFile): Promise<void> {
+		this.lectureMode?.closing();
 		await this.closeSession();
+		const pending = this.snapshotAfterClose;
+		this.snapshotAfterClose = null;
+		if (pending) this.host.lectureEnded?.(pending.path, pending.course, this.closedSaved);
 		this.activePenSetId = null;
 		// wave 0.10 (51): read-only mode belongs to the notebook being read; the next one opens editable.
 		if (this.userReadOnly) this.setReadOnlyMode(false, false);
@@ -1315,10 +1362,33 @@ export class NotebookView extends FileView {
 	async flushNow(): Promise<boolean> {
 		this.controller?.finishActiveStroke();
 		this.commitText();
+		// 0.19 (#103): the ticks of linked checkboxes that still wait for their task line are written now (the app may be killed).
+		this.checklist?.flush();
 		const session = this.session;
 		if (!session) return true;
 		const written = await session.flush();
 		return written && (session.mode !== "ok" || !session.dirty);
+	}
+
+	/** Saved state of the session closeSession last detached (what a lecture snapshot at close may rely on). */
+	private closedSaved = false;
+
+	/**
+	 * 0.19 (222): writes everything first and tells the plugin whether it all reached the file; the snapshot itself is made
+	 * from the file on disk, never from this view's memory.
+	 */
+	private async snapshotAfterFlush(path: string, course: string): Promise<void> {
+		let saved = this.closedSaved;
+		const session = this.session;
+		if (session) {
+			try {
+				saved = (await this.flushNow()) && session.isSaved();
+			} catch (e) {
+				console.error("[notebook] flush at the end of a lecture failed", e);
+				saved = false;
+			}
+		}
+		this.host.lectureEnded?.(path, course, saved);
 	}
 
 	/** Final flush (with retries and an "unsaved" backup as last resort), then detaches the session. */
@@ -1326,6 +1396,7 @@ export class NotebookView extends FileView {
 		this.controller?.finishActiveStroke();
 		this.commitText();
 		const session = this.session;
+		this.closedSaved = false;
 		if (!session) return;
 		try {
 			// Obsidian may close the view for a deleted file before our 'delete' handler runs.
@@ -1337,6 +1408,7 @@ export class NotebookView extends FileView {
 				if (file && session.mode === "ok" && !session.dirty) this.host.pdfCopy?.closing(file.path, this.pdfCopySource(session));
 			}
 		} finally {
+			this.closedSaved = session.isSaved();
 			session.dispose();
 			if (this.session === session) this.session = null;
 		}
@@ -1890,6 +1962,79 @@ export class NotebookView extends FileView {
 		}, request)).open();
 	}
 
+	/** 0.19 (#228): the Figures gallery: every picture and figure cut-out of the section, the notebook or some pages (read-only). */
+	openFigures(): void {
+		const file = this.file;
+		if (!this.shownDoc() || !file) return;
+		const docPages = () => this.shownDoc()?.pages ?? [];
+		new FiguresModal({
+			app: this.app,
+			pages: docPages,
+			assetIds: () => new Set(Object.values(this.shownDoc()?.assets ?? {}).filter((a) => a.kind === "image").map((a) => a.id)),
+			current: () => this.currentPageIndex(),
+			readAsset: (id) => (this.media ? this.media.readAsset(id) : Promise.reject(new Error("no media"))),
+			goTo: (entry) => {
+				const index = docPages().findIndex((p) => p.id === entry.pageId);
+				if (index < 0) return;
+				this.recordArrival(index);
+				if (!this.excerpts?.reveal(index, { x: entry.x, y: entry.y, width: entry.width, height: entry.height })) this.scrollToPage(index);
+			},
+			insertIntoNote: (entry) => {
+				const doc = this.session?.doc;
+				const index = docPages().findIndex((p) => p.id === entry.pageId);
+				const page = doc?.pages[index];
+				const shown = doc ? this.renderPagesOf(doc)[index] : undefined;
+				if (!page || !shown) return;
+				const options = this.exportOptions();
+				void runInsertIntoNote({
+					app: this.app, file, settings: this.host.settings, page: shown, pageNumber: index + 1, media: this.media, kind: "png", exportOptions: options,
+					crop: taskCropRect({ minX: entry.x, minY: entry.y, maxX: entry.x + entry.width, maxY: entry.y + entry.height }, page),
+					render: {
+						...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+						...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+					},
+				});
+			},
+			openOriginal: (entry) => {
+				const asset = this.shownDoc()?.assets?.[entry.asset];
+				const stored = asset ? resolveAssetFile(this.app, asset, this.host.settings.folder) : null;
+				if (!stored) return false;
+				void this.app.workspace.getLeaf("tab").openFile(stored);
+				return true;
+			},
+		}).open();
+	}
+
+	/** 0.19 (#213): "Look up later" from the selection: an optional typed word, then a picture of the region and a link to the page are appended to the list note. */
+	lookUpFromSelection(): void {
+		const sel = this.selection;
+		const doc = this.session?.doc;
+		const file = this.file;
+		if (!sel || !doc || !file || this.statesTools?.ownsSelection(sel)) return;
+		// A collapsed sticky note keeps its ink out of view: it never widens the region.
+		const bounds = itemsBounds(withoutPinnedInk(sel.strokes, sel.elements), sel.elements, measureText);
+		const page = doc.pages[sel.pageIndex];
+		const shown = this.renderPagesOf(doc)[sel.pageIndex];
+		if (!bounds || !page || !shown) return;
+		const crop = taskCropRect(bounds, page);
+		const options = this.exportOptions();
+		new LookUpWordModal(this.app, sel.pageIndex + 1, (word) => void runLookUp({
+			app: this.app, file, settings: this.host.settings, page: shown, pageNumber: sel.pageIndex + 1, crop, media: this.media,
+			render: {
+				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+			},
+			...(options.prepare ? { prepare: options.prepare } : {}),
+		}, word)).open();
+	}
+
+	/** 0.19 (#213): the read-only sheet of this notebook's "Look up later" entries, each with a jump to its page. */
+	openLookUpList(): void {
+		const file = this.file;
+		const doc = this.shownDoc();
+		if (!file || !doc) return;
+		new LookUpSheet({ app: this.app, file, settings: this.host.settings, pages: () => this.shownDoc()?.pages ?? [], goTo: (index) => this.goToPage(index) }).open();	}
+
 	/** 0.18 (O7): the sheet of notes that link to the page in view. */
 	openMentions(): void {
 		this.mentions?.open();
@@ -2062,6 +2207,86 @@ export class NotebookView extends FileView {
 			select: (pageIndex, elements) => this.selectItems(pageIndex, [], elements),
 			refresh: () => this.refreshUi(),
 		};
+	}
+
+	/** What the checklist tools need from the view (0.19, #103). */
+	private checklistHost(): ChecklistHost {
+		return {
+			app: this.app,
+			stage: () => this.stage,
+			doc: () => this.session?.doc ?? null,
+			editable: () => !!this.editableDocument(),
+			// One undo step. Unlike `applyCommand` it keeps the selection and the text being typed: a tap on a checkbox is not an edit session.
+			execute: (cmd) => {
+				const done = this.history.execute(cmd);
+				this.afterHistoryChange();
+				this.renderer?.invalidate();
+				return done;
+			},
+			// Upkeep (a link that follows a renamed note, or is dropped): no undo step, but the document changed, so it is saved.
+			maintain: (cmd) => {
+				const done = this.history.applyQuietly(cmd);
+				if (done) {
+					this.afterHistoryChange();
+					this.renderer?.invalidate();
+				}
+				return done;
+			},
+			settings: () => this.host.settings,
+			tool: () => this.tools.tool,
+			scale: () => this.viewport.scale,
+			toStage: (pageIndex, x, y) => {
+				const box = this.layout?.boxes[pageIndex];
+				if (!box) return null;
+				const { scale, offsetX, offsetY } = this.viewport;
+				return [offsetX + (box.x + x) * scale, offsetY + (box.y + y) * scale];
+			},
+			pageAt: (clientX, clientY) => {
+				const layout = this.layout;
+				if (!layout) return null;
+				const rect = this.stage.getBoundingClientRect();
+				const [dx, dy] = this.toDoc({ x: clientX - rect.left, y: clientY - rect.top });
+				const pageIndex = pageAt(layout, dx, dy, 0);
+				const box = layout.boxes[pageIndex];
+				return box ? { pageIndex, local: toPageLocal(box, dx, dy) } : null;
+			},
+			fingerNavigates: (e) => this.policy.route("touch", e.timeStamp, 0, Math.max(e.width || 0, e.height || 0), e.buttons) === "navigate",
+			penBusy: (t) => this.policy.penRecentlyActive(t),
+			register: (ref) => this.registerEvent(ref),
+			insertTarget: () => this.mathHost().insertTarget(),
+			selection: () => (this.selection ? { pageIndex: this.selection.pageIndex, strokes: this.selection.strokes, elements: this.selection.elements } : null),
+			select: (pageIndex, strokes, elements) => this.selectItems(pageIndex, strokes, elements),
+			penColor: () => this.tools.penColor,
+			inkOf: (page) => this.inkInView(page),
+			sendTask: (pageIndex, bounds, request) => this.sendChecklistTask(pageIndex, bounds, request),
+			refresh: () => this.refreshUi(),
+		};
+	}
+
+	/** 0.19 (#103): handwritten checklists of this view (null before the view is open). */
+	get checklistTools(): ChecklistTools | null {
+		return this.checklist;
+	}
+
+	/**
+	 * 0.19 (#103): writes the task line of a checkbox (with a picture of its handwriting and a link to the page) into the note the
+	 * request names, the way "Make task" does for a selection (the same code, view/selection-task.ts). The path of the note, or null.
+	 */
+	private sendChecklistTask(pageIndex: number, bounds: BBox, request: TaskRequest): Promise<string | null> {
+		const doc = this.session?.doc;
+		const file = this.file;
+		const page = doc?.pages[pageIndex];
+		const shown = doc ? this.renderPagesOf(doc)[pageIndex] : undefined;
+		if (!doc || !file || !page || !shown) return Promise.resolve(null);
+		const options = this.exportOptions();
+		return runMakeTask({
+			app: this.app, file, settings: this.host.settings, page: shown, pageNumber: pageIndex + 1, crop: taskCropRect(bounds, page), media: this.media,
+			render: {
+				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+			},
+			...(options.prepare ? { prepare: options.prepare } : {}),
+		}, request);
 	}
 
 	/** Colour picker and eyedroppers of this view (null before the view is open). */
@@ -3001,6 +3226,9 @@ export class NotebookView extends FileView {
 			// 0.17 (#20): the sticky note actions (Edit, Collapse, Open) work on the primary page's notes (see stickyTools).
 			stickies: sel.elements.filter((e) => e.type === "sticky").length,
 			stickiesCollapsed: sel.elements.filter((e) => e.type === "sticky" && e.collapsed === true).length,
+			// 0.19 (#103): the checkbox actions (Tick, Label, Send to tasks, Unlink) work on the primary page's checkboxes (see checklistTools).
+			checkboxes: sel.elements.filter((e) => e.type === "checkbox").length,
+			checkboxesLinked: sel.elements.filter((e) => e.type === "checkbox" && e.task !== undefined).length,
 		};
 	}
 
@@ -3382,6 +3610,7 @@ export class NotebookView extends FileView {
 		this.textTap = null;
 		this.lassoTap = null;
 		this.penLinks?.reset();
+		this.checklist?.reset();
 		this.pageOffer?.reset();
 		this.multiTap.reset();
 		this.stopHold();
@@ -3524,6 +3753,8 @@ export class NotebookView extends FileView {
 		// wave 0.10 (51): read-only mode never schedules a save (nothing changed; a stray call must not write the file).
 		if (this.userReadOnly) return;
 		this.session?.markChanged();
+		// 0.19 (#103): the task lines of linked checkboxes follow the ticks a moment later.
+		this.checklist?.docChanged();
 		// v10: live pictures of excerpts of this notebook's pages follow the edit (throttled).
 		this.media?.excerptsChanged();
 		const doc = this.session?.doc;
@@ -3581,6 +3812,7 @@ export class NotebookView extends FileView {
 			}
 			this.pageNav?.markCurrent(current);
 			this.pageOffer?.cancel(); // an offer made for the page that was in view
+			this.checklist?.cancelOffer();
 			this.smartAdd?.hide();
 			this.refreshUi(); // the contextual bar follows the kind of page in view
 			if (n && this.file && this.pendingPage === null) this.location.note(this.file.path, current + 1, this.currentPosition());
@@ -3851,6 +4083,7 @@ export class NotebookView extends FileView {
 		this.viewport = layout ? (this.pageMode?.enabled ? this.pageMode.clamp(v) : clampToPage(v, this.viewSize, layout)) : v;
 		this.renderer?.setViewport(this.viewport, interactive);
 		this.penLinks?.viewChanged();
+		this.checklist?.viewChanged();
 		this.reading?.viewportChanged();
 		this.pdfText?.viewportChanged();
 		if (this.selection) this.pushSelection();
@@ -4114,6 +4347,9 @@ export class NotebookView extends FileView {
 			this.clearSelection();
 			return true;
 		}
+		// 0.19 (#103): a contact on a checkbox is only noted, like the badge of an excerpt: it goes on as ink unless it lifts soon without
+		// moving (then drawEnd drops the dot and ticks the checkbox).
+		if (page && !eraserButton) this.checklist?.begin(page, local, sample, tool);
 
 		if (tool === "eraser") {
 			// Area mode: the outline drawn like a lasso erases what is inside it when the pen lifts.
@@ -4168,6 +4404,7 @@ export class NotebookView extends FileView {
 		// A selection made with the side button's lasso is not carried into new ink.
 		this.clearSelection();
 		this.penLinks?.strokeStarted();
+		this.checklist?.strokeStarted();
 		this.pageOffer?.penDown();
 		this.smartAdd?.hide();
 		this.strokeStart = sample.t;
@@ -4215,6 +4452,7 @@ export class NotebookView extends FileView {
 		if (n > 0) this.perfInput = samples.t[n - 1]!;
 		// v10: a contact that started on an excerpt's badge and moves is ink, not a tap.
 		if (this.excerpts) for (let i = 0; i < n; i++) this.excerpts.watch(NotebookView.at(samples, i));
+		if (this.checklist) for (let i = 0; i < n; i++) this.checklist.watch(NotebookView.at(samples, i));
 		if (this.pdfText?.dragging) {
 			const textPage = this.pdfText.gesturePage;
 			const last = n > 0 ? NotebookView.at(samples, n - 1) : null;
@@ -4414,13 +4652,16 @@ export class NotebookView extends FileView {
 		this.justCommitted = null;
 		// v10: a short unmoved contact on an excerpt's badge was a tap: what it drew (a dot) is dropped, then the jump.
 		const badgeTap = this.excerpts?.takeBadgeTap(cancelled, performance.now(), () => this.contactExtentPx()) ?? null;
-		this.endGesture(cancelled || badgeTap !== null);
+		// 0.19 (#103): the same for a checkbox: a short unmoved contact on it was a tap.
+		const boxTap = this.checklist?.takeTap(cancelled, performance.now(), () => this.contactExtentPx()) ?? null;
+		this.endGesture(cancelled || badgeTap !== null || boxTap !== null);
+		if (boxTap) this.checklist?.toggle(boxTap);
 		if (badgeTap) this.excerpts?.openSource(badgeTap);
 		// An external change seen during the gesture was postponed; check it now.
 		this.session?.gestureEnded();
 		// 0.14: the first stroke written during an automatic lecture is what adds its page (view/lecture-mode.ts). Deferred past the
 		// pointer handler so the contact is over; the document is only touched through the usual edit context.
-		if (!cancelled && badgeTap === null && this.justCommitted) window.setTimeout(() => this.lectureMode?.wrote(), 0);
+		if (!cancelled && badgeTap === null && boxTap === null && this.justCommitted) window.setTimeout(() => this.lectureMode?.wrote(), 0);
 	}
 
 	private endGesture(cancelled: boolean): void {
@@ -4566,7 +4807,7 @@ export class NotebookView extends FileView {
 	}
 
 	/** Commits strokes drawn on a page as one undo step; an infinite page grows in the same step. */
-	private addStrokes(pageIndex: number, page: Page, drawn: Stroke[]): void {
+	private addStrokes(pageIndex: number, page: Page, drawn: Stroke[], offerChecklist = true): void {
 		// 0.14 slides (#226): ink written while a slide is beside the notes remembers it, in the same undo step. The renderer
 		// still gets the strokes it drew (`drawn`, same geometry): the wet ink hands over to exactly those objects.
 		const linked = this.session?.doc ? linkToSlide(this, this.session.doc, drawn, this.host.settings.slideInkLink) : null;
@@ -4593,6 +4834,7 @@ export class NotebookView extends FileView {
 		const cmd = commands.length === 1 ? commands[0]! : new Batch("Draw", commands);
 		this.justCommitted = this.history.execute(cmd) ? { ids: new Set(strokes.map((s) => s.id)), cmd } : null;
 		this.penLinks?.strokesAdded(pageIndex);
+		if (offerChecklist) this.checklist?.strokesAdded(pageIndex, strokes);
 		// Reaching the bottom of a page in the middle: offer (never add) a page right after it.
 		if (doc && this.renderer && !grew) {
 			const maxY = Math.max(...strokes.map((s) => this.renderer!.boundsOf(s).maxY));
@@ -4614,7 +4856,7 @@ export class NotebookView extends FileView {
 		const points = shapePoints(this.tools.shapeKind, shape.a, shape.b, this.tools.penWidth, this.shiftDown);
 		if (points.length < 2) return;
 		const stroke = freezeStroke(createStroke(this.tools.penColor, this.tools.penWidth, points, "shape"));
-		this.addStrokes(shape.pageIndex, page, [stroke]);
+		this.addStrokes(shape.pageIndex, page, [stroke], false);
 	}
 
 	private pushLive(): void {

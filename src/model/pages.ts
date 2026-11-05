@@ -1,11 +1,22 @@
+import { copiedCheckbox } from "./checklist";
 import { createId, createPage } from "./document";
 import { freezeElement, freezeStroke } from "./serialize";
 import { copyComments } from "./comments";
 import { remapStates } from "./states";
 import { PAPER_SPACING, type Asset, type Page, type PageElement, type Stroke } from "./types";
 
-function copyElement(el: PageElement): PageElement {
+function copyElement(el: PageElement, keepTasks: boolean): PageElement {
+	// v17: a copy of a checkbox keeps its tick but never the link to the task line of the original (unless the page is moved).
+	if (el.type === "checkbox") return freezeElement(copiedCheckbox(el, createId(), keepTasks));
 	return freezeElement({ ...el, id: createId() });
+}
+
+export interface DuplicateOptions {
+	/**
+	 * The copy replaces the page (pages moved to another notebook, a page restored from the page trash): its checkboxes are the same
+	 * checkboxes and keep the link to their task lines. A real copy (the default) never ticks the tasks of the original.
+	 */
+	keepTasks?: boolean;
 }
 
 /**
@@ -28,7 +39,7 @@ export function copyStroke(s: Stroke, id: string = s.id, slide?: string | null):
  * frozen like committed ones. Lives apart from document.ts because
  * serialize.ts -> migrations.ts -> document.ts would cycle.
  */
-export function duplicatePage(page: Page): Page {
+export function duplicatePage(page: Page, opts: DuplicateOptions = {}): Page {
 	const ids = new Map<string, string>();
 	const copy: Page = {
 		id: createId(),
@@ -49,7 +60,7 @@ export function duplicatePage(page: Page): Page {
 	if (page.margins) copy.margins = { ...page.margins };
 	// v7: the copy keeps the page's tags (its bookmark is not copied: bookmarks belong to the original page id).
 	if (page.tags && page.tags.length > 0) copy.tags = [...page.tags];
-	if (page.elements && page.elements.length > 0) copy.elements = page.elements.map(copyElement);
+	if (page.elements && page.elements.length > 0) copy.elements = page.elements.map((e) => copyElement(e, opts.keepTasks === true));
 	// v16: the comments are about the page, so a copy of the page keeps them (same ids: they are scoped to the page).
 	const comments = copyComments(page.comments, page);
 	if (comments) copy.comments = comments;

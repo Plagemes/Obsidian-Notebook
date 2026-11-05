@@ -101,6 +101,18 @@ describe("which backups are old enough to offer", () => {
 		expect(more.old.map((o) => o.path.slice(o.path.lastIndexOf("/") + 1))).toEqual(["20240101-1000.snapshot"]);
 	});
 
+	it("lecture snapshots neither fill the spared window of the ordinary ones nor are offered (own retention)", () => {
+		const ordinary = ["20240101-1000", "20240201-1000", "20240301-1000", "20240401-1000"].map((n) => snap("doc-physics", n));
+		const lectures = ["20261001-1000", "20261002-1000", "20261003-1000", "20261004-1000", "20261005-1000"].map((n) => snap("doc-physics", `${n}-lecture`));
+		const plan = planBackups([...ordinary, ...lectures], FOLDER, notebooks, NOW, { keepSnapshots: 3 });
+		// The newest 3 ordinary ones stay (as without the lecture ones); only the oldest ordinary is old; no lecture snapshot is listed.
+		expect(plan.old.map((o) => o.path.slice(o.path.lastIndexOf("/") + 1))).toEqual(["20240101-1000.snapshot"]);
+		// They still count as the notebook's files and bytes.
+		expect(plan.countByNotebook.get("Notebooks/Physics.notebook")).toBe(9);
+		const old = planBackups(["20200101-1000-lecture", "20200201-1000-lecture", "20200301-1000-lecture", "20200401-1000-lecture", "20200501-1000-lecture"].map((n) => snap("doc-physics", n)), FOLDER, notebooks, NOW);
+		expect(old.old).toEqual([]);
+	});
+
 	it("the snapshots of a document no notebook has are kept; so are young ones", () => {
 		const gone = planBackups(["20200101-1000", "20200201-1000", "20200301-1000", "20200401-1000"].map((n) => snap("doc-gone", n)), FOLDER, notebooks, NOW);
 		expect(gone.old).toEqual([]);

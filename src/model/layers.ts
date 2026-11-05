@@ -32,6 +32,8 @@ export function elementBand(el: PageElement): number {
 		case "equation": return 3;
 		case "text": return 4;
 		case "marker": return 5;
+		// v17 checkboxes are drawn above the ink like marker badges, in the same band.
+		case "checkbox": return 5;
 	}
 }
 

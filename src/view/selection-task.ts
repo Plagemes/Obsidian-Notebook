@@ -28,6 +28,8 @@ export interface TaskRequest {
 	/** `YYYY-MM-DD` or empty. */
 	due: string;
 	target: TaskTarget;
+	/** 0.19 (#103): a block id (`nb-…`) written at the end of the line, so a checkbox can find the line again to tick it. */
+	block?: string;
 }
 
 export interface TaskHost {
@@ -77,6 +79,16 @@ class NotePicker extends FuzzySuggestModal<TFile> {
 
 let lastTarget: "daily" | "tasks" = "daily";
 
+/** 0.19 (#103): how the dialog differs when a checkbox is sent (the text may stay empty: the picture of its handwriting is the task). */
+export interface MakeTaskOptions {
+	allowEmpty?: boolean;
+	title?: string;
+	desc?: string;
+	text?: string;
+	buttonLabel?: string;
+	block?: string;
+}
+
 /** The dialog: the task's text, an optional due date and the note it goes to. */
 export class MakeTaskModal extends Modal {
 	private text = "";
@@ -84,17 +96,22 @@ export class MakeTaskModal extends Modal {
 	private choice: "daily" | "tasks" | "pick" = lastTarget;
 	private picked: TFile | null = null;
 
-	constructor(app: App, private readonly settings: NotebookSettings, private readonly page: number, private readonly run: (request: TaskRequest) => void) {
+	constructor(
+		app: App, private readonly settings: NotebookSettings, private readonly page: number, private readonly run: (request: TaskRequest) => void,
+		private readonly options: MakeTaskOptions = {},
+	) {
 		super(app);
+		this.text = options.text ?? "";
 	}
 
 	onOpen(): void {
 		const tasksNote = configuredTasksNote(this.app, this.settings);
 		if (this.choice === "tasks" && !tasksNote) this.choice = "daily";
-		const shell = modalShell(this, { title: t("task.title"), icon: "list-checks", size: "narrow", cls: "notebook-task-modal" });
-		shellNote(shell.body, t("task.desc", { page: String(this.page) }));
+		const shell = modalShell(this, { title: this.options.title ?? t("task.title"), icon: "list-checks", size: "narrow", cls: "notebook-task-modal" });
+		shellNote(shell.body, this.options.desc ?? t("task.desc", { page: String(this.page) }));
 		const textField = shellField(shell.body, t("task.text"), "nb-task-text");
 		const input = textField.createEl("input", { cls: "nb-modal-input", attr: { id: "nb-task-text", type: "text", maxlength: "300", autocomplete: "off", placeholder: t("task.text.placeholder") } });
+		input.value = this.text;
 		const dueField = shellField(shell.body, t("task.due"), "nb-task-due");
 		const date = dueField.createEl("input", { cls: "nb-modal-input", attr: { id: "nb-task-due", type: "date" } });
 		const targetField = shellField(shell.body, t("task.target"), "nb-task-target");
@@ -112,11 +129,11 @@ export class MakeTaskModal extends Modal {
 			}).open();
 		});
 		shellButton(shell.foot, "secondary", t("export.dialog.cancel"), () => this.close());
-		const make = shellButton(shell.foot, "primary", t("task.make"), () => this.submit(tasksNote), { icon: "plus" });
+		const make = shellButton(shell.foot, "primary", this.options.buttonLabel ?? t("task.make"), () => this.submit(tasksNote), { icon: "plus" });
 		const refresh = () => {
 			pickRow.toggleClass("nb-task-hidden", this.choice !== "pick");
 			chosen.setText(this.picked ? this.picked.path : t("task.pick.none"));
-			make.disabled = cleanTaskText(this.text) === "" || (this.choice === "pick" && !this.picked) || (this.due !== "" && !isIsoDate(this.due));
+			make.disabled = (cleanTaskText(this.text) === "" && !this.options.allowEmpty) || (this.choice === "pick" && !this.picked) || (this.due !== "" && !isIsoDate(this.due));
 		};
 		input.addEventListener("input", () => {
 			this.text = input.value;
@@ -140,12 +157,12 @@ export class MakeTaskModal extends Modal {
 
 	private submit(tasksNote: TFile | null): void {
 		const text = cleanTaskText(this.text);
-		if (text === "") return;
+		if (text === "" && !this.options.allowEmpty) return;
 		const target: TaskTarget | null = this.choice === "daily" ? { kind: "daily" } : this.choice === "tasks" ? (tasksNote ? { kind: "file", file: tasksNote } : null) : this.picked ? { kind: "file", file: this.picked } : null;
 		if (!target) return;
 		if (this.choice !== "pick") lastTarget = this.choice;
 		this.close();
-		this.run({ text, due: this.due, target });
+		this.run({ text, due: this.due, target, ...(this.options.block ? { block: this.options.block } : {}) });
 	}
 
 	onClose(): void {
@@ -208,7 +225,7 @@ export async function runMakeTask(host: TaskHost, request: TaskRequest, now: Dat
 			stored = crop?.file ?? null;
 			const image = crop?.embed ?? null;
 			const pageLink = app.fileManager.generateMarkdownLink(file, notePath, stablePageSubpath(host.pageNumber, host.page.id), t("task.pageAlias", { notebook: file.basename, n: String(host.pageNumber) }));
-			return buildTaskLine({ text: request.text, due: request.due, emoji: host.settings.taskDueEmoji, image, pageLink });
+			return buildTaskLine({ text: request.text, due: request.due, emoji: host.settings.taskDueEmoji, image, pageLink, ...(request.block ? { block: request.block } : {}) });
 		};
 		let written: string | null = null;
 		let added = false;

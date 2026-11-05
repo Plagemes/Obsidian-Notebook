@@ -4,7 +4,7 @@
 import { outlineEntries } from "./bookmarks";
 import { orderedNotes, repliesOf } from "./comments";
 import { equationNumbers } from "./math-elements";
-import type { EquationElement, NotebookMeta, Page, StickyElement, TextElement } from "./types";
+import type { CheckboxElement, EquationElement, NotebookMeta, Page, StickyElement, TextElement } from "./types";
 
 /** Resolutions offered for the page images (dots per inch of the page at its real size). */
 export const MARKDOWN_DPI = [100, 150, 200] as const;
@@ -110,11 +110,14 @@ export function equationMarkdown(e: EquationElement, number?: number): string {
  * (top to bottom, then left to right); a note is a block quote. Graphs and handwriting are in the page image.
  */
 export function pageTexts(page: Pick<Page, "elements">, numbers: ReadonlyMap<string, number> = new Map()): string[] {
-	const items = (page.elements ?? []).filter((e): e is TextElement | EquationElement | StickyElement =>
-		(e.type === "text" && e.text.trim() !== "") || (e.type === "equation" && e.latex.trim() !== "") || (e.type === "sticky" && (e.text ?? "").trim() !== ""));
+	const items = (page.elements ?? []).filter((e): e is TextElement | EquationElement | StickyElement | CheckboxElement =>
+		(e.type === "text" && e.text.trim() !== "") || (e.type === "equation" && e.latex.trim() !== "") || (e.type === "sticky" && (e.text ?? "").trim() !== "")
+		|| (e.type === "checkbox" && (e.label ?? "") !== ""));
 	items.sort((a, b) => a.y - b.y || a.x - b.x);
 	const lines = (text: string) => text.replace(/\r\n?/g, "\n").trim().split("\n");
 	return items.map((e) => {
+		// v17: a checkbox with a typed label is a task-list item (the handwritten label is in the page image).
+		if (e.type === "checkbox") return `- [${e.checked === true ? "x" : " "}] ${escapeMarkdownLine(e.label ?? "")}`;
 		if (e.type === "equation") return equationMarkdown(e, numbers.get(e.id));
 		if (e.type === "sticky") return lines(e.text ?? "").map((l) => `> ${escapeMarkdownLine(l)}`).join("\n");
 		return lines(e.text).map(escapeMarkdownLine).join("  \n");

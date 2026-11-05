@@ -17,6 +17,7 @@
  * name), so two synced devices generate byte-identical notes and never rewrite each other's copy.
  */
 import { cardSubpath, clampRegion, validPageId } from "../zettel/subpath";
+import { fitSearchBudget, SEARCH_NOTE_MAX, searchLines } from "./companion-search";
 import { cleanMarkerText, isBoxKind, isIsoDate } from "./markers";
 import { computeSharedTags, normalizeTag, uniqueTags } from "./tags";
 import type { BoxElement, MarkerElement, NotebookDocument, Page, TextElement } from "./types";
@@ -44,6 +45,8 @@ export interface CompanionContext {
 	notebookPath: string;
 	/** Link that opens the notebook at a 1-based page, by page id first (integration/links.ts `notebookUri`). */
 	pageUri(page: number, pageId?: string): string;
+	/** O19: also write the typed text of sticky notes, comments, equations and marker labels, and link each page with a wikilink. */
+	searchText?: boolean;
 }
 
 export interface CompanionContent {
@@ -283,15 +286,23 @@ export function companionContent(doc: NotebookDocument, ctx: CompanionContext, h
 	const sections: string[] = [];
 	const homeworkDone: string[] = [];
 	const anchors = new Set<string>();
+	// The search text of all pages together is bounded, so a notebook of hundreds of pages cannot make a huge note.
+	const budget = { left: SEARCH_NOTE_MAX, cut: false };
 	pages.forEach((page, i) => {
 		// v8: structured boxes become callouts with a live embed of their region, homework becomes Obsidian tasks.
+		const extra = ctx.searchText ? fitSearchBudget(searchLines(page), budget) : [];
 		const blocks = [
 			...textBlocks(page?.elements), ...boxCallouts(page, i + 1, ctx.notebookPath), ...homeworkTasks(page?.elements, homework, homeworkDone, anchors),
+			...(extra.length > 0 ? [extra.join("\n")] : []),
 		];
 		if (blocks.length === 0) return;
 		// Parentheses would end the Markdown link early.
 		const uri = ctx.pageUri(i + 1, page.id).replace(/\(/g, "%28").replace(/\)/g, "%29");
-		sections.push([`### ${pageHeading(i + 1)}`, `[↗ ${pageHeading(i + 1)}](${uri})`, "", blocks.join("\n\n")].join("\n"));
+		// O19: with search text on, the link is a wikilink to the page (by page id), so a global-search hit leads back to it.
+		const link = ctx.searchText && typeof page.id === "string" && validPageId(page.id)
+			? `[[${ctx.notebookPath}${cardSubpath(i + 1, page.id, null)}|${pageHeading(i + 1)}]]`
+			: `[↗ ${pageHeading(i + 1)}](${uri})`;
+		sections.push([`### ${pageHeading(i + 1)}`, link, "", blocks.join("\n\n")].join("\n"));
 	});
 	const content: CompanionContent = { properties, tags: uniqueTags(tags), text: sections.join("\n\n") };
 	if (homeworkDone.length > 0) content.homeworkDone = homeworkDone;

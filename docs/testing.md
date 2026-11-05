@@ -6,7 +6,9 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 
 | Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
 |---|---|---|---|---|---|
+| Figures gallery (roadmap 228, 0.19 gallery): *Figures…* opens a grid of every photo and anchored crop of the section, the notebook or typed pages; kind chips with counts, page badge, tap to go and outline, long press for Copy image, Insert into note, Open original; thumbnails lazy, one at a time, bounded cache; read-only | yes | yes: collection, scopes, counts, cache and queue (`tests/figures.test.ts`); harness `dev/harness/figures-check.ts` | | | not tried on the tablet with a real photo set; clipboard image copy needs `ClipboardItem` (steps 1600-1619) |
 | Split an infinite page into sheets (roadmap 178, 0.18 a4split): *Split into sheets* in the PDF and PNG export dialog for infinite pages; paper A4/Letter/A5, orientation, fit width or 100%, margin, overlap, smart cuts between lines, page numbers, skip empty sheets; preview of the cuts | yes | yes: tiling, smart cuts, split PDF structure, byte-identical non-split PDF (`tests/export-tiles.test.ts`); harness `dev/harness/a4split-check.ts` | | | |
+| Companion note holds typed text for search (roadmap O19, 0.19 search): setting *Include typed text in search* (under *Companion notes*, off by default) also writes, per page under its `### p. N` heading with a wikilink `[[notebook#pN&id=…&#124;p. N]]`, the text of sticky notes, margin comments and replies, equation sources (inline code) and marker labels (questions, gaps, importance), escaped so nothing becomes a link, tag, comment or maths; at most 4000 characters per page, a cut says so; same debounce, same region markers, no write when unchanged; text boxes, box titles and homework were already written | ✅ | ✅ `tests/companion-search.test.ts` (escaping, equation code, every source, bounds, off = unchanged, wikilink, deterministic output, setting default and lenient reading) | | | OCR text is not included (no OCR yet); not tried in the real Obsidian search or on Android (steps 1520-1539) |
 | Magnetic snap and alignment guides (roadmap 71, 0.17 snap): while a selection is moved or scaled it is pulled onto the paper grid (grid, dotted, millimetre every 5 mm, ruled vertically) and onto the edges and centres of the other items, the page centre and edges and the margins; thin coloured guides on the live layer only during the drag; setting *Snap and guides* (off / grid / guides / both) and *Snap strength*; a second finger held (or Alt), or the *Snap* button of the selection bar, lets the drag move freely; rotation is never snapped | ✅ | ✅ `tests/snap.test.ts` (grid per paper, targets, move and scale snapping, guides, modes), `tests/snap-glue.test.ts` (session from a page, dragged matrices, finger/Alt bookkeeping); ✅ harness `doc=snap` (snap on lands on the edge, off, paused, finger held, guides during the drag) at tablet and phone, light and dark | | | not tried with the real S Pen or a held finger on a tablet; the palm-size filter for the held finger is a guess (steps 1120-1139) |
 | Saved collections (roadmap 120, 0.17 collections): *Collections* section in the library rail with a live count per collection and a + row; a collection is a name and rules combined with AND: tags (any / all, nested tags match under their parent), a folder with its subfolders, modified or created in the last 7 / 30 days or a date range, favourite (starred or pinned) or not, has a PDF or not; the editor shows how many notebooks match as the rules change; opening one filters the library grid (same filter and search path as the other places, archived notebooks stay out); edit with the rail's pencil or the header's; delete asks first and never touches a notebook; stored in `_meta/collections-<device>.json`, one file per device merged on read (latest change wins per collection, a delete is a tombstone), read leniently with unknown fields kept, never overwritten when unreadable or empty | ✅ | ✅ `tests/collections.test.ts` (every rule, AND, ranges, lenient reading, unknown fields and items kept, merge and tombstones, later time than the merged one, own file never overwritten when unreadable or empty, other devices' bad files skipped, change events); ✅ harness `doc=library` (make through the real dialog, live count, rail count equals cards, header names it, edit, delete with confirmation, no sideways scroll) at tablet and phone, light and dark | | notebook type / template is not a rule (the library index has no such field; adding one means a new index version); a collection whose folder was renamed matches nothing until edited | not tried on the real tablet or with two synced devices (steps 1220-1239) |
 | Copy text from the PDF (roadmap 45, 0.16 pdftext): *Select text* mode on PDF pages (contextual bar, sheet, command): a drag with the pen, a finger or the mouse, or a tap on a word, selects the PDF text; nothing is ever drawn in the mode; bubble with *Copy*, *Copy as quote* (PDF name and page, link back to the notebook page) and clear; Ctrl/Cmd+C; a hyphenated word at the end of a line is joined; text read per page on demand and cached, no DOM text layer | ✅ | ✅ `tests/pdf-text-select.test.ts` (page to PDF coordinates with margins, character boundary with real glyph widths, nearest line then run, word, ranges, copied text, boxes, tap, quote); ✅ harness `doc=pdftext` (pen drag, finger drag, multi-line drag, tap, both copy buttons, no ink, leaving the mode, a page without PDF text) at tablet and phone, light and dark | | | not tried with the real S Pen or a finger on a tablet, with a real PDF (columns, rotated text, scans), or with the Android clipboard (steps 970-979) |
@@ -346,7 +348,7 @@ Numbers from the final run of 0.9.0 (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 4376 tests passed |
+| `npm test` (unit project only; benchmarks are separate) | 4669 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: 0 errors; `eslint-plugin-obsidianmd` recommended rules: 0 errors |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
@@ -1233,6 +1235,60 @@ Generated outline (roadmap 407). Reference screenshots after `npm run harness:ch
 611. **Dark and light, Obsidian theme.** Check the outline in the dark and light theme and with *Appearance → Style → Follow Obsidian theme*; the white picture of a heading stays readable.
 612. **Cost.** In a notebook of 100+ pages, open the outline for the first time (note how long it takes), then close and reopen it: the second time is immediate. Writing with the outline open does not stutter.
 613. **No change to the file.** Open a notebook, view the outline, close it without editing: the file is not rewritten (no new snapshot, no sync conflict).
+
+### 0.19 — gallery: Figures gallery (steps 1600-1619)
+
+Figures gallery (roadmap #228). Use a notebook with two or three lectures (pages with a "Name — 2026-11-03" header), several photos (camera, board photo, pasted or imported pictures) and at least one anchored crop (*Anchored excerpt*), plus one photo placed twice.
+
+1600. **Open.** *Figures…* in All actions, in the notebook menu and in the command palette opens a *Figures* dialog; the subtitle says how many figures on how many pages.
+1601. **Section.** *This section* is selected and shows only the photos and crops of the lecture of the page in view. Going to another lecture and reopening shows that lecture's. In a notebook without lecture headers the choice is not offered and the whole notebook is shown.
+1602. **Scope.** *Whole notebook* shows every figure in page order, top to bottom within a page. *Some pages* shows a field: type `2-3, 5`; the cards follow; a wrong text (`9-2`, a page that does not exist) says what is wrong and keeps the last good list.
+1603. **Kinds.** The chips *All / Photos / Crops* show counts; a tap filters and a second tap clears; a kind with nothing in it is not offered.
+1604. **Page badge.** Every card shows its page number (`p. 3`) and a small photo or crop mark.
+1605. **Tap.** Tap a card: the dialog closes, the view scrolls to the figure and outlines it for about a second. Back returns to where you were.
+1606. **Long press.** Long-press a card with the finger or the S Pen (or tap its ... button, or right-click with a mouse): a menu with *Go to page*, *Copy image*, *Insert into note…* and *Open original*.
+1607. **Copy image.** *Copy image* then paste into a note or another app: the full picture arrives. If the device does not allow it a notice says so.
+1608. **Insert into note.** *Insert into note…* adds the picture of that place on the page (as drawn, with any ink over it) and a link back to the note you were last in (or one you choose), like selection-into-note.
+1609. **Open original.** *Open original* opens the stored picture file in a new tab.
+1610. **Lazy.** In a notebook with dozens of photos the dialog opens at once; thumbnails appear for the cards in view first and the rest as you scroll; memory does not grow without bound while scrolling the whole list (the app stays responsive).
+1611. **Missing file.** With a picture file removed from `_assets` (or not yet synced) its card shows "File missing or syncing"; the other cards are fine; a tap still goes to the figure.
+1612. **Same picture twice.** Two cards of the same picture show the same thumbnail and each goes to its own place.
+1613. **Read only.** Opening the gallery, jumping and copying do not change the notebook (modified time and *Unsaved* state); it also works in a read-only notebook.
+1614. **Pen.** While writing with the pen no thumbnail is made until you pause.
+1615. **Android.** Cards and the ... button are easy to hit; the long press does not also jump.
+1616. **Look.** Light, dark, *Follow Obsidian theme*, phone width (two columns), Italian.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Figures gallery (#228): grid of the photos and anchored crops of the section / notebook / typed pages, kind filter with counts, page badge, tap to go and outline, long press: copy image, insert into note, open original | yes | yes (`tests/figures.test.ts`: collection and reading order, rotation, scopes and sections, counts, thumbnail cache and queue); harness `doc=figures` | | Copying an image to the clipboard needs `ClipboardItem` (not in every Android WebView); decoding very large photos at a small size depends on the WebView | Run on the tablet with a real photo set |
+
+### 0.19 — lecturelog: lecture log in the daily note (steps 1560-1579)
+
+Lecture log (roadmap #221). Needs Daily notes (or Periodic Notes) on, and a timetable class running now that belongs to a notebook (set the class a few minutes around the current time).
+
+1560. **Off by default.** Settings, Integrations: *Lecture log in the daily note* is off; *Lecture log heading* appears only when it is on. With it off, ending a lecture writes nothing to the daily note.
+1561. **First line.** Turn it on, enter lecture mode in the class's notebook, write a few lines, leave lecture mode (End). Today's daily note ends with `## Lectures` and one line: time slot, bold course, the page count and (only if there are any) the open questions, then the link `pp. a–b`.
+1562. **Link.** Tap the link in the daily note (reading view): the notebook opens at the first lecture page. Reorder pages: the link still opens the same page (it carries the page id).
+1563. **Open questions.** Add two question markers on the lecture pages, resolve one, end the lecture again: the same line (not a second one) now says "1 open question".
+1564. **Session goes on.** Re-enter lecture mode within the same class, add a page, end: still one line, now with the new range and count. The rest of the note (text before and after, other headings) is unchanged.
+1565. **Closing the notebook.** Write during the class without lecture mode on, close the notebook before the class ends: the line is written or updated.
+1566. **Custom heading.** Change the heading to `Classes`: the next line goes under a `## Classes` heading (created at the end if missing); an existing heading of that text collects the line at the end of its section, before the next heading of the same level.
+1567. **Edited line.** Move the line elsewhere in the note, or edit its text but keep `^nb-lec-…`: the next update rewrites it where it stands.
+1568. **Note missing, create off.** Delete today's daily note and turn *Create the daily note if missing* off: ending a lecture creates nothing. Create the note (or open today's note with the Daily notes command): within a moment the line appears in it. Restart Obsidian before creating the note: the line is still written afterwards.
+1569. **Note missing, create on.** With *Create the daily note if missing* on, a missing note is made (with your Daily notes template) and holds the line.
+1570. **Nothing written without writing.** Enter lecture mode and end it without writing anything: no line. A class you did not write in leaves no line.
+1571. **Two classes.** Two classes in the same notebook on one day each get their own line.
+1572. **Android.** All of the above on the tablet; no notice or delay while closing the notebook.
+1573. **Look.** The two settings in light, dark, *Follow Obsidian theme*, phone width, Italian.
+1574. **Your edits to the line survive.** After the first line is written, put it in a callout (`> `), turn it into a task (`- [ ]`) and type a few words after the link. Write more in the class and end the lecture again: the line is updated (new range and counts) and the callout mark, the task box and your words are still there. A copy of the line inside a code block is not touched. Rewrite the line completely by hand (keeping `^nb-lec-…`): the next end changes nothing and adds no second line.
+1575. **Templater on a new daily note.** With *Create the daily note if missing* on and Templater filling new daily notes (folder template or "trigger on new file creation"), end a lecture on a day without a note: after a few seconds the note holds the template text and the lecture line. Delete the line afterwards: it does not come back.
+1576. **Ten minutes after the class.** Write on the lecture page up to ten minutes after the class's time slot has ended: the line and (if on) the snapshot are updated with it. Write eleven minutes after: nothing changes.
+1577. **Rename the notebook.** End a lecture, rename or move the notebook, write again in the same class and end it: still one line (with the new link), not two.
+1578. **Switching apps.** Switch to another app and back several times during a class: no line is written and no snapshot is taken until the lecture ends.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Lecture log: one line per lecture in the daily note under a configurable heading, rewritten in place by its block id, pending on this device while the note is missing and may not be made | yes | yes (`tests/lecture-log.test.ts`: snapshot, line, merge, pending list, writer on an in-memory vault) | | Never run against the real Daily notes / Periodic Notes plugins; the leave-on-close path depends on Obsidian's view unload order | Run on a real vault and on Android |
 
 ### 0.18 — mentions: notes that link to a page (steps 1400-1419)
 
@@ -2224,6 +2280,59 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 |---|---|---|---|---|---|
 | Selection into a Markdown note as PNG or SVG with optional link back; cursor insert through the editor, note picker and append fallback; width, background, link-back settings (#59) | yes | `tests/note-insert.test.ts` | | | |
 
+### 0.19 — checklists (handwritten checklists, format v17; steps 1500-1519)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`HARNESS_DOC=checklists`): `dev/harness/dist/shots/checklists-*.png` (tablet and phone, light and dark). Notebooks saved with a checkbox are format v17: 0.18 and older open them read-only.
+
+1500. **Insert.** Insert sheet (More) > *Checkbox*. Expected: an unticked rounded square appears at the centre of the view, selected (handles); the selection bar has *Tick / untick*, *Select with text*, *Label…*, *Send to tasks…*. One undo removes it.
+1501. **Tick with the S Pen.** With the pen tool, tap the box with the S Pen tip. Expected: a tick appears, no dot of ink is left, one undo unticks it. A stroke that starts on the box and moves is ordinary ink and ticks nothing. Tap again: it unticks. The pen target is the box and about 3 pt around it: dot an "i" or write a colon right next to the box (where the label starts) and the dot stays as ink and the box does not tick.
+1502. **Tick with a finger.** With *write with finger* off, tap the box with a finger: it ticks (a tap that moves or lingers pans the page instead). With *write with finger* on, the same tap ticks it too and leaves no dot. While the pen is down or was used a moment ago (the palm rejection time), a finger or palm touching the box ticks nothing.
+1503. **A drawn square.** With the pen draw a small square (about 1 cm) in one stroke. Expected: after the pen lifts a *Make checkbox* chip appears below it; tap it: the square becomes a checkbox of the same size and place in the colour of the pen; one undo gives the square back as ink. Writing on, scrolling or waiting about 9 seconds takes the chip away.
+1504. **Not a square.** Draw a rectangle, a circle, a very small or very large square, a square with the Shape tool, a highlighter square and a hand-written *O*: none is offered a chip. A square turned about 45° is not offered either.
+1505. **The setting.** Settings > Writing > *Squares drawn as checkboxes*. *Make it a checkbox*: a drawn square becomes a checkbox by itself about half a second after the pen lifts (not if you draw a tick across it: the square waits while the tick is drawn and is checked again after it; writing a label beside it does make it one). *Leave it as ink*: nothing is offered. A checkbox from the Insert sheet works in every mode. Ignore the chip three times in a row: it stops appearing until you make a checkbox or reopen the notebook.
+1506. **The line.** Draw a box and write a few words on its line to the right, a second line below it with its own box. Select the first box (lasso) and tap *Select with text*: the box and its words are selected, not the line below or a box further right on the same line. Move the selection: they move together.
+1507. **Label.** With one checkbox selected tap *Label…*, type a name, *Save*. One undo step. The notebook map tooltip and the Markdown export use it.
+1508. **Send to tasks.** Select a checkbox that has handwriting beside it, *Send to tasks…*. Expected: the Make task dialog (title *Send to tasks*, the text may stay empty), the daily note as default target. *Send task*: the note ends with a line `- [ ] … ![[… task p… .png|200]] [[page link]] ^nb-…`; the selection bar now offers *Unlink task* instead of *Send to tasks…*.
+1509. **The tick follows.** Tick the linked checkbox on the page: within a second the line in the note shows `- [x]` and no other line or byte of the note changed. Untick: `- [ ]`. Undo and redo of a tick do the same. Ticking goes from the notebook to the note only: ticking the task in the note does not tick the checkbox (the dialog says so). Tick and at once switch to another app or close the notebook: the line is still updated. Make the write fail (read-only note, or the note not yet synced): the link stays and the tick is retried a few times.
+1510. **The line is gone.** Delete that line in the note (this edits the note), then tick the checkbox: nothing happens at first; when the app reads the note again a minute or more later (tick again, or wait for the retry) a notice says the line is no longer in the note and the checkbox is no longer linked (*Unlink task* is gone). The note is not touched. Undo right after the tick un-ticks it (the unlink is not an undo step). A note that was not edited since the link was made and lacks the line (an older copy that has not synced yet) keeps the link, as does a note with a code fence that never closes above the line. Delete the note instead, or move it out of the vault: the checkbox stays linked (a missing note is not a deleted line) and the tick is retried; rename or move the note inside the vault, or rename its folder: the link follows (not an undo step) and the next tick reaches it. Close the notebook, rename the note, open the notebook and tick: the link has followed (the rename is remembered on this device for 30 days; a rename done on another device is not known here). Rename the note to a path of more than 500 characters: the old link stays and one notice says so. On a locked page nothing is unlinked and no notice appears. Copy the line twice into the note: a notice says more than one line carries the id and nothing is changed. A copy of the line inside a code block or the frontmatter is ignored; a task inside a callout is ticked.
+1511. **Unlink.** *Unlink task* on a linked checkbox: the notice says the task stays in the note; ticking the checkbox no longer touches it.
+1512. **Locked page and read-only.** On a locked page a tap on a box shows the *Page locked* notice and changes nothing; *Insert checkbox* is refused. In a read-only notebook a tap changes nothing.
+1513. **Copies.** Duplicate a page, copy-paste a ticked, linked checkbox to another page, and *Duplicate* the whole notebook in the Library: the copies keep the tick but are not linked; ticking the copy does not touch the original's task line. *Move* pages with linked boxes to another notebook (or split a notebook): the moved boxes keep their links, and ticking them still reaches the note; *Copy* them instead: the copies are not linked.
+1514. **Templates.** Save a notebook or a page with ticked boxes as a template and make a new notebook or page from it: every box is unticked and unlinked.
+1515. **Two devices.** On two devices tick and untick the same box at different times, sync so a conflicted copy appears, *Merge conflicted copies*: the checkbox is there once and shows the state of the later toggle; the summary counts it. Unlink the task on one device, merge an older copy that still has the link: it stays unlinked. A tick and an untick at the same moment: the tick wins.
+1516. **Open items.** Notebook map > *Open items* (only offered when a page has an unticked box): the pages with open boxes, the number of open boxes on the badge, the label of the first as tooltip; tap goes to the page. Tick the last open box on a page: it leaves the filter.
+1517. **Exports.** Export a page with boxes as PDF, PNG and SVG: boxes and ticks are drawn above the ink, in the colour they were drawn in. A page thumbnail shows them. The Markdown export lists labelled boxes as `- [ ] label` / `- [x] label`.
+1518. **An older plugin.** Copy a notebook with a checkbox to a device with 0.18: it opens read-only with the "newer version" message and is not rewritten.
+1519. **Italian, dark, phone.** The chip, the label dialog, the task dialog, the notices and the setting read in Italian; the chip and the dialogs are readable in light, dark and with *Follow Obsidian theme*; on a phone the tap target is still comfortable and the chip stays inside the view.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Handwritten checklists (#103, format v17): element `checkbox`; v16 to v17 migration (a checkbox in a v16 file is refused, large v16 files still stage), lenient read and strict write (a label cut at the limit is trimmed again; optional `taskAt`), repair, copies (tick kept, link dropped; a Library duplicate unlinks; a move or a trash restore keeps links), templates (unticked), merge (later toggle wins, a tie keeps the tick, the later link decision wins), lock guard, history | yes | `tests/model-v17.test.ts`, `tests/checklist-review-fixes.test.ts` | | | |
+| Checklist geometry: the drawn square detector, the label ink on a line, tap targets, exports of the box and tick (canvas, SVG, PDF), Markdown list | yes | `tests/model-v17.test.ts` | | | |
+| Task link: *Send to tasks* with a block id, ticks follow into the one line of the note (only that line, line endings kept; code blocks and frontmatter skipped, callouts accepted, a duplicated id refused), pending ticks kept across close, hide and reload and retried, a missing note keeps the link, a renamed note is followed (not an undo step; also while the notebook was closed, through a bounded device-local record of renames; a path too long to store is not followed), unlink only when the line is really gone (the note edited since the link, no unclosed code fence, seen twice a minute apart; the unlink is not an undo step); undo and redo of a move, a move to another page or a margin change after such upkeep keep one checkbox with the upkeep's link, and an undo or redo the writer would refuse is taken back | yes | `setTaskLineChecked` (`tests/model-v17.test.ts`), the bookkeeping `ChecklistSync` (`tests/checklist-review-fixes.test.ts`), the second review `tests/checklist-round2.test.ts` (sync, view with a fake vault, rename record, `History.applyQuietly`), the third review `tests/checklist-round3.test.ts` (upkeep and the undo stacks, the undo/redo backstop, the link time after a rename, one notice per checkbox); harness scenario `checklists` | | | |
+| Checklists UI: insert, tap to tick (pen, mouse, finger), *Make checkbox* chip and the setting, label dialog, *Select with text*, *Open items* filter of the map | yes | harness scenario `checklists` (tablet and phone, light and dark) | | | tap and offer with the S Pen on hardware |
+
+### 0.19 — cleanexport
+
+Clean copy (#239). Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`HARNESS_DOC=cleanexport`): `dev/harness/dist/shots/` (the export dialog with the switch on, tablet and phone, dark and light).
+
+1620. **The switch.** Open *Export…* on a notebook: *Clean copy* is off. Turn it on: *Also leave out open sticky notes* appears under it. Close and open the dialog again in the same session: the choices are remembered.
+1621. **Markers.** On a page with a placeholder (gap), a question, an importance badge and a homework marker, export a PDF with *Clean copy* on: the PDF has none of the badges or outlined regions; the same page exported with it off still shows them.
+1622. **Other formats.** Repeat with SVG, PNG images and Print: the markers are missing in each when *Clean copy* is on.
+1623. **Comments.** With *Include comments in exports* on in the settings and a page that has margin comments, a clean PDF has no notes strip; a normal PDF still has it.
+1624. **Collapsed sticky notes.** Collapse a sticky note that has ink written on it: the clean PDF shows neither the icon nor that ink; strokes written elsewhere are there. Expand the note again in the notebook: the ink is back (the notebook was not changed).
+1625. **Open sticky notes.** An open note is in the clean PDF. With *Also leave out open sticky notes* on it is not; the ink written over it stays.
+1626. **What stays.** Boxes (definition, theorem…), text, pictures, equations, graphs, excerpts, the page header and the paper are in the clean PDF. Invisible ink follows *Show solutions* as in every export.
+1627. **Scope and layers.** Clean copy works with *This page*, *Whole notebook* and *Some pages*, and with *Ink only* / *Background only*.
+1628. **Nothing changes in the notebook.** After a clean export the markers, comments and sticky notes are all still in the notebook; undo history is untouched.
+1629. **Plain export.** With *Clean copy* off the exported file is the same as in 0.18.
+1630. **Italian.** In Italian: *Copia pulita*, *Escludi anche le note adesive aperte*.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Clean copy (#239): export dialog switch that leaves out markers (gaps, questions, importance, homework), margin comments and collapsed sticky notes with their hidden ink, optionally open notes; PDF, SVG, PNG, Print | yes | `tests/clean-export.test.ts` (filter, no mutation, byte-identical plain output); dialog: harness (`doc=cleanexport`) | | | |
+| Clean copy: "this lecture" page range by lecture date | no | | | | to do (the pages carry no creation time; use *Some pages* meanwhile) |
+
 ## Quick check — Windows
 
 Mouse: draw, erase (both modes), undo/redo with Ctrl+Z / Ctrl+Shift+Z, wheel scroll, Ctrl+wheel zoom, resize the window (the page refits), add a page, use every page menu action with undo, create notebooks with each paper and size, export PDF and SVG and open them, lasso select/move/resize/rotate/delete, close and reopen the notebook. Also: open the library and use every action, import a PDF and write on it, insert a PDF range and an image page, use the shape, text, image and ruler tools, scan from a photo file, use the Pages panel, run *Restore a previous version*, insert an embed in a note and open an `obsidian://notebook` link. With a pen tablet or Surface pen: pressure and eraser end (`buttons & 32`).
@@ -2622,3 +2731,90 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 | Quick tabs: drag to reorder (mouse at once, touch / pen after a long press), Move earlier / later, Unpin | yes | order logic; harness drives the same store calls | | | drag by finger and S Pen on hardware |
 | Quick tabs to pages of other notebooks (picker, opens the notebook, follows a rename) | yes | store retarget; harness with a recorded opener | | | |
 | Quick tabs storage: per-device `_meta/quicktabs-<device>.json`, latest change wins, tombstones, unknown fields kept, unreadable never overwritten | yes | `tests/quicktabs.test.ts`, `tests/library-check.test.ts` | | | |
+
+### 0.19 — lookup: Look up later list (steps 1540-1559)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`HARNESS_DOC=lookup`): `dev/harness/dist/shots/` (the word dialog and the sheet with three entries, tablet and phone, dark and light).
+
+1540. **Circle a word.** Lasso a handwritten word on a page. In the selection menu choose *Look up later…*: a small dialog asks for the word (optional). Leave it empty and tap *Add to list*: a notice says it was added to *Look up later*.
+1541. **The note.** Open *<notebooks folder>/Look up later.md* (made now if it did not exist): one line `- [ ] ![[… lookup p3-….png|150]] — [[<Notebook>#p3&id=…|<Notebook> p. 3]] (today's date)`, and the picture shows the circled word. Its file is next to your other attachments.
+1542. **A typed word.** Do it again on another word and type it: the line has the word between the picture and the dash. Type `*x* [[y]] %% <b>` : it appears as plain text in the note, nothing is bold, linked or hidden.
+1543. **Only appended.** Edit the note by hand (a heading, other tasks), then add another entry: the lines you wrote are unchanged and the new line is at the end.
+1544. **The sheet.** In the notebook open the page sheet or notebook menu, *Look up later list…*: a row for each entry of this notebook only, with its picture, the word, *p. N*, the date, and a count at the top (*N to look up · M in this notebook*). Entries of other notebooks in the same note are not listed.
+1545. **Jump.** Tap a row: the sheet closes and the notebook scrolls to that page. Move pages around first: it still goes to the same page (the link names the page by id). Delete the page: the row says the page is no longer in the notebook.
+1546. **Tick off.** In the note change `- [ ]` to `- [x]`; reopen the sheet: that row is dimmed with *done* and the count drops.
+1547. **Open the note.** *Open the note* in the sheet opens the list in a new tab; it is disabled while the note does not exist.
+1548. **Settings.** In Settings, Integration: *Look up later note* set to `Words/To check` : the next entry goes to `Words/To check.md` (folder and note made). *Look up later picture width* 300: the next picture embed ends `|300]]`.
+1549. **Not twice, not lost.** Add two entries in the same second on the same page: both are in the note. A read-only notebook and a page that has a collapsed sticky note: the picture shows only what is visible.
+1550. **Sync.** On two devices with one vault: add an entry on each; after sync the note has both lines and each sheet lists them.
+1551. **Italian.** In Italian: *Cerca dopo…*, *Elenco Cerca dopo…*, *Parola (facoltativa)*, *Aggiungi all'elenco*.
+1552. **Shared-files inbox.** The pictures are not offered by the shared-files inbox.
+1553. **A busy shared list.** Add several hundred lines for other notebooks to the list note (for example by copy and paste of a line with a link to another notebook), then add one more entry from this notebook: the sheet still shows the new entry (this notebook's entries are picked across the whole note, the newest 500 are kept).
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Look up later (#213): selection action, crop picture, optional typed word, one appended line in a configurable note (made if missing) | yes | line building, escaping, append and parsing: `tests/look-up.test.ts`; vault write: harness (`doc=lookup`) | | | |
+| Look up later list sheet: this notebook's entries read from the note, count, jump to page by id | yes | parsing and filtering: yes; sheet: harness | | | |
+| Look up later as a quick pen gesture | no | | | | not added: needs the gesture/input files |
+
+### 0.19 — search: typed text in global search through the companion note (steps 1520-1539)
+
+Needs *Companion notes* on. Not verified on hardware.
+
+1520. Settings › Integration › Companion notes: *Include typed text in search* is listed under the companion settings, off by default; it disappears when Companion notes is off.
+1521. In a notebook put a sticky note with text "zebra crossing", a margin comment "check the zebra", an equation `x^2` and a question marker "why zebra". Run *Update all companion notes* with the setting OFF: the companion note has no "zebra" lines.
+1522. Turn the setting ON and run *Update all companion notes* again: under `### p. N` there is a link `p. N` and lines starting `sticky:`, `comment:`, `equation:` and `question:`; nothing outside the generated block changed (write text above and below it first, then check it is intact).
+1523. Obsidian's global search for "zebra" finds the companion note; clicking the result's link `p. N` opens the notebook at that page.
+1524. Type `#tag [[Link]] %% $x$` in a sticky note: after the update the companion shows it as plain text (no tag, no link, no comment, no maths), and the rest of the note below the block still renders.
+1525. Put a very long text (more than 4000 characters in total) on one page: the page lists text up to the limit and ends with "(more text on this page is not listed)".
+1526. Update again without changing anything: the companion file is not modified (check the modified time); editing a sticky note and waiting a few seconds updates it once.
+1527. Switch the setting off and update: the extra lines and wikilinks go back to the previous form; user text outside the block is untouched.
+1528. Give a checkbox a label (*Label…*), tick another labelled one, update the companion note with the setting on: the page lists `checkbox: ☐ label` and `checkbox: ☑ label`; a box without a typed label adds nothing.
+1529. Type `https://example.com` and `www.example.org` in a sticky note: after the update the companion note shows them as plain text with backslashes in the source, not as clickable links. On a notebook of several hundred pages with long sticky notes on each, the companion note stays at a reasonable size and ends the listing with "(the search text of the following pages is not listed)".
+
+### 0.19 — templates: notebooks from note templates (steps 1640-1659)
+
+Roadmap O13. Needs Templater and the core Templates plugin, and a notebook template named `Lecture` (use *Save as notebook template* on a notebook with two pages and a text box holding `{{date}}`). See `docs/templates.md`. Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/tplnote-*.png`.
+
+1640. **Button, core Templates.** A template file containing a `notebook-new` block with `name="{{title}} notes"` and `template="Lecture"`. Insert it in a new note called `Optics`: the note shows a card "Optics notes, From the template “Lecture”" with a *Create notebook* button. No notebook exists yet in the library.
+1641. **Press it.** Tap *Create notebook*: a notice says it was created, the card is replaced by an embed of `Optics notes.notebook`, and the rest of the note is unchanged (check the Markdown source). The notebook has the template's pages and cover, and the `{{date}}` text is filled in.
+1642. **Pages only.** With `content=false` the notebook has the template's empty pages only.
+1643. **Templater.** The same block written with `<% tp.file.title %>` expands and behaves the same. A block whose name still shows `{{title}}` or `<% … %>` shows an explanation instead of a button.
+1644. **Bad input.** A block with an unknown key, no name, or `open=maybe` shows a message, no button. A `template` that does not exist: the button fails with a notice and creates nothing; the block stays.
+1645. **Two identical blocks.** Two identical blocks in one note: pressing the second replaces the second only. Edit the note in another pane so the block is gone before pressing: a notice, nothing created.
+1646. **Never automatic.** Opening, reloading, switching between reading view and Live Preview, and printing the note never create anything.
+1647. **Templater script.** The `new-notebook.js` user script of `docs/templates.md` inserts `![[….notebook]]`, and the notebook exists, opens, and keeps the template's cover. With a wrong template name the note gets the error text, not a crash.
+1648. **Phone.** On Android the card fits the width, the button is a comfortable target, and creating works.
+1649. **Look.** Light, dark and *Follow Obsidian theme*: the card reads well beside the note text.
+1650. **In the template itself.** Open the template file (the one in the Templates or Templater folder) in reading view: the block shows the card with a note that the button appears in the notes made from the template, and no button. The template file is never changed.
+1651. **No second notebook.** Press the button, then make the note read-only or remove it from the vault while it is working (hard to time; or make the notebook open fail): the button does not come back, and if the block could not be replaced a notice shows the `![[….notebook]]` link to paste. Pressing again is not possible.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| `api.newNotebook` (API 1.2) and `template` / `templateContent` options of `createNotebook`: a notebook from a stored notebook template, returning ready `link` and `embed` markup; no format change | yes | option parsing, template picking, link markup (`tests/new-block.test.ts`) | | | the template reading is only covered through the existing template code |
+| `notebook-new` code block for core Templates and Templater: parsing, card with a *Create notebook* button (never on render), replacement of exactly that block through `vault.process` | yes | parsing, exact replacement, duplicates, fences (`tests/new-block.test.ts`); harness `doc=tplnote` (card, error card) | | | not tried inside Obsidian (steps 1640-1649) |
+
+### 0.19 — snapshot: automatic snapshot at the end of a lecture (steps 1580-1599)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`HARNESS_DOC=snapshot`): `dev/harness/dist/shots/` (the history list with the filter chip, tablet and phone, dark and light). Needs a timetable class linked to a notebook (Timetable dialog).
+
+1580. **Lecture ends by the clock.** With lecture mode on during a class, write a few strokes, then wait until the class ends (or use *End lecture* on the chip). Within a moment: *Restore a previous version* lists "Lecture <course> <date> <hh:mm>" with a graduation-cap mark. The file `Notebooks/_backup/history/<id>/<stamp>-lecture.snapshot` exists.
+1581. **Nothing written, nothing taken.** Open the notebook during a class, start lecture mode and end it without writing: no new lecture snapshot.
+1582. **Closed after writing.** Write during a class, close the notebook tab: a lecture snapshot appears. With lecture mode off in settings (*Automatic lecture mode*), the same happens (the class comes from the timetable).
+1583. **Backgrounded.** Write during a class and switch to another app (S Pen tablet): nothing is snapshotted (a switch only saves; it does not end the lecture), and earlier lecture snapshots are not pruned by switching. Leave lecture mode, or close the notebook, or let the class end: now the list has the snapshot, and the daily-note log line is written once (with the lecture log on). Reopen the notebook in the same class, write more and close it again: the log line is updated and a snapshot is added only because the content changed.
+1584. **Unchanged is skipped.** Immediately after 1580, write nothing, close and reopen, close again: still one snapshot. Erase a stroke then redo it so the notebook is identical to the snapshot: no new one.
+1585. **Filter.** In *Restore a previous version* the chip *Lecture snapshots* appears only when the notebook has one; tap it: only lecture snapshots remain, tap again: all. Ordinary snapshots show just the date.
+1586. **Retention.** Set *Lecture snapshots to keep* to 2 and end three lectures with changes between them (move the file-name dates back on a PC to get several): the oldest lecture snapshot goes to the trash; ordinary snapshots stay, whatever *Versions to keep* says.
+1587. **Does not touch others.** Put your own `….snapshot` (no `-lecture`) in the folder, and lower the lecture count: it is not trashed. Lowering *Versions to keep* does not trash lecture snapshots.
+1588. **Setting off.** Turn off *Snapshot at the end of a lecture*: none is taken; the count setting is hidden.
+1589. **Restore.** Restore a lecture snapshot: the usual confirmation, a backup of the current content, the notebook goes back.
+1590. **Italian.** In Italian: *Istantanea a fine lezione*, *Istantanee di lezione*, the row reads "Lezione <corso> <data> <ora>".
+1591. **Unreadable label file.** Make `lectures.json` invalid on a PC: new lecture snapshots still work (the row shows "Lecture <date> <hh:mm>" without the course) and the file is left as it is.
+1592. **Storage cleanup spares the ordinary snapshots.** With more than *Versions to keep* lecture snapshots and a few old ordinary ones in a notebook's history, open *Storage* → backups: the old ordinary snapshots beyond the newest few are offered; the lecture snapshots are never listed (they only follow *Lecture snapshots to keep*).
+1593. **Large notebook, version list.** On a notebook with many pages and a dozen or more versions, *Restore a previous version* opens at once; rows show the date and size (no page count). Choosing a copy that is damaged says it cannot be read instead of restoring it.
+1594. **Interval snapshot running.** Open a notebook at the end of a class right after the interval snapshot is due: both the ordinary and the lecture snapshot are taken (the lecture one a moment later).
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Automatic snapshot at the end of a lecture (#222): lecture mode left, class over or notebook closed after writing in a class (one shared end with the lecture log; the app going to the background does not end it); from the saved file after the flush; only if changed | yes | pure decision, names, retention, fingerprint, label file: yes; vault and view wiring: no (needs a real vault and timetable) | | | |
+| Lecture snapshots: own retention count, label, "Lecture snapshots" filter in version history | yes | pure logic: yes; list pieces: harness (`doc=snapshot`) | | | |

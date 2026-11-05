@@ -131,7 +131,7 @@ export function rotate90Matrix(b: BBox, clockwise: boolean): Matrix {
 
 /** Elements that have no rotated form in the format (no rotation field): a rotation moves their centre and keeps their orientation. */
 export function rotationKeepsOrientation(el: PageElement): boolean {
-	return el.type === "text" || el.type === "equation" || el.type === "graph" || el.type === "sticky";
+	return el.type === "text" || el.type === "equation" || el.type === "graph" || el.type === "sticky" || el.type === "checkbox";
 }
 
 /**
@@ -170,7 +170,7 @@ export type MirrorAxis = "horizontal" | "vertical";
 
 /** The kinds of element that have no mirrored form in the format (no flip field): they are moved to the mirrored place, not flipped. */
 export function mirrorKeepsOrientation(el: PageElement): boolean {
-	return el.type === "image" || el.type === "text" || el.type === "equation" || el.type === "graph" || el.type === "excerpt" || el.type === "sticky";
+	return el.type === "image" || el.type === "text" || el.type === "equation" || el.type === "graph" || el.type === "excerpt" || el.type === "sticky" || el.type === "checkbox";
 }
 
 /**

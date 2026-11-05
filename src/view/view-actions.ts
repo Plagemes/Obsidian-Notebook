@@ -139,6 +139,9 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"comment-next": (v) => void v.commentTools?.step(1),
 	// 0.17 (#57): a task from the selection
 	"selection-make-task": (v) => v.makeTaskFromSelection(),
+	// 0.19 (#213): look up later
+	"selection-look-up": (v) => v.lookUpFromSelection(),
+	"look-up-list": (v) => v.openLookUpList(),
 	// 0.18 (#59): the selection as a picture in a note
 	"selection-insert-note": (v) => v.insertSelectionIntoNote("png"),
 	"selection-insert-note-svg": (v) => v.insertSelectionIntoNote("svg"),
@@ -201,6 +204,13 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"sticky-edit": (v) => v.stickyTools?.editSelected(),
 	"sticky-collapse": (v) => v.stickyTools?.setCollapsed(true),
 	"sticky-expand": (v) => v.stickyTools?.setCollapsed(false),
+	// 0.19 (#103): handwritten checklists
+	"insert-checkbox": (v) => v.checklistTools?.insert(),
+	"checkbox-toggle": (v) => v.checklistTools?.toggleSelected(),
+	"checkbox-select-label": (v) => v.checklistTools?.selectWithLabel(),
+	"checkbox-label": (v) => v.checklistTools?.editLabel(),
+	"checkbox-task": (v) => v.checklistTools?.sendTask(),
+	"checkbox-unlink": (v) => v.checklistTools?.unlinkSelected(),
 	"insert-date-stamp": (v) => v.insertDateStamp(),
 	"stamps": (v) => v.stampPalette?.toggle(),
 	"board-shot": (v) => void v.boardShot(),
@@ -371,6 +381,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"highlights-digest": (v) => v.openHighlightsDigest(),
 	// 0.18 mentions (O7): the notes that link to this page
 	"mentions": (v) => v.openMentions(),
+	// 0.19 (#228): the Figures gallery
+	"figures": (v) => v.openFigures(),
 	// wave 0.10: PNG images (81) and Print (81) are choices of the same dialog; read-only mode (51)
 	"export-png": (v) => v.openExportDialog(undefined, "png"),
 	"print": (v) => {

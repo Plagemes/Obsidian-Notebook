@@ -10,6 +10,9 @@ import { backupFolder, type NotebookSettings } from "../settings";
 import { isNotebookFile, readNotebookText, writeNotebookText } from "../storage/format";
 import { isHiddenNotebookPath } from "../storage/trash-paths";
 import { createNotebook, sanitizeName } from "../storage/notebooks";
+import { notebookFromTemplate } from "../model/notebook-template";
+import { listStoredTemplates, type StoredTemplate } from "../storage/templates-store";
+import { notebookTemplatesFolderPath } from "../storage/trash-paths";
 import { VaultDocumentIO } from "../storage/vault-io";
 import { recordPluginWrite } from "../storage/plugin-written";
 import type { EditContext } from "../view/edit-context";
@@ -19,9 +22,9 @@ import { t } from "../i18n";
 import { validPageId } from "../zettel/subpath";
 import { NotebookApiError, invalid } from "./api-errors";
 import {
-	API_METHODS, API_VERSION, KeyedQueue, MAX_IMAGE_BYTES, buildNewDocument, checkFolder, checkName, checkPageNumber, checkPageUnlocked, checkPageRef, describeNotebook, imageExtension,
+	API_METHODS, API_VERSION, KeyedQueue, MAX_IMAGE_BYTES, buildNewDocument, checkFolder, checkName, checkPageNumber, linkMarkup, pickTemplate, checkPageUnlocked, checkPageRef, describeNotebook, imageExtension,
 	parseCreateOptions, parseImageOptions, parsePageSpec, planClosedEdit, prepareAddPages, prepareInsertImage,
-	type AddPagesResult, type CreateNotebookOptions, type InsertImageOptions, type InsertImageResult, type NotebookInfo, type PageLinkInfo, type PageTemplate, type Prepare,
+	type AddPagesResult, type CreateNotebookOptions, type ParsedCreate, type InsertImageOptions, type InsertImageResult, type NotebookInfo, type PageLinkInfo, type PageTemplate, type Prepare,
 } from "./api-plan";
 import { notebookUri } from "./links";
 import { openNotebookAtPage, viewsOf } from "./open";
@@ -53,6 +56,8 @@ export interface NotebookApi {
 	/** `page`: a 1-based number, or a page id (a string), which wins over any number when the page moved. */
 	openNotebook(file: NotebookFileRef, page?: number | string): Promise<void>;
 	listNotebooks(options?: ListNotebooksOptions): NotebookSummary[];
+	/** Creates a notebook (optionally from a notebook template) and returns it with ready-to-paste `link` and `embed` markup (since 1.2). */
+	newNotebook(spec: NewNotebookSpec): Promise<NewNotebookResult>;
 }
 
 /** A notebook: the `TFile`, its vault path (with or without `.notebook`), or any object with a `path`. */
@@ -65,6 +70,27 @@ export interface NotebookRef {
 	/** Document id. */
 	id: string;
 	file: TFile;
+}
+
+/** What `newNotebook` takes: one object, convenient for Templater (`tp.app.plugins.plugins["notebook"].api.newNotebook({...})`). */
+export interface NewNotebookSpec {
+	/** File name of the notebook (without extension). */
+	name: string;
+	/** Vault folder; default: the notebooks folder of the plugin settings. */
+	folder?: string;
+	/** Name of a notebook template; omitted: a plain notebook with the defaults of the New notebook dialog. */
+	template?: string;
+	/** With `template`: keep its ink and elements (default true) or only its pages. */
+	content?: boolean;
+	/** Open it in a tab (default false). */
+	open?: boolean;
+}
+
+export interface NewNotebookResult extends NotebookRef {
+	/** `[[Name.notebook]]`. */
+	link: string;
+	/** `![[Name.notebook]]`. */
+	embed: string;
 }
 
 export interface ExportPdfOptions {
@@ -191,7 +217,8 @@ class NotebookApiImpl implements NotebookApi {
 		if (!base) throw invalid("name", "has no characters that can be used in a file name");
 		const o = parseCreateOptions(options);
 		const s = this.settings;
-		const doc = buildNewDocument(o, { pageSize: s.defaultPageSize, landscape: s.defaultLandscape, paper: s.defaultPaper }, new Date());
+		const now = new Date();
+		const doc = o.template === undefined ? buildNewDocument(o, { pageSize: s.defaultPageSize, landscape: s.defaultLandscape, paper: s.defaultPaper }, now) : await this.documentFromTemplate(o, o.template, now);
 		const checked = serializeChecked(doc, true);
 		if (!checked.ok) throw new NotebookApiError("write-failed", `The new notebook did not pass validation, so nothing was created: ${checked.message}`);
 		let file: TFile;
@@ -202,8 +229,58 @@ class NotebookApiImpl implements NotebookApi {
 		}
 		const back = parse(readNotebookText(file.extension, await this.app.vault.read(file)));
 		if (!back.ok || back.doc.id !== doc.id) throw new NotebookApiError("write-failed", `"${file.path}" was created but could not be read back.`, { path: file.path });
-		if (o.open) await this.openNotebook(file);
+		if (o.open) {
+			// The notebook exists and was read back: failing to show it must not look like failing to make it (the caller would try again and make a second one).
+			try {
+				await this.openNotebook(file);
+			} catch (e) {
+				console.error("[notebook] the new notebook could not be opened", file.path, e);
+			}
+		}
 		return { path: file.path, name: file.basename, id: doc.id, file };
+	}
+
+	/** The document of a notebook made from a stored template; tags, favorite and cover given by the caller win over the template's. */
+	private async documentFromTemplate(o: ParsedCreate, wanted: string, now: Date): Promise<NotebookDocument> {
+		const s = this.settings;
+		let list: StoredTemplate[];
+		try {
+			list = await listStoredTemplates(this.app, notebookTemplatesFolderPath(s.notebookTemplatesFolder, s.templatesFolder, s.folder));
+		} catch (e) {
+			throw new NotebookApiError("not-found", `The notebook templates could not be read: ${message(e)}`, { template: wanted });
+		}
+		const tpl = pickTemplate(list.map((x) => ({ name: x.name, path: x.file.path, tpl: x })), wanted)?.tpl;
+		if (!tpl) throw new NotebookApiError("not-found", `There is no notebook template "${wanted}" (known: ${list.map((x) => x.name).join(", ") || "none"}).`, { template: wanted });
+		const doc = notebookFromTemplate(tpl.doc, { content: o.templateContent !== false, now });
+		const from = tpl.doc.meta;
+		const meta = (doc.meta ??= { tags: [], favorite: false, cover: "#3b82f6", bookmarks: [] });
+		if (from) {
+			meta.cover = from.cover;
+			if (from.description !== undefined) meta.description = from.description;
+			if (from.coverArt?.kind === "art") meta.coverArt = { ...from.coverArt };
+		}
+		if (o.cover !== undefined) {
+			meta.cover = o.cover;
+			delete meta.coverArt;
+		}
+		if (o.tags.length > 0) meta.tags = [...o.tags];
+		if (o.favorite !== undefined) meta.favorite = o.favorite;
+		return doc;
+	}
+
+	async newNotebook(spec: NewNotebookSpec): Promise<NewNotebookResult> {
+		if (typeof spec !== "object" || spec === null || Array.isArray(spec)) throw invalid("spec", "expected an object like { name, folder, template, open }");
+		for (const key of Object.keys(spec)) {
+			if (!["name", "folder", "template", "content", "open"].includes(key)) throw invalid("spec", `unknown field "${key}" (known: name, folder, template, content, open)`, { field: key });
+		}
+		const options: CreateNotebookOptions = {};
+		if (spec.template !== undefined) options.template = spec.template;
+		if (spec.content !== undefined) options.templateContent = spec.content;
+		if (spec.open !== undefined) options.open = spec.open;
+		if (spec.content !== undefined && spec.template === undefined) throw invalid("spec.content", "needs spec.template");
+		const ref = await this.createNotebook(spec.folder === undefined ? this.settings.folder : spec.folder, spec.name, options);
+		const { link, embed } = linkMarkup(this.app.fileManager.generateMarkdownLink(ref.file, ""));
+		return { ...ref, link, embed };
 	}
 
 	async getPageLink(file: NotebookFileRef, page: number | string): Promise<PageLinkInfo> {

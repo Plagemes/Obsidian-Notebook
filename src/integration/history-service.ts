@@ -4,14 +4,20 @@ import { parse } from "../model/serialize";
 import { backupFolder, type NotebookSettings } from "../settings";
 import { isNotebookFile, readNotebookText, writeNotebookText } from "../storage/format";
 import {
-	checkRestoreTarget, extractDocId, formatBytes, formatSnapshotDate, shouldSnapshot, snapshotFileName, snapshotFolder, snapshotPageCount,
+	checkRestoreTarget, extractDocId, formatSnapshotDate, shouldSnapshot, snapshotFileName, snapshotFolder,
 	restoredText, snapshotsToPrune, sortSnapshots,
 } from "../storage/history";
+import {
+	contentFingerprint, courseOf, decideLectureSnapshot, isLectureSnapshotName, lectureSnapshotFileName, lectureSnapshotsToPrune,
+	LECTURE_LABELS_FILE, ordinarySnapshotNames, readLectureLabels, withLectureLabel, type LectureLabels,
+} from "../storage/lecture-snapshot";
+import { PathLock } from "../storage/path-lock";
 import { ensureFolder, VaultDocumentIO } from "../storage/vault-io";
 import { viewsOf } from "./open";
 import { NotebookPickerModal } from "./picker";
 
 import { showErrorNotice, showNotice } from "../view/notice";
+import { createLectureFilter, renderSnapshotRow, snapshotLabel } from "../view/history-ui";
 
 export interface HistoryHost {
 	app: App;
@@ -21,14 +27,17 @@ export interface HistoryHost {
 interface SnapshotItem {
 	file: TFile;
 	date: Date;
-	pages: number | null;
+	/** 0.19: taken automatically at the end of a lecture. */
+	lecture: boolean;
+	/** Course recorded for a lecture snapshot, or null. */
+	course: string | null;
 }
 
 /** Automatic snapshots of notebooks and the restore flow. */
 export class HistoryService {
 	/** When each notebook was last found up to date (ms), so a save does not re-read the file every time. */
 	private readonly checked = new Map<string, number>();
-	private readonly busy = new Set<string>();
+	private readonly busy = new PathLock();
 
 	constructor(private readonly host: HistoryHost) {}
 
@@ -68,7 +77,7 @@ export class HistoryService {
 		if (!(hours > 0) || !isNotebookFile(file) || this.busy.has(file.path)) return null;
 		const known = this.checked.get(file.path);
 		if (known !== undefined && !shouldSnapshot(new Date(known), now, hours)) return null;
-		this.busy.add(file.path);
+		const release = this.busy.acquire(file.path);
 		try {
 			const text = await this.app.vault.read(file);
 			if (settle) await settle();
@@ -79,7 +88,8 @@ export class HistoryService {
 				this.checked.set(file.path, now.getTime());
 				return null;
 			}
-			const existing = this.snapshotFiles(parsed.doc.id);
+			// The interval rule looks at the ordinary snapshots only: a lecture snapshot never delays or stands in for one.
+			const existing = this.snapshotFiles(parsed.doc.id).filter((s) => !isLectureSnapshotName(s.file.name));
 			const latest = existing[0];
 			if (latest && !shouldSnapshot(latest.date, now, hours)) {
 				this.checked.set(file.path, latest.date.getTime());
@@ -101,15 +111,92 @@ export class HistoryService {
 			console.error("[notebook] snapshot failed", file.path, e);
 			return null;
 		} finally {
-			this.busy.delete(file.path);
+			release();
 		}
 	}
 
 	private async prune(docId: string): Promise<void> {
 		const files = this.snapshotFiles(docId);
-		const drop = new Set(snapshotsToPrune(files.map((f) => f.file.name), this.host.settings.snapshotsToKeep));
+		// 0.19: the interval retention never touches lecture snapshots (they have their own count).
+		const drop = new Set(snapshotsToPrune(ordinarySnapshotNames(files.map((f) => f.file.name)), this.host.settings.snapshotsToKeep));
 		for (const { file } of files) {
 			if (drop.has(file.name)) await this.app.fileManager.trashFile(file);
+		}
+	}
+
+	// ------------------------------------------------------- lecture snapshots (0.19, roadmap 222)
+
+	/**
+	 * Takes the snapshot at the end of a lecture. The caller flushed the view first and says whether that saved everything
+	 * (`saved`); the snapshot is made from the file on disk, never from the view's memory. Skipped when the setting is off,
+	 * nothing was written, the file does not parse, or it holds what the newest snapshot already holds. It goes through the
+	 * same folder as every snapshot; only this feature's own lecture snapshots beyond the setting are trashed (through the
+	 * file manager). Never throws; returns the path or null.
+	 */
+	async lectureSnapshot(file: TFile, course: string, opts: { wrote: boolean; saved: boolean }, now = new Date()): Promise<string | null> {
+		if (!this.host.settings.lectureSnapshots || !isNotebookFile(file)) return null;
+		// A snapshot of the interval or another lecture end may be running on this file: wait for it, never drop the lecture one.
+		const release = await this.busy.acquireWhenFree(file.path);
+		try {
+			const json = readNotebookText(file.extension, await this.app.vault.read(file));
+			const parsed = parse(json);
+			if (!parsed.ok) return null;
+			const docId = parsed.doc.id;
+			const all = this.snapshotFiles(docId);
+			const newest = all[0];
+			const name = lectureSnapshotFileName(now);
+			const folder = this.folderFor(docId);
+			const path = normalizePath(`${folder}/${name}`);
+			const decision = decideLectureSnapshot({
+				enabled: true, wrote: opts.wrote, saved: opts.saved, fingerprint: contentFingerprint(json),
+				latestFingerprint: newest ? contentFingerprint(await this.app.vault.read(newest.file)) : null,
+				nameTaken: this.app.vault.getAbstractFileByPath(path) !== null,
+			});
+			if (!decision.take) return null;
+			await ensureFolder(this.app, folder);
+			await this.app.vault.create(path, json);
+			await this.pruneLecture(docId, name, course);
+			return path;
+		} catch (e) {
+			console.error("[notebook] lecture snapshot failed", file.path, e);
+			return null;
+		} finally {
+			release();
+		}
+	}
+
+	/** Trashes this feature's snapshots beyond the setting and records the course of the new one (sidecar). */
+	private async pruneLecture(docId: string, newName: string, course: string): Promise<void> {
+		const files = this.snapshotFiles(docId);
+		const names = files.map((f) => f.file.name);
+		const drop = new Set(lectureSnapshotsToPrune(names, this.host.settings.lectureSnapshotsKeep));
+		for (const { file } of files) {
+			if (drop.has(file.name)) await this.app.fileManager.trashFile(file);
+		}
+		const remaining = names.filter((n) => !drop.has(n));
+		const labelsPath = normalizePath(`${this.folderFor(docId)}/${LECTURE_LABELS_FILE}`);
+		const existing = this.app.vault.getAbstractFileByPath(labelsPath);
+		try {
+			if (existing instanceof TFile) {
+				const labels = readLectureLabels(await this.app.vault.read(existing));
+				// Unreadable: left exactly as it is (the label falls back to the date).
+				if (labels) await this.app.vault.modify(existing, JSON.stringify(withLectureLabel(labels, newName, course, remaining), null, 1));
+			} else if (!existing) {
+				await this.app.vault.create(labelsPath, JSON.stringify(withLectureLabel({}, newName, course, remaining), null, 1));
+			}
+		} catch (e) {
+			console.error("[notebook] lecture snapshot label not saved", e);
+		}
+	}
+
+	/** Course of each lecture snapshot of a document (empty when the sidecar is missing or unreadable). */
+	private async lectureLabels(docId: string): Promise<LectureLabels | null> {
+		const f = this.app.vault.getAbstractFileByPath(normalizePath(`${this.folderFor(docId)}/${LECTURE_LABELS_FILE}`));
+		if (!(f instanceof TFile)) return {};
+		try {
+			return readLectureLabels(await this.app.vault.read(f));
+		} catch {
+			return null;
 		}
 	}
 
@@ -138,9 +225,11 @@ export class HistoryService {
 				showNotice(t("history.empty"));
 				return;
 			}
+			const labels = found.some((s) => isLectureSnapshotName(s.file.name)) ? await this.lectureLabels(docId) : {};
 			const items: SnapshotItem[] = [];
 			for (const { file: snap, date } of found) {
-				items.push({ file: snap, date, pages: snapshotPageCount(await this.app.vault.read(snap)) });
+				// Names and sizes only: reading and parsing every copy would freeze a large notebook's list (the chosen one is checked on restore).
+				items.push({ file: snap, date, lecture: isLectureSnapshotName(snap.name), course: courseOf(labels, snap.name) });
 			}
 			new SnapshotModal(this.app, items, (item) => {
 				new ConfirmRestoreModal(this.app, item.date, () => void this.restore(file, item)).open();
@@ -231,27 +320,35 @@ export class HistoryService {
 }
 
 class SnapshotModal extends FuzzySuggestModal<SnapshotItem> {
+	/** 0.19: only the snapshots taken at the end of a lecture. */
+	private onlyLecture = false;
+
 	constructor(app: App, private readonly items: SnapshotItem[], private readonly onChoose: (item: SnapshotItem) => void) {
 		super(app);
 		this.setPlaceholder(t("history.placeholder"));
 		this.emptyStateText = t("history.empty");
+		if (items.some((i) => i.lecture)) {
+			// The "Lecture snapshots" filter sits between the search box and the list.
+			const bar = createLectureFilter((on) => {
+				this.onlyLecture = on;
+				this.emptyStateText = on ? t("history.filter.none") : t("history.empty");
+				// Re-run the search so the list is built again with the filter.
+				this.inputEl.dispatchEvent(new Event("input"));
+			});
+			this.inputEl.parentElement?.insertAdjacentElement("afterend", bar);
+		}
 	}
 
 	getItems(): SnapshotItem[] {
-		return this.items;
-	}
-
-	private label(item: SnapshotItem): string {
-		const pages = item.pages === null ? t("history.unreadable") : item.pages === 1 ? t("history.pages.one") : t("history.pages.other", { count: String(item.pages) });
-		return `${formatSnapshotDate(item.date)} · ${formatBytes(item.file.stat.size)} · ${pages}`;
+		return this.onlyLecture ? this.items.filter((i) => i.lecture) : this.items;
 	}
 
 	getItemText(item: SnapshotItem): string {
-		return this.label(item);
+		return snapshotLabel({ ...item, size: item.file.stat.size });
 	}
 
 	renderSuggestion(match: FuzzyMatch<SnapshotItem>, el: HTMLElement): void {
-		el.createDiv({ text: this.label(match.item) });
+		renderSnapshotRow(el, { ...match.item, size: match.item.file.stat.size });
 	}
 
 	onChooseItem(item: SnapshotItem): void {

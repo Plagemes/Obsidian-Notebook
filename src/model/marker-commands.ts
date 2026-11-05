@@ -2,7 +2,7 @@
  * v8 undoable commands on markers that find their target by id when they are applied, so they still work after
  * another command of the same step replaced the element object (a margin change moves every element). Pure.
  */
-import type { Command } from "./history";
+import type { Command, ElementSwap } from "./history";
 import { withDone } from "./markers";
 import type { MarkerElement, NotebookDocument } from "./types";
 
@@ -10,6 +10,8 @@ import type { MarkerElement, NotebookDocument } from "./types";
 export class SetMarkerDone implements Command {
 	readonly label: string;
 	private replaced: { before: MarkerElement; after: MarkerElement } | null = null;
+	/** 0.19: what the last undo put back exactly: a redo on that same object puts the same `after` back, so the steps above find it. */
+	private undone: { before: MarkerElement; after: MarkerElement } | null = null;
 
 	constructor(readonly pageId: string, readonly markerId: string, readonly done: boolean) {
 		this.label = done ? "Resolve marker" : "Reopen marker";
@@ -17,11 +19,18 @@ export class SetMarkerDone implements Command {
 
 	apply(doc: NotebookDocument): void {
 		this.replaced = null;
+		const again = this.undone;
+		this.undone = null;
 		const els = doc.pages.find((p) => p.id === this.pageId)?.elements;
 		if (!els) return;
 		const i = els.findIndex((e) => e.id === this.markerId && e.type === "marker");
 		const before = els[i] as MarkerElement | undefined;
 		if (!before || !!before.done === this.done) return;
+		if (again && again.before === before) {
+			els[i] = again.after;
+			this.replaced = again;
+			return;
+		}
 		const after = withDone(before, this.done);
 		els[i] = after;
 		this.replaced = { before, after };
@@ -34,6 +43,14 @@ export class SetMarkerDone implements Command {
 		const els = doc.pages.find((p) => p.id === this.pageId)?.elements;
 		if (!els) return;
 		const i = els.indexOf(r.after);
-		if (i >= 0) els[i] = r.before;
+		if (i < 0) return;
+		els[i] = r.before;
+		this.undone = r;
+	}
+
+	remap(swap: ElementSwap): void {
+		const pair = (r: { before: MarkerElement; after: MarkerElement } | null) => (r ? { before: swap(r.before) as MarkerElement, after: swap(r.after) as MarkerElement } : null);
+		this.replaced = pair(this.replaced);
+		this.undone = pair(this.undone);
 	}
 }

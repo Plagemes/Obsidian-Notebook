@@ -16,6 +16,8 @@ export interface CompanionSettings {
 	companionFolder: string;
 	/** File name without `.md`; `{name}` is the notebook's name. */
 	companionName: string;
+	/** O19: the companion also holds the text of sticky notes, comments, equations and marker labels, so global search finds it. */
+	companionSearchText: boolean;
 }
 
 export const NAME_TOKEN = "{name}";
@@ -25,6 +27,7 @@ export const DEFAULT_COMPANION_SETTINGS: Readonly<CompanionSettings> = {
 	companionLocation: "beside",
 	companionFolder: "Notebook notes",
 	companionName: NAME_TOKEN,
+	companionSearchText: false,
 };
 
 /** Characters Obsidian (or one of the platforms it syncs to) does not accept in a file name, plus link syntax. */
@@ -49,6 +52,7 @@ export function readCompanionSettings(d: Record<string, unknown>): CompanionSett
 	if (d.companionLocation === "beside" || d.companionLocation === "folder") s.companionLocation = d.companionLocation;
 	if (typeof d.companionFolder === "string" && cleanFolder(d.companionFolder)) s.companionFolder = cleanFolder(d.companionFolder);
 	if (typeof d.companionName === "string" && validCompanionName(d.companionName)) s.companionName = d.companionName.trim();
+	if (typeof d.companionSearchText === "boolean") s.companionSearchText = d.companionSearchText;
 	return s;
 }
 
