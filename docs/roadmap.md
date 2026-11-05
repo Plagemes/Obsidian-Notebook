@@ -279,7 +279,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 120. **P2** 🧪 Smart collections in the library: saved rules (tag + folder + period + favourite). Notebook type / template is not a rule yet.
 
 ### E. Versions, review, collaboration
-121. **P2** Visual version diff: additions in green, removals in red, between the current version and a snapshot.
+121. **P2** 🧪 Visual version diff: additions in green, removals in red, between the current version and a snapshot. Compare with a version or two versions: a page list (added, removed, modified, counts), before/overlay/after view, restore this page through the page-restore path.
 122. **P1** 🧪 Merge conflicted copies created by Google Drive or OneDrive: compare both copies and merge the strokes (by id) without losing anything.
 123. **P3** Stroke authors in notebooks shared through a common folder: filter and colour by person or device.
 124. **P2** 🧪 Lock a finished page (0.16, format v14: `Page.locked`, one guard in the history, lock badge, page sheet / pages panel / notebook map / command).

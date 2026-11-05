@@ -2818,3 +2818,26 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 |---|---|---|---|---|---|
 | Automatic snapshot at the end of a lecture (#222): lecture mode left, class over or notebook closed after writing in a class (one shared end with the lecture log; the app going to the background does not end it); from the saved file after the flush; only if changed | yes | pure decision, names, retention, fingerprint, label file: yes; vault and view wiring: no (needs a real vault and timetable) | | | |
 | Lecture snapshots: own retention count, label, "Lecture snapshots" filter in version history | yes | pure logic: yes; list pieces: harness (`doc=snapshot`) | | | |
+
+### 0.20 — vdiff: visual version diff (steps 1840-1859)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`doc=vdiff`): `dev/harness/dist/shots/` (the dialog on the modified page in the overlay view, tablet and phone, dark and light). Needs a notebook with at least one version in its history (*Version history interval* set to 1 and a day of editing, or a `.snapshot` copied into `Notebooks/_backup/history/<id>/`).
+
+1840. **Compare with the current notebook.** Open a notebook that has a previous version, run *Compare this notebook with a previous version* (or *Compare with a previous version…* in the page sheet), choose a version. The dialog opens on the page in view when it differs, else on the first changed page. The summary counts pages (added, removed, modified, unchanged) and ink and elements (added, removed, changed, moved).
+1841. **Colours.** On a page where you added a stroke, erased one, moved a text box and recoloured a stroke: *Overlay* shows the new ink tinted green, the erased ink ghosted in red, and the moved or recoloured items outlined in amber (a moved item also has a dashed outline where it was). *Before* shows the old page with the removed ink in red; *After* shows the current page with the added ink in green. The legend under the page title names the three colours.
+1842. **Page list.** The list shows the changed pages by default (*Changed · n*), each with a dot (green added, red removed, amber modified), its status and counts (+added −removed ~changed). A page deleted since the version reads "Was page n". *All pages* lists every page; the selected page keeps its place when the filter changes. A page that only changed place is marked *Moved*.
+1843. **Navigation.** The arrows beside the page title jump to the previous or next changed page and are disabled at the ends. Tapping a row selects it. On a phone the list sits above the page.
+1844. **Two versions.** Run *Compare two previous versions*, choose two versions in either order: the earlier one is *Before*, the later one *After*. Neither the notebook nor the files change.
+1845. **Restore this page.** On a modified page choose *Restore this page from <date>* and confirm: the page is replaced by the old one (same page id, so bookmarks and links keep working) as one undo step; undo brings back the current page. On a page that was deleted since, the button inserts it again after the page before it. On a page that did not exist in the version, the button is disabled.
+1846. **Locked page.** Lock a page and try to restore it from the dialog: the notice says to unlock it first and nothing changes.
+1847. **Two-version restore.** With two old versions open, the button names the version on show: *Before* and *Overlay* use the earlier one, *After* the later one.
+1848. **Read-only.** Open the dialog and close it without pressing restore, with the notebook open and edited: no new undo step, nothing is saved, no file changes.
+1849. **Large notebook.** On a notebook with hundreds of pages, the dialog opens at once; if the notebook is very large the summary says some pages were not compared and those rows read *Not compared*. Switching pages draws one page at a time.
+1850. **Other differences.** Change a page's paper, add a tag or a margin comment and compare: the page is listed as modified with "Also differs: paper, tags, comments".
+1851. **Preview limits.** A page with a PDF background or a picture: the preview draws the ink, boxes and text without the PDF or picture (the note under the dialog says so); a changed picture is outlined.
+1852. **Italian.** In Italian the dialog reads *Confronta versioni*, *Prima* / *Sovrapposto* / *Dopo*, *Ripristina questa pagina del <data>*.
+1853. **Unreadable or other notebook's version.** Choose a damaged copy or a snapshot of another notebook: a notice says so and no dialog opens.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Visual version diff (#121): compare the open notebook with a snapshot or backup, or two versions; read-only dialog with a page list (added / removed / modified / moved pages, counts), before / overlay / after views, green / red / amber marks, restore this page through the page-restore path (History, lock respected, confirmation) | yes | pure diff by ids (pages, strokes, elements, moved vs changed, reorder, cap), marks per view, restore planning and undo (`tests/version-diff.test.ts`, `tests/diff-render.test.ts`, `tests/diff-restore.test.ts`); dialog: harness (`doc=vdiff`) | | | PDF and picture backgrounds are not drawn in the preview |

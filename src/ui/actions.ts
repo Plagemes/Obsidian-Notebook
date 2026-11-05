@@ -320,6 +320,7 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "page-quick-tab-other", label: "quicktabs.pinOther", icon: "book-open", group: "page", surfaces: ["page", "sheet"], priority: 46, scope: "view", command: true, keywords: "quick tab pin other notebook formula sheet fissa altro quaderno" },
 	{ id: "page-save-template", label: "page.saveTemplate", icon: "layout-template", group: "page", surfaces: ["page"], priority: 25, scope: "view" },
 	{ id: "page-restore-version", label: "page.restoreVersion", icon: "history", group: "page", surfaces: ["page"], priority: 20, scope: "view", enabled: pageOpen },
+	{ id: "page-compare-version", label: "page.compareVersion", icon: "git-compare", group: "page", surfaces: ["page"], priority: 21, scope: "view", enabled: pageOpen },
 	{ id: "page-deleted-pages", label: "page.deletedPages", icon: "archive-restore", group: "page", surfaces: ["page"], priority: 20, scope: "view", keywords: "trash restore" },
 	// wave 0.9 (379): dates, ink, objects, files, tags, bookmark and markers of one page.
 	{ id: "page-info", label: "page.info", icon: "info", group: "page", surfaces: ["page", "sheet"], priority: 42, scope: "view", command: true, readOnly: true, keywords: "properties details statistics strokes points size dates" },

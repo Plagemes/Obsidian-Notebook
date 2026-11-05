@@ -18,6 +18,7 @@ import { createId } from "../model/document";
 import type { Command } from "../model/history";
 import { mergeChangeCount, mergeCovers, planMerge, type MergeSummary } from "../model/merge";
 import { matchingPageIndex, planPageRestore, type RestoreMode } from "../model/page-restore";
+import { openVersionCompare } from "./version-compare";
 import type { RepairSummary } from "../model/repair";
 import { parse, serializeChecked } from "../model/serialize";
 import type { NotebookDocument } from "../model/types";
@@ -512,6 +513,18 @@ export function openPageRestore(deps: ReliabilityDeps, view: ReliabilityView, pa
 	})()).open();
 }
 
+/** 0.20 (#121): compares the open notebook with a previous version (`two` false), or two previous versions, in the read-only diff dialog. */
+export function openCompare(deps: ReliabilityDeps, view: ReliabilityView, two: boolean): void {
+	const file = view.file;
+	const doc = view.editableDocument();
+	if (!file || !doc) {
+		showNotice(t("merge.notEditable"));
+		return;
+	}
+	const versions = versionFiles(deps, file, doc.id).map((v) => ({ file: v.file, date: v.date, label: versionLabel(v) }));
+	openVersionCompare(deps.app, view, versions, two);
+}
+
 class PageRestoreModal extends Modal {
 	private selected: number;
 
@@ -612,6 +625,19 @@ export function registerReliability(plugin: Plugin, deps: ReliabilityDeps, views
 			return true;
 		},
 	});
+	// 0.20 (#121): visual version diff.
+	for (const [id, two, name] of [["compare-version", false, t("command.compareVersion")], ["compare-versions", true, t("command.compareVersions")]] as const) {
+		plugin.addCommand({
+			id,
+			name,
+			checkCallback: (checking) => {
+				const view = active();
+				if (!view?.editableDocument()) return false;
+				if (!checking) openCompare(deps, view, two);
+				return true;
+			},
+		});
+	}
 	// A conflicted copy that arrives while the notebook is open (the sync client writes it next to the file).
 	// Registered after the layout is ready: Obsidian reports every existing file as "created" while loading.
 	app.workspace.onLayoutReady(() => {
