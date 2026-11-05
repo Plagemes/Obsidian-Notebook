@@ -55,7 +55,8 @@ interface Rig {
 
 function rig(sourcePath: string, folders: { core?: string } = {}): Rig {
 	const files = new Map<string, string>([[sourcePath, NOTE]]);
-	const note = new TFile(sourcePath);
+	// The mocked TFile above takes the path (the real class takes nothing).
+	const note = new (TFile as unknown as new (path: string) => object)(sourcePath);
 	const processFails = { on: false };
 	const app = {
 		vault: {
@@ -68,7 +69,7 @@ function rig(sourcePath: string, folders: { core?: string } = {}): Rig {
 		},
 		internalPlugins: { getPluginById: () => (folders.core ? { enabled: true, instance: { options: { folder: folders.core } } } : null) },
 	};
-	const newNotebook = vi.fn(async () => ({ name: "Sketches", embed: "![[Sketches.notebook]]", link: "[[Sketches.notebook]]" }));
+	const newNotebook = vi.fn(async (_spec?: unknown) => ({ name: "Sketches", embed: "![[Sketches.notebook]]", link: "[[Sketches.notebook]]" }));
 	let make: ((source: string, el: unknown, ctx: unknown) => void) | null = null;
 	registerNewBlock({ registerMarkdownCodeBlockProcessor: (_l: string, fn: typeof make) => void (make = fn) } as never, { app: app as never, api: () => ({ newNotebook }) as never });
 	let child: { onload(): void } | null = null;
