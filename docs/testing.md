@@ -2741,3 +2741,22 @@ Needs *Companion notes* on. Not verified on hardware.
 1526. Update again without changing anything: the companion file is not modified (check the modified time); editing a sticky note and waiting a few seconds updates it once.
 1527. Switch the setting off and update: the extra lines and wikilinks go back to the previous form; user text outside the block is untouched.
 
+### 0.19 — templates: notebooks from note templates (steps 1640-1659)
+
+Roadmap O13. Needs Templater and the core Templates plugin, and a notebook template named `Lecture` (use *Save as notebook template* on a notebook with two pages and a text box holding `{{date}}`). See `docs/templates.md`. Reference screenshots after `npm run harness:check`: `dev/harness/dist/shots/tplnote-*.png`.
+
+1640. **Button, core Templates.** A template file containing a `notebook-new` block with `name="{{title}} notes"` and `template="Lecture"`. Insert it in a new note called `Optics`: the note shows a card "Optics notes, From the template “Lecture”" with a *Create notebook* button. No notebook exists yet in the library.
+1641. **Press it.** Tap *Create notebook*: a notice says it was created, the card is replaced by an embed of `Optics notes.notebook`, and the rest of the note is unchanged (check the Markdown source). The notebook has the template's pages and cover, and the `{{date}}` text is filled in.
+1642. **Pages only.** With `content=false` the notebook has the template's empty pages only.
+1643. **Templater.** The same block written with `<% tp.file.title %>` expands and behaves the same. A block whose name still shows `{{title}}` or `<% … %>` shows an explanation instead of a button.
+1644. **Bad input.** A block with an unknown key, no name, or `open=maybe` shows a message, no button. A `template` that does not exist: the button fails with a notice and creates nothing; the block stays.
+1645. **Two identical blocks.** Two identical blocks in one note: pressing the second replaces the second only. Edit the note in another pane so the block is gone before pressing: a notice, nothing created.
+1646. **Never automatic.** Opening, reloading, switching between reading view and Live Preview, and printing the note never create anything.
+1647. **Templater script.** The `new-notebook.js` user script of `docs/templates.md` inserts `![[….notebook]]`, and the notebook exists, opens, and keeps the template's cover. With a wrong template name the note gets the error text, not a crash.
+1648. **Phone.** On Android the card fits the width, the button is a comfortable target, and creating works.
+1649. **Look.** Light, dark and *Follow Obsidian theme*: the card reads well beside the note text.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| `api.newNotebook` (API 1.2) and `template` / `templateContent` options of `createNotebook`: a notebook from a stored notebook template, returning ready `link` and `embed` markup; no format change | yes | option parsing, template picking, link markup (`tests/new-block.test.ts`) | | | the template reading is only covered through the existing template code |
+| `notebook-new` code block for core Templates and Templater: parsing, card with a *Create notebook* button (never on render), replacement of exactly that block through `vault.process` | yes | parsing, exact replacement, duplicates, fences (`tests/new-block.test.ts`); harness `doc=tplnote` (card, error card) | | | not tried inside Obsidian (steps 1640-1649) |

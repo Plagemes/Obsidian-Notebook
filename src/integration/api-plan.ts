@@ -20,9 +20,9 @@ import { centredPosition, imageElementSize } from "../view/view-helpers";
 import { invalid, NotebookApiError } from "./api-errors";
 
 /** Version of the public API (semver): a new method or option raises the minor number, a breaking change the major one. */
-export const API_VERSION = "1.1.0";
+export const API_VERSION = "1.2.0";
 /** Names of the methods of the API (`NotebookApi` in api.ts), for the check that docs/api.md describes all of them. */
-export const API_METHODS = ["createNotebook", "addPages", "insertImage", "exportPdf", "getNotebookInfo", "getPageLink", "openNotebook", "listNotebooks"] as const;
+export const API_METHODS = ["createNotebook", "addPages", "insertImage", "exportPdf", "getNotebookInfo", "getPageLink", "openNotebook", "listNotebooks", "newNotebook"] as const;
 /** Pages one call may create. */
 export const MAX_PAGES_PER_CALL = 500;
 /** Largest image `insertImage` accepts, bytes. */
@@ -163,6 +163,10 @@ export interface CreateNotebookOptions {
 	favorite?: boolean;
 	/** Cover colour, `#rrggbb`. */
 	cover?: string;
+	/** Name (or vault path) of a notebook template to start from (since 1.2). Not combined with pageSize, landscape, paper or pages. */
+	template?: string;
+	/** With `template`: keep the template's ink and elements (default true), or only its pages. */
+	templateContent?: boolean;
 	/** Open the notebook after creating it (default false). */
 	open?: boolean;
 }
@@ -176,9 +180,11 @@ export interface ParsedCreate {
 	favorite?: boolean;
 	cover?: string;
 	open: boolean;
+	template?: string;
+	templateContent?: boolean;
 }
 
-const CREATE_KEYS = ["pageSize", "landscape", "paper", "pages", "tags", "favorite", "cover", "open"] as const;
+const CREATE_KEYS = ["pageSize", "landscape", "paper", "pages", "tags", "favorite", "cover", "open", "template", "templateContent"] as const;
 
 export function parseCreateOptions(v: unknown): ParsedCreate {
 	const o = checkOptions("options", v, CREATE_KEYS);
@@ -201,6 +207,18 @@ export function parseCreateOptions(v: unknown): ParsedCreate {
 	if (o.cover !== undefined) {
 		if (typeof o.cover !== "string" || !/^#[0-9a-fA-F]{6}$/.test(o.cover)) throw invalid("options.cover", "expected a colour like #3b82f6", { value: o.cover });
 		out.cover = o.cover.toLowerCase();
+	}
+	if (o.template !== undefined) {
+		if (typeof o.template !== "string" || o.template.trim() === "") throw invalid("options.template", "expected the name of a notebook template");
+		out.template = o.template.trim();
+		for (const k of ["pageSize", "landscape", "paper", "pages"] as const) {
+			if (o[k] !== undefined) throw invalid(`options.${k}`, "cannot be combined with a template: the template decides the pages", { option: k });
+		}
+	}
+	const templateContent = optBoolean("options.templateContent", o.templateContent);
+	if (templateContent !== undefined) {
+		if (out.template === undefined) throw invalid("options.templateContent", "needs options.template");
+		out.templateContent = templateContent;
 	}
 	const open = optBoolean("options.open", o.open);
 	if (open !== undefined) out.open = open;
@@ -546,4 +564,18 @@ export class KeyedQueue {
 		});
 		return result;
 	}
+}
+
+// ------------------------------------------------------------------- templates (1.2)
+
+/** The template a script means: its path, or its name without extension (case and a trailing ".notebook" do not matter). */
+export function pickTemplate<T extends { name: string; path: string }>(list: readonly T[], wanted: string): T | undefined {
+	const w = wanted.trim().replace(/\\/g, "/").replace(/\.notebook$/i, "").toLowerCase();
+	return list.find((x) => x.path.replace(/\.notebook$/i, "").toLowerCase() === w) ?? list.find((x) => x.name.toLowerCase() === w);
+}
+
+/** Link text for a created notebook: `link` is `[[Name.notebook]]`, `embed` is `![[Name.notebook]]`. */
+export function linkMarkup(link: string): { link: string; embed: string } {
+	const bare = link.startsWith("!") ? link.slice(1) : link;
+	return { link: bare, embed: `!${bare}` };
 }

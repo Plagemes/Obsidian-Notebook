@@ -16498,3 +16498,48 @@ body.notebook-style-obsidian {
 	font-size: var(--nb-fs-chip);
 	color: var(--nb-text-muted);
 }
+
+/* ===== 0.19 templates ===== */
+.nb-ui.nb-newblock {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--nb-space-3, 12px);
+	margin: var(--nb-space-2, 8px) 0;
+	padding: var(--nb-space-3) var(--nb-space-4);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-m);
+	background: var(--nb-panel);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-newblock .nb-newblock-text {
+	min-width: 0;
+}
+
+.nb-ui.nb-newblock .nb-newblock-title {
+	overflow: hidden;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-newblock .nb-newblock-detail {
+	color: var(--nb-text-muted, var(--nb-text));
+	font-size: 0.9em;
+}
+
+.nb-ui.nb-newblock.is-error {
+	border-color: var(--nb-danger, var(--nb-border));
+}
+
+.nb-ui.nb-newblock .nb-modal-btn {
+	flex: 0 0 auto;
+	min-height: 40px;
+}
+
+.nb-ui.nb-newblock.is-error {
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--nb-space-1);
+}
