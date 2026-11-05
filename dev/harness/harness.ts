@@ -73,6 +73,7 @@ import { modalsApi } from "./modals-check";
 import { a4splitApi } from "./a4split-check";
 import { cleanExportApi } from "./cleanexport-check";
 import { templatesApi } from "./templates-check";
+import { plannerApi } from "./planner-check";
 import { storageApi } from "./storage-check";
 import { bulkApi } from "./bulk-check";
 import { xferApi } from "./pagesplit-check";
@@ -2209,6 +2210,8 @@ Object.assign(harnessApi, modalsApi({ app, errors, notices }));
 Object.assign(harnessApi, a4splitApi({ app, errors, notices }));
 Object.assign(harnessApi, cleanExportApi({ app, errors, notices }));
 Object.assign(harnessApi, templatesApi({ app, errors, notices }));
+// 0.20 planner (#118): the Planner tab of the creation dialog and the generated pages (doc=planner, planner-check.ts).
+Object.assign(harnessApi, plannerApi({ app, errors, notices }));
 // 0.15 storage: the Storage manager (doc=storage, storage-check.ts).
 Object.assign(harnessApi, storageApi({ app, errors, notices }));
 // 0.16 bulk import (doc=bulk, bulk-check.ts).

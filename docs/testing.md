@@ -2818,3 +2818,31 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 |---|---|---|---|---|---|
 | Automatic snapshot at the end of a lecture (#222): lecture mode left, class over or notebook closed after writing in a class (one shared end with the lecture log; the app going to the background does not end it); from the saved file after the flush; only if changed | yes | pure decision, names, retention, fingerprint, label file: yes; vault and view wiring: no (needs a real vault and timetable) | | | |
 | Lecture snapshots: own retention count, label, "Lecture snapshots" filter in version history | yes | pure logic: yes; list pieces: harness (`doc=snapshot`) | | | |
+
+### 0.20 — planner: planner generator (steps 1820-1839)
+
+Roadmap #118. Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`HARNESS_DOC=planner`): `dev/harness/dist/shots/design/planner-{dialog,large,pages}-{light,dark}-{tablet,phone}.png` (the Planner tab, the tab with daily pages on and the large-notebook warning, and the year, month, week and day pages as drawn by the thumbnail renderer).
+
+1820. **The tab.** Open the creation dialog (*New notebook*) and tap *Planner*. The name is already "Planner" and the current year, the form has year, calendar or academic year, a start month, language, week start, page size, orientation and five section chips. Left and right arrows on the tab row move through Notebook, Planner and Folder.
+1821. **Page count.** With the defaults (year, months, weeks, notes) the dialog says 72 pages. Switch on *Daily pages*: it says 437 pages (366 in a leap year) and a note says it is a large notebook. Switch every section off: it asks you to pick one, and *Create planner* does nothing but move to the chips.
+1822. **Year field.** Type 1800 or 12: an inline error, and *Create planner* focuses the field. Change the year: the suggested name follows; type a name of your own first and it stays.
+1823. **Academic year.** Tap *Academic year*: the start month becomes September and the name becomes "Planner 2026-2027". Create it: the first month page is September, the last is August of the next year, and the year page title reads 2026–2027.
+1824. **Create and open.** Create a calendar-year planner. It opens on the year page: twelve mini calendars with the weekday letters, weekends in grey, and a month link under each month name. The outline (bookmarks) lists the year, each month and Notes.
+1825. **Links down.** Tap a month link on the year page: the month calendar opens (grid paper, one cell per day, the day numbers typed in the cells). Its *Weeks* list links to the weeks. Tap a week: the weekly planner page with a box per day, each day label a link. Tap a day: the daily planner page with the date as the title and hours down the left.
+1826. **Links up.** On the day page tap *‹ Week*, then *‹ Month*, then *‹ Year*: each goes back one level. A page link shows its text (the brackets and the notebook name); that is how links written in text boxes look.
+1827. **Links survive moves.** Insert a blank page in the middle of the planner and tap links again: they still open the right pages (the links name pages by id).
+1828. **Week start.** Make a planner with *Sunday*: month columns start on Sunday, week pages start on Sunday and week numbers follow the January 1st rule; with *Monday* they are ISO weeks. In *Settings > Writing > Planner week starts on* choose Sunday, close and reopen the dialog: Sunday is selected.
+1829. **Italian.** Choose *Italiano*: month names, weekdays and the titles ("Settimana 11", "Giovedì 12 marzo 2026", "Note") are Italian, and the interface language does not change.
+1830. **Sizes.** Make planners in A5 portrait, A4 landscape and a custom size: nothing is cut off at the page edge and the month grid still has seven columns across the page. In landscape the links of a month sit to the right of the grid.
+1831. **Writing on it.** Write with the pen on a month cell, a week box and the day schedule: ink goes where you write, the pen never selects a date, and the rules do not move.
+1832. **Big one.** Make a planner with daily pages (about 437 pages): the dialog stays responsive, the notebook is created and opens, scrolling the pages panel is smooth, and closing and reopening it loses nothing.
+1833. **Name taken.** Name a planner like an existing notebook: the usual inline error. If another file of the vault has the same name in another folder, the links use the full path and still open the right notebook.
+1834. **Phone.** On a phone the three tabs fit the header, the section chips wrap, and the form scrolls under the preview.
+1835. **Look.** Light, dark and *Follow Obsidian theme*: the Planner tab reads well; the generated pages are always light paper.
+1836. **Rename.** Rename the planner notebook in the library: the links inside it still need the new name (use *Update links* from the notebook menu if it offers it); note which happens.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Calendar math: leap years, month lengths, day numbers, weekday, ISO week and Sunday-start week numbers, week lists, month rows, calendar and academic ranges, week start from the locale | yes | `tests/calendar.test.ts` (checked against `Date` over a leap year and sampled over 1900-2200) | | | |
+| Planner generator: year, month, week, day and notes pages on existing papers and text boxes, page links by id up and down, outline bookmarks, English and Italian, Monday or Sunday weeks, page counts, bounds on every size and orientation, document write and read back | yes | `tests/planner.test.ts` | | | link text shows its markup on the page; not tried inside Obsidian (steps 1820-1836) |
+| Planner tab of the creation dialog (year, span, start month, language, week start, size, section chips, page count and large warning) and the setting *Planner week starts on* | yes | harness `doc=planner` (tab, chips, counts, creating and reading back) | | | not tried on a phone (step 1834) |

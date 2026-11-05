@@ -274,7 +274,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 115. **P1** 🧪 Class timetable: define the weekly timetable; new pages are tagged with the course in progress, and opening the app during a class opens that course's notebook on a new page.
 116. ~~**P1** Exam review plan: set an exam date per notebook and its pages are spread over the remaining days for review.~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
 117. ~~**P2** Review coverage map: thumbnails coloured from "never reviewed" to "reviewed often".~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
-118. **P2** Planner generator: a planner notebook with dated month, week and day pages linked to each other.
+118. **P2** 🧪 Planner generator: a planner notebook with dated month, week and day pages linked to each other. New **Planner** tab in the creation dialog: year, calendar or academic year, language (English, Italian), week start, size, sections (year overview, monthly calendars, weekly spreads, daily pages, notes); pages link year to month to week to day and back (page links in text boxes), outline bookmarks per month, no format change. The link text shows its markup on the page.
 119. **P1** 🧪 Page tags: tags on single pages, filterable in the navigator and in search.
 120. **P2** 🧪 Smart collections in the library: saved rules (tag + folder + period + favourite). Notebook type / template is not a rule yet.
 

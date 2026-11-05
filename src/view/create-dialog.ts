@@ -23,6 +23,8 @@ import { applyArt, artRef, type ArtSource } from "../ui/art/art-ref";
 import { artEnabled, type ArtSpec } from "../ui/art/generative-art";
 import { motifFor } from "../ui/art/keywords";
 import { COVER_FAMILIES, decodeCoverArt, type CoverFamily } from "../model/cover-family";
+import { ACADEMIC_START_MONTH, MAX_PLANNER_YEAR, MIN_PLANNER_YEAR, monthName, type CalendarLang, type WeekStart } from "../model/calendar";
+import { NOTES_PAGES_DEFAULT, NOTES_PAGES_MAX, PLANNER_LARGE_PAGES, plannerDocument, plannerPageCount, plannerProblem, type PlannerOptions, type PlannerSections } from "../model/planner";
 import { decorate } from "../ui/components/dom";
 import { drawSafely, errorCard } from "../ui/components/error-card";
 import { subjectCard } from "../ui/components/subject-card";
@@ -33,9 +35,23 @@ import {
 	nextArtStyle, orientCustom, pageSize, SIZE_CHOICES, startFolder, type NameProblem, type NotebookSpec, type SizeChoice,
 } from "./create-logic";
 import { sanitizeName } from "../storage/names";
+import { NEW_NOTEBOOK_EXTENSION } from "../storage/format";
 import type { PickedFile } from "./pick";
 
-export type CreateTab = "notebook" | "folder";
+export type CreateTab = "notebook" | "folder" | "planner";
+const CREATE_TABS: readonly CreateTab[] = ["notebook", "planner", "folder"];
+
+/** What the Planner tab has chosen (the pure rules are in model/planner.ts). */
+interface PlannerChoices {
+	year: number;
+	/** The year as typed (it may be invalid while typing). */
+	yearText: string;
+	startMonth: number;
+	lang: CalendarLang;
+	weekStart: WeekStart;
+	sections: PlannerSections;
+	notesPages: number;
+}
 
 /** A template the dialog will make the notebook from. `ready`: a notebook template already turned into the new document (new ids, placeholders filled). */
 export interface ChosenTemplate {
@@ -75,6 +91,10 @@ export interface CreateDialogHost {
 	/** Creates and opens the notebook. Resolves false (the dialog stays open) when it failed; the host told the user why. */
 	createNotebook(spec: NotebookSpec, extras: { image?: PickedFile; template?: ChosenTemplate }): Promise<boolean>;
 	createFolder(spec: FolderSpec): Promise<boolean>;
+	/** 0.20 planner (#118): the language, first weekday and year a planner starts with (absent: English, Monday, this year). */
+	plannerDefaults?(): { lang: CalendarLang; weekStart: WeekStart; year: number };
+	/** 0.20 planner: how a link names the notebook that will be at `path` (its file name, or its path when another file has that name); absent: the path. */
+	linkTarget?(path: string): string;
 }
 
 /** Icons offered directly on the Folder tab (DESIGN.md subjects); "More icons…" searches every Lucide icon. */
@@ -127,6 +147,10 @@ export class CreateDialog extends Modal {
 	private closePopover: (() => void) | null = null;
 	/** Rebuilds the folder card (its art seed is the path) once typing pauses. */
 	private cardTimer: number | null = null;
+	/** 0.20 planner (#118): what the Planner tab has chosen. */
+	private readonly pl: PlannerChoices;
+	/** The name the tab suggested (so a name typed by the user is never replaced). */
+	private plannerNameAuto = "";
 
 	constructor(app: App, private readonly host: CreateDialogHost, tab: CreateTab = "notebook", folder?: string) {
 		super(app);
@@ -140,6 +164,12 @@ export class CreateDialog extends Modal {
 			color: host.folderMeta?.(start)?.color ?? colorFor(seed), art: { style: "contours", seed },
 		};
 		this.fd = { name: "", description: "", parent: start, icon: "folder", color: SUBJECT_COLORS[0]!.base, art: "contours" };
+		const pd = host.plannerDefaults?.() ?? { lang: "en" as CalendarLang, weekStart: 1 as WeekStart, year: new Date().getFullYear() };
+		this.pl = {
+			year: pd.year, yearText: String(pd.year), startMonth: 1, lang: pd.lang, weekStart: pd.weekStart,
+			sections: { year: true, months: true, weeks: true, days: false, notes: true }, notesPages: NOTES_PAGES_DEFAULT,
+		};
+		if (tab === "planner") this.suggestPlannerName();
 	}
 
 	onOpen(): void {
@@ -186,15 +216,16 @@ export class CreateDialog extends Modal {
 		const band = head.createDiv({ cls: "nb-create-band", attr: { "aria-hidden": "true" } });
 		decorate(undefined, () => applyArt(band, artRef("art", { seed: "create-header", color: this.color(), style: this.tab === "folder" ? this.fd.art : this.nb.art.style, density: 0.4, intensity: 0.35, surface: surface() }, 480, 64), { prop: "--nb-create-band" }));
 		const tabs = head.createDiv({ cls: "nb-create-tabs", attr: { role: "tablist", "aria-label": t("create.tabs") } });
-		for (const id of ["notebook", "folder"] as const) {
+		for (const id of CREATE_TABS) {
 			const on = this.tab === id;
-			const b = tabs.createEl("button", { cls: "nb-create-tab", text: t(id === "notebook" ? "create.tab.notebook" : "create.tab.folder"), attr: { type: "button", role: "tab", "aria-selected": String(on), tabindex: on ? "0" : "-1" } });
+			const b = tabs.createEl("button", { cls: "nb-create-tab", text: t(`create.tab.${id}`), attr: { type: "button", role: "tab", "aria-selected": String(on), tabindex: on ? "0" : "-1" } });
 			b.toggleClass("is-active", on);
 			b.addEventListener("click", () => this.switchTab(id));
 			b.addEventListener("keydown", (e) => {
 				if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
 					e.preventDefault();
-					this.switchTab(id === "notebook" ? "folder" : "notebook");
+					const i = CREATE_TABS.indexOf(id);
+					this.switchTab(CREATE_TABS[(i + (e.key === "ArrowRight" ? 1 : CREATE_TABS.length - 1)) % CREATE_TABS.length]!);
 					this.contentEl.querySelector<HTMLElement>(".nb-create-tab.is-active")?.focus();
 				}
 			});
@@ -204,9 +235,9 @@ export class CreateDialog extends Modal {
 		const body = el.createDiv({ cls: "nb-create-body" });
 		const preview = body.createDiv({ cls: "nb-create-preview" });
 		const form = body.createDiv({ cls: "nb-create-form" });
-		if (this.tab === "notebook") {
+		if (this.tab !== "folder") {
 			drawSafely(preview, "the creation dialog's cover", t("ui.part.preview"), () => this.renderCover(preview));
-			drawSafely(form, "the creation dialog's notebook form", t("ui.part.form"), () => this.renderNotebookForm(form));
+			drawSafely(form, "the creation dialog's notebook form", t("ui.part.form"), () => (this.tab === "planner" ? this.renderPlannerForm(form) : this.renderNotebookForm(form)));
 		} else {
 			drawSafely(preview, "the creation dialog's folder card", t("ui.part.preview"), () => this.renderFolderPreview(preview));
 			drawSafely(form, "the creation dialog's folder form", t("ui.part.form"), () => this.renderFolderForm(form));
@@ -215,7 +246,7 @@ export class CreateDialog extends Modal {
 		const foot = el.createDiv({ cls: "nb-create-foot" });
 		const cancel = foot.createEl("button", { cls: "nb-create-secondary", text: t("create.cancel"), attr: { type: "button" } });
 		cancel.addEventListener("click", () => this.close());
-		const cta = foot.createEl("button", { cls: "nb-create-primary mod-cta", text: t(this.tab === "notebook" ? "create.notebook.cta" : "create.folder.cta"), attr: { type: "button" } });
+		const cta = foot.createEl("button", { cls: "nb-create-primary mod-cta", text: t(this.tab === "notebook" ? "create.notebook.cta" : this.tab === "planner" ? "create.planner.cta" : "create.folder.cta"), attr: { type: "button" } });
 		cta.disabled = this.busy;
 		cta.addEventListener("click", () => void this.submit());
 
@@ -236,15 +267,17 @@ export class CreateDialog extends Modal {
 
 	private switchTab(tab: CreateTab): void {
 		if (tab === this.tab) return;
+		if (this.tab === "planner" && tab !== "planner" && this.nb.name === this.plannerNameAuto) this.nb.name = "";
 		// The name typed so far carries over: the user may have started on the wrong tab.
 		if (tab === "folder") {
 			this.fd.name ||= this.nb.name;
 			this.fd.parent = this.nb.folder;
-		} else {
+		} else if (this.tab === "folder") {
 			this.nb.name ||= this.fd.name;
 			this.nb.folder = this.fd.parent;
 		}
 		this.tab = tab;
+		if (tab === "planner") this.suggestPlannerName();
 		this.nameTouched = false;
 		this.render();
 	}
@@ -283,12 +316,12 @@ export class CreateDialog extends Modal {
 	}
 
 	private nameField(form: HTMLElement): void {
-		const spec = this.tab === "notebook" ? this.nb : this.fd;
+		const spec = this.tab !== "folder" ? this.nb : this.fd;
 		const f = this.field(form, t("create.name"), "nb-create-name");
 		const input = f.createEl("input", {
 			cls: "nb-create-input nb-create-name",
 			attr: { id: "nb-create-name", type: "text", maxlength: String(MAX_NAME), autocomplete: "off", spellcheck: "false", "aria-required": "true",
-				placeholder: t(this.tab === "notebook" ? "create.name.notebookPlaceholder" : "create.name.folderPlaceholder") },
+				placeholder: t(this.tab !== "folder" ? "create.name.notebookPlaceholder" : "create.name.folderPlaceholder") },
 		});
 		input.value = spec.name;
 		const error = f.createDiv({ cls: "nb-create-error", attr: { id: "nb-create-name-error", role: "alert" } });
@@ -311,11 +344,11 @@ export class CreateDialog extends Modal {
 	}
 
 	private descriptionField(form: HTMLElement): void {
-		const spec = this.tab === "notebook" ? this.nb : this.fd;
+		const spec = this.tab !== "folder" ? this.nb : this.fd;
 		const f = this.field(form, t("create.description"), "nb-create-description");
 		const area = f.createEl("textarea", {
 			cls: "nb-create-input nb-create-description",
-			attr: { id: "nb-create-description", rows: "2", maxlength: String(this.tab === "notebook" ? META_DESCRIPTION_MAX : FOLDER_DESCRIPTION_MAX), placeholder: t("create.description.placeholder") },
+			attr: { id: "nb-create-description", rows: "2", maxlength: String(this.tab !== "folder" ? META_DESCRIPTION_MAX : FOLDER_DESCRIPTION_MAX), placeholder: t("create.description.placeholder") },
 		});
 		area.value = spec.description;
 		area.addEventListener("input", () => {
@@ -327,7 +360,7 @@ export class CreateDialog extends Modal {
 	/** A keyword in the name picks the art family (veins for biology, orbits for physics…) until the user picks one. */
 	private followName(): void {
 		if (this.artChosen) return;
-		const motif = motifFor(this.tab === "notebook" ? this.nb.name : this.fd.name, COVER_FAMILIES);
+		const motif = motifFor(this.tab !== "folder" ? this.nb.name : this.fd.name, COVER_FAMILIES);
 		if (!motif) return;
 		if (this.tab === "folder") {
 			this.fd.art = motif;
@@ -344,14 +377,14 @@ export class CreateDialog extends Modal {
 
 	private nameProblem(): NameProblem | null {
 		// `clean` is the name as it will be created, so the check asks about the path that will be written.
-		if (this.tab === "notebook") {
+		if (this.tab !== "folder") {
 			return nameProblem(this.nb.name, (clean) => this.host.exists(joinPath(this.nb.folder, `${clean}.notebook`)), isRootFolder(this.nb.folder, this.host.root()));
 		}
 		return nameProblem(this.fd.name, (clean) => this.host.exists(joinPath(this.fd.parent, clean)), isRootFolder(this.fd.parent, this.host.root()));
 	}
 
 	private problemText(p: NameProblem): string {
-		const name = sanitizeName(this.tab === "notebook" ? this.nb.name : this.fd.name);
+		const name = sanitizeName(this.tab !== "folder" ? this.nb.name : this.fd.name);
 		switch (p) {
 			case "empty": return t("create.error.empty");
 			case "chars": return t("create.error.chars");
@@ -360,7 +393,7 @@ export class CreateDialog extends Modal {
 			case "device": return t("create.error.device", { name });
 			case "reserved": return t("create.error.reserved", { name });
 			case "long": return t("create.error.long", { max: String(MAX_NAME) });
-			case "exists": return t(this.tab === "notebook" ? "create.error.notebookExists" : "create.error.folderExists", { name });
+			case "exists": return t(this.tab !== "folder" ? "create.error.notebookExists" : "create.error.folderExists", { name });
 		}
 	}
 
@@ -615,6 +648,11 @@ export class CreateDialog extends Modal {
 			}));
 		}
 
+		this.sizeFields(form);
+	}
+
+	/** Page size and orientation (shared by the Notebook and Planner tabs). */
+	private sizeFields(form: HTMLElement): void {
 		const sizes = this.group(form, t("create.size"));
 		sizes.addClass("nb-create-chips");
 		const sizeItems: Array<{ id: SizeChoice; label: string; cls: string }> = [
@@ -645,6 +683,186 @@ export class CreateDialog extends Modal {
 			this.nb.landscape = landscape;
 			this.render(false);
 		});
+	}
+
+	// ----------------------------------------------------------------- planner
+
+	private plannerAutoName(): string {
+		const { year, startMonth, lang } = this.pl;
+		const span = startMonth === 1 ? String(year) : `${year}-${year + 1}`;
+		return `${lang === "it" ? "Agenda" : "Planner"} ${span}`;
+	}
+
+	/** Suggests "Planner 2026" as the name, unless the user typed a name of their own. */
+	private suggestPlannerName(): void {
+		const next = this.plannerAutoName();
+		if (!this.nb.name.trim() || this.nb.name === this.plannerNameAuto) this.nb.name = next;
+		this.plannerNameAuto = next;
+	}
+
+	private yearValid(): boolean {
+		return /^\d{4}$/.test(this.pl.yearText.trim()) && Number(this.pl.yearText) >= MIN_PLANNER_YEAR && Number(this.pl.yearText) <= MAX_PLANNER_YEAR;
+	}
+
+	/** What the planner will be made from (null while the choices are not valid). */
+	private plannerOptions(size: { width: number; height: number }, linkTarget: string): PlannerOptions | null {
+		const o: PlannerOptions = {
+			year: this.pl.year, startMonth: this.pl.startMonth, lang: this.pl.lang, weekStart: this.pl.weekStart, size,
+			sections: { ...this.pl.sections }, notesPages: this.pl.notesPages, linkTarget,
+		};
+		return this.yearValid() && plannerProblem(o) === null ? o : null;
+	}
+
+	private plannerSize(): { width: number; height: number } {
+		return pageSize(this.nb.size, this.nb.landscape, this.nb.customMm);
+	}
+
+	/** The file name the links name: the notebook that will be created from the name typed. */
+	private plannerLinkTarget(): string {
+		const path = joinPath(this.nb.folder, `${sanitizeName(this.nb.name.trim())}.${NEW_NOTEBOOK_EXTENSION}`);
+		return this.host.linkTarget?.(path) ?? path;
+	}
+
+	/** Updates the page count and its warning without rebuilding the form (typing goes on). */
+	private refreshPlannerSummary(): void {
+		const box = this.contentEl.querySelector<HTMLElement>(".nb-create-planner-summary");
+		if (!box) return;
+		box.empty();
+		const s = this.pl.sections;
+		const none = !(s.year || s.months || s.weeks || s.days || (s.notes && this.pl.notesPages > 0));
+		if (none) {
+			box.createDiv({ cls: "nb-create-error", text: t("create.planner.sectionsNone") });
+			return;
+		}
+		const options = this.plannerOptions(this.plannerSize(), "x");
+		const count = options ? plannerPageCount(options) : 0;
+		if (!options) return;
+		box.createDiv({ cls: "nb-create-planner-count", text: t("create.planner.pages", { n: String(count) }) });
+		if (count > PLANNER_LARGE_PAGES) box.createDiv({ cls: "nb-create-planner-warning", text: t("create.planner.large", { n: String(count) }), attr: { role: "status" } });
+	}
+
+	/** A switch chip (a checkbox that looks like the page-size chips). */
+	private checkChip(parent: HTMLElement, label: string, on: boolean, set: (on: boolean) => void): HTMLButtonElement {
+		const chip = parent.createEl("button", { cls: "nb-create-tile nb-create-chip nb-create-check", attr: { type: "button", role: "checkbox", "aria-checked": String(on) } });
+		chip.toggleClass("is-active", on);
+		setIcon(chip.createSpan({ cls: "nb-create-check-icon" }), on ? "check" : "plus");
+		chip.createSpan({ text: label });
+		chip.addEventListener("click", () => set(!on));
+		return chip;
+	}
+
+	private renderPlannerForm(form: HTMLElement): void {
+		this.nameField(form);
+		this.descriptionField(form);
+		this.folderField(form, t("create.folder"), this.nb.folder, (path) => {
+			this.nb.folder = path;
+			const c = this.host.folderMeta?.(path)?.color;
+			if (c && !this.nbColorChosen) this.nb.color = c;
+		});
+		form.createDiv({ cls: "nb-create-planner-intro", text: t("create.planner.intro") });
+
+		// Year, and the twelve months it covers.
+		const y = this.field(form, t("create.planner.year"), "nb-create-planner-year");
+		const year = y.createEl("input", {
+			cls: "nb-create-input nb-create-planner-year",
+			attr: { id: "nb-create-planner-year", type: "number", inputmode: "numeric", min: String(MIN_PLANNER_YEAR), max: String(MAX_PLANNER_YEAR), step: "1" },
+		});
+		year.value = this.pl.yearText;
+		const yearError = y.createDiv({ cls: "nb-create-error", attr: { role: "alert" } });
+		const showYear = () => {
+			const bad = !this.yearValid();
+			year.toggleClass("is-invalid", bad);
+			yearError.setText(bad ? t("create.planner.year.invalid", { min: String(MIN_PLANNER_YEAR), max: String(MAX_PLANNER_YEAR) }) : "");
+		};
+		year.addEventListener("input", () => {
+			this.pl.yearText = year.value;
+			if (this.yearValid()) {
+				this.pl.year = Number(this.pl.yearText);
+				this.followPlannerName();
+			}
+			showYear();
+			this.refreshPlannerSummary();
+		});
+		showYear();
+
+		const span = this.group(form, t("create.planner.span"));
+		span.addClass("nb-create-chips");
+		const spanChoice = this.pl.startMonth === 1 ? "calendar" : this.pl.startMonth === ACADEMIC_START_MONTH ? "academic" : "";
+		this.radioTiles(span, [
+			{ id: "calendar", label: t("create.planner.span.calendar"), cls: "nb-create-chip", build: (tile: HTMLElement) => void tile.setText(t("create.planner.span.calendar")) },
+			{ id: "academic", label: t("create.planner.span.academic"), cls: "nb-create-chip", build: (tile: HTMLElement) => void tile.setText(t("create.planner.span.academic")) },
+		], spanChoice, (id) => {
+			this.pl.startMonth = id === "academic" ? ACADEMIC_START_MONTH : 1;
+			this.followPlannerName();
+			this.render(false);
+		});
+		const startField = this.field(form, t("create.planner.start"), "nb-create-planner-start");
+		const start = startField.createEl("select", { cls: "nb-create-input nb-create-planner-start", attr: { id: "nb-create-planner-start" } });
+		for (let m = 1; m <= 12; m++) start.createEl("option", { text: monthName(this.pl.lang, m), attr: { value: String(m) } });
+		start.value = String(this.pl.startMonth);
+		start.addEventListener("change", () => {
+			this.pl.startMonth = Number(start.value);
+			this.followPlannerName();
+			this.render(false);
+			this.contentEl.querySelector<HTMLElement>("#nb-create-planner-start")?.focus();
+		});
+
+		const lang = this.group(form, t("create.planner.language"));
+		lang.addClass("nb-create-chips");
+		this.radioTiles(lang, ([["en", "English"], ["it", "Italiano"]] as const).map(([id, label]) => ({ id, label, cls: "nb-create-chip", build: (tile: HTMLElement) => void tile.setText(label) })), this.pl.lang, (id) => {
+			this.pl.lang = id;
+			this.followPlannerName();
+			this.render(false);
+		});
+		const week = this.group(form, t("create.planner.weekStart"));
+		week.addClass("nb-create-chips");
+		this.radioTiles(week, ([["1", t("create.planner.monday")], ["0", t("create.planner.sunday")]] as const).map(([id, label]) => ({ id, label, cls: "nb-create-chip", build: (tile: HTMLElement) => void tile.setText(label) })), String(this.pl.weekStart), (id) => {
+			this.pl.weekStart = id === "0" ? 0 : 1;
+			this.render(false);
+		});
+
+		this.sizeFields(form);
+
+		// What to include.
+		const sections = this.group(form, t("create.planner.sections"));
+		sections.addClass("nb-create-chips");
+		sections.setAttribute("role", "group");
+		for (const key of ["year", "months", "weeks", "days", "notes"] as const) {
+			this.checkChip(sections, t(`create.planner.section.${key}`), this.pl.sections[key], (on) => {
+				this.pl.sections[key] = on;
+				this.render(false);
+				this.contentEl.querySelectorAll<HTMLElement>(".nb-create-check")[["year", "months", "weeks", "days", "notes"].indexOf(key)]?.focus();
+			});
+		}
+		if (this.pl.sections.notes) {
+			const n = this.field(form, t("create.planner.notesCount"), "nb-create-planner-notes");
+			const notes = n.createEl("input", {
+				cls: "nb-create-input nb-create-planner-notes",
+				attr: { id: "nb-create-planner-notes", type: "number", inputmode: "numeric", min: "0", max: String(NOTES_PAGES_MAX), step: "1" },
+			});
+			notes.value = String(this.pl.notesPages);
+			notes.addEventListener("input", () => {
+				const v = Number(notes.value);
+				const ok = notes.value.trim() !== "" && Number.isInteger(v) && v >= 0 && v <= NOTES_PAGES_MAX;
+				notes.toggleClass("is-invalid", !ok);
+				if (ok) this.pl.notesPages = v;
+				this.refreshPlannerSummary();
+			});
+		}
+		form.createDiv({ cls: "nb-create-planner-summary" });
+		this.refreshPlannerSummary();
+		form.createDiv({ cls: "nb-create-planner-intro nb-create-planner-links", text: t("create.planner.links") });
+	}
+
+	/** After the year, span or language changed: the suggested name follows (a name typed by the user stays). */
+	private followPlannerName(): void {
+		const before = this.nb.name;
+		this.suggestPlannerName();
+		if (this.nb.name !== before) {
+			const input = this.contentEl.querySelector<HTMLInputElement>("input.nb-create-name");
+			if (input) input.value = this.nb.name;
+			this.refreshPreview();
+		}
 	}
 
 	/** Sets the custom side fields (as typed) and, when both are valid, the custom size. */
@@ -824,7 +1042,7 @@ export class CreateDialog extends Modal {
 
 	/** Updates the parts of the preview that show the name and description, without rebuilding the form (focus stays). */
 	private refreshPreview(): void {
-		if (this.tab === "notebook") {
+		if (this.tab !== "folder") {
 			const title = this.contentEl.querySelector(".nb-create-cover-title");
 			if (title) title.textContent = this.nb.name.trim() || t("create.tab.notebook");
 			return;
@@ -848,11 +1066,15 @@ export class CreateDialog extends Modal {
 		if (this.busy) return;
 		this.nameTouched = true;
 		const problem = this.nameProblem();
-		const customBad = this.tab === "notebook" && this.nb.size === "custom" && !this.template
+		const customBad = this.tab !== "folder" && this.nb.size === "custom" && (this.tab === "planner" || !this.template)
 			&& (customSide(this.customWidth) === null || customSide(this.customHeight) === null);
-		if (problem || customBad) {
+		const spec: NotebookSpec = { ...this.nb, name: this.nb.name.trim(), description: this.nb.description.trim() };
+		// Planner: the choices must make a planner (a year in range, at least one section).
+		const planner = this.tab === "planner" ? this.plannerOptions(this.plannerSize(), this.plannerLinkTarget()) : null;
+		const plannerBad = this.tab === "planner" && planner === null;
+		if (problem || customBad || plannerBad) {
 			this.render(false);
-			const target = problem ? ".nb-create-name" : ".nb-create-custom input.is-invalid";
+			const target = problem ? ".nb-create-name" : customBad ? ".nb-create-custom input.is-invalid" : this.yearValid() ? ".nb-create-check" : ".nb-create-planner-year";
 			this.contentEl.querySelector<HTMLElement>(target)?.focus();
 			return;
 		}
@@ -860,8 +1082,12 @@ export class CreateDialog extends Modal {
 		this.contentEl.querySelector<HTMLButtonElement>(".nb-create-primary")?.setAttribute("disabled", "true");
 		let ok = false;
 		try {
-			if (this.tab === "notebook") {
-				const spec: NotebookSpec = { ...this.nb, name: this.nb.name.trim(), description: this.nb.description.trim() };
+			if (planner) {
+				// Let the disabled button paint before the pages are built (a full year of day pages is a few thousand text boxes).
+				await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+				const doc = plannerDocument(planner);
+				ok = await this.host.createNotebook(spec, { ...(this.image ? { image: this.image.file } : {}), template: { name: spec.name, doc, ready: true } });
+			} else if (this.tab !== "folder") {
 				ok = await this.host.createNotebook(spec, { ...(this.image ? { image: this.image.file } : {}), ...(this.template ? { template: this.template } : {}) });
 			} else {
 				ok = await this.host.createFolder({ ...this.fd, name: sanitizeName(this.fd.name), description: this.fd.description.trim() });

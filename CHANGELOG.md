@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### planner
+- **Planner generator (#118).** The creation dialog has a third tab, *Planner*: choose the year (a calendar year, or an academic year from September to August, or any start month), the language of the names (English or Italian), the first day of the week, the page size and orientation, and which sections to make: a year overview with twelve mini calendars, a calendar page per month, a spread per week (the weekly planner paper), a page per day (the daily planner paper, with hours) and notes pages. The dialog shows the page count and warns above 200 pages (daily pages add 365). Titles, weekday names, dates and hours are typed text boxes and the rules are paper (month pages sit on grid paper whose spacing is the calendar cell), so there is no ink in a new planner. Pages link to each other, year to month to week to day and back, with the notebook's page links (`[[Planner 2026.notebook#p14&id=d71|…]]` in a text box, which stay right when pages are moved), and the year, every month and the notes get an outline bookmark. The link text shows on the page, as every link written in a text box does. A new setting *Planner week starts on* (Automatic follows the device language). No format change; the pages are built in one pass (a few milliseconds for a year of day pages). Pure calendar math (leap years, ISO and Sunday-start week numbers, academic ranges, month grids) in `src/model/calendar.ts`, the generator in `src/model/planner.ts`; tests `tests/calendar.test.ts`, `tests/planner.test.ts`; harness `doc=planner`.
+
 ## 0.19.0 — 2026-11-05
 
 Handwritten tasks and a lecture you can follow up from your notes: checkboxes drawn with the pen that tick the tasks in your Markdown notes, a lecture log line in the daily note and an automatic snapshot at the end of each lecture, a gallery of the figures of a lecture, a clean copy of the notes to share, a list of things to look up later, typed text that Obsidian's search can find, and notebooks made from note templates. The notebook format moves to version 17: 0.18 and older open a v17 file read-only and never overwrite it.
