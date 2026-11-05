@@ -121,7 +121,7 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 
 ### Capture and sharing
 29. 🧪 **P1** Scan into the notebook: the camera scan goes straight into the notebook as a page whose background is the cropped, perspective-corrected and enhanced photo (like a PDF page), so you write on it, reorder it in the navigator and export it like any other page. A multi-sheet session adds consecutive pages after the current one; alternatively a scan can be placed as an image on the current page. Enhancement filters: original, document (high-contrast black and white), whiteboard.
-30. 🧪 **P2** Quick share of a page as PNG or PDF through the Android share sheet. *(0.20: "Share page…" in the page menu, the sheet and the palette, and "Share selection…" in the selection menu: PNG or PDF of the page, the selection or some pages through `navigator.share({ files })`; where file sharing is not available a copy is saved in the vault. Needs hardware verification of the share sheet.)*
+30. **P2** 🧪 Quick share of a page as PNG or PDF through the Android share sheet. *(0.20: "Share page…" in the page menu, the sheet and the palette, and "Share selection…" in the selection menu: PNG or PDF of the page, the selection or some pages through `navigator.share({ files })`; where file sharing is not available a copy is saved in the vault. Needs hardware verification of the share sheet.)*
 
 ## M8 — More features (backlog, planned 2026-10-29)
 
@@ -274,7 +274,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 115. **P1** 🧪 Class timetable: define the weekly timetable; new pages are tagged with the course in progress, and opening the app during a class opens that course's notebook on a new page.
 116. ~~**P1** Exam review plan: set an exam date per notebook and its pages are spread over the remaining days for review.~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
 117. ~~**P2** Review coverage map: thumbnails coloured from "never reviewed" to "reviewed often".~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
-118. **P2** 🧪 Planner generator: a planner notebook with dated month, week and day pages linked to each other. New **Planner** tab in the creation dialog: year, calendar or academic year, language (English, Italian), week start, size, sections (year overview, monthly calendars, weekly spreads, daily pages, notes); pages link year to month to week to day and back (page links in text boxes), outline bookmarks per month, no format change. The link text shows its markup on the page.
+118. **P2** 🧪 Planner generator: a planner notebook with dated month, week and day pages linked to each other. New **Planner** tab in the creation dialog: year, calendar or academic year, language (English, Italian), week start, size, sections (year overview, monthly calendars, weekly spreads, daily pages, notes); pages link year to month to week to day and back (page links in text boxes), outline bookmarks per month, no format change. The link text shows its label on the page.
 119. **P1** 🧪 Page tags: tags on single pages, filterable in the navigator and in search.
 120. **P2** 🧪 Smart collections in the library: saved rules (tag + folder + period + favourite). Notebook type / template is not a rule yet.
 
