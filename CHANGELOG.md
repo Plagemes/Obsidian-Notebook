@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### groups
+- **Groups and locked elements (#39), document format 18.** *Group* in the selection bar makes the selected strokes and elements one group: picking any member with the lasso, or tapping a grouped element or grouped ink, picks them all, so they move, resize, rotate, copy, duplicate, cut and delete together. *Ungroup* splits it. *Lock* fixes the selected elements in place (a background picture that must not move): the lasso, a tap and the area eraser skip a locked element, ink over it is unaffected. A tap with the lasso on a locked element shows a small *Locked · Unlock* chip; *Locked elements…* in the page menu lists them with *Unlock* and *Unlock all*. Each change is one undo step and a locked page still refuses them.
+- **Document format v18.** Strokes and elements get an optional `group` id; elements an optional `locked` flag and `lockAt` time. A group is two members or more on one page; a smaller one is released when read (counted) and never written. The v17 to v18 migration only drops such keys from a v17 file (large v17 files still stage); 0.19 and older open a v18 file read-only and never overwrite it. Copies of a page or a selection and templates get fresh group ids and keep locks. Merging a conflicted copy unites the groups by id and the later lock decision wins (a lock tie keeps the lock).
+
 ## 0.19.0 — 2026-11-05
 
 Handwritten tasks and a lecture you can follow up from your notes: checkboxes drawn with the pen that tick the tasks in your Markdown notes, a lecture log line in the daily note and an automatic snapshot at the end of each lecture, a gallery of the figures of a lecture, a clean copy of the notes to share, a list of things to look up later, typed text that Obsidian's search can find, and notebooks made from note templates. The notebook format moves to version 17: 0.18 and older open a v17 file read-only and never overwrite it.

@@ -16585,3 +16585,136 @@ body.notebook-style-obsidian {
 	width: 16px;
 	height: 16px;
 }
+
+/* ===== 0.20 groups ===== */
+/* #39: the chip a tap with the lasso offers on a locked element, and the list of the page's locked elements (view/group-tools.ts, view/locked-elements-modal.ts). */
+.nb-ui.nb-grp-chip {
+	position: absolute;
+	left: var(--nb-grp-x, 0);
+	top: var(--nb-grp-y, 0);
+	z-index: 25;
+	transform: translateX(-50%);
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-2, 8px);
+	padding: 4px 6px 4px 12px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-l);
+	background: var(--nb-panel);
+	box-shadow: var(--nb-shadow-float);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-grp-chip .nb-grp-chip-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	white-space: nowrap;
+}
+
+.nb-ui.nb-grp-chip .nb-grp-chip-icon {
+	display: inline-flex;
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-grp-chip .nb-grp-chip-icon svg {
+	width: 14px;
+	height: 14px;
+}
+
+.nb-ui.nb-grp-chip .nb-chip {
+	min-height: 40px;
+}
+
+.nb-ui.nb-grp-modal .nb-grp-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.nb-ui.nb-grp-modal .nb-grp-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 52px;
+	padding: 4px 8px 4px 14px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+}
+
+.nb-ui.nb-grp-modal .nb-grp-row-icon {
+	display: inline-flex;
+	flex: none;
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-grp-modal .nb-grp-row-icon svg {
+	width: 18px;
+	height: 18px;
+}
+
+.nb-ui.nb-grp-modal .nb-grp-row-text {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 2px;
+	min-width: 0;
+	min-height: 44px;
+	margin: 0;
+	padding: 4px 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text);
+	text-align: left;
+	cursor: pointer;
+}
+
+.nb-ui.nb-grp-modal .nb-grp-row-label {
+	font-size: var(--nb-fs-row);
+	font-weight: 500;
+}
+
+.nb-ui.nb-grp-modal .nb-grp-row-detail {
+	max-width: 100%;
+	overflow: hidden;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-grp-modal .nb-grp-row-unlock {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 6px;
+	min-height: 44px;
+	margin: 0;
+	padding: 0 12px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill, 999px);
+	background: var(--nb-bg-elevated);
+	box-shadow: none;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-meta);
+	cursor: pointer;
+}
+
+.nb-ui.nb-grp-modal .nb-grp-row-unlock:hover {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui.nb-grp-modal .nb-grp-row-unlock-icon {
+	display: inline-flex;
+}
+
+.nb-ui.nb-grp-modal .nb-grp-row-unlock-icon svg {
+	width: 14px;
+	height: 14px;
+}

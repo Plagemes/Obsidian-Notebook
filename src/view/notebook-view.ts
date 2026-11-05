@@ -16,7 +16,7 @@ import { cleanStampFormat, formatStamp, stampElement, stampSpot } from "../ink/d
 import {
 	captureCrossPageClip, frameOffset, inkFollowers, pagesTouchedBy, partsBounds, planCrossPageTransform, selectAcrossPages, type PagePart,
 } from "../ink/cross-page";
-import { elementsInLasso, hitElement } from "../ink/elements";
+import { elementsInLasso, hitElement, hitLockedElement } from "../ink/elements";
 import { eraseAreaCommand } from "../ink/erase-area";
 import { filterErasable } from "../ink/erase-filter";
 import { findHitStrokes, type BBox } from "../ink/hit-test";
@@ -162,6 +162,8 @@ import { TextEditor, type TextEditSession } from "./text-editor";
 import { MathTools, type MathHost } from "./math-tools";
 import { StickyTools, type StickyHost } from "./sticky-tools";
 import { ChecklistTools, type ChecklistHost } from "./checklist-tools";
+import { GroupTools, type GroupHost } from "./group-tools";
+import { canGroup, expandToGroups, lockedElementsOf, unlockedElements } from "../model/groups";
 import { CommentTools, pdfCommentLabels, type CommentsHost } from "./comments-tools";
 import { equationNumbers } from "../model/math-elements";
 import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites";
@@ -436,6 +438,8 @@ export class NotebookView extends FileView {
 	private sticky: StickyTools | null = null;
 	/** 0.19 (#103): handwritten checklists (taps, the square drawn by hand, send to tasks, the task lines). */
 	private checklist: ChecklistTools | null = null;
+	/** 0.20 (#39): groups and locked elements (Group, Ungroup, Lock, the Unlock chip, the list of locked elements). */
+	private groups: GroupTools | null = null;
 	/** 0.18 (#86): margin comments (markers, card, side panel). */
 	private comments: CommentTools | null = null;
 	private rulerGesture: RulerGesture | null = null;
@@ -681,6 +685,7 @@ export class NotebookView extends FileView {
 		this.math = new MathTools(this.mathHost());
 		this.sticky = new StickyTools(this.stickyHost());
 		this.checklist = new ChecklistTools(this.checklistHost());
+		this.groups = new GroupTools(this.groupHost());
 		this.comments = new CommentTools(this.commentsHost());
 		this.penGestures = new PenGestureLayer({
 			stage: this.stage,
@@ -995,6 +1000,8 @@ export class NotebookView extends FileView {
 		this.arrange = null;
 		this.checklist?.destroy();
 		this.checklist = null;
+		this.groups?.destroy();
+		this.groups = null;
 		this.penLinks?.destroy();
 		this.penLinks = null;
 		this.pageOffer?.destroy();
@@ -2209,6 +2216,33 @@ export class NotebookView extends FileView {
 		};
 	}
 
+	/** 0.20 (#39): groups and locked elements of this view (null before the view is open). */
+	get groupTools(): GroupTools | null {
+		return this.groups;
+	}
+
+	/** What the group tools need from the view (0.20, #39). */
+	private groupHost(): GroupHost {
+		return {
+			app: this.app,
+			stage: () => this.stage,
+			doc: () => this.session?.doc ?? null,
+			editable: () => !!this.editableDocument(),
+			execute: (cmd) => this.applyCommand(cmd),
+			selection: () => (this.selection ? this.selectionParts(this.selection) : null),
+			select: (pageIndex, strokes, elements) => this.selectItems(pageIndex, strokes, elements),
+			toStage: (pageIndex, x, y) => {
+				const box = this.layout?.boxes[pageIndex];
+				if (!box) return null;
+				const { scale, offsetX, offsetY } = this.viewport;
+				return [offsetX + (box.x + x) * scale, offsetY + (box.y + y) * scale];
+			},
+			reveal: (pageIndex, y) => this.scrollToPage(pageIndex, y),
+			measure: measureText,
+			refresh: () => this.refreshUi(),
+		};
+	}
+
 	/** What the checklist tools need from the view (0.19, #103). */
 	private checklistHost(): ChecklistHost {
 		return {
@@ -3184,6 +3218,7 @@ export class NotebookView extends FileView {
 			selection: sel && !this.statesTools?.ownsSelection(sel) ? this.selectionCounts(sel) : null,
 			page: page ? {
 				index, count: pages.length, background: page.background?.kind ?? "none", infinite: !!page.infinite, locked: page.locked === true,
+				lockedElements: lockedElementsOf(page).length,
 				bookmarked: doc?.meta?.bookmarks.includes(page.id) ?? false, splittable: page.id === this.heavyPageId,
 				...(this.host.quickTabs ? { quickTab: this.host.quickTabs.isPinnedAt(this.quickApi(), index) } : {}),
 				kind: pageKindOf({ background: page.background?.kind ?? "none", paper: page.paper.kind, width: page.width, height: page.height }),
@@ -3229,6 +3264,9 @@ export class NotebookView extends FileView {
 			// 0.19 (#103): the checkbox actions (Tick, Label, Send to tasks, Unlink) work on the primary page's checkboxes (see checklistTools).
 			checkboxes: sel.elements.filter((e) => e.type === "checkbox").length,
 			checkboxesLinked: sel.elements.filter((e) => e.type === "checkbox" && e.task !== undefined).length,
+			// 0.20 (#39): Group works within one page (a group never spans pages); Ungroup and Lock work on every page of the selection.
+			canGroup: !sel.others?.length && canGroup({ strokes: sel.strokes, elements: sel.elements }),
+			grouped: parts.reduce((n, p) => n + p.strokes.filter((s) => s.group !== undefined).length + p.elements.filter((e) => e.group !== undefined).length, 0),
 		};
 	}
 
@@ -4155,6 +4193,14 @@ export class NotebookView extends FileView {
 		this.clearSelection();
 		const texts = (page.elements ?? []).filter((e): e is TextElement => e.type === "text");
 		const hit = hitElement(texts, local[0], local[1], 4 / this.viewport.scale, measureText) as TextElement | null;
+		if (!hit) {
+			// 0.20 (#39): a locked text box is not edited, and no new box is started on top of it: the chip offers Unlock.
+			const locked = hitLockedElement(texts, local[0], local[1], 4 / this.viewport.scale, measureText);
+			if (locked) {
+				this.groups?.showLocked(pageIndex, locked, local);
+				return;
+			}
+		}
 		let session: TextEditSession;
 		if (hit) {
 			session = { pageId: page.id, element: hit, x: hit.x, y: hit.y, width: hit.width, fontSize: hit.fontSize, color: hit.color };
@@ -5267,8 +5313,20 @@ export class NotebookView extends FileView {
 		let elements: PageElement[] = [];
 		if (extent * this.viewport.scale < TAP_SLOP_PX) {
 			const p = lasso.points[0]!;
-			const el = hitElement(page.elements ?? [], p[0], p[1], 6 / this.viewport.scale, measureText);
+			const tol = 6 / this.viewport.scale;
+			const el = hitElement(page.elements ?? [], p[0], p[1], tol, measureText);
 			if (el) elements = [el];
+			else {
+				// 0.20 (#39): a member of a group that is hit by the tap is picked too (loose ink is not selected by a tap), and a locked
+				// element is not selected: a chip says so and offers Unlock.
+				const grouped = this.inkInView(page).filter((s) => s.group !== undefined);
+				const hit = grouped.length > 0 ? findHitStrokes(grouped, p[0], p[1], p[0], p[1], tol).pop() : undefined;
+				if (hit) strokes = [hit];
+				else {
+					const locked = hitLockedElement(page.elements ?? [], p[0], p[1], tol, measureText);
+					if (locked) this.groups?.showLocked(lasso.pageIndex, locked, p);
+				}
+			}
 		} else {
 			// wave 0.10 (359): a lasso that reaches over a page boundary selects on every page it touches.
 			const touched = pagesTouchedBy(this.layout?.boxes ?? [], lasso.points, lasso.pageIndex);
@@ -5276,8 +5334,11 @@ export class NotebookView extends FileView {
 			strokes = strokesInLasso(this.inkInView(page), lasso.points);
 			elements = elementsInLasso(page.elements ?? [], lasso.points, measureText);
 		}
+		// 0.20 (#39): picking one member of a group picks all of them.
+		({ strokes, elements } = expandToGroups(page, { strokes, elements }, this.inkInView(page)));
 		const bounds = unionBounds(strokes, elements, measureText);
 		if (!bounds) return;
+		this.groups?.hideChip();
 		this.selection = { pageIndex: lasso.pageIndex, strokes, elements, bounds, matrix: IDENTITY };
 		this.pushSelection();
 		hint("lasso-selected");
@@ -5295,6 +5356,10 @@ export class NotebookView extends FileView {
 				return p ? this.inkInView(p) : [];
 			},
 			elementsOf: (i) => doc.pages[i]?.elements ?? [],
+		}).map((part) => {
+			// 0.20 (#39): a group is picked whole on each page (a group never spans pages).
+			const there = doc.pages[part.pageIndex];
+			return there ? { ...part, ...expandToGroups(there, part, this.inkInView(there)) } : part;
 		});
 		const first = parts[0];
 		if (!first) return false;
@@ -5673,6 +5738,9 @@ export class NotebookView extends FileView {
 	private selectItems(pageIndex: number, strokes: Stroke[], elements: PageElement[], others?: PagePart[]): void {
 		this.commitText();
 		this.toolbar.setTool("lasso");
+		// 0.20 (#39): a locked element is never part of a selection, whoever asks (it cannot be moved, resized or erased).
+		elements = [...unlockedElements(elements)];
+		others = others?.map((o) => ({ ...o, elements: [...unlockedElements(o.elements)] }));
 		const boxes = this.layout?.boxes ?? [];
 		const extra = others?.filter((o) => o.strokes.length + o.elements.length > 0);
 		const bounds = extra?.length
