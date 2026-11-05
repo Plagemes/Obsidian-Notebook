@@ -3562,6 +3562,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"newblock.error.noName": "Aggiungi un nome: name=\"I miei schizzi\"",
 	"newblock.error.unexpanded": "Qui c'è ancora la sintassi del modello (“{detail}”). Inserisci prima il modello con Templater o con i Modelli di Obsidian.",
 	"newblock.error.badValue": "Atteso true o false: {detail}",
+	"newblock.inTemplate": "Questo è un segnaposto dentro un modello di nota. Le note create dal modello mostrano qui il pulsante Crea quaderno.",
 	"newblock.noApi": "L'API di Notebook non è ancora pronta. Riprova tra un momento.",
 	"newblock.notFound": "Questo blocco non è più nella nota, oppure compare più volte. Non è stato creato nulla.",
 	"newblock.created": "Creato “{name}” e incorporato nella nota.",

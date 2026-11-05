@@ -229,7 +229,14 @@ class NotebookApiImpl implements NotebookApi {
 		}
 		const back = parse(readNotebookText(file.extension, await this.app.vault.read(file)));
 		if (!back.ok || back.doc.id !== doc.id) throw new NotebookApiError("write-failed", `"${file.path}" was created but could not be read back.`, { path: file.path });
-		if (o.open) await this.openNotebook(file);
+		if (o.open) {
+			// The notebook exists and was read back: failing to show it must not look like failing to make it (the caller would try again and make a second one).
+			try {
+				await this.openNotebook(file);
+			} catch (e) {
+				console.error("[notebook] the new notebook could not be opened", file.path, e);
+			}
+		}
 		return { path: file.path, name: file.basename, id: doc.id, file };
 	}
 
