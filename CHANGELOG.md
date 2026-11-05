@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### htmlexport
+- **Interactive HTML export (#164).** *Export…* has a new format, *Interactive HTML*: one self-contained `.html` file (whole notebook, this page or some pages, ink and background choices and *Clean copy* as in the other formats) that opens in any browser without Obsidian. Each page is the inline SVG of the SVG export, with a small vanilla-JS viewer: page strip, wheel and pinch zoom, pan, fit width, keyboard navigation, light and dark by the system theme, links to pages of the notebook (`[[Name#p3]]`) that jump inside the file and web links that open normally. Pictures are embedded up to about 32 MB (a notice says how many were left out); a Content-Security-Policy forbids any network request; titles and text are escaped. Written next to the notebook, never over an existing file; built one page at a time. No format change. Pure builder in `src/ink/export-html.ts`, writer in `src/view/export.ts`. Tests: `tests/export-html.test.ts`. Harness: `dev/harness/htmlexport-check.ts` (`doc=htmlexport`).
+
 ## 0.20.0 — 2026-11-05
 
 Eight features: groups and locked elements, a quick share of a page or a selection, files dragged straight onto a page, ghost guide lines on blank paper, headings found from the size of the handwriting, a floating reference window, a planner generator and a visual version diff. The notebook format moves to version 18 (groups and locks): the migration from version 17 is automatic, and 0.19 and older open a v18 file read-only and never overwrite it.

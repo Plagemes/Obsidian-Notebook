@@ -3022,3 +3022,25 @@ Ghost guide lines (roadmap #94). Settings, Writing: *Ghost guide lines* (off / w
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Ghost guide lines on blank paper (#94): baseline and next line inferred from the newest strokes, faint dashed overlay on the live layer, off / while writing / always, auto or fixed spacing, never saved or exported | yes | inference (baseline, line height, tilt tolerance, descenders, drawings as outliers, fallback to the last complete line, fixed spacing), segments, fade, settings: `tests/ghost-lines.test.ts`; harness `doc=ghostlines` | | | not tried with a real hand on a tablet; the thresholds (tilt 12 degrees, spacing from stroke height) are a guess |
+
+### 0.21 — htmlexport: Interactive HTML export (steps 1880-1899)
+
+Interactive HTML export (roadmap #164). *Export…*, format *Interactive HTML*. One self-contained `.html` file that opens in any browser without Obsidian. Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`HARNESS_DOC=htmlexport`): `dev/harness/dist/shots/` (the export dialog on Interactive HTML, tablet and phone, dark and light).
+
+1880. **The format.** Open *Export…* on a notebook of several pages: *Interactive HTML* is in the *Format* list; choosing it hides the PNG folder and shows a note that one file is written next to the notebook and nothing is loaded from the internet.
+1881. **Whole notebook.** Export it: one `<notebook>.html` appears next to the notebook (a notice gives the path). Open it in a desktop browser (double click, no Obsidian running): the first page is shown fitted to the width, with a page strip on the left (hidden on a phone-width window) and the title on top.
+1882. **Same drawing.** Compare a page with the SVG export of the same page: strokes, text boxes, images, boxes, markers and the paper pattern look the same; a wikilink on a text box shows its label.
+1883. **Zoom and pan.** Ctrl + wheel zooms around the cursor; the +/- buttons zoom; *Fit width* (or key 0) restores the fit; dragging with the mouse (or one finger on a tablet) pans; pinching with two fingers zooms. Strokes stay sharp at 8x.
+1884. **Pages and keys.** Next/Previous, the arrow keys, PageUp/PageDown, Home/End and a tap on a thumbnail change page; the address gets `#p3` and opening it later goes straight to that page; the browser Back button follows.
+1885. **Dark and light.** Switch the system theme: the bar and the strip follow; the paper of the pages stays white (as in every other export).
+1886. **Scope.** Export *This page* (file named `… p3.html`, one page) and *Some pages* `1, 4-5` (`… p1+4-5.html`, three pages). *Ink only* and *Background only* work; *Clean copy* leaves out the markers like the other formats.
+1887. **Links.** A text box with `[[<notebook name>#p3]]` is a link in the file that jumps to page 3 (if page 3 is in the file); a `[[https://example.com|site]]` link opens the address in a new tab; any other note link is plain text.
+1888. **Pictures.** A notebook with pictures and a PDF background: they appear in the file (as JPEG data inside it). A notebook whose pictures exceed about 32 MB shows a notice that some images were left out.
+1889. **No overwrite, no network.** Export again: a second file `… 2.html` is written, the first is untouched. Open the browser developer tools, Network tab: reloading the file makes no request.
+1890. **Big notebook.** Export a notebook of 100+ pages: Obsidian stays responsive while the notice counts the pages.
+1891. **Print.** Printing the file from the browser prints the current page without the bar and strip.
+1892. **Hostile text.** A notebook titled `<img src=x onerror=alert(1)>` and a text box with `<script>alert(1)</script>`: the exported file shows both as text and runs nothing.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Interactive HTML export (#164): one self-contained file with the inline SVG of each page, a vanilla-JS viewer (page strip, wheel/pinch zoom, pan, keyboard, fit width, light/dark), page links inside the file, web links, image size cap, no network (CSP), chunked build, never overwrites | yes | builder (escaping, clip ids, links, URL whitelist, image budget, valid script): `tests/export-html.test.ts`; harness `doc=htmlexport` drives the real viewer in an iframe | | | not opened on Android/Safari; the strip clones every page SVG when the file opens (slow to open for 500+ pages) |
