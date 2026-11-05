@@ -682,7 +682,7 @@ function splitGroup(item: unknown): { bare: unknown; group: string | undefined; 
 function withGroup<T extends Stroke | PageElement>(item: T | undefined, group: string | undefined): T | undefined {
 	if (item === undefined || group === undefined) return item;
 	const copy = { ...item, group };
-	return ("type" in copy ? freezeElement(copy) : freezeStroke(copy as Stroke)) as unknown as T;
+	return ("type" in copy ? freezeElement(copy) : freezeStroke(copy)) as unknown as T;
 }
 
 /** v18: the lock flags of `item` carried onto `fixed` (the builders of a repaired element know no flags). */
