@@ -3808,4 +3808,13 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"share.copyImage": "Copia immagine",
 	"share.imageCopied": "Immagine copiata.",
 	"share.imageCopyFailed": "Non sono riuscito a copiare l'immagine.",
+	// 0.20 ghostlines
+	"settings.ghostLines": "Righe guida fantasma",
+	"settings.ghostLines.desc": "Righe tratteggiate leggere sulla carta bianca. Mai salvate né esportate.",
+	"settings.ghostLines.off": "No",
+	"settings.ghostLines.writing": "Mentre scrivi",
+	"settings.ghostLines.always": "Sempre sulla carta bianca",
+	"settings.ghostSpacing": "Distanza delle righe guida",
+	"settings.ghostSpacing.desc": "Segui la tua scrittura oppure una spaziatura fissa.",
+	"settings.ghostSpacing.auto": "Auto (dalla tua scrittura)",
 };

@@ -25,6 +25,7 @@ import { InputPolicy } from "../ink/input-policy";
 import { rectanglePolygon, strokesInLasso } from "../ink/lasso";
 import { lineBreakTarget } from "../ink/line-break";
 import type { SnapGuide } from "../model/snap";
+import { ghostApplies, ghostSegments, ghostSpacingPt, inferGhostLines, MAX_STROKES as GHOST_MAX_STROKES, type GhostBox } from "../model/ghost-lines";
 import { dragSnapSession, snapDragged, type SnapSession } from "./snap-glue";
 import { SnapHold } from "./snap-hold";
 import { applyPlacement, itemsBounds, uniformPlacement } from "../ink/selection-transform";
@@ -62,7 +63,7 @@ import { checkContent, freezeStroke } from "../model/serialize";
 import {
 	DEFAULT_META, PAPER_SPACING,
 	type Asset, type ImageElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement,
-	type PaperKind, type Point, type Stroke, type TextElement, RENDER_FREEHAND, RENDER_INK,
+	type PaperKind, type Point, type Stroke, type TextElement, type Tool, RENDER_FREEHAND, RENDER_INK,
 } from "../model/types";
 import type { JournalStore } from "../storage/journal";
 import { DocumentSession, type SaveState, type SessionMode } from "../storage/session";
@@ -3923,6 +3924,7 @@ export class NotebookView extends FileView {
 	}
 
 	private afterHistoryChange(): void {
+		this.renderer?.setGhost(null);
 		this.refreshLayout();
 		this.minimap?.invalidate();
 		// The document may be shorter now (page deleted or made smaller): keep the view inside it.
@@ -4581,6 +4583,7 @@ export class NotebookView extends FileView {
 		this.pageOffer?.penDown();
 		this.smartAdd?.hide();
 		this.strokeStart = sample.t;
+		this.renderer?.touchGhost(performance.now());
 		const snap = !!page && this.rulerLatches(page, local);
 		const start = snap && this.ruler ? (projectToRuler(this.ruler.ruler, local, Infinity) ?? local) : local;
 		this.filter.reset(sample.x, sample.y, sample.t);
@@ -4934,6 +4937,7 @@ export class NotebookView extends FileView {
 			// The wet canvas shows exactly this geometry; the static layer takes it over without a change.
 			this.renderer?.endWet(stroke);
 			this.addStrokes(active.pageIndex, page, [stroke]);
+			this.updateGhostLines(active.pageIndex, page, stroke.tool);
 			if (active.liveFallback) this.renderer?.setLive(null);
 			const box = this.layout?.boxes[active.pageIndex];
 			if (box) {
@@ -4954,6 +4958,30 @@ export class NotebookView extends FileView {
 		}
 		const extras = active.extra.map((points) => freezeStroke({ ...active.stroke, id: createId(), points }));
 		this.addStrokes(active.pageIndex, page, [stroke, ...extras]);
+		this.updateGhostLines(active.pageIndex, page, stroke.tool);
+	}
+
+	/**
+	 * 0.20 (#94): after a pen stroke ends on blank paper, infers the line of writing from the newest strokes and shows the ghost
+	 * guides (only on the live layer, never saved). Once per stroke, on the newest strokes only; nothing runs per frame.
+	 */
+	private updateGhostLines(pageIndex: number, page: Page, tool: Tool): void {
+		const renderer = this.renderer;
+		const mode = this.host.settings.ghostLines;
+		if (!renderer || tool !== "pen") return;
+		if (!ghostApplies(mode, page.paper.kind)) {
+			renderer.setGhost(null);
+			return;
+		}
+		const boxes: GhostBox[] = [];
+		for (let i = page.strokes.length - 1; i >= 0 && boxes.length < GHOST_MAX_STROKES; i--) {
+			const s = page.strokes[i]!;
+			if (s.tool === "pen" && !s.hidden) boxes.push(renderer.boundsOf(s));
+		}
+		boxes.reverse();
+		const lines = inferGhostLines(boxes, ghostSpacingPt(this.host.settings.ghostSpacing));
+		const segments = lines ? ghostSegments(lines, page.width, page.height) : [];
+		renderer.setGhost(segments.length > 0 ? { pageIndex, segments, mode, since: performance.now() } : null);
 	}
 
 	/**

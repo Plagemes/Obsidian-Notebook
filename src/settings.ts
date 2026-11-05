@@ -28,6 +28,7 @@ import { DEFAULT_READING_SETTINGS, readReadingSettings, type ReadingSettings } f
 import { DEFAULT_PRESENT_SETTINGS, readPresentSettings, type PresentSettings } from "./view/present-logic";
 import { DEFAULT_BOARD_SETTINGS, readBoardSettings, type BoardSettings } from "./library/board-logic";
 import { DEFAULT_SNAP_SETTINGS, readSnapSettings, type SnapSettings } from "./view/snap-settings";
+import { DEFAULT_GHOST_SETTINGS, readGhostSettings, type GhostSettings } from "./view/ghost-settings";
 import { DEFAULT_PDF_COPY_SETTINGS, readPdfCopySettings, type PdfCopySettings } from "./storage/pdf-copy-logic";
 import { isPlannerWeekStart, type PlannerWeekStart } from "./model/calendar";
 
@@ -36,7 +37,7 @@ import { isPlannerWeekStart, type PlannerWeekStart } from "./model/calendar";
 export const APPEARANCE_STYLES = ["notebook", "obsidian"] as const;
 export type AppearanceStyle = (typeof APPEARANCE_STYLES)[number];
 
-export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings, LectureSettings, BoardSettings, PresentSettings, SnapSettings, PdfCopySettings {
+export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings, LectureSettings, BoardSettings, PresentSettings, SnapSettings, GhostSettings, PdfCopySettings {
 	/** UI language: "auto" follows Obsidian. */
 	uiLanguage: UiLanguage;
 	folder: string;
@@ -374,6 +375,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	...DEFAULT_READING_SETTINGS,
 	...DEFAULT_PRESENT_SETTINGS,
 	...DEFAULT_SNAP_SETTINGS,
+	...DEFAULT_GHOST_SETTINGS,
 	// 0.15 views
 	...DEFAULT_BOARD_SETTINGS,
 	boardColumns: DEFAULT_BOARD_SETTINGS.boardColumns.map((c) => ({ ...c })),
@@ -504,6 +506,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	Object.assign(s, readReadingSettings(d));
 	Object.assign(s, readPresentSettings(d));
 	Object.assign(s, readSnapSettings(d));
+	Object.assign(s, readGhostSettings(d));
 	Object.assign(s, readBoardSettings(d));
 	Object.assign(s, readPdfCopySettings(d));
 	return s;

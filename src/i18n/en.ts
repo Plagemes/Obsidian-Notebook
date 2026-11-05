@@ -3806,6 +3806,15 @@ export const en = {
 	"share.copyImage": "Copy image",
 	"share.imageCopied": "Image copied.",
 	"share.imageCopyFailed": "Could not copy the image.",
+	// 0.20 ghostlines
+	"settings.ghostLines": "Ghost guide lines",
+	"settings.ghostLines.desc": "Faint dashed baseline and next-line guides on blank paper. Never saved or exported.",
+	"settings.ghostLines.off": "Off",
+	"settings.ghostLines.writing": "While writing",
+	"settings.ghostLines.always": "Always on blank paper",
+	"settings.ghostSpacing": "Guide spacing",
+	"settings.ghostSpacing.desc": "Follow your handwriting, or use a fixed ruled spacing.",
+	"settings.ghostSpacing.auto": "Auto (from your writing)",
 } as const;
 
 export type MessageKey = keyof typeof en;
