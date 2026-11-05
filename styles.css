@@ -16423,3 +16423,78 @@ body.notebook-style-obsidian {
 	position: absolute;
 	inset: -4px;
 }
+
+/* ===== 0.19 lookup ===== */
+.nb-ui.notebook-lookup-sheet .nb-lookup-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.nb-ui.notebook-lookup-sheet .nb-lookup-row {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 12px;
+	width: 100%;
+	min-height: 56px;
+	padding: 8px 12px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-card);
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	text-align: left;
+	cursor: pointer;
+	box-shadow: none;
+	height: auto;
+}
+
+.nb-ui.notebook-lookup-sheet .nb-lookup-row:hover,
+.nb-ui.notebook-lookup-sheet .nb-lookup-row:focus-visible {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui.notebook-lookup-sheet .nb-lookup-row.is-done {
+	opacity: 0.6;
+}
+
+.nb-ui.notebook-lookup-sheet .nb-lookup-thumb {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	width: 96px;
+	height: 44px;
+	overflow: hidden;
+	border-radius: var(--nb-radius-s);
+	background: var(--nb-panel-2, var(--nb-panel));
+	border: 1px solid var(--nb-border);
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.notebook-lookup-sheet .nb-lookup-thumb img {
+	max-width: 100%;
+	max-height: 100%;
+	object-fit: contain;
+}
+
+.nb-ui.notebook-lookup-sheet .nb-lookup-text {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.nb-ui.notebook-lookup-sheet .nb-lookup-word {
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.notebook-lookup-sheet .nb-lookup-meta {
+	font-size: var(--nb-fs-chip);
+	color: var(--nb-text-muted);
+}

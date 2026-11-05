@@ -21,6 +21,7 @@ import { defaultLooseSheetPath } from "../library/loose-sheet-logic";
 import { defaultDailyPath } from "../library/daily-logic";
 import { DIM_MAX, DIM_MIN, DIM_STEP } from "./reading-settings";
 import { INSERT_WIDTH_MAX, INSERT_WIDTH_MIN, INSERT_WIDTH_STEP } from "../model/note-insert";
+import { LOOKUP_WIDTH_MAX, LOOKUP_WIDTH_MIN, LOOKUP_WIDTH_STEP } from "../model/look-up";
 import { SNAP_STRENGTH_MAX, SNAP_STRENGTH_MIN, SNAP_STRENGTH_STEP } from "../model/snap";
 import { DEFAULT_SETTINGS, type NotebookSettings } from "../settings";
 
@@ -402,6 +403,9 @@ const INTEGRATION: SettingSpec[] = [
 	{ id: "noteInsertLinkBack", section: "integration", order: 37, name: "settings.noteInsertLinkBack", desc: "settings.noteInsertLinkBack.desc", control: { type: "toggle" }, keywords: "insert note link back page collegamento pagina" },
 	// 0.18 (#186): "Copy to notebook…" can leave a chip on the original page too.
 	{ id: "copyLinkReverse", section: "integration", order: 38, name: "settings.copyLinkReverse", desc: "settings.copyLinkReverse.desc", control: { type: "toggle" }, keywords: "copy page notebook link back chip copia pagina collegamento" },
+	// 0.19 (#213): "Look up later" from a selection.
+	{ id: "lookUpNote", section: "integration", order: 43, name: "settings.lookUpNote", desc: "settings.lookUpNote.desc", control: { type: "text", placeholder: "Look up later.md" }, keywords: "look up later words list dictionary cerca dopo parole elenco" },
+	{ id: "lookUpWidth", section: "integration", order: 44, name: "settings.lookUpWidth", desc: "settings.lookUpWidth.desc", control: { type: "slider", min: LOOKUP_WIDTH_MIN, max: LOOKUP_WIDTH_MAX, step: LOOKUP_WIDTH_STEP, format: suffix("px") }, keywords: "look up later picture crop width larghezza immagine" },
 ];
 
 const timetableOn: Predicate = (s) => s.timetableOffer;

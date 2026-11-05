@@ -2702,3 +2702,27 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 | Quick tabs: drag to reorder (mouse at once, touch / pen after a long press), Move earlier / later, Unpin | yes | order logic; harness drives the same store calls | | | drag by finger and S Pen on hardware |
 | Quick tabs to pages of other notebooks (picker, opens the notebook, follows a rename) | yes | store retarget; harness with a recorded opener | | | |
 | Quick tabs storage: per-device `_meta/quicktabs-<device>.json`, latest change wins, tombstones, unknown fields kept, unreadable never overwritten | yes | `tests/quicktabs.test.ts`, `tests/library-check.test.ts` | | | |
+
+### 0.19 — lookup: Look up later list (steps 1540-1559)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`HARNESS_DOC=lookup`): `dev/harness/dist/shots/` (the word dialog and the sheet with three entries, tablet and phone, dark and light).
+
+1540. **Circle a word.** Lasso a handwritten word on a page. In the selection menu choose *Look up later…*: a small dialog asks for the word (optional). Leave it empty and tap *Add to list*: a notice says it was added to *Look up later*.
+1541. **The note.** Open *<notebooks folder>/Look up later.md* (made now if it did not exist): one line `- [ ] ![[… lookup p3-….png|150]] — [[<Notebook>#p3&id=…|<Notebook> p. 3]] (today's date)`, and the picture shows the circled word. Its file is next to your other attachments.
+1542. **A typed word.** Do it again on another word and type it: the line has the word between the picture and the dash. Type `*x* [[y]] %% <b>` : it appears as plain text in the note, nothing is bold, linked or hidden.
+1543. **Only appended.** Edit the note by hand (a heading, other tasks), then add another entry: the lines you wrote are unchanged and the new line is at the end.
+1544. **The sheet.** In the notebook open the page sheet or notebook menu, *Look up later list…*: a row for each entry of this notebook only, with its picture, the word, *p. N*, the date, and a count at the top (*N to look up · M in this notebook*). Entries of other notebooks in the same note are not listed.
+1545. **Jump.** Tap a row: the sheet closes and the notebook scrolls to that page. Move pages around first: it still goes to the same page (the link names the page by id). Delete the page: the row says the page is no longer in the notebook.
+1546. **Tick off.** In the note change `- [ ]` to `- [x]`; reopen the sheet: that row is dimmed with *done* and the count drops.
+1547. **Open the note.** *Open the note* in the sheet opens the list in a new tab; it is disabled while the note does not exist.
+1548. **Settings.** In Settings, Integration: *Look up later note* set to `Words/To check` : the next entry goes to `Words/To check.md` (folder and note made). *Look up later picture width* 300: the next picture embed ends `|300]]`.
+1549. **Not twice, not lost.** Add two entries in the same second on the same page: both are in the note. A read-only notebook and a page that has a collapsed sticky note: the picture shows only what is visible.
+1550. **Sync.** On two devices with one vault: add an entry on each; after sync the note has both lines and each sheet lists them.
+1551. **Italian.** In Italian: *Cerca dopo…*, *Elenco Cerca dopo…*, *Parola (facoltativa)*, *Aggiungi all'elenco*.
+1552. **Shared-files inbox.** The pictures are not offered by the shared-files inbox.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Look up later (#213): selection action, crop picture, optional typed word, one appended line in a configurable note (made if missing) | yes | line building, escaping, append and parsing: `tests/look-up.test.ts`; vault write: harness (`doc=lookup`) | | | |
+| Look up later list sheet: this notebook's entries read from the note, count, jump to page by id | yes | parsing and filtering: yes; sheet: harness | | | |
+| Look up later as a quick pen gesture | no | | | | not added: needs the gesture/input files |

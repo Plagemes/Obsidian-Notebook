@@ -139,6 +139,9 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"comment-next": (v) => void v.commentTools?.step(1),
 	// 0.17 (#57): a task from the selection
 	"selection-make-task": (v) => v.makeTaskFromSelection(),
+	// 0.19 (#213): look up later
+	"selection-look-up": (v) => v.lookUpFromSelection(),
+	"look-up-list": (v) => v.openLookUpList(),
 	// 0.18 (#59): the selection as a picture in a note
 	"selection-insert-note": (v) => v.insertSelectionIntoNote("png"),
 	"selection-insert-note-svg": (v) => v.insertSelectionIntoNote("svg"),
