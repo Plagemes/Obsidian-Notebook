@@ -1,5 +1,6 @@
-import { loadPdfJs, normalizePath, Platform, TFolder, type App, type TFile, type WorkspaceLeaf } from "obsidian";
-import { t } from "../i18n";
+import { getLanguage, loadPdfJs, normalizePath, Platform, TFolder, type App, type TFile, type WorkspaceLeaf } from "obsidian";
+import { resolveLanguage, t } from "../i18n";
+import { resolveWeekStart } from "../model/calendar";
 import { createDocument, createId } from "../model/document";
 import { backgroundRect } from "../model/margins";
 import { parse, serializeChecked } from "../model/serialize";
@@ -302,6 +303,13 @@ export class NotebookLibraryHost implements LibraryHost {
 			pickImage: () => pickFile(app, "image"),
 			createNotebook: (spec, extras) => this.createFromDialog(spec, extras),
 			createFolder: (spec) => this.createFolderFromDialog(spec),
+			// 0.20 planner (#118)
+			plannerDefaults: () => {
+				const s = this.plugin.settings;
+				const lang = resolveLanguage(s.uiLanguage, getLanguage()) === "it" ? "it" : "en";
+				return { lang, weekStart: resolveWeekStart(s.plannerWeekStart, typeof navigator === "undefined" ? "en-GB" : navigator.language), year: new Date().getFullYear() };
+			},
+			linkTarget: (path) => plannerLinkTarget(app, path),
 		}, tab, folder).open();
 	}
 
@@ -717,4 +725,15 @@ export class NotebookLibraryHost implements LibraryHost {
 function leafFile(leaf: WorkspaceLeaf): string | undefined {
 	const state = leaf.getViewState().state as { file?: unknown } | undefined;
 	return typeof state?.file === "string" ? state.file : undefined;
+}
+
+/**
+ * 0.20 planner (#118): how a link names the notebook that will be created at `path`: its file name when no other file of the
+ * vault has that name (Obsidian resolves it), else the full path.
+ */
+function plannerLinkTarget(app: App, path: string): string {
+	const clean = normalizePath(path);
+	const name = clean.slice(clean.lastIndexOf("/") + 1);
+	const taken = app.vault.getFiles().some((f) => f.name.toLowerCase() === name.toLowerCase() && f.path.toLowerCase() !== clean.toLowerCase());
+	return taken ? clean : name;
 }

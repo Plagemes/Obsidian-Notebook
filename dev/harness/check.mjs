@@ -159,6 +159,8 @@ for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"])
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "modals", theme, device, lowLatency: false });
 // 0.15 templates: the notebook template picker, the creation dialog with a template, the manager (dev/harness/templates-check.ts).
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "templates", theme, device, lowLatency: false });
+// 0.20 planner (#118): the Planner tab of the creation dialog and the generated pages (dev/harness/planner-check.ts), tablet and phone, light and dark.
+for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "planner", theme, device, lowLatency: false });
 // 0.15 storage (128): the Storage manager at tablet and phone widths, light and dark (dev/harness/storage-check.ts).
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "storage", theme, device, lowLatency: false });
 // 0.17 pdfcopy (#23): the notebook menu entry, the save hook and the three settings rows (dev/harness/pdfcopy-check.ts), tablet and phone, light and dark.
@@ -328,7 +330,7 @@ async function main() {
 				// 0.18 mentions: its own check.
 				else if (s.doc === "mentions") report = await cdp.evaluate("window.harness.checkMentions()", 60000);
 				else
-				report = await cdp.evaluate(s.doc === "states" ? "window.harness.checkStates()" : s.doc === "hints" ? "window.harness.checkHints()" : s.doc === "slides" ? "window.harness.checkSlides()" : s.doc === "zettel" ? "window.harness.checkZettel()" : s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "lecture" ? "window.harness.checkLecture()" : s.doc === "outline" ? "window.harness.checkOutline()" : s.doc === "smartadd" ? "window.harness.checkSmartAdd()" : s.doc === "header" ? "window.harness.checkHeader()" : s.doc === "pensets" ? "window.harness.checkPenSets()" : s.doc === "task" ? "window.harness.checkTask()" : s.doc === "lookup" ? "window.harness.checkLookUp()" :s.doc === "annotate" ? "window.harness.checkAnnotate()" : s.doc === "tplnote" ? "window.harness.checkTplNote()" :s.doc === "qr" ? "window.harness.checkQr()" : s.doc === "snapshot" ? "window.harness.checkSnapshot()" : s.doc === "vdiff" ? "window.harness.checkVdiff()" :s.doc === "daily" ? "window.harness.checkDaily()" : s.doc === "nbmap" ? "window.harness.checkNbmap()" : s.doc === "figures" ? "window.harness.checkFigures()" :s.doc === "movesel" ? "window.harness.checkMovesel()" : s.doc === "present" ? "window.harness.checkPresent()" : s.doc === "digest" ? "window.harness.checkDigest()" : s.doc === "lock" ? "window.harness.checkLock()" : s.doc === "quicktabs" ? "window.harness.checkQuicktabs()" : s.doc === "sticky" ? "window.harness.checkSticky()" : s.doc === "comments" ? "window.harness.checkComments()" : s.doc === "checklists" ? "window.harness.checkChecklists()" : s.doc === "groups" ? "window.harness.checkGroups()" : s.doc === "minimap" ? "window.harness.checkMinimap()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "chrome" ? "window.harness.checkChrome()" : s.doc === "toolbar" || s.doc === "toolbar-pdf" ? "window.harness.checkAdaptiveToolbar()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "modals" ? "window.harness.checkModals()" : s.doc === "templates" ? "window.harness.checkTemplates()" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "states" ? "window.harness.checkStates()" : s.doc === "hints" ? "window.harness.checkHints()" : s.doc === "slides" ? "window.harness.checkSlides()" : s.doc === "zettel" ? "window.harness.checkZettel()" : s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "lecture" ? "window.harness.checkLecture()" : s.doc === "outline" ? "window.harness.checkOutline()" : s.doc === "smartadd" ? "window.harness.checkSmartAdd()" : s.doc === "header" ? "window.harness.checkHeader()" : s.doc === "pensets" ? "window.harness.checkPenSets()" : s.doc === "task" ? "window.harness.checkTask()" : s.doc === "lookup" ? "window.harness.checkLookUp()" :s.doc === "annotate" ? "window.harness.checkAnnotate()" : s.doc === "tplnote" ? "window.harness.checkTplNote()" :s.doc === "qr" ? "window.harness.checkQr()" : s.doc === "snapshot" ? "window.harness.checkSnapshot()" : s.doc === "vdiff" ? "window.harness.checkVdiff()" :s.doc === "daily" ? "window.harness.checkDaily()" : s.doc === "nbmap" ? "window.harness.checkNbmap()" : s.doc === "figures" ? "window.harness.checkFigures()" :s.doc === "movesel" ? "window.harness.checkMovesel()" : s.doc === "present" ? "window.harness.checkPresent()" : s.doc === "digest" ? "window.harness.checkDigest()" : s.doc === "lock" ? "window.harness.checkLock()" : s.doc === "quicktabs" ? "window.harness.checkQuicktabs()" : s.doc === "sticky" ? "window.harness.checkSticky()" : s.doc === "comments" ? "window.harness.checkComments()" : s.doc === "checklists" ? "window.harness.checkChecklists()" : s.doc === "groups" ? "window.harness.checkGroups()" : s.doc === "minimap" ? "window.harness.checkMinimap()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "chrome" ? "window.harness.checkChrome()" : s.doc === "toolbar" || s.doc === "toolbar-pdf" ? "window.harness.checkAdaptiveToolbar()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "modals" ? "window.harness.checkModals()" : s.doc === "templates" ? "window.harness.checkTemplates()" : s.doc === "planner" ? "window.harness.checkPlanner()" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}
@@ -551,6 +553,20 @@ async function main() {
 					}
 				}
 				await cdp.evaluate("window.harness.closeTemplates()");
+			}
+			// 0.20 planner: the dialog's Planner tab with the large-notebook warning, and the generated pages.
+			if (s.doc === "planner") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of await cdp.evaluate("window.harness.plannerStates")) {
+					try {
+						await cdp.evaluate(`window.harness.plannerShot('${state}').then(() => true)`);
+						writeFileSync(join(designDir, `planner-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`planner ${state} screenshot: ${e.message}`);
+					}
+				}
+				await cdp.evaluate("window.harness.closePlanner()");
 			}
 			// 0.12: review screenshots of Home and the library, then their controls (bell, rail, quick actions, search, star, list).
 			if (s.doc === "library") {

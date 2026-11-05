@@ -29,6 +29,7 @@ import { DEFAULT_PRESENT_SETTINGS, readPresentSettings, type PresentSettings } f
 import { DEFAULT_BOARD_SETTINGS, readBoardSettings, type BoardSettings } from "./library/board-logic";
 import { DEFAULT_SNAP_SETTINGS, readSnapSettings, type SnapSettings } from "./view/snap-settings";
 import { DEFAULT_PDF_COPY_SETTINGS, readPdfCopySettings, type PdfCopySettings } from "./storage/pdf-copy-logic";
+import { isPlannerWeekStart, type PlannerWeekStart } from "./model/calendar";
 
 /** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
 /** DESIGN.md §2.2: *Notebook* (its own tokens, the default) or *Follow Obsidian theme*. */
@@ -62,6 +63,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	defaultPaper: PaperKind;
 	defaultPageSize: PageSizeName;
 	defaultLandscape: boolean;
+	/** 0.20 planner: the first day of the week of a generated planner ("auto" follows the device language). */
+	plannerWeekStart: PlannerWeekStart;
 	/** Version history: at most one snapshot per notebook per this many hours; 0 turns snapshots off. */
 	snapshotIntervalHours: number;
 	/** Version history: how many snapshots to keep per notebook. */
@@ -266,6 +269,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	defaultPaper: "grid",
 	defaultPageSize: "a4",
 	defaultLandscape: false,
+	plannerWeekStart: "auto",
 	snapshotIntervalHours: 24,
 	snapshotsToKeep: 10,
 	lectureSnapshots: true,
@@ -393,6 +397,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (PAPER_KINDS.includes(d.defaultPaper as PaperKind)) s.defaultPaper = d.defaultPaper as PaperKind;
 	if (typeof d.defaultPageSize === "string" && Object.prototype.hasOwnProperty.call(PAGE_SIZES, d.defaultPageSize)) s.defaultPageSize = d.defaultPageSize as PageSizeName;
 	if (typeof d.defaultLandscape === "boolean") s.defaultLandscape = d.defaultLandscape;
+	if (isPlannerWeekStart(d.plannerWeekStart)) s.plannerWeekStart = d.plannerWeekStart;
 	if (typeof d.snapshotIntervalHours === "number" && d.snapshotIntervalHours >= 0 && d.snapshotIntervalHours <= 720) s.snapshotIntervalHours = d.snapshotIntervalHours;
 	if (typeof d.snapshotsToKeep === "number" && Number.isInteger(d.snapshotsToKeep) && d.snapshotsToKeep >= 1 && d.snapshotsToKeep <= 100) s.snapshotsToKeep = d.snapshotsToKeep;
 	if (typeof d.lectureSnapshots === "boolean") s.lectureSnapshots = d.lectureSnapshots;
