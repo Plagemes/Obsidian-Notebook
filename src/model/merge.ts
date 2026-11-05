@@ -27,9 +27,10 @@
  *   infinite page (`SetPageSize`, which follows the margin rule).
  * - v17: a checkbox is its place, size and colour; whether it is ticked, when it was last toggled (`at`), its typed label and its
  *   task link are its state, not content. The same checkbox (same id) on both sides is kept once; when both toggled it the later
- *   toggle wins (`mergedCheckbox`: ticked or unticked as the later one left it, a tie keeps the main notebook's) and a label or
- *   task link only the copy has is added (counted in `checkboxesUpdated`). A checkbox only the copy has comes as it is, link
- *   included (it names the same task line). Edits to the task line itself are not merged: they live in the note.
+ *   toggle wins (`mergedCheckbox`: ticked or unticked as the later one left it, a tie that disagrees keeps the tick) and a label or
+ *   task link only the copy has is added (counted in `checkboxesUpdated`); the link itself follows the later decision (`taskAt`,
+ *   stamped by link and unlink), so an *Unlink task* is not undone by an older copy. A checkbox only the copy has comes as it is,
+ *   link included (it names the same task line). Edits to the task line itself are not merged: they live in the note.
  * - v16: the margin comments of a common page are united by id (`mergeComments`): two devices that added comments or replies
  *   both keep theirs; for one comment (or reply) both have, the later edit wins (`edited`, else `created`; the main notebook on a
  *   tie), and when both edited the text the losing version is kept beside it as a marked comment or reply (`conflictId`, counted in
@@ -143,8 +144,8 @@ export function elementContentKey(e: PageElement): string {
 	// v17: what a checkbox is (where, how big, which colour) is its content; whether it is ticked, when, its typed label and its
 	// task link are its state (merged by `mergedCheckbox`: the later toggle wins).
 	if (rest.type === "checkbox") {
-		const { checked: _c, at: _t, label: _l, task: _k, ...box } = rest;
-		void _c; void _t; void _l; void _k;
+		const { checked: _c, at: _t, taskAt: _s, label: _l, task: _k, ...box } = rest;
+		void _c; void _t; void _s; void _l; void _k;
 		return stableStringify(box);
 	}
 	if (rest.type === "equation") {
@@ -261,16 +262,30 @@ function copyElement(e: PageElement, id: string): PageElement {
 
 /**
  * v17: the state of the same checkbox (same id, same content) in the main notebook and in the copy, or null when the main notebook's
- * is kept. The later toggle wins (`at`; never toggled counts as 0; a tie keeps the main notebook's). A typed label or a task link
- * that only the copy has is taken either way (the main notebook's own stays when both have one).
+ * is kept. The later toggle wins (`at`; never toggled counts as 0); on a tie that disagrees (the same time, or both without one, with
+ * different ticks) the tick wins, so a tick is never lost. The link follows the later decision (`taskAt`, set whenever a task is
+ * linked or unlinked; none counts as 0): the copy's link, or its absence, replaces the main notebook's when the copy decided later,
+ * the main notebook's stands when it did, and when neither ever decided a link only the copy has is taken. A typed label that only
+ * the copy has is taken either way (the main notebook's own stays when both have one).
  */
 export function mergedCheckbox(main: CheckboxElement, copy: CheckboxElement): CheckboxElement | null {
-	const later = (copy.at ?? 0) > (main.at ?? 0);
+	const mainAt = main.at ?? 0;
+	const copyAt = copy.at ?? 0;
+	const mainTicked = main.checked === true;
+	const copyTicked = copy.checked === true;
 	let out: CheckboxElement = main;
-	if (later && (copy.checked === true) !== (main.checked === true)) out = withChecked(out, copy.checked === true, copy.at ?? 0);
-	else if (later) out = { ...out, at: copy.at! };
+	if (copyAt > mainAt) {
+		if (copyTicked !== mainTicked) out = withChecked(out, copyTicked, copyAt);
+		else out = { ...out, at: copyAt };
+	} else if (copyAt === mainAt && copyTicked && !mainTicked) out = withChecked(out, true, copyAt);
 	if (main.label === undefined && copy.label !== undefined) out = withCheckboxLabel(out, copy.label);
-	if (main.task === undefined && copy.task !== undefined) out = withCheckboxTask(out, copy.task);
+	const mainStamp = main.taskAt ?? 0;
+	const copyStamp = copy.taskAt ?? 0;
+	if (copyStamp > mainStamp) {
+		if (copy.task === undefined) {
+			if (out.task !== undefined || out.taskAt !== copyStamp) out = withCheckboxTask(out, null, copyStamp);
+		} else if (out.task?.path !== copy.task.path || out.task.block !== copy.task.block || out.taskAt !== copyStamp) out = withCheckboxTask(out, copy.task, copyStamp);
+	} else if (copyStamp === mainStamp && mainStamp === 0 && main.task === undefined && copy.task !== undefined) out = withCheckboxTask(out, copy.task);
 	return out === main ? null : out;
 }
 
@@ -665,8 +680,10 @@ export function mergeCovers(result: NotebookDocument, other: NotebookDocument): 
 	/** v8: content keys of resolved markers per page, and resolved marker ids. */
 	const resolvedOn = new Map<string, Set<string>>();
 	const resolvedIds = new Set<string>();
-	/** v17: when each checkbox of the result was last toggled (0: never). */
+	/** v17: when each checkbox of the result was last toggled (0: never), whether it is ticked, and when its link was last decided. */
 	const toggledAt = new Map<string, number>();
+	const ticked = new Set<string>();
+	const linkedAt = new Map<string, number>();
 	for (const p of result.pages) {
 		const keys = new Set<string>();
 		for (const s of p.strokes) {
@@ -683,7 +700,11 @@ export function mergeCovers(result: NotebookDocument, other: NotebookDocument): 
 				resolved.add(k);
 				resolvedIds.add(e.id);
 			}
-			if (e.type === "checkbox") toggledAt.set(e.id, e.at ?? 0);
+			if (e.type === "checkbox") {
+				toggledAt.set(e.id, e.at ?? 0);
+				linkedAt.set(e.id, e.taskAt ?? 0);
+				if (e.checked === true) ticked.add(e.id);
+			}
 		}
 		onPage.set(p.id, keys);
 		resolvedOn.set(p.id, resolved);
@@ -703,8 +724,13 @@ export function mergeCovers(result: NotebookDocument, other: NotebookDocument): 
 			if (byId.get(e.id) !== k && !keys.has(k)) return false;
 			// v8: a marker the copy resolved is resolved in the result (the same marker, or the same content on the page).
 			if (e.type === "marker" && e.done && !(byId.get(e.id) === k && resolvedIds.has(e.id)) && !resolvedOn.get(p.id)?.has(k)) return false;
-			// v17: the same checkbox is in the result toggled at least as late as in the copy.
-			if (e.type === "checkbox" && byId.get(e.id) === k && (toggledAt.get(e.id) ?? 0) < (e.at ?? 0)) return false;
+			// v17: the same checkbox is in the result toggled and linked or unlinked at least as late as in the copy, and a tick of the copy
+			// that ties with the result's untick is in the result too.
+			if (e.type === "checkbox" && byId.get(e.id) === k) {
+				const at = toggledAt.get(e.id) ?? 0;
+				if (at < (e.at ?? 0) || (at === (e.at ?? 0) && e.checked === true && !ticked.has(e.id))) return false;
+				if ((linkedAt.get(e.id) ?? 0) < (e.taskAt ?? 0)) return false;
+			}
 		}
 	}
 	for (const id of Object.keys(other.assets ?? {})) if (!result.assets?.[id]) return false;

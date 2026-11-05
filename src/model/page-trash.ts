@@ -266,7 +266,8 @@ export function planPageTrashRestore(doc: NotebookDocument, entry: PageTrashEntr
 		for (const e of p.elements ?? []) used.add(e.id);
 	}
 	const clash = used.has(source.id) || source.strokes.some((s) => used.has(s.id)) || (source.elements ?? []).some((e) => used.has(e.id));
-	const copied = clash ? duplicatePage(source) : source;
+	// (v17: the page comes back from the trash, it is the same page: its checkboxes keep the link to their task lines)
+	const copied = clash ? duplicatePage(source, { keepTasks: true }) : source;
 	// v12: the ink's slide links name entries of the entry's own table: mapped to the notebook's (an equal entry, or the
 	// entry added to its table in the same undo step).
 	const slides = slideMerger(doc, saved);

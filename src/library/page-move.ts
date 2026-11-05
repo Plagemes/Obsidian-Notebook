@@ -61,9 +61,10 @@ export function pageSnapshot(page: Page): string {
 
 /**
  * Plans moving the pages `pageIds` of `source` to the end of `target`. Pages keep the order they have in the source,
- * whatever the order of `pageIds`. Asset records the target already has (same content id) are not added again.
+ * whatever the order of `pageIds`. Asset records the target already has (same content id) are not added again. `keepTasks`: the
+ * originals are removed afterwards (a move), so the checkboxes keep the link to their task lines; a copy (the default) drops it.
  */
-export function planPageMove(source: NotebookDocument, pageIds: readonly string[], target: NotebookDocument): PageMovePlan | PageMoveFailure {
+export function planPageMove(source: NotebookDocument, pageIds: readonly string[], target: NotebookDocument, keepTasks = false): PageMovePlan | PageMoveFailure {
 	const wanted = new Set(pageIds);
 	if (wanted.size === 0) return { ok: false, reason: "no-pages" };
 	for (const id of wanted) if (!source.pages.some((p) => p.id === id)) return { ok: false, reason: "unknown-page", pageId: id };
@@ -84,7 +85,7 @@ export function planPageMove(source: NotebookDocument, pageIds: readonly string[
 	const taken = new Set(target.pages.map((p) => p.id));
 	const renamed: PageMovePlan["renamed"] = [];
 	const pages = chosen.map((p) => {
-		const copy = duplicatePage(p);
+		const copy = duplicatePage(p, { keepTasks });
 		// v12: a slide link names an entry of the source's table, which the target does not have: the ink stays, unlinked.
 		if (copy.strokes.some((s) => s.slide !== undefined)) copy.strokes = copy.strokes.map((s) => (s.slide === undefined ? s : copyStroke(s, s.id, null)));
 		if (taken.has(p.id)) renamed.push({ from: p.id, to: copy.id });

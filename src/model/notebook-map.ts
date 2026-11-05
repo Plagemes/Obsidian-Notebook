@@ -123,7 +123,7 @@ export function mapKey(page: Page, opts: MapOptions = {}): string {
 	parts.push(hidden);
 	for (const el of page.elements ?? []) {
 		if (el.type === "marker") parts.push(el.id, el.kind, el.done ? 1 : 0, el.due ?? "", el.text ?? "");
-		else if (el.type === "checkbox") parts.push(el.id, el.checked ? "c1" : "c0");
+		else if (el.type === "checkbox") parts.push(el.id, el.checked ? "c1" : "c0", el.label ?? "");
 		else if (el.type === "text") parts.push("t", el.text);
 		else parts.push(el.type);
 	}

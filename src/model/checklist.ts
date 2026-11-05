@@ -53,9 +53,13 @@ export function checkboxBounds(el: CheckboxElement): BBox {
 	return { minX: el.x, minY: el.y, maxX: el.x + el.size, maxY: el.y + el.size };
 }
 
-/** Typed label as stored: one line, runs of spaces collapsed, at most CHECKBOX_LABEL_MAX characters. */
+/**
+ * Typed label as stored: one line, runs of spaces collapsed, at most CHECKBOX_LABEL_MAX characters, never ending in a space (the cut
+ * can land just after one, so the end is trimmed again: the strict reader re-normalises and refuses any label that would change).
+ * Idempotent. The reader of the file uses this very function.
+ */
 export function cleanCheckboxLabel(text: string): string {
-	return Array.from(text.replace(/\s+/g, " ").trim()).slice(0, CHECKBOX_LABEL_MAX).join("");
+	return Array.from(text.replace(/\s+/g, " ").trim()).slice(0, CHECKBOX_LABEL_MAX).join("").trimEnd();
 }
 
 /** The checkbox ticked (or unticked) at time `at` (ms). The tick time is what the merge of two copies compares. */
@@ -80,11 +84,15 @@ export function withCheckboxLabel(el: CheckboxElement, label: string): CheckboxE
 	return out;
 }
 
-/** A copy linked to the task line (`task`), or without a link (null). */
-export function withCheckboxTask(el: CheckboxElement, task: CheckboxTask | null): CheckboxElement {
+/**
+ * A copy linked to the task line (`task`), or without a link (null). `at` (ms) stamps the change (`taskAt`): the later decision
+ * about the link wins when two copies of a notebook are merged, so an *Unlink task* is not undone by an older copy that still has it.
+ */
+export function withCheckboxTask(el: CheckboxElement, task: CheckboxTask | null, at?: number): CheckboxElement {
 	const out: CheckboxElement = { ...el };
 	if (task === null) delete out.task;
 	else out.task = { path: task.path, block: task.block };
+	if (at !== undefined) out.taskAt = Math.max(0, Math.round(at));
 	return out;
 }
 
@@ -96,23 +104,51 @@ export function clearedCheckbox(el: CheckboxElement): CheckboxElement {
 	const out: CheckboxElement = { ...el };
 	delete out.checked;
 	delete out.at;
+	delete out.taskAt;
 	delete out.task;
 	return out;
 }
 
-/** The checkbox as a copy under a new id keeps its state but never the link to the task of the original. */
-export function copiedCheckbox(el: CheckboxElement, id: string): CheckboxElement {
+/**
+ * The checkbox as a copy under a new id keeps its state but never the link to the task of the original. `keepTask`: the checkbox is
+ * moved, not copied (the originals are removed: pages moved to another notebook), so it is the same checkbox and keeps its link.
+ */
+export function copiedCheckbox(el: CheckboxElement, id: string, keepTask = false): CheckboxElement {
 	const out: CheckboxElement = { ...el, id };
-	delete out.task;
+	if (!keepTask) {
+		delete out.task;
+		delete out.taskAt;
+	}
 	return out;
+}
+
+/**
+ * The path `path` of a note after the file or folder `oldPath` was renamed to `newPath`, or null when it is not affected (the note
+ * itself, or a note inside the renamed folder).
+ */
+export function renamedPath(path: string, oldPath: string, newPath: string): string | null {
+	if (oldPath === "" || oldPath === newPath) return null;
+	if (path === oldPath) return newPath;
+	if (path.startsWith(`${oldPath}/`)) return `${newPath}${path.slice(oldPath.length)}`;
+	return null;
 }
 
 /** `page` with every checkbox cleared (see `clearedCheckbox`); the same page object when it has none that needs it. */
 export function clearChecklist(page: Page): Page {
 	const elements = page.elements;
-	if (!elements || !elements.some((e) => e.type === "checkbox" && (e.checked || e.at !== undefined || e.task))) return page;
+	if (!elements || !elements.some((e) => e.type === "checkbox" && (e.checked || e.at !== undefined || e.taskAt !== undefined || e.task))) return page;
 	// (frozen like every committed element; a cleared checkbox has no nested object left)
 	return { ...page, elements: elements.map((e) => (e.type === "checkbox" ? Object.freeze(clearedCheckbox(e)) : e)) };
+}
+
+/**
+ * `page` with the task link of every checkbox removed (the ticks stay); the same page object when none is linked. For a notebook
+ * that is a duplicate of another one.
+ */
+export function unlinkChecklist(page: Page): Page {
+	const elements = page.elements;
+	if (!elements || !elements.some((e) => e.type === "checkbox" && (e.task !== undefined || e.taskAt !== undefined))) return page;
+	return { ...page, elements: elements.map((e) => (e.type === "checkbox" ? Object.freeze(copiedCheckbox(e, e.id)) : e)) };
 }
 
 /** The unticked checkboxes of `pages`, with their page index, in reading order (page, then the order on the page). */
@@ -148,6 +184,11 @@ export function blockIdFor(el: Pick<CheckboxElement, "id">, salt = ""): string {
 	return `${CHECKBOX_BLOCK_PREFIX}${body === "" ? "x" : body}${salt.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8)}`;
 }
 
+/** Whether a note at `path` can be named by a link (the strict writer accepts it: not empty, not longer than CHECKBOX_PATH_MAX, no control characters). */
+export function isLinkablePath(path: string): boolean {
+	return path !== "" && path.length <= CHECKBOX_PATH_MAX && !Array.from(path).some((ch) => ch.charCodeAt(0) < 32);
+}
+
 /** Whether `block` is a block id this plugin could have written. */
 export function isOurBlockId(block: unknown): block is string {
 	return typeof block === "string" && block.length <= CHECKBOX_BLOCK_MAX && /^nb-[A-Za-z0-9]+$/.test(block);
@@ -160,9 +201,50 @@ export interface TaskLineEdit {
 	found: boolean;
 	/** The line was rewritten. */
 	changed: boolean;
+	/** More than one task line carries the block id: nothing was changed, the right one cannot be told (only present when true). */
+	ambiguous?: true;
 }
 
-const TASK_LINE = /^(\s*(?:[-*+]|\d+[.)])\s+\[)(.)(\](?:\s.*)?)$/;
+/** A task line, also inside a callout or a quote (`> - [ ] …`, `> > 1. [ ] …`). */
+const TASK_LINE = /^((?:\s*>)*\s*(?:[-*+]|\d+[.)])\s+\[)(.)(\](?:\s.*)?)$/;
+const QUOTE_PREFIX = /^(?:\s*>)*\s*/;
+const BYTE_ORDER_MARK = String.fromCharCode(0xfeff);
+
+/**
+ * The lines of `lines` that are real note text: not the frontmatter (a `---` block at the very top) and not inside a fenced code
+ * block (``` or ~~~, also inside a quote), where a copy of a task line is an example, not a task.
+ */
+function liveLines(lines: readonly string[]): boolean[] {
+	const live = new Array<boolean>(lines.length).fill(true);
+	let start = 0;
+	const first = lines[0]!.startsWith(BYTE_ORDER_MARK) ? lines[0]!.slice(1) : lines[0]!;
+	if (lines.length > 1 && first.trimEnd() === "---") {
+		for (let i = 1; i < lines.length; i++) {
+			const l = lines[i]!.trimEnd();
+			if (l === "---" || l === "...") {
+				for (let k = 0; k <= i; k++) live[k] = false;
+				start = i + 1;
+				break;
+			}
+		}
+	}
+	let fence: { ch: string; len: number } | null = null;
+	for (let i = start; i < lines.length; i++) {
+		const stripped = lines[i]!.replace(QUOTE_PREFIX, "").trimEnd();
+		if (fence) {
+			live[i] = false;
+			const close = /^(`{3,}|~{3,})$/.exec(stripped);
+			if (close && close[1]![0] === fence.ch && close[1]!.length >= fence.len) fence = null;
+			continue;
+		}
+		const open = /^(`{3,}|~{3,})/.exec(stripped);
+		if (open) {
+			fence = { ch: open[1]![0]!, len: open[1]!.length };
+			live[i] = false;
+		}
+	}
+	return live;
+}
 
 /** Whether `line` ends with the block id `^block` (preceded by a space, followed by nothing but spaces). */
 function endsWithBlock(line: string, block: string): boolean {
@@ -173,26 +255,36 @@ function endsWithBlock(line: string, block: string): boolean {
 /**
  * Ticks (or unticks) the one task line of `text` that ends with `^block`: only the status character between the brackets changes,
  * every other byte of the note (every other line, the line ending of this one) stays as it is. A custom status (`[/]`, `[-]`) is left
- * alone when ticking, and only `x` / `X` becomes a space when unticking. When several lines carry the block id the first is used. A
- * block id that is not one of ours (anything but `nb-…`) is never looked for.
+ * alone when ticking, and only `x` / `X` becomes a space when unticking. Frontmatter and fenced code blocks are skipped, a task in a
+ * callout or quote counts, and when more than one line carries the block id nothing is changed (`ambiguous`: it cannot be told
+ * which is the task the checkbox was sent as). A block id that is not one of ours (anything but `nb-…`) is never looked for.
  */
 export function setTaskLineChecked(text: string, block: string, checked: boolean): TaskLineEdit {
 	if (!isOurBlockId(block)) return { text, found: false, changed: false };
 	const lines = text.split("\n");
+	const live = liveLines(lines);
+	let at = -1;
+	let match: RegExpExecArray | null = null;
+	let cr = "";
 	for (let i = 0; i < lines.length; i++) {
+		if (!live[i]) continue;
 		const raw = lines[i]!;
-		const cr = raw.endsWith("\r") ? "\r" : "";
-		const body = cr ? raw.slice(0, -1) : raw;
+		const eol = raw.endsWith("\r") ? "\r" : "";
+		const body = eol ? raw.slice(0, -1) : raw;
 		if (!endsWithBlock(body, block)) continue;
 		const m = TASK_LINE.exec(body);
 		if (!m) continue; // the block id is on something that is not a task: not ours to change
-		const status = m[2]!;
-		let next = status;
-		if (checked && status === " ") next = "x";
-		else if (!checked && (status === "x" || status === "X")) next = " ";
-		if (next === status) return { text, found: true, changed: false };
-		lines[i] = `${m[1]}${next}${m[3]}${cr}`;
-		return { text: lines.join("\n"), found: true, changed: true };
+		if (at >= 0) return { text, found: true, changed: false, ambiguous: true };
+		at = i;
+		match = m;
+		cr = eol;
 	}
-	return { text, found: false, changed: false };
+	if (at < 0 || !match) return { text, found: false, changed: false };
+	const status = match[2]!;
+	let next = status;
+	if (checked && status === " ") next = "x";
+	else if (!checked && (status === "x" || status === "X")) next = " ";
+	if (next === status) return { text, found: true, changed: false };
+	lines[at] = `${match[1]}${next}${match[3]}${cr}`;
+	return { text: lines.join("\n"), found: true, changed: true };
 }

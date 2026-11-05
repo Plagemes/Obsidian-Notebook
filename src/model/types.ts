@@ -424,6 +424,8 @@ export interface CheckboxTask {
  * 1970; written only once it has been toggled): the later toggle wins when two copies of a notebook are merged. `label`: a typed
  * name of the item (shown in lists; the ink on the same line to its right is its handwritten label, found geometrically,
  * ink/checklist.ts). `task`: the link to a task line of a note (absent: none). A copy of a checkbox never keeps the link.
+ * `taskAt`: when the link was last set or removed (ms since 1970; written only once it was): the later
+ * decision wins when two copies are merged, so an unlinked checkbox is not linked again by an older copy.
  */
 export interface CheckboxElement {
 	id: string;
@@ -434,6 +436,7 @@ export interface CheckboxElement {
 	color: string;
 	checked?: true;
 	at?: number;
+	taskAt?: number;
 	label?: string;
 	task?: CheckboxTask;
 }

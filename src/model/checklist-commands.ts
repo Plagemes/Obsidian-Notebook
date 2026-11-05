@@ -53,9 +53,15 @@ export function toggleCheckbox(pageId: string, id: string, at: number): UpdateCh
 	return new UpdateCheckbox(pageId, id, (el) => toggledCheckbox(el, at), "Toggle checkbox");
 }
 
-/** Links a checkbox to a task line, or unlinks it (`task` null). */
-export function setCheckboxTask(pageId: string, id: string, task: CheckboxTask | null): UpdateCheckbox {
-	return new UpdateCheckbox(pageId, id, (el) => withCheckboxTask(el, task), task ? "Link checkbox to task" : "Unlink checkbox from task");
+/**
+ * Links a checkbox to a task line, or unlinks it (`task` null). The change is stamped with `at` (`taskAt`) so that merging an
+ * older copy of the notebook, which still has the link, does not bring it back. Linking again to what it already is changes nothing.
+ */
+export function setCheckboxTask(pageId: string, id: string, task: CheckboxTask | null, at: number = Date.now()): UpdateCheckbox {
+	return new UpdateCheckbox(pageId, id, (el) => {
+		const plain = withCheckboxTask(el, task);
+		return JSON.stringify(plain) === JSON.stringify(el) ? el : withCheckboxTask(el, task, at);
+	}, task ? "Link checkbox to task" : "Unlink checkbox from task");
 }
 
 /** Changes the typed label of a checkbox. */

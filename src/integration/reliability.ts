@@ -298,6 +298,8 @@ export function describeMerge(s: MergeSummary): string[] {
 	add(s.bookmarkInfoDiffer, "merge.summary.bookmarkInfo");
 	add(s.pagesEnlarged, "merge.summary.enlarged");
 	add(s.commentsAdded, "merge.summary.comments");
+	add(s.markersResolved, "merge.summary.markers");
+	add(s.checkboxesUpdated, "merge.summary.checkboxes");
 	add(s.onlyInMain, "merge.summary.onlyMain");
 	return lines;
 }
