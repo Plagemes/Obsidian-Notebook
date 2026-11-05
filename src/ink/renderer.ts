@@ -10,7 +10,7 @@ import { drawCheckbox } from "./checkbox-render";
 import { drawEquation, drawGraph, type GraphPalette } from "./math-render";
 import { graphClips, strokeClip } from "./attach";
 import { equationNumbers } from "../model/math-elements";
-import { drawLinkedLines, parseLinks } from "./link-text";
+import { drawLinkedLines, shownText } from "./link-text";
 import { layoutText, type MeasureText } from "./text-layout";
 import { strokeBounds, type BBox } from "./hit-test";
 import { memoColors, nightHighlighter, nightInk, nightLine, NIGHT_BACKGROUND_VEIL, NIGHT_HIGHLIGHTER_ALPHA, NIGHT_PAPER } from "./night";
@@ -24,7 +24,7 @@ import { WetInk, type PageTransform } from "./wet-ink";
 import { ErrorOnce } from "./errors";
 import type { SpacePreviewEntry } from "./space";
 import type { SnapGuide } from "../model/snap";
-import { ghostAlpha, GHOST_IDLE_MS, type GhostMode, type GhostSegment } from "../model/ghost-lines";
+import { ghostAlpha, ghostTouchRedraws, GHOST_IDLE_MS, type GhostMode, type GhostSegment } from "../model/ghost-lines";
 import { partMatrix, translate, type Matrix } from "./transform";
 import type { Viewport } from "./viewport";
 
@@ -67,11 +67,12 @@ export function drawTextElement(ctx: CanvasRenderingContext2D, el: TextElement):
 		ctx.font = `${el.fontSize}px ${TEXT_FONT}`;
 		ctx.fillStyle = el.color;
 		ctx.textBaseline = "top";
-		const layout = layoutText(el.text, el.fontSize, el.width, (str) => ctx.measureText(str).width);
-		// Links ([[Note]]) are drawn in their own colour (ink/link-text.ts); text without any takes the plain path.
-		const links = el.text.includes("[[") ? parseLinks(el.text) : [];
-		if (links.length > 0) {
-			drawLinkedLines(ctx, el, layout.lines, layout.lineHeight, links);
+		// A link ([[Note|alias]]) shows its label, not its markup (ink/wikilink.ts); the layout is of what is shown.
+		const shown = el.text.includes("[[") ? shownText(el.text) : null;
+		const layout = layoutText(shown ? shown.text : el.text, el.fontSize, el.width, (str) => ctx.measureText(str).width);
+		// Links are drawn in their own colour (ink/link-text.ts); text without any takes the plain path.
+		if (shown && shown.links.length > 0) {
+			drawLinkedLines(ctx, el, layout.lines, layout.lineHeight, shown);
 			return;
 		}
 		layout.lines.forEach((line, i) => ctx.fillText(line, el.x, el.y + i * layout.lineHeight + (layout.lineHeight - el.fontSize) / 2));
@@ -728,7 +729,11 @@ export class Renderer {
 	/** A new stroke began: the guides come back at full strength and the idle time starts again. */
 	touchGhost(now: number): void {
 		if (!this.ghost || this.ghost.since === now) return;
+		// 0.20 review (D4): the guides only need a redraw when they had started to fade; otherwise nothing visible changes and
+		// the first frame of the stroke stays free (the pending timer of "writing" mode re-arms itself from the new time).
+		const fading = ghostTouchRedraws(this.ghost.mode, performance.now() - this.ghost.since);
 		this.ghost = { ...this.ghost, since: now };
+		if (!fading) return;
 		this.liveDirty = true;
 		this.schedule();
 	}

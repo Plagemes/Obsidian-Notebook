@@ -1,5 +1,6 @@
 import type { TextElement } from "../model/types";
 import type { BBox } from "./hit-test";
+import { shownText } from "./wikilink";
 
 /** Line height as a multiple of the font size. */
 export const LINE_HEIGHT = 1.25;
@@ -64,8 +65,11 @@ export function layoutText(text: string, fontSize: number, width: number, measur
 	return { lines, height: lines.length * lineHeight, lineHeight };
 }
 
-/** Box of a text element: `x`, `y`, `width` and the height of the wrapped text. */
+/**
+ * Box of a text element: `x`, `y`, `width` and the height of the wrapped text as it is shown (a `[[link]]` shows its label, not
+ * its markup: ink/wikilink.ts).
+ */
 export function textElementBounds(el: TextElement, measure: MeasureText = estimateMeasure): BBox {
-	const { height } = layoutText(el.text, el.fontSize, el.width, (s) => measure(s, el.fontSize));
+	const { height } = layoutText(shownText(el.text).text, el.fontSize, el.width, (s) => measure(s, el.fontSize));
 	return { minX: el.x, minY: el.y, maxX: el.x + el.width, maxY: el.y + height };
 }

@@ -18,6 +18,7 @@ import { HIGHLIGHTER_ALPHA, strokeOutline } from "./stroke-shape";
 import { layerFlags, type ExportLayers, type LayerFlags } from "./export-layers";
 import { HEADER_COLOR_DAY, type HeaderLayout } from "./page-header";
 import { helveticaCodeWidth, helveticaWidth, toWinAnsi, wrapHelvetica } from "../pdf/helvetica";
+import { LINK_COLOR, lineRuns, shownText } from "./link-text";
 import { tileLabel, type SplitPlan } from "./export-tiles";
 
 /**
@@ -726,19 +727,41 @@ function winAnsiLiteral(codes: readonly number[]): string {
 	return s + ")";
 }
 
-/** A text element: wrapped to its width with Helvetica metrics, one `Tm`/`Tj` per line. */
+/**
+ * A text element: wrapped to its width with Helvetica metrics, one `Tm`/`Tj` per line. A `[[link]]` shows its label (the alias,
+ * else a short name), in the link colour and underlined, like on the page (K-planner).
+ */
 function textOps(el: TextElement): string {
 	const size = el.fontSize;
 	if (!(size > 0) || el.text === "") return "";
-	const lines = wrapHelvetica(el.text, size, Math.max(el.width, 1));
+	const shown = shownText(el.text);
+	const lines = wrapHelvetica(shown.text, size, Math.max(el.width, 1));
 	const out = ["BT", `/F1 ${num(size)} Tf`, `${rgb(el.color)} rg`];
+	// The lines as strings of WinAnsi codes, to cut them into plain and linked runs.
+	const asCodes = (s: string) => String.fromCharCode(...toWinAnsi(s));
+	const runs = shown.links.length > 0 ? lineRuns(shown.text.split("\n").map(asCodes).join("\n"), lines.map((codes) => String.fromCharCode(...codes)), shown.links) : null;
+	const underlines: string[] = [];
 	lines.forEach((codes, i) => {
 		if (codes.length === 0) return;
 		const baseline = el.y + size * (TEXT_BASELINE + i * TEXT_LINE_HEIGHT);
-		// The page is y-down: a negative d flips the glyphs upright again.
-		out.push(`1 0 0 -1 ${num(el.x)} ${num(baseline)} Tm ${winAnsiLiteral(codes)} Tj`);
+		if (!runs) {
+			// The page is y-down: a negative d flips the glyphs upright again.
+			out.push(`1 0 0 -1 ${num(el.x)} ${num(baseline)} Tm ${winAnsiLiteral(codes)} Tj`);
+			return;
+		}
+		let x = el.x;
+		for (const run of runs[i] ?? []) {
+			if (run.text === "") continue;
+			const runCodes = Array.from(run.text, (c) => c.charCodeAt(0));
+			out.push(`${rgb(run.link ? LINK_COLOR : el.color)} rg`, `1 0 0 -1 ${num(x)} ${num(baseline)} Tm ${winAnsiLiteral(runCodes)} Tj`);
+			const width = runCodes.reduce((sum, c) => sum + helveticaCodeWidth(c, size), 0);
+			if (run.link) underlines.push(`${num(x)} ${num(baseline + size * 0.1)} ${num(width)} ${num(Math.max(0.5, size / 14))} re`);
+			x += width;
+		}
 	});
+	if (runs) out.push(`${rgb(el.color)} rg`);
 	out.push("ET");
+	if (underlines.length > 0) out.push(`q ${rgb(LINK_COLOR)} rg ${underlines.join(" ")} f Q`);
 	return out.join("\n");
 }
 

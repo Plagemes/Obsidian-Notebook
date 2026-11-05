@@ -1,6 +1,7 @@
 import type { TextElement } from "../model/types";
 import type { BBox } from "./hit-test";
 import { estimateMeasure, layoutText, LINE_HEIGHT, textElementBounds, type MeasureText } from "./text-layout";
+import { parseLinks, shownText, type ShownText, type TextLink } from "./wikilink";
 
 /**
  * Links written in text boxes (O8): `[[Note]]`, `[[Note|alias]]`, `[[Note#Heading]]`. Pure: no 'obsidian'. Nothing here is
@@ -12,58 +13,10 @@ import { estimateMeasure, layoutText, LINE_HEIGHT, textElementBounds, type Measu
  * rule "ink written on an object moves with it" (ink/attach.ts) keeps ink and link together.
  */
 
-export interface TextLink {
-	/** Index of `[[` in the text (line endings normalised to `\n`) and one past the closing `]]`. */
-	start: number;
-	end: number;
-	/** Text between the brackets, as written. */
-	inner: string;
-	/** Note path or name (trimmed), before `#` and `|`. Never empty. */
-	target: string;
-	/** What follows `#` (heading, `^block`, `p3`), without the `#`; empty when absent. */
-	subpath: string;
-	alias: string | null;
-	/** What a reader sees: the alias, else the written target (with its subpath). */
-	display: string;
-}
-
-/** `[[…]]` on one line, not an embed (`![[…]]`) and not containing brackets itself. */
-const LINK_RE = /(!?)\[\[([^[\]\r\n]+?)\]\]/g;
+// The parsing and the text a reader sees instead of the markup live in ./wikilink (no layout code, so text-layout can use it).
+export { linkLabel, linktextOf, parseLinks, shownText, splitLinkInner, type ShownText, type TextLink } from "./wikilink";
 
 const normalize = (text: string) => text.replace(/\r\n?/g, "\n");
-
-/** Splits the inside of a link into target, subpath and alias; null when there is no note name (`[[#Heading]]`, `[[|x]]`). */
-export function splitLinkInner(inner: string): { target: string; subpath: string; alias: string | null } | null {
-	const bar = inner.indexOf("|");
-	const path = bar < 0 ? inner : inner.slice(0, bar);
-	const alias = bar < 0 ? null : inner.slice(bar + 1).trim() || null;
-	const hash = path.indexOf("#");
-	const target = (hash < 0 ? path : path.slice(0, hash)).trim();
-	if (target === "") return null;
-	return { target, subpath: hash < 0 ? "" : path.slice(hash + 1).trim(), alias };
-}
-
-/** The text Obsidian resolves: the link without its alias (`Note#Heading`). */
-export function linktextOf(link: Pick<TextLink, "target" | "subpath">): string {
-	return link.subpath ? `${link.target}#${link.subpath}` : link.target;
-}
-
-/** Every link in `text`, in order. */
-export function parseLinks(text: string): TextLink[] {
-	const src = normalize(text);
-	if (!src.includes("[[")) return [];
-	const out: TextLink[] = [];
-	for (const m of src.matchAll(LINK_RE)) {
-		if (m[1] === "!") continue;
-		const inner = m[2]!;
-		const parts = splitLinkInner(inner);
-		if (!parts) continue;
-		const start = m.index + m[1]!.length;
-		const written = inner.slice(0, inner.indexOf("|") < 0 ? inner.length : inner.indexOf("|")).trim();
-		out.push({ start, end: m.index + m[0].length, inner, ...parts, display: parts.alias ?? written });
-	}
-	return out;
-}
 
 /** `[[linktext]]` or `[[linktext|alias]]`; `|` and brackets are stripped from the alias. */
 export function linkMarkup(linktext: string, alias?: string): string {
@@ -125,12 +78,13 @@ export interface LinkRect {
 
 /** Where each link of a text box is on the page: one rectangle per wrapped line it covers. */
 export function linkRects(el: TextElement, measure: MeasureText = estimateMeasure): LinkRect[] {
-	const links = parseLinks(el.text);
-	if (links.length === 0) return [];
+	// The text as it is read: a link shows its label, so that is what the rectangles follow.
+	const shown = shownText(el.text);
+	if (shown.links.length === 0) return [];
 	const m = (s: string) => measure(s, el.fontSize);
-	const layout = layoutText(el.text, el.fontSize, el.width, m);
+	const layout = layoutText(shown.text, el.fontSize, el.width, m);
 	const out: LinkRect[] = [];
-	lineRuns(el.text, layout.lines, links).forEach((runs, i) => {
+	lineRuns(shown.text, layout.lines, shown.links).forEach((runs, i) => {
 		let x = el.x;
 		for (const run of runs) {
 			const w = m(run.text);
@@ -317,12 +271,13 @@ export function currentLinkResolver(): LinkResolver | null {
 /**
  * Draws the wrapped lines of a text box that contains links: links in the link colour, underlined, dimmed when the note
  * does not exist; an ink link also gets a small badge after its label and a faint tint over its box.
- * The text keeps its exact layout (the brackets stay visible), so wrapping, bounds and the editor never disagree.
+ * K-planner: a link shows its label (the alias, else a short name), not its `[[…]]` markup; `lines` are the wrapped lines of
+ * `shown.text`, so wrapping, bounds and the tap areas all follow what is drawn. The editor shows the raw markup.
  */
 export function drawLinkedLines(
-	ctx: CanvasRenderingContext2D, el: TextElement, lines: readonly string[], lineHeight: number, links: readonly TextLink[],
+	ctx: CanvasRenderingContext2D, el: TextElement, lines: readonly string[], lineHeight: number, shown: ShownText,
 ): void {
-	const runs = lineRuns(el.text, lines, links);
+	const runs = lineRuns(shown.text, lines, shown.links);
 	const resolves = resolver;
 	const sole = soleLink(el.text);
 	if (sole && lines.length > 1) {

@@ -17,6 +17,7 @@
  * days, then the notes. Building 366 day pages is a few thousand small text boxes and takes a few milliseconds.
  */
 import { linkMarkup } from "../ink/link-text";
+import { shownText } from "../ink/wikilink";
 import { estimateMeasure, LINE_HEIGHT, textElementBounds } from "../ink/text-layout";
 import { stablePageSubpath } from "../integration/page-links";
 import { setBookmark } from "./bookmarks";
@@ -225,6 +226,11 @@ function markup(b: Build, slot: Slot, label: string): string {
 	return linkMarkup(`${b.o.linkTarget}${stablePageSubpath(slot.page, slot.id)}`, label);
 }
 
+/** How many characters a link shows on the page: its label, not the markup (K-planner: ink/wikilink.ts). */
+function shownLength(text: string): number {
+	return Array.from(shownText(text).text).length;
+}
+
 /** The largest font size in [min, max] at which `length` characters of a link fit in `width` (min when none does). */
 function fitFont(length: number, width: number, max: number, min: number): number {
 	const fs = Math.floor((width / (length * 0.55 + 0.3)) * 2) / 2;
@@ -234,7 +240,7 @@ function fitFont(length: number, width: number, max: number, min: number): numbe
 /** A text box that is one page link: tapping it opens the page. Its box is the tap area. */
 function link(b: Build, slot: Slot, label: string, x: number, y: number, width: number, maxFs = 8, minFs = 6): TextElement {
 	const text = markup(b, slot, label);
-	const fs = fitFont(Array.from(text).length, width, maxFs, minFs);
+	const fs = fitFont(shownLength(text), width, maxFs, minFs);
 	return freezeElement({ id: b.newId(), type: "text", x: round2(x), y: round2(y), width: round2(Math.max(10, width)), text, fontSize: fs, color: LINK });
 }
 
@@ -254,7 +260,7 @@ interface LinkItem {
 
 /** How a list of links fits an area: font size, columns and rows. */
 function listShape(items: readonly LinkItem[], b: Build, w: number, h: number, maxFs = 7.5): { fs: number; cols: number; rows: number; rowH: number } {
-	const longest = Math.max(...items.map((i) => Array.from(markup(b, i.slot, i.label)).length), 1);
+	const longest = Math.max(...items.map((i) => shownLength(markup(b, i.slot, i.label))), 1);
 	let shape = { fs: 6, cols: 1, rows: 1, rowH: 6 * LINE_HEIGHT + 3 };
 	for (let fs = maxFs; fs >= 6; fs -= 0.5) {
 		const itemW = Math.ceil(longest * 0.55 * fs) + 10;
@@ -269,7 +275,7 @@ function listShape(items: readonly LinkItem[], b: Build, w: number, h: number, m
 
 /** Height a list of `count` links needs in a width, at the preferred size. */
 function listHeight(items: readonly LinkItem[], b: Build, w: number): number {
-	const longest = Math.max(...items.map((i) => Array.from(markup(b, i.slot, i.label)).length), 1);
+	const longest = Math.max(...items.map((i) => shownLength(markup(b, i.slot, i.label))), 1);
 	const fs = 7;
 	const cols = Math.max(1, Math.floor(w / (Math.ceil(longest * 0.55 * fs) + 10)));
 	return Math.ceil(items.length / cols) * (fs * LINE_HEIGHT + 3);
