@@ -1984,6 +1984,18 @@ export const en = {
 	// wave 0.10 (81): PNG images and printing, as more choices of the export dialog.
 	"export.format.png": "PNG images",
 	"export.format.print": "Print",
+	// 0.21 htmlexport
+	"export.format.html": "Interactive HTML",
+	"export.html.note": "Writes ONE .html file next to the notebook that opens in any browser, without Obsidian: zoomable vector pages, a page strip and keyboard keys. Nothing is loaded from the internet. A file that already exists is never replaced. Pictures are embedded up to a size limit.",
+	"export.html.page": "Page",
+	"export.html.of": "of",
+	"export.html.fit": "Fit width",
+	"export.html.zoomIn": "Zoom in",
+	"export.html.zoomOut": "Zoom out",
+	"export.html.prev": "Previous page",
+	"export.html.next": "Next page",
+	"export.html.pages": "Pages",
+	"export.html.imagesOmitted": "{n} images were left out of the HTML file to keep it a reasonable size.",
 	"export.dialog.scope.range": "Some pages…",
 	"export.dialog.range": "Pages",
 	"export.dialog.range.desc": "For example 1-3, 5, 8- (from 8 to the last page). The notebook has {n} pages.",
