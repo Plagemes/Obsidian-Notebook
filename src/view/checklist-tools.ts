@@ -85,6 +85,9 @@ function vanished(probe: TaskLineEdit, mtime: number, taskAt: number): SyncResul
 	return probe.unclosedFence || !(mtime > taskAt) ? "missing" : "gone";
 }
 
+/** The checkboxes (notebook, checkbox, new path) already told this session that a renamed note's new path is too long to follow. */
+const toldTooLong = new Set<string>();
+
 /** Contact moved further than this (CSS px): a drag, not a tap. */
 const TAP_SLOP_PX = 8;
 /** Longest contact that still counts as a tap, ms. */
@@ -593,8 +596,16 @@ export class ChecklistTools {
 			for (const box of checkboxesOf(page)) {
 				const next = box.task ? renamedPath(box.task.path, oldPath, newPath) : null;
 				if (!box.task || next === null) continue;
-				if (isLinkablePath(next)) steps.push(setCheckboxTask(page.id, box.id, { path: next, block: box.task.block }));
-				else tooLong = true;
+				// The link keeps the time it was made (one ms later, so this decision wins a merge with a copy that still has the old path):
+				// a note edited since the link was made still reads as edited when the rename is seen later (on opening the notebook), so a
+				// line deleted from it reads as gone and not as missing.
+				if (isLinkablePath(next)) steps.push(setCheckboxTask(page.id, box.id, { path: next, block: box.task.block }, (box.taskAt ?? 0) + 1));
+				else {
+					// Said once per checkbox and path in a session: every retry of the sync comes back here.
+					const key = `${doc.id}\n${box.id}\n${next}`;
+					if (!toldTooLong.has(key)) tooLong = true;
+					toldTooLong.add(key);
+				}
 			}
 		}
 		if (tooLong) showNotice(t("checklist.task.renameTooLong"), 8000);
