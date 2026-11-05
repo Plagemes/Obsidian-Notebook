@@ -43,6 +43,11 @@ export interface InboxContext {
 	notebookTemplatesFolder: string;
 	/** Lowercase base names of the notebooks sitting in the same folder (a PDF with the name of a notebook is its export). */
 	siblingNotebooks?: ReadonlySet<string>;
+	/**
+	 * Whether a notebook named `<stemPath>` (folder and base name, no extension) exists. A `<Notebook> (Headings)` folder is the
+	 * plugin's only when its notebook is beside it; without this the folder is treated as the user's own.
+	 */
+	hasNotebookNamed?: (stemPath: string) => boolean;
 	/** Lowercase paths the plugin wrote recently outside `_assets` (digest pictures, exports): never offered (storage/plugin-written.ts). */
 	pluginWritten?: ReadonlySet<string>;
 }
@@ -91,6 +96,22 @@ function below(path: string, folder: string): string[] | null {
 	return path.startsWith(`${folder}/`) ? path.slice(folder.length + 1).split("/") : null;
 }
 
+/**
+ * 0.20 review (N6): whether `path` lies in a `<Notebook> (Headings)` folder that the plugin made, that is one with its notebook
+ * beside it. A folder of the user's that merely ends in " (Headings)" keeps its files in the inbox.
+ */
+export function inCompanionHeadingsFolder(path: string, ctx: Pick<InboxContext, "hasNotebookNamed">): boolean {
+	if (!ctx.hasNotebookNamed) return false;
+	const segments = path.split("/");
+	for (let i = 0; i < segments.length - 1; i++) {
+		const m = /^(.+) \(Headings\)$/i.exec(segments[i]!);
+		if (!m) continue;
+		const parent = segments.slice(0, i).join("/");
+		if (ctx.hasNotebookNamed(parent === "" ? m[1]! : `${parent}/${m[1]!}`)) return true;
+	}
+	return false;
+}
+
 /** Whether a file in the vault is a received file: a PDF or image directly in the folder that the plugin did not write. */
 export function isInboxCandidate(path: string, ctx: InboxContext): boolean {
 	const rel = below(path, ctx.folder);
@@ -103,7 +124,7 @@ export function isInboxCandidate(path: string, ctx: InboxContext): boolean {
 	if (isPluginPictureName(name) || ctx.pluginWritten?.has(path.toLowerCase())) return false;
 	// The heading pictures of a companion note live in `<Notebook> (Headings)`: that folder is the plugin's, so its files are not
 	// recorded one by one (the record is bounded) but recognised by the folder.
-	if (path.split("/").some((s) => / \(Headings\)$/i.test(s))) return false;
+	if (inCompanionHeadingsFolder(path, ctx)) return false;
 	// A `_` folder is the plugin's (or the user's) own storage, never a drop place.
 	if (ctx.folder.split("/").some((s) => s.startsWith("_"))) return false;
 	// An exported PDF is named after its notebook ("Maths.pdf", "Maths 2.pdf") and sits next to it.

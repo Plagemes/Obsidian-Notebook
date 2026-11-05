@@ -16,7 +16,7 @@ import { NotebookApiError } from "../integration/api-errors";
 import { serializeChecked } from "../model/serialize";
 import { PhotoDecodeError, photoSize } from "../scan/decode";
 import type { NotebookSettings } from "../settings";
-import { isNotebookFile } from "../storage/format";
+import { isNotebookFile, NOTEBOOK_EXTENSIONS } from "../storage/format";
 import { backlinksOf } from "../storage/backlinks";
 import { createNotebook } from "../storage/notebooks";
 import { loadWritten, writtenSet } from "../storage/plugin-written";
@@ -181,7 +181,7 @@ export class SharedInbox implements SharedInboxPort {
 		for (const child of parent?.children ?? []) {
 			if (child instanceof TFile && isNotebookFile(child)) siblings.add(child.basename.toLowerCase());
 		}
-		return { folder, notebooksFolder: s.folder, templatesFolder: s.templatesFolder, notebookTemplatesFolder: s.notebookTemplatesFolder, siblingNotebooks: siblings, pluginWritten: writtenSet(loadWritten(this.app)) };
+		return { folder, notebooksFolder: s.folder, templatesFolder: s.templatesFolder, notebookTemplatesFolder: s.notebookTemplatesFolder, siblingNotebooks: siblings, hasNotebookNamed: (stem) => NOTEBOOK_EXTENSIONS.some((e) => this.app.vault.getFileByPath(`${stem}.${e}`) !== null), pluginWritten: writtenSet(loadWritten(this.app)) };
 	}
 
 	private toItem(file: TFile): InboxItem | null {
