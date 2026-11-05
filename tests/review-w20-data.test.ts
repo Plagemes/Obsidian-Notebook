@@ -227,7 +227,7 @@ describe("D2: pictures are marked, and only marked ones are ours", () => {
 // ------------------------------------------------------------------------------------------------------------- D3
 
 describe("D3: the headings folder is the plugin's, so the inbox never offers its pictures", () => {
-	const ctx = (over: Partial<InboxContext> = {}): InboxContext => ({ folder: "", notebooksFolder: "Notebooks", templatesFolder: "", notebookTemplatesFolder: "", ...over });
+	const ctx = (over: Partial<InboxContext> = {}): InboxContext => ({ folder: "", notebooksFolder: "Notebooks", templatesFolder: "", notebookTemplatesFolder: "", hasNotebookNamed: () => true, ...over });
 
 	it("skips files in a '<Notebook> (Headings)' folder without any record", () => {
 		expect(isInboxCandidate("Maths (Headings)/p3-h1.png", ctx({ folder: "Maths (Headings)" }))).toBe(false);
