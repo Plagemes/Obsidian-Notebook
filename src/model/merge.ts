@@ -72,7 +72,7 @@ import { copyStroke as copyStrokeWithId } from "./pages";
 import { freezeElement } from "./serialize";
 import { UpdateCheckbox } from "./checklist-commands";
 import { copiedCheckbox, withChecked, withCheckboxLabel, withCheckboxTask } from "./checklist";
-import { mergedFlags, UpdateItems, type PageItem } from "./groups";
+import { groupJoins, mergedFlags, UpdateItems, type PageItem } from "./groups";
 import { DEFAULT_META, type BookmarkInfo, type CheckboxElement, type MarkerElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type PageMargins, type Stroke } from "./types";
 
 export interface MergeSummary {
@@ -340,6 +340,8 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 	const mainCheckboxes = new Map<string, { pageId: string; el: CheckboxElement }>();
 	/** v18: strokes and elements of the main notebook by id, as the merge leaves them (see `flagsFrom`). */
 	const mainItems = new Map<string, { pageId: string; item: PageItem }>();
+	/** v18: per page of the main notebook, the copy's version of each item that is on both sides (see `flushFlags`). */
+	const flagCopies = new Map<string, Map<string, PageItem>>();
 	/** Content keys present on each page of the result, for the idempotence of copies. */
 	const contentOn = new Map<string, Set<string>>();
 	for (const page of main.pages) {
@@ -397,11 +399,40 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 		if (used.get(item.id) !== key) return;
 		const have = mainItems.get(item.id);
 		if (!have) return;
-		const next = mergedFlags(have.item, item);
-		if (!next) return;
-		commands.push(new UpdateItems(have.pageId, new Set([item.id]), (current) => mergedFlags(current, item) ?? current, "Merge groups and locks"));
-		mainItems.set(item.id, { pageId: have.pageId, item: next });
-		summary.flagsUpdated++;
+		let list = flagCopies.get(have.pageId);
+		if (!list) flagCopies.set(have.pageId, (list = new Map<string, PageItem>()));
+		list.set(item.id, item);
+	};
+	/** The groups of the items the merge adds, per page of the main notebook (they count as members of their group there). */
+	const addedGroups = new Map<string, string[]>();
+	const addedGroup = (pageId: string, item: PageItem): void => {
+		if (item.group === undefined) return;
+		const list = addedGroups.get(pageId);
+		if (list) list.push(item.group);
+		else addedGroups.set(pageId, [item.group]);
+	};
+	/**
+	 * Once every item is known: one `UpdateItems` per page with the map id -> copy's item (linear in the page, whatever the number
+	 * of items), and an item takes the copy's group only when that group still has two members in the result (`groupJoins`).
+	 */
+	const flushFlags = (): void => {
+		for (const [pageId, copies] of flagCopies) {
+			const page = mainPages.get(pageId);
+			if (!page) continue;
+			const joins = groupJoins(page, addedGroups.get(pageId) ?? [], copies);
+			const ids = new Set<string>();
+			for (const [id, copy] of copies) {
+				const have = mainItems.get(id)!;
+				if (!mergedFlags(have.item, copy, joins.has(id))) continue;
+				ids.add(id);
+				summary.flagsUpdated++;
+			}
+			if (ids.size === 0) continue;
+			commands.push(new UpdateItems(pageId, ids, (current) => {
+				const copy = copies.get(current.id);
+				return (copy && mergedFlags(current, copy, joins.has(current.id))) ?? current;
+			}, "Merge groups and locks"));
+		}
 	};
 	const freshId = () => {
 		let id = createId();
@@ -522,6 +553,7 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 				addedStrokes.add(d.kind === "keep" ? s.id : d.id);
 				const stroke = d.kind === "keep" ? taken(s, true, s.id) : taken(s, false, d.id);
 				commands.push(new AddStroke(page.id, stroke, strokeAt++));
+				addedGroup(target.id, stroke);
 				keys.add(key);
 			}
 			let elAt = target.elements?.length ?? 0;
@@ -536,6 +568,7 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 				}
 				const el = carriedInk(d.kind === "keep" ? e : copyElement(e, d.id), strokeMap, addedStrokes);
 				commands.push(new AddElement(page.id, el, elAt++));
+				addedGroup(target.id, el);
 				keys.add(key);
 			}
 			// v13: the copy's parts and states for a page that has none (the strokes are in the frame of the main page).
@@ -604,6 +637,7 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 		summary.pagesAdded++;
 		anchor = page.id;
 	}
+	flushFlags();
 
 	// Items of the main notebook that the copy does not have: kept, only counted.
 	const otherIds = new Set<string>();
@@ -696,7 +730,7 @@ export function mergeMeta(main: NotebookMeta, other: NotebookMeta, pageIds: Read
 /** Number of changes a summary describes (0: the copy holds nothing new). */
 export function mergeChangeCount(s: MergeSummary): number {
 	return s.pagesEnlarged + s.pagesAdded + s.strokesAdded + s.strokesCopied + s.elementsAdded + s.elementsCopied + s.assetsAdded + s.tagsAdded
-		+ s.bookmarksAdded + s.bookmarkInfoAdded + s.pageTagsAdded + s.markersResolved + s.commentsAdded + s.checkboxesUpdated;
+		+ s.bookmarksAdded + s.bookmarkInfoAdded + s.pageTagsAdded + s.markersResolved + s.commentsAdded + s.checkboxesUpdated + s.flagsUpdated;
 }
 
 /**
@@ -717,6 +751,9 @@ export function mergeCovers(result: NotebookDocument, other: NotebookDocument): 
 	const toggledAt = new Map<string, number>();
 	const ticked = new Set<string>();
 	const linkedAt = new Map<string, number>();
+	/** v18: when each element of the result was last locked or unlocked (0: never) and whether it is locked. */
+	const lockedAt = new Map<string, number>();
+	const locked = new Set<string>();
 	for (const p of result.pages) {
 		const keys = new Set<string>();
 		for (const s of p.strokes) {
@@ -729,6 +766,8 @@ export function mergeCovers(result: NotebookDocument, other: NotebookDocument): 
 			const k = `e${elementContentKey(e)}`;
 			byId.set(e.id, k);
 			keys.add(k);
+			lockedAt.set(e.id, e.lockAt ?? 0);
+			if (e.locked === true) locked.add(e.id);
 			if (e.type === "marker" && e.done) {
 				resolved.add(k);
 				resolvedIds.add(e.id);
@@ -759,6 +798,12 @@ export function mergeCovers(result: NotebookDocument, other: NotebookDocument): 
 			if (e.type === "marker" && e.done && !(byId.get(e.id) === k && resolvedIds.has(e.id)) && !resolvedOn.get(p.id)?.has(k)) return false;
 			// v17: the same checkbox is in the result toggled and linked or unlinked at least as late as in the copy, and a tick of the copy
 			// that ties with the result's untick is in the result too.
+			// v18: the same element is in the result locked or unlocked at least as late as in the copy, and a lock of the copy that
+			// ties with the result's unlock is in the result too.
+			if (byId.get(e.id) === k) {
+				const at = lockedAt.get(e.id) ?? 0;
+				if (at < (e.lockAt ?? 0) || (at === (e.lockAt ?? 0) && e.locked === true && !locked.has(e.id))) return false;
+			}
 			if (e.type === "checkbox" && byId.get(e.id) === k) {
 				const at = toggledAt.get(e.id) ?? 0;
 				if (at < (e.at ?? 0) || (at === (e.at ?? 0) && e.checked === true && !ticked.has(e.id))) return false;

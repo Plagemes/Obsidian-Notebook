@@ -653,7 +653,7 @@ function salvageStrokes(raw: unknown, skeleton: RawObject, ctx: SalvageContext):
 		if (invalid) s.fieldsReset++;
 		const asIs = withGroup(tryDoc([{ ...skeleton, strokes: [bare] }], ctx.assets, undefined, ctx.slides)?.pages[0]?.strokes[0], group);
 		if (asIs) {
-			s.unknownFields += unknownKeys(item, asIs);
+			s.unknownFields += unknownKeys(bare, asIs);
 			// A stroke cut off by the damage keeps the points before it: kept, but not "as it was".
 			const cut = isObj(item) && (ctx.cut.has(item) || (Array.isArray(item.points) && ctx.cut.has(item.points)));
 			accept(asIs, cut);
@@ -704,7 +704,7 @@ function salvageElements(raw: unknown, skeleton: RawObject, ctx: SalvageContext)
 		let el = withGroup(tryDoc([{ ...skeleton, elements: [bare] }], ctx.assets)?.pages[0]?.elements?.[0], group);
 		let repaired = false;
 		if (el) {
-			s.unknownFields += unknownKeys(item, el);
+			s.unknownFields += unknownKeys(bare, el);
 		} else {
 			const fixed = fixElement(bare, ctx.assets);
 			el = withGroup(fixed ? tryDoc([{ ...skeleton, elements: [withLockOf(fixed, bare)] }], ctx.assets)?.pages[0]?.elements?.[0] : undefined, group);

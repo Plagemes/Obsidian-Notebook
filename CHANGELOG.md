@@ -30,6 +30,12 @@
 - **Ghost guide lines on blank paper (#94).** After a first line of handwriting on blank paper, two faint dashed guides (the baseline of the line you wrote and the next one) appear near the pen and fade after a short pause. The baseline and line height are inferred from the newest strokes when a stroke ends (drawings and descenders are ignored, a slightly tilted line is followed); nothing runs per frame. Settings: *Ghost guide lines* (off / while writing / always on blank paper) and *Guide spacing* (auto or 6-10 mm). Overlay only on the live layer: never saved, exported or printed. No format change. Pure logic in `src/model/ghost-lines.ts` (tests: `tests/ghost-lines.test.ts`). Harness: `dev/harness/ghostlines-check.ts` (`doc=ghostlines`).
 
 
+### Review fixes
+- Groups and locks: merging a conflicted copy that only differs in locks or groups is now counted as a change (the conflict dialog no longer says "nothing to merge" over a working Merge button, and the recovery union keeps the other candidate's locks and groups). The merge brings the flags with one command per page instead of one per item, so a large drawing no longer takes seconds to merge, undo or redo.
+- Groups and locks: a merge no longer puts an item into a group of one (the copy was offered again on every open); `mergeCovers` checks the lock before the conflicted copy is moved to backup.
+- Groups and locks: a cross-page drag and *Split page* no longer carry a group id to another page. Members that arrive together form a new group, a lone one leaves its group. *Split page* keeps locked elements on the page and keeps a group whole on one side.
+- Groups and locks: a locked marker, box or equation no longer opens its editor (so it cannot be deleted from there). Selections made by find, select similar, the states tools and stamps are completed to their groups. The pieces of a cut stroke stay in its group only while another member exists, and the repair summary no longer counts an invalid group twice.
+
 ## 0.19.0 — 2026-11-05
 
 Handwritten tasks and a lecture you can follow up from your notes: checkboxes drawn with the pen that tick the tasks in your Markdown notes, a lecture log line in the daily note and an automatic snapshot at the end of each lecture, a gallery of the figures of a lecture, a clean copy of the notes to share, a list of things to look up later, typed text that Obsidian's search can find, and notebooks made from note templates. The notebook format moves to version 17: 0.18 and older open a v17 file read-only and never overwrite it.
