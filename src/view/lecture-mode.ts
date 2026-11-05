@@ -33,6 +33,33 @@ import { showNotice, type NoticeHandle } from "./notice";
 /** How often the clock is looked at while a notebook is open, ms. Cheap: no rendering, no file access. */
 export const LECTURE_TICK_MS = 30_000;
 
+/** Why a lecture ended: the mode was left by hand, the class slot ran out, or the notebook is closing. Never the app going to the background. */
+export type LectureEndReason = "left" | "over" | "closing";
+
+/** The one lecture-end event: the user wrote during `cls` and that stretch of the class is done. */
+export interface LectureEnd {
+	path: string;
+	cls: LectureClass;
+	reason: LectureEndReason;
+	now: Date;
+}
+
+/** What a lecture end feeds: the log line (from the open document, in memory) and the snapshot (from the saved file, after a flush). */
+export interface LectureEndSink {
+	log(cls: LectureClass): void;
+	/** Flush first, then snapshot the file on disk. */
+	snapshotAfterFlush(path: string, course: string): void;
+	/** The notebook is closing: its own final flush comes first; the snapshot is asked for once that resolved. */
+	snapshotAfterClose(path: string, course: string): void;
+}
+
+/** One lecture end, in the one order that is right: the log line first (memory), then the snapshot (file, after the flush). */
+export function routeLectureEnd(end: LectureEnd, sink: LectureEndSink): void {
+	sink.log(end.cls);
+	if (end.reason === "closing") sink.snapshotAfterClose(end.path, end.cls.course);
+	else sink.snapshotAfterFlush(end.path, end.cls.course);
+}
+
 /** What the controller needs of the notebook view and the plugin. */
 export interface LectureModeHost {
 	/** The element the banner floats in (the notebook body). */
@@ -52,8 +79,11 @@ export interface LectureModeHost {
 	goToLecturePage(course: string, date: Date): void;
 	/** The lecture state changed: the UI (contextual bar) is drawn again. */
 	changed(): void;
-	/** 0.19 (222): a lecture session ended after the user wrote in it (mode left, notebook closed, app hidden). The view saves, then asks for the snapshot. */
-	ended?(path: string, course: string): void;
+	/**
+	 * 0.19 (#221, 222): a lecture the user wrote in ended (mode left, class over, notebook closing), once per stretch of
+	 * writing. Called while the document is still open: the host logs it from memory first, then saves and snapshots the file.
+	 */
+	ended?(end: LectureEnd): void;
 	/** The device's local storage (what was turned down or paged today); without it nothing is remembered across openings. */
 	memory?: { load(): unknown; save(value: unknown): void };
 	now?(): Date;
@@ -68,16 +98,19 @@ export class LectureModeController {
 	/** Occurrences whose lecture page was added (or found), same scope. */
 	private readonly paged = new Set<string>();
 	private path: string | null = null;
+	/**
+	 * The one "wrote during the class" signal (the lecture log and the lecture snapshot both follow it): the class the user
+	 * wrote in since the last lecture end was reported. Cleared when the end is reported, so one stretch of writing ends once.
+	 */
+	private wroteIn: LectureClass | null = null;
 	private banner: HTMLElement | null = null;
 	private chip: HTMLElement | null = null;
 	private timer: number | null = null;
-	/** The user wrote (or added the lecture page) during a class since the last snapshot request: the course. */
-	private wroteDuring: string | null = null;
 	private slotCheckedAt = 0;
 	private slotClass: LectureClass | null = null;
+	// The app going to the background is not the end of a lecture (the view only saves then); the clock is looked at again on return.
 	private readonly onVisible = (): void => {
 		if (document.visibilityState === "visible") this.evaluate();
-		else this.finishSession();
 	};
 
 	constructor(private readonly host: LectureModeHost) {}
@@ -110,9 +143,16 @@ export class LectureModeController {
 		this.evaluate();
 	}
 
+	/**
+	 * The notebook is about to close (its document is still there, before the view saves and detaches it): a lecture the user
+	 * wrote in ends here, if it did not end already.
+	 */
+	closing(): void {
+		this.endLecture("closing");
+	}
+
 	/** The notebook was closed or unloaded: nothing of its lecture state survives. */
 	closed(): void {
-		this.finishSession();
 		this.reset();
 		this.stopTimer();
 		this.path = null;
@@ -163,7 +203,7 @@ export class LectureModeController {
 			}
 			cls = this.slotClass;
 		}
-		if (cls) this.wroteDuring = cls.course;
+		if (cls) this.wroteIn = cls;
 	}
 
 	/** Looks at the clock and the timetable and does what the rules say. */
@@ -181,7 +221,7 @@ export class LectureModeController {
 			if (step.kind !== "leave" && step.kind !== "unask") break;
 		}
 		// The class is over and the lecture mode is not on (it is off, or was left earlier): the writing of the class is done.
-		if (this.wroteDuring && !match && !this.active && !busy) this.finishSession();
+		if (this.wroteIn && !match && !this.active && !busy) this.endLecture("over");
 		// No page is added here: the clock never edits the notebook (see the top of this file).
 	}
 
@@ -217,7 +257,7 @@ export class LectureModeController {
 	}
 
 	private leave(ended: boolean, now: Date = this.now()): void {
-		this.finishSession();
+		this.endLecture(ended ? "over" : "left");
 		const was = this.activeClass;
 		if (this.active?.key) this.remember("declined", this.active.key);
 		this.active = null;
@@ -246,7 +286,7 @@ export class LectureModeController {
 			addLecturePage(ctx, cls.course, now, cls.course, classContext(cls, ctx.slide?.() ?? null), scroll);
 			added = true;
 		}
-		if (added) this.wroteDuring = cls.course;
+		if (added) this.wroteIn = cls;
 		this.remember("paged", cls.key);
 		// Added behind the user's back (the view stayed where they write): say so, with a way to go there.
 		if (added && !scroll) this.offerGo(cls, now);
@@ -294,14 +334,18 @@ export class LectureModeController {
 		}
 	}
 
-	/** Asks for the end-of-lecture snapshot, once per stretch of writing. The view saves first; nothing is read from memory here. */
-	private finishSession(): void {
-		const course = this.wroteDuring;
-		this.wroteDuring = null;
+	/**
+	 * Reports the end of a lecture the user wrote in: the one place that feeds both the lecture log and the lecture snapshot.
+	 * Fires once per stretch of writing (the tracker is cleared first); another end of the same class reports again only if the
+	 * user wrote again in between, and the snapshot then skips unchanged content.
+	 */
+	private endLecture(reason: LectureEndReason): void {
+		const cls = this.wroteIn;
+		this.wroteIn = null;
 		const path = this.path;
-		if (!course || !path) return;
+		if (!cls || !path) return;
 		try {
-			this.host.ended?.(path, course);
+			this.host.ended?.({ path, cls, reason, now: this.now() });
 		} catch (e) {
 			console.error("[notebook] end of lecture", e);
 		}
@@ -315,7 +359,7 @@ export class LectureModeController {
 		this.active = null;
 		this.activeClass = null;
 		this.asking = null;
-		this.wroteDuring = null;
+		this.wroteIn = null;
 		this.slotClass = null;
 		this.slotCheckedAt = 0;
 		this.declined.clear();

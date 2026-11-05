@@ -83,7 +83,7 @@ export const DAILY_SETTLE_MS = 1500;
  * The text a new daily note starts with: the Daily notes template (placeholders filled in) when one is configured. Null when
  * a template is configured but cannot be read: then the note is not made at all, because it would come out without it.
  */
-async function newNoteText(app: App, cfg: DailyNoteConfig, notePath: string, date: Date): Promise<string | null> {
+export async function newNoteText(app: App, cfg: DailyNoteConfig, notePath: string, date: Date): Promise<string | null> {
 	if (!cfg.template) return "";
 	const text = await loadDailyTemplate<TFile>({
 		resolveLink: (link) => app.metadataCache.getFirstLinkpathDest(link, ""),

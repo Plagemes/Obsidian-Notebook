@@ -3575,6 +3575,17 @@ export const en = {
 	"history.filter.lecture": "Lecture snapshots",
 	"history.filter.lecture.hint": "Show only the snapshots taken at the end of a lecture",
 	"history.filter.none": "No lecture snapshots of this notebook yet.",
+	// 0.19 lecturelog
+	"settings.lectureLog": "Lecture log in the daily note",
+	"settings.lectureLog.desc": "When a lecture ends, add one line to the daily note: time, course, pages, open questions.",
+	"settings.lectureLogHeading": "Lecture log heading",
+	"settings.lectureLogHeading.desc": "The heading the lines go under; added at the end of the note if missing.",
+	"lectureLog.page": "p. {n}",
+	"lectureLog.pages": "pp. {from}–{to}",
+	"lectureLog.count.page": "1 page",
+	"lectureLog.count.pages": "{n} pages",
+	"lectureLog.count.question": "1 open question",
+	"lectureLog.count.questions": "{n} open questions",
 } as const;
 
 export type MessageKey = keyof typeof en;

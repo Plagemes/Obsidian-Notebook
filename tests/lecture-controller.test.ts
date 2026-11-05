@@ -18,7 +18,7 @@ vi.mock("obsidian", () => ({
 import { createDocument } from "../src/model/document";
 import { AddPage, type Command } from "../src/model/history";
 import type { NotebookDocument } from "../src/model/types";
-import { LectureModeController, type LectureModeHost } from "../src/view/lecture-mode";
+import { LectureModeController, routeLectureEnd, type LectureEnd, type LectureModeHost } from "../src/view/lecture-mode";
 import type { EditContext } from "../src/view/edit-context";
 import type { LectureClass } from "../src/timetable/lecture-mode";
 import { LECTURE_MEMORY_KEY } from "../src/timetable/lecture-memory";
@@ -72,6 +72,10 @@ interface Rig {
 	store: Map<string, unknown>;
 	state: { editable: boolean; cls: LectureClass | null; setting: "off" | "ask" | "auto" };
 	went: Array<[string, Date]>;
+	/** Every lecture end the controller reported. */
+	ends: LectureEnd[];
+	/** What the ends fed, in order: the log line (memory) and the snapshot (after a flush, or after the close). */
+	calls: string[];
 }
 
 function rig(shared?: { store: Map<string, unknown>; doc: NotebookDocument }): Rig {
@@ -79,6 +83,8 @@ function rig(shared?: { store: Map<string, unknown>; doc: NotebookDocument }): R
 	const store = shared?.store ?? new Map<string, unknown>();
 	const executed: Rig["executed"] = [];
 	const went: Rig["went"] = [];
+	const ends: LectureEnd[] = [];
+	const calls: string[] = [];
 	const state: Rig["state"] = { editable: true, cls, setting: "auto" };
 	const body = new El();
 	const ctx = (): EditContext => ({
@@ -97,10 +103,18 @@ function rig(shared?: { store: Map<string, unknown>; doc: NotebookDocument }): R
 		editable: () => state.editable,
 		goToLecturePage: (course, date) => went.push([course, date]),
 		changed: () => undefined,
+		ended: (end) => {
+			ends.push(end);
+			routeLectureEnd(end, {
+				log: (c) => calls.push(`log:${c.course}`),
+				snapshotAfterFlush: (path, course) => calls.push(`snapshot-after-flush:${path}:${course}`),
+				snapshotAfterClose: (path, course) => calls.push(`snapshot-after-close:${path}:${course}`),
+			});
+		},
 		now: () => NOW,
 		memory: { load: () => store.get(LECTURE_MEMORY_KEY) ?? null, save: (v) => store.set(LECTURE_MEMORY_KEY, JSON.parse(JSON.stringify(v))) },
 	};
-	return { ctl: new LectureModeController(host), doc, executed, store, state, went };
+	return { ctl: new LectureModeController(host), doc, executed, store, state, went, ends, calls };
 }
 
 beforeEach(() => {
@@ -202,5 +216,72 @@ describe("Not now is remembered", () => {
 		broken.state.setting = "ask";
 		broken.ctl.opened();
 		expect(broken.ctl.asked).toBe(true);
+	});
+});
+
+describe("one lecture end feeds the log and the snapshot", () => {
+	const P = "Notebooks/Analysis 1.notebook";
+
+	it("leaving the mode ends the lecture once: one log call, then one snapshot after the flush; closing later adds nothing", () => {
+		const r = rig();
+		r.ctl.opened();
+		r.ctl.wrote();
+		r.ctl.toggle();
+		expect(r.ends.map((e) => e.reason)).toEqual(["left"]);
+		expect(r.calls).toEqual(["log:Analysis 1", `snapshot-after-flush:${P}:Analysis 1`]);
+		r.ctl.closing();
+		r.ctl.closed();
+		expect(r.calls).toHaveLength(2);
+	});
+
+	it("closing the notebook ends it once: the log first (memory), the snapshot after the close; a second close adds nothing", () => {
+		const r = rig();
+		r.ctl.opened();
+		r.ctl.wrote();
+		r.ctl.closing();
+		r.ctl.closing();
+		expect(r.ends.map((e) => e.reason)).toEqual(["closing"]);
+		expect(r.calls).toEqual(["log:Analysis 1", `snapshot-after-close:${P}:Analysis 1`]);
+	});
+
+	it("the class being over ends it once, with the mode off", () => {
+		const r = rig();
+		r.state.setting = "ask";
+		r.ctl.opened();
+		r.ctl.wrote();
+		expect(r.ends).toHaveLength(0);
+		r.state.cls = null;
+		r.ctl.evaluate();
+		r.ctl.evaluate();
+		r.ctl.closing();
+		expect(r.ends.map((e) => e.reason)).toEqual(["over"]);
+		expect(r.calls).toEqual(["log:Analysis 1", `snapshot-after-flush:${P}:Analysis 1`]);
+	});
+
+	it("the app going to the background is not an end; neither is closing without having written", () => {
+		const listeners: Array<() => void> = [];
+		vi.stubGlobal("document", {
+			addEventListener: (_t: string, fn: () => void) => listeners.push(fn), removeEventListener: () => undefined, visibilityState: "hidden",
+		});
+		const r = rig();
+		r.ctl.opened();
+		r.ctl.wrote();
+		for (const fn of listeners) fn();
+		expect(r.ends).toHaveLength(0);
+		expect(r.calls).toHaveLength(0);
+		const quiet = rig();
+		quiet.ctl.opened();
+		quiet.ctl.closing();
+		expect(quiet.ends).toHaveLength(0);
+	});
+
+	it("writing again after an end starts a new stretch: the next end reports again (the snapshot then skips unchanged content)", () => {
+		const r = rig();
+		r.ctl.opened();
+		r.ctl.wrote();
+		r.ctl.closing();
+		r.ctl.wrote();
+		r.ctl.closing();
+		expect(r.ends).toHaveLength(2);
 	});
 });

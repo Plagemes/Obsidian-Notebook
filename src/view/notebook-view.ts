@@ -119,7 +119,8 @@ import { runBoardShot } from "./board-shot";
 import type { EditContext } from "./edit-context";
 import { runNewLecture } from "./lecture";
 import { pickSlideRef } from "./lecture-logic";
-import { LectureModeController } from "./lecture-mode";
+import { LectureModeController, routeLectureEnd, type LectureEnd } from "./lecture-mode";
+import { lectureSnapshot, type LectureSnapshot } from "../library/lecture-log-logic";
 import { LECTURE_MEMORY_KEY } from "../timetable/lecture-memory";
 import { findLecturePage } from "../timetable/lecture-open";
 import type { LectureClass } from "../timetable/lecture-mode";
@@ -244,6 +245,8 @@ export interface NotebookHost {
 	lectureClassFor?(path: string): LectureClass | null;
 	/** 0.19 (222): a lecture ended in that notebook; the plugin takes the lecture snapshot from the saved file. Optional: absent in tests and the harness. */
 	lectureEnded?(path: string, course: string, saved: boolean): void;
+	/** 0.19 (#221): a lecture the user wrote in ended: its line goes into the daily note (library/lecture-log.ts). Optional: absent in tests and the harness. */
+	logLecture?(file: TFile, cls: LectureClass, snap: LectureSnapshot): void;
 	/** ui redesign: runs a plugin-level action of the registry (notebook menu). Optional. */
 	runGlobal?(id: string): void;
 	/** wave 0.7: sync safety (presence files, sync check). Optional: absent in tests and the harness. */
@@ -744,7 +747,7 @@ export class NotebookView extends FileView {
 				if (i >= 0) this.scrollToPage(i);
 			},
 			changed: () => this.refreshUi(),
-			ended: (path, course) => void this.lectureEnded(path, course),
+			ended: (end) => this.onLectureEnd(end),
 			memory: { load: (): unknown => this.app.loadLocalStorage(LECTURE_MEMORY_KEY), save: (v) => this.app.saveLocalStorage(LECTURE_MEMORY_KEY, v) },
 		});
 		this.mountExcerpts();
@@ -1294,8 +1297,39 @@ export class NotebookView extends FileView {
 		}
 	}
 
+	/** The snapshot a closing notebook asked for: made once closeSession has written the file (see onLectureEnd). */
+	private snapshotAfterClose: { path: string; course: string } | null = null;
+
+	/**
+	 * 0.19 (#221, 222): the one lecture end. The log line comes first, from the open document in memory. The snapshot reads the
+	 * saved file, so it waits for the flush: for a lecture left or over the view flushes here; for a closing notebook closeSession
+	 * is the flush and onUnloadFile asks for the snapshot once it resolved.
+	 */
+	private onLectureEnd(end: LectureEnd): void {
+		routeLectureEnd(end, {
+			log: (cls) => this.logLecture(cls),
+			snapshotAfterFlush: (path, course) => void this.snapshotAfterFlush(path, course),
+			snapshotAfterClose: (path, course) => {
+				this.snapshotAfterClose = { path, course };
+			},
+		});
+	}
+
+	/** The facts of the lecture in the open document, handed to the lecture log (a no-op without the lecture page or the log). */
+	private logLecture(cls: LectureClass): void {
+		const file = this.file;
+		const doc = this.session?.doc;
+		if (!file || !doc || !this.host.logLecture) return;
+		const snap = lectureSnapshot(doc.pages, cls.course, new Date(cls.startsAt));
+		if (snap) this.host.logLecture(file, cls, snap);
+	}
+
 	async onUnloadFile(file: TFile): Promise<void> {
+		this.lectureMode?.closing();
 		await this.closeSession();
+		const pending = this.snapshotAfterClose;
+		this.snapshotAfterClose = null;
+		if (pending) this.host.lectureEnded?.(pending.path, pending.course, this.closedSaved);
 		this.activePenSetId = null;
 		// wave 0.10 (51): read-only mode belongs to the notebook being read; the next one opens editable.
 		if (this.userReadOnly) this.setReadOnlyMode(false, false);
@@ -1336,10 +1370,10 @@ export class NotebookView extends FileView {
 	private closedSaved = false;
 
 	/**
-	 * 0.19 (222): a lecture ended here. Writes everything first and tells the plugin whether it all reached the file; the
-	 * snapshot itself is made from the file on disk, never from this view's memory.
+	 * 0.19 (222): writes everything first and tells the plugin whether it all reached the file; the snapshot itself is made
+	 * from the file on disk, never from this view's memory.
 	 */
-	private async lectureEnded(path: string, course: string): Promise<void> {
+	private async snapshotAfterFlush(path: string, course: string): Promise<void> {
 		let saved = this.closedSaved;
 		const session = this.session;
 		if (session) {
@@ -1358,6 +1392,7 @@ export class NotebookView extends FileView {
 		this.controller?.finishActiveStroke();
 		this.commitText();
 		const session = this.session;
+		this.closedSaved = false;
 		if (!session) return;
 		try {
 			// Obsidian may close the view for a deleted file before our 'delete' handler runs.

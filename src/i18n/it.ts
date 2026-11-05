@@ -3577,4 +3577,15 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"history.filter.lecture": "Istantanee di lezione",
 	"history.filter.lecture.hint": "Mostra solo le istantanee fatte a fine lezione",
 	"history.filter.none": "Ancora nessuna istantanea di lezione di questo quaderno.",
+	// 0.19 lecturelog
+	"settings.lectureLog": "Registro delle lezioni nella nota giornaliera",
+	"settings.lectureLog.desc": "A fine lezione aggiunge una riga alla nota giornaliera: orario, corso, pagine.",
+	"settings.lectureLogHeading": "Titolo del registro lezioni",
+	"settings.lectureLogHeading.desc": "Il titolo sotto cui vanno le righe. Se manca, viene aggiunto in fondo alla nota.",
+	"lectureLog.page": "p. {n}",
+	"lectureLog.pages": "pp. {from}–{to}",
+	"lectureLog.count.page": "1 pagina",
+	"lectureLog.count.pages": "{n} pagine",
+	"lectureLog.count.question": "1 domanda aperta",
+	"lectureLog.count.questions": "{n} domande aperte",
 };
