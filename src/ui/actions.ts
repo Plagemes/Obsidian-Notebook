@@ -427,6 +427,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "share-insert-embed", label: "share.insertEmbed", icon: "picture-in-picture", group: "share", surfaces: ["page"], priority: 35, scope: "view", readOnly: true },
 	// wave 0.9 (385): Obsidian's own Bookmarks pane (core plugin, feature-detected in integration/obsidian-bookmarks.ts).
 	{ id: "obsidian-bookmark-page", label: "bookmarks.add", icon: "bookmark-check", group: "share", surfaces: ["page", "sheet", "palette"], priority: 33, scope: "view", command: true, readOnly: true, keywords: "bookmarks pane obsidian star favourite" },
+	// 0.20 (#30): the page, the selection or some pages as PNG or PDF through the system share sheet (a saved copy where the device cannot share files).
+	{ id: "share-page", label: "share.menu", icon: "share-2", group: "share", surfaces: ["page", "sheet", "palette"], priority: 36, scope: "view", command: true, readOnly: true, keywords: "share send png pdf image page whatsapp mail condividi invia immagine" },
+	{ id: "share-selection", label: "share.selectionMenu", icon: "share-2", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 40.3, scope: "view", command: true, readOnly: true, when: hasSelection, keywords: "share send selection png image condividi invia selezione immagine" },
 	{ id: "export-page-pdf", label: "export.pagePdf", icon: "file-output", group: "share", surfaces: ["page"], priority: 30, scope: "view", readOnly: true },
 	{ id: "export-page-svg", label: "export.pageSvg", icon: "image", group: "share", surfaces: ["page"], priority: 20, scope: "view", readOnly: true },
 	{ id: "export-pdf", label: "export.notebookPdf", icon: "file-down", group: "share", surfaces: ["sheet", "notebook"], priority: 30, scope: "view", command: "command.exportPdf", readOnly: true },

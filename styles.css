@@ -17454,3 +17454,34 @@ body.notebook-style-obsidian {
 .nb-ui.nb-drop-zone.is-blocked .nb-drop-ring {
 	display: none;
 }
+
+/* ===== 0.20 share ===== */
+.nb-ui.nb-share-notice {
+	display: flex;
+	flex-direction: column;
+	gap: var(--nb-space-2, 8px);
+}
+
+.nb-ui.nb-share-notice .nb-share-notice-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--nb-space-2, 8px);
+}
+
+.nb-ui.nb-share-notice .nb-share-notice-btn {
+	min-height: 36px;
+	padding: 0 var(--nb-space-3, 14px);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill, 999px);
+	background: var(--nb-bg-elevated);
+	color: var(--nb-text);
+	font-size: var(--font-ui-small, 13px);
+	cursor: pointer;
+	box-shadow: none;
+}
+
+.nb-ui.nb-share-notice .nb-share-notice-btn.mod-cta {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent);
+	color: var(--nb-on-accent, #fff);
+}

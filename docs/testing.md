@@ -2973,3 +2973,28 @@ Manual steps (hardware / real Obsidian; nothing here is verified on Android).
 | Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
 |---|---|---|---|---|---|
 | Drag files onto a page (#79): pictures at the drop point (cascade), PDF choice (pages / images / annotate), explorer files, note links, frame, one notice for what is left out | yes | type routing, caps, cascade, page-coordinate mapping: yes; view wiring: harness (`doc=dropfiles`) with synthetic DragEvents; explorer drag (`app.dragManager`, not public API) and Android: no | | yes (explorer drag relies on an internal Obsidian field) | |
+
+### 0.20 — share: Share page… (steps 1720-1739)
+
+Quick share of a page as PNG or PDF (#30). Implemented, **the system share sheet needs hardware verification** (it only exists in the Android WebView / Chrome; the harness replaces `navigator.share` with a recorder). Reference screenshots after `npm run harness:check` (`HARNESS_DOC=share`): `dev/harness/dist/shots/` (the dialog on *Some pages*, tablet and phone, dark and light).
+
+1720. **From the page menu.** Open the page sheet of a page and choose *Share page…* (also in the command palette): a dialog with *What to share* (Page N, Some pages…), *Format* (PNG image, PDF), *Clean copy*, and a button *Share* on a tablet that can share files.
+1721. **PNG through the share sheet.** Choose PNG and tap *Share*: the Android share sheet opens with one image named "<notebook> p3.png". Send it to an app (Gmail, Drive, Messages): the picture is the page as in *Export…* (paper, ink, pictures, equations, header). Nothing new appears in the vault.
+1722. **PDF through the share sheet.** Choose PDF and share: one "<notebook> p3.pdf" opens in the receiving app with the page.
+1723. **Closing the share sheet.** Open the share sheet and dismiss it (back, or tap outside): no notice, no file in the vault.
+1724. **Some pages.** *Some pages…* with "1-3, 5" and PDF: one PDF named "<notebook> p1-3+5.pdf" with those pages. With PNG: one image per page ("p1.png"…), all offered in the same share sheet. More than 10 pages as PNG are refused with a sentence that suggests PDF; an empty or wrong range is refused with the usual range sentence.
+1725. **Selection.** Select something with the lasso: the selection menu has *Share selection…*; the dialog opens on *The selection (page N)*, the format is not asked, and the shared PNG is the region around the selection (with a little margin), named "<notebook> p3 selection.png". From the page menu of the same page the dialog also offers the selection; from another page it does not.
+1726. **Clean copy.** With *Clean copy* on, markers, margin comments and collapsed sticky notes are missing from the shared image or PDF (as in step 1621); with it off they are there. Nothing changes in the notebook.
+1727. **Slow draw.** Share a PDF of many pages with a PDF background (drawing takes a few seconds): if Android refuses the share because the tap is too old, a notice "Ready to share." with a *Share* button appears; tapping it opens the share sheet with the same file. No second drawing.
+1728. **Large file.** Share a PDF bigger than 25 MB (many pages with large pictures): a notice warns about the size; the share still goes ahead.
+1729. **No file sharing (desktop).** On Windows (or in a browser without file sharing) the button reads *Save a copy*; it saves "Maths (PNG)/page-003.png" (images) or "<notebook> p3.pdf" next to the notebook, with the export naming (" 2" if taken), and a notice with *Open* (opens the file in Obsidian) and, for one image, *Copy image* (the image is on the clipboard: paste it into a chat or a document). A name that exists is never overwritten.
+1730. **Share sheet refuses.** If the share sheet fails with an error other than closing it, a copy is saved as in 1729 and the notice says the share sheet failed.
+1731. **Remembered.** Choose PDF with *Clean copy* on, share, open the dialog again: the same format and switch are set (per device; another device keeps its own). A remembered "selection" with nothing selected opens on the page.
+1732. **Read-only mode and locked pages.** In read-only mode and on a locked page *Share page…* works (it only reads).
+1733. **Italian.** In Italian: *Condividi pagina…*, *Condividi selezione…*, *Salva una copia*, *Copia immagine*.
+1734. **Notebook unchanged.** After any of the above the notebook file and the undo history are unchanged.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Share page… / Share selection… (#30): PNG or PDF of the page, the selection or some pages, drawn by the export pipeline (clean copy supported), handed to `navigator.share({ files })` | yes | choice/plan/names/canShare decision/size/error reading/local storage: `tests/share-page.test.ts`; dialog and both branches with a stubbed `navigator.share`: harness (`doc=share`) | | | the real Android share sheet (and its tap-too-old rule, step 1727) is untested |
+| Share fallback: copy saved in the vault with the export names, notice with Open and Copy image (PNG) | yes | harness (`doc=share`, saved path and notice) | | | "Open folder" is "Open" (the file): Obsidian has no public API to reveal a folder on Android |
