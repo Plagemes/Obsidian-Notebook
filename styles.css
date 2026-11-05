@@ -16718,3 +16718,272 @@ body.notebook-style-obsidian {
 	width: 14px;
 	height: 14px;
 }
+
+/* ===== 0.20 vdiff ===== */
+/* #121: the visual version diff (view/version-diff-dialog.ts): a summary, a page list and a preview of the chosen page. */
+.nb-ui.nb-vdiff-modal .nb-vdiff-summary {
+	display: flex;
+	flex-direction: column;
+	gap: var(--nb-space-1);
+	margin-bottom: var(--nb-space-3);
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-summary-line.is-same {
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-tools {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--nb-space-2) var(--nb-space-3);
+	margin-bottom: var(--nb-space-3);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-main {
+	display: grid;
+	grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
+	gap: var(--nb-space-3);
+	align-items: start;
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--nb-space-1);
+	max-height: 56vh;
+	overflow-y: auto;
+	padding-right: var(--nb-space-1);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-row {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-2);
+	width: 100%;
+	min-height: var(--nb-target);
+	height: auto;
+	padding: var(--nb-space-2) var(--nb-space-3);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	box-shadow: none;
+	color: var(--nb-text);
+	text-align: left;
+	cursor: pointer;
+	transition: border-color var(--nb-motion-fast) var(--nb-ease), background var(--nb-motion-fast) var(--nb-ease);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-row:hover {
+	border-color: var(--nb-border-strong);
+	background: var(--nb-hover);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-row.is-selected {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-dot {
+	flex: none;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: var(--nb-text-faint);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-row.is-added .nb-vdiff-dot {
+	background: var(--nb-success);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-row.is-removed .nb-vdiff-dot {
+	background: var(--nb-danger);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-row.is-modified .nb-vdiff-dot,
+.nb-ui.nb-vdiff-modal .nb-vdiff-row.is-reordered .nb-vdiff-dot {
+	background: var(--nb-star);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-row.is-unchanged:not(.is-reordered) .nb-vdiff-dot {
+	background: transparent;
+	box-shadow: inset 0 0 0 1px var(--nb-text-faint);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-row-text {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-row-title {
+	font-size: var(--nb-fs-row);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-row-status {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-row-counts {
+	flex: none;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	font-variant-numeric: tabular-nums;
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-stage {
+	display: flex;
+	flex-direction: column;
+	gap: var(--nb-space-2);
+	min-width: 0;
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-stage-head {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-2);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-stage-title {
+	display: flex;
+	flex: 1;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: center;
+	gap: var(--nb-space-1) var(--nb-space-2);
+	min-width: 0;
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-stage-page {
+	font-weight: 600;
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-stage-status {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-stage-status.is-added {
+	color: var(--nb-success);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-stage-status.is-removed {
+	color: var(--nb-danger);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-nav {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: var(--nb-target);
+	height: var(--nb-target);
+	padding: 0;
+	border: 1px solid var(--nb-border);
+	border-radius: 50%;
+	background: var(--nb-tile);
+	box-shadow: none;
+	color: var(--nb-text);
+	cursor: pointer;
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-nav:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-nav-icon {
+	width: 8px;
+	height: 8px;
+	border-top: 2px solid currentColor;
+	border-left: 2px solid currentColor;
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-nav-icon.is-left {
+	transform: translateX(2px) rotate(-45deg);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-nav-icon.is-right {
+	transform: translateX(-2px) rotate(135deg);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-legend {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: var(--nb-space-1) var(--nb-space-3);
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-legend-item {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--nb-space-1);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-swatch {
+	width: 12px;
+	height: 12px;
+	border: 2px solid var(--nb-text-faint);
+	border-radius: 3px;
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-swatch.is-added {
+	border-color: var(--nb-success);
+	background: var(--nb-success);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-swatch.is-removed {
+	border-color: var(--nb-danger);
+	background: transparent;
+	border-style: dashed;
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-swatch.is-changed {
+	border-color: var(--nb-star);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-canvas-wrap {
+	display: flex;
+	justify-content: center;
+	max-height: 56vh;
+	overflow: auto;
+	padding: var(--nb-space-2);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-bg-elevated);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-canvas {
+	display: block;
+	max-width: 100%;
+	height: auto;
+	border-radius: 4px;
+	box-shadow: var(--nb-shadow-1, 0 1px 2px rgba(0, 0, 0, 0.12));
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-props,
+.nb-ui.nb-vdiff-modal .nb-vdiff-preview-note {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.nb-vdiff-modal .nb-vdiff-preview-note {
+	margin-top: var(--nb-space-3);
+}
+
+@media (max-width: 640px) {
+	.nb-ui.nb-vdiff-modal .nb-vdiff-main {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.nb-ui.nb-vdiff-modal .nb-vdiff-list {
+		max-height: 24vh;
+	}
+}

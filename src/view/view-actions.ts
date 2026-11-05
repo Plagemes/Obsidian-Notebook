@@ -6,7 +6,7 @@ import { t } from "../i18n";
 import { addPageToObsidianBookmarks } from "../integration/obsidian-bookmarks";
 import { PageQrModal, pageQrUri } from "./qr-modal";
 import { copyPageLink, insertPageIntoNote } from "../integration/page-share";
-import { openPageRestore } from "../integration/reliability";
+import { openCompare, openPageRestore } from "../integration/reliability";
 import { cloneMeta } from "../model/document";
 import { AddPage, DeletePage, MovePage, SetMeta, SetPageInfinite, SetPageSize, SetPaper } from "../model/history";
 import { duplicatePage } from "../model/pages";
@@ -275,6 +275,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 		if (doc) savePageAsTemplate(v.pageToolsHost(), doc, p, v.file?.basename ?? "");
 	}),
 	"page-restore-version": onPage((v, _p, i) => openPageRestore(v.reliabilityDeps(), v, i)),
+	"page-compare-version": (v) => openCompare(v.reliabilityDeps(), v, false),
 	"page-deleted-pages": (v) => void openDeletedPages(v.pageToolsHost()),
 	// practice copies (wave 0.9, view/practice.ts)
 	"practice-redo": onPage((v, _p, i) => void v.practiceHooks?.redo(i)),
