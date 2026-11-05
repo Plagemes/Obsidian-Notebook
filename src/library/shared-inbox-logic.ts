@@ -101,6 +101,9 @@ export function isInboxCandidate(path: string, ctx: InboxContext): boolean {
 	if (isHiddenNotebookPath(path, ctx.notebooksFolder, ctx.templatesFolder, ctx.notebookTemplatesFolder)) return false;
 	// What the plugin itself wrote in this folder (a digest crop, an exported page picture or PDF): by its record and by its name.
 	if (isPluginPictureName(name) || ctx.pluginWritten?.has(path.toLowerCase())) return false;
+	// The heading pictures of a companion note live in `<Notebook> (Headings)`: that folder is the plugin's, so its files are not
+	// recorded one by one (the record is bounded) but recognised by the folder.
+	if (path.split("/").some((s) => / \(Headings\)$/i.test(s))) return false;
 	// A `_` folder is the plugin's (or the user's) own storage, never a drop place.
 	if (ctx.folder.split("/").some((s) => s.startsWith("_"))) return false;
 	// An exported PDF is named after its notebook ("Maths.pdf", "Maths 2.pdf") and sits next to it.

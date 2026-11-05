@@ -188,6 +188,11 @@ export class OutlineBuilder {
 		return this.index.warm(pages, budgetMs, now);
 	}
 
+	/** 0.20 review (D1): the per-page analysis this builder keeps, so the companion note can reuse the work of an open notebook. */
+	headingIndex(): HeadingIndex {
+		return this.index;
+	}
+
 	/** 0.20: pages whose headings would have to be analysed by the next build. */
 	pending(pages: readonly Page[]): number {
 		return this.index.pending(pages);
