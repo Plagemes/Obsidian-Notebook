@@ -8,6 +8,7 @@
  * actions, after reading it again (see `textbook-store.ts`). The notebook format is not touched.
  */
 import { layoutText, type MeasureText } from "../ink/text-layout";
+import { shownText } from "../ink/wikilink";
 
 // ---------------------------------------------------------------------------------------------------- references
 
@@ -67,13 +68,17 @@ export interface PlacedRef extends PageRef {
  * Where each page reference of a text box is drawn. The box is laid out with the same function that draws it
  * (`layoutText`); a reference is found on the line where it ends, from the width of the text before it, and when it was
  * wrapped across two lines only the part on its last line counts.
+ *
+ * 0.20 review (N4): the box is drawn as `shownText` (a wikilink shows its label), so the search and the layout work on that text,
+ * and a match inside a link label is skipped: the tap there belongs to the link, not to the textbook.
  */
 export function placeRefs(
 	el: { x: number; y: number; width: number; fontSize: number; text: string },
 	measure: (s: string) => number,
 ): PlacedRef[] {
-	const text = el.text.replace(/\r\n?/g, "\n");
-	const refs = findPageRefs(text);
+	const shown = shownText(el.text);
+	const text = shown.text;
+	const refs = findPageRefs(text).filter((r) => !shown.links.some((l) => r.start < l.end && r.end > l.start));
 	if (refs.length === 0) return [];
 	const out: PlacedRef[] = [];
 	for (const ref of refs) {

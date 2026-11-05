@@ -2,6 +2,7 @@ import { copiedCheckbox } from "../model/checklist";
 import { createId } from "../model/document";
 import { AddAsset, AddElement, AddStroke, Batch, type Command } from "../model/history";
 import { elementAssetId, withElementAsset } from "../model/excerpts";
+import { groupRenamer } from "../model/groups";
 import { copyStroke as copyStrokeWithId } from "../model/pages";
 import { freezeElement, freezeStroke } from "../model/serialize";
 import type { Asset, Page, PageElement, Stroke } from "../model/types";
@@ -84,6 +85,9 @@ export function instantiateClip(
 ): { strokes: Stroke[]; elements: PageElement[] } {
 	const m = scale === 1 ? translate(dx, dy) : multiply(translate(dx, dy), scaleAbout(scale, scale, clip.bounds.minX, clip.bounds.minY));
 	const newIds = new Map<string, string>();
+	// v18: a pasted or duplicated set of items belongs to groups of its own (new ids, the same one for the members that shared one);
+	// a lock is kept.
+	const regroup = groupRenamer();
 	const elements = clip.elements.map((e) => {
 		const moved = transformElement(e, m, measure);
 		// Images and (v10) excerpt snapshots stored again under another id are renamed.
@@ -92,14 +96,15 @@ export function instantiateClip(
 		const id = createId();
 		if (e.type === "graph") newIds.set(e.id, id);
 		// v17: a pasted checkbox keeps its tick but never the link to the task line of the original.
-		if (base.type === "checkbox") return freezeElement(copiedCheckbox(base, id));
-		return freezeElement({ ...base, id });
+		const copy = base.type === "checkbox" ? copiedCheckbox(base, id) : { ...base, id };
+		if (copy.group !== undefined) copy.group = regroup(copy.group);
+		return freezeElement(copy);
 	});
 	const strokeIds = new Map<string, string>();
 	const strokes = clip.strokes.map((s) => {
 		const graph = boundGraphId(s);
 		const owner = graph === null ? undefined : newIds.get(graph);
-		const stroke = freezeStroke({ ...transformStroke(s, m), id: owner === undefined ? createId() : `${owner}${BOUND_SEPARATOR}${createId()}` });
+		const stroke = freezeStroke({ ...transformStroke(s, m), id: owner === undefined ? createId() : `${owner}${BOUND_SEPARATOR}${createId()}`, ...(s.group === undefined ? {} : { group: regroup(s.group) }) });
 		strokeIds.set(s.id, stroke.id);
 		return stroke;
 	});

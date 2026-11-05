@@ -15,6 +15,7 @@ import { quickDocId } from "../storage/history";
 import { isInTrash, isWithin, notebookTemplatesFolderPath, templatesFolderPath } from "../storage/trash-paths";
 import { ensureFolder } from "../storage/vault-io";
 import { isCardFrontmatter } from "../zettel/card-content";
+import { CompanionHeadings } from "./companion-headings";
 import { notebookUri } from "./links";
 import { viewsOf } from "./open";
 import { showNotice } from "../view/notice";
@@ -91,6 +92,8 @@ export class CompanionService {
 	private kept: string[] = [];
 	private keptTimer: number | null = null;
 	private disposed = false;
+	/** 0.20 (#102): the pictures of handwritten headings (made on first use, when the setting is on). */
+	private headingPics: CompanionHeadings | null = null;
 
 	constructor(private readonly plugin: CompanionHost) {}
 
@@ -201,8 +204,8 @@ export class CompanionService {
 		return result.ok ? result.doc : null;
 	}
 
-	private content(file: TFile, doc: NotebookDocument, homework?: HomeworkNote): CompanionContent {
-		return companionContent(doc, { notebookPath: file.path, pageUri: (page, pageId) => notebookUri("", file.path, page, pageId), searchText: this.plugin.settings.companionSearchText }, homework);
+	private content(file: TFile, doc: NotebookDocument, homework?: HomeworkNote, headingEmbeds?: ReadonlyMap<string, readonly (string | null)[]>): CompanionContent {
+		return companionContent(doc, { notebookPath: file.path, pageUri: (page, pageId) => notebookUri("", file.path, page, pageId), searchText: this.plugin.settings.companionSearchText, ...(headingEmbeds ? { headingEmbeds } : {}) }, homework);
 	}
 
 	/**
@@ -322,8 +325,19 @@ export class CompanionService {
 			return "skipped";
 		}
 
+		// 0.20 (#102): pictures of the handwritten headings, when asked for (never while a pen is down: the update is tried again).
+		let heads: Map<string, Array<string | null>> | undefined;
+		if (this.plugin.settings.companionHeadings) {
+			this.headingPics ??= new CompanionHeadings(this.app);
+			const got = await this.headingPics.embeds(file, "create" in target ? target.create : target.file.path, doc, () => this.input.active() || this.disposed);
+			if (got === null) {
+				this.schedule(file, INPUT_POLL_MS);
+				return "skipped";
+			}
+			heads = got;
+		}
 		if ("create" in target) {
-			const content = this.content(file, doc);
+			const content = this.content(file, doc, undefined, heads);
 			// A new note owns every tag it gets; an existing one records which tags the plugin added (model/tags.ts).
 			const region = (owned: readonly string[]) => renderRegion(content, owned);
 			const dir = target.create.includes("/") ? target.create.slice(0, target.create.lastIndexOf("/")) : "";
@@ -345,7 +359,7 @@ export class CompanionService {
 		const current = doc;
 		// What the note says about its homework counts too: a task ticked there stays ticked (model/companion-content.ts).
 		const plan = (noteText: string) => {
-			const content = this.content(file, current, homeworkFromNote(current, noteText));
+			const content = this.content(file, current, homeworkFromNote(current, noteText), heads);
 			return updateCompanionText(noteText, content, (owned) => renderRegion(content, owned), TEXT_DEPS);
 		};
 		const planned = plan(text);

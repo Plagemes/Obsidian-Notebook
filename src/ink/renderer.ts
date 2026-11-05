@@ -10,7 +10,7 @@ import { drawCheckbox } from "./checkbox-render";
 import { drawEquation, drawGraph, type GraphPalette } from "./math-render";
 import { graphClips, strokeClip } from "./attach";
 import { equationNumbers } from "../model/math-elements";
-import { drawLinkedLines, parseLinks } from "./link-text";
+import { drawLinkedLines, shownText } from "./link-text";
 import { layoutText, type MeasureText } from "./text-layout";
 import { strokeBounds, type BBox } from "./hit-test";
 import { memoColors, nightHighlighter, nightInk, nightLine, NIGHT_BACKGROUND_VEIL, NIGHT_HIGHLIGHTER_ALPHA, NIGHT_PAPER } from "./night";
@@ -24,6 +24,7 @@ import { WetInk, type PageTransform } from "./wet-ink";
 import { ErrorOnce } from "./errors";
 import type { SpacePreviewEntry } from "./space";
 import type { SnapGuide } from "../model/snap";
+import { ghostAlpha, ghostTouchRedraws, GHOST_IDLE_MS, type GhostMode, type GhostSegment } from "../model/ghost-lines";
 import { partMatrix, translate, type Matrix } from "./transform";
 import type { Viewport } from "./viewport";
 
@@ -66,11 +67,12 @@ export function drawTextElement(ctx: CanvasRenderingContext2D, el: TextElement):
 		ctx.font = `${el.fontSize}px ${TEXT_FONT}`;
 		ctx.fillStyle = el.color;
 		ctx.textBaseline = "top";
-		const layout = layoutText(el.text, el.fontSize, el.width, (str) => ctx.measureText(str).width);
-		// Links ([[Note]]) are drawn in their own colour (ink/link-text.ts); text without any takes the plain path.
-		const links = el.text.includes("[[") ? parseLinks(el.text) : [];
-		if (links.length > 0) {
-			drawLinkedLines(ctx, el, layout.lines, layout.lineHeight, links);
+		// A link ([[Note|alias]]) shows its label, not its markup (ink/wikilink.ts); the layout is of what is shown.
+		const shown = el.text.includes("[[") ? shownText(el.text) : null;
+		const layout = layoutText(shown ? shown.text : el.text, el.fontSize, el.width, (str) => ctx.measureText(str).width);
+		// Links are drawn in their own colour (ink/link-text.ts); text without any takes the plain path.
+		if (shown && shown.links.length > 0) {
+			drawLinkedLines(ctx, el, layout.lines, layout.lineHeight, shown);
 			return;
 		}
 		layout.lines.forEach((line, i) => ctx.fillText(line, el.x, el.y + i * layout.lineHeight + (layout.lineHeight - el.fontSize) / 2));
@@ -166,6 +168,20 @@ export interface PeekOverlay {
 	pageIndex: number;
 	strokes: readonly Stroke[];
 }
+
+/** 0.20 (#94): ghost guide lines on blank paper, drawn on the live layer for a moment and never saved or exported. */
+export interface GhostOverlay {
+	pageIndex: number;
+	segments: readonly GhostSegment[];
+	mode: GhostMode;
+	/** `performance.now()` of the last stroke that ended (the guides fade from here in "writing" mode). */
+	since: number;
+}
+/** Shared dash pattern (no allocation per frame). */
+const GHOST_DASH: number[] = [6, 5];
+const GHOST_COLOR = "#64748b";
+const GHOST_COLOR_NIGHT = "#cbd5e1";
+const GHOST_ALPHA = 0.5;
 
 /** Ruler placed on a page, drawn on the live layer (page coordinates). */
 export interface RulerOverlay {
@@ -279,6 +295,8 @@ export class Renderer {
 	private lasso: LassoOverlay | null = null;
 	private selection: SelectionOverlay | null = null;
 	private peek: PeekOverlay | null = null;
+	private ghost: GhostOverlay | null = null;
+	private ghostTimer: number | null = null;
 	private draft: ElementDraft | null = null;
 	/** Content shown shifted while the insert/remove-space tool is dragged (hidden from the static layer meanwhile). */
 	private spacePreview: readonly SpacePreviewEntry[] | null = null;
@@ -700,6 +718,26 @@ export class Renderer {
 		this.schedule();
 	}
 
+	/** 0.20 (#94): shows (or, with null, removes) the ghost guide lines. They fade by themselves in "writing" mode. */
+	setGhost(ghost: GhostOverlay | null): void {
+		this.ghost = ghost;
+		if (this.ghostTimer !== null) { window.clearTimeout(this.ghostTimer); this.ghostTimer = null; }
+		this.liveDirty = true;
+		this.schedule();
+	}
+
+	/** A new stroke began: the guides come back at full strength and the idle time starts again. */
+	touchGhost(now: number): void {
+		if (!this.ghost || this.ghost.since === now) return;
+		// 0.20 review (D4): the guides only need a redraw when they had started to fade; otherwise nothing visible changes and
+		// the first frame of the stroke stays free (the pending timer of "writing" mode re-arms itself from the new time).
+		const fading = ghostTouchRedraws(this.ghost.mode, performance.now() - this.ghost.since);
+		this.ghost = { ...this.ghost, since: now };
+		if (!fading) return;
+		this.liveDirty = true;
+		this.schedule();
+	}
+
 	setLasso(lasso: LassoOverlay | null): void {
 		this.lasso = lasso;
 		this.liveDirty = true;
@@ -791,6 +829,8 @@ export class Renderer {
 		this.wetRelease.length = 0;
 		this.frame = null;
 		this.settleTimer = null;
+		if (this.ghostTimer !== null) window.clearTimeout(this.ghostTimer);
+		this.ghostTimer = null;
 	}
 
 	private schedule(): void {
@@ -1099,6 +1139,10 @@ export class Renderer {
 		const boxes = this.layout?.boxes;
 		if (!boxes) return;
 
+		// 0.20 (#94): ghost guide lines, under every other overlay.
+		const ghost = this.ghost;
+		if (ghost && boxes[ghost.pageIndex]) this.guarded(ctx, "ghost lines", () => this.drawGhost(ctx, boxes[ghost.pageIndex]!, ghost));
+
 		// Each overlay is guarded on its own (see drawStatic).
 		const sel = this.selection;
 		if (sel && boxes[sel.pageIndex]) this.guarded(ctx, "selection", () => {
@@ -1287,6 +1331,50 @@ export class Renderer {
 			ctx.beginPath();
 			ctx.arc(sx, sy, h / 2, 0, Math.PI * 2);
 			ctx.fill();
+			ctx.stroke();
+		}
+		ctx.restore();
+	}
+
+	/**
+	 * Faint dashed guides in screen space (one pixel wide at any zoom, `devicePixelRatio` aware). In "writing" mode they hold
+	 * for `GHOST_IDLE_MS`, then fade; the next frame is asked for only while fading, never while idle or fully shown.
+	 */
+	private drawGhost(ctx: CanvasRenderingContext2D, box: PageBox, ghost: GhostOverlay): void {
+		const elapsed = performance.now() - ghost.since;
+		const fade = ghostAlpha(ghost.mode, elapsed);
+		if (fade <= 0) {
+			this.ghost = null;
+			return;
+		}
+		if (ghost.mode === "writing") {
+			if (elapsed < GHOST_IDLE_MS) {
+				if (this.ghostTimer === null) {
+					this.ghostTimer = window.setTimeout(() => {
+						this.ghostTimer = null;
+						this.liveDirty = true;
+						this.schedule();
+					}, GHOST_IDLE_MS - elapsed + 1);
+				}
+			} else {
+				this.liveDirty = true;
+				this.schedule();
+			}
+		}
+		const d = this.dpr;
+		ctx.save();
+		ctx.setTransform(d, 0, 0, d, 0, 0);
+		ctx.lineWidth = 1;
+		ctx.lineCap = "round";
+		ctx.setLineDash(GHOST_DASH);
+		ctx.strokeStyle = this.night ? GHOST_COLOR_NIGHT : GHOST_COLOR;
+		for (const s of ghost.segments) {
+			const [x1, y1] = this.pageToScreen(box, s.x1, s.y1);
+			const [x2, y2] = this.pageToScreen(box, s.x2, s.y2);
+			ctx.globalAlpha = GHOST_ALPHA * fade * s.strength;
+			ctx.beginPath();
+			ctx.moveTo(x1, y1);
+			ctx.lineTo(x2, y2);
 			ctx.stroke();
 		}
 		ctx.restore();

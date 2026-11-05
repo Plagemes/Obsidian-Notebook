@@ -8,6 +8,7 @@
  *
  * Pure: no 'obsidian' import (tested in Node). Texts are i18n keys; the tab translates them.
  */
+import { GHOST_SPACINGS_MM } from "../model/ghost-lines";
 import type { MessageKey } from "../i18n/en";
 import { LANGUAGES, LANGUAGE_CODES } from "../i18n/languages";
 import { PAGE_SIZES, PAPER_KINDS } from "../model/types";
@@ -159,6 +160,11 @@ const WRITING: SettingSpec[] = [
 		control: { type: "dropdown", options: (tr) => Object.fromEntries((Object.keys(PAGE_SIZES) as Array<keyof typeof PAGE_SIZES>).map((k) => [k, tr(`size.${k}` as MessageKey)])) },
 	},
 	{ id: "defaultLandscape", section: "writing", order: 30, name: "settings.defaultLandscape", control: { type: "toggle" } },
+	// 0.20 planner (#118)
+	{
+		id: "plannerWeekStart", section: "writing", order: 35, name: "settings.plannerWeekStart", desc: "settings.plannerWeekStart.desc", keywords: "planner calendar week monday sunday agenda settimana lunedi domenica",
+		control: { type: "dropdown", options: options([["auto", "settings.plannerWeekStart.auto"], ["monday", "settings.plannerWeekStart.monday"], ["sunday", "settings.plannerWeekStart.sunday"]]) },
+	},
 	{ id: "stabilization", section: "writing", order: 40, name: "settings.stabilization", desc: "settings.stabilization.filter.desc", control: { type: "slider", min: 0, max: 10, step: 1 } },
 	{ id: "inkFollowsObjects", section: "writing", order: 50, name: "settings.inkFollows", desc: "settings.inkFollows.desc", control: { type: "toggle" } },
 	// 0.17 snap (#71): magnetic snap to the paper grid and alignment guides while a selection moves or scales
@@ -169,6 +175,15 @@ const WRITING: SettingSpec[] = [
 	{
 		id: "snapStrength", section: "writing", order: 56, name: "settings.snapStrength", desc: "settings.snapStrength.desc",
 		control: { type: "slider", min: SNAP_STRENGTH_MIN, max: SNAP_STRENGTH_MAX, step: SNAP_STRENGTH_STEP, format: suffix("px") }, parent: "snapMode", visible: (s) => s.snapMode !== "off",
+	},
+	// 0.20 ghost lines (#94): faint temporary guide lines on blank paper
+	{
+		id: "ghostLines", section: "writing", order: 57, name: "settings.ghostLines", desc: "settings.ghostLines.desc", keywords: "ghost guide lines baseline straight blank paper handwriting righe guida linee scrittura dritta",
+		control: { type: "dropdown", options: options([["off", "settings.ghostLines.off"], ["writing", "settings.ghostLines.writing"], ["always", "settings.ghostLines.always"]]) },
+	},
+	{
+		id: "ghostSpacing", section: "writing", order: 57.5, name: "settings.ghostSpacing", desc: "settings.ghostSpacing.desc",
+		control: { type: "dropdown", options: (tr) => ({ auto: tr("settings.ghostSpacing.auto"), ...Object.fromEntries(GHOST_SPACINGS_MM.map((mm) => [String(mm), `${mm} mm`])) }) }, parent: "ghostLines", visible: (s) => s.ghostLines !== "off",
 	},
 	// 0.19 checklists (#103): a small square drawn with the pen
 	{
@@ -317,6 +332,8 @@ const READING: SettingSpec[] = [
 	// 0.18 (#86): margin comments.
 	{ id: "commentMarkers", section: "reading", order: 70, name: "settings.commentMarkers", desc: "settings.commentMarkers.desc", control: { type: "toggle" }, keywords: "comments markers margin review commenti margine revisione" },
 	{ id: "commentsInPdf", section: "reading", order: 71, name: "settings.commentsInPdf", desc: "settings.commentsInPdf.desc", control: { type: "toggle" }, keywords: "comments pdf markdown export margin notes commenti esporta note a margine" },
+	// 0.20 refwindow (#107): the floating reference window.
+	{ id: "refWindowSnap", section: "reading", order: 75, name: "settings.refWindowSnap", desc: "settings.refWindowSnap.desc", control: { type: "toggle" }, keywords: "reference window floating snap edges finestra riferimento aggancio bordi" },
 
 	// 0.16 (#46): links of PDF pages.
 	{ id: "pdfLinks", section: "reading", order: 45, name: "settings.pdfLinks", desc: "settings.pdfLinks.desc", control: { type: "toggle" }, keywords: "pdf link internal external collegamenti url" },
@@ -387,6 +404,7 @@ const INTEGRATION: SettingSpec[] = [
 	{ id: "companionName", section: "integration", order: 23, name: "settings.companionName", desc: "settings.companionName.desc", control: { type: "text", placeholder: NAME_TOKEN }, parent: "companionNotes", visible: companionOn },
 	// 0.19 search (O19)
 	{ id: "companionSearchText", section: "integration", order: 23.5, name: "settings.companionSearchText", desc: "settings.companionSearchText.desc", control: { type: "toggle" }, parent: "companionNotes", visible: companionOn, keywords: "search find sticky comments equations ricerca" },
+	{ id: "companionHeadings", section: "integration", order: 23.6, name: "settings.companionHeadings", desc: "settings.companionHeadings.desc", control: { type: "toggle" }, parent: "companionNotes", visible: companionOn, keywords: "headings titles titoli handwriting scrittura pictures immagini" },
 	{
 		id: "companionUpdateAll", section: "integration", order: 24, name: "settings.companionUpdateAll", desc: "settings.companionUpdateAll.desc",
 		control: { type: "action", run: "companion-update-all", button: "settings.companionUpdateAll.button" }, parent: "companionNotes", visible: companionOn,

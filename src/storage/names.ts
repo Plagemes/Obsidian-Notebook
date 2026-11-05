@@ -2,6 +2,7 @@
  * File and folder names of new notebooks and folders, kept pure (no 'obsidian') so the creation dialog's check and the
  * code that creates the file agree, and both are tested in Node.
  */
+import { expandPlaceholders } from "../model/notebook-template";
 
 /** Characters Obsidian does not allow in file names, plus those that break links. */
 const FORBIDDEN = /[\\/:*?"<>|#^[\]]/g;
@@ -9,6 +10,15 @@ const FORBIDDEN = /[\\/:*?"<>|#^[\]]/g;
 /** The name a notebook file gets: forbidden characters become spaces, runs of spaces one, no leading dots. */
 export function sanitizeName(name: string): string {
 	return name.replace(FORBIDDEN, " ").replace(/\s+/g, " ").trim().replace(/^\.+/, "");
+}
+
+/**
+ * 0.20 review (D8): the file name (without extension) a notebook gets from the name typed when a template or a planner is
+ * created: the placeholders (`{{year}}`, `{{date}}`) are filled in first, then the name is made safe. The planner's page links
+ * name this file, so they must be computed with the same steps the creation takes.
+ */
+export function createdNotebookName(typed: string, now: Date = new Date()): string {
+	return sanitizeName(expandPlaceholders(typed.trim(), now));
 }
 
 /** Windows device names (with or without an extension): such a file cannot be created or synced to Windows. */

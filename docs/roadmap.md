@@ -121,7 +121,7 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 
 ### Capture and sharing
 29. 🧪 **P1** Scan into the notebook: the camera scan goes straight into the notebook as a page whose background is the cropped, perspective-corrected and enhanced photo (like a PDF page), so you write on it, reorder it in the navigator and export it like any other page. A multi-sheet session adds consecutive pages after the current one; alternatively a scan can be placed as an image on the current page. Enhancement filters: original, document (high-contrast black and white), whiteboard.
-30. **P2** Quick share of a page as PNG or PDF through the Android share sheet.
+30. **P2** 🧪 Quick share of a page as PNG or PDF through the Android share sheet. *(0.20: "Share page…" in the page menu, the sheet and the palette, and "Share selection…" in the selection menu: PNG or PDF of the page, the selection or some pages through `navigator.share({ files })`; where file sharing is not available a copy is saved in the vault. Needs hardware verification of the share sheet.)*
 
 ## M8 — More features (backlog, planned 2026-10-29)
 
@@ -138,7 +138,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 36. **P1** 🧪 Auto-scroll while writing near the bottom of the screen.
 37. **P2** Filled shapes and dashed or dotted lines.
 38. **P2** 🧪 Align and distribute the selection.
-39. **P2** Group elements and lock elements (for example a background image that must not move).
+39. **P2** 🧪 Group elements and lock elements (for example a background image that must not move). (0.20, format v18: an optional `group` on strokes and elements and `locked` on elements. *Group* / *Ungroup* / *Lock* in the selection bar; a tap or the lasso on one member picks the whole group; the lasso, a tap and the area eraser skip a locked element; a *Locked · Unlock* chip on a tap and *Locked elements…* in the page menu unlock.)
 40. **P2** Layers: annotations on a layer separate from the PDF, which can be hidden or locked.
 41. **P2** Hand-drawn tables: insert a grid of cells and write inside it.
 42. **P3** Symbol keyboard (Greek, maths) for text boxes.
@@ -196,7 +196,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 76. **P2** Rotate and crop imported PDF pages.
 77. **P2** 🧪 Merge notebooks, split a notebook, extract pages into a new notebook.
 78. **P2** 🧪 Move a selection to another page.
-79. **P2** Drag files (images, PDFs) straight onto a page.
+79. **P2** 🧪 Drag files (images, PDFs) straight onto a page.
 80. **P2** 🧪 Bulk import in the library: drop many PDFs or images and they become notebooks.
 81. **P2** 🧪 Export all pages as PNG images, and print.
 82. **P3** Portable package: a .zip with the notebook and its assets, to move it to another vault.
@@ -244,7 +244,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 91. **P1** 🧪 Insert or remove space: drag a line and everything below moves down (onto the next page if needed) or back up.
 92. **P2** Handwriting reflow: handwritten lines re-wrap to a different width like text, words found from the gaps between strokes.
 93. **P2** Align to baseline: crooked handwritten words are moved onto a common baseline.
-94. **P2** Ghost guide lines on blank paper: they appear while writing and fade when you stop.
+94. **P2** 🧪 Ghost guide lines on blank paper: they appear while writing and fade when you stop.
 95. **P1** 🧪 Automatic next page: writing at the bottom of the last page appends a new page (different from infinite pages).
 96. **P2** Strike-through as logical deletion: a line over a word marks it as deleted; it stays readable struck through and can be hidden.
 97. **P1** 🧪 Selective eraser: erase only one kind of ink (only highlighter, only one colour) and leave the rest.
@@ -252,14 +252,14 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 99. **P2** Area highlighter: translucent rectangles, ideal on scanned PDFs.
 100. **P1** 🧪 Invisible ink for self-testing: write answers with a hidden pen and reveal them with "show solutions".
 101. **P2** Colours with meaning: define what each colour means (red = definition, blue = example), filter the view by it and generate a digest per colour.
-102. **P2** Headings from handwriting size (no OCR): lines written large become outline entries, shown as images of the ink.
+102. **P2** 🧪 Headings from handwriting size (no OCR): lines written large become outline entries, shown as images of the ink.
 103. **P2** 🧪 Handwritten checklists: a drawn square becomes a tappable checkbox, linked to Obsidian tasks (0.19, format v17: element `checkbox`, offered or automatic from a drawn square, tap to tick, label ink, "Send to tasks" with the tick following into the note, "Open items" filter in the notebook map).
 
 ### B. PDF and study material
 104. **P1** 🧪 Expandable margins on PDFs: widen a PDF page sideways to annotate without covering the text.
 105. **P1** 🧪 Anchored excerpts: cut a region of a PDF, drop it on another page as an excerpt; tapping the excerpt jumps back to the exact source location.
 106. **P1** 🧪 Synchronised PDF ↔ notes view: the PDF on one side and the linked note pages on the other; turning a PDF page follows on the notes side.
-107. **P2** Floating reference window: another page or notebook stays visible while you write.
+107. **P2** 🧪 Floating reference window: another page or notebook stays visible while you write.
 108. ~~**P3** Read the PDF text aloud with the system's speech synthesis, offline.~~ — dropped (user decision, 2026-10-29)
 109. ~~**P3** Reading ruler on PDFs: highlights the line being read (accessibility, dyslexia).~~ — dropped (user decision, 2026-10-29)
 
@@ -274,12 +274,12 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 115. **P1** 🧪 Class timetable: define the weekly timetable; new pages are tagged with the course in progress, and opening the app during a class opens that course's notebook on a new page.
 116. ~~**P1** Exam review plan: set an exam date per notebook and its pages are spread over the remaining days for review.~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
 117. ~~**P2** Review coverage map: thumbnails coloured from "never reviewed" to "reviewed often".~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
-118. **P2** Planner generator: a planner notebook with dated month, week and day pages linked to each other.
+118. **P2** 🧪 Planner generator: a planner notebook with dated month, week and day pages linked to each other. New **Planner** tab in the creation dialog: year, calendar or academic year, language (English, Italian), week start, size, sections (year overview, monthly calendars, weekly spreads, daily pages, notes); pages link year to month to week to day and back (page links in text boxes), outline bookmarks per month, no format change. The link text shows its label on the page.
 119. **P1** 🧪 Page tags: tags on single pages, filterable in the navigator and in search.
 120. **P2** 🧪 Smart collections in the library: saved rules (tag + folder + period + favourite). Notebook type / template is not a rule yet.
 
 ### E. Versions, review, collaboration
-121. **P2** Visual version diff: additions in green, removals in red, between the current version and a snapshot.
+121. **P2** 🧪 Visual version diff: additions in green, removals in red, between the current version and a snapshot. Compare with a version or two versions: a page list (added, removed, modified, counts), before/overlay/after view, restore this page through the page-restore path.
 122. **P1** 🧪 Merge conflicted copies created by Google Drive or OneDrive: compare both copies and merge the strokes (by id) without losing anything.
 123. **P3** Stroke authors in notebooks shared through a common folder: filter and colour by person or device.
 124. **P2** 🧪 Lock a finished page (0.16, format v14: `Page.locked`, one guard in the history, lock badge, page sheet / pages panel / notebook map / command).

@@ -6,7 +6,7 @@ import { t } from "../i18n";
 import { addPageToObsidianBookmarks } from "../integration/obsidian-bookmarks";
 import { PageQrModal, pageQrUri } from "./qr-modal";
 import { copyPageLink, insertPageIntoNote } from "../integration/page-share";
-import { openPageRestore } from "../integration/reliability";
+import { openCompare, openPageRestore } from "../integration/reliability";
 import { cloneMeta } from "../model/document";
 import { AddPage, DeletePage, MovePage, SetMeta, SetPageInfinite, SetPageSize, SetPaper } from "../model/history";
 import { duplicatePage } from "../model/pages";
@@ -19,6 +19,7 @@ import { editBookmark, editPageTags } from "./outline";
 import { exportPdfAnnotations, openMarginsModal, updatePdfFromNewVersion } from "./pdf-actions";
 import { openSlideStripOf, pdfSideState, runPdfSideAction, type PdfSideAction } from "./pdf-sync";
 import { saveNotebookAsTemplate } from "./notebook-templates";
+import { ReferencePickerModal } from "./ref-window-picker";
 import { deletePageKeepingCopy, newPageFromTemplate, openDeletedPages, savePageAsTemplate } from "./page-tools";
 import { insertReference, openPage, removeTextbook, setTextbook } from "./textbook-ref-ui";
 import { toggleBookmark } from "./view-helpers";
@@ -37,7 +38,7 @@ export function sizeName(page: Page): PageSizeName | null {
 }
 
 /** The commands that work on a selection (layer order; wave 0.10: align, distribute, rotate, mirror, size, select similar). */
-const SELECTION_ONLY = /^(layer-|comment-selection$|selection-(move-page|copy-page|align|distribute|rotate|mirror|resize|transform|similar|part)|select-same-)/;
+const SELECTION_ONLY = /^(layer-|comment-selection$|selection-(move-page|copy-page|align|distribute|rotate|mirror|resize|transform|similar|part|group|ungroup|lock)|select-same-)/;
 
 /** Whether a command of the registry applies to this view now (the palette hides it otherwise). */
 export function commandApplies(view: NotebookView, id: string): boolean {
@@ -45,12 +46,16 @@ export function commandApplies(view: NotebookView, id: string): boolean {
 	if (id === "notebook-next" || id === "notebook-previous") return (view.tabTools?.count ?? 0) > 1;
 	if (id === "pdf-side-open") return pdfSideState(view).available;
 	if (id.startsWith("pdf-side-")) return pdfSideState(view).open;
+	// 0.20 (#107): closing needs a reference window to close.
+	if (id === "ref-close") return view.referenceOpen;
 	// wave 0.9 (357): the layer order needs something selected. Wave 0.10: so do arranging it and selecting similar ink.
 	if (SELECTION_ONLY.test(id)) return !!view.uiContext().selection;
 	// v10: "Go to source" needs a selected excerpt.
 	if (id === "excerpt-open-source") return (view.uiContext().selection?.excerpts ?? 0) > 0;
 	// wave 0.10 (362): copying to the other devices needs a selection (pasting does not).
 	if (id === "selection-copy-devices") return !!view.uiContext().selection;
+	// 0.20 (#39): there has to be a locked element on the page in view.
+	if (id === "locked-elements") return (view.uiContext().page?.lockedElements ?? 0) > 0;
 	// 0.18 (#86): there has to be an open comment to go to.
 	if (id === "comment-next") return (view.uiContext().comments?.open ?? 0) > 0;
 	// wave 0.10 (81): there is no print dialog on a phone or tablet.
@@ -211,6 +216,11 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"checkbox-label": (v) => v.checklistTools?.editLabel(),
 	"checkbox-task": (v) => v.checklistTools?.sendTask(),
 	"checkbox-unlink": (v) => v.checklistTools?.unlinkSelected(),
+	// 0.20 (#39): groups and locked elements
+	"selection-group": (v) => v.groupTools?.group(),
+	"selection-ungroup": (v) => v.groupTools?.ungroup(),
+	"selection-lock": (v) => v.groupTools?.lockSelected(),
+	"locked-elements": onPage((v, _p, index) => v.groupTools?.openList(index)),
 	"insert-date-stamp": (v) => v.insertDateStamp(),
 	"stamps": (v) => v.stampPalette?.toggle(),
 	"board-shot": (v) => void v.boardShot(),
@@ -268,6 +278,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 		if (doc) savePageAsTemplate(v.pageToolsHost(), doc, p, v.file?.basename ?? "");
 	}),
 	"page-restore-version": onPage((v, _p, i) => openPageRestore(v.reliabilityDeps(), v, i)),
+	"page-compare-version": (v) => openCompare(v.reliabilityDeps(), v, false),
 	"page-deleted-pages": (v) => void openDeletedPages(v.pageToolsHost()),
 	// practice copies (wave 0.9, view/practice.ts)
 	"practice-redo": onPage((v, _p, i) => void v.practiceHooks?.redo(i)),
@@ -323,6 +334,11 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"pdf-side-show-slide": side("pdf-side-show-slide"),
 	"pdf-side-add-page": side("pdf-side-add-page"),
 	"pdf-side-close": side("pdf-side-close"),
+	// 0.20 refwindow (#107)
+	"ref-open": (v) => new ReferencePickerModal(v.app, (file) => void v.openReference(file)).open(),
+	"ref-page": onPage((v, _p, i) => v.openPageAsReference(i)),
+	"ref-close": (v) => v.closeReference(),
+	"selection-open-reference": (v) => v.openSelectionReference(),
 	// 0.14 slides (#417)
 	"slide-strip": (v) => void openSlideStripOf(v),
 
@@ -373,6 +389,9 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	}),
 	"export-page-pdf": onPage((v, p, i) => exportPage(v, p, i, "pdf")),
 	"export-page-svg": onPage((v, p, i) => exportPage(v, p, i, "svg")),
+	// 0.20 (#30): share the page (from a page's sheet it starts on that page) or the selection through the share sheet
+	"share-page": (v, arg) => v.openSharePage(arg.page),
+	"share-selection": (v) => v.openSharePage(undefined, true),
 	"export-pdf": (v) => void v.exportNotebookPdf(),
 	// wave 0.9: export dialog (381, from a page's sheet it starts on that page), Markdown export (382), night mode (367), cropped margins (376)
 	"export-dialog": (v, arg) => v.openExportDialog(arg.page),

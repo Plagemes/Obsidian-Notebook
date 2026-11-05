@@ -28,14 +28,16 @@ import { DEFAULT_READING_SETTINGS, readReadingSettings, type ReadingSettings } f
 import { DEFAULT_PRESENT_SETTINGS, readPresentSettings, type PresentSettings } from "./view/present-logic";
 import { DEFAULT_BOARD_SETTINGS, readBoardSettings, type BoardSettings } from "./library/board-logic";
 import { DEFAULT_SNAP_SETTINGS, readSnapSettings, type SnapSettings } from "./view/snap-settings";
+import { DEFAULT_GHOST_SETTINGS, readGhostSettings, type GhostSettings } from "./view/ghost-settings";
 import { DEFAULT_PDF_COPY_SETTINGS, readPdfCopySettings, type PdfCopySettings } from "./storage/pdf-copy-logic";
+import { isPlannerWeekStart, type PlannerWeekStart } from "./model/calendar";
 
 /** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
 /** DESIGN.md §2.2: *Notebook* (its own tokens, the default) or *Follow Obsidian theme*. */
 export const APPEARANCE_STYLES = ["notebook", "obsidian"] as const;
 export type AppearanceStyle = (typeof APPEARANCE_STYLES)[number];
 
-export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings, LectureSettings, BoardSettings, PresentSettings, SnapSettings, PdfCopySettings {
+export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings, LectureSettings, BoardSettings, PresentSettings, SnapSettings, GhostSettings, PdfCopySettings {
 	/** UI language: "auto" follows Obsidian. */
 	uiLanguage: UiLanguage;
 	folder: string;
@@ -62,6 +64,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	defaultPaper: PaperKind;
 	defaultPageSize: PageSizeName;
 	defaultLandscape: boolean;
+	/** 0.20 planner: the first day of the week of a generated planner ("auto" follows the device language). */
+	plannerWeekStart: PlannerWeekStart;
 	/** Version history: at most one snapshot per notebook per this many hours; 0 turns snapshots off. */
 	snapshotIntervalHours: number;
 	/** Version history: how many snapshots to keep per notebook. */
@@ -109,6 +113,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	lectureLog: boolean;
 	/** 0.19 (#221): the heading that line goes under (created at the end of the note when missing). */
 	lectureLogHeading: string;
+	/** 0.20 refwindow (#107): the floating reference window snaps to the edges of the view when it is dropped near them. */
+	refWindowSnap: boolean;
 	/** 0.17 (#57): a task made from a selection gets its due date as the Tasks plugin's date emoji (else a Dataview field). */
 	taskDueEmoji: boolean;
 	/** 0.17 (#57): the note "Make task" can add to besides the daily note (vault path; empty = none configured). */
@@ -266,6 +272,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	defaultPaper: "grid",
 	defaultPageSize: "a4",
 	defaultLandscape: false,
+	plannerWeekStart: "auto",
 	snapshotIntervalHours: 24,
 	snapshotsToKeep: 10,
 	lectureSnapshots: true,
@@ -291,6 +298,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	dailyCreateNote: false,
 	lectureLog: false,
 	lectureLogHeading: "## Lectures",
+	refWindowSnap: true, // 0.20 refwindow
 	taskDueEmoji: true,
 	tasksNote: "",
 	checklistDraw: "offer",
@@ -367,6 +375,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	...DEFAULT_READING_SETTINGS,
 	...DEFAULT_PRESENT_SETTINGS,
 	...DEFAULT_SNAP_SETTINGS,
+	...DEFAULT_GHOST_SETTINGS,
 	// 0.15 views
 	...DEFAULT_BOARD_SETTINGS,
 	boardColumns: DEFAULT_BOARD_SETTINGS.boardColumns.map((c) => ({ ...c })),
@@ -393,6 +402,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (PAPER_KINDS.includes(d.defaultPaper as PaperKind)) s.defaultPaper = d.defaultPaper as PaperKind;
 	if (typeof d.defaultPageSize === "string" && Object.prototype.hasOwnProperty.call(PAGE_SIZES, d.defaultPageSize)) s.defaultPageSize = d.defaultPageSize as PageSizeName;
 	if (typeof d.defaultLandscape === "boolean") s.defaultLandscape = d.defaultLandscape;
+	if (isPlannerWeekStart(d.plannerWeekStart)) s.plannerWeekStart = d.plannerWeekStart;
 	if (typeof d.snapshotIntervalHours === "number" && d.snapshotIntervalHours >= 0 && d.snapshotIntervalHours <= 720) s.snapshotIntervalHours = d.snapshotIntervalHours;
 	if (typeof d.snapshotsToKeep === "number" && Number.isInteger(d.snapshotsToKeep) && d.snapshotsToKeep >= 1 && d.snapshotsToKeep <= 100) s.snapshotsToKeep = d.snapshotsToKeep;
 	if (typeof d.lectureSnapshots === "boolean") s.lectureSnapshots = d.lectureSnapshots;
@@ -418,6 +428,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.dailyCreateNote === "boolean") s.dailyCreateNote = d.dailyCreateNote;
 	if (typeof d.lectureLog === "boolean") s.lectureLog = d.lectureLog;
 	if (typeof d.lectureLogHeading === "string") s.lectureLogHeading = d.lectureLogHeading.trim().slice(0, 80); // normalised where it is used (an empty one means the default)
+	if (typeof d.refWindowSnap === "boolean") s.refWindowSnap = d.refWindowSnap; // 0.20 refwindow
 	if (typeof d.taskDueEmoji === "boolean") s.taskDueEmoji = d.taskDueEmoji;
 	if (typeof d.tasksNote === "string") s.tasksNote = d.tasksNote.trim();
 	if (d.checklistDraw === "off" || d.checklistDraw === "offer" || d.checklistDraw === "auto") s.checklistDraw = d.checklistDraw;
@@ -495,6 +506,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	Object.assign(s, readReadingSettings(d));
 	Object.assign(s, readPresentSettings(d));
 	Object.assign(s, readSnapSettings(d));
+	Object.assign(s, readGhostSettings(d));
 	Object.assign(s, readBoardSettings(d));
 	Object.assign(s, readPdfCopySettings(d));
 	return s;

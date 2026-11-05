@@ -348,7 +348,7 @@ Numbers from the final run of 0.9.0 (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 4669 tests passed |
+| `npm test` (unit project only; benchmarks are separate) | 4965 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: 0 errors; `eslint-plugin-obsidianmd` recommended rules: 0 errors |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
@@ -1235,6 +1235,35 @@ Generated outline (roadmap 407). Reference screenshots after `npm run harness:ch
 611. **Dark and light, Obsidian theme.** Check the outline in the dark and light theme and with *Appearance → Style → Follow Obsidian theme*; the white picture of a heading stays readable.
 612. **Cost.** In a notebook of 100+ pages, open the outline for the first time (note how long it takes), then close and reopen it: the second time is immediate. Writing with the outline open does not stutter.
 613. **No change to the file.** Open a notebook, view the outline, close it without editing: the file is not rewritten (no new snapshot, no sync conflict).
+
+### 0.20 — refwindow: floating reference window (steps 1800-1819)
+
+Floating reference window (roadmap #107). Use a notebook with several pages and, in the vault, a second notebook, a PDF, a picture and a Markdown note. Nothing about this feature is stored in the notebook file (no format change); the place of the window is kept on the device.
+
+1800. **Open from a page.** In the page sheet (page indicator, or the long-press menu of a page thumbnail) *Show in reference window* opens a small window at the bottom right of the page area showing that page; the title is the notebook name and the stepper says the page (`3 / 12`).
+1801. **Open from the palette.** *Open a reference window…* in the command palette (and in All actions) lists notebooks, PDFs, pictures and Markdown notes, the most recently changed first; the choice opens in the window. *Close reference window* is in the palette only while a window is open.
+1802. **Another notebook and a PDF.** A page of another notebook (with ink, a PDF background, a picture) is drawn as the reader would see it; a PDF shows its page. The stepper moves page by page and stops at the first and last page.
+1803. **A note and a picture.** A Markdown note is shown rendered and scrolls with a finger; a picture is shown fitted, and pans and zooms. A note has no stepper and no *Fit* button.
+1804. **From a link.** Select a text box that holds a `[[link]]` (to a note, a notebook page, a PDF or a picture): *Open as reference* in the selection bar opens that target in the window (a notebook link opens at its page). A link that does not exist says so.
+1805. **From the hover card.** Hover (or long-press) a `[[Notebook.notebook#p3]]` link in a note: the preview card has a picture-in-picture button; it opens that page in the window of the notebook in view. With no notebook open a notice says to open one first. *Open as reference* is also in the file menu of notes, PDFs, pictures and notebooks.
+1806. **Pen outside.** With the window open write next to it with the S Pen: ink appears normally right up to the window's edge, and the window does not catch strokes that start outside it.
+1807. **Pen inside.** Put the S Pen on the window's picture and drag: no ink is written on the page behind it, the reference does not move and nothing is drawn on the reference. (Fingers still pan it.)
+1808. **Fingers.** One finger pans, two fingers pinch-zoom the reference (up to 6x); the picture stays sharp after you let go (it is drawn again at the new zoom a moment later) and *Fit* returns to the whole page. Double tap or double click zooms in and back out.
+1809. **Move.** Drag the header: the window follows the finger or pen and cannot leave the page area; dropped near an edge it settles against it (with *Reference window snaps to the edges* on, Settings, Reading).
+1810. **Resize.** Drag the corner grip: the window grows and shrinks, never beyond the page area and never below a small minimum. The picture is drawn again once you let go, not while you drag.
+1811. **Opacity.** The slider fades the window from fully solid to about a third; the ink under it shows through. Close and reopen: the opacity is the same.
+1812. **Minimise.** The minus button turns the window into a small chip with the title at the same corner; tap the chip to bring the window back where it was; the chip can be dragged too.
+1813. **Close.** The x button removes the window; opening the page action again opens it where it was left.
+1814. **Remembered.** Move and resize the window, close the notebook (or restart Obsidian), open a notebook and open a reference: it is in the same place and size. Rotate the tablet: the window is inside the page area in both orientations and each orientation remembers its own place.
+1815. **Small views.** On a phone-width view the window never covers more than the page area and still reaches the minimise, close and corner controls with a finger.
+1816. **Same notebook.** A page of the notebook being written in shows its current ink when the window is opened, the stepper, zoom or resize is used (not live while writing).
+1817. **Changing files.** Editing the referenced Markdown note or saving the referenced notebook elsewhere updates the window within a second or so; deleting the file closes the window; closing the notebook that the window shows (its own pages) closes the window.
+1818. **Android cost.** With a large PDF or a page with a lot of ink the app stays responsive while the window is open and while writing; panning the reference is smooth; memory does not grow when you zoom in and out many times.
+1819. **Look.** Light, dark, *Follow Obsidian theme*, phone and tablet width, Italian; every control has a label and works.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Floating reference window (#107): a movable, resizable, see-through window over the page showing a notebook page, a PDF page, a picture or a Markdown note, read only; open from the page sheet, the palette, a link in a text box, the hover card and the file menu; minimise to a chip; place and opacity remembered per device and per orientation | yes | yes (`tests/ref-window.test.ts`: clamping, resizing, snapping, chip, remembered place per orientation, corrupt storage, pan and zoom limits, redraw rule, reference kinds, page choice; harness `refwindow` scenario: pen inside and outside, wheel zoom, move, resize, opacity, chip, note, picture, close) | | | PDF is not covered in the harness (no pdf.js there); the pen test uses synthetic events |
 
 ### 0.19 — gallery: Figures gallery (steps 1600-1619)
 
@@ -2818,3 +2847,178 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 |---|---|---|---|---|---|
 | Automatic snapshot at the end of a lecture (#222): lecture mode left, class over or notebook closed after writing in a class (one shared end with the lecture log; the app going to the background does not end it); from the saved file after the flush; only if changed | yes | pure decision, names, retention, fingerprint, label file: yes; vault and view wiring: no (needs a real vault and timetable) | | | |
 | Lecture snapshots: own retention count, label, "Lecture snapshots" filter in version history | yes | pure logic: yes; list pieces: harness (`doc=snapshot`) | | | |
+
+### 0.20 — groups (groups and locked elements, format v18; steps 1700-1719)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`HARNESS_DOC=groups`): `dev/harness/dist/shots/groups-*.png` (tablet and phone, light and dark). Notebooks saved with a group or a lock are format v18: 0.19 and older open them read-only.
+
+1700. **Group.** With the lasso select two strokes and a picture (or any element) and tap *Group* in the selection bar. Expected: the selection stays; the bar now offers *Ungroup* instead of *Group*; one undo takes the group away and one redo makes it again.
+1701. **A tap picks the group.** Deselect, then tap one grouped picture with the lasso (finger or S Pen): the whole group is selected. Tap one grouped stroke: also the whole group. Tap loose ink: nothing is selected (a tap never selects ink that is not grouped). A lasso that touches only one member selects all of them.
+1702. **Move, resize, copy.** Drag, scale and rotate the group: all members move together, one undo step each. Copy and paste, Duplicate and Cut act on all of them; the copies are a new group (select one copy: only the copies are selected, not the originals).
+1703. **Ungroup.** With a group selected tap *Ungroup*: each member can be selected alone again; one undo makes the group again.
+1704. **Erase a member.** Erase one stroke of a group with the eraser, save, close and reopen the notebook: the other members are still selected together; erase all but one member: the last one is a normal item again (no group, no error, the notebook saves).
+1705. **Lock.** Select a picture and tap *Lock*. Expected: a notice says it is locked, the selection is dropped. A lasso over the picture, a tap on it and the area eraser (set to erase pictures and text as well) do not pick, move or erase it. Ink written over it still works and can be erased. One undo unlocks it.
+1706. **The chip.** With the lasso tap the locked picture: nothing is selected and a small *Locked · Unlock* chip appears next to the finger for about five seconds. Tap *Unlock*: the picture is unlocked (one undo step) and can be selected again. With the text tool a tap on a locked text box does not edit it and shows the same chip.
+1707. **Locked elements….** Lock two elements, open the page menu (tap the page number) > *Locked elements…*: a list with the kind and text of each. Tap a name: the page scrolls to it and the list closes. *Unlock* on a row unlocks that one and the list redraws; *Unlock all* unlocks the rest. The entry is not there when nothing is locked.
+1708. **A lock inside a group.** Group a picture with some ink, then lock the picture. A lasso over the group selects the ink only (the locked picture is left out and stays where it is when the ink is moved).
+1709. **Page lock on top.** Lock the page (page menu > *Lock page*): *Group*, *Ungroup* and *Lock* are refused with the *Page locked* notice; selecting still works for copying.
+1710. **Copies and templates.** Duplicate a page that has a group and a locked picture: the copy has a group of its own (select a member: only the copy is selected) and the picture is locked too. Save the notebook as a template and make a notebook from it: groups and locks are there.
+1711. **Move to another page.** Select a group and use *Move to page…*: the whole group arrives and is still a group (a locked picture is not part of the selection, so it stays on its page).
+1712. **Two devices.** Lock a picture on one device and, without syncing, group two strokes on the other; sync so a conflicted copy appears and *Merge conflicted copies*: the picture is there once and locked, the strokes are grouped, the summary counts them. Unlock on one device (later) and merge an older copy that still has the lock: it stays unlocked.
+1713. **An older plugin.** Copy a notebook with a group or a lock to a device with 0.19: it opens read-only with the "newer version" message and is not rewritten.
+1714. **Undo across the steps.** Group, lock, ungroup and unlock in turn, then undo all of it and redo all of it: the page ends where it was each time, with no duplicated element.
+1715. **A large notebook.** Open a notebook of several thousand strokes with a few groups and locks: it opens page by page as before and the groups and locks are there.
+1716. **Italian, dark, phone.** The bar, the chip, the list and the notices read in Italian; the chip and the list are readable in light, dark and with *Follow Obsidian theme*; on a phone the chip stays inside the view and its *Unlock* button is a comfortable target.
+1717. **A group across the seam.** With two pages in view lasso a group that is on one page and drag part of it over the other. Expected: the members that arrive on the other page together are a group there (a tap selects just them), a member that arrives alone is a normal stroke, and the members left behind are still a group while two or more remain. One undo puts everything back.
+1718. **Split page.** On a heavy page with a group that crosses the middle and a locked picture in the lower half, tap *Split page*. Expected: the group is whole on one page (not half and half), the locked picture stays on the original page, and when only locked elements are below the cut the notice says the page cannot be split.
+1719. **Locked marker, box, equation.** Lock a marker (homework), a structured box and an equation, then tap the marker, tap the box label and double-tap the equation: no editor opens (so no Delete either) and a notice says the element is locked; unlock it and the editor opens again.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Groups and locked elements (#39, format v18): `group` on strokes and elements, `locked` and `lockAt` on elements; v17 to v18 migration (the keys are dropped from a v17 file, large v17 files still stage), lenient read (a lone member is released and counted) and strict write (a group of fewer than two is not written), repair, copies and templates (fresh group ids, locks kept), merge (groups united by id, later lock decision wins, a tie keeps the lock), page-lock guard, history (`UpdateItems`, one undo step, `remap`) | yes | `tests/model-v18.test.ts` | | | |
+| Selection: picking a member picks the group (strokes and elements, ink in view only), the lasso, a tap and the area eraser skip a locked element, a locked element is never selected | yes | `tests/model-v18.test.ts` (pure parts); harness scenario `groups` (view) | | | tap and lasso with the S Pen on hardware |
+| Groups across pages and in *Split page*, locked marker/box/equation editors, merge batches and lone joins, tool selections completed to groups, pieces of cut ink (review fixes) | yes | `tests/groups-review-fixes.test.ts` | | | cross-page drag and Split page with the S Pen on hardware |
+| Groups UI: *Group*, *Ungroup*, *Lock* on the selection bar, the *Locked · Unlock* chip, *Locked elements…* in the page menu | yes | harness scenario `groups` (tablet and phone, light and dark); `tests/ui-registry.test.ts` | | | |
+
+### 0.20 — vdiff: visual version diff (steps 1840-1859)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`doc=vdiff`): `dev/harness/dist/shots/` (the dialog on the modified page in the overlay view, tablet and phone, dark and light). Needs a notebook with at least one version in its history (*Version history interval* set to 1 and a day of editing, or a `.snapshot` copied into `Notebooks/_backup/history/<id>/`).
+
+1840. **Compare with the current notebook.** Open a notebook that has a previous version, run *Compare this notebook with a previous version* (or *Compare with a previous version…* in the page sheet), choose a version. The dialog opens on the page in view when it differs, else on the first changed page. The summary counts pages (added, removed, modified, unchanged) and ink and elements (added, removed, changed, moved).
+1841. **Colours.** On a page where you added a stroke, erased one, moved a text box and recoloured a stroke: *Overlay* shows the new ink tinted green, the erased ink ghosted in red, and the moved or recoloured items outlined in amber (a moved item also has a dashed outline where it was). *Before* shows the old page with the removed ink in red; *After* shows the current page with the added ink in green. The legend under the page title names the three colours.
+1842. **Page list.** The list shows the changed pages by default (*Changed · n*), each with a dot (green added, red removed, amber modified), its status and counts (+added −removed ~changed). A page deleted since the version reads "Was page n". *All pages* lists every page; the selected page keeps its place when the filter changes. A page that only changed place is marked *Moved*.
+1843. **Navigation.** The arrows beside the page title jump to the previous or next changed page and are disabled at the ends. Tapping a row selects it. On a phone the list sits above the page.
+1844. **Two versions.** Run *Compare two previous versions*, choose two versions in either order: the earlier one is *Before*, the later one *After*. Neither the notebook nor the files change.
+1845. **Restore this page.** On a modified page choose *Restore this page from <date>* and confirm: the page is replaced by the old one (same page id, so bookmarks and links keep working) as one undo step; undo brings back the current page. On a page that was deleted since, the button inserts it again after the page before it. On a page that did not exist in the version, the button is disabled.
+1846. **Locked page.** Lock a page and try to restore it from the dialog: the notice says to unlock it first and nothing changes.
+1847. **Two-version restore.** With two old versions open, the button names the version on show: *Before* and *Overlay* use the earlier one, *After* the later one.
+1848. **Read-only.** Open the dialog and close it without pressing restore, with the notebook open and edited: no new undo step, nothing is saved, no file changes.
+1849. **Large notebook.** On a notebook with hundreds of pages, the dialog opens at once; if the notebook is very large the summary says some pages were not compared and those rows read *Not compared*. Switching pages draws one page at a time.
+1850. **Other differences.** Change a page's paper, add a tag or a margin comment and compare: the page is listed as modified with "Also differs: paper, tags, comments".
+1851. **Preview limits.** A page with a PDF background or a picture: the preview draws the ink, boxes and text without the PDF or picture (the note under the dialog says so); a changed picture is outlined.
+1852. **Italian.** In Italian the dialog reads *Confronta versioni*, *Prima* / *Sovrapposto* / *Dopo*, *Ripristina questa pagina del <data>*.
+1853. **Unreadable or other notebook's version.** Choose a damaged copy or a snapshot of another notebook: a notice says so and no dialog opens.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Visual version diff (#121): compare the open notebook with a snapshot or backup, or two versions; read-only dialog with a page list (added / removed / modified / moved pages, counts), before / overlay / after views, green / red / amber marks, restore this page through the page-restore path (History, lock respected, confirmation) | yes | pure diff by ids (pages, strokes, elements, moved vs changed, reorder, cap), marks per view, restore planning and undo (`tests/version-diff.test.ts`, `tests/diff-render.test.ts`, `tests/diff-restore.test.ts`); dialog: harness (`doc=vdiff`) | | | PDF and picture backgrounds are not drawn in the preview |
+
+### 0.20 — headings: headings from the size of the handwriting (steps 1780-1799)
+
+Implemented, not verified on hardware. The thresholds are tuned on synthetic writing; real handwriting is what these steps check. Reference screenshots after `npm run harness:check` (`doc=headings`): `dev/harness/dist/shots/` (the notebook map with the Titles filter and the title strips, tablet and phone, dark and light).
+
+1780. **Large title.** On a page of ordinary notes (three or four lines) write a title about twice to three times as tall as the text, on its own line at the left. Open the outline (page panel). Expected: a row with a picture of the title and the page number; a title about three times the size is the top level, one about twice the size is nested under it.
+1781. **Jump to the line.** On a long page with the heading far down, tap its row in the outline. Expected: the notebook scrolls to the heading itself (a little above it), not only to the top of the page.
+1782. **Underlined line.** Write a line only slightly larger than the text (about 1.3 times) and draw a straight line under it with the pen. Expected: it appears as a heading (second level). The same line without the underline does not, and an underlined line of ordinary size does not either.
+1783. **Tilted writing.** Write a heading on a slant (about 10 degrees) with a slanted underline. Expected: it is found; a slanted line of ordinary text is not.
+1784. **Drawings are not titles.** Draw a large circle, a framed box and a big arrow among the notes. Expected: none appears as a heading. A highlighter stroke never does.
+1785. **Notebook map.** Open the notebook map. Expected: a *Titles* chip with the number of pages that have headings; cards of those pages show the picture of up to two headings under the thumbnail. Tap the chip: only those pages remain; tap it again: all.
+1786. **Tap a strip.** Tap a heading picture on a card of the map. Expected: the map closes and the notebook shows that heading. Tap the card elsewhere: it goes to the page as before. In the map's selection mode a strip does nothing.
+1787. **Switch.** Settings, Pages, Outline, *Large handwriting as headings* off: no heading rows in the outline and no Titles chip or strips in the map.
+1788. **Speed while writing.** On a notebook of dozens of full pages, write quickly with the S Pen. Expected: no stutter and no lag in the stroke; the analysis runs after a pause of a few seconds (it waits while the pen is on the screen). Open the outline after writing: the headings are there at once.
+1789. **Edits follow.** Rewrite the title larger or smaller, or erase it: the outline and the map follow within a moment of reopening them. Undo and redo bring the heading back; the picture is redrawn only when the ink changed.
+1790. **Companion pictures (off by default).** With *Companion notes* on, open the companion note: no pictures. Turn on *Headings as pictures* (Settings, Integration, under Companion notes). Expected, after the next update (*Update all companion notes* or a moment after writing): in the note, under the `### p. N` heading of each page that has headings, lines `- heading: ![[…]]` showing the picture of the heading at about 220 px; the pictures are in the folder `<Notebook> (Headings)` beside the notebook, named `p3-h1.png`.
+1791. **Companion stays stable.** Run the update again without writing: the note is not rewritten and the pictures are not rewritten. Change a heading: only that picture changes.
+1792. **Companion respects the pen.** With the pen down, the companion does not draw pictures (it waits for a pause).
+1793. **Companion off again.** Turn the setting off: the `- heading:` lines go from the note at the next update; the picture files stay in their folder (the plugin never deletes them).
+1794. **Italian.** In Italian: *Titoli* chip in the map, *Titoli come immagini* in the settings, *Vai al titolo a pagina N* as the strip's label.
+1795. **Heavy page.** A page with a very large number of strokes (thousands) is not searched for headings and the outline stays quick.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Headings from the size of the handwriting (roadmap #102, 0.20 headings): lines written clearly larger than the page's usual letters (1.7x level 2, 2.4x level 1), or only 1.25x when underlined by a straight stroke under them (slanted lines too), listed in the outline and in the notebook map (Titles filter and picture strips, jump to the line); no OCR, no format change | yes | pure analysis: yes (`tests/headings-w20.test.ts`, `tests/outline-builder.test.ts`: sizes, levels, underlines, tilted writing, drawings, highlighter, invisible ink); view: harness (`doc=headings`) | | yes (thresholds tuned on synthetic writing) | colour is not used |
+| Heading analysis cache and idle work: per page, keyed by a fingerprint of the page's content (rebuilt strokes with the same content are not analysed again), analysed in 8 ms slices at idle moments and not while the pen is down | yes | yes (`tests/headings-w20.test.ts`: fingerprint, caching, slices, heavy pages) | | | |
+| Headings as pictures in the companion note (#102, setting *Headings as pictures*, off by default): `- heading: ![[…]]` under the page heading, pictures in `<Notebook> (Headings)` named by page and position, marked with the ink they show (a PNG text chunk: same mark left alone, another mark redrawn, no mark = the user's file, never overwritten, next free name), never deleted; up to 4 per page and 60 per notebook | yes | text: yes (`tests/headings-companion-w20.test.ts`); marks, name choice, per-notebook cache: `tests/review-w20-data.test.ts`; a picture the user edited (marks kept, pixels changed) is not rewritten: `tests/review-w20-round2.test.ts`; vault writes: not tested (need Obsidian) | | | |
+
+### 0.20 — planner: planner generator (steps 1820-1839)
+
+Roadmap #118. Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`HARNESS_DOC=planner`): `dev/harness/dist/shots/design/planner-{dialog,large,pages}-{light,dark}-{tablet,phone}.png` (the Planner tab, the tab with daily pages on and the large-notebook warning, and the year, month, week and day pages as drawn by the thumbnail renderer).
+
+1820. **The tab.** Open the creation dialog (*New notebook*) and tap *Planner*. The name is already "Planner" and the current year, the form has year, calendar or academic year, a start month, language, week start, page size, orientation and five section chips. Left and right arrows on the tab row move through Notebook, Planner and Folder.
+1821. **Page count.** With the defaults (year, months, weeks, notes) the dialog says 72 pages. Switch on *Daily pages*: it says 437 pages (366 in a leap year) and a note says it is a large notebook. Switch every section off: it asks you to pick one, and *Create planner* does nothing but move to the chips.
+1822. **Year field.** Type 1800 or 12: an inline error, and *Create planner* focuses the field. Change the year: the suggested name follows; type a name of your own first and it stays.
+1823. **Academic year.** Tap *Academic year*: the start month becomes September and the name becomes "Planner 2026-2027". Create it: the first month page is September, the last is August of the next year, and the year page title reads 2026–2027.
+1824. **Create and open.** Create a calendar-year planner. It opens on the year page: twelve mini calendars with the weekday letters, weekends in grey, and a month link under each month name. The outline (bookmarks) lists the year, each month and Notes.
+1825. **Links down.** Tap a month link on the year page: the month calendar opens (grid paper, one cell per day, the day numbers typed in the cells). Its *Weeks* list links to the weeks. Tap a week: the weekly planner page with a box per day, each day label a link. Tap a day: the daily planner page with the date as the title and hours down the left.
+1826. **Links up.** On the day page tap *‹ Week*, then *‹ Month*, then *‹ Year*: each goes back one level. A page link shows its text (the brackets and the notebook name); that is how links written in text boxes look.
+1827. **Links survive moves.** Insert a blank page in the middle of the planner and tap links again: they still open the right pages (the links name pages by id).
+1828. **Week start.** Make a planner with *Sunday*: month columns start on Sunday, week pages start on Sunday and week numbers follow the January 1st rule; with *Monday* they are ISO weeks. In *Settings > Writing > Planner week starts on* choose Sunday, close and reopen the dialog: Sunday is selected.
+1829. **Italian.** Choose *Italiano*: month names, weekdays and the titles ("Settimana 11", "Giovedì 12 marzo 2026", "Note") are Italian, and the interface language does not change.
+1830. **Sizes.** Make planners in A5 portrait, A4 landscape and a custom size: nothing is cut off at the page edge and the month grid still has seven columns across the page. In landscape the links of a month sit to the right of the grid.
+1831. **Writing on it.** Write with the pen on a month cell, a week box and the day schedule: ink goes where you write, the pen never selects a date, and the rules do not move.
+1832. **Big one.** Make a planner with daily pages (about 437 pages): the dialog stays responsive, the notebook is created and opens, scrolling the pages panel is smooth, and closing and reopening it loses nothing.
+1833. **Name taken.** Name a planner like an existing notebook: the usual inline error. If another file of the vault has the same name in another folder, the links use the full path and still open the right notebook.
+1834. **Phone.** On a phone the three tabs fit the header, the section chips wrap, and the form scrolls under the preview.
+1835. **Look.** Light, dark and *Follow Obsidian theme*: the Planner tab reads well; the generated pages are always light paper.
+1836. **Rename.** Rename the planner notebook in the library: the links inside it still need the new name (use *Update links* from the notebook menu if it offers it); note which happens.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Calendar math: leap years, month lengths, day numbers, weekday, ISO week and Sunday-start week numbers, week lists, month rows, calendar and academic ranges, week start from the locale | yes | `tests/calendar.test.ts` (checked against `Date` over a leap year and sampled over 1900-2200) | | | |
+| Planner generator: year, month, week, day and notes pages on existing papers and text boxes, page links by id up and down, outline bookmarks, English and Italian, Monday or Sunday weeks, page counts, bounds on every size and orientation, document write and read back | yes | `tests/planner.test.ts`; link labels on the page and in exports: `tests/review-w20-data.test.ts` | | | links show only their label (alias or short name), as links; not tried inside Obsidian (steps 1820-1836) |
+| Planner tab of the creation dialog (year, span, start month, language, week start, size, section chips, page count and large warning) and the setting *Planner week starts on* | yes | harness `doc=planner` (tab, chips, counts, creating and reading back) | | | not tried on a phone (step 1834) |
+
+### 0.20 — dropfiles
+
+Manual steps (hardware / real Obsidian; nothing here is verified on Android).
+
+1740. **Picture from the desktop.** On Windows, drag a PNG from File Explorer onto a page of an open notebook: a dashed frame and a chip "Drop to add to page N" show while dragging, with a ring under the pointer; dropping places the picture centred on the pointer, selected. One undo removes it (and its place in the page).
+1741. **Several files.** Drop three pictures at once: they land in a cascade (each a step down and to the right), all selected; one undo removes all three.
+1742. **Wrong files.** Drop a `.zip` and a PNG together: the PNG is placed and one notice names the zip ("Not added: 1 of an unsupported type…"). Drop only a zip: only the notice.
+1743. **Too large / HEIC.** Drop a picture over 50 MB, and a `.heic` photo: each is named in the notice, nothing is stored for them.
+1744. **Locked page, read-only.** On a locked page the frame is grey with the lock and the drop adds nothing ("Page N is locked"). In a read-only notebook (newer format, hidden annotations) the frame says it is read-only.
+1745. **PDF choices.** Drop a PDF: the dialog offers *Insert pages after this one*, *Insert as images on this page* and *Annotate in a new notebook*. Pages: the usual range and layout questions, then the pages appear after the page you dropped on. Images: the first pages (at most 8) are placed as pictures in a cascade, one undo step. Annotate: the import dialog (file from the desktop) opens.
+1746. **Explorer drag.** Drag a PNG and a PDF from Obsidian's file explorer onto a page (side by side layout): the picture is placed; the PDF asks as above. The vault file is unchanged.
+1747. **Note as link.** Drag a Markdown note from the explorer onto a page: a text box showing the note's name as a link appears at the drop point (the raw `[[Note]]` shows only while editing the box); tapping it opens the note. Also: drop a PDF, choose *Insert as images*, cancel the page range: the assets folder has no new file (a PDF is never stored by this choice).
+1748. **Between pages and zoom.** Zoom in, pan, drop between two pages and on the second page: the picture lands on the nearest/the right page at the pointer, not offset by the zoom.
+1749. **Pen unaffected.** Writing and S Pen button gestures behave exactly as before; a drag of text (from a browser) over the page shows no frame.
+1750. **Italian.** In Italian: "Rilascia per aggiungere alla pagina N", the PDF dialog and the notice are translated.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Drag files onto a page (#79): pictures at the drop point (cascade), PDF choice (pages / images / annotate), explorer files, note links, frame, one notice for what is left out | yes | type routing, caps, cascade, page-coordinate mapping: yes; write-after-commit and rollback of created files: `tests/review-w20-data.test.ts`; selecting after the commit can never trash the files: `tests/review-w20-round2.test.ts`; view wiring: harness (`doc=dropfiles`) with synthetic DragEvents; explorer drag (`app.dragManager`, not public API) and Android: no | | yes (explorer drag relies on an internal Obsidian field) | |
+
+### 0.20 — share: Share page… (steps 1720-1739)
+
+Quick share of a page as PNG or PDF (#30). Implemented, **the system share sheet needs hardware verification** (it only exists in the Android WebView / Chrome; the harness replaces `navigator.share` with a recorder). Reference screenshots after `npm run harness:check` (`HARNESS_DOC=share`): `dev/harness/dist/shots/` (the dialog on *Some pages*, tablet and phone, dark and light).
+
+1720. **From the page menu.** Open the page sheet of a page and choose *Share page…* (also in the command palette): a dialog with *What to share* (Page N, Some pages…), *Format* (PNG image, PDF), *Clean copy*, and a button *Share* on a tablet that can share files.
+1721. **PNG through the share sheet.** Choose PNG and tap *Share*: the Android share sheet opens with one image named "<notebook> p3.png". Send it to an app (Gmail, Drive, Messages): the picture is the page as in *Export…* (paper, ink, pictures, equations, header). Nothing new appears in the vault.
+1722. **PDF through the share sheet.** Choose PDF and share: one "<notebook> p3.pdf" opens in the receiving app with the page.
+1723. **Closing the share sheet.** Open the share sheet and dismiss it (back, or tap outside): no notice, no file in the vault.
+1724. **Some pages.** *Some pages…* with "1-3, 5" and PDF: one PDF named "<notebook> p1-3+5.pdf" with those pages. With PNG: one image per page ("p1.png"…), all offered in the same share sheet. More than 10 pages as PNG are refused with a sentence that suggests PDF; an empty or wrong range is refused with the usual range sentence.
+1725. **Selection.** Select something with the lasso: the selection menu has *Share selection…*; the dialog opens on *The selection (page N)*, the format is not asked, and the shared PNG is the region around the selection (with a little margin), named "<notebook> p3 selection.png". From the page menu of the same page the dialog also offers the selection; from another page it does not.
+1726. **Clean copy.** With *Clean copy* on, markers, margin comments and collapsed sticky notes are missing from the shared image or PDF (as in step 1621); with it off they are there. Nothing changes in the notebook.
+1727. **Slow draw.** Share a PDF of many pages with a PDF background (drawing takes a few seconds): if Android refuses the share because the tap is too old, a notice "Ready to share." with a *Share* button appears; tapping it opens the share sheet with the same file. No second drawing.
+1728. **Large file.** Share a PDF bigger than 25 MB (many pages with large pictures): a notice warns about the size; the share still goes ahead.
+1729. **No file sharing (desktop).** On Windows (or in a browser without file sharing) the button reads *Save a copy*; it saves "Maths (PNG)/page-003.png" (images) or "<notebook> p3.pdf" next to the notebook, with the export naming (" 2" if taken), and a notice with *Open* (opens the file in Obsidian) and, for one image, *Copy image* (the image is on the clipboard: paste it into a chat or a document). A name that exists is never overwritten.
+1730. **Share sheet refuses.** If the share sheet fails with an error other than closing it, a copy is saved as in 1729 and the notice says the share sheet failed.
+1731. **Remembered.** Choose PDF with *Clean copy* on, share, open the dialog again: the same format and switch are set (per device; another device keeps its own). A remembered "selection" with nothing selected opens on the page.
+1732. **Read-only mode and locked pages.** In read-only mode and on a locked page *Share page…* works (it only reads).
+1733. **Italian.** In Italian: *Condividi pagina…*, *Condividi selezione…*, *Salva una copia*, *Copia immagine*.
+1734. **Notebook unchanged.** After any of the above the notebook file and the undo history are unchanged.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Share page… / Share selection… (#30): PNG or PDF of the page, the selection or some pages, drawn by the export pipeline (clean copy supported), handed to `navigator.share({ files })` | yes | choice/plan/names/canShare decision/size/error reading/local storage: `tests/share-page.test.ts`; dialog and both branches with a stubbed `navigator.share`: harness (`doc=share`) | | | the real Android share sheet (and its tap-too-old rule, step 1727) is untested |
+| Share fallback: copy saved in the vault with the export names, notice with Open and Copy image (PNG) | yes | harness (`doc=share`, saved path and notice) | | | "Open folder" is "Open" (the file): Obsidian has no public API to reveal a folder on Android |
+
+### 0.20 — ghostlines: ghost guide lines on blank paper (steps 1760-1779)
+
+Ghost guide lines (roadmap #94). Settings, Writing: *Ghost guide lines* (off / while writing / always on blank paper) and *Guide spacing* (auto, or 6-10 mm). Use a notebook with a blank page. Implemented, not verified on hardware.
+
+1760. **Off by default.** Write a line of text on a blank page: no guides appear. The *Guide spacing* row is hidden while the setting is off.
+1761. **While writing.** Choose *While writing*. Write a first line of at least four or five letters/words: after the stroke ends, two faint dashed lines appear, the baseline of what you wrote and the next one below it (the next one a little stronger). A single stroke or a drawing does not show them.
+1762. **Fade.** Stop writing: after about a second and a half the guides fade out over a moment. Start another stroke before that: they stay and the wait starts again.
+1763. **Next line.** Write a second line: the guides follow your last complete line; the spacing between them matches the distance between your two lines (auto).
+1764. **Tilt.** Write a line that slopes slightly upward: the guides slope with it. A line sloping more than about 12 degrees is treated as flat.
+1765. **Drawing.** Draw a big shape (a circle, a diagram) among the text: it does not move the guides.
+1766. **Fixed spacing.** Set *Guide spacing* to 8 mm: the distance between the two guides is 8 mm whatever your writing size.
+1767. **Always.** Choose *Always on blank paper*: the guides stay after a pause (they update with each stroke). They are not there before you have written a first line.
+1768. **Other paper.** On ruled, grid or dotted paper no guides are drawn. Switching a page to blank paper and writing shows them.
+1769. **Overlay only.** Undo/redo removes the guides; they are not in the saved notebook, a PDF/PNG/SVG export or Print, and the file is unchanged by them.
+1770. **Night and zoom.** In night mode they are light grey; zoomed in or out they stay one pixel wide; writing stays smooth (no extra lag).
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Ghost guide lines on blank paper (#94): baseline and next line inferred from the newest strokes, faint dashed overlay on the live layer, off / while writing / always, auto or fixed spacing, never saved or exported | yes | inference (baseline, line height, tilt tolerance, descenders, drawings as outliers, fallback to the last complete line, fixed spacing), segments, fade, settings: `tests/ghost-lines.test.ts`; harness `doc=ghostlines` | | | not tried with a real hand on a tablet; the thresholds (tilt 12 degrees, spacing from stroke height) are a guess |

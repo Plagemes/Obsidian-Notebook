@@ -50,6 +50,7 @@ export interface UiContext {
 		/** 0.14 (402): selected text boxes (optional, 0 when absent). */ texts?: number;
 		/** 0.17 (#20): selected sticky notes, and how many of them are collapsed (optional, 0 when absent). */ stickies?: number; stickiesCollapsed?: number;
 		/** 0.19 (#103): selected checkboxes, and how many of them are linked to a task (optional, 0 when absent). */ checkboxes?: number; checkboxesLinked?: number;
+		/** 0.20 (#39): the selected items can be made one group (two or more, not already exactly one group), and how many of them are in a group now (optional, false and 0 when absent). */ canGroup?: boolean; grouped?: number;
 	} | null;
 	/** The page in view (index of the page sheet when it was opened from a thumbnail). */
 	page: {
@@ -62,6 +63,8 @@ export interface UiContext {
 		locked?: boolean;
 		/** 0.18 (#227): the page is a quick tab of this notebook. Optional (false when absent). */
 		quickTab?: boolean;
+		/** 0.20 (#39): how many locked elements the page has. Optional (0 when absent). */
+		lockedElements?: number;
 	} | null;
 	notebook: { pdfPages: boolean; backgrounds: boolean };
 	/** A class of the timetable is on now. */
@@ -280,6 +283,11 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "checkbox-label", label: "checklist.editLabel", icon: "square-pen", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 89, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) === 1, enabled: pageOpen, keywords: "checkbox label name casella etichetta nome" },
 	{ id: "checkbox-task", label: "checklist.sendTask", icon: "list-checks", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 88, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) === 1 && (c.selection?.checkboxesLinked ?? 0) === 0, enabled: pageOpen, keywords: "checkbox task todo tasks daily note casella attivita nota giornaliera" },
 	{ id: "checkbox-unlink", label: "checklist.unlink", icon: "unlink", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 87, scope: "view", when: (c) => (c.selection?.checkboxesLinked ?? 0) > 0, enabled: pageOpen, keywords: "checkbox task unlink casella attivita scollega" },
+	// 0.20 (#39): groups and locked elements. A group selects, moves, resizes and copies as one; a locked element is skipped by the lasso, a tap and the
+	// eraser (a locked one is unlocked from the chip that a tap with the lasso offers, or from "Locked elements…" of the page menu).
+	{ id: "selection-group", label: "groups.group", icon: "group", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 52, scope: "view", command: "groups.command.group", when: (c) => c.selection?.canGroup === true, enabled: pageOpen, keywords: "group together combine join one raggruppa unisci" },
+	{ id: "selection-ungroup", label: "groups.ungroup", icon: "ungroup", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 51, scope: "view", command: "groups.command.ungroup", when: (c) => (c.selection?.grouped ?? 0) > 0, enabled: pageOpen, keywords: "ungroup split separate break group dividi separa gruppo" },
+	{ id: "selection-lock", label: "groups.lock", icon: "lock", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 49, scope: "view", command: "groups.command.lock", when: (c) => (c.selection?.elements ?? 0) > 0, enabled: pageOpen, keywords: "lock fix pin freeze background anchor blocca fissa sfondo" },
 	{ id: "insert-graph", label: "math.insertGraph", icon: "chart-spline", group: "insert", surfaces: ["sheet"], priority: 50, scope: "view", command: "math.command.insertGraph", keywords: "function plot chart curve grafico funzione" },
 	// "add-page" is the Obsidian command (and its hotkey): it adds a page right away, same paper, as before 0.14. The on-screen "+" is
 	// "add-page-suggest": it opens the Smart "+" strip (0.14, 410); the command of the same name opens that strip from the keyboard.
@@ -315,11 +323,14 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "page-lock", label: "page.lock", icon: "lock", group: "page", surfaces: ["page", "sheet"], priority: 48, scope: "view", when: (c) => !c.page?.locked, keywords: "lock finish protect freeze read only blocca proteggi" },
 	{ id: "page-unlock", label: "page.unlock", icon: "lock-open", group: "page", surfaces: ["page", "sheet"], priority: 49, scope: "view", when: (c) => !!c.page?.locked, keywords: "unlock edit sblocca" },
 	{ id: "page-lock-toggle", label: "command.lockPage", icon: "lock", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true },
+	// 0.20 (#39): the elements locked on the page (a background picture that must not move): listed, shown and unlocked from here.
+	{ id: "locked-elements", label: "groups.lockedElements", icon: "lock", group: "page", surfaces: ["page", "sheet"], priority: 47, scope: "view", command: "groups.command.lockedElements", when: (c) => (c.page?.lockedElements ?? 0) > 0, keywords: "locked lock fixed background element unlock bloccati sblocca sfondo" },
 	// 0.18 (#227): quick tabs. Pinning does not edit the notebook (the pins are in _meta), so it works on a read-only or locked page too.
 	{ id: "page-quick-tab", label: "quicktabs.pin", icon: "pin", group: "page", surfaces: ["page", "sheet"], priority: 47, scope: "view", command: true, checked: (c) => !!c.page?.quickTab, keywords: "quick tab pin pinned formula sheet fissa scheda rapida" },
 	{ id: "page-quick-tab-other", label: "quicktabs.pinOther", icon: "book-open", group: "page", surfaces: ["page", "sheet"], priority: 46, scope: "view", command: true, keywords: "quick tab pin other notebook formula sheet fissa altro quaderno" },
 	{ id: "page-save-template", label: "page.saveTemplate", icon: "layout-template", group: "page", surfaces: ["page"], priority: 25, scope: "view" },
 	{ id: "page-restore-version", label: "page.restoreVersion", icon: "history", group: "page", surfaces: ["page"], priority: 20, scope: "view", enabled: pageOpen },
+	{ id: "page-compare-version", label: "page.compareVersion", icon: "git-compare", group: "page", surfaces: ["page"], priority: 21, scope: "view", enabled: pageOpen },
 	{ id: "page-deleted-pages", label: "page.deletedPages", icon: "archive-restore", group: "page", surfaces: ["page"], priority: 20, scope: "view", keywords: "trash restore" },
 	// wave 0.9 (379): dates, ink, objects, files, tags, bookmark and markers of one page.
 	{ id: "page-info", label: "page.info", icon: "info", group: "page", surfaces: ["page", "sheet"], priority: 42, scope: "view", command: true, readOnly: true, keywords: "properties details statistics strokes points size dates" },
@@ -354,6 +365,11 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "pdf-side-show-slide", label: "pdfSide.menu.showSlide", icon: "file-search", group: "side", surfaces: ["context", "sheet"], contexts: ["side-pane"], priority: 70, scope: "view", readOnly: true, when: sideOpen },
 	{ id: "pdf-side-add-page", label: "command.pdfSideAdd", icon: "file-plus", group: "side", surfaces: ["context", "sheet"], contexts: ["side-pane"], priority: 75, scope: "view", command: true, when: sideOpen },
 	{ id: "pdf-side-close", label: "command.pdfSideClose", icon: "panel-right-close", group: "side", surfaces: ["context", "sheet"], contexts: ["side-pane"], priority: 30, scope: "view", command: true, readOnly: true, when: sideOpen },
+	// 0.20 refwindow (#107): the floating reference window. Read only (the reference is never edited), so these work on a read-only notebook too.
+	{ id: "ref-open", label: "refwin.open", icon: "picture-in-picture-2", group: "side", surfaces: ["sheet"], priority: 46, scope: "view", command: "refwin.command.open", readOnly: true, keywords: "reference window floating pdf note picture page finestra riferimento flottante" },
+	{ id: "ref-page", label: "refwin.openPage", icon: "picture-in-picture-2", group: "page", surfaces: ["page", "sheet"], priority: 28, scope: "view", command: "refwin.command.openPage", readOnly: true, keywords: "reference window floating page finestra riferimento flottante" },
+	{ id: "ref-close", label: "refwin.close", icon: "picture-in-picture", group: "side", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
+	{ id: "selection-open-reference", label: "refwin.openLink", icon: "picture-in-picture-2", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 54, scope: "view", readOnly: true, when: (c) => (c.selection?.links ?? 0) > 0 },
 	// 0.15 states (#241): the strip of the states of the page in view: switch, play, add, move the parts of a figure from state to state.
 	{ id: "states-toggle", label: "states.open", icon: "layers", group: "page", surfaces: ["sheet", "page"], priority: 30, scope: "view", command: "command.states", readOnly: true, checked: (c) => !!c.states?.open, keywords: "states drawing figure physics animation parts stati disegno figura animazione parti" },
 	// 0.14 slides (#417): every slide with its notes pages, exercise page, linked ink and questions (view/slide-strip-modal.ts).
@@ -411,6 +427,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "share-insert-embed", label: "share.insertEmbed", icon: "picture-in-picture", group: "share", surfaces: ["page"], priority: 35, scope: "view", readOnly: true },
 	// wave 0.9 (385): Obsidian's own Bookmarks pane (core plugin, feature-detected in integration/obsidian-bookmarks.ts).
 	{ id: "obsidian-bookmark-page", label: "bookmarks.add", icon: "bookmark-check", group: "share", surfaces: ["page", "sheet", "palette"], priority: 33, scope: "view", command: true, readOnly: true, keywords: "bookmarks pane obsidian star favourite" },
+	// 0.20 (#30): the page, the selection or some pages as PNG or PDF through the system share sheet (a saved copy where the device cannot share files).
+	{ id: "share-page", label: "share.menu", icon: "share-2", group: "share", surfaces: ["page", "sheet", "palette"], priority: 36, scope: "view", command: true, readOnly: true, keywords: "share send png pdf image page whatsapp mail condividi invia immagine" },
+	{ id: "share-selection", label: "share.selectionMenu", icon: "share-2", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 40.3, scope: "view", command: true, readOnly: true, when: hasSelection, keywords: "share send selection png image condividi invia selezione immagine" },
 	{ id: "export-page-pdf", label: "export.pagePdf", icon: "file-output", group: "share", surfaces: ["page"], priority: 30, scope: "view", readOnly: true },
 	{ id: "export-page-svg", label: "export.pageSvg", icon: "image", group: "share", surfaces: ["page"], priority: 20, scope: "view", readOnly: true },
 	{ id: "export-pdf", label: "export.notebookPdf", icon: "file-down", group: "share", surfaces: ["sheet", "notebook"], priority: 30, scope: "view", command: "command.exportPdf", readOnly: true },

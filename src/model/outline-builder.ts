@@ -17,10 +17,11 @@
  * Cost: the text layout of a page is cached by the identity of its strokes (strokes are immutable), so a page that did
  * not change costs a pointer comparison per stroke; everything else is a single pass over the pages.
  */
-import { detectHeadings, lineSizes, pageLayout, referenceHeight, type LineSize, type PageHeading } from "../ink/headings";
+import type { PageHeading } from "../ink/headings";
+import { HeadingIndex } from "./heading-index";
 import { bookmarkColor } from "./bookmarks";
 import { mapPdfOutline, type OutlineEntryLike } from "./pdf-outline-map";
-import type { Asset, MarkerElement, MarkerKind, NotebookMeta, Page, Stroke } from "./types";
+import type { Asset, MarkerElement, MarkerKind, NotebookMeta, Page } from "./types";
 
 export const OUTLINE_SOURCES = ["bookmarks", "slides", "headings", "markers", "pdf"] as const;
 export type OutlineSource = (typeof OUTLINE_SOURCES)[number];
@@ -35,7 +36,7 @@ export const OUTLINE_MARKER_KINDS: readonly MarkerKind[] = ["question", "homewor
 const LEVEL = { bookmark: 1, document: 1, slide: 2, heading1: 3, heading2: 4, marker: 5 } as const;
 
 /** Pages with more strokes than this are not searched for headings (the outline must stay cheap on a heavy page). */
-export const MAX_HEADING_STROKES = 4000;
+export { MAX_HEADING_STROKES } from "./heading-index";
 
 export type OutlineKind = "bookmark" | "document" | "slide" | "heading" | "marker" | "pdf";
 
@@ -76,25 +77,15 @@ export interface OutlineInput {
 	pdfOutlines?: Readonly<Record<string, readonly OutlineEntryLike[]>> | undefined;
 }
 
-interface PageCache {
-	strokes: readonly Stroke[];
-	sizes: LineSize[];
-	layout: ReturnType<typeof pageLayout>;
-	width: number;
-	height: number;
-	/** Headings with the notebook reference they were found with (0: the page's own). */
-	headings: { reference: number; list: PageHeading[] } | null;
-}
-
 /** Builds the outline and keeps the per-page work between builds. One instance per open notebook. */
 export class OutlineBuilder {
-	private readonly pages = new Map<string, PageCache>();
+	private readonly index = new HeadingIndex();
 	/** Pages whose layout was computed by the last build (for tests and the status of the cache). */
 	lastComputed = 0;
 
 	/** The outline of `input` with the given sources (default: all). */
 	build(input: OutlineInput, sources: OutlineSources = DEFAULT_OUTLINE_SOURCES): OutlineItem[] {
-		this.lastComputed = 0;
+		this.index.resetCount();
 		const items: Array<{ item: OutlineItem; rank: number; level: number; seq: number }> = [];
 		let seq = 0;
 		const push = (item: OutlineItem, level: number, rank: number) => items.push({ item, level, rank, seq: seq++ });
@@ -172,7 +163,7 @@ export class OutlineBuilder {
 			stack.push(level);
 			out.push({ ...item, depth: stack.length });
 		}
-		this.forget(pages);
+		this.lastComputed = this.index.computed;
 		return out;
 	}
 
@@ -182,47 +173,32 @@ export class OutlineBuilder {
 	}
 
 	private addHeadings(pages: readonly Page[], push: (item: OutlineItem, level: number, rank: number) => void): void {
-		const caches = pages.map((page) => (page.strokes.length > MAX_HEADING_STROKES ? null : this.cacheOf(page)));
-		const reference = referenceHeight(caches.flatMap((c) => c?.sizes ?? []));
-		pages.forEach((page, index) => {
-			const cache = caches[index];
-			if (!cache) return;
-			if (!cache.headings || cache.headings.reference !== reference) {
-				cache.headings = { reference, list: detectHeadings(cache.layout, page, reference) };
-			}
-			cache.headings.list.forEach((h, n) => {
+		for (const { pageId, index, headings } of this.index.headings(pages)) {
+			headings.forEach((h, n) => {
 				push({
-					key: `h:${page.id}:${h.strokeIds[0] ?? n}`, kind: "heading", source: "headings", pageId: page.id, index, y: h.rect.y, depth: 1,
+					key: `h:${pageId}:${h.strokeIds[0] ?? n}`, kind: "heading", source: "headings", pageId, index, y: h.rect.y, depth: 1,
 					title: "", color: null, category: null, heading: { rect: h.rect, strokeIds: h.strokeIds, ratio: h.ratio, level: h.level },
 				}, h.level === 1 ? LEVEL.heading1 : LEVEL.heading2, 4);
 			});
-		});
+		}
 	}
 
-	/** The cached layout of a page, recomputed when its strokes or size changed. */
-	private cacheOf(page: Page): PageCache {
-		const have = this.pages.get(page.id);
-		if (have && have.width === page.width && have.height === page.height && sameStrokes(have.strokes, page.strokes)) return have;
-		const layout = pageLayout(page.strokes);
-		const next: PageCache = { strokes: page.strokes.slice(), sizes: lineSizes(layout), layout, width: page.width, height: page.height, headings: null };
-		this.pages.set(page.id, next);
-		this.lastComputed++;
-		return next;
+	/** 0.20: analyses stale pages for at most `budgetMs` (an idle callback calls this); returns how many are still stale. */
+	warm(pages: readonly Page[], budgetMs: number, now?: () => number): number {
+		return this.index.warm(pages, budgetMs, now);
 	}
 
-	/** Drops the cache of pages that are gone. */
-	private forget(pages: readonly Page[]): void {
-		if (this.pages.size <= pages.length) return;
-		const ids = new Set(pages.map((p) => p.id));
-		for (const id of [...this.pages.keys()]) if (!ids.has(id)) this.pages.delete(id);
+	/** 0.20 review (D1): the per-page analysis this builder keeps, so the companion note can reuse the work of an open notebook. */
+	headingIndex(): HeadingIndex {
+		return this.index;
+	}
+
+	/** 0.20: pages whose headings would have to be analysed by the next build. */
+	pending(pages: readonly Page[]): number {
+		return this.index.pending(pages);
 	}
 }
 
-function sameStrokes(a: readonly Stroke[], b: readonly Stroke[]): boolean {
-	if (a.length !== b.length) return false;
-	for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-	return true;
-}
 
 function markerTitle(el: MarkerElement): string {
 	return el.text ?? "";

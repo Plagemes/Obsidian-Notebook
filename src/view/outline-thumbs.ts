@@ -53,29 +53,54 @@ export class HeadingThumbs {
 		this.cache.clear();
 	}
 
-	private draw(page: Page, strokes: Stroke[], rect: { x: number; y: number; width: number; height: number }): string | null {
-		let canvas: HTMLCanvasElement | null = null;
-		try {
-			const dpr = Math.min(MAX_DPR, window.devicePixelRatio || 1);
-			const scale = (Math.min(rect.width, HEADING_THUMB_WIDTH) / rect.width) * dpr;
-			canvas = createEl("canvas");
-			canvas.width = Math.max(1, Math.round(rect.width * scale));
-			canvas.height = Math.max(1, Math.round(rect.height * scale));
-			const ctx = canvas.getContext("2d");
-			if (!ctx) return null;
-			// Only the heading's ink, on a plain white sheet: no paper lines, no background, no other elements.
-			const sheet: Page = { id: page.id, width: page.width, height: page.height, paper: { kind: "blank", spacing: page.paper.spacing }, strokes, elements: [] };
-			drawPageRaster(ctx, sheet, scale, { background: null, images: new Map(), region: rect });
-			return canvas.toDataURL("image/png");
-		} catch (e) {
-			console.error("[notebook] outline heading picture", e);
-			return null;
-		} finally {
-			if (canvas) {
-				canvas.width = 0;
-				canvas.height = 0;
-			}
+	private draw(page: Page, strokes: Stroke[], rect: HeadingRect): string | null {
+		return headingDataUrl(page, strokes, rect, HEADING_THUMB_WIDTH, Math.min(MAX_DPR, window.devicePixelRatio || 1));
+	}
+}
+
+export interface HeadingRect {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
+/** The heading's ink drawn on its own, on a white sheet (no paper pattern, no background, no other elements), at most `maxWidth` px wide at 1 px per CSS px × `dpr`. */
+export function headingDataUrl(page: Page, strokes: Stroke[], rect: HeadingRect, maxWidth: number, dpr: number): string | null {
+	let canvas: HTMLCanvasElement | null = null;
+	try {
+		const scale = (Math.min(rect.width, maxWidth) / rect.width) * dpr;
+		canvas = createEl("canvas");
+		canvas.width = Math.max(1, Math.round(rect.width * scale));
+		canvas.height = Math.max(1, Math.round(rect.height * scale));
+		const ctx = canvas.getContext("2d");
+		if (!ctx) return null;
+		const sheet: Page = { id: page.id, width: page.width, height: page.height, paper: { kind: "blank", spacing: page.paper.spacing }, strokes, elements: [] };
+		drawPageRaster(ctx, sheet, scale, { background: null, images: new Map(), region: rect });
+		return canvas.toDataURL("image/png");
+	} catch (e) {
+		console.error("[notebook] outline heading picture", e);
+		return null;
+	} finally {
+		if (canvas) {
+			canvas.width = 0;
+			canvas.height = 0;
 		}
+	}
+}
+
+/** PNG bytes of a heading's ink for a file (the companion note's picture); null when it cannot be drawn. */
+export function headingPngBytes(page: Page, strokes: Stroke[], rect: HeadingRect, maxWidth: number): Uint8Array | null {
+	const url = headingDataUrl(page, strokes, rect, maxWidth, 1);
+	const comma = url ? url.indexOf(",") : -1;
+	if (!url || comma < 0 || !url.startsWith("data:image/png")) return null;
+	try {
+		const bin = atob(url.slice(comma + 1));
+		const out = new Uint8Array(bin.length);
+		for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+		return out;
+	} catch {
+		return null;
 	}
 }
 

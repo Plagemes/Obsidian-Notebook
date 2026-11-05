@@ -62,21 +62,32 @@ function hits(el: PageElement, x: number, y: number, tolerance: number, measure:
 	return Math.abs(lx) <= el.width / 2 + tolerance && Math.abs(ly) <= el.height / 2 + tolerance;
 }
 
-/** Topmost element (the last one in the array is drawn on top) under (x, y), with `tolerance` pt around it. */
+/**
+ * Topmost element (the last one in the array is drawn on top) under (x, y), with `tolerance` pt around it. v18: a locked element
+ * is not there to be hit (`hitLockedElement` finds it); with `locked` true only locked ones are looked at.
+ */
 export function hitElement(
-	elements: readonly PageElement[], x: number, y: number, tolerance: number, measure: MeasureText = estimateMeasure,
+	elements: readonly PageElement[], x: number, y: number, tolerance: number, measure: MeasureText = estimateMeasure, locked = false,
 ): PageElement | null {
 	for (let i = elements.length - 1; i >= 0; i--) {
 		const el = elements[i]!;
-		if (hits(el, x, y, tolerance, measure)) return el;
+		if ((el.locked === true) === locked && hits(el, x, y, tolerance, measure)) return el;
 	}
 	return null;
 }
 
-/** Elements whose centre is inside the lasso, in array order. */
+/** v18: the topmost locked element under (x, y), or null. */
+export function hitLockedElement(
+	elements: readonly PageElement[], x: number, y: number, tolerance: number, measure: MeasureText = estimateMeasure,
+): PageElement | null {
+	return hitElement(elements, x, y, tolerance, measure, true);
+}
+
+/** Elements whose centre is inside the lasso, in array order. v18: a locked element is never picked (nor erased by the area eraser). */
 export function elementsInLasso(elements: readonly PageElement[], poly: Polygon, measure: MeasureText = estimateMeasure): PageElement[] {
 	if (poly.length < 3) return [];
 	return elements.filter((el) => {
+		if (el.locked === true) return false;
 		const b = elementBounds(el, measure);
 		return pointInPolygon((b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2, poly);
 	});

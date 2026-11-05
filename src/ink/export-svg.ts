@@ -14,6 +14,7 @@ import { layerFlags, type ExportLayers } from "./export-layers";
 import { HEADER_COLOR_DAY, type HeaderLayout } from "./page-header";
 import { PAPER_COLORS, paperPattern, type PaperLineKind } from "./paper";
 import { HIGHLIGHTER_ALPHA, strokeSvgPath } from "./stroke-shape";
+import { LINK_COLOR, lineRuns, shownText } from "./link-text";
 
 /** Line widths of the paper pattern, pt. Shared with the PDF exporter. */
 export const PAPER_LINE_WIDTH: Readonly<Record<PaperLineKind, number>> = { minor: 0.3, major: 0.5, margin: 0.5 };
@@ -332,9 +333,17 @@ function textTag(el: TextElement): string {
 	const size = el.fontSize;
 	if (!(size > 0) || el.text === "") return "";
 	const maxChars = Math.max(1, Math.floor(el.width / (size * AVG_CHAR_WIDTH)));
-	const tspans = wrapByChars(stripInvalidXml(el.text), maxChars).map((line, i) => {
+	// A `[[link]]` shows its label (the alias, else a short name), in the link colour and underlined, like on the page.
+	const shown = shownText(el.text);
+	const clean = stripInvalidXml(shown.text);
+	const lines = wrapByChars(clean, maxChars);
+	const runs = shown.links.length > 0 && clean.length === shown.text.length ? lineRuns(clean, lines, shown.links) : null;
+	const tspans = lines.map((line, i) => {
 		const dy = i === 0 ? 0 : num(size * TEXT_LINE_HEIGHT);
-		return `<tspan x="${num(el.x)}" dy="${dy}">${escapeAttr(line)}</tspan>`;
+		const inner = runs
+			? (runs[i] ?? []).map((run) => (run.link ? `<tspan fill="${LINK_COLOR}" text-decoration="underline">${escapeAttr(run.text)}</tspan>` : escapeAttr(run.text))).join("")
+			: escapeAttr(line);
+		return `<tspan x="${num(el.x)}" dy="${dy}">${inner}</tspan>`;
 	});
 	return `<text x="${num(el.x)}" y="${num(el.y + size * TEXT_BASELINE)}" font-family="Helvetica, Arial, sans-serif" font-size="${num(size)}" fill="${escapeAttr(el.color)}">${tspans.join("")}</text>`;
 }

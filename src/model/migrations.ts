@@ -400,6 +400,42 @@ export function v17OnlyElement(page: unknown, index: number): string | null {
 	return null;
 }
 
+/**
+ * v18 adds the optional `group` of strokes and elements and the optional `locked` / `lockAt` of elements (groups and locked
+ * elements, #39). Every valid v17 document is a valid v18 document without them. A v17 reader ignored unknown fields of strokes and
+ * elements, so such a key in a v17 file was never ours and never meant anything: it is dropped, not interpreted (like `slide` in
+ * v11 -> v12, `states` in v12 -> v13 and `comments` in v15 -> v16). Nothing else changes, so a large v17 file can still be read page
+ * by page (StagedParse), which ignores these keys of each item.
+ */
+function v17ToV18(raw: RawObject): RawObject {
+	const out: RawObject = { ...raw, version: 18 };
+	if (!Array.isArray(raw.pages)) return out;
+	out.pages = (raw.pages as unknown[]).map((page) => {
+		if (!isRaw(page)) return page;
+		let copy: RawObject | null = null;
+		if (Array.isArray(page.strokes) && page.strokes.some((s) => isRaw(s) && "group" in s)) {
+			copy = { ...page, strokes: page.strokes.map((s) => withoutKeys(s, ["group"])) };
+		}
+		if (Array.isArray(page.elements) && page.elements.some((e) => isRaw(e) && ("group" in e || "locked" in e || "lockAt" in e))) {
+			copy = { ...(copy ?? page), elements: page.elements.map((e) => withoutKeys(e, ["group", "locked", "lockAt"])) };
+		}
+		return copy ?? page;
+	});
+	return out;
+}
+
+function isRaw(v: unknown): v is RawObject {
+	return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** `item` without the keys `keys` (the same object when it has none of them). */
+function withoutKeys(item: unknown, keys: readonly string[]): unknown {
+	if (!isRaw(item) || !keys.some((k) => k in item)) return item;
+	const copy = { ...item };
+	for (const k of keys) delete copy[k];
+	return copy;
+}
+
 /** MIGRATIONS[n] takes a document from version n to n+1. */
 export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	0: v0ToV1,
@@ -419,6 +455,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	14: v14ToV15,
 	15: v15ToV16,
 	16: v16ToV17,
+	17: v17ToV18,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */
