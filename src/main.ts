@@ -23,6 +23,7 @@ import { SharedInbox } from "./library/shared-inbox";
 import { registerIntegration } from "./integration";
 import { annotatePdfFlow, registerAnnotatePdf, type AnnotatePdfHost } from "./library/annotate-pdf";
 import { registerHoverPreview } from "./view/hover-preview";
+import { registerReferenceMenu } from "./view/ref-window-open";
 import type { HistoryService } from "./integration/history-service";
 import type { NotebookApi } from "./integration/api";
 import { registerReliability } from "./integration/reliability";
@@ -267,6 +268,8 @@ export default class NotebookPlugin extends Plugin {
 			readNotebook: (file) => this.host.readNotebook(file),
 			background: (doc, page, width) => this.host.thumbnailBackground(doc, page, width),
 		}));
+		// 0.20 (#107): "Open as reference" in the file menu
+		this.step("reference window", () => registerReferenceMenu(this));
 		// wave 0.6: zettelkasten (M15 Z1–Z3, Z11, Z12)
 		this.step("zettelkasten", () => registerZettel(this));
 		// wave 0.8: quick textbook reference (roadmap 208): "p. 134" in a text box opens the textbook at that page

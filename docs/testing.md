@@ -1236,6 +1236,35 @@ Generated outline (roadmap 407). Reference screenshots after `npm run harness:ch
 612. **Cost.** In a notebook of 100+ pages, open the outline for the first time (note how long it takes), then close and reopen it: the second time is immediate. Writing with the outline open does not stutter.
 613. **No change to the file.** Open a notebook, view the outline, close it without editing: the file is not rewritten (no new snapshot, no sync conflict).
 
+### 0.20 — refwindow: floating reference window (steps 1800-1819)
+
+Floating reference window (roadmap #107). Use a notebook with several pages and, in the vault, a second notebook, a PDF, a picture and a Markdown note. Nothing about this feature is stored in the notebook file (no format change); the place of the window is kept on the device.
+
+1800. **Open from a page.** In the page sheet (page indicator, or the long-press menu of a page thumbnail) *Show in reference window* opens a small window at the bottom right of the page area showing that page; the title is the notebook name and the stepper says the page (`3 / 12`).
+1801. **Open from the palette.** *Open a reference window…* in the command palette (and in All actions) lists notebooks, PDFs, pictures and Markdown notes, the most recently changed first; the choice opens in the window. *Close reference window* is in the palette only while a window is open.
+1802. **Another notebook and a PDF.** A page of another notebook (with ink, a PDF background, a picture) is drawn as the reader would see it; a PDF shows its page. The stepper moves page by page and stops at the first and last page.
+1803. **A note and a picture.** A Markdown note is shown rendered and scrolls with a finger; a picture is shown fitted, and pans and zooms. A note has no stepper and no *Fit* button.
+1804. **From a link.** Select a text box that holds a `[[link]]` (to a note, a notebook page, a PDF or a picture): *Open as reference* in the selection bar opens that target in the window (a notebook link opens at its page). A link that does not exist says so.
+1805. **From the hover card.** Hover (or long-press) a `[[Notebook.notebook#p3]]` link in a note: the preview card has a picture-in-picture button; it opens that page in the window of the notebook in view. With no notebook open a notice says to open one first. *Open as reference* is also in the file menu of notes, PDFs, pictures and notebooks.
+1806. **Pen outside.** With the window open write next to it with the S Pen: ink appears normally right up to the window's edge, and the window does not catch strokes that start outside it.
+1807. **Pen inside.** Put the S Pen on the window's picture and drag: no ink is written on the page behind it, the reference does not move and nothing is drawn on the reference. (Fingers still pan it.)
+1808. **Fingers.** One finger pans, two fingers pinch-zoom the reference (up to 6x); the picture stays sharp after you let go (it is drawn again at the new zoom a moment later) and *Fit* returns to the whole page. Double tap or double click zooms in and back out.
+1809. **Move.** Drag the header: the window follows the finger or pen and cannot leave the page area; dropped near an edge it settles against it (with *Reference window snaps to the edges* on, Settings, Reading).
+1810. **Resize.** Drag the corner grip: the window grows and shrinks, never beyond the page area and never below a small minimum. The picture is drawn again once you let go, not while you drag.
+1811. **Opacity.** The slider fades the window from fully solid to about a third; the ink under it shows through. Close and reopen: the opacity is the same.
+1812. **Minimise.** The minus button turns the window into a small chip with the title at the same corner; tap the chip to bring the window back where it was; the chip can be dragged too.
+1813. **Close.** The x button removes the window; opening the page action again opens it where it was left.
+1814. **Remembered.** Move and resize the window, close the notebook (or restart Obsidian), open a notebook and open a reference: it is in the same place and size. Rotate the tablet: the window is inside the page area in both orientations and each orientation remembers its own place.
+1815. **Small views.** On a phone-width view the window never covers more than the page area and still reaches the minimise, close and corner controls with a finger.
+1816. **Same notebook.** A page of the notebook being written in shows its current ink when the window is opened, the stepper, zoom or resize is used (not live while writing).
+1817. **Changing files.** Editing the referenced Markdown note or saving the referenced notebook elsewhere updates the window within a second or so; deleting the file closes the window; closing the notebook that the window shows (its own pages) closes the window.
+1818. **Android cost.** With a large PDF or a page with a lot of ink the app stays responsive while the window is open and while writing; panning the reference is smooth; memory does not grow when you zoom in and out many times.
+1819. **Look.** Light, dark, *Follow Obsidian theme*, phone and tablet width, Italian; every control has a label and works.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Floating reference window (#107): a movable, resizable, see-through window over the page showing a notebook page, a PDF page, a picture or a Markdown note, read only; open from the page sheet, the palette, a link in a text box, the hover card and the file menu; minimise to a chip; place and opacity remembered per device and per orientation | yes | yes (`tests/ref-window.test.ts`: clamping, resizing, snapping, chip, remembered place per orientation, corrupt storage, pan and zoom limits, redraw rule, reference kinds, page choice; harness `refwindow` scenario: pen inside and outside, wheel zoom, move, resize, opacity, chip, note, picture, close) | | | PDF is not covered in the harness (no pdf.js there); the pen test uses synthetic events |
+
 ### 0.19 — gallery: Figures gallery (steps 1600-1619)
 
 Figures gallery (roadmap #228). Use a notebook with two or three lectures (pages with a "Name — 2026-11-03" header), several photos (camera, board photo, pasted or imported pictures) and at least one anchored crop (*Anchored excerpt*), plus one photo placed twice.

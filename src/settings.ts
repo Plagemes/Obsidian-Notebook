@@ -112,6 +112,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	lectureLog: boolean;
 	/** 0.19 (#221): the heading that line goes under (created at the end of the note when missing). */
 	lectureLogHeading: string;
+	/** 0.20 refwindow (#107): the floating reference window snaps to the edges of the view when it is dropped near them. */
+	refWindowSnap: boolean;
 	/** 0.17 (#57): a task made from a selection gets its due date as the Tasks plugin's date emoji (else a Dataview field). */
 	taskDueEmoji: boolean;
 	/** 0.17 (#57): the note "Make task" can add to besides the daily note (vault path; empty = none configured). */
@@ -295,6 +297,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	dailyCreateNote: false,
 	lectureLog: false,
 	lectureLogHeading: "## Lectures",
+	refWindowSnap: true, // 0.20 refwindow
 	taskDueEmoji: true,
 	tasksNote: "",
 	checklistDraw: "offer",
@@ -423,6 +426,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.dailyCreateNote === "boolean") s.dailyCreateNote = d.dailyCreateNote;
 	if (typeof d.lectureLog === "boolean") s.lectureLog = d.lectureLog;
 	if (typeof d.lectureLogHeading === "string") s.lectureLogHeading = d.lectureLogHeading.trim().slice(0, 80); // normalised where it is used (an empty one means the default)
+	if (typeof d.refWindowSnap === "boolean") s.refWindowSnap = d.refWindowSnap; // 0.20 refwindow
 	if (typeof d.taskDueEmoji === "boolean") s.taskDueEmoji = d.taskDueEmoji;
 	if (typeof d.tasksNote === "string") s.tasksNote = d.tasksNote.trim();
 	if (d.checklistDraw === "off" || d.checklistDraw === "offer" || d.checklistDraw === "auto") s.checklistDraw = d.checklistDraw;

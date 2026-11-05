@@ -19,6 +19,7 @@ import { editBookmark, editPageTags } from "./outline";
 import { exportPdfAnnotations, openMarginsModal, updatePdfFromNewVersion } from "./pdf-actions";
 import { openSlideStripOf, pdfSideState, runPdfSideAction, type PdfSideAction } from "./pdf-sync";
 import { saveNotebookAsTemplate } from "./notebook-templates";
+import { ReferencePickerModal } from "./ref-window-picker";
 import { deletePageKeepingCopy, newPageFromTemplate, openDeletedPages, savePageAsTemplate } from "./page-tools";
 import { insertReference, openPage, removeTextbook, setTextbook } from "./textbook-ref-ui";
 import { toggleBookmark } from "./view-helpers";
@@ -45,6 +46,8 @@ export function commandApplies(view: NotebookView, id: string): boolean {
 	if (id === "notebook-next" || id === "notebook-previous") return (view.tabTools?.count ?? 0) > 1;
 	if (id === "pdf-side-open") return pdfSideState(view).available;
 	if (id.startsWith("pdf-side-")) return pdfSideState(view).open;
+	// 0.20 (#107): closing needs a reference window to close.
+	if (id === "ref-close") return view.referenceOpen;
 	// wave 0.9 (357): the layer order needs something selected. Wave 0.10: so do arranging it and selecting similar ink.
 	if (SELECTION_ONLY.test(id)) return !!view.uiContext().selection;
 	// v10: "Go to source" needs a selected excerpt.
@@ -331,6 +334,11 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"pdf-side-show-slide": side("pdf-side-show-slide"),
 	"pdf-side-add-page": side("pdf-side-add-page"),
 	"pdf-side-close": side("pdf-side-close"),
+	// 0.20 refwindow (#107)
+	"ref-open": (v) => new ReferencePickerModal(v.app, (file) => void v.openReference(file)).open(),
+	"ref-page": onPage((v, _p, i) => v.openPageAsReference(i)),
+	"ref-close": (v) => v.closeReference(),
+	"selection-open-reference": (v) => v.openSelectionReference(),
 	// 0.14 slides (#417)
 	"slide-strip": (v) => void openSlideStripOf(v),
 
