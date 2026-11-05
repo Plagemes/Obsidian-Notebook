@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### symbols
+- **Recent symbols (#212).** A strip at the top of the page area with the symbols you use most: typographic ones (∀ ∃ ∫ → ⇒ ≠ ≤ …) and signs you saved with *Save selection as symbol*. Tap one, then tap the page: a character becomes a text box, a saved sign is drawn about one line high in the current pen colour and width (one group, one undo step, fresh ids). Ordered by use with decay (a use counts half as much after two weeks); counts stay on the device. Symbols are small personal stamps, so there is no format change. Settings, Writing: *Recent symbols* and *Symbols shown*.
+
 ## 0.20.0 — 2026-11-05
 
 Eight features: groups and locked elements, a quick share of a page or a selection, files dragged straight onto a page, ghost guide lines on blank paper, headings found from the size of the handwriting, a floating reference window, a planner generator and a visual version diff. The notebook format moves to version 18 (groups and locks): the migration from version 17 is automatic, and 0.19 and older open a v18 file read-only and never overwrite it.
