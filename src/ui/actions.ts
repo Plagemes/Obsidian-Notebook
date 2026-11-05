@@ -214,6 +214,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "excerpt-to-page", label: "excerpt.toPage", icon: "crop", group: "insert", surfaces: ["context", "sheet"], contexts: ["selection", "lasso"], priority: 46, scope: "view", command: "excerpt.command.toPage", keywords: "excerpt clip cut region quote anchor pdf estratto ritaglio citazione" },
 	{ id: "excerpt-copy", label: "excerpt.copy", icon: "clipboard-copy", group: "insert", surfaces: ["context", "sheet"], contexts: ["selection", "lasso"], priority: 44, scope: "view", command: "excerpt.command.copy", keywords: "excerpt clip region another notebook estratto copia quaderno" },
 	{ id: "stamps-save-selection", label: "stamps.save", icon: "stamp", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 50, scope: "view", when: hasSelection },
+	// 0.21 (212): the lasso selection as a symbol of the quick strip.
+	{ id: "symbols-save-selection", label: "symbols.save", icon: "sigma", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 30, scope: "view", when: hasSelection, keywords: "symbol maths formula simbolo" },
 	// wave 0.9 (357): layer order of the selection. Front and back are the strongest moves, so they rank higher in a narrow bar.
 	...([
 		["front", "bring-to-front", 52, "command.layerFront"], ["back", "send-to-back", 51, "command.layerBack"],

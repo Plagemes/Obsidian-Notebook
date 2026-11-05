@@ -31,6 +31,7 @@ import { DEFAULT_SNAP_SETTINGS, readSnapSettings, type SnapSettings } from "./vi
 import { DEFAULT_GHOST_SETTINGS, readGhostSettings, type GhostSettings } from "./view/ghost-settings";
 import { DEFAULT_PDF_COPY_SETTINGS, readPdfCopySettings, type PdfCopySettings } from "./storage/pdf-copy-logic";
 import { isPlannerWeekStart, type PlannerWeekStart } from "./model/calendar";
+import { clampSymbolCount } from "./ui/symbol-rank";
 
 /** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
 /** DESIGN.md §2.2: *Notebook* (its own tokens, the default) or *Follow Obsidian theme*. */
@@ -233,6 +234,9 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	headerAlign: HeaderAlign;
 	headerInExport: boolean;
 	// wave 0.10: clipboard and stamps
+	/** 0.21 (212): the strip of recent symbols, and how many buttons it has. */
+	symbolStrip: boolean;
+	symbolCount: number;
 	/** Format of the quick date and time stamp (356): tokens YYYY MM DD HH mm ss and so on, text in [brackets]. */
 	dateStampFormat: string;
 	// wave 0.10: colours
@@ -356,6 +360,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	recentColours: [],
 	fastScrollbar: true,
 	minimapMode: "auto",
+	symbolStrip: true,
+	symbolCount: 6,
 	appearanceStyle: "notebook",
 	userName: "",
 	hintsEnabled: true,
@@ -485,6 +491,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.dateStampFormat === "string") s.dateStampFormat = cleanStampFormat(d.dateStampFormat);
 	s.recentColours = normaliseRecentColours(d.recentColours);
 	if (typeof d.fastScrollbar === "boolean") s.fastScrollbar = d.fastScrollbar;
+	if (typeof d.symbolStrip === "boolean") s.symbolStrip = d.symbolStrip;
+	s.symbolCount = clampSymbolCount(d.symbolCount);
 	if (isMinimapMode(d.minimapMode)) s.minimapMode = d.minimapMode;
 	if (APPEARANCE_STYLES.includes(d.appearanceStyle as AppearanceStyle)) s.appearanceStyle = d.appearanceStyle as AppearanceStyle;
 	if (typeof d.userName === "string") s.userName = cleanUserName(d.userName);

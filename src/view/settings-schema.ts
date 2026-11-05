@@ -25,6 +25,7 @@ import { INSERT_WIDTH_MAX, INSERT_WIDTH_MIN, INSERT_WIDTH_STEP } from "../model/
 import { LOOKUP_WIDTH_MAX, LOOKUP_WIDTH_MIN, LOOKUP_WIDTH_STEP } from "../model/look-up";
 import { SNAP_STRENGTH_MAX, SNAP_STRENGTH_MIN, SNAP_STRENGTH_STEP } from "../model/snap";
 import { DEFAULT_SETTINGS, type NotebookSettings } from "../settings";
+import { SYMBOL_COUNT_MAX, SYMBOL_COUNT_MIN } from "../ui/symbol-rank";
 
 export type SettingKey = keyof NotebookSettings;
 
@@ -191,6 +192,9 @@ const WRITING: SettingSpec[] = [
 		control: { type: "dropdown", options: options([["offer", "settings.checklistDraw.offer"], ["auto", "settings.checklistDraw.auto"], ["off", "settings.checklistDraw.off"]]) },
 	},
 	{ id: "autoLineBreak", section: "writing", order: 60, name: "settings.autoLineBreak", desc: "settings.autoLineBreak.desc", control: { type: "toggle" } },
+	// 0.21 symbols
+	{ id: "symbolStrip", section: "writing", order: 62, name: "settings.symbolStrip", desc: "settings.symbolStrip.desc", keywords: "symbols maths math formula greek simboli matematica", control: { type: "toggle" } },
+	{ id: "symbolCount", section: "writing", order: 63, name: "settings.symbolCount", desc: "settings.symbolCount.desc", control: { type: "slider", min: SYMBOL_COUNT_MIN, max: SYMBOL_COUNT_MAX, step: 1 }, parent: "symbolStrip", visible: (s) => s.symbolStrip },
 	// 0.15 pen sets: named pens per subject, loaded with the notebook (view/pen-sets.ts)
 	{
 		id: "penSets", section: "writing", order: 70, name: "settings.penSets", desc: "settings.penSets.desc", keywords: "pens subject maths languages science favourites penne materia",

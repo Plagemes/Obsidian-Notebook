@@ -3817,6 +3817,23 @@ export const en = {
 	"settings.ghostSpacing": "Guide spacing",
 	"settings.ghostSpacing.desc": "Follow your handwriting, or use a fixed ruled spacing.",
 	"settings.ghostSpacing.auto": "Auto (from your writing)",
+	// 0.21 symbols
+	"symbols.title": "Recent symbols",
+	"symbols.hint": "Tap the page",
+	"symbols.insert": "Insert {name}",
+	"symbols.place": "Place symbol {name}",
+	"symbols.save": "Save selection as symbol",
+	"symbols.tooLarge": "The selection is too large for a symbol. Select just the sign.",
+	"symbols.nameTitle": "Name this symbol",
+	"symbols.name": "Symbol name",
+	"symbols.defaultName": "Symbol",
+	"symbols.saved": "Symbol saved: {name}",
+	"symbols.saveFailed": "Could not save the symbol: {error}",
+	"symbols.placeFailed": "Could not place the symbol: {error}",
+	"settings.symbolStrip": "Recent symbols",
+	"settings.symbolStrip.desc": "A strip with the symbols you use most (∀, ∫, →, or signs you saved). Tap one, then tap the page to place it.",
+	"settings.symbolCount": "Symbols shown",
+	"settings.symbolCount.desc": "How many buttons the strip has.",
 } as const;
 
 export type MessageKey = keyof typeof en;
