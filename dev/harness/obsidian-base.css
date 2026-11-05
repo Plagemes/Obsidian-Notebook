@@ -324,4 +324,4 @@ input[type=number]:where(:not(:disabled)):hover {
 
 /* 0.20 planner: the generated pages laid side by side (planner-check.ts). */
 .harness-planner-pages { position: fixed; inset: 0; display: flex; gap: 8px; padding: 8px; background: #e5e7eb; z-index: 99999; overflow: auto; }
-.harness-planner-pages img { flex: 0 0 auto; height: fit-content; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); }
+.harness-planner-pages img, .harness-planner-pages canvas { flex: 0 0 auto; height: fit-content; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); }

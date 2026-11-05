@@ -16609,6 +16609,7 @@ body.notebook-style-obsidian {
 
 .notebook-create-modal.nb-ui .nb-create-check {
 	display: inline-flex;
+	flex-direction: row;
 	align-items: center;
 	gap: 6px;
 }

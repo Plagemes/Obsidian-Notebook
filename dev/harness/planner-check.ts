@@ -6,6 +6,7 @@
  */
 import type { App, TFile } from "obsidian";
 import { renderThumbnail } from "../../src/library/thumbnail";
+import { drawTextElement } from "../../src/ink/renderer";
 import { soleLink } from "../../src/ink/link-text";
 import { parse } from "../../src/model/serialize";
 import { buildPlanner } from "../../src/model/planner";
@@ -172,7 +173,15 @@ async function showPages(app: App): Promise<void> {
 	const pick = ["y", "m3", "w11", "d71"].map((id) => pages.find((p) => p.id === id)!);
 	overlay = document.body.createDiv({ cls: "harness-planner-pages" });
 	for (const p of pick) {
-		overlay.createEl("img", { attr: { src: renderThumbnail(p, 560), alt: p.id } });
+		const bg = new Image();
+		bg.src = renderThumbnail(p, 560);
+		await bg.decode();
+		const scale = 560 / p.width;
+		const canvas = overlay.createEl("canvas", { attr: { width: String(Math.round(p.width * scale)), height: String(Math.round(p.height * scale)) } });
+		const ctx = canvas.getContext("2d")!;
+		ctx.drawImage(bg, 0, 0, canvas.width, canvas.height);
+		ctx.scale(scale, scale);
+		for (const e of p.elements ?? []) if (e.type === "text") drawTextElement(ctx, e);
 	}
 	await frames();
 }
