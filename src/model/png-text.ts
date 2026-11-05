@@ -72,3 +72,39 @@ export function readPngText(png: Uint8Array, keyword: string): string | null {
 	}
 	return null;
 }
+
+/** Keyword of the chunk that holds the checksum of the pixels the plugin wrote (see `pngPixelSum`). */
+export const PIXEL_SUM_KEYWORD = "notebook-heading-pixels";
+
+/**
+ * A checksum (8 hex digits) of the image data of `png` (all `IDAT` chunks), or null for something that is not a PNG or is cut
+ * short. Text chunks do not count, so it still matches after an editor that keeps them but re-encodes the pixels has not run,
+ * and stops matching once the pixels were cropped, annotated or re-encoded.
+ */
+export function pngPixelSum(png: Uint8Array): string | null {
+	if (!isPng(png)) return null;
+	const parts: Uint8Array[] = [];
+	let total = 0;
+	let at = 8;
+	while (at + 12 <= png.length) {
+		const length = u32(png, at);
+		const type = String.fromCharCode(png[at + 4]!, png[at + 5]!, png[at + 6]!, png[at + 7]!);
+		const start = at + 8;
+		const end = start + length;
+		if (end + 4 > png.length) return null;
+		if (type === "IDAT") {
+			parts.push(png.subarray(start, end));
+			total += length;
+		}
+		if (type === "IEND") break;
+		at = end + 4;
+	}
+	if (parts.length === 0) return null;
+	const all = new Uint8Array(total);
+	let o = 0;
+	for (const part of parts) {
+		all.set(part, o);
+		o += part.length;
+	}
+	return crc32(all).toString(16).padStart(8, "0");
+}

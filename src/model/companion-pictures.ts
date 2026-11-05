@@ -7,6 +7,8 @@
  *   chunk (`PICTURE_MARK`). A file at the wanted name that has no mark is the user's (cropped, annotated, their own): it is never
  *   written over, the picture takes the next free name instead. A file with the same mark is already right (nothing is written,
  *   whatever encoder drew it, so devices do not rewrite each other's pictures); one with another mark is ours and stale.
+ *   Stale is rewritten only while its pixels are still the ones the plugin wrote (`intact`): a picture the user cropped or
+ *   annotated in an editor that kept the text chunks is theirs now, so the picture takes the next free name instead.
  */
 
 /** Keyword of the PNG text chunk that holds the ink key. */
@@ -48,8 +50,8 @@ export class NotebookLru<V> {
 	}
 }
 
-/** What is at a path: nothing, or a file with its mark (null when it has none). */
-export type PictureProbe = { kind: "free" } | { kind: "file"; mark: string | null };
+/** What is at a path: nothing, or a file with its mark (null when it has none) and whether its pixels are still as written. */
+export type PictureProbe = { kind: "free" } | { kind: "file"; mark: string | null; intact?: boolean };
 
 export type PicturePlan = { path: string; action: "create" | "keep" | "rewrite" };
 
@@ -70,7 +72,8 @@ export async function choosePicturePath(base: string, key: string, probe: (path:
 		const found = await probe(path);
 		if (found.kind === "free") return { path, action: "create" };
 		if (found.mark === key) return { path, action: "keep" };
-		if (found.mark !== null) return { path, action: "rewrite" };
+		// `intact` false: the pixels are no longer the ones this plugin wrote, so the file has become the user's (next name).
+		if (found.mark !== null && found.intact !== false) return { path, action: "rewrite" };
 	}
 	return null;
 }

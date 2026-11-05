@@ -4,7 +4,7 @@ import {
 	COMPANION_HEADING_PIXELS, COMPANION_HEADING_WIDTH, headingPictureName, pickCompanionHeadings,
 } from "../model/companion-headings";
 import { choosePicturePath, NotebookLru, PICTURE_MARK, type PictureProbe } from "../model/companion-pictures";
-import { addPngText, readPngText } from "../model/png-text";
+import { addPngText, PIXEL_SUM_KEYWORD, pngPixelSum, readPngText } from "../model/png-text";
 import { embedWithWidth } from "../model/selection-task";
 import type { NotebookDocument } from "../model/types";
 import { whenIdle } from "../storage/idle";
@@ -89,7 +89,10 @@ export class CompanionHeadings {
 				} else {
 					const bytes = headingPngBytes(page, strokes, r, COMPANION_HEADING_PIXELS);
 					if (!bytes) return null;
-					const marked = addPngText(bytes, PICTURE_MARK, key);
+					// The checksum of the pixels written goes in a second chunk: a later run rewrites only a picture that still has them.
+					const sum = pngPixelSum(bytes);
+					const keyed = addPngText(bytes, PICTURE_MARK, key);
+					const marked = sum ? addPngText(keyed, PIXEL_SUM_KEYWORD, sum) : keyed;
 					const data = marked.buffer.slice(marked.byteOffset, marked.byteOffset + marked.byteLength) as ArrayBuffer;
 					if (plan.action === "rewrite") {
 						target = app.vault.getFileByPath(plan.path);
@@ -113,6 +116,8 @@ export class CompanionHeadings {
 	private async probe(path: string): Promise<PictureProbe> {
 		const found = this.app.vault.getFileByPath(path);
 		if (!found) return { kind: "free" };
-		return { kind: "file", mark: readPngText(new Uint8Array(await this.app.vault.readBinary(found)), PICTURE_MARK) };
+		const bytes = new Uint8Array(await this.app.vault.readBinary(found));
+		const sum = readPngText(bytes, PIXEL_SUM_KEYWORD);
+		return { kind: "file", mark: readPngText(bytes, PICTURE_MARK), intact: sum !== null && sum === pngPixelSum(bytes) };
 	}
 }
