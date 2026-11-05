@@ -441,7 +441,7 @@ Features for following a lecture live. Exam and review features stay in the sepa
 225. **P2** "Back to the current slide" after looking elsewhere.
 226. **P1** 🧪 Automatic notes ↔ slide link: ink remembers which slide was visible in the side-by-side view while you wrote it; tapping it shows that slide again.
 227. **P2** 🧪 Quick tabs: pages pinned during the lecture (e.g. the formula sheet), one tap away.
-228. **P2** Lecture figure gallery: all photos and crops of the section in one place.
+228. **P2** 🧪 Lecture figure gallery: all photos and crops of the section in one place.
 229. **P3** Peek at the next slide while writing.
 230. **P3** Continuous board: a horizontally scrolling page for long blackboards.
 

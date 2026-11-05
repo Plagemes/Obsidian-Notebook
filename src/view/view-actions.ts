@@ -378,6 +378,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"highlights-digest": (v) => v.openHighlightsDigest(),
 	// 0.18 mentions (O7): the notes that link to this page
 	"mentions": (v) => v.openMentions(),
+	// 0.19 (#228): the Figures gallery
+	"figures": (v) => v.openFigures(),
 	// wave 0.10: PNG images (81) and Print (81) are choices of the same dialog; read-only mode (51)
 	"export-png": (v) => v.openExportDialog(undefined, "png"),
 	"print": (v) => {
