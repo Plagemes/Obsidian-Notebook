@@ -43,6 +43,7 @@ import { checkQuicktabs, harnessQuickTabs } from "./quicktabs-check";
 import { checkSticky } from "./sticky-check";
 import { checkComments } from "./comments-check";
 import { checkChecklists } from "./checklists-check";
+import { dropApi } from "./dropfiles-check";
 import { checkSnap } from "./snap-check";
 import { checkMinimap } from "./minimap-check";
 import { checkHeader } from "./header-check";
@@ -293,7 +294,7 @@ async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	leaf = new WorkspaceLeaf(app, root);
 	view = new NotebookView(asLeaf(leaf), { settings: settings(), practice: doc === "practice" ? practiceService : undefined, lectureClassFor: doc === "lecture" ? () => lectureStub.cls : undefined, nav: harnessNav, quickTabs: doc === "quicktabs" ? harnessQuickTabs(app) : undefined, statusChanged: (v) => harnessStatusBar.update(v.statusSnapshot()) });
 	await view.onOpen();
-	const path = doc === "new" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" || doc === "lock" || doc === "sticky" || doc === "comments" || doc === "checklists" || doc === "snap" || doc === "minimap" ? "Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "mentions" || doc === "nbmap" || doc === "movesel" || doc === "present" || doc === "quicktabs" ? "Notebooks/Outline.notebook" : doc === "digest" ? "Notebooks/Digest.notebook" : doc === "figures" ? "Notebooks/Figures.notebook" :doc === "pdftext" ? "Notebooks/PdfText.notebook" : "Notebooks/Old v3.notebook";
+	const path = doc === "new" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" || doc === "lock" || doc === "sticky" || doc === "comments" || doc === "checklists" || doc === "dropfiles" || doc === "snap" || doc === "minimap" ? "Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "mentions" || doc === "nbmap" || doc === "movesel" || doc === "present" || doc === "quicktabs" ? "Notebooks/Outline.notebook" : doc === "digest" ? "Notebooks/Digest.notebook" : doc === "figures" ? "Notebooks/Figures.notebook" :doc === "pdftext" ? "Notebooks/PdfText.notebook" : "Notebooks/Old v3.notebook";
 	const file = app.vault.getFileByPath(path)!;
 	await (view as unknown as HarnessView).loadFile(file);
 	view.onResize();
@@ -2219,5 +2220,7 @@ Object.assign(harnessApi, xferApi({ app, errors, notices }));
 Object.assign(harnessApi, linkbackApi({ app, errors, notices }));
 // 0.17 pdfcopy: the optional PDF copy (doc=pdfcopy, pdfcopy-check.ts).
 Object.assign(harnessApi, pdfcopyApi({ get view() { return view; }, app, frames, penStroke, errors, notices }));
+// 0.20 dropfiles: files dropped on a page (doc=dropfiles, dropfiles-check.ts).
+Object.assign(harnessApi, dropApi({ get view() { return view; }, frames, errors, notices }));
 (window as unknown as { harness: Record<string, unknown> }).harness = harnessApi;
 harnessApi.ready = main();

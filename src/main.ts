@@ -479,6 +479,12 @@ export default class NotebookPlugin extends Plugin {
 		void this.saveData(this.settings).catch((e) => console.error("[notebook] could not save the last location", e));
 	}
 
+	/** 0.20 (#79): a PDF dropped on a page was chosen to be annotated in a notebook of its own: a vault file takes the "Annotate in Notebook" path, a file from another app the one-file import dialog. */
+	annotateDropped(source: File | TFile): void {
+		if (source instanceof TFile) void annotatePdfFlow(this.app, this.annotateHost(), source);
+		else this.host.importFiles(this.settings.folder, [source]);
+	}
+
 	/** 0.18 (O10): what "Annotate in Notebook" needs from the plugin. */
 	private annotateHost(): AnnotatePdfHost {
 		return {

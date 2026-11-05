@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### dropfiles
+- **Drag files straight onto a page (#79).** Drop pictures (PNG, JPG, WebP, GIF) on the page: they are stored in the assets folder and placed at the drop point in page coordinates, several files in a cascade, as one undo step, and selected so they can be moved at once. Drop a PDF: choose *Insert pages after this one*, *Insert as images on this page* (the first 8 pages) or *Annotate in a new notebook*. Files dragged from Obsidian's file explorer work too (pictures and PDFs are copied into the assets folder; a note or notebook becomes a `[[link]]` text box). A dashed frame names the target page while you drag; a locked page or a read-only notebook shows a blocked frame and refuses. Anything not taken (other types, HEIC photos, empty or too large files, more than 20) is named in one notice. No format change.
+
 ## 0.19.0 — 2026-11-05
 
 Handwritten tasks and a lecture you can follow up from your notes: checkboxes drawn with the pen that tick the tasks in your Markdown notes, a lecture log line in the daily note and an automatic snapshot at the end of each lecture, a gallery of the figures of a lecture, a clean copy of the notes to share, a list of things to look up later, typed text that Obsidian's search can find, and notebooks made from note templates. The notebook format moves to version 17: 0.18 and older open a v17 file read-only and never overwrite it.

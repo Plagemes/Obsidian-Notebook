@@ -115,6 +115,7 @@ import { editPageTags } from "./outline";
 import { OutlineBuilder } from "../model/outline-builder";
 import { HeadingThumbs } from "./outline-thumbs";
 import { askPdfRange } from "./pdf-range-modal";
+import { attachDropFiles } from "./drop-files";
 import { runBoardShot } from "./board-shot";
 import type { EditContext } from "./edit-context";
 import { runNewLecture } from "./lecture";
@@ -257,6 +258,8 @@ export interface NotebookHost {
 	sharedClips?(): SharedClipStore;
 	/** 0.17 (#23): the optional PDF copy next to each notebook. Optional: absent in tests and the harness. */
 	pdfCopy?: PdfCopyPort;
+	/** 0.20 (#79): a PDF dropped on a page was chosen to be annotated in a notebook of its own (a dropped file or a vault file). Optional: absent in tests and the harness. */
+	annotateDropped?(source: File | TFile): void;
 }
 
 interface ActiveStroke {
@@ -670,6 +673,22 @@ export class NotebookView extends FileView {
 			if (page) this.setPageLocked(page, false);
 		});
 		this.lockBadge = badge;
+		// 0.20 (#79): pictures, PDFs and notes dragged onto a page (view/drop-files.ts; the pen and pointer input are not involved).
+		this.dropFilesOff = attachDropFiles({
+			app: this.app,
+			stage: this.stage,
+			overlayParent: this.body,
+			listen: (el, type, handler) => this.registerDomEvent(el, type, handler),
+			editable: () => this.editable(),
+			context: () => this.editContext(),
+			layout: () => this.layout,
+			viewport: () => this.viewport,
+			media: () => this.media,
+			textStyle: () => ({ fontSize: this.tools.textSize, color: this.tools.penColor }),
+			select: (pageIndex, elements) => this.selectItems(pageIndex, [], elements),
+			insertPdfPages: (source, afterIndex) => this.insertPdfAfter(afterIndex, source),
+			...(this.host.annotateDropped ? { annotate: (source: File | TFile) => this.host.annotateDropped?.(source) } : {}),
+		});
 		// 0.18 mentions (O7): a count of the notes that link to the page in view; a tap lists them.
 		this.mentions = new Mentions({
 			app: this.app, body: this.body, file: () => this.file, pages: () => this.shownDoc()?.pages ?? [],
@@ -938,6 +957,8 @@ export class NotebookView extends FileView {
 		this.stopHold();
 		this.clearDwell();
 		this.penGestures?.destroy();
+		this.dropFilesOff?.();
+		this.dropFilesOff = null;
 		this.penGestures = null;
 		this.mentions?.destroy();
 		this.mentions = null;
@@ -2666,7 +2687,14 @@ export class NotebookView extends FileView {
 		return { asset, bytes: file.bytes };
 	}
 
-	/** True when the view still shows the same editable document (the picker and the import are asynchronous). */
+	/** `pickAndStore` for a file that is already in hand (dropped on the page): same HEIC refusal, same asset store. */
+	private async storeSource(kind: "pdf" | "image", file: { name: string; bytes: ArrayBuffer }): Promise<{ asset: Asset; bytes: ArrayBuffer }> {
+		if (kind === "image" && isHeic(file.bytes)) throw new PhotoDecodeError("heic");
+		const asset = await storeAsset(this.app, this.host.settings.folder, file.bytes, file.name, kind);
+		this.media?.addPending(asset);
+		return { asset, bytes: file.bytes };
+	}
+
 	/** Any pointer contact or gesture in progress on the canvas. */
 	private inContact(): boolean {
 		return this.active !== null || this.erasing !== null || this.lasso !== null || this.drag !== null || this.shapeDrag !== null
@@ -2678,17 +2706,17 @@ export class NotebookView extends FileView {
 		return !!session && this.session === session && this.editable() && !this.controller?.drawing;
 	}
 
-	/** Page menu: inserts a whole PDF or a page range after the page at `index` (one undo step). */
-	async insertPdfAfter(index: number): Promise<void> {
+	/** Page menu: inserts a whole PDF or a page range after the page at `index` (one undo step). `source`: a PDF already in hand (a file dropped on the page) instead of the picker. Resolves with the number of pages inserted. */
+	async insertPdfAfter(index: number, source?: { name: string; bytes: ArrayBuffer }): Promise<number> {
 		const session = this.session;
 		const media = this.media;
 		const anchor = session?.doc?.pages[index];
-		if (!session || !media || !anchor || !this.stillHere(session)) return;
+		if (!session || !media || !anchor || !this.stillHere(session)) return 0;
 		let asset: Asset | null = null;
 		let working: NoticeHandle | null = null;
 		try {
-			const picked = await this.pickAndStore("pdf");
-			if (!picked) return;
+			const picked = source ? await this.storeSource("pdf", source) : await this.pickAndStore("pdf");
+			if (!picked) return 0;
 			asset = picked.asset;
 			working = showNotice(t("insert.working"), 0);
 			const sizes = await media.pdf.pageSizes(asset.id);
@@ -2696,23 +2724,25 @@ export class NotebookView extends FileView {
 			working = null;
 			if (sizes.length === 0) throw new Error("the PDF has no pages");
 			const range = sizes.length === 1 ? { from: 1, to: 1 } : await askPdfRange(this.app, sizes.length);
-			if (!range || !this.stillHere(session)) return;
+			if (!range || !this.stillHere(session)) return 0;
 			// Lecture pack layout (#192, #193): on the slide, slide + notes area, notes page after every slide.
 			const layout = await askLayoutOptions(this.app);
-			if (!layout || !this.stillHere(session)) return;
+			if (!layout || !this.stillHere(session)) return 0;
 			const doc = session.doc;
 			const at = doc ? doc.pages.indexOf(anchor) : -1;
-			if (!doc || at < 0) return;
+			if (!doc || at < 0) return 0;
 			const pages = buildLecturePackPages(asset, sizes.slice(range.from - 1, range.to), range.from, layout);
 			this.commitText();
 			this.clearSelection();
-			this.history.execute(new Batch("Insert PDF", [new AddAsset(asset), new InsertPages(pages, at + 1)]));
+			const done = this.history.execute(new Batch("Insert PDF", [new AddAsset(asset), new InsertPages(pages, at + 1)]));
 			this.afterHistoryChange();
 			this.scrollToPage(at + 1);
 			showNotice(t("insert.pdfDone", { n: String(range.to - range.from + 1) }));
+			return done ? pages.length : 0;
 		} catch (e) {
 			console.error("[notebook] insert PDF", e);
 			showNotice(t("insert.failed", { error: (e as Error).message }), 8000);
+			return 0;
 		} finally {
 			working?.hide();
 			if (asset) media.removePending(asset.id);
@@ -2841,6 +2871,7 @@ export class NotebookView extends FileView {
 	/** The last time the "Page locked" notice was shown (it lasts 5 s: one at a time). */
 	private lockNoticeAt = 0;
 	private lockBadge: HTMLButtonElement | null = null;
+	private dropFilesOff: (() => void) | null = null;
 	private mentions: Mentions | null = null;
 
 	/** Locks or unlocks a page of this document (one undo step). False when it could not be done. */
