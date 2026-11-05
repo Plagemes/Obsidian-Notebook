@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### headings
+- **Headings from the size of the handwriting (#102).** Lines written clearly larger than the page's usual letters are headings (1.7x: second level, 2.4x: first level); a line only 1.25x larger counts when a straight stroke is drawn under it (slanted lines and slanted underlines too). Colour is not used. They are listed in the outline (as before, now also finding underlined titles) and, new, in the notebook map: a *Titles* filter chip with the number of pages that have headings and up to two pictures of the ink on each card; tapping a heading, in the outline or the map, goes to the line, not only to the page. Pictures are drawn only for cards in view, from a bounded cache. No OCR, no format change. Thresholds are documented in `src/ink/headings.ts`.
+- **Idle analysis.** The analysis is cached per page by a fingerprint of the page's content (`src/model/heading-index.ts`; rebuilt strokes with the same content are not analysed again) and runs in 8 ms slices at idle moments a few seconds after a change, never while the pen is down (`src/view/heading-warm.ts`).
+- **Headings as pictures in the companion note.** New setting *Headings as pictures* (under *Companion notes*, off by default): under the `### p. N` heading of a page, `- heading: ![[…]]` lines with the picture of each heading (up to 4 per page, 60 per notebook). Pictures are saved in `<Notebook> (Headings)` beside the notebook as `p3-h1.png`, rewritten only when their bytes change, recorded as plugin writes and never deleted; nothing is drawn while a pen is down.
+
 ## 0.19.0 — 2026-11-05
 
 Handwritten tasks and a lecture you can follow up from your notes: checkboxes drawn with the pen that tick the tasks in your Markdown notes, a lecture log line in the daily note and an automatic snapshot at the end of each lecture, a gallery of the figures of a lecture, a clean copy of the notes to share, a list of things to look up later, typed text that Obsidian's search can find, and notebooks made from note templates. The notebook format moves to version 17: 0.18 and older open a v17 file read-only and never overwrite it.
