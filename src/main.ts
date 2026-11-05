@@ -283,10 +283,16 @@ export default class NotebookPlugin extends Plugin {
 		// 0.19 (#221): lecture log lines that waited for a daily note are written once it exists.
 		this.step("lecture log", () => {
 			const log = (this.lectureLog = new LectureLogService(this));
-			this.app.workspace.onLayoutReady(() => void log.flushPending());
-			this.registerEvent(this.app.vault.on("create", (f) => {
-				if (this.settings.lectureLog && log.waitingPaths().includes(f.path)) void log.flushPending();
-			}));
+			// Registered once the layout is ready: while the vault loads, Obsidian fires "create" for every file in it.
+			this.app.workspace.onLayoutReady(() => {
+				void log.flushPending();
+				// A waiting note that appears or changes (a sync, a template engine filling a new daily note) is looked at once it has settled.
+				const changed = (f: { path: string }): void => {
+					if (this.settings.lectureLog) log.noteChanged(f.path);
+				};
+				this.registerEvent(this.app.vault.on("create", changed));
+				this.registerEvent(this.app.vault.on("modify", changed));
+			});
 		});
 
 		// Best effort only (not guaranteed, unreliable on mobile): views also flush on visibilitychange/pagehide.
@@ -344,6 +350,7 @@ export default class NotebookPlugin extends Plugin {
 		stop("recent pages", () => this.recentPages?.flush());
 		stop("views", () => void this.flushAll());
 		stop("sync safety", () => this.syncSafety?.dispose());
+		stop("lecture log", () => this.lectureLog?.dispose());
 		stop("timetable", () => this.timetable?.stop());
 		stop("library", () => this.host?.dispose());
 		stop("appearance", () => activeDocument.body.removeClass("notebook-style-obsidian"));
@@ -402,8 +409,8 @@ export default class NotebookPlugin extends Plugin {
 	}
 
 	/** 0.19 (#221): a lecture the user wrote in ended; its line is written to (or updated in) the daily note when the setting is on. */
-	logLecture(file: TFile, cls: LectureClass, snap: LectureSnapshot): void {
-		if (this.settings.lectureLog) void this.lectureLog?.log(file, cls, snap);
+	logLecture(file: TFile, cls: LectureClass, snap: LectureSnapshot, docId?: string): void {
+		if (this.settings.lectureLog) void this.lectureLog?.log(file, cls, snap, docId);
 	}
 
 	/** wave 0.10 (O15): Obsidian's status bar item shows the page and save state of the active notebook. Desktop only: mobile has no status bar. */

@@ -21,13 +21,11 @@ describe("a lecture snapshot waits for a running snapshot of the same file inste
 		const release = lock.acquire("A.notebook");
 		expect(lock.has("A.notebook")).toBe(true);
 		const order: string[] = [];
-		const first = lock.acquireWhenFree("A.notebook").then((free) => {
+		const first = lock.acquireWhenFree("A.notebook").then(async (free) => {
 			order.push("first");
-			return new Promise<void>((resolve) => setTimeout(() => {
-				order.push("first-done");
-				free();
-				resolve();
-			}, 5));
+			for (let i = 0; i < 5; i++) await Promise.resolve();
+			order.push("first-done");
+			free();
 		});
 		const second = lock.acquireWhenFree("A.notebook").then((free) => {
 			order.push("second");
