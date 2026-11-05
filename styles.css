@@ -17375,3 +17375,82 @@ body.notebook-style-obsidian {
 	min-width: 32px;
 	margin-left: auto;
 }
+
+/* ===== 0.20 dropfiles ===== */
+/* Files dragged onto a page: a dashed frame over the canvas area, the target page and a ring on the drop point (decoration, no control). */
+.nb-ui.nb-drop-zone {
+	position: absolute;
+	inset: 0;
+	z-index: 30;
+	display: none;
+	pointer-events: none;
+}
+
+.nb-ui.nb-drop-zone.is-active {
+	display: block;
+}
+
+.nb-ui.nb-drop-zone .nb-drop-frame {
+	position: absolute;
+	inset: 8px;
+	border: 2px dashed var(--nb-accent);
+	border-radius: var(--nb-radius-panel);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui.nb-drop-zone .nb-drop-chip {
+	position: absolute;
+	bottom: 24px;
+	left: 50%;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	max-width: calc(100% - 48px);
+	padding: 10px 18px;
+	transform: translateX(-50%);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-accent);
+	color: var(--nb-surface);
+	font-size: var(--nb-fs-chip);
+	font-weight: 600;
+	box-shadow: var(--nb-shadow-1);
+}
+
+.nb-ui.nb-drop-zone .nb-drop-chip-icon svg {
+	width: 16px;
+	height: 16px;
+}
+
+.nb-ui.nb-drop-zone .nb-drop-chip-text {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-drop-zone .nb-drop-ring {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 36px;
+	height: 36px;
+	margin: -18px 0 0 -18px;
+	transform: translate(var(--nb-drop-x, 0), var(--nb-drop-y, 0));
+	border: 2px solid var(--nb-accent);
+	border-radius: 50%;
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui.nb-drop-zone.is-blocked .nb-drop-frame {
+	border-color: var(--nb-border-strong);
+	background: transparent;
+}
+
+.nb-ui.nb-drop-zone.is-blocked .nb-drop-chip {
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	border: 1px solid var(--nb-border-strong);
+}
+
+.nb-ui.nb-drop-zone.is-blocked .nb-drop-ring {
+	display: none;
+}

@@ -2953,3 +2953,23 @@ Roadmap #118. Implemented, not verified on hardware. Reference screenshots after
 | Calendar math: leap years, month lengths, day numbers, weekday, ISO week and Sunday-start week numbers, week lists, month rows, calendar and academic ranges, week start from the locale | yes | `tests/calendar.test.ts` (checked against `Date` over a leap year and sampled over 1900-2200) | | | |
 | Planner generator: year, month, week, day and notes pages on existing papers and text boxes, page links by id up and down, outline bookmarks, English and Italian, Monday or Sunday weeks, page counts, bounds on every size and orientation, document write and read back | yes | `tests/planner.test.ts` | | | link text shows its markup on the page; not tried inside Obsidian (steps 1820-1836) |
 | Planner tab of the creation dialog (year, span, start month, language, week start, size, section chips, page count and large warning) and the setting *Planner week starts on* | yes | harness `doc=planner` (tab, chips, counts, creating and reading back) | | | not tried on a phone (step 1834) |
+
+### 0.20 — dropfiles
+
+Manual steps (hardware / real Obsidian; nothing here is verified on Android).
+
+1740. **Picture from the desktop.** On Windows, drag a PNG from File Explorer onto a page of an open notebook: a dashed frame and a chip "Drop to add to page N" show while dragging, with a ring under the pointer; dropping places the picture centred on the pointer, selected. One undo removes it (and its place in the page).
+1741. **Several files.** Drop three pictures at once: they land in a cascade (each a step down and to the right), all selected; one undo removes all three.
+1742. **Wrong files.** Drop a `.zip` and a PNG together: the PNG is placed and one notice names the zip ("Not added: 1 of an unsupported type…"). Drop only a zip: only the notice.
+1743. **Too large / HEIC.** Drop a picture over 50 MB, and a `.heic` photo: each is named in the notice, nothing is stored for them.
+1744. **Locked page, read-only.** On a locked page the frame is grey with the lock and the drop adds nothing ("Page N is locked"). In a read-only notebook (newer format, hidden annotations) the frame says it is read-only.
+1745. **PDF choices.** Drop a PDF: the dialog offers *Insert pages after this one*, *Insert as images on this page* and *Annotate in a new notebook*. Pages: the usual range and layout questions, then the pages appear after the page you dropped on. Images: the first pages (at most 8) are placed as pictures in a cascade, one undo step. Annotate: the import dialog (file from the desktop) opens.
+1746. **Explorer drag.** Drag a PNG and a PDF from Obsidian's file explorer onto a page (side by side layout): the picture is placed; the PDF asks as above. The vault file is unchanged.
+1747. **Note as link.** Drag a Markdown note from the explorer onto a page: a text box `[[Note]]` appears at the drop point; tapping it opens the note.
+1748. **Between pages and zoom.** Zoom in, pan, drop between two pages and on the second page: the picture lands on the nearest/the right page at the pointer, not offset by the zoom.
+1749. **Pen unaffected.** Writing and S Pen button gestures behave exactly as before; a drag of text (from a browser) over the page shows no frame.
+1750. **Italian.** In Italian: "Rilascia per aggiungere alla pagina N", the PDF dialog and the notice are translated.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Drag files onto a page (#79): pictures at the drop point (cascade), PDF choice (pages / images / annotate), explorer files, note links, frame, one notice for what is left out | yes | type routing, caps, cascade, page-coordinate mapping: yes; view wiring: harness (`doc=dropfiles`) with synthetic DragEvents; explorer drag (`app.dragManager`, not public API) and Android: no | | yes (explorer drag relies on an internal Obsidian field) | |
