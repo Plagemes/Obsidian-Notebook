@@ -87,7 +87,7 @@ function sourcesOf(app: App, dt: DataTransfer | null): DropSource[] {
 	if (!dt) return [];
 	return Array.from(dt.files).map((file) => ({
 		meta: { name: file.name, size: file.size, type: file.type, origin: "os" as const },
-		read: fileSource(file).read,
+		read: () => fileSource(file).read(),
 		file,
 	}));
 }

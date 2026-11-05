@@ -28,7 +28,7 @@ const stage = (): HTMLElement => document.querySelector<HTMLElement>(".notebook-
 const sleep = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
 
 async function png(color: string, w = 160, h = 100): Promise<File> {
-	const c = document.createElement("canvas");
+	const c = createEl("canvas");
 	c.width = w;
 	c.height = h;
 	const ctx = c.getContext("2d")!;
