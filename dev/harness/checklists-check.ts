@@ -177,18 +177,31 @@ export async function checkChecklists(api: ChecklistsCheckApi): Promise<{ ok: bo
 	await frames(2);
 	await sleep(1500);
 	add("undoing the tick unticks the line again", (await text("Tasks/Today.md")) === note, JSON.stringify(await text("Tasks/Today.md")));
-	// the line is gone: the checkbox is unlinked
+	// the line is gone: seen once it changes nothing, seen again a minute later the checkbox is unlinked
 	const file = vault.getFileByPath("Tasks/Today.md");
 	await vault.modify(file, "intro\nend\n");
 	await penStroke([centre(boxes()[0]!)]);
 	await sleep(1500);
-	add("a line that is gone unlinks the checkbox and the note is left alone", boxes()[0]!.task === undefined && (await text("Tasks/Today.md")) === "intro\nend\n" && boxes()[0]!.checked === true);
+	add("a line that is gone is kept linked at the first sight", boxes()[0]!.task !== undefined && boxes()[0]!.checked === true);
+	// (the clock is moved on by a minute for the second read, then put back)
+	const realNow = Date.now.bind(Date);
+	Date.now = () => realNow() + 61_000;
+	try {
+		await (v as unknown as { checklistTools: { reconcile(): Promise<void> } | null }).checklistTools?.reconcile();
+	} finally {
+		Date.now = realNow;
+	}
+	await sleep(300);
+	add("a line that is gone, seen twice, unlinks the checkbox and the note is left alone", boxes()[0]!.task === undefined && (await text("Tasks/Today.md")) === "intro\nend\n" && boxes()[0]!.checked === true);
 	add("and says so", api.notices.some((n) => /no longer in|non è più/i.test(n)), api.notices.slice(-2).join(" | "));
 	v.undo();
 	await frames(2);
-	v.undo();
+	add("the unlink is no undo step: one undo takes the tick back", boxes()[0]!.checked !== true && boxes()[0]!.task === undefined);
+	// linked again to the note as it was, for the rest of the scenario
+	await vault.modify(file, note);
+	v.applyCommand(setCheckboxTask(page().id, row.id, { path: "Tasks/Today.md", block: "nb-harness1" }));
+	await sleep(1200);
 	await frames(2);
-	await sleep(1000);
 
 	// --- the dialog of Send to tasks ---
 	setTool("lasso");
